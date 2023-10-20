@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 
 #include <DataStreams/IBlockInputStream.h>
 #include <Interpreters/sortBlock.h>
+#include <Storages/DeltaMerge/Decode/SSTFilesToBlockInputStream.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 
@@ -32,10 +33,15 @@ template <bool need_extra_sort>
 class PKSquashingBlockInputStream final : public IBlockInputStream
 {
 public:
-    PKSquashingBlockInputStream(BlockInputStreamPtr child, ColId pk_column_id_, bool is_common_handle_)
+    PKSquashingBlockInputStream(
+        BlockInputStreamPtr child,
+        ColId pk_column_id_,
+        bool is_common_handle_,
+        size_t split_id_ = DM::SSTScanSoftLimit::HEAD_OR_ONLY_SPLIT)
         : sorted_input_stream(child)
         , pk_column_id(pk_column_id_)
         , is_common_handle(is_common_handle_)
+        , split_id(split_id_)
     {
         assert(sorted_input_stream != nullptr);
         cur_block = {};
@@ -80,12 +86,16 @@ public:
 #ifndef NDEBUG
             if (next_block && !isSameSchema(cur_block, next_block))
             {
-                throw Exception("schema not match! [cur_block=" + cur_block.dumpStructure() + "] [next_block=" + next_block.dumpStructure()
-                                + "]");
+                throw Exception(
+                    ErrorCodes::LOGICAL_ERROR,
+                    "schema not match! [cur_block={}] [next_block={}]",
+                    cur_block.dumpStructure(),
+                    next_block.dumpStructure());
             }
 #endif
 
-            const size_t cut_offset = findCutOffsetInNextBlock(cur_block, next_block, pk_column_id, is_common_handle);
+            const size_t cut_offset
+                = findCutOffsetInNextBlock(split_id, cur_block, next_block, pk_column_id, is_common_handle);
             if (unlikely(cut_offset == 0))
                 // There is no pk overlap between `cur_block` and `next_block`, or `next_block` is empty, just return `cur_block`.
                 return finializeBlock(std::move(cur_block));
@@ -121,8 +131,12 @@ public:
     }
 
 private:
-    static size_t
-    findCutOffsetInNextBlock(const Block & cur_block, const Block & next_block, const ColId pk_column_id, bool is_common_handle)
+    static size_t findCutOffsetInNextBlock(
+        size_t split_id,
+        const Block & cur_block,
+        const Block & next_block,
+        const ColId pk_column_id,
+        bool is_common_handle)
     {
         assert(cur_block);
         if (!next_block)
@@ -142,9 +156,13 @@ private:
                 if constexpr (DM_RUN_CHECK)
                 {
                     if (unlikely(next_pk < last_curr_pk))
-                        throw Exception("InputStream is not sorted, pk in next block is smaller than current block: "
-                                            + next_pk.toDebugString() + " < " + last_curr_pk.toDebugString(),
-                                        ErrorCodes::LOGICAL_ERROR);
+                        throw Exception(
+                            ErrorCodes::LOGICAL_ERROR,
+                            "InputStream is not sorted, pk in next block {} is smaller than current block {}, "
+                            "split_id={}",
+                            next_pk.toDebugString(),
+                            last_curr_pk.toDebugString(),
+                            split_id);
                 }
                 break;
             }
@@ -157,8 +175,9 @@ private:
         if constexpr (need_extra_sort)
         {
             // Sort by handle & version in ascending order.
-            static SortDescription sort{SortColumnDescription{EXTRA_HANDLE_COLUMN_NAME, 1, 0},
-                                        SortColumnDescription{VERSION_COLUMN_NAME, 1, 0}};
+            static SortDescription sort{
+                SortColumnDescription{EXTRA_HANDLE_COLUMN_NAME, 1, 0},
+                SortColumnDescription{VERSION_COLUMN_NAME, 1, 0}};
             if (block.rows() > 1 && !isAlreadySorted(block, sort))
                 stableSortBlock(block, sort);
         }
@@ -174,6 +193,8 @@ private:
 
     bool first_read = true;
     const bool is_common_handle;
+    // Setting to non `HEAD_OR_ONLY_SPLIT` means this is a part stream.
+    const size_t split_id;
 };
 
 } // namespace DM

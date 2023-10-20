@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -33,10 +33,7 @@ public:
         , expression(expression_)
     {}
 
-    String getName() const override
-    {
-        return "ExpressionTransformOp";
-    }
+    String getName() const override { return "ExpressionTransformOp"; }
 
 protected:
     OperatorStatus transformImpl(Block & block) override;

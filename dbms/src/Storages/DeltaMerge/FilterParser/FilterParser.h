@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,17 +17,14 @@
 #include <Interpreters/Set.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/Index/RSResult.h>
-#include <Storages/Transaction/Types.h>
+#include <Storages/KVStore/Types.h>
+#include <tipb/executor.pb.h>
 #include <tipb/expression.pb.h>
 
 #include <functional>
 #include <memory>
 #include <unordered_map>
 
-namespace Poco
-{
-class Logger;
-}
 
 namespace DB
 {
@@ -53,9 +50,13 @@ public:
         const LoggerPtr & log);
 
     // only for runtime filter in predicate
-    static RSOperatorPtr parseRFInExpr(const tipb::RuntimeFilterType rf_type, const tipb::Expr & target_expr, const ColumnDefines & columns_to_read, const std::set<Field> & setElements);
+    static RSOperatorPtr parseRFInExpr(
+        tipb::RuntimeFilterType rf_type,
+        const tipb::Expr & target_expr,
+        const ColumnDefines & columns_to_read,
+        const std::set<Field> & setElements);
 
-    static bool isRSFilterSupportType(const Int32 field_type);
+    static bool isRSFilterSupportType(Int32 field_type);
 
     /// Some helper structure
 
@@ -76,10 +77,10 @@ public:
         LessEqual,
 
         In,
-        NotIn,
+        // NotIn, TiDB will convert it to Not(In）
 
         Like,
-        NotLike,
+        // NotLike, TiDB will convert it to Not(Like)
 
         IsNull,
     };

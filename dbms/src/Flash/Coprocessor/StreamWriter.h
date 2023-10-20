@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -35,19 +35,45 @@ class MPPDataPacket;
 
 namespace DB
 {
-struct StreamWriter
+
+struct CopStreamWriter
+{
+    grpc::ServerWriter<coprocessor::Response> * writer;
+    std::mutex write_mutex;
+
+    explicit CopStreamWriter(grpc::ServerWriter<coprocessor::Response> * writer_)
+        : writer(writer_)
+    {}
+    void write(tipb::SelectResponse & response)
+    {
+        coprocessor::Response resp;
+        if (!response.SerializeToString(resp.mutable_data()))
+            throw Exception(
+                "[StreamWriter]Fail to serialize response, response size: " + std::to_string(response.ByteSizeLong()));
+
+        GET_METRIC(tiflash_coprocessor_response_bytes, type_cop_stream).Increment(resp.ByteSizeLong());
+
+        std::lock_guard lk(write_mutex);
+        if (!writer->Write(resp))
+            throw Exception("Failed to write resp");
+    }
+    bool isWritable() const { throw Exception("Unsupport async write"); }
+};
+
+struct BatchCopStreamWriter
 {
     ::grpc::ServerWriter<::coprocessor::BatchResponse> * writer;
     std::mutex write_mutex;
 
-    explicit StreamWriter(::grpc::ServerWriter<::coprocessor::BatchResponse> * writer_)
+    explicit BatchCopStreamWriter(::grpc::ServerWriter<::coprocessor::BatchResponse> * writer_)
         : writer(writer_)
     {}
     void write(tipb::SelectResponse & response)
     {
         ::coprocessor::BatchResponse resp;
         if (!response.SerializeToString(resp.mutable_data()))
-            throw Exception("[StreamWriter]Fail to serialize response, response size: " + std::to_string(response.ByteSizeLong()));
+            throw Exception(
+                "[StreamWriter]Fail to serialize response, response size: " + std::to_string(response.ByteSizeLong()));
 
         GET_METRIC(tiflash_coprocessor_response_bytes, type_batch_cop).Increment(resp.ByteSizeLong());
 
@@ -58,5 +84,6 @@ struct StreamWriter
     bool isWritable() const { throw Exception("Unsupport async write"); }
 };
 
-using StreamWriterPtr = std::shared_ptr<StreamWriter>;
+using CopStreamWriterPtr = std::shared_ptr<CopStreamWriter>;
+using BatchCopStreamWriterPtr = std::shared_ptr<BatchCopStreamWriter>;
 } // namespace DB

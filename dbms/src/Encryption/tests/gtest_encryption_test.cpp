@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,7 +22,7 @@
 #include <Encryption/PosixWritableFile.h>
 #include <Encryption/PosixWriteReadableFile.h>
 #include <Encryption/WriteReadableFile.h>
-#include <Storages/Transaction/FileEncryption.h>
+#include <Storages/KVStore/FFI/FileEncryption.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <gtest/gtest.h>
 #include <sys/stat.h>
@@ -103,8 +103,9 @@ public:
             // Use sm4 in GmSSL, don't need to do anything here
             break;
 #elif OPENSSL_VERSION_NUMBER < 0x1010100fL || defined(OPENSSL_NO_SM4)
-            throw DB::TiFlashException("Unsupported encryption method: " + std::to_string(static_cast<int>(method)),
-                                       Errors::Encryption::Internal);
+            throw DB::TiFlashException(
+                "Unsupported encryption method: " + std::to_string(static_cast<int>(method)),
+                Errors::Encryption::Internal);
 #else
             // Openssl support SM4 after 1.1.1 release version.
             cipher = EVP_sm4_ctr();

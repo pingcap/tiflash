@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,7 +24,7 @@
 #include <Flash/Planner/Plans/PhysicalExchangeReceiver.h>
 #include <Interpreters/Context.h>
 #include <Operators/ExchangeReceiverSourceOp.h>
-#include <Storages/Transaction/TypeMapping.h>
+#include <TiDB/Decode/TypeMapping.h>
 #include <fmt/format.h>
 
 namespace DB
@@ -104,12 +104,11 @@ void PhysicalExchangeReceiver::buildPipelineExecGroupImpl(
 
     for (size_t partition_id = 0; partition_id < concurrency; ++partition_id)
     {
-        group_builder.addConcurrency(
-            std::make_unique<ExchangeReceiverSourceOp>(
-                exec_context,
-                log->identifier(),
-                mpp_exchange_receiver,
-                /*stream_id=*/fine_grained_shuffle.enable() ? partition_id : 0));
+        group_builder.addConcurrency(std::make_unique<ExchangeReceiverSourceOp>(
+            exec_context,
+            log->identifier(),
+            mpp_exchange_receiver,
+            /*stream_id=*/fine_grained_shuffle.enable() ? partition_id : 0));
     }
     context.getDAGContext()->addInboundIOProfileInfos(executor_id, group_builder.getCurIOProfileInfos());
 }

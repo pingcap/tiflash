@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,7 +27,7 @@
 #include <Interpreters/AggregateDescription.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/WindowDescription.h>
-#include <Storages/Transaction/TMTStorages.h>
+#include <Storages/KVStore/TMTStorages.h>
 
 namespace DB
 {
@@ -48,6 +48,7 @@ public:
 
     // source_columns_ is intended to be passed by value to adapt both to left and right references.
     DAGExpressionAnalyzer(std::vector<NameAndTypePair> source_columns_, const Context & context_);
+    DAGExpressionAnalyzer(const Block & sample_block, const Context & context_);
 
     const Context & getContext() const { return context; }
 
@@ -71,9 +72,7 @@ public:
 
     NamesAndTypes buildWindowOrderColumns(const tipb::Sort & window_sort) const;
 
-    std::vector<NameAndTypePair> appendOrderBy(
-        ExpressionActionsChain & chain,
-        const tipb::TopN & topN);
+    std::vector<NameAndTypePair> appendOrderBy(ExpressionActionsChain & chain, const tipb::TopN & topN);
 
     /// <aggregation_keys, collators, aggregate_descriptions, before_agg>
     /// May change the source columns.
@@ -89,8 +88,7 @@ public:
 
     WindowDescription buildWindowDescription(const tipb::Window & window);
 
-    SortDescription getWindowSortDescription(
-        const ::google::protobuf::RepeatedPtrField<tipb::ByItem> & by_items) const;
+    SortDescription getWindowSortDescription(const ::google::protobuf::RepeatedPtrField<tipb::ByItem> & by_items) const;
 
     void initChain(ExpressionActionsChain & chain) const;
 
@@ -121,10 +119,7 @@ public:
         const String & column_prefix,
         bool keep_session_timezone_info);
 
-    String getActions(
-        const tipb::Expr & expr,
-        const ExpressionActionsPtr & actions,
-        bool output_as_uint8_type = false);
+    String getActions(const tipb::Expr & expr, const ExpressionActionsPtr & actions, bool output_as_uint8_type = false);
 
     // appendExtraCastsAfterTS will append extra casts after tablescan if needed.
     // 1) add timezone cast after table scan, this is used for session level timezone support
@@ -197,9 +192,7 @@ public:
         bool group_by_collation_sensitive,
         TiDB::TiDBCollators & collators);
 
-    void appendCastAfterAgg(
-        const ExpressionActionsPtr & actions,
-        const tipb::Aggregation & agg);
+    void appendCastAfterAgg(const ExpressionActionsPtr & actions, const tipb::Aggregation & agg);
 
     std::pair<bool, std::vector<String>> buildExtraCastsAfterTS(
         const ExpressionActionsPtr & actions,
@@ -262,10 +255,7 @@ private:
         bool create_ordered_set,
         const String & left_arg_name);
 
-    String appendCast(
-        const DataTypePtr & target_type,
-        const ExpressionActionsPtr & actions,
-        const String & expr_name);
+    String appendCast(const DataTypePtr & target_type, const ExpressionActionsPtr & actions, const String & expr_name);
 
     String appendCastForFunctionExpr(
         const tipb::Expr & expr,
@@ -315,13 +305,10 @@ private:
         const String & func_name,
         const ExpressionActionsPtr & actions);
 
-    String convertToUInt8(
-        const ExpressionActionsPtr & actions,
-        const String & column_name);
+    String convertToUInt8(const ExpressionActionsPtr & actions, const String & column_name);
 
-    NamesWithAliases genRootFinalProjectAliases(
-        const String & column_prefix,
-        const std::vector<Int32> & output_offsets) const;
+    NamesWithAliases genRootFinalProjectAliases(const String & column_prefix, const std::vector<Int32> & output_offsets)
+        const;
 
     // May change the source columns.
     void appendCastForRootFinalProjection(

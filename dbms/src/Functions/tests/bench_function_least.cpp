@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -86,10 +86,14 @@ public:
     {
         if (arguments.size() < 2)
             throw Exception(
-                fmt::format("Number of arguments for function {} doesn't match: passed {}, should be at least 2.", getName(), arguments.size()),
+                fmt::format(
+                    "Number of arguments for function {} doesn't match: passed {}, should be at least 2.",
+                    getName(),
+                    arguments.size()),
                 ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
-        return FunctionVectorizedLeastGreatest<Impl, SpecializedFunction>::create(context)->getReturnTypeImpl(arguments);
+        return FunctionVectorizedLeastGreatest<Impl, SpecializedFunction>::create(context)->getReturnTypeImpl(
+            arguments);
     }
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
@@ -98,7 +102,10 @@ public:
         if (num_arguments < 2)
         {
             throw Exception(
-                fmt::format("Number of arguments for function {} doesn't match: passed {}, should be at least 2.", getName(), arguments.size()),
+                fmt::format(
+                    "Number of arguments for function {} doesn't match: passed {}, should be at least 2.",
+                    getName(),
+                    arguments.size()),
                 ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
         }
 
@@ -121,10 +128,16 @@ public:
             // TODO need to convert the column
             for (size_t arg = 0; arg < num_arguments; ++arg)
             {
-                if (const auto * from = checkAndGetColumn<ColVec>(block.getByPosition(arguments[arg]).column.get()); from)
+                if (const auto * from = checkAndGetColumn<ColVec>(block.getByPosition(arguments[arg]).column.get());
+                    from)
                     columns.push_back(from);
                 else
-                    throw Exception(fmt::format("Illegal column type {} of  arguments of function {}", block.getByPosition(arguments[arg]).type->getName(), getName()), ErrorCodes::LOGICAL_ERROR);
+                    throw Exception(
+                        fmt::format(
+                            "Illegal column type {} of  arguments of function {}",
+                            block.getByPosition(arguments[arg]).type->getName(),
+                            getName()),
+                        ErrorCodes::LOGICAL_ERROR);
             }
 
             for (size_t row_num = 0; row_num < rows; ++row_num)
@@ -146,17 +159,16 @@ public:
         });
 
         if (!is_types_valid)
-            throw Exception(fmt::format("Illegal return type of function {}", getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception(
+                fmt::format("Illegal return type of function {}", getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 
 private:
     template <typename F>
     static bool getColumnType(DataTypePtr type, F && f)
     {
-        return castTypeToEither<
-            DataTypeInt64,
-            DataTypeUInt64,
-            DataTypeFloat64>(type.get(), std::forward<F>(f));
+        return castTypeToEither<DataTypeInt64, DataTypeUInt64, DataTypeFloat64>(type.get(), std::forward<F>(f));
     }
 
     const Context & context;
@@ -169,7 +181,8 @@ struct NameGreatest               { static constexpr auto name = "greatest"; };
 // clang-format on
 
 using FunctionBinaryRowbasedGreatest = FunctionBinaryArithmetic<BinaryGreatestBaseImpl_t, NameGreatest>;
-using FunctionTiDBRowbasedGreatest = FunctionRowbasedLeastGreatest<RowbasedGreatestImpl, FunctionBinaryRowbasedGreatest>;
+using FunctionTiDBRowbasedGreatest
+    = FunctionRowbasedLeastGreatest<RowbasedGreatestImpl, FunctionBinaryRowbasedGreatest>;
 } // namespace
 class LeastBench : public benchmark::Fixture
 {
@@ -194,8 +207,7 @@ public:
     const size_t data_size_random = 30000;
     const size_t data_size = 10000000;
     const size_t col_num = 1000;
-    std::vector<DataTypePtr> data_types = {
-        makeDataType<Nullable<Int64>>()};
+    std::vector<DataTypePtr> data_types = {makeDataType<Nullable<Int64>>()};
 
     ColumnWithTypeAndName col1;
     ColumnWithTypeAndName col2;
@@ -273,7 +285,7 @@ try
     auto context = DB::tests::TiFlashTestEnv::getContext();
     for (auto _ : state)
     {
-        executeFunction(context, func_name, col1, col2, col3);
+        executeFunction(*context, func_name, col1, col2, col3);
     }
 }
 CATCH
@@ -287,7 +299,7 @@ try
     auto context = DB::tests::TiFlashTestEnv::getContext();
     for (auto _ : state)
     {
-        executeFunction(context, func_name, col1, col2);
+        executeFunction(*context, func_name, col1, col2);
     }
 }
 CATCH
@@ -301,7 +313,7 @@ try
     auto context = DB::tests::TiFlashTestEnv::getContext();
     for (auto _ : state)
     {
-        executeFunction(context, func_name, col_nullable1, col_nullable2, col_nullable3);
+        executeFunction(*context, func_name, col_nullable1, col_nullable2, col_nullable3);
     }
 }
 CATCH
@@ -315,7 +327,7 @@ try
     auto context = DB::tests::TiFlashTestEnv::getContext();
     for (auto _ : state)
     {
-        executeFunction(context, func_name, col1, col2, col3);
+        executeFunction(*context, func_name, col1, col2, col3);
     }
 }
 CATCH
@@ -329,7 +341,7 @@ try
     auto context = DB::tests::TiFlashTestEnv::getContext();
     for (auto _ : state)
     {
-        executeFunction(context, func_name, col1, col2);
+        executeFunction(*context, func_name, col1, col2);
     }
 }
 CATCH
@@ -343,7 +355,7 @@ try
     auto context = DB::tests::TiFlashTestEnv::getContext();
     for (auto _ : state)
     {
-        executeFunction(context, func_name, col_nullable1, col_nullable2, col_nullable3);
+        executeFunction(*context, func_name, col_nullable1, col_nullable2, col_nullable3);
     }
 }
 CATCH
@@ -358,7 +370,7 @@ try
     auto context = DB::tests::TiFlashTestEnv::getContext();
     for (auto _ : state)
     {
-        executeFunction(context, func_name, v_col);
+        executeFunction(*context, func_name, v_col);
     }
 }
 CATCH
@@ -372,7 +384,7 @@ try
     auto context = DB::tests::TiFlashTestEnv::getContext();
     for (auto _ : state)
     {
-        executeFunction(context, func_name, v_col);
+        executeFunction(*context, func_name, v_col);
     }
 }
 CATCH

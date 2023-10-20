@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,10 +14,5 @@
 
 #pragma once
 
-#if _MSC_VER
-#define likely(x)   (x)
-#define unlikely(x) (x)
-#else
-#define likely(x)   (__builtin_expect(!!(x), 1))
-#define unlikely(x) (__builtin_expect(!!(x), 0))
-#endif
+#define likely(x) (__builtin_expect(!!(x), 1)) // NOLINT(readability-simplify-boolean-expr)
+#define unlikely(x) (__builtin_expect(!!(x), 0)) // NOLINT(readability-simplify-boolean-expr)

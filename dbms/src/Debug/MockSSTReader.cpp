@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,12 +15,16 @@
 #include "MockSSTReader.h"
 
 #include <Common/Exception.h>
+#include <Debug/MockRaftStoreProxy.h>
+
+#include <ext/scope_guard.h>
 
 namespace DB
 {
 SSTReaderPtr fn_get_sst_reader(SSTView v, RaftStoreProxyPtr)
 {
     std::string s(v.path.data, v.path.len);
+    std::scoped_lock<std::mutex> lock(MockSSTReader::mut);
     auto iter = MockSSTReader::getMockSSTData().find({s, v.type});
     if (iter == MockSSTReader::getMockSSTData().end())
         throw Exception("Can not find data in MockSSTData, [key=" + s + "] [type=" + CFToName(v.type) + "]");
@@ -69,6 +73,39 @@ void fn_seek(SSTReaderPtr ptr, ColumnFamilyType ct, EngineIteratorSeekType et, B
     auto * reader = reinterpret_cast<MockSSTReader *>(ptr.inner);
     reader->ffi_seek(ptr, ct, et, bf);
 }
+static uint64_t fn_approx_size(SSTReaderPtr ptr, ColumnFamilyType)
+{
+    auto * reader = reinterpret_cast<MockSSTReader *>(ptr.inner);
+    return reader->ffi_approx_size();
+}
+
+static RustStrWithViewVec fn_get_split_keys(SSTReaderPtr ptr, uint64_t splits_count)
+{
+    auto * reader = reinterpret_cast<MockSSTReader *>(ptr.inner);
+    auto length = reader->length();
+    RUNTIME_CHECK(splits_count > 1);
+    auto size_per_split = length / splits_count;
+    auto * vec = new std::vector<std::string>();
+    auto split_key_count = splits_count - 1;
+    auto it = reader->getBegin();
+    BaseBuffView * buffs = createBaseBuffViewArray(split_key_count);
+    for (size_t i = 0; i < split_key_count; i++)
+    {
+        for (size_t j = 0; j < size_per_split; j++)
+        {
+            it++;
+        }
+        vec->push_back(it->first);
+        new (&buffs[i]) BaseBuffView{.data = vec->back().data(), .len = vec->back().size()};
+    }
+    GCMonitor::instance().add(RawObjType::MockVecOfString, 1);
+    return RustStrWithViewVec{
+        .buffs = buffs,
+        .len = split_key_count,
+        .inner = RawRustPtr{
+            .ptr = new RustStrWithViewVecInner{.vec = vec, .buffs = buffs},
+            .type = static_cast<RawRustPtrType>(RawObjType::MockVecOfString)}};
+}
 
 SSTReaderInterfaces make_mock_sst_reader_interface()
 {
@@ -81,6 +118,8 @@ SSTReaderInterfaces make_mock_sst_reader_interface()
         .fn_gc = fn_gc,
         .fn_kind = fn_kind,
         .fn_seek = fn_seek,
+        .fn_approx_size = fn_approx_size,
+        .fn_get_split_keys = fn_get_split_keys,
     };
 }
 } // namespace DB

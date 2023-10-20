@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,7 +15,7 @@
 #pragma once
 
 #include <Flash/Coprocessor/ChunkCodec.h>
-#include <Storages/Transaction/TiDB.h>
+#include <TiDB/Schema/TiDB.h>
 #include <kvproto/mpp.pb.h>
 
 namespace DB
@@ -90,7 +90,12 @@ void literalFieldToTiPBExpr(const ColumnInfo & ci, const Field & field, tipb::Ex
 void literalToPB(tipb::Expr * expr, const Field & value, int32_t collator_id);
 String getFunctionNameForConstantFolding(tipb::Expr * expr);
 void foldConstant(tipb::Expr * expr, int32_t collator_id, const Context & context);
-void functionToPB(const DAGSchema & input, ASTFunction * func, tipb::Expr * expr, int32_t collator_id, const Context & context);
+void functionToPB(
+    const DAGSchema & input,
+    ASTFunction * func,
+    tipb::Expr * expr,
+    int32_t collator_id,
+    const Context & context);
 void identifierToPB(const DAGSchema & input, ASTIdentifier * id, tipb::Expr * expr, int32_t collator_id);
 void astToPB(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, int32_t collator_id, const Context & context);
 void collectUsedColumnsFromExpr(const DAGSchema & input, ASTPtr ast, std::unordered_set<String> & used_columns);

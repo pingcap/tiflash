@@ -1,4 +1,4 @@
-# Copyright 2023 PingCAP, Ltd.
+# Copyright 2023 PingCAP, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -29,6 +29,7 @@ add_headers_and_sources(delta_merge ./Delta)
 add_headers_and_sources(delta_merge ./ReadThread)
 add_headers_and_sources(delta_merge ./Remote)
 add_headers_and_sources(delta_merge ./Remote/DataStore)
+add_headers_and_sources(delta_merge ./Decode)
 
 add_library(delta_merge ${delta_merge_headers} ${delta_merge_sources})
 target_link_libraries(delta_merge PRIVATE dbms page)

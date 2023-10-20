@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-# Copyright 2022 PingCAP, Ltd.
+# Copyright 2023 PingCAP, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 import argparse
 import os
 import subprocess
+from shutil import which
 from os import path
 
 import json
@@ -82,8 +83,11 @@ def main():
 
     if files_to_format:
         print('Files to format:\n  {}'.format('\n  '.join(files_to_format)))
+        clang_format_cmd = 'clang-format-15'
+        if which(clang_format_cmd) is None:
+            clang_format_cmd = 'clang-format'
         for file in files_to_format:
-            cmd = 'clang-format -i {}'.format(file)
+            cmd = clang_format_cmd + ' -i {}'.format(file)
             if subprocess.Popen(cmd, shell=True, cwd=tiflash_repo_path).wait():
                 exit(-1)
 

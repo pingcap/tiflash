@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Core/QueryOperatorSpillContexts.h>
 #include <Flash/EstablishCall.h>
 #include <Flash/Mpp/MPPTask.h>
 #include <Flash/Mpp/MinTSOScheduler.h>
@@ -40,21 +41,21 @@ struct MPPGatherTaskSet
     /// task can only be registered state is Normal
     State state = Normal;
     String error_message;
+    /// <sender_task_id, <receiver_task_id, alarm>>
     std::unordered_map<Int64, std::unordered_map<Int64, grpc::Alarm>> alarms;
     /// only used in scheduler
     std::queue<MPPTaskId> waiting_tasks;
-    bool isInNormalState() const
-    {
-        return state == Normal;
-    }
-    bool allowUnregisterTask() const
-    {
-        return state == Normal || state == Aborted;
-    }
+    bool isInNormalState() const { return state == Normal; }
+    bool allowUnregisterTask() const { return state == Normal || state == Aborted; }
     MPPTask * findMPPTask(const MPPTaskId & task_id) const;
-    bool isTaskRegistered(const MPPTaskId & task_id) const
+    bool isTaskRegistered(const MPPTaskId & task_id) const { return task_map.find(task_id) != task_map.end(); }
+    std::pair<bool, String> isTaskAlreadyFinishedOrFailed(const MPPTaskId & task_id) const
     {
-        return task_map.find(task_id) != task_map.end();
+        auto result = finished_or_failed_tasks.find(task_id);
+        if (result != finished_or_failed_tasks.end())
+            return {true, result->second};
+        else
+            return {false, ""};
     }
     void registerTask(const MPPTaskId & task_id)
     {
@@ -66,33 +67,36 @@ struct MPPGatherTaskSet
         assert(task_map.find(task->getId()) != task_map.end());
         task_map[task->getId()] = task;
     }
+    void cancelAlarmsBySenderTaskId(const MPPTaskId & task_id);
     bool hasMPPTask() const { return !task_map.empty(); }
+    bool hasAlarm() const { return !alarms.empty(); }
     template <typename F>
     void forEachMPPTask(F && f) const
     {
         for (const auto & it : task_map)
             f(it);
     }
-    void removeMPPTask(const MPPTaskId & task_id)
-    {
-        task_map.erase(task_id);
-    }
+    void markTaskAsFinishedOrFailed(const MPPTaskId & task_id, const String & error_message);
 
 private:
     MPPTaskMap task_map;
+    std::unordered_map<MPPTaskId, String> finished_or_failed_tasks;
 };
 using MPPGatherTaskSetPtr = std::shared_ptr<MPPGatherTaskSet>;
 
 struct MPPQuery
 {
-    explicit MPPQuery(bool has_meaningful_gather_id_)
-        : has_meaningful_gather_id(has_meaningful_gather_id_)
+    MPPQuery(const MPPQueryId & mpp_query_id, bool has_meaningful_gather_id_, UInt64 auto_spill_check_min_interval_ms)
+        : mpp_query_operator_spill_contexts(
+            std::make_shared<QueryOperatorSpillContexts>(mpp_query_id, auto_spill_check_min_interval_ms))
+        , has_meaningful_gather_id(has_meaningful_gather_id_)
     {}
     MPPGatherTaskSetPtr addMPPGatherTaskSet(const MPPGatherId & gather_id);
     ~MPPQuery();
 
     std::shared_ptr<ProcessListEntry> process_list_entry;
     std::unordered_map<MPPGatherId, MPPGatherTaskSetPtr, MPPGatherIdHash> mpp_gathers;
+    std::shared_ptr<QueryOperatorSpillContexts> mpp_query_operator_spill_contexts;
     bool has_meaningful_gather_id;
 };
 using MPPQueryPtr = std::shared_ptr<MPPQuery>;
@@ -153,17 +157,21 @@ public:
         : log(log_)
     {}
 
-    void addMonitoredTask(const String & task_unique_id)
+    bool addMonitoredTask(const String & task_unique_id)
     {
         std::lock_guard lock(mu);
         auto iter = monitored_tasks.find(task_unique_id);
         if (iter != monitored_tasks.end())
         {
-            LOG_WARNING(log, "task {} is repeatedly added to be monitored which is not an expected behavior!");
-            return;
+            LOG_WARNING(
+                log,
+                "task {} is repeatedly added to be monitored which is not an expected behavior!",
+                task_unique_id);
+            return false;
         }
 
         monitored_tasks.insert(std::make_pair(task_unique_id, Stopwatch()));
+        return true;
     }
 
     void removeMonitoredTask(const String & task_unique_id)
@@ -172,11 +180,17 @@ public:
         auto iter = monitored_tasks.find(task_unique_id);
         if (iter == monitored_tasks.end())
         {
-            LOG_WARNING(log, "Unexpected behavior! task {} is not found in monitored_task.");
+            LOG_WARNING(log, "Unexpected behavior! task {} is not found in monitored_task.", task_unique_id);
             return;
         }
 
         monitored_tasks.erase(iter);
+    }
+
+    bool isInMonitor(const String & task_unique_id)
+    {
+        std::lock_guard lock(mu);
+        return monitored_tasks.find(task_unique_id) != monitored_tasks.end();
     }
 
     std::mutex mu;
@@ -213,7 +227,7 @@ public:
 
     std::shared_ptr<MPPTaskMonitor> getMPPTaskMonitor() const { return monitor; }
 
-    void addMonitoredTask(const String & task_unique_id) { monitor->addMonitoredTask(task_unique_id); }
+    bool addMonitoredTask(const String & task_unique_id) { return monitor->addMonitoredTask(task_unique_id); }
 
     void removeMonitoredTask(const String & task_unique_id) { monitor->removeMonitoredTask(task_unique_id); }
 
@@ -227,15 +241,21 @@ public:
 
     std::pair<bool, String> makeTaskActive(MPPTaskPtr task);
 
-    std::pair<bool, String> unregisterTask(const MPPTaskId & id);
+    std::pair<bool, String> unregisterTask(const MPPTaskId & id, const String & error_message);
 
     bool tryToScheduleTask(MPPTaskScheduleEntry & schedule_entry);
 
-    void releaseThreadsFromScheduler(int needed_threads);
+    void releaseThreadsFromScheduler(const String & resource_group_name, int needed_threads);
 
-    std::pair<MPPTunnelPtr, String> findTunnelWithTimeout(const ::mpp::EstablishMPPConnectionRequest * request, std::chrono::seconds timeout);
+    std::pair<MPPTunnelPtr, String> findTunnelWithTimeout(
+        const ::mpp::EstablishMPPConnectionRequest * request,
+        std::chrono::seconds timeout);
 
-    std::pair<MPPTunnelPtr, String> findAsyncTunnel(const ::mpp::EstablishMPPConnectionRequest * request, EstablishCallData * call_data, grpc::CompletionQueue * cq);
+    std::pair<MPPTunnelPtr, String> findAsyncTunnel(
+        const ::mpp::EstablishMPPConnectionRequest * request,
+        EstablishCallData * call_data,
+        grpc::CompletionQueue * cq,
+        const Context & context);
 
     void abortMPPGather(const MPPGatherId & gather_id, const String & reason, AbortType abort_type);
 
@@ -245,8 +265,16 @@ public:
 
     MPPQueryPtr getMPPQuery(const MPPQueryId & query_id);
 
+    /// for test
+    MPPQueryId getCurrentMinTSOQueryId(const String & resource_group_name);
+
+    bool isTaskExists(const MPPTaskId & id);
+
 private:
-    MPPQueryPtr addMPPQuery(const MPPQueryId & query_id, bool has_meaningful_gather_id);
+    MPPQueryPtr addMPPQuery(
+        const MPPQueryId & query_id,
+        bool has_meaningful_gather_id,
+        UInt64 auto_spill_check_min_interval_ms);
     void removeMPPGatherTaskSet(MPPQueryPtr & mpp_query, const MPPGatherId & gather_id, bool on_abort);
     std::tuple<MPPQueryPtr, MPPGatherTaskSetPtr, String> getMPPQueryAndGatherTaskSet(const MPPGatherId & gather_id);
 };

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright 2022 PingCAP, Ltd.
+# Copyright 2023 PingCAP, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,7 +12,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
 
 source ../docker/util.sh
 
@@ -31,13 +30,6 @@ wait_env
 docker-compose -f cluster.yaml -f tiflash-dt.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh tidb-ci/fail-point-tests && ./run-test.sh tidb-ci/fullstack-test true && ./run-test.sh tidb-ci/fullstack-test-dt'
 
 docker-compose -f cluster.yaml -f tiflash-dt.yaml down
-clean_data_log
-
-docker-compose -f cluster.yaml -f tiflash-dt-enable-pipeline.yaml up -d
-wait_env
-docker-compose -f cluster.yaml -f tiflash-dt-enable-pipeline.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh tidb-ci/enable_pipeline'
-
-docker-compose -f cluster.yaml -f tiflash-dt-enable-pipeline.yaml down
 clean_data_log
 
 # run new_collation_fullstack tests

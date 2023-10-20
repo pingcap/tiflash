@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,10 +18,10 @@
 #include <Flash/Coprocessor/ChunkDecodeAndSquash.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Mpp/MPPTunnelSetHelper.h>
-#include <Storages/Transaction/TiDB.h>
 #include <TestUtils/ColumnGenerator.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TestUtils/TiFlashTestEnv.h>
+#include <TiDB/Schema/TiDB.h>
 #include <gtest/gtest.h>
 
 #include <Flash/Mpp/BroadcastOrPassThroughWriter.cpp>
@@ -41,7 +41,7 @@ protected:
     {
         dag_context_ptr = std::make_unique<DAGContext>(1024);
         dag_context_ptr->encode_type = tipb::EncodeType::TypeCHBlock;
-        dag_context_ptr->is_mpp_task = true;
+        dag_context_ptr->kind = DAGRequestKind::MPP;
         dag_context_ptr->is_root_mpp_task = false;
         dag_context_ptr->result_field_types = makeFields();
     }
@@ -49,8 +49,7 @@ protected:
 public:
     TestMPPExchangeWriter()
         : part_col_ids{0}
-        , part_col_collators{
-              TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::BINARY)}
+        , part_col_collators{TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::BINARY)}
     {}
 
     // Return 10 Int64 column.
@@ -82,10 +81,8 @@ public:
             {
                 int64_col->insert(Field(r));
             }
-            block.insert(ColumnWithTypeAndName{
-                std::move(int64_col),
-                int64_data_type,
-                String("col") + std::to_string(i)});
+            block.insert(
+                ColumnWithTypeAndName{std::move(int64_col), int64_data_type, String("col") + std::to_string(i)});
         }
         return block;
     }
@@ -98,10 +95,8 @@ public:
         {
             DataTypePtr int64_data_type = std::make_shared<DataTypeInt64>();
             auto int64_column = ColumnGenerator::instance().generate({rows, "Int64", RANDOM}).column;
-            block.insert(ColumnWithTypeAndName{
-                std::move(int64_column),
-                int64_data_type,
-                String("col") + std::to_string(i)});
+            block.insert(
+                ColumnWithTypeAndName{std::move(int64_column), int64_data_type, String("col") + std::to_string(i)});
         }
         return block;
     }
@@ -117,10 +112,7 @@ using MockExchangeWriterChecker = std::function<void(const TrackedMppDataPacketP
 
 struct MockExchangeWriter
 {
-    MockExchangeWriter(
-        MockExchangeWriterChecker checker_,
-        uint16_t part_num_,
-        DAGContext & dag_context)
+    MockExchangeWriter(MockExchangeWriterChecker checker_, uint16_t part_num_, DAGContext & dag_context)
         : checker(checker_)
         , part_num(part_num_)
         , result_field_types(dag_context.result_field_types)
@@ -135,7 +127,8 @@ struct MockExchangeWriter
         assert(version > MPPDataPacketV0);
         method = isLocal(part_id) ? CompressionMethod::NONE : method;
         size_t original_size = 0;
-        auto tracked_packet = MPPTunnelSetHelper::ToPacket(header, std::move(part_columns), version, method, original_size);
+        auto tracked_packet
+            = MPPTunnelSetHelper::ToPacket(header, std::move(part_columns), version, method, original_size);
         checker(tracked_packet, part_id);
     }
     void fineGrainedShuffleWrite(
@@ -149,7 +142,13 @@ struct MockExchangeWriter
         CompressionMethod method)
     {
         if (version == MPPDataPacketV0)
-            return fineGrainedShuffleWrite(header, scattered, bucket_idx, fine_grained_shuffle_stream_count, num_columns, part_id);
+            return fineGrainedShuffleWrite(
+                header,
+                scattered,
+                bucket_idx,
+                fine_grained_shuffle_stream_count,
+                num_columns,
+                part_id);
         method = isLocal(part_id) ? CompressionMethod::NONE : method;
         size_t original_size = 0;
         auto tracked_packet = MPPTunnelSetHelper::ToFineGrainedPacket(
@@ -169,15 +168,12 @@ struct MockExchangeWriter
         checker(MPPTunnelSetHelper::ToPacketV0(blocks, result_field_types), 0);
     }
 
-    void broadcastWrite(Blocks & blocks)
-    {
-        return broadcastOrPassThroughWriteV0(blocks);
-    }
-    void passThroughWrite(Blocks & blocks)
-    {
-        return broadcastOrPassThroughWriteV0(blocks);
-    }
-    void broadcastOrPassThroughWrite(Blocks & blocks, MPPDataPacketVersion version, CompressionMethod compression_method)
+    void broadcastWrite(Blocks & blocks) { return broadcastOrPassThroughWriteV0(blocks); }
+    void passThroughWrite(Blocks & blocks) { return broadcastOrPassThroughWriteV0(blocks); }
+    void broadcastOrPassThroughWrite(
+        Blocks & blocks,
+        MPPDataPacketVersion version,
+        CompressionMethod compression_method)
     {
         if (version == MPPDataPacketV0)
             return broadcastOrPassThroughWriteV0(blocks);
@@ -315,7 +311,8 @@ try
     }
     const auto & header = blocks.back().cloneEmpty();
 
-    for (auto mode : {tipb::CompressionMode::NONE, tipb::CompressionMode::FAST, tipb::CompressionMode::HIGH_COMPRESSION})
+    for (auto mode :
+         {tipb::CompressionMode::NONE, tipb::CompressionMode::FAST, tipb::CompressionMode::HIGH_COMPRESSION})
     {
         // 2. Build MockExchangeWriter.
         std::unordered_map<uint16_t, TrackedMppDataPacketPtrs> write_report;
@@ -359,7 +356,9 @@ try
                 {
                     const auto & chunk = packet->getPacket().chunks(i);
 
-                    auto tar_method_byte = mock_writer->isLocal(part_index) ? CompressionMethodByte::NONE : GetCompressionMethodByte(ToInternalCompressionMethod(mode));
+                    auto tar_method_byte = mock_writer->isLocal(part_index)
+                        ? CompressionMethodByte::NONE
+                        : GetCompressionMethodByte(ToInternalCompressionMethod(mode));
 
                     ASSERT_EQ(CompressionMethodByte(chunk[0]), tar_method_byte);
                     auto && result = decoder.decodeAndSquashV1(chunk);
@@ -571,7 +570,8 @@ try
         blocks.emplace_back(prepareRandomBlock(0));
     }
     Block header = blocks.back();
-    for (auto mode : {tipb::CompressionMode::NONE, tipb::CompressionMode::FAST, tipb::CompressionMode::HIGH_COMPRESSION})
+    for (auto mode :
+         {tipb::CompressionMode::NONE, tipb::CompressionMode::FAST, tipb::CompressionMode::HIGH_COMPRESSION})
     {
         // 2. Build MockExchangeWriter.
         TrackedMppDataPacketPtrs write_report;
@@ -643,7 +643,8 @@ try
     }
     const auto & header = blocks.back().cloneEmpty();
 
-    for (auto mode : {tipb::CompressionMode::NONE, tipb::CompressionMode::FAST, tipb::CompressionMode::HIGH_COMPRESSION})
+    for (auto mode :
+         {tipb::CompressionMode::NONE, tipb::CompressionMode::FAST, tipb::CompressionMode::HIGH_COMPRESSION})
     {
         // 2. Build MockExchangeWriter.
         std::unordered_map<uint16_t, TrackedMppDataPacketPtrs> write_report;
@@ -683,7 +684,9 @@ try
 
                 for (auto && chunk : packet.chunks())
                 {
-                    auto tar_method_byte = mock_writer->isLocal(part_index) ? CompressionMethodByte::NONE : GetCompressionMethodByte(ToInternalCompressionMethod(mode));
+                    auto tar_method_byte = mock_writer->isLocal(part_index)
+                        ? CompressionMethodByte::NONE
+                        : GetCompressionMethodByte(ToInternalCompressionMethod(mode));
                     ASSERT_EQ(CompressionMethodByte(chunk[0]), tar_method_byte);
                     auto && result = decoder.decodeAndSquashV1(chunk);
                     if (!result)

@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -54,16 +54,10 @@ class SharedHandleTable;
 class ThreadStat
 {
 public:
-    std::string toString() const
-    {
-        return fmt::format("ms {} count {} speed {}", ms, count, speed());
-    }
+    std::string toString() const { return fmt::format("ms {} count {} speed {}", ms, count, speed()); }
 
     // count per second
-    uint64_t speed() const
-    {
-        return ms == 0 ? 0 : count * 1000 / ms;
-    }
+    uint64_t speed() const { return ms == 0 ? 0 : count * 1000 / ms; }
 
 private:
     uint64_t ms = 0;
@@ -124,15 +118,16 @@ class DTWorkload
 public:
     static int mainEntry(int argc, char ** argv);
 
-    DTWorkload(const WorkloadOptions & opts_, std::shared_ptr<SharedHandleTable> handle_table_, const TableInfo & table_info_, ContextPtr context_);
+    DTWorkload(
+        const WorkloadOptions & opts_,
+        std::shared_ptr<SharedHandleTable> handle_table_,
+        const TableInfo & table_info_,
+        ContextPtr context_);
     ~DTWorkload();
 
     void run(uint64_t r);
 
-    const Statistics & getStat() const
-    {
-        return stat;
-    }
+    const Statistics & getStat() const { return stat; }
 
 private:
     void write(ThreadStat & write_stat);

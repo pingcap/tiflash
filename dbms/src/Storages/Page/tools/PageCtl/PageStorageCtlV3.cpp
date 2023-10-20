@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@
 #include <Storages/PathPool.h>
 #include <TestUtils/MockDiskDelegator.h>
 #include <TestUtils/TiFlashTestEnv.h>
+#include <common/types.h>
 
 #include <boost/program_options.hpp>
 #include <magic_enum.hpp>
@@ -55,7 +56,13 @@ struct ControlOptions
     UInt64 namespace_id = DB::TEST_NAMESPACE_ID;
     StorageType storage_type = StorageType::Unknown; // only useful for universal page storage
     UInt32 keyspace_id = NullspaceID; // only useful for universal page storage
-    bool enable_fo_check = true;
+
+    // Show the entries for each Page
+    bool show_entries = true;
+    // Check the CRC checksum for each fields in pages
+    // Only effective when mode == CHECK_ALL_DATA_CRC
+    bool check_fields = true;
+
     bool is_imitative = true;
     String config_file_path;
 
@@ -79,7 +86,12 @@ ControlOptions ControlOptions::parse(int argc, char ** argv)
  5 is dump entries in WAL log files
  6 is display all region info
 )") //
-        ("enable_fo_check,E", value<bool>()->default_value(true), "Also check the evert field offsets. This options only works when `display_mode` is 4.") //
+        ("show_entries",
+         value<bool>()->default_value(true),
+         "Show the entries for each Page. Only effective when `display_mode` is 2") //
+        ("check_fields",
+         value<bool>()->default_value(true),
+         "Also check the checksum for every field inside a Page. Only effective when `display_mode` is 4.") //
         ("storage_type,S", value<int>()->default_value(0), R"(Storage Type(Only useful for UniversalPageStorage):
  1 is Log
  2 is Data
@@ -87,10 +99,20 @@ ControlOptions ControlOptions::parse(int argc, char ** argv)
  4 is KVStore
 )") //
         ("keyspace_id,K", value<UInt32>()->default_value(NullspaceID), "Specify keyspace id.") //
-        ("namespace_id,N", value<UInt64>()->default_value(DB::TEST_NAMESPACE_ID), "When used `page_id`/`blob_id` to query results. You can specify a namespace id.") //
-        ("page_id", value<UInt64>()->default_value(UINT64_MAX), "Query a single Page id, and print its version chain.") //
-        ("blob_id,B", value<UInt32>()->default_value(UINT32_MAX), "Query a single Blob id, and print its data distribution.") //
-        ("imitative,I", value<bool>()->default_value(true), "Use imitative context instead. (encryption is not supported in this mode so that no need to set config_file_path)") //
+        ("namespace_id,N",
+         value<UInt64>()->default_value(DB::TEST_NAMESPACE_ID),
+         "When used `page_id`/`blob_id` to query results. You can specify a namespace id.") //
+        ("page_id",
+         value<UInt64>()->default_value(UINT64_MAX),
+         "Query a single Page id, and print its version chain.") //
+        ("blob_id,B",
+         value<UInt32>()->default_value(UINT32_MAX),
+         "Query a single Blob id, and print its data distribution.") //
+        //
+        ("imitative,I",
+         value<bool>()->default_value(true),
+         "Use imitative context instead. (encryption is not supported in this mode so that no need to set "
+         "config_file_path)") //
         ("config_file_path", value<std::string>(), "Path to TiFlash config (tiflash.toml).");
 
 
@@ -119,7 +141,8 @@ ControlOptions ControlOptions::parse(int argc, char ** argv)
     auto mode_int = options["mode"].as<int>();
     opt.page_id = options["page_id"].as<UInt64>();
     opt.blob_id = options["blob_id"].as<UInt32>();
-    opt.enable_fo_check = options["enable_fo_check"].as<bool>();
+    opt.show_entries = options["show_entries"].as<bool>();
+    opt.check_fields = options["check_fields"].as<bool>();
     auto storage_type_int = options["storage_type"].as<int>();
     opt.keyspace_id = options["keyspace_id"].as<UInt32>();
     opt.namespace_id = options["namespace_id"].as<UInt64>();
@@ -203,8 +226,7 @@ public:
 public:
     explicit PageStorageControlV3(const ControlOptions & options_)
         : options(options_)
-    {
-    }
+    {}
 
     void run()
     {
@@ -252,13 +274,16 @@ private:
             provider = context.getFileProvider();
         }
 
+
         constexpr static std::string_view NAME = "PageStorageControlV3";
         PageStorageConfig config;
+        fmt::print("Running with mode={}\n", magic_enum::enum_name(options.mode));
         if (options.mode == ControlOptions::DisplayType::DISPLAY_WAL_ENTRIES)
         {
             // Only restore the PageDirectory
             typename Trait::PageDirectoryFactory factory;
-            factory.dump_entries = true;
+            factory.debug.dump_entries = true;
+            factory.debug.apply_entries_to_directory = false;
             factory.create(String(NAME), provider, delegator, WALConfig::from(config));
             return 0;
         }
@@ -274,7 +299,15 @@ private:
             }
             case ControlOptions::DisplayType::DISPLAY_DIRECTORY_INFO:
             {
-                std::cout << getDirectoryInfo(mvcc_table_directory, opts.storage_type, opts.keyspace_id, opts.namespace_id, opts.page_id) << std::endl;
+                fmt::print(
+                    "{}\n",
+                    getDirectoryInfo(
+                        mvcc_table_directory,
+                        opts.show_entries,
+                        opts.storage_type,
+                        opts.keyspace_id,
+                        opts.namespace_id,
+                        opts.page_id));
                 break;
             }
             case ControlOptions::DisplayType::DISPLAY_BLOBS_INFO:
@@ -286,11 +319,18 @@ private:
             {
                 if (opts.page_id != UINT64_MAX)
                 {
-                    std::cout << checkSinglePage(mvcc_table_directory, blob_store, opts.storage_type, opts.keyspace_id, opts.namespace_id, opts.page_id) << std::endl;
+                    std::cout << checkSinglePage(
+                        mvcc_table_directory,
+                        blob_store,
+                        opts.storage_type,
+                        opts.keyspace_id,
+                        opts.namespace_id,
+                        opts.page_id)
+                              << std::endl;
                 }
                 else
                 {
-                    std::cout << checkAllDataCrc(mvcc_table_directory, blob_store, opts.enable_fo_check) << std::endl;
+                    std::cout << checkAllDataCrc(mvcc_table_directory, blob_store, opts.check_fields) << std::endl;
                 }
                 break;
             }
@@ -336,18 +376,19 @@ private:
     {
         auto stat_info = [](const BlobStats::BlobStatPtr & stat, const String & path) {
             FmtBuffer stat_str;
-            stat_str.fmtAppend("    stat id: {}\n"
-                               "     path: {}\n"
-                               "     total size: {}\n"
-                               "     valid size: {}\n"
-                               "     valid rate: {}\n"
-                               "     max cap: {}\n", //
-                               stat->id, //
-                               path,
-                               stat->sm_total_size, //
-                               stat->sm_valid_size, //
-                               stat->sm_valid_rate, //
-                               stat->sm_max_caps);
+            stat_str.fmtAppend(
+                "    stat id: {}\n"
+                "     path: {}\n"
+                "     total size: {}\n"
+                "     valid size: {}\n"
+                "     valid rate: {}\n"
+                "     max cap: {}\n", //
+                stat->id, //
+                path,
+                stat->sm_total_size, //
+                stat->sm_valid_size, //
+                stat->sm_valid_rate, //
+                stat->sm_max_caps);
 
             stat_str.append(stat->smap->toDebugString());
             stat_str.append("\n");
@@ -382,34 +423,49 @@ private:
         return stats_info.toString();
     }
 
-    static String getDirectoryInfo(typename Trait::PageDirectory::MVCCMapType & mvcc_table_directory, StorageType storage_type, KeyspaceID keyspace_id, UInt64 ns_id, UInt64 page_id)
+    static String getDirectoryInfo(
+        typename Trait::PageDirectory::MVCCMapType & mvcc_table_directory,
+        bool show_entries,
+        StorageType storage_type,
+        KeyspaceID keyspace_id,
+        UInt64 ns_id,
+        UInt64 page_id)
     {
-        auto page_info = [](const auto & page_internal_id_, const auto & versioned_entries) {
+        auto page_info = [show_entries]( //
+                             const auto & page_internal_id_,
+                             const auto & versioned_entries,
+                             const String & extra_msg) {
             FmtBuffer page_str;
-            page_str.fmtAppend("    page id {}\n", page_internal_id_);
+            page_str.fmtAppend("    page id {} {}\n", page_internal_id_, extra_msg);
             page_str.fmtAppend("      {}\n", versioned_entries->toDebugString());
+
+            if (!show_entries)
+            {
+                return page_str.toString();
+            }
 
             size_t count = 0;
             for (const auto & [version, entry_or_del] : versioned_entries->entries)
             {
                 const auto & entry = entry_or_del.entry;
-                page_str.fmtAppend("      entry {}\n"
-                                   "       sequence: {}\n"
-                                   "       epoch: {}\n"
-                                   "       is del: {}\n"
-                                   "       blob id: {}\n"
-                                   "       offset: {}\n"
-                                   "       size: {}\n"
-                                   "       crc: {}\n", //
-                                   count++, //
-                                   version.sequence, //
-                                   version.epoch, //
-                                   entry_or_del.isDelete(), //
-                                   entry.file_id, //
-                                   entry.offset, //
-                                   entry.size, //
-                                   entry.checksum, //
-                                   entry.field_offsets.size() //
+                page_str.fmtAppend(
+                    "      entry {}\n"
+                    "       sequence: {}\n"
+                    "       epoch: {}\n"
+                    "       is del: {}\n"
+                    "       blob id: {}\n"
+                    "       offset: {}\n"
+                    "       size: {}\n"
+                    "       crc: 0x{:X}\n", //
+                    count++, //
+                    version.sequence, //
+                    version.epoch, //
+                    entry_or_del.isDelete(), //
+                    entry.file_id, //
+                    entry.offset, //
+                    entry.size, //
+                    entry.checksum, //
+                    entry.field_offsets.size() //
                 );
                 if (!entry.field_offsets.empty())
                 {
@@ -428,30 +484,42 @@ private:
         directory_info.append("  Directory specific info: \n\n");
         for (const auto & [internal_id, versioned_entries] : mvcc_table_directory)
         {
-            if (page_id != UINT64_MAX)
+            // Show all page_id
+            if (page_id == UINT64_MAX)
             {
-                if constexpr (std::is_same_v<Trait, u128::PageStorageControlV3Trait>)
+                String extra_msg;
+                if constexpr (std::is_same_v<Trait, universal::PageStorageControlV3Trait>)
                 {
-                    if (internal_id.low == page_id && internal_id.high == ns_id)
-                    {
-                        directory_info.append(page_info(internal_id, versioned_entries));
-                        return directory_info.toString();
-                    }
+                    if (auto maybe_region_id = RaftDataReader::tryParseRegionId(internal_id); maybe_region_id)
+                        extra_msg = fmt::format("(region_id={})", *maybe_region_id);
                 }
-                else if constexpr (std::is_same_v<Trait, universal::PageStorageControlV3Trait>)
-                {
-                    RUNTIME_CHECK_MSG(storage_type == StorageType::Log || storage_type == StorageType::Data || storage_type == StorageType::Meta || storage_type == StorageType::KVStore, "Unsupported storage type"); // NOLINT(readability-simplify-boolean-expr)
-                    auto prefix = UniversalPageIdFormat::toFullPrefix(keyspace_id, storage_type, ns_id);
-                    auto full_page_id = UniversalPageIdFormat::toFullPageId(prefix, page_id);
-                    if (full_page_id == internal_id)
-                    {
-                        directory_info.append(page_info(internal_id, versioned_entries));
-                        return directory_info.toString();
-                    }
-                }
+                directory_info.append(page_info(internal_id, versioned_entries, extra_msg));
                 continue;
             }
-            directory_info.append(page_info(internal_id, versioned_entries));
+
+            // Only show the given page_id
+            if constexpr (std::is_same_v<Trait, u128::PageStorageControlV3Trait>)
+            {
+                if (internal_id.low == page_id && internal_id.high == ns_id)
+                {
+                    directory_info.append(page_info(internal_id, versioned_entries, ""));
+                    return directory_info.toString();
+                }
+            }
+            else if constexpr (std::is_same_v<Trait, universal::PageStorageControlV3Trait>)
+            {
+                RUNTIME_CHECK_MSG(
+                    storage_type == StorageType::Log || storage_type == StorageType::Data
+                        || storage_type == StorageType::Meta || storage_type == StorageType::KVStore,
+                    "Unsupported storage type"); // NOLINT(readability-simplify-boolean-expr)
+                auto prefix = UniversalPageIdFormat::toFullPrefix(keyspace_id, storage_type, ns_id);
+                auto full_page_id = UniversalPageIdFormat::toFullPageId(prefix, page_id);
+                if (full_page_id == internal_id)
+                {
+                    directory_info.append(page_info(internal_id, versioned_entries, ""));
+                    return directory_info.toString();
+                }
+            }
         }
 
         if (page_id != UINT64_MAX)
@@ -461,10 +529,19 @@ private:
         return directory_info.toString();
     }
 
+    struct RegionSummary
+    {
+        RegionID region_id;
+        UInt64 min_raft_log_index;
+        UInt64 max_raft_log_index;
+        UInt64 num_raft_log;
+    };
+
     static String getAllRegionInfo(universal::PageDirectoryType::MVCCMapType & mvcc_table_directory)
     {
         // region_id -> pair<min_raft_log_index, max_raft_log_index>
-        std::unordered_map<UInt64, std::pair<UInt64, UInt64>> regions;
+        size_t tot_num_raft_log = 0;
+        std::unordered_map<RegionID, RegionSummary> regions;
         for (const auto & [page_id, _] : mvcc_table_directory)
         {
             auto maybe_region_id = RaftDataReader::tryParseRegionId(page_id);
@@ -472,50 +549,65 @@ private:
                 continue;
 
             auto region_id = *maybe_region_id;
-            if (regions.find(region_id) == regions.end())
-            {
-                regions.emplace(region_id, std::make_pair(UINT64_MAX, 0));
-            }
+            regions.try_emplace(
+                region_id,
+                RegionSummary{
+                    .region_id = region_id,
+                    .min_raft_log_index = UINT64_MAX,
+                    .max_raft_log_index = 0,
+                    .num_raft_log = 0});
 
             auto maybe_raft_log_index = RaftDataReader::tryParseRaftLogIndex(page_id);
             if (!maybe_raft_log_index)
                 continue;
 
             auto raft_log_index = *maybe_raft_log_index;
-            auto & [min_raft_log_index, max_raft_log_index] = regions[region_id];
-            min_raft_log_index = std::min(min_raft_log_index, raft_log_index);
-            max_raft_log_index = std::max(max_raft_log_index, raft_log_index);
+            auto & summary = regions[region_id];
+            summary.min_raft_log_index = std::min(summary.min_raft_log_index, raft_log_index);
+            summary.max_raft_log_index = std::max(summary.max_raft_log_index, raft_log_index);
+            summary.num_raft_log += 1;
+
+            tot_num_raft_log += 1;
         }
 
-        // tuple<region_id, min_log_index, max_log_index, log_count>
-        std::vector<std::tuple<UInt64, UInt64, UInt64, UInt64>> region_infos_vec;
+        std::vector<RegionSummary> region_infos_vec;
         region_infos_vec.reserve(regions.size());
-        for (const auto & [region_id, min_max] : regions)
-        {
-            region_infos_vec.emplace_back(std::make_tuple(region_id, min_max.first, min_max.second, min_max.first > min_max.second ? 0 : min_max.second - min_max.first + 1));
-        }
+        for (const auto & [region_id, summary] : regions)
+            region_infos_vec.emplace_back(summary);
         // sort by raft log count
         sort(region_infos_vec.begin(), region_infos_vec.end(), [](const auto & lhs, const auto & rhs) {
-            return std::get<3>(lhs) > std::get<3>(rhs);
+            return lhs.num_raft_log > rhs.num_raft_log;
         });
+
         FmtBuffer all_region_info;
         all_region_info.append("  All regions: \n\n");
+        all_region_info.fmtAppend(
+            "  num_pages={} num_regions={} num_raft_log={}\n",
+            mvcc_table_directory.size(),
+            region_infos_vec.size(),
+            tot_num_raft_log);
         all_region_info.joinStr(
             region_infos_vec.begin(),
             region_infos_vec.end(),
-            [](const auto arg, FmtBuffer & fb) {
-                fb.fmtAppend("   region id: {} min_raft_log_index: {} max_raft_log_index: {} log count: {}\n",
-                             std::get<0>(arg),
-                             std::get<1>(arg),
-                             std::get<2>(arg),
-                             std::get<3>(arg));
+            [](const RegionSummary & summary, FmtBuffer & fb) {
+                bool has_log_hole
+                    = summary.num_raft_log != (summary.max_raft_log_index - summary.min_raft_log_index + 1);
+                fb.fmtAppend(
+                    "   region_id={} min_raft_log_index={} max_raft_log_index={} log_count={} has_log_hole={}\n",
+                    summary.region_id,
+                    summary.min_raft_log_index,
+                    summary.max_raft_log_index,
+                    summary.num_raft_log,
+                    has_log_hole);
             },
             "");
 
         return all_region_info.toString();
     }
 
-    static String getSummaryInfo(typename Trait::PageDirectory::MVCCMapType & mvcc_table_directory, typename Trait::BlobStore & blob_store)
+    static String getSummaryInfo(
+        typename Trait::PageDirectory::MVCCMapType & mvcc_table_directory,
+        typename Trait::BlobStore & blob_store)
     {
         UInt64 longest_version_chaim = 0;
         UInt64 shortest_version_chaim = UINT64_MAX;
@@ -530,10 +622,11 @@ private:
             shortest_version_chaim = std::min(shortest_version_chaim, versioned_entries->size());
         }
 
-        dir_summary_info.fmtAppend("    total pages: {}, longest version chaim: {} , shortest version chaim: {} \n\n",
-                                   mvcc_table_directory.size(),
-                                   longest_version_chaim,
-                                   shortest_version_chaim);
+        dir_summary_info.fmtAppend(
+            "    total pages: {}, longest version chain: {}, shortest version chain: {}\n\n",
+            mvcc_table_directory.size(),
+            longest_version_chaim,
+            shortest_version_chaim);
 
         dir_summary_info.append("  Blobs summary info: \n");
         const auto & blob_stats = blob_store.blob_stats.getStats();
@@ -543,18 +636,19 @@ private:
             [](const auto arg, FmtBuffer & fb) {
                 for (const auto & stat : arg.second)
                 {
-                    fb.fmtAppend("   stat id: {}\n"
-                                 "     path: {}\n"
-                                 "     total size: {}\n"
-                                 "     valid size: {}\n"
-                                 "     valid rate: {}\n"
-                                 "     max cap: {}\n",
-                                 stat->id,
-                                 arg.first,
-                                 stat->sm_total_size,
-                                 stat->sm_valid_size,
-                                 stat->sm_valid_rate,
-                                 stat->sm_max_caps);
+                    fb.fmtAppend(
+                        "   stat id: {}\n"
+                        "     path: {}\n"
+                        "     total size: {}\n"
+                        "     valid size: {}\n"
+                        "     valid rate: {:.2f}%\n"
+                        "     max cap: {}\n",
+                        stat->id,
+                        arg.first,
+                        stat->sm_total_size,
+                        stat->sm_valid_size,
+                        stat->sm_valid_rate * 100,
+                        stat->sm_max_caps);
                 }
             },
             "");
@@ -562,7 +656,13 @@ private:
         return dir_summary_info.toString();
     }
 
-    static String checkSinglePage(typename Trait::PageDirectory::MVCCMapType & mvcc_table_directory, typename Trait::BlobStore & blob_store, StorageType storage_type, KeyspaceID keyspace_id, UInt64 ns_id, UInt64 page_id)
+    static String checkSinglePage(
+        typename Trait::PageDirectory::MVCCMapType & mvcc_table_directory,
+        typename Trait::BlobStore & blob_store,
+        StorageType storage_type,
+        KeyspaceID keyspace_id,
+        UInt64 ns_id,
+        UInt64 page_id)
     {
         auto check = [&](auto & full_page_id) {
             const auto & it = mvcc_table_directory.find(full_page_id);
@@ -631,7 +731,10 @@ private:
         }
         else if constexpr (std::is_same_v<Trait, universal::PageStorageControlV3Trait>)
         {
-            RUNTIME_CHECK_MSG(storage_type == StorageType::Log || storage_type == StorageType::Data || storage_type == StorageType::Meta || storage_type == StorageType::KVStore, "Unsupported storage type"); // NOLINT(readability-simplify-boolean-expr)
+            RUNTIME_CHECK_MSG(
+                storage_type == StorageType::Log || storage_type == StorageType::Data
+                    || storage_type == StorageType::Meta || storage_type == StorageType::KVStore,
+                "Unsupported storage type"); // NOLINT(readability-simplify-boolean-expr)
             auto prefix = UniversalPageIdFormat::toFullPrefix(keyspace_id, storage_type, ns_id);
             auto full_page_id = UniversalPageIdFormat::toFullPageId(prefix, page_id);
             return check(full_page_id);
@@ -639,19 +742,22 @@ private:
         __builtin_unreachable();
     }
 
-    static String checkAllDataCrc(typename Trait::PageDirectory::MVCCMapType & mvcc_table_directory, typename Trait::BlobStore & blob_store, bool enable_fo_check)
+    static String checkAllDataCrc(
+        typename Trait::PageDirectory::MVCCMapType & mvcc_table_directory,
+        typename Trait::BlobStore & blob_store,
+        bool check_fields)
     {
         size_t total_pages = mvcc_table_directory.size();
         size_t cut_index = 0;
         size_t index = 0;
-        std::cout << fmt::format("Begin to check all of datas CRC. enable_fo_check={}", static_cast<int>(enable_fo_check)) << std::endl;
+        fmt::print("Begin to check CRC for all pages. check_fields={}\n", check_fields);
 
         std::list<std::pair<typename Trait::PageId, PageVersion>> error_versioned_pages;
         for (const auto & [internal_id, versioned_entries] : mvcc_table_directory)
         {
             if (index == total_pages / 10 * cut_index)
             {
-                std::cout << fmt::format("processing : {}%", cut_index * 10) << std::endl;
+                fmt::print("processing : {}%\n", cut_index * 10);
                 cut_index++;
             }
 
@@ -672,7 +778,7 @@ private:
                         to_read.emplace_back(to_read_entry);
                         blob_store.read(to_read);
 
-                        if (enable_fo_check && !entry.field_offsets.empty())
+                        if (check_fields && !entry.field_offsets.empty())
                         {
                             DB::PageStorage::FieldIndices indices(entry.field_offsets.size());
                             std::iota(std::begin(indices), std::end(indices), 0);

@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,10 +13,18 @@
 // limitations under the License.
 
 #include <Common/DynamicThreadPool.h>
+#include <Common/FailPoint.h>
 #include <Common/TiFlashMetrics.h>
+
+#include <exception>
 
 namespace DB
 {
+namespace FailPoints
+{
+extern const char exception_new_dynamic_thread[];
+} // namespace FailPoints
+
 DynamicThreadPool::~DynamicThreadPool()
 {
     for (auto & queue : fixed_queues)
@@ -54,7 +62,8 @@ void DynamicThreadPool::init(size_t initial_size)
     {
         fixed_queues.emplace_back(std::make_unique<Queue>(1)); // each Queue will only contain at most 1 task.
         idle_fixed_queues.push(fixed_queues.back().get());
-        fixed_threads.emplace_back(ThreadFactory::newThread(false, "FixedThread", &DynamicThreadPool::fixedWork, this, i));
+        fixed_threads.emplace_back(
+            ThreadFactory::newThread(false, "FixedThread", &DynamicThreadPool::fixedWork, this, i));
     }
 }
 
@@ -90,9 +99,23 @@ bool DynamicThreadPool::scheduledToExistedDynamicThread(TaskPtr & task)
 
 void DynamicThreadPool::scheduledToNewDynamicThread(TaskPtr & task)
 {
-    alive_dynamic_threads.fetch_add(1);
-    std::thread t = ThreadFactory::newThread(false, "DynamicThread", &DynamicThreadPool::dynamicWork, this, std::move(task));
+    std::thread t = newDynamcThread(task);
     t.detach();
+}
+
+std::thread DynamicThreadPool::newDynamcThread(TaskPtr & task)
+{
+    alive_dynamic_threads.fetch_add(1);
+    try
+    {
+        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_new_dynamic_thread);
+        return ThreadFactory::newThread(false, "DynamicThread", &DynamicThreadPool::dynamicWork, this, std::move(task));
+    }
+    catch (...)
+    {
+        alive_dynamic_threads.fetch_sub(1);
+        std::rethrow_exception(std::current_exception());
+    }
 }
 
 void DynamicThreadPool::executeTask(TaskPtr & task)

@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -85,7 +85,11 @@ public:
 
     ~LogWriter();
 
-    void addRecord(ReadBuffer & payload, size_t payload_size, const WriteLimiterPtr & write_limiter = nullptr, bool background = false);
+    void addRecord(
+        ReadBuffer & payload,
+        size_t payload_size,
+        const WriteLimiterPtr & write_limiter = nullptr,
+        bool background = false);
 
     void sync();
 
@@ -93,10 +97,7 @@ public:
 
     size_t writtenBytes() const;
 
-    Format::LogNumberType logNumber() const
-    {
-        return log_number;
-    }
+    Format::LogNumberType logNumber() const { return log_number; }
 
 private:
     void emitPhysicalRecord(Format::RecordType type, ReadBuffer & payload, size_t length);

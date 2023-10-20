@@ -1,4 +1,4 @@
-# Copyright 2022 PingCAP, Ltd.
+# Copyright 2023 PingCAP, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@ mysql> alter table test.t set tiflash replica 1;
 func> wait_table test t
 
 # Disable flushing.
->> DBGInvoke __set_flush_threshold(1000000, 1000000)
+
 
 # Insert a record and Read once (not necessary).
 mysql> insert into test.t values (1);
@@ -31,8 +31,6 @@ mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;
 +------+
 |    1 |
 +------+
-# Flush the record into storage.
->> DBGInvoke __try_flush()
 
 # Enable the failpoint and make it pause before applying the raft cmd to write a row
 >> DBGInvoke __init_fail_point()

@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -33,7 +33,15 @@ public:
     // TODO: currently hashing contains redundant computations when doing distributed or external aggregations
     size_t hash(const Key & x) const
     {
-        return const_cast<Self &>(*this).dispatch(*this, x, [&](const auto &, const auto &, size_t hash) { return hash; });
+        return const_cast<Self &>(*this).dispatch(*this, x, [&](const auto &, const auto &, size_t hash) {
+            return hash;
+        });
+    }
+
+    void setResizeCallback(const ResizeCallback & resize_callback)
+    {
+        for (auto & impl : impls)
+            impl.setResizeCallback(resize_callback);
     }
 
     size_t operator()(const Key & x) const { return hash(x); }
@@ -194,10 +202,7 @@ public:
         dispatch(*this, key_holder, typename Impl::EmplaceCallable{it, inserted});
     }
 
-    LookupResult ALWAYS_INLINE find(const Key x)
-    {
-        return dispatch(*this, x, typename Impl::FindCallable{});
-    }
+    LookupResult ALWAYS_INLINE find(const Key x) { return dispatch(*this, x, typename Impl::FindCallable{}); }
 
     ConstLookupResult ALWAYS_INLINE find(const Key x) const
     {

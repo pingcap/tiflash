@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,9 +28,7 @@
 namespace DB
 {
 template <typename T>
-IColumn::Selector createBlockSelector(
-    const IColumn & column,
-    const std::vector<UInt64> & slots)
+IColumn::Selector createBlockSelector(const IColumn & column, const std::vector<UInt64> & slots)
 {
     const auto total_weight = slots.size();
     size_t num_rows = column.size();
@@ -59,7 +57,8 @@ IColumn::Selector createBlockSelector(
         const auto & data = typeid_cast<const ColumnVector<T> &>(column).getData();
 
         for (size_t i = 0; i < num_rows; ++i)
-            selector[i] = slots[static_cast<TUInt32Or64>(data[i]) - (static_cast<TUInt32Or64>(data[i]) / divider) * total_weight];
+            selector[i] = slots
+                [static_cast<TUInt32Or64>(data[i]) - (static_cast<TUInt32Or64>(data[i]) / divider) * total_weight];
     }
 
     return selector;

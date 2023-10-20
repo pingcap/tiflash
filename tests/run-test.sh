@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright 2022 PingCAP, Ltd.
+# Copyright 2023 PingCAP, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -35,9 +35,15 @@ function get_elapse_s()
 	# Another way, the time part may start with 0, which means
 	# it will be regarded as oct format, use "10#" to ensure
 	# calculateing with decimal
-	if [ "$end_nanos" -lt "$start_nanos" ];then
-		end_s=$(( 10#$end_s - 1 ))
-		end_nanos=$(( 10#$end_nanos + 10**9 ))
+	if [ "$end_nanos" = "N" -a "N" = "$start_nanos" ];then
+		# MacOS does not support '%N' output_fmt in date...
+		end_nanos=0
+		start_nanos=0
+	else
+		if [ "$end_nanos" -lt "$start_nanos" ];then
+			end_s=$(( 10#$end_s - 1 ))
+			end_nanos=$(( 10#$end_nanos + 10**9 ))
+		fi
 	fi
 
 	elapse_s=$(( 10#$end_s - 10#$start_s )).`printf "%03d\n" $(( (10#$end_nanos - 10#$start_nanos)/10**6 ))`

@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,8 +13,8 @@
 // limitations under the License.
 
 #include <Encryption/DataKeyManager.h>
-#include <Storages/Transaction/FileEncryption.h>
-#include <Storages/Transaction/ProxyFFI.h>
+#include <Storages/KVStore/FFI/FileEncryption.h>
+#include <Storages/KVStore/FFI/ProxyFFI.h>
 
 namespace DB
 {
@@ -27,7 +27,9 @@ FileEncryptionInfo DataKeyManager::getFile(const String & fname)
     auto r = tiflash_instance_wrap->proxy_helper->getFile(Poco::Path(fname).toString());
     if (unlikely(r.res != FileEncryptionRes::Ok && r.res != FileEncryptionRes::Disabled))
     {
-        throw DB::TiFlashException("Get encryption info for file: " + fname + " meet error: " + *r.error_msg, Errors::Encryption::Internal);
+        throw DB::TiFlashException(
+            "Get encryption info for file: " + fname + " meet error: " + *r.error_msg,
+            Errors::Encryption::Internal);
     }
     return r;
 }
@@ -57,11 +59,14 @@ void DataKeyManager::deleteFile(const String & fname, bool throw_on_error)
 
 void DataKeyManager::linkFile(const String & src_fname, const String & dst_fname)
 {
-    auto r = tiflash_instance_wrap->proxy_helper->linkFile(Poco::Path(src_fname).toString(), Poco::Path(dst_fname).toString());
+    auto r = tiflash_instance_wrap->proxy_helper->linkFile(
+        Poco::Path(src_fname).toString(),
+        Poco::Path(dst_fname).toString());
     if (unlikely(r.res != FileEncryptionRes::Ok && r.res != FileEncryptionRes::Disabled))
     {
-        throw DB::TiFlashException("Link encryption info from file: " + src_fname + " to " + dst_fname + " meet error: " + *r.error_msg,
-                                   Errors::Encryption::Internal);
+        throw DB::TiFlashException(
+            "Link encryption info from file: " + src_fname + " to " + dst_fname + " meet error: " + *r.error_msg,
+            Errors::Encryption::Internal);
     }
 }
 

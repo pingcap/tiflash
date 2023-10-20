@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -93,15 +93,9 @@ struct MemTrackerWrapper
             alloc(bak_size);
         }
     }
-    ~MemTrackerWrapper()
-    {
-        freeAll();
-    }
+    ~MemTrackerWrapper() { freeAll(); }
 
-    void freeAll()
-    {
-        free(size);
-    }
+    void freeAll() { free(size); }
 
     MemoryTracker * memory_tracker;
     size_t size = 0;
@@ -186,20 +180,11 @@ struct TrackedMppDataPacket
         mem_tracker_wrapper.switchMemTracker(new_memory_tracker);
     }
 
-    bool hasError() const
-    {
-        return !error_message.empty() || packet.has_error();
-    }
+    bool hasError() const { return !error_message.empty() || packet.has_error(); }
 
-    const String & error() const
-    {
-        return error_message.empty() ? packet.error().msg() : error_message;
-    }
+    const String & error() const { return error_message.empty() ? packet.error().msg() : error_message; }
 
-    mpp::MPPDataPacket & getPacket()
-    {
-        return packet;
-    }
+    mpp::MPPDataPacket & getPacket() { return packet; }
 
     std::shared_ptr<DB::TrackedMppDataPacket> copy() const
     {
@@ -230,20 +215,11 @@ struct TrackedSelectResp
         dag_chunk->set_rows_data(std::move(value));
     }
 
-    tipb::SelectResponse & getResponse()
-    {
-        return response;
-    }
+    tipb::SelectResponse & getResponse() { return response; }
 
-    void setEncodeType(::tipb::EncodeType value)
-    {
-        response.set_encode_type(value);
-    }
+    void setEncodeType(::tipb::EncodeType value) { response.set_encode_type(value); }
 
-    tipb::ExecutorExecutionSummary * addExecutionSummary()
-    {
-        return response.add_execution_summaries();
-    }
+    tipb::ExecutorExecutionSummary * addExecutionSummary() { return response.add_execution_summaries(); }
 
     MemTrackerWrapper memory_tracker;
     tipb::SelectResponse response;

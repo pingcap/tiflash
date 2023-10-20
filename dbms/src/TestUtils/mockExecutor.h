@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,7 +22,7 @@
 #include <Debug/dbgQueryCompiler.h>
 #include <Interpreters/Context_fwd.h>
 #include <Parsers/ASTFunction.h>
-#include <Storages/Transaction/Collator.h>
+#include <TiDB/Collation/Collator.h>
 #include <tipb/executor.pb.h>
 
 #include <memory>
@@ -37,7 +37,8 @@ using MockOrderByItemVec = std::vector<MockOrderByItem>;
 using MockPartitionByItem = std::pair<String, bool>;
 using MockPartitionByItemVec = std::vector<MockPartitionByItem>;
 using MockColumnNameVec = std::vector<String>;
-using MockVecColumnNameVec = std::vector<MockColumnNameVec>; // for grouping set (every groupingExpr element inside is slice of column)
+using MockVecColumnNameVec
+    = std::vector<MockColumnNameVec>; // for grouping set (every groupingExpr element inside is slice of column)
 using MockVVecColumnNameVec = std::vector<MockVecColumnNameVec>; // for grouping sets
 using MockAstVec = std::vector<ASTPtr>;
 using MockWindowFrame = mock::MockWindowFrame;
@@ -66,10 +67,7 @@ class DAGRequestBuilder
 public:
     size_t & executor_index;
 
-    size_t & getExecutorIndex() const
-    {
-        return executor_index;
-    }
+    size_t & getExecutorIndex() const { return executor_index; }
 
     explicit DAGRequestBuilder(size_t & index, Int32 collator = TiDB::ITiDBCollator::UTF8MB4_BIN)
         : executor_index(index)
@@ -77,12 +75,11 @@ public:
         properties.collator = -abs(collator);
     }
 
-    mock::ExecutorBinderPtr getRoot()
-    {
-        return root;
-    }
+    mock::ExecutorBinderPtr getRoot() { return root; }
 
-    std::shared_ptr<tipb::DAGRequest> build(MockDAGRequestContext & mock_context, DAGRequestType type = DAGRequestType::tree);
+    std::shared_ptr<tipb::DAGRequest> build(
+        MockDAGRequestContext & mock_context,
+        DAGRequestType type = DAGRequestType::tree);
     QueryTasks buildMPPTasks(MockDAGRequestContext & mock_context);
     QueryTasks buildMPPTasks(MockDAGRequestContext & mock_context, const DAGProperties & properties);
 
@@ -98,7 +95,10 @@ public:
         const MockColumnInfoVec & columns,
         bool keep_order);
 
-    DAGRequestBuilder & exchangeReceiver(const String & exchange_name, const MockColumnInfoVec & columns, uint64_t fine_grained_shuffle_stream_count = 0);
+    DAGRequestBuilder & exchangeReceiver(
+        const String & exchange_name,
+        const MockColumnInfoVec & columns,
+        uint64_t fine_grained_shuffle_stream_count = 0);
 
     DAGRequestBuilder & filter(ASTPtr filter_expr);
 
@@ -110,19 +110,16 @@ public:
     DAGRequestBuilder & topN(MockOrderByItemVec order_by_items, int limit);
     DAGRequestBuilder & topN(MockOrderByItemVec order_by_items, ASTPtr limit_expr);
 
-    DAGRequestBuilder & project(std::initializer_list<ASTPtr> exprs)
-    {
-        return project(MockAstVec{exprs});
-    }
+    DAGRequestBuilder & project(std::initializer_list<ASTPtr> exprs) { return project(MockAstVec{exprs}); }
     DAGRequestBuilder & project(MockAstVec exprs);
 
-    DAGRequestBuilder & project(std::initializer_list<String> exprs)
-    {
-        return project(MockColumnNameVec{exprs});
-    }
+    DAGRequestBuilder & project(std::initializer_list<String> exprs) { return project(MockColumnNameVec{exprs}); }
     DAGRequestBuilder & project(MockColumnNameVec col_names);
 
-    DAGRequestBuilder & exchangeSender(tipb::ExchangeType exchange_type, MockColumnNameVec part_keys = {}, uint64_t fine_grained_shuffle_stream_count = 0);
+    DAGRequestBuilder & exchangeSender(
+        tipb::ExchangeType exchange_type,
+        MockColumnNameVec part_keys = {},
+        uint64_t fine_grained_shuffle_stream_count = 0);
 
     /// User should prefer using other simplified join buidler API instead of this one unless he/she have to test
     /// join conditional expressions and knows how TiDB translates sql's `join on` clause to conditional expressions.
@@ -149,30 +146,70 @@ public:
         uint64_t fine_grained_shuffle_stream_count = 0,
         bool is_null_aware_semi_join = false,
         int64_t inner_index = 1);
-    DAGRequestBuilder & join(const DAGRequestBuilder & right, tipb::JoinType tp, MockAstVec join_col_exprs, uint64_t fine_grained_shuffle_stream_count = 0)
+    DAGRequestBuilder & join(
+        const DAGRequestBuilder & right,
+        tipb::JoinType tp,
+        MockAstVec join_col_exprs,
+        uint64_t fine_grained_shuffle_stream_count = 0)
     {
         return join(right, tp, join_col_exprs, {}, {}, {}, {}, fine_grained_shuffle_stream_count);
     }
-    DAGRequestBuilder & join(const DAGRequestBuilder & right, tipb::JoinType tp, MockAstVec join_col_exprs, mock::MockRuntimeFilter & rf, uint64_t fine_grained_shuffle_stream_count = 0)
+    DAGRequestBuilder & join(
+        const DAGRequestBuilder & right,
+        tipb::JoinType tp,
+        MockAstVec join_col_exprs,
+        mock::MockRuntimeFilter & rf,
+        uint64_t fine_grained_shuffle_stream_count = 0)
     {
-        return join(right, tp, join_col_exprs, {}, {}, {}, {}, fine_grained_shuffle_stream_count).appendRuntimeFilter(rf);
+        return join(right, tp, join_col_exprs, {}, {}, {}, {}, fine_grained_shuffle_stream_count)
+            .appendRuntimeFilter(rf);
     }
 
 
     // aggregation
-    DAGRequestBuilder & aggregation(ASTPtr agg_func, ASTPtr group_by_expr, uint64_t fine_grained_shuffle_stream_count = 0);
-    DAGRequestBuilder & aggregation(MockAstVec agg_funcs, MockAstVec group_by_exprs, uint64_t fine_grained_shuffle_stream_count = 0);
+    DAGRequestBuilder & aggregation(
+        ASTPtr agg_func,
+        ASTPtr group_by_expr,
+        uint64_t fine_grained_shuffle_stream_count = 0);
+    DAGRequestBuilder & aggregation(
+        MockAstVec agg_funcs,
+        MockAstVec group_by_exprs,
+        uint64_t fine_grained_shuffle_stream_count = 0);
 
     // window
-    DAGRequestBuilder & window(ASTPtr window_func, MockOrderByItem order_by, MockPartitionByItem partition_by, MockWindowFrame frame, uint64_t fine_grained_shuffle_stream_count = 0);
-    DAGRequestBuilder & window(MockAstVec window_funcs, MockOrderByItemVec order_by_vec, MockPartitionByItemVec partition_by_vec, MockWindowFrame frame, uint64_t fine_grained_shuffle_stream_count = 0);
-    DAGRequestBuilder & window(ASTPtr window_func, MockOrderByItemVec order_by_vec, MockPartitionByItemVec partition_by_vec, MockWindowFrame frame, uint64_t fine_grained_shuffle_stream_count = 0);
-    DAGRequestBuilder & sort(MockOrderByItem order_by, bool is_partial_sort, uint64_t fine_grained_shuffle_stream_count = 0);
-    DAGRequestBuilder & sort(MockOrderByItemVec order_by_vec, bool is_partial_sort, uint64_t fine_grained_shuffle_stream_count = 0);
+    DAGRequestBuilder & window(
+        ASTPtr window_func,
+        MockOrderByItem order_by,
+        MockPartitionByItem partition_by,
+        MockWindowFrame frame,
+        uint64_t fine_grained_shuffle_stream_count = 0);
+    DAGRequestBuilder & window(
+        MockAstVec window_funcs,
+        MockOrderByItemVec order_by_vec,
+        MockPartitionByItemVec partition_by_vec,
+        MockWindowFrame frame,
+        uint64_t fine_grained_shuffle_stream_count = 0);
+    DAGRequestBuilder & window(
+        ASTPtr window_func,
+        MockOrderByItemVec order_by_vec,
+        MockPartitionByItemVec partition_by_vec,
+        MockWindowFrame frame,
+        uint64_t fine_grained_shuffle_stream_count = 0);
+    DAGRequestBuilder & sort(
+        MockOrderByItem order_by,
+        bool is_partial_sort,
+        uint64_t fine_grained_shuffle_stream_count = 0);
+    DAGRequestBuilder & sort(
+        MockOrderByItemVec order_by_vec,
+        bool is_partial_sort,
+        uint64_t fine_grained_shuffle_stream_count = 0);
 
     // expand
     DAGRequestBuilder & expand(MockVVecColumnNameVec grouping_set_columns);
-    DAGRequestBuilder & expand2(std::vector<MockAstVec> level_projection_expressions, std::vector<String> output_names, std::vector<tipb::FieldType> fps);
+    DAGRequestBuilder & expand2(
+        std::vector<MockAstVec> level_projection_expressions,
+        std::vector<String> output_names,
+        std::vector<tipb::FieldType> fps);
 
     // runtime filter
     DAGRequestBuilder & appendRuntimeFilter(mock::MockRuntimeFilter & rf);
@@ -182,8 +219,14 @@ public:
 
 private:
     void initDAGRequest(tipb::DAGRequest & dag_request);
-    DAGRequestBuilder & buildAggregation(ASTPtr agg_funcs, ASTPtr group_by_exprs, uint64_t fine_grained_shuffle_stream_count = 0);
-    DAGRequestBuilder & buildExchangeReceiver(const String & exchange_name, const MockColumnInfoVec & columns, uint64_t fine_grained_shuffle_stream_count = 0);
+    DAGRequestBuilder & buildAggregation(
+        ASTPtr agg_funcs,
+        ASTPtr group_by_exprs,
+        uint64_t fine_grained_shuffle_stream_count = 0);
+    DAGRequestBuilder & buildExchangeReceiver(
+        const String & exchange_name,
+        const MockColumnInfoVec & columns,
+        uint64_t fine_grained_shuffle_stream_count = 0);
 
     mock::ExecutorBinderPtr root;
     DAGProperties properties;
@@ -200,18 +243,27 @@ public:
         : index(0)
         , context(context_)
         , collation(convertToTiDBCollation(collation_))
-    {
-    }
+    {}
 
-    DAGRequestBuilder createDAGRequestBuilder()
-    {
-        return DAGRequestBuilder(index);
-    }
+    DAGRequestBuilder createDAGRequestBuilder() { return DAGRequestBuilder(index); }
     /// mock column table scan
-    void addMockTable(const String & db, const String & table, const MockColumnInfoVec & columnInfos, size_t concurrency_hint = 0);
+    void addMockTable(
+        const String & db,
+        const String & table,
+        const MockColumnInfoVec & columnInfos,
+        size_t concurrency_hint = 0);
     void addMockTable(const MockTableName & name, const MockColumnInfoVec & columnInfos, size_t concurrency_hint = 0);
-    void addMockTable(const String & db, const String & table, const MockColumnInfoVec & columnInfos, ColumnsWithTypeAndName columns, size_t concurrency_hint = 0);
-    void addMockTable(const MockTableName & name, const MockColumnInfoVec & columnInfos, ColumnsWithTypeAndName columns, size_t concurrency_hint = 0);
+    void addMockTable(
+        const String & db,
+        const String & table,
+        const MockColumnInfoVec & columnInfos,
+        ColumnsWithTypeAndName columns,
+        size_t concurrency_hint = 0);
+    void addMockTable(
+        const MockTableName & name,
+        const MockColumnInfoVec & columnInfos,
+        ColumnsWithTypeAndName columns,
+        size_t concurrency_hint = 0);
 
     void updateMockTableColumnData(const String & db, const String & table, ColumnsWithTypeAndName columns)
     {
@@ -219,9 +271,20 @@ public:
     }
 
     /// mock DeltaMerge table scan
-    void addMockDeltaMerge(const MockTableName & name, const MockColumnInfoVec & columnInfos, ColumnsWithTypeAndName columns);
-    void addMockDeltaMerge(const MockTableName & name, const MockColumnInfoVec & columnInfos, ColumnsWithTypeAndName columns, size_t concurrency_hint);
-    void addMockDeltaMerge(const String & db, const String & table, const MockColumnInfoVec & columnInfos, ColumnsWithTypeAndName columns);
+    void addMockDeltaMerge(
+        const MockTableName & name,
+        const MockColumnInfoVec & columnInfos,
+        ColumnsWithTypeAndName columns);
+    void addMockDeltaMerge(
+        const MockTableName & name,
+        const MockColumnInfoVec & columnInfos,
+        ColumnsWithTypeAndName columns,
+        size_t concurrency_hint);
+    void addMockDeltaMerge(
+        const String & db,
+        const String & table,
+        const MockColumnInfoVec & columnInfos,
+        ColumnsWithTypeAndName columns);
 
     void addMockDeltaMergeSchema(const String & db, const String & table, const MockColumnInfoVec & columnInfos);
     void addMockDeltaMergeData(const String & db, const String & table, ColumnsWithTypeAndName columns);
@@ -229,13 +292,19 @@ public:
     void addMockDeltaMergeTableConcurrencyHint(const MockTableName & name, size_t concurrency_hint);
 
     /// mock column exchange receiver
-    void addExchangeReceiver(const String & name, const MockColumnInfoVec & columnInfos, const ColumnsWithTypeAndName & columns, size_t fine_grained_stream_count = 0, const MockColumnInfoVec & partition_column_infos = {});
-    void addExchangeReceiver(const String & name, const MockColumnInfoVec & columnInfos, size_t fine_grained_stream_count = 0, const MockColumnInfoVec & partition_column_infos = {});
+    void addExchangeReceiver(
+        const String & name,
+        const MockColumnInfoVec & columnInfos,
+        const ColumnsWithTypeAndName & columns,
+        size_t fine_grained_stream_count = 0,
+        const MockColumnInfoVec & partition_column_infos = {});
+    void addExchangeReceiver(
+        const String & name,
+        const MockColumnInfoVec & columnInfos,
+        size_t fine_grained_stream_count = 0,
+        const MockColumnInfoVec & partition_column_infos = {});
 
-    DAGRequestBuilder scan(
-        const String & db_name,
-        const String & table_name,
-        bool keep_order = false);
+    DAGRequestBuilder scan(const String & db_name, const String & table_name, bool keep_order = false);
 
     DAGRequestBuilder scan(const String & db_name, const String & table_name, const std::vector<int> & rf_ids);
 

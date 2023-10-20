@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,18 +18,21 @@
 #include <Storages/DeltaMerge/Range.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 
-namespace DB
+namespace DB::DM
 {
-namespace DM
-{
+
 inline RSOperatorPtr toFilter(RowKeyRange & rowkey_range)
 {
-    Attr handle_attr = {EXTRA_HANDLE_COLUMN_NAME,
-                        EXTRA_HANDLE_COLUMN_ID,
-                        rowkey_range.is_common_handle ? EXTRA_HANDLE_COLUMN_STRING_TYPE : EXTRA_HANDLE_COLUMN_INT_TYPE};
+    Attr handle_attr
+        = {EXTRA_HANDLE_COLUMN_NAME,
+           EXTRA_HANDLE_COLUMN_ID,
+           rowkey_range.is_common_handle ? EXTRA_HANDLE_COLUMN_STRING_TYPE : EXTRA_HANDLE_COLUMN_INT_TYPE};
     if (rowkey_range.is_common_handle)
     {
-        auto left = createGreaterEqual(handle_attr, Field(rowkey_range.start.value->data(), rowkey_range.start.value->size()), -1);
+        auto left = createGreaterEqual(
+            handle_attr,
+            Field(rowkey_range.start.value->data(), rowkey_range.start.value->size()),
+            -1);
         auto right = createLess(handle_attr, Field(rowkey_range.end.value->data(), rowkey_range.end.value->size()), -1);
         return createAnd({left, right});
     }
@@ -41,5 +44,4 @@ inline RSOperatorPtr toFilter(RowKeyRange & rowkey_range)
     }
 }
 
-} // namespace DM
-} // namespace DB
+} // namespace DB::DM

@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,11 +16,10 @@
 
 #include <Common/Logger.h>
 #include <Common/Stopwatch.h>
-#include <Common/TiFlashMetrics.h>
 #include <Debug/MockSchemaGetter.h>
 #include <Debug/MockSchemaNameMapper.h>
-#include <Storages/Transaction/TiDB.h>
 #include <TiDB/Schema/SchemaBuilder.h>
+#include <TiDB/Schema/TiDB.h>
 #include <pingcap/kv/Cluster.h>
 #include <pingcap/kv/Snapshot.h>
 
@@ -100,10 +99,7 @@ public:
      * When the table is physically dropped from the TiFlash node, use this method to unregister
      * the TableID mapping.
      */
-    void removeTableID(TableID table_id) override
-    {
-        table_id_map.erase(table_id);
-    }
+    void removeTableID(TableID table_id) override { table_id_map.erase(table_id); }
 
 private:
     Int64 syncSchemaDiffs(Context & context, Getter & getter, Int64 latest_version);
@@ -113,7 +109,9 @@ private:
     {
         std::shared_lock<std::shared_mutex> lock(shared_mutex_for_databases);
 
-        auto it = std::find_if(databases.begin(), databases.end(), [&](const auto & pair) { return pair.second->name == database_name; });
+        auto it = std::find_if(databases.begin(), databases.end(), [&](const auto & pair) {
+            return pair.second->name == database_name;
+        });
         if (it == databases.end())
             return nullptr;
         return it->second;
@@ -123,7 +121,9 @@ private:
     {
         std::shared_lock<std::shared_mutex> lock(shared_mutex_for_databases);
 
-        auto it = std::find_if(databases.begin(), databases.end(), [&](const auto & pair) { return NameMapper().mapDatabaseName(*pair.second) == mapped_database_name; });
+        auto it = std::find_if(databases.begin(), databases.end(), [&](const auto & pair) {
+            return NameMapper().mapDatabaseName(*pair.second) == mapped_database_name;
+        });
         if (it == databases.end())
             return nullptr;
         return it->second;

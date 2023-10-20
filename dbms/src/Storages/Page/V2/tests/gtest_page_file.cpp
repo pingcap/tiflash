@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -67,7 +67,8 @@ TEST(PageFileTest, Compare)
     ASSERT_TRUE(pf_set.rbegin()->isExist());
 
     // Test `isPageFileExist`
-    ASSERT_TRUE(PageFile::isPageFileExist(checkpoint_pf.fileIdLevel(), path, file_provider, PageFile::Type::Checkpoint, log));
+    ASSERT_TRUE(
+        PageFile::isPageFileExist(checkpoint_pf.fileIdLevel(), path, file_provider, PageFile::Type::Checkpoint, log));
     ASSERT_TRUE(PageFile::isPageFileExist(pf0.fileIdLevel(), path, file_provider, PageFile::Type::Formal, log));
     ASSERT_TRUE(PageFile::isPageFileExist(pf1.fileIdLevel(), path, file_provider, PageFile::Type::Formal, log));
     ASSERT_FALSE(PageFile::isPageFileExist(pf1.fileIdLevel(), path, file_provider, PageFile::Type::Legacy, log));

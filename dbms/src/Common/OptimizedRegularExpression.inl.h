@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -257,7 +257,8 @@ void OptimizedRegularExpressionImpl<thread_safe>::analyze(
                     && (it->first.size() > strlen("://") || strncmp(it->first.data(), "://", strlen("://")) != 0)
                     && (it->first.size() > strlen("http://") || strncmp(it->first.data(), "http", strlen("http")) != 0)
                     && (it->first.size() > strlen("www.") || strncmp(it->first.data(), "www", strlen("www")) != 0)
-                    && (it->first.size() > strlen("Windows ") || strncmp(it->first.data(), "Windows ", strlen("Windows ")) != 0))
+                    && (it->first.size() > strlen("Windows ")
+                        || strncmp(it->first.data(), "Windows ", strlen("Windows ")) != 0))
                 {
                     max_length = it->first.size();
                     candidate_it = it;
@@ -325,7 +326,8 @@ OptimizedRegularExpressionImpl<thread_safe>::OptimizedRegularExpressionImpl(cons
 
         re2 = std::make_unique<RegexType>(regexp_, reg_options);
         if (!re2->ok())
-            throw Poco::Exception(fmt::format("OptimizedRegularExpression: cannot compile re2: {}, error: {}", regexp_, re2->error()));
+            throw Poco::Exception(
+                fmt::format("OptimizedRegularExpression: cannot compile re2: {}, error: {}", regexp_, re2->error()));
 
         capture_num = re2->NumberOfCapturingGroups();
         capture_num = capture_num <= MAX_CAPTURES ? capture_num : MAX_CAPTURES;
@@ -411,7 +413,11 @@ bool OptimizedRegularExpressionImpl<thread_safe>::match(const char * subject, si
 
 
 template <bool thread_safe>
-unsigned OptimizedRegularExpressionImpl<thread_safe>::match(const char * subject, size_t subject_size, MatchVec & matches, unsigned limit) const
+unsigned OptimizedRegularExpressionImpl<thread_safe>::match(
+    const char * subject,
+    size_t subject_size,
+    MatchVec & matches,
+    unsigned limit) const
 {
     matches.clear();
 
@@ -480,7 +486,11 @@ unsigned OptimizedRegularExpressionImpl<thread_safe>::match(const char * subject
 }
 
 template <bool thread_safe>
-Int64 OptimizedRegularExpressionImpl<thread_safe>::processInstrEmptyStringExpr(const char * expr, size_t expr_size, size_t pos, Int64 occur)
+Int64 OptimizedRegularExpressionImpl<thread_safe>::processInstrEmptyStringExpr(
+    const char * expr,
+    size_t expr_size,
+    size_t pos,
+    Int64 occur)
 {
     if (occur != 1)
         return 0;
@@ -490,7 +500,11 @@ Int64 OptimizedRegularExpressionImpl<thread_safe>::processInstrEmptyStringExpr(c
 }
 
 template <bool thread_safe>
-std::optional<StringRef> OptimizedRegularExpressionImpl<thread_safe>::processSubstrEmptyStringExpr(const char * expr, size_t expr_size, size_t byte_pos, Int64 occur)
+std::optional<StringRef> OptimizedRegularExpressionImpl<thread_safe>::processSubstrEmptyStringExpr(
+    const char * expr,
+    size_t expr_size,
+    size_t byte_pos,
+    Int64 occur)
 {
     if (occur != 1 || byte_pos != 1)
         return std::nullopt;
@@ -507,12 +521,16 @@ namespace FunctionsRegexp
 {
 inline void checkArgPos(Int64 utf8_total_len, size_t subject_size, Int64 pos)
 {
-    RUNTIME_CHECK_MSG(!(pos <= 0 || (pos > utf8_total_len && subject_size != 0)), "Index out of bounds in regular function.");
+    RUNTIME_CHECK_MSG(
+        !(pos <= 0 || (pos > utf8_total_len && subject_size != 0)),
+        "Index out of bounds in regular function.");
 }
 
 inline void checkArgsInstr(Int64 utf8_total_len, size_t subject_size, Int64 pos, Int64 ret_op)
 {
-    RUNTIME_CHECK_MSG(!(ret_op != 0 && ret_op != 1), "Incorrect argument to regexp function: return_option must be 1 or 0");
+    RUNTIME_CHECK_MSG(
+        !(ret_op != 0 && ret_op != 1),
+        "Incorrect argument to regexp function: return_option must be 1 or 0");
     checkArgPos(utf8_total_len, subject_size, pos);
 }
 
@@ -523,7 +541,9 @@ inline void checkArgsSubstr(Int64 utf8_total_len, size_t subject_size, Int64 pos
 
 inline void checkArgsReplace(Int64 utf8_total_len, size_t subject_size, Int64 pos)
 {
-    RUNTIME_CHECK_MSG(!(pos <= 0 || (pos > utf8_total_len && subject_size != 0) || (pos != 1 && subject_size == 0)), "Index out of bounds in regular function.");
+    RUNTIME_CHECK_MSG(
+        !(pos <= 0 || (pos > utf8_total_len && subject_size != 0) || (pos != 1 && subject_size == 0)),
+        "Index out of bounds in regular function.");
 }
 
 inline void makeOccurValid(Int64 & occur)
@@ -538,7 +558,12 @@ inline void makeReplaceOccurValid(Int64 & occur)
 } // namespace FunctionsRegexp
 
 template <bool thread_safe>
-Int64 OptimizedRegularExpressionImpl<thread_safe>::instrImpl(const char * subject, size_t subject_size, Int64 byte_pos, Int64 occur, Int64 ret_op)
+Int64 OptimizedRegularExpressionImpl<thread_safe>::instrImpl(
+    const char * subject,
+    size_t subject_size,
+    Int64 byte_pos,
+    Int64 occur,
+    Int64 ret_op)
 {
     size_t byte_offset = byte_pos - 1; // This is a offset for bytes, not utf8
     const char * expr = subject + byte_offset; // expr is the string actually passed into regexp to be matched
@@ -556,11 +581,17 @@ Int64 OptimizedRegularExpressionImpl<thread_safe>::instrImpl(const char * subjec
     }
 
     byte_offset = matched_str.data() - subject;
-    return ret_op == 0 ? DB::UTF8::bytePos2Utf8Pos(reinterpret_cast<const UInt8 *>(subject), byte_offset + 1) : DB::UTF8::bytePos2Utf8Pos(reinterpret_cast<const UInt8 *>(subject), byte_offset + matched_str.size() + 1);
+    return ret_op == 0
+        ? DB::UTF8::bytePos2Utf8Pos(reinterpret_cast<const UInt8 *>(subject), byte_offset + 1)
+        : DB::UTF8::bytePos2Utf8Pos(reinterpret_cast<const UInt8 *>(subject), byte_offset + matched_str.size() + 1);
 }
 
 template <bool thread_safe>
-std::optional<StringRef> OptimizedRegularExpressionImpl<thread_safe>::substrImpl(const char * subject, size_t subject_size, Int64 byte_pos, Int64 occur)
+std::optional<StringRef> OptimizedRegularExpressionImpl<thread_safe>::substrImpl(
+    const char * subject,
+    size_t subject_size,
+    Int64 byte_pos,
+    Int64 occur)
 {
     size_t byte_offset = byte_pos - 1; // This is a offset for bytes, not utf8
     const char * expr = subject + byte_offset; // expr is the string actually passed into regexp to be matched
@@ -580,7 +611,13 @@ std::optional<StringRef> OptimizedRegularExpressionImpl<thread_safe>::substrImpl
 }
 
 template <bool thread_safe>
-void OptimizedRegularExpressionImpl<thread_safe>::replaceAllImpl(const char * subject, size_t subject_size, DB::ColumnString::Chars_t & res_data, DB::ColumnString::Offset & res_offset, Int64 byte_pos, const Instructions & instructions)
+void OptimizedRegularExpressionImpl<thread_safe>::replaceAllImpl(
+    const char * subject,
+    size_t subject_size,
+    DB::ColumnString::Chars_t & res_data,
+    DB::ColumnString::Offset & res_offset,
+    Int64 byte_pos,
+    const Instructions & instructions)
 {
     size_t byte_offset = byte_pos - 1; // This is a offset for bytes, not utf8
     StringPieceType expr_sp(subject + byte_offset, subject_size - byte_offset);
@@ -596,7 +633,8 @@ void OptimizedRegularExpressionImpl<thread_safe>::replaceAllImpl(const char * su
 
     while (true)
     {
-        bool success = re2->Match(expr_sp, start_pos, expr_len, re2_st::RE2::Anchor::UNANCHORED, matches, capture_num + 1);
+        bool success
+            = re2->Match(expr_sp, start_pos, expr_len, re2_st::RE2::Anchor::UNANCHORED, matches, capture_num + 1);
         if (!success)
             break;
 
@@ -621,7 +659,14 @@ void OptimizedRegularExpressionImpl<thread_safe>::replaceAllImpl(const char * su
 }
 
 template <bool thread_safe>
-void OptimizedRegularExpressionImpl<thread_safe>::replaceOneImpl(const char * subject, size_t subject_size, DB::ColumnString::Chars_t & res_data, DB::ColumnString::Offset & res_offset, Int64 byte_pos, Int64 occur, const Instructions & instructions)
+void OptimizedRegularExpressionImpl<thread_safe>::replaceOneImpl(
+    const char * subject,
+    size_t subject_size,
+    DB::ColumnString::Chars_t & res_data,
+    DB::ColumnString::Offset & res_offset,
+    Int64 byte_pos,
+    Int64 occur,
+    const Instructions & instructions)
 {
     size_t byte_offset = byte_pos - 1; // This is a offset for bytes, not utf8
     StringPieceType expr_sp(subject + byte_offset, subject_size - byte_offset);
@@ -631,7 +676,8 @@ void OptimizedRegularExpressionImpl<thread_safe>::replaceOneImpl(const char * su
 
     while (occur > 0)
     {
-        bool success = re2->Match(expr_sp, start_pos, expr_len, re2_st::RE2::Anchor::UNANCHORED, matches, capture_num + 1);
+        bool success
+            = re2->Match(expr_sp, start_pos, expr_len, re2_st::RE2::Anchor::UNANCHORED, matches, capture_num + 1);
         if (!success)
         {
             res_data.resize(res_data.size() + subject_size + 1);
@@ -664,7 +710,14 @@ void OptimizedRegularExpressionImpl<thread_safe>::replaceOneImpl(const char * su
 }
 
 template <bool thread_safe>
-void OptimizedRegularExpressionImpl<thread_safe>::replaceImpl(const char * subject, size_t subject_size, DB::ColumnString::Chars_t & res_data, DB::ColumnString::Offset & res_offset, Int64 byte_pos, Int64 occur, const Instructions & instructions)
+void OptimizedRegularExpressionImpl<thread_safe>::replaceImpl(
+    const char * subject,
+    size_t subject_size,
+    DB::ColumnString::Chars_t & res_data,
+    DB::ColumnString::Offset & res_offset,
+    Int64 byte_pos,
+    Int64 occur,
+    const Instructions & instructions)
 {
     if (occur == 0)
         return replaceAllImpl(subject, subject_size, res_data, res_offset, byte_pos, instructions);
@@ -673,7 +726,12 @@ void OptimizedRegularExpressionImpl<thread_safe>::replaceImpl(const char * subje
 }
 
 template <bool thread_safe>
-Int64 OptimizedRegularExpressionImpl<thread_safe>::instr(const char * subject, size_t subject_size, Int64 pos, Int64 occur, Int64 ret_op)
+Int64 OptimizedRegularExpressionImpl<thread_safe>::instr(
+    const char * subject,
+    size_t subject_size,
+    Int64 pos,
+    Int64 occur,
+    Int64 ret_op)
 {
     Int64 utf8_total_len = DB::UTF8::countCodePoints(reinterpret_cast<const UInt8 *>(subject), subject_size);
 
@@ -688,7 +746,11 @@ Int64 OptimizedRegularExpressionImpl<thread_safe>::instr(const char * subject, s
 }
 
 template <bool thread_safe>
-std::optional<StringRef> OptimizedRegularExpressionImpl<thread_safe>::substr(const char * subject, size_t subject_size, Int64 pos, Int64 occur)
+std::optional<StringRef> OptimizedRegularExpressionImpl<thread_safe>::substr(
+    const char * subject,
+    size_t subject_size,
+    Int64 pos,
+    Int64 occur)
 {
     Int64 utf8_total_len = DB::UTF8::countCodePoints(reinterpret_cast<const UInt8 *>(subject), subject_size);
     FunctionsRegexp::checkArgsSubstr(utf8_total_len, subject_size, pos);
@@ -771,14 +833,19 @@ Instructions OptimizedRegularExpressionImpl<thread_safe>::getInstructions(const 
 }
 
 template <bool thread_safe>
-void OptimizedRegularExpressionImpl<thread_safe>::replaceMatchedStringWithInstructions(DB::ColumnString::Chars_t & res_data, DB::ColumnString::Offset & res_offset, StringPieceType * matches, const Instructions & instructions)
+void OptimizedRegularExpressionImpl<thread_safe>::replaceMatchedStringWithInstructions(
+    DB::ColumnString::Chars_t & res_data,
+    DB::ColumnString::Offset & res_offset,
+    StringPieceType * matches,
+    const Instructions & instructions)
 {
     // Replace the matched string with instructions
     for (const auto & instr : instructions)
     {
         std::string_view replacement;
         if (instr.substitution_num >= 0)
-            replacement = std::string_view(matches[instr.substitution_num].data(), matches[instr.substitution_num].size());
+            replacement
+                = std::string_view(matches[instr.substitution_num].data(), matches[instr.substitution_num].size());
         else
             replacement = instr.literal;
         res_data.resize(res_data.size() + replacement.size());

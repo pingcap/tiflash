@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,13 +22,13 @@
 #include <Poco/Path.h>
 #include <Storages/BackgroundProcessingPool.h>
 #include <Storages/DeltaMerge/Remote/DataStore/DataStore.h>
+#include <Storages/KVStore/KVStore.h>
+#include <Storages/KVStore/TMTContext.h>
+#include <Storages/KVStore/Types.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorageService.h>
 #include <Storages/S3/S3Common.h>
 #include <Storages/S3/S3Filename.h>
-#include <Storages/Transaction/KVStore.h>
-#include <Storages/Transaction/TMTContext.h>
-#include <Storages/Transaction/Types.h>
 #include <aws/s3/S3Client.h>
 
 #include <ext/scope_guard.h>
@@ -44,8 +44,7 @@ UniversalPageStorageService::UniversalPageStorageService(Context & global_contex
     : global_context(global_context_)
     , uni_page_storage(nullptr)
     , log(Logger::get("UniPSService"))
-{
-}
+{}
 
 UniversalPageStorageServicePtr UniversalPageStorageService::create(
     Context & context,
@@ -67,25 +66,20 @@ UniversalPageStorageServicePtr UniversalPageStorageService::create(
         // Only upload checkpoint when S3 is enabled
         service->checkpoint_pool = std::make_unique<BackgroundProcessingPool>(1, "ps-checkpoint");
         service->remote_checkpoint_handle = service->checkpoint_pool->addTask(
-            [service] {
-                return service->uploadCheckpoint();
-            },
+            [service] { return service->uploadCheckpoint(); },
             /*multi*/ false,
             /*interval_ms*/ interval_s * 1000);
     }
 
     auto & bkg_pool = context.getBackgroundPool();
     service->gc_handle = bkg_pool.addTask(
-        [service] {
-            return service->gc();
-        },
+        [service] { return service->gc(); },
         false,
         /*interval_ms*/ 60 * 1000);
     return service;
 }
 
-UniversalPageStorageServicePtr
-UniversalPageStorageService::createForTest(
+UniversalPageStorageServicePtr UniversalPageStorageService::createForTest(
     Context & context,
     const String & name,
     PSDiskDelegatorPtr delegator,
@@ -291,14 +285,8 @@ bool UniversalPageStorageService::uploadCheckpointImpl(
     return true;
 }
 
-bool UniversalPageStorageService::gc()
+bool UniversalPageStorageService::gc() const
 {
-    Timepoint now = Clock::now();
-    const std::chrono::seconds try_gc_period(60);
-    if (now < (last_try_gc_time.load() + try_gc_period))
-        return false;
-
-    last_try_gc_time = now;
     // TODO: reload config
     return this->uni_page_storage->gc();
 }
@@ -324,7 +312,7 @@ void UniversalPageStorageService::shutdown()
     }
 }
 
-void UniversalPageStorageService::removeAllLocalCheckpointFiles()
+void UniversalPageStorageService::removeAllLocalCheckpointFiles() const
 {
     Poco::File temp_dir(global_context.getTemporaryPath());
     if (temp_dir.exists() && temp_dir.isDirectory())
@@ -344,7 +332,8 @@ void UniversalPageStorageService::removeAllLocalCheckpointFiles()
 
 Poco::Path UniversalPageStorageService::getCheckpointLocalDir(UInt64 seq) const
 {
-    return Poco::Path(global_context.getTemporaryPath() + fmt::format("/{}{}", checkpoint_dirname_prefix, seq)).absolute();
+    return Poco::Path(global_context.getTemporaryPath() + fmt::format("/{}{}", checkpoint_dirname_prefix, seq))
+        .absolute();
 }
 
 } // namespace DB

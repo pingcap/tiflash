@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -47,7 +47,7 @@ public:
         PSDiskDelegatorPtr delegator,
         const PageStorageConfig & config);
 
-    bool gc();
+    bool gc() const;
 
     bool uploadCheckpoint();
 
@@ -64,8 +64,7 @@ public:
         const DM::Remote::IDataStorePtr & remote_store,
         bool force_sync_data);
 
-    static UniversalPageStorageServicePtr
-    createForTest(
+    static UniversalPageStorageServicePtr createForTest(
         Context & context,
         const String & name,
         PSDiskDelegatorPtr delegator,
@@ -79,7 +78,7 @@ public:
     explicit UniversalPageStorageService(Context & global_context_);
     // If the TiFlash process restart unexpectedly, some local checkpoint files can be left,
     // remove these files when the process restarting.
-    void removeAllLocalCheckpointFiles();
+    void removeAllLocalCheckpointFiles() const;
     Poco::Path getCheckpointLocalDir(UInt64 seq) const;
 
 #ifndef DBMS_PUBLIC_GTEST
@@ -96,8 +95,6 @@ public:
     Context & global_context;
     UniversalPageStoragePtr uni_page_storage;
     BackgroundProcessingPool::TaskHandle gc_handle;
-
-    std::atomic<Timepoint> last_try_gc_time = Clock::now();
 
     LoggerPtr log;
 

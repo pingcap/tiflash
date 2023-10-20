@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,11 +16,11 @@
 
 namespace DB
 {
-// TODO support resource group queue.
 enum class TaskQueueType
 {
     DEFAULT, // Determined internally by the task thread pool.
     MLFQ, // multi-level feedback queue
     IO_PRIORITY, // io priority queue
+    RCQ_MLFQ, // resource control queue nesting MLFQ.
 };
 } // namespace DB

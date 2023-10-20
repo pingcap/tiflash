@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,16 +14,17 @@
 
 #include <Common/Exception.h>
 #include <Common/RedactHelpers.h>
+#include <Storages/KVStore/Types.h>
 #include <Storages/Page/V3/Universal/UniversalPageIdFormatImpl.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
-#include <Storages/Transaction/Types.h>
 #include <raft_serverpb.pb.h>
 
 namespace DB
 {
 
-std::optional<raft_serverpb::StoreIdent>
-tryGetStoreIdentFromKey(const UniversalPageStoragePtr & wn_ps, const String & key)
+std::optional<raft_serverpb::StoreIdent> tryGetStoreIdentFromKey(
+    const UniversalPageStoragePtr & wn_ps,
+    const String & key)
 {
     raft_serverpb::StoreIdent store_ident;
     auto page = wn_ps->read(key, nullptr, {}, /*throw_on_not_exist*/ false);
@@ -45,8 +46,7 @@ tryGetStoreIdentFromKey(const UniversalPageStoragePtr & wn_ps, const String & ke
     return store_ident;
 }
 
-std::optional<raft_serverpb::StoreIdent>
-tryGetStoreIdent(const UniversalPageStoragePtr & wn_ps)
+std::optional<raft_serverpb::StoreIdent> tryGetStoreIdent(const UniversalPageStoragePtr & wn_ps)
 {
     // First try to get from raft engine
     auto store_ident = tryGetStoreIdentFromKey(wn_ps, UniversalPageIdFormat::getStoreIdentId());

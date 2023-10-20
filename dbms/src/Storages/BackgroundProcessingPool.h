@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -32,7 +32,6 @@
 
 namespace DB
 {
-class Context;
 
 /** Using a fixed number of threads, perform an arbitrary number of tasks in an infinite loop.
   * In this case, one task can run simultaneously from different threads.
@@ -54,7 +53,11 @@ public:
         /// Wake up any thread.
         void wake();
 
-        TaskInfo(BackgroundProcessingPool & pool_, const Task & function_, const bool multi_, const uint64_t interval_ms_)
+        TaskInfo(
+            BackgroundProcessingPool & pool_,
+            const Task & function_,
+            const bool multi_,
+            const uint64_t interval_ms_)
             : pool(pool_)
             , function(function_)
             , multi(multi_)

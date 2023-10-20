@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -38,15 +38,16 @@ const DB::PageId MAX_PAGE_ID = 500;
 
 void printPageEntry(const DB::PageId pid, const DB::PageEntry & entry)
 {
-    printf("\tpid:%9lu\t\t"
-           "%9lu\t%u\t%u\t%9lu\t%9lu\t%016lx\n",
-           pid, //
-           entry.file_id,
-           entry.level,
-           entry.size,
-           entry.offset,
-           entry.tag,
-           entry.checksum);
+    printf(
+        "\tpid:%9lu\t\t"
+        "%9lu\t%u\t%u\t%9lu\t%9lu\t%016lx\n",
+        pid, //
+        entry.file_id,
+        entry.level,
+        entry.size,
+        entry.offset,
+        entry.tag,
+        entry.checksum);
 }
 
 
@@ -93,13 +94,16 @@ public:
             memset(buff, buff_ch, buff_sz);
             wb.putPage(pageId, 0, std::make_shared<DB::ReadBufferFromMemory>(buff, buff_sz), buff_sz);
 
-            LOG_INFO(&Poco::Logger::get("root"),
-                     "writing page" + DB::toString(pageId) + " with size:" + DB::toString(buff_sz)
-                         + ", byte: " + DB::toString((DB::UInt32)(buff_ch)));
+            LOG_INFO(
+                &Poco::Logger::get("root"),
+                "writing page" + DB::toString(pageId) + " with size:" + DB::toString(buff_sz)
+                    + ", byte: " + DB::toString((DB::UInt32)(buff_ch)));
             try
             {
                 ps->write(wb);
-                LOG_INFO(&Poco::Logger::get("root"), "writing page" + DB::toString(pageId) + " with size:" + DB::toString(buff_sz) + " done");
+                LOG_INFO(
+                    &Poco::Logger::get("root"),
+                    "writing page" + DB::toString(pageId) + " with size:" + DB::toString(buff_sz) + " done");
                 delete[] buff;
             }
             catch (DB::Exception & e)
@@ -119,8 +123,10 @@ public:
                 {
                     state = REWRITE_TO_FILE;
                 }
-                LOG_INFO(&Poco::Logger::get("root"),
-                         "writing page" + DB::toString(pageId) + " with size:" + DB::toString(buff_sz) + " error: " + e.displayText());
+                LOG_INFO(
+                    &Poco::Logger::get("root"),
+                    "writing page" + DB::toString(pageId) + " with size:" + DB::toString(buff_sz)
+                        + " error: " + e.displayText());
             }
         }
         LOG_INFO(&Poco::Logger::get("root"), "writer exit");
@@ -165,7 +171,11 @@ int main(int argc, char ** argv)
     {
         DB::PageEntries page_entries;
         const_cast<DB::PageFile &>(page_file).readAndSetPageMetas(page_entries, false);
-        printf("File: page_%lu_%u with %zu entries:\n", page_file.getFileId(), page_file.getLevel(), page_entries.size());
+        printf(
+            "File: page_%lu_%u with %zu entries:\n",
+            page_file.getFileId(),
+            page_file.getLevel(),
+            page_entries.size());
         DB::PageIdAndEntries id_and_caches;
         for (auto iter = page_entries.cbegin(); iter != page_entries.cend(); ++iter)
         {

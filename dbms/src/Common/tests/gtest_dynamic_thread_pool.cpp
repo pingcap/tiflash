@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/DynamicThreadPool.h>
+#include <Common/FailPoint.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
 namespace DB::tests
@@ -67,8 +68,9 @@ try
     DynamicThreadPool pool(0, std::chrono::milliseconds(50));
 
     auto f0 = pool.schedule(true, [] {
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
-            return 0; });
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        return 0;
+    });
     pool.schedule(true, [] { return 0; });
 
     auto cnt = pool.threadCount();
@@ -111,17 +113,29 @@ CATCH
 TEST_F(DynamicThreadPoolTest, testExceptionSafe)
 try
 {
-    DynamicThreadPool pool(1, std::chrono::milliseconds(10));
+    {
+        DynamicThreadPool pool(1, std::chrono::milliseconds(10));
 
-    auto f0 = pool.schedule(true, [] { throw Exception("test"); });
-    ASSERT_THROW(f0.get(), Exception);
+        auto f0 = pool.schedule(true, [] { throw Exception("test"); });
+        ASSERT_THROW(f0.get(), Exception);
 
-    auto cnt = pool.threadCount();
-    ASSERT_EQ(cnt.fixed, 1);
-    ASSERT_EQ(cnt.dynamic, 0);
+        auto cnt = pool.threadCount();
+        ASSERT_EQ(cnt.fixed, 1);
+        ASSERT_EQ(cnt.dynamic, 0);
 
-    auto f1 = pool.schedule(true, [] { return 1; });
-    ASSERT_EQ(f1.get(), 1);
+        auto f1 = pool.schedule(true, [] { return 1; });
+        ASSERT_EQ(f1.get(), 1);
+    }
+    {
+        DynamicThreadPool pool(0, std::chrono::milliseconds(0));
+        auto f0 = pool.schedule(true, [] { throw Exception("test"); });
+        ASSERT_THROW(f0.get(), Exception);
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        auto cnt = pool.threadCount();
+        ASSERT_EQ(cnt.fixed, 0);
+        ASSERT_EQ(cnt.dynamic, 0);
+    }
 }
 CATCH
 
@@ -205,6 +219,27 @@ try
         auto ret = cv.wait_for(lock, std::chrono::seconds(1), [&] { return destructed; });
         ASSERT_TRUE(ret);
     }
+}
+CATCH
+
+TEST_F(DynamicThreadPoolTest, testExceptionNewDynamicThread)
+try
+{
+    FailPointHelper::enableFailPoint("exception_new_dynamic_thread");
+    DynamicThreadPool pool(0, std::chrono::milliseconds(10));
+    try
+    {
+        pool.schedule(true, [] {});
+        GTEST_FAIL();
+    }
+    catch (Exception & e)
+    {
+        GTEST_ASSERT_EQ(std::strstr(e.message().c_str(), "exception_new_dynamic_thread") != nullptr, true);
+    }
+    auto cnt = pool.threadCount();
+    ASSERT_EQ(cnt.fixed, 0);
+    ASSERT_EQ(cnt.dynamic, 0);
+    FailPointHelper::disableFailPoint("exception_new_dynamic_thread");
 }
 CATCH
 

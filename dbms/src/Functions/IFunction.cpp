@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,7 +19,6 @@
 #include <DataTypes/DataTypeNullable.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/IFunction.h>
-#include <Interpreters/Settings.h>
 
 #include <ext/collection_cast.h>
 #include <ext/range.h>
@@ -139,14 +138,22 @@ NullPresence getNullPresense(const Block & block, const ColumnNumbers & args)
     return res;
 }
 
-bool IExecutableFunction::defaultImplementationForConstantArguments(Block & block, const ColumnNumbers & args, size_t result) const
+bool IExecutableFunction::defaultImplementationForConstantArguments(
+    Block & block,
+    const ColumnNumbers & args,
+    size_t result) const
 {
     ColumnNumbers arguments_to_remain_constants = getArgumentsThatAreAlwaysConstant();
 
     /// Check that these arguments are really constant.
     for (auto arg_num : arguments_to_remain_constants)
         if (arg_num < args.size() && !block.getByPosition(args[arg_num]).column->isColumnConst())
-            throw Exception("Argument at index " + toString(arg_num) + " for function " + getName() + " must be constant", ErrorCodes::ILLEGAL_COLUMN);
+            throw Exception(
+                ErrorCodes::ILLEGAL_COLUMN,
+                "Argument at index {} for function {}"
+                " must be constant",
+                arg_num,
+                getName());
 
     if (args.empty() || !useDefaultImplementationForConstants() || !allArgumentsAreConstants(block, args))
         return false;
@@ -159,12 +166,14 @@ bool IExecutableFunction::defaultImplementationForConstantArguments(Block & bloc
     {
         const ColumnWithTypeAndName & column = block.getByPosition(args[arg_num]);
 
-        if (arguments_to_remain_constants.end() != std::find(arguments_to_remain_constants.begin(), arguments_to_remain_constants.end(), arg_num))
+        if (arguments_to_remain_constants.end()
+            != std::find(arguments_to_remain_constants.begin(), arguments_to_remain_constants.end(), arg_num))
             temporary_block.insert(column);
         else
         {
             have_converted_columns = true;
-            temporary_block.insert({static_cast<const ColumnConst *>(column.column.get())->getDataColumnPtr(), column.type, column.name});
+            temporary_block.insert(
+                {static_cast<const ColumnConst *>(column.column.get())->getDataColumnPtr(), column.type, column.name});
         }
     }
 
@@ -172,8 +181,9 @@ bool IExecutableFunction::defaultImplementationForConstantArguments(Block & bloc
       *  not in "arguments_to_remain_constants" set. Otherwise we get infinite recursion.
       */
     if (!have_converted_columns)
-        throw Exception("Number of arguments for function " + getName() + " doesn't match: the function requires more arguments",
-                        ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+        throw Exception(
+            "Number of arguments for function " + getName() + " doesn't match: the function requires more arguments",
+            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
     temporary_block.insert(block.getByPosition(result));
 
@@ -183,7 +193,8 @@ bool IExecutableFunction::defaultImplementationForConstantArguments(Block & bloc
 
     execute(temporary_block, temporary_argument_numbers, arguments_size);
 
-    block.getByPosition(result).column = ColumnConst::create(temporary_block.getByPosition(arguments_size).column, block.rows());
+    block.getByPosition(result).column
+        = ColumnConst::create(temporary_block.getByPosition(arguments_size).column, block.rows());
     return true;
 }
 
@@ -205,7 +216,8 @@ bool IExecutableFunction::defaultImplementationForNulls(Block & block, const Col
     {
         Block temporary_block = createBlockWithNestedColumns(block, args, result);
         execute(temporary_block, args, result);
-        block.getByPosition(result).column = wrapInNullable(temporary_block.getByPosition(result).column, block, args, result);
+        block.getByPosition(result).column
+            = wrapInNullable(temporary_block.getByPosition(result).column, block, args, result);
         return true;
     }
 
@@ -232,15 +244,16 @@ void IFunctionBuilder::checkNumberOfArguments(size_t number_of_arguments) const
 
     if (number_of_arguments != expected_number_of_arguments)
         throw Exception(
-            fmt::format(
-                "Number of arguments for function {} doesn't match: passed {} , should be {}",
-                getName(),
-                toString(number_of_arguments),
-                toString(expected_number_of_arguments)),
-            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH,
+            "Number of arguments for function {} doesn't match: passed {} , should be {}",
+            getName(),
+            number_of_arguments,
+            expected_number_of_arguments);
 }
 
-FunctionBasePtr IFunctionBuilder::build(const ColumnsWithTypeAndName & arguments, const TiDB::TiDBCollatorPtr & collator) const
+FunctionBasePtr IFunctionBuilder::build(
+    const ColumnsWithTypeAndName & arguments,
+    const TiDB::TiDBCollatorPtr & collator) const
 {
     return buildImpl(arguments, getReturnType(arguments), collator);
 }
@@ -259,7 +272,9 @@ DataTypePtr IFunctionBuilder::getReturnType(const ColumnsWithTypeAndName & argum
         }
         if (null_presense.has_nullable)
         {
-            Block nested_block = createBlockWithNestedColumns(Block(arguments), ext::collection_cast<ColumnNumbers>(ext::range(0, arguments.size())));
+            Block nested_block = createBlockWithNestedColumns(
+                Block(arguments),
+                ext::collection_cast<ColumnNumbers>(ext::range(0, arguments.size())));
             auto return_type = getReturnTypeImpl(ColumnsWithTypeAndName(nested_block.begin(), nested_block.end()));
             return makeNullable(return_type);
         }

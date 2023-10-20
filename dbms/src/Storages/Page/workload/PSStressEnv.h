@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -54,20 +54,14 @@ public:
         return instance;
     }
 
-    bool isRunning() const
-    {
-        return status == STATUS_LOOP;
-    }
+    bool isRunning() const { return status == STATUS_LOOP; }
     int isSuccess() const
     {
         auto code = status.load();
         return code > 0 ? 0 : static_cast<int>(code);
     }
 
-    void setStat(enum StressEnvStat status_)
-    {
-        status = status_;
-    }
+    void setStat(enum StressEnvStat status_) { status = status_; }
 };
 
 struct StressEnv

@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,11 +29,11 @@
 #include <Storages/DeltaMerge/workload/KeyGenerator.h>
 #include <Storages/DeltaMerge/workload/Options.h>
 #include <Storages/DeltaMerge/workload/Utils.h>
+#include <Storages/KVStore/KVStore.h>
+#include <Storages/KVStore/TMTContext.h>
 #include <Storages/Page/PageConstants.h>
 #include <Storages/PathPool.h>
 #include <Storages/S3/S3Common.h>
-#include <Storages/Transaction/KVStore.h>
-#include <Storages/Transaction/TMTContext.h>
 #include <TestUtils/TiFlashTestEnv.h>
 #include <common/logger_useful.h>
 #include <cpptoml.h>
@@ -134,7 +134,8 @@ ContextPtr init(WorkloadOptions & opts)
     opts.initFailpoints();
     DB::STORAGE_FORMAT_CURRENT = DB::STORAGE_FORMAT_V5; // metav2 is used forcibly for test.
     // For mixed mode, we need to run the test in ONLY_V2 mode first.
-    auto ps_run_mode = opts.ps_run_mode == DB::PageStorageRunMode::MIX_MODE ? DB::PageStorageRunMode::ONLY_V2 : opts.ps_run_mode;
+    auto ps_run_mode
+        = opts.ps_run_mode == DB::PageStorageRunMode::MIX_MODE ? DB::PageStorageRunMode::ONLY_V2 : opts.ps_run_mode;
     TiFlashTestEnv::initializeGlobalContext(opts.work_dirs, ps_run_mode, opts.bg_thread_count);
 
     if (!opts.s3_bucket.empty())
@@ -208,13 +209,14 @@ void outputResult(Poco::Logger * log, const std::vector<Statistics> & stats, Wor
     auto avg_read_per_second = average(read_per_seconds);
 
     // Date, Table Schema, Workload, Init Seconds, Write Speed(rows count), Read Speed(rows count)
-    auto s = fmt::format("{},{},{},{:.2f},{},{}",
-                         localDate(),
-                         opts.table,
-                         opts.write_key_distribution,
-                         max_init_ms / 1000.0,
-                         avg_write_per_second,
-                         avg_read_per_second);
+    auto s = fmt::format(
+        "{},{},{},{:.2f},{},{}",
+        localDate(),
+        opts.table,
+        opts.write_key_distribution,
+        max_init_ms / 1000.0,
+        avg_write_per_second,
+        avg_read_per_second);
     LOG_INFO(log, s);
     std::cout << s << std::endl;
 }
@@ -406,14 +408,18 @@ public:
     std::pair<String, double> getMaxPutStat()
     {
         std::lock_guard lock(mtx);
-        auto itr = std::max_element(put_stats.begin(), put_stats.end(), [](const auto & a, const auto & b) { return a.second < b.second; });
+        auto itr = std::max_element(put_stats.begin(), put_stats.end(), [](const auto & a, const auto & b) {
+            return a.second < b.second;
+        });
         return *itr;
     }
 
     std::pair<String, double> getMaxGetStat()
     {
         std::lock_guard lock(mtx);
-        auto itr = std::max_element(get_stats.begin(), get_stats.end(), [](const auto & a, const auto & b) { return a.second < b.second; });
+        auto itr = std::max_element(get_stats.begin(), get_stats.end(), [](const auto & a, const auto & b) {
+            return a.second < b.second;
+        });
         return *itr;
     }
 
@@ -491,7 +497,8 @@ void getRandomObject(const DB::DM::tests::WorkloadOptions & opts)
     S3::downloadFileByS3RandomAccessFile(client, local_fname, remote_fname);
     s3_stat.addGetStat(remote_fname, sw.elapsedSeconds());
     auto download_size = std::filesystem::file_size(local_fname);
-    std::cout << fmt::format("GetObject {} bytes={} cost={:.3f}s", remote_fname, download_size, sw.elapsedSeconds()) << std::endl;
+    std::cout << fmt::format("GetObject {} bytes={} cost={:.3f}s", remote_fname, download_size, sw.elapsedSeconds())
+              << std::endl;
     RUNTIME_CHECK(fsize = download_size, remote_fname, download_size, fsize);
     std::filesystem::remove(local_fname);
 }
@@ -564,10 +571,7 @@ void benchS3(WorkloadOptions & opts)
     std::vector<std::future<void>> put_results;
     for (UInt64 i = 0; i < opts.s3_put_concurrency; ++i)
     {
-        auto task = std::make_shared<std::packaged_task<void()>>(
-            [&]() {
-                putRandomObjectLoop(opts);
-            });
+        auto task = std::make_shared<std::packaged_task<void()>>([&]() { putRandomObjectLoop(opts); });
         put_results.push_back(task->get_future());
         DataStoreS3Pool::get().scheduleOrThrowOnError([task]() { (*task)(); });
     }
@@ -575,10 +579,7 @@ void benchS3(WorkloadOptions & opts)
     std::vector<std::future<void>> get_results;
     for (UInt64 i = 0; i < opts.s3_get_concurrency; ++i)
     {
-        auto task = std::make_shared<std::packaged_task<void()>>(
-            [&]() {
-                getRandomObjectLoop(opts);
-            });
+        auto task = std::make_shared<std::packaged_task<void()>>([&]() { getRandomObjectLoop(opts); });
         get_results.push_back(task->get_future());
         S3FileCachePool::get().scheduleOrThrowOnError([task]() { (*task)(); });
     }

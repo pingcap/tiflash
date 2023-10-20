@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,9 +18,9 @@
 #include <IO/WriteBuffer.h>
 #include <IO/WriteBufferFromString.h>
 #include <IO/WriteHelpers.h>
+#include <Storages/KVStore/TiKVHelpers/TiKVKeyspaceIDImpl.h>
 #include <Storages/Page/PageConstants.h>
 #include <Storages/Page/V3/Universal/UniversalPageId.h>
-#include <Storages/Transaction/TiKVKeyspaceIDImpl.h>
 #include <fmt/format.h>
 
 namespace DB
@@ -109,6 +109,18 @@ public:
         return buff.releaseStr();
     }
 
+    // RAFT_PREFIX LOCAL_PREFIX REGION_RAFT_PREFIX region_id APPLY_STATE_SUFFIX
+    static UniversalPageId toRaftApplyStateKeyInRaftEngine(UInt64 region_id)
+    {
+        WriteBufferFromOwnString buff;
+        writeChar(RAFT_PREFIX, buff);
+        writeChar(0x01, buff);
+        writeChar(0x02, buff);
+        encodeUInt64(region_id, buff);
+        writeChar(0x03, buff);
+        return buff.releaseStr();
+    }
+
     // data is in kv engine, so it is prepended by KV_PREFIX
     // KV_PREFIX LOCAL_PREFIX REGION_META_PREFIX region_id REGION_STATE_SUFFIX
     static UniversalPageId toRegionLocalStateKeyInKVEngine(UInt64 region_id)
@@ -143,6 +155,19 @@ public:
         writeChar(0x02, buff);
         encodeUInt64(region_id, buff);
         writeChar(0x02, buff);
+        return buff.releaseStr();
+    }
+
+    // RAFT_PREFIX LOCAL_PREFIX REGION_RAFT_PREFIX region_id RAFT_LOG_SUFFIX log_index
+    static String toRaftLogKey(RegionID region_id, UInt64 log_index)
+    {
+        WriteBufferFromOwnString buff;
+        writeChar(RAFT_PREFIX, buff);
+        writeChar(0x01, buff);
+        writeChar(0x02, buff);
+        encodeUInt64(region_id, buff);
+        writeChar(0x01, buff);
+        encodeUInt64(log_index, buff);
         return buff.releaseStr();
     }
 
@@ -190,7 +215,8 @@ public:
     static inline bool isType(const UniversalPageId & page_id, StorageType type)
     {
         const auto & page_id_str = page_id.asStr();
-        auto page_id_without_keyspace = TiKVKeyspaceID::removeKeyspaceID(std::string_view(page_id_str.data(), page_id_str.size()));
+        auto page_id_without_keyspace
+            = TiKVKeyspaceID::removeKeyspaceID(std::string_view(page_id_str.data(), page_id_str.size()));
         return page_id_without_keyspace.starts_with(getSubPrefix(type));
     }
 
@@ -210,7 +236,8 @@ public:
         }
         else
         {
-            auto page_id_without_keyspace = TiKVKeyspaceID::removeKeyspaceID(std::string_view(page_id_str.data(), page_id_str.size()));
+            auto page_id_without_keyspace
+                = TiKVKeyspaceID::removeKeyspaceID(std::string_view(page_id_str.data(), page_id_str.size()));
             if (page_id_without_keyspace.starts_with(getSubPrefix(StorageType::Log)))
             {
                 return StorageType::Log;
@@ -257,7 +284,9 @@ private:
         case StorageType::KVStore:
             return "kvs";
         default:
-            throw Exception(fmt::format("Unknown storage type {}", static_cast<UInt8>(type)), ErrorCodes::LOGICAL_ERROR);
+            throw Exception(
+                fmt::format("Unknown storage type {}", static_cast<UInt8>(type)),
+                ErrorCodes::LOGICAL_ERROR);
         }
     }
 };

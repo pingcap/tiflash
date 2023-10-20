@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 #include <Columns/ColumnsNumber.h>
 #include <Core/Block.h>
 #include <DataStreams/IBlockInputStream.h>
+#include <Flash/ResourceControl/LocalAdmissionController.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 
@@ -83,7 +84,10 @@ public:
         current_stream = children.begin();
     }
 
-    ConcatSkippableBlockInputStream(SkippableBlockInputStreams inputs_, std::vector<size_t> && rows_, const ScanContextPtr & scan_context_)
+    ConcatSkippableBlockInputStream(
+        SkippableBlockInputStreams inputs_,
+        std::vector<size_t> && rows_,
+        const ScanContextPtr & scan_context_)
         : rows(std::move(rows_))
         , precede_stream_rows(0)
         , scan_context(scan_context_)
@@ -215,6 +219,12 @@ private:
         if (likely(scan_context != nullptr))
         {
             scan_context->total_user_read_bytes += bytes;
+
+            if (scan_context->enable_resource_control)
+                LocalAdmissionController::global_instance->consumeResource(
+                    scan_context->resource_group_name,
+                    bytesToRU(bytes),
+                    0);
         }
     }
     BlockInputStreams::iterator current_stream;

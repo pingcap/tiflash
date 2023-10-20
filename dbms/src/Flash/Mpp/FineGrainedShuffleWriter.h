@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -66,7 +66,9 @@ private:
 
     Block header;
     bool prepared = false;
-    size_t num_columns = 0, num_bucket = 0, batch_send_row_limit = 0; // Assign they initial values to pass clang-tidy check, they will be initialized in prepare method
+    size_t num_columns = 0, num_bucket = 0,
+           batch_send_row_limit
+        = 0; // Assign they initial values to pass clang-tidy check, they will be initialized in prepare method
     std::vector<String> partition_key_containers_for_reuse;
     WeakHash32 hash;
     IColumn::Selector selector;

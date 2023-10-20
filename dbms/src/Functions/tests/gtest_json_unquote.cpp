@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,9 +13,9 @@
 // limitations under the License.
 
 #include <Columns/ColumnNullable.h>
-#include <Storages/Transaction/JsonBinary.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
+#include <TiDB/Decode/JsonBinary.h>
 
 #include <string>
 #include <vector>
@@ -36,7 +36,8 @@ try
     String bj2("\"hello, \\\"你好, \\u554A world, null, true]\"");
     String bj4("[[0, 1], [2, 3], [4, [5, 6]]]");
     auto input_col = createColumn<Nullable<String>>({bj2, {}, bj4});
-    auto output_col = createColumn<Nullable<String>>({"hello, \"你好, 啊 world, null, true]", {}, "[[0, 1], [2, 3], [4, [5, 6]]]"});
+    auto output_col
+        = createColumn<Nullable<String>>({"hello, \"你好, 啊 world, null, true]", {}, "[[0, 1], [2, 3], [4, [5, 6]]]"});
     auto res = executeFunction(func_name, input_col);
     ASSERT_COLUMN_EQ(res, output_col);
 
@@ -55,7 +56,10 @@ try
     /// ColumnVector(non-null)
     auto non_null_input_col = createColumn<String>({bj2, bj2, bj4});
     res = executeFunction(func_name, non_null_input_col);
-    output_col = createColumn<Nullable<String>>({"hello, \"你好, 啊 world, null, true]", "hello, \"你好, 啊 world, null, true]", "[[0, 1], [2, 3], [4, [5, 6]]]"});
+    output_col = createColumn<Nullable<String>>(
+        {"hello, \"你好, 啊 world, null, true]",
+         "hello, \"你好, 啊 world, null, true]",
+         "[[0, 1], [2, 3], [4, [5, 6]]]"});
     ASSERT_COLUMN_EQ(res, output_col);
 
     /// ColumnConst(non-null)

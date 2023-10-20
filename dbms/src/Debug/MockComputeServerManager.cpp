@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,7 +17,7 @@
 #include <Debug/MockStorage.h>
 #include <Flash/Mpp/MPPTaskManager.h>
 #include <Interpreters/Context.h>
-#include <Storages/Transaction/TMTContext.h>
+#include <Storages/KVStore/TMTContext.h>
 #include <TestUtils/TiFlashTestEnv.h>
 
 #include <chrono>
@@ -35,10 +35,7 @@ void MockComputeServerManager::addServer(const String & addr)
     MockServerConfig config;
     for (const auto & server : server_config_map)
     {
-        RUNTIME_CHECK_MSG(
-            server.second.addr != addr,
-            "Already register mock compute server with addr = {}",
-            addr);
+        RUNTIME_CHECK_MSG(server.second.addr != addr, "Already register mock compute server with addr = {}", addr);
     }
     config.partition_id = server_config_map.size();
     config.addr = addr;
@@ -53,7 +50,9 @@ void MockComputeServerManager::startServers(const LoggerPtr & log_ptr, Context &
         TiFlashRaftConfig raft_config;
         raft_config.flash_server_addr = server_config.second.addr;
         Poco::AutoPtr<Poco::Util::LayeredConfiguration> config = new Poco::Util::LayeredConfiguration;
-        addServer(server_config.first, std::make_unique<FlashGrpcServerHolder>(global_context, *config, raft_config, log_ptr));
+        addServer(
+            server_config.first,
+            std::make_unique<FlashGrpcServerHolder>(global_context, *config, raft_config, log_ptr));
     }
 
     prepareMockMPPServerInfo();

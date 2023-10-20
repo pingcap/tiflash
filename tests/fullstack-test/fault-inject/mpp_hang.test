@@ -1,4 +1,4 @@
-# Copyright 2022 PingCAP, Ltd.
+# Copyright 2023 PingCAP, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -31,7 +31,6 @@ mysql> select table_schema,table_name,replica_count,location_labels,available fr
 +--------------+------------+---------------+-----------------+-----------+
 | test         | t          |             1 |                 |         1 |
 +--------------+------------+---------------+-----------------+-----------+
->> DBGInvoke __try_flush()
 >> DBGInvoke __init_fail_point()
 
 >> DBGInvoke __enable_fail_point(hang_in_execution)

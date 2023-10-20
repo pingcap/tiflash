@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -76,15 +76,9 @@ private:
     using Large = HyperLogLogCounter<K, Hash, HashValueType, DenominatorType, BiasEstimator, mode>;
 
 public:
-    CombinedCardinalityEstimator()
-    {
-        setContainerType(details::ContainerType::SMALL);
-    }
+    CombinedCardinalityEstimator() { setContainerType(details::ContainerType::SMALL); }
 
-    ~CombinedCardinalityEstimator()
-    {
-        destroy();
-    }
+    ~CombinedCardinalityEstimator() { destroy(); }
 
     void insert(Key value)
     {
@@ -323,10 +317,7 @@ private:
         return static_cast<details::ContainerType>(address & ~mask);
     }
 
-    void clearContainerType()
-    {
-        address &= mask;
-    }
+    void clearContainerType() { address &= mask; }
 
 private:
     Small small;

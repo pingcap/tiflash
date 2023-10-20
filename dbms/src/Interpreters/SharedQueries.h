@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -57,11 +57,12 @@ struct SharedQuery
         ++finished_clients;
         last_finish_time = Poco::Timestamp();
 
-        LOG_TRACE(log,
-                  "onClientFinish, SharedQuery({}), clients:{}, finished_clients: {}",
-                  query_id,
-                  clients,
-                  finished_clients);
+        LOG_TRACE(
+            log,
+            "onClientFinish, SharedQuery({}), clients:{}, finished_clients: {}",
+            query_id,
+            clients,
+            finished_clients);
     }
 
     bool isDone() const
@@ -106,11 +107,12 @@ public:
         {
             if (clients != it->second->clients)
             {
-                LOG_WARNING(log,
-                            "Different client numbers between shared queries with same query_id({}), former: {} now: {}",
-                            query_id,
-                            it->second->clients,
-                            clients);
+                LOG_WARNING(
+                    log,
+                    "Different client numbers between shared queries with same query_id({}), former: {} now: {}",
+                    query_id,
+                    it->second->clients,
+                    clients);
             }
             auto & query = *(it->second);
             if (query.connected_clients >= clients)
@@ -123,11 +125,12 @@ public:
             }
             query.connected_clients++;
 
-            LOG_TRACE(log,
-                      "getOrCreateBlockIO, query_id: {}, clients: {}, connected_clients: {}",
-                      query_id,
-                      clients,
-                      query.connected_clients);
+            LOG_TRACE(
+                log,
+                "getOrCreateBlockIO, query_id: {}, clients: {}, connected_clients: {}",
+                query_id,
+                clients,
+                query.connected_clients);
             return query.io;
         }
         else
@@ -149,9 +152,11 @@ public:
         const auto it = queries.find(query_id);
         if (it == queries.end())
         {
-            LOG_WARNING(log,
-                        "Shared query finished with query_id({}), while resource cache not exists. Maybe this client takes too long before finish",
-                        query_id);
+            LOG_WARNING(
+                log,
+                "Shared query finished with query_id({}), while resource cache not exists. Maybe this client takes too "
+                "long before finish",
+                query_id);
             return;
         }
         auto & query = *(it->second);
@@ -183,15 +188,13 @@ public:
     SharedQueries()
         : log(&Poco::Logger::get("SharedQueries"))
     {
-        timer.schedule(FunctionTimerTask::create([this] { checkAll(); }), //
-                       check_interval_milliseconds,
-                       check_interval_milliseconds);
+        timer.schedule(
+            FunctionTimerTask::create([this] { checkAll(); }), //
+            check_interval_milliseconds,
+            check_interval_milliseconds);
     }
 
-    ~SharedQueries()
-    {
-        timer.cancel();
-    }
+    ~SharedQueries() { timer.cancel(); }
 
 private:
     static constexpr Int64 check_interval_milliseconds = 20 * 1000; // 20 seconds

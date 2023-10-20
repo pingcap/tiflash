@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,9 +22,7 @@ namespace DB
 ExecutionResult PipelineExecutorContext::toExecutionResult()
 {
     std::lock_guard lock(mu);
-    return exception_ptr
-        ? ExecutionResult::fail(exception_ptr)
-        : ExecutionResult::success();
+    return exception_ptr ? ExecutionResult::fail(exception_ptr) : ExecutionResult::success();
 }
 
 std::exception_ptr PipelineExecutorContext::getExceptionPtr()
@@ -78,7 +76,7 @@ void PipelineExecutorContext::onErrorOccurred(const std::exception_ptr & excepti
     if (setExceptionPtr(exception_ptr_))
     {
         cancel();
-        LOG_WARNING(log, "error occured and cancel the query");
+        LOG_WARNING(log, "error {} occured and cancel the query", getExceptionMsg());
     }
 }
 
@@ -140,15 +138,12 @@ void PipelineExecutorContext::decActiveRefCount()
         RUNTIME_ASSERT(!is_finished);
         is_finished = true;
 
-        if (isWaitMode())
-        {
-            cv.notify_all();
-        }
-        else
+        if (!isWaitMode())
         {
             assert(*result_queue);
             (*result_queue)->finish();
         }
+        cv.notify_all();
     }
 }
 
@@ -158,7 +153,7 @@ void PipelineExecutorContext::cancel()
     if (is_cancelled.compare_exchange_strong(origin_value, true, std::memory_order_release))
     {
         if likely (TaskScheduler::instance && !query_id.empty())
-            TaskScheduler::instance->cancel(query_id);
+            TaskScheduler::instance->cancel(query_id, resource_group_name);
     }
 }
 

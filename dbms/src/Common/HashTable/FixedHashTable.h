@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -122,7 +122,8 @@ struct FixedHashTableCalculatedSize
   *  TwoLevelHashSet(Map) to contain different type of sets(maps).
   */
 template <typename Key, typename Cell, typename Size, typename Allocator>
-class FixedHashTable : private boost::noncopyable
+class FixedHashTable
+    : private boost::noncopyable
     , protected Allocator
     , protected Cell::State
     , protected Size
@@ -347,15 +348,9 @@ public:
         return const_iterator(this, buf ? buf + NUM_CELLS : buf);
     }
 
-    const_iterator cend() const
-    {
-        return end();
-    }
+    const_iterator cend() const { return end(); }
 
-    iterator end()
-    {
-        return iterator(this, buf ? buf + NUM_CELLS : buf);
-    }
+    iterator end() { return iterator(this, buf ? buf + NUM_CELLS : buf); }
 
     /// The last parameter is unused but exists for compatibility with HashTable interface.
     void ALWAYS_INLINE emplace(const Key & x, LookupResult & it, bool & inserted, size_t /* hash */ = 0)
@@ -385,9 +380,15 @@ public:
 
     LookupResult ALWAYS_INLINE find(const Key & x) { return !buf[x].isZero(*this) ? &buf[x] : nullptr; }
 
-    ConstLookupResult ALWAYS_INLINE find(const Key & x) const { return const_cast<std::decay_t<decltype(*this)> *>(this)->find(x); }
+    ConstLookupResult ALWAYS_INLINE find(const Key & x) const
+    {
+        return const_cast<std::decay_t<decltype(*this)> *>(this)->find(x);
+    }
 
-    LookupResult ALWAYS_INLINE find(const Key &, size_t hash_value) { return !buf[hash_value].isZero(*this) ? &buf[hash_value] : nullptr; }
+    LookupResult ALWAYS_INLINE find(const Key &, size_t hash_value)
+    {
+        return !buf[hash_value].isZero(*this) ? &buf[hash_value] : nullptr;
+    }
 
     ConstLookupResult ALWAYS_INLINE find(const Key & key, size_t hash_value) const
     {
@@ -499,6 +500,8 @@ public:
 
     size_t getBufferSizeInBytes() const { return NUM_CELLS * sizeof(Cell); }
 
+    void setResizeCallback(const ResizeCallback &) {}
+
     size_t getBufferSizeInCells() const { return NUM_CELLS; }
 
     /// Return offset for result in internal buffer.
@@ -516,9 +519,6 @@ public:
     Cell * data() { return buf; }
 
 #ifdef DBMS_HASH_MAP_COUNT_COLLISIONS
-    size_t getCollisions() const
-    {
-        return 0;
-    }
+    size_t getCollisions() const { return 0; }
 #endif
 };

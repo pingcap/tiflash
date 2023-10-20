@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,10 +20,10 @@
 #include <Databases/IDatabase.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
+#include <Storages/KVStore/Types.h>
 #include <Storages/MutableSupport.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/System/StorageSystemDTSegments.h>
-#include <Storages/Transaction/Types.h>
 #include <TiDB/Schema/SchemaNameMapper.h>
 
 namespace DB
@@ -71,12 +71,13 @@ StorageSystemDTSegments::StorageSystemDTSegments(const std::string & name_)
     }));
 }
 
-BlockInputStreams StorageSystemDTSegments::read(const Names & column_names,
-                                                const SelectQueryInfo &,
-                                                const Context & context,
-                                                QueryProcessingStage::Enum & processed_stage,
-                                                const size_t /*max_block_size*/,
-                                                const unsigned /*num_streams*/)
+BlockInputStreams StorageSystemDTSegments::read(
+    const Names & column_names,
+    const SelectQueryInfo &,
+    const Context & context,
+    QueryProcessingStage::Enum & processed_stage,
+    const size_t /*max_block_size*/,
+    const unsigned /*num_streams*/)
 {
     check(column_names);
     processed_stage = QueryProcessingStage::FetchColumns;
@@ -154,7 +155,9 @@ BlockInputStreams StorageSystemDTSegments::read(const Names & column_names,
         }
     }
 
-    return BlockInputStreams(1, std::make_shared<OneBlockInputStream>(getSampleBlock().cloneWithColumns(std::move(res_columns))));
+    return BlockInputStreams(
+        1,
+        std::make_shared<OneBlockInputStream>(getSampleBlock().cloneWithColumns(std::move(res_columns))));
 }
 
 

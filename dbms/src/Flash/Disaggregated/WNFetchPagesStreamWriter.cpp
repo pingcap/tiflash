@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -39,12 +39,8 @@ WNFetchPagesStreamWriterPtr WNFetchPagesStreamWriter::build(
     const PageIdU64s & read_page_ids,
     UInt64 packet_limit_size)
 {
-    return std::unique_ptr<WNFetchPagesStreamWriter>(new WNFetchPagesStreamWriter(
-        task.seg_task,
-        task.column_defines,
-        task.output_field_types,
-        read_page_ids,
-        packet_limit_size));
+    return std::unique_ptr<WNFetchPagesStreamWriter>(
+        new WNFetchPagesStreamWriter(task.seg_task, task.column_defines, read_page_ids, packet_limit_size));
 }
 
 std::pair<DM::RemotePb::RemotePage, size_t> WNFetchPagesStreamWriter::getPersistedRemotePage(UInt64 page_id)
@@ -103,14 +99,15 @@ void WNFetchPagesStreamWriter::pipeTo(SyncPagePacketWriter * sync_writer)
     //       We could improve it to respond in the FetchPages stage, so that the parallel FetchPages could start
     //       as soon as possible.
 
-    LOG_DEBUG(log,
-              "Send FetchPagesStream, pages={} pages_size={} blocks={} packets={} read_page_ms={} send_page_ms={}",
-              read_page_ids.size(),
-              total_pages_data_size,
-              packet.chunks_size(),
-              packet_count,
-              read_page_ns / 1000000,
-              send_page_ns / 1000000);
+    LOG_DEBUG(
+        log,
+        "Send FetchPagesStream, pages={} pages_size={} blocks={} packets={} read_page_ms={} send_page_ms={}",
+        read_page_ids.size(),
+        total_pages_data_size,
+        packet.chunks_size(),
+        packet_count,
+        read_page_ns / 1000000,
+        send_page_ns / 1000000);
 }
 
 

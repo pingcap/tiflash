@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -140,7 +140,7 @@ inline static const StorageFormatVersion STORAGE_FORMAT_V100 = StorageFormatVers
     .identifier = 100,
 };
 
-inline StorageFormatVersion STORAGE_FORMAT_CURRENT = STORAGE_FORMAT_V4;
+inline StorageFormatVersion STORAGE_FORMAT_CURRENT = STORAGE_FORMAT_V5;
 
 inline const StorageFormatVersion & toStorageFormat(UInt64 setting)
 {

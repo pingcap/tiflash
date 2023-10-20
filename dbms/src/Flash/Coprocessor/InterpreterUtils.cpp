@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/ThresholdUtils.h>
+#include <Core/FineGrainedOperatorSpillContext.h>
 #include <DataStreams/CreatingSetsBlockInputStream.h>
 #include <DataStreams/ExpressionBlockInputStream.h>
 #include <DataStreams/FilterBlockInputStream.h>
@@ -43,16 +44,15 @@ using UnionWithBlock = UnionBlockInputStream<>;
 using UnionWithoutBlock = UnionBlockInputStream<StreamUnionMode::Basic, /*ignore_block=*/true>;
 } // namespace
 
-void restoreConcurrency(
-    DAGPipeline & pipeline,
-    size_t concurrency,
-    Int64 max_buffered_bytes,
-    const LoggerPtr & log)
+void restoreConcurrency(DAGPipeline & pipeline, size_t concurrency, Int64 max_buffered_bytes, const LoggerPtr & log)
 {
     if (concurrency > 1 && pipeline.streams.size() == 1)
     {
-        BlockInputStreamPtr shared_query_block_input_stream
-            = std::make_shared<SharedQueryBlockInputStream>(concurrency * 5, max_buffered_bytes, pipeline.firstStream(), log->identifier());
+        BlockInputStreamPtr shared_query_block_input_stream = std::make_shared<SharedQueryBlockInputStream>(
+            concurrency * 5,
+            max_buffered_bytes,
+            pipeline.firstStream(),
+            log->identifier());
         shared_query_block_input_stream->setExtraInfo("restore concurrency");
         pipeline.streams.assign(concurrency, shared_query_block_input_stream);
     }
@@ -70,9 +70,19 @@ void executeUnion(
     {
         BlockInputStreamPtr stream;
         if (ignore_block)
-            stream = std::make_shared<UnionWithoutBlock>(pipeline.streams, BlockInputStreams{}, max_streams, max_buffered_bytes, log->identifier());
+            stream = std::make_shared<UnionWithoutBlock>(
+                pipeline.streams,
+                BlockInputStreams{},
+                max_streams,
+                max_buffered_bytes,
+                log->identifier());
         else
-            stream = std::make_shared<UnionWithBlock>(pipeline.streams, BlockInputStreams{}, max_streams, max_buffered_bytes, log->identifier());
+            stream = std::make_shared<UnionWithBlock>(
+                pipeline.streams,
+                BlockInputStreams{},
+                max_streams,
+                max_buffered_bytes,
+                log->identifier());
         stream->setExtraInfo(extra_info);
 
         pipeline.streams.resize(1);
@@ -97,7 +107,8 @@ void restoreConcurrency(
         auto cur_header = group_builder.getCurrentHeader();
         group_builder.addGroup();
         for (size_t i = 0; i < concurrency; ++i)
-            group_builder.addConcurrency(std::make_unique<SharedQueueSourceOp>(exec_context, log->identifier(), cur_header, shared_queue));
+            group_builder.addConcurrency(
+                std::make_unique<SharedQueueSourceOp>(exec_context, log->identifier(), cur_header, shared_queue));
     }
 }
 
@@ -115,7 +126,8 @@ void executeUnion(
         });
         auto cur_header = group_builder.getCurrentHeader();
         group_builder.addGroup();
-        group_builder.addConcurrency(std::make_unique<SharedQueueSourceOp>(exec_context, log->identifier(), cur_header, shared_queue));
+        group_builder.addConcurrency(
+            std::make_unique<SharedQueueSourceOp>(exec_context, log->identifier(), cur_header, shared_queue));
     }
 }
 
@@ -155,7 +167,8 @@ void executeExpression(
     if (expr_actions && !expr_actions->getActions().empty())
     {
         group_builder.transform([&](auto & builder) {
-            builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(exec_context, log->identifier(), expr_actions));
+            builder.appendTransformOp(
+                std::make_unique<ExpressionTransformOp>(exec_context, log->identifier(), expr_actions));
         });
     }
 }
@@ -181,6 +194,10 @@ void orderStreams(
 
     if (enable_fine_grained_shuffle)
     {
+        std::shared_ptr<FineGrainedOperatorSpillContext> fine_grained_spill_context;
+        if (context.getDAGContext() != nullptr && context.getDAGContext()->isInAutoSpillMode()
+            && pipeline.hasMoreThanOneStream())
+            fine_grained_spill_context = std::make_shared<FineGrainedOperatorSpillContext>("sort", log);
         pipeline.transform([&](auto & stream) {
             stream = std::make_shared<MergeSortingBlockInputStream>(
                 stream,
@@ -188,10 +205,24 @@ void orderStreams(
                 settings.max_block_size,
                 limit,
                 getAverageThreshold(settings.max_bytes_before_external_sort, pipeline.streams.size()),
-                SpillConfig(context.getTemporaryPath(), fmt::format("{}_sort", log->identifier()), settings.max_cached_data_bytes_in_spiller, settings.max_spilled_rows_per_file, settings.max_spilled_bytes_per_file, context.getFileProvider()),
-                log->identifier());
+                SpillConfig(
+                    context.getTemporaryPath(),
+                    fmt::format("{}_sort", log->identifier()),
+                    settings.max_cached_data_bytes_in_spiller,
+                    settings.max_spilled_rows_per_file,
+                    settings.max_spilled_bytes_per_file,
+                    context.getFileProvider()),
+                log->identifier(),
+                [&](const OperatorSpillContextPtr & operator_spill_context) {
+                    if (fine_grained_spill_context != nullptr)
+                        fine_grained_spill_context->addOperatorSpillContext(operator_spill_context);
+                    else if (context.getDAGContext() != nullptr)
+                        context.getDAGContext()->registerOperatorSpillContext(operator_spill_context);
+                });
             stream->setExtraInfo(String(enableFineGrainedShuffleExtraInfo));
         });
+        if (fine_grained_spill_context != nullptr)
+            context.getDAGContext()->registerOperatorSpillContext(fine_grained_spill_context);
     }
     else
     {
@@ -206,8 +237,20 @@ void orderStreams(
             limit,
             settings.max_bytes_before_external_sort,
             // todo use identifier_executor_id as the spill id
-            SpillConfig(context.getTemporaryPath(), fmt::format("{}_sort", log->identifier()), settings.max_cached_data_bytes_in_spiller, settings.max_spilled_rows_per_file, settings.max_spilled_bytes_per_file, context.getFileProvider()),
-            log->identifier());
+            SpillConfig(
+                context.getTemporaryPath(),
+                fmt::format("{}_sort", log->identifier()),
+                settings.max_cached_data_bytes_in_spiller,
+                settings.max_spilled_rows_per_file,
+                settings.max_spilled_bytes_per_file,
+                context.getFileProvider()),
+            log->identifier(),
+            [&](const OperatorSpillContextPtr & operator_spill_context) {
+                if (context.getDAGContext() != nullptr)
+                {
+                    context.getDAGContext()->registerOperatorSpillContext(operator_spill_context);
+                }
+            });
     }
 }
 
@@ -216,6 +259,7 @@ void executeLocalSort(
     PipelineExecGroupBuilder & group_builder,
     const SortDescription & order_descr,
     std::optional<size_t> limit,
+    bool for_fine_grained_executor,
     const Context & context,
     const LoggerPtr & log)
 {
@@ -227,7 +271,8 @@ void executeLocalSort(
         {
             group_builder.transform([&](auto & builder) {
                 auto local_limit = std::make_shared<LocalLimitTransformAction>(input_header, *limit);
-                builder.appendTransformOp(std::make_unique<LimitTransformOp<LocalLimitPtr>>(exec_context, log->identifier(), local_limit));
+                builder.appendTransformOp(
+                    std::make_unique<LimitTransformOp<LocalLimitPtr>>(exec_context, log->identifier(), local_limit));
             });
         }
         // For order by const and doesn't has limit, do nothing here.
@@ -242,7 +287,12 @@ void executeLocalSort(
                 limit.value_or(0))); // 0 means that no limit in PartialSortTransformOp.
         });
         const Settings & settings = context.getSettingsRef();
-        size_t max_bytes_before_external_sort = getAverageThreshold(settings.max_bytes_before_external_sort, group_builder.concurrency());
+        size_t max_bytes_before_external_sort
+            = getAverageThreshold(settings.max_bytes_before_external_sort, group_builder.concurrency());
+        std::shared_ptr<FineGrainedOperatorSpillContext> fine_grained_spill_context;
+        if (for_fine_grained_executor && context.getDAGContext() != nullptr
+            && context.getDAGContext()->isInAutoSpillMode() && group_builder.concurrency() > 1)
+            fine_grained_spill_context = std::make_shared<FineGrainedOperatorSpillContext>("sort", log);
         SpillConfig spill_config{
             context.getTemporaryPath(),
             fmt::format("{}_sort", log->identifier()),
@@ -258,8 +308,11 @@ void executeLocalSort(
                 limit.value_or(0), // 0 means that no limit in MergeSortTransformOp.
                 settings.max_block_size,
                 max_bytes_before_external_sort,
-                spill_config));
+                spill_config,
+                fine_grained_spill_context));
         });
+        if (fine_grained_spill_context != nullptr)
+            exec_context.registerOperatorSpillContext(fine_grained_spill_context);
     }
 }
 
@@ -279,7 +332,8 @@ void executeFinalSort(
         {
             auto global_limit = std::make_shared<GlobalLimitTransformAction>(input_header, *limit);
             group_builder.transform([&](auto & builder) {
-                builder.appendTransformOp(std::make_unique<LimitTransformOp<GlobalLimitPtr>>(exec_context, log->identifier(), global_limit));
+                builder.appendTransformOp(
+                    std::make_unique<LimitTransformOp<GlobalLimitPtr>>(exec_context, log->identifier(), global_limit));
             });
         }
         // For order by const and doesn't has limit, do nothing here.
@@ -297,7 +351,6 @@ void executeFinalSort(
         const Settings & settings = context.getSettingsRef();
         executeUnion(exec_context, group_builder, settings.max_buffered_bytes_in_executor, log);
 
-        size_t max_bytes_before_external_sort = getAverageThreshold(settings.max_bytes_before_external_sort, 1);
         SpillConfig spill_config{
             context.getTemporaryPath(),
             fmt::format("{}_sort", log->identifier()),
@@ -312,29 +365,50 @@ void executeFinalSort(
                 order_descr,
                 limit.value_or(0), // 0 means that no limit in MergeSortTransformOp.
                 settings.max_block_size,
-                max_bytes_before_external_sort,
-                spill_config));
+                settings.max_bytes_before_external_sort,
+                spill_config,
+                nullptr));
         });
     }
 }
 
-void executeCreatingSets(
-    DAGPipeline & pipeline,
-    const Context & context,
-    size_t max_streams,
-    const LoggerPtr & log)
+void executeCreatingSets(DAGPipeline & pipeline, const Context & context, size_t max_streams, const LoggerPtr & log)
 {
     DAGContext & dag_context = *context.getDAGContext();
     /// add union to run in parallel if needed
     if (unlikely(context.isExecutorTest() || context.isInterpreterTest()))
-        executeUnion(pipeline, max_streams, context.getSettingsRef().max_buffered_bytes_in_executor, log, /*ignore_block=*/false, "for test");
+        executeUnion(
+            pipeline,
+            max_streams,
+            context.getSettingsRef().max_buffered_bytes_in_executor,
+            log,
+            /*ignore_block=*/false,
+            "for test");
     else if (context.isMPPTest())
-        executeUnion(pipeline, max_streams, context.getSettingsRef().max_buffered_bytes_in_executor, log, /*ignore_block=*/true, "for mpp test");
+        executeUnion(
+            pipeline,
+            max_streams,
+            context.getSettingsRef().max_buffered_bytes_in_executor,
+            log,
+            /*ignore_block=*/true,
+            "for mpp test");
     else if (dag_context.isMPPTask())
         /// MPPTask do not need the returned blocks.
-        executeUnion(pipeline, max_streams, context.getSettingsRef().max_buffered_bytes_in_executor, log, /*ignore_block=*/true, "for mpp");
+        executeUnion(
+            pipeline,
+            max_streams,
+            context.getSettingsRef().max_buffered_bytes_in_executor,
+            log,
+            /*ignore_block=*/true,
+            "for mpp");
     else
-        executeUnion(pipeline, max_streams, context.getSettingsRef().max_buffered_bytes_in_executor, log, /*ignore_block=*/false, "for non mpp");
+        executeUnion(
+            pipeline,
+            max_streams,
+            context.getSettingsRef().max_buffered_bytes_in_executor,
+            log,
+            /*ignore_block=*/false,
+            "for non mpp");
     if (dag_context.hasSubquery())
     {
         const Settings & settings = context.getSettingsRef();
@@ -372,19 +446,16 @@ std::tuple<ExpressionActionsPtr, String, ExpressionActionsPtr> buildPushDownFilt
 }
 
 void executePushedDownFilter(
-    size_t remote_read_streams_start_index,
     const FilterConditions & filter_conditions,
     DAGExpressionAnalyzer & analyzer,
     LoggerPtr log,
     DAGPipeline & pipeline)
 {
-    auto [before_where, filter_column_name, project_after_where] = ::DB::buildPushDownFilter(filter_conditions.conditions, analyzer);
+    auto [before_where, filter_column_name, project_after_where]
+        = ::DB::buildPushDownFilter(filter_conditions.conditions, analyzer);
 
-    assert(remote_read_streams_start_index <= pipeline.streams.size());
-    // for remote read, filter had been pushed down, don't need to execute again.
-    for (size_t i = 0; i < remote_read_streams_start_index; ++i)
+    for (auto & stream : pipeline.streams)
     {
-        auto & stream = pipeline.streams[i];
         stream = std::make_shared<FilterBlockInputStream>(stream, before_where, filter_column_name, log->identifier());
         // todo link runtime filter
         stream->setExtraInfo("push down filter");
@@ -397,59 +468,62 @@ void executePushedDownFilter(
 void executePushedDownFilter(
     PipelineExecutorContext & exec_context,
     PipelineExecGroupBuilder & group_builder,
-    size_t remote_read_sources_start_index,
     const FilterConditions & filter_conditions,
     DAGExpressionAnalyzer & analyzer,
     LoggerPtr log)
 {
-    auto [before_where, filter_column_name, project_after_where] = ::DB::buildPushDownFilter(filter_conditions.conditions, analyzer);
+    auto [before_where, filter_column_name, project_after_where]
+        = ::DB::buildPushDownFilter(filter_conditions.conditions, analyzer);
 
-    assert(remote_read_sources_start_index <= group_builder.concurrency());
     auto input_header = group_builder.getCurrentHeader();
-
-    // for remote read, filter had been pushed down, don't need to execute again.
-    for (size_t i = 0; i < remote_read_sources_start_index; ++i)
+    for (size_t i = 0; i < group_builder.concurrency(); ++i)
     {
         auto & builder = group_builder.getCurBuilder(i);
-        builder.appendTransformOp(std::make_unique<FilterTransformOp>(exec_context, log->identifier(), input_header, before_where, filter_column_name));
+        builder.appendTransformOp(std::make_unique<FilterTransformOp>(
+            exec_context,
+            log->identifier(),
+            input_header,
+            before_where,
+            filter_column_name));
         // after filter, do project action to keep the schema of local transforms and remote transforms the same.
-        builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(exec_context, log->identifier(), project_after_where));
+        builder.appendTransformOp(
+            std::make_unique<ExpressionTransformOp>(exec_context, log->identifier(), project_after_where));
     }
 }
 
 void executeGeneratedColumnPlaceholder(
-    size_t remote_read_streams_start_index,
     const std::vector<std::tuple<UInt64, String, DataTypePtr>> & generated_column_infos,
     LoggerPtr log,
     DAGPipeline & pipeline)
 {
     if (generated_column_infos.empty())
         return;
-    assert(remote_read_streams_start_index <= pipeline.streams.size());
-    for (size_t i = 0; i < remote_read_streams_start_index; ++i)
-    {
-        auto & stream = pipeline.streams[i];
-        stream = std::make_shared<GeneratedColumnPlaceholderBlockInputStream>(stream, generated_column_infos, log->identifier());
+    pipeline.transform([&](auto & stream) {
+        stream = std::make_shared<GeneratedColumnPlaceholderBlockInputStream>(
+            stream,
+            generated_column_infos,
+            log->identifier());
         stream->setExtraInfo("generated column placeholder above table scan");
-    }
+    });
 }
 
 void executeGeneratedColumnPlaceholder(
     PipelineExecutorContext & exec_context,
     PipelineExecGroupBuilder & group_builder,
-    size_t remote_read_sources_start_index,
     const std::vector<std::tuple<UInt64, String, DataTypePtr>> & generated_column_infos,
     LoggerPtr log)
 {
     if (generated_column_infos.empty())
         return;
-    assert(remote_read_sources_start_index <= group_builder.concurrency());
 
-    for (size_t i = 0; i < remote_read_sources_start_index; ++i)
-    {
-        auto & builder = group_builder.getCurBuilder(i);
-        builder.appendTransformOp(std::make_unique<GeneratedColumnPlaceHolderTransformOp>(exec_context, log->identifier(), group_builder.getCurrentHeader(), generated_column_infos));
-    }
+    auto input_header = group_builder.getCurrentHeader();
+    group_builder.transform([&](auto & builder) {
+        builder.appendTransformOp(std::make_unique<GeneratedColumnPlaceHolderTransformOp>(
+            exec_context,
+            log->identifier(),
+            input_header,
+            generated_column_infos));
+    });
 }
 
 } // namespace DB

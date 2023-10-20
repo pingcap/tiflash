@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include <Storages/Transaction/TiDB.h>
+#include <TiDB/Schema/TiDB.h>
 
 namespace DB
 {
@@ -76,20 +76,19 @@ struct SchemaNameMapper
     // Only use for logging / debugging
     virtual String debugDatabaseName(const TiDB::DBInfo & db_info) const
     {
-        auto db_name = db_info.name + "(" + std::to_string(db_info.id) + ")";
-        return map2Keyspace(db_info.keyspace_id, db_name);
+        return map2Keyspace(db_info.keyspace_id, db_info.name);
     }
     virtual String debugTableName(const TiDB::TableInfo & table_info) const
     {
-        auto table_name = table_info.name + "(" + std::to_string(table_info.id) + ")";
-        return map2Keyspace(table_info.keyspace_id, table_name);
+        return map2Keyspace(table_info.keyspace_id, table_info.name);
     }
     virtual String debugCanonicalName(const TiDB::DBInfo & db_info, const TiDB::TableInfo & table_info) const
     {
         return debugDatabaseName(db_info) + "." + debugTableName(table_info);
     }
 
-    virtual String debugCanonicalName(const TiDB::TableInfo & table_info, DatabaseID db_id, KeyspaceID keyspace_id) const
+    virtual String debugCanonicalName(const TiDB::TableInfo & table_info, DatabaseID db_id, KeyspaceID keyspace_id)
+        const
     {
         auto db_name = DATABASE_PREFIX + std::to_string(db_id);
         return map2Keyspace(keyspace_id, db_name) + "." + debugTableName(table_info);

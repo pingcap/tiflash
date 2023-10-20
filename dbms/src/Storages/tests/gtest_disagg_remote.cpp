@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,8 +14,8 @@
 
 #include <Flash/Coprocessor/RequestUtils.h>
 #include <Interpreters/Context.h>
+#include <Storages/KVStore/TMTContext.h>
 #include <Storages/StorageDisaggregatedHelpers.h>
-#include <Storages/Transaction/TMTContext.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TestUtils/TiFlashTestEnv.h>
 #include <kvproto/disaggregated.pb.h>
@@ -36,10 +36,7 @@ struct MockRegionCache
 {
     std::vector<pingcap::kv::RegionVerID> dropped_id;
 
-    void dropRegion(const pingcap::kv::RegionVerID & region_id)
-    {
-        dropped_id.emplace_back(region_id);
-    }
+    void dropRegion(const pingcap::kv::RegionVerID & region_id) { dropped_id.emplace_back(region_id); }
 };
 
 class StorageDisaggregatedHelpersTest : public testing::Test
@@ -50,12 +47,10 @@ public:
     {}
 
 protected:
-    void SetUp() override
-    {
-    }
+    void SetUp() override {}
 
-    static std::shared_ptr<disaggregated::EstablishDisaggTaskRequest>
-    genRequest(const std::vector<TestRegionInfo> test_regions)
+    static std::shared_ptr<disaggregated::EstablishDisaggTaskRequest> genRequest(
+        const std::vector<TestRegionInfo> test_regions)
     {
         // Generate BatchCopTask
         pingcap::coprocessor::BatchCopTask task;

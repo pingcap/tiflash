@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,10 +20,10 @@
 #include <Interpreters/Context.h>
 #include <Operators/ExchangeReceiverSourceOp.h>
 #include <Operators/ExpressionTransformOp.h>
+#include <Storages/KVStore/TMTContext.h>
+#include <Storages/KVStore/Types.h>
 #include <Storages/S3/S3Common.h>
 #include <Storages/StorageDisaggregated.h>
-#include <Storages/Transaction/TMTContext.h>
-#include <Storages/Transaction/Types.h>
 #include <kvproto/kvrpcpb.pb.h>
 
 
@@ -41,8 +41,7 @@ StorageDisaggregated::StorageDisaggregated(
     , log(Logger::get(context_.getDAGContext()->log ? context_.getDAGContext()->log->identifier() : ""))
     , sender_target_mpp_task_id(context_.getDAGContext()->getMPPTaskMeta())
     , filter_conditions(filter_conditions_)
-{
-}
+{}
 
 BlockInputStreams StorageDisaggregated::read(
     const Names &,
@@ -134,7 +133,9 @@ std::vector<StorageDisaggregated::RemoteTableRange> StorageDisaggregated::buildR
     {
         const auto & table_regions_info = context.getDAGContext()->getTableRegionsInfoByTableID(physical_table_id);
 
-        RUNTIME_CHECK_MSG(table_regions_info.local_regions.empty(), "in disaggregated_compute_mode, local_regions should be empty");
+        RUNTIME_CHECK_MSG(
+            table_regions_info.local_regions.empty(),
+            "in disaggregated_compute_mode, local_regions should be empty");
         for (const auto & reg : table_regions_info.remote_regions)
             all_remote_regions[physical_table_id].emplace_back(std::cref(reg));
     }
@@ -227,9 +228,8 @@ RequestAndRegionIDs StorageDisaggregated::buildDispatchMPPTaskRequest(
     tipb::Executor * executor = sender_dag_req.mutable_root_executor();
     executor->set_tp(tipb::ExecType::TypeExchangeSender);
     // Exec summary of ExchangeSender will be merged into TableScan.
-    executor->set_executor_id(fmt::format("{}_{}",
-                                          ExecIDPrefixForTiFlashStorageSender,
-                                          sender_target_mpp_task_id.toString()));
+    executor->set_executor_id(
+        fmt::format("{}_{}", ExecIDPrefixForTiFlashStorageSender, sender_target_mpp_task_id.toString()));
 
     tipb::ExchangeSender * sender = executor->mutable_exchange_sender();
     sender->set_tp(tipb::ExchangeType::PassThrough);
@@ -278,7 +278,9 @@ tipb::Executor StorageDisaggregated::buildTableScanTiPB()
     return ts_exec;
 }
 
-void StorageDisaggregated::buildExchangeReceiver(const std::vector<RequestAndRegionIDs> & dispatch_reqs, unsigned num_streams)
+void StorageDisaggregated::buildExchangeReceiver(
+    const std::vector<RequestAndRegionIDs> & dispatch_reqs,
+    unsigned num_streams)
 {
     tipb::ExchangeReceiver receiver;
     for (const auto & dispatch_req : dispatch_reqs)
@@ -318,7 +320,10 @@ void StorageDisaggregated::buildExchangeReceiver(const std::vector<RequestAndReg
     context.getDAGContext()->setDisaggregatedComputeExchangeReceiver(executor_id, exchange_receiver);
 }
 
-void StorageDisaggregated::buildReceiverStreams(const std::vector<RequestAndRegionIDs> & dispatch_reqs, unsigned num_streams, DAGPipeline & pipeline)
+void StorageDisaggregated::buildReceiverStreams(
+    const std::vector<RequestAndRegionIDs> & dispatch_reqs,
+    unsigned num_streams,
+    DAGPipeline & pipeline)
 {
     buildExchangeReceiver(dispatch_reqs, num_streams);
 
@@ -355,12 +360,11 @@ void StorageDisaggregated::buildReceiverSources(
 
     for (size_t i = 0; i < num_streams; ++i)
     {
-        group_builder.addConcurrency(
-            std::make_unique<ExchangeReceiverSourceOp>(
-                exec_context,
-                log->identifier(),
-                exchange_receiver,
-                /*stream_id=*/0));
+        group_builder.addConcurrency(std::make_unique<ExchangeReceiverSourceOp>(
+            exec_context,
+            log->identifier(),
+            exchange_receiver,
+            /*stream_id=*/0));
     }
     const String & executor_id = table_scan.getTableScanExecutorID();
     context.getDAGContext()->addInboundIOProfileInfos(executor_id, group_builder.getCurIOProfileInfos());
@@ -372,7 +376,7 @@ void StorageDisaggregated::filterConditions(DAGExpressionAnalyzer & analyzer, DA
     if (filter_conditions.hasValue())
     {
         // No need to cast, because already done by tiflash_storage node.
-        ::DB::executePushedDownFilter(/*remote_read_streams_start_index=*/pipeline.streams.size(), filter_conditions, analyzer, log, pipeline);
+        ::DB::executePushedDownFilter(filter_conditions, analyzer, log, pipeline);
 
         auto & profile_streams = context.getDAGContext()->getProfileStreamsMap()[filter_conditions.executor_id];
         pipeline.transform([&profile_streams](auto & stream) { profile_streams.push_back(stream); });
@@ -386,8 +390,10 @@ void StorageDisaggregated::filterConditions(
 {
     if (filter_conditions.hasValue())
     {
-        ::DB::executePushedDownFilter(exec_context, group_builder, /*remote_read_sources_start_index=*/group_builder.concurrency(), filter_conditions, analyzer, log);
-        context.getDAGContext()->addOperatorProfileInfos(filter_conditions.executor_id, group_builder.getCurProfileInfos());
+        ::DB::executePushedDownFilter(exec_context, group_builder, filter_conditions, analyzer, log);
+        context.getDAGContext()->addOperatorProfileInfos(
+            filter_conditions.executor_id,
+            group_builder.getCurProfileInfos());
     }
 }
 
@@ -402,8 +408,10 @@ ExpressionActionsPtr StorageDisaggregated::getExtraCastExpr(DAGExpressionAnalyze
         getColumnIDsFromExpr(expr, table_scan.getColumns(), filter_col_id_set);
     }
     for (const auto & col : table_scan.getColumns())
-        may_need_add_cast_column.push_back(!col.hasGeneratedColumnFlag() && !filter_col_id_set.contains(col.id) && col.id != -1);
-    bool has_need_cast_column = std::find(may_need_add_cast_column.begin(), may_need_add_cast_column.end(), true) != may_need_add_cast_column.end();
+        may_need_add_cast_column.push_back(
+            !col.hasGeneratedColumnFlag() && !filter_col_id_set.contains(col.id) && col.id != -1);
+    bool has_need_cast_column = std::find(may_need_add_cast_column.begin(), may_need_add_cast_column.end(), true)
+        != may_need_add_cast_column.end();
     ExpressionActionsChain chain;
     if (has_need_cast_column && analyzer.appendExtraCastsAfterTS(chain, may_need_add_cast_column, table_scan))
     {
@@ -422,20 +430,23 @@ void StorageDisaggregated::extraCast(DAGExpressionAnalyzer & analyzer, DAGPipeli
 {
     if (auto extra_cast = getExtraCastExpr(analyzer); extra_cast)
     {
-        for (auto & stream : pipeline.streams)
-        {
+        pipeline.transform([&](auto & stream) {
             stream = std::make_shared<ExpressionBlockInputStream>(stream, extra_cast, log->identifier());
             stream->setExtraInfo("cast after local tableScan");
-        }
+        });
     }
 }
 
-void StorageDisaggregated::extraCast(PipelineExecutorContext & exec_context, PipelineExecGroupBuilder & group_builder, DAGExpressionAnalyzer & analyzer)
+void StorageDisaggregated::extraCast(
+    PipelineExecutorContext & exec_context,
+    PipelineExecGroupBuilder & group_builder,
+    DAGExpressionAnalyzer & analyzer)
 {
     if (auto extra_cast = getExtraCastExpr(analyzer); extra_cast)
     {
         group_builder.transform([&](auto & builder) {
-            builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(exec_context, log->identifier(), extra_cast));
+            builder.appendTransformOp(
+                std::make_unique<ExpressionTransformOp>(exec_context, log->identifier(), extra_cast));
         });
     }
 }

@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -31,7 +31,7 @@ public:
 
     virtual void submit(std::vector<TaskPtr> & tasks) = 0;
 
-    // return false if the queue is empty and finished.
+    // Will return false if finished and all remaining tasks should be drained in destructor.
     virtual bool take(TaskPtr & task) = 0;
 
     // Update the execution metrics of the task taken from the queue.
@@ -44,11 +44,25 @@ public:
     // And the tasks in the queue can still be taken normally.
     virtual void finish() = 0;
 
-    virtual void cancel(const String & query_id) = 0;
+    virtual void cancel(const String & query_id, const String & resource_group_name) = 0;
 
 protected:
     LoggerPtr logger = Logger::get();
 };
 using TaskQueuePtr = std::unique_ptr<TaskQueue>;
 
+template <typename Queue>
+bool popTask(Queue & queue, TaskPtr & task)
+{
+    if (!queue.empty())
+    {
+        task = std::move(queue.front());
+        queue.pop_front();
+        return true;
+    }
+    else
+    {
+        return false;
+    }
+}
 } // namespace DB

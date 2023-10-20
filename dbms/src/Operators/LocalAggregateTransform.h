@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Core/FineGrainedOperatorSpillContext.h>
 #include <Operators/AggregateContext.h>
 #include <Operators/Operator.h>
 
@@ -26,12 +27,10 @@ public:
     LocalAggregateTransform(
         PipelineExecutorContext & exec_context_,
         const String & req_id,
-        const Aggregator::Params & params_);
+        const Aggregator::Params & params_,
+        const std::shared_ptr<FineGrainedOperatorSpillContext> & fine_grained_spill_context);
 
-    String getName() const override
-    {
-        return "LocalAggregateTransform";
-    }
+    String getName() const override { return "LocalAggregateTransform"; }
 
 protected:
     OperatorStatus transformImpl(Block & block) override;

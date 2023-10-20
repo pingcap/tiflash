@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -62,20 +62,11 @@ public:
     // To ensure that the data is uploaded to S3, the caller must call fsync after all write is finished.
     int fsync() override;
 
-    std::string getFileName() const override
-    {
-        return fmt::format("{}/{}", client_ptr->bucket(), remote_fname);
-    }
+    std::string getFileName() const override { return fmt::format("{}/{}", client_ptr->bucket(), remote_fname); }
 
-    void close() override
-    {
-        is_close = true;
-    }
+    void close() override { is_close = true; }
 
-    bool isClosed() const override
-    {
-        return is_close;
-    }
+    bool isClosed() const override { return is_close; }
 
     ssize_t pwrite(char * /*buf*/, size_t /*size*/, off_t /*offset*/) const override
     {
@@ -87,15 +78,9 @@ public:
         throw Exception("S3WritableFile not support seek", ErrorCodes::NOT_IMPLEMENTED);
     }
 
-    int getFd() const override
-    {
-        return -1;
-    }
+    int getFd() const override { return -1; }
 
-    void open() override
-    {
-        throw Exception("S3WritableFile not support open", ErrorCodes::NOT_IMPLEMENTED);
-    }
+    void open() override { throw Exception("S3WritableFile not support open", ErrorCodes::NOT_IMPLEMENTED); }
 
     int ftruncate(off_t /*length*/) override
     {
@@ -144,7 +129,12 @@ private:
     {
         if (!outcome.IsSuccess())
         {
-            throw S3::fromS3Error(outcome.GetError(), "bucket={} root={} key={}", client_ptr->bucket(), client_ptr->root(), remote_fname);
+            throw S3::fromS3Error(
+                outcome.GetError(),
+                "bucket={} root={} key={}",
+                client_ptr->bucket(),
+                client_ptr->root(),
+                remote_fname);
         }
     }
 

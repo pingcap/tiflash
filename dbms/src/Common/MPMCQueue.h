@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -55,9 +55,7 @@ public:
     }
 
     template <typename Pred>
-    ALWAYS_INLINE void wait(
-        std::unique_lock<std::mutex> & lock,
-        Pred pred)
+    ALWAYS_INLINE void wait(std::unique_lock<std::mutex> & lock, Pred pred)
     {
 #ifdef __APPLE__
         WaitingNode node;
@@ -133,7 +131,7 @@ public:
     using Result = MPMCQueueResult;
     using ElementAuxiliaryMemoryUsageFunc = std::function<Int64(const T & element)>;
 
-    MPMCQueue(
+    explicit MPMCQueue(
         const CapacityLimits & capacity_limits_,
         ElementAuxiliaryMemoryUsageFunc && get_auxiliary_memory_usage_ = [](const T &) { return 0; })
         : capacity_limits(capacity_limits_)
@@ -145,13 +143,9 @@ public:
                   : std::move(get_auxiliary_memory_usage_))
         , element_auxiliary_memory(capacity_limits.max_size, 0)
         , data(capacity_limits.max_size * sizeof(T))
-    {
-    }
+    {}
 
-    ~MPMCQueue()
-    {
-        drain();
-    }
+    ~MPMCQueue() { drain(); }
 
     // Cannot to use copy/move constructor,
     // because MPMCQueue maybe used by different threads.
@@ -167,10 +161,7 @@ public:
     * | Finished         | No         | Pop and return OK        |
     * | Cancelled        | Yes/No     | return CANCELLED         |
     * */
-    ALWAYS_INLINE Result pop(T & obj)
-    {
-        return popObj<true>(obj);
-    }
+    ALWAYS_INLINE Result pop(T & obj) { return popObj<true>(obj); }
 
     /// Besides all conditions mentioned at `pop`, `popTimeout` will return TIMEOUT if `timeout` is exceeded.
     template <typename Duration>
@@ -182,10 +173,7 @@ public:
 
     /// Non-blocking function.
     /// Besides all conditions mentioned at `pop`, `tryPop` will immediately return EMPTY if queue is `NORMAL` but empty.
-    ALWAYS_INLINE Result tryPop(T & obj)
-    {
-        return popObj<false>(obj);
-    }
+    ALWAYS_INLINE Result tryPop(T & obj) { return popObj<false>(obj); }
 
     /*
     * | Queue Status     | Empty      | Behavior                 |
@@ -242,10 +230,7 @@ public:
     /// Cancel a NORMAL queue will wake up all blocking readers and writers.
     /// After `cancel()` the queue can't be pushed or popped any more.
     /// That means some objects may leave at the queue without poped.
-    bool cancel()
-    {
-        return cancelWith("");
-    }
+    bool cancel() { return cancelWith(""); }
 
     bool cancelWith(String reason)
     {
@@ -261,9 +246,7 @@ public:
     /// Return true if the previous status is NORMAL.
     bool finish()
     {
-        return changeStatus([&] {
-            status = Status::FINISHED;
-        });
+        return changeStatus([&] { status = Status::FINISHED; });
     }
 
     Status getStatus() const
@@ -380,7 +363,9 @@ private:
         if constexpr (need_wait)
         {
             auto pred = [&] {
-                return (write_pos - read_pos < capacity_limits.max_size && current_auxiliary_memory_usage < capacity_limits.max_bytes) || !isNormal();
+                return (write_pos - read_pos < capacity_limits.max_size
+                        && current_auxiliary_memory_usage < capacity_limits.max_bytes)
+                    || !isNormal();
             };
             if (!wait(lock, writer_head, pred, deadline))
                 is_timeout = true;
@@ -388,7 +373,9 @@ private:
 
         /// double check status after potential wait
         /// check write_pos because timeouted will also reach here.
-        if (isNormal() && (write_pos - read_pos < capacity_limits.max_size && current_auxiliary_memory_usage < capacity_limits.max_bytes))
+        if (isNormal()
+            && (write_pos - read_pos < capacity_limits.max_size
+                && current_auxiliary_memory_usage < capacity_limits.max_bytes))
         {
             void * addr = getObjAddr(write_pos);
             assigner(addr);
@@ -399,7 +386,9 @@ private:
 
             /// See comments in `popObj`.
             reader_head.notifyNext();
-            if (capacity_limits.max_bytes != std::numeric_limits<Int64>::max() && current_auxiliary_memory_usage < capacity_limits.max_bytes && write_pos - read_pos < capacity_limits.max_size)
+            if (capacity_limits.max_bytes != std::numeric_limits<Int64>::max()
+                && current_auxiliary_memory_usage < capacity_limits.max_bytes
+                && write_pos - read_pos < capacity_limits.max_size)
                 writer_head.notifyNext();
             return Result::OK;
         }
@@ -431,15 +420,9 @@ private:
         return assignObj<need_wait>(deadline, [&](void * addr) { new (addr) T(std::forward<Args>(args)...); });
     }
 
-    ALWAYS_INLINE bool isNormal() const
-    {
-        return likely(status == Status::NORMAL);
-    }
+    ALWAYS_INLINE bool isNormal() const { return likely(status == Status::NORMAL); }
 
-    ALWAYS_INLINE bool isCancelled() const
-    {
-        return unlikely(status == Status::CANCELLED);
-    }
+    ALWAYS_INLINE bool isCancelled() const { return unlikely(status == Status::CANCELLED); }
 
     ALWAYS_INLINE void * getObjAddr(Int64 pos)
     {
@@ -447,10 +430,7 @@ private:
         return &data[pos];
     }
 
-    ALWAYS_INLINE T & getObj(Int64 pos)
-    {
-        return *reinterpret_cast<T *>(getObjAddr(pos));
-    }
+    ALWAYS_INLINE T & getObj(Int64 pos) { return *reinterpret_cast<T *>(getObjAddr(pos)); }
 
     ALWAYS_INLINE void destruct(T & obj)
     {

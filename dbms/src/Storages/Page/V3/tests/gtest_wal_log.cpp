@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -131,7 +131,11 @@ public:
 
         file_name = path + "/log_0";
 
-        writer = std::make_unique<LogWriter>(file_name, provider, /*log_num*/ log_file_num, /*recycle_log*/ recyclable_log);
+        writer = std::make_unique<LogWriter>(
+            file_name,
+            provider,
+            /*log_num*/ log_file_num,
+            /*recycle_log*/ recyclable_log);
         resetReader();
 
 
@@ -142,7 +146,9 @@ public:
             /*create_new_encryption_info_*/ false);
     }
 
-    std::unique_ptr<LogReader> getNewReader(const WALRecoveryMode wal_recovery_mode = WALRecoveryMode::TolerateCorruptedTailRecords, size_t log_num = 0)
+    std::unique_ptr<LogReader> getNewReader(
+        const WALRecoveryMode wal_recovery_mode = WALRecoveryMode::TolerateCorruptedTailRecords,
+        size_t log_num = 0)
     {
         auto read_buf = createReadBufferFromFileBaseByFileProvider(
             provider,
@@ -154,11 +160,12 @@ public:
             /*buffer_size*/ Format::BLOCK_SIZE // Must be `Format::BLOCK_SIZE`
         );
 
-        return std::make_unique<LogReader>(std::move(read_buf),
-                                           &report,
-                                           /* verify_checksum */ true,
-                                           /* log_number */ log_num,
-                                           wal_recovery_mode);
+        return std::make_unique<LogReader>(
+            std::move(read_buf),
+            &report,
+            /* verify_checksum */ true,
+            /* log_number */ log_num,
+            wal_recovery_mode);
     }
 
     void resetReader(const WALRecoveryMode wal_recovery_mode = WALRecoveryMode::TolerateCorruptedTailRecords)
@@ -196,15 +203,9 @@ public:
         PageUtil::writeFile(wr_file, offset, old_one, 1, nullptr);
     }
 
-    void setByte(int offset, char new_byte)
-    {
-        PageUtil::writeFile(wr_file, offset, &new_byte, 1, nullptr);
-    }
+    void setByte(int offset, char new_byte) { PageUtil::writeFile(wr_file, offset, &new_byte, 1, nullptr); }
 
-    void shrinkSize(int bytes)
-    {
-        PageUtil::ftruncateFile(wr_file, writtenBytes() - bytes);
-    }
+    void shrinkSize(int bytes) { PageUtil::ftruncateFile(wr_file, writtenBytes() - bytes); }
 
     void fixChecksum(int header_offset, int payload_len, bool recyclable)
     {
@@ -224,15 +225,9 @@ public:
 
     /// Some methods to check the error reporter
 
-    size_t droppedBytes() const
-    {
-        return report.dropped_bytes;
-    }
+    size_t droppedBytes() const { return report.dropped_bytes; }
 
-    String reportMessage() const
-    {
-        return report.message;
-    }
+    String reportMessage() const { return report.message; }
 
     // Returns OK iff recorded error message contains "msg"
     String matchError(const std::string & msg) const
@@ -537,7 +532,9 @@ TEST_P(LogFileRWTest, ChecksumMismatch)
 TEST_P(LogFileRWTest, UnexpectedMiddleType)
 {
     write("foo");
-    setByte(Format::CHECKSUM_START_OFFSET, static_cast<char>(recyclable_log ? Format::RecyclableMiddleType : Format::MiddleType));
+    setByte(
+        Format::CHECKSUM_START_OFFSET,
+        static_cast<char>(recyclable_log ? Format::RecyclableMiddleType : Format::MiddleType));
     fixChecksum(0, 3, recyclable_log);
     ASSERT_EQ("EOF", read());
     ASSERT_EQ(3, droppedBytes());
@@ -547,7 +544,9 @@ TEST_P(LogFileRWTest, UnexpectedMiddleType)
 TEST_P(LogFileRWTest, UnexpectedLastType)
 {
     write("foo");
-    setByte(Format::CHECKSUM_START_OFFSET, static_cast<char>(recyclable_log ? Format::RecyclableLastType : Format::LastType));
+    setByte(
+        Format::CHECKSUM_START_OFFSET,
+        static_cast<char>(recyclable_log ? Format::RecyclableLastType : Format::LastType));
     fixChecksum(0, 3, recyclable_log);
     ASSERT_EQ("EOF", read());
     ASSERT_EQ(3, droppedBytes());
@@ -558,7 +557,9 @@ TEST_P(LogFileRWTest, UnexpectedFullType)
 {
     write("foo");
     write("bar");
-    setByte(Format::CHECKSUM_START_OFFSET, static_cast<char>(recyclable_log ? Format::RecyclableFirstType : Format::FirstType));
+    setByte(
+        Format::CHECKSUM_START_OFFSET,
+        static_cast<char>(recyclable_log ? Format::RecyclableFirstType : Format::FirstType));
     fixChecksum(0, 3, recyclable_log);
     ASSERT_EQ("bar", read());
     ASSERT_EQ("EOF", read());
@@ -570,7 +571,9 @@ TEST_P(LogFileRWTest, UnexpectedFirstType)
 {
     write("foo");
     write(repeatedString("bar", 100000));
-    setByte(Format::CHECKSUM_START_OFFSET, static_cast<char>(recyclable_log ? Format::RecyclableFirstType : Format::FirstType));
+    setByte(
+        Format::CHECKSUM_START_OFFSET,
+        static_cast<char>(recyclable_log ? Format::RecyclableFirstType : Format::FirstType));
     fixChecksum(0, 3, recyclable_log);
     ASSERT_EQ(repeatedString("bar", 100000), read());
     ASSERT_EQ("EOF", read());
@@ -802,9 +805,7 @@ TEST_P(LogFileRWTest, RecycleWithSameBoundaryLogNum)
 INSTANTIATE_TEST_CASE_P(
     Recycle_AllowRetryRead,
     LogFileRWTest,
-    ::testing::Combine(
-        ::testing::Bool(),
-        ::testing::Bool()),
+    ::testing::Combine(::testing::Bool(), ::testing::Bool()),
     [](const ::testing::TestParamInfo<LogFileRWTest::ParamType> & info) -> String {
         const auto [recycle_log, allow_retry_read] = info.param;
         return fmt::format("{}_{}", recycle_log, allow_retry_read);
@@ -826,7 +827,8 @@ TEST(LogFileRWTest2, ManuallySync)
     auto payload = repeatedString("medium", 50000);
     Format::LogNumberType log_num = 30;
 
-    auto writer = std::make_unique<LogWriter>(file_name, provider, log_num, /* recycle_log */ true, /* manual_flush */ true);
+    auto writer
+        = std::make_unique<LogWriter>(file_name, provider, log_num, /* recycle_log */ true, /* manual_flush */ true);
     {
         ReadBufferFromString buff(payload);
         ASSERT_NO_THROW(writer->addRecord(buff, payload.size()));
@@ -848,11 +850,12 @@ TEST(LogFileRWTest2, ManuallySync)
     );
 
     DB::PS::V3::ReportCollector reporter;
-    auto reader = std::make_unique<LogReader>(std::move(read_buf),
-                                              &reporter,
-                                              /* verify_checksum */ true,
-                                              log_num,
-                                              WALRecoveryMode::PointInTimeRecovery);
+    auto reader = std::make_unique<LogReader>(
+        std::move(read_buf),
+        &reporter,
+        /* verify_checksum */ true,
+        log_num,
+        WALRecoveryMode::PointInTimeRecovery);
     {
         auto [ok, scratch] = reader->readRecord();
         ASSERT_TRUE(ok);

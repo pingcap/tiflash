@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,7 +18,7 @@
 #include <Storages/DeltaMerge/Filter/PushDownFilter.h>
 #include <Storages/DeltaMerge/ReadThread/WorkQueue.h>
 #include <Storages/DeltaMerge/RowKeyRangeUtils.h>
-
+#include <Storages/DeltaMerge/Segment.h>
 namespace DB
 {
 namespace DM
@@ -39,9 +39,10 @@ struct SegmentReadTask
     SegmentSnapshotPtr read_snapshot;
     RowKeyRanges ranges;
 
-    SegmentReadTask(const SegmentPtr & segment_, //
-                    const SegmentSnapshotPtr & read_snapshot_,
-                    const RowKeyRanges & ranges_);
+    SegmentReadTask(
+        const SegmentPtr & segment_, //
+        const SegmentSnapshotPtr & read_snapshot_,
+        const RowKeyRanges & ranges_);
 
     explicit SegmentReadTask(const SegmentPtr & segment_, const SegmentSnapshotPtr & read_snapshot_);
 
@@ -87,30 +88,15 @@ public:
         }
     }
 
-    Int64 pendingCount() const
-    {
-        return pending_count.load(std::memory_order_relaxed);
-    }
+    Int64 pendingCount() const { return pending_count.load(std::memory_order_relaxed); }
 
-    Int64 pendingBytes() const
-    {
-        return pending_bytes.load(std::memory_order_relaxed);
-    }
+    Int64 pendingBytes() const { return pending_bytes.load(std::memory_order_relaxed); }
 
-    Int64 totalCount() const
-    {
-        return total_count.load(std::memory_order_relaxed);
-    }
+    Int64 totalCount() const { return total_count.load(std::memory_order_relaxed); }
 
-    Int64 totalBytes() const
-    {
-        return total_bytes.load(std::memory_order_relaxed);
-    }
+    Int64 totalBytes() const { return total_bytes.load(std::memory_order_relaxed); }
 
-    Int64 totalRows() const
-    {
-        return total_rows.load(std::memory_order_relaxed);
-    }
+    Int64 totalRows() const { return total_rows.load(std::memory_order_relaxed); }
 
 private:
     std::atomic<Int64> pending_count;
@@ -192,23 +178,24 @@ public:
         auto blk_avg_bytes = total_count > 0 ? total_bytes / total_count : 0;
         auto approximate_max_pending_block_bytes = blk_avg_bytes * max_queue_size;
         auto total_rows = blk_stat.totalRows();
-        LOG_DEBUG(log,
-                  "Done. pool_id={} table_id={} pop={} pop_empty={} pop_empty_ratio={} "
-                  "max_queue_size={} blk_avg_bytes={} approximate_max_pending_block_bytes={:.2f}MB "
-                  "total_count={} total_bytes={:.2f}MB total_rows={} avg_block_rows={} avg_rows_bytes={}B",
-                  pool_id,
-                  physical_table_id,
-                  pop_times,
-                  pop_empty_times,
-                  pop_empty_ratio,
-                  max_queue_size,
-                  blk_avg_bytes,
-                  approximate_max_pending_block_bytes / 1024.0 / 1024.0,
-                  total_count,
-                  total_bytes / 1024.0 / 1024.0,
-                  total_rows,
-                  total_count > 0 ? total_rows / total_count : 0,
-                  total_rows > 0 ? total_bytes / total_rows : 0);
+        LOG_DEBUG(
+            log,
+            "Done. pool_id={} table_id={} pop={} pop_empty={} pop_empty_ratio={} "
+            "max_queue_size={} blk_avg_bytes={} approximate_max_pending_block_bytes={:.2f}MB "
+            "total_count={} total_bytes={:.2f}MB total_rows={} avg_block_rows={} avg_rows_bytes={}B",
+            pool_id,
+            physical_table_id,
+            pop_times,
+            pop_empty_times,
+            pop_empty_ratio,
+            max_queue_size,
+            blk_avg_bytes,
+            approximate_max_pending_block_bytes / 1024.0 / 1024.0,
+            total_count,
+            total_bytes / 1024.0 / 1024.0,
+            total_rows,
+            total_count > 0 ? total_rows / total_count : 0,
+            total_rows > 0 ? total_bytes / total_rows : 0);
     }
 
     SegmentReadTaskPtr nextTask();
@@ -232,10 +219,7 @@ public:
     bool valid() const;
     void setException(const DB::Exception & e);
 
-    std::once_flag & addToSchedulerFlag()
-    {
-        return add_to_scheduler;
-    }
+    std::once_flag & addToSchedulerFlag() { return add_to_scheduler; }
 
 public:
     const uint64_t pool_id;
@@ -244,10 +228,7 @@ public:
     // The memory tracker of MPPTask.
     const MemoryTrackerPtr mem_tracker;
 
-    ColumnDefines & getColumnToRead()
-    {
-        return columns_to_read;
-    }
+    ColumnDefines & getColumnToRead() { return columns_to_read; }
 
     void appendRSOperator(RSOperatorPtr & new_filter)
     {
@@ -301,10 +282,7 @@ private:
 
     inline static std::atomic<uint64_t> pool_id_gen{1};
     inline static BlockStat global_blk_stat;
-    static uint64_t nextPoolId()
-    {
-        return pool_id_gen.fetch_add(1, std::memory_order_relaxed);
-    }
+    static uint64_t nextPoolId() { return pool_id_gen.fetch_add(1, std::memory_order_relaxed); }
 };
 
 using SegmentReadTaskPoolPtr = std::shared_ptr<SegmentReadTaskPool>;
@@ -312,3 +290,19 @@ using SegmentReadTaskPools = std::vector<SegmentReadTaskPoolPtr>;
 
 } // namespace DM
 } // namespace DB
+
+
+template <>
+struct fmt::formatter<DB::DM::SegmentReadTaskPtr>
+{
+    template <typename FormatContext>
+    auto format(const DB::DM::SegmentReadTaskPtr & t, FormatContext & ctx) const -> decltype(ctx.out())
+    {
+        return format_to(
+            ctx.out(),
+            "{}_{}_{}",
+            t->segment->segmentId(),
+            t->segment->segmentEpoch(),
+            t->read_snapshot->delta->getDeltaIndexEpoch());
+    }
+};

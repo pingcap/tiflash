@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -91,10 +91,7 @@ public:
         }
     }
 
-    static MemoryTrackerPtr createGlobalRoot()
-    {
-        return std::shared_ptr<MemoryTracker>(new MemoryTracker(0, true));
-    }
+    static MemoryTrackerPtr createGlobalRoot() { return std::shared_ptr<MemoryTracker>(new MemoryTracker(0, true)); }
 
     ~MemoryTracker();
 
@@ -121,7 +118,10 @@ public:
       */
     void setOrRaiseLimit(Int64 value);
 
-    void setBytesThatRssLargerThanLimit(Int64 value) { bytes_rss_larger_than_limit.store(value, std::memory_order_relaxed); }
+    void setBytesThatRssLargerThanLimit(Int64 value)
+    {
+        bytes_rss_larger_than_limit.store(value, std::memory_order_relaxed);
+    }
 
     void setFaultProbability(double value) { fault_probability = value; }
 
@@ -171,6 +171,7 @@ extern std::shared_ptr<MemoryTracker> root_of_query_mem_trackers;
 //                  |-- fetch_pages_mem_tracker
 extern std::shared_ptr<MemoryTracker> sub_root_of_query_storage_task_mem_trackers;
 extern std::shared_ptr<MemoryTracker> fetch_pages_mem_tracker;
+extern std::shared_ptr<MemoryTracker> shared_column_data_mem_tracker;
 
 void initStorageMemoryTracker(Int64 limit, Int64 larger_than_limit);
 

@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@
 #include <Storages/DeltaMerge/Remote/RNReadTask_fwd.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
-#include <Storages/Transaction/Types.h>
+#include <Storages/KVStore/Types.h>
 
 #include <boost/noncopyable.hpp>
 #include <memory>
@@ -112,11 +112,14 @@ public:
         return input_stream;
     }
 
+#ifndef DBMS_PUBLIC_GTEST
 private:
+#else
+public:
+#endif
     explicit RNReadSegmentTask(const RNReadSegmentMeta & meta_)
         : meta(meta_)
-    {
-    }
+    {}
 
 private:
     BlockInputStreamPtr input_stream;
@@ -136,8 +139,7 @@ public:
 private:
     explicit RNReadTask(const std::vector<RNReadSegmentTaskPtr> & segment_read_tasks_)
         : segment_read_tasks(segment_read_tasks_)
-    {
-    }
+    {}
 };
 
 

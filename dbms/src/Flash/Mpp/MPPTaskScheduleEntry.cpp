@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -31,7 +31,7 @@ MPPTaskScheduleEntry::~MPPTaskScheduleEntry()
 {
     if (schedule_state == ScheduleState::SCHEDULED)
     {
-        manager->releaseThreadsFromScheduler(needed_threads);
+        manager->releaseThreadsFromScheduler(getResourceGroupName(), needed_threads);
         schedule_state = ScheduleState::COMPLETED;
     }
 }
@@ -42,7 +42,11 @@ bool MPPTaskScheduleEntry::schedule(ScheduleState state)
     if (schedule_state == ScheduleState::WAITING)
     {
         auto log_level = state == ScheduleState::SCHEDULED ? Poco::Message::PRIO_DEBUG : Poco::Message::PRIO_WARNING;
-        LOG_IMPL(log, log_level, "task is {}.", state == ScheduleState::SCHEDULED ? "scheduled" : " failed to schedule");
+        LOG_IMPL(
+            log,
+            log_level,
+            "task is {}.",
+            state == ScheduleState::SCHEDULED ? "scheduled" : " failed to schedule");
         schedule_state = state;
         schedule_cv.notify_one();
         return true;
@@ -59,15 +63,23 @@ void MPPTaskScheduleEntry::waitForSchedule()
         std::unique_lock lock(schedule_mu);
         schedule_cv.wait(lock, [&] { return schedule_state != ScheduleState::WAITING; });
         time_cost = stopwatch.elapsedSeconds();
-        GET_METRIC(tiflash_task_scheduler_waiting_duration_seconds).Observe(time_cost);
+        GET_RESOURCE_GROUP_METRIC(tiflash_task_scheduler_waiting_duration_seconds, getResourceGroupName())
+            .Observe(time_cost);
 
         if (schedule_state == ScheduleState::EXCEEDED)
         {
-            throw Exception(fmt::format("{} is failed to schedule because of exceeding the thread hard limit in min-tso scheduler after waiting for {}s.", id.toString(), time_cost));
+            throw Exception(fmt::format(
+                "{} is failed to schedule because of exceeding the thread hard limit in min-tso scheduler after "
+                "waiting for {}s.",
+                id.toString(),
+                time_cost));
         }
         else if (schedule_state == ScheduleState::FAILED)
         {
-            throw Exception(fmt::format("{} is failed to schedule because of being cancelled in min-tso scheduler after waiting for {}s.", id.toString(), time_cost));
+            throw Exception(fmt::format(
+                "{} is failed to schedule because of being cancelled in min-tso scheduler after waiting for {}s.",
+                id.toString(),
+                time_cost));
         }
     }
     LOG_DEBUG(log, "task waits for {} s to schedule and starts to run in parallel.", time_cost);

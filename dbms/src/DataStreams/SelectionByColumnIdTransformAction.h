@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,7 +15,7 @@
 #pragma once
 
 #include <Core/Block.h>
-#include <Storages/Transaction/Types.h>
+#include <Storages/KVStore/Types.h>
 
 #include <unordered_map>
 
@@ -34,10 +34,7 @@ public:
 
     Block filterAndTransform(const Block & in_block, const IColumn::Filter & filter, ssize_t result_size_hint);
 
-    Block getHeader() const
-    {
-        return out_header;
-    }
+    Block getHeader() const { return out_header; }
 
 private:
     Block out_header;

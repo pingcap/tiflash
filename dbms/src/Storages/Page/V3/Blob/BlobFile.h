@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,26 +30,22 @@ public:
     constexpr static const char * BLOB_PREFIX_NAME = "blobfile_";
 
 public:
-    BlobFile(String parent_path_,
-             BlobFileId blob_id_,
-             FileProviderPtr file_provider_,
-             PSDiskDelegatorPtr delegator_);
+    BlobFile(String parent_path_, BlobFileId blob_id_, FileProviderPtr file_provider_, PSDiskDelegatorPtr delegator_);
 
     ~BlobFile();
 
-    String getPath() const
-    {
-        return fmt::format("{}/{}{}", parent_path, BLOB_PREFIX_NAME, blob_id);
-    }
+    String getPath() const { return fmt::format("{}/{}{}", parent_path, BLOB_PREFIX_NAME, blob_id); }
 
-    EncryptionPath getEncryptionPath() const
-    {
-        return EncryptionPath(getPath(), "");
-    }
+    EncryptionPath getEncryptionPath() const { return EncryptionPath(getPath(), ""); }
 
     void read(char * buffer, size_t offset, size_t size, const ReadLimiterPtr & read_limiter, bool background = false);
 
-    void write(char * buffer, size_t offset, size_t size, const WriteLimiterPtr & write_limiter, bool background = false);
+    void write(
+        char * buffer,
+        size_t offset,
+        size_t size,
+        const WriteLimiterPtr & write_limiter,
+        bool background = false);
 
     void truncate(size_t size);
 

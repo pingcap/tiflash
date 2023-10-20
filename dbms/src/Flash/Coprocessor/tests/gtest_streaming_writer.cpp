@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,10 +17,10 @@
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DefaultChunkCodec.h>
-#include <Storages/Transaction/TiDB.h>
 #include <TestUtils/ColumnGenerator.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TestUtils/TiFlashTestEnv.h>
+#include <TiDB/Schema/TiDB.h>
 #include <gtest/gtest.h>
 
 #include <Flash/Coprocessor/StreamingDAGResponseWriter.cpp>
@@ -35,14 +35,13 @@ protected:
     void SetUp() override
     {
         dag_context_ptr = std::make_unique<DAGContext>(1024);
-        dag_context_ptr->is_mpp_task = true;
+        dag_context_ptr->kind = DAGRequestKind::MPP;
         dag_context_ptr->is_root_mpp_task = true;
         dag_context_ptr->result_field_types = makeFields();
     }
 
 public:
-    TestStreamingWriter()
-    {}
+    TestStreamingWriter() {}
 
     // Return 10 Int64 column.
     static std::vector<tipb::FieldType> makeFields()
@@ -76,10 +75,8 @@ public:
         {
             DataTypePtr int64_data_type = std::make_shared<DataTypeInt64>();
             auto int64_column = ColumnGenerator::instance().generate({rows, "Int64", RANDOM}).column;
-            block.insert(ColumnWithTypeAndName{
-                std::move(int64_column),
-                int64_data_type,
-                String("col") + std::to_string(i)});
+            block.insert(
+                ColumnWithTypeAndName{std::move(int64_column), int64_data_type, String("col") + std::to_string(i)});
         }
         return block;
     }

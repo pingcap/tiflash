@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,17 +14,11 @@
 
 #pragma once
 
-#include <Common/FailPoint.h>
 #include <DataStreams/AddExtraTableIDColumnTransformAction.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Flash/Coprocessor/RuntimeFilterMgr.h>
 #include <Storages/DeltaMerge/ReadThread/SegmentReadTaskScheduler.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
-
-namespace DB::FailPoints
-{
-extern const char pause_when_reading_from_dt_stream[];
-}
 
 namespace DB::DM
 {
@@ -89,7 +83,6 @@ protected:
         addReadTaskPoolToScheduler();
         while (true)
         {
-            FAIL_POINT_PAUSE(FailPoints::pause_when_reading_from_dt_stream);
             Block res;
             task_pool->popBlock(res);
             if (res)
@@ -114,7 +107,12 @@ protected:
 
     void readSuffixImpl() override
     {
-        LOG_DEBUG(log, "Finish read from storage, pool_id={} ref_no={} rows={}", task_pool->pool_id, ref_no, total_rows);
+        LOG_DEBUG(
+            log,
+            "Finish read from storage, pool_id={} ref_no={} rows={}",
+            task_pool->pool_id,
+            ref_no,
+            total_rows);
     }
 
     void addReadTaskPoolToScheduler()
@@ -125,7 +123,8 @@ protected:
         }
         std::call_once(task_pool->addToSchedulerFlag(), [&]() {
             prepareRuntimeFilter();
-            SegmentReadTaskScheduler::instance().add(task_pool); });
+            SegmentReadTaskScheduler::instance().add(task_pool);
+        });
         task_pool_added = true;
     }
 

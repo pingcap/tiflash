@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -107,8 +107,7 @@ BlockInputStreamPtr ClickHouseDictionarySource::loadUpdatedAll()
 
 BlockInputStreamPtr ClickHouseDictionarySource::loadIds(const std::vector<UInt64> & ids)
 {
-    return createStreamForSelectiveLoad(
-        query_builder.composeLoadIdsQuery(ids));
+    return createStreamForSelectiveLoad(query_builder.composeLoadIdsQuery(ids));
 }
 
 
@@ -117,10 +116,7 @@ BlockInputStreamPtr ClickHouseDictionarySource::loadKeys(
     const std::vector<size_t> & requested_rows)
 {
     return createStreamForSelectiveLoad(
-        query_builder.composeLoadKeysQuery(
-            key_columns,
-            requested_rows,
-            ExternalQueryBuilder::IN_WITH_TUPLES));
+        query_builder.composeLoadKeysQuery(key_columns, requested_rows, ExternalQueryBuilder::IN_WITH_TUPLES));
 }
 
 bool ClickHouseDictionarySource::hasUpdateField() const

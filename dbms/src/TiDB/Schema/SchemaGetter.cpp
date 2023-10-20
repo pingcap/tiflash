@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <Common/TiFlashException.h>
-#include <Storages/Transaction/DatumCodec.h>
+#include <TiDB/Decode/DatumCodec.h>
 #include <TiDB/Schema/SchemaGetter.h>
 
 namespace DB
@@ -93,7 +93,9 @@ struct TxnStructure
         UInt64 tp = DecodeUInt<UInt64>(idx, key);
         if (char(tp) != HashData)
         {
-            throw TiFlashException("invalid encoded hash data key flag:" + std::to_string(tp), Errors::Table::SyncError);
+            throw TiFlashException(
+                "invalid encoded hash data key flag:" + std::to_string(tp),
+                Errors::Table::SyncError);
         }
 
         String field = DecodeBytes(idx, key);
@@ -293,7 +295,10 @@ TiDB::TableInfoPtr SchemaGetter::getTableInfo(DatabaseID db_id, TableID table_id
         table_info_json = TxnStructure::mvccGet(snap, db_key, table_key);
         if (table_info_json.empty())
         {
-            LOG_ERROR(log, "The table {} is dropped in TiKV, and the latest table_info is still empty, it should by gc", table_id);
+            LOG_ERROR(
+                log,
+                "The table {} is dropped in TiKV, and the latest table_info is still empty, it should by gc",
+                table_id);
             return nullptr;
         }
     }
@@ -303,7 +308,9 @@ TiDB::TableInfoPtr SchemaGetter::getTableInfo(DatabaseID db_id, TableID table_id
     return table_info;
 }
 
-std::tuple<TiDB::DBInfoPtr, TiDB::TableInfoPtr> SchemaGetter::getDatabaseAndTableInfo(DatabaseID db_id, TableID table_id)
+std::tuple<TiDB::DBInfoPtr, TiDB::TableInfoPtr> SchemaGetter::getDatabaseAndTableInfo(
+    DatabaseID db_id,
+    TableID table_id)
 {
     String db_key = getDBKey(db_id);
     String db_json = TxnStructure::hGet(snap, DBs, db_key);
@@ -322,7 +329,10 @@ std::tuple<TiDB::DBInfoPtr, TiDB::TableInfoPtr> SchemaGetter::getDatabaseAndTabl
         table_info_json = TxnStructure::mvccGet(snap, db_key, table_key);
         if (table_info_json.empty())
         {
-            LOG_ERROR(log, "The table {} is dropped in TiKV, and the latest table_info is still empty, it should by gc", table_id);
+            LOG_ERROR(
+                log,
+                "The table {} is dropped in TiKV, and the latest table_info is still empty, it should by gc",
+                table_id);
             return std::make_tuple(db_info, nullptr);
             ;
         }

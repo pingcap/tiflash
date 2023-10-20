@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,12 +13,11 @@
 // limitations under the License.
 
 #include <Columns/ColumnString.h>
+#include <Common/config_build.h>
+#include <DataStreams/OneBlockInputStream.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
-#include <DataStreams/OneBlockInputStream.h>
-#include <Interpreters/Settings.h>
 #include <Storages/System/StorageSystemBuildOptions.h>
-#include <Common/config_build.h>
 
 namespace DB
 {
@@ -28,8 +27,8 @@ StorageSystemBuildOptions::StorageSystemBuildOptions(const std::string & name_)
     : name(name_)
 {
     setColumns(ColumnsDescription({
-        { "name", std::make_shared<DataTypeString>() },
-        { "value", std::make_shared<DataTypeString>() },
+        {"name", std::make_shared<DataTypeString>()},
+        {"value", std::make_shared<DataTypeString>()},
     }));
 }
 
@@ -47,14 +46,16 @@ BlockInputStreams StorageSystemBuildOptions::read(
 
     MutableColumns res_columns = getSampleBlock().cloneEmptyColumns();
 
-    for (auto it = auto_config_build; *it; it += 2)
+    for (auto * it = auto_config_build; *it; it += 2)
     {
         res_columns[0]->insert(String(it[0]));
         res_columns[1]->insert(String(it[1]));
     }
 
-    return BlockInputStreams(1, std::make_shared<OneBlockInputStream>(getSampleBlock().cloneWithColumns(std::move(res_columns))));
+    return BlockInputStreams(
+        1,
+        std::make_shared<OneBlockInputStream>(getSampleBlock().cloneWithColumns(std::move(res_columns))));
 }
 
 
-}
+} // namespace DB

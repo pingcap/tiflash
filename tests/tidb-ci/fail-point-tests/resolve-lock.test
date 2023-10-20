@@ -1,4 +1,4 @@
-# Copyright 2022 PingCAP, Ltd.
+# Copyright 2023 PingCAP, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,7 +19,7 @@ mysql> alter table test.t set tiflash replica 1;
 
 mysql> set @@global.tidb_enable_async_commit=1; set @@global.tidb_allow_batch_cop=0;
 
-curl_tidb> get fail/github.com/pingcap/tidb/server/enableTestAPI
+curl_tidb> get fail/github.com/pingcap/tidb/pkg/server/enableTestAPI
 return
 
 curl_tidb> put fail/tikvclient/asyncCommitDoNothing return

@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -138,10 +138,7 @@ TEST_F(LocalPageCacheLRUTest, PutDifferentSize)
     RNLocalPageCacheLRU lru(5);
     lru.put("key_1", 3);
 
-    ASSERT_THROW({
-        lru.put("key_1", 1);
-    },
-                 DB::Exception);
+    ASSERT_THROW({ lru.put("key_1", 1); }, DB::Exception);
 }
 
 } // namespace DB::DM::Remote::tests

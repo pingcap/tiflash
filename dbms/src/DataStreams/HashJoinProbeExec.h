@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,6 +30,7 @@ class HashJoinProbeExec : public std::enable_shared_from_this<HashJoinProbeExec>
 {
 public:
     static HashJoinProbeExecPtr build(
+        const String & req_id,
         const JoinPtr & join,
         size_t stream_index,
         const BlockInputStreamPtr & probe_stream,
@@ -38,6 +39,7 @@ public:
     using CancellationHook = std::function<bool()>;
 
     HashJoinProbeExec(
+        const String & req_id,
         const JoinPtr & join_,
         size_t stream_index_,
         const BlockInputStreamPtr & restore_build_stream_,
@@ -72,10 +74,7 @@ public:
     // Returns false if the probe_exec continues to execute.
     bool onScanHashMapAfterProbeFinish();
 
-    void setCancellationHook(CancellationHook cancellation_hook)
-    {
-        is_cancelled = std::move(cancellation_hook);
-    }
+    void setCancellationHook(CancellationHook cancellation_hook) { is_cancelled = std::move(cancellation_hook); }
 
 private:
     PartitionBlock getProbeBlock();
@@ -83,6 +82,8 @@ private:
     HashJoinProbeExecPtr doTryGetRestoreExec();
 
 private:
+    const LoggerPtr log;
+
     const JoinPtr join;
 
     const size_t stream_index;

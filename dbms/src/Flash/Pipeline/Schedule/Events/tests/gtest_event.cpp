@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 #include <Flash/Pipeline/Schedule/Events/Event.h>
 #include <Flash/Pipeline/Schedule/TaskScheduler.h>
 #include <Flash/Pipeline/Schedule/Tasks/EventTask.h>
+#include <Flash/ResourceControl/LocalAdmissionController.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <gtest/gtest.h>
 
@@ -27,10 +28,7 @@ namespace
 class BaseTask : public EventTask
 {
 public:
-    BaseTask(
-        PipelineExecutorContext & exec_context_,
-        const EventPtr & event_,
-        std::atomic_int64_t & counter_)
+    BaseTask(PipelineExecutorContext & exec_context_, const EventPtr & event_, std::atomic_int64_t & counter_)
         : EventTask(exec_context_, event_)
         , counter(counter_)
     {}
@@ -49,9 +47,7 @@ private:
 class BaseEvent : public Event
 {
 public:
-    BaseEvent(
-        PipelineExecutorContext & exec_context_,
-        std::atomic_int64_t & counter_)
+    BaseEvent(PipelineExecutorContext & exec_context_, std::atomic_int64_t & counter_)
         : Event(exec_context_)
         , counter(counter_)
     {}
@@ -65,10 +61,7 @@ protected:
             addTask(std::make_unique<BaseTask>(exec_context, shared_from_this(), counter));
     }
 
-    void finishImpl() override
-    {
-        --counter;
-    }
+    void finishImpl() override { --counter; }
 
 private:
     std::atomic_int64_t & counter;
@@ -77,9 +70,7 @@ private:
 class RunTask : public EventTask
 {
 public:
-    RunTask(
-        PipelineExecutorContext & exec_context_,
-        const EventPtr & event_)
+    RunTask(PipelineExecutorContext & exec_context_, const EventPtr & event_)
         : EventTask(exec_context_, event_)
     {}
 
@@ -98,9 +89,7 @@ private:
 class RunEvent : public Event
 {
 public:
-    RunEvent(
-        PipelineExecutorContext & exec_context_,
-        bool with_tasks_)
+    RunEvent(PipelineExecutorContext & exec_context_, bool with_tasks_)
         : Event(exec_context_)
         , with_tasks(with_tasks_)
     {}
@@ -122,9 +111,7 @@ private:
 class DeadLoopTask : public EventTask
 {
 public:
-    DeadLoopTask(
-        PipelineExecutorContext & exec_context_,
-        const EventPtr & event_)
+    DeadLoopTask(PipelineExecutorContext & exec_context_, const EventPtr & event_)
         : EventTask(exec_context_, event_)
     {}
 
@@ -139,9 +126,7 @@ protected:
 class DeadLoopEvent : public Event
 {
 public:
-    DeadLoopEvent(
-        PipelineExecutorContext & exec_context_,
-        bool with_tasks_)
+    DeadLoopEvent(PipelineExecutorContext & exec_context_, bool with_tasks_)
         : Event(exec_context_)
         , with_tasks(with_tasks_)
     {}
@@ -174,10 +159,7 @@ public:
     static constexpr auto err_msg = "error from OnErrEvent";
 
 protected:
-    void scheduleImpl() override
-    {
-        exec_context.onErrorOccurred(err_msg);
-    }
+    void scheduleImpl() override { exec_context.onErrorOccurred(err_msg); }
 };
 
 class AssertMemoryTraceEvent : public Event
@@ -190,39 +172,26 @@ public:
     }
 
 protected:
-    void scheduleImpl() override
-    {
-        assert(mem_tracker.get() == current_memory_tracker);
-    }
+    void scheduleImpl() override { assert(mem_tracker.get() == current_memory_tracker); }
 
-    void finishImpl() override
-    {
-        assert(mem_tracker.get() == current_memory_tracker);
-    }
+    void finishImpl() override { assert(mem_tracker.get() == current_memory_tracker); }
 };
 
 class ThrowExceptionTask : public EventTask
 {
 public:
-    ThrowExceptionTask(
-        PipelineExecutorContext & exec_context_,
-        const EventPtr & event_)
+    ThrowExceptionTask(PipelineExecutorContext & exec_context_, const EventPtr & event_)
         : EventTask(exec_context_, event_)
     {}
 
 protected:
-    ExecTaskStatus executeImpl() override
-    {
-        throw Exception("throw exception in doExecuteImpl");
-    }
+    ExecTaskStatus executeImpl() override { throw Exception("throw exception in doExecuteImpl"); }
 };
 
 class ThrowExceptionEvent : public Event
 {
 public:
-    ThrowExceptionEvent(
-        PipelineExecutorContext & exec_context_,
-        bool with_task_)
+    ThrowExceptionEvent(PipelineExecutorContext & exec_context_, bool with_task_)
         : Event(exec_context_)
         , with_task(with_task_)
     {}
@@ -250,9 +219,7 @@ private:
 class ManyTasksEvent : public Event
 {
 public:
-    ManyTasksEvent(
-        PipelineExecutorContext & exec_context_,
-        size_t task_num_)
+    ManyTasksEvent(PipelineExecutorContext & exec_context_, size_t task_num_)
         : Event(exec_context_)
         , task_num(task_num_)
     {}
@@ -274,9 +241,7 @@ private:
 class DoInsertEvent : public Event
 {
 public:
-    DoInsertEvent(
-        PipelineExecutorContext & exec_context_,
-        int16_t & counter_)
+    DoInsertEvent(PipelineExecutorContext & exec_context_, int16_t & counter_)
         : Event(exec_context_)
         , counter(counter_)
     {
@@ -284,10 +249,7 @@ public:
     }
 
 protected:
-    void scheduleImpl() override
-    {
-        addTask(std::make_unique<RunTask>(exec_context, shared_from_this()));
-    }
+    void scheduleImpl() override { addTask(std::make_unique<RunTask>(exec_context, shared_from_this())); }
 
     void finishImpl() override
     {
@@ -305,8 +267,7 @@ class CreateTaskFailEvent : public Event
 public:
     explicit CreateTaskFailEvent(PipelineExecutorContext & exec_context_)
         : Event(exec_context_)
-    {
-    }
+    {}
 
 protected:
     void scheduleImpl() override
@@ -324,9 +285,7 @@ public:
 
     static constexpr size_t per_execute_time = 10'000'000L; // 10ms
 
-    TestPorfileTask(
-        PipelineExecutorContext & exec_context_,
-        const EventPtr & event_)
+    TestPorfileTask(PipelineExecutorContext & exec_context_, const EventPtr & event_)
         : EventTask(exec_context_, event_)
     {}
 
@@ -358,9 +317,7 @@ protected:
     {
         if unlikely (!wait_stopwatch)
             wait_stopwatch.emplace(CLOCK_MONOTONIC_COARSE);
-        return wait_stopwatch->elapsed() < min_time
-            ? ExecTaskStatus::WAITING
-            : ExecTaskStatus::FINISHED;
+        return wait_stopwatch->elapsed() < min_time ? ExecTaskStatus::WAITING : ExecTaskStatus::FINISHED;
     }
 
 private:
@@ -426,6 +383,7 @@ protected:
 
     void SetUp() override
     {
+        DB::LocalAdmissionController::global_instance = std::make_unique<DB::MockLocalAdmissionController>();
         TaskSchedulerConfig config{thread_num, thread_num};
         assert(!TaskScheduler::instance);
         TaskScheduler::instance = std::make_unique<TaskScheduler>(config);

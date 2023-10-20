@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -190,14 +190,18 @@ try
     ASSERT_EQ(page_files_compacted.size(), 4UL);
 
     // TODO:
-    PageFile page_file
-        = PageFile::openPageFileForRead(7, 0, delegator->defaultPath(), file_provider, PageFile::Type::Checkpoint, storage.page_file_log);
+    PageFile page_file = PageFile::openPageFileForRead(
+        7,
+        0,
+        delegator->defaultPath(),
+        file_provider,
+        PageFile::Type::Checkpoint,
+        storage.page_file_log);
     ASSERT_TRUE(page_file.isExist());
 
     PageStorage::MetaMergingQueue mergine_queue;
     {
-        if (auto reader = PageFile::MetaMergingReader::createFrom(page_file, ctx->getReadLimiter());
-            reader->hasNext())
+        if (auto reader = PageFile::MetaMergingReader::createFrom(page_file, ctx->getReadLimiter()); reader->hasNext())
         {
             reader->moveNext();
             mergine_queue.push(std::move(reader));

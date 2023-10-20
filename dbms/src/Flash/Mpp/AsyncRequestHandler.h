@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -166,7 +166,8 @@ private:
         switch (res)
         {
         case MPMCQueueResult::OK:
-            break;
+            startAsyncRead();
+            return;
         case MPMCQueueResult::FULL:
             // Do nothing and return immediately
             return;
@@ -174,8 +175,6 @@ private:
             closeConnection("Exchange receiver meet error : push packet fail");
             return;
         }
-
-        startAsyncRead();
     }
 
     void processWaitPushToQueue(bool ok)
@@ -196,7 +195,11 @@ private:
         else
         {
             String done_msg = fmt::format("Exchange receiver meet error : {}", finish_status.error_message());
-            String log_msg = fmt::format("Finish fail. err code: {}, err msg: {}, retry time {}", finish_status.error_code(), finish_status.error_message(), retry_times);
+            String log_msg = fmt::format(
+                "Finish fail. err code: {}, err msg: {}, retry time {}",
+                finish_status.error_code(),
+                finish_status.error_message(),
+                retry_times);
             retryOrDone(std::move(done_msg), log_msg);
         }
     }

@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@
 #include <DataStreams/NativeBlockInputStream.h>
 #include <IO/CompressedReadBuffer.h>
 #include <IO/ReadBufferFromFile.h>
+#include <Interpreters/SortSpillContext.h>
 #include <Poco/TemporaryFile.h>
 
 
@@ -40,7 +41,8 @@ public:
         size_t limit_,
         size_t max_bytes_before_external_sort_,
         const SpillConfig & spill_config_,
-        const String & req_id);
+        const String & req_id,
+        const RegisterOperatorSpillContext & register_operator_spill_context);
 
     String getName() const override { return NAME; }
 
@@ -55,16 +57,12 @@ protected:
     void appendInfo(FmtBuffer & buffer) const override;
 
 private:
-    bool hasSpilledData() const
-    {
-        return max_bytes_before_external_sort > 0 && spiller->hasSpilledData();
-    }
+    bool hasSpilledData() const { return sort_spill_context->hasSpilledData(); }
+
+    void spillCurrentBlocks();
     SortDescription description;
     size_t max_merged_block_size;
     size_t limit;
-
-    size_t max_bytes_before_external_sort;
-    const SpillConfig spill_config;
 
     LoggerPtr log;
 
@@ -79,7 +77,7 @@ private:
     Block header_without_constants;
 
     /// Everything below is for external sorting.
-    std::unique_ptr<Spiller> spiller;
+    SortSpillContextPtr sort_spill_context;
 
     BlockInputStreams inputs_to_merge;
 };

@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -37,10 +37,7 @@ struct UncompressedCacheCell
 
 struct UncompressedSizeWeightFunction
 {
-    size_t operator()(const UncompressedCacheCell & x) const
-    {
-        return x.data.size();
-    }
+    size_t operator()(const UInt128 key, const UncompressedCacheCell & x) const { return sizeof(key) + x.data.size(); }
 };
 
 

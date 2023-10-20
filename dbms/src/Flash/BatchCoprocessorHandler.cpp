@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,7 +22,7 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Storages/IStorage.h>
-#include <Storages/Transaction/TMTContext.h>
+#include <Storages/KVStore/TMTContext.h>
 #include <TiDB/Schema/SchemaSyncer.h>
 
 #include <ext/scope_guard.h>
@@ -37,13 +37,14 @@ extern const int NOT_IMPLEMENTED;
 BatchCoprocessorHandler::BatchCoprocessorHandler(
     CoprocessorContext & cop_context_,
     const coprocessor::BatchRequest * cop_request_,
-    ::grpc::ServerWriter<::coprocessor::BatchResponse> * writer_)
-    : CoprocessorHandler(cop_context_, nullptr, nullptr)
+    ::grpc::ServerWriter<::coprocessor::BatchResponse> * writer_,
+    const String & identifier)
+    : cop_context(cop_context_)
     , cop_request(cop_request_)
     , writer(writer_)
-{
-    log = (&Poco::Logger::get("BatchCoprocessorHandler"));
-}
+    , resource_group_name(cop_request->context().resource_control_context().resource_group_name())
+    , log(Logger::get(identifier))
+{}
 
 grpc::Status BatchCoprocessorHandler::execute()
 {
@@ -52,7 +53,9 @@ grpc::Status BatchCoprocessorHandler::execute()
 
     try
     {
-        RUNTIME_CHECK_MSG(!cop_context.db_context.getSharedContextDisagg()->isDisaggregatedComputeMode(), "cannot run cop or batchCop request on tiflash_compute node");
+        RUNTIME_CHECK_MSG(
+            !cop_context.db_context.getSharedContextDisagg()->isDisaggregatedComputeMode(),
+            "cannot run cop or batchCop request on tiflash_compute node");
 
         switch (cop_request->tp())
         {
@@ -60,11 +63,13 @@ grpc::Status BatchCoprocessorHandler::execute()
         {
             GET_METRIC(tiflash_coprocessor_request_count, type_batch_executing).Increment();
             GET_METRIC(tiflash_coprocessor_handling_request_count, type_batch_executing).Increment();
-            SCOPE_EXIT(
-                { GET_METRIC(tiflash_coprocessor_handling_request_count, type_batch_executing).Decrement(); });
+            SCOPE_EXIT({ GET_METRIC(tiflash_coprocessor_handling_request_count, type_batch_executing).Decrement(); });
 
             auto dag_request = getDAGRequestFromStringWithRetry(cop_request->data());
-            auto tables_regions_info = TablesRegionsInfo::create(cop_request->regions(), cop_request->table_regions(), cop_context.db_context.getTMTContext());
+            auto tables_regions_info = TablesRegionsInfo::create(
+                cop_request->regions(),
+                cop_request->table_regions(),
+                cop_context.db_context.getTMTContext());
             LOG_DEBUG(
                 log,
                 "Handling {} regions from {} physical tables in DAG request: {}",
@@ -77,11 +82,16 @@ grpc::Status BatchCoprocessorHandler::execute()
                 std::move(tables_regions_info),
                 RequestUtils::deriveKeyspaceID(cop_request->context()),
                 cop_context.db_context.getClientInfo().current_address.toString(),
-                /*is_batch_cop=*/true,
-                Logger::get("BatchCoprocessorHandler"));
+                DAGRequestKind::BatchCop,
+                resource_group_name,
+                Logger::get(log->identifier()));
             cop_context.db_context.setDAGContext(&dag_context);
 
-            DAGDriver<true> driver(cop_context.db_context, cop_request->start_ts() > 0 ? cop_request->start_ts() : dag_request.start_ts_fallback(), cop_request->schema_ver(), writer);
+            DAGDriver<DAGRequestKind::BatchCop> driver(
+                cop_context.db_context,
+                cop_request->start_ts() > 0 ? cop_request->start_ts() : dag_request.start_ts_fallback(),
+                cop_request->schema_ver(),
+                writer);
             // batch execution;
             driver.execute();
             LOG_DEBUG(log, "Handle DAG request done");
@@ -90,8 +100,9 @@ grpc::Status BatchCoprocessorHandler::execute()
         case COP_REQ_TYPE_ANALYZE:
         case COP_REQ_TYPE_CHECKSUM:
         default:
-            throw TiFlashException("Coprocessor request type " + std::to_string(cop_request->tp()) + " is not implemented",
-                                   Errors::Coprocessor::Unimplemented);
+            throw TiFlashException(
+                "Coprocessor request type " + std::to_string(cop_request->tp()) + " is not implemented",
+                Errors::Coprocessor::Unimplemented);
         }
         return grpc::Status::OK;
     }
@@ -125,8 +136,9 @@ grpc::Status BatchCoprocessorHandler::execute()
 
 grpc::Status BatchCoprocessorHandler::recordError(grpc::StatusCode err_code, const String & err_msg)
 {
-    err_response.set_other_error(err_msg);
-    writer->Write(err_response);
+    coprocessor::BatchResponse response;
+    response.set_other_error(err_msg);
+    writer->Write(response);
 
     return grpc::Status(err_code, err_msg);
 }

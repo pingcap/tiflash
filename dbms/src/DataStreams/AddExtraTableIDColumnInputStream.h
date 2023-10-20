@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@
 
 #include <DataStreams/AddExtraTableIDColumnTransformAction.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
-#include <Storages/Transaction/Types.h>
+#include <Storages/KVStore/Types.h>
 
 namespace DB
 {
@@ -29,10 +29,7 @@ class AddExtraTableIDColumnInputStream : public IProfilingBlockInputStream
     static constexpr auto NAME = "AddExtraTableIDColumn";
 
 public:
-    AddExtraTableIDColumnInputStream(
-        BlockInputStreamPtr input,
-        int extra_table_id_index,
-        TableID physical_table_id);
+    AddExtraTableIDColumnInputStream(BlockInputStreamPtr input, int extra_table_id_index, TableID physical_table_id);
 
     String getName() const override { return NAME; }
 

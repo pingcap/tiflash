@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -11,6 +11,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
+#include <Common/TiFlashMetrics.h>
 #include <TiDB/Schema/TiDBSchemaSyncer.h>
 #include <common/types.h>
 
@@ -58,7 +60,11 @@ bool TiDBSchemaSyncer<mock_getter, mock_mapper>::syncSchemas(Context & context)
             return false;
         }
 
-        LOG_INFO(log, "Start to sync schemas. current version is: {} and try to sync schema version to: {}", cur_version, version);
+        LOG_INFO(
+            log,
+            "Start to sync schemas. current version is: {} and try to sync schema version to: {}",
+            cur_version,
+            version);
 
         if (cur_version <= 0)
         {
@@ -88,12 +94,19 @@ bool TiDBSchemaSyncer<mock_getter, mock_mapper>::syncSchemas(Context & context)
         }
     }
 
-    LOG_INFO(log, "End sync schema, version has been updated to {}{}", cur_version, cur_version == version ? "" : "(latest diff is empty)");
+    LOG_INFO(
+        log,
+        "End sync schema, version has been updated to {}{}",
+        cur_version,
+        cur_version == version ? "" : "(latest diff is empty)");
     return true;
 }
 
 template <bool mock_getter, bool mock_mapper>
-Int64 TiDBSchemaSyncer<mock_getter, mock_mapper>::syncSchemaDiffs(Context & context, Getter & getter, Int64 latest_version)
+Int64 TiDBSchemaSyncer<mock_getter, mock_mapper>::syncSchemaDiffs(
+    Context & context,
+    Getter & getter,
+    Int64 latest_version)
 {
     Int64 used_version = cur_version;
     // TODO:try to use parallel to speed up
@@ -135,7 +148,8 @@ Int64 TiDBSchemaSyncer<mock_getter, mock_mapper>::syncAllSchemas(Context & conte
 }
 
 template <bool mock_getter, bool mock_mapper>
-std::tuple<bool, DatabaseID, TableID> TiDBSchemaSyncer<mock_getter, mock_mapper>::findDatabaseIDAndTableID(TableID physical_table_id)
+std::tuple<bool, DatabaseID, TableID> TiDBSchemaSyncer<mock_getter, mock_mapper>::findDatabaseIDAndTableID(
+    TableID physical_table_id)
 {
     auto database_id = table_id_map.findTableIDInDatabaseMap(physical_table_id);
     TableID logical_table_id = physical_table_id;
@@ -163,7 +177,10 @@ template <bool mock_getter, bool mock_mapper>
 bool TiDBSchemaSyncer<mock_getter, mock_mapper>::syncTableSchema(Context & context, TableID physical_table_id)
 {
     Stopwatch watch;
-    SCOPE_EXIT({ GET_METRIC(tiflash_schema_apply_duration_seconds, type_sync_table_schema_apply_duration).Observe(watch.elapsedSeconds()); });
+    SCOPE_EXIT({
+        GET_METRIC(tiflash_schema_apply_duration_seconds, type_sync_table_schema_apply_duration)
+            .Observe(watch.elapsedSeconds());
+    });
 
     LOG_INFO(log, "Start sync table schema, table_id={}", physical_table_id);
     auto getter = createSchemaGetter(keyspace_id);
@@ -173,13 +190,20 @@ bool TiDBSchemaSyncer<mock_getter, mock_mapper>::syncTableSchema(Context & conte
     auto [find, database_id, logical_table_id] = findDatabaseIDAndTableID(physical_table_id);
     if (!find)
     {
-        LOG_WARNING(log, "Can't find related database_id and logical_table_id from table_id_map, try to syncSchemas. physical_table_id={}", physical_table_id);
+        LOG_WARNING(
+            log,
+            "Can't find related database_id and logical_table_id from table_id_map, try to syncSchemas. "
+            "physical_table_id={}",
+            physical_table_id);
         GET_METRIC(tiflash_schema_trigger_count, type_sync_table_schema).Increment();
         syncSchemas(context);
         std::tie(find, database_id, logical_table_id) = findDatabaseIDAndTableID(physical_table_id);
         if (!find)
         {
-            LOG_ERROR(log, "Still can't find related database_id and logical_table_id from table_id_map, physical_table_id={}", physical_table_id);
+            LOG_ERROR(
+                log,
+                "Still can't find related database_id and logical_table_id from table_id_map, physical_table_id={}",
+                physical_table_id);
             return false;
         }
     }

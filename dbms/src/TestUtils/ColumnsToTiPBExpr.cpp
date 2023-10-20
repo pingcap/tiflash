@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,8 +18,8 @@
 #include <Debug/MockExecutor/AstToPB.h>
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGUtils.h>
-#include <Storages/Transaction/TypeMapping.h>
 #include <TestUtils/ColumnsToTiPBExpr.h>
+#include <TiDB/Decode/TypeMapping.h>
 
 namespace DB
 {
@@ -197,9 +197,7 @@ void columnsToTiPBExpr(
 }
 } // namespace
 
-tipb::Expr columnToTiPBExpr(
-    const ColumnWithTypeAndName & column,
-    size_t index)
+tipb::Expr columnToTiPBExpr(const ColumnWithTypeAndName & column, size_t index)
 {
     tipb::Expr ret;
     columnToTiPBExpr(&ret, column, index);

@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -46,6 +46,7 @@
 #include <Flash/FlashService.h>
 #include <Flash/Mpp/GRPCCompletionQueuePool.h>
 #include <Flash/Pipeline/Schedule/TaskScheduler.h>
+#include <Flash/ResourceControl/LocalAdmissionController.h>
 #include <Functions/registerFunctions.h>
 #include <IO/HTTPCommon.h>
 #include <IO/IOThreadPools.h>
@@ -79,16 +80,16 @@
 #include <Storages/DeltaMerge/ReadThread/SegmentReader.h>
 #include <Storages/FormatVersion.h>
 #include <Storages/IManageableStorage.h>
+#include <Storages/KVStore/FFI/FileEncryption.h>
+#include <Storages/KVStore/FFI/ProxyFFI.h>
+#include <Storages/KVStore/KVStore.h>
+#include <Storages/KVStore/TMTContext.h>
+#include <Storages/KVStore/TiKVHelpers/PDTiKVClient.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
 #include <Storages/PathCapacityMetrics.h>
 #include <Storages/S3/FileCache.h>
 #include <Storages/S3/S3Common.h>
 #include <Storages/System/attachSystemTables.h>
-#include <Storages/Transaction/FileEncryption.h>
-#include <Storages/Transaction/KVStore.h>
-#include <Storages/Transaction/PDTiKVClient.h>
-#include <Storages/Transaction/ProxyFFI.h>
-#include <Storages/Transaction/TMTContext.h>
 #include <Storages/registerStorages.h>
 #include <TableFunctions/registerTableFunctions.h>
 #include <TiDB/Schema/SchemaSyncer.h>
@@ -138,8 +139,7 @@
             mi_option_set(NAME, value);              \
         }                                            \
         catch (...)                                  \
-        {                                            \
-        }                                            \
+        {}                                           \
     }
 
 void loadMiConfig(Logger * log)
@@ -191,8 +191,7 @@ namespace
             target = result;
         }
         catch (...)
-        {
-        }
+        {}
     }
 }
 } // namespace
@@ -243,10 +242,7 @@ void Server::initialize(Poco::Util::Application & self)
 void Server::defineOptions(Poco::Util::OptionSet & options)
 {
     options.addOption(
-        Poco::Util::Option("help", "h", "show help and exit")
-            .required(false)
-            .repeatable(false)
-            .binding("help"));
+        Poco::Util::Option("help", "h", "show help and exit").required(false).repeatable(false).binding("help"));
     BaseDaemon::defineOptions(options);
 }
 
@@ -255,9 +251,10 @@ int Server::run()
     if (config().hasOption("help"))
     {
         Poco::Util::HelpFormatter help_formatter(Server::options());
-        auto header_str = fmt::format("{} server [OPTION] [-- [POSITIONAL_ARGS]...]\n"
-                                      "POSITIONAL_ARGS can be used to rewrite config properties, for example, --http_port=8010",
-                                      commandName());
+        auto header_str = fmt::format(
+            "{} server [OPTION] [-- [POSITIONAL_ARGS]...]\n"
+            "POSITIONAL_ARGS can be used to rewrite config properties, for example, --http_port=8010",
+            commandName());
         help_formatter.setHeader(header_str);
         help_formatter.format(std::cout);
         return 0;
@@ -294,7 +291,9 @@ struct TiFlashProxyConfig
         // tiflash_compute doesn't need proxy.
         if (disaggregated_mode == DisaggregatedMode::Compute && useAutoScaler(config))
         {
-            LOG_INFO(Logger::get(), "TiFlash Proxy will not start because AutoScale Disaggregated Compute Mode is specified.");
+            LOG_INFO(
+                Logger::get(),
+                "TiFlash Proxy will not start because AutoScale Disaggregated Compute Mode is specified.");
             return;
         }
 
@@ -339,7 +338,10 @@ struct TiFlashProxyConfig
     }
 };
 
-pingcap::ClusterConfig getClusterConfig(TiFlashSecurityConfigPtr security_config, const int api_version, const LoggerPtr & log)
+pingcap::ClusterConfig getClusterConfig(
+    TiFlashSecurityConfigPtr security_config,
+    const int api_version,
+    const LoggerPtr & log)
 {
     pingcap::ClusterConfig config;
     config.tiflash_engine_key = "engine";
@@ -359,7 +361,13 @@ pingcap::ClusterConfig getClusterConfig(TiFlashSecurityConfigPtr security_config
     default:
         throw Exception(ErrorCodes::INVALID_CONFIG_PARAMETER, "Invalid api version {}", api_version);
     }
-    LOG_INFO(log, "update cluster config, ca_path: {}, cert_path: {}, key_path: {}, api_version: {}", ca_path, cert_path, key_path, config.api_version);
+    LOG_INFO(
+        log,
+        "update cluster config, ca_path: {}, cert_path: {}, key_path: {}, api_version: {}",
+        ca_path,
+        cert_path,
+        key_path,
+        config.api_version);
     return config;
 }
 
@@ -384,7 +392,11 @@ void printGRPCLog(gpr_log_func_args * args)
 
 struct TCPServer : Poco::Net::TCPServer
 {
-    TCPServer(Poco::Net::TCPServerConnectionFactory::Ptr pFactory, Poco::ThreadPool & threadPool, const Poco::Net::ServerSocket & socket, Poco::Net::TCPServerParams::Ptr pParams)
+    TCPServer(
+        Poco::Net::TCPServerConnectionFactory::Ptr pFactory,
+        Poco::ThreadPool & threadPool,
+        const Poco::Net::ServerSocket & socket,
+        Poco::Net::TCPServerParams::Ptr pParams)
         : Poco::Net::TCPServer(pFactory, threadPool, socket, pParams)
     {}
 
@@ -593,7 +605,10 @@ public:
 #if POCO_VERSION < 0x01080000
                 socket.bind(address, /* reuseAddress = */ true);
 #else
-            socket.bind(address, /* reuseAddress = */ true, /* reusePort = */ config.getBool("listen_reuse_port", false));
+            socket.bind(
+                address,
+                /* reuseAddress = */ true,
+                /* reusePort = */ config.getBool("listen_reuse_port", false));
 #endif
 
             socket.listen(/* backlog = */ config.getUInt("listen_backlog", 64));
@@ -617,7 +632,11 @@ public:
                     auto address = socket_bind_listen(socket, listen_host, config.getInt("tcp_port"));
                     socket.setReceiveTimeout(settings.receive_timeout);
                     socket.setSendTimeout(settings.send_timeout);
-                    servers.emplace_back(new TCPServer(new TCPHandlerFactory(server), server_pool, socket, new Poco::Net::TCPServerParams));
+                    servers.emplace_back(new TCPServer(
+                        new TCPHandlerFactory(server),
+                        server_pool,
+                        socket,
+                        new Poco::Net::TCPServerParams));
 
                     LOG_INFO(log, "Listening tcp: {}", address.toString());
                 }
@@ -631,13 +650,15 @@ public:
                 {
 #if Poco_NetSSL_FOUND
                     auto [ca_path, cert_path, key_path] = security_config->getPaths();
-                    Poco::Net::Context::Ptr context = new Poco::Net::Context(Poco::Net::Context::TLSV1_2_SERVER_USE,
-                                                                             key_path,
-                                                                             cert_path,
-                                                                             ca_path);
+                    Poco::Net::Context::Ptr context
+                        = new Poco::Net::Context(Poco::Net::Context::TLSV1_2_SERVER_USE, key_path, cert_path, ca_path);
                     CertificateReloader::initSSLCallback(context, server.global_context.get());
                     Poco::Net::SecureServerSocket socket(context);
-                    auto address = socket_bind_listen(socket, listen_host, config.getInt("tcp_port_secure"), /* secure = */ true);
+                    auto address = socket_bind_listen(
+                        socket,
+                        listen_host,
+                        config.getInt("tcp_port_secure"),
+                        /* secure = */ true);
                     socket.setReceiveTimeout(settings.receive_timeout);
                     socket.setSendTimeout(settings.send_timeout);
                     servers.emplace_back(new TCPServer(
@@ -647,8 +668,10 @@ public:
                         new Poco::Net::TCPServerParams));
                     LOG_INFO(log, "Listening tcp_secure: {}", address.toString());
 #else
-                    throw Exception{"SSL support for TCP protocol is disabled because Poco library was built without NetSSL support.",
-                                    ErrorCodes::SUPPORT_IS_DISABLED};
+                    throw Exception{
+                        "SSL support for TCP protocol is disabled because Poco library was built without NetSSL "
+                        "support.",
+                        ErrorCodes::SUPPORT_IS_DISABLED};
 #endif
                 }
                 else if (security_config->hasTlsConfig())
@@ -698,11 +721,7 @@ public:
         String debug_msg = "Closed all listening sockets.";
 
         if (current_connections)
-            LOG_DEBUG(
-                log,
-                "{} Waiting for {} outstanding connections.",
-                debug_msg,
-                current_connections);
+            LOG_DEBUG(log, "{} Waiting for {} outstanding connections.", debug_msg, current_connections);
         else
             LOG_DEBUG(log, debug_msg);
 
@@ -783,6 +802,14 @@ void initThreadPool(Poco::Util::LayeredConfiguration & config)
             /*max_free_threads*/ default_num_threads / 2,
             /*queue_size*/ default_num_threads * 2);
     }
+
+    if (disaggregated_mode == DisaggregatedMode::Storage)
+    {
+        WNEstablishDisaggTaskPool::initialize(
+            /*max_threads*/ default_num_threads,
+            /*max_free_threads*/ default_num_threads / 2,
+            /*queue_size*/ default_num_threads * 2);
+    }
 }
 
 void adjustThreadPoolSize(const Settings & settings, size_t logical_cores)
@@ -824,6 +851,15 @@ void adjustThreadPoolSize(const Settings & settings, size_t logical_cores)
         RNWritePageCachePool::instance->setMaxFreeThreads(max_io_thread_count / 2);
         RNWritePageCachePool::instance->setQueueSize(max_io_thread_count * 2);
     }
+
+    size_t max_cpu_thread_count = std::ceil(settings.cpu_thread_count_scale * logical_cores);
+    if (WNEstablishDisaggTaskPool::instance)
+    {
+        // Tasks of EstablishDisaggTask is computation-intensive.
+        WNEstablishDisaggTaskPool::instance->setMaxThreads(max_cpu_thread_count);
+        WNEstablishDisaggTaskPool::instance->setMaxFreeThreads(max_cpu_thread_count / 2);
+        WNEstablishDisaggTaskPool::instance->setQueueSize(max_cpu_thread_count * 2);
+    }
 }
 
 void syncSchemaWithTiDB(
@@ -862,11 +898,8 @@ void syncSchemaWithTiDB(
     // Init the DeltaMergeStore instances if data exist.
     // Make the disk usage correct and prepare for serving
     // queries.
-    bg_init_stores.start(
-        *global_context,
-        log,
-        storage_config.lazily_init_store,
-        storage_config.s3_config.isS3Enabled());
+    bg_init_stores
+        .start(*global_context, log, storage_config.lazily_init_store, storage_config.s3_config.isS3Enabled());
 
     // init schema sync service with tidb
     global_context->initializeSchemaSyncService();
@@ -946,7 +979,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
         if (storage_config.s3_config.isS3Enabled() && storage_config.format_version != STORAGE_FORMAT_V100.identifier)
         {
             LOG_WARNING(log, "'storage.format_version' must be set to 100 when S3 is enabled!");
-            throw Exception(ErrorCodes::INVALID_CONFIG_PARAMETER, "'storage.format_version' must be set to 5 when S3 is enabled!");
+            throw Exception(
+                ErrorCodes::INVALID_CONFIG_PARAMETER,
+                "'storage.format_version' must be set to 100 when S3 is enabled!");
         }
         setStorageFormat(storage_config.format_version);
         LOG_INFO(log, "Using format_version={} (explicit storage format detected).", storage_config.format_version);
@@ -973,7 +1008,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
         if (auto disaggregated_mode = getDisaggregatedMode(config()); disaggregated_mode == DisaggregatedMode::None)
         {
             LOG_WARNING(log, "'flash.disaggregated_mode' must be set when S3 is enabled!");
-            throw Exception(ErrorCodes::INVALID_CONFIG_PARAMETER, "'flash.disaggregated_mode' must be set when S3 is enabled!");
+            throw Exception(
+                ErrorCodes::INVALID_CONFIG_PARAMETER,
+                "'flash.disaggregated_mode' must be set when S3 is enabled!");
         }
     }
 
@@ -985,8 +1022,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     // Init Proxy's config
     TiFlashProxyConfig proxy_conf(config(), storage_config.s3_config.isS3Enabled());
     EngineStoreServerWrap tiflash_instance_wrap{};
-    auto helper = GetEngineStoreServerHelper(
-        &tiflash_instance_wrap);
+    auto helper = GetEngineStoreServerHelper(&tiflash_instance_wrap);
 
     if (STORAGE_FORMAT_CURRENT.page == PageFormat::V4)
     {
@@ -1100,10 +1136,13 @@ int Server::main(const std::vector<std::string> & /*args*/)
         S3::ClientFactory::instance().init(storage_config.s3_config);
     }
 
-    global_context->getSharedContextDisagg()->initRemoteDataStore(global_context->getFileProvider(), storage_config.s3_config.isS3Enabled());
+    global_context->getSharedContextDisagg()->initRemoteDataStore(
+        global_context->getFileProvider(),
+        storage_config.s3_config.isS3Enabled());
 
     const auto is_compute_mode = global_context->getSharedContextDisagg()->isDisaggregatedComputeMode();
-    const auto [remote_cache_paths, remote_cache_capacity_quota] = storage_config.remote_cache_config.getCacheDirInfos(is_compute_mode);
+    const auto [remote_cache_paths, remote_cache_capacity_quota]
+        = storage_config.remote_cache_config.getCacheDirInfos(is_compute_mode);
     global_context->initializePathCapacityMetric( //
         global_capacity_quota, //
         storage_config.main_data_paths,
@@ -1254,13 +1293,18 @@ int Server::main(const std::vector<std::string> & /*args*/)
     auto & blockable_bg_pool = global_context->initializeBlockableBackgroundPool(settings.background_pool_size);
     // adjust the thread pool size according to settings and logical cores num
     adjustThreadPoolSize(settings, server_info.cpu_info.logical_cores);
-    initStorageMemoryTracker(settings.max_memory_usage_for_all_queries.getActualBytes(server_info.memory_info.capacity), settings.bytes_that_rss_larger_than_limit);
+    initStorageMemoryTracker(
+        settings.max_memory_usage_for_all_queries.getActualBytes(server_info.memory_info.capacity),
+        settings.bytes_that_rss_larger_than_limit);
 
     /// PageStorage run mode has been determined above
     if (!global_context->getSharedContextDisagg()->isDisaggregatedComputeMode())
     {
         global_context->initializeGlobalStoragePoolIfNeed(global_context->getPathPool());
-        LOG_INFO(log, "Global PageStorage run mode is {}", magic_enum::enum_name(global_context->getPageStorageRunMode()));
+        LOG_INFO(
+            log,
+            "Global PageStorage run mode is {}",
+            magic_enum::enum_name(global_context->getPageStorageRunMode()));
     }
 
     /// Try to restore the StoreIdent from UniPS. There are many services that require
@@ -1306,15 +1350,21 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->setServerInfo(server_info);
     if (server_info.memory_info.capacity == 0)
     {
-        LOG_ERROR(log, "Failed to get memory capacity, float-pointing memory limit config (for example, set `max_memory_usage_for_all_queries` to `0.1`) won't take effect. If you set them as float-pointing value, you can change them to integer instead.");
+        LOG_ERROR(
+            log,
+            "Failed to get memory capacity, float-pointing memory limit config (for example, set "
+            "`max_memory_usage_for_all_queries` to `0.1`) won't take effect. If you set them as float-pointing value, "
+            "you can change them to integer instead.");
     }
     else
     {
-        LOG_INFO(log,
-                 "Detected memory capacity {} bytes, you have config `max_memory_usage_for_all_queries` to {}, finally limit to {} bytes.",
-                 server_info.memory_info.capacity,
-                 settings.max_memory_usage_for_all_queries.toString(),
-                 settings.max_memory_usage_for_all_queries.getActualBytes(server_info.memory_info.capacity));
+        LOG_INFO(
+            log,
+            "Detected memory capacity {} bytes, you have config `max_memory_usage_for_all_queries` to {}, finally "
+            "limit to {} bytes.",
+            server_info.memory_info.capacity,
+            settings.max_memory_usage_for_all_queries.toString(),
+            settings.max_memory_usage_for_all_queries.getActualBytes(server_info.memory_info.capacity));
     }
 
     /// Initialize main config reloader.
@@ -1333,12 +1383,16 @@ int Server::main(const std::vector<std::string> & /*args*/)
             }
             {
                 // update TiFlashSecurity and related config in client for ssl certificate reload.
-                bool updated = global_context->getSecurityConfig()->update(*config); // Whether the cert path or file is updated.
+                bool updated
+                    = global_context->getSecurityConfig()->update(*config); // Whether the cert path or file is updated.
                 if (updated)
                 {
                     auto raft_config = TiFlashRaftConfig::parseSettings(*config, log);
-                    auto cluster_config = getClusterConfig(global_context->getSecurityConfig(), storage_config.api_version, log);
-                    global_context->getTMTContext().updateSecurityConfig(std::move(raft_config), std::move(cluster_config));
+                    auto cluster_config
+                        = getClusterConfig(global_context->getSecurityConfig(), storage_config.api_version, log);
+                    global_context->getTMTContext().updateSecurityConfig(
+                        std::move(raft_config),
+                        std::move(cluster_config));
                     LOG_DEBUG(log, "TMTContext updated security config");
                 }
             }
@@ -1372,22 +1426,23 @@ int Server::main(const std::vector<std::string> & /*args*/)
         global_context->setMinMaxIndexCache(minmax_index_cache_size);
 
     /// Size of max memory usage of DeltaIndex, used by DeltaMerge engine.
-    /// This setting is currently a bit tricky:
     /// - In non-disaggregated mode, its default value is 0, means unlimited, and it
-    //    controls the number of total bytes keep in the memory.
-    /// - In disaggregated mode, its default value is 2000. 0 means cache is disabled, and it
-    ///   controls the **number** of trees keep in the memory. <-- Will be fixed.
+    ///   controls the number of total bytes keep in the memory.
+    /// - In disaggregated mode, its default value is memory_capacity_of_host * 0.02.
+    ///   0 means cache is disabled.
     ///   We cannot support unlimited delta index cache in disaggregated mode for now,
     ///   because cache items will be never explicitly removed.
     if (global_context->getSharedContextDisagg()->isDisaggregatedComputeMode())
     {
-        size_t n = config().getUInt64("delta_index_cache_count", 2000);
+        constexpr auto delta_index_cache_ratio = 0.02;
+        constexpr auto backup_delta_index_cache_size = 1024 * 1024 * 1024; // 1GiB
+        const auto default_delta_index_cache_size = server_info.memory_info.capacity > 0
+            ? server_info.memory_info.capacity * delta_index_cache_ratio
+            : backup_delta_index_cache_size;
+        size_t n = config().getUInt64("delta_index_cache_size", default_delta_index_cache_size);
+        LOG_INFO(log, "delta_index_cache_size={}", n);
         // In disaggregated compute node, we will not use DeltaIndexManager to cache the delta index.
         // Instead, we use RNDeltaIndexCache.
-
-        // TODO: Currently RNDeltaIndexCache caches by number of entities, instead of
-        // number of bytes!
-
         global_context->getSharedContextDisagg()->initReadNodeDeltaIndexCache(n);
     }
     else
@@ -1437,7 +1492,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
     LOG_INFO(log, "dt_enable_read_thread {}", global_context->getSettingsRef().dt_enable_read_thread);
     // `DMFileReaderPool` should be constructed before and destructed after `SegmentReaderPoolManager`.
     DM::DMFileReaderPool::instance();
-    DM::SegmentReaderPoolManager::instance().init(server_info.cpu_info.logical_cores, settings.dt_read_thread_count_scale);
+    DM::SegmentReaderPoolManager::instance().init(
+        server_info.cpu_info.logical_cores,
+        settings.dt_read_thread_count_scale);
     DM::SegmentReadTaskScheduler::instance();
 
     auto schema_cache_size = config().getInt("schema_cache_size", 10000);
@@ -1505,23 +1562,44 @@ int Server::main(const std::vector<std::string> & /*args*/)
         }
     });
 
-    // For test mode, TaskScheduler is controlled by test case.
-    bool is_prod = !global_context->isTest();
-    if (is_prod)
+    auto & tmt_context = global_context->getTMTContext();
+    const bool is_disagg_storage = global_context->getSharedContextDisagg()->isDisaggregatedStorageMode();
+    const bool is_prod = !global_context->isTest();
+
+    // TODO: resource control is not supported for WN. So disable pipeline model and LAC.
+    if (!is_disagg_storage)
     {
-        auto get_pool_size = [](const auto & setting) {
-            return setting == 0 ? getNumberOfLogicalCPUCores() : static_cast<size_t>(setting);
-        };
-        TaskSchedulerConfig config{
-            {get_pool_size(settings.pipeline_cpu_task_thread_pool_size), settings.pipeline_cpu_task_thread_pool_queue_type},
-            {get_pool_size(settings.pipeline_io_task_thread_pool_size), settings.pipeline_io_task_thread_pool_queue_type},
-        };
-        RUNTIME_CHECK(!TaskScheduler::instance);
-        TaskScheduler::instance = std::make_unique<TaskScheduler>(config);
-        LOG_INFO(log, "init pipeline task scheduler");
-    }
-    SCOPE_EXIT({
+#ifdef DBMS_PUBLIC_GTEST
+        LocalAdmissionController::global_instance = std::make_unique<MockLocalAdmissionController>();
+#else
+        LocalAdmissionController::global_instance
+            = std::make_unique<LocalAdmissionController>(tmt_context.getKVCluster(), tmt_context.getEtcdClient());
+#endif
+
+        // For test mode, TaskScheduler is controlled by test case.
         if (is_prod)
+        {
+            auto get_pool_size = [](const auto & setting) {
+                return setting == 0 ? getNumberOfLogicalCPUCores() : static_cast<size_t>(setting);
+            };
+            TaskSchedulerConfig config{
+                {get_pool_size(settings.pipeline_cpu_task_thread_pool_size),
+                 settings.pipeline_cpu_task_thread_pool_queue_type},
+                {get_pool_size(settings.pipeline_io_task_thread_pool_size),
+                 settings.pipeline_io_task_thread_pool_queue_type},
+            };
+            RUNTIME_CHECK(!TaskScheduler::instance);
+            TaskScheduler::instance = std::make_unique<TaskScheduler>(config);
+            LOG_INFO(log, "init pipeline task scheduler");
+        }
+    }
+
+    SCOPE_EXIT({
+        if (!is_disagg_storage)
+            LocalAdmissionController::global_instance.reset();
+    });
+    SCOPE_EXIT({
+        if (!is_disagg_storage && is_prod)
         {
             assert(TaskScheduler::instance);
             TaskScheduler::instance.reset();
@@ -1537,7 +1615,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
 
     // FIXME: (bootstrap) we should bootstrap the tiflash node more early!
-    if (global_context->getSharedContextDisagg()->notDisaggregatedMode() || /*has_been_bootstrap*/ store_ident.has_value())
+    if (global_context->getSharedContextDisagg()->notDisaggregatedMode()
+        || /*has_been_bootstrap*/ store_ident.has_value())
     {
         // If S3 enabled, wait for all DeltaMergeStores' initialization
         // before this instance can accept requests.
@@ -1545,7 +1624,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
         bg_init_stores.waitUntilFinish();
     }
 
-    if (global_context->getSharedContextDisagg()->isDisaggregatedStorageMode() && /*has_been_bootstrap*/ store_ident.has_value())
+    if (global_context->getSharedContextDisagg()->isDisaggregatedStorageMode()
+        && /*has_been_bootstrap*/ store_ident.has_value())
     {
         // Only disagg write node that has been bootstrap need wait. For the write node does not bootstrap, its
         // store id is allocated later.
@@ -1596,14 +1676,14 @@ int Server::main(const std::vector<std::string> & /*args*/)
         std::vector<std::unique_ptr<MetricsTransmitter>> metrics_transmitters;
         for (const auto & graphite_key : DB::getMultipleKeysFromConfig(config(), "", "graphite"))
         {
-            metrics_transmitters.emplace_back(std::make_unique<MetricsTransmitter>(*global_context, async_metrics, graphite_key));
+            metrics_transmitters.emplace_back(
+                std::make_unique<MetricsTransmitter>(*global_context, async_metrics, graphite_key));
         }
 
         auto metrics_prometheus = std::make_unique<MetricsPrometheus>(*global_context, async_metrics);
 
         SessionCleaner session_cleaner(*global_context);
 
-        auto & tmt_context = global_context->getTMTContext();
         if (proxy_conf.is_proxy_runnable)
         {
             // If a TiFlash starts before any TiKV starts, then the very first Region will be created in TiFlash's proxy and it must be the peer as a leader role.
@@ -1631,7 +1711,12 @@ int Server::main(const std::vector<std::string> & /*args*/)
             const auto store_id = tmt_context.getKVStore()->getStoreID(std::memory_order_seq_cst);
             if (store_ident)
             {
-                RUNTIME_ASSERT(store_id == store_ident->store_id(), log, "store id mismatch store_id={} store_ident.store_id={}", store_id, store_ident->store_id());
+                RUNTIME_ASSERT(
+                    store_id == store_ident->store_id(),
+                    log,
+                    "store id mismatch store_id={} store_ident.store_id={}",
+                    store_id,
+                    store_ident->store_id());
             }
             if (global_context->getSharedContextDisagg()->isDisaggregatedComputeMode())
             {
@@ -1640,7 +1725,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
             }
             else
             {
-                LOG_INFO(log, "store_id={}, tiflash proxy is ready to serve, try to wake up all regions' leader", store_id);
+                LOG_INFO(
+                    log,
+                    "store_id={}, tiflash proxy is ready to serve, try to wake up all regions' leader",
+                    store_id);
 
                 if (global_context->getSharedContextDisagg()->isDisaggregatedStorageMode() && !store_ident.has_value())
                 {

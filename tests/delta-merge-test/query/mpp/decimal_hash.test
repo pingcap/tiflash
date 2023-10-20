@@ -1,4 +1,4 @@
-# Copyright 2022 PingCAP, Ltd.
+# Copyright 2023 PingCAP, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,7 +20,7 @@
 => DBGInvoke __drop_tidb_table(default, test2)
 => drop table if exists default.test2
 
-=> DBGInvoke __set_flush_threshold(1000000, 1000000)
+
 
 # Data.
 => DBGInvoke __mock_tidb_table(default, test1, 'col_1 String, col_2 Decimal(40,2), col_3 Decimal(30,2), col_4 Decimal(10,2), col_5 Decimal(5,2)')

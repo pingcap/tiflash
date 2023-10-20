@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/nocopyable.h>
+#include <Flash/Coprocessor/CoprocessorReader.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/FilterConditions.h>
@@ -22,13 +23,13 @@
 #include <Flash/Coprocessor/TiDBTableScan.h>
 #include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 #include <Storages/DeltaMerge/Remote/DisaggSnapshot_fwd.h>
-#include <Storages/RegionQueryInfo.h>
+#include <Storages/KVStore/Read/LearnerRead.h>
+#include <Storages/KVStore/Read/RegionException.h>
+#include <Storages/KVStore/TMTStorages.h>
+#include <Storages/KVStore/Types.h>
+#include <Storages/RegionQueryInfo_fwd.h>
 #include <Storages/SelectQueryInfo.h>
 #include <Storages/TableLockHolder.h>
-#include <Storages/Transaction/LearnerRead.h>
-#include <Storages/Transaction/RegionException.h>
-#include <Storages/Transaction/TMTStorages.h>
-#include <Storages/Transaction/Types.h>
 #include <pingcap/coprocessor/Client.h>
 
 #include <vector>
@@ -49,15 +50,13 @@ public:
         const FilterConditions & filter_conditions_,
         size_t max_streams_);
 
+    ~DAGStorageInterpreter();
+
     DISALLOW_MOVE(DAGStorageInterpreter);
 
     void execute(DAGPipeline & pipeline);
 
     void execute(PipelineExecutorContext & exec_context, PipelineExecGroupBuilder & group_builder);
-
-    /// Members will be transferred to DAGQueryBlockInterpreter after execute
-
-    std::unique_ptr<DAGExpressionAnalyzer> analyzer;
 
 private:
     struct StorageWithStructureLock
@@ -75,15 +74,13 @@ private:
         const RegionException & e,
         int num_allow_retry);
 
-    DM::Remote::DisaggPhysicalTableReadSnapshotPtr
-    buildLocalStreamsForPhysicalTable(
+    DM::Remote::DisaggPhysicalTableReadSnapshotPtr buildLocalStreamsForPhysicalTable(
         const TableID & table_id,
         const SelectQueryInfo & query_info,
         DAGPipeline & pipeline,
         size_t max_block_size);
 
-    DM::Remote::DisaggPhysicalTableReadSnapshotPtr
-    buildLocalExecForPhysicalTable(
+    DM::Remote::DisaggPhysicalTableReadSnapshotPtr buildLocalExecForPhysicalTable(
         PipelineExecutorContext & exec_context,
         PipelineExecGroupBuilder & group_builder,
         const TableID & table_id,
@@ -112,6 +109,9 @@ private:
     void recordProfileStreams(DAGPipeline & pipeline, const String & key);
 
     std::vector<pingcap::coprocessor::CopTask> buildCopTasks(const std::vector<RemoteRequest> & remote_requests);
+
+    CoprocessorReaderPtr buildCoprocessorReader(const std::vector<RemoteRequest> & remote_requests);
+
     void buildRemoteStreams(const std::vector<RemoteRequest> & remote_requests, DAGPipeline & pipeline);
 
     void buildRemoteExec(
@@ -119,14 +119,12 @@ private:
         PipelineExecGroupBuilder & group_builder,
         const std::vector<RemoteRequest> & remote_requests);
 
-    void executeCastAfterTableScan(
-        size_t remote_read_streams_start_index,
-        DAGPipeline & pipeline);
+    void executeCastAfterTableScan(DAGPipeline & pipeline, DAGExpressionAnalyzer & analyzer);
 
     void executeCastAfterTableScan(
         PipelineExecutorContext & exec_context,
         PipelineExecGroupBuilder & group_builder,
-        size_t remote_read_start_index);
+        DAGExpressionAnalyzer & analyzer);
 
     void prepare();
 

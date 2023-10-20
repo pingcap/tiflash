@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -43,6 +43,8 @@ bool CachedSpillHandler::batchRead()
     {
         if unlikely (is_cancelled())
             return false;
+        if unlikely (block.rows() == 0)
+            continue;
         ret.push_back(std::move(block));
         current_return_size += ret.back().estimateBytesForSpill();
         if (bytes_threshold > 0 && current_return_size >= bytes_threshold)

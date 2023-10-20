@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
-#include <Storages/Transaction/Types.h>
+#include <Storages/KVStore/Types.h>
 #include <kvproto/coprocessor.pb.h>
 #include <kvproto/disaggregated.pb.h>
 
@@ -33,24 +33,26 @@ void dropRegionCache(
     std::unordered_set<RegionID> && retry_regions)
 {
     std::unordered_set<RegionID> dropped_regions;
-    auto retry_from_region_infos = [&retry_regions, &region_cache, &dropped_regions](const google::protobuf::RepeatedPtrField<::coprocessor::RegionInfo> & region_infos) {
-        for (const auto & region : region_infos)
-        {
-            if (retry_regions.contains(region.region_id()))
-            {
-                auto region_ver_id = pingcap::kv::RegionVerID(
-                    region.region_id(),
-                    region.region_epoch().conf_ver(),
-                    region.region_epoch().version());
-                region_cache->dropRegion(region_ver_id);
-                // There could be multiple Region info in `region_cache` share the same RegionID but with different epoch,
-                // we need to drop all their cache.
-                dropped_regions.insert(region.region_id());
-                if (retry_regions.empty())
-                    break;
-            }
-        }
-    };
+    auto retry_from_region_infos
+        = [&retry_regions, &region_cache, &dropped_regions](
+              const google::protobuf::RepeatedPtrField<::coprocessor::RegionInfo> & region_infos) {
+              for (const auto & region : region_infos)
+              {
+                  if (retry_regions.contains(region.region_id()))
+                  {
+                      auto region_ver_id = pingcap::kv::RegionVerID(
+                          region.region_id(),
+                          region.region_epoch().conf_ver(),
+                          region.region_epoch().version());
+                      region_cache->dropRegion(region_ver_id);
+                      // There could be multiple Region info in `region_cache` share the same RegionID but with different epoch,
+                      // we need to drop all their cache.
+                      dropped_regions.insert(region.region_id());
+                      if (retry_regions.empty())
+                          break;
+                  }
+              }
+          };
 
     // non-partition table
     retry_from_region_infos(req->regions());

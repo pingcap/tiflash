@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,14 +18,17 @@
 #include <Storages/DeltaMerge/Remote/RNDeltaIndexCache.h>
 #include <Storages/DeltaMerge/Remote/RNLocalPageCache.h>
 #include <Storages/DeltaMerge/Remote/WNDisaggSnapshotManager.h>
+#include <Storages/KVStore/MultiRaft/Disagg/FastAddPeer.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorageService.h>
 #include <Storages/PathPool.h>
-#include <Storages/Transaction/FastAddPeer.h>
 
 namespace DB
 {
 
-void SharedContextDisagg::initReadNodePageCache(const PathPool & path_pool, const String & cache_dir, size_t cache_capacity)
+void SharedContextDisagg::initReadNodePageCache(
+    const PathPool & path_pool,
+    const String & cache_dir,
+    size_t cache_capacity)
 {
     RUNTIME_CHECK(rn_page_cache_storage == nullptr && rn_page_cache == nullptr);
 
@@ -35,7 +38,11 @@ void SharedContextDisagg::initReadNodePageCache(const PathPool & path_pool, cons
         if (!cache_dir.empty())
         {
             delegator = path_pool.getPSDiskDelegatorFixedDirectory(cache_dir);
-            LOG_INFO(Logger::get(), "Initialize Read Node page cache in cache directory. path={} capacity={}", cache_dir, cache_capacity);
+            LOG_INFO(
+                Logger::get(),
+                "Initialize Read Node page cache in cache directory. path={} capacity={}",
+                cache_dir,
+                cache_capacity);
         }
         else
         {

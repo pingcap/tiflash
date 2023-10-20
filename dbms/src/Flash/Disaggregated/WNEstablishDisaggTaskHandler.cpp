@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,8 +24,8 @@
 #include <Storages/DeltaMerge/Remote/DisaggTaskId.h>
 #include <Storages/DeltaMerge/Remote/Serializer.h>
 #include <Storages/DeltaMerge/Remote/WNDisaggSnapshotManager.h>
-#include <Storages/Transaction/KVStore.h>
-#include <Storages/Transaction/TMTContext.h>
+#include <Storages/KVStore/KVStore.h>
+#include <Storages/KVStore/TMTContext.h>
 #include <kvproto/disaggregated.pb.h>
 
 namespace DB
@@ -34,6 +34,7 @@ namespace DB
 WNEstablishDisaggTaskHandler::WNEstablishDisaggTaskHandler(ContextPtr context_, const DM::DisaggTaskId & task_id)
     : context(std::move(context_))
     , log(Logger::get(task_id))
+    , mem_tracker_wrapper(fetch_pages_mem_tracker.get())
 {}
 
 // Some preparation
@@ -45,8 +46,13 @@ void WNEstablishDisaggTaskHandler::prepare(const disaggregated::EstablishDisaggT
     const auto & meta = request->meta();
 
     auto & tmt_context = context->getTMTContext();
-    TablesRegionsInfo tables_regions_info = TablesRegionsInfo::create(request->regions(), request->table_regions(), tmt_context);
-    LOG_INFO(log, "DisaggregatedTask handling {} regions from {} physical tables", tables_regions_info.regionCount(), tables_regions_info.tableCount());
+    TablesRegionsInfo tables_regions_info
+        = TablesRegionsInfo::create(request->regions(), request->table_regions(), tmt_context);
+    LOG_INFO(
+        log,
+        "DisaggregatedTask handling {} regions from {} physical tables",
+        tables_regions_info.regionCount(),
+        tables_regions_info.tableCount());
 
     // set schema ver and start ts
     auto schema_ver = request->schema_ver();
@@ -79,6 +85,8 @@ void WNEstablishDisaggTaskHandler::execute(disaggregated::EstablishDisaggTaskRes
     }
 
     // run into DAGStorageInterpreter and build the segment snapshots
+    // TODO: Remove this after resource control of WN is supported.
+    context->getSettingsRef().enable_resource_control = false;
     query_executor_holder.set(queryExecute(*context));
 
     auto snaps = context->getSharedContextDisagg()->wn_snapshot_manager;
@@ -93,7 +101,7 @@ void WNEstablishDisaggTaskHandler::execute(disaggregated::EstablishDisaggTaskRes
 
     using DM::Remote::Serializer;
     snap->iterateTableSnapshots([&](const DM::Remote::DisaggPhysicalTableReadSnapshotPtr & snap) {
-        response->add_tables(Serializer::serializeTo(snap, task_id).SerializeAsString());
+        response->add_tables(Serializer::serializeTo(snap, task_id, mem_tracker_wrapper).SerializeAsString());
     });
 }
 

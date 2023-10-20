@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,8 +17,12 @@
 #include <Common/HashTable/StringHashMap.h>
 #include <Common/HashTable/TwoLevelStringHashTable.h>
 
-template <typename TMapped, typename Allocator = HashTableAllocator, template <typename...> typename ImplTable = StringHashMap>
-class TwoLevelStringHashMap : public TwoLevelStringHashTable<StringHashMapSubMaps<TMapped, Allocator>, ImplTable<TMapped, Allocator>>
+template <
+    typename TMapped,
+    typename Allocator = HashTableAllocator,
+    template <typename...> typename ImplTable = StringHashMap>
+class TwoLevelStringHashMap
+    : public TwoLevelStringHashTable<StringHashMapSubMaps<TMapped, Allocator>, ImplTable<TMapped, Allocator>>
 {
 public:
     using Key = StringRef;

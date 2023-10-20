@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,8 +22,8 @@
 #include <DataTypes/DataTypeFactory.h>
 #include <Storages/DeltaMerge/Range.h>
 #include <Storages/FormatVersion.h>
+#include <Storages/KVStore/Types.h>
 #include <Storages/MutableSupport.h>
-#include <Storages/Transaction/Types.h>
 
 #include <limits>
 #include <memory>
@@ -94,8 +94,7 @@ struct ColumnDefine
         , name(std::move(name_))
         , type(std::move(type_))
         , default_value(std::move(default_value_))
-    {
-    }
+    {}
 };
 
 using ColumnDefines = std::vector<ColumnDefine>;
@@ -127,12 +126,18 @@ inline static const UInt64 INITIAL_EPOCH = 0;
 
 inline const ColumnDefine & getExtraIntHandleColumnDefine()
 {
-    static ColumnDefine EXTRA_HANDLE_COLUMN_DEFINE_{EXTRA_HANDLE_COLUMN_ID, EXTRA_HANDLE_COLUMN_NAME, EXTRA_HANDLE_COLUMN_INT_TYPE};
+    static ColumnDefine EXTRA_HANDLE_COLUMN_DEFINE_{
+        EXTRA_HANDLE_COLUMN_ID,
+        EXTRA_HANDLE_COLUMN_NAME,
+        EXTRA_HANDLE_COLUMN_INT_TYPE};
     return EXTRA_HANDLE_COLUMN_DEFINE_;
 }
 inline const ColumnDefine & getExtraStringHandleColumnDefine()
 {
-    static ColumnDefine EXTRA_HANDLE_COLUMN_DEFINE_{EXTRA_HANDLE_COLUMN_ID, EXTRA_HANDLE_COLUMN_NAME, EXTRA_HANDLE_COLUMN_STRING_TYPE};
+    static ColumnDefine EXTRA_HANDLE_COLUMN_DEFINE_{
+        EXTRA_HANDLE_COLUMN_ID,
+        EXTRA_HANDLE_COLUMN_NAME,
+        EXTRA_HANDLE_COLUMN_STRING_TYPE};
     return EXTRA_HANDLE_COLUMN_DEFINE_;
 }
 inline const ColumnDefine & getExtraHandleColumnDefine(bool is_common_handle)
@@ -153,14 +158,32 @@ inline const ColumnDefine & getTagColumnDefine()
 }
 inline const ColumnDefine & getExtraTableIDColumnDefine()
 {
-    static ColumnDefine EXTRA_TABLE_ID_COLUMN_DEFINE_{EXTRA_TABLE_ID_COLUMN_ID, EXTRA_TABLE_ID_COLUMN_NAME, EXTRA_TABLE_ID_COLUMN_TYPE};
+    static ColumnDefine EXTRA_TABLE_ID_COLUMN_DEFINE_{
+        EXTRA_TABLE_ID_COLUMN_ID,
+        EXTRA_TABLE_ID_COLUMN_NAME,
+        EXTRA_TABLE_ID_COLUMN_TYPE};
     return EXTRA_TABLE_ID_COLUMN_DEFINE_;
 }
 
-static_assert(static_cast<Int64>(static_cast<UInt64>(std::numeric_limits<Int64>::min())) == std::numeric_limits<Int64>::min(), "Unsupported compiler!");
-static_assert(static_cast<Int64>(static_cast<UInt64>(std::numeric_limits<Int64>::max())) == std::numeric_limits<Int64>::max(), "Unsupported compiler!");
+static_assert(
+    static_cast<Int64>(static_cast<UInt64>(std::numeric_limits<Int64>::min())) == std::numeric_limits<Int64>::min(),
+    "Unsupported compiler!");
+static_assert(
+    static_cast<Int64>(static_cast<UInt64>(std::numeric_limits<Int64>::max())) == std::numeric_limits<Int64>::max(),
+    "Unsupported compiler!");
 
 static constexpr bool DM_RUN_CHECK = true;
 
 } // namespace DM
 } // namespace DB
+
+template <>
+struct fmt::formatter<DB::DM::ColumnDefine>
+{
+    template <typename FormatContext>
+    auto format(const DB::DM::ColumnDefine & cd, FormatContext & ctx) const -> decltype(ctx.out())
+    {
+        // Use '/' as separators because column names often have '_'.
+        return format_to(ctx.out(), "{}/{}/{}", cd.id, cd.name, cd.type->getName());
+    }
+};

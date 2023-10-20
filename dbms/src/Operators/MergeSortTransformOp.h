@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,9 +14,12 @@
 
 #pragma once
 
+#include <Core/FineGrainedOperatorSpillContext.h>
 #include <Core/SortDescription.h>
 #include <Core/Spiller.h>
 #include <DataStreams/IBlockInputStream.h>
+#include <Flash/Executor/PipelineExecutorContext.h>
+#include <Interpreters/SortSpillContext.h>
 #include <Operators/Operator.h>
 
 namespace DB
@@ -30,20 +33,22 @@ public:
         const SortDescription & order_desc_,
         size_t limit_,
         size_t max_block_size_,
-        size_t max_bytes_before_external_sort_,
-        const SpillConfig & spill_config_)
+        size_t max_bytes_before_external_sort,
+        const SpillConfig & spill_config,
+        const std::shared_ptr<FineGrainedOperatorSpillContext> & fine_grained_operator_spill_context)
         : TransformOp(exec_context_, req_id_)
         , order_desc(order_desc_)
         , limit(limit_)
         , max_block_size(max_block_size_)
-        , max_bytes_before_external_sort(max_bytes_before_external_sort_)
-        , spill_config(spill_config_)
-    {}
-
-    String getName() const override
     {
-        return "MergeSortTransformOp";
+        sort_spill_context = std::make_shared<SortSpillContext>(spill_config, max_bytes_before_external_sort, log);
+        if (fine_grained_operator_spill_context != nullptr)
+            fine_grained_operator_spill_context->addOperatorSpillContext(sort_spill_context);
+        else
+            exec_context.registerOperatorSpillContext(sort_spill_context);
     }
+
+    String getName() const override { return "MergeSortTransformOp"; }
 
 protected:
     void operatePrefixImpl() override;
@@ -70,7 +75,7 @@ private:
     OperatorStatus fromPartialToMerge(Block & block);
 
 private:
-    bool hasSpilledData() const { return max_bytes_before_external_sort > 0 && spiller->hasSpilledData(); }
+    bool hasSpilledData() const { return sort_spill_context->hasSpilledData(); }
     SortDescription order_desc;
     // 0 means no limit.
     size_t limit;
@@ -112,9 +117,7 @@ private:
 
     /// Everything below is for external sorting.
     size_t sum_bytes_in_blocks = 0;
-    size_t max_bytes_before_external_sort;
-    const SpillConfig spill_config;
-    std::unique_ptr<Spiller> spiller;
+    SortSpillContextPtr sort_spill_context;
     // Used for spill phase.
     // - `cached_handler.batchRead` is executed in `tryOutput` and `transform`.
     // - `cached_handler.spill` is executed in `executeIO`.

@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -82,11 +82,19 @@ public:
         const ReadLimiterPtr & read_limiter = nullptr);
 
     using PageTypeAndGcInfo = std::vector<std::tuple<PageType, GcEntriesMap, PageSize>>;
-    PageEntriesEdit gc(const PageTypeAndGcInfo & page_type_and_gc_info,
-                       const WriteLimiterPtr & write_limiter = nullptr,
-                       const ReadLimiterPtr & read_limiter = nullptr);
+    PageEntriesEdit gc(
+        const PageTypeAndGcInfo & page_type_and_gc_info,
+        const WriteLimiterPtr & write_limiter = nullptr,
+        const ReadLimiterPtr & read_limiter = nullptr);
 
-    PageEntriesEdit write(typename Trait::WriteBatch && wb, PageType page_type = PageType::Normal, const WriteLimiterPtr & write_limiter = nullptr);
+    PageEntriesEdit write(
+        typename Trait::WriteBatch && wb,
+        PageType page_type = PageType::Normal,
+        const WriteLimiterPtr & write_limiter = nullptr);
+
+    // Freeze coming writes on all existing BlobFiles.
+    // New writes will be written to new BlobFiles.
+    void freezeBlobFiles();
 
     void remove(const PageEntries & del_entries);
 
@@ -113,9 +121,19 @@ public:
 private:
 #endif
 
-    PageEntriesEdit handleLargeWrite(typename Trait::WriteBatch && wb, PageType page_type, const WriteLimiterPtr & write_limiter = nullptr);
+    PageEntriesEdit handleLargeWrite(
+        typename Trait::WriteBatch && wb,
+        PageType page_type,
+        const WriteLimiterPtr & write_limiter = nullptr);
 
-    BlobFilePtr read(const PageId & page_id_v3, BlobFileId blob_id, BlobFileOffset offset, char * buffers, size_t size, const ReadLimiterPtr & read_limiter = nullptr, bool background = false);
+    BlobFilePtr read(
+        const PageId & page_id_v3,
+        BlobFileId blob_id,
+        BlobFileOffset offset,
+        char * buffers,
+        size_t size,
+        const ReadLimiterPtr & read_limiter = nullptr,
+        bool background = false);
 
     /**
      *  Ask BlobStats to get a span from BlobStat.

@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,8 +17,8 @@
 #include <Common/Logger.h>
 #include <Storages/DeltaMerge/Range.h>
 #include <Storages/DeltaMerge/RowKeyRangeUtils.h>
+#include <Storages/KVStore/Decode/TiKVHandle.h>
 #include <Storages/RegionQueryInfo.h>
-#include <Storages/Transaction/TiKVHandle.h>
 
 #include <algorithm>
 #include <numeric>
@@ -46,14 +46,22 @@ inline DM::RowKeyRanges getQueryRanges(
         if (!region_info.required_handle_ranges.empty())
         {
             for (const auto & handle_range : region_info.required_handle_ranges)
-                ranges.push_back(
-                    DM::RowKeyRange::fromRegionRange(handle_range, table_id, table_id, is_common_handle, rowkey_column_size));
+                ranges.push_back(DM::RowKeyRange::fromRegionRange(
+                    handle_range,
+                    table_id,
+                    table_id,
+                    is_common_handle,
+                    rowkey_column_size));
         }
         else
         {
             /// only used for test cases
-            ranges.push_back(
-                DM::RowKeyRange::fromRegionRange(region_info.range_in_table, table_id, table_id, is_common_handle, rowkey_column_size));
+            ranges.push_back(DM::RowKeyRange::fromRegionRange(
+                region_info.range_in_table,
+                table_id,
+                table_id,
+                is_common_handle,
+                rowkey_column_size));
         }
     }
     if (ranges.empty())

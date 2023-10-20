@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,7 +29,8 @@ class Context;
   * Used when the table is not specified in the query.
   * Analog of the DUAL table in Oracle and MySQL.
   */
-class StorageSystemOne : public ext::SharedPtrHelper<StorageSystemOne>
+class StorageSystemOne
+    : public ext::SharedPtrHelper<StorageSystemOne>
     , public IStorage
 {
 public:

@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@
 #include <Flash/FlashService.h>
 #include <Flash/Mpp/GRPCCompletionQueuePool.h>
 #include <Server/RaftConfigParser.h>
-#include <Storages/Transaction/PDTiKVClient.h>
+#include <Storages/KVStore/TiKVHelpers/PDTiKVClient.h>
 #include <grpc/grpc_security.h>
 
 

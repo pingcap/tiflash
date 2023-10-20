@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,7 +16,11 @@
 
 namespace DB::mock
 {
-bool SelectionBinder::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, const MPPInfo & mpp_info, const Context & context)
+bool SelectionBinder::toTiPBExecutor(
+    tipb::Executor * tipb_executor,
+    int32_t collator_id,
+    const MPPInfo & mpp_info,
+    const Context & context)
 {
     tipb_executor->set_tp(tipb::ExecType::TypeSelection);
     tipb_executor->set_executor_id(name);
@@ -43,7 +47,8 @@ ExecutorBinderPtr compileSelection(ExecutorBinderPtr input, size_t & executor_in
 {
     std::vector<ASTPtr> conditions;
     compileFilter(input->output_schema, filter, conditions);
-    auto selection = std::make_shared<mock::SelectionBinder>(executor_index, input->output_schema, std::move(conditions));
+    auto selection
+        = std::make_shared<mock::SelectionBinder>(executor_index, input->output_schema, std::move(conditions));
     selection->children.push_back(input);
     return selection;
 }

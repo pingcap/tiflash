@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,10 +19,10 @@
 #include <DataTypes/DataTypesNumber.h>
 #include <Interpreters/Context_fwd.h>
 #include <Storages/IStorage.h>
-#include <Storages/Transaction/DecodingStorageSchemaSnapshot.h>
-#include <Storages/Transaction/StorageEngineType.h>
-#include <Storages/Transaction/TiKVHandle.h>
-#include <Storages/Transaction/Types.h>
+#include <Storages/KVStore/Decode/DecodingStorageSchemaSnapshot.h>
+#include <Storages/KVStore/Decode/TiKVHandle.h>
+#include <Storages/KVStore/StorageEngineType.h>
+#include <Storages/KVStore/Types.h>
 
 
 namespace TiDB
@@ -71,7 +71,13 @@ public:
 
     virtual void flushCache(const Context & /*context*/) {}
 
-    virtual bool flushCache(const Context & /*context*/, const DM::RowKeyRange & /*range_to_flush*/, [[maybe_unused]] bool try_until_succeed = true) { return true; }
+    virtual bool flushCache(
+        const Context & /*context*/,
+        const DM::RowKeyRange & /*range_to_flush*/,
+        [[maybe_unused]] bool try_until_succeed)
+    {
+        return true;
+    }
 
     // Get the statistics of this table.
     // Used by `manage table xxx status` in ch-client
@@ -141,7 +147,9 @@ public:
 
     virtual void modifyASTStorage(ASTStorage * /*storage*/, const TiDB::TableInfo & /*table_info*/)
     {
-        throw Exception("Method modifyASTStorage is not supported by storage " + getName(), ErrorCodes::NOT_IMPLEMENTED);
+        throw Exception(
+            "Method modifyASTStorage is not supported by storage " + getName(),
+            ErrorCodes::NOT_IMPLEMENTED);
     }
 
     /// Remove this storage from TMTContext. Should be called after its metadata and data have been removed from disk.
@@ -170,16 +178,22 @@ public:
     ///     and `releaseDecodingBlock` need to be called when the block is free
     /// when `need_block` is false, it will just return an nullptr
     /// This method must be called under the protection of table structure lock
-    virtual std::pair<DB::DecodingStorageSchemaSnapshotConstPtr, BlockUPtr> getSchemaSnapshotAndBlockForDecoding(const TableStructureLockHolder & /* table_structure_lock */, bool /* need_block */)
+    virtual std::pair<DB::DecodingStorageSchemaSnapshotConstPtr, BlockUPtr> getSchemaSnapshotAndBlockForDecoding(
+        const TableStructureLockHolder & /* table_structure_lock */,
+        bool /* need_block */)
     {
-        throw Exception("Method getDecodingSchemaSnapshot is not supported by storage " + getName(), ErrorCodes::NOT_IMPLEMENTED);
+        throw Exception(
+            "Method getDecodingSchemaSnapshot is not supported by storage " + getName(),
+            ErrorCodes::NOT_IMPLEMENTED);
     };
 
-    /// The `block_decoding_schema_version` is just an internal version for `DecodingStorageSchemaSnapshot`,
+    /// The `block_decoding_schema_epoch` is just an internal version for `DecodingStorageSchemaSnapshot`,
     /// And it has no relation with the table schema version.
-    virtual void releaseDecodingBlock(Int64 /* block_decoding_schema_version */, BlockUPtr /* block */)
+    virtual void releaseDecodingBlock(Int64 /* block_decoding_schema_epoch */, BlockUPtr /* block */)
     {
-        throw Exception("Method getDecodingSchemaSnapshot is not supported by storage " + getName(), ErrorCodes::NOT_IMPLEMENTED);
+        throw Exception(
+            "Method getDecodingSchemaSnapshot is not supported by storage " + getName(),
+            ErrorCodes::NOT_IMPLEMENTED);
     }
 
 private:

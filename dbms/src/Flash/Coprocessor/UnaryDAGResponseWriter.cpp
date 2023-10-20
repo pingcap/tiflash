@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -78,7 +78,7 @@ void UnaryDAGResponseWriter::flush()
         encodeChunkToDAGResponse();
     }
     // TODO separate from UnaryDAGResponseWriter and support mpp/batchCop.
-    appendWarningsToDAGResponse();
+    dag_context.fillWarnings(*dag_response);
 
     // Under some test cases, there may be dag response whose size is bigger than INT_MAX, and GRPC can not limit it.
     // Throw exception to prevent receiver from getting wrong response.

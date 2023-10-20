@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright 2022 PingCAP, Ltd.
+# Copyright 2023 PingCAP, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -33,7 +33,7 @@ fi
 export storage_server="127.0.0.1"
 
 # Server port for connecting
-export storage_port="9000"
+export storage_port=${storage_port:-9000}
 
 # Default database for scripts
 export storage_db="system"

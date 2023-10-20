@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,7 +23,21 @@ namespace tests
 TEST(TestColumnGenerator, run)
 try
 {
-    std::vector<String> type_vec = {"Int8", "Int16", "Int32", "Int64", "UInt8", "UInt16", "UInt32", "UInt64", "Float32", "Float64", "String", "MyDateTime", "MyDate", "Decimal"};
+    std::vector<String> type_vec
+        = {"Int8",
+           "Int16",
+           "Int32",
+           "Int64",
+           "UInt8",
+           "UInt16",
+           "UInt32",
+           "UInt64",
+           "Float32",
+           "Float64",
+           "String",
+           "MyDateTime",
+           "MyDate",
+           "Decimal"};
     for (size_t i = 10; i <= 100000; i *= 10)
     {
         for (auto type : type_vec)

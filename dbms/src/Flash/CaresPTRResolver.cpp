@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -153,7 +153,10 @@ bool CaresPTRResolver::wait_and_process()
         int number_of_fds_ready = 0;
         if (!readable_sockets.empty())
         {
-            number_of_fds_ready = poll(readable_sockets.data(), static_cast<nfds_t>(readable_sockets.size()), static_cast<int>(timeout));
+            number_of_fds_ready = poll(
+                readable_sockets.data(),
+                static_cast<nfds_t>(readable_sockets.size()),
+                static_cast<int>(timeout));
 
             bool poll_error = number_of_fds_ready < 0;
             bool is_poll_error_an_interrupt = poll_error && errno == EINTR;

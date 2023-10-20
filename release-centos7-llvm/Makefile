@@ -1,4 +1,4 @@
-# Copyright 2022 PingCAP, Ltd.
+# Copyright 2022 PingCAP, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -28,6 +28,12 @@ build_tiflash_release_amd64:
 # Add build_tiflash_debug_amd64 target to enable FailPoints on x86. Since outputs are the same as release version, no new package targets added. 
 build_tiflash_debug_amd64:
 	$(DOCKER) run --rm -v $(realpath ..):/build/tics hub.pingcap.net/tiflash/tiflash-llvm-base:amd64 /build/tics/release-centos7-llvm/scripts/build-debug.sh
+
+build_tiflash_tsan_amd64:
+	$(DOCKER) run --rm -v $(realpath ..):/build/tics hub.pingcap.net/tiflash/tiflash-llvm-base:amd64 /build/tics/release-centos7-llvm/scripts/build-tsan.sh
+
+build_tiflash_asan_amd64:
+	$(DOCKER) run --rm -v $(realpath ..):/build/tics hub.pingcap.net/tiflash/tiflash-llvm-base:amd64 /build/tics/release-centos7-llvm/scripts/build-asan.sh
 
 build_tiflash_ci_amd64:
 	$(DOCKER) run --rm -v $(realpath ..):/build/tics hub.pingcap.net/tiflash/tiflash-llvm-base:amd64 /build/tics/release-centos7-llvm/scripts/build-tiflash-ci.sh

@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,7 +17,8 @@
 
 namespace DB::PS::tests
 {
-class HeavySkewWriteRead : public StressWorkload
+class HeavySkewWriteRead
+    : public StressWorkload
     , public StressWorkloadFunc<HeavySkewWriteRead>
 {
 public:
@@ -25,25 +26,20 @@ public:
         : StressWorkload(options_)
     {}
 
-    static String name()
-    {
-        return "HeavySkewWriteRead";
-    }
+    static String name() { return "HeavySkewWriteRead"; }
 
-    static UInt64 mask()
-    {
-        return 1 << 4;
-    }
+    static UInt64 mask() { return 1 << 4; }
 
 private:
     String desc() override
     {
-        return fmt::format("Some of options will be ignored"
-                           "`paths` will only used first one. which is {}. Data will store in {}. "
-                           "Please cleanup folder after this test. "
-                           "The current workload will elapse near 60 seconds",
-                           options.paths[0],
-                           options.paths[0] + "/" + name());
+        return fmt::format(
+            "Some of options will be ignored"
+            "`paths` will only used first one. which is {}. Data will store in {}. "
+            "Please cleanup folder after this test. "
+            "The current workload will elapse near 60 seconds",
+            options.paths[0],
+            options.paths[0] + "/" + name());
     }
 
     void run() override
@@ -74,9 +70,6 @@ private:
         }
     }
 
-    bool verify() override
-    {
-        return true;
-    }
+    bool verify() override { return true; }
 };
 } // namespace DB::PS::tests

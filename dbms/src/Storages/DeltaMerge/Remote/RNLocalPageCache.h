@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,10 +18,11 @@
 #include <Interpreters/Context_fwd.h>
 #include <Storages/DeltaMerge/Remote/ObjectId.h>
 #include <Storages/DeltaMerge/Remote/RNLocalPageCache_fwd.h>
+#include <Storages/DeltaMerge/ScanContext.h>
+#include <Storages/KVStore/Types.h>
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageStorage_fwd.h>
 #include <Storages/Page/V3/Universal/UniversalPageId.h>
-#include <Storages/Transaction/Types.h>
 
 #include <boost/noncopyable.hpp>
 
@@ -50,8 +51,7 @@ namespace DB::DM::Remote
  *
  * Eviction only happens when you manually call `evict()`..
  */
-class RNLocalPageCacheLRU
-    : private boost::noncopyable
+class RNLocalPageCacheLRU : private boost::noncopyable
 {
 private:
     using Queue = std::list<UniversalPageId>;
@@ -67,21 +67,13 @@ public:
     explicit RNLocalPageCacheLRU(size_t max_size_)
         : log(Logger::get())
         , max_size(max_size_)
-    {
-    }
+    {}
 
-    void setMaxSize(size_t max_size_)
-    {
-        max_size = max_size_;
-    }
+    void setMaxSize(size_t max_size_) { max_size = max_size_; }
 
     String statistics() const
     {
-        return fmt::format(
-            "<total_n={} total_size={} max_size={}>",
-            index.size(),
-            current_total_size,
-            max_size);
+        return fmt::format("<total_n={} total_size={} max_size={}>", index.size(), current_total_size, max_size);
     }
 
     /// Returns true if the key is newly inserted.
@@ -179,7 +171,10 @@ public:
      *
      * This function also returns pages not in the cache.
      */
-    OccupySpaceResult occupySpace(const std::vector<PageOID> & pages, const std::vector<size_t> & page_sizes);
+    OccupySpaceResult occupySpace(
+        const std::vector<PageOID> & pages,
+        const std::vector<size_t> & page_sizes,
+        ScanContextPtr scan_context = nullptr);
 
     /**
      * Put a page into the cache.
@@ -197,10 +192,7 @@ public:
      *
      * This is a shortcut function for write, only used in tests.
      */
-    void write(
-        const PageOID & oid,
-        std::string_view data,
-        const PageFieldSizes & field_sizes = {});
+    void write(const PageOID & oid, std::string_view data, const PageFieldSizes & field_sizes = {});
 
     void write(UniversalWriteBatch && wb);
     /**
@@ -263,10 +255,7 @@ public:
         parent->guard(lock, keys, sizes, debug_id);
     }
 
-    ~RNLocalPageCacheGuard()
-    {
-        parent->unguard(keys, debug_id);
-    }
+    ~RNLocalPageCacheGuard() { parent->unguard(keys, debug_id); }
 
 private:
     const std::shared_ptr<RNLocalPageCache> parent;

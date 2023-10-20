@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/FailPoint.h>
+#include <Core/AutoSpillTrigger.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/Quota.h>
@@ -88,7 +89,8 @@ Block IProfilingBlockInputStream::read(FilterPtr & res_filter, bool return_filte
         if (enabled_extremes)
             updateExtremes(res);
 
-        if (limits.mode == LIMITS_CURRENT && !limits.size_limits.check(info.rows, info.bytes, "result", ErrorCodes::TOO_MANY_ROWS_OR_BYTES))
+        if (limits.mode == LIMITS_CURRENT
+            && !limits.size_limits.check(info.rows, info.bytes, "result", ErrorCodes::TOO_MANY_ROWS_OR_BYTES))
             limit_exceeded_need_break = true;
 
         if (quota != nullptr)
@@ -116,6 +118,8 @@ Block IProfilingBlockInputStream::read(FilterPtr & res_filter, bool return_filte
     }
 #endif
 
+    if (auto_spill_trigger != nullptr)
+        auto_spill_trigger->triggerAutoSpill();
     info.updateExecutionTime(info.total_stopwatch.elapsed() - start_time);
     return res;
 }
@@ -231,10 +235,11 @@ bool IProfilingBlockInputStream::checkTimeLimit() const
 {
     if (limits.max_execution_time != 0
         && info.total_stopwatch.elapsed() > static_cast<UInt64>(limits.max_execution_time.totalMicroseconds()) * 1000)
-        return handleOverflowMode(limits.timeout_overflow_mode,
-                                  "Timeout exceeded: elapsed " + toString(info.total_stopwatch.elapsedSeconds())
-                                      + " seconds, maximum: " + toString(limits.max_execution_time.totalMicroseconds() / 1000000.0),
-                                  ErrorCodes::TIMEOUT_EXCEEDED);
+        return handleOverflowMode(
+            limits.timeout_overflow_mode,
+            "Timeout exceeded: elapsed " + toString(info.total_stopwatch.elapsedSeconds())
+                + " seconds, maximum: " + toString(limits.max_execution_time.totalMicroseconds() / 1000000.0),
+            ErrorCodes::TIMEOUT_EXCEEDED);
 
     return true;
 }
@@ -294,13 +299,15 @@ void IProfilingBlockInputStream::progressImpl(const Progress & value)
             case OverflowMode::THROW:
             {
                 if (limits.size_limits.max_rows && total_rows_estimate > limits.size_limits.max_rows)
-                    throw Exception("Limit for rows to read exceeded: " + toString(total_rows_estimate)
-                                        + " rows read (or to read), maximum: " + toString(limits.size_limits.max_rows),
-                                    ErrorCodes::TOO_MANY_ROWS);
+                    throw Exception(
+                        "Limit for rows to read exceeded: " + toString(total_rows_estimate)
+                            + " rows read (or to read), maximum: " + toString(limits.size_limits.max_rows),
+                        ErrorCodes::TOO_MANY_ROWS);
                 else
-                    throw Exception("Limit for (uncompressed) bytes to read exceeded: " + toString(progress.bytes)
-                                        + " bytes read, maximum: " + toString(limits.size_limits.max_bytes),
-                                    ErrorCodes::TOO_MANY_BYTES);
+                    throw Exception(
+                        "Limit for (uncompressed) bytes to read exceeded: " + toString(progress.bytes)
+                            + " bytes read, maximum: " + toString(limits.size_limits.max_bytes),
+                        ErrorCodes::TOO_MANY_BYTES);
                 break;
             }
 
@@ -330,22 +337,26 @@ void IProfilingBlockInputStream::progressImpl(const Progress & value)
             if (total_elapsed > limits.timeout_before_checking_execution_speed.totalMicroseconds() / 1000000.0)
             {
                 if (limits.min_execution_speed && progress.rows / total_elapsed < limits.min_execution_speed)
-                    throw Exception("Query is executing too slow: " + toString(progress.rows / total_elapsed)
-                                        + " rows/sec., minimum: " + toString(limits.min_execution_speed),
-                                    ErrorCodes::TOO_SLOW);
+                    throw Exception(
+                        "Query is executing too slow: " + toString(progress.rows / total_elapsed)
+                            + " rows/sec., minimum: " + toString(limits.min_execution_speed),
+                        ErrorCodes::TOO_SLOW);
 
                 size_t total_rows = progress.total_rows;
 
                 /// If the predicted execution time is longer than `max_execution_time`.
                 if (limits.max_execution_time != 0 && total_rows)
                 {
-                    double estimated_execution_time_seconds = total_elapsed * (static_cast<double>(total_rows) / progress.rows);
+                    double estimated_execution_time_seconds
+                        = total_elapsed * (static_cast<double>(total_rows) / progress.rows);
 
                     if (estimated_execution_time_seconds > limits.max_execution_time.totalSeconds())
-                        throw Exception("Estimated query execution time (" + toString(estimated_execution_time_seconds) + " seconds)"
-                                            + " is too long. Maximum: " + toString(limits.max_execution_time.totalSeconds())
-                                            + ". Estimated rows to process: " + toString(total_rows),
-                                        ErrorCodes::TOO_SLOW);
+                        throw Exception(
+                            "Estimated query execution time (" + toString(estimated_execution_time_seconds)
+                                + " seconds)"
+                                + " is too long. Maximum: " + toString(limits.max_execution_time.totalSeconds())
+                                + ". Estimated rows to process: " + toString(total_rows),
+                            ErrorCodes::TOO_SLOW);
                 }
             }
         }
@@ -391,10 +402,33 @@ bool IProfilingBlockInputStream::isCancelledOrThrowIfKilled() const
 
 void IProfilingBlockInputStream::setProgressCallback(const ProgressCallback & callback)
 {
+    std::unordered_set<void *> visited_nodes;
+    setProgressCallbackImpl(callback, visited_nodes);
+}
+
+void IProfilingBlockInputStream::setProgressCallbackImpl(
+    const ProgressCallback & callback,
+    std::unordered_set<void *> & visited_nodes)
+{
+    if (visited_nodes.find(this) != visited_nodes.end())
+        return;
+    visited_nodes.insert(this);
     progress_callback = callback;
 
     forEachProfilingChild([&](IProfilingBlockInputStream & child) {
-        child.setProgressCallback(callback);
+        child.setProgressCallbackImpl(callback, visited_nodes);
+        return false;
+    });
+}
+
+void IProfilingBlockInputStream::setAutoSpillTrigger(AutoSpillTrigger * auto_spill_trigger_)
+{
+    if (auto_spill_trigger == auto_spill_trigger_)
+        return;
+    auto_spill_trigger = auto_spill_trigger_;
+
+    forEachProfilingChild([&](IProfilingBlockInputStream & child) {
+        child.setAutoSpillTrigger(auto_spill_trigger_);
         return false;
     });
 }
@@ -402,6 +436,8 @@ void IProfilingBlockInputStream::setProgressCallback(const ProgressCallback & ca
 
 void IProfilingBlockInputStream::setProcessListElement(ProcessListElement * elem)
 {
+    if (process_list_elem == elem)
+        return;
     process_list_elem = elem;
 
     forEachProfilingChild([&](IProfilingBlockInputStream & child) {

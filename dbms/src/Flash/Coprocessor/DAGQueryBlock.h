@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,9 +20,9 @@
 #pragma GCC diagnostic pop
 
 #include <Interpreters/IQuerySource.h>
-#include <Storages/Transaction/TiDB.h>
-#include <Storages/Transaction/TiKVKeyValue.h>
-#include <Storages/Transaction/Types.h>
+#include <Storages/KVStore/Decode/DecodedTiKVKeyValue.h>
+#include <Storages/KVStore/Types.h>
+#include <TiDB/Schema/TiDB.h>
 
 namespace DB
 {
@@ -32,10 +32,7 @@ class QueryBlockIDGenerator
 {
     UInt32 current_id = 0; //Root query block id is 1, so set current_id initial value to 0
 public:
-    UInt32 nextBlockID()
-    {
-        return ++current_id;
-    }
+    UInt32 nextBlockID() { return ++current_id; }
 };
 
 /// DAGQueryBlock is a dag query from single source,
@@ -71,7 +68,10 @@ public:
     bool can_restore_pipeline_concurrency = true;
 
     bool isRootQueryBlock() const { return id == 1; };
-    bool isTableScanSource() const { return source->tp() == tipb::ExecType::TypeTableScan || source->tp() == tipb::ExecType::TypePartitionTableScan; }
+    bool isTableScanSource() const
+    {
+        return source->tp() == tipb::ExecType::TypeTableScan || source->tp() == tipb::ExecType::TypePartitionTableScan;
+    }
 };
 
 } // namespace DB

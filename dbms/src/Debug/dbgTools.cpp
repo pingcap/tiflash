@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,14 +19,14 @@
 #include <Interpreters/Context.h>
 #include <Parsers/ASTLiteral.h>
 #include <Storages/IManageableStorage.h>
-#include <Storages/Transaction/ColumnFamily.h>
-#include <Storages/Transaction/DatumCodec.h>
-#include <Storages/Transaction/KVStore.h>
-#include <Storages/Transaction/Region.h>
-#include <Storages/Transaction/RowCodec.h>
-#include <Storages/Transaction/TMTContext.h>
-#include <Storages/Transaction/TiDB.h>
-#include <Storages/Transaction/TiKVRange.h>
+#include <Storages/KVStore/Decode/TiKVRange.h>
+#include <Storages/KVStore/FFI/ColumnFamily.h>
+#include <Storages/KVStore/KVStore.h>
+#include <Storages/KVStore/Region.h>
+#include <Storages/KVStore/TMTContext.h>
+#include <TiDB/Decode/DatumCodec.h>
+#include <TiDB/Decode/RowCodec.h>
+#include <TiDB/Schema/TiDB.h>
 #include <TiDB/Schema/TiDBSchemaManager.h>
 
 #include <random>
@@ -43,9 +43,13 @@ extern const int UNKNOWN_DATABASE;
 namespace RegionBench
 {
 using TiDB::ColumnInfo;
-using TiDB::TableInfo;
 
-RegionPtr createRegion(TableID table_id, RegionID region_id, const HandleID & start, const HandleID & end, std::optional<uint64_t> index_)
+RegionPtr createRegion(
+    TableID table_id,
+    RegionID region_id,
+    const HandleID & start,
+    const HandleID & end,
+    std::optional<uint64_t> index_)
 {
     metapb::Region region;
     metapb::Peer peer;
@@ -65,7 +69,12 @@ RegionPtr createRegion(TableID table_id, RegionID region_id, const HandleID & st
     return std::make_shared<Region>(std::move(region_meta));
 }
 
-Regions createRegions(TableID table_id, size_t region_num, size_t key_num_each_region, HandleID handle_begin, RegionID new_region_id_begin)
+Regions createRegions(
+    TableID table_id,
+    size_t region_num,
+    size_t key_num_each_region,
+    HandleID handle_begin,
+    RegionID new_region_id_begin)
 {
     Regions regions;
     for (RegionID region_id = new_region_id_begin; region_id < static_cast<RegionID>(new_region_id_begin + region_num);
@@ -115,7 +124,14 @@ void setupDelRequest(raft_cmdpb::Request * req, const std::string & cf, const Ti
     del->set_key(key.getStr());
 }
 
-void addRequestsToRaftCmd(raft_cmdpb::RaftCmdRequest & request, const TiKVKey & key, const TiKVValue & value, UInt64 prewrite_ts, UInt64 commit_ts, bool del, const String pk)
+void addRequestsToRaftCmd(
+    raft_cmdpb::RaftCmdRequest & request,
+    const TiKVKey & key,
+    const TiKVValue & value,
+    UInt64 prewrite_ts,
+    UInt64 commit_ts,
+    bool del,
+    const String pk)
 {
     TiKVKey commit_key = RecordKVFormat::appendTs(key, commit_ts);
     const TiKVKey & lock_key = key;
@@ -177,7 +193,9 @@ T convertNumber(const Field & field)
     case Field::Types::Decimal256:
         return static_cast<T>(field.get<DecimalField<Decimal256>>());
     default:
-        throw Exception(String("Unable to convert field type ") + field.getTypeName() + " to number", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(
+            String("Unable to convert field type ") + field.getTypeName() + " to number",
+            ErrorCodes::LOGICAL_ERROR);
     }
 }
 
@@ -200,7 +218,9 @@ Field convertDecimal(const ColumnInfo & column_info, const Field & field)
     case Field::Types::Decimal256:
         return column_info.getDecimalValue(field.get<Decimal256>().toString(column_info.decimal));
     default:
-        throw Exception(String("Unable to convert field type ") + field.getTypeName() + " to number", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(
+            String("Unable to convert field type ") + field.getTypeName() + " to number",
+            ErrorCodes::LOGICAL_ERROR);
     }
 }
 
@@ -214,7 +234,9 @@ Field convertEnum(const ColumnInfo & column_info, const Field & field)
     case Field::Types::String:
         return static_cast<UInt64>(column_info.getEnumIndex(field.get<String>()));
     default:
-        throw Exception(String("Unable to convert field type ") + field.getTypeName() + " to Enum", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(
+            String("Unable to convert field type ") + field.getTypeName() + " to Enum",
+            ErrorCodes::LOGICAL_ERROR);
     }
 }
 
@@ -270,9 +292,10 @@ Field convertField(const ColumnInfo & column_info, const Field & field)
 void encodeRow(const TiDB::TableInfo & table_info, const std::vector<Field> & fields, WriteBuffer & ss)
 {
     if (table_info.columns.size() < fields.size() + table_info.pk_is_handle)
-        throw Exception("Encoding row has less columns than encode values [num_columns=" + DB::toString(table_info.columns.size())
-                            + "] [num_fields=" + DB::toString(fields.size()) + "] . ",
-                        ErrorCodes::LOGICAL_ERROR);
+        throw Exception(
+            "Encoding row has less columns than encode values [num_columns=" + DB::toString(table_info.columns.size())
+                + "] [num_fields=" + DB::toString(fields.size()) + "] . ",
+            ErrorCodes::LOGICAL_ERROR);
 
     std::vector<Field> flatten_fields;
     std::unordered_set<String> pk_column_names;
@@ -297,7 +320,8 @@ void encodeRow(const TiDB::TableInfo & table_info, const std::vector<Field> & fi
 
     static bool row_format_flip = false;
     // Ping-pong encoding using row format V1/V2.
-    (row_format_flip = !row_format_flip) ? encodeRowV1(table_info, flatten_fields, ss) : encodeRowV2(table_info, flatten_fields, ss);
+    (row_format_flip = !row_format_flip) ? encodeRowV1(table_info, flatten_fields, ss)
+                                         : encodeRowV2(table_info, flatten_fields, ss);
 }
 
 void insert( //
@@ -363,7 +387,8 @@ void insert( //
 
     raft_cmdpb::RaftCmdRequest request;
     addRequestsToRaftCmd(request, key, value, prewrite_ts, commit_ts, is_del);
-    tmt.getKVStore()->handleWriteRaftCmd(
+    RegionBench::applyWriteRaftCmd(
+        *tmt.getKVStore(),
         std::move(request),
         region_id,
         MockTiKV::instance().getRaftIndex(region_id),
@@ -386,7 +411,8 @@ void remove(const TiDB::TableInfo & table_info, RegionID region_id, HandleID han
 
     raft_cmdpb::RaftCmdRequest request;
     addRequestsToRaftCmd(request, key, value, prewrite_ts, commit_ts, true);
-    tmt.getKVStore()->handleWriteRaftCmd(
+    RegionBench::applyWriteRaftCmd(
+        *tmt.getKVStore(),
         std::move(request),
         region_id,
         MockTiKV::instance().getRaftIndex(region_id),
@@ -407,7 +433,16 @@ struct BatchCtrl
     HandleID handle_begin;
     bool del;
 
-    BatchCtrl(Int64 concurrent_id_, Int64 flush_num_, Int64 batch_num_, UInt64 min_strlen_, UInt64 max_strlen_, Context * context_, RegionPtr region_, HandleID handle_begin_, bool del_)
+    BatchCtrl(
+        Int64 concurrent_id_,
+        Int64 flush_num_,
+        Int64 batch_num_,
+        UInt64 min_strlen_,
+        UInt64 max_strlen_,
+        Context * context_,
+        RegionPtr region_,
+        HandleID handle_begin_,
+        bool del_)
         : concurrent_id(concurrent_id_)
         , flush_num(flush_num_)
         , batch_num(batch_num_)
@@ -427,15 +462,19 @@ struct BatchCtrl
     void encodeDatum(WriteBuffer & ss, TiDB::CodecFlag flag, Int64 magic_num)
     {
         Int8 target = (magic_num % 70) + '0';
-        EncodeUInt(UInt8(flag), ss);
+        EncodeUInt(static_cast<UInt8>(flag), ss);
         switch (flag)
         {
         case TiDB::CodecFlagJson:
-            throw Exception("Not implented yet: BatchCtrl::encodeDatum, TiDB::CodecFlagJson", ErrorCodes::LOGICAL_ERROR);
+            throw Exception(
+                "Not implented yet: BatchCtrl::encodeDatum, TiDB::CodecFlagJson",
+                ErrorCodes::LOGICAL_ERROR);
         case TiDB::CodecFlagMax:
             throw Exception("Not implented yet: BatchCtrl::encodeDatum, TiDB::CodecFlagMax", ErrorCodes::LOGICAL_ERROR);
         case TiDB::CodecFlagDuration:
-            throw Exception("Not implented yet: BatchCtrl::encodeDatum, TiDB::CodecFlagDuration", ErrorCodes::LOGICAL_ERROR);
+            throw Exception(
+                "Not implented yet: BatchCtrl::encodeDatum, TiDB::CodecFlagDuration",
+                ErrorCodes::LOGICAL_ERROR);
         case TiDB::CodecFlagNil:
             return;
         case TiDB::CodecFlagBytes:
@@ -447,15 +486,15 @@ struct BatchCtrl
             memset(default_str.data(), target, default_str.size());
             return EncodeCompactBytes(default_str, ss);
         case TiDB::CodecFlagFloat:
-            return EncodeFloat64(Float64(magic_num) / 1111.1, ss);
+            return EncodeFloat64(static_cast<Float64>(magic_num) / 1111.1, ss);
         case TiDB::CodecFlagUInt:
-            return EncodeUInt<UInt64>(UInt64(magic_num), ss);
+            return EncodeUInt<UInt64>(static_cast<UInt64>(magic_num), ss);
         case TiDB::CodecFlagInt:
-            return EncodeInt64(Int64(magic_num), ss);
+            return EncodeInt64((magic_num), ss);
         case TiDB::CodecFlagVarInt:
-            return EncodeVarInt(Int64(magic_num), ss);
+            return EncodeVarInt((magic_num), ss);
         case TiDB::CodecFlagVarUInt:
-            return EncodeVarUInt(UInt64(magic_num), ss);
+            return EncodeVarUInt(static_cast<UInt64>(magic_num), ss);
         default:
             throw Exception("Not implented codec flag: " + std::to_string(flag), ErrorCodes::LOGICAL_ERROR);
         }
@@ -474,7 +513,10 @@ struct BatchCtrl
     }
 };
 
-void batchInsert(const TiDB::TableInfo & table_info, std::unique_ptr<BatchCtrl> batch_ctrl, std::function<Int64(Int64)> fn_gen_magic_num)
+void batchInsert(
+    const TiDB::TableInfo & table_info,
+    std::unique_ptr<BatchCtrl> batch_ctrl,
+    std::function<Int64(Int64)> fn_gen_magic_num)
 {
     RegionPtr & region = batch_ctrl->region;
 
@@ -497,18 +539,32 @@ void batchInsert(const TiDB::TableInfo & table_info, std::unique_ptr<BatchCtrl> 
             addRequestsToRaftCmd(request, key, value, prewrite_ts, commit_ts, batch_ctrl->del);
         }
 
-        tmt.getKVStore()->handleWriteRaftCmd(std::move(request), region->id(), MockTiKV::instance().getRaftIndex(region->id()), MockTiKV::instance().getRaftTerm(region->id()), tmt);
+        RegionBench::applyWriteRaftCmd(
+            *tmt.getKVStore(),
+            std::move(request),
+            region->id(),
+            MockTiKV::instance().getRaftIndex(region->id()),
+            MockTiKV::instance().getRaftTerm(region->id()),
+            tmt);
     }
 }
 
-void concurrentBatchInsert(const TiDB::TableInfo & table_info, Int64 concurrent_num, Int64 flush_num, Int64 batch_num, UInt64 min_strlen, UInt64 max_strlen, Context & context)
+void concurrentBatchInsert(
+    const TiDB::TableInfo & table_info,
+    Int64 concurrent_num,
+    Int64 flush_num,
+    Int64 batch_num,
+    UInt64 min_strlen,
+    UInt64 max_strlen,
+    Context & context)
 {
     TMTContext & tmt = context.getTMTContext();
 
     RegionID curr_max_region_id(InvalidRegionID);
     HandleID curr_max_handle_id = 0;
     tmt.getKVStore()->traverseRegions([&](const RegionID region_id, const RegionPtr & region) {
-        curr_max_region_id = (curr_max_region_id == InvalidRegionID) ? region_id : std::max<RegionID>(curr_max_region_id, region_id);
+        curr_max_region_id
+            = (curr_max_region_id == InvalidRegionID) ? region_id : std::max<RegionID>(curr_max_region_id, region_id);
         const auto range = region->getRange();
         curr_max_handle_id = std::max(RecordKVFormat::getHandle(*range->rawKeys().second), curr_max_handle_id);
     });
@@ -516,16 +572,18 @@ void concurrentBatchInsert(const TiDB::TableInfo & table_info, Int64 concurrent_
     Int64 key_num_each_region = flush_num * batch_num;
     HandleID handle_begin = curr_max_handle_id;
 
-    Regions regions = createRegions(table_info.id, concurrent_num, key_num_each_region, handle_begin, curr_max_region_id + 1);
+    Regions regions
+        = createRegions(table_info.id, concurrent_num, key_num_each_region, handle_begin, curr_max_region_id + 1);
     for (const RegionPtr & region : regions)
         tmt.getKVStore()->onSnapshot<RegionPtrWithBlock>(region, nullptr, 0, tmt);
 
     std::list<std::thread> threads;
     for (Int64 i = 0; i < concurrent_num; i++, handle_begin += key_num_each_region)
     {
-        auto batch_ptr
-            = std::make_unique<BatchCtrl>(i, flush_num, batch_num, min_strlen, max_strlen, &context, regions[i], handle_begin, false);
-        threads.push_back(std::thread(&batchInsert, table_info, std::move(batch_ptr), [](Int64 index) -> Int64 { return index; }));
+        auto batch_ptr = std::make_unique<
+            BatchCtrl>(i, flush_num, batch_num, min_strlen, max_strlen, &context, regions[i], handle_begin, false);
+        threads.push_back(
+            std::thread(&batchInsert, table_info, std::move(batch_ptr), [](Int64 index) -> Int64 { return index; }));
     }
     for (auto & thread : threads)
     {
@@ -568,7 +626,8 @@ Int64 concurrentRangeOperate(
             continue;
         Int64 batch_num = handle_end - handle_begin;
         tol += batch_num;
-        auto batch_ptr = std::make_unique<BatchCtrl>(-1, 1, batch_num, 1, 1, &context, region, handle_begin.handle_id, del);
+        auto batch_ptr
+            = std::make_unique<BatchCtrl>(-1, 1, batch_num, 1, 1, &context, region, handle_begin.handle_id, del);
         threads.push_back(std::thread(&batchInsert, table_info, std::move(batch_ptr), [=](Int64 index) -> Int64 {
             std::ignore = index;
             return magic_num;
@@ -581,7 +640,11 @@ Int64 concurrentRangeOperate(
     return tol;
 }
 
-TableID getTableID(Context & context, const std::string & database_name, const std::string & table_name, const std::string & partition_id)
+TableID getTableID(
+    Context & context,
+    const std::string & database_name,
+    const std::string & table_name,
+    const std::string & partition_id)
 {
     try
     {
@@ -628,11 +691,104 @@ const TiDB::TableInfo & getTableInfo(Context & context, const String & database_
     auto managed_storage = std::static_pointer_cast<IManageableStorage>(storage);
     return managed_storage->getTableInfo();
 }
+
+
+EngineStoreApplyRes applyWriteRaftCmd(
+    KVStore & kvstore,
+    raft_cmdpb::RaftCmdRequest && request,
+    UInt64 region_id,
+    UInt64 index,
+    UInt64 term,
+    TMTContext & tmt,
+    DM::WriteResult * write_result_ptr)
+{
+    std::vector<BaseBuffView> keys;
+    std::vector<BaseBuffView> vals;
+    std::vector<WriteCmdType> cmd_types;
+    std::vector<ColumnFamilyType> cmd_cf;
+    keys.reserve(request.requests_size());
+    vals.reserve(request.requests_size());
+    cmd_types.reserve(request.requests_size());
+    cmd_cf.reserve(request.requests_size());
+
+    for (const auto & req : request.requests())
+    {
+        auto type = req.cmd_type();
+
+        switch (type)
+        {
+        case raft_cmdpb::CmdType::Put:
+            keys.push_back({req.put().key().data(), req.put().key().size()});
+            vals.push_back({req.put().value().data(), req.put().value().size()});
+            cmd_types.push_back(WriteCmdType::Put);
+            cmd_cf.push_back(NameToCF(req.put().cf()));
+            break;
+        case raft_cmdpb::CmdType::Delete:
+            keys.push_back({req.delete_().key().data(), req.delete_().key().size()});
+            vals.push_back({nullptr, 0});
+            cmd_types.push_back(WriteCmdType::Del);
+            cmd_cf.push_back(NameToCF(req.delete_().cf()));
+            break;
+        default:
+            throw Exception(
+                fmt::format("Unsupport raft cmd {}", raft_cmdpb::CmdType_Name(type)),
+                ErrorCodes::LOGICAL_ERROR);
+        }
+    }
+    if (write_result_ptr)
+    {
+        return kvstore.handleWriteRaftCmdInner(
+            WriteCmdsView{
+                .keys = keys.data(),
+                .vals = vals.data(),
+                .cmd_types = cmd_types.data(),
+                .cmd_cf = cmd_cf.data(),
+                .len = keys.size()},
+            region_id,
+            index,
+            term,
+            tmt,
+            *write_result_ptr);
+    }
+    else
+    {
+        DM::WriteResult write_result;
+        return kvstore.handleWriteRaftCmdInner(
+            WriteCmdsView{
+                .keys = keys.data(),
+                .vals = vals.data(),
+                .cmd_types = cmd_types.data(),
+                .cmd_cf = cmd_cf.data(),
+                .len = keys.size()},
+            region_id,
+            index,
+            term,
+            tmt,
+            write_result);
+    }
+}
+
+void handleApplySnapshot(
+    KVStore & kvstore,
+    metapb::Region && region,
+    uint64_t peer_id,
+    SSTViewVec snaps,
+    uint64_t index,
+    uint64_t term,
+    std::optional<uint64_t> deadline_index,
+    TMTContext & tmt)
+{
+    auto new_region = kvstore.genRegionPtr(std::move(region), peer_id, index, term);
+    auto prehandle_result = kvstore.preHandleSnapshotToFiles(new_region, snaps, index, term, deadline_index, tmt);
+    kvstore.applyPreHandledSnapshot(
+        RegionPtrWithSnapshotFiles{new_region, std::move(prehandle_result.ingest_ids)},
+        tmt);
+}
+
 } // namespace RegionBench
 } // namespace DB
 namespace DB
 {
-
 String mappedDatabase(Context & context, const String & database_name)
 {
     TMTContext & tmt = context.getTMTContext();
@@ -653,12 +809,17 @@ std::optional<String> mappedDatabaseWithOptional(Context & context, const String
     return SchemaNameMapper().mapDatabaseName(*db_info);
 }
 
-std::optional<QualifiedName> mappedTableWithOptional(Context & context, const String & database_name, const String & table_name)
+std::optional<QualifiedName> mappedTableWithOptional(
+    Context & context,
+    const String & database_name,
+    const String & table_name)
 {
-    auto mapped_db = mappedDatabase(context, database_name);
+    auto mapped_db = mappedDatabaseWithOptional(context, database_name);
 
+    if (!mapped_db.has_value())
+        return std::nullopt;
     TMTContext & tmt = context.getTMTContext();
-    auto storage = tmt.getStorages().getByName(mapped_db, table_name, false);
+    auto storage = tmt.getStorages().getByName(mapped_db.value(), table_name, false);
     if (storage == nullptr)
     {
         return std::nullopt;
@@ -667,7 +828,11 @@ std::optional<QualifiedName> mappedTableWithOptional(Context & context, const St
     return std::make_pair(storage->getDatabaseName(), storage->getTableName());
 }
 
-QualifiedName mappedTable(Context & context, const String & database_name, const String & table_name, bool include_tombstone)
+QualifiedName mappedTable(
+    Context & context,
+    const String & database_name,
+    const String & table_name,
+    bool include_tombstone)
 {
     auto mapped_db = mappedDatabase(context, database_name);
 

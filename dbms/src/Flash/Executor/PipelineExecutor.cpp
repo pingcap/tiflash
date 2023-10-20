@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,26 +17,33 @@
 #include <Flash/Pipeline/Pipeline.h>
 #include <Flash/Pipeline/Schedule/Events/Event.h>
 #include <Flash/Planner/PhysicalPlan.h>
+#include <Flash/ResourceControl/LocalAdmissionController.h>
 #include <Interpreters/Context.h>
 
 namespace DB
 {
 PipelineExecutor::PipelineExecutor(
     const MemoryTrackerPtr & memory_tracker_,
+    AutoSpillTrigger * auto_spill_trigger,
+    const RegisterOperatorSpillContext & register_operator_spill_context,
     Context & context_,
     const String & req_id)
     : QueryExecutor(memory_tracker_, context_, req_id)
     , exec_context(
           // For mpp task, there is a unique identifier MPPTaskId, so MPPTaskId is used here as the query id of PipelineExecutor.
           // But for cop/batchCop, there is no such unique identifier, so an empty value is given here, indicating that the query id of PipelineExecutor is invalid.
-          /*query_id=*/context.getDAGContext()->is_mpp_task ? context.getDAGContext()->getMPPTaskId().toString() : "",
+          /*query_id=*/context.getDAGContext()->isMPPTask() ? context.getDAGContext()->getMPPTaskId().toString() : "",
           req_id,
-          memory_tracker_)
+          memory_tracker_,
+          auto_spill_trigger,
+          register_operator_spill_context,
+          context.getDAGContext()->getResourceGroupName())
 {
     PhysicalPlan physical_plan{context, log->identifier()};
     physical_plan.build(context.getDAGContext()->dag_request());
     physical_plan.outputAndOptimize();
     root_pipeline = physical_plan.toPipeline(exec_context, context);
+    LocalAdmissionController::global_instance->warmupResourceGroupInfoCache(dagContext().getResourceGroupName());
 }
 
 void PipelineExecutor::scheduleEvents()
@@ -113,7 +120,7 @@ void PipelineExecutor::cancel()
 String PipelineExecutor::toString() const
 {
     assert(root_pipeline);
-    return root_pipeline->toTreeString();
+    return fmt::format("query concurrency: {}\n{}", context.getMaxStreams(), root_pipeline->toTreeString());
 }
 
 int PipelineExecutor::estimateNewThreadCount()
@@ -132,7 +139,7 @@ RU PipelineExecutor::collectRequestUnit()
     // It may be necessary to obtain CPU time using a more accurate method, such as using system call `clock_gettime`.
     const auto & query_profile_info = exec_context.getQueryProfileInfo();
     auto cpu_time_ns = query_profile_info.getCPUExecuteTimeNs();
-    return toRU(ceil(cpu_time_ns));
+    return cpuTimeToRU(cpu_time_ns);
 }
 
 Block PipelineExecutor::getSampleBlock() const

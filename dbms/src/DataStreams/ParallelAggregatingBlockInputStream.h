@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -39,7 +39,8 @@ public:
         size_t max_threads_,
         Int64 max_buffered_bytes_,
         size_t temporary_data_merge_threads_,
-        const String & req_id);
+        const String & req_id,
+        const RegisterOperatorSpillContext & register_operator_spill_context);
 
     String getName() const override { return NAME; }
 
@@ -47,16 +48,11 @@ public:
 
     Block getHeader() const override;
 
-    void collectNewThreadCountOfThisLevel(int & cnt) override
-    {
-        cnt += processor.getMaxThreads();
-    }
+    void collectNewThreadCountOfThisLevel(int & cnt) override { cnt += processor.getMaxThreads(); }
 
 protected:
     /// Do nothing that preparation to execution of the query be done in parallel, in ParallelInputsProcessor.
-    void readPrefix() override
-    {
-    }
+    void readPrefix() override {}
 
     Block readImpl() override;
     void appendInfo(FmtBuffer & buffer) const override;
@@ -66,15 +62,12 @@ protected:
 private:
     const LoggerPtr log;
 
+    size_t max_threads;
     Aggregator::Params params;
     Aggregator aggregator;
     bool final;
-    size_t max_threads;
     Int64 max_buffered_bytes;
     size_t temporary_data_merge_threads;
-
-    size_t keys_size;
-    size_t aggregates_size;
 
     std::atomic<bool> executed{false};
 
@@ -86,15 +79,11 @@ private:
     {
         size_t src_rows = 0;
         size_t src_bytes = 0;
+        Aggregator::AggProcessInfo agg_process_info;
 
-        ColumnRawPtrs key_columns;
-        Aggregator::AggregateColumns aggregate_columns;
-
-        ThreadData(size_t keys_size, size_t aggregates_size)
-        {
-            key_columns.resize(keys_size);
-            aggregate_columns.resize(aggregates_size);
-        }
+        ThreadData(Aggregator * aggregator)
+            : agg_process_info(aggregator)
+        {}
     };
 
     std::vector<ThreadData> threads_data;
@@ -110,10 +99,7 @@ private:
         void onFinishThread(size_t thread_num);
         void onFinish();
         void onException(std::exception_ptr & exception, size_t thread_num);
-        static String getName()
-        {
-            return "ParallelAgg";
-        }
+        static String getName() { return "ParallelAgg"; }
 
         ParallelAggregatingBlockInputStream & parent;
     };

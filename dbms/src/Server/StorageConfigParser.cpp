@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -96,9 +96,12 @@ void TiFlashStorageConfig::parseStoragePath(const String & storage, const Logger
     cpptoml::parser p(ss);
     auto table = p.parse();
 
-    auto get_checked_qualified_array = [log](const std::shared_ptr<cpptoml::table> table, const char * key) -> cpptoml::option<Strings> {
+    auto get_checked_qualified_array
+        = [log](const std::shared_ptr<cpptoml::table> table, const char * key) -> cpptoml::option<Strings> {
         auto throw_invalid_value = [log, key]() {
-            String error_msg = fmt::format("The configuration \"storage.{}\" should be an array of strings. Please check your configuration file.", key);
+            String error_msg = fmt::format(
+                "The configuration \"storage.{}\" should be an array of strings. Please check your configuration file.",
+                key);
             LOG_ERROR(log, "{}", error_msg);
             throw Exception(error_msg, ErrorCodes::INVALID_CONFIG_PARAMETER);
         };
@@ -166,7 +169,9 @@ void TiFlashStorageConfig::parseStoragePath(const String & storage, const Logger
     // If it is empty, use the same dir as "main.dir"
     if (latest_data_paths.empty())
     {
-        LOG_INFO(log, "The configuration \"storage.latest.dir\" is empty, use the same dir and capacity of \"storage.main.dir\"");
+        LOG_INFO(
+            log,
+            "The configuration \"storage.latest.dir\" is empty, use the same dir and capacity of \"storage.main.dir\"");
         latest_data_paths = main_data_paths;
         latest_capacity_quota = main_capacity_quota;
     }
@@ -187,7 +192,11 @@ void TiFlashStorageConfig::parseStoragePath(const String & storage, const Logger
         latest_data_paths[i] = getNormalizedPath(latest_data_paths[i]);
         if (latest_capacity_quota.size() <= i)
             latest_capacity_quota.emplace_back(0);
-        LOG_INFO(log, "Latest data candidate path: {}, capacity_quota: {}", latest_data_paths[i], latest_capacity_quota[i]);
+        LOG_INFO(
+            log,
+            "Latest data candidate path: {}, capacity_quota: {}",
+            latest_data_paths[i],
+            latest_capacity_quota[i]);
     }
 
     // Raft
@@ -218,7 +227,10 @@ void TiFlashStorageConfig::parseMisc(const String & storage_section, const Logge
 
     if (table->contains("bg_task_io_rate_limit"))
     {
-        LOG_WARNING(log, "The configuration \"bg_task_io_rate_limit\" is deprecated. Check [storage.io_rate_limit] section for new style.");
+        LOG_WARNING(
+            log,
+            "The configuration \"bg_task_io_rate_limit\" is deprecated. Check [storage.io_rate_limit] section for new "
+            "style.");
     }
 
     readConfig(table, "format_version", format_version);
@@ -266,7 +278,9 @@ Strings TiFlashStorageConfig::getAllNormalPaths() const
     return all_normal_path;
 }
 
-bool TiFlashStorageConfig::parseFromDeprecatedConfiguration(Poco::Util::LayeredConfiguration & config, const LoggerPtr & log)
+bool TiFlashStorageConfig::parseFromDeprecatedConfiguration(
+    Poco::Util::LayeredConfiguration & config,
+    const LoggerPtr & log)
 {
     if (!config.has("path"))
         return false;
@@ -310,7 +324,9 @@ bool TiFlashStorageConfig::parseFromDeprecatedConfiguration(Poco::Util::LayeredC
         String str_kvstore_path;
         if (config.has("raft.kvstore_path"))
         {
-            LOG_WARNING(log, "The configuration `raft.kvstore_path` is deprecated. Check [storage.raft] section for new style.");
+            LOG_WARNING(
+                log,
+                "The configuration `raft.kvstore_path` is deprecated. Check [storage.raft] section for new style.");
             str_kvstore_path = config.getString("raft.kvstore_path");
         }
         if (str_kvstore_path.empty())
@@ -335,7 +351,9 @@ bool TiFlashStorageConfig::parseFromDeprecatedConfiguration(Poco::Util::LayeredC
     return true;
 }
 
-std::tuple<size_t, TiFlashStorageConfig> TiFlashStorageConfig::parseSettings(Poco::Util::LayeredConfiguration & config, const LoggerPtr & log)
+std::tuple<size_t, TiFlashStorageConfig> TiFlashStorageConfig::parseSettings(
+    Poco::Util::LayeredConfiguration & config,
+    const LoggerPtr & log)
 {
     size_t global_capacity_quota = 0; // "0" by default, means no quota, use the whole disk capacity.
     TiFlashStorageConfig storage_config;
@@ -361,7 +379,9 @@ std::tuple<size_t, TiFlashStorageConfig> TiFlashStorageConfig::parseSettings(Poc
             String deprecated_kvstore_path = config.getString("raft.kvstore_path");
             if (!deprecated_kvstore_path.empty())
             {
-                LOG_WARNING(log, "The configuration `raft.kvstore_path` is deprecated. Check `storage.raft.dir` for new style.");
+                LOG_WARNING(
+                    log,
+                    "The configuration `raft.kvstore_path` is deprecated. Check `storage.raft.dir` for new style.");
                 kvstore_paths.clear();
                 kvstore_paths.emplace_back(getNormalizedPath(deprecated_kvstore_path));
                 for (auto & kvstore_path : kvstore_paths)
@@ -403,7 +423,8 @@ std::tuple<size_t, TiFlashStorageConfig> TiFlashStorageConfig::parseSettings(Poc
         if (!storage_config.parseFromDeprecatedConfiguration(config, log))
         {
             // Can not parse from the deprecated configuration "path".
-            String msg = "The configuration `storage.main` section is not defined. Please check your configuration file.";
+            String msg
+                = "The configuration `storage.main` section is not defined. Please check your configuration file.";
             LOG_ERROR(log, "{}", msg);
             throw Exception(msg, ErrorCodes::INVALID_CONFIG_PARAMETER);
         }
@@ -452,7 +473,8 @@ std::string StorageIORateLimitConfig::toString() const
     return fmt::format(
         "max_bytes_per_sec {} max_read_bytes_per_sec {} max_write_bytes_per_sec {} use_max_bytes_per_sec {} "
         "fg_write_weight {} bg_write_weight {} fg_read_weight {} bg_read_weight {} fg_write_max_bytes_per_sec {} "
-        "bg_write_max_bytes_per_sec {} fg_read_max_bytes_per_sec {} bg_read_max_bytes_per_sec {} emergency_pct {} high_pct {} "
+        "bg_write_max_bytes_per_sec {} fg_read_max_bytes_per_sec {} bg_read_max_bytes_per_sec {} emergency_pct {} "
+        "high_pct {} "
         "medium_pct {} tune_base {} min_bytes_per_sec {} auto_tune_sec {}",
         max_bytes_per_sec,
         max_read_bytes_per_sec,
@@ -543,9 +565,10 @@ bool StorageIORateLimitConfig::operator==(const StorageIORateLimitConfig & confi
 {
     return config.max_bytes_per_sec == max_bytes_per_sec && config.max_read_bytes_per_sec == max_read_bytes_per_sec
         && config.max_write_bytes_per_sec == max_write_bytes_per_sec && config.bg_write_weight == bg_write_weight
-        && config.fg_write_weight == fg_write_weight && config.bg_read_weight == bg_read_weight && config.fg_read_weight == fg_read_weight
-        && config.emergency_pct == emergency_pct && config.high_pct == high_pct && config.medium_pct == medium_pct
-        && config.tune_base == tune_base && config.min_bytes_per_sec == min_bytes_per_sec && config.auto_tune_sec == auto_tune_sec;
+        && config.fg_write_weight == fg_write_weight && config.bg_read_weight == bg_read_weight
+        && config.fg_read_weight == fg_read_weight && config.emergency_pct == emergency_pct
+        && config.high_pct == high_pct && config.medium_pct == medium_pct && config.tune_base == tune_base
+        && config.min_bytes_per_sec == min_bytes_per_sec && config.auto_tune_sec == auto_tune_sec;
 }
 
 void StorageS3Config::parse(const String & content)
@@ -621,7 +644,8 @@ void StorageS3Config::enable(bool check_requirements, const LoggerPtr & log)
     {
         if (bucket.empty() || endpoint.empty() || root.empty())
         {
-            const auto * msg = "'storage.s3.bucket', 'storage.s3.endpoint' and 'storage.s3.root' must be set when S3 is enabled!";
+            const auto * msg
+                = "'storage.s3.bucket', 'storage.s3.endpoint' and 'storage.s3.root' must be set when S3 is enabled!";
             LOG_WARNING(log, msg);
             throw Exception(ErrorCodes::INVALID_CONFIG_PARAMETER, msg);
         }
@@ -713,7 +737,9 @@ std::pair<Strings, std::vector<size_t>> StorageRemoteCacheConfig::getCacheDirInf
 {
     if (is_compute_mode && isCacheEnabled())
     {
-        return {Strings{getDTFileCacheDir(), getPageCacheDir()}, std::vector<size_t>{getDTFileCapacity(), getPageCapacity()}};
+        return {
+            Strings{getDTFileCacheDir(), getPageCacheDir()},
+            std::vector<size_t>{getDTFileCapacity(), getPageCapacity()}};
     }
     else
     {

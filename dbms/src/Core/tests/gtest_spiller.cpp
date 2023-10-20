@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -70,10 +70,7 @@ protected:
         }
         return ret;
     }
-    Blocks generateBlocks(size_t block_num)
-    {
-        return generateBlocks(block_num, spiller_test_header);
-    }
+    Blocks generateBlocks(size_t block_num) { return generateBlocks(block_num, spiller_test_header); }
     Blocks generateSortedBlocks(size_t block_num)
     {
         Blocks ret;
@@ -91,9 +88,16 @@ protected:
         }
         return ret;
     }
-    static void verifyRestoreBlocks(Spiller & spiller, size_t restore_partition_id, size_t restore_max_stream_size, size_t expected_stream_size, const Blocks & expected_blocks, bool append_dummy_read_stream = false)
+    static void verifyRestoreBlocks(
+        Spiller & spiller,
+        size_t restore_partition_id,
+        size_t restore_max_stream_size,
+        size_t expected_stream_size,
+        const Blocks & expected_blocks,
+        bool append_dummy_read_stream = false)
     {
-        auto block_streams = spiller.restoreBlocks(restore_partition_id, restore_max_stream_size, append_dummy_read_stream);
+        auto block_streams
+            = spiller.restoreBlocks(restore_partition_id, restore_max_stream_size, append_dummy_read_stream);
         if (expected_stream_size > 0)
         {
             GTEST_ASSERT_EQ(block_streams.size(), expected_stream_size);
@@ -141,7 +145,9 @@ try
 }
 catch (Exception & e)
 {
-    GTEST_ASSERT_EQ(e.message(), "Check partition_id < partition_num failed: test: partition id 30 exceeds partition num 20.");
+    GTEST_ASSERT_EQ(
+        e.message(),
+        "Check partition_id < partition_num failed: test: partition id 30 exceeds partition num 20.");
 }
 
 TEST_F(SpillerTest, ExceptionDuringSpill)
@@ -159,6 +165,7 @@ try
         GTEST_ASSERT_EQ(std::strstr(e.message().c_str(), "exception_during_spill") != nullptr, true);
         GTEST_ASSERT_EQ(spiller.hasSpilledData(), false);
     }
+    FailPointHelper::disableFailPoint("exception_during_spill");
 }
 CATCH
 
@@ -185,7 +192,9 @@ try
 }
 catch (Exception & e)
 {
-    GTEST_ASSERT_EQ(e.message(), "Check partition_id < partition_num failed: test: partition id 30 exceeds partition num 20.");
+    GTEST_ASSERT_EQ(
+        e.message(),
+        "Check partition_id < partition_num failed: test: partition id 30 exceeds partition num 20.");
 }
 
 TEST_F(SpillerTest, RestoreBeforeFinish)
@@ -251,8 +260,10 @@ try
     std::vector<std::unique_ptr<Spiller>> spillers;
     spillers.push_back(std::make_unique<Spiller>(*spill_config_ptr, false, 2, spiller_test_header, logger));
     auto spiller_config_with_small_max_spill_size = *spill_config_ptr;
-    spiller_config_with_small_max_spill_size.max_cached_data_bytes_in_spiller = spill_config_ptr->max_cached_data_bytes_in_spiller / 1000;
-    spillers.push_back(std::make_unique<Spiller>(spiller_config_with_small_max_spill_size, false, 2, spiller_test_header, logger));
+    spiller_config_with_small_max_spill_size.max_cached_data_bytes_in_spiller
+        = spill_config_ptr->max_cached_data_bytes_in_spiller / 1000;
+    spillers.push_back(
+        std::make_unique<Spiller>(spiller_config_with_small_max_spill_size, false, 2, spiller_test_header, logger));
 
     for (auto & spiller : spillers)
     {
@@ -277,7 +288,12 @@ try
         {
             size_t max_restore_streams = 2 + partition_id * 10;
             size_t expected_streams = std::min(max_restore_streams, spill_num);
-            verifyRestoreBlocks(*spiller, partition_id, max_restore_streams, expected_streams, all_blocks[partition_id]);
+            verifyRestoreBlocks(
+                *spiller,
+                partition_id,
+                max_restore_streams,
+                expected_streams,
+                all_blocks[partition_id]);
         }
     }
 }
@@ -289,7 +305,13 @@ try
     std::vector<std::unique_ptr<Spiller>> spillers;
     spillers.push_back(std::make_unique<Spiller>(*spill_config_ptr, false, 1, spiller_test_header, logger, 1, false));
     auto new_spill_path = fmt::format("{}{}_{}", spill_config_ptr->spill_dir, "release_file_on_restore_test", rand());
-    SpillConfig new_spill_config(new_spill_path, spill_config_ptr->spill_id, spill_config_ptr->max_cached_data_bytes_in_spiller, 0, 0, spill_config_ptr->file_provider);
+    SpillConfig new_spill_config(
+        new_spill_path,
+        spill_config_ptr->spill_id,
+        spill_config_ptr->max_cached_data_bytes_in_spiller,
+        0,
+        0,
+        spill_config_ptr->file_provider);
     Poco::File new_spiller_dir(new_spill_config.spill_dir);
     /// remove spiller dir if exists
     if (new_spiller_dir.exists())
@@ -350,8 +372,10 @@ try
     std::vector<std::unique_ptr<Spiller>> spillers;
     spillers.push_back(std::make_unique<Spiller>(*spill_config_ptr, true, 2, spiller_test_header, logger));
     auto spiller_config_with_small_max_spill_size = *spill_config_ptr;
-    spiller_config_with_small_max_spill_size.max_cached_data_bytes_in_spiller = spill_config_ptr->max_cached_data_bytes_in_spiller / 1000;
-    spillers.push_back(std::make_unique<Spiller>(spiller_config_with_small_max_spill_size, true, 2, spiller_test_header, logger));
+    spiller_config_with_small_max_spill_size.max_cached_data_bytes_in_spiller
+        = spill_config_ptr->max_cached_data_bytes_in_spiller / 1000;
+    spillers.push_back(
+        std::make_unique<Spiller>(spiller_config_with_small_max_spill_size, true, 2, spiller_test_header, logger));
 
     for (auto & spiller : spillers)
     {
@@ -377,7 +401,12 @@ try
             size_t max_restore_streams = 2 + partition_id * 10;
             /// for sorted spill, the restored stream num is always equal to the spill time
             size_t expected_streams = spill_num;
-            verifyRestoreBlocks(*spiller, partition_id, max_restore_streams, expected_streams, all_blocks[partition_id]);
+            verifyRestoreBlocks(
+                *spiller,
+                partition_id,
+                max_restore_streams,
+                expected_streams,
+                all_blocks[partition_id]);
         }
     }
 }
@@ -483,6 +512,46 @@ try
 }
 CATCH
 
+TEST_F(SpillerTest, SpillFileNumberUsingBlockInputStream)
+try
+{
+    auto blocks = generateBlocks(50);
+    size_t total_block_size = 0;
+    size_t total_block_rows = 0;
+    for (const auto & block : blocks)
+    {
+        total_block_size += block.bytes();
+        total_block_rows += block.rows();
+    }
+
+    auto spiller_config_with_small_max_spill_size = *spill_config_ptr;
+    spiller_config_with_small_max_spill_size.max_cached_data_bytes_in_spiller = total_block_size / 50;
+    spiller_config_with_small_max_spill_size.max_spilled_bytes_per_file
+        = spiller_config_with_small_max_spill_size.max_cached_data_bytes_in_spiller;
+    spiller_config_with_small_max_spill_size.max_spilled_rows_per_file = total_block_rows / 50;
+
+    /// case 1, sorted spiller, only 1 file per spill
+    Spiller sorted_spiller(spiller_config_with_small_max_spill_size, true, 1, spiller_test_header, logger);
+    BlocksList block_list;
+    block_list.insert(block_list.end(), blocks.begin(), blocks.end());
+    auto block_input_stream = std::make_shared<BlocksListBlockInputStream>(std::move(block_list));
+    sorted_spiller.spillBlocksUsingBlockInputStream(block_input_stream, 0, []() { return false; });
+    sorted_spiller.finishSpill();
+    auto restore_streams = sorted_spiller.restoreBlocks(0);
+    ASSERT_TRUE(restore_streams.size() == 1);
+
+    /// case 2, non-sorted spiller, multiple file
+    Spiller non_sorted_spiller(spiller_config_with_small_max_spill_size, false, 1, spiller_test_header, logger);
+    block_list.clear();
+    block_list.insert(block_list.end(), blocks.begin(), blocks.end());
+    block_input_stream = std::make_shared<BlocksListBlockInputStream>(std::move(block_list));
+    non_sorted_spiller.spillBlocksUsingBlockInputStream(block_input_stream, 0, []() { return false; });
+    non_sorted_spiller.finishSpill();
+    restore_streams = non_sorted_spiller.restoreBlocks(0);
+    ASSERT_TRUE(restore_streams.size() > 1);
+}
+CATCH
+
 TEST_F(SpillerTest, SpillAndMeetCancelled)
 try
 {
@@ -524,7 +593,15 @@ try
             blocks.push_back(std::move(block));
         }
         auto new_spill_path = fmt::format("{}{}_{}", spill_config_ptr->spill_dir, "SpillAllConstantBlock1", rand());
-        SpillConfig new_spill_config(new_spill_path, spill_config_ptr->spill_id, spill_config_ptr->max_cached_data_bytes_in_spiller, 0, 0, spill_config_ptr->file_provider, 100, DEFAULT_BLOCK_SIZE);
+        SpillConfig new_spill_config(
+            new_spill_path,
+            spill_config_ptr->spill_id,
+            spill_config_ptr->max_cached_data_bytes_in_spiller,
+            0,
+            0,
+            spill_config_ptr->file_provider,
+            100,
+            DEFAULT_BLOCK_SIZE);
         Spiller spiller(new_spill_config, false, 1, constant_header, logger);
         spiller.spillBlocks(std::move(blocks), 0);
         spiller.finishSpill();
@@ -547,7 +624,15 @@ try
             blocks.push_back(std::move(block));
         }
         auto new_spill_path = fmt::format("{}{}_{}", spill_config_ptr->spill_dir, "SpillAllConstantBlock2", rand());
-        SpillConfig new_spill_config(new_spill_path, spill_config_ptr->spill_id, spill_config_ptr->max_cached_data_bytes_in_spiller, 0, 0, spill_config_ptr->file_provider, 100, DEFAULT_BLOCK_SIZE);
+        SpillConfig new_spill_config(
+            new_spill_path,
+            spill_config_ptr->spill_id,
+            spill_config_ptr->max_cached_data_bytes_in_spiller,
+            0,
+            0,
+            spill_config_ptr->file_provider,
+            100,
+            DEFAULT_BLOCK_SIZE);
         Spiller spiller(new_spill_config, false, 1, constant_header, logger);
         spiller.spillBlocks(std::move(blocks), 0);
         spiller.finishSpill();
@@ -576,7 +661,15 @@ try
             blocks.push_back(std::move(block));
         }
         auto new_spill_path = fmt::format("{}{}_{}", spill_config_ptr->spill_dir, "SpillAllConstantBlock3", rand());
-        SpillConfig new_spill_config(new_spill_path, spill_config_ptr->spill_id, spill_config_ptr->max_cached_data_bytes_in_spiller, 0, 0, spill_config_ptr->file_provider, 100, DEFAULT_BLOCK_SIZE);
+        SpillConfig new_spill_config(
+            new_spill_path,
+            spill_config_ptr->spill_id,
+            spill_config_ptr->max_cached_data_bytes_in_spiller,
+            0,
+            0,
+            spill_config_ptr->file_provider,
+            100,
+            DEFAULT_BLOCK_SIZE);
         Spiller spiller(new_spill_config, false, 1, constant_header, logger);
         spiller.spillBlocks(std::move(blocks), 0);
         spiller.finishSpill();
@@ -615,16 +708,18 @@ try
         if (const_columns_flag[i])
         {
             /// const column
-            columns.emplace_back(names_and_types[i].type->createColumnConst(1, Field(static_cast<Int64>(1))),
-                                 names_and_types[i].type,
-                                 names_and_types[i].name);
+            columns.emplace_back(
+                names_and_types[i].type->createColumnConst(1, Field(static_cast<Int64>(1))),
+                names_and_types[i].type,
+                names_and_types[i].name);
         }
         else
         {
             /// normal column
-            columns.emplace_back(names_and_types[i].type->createColumn(),
-                                 names_and_types[i].type,
-                                 names_and_types[i].name);
+            columns.emplace_back(
+                names_and_types[i].type->createColumn(),
+                names_and_types[i].type,
+                names_and_types[i].name);
         }
     }
     Block header(columns);
@@ -635,7 +730,11 @@ try
 }
 catch (Exception & e)
 {
-    GTEST_ASSERT_EQ(e.message().find("Check block.getByPosition(*it).column->isColumnConst() failed: The 0-th column in block must be constant column") != std::string::npos, true);
+    GTEST_ASSERT_EQ(
+        e.message().find("Check block.getByPosition(*it).column->isColumnConst() failed: The 0-th column in block must "
+                         "be constant column")
+            != std::string::npos,
+        true);
 }
 
 TEST_F(SpillerTest, SpillAndRestoreConstantData)
@@ -668,16 +767,18 @@ try
             if (const_columns_flag[i])
             {
                 /// const column
-                columns.emplace_back(names_and_types[i].type->createColumnConst(1, Field(static_cast<Int64>(1))),
-                                     names_and_types[i].type,
-                                     names_and_types[i].name);
+                columns.emplace_back(
+                    names_and_types[i].type->createColumnConst(1, Field(static_cast<Int64>(1))),
+                    names_and_types[i].type,
+                    names_and_types[i].name);
             }
             else
             {
                 /// normal column
-                columns.emplace_back(names_and_types[i].type->createColumn(),
-                                     names_and_types[i].type,
-                                     names_and_types[i].name);
+                columns.emplace_back(
+                    names_and_types[i].type->createColumn(),
+                    names_and_types[i].type,
+                    names_and_types[i].name);
             }
         }
         Block header(columns);
@@ -691,7 +792,8 @@ try
                 {
                     Field constant_field;
                     header.getByPosition(i).column->get(0, constant_field);
-                    block.getByPosition(i).column = header.getByPosition(i).type->createColumnConst(block.rows(), constant_field);
+                    block.getByPosition(i).column
+                        = header.getByPosition(i).type->createColumnConst(block.rows(), constant_field);
                 }
             }
         }
@@ -748,7 +850,8 @@ try
     size_t rows = 100;
     for (const auto & type_and_name : spiller_schema)
     {
-        auto column = ColumnGenerator::instance().generate({rows, type_and_name.type->getName(), RANDOM, type_and_name.name, 128});
+        auto column = ColumnGenerator::instance().generate(
+            {rows, type_and_name.type->getName(), RANDOM, type_and_name.name, 128});
         data.push_back(column);
     }
     ret.emplace_back(data);
@@ -785,7 +888,8 @@ try
     size_t rows = 100;
     for (const auto & type_and_name : spiller_schema)
     {
-        auto column = ColumnGenerator::instance().generate({rows, type_and_name.type->getName(), RANDOM, type_and_name.name, 128});
+        auto column = ColumnGenerator::instance().generate(
+            {rows, type_and_name.type->getName(), RANDOM, type_and_name.name, 128});
         data.push_back(column);
     }
     ret.emplace_back(data);
@@ -820,7 +924,8 @@ try
     size_t rows = 100;
     for (const auto & type_and_name : spiller_schema)
     {
-        auto column = ColumnGenerator::instance().generate({rows, type_and_name.type->getName(), RANDOM, type_and_name.name, 128});
+        auto column = ColumnGenerator::instance().generate(
+            {rows, type_and_name.type->getName(), RANDOM, type_and_name.name, 128});
         data.push_back(column);
     }
     ret.emplace_back(data);
@@ -851,7 +956,8 @@ try
     size_t rows = 100;
     for (const auto & type_and_name : spiller_schema)
     {
-        auto column = ColumnGenerator::instance().generate({rows, type_and_name.type->getName(), RANDOM, type_and_name.name, 128});
+        auto column = ColumnGenerator::instance().generate(
+            {rows, type_and_name.type->getName(), RANDOM, type_and_name.name, 128});
         data.push_back(column);
     }
     ret.emplace_back(data);

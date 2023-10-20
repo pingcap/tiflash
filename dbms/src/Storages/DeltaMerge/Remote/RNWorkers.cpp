@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,18 +22,26 @@ RNWorkers::RNWorkers(const Context & context, const Options & options, size_t nu
 {
     RUNTIME_CHECK(num_streams > 0, num_streams);
     size_t n = options.read_task->segment_read_tasks.size();
-    RUNTIME_CHECK(n > 0, n);
+    if (n == 0)
+    {
+        empty_channel = std::make_shared<Channel>(0);
+        empty_channel->finish();
+        return;
+    }
 
     auto fetch_pages_concurrency = n;
     auto prepare_streams_concurrency = n;
     const auto & settings = context.getSettingsRef();
     if (settings.dt_fetch_page_concurrency_scale > 0.0)
     {
-        fetch_pages_concurrency = std::min(std::ceil(num_streams * settings.dt_fetch_page_concurrency_scale), fetch_pages_concurrency);
+        fetch_pages_concurrency
+            = std::min(std::ceil(num_streams * settings.dt_fetch_page_concurrency_scale), fetch_pages_concurrency);
     }
     if (settings.dt_prepare_stream_concurrency_scale > 0.0)
     {
-        prepare_streams_concurrency = std::min(std::ceil(num_streams * settings.dt_prepare_stream_concurrency_scale), prepare_streams_concurrency);
+        prepare_streams_concurrency = std::min(
+            std::ceil(num_streams * settings.dt_prepare_stream_concurrency_scale),
+            prepare_streams_concurrency);
     }
 
     worker_fetch_pages = RNWorkerFetchPages::create({
@@ -66,18 +74,26 @@ RNWorkers::RNWorkers(const Context & context, const Options & options, size_t nu
 
 void RNWorkers::startInBackground()
 {
-    worker_fetch_pages->startInBackground();
-    worker_prepare_streams->startInBackground();
+    if (!empty_channel)
+    {
+        worker_fetch_pages->startInBackground();
+        worker_prepare_streams->startInBackground();
+    }
 }
 
 void RNWorkers::wait()
 {
-    worker_fetch_pages->wait();
-    worker_prepare_streams->wait();
+    if (!empty_channel)
+    {
+        worker_fetch_pages->wait();
+        worker_prepare_streams->wait();
+    }
 }
 
 RNWorkers::ChannelPtr RNWorkers::getReadyChannel() const
 {
+    if (empty_channel)
+        return empty_channel;
     return worker_prepare_streams->result_queue;
 }
 } // namespace DB::DM::Remote

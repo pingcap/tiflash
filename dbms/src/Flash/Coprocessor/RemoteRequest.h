@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,7 +17,7 @@
 #include <Flash/Coprocessor/FilterConditions.h>
 #include <Flash/Coprocessor/RegionInfo.h>
 #include <Flash/Coprocessor/TiDBTableScan.h>
-#include <Storages/Transaction/TiDB.h>
+#include <TiDB/Schema/TiDB.h>
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"

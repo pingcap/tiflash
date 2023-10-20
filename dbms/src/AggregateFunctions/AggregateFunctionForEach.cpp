@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -37,8 +37,9 @@ public:
                 nested_arguments.push_back(array->getNestedType());
             else
                 throw Exception(
-                    "Illegal type " + type->getName() + " of argument"
-                                                        " for aggregate function with "
+                    "Illegal type " + type->getName()
+                        + " of argument"
+                          " for aggregate function with "
                         + getName() + " suffix. Must be array.",
                     ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         }

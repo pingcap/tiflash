@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -32,10 +32,7 @@ template <size_t initial_size_degree = 8>
 struct TwoLevelHashTableGrower : public HashTableGrower<initial_size_degree>
 {
     /// Increase the size of the hash table.
-    void increaseSize()
-    {
-        this->size_degree += this->size_degree >= 15 ? 1 : 2;
-    }
+    void increaseSize() { this->size_degree += this->size_degree >= 15 ? 1 : 2; }
 };
 
 template <
@@ -67,6 +64,12 @@ public:
 
     /// NOTE Bad for hash tables with more than 2^32 cells.
     static size_t getBucketFromHash(size_t hash_value) { return (hash_value >> (32 - BITS_FOR_BUCKET)) & MAX_BUCKET; }
+
+    void setResizeCallback(const ResizeCallback & resize_callback)
+    {
+        for (auto & impl : impls)
+            impl.setResizeCallback(resize_callback);
+    }
 
 protected:
     typename Impl::iterator beginOfNextNonEmptyBucket(size_t & bucket)
@@ -192,7 +195,10 @@ public:
             , current_it(rhs.current_it)
         {}
 
-        bool operator==(const const_iterator & rhs) const { return bucket == rhs.bucket && current_it == rhs.current_it; }
+        bool operator==(const const_iterator & rhs) const
+        {
+            return bucket == rhs.bucket && current_it == rhs.current_it;
+        }
         bool operator!=(const const_iterator & rhs) const { return !(*this == rhs); }
 
         const_iterator & operator++()

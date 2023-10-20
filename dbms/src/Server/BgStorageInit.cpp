@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,7 +17,7 @@
 #include <Interpreters/Context.h>
 #include <Server/BgStorageInit.h>
 #include <Storages/IManageableStorage.h>
-#include <Storages/Transaction/TMTContext.h>
+#include <Storages/KVStore/TMTContext.h>
 #include <common/logger_useful.h>
 
 #include <thread>
@@ -63,7 +63,8 @@ void doInitStores(Context & global_context, const LoggerPtr & log)
         }
     };
 
-    size_t num_threads = std::max(4UL, std::thread::hardware_concurrency()) * global_context.getSettingsRef().init_thread_count_scale;
+    size_t num_threads
+        = std::max(4UL, std::thread::hardware_concurrency()) * global_context.getSettingsRef().init_thread_count_scale;
     auto init_storages_thread_pool = ThreadPool(num_threads, num_threads / 2, num_threads * 2);
     auto init_storages_wait_group = init_storages_thread_pool.waitGroup();
 
@@ -91,7 +92,11 @@ void doInitStores(Context & global_context, const LoggerPtr & log)
         DataTypeFactory::instance().getFullNameCacheSize());
 }
 
-void BgStorageInitHolder::start(Context & global_context, const LoggerPtr & log, bool lazily_init_store, bool is_s3_enabled)
+void BgStorageInitHolder::start(
+    Context & global_context,
+    const LoggerPtr & log,
+    bool lazily_init_store,
+    bool is_s3_enabled)
 {
     RUNTIME_CHECK_MSG(
         lazily_init_store || !is_s3_enabled,

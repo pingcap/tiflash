@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -95,7 +95,11 @@ public:
      * Note that this function ensure CheckpointManifest is the last file to be seen in the
      * remote data source for a given `upload_seq`.
      */
-    virtual bool putCheckpointFiles(const PS::V3::LocalCheckpointFiles & local_files, StoreID store_id, UInt64 upload_seq) = 0;
+    virtual bool putCheckpointFiles(
+        const PS::V3::LocalCheckpointFiles & local_files,
+        StoreID store_id,
+        UInt64 upload_seq)
+        = 0;
 
     struct DataFileInfo
     {
@@ -120,6 +124,11 @@ struct fmt::formatter<DB::DM::Remote::RemoteGCThreshold>
     template <typename FormatContext>
     auto format(const DB::DM::Remote::RemoteGCThreshold & v, FormatContext & ctx) const -> decltype(ctx.out())
     {
-        return format_to(ctx.out(), "RemoteGCThreshold{{min_age={} min_file_threshold={} valid_rate={:2.2f}%}}", v.min_age_seconds, v.min_file_threshold, v.valid_rate);
+        return format_to(
+            ctx.out(),
+            "RemoteGCThreshold{{min_age={} min_file_threshold={} valid_rate={:2.2f}%}}",
+            v.min_age_seconds,
+            v.min_file_threshold,
+            v.valid_rate);
     }
 };

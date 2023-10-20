@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -94,7 +94,10 @@ private:
     std::atomic<size_t> last_try_place_delta_index_rows = 0;
 
     DeltaIndexPtr delta_index;
-    UInt64 delta_index_epoch = 0;
+    // `delta_index_epoch` is used in disaggregated mode by compute-nodes to identify if the delta_index has changed.
+    // To avoid persisting it, we use `std::chrono::steady_clock` to make it monotonic increase.
+    // Accuracy of `std::chrono::steady_clock` in Linux is nanosecond. This is much smaller than the interval between two flushes.
+    UInt64 delta_index_epoch = std::chrono::steady_clock::now().time_since_epoch().count();
 
     // Protects the operations in this instance.
     // It is a recursive_mutex because the lock may be also used by the parent segment as its update lock.
@@ -103,7 +106,10 @@ private:
     LoggerPtr log;
 
 public:
-    explicit DeltaValueSpace(PageIdU64 id_, const ColumnFilePersisteds & persisted_files = {}, const ColumnFiles & in_memory_files = {});
+    explicit DeltaValueSpace(
+        PageIdU64 id_,
+        const ColumnFilePersisteds & persisted_files = {},
+        const ColumnFiles & in_memory_files = {});
 
     explicit DeltaValueSpace(ColumnFilePersistedSetPtr && persisted_file_set_);
 
@@ -135,10 +141,7 @@ public:
     ColumnFilePersistedSetPtr getPersistedFileSet() const { return persisted_file_set; }
 
     String simpleInfo() const { return "<delta_id=" + DB::toString(persisted_file_set->getId()) + ">"; }
-    String info() const
-    {
-        return fmt::format("{}. {}", mem_table_set->info(), persisted_file_set->info());
-    }
+    String info() const { return fmt::format("{}. {}", mem_table_set->info(), persisted_file_set->info()); }
 
     std::optional<Lock> getLock() const
     {
@@ -179,14 +182,18 @@ public:
 
     PageIdU64 getId() const { return persisted_file_set->getId(); }
 
-    size_t getColumnFileCount() const { return persisted_file_set->getColumnFileCount() + mem_table_set->getColumnFileCount(); }
+    size_t getColumnFileCount() const
+    {
+        return persisted_file_set->getColumnFileCount() + mem_table_set->getColumnFileCount();
+    }
     size_t getRows(bool use_unsaved = true) const
     {
         return use_unsaved ? persisted_file_set->getRows() + mem_table_set->getRows() : persisted_file_set->getRows();
     }
     size_t getBytes(bool use_unsaved = true) const
     {
-        return use_unsaved ? persisted_file_set->getBytes() + mem_table_set->getBytes() : persisted_file_set->getBytes();
+        return use_unsaved ? persisted_file_set->getBytes() + mem_table_set->getBytes()
+                           : persisted_file_set->getBytes();
     }
     size_t getDeletes() const { return persisted_file_set->getDeletes() + mem_table_set->getDeletes(); }
 
@@ -207,7 +214,11 @@ public:
         // Other thread is doing structure update, just return.
         if (!is_updating.compare_exchange_strong(v, true))
         {
-            LOG_DEBUG(log, "Cannot get update lock because DeltaValueSpace is updating. Current update operation will be discarded, delta={}", simpleInfo());
+            LOG_DEBUG(
+                log,
+                "Cannot get update lock because DeltaValueSpace is updating. Current update operation will be "
+                "discarded, delta={}",
+                simpleInfo());
             return false;
         }
         return true;
@@ -218,7 +229,10 @@ public:
         bool v = true;
         if (!is_updating.compare_exchange_strong(v, false))
         {
-            LOG_ERROR(log, "!!!========================= delta={} is expected to be updating=========================!!!", simpleInfo());
+            LOG_ERROR(
+                log,
+                "!!!========================= delta={} is expected to be updating=========================!!!",
+                simpleInfo());
             return false;
         }
         else
@@ -269,7 +283,11 @@ public:
 
     bool appendDeleteRange(DMContext & context, const RowKeyRange & delete_range);
 
-    bool ingestColumnFiles(DMContext & context, const RowKeyRange & range, const ColumnFiles & column_files, bool clear_data_in_range);
+    bool ingestColumnFiles(
+        DMContext & context,
+        const RowKeyRange & range,
+        const ColumnFiles & column_files,
+        bool clear_data_in_range);
 
     /// Flush the data of column files which haven't write to disk yet, and also save the metadata of column files.
     bool flush(DMContext & context);
@@ -310,7 +328,11 @@ class DeltaValueSnapshot
     friend class DeltaValueSpace;
     friend struct DB::DM::Remote::Serializer;
 
+#ifndef DBMS_PUBLIC_GTEST
 private:
+#else
+public:
+#endif
     bool is_update{false};
 
     // The delta index of cached.
@@ -360,7 +382,10 @@ public:
     ColumnFileSetSnapshotPtr getMemTableSetSnapshot() const { return mem_table_snap; }
     ColumnFileSetSnapshotPtr getPersistedFileSetSnapshot() const { return persisted_files_snap; }
 
-    size_t getColumnFileCount() const { return mem_table_snap->getColumnFileCount() + persisted_files_snap->getColumnFileCount(); }
+    size_t getColumnFileCount() const
+    {
+        return mem_table_snap->getColumnFileCount() + persisted_files_snap->getColumnFileCount();
+    }
     size_t getRows() const { return mem_table_snap->getRows() + persisted_files_snap->getRows(); }
     size_t getBytes() const { return mem_table_snap->getBytes() + persisted_files_snap->getBytes(); }
     size_t getDeletes() const { return mem_table_snap->getDeletes() + persisted_files_snap->getDeletes(); }
@@ -398,10 +423,11 @@ private:
     DeltaValueReader() = default;
 
 public:
-    DeltaValueReader(const DMContext & context_,
-                     const DeltaSnapshotPtr & delta_snap_,
-                     const ColumnDefinesPtr & col_defs_,
-                     const RowKeyRange & segment_range_);
+    DeltaValueReader(
+        const DMContext & context_,
+        const DeltaSnapshotPtr & delta_snap_,
+        const ColumnDefinesPtr & col_defs_,
+        const RowKeyRange & segment_range_);
 
     // If we need to read columns besides pk and version, a DeltaValueReader can NOT be used more than once.
     // This method create a new reader based on then current one. It will reuse some caches in the current reader.
@@ -413,18 +439,24 @@ public:
 
     // Use for DeltaMergeBlockInputStream to read delta rows, and merge with stable rows.
     // This method will check whether offset and limit are valid. It only return those valid rows.
-    size_t readRows(MutableColumns & output_cols, size_t offset, size_t limit, const RowKeyRange * range, std::vector<UInt32> * row_ids = nullptr);
+    size_t readRows(
+        MutableColumns & output_cols,
+        size_t offset,
+        size_t limit,
+        const RowKeyRange * range,
+        std::vector<UInt32> * row_ids = nullptr);
 
     // Get blocks or delete_ranges of `ExtraHandleColumn` and `VersionColumn`.
     // If there are continuous blocks, they will be squashed into one block.
     // We use the result to update DeltaTree.
     BlockOrDeletes getPlaceItems(size_t rows_begin, size_t deletes_begin, size_t rows_end, size_t deletes_end);
 
-    bool shouldPlace(const DMContext & context,
-                     DeltaIndexPtr my_delta_index,
-                     const RowKeyRange & segment_range,
-                     const RowKeyRange & relevant_range,
-                     UInt64 max_version);
+    bool shouldPlace(
+        const DMContext & context,
+        DeltaIndexPtr my_delta_index,
+        const RowKeyRange & segment_range,
+        const RowKeyRange & relevant_range,
+        UInt64 max_version);
 };
 
 class DeltaValueInputStream : public SkippableBlockInputStream
@@ -437,10 +469,11 @@ private:
     size_t read_rows = 0;
 
 public:
-    DeltaValueInputStream(const DMContext & context_,
-                          const DeltaSnapshotPtr & delta_snap_,
-                          const ColumnDefinesPtr & col_defs_,
-                          const RowKeyRange & segment_range_)
+    DeltaValueInputStream(
+        const DMContext & context_,
+        const DeltaSnapshotPtr & delta_snap_,
+        const ColumnDefinesPtr & col_defs_,
+        const RowKeyRange & segment_range_)
         : mem_table_input_stream(context_, delta_snap_->getMemTableSetSnapshot(), col_defs_, segment_range_)
         , persisted_files_input_stream(context_, delta_snap_->getPersistedFileSetSnapshot(), col_defs_, segment_range_)
     {}

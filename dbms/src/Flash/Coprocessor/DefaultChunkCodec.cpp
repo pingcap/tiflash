@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,10 +13,10 @@
 // limitations under the License.
 
 #include <Flash/Coprocessor/DefaultChunkCodec.h>
-#include <Storages/Transaction/Datum.h>
-#include <Storages/Transaction/DatumCodec.h>
-#include <Storages/Transaction/TiDB.h>
-#include <Storages/Transaction/TypeMapping.h>
+#include <TiDB/Decode/Datum.h>
+#include <TiDB/Decode/DatumCodec.h>
+#include <TiDB/Decode/TypeMapping.h>
+#include <TiDB/Schema/TiDB.h>
 
 using TiDB::DatumBumpy;
 using TiDB::DatumFlat;
@@ -67,7 +67,7 @@ Block DefaultChunkCodec::decode(const String & data, const DAGSchema & schema)
     }
 
     ColumnsWithTypeAndName columns;
-    for (auto & field : schema)
+    for (const auto & field : schema)
     {
         const auto & name = field.first;
         auto data_type = getDataTypeByColumnInfoForComputingLayer(field.second);

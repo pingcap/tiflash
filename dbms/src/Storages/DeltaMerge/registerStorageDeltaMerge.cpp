@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,7 +19,7 @@
 #include <Parsers/ASTLiteral.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/StorageFactory.h>
-#include <Storages/Transaction/TiDB.h>
+#include <TiDB/Schema/TiDB.h>
 
 namespace DB
 {
@@ -33,7 +33,7 @@ static ASTPtr extractKeyExpressionList(IAST & node)
 {
     // For multiple primary key, this is a ASTFunction with name "tuple".
     // For single primary key, this is a ASTExpressionList.
-    const ASTFunction * expr_func = typeid_cast<const ASTFunction *>(&node);
+    const auto * expr_func = typeid_cast<const ASTFunction *>(&node);
     if (expr_func && expr_func->name == "tuple")
     {
         /// Primary key is specified in tuple.
@@ -82,7 +82,7 @@ void registerStorageDeltaMerge(StorageFactory & factory)
 
         if (args.engine_args.size() >= 2)
         {
-            auto ast = typeid_cast<const ASTLiteral *>(args.engine_args[1].get());
+            const auto * ast = typeid_cast<const ASTLiteral *>(args.engine_args[1].get());
             if (ast && ast->value.getType() == Field::Types::String)
             {
                 const auto table_info_json = safeGet<String>(ast->value);
@@ -93,15 +93,19 @@ void registerStorageDeltaMerge(StorageFactory & factory)
                 }
             }
             else
-                throw Exception("Engine DeltaMerge table info must be a string" + getDeltaMergeVerboseHelp(), ErrorCodes::BAD_ARGUMENTS);
+                throw Exception(
+                    "Engine DeltaMerge table info must be a string" + getDeltaMergeVerboseHelp(),
+                    ErrorCodes::BAD_ARGUMENTS);
         }
         if (args.engine_args.size() == 3)
         {
-            auto ast = typeid_cast<const ASTLiteral *>(args.engine_args[2].get());
+            const auto * ast = typeid_cast<const ASTLiteral *>(args.engine_args[2].get());
             if (ast && ast->value.getType() == Field::Types::UInt64)
                 tombstone = safeGet<UInt64>(ast->value);
             else
-                throw Exception("Engine DeltaMerge tombstone must be a UInt64" + getDeltaMergeVerboseHelp(), ErrorCodes::BAD_ARGUMENTS);
+                throw Exception(
+                    "Engine DeltaMerge tombstone must be a UInt64" + getDeltaMergeVerboseHelp(),
+                    ErrorCodes::BAD_ARGUMENTS);
         }
         return StorageDeltaMerge::create(
             args.database_engine,

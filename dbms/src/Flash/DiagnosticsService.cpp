@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,9 +19,9 @@
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Poco/DirectoryIterator.h>
 #include <Poco/Path.h>
-#include <Storages/Transaction/KVStore.h>
-#include <Storages/Transaction/ProxyFFI.h>
-#include <Storages/Transaction/TMTContext.h>
+#include <Storages/KVStore/FFI/ProxyFFI.h>
+#include <Storages/KVStore/KVStore.h>
+#include <Storages/KVStore/TMTContext.h>
 #include <fmt/ranges.h>
 
 #include <ext/scope_guard.h>
@@ -40,9 +40,11 @@ using diagnosticspb::SearchLogResponse;
     ::diagnosticspb::ServerInfoResponse * response)
 try
 {
-    if (context.getSharedContextDisagg()->isDisaggregatedComputeMode() && context.getSharedContextDisagg()->use_autoscaler)
+    if (context.getSharedContextDisagg()->isDisaggregatedComputeMode()
+        && context.getSharedContextDisagg()->use_autoscaler)
     {
-        String err_msg = "tiflash compute node should be managed by AutoScaler instead of PD, this grpc should not be called be AutoScaler for now";
+        String err_msg = "tiflash compute node should be managed by AutoScaler instead of PD, this grpc should not be "
+                         "called be AutoScaler for now";
         LOG_ERROR(log, err_msg);
         return ::grpc::Status(::grpc::StatusCode::INTERNAL, err_msg);
     }
@@ -71,7 +73,10 @@ catch (const std::exception & e)
 }
 
 // get & filter(ts of last record < start-time) all files in same log directory.
-std::list<std::string> getFilesToSearch(Poco::Util::LayeredConfiguration & config, Poco::Logger * log, const int64_t start_time)
+std::list<std::string> getFilesToSearch(
+    Poco::Util::LayeredConfiguration & config,
+    Poco::Logger * log,
+    const int64_t start_time)
 {
     std::list<std::string> files_to_search;
 
@@ -110,7 +115,10 @@ std::list<std::string> getFilesToSearch(Poco::Util::LayeredConfiguration & confi
     return files_to_search;
 }
 
-grpc::Status searchLog(Poco::Logger * log, ::grpc::ServerWriter<::diagnosticspb::SearchLogResponse> * stream, LogIterator & log_itr)
+grpc::Status searchLog(
+    Poco::Logger * log,
+    ::grpc::ServerWriter<::diagnosticspb::SearchLogResponse> * stream,
+    LogIterator & log_itr)
 {
     static constexpr size_t LOG_BATCH_SIZE = 256;
 
@@ -167,9 +175,7 @@ grpc::Status searchLog(Poco::Logger * log, ::grpc::ServerWriter<::diagnosticspb:
     }
 
     LOG_DEBUG(log, "Handling SearchLog: {}", request->DebugString());
-    SCOPE_EXIT({
-        LOG_DEBUG(log, "Handling SearchLog done: {}", request->DebugString());
-    });
+    SCOPE_EXIT({ LOG_DEBUG(log, "Handling SearchLog done: {}", request->DebugString()); });
 
     auto files_to_search = getFilesToSearch(config, log, start_time);
 

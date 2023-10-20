@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -53,14 +53,29 @@ public:
         : prefix(std::move(prefix_))
     {}
 
-    void putPage(PageIdU64 page_id, UInt64 tag, const ReadBufferPtr & read_buffer, PageSize size, const PageFieldSizes & data_sizes = {})
+    void putPage(
+        PageIdU64 page_id,
+        UInt64 tag,
+        const ReadBufferPtr & read_buffer,
+        PageSize size,
+        const PageFieldSizes & data_sizes = {})
     {
         putPage(UniversalPageIdFormat::toFullPageId(prefix, page_id), tag, read_buffer, size, data_sizes);
     }
 
-    void putRemotePage(PageIdU64 page_id, UInt64 tag, PageSize size, const PS::V3::CheckpointLocation & data_location, PageFieldOffsetChecksums && offset_and_checksums)
+    void putRemotePage(
+        PageIdU64 page_id,
+        UInt64 tag,
+        PageSize size,
+        const PS::V3::CheckpointLocation & data_location,
+        PageFieldOffsetChecksums && offset_and_checksums)
     {
-        putRemotePage(UniversalPageIdFormat::toFullPageId(prefix, page_id), tag, size, data_location, std::move(offset_and_checksums));
+        putRemotePage(
+            UniversalPageIdFormat::toFullPageId(prefix, page_id),
+            tag,
+            size,
+            data_location,
+            std::move(offset_and_checksums));
     }
 
     void putExternal(PageIdU64 page_id, UInt64 tag)
@@ -76,15 +91,19 @@ public:
     // Add RefPage{ref_id} -> Page{page_id}
     void putRefPage(PageIdU64 ref_id, PageIdU64 page_id)
     {
-        putRefPage(UniversalPageIdFormat::toFullPageId(prefix, ref_id), UniversalPageIdFormat::toFullPageId(prefix, page_id));
+        putRefPage(
+            UniversalPageIdFormat::toFullPageId(prefix, ref_id),
+            UniversalPageIdFormat::toFullPageId(prefix, page_id));
     }
 
-    void delPage(PageIdU64 page_id)
-    {
-        delPage(UniversalPageIdFormat::toFullPageId(prefix, page_id));
-    }
+    void delPage(PageIdU64 page_id) { delPage(UniversalPageIdFormat::toFullPageId(prefix, page_id)); }
 
-    void putPage(const UniversalPageId & page_id, UInt64 tag, const ReadBufferPtr & read_buffer, PageSize size, const PageFieldSizes & data_sizes = {})
+    void putPage(
+        const UniversalPageId & page_id,
+        UInt64 tag,
+        const ReadBufferPtr & read_buffer,
+        PageSize size,
+        const PageFieldSizes & data_sizes = {})
     {
         // Convert from data_sizes to the offset of each field
         PageFieldOffsetChecksums offsets;
@@ -95,28 +114,46 @@ public:
             off += data_sz;
         }
 
-        RUNTIME_CHECK_MSG(data_sizes.empty() || off == size,
-                          "Try to put Page with fields, but page size and fields total size not match "
-                          "[page_id={}] [num_fields={}] [page_size={}] [all_fields_size={}]",
-                          page_id,
-                          data_sizes.size(),
-                          size,
-                          off);
+        RUNTIME_CHECK_MSG(
+            data_sizes.empty() || off == size,
+            "Try to put Page with fields, but page size and fields total size not match "
+            "[page_id={}] [num_fields={}] [page_size={}] [all_fields_size={}]",
+            page_id,
+            data_sizes.size(),
+            size,
+            off);
 
         Write w{WriteBatchWriteType::PUT, page_id, tag, read_buffer, size, "", std::move(offsets)};
         total_data_size += size;
         writes.emplace_back(std::move(w));
     }
 
-    void putPage(const UniversalPageId & page_id, UInt64 tag, std::string_view data, const PageFieldSizes & data_sizes = {})
+    void putPage(
+        const UniversalPageId & page_id,
+        UInt64 tag,
+        std::string_view data,
+        const PageFieldSizes & data_sizes = {})
     {
         auto buffer_ptr = std::make_shared<ReadBufferFromOwnString>(data);
         putPage(page_id, tag, buffer_ptr, data.size(), data_sizes);
     }
 
-    void putRemotePage(const UniversalPageId & page_id, UInt64 tag, PageSize size, const PS::V3::CheckpointLocation & data_location, PageFieldOffsetChecksums && offset_and_checksums)
+    void putRemotePage(
+        const UniversalPageId & page_id,
+        UInt64 tag,
+        PageSize size,
+        const PS::V3::CheckpointLocation & data_location,
+        PageFieldOffsetChecksums && offset_and_checksums)
     {
-        Write w{WriteBatchWriteType::PUT_REMOTE, page_id, tag, nullptr, size, "", std::move(offset_and_checksums), data_location};
+        Write w{
+            WriteBatchWriteType::PUT_REMOTE,
+            page_id,
+            tag,
+            nullptr,
+            size,
+            "",
+            std::move(offset_and_checksums),
+            data_location};
         writes.emplace_back(std::move(w));
         has_writes_from_remote = true;
     }
@@ -157,19 +194,10 @@ public:
         writes.emplace_back(std::move(w));
     }
 
-    bool empty() const
-    {
-        return writes.empty();
-    }
+    bool empty() const { return writes.empty(); }
 
-    const Writes & getWrites() const
-    {
-        return writes;
-    }
-    Writes & getMutWrites()
-    {
-        return writes;
-    }
+    const Writes & getWrites() const { return writes; }
+    Writes & getMutWrites() { return writes; }
 
     size_t putWriteCount() const
     {
@@ -180,23 +208,14 @@ public:
     }
 
     // This write batch contains any `putRemotePage` or `putRemoteExternal`
-    bool hasWritesFromRemote() const
-    {
-        return !remote_lock_disabled && has_writes_from_remote;
-    }
+    bool hasWritesFromRemote() const { return !remote_lock_disabled && has_writes_from_remote; }
 
     // There are some cases that we don't want to do remote lock when write to ps:
     // 1. Parse checkpoint files and write its contents to a temp ps for later use when do FAP;
     // 2. When do some tests which just involves read/write logic;
-    void disableRemoteLock()
-    {
-        remote_lock_disabled = true;
-    }
+    void disableRemoteLock() { remote_lock_disabled = true; }
 
-    size_t getTotalDataSize() const
-    {
-        return total_data_size;
-    }
+    size_t getTotalDataSize() const { return total_data_size; }
 
     static const UniversalPageId & getFullPageId(const UniversalPageId & id) { return id; }
 
@@ -244,12 +263,13 @@ public:
         has_writes_from_remote |= rhs.has_writes_from_remote;
     }
 
-    void clear()
+    [[clang::reinitializes]] void clear()
     {
         Writes tmp;
         writes.swap(tmp);
         total_data_size = 0;
         has_writes_from_remote = false;
+        remote_lock_disabled = false;
     }
 
     UniversalWriteBatch(UniversalWriteBatch && rhs) noexcept
@@ -257,6 +277,7 @@ public:
         , writes(std::move(rhs.writes))
         , total_data_size(rhs.total_data_size)
         , has_writes_from_remote(rhs.has_writes_from_remote)
+        , remote_lock_disabled(rhs.remote_lock_disabled)
     {}
 
     void swap(UniversalWriteBatch & o)
@@ -265,6 +286,7 @@ public:
         writes.swap(o.writes);
         std::swap(total_data_size, o.total_data_size);
         std::swap(has_writes_from_remote, o.has_writes_from_remote);
+        std::swap(remote_lock_disabled, o.remote_lock_disabled);
     }
 
 private:

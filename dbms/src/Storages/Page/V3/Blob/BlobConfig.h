@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -32,16 +32,17 @@ struct BlobConfig
 
     String toString()
     {
-        return fmt::format("BlobStore Config Info: "
-                           "[file_limit_size={}] [spacemap_type={}] "
-                           "[block_alignment_bytes={}] "
-                           "[heavy_gc_valid_rate={}]"
-                           "[heavy_gc_valid_rate_raft_data={}]",
-                           file_limit_size,
-                           spacemap_type,
-                           block_alignment_bytes,
-                           heavy_gc_valid_rate,
-                           heavy_gc_valid_rate_raft_data);
+        return fmt::format(
+            "BlobStore Config Info: "
+            "[file_limit_size={}] [spacemap_type={}] "
+            "[block_alignment_bytes={}] "
+            "[heavy_gc_valid_rate={}]"
+            "[heavy_gc_valid_rate_raft_data={}]",
+            file_limit_size,
+            spacemap_type,
+            block_alignment_bytes,
+            heavy_gc_valid_rate,
+            heavy_gc_valid_rate_raft_data);
     }
 
     static BlobConfig from(const PageStorageConfig & config)

@@ -1,4 +1,4 @@
-# Copyright 2022 PingCAP, Ltd.
+# Copyright 2023 PingCAP, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -45,6 +45,8 @@ services:
     command:
       - --addr=0.0.0.0:20160
       - --advertise-addr=tikv0:20160
+      - --status-addr=0.0.0.0:20180
+      - --advertise-status-addr=tikv0:20180
       - --pd=pd0:2379
       - --config=/tikv.toml
       - --data-dir=/data
@@ -57,7 +59,7 @@ services:
     security_opt:
       - seccomp:unconfined
     environment:
-      GO_FAILPOINTS: "github.com/pingcap/tidb/server/enableTestAPI=return"
+      GO_FAILPOINTS: "github.com/pingcap/tidb/pkg/server/enableTestAPI=return"
     volumes:
       - ./config/tidb.toml:/tidb.toml:ro
       - ./log/tidb0:/log

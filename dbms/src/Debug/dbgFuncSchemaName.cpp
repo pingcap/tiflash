@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
 #include <Storages/IManageableStorage.h>
-#include <Storages/Transaction/TMTContext.h>
+#include <Storages/KVStore/TMTContext.h>
 #include <TiDB/Schema/SchemaNameMapper.h>
 #include <TiDB/Schema/SchemaSyncer.h>
 #include <fmt/core.h>
@@ -52,7 +52,9 @@ void dbgFuncMappedDatabase(Context & context, const ASTs & args, DBGInvoker::Pri
 void dbgFuncMappedTable(Context & context, const ASTs & args, DBGInvoker::Printer output)
 {
     if (args.size() < 2 || args.size() > 3)
-        throw Exception("Args not matched, should be: database-name, table-name[, qualify = 'true']", ErrorCodes::BAD_ARGUMENTS);
+        throw Exception(
+            "Args not matched, should be: database-name, table-name[, qualify = 'true']",
+            ErrorCodes::BAD_ARGUMENTS);
 
     const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
     const String & table_name = typeid_cast<const ASTIdentifier &>(*args[1]).name;
@@ -62,7 +64,7 @@ void dbgFuncMappedTable(Context & context, const ASTs & args, DBGInvoker::Printe
 
     auto mapped = mappedTableWithOptional(context, database_name, table_name);
     if (mapped == std::nullopt)
-        output(fmt::format("in dbgFuncMappedTable Table {}.{} not found.", database_name, table_name));
+        output(fmt::format("Table {}.{} not found.", database_name, table_name));
     else if (qualify)
         output(fmt::format("{}.{}", mapped->first, mapped->second));
     else
@@ -180,7 +182,9 @@ void dbgFuncGetPartitionTablesTiflashReplicaCount(Context & context, const ASTs 
     auto table_info = managed_storage->getTableInfo();
 
     if (!table_info.isLogicalPartitionTable())
-        throw Exception(database_name + "." + table_name + " is not logical partition table", ErrorCodes::BAD_ARGUMENTS);
+        throw Exception(
+            database_name + "." + table_name + " is not logical partition table",
+            ErrorCodes::BAD_ARGUMENTS);
 
     SchemaNameMapper name_mapper;
     for (const auto & part_def : table_info.partition.definitions)

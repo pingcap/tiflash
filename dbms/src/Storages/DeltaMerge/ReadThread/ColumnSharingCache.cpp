@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -59,6 +59,14 @@ void DMFileReaderPool::set(DMFileReader & from_reader, int64_t col_id, size_t st
         }
         r->addCachedPacks(col_id, start, count, col);
     }
+}
+
+// Check is there any concurrent DMFileReader with `from_reader`.
+bool DMFileReaderPool::hasConcurrentReader(DMFileReader & from_reader)
+{
+    std::lock_guard lock(mtx);
+    auto itr = readers.find(from_reader.path());
+    return itr != readers.end() && itr->second.size() >= 2;
 }
 
 DMFileReader * DMFileReaderPool::get(const std::string & name)

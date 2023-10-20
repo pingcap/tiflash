@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,9 +14,10 @@
 
 #pragma once
 
-#include <Common/Throttler.h>
 #include <Client/Connection.h>
 #include <Client/ConnectionPoolWithFailover.h>
+#include <Common/Throttler.h>
+
 #include <mutex>
 
 namespace DB
@@ -39,8 +40,10 @@ public:
       * If the append_extra_info flag is set, additional information appended to each received block.
       */
     MultiplexedConnections(
-            std::vector<IConnectionPool::Entry> && connections,
-            const Settings & settings_, const ThrottlerPtr & throttler_, bool append_extra_info);
+        std::vector<IConnectionPool::Entry> && connections,
+        const Settings & settings_,
+        const ThrottlerPtr & throttler_,
+        bool append_extra_info);
 
     /// Send all content of external tables to replicas.
     void sendExternalTablesData(std::vector<ExternalTablesData> & data);
@@ -125,4 +128,4 @@ private:
     mutable std::mutex cancel_mutex;
 };
 
-}
+} // namespace DB

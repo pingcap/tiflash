@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -47,7 +47,7 @@ protected:
 
 public:
     /// 'compressed_in' could be initialized lazily, but before first call of 'readCompressedData'.
-    CompressedReadBufferBase(ReadBuffer * in = nullptr);
+    explicit CompressedReadBufferBase(ReadBuffer * in = nullptr);
     ~CompressedReadBufferBase();
 
     /** Disable checksums.

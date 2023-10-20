@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -109,27 +109,8 @@ public:
 
 private:
     using StringSet = std::unordered_set<String>;
-    StringSet exit_strings{
-        "exit",
-        "quit",
-        "logout",
-        "учше",
-        "йгше",
-        "дщпщге",
-        "exit;",
-        "quit;",
-        "logout;",
-        "учшеж",
-        "йгшеж",
-        "дщпщгеж",
-        "q",
-        "й",
-        "\\q",
-        "\\Q",
-        "\\й",
-        "\\Й",
-        ":q",
-        "Жй"};
+    StringSet exit_strings{"exit",  "quit",    "logout", "учше", "йгше", "дщпщге", "exit;", "quit;", "logout;", "учшеж",
+                           "йгшеж", "дщпщгеж", "q",      "й",    "\\q",  "\\Q",    "\\й",   "\\Й",   ":q",      "Жй"};
     bool is_interactive = true; /// Use either readline interface or batch mode.
     bool need_render_progress = true; /// Render query execution progress.
     bool echo_queries = false; /// Print queries before execution in batch mode.
@@ -147,7 +128,8 @@ private:
     size_t format_max_block_size = 0; /// Max block size for console output.
     String insert_format; /// Format of INSERT data that is read from stdin in batch mode.
     size_t insert_format_max_block_size = 0; /// Max block size when reading INSERT data.
-    size_t max_client_network_bandwidth = 0; /// The maximum speed of data exchange over the network for the client in bytes per second.
+    size_t max_client_network_bandwidth
+        = 0; /// The maximum speed of data exchange over the network for the client in bytes per second.
 
     bool has_vertical_output_suffix = false; /// Is \G present at the end of the query string?
 
@@ -215,22 +197,21 @@ private:
         explicit ConnectionParameters(const Poco::Util::AbstractConfiguration & config)
         {
             bool is_secure = config.getBool("secure", false);
-            security = is_secure
-                ? Protocol::Secure::Enable
-                : Protocol::Secure::Disable;
+            security = is_secure ? Protocol::Secure::Enable : Protocol::Secure::Disable;
 
             host = config.getString("host", "localhost");
-            port = config.getInt("port",
-                                 config.getInt(is_secure ? "tcp_port_secure" : "tcp_port",
-                                               is_secure ? DBMS_DEFAULT_SECURE_PORT : DBMS_DEFAULT_PORT));
+            port = config.getInt(
+                "port",
+                config.getInt(
+                    is_secure ? "tcp_port_secure" : "tcp_port",
+                    is_secure ? DBMS_DEFAULT_SECURE_PORT : DBMS_DEFAULT_PORT));
 
             default_database = config.getString("database", "");
             user = config.getString("user", "");
             password = config.getString("password", "");
 
-            compression = config.getBool("compression", true)
-                ? Protocol::Compression::Enable
-                : Protocol::Compression::Disable;
+            compression
+                = config.getBool("compression", true) ? Protocol::Compression::Enable : Protocol::Compression::Disable;
 
             timeouts = ConnectionTimeouts(
                 Poco::Timespan(config.getInt("connect_timeout", DBMS_DEFAULT_CONNECT_TIMEOUT_SEC), 0),
@@ -292,17 +273,14 @@ private:
             if (std::string::npos != embedded_stack_trace_pos && !print_stack_trace)
                 text.resize(embedded_stack_trace_pos);
 
-            std::cerr << "Code: " << e.code() << ". " << text << std::endl
-                      << std::endl;
+            std::cerr << "Code: " << e.code() << ". " << text << std::endl << std::endl;
 
             /// Don't print the stack trace on the client if it was logged on the server.
             /// Also don't print the stack trace in case of network errors.
-            if (print_stack_trace
-                && e.code() != ErrorCodes::NETWORK_ERROR
+            if (print_stack_trace && e.code() != ErrorCodes::NETWORK_ERROR
                 && std::string::npos == embedded_stack_trace_pos)
             {
-                std::cerr << "Stack trace:" << std::endl
-                          << e.getStackTrace().toString();
+                std::cerr << "Stack trace:" << std::endl << e.getStackTrace().toString();
             }
 
             /// If exception code isn't zero, we should return non-zero return code anyway.
@@ -335,8 +313,7 @@ private:
             return false;
 
         LocalDate now(current_time);
-        return (now.month() == 12 && now.day() >= 20)
-            || (now.month() == 1 && now.day() <= 5);
+        return (now.month() == 12 && now.day() >= 20) || (now.month() == 1 && now.day() <= 5);
     }
 
 
@@ -370,7 +347,8 @@ private:
         format_max_block_size = config().getInt("format_max_block_size", context->getSettingsRef().max_block_size);
 
         insert_format = "Values";
-        insert_format_max_block_size = config().getInt("insert_format_max_block_size", context->getSettingsRef().max_insert_block_size);
+        insert_format_max_block_size
+            = config().getInt("insert_format_max_block_size", context->getSettingsRef().max_insert_block_size);
 
         if (!is_interactive)
         {
@@ -396,23 +374,22 @@ private:
                 {
                     std::cerr << "Warning: could not switch to server time zone: " << time_zone
                               << ", reason: " << getCurrentExceptionMessage(/* with_stacktrace = */ false) << std::endl
-                              << "Proceeding with local time zone."
-                              << std::endl
+                              << "Proceeding with local time zone." << std::endl
                               << std::endl;
                 }
             }
             else
             {
                 std::cerr << "Warning: could not determine server time zone. "
-                          << "Proceeding with local time zone."
-                          << std::endl
+                          << "Proceeding with local time zone." << std::endl
                           << std::endl;
             }
         }
 
         Strings keys;
 
-        prompt_by_server_display_name = config().getRawString("prompt_by_server_display_name.default", "{display_name} :) ");
+        prompt_by_server_display_name
+            = config().getRawString("prompt_by_server_display_name.default", "{display_name} :) ");
 
         config().keys("prompt_by_server_display_name", keys);
 
@@ -450,7 +427,9 @@ private:
             if (!query_id.empty())
                 throw Exception("query_id could be specified only in non-interactive mode", ErrorCodes::BAD_ARGUMENTS);
             if (print_time_to_stderr)
-                throw Exception("time option could be specified only in non-interactive mode", ErrorCodes::BAD_ARGUMENTS);
+                throw Exception(
+                    "time option could be specified only in non-interactive mode",
+                    ErrorCodes::BAD_ARGUMENTS);
 
             /// Turn tab completion off.
             rl_bind_key('\t', rl_insert);
@@ -468,7 +447,9 @@ private:
 #if USE_READLINE
                     int res = read_history(history_file.c_str());
                     if (res)
-                        throwFromErrno("Cannot read history from file " + history_file, ErrorCodes::CANNOT_READ_HISTORY);
+                        throwFromErrno(
+                            "Cannot read history from file " + history_file,
+                            ErrorCodes::CANNOT_READ_HISTORY);
 #endif
                 }
                 else /// Create history file.
@@ -498,10 +479,12 @@ private:
     {
         if (is_interactive)
             std::cout << "Connecting to "
-                      << (!connection_parameters.default_database.empty() ? "database " + connection_parameters.default_database + " at " : "")
+                      << (!connection_parameters.default_database.empty()
+                              ? "database " + connection_parameters.default_database + " at "
+                              : "")
                       << connection_parameters.host << ":" << connection_parameters.port
-                      << (!connection_parameters.user.empty() ? " as user " + connection_parameters.user : "")
-                      << "." << std::endl;
+                      << (!connection_parameters.user.empty() ? " as user " + connection_parameters.user : "") << "."
+                      << std::endl;
 
         connection = std::make_unique<Connection>(
             connection_parameters.host,
@@ -527,7 +510,8 @@ private:
 
         connection->getServerVersion(server_name, server_version_major, server_version_minor, server_revision);
 
-        server_version = toString(server_version_major) + "." + toString(server_version_minor) + "." + toString(server_revision);
+        server_version
+            = toString(server_version_major) + "." + toString(server_version_minor) + "." + toString(server_revision);
 
         if (server_display_name = connection->getServerDisplayName(); server_display_name.length() == 0)
         {
@@ -536,9 +520,7 @@ private:
 
         if (is_interactive)
         {
-            std::cout << "Connected to " << server_name
-                      << " server version " << server_version
-                      << "." << std::endl
+            std::cout << "Connected to " << server_name << " server version " << server_version << "." << std::endl
                       << std::endl;
         }
     }
@@ -557,7 +539,10 @@ private:
 
     inline String prompt() const
     {
-        return boost::replace_all_copy(prompt_by_server_display_name, "{database}", config().getString("database", "default"));
+        return boost::replace_all_copy(
+            prompt_by_server_display_name,
+            "{database}",
+            config().getString("database", "default"));
     }
 
     void loop()
@@ -587,7 +572,9 @@ private:
 
             query += line;
 
-            if (!ends_with_backslash && (ends_with_semicolon || has_vertical_output_suffix || (!config().has("multiline") && !hasDataInSTDIN())))
+            if (!ends_with_backslash
+                && (ends_with_semicolon || has_vertical_output_suffix
+                    || (!config().has("multiline") && !hasDataInSTDIN())))
             {
                 if (query != prev_query)
                 {
@@ -601,7 +588,9 @@ private:
 
 #if USE_READLINE && HAVE_READLINE_HISTORY
                     if (!history_file.empty() && append_history(1, history_file.c_str()))
-                        throwFromErrno("Cannot append history to file " + history_file, ErrorCodes::CANNOT_APPEND_HISTORY);
+                        throwFromErrno(
+                            "Cannot append history to file " + history_file,
+                            ErrorCodes::CANNOT_APPEND_HISTORY);
 #endif
 
                     prev_query = query;
@@ -812,14 +801,12 @@ private:
 
         if (is_interactive)
         {
-            std::cout << std::endl
-                      << processed_rows << " rows in set. Elapsed: " << watch.elapsedSeconds() << " sec. ";
+            std::cout << std::endl << processed_rows << " rows in set. Elapsed: " << watch.elapsedSeconds() << " sec. ";
 
             if (progress.rows >= 1000)
                 writeFinalProgress();
 
-            std::cout << std::endl
-                      << std::endl;
+            std::cout << std::endl << std::endl;
         }
         else if (print_time_to_stderr)
         {
@@ -848,7 +835,8 @@ private:
     /// Process the query that doesn't require transfering data blocks to the server.
     void processOrdinaryQuery()
     {
-        connection->sendQuery(query, query_id, QueryProcessingStage::Complete, &context->getSettingsRef(), nullptr, true);
+        connection
+            ->sendQuery(query, query_id, QueryProcessingStage::Complete, &context->getSettingsRef(), nullptr, true);
         sendExternalTables();
         receiveResult();
     }
@@ -859,14 +847,19 @@ private:
     {
         /// Send part of query without data, because data will be sent separately.
         const ASTInsertQuery & parsed_insert_query = typeid_cast<const ASTInsertQuery &>(*parsed_query);
-        String query_without_data = parsed_insert_query.data
-            ? query.substr(0, parsed_insert_query.data - query.data())
-            : query;
+        String query_without_data
+            = parsed_insert_query.data ? query.substr(0, parsed_insert_query.data - query.data()) : query;
 
         if (!parsed_insert_query.data && (is_interactive || (stdin_is_not_tty && std_in.eof())))
             throw Exception("No data to insert", ErrorCodes::NO_DATA_TO_INSERT);
 
-        connection->sendQuery(query_without_data, query_id, QueryProcessingStage::Complete, &context->getSettingsRef(), nullptr, true);
+        connection->sendQuery(
+            query_without_data,
+            query_id,
+            QueryProcessingStage::Complete,
+            &context->getSettingsRef(),
+            nullptr,
+            true);
         sendExternalTables();
 
         /// Receive description of table structure.
@@ -895,9 +888,7 @@ private:
 
             if (!res)
             {
-                std::cerr << std::endl
-                          << message << std::endl
-                          << std::endl;
+                std::cerr << std::endl << message << std::endl << std::endl;
                 return nullptr;
             }
         }
@@ -908,8 +899,7 @@ private:
         {
             std::cout << std::endl;
             formatAST(*res, std::cout);
-            std::cout << std::endl
-                      << std::endl;
+            std::cout << std::endl << std::endl;
         }
 
         return res;
@@ -926,7 +916,9 @@ private:
         if (parsed_insert_query->data)
         {
             /// Send data contained in the query.
-            ReadBufferFromMemory data_in(parsed_insert_query->data, parsed_insert_query->end - parsed_insert_query->data);
+            ReadBufferFromMemory data_in(
+                parsed_insert_query->data,
+                parsed_insert_query->end - parsed_insert_query->data);
             sendDataFrom(data_in, sample);
         }
         else if (!is_interactive)
@@ -948,11 +940,8 @@ private:
             if (!insert->format.empty())
                 current_format = insert->format;
 
-        BlockInputStreamPtr block_input = context->getInputFormat(
-            current_format,
-            buf,
-            sample,
-            insert_format_max_block_size);
+        BlockInputStreamPtr block_input
+            = context->getInputFormat(current_format, buf, sample, insert_format_max_block_size);
 
         BlockInputStreamPtr async_block_input = std::make_shared<AsynchronousBlockInputStream>(block_input);
 
@@ -1084,9 +1073,10 @@ private:
             return false;
 
         default:
-            throw NetException("Unexpected packet from server (expected Data, got "
-                                   + String(Protocol::Server::toString(packet.type)) + ")",
-                               ErrorCodes::UNEXPECTED_PACKET_FROM_SERVER);
+            throw NetException(
+                "Unexpected packet from server (expected Data, got " + String(Protocol::Server::toString(packet.type))
+                    + ")",
+                ErrorCodes::UNEXPECTED_PACKET_FROM_SERVER);
         }
     }
 
@@ -1211,18 +1201,14 @@ private:
             std::cerr << SAVE_CURSOR_POSITION;
 
         std::stringstream message;
-        message << indicators[increment % 8]
-                << std::fixed << std::setprecision(3)
-                << " Progress: ";
+        message << indicators[increment % 8] << std::fixed << std::setprecision(3) << " Progress: ";
 
-        message
-            << formatReadableQuantity(progress.rows) << " rows, "
-            << formatReadableSizeWithDecimalSuffix(progress.bytes);
+        message << formatReadableQuantity(progress.rows) << " rows, "
+                << formatReadableSizeWithDecimalSuffix(progress.bytes);
 
         size_t elapsed_ns = watch.elapsed();
         if (elapsed_ns)
-            message << " ("
-                    << formatReadableQuantity(progress.rows * 1000000000.0 / elapsed_ns) << " rows/s., "
+            message << " (" << formatReadableQuantity(progress.rows * 1000000000.0 / elapsed_ns) << " rows/s., "
                     << formatReadableSizeWithDecimalSuffix(progress.bytes * 1000000000.0 / elapsed_ns) << "/s.) ";
         else
             message << ". ";
@@ -1246,10 +1232,12 @@ private:
 
                 if (show_progress_bar)
                 {
-                    ssize_t width_of_progress_bar = static_cast<ssize_t>(terminal_size.ws_col) - written_progress_chars - strlen(" 99%");
+                    ssize_t width_of_progress_bar
+                        = static_cast<ssize_t>(terminal_size.ws_col) - written_progress_chars - strlen(" 99%");
                     if (width_of_progress_bar > 0)
                     {
-                        std::string bar = UnicodeBar::render(UnicodeBar::getWidth(progress.rows, 0, total_rows_corrected, width_of_progress_bar));
+                        std::string bar = UnicodeBar::render(
+                            UnicodeBar::getWidth(progress.rows, 0, total_rows_corrected, width_of_progress_bar));
                         std::cerr << "\033[0;32m" << bar << "\033[0m";
                         if (width_of_progress_bar > static_cast<ssize_t>(bar.size() / UNICODE_BAR_CHAR_SIZE))
                             std::cerr << std::string(width_of_progress_bar - bar.size() / UNICODE_BAR_CHAR_SIZE, ' ');
@@ -1268,14 +1256,12 @@ private:
 
     void writeFinalProgress()
     {
-        std::cout << "Processed "
-                  << formatReadableQuantity(progress.rows) << " rows, "
+        std::cout << "Processed " << formatReadableQuantity(progress.rows) << " rows, "
                   << formatReadableSizeWithDecimalSuffix(progress.bytes);
 
         size_t elapsed_ns = watch.elapsed();
         if (elapsed_ns)
-            std::cout << " ("
-                      << formatReadableQuantity(progress.rows * 1000000000.0 / elapsed_ns) << " rows/s., "
+            std::cout << " (" << formatReadableQuantity(progress.rows * 1000000000.0 / elapsed_ns) << " rows/s., "
                       << formatReadableSizeWithDecimalSuffix(progress.bytes * 1000000000.0 / elapsed_ns) << "/s.) ";
         else
             std::cout << ". ";
@@ -1318,10 +1304,8 @@ private:
 
     static void showClientVersion()
     {
-        std::cout << "ClickHouse client version " << DBMS_VERSION_MAJOR
-                  << "." << DBMS_VERSION_MINOR
-                  << "." << ClickHouseRevision::get()
-                  << "." << std::endl;
+        std::cout << "ClickHouse client version " << DBMS_VERSION_MAJOR << "." << DBMS_VERSION_MINOR << "."
+                  << ClickHouseRevision::get() << "." << std::endl;
     }
 
 public:
@@ -1352,22 +1336,20 @@ public:
                 external_tables_arguments.emplace_back(Arguments{""});
             }
             /// Options with value after equal sign.
-            else if (in_external_group
-                     && (0 == strncmp(arg, "--file=", strlen("--file="))
-                         || 0 == strncmp(arg, "--name=", strlen("--name="))
-                         || 0 == strncmp(arg, "--format=", strlen("--format="))
-                         || 0 == strncmp(arg, "--structure=", strlen("--structure="))
-                         || 0 == strncmp(arg, "--types=", strlen("--types="))))
+            else if (
+                in_external_group
+                && (0 == strncmp(arg, "--file=", strlen("--file=")) || 0 == strncmp(arg, "--name=", strlen("--name="))
+                    || 0 == strncmp(arg, "--format=", strlen("--format="))
+                    || 0 == strncmp(arg, "--structure=", strlen("--structure="))
+                    || 0 == strncmp(arg, "--types=", strlen("--types="))))
             {
                 external_tables_arguments.back().emplace_back(arg);
             }
             /// Options with value after whitespace.
-            else if (in_external_group
-                     && (0 == strcmp(arg, "--file")
-                         || 0 == strcmp(arg, "--name")
-                         || 0 == strcmp(arg, "--format")
-                         || 0 == strcmp(arg, "--structure")
-                         || 0 == strcmp(arg, "--types")))
+            else if (
+                in_external_group
+                && (0 == strcmp(arg, "--file") || 0 == strcmp(arg, "--name") || 0 == strcmp(arg, "--format")
+                    || 0 == strcmp(arg, "--structure") || 0 == strcmp(arg, "--types")))
             {
                 if (arg_num + 1 < argc)
                 {
@@ -1386,7 +1368,8 @@ public:
             }
         }
 
-#define DECLARE_SETTING(TYPE, NAME, DEFAULT, DESCRIPTION) (#NAME, boost::program_options::value<std::string>(), DESCRIPTION)
+#define DECLARE_SETTING(TYPE, NAME, DEFAULT, DESCRIPTION) \
+    (#NAME, boost::program_options::value<std::string>(), DESCRIPTION)
 
         /// Main commandline options related to client functionality and all parameters from Settings.
         boost::program_options::options_description main_description("Main options");
@@ -1433,11 +1416,10 @@ public:
         // clang-format on
 
         /// Parse main commandline options.
-        boost::program_options::parsed_options parsed = boost::program_options::command_line_parser(
-                                                            common_arguments.size(),
-                                                            common_arguments.data())
-                                                            .options(main_description)
-                                                            .run();
+        boost::program_options::parsed_options parsed
+            = boost::program_options::command_line_parser(common_arguments.size(), common_arguments.data())
+                  .options(main_description)
+                  .run();
         boost::program_options::variables_map options;
         boost::program_options::store(parsed, options);
 
@@ -1449,7 +1431,8 @@ public:
 
         /// Output of help message.
         if (options.count("help")
-            || (options.count("host") && options["host"].as<std::string>() == "elp")) /// If user writes -help instead of --help.
+            || (options.count("host")
+                && options["host"].as<std::string>() == "elp")) /// If user writes -help instead of --help.
         {
             std::cout << main_description << "\n";
             std::cout << external_description << "\n";
@@ -1474,14 +1457,15 @@ public:
                 if (external_tables.back().file == "-")
                     ++number_of_external_tables_with_stdin_source;
                 if (number_of_external_tables_with_stdin_source > 1)
-                    throw Exception("Two or more external tables has stdin (-) set as --file field", ErrorCodes::BAD_ARGUMENTS);
+                    throw Exception(
+                        "Two or more external tables has stdin (-) set as --file field",
+                        ErrorCodes::BAD_ARGUMENTS);
             }
             catch (const Exception & e)
             {
                 std::string text = e.displayText();
                 std::cerr << "Code: " << e.code() << ". " << text << std::endl;
-                std::cerr << "Table №" << i << std::endl
-                          << std::endl;
+                std::cerr << "Table №" << i << std::endl << std::endl;
                 exit(e.code());
             }
         }

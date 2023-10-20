@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,7 +15,7 @@
 #pragma once
 
 #include <Core/Types.h>
-#include <Storages/Transaction/Types.h>
+#include <Storages/KVStore/Types.h>
 #include <common/types.h>
 #include <fmt/format.h>
 
@@ -59,7 +59,13 @@ struct fmt::formatter<DB::DM::Remote::DMFileOID>
         }
         else
         {
-            return format_to(ctx.out(), "{}_{}_{}_{}", value.store_id, value.keyspace_id, value.table_id, value.file_id);
+            return format_to(
+                ctx.out(),
+                "{}_{}_{}_{}",
+                value.store_id,
+                value.keyspace_id,
+                value.table_id,
+                value.file_id);
         }
     }
 };
@@ -78,7 +84,13 @@ struct fmt::formatter<DB::DM::Remote::PageOID>
         }
         else
         {
-            return format_to(ctx.out(), "{}_{}_{}_{}", value.store_id, value.ks_table_id.first, value.ks_table_id.second, value.page_id);
+            return format_to(
+                ctx.out(),
+                "{}_{}_{}_{}",
+                value.store_id,
+                value.ks_table_id.first,
+                value.ks_table_id.second,
+                value.page_id);
         }
     }
 };

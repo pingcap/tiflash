@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,7 +15,7 @@
 #pragma once
 
 #include <Interpreters/TimezoneInfo.h>
-#include <Storages/Transaction/DecodingStorageSchemaSnapshot.h>
+#include <Storages/KVStore/Decode/DecodingStorageSchemaSnapshot.h>
 #include <google/protobuf/repeated_ptr_field.h>
 #include <tipb/expression.pb.h>
 

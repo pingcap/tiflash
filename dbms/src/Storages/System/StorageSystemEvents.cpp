@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/ProfileEvents.h>
 #include <Columns/ColumnString.h>
+#include <Common/ProfileEvents.h>
+#include <DataStreams/OneBlockInputStream.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
-#include <DataStreams/OneBlockInputStream.h>
 #include <Storages/System/StorageSystemEvents.h>
 
 
@@ -27,8 +27,7 @@ namespace DB
 StorageSystemEvents::StorageSystemEvents(const std::string & name_)
     : name(name_)
 {
-    setColumns(ColumnsDescription(
-    {
+    setColumns(ColumnsDescription({
         {"event", std::make_shared<DataTypeString>()},
         {"value", std::make_shared<DataTypeUInt64>()},
     }));
@@ -59,8 +58,10 @@ BlockInputStreams StorageSystemEvents::read(
         }
     }
 
-    return BlockInputStreams(1, std::make_shared<OneBlockInputStream>(getSampleBlock().cloneWithColumns(std::move(res_columns))));
+    return BlockInputStreams(
+        1,
+        std::make_shared<OneBlockInputStream>(getSampleBlock().cloneWithColumns(std::move(res_columns))));
 }
 
 
-}
+} // namespace DB

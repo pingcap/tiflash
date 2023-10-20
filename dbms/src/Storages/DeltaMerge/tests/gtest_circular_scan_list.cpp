@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,14 +27,8 @@ public:
         , v(true)
     {}
 
-    bool valid() const
-    {
-        return v;
-    }
-    void setInvalid()
-    {
-        v = false;
-    }
+    bool valid() const { return v; }
+    void setInvalid() { v = false; }
 
 public:
     uint64_t pool_id;

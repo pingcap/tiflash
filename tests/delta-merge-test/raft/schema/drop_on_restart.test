@@ -1,4 +1,4 @@
-# Copyright 2022 PingCAP, Ltd.
+# Copyright 2023 PingCAP, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@
 => DBGInvoke __drop_tidb_db(db5)
 => DBGInvoke __refresh_schemas()
 
-=> DBGInvoke __set_flush_threshold(1000000, 1000000)
+
 
 # Mock test keep table name but use DatabaseTiFlash,
 # can NOT create two tables with the same name, or they will

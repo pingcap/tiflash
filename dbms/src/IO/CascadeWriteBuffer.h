@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -52,10 +52,7 @@ public:
     /// Should be called once
     void getResultBuffers(WriteBufferPtrs & res);
 
-    const WriteBuffer * getCurrentBuffer() const
-    {
-        return curr_buffer;
-    }
+    const WriteBuffer * getCurrentBuffer() const { return curr_buffer; }
 
     ~CascadeWriteBuffer();
 

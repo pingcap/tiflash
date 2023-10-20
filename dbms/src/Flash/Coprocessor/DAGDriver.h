@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,8 +17,8 @@
 #include <Common/Logger.h>
 #include <DataStreams/BlockIO.h>
 #include <Flash/Coprocessor/RegionInfo.h>
-#include <Storages/Transaction/TiKVKeyValue.h>
-#include <Storages/Transaction/Types.h>
+#include <Storages/KVStore/Decode/DecodedTiKVKeyValue.h>
+#include <Storages/KVStore/Types.h>
 
 #ifdef __clang__
 #pragma clang diagnostic push
@@ -39,8 +39,7 @@ class Context;
 
 /// An abstraction of driver running DAG request.
 /// Now is a naive native executor. Might get evolved to drive MPP-like computation.
-
-template <bool batch = false>
+template <DAGRequestKind Kind>
 class DAGDriver
 {
 public:
@@ -48,14 +47,21 @@ public:
         Context & context_,
         UInt64 start_ts,
         UInt64 schema_ver,
-        tipb::SelectResponse * dag_response_,
+        tipb::SelectResponse * cop_response_,
         bool internal_ = false);
 
     DAGDriver(
         Context & context_,
         UInt64 start_ts,
         UInt64 schema_ver,
-        ::grpc::ServerWriter<::coprocessor::BatchResponse> * writer,
+        grpc::ServerWriter<::coprocessor::Response> * cop_writer_,
+        bool internal_ = false);
+
+    DAGDriver(
+        Context & context_,
+        UInt64 start_ts,
+        UInt64 schema_ver,
+        grpc::ServerWriter<coprocessor::BatchResponse> * batch_cop_writer_,
         bool internal_ = false);
 
     void execute();
@@ -67,9 +73,9 @@ private:
 
     Context & context;
 
-    tipb::SelectResponse * dag_response;
-
-    ::grpc::ServerWriter<::coprocessor::BatchResponse> * writer;
+    tipb::SelectResponse * cop_response = nullptr;
+    grpc::ServerWriter<coprocessor::Response> * cop_writer = nullptr;
+    grpc::ServerWriter<coprocessor::BatchResponse> * batch_cop_writer = nullptr;
 
     bool internal;
 

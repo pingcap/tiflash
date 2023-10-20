@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -38,9 +38,7 @@ extern const Event S3GetObjectRetry;
 
 namespace DB::S3
 {
-S3RandomAccessFile::S3RandomAccessFile(
-    std::shared_ptr<TiFlashS3Client> client_ptr_,
-    const String & remote_fname_)
+S3RandomAccessFile::S3RandomAccessFile(std::shared_ptr<TiFlashS3Client> client_ptr_, const String & remote_fname_)
     : client_ptr(std::move(client_ptr_))
     , remote_fname(remote_fname_)
     , cur_offset(0)
@@ -88,7 +86,8 @@ ssize_t S3RandomAccessFile::readImpl(char * buf, size_t size)
     {
         LOG_ERROR(
             log,
-            "Cannot read from istream, size={} gcount={} state=0x{:02X} cur_offset={} content_length={} errmsg={} cost={}ns",
+            "Cannot read from istream, size={} gcount={} state=0x{:02X} cur_offset={} content_length={} errmsg={} "
+            "cost={}ns",
             size,
             gcount,
             istr.rdstate(),
@@ -215,7 +214,9 @@ inline static RandomAccessFilePtr tryOpenCachedFile(const String & remote_fname,
     try
     {
         auto * file_cache = FileCache::instance();
-        return file_cache != nullptr ? file_cache->getRandomAccessFile(S3::S3FilenameView::fromKey(remote_fname), filesize) : nullptr;
+        return file_cache != nullptr
+            ? file_cache->getRandomAccessFile(S3::S3FilenameView::fromKey(remote_fname), filesize)
+            : nullptr;
     }
     catch (...)
     {
@@ -224,19 +225,33 @@ inline static RandomAccessFilePtr tryOpenCachedFile(const String & remote_fname,
     }
 }
 
-inline static RandomAccessFilePtr createFromNormalFile(const String & remote_fname, std::optional<UInt64> filesize)
+inline static RandomAccessFilePtr createFromNormalFile(
+    const String & remote_fname,
+    std::optional<UInt64> filesize,
+    std::optional<DM::ScanContextPtr> scan_context)
 {
     auto file = tryOpenCachedFile(remote_fname, filesize);
     if (file != nullptr)
     {
+        if (scan_context.has_value())
+            scan_context.value()->total_disagg_read_cache_hit_size += filesize.value();
         return file;
     }
+    if (scan_context.has_value())
+        scan_context.value()->total_disagg_read_cache_miss_size += filesize.value();
     auto & ins = S3::ClientFactory::instance();
     return std::make_shared<S3RandomAccessFile>(ins.sharedTiFlashClient(), remote_fname);
 }
 
 RandomAccessFilePtr S3RandomAccessFile::create(const String & remote_fname)
 {
-    return createFromNormalFile(remote_fname, read_file_info ? std::optional<UInt64>(read_file_info->size) : std::nullopt);
+    if (read_file_info)
+        return createFromNormalFile(
+            remote_fname,
+            std::optional<UInt64>(read_file_info->size),
+            read_file_info->scan_context != nullptr ? std::optional<DM::ScanContextPtr>(read_file_info->scan_context)
+                                                    : std::nullopt);
+    else
+        return createFromNormalFile(remote_fname, std::nullopt, std::nullopt);
 }
 } // namespace DB::S3

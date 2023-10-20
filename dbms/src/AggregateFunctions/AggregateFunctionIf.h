@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -46,46 +46,29 @@ public:
         , num_arguments(types.size())
     {
         if (num_arguments == 0)
-            throw Exception("Aggregate function " + getName() + " require at least one argument", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+            throw Exception(
+                "Aggregate function " + getName() + " require at least one argument",
+                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         if (!typeid_cast<const DataTypeUInt8 *>(types.back().get()))
-            throw Exception("Last argument for aggregate function " + getName() + " must be UInt8", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception(
+                "Last argument for aggregate function " + getName() + " must be UInt8",
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 
-    String getName() const override
-    {
-        return nested_func->getName() + "If";
-    }
+    String getName() const override { return nested_func->getName() + "If"; }
 
-    DataTypePtr getReturnType() const override
-    {
-        return nested_func->getReturnType();
-    }
+    DataTypePtr getReturnType() const override { return nested_func->getReturnType(); }
 
-    void create(AggregateDataPtr __restrict place) const override
-    {
-        nested_func->create(place);
-    }
+    void create(AggregateDataPtr __restrict place) const override { nested_func->create(place); }
 
-    void destroy(AggregateDataPtr __restrict place) const noexcept override
-    {
-        nested_func->destroy(place);
-    }
+    void destroy(AggregateDataPtr __restrict place) const noexcept override { nested_func->destroy(place); }
 
-    bool hasTrivialDestructor() const override
-    {
-        return nested_func->hasTrivialDestructor();
-    }
+    bool hasTrivialDestructor() const override { return nested_func->hasTrivialDestructor(); }
 
-    size_t sizeOfData() const override
-    {
-        return nested_func->sizeOfData();
-    }
+    size_t sizeOfData() const override { return nested_func->sizeOfData(); }
 
-    size_t alignOfData() const override
-    {
-        return nested_func->alignOfData();
-    }
+    size_t alignOfData() const override { return nested_func->alignOfData(); }
 
     void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const override
     {
@@ -94,6 +77,7 @@ public:
     }
 
     void addBatch(
+        size_t start_offset,
         size_t batch_size,
         AggregateDataPtr * places,
         size_t place_offset,
@@ -101,20 +85,22 @@ public:
         Arena * arena,
         ssize_t) const override
     {
-        nested_func->addBatch(batch_size, places, place_offset, columns, arena, num_arguments - 1);
+        nested_func->addBatch(start_offset, batch_size, places, place_offset, columns, arena, num_arguments - 1);
     }
 
     void addBatchSinglePlace(
+        size_t start_offset,
         size_t batch_size,
         AggregateDataPtr place,
         const IColumn ** columns,
         Arena * arena,
         ssize_t) const override
     {
-        nested_func->addBatchSinglePlace(batch_size, place, columns, arena, num_arguments - 1);
+        nested_func->addBatchSinglePlace(start_offset, batch_size, place, columns, arena, num_arguments - 1);
     }
 
     void addBatchSinglePlaceNotNull(
+        size_t start_offset,
         size_t batch_size,
         AggregateDataPtr place,
         const IColumn ** columns,
@@ -122,7 +108,8 @@ public:
         Arena * arena,
         ssize_t) const override
     {
-        nested_func->addBatchSinglePlaceNotNull(batch_size, place, columns, null_map, arena, num_arguments - 1);
+        nested_func
+            ->addBatchSinglePlaceNotNull(start_offset, batch_size, place, columns, null_map, arena, num_arguments - 1);
     }
 
     void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena * arena) const override
@@ -155,15 +142,9 @@ public:
         nested_func->insertResultInto(place, to, arena);
     }
 
-    bool allocatesMemoryInArena() const override
-    {
-        return nested_func->allocatesMemoryInArena();
-    }
+    bool allocatesMemoryInArena() const override { return nested_func->allocatesMemoryInArena(); }
 
-    bool isState() const override
-    {
-        return nested_func->isState();
-    }
+    bool isState() const override { return nested_func->isState(); }
 
     const char * getHeaderFilePath() const override { return __FILE__; }
 };

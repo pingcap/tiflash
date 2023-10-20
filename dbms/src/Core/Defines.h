@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -50,7 +50,7 @@
 
 // Timeout for building one disagg task in the TiFlash write node.
 // Including read index / wait index / generate segments snapshots.
-static constexpr UInt64 DEFAULT_DISAGG_TASK_BUILD_TIMEOUT_SEC = 15;
+static constexpr UInt64 DEFAULT_DISAGG_TASK_BUILD_TIMEOUT_SEC = 60;
 // Timeout for how long one disagg task is valid in the TiFlash write node.
 // It is now a short period to avoid long stale snapshots causing system
 // instable.

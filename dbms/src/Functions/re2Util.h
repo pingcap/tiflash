@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,8 +16,8 @@
 
 #include <Common/Exception.h>
 #include <Common/config.h>
-#include <Storages/Transaction/Collator.h>
-#include <Storages/Transaction/CollatorUtils.h>
+#include <TiDB/Collation/Collator.h>
+#include <TiDB/Collation/CollatorUtils.h>
 #include <re2/re2.h>
 
 

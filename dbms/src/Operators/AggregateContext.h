@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,27 +27,25 @@ struct ThreadData
     size_t src_rows = 0;
     size_t src_bytes = 0;
 
-    ColumnRawPtrs key_columns;
-    Aggregator::AggregateColumns aggregate_columns;
-
-    ThreadData(size_t keys_size, size_t aggregates_size)
-    {
-        key_columns.resize(keys_size);
-        aggregate_columns.resize(aggregates_size);
-    }
+    Aggregator::AggProcessInfo agg_process_info;
+    ThreadData(Aggregator * aggregator)
+        : agg_process_info(aggregator)
+    {}
 };
 
 /// Aggregated data shared between AggBuild and AggConvergent Pipeline.
 class AggregateContext
 {
 public:
-    explicit AggregateContext(
-        const String & req_id)
+    explicit AggregateContext(const String & req_id)
         : log(Logger::get(req_id))
-    {
-    }
+    {}
 
-    void initBuild(const Aggregator::Params & params, size_t max_threads_, Aggregator::CancellationHook && hook);
+    void initBuild(
+        const Aggregator::Params & params,
+        size_t max_threads_,
+        Aggregator::CancellationHook && hook,
+        const RegisterOperatorSpillContext & register_operator_spill_context);
 
     size_t getBuildConcurrency() const { return max_threads; }
 
@@ -73,6 +71,16 @@ public:
     Block readForConvergent(size_t index);
 
     Block getHeader() const;
+
+    AggSpillContextPtr & getAggSpillContext() { return aggregator->getAggSpillContext(); }
+
+    bool hasLocalDataToBuild(size_t task_index);
+
+    void buildOnLocalData(size_t task_index);
+
+    bool isTaskMarkedForSpill(size_t task_index);
+
+    size_t getTotalBuildRows(size_t task_index) { return threads_data[task_index]->src_rows; }
 
 private:
     std::unique_ptr<Aggregator> aggregator;

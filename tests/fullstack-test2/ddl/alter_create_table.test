@@ -1,4 +1,4 @@
-# Copyright 2022 PingCAP, Ltd.
+# Copyright 2023 PingCAP, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -33,11 +33,6 @@ mysql> create table test.t(a int primary key, b decimal(5,2) not NULL, c varchar
 
 mysql> alter table test.t set tiflash replica 1; 
 => DBGInvoke __refresh_schemas()
-
-=> DBGInvoke mapped_table_exists(test, t)
-┌─mapped_table_exists(test, t)─┐
-│ false                        │
-└──────────────────────────────┘
 
 func> wait_table test t
 

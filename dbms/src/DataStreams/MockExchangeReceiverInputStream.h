@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,7 +15,7 @@
 #pragma once
 
 #include <DataStreams/IProfilingBlockInputStream.h>
-#include <Storages/Transaction/TypeMapping.h>
+#include <TiDB/Decode/TypeMapping.h>
 #include <tipb/executor.pb.h>
 
 namespace DB
@@ -28,10 +28,7 @@ public:
     MockExchangeReceiverInputStream(const tipb::ExchangeReceiver & receiver, size_t max_block_size, size_t rows_);
     MockExchangeReceiverInputStream(const ColumnsWithTypeAndName & columns, size_t max_block_size);
     MockExchangeReceiverInputStream(const std::vector<ColumnsWithTypeAndName> & columns_vector, size_t max_block_size);
-    Block getHeader() const override
-    {
-        return Block(columns_vector[0]).cloneEmpty();
-    }
+    Block getHeader() const override { return Block(columns_vector[0]).cloneEmpty(); }
     String getName() const override { return "MockExchangeReceiver"; }
     size_t getSourceNum() const { return source_num; }
     std::vector<ColumnsWithTypeAndName> columns_vector;

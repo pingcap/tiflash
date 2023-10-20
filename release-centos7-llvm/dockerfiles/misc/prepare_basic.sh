@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Copyright 2022 PingCAP, Ltd.
+# Copyright 2023 PingCAP, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -27,8 +27,8 @@ function prepare_basic() {
          libtool-ltdl-devel \
          python3-devel \
          bzip2 \
-         chrpath \
+         chrpath
     yum install -y curl git perl wget cmake3 glibc-static zlib-devel diffutils ninja-build devtoolset-10
-    yum -y install 'perl(Data::Dumper)' 
+    yum install -y 'perl(Data::Dumper)' 
     yum clean all -y
 }

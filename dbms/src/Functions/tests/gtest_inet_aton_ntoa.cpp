@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,8 +23,6 @@
 #include <TestUtils/TiFlashTestBasic.h>
 
 #include <random>
-#include <string>
-#include <vector>
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wsign-compare"
@@ -85,9 +83,7 @@ try
     const String func_name = "tiDBIPv4StringToNum";
 
     // empty column
-    ASSERT_COLUMN_EQ(
-        createColumn<Nullable<UInt32>>({}),
-        executeFunction(func_name, createColumn<String>({})));
+    ASSERT_COLUMN_EQ(createColumn<Nullable<UInt32>>({}), executeFunction(func_name, createColumn<String>({})));
 
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<UInt32>>({}),
@@ -106,48 +102,128 @@ try
     // normal valid cases
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<UInt32>>({16909060, 65537, 16711935, 66051, 0, 16777472, 1862276364}),
-        executeFunction(func_name, createColumn<Nullable<String>>({"1.2.3.4", "0.1.0.1", "0.255.0.255", "0000.1.2.3", "00000.0000.0000.000", "1.0.1.0", "111.0.21.012"})));
+        executeFunction(
+            func_name,
+            createColumn<Nullable<String>>(
+                {"1.2.3.4",
+                 "0.1.0.1",
+                 "0.255.0.255",
+                 "0000.1.2.3",
+                 "00000.0000.0000.000",
+                 "1.0.1.0",
+                 "111.0.21.012"})));
 
     // valid but weird cases
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<UInt32>>({255, 255, 255, 255, 65535, 16711935, 16711935, 1, 16777218, 16908291}),
-        executeFunction(func_name, createColumn<Nullable<String>>({"255", ".255", "..255", "...255", "..255.255", ".255.255", ".255..255", "1", "1.2", "1.2.3"})));
+        executeFunction(
+            func_name,
+            createColumn<Nullable<String>>(
+                {"255", ".255", "..255", "...255", "..255.255", ".255.255", ".255..255", "1", "1.2", "1.2.3"})));
 
     // invalid cases
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<UInt32>>({{}, {}, {}, {}, {}, {}, {}, {}, {}, {}}),
-        executeFunction(func_name, createColumn<Nullable<String>>({{}, "", ".", "....255", "...255.255", ".255...255", ".255.255.", "1.0.a", "1.a", "a.1"})));
+        executeFunction(
+            func_name,
+            createColumn<Nullable<String>>(
+                {{}, "", ".", "....255", "...255.255", ".255...255", ".255.255.", "1.0.a", "1.a", "a.1"})));
 }
 CATCH
 
-TEST_F(TestInetAtonNtoa, InetNtoa)
-try
+
+template <typename Type>
+static void TestInetAtonNtoaImpl(TestInetAtonNtoa & test)
 {
     const String func_name = "IPv4NumToString";
 
     // empty column
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({}),
-        executeFunction(func_name, createColumn<Nullable<UInt32>>({})));
+        test.executeFunction(func_name, createColumn<Nullable<Type>>({})));
 
-    ASSERT_COLUMN_EQ(
-        createColumn<String>({}),
-        executeFunction(func_name, createColumn<UInt32>({})));
+    ASSERT_COLUMN_EQ(createColumn<Nullable<String>>({}), test.executeFunction(func_name, createColumn<Type>({})));
 
     // const null-only column
     ASSERT_COLUMN_EQ(
         createConstColumn<Nullable<String>>(1, {}),
-        executeFunction(func_name, createConstColumn<Nullable<UInt32>>(1, {})));
+        test.executeFunction(func_name, createConstColumn<Nullable<Type>>(1, {})));
 
-    // const non-null column
-    ASSERT_COLUMN_EQ(
-        createConstColumn<String>(1, "0.0.0.1"),
-        executeFunction(func_name, createConstColumn<Nullable<UInt32>>(1, 1)));
+    if constexpr (std::is_same_v<UInt8, Type>)
+    {
+        ASSERT_COLUMN_EQ(
+            createColumn<Nullable<String>>({"0.0.0.255"}),
+            test.executeFunction(func_name, createColumn<Nullable<Type>>({std::numeric_limits<Type>::max()})));
+    }
+    else if constexpr (std::is_same_v<Int8, Type>)
+    {
+        ASSERT_COLUMN_EQ(
+            createColumn<Nullable<String>>({{}, "0.0.0.127"}),
+            test.executeFunction(func_name, createColumn<Nullable<Type>>({-1, std::numeric_limits<Type>::max()})));
+    }
+    else if constexpr (std::is_same_v<UInt16, Type>)
+    {
+        ASSERT_COLUMN_EQ(
+            createColumn<Nullable<String>>({"0.0.255.255"}),
+            test.executeFunction(func_name, createColumn<Nullable<Type>>({std::numeric_limits<Type>::max()})));
+    }
+    else if constexpr (std::is_same_v<Int16, Type>)
+    {
+        ASSERT_COLUMN_EQ(
+            createColumn<Nullable<String>>({{}, "0.0.127.255"}),
+            test.executeFunction(func_name, createColumn<Nullable<Type>>({-1, std::numeric_limits<Type>::max()})));
+    }
+    else if constexpr (std::is_same_v<UInt32, Type>)
+    {
+        ASSERT_COLUMN_EQ(
+            createColumn<Nullable<String>>({"255.255.255.255"}),
+            test.executeFunction(func_name, createColumn<Nullable<Type>>({std::numeric_limits<Type>::max()})));
+        ASSERT_COLUMN_EQ(
+            createColumn<Nullable<String>>(
+                {"1.2.3.4", "0.1.0.1", "0.255.0.255", "0.1.2.3", "0.0.0.0", "1.0.1.0", "111.0.21.12"}),
+            test.executeFunction(
+                func_name,
+                createColumn<Nullable<Type>>({16909060, 65537, 16711935, 66051, 0, 16777472, 1862276364})));
+    }
+    else if constexpr (std::is_same_v<Int32, Type>)
+    {
+        ASSERT_COLUMN_EQ(
+            createColumn<Nullable<String>>({{}, "127.255.255.255"}),
+            test.executeFunction(func_name, createColumn<Nullable<Type>>({-1, std::numeric_limits<Type>::max()})));
+    }
+    else if constexpr (std::is_same_v<UInt64, Type>)
+    {
+        ASSERT_COLUMN_EQ(
+            createColumn<Nullable<String>>({"255.255.255.255", {}}),
+            test.executeFunction(
+                func_name,
+                createColumn<Nullable<Type>>({std::numeric_limits<UInt32>::max(), std::numeric_limits<Type>::max()})));
+    }
+    else if constexpr (std::is_same_v<Int64, Type>)
+    {
+        ASSERT_COLUMN_EQ(
+            createColumn<Nullable<String>>({"255.255.255.255", {}, {}}),
+            test.executeFunction(
+                func_name,
+                createColumn<Nullable<Type>>(
+                    {std::numeric_limits<UInt32>::max(), -1, std::numeric_limits<Type>::max()})));
+    }
+}
 
-    // normal cases
-    ASSERT_COLUMN_EQ(
-        createColumn<Nullable<String>>({"1.2.3.4", "0.1.0.1", "0.255.0.255", "0.1.2.3", "0.0.0.0", "1.0.1.0", "111.0.21.12"}),
-        executeFunction(func_name, createColumn<Nullable<UInt32>>({16909060, 65537, 16711935, 66051, 0, 16777472, 1862276364})));
+
+TEST_F(TestInetAtonNtoa, InetNtoa)
+try
+{
+#define M(T) TestInetAtonNtoaImpl<T>(*this);
+    M(UInt8);
+    M(Int8);
+    M(UInt16);
+    M(Int16);
+    M(UInt32);
+    M(Int32);
+    M(UInt64);
+    M(Int64);
+#undef M
 }
 CATCH
 
@@ -162,7 +238,7 @@ try
     std::uniform_int_distribution<UInt32> dist;
 
     InferredDataVector<Nullable<UInt32>> num_vec;
-    for (size_t i = 0; i < 10000; ++i)
+    for (size_t i = 0; i < 512; ++i)
     {
         num_vec.emplace_back(dist(mt));
     }
@@ -181,9 +257,7 @@ try
     const String func_name = "tiDBIPv6StringToNum";
 
     // empty column
-    ASSERT_COLUMN_EQ(
-        createColumn<Nullable<String>>({}),
-        executeFunction(func_name, createColumn<String>({})));
+    ASSERT_COLUMN_EQ(createColumn<Nullable<String>>({}), executeFunction(func_name, createColumn<String>({})));
 
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({}),
@@ -197,31 +271,38 @@ try
     // const non-null ipv4
     ASSERT_COLUMN_EQ(
         createConstColumn<Nullable<String>>(1, toBinary(0x0000'0001)),
-        executeFunction(
-            func_name,
-            createConstColumn<Nullable<String>>(1, "0.0.0.1")));
+        executeFunction(func_name, createConstColumn<Nullable<String>>(1, "0.0.0.1")));
 
     // const non-null ipv6
     ASSERT_COLUMN_EQ(
         createConstColumn<Nullable<String>>(1, toBinary({{0xFDFE'0000, 0x0000'0000, 0x5A55'CAFF, 0xFEFA'9089}})),
-        executeFunction(
-            func_name,
-            createConstColumn<Nullable<String>>(1, "fdfe::5a55:caff:fefa:9089")));
+        executeFunction(func_name, createConstColumn<Nullable<String>>(1, "fdfe::5a55:caff:fefa:9089")));
 
     // valid ipv4
     ASSERT_COLUMN_EQ(
-        createColumn<Nullable<String>>(
-            toBinariesV4({0x0102'0304, 0x0001'0001, 0x0100'0100, 0x6F00'150C, 0x0001'0203, 0x0000'0000, 0x00FF'00FF, 0xFFFF'FFFF})),
+        createColumn<Nullable<String>>(toBinariesV4(
+            {0x0102'0304, 0x0001'0001, 0x0100'0100, 0x6F00'150C, 0x0001'0203, 0x0000'0000, 0x00FF'00FF, 0xFFFF'FFFF})),
         executeFunction(
             func_name,
-            createColumn<Nullable<String>>({"1.2.3.4", "0.1.0.1", "1.0.1.0", "111.0.21.012", "0000.1.2.3", "00.000.0000.00000", "0.255.0.255", "255.255.255.255"})));
+            createColumn<Nullable<String>>(
+                {"1.2.3.4",
+                 "0.1.0.1",
+                 "1.0.1.0",
+                 "111.0.21.012",
+                 "0000.1.2.3",
+                 "00.000.0000.00000",
+                 "0.255.0.255",
+                 "255.255.255.255"})));
 
     // invalid ipv4
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>(DataVectorString(21)),
         executeFunction(
             func_name,
-            createColumn<Nullable<String>>({"", "1.2", "1.2.3", "1.0.1.0a", "a0.1.2.3", "255", "255.", "....255", "...255", "...255.255", "..255", "..255.255", ".255", ".255...255", ".255..255", ".255.255", ".255.255.", "1.2.3.256", "1.256.3.4", "1.2.256.4", "256.2.3.4"})));
+            createColumn<Nullable<String>>(
+                {"",          "1.2",      "1.2.3",      "1.0.1.0a",  "a0.1.2.3",  "255",       "255.",
+                 "....255",   "...255",   "...255.255", "..255",     "..255.255", ".255",      ".255...255",
+                 ".255..255", ".255.255", ".255.255.",  "1.2.3.256", "1.256.3.4", "1.2.256.4", "256.2.3.4"})));
 
     // valid ipv6
 
@@ -238,7 +319,15 @@ try
         })),
         executeFunction(
             func_name,
-            createColumn<Nullable<String>>({"1:2:3:4:5:6:7:8", "1:2:3:4:5:6::7", "1:2:3:4:5::", "1:2:3:4:5::7", "::", "fdfe::5a55:caff:fefa:9089", "FDFE::5A55:CAFF:FEFA:9089", "ff:ff:ff:ff:ff:ff:ff:ff"})));
+            createColumn<Nullable<String>>(
+                {"1:2:3:4:5:6:7:8",
+                 "1:2:3:4:5:6::7",
+                 "1:2:3:4:5::",
+                 "1:2:3:4:5::7",
+                 "::",
+                 "fdfe::5a55:caff:fefa:9089",
+                 "FDFE::5A55:CAFF:FEFA:9089",
+                 "ff:ff:ff:ff:ff:ff:ff:ff"})));
 
     // valid ipv4-mapped ipv6
     ASSERT_COLUMN_EQ(
@@ -254,9 +343,7 @@ try
     // invalid ipv4-mapped ipv6
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({{}, {}}),
-        executeFunction(
-            func_name,
-            createColumn<Nullable<String>>({"::FFFF:169.256.13.133", "::1.1.1.x"})));
+        executeFunction(func_name, createColumn<Nullable<String>>({"::FFFF:169.256.13.133", "::1.1.1.x"})));
 }
 CATCH
 
@@ -266,9 +353,7 @@ try
     const String func_name = "tiDBIPv6NumToString";
 
     // empty column
-    ASSERT_COLUMN_EQ(
-        createColumn<Nullable<String>>({}),
-        executeFunction(func_name, createColumn<String>({})));
+    ASSERT_COLUMN_EQ(createColumn<Nullable<String>>({}), executeFunction(func_name, createColumn<String>({})));
 
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({}),
@@ -293,14 +378,30 @@ try
 
     // valid ipv4
     ASSERT_COLUMN_EQ(
-        createColumn<Nullable<String>>({"1.2.3.4", "0.1.0.1", "1.0.1.0", "111.0.21.12", "0.1.2.3", "0.0.0.0", "0.255.0.255", "255.255.255.255"}),
+        createColumn<Nullable<String>>(
+            {"1.2.3.4", "0.1.0.1", "1.0.1.0", "111.0.21.12", "0.1.2.3", "0.0.0.0", "0.255.0.255", "255.255.255.255"}),
         executeFunction(
             func_name,
-            createColumn<Nullable<String>>(toBinariesV4({0x0102'0304, 0x0001'0001, 0x0100'0100, 0x6F00'150C, 0x0001'0203, 0x0000'0000, 0x00FF'00FF, 0xFFFF'FFFF}))));
+            createColumn<Nullable<String>>(toBinariesV4(
+                {0x0102'0304,
+                 0x0001'0001,
+                 0x0100'0100,
+                 0x6F00'150C,
+                 0x0001'0203,
+                 0x0000'0000,
+                 0x00FF'00FF,
+                 0xFFFF'FFFF}))));
 
     // valid ipv6
     ASSERT_COLUMN_EQ(
-        createColumn<Nullable<String>>({"1:2:3:4:5:6:7:8", "1:2:3:4:5:6:0:7", "1:2:3:4:5::", "1:2:3:4:5::7", "::", "fdfe::5a55:caff:fefa:9089", "ff:ff:ff:ff:ff:ff:ff:ff"}),
+        createColumn<Nullable<String>>(
+            {"1:2:3:4:5:6:7:8",
+             "1:2:3:4:5:6:0:7",
+             "1:2:3:4:5::",
+             "1:2:3:4:5::7",
+             "::",
+             "fdfe::5a55:caff:fefa:9089",
+             "ff:ff:ff:ff:ff:ff:ff:ff"}),
         executeFunction(
             func_name,
             createColumn<Nullable<String>>(toBinariesV6({

@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -52,7 +52,8 @@ struct Settings
     M(SettingUInt64, mpp_task_timeout, DEFAULT_MPP_TASK_TIMEOUT, "mpp task max endurable time.")                                                                                                                                        \
     M(SettingUInt64, mpp_task_running_timeout, DEFAULT_MPP_TASK_RUNNING_TIMEOUT, "mpp task max time that running without any progress.")                                                                                                \
     M(SettingUInt64, mpp_task_waiting_timeout, DEFAULT_MPP_TASK_WAITING_TIMEOUT, "mpp task max time that waiting first data block from source input stream.")                                                                           \
-    M(SettingUInt64, disagg_task_snapshot_timeout, DEFAULT_DISAGG_TASK_TIMEOUT_SEC, "disagg task max endurable time, unit is second.")                                                                                                  \
+    M(SettingUInt64, disagg_build_task_timeout, DEFAULT_DISAGG_TASK_BUILD_TIMEOUT_SEC, "disagg task establish timeout, unit is second.")                                                                                                \
+    M(SettingUInt64, disagg_task_snapshot_timeout, DEFAULT_DISAGG_TASK_TIMEOUT_SEC, "disagg task snapshot max endurable time, unit is second.")                                                                                         \
     M(SettingInt64, safe_point_update_interval_seconds, 1, "The interval in seconds to update safe point from PD.")                                                                                                                     \
     M(SettingUInt64, min_compress_block_size, DEFAULT_MIN_COMPRESS_BLOCK_SIZE, "The actual size of the block to compress, if the uncompressed data less than max_compress_block_size is no less than this value "                       \
                                                                                "and no less than the volume of data for one mark.")                                                                                                     \
@@ -222,14 +223,16 @@ struct Settings
     M(SettingDouble, dt_read_thread_count_scale, 1.0, "Number of read thread = number of logical cpu cores * dt_read_thread_count_scale.  Only has meaning at server startup.")                                                         \
     M(SettingDouble, dt_filecache_max_downloading_count_scale, 1.0, "Max downloading task count of FileCache = io thread count * dt_filecache_max_downloading_count_scale.")                                                            \
     M(SettingUInt64, dt_filecache_min_age_seconds, 1800, "Files of the same priority can only be evicted from files that were not accessed within `dt_filecache_min_age_seconds` seconds.")                                             \
-    M(SettingUInt64, dt_small_file_size_threshold, 128 * 1024, "for dmfile, when the file size less than dt_small_file_size_threshold, it will be merged. If dt_small_file_size_threshold = 0, dmfile will just do as v2")               \
-    M(SettingUInt64, dt_merged_file_max_size, 16 * 1024 * 1024, "Small files are merged into one or more files not larger than dt_merged_file_max_size")                                                                              \
-    M(SettingUInt64, dt_fetch_pages_packet_limit_size, 0, "Response packet size limit of FetchDisaggPages, 0 means one page per packet")                                                                                                  \
-    M(SettingUInt64, dt_write_page_cache_limit_size, 2 * 1024 * 1024, "Limit size per write batch when compute node writing to PageStorage cache")                                                                                          \
+    M(SettingUInt64, dt_small_file_size_threshold, 128 * 1024, "for dmfile, when the file size less than dt_small_file_size_threshold, it will be merged. If dt_small_file_size_threshold = 0, dmfile will just do as v2")              \
+    M(SettingUInt64, dt_merged_file_max_size, 16 * 1024 * 1024, "Small files are merged into one or more files not larger than dt_merged_file_max_size")                                                                                \
+    M(SettingUInt64, dt_fetch_pages_packet_limit_size, 0, "Response packet size limit of FetchDisaggPages, 0 means one page per packet")                                                                                                \
+    M(SettingUInt64, dt_write_page_cache_limit_size, 2 * 1024 * 1024, "Limit size per write batch when compute node writing to PageStorage cache")                                                                                      \
     M(SettingDouble, io_thread_count_scale, 5.0, "Number of thread of IOThreadPool = number of logical cpu cores * io_thread_count_scale.  Only has meaning at server startup.")                                                        \
     M(SettingDouble, dt_fetch_page_concurrency_scale, 4.0, "Concurrency of fetching pages of one query equals to num_streams * dt_fetch_page_concurrency_scale.")                                                                       \
     M(SettingDouble, dt_prepare_stream_concurrency_scale, 2.0, "Concurrency of preparing streams of one query equals to num_streams * dt_prepare_stream_concurrency_scale.")                                                            \
+    M(SettingBool, dt_enable_delta_index_error_fallback, true, "Whether fallback to an empty delta index if a delta index error is detected")                                                                                           \
     M(SettingUInt64, init_thread_count_scale, 100, "Number of thread = number of logical cpu cores * init_thread_count_scale. It just works for thread pool for initStores and loadMetadata")                                           \
+    M(SettingDouble, cpu_thread_count_scale, 1.0, "Number of thread of computation-intensive thread pool = number of logical cpu cores * cpu_thread_count_scale. Only takes effects at server startup.")                                \
                                                                                                                                                                                                                                         \
     M(SettingChecksumAlgorithm, dt_checksum_algorithm, ChecksumAlgo::XXH3, "Checksum algorithm for delta tree stable storage")                                                                                                          \
     M(SettingCompressionMethod, dt_compression_method, CompressionMethod::LZ4, "The method of data compression when writing.")                                                                                                          \
@@ -294,12 +297,12 @@ struct Settings
     M(SettingUInt64, manual_compact_more_until_ms, 60000, "Continuously compact more segments until reaching specified elapsed time. If 0 is specified, only one segment will be compacted each round.")                                \
     M(SettingUInt64, max_bytes_before_external_join, 0, "max bytes used by join before spill, 0 as the default value, 0 means no limit")                                                                                                \
     M(SettingInt64, join_restore_concurrency, 0, "join restore concurrency, negative value means restore join serially, 0 means TiFlash choose restore concurrency automatically, 0 as the default value")                              \
-    M(SettingUInt64, max_cached_data_bytes_in_spiller, 1024ULL * 1024 * 100, "Max cached data bytes in spiller before spilling, 100MB as the default value, 0 means no limit")                                                          \
+    M(SettingUInt64, max_cached_data_bytes_in_spiller, 1024ULL * 1024 * 20, "Max cached data bytes in spiller before spilling, 20 MB as the default value, 0 means no limit")                                                           \
     M(SettingUInt64, max_spilled_rows_per_file, 200000, "Max spilled data rows per spill file, 200000 as the default value, 0 means no limit.")                                                                                         \
     M(SettingUInt64, max_spilled_bytes_per_file, 0, "Max spilled data bytes per spill file, 0 as the default value, 0 means no limit.")                                                                                                 \
     M(SettingBool, enable_planner, true, "Enable planner")                                                                                                                                                                              \
-    M(SettingBool, enable_pipeline, false, "Enable pipeline model")                                                                                                                                                                     \
-    M(SettingBool, enforce_enable_pipeline, false, "Enforce the enablement of the pipeline model")                                                                                                                                      \
+    M(SettingBool, enable_resource_control, true, "Enable resource control")                                                                                                                                                           \
+    M(SettingBool, enforce_enable_resource_control, false, "Enforce the enablement of the resource control")                                                                                                                            \
     M(SettingUInt64, pipeline_cpu_task_thread_pool_size, 0, "The size of cpu task thread pool. 0 means using number_of_logical_cpu_cores.")                                                                                             \
     M(SettingUInt64, pipeline_io_task_thread_pool_size, 0, "The size of io task thread pool. 0 means using number_of_logical_cpu_cores.")                                                                                               \
     M(SettingTaskQueueType, pipeline_cpu_task_thread_pool_queue_type, TaskQueueType::DEFAULT, "The task queue of cpu task thread pool")                                                                                                 \
@@ -309,9 +312,14 @@ struct Settings
     M(SettingUInt64, async_recv_version, 2, "1: reactor mode, 2: no additional threads")                                                                                                                                                \
     M(SettingUInt64, recv_queue_size, 0, "size of ExchangeReceiver queue, 0 means the size is set to data_source_mpp_task_num * 50")                                                                                                    \
     M(SettingUInt64, shallow_copy_cross_probe_threshold, 0, "minimum right rows to use shallow copy probe mode for cross join, default is max(1, max_block_size/10)")                                                                   \
-    M(SettingInt64, max_buffered_bytes_in_executor, 200LL * 1024 * 1024, "The max buffered size in each executor, 0 mean unlimited, use 200MB as the default value")                                                                    \
+    M(SettingInt64, max_buffered_bytes_in_executor, 100LL * 1024 * 1024, "The max buffered size in each executor, 0 mean unlimited, use 100MB as the default value")                                                                    \
     M(SettingUInt64, ddl_sync_interval_seconds, 60, "The interval of background DDL sync schema in seconds")                                                                                                                            \
-    M(SettingUInt64, ddl_restart_wait_seconds, 180, "The wait time for sync schema in seconds when restart")
+    M(SettingUInt64, ddl_restart_wait_seconds, 180, "The wait time for sync schema in seconds when restart")                                                                                                                            \
+    M(SettingDouble, auto_memory_revoke_trigger_threshold, 0.0, "Trigger auto memory revocation when the memory usage is above this percentage.")                                                                                       \
+    M(SettingUInt64, remote_read_queue_size, 0, "size of remote read queue, 0 means it is determined automatically")                                                                                                                    \
+    M(SettingBool, enable_cop_stream_for_remote_read, false, "Enable cop stream for remote read")                                                                                                                                        \
+    M(SettingUInt64, cop_timeout_for_remote_read, 60, "cop timeout seconds for remote read")                                                                                                                                            \
+    M(SettingUInt64, auto_spill_check_min_interval_ms, 10, "The minimum interval in millisecond between two successive auto spill check, default value is 100, 0 means no limit")
 
 
 // clang-format on

@@ -1,4 +1,4 @@
-# Copyright 2022 PingCAP, Ltd.
+# Copyright 2023 PingCAP, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,9 +17,6 @@ include(${TiFlash_SOURCE_DIR}/cmake/dbms_glob_sources.cmake)
 add_subdirectory (./V3/CheckpointFile/Proto)
 
 add_headers_and_sources(page .)
-add_headers_and_sources(page ./V1)
-add_headers_and_sources(page ./V1/mvcc)
-add_headers_and_sources(page ./V1/VersionSet)
 add_headers_and_sources(page ./V2)
 add_headers_and_sources(page ./V2/mvcc)
 add_headers_and_sources(page ./V2/VersionSet)

@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,17 +22,13 @@ namespace DB::tests
 template <typename T>
 using Limits = std::numeric_limits<T>;
 
-// TODO Support more convenient testing framework for Window Function.
-// TODO Tests with frame should be added
+// TODO support unsigned int as the test framework not supports unsigned int so far.
 class LeadLag : public DB::tests::WindowTest
 {
 public:
     const ASTPtr value_col = col(VALUE_COL_NAME);
 
-    void initializeContext() override
-    {
-        ExecutorTest::initializeContext();
-    }
+    void initializeContext() override { ExecutorTest::initializeContext(); }
 
     template <typename IntType>
     void testInt()
@@ -59,13 +55,15 @@ public:
             Lead2(value_col, lit(Field(static_cast<UInt64>(1)))),
             {toNullableVec<Int64>(/*partition*/ {1, 1, 1, 1, 2, 2, 2, 2}),
              toNullableVec<Int64>(/*order*/ {1, 2, 3, 4, 5, 6, 7, 8}),
-             toNullableVec<FloatType>(/*value*/ {1, Limits<FloatType>::max(), Limits<FloatType>::min(), 4.4, 5.5, 6.6, 0, 8.8})});
+             toNullableVec<FloatType>(
+                 /*value*/ {1, Limits<FloatType>::max(), Limits<FloatType>::min(), 4.4, 5.5, 6.6, 0, 8.8})});
         executeFunctionAndAssert(
             toNullableVec<FloatType>({{}, 1, Limits<FloatType>::max(), Limits<FloatType>::min(), {}, 5.5, 6.6, 0}),
             Lag2(value_col, lit(Field(static_cast<UInt64>(1)))),
             {toNullableVec<Int64>(/*partition*/ {1, 1, 1, 1, 2, 2, 2, 2}),
              toNullableVec<Int64>(/*order*/ {1, 2, 3, 4, 5, 6, 7, 8}),
-             toNullableVec<FloatType>(/*value*/ {1, Limits<FloatType>::max(), Limits<FloatType>::min(), 4.4, 5.5, 6.6, 0, 8.8})});
+             toNullableVec<FloatType>(
+                 /*value*/ {1, Limits<FloatType>::max(), Limits<FloatType>::min(), 4.4, 5.5, 6.6, 0, 8.8})});
     }
 };
 
@@ -368,8 +366,6 @@ CATCH
 TEST_F(LeadLag, Int)
 try
 {
-    // TODO support unsigned int.
-
     testInt<Int8>();
     testInt<Int16>();
     testInt<Int32>();

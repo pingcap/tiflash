@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,12 +27,12 @@
 #include <Poco/Logger.h>
 #include <Server/StorageConfigParser.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
+#include <Storages/KVStore/MultiRaft/RegionManager.h>
+#include <Storages/KVStore/MultiRaft/RegionPersister.h>
+#include <Storages/KVStore/Region.h>
 #include <Storages/Page/PageStorage.h>
 #include <Storages/Page/V2/PageStorage.h>
 #include <Storages/PathCapacityMetrics.h>
-#include <Storages/Transaction/Region.h>
-#include <Storages/Transaction/RegionManager.h>
-#include <Storages/Transaction/RegionPersister.h>
 #include <TestUtils/ConfigTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
@@ -61,7 +61,8 @@ try
     alarm.Set(&cq, Clock::now() + std::chrono::seconds(1), data);
     void * output_tag;
     bool ok;
-    const grpc::CompletionQueue::NextStatus status = cq.AsyncNext(&output_tag, &ok, Clock::now() + std::chrono::seconds(10));
+    const grpc::CompletionQueue::NextStatus status
+        = cq.AsyncNext(&output_tag, &ok, Clock::now() + std::chrono::seconds(10));
     ASSERT_TRUE(status == grpc::CompletionQueue::NextStatus::GOT_EVENT);
     ASSERT_TRUE(ok == true);
     ASSERT_TRUE(output_tag == data);
@@ -78,7 +79,8 @@ try
     void * output_tag;
     bool ok;
     alarm.Cancel();
-    const grpc::CompletionQueue::NextStatus status = cq.AsyncNext(&output_tag, &ok, Clock::now() + std::chrono::seconds(1));
+    const grpc::CompletionQueue::NextStatus status
+        = cq.AsyncNext(&output_tag, &ok, Clock::now() + std::chrono::seconds(1));
     ASSERT_TRUE(status == grpc::CompletionQueue::NextStatus::GOT_EVENT);
     ASSERT_TRUE(ok == false);
     ASSERT_TRUE(output_tag == data);

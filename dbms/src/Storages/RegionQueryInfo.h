@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,12 +14,13 @@
 
 #pragma once
 
-#include <Storages/Transaction/TiKVHandle.h>
-#include <Storages/Transaction/TiKVKeyValue.h>
+#include <Storages/KVStore/Decode/DecodedTiKVKeyValue.h>
+#include <Storages/KVStore/Decode/TiKVHandle.h>
+#include <Storages/RegionQueryInfo_fwd.h>
 
 namespace DB
 {
-using DecodedTiKVKeyPtr = std::shared_ptr<DecodedTiKVKey>;
+
 namespace DM
 {
 class ScanContext;
@@ -28,7 +29,13 @@ using ScanContextPtr = std::shared_ptr<ScanContext>;
 
 struct RegionQueryInfo
 {
-    RegionQueryInfo(RegionID region_id_, UInt64 version_, UInt64 conf_version_, Int64 physical_table_id_, const std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr> & range_in_table_ = {}, const std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> & required_handle_ranges_ = {})
+    RegionQueryInfo(
+        RegionID region_id_,
+        UInt64 version_,
+        UInt64 conf_version_,
+        TableID physical_table_id_,
+        const std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr> & range_in_table_ = {},
+        const std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> & required_handle_ranges_ = {})
         : region_id(region_id_)
         , version(version_)
         , conf_version(conf_version_)
@@ -39,7 +46,7 @@ struct RegionQueryInfo
     RegionID region_id;
     UInt64 version;
     UInt64 conf_version;
-    Int64 physical_table_id;
+    TableID physical_table_id;
     std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr> range_in_table;
     // required handle ranges is the handle range specified in DAG request
     std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> required_handle_ranges;
@@ -63,13 +70,22 @@ struct MvccQueryInfo
     using RegionsQueryInfo = std::vector<RegionQueryInfo>;
     RegionsQueryInfo regions_query_info;
 
+    // A cache for Region -> read index result between retries
     using ReadIndexRes = std::unordered_map<RegionID, UInt64>;
-    ReadIndexRes read_index_res;
+    ReadIndexRes read_index_res_cache;
 
     DM::ScanContextPtr scan_context;
 
 public:
     explicit MvccQueryInfo(bool resolve_locks_ = false, UInt64 read_tso_ = 0, DM::ScanContextPtr scan_ctx = nullptr);
+
+    void addReadIndexResToCache(RegionID region_id, UInt64 read_index) { read_index_res_cache[region_id] = read_index; }
+    UInt64 getReadIndexRes(RegionID region_id) const
+    {
+        if (auto it = read_index_res_cache.find(region_id); it != read_index_res_cache.end())
+            return it->second;
+        return 0;
+    }
 };
 
 } // namespace DB

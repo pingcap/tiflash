@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -67,7 +67,7 @@ public:
     void submitToIOTaskThreadPool(TaskPtr && task);
     void submitToIOTaskThreadPool(std::vector<TaskPtr> & tasks);
 
-    void cancel(const String & query_id);
+    void cancel(const String & query_id, const String & resource_group_name);
 
     static std::unique_ptr<TaskScheduler> instance;
 

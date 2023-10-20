@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -113,16 +113,14 @@ inline DataTypes typesFromString(const String & str)
     return data_types;
 }
 
-#define CHECK_TESTS_WITH_DATA_ENABLED                                                     \
-    if (!TiFlashTestEnv::isTestsWithDataEnabled())                                        \
-    {                                                                                     \
-        const auto * test_info = ::testing::UnitTest::GetInstance()->current_test_info(); \
-        LOG_INFO(&Poco::Logger::get("GTEST"),                                             \
-                 fmt::format(                                                             \
-                     "Test: {}.{} is disabled.",                                          \
-                     test_info->test_case_name(),                                         \
-                     test_info->name()));                                                 \
-        return;                                                                           \
+#define CHECK_TESTS_WITH_DATA_ENABLED                                                                 \
+    if (!TiFlashTestEnv::isTestsWithDataEnabled())                                                    \
+    {                                                                                                 \
+        const auto * test_info = ::testing::UnitTest::GetInstance()->current_test_info();             \
+        LOG_INFO(                                                                                     \
+            &Poco::Logger::get("GTEST"),                                                              \
+            fmt::format("Test: {}.{} is disabled.", test_info->test_case_name(), test_info->name())); \
+        return;                                                                                       \
     }
 } // namespace tests
 } // namespace DB

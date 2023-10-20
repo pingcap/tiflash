@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -37,11 +37,6 @@ void dbgFuncDumpAllRegion(Context & context, const ASTs & args, DBGInvoker::Prin
 // Usage:
 //   ./storage-client.sh "DBGInvoke dump_all_mock_region(table_id)"
 void dbgFuncDumpAllMockRegion(Context & context, const ASTs & args, DBGInvoker::Printer output);
-
-// Try flush regions
-// Usage:
-//   ./storage-client.sh "DBGInvoke try_flush([force_flush])"
-void dbgFuncTryFlush(Context & context, const ASTs & args, DBGInvoker::Printer output);
 
 // Try flush regions
 // Usage:

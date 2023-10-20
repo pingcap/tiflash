@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,7 +17,7 @@
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Coprocessor/ExchangeSenderInterpreterHelper.h>
-#include <Storages/Transaction/TypeMapping.h>
+#include <TiDB/Decode/TypeMapping.h>
 #include <common/logger_useful.h>
 #include <fmt/format.h>
 
@@ -31,7 +31,9 @@ std::vector<Int64> genPartitionColIds(const tipb::ExchangeSender & exchange_send
         if (unlikely(!isColumnExpr(part_key)))
         {
             throw TiFlashException(
-                fmt::format("{}: Invalid plan, in ExchangeSender, part_key of ExchangeSender must be column", __PRETTY_FUNCTION__),
+                fmt::format(
+                    "{}: Invalid plan, in ExchangeSender, part_key of ExchangeSender must be column",
+                    __PRETTY_FUNCTION__),
                 Errors::Coprocessor::BadRequest);
         }
         partition_col_ids.emplace_back(decodeDAGInt64(part_key.val()));
@@ -48,7 +50,10 @@ TiDB::TiDBCollators genPartitionColCollators(const tipb::ExchangeSender & exchan
     if (unlikely(has_collator_info && part_keys.size() != exchange_sender.types_size()))
     {
         throw TiFlashException(
-            fmt::format("{}: Invalid plan, in ExchangeSender, the length of partition_keys and types is not the same when TiDB new collation is enabled", __PRETTY_FUNCTION__),
+            fmt::format(
+                "{}: Invalid plan, in ExchangeSender, the length of partition_keys and types is not the same when TiDB "
+                "new collation is enabled",
+                __PRETTY_FUNCTION__),
             Errors::Coprocessor::BadRequest);
     }
     for (int i = 0; i < part_keys.size(); ++i)

@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -58,9 +58,7 @@ public:
     {}
 
 protected:
-    static void SetUpTestCase()
-    {
-    }
+    static void SetUpTestCase() {}
 
     void SetUp() override
     {
@@ -253,8 +251,9 @@ try
     callbacks.scanner = []() -> ExternalPageCallbacks::PathAndIdsVec {
         return {};
     };
-    callbacks.remover
-        = [&times_remover_called](const ExternalPageCallbacks::PathAndIdsVec &, const std::set<PageId> & normal_page_ids) -> void {
+    callbacks.remover = [&times_remover_called](
+                            const ExternalPageCallbacks::PathAndIdsVec &,
+                            const std::set<PageId> & normal_page_ids) -> void {
         times_remover_called += 1;
         ASSERT_EQ(normal_page_ids.size(), 2UL);
         EXPECT_GT(normal_page_ids.count(0), 0UL);
@@ -294,7 +293,9 @@ try
     }
 
     snapshot.reset();
-    callbacks.remover = [&times_remover_called](const ExternalPageCallbacks::PathAndIdsVec &, const std::set<PageId> & normal_page_ids) -> void {
+    callbacks.remover = [&times_remover_called](
+                            const ExternalPageCallbacks::PathAndIdsVec &,
+                            const std::set<PageId> & normal_page_ids) -> void {
         times_remover_called += 1;
         ASSERT_EQ(normal_page_ids.size(), 1UL);
         EXPECT_GT(normal_page_ids.count(0), 0UL);
@@ -400,8 +401,13 @@ try
         wb.putPage(1, 0, buf, buf_sz);
         storage->write(std::move(wb));
 
-        auto f
-            = PageFile::openPageFileForRead(1, 0, storage->delegator->defaultPath(), file_provider, PageFile::Type::Formal, storage->log);
+        auto f = PageFile::openPageFileForRead(
+            1,
+            0,
+            storage->delegator->defaultPath(),
+            file_provider,
+            PageFile::Type::Formal,
+            storage->log);
         f.setLegacy();
     }
 
@@ -412,7 +418,13 @@ try
         auto buf = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
         wb.putPage(1, 0, buf, buf_sz);
 
-        auto f = PageFile::newPageFile(2, 0, storage->delegator->defaultPath(), file_provider, PageFile::Type::Temp, storage->log);
+        auto f = PageFile::newPageFile(
+            2,
+            0,
+            storage->delegator->defaultPath(),
+            file_provider,
+            PageFile::Type::Temp,
+            storage->log);
         {
             auto w = f.createWriter(false, true);
 
@@ -786,8 +798,18 @@ try
     {
         WriteBatch batch;
         memset(buf, 0x01, buf_sz);
-        batch.putPage(1, 0, std::make_shared<ReadBufferFromMemory>(buf, buf_sz), buf_sz, PageFieldSizes{{32, 64, 79, 128, 196, 256, 269}});
-        batch.putPage(2, 0, std::make_shared<ReadBufferFromMemory>(buf, buf_sz), buf_sz, PageFieldSizes{{64, 79, 128, 196, 256, 301}});
+        batch.putPage(
+            1,
+            0,
+            std::make_shared<ReadBufferFromMemory>(buf, buf_sz),
+            buf_sz,
+            PageFieldSizes{{32, 64, 79, 128, 196, 256, 269}});
+        batch.putPage(
+            2,
+            0,
+            std::make_shared<ReadBufferFromMemory>(buf, buf_sz),
+            buf_sz,
+            PageFieldSizes{{64, 79, 128, 196, 256, 301}});
         batch.putRefPage(3, 2);
         batch.putRefPage(4, 2);
         try
@@ -815,11 +837,12 @@ try
     {
         WriteBatch batch;
         memset(buf, 0x02, buf_sz);
-        batch.putPage(1,
-                      0,
-                      std::make_shared<ReadBufferFromMemory>(buf, buf_sz),
-                      buf_sz, //
-                      PageFieldSizes{{32, 128, 196, 256, 12, 99, 1, 300}});
+        batch.putPage(
+            1,
+            0,
+            std::make_shared<ReadBufferFromMemory>(buf, buf_sz),
+            buf_sz, //
+            PageFieldSizes{{32, 128, 196, 256, 12, 99, 1, 300}});
         storage->write(std::move(batch));
 
         auto page1 = storage->read(1);
@@ -861,8 +884,18 @@ try
     {
         WriteBatch batch;
         memset(buf, 0x01, buf_sz);
-        batch.putPage(1, 0, std::make_shared<ReadBufferFromMemory>(buf, buf_sz), buf_sz, PageFieldSizes{{32, 64, 79, 128, 196, 256, 269}});
-        batch.putPage(2, 0, std::make_shared<ReadBufferFromMemory>(buf, buf_sz), buf_sz, PageFieldSizes{{64, 79, 128, 196, 256, 301}});
+        batch.putPage(
+            1,
+            0,
+            std::make_shared<ReadBufferFromMemory>(buf, buf_sz),
+            buf_sz,
+            PageFieldSizes{{32, 64, 79, 128, 196, 256, 269}});
+        batch.putPage(
+            2,
+            0,
+            std::make_shared<ReadBufferFromMemory>(buf, buf_sz),
+            buf_sz,
+            PageFieldSizes{{64, 79, 128, 196, 256, 301}});
         batch.putRefPage(3, 2);
         batch.putRefPage(4, 2);
         try
@@ -889,11 +922,12 @@ try
     {
         WriteBatch batch;
         memset(buf, 0x02, buf_sz);
-        batch.putPage(1,
-                      0,
-                      std::make_shared<ReadBufferFromMemory>(buf, buf_sz),
-                      buf_sz, //
-                      PageFieldSizes{{32, 128, 196, 256, 12, 99, 1, 300}});
+        batch.putPage(
+            1,
+            0,
+            std::make_shared<ReadBufferFromMemory>(buf, buf_sz),
+            buf_sz, //
+            PageFieldSizes{{32, 128, 196, 256, 12, 99, 1, 300}});
         storage->write(std::move(batch));
 
         auto page1 = storage->read(1);

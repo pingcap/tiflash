@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,7 +18,7 @@
 #include <Core/NamesAndTypes.h>
 #include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Coprocessor/TiDBTableScan.h>
-#include <Storages/Transaction/TiDB.h>
+#include <TiDB/Schema/TiDB.h>
 #include <common/StringRef.h>
 
 namespace DB
@@ -39,7 +39,6 @@ using ColumnDefinesPtr = std::shared_ptr<std::vector<ColumnDefine>>;
 } // namespace DM
 
 // The column defines and `extra table id index`
-std::tuple<DM::ColumnDefinesPtr, int>
-genColumnDefinesForDisaggregatedRead(const TiDBTableScan & table_scan);
+std::tuple<DM::ColumnDefinesPtr, int> genColumnDefinesForDisaggregatedRead(const TiDBTableScan & table_scan);
 
 } // namespace DB

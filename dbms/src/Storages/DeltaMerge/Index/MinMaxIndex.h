@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -49,20 +49,22 @@ private:
         : has_null_marks(has_null_marks_)
         , has_value_marks(has_value_marks_)
         , minmaxes(std::move(minmaxes_))
-    {
-    }
+    {}
 
 public:
     explicit MinMaxIndex(const IDataType & type)
         : has_null_marks(std::make_shared<PaddedPODArray<UInt8>>())
         , has_value_marks(std::make_shared<PaddedPODArray<UInt8>>())
         , minmaxes(type.createColumn())
-    {
-    }
+    {}
 
     size_t byteSize() const
     {
-        return sizeof(UInt8) * has_null_marks->size() + sizeof(UInt8) * has_value_marks->size() + minmaxes->byteSize();
+        // we add 3 * sizeof(PaddedPODArray<UInt8>)
+        // because has_null_marks/ has_value_marks / minmaxes are all use PaddedPODArray
+        // Thus we need to add the structual memory cost of PaddedPODArray for each of them
+        return sizeof(UInt8) * has_null_marks->size() + sizeof(UInt8) * has_value_marks->size() + minmaxes->byteSize()
+            + 3 * sizeof(PaddedPODArray<UInt8>);
     }
 
     void addPack(const IColumn & column, const ColumnVector<UInt8> * del_mark);
@@ -79,21 +81,63 @@ public:
 
     std::pair<UInt64, UInt64> getUInt64MinMax(size_t pack_index);
 
-    RSResult checkEqual(size_t pack_index, const Field & value, const DataTypePtr & type);
-    RSResult checkGreater(size_t pack_index, const Field & value, const DataTypePtr & type, int nan_direction);
-    RSResult checkGreaterEqual(size_t pack_index, const Field & value, const DataTypePtr & type, int nan_direction);
-    RSResult checkIsNull(size_t pack_index);
+    RSResults checkEqual(size_t start_pack, size_t pack_count, const Field & value, const DataTypePtr & type);
+    RSResults checkIn(
+        size_t start_pack,
+        size_t pack_count,
+        const std::vector<Field> & values,
+        const DataTypePtr & type);
+    RSResults checkGreater(
+        size_t start_pack,
+        size_t pack_count,
+        const Field & value,
+        const DataTypePtr & type,
+        int nan_direction);
+    RSResults checkGreaterEqual(
+        size_t start_pack,
+        size_t pack_count,
+        const Field & value,
+        const DataTypePtr & type,
+        int nan_direction);
+    RSResults checkIsNull(size_t start_pack, size_t pack_count);
+
+    RSResults checkNullableEqual(size_t start_pack, size_t pack_count, const Field & value, const DataTypePtr & type);
+    RSResults checkNullableIn(
+        size_t start_pack,
+        size_t pack_count,
+        const std::vector<Field> & values,
+        const DataTypePtr & type);
+    RSResults checkNullableGreater(size_t start_pack, size_t pack_count, const Field & value, const DataTypePtr & type);
+    RSResults checkNullableGreaterEqual(
+        size_t start_pack,
+        size_t pack_count,
+        const Field & value,
+        const DataTypePtr & type);
 
     static String toString();
-    RSResult checkNullableEqual(size_t pack_index, const Field & value, const DataTypePtr & type);
-    RSResult checkNullableGreater(size_t pack_index, const Field & value, const DataTypePtr & type);
-    RSResult checkNullableGreaterEqual(size_t pack_index, const Field & value, const DataTypePtr & type);
 };
 
 
 struct MinMaxIndexWeightFunction
 {
-    size_t operator()(const MinMaxIndex & index) const { return index.byteSize(); }
+    size_t operator()(const String & key, const MinMaxIndex & index) const
+    {
+        auto index_memory_usage = index.byteSize(); // index
+        auto cells_memory_usage = 32; // Cells struct memory cost
+
+        // 2. the memory cost of key part
+        auto str_len = key.size(); // key_len
+        auto key_memory_usage = sizeof(String); // String struct memory cost
+
+        // 3. the memory cost of hash table
+        auto unordered_map_memory_usage = 28; // hash table struct approximate memory cost
+
+        // 4. the memory cost of LRUQueue
+        auto list_memory_usage = sizeof(std::list<String>); // list struct memory cost
+
+        return index_memory_usage + cells_memory_usage + str_len * 2 + key_memory_usage * 2 + unordered_map_memory_usage
+            + list_memory_usage;
+    }
 };
 
 

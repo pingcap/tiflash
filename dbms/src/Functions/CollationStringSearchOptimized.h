@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,7 +15,7 @@
 #pragma once
 
 #include <Common/UTF8Helpers.h>
-#include <Storages/Transaction/CollatorUtils.h>
+#include <TiDB/Collation/CollatorUtils.h>
 #include <common/mem_utils_opt.h>
 
 #include <algorithm>
@@ -155,39 +155,21 @@ struct BinStrPattern
         ssize_t match_str_index_start{}, match_str_index_end{};
         ssize_t src_index_start{}, src_index_end{};
 
-        bool isSrcValid() const
-        {
-            return !isSrcEmpty();
-        }
-        bool isSrcEmpty() const
-        {
-            return src_index_start >= src_index_end;
-        }
-        size_t srcSize() const
-        {
-            return src_index_end - src_index_start;
-        }
+        bool isSrcValid() const { return !isSrcEmpty(); }
+        bool isSrcEmpty() const { return src_index_start >= src_index_end; }
+        size_t srcSize() const { return src_index_end - src_index_start; }
         std::string_view getSrcStrView(const char * src_data, size_t size) const
         {
             return std::string_view{src_data + src_index_start, size};
         }
-        void srcMoveByOffset(size_t size)
-        {
-            src_index_start += size;
-        }
+        void srcMoveByOffset(size_t size) { src_index_start += size; }
         void srcSkipChar(const char * src_data)
         {
             auto size = BinCharSizeFromHead<utf8>(src_data[src_index_start]);
             srcMoveByOffset(size);
         }
-        bool patternEmpty() const
-        {
-            return pattern_index_start >= pattern_index_end;
-        }
-        void makeSrcInvalid()
-        {
-            src_index_start = src_index_end;
-        }
+        bool patternEmpty() const { return pattern_index_start >= pattern_index_end; }
+        void makeSrcInvalid() { src_index_start = src_index_end; }
     };
 
     // check str equality
@@ -261,7 +243,9 @@ struct BinStrPattern
                     return false;
                 }
 
-                if (!mem_utils::IsStrViewEqual({src.data() + cur_match_desc.src_index_end - match_str.size(), match_str.size()}, match_str))
+                if (!mem_utils::IsStrViewEqual(
+                        {src.data() + cur_match_desc.src_index_end - match_str.size(), match_str.size()},
+                        match_str))
                 {
                     return false;
                 }
@@ -274,7 +258,9 @@ struct BinStrPattern
                 if (!cur_match_desc.isSrcValid())
                     return false;
 
-                auto size = BinCharSizeFromEnd<utf8>(&src[cur_match_desc.src_index_end - 1], &src[cur_match_desc.src_index_start]);
+                auto size = BinCharSizeFromEnd<utf8>(
+                    &src[cur_match_desc.src_index_end - 1],
+                    &src[cur_match_desc.src_index_start]);
                 cur_match_desc.src_index_end -= size; // remove from end
             }
         }

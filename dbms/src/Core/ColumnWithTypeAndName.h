@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -53,7 +53,12 @@ struct ColumnWithTypeAndName
     {}
     // If we use `Field default_value_` as the param and init default_value with `std::move(default_value_)`, it brings compile warnings.
     // Check PR#1383 for more details
-    ColumnWithTypeAndName(ColumnPtr column_, DataTypePtr type_, String name_, Int64 column_id_ = 0, const Field & default_value_ = Field())
+    ColumnWithTypeAndName(
+        ColumnPtr column_,
+        DataTypePtr type_,
+        String name_,
+        Int64 column_id_ = 0,
+        const Field & default_value_ = Field())
         : column(std::move(column_))
         , type(std::move(type_))
         , name(std::move(name_))

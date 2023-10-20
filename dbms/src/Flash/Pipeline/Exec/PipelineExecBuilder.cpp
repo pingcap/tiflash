@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -39,10 +39,7 @@ void PipelineExecBuilder::setSinkOp(SinkOpPtr && sink_op_)
 PipelineExecPtr PipelineExecBuilder::build()
 {
     RUNTIME_CHECK(source_op && sink_op);
-    return std::make_unique<PipelineExec>(
-        std::move(source_op),
-        std::move(transform_ops),
-        std::move(sink_op));
+    return std::make_unique<PipelineExec>(std::move(source_op), std::move(transform_ops), std::move(sink_op));
 }
 
 OperatorProfileInfoPtr PipelineExecBuilder::getCurProfileInfo() const
@@ -110,7 +107,10 @@ void PipelineExecGroupBuilder::merge(PipelineExecGroupBuilder && other)
     RUNTIME_CHECK(groups.size() == other.groups.size());
     size_t group_num = groups.size();
     for (size_t i = 0; i < group_num; ++i)
-        groups[i].insert(groups[i].end(), std::make_move_iterator(other.groups[i].begin()), std::make_move_iterator(other.groups[i].end()));
+        groups[i].insert(
+            groups[i].end(),
+            std::make_move_iterator(other.groups[i].begin()),
+            std::make_move_iterator(other.groups[i].end()));
 }
 
 PipelineExecGroup PipelineExecGroupBuilder::build()
@@ -130,7 +130,7 @@ Block PipelineExecGroupBuilder::getCurrentHeader()
 {
     auto & cur_group = getCurGroup();
     RUNTIME_CHECK(!cur_group.empty());
-    return cur_group.back().getCurrentHeader();
+    return cur_group.front().getCurrentHeader();
 }
 
 OperatorProfileInfos PipelineExecGroupBuilder::getCurProfileInfos() const

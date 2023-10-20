@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,8 +25,7 @@
 namespace DB::DM::Remote
 {
 
-class RNWorkers
-    : private boost::noncopyable
+class RNWorkers : private boost::noncopyable
 {
 public:
     using Channel = MPMCQueue<RNReadSegmentTaskPtr>;
@@ -40,10 +39,7 @@ public:
 
     void wait();
 
-    ~RNWorkers()
-    {
-        wait();
-    }
+    ~RNWorkers() { wait(); }
 
 public:
     struct Options
@@ -65,6 +61,8 @@ public:
     }
 
 private:
+    ChannelPtr empty_channel;
+
     RNWorkerFetchPagesPtr worker_fetch_pages;
     RNWorkerPrepareStreamsPtr worker_prepare_streams;
 };

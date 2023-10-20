@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -40,6 +40,7 @@ class MPPTaskManager;
 using MPPTaskManagerPtr = std::shared_ptr<MPPTaskManager>;
 class DAGContext;
 class ProcessListEntry;
+class QueryOperatorSpillContexts;
 
 enum class AbortType
 {
@@ -61,10 +62,11 @@ public:
 private:
     MPPTaskManager * manager = nullptr;
     String task_unique_id;
-    bool initialized = false;
+    bool added_to_monitor = false;
 };
 
-class MPPTask : public std::enable_shared_from_this<MPPTask>
+class MPPTask
+    : public std::enable_shared_from_this<MPPTask>
     , private boost::noncopyable
 {
 public:
@@ -75,6 +77,15 @@ public:
     static Ptr newTask(Args &&... args)
     {
         return Ptr(new MPPTask(std::forward<Args>(args)...));
+    }
+
+    /// Ensure all MPPTasks are allocated as std::shared_ptr
+    template <typename... Args>
+    static Ptr newTaskForTest(Args &&... args)
+    {
+        auto ret = Ptr(new MPPTask(std::forward<Args>(args)...));
+        ret->initForTest();
+        return ret;
     }
 
     const MPPTaskId & getId() const { return id; }
@@ -103,6 +114,8 @@ private:
 
     void runImpl();
 
+    void initForTest();
+
     void unregisterTask();
 
     // abort the mpp task, note this function should be non-blocking, it just set some flags
@@ -126,6 +139,9 @@ private:
 
     void initProcessListEntry(const std::shared_ptr<ProcessListEntry> & query_process_list_entry);
 
+    void initQueryOperatorSpillContexts(
+        const std::shared_ptr<QueryOperatorSpillContexts> & mpp_query_operator_spill_contexts);
+
     void initExchangeReceivers();
 
     String getErrString() const;
@@ -134,6 +150,8 @@ private:
     MemoryTracker * getMemoryTracker() const;
 
     void reportStatus(const String & err_msg);
+
+    String getResourceGroupName() const { return meta.resource_group_name(); }
 
 private:
     struct ProcessListEntryHolder
@@ -158,7 +176,7 @@ private:
     ContextPtr context;
 
     MPPTaskManager * manager;
-    std::atomic<bool> is_public{false};
+    std::atomic<bool> is_registered{false};
 
     MPPTaskScheduleEntry schedule_entry;
 

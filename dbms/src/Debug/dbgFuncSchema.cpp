@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,11 +23,11 @@
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/ParserCreateQuery.h>
 #include <Storages/IManageableStorage.h>
-#include <Storages/Transaction/TMTContext.h>
-#include <Storages/Transaction/TiDB.h>
+#include <Storages/KVStore/TMTContext.h>
 #include <TiDB/Schema/SchemaNameMapper.h>
 #include <TiDB/Schema/SchemaSyncService.h>
 #include <TiDB/Schema/SchemaSyncer.h>
+#include <TiDB/Schema/TiDB.h>
 #include <TiDB/Schema/TiDBSchemaManager.h>
 #include <fmt/core.h>
 

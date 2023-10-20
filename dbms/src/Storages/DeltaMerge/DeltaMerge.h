@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,6 +15,8 @@
 #pragma once
 
 #include <Common/Exception.h>
+#include <Common/Logger.h>
+#include <Common/ProfileEvents.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <IO/ReadBufferFromFile.h>
 #include <IO/ReadHelpers.h>
@@ -25,15 +27,26 @@
 #include <Storages/DeltaMerge/RowKeyFilter.h>
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
 
+namespace ProfileEvents
+{
+extern const Event DTDeltaIndexError;
+} // namespace ProfileEvents
+
 namespace DB
 {
+namespace ErrorCodes
+{
+extern const int DT_DELTA_INDEX_ERROR;
+}
+
 namespace DM
 {
 /// Note that the columns in stable input stream and value space must exactly the same, including name, type, and id.
 /// The first column must be PK column.
 /// This class does not guarantee that the rows in the return blocks are filltered by range.
 template <class DeltaValueReader, class IndexIterator, bool skippable_place = false, bool need_row_id = false>
-class DeltaMergeBlockInputStream final : public SkippableBlockInputStream
+class DeltaMergeBlockInputStream final
+    : public SkippableBlockInputStream
     , Allocator<false>
 {
     static constexpr size_t UNLIMITED = std::numeric_limits<UInt64>::max();
@@ -98,14 +111,18 @@ private:
     // `delta_row_ids` is used to return the row id of delta.
     std::vector<UInt32> delta_row_ids;
 
+    const String tracing_id;
+
 public:
-    DeltaMergeBlockInputStream(const SkippableBlockInputStreamPtr & stable_input_stream_,
-                               const DeltaValueReaderPtr & delta_value_reader_,
-                               const IndexIterator & delta_index_start_,
-                               const IndexIterator & delta_index_end_,
-                               const RowKeyRange rowkey_range_,
-                               size_t max_block_size_,
-                               UInt64 stable_rows_)
+    DeltaMergeBlockInputStream(
+        const SkippableBlockInputStreamPtr & stable_input_stream_,
+        const DeltaValueReaderPtr & delta_value_reader_,
+        const IndexIterator & delta_index_start_,
+        const IndexIterator & delta_index_end_,
+        const RowKeyRange rowkey_range_,
+        size_t max_block_size_,
+        UInt64 stable_rows_,
+        const String & tracing_id_)
         : stable_input_stream(stable_input_stream_)
         , delta_value_reader(delta_value_reader_)
         , delta_index_it(delta_index_start_)
@@ -115,6 +132,7 @@ public:
         , rowkey_column_size(rowkey_range.rowkey_column_size)
         , max_block_size(max_block_size_)
         , stable_rows(stable_rows_)
+        , tracing_id(tracing_id_)
     {
         if constexpr (skippable_place)
         {
@@ -166,7 +184,10 @@ public:
     }
 
     size_t skipNextBlock() override { throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED); }
-    Block readWithFilter(const IColumn::Filter &) override { throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED); }
+    Block readWithFilter(const IColumn::Filter &) override
+    {
+        throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED);
+    }
 
     Block read() override
     {
@@ -212,11 +233,32 @@ private:
                 int cmp_result = compare(rowkey_value, last_value_ref);
                 if (cmp_result < 0 || (cmp_result == 0 && version < last_version))
                 {
-                    throw Exception("DeltaMerge return wrong result, current handle[" + rowkey_value.toDebugString() + "]version["
-                                    + DB::toString(version) + "]@read[" + DB::toString(num_read) + "]@pos[" + DB::toString(i)
-                                    + "] is expected >= last_handle[" + last_value_ref.toDebugString() + "]last_version["
-                                    + DB::toString(last_version) + "]@read[" + DB::toString(last_handle_read_num) + "]@pos["
-                                    + DB::toString(last_handle_pos) + "]");
+                    ProfileEvents::increment(ProfileEvents::DTDeltaIndexError);
+                    LOG_ERROR(
+                        Logger::get(tracing_id),
+                        "DeltaMerge return wrong result, current handle[{}]version[{}]@read[{}]@pos[{}] "
+                        "is expected >= last_handle[{}]last_version[{}]@read[{}]@pos[{}]",
+                        rowkey_value.toDebugString(),
+                        version,
+                        num_read,
+                        i,
+                        last_value_ref.toDebugString(),
+                        last_version,
+                        last_handle_read_num,
+                        last_handle_pos);
+
+                    throw Exception(
+                        ErrorCodes::DT_DELTA_INDEX_ERROR,
+                        "DeltaMerge return wrong result, current handle[{}]version[{}]@read[{}]@pos[{}] "
+                        "is expected >= last_handle[{}]last_version[{}]@read[{}]@pos[{}]",
+                        rowkey_value.toDebugString(),
+                        version,
+                        num_read,
+                        i,
+                        last_value_ref.toDebugString(),
+                        last_version,
+                        last_handle_read_num,
+                        last_handle_pos);
                 }
                 last_value_ref = rowkey_value;
                 last_version = version;
@@ -230,10 +272,11 @@ private:
 
             if constexpr (need_row_id)
             {
-                RUNTIME_CHECK_MSG(block.rows() == block.segmentRowIdCol()->size(),
-                                  "Build bitmap error: block.rows {} != segmentRowId.size() {}",
-                                  block.rows(),
-                                  block.segmentRowIdCol()->size());
+                RUNTIME_CHECK_MSG(
+                    block.rows() == block.segmentRowIdCol()->size(),
+                    "Build bitmap error: block.rows {} != segmentRowId.size() {}",
+                    block.rows(),
+                    block.segmentRowIdCol()->size());
             }
         }
     }
@@ -497,7 +540,8 @@ private:
         auto offset = cur_stable_block_pos;
         auto limit = copy_rows;
 
-        auto [final_offset, final_limit] = RowKeyFilter::getPosRangeOfSorted(rowkey_range, cur_stable_block_columns[0], offset, limit);
+        auto [final_offset, final_limit]
+            = RowKeyFilter::getPosRangeOfSorted(rowkey_range, cur_stable_block_columns[0], offset, limit);
 
         if constexpr (skippable_place)
         {
@@ -522,7 +566,10 @@ private:
                     output_columns[column_id]->reserve(max_block_size);
             }
             for (size_t column_id = 0; column_id < num_columns; ++column_id)
-                output_columns[column_id]->insertRangeFrom(*cur_stable_block_columns[column_id], final_offset, final_limit);
+                output_columns[column_id]->insertRangeFrom(
+                    *cur_stable_block_columns[column_id],
+                    final_offset,
+                    final_limit);
 
             output_write_limit -= std::min(final_limit, output_write_limit);
         }
@@ -554,7 +601,8 @@ private:
         {
             delta_row_ids.clear();
             delta_row_ids.reserve(write_rows);
-            actual_write = delta_value_reader->readRows(output_columns, use_delta_offset, write_rows, &rowkey_range, &delta_row_ids);
+            actual_write = delta_value_reader
+                               ->readRows(output_columns, use_delta_offset, write_rows, &rowkey_range, &delta_row_ids);
             fillSegmentRowId(delta_row_ids);
         }
         else

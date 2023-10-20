@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@
 
 #include <Core/NamesAndTypes.h>
 #include <Core/Types.h>
-#include <Storages/Transaction/Types.h>
+#include <Storages/KVStore/Types.h>
 
 #include <map>
 #include <set>
@@ -40,7 +40,10 @@ constexpr char tmpNamePrefix[] = "_tiflash_tmp_";
 struct TmpTableNameGenerator
 {
     using TableName = std::pair<String, String>;
-    TableName operator()(const TableName & name) { return std::make_pair(name.first, String(tmpNamePrefix) + name.second); }
+    TableName operator()(const TableName & name)
+    {
+        return std::make_pair(name.first, String(tmpNamePrefix) + name.second);
+    }
 };
 
 struct TmpColNameGenerator

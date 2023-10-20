@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,8 +22,8 @@
 #include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/IFunction.h>
-#include <Storages/Transaction/JsonBinary.h>
-#include <Storages/Transaction/JsonPathExprRef.h>
+#include <TiDB/Decode/JsonBinary.h>
+#include <TiDB/Decode/JsonPathExprRef.h>
 
 namespace DB
 {
@@ -51,20 +51,11 @@ class FunctionsJsonExtract : public IFunction
 {
 public:
     static constexpr auto name = "json_extract";
-    static FunctionPtr create(const Context &)
-    {
-        return std::make_shared<FunctionsJsonExtract>();
-    }
+    static FunctionPtr create(const Context &) { return std::make_shared<FunctionsJsonExtract>(); }
 
-    String getName() const override
-    {
-        return name;
-    }
+    String getName() const override { return name; }
 
-    size_t getNumberOfArguments() const override
-    {
-        return 0;
-    }
+    size_t getNumberOfArguments() const override { return 0; }
 
     bool useDefaultImplementationForNulls() const override { return false; }
     bool isVariadic() const override { return true; }
@@ -116,7 +107,9 @@ public:
             all_null = isColumnOnlyNull(nullable_col); /// changes
             source_data_column_ptr = checkAndGetColumn<ColumnString>(nullable_col->getNestedColumnPtr().get());
             if unlikely (!source_data_column_ptr)
-                throw Exception(fmt::format("Illegal column {} of argument of function {}", json_column->getName(), getName()), ErrorCodes::ILLEGAL_COLUMN);
+                throw Exception(
+                    fmt::format("Illegal column {} of argument of function {}", json_column->getName(), getName()),
+                    ErrorCodes::ILLEGAL_COLUMN);
         }
         else if (const auto * string_col = checkAndGetColumn<ColumnString>(json_column))
         {
@@ -124,7 +117,9 @@ public:
         }
         else
         {
-            throw Exception(fmt::format("Illegal column {} of argument of function {}", json_column->getName(), getName()), ErrorCodes::ILLEGAL_COLUMN);
+            throw Exception(
+                fmt::format("Illegal column {} of argument of function {}", json_column->getName(), getName()),
+                ErrorCodes::ILLEGAL_COLUMN);
         }
 
         if unlikely (all_null)
@@ -160,7 +155,8 @@ public:
             {
                 if unlikely (nullable_string_path_col->isNullAt(0))
                 {
-                    block.getByPosition(result).column = block.getByPosition(result).type->createColumnConst(rows, Null());
+                    block.getByPosition(result).column
+                        = block.getByPosition(result).type->createColumnConst(rows, Null());
                     return;
                 }
                 nested_column = nullable_string_path_col->getNestedColumnPtr().get();
@@ -175,29 +171,41 @@ public:
                 path_str = fixed_string_col->getDataAt(0);
             }
             else
-                throw Exception(fmt::format("Illegal column {} of argument of function {}", column->getName(), getName()), ErrorCodes::ILLEGAL_COLUMN);
+                throw Exception(
+                    fmt::format("Illegal column {} of argument of function {}", column->getName(), getName()),
+                    ErrorCodes::ILLEGAL_COLUMN);
 
             auto path_expr = JsonPathExpr::parseJsonPathExpr(path_str);
             /// If any path_expr failed to parse, return null
             if (!path_expr)
-                throw Exception(fmt::format("Illegal json path expression {} of argument of function {}", column->getName(), getName()), ErrorCodes::ILLEGAL_COLUMN);
+                throw Exception(
+                    fmt::format(
+                        "Illegal json path expression {} of argument of function {}",
+                        column->getName(),
+                        getName()),
+                    ErrorCodes::ILLEGAL_COLUMN);
             path_expr_container_vec.push_back(std::make_unique<JsonPathExprRefContainer>(path_expr));
         }
 
         const ColumnPtr column = block.getByPosition(arguments[0]).column;
         if (const_json)
         {
-            auto nullable_col = calculateResultCol(source_data_column_ptr, source_nullable_column_ptr, path_expr_container_vec);
+            auto nullable_col
+                = calculateResultCol(source_data_column_ptr, source_nullable_column_ptr, path_expr_container_vec);
             block.getByPosition(result).column = ColumnConst::create(std::move(nullable_col), rows);
         }
         else
         {
-            block.getByPosition(result).column = calculateResultCol(source_data_column_ptr, source_nullable_column_ptr, path_expr_container_vec);
+            block.getByPosition(result).column
+                = calculateResultCol(source_data_column_ptr, source_nullable_column_ptr, path_expr_container_vec);
         }
     }
 
 private:
-    static MutableColumnPtr calculateResultCol(const ColumnString * source_col, const ColumnNullable * source_nullable_col, std::vector<JsonPathExprRefContainerPtr> & path_expr_container_vec)
+    static MutableColumnPtr calculateResultCol(
+        const ColumnString * source_col,
+        const ColumnNullable * source_nullable_col,
+        std::vector<JsonPathExprRefContainerPtr> & path_expr_container_vec)
     {
         size_t rows = source_col->size();
         const ColumnString::Chars_t & data_from = source_col->getChars();
@@ -222,7 +230,9 @@ private:
             }
             else
             {
-                JsonBinary json_binary(data_from[current_offset], StringRef(&data_from[current_offset + 1], data_length - 1));
+                JsonBinary json_binary(
+                    data_from[current_offset],
+                    StringRef(&data_from[current_offset + 1], data_length - 1));
                 found = json_binary.extract(path_expr_container_vec, write_buffer);
             }
             if (!found)
@@ -262,20 +272,11 @@ class FunctionsJsonUnquote : public IFunction
 {
 public:
     static constexpr auto name = "json_unquote";
-    static FunctionPtr create(const Context &)
-    {
-        return std::make_shared<FunctionsJsonUnquote>();
-    }
+    static FunctionPtr create(const Context &) { return std::make_shared<FunctionsJsonUnquote>(); }
 
-    String getName() const override
-    {
-        return name;
-    }
+    String getName() const override { return name; }
 
-    size_t getNumberOfArguments() const override
-    {
-        return 1;
-    }
+    size_t getNumberOfArguments() const override { return 1; }
 
     bool useDefaultImplementationForConstants() const override { return true; }
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
@@ -317,7 +318,9 @@ public:
             block.getByPosition(result).column = ColumnNullable::create(std::move(col_to), std::move(col_null_map));
         }
         else
-            throw Exception(fmt::format("Illegal column {} of argument of function {}", column->getName(), getName()), ErrorCodes::ILLEGAL_COLUMN);
+            throw Exception(
+                fmt::format("Illegal column {} of argument of function {}", column->getName(), getName()),
+                ErrorCodes::ILLEGAL_COLUMN);
     }
 };
 
@@ -325,20 +328,11 @@ class FunctionsCastJsonAsString : public IFunction
 {
 public:
     static constexpr auto name = "cast_json_as_string";
-    static FunctionPtr create(const Context &)
-    {
-        return std::make_shared<FunctionsCastJsonAsString>();
-    }
+    static FunctionPtr create(const Context &) { return std::make_shared<FunctionsCastJsonAsString>(); }
 
-    String getName() const override
-    {
-        return name;
-    }
+    String getName() const override { return name; }
 
-    size_t getNumberOfArguments() const override
-    {
-        return 1;
-    }
+    size_t getNumberOfArguments() const override { return 1; }
 
     bool useDefaultImplementationForConstants() const override { return true; }
 
@@ -379,7 +373,9 @@ public:
                 }
                 else
                 {
-                    JsonBinary json_binary(data_from[current_offset], StringRef(&data_from[current_offset + 1], json_length - 1));
+                    JsonBinary json_binary(
+                        data_from[current_offset],
+                        StringRef(&data_from[current_offset + 1], json_length - 1));
                     json_binary.toStringInBuffer(write_buffer);
                 }
                 writeChar(0, write_buffer);
@@ -390,7 +386,9 @@ public:
             block.getByPosition(result).column = ColumnNullable::create(std::move(col_to), std::move(col_null_map));
         }
         else
-            throw Exception(fmt::format("Illegal column {} of argument of function {}", column->getName(), getName()), ErrorCodes::ILLEGAL_COLUMN);
+            throw Exception(
+                fmt::format("Illegal column {} of argument of function {}", column->getName(), getName()),
+                ErrorCodes::ILLEGAL_COLUMN);
     }
 };
 

@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,7 +26,6 @@
 #include <TestUtils/TiFlashTestEnv.h>
 #include <gtest/gtest.h>
 #include <signal.h>
-
 
 namespace DB::FailPoints
 {
@@ -66,10 +65,10 @@ int main(int argc, char ** argv)
 {
     install_fault_signal_handlers({SIGSEGV, SIGILL, SIGFPE, SIGABRT, SIGTERM});
 
-    DB::tests::TiFlashTestEnv::setupLogger();
+    bool enable_colors = isatty(STDERR_FILENO) && isatty(STDOUT_FILENO);
+    DB::tests::TiFlashTestEnv::setupLogger("trace", std::cerr, enable_colors);
     auto run_mode = DB::PageStorageRunMode::ONLY_V3;
     DB::tests::TiFlashTestEnv::initializeGlobalContext(/*testdata_path*/ {}, run_mode);
-
     DB::ServerInfo server_info;
     // `DMFileReaderPool` should be constructed before and destructed after `SegmentReaderPoolManager`.
     DB::DM::DMFileReaderPool::instance();

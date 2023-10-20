@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,10 +15,10 @@
 #pragma once
 
 #include <Storages/ColumnsDescription.h>
-#include <Storages/Transaction/TiDB.h>
-#include <Storages/Transaction/Types.h>
+#include <Storages/KVStore/Types.h>
 #include <TiDB/Schema/SchemaGetter.h>
 #include <TiDB/Schema/SchemaSyncer.h>
+#include <TiDB/Schema/TiDB.h>
 
 #include <atomic>
 
@@ -35,7 +35,11 @@ public:
         friend class MockTiDB;
 
     public:
-        Table(const String & database_name, DatabaseID database_id, const String & table_name, TiDB::TableInfo && table_info);
+        Table(
+            const String & database_name,
+            DatabaseID database_id,
+            const String & table_name,
+            TiDB::TableInfo && table_info);
 
         TableID id() const { return table_info.id; }
         DatabaseID dbID() const { return database_id; }
@@ -98,7 +102,12 @@ public:
 
     DatabaseID newDataBase(const String & database_name);
 
-    TableID newPartition(const String & database_name, const String & table_name, TableID partition_id, Timestamp tso, bool);
+    TableID newPartition(
+        const String & database_name,
+        const String & table_name,
+        TableID partition_id,
+        Timestamp tso,
+        bool);
     TableID newPartition(TableID belong_logical_table, const String & partition_name, Timestamp tso, bool);
 
     void dropPartition(const String & database_name, const String & table_name, TableID partition_id);
@@ -150,8 +159,17 @@ public:
     TableID newTableID() { return table_id_allocator++; }
 
 private:
-    TableID newPartitionImpl(const TablePtr & logical_table, TableID partition_id, const String & partition_name, Timestamp tso, bool is_add_part);
-    TablePtr dropTableInternal(Context & context, const String & database_name, const String & table_name, bool drop_regions);
+    TableID newPartitionImpl(
+        const TablePtr & logical_table,
+        TableID partition_id,
+        const String & partition_name,
+        Timestamp tso,
+        bool is_add_part);
+    TablePtr dropTableInternal(
+        Context & context,
+        const String & database_name,
+        const String & table_name,
+        bool drop_regions);
     TablePtr getTableByNameInternal(const String & database_name, const String & table_name);
     TablePtr getTableByID(TableID table_id);
 

@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,8 +24,22 @@ void PhysicalJoinProbe::buildPipelineExecGroupImpl(
     PipelineExecutorContext & exec_context,
     PipelineExecGroupBuilder & group_builder,
     Context & context,
-    size_t /*concurrency*/)
+    size_t concurrency)
 {
+    // Currently join probe does not support fine grained shuffle.
+    RUNTIME_CHECK(!fine_grained_shuffle.enable());
+    if (join_ptr->isSpilled() && group_builder.concurrency() == 1)
+    {
+        // When the join build operator spilled, the probe operator requires at least two or more threads to restore spilled hash partitions.
+        auto restore_concurrency = std::max(2, concurrency);
+        restoreConcurrency(
+            exec_context,
+            group_builder,
+            restore_concurrency,
+            context.getSettingsRef().max_buffered_bytes_in_executor,
+            log);
+    }
+
     executeExpression(exec_context, group_builder, prepare_actions, log);
 
     auto input_header = group_builder.getCurrentHeader();
