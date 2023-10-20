@@ -49,7 +49,7 @@ void UnavailableRegions::addRegionWaitIndexTimeout(
     if (!batch_cop)
     {
         // If server is being terminated / time-out, add the region_id into `unavailable_regions` to other store.
-        addStatus(region_id, RegionException::RegionReadStatus::NOT_FOUND, nullptr);
+        addStatus(region_id, RegionException::RegionReadStatus::NOT_FOUND, "");
         return;
     }
 
