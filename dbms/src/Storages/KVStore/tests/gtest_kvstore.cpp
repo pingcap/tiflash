@@ -150,7 +150,7 @@ TEST_F(RegionKVStoreOldTest, ReadIndex)
             {
                 ASSERT_EQ(proxy_instance->regions.at(tar_region_id)->getLatestCommitIndex(), 66);
                 proxy_instance->unsafeInvokeForTest([&](MockRaftStoreProxy & p) {
-                    p.region_id_to_error.emplace(tar_region_id);
+                    p.mock_read_index.region_id_to_error.emplace(tar_region_id);
                     p.regions.at(2)->updateCommitIndex(6);
                 });
             }
@@ -237,7 +237,7 @@ TEST_F(RegionKVStoreOldTest, ReadIndex)
     kvs.stopReadIndexWorkers();
     kvs.releaseReadIndexWorkers();
     over = true;
-    proxy_instance->wakeNotifier();
+    proxy_instance->mock_read_index.wakeNotifier();
     proxy_runner.join();
     ASSERT(GCMonitor::instance().checkClean());
     ASSERT(!GCMonitor::instance().empty());

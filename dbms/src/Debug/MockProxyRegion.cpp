@@ -14,14 +14,8 @@
 
 #include <Common/Exception.h>
 #include <Common/Logger.h>
-#include <Core/NamesAndTypes.h>
-#include <DataTypes/DataTypeFactory.h>
 #include <Debug/MockRaftStoreProxy.h>
-#include <Debug/MockSSTReader.h>
-#include <Debug/MockTiDB.h>
-#include <Debug/dbgTools.h>
 #include <Interpreters/Context.h>
-#include <Storages/DeltaMerge/DeltaMergeInterfaces.h>
 #include <Storages/KVStore/Decode/RegionTable.h>
 #include <Storages/KVStore/FFI/ProxyFFICommon.h>
 #include <Storages/KVStore/KVStore.h>
@@ -32,7 +26,6 @@
 #include <TestUtils/TiFlashTestEnv.h>
 #include <TiDB/Decode/RowCodec.h>
 #include <TiDB/Schema/TiDBSchemaManager.h>
-#include <google/protobuf/text_format.h>
 
 namespace DB
 {

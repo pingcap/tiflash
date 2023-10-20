@@ -158,7 +158,7 @@ protected:
         kvstore->stopReadIndexWorkers();
         kvstore->releaseReadIndexWorkers();
         over = true;
-        proxy_instance->wakeNotifier();
+        proxy_instance->mock_read_index.wakeNotifier();
         proxy_runner->join();
     }
 

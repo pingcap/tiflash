@@ -44,13 +44,16 @@ extern void setupPutRequest(raft_cmdpb::Request *, const std::string &, const Ti
 extern void setupDelRequest(raft_cmdpb::Request *, const std::string &, const TiKVKey &);
 } // namespace RegionBench
 
-kvrpcpb::ReadIndexRequest make_read_index_reqs(uint64_t region_id, uint64_t start_ts)
-{
-    kvrpcpb::ReadIndexRequest req;
-    req.set_start_ts(start_ts);
-    req.mutable_context()->set_region_id(region_id);
-    return req;
-}
+RawRustPtr fn_make_read_index_task(RaftStoreProxyPtr ptr, BaseBuffView view);
+RawRustPtr fn_make_async_waker(void (*wake_fn)(RawVoidPtr), RawCppPtr data);
+uint8_t fn_poll_read_index_task(RaftStoreProxyPtr, RawVoidPtr task, RawVoidPtr resp, RawVoidPtr waker);
+void fn_handle_batch_read_index(
+    RaftStoreProxyPtr,
+    CppStrVecView,
+    RawVoidPtr,
+    uint64_t,
+    void (*)(RawVoidPtr, BaseBuffView, uint64_t));
+kvrpcpb::ReadIndexRequest make_read_index_reqs(uint64_t region_id, uint64_t start_ts);
 
 MockRaftStoreProxy & as_ref(RaftStoreProxyPtr ptr)
 {
@@ -58,43 +61,6 @@ MockRaftStoreProxy & as_ref(RaftStoreProxyPtr ptr)
 }
 
 extern void mock_set_rust_gc_helper(void (*)(RawVoidPtr, RawRustPtrType));
-
-RawRustPtr fn_make_read_index_task(RaftStoreProxyPtr ptr, BaseBuffView view)
-{
-    auto & x = as_ref(ptr);
-    kvrpcpb::ReadIndexRequest req;
-    req.ParseFromArray(view.data, view.len);
-    auto * task = x.makeReadIndexTask(req);
-    if (task)
-        GCMonitor::instance().add(RawObjType::MockReadIndexTask, 1);
-    return RawRustPtr{task, static_cast<uint32_t>(RawObjType::MockReadIndexTask)};
-}
-
-RawRustPtr fn_make_async_waker(void (*wake_fn)(RawVoidPtr), RawCppPtr data)
-{
-    auto * p = new MockAsyncWaker{std::make_shared<MockAsyncNotifier>()};
-    p->data->data = data;
-    p->data->wake_fn = wake_fn;
-    GCMonitor::instance().add(RawObjType::MockAsyncWaker, 1);
-    return RawRustPtr{p, static_cast<uint32_t>(RawObjType::MockAsyncWaker)};
-}
-
-uint8_t fn_poll_read_index_task(RaftStoreProxyPtr, RawVoidPtr task, RawVoidPtr resp, RawVoidPtr waker)
-{
-    auto & read_index_task = *reinterpret_cast<MockReadIndexTask *>(task);
-    auto * async_waker = reinterpret_cast<MockAsyncWaker *>(waker);
-    auto res = read_index_task.data->poll(async_waker ? async_waker->data : nullptr);
-    if (res)
-    {
-        auto buff = res->SerializePartialAsString();
-        SetPBMsByBytes(MsgPBType::ReadIndexResponse, resp, BaseBuffView{buff.data(), buff.size()});
-        return 1;
-    }
-    else
-    {
-        return 0;
-    }
-}
 
 void fn_gc_rust_ptr(RawVoidPtr ptr, RawRustPtrType type_)
 {
@@ -119,16 +85,6 @@ void fn_gc_rust_ptr(RawVoidPtr ptr, RawRustPtrType type_)
         delete reinterpret_cast<RustStrWithViewVecInner *>(ptr);
         break;
     }
-}
-
-void fn_handle_batch_read_index(
-    RaftStoreProxyPtr,
-    CppStrVecView,
-    RawVoidPtr,
-    uint64_t,
-    void (*)(RawVoidPtr, BaseBuffView, uint64_t))
-{
-    throw Exception("`fn_handle_batch_read_index` is deprecated");
 }
 
 KVGetStatus fn_get_region_local_state(
@@ -212,46 +168,6 @@ TiFlashRaftProxyHelper MockRaftStoreProxy::SetRaftStoreProxyFFIHelper(RaftStoreP
     return res;
 }
 
-std::optional<kvrpcpb::ReadIndexResponse> RawMockReadIndexTask::poll(std::shared_ptr<MockAsyncNotifier> waker)
-{
-    auto _ = genLockGuard();
-
-    if (!finished)
-    {
-        if (waker != this->waker)
-        {
-            this->waker = waker;
-        }
-        return {};
-    }
-    if (has_lock)
-    {
-        resp.mutable_locked();
-        return resp;
-    }
-    if (has_region_error)
-    {
-        resp.mutable_region_error()->mutable_data_is_not_ready();
-        return resp;
-    }
-    resp.set_read_index(region->getLatestCommitIndex());
-    return resp;
-}
-
-void RawMockReadIndexTask::update(bool lock, bool region_error)
-{
-    {
-        auto _ = genLockGuard();
-        if (finished)
-            return;
-        finished = true;
-        has_lock = lock;
-        has_region_error = region_error;
-    }
-    if (waker)
-        waker->wake();
-}
-
 MockProxyRegionPtr MockRaftStoreProxy::getRegion(uint64_t id)
 {
     auto _ = genLockGuard();
@@ -271,7 +187,7 @@ MockReadIndexTask * MockRaftStoreProxy::makeReadIndexTask(kvrpcpb::ReadIndexRequ
 {
     auto _ = genLockGuard();
 
-    wakeNotifier();
+    mock_read_index.wakeNotifier();
 
     auto region = doGetRegion(req.context().region_id());
     if (region)
@@ -280,7 +196,7 @@ MockReadIndexTask * MockRaftStoreProxy::makeReadIndexTask(kvrpcpb::ReadIndexRequ
         r->data = std::make_shared<RawMockReadIndexTask>();
         r->data->req = std::move(req);
         r->data->region = region;
-        read_index_tasks.push_back(r->data);
+        mock_read_index.read_index_tasks.push_back(r->data);
         return r;
     }
     return nullptr;
@@ -310,35 +226,15 @@ size_t MockRaftStoreProxy::size() const
     return regions.size();
 }
 
-void MockRaftStoreProxy::wakeNotifier()
-{
-    notifier.wake();
-}
-
 void MockRaftStoreProxy::testRunNormal(const std::atomic_bool & over)
 {
     while (!over)
     {
-        runOneRound();
-        notifier.blockedWaitFor(std::chrono::seconds(1));
-    }
-}
-
-void MockRaftStoreProxy::runOneRound()
-{
-    auto _ = genLockGuard();
-    while (!read_index_tasks.empty())
-    {
-        auto & t = *read_index_tasks.front();
-        auto region_id = t.req.context().region_id();
-        if (!region_id_to_drop.contains(region_id))
         {
-            if (region_id_to_error.contains(region_id))
-                t.update(false, true);
-            else
-                t.update(false, false);
+            auto _ = genLockGuard();
+            mock_read_index.runOneRound();
         }
-        read_index_tasks.pop_front();
+        mock_read_index.notifier.blockedWaitFor(std::chrono::seconds(1));
     }
 }
 

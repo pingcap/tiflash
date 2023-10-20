@@ -117,24 +117,36 @@ struct MockReadIndexTask
     std::shared_ptr<RawMockReadIndexTask> data;
 };
 
+struct MockReadIndex
+{
+    MockReadIndex(LoggerPtr log_)
+        : log(log_)
+    {}
+    void wakeNotifier();
+    /// Handle one read index task.
+    void runOneRound();
+
+    LoggerPtr log;
+    // Mock Proxy will drop read index requests to these regions
+    std::unordered_set<uint64_t> region_id_to_drop;
+    // Mock Proxy will return error read index response to these regions
+    std::unordered_set<uint64_t> region_id_to_error;
+    std::list<std::shared_ptr<RawMockReadIndexTask>> read_index_tasks;
+    AsyncWaker::Notifier notifier;
+};
+
 struct MockRaftStoreProxy : MutexLockWrap
 {
     MockProxyRegionPtr getRegion(uint64_t id);
     MockProxyRegionPtr doGetRegion(uint64_t id);
-
-    MockReadIndexTask * makeReadIndexTask(kvrpcpb::ReadIndexRequest req);
 
     void init(size_t region_num);
     std::unique_ptr<TiFlashRaftProxyHelper> generateProxyHelper();
 
     size_t size() const;
 
-    void wakeNotifier();
-
+    MockReadIndexTask * makeReadIndexTask(kvrpcpb::ReadIndexRequest req);
     void testRunNormal(const std::atomic_bool & over);
-
-    /// Handle one read index task.
-    void runOneRound();
 
     void unsafeInvokeForTest(std::function<void(MockRaftStoreProxy &)> && cb);
 
@@ -194,7 +206,6 @@ struct MockRaftStoreProxy : MutexLockWrap
         std::vector<ColumnFamilyType> && cmd_cf,
         std::optional<uint64_t> forced_index = std::nullopt);
 
-
     std::tuple<uint64_t, uint64_t> adminCommand(
         UInt64 region_id,
         raft_cmdpb::AdminRequest &&,
@@ -250,24 +261,20 @@ struct MockRaftStoreProxy : MutexLockWrap
     std::pair<std::string, std::string> generateTiKVKeyValue(uint64_t tso, int64_t t) const;
 
     MockRaftStoreProxy()
+        : log(Logger::get("MockRaftStoreProxy"))
+        , mock_read_index(MockReadIndex(log))
+        , table_id(1)
+        , cluster_ver(RaftstoreVer::V1)
     {
-        log = Logger::get("MockRaftStoreProxy");
-        table_id = 1;
-        cluster_ver = RaftstoreVer::V1;
         proxy_config_string = R"({"raftstore":{"snap-handle-pool-size":4}})";
     }
 
-    // Mock Proxy will drop read index requests to these regions
-    std::unordered_set<uint64_t> region_id_to_drop;
-    // Mock Proxy will return error read index response to these regions
-    std::unordered_set<uint64_t> region_id_to_error;
-    std::map<uint64_t, MockProxyRegionPtr> regions;
-    std::list<std::shared_ptr<RawMockReadIndexTask>> read_index_tasks;
-    AsyncWaker::Notifier notifier;
+    LoggerPtr log;
+    MockReadIndex mock_read_index;
     TableID table_id;
     RaftstoreVer cluster_ver;
     std::string proxy_config_string;
-    LoggerPtr log;
+    std::map<uint64_t, MockProxyRegionPtr> regions;
 };
 
 enum class RawObjType : uint32_t
