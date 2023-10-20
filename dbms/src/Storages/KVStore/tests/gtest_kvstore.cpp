@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <Debug/dbgTools.h>
-#include <Storages/KVStore/tests/kvstore_helper.h>
+#include <Storages/KVStore/MultiRaft/RegionsRangeIndex.h>
 
 #include "kvstore_helper.h"
 
