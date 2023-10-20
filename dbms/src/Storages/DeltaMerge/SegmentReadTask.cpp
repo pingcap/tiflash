@@ -162,7 +162,10 @@ SegmentReadTasks SegmentReadTask::trySplitReadTasks(const SegmentReadTasks & tas
     auto cmp = [](const SegmentReadTaskPtr & a, const SegmentReadTaskPtr & b) {
         return a->ranges.size() < b->ranges.size();
     };
-    std::priority_queue<SegmentReadTaskPtr, std::vector<SegmentReadTaskPtr>, decltype(cmp)> largest_ranges_first(tasks.begin(), tasks.end(), cmp);
+    std::priority_queue<SegmentReadTaskPtr, std::vector<SegmentReadTaskPtr>, decltype(cmp)> largest_ranges_first(
+        tasks.begin(),
+        tasks.end(),
+        cmp);
 
     // Split the top task.
     while (largest_ranges_first.size() < expected_size && largest_ranges_first.top()->ranges.size() > 1)
