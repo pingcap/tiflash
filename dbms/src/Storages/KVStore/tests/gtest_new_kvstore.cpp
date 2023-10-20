@@ -13,26 +13,15 @@
 // limitations under the License.
 
 #include <Debug/MockSSTGenerator.h>
-#include <Storages/DeltaMerge/Decode/SSTFilesToBlockInputStream.h>
 #include <Storages/KVStore/Read/LearnerRead.h>
 #include <Storages/RegionQueryInfo.h>
 
-#include "kvstore_helper.h"
+#include "region_kvstore_test.h"
 
 namespace DB
 {
 namespace tests
 {
-
-class RegionKVStoreTest : public KVStoreTestBase
-{
-public:
-    RegionKVStoreTest()
-    {
-        log = DB::Logger::get("RegionKVStoreTest");
-        test_path = TiFlashTestEnv::getTemporaryPath("/region_kvs_test");
-    }
-};
 
 TEST_F(RegionKVStoreTest, KVStoreFailRecovery)
 try
@@ -365,52 +354,6 @@ try
 }
 CATCH
 
-static void validate(
-    KVStore & kvs,
-    std::unique_ptr<MockRaftStoreProxy> & proxy_instance,
-    UInt64 region_id,
-    MockSSTGenerator & cf_data,
-    ColumnFamilyType cf,
-    int sst_size,
-    int key_count)
-{
-    auto kvr1 = kvs.getRegion(region_id);
-    auto r1 = proxy_instance->getRegion(region_id);
-    auto proxy_helper = proxy_instance->generateProxyHelper();
-    auto ssts = cf_data.ssts();
-    ASSERT_EQ(ssts.size(), sst_size);
-    auto make_inner_func = [](const TiFlashRaftProxyHelper * proxy_helper,
-                              SSTView snap,
-                              SSTReader::RegionRangeFilter range,
-                              size_t split_id) -> std::unique_ptr<MonoSSTReader> {
-        auto parsed_kind = MockSSTGenerator::parseSSTViewKind(buffToStrView(snap.path));
-        auto reader = std::make_unique<MonoSSTReader>(proxy_helper, snap, range, split_id);
-        assert(reader->sst_format_kind() == parsed_kind);
-        return reader;
-    };
-    MultiSSTReader<MonoSSTReader, SSTView> reader{
-        proxy_helper.get(),
-        cf,
-        make_inner_func,
-        ssts,
-        Logger::get(),
-        kvr1->getRange(),
-        DM::SSTScanSoftLimit::HEAD_OR_ONLY_SPLIT};
-
-    size_t counter = 0;
-    while (reader.remained())
-    {
-        // repeatedly remained are called.
-        reader.remained();
-        reader.remained();
-        counter++;
-        auto v = std::string(reader.valueView().data);
-        ASSERT_EQ(v, "v" + std::to_string(counter));
-        reader.next();
-    }
-    ASSERT_EQ(counter, key_count);
-}
-
 TEST_F(RegionKVStoreTest, KVStoreSnapshotV1)
 try
 {
@@ -618,117 +561,6 @@ try
                     0,
                     std::nullopt,
                     /*cancel_after_prehandle=*/true);
-            }
-        }
-    }
-}
-CATCH
-
-
-TEST_F(RegionKVStoreTest, KVStoreSnapshotV2Extra)
-try
-{
-    auto & ctx = TiFlashTestEnv::getGlobalContext();
-    ASSERT_NE(proxy_helper->sst_reader_interfaces.fn_key, nullptr);
-    UInt64 region_id = 2;
-    TableID table_id;
-    {
-        std::string start_str = "7480000000000000FF795F720000000000FA";
-        std::string end_str = "7480000000000000FF795F720380000000FF0000004003800000FF0000017FCC000000FC";
-        auto start = Redact::hexStringToKey(start_str.data(), start_str.size());
-        auto end = Redact::hexStringToKey(end_str.data(), end_str.size());
-
-        initStorages();
-        KVStore & kvs = getKVS();
-        table_id = proxy_instance->bootstrapTable(ctx, kvs, ctx.getTMTContext());
-        proxy_instance->bootstrapWithRegion(kvs, ctx.getTMTContext(), region_id, std::make_pair(start, end));
-        auto kvr1 = kvs.getRegion(region_id);
-        auto r1 = proxy_instance->getRegion(region_id);
-    }
-    KVStore & kvs = getKVS();
-    {
-        std::string k = "7480000000000000FF795F720380000000FF0000026303800000FF0000017801000000FCF9DE534E2797FB83";
-        MockSSTGenerator write_cf{region_id, table_id, ColumnFamilyType::Write};
-        write_cf.insert_raw(Redact::hexStringToKey(k.data(), k.size()), "v1");
-        write_cf.finish_file(SSTFormatKind::KIND_TABLET);
-        write_cf.freeze();
-        validate(kvs, proxy_instance, region_id, write_cf, ColumnFamilyType::Write, 1, 0);
-    }
-}
-CATCH
-
-TEST_F(RegionKVStoreTest, KVStoreSnapshotV2Basic)
-try
-{
-    auto & ctx = TiFlashTestEnv::getGlobalContext();
-    ASSERT_NE(proxy_helper->sst_reader_interfaces.fn_key, nullptr);
-    UInt64 region_id = 1;
-    TableID table_id;
-    {
-        region_id = 2;
-        initStorages();
-        KVStore & kvs = getKVS();
-        table_id = proxy_instance->bootstrapTable(ctx, kvs, ctx.getTMTContext());
-        proxy_instance->bootstrapWithRegion(kvs, ctx.getTMTContext(), region_id, std::nullopt);
-        auto kvr1 = kvs.getRegion(region_id);
-        auto r1 = proxy_instance->getRegion(region_id);
-        {
-            // Shall filter out of range kvs.
-            // RegionDefaultCFDataTrait will "reconstruct" TiKVKey, without table_id, it is correct since different tables ares in different regions.
-            // so we may find conflict if we set the same handle_id here.
-            // Shall we remove this constraint?
-            auto klo = RecordKVFormat::genKey(table_id - 1, 1, 111);
-            auto klo2 = RecordKVFormat::genKey(table_id - 1, 9999, 222);
-            auto kro = RecordKVFormat::genKey(table_id + 1, 0, 333);
-            auto kro2 = RecordKVFormat::genKey(table_id + 1, 2, 444);
-            auto kin1 = RecordKVFormat::genKey(table_id, 0, 0);
-            auto kin2 = RecordKVFormat::genKey(table_id, 5, 0);
-            MockSSTReader::getMockSSTData().clear();
-            MockSSTGenerator default_cf{region_id, table_id, ColumnFamilyType::Default};
-            default_cf.insert_raw(klo, "v1");
-            default_cf.insert_raw(klo2, "v1");
-            default_cf.insert_raw(kin1, "v1");
-            default_cf.insert_raw(kin2, "v2");
-            default_cf.insert_raw(kro, "v1");
-            default_cf.insert_raw(kro2, "v1");
-            default_cf.finish_file(SSTFormatKind::KIND_TABLET);
-            default_cf.freeze();
-            MockSSTGenerator write_cf{region_id, table_id, ColumnFamilyType::Write};
-            write_cf.insert_raw(klo, "v1");
-            write_cf.insert_raw(klo2, "v1");
-            write_cf.insert_raw(kro, "v1");
-            write_cf.insert_raw(kro2, "v1");
-            write_cf.finish_file(SSTFormatKind::KIND_TABLET);
-            write_cf.freeze();
-            validate(kvs, proxy_instance, region_id, default_cf, ColumnFamilyType::Default, 1, 2);
-            validate(kvs, proxy_instance, region_id, write_cf, ColumnFamilyType::Write, 1, 0);
-
-            proxy_helper->sst_reader_interfaces = make_mock_sst_reader_interface();
-            proxy_instance->snapshot(kvs, ctx.getTMTContext(), region_id, {default_cf, write_cf}, 0, 0, std::nullopt);
-            MockRaftStoreProxy::FailCond cond;
-            {
-                auto [index, term]
-                    = proxy_instance
-                          ->rawWrite(region_id, {klo}, {"v1"}, {WriteCmdType::Put}, {ColumnFamilyType::Default});
-                proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index);
-            }
-            {
-                auto [index, term]
-                    = proxy_instance
-                          ->rawWrite(region_id, {klo2}, {"v1"}, {WriteCmdType::Put}, {ColumnFamilyType::Default});
-                proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index);
-            }
-            {
-                auto [index, term]
-                    = proxy_instance
-                          ->rawWrite(region_id, {kro}, {"v1"}, {WriteCmdType::Put}, {ColumnFamilyType::Default});
-                proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index);
-            }
-            {
-                auto [index, term]
-                    = proxy_instance
-                          ->rawWrite(region_id, {kro2}, {"v1"}, {WriteCmdType::Put}, {ColumnFamilyType::Default});
-                proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index);
             }
         }
     }

@@ -12,21 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "kvstore_helper.h"
+#include "region_kvstore_test.h"
 
 namespace DB
 {
 namespace tests
 {
-class RegionKVStoreTest : public KVStoreTestBase
-{
-public:
-    RegionKVStoreTest()
-    {
-        log = DB::Logger::get("RegionKVStoreTest");
-        test_path = TiFlashTestEnv::getTemporaryPath("/region_kvs_test");
-    }
-};
 
 TEST_F(RegionKVStoreTest, KVStorePassivePersistence)
 try
