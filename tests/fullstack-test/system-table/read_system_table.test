@@ -19,7 +19,7 @@ mysql> create table test.ts (a int);
 # empty set
 mysql> select * from information_schema.tiflash_replica;
 mysql> select * from information_schema.tiflash_segments where tidb_table = 'ts' and is_tombstone = 0;
-mysql> select * from information_schema.tiflash_tables where tidb_table = 'ts' and is_tombstone = 0;
+# In raftstore v1, this new table_id will not be created in TiFlash. On the contrary in raftstore v2.
 
 # add tiflash replica
 mysql> alter table test.ts set tiflash replica 1;
@@ -34,8 +34,7 @@ mysql> select `table_schema`, `table_name`, `replica_count`, `location_labels`, 
 
 mysql> select `tidb_database`, `tidb_table`, `rows` from information_schema.tiflash_segments where tidb_table = 'ts' and is_tombstone = 0;
 
-
-mysql> select `tidb_database`, `tidb_table`, `total_rows` from information_schema.tiflash_tables where tidb_table = 'ts' and is_tombstone = 0;
+# In raftstore v1, this new table_id will not be created in TiFlash. On the contrary in raftstore v2.
 
 # insert data
 mysql> alter table test.ts set tiflash replica 0;
