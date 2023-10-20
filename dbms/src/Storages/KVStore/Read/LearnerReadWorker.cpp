@@ -38,7 +38,7 @@ void UnavailableRegions::tryThrowRegionException()
         throw LockException(std::move(region_locks));
 
     if (!ids.empty())
-        throw RegionException(std::move(ids), status);
+        throw RegionException(std::move(ids), status, extra_msg.c_str());
 }
 
 void UnavailableRegions::addRegionWaitIndexTimeout(
@@ -49,7 +49,7 @@ void UnavailableRegions::addRegionWaitIndexTimeout(
     if (!batch_cop)
     {
         // If server is being terminated / time-out, add the region_id into `unavailable_regions` to other store.
-        add(region_id, RegionException::RegionReadStatus::NOT_FOUND);
+        addStatus(region_id, RegionException::RegionReadStatus::NOT_FOUND, nullptr);
         return;
     }
 
@@ -93,7 +93,7 @@ LearnerReadSnapshot LearnerReadWorker::buildRegionsSnapshot()
         if (region == nullptr)
         {
             LOG_WARNING(log, "region not found in KVStore, region_id={}", info.region_id);
-            throw RegionException({info.region_id}, RegionException::RegionReadStatus::NOT_FOUND);
+            throw RegionException({info.region_id}, RegionException::RegionReadStatus::NOT_FOUND, nullptr);
         }
         regions_snapshot.emplace(info.region_id, std::move(region));
     }
@@ -195,12 +195,20 @@ void LearnerReadWorker::recordReadIndexError(RegionsReadIndexResult & read_index
     // if size of batch_read_index_result is not equal with batch_read_index_req, there must be region_error/lock, find and return directly.
     for (auto & [region_id, resp] : read_index_result)
     {
+        std::string extra_msg;
         if (resp.has_region_error())
         {
             const auto & region_error = resp.region_error();
             auto region_status = RegionException::RegionReadStatus::OTHER;
             if (region_error.has_epoch_not_match())
+            {
+                extra_msg = fmt::format(
+                    "read_index_resp {} epoch {}:{}",
+                    region_id,
+                    kvstore->getRegion(region_id)->version(),
+                    kvstore->getRegion(region_id)->confVer());
                 region_status = RegionException::RegionReadStatus::EPOCH_NOT_MATCH;
+            }
             else if (region_error.has_not_leader())
                 region_status = RegionException::RegionReadStatus::NOT_LEADER;
             else if (region_error.has_region_not_found())
@@ -248,7 +256,7 @@ void LearnerReadWorker::recordReadIndexError(RegionsReadIndexResult & read_index
                     resp.region_error().DebugString(),
                     region_id);
             }
-            unavailable_regions.add(region_id, region_status);
+            unavailable_regions.addStatus(region_id, region_status, std::move(extra_msg));
         }
         else if (resp.has_locked())
         {
@@ -282,18 +290,22 @@ RegionsReadIndexResult LearnerReadWorker::readIndex(
 
     stats.read_index_elapsed_ms = watch.elapsedMilliseconds();
     GET_METRIC(tiflash_raft_read_index_duration_seconds).Observe(stats.read_index_elapsed_ms / 1000.0);
+    recordReadIndexError(batch_read_index_result);
 
-    LOG_DEBUG(
+    const auto log_lvl = unavailable_regions.empty() ? Poco::Message::PRIO_DEBUG : Poco::Message::PRIO_INFORMATION;
+    LOG_IMPL(
         log,
+        log_lvl,
         "[Learner Read] Batch read index, num_regions={} num_requests={} num_stale_read={} num_cached_index={} "
+        "num_unavailable={} "
         "cost={}ms",
         stats.num_regions,
         stats.num_read_index_request,
         stats.num_stale_read,
         stats.num_cached_read_index,
+        unavailable_regions.size(),
         stats.read_index_elapsed_ms);
 
-    recordReadIndexError(batch_read_index_result);
     return batch_read_index_result;
 }
 
@@ -373,7 +385,7 @@ void LearnerReadWorker::waitIndex(
                             region_to_query.version,
                             RecordKVFormat::DecodedTiKVKeyRangeToDebugString(region_to_query.range_in_table),
                             magic_enum::enum_name(status));
-                        unavailable_regions.add(region->id(), status);
+                        unavailable_regions.addStatus(region->id(), status, "resolveLock");
                     }
                 },
             },
@@ -408,6 +420,7 @@ LearnerReadWorker::waitUntilDataAvailable(
     const auto time_elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
     GET_METRIC(tiflash_syncing_data_freshness).Observe(time_elapsed_ms / 1000.0); // For DBaaS SLI
 
+    // TODO should we try throw immediately after readIndex?
     // Throw Region exception if there are any unavailable regions, the exception will be handled in the
     // following methods
     // - `CoprocessorHandler::execute`
