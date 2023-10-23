@@ -637,6 +637,7 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
         else
             database->createTable(context, table_name, query_ptr);
 
+        // register the storage instance into `ManagedStorages`
         res->startup();
 
         if (!create.is_temporary)
