@@ -33,8 +33,9 @@ namespace DB
 {
 namespace tests
 {
-class RegionKVStoreTest;
-}
+class KVStoreTestBase;
+class RegionKVStoreOldTest;
+} // namespace tests
 
 class Region;
 using RegionPtr = std::shared_ptr<Region>;
@@ -236,7 +237,8 @@ public:
 private:
     friend class RegionRaftCommandDelegate;
     friend class RegionMockTest;
-    friend class tests::RegionKVStoreTest;
+    friend class tests::KVStoreTestBase;
+    friend class tests::RegionKVStoreOldTest;
 
     // Private methods no need to lock mutex, normally
 
@@ -301,7 +303,7 @@ public:
     RegionRaftCommandDelegate() = delete;
 
 private:
-    friend class tests::RegionKVStoreTest;
+    friend class tests::KVStoreTestBase;
 
     Regions execBatchSplit(
         const raft_cmdpb::AdminRequest & request,

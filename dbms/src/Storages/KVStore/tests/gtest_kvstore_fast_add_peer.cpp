@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Debug/MockRaftStoreProxy.h>
+#include <Debug/MockKVStore/MockRaftStoreProxy.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Storages/KVStore/FFI/ProxyFFI.h>
 #include <Storages/KVStore/MultiRaft/Disagg/FastAddPeer.h>
@@ -41,7 +41,7 @@ FastAddPeerRes genFastAddPeerRes(FastAddPeerStatus status, std::string && apply_
 
 namespace tests
 {
-class RegionKVStoreTestFAP : public RegionKVStoreTest
+class RegionKVStoreTestFAP : public KVStoreTestBase
 {
 public:
     void SetUp() override
@@ -62,7 +62,7 @@ public:
         orig_mode = global_context.getPageStorageRunMode();
         global_context.setPageStorageRunMode(PageStorageRunMode::UNI_PS);
         global_context.getSharedContextDisagg()->initFastAddPeerContext();
-        RegionKVStoreTest::SetUp();
+        KVStoreTestBase::SetUp();
     }
 
     void TearDown() override
@@ -121,7 +121,7 @@ private:
 TEST_F(RegionKVStoreTestFAP, FAPThreadPool)
 try
 {
-    auto * log = &Poco::Logger::get("RegionKVStoreTest");
+    auto * log = &Poco::Logger::get("RegionKVStoreTestFAP");
     using namespace std::chrono_literals;
     auto fap_context = std::make_shared<FastAddPeerContext>(1);
     auto async_tasks = fap_context->tasks_trace;

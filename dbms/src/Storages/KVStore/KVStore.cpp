@@ -380,7 +380,7 @@ void KVStore::persistRegion(
         LOG_INFO(
             log,
             "Start to persist {}, cache size: {} bytes for `{}`",
-            region.toString(true),
+            region.getDebugString(),
             region.dataSize(),
             caller);
         region_persister->persist(region, *region_task_lock.value());

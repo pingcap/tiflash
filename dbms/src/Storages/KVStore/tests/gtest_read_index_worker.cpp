@@ -14,7 +14,7 @@
 
 #include <Common/FailPoint.h>
 #include <Common/setThreadName.h>
-#include <Debug/MockRaftStoreProxy.h>
+#include <Debug/MockKVStore/MockRaftStoreProxy.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <fmt/chrono.h>
 
@@ -74,10 +74,10 @@ void ReadIndexTest::testError()
                 auto resp = future->poll();
                 ASSERT(!resp);
             }
-            ASSERT_EQ(proxy_instance.read_index_tasks.size(), 1);
+            ASSERT_EQ(proxy_instance.mock_read_index.read_index_tasks.size(), 1);
 
             // force response region error `data_is_not_ready`
-            proxy_instance.read_index_tasks.front()->update(false, true);
+            proxy_instance.mock_read_index.read_index_tasks.front()->update(false, true);
 
             for (auto & future : futures)
             {
@@ -99,7 +99,7 @@ void ReadIndexTest::testError()
                 ASSERT(resp->region_error().has_data_is_not_ready());
             }
             futures.clear();
-            proxy_instance.runOneRound();
+            proxy_instance.mock_read_index.runOneRound();
             ASSERT_FALSE(manager->getWorkerByRegion(2).data_map.getDataNode(2)->history_success_tasks);
         }
 
@@ -118,12 +118,12 @@ void ReadIndexTest::testError()
                 auto resp = future->poll();
                 ASSERT(!resp);
             }
-            ASSERT_EQ(proxy_instance.read_index_tasks.size(), 1);
+            ASSERT_EQ(proxy_instance.mock_read_index.read_index_tasks.size(), 1);
 
             // force response to have lock
-            proxy_instance.read_index_tasks.front()->update(true, false);
+            proxy_instance.mock_read_index.read_index_tasks.front()->update(true, false);
 
-            proxy_instance.runOneRound();
+            proxy_instance.mock_read_index.runOneRound();
             for (auto & future : futures)
             {
                 auto resp = future->poll();
@@ -164,7 +164,7 @@ void ReadIndexTest::testError()
                 futures.push_back(future);
             }
             manager->runOneRoundAll();
-            proxy_instance.runOneRound();
+            proxy_instance.mock_read_index.runOneRound();
             auto future = manager->genReadIndexFuture(make_read_index_reqs(2, 15));
 
             // drop region 2
@@ -284,7 +284,7 @@ void ReadIndexTest::testNormal()
     // start mock proxy in other thread
     auto proxy_runner = std::thread([&]() {
         setThreadName("proxy-runner");
-        proxy_instance.testRunNormal(over);
+        proxy_instance.testRunReadIndex(over);
     });
 
     {
@@ -363,7 +363,8 @@ void ReadIndexTest::testNormal()
         }
         {
             // set region id to let mock proxy drop all related tasks.
-            proxy_instance.unsafeInvokeForTest([](MockRaftStoreProxy & proxy) { proxy.region_id_to_drop.emplace(1); });
+            proxy_instance.unsafeInvokeForTest(
+                [](MockRaftStoreProxy & proxy) { proxy.mock_read_index.region_id_to_drop.emplace(1); });
             std::vector<kvrpcpb::ReadIndexRequest> reqs;
 
             reqs = {make_read_index_reqs(5, 12), make_read_index_reqs(1, 12), make_read_index_reqs(2, 12)};
@@ -378,7 +379,7 @@ void ReadIndexTest::testNormal()
             {
                 // test timeout 0ms
                 proxy_instance.unsafeInvokeForTest(
-                    [](MockRaftStoreProxy & proxy) { proxy.region_id_to_drop.emplace(9); });
+                    [](MockRaftStoreProxy & proxy) { proxy.mock_read_index.region_id_to_drop.emplace(9); });
                 auto resps = manager->batchReadIndex({make_read_index_reqs(9, 12)}, 0);
                 ASSERT_EQ(
                     resps[0].first.region_error().has_region_not_found(),
@@ -386,7 +387,8 @@ void ReadIndexTest::testNormal()
             }
 
             // disable drop region task
-            proxy_instance.unsafeInvokeForTest([](MockRaftStoreProxy & proxy) { proxy.region_id_to_drop.clear(); });
+            proxy_instance.unsafeInvokeForTest(
+                [](MockRaftStoreProxy & proxy) { proxy.mock_read_index.region_id_to_drop.clear(); });
 
             ReadIndexWorker::setMaxReadIndexTaskTimeout(
                 std::chrono::milliseconds{10}); // set max task timeout in worker
@@ -414,7 +416,8 @@ void ReadIndexTest::testNormal()
             }
 
             // set region id to let mock proxy drop all related tasks.
-            proxy_instance.unsafeInvokeForTest([](MockRaftStoreProxy & proxy) { proxy.region_id_to_drop.emplace(1); });
+            proxy_instance.unsafeInvokeForTest(
+                [](MockRaftStoreProxy & proxy) { proxy.mock_read_index.region_id_to_drop.emplace(1); });
 
             resps = proxy_helper.batchReadIndex_v2(reqs, 50);
 
@@ -422,7 +425,8 @@ void ReadIndexTest::testNormal()
             ASSERT_EQ(resps[1].first.region_error().has_region_not_found(), true); // timeout to region error not found
             ASSERT_EQ(resps[2].first.read_index(), 669);
 
-            proxy_instance.unsafeInvokeForTest([](MockRaftStoreProxy & proxy) { proxy.region_id_to_drop.clear(); });
+            proxy_instance.unsafeInvokeForTest(
+                [](MockRaftStoreProxy & proxy) { proxy.mock_read_index.region_id_to_drop.clear(); });
         }
         {
             // test region not exists
@@ -432,7 +436,7 @@ void ReadIndexTest::testNormal()
         }
     }
     over = true;
-    proxy_instance.wakeNotifier();
+    proxy_instance.mock_read_index.wakeNotifier();
     proxy_runner.join();
     manager.reset();
     ASSERT(GCMonitor::instance().checkClean());
@@ -522,7 +526,7 @@ void ReadIndexTest::testBatch()
         ASSERT_EQ(2, manager->getWorkerByRegion(0).data_map.getDataNode(0)->running_tasks.size());
 
         // mock proxy update all read index requests.
-        proxy_instance.runOneRound();
+        proxy_instance.mock_read_index.runOneRound();
         manager->runOneRoundAll();
         std::vector<kvrpcpb::ReadIndexResponse> resps;
         for (auto & future : futures)
@@ -549,7 +553,7 @@ void ReadIndexTest::testBatch()
         auto resp = future->poll();
         ASSERT(resp);
         ASSERT(resp->has_region_error());
-        proxy_instance.runOneRound();
+        proxy_instance.mock_read_index.runOneRound();
     }
     {
         // test history
@@ -577,7 +581,7 @@ void ReadIndexTest::testBatch()
         }
         manager->runOneRoundAll();
         {
-            auto & t = proxy_instance.read_index_tasks.back();
+            auto & t = proxy_instance.mock_read_index.read_index_tasks.back();
             ASSERT_EQ(t->req.start_ts(), 10);
             t->update(); // only response ts `10`
         }
@@ -599,7 +603,7 @@ void ReadIndexTest::testBatch()
             ASSERT_EQ(resps[1].read_index(), 670);
             ASSERT_EQ(resps[2].read_index(), 670);
         }
-        proxy_instance.runOneRound();
+        proxy_instance.mock_read_index.runOneRound();
         manager->runOneRoundAll();
 
         futures.clear();
@@ -612,7 +616,7 @@ void ReadIndexTest::testBatch()
             futures.push_back(future);
         }
         manager->runOneRoundAll();
-        proxy_instance.runOneRound();
+        proxy_instance.mock_read_index.runOneRound();
         manager->runOneRoundAll();
         for (auto & future : futures)
         {
@@ -630,7 +634,7 @@ void ReadIndexTest::testBatch()
         auto f = manager->genReadIndexFuture(make_read_index_reqs(region_id, 15));
         manager->runOneRoundAll();
         proxy_instance.regions[1]->updateCommitIndex(677);
-        proxy_instance.runOneRound();
+        proxy_instance.mock_read_index.runOneRound();
         manager->runOneRoundAll();
         auto resp = f->poll();
         ASSERT_EQ(resp->read_index(), 677);
