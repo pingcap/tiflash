@@ -27,8 +27,9 @@ namespace DB
 {
 namespace tests
 {
-class RegionKVStoreTest;
-}
+class KVStoreTestBase;
+class RegionKVStoreOldTest;
+} // namespace tests
 
 struct RegionMergeResult;
 class Region;
@@ -121,7 +122,8 @@ public:
 
 private:
     friend class MetaRaftCommandDelegate;
-    friend class tests::RegionKVStoreTest;
+    friend class tests::KVStoreTestBase;
+    friend class tests::RegionKVStoreOldTest;
 
     void doSetRegion(const metapb::Region & region);
     void doSetApplied(UInt64 index, UInt64 term);
@@ -163,7 +165,8 @@ class MetaRaftCommandDelegate
     , private boost::noncopyable
 {
     friend class RegionRaftCommandDelegate;
-    friend class tests::RegionKVStoreTest;
+    friend class tests::KVStoreTestBase;
+    friend class tests::RegionKVStoreOldTest;
 
     const metapb::Peer & getPeer() const;
     const raft_serverpb::RaftApplyState & applyState() const;

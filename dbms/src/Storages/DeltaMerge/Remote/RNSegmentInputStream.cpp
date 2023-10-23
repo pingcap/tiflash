@@ -101,7 +101,7 @@ Block RNSegmentInputStream::readImpl(FilterPtr & res_filter, bool return_filter)
         }
         else
         {
-            action.transform(res, current_seg_task->meta.physical_table_id);
+            action.transform(res, current_seg_task->extra_remote_info->remote_segment_id.physical_table_id);
             return res;
         }
     }

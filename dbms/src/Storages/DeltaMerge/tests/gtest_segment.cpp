@@ -20,8 +20,8 @@
 #include <DataStreams/OneBlockInputStream.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
-#include <Storages/DeltaMerge/Remote/RNReadTask.h>
 #include <Storages/DeltaMerge/Remote/RNWorkerPrepareStreams.h>
+#include <Storages/DeltaMerge/SegmentReadTask.h>
 #include <Storages/DeltaMerge/WriteBatchesImpl.h>
 #include <Storages/DeltaMerge/tests/gtest_segment_test_basic.h>
 #include <Storages/DeltaMerge/tests/gtest_segment_util.h>
@@ -588,21 +588,8 @@ try
         first_snap->delta->getSharedDeltaIndex()->getRNCacheKey());
     first_snap->delta->shared_delta_index = broken_delta_index;
 
-    auto meta = DB::DM::Remote::RNReadSegmentMeta{
-        .keyspace_id = 0,
-        .physical_table_id = 0,
-        .segment_id = DELTA_MERGE_FIRST_SEGMENT_ID,
-        .store_id = 0,
-        .delta_tinycf_page_ids = {},
-        .delta_tinycf_page_sizes = {},
-        .segment = first,
-        .segment_snap = first_snap,
-        .store_address = {},
-        .read_ranges = {first->getRowKeyRange()},
-        .snapshot_id = {},
-        .dm_context = createDMContext(),
-    };
-    auto task = std::make_shared<DB::DM::Remote::RNReadSegmentTask>(meta);
+    auto task = std::make_shared<DM::SegmentReadTask>(first, first_snap, RowKeyRanges{first->getRowKeyRange()});
+    task->extra_remote_info.emplace(ExtraRemoteSegmentInfo{.dm_context = createDMContext()});
 
     auto worker = DB::DM::Remote::RNWorkerPrepareStreams::create({
         .source_queue = nullptr,
@@ -648,7 +635,7 @@ try
         blks.push_back(blk);
     }
     auto handle_col1 = vstackBlocks(std::move(blks)).getByName(EXTRA_HANDLE_COLUMN_NAME).column;
-    auto handle_col2 = getSegmentHandle(task->meta.segment->segmentId(), {task->meta.segment->getRowKeyRange()});
+    auto handle_col2 = getSegmentHandle(task->segment->segmentId(), {task->segment->getRowKeyRange()});
     ASSERT_TRUE(sequenceEqual(
         toColumnVectorDataPtr<Int64>(handle_col2)->data(),
         toColumnVectorDataPtr<Int64>(handle_col1)->data(),
