@@ -624,12 +624,18 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
             create.attach,
             false);
 
+        //when do create tables, we should strictly follow the order of
+        // 1. write .sql file
+        // 2. set tmt.getStorages()
+        // 3. emplace table into tables
+        // Because we are based on whether we found table in tmt.getStorages() to decide whether we have created the table, and can do alter table.
+        // if we do step 2 before step 1, we may alter table and then can't find .sql file.
+        // Besides, we make step 3 as the final one, to make sure if we pass context.isTableExist(database_name, table_name), the table must be created completely.
 
-        // 这边真正创建 table 的过程需要严格按照先实际写入 .sql ，然后再设置 storages ，最后 emplace table ，来保证 当 storages 可以查到 的时候，一定是可以 alterTable 的，tables 可以 find 的时候，一定全部完成了。
         if (create.is_temporary)
             context.getSessionContext().addExternalTable(table_name, res, query_ptr);
         else
-            database->createTable(context, table_name, res, query_ptr);
+            database->createTable(context, table_name, query_ptr);
 
         res->startup();
 

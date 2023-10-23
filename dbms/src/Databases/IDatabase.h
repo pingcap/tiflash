@@ -91,7 +91,6 @@ public:
     virtual void createTable(
         const Context & context,
         const String & name,
-        const StoragePtr & table,
         const ASTPtr & query)
         = 0;
 
