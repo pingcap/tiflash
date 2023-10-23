@@ -64,7 +64,7 @@ try
         write_cf.insert_raw(Redact::hexStringToKey(k.data(), k.size()), "v1");
         write_cf.finish_file(SSTFormatKind::KIND_TABLET);
         write_cf.freeze();
-        validate(kvs, proxy_instance, region_id, write_cf, ColumnFamilyType::Write, 1, 0);
+        validateSSTGeneration(kvs, proxy_instance, region_id, write_cf, ColumnFamilyType::Write, 1, 0);
     }
 }
 CATCH
@@ -112,8 +112,8 @@ try
             write_cf.insert_raw(kro2, "v1");
             write_cf.finish_file(SSTFormatKind::KIND_TABLET);
             write_cf.freeze();
-            validate(kvs, proxy_instance, region_id, default_cf, ColumnFamilyType::Default, 1, 2);
-            validate(kvs, proxy_instance, region_id, write_cf, ColumnFamilyType::Write, 1, 0);
+            validateSSTGeneration(kvs, proxy_instance, region_id, default_cf, ColumnFamilyType::Default, 1, 2);
+            validateSSTGeneration(kvs, proxy_instance, region_id, write_cf, ColumnFamilyType::Write, 1, 0);
 
             proxy_helper->sst_reader_interfaces = make_mock_sst_reader_interface();
             proxy_instance->snapshot(kvs, ctx.getTMTContext(), region_id, {default_cf, write_cf}, 0, 0, std::nullopt);

@@ -33,7 +33,7 @@ public:
     }
 };
 
-static inline void validate(
+static inline void validateSSTGeneration(
     KVStore & kvs,
     std::unique_ptr<MockRaftStoreProxy> & proxy_instance,
     UInt64 region_id,

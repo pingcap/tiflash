@@ -378,7 +378,7 @@ try
                 default_cf.insert(2, "v2");
                 default_cf.finish_file();
                 default_cf.freeze();
-                validate(kvs, proxy_instance, region_id, default_cf, ColumnFamilyType::Default, 1, 2);
+                validateSSTGeneration(kvs, proxy_instance, region_id, default_cf, ColumnFamilyType::Default, 1, 2);
             }
             {
                 // Empty
@@ -386,7 +386,7 @@ try
                 MockSSTGenerator default_cf{901, 800, ColumnFamilyType::Default};
                 default_cf.finish_file();
                 default_cf.freeze();
-                validate(kvs, proxy_instance, region_id, default_cf, ColumnFamilyType::Default, 1, 0);
+                validateSSTGeneration(kvs, proxy_instance, region_id, default_cf, ColumnFamilyType::Default, 1, 0);
             }
             {
                 // Multiple files
@@ -405,7 +405,7 @@ try
                 default_cf.insert(7, "v7");
                 default_cf.finish_file();
                 default_cf.freeze();
-                validate(kvs, proxy_instance, region_id, default_cf, ColumnFamilyType::Default, 5, 7);
+                validateSSTGeneration(kvs, proxy_instance, region_id, default_cf, ColumnFamilyType::Default, 5, 7);
             }
 
             {
@@ -422,7 +422,7 @@ try
                 default_cf.insert(6, "v6");
                 default_cf.finish_file();
                 default_cf.freeze();
-                validate(kvs, proxy_instance, region_id, default_cf, ColumnFamilyType::Default, 3, 6);
+                validateSSTGeneration(kvs, proxy_instance, region_id, default_cf, ColumnFamilyType::Default, 3, 6);
 
                 kvs.mutProxyHelperUnsafe()->sst_reader_interfaces = make_mock_sst_reader_interface();
                 proxy_instance->snapshot(kvs, ctx.getTMTContext(), region_id, {default_cf}, 0, 0, std::nullopt);
