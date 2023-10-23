@@ -14,7 +14,6 @@
 
 #pragma once
 
-#include <Interpreters/Set.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/Index/RSResult.h>
 #include <Storages/KVStore/Types.h>
@@ -22,14 +21,11 @@
 #include <tipb/expression.pb.h>
 
 #include <functional>
-#include <memory>
 #include <unordered_map>
 
 
 namespace DB
 {
-class ASTSelectQuery;
-
 struct DAGQueryInfo;
 
 namespace DM
