@@ -114,11 +114,12 @@ SegmentReadTask::SegmentReadTask(
     }
 
     extra_remote_info.emplace(ExtraRemoteSegmentInfo{
-        .remote_segment_id
-        = {.keyspace_id = keyspace_id,
+        .remote_segment_id = RemoteSegmentID{
            .store_id = store_id,
+           .keyspace_id = keyspace_id,
            .physical_table_id = physical_table_id,
-           .segment_id = proto.segment_id()},
+           .segment_id = proto.segment_id(),
+        },
         .store_address = store_address,
         .snapshot_id = snapshot_id,
         .remote_page_ids = std::move(remote_page_ids),

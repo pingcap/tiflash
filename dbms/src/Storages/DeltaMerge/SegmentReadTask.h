@@ -29,10 +29,10 @@ using SegmentReadTasks = std::list<SegmentReadTaskPtr>;
 
 struct RemoteSegmentID
 {
-    KeyspaceID keyspace_id;
-    StoreID store_id;
-    TableID physical_table_id;
-    UInt64 segment_id;
+    const StoreID store_id;
+    const KeyspaceID keyspace_id;
+    const TableID physical_table_id;
+    const UInt64 segment_id;
 
     String toString() const
     {
@@ -93,10 +93,15 @@ struct SegmentReadTask
 
     static SegmentReadTasks trySplitReadTasks(const SegmentReadTasks & tasks, size_t expected_size);
 
-    String info() const { return extra_remote_info.has_value() ? extra_remote_info->remote_segment_id.toString() : ""; }
+    String info() const
+    {
+        return extra_remote_info.has_value() ? extra_remote_info->remote_segment_id.toString() : segment->simpleInfo();
+    }
 
+    /// Called from RNWorkerFetchPages.
     void initColumnFileDataProvider(const Remote::RNLocalPageCacheGuardPtr & pages_guard);
 
+    /// Called from RNWorkerPrepareStreams.
     void initInputStream(
         const ColumnDefines & columns_to_read,
         UInt64 read_tso,
