@@ -18,6 +18,11 @@
 #include <Poco/Timer.h>
 #include <Storages/Page/workload/PSStressEnv.h>
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+#include <Poco/JSON/Object.h>
+#pragma GCC diagnostic pop
+
 namespace CurrentMetrics
 {
 extern const Metric PSMVCCSnapshotsList;
@@ -28,13 +33,14 @@ namespace DB::PS::tests
 class PSMetricsDumper
 {
 public:
-    explicit PSMetricsDumper(size_t status_interval_)
+    explicit PSMetricsDumper(size_t status_interval_, const LoggerPtr & log)
         : status_interval(status_interval_)
+        , logger(log)
     {
 #define REGISTER_METRICS(metric, desc) \
     metrics.insert(metrics.end(), std::pair<CurrentMetrics::Metric, MetricInfo>(metric, {desc}));
-        REGISTER_METRICS(CurrentMetrics::MemoryTracking, "Memory");
-        REGISTER_METRICS(CurrentMetrics::PSMVCCSnapshotsList, "SnapshotsList");
+        REGISTER_METRICS(CurrentMetrics::MemoryTracking, "memory");
+        REGISTER_METRICS(CurrentMetrics::PSMVCCSnapshotsList, "snapshots");
 
 #undef REGISTER_METRICS
         timer_status.setStartInterval(1000);
@@ -42,6 +48,8 @@ public:
     }
 
     void onTime(Poco::Timer & timer);
+
+    void addJSONSummaryTo(Poco::JSON::Object::Ptr & root) const;
 
     String toString() const
     {
@@ -93,6 +101,8 @@ private:
     std::map<CurrentMetrics::Metric, MetricInfo> metrics;
 
     Poco::Timer timer_status;
+
+    LoggerPtr logger;
 };
 using PSMetricsDumperPtr = std::shared_ptr<PSMetricsDumper>;
 
@@ -130,8 +140,9 @@ class PSSnapStatGetter
     PSPtr ps;
 
 public:
-    explicit PSSnapStatGetter(const PSPtr & ps_)
+    PSSnapStatGetter(const PSPtr & ps_, const LoggerPtr & log)
         : ps(ps_)
+        , logger(log)
     {
         assert(ps != nullptr);
 
@@ -147,16 +158,18 @@ public:
 
 private:
     Poco::Timer scanner_timer;
+    LoggerPtr logger;
 };
 using PSSnapStatGetterPtr = std::shared_ptr<PSSnapStatGetter>;
 
 class StressTimeout
 {
 public:
-    explicit StressTimeout(size_t timeout_s)
+    StressTimeout(size_t timeout_s, const LoggerPtr & log)
+        : logger(log)
     {
         StressEnvStatus::getInstance().setStat(STATUS_LOOP);
-        LOG_INFO(StressEnv::logger, "Timeout: {}s", timeout_s);
+        LOG_INFO(logger, "Timeout: {}s", timeout_s);
         timeout_timer.setStartInterval(timeout_s * 1000);
     }
 
@@ -166,6 +179,7 @@ public:
 
 private:
     Poco::Timer timeout_timer;
+    LoggerPtr logger;
 };
 using StressTimeoutPtr = std::shared_ptr<StressTimeout>;
 } // namespace DB::PS::tests
