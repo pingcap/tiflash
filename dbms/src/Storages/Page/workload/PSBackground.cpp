@@ -30,7 +30,7 @@ void PSMetricsDumper::addJSONSummaryTo(Poco::JSON::Object::Ptr & root) const
     for (const auto & m : metrics)
     {
         Poco::JSON::Object::Ptr metrics_obj = new Poco::JSON::Object();
-        metrics_obj->set("latest", m.second.lastest);
+        metrics_obj->set("latest", m.second.latest);
         double avg = m.second.loop_times == 0 ? 0.0 : (1.0 * m.second.summary / m.second.loop_times);
         metrics_obj->set("avg", avg);
         metrics_obj->set("top", m.second.biggest);
@@ -43,14 +43,14 @@ void PSMetricsDumper::onTime(Poco::Timer & /*timer*/)
 {
     for (auto & metric : metrics)
     {
-        auto lastest = CurrentMetrics::get(metric.first);
-        if (likely(lastest != 0))
+        auto latest = CurrentMetrics::get(metric.first);
+        if (likely(latest != 0))
         {
             auto & info = metric.second;
             info.loop_times++;
-            info.lastest = lastest;
-            info.summary += lastest;
-            info.biggest = std::max(info.biggest, lastest);
+            info.latest = latest;
+            info.summary += latest;
+            info.biggest = std::max(info.biggest, latest);
             LOG_INFO(logger, info.toString());
         }
     }

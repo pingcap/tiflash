@@ -51,19 +51,6 @@ public:
 
     void addJSONSummaryTo(Poco::JSON::Object::Ptr & root) const;
 
-    String toString() const
-    {
-        String str;
-        for (const auto & metric : metrics)
-        {
-            if (likely(metric.second.loop_times != 0))
-            {
-                str += (metric.second.toString() + "\n");
-            }
-        }
-        return str;
-    }
-
     void start();
 
     void stop() { timer_status.stop(); }
@@ -83,7 +70,7 @@ private:
     {
         String name;
         UInt32 loop_times = 0;
-        UInt32 lastest = 0;
+        UInt32 latest = 0;
         UInt32 biggest = 0;
         UInt32 summary = 0;
 
@@ -92,7 +79,7 @@ private:
             return fmt::format(
                 "{} lastest used: {}, avg used: {}, top used: {}.",
                 name,
-                lastest,
+                latest,
                 loop_times == 0 ? 0 : (summary / loop_times),
                 biggest);
         }
