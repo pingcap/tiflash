@@ -67,11 +67,13 @@ struct SegmentReadTask
 
     BlockInputStreamPtr input_stream;
 
+    // Constructor for op-mode.
     SegmentReadTask(
         const SegmentPtr & segment_, //
         const SegmentSnapshotPtr & read_snapshot_,
         const RowKeyRanges & ranges_ = {});
 
+    // Constructor for disaggregated-mode.
     SegmentReadTask(
         const LoggerPtr & log,
         const Context & db_context,
@@ -94,11 +96,13 @@ struct SegmentReadTask
     String info() const { return extra_remote_info.has_value() ? extra_remote_info->remote_segment_id.toString() : ""; }
 
     void initColumnFileDataProvider(const Remote::RNLocalPageCacheGuardPtr & pages_guard);
+
     void initInputStream(
         const ColumnDefines & columns_to_read,
         UInt64 read_tso,
         const PushDownFilterPtr & push_down_filter,
         ReadMode read_mode);
+
     BlockInputStreamPtr getInputStream() const
     {
         RUNTIME_CHECK(input_stream != nullptr);
