@@ -39,11 +39,11 @@ void DatabaseMemory::loadTables(
 
 void DatabaseMemory::createTable(
     const Context & /*context*/,
-    const String & table_name,
-    const StoragePtr & table,
+    const String & /*table_name*/,
+    const StoragePtr & /*table*/,
     const ASTPtr & /*query*/)
 {
-    attachTable(table_name, table);
+    //attachTable(table_name, table);
 }
 
 void DatabaseMemory::removeTable(const Context & /*context*/, const String & table_name)

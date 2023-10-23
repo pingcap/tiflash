@@ -184,7 +184,7 @@ void DatabaseOrdinary::loadTables(Context & context, ThreadPool * thread_pool, b
 void DatabaseOrdinary::createTable(
     const Context & context,
     const String & table_name,
-    const StoragePtr & table,
+    const StoragePtr & /*table*/,
     const ASTPtr & query)
 {
     const auto & settings = context.getSettingsRef();
@@ -235,13 +235,13 @@ void DatabaseOrdinary::createTable(
     try
     {
         /// Add a table to the map of known tables.
-        {
-            std::lock_guard lock(mutex);
-            if (!tables.emplace(table_name, table).second)
-                throw Exception(
-                    fmt::format("Table {}.{} already exists.", name, table_name),
-                    ErrorCodes::TABLE_ALREADY_EXISTS);
-        }
+        // {
+        //     std::lock_guard lock(mutex);
+        //     if (!tables.emplace(table_name, table).second)
+        //         throw Exception(
+        //             fmt::format("Table {}.{} already exists.", name, table_name),
+        //             ErrorCodes::TABLE_ALREADY_EXISTS);
+        // }
 
         context.getFileProvider()->renameFile(
             table_metadata_tmp_path,

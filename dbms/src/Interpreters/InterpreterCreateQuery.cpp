@@ -624,13 +624,17 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
             create.attach,
             false);
 
-        // start up before adding to `database`, or the storage can not be retrieved from `ManagedStorages::get`
-        res->startup();
 
+        // 这边真正创建 table 的过程需要严格按照先实际写入 .sql ，然后再设置 storages ，最后 emplace table ，来保证 当 storages 可以查到 的时候，一定是可以 alterTable 的，tables 可以 find 的时候，一定全部完成了。
         if (create.is_temporary)
             context.getSessionContext().addExternalTable(table_name, res, query_ptr);
         else
             database->createTable(context, table_name, res, query_ptr);
+
+        res->startup();
+
+        if (!create.is_temporary)
+            database->attachTable(table_name, res);
     }
 
     /// If the query is a CREATE SELECT, insert the data into the table.
