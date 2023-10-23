@@ -181,10 +181,7 @@ void DatabaseOrdinary::loadTables(Context & context, ThreadPool * thread_pool, b
     DatabaseLoading::cleanupTables(*this, name, tables_failed_to_startup, log);
 }
 
-void DatabaseOrdinary::createTable(
-    const Context & context,
-    const String & table_name,
-    const ASTPtr & query)
+void DatabaseOrdinary::createTable(const Context & context, const String & table_name, const ASTPtr & query)
 {
     const auto & settings = context.getSettingsRef();
 

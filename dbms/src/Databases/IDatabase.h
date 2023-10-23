@@ -88,11 +88,7 @@ public:
     virtual bool empty(const Context & context) const = 0;
 
     /// Add the table to the database. Record its presence in the metadata.
-    virtual void createTable(
-        const Context & context,
-        const String & name,
-        const ASTPtr & query)
-        = 0;
+    virtual void createTable(const Context & context, const String & name, const ASTPtr & query) = 0;
 
     /// Delete the table from the database and return it. Delete the metadata.
     virtual void removeTable(const Context & context, const String & name) = 0;

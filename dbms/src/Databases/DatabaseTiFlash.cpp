@@ -209,10 +209,7 @@ void DatabaseTiFlash::loadTables(Context & context, ThreadPool * thread_pool, bo
 }
 
 
-void DatabaseTiFlash::createTable(
-    const Context & context,
-    const String & table_name,
-    const ASTPtr & query)
+void DatabaseTiFlash::createTable(const Context & context, const String & table_name, const ASTPtr & query)
 {
     const auto & settings = context.getSettingsRef();
 
