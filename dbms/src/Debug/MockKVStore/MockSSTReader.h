@@ -19,7 +19,7 @@
 #include <Storages/KVStore/FFI/SSTReader.h>
 
 #include <map>
-
+#include <mutex>
 
 namespace DB
 {
@@ -116,6 +116,9 @@ struct MockSSTReader
 
     static std::map<Key, MockSSTReader::Data> & getMockSSTData() { return MockSSTData; }
 
+public:
+    static std::mutex mut;
+
 private:
     Data::const_iterator iter;
     Data::const_iterator begin;
@@ -128,6 +131,9 @@ private:
     // (region_id, cf) -> Data
     static std::map<Key, MockSSTReader::Data> MockSSTData;
 };
+
+inline std::map<MockSSTReader::Key, MockSSTReader::Data> MockSSTReader::MockSSTData;
+inline std::mutex MockSSTReader::mut;
 
 SSTReaderInterfaces make_mock_sst_reader_interface();
 } // namespace DB

@@ -108,6 +108,11 @@ void KVStore::restore(PathPool & path_pool, const TiFlashRaftProxyHelper * proxy
         }
     }
 
+    fetchProxyConfig(proxy_helper);
+}
+
+void KVStore::fetchProxyConfig(const TiFlashRaftProxyHelper * proxy_helper)
+{
     // Try fetch proxy's config as a json string
     if (proxy_helper && proxy_helper->fn_get_config_json)
     {
@@ -375,7 +380,7 @@ void KVStore::persistRegion(
         LOG_INFO(
             log,
             "Start to persist {}, cache size: {} bytes for `{}`",
-            region.toString(true),
+            region.getDebugString(),
             region.dataSize(),
             caller);
         region_persister->persist(region, *region_task_lock.value());

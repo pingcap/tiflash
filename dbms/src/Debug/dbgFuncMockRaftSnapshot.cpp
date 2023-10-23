@@ -16,7 +16,7 @@
 #include <Common/FmtUtils.h>
 #include <Common/setThreadName.h>
 #include <Common/typeid_cast.h>
-#include <Debug/MockSSTReader.h>
+#include <Debug/MockKVStore/MockSSTReader.h>
 #include <Debug/MockTiDB.h>
 #include <Debug/MockTiKV.h>
 #include <Debug/dbgFuncMockRaftCommand.h>
@@ -262,8 +262,6 @@ void MockRaftCommand::dbgFuncRegionSnapshot(Context & context, const ASTs & args
         RecordKVFormat::DecodedTiKVKeyToDebugString<false>(end_decoded_key),
         table_id));
 }
-
-std::map<MockSSTReader::Key, MockSSTReader::Data> MockSSTReader::MockSSTData;
 
 class RegionMockTest final
 {

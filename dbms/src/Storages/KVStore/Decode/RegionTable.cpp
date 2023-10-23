@@ -102,6 +102,13 @@ RegionTable::RegionTable(Context & context_)
     , log(Logger::get())
 {}
 
+void RegionTable::clear()
+{
+    regions.clear();
+    tables.clear();
+    safe_ts_map.clear();
+}
+
 void RegionTable::restore()
 {
     LOG_INFO(log, "RegionTable restore start");
@@ -430,7 +437,7 @@ bool RegionTable::isSafeTSLag(UInt64 region_id, UInt64 * leader_safe_ts, UInt64 
         && ((*leader_safe_ts >> TsoPhysicalShiftBits) - (*self_safe_ts >> TsoPhysicalShiftBits) > SafeTsDiffThreshold);
 }
 
-UInt64 RegionTable::getSelfSafeTS(UInt64 region_id)
+UInt64 RegionTable::getSelfSafeTS(UInt64 region_id) const
 {
     std::shared_lock lock(rw_lock);
     auto it = safe_ts_map.find(region_id);

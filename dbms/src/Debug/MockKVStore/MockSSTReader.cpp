@@ -15,7 +15,7 @@
 #include "MockSSTReader.h"
 
 #include <Common/Exception.h>
-#include <Debug/MockRaftStoreProxy.h>
+#include <Debug/MockKVStore/MockRaftStoreProxy.h>
 
 #include <ext/scope_guard.h>
 
@@ -24,6 +24,7 @@ namespace DB
 SSTReaderPtr fn_get_sst_reader(SSTView v, RaftStoreProxyPtr)
 {
     std::string s(v.path.data, v.path.len);
+    std::scoped_lock<std::mutex> lock(MockSSTReader::mut);
     auto iter = MockSSTReader::getMockSSTData().find({s, v.type});
     if (iter == MockSSTReader::getMockSSTData().end())
         throw Exception("Can not find data in MockSSTData, [key=" + s + "] [type=" + CFToName(v.type) + "]");

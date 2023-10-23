@@ -178,7 +178,7 @@ DM::Remote::RNReadTaskPtr StorageDisaggregated::buildReadTask(
     }
 
     std::mutex output_lock;
-    std::vector<DM::Remote::RNReadSegmentTaskPtr> output_seg_tasks;
+    std::vector<DM::SegmentReadTaskPtr> output_seg_tasks;
 
     // Then, for each BatchCopTask, let's build read tasks concurrently.
     auto thread_manager = newThreadManager();
@@ -207,7 +207,7 @@ void StorageDisaggregated::buildReadTaskForWriteNode(
     const DM::ScanContextPtr & scan_context,
     const pingcap::coprocessor::BatchCopTask & batch_cop_task,
     std::mutex & output_lock,
-    std::vector<DM::Remote::RNReadSegmentTaskPtr> & output_seg_tasks)
+    std::vector<DM::SegmentReadTaskPtr> & output_seg_tasks)
 {
     Stopwatch watch;
 
@@ -353,7 +353,7 @@ void StorageDisaggregated::buildReadTaskForWriteNodeTable(
     const String & store_address,
     const String & serialized_physical_table,
     std::mutex & output_lock,
-    std::vector<DM::Remote::RNReadSegmentTaskPtr> & output_seg_tasks)
+    std::vector<DM::SegmentReadTaskPtr> & output_seg_tasks)
 {
     DB::DM::RemotePb::RemotePhysicalTable table;
     auto parse_ok = table.ParseFromString(serialized_physical_table);
@@ -369,7 +369,7 @@ void StorageDisaggregated::buildReadTaskForWriteNodeTable(
         const auto & remote_seg = table.segments(idx);
 
         thread_manager->schedule(true, "buildRNReadSegmentTask", [&] {
-            auto seg_read_task = DM::Remote::RNReadSegmentTask::buildFromEstablishResp(
+            auto seg_read_task = std::make_shared<DM::SegmentReadTask>(
                 table_tracing_logger,
                 db_context,
                 scan_context,

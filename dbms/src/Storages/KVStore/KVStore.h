@@ -23,6 +23,7 @@
 #include <Storages/KVStore/MultiRaft/RegionRangeKeys.h>
 #include <Storages/KVStore/StorageEngineType.h>
 
+#include <condition_variable>
 #include <magic_enum.hpp>
 
 namespace TiDB
@@ -44,7 +45,7 @@ struct ExternalDTFileInfo;
 
 namespace tests
 {
-class RegionKVStoreTest;
+class KVStoreTestBase;
 }
 
 class IAST;
@@ -249,6 +250,7 @@ public:
     RaftLogEagerGcTasks::Hints getRaftLogGcHints();
     void applyRaftLogGcTaskRes(const RaftLogGcTasksRes & res) const;
     const ProxyConfigSummary & getProxyConfigSummay() const { return proxy_config_summary; }
+    size_t getMaxParallelPrehandleSize() const;
 
 #ifndef DBMS_PUBLIC_GTEST
 private:
@@ -270,7 +272,7 @@ private:
     using DBGInvokerPrinter = std::function<void(const std::string &)>;
     friend void dbgFuncRemoveRegion(Context &, const ASTs &, DBGInvokerPrinter);
     friend void dbgFuncPutRegion(Context &, const ASTs &, DBGInvokerPrinter);
-    friend class tests::RegionKVStoreTest;
+    friend class tests::KVStoreTestBase;
     friend class ReadIndexStressTest;
     struct StoreMeta
     {
@@ -361,6 +363,7 @@ private:
 
     void releaseReadIndexWorkers();
     void handleDestroy(UInt64 region_id, TMTContext & tmt, const KVStoreTaskLock &);
+    void fetchProxyConfig(const TiFlashRaftProxyHelper * proxy_helper);
 
 #ifndef DBMS_PUBLIC_GTEST
 private:

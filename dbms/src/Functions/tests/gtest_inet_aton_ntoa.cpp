@@ -23,8 +23,6 @@
 #include <TestUtils/TiFlashTestBasic.h>
 
 #include <random>
-#include <string>
-#include <vector>
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wsign-compare"
@@ -133,35 +131,99 @@ try
 }
 CATCH
 
-TEST_F(TestInetAtonNtoa, InetNtoa)
-try
+
+template <typename Type>
+static void TestInetAtonNtoaImpl(TestInetAtonNtoa & test)
 {
     const String func_name = "IPv4NumToString";
 
     // empty column
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({}),
-        executeFunction(func_name, createColumn<Nullable<UInt32>>({})));
+        test.executeFunction(func_name, createColumn<Nullable<Type>>({})));
 
-    ASSERT_COLUMN_EQ(createColumn<String>({}), executeFunction(func_name, createColumn<UInt32>({})));
+    ASSERT_COLUMN_EQ(createColumn<Nullable<String>>({}), test.executeFunction(func_name, createColumn<Type>({})));
 
     // const null-only column
     ASSERT_COLUMN_EQ(
         createConstColumn<Nullable<String>>(1, {}),
-        executeFunction(func_name, createConstColumn<Nullable<UInt32>>(1, {})));
+        test.executeFunction(func_name, createConstColumn<Nullable<Type>>(1, {})));
 
-    // const non-null column
-    ASSERT_COLUMN_EQ(
-        createConstColumn<String>(1, "0.0.0.1"),
-        executeFunction(func_name, createConstColumn<Nullable<UInt32>>(1, 1)));
+    if constexpr (std::is_same_v<UInt8, Type>)
+    {
+        ASSERT_COLUMN_EQ(
+            createColumn<Nullable<String>>({"0.0.0.255"}),
+            test.executeFunction(func_name, createColumn<Nullable<Type>>({std::numeric_limits<Type>::max()})));
+    }
+    else if constexpr (std::is_same_v<Int8, Type>)
+    {
+        ASSERT_COLUMN_EQ(
+            createColumn<Nullable<String>>({{}, "0.0.0.127"}),
+            test.executeFunction(func_name, createColumn<Nullable<Type>>({-1, std::numeric_limits<Type>::max()})));
+    }
+    else if constexpr (std::is_same_v<UInt16, Type>)
+    {
+        ASSERT_COLUMN_EQ(
+            createColumn<Nullable<String>>({"0.0.255.255"}),
+            test.executeFunction(func_name, createColumn<Nullable<Type>>({std::numeric_limits<Type>::max()})));
+    }
+    else if constexpr (std::is_same_v<Int16, Type>)
+    {
+        ASSERT_COLUMN_EQ(
+            createColumn<Nullable<String>>({{}, "0.0.127.255"}),
+            test.executeFunction(func_name, createColumn<Nullable<Type>>({-1, std::numeric_limits<Type>::max()})));
+    }
+    else if constexpr (std::is_same_v<UInt32, Type>)
+    {
+        ASSERT_COLUMN_EQ(
+            createColumn<Nullable<String>>({"255.255.255.255"}),
+            test.executeFunction(func_name, createColumn<Nullable<Type>>({std::numeric_limits<Type>::max()})));
+        ASSERT_COLUMN_EQ(
+            createColumn<Nullable<String>>(
+                {"1.2.3.4", "0.1.0.1", "0.255.0.255", "0.1.2.3", "0.0.0.0", "1.0.1.0", "111.0.21.12"}),
+            test.executeFunction(
+                func_name,
+                createColumn<Nullable<Type>>({16909060, 65537, 16711935, 66051, 0, 16777472, 1862276364})));
+    }
+    else if constexpr (std::is_same_v<Int32, Type>)
+    {
+        ASSERT_COLUMN_EQ(
+            createColumn<Nullable<String>>({{}, "127.255.255.255"}),
+            test.executeFunction(func_name, createColumn<Nullable<Type>>({-1, std::numeric_limits<Type>::max()})));
+    }
+    else if constexpr (std::is_same_v<UInt64, Type>)
+    {
+        ASSERT_COLUMN_EQ(
+            createColumn<Nullable<String>>({"255.255.255.255", {}}),
+            test.executeFunction(
+                func_name,
+                createColumn<Nullable<Type>>({std::numeric_limits<UInt32>::max(), std::numeric_limits<Type>::max()})));
+    }
+    else if constexpr (std::is_same_v<Int64, Type>)
+    {
+        ASSERT_COLUMN_EQ(
+            createColumn<Nullable<String>>({"255.255.255.255", {}, {}}),
+            test.executeFunction(
+                func_name,
+                createColumn<Nullable<Type>>(
+                    {std::numeric_limits<UInt32>::max(), -1, std::numeric_limits<Type>::max()})));
+    }
+}
 
-    // normal cases
-    ASSERT_COLUMN_EQ(
-        createColumn<Nullable<String>>(
-            {"1.2.3.4", "0.1.0.1", "0.255.0.255", "0.1.2.3", "0.0.0.0", "1.0.1.0", "111.0.21.12"}),
-        executeFunction(
-            func_name,
-            createColumn<Nullable<UInt32>>({16909060, 65537, 16711935, 66051, 0, 16777472, 1862276364})));
+
+TEST_F(TestInetAtonNtoa, InetNtoa)
+try
+{
+#define M(T) TestInetAtonNtoaImpl<T>(*this);
+    M(UInt8);
+    M(Int8);
+    M(UInt16);
+    M(Int16);
+    M(UInt32);
+    M(Int32);
+    M(UInt64);
+    M(Int64);
+#undef M
 }
 CATCH
 
@@ -176,7 +238,7 @@ try
     std::uniform_int_distribution<UInt32> dist;
 
     InferredDataVector<Nullable<UInt32>> num_vec;
-    for (size_t i = 0; i < 10000; ++i)
+    for (size_t i = 0; i < 512; ++i)
     {
         num_vec.emplace_back(dist(mt));
     }

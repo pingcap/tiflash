@@ -13,13 +13,26 @@
 // limitations under the License.
 
 #include <Debug/dbgTools.h>
-#include <Storages/KVStore/tests/kvstore_helper.h>
+#include <Storages/KVStore/MultiRaft/RegionsRangeIndex.h>
 
-namespace DB
+#include "kvstore_helper.h"
+
+namespace DB::tests
 {
-namespace tests
+
+class RegionKVStoreOldTest : public KVStoreTestBase
 {
-TEST_F(RegionKVStoreTest, PersistenceV1)
+public:
+    static void testRaftMerge(KVStore & kvs, TMTContext & tmt);
+    static void testRaftMergeRollback(KVStore & kvs, TMTContext & tmt);
+    RegionKVStoreOldTest()
+    {
+        log = DB::Logger::get("RegionKVStoreOldTest");
+        test_path = TiFlashTestEnv::getTemporaryPath("/region_kvs_old_test");
+    }
+};
+
+TEST_F(RegionKVStoreOldTest, PersistenceV1)
 try
 {
     auto ctx = TiFlashTestEnv::getGlobalContext();
@@ -53,14 +66,14 @@ try
 }
 CATCH
 
-TEST_F(RegionKVStoreTest, ReadIndex)
+TEST_F(RegionKVStoreOldTest, ReadIndex)
 {
     createDefaultRegions();
     auto ctx = TiFlashTestEnv::getGlobalContext();
 
     // Start mock proxy in other thread
     std::atomic_bool over{false};
-    auto proxy_runner = std::thread([&]() { proxy_instance->testRunNormal(over); });
+    auto proxy_runner = std::thread([&]() { proxy_instance->testRunReadIndex(over); });
     KVStore & kvs = getKVS();
     ASSERT_EQ(kvs.getProxyHelper(), proxy_helper.get());
 
@@ -137,7 +150,7 @@ TEST_F(RegionKVStoreTest, ReadIndex)
             {
                 ASSERT_EQ(proxy_instance->regions.at(tar_region_id)->getLatestCommitIndex(), 66);
                 proxy_instance->unsafeInvokeForTest([&](MockRaftStoreProxy & p) {
-                    p.region_id_to_error.emplace(tar_region_id);
+                    p.mock_read_index.region_id_to_error.emplace(tar_region_id);
                     p.regions.at(2)->updateCommitIndex(6);
                 });
             }
@@ -224,13 +237,13 @@ TEST_F(RegionKVStoreTest, ReadIndex)
     kvs.stopReadIndexWorkers();
     kvs.releaseReadIndexWorkers();
     over = true;
-    proxy_instance->wakeNotifier();
+    proxy_instance->mock_read_index.wakeNotifier();
     proxy_runner.join();
     ASSERT(GCMonitor::instance().checkClean());
     ASSERT(!GCMonitor::instance().empty());
 }
 
-void RegionKVStoreTest::testRaftMergeRollback(KVStore & kvs, TMTContext & tmt)
+void RegionKVStoreOldTest::testRaftMergeRollback(KVStore & kvs, TMTContext & tmt)
 {
     uint64_t region_id = 7;
     {
@@ -393,7 +406,7 @@ static void testRaftSplit(KVStore & kvs, TMTContext & tmt, std::unique_ptr<MockR
     }
 }
 
-void RegionKVStoreTest::testRaftMerge(KVStore & kvs, TMTContext & tmt)
+void RegionKVStoreOldTest::testRaftMerge(KVStore & kvs, TMTContext & tmt)
 {
     {
         auto region_id = 7;
@@ -447,7 +460,6 @@ void RegionKVStoreTest::testRaftMerge(KVStore & kvs, TMTContext & tmt)
         auto && [request, response]
             = MockRaftStoreProxy::composeCommitMerge(source_region->cloneMetaRegion(), source_region->appliedIndex());
         source_region->setStateApplying();
-        source_region->makeRaftCommandDelegate(kvs.genTaskLock());
         const auto & source_region_meta_delegate = source_region->meta.makeRaftCommandDelegate();
         try
         {
@@ -536,7 +548,7 @@ void RegionKVStoreTest::testRaftMerge(KVStore & kvs, TMTContext & tmt)
     }
 }
 
-TEST_F(RegionKVStoreTest, RegionReadWrite)
+TEST_F(RegionKVStoreOldTest, RegionReadWrite)
 {
     auto ctx = TiFlashTestEnv::getGlobalContext();
     TableID table_id = 100;
@@ -663,7 +675,7 @@ TEST_F(RegionKVStoreTest, RegionReadWrite)
     }
 }
 
-TEST_F(RegionKVStoreTest, Writes)
+TEST_F(RegionKVStoreOldTest, Writes)
 {
     createDefaultRegions();
     auto ctx = TiFlashTestEnv::getGlobalContext();
@@ -849,9 +861,8 @@ TEST_F(RegionKVStoreTest, Writes)
 }
 
 
-TEST_F(RegionKVStoreTest, AdminSplit)
+TEST_F(RegionKVStoreOldTest, AdminSplit)
 {
-    createDefaultRegions();
     auto ctx = TiFlashTestEnv::getGlobalContext();
     KVStore & kvs = getKVS();
     proxy_instance->debugAddRegions(
@@ -873,9 +884,8 @@ TEST_F(RegionKVStoreTest, AdminSplit)
     }
 }
 
-TEST_F(RegionKVStoreTest, AdminMerge)
+TEST_F(RegionKVStoreOldTest, AdminMerge)
 {
-    createDefaultRegions();
     auto ctx = TiFlashTestEnv::getGlobalContext();
     KVStore & kvs = getKVS();
     proxy_instance->debugAddRegions(
@@ -884,7 +894,6 @@ TEST_F(RegionKVStoreTest, AdminMerge)
         {1, 7},
         {{RecordKVFormat::genKey(1, 0), RecordKVFormat::genKey(1, 5)},
          {RecordKVFormat::genKey(1, 5), RecordKVFormat::genKey(1, 10)}});
-
     {
         testRaftMergeRollback(kvs, ctx.getTMTContext());
         testRaftMerge(kvs, ctx.getTMTContext());
@@ -892,7 +901,7 @@ TEST_F(RegionKVStoreTest, AdminMerge)
 }
 
 
-TEST_F(RegionKVStoreTest, AdminChangePeer)
+TEST_F(RegionKVStoreOldTest, AdminChangePeer)
 {
     UInt64 region_id = 88;
     auto ctx = TiFlashTestEnv::getGlobalContext();
@@ -921,7 +930,7 @@ TEST_F(RegionKVStoreTest, AdminChangePeer)
 // TODO Use test utils in new KVStore test for snapshot test.
 // Otherwise data will not actually be inserted.
 class ApplySnapshotTest
-    : public RegionKVStoreTest
+    : public RegionKVStoreOldTest
     , public testing::WithParamInterface<bool /* ingest_using_split */>
 {
 public:
@@ -1084,7 +1093,7 @@ try
 }
 CATCH
 
-TEST_F(RegionKVStoreTest, ApplySnapshot)
+TEST_F(RegionKVStoreOldTest, ApplySnapshot)
 try
 {
     createDefaultRegions();
@@ -1178,7 +1187,7 @@ try
 }
 CATCH
 
-TEST_F(RegionKVStoreTest, ApplySnapshotOverlap)
+TEST_F(RegionKVStoreOldTest, ApplySnapshotOverlap)
 try
 {
     createDefaultRegions();
@@ -1276,7 +1285,7 @@ try
 }
 CATCH
 
-TEST_F(RegionKVStoreTest, IngestSST)
+TEST_F(RegionKVStoreOldTest, IngestSST)
 try
 {
     createDefaultRegions();
@@ -1352,7 +1361,7 @@ try
 }
 CATCH
 
-TEST_F(RegionKVStoreTest, Restore)
+TEST_F(RegionKVStoreOldTest, Restore)
 {
     auto ctx = TiFlashTestEnv::getGlobalContext();
     {
@@ -1379,7 +1388,7 @@ TEST_F(RegionKVStoreTest, Restore)
     }
 }
 
-TEST_F(RegionKVStoreTest, RegionRange)
+TEST_F(RegionKVStoreOldTest, RegionRange)
 {
     {
         // Test util functions.
@@ -1640,5 +1649,4 @@ TEST_F(RegionKVStoreTest, RegionRange)
     }
 }
 
-} // namespace tests
-} // namespace DB
+} // namespace DB::tests

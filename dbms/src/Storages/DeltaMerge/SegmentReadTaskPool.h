@@ -17,45 +17,12 @@
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/Filter/PushDownFilter.h>
 #include <Storages/DeltaMerge/ReadThread/WorkQueue.h>
-#include <Storages/DeltaMerge/RowKeyRangeUtils.h>
-#include <Storages/DeltaMerge/Segment.h>
-namespace DB
-{
-namespace DM
-{
-struct SegmentReadTask;
-class Segment;
-using SegmentPtr = std::shared_ptr<Segment>;
-struct SegmentSnapshot;
-using SegmentSnapshotPtr = std::shared_ptr<SegmentSnapshot>;
+#include <Storages/DeltaMerge/SegmentReadTask.h>
 
-using SegmentReadTaskPtr = std::shared_ptr<SegmentReadTask>;
-using SegmentReadTasks = std::list<SegmentReadTaskPtr>;
+namespace DB::DM
+{
+
 using AfterSegmentRead = std::function<void(const DMContextPtr &, const SegmentPtr &)>;
-
-struct SegmentReadTask
-{
-    SegmentPtr segment;
-    SegmentSnapshotPtr read_snapshot;
-    RowKeyRanges ranges;
-
-    SegmentReadTask(
-        const SegmentPtr & segment_, //
-        const SegmentSnapshotPtr & read_snapshot_,
-        const RowKeyRanges & ranges_);
-
-    explicit SegmentReadTask(const SegmentPtr & segment_, const SegmentSnapshotPtr & read_snapshot_);
-
-    ~SegmentReadTask();
-
-    std::pair<size_t, size_t> getRowsAndBytes() const;
-
-    void addRange(const RowKeyRange & range) { ranges.push_back(range); }
-
-    void mergeRanges() { ranges = DM::tryMergeRanges(std::move(ranges), 1); }
-
-    static SegmentReadTasks trySplitReadTasks(const SegmentReadTasks & tasks, size_t expected_size);
-};
 
 class BlockStat
 {
@@ -288,21 +255,4 @@ private:
 using SegmentReadTaskPoolPtr = std::shared_ptr<SegmentReadTaskPool>;
 using SegmentReadTaskPools = std::vector<SegmentReadTaskPoolPtr>;
 
-} // namespace DM
-} // namespace DB
-
-
-template <>
-struct fmt::formatter<DB::DM::SegmentReadTaskPtr>
-{
-    template <typename FormatContext>
-    auto format(const DB::DM::SegmentReadTaskPtr & t, FormatContext & ctx) const -> decltype(ctx.out())
-    {
-        return format_to(
-            ctx.out(),
-            "{}_{}_{}",
-            t->segment->segmentId(),
-            t->segment->segmentEpoch(),
-            t->read_snapshot->delta->getDeltaIndexEpoch());
-    }
-};
+} // namespace DB::DM
