@@ -624,13 +624,13 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
             create.attach,
             false);
 
-        //when do create tables, we should strictly follow the order of
-        // 1. write .sql file
-        // 2. set tmt.getStorages()
-        // 3. emplace table into tables
-        // Because we are based on whether we found table in tmt.getStorages() to decide whether we have created the table, and can do alter table.
-        // if we do step 2 before step 1, we may alter table and then can't find .sql file.
-        // Besides, we make step 3 as the final one, to make sure if we pass context.isTableExist(database_name, table_name), the table must be created completely.
+        // When creating tables, we should strictly follow the following steps:
+        // 1. Create a .sql file
+        // 2. Register the instance to ManagedStorages
+        // 3. Register the instance to IDatabase
+        // Once the instance is registered in `ManagedStorages`, we will try to apply DDL alter changes to its .sql files
+        // If we do step 2 before step 1, we may run into "can't find .sql file" error when applying DDL jobs.
+        // Besides, we make step 3 the final one, to ensure once we pass the check of context.isTableExist(database_name, table_name)`, the table must be created completely.
 
         if (create.is_temporary)
             context.getSessionContext().addExternalTable(table_name, res, query_ptr);
