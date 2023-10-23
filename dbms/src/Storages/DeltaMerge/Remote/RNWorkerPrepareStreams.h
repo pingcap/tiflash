@@ -16,7 +16,7 @@
 
 #include <Common/ThreadedWorker.h>
 #include <Storages/DeltaMerge/Filter/PushDownFilter.h>
-#include <Storages/DeltaMerge/Remote/RNReadTask_fwd.h>
+#include <Storages/DeltaMerge/Remote/RNReadTask.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 #include <pingcap/kv/Cluster.h>
 
@@ -33,10 +33,10 @@ using RNWorkerPrepareStreamsPtr = std::shared_ptr<RNWorkerPrepareStreams>;
 /// they will be downloaded.
 class RNWorkerPrepareStreams
     : private boost::noncopyable
-    , public ThreadedWorker<RNReadSegmentTaskPtr, RNReadSegmentTaskPtr>
+    , public ThreadedWorker<SegmentReadTaskPtr, SegmentReadTaskPtr>
 {
 protected:
-    RNReadSegmentTaskPtr doWork(const RNReadSegmentTaskPtr & task) override;
+    SegmentReadTaskPtr doWork(const SegmentReadTaskPtr & task) override;
 
     String getName() const noexcept override { return "PrepareStreams"; }
 
@@ -49,8 +49,8 @@ public:
 public:
     struct Options
     {
-        const std::shared_ptr<MPMCQueue<RNReadSegmentTaskPtr>> & source_queue;
-        const std::shared_ptr<MPMCQueue<RNReadSegmentTaskPtr>> & result_queue;
+        const std::shared_ptr<MPMCQueue<SegmentReadTaskPtr>> & source_queue;
+        const std::shared_ptr<MPMCQueue<SegmentReadTaskPtr>> & result_queue;
         const LoggerPtr & log;
         const size_t concurrency;
         const ColumnDefinesPtr & columns_to_read;
@@ -65,7 +65,7 @@ public:
     }
 
     explicit RNWorkerPrepareStreams(const Options & options)
-        : ThreadedWorker<RNReadSegmentTaskPtr, RNReadSegmentTaskPtr>(
+        : ThreadedWorker<SegmentReadTaskPtr, SegmentReadTaskPtr>(
             options.source_queue,
             options.result_queue,
             options.log,
@@ -78,10 +78,10 @@ public:
 
     ~RNWorkerPrepareStreams() override { wait(); }
 
-    bool initInputStream(const RNReadSegmentTaskPtr & task, bool enable_delta_index_error_fallback);
+    bool initInputStream(const SegmentReadTaskPtr & task, bool enable_delta_index_error_fallback);
 
     // Only use in unit-test.
-    RNReadSegmentTaskPtr testDoWork(const RNReadSegmentTaskPtr & task) { return doWork(task); }
+    SegmentReadTaskPtr testDoWork(const SegmentReadTaskPtr & task) { return doWork(task); }
 };
 
 } // namespace DB::DM::Remote
