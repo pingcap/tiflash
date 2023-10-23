@@ -385,7 +385,7 @@ void TMTContext::reloadConfig(const Poco::Util::AbstractConfiguration & config)
         std::max(config.getUInt64(COMPACT_LOG_MIN_ROWS, 40 * 1024), 1),
         std::max(config.getUInt64(COMPACT_LOG_MIN_BYTES, 32 * 1024 * 1024), 1),
         std::max(config.getUInt64(COMPACT_LOG_MIN_GAP, 200), 1),
-        config.getUInt64(EAGER_GC_LOG_GAP, 512));
+        config.getUInt64(EAGER_GC_LOG_GAP, 0)); // disable on the serverless branch
     {
         batch_read_index_timeout_ms
             = config.getUInt64(BATCH_READ_INDEX_TIMEOUT_MS, DEFAULT_BATCH_READ_INDEX_TIMEOUT_MS);

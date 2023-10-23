@@ -61,7 +61,7 @@ KVStore::KVStore(Context & context)
     , region_compact_log_min_rows(40 * 1024)
     , region_compact_log_min_bytes(32 * 1024 * 1024)
     , region_compact_log_gap(200)
-    , region_eager_gc_log_gap(512)
+    , region_eager_gc_log_gap(0) // disable on the serverless branch
     // Eager RaftLog GC is only enabled under UniPS
     , eager_raft_log_gc_enabled(context.getPageStorageRunMode() == PageStorageRunMode::UNI_PS)
 {
