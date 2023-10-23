@@ -117,7 +117,7 @@ protected:
         global_ctx.getTMTContext().getRegionTable().clear();
         return *kvstore;
     }
-    // Onlt handle mock proxy's part. Conflicts with `debugAddRegions`.
+    // Only handle mock proxy's part. Conflicts with `debugAddRegions`.
     void createDefaultRegions() { proxy_instance->init(100); }
     void initStorages()
     {

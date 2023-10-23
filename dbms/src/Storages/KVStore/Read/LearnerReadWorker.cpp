@@ -203,7 +203,7 @@ void LearnerReadWorker::recordReadIndexError(RegionsReadIndexResult & read_index
             if (region_error.has_epoch_not_match())
             {
                 extra_msg = fmt::format(
-                    "read_index_resp {} epoch {}:{}",
+                    "read_index_resp error, region_id={} version={} conf_version={}",
                     region_id,
                     kvstore->getRegion(region_id)->version(),
                     kvstore->getRegion(region_id)->confVer());
