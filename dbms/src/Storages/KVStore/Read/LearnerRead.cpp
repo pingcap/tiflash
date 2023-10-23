@@ -79,6 +79,7 @@ void validateQueryInfo(
 {
     RegionException::UnavailableRegions fail_region_ids;
     RegionException::RegionReadStatus fail_status = RegionException::RegionReadStatus::OK;
+    std::string fail_extra_msg;
 
     for (const auto & region_query_info : mvcc_query_info.regions_query_info)
     {
@@ -95,6 +96,7 @@ void validateQueryInfo(
             // ABA problem may cause because one region is removed and inserted back.
             // if the version of region is changed, the `streams` may has less data because of compaction.
             status = RegionException::RegionReadStatus::EPOCH_NOT_MATCH;
+            fail_extra_msg = fmt::format("{} != {}", region->version(), region_query_info.version);
         }
 
         if (status != RegionException::RegionReadStatus::OK)
@@ -103,17 +105,19 @@ void validateQueryInfo(
             fail_status = status;
             LOG_WARNING(
                 log,
-                "Check after snapshot acquired from storage, region_id={} version={} handle_range={} status={}",
+                "Check after snapshot acquired from storage, region_id={} version={} handle_range={} status={} "
+                "fail_msg={}",
                 region_query_info.region_id,
                 region_query_info.version,
                 RecordKVFormat::DecodedTiKVKeyRangeToDebugString(region_query_info.range_in_table),
-                magic_enum::enum_name(status));
+                magic_enum::enum_name(status),
+                fail_extra_msg);
         }
     }
 
     if (!fail_region_ids.empty())
     {
-        throw RegionException(std::move(fail_region_ids), fail_status);
+        throw RegionException(std::move(fail_region_ids), fail_status, fail_extra_msg.c_str());
     }
 }
 
