@@ -28,6 +28,7 @@
 
 #include <ext/scope_guard.h>
 #include <mutex>
+#include <shared_mutex>
 
 // to make GCC 11 happy
 #include <cassert>
@@ -860,10 +861,16 @@ struct MetricFamily
     T & get(size_t idx = 0) { return *(metrics[idx]); }
     T & get(size_t idx, const String & resource_group_name)
     {
-        if (metrics_map.find(resource_group_name) == metrics_map.end())
         {
-            addMetricsForResourceGroup(resource_group_name);
+            std::shared_lock lock(mu);
+            if (metrics_map.find(resource_group_name) != metrics_map.end())
+                return *(metrics_map[resource_group_name][idx]);
         }
+
+        std::lock_guard lock(mu);
+        if (metrics_map.find(resource_group_name) == metrics_map.end())
+            addMetricsForResourceGroup(resource_group_name);
+
         return *(metrics_map[resource_group_name][idx]);
     }
 
@@ -890,6 +897,7 @@ private:
     prometheus::Family<T> * store_family;
     std::vector<MetricArgType> store_args;
     // <resource_group_name, metrics>
+    std::shared_mutex mu;
     std::unordered_map<String, std::vector<T *>> metrics_map;
 };
 
