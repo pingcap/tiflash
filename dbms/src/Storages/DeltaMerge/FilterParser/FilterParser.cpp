@@ -16,7 +16,6 @@
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGQueryInfo.h>
 #include <Flash/Coprocessor/DAGUtils.h>
-#include <Poco/Logger.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/FilterParser/FilterParser.h>
 #include <TiDB/Schema/TiDB.h>
@@ -92,6 +91,19 @@ ColumnDefine getColumnDefineForColumnExpr(const tipb::Expr & expr, const ColumnD
             Errors::Coprocessor::BadRequest);
     }
     return columns_to_read[column_index];
+}
+
+// convert literal value from timezone specified in cop request to UTC in-place
+inline void convertFieldWithTimezone(Field & value, const TimezoneInfo & timezone_info)
+{
+    static const auto & time_zone_utc = DateLUT::instance("UTC");
+    UInt64 from_time = value.get<UInt64>();
+    UInt64 result_time = from_time;
+    if (timezone_info.is_name_based)
+        convertTimeZone(from_time, result_time, *timezone_info.timezone, time_zone_utc);
+    else if (timezone_info.timezone_offset != 0)
+        convertTimeZoneByOffset(from_time, result_time, false, timezone_info.timezone_offset);
+    value = Field(result_time);
 }
 
 inline RSOperatorPtr parseTiCompareExpr( //
@@ -171,16 +183,7 @@ inline RSOperatorPtr parseTiCompareExpr( //
                         false);
                 // convert literal value from timezone specified in cop request to UTC
                 if (literal_type == TiDB::TypeDatetime && !timezone_info.is_utc_timezone)
-                {
-                    static const auto & time_zone_utc = DateLUT::instance("UTC");
-                    UInt64 from_time = value.get<UInt64>();
-                    UInt64 result_time = from_time;
-                    if (timezone_info.is_name_based)
-                        convertTimeZone(from_time, result_time, *timezone_info.timezone, time_zone_utc);
-                    else if (timezone_info.timezone_offset != 0)
-                        convertTimeZoneByOffset(from_time, result_time, false, timezone_info.timezone_offset);
-                    value = Field(result_time);
-                }
+                    convertFieldWithTimezone(value, timezone_info);
             }
             values.push_back(value);
         }
@@ -242,15 +245,12 @@ RSOperatorPtr parseTiExpr(
     const TimezoneInfo & timezone_info,
     const LoggerPtr & log)
 {
-    assert(isFunctionExpr(expr));
-
-    RSOperatorPtr op = EMPTY_RS_OPERATOR;
+    if (unlikely(!isFunctionExpr(expr)))
+        return createUnsupported(expr.ShortDebugString(), "child of logical and is not function", false);
     if (unlikely(isAggFunctionExpr(expr)))
-    {
-        op = createUnsupported(expr.ShortDebugString(), "agg function: " + tipb::ExprType_Name(expr.tp()), false);
-        return op;
-    }
+        return createUnsupported(expr.ShortDebugString(), "agg function: " + tipb::ExprType_Name(expr.tp()), false);
 
+    String reason = fmt::format("{} is not supported", tipb::ScalarFuncSig_Name(expr.sig()));
     if (auto iter = FilterParser::scalar_func_rs_filter_map.find(expr.sig());
         iter != FilterParser::scalar_func_rs_filter_map.end())
     {
@@ -264,28 +264,22 @@ RSOperatorPtr parseTiExpr(
         case FilterParser::RSFilterType::Not:
         {
             if (unlikely(expr.children_size() != 1))
-                op = createUnsupported(
-                    expr.ShortDebugString(),
-                    "logical not with " + DB::toString(expr.children_size()) + " children",
-                    false);
-            else
             {
-                const auto & child = expr.children(0);
-                if (likely(isFunctionExpr(child)))
-                    op = createNot(parseTiExpr(child, columns_to_read, creator, timezone_info, log));
-                else
-                    op = createUnsupported(child.ShortDebugString(), "child of logical not is not function", false);
+                reason = fmt::format("logical not with {} children is not supported", expr.children_size());
+                break;
             }
+            if (const auto & child = expr.children(0); likely(isFunctionExpr(child)))
+                return createNot(parseTiExpr(child, columns_to_read, creator, timezone_info, log));
+            reason = "child of logical not is not function";
+            break;
         }
-        break;
 
         case FilterParser::RSFilterType::And:
         case FilterParser::RSFilterType::Or:
         {
             RSOperators children;
-            for (Int32 i = 0; i < expr.children_size(); ++i)
+            for (const auto & child : expr.children())
             {
-                const auto & child = expr.children(i);
                 if (likely(isFunctionExpr(child)))
                     children.emplace_back(parseTiExpr(child, columns_to_read, creator, timezone_info, log));
                 else
@@ -295,11 +289,10 @@ RSOperatorPtr parseTiExpr(
                         false));
             }
             if (expr.sig() == tipb::ScalarFuncSig::LogicalAnd)
-                op = createAnd(children);
+                return createAnd(children);
             else
-                op = createOr(children);
+                return createOr(children);
         }
-        break;
 
         case FilterParser::RSFilterType::Equal:
         case FilterParser::RSFilterType::NotEqual:
@@ -308,8 +301,7 @@ RSOperatorPtr parseTiExpr(
         case FilterParser::RSFilterType::Less:
         case FilterParser::RSFilterType::LessEqual:
         case FilterParser::RSFilterType::In:
-            op = parseTiCompareExpr(expr, filter_type, columns_to_read, creator, timezone_info);
-            break;
+            return parseTiCompareExpr(expr, filter_type, columns_to_read, creator, timezone_info);
 
         case FilterParser::RSFilterType::IsNull:
         {
@@ -322,68 +314,34 @@ RSOperatorPtr parseTiExpr(
             // but in RSResult (a > 1), we will get the result RSResult::None, and then we think the result is the empty set.
             if (unlikely(expr.children_size() != 1))
             {
-                op = createUnsupported(
-                    expr.ShortDebugString(),
-                    "filter IsNull with " + DB::toString(expr.children_size()) + " children",
-                    false);
+                reason = fmt::format("filter IsNull with {} children is not supported", expr.children_size());
+                break;
+            }
+            const auto & child = expr.children(0);
+            if (likely(isColumnExpr(child)))
+            {
+                auto field_type = child.field_type().tp();
+                if (isRoughSetFilterSupportType(field_type))
+                {
+                    const auto col = getColumnDefineForColumnExpr(child, columns_to_read);
+                    Attr attr = creator(col.id);
+                    return createIsNull(attr);
+                }
+                reason = fmt::format("ColumnRef with field type({}) is not supported", tipb::ExprType_Name(expr.tp()));
             }
             else
             {
-                const auto & child = expr.children(0);
-                if (likely(isColumnExpr(child)))
-                {
-                    auto field_type = child.field_type().tp();
-                    if (!isRoughSetFilterSupportType(field_type))
-                        op = createUnsupported(
-                            expr.ShortDebugString(),
-                            "ColumnRef with field type(" + DB::toString(field_type) + ") is not supported",
-                            false);
-                    else
-                    {
-                        const auto col = getColumnDefineForColumnExpr(child, columns_to_read);
-                        Attr attr = creator(col.id);
-                        op = createIsNull(attr);
-                    }
-                }
-                else
-                {
-                    op = createUnsupported(child.ShortDebugString(), "child of is null is not column", false);
-                }
+                reason = "child of IsNull is not ColumnRef";
             }
             break;
         }
-
+        // Unsupported filter type:
         case FilterParser::RSFilterType::Like:
         case FilterParser::RSFilterType::Unsupported:
-            op = createUnsupported(
-                expr.ShortDebugString(),
-                tipb::ScalarFuncSig_Name(expr.sig()) + " is not supported",
-                false);
             break;
         }
     }
-    else
-    {
-        op = createUnsupported(
-            expr.ShortDebugString(),
-            tipb::ScalarFuncSig_Name(expr.sig()) + " is not supported",
-            false);
-    }
-
-    return op;
-}
-
-inline RSOperatorPtr tryParse(
-    const tipb::Expr & filter,
-    const ColumnDefines & columns_to_read,
-    const FilterParser::AttrCreatorByColumnID & creator,
-    const TimezoneInfo & timezone_info,
-    const LoggerPtr & log)
-{
-    if (isFunctionExpr(filter))
-        return cop::parseTiExpr(filter, columns_to_read, creator, timezone_info, log);
-    else
-        return createUnsupported(filter.ShortDebugString(), "child of logical and is not function", false);
+    return createUnsupported(expr.ShortDebugString(), reason, false);
 }
 
 } // namespace cop
@@ -395,34 +353,24 @@ RSOperatorPtr FilterParser::parseDAGQuery(
     FilterParser::AttrCreatorByColumnID && creator,
     const LoggerPtr & log)
 {
-    RSOperatorPtr op = EMPTY_RS_OPERATOR;
-    if (dag_info.filters.empty() && dag_info.pushed_down_filters.empty())
-        return op;
+    /// By default, multiple conditions with operator "and"
+    RSOperators children;
+    children.reserve(dag_info.filters.size() + dag_info.pushed_down_filters.size());
+    for (const auto & filter : dag_info.filters)
+    {
+        children.emplace_back(cop::parseTiExpr(filter, columns_to_read, creator, dag_info.timezone_info, log));
+    }
+    for (const auto & filter : dag_info.pushed_down_filters)
+    {
+        children.emplace_back(cop::parseTiExpr(filter, columns_to_read, creator, dag_info.timezone_info, log));
+    }
 
-    if (dag_info.filters.size() == 1 && dag_info.pushed_down_filters.empty())
-    {
-        op = cop::tryParse(dag_info.filters[0], columns_to_read, creator, dag_info.timezone_info, log);
-    }
-    else if (dag_info.pushed_down_filters.size() == 1 && dag_info.filters.empty())
-    {
-        op = cop::tryParse(dag_info.pushed_down_filters[0], columns_to_read, creator, dag_info.timezone_info, log);
-    }
+    if (children.empty())
+        return EMPTY_RS_OPERATOR;
+    else if (children.size() == 1)
+        return children[0];
     else
-    {
-        /// By default, multiple conditions with operator "and"
-        RSOperators children;
-        children.reserve(dag_info.filters.size() + dag_info.pushed_down_filters.size());
-        for (const auto & filter : dag_info.filters)
-        {
-            children.emplace_back(cop::tryParse(filter, columns_to_read, creator, dag_info.timezone_info, log));
-        }
-        for (const auto & filter : dag_info.pushed_down_filters)
-        {
-            children.emplace_back(cop::tryParse(filter, columns_to_read, creator, dag_info.timezone_info, log));
-        }
-        op = createAnd(children);
-    }
-    return op;
+        return createAnd(children);
 }
 
 RSOperatorPtr FilterParser::parseRFInExpr(
@@ -431,27 +379,22 @@ RSOperatorPtr FilterParser::parseRFInExpr(
     const ColumnDefines & columns_to_read,
     const std::set<Field> & setElements)
 {
-    // todo check if set elements is empty
-    Attr attr;
-    Fields values;
     switch (rf_type)
     {
     case tipb::IN:
     {
         if (!isColumnExpr(target_expr))
-        {
             return createUnsupported(target_expr.ShortDebugString(), "rf target expr is not column expr", false);
-        }
         auto column_define = cop::getColumnDefineForColumnExpr(target_expr, columns_to_read);
-        attr = Attr{.col_name = column_define.name, .col_id = column_define.id, .type = column_define.type};
-        std::for_each(setElements.begin(), setElements.end(), [&](Field element) { values.push_back(element); });
+        auto attr = Attr{.col_name = column_define.name, .col_id = column_define.id, .type = column_define.type};
+        // FIXME: for timestamp literal, we should convert it to UTC timezone
+        Fields values(setElements.begin(), setElements.end());
         return createIn(attr, values);
     }
     case tipb::MIN_MAX:
     case tipb::BLOOM_FILTER:
         return createUnsupported(target_expr.ShortDebugString(), "function params should be in predicate", false);
     }
-    return createUnsupported(target_expr.ShortDebugString(), "function params should be in predicate", false);
 }
 
 bool FilterParser::isRSFilterSupportType(const Int32 field_type)
