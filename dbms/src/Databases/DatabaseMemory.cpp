@@ -37,10 +37,7 @@ void DatabaseMemory::loadTables(
     /// Nothing to load.
 }
 
-void DatabaseMemory::createTable(
-    const Context & /*context*/,
-    const String & /*table_name*/,
-    const ASTPtr & /*query*/)
+void DatabaseMemory::createTable(const Context & /*context*/, const String & /*table_name*/, const ASTPtr & /*query*/)
 {
     /// Nothing to do.
 }
