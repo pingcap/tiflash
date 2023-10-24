@@ -210,3 +210,17 @@ mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t w
 |   40 |   50 |
 +------+------+
 mysql> drop table test.t;
+
+mysql> create table test.t (a int unsigned);
+mysql> insert into test.t values (300), (null), (981);
+mysql> alter table test.t set tiflash replica 1;
+func> wait_table test t
+mysql> alter table test.t compact tiflash replica;
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t where not cast(a as signed) not in (a, 88);
++------+
+| a    |
++------+
+|  300 |
+|  981 |
++------+
+mysql> drop table test.t;
