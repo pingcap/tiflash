@@ -32,7 +32,7 @@ private:
     KeyspaceTableID ks_table_id;
 
 public:
-    explicit ColumnFileDataProviderRNLocalPageCache(
+    ColumnFileDataProviderRNLocalPageCache(
         RNLocalPageCachePtr page_cache_,
         RNLocalPageCacheGuardPtr pages_guard_,
         StoreID store_id_,

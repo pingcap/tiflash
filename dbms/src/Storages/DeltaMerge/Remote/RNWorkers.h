@@ -28,7 +28,7 @@ namespace DB::DM::Remote
 class RNWorkers : private boost::noncopyable
 {
 public:
-    using Channel = MPMCQueue<RNReadSegmentTaskPtr>;
+    using Channel = MPMCQueue<SegmentReadTaskPtr>;
     using ChannelPtr = std::shared_ptr<Channel>;
 
 public:

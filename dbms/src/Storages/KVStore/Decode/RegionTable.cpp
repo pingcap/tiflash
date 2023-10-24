@@ -102,6 +102,13 @@ RegionTable::RegionTable(Context & context_)
     , log(Logger::get())
 {}
 
+void RegionTable::clear()
+{
+    regions.clear();
+    tables.clear();
+    safe_ts_map.clear();
+}
+
 void RegionTable::restore()
 {
     LOG_INFO(log, "RegionTable restore start");

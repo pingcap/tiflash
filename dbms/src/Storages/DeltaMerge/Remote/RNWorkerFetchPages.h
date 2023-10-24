@@ -15,7 +15,7 @@
 #pragma once
 
 #include <Common/ThreadedWorker.h>
-#include <Storages/DeltaMerge/Remote/RNReadTask_fwd.h>
+#include <Storages/DeltaMerge/Remote/RNReadTask.h>
 #include <pingcap/kv/Cluster.h>
 
 #include <boost/noncopyable.hpp>
@@ -29,15 +29,15 @@ using RNWorkerFetchPagesPtr = std::shared_ptr<RNWorkerFetchPages>;
 /// This worker fetch page data from Write Node, and then write page data into the local cache.
 class RNWorkerFetchPages
     : private boost::noncopyable
-    , public ThreadedWorker<RNReadSegmentTaskPtr, RNReadSegmentTaskPtr>
+    , public ThreadedWorker<SegmentReadTaskPtr, SegmentReadTaskPtr>
 {
 protected:
-    RNReadSegmentTaskPtr doWork(const RNReadSegmentTaskPtr & task) override;
+    SegmentReadTaskPtr doWork(const SegmentReadTaskPtr & task) override;
 
     String getName() const noexcept override { return "FetchPages"; }
 
 private:
-    void doFetchPages(const RNReadSegmentTaskPtr & seg_task, const disaggregated::FetchDisaggPagesRequest & request);
+    void doFetchPages(const SegmentReadTaskPtr & seg_task, const disaggregated::FetchDisaggPagesRequest & request);
 
 private:
     const pingcap::kv::Cluster * cluster;
@@ -45,15 +45,15 @@ private:
 public:
     struct Options
     {
-        const std::shared_ptr<MPMCQueue<RNReadSegmentTaskPtr>> & source_queue;
-        const std::shared_ptr<MPMCQueue<RNReadSegmentTaskPtr>> & result_queue;
+        const std::shared_ptr<MPMCQueue<SegmentReadTaskPtr>> & source_queue;
+        const std::shared_ptr<MPMCQueue<SegmentReadTaskPtr>> & result_queue;
         const LoggerPtr & log;
         const size_t concurrency;
         const pingcap::kv::Cluster * cluster;
     };
 
     explicit RNWorkerFetchPages(const Options & options)
-        : ThreadedWorker<RNReadSegmentTaskPtr, RNReadSegmentTaskPtr>(
+        : ThreadedWorker<SegmentReadTaskPtr, SegmentReadTaskPtr>(
             options.source_queue,
             options.result_queue,
             options.log,
