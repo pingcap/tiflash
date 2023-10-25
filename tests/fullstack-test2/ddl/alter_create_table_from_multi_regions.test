@@ -1,0 +1,93 @@
+# Copyright 2023 PingCAP, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# mock a table with multiple regions, and reach tiflash together, 
+# to make multiple regions create the same table simultaneously
+
+mysql> drop database if exists d1;
+mysql> create database d1;
+mysql> create table d1.t1 (id int not null primary key);
+mysql> split table d1.t1 between (0) and (50000) regions 50;
++--------------------+------------------------+
+| TOTAL_SPLIT_REGION |	SCATTER_FINISH_RATIO  |
+|   49 	             |          1             |
++--------------------+------------------------+
+
+mysql> insert into d1.t1 values (1), (1001), (2001), (3001), (4001), (5001), (6001), (7001), (8001),(9001);
+mysql> insert into d1.t1 values (10001), (11001), (12001), (13001), (14001), (15001), (16001), (17001), (18001),(19001);
+mysql> insert into d1.t1 values (20001), (21001), (22001), (23001), (24001), (25001), (26001), (27001), (28001),(29001);
+mysql> insert into d1.t1 values (30001), (31001), (32001), (33001), (34001), (35001), (36001), (37001), (38001),(39001);
+mysql> insert into d1.t1 values (40001), (41001), (42001), (43001), (44001), (45001), (46001), (47001), (48001),(49001);
+
+mysql> alter table d1.t1 set tiflash replica 1;
+
+func> wait_table d1 t1
+mysql> set session tidb_isolation_read_engines='tiflash';select * from d1.t1;
++------+
+| id   |
+| 1    |
+| 1001 |
+| 2001 |
+| 3001 |
+| 4001 |
+| 5001 |
+| 6001 |
+| 7001 | 
+| 8001 | 
+| 9001 | 
+| 10001|
+| 11001|
+| 12001|
+| 13001|
+| 14001|
+| 15001|
+| 16001|
+| 17001|
+| 18001|
+| 19001|
+| 20001|
+| 21001|
+| 22001|
+| 23001|
+| 24001|
+| 25001|
+| 26001|
+| 27001|
+| 28001|
+| 29001|
+| 30001|
+| 31001|
+| 32001|
+| 33001|
+| 34001|
+| 35001|
+| 36001|
+| 37001|
+| 38001|
+| 39001|
+| 40001|
+| 41001|
+| 42001|
+| 43001|
+| 44001|
+| 45001|
+| 46001|
+| 47001|
+| 48001|
+| 49001|
++------+
+
+
+mysql> drop table d1.t1;
+mysql> drop database d1;
