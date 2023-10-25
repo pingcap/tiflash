@@ -862,16 +862,16 @@ struct MetricFamily
     T & get(size_t idx, const String & resource_group_name)
     {
         {
-            std::shared_lock lock(mu);
-            if (metrics_map.find(resource_group_name) != metrics_map.end())
-                return *(metrics_map[resource_group_name][idx]);
+            std::shared_lock lock(resource_group_metrics_mu);
+            if (resource_group_metrics_map.find(resource_group_name) != resource_group_metrics_map.end())
+                return *(resource_group_metrics_map[resource_group_name][idx]);
         }
 
-        std::lock_guard lock(mu);
-        if (metrics_map.find(resource_group_name) == metrics_map.end())
+        std::lock_guard lock(resource_group_metrics_mu);
+        if (resource_group_metrics_map.find(resource_group_name) == resource_group_metrics_map.end())
             addMetricsForResourceGroup(resource_group_name);
 
-        return *(metrics_map[resource_group_name][idx]);
+        return *(resource_group_metrics_map[resource_group_name][idx]);
     }
 
 private:
@@ -890,15 +890,15 @@ private:
             auto & metric = MetricTrait::add(*store_family, resource_group_name, MetricArgType{});
             metrics_temp.emplace_back(&metric);
         }
-        metrics_map[resource_group_name] = metrics_temp;
+        resource_group_metrics_map[resource_group_name] = metrics_temp;
     }
 
     std::vector<T *> metrics;
     prometheus::Family<T> * store_family;
     std::vector<MetricArgType> store_args;
     // <resource_group_name, metrics>
-    std::shared_mutex mu;
-    std::unordered_map<String, std::vector<T *>> metrics_map;
+    std::shared_mutex resource_group_metrics_mu;
+    std::unordered_map<String, std::vector<T *>> resource_group_metrics_map;
 };
 
 /// Centralized registry of TiFlash metrics.
