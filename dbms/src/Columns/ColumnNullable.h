@@ -103,11 +103,11 @@ public:
     std::tuple<bool, int> compareAtCheckNull(size_t n, size_t m, const ColumnNullable & rhs, int null_direction_hint)
         const;
     int compareAt(size_t n, size_t m, const IColumn & rhs_, int null_direction_hint) const override;
-    int compareAt(size_t n, size_t m, const IColumn & rhs_, int null_direction_hint, const ICollator & collator)
+    int compareAt(size_t n, size_t m, const IColumn & rhs_, int null_direction_hint, const TiDB::ITiDBCollator & collator)
         const override;
     void getPermutation(bool reverse, size_t limit, int null_direction_hint, Permutation & res) const override;
     void getPermutation(
-        const ICollator & collator,
+        const TiDB::ITiDBCollator & collator,
         bool reverse,
         size_t limit,
         int null_direction_hint,
