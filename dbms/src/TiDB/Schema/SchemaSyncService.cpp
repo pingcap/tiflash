@@ -20,6 +20,7 @@
 #include <Storages/BackgroundProcessingPool.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/KVStore/TMTContext.h>
+#include <Storages/KVStore/Types.h>
 #include <TiDB/Schema/SchemaNameMapper.h>
 #include <TiDB/Schema/SchemaSyncService.h>
 #include <TiDB/Schema/SchemaSyncer.h>
@@ -138,6 +139,8 @@ void SchemaSyncService::removeKeyspaceGCTasks()
 
         context.getTMTContext().getSchemaSyncerManager()->removeSchemaSyncer(keyspace);
         PDClientHelper::remove_ks_gc_sp(keyspace);
+
+        keyspace_gc_context.erase(keyspace);
     }
 }
 
@@ -160,19 +163,36 @@ bool SchemaSyncService::syncSchemas(KeyspaceID keyspace_id)
 template <typename DatabaseOrTablePtr>
 inline bool isSafeForGC(const DatabaseOrTablePtr & ptr, Timestamp gc_safe_point)
 {
-    return ptr->isTombstone() && ptr->getTombstone() < gc_safe_point;
+    const auto tombstone_ts = ptr->getTombstone();
+    return tombstone_ts != 0 && tombstone_ts < gc_safe_point;
 }
 
-bool SchemaSyncService::gc(Timestamp gc_safe_point, KeyspaceID keyspace_id)
+Timestamp SchemaSyncService::lastGcSafePoint(KeyspaceID keyspace_id) const
 {
-    auto & tmt_context = context.getTMTContext();
-    if (gc_safe_point == gc_context.last_gc_safe_point)
+    std::shared_lock lock(keyspace_map_mutex);
+    auto iter = keyspace_gc_context.find(keyspace_id);
+    if (iter == keyspace_gc_context.end())
+        return 0;
+    return iter->second.last_gc_safepoint;
+}
+
+void SchemaSyncService::updateLastGcSafepoint(KeyspaceID keyspace_id, Timestamp gc_safepoint)
+{
+    std::unique_lock lock(keyspace_map_mutex);
+    keyspace_gc_context[keyspace_id].last_gc_safepoint = gc_safepoint;
+}
+
+bool SchemaSyncService::gc(Timestamp gc_safepoint, KeyspaceID keyspace_id)
+{
+    const Timestamp last_gc_safepoint = lastGcSafePoint(keyspace_id);
+    if (gc_safepoint == last_gc_safepoint)
         return false;
 
     auto keyspace_log = log->getChild(fmt::format("keyspace={}", keyspace_id));
 
-    LOG_INFO(keyspace_log, "Performing GC using safe point {}", gc_safe_point);
+    LOG_INFO(keyspace_log, "Schema GC begin, last_safepoint={} safepoint={}", last_gc_safepoint, gc_safepoint);
 
+    auto & tmt_context = context.getTMTContext();
     // The storages that are ready for gc
     std::vector<std::weak_ptr<IManageableStorage>> storages_to_gc;
     // Get a snapshot of database
@@ -190,7 +210,7 @@ bool SchemaSyncService::gc(Timestamp gc_safe_point, KeyspaceID keyspace_id)
             if (!managed_storage)
                 continue;
 
-            if (isSafeForGC(db, gc_safe_point) || isSafeForGC(managed_storage, gc_safe_point))
+            if (isSafeForGC(db, gc_safepoint) || isSafeForGC(managed_storage, gc_safepoint))
             {
                 // Only keep a weak_ptr on storage so that the memory can be free as soon as
                 // it is dropped.
@@ -260,7 +280,7 @@ bool SchemaSyncService::gc(Timestamp gc_safe_point, KeyspaceID keyspace_id)
     {
         const auto & db = iter.second;
         auto ks_db_id = SchemaNameMapper::getMappedNameKeyspaceID(iter.first);
-        if (!isSafeForGC(db, gc_safe_point) || ks_db_id != keyspace_id)
+        if (!isSafeForGC(db, gc_safepoint) || ks_db_id != keyspace_id)
             continue;
 
         const auto & db_name = iter.first;
@@ -305,13 +325,17 @@ bool SchemaSyncService::gc(Timestamp gc_safe_point, KeyspaceID keyspace_id)
 
     if (succeeded)
     {
-        gc_context.last_gc_safe_point = gc_safe_point;
-        LOG_INFO(keyspace_log, "Performed GC using safe point {}", gc_safe_point);
+        updateLastGcSafepoint(keyspace_id, gc_safepoint);
+        LOG_INFO(keyspace_log, "Schema GC done, safepoint={}", gc_safepoint);
     }
     else
     {
         // Don't update last_gc_safe_point and retry later
-        LOG_INFO(keyspace_log, "Performed GC using safe point {} meet error, will try again later", gc_safe_point);
+        LOG_INFO(
+            keyspace_log,
+            "Schema GC meet error, will try again later, last_safepoint={} safepoint={}",
+            last_gc_safepoint,
+            gc_safepoint);
     }
 
     return true;
