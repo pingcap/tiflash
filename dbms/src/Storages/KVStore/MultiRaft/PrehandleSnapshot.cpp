@@ -53,14 +53,6 @@ extern const int TABLE_IS_DROPPED;
 extern const int REGION_DATA_SCHEMA_UPDATED;
 } // namespace ErrorCodes
 
-enum class ReadFromStreamError
-{
-    Ok,
-    Aborted,
-    ErrUpdateSchema,
-    ErrTableDropped,
-};
-
 struct ReadFromStreamResult
 {
     ReadFromStreamError error = ReadFromStreamError::Ok;
@@ -189,7 +181,10 @@ static inline std::tuple<ReadFromStreamResult, PrehandleResult> executeTransform
         if (stream->isAbort())
         {
             stream->cancel();
-            res = ReadFromStreamResult{.error = ReadFromStreamError::Aborted, .extra_msg = "", .region = new_region};
+            res = ReadFromStreamResult{
+                .error = prehandle_task->abort_error.load(),
+                .extra_msg = "",
+                .region = new_region};
         }
         return std::make_pair(
             std::move(res),
@@ -448,6 +443,7 @@ static void runInParallel(
         if (part_result.error == ReadFromStreamError::ErrUpdateSchema)
         {
             prehandle_task->abort_flag.store(true);
+            prehandle_task->abort_error.store(ReadFromStreamError::ErrUpdateSchema);
         }
         {
             std::scoped_lock l(ctx->mut);
@@ -567,7 +563,6 @@ void executeParallelTransform(
         LOG_DEBUG(log, "Try fetch prehandle task split_id={}, region_id={}", extra_id, new_region->id());
         async_tasks.fetchResult(extra_id);
     }
-    if (head_result.error == ReadFromStreamError::Ok)
     {
         prehandle_result = std::move(head_prehandle_result);
         // Aggregate results.
@@ -604,11 +599,6 @@ void executeParallelTransform(
             split_key_count,
             watch.elapsedSeconds(),
             new_region->id());
-    }
-    else
-    {
-        // Otherwise, fallback to error handling or exception handling.
-        result = head_result;
     }
 }
 

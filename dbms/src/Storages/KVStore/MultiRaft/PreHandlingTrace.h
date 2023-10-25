@@ -22,6 +22,14 @@
 
 namespace DB
 {
+enum class ReadFromStreamError
+{
+    Ok,
+    Aborted,
+    ErrUpdateSchema,
+    ErrTableDropped,
+};
+
 struct PreHandlingTrace : MutexLockWrap
 {
     struct Item
@@ -30,6 +38,7 @@ struct PreHandlingTrace : MutexLockWrap
             : abort_flag(false)
         {}
         std::atomic_bool abort_flag;
+        std::atomic<ReadFromStreamError> abort_error = ReadFromStreamError::Aborted;
     };
 
     std::unordered_map<uint64_t, std::shared_ptr<Item>> tasks;
