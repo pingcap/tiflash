@@ -12,7 +12,8 @@ set(AWS_PUBLIC_COMPILE_DEFS)
 set(AWS_PRIVATE_COMPILE_DEFS)
 set(AWS_PRIVATE_LIBS)
 
-list(APPEND AWS_PRIVATE_COMPILE_DEFS "-DENABLE_CURL_CLIENT")
+# ignore the symbols defined in `aws/common/external/ittnotify.h`
+list(APPEND AWS_PRIVATE_COMPILE_DEFS "-DENABLE_CURL_CLIENT -DINTEL_NO_ITTNOTIFY_API")
 
 if (CMAKE_BUILD_TYPE_UC STREQUAL "DEBUG")
     list(APPEND AWS_PRIVATE_COMPILE_DEFS "-DDEBUG_BUILD")
@@ -70,9 +71,12 @@ file(GLOB AWS_SDK_CORE_SRC
     "${AWS_SDK_CORE_DIR}/source/monitoring/*.cpp"
     "${AWS_SDK_CORE_DIR}/source/utils/*.cpp"
     "${AWS_SDK_CORE_DIR}/source/utils/base64/*.cpp"
+    "${AWS_SDK_CORE_DIR}/source/utils/component-registry/*.cpp"
     "${AWS_SDK_CORE_DIR}/source/utils/crypto/*.cpp"
-    "${AWS_SDK_CORE_DIR}/source/utils/crypto/openssl/*.cpp"
+    # "${AWS_SDK_CORE_DIR}/source/utils/crypto/bcrypt/*.cpp"
+    # "${AWS_SDK_CORE_DIR}/source/utils/crypto/commoncrypto/*.cpp"
     "${AWS_SDK_CORE_DIR}/source/utils/crypto/factory/*.cpp"
+    "${AWS_SDK_CORE_DIR}/source/utils/crypto/openssl/*.cpp"
     "${AWS_SDK_CORE_DIR}/source/utils/event/*.cpp"
     "${AWS_SDK_CORE_DIR}/source/utils/json/*.cpp"
     "${AWS_SDK_CORE_DIR}/source/utils/logging/*.cpp"
@@ -81,6 +85,8 @@ file(GLOB AWS_SDK_CORE_SRC
     "${AWS_SDK_CORE_DIR}/source/utils/stream/*.cpp"
     "${AWS_SDK_CORE_DIR}/source/utils/threading/*.cpp"
     "${AWS_SDK_CORE_DIR}/source/utils/xml/*.cpp"
+    "${AWS_SDK_CORE_DIR}/source/smithy/*.cpp"
+    "${AWS_SDK_CORE_DIR}/source/smithy/tracing/*.cpp"
 )
 
 if(OS_LINUX OR OS_DARWIN)
@@ -138,6 +144,41 @@ list(APPEND AWS_PUBLIC_INCLUDES "${AWS_AUTH_DIR}/include/")
 file(GLOB AWS_CAL_SRC
     "${AWS_CAL_DIR}/source/*.c"
 )
+if (WIN32)
+elseif (OS_DARWIN)
+    file(GLOB AWS_CAL_OS_SRC
+        "${AWS_CAL_DIR}/source/darwin/*.c"
+    )
+
+    find_library(SECURITY_LIB Security)
+    if (NOT SECURITY_LIB)
+        message(FATAL_ERROR "Security Framework not found")
+    endif ()
+
+    list(APPEND PLATFORM_LIBS "-framework Security")
+else (OS_LINUX)
+    file(GLOB AWS_CAL_OS_SRC
+        "${AWS_CAL_DIR}/source/unix/*.c"
+    )
+    if (ENABLE_OPENSSL_ENCRYPTION AND NOT ANDROID)
+        find_package(OpenSSL REQUIRED)
+        find_package(Threads REQUIRED)
+        set(PLATFORM_LIBS OpenSSL::Crypto Threads::Threads)
+        message(STATUS "Using libcrypto from system: ${OPENSSL_CRYPTO_LIBRARY}")
+    elseif(NOT ENABLE_OPENSSL_ENCRYPTION AND IN_SOURCE_BUILD)
+        if (TARGET crypto)
+            message(STATUS "Using libcrypto from AWS-LC")
+        else()
+            message(FATAL_ERROR "Target crypto is not defined, failed to find libcrypto.")
+        endif()
+        set(PLATFORM_LIBS crypto)
+    else()
+        #  note aws_use_package() does this for you, except it appends to the public link targets
+        # which we probably don't want for this case where we want the crypto dependency private
+        find_package(crypto REQUIRED)
+        set(PLATFORM_LIBS AWS::crypto)
+    endif()
+endif ()
 
 if (ENABLE_OPENSSL_ENCRYPTION)
     file(GLOB AWS_CAL_OS_SRC
@@ -248,6 +289,7 @@ elseif (OS_DARWIN)
     file(GLOB AWS_IO_OS_SRC
         "${AWS_IO_DIR}/source/bsd/*.c"
         "${AWS_IO_DIR}/source/posix/*.c"
+        "${AWS_IO_DIR}/source/darwin/*.c"
     )
 endif()
 
@@ -290,13 +332,13 @@ file(GLOB AWS_CRT_SRC
     "${AWS_CRT_DIR}/source/auth/*.cpp"
     "${AWS_CRT_DIR}/source/crypto/*.cpp"
     "${AWS_CRT_DIR}/source/endpoints/*.cpp"
-    "${AWS_CRT_DIR}/source/external/*.cpp"
     "${AWS_CRT_DIR}/source/http/*.cpp"
     "${AWS_CRT_DIR}/source/io/*.cpp"
 )
 
 list(APPEND AWS_SOURCES ${AWS_CRT_SRC})
 list(APPEND AWS_PUBLIC_INCLUDES "${AWS_CRT_DIR}/include/")
+configure_file("${AWS_CRT_DIR}/include/aws/crt/Config.h.in" ${CMAKE_CURRENT_BINARY_DIR}/include/aws/crt/Config.h @ONLY)
 
 
 # aws-c-mqtt
@@ -351,6 +393,7 @@ target_include_directories(_aws SYSTEM BEFORE PUBLIC ${AWS_PUBLIC_INCLUDES})
 target_include_directories(_aws SYSTEM BEFORE PRIVATE ${AWS_PRIVATE_INCLUDES})
 target_compile_definitions(_aws PUBLIC ${AWS_PUBLIC_COMPILE_DEFS})
 target_compile_definitions(_aws PRIVATE ${AWS_PRIVATE_COMPILE_DEFS})
+
 target_link_libraries(_aws PRIVATE ${AWS_PRIVATE_LIBS})
 target_no_warning(_aws deprecated-declarations)
 target_no_warning(_aws implicit-function-declaration)
