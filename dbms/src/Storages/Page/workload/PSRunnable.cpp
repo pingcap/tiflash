@@ -57,17 +57,13 @@ try
     }
     auto peak = current_memory_tracker->getPeak();
     current_memory_tracker = nullptr;
-    LOG_INFO(
-        StressEnv::logger,
-        "{} exit with peak memory usage: {}",
-        description(),
-        formatReadableSizeWithBinarySuffix(peak));
+    LOG_INFO(logger, "{} exit with peak memory usage: {}", description(), formatReadableSizeWithBinarySuffix(peak));
 }
 catch (...)
 {
     // stop the whole testing
     StressEnvStatus::getInstance().setStat(StressEnvStat::STATUS_EXCEPTION);
-    DB::tryLogCurrentException(StressEnv::logger);
+    DB::tryLogCurrentException(logger);
 }
 
 size_t PSRunnable::getBytesUsed() const
@@ -106,7 +102,7 @@ void PSWriter::setBufferSizeRange(size_t min, size_t max)
     buffer_size_max = max;
 
     if (buffer_size_max - buffer_size_min >= 4096)
-        LOG_WARNING(StressEnv::logger, "The result maybe not stable, min_size={} max_size={}", min, max);
+        LOG_WARNING(logger, "The result maybe not stable, min_size={} max_size={}", min, max);
 }
 
 void PSWriter::write(const RandomPageId & r)
@@ -123,7 +119,7 @@ void PSWriter::write(const RandomPageId & r)
     bytes_used += buff_ptr->buffer().size();
 
     // verbose logging for debug
-    // LOG_TRACE(StressEnv::logger, "write done, page_id={}, remove={}", r.page_id, r.page_id_to_remove);
+    // LOG_TRACE(logger, "write done, page_id={}, remove={}", r.page_id, r.page_id_to_remove);
 
     global_stat->commit(r);
 }
@@ -191,7 +187,7 @@ bool PSCommonWriter::runImpl()
     bytes_used += bytes_write;
 
     // verbose logging for debug
-    // LOG_TRACE(StressEnv::logger, "write done, page_id={}, remove={}", r.page_id, r.page_id_to_remove);
+    // LOG_TRACE(logger, "write done, page_id={}, remove={}", r.page_id, r.page_id_to_remove);
     global_stat->commit(r);
     bool keep_running = (batch_buffer_limit == 0 || bytes_used < batch_buffer_limit);
     return keep_running;
@@ -316,7 +312,7 @@ RandomPageId PSWindowWriter::genRandomPageId()
 
         auto page_id = global_stat->right_id_boundary++;
         if (page_id % 200 == 0)
-            LOG_INFO(StressEnv::logger, "Update boundary to [{}, {})", left_boundary, global_stat->right_id_boundary);
+            LOG_INFO(logger, "Update boundary to [{}, {})", left_boundary, global_stat->right_id_boundary);
         return page_id;
     }();
     return RandomPageId(page_id, ids_to_del);
