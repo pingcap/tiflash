@@ -12,6 +12,11 @@ set(AWS_PUBLIC_COMPILE_DEFS)
 set(AWS_PRIVATE_COMPILE_DEFS)
 set(AWS_PRIVATE_LIBS)
 
+# Versions
+list(APPEND AWS_PUBLIC_COMPILE_DEFS "-DAWS_SDK_VERSION_MAJOR=1")
+list(APPEND AWS_PUBLIC_COMPILE_DEFS "-DAWS_SDK_VERSION_MINOR=11")
+list(APPEND AWS_PUBLIC_COMPILE_DEFS "-DAWS_SDK_VERSION_PATCH=186")
+
 # ignore the symbols defined in `aws/common/external/ittnotify.h`
 list(APPEND AWS_PRIVATE_COMPILE_DEFS "-DENABLE_CURL_CLIENT -DINTEL_NO_ITTNOTIFY_API")
 
@@ -28,11 +33,6 @@ set(USE_S2N ON)
 if (USE_S2N)
     list(APPEND AWS_PRIVATE_COMPILE_DEFS "-DUSE_S2N")
 endif()
-
-# Versions
-list(APPEND AWS_PUBLIC_COMPILE_DEFS "-DAWS_SDK_VERSION_MAJOR=1")
-list(APPEND AWS_PUBLIC_COMPILE_DEFS "-DAWS_SDK_VERSION_MINOR=11")
-list(APPEND AWS_PUBLIC_COMPILE_DEFS "-DAWS_SDK_VERSION_PATCH=186")
 
 # Directories.
 SET(AWS_SDK_DIR "${TiFlash_SOURCE_DIR}/contrib/aws")
@@ -176,9 +176,6 @@ file(GLOB AWS_COMMON_ARCH_SRC
     "${AWS_COMMON_DIR}/source/arch/generic/*.c"
 )
 
-## Note: These arch optimization are ineffective now, the variables
-## defined for AWS is not translated to the variables for TiFlash
-# arch optimization begin
 if (AWS_ARCH_INTEL)
     file(GLOB AWS_COMMON_ARCH_SRC
         "${AWS_COMMON_DIR}/source/arch/intel/cpuid.c"
@@ -197,7 +194,7 @@ if (HAVE_AVX2_INTRINSICS)
     list(APPEND AWS_PRIVATE_COMPILE_DEFS "-DUSE_SIMD_ENCODING")
     set(AWS_COMMON_AVX2_SRC "${AWS_COMMON_DIR}/source/arch/intel/encoding_avx2.c")
     set_source_files_properties(${AWS_COMMON_AVX2_SRC} PROPERTIES COMPILE_FLAGS "${AVX2_CFLAGS}")
-endif() # arch optimization ends
+endif()
 
 configure_file("${AWS_COMMON_DIR}/include/aws/common/config.h.in"
     "${CMAKE_CURRENT_BINARY_DIR}/include/aws/common/config.h" @ONLY)
@@ -213,12 +210,15 @@ list(APPEND AWS_PUBLIC_INCLUDES
 # aws-checksums
 file(GLOB AWS_CHECKSUMS_SRC
     "${AWS_CHECKSUMS_DIR}/source/*.c"
-    "${AWS_CHECKSUMS_DIR}/source/intel/*.c"
-    "${AWS_CHECKSUMS_DIR}/source/intel/asm/*.c"
-    "${AWS_CHECKSUMS_DIR}/source/arm/*.c"
 )
 
-if (ARCH_AARCH64)
+if(AWS_ARCH_INTEL AND AWS_HAVE_GCC_INLINE_ASM)
+    file(GLOB AWS_CHECKSUMS_ARCH_SRC
+            "${AWS_CHECKSUMS_DIR}/source/intel/asm/*.c"
+    )
+endif()
+
+if (AWS_ARCH_ARM64)
     file(GLOB AWS_CHECKSUMS_ARCH_SRC
         "${AWS_CHECKSUMS_DIR}/source/arm/*.c"
     )
