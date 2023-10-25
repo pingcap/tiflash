@@ -53,7 +53,7 @@ struct ExtraRemoteSegmentInfo
     // Returned by EstablishDisaggTask and used by FetchDisaggPages.
     DisaggTaskId snapshot_id;
     std::vector<UInt64> remote_page_ids;
-    std::vector<UInt64> remote_page_sizes;
+    std::vector<size_t> remote_page_sizes;
     DMContextPtr dm_context;
 };
 
