@@ -200,6 +200,9 @@ inline RSOperatorPtr parseTiCompareExpr( //
             expr.ShortDebugString(),
             fmt::format("Multiple Literal in compare expression is not supported, size: {}", values.size()),
             false);
+    // For In type, the first child must be ColumnRef, nested column like `cast(a as signed)` is not supported.
+    if (column_expr_child_idx != 0 && filter_type == FilterParser::RSFilterType::In)
+        return createUnsupported(expr.ShortDebugString(), "the first child of In expression must be ColumnRef", false);
 
     bool inverse_cmp = column_expr_child_idx == 1;
     switch (filter_type)
