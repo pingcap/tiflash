@@ -29,6 +29,11 @@ if (USE_S2N)
     list(APPEND AWS_PRIVATE_COMPILE_DEFS "-DUSE_S2N")
 endif()
 
+# Versions
+list(APPEND AWS_PUBLIC_COMPILE_DEFS "-DAWS_SDK_VERSION_MAJOR=1")
+list(APPEND AWS_PUBLIC_COMPILE_DEFS "-DAWS_SDK_VERSION_MINOR=11")
+list(APPEND AWS_PUBLIC_COMPILE_DEFS "-DAWS_SDK_VERSION_PATCH=186")
+
 # Directories.
 SET(AWS_SDK_DIR "${TiFlash_SOURCE_DIR}/contrib/aws")
 SET(AWS_SDK_CORE_DIR "${AWS_SDK_DIR}/src/aws-cpp-sdk-core")
@@ -49,7 +54,6 @@ SET(AWS_S2N_TLS_DIR "${TiFlash_SOURCE_DIR}/contrib/aws-s2n-tls")
 SET(AWS_S3_DIR "${TiFlash_SOURCE_DIR}/contrib/aws-c-s3")
 SET(AWS_SDKUTILS_DIR "${TiFlash_SOURCE_DIR}/contrib/aws-c-sdkutils")
 
-
 # aws-cpp-sdk-core
 file(GLOB AWS_SDK_CORE_SRC
     "${AWS_SDK_CORE_DIR}/source/*.cpp"
@@ -65,16 +69,16 @@ file(GLOB AWS_SDK_CORE_SRC
     "${AWS_SDK_CORE_DIR}/source/external/cjson/*.cpp"
     "${AWS_SDK_CORE_DIR}/source/external/tinyxml2/*.cpp"
     "${AWS_SDK_CORE_DIR}/source/http/*.cpp"
-    "${AWS_SDK_CORE_DIR}/source/http/standard/*.cpp"
     "${AWS_SDK_CORE_DIR}/source/http/curl/*.cpp"
+    "${AWS_SDK_CORE_DIR}/source/http/standard/*.cpp"
     "${AWS_SDK_CORE_DIR}/source/internal/*.cpp"
     "${AWS_SDK_CORE_DIR}/source/monitoring/*.cpp"
+    "${AWS_SDK_CORE_DIR}/source/smithy/*.cpp"
+    "${AWS_SDK_CORE_DIR}/source/smithy/tracing/*.cpp"
     "${AWS_SDK_CORE_DIR}/source/utils/*.cpp"
     "${AWS_SDK_CORE_DIR}/source/utils/base64/*.cpp"
     "${AWS_SDK_CORE_DIR}/source/utils/component-registry/*.cpp"
     "${AWS_SDK_CORE_DIR}/source/utils/crypto/*.cpp"
-    # "${AWS_SDK_CORE_DIR}/source/utils/crypto/bcrypt/*.cpp"
-    # "${AWS_SDK_CORE_DIR}/source/utils/crypto/commoncrypto/*.cpp"
     "${AWS_SDK_CORE_DIR}/source/utils/crypto/factory/*.cpp"
     "${AWS_SDK_CORE_DIR}/source/utils/crypto/openssl/*.cpp"
     "${AWS_SDK_CORE_DIR}/source/utils/event/*.cpp"
@@ -85,8 +89,6 @@ file(GLOB AWS_SDK_CORE_SRC
     "${AWS_SDK_CORE_DIR}/source/utils/stream/*.cpp"
     "${AWS_SDK_CORE_DIR}/source/utils/threading/*.cpp"
     "${AWS_SDK_CORE_DIR}/source/utils/xml/*.cpp"
-    "${AWS_SDK_CORE_DIR}/source/smithy/*.cpp"
-    "${AWS_SDK_CORE_DIR}/source/smithy/tracing/*.cpp"
 )
 
 if(OS_LINUX OR OS_DARWIN)
@@ -101,10 +103,6 @@ OPTION(USE_AWS_MEMORY_MANAGEMENT "Aws memory management" OFF)
 configure_file("${AWS_SDK_CORE_DIR}/include/aws/core/SDKConfig.h.in"
     "${CMAKE_CURRENT_BINARY_DIR}/include/aws/core/SDKConfig.h" @ONLY)
 
-list(APPEND AWS_PUBLIC_COMPILE_DEFS "-DAWS_SDK_VERSION_MAJOR=1")
-list(APPEND AWS_PUBLIC_COMPILE_DEFS "-DAWS_SDK_VERSION_MINOR=10")
-list(APPEND AWS_PUBLIC_COMPILE_DEFS "-DAWS_SDK_VERSION_PATCH=36")
-    
 list(APPEND AWS_SOURCES ${AWS_SDK_CORE_SRC} ${AWS_SDK_CORE_NET_SRC} ${AWS_SDK_CORE_PLATFORM_SRC})
 
 list(APPEND AWS_PUBLIC_INCLUDES
@@ -144,43 +142,10 @@ list(APPEND AWS_PUBLIC_INCLUDES "${AWS_AUTH_DIR}/include/")
 file(GLOB AWS_CAL_SRC
     "${AWS_CAL_DIR}/source/*.c"
 )
-if (WIN32)
-elseif (OS_DARWIN)
-    file(GLOB AWS_CAL_OS_SRC
-        "${AWS_CAL_DIR}/source/darwin/*.c"
-    )
-
-    find_library(SECURITY_LIB Security)
-    if (NOT SECURITY_LIB)
-        message(FATAL_ERROR "Security Framework not found")
-    endif ()
-
-    list(APPEND PLATFORM_LIBS "-framework Security")
-else (OS_LINUX)
-    file(GLOB AWS_CAL_OS_SRC
-        "${AWS_CAL_DIR}/source/unix/*.c"
-    )
-    if (ENABLE_OPENSSL_ENCRYPTION AND NOT ANDROID)
-        find_package(OpenSSL REQUIRED)
-        find_package(Threads REQUIRED)
-        set(PLATFORM_LIBS OpenSSL::Crypto Threads::Threads)
-        message(STATUS "Using libcrypto from system: ${OPENSSL_CRYPTO_LIBRARY}")
-    elseif(NOT ENABLE_OPENSSL_ENCRYPTION AND IN_SOURCE_BUILD)
-        if (TARGET crypto)
-            message(STATUS "Using libcrypto from AWS-LC")
-        else()
-            message(FATAL_ERROR "Target crypto is not defined, failed to find libcrypto.")
-        endif()
-        set(PLATFORM_LIBS crypto)
-    else()
-        #  note aws_use_package() does this for you, except it appends to the public link targets
-        # which we probably don't want for this case where we want the crypto dependency private
-        find_package(crypto REQUIRED)
-        set(PLATFORM_LIBS AWS::crypto)
-    endif()
-endif ()
 
 if (ENABLE_OPENSSL_ENCRYPTION)
+    # Note: We use `unix/*.c` for both OS_LINUX and OS_DARWIN
+    # `darwin/*.c` lead to compile errors
     file(GLOB AWS_CAL_OS_SRC
         "${AWS_CAL_DIR}/source/unix/*.c"
     )
@@ -211,6 +176,9 @@ file(GLOB AWS_COMMON_ARCH_SRC
     "${AWS_COMMON_DIR}/source/arch/generic/*.c"
 )
 
+## Note: These arch optimization are ineffective now, the variables
+## defined for AWS is not translated to the variables for TiFlash
+# arch optimization begin
 if (AWS_ARCH_INTEL)
     file(GLOB AWS_COMMON_ARCH_SRC
         "${AWS_COMMON_DIR}/source/arch/intel/cpuid.c"
@@ -229,7 +197,7 @@ if (HAVE_AVX2_INTRINSICS)
     list(APPEND AWS_PRIVATE_COMPILE_DEFS "-DUSE_SIMD_ENCODING")
     set(AWS_COMMON_AVX2_SRC "${AWS_COMMON_DIR}/source/arch/intel/encoding_avx2.c")
     set_source_files_properties(${AWS_COMMON_AVX2_SRC} PROPERTIES COMPILE_FLAGS "${AVX2_CFLAGS}")
-endif()
+endif() # arch optimization ends
 
 configure_file("${AWS_COMMON_DIR}/include/aws/common/config.h.in"
     "${CMAKE_CURRENT_BINARY_DIR}/include/aws/common/config.h" @ONLY)
@@ -250,25 +218,11 @@ file(GLOB AWS_CHECKSUMS_SRC
     "${AWS_CHECKSUMS_DIR}/source/arm/*.c"
 )
 
-if(AWS_ARCH_INTEL AND AWS_HAVE_GCC_INLINE_ASM)
-    file(GLOB AWS_CHECKSUMS_ARCH_SRC
-            "${AWS_CHECKSUMS_DIR}/source/intel/asm/*.c"
-    )
-endif()
-
-if (AWS_ARCH_ARM64)
+if (ARCH_AARCH64)
     file(GLOB AWS_CHECKSUMS_ARCH_SRC
         "${AWS_CHECKSUMS_DIR}/source/arm/*.c"
     )
     set_source_files_properties("${AWS_CHECKSUMS_DIR}/source/arm/crc32c_arm.c" PROPERTIES COMPILE_FLAGS -march=armv8-a+crc)
-elseif (AWS_ARCH_ARM32)
-    if (AWS_ARM32_CRC)
-        file(GLOB AWS_CHECKSUMS_ARCH_SRC
-            "${AWS_CHECKSUMS_DIR}/source/arm/*.c"
-            "${AWS_CHECKSUMS_DIR}/source/arm/asm/*.c"
-        )
-        set_source_files_properties(source/arm/crc32c_arm.c PROPERTIES COMPILE_FLAGS -march=armv8-a+crc)
-    endif()
 endif()
 
 list(APPEND AWS_SOURCES ${AWS_CHECKSUMS_SRC} ${AWS_CHECKSUMS_ARCH_SRC})
@@ -289,7 +243,8 @@ elseif (OS_DARWIN)
     file(GLOB AWS_IO_OS_SRC
         "${AWS_IO_DIR}/source/bsd/*.c"
         "${AWS_IO_DIR}/source/posix/*.c"
-        "${AWS_IO_DIR}/source/darwin/*.c"
+        # Note darwin source files leads to compile errors, ignore them
+        # "${AWS_IO_DIR}/source/darwin/*.c"
     )
 endif()
 
@@ -338,7 +293,8 @@ file(GLOB AWS_CRT_SRC
 
 list(APPEND AWS_SOURCES ${AWS_CRT_SRC})
 list(APPEND AWS_PUBLIC_INCLUDES "${AWS_CRT_DIR}/include/")
-configure_file("${AWS_CRT_DIR}/include/aws/crt/Config.h.in" ${CMAKE_CURRENT_BINARY_DIR}/include/aws/crt/Config.h @ONLY)
+configure_file("${AWS_CRT_DIR}/include/aws/crt/Config.h.in"
+    ${CMAKE_CURRENT_BINARY_DIR}/include/aws/crt/Config.h @ONLY)
 
 
 # aws-c-mqtt
@@ -393,7 +349,6 @@ target_include_directories(_aws SYSTEM BEFORE PUBLIC ${AWS_PUBLIC_INCLUDES})
 target_include_directories(_aws SYSTEM BEFORE PRIVATE ${AWS_PRIVATE_INCLUDES})
 target_compile_definitions(_aws PUBLIC ${AWS_PUBLIC_COMPILE_DEFS})
 target_compile_definitions(_aws PRIVATE ${AWS_PRIVATE_COMPILE_DEFS})
-
 target_link_libraries(_aws PRIVATE ${AWS_PRIVATE_LIBS})
 target_no_warning(_aws deprecated-declarations)
 target_no_warning(_aws implicit-function-declaration)
