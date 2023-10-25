@@ -161,10 +161,10 @@ bool SchemaSyncService::syncSchemas(KeyspaceID keyspace_id)
 }
 
 template <typename DatabaseOrTablePtr>
-inline bool isSafeForGC(const DatabaseOrTablePtr & ptr, Timestamp gc_safe_point)
+inline std::tuple<bool, Timestamp> isSafeForGC(const DatabaseOrTablePtr & ptr, Timestamp gc_safepoint)
 {
     const auto tombstone_ts = ptr->getTombstone();
-    return tombstone_ts != 0 && tombstone_ts < gc_safe_point;
+    return {tombstone_ts != 0 && tombstone_ts < gc_safepoint, tombstone_ts};
 }
 
 Timestamp SchemaSyncService::lastGcSafePoint(KeyspaceID keyspace_id) const
@@ -210,11 +210,21 @@ bool SchemaSyncService::gc(Timestamp gc_safepoint, KeyspaceID keyspace_id)
             if (!managed_storage)
                 continue;
 
-            if (isSafeForGC(db, gc_safepoint) || isSafeForGC(managed_storage, gc_safepoint))
+            const auto & [database_is_stale, db_tombstone] = isSafeForGC(db, gc_safepoint);
+            const auto & [table_is_stale, table_tombstone] = isSafeForGC(managed_storage, gc_safepoint);
+            if (database_is_stale || table_is_stale)
             {
                 // Only keep a weak_ptr on storage so that the memory can be free as soon as
                 // it is dropped.
                 storages_to_gc.emplace_back(std::weak_ptr<IManageableStorage>(managed_storage));
+                LOG_INFO(
+                    log,
+                    "Detect stale table, database_name={} table_name={} database_tombstone={} table_tombstone={} "
+                    "gc_safepoint={}",
+                    managed_storage->getDatabaseName(),
+                    managed_storage->getTableName(),
+                    db_tombstone,
+                    table_tombstone);
             }
         }
     }
@@ -248,7 +258,11 @@ bool SchemaSyncService::gc(Timestamp gc_safepoint, KeyspaceID keyspace_id)
                                SchemaNameMapper().debugTableName(table_info),
                                table_info.id);
         }();
-        LOG_INFO(keyspace_log, "Physically dropping table {}", canonical_name);
+        LOG_INFO(
+            keyspace_log,
+            "Physically dropping table, table_tombstone={} {}",
+            storage->getTombstone(),
+            canonical_name);
         auto drop_query = std::make_shared<ASTDropQuery>();
         drop_query->database = std::move(database_name);
         drop_query->table = std::move(table_name);
@@ -280,7 +294,10 @@ bool SchemaSyncService::gc(Timestamp gc_safepoint, KeyspaceID keyspace_id)
     {
         const auto & db = iter.second;
         auto ks_db_id = SchemaNameMapper::getMappedNameKeyspaceID(iter.first);
-        if (!isSafeForGC(db, gc_safepoint) || ks_db_id != keyspace_id)
+        if (ks_db_id != keyspace_id)
+            continue;
+        const auto & [db_is_stale, db_tombstone] = isSafeForGC(db, gc_safepoint);
+        if (!db_is_stale)
             continue;
 
         const auto & db_name = iter.first;
@@ -299,7 +316,7 @@ bool SchemaSyncService::gc(Timestamp gc_safepoint, KeyspaceID keyspace_id)
             continue;
         }
 
-        LOG_INFO(keyspace_log, "Physically dropping database {}", db_name);
+        LOG_INFO(keyspace_log, "Physically dropping database, database_tombstone={} {}", db->getTombstone(), db_name);
         auto drop_query = std::make_shared<ASTDropQuery>();
         drop_query->database = db_name;
         drop_query->if_exists = true;
