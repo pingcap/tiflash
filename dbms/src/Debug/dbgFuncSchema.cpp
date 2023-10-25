@@ -213,7 +213,7 @@ void dbgFuncIsTombstone(Context & context, const ASTs & args, DBGInvoker::Printe
         if (!tiflash_db)
             throw Exception(database_name + " is not DatabaseTiFlash", ErrorCodes::BAD_ARGUMENTS);
 
-        fmt_buf.append((tiflash_db->getTombstone() != 0 ? "true" : "false"));
+        fmt_buf.append((tiflash_db->isTombstone() ? "true" : "false"));
     }
     else if (args.size() == 2)
     {
@@ -225,7 +225,7 @@ void dbgFuncIsTombstone(Context & context, const ASTs & args, DBGInvoker::Printe
         if (!managed_storage)
             throw Exception(database_name + "." + table_name + " is not ManageableStorage", ErrorCodes::BAD_ARGUMENTS);
 
-        fmt_buf.append((managed_storage->getTombstone() != 0 ? "true" : "false"));
+        fmt_buf.append((managed_storage->isTombstone() ? "true" : "false"));
     }
     output(fmt_buf.toString());
 }
