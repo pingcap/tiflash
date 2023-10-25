@@ -328,7 +328,11 @@ void ColumnString::getExtremes(Field & min, Field & max) const
 }
 
 
-int ColumnString::compareAtWithCollationImpl(size_t n, size_t m, const IColumn & rhs_, const TiDB::ITiDBCollator & collator) const
+int ColumnString::compareAtWithCollationImpl(
+    size_t n,
+    size_t m,
+    const IColumn & rhs_,
+    const TiDB::ITiDBCollator & collator) const
 {
     const auto & rhs = static_cast<const ColumnString &>(rhs_);
 

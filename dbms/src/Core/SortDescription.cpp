@@ -26,7 +26,7 @@ std::string SortColumnDescription::getID() const
 {
     WriteBufferFromOwnString out;
     out << column_name << ", " << column_number << ", " << direction << ", " << nulls_direction;
-        out << ", collation locale: " << collator->getCollatorId();
+    out << ", collation locale: " << collator->getCollatorId();
     return out.str();
 }
 

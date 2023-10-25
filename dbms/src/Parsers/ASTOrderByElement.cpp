@@ -17,7 +17,6 @@
 
 namespace DB
 {
-
 void ASTOrderByElement::formatImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const
 {
     children.front()->formatImpl(settings, state, frame);

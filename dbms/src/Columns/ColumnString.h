@@ -303,18 +303,23 @@ public:
         return compareAtWithCollationImpl(n, m, rhs_, collator);
     }
     /// Variant of compareAt for string comparison with respect of collation.
-    int compareAtWithCollationImpl(size_t n, size_t m, const IColumn & rhs_, const TiDB::ITiDBCollator & collator) const;
+    int compareAtWithCollationImpl(size_t n, size_t m, const IColumn & rhs_, const TiDB::ITiDBCollator & collator)
+        const;
 
     void getPermutation(bool reverse, size_t limit, int nan_direction_hint, Permutation & res) const override;
 
-    void getPermutation(const TiDB::ITiDBCollator & collator, bool reverse, size_t limit, int, Permutation & res) const override
+    void getPermutation(const TiDB::ITiDBCollator & collator, bool reverse, size_t limit, int, Permutation & res)
+        const override
     {
         getPermutationWithCollationImpl(collator, reverse, limit, res);
     }
 
     /// Sorting with respect of collation.
-    void getPermutationWithCollationImpl(const TiDB::ITiDBCollator & collator, bool reverse, size_t limit, Permutation & res)
-        const;
+    void getPermutationWithCollationImpl(
+        const TiDB::ITiDBCollator & collator,
+        bool reverse,
+        size_t limit,
+        Permutation & res) const;
 
     ColumnPtr replicateRange(size_t start_row, size_t end_row, const IColumn::Offsets & replicate_offsets)
         const override;

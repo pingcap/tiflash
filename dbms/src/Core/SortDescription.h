@@ -41,7 +41,11 @@ struct SortColumnDescription
     /// Collator for locale-specific comparison of strings
     TiDB::ITiDBCollator const * collator = nullptr;
 
-    SortColumnDescription(size_t column_number_, int direction_, int nulls_direction_, TiDB::ITiDBCollator const * collator_ = nullptr)
+    SortColumnDescription(
+        size_t column_number_,
+        int direction_,
+        int nulls_direction_,
+        TiDB::ITiDBCollator const * collator_ = nullptr)
         : column_number(column_number_)
         , direction(direction_)
         , nulls_direction(nulls_direction_)

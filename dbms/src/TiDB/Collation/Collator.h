@@ -22,7 +22,6 @@
 
 namespace TiDB
 {
-
 using TiDBCollatorPtr = class ITiDBCollator const *;
 using TiDBCollators = std::vector<TiDBCollatorPtr>;
 
