@@ -326,7 +326,7 @@ int ColumnNullable::compareAt(
     size_t m,
     const IColumn & rhs_,
     int null_direction_hint,
-    const ICollator & collator) const
+    const TiDB::ITiDBCollator & collator) const
 {
     const auto & nullable_rhs = static_cast<const ColumnNullable &>(rhs_);
     auto [has_null, res] = compareAtCheckNull(n, m, nullable_rhs, null_direction_hint);
@@ -347,7 +347,7 @@ int ColumnNullable::compareAt(size_t n, size_t m, const IColumn & rhs_, int null
 }
 
 void ColumnNullable::getPermutation(
-    const ICollator & collator,
+    const TiDB::ITiDBCollator & collator,
     bool reverse,
     size_t limit,
     int null_direction_hint,

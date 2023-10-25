@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Columns/Collator.h>
 #include <Core/SortDescription.h>
 #include <IO/Operators.h>
 #include <IO/WriteBufferFromString.h>
+#include <TiDB/Collation/Collator.h>
 
 #include <sstream>
 
@@ -27,7 +27,7 @@ std::string SortColumnDescription::getID() const
     WriteBufferFromOwnString out;
     out << column_name << ", " << column_number << ", " << direction << ", " << nulls_direction;
     if (collator)
-        out << ", collation locale: " << collator->getLocale();
+        out << ", collation locale: " << collator->getCollatorId();
     return out.str();
 }
 
