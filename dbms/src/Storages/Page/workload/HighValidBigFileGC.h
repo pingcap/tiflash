@@ -42,11 +42,11 @@ public:
 
     void run() override
     {
-        metrics_dumper = std::make_shared<PSMetricsDumper>(1);
+        metrics_dumper = std::make_shared<PSMetricsDumper>(1, options.logger);
         metrics_dumper->start();
 
         // For safe , setup timeout.
-        stress_time = std::make_shared<StressTimeout>(100);
+        stress_time = std::make_shared<StressTimeout>(100, options.logger);
         stress_time->start();
 
         // Generate 8G data in the same Pagefile
@@ -70,7 +70,7 @@ public:
             onDumpResult();
         }
 
-        LOG_INFO(StressEnv::logger, "Already generator an 8G page file");
+        LOG_INFO(options.logger, "Already generator an 8G page file");
 
         // Generate normal data in the same Pagefile
         {
@@ -115,7 +115,7 @@ public:
 
     void onFailed() override
     {
-        LOG_WARNING(StressEnv::logger, "GC time is {} , it should not bigger than {} ", gc_time_ms, 1 * 1000);
+        LOG_WARNING(options.logger, "GC time is {} , it should not bigger than {} ", gc_time_ms, 1 * 1000);
     }
 
 private:
