@@ -39,11 +39,6 @@ if (CMAKE_BUILD_TYPE_UC STREQUAL "RELEASE" OR CMAKE_BUILD_TYPE_UC STREQUAL "RELW
     target_compile_options(tiflash_functions PRIVATE "-g0")
 endif ()
 
-if (USE_ICU)
-    #target_link_libraries (tiflash_functions ${ICU_LIBS})
-    target_include_directories (tiflash_functions PRIVATE ${ICU_INCLUDE_DIR})
-endif ()
-
 if (USE_VECTORCLASS)
     target_include_directories (tiflash_functions BEFORE PUBLIC ${VECTORCLASS_INCLUDE_DIR})
 endif ()

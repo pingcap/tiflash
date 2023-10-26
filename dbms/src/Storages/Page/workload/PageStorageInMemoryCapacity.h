@@ -156,7 +156,7 @@ private:
         assert(page_writen != 0);
 
         LOG_INFO(
-            StressEnv::logger,
+            options.logger,
             "After gen: {} pages"
             "virtual memory used: {} MB,"
             "resident memory used: {} MB,"
