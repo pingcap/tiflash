@@ -60,56 +60,56 @@ void SchemaSyncService::addKeyspaceGCTasks()
     for (auto const iter : keyspaces)
     {
         auto keyspace = iter.first;
-        if (!keyspace_handle_map.count(keyspace))
-        {
-            auto ks_log = log->getChild(fmt::format("keyspace={}", keyspace));
-            LOG_INFO(ks_log, "add sync schema task");
-            auto task_handle = background_pool.addTask(
-                [&, this, keyspace, ks_log]() noexcept {
-                    String stage;
-                    bool done_anything = false;
-                    try
-                    {
-                        /// Do sync schema first, then gc.
-                        /// They must be performed synchronously,
-                        /// otherwise table may get mis-GC-ed if RECOVER was not properly synced caused by schema sync pause but GC runs too aggressively.
-                        // GC safe point must be obtained ahead of syncing schema.
-                        auto gc_safe_point
-                            = PDClientHelper::getGCSafePointWithRetry(context.getTMTContext().getPDClient(), keyspace);
-                        stage = "Sync schemas";
-                        done_anything = syncSchemas(keyspace);
-                        if (done_anything)
-                            GET_METRIC(tiflash_schema_trigger_count, type_timer).Increment();
+        if (keyspace_handle_map.contains(keyspace))
+            continue;
 
-                        stage = "GC";
-                        done_anything = gc(gc_safe_point, keyspace);
+        auto ks_log = log->getChild(fmt::format("keyspace={}", keyspace));
+        LOG_INFO(ks_log, "add sync schema task");
+        auto task_handle = background_pool.addTask(
+            [&, this, keyspace, ks_log]() noexcept {
+                String stage;
+                bool done_anything = false;
+                try
+                {
+                    /// Do sync schema first, then gc.
+                    /// They must be performed synchronously,
+                    /// otherwise table may get mis-GC-ed if RECOVER was not properly synced caused by schema sync pause but GC runs too aggressively.
+                    // GC safe point must be obtained ahead of syncing schema.
+                    auto gc_safe_point
+                        = PDClientHelper::getGCSafePointWithRetry(context.getTMTContext().getPDClient(), keyspace);
+                    stage = "Sync schemas";
+                    done_anything = syncSchemas(keyspace);
+                    if (done_anything)
+                        GET_METRIC(tiflash_schema_trigger_count, type_timer).Increment();
 
-                        return done_anything;
-                    }
-                    catch (const Exception & e)
-                    {
-                        LOG_ERROR(
-                            ks_log,
-                            "{} failed by {} \n stack : {}",
-                            stage,
-                            e.displayText(),
-                            e.getStackTrace().toString());
-                    }
-                    catch (const Poco::Exception & e)
-                    {
-                        LOG_ERROR(ks_log, "{} failed by {}", stage, e.displayText());
-                    }
-                    catch (const std::exception & e)
-                    {
-                        LOG_ERROR(ks_log, "{} failed by {}", stage, e.what());
-                    }
-                    return false;
-                },
-                false,
-                context.getSettingsRef().ddl_sync_interval_seconds * 1000);
+                    stage = "GC";
+                    done_anything = gc(gc_safe_point, keyspace);
 
-            keyspace_handle_map.emplace(keyspace, task_handle);
-        }
+                    return done_anything;
+                }
+                catch (const Exception & e)
+                {
+                    LOG_ERROR(
+                        ks_log,
+                        "{} failed by {} \n stack : {}",
+                        stage,
+                        e.displayText(),
+                        e.getStackTrace().toString());
+                }
+                catch (const Poco::Exception & e)
+                {
+                    LOG_ERROR(ks_log, "{} failed by {}", stage, e.displayText());
+                }
+                catch (const std::exception & e)
+                {
+                    LOG_ERROR(ks_log, "{} failed by {}", stage, e.what());
+                }
+                return false;
+            },
+            false,
+            context.getSettingsRef().ddl_sync_interval_seconds * 1000);
+
+        keyspace_handle_map.emplace(keyspace, task_handle);
     }
 }
 
@@ -190,8 +190,10 @@ bool SchemaSyncService::gc(Timestamp gc_safepoint, KeyspaceID keyspace_id)
         return false;
 
     auto keyspace_log = log->getChild(fmt::format("keyspace={}", keyspace_id));
-
     LOG_INFO(keyspace_log, "Schema GC begin, last_safepoint={} safepoint={}", last_gc_safepoint, gc_safepoint);
+
+    size_t num_tables_removed = 0;
+    size_t num_databases_removed = 0;
 
     auto & tmt_context = context.getTMTContext();
     // The storages that are ready for gc
@@ -277,6 +279,7 @@ bool SchemaSyncService::gc(Timestamp gc_safepoint, KeyspaceID keyspace_id)
             InterpreterDropQuery drop_interpreter(ast_drop_query, context);
             drop_interpreter.execute();
             LOG_INFO(keyspace_log, "Physically dropped table {}", canonical_name);
+            ++num_tables_removed;
         }
         catch (DB::Exception & e)
         {
@@ -330,6 +333,7 @@ bool SchemaSyncService::gc(Timestamp gc_safepoint, KeyspaceID keyspace_id)
             InterpreterDropQuery drop_interpreter(ast_drop_query, context);
             drop_interpreter.execute();
             LOG_INFO(keyspace_log, "Physically dropped database {}, safepoint={}", db_name, gc_safepoint);
+            ++num_databases_removed;
         }
         catch (DB::Exception & e)
         {
@@ -346,7 +350,12 @@ bool SchemaSyncService::gc(Timestamp gc_safepoint, KeyspaceID keyspace_id)
     if (succeeded)
     {
         updateLastGcSafepoint(keyspace_id, gc_safepoint);
-        LOG_INFO(keyspace_log, "Schema GC done, safepoint={}", gc_safepoint);
+        LOG_INFO(
+            keyspace_log,
+            "Schema GC done, tables_removed={} databases_removed={} safepoint={}",
+            num_tables_removed,
+            num_databases_removed,
+            gc_safepoint);
     }
     else
     {

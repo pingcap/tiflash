@@ -43,10 +43,9 @@ public:
     explicit SchemaSyncService(Context & context_);
     ~SchemaSyncService();
 
+    bool gc(Timestamp gc_safepoint, KeyspaceID keyspace_id);
 private:
     bool syncSchemas(KeyspaceID keyspace_id);
-
-    bool gc(Timestamp gc_safepoint, KeyspaceID keyspace_id);
 
     void addKeyspaceGCTasks();
     void removeKeyspaceGCTasks();
