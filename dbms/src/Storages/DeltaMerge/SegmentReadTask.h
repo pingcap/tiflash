@@ -149,20 +149,29 @@ struct fmt::formatter<DB::DM::SegmentReadTaskPtr>
 };
 
 template <>
-struct fmt::formatter<DB::DM::GlobalSegmentID> : formatter<std::string_view>
+struct fmt::formatter<DB::DM::GlobalSegmentID>
 {
-    template <typename FormatContext>
-    auto format(const DB::DM::GlobalSegmentID & t, FormatContext & ctx)
+    static constexpr auto parse(format_parse_context & ctx)
     {
-        return formatter<std::string_view>::format(
-            fmt::format(
-                "s{}_k{}_t{}_{}_{}",
-                t.store_id,
-                t.keyspace_id,
-                t.physical_table_id,
-                t.segment_id,
-                t.segment_epoch),
-            ctx);
+        const auto * it = ctx.begin();
+        const auto * end = ctx.end();
+        /// Only support {}.
+        if (it != end && *it != '}')
+            throw format_error("invalid format");
+        return it;
+    }
+
+    template <typename FormatContext>
+    auto format(const DB::DM::GlobalSegmentID & t, FormatContext & ctx) const
+    {
+        return format_to(
+            ctx.out(),
+            "s{}_k{}_t{}_{}_{}",
+            t.store_id,
+            t.keyspace_id,
+            t.physical_table_id,
+            t.segment_id,
+            t.segment_epoch);
     }
 };
 
