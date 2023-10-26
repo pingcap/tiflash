@@ -224,7 +224,8 @@ bool SchemaSyncService::gc(Timestamp gc_safepoint, KeyspaceID keyspace_id)
                     managed_storage->getDatabaseName(),
                     managed_storage->getTableName(),
                     db_tombstone,
-                    table_tombstone);
+                    table_tombstone,
+                    gc_safepoint);
             }
         }
     }
