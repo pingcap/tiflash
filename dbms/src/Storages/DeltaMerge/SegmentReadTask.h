@@ -123,18 +123,10 @@ using MergingSegments = std::unordered_map<GlobalSegmentID, std::vector<UInt64>>
 template <>
 struct fmt::formatter<DB::DM::SegmentReadTaskPtr>
 {
-    static constexpr auto parse(format_parse_context & ctx)
-    {
-        const auto * it = ctx.begin();
-        const auto * end = ctx.end();
-        /// Only support {}.
-        if (it != end && *it != '}')
-            throw format_error("invalid format");
-        return it;
-    }
+    static constexpr auto parse(format_parse_context & ctx) { return ctx.begin(); }
 
     template <typename FormatContext>
-    auto format(const DB::DM::SegmentReadTaskPtr & t, FormatContext & ctx) const -> decltype(ctx.out())
+    auto format(const DB::DM::SegmentReadTaskPtr & t, FormatContext & ctx) const
     {
         return format_to(
             ctx.out(),
@@ -151,15 +143,7 @@ struct fmt::formatter<DB::DM::SegmentReadTaskPtr>
 template <>
 struct fmt::formatter<DB::DM::GlobalSegmentID>
 {
-    static constexpr auto parse(format_parse_context & ctx)
-    {
-        const auto * it = ctx.begin();
-        const auto * end = ctx.end();
-        /// Only support {}.
-        if (it != end && *it != '}')
-            throw format_error("invalid format");
-        return it;
-    }
+    static constexpr auto parse(format_parse_context & ctx) { return ctx.begin(); }
 
     template <typename FormatContext>
     auto format(const DB::DM::GlobalSegmentID & t, FormatContext & ctx) const
