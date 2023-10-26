@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/StringUtils/StringUtils.h>
+#include <Encryption/MockKeyManager.h>
 #include <IO/CompressedReadBuffer.h>
 #include <IO/CompressedWriteBuffer.h>
 #include <Interpreters/Context.h>
@@ -23,6 +24,7 @@
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/Remote/DataStore/DataStore.h>
+#include <Storages/DeltaMerge/Remote/DataStore/DataStoreS3.h>
 #include <Storages/DeltaMerge/Remote/DisaggSnapshot.h>
 #include <Storages/DeltaMerge/Remote/ObjectId.h>
 #include <Storages/DeltaMerge/Remote/RNDeltaIndexCache.h>
@@ -93,7 +95,9 @@ RemotePb::RemoteSegment Serializer::serializeTo(
         auto * remote_file = remote.add_stable_pages();
         remote_file->set_page_id(dt_file->pageId());
         auto * checkpoint_info = remote_file->mutable_checkpoint_info();
+#ifndef DBMS_PUBLIC_GTEST // Don't not check path in unittests.
         RUNTIME_CHECK(startsWith(dt_file->path(), "s3://"), dt_file->path());
+#endif
         checkpoint_info->set_data_file_id(dt_file->path()); // It should be a key to remote path
     }
     remote.mutable_column_files_memtable()->CopyFrom(
@@ -111,6 +115,21 @@ RemotePb::RemoteSegment Serializer::serializeTo(
 
     return remote;
 }
+
+#ifdef DBMS_PUBLIC_GTEST
+static std::tuple<String, UInt64> parseDMFilePath(const String & path)
+{
+    // Path likes /disk1/data/t_100/stable/dmf_2.
+    auto pos = path.find_last_of('_');
+    RUNTIME_CHECK(pos != std::string::npos, path);
+    auto file_id = stoul(path.substr(pos + 1));
+
+    pos = path.rfind("/dmf_");
+    RUNTIME_CHECK(pos != std::string::npos, path);
+    auto parent_path = path.substr(0, pos);
+    return std::tuple<String, UInt64>{parent_path, file_id};
+}
+#endif
 
 SegmentSnapshotPtr Serializer::deserializeSegmentSnapshotFrom(
     const DMContext & dm_context,
@@ -161,8 +180,19 @@ SegmentSnapshotPtr Serializer::deserializeSegmentSnapshotFrom(
     for (const auto & stable_file : proto.stable_pages())
     {
         auto remote_key = stable_file.checkpoint_info().data_file_id();
+#ifndef DBMS_PUBLIC_GTEST
         auto prepared = data_store->prepareDMFileByKey(remote_key);
         auto dmfile = prepared->restore(DMFile::ReadMetaMode::all());
+#else
+        auto [parent_path, file_id] = parseDMFilePath(remote_key);
+        auto dmfile = DMFile::restore(
+            dm_context.db_context.getFileProvider(),
+            file_id,
+            /*page_id*/ 0,
+            parent_path,
+            DMFile::ReadMetaMode::all());
+#endif
+        RUNTIME_CHECK(dmfile != nullptr, remote_key);
         dmfiles.emplace_back(std::move(dmfile));
     }
     new_stable->setFiles(dmfiles, segment_range, &dm_context);
@@ -389,9 +419,21 @@ ColumnFileBigPtr Serializer::deserializeCFBig(
 {
     RUNTIME_CHECK(proto.has_checkpoint_info());
     LOG_DEBUG(Logger::get(), "Rebuild local ColumnFileBig from remote, key={}", proto.checkpoint_info().data_file_id());
-
+#ifndef DBMS_PUBLIC_GTEST
     auto prepared = data_store->prepareDMFileByKey(proto.checkpoint_info().data_file_id());
     auto dmfile = prepared->restore(DMFile::ReadMetaMode::all());
+#else
+    (void)data_store; // Disable warnning of unused parameter.
+    auto [parent_path, file_id] = parseDMFilePath(proto.checkpoint_info().data_file_id());
+    auto key_manager = std::make_shared<MockKeyManager>(false);
+    auto file_provider = std::make_shared<FileProvider>(key_manager, false);
+    auto dmfile = DMFile::restore(
+        file_provider,
+        file_id,
+        /*page_id*/ 0,
+        parent_path,
+        DMFile::ReadMetaMode::all());
+#endif
     auto * cf_big = new ColumnFileBig(dmfile, proto.valid_rows(), proto.valid_bytes(), segment_range);
     return std::shared_ptr<ColumnFileBig>(cf_big); // The constructor is private, so we cannot use make_shared.
 }

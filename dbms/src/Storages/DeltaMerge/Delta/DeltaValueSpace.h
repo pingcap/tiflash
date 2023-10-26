@@ -64,7 +64,11 @@ class DeltaValueSpace
 public:
     using Lock = std::unique_lock<std::recursive_mutex>;
 
+#ifndef DBMS_PUBLIC_GTEST
 private:
+#else
+public:
+#endif
     /// column files in `persisted_file_set` are all persisted in disks and can be restored after restart.
     /// column files in `mem_table_set` just resides in memory.
     ///

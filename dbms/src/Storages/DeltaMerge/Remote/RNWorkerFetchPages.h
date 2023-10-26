@@ -31,12 +31,13 @@ class RNWorkerFetchPages
     , public ThreadedWorker<SegmentReadTaskPtr, SegmentReadTaskPtr>
 {
 protected:
-    SegmentReadTaskPtr doWork(const SegmentReadTaskPtr & task) override;
+    SegmentReadTaskPtr doWork(const SegmentReadTaskPtr & task) override
+    {
+        task->fetchPages();
+        return task;
+    }
 
     String getName() const noexcept override { return "FetchPages"; }
-
-private:
-    void doFetchPages(const SegmentReadTaskPtr & seg_task, const disaggregated::FetchDisaggPagesRequest & request);
 
 public:
     struct Options
