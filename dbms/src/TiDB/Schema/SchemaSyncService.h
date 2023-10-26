@@ -59,17 +59,18 @@ private:
 
     friend void dbgFuncGcSchemas(Context &, const ASTs &, DBGInvokerPrinter);
 
+    struct KeyspaceGCContext
+    {
+        Timestamp last_gc_safepoint = 0;
+    };
+
     BackgroundProcessingPool & background_pool;
+    // The background task handle for adding/removing task for all keyspaces
     BackgroundProcessingPool::TaskHandle handle;
 
     mutable std::shared_mutex keyspace_map_mutex;
     // Handles for each keyspace schema sync task.
     std::unordered_map<KeyspaceID, BackgroundProcessingPool::TaskHandle> keyspace_handle_map;
-
-    struct KeyspaceGCContext
-    {
-        Timestamp last_gc_safepoint = 0;
-    };
     std::unordered_map<KeyspaceID, KeyspaceGCContext> keyspace_gc_context;
 
     LoggerPtr log;

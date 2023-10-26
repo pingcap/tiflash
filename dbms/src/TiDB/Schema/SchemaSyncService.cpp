@@ -34,10 +34,6 @@ namespace ErrorCodes
 extern const int DEADLOCK_AVOIDED;
 } // namespace ErrorCodes
 
-// TODO: make this interval configurable
-// constexpr size_t interval_seconds = 60;
-// bg_ddl_sync_schema_interval
-
 SchemaSyncService::SchemaSyncService(DB::Context & context_)
     : context(context_)
     , background_pool(context_.getBackgroundPool())
@@ -146,7 +142,12 @@ void SchemaSyncService::removeKeyspaceGCTasks()
 
 SchemaSyncService::~SchemaSyncService()
 {
-    background_pool.removeTask(handle);
+    if (handle)
+    {
+        // stop the root handle first
+        background_pool.removeTask(handle);
+    }
+
     for (auto const & iter : keyspace_handle_map)
     {
         auto task_handle = iter.second;
@@ -185,7 +186,7 @@ void SchemaSyncService::updateLastGcSafepoint(KeyspaceID keyspace_id, Timestamp 
 bool SchemaSyncService::gc(Timestamp gc_safepoint, KeyspaceID keyspace_id)
 {
     const Timestamp last_gc_safepoint = lastGcSafePoint(keyspace_id);
-    if (gc_safepoint == last_gc_safepoint)
+    if (last_gc_safepoint != 0 && gc_safepoint == last_gc_safepoint)
         return false;
 
     auto keyspace_log = log->getChild(fmt::format("keyspace={}", keyspace_id));
@@ -220,7 +221,7 @@ bool SchemaSyncService::gc(Timestamp gc_safepoint, KeyspaceID keyspace_id)
                 LOG_INFO(
                     log,
                     "Detect stale table, database_name={} table_name={} database_tombstone={} table_tombstone={} "
-                    "gc_safepoint={}",
+                    "safepoint={}",
                     managed_storage->getDatabaseName(),
                     managed_storage->getTableName(),
                     db_tombstone,
@@ -261,8 +262,9 @@ bool SchemaSyncService::gc(Timestamp gc_safepoint, KeyspaceID keyspace_id)
         }();
         LOG_INFO(
             keyspace_log,
-            "Physically dropping table, table_tombstone={} {}",
+            "Physically dropping table, table_tombstone={} safepoint={} {}",
             storage->getTombstone(),
+            gc_safepoint,
             canonical_name);
         auto drop_query = std::make_shared<ASTDropQuery>();
         drop_query->database = std::move(database_name);
@@ -327,7 +329,7 @@ bool SchemaSyncService::gc(Timestamp gc_safepoint, KeyspaceID keyspace_id)
         {
             InterpreterDropQuery drop_interpreter(ast_drop_query, context);
             drop_interpreter.execute();
-            LOG_INFO(keyspace_log, "Physically dropped database {}", db_name);
+            LOG_INFO(keyspace_log, "Physically dropped database {}, safepoint={}", db_name, gc_safepoint);
         }
         catch (DB::Exception & e)
         {
