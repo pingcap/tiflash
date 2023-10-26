@@ -202,11 +202,19 @@ void LearnerReadWorker::recordReadIndexError(RegionsReadIndexResult & read_index
             auto region_status = RegionException::RegionReadStatus::OTHER;
             if (region_error.has_epoch_not_match())
             {
-                extra_msg = fmt::format(
-                    "read_index_resp error, region_id={} version={} conf_version={}",
-                    region_id,
-                    kvstore->getRegion(region_id)->version(),
-                    kvstore->getRegion(region_id)->confVer());
+                auto kv_region = kvstore->getRegion(region_id);
+                if (kv_region)
+                {
+                    extra_msg = fmt::format(
+                        "read_index_resp error, region_id={} version={} conf_version={}",
+                        region_id,
+                        kv_region->version(),
+                        kv_region->confVer());
+                }
+                else
+                {
+                    extra_msg = fmt::format("read_index_resp error, region_id={} does not exist", region_id);
+                }
                 region_status = RegionException::RegionReadStatus::EPOCH_NOT_MATCH;
             }
             else if (region_error.has_not_leader())
