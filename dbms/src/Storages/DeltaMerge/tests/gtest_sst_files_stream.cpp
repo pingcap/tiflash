@@ -527,7 +527,7 @@ try
     stream->writePrefix();
     auto t = std::thread([&]() { stream->write(); });
     sp.waitAndPause();
-    prehandle_task->abortFor(ReadFromStreamError::Aborted);
+    prehandle_task->abortFor(PrehandleTransformStatus::Aborted);
     sp.next();
     sp.disable();
     t.join();

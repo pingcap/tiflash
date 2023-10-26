@@ -22,7 +22,7 @@
 
 namespace DB
 {
-enum class ReadFromStreamError
+enum class PrehandleTransformStatus
 {
     Ok,
     Aborted,
@@ -35,22 +35,22 @@ struct PreHandlingTrace : MutexLockWrap
     struct Item
     {
         Item()
-            : abort_error(ReadFromStreamError::Ok)
+            : abort_error(PrehandleTransformStatus::Ok)
         {}
-        bool isAbort() const { return abort_error.load() != ReadFromStreamError::Ok; }
-        std::optional<ReadFromStreamError> abortReason() const
+        bool isAbort() const { return abort_error.load() != PrehandleTransformStatus::Ok; }
+        std::optional<PrehandleTransformStatus> abortReason() const
         {
             auto res = abort_error.load();
-            if (res == ReadFromStreamError::Ok)
+            if (res == PrehandleTransformStatus::Ok)
             {
                 return std::nullopt;
             }
             return res;
         }
-        void abortFor(ReadFromStreamError reason) { abort_error.store(reason); }
+        void abortFor(PrehandleTransformStatus reason) { abort_error.store(reason); }
 
     protected:
-        std::atomic<ReadFromStreamError> abort_error;
+        std::atomic<PrehandleTransformStatus> abort_error;
     };
 
     std::unordered_map<uint64_t, std::shared_ptr<Item>> tasks;
