@@ -599,6 +599,11 @@ void executeParallelTransform(
             watch.elapsedSeconds(),
             new_region->id());
     }
+    else
+    {
+        // Otherwise, fallback to error handling or exception handling.
+        result = head_result;
+    }
 }
 
 /// `preHandleSSTsToDTFiles` read data from SSTFiles and generate DTFile(s) for commited data
