@@ -747,7 +747,14 @@ UInt64 DeltaMergeStore::ingestFiles(
     Segments updated_segments;
     if (!range.none())
     {
-        if (!segments.empty() || !external_files.empty())
+        bool has_segments = true;
+        {
+            std::shared_lock lock(read_write_mutex);
+            if (segments.empty()) {
+                has_segments = false;
+            }
+        }
+        if (has_segments || !external_files.empty())
         {
             if (use_split_replace)
                 updated_segments
