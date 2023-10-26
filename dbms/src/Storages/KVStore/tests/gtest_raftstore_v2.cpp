@@ -734,7 +734,7 @@ try
 CATCH
 
 // Test if one subtask throws.
-TEST_F(RegionKVStoreV2Test, KVStoreSingleSnapXXX4)
+TEST_F(RegionKVStoreV2Test, KVStoreSingleSnap4)
 try
 {
     auto ctx = TiFlashTestEnv::getGlobalContext();
@@ -805,7 +805,7 @@ try
 CATCH
 
 // Test if default has significantly more kvs than write cf.
-TEST_F(RegionKVStoreV2Test, KVStoreSingleSnapXXX5)
+TEST_F(RegionKVStoreV2Test, KVStoreSingleSnap5)
 try
 {
     auto ctx = TiFlashTestEnv::getGlobalContext();
