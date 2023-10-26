@@ -453,6 +453,7 @@ static void runInParallel(
     }
     catch (Exception & e)
     {
+        // Exceptions other than ReadFromStreamError.
         // The exception can be wrapped in the future, however, we abort here.
         const auto & processed_keys = part_sst_stream->getProcessKeys();
         LOG_INFO(
@@ -563,6 +564,7 @@ void executeParallelTransform(
         LOG_DEBUG(log, "Try fetch prehandle task split_id={}, region_id={}", extra_id, new_region->id());
         async_tasks.fetchResult(extra_id);
     }
+    if (head_result.error == ReadFromStreamError::Ok)
     {
         prehandle_result = std::move(head_prehandle_result);
         // Aggregate results.
