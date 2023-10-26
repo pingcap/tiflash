@@ -95,7 +95,7 @@ public:
     // Try to cleanup the files in `ingest_files` quickly.
     void cancel();
 
-    bool isAbort() const { return prehandle_task->abort_flag.load(std::memory_order_seq_cst); }
+    bool isAbort() const { return prehandle_task->isAbort(); }
 
     size_t getTotalCommittedBytes() const { return total_committed_bytes; }
     size_t getTotalBytesOnDisk() const { return total_bytes_on_disk; }

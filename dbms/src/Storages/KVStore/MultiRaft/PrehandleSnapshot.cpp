@@ -178,13 +178,11 @@ static inline std::tuple<ReadFromStreamResult, PrehandleResult> executeTransform
         stream->write();
         stream->writeSuffix();
         auto res = ReadFromStreamResult{.error = ReadFromStreamError::Ok, .extra_msg = "", .region = new_region};
-        if (stream->isAbort())
+        auto abort_reason = prehandle_task->abortReason();
+        if (abort_reason)
         {
             stream->cancel();
-            res = ReadFromStreamResult{
-                .error = prehandle_task->abort_error.load(),
-                .extra_msg = "",
-                .region = new_region};
+            res = ReadFromStreamResult{.error = abort_reason.value(), .extra_msg = "", .region = new_region};
         }
         return std::make_pair(
             std::move(res),
@@ -442,8 +440,7 @@ static void runInParallel(
             part_new_region->id());
         if (part_result.error == ReadFromStreamError::ErrUpdateSchema)
         {
-            prehandle_task->abort_flag.store(true);
-            prehandle_task->abort_error.store(ReadFromStreamError::ErrUpdateSchema);
+            prehandle_task->abortFor(ReadFromStreamError::ErrUpdateSchema);
         }
         {
             std::scoped_lock l(ctx->mut);
@@ -465,7 +462,7 @@ static void runInParallel(
             processed_keys.write_cf,
             extra_id,
             part_new_region->id());
-        prehandle_task->abort_flag.store(true);
+        prehandle_task->abortFor(ReadFromStreamError::Aborted);
         throw;
     }
 }
@@ -808,7 +805,7 @@ void KVStore::abortPreHandleSnapshot(UInt64 region_id, TMTContext & tmt)
         // The task is registered, set the cancel flag to true and the generated files
         // will be clear later by `releasePreHandleSnapshot`
         LOG_INFO(log, "Try cancel pre-handling from upper layer, region_id={}", region_id);
-        prehandle_task->abort_flag.store(true, std::memory_order_seq_cst);
+        prehandle_task->abortFor(ReadFromStreamError::Aborted);
     }
     else
     {

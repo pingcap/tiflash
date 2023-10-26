@@ -35,10 +35,22 @@ struct PreHandlingTrace : MutexLockWrap
     struct Item
     {
         Item()
-            : abort_flag(false)
+            : abort_error(ReadFromStreamError::Ok)
         {}
-        std::atomic_bool abort_flag;
-        std::atomic<ReadFromStreamError> abort_error = ReadFromStreamError::Aborted;
+        bool isAbort() const { return abort_error.load() != ReadFromStreamError::Ok; }
+        std::optional<ReadFromStreamError> abortReason() const
+        {
+            auto res = abort_error.load();
+            if (res == ReadFromStreamError::Ok)
+            {
+                return std::nullopt;
+            }
+            return res;
+        }
+        void abortFor(ReadFromStreamError reason) { abort_error.store(reason); }
+
+    protected:
+        std::atomic<ReadFromStreamError> abort_error;
     };
 
     std::unordered_map<uint64_t, std::shared_ptr<Item>> tasks;
