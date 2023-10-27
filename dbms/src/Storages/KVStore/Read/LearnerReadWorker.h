@@ -118,7 +118,7 @@ private:
         const std::vector<kvrpcpb::ReadIndexRequest> & batch_read_index_req,
         UInt64 timeout_ms,
         RegionsReadIndexResult & batch_read_index_result);
-    void recordReadIndexError(RegionsReadIndexResult & read_index_result);
+    void recordReadIndexError(const LearnerReadSnapshot & regions_snapshot, RegionsReadIndexResult & read_index_result);
 
     RegionsReadIndexResult readIndex(
         const LearnerReadSnapshot & regions_snapshot,

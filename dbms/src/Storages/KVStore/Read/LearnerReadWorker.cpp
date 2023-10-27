@@ -190,7 +190,7 @@ void LearnerReadWorker::doBatchReadIndex(
     }
 }
 
-void LearnerReadWorker::recordReadIndexError(RegionsReadIndexResult & read_index_result)
+void LearnerReadWorker::recordReadIndexError(const LearnerReadSnapshot & regions_snapshot, RegionsReadIndexResult & read_index_result)
 {
     // if size of batch_read_index_result is not equal with batch_read_index_req, there must be region_error/lock, find and return directly.
     for (auto & [region_id, resp] : read_index_result)
@@ -202,18 +202,18 @@ void LearnerReadWorker::recordReadIndexError(RegionsReadIndexResult & read_index
             auto region_status = RegionException::RegionReadStatus::OTHER;
             if (region_error.has_epoch_not_match())
             {
-                auto kv_region = kvstore->getRegion(region_id);
-                if (kv_region)
+                auto snapshot_region_iter = regions_snapshot.find(region_id);
+                if (snapshot_region_iter != regions_snapshot.end())
                 {
                     extra_msg = fmt::format(
                         "read_index_resp error, region_id={} version={} conf_version={}",
                         region_id,
-                        kv_region->version(),
-                        kv_region->confVer());
+                        snapshot_region_iter->second.create_time_version,
+                        snapshot_region_iter->second.create_time_conf_ver);
                 }
                 else
                 {
-                    extra_msg = fmt::format("read_index_resp error, region_id={} does not exist", region_id);
+                    extra_msg = fmt::format("read_index_resp error, region_id={} not found in snapshot", region_id);
                 }
                 region_status = RegionException::RegionReadStatus::EPOCH_NOT_MATCH;
             }
@@ -298,7 +298,7 @@ RegionsReadIndexResult LearnerReadWorker::readIndex(
 
     stats.read_index_elapsed_ms = watch.elapsedMilliseconds();
     GET_METRIC(tiflash_raft_read_index_duration_seconds).Observe(stats.read_index_elapsed_ms / 1000.0);
-    recordReadIndexError(batch_read_index_result);
+    recordReadIndexError(regions_snapshot, batch_read_index_result);
 
     const auto log_lvl = unavailable_regions.empty() ? Poco::Message::PRIO_DEBUG : Poco::Message::PRIO_INFORMATION;
     LOG_IMPL(
