@@ -190,7 +190,9 @@ void LearnerReadWorker::doBatchReadIndex(
     }
 }
 
-void LearnerReadWorker::recordReadIndexError(const LearnerReadSnapshot & regions_snapshot, RegionsReadIndexResult & read_index_result)
+void LearnerReadWorker::recordReadIndexError(
+    const LearnerReadSnapshot & regions_snapshot,
+    RegionsReadIndexResult & read_index_result)
 {
     // if size of batch_read_index_result is not equal with batch_read_index_req, there must be region_error/lock, find and return directly.
     for (auto & [region_id, resp] : read_index_result)

@@ -51,7 +51,10 @@ protected:
         return worker.buildBatchReadIndexReq(region_table, snapshot, read_index_result);
     }
 
-    static void recordReadIndexError(const LearnerReadSnapshot & regions_snapshot, LearnerReadWorker & worker, RegionsReadIndexResult & read_index_result)
+    static void recordReadIndexError(
+        const LearnerReadSnapshot & regions_snapshot,
+        LearnerReadWorker & worker,
+        RegionsReadIndexResult & read_index_result)
     {
         worker.recordReadIndexError(regions_snapshot, read_index_result);
     }
