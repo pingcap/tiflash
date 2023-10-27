@@ -22,14 +22,35 @@
 
 namespace DB
 {
+enum class PrehandleTransformStatus
+{
+    Ok,
+    Aborted,
+    ErrUpdateSchema,
+    ErrTableDropped,
+};
+
 struct PreHandlingTrace : MutexLockWrap
 {
     struct Item
     {
         Item()
-            : abort_flag(false)
+            : abort_error(PrehandleTransformStatus::Ok)
         {}
-        std::atomic_bool abort_flag;
+        bool isAbort() const { return abort_error.load() != PrehandleTransformStatus::Ok; }
+        std::optional<PrehandleTransformStatus> abortReason() const
+        {
+            auto res = abort_error.load();
+            if (res == PrehandleTransformStatus::Ok)
+            {
+                return std::nullopt;
+            }
+            return res;
+        }
+        void abortFor(PrehandleTransformStatus reason) { abort_error.store(reason); }
+
+    protected:
+        std::atomic<PrehandleTransformStatus> abort_error;
     };
 
     std::unordered_map<uint64_t, std::shared_ptr<Item>> tasks;

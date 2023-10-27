@@ -148,7 +148,7 @@ void SSTFilesToBlockInputStream::checkFinishedState(SSTReaderPtr & reader, Colum
         return;
     if (!reader->remained())
         return;
-    if (prehandle_task->abort_flag.load())
+    if (prehandle_task->isAbort())
         return;
 
     // now the stream must be stopped by `soft_limit`, let's check the keys in reader
