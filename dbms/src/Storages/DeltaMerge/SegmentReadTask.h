@@ -29,6 +29,7 @@ using SegmentReadTasks = std::list<SegmentReadTaskPtr>;
 
 
 // A SegmentReadTask object is identified by <store_id, keyspace_id, physical_table_id, segment_id, segment_epoch>.
+// Under disagg arch, there could be SegmentReadTasks from different stores in one compute node.
 struct GlobalSegmentID
 {
     StoreID store_id;
