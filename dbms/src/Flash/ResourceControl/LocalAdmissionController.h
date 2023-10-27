@@ -613,4 +613,38 @@ private:
 
     const LoggerPtr log = Logger::get("LocalAdmissionController");
 };
+
+class LACBytesCollector
+{
+public:
+    explicit LACBytesCollector(const std::string & name)
+        : resource_group_name(name)
+        , delta_bytes(0) {}
+
+    ~LACBytesCollector()
+    {
+        consume();
+    }
+
+    void collect(uint64_t bytes)
+    {
+        delta_bytes += bytes;
+        if (delta_bytes >= bytes_of_one_ru)
+        {
+            consume();
+            delta_bytes = 0;
+        }
+    }
+
+private:
+    void consume()
+    {
+        if (!resource_group_name.empty() && delta_bytes != 0.0)
+            LocalAdmissionController::global_instance->consumeResource(resource_group_name, bytesToRU(delta_bytes), 0);
+    }
+
+    const std::string resource_group_name;
+    uint64_t delta_bytes;
+};
+using LACBytesCollectorPtr = std::unique_ptr<LACBytesCollector>;
 } // namespace DB
