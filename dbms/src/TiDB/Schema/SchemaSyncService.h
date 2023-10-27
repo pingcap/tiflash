@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Interpreters/Context_fwd.h>
 #include <Storages/BackgroundProcessingPool.h>
 #include <Storages/KVStore/Types.h>
 
@@ -24,7 +25,6 @@
 
 namespace DB
 {
-class Context;
 class BackgroundProcessingPool;
 class Logger;
 using LoggerPtr = std::shared_ptr<Logger>;
@@ -43,30 +43,35 @@ public:
     explicit SchemaSyncService(Context & context_);
     ~SchemaSyncService();
 
+    bool gc(Timestamp gc_safepoint, KeyspaceID keyspace_id);
+
 private:
     bool syncSchemas(KeyspaceID keyspace_id);
 
-    struct GCContext
-    {
-        Timestamp last_gc_safe_point = 0;
-    } gc_context;
-
-    bool gc(Timestamp gc_safe_point, KeyspaceID keyspace_id);
-
     void addKeyspaceGCTasks();
     void removeKeyspaceGCTasks();
+
+    Timestamp lastGcSafePoint(KeyspaceID keyspace_id) const;
+    void updateLastGcSafepoint(KeyspaceID keyspace_id, Timestamp gc_safepoint);
 
 private:
     Context & context;
 
     friend void dbgFuncGcSchemas(Context &, const ASTs &, DBGInvokerPrinter);
 
+    struct KeyspaceGCContext
+    {
+        Timestamp last_gc_safepoint = 0;
+    };
+
     BackgroundProcessingPool & background_pool;
+    // The background task handle for adding/removing task for all keyspaces
     BackgroundProcessingPool::TaskHandle handle;
 
     mutable std::shared_mutex keyspace_map_mutex;
     // Handles for each keyspace schema sync task.
     std::unordered_map<KeyspaceID, BackgroundProcessingPool::TaskHandle> keyspace_handle_map;
+    std::unordered_map<KeyspaceID, KeyspaceGCContext> keyspace_gc_context;
 
     LoggerPtr log;
 };
