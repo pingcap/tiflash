@@ -130,7 +130,7 @@ struct fmt::formatter<DB::DM::SegmentReadTaskPtr>
     {
         return format_to(
             ctx.out(),
-            "s{}_k{}_t{}_{}_{}_{}",
+            "s{}_ks{}_t{}_{}_{}_{}",
             t->store_id,
             t->dm_context->keyspace_id,
             t->dm_context->physical_table_id,
