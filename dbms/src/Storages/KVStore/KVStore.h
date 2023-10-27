@@ -225,10 +225,10 @@ public:
 
     /// Create `runner_cnt` threads to run ReadIndexWorker asynchronously and automatically.
     /// If there is other runtime framework, DO NOT invoke it.
-    void asyncRunReadIndexWorkers();
+    void asyncRunReadIndexWorkers() const;
 
     /// Stop workers after there is no more read-index task.
-    void stopReadIndexWorkers();
+    void stopReadIndexWorkers() const;
 
     /// TODO: if supported by runtime framework, run one round for specific runner by `id`.
     void runOneRoundOfReadIndexRunner(size_t runner_id);
