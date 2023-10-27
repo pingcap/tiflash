@@ -1343,7 +1343,7 @@ struct Adder<KIND, ASTTableJoin::Strictness::All, Map>
                 {
                     for (size_t j = 0; j < num_columns_to_add; ++j)
                     {
-                        added_columns[j] = mapped_value.cached_columns[j]->assumeMutable();
+                        added_columns[j] = mapped_value.cached_columns[j]->mutateWithClone();
                     }
                 }
                 else
@@ -1390,7 +1390,7 @@ struct Adder<KIND, ASTTableJoin::Strictness::All, Map>
             {
                 for (size_t j = 0; j < num_columns_to_add; ++j)
                 {
-                    cached_columns.push_back(added_columns[j]->assumeMutable());
+                    cached_columns.push_back(added_columns[j]->mutateWithClone());
                 }
             }
             else
@@ -1495,7 +1495,7 @@ struct RowFlaggedHashMapAdder
                 {
                     for (size_t j = 0; j < num_columns_to_add; ++j)
                     {
-                        added_columns[j] = mapped_value.cached_columns[j]->assumeMutable();
+                        added_columns[j] = mapped_value.cached_columns[j]->mutateWithClone();
                     }
                 }
                 else
@@ -1535,7 +1535,7 @@ struct RowFlaggedHashMapAdder
             {
                 for (size_t j = 0; j < num_columns_to_add; ++j)
                 {
-                    cached_columns.push_back(added_columns[j]->assumeMutable());
+                    cached_columns.push_back(added_columns[j]->mutateWithClone());
                 }
             }
             else
