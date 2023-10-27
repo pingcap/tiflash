@@ -150,7 +150,7 @@ struct fmt::formatter<DB::DM::GlobalSegmentID>
     {
         return format_to(
             ctx.out(),
-            "s{}_k{}_t{}_{}_{}",
+            "s{}_ks{}_t{}_{}_{}",
             t.store_id,
             t.keyspace_id,
             t.physical_table_id,
