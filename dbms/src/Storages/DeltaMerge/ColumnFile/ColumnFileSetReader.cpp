@@ -185,16 +185,13 @@ size_t ColumnFileSetReader::readRows(
             }
         }
     }
+    // todo enable?
+    auto lac_bytes_collector = std::make_unique<LACBytesCollector>(context.scan_context->resource_group_name);
     for (const auto & col : output_columns)
     {
         const auto delta_bytes = col->byteSize();
         context.scan_context->total_user_read_bytes += delta_bytes;
-
-        if (context.scan_context->enable_resource_control)
-            LocalAdmissionController::global_instance->consumeResource(
-                context.scan_context->resource_group_name,
-                bytesToRU(delta_bytes),
-                0);
+        lac_bytes_collector->collect(delta_bytes);
     }
     return actual_read;
 }

@@ -152,6 +152,8 @@ public:
     {
         Block res;
 
+        // todo enable?
+        auto lac_bytes_collector = std::make_unique<LACBytesCollector>(scan_context->resource_group_name);
         while (current_stream != children.end())
         {
             auto * skippable_stream = dynamic_cast<SkippableBlockInputStream *>((*current_stream).get());
@@ -160,7 +162,7 @@ public:
             if (res)
             {
                 res.setStartOffset(res.startOffset() + precede_stream_rows);
-                addReadBytes(res.bytes());
+                addReadBytes(res.bytes(), lac_bytes_collector);
                 break;
             }
             else
@@ -177,6 +179,7 @@ public:
     {
         Block res;
 
+        auto lac_bytes_collector = std::make_unique<LACBytesCollector>(scan_context->resource_group_name);
         while (current_stream != children.end())
         {
             res = (*current_stream)->read();
@@ -188,7 +191,7 @@ public:
                 {
                     res.setSegmentRowIdCol(createSegmentRowIdCol(res.startOffset(), res.rows()));
                 }
-                addReadBytes(res.bytes());
+                addReadBytes(res.bytes(), lac_bytes_collector);
                 break;
             }
             else
@@ -214,17 +217,12 @@ private:
         }
         return seg_row_id_col;
     }
-    void addReadBytes(UInt64 bytes)
+    void addReadBytes(UInt64 bytes, LACBytesCollectorPtr & lac_bytes_collector)
     {
         if (likely(scan_context != nullptr))
         {
             scan_context->total_user_read_bytes += bytes;
-
-            if (scan_context->enable_resource_control)
-                LocalAdmissionController::global_instance->consumeResource(
-                    scan_context->resource_group_name,
-                    bytesToRU(bytes),
-                    0);
+            lac_bytes_collector->collect(bytes);
         }
     }
     BlockInputStreams::iterator current_stream;
