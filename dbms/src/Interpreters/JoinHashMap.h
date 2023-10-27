@@ -37,6 +37,9 @@ struct RowRef
 struct RowRefList : RowRef
 {
     RowRefList * next = nullptr;
+    mutable std::mutex cached_columns_mu;
+    mutable Columns cached_columns;
+    mutable bool generate_cached_columns = false;
 
     RowRefList() = default;
     RowRefList(const Block * block_, size_t row_num_)
@@ -50,6 +53,9 @@ struct RowRefListWithUsedFlag : RowRef
     using Base_t = RowRefListWithUsedFlag;
     mutable std::atomic<bool> used{};
     RowRefListWithUsedFlag * next = nullptr;
+    mutable std::mutex cached_columns_mu;
+    mutable Columns cached_columns;
+    mutable bool generate_cached_columns = false;
 
     void setUsed() const
     {

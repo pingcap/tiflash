@@ -39,7 +39,8 @@ public:
         const JoinPtr & join_,
         size_t stream_index,
         const String & req_id,
-        UInt64 max_block_size_);
+        UInt64 max_block_size_,
+        UInt64 cache_columns_threshold_);
 
     String getName() const override { return name; }
     Block getHeader() const override;

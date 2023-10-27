@@ -24,7 +24,8 @@ HashJoinProbeExecPtr HashJoinProbeExec::build(
     const JoinPtr & join,
     size_t stream_index,
     const BlockInputStreamPtr & probe_stream,
-    size_t max_block_size)
+    size_t max_block_size,
+    size_t cache_columns_threshold)
 {
     bool need_scan_hash_map_after_probe = needScanHashMapAfterProbe(join->getKind());
     BlockInputStreamPtr scan_hash_map_stream = nullptr;
@@ -43,7 +44,8 @@ HashJoinProbeExecPtr HashJoinProbeExec::build(
         probe_stream,
         need_scan_hash_map_after_probe,
         scan_hash_map_stream,
-        max_block_size);
+        max_block_size,
+        cache_columns_threshold);
 }
 
 HashJoinProbeExec::HashJoinProbeExec(
@@ -54,7 +56,8 @@ HashJoinProbeExec::HashJoinProbeExec(
     const BlockInputStreamPtr & probe_stream_,
     bool need_scan_hash_map_after_probe_,
     const BlockInputStreamPtr & scan_hash_map_after_probe_stream_,
-    size_t max_block_size_)
+    size_t max_block_size_,
+    size_t cache_columns_threshold_)
     : log(Logger::get(req_id))
     , join(join_)
     , stream_index(stream_index_)
@@ -63,7 +66,8 @@ HashJoinProbeExec::HashJoinProbeExec(
     , need_scan_hash_map_after_probe(need_scan_hash_map_after_probe_)
     , scan_hash_map_after_probe_stream(scan_hash_map_after_probe_stream_)
     , max_block_size(max_block_size_)
-    , probe_process_info(max_block_size_)
+    , cache_columns_threshold(cache_columns_threshold_)
+    , probe_process_info(max_block_size_, cache_columns_threshold_)
 {}
 
 void HashJoinProbeExec::waitUntilAllBuildFinished()
@@ -178,7 +182,8 @@ HashJoinProbeExecPtr HashJoinProbeExec::doTryGetRestoreExec()
                 restore_info->probe_stream,
                 need_scan_hash_map_after_probe,
                 restore_info->scan_hash_map_stream,
-                max_block_size);
+                max_block_size,
+                cache_columns_threshold);
             restore_probe_exec->parent = shared_from_this();
             restore_probe_exec->setCancellationHook(is_cancelled);
             return restore_probe_exec;

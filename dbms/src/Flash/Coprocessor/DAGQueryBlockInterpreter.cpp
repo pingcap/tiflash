@@ -419,7 +419,8 @@ void DAGQueryBlockInterpreter::handleJoin(
             join_ptr,
             probe_index++,
             log->identifier(),
-            settings.max_block_size);
+            settings.max_block_size,
+            settings.join_probe_cache_columns_threshold);
         stream->setExtraInfo(fmt::format(
             "join probe, join_executor_id = {}, scan_hash_map_after_probe = {}",
             query_block.source_name,

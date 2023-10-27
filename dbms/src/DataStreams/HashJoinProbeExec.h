@@ -34,7 +34,8 @@ public:
         const JoinPtr & join,
         size_t stream_index,
         const BlockInputStreamPtr & probe_stream,
-        size_t max_block_size);
+        size_t max_block_size,
+        size_t cache_columns_threshold);
 
     using CancellationHook = std::function<bool()>;
 
@@ -46,7 +47,8 @@ public:
         const BlockInputStreamPtr & probe_stream_,
         bool need_scan_hash_map_after_probe_,
         const BlockInputStreamPtr & scan_hash_map_after_probe_stream_,
-        size_t max_block_size_);
+        size_t max_block_size_,
+        size_t cache_columns_threshold_);
 
     void waitUntilAllBuildFinished();
 
@@ -96,6 +98,7 @@ private:
     const BlockInputStreamPtr scan_hash_map_after_probe_stream;
 
     const size_t max_block_size;
+    const size_t cache_columns_threshold;
 
     CancellationHook is_cancelled{[]() {
         return false;

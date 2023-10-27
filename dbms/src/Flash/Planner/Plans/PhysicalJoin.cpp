@@ -234,7 +234,8 @@ void PhysicalJoin::probeSideTransform(DAGPipeline & probe_pipeline, Context & co
             join_ptr,
             probe_index++,
             log->identifier(),
-            settings.max_block_size);
+            settings.max_block_size,
+            settings.join_probe_cache_columns_threshold);
         stream->setExtraInfo(join_probe_extra_info);
     }
 }
