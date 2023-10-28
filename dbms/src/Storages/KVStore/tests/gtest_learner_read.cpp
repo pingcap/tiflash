@@ -51,9 +51,12 @@ protected:
         return worker.buildBatchReadIndexReq(region_table, snapshot, read_index_result);
     }
 
-    static void recordReadIndexError(LearnerReadWorker & worker, RegionsReadIndexResult & read_index_result)
+    static void recordReadIndexError(
+        const LearnerReadSnapshot & regions_snapshot,
+        LearnerReadWorker & worker,
+        RegionsReadIndexResult & read_index_result)
     {
-        worker.recordReadIndexError(read_index_result);
+        worker.recordReadIndexError(regions_snapshot, read_index_result);
     }
 
 protected:
@@ -162,7 +165,8 @@ try
         {202, makeReadIndexResult(1024)},
         {203, makeReadIndexResult(10000)},
     };
-    recordReadIndexError(worker, read_index_result);
+    LearnerReadSnapshot regions_snapshot = worker.buildRegionsSnapshot();
+    recordReadIndexError(regions_snapshot, worker, read_index_result);
 
     ASSERT_EQ(0, mvcc_query_info.getReadIndexRes(200));
     ASSERT_EQ(24, mvcc_query_info.getReadIndexRes(201));
