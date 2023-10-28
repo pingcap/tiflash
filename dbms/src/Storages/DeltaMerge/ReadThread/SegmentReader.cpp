@@ -222,8 +222,7 @@ void SegmentReaderPoolManager::init(UInt32 logical_cpu_cores, double read_thread
 
 void SegmentReaderPoolManager::addTask(MergedTaskPtr && task)
 {
-    static std::hash<uint64_t> hash_func;
-    auto idx = hash_func(task->getSegmentId()) % reader_pools.size();
+    auto idx = std::hash<GlobalSegmentID>{}(task->getSegmentId()) % reader_pools.size();
     reader_pools[idx]->addTask(std::move(task));
 }
 
