@@ -28,5 +28,5 @@ RU cpuTimeToRU(UInt64 cpu_time_ns);
 RU bytesToRU(UInt64 bytes);
 
 static constexpr UInt64 bytes_of_one_ru = 1024 * 64;
-static constexpr UInt64 bytes_of_one_hundred_ru = 100 * 1024 * 64;
+static constexpr UInt64 bytes_of_one_hundred_ru = 100 * bytes_of_one_ru;
 } // namespace DB
