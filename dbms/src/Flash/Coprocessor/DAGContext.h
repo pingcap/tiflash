@@ -318,6 +318,7 @@ public:
 
     KeyspaceID getKeyspaceID() const { return keyspace_id; }
     String getResourceGroupName() { return resource_group_name; }
+    // For now, only called for BlockIO execution engine to disable report RU of storage layer.
     void clearResourceGroupName() { resource_group_name = ""; }
 
     RU getReadRU() const;
@@ -452,7 +453,6 @@ private:
     const KeyspaceID keyspace_id = NullspaceID;
 
     String resource_group_name;
-    bool enable_resource_control = false;
 
     // Used to determine the execution mode
     // - None: request has not been executed yet
