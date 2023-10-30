@@ -16,7 +16,6 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Storages/DeltaMerge/DeltaIndex.h>
-#include <Storages/DeltaMerge/Remote/RNReadTask.h>
 #include <Storages/DeltaMerge/Remote/RNWorkerPrepareStreams.h>
 #include <Storages/DeltaMerge/Segment.h>
 
@@ -58,9 +57,8 @@ SegmentReadTaskPtr RNWorkerPrepareStreams::doWork(const SegmentReadTaskPtr & tas
             .Observe(watch_work.elapsedSeconds());
     });
 
-    if (likely(initInputStream(
-            task,
-            task->extra_remote_info->dm_context->db_context.getSettingsRef().dt_enable_delta_index_error_fallback)))
+    if (likely(
+            initInputStream(task, task->dm_context->db_context.getSettingsRef().dt_enable_delta_index_error_fallback)))
     {
         return task;
     }
@@ -68,8 +66,7 @@ SegmentReadTaskPtr RNWorkerPrepareStreams::doWork(const SegmentReadTaskPtr & tas
     // Exception DT_DELTA_INDEX_ERROR raised. Reset delta index and try again.
     DeltaIndex empty_delta_index;
     task->read_snapshot->delta->getSharedDeltaIndex()->swap(empty_delta_index);
-    if (auto cache = task->extra_remote_info->dm_context->db_context.getSharedContextDisagg()->rn_delta_index_cache;
-        cache)
+    if (auto cache = task->dm_context->db_context.getSharedContextDisagg()->rn_delta_index_cache; cache)
     {
         cache->setDeltaIndex(task->read_snapshot->delta->getSharedDeltaIndex());
     }
