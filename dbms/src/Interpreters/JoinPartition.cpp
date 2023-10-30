@@ -1304,14 +1304,18 @@ struct Adder<KIND, ASTTableJoin::Strictness::All, Map>
         const std::vector<size_t> & right_indexes,
         ProbeProcessInfo & probe_process_info)
     {
-        size_t rows_joined = 0;
+        const auto & mapped_value = static_cast<const typename Map::mapped_type::Base_t &>(it->getMapped());
+        size_t rows_joined = mapped_value.rows;
         // If there are too many rows in the column to split, record the number of rows that have been expanded for next read.
         // and it means the rows in this block are not joined finish.
-
-        for (auto current = &static_cast<const typename Map::mapped_type::Base_t &>(it->getMapped());
-             current != nullptr;
-             current = current->next)
-            ++rows_joined;
+        if (rows_joined == 0)
+        {
+            for (auto current = &mapped_value;
+                 current != nullptr;
+                 current = current->next)
+                ++rows_joined;
+            mapped_value.rows = rows_joined;
+        }
 
         if (current_offset && current_offset + rows_joined > probe_process_info.max_block_size)
         {
@@ -1319,7 +1323,6 @@ struct Adder<KIND, ASTTableJoin::Strictness::All, Map>
         }
 
         bool need_generated_cached_columns = false;
-        const auto & mapped_value = static_cast<const typename Map::mapped_type::Base_t &>(it->getMapped());
         if unlikely (
             probe_process_info.cache_columns_threshold > 0 && rows_joined > probe_process_info.cache_columns_threshold)
         {
@@ -1339,20 +1342,20 @@ struct Adder<KIND, ASTTableJoin::Strictness::All, Map>
             if (has_cached_columns)
             {
                 /// todo skip copy if added_columns has no rows
-                if (added_columns[0]->empty())
-                {
-                    for (size_t j = 0; j < num_columns_to_add; ++j)
-                    {
-                        added_columns[j] = mapped_value.cached_columns[j]->mutateWithClone();
-                    }
-                }
-                else
-                {
+                //if (added_columns[0]->empty())
+                //{
+                //    for (size_t j = 0; j < num_columns_to_add; ++j)
+                //    {
+                //        added_columns[j] = mapped_value.cached_columns[j]->mutateWithClone();
+                //    }
+                //}
+                //else
+                //{
                     for (size_t j = 0; j < num_columns_to_add; ++j)
                     {
                         added_columns[j]->insertRangeFrom(*mapped_value.cached_columns[j], 0, rows_joined);
                     }
-                }
+                //}
                 current_offset += rows_joined;
                 (*offsets)[i] = current_offset;
                 if constexpr (KIND == ASTTableJoin::Kind::Anti)
@@ -1386,20 +1389,20 @@ struct Adder<KIND, ASTTableJoin::Strictness::All, Map>
         {
             Columns cached_columns;
             size_t start_offset = added_columns[0]->size() - rows_joined;
-            if (start_offset == 0)
-            {
-                for (size_t j = 0; j < num_columns_to_add; ++j)
-                {
-                    cached_columns.push_back(added_columns[j]->mutateWithClone());
-                }
-            }
-            else
-            {
+            //if (start_offset == 0)
+            //{
+            //    for (size_t j = 0; j < num_columns_to_add; ++j)
+            //    {
+            //        cached_columns.push_back(added_columns[j]->mutateWithClone());
+            //    }
+           // }
+            //else
+           // {
                 for (size_t j = 0; j < num_columns_to_add; ++j)
                 {
                     cached_columns.push_back(added_columns[j]->cut(start_offset, rows_joined));
                 }
-            }
+            //}
             std::unique_lock lock(mapped_value.cached_columns_mu);
             mapped_value.cached_columns.insert(
                 mapped_value.cached_columns.end(),

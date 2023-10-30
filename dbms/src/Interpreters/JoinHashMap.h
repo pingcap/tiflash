@@ -40,6 +40,7 @@ struct RowRefList : RowRef
     mutable std::mutex cached_columns_mu;
     mutable Columns cached_columns;
     mutable bool generate_cached_columns = false;
+    mutable std::atomic<UInt64> rows;
 
     RowRefList() = default;
     RowRefList(const Block * block_, size_t row_num_)
