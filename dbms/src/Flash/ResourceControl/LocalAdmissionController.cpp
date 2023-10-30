@@ -167,15 +167,20 @@ std::optional<LocalAdmissionController::AcquireTokenInfo> LocalAdmissionControll
     const ResourceGroupPtr & resource_group,
     bool is_periodically_fetch)
 {
-    double token_consumption = resource_group->getAndCleanConsumptionDelta();
+    double token_consumption = 0.0;
     double acquire_tokens = 0.0;
+    const auto now = std::chrono::steady_clock::now();
+
+    const auto consumption_update_info
+        = resource_group->updateConsumptionSpeedInfoIfNecessary(now, DEFAULT_FETCH_GAC_INTERVAL);
+    if (consumption_update_info.updated)
+        token_consumption = consumption_update_info.delta;
 
     auto get_acquire_tokens = [&]() {
         if (resource_group->burstable)
             return;
 
         // To avoid periodically_token_fetch after low_token_fetch immediately
-        const auto now = std::chrono::steady_clock::now();
         if (is_periodically_fetch && !resource_group->needFetchTokenPeridically(now, DEFAULT_FETCH_GAC_INTERVAL))
             return;
 
@@ -183,7 +188,10 @@ std::optional<LocalAdmissionController::AcquireTokenInfo> LocalAdmissionControll
         if (resource_group->inTrickleModeLease(now))
             return;
 
-        acquire_tokens = resource_group->getAcquireRUNum(DEFAULT_FETCH_GAC_INTERVAL.count(), ACQUIRE_RU_AMPLIFICATION);
+        acquire_tokens = resource_group->getAcquireRUNum(
+            consumption_update_info.speed,
+            DEFAULT_FETCH_GAC_INTERVAL.count(),
+            ACQUIRE_RU_AMPLIFICATION);
         assert(acquire_tokens >= 0.0);
     };
 
