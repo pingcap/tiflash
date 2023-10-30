@@ -318,8 +318,7 @@ public:
 
     KeyspaceID getKeyspaceID() const { return keyspace_id; }
     String getResourceGroupName() { return resource_group_name; }
-    void enableResourceControl() { enable_resource_control = true; }
-    bool isResourceControlEnabled() const { return enable_resource_control; }
+    void clearResourceGroupName() { resource_group_name = ""; }
 
     RU getReadRU() const;
 
@@ -452,7 +451,7 @@ private:
     // The keyspace that the DAG request from
     const KeyspaceID keyspace_id = NullspaceID;
 
-    const String resource_group_name;
+    String resource_group_name;
     bool enable_resource_control = false;
 
     // Used to determine the execution mode
