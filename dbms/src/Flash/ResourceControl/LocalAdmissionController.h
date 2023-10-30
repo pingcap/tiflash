@@ -622,7 +622,11 @@ public:
         , delta_bytes(0)
     {}
 
-    ~LACBytesCollector() { consume(); }
+    ~LACBytesCollector()
+    {
+        if (delta_bytes != 0)
+            consume();
+    }
 
     void collect(uint64_t bytes)
     {
@@ -638,7 +642,8 @@ public:
 private:
     void consume()
     {
-        if (!resource_group_name.empty() && delta_bytes != 0.0)
+        assert(delta_bytes != 0);
+        if (!resource_group_name.empty())
             LocalAdmissionController::global_instance->consumeResource(resource_group_name, bytesToRU(delta_bytes), 0);
     }
 
