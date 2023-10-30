@@ -280,11 +280,10 @@ private:
             return;
 
         bucket_mode = TokenBucketMode::degrade_mode;
-        double avg_speed = bucket->getAvgSpeedPerSec();
         auto config = bucket->getConfig();
         std::string ori_bucket_info = bucket->toString();
 
-        config.fill_rate = avg_speed;
+        config.fill_rate = ru_consumption_speed;
         bucket->reConfig(config);
         LOG_INFO(
             log,
