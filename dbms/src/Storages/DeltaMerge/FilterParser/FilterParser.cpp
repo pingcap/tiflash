@@ -394,6 +394,7 @@ RSOperatorPtr FilterParser::parseRFInExpr(
         if (target_expr.field_type().tp() == TiDB::TypeTimestamp && !timezone_info.is_utc_timezone)
         {
             Fields values;
+            values.reserve(setElements.size());
             std::for_each(setElements.begin(), setElements.end(), [&](Field element) {
                 // convert literal value from timezone specified in cop request to UTC
                 cop::convertFieldWithTimezone(element, timezone_info);
