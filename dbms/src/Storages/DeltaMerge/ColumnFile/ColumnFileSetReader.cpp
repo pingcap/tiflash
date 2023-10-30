@@ -185,9 +185,7 @@ size_t ColumnFileSetReader::readRows(
             }
         }
     }
-    auto lac_bytes_collector = std::make_unique<LACBytesCollector>(
-        context.scan_context->resource_group_name,
-        context.scan_context->enable_resource_control);
+    auto lac_bytes_collector = std::make_unique<LACBytesCollector>(context.scan_context->resource_group_name);
     for (const auto & col : output_columns)
     {
         const auto delta_bytes = col->byteSize();
