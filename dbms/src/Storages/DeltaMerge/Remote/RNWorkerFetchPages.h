@@ -15,8 +15,7 @@
 #pragma once
 
 #include <Common/ThreadedWorker.h>
-#include <Storages/DeltaMerge/Remote/RNReadTask.h>
-#include <pingcap/kv/Cluster.h>
+#include <Storages/DeltaMerge/SegmentReadTask.h>
 
 #include <boost/noncopyable.hpp>
 
@@ -39,9 +38,6 @@ protected:
 private:
     void doFetchPages(const SegmentReadTaskPtr & seg_task, const disaggregated::FetchDisaggPagesRequest & request);
 
-private:
-    const pingcap::kv::Cluster * cluster;
-
 public:
     struct Options
     {
@@ -49,7 +45,6 @@ public:
         const std::shared_ptr<MPMCQueue<SegmentReadTaskPtr>> & result_queue;
         const LoggerPtr & log;
         const size_t concurrency;
-        const pingcap::kv::Cluster * cluster;
     };
 
     explicit RNWorkerFetchPages(const Options & options)
@@ -58,7 +53,6 @@ public:
             options.result_queue,
             options.log,
             options.concurrency)
-        , cluster(options.cluster)
     {}
 
     static RNWorkerFetchPagesPtr create(const Options & options)
