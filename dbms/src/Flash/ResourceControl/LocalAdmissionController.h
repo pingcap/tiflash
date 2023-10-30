@@ -347,6 +347,12 @@ private:
         return bucket_mode == trickle_mode && tp < stop_trickle_timepoint;
     }
 
+    bool needNotifyStopTrickleMode(const std::chrono::steady_clock::time_point & tp)
+    {
+        std::lock_guard lock(mu);
+        return bucket_mode == trickle_mode && tp >= stop_trickle_timepoint;
+    }
+
     void collectMetrics() const
     {
         // todo maybe put it where metric change
@@ -430,7 +436,7 @@ public:
         }
 
         group->consumeResource(ru, cpu_time_in_ns);
-        if (group->lowToken())
+        if (group->lowToken() || group->needNotifyStopTrickleMode(std::chrono::steady_clock::now()))
         {
             {
                 std::lock_guard lock(mu);
@@ -597,7 +603,7 @@ private:
     // Utilities for fetch token from GAC.
     void fetchTokensForLowTokenResourceGroups();
     void fetchTokensForAllResourceGroups();
-    static std::optional<AcquireTokenInfo> buildAcquireInfo(
+    std::optional<AcquireTokenInfo> buildAcquireInfo(
         const ResourceGroupPtr & resource_group,
         bool is_periodically_fetch);
 
