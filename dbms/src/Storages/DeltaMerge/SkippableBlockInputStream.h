@@ -152,8 +152,9 @@ public:
     {
         Block res;
 
-        // todo enable?
-        auto lac_bytes_collector = std::make_unique<LACBytesCollector>(scan_context->resource_group_name);
+        auto lac_bytes_collector = std::make_unique<LACBytesCollector>(
+            scan_context->resource_group_name,
+            scan_context->enable_resource_control);
         while (current_stream != children.end())
         {
             auto * skippable_stream = dynamic_cast<SkippableBlockInputStream *>((*current_stream).get());
@@ -179,7 +180,9 @@ public:
     {
         Block res;
 
-        auto lac_bytes_collector = std::make_unique<LACBytesCollector>(scan_context->resource_group_name);
+        auto lac_bytes_collector = std::make_unique<LACBytesCollector>(
+            scan_context->resource_group_name,
+            scan_context->enable_resource_control);
         while (current_stream != children.end())
         {
             res = (*current_stream)->read();
