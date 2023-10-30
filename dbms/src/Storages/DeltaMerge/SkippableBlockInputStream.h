@@ -79,10 +79,11 @@ public:
         : rows(inputs_.size(), 0)
         , precede_stream_rows(0)
         , scan_context(scan_context_)
-        , lac_bytes_collector(scan_context_->resource_group_name)
     {
         children.insert(children.end(), inputs_.begin(), inputs_.end());
         current_stream = children.begin();
+        if (scan_context)
+            lac_bytes_collector = std::make_unique<LACBytesCollector>(scan_context_->resource_group_name);
     }
 
     ConcatSkippableBlockInputStream(
@@ -92,10 +93,11 @@ public:
         : rows(std::move(rows_))
         , precede_stream_rows(0)
         , scan_context(scan_context_)
-        , lac_bytes_collector(scan_context_->resource_group_name)
     {
         children.insert(children.end(), inputs_.begin(), inputs_.end());
         current_stream = children.begin();
+        if (scan_context)
+            lac_bytes_collector = std::make_unique<LACBytesCollector>(scan_context_->resource_group_name);
     }
 
     String getName() const override { return "ConcatSkippable"; }
@@ -221,14 +223,15 @@ private:
         if (likely(scan_context != nullptr))
         {
             scan_context->total_user_read_bytes += bytes;
-            lac_bytes_collector.collect(bytes);
+            assert(lac_bytes_collector);
+            lac_bytes_collector->collect(bytes);
         }
     }
     BlockInputStreams::iterator current_stream;
     std::vector<size_t> rows;
     size_t precede_stream_rows;
     const ScanContextPtr scan_context;
-    LACBytesCollector lac_bytes_collector;
+    LACBytesCollectorPtr lac_bytes_collector;
 };
 
 } // namespace DM
