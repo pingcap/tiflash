@@ -43,9 +43,6 @@ public:
         , tokens(init_tokens_)
         , capacity(capacity_)
         , last_compact_timepoint(std::chrono::steady_clock::now())
-        , last_get_avg_speed_timepoint(std::chrono::steady_clock::now())
-        , last_get_avg_speed_tokens(init_tokens_)
-        , avg_speed_per_sec(0.0)
         , low_token_threshold(LOW_TOKEN_THRESHOLD_RATE * capacity_)
         , log(Logger::get(log_id))
     {}
@@ -83,8 +80,6 @@ public:
         return {tokens, fill_rate, capacity};
     }
 
-    double getAvgSpeedPerSec();
-
     bool lowToken() const { return peek() <= low_token_threshold; }
 
     bool isStatic() const { return fill_rate == 0.0; }
@@ -92,12 +87,7 @@ public:
     std::string toString() const
     {
         FmtBuffer fmt_buf;
-        fmt_buf.fmtAppend(
-            "tokens: {}, fill_rate: {}, capacity: {}, avg_speed_per_sec: {}",
-            tokens,
-            fill_rate,
-            capacity,
-            avg_speed_per_sec);
+        fmt_buf.fmtAppend("tokens: {}, fill_rate: {}, capacity: {}", tokens, fill_rate, capacity);
         return fmt_buf.toString();
     }
 
@@ -115,10 +105,6 @@ private:
     double capacity;
 
     TimePoint last_compact_timepoint;
-
-    TimePoint last_get_avg_speed_timepoint;
-    double last_get_avg_speed_tokens;
-    double avg_speed_per_sec;
 
     double low_token_threshold;
 

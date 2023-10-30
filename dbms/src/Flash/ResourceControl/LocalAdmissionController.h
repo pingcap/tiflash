@@ -175,23 +175,21 @@ private:
     }
 
     // Return how many tokens should acquire from GAC for the next n seconds.
-    double getAcquireRUNum(uint32_t n, double amplification) const
+    double getAcquireRUNum(double speed, uint32_t n_sec, double amplification) const
     {
         assert(amplification >= 1.0);
 
-        double avg_speed = 0.0;
         double remaining_ru = 0.0;
         double base = 0.0;
         {
             std::lock_guard lock(mu);
-            avg_speed = bucket->getAvgSpeedPerSec();
             remaining_ru = bucket->peek();
             base = static_cast<double>(user_ru_per_sec);
         }
 
         // Appropriate amplification is necessary to prevent situation that GAC has sufficient RU,
         // but user query speed is limited due to LAC requests too few RU.
-        double acquire_num = avg_speed * n * amplification;
+        double acquire_num = speed * n_sec * amplification;
 
         // Prevent avg_speed from being 0 due to RU exhaustion.
         if (acquire_num == 0.0 && remaining_ru <= 0.0)
@@ -205,7 +203,7 @@ private:
             "acquire num for rg {}: avg_speed: {}, remaining_ru: {}, base: {}, amplification: {}, "
             "acquire num: {}",
             name,
-            avg_speed,
+            speed,
             remaining_ru,
             base,
             amplification,
@@ -296,13 +294,37 @@ private:
             bucket->toString());
     }
 
-    double getAndCleanConsumptionDelta()
+    struct ConsumptionUpdateInfo
+    {
+        // Avg speed of RU consumption of time range [last_update_ru_consumption_timepoint, now].
+        double speed;
+        // RU consumption since last_update_ru_consumption_timepoint.
+        double delta;
+        // If speed or delta is updated or not.
+        bool updated;
+    };
+
+    ConsumptionUpdateInfo updateConsumptionSpeedInfoIfNecessary(
+        const std::chrono::steady_clock::time_point & now,
+        const std::chrono::seconds & dura)
     {
         std::lock_guard lock(mu);
-        auto ori = ru_consumption_delta;
-        ru_consumption_delta = 0.0;
-        total_consumption += ori;
-        return ori;
+        const auto elapsed
+            = std::chrono::duration_cast<std::chrono::seconds>(now - last_update_ru_consumption_timepoint);
+
+        if (elapsed < dura)
+            return {.speed = ru_consumption_speed, .delta = ru_consumption_delta, .updated = false};
+
+        ru_consumption_speed = ru_consumption_delta / elapsed.count();
+        ConsumptionUpdateInfo info = {ru_consumption_speed, ru_consumption_delta, true};
+
+        last_update_ru_consumption_timepoint = now;
+        total_ru_consumption += ru_consumption_delta;
+        ru_consumption_delta = 0;
+
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_avg_speed, name).Set(ru_consumption_speed);
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_total_consumption, name).Set(total_ru_consumption);
+        return info;
     }
 
     bool needFetchTokenPeridically(const std::chrono::steady_clock::time_point & now, const std::chrono::seconds & dura)
@@ -328,11 +350,10 @@ private:
 
     void collectMetrics() const
     {
+        // todo maybe put it where metric change
         std::lock_guard lock(mu);
         const auto & config = bucket->getConfig();
         GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_remaining_tokens, name).Set(config.tokens);
-        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_avg_speed, name).Set(bucket->getAvgSpeedPerSec());
-        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_total_consumption, name).Set(total_consumption);
         GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_bucket_fill_rate, name).Set(config.fill_rate);
         GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_bucket_capacity, name).Set(config.capacity);
         GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_fetch_tokens_from_gac_count, name)
@@ -358,15 +379,16 @@ private:
 
     TokenBucketMode bucket_mode = TokenBucketMode::normal_mode;
 
-    double ru_consumption_delta = 0.0;
-
     LoggerPtr log;
 
-    std::chrono::time_point<std::chrono::steady_clock> last_fetch_tokens_from_gac_timepoint
-        = std::chrono::steady_clock::now();
-    std::chrono::time_point<std::chrono::steady_clock> stop_trickle_timepoint = std::chrono::steady_clock::now();
+    std::chrono::steady_clock::time_point last_fetch_tokens_from_gac_timepoint = std::chrono::steady_clock::now();
+    std::chrono::steady_clock::time_point stop_trickle_timepoint = std::chrono::steady_clock::now();
     uint64_t fetch_tokens_from_gac_count = 0;
-    double total_consumption = 0.0;
+    double total_ru_consumption = 0.0;
+
+    double ru_consumption_delta = 0.0;
+    double ru_consumption_speed = 0.0;
+    std::chrono::steady_clock::time_point last_update_ru_consumption_timepoint = std::chrono::steady_clock::now();
 };
 
 using ResourceGroupPtr = std::shared_ptr<ResourceGroup>;
