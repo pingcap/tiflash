@@ -55,6 +55,11 @@ void RuntimeFilter::setINValuesSet(const std::shared_ptr<Set> & in_values_set_)
     in_values_set = in_values_set_;
 }
 
+void RuntimeFilter::setTimezoneInfo(const TimezoneInfo & timezone_info_)
+{
+    timezone_info = timezone_info_;
+}
+
 void RuntimeFilter::build()
 {
     if (!DM::FilterParser::isRSFilterSupportType(target_expr.field_type().tp()))
@@ -206,11 +211,14 @@ DM::RSOperatorPtr RuntimeFilter::parseToRSOperator(DM::ColumnDefines & columns_t
     switch (rf_type)
     {
     case tipb::IN:
+        // Note that the elements are added from the block read (after timezone casted).
+        // Take care of them when parsing to rough set filter.
         return DM::FilterParser::parseRFInExpr(
             rf_type,
             target_expr,
             columns_to_read,
-            in_values_set->getUniqueSetElements());
+            in_values_set->getUniqueSetElements(),
+            timezone_info);
     case tipb::MIN_MAX:
     case tipb::BLOOM_FILTER:
         // TODO

@@ -474,7 +474,8 @@ RSOperatorPtr FilterParser::parseRFInExpr(
     const tipb::RuntimeFilterType rf_type,
     const tipb::Expr & target_expr,
     const ColumnDefines & columns_to_read,
-    const std::set<Field> & setElements)
+    const std::set<Field> & setElements,
+    const TimezoneInfo & timezone_info)
 {
     // todo check if set elements is empty
     Attr attr;
@@ -488,9 +489,29 @@ RSOperatorPtr FilterParser::parseRFInExpr(
             return createUnsupported(target_expr.ShortDebugString(), "rf target expr is not column expr", false);
         }
         auto column_define = cop::getColumnDefineForColumnExpr(target_expr, columns_to_read);
+<<<<<<< HEAD
         attr = Attr{.col_name = column_define.name, .col_id = column_define.id, .type = column_define.type};
         std::for_each(setElements.begin(), setElements.end(), [&](Field element) { values.push_back(element); });
         return createIn(attr, values);
+=======
+        auto attr = Attr{.col_name = column_define.name, .col_id = column_define.id, .type = column_define.type};
+        if (target_expr.field_type().tp() == TiDB::TypeTimestamp && !timezone_info.is_utc_timezone)
+        {
+            Fields values;
+            values.reserve(setElements.size());
+            std::for_each(setElements.begin(), setElements.end(), [&](Field element) {
+                // convert literal value from timezone specified in cop request to UTC
+                cop::convertFieldWithTimezone(element, timezone_info);
+                values.push_back(element);
+            });
+            return createIn(attr, values);
+        }
+        else
+        {
+            Fields values(setElements.begin(), setElements.end());
+            return createIn(attr, values);
+        }
+>>>>>>> ceb7c2490d (runtime filter: fix timezone error in runtime filter (#8273))
     }
     case tipb::MIN_MAX:
     case tipb::BLOOM_FILTER:
