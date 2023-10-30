@@ -79,6 +79,7 @@ public:
         : rows(inputs_.size(), 0)
         , precede_stream_rows(0)
         , scan_context(scan_context_)
+        , lac_bytes_collector(scan_context_->resource_group_name)
     {
         children.insert(children.end(), inputs_.begin(), inputs_.end());
         current_stream = children.begin();
@@ -91,6 +92,7 @@ public:
         : rows(std::move(rows_))
         , precede_stream_rows(0)
         , scan_context(scan_context_)
+        , lac_bytes_collector(scan_context_->resource_group_name)
     {
         children.insert(children.end(), inputs_.begin(), inputs_.end());
         current_stream = children.begin();
@@ -152,7 +154,6 @@ public:
     {
         Block res;
 
-        auto lac_bytes_collector = std::make_unique<LACBytesCollector>(scan_context->resource_group_name);
         while (current_stream != children.end())
         {
             auto * skippable_stream = dynamic_cast<SkippableBlockInputStream *>((*current_stream).get());
@@ -161,7 +162,7 @@ public:
             if (res)
             {
                 res.setStartOffset(res.startOffset() + precede_stream_rows);
-                addReadBytes(res.bytes(), lac_bytes_collector);
+                addReadBytes(res.bytes());
                 break;
             }
             else
@@ -178,7 +179,6 @@ public:
     {
         Block res;
 
-        auto lac_bytes_collector = std::make_unique<LACBytesCollector>(scan_context->resource_group_name);
         while (current_stream != children.end())
         {
             res = (*current_stream)->read();
@@ -190,7 +190,7 @@ public:
                 {
                     res.setSegmentRowIdCol(createSegmentRowIdCol(res.startOffset(), res.rows()));
                 }
-                addReadBytes(res.bytes(), lac_bytes_collector);
+                addReadBytes(res.bytes());
                 break;
             }
             else
@@ -216,18 +216,19 @@ private:
         }
         return seg_row_id_col;
     }
-    void addReadBytes(UInt64 bytes, LACBytesCollectorPtr & lac_bytes_collector)
+    void addReadBytes(UInt64 bytes)
     {
         if (likely(scan_context != nullptr))
         {
             scan_context->total_user_read_bytes += bytes;
-            lac_bytes_collector->collect(bytes);
+            lac_bytes_collector.collect(bytes);
         }
     }
     BlockInputStreams::iterator current_stream;
     std::vector<size_t> rows;
     size_t precede_stream_rows;
     const ScanContextPtr scan_context;
+    LACBytesCollector lac_bytes_collector;
 };
 
 } // namespace DM
