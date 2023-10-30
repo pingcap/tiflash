@@ -634,7 +634,7 @@ public:
     void collect(uint64_t bytes)
     {
         delta_bytes += bytes;
-        // Call LAC::consumeResource() when accumulated to 1 RU(a.k.a. 64K) to avoid lock contension.
+        // Call LAC::consumeResource() when accumulated to `bytes_of_one_hundred_ru` to avoid lock contension.
         if (delta_bytes >= bytes_of_one_hundred_ru)
         {
             consume();
