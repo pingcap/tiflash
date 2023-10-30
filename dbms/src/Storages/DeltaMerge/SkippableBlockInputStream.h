@@ -83,7 +83,7 @@ public:
         children.insert(children.end(), inputs_.begin(), inputs_.end());
         current_stream = children.begin();
         if (scan_context)
-            lac_bytes_collector = std::make_unique<LACBytesCollector>(scan_context_->resource_group_name);
+            lac_bytes_collector = std::make_unique<LACBytesCollector>(scan_context->resource_group_name);
     }
 
     ConcatSkippableBlockInputStream(
@@ -97,7 +97,7 @@ public:
         children.insert(children.end(), inputs_.begin(), inputs_.end());
         current_stream = children.begin();
         if (scan_context)
-            lac_bytes_collector = std::make_unique<LACBytesCollector>(scan_context_->resource_group_name);
+            lac_bytes_collector = std::make_unique<LACBytesCollector>(scan_context->resource_group_name);
     }
 
     String getName() const override { return "ConcatSkippable"; }
