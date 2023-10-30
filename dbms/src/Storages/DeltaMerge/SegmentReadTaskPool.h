@@ -107,24 +107,22 @@ public:
     SegmentReadTaskPtr nextTask();
 
     // `getTask` and `getTasks` are used when `enable_read_thread` is true.
-    SegmentReadTaskPtr getTask(UInt64 seg_id);
-    const std::unordered_map<UInt64, SegmentReadTaskPtr> & getTasks() const;
+    SegmentReadTaskPtr getTask(const GlobalSegmentID & seg_id);
+    const std::unordered_map<GlobalSegmentID, SegmentReadTaskPtr> & getTasks() const;
 
     bool empty() const;
 
 private:
     bool enable_read_thread;
     SegmentReadTasks ordered_tasks;
-    std::unordered_map<UInt64, SegmentReadTaskPtr> unordered_tasks;
+    std::unordered_map<GlobalSegmentID, SegmentReadTaskPtr> unordered_tasks;
 };
 
 class SegmentReadTaskPool : private boost::noncopyable
 {
 public:
     SegmentReadTaskPool(
-        int64_t physical_table_id_,
         int extra_table_id_index_,
-        const DMContextPtr & dm_context_,
         const ColumnDefines & columns_to_read_,
         const PushDownFilterPtr & filter_,
         uint64_t max_version_,
@@ -147,11 +145,10 @@ public:
         auto total_rows = blk_stat.totalRows();
         LOG_DEBUG(
             log,
-            "Done. pool_id={} table_id={} pop={} pop_empty={} pop_empty_ratio={} "
+            "Done. pool_id={} pop={} pop_empty={} pop_empty_ratio={} "
             "max_queue_size={} blk_avg_bytes={} approximate_max_pending_block_bytes={:.2f}MB "
             "total_count={} total_bytes={:.2f}MB total_rows={} avg_block_rows={} avg_rows_bytes={}B",
             pool_id,
-            physical_table_id,
             pop_times,
             pop_empty_times,
             pop_empty_ratio,
@@ -166,18 +163,16 @@ public:
     }
 
     SegmentReadTaskPtr nextTask();
-    const std::unordered_map<UInt64, SegmentReadTaskPtr> & getTasks();
-    SegmentReadTaskPtr getTask(UInt64 seg_id);
+    const std::unordered_map<GlobalSegmentID, SegmentReadTaskPtr> & getTasks();
+    SegmentReadTaskPtr getTask(const GlobalSegmentID & seg_id);
 
     BlockInputStreamPtr buildInputStream(SegmentReadTaskPtr & t);
 
-    bool readOneBlock(BlockInputStreamPtr & stream, const SegmentPtr & seg);
+    bool readOneBlock(BlockInputStreamPtr & stream, const SegmentReadTaskPtr & seg);
     void popBlock(Block & block);
     bool tryPopBlock(Block & block);
 
-    std::unordered_map<uint64_t, std::vector<uint64_t>>::const_iterator scheduleSegment(
-        const std::unordered_map<uint64_t, std::vector<uint64_t>> & segments,
-        uint64_t expected_merge_count);
+    MergingSegments::iterator scheduleSegment(MergingSegments & segments, uint64_t expected_merge_count);
 
     Int64 increaseUnorderedInputStreamRefCount();
     Int64 decreaseUnorderedInputStreamRefCount();
@@ -190,7 +185,6 @@ public:
 
 public:
     const uint64_t pool_id;
-    const int64_t physical_table_id;
 
     // The memory tracker of MPPTask.
     const MemoryTrackerPtr mem_tracker;
@@ -215,11 +209,10 @@ public:
 private:
     Int64 getFreeActiveSegmentsUnlock() const;
     bool exceptionHappened() const;
-    void finishSegment(const SegmentPtr & seg);
+    void finishSegment(const SegmentReadTaskPtr & seg);
     void pushBlock(Block && block);
 
     const int extra_table_id_index;
-    DMContextPtr dm_context;
     ColumnDefines columns_to_read;
     PushDownFilterPtr filter;
     const uint64_t max_version;
@@ -228,7 +221,7 @@ private:
     SegmentReadTasksWrapper tasks_wrapper;
     AfterSegmentRead after_segment_read;
     mutable std::mutex mutex;
-    std::unordered_set<uint64_t> active_segment_ids;
+    std::unordered_set<GlobalSegmentID> active_segment_ids;
     WorkQueue<Block> q;
     BlockStat blk_stat;
     LoggerPtr log;

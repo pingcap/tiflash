@@ -16,8 +16,8 @@
 
 #include <DataStreams/AddExtraTableIDColumnTransformAction.h>
 #include <Operators/Operator.h>
-#include <Storages/DeltaMerge/Remote/RNReadTask.h>
 #include <Storages/DeltaMerge/Remote/RNWorkers_fwd.h>
+#include <Storages/DeltaMerge/SegmentReadTask.h>
 
 namespace DB::DM::Remote
 {

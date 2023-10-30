@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Columns/Collator.h>
 #include <Common/FailPoint.h>
 #include <Common/Logger.h>
 #include <Common/TiFlashException.h>
@@ -1050,13 +1049,7 @@ static SortDescription getSortDescription(ASTSelectQuery & query)
     {
         String name = elem->children.front()->getColumnName();
         const ASTOrderByElement & order_by_elem = typeid_cast<const ASTOrderByElement &>(*elem);
-
-        std::shared_ptr<ICollator> collator;
-        if (order_by_elem.collation)
-            collator = std::make_shared<Collator>(
-                typeid_cast<const ASTLiteral &>(*order_by_elem.collation).value.get<String>());
-
-        order_descr.emplace_back(name, order_by_elem.direction, order_by_elem.nulls_direction, collator);
+        order_descr.emplace_back(name, order_by_elem.direction, order_by_elem.nulls_direction, nullptr);
     }
 
     return order_descr;

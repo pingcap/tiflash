@@ -755,7 +755,7 @@ ReadIndexWorkerManager::ReadIndexWorkerManager(
     ReadIndexWorkerManager::FnGetTickTime && fn_min_dur_handle_region,
     size_t runner_cnt)
     : proxy_helper(proxy_helper_)
-    , logger(&Poco::Logger::get("ReadIndexWorkers"))
+    , logger(Logger::get("ReadIndexWorkers"))
 {
     for (size_t i = 0; i < runner_cnt; ++i)
         runners.emplace_back(std::make_unique<ReadIndexRunner>(
@@ -931,7 +931,7 @@ void KVStore::initReadIndexWorkers(
     read_index_worker_manager = ptr;
 }
 
-void KVStore::asyncRunReadIndexWorkers()
+void KVStore::asyncRunReadIndexWorkers() const
 {
     if (!read_index_worker_manager)
         return;
@@ -940,13 +940,12 @@ void KVStore::asyncRunReadIndexWorkers()
     read_index_worker_manager->asyncRun();
 }
 
-void KVStore::stopReadIndexWorkers()
+void KVStore::stopReadIndexWorkers() const
 {
     if (!read_index_worker_manager)
         return;
 
     assert(this->proxy_helper);
-
     read_index_worker_manager->stop();
 }
 
@@ -1012,13 +1011,13 @@ ReadIndexWorkerManager::ReadIndexRunner::ReadIndexRunner(
     size_t id_,
     size_t runner_cnt_,
     ReadIndexWorkers & workers_,
-    Poco::Logger * logger_,
+    LoggerPtr logger_,
     FnGetTickTime fn_min_dur_handle_region_,
     AsyncWaker::NotifierPtr global_notifier_)
     : id(id_)
     , runner_cnt(runner_cnt_)
     , workers(workers_)
-    , logger(logger_)
+    , logger(std::move(logger_))
     , fn_min_dur_handle_region(std::move(fn_min_dur_handle_region_))
     , global_notifier(std::move(global_notifier_))
 {}
