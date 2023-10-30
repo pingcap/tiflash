@@ -622,7 +622,6 @@ void DAGStorageInterpreter::prepare()
 
     // Do learner read
     DAGContext & dag_context = *context.getDAGContext();
-    // todo remove enable
     auto scan_context
         = std::make_shared<DM::ScanContext>(dag_context.getResourceGroupName(), dag_context.isResourceControlEnabled());
     dag_context.scan_context_map[table_scan.getTableScanExecutorID()] = scan_context;
