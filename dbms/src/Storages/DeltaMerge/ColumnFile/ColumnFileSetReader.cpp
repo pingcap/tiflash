@@ -186,12 +186,14 @@ size_t ColumnFileSetReader::readRows(
             }
         }
     }
+
+    UInt64 delta_bytes = 0;
     for (const auto & col : output_columns)
-    {
-        const auto delta_bytes = col->byteSize();
-        context.scan_context->total_user_read_bytes += delta_bytes;
-        lac_bytes_collector.collect(delta_bytes);
-    }
+        delta_bytes += col->byteSize();
+
+    context.scan_context->total_user_read_bytes += delta_bytes;
+    lac_bytes_collector.collect(delta_bytes);
+
     return actual_read;
 }
 

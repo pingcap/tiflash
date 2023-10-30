@@ -653,4 +653,5 @@ private:
     const std::string resource_group_name;
     uint64_t delta_bytes;
 };
+using LACBytesCollectorPtr = std::unique_ptr<LACBytesCollector>;
 } // namespace DB
