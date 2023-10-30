@@ -588,8 +588,11 @@ try
         first_snap->delta->getSharedDeltaIndex()->getRNCacheKey());
     first_snap->delta->shared_delta_index = broken_delta_index;
 
-    auto task = std::make_shared<DM::SegmentReadTask>(first, first_snap, RowKeyRanges{first->getRowKeyRange()});
-    task->extra_remote_info.emplace(ExtraRemoteSegmentInfo{.dm_context = createDMContext()});
+    auto task = std::make_shared<DM::SegmentReadTask>(
+        first,
+        first_snap,
+        createDMContext(),
+        RowKeyRanges{first->getRowKeyRange()});
 
     auto worker = DB::DM::Remote::RNWorkerPrepareStreams::create({
         .source_queue = nullptr,

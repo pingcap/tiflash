@@ -27,40 +27,34 @@ struct SegmentReadTask;
 using SegmentReadTaskPtr = std::shared_ptr<SegmentReadTask>;
 using SegmentReadTasks = std::list<SegmentReadTaskPtr>;
 
-struct RemoteSegmentID
-{
-    const StoreID store_id;
-    const KeyspaceID keyspace_id;
-    const TableID physical_table_id;
-    const UInt64 segment_id;
 
-    String toString() const
-    {
-        return fmt::format(
-            "RemoteSegmentID<store_id={} keyspace={} table_id={} segment_id={}>",
-            store_id,
-            keyspace_id,
-            physical_table_id,
-            segment_id);
-    }
+// A SegmentReadTask object is identified by <store_id, keyspace_id, physical_table_id, segment_id, segment_epoch>.
+// Under disagg arch, there could be SegmentReadTasks from different stores in one compute node.
+struct GlobalSegmentID
+{
+    StoreID store_id;
+    KeyspaceID keyspace_id;
+    TableID physical_table_id;
+    UInt64 segment_id;
+    UInt64 segment_epoch;
 };
 
 struct ExtraRemoteSegmentInfo
 {
-    RemoteSegmentID remote_segment_id;
     String store_address;
     // DisaggTaskId is corresponding to a storage snapshot in write node.
     // Returned by EstablishDisaggTask and used by FetchDisaggPages.
     DisaggTaskId snapshot_id;
     std::vector<UInt64> remote_page_ids;
     std::vector<size_t> remote_page_sizes;
-    DMContextPtr dm_context;
 };
 
 struct SegmentReadTask
 {
-    SegmentPtr segment;
+    const StoreID store_id;
+    SegmentPtr segment; // Contains segment_id, segment_epoch
     SegmentSnapshotPtr read_snapshot;
+    DMContextPtr dm_context; // Contains keyspace_id, physical_table_id
     RowKeyRanges ranges;
 
     std::optional<ExtraRemoteSegmentInfo> extra_remote_info;
@@ -71,6 +65,7 @@ struct SegmentReadTask
     SegmentReadTask(
         const SegmentPtr & segment_, //
         const SegmentSnapshotPtr & read_snapshot_,
+        const DMContextPtr & dm_context_,
         const RowKeyRanges & ranges_ = {});
 
     // Constructor for disaggregated-mode.
@@ -93,11 +88,6 @@ struct SegmentReadTask
 
     static SegmentReadTasks trySplitReadTasks(const SegmentReadTasks & tasks, size_t expected_size);
 
-    String info() const
-    {
-        return extra_remote_info.has_value() ? extra_remote_info->remote_segment_id.toString() : segment->simpleInfo();
-    }
-
     /// Called from RNWorkerFetchPages.
     void initColumnFileDataProvider(const Remote::RNLocalPageCacheGuardPtr & pages_guard);
 
@@ -113,21 +103,84 @@ struct SegmentReadTask
         RUNTIME_CHECK(input_stream != nullptr);
         return input_stream;
     }
+
+    GlobalSegmentID getGlobalSegmentID() const
+    {
+        return GlobalSegmentID{
+            .store_id = store_id,
+            .keyspace_id = dm_context->keyspace_id,
+            .physical_table_id = dm_context->physical_table_id,
+            .segment_id = segment->segmentId(),
+            .segment_epoch = segment->segmentEpoch(),
+        };
+    }
 };
+
+// Used in SegmentReadTaskScheduler, SegmentReadTaskPool.
+using MergingSegments = std::unordered_map<GlobalSegmentID, std::vector<UInt64>>;
 
 } // namespace DB::DM
 
 template <>
 struct fmt::formatter<DB::DM::SegmentReadTaskPtr>
 {
+    static constexpr auto parse(format_parse_context & ctx) { return ctx.begin(); }
+
     template <typename FormatContext>
-    auto format(const DB::DM::SegmentReadTaskPtr & t, FormatContext & ctx) const -> decltype(ctx.out())
+    auto format(const DB::DM::SegmentReadTaskPtr & t, FormatContext & ctx) const
     {
         return format_to(
             ctx.out(),
-            "{}_{}_{}",
+            "s{}_ks{}_t{}_{}_{}_{}",
+            t->store_id,
+            t->dm_context->keyspace_id,
+            t->dm_context->physical_table_id,
             t->segment->segmentId(),
             t->segment->segmentEpoch(),
             t->read_snapshot->delta->getDeltaIndexEpoch());
+    }
+};
+
+template <>
+struct fmt::formatter<DB::DM::GlobalSegmentID>
+{
+    static constexpr auto parse(format_parse_context & ctx) { return ctx.begin(); }
+
+    template <typename FormatContext>
+    auto format(const DB::DM::GlobalSegmentID & t, FormatContext & ctx) const
+    {
+        return format_to(
+            ctx.out(),
+            "s{}_ks{}_t{}_{}_{}",
+            t.store_id,
+            t.keyspace_id,
+            t.physical_table_id,
+            t.segment_id,
+            t.segment_epoch);
+    }
+};
+
+template <>
+struct std::hash<DB::DM::GlobalSegmentID>
+{
+    size_t operator()(const DB::DM::GlobalSegmentID & seg) const
+    {
+        size_t seed = 0;
+        boost::hash_combine(seed, boost::hash_value(seg.store_id));
+        boost::hash_combine(seed, boost::hash_value(seg.keyspace_id));
+        boost::hash_combine(seed, boost::hash_value(seg.physical_table_id));
+        boost::hash_combine(seed, boost::hash_value(seg.segment_id));
+        boost::hash_combine(seed, boost::hash_value(seg.segment_epoch));
+        return seed;
+    }
+};
+
+template <>
+struct std::equal_to<DB::DM::GlobalSegmentID>
+{
+    bool operator()(const DB::DM::GlobalSegmentID & a, const DB::DM::GlobalSegmentID & b) const
+    {
+        return a.store_id == b.store_id && a.keyspace_id == b.keyspace_id && a.physical_table_id == b.physical_table_id
+            && a.segment_id == b.segment_id && a.segment_epoch == b.segment_epoch;
     }
 };

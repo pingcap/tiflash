@@ -79,7 +79,7 @@ int MergedTask::readOneBlock()
             continue;
         }
 
-        if (pool->readOneBlock(stream, task->segment))
+        if (pool->readOneBlock(stream, task))
         {
             read_block_count++;
         }

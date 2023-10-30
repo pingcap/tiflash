@@ -21,7 +21,6 @@
 #include <Flash/Mpp/MPPTaskId.h>
 #include <Interpreters/Context_fwd.h>
 #include <Storages/DeltaMerge/Remote/DisaggTaskId.h>
-#include <Storages/DeltaMerge/Remote/RNReadTask.h>
 #include <Storages/DeltaMerge/Remote/RNWorkers_fwd.h>
 #include <Storages/DeltaMerge/SegmentReadTask.h>
 #include <Storages/IStorage.h>
@@ -94,16 +93,16 @@ private:
         const Context & db_context,
         unsigned num_streams);
 
-    DM::Remote::RNReadTaskPtr buildReadTaskWithBackoff(const Context & db_context);
+    DM::SegmentReadTasks buildReadTaskWithBackoff(const Context & db_context);
 
-    DM::Remote::RNReadTaskPtr buildReadTask(const Context & db_context, const DM::ScanContextPtr & scan_context);
+    DM::SegmentReadTasks buildReadTask(const Context & db_context, const DM::ScanContextPtr & scan_context);
 
     void buildReadTaskForWriteNode(
         const Context & db_context,
         const DM::ScanContextPtr & scan_context,
         const pingcap::coprocessor::BatchCopTask & batch_cop_task,
         std::mutex & output_lock,
-        std::vector<DM::SegmentReadTaskPtr> & output_seg_tasks);
+        DM::SegmentReadTasks & output_seg_tasks);
 
     void buildReadTaskForWriteNodeTable(
         const Context & db_context,
@@ -113,7 +112,7 @@ private:
         const String & store_address,
         const String & serialized_physical_table,
         std::mutex & output_lock,
-        std::vector<DM::SegmentReadTaskPtr> & output_seg_tasks);
+        DM::SegmentReadTasks & output_seg_tasks);
 
     std::shared_ptr<disaggregated::EstablishDisaggTaskRequest> buildEstablishDisaggTaskReq(
         const Context & db_context,
@@ -121,19 +120,19 @@ private:
     DM::RSOperatorPtr buildRSOperator(const Context & db_context, const DM::ColumnDefinesPtr & columns_to_read);
     DM::Remote::RNWorkersPtr buildRNWorkers(
         const Context & db_context,
-        const DM::Remote::RNReadTaskPtr & read_task,
+        DM::SegmentReadTasks && read_tasks,
         const DM::ColumnDefinesPtr & column_defines,
         size_t num_streams);
     void buildRemoteSegmentInputStreams(
         const Context & db_context,
-        const DM::Remote::RNReadTaskPtr & read_task,
+        DM::SegmentReadTasks && read_tasks,
         size_t num_streams,
         DAGPipeline & pipeline);
     void buildRemoteSegmentSourceOps(
         PipelineExecutorContext & exec_context,
         PipelineExecGroupBuilder & group_builder,
         const Context & db_context,
-        const DM::Remote::RNReadTaskPtr & read_task,
+        DM::SegmentReadTasks && read_tasks,
         size_t num_streams);
 
 private:
