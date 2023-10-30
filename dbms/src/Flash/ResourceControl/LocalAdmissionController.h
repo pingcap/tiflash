@@ -614,6 +614,9 @@ private:
     const LoggerPtr log = Logger::get("LocalAdmissionController");
 };
 
+// This is to reduce the calling frequence of LAC::consumeResource() to avoid lock contension.
+// TODO: Need to optimize LAC::consumeResource().
+// Because the lock contension still increase when the thread num of storage layer or the data to be read is very large.
 class LACBytesCollector
 {
 public:
@@ -632,7 +635,7 @@ public:
     {
         delta_bytes += bytes;
         // Call LAC::consumeResource() when accumulated to 1 RU(a.k.a. 64K) to avoid lock contension.
-        if (delta_bytes >= bytes_of_one_ru)
+        if (delta_bytes >= bytes_of_one_hundred_ru)
         {
             consume();
             delta_bytes = 0;
