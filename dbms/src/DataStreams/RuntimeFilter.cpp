@@ -55,7 +55,8 @@ void RuntimeFilter::setINValuesSet(const std::shared_ptr<Set> & in_values_set_)
     in_values_set = in_values_set_;
 }
 
-void RuntimeFilter::setTimezoneInfo(const TimezoneInfo & timezone_info_) {
+void RuntimeFilter::setTimezoneInfo(const TimezoneInfo & timezone_info_)
+{
     timezone_info = timezone_info_;
 }
 

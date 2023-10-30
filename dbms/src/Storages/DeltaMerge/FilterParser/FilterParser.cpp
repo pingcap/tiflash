@@ -391,15 +391,18 @@ RSOperatorPtr FilterParser::parseRFInExpr(
             return createUnsupported(target_expr.ShortDebugString(), "rf target expr is not column expr", false);
         auto column_define = cop::getColumnDefineForColumnExpr(target_expr, columns_to_read);
         auto attr = Attr{.col_name = column_define.name, .col_id = column_define.id, .type = column_define.type};
-        if (target_expr.field_type().tp() == TiDB::TypeTimestamp && !timezone_info.is_utc_timezone) {
+        if (target_expr.field_type().tp() == TiDB::TypeTimestamp && !timezone_info.is_utc_timezone)
+        {
             Fields values;
-            std::for_each(setElements.begin(), setElements.end(),[&](Field element) {
+            std::for_each(setElements.begin(), setElements.end(), [&](Field element) {
                 // convert literal value from timezone specified in cop request to UTC
                 cop::convertFieldWithTimezone(element, timezone_info);
                 values.push_back(element);
             });
             return createIn(attr, values);
-        } else {
+        }
+        else
+        {
             Fields values(setElements.begin(), setElements.end());
             return createIn(attr, values);
         }
