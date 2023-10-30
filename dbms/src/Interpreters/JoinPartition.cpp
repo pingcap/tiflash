@@ -1342,20 +1342,20 @@ struct Adder<KIND, ASTTableJoin::Strictness::All, Map>
             if (has_cached_columns)
             {
                 /// todo skip copy if added_columns has no rows
-                //if (added_columns[0]->empty())
-                //{
-                //    for (size_t j = 0; j < num_columns_to_add; ++j)
-                //    {
-                //        added_columns[j] = mapped_value.cached_columns[j]->mutateWithClone();
-                //    }
-                //}
-                //else
-                //{
+                if (added_columns[0]->empty())
+                {
+                    for (size_t j = 0; j < num_columns_to_add; ++j)
+                    {
+                        added_columns[j] = mapped_value.cached_columns[j]->mutateWithClone();
+                    }
+                }
+                else
+                {
                     for (size_t j = 0; j < num_columns_to_add; ++j)
                     {
                         added_columns[j]->insertRangeFrom(*mapped_value.cached_columns[j], 0, rows_joined);
                     }
-                //}
+                }
                 current_offset += rows_joined;
                 (*offsets)[i] = current_offset;
                 if constexpr (KIND == ASTTableJoin::Kind::Anti)
@@ -1389,20 +1389,20 @@ struct Adder<KIND, ASTTableJoin::Strictness::All, Map>
         {
             Columns cached_columns;
             size_t start_offset = added_columns[0]->size() - rows_joined;
-            //if (start_offset == 0)
-            //{
-            //    for (size_t j = 0; j < num_columns_to_add; ++j)
-            //    {
-            //        cached_columns.push_back(added_columns[j]->mutateWithClone());
-            //    }
-           // }
-            //else
-           // {
+            if (start_offset == 0)
+            {
+                for (size_t j = 0; j < num_columns_to_add; ++j)
+                {
+                    cached_columns.push_back(added_columns[j]->mutateWithClone());
+                }
+            }
+            else
+            {
                 for (size_t j = 0; j < num_columns_to_add; ++j)
                 {
                     cached_columns.push_back(added_columns[j]->cut(start_offset, rows_joined));
                 }
-            //}
+            }
             std::unique_lock lock(mapped_value.cached_columns_mu);
             mapped_value.cached_columns.insert(
                 mapped_value.cached_columns.end(),
