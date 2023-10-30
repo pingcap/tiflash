@@ -33,14 +33,14 @@ private:
     ColumnDefinesPtr col_defs;
     RowKeyRange segment_range;
 
-    LACBytesCollector lac_bytes_collector;
-
     // The row count of each column file. Cache here to speed up checking.
     std::vector<size_t> column_file_rows;
     // The cumulative rows of column files. Used to fast locate specific column files according to rows offset by binary search.
     std::vector<size_t> column_file_rows_end;
 
     std::vector<ColumnFileReaderPtr> column_file_readers;
+
+    LACBytesCollector lac_bytes_collector;
 
 private:
     explicit ColumnFileSetReader(const DMContext & context_)
