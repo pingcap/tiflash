@@ -192,6 +192,13 @@ std::optional<LocalAdmissionController::AcquireTokenInfo> LocalAdmissionControll
             consumption_update_info.speed,
             DEFAULT_FETCH_GAC_INTERVAL.count(),
             ACQUIRE_RU_AMPLIFICATION);
+
+        if (acquire_tokens == 0.0 && resource_group->needNotifyStopTrickleMode(now))
+        {
+            LOG_DEBUG(log, "force notify stop trickle mode");
+            acquire_tokens = 1.0;
+        }
+
         assert(acquire_tokens >= 0.0);
     };
 
