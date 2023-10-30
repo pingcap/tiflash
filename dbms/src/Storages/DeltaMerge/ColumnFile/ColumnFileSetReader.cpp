@@ -89,7 +89,6 @@ ColumnFileSetReader::ColumnFileSetReader(
     , snapshot(snapshot_)
     , col_defs(col_defs_)
     , segment_range(segment_range_)
-    , lac_bytes_collector(context_.scan_context->resource_group_name)
 {
     size_t total_rows = 0;
     for (auto & f : snapshot->getColumnFiles())
@@ -99,6 +98,8 @@ ColumnFileSetReader::ColumnFileSetReader(
         column_file_rows_end.push_back(total_rows);
         column_file_readers.push_back(f->getReader(context, snapshot->getDataProvider(), col_defs));
     }
+    if (context.scan_context)
+        lac_bytes_collector = std::make_unique<LACBytesCollector>(context.scan_context->resource_group_name);
 }
 
 ColumnFileSetReaderPtr ColumnFileSetReader::createNewReader(const ColumnDefinesPtr & new_col_defs)
@@ -192,7 +193,8 @@ size_t ColumnFileSetReader::readRows(
         delta_bytes += col->byteSize();
 
     context.scan_context->total_user_read_bytes += delta_bytes;
-    lac_bytes_collector.collect(delta_bytes);
+    if (likely(lac_bytes_collector))
+        lac_bytes_collector->collect(delta_bytes);
 
     return actual_read;
 }
