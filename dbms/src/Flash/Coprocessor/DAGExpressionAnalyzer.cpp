@@ -1375,6 +1375,7 @@ void DAGExpressionAnalyzer::appendRuntimeFilterProperties(RuntimeFilterPtr & run
         header.insert(ColumnWithTypeAndName(name_and_type.type->createColumn(), name_and_type.type, "_" + toString(1)));
         in_values_set->setHeader(header);
         runtime_filter->setINValuesSet(in_values_set);
+        runtime_filter->setTimezoneInfo(context.getTimezoneInfo());
         break;
     case tipb::MIN_MAX:
     case tipb::BLOOM_FILTER:
