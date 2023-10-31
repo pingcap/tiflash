@@ -18,7 +18,6 @@
 #include <Flash/Mpp/MPPTunnelSetHelper.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/ScanContext.h>
-#include <Storages/StorageDisaggregated.h>
 #include <TestUtils/ColumnGenerator.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
@@ -231,16 +230,6 @@ struct MockReceiverContext
     static Request makeRequest(int index) { return {index, index, -1}; }
 
     std::unique_ptr<Reader> makeSyncReader(const Request &) { return std::make_unique<Reader>(queue); }
-
-    static void cancelMPPTaskOnTiFlashStorageNode(LoggerPtr)
-    {
-        throw Exception("cancelMPPTaskOnTiFlashStorageNode not implemented for MockReceiverContext");
-    }
-
-    static void sendMPPTaskToTiFlashStorageNode(LoggerPtr, const std::vector<RequestAndRegionIDs> &)
-    {
-        throw Exception("sendMPPTaskToTiFlashStorageNode not implemented for MockReceiverContext");
-    }
 
     static Status getStatusOK() { return ::grpc::Status(); }
 
