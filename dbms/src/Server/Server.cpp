@@ -951,7 +951,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     const auto disaggregated_mode = getDisaggregatedMode(config());
     const auto use_autoscaler = useAutoScaler(config());
-    const bool use_autoscaler_without_s3 = useAutoScalerWithoutS3(config());
 
     // Some Storage's config is necessary for Proxy
     TiFlashStorageConfig storage_config;
@@ -966,12 +965,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
     else if (disaggregated_mode == DisaggregatedMode::Compute && use_autoscaler)
     {
-        if (!use_autoscaler_without_s3)
-        {
-            // compute node with auto scaler, the requirements will be initted later.
-            storage_config.s3_config.enable(/*check_requirements*/ false, log);
-        }
-        // else keep the behavior running disagg without S3 when auto scaler is enable.
+        // compute node with auto scaler, the requirements will be initted later.
+        storage_config.s3_config.enable(/*check_requirements*/ false, log);
     }
 
     if (storage_config.format_version != 0)
