@@ -318,8 +318,8 @@ public:
 
     KeyspaceID getKeyspaceID() const { return keyspace_id; }
     String getResourceGroupName() { return resource_group_name; }
-    void enableResourceControl() { enable_resource_control = true; }
-    bool isResourceControlEnabled() const { return enable_resource_control; }
+    // For now, only called for BlockIO execution engine to disable report RU of storage layer.
+    void clearResourceGroupName() { resource_group_name = ""; }
 
     RU getReadRU() const;
 
@@ -452,8 +452,7 @@ private:
     // The keyspace that the DAG request from
     const KeyspaceID keyspace_id = NullspaceID;
 
-    const String resource_group_name;
-    bool enable_resource_control = false;
+    String resource_group_name;
 
     // Used to determine the execution mode
     // - None: request has not been executed yet
