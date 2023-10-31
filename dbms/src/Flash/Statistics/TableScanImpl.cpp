@@ -48,18 +48,10 @@ void TableScanStatistics::collectExtraRuntimeDetail()
         break;
     case ExecutionMode::Stream:
         transformInBoundIOProfileForStream(dag_context, executor_id, [&](const IBlockInputStream & stream) {
-            const auto * cop_stream = dynamic_cast<const CoprocessorBlockInputStream *>(&stream);
-            /// In tiflash_compute node, TableScan will be converted to ExchangeReceiver.
-            const auto * exchange_stream = dynamic_cast<const ExchangeReceiverInputStream *>(&stream);
-            if (cop_stream || exchange_stream)
+            if (const auto * cop_stream = dynamic_cast<const CoprocessorBlockInputStream *>(&stream); cop_stream)
             {
-                const std::vector<ConnectionProfileInfo> * connection_profile_infos = nullptr;
-                if (cop_stream)
-                    connection_profile_infos = &cop_stream->getConnectionProfileInfos();
-                else if (exchange_stream)
-                    connection_profile_infos = &exchange_stream->getConnectionProfileInfos();
-
-                updateTableScanDetail(*connection_profile_infos);
+                /// remote read
+                updateTableScanDetail(cop_stream->getConnectionProfileInfos());
             }
             else if (const auto * local_stream = dynamic_cast<const IProfilingBlockInputStream *>(&stream);
                      local_stream)

@@ -53,19 +53,6 @@ bool useAutoScaler(const Poco::Util::LayeredConfiguration & config)
     return use_autoscaler;
 }
 
-// Use auto scaler without S3 disagg // TODO: remove it after S3 disagg is stable
-bool useAutoScalerWithoutS3(const Poco::Util::LayeredConfiguration & config)
-{
-    // Keep the behavior running disagg without S3 when auto scaler is enable.
-    // This is a special config that is only effecive when `flash.use_autoscaler`
-    // is true. Will be removed soon.
-    static const std::string autoscaler_config_key = "flash.use_autoscaler_without_s3";
-    bool use_autoscaler_without_s3 = false;
-    if (config.has(autoscaler_config_key))
-        use_autoscaler_without_s3 = config.getBool(autoscaler_config_key);
-    return use_autoscaler_without_s3;
-}
-
 std::string getProxyLabelByDisaggregatedMode(DisaggregatedMode mode)
 {
     switch (mode)

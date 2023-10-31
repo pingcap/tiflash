@@ -34,7 +34,7 @@
 namespace DB
 {
 class DAGContext;
-class ExchangeReceiver;
+
 namespace DM
 {
 struct ColumnDefine;
@@ -44,12 +44,6 @@ class RSOperator;
 using RSOperatorPtr = std::shared_ptr<RSOperator>;
 } // namespace DM
 
-using RequestAndRegionIDs = std::tuple<mpp::DispatchTaskRequest, std::vector<pingcap::kv::RegionVerID>, uint64_t>;
-
-// Naive implementation of StorageDisaggregated, all region data will be transferred by GRPC,
-// rewrite this when local cache is supported.
-// Naive StorageDisaggregated will convert TableScan to ExchangeReceiver(executed in tiflash_compute node),
-// and ExchangeSender + TableScan(executed in tiflash_storage node).
 class StorageDisaggregated : public IStorage
 {
 public:
@@ -78,11 +72,6 @@ public:
         const Context & /*context*/,
         size_t /*max_block_size*/,
         unsigned num_streams) override;
-
-    RequestAndRegionIDs buildDispatchMPPTaskRequest(const pingcap::coprocessor::BatchCopTask & batch_cop_task);
-
-    // To help find exec summary of ExchangeSender in tiflash_storage and merge it into TableScan's exec summary.
-    static const String ExecIDPrefixForTiFlashStorageSender;
 
 private:
     // helper functions for building the task read from a shared remote storage system (e.g. S3)
@@ -135,30 +124,12 @@ private:
         DM::SegmentReadTasks && read_tasks,
         size_t num_streams);
 
-private:
     using RemoteTableRange = std::pair<TableID, pingcap::coprocessor::KeyRanges>;
     std::vector<RemoteTableRange> buildRemoteTableRanges();
     std::vector<pingcap::coprocessor::BatchCopTask> buildBatchCopTasks(
         const std::vector<RemoteTableRange> & remote_table_ranges,
         const pingcap::kv::LabelFilter & label_filter);
 
-    /// helper functions for building the task fetch all data from write node through MPP exchange sender/receiver
-    BlockInputStreams readThroughExchange(unsigned num_streams);
-    void readThroughExchange(
-        PipelineExecutorContext & exec_context,
-        PipelineExecGroupBuilder & group_builder,
-        unsigned num_streams);
-    std::vector<RequestAndRegionIDs> buildDispatchRequests();
-    void buildExchangeReceiver(const std::vector<RequestAndRegionIDs> & dispatch_reqs, unsigned num_streams);
-    void buildReceiverStreams(
-        const std::vector<RequestAndRegionIDs> & dispatch_reqs,
-        unsigned num_streams,
-        DAGPipeline & pipeline);
-    void buildReceiverSources(
-        PipelineExecutorContext & exec_context,
-        PipelineExecGroupBuilder & group_builder,
-        const std::vector<RequestAndRegionIDs> & dispatch_reqs,
-        unsigned num_streams);
     void filterConditions(DAGExpressionAnalyzer & analyzer, DAGPipeline & pipeline);
     void filterConditions(
         PipelineExecutorContext & exec_context,
@@ -172,13 +143,12 @@ private:
         DAGExpressionAnalyzer & analyzer);
     tipb::Executor buildTableScanTiPB();
 
+private:
     Context & context;
     const TiDBTableScan & table_scan;
     LoggerPtr log;
     MPPTaskId sender_target_mpp_task_id;
     const FilterConditions & filter_conditions;
-
-    std::shared_ptr<ExchangeReceiver> exchange_receiver;
 
     std::unique_ptr<DAGExpressionAnalyzer> analyzer;
 };
