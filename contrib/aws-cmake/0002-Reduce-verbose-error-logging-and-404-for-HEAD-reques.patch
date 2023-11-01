@@ -1,0 +1,62 @@
+From 7e6f90112f21c6996e097012c0fe6bfc5c3445d3 Mon Sep 17 00:00:00 2001
+From: JaySon-Huang <tshent@qq.com>
+Date: Wed, 17 May 2023 15:56:17 +0800
+Subject: [PATCH 2/2] Reduce verbose error logging and 404 for HEAD request
+
+---
+ src/aws-cpp-sdk-core/source/client/AWSClient.cpp    |  2 +-
+ src/aws-cpp-sdk-core/source/client/AWSXmlClient.cpp | 12 +++++++++++-
+ 2 files changed, 12 insertions(+), 2 deletions(-)
+
+diff --git a/src/aws-cpp-sdk-core/source/client/AWSClient.cpp b/src/aws-cpp-sdk-core/source/client/AWSClient.cpp
+index 5d8a7a9e8a..932bf7d2c0 100644
+--- a/src/aws-cpp-sdk-core/source/client/AWSClient.cpp
++++ b/src/aws-cpp-sdk-core/source/client/AWSClient.cpp
+@@ -209,7 +209,6 @@ bool AWSClient::AdjustClockSkew(HttpResponseOutcome& outcome, const char* signer
+     {
+         auto signer = GetSignerByName(signerName);
+         //detect clock skew and try to correct.
+-        AWS_LOGSTREAM_WARN(AWS_CLIENT_LOG_TAG, "If the signature check failed. This could be because of a time skew. Attempting to adjust the signer.");
+ 
+         DateTime serverTime = GetServerTimeFromError(outcome.GetError());
+         const auto signingTimestamp = signer->GetSigningTimestamp();
+@@ -224,6 +223,7 @@ bool AWSClient::AdjustClockSkew(HttpResponseOutcome& outcome, const char* signer
+         //only try again if clock skew was the cause of the error.
+         if (diff >= TIME_DIFF_MAX || diff <= TIME_DIFF_MIN)
+         {
++            AWS_LOGSTREAM_WARN(AWS_CLIENT_LOG_TAG, "If the signature check failed. This could be because of a time skew. Attempting to adjust the signer.");
+             diff = DateTime::Diff(serverTime, DateTime::Now());
+             AWS_LOGSTREAM_INFO(AWS_CLIENT_LOG_TAG, "Computed time difference as " << diff.count() << " milliseconds. Adjusting signer with the skew.");
+             signer->SetClockSkew(diff);
+diff --git a/src/aws-cpp-sdk-core/source/client/AWSXmlClient.cpp b/src/aws-cpp-sdk-core/source/client/AWSXmlClient.cpp
+index c122c5d5a1..311b64f4c0 100644
+--- a/src/aws-cpp-sdk-core/source/client/AWSXmlClient.cpp
++++ b/src/aws-cpp-sdk-core/source/client/AWSXmlClient.cpp
+@@ -13,6 +13,7 @@
+ #include <aws/core/client/RetryStrategy.h>
+ #include <aws/core/http/HttpClient.h>
+ #include <aws/core/http/HttpResponse.h>
++#include <aws/core/http/HttpTypes.h>
+ #include <aws/core/http/URI.h>
+ #include <aws/core/utils/Outcome.h>
+ #include <aws/core/utils/xml/XmlSerializer.h>
+@@ -207,6 +208,15 @@ AWSError<CoreErrors> AWSXMLClient::BuildAWSError(const std::shared_ptr<Http::Htt
+     error.SetResponseHeaders(httpResponse->GetHeaders());
+     error.SetResponseCode(httpResponse->GetResponseCode());
+     error.SetRemoteHostIpAddress(httpResponse->GetOriginatingRequest().GetResolvedRemoteHost());
+-    AWS_LOGSTREAM_ERROR(AWS_XML_CLIENT_LOG_TAG, error);
++
++    if (httpResponse->GetOriginatingRequest().GetMethod() == HttpMethod::HTTP_HEAD && httpResponse->GetResponseCode() == HttpResponseCode::NOT_FOUND)
++    {
++        // ignore error logging for HEAD request with 404 response code, ususally it is caused by determining whether the object exists or not.
++        AWS_LOGSTREAM_DEBUG(AWS_XML_CLIENT_LOG_TAG, error);
++    }
++    else
++    {
++        AWS_LOGSTREAM_ERROR(AWS_XML_CLIENT_LOG_TAG, error);
++    }
+     return error;
+ }
+-- 
+2.31.1
+

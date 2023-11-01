@@ -165,6 +165,8 @@ public:
 
     void shutdown();
 
+    void wake() const;
+
 private:
     Context & global_ctx;
     std::unique_ptr<S3GCManager> manager;
