@@ -95,6 +95,9 @@
 [submodule "contrib/aws"]
 	path = contrib/aws
 	url = https://github.com/aws/aws-sdk-cpp.git
+	# ignore dirty status since we apply patches to
+	# fix bug when using Poco client
+	ignore = dirty
 [submodule "contrib/aws-c-auth"]
 	path = contrib/aws-c-auth
 	url = https://github.com/awslabs/aws-c-auth.git
