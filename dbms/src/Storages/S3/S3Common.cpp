@@ -1132,6 +1132,7 @@ void rawListPrefix(
     {
         req.SetDelimiter(String(delimiter));
     }
+    req.SetEncodingType(Aws::S3::Model::EncodingType::url);
 
     static auto log = Logger::get("S3RawListPrefix");
 
