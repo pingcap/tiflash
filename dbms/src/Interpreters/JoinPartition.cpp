@@ -1476,7 +1476,6 @@ void NO_INLINE probeBlockImplTypeCase(
     std::vector<std::string> sort_key_containers;
     sort_key_containers.resize(key_columns.size());
     Arena pool;
-    WeakHash32 build_hash(0); /// reproduce hash values according to build stage
     if (join_build_info.needVirtualDispatchForProbeBlock())
     {
         assert(!(join_build_info.restore_round > 0 && join_build_info.enable_fine_grained_shuffle));
@@ -1484,16 +1483,10 @@ void NO_INLINE probeBlockImplTypeCase(
         /// Note: 1. Not sure, if inconsistency will do happen in heterogeneous envs
         ///       2. Virtual column would take up a little more network bandwidth, might lead to poor performance if network was bottleneck
         /// Currently, the computation cost is tolerable, since it's a very simple crc32 hash algorithm, and heterogeneous envs support is not considered
-        computeDispatchHash(
-            rows,
-            key_columns,
-            collators,
-            sort_key_containers,
-            join_build_info.restore_round,
-            build_hash);
+        assert(probe_process_info.hash_data->getData().size() == rows);
     }
 
-    const auto & build_hash_data = build_hash.getData();
+    const auto & build_hash_data = probe_process_info.hash_data->getData();
     assert(probe_process_info.start_row < rows);
     size_t i;
     bool block_full = false;

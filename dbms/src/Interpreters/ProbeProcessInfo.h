@@ -51,6 +51,7 @@ struct ProbeProcessInfo
     /// for hash probe
     Columns materialized_columns;
     ColumnRawPtrs key_columns;
+    std::unique_ptr<WeakHash32> hash_data; /// reproduce hash values according to build stage
 
     /// for cross probe
     Block result_block_schema;
@@ -118,7 +119,10 @@ struct ProbeProcessInfo
         const Names & key_names,
         const String & filter_column,
         ASTTableJoin::Kind kind,
-        ASTTableJoin::Strictness strictness);
+        ASTTableJoin::Strictness strictness,
+        bool need_compute_hash,
+        const TiDB::TiDBCollators & collators,
+        size_t restore_round);
     void prepareForCrossProbe(
         const String & filter_column,
         ASTTableJoin::Kind kind,

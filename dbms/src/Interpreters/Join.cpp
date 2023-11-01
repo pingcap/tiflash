@@ -793,20 +793,45 @@ void mergeNullAndFilterResult(
     auto [filter_vec, nullmap_vec] = getDataAndNullMapVectorFromFilterColumn(current_filter_column);
     if (nullmap_vec != nullptr)
     {
-        for (size_t i = 0; i < nullmap_vec->size(); ++i)
+        if (filter_column.empty())
         {
-            if (filter_column[i] == 0)
-                continue;
-            if ((*nullmap_vec)[i])
-                filter_column[i] = null_as_true;
+            filter_column.insert(nullmap_vec->begin(), nullmap_vec->end());
+            if (null_as_true)
+            {
+                for (size_t i = 0; i < nullmap_vec->size(); ++i)
+                    filter_column[i] = filter_column[i] || (*filter_vec)[i];
+            }
             else
-                filter_column[i] = filter_column[i] && (*filter_vec)[i];
+            {
+                for (size_t i = 0; i < nullmap_vec->size(); ++i)
+                    filter_column[i] = !filter_column[i] && (*filter_vec)[i];
+            }
+        }
+        else
+        {
+            if (null_as_true)
+            {
+                for (size_t i = 0; i < nullmap_vec->size(); ++i)
+                    filter_column[i] = filter_column[i] && ((*nullmap_vec)[i] || (*filter_vec)[i]);
+            }
+            else
+            {
+                for (size_t i = 0; i < nullmap_vec->size(); ++i)
+                    filter_column[i] = filter_column[i] && (*nullmap_vec)[i] == 0 && (*filter_vec)[i];
+            }
         }
     }
     else
     {
-        for (size_t i = 0; i < filter_vec->size(); ++i)
-            filter_column[i] = filter_column[i] && (*filter_vec)[i];
+        if (filter_column.empty())
+        {
+            filter_column.insert(filter_vec->begin(), filter_vec->end());
+        }
+        else
+        {
+            for (size_t i = 0; i < filter_vec->size(); ++i)
+                filter_column[i] = filter_column[i] && (*filter_vec)[i];
+        }
     }
 }
 
@@ -833,7 +858,6 @@ void Join::handleOtherConditions(
 
     auto filter_column = ColumnUInt8::create();
     auto & filter = filter_column->getData();
-    filter.assign(block.rows(), static_cast<UInt8>(1));
     mergeNullAndFilterResult(block, filter, non_equal_conditions.other_cond_name, false);
 
     ColumnUInt8::Container row_filter(filter.size(), 0);
@@ -1021,7 +1045,6 @@ void Join::handleOtherConditionsForOneProbeRow(Block & block, ProbeProcessInfo &
     non_equal_conditions.other_cond_expr->execute(block);
     auto filter_column = ColumnUInt8::create();
     auto & filter = filter_column->getData();
-    filter.assign(block.rows(), static_cast<UInt8>(1));
     mergeNullAndFilterResult(block, filter, non_equal_conditions.other_cond_name, false);
     UInt64 matched_row_count_in_current_block = 0;
     if (isLeftOuterSemiFamily(kind) && !non_equal_conditions.other_eq_cond_from_in_name.empty())
@@ -1228,11 +1251,10 @@ Block Join::doJoinBlockHash(ProbeProcessInfo & probe_process_info) const
     auto & filter = probe_process_info.filter;
     auto & offsets_to_replicate = probe_process_info.offsets_to_replicate;
 
-    bool enable_spill_join = isEnableSpill();
     JoinBuildInfo join_build_info{
         enable_fine_grained_shuffle,
         fine_grained_shuffle_count,
-        enable_spill_join,
+        isEnableSpill(),
         hash_join_spill_context->isSpilled(),
         build_concurrency,
         restore_round};
@@ -1365,7 +1387,14 @@ Block Join::joinBlockHash(ProbeProcessInfo & probe_process_info) const
 {
     std::vector<Block> result_blocks;
     size_t result_rows = 0;
-    probe_process_info.prepareForHashProbe(key_names_left, non_equal_conditions.left_filter_column, kind, strictness);
+    bool need_compute_hash = enable_fine_grained_shuffle || (hash_join_spill_context->isSpillEnabled() && !hash_join_spill_context->isSpilled());
+    probe_process_info.prepareForHashProbe(key_names_left,
+                                           non_equal_conditions.left_filter_column,
+                                           kind,
+                                           strictness,
+                                           need_compute_hash,
+                                           collators,
+                                           restore_round);
     while (true)
     {
         auto block = doJoinBlockHash(probe_process_info);
