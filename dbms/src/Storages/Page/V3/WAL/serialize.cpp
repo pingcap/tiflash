@@ -60,6 +60,13 @@ inline void serializeEntryTo(const PageEntryV3 & entry, WriteBuffer & buf, bool 
     {
         writeIntBinary(entry.checkpoint_info.data_location.offset_in_file, buf);
         writeIntBinary(entry.checkpoint_info.data_location.size_in_file, buf);
+        if (!entry.checkpoint_info.data_location.data_file_id) {
+            LOG_ERROR(&Poco::Logger::get("serializeEntryTo"), "data_file_id is empty file_id={} offset={} checkpoint_info={}",
+                entry.file_id,
+                entry.offset,
+                entry.checkpoint_info.toDebugString()
+            );
+        }
         writeStringBinary(*(entry.checkpoint_info.data_location.data_file_id), buf);
     }
 }

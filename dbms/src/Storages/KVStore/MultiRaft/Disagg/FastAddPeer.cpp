@@ -115,6 +115,7 @@ std::pair<UInt64, ParsedCheckpointDataHolderPtr> FastAddPeerContext::getNewerChe
         }
     }
 
+    // Now we try to parse the lastest manifest of this store.
     auto checkpoint_data = cache_element->getParsedCheckpointData(context);
     return std::make_pair(cache_seq, checkpoint_data);
 }

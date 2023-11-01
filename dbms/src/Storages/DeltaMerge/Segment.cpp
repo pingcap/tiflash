@@ -405,6 +405,7 @@ Segment::SegmentMetaInfos Segment::readAllSegmentsMetaInfoInRange( //
     bool is_cache_ready = end_to_segment_id_cache->isReady(lock);
     if (is_cache_ready)
     {
+        // TODO bisect for end
         current_segment_id
             = end_to_segment_id_cache->getSegmentIdContainingKey(lock, target_range.getStart().toRowKeyValue());
     }
@@ -471,8 +472,10 @@ Segments Segment::createTargetSegmentsFromCheckpoint( //
             segment_info.epoch,
             segment_info.next_segment_id);
         auto stable = StableValueSpace::createFromCheckpoint(context, temp_ps, segment_info.stable_id, wbs);
+        LOG_INFO(parent_log, "!!!!! afterr stable {}", wbs.data.empty());
         auto delta
             = DeltaValueSpace::createFromCheckpoint(context, temp_ps, segment_info.range, segment_info.delta_id, wbs);
+        LOG_INFO(parent_log, "!!!!! afterr delta {}", wbs.data.empty());
         auto segment = std::make_shared<Segment>(
             Logger::get("Checkpoint"),
             segment_info.epoch,
