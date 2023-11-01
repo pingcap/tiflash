@@ -296,33 +296,42 @@ private:
     struct ConsumptionUpdateInfo
     {
         // Avg speed of RU consumption of time range [last_update_ru_consumption_timepoint, now].
-        double speed;
+        double speed = 0.0;
         // RU consumption since last_update_ru_consumption_timepoint.
-        double delta;
+        double delta = 0.0;
+        // Total RU consumption of all time.
+        double total = 0.0;
         // If speed or delta is updated or not.
-        bool updated;
+        bool updated = false;
     };
 
     ConsumptionUpdateInfo updateConsumptionSpeedInfoIfNecessary(
         const std::chrono::steady_clock::time_point & now,
         const std::chrono::seconds & dura)
     {
-        std::lock_guard lock(mu);
-        const auto elapsed
-            = std::chrono::duration_cast<std::chrono::seconds>(now - last_update_ru_consumption_timepoint);
+        ConsumptionUpdateInfo info;
+        {
+            std::lock_guard lock(mu);
+            const auto elapsed
+                = std::chrono::duration_cast<std::chrono::seconds>(now - last_update_ru_consumption_timepoint);
 
-        if (elapsed < dura)
-            return {.speed = ru_consumption_speed, .delta = ru_consumption_delta, .updated = false};
+            if (elapsed < dura)
+                return {.speed = ru_consumption_speed, .delta = ru_consumption_delta, .updated = false};
 
-        ru_consumption_speed = ru_consumption_delta / elapsed.count();
-        ConsumptionUpdateInfo info = {ru_consumption_speed, ru_consumption_delta, true};
+            ru_consumption_speed = ru_consumption_delta / elapsed.count();
+            total_ru_consumption += ru_consumption_delta;
 
-        last_update_ru_consumption_timepoint = now;
-        total_ru_consumption += ru_consumption_delta;
-        ru_consumption_delta = 0;
+            info.speed = ru_consumption_speed;
+            info.total = total_ru_consumption;
+            info.delta = ru_consumption_delta;
+            info.updated = true;
 
-        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_avg_speed, name).Set(ru_consumption_speed);
-        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_total_consumption, name).Set(total_ru_consumption);
+            ru_consumption_delta = 0;
+            last_update_ru_consumption_timepoint = now;
+        }
+
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_avg_speed, name).Set(info.speed);
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_total_consumption, name).Set(info.total);
         return info;
     }
 
@@ -355,14 +364,18 @@ private:
 
     void collectMetrics() const
     {
-        // todo maybe put it where metric change
-        std::lock_guard lock(mu);
-        const auto & config = bucket->getConfig();
-        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_remaining_tokens, name).Set(config.tokens);
-        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_bucket_fill_rate, name).Set(config.fill_rate);
-        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_bucket_capacity, name).Set(config.capacity);
+        TokenBucket::TokenBucketConfig local_config;
+        uint64_t local_fetch_count = 0;
+        {
+            std::lock_guard lock(mu);
+            local_config = bucket->getConfig();
+            local_fetch_count = fetch_tokens_from_gac_count;
+        }
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_remaining_tokens, name).Set(local_config.tokens);
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_bucket_fill_rate, name).Set(local_config.fill_rate);
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_bucket_capacity, name).Set(local_config.capacity);
         GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_fetch_tokens_from_gac_count, name)
-            .Set(fetch_tokens_from_gac_count);
+            .Set(local_fetch_count);
     }
 
     const std::string name;
