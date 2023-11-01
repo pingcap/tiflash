@@ -101,13 +101,7 @@ void ProbeProcessInfo::prepareForHashProbe(
     {
         std::vector<std::string> sort_key_containers;
         sort_key_containers.resize(key_columns.size());
-        computeDispatchHash(
-            block.rows(),
-            key_columns,
-            collators,
-            sort_key_containers,
-            restore_round,
-            *hash_data);
+        computeDispatchHash(block.rows(), key_columns, collators, sort_key_containers, restore_round, *hash_data);
     }
     prepare_for_probe_done = true;
 }

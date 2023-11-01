@@ -1387,14 +1387,16 @@ Block Join::joinBlockHash(ProbeProcessInfo & probe_process_info) const
 {
     std::vector<Block> result_blocks;
     size_t result_rows = 0;
-    bool need_compute_hash = enable_fine_grained_shuffle || (hash_join_spill_context->isSpillEnabled() && !hash_join_spill_context->isSpilled());
-    probe_process_info.prepareForHashProbe(key_names_left,
-                                           non_equal_conditions.left_filter_column,
-                                           kind,
-                                           strictness,
-                                           need_compute_hash,
-                                           collators,
-                                           restore_round);
+    bool need_compute_hash = enable_fine_grained_shuffle
+        || (hash_join_spill_context->isSpillEnabled() && !hash_join_spill_context->isSpilled());
+    probe_process_info.prepareForHashProbe(
+        key_names_left,
+        non_equal_conditions.left_filter_column,
+        kind,
+        strictness,
+        need_compute_hash,
+        collators,
+        restore_round);
     while (true)
     {
         auto block = doJoinBlockHash(probe_process_info);
