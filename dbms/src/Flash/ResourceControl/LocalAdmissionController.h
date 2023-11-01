@@ -434,7 +434,6 @@ public:
             LOG_INFO(log, "cannot consume ru for {}, maybe it has been deleted", name);
             return;
         }
-        LOG_DEBUG(log, "background threads joined");
 
         // Report final RU consumption before stop:
         // 1. to avoid RU consumption omission.
@@ -450,7 +449,9 @@ public:
             if (consumption_update_info.delta == 0.0)
                 continue;
             acquire_infos.push_back(
-                {.resource_group_name = resource_group.first, .ru_consumption_delta = consumption_update_info.delta});
+                {.resource_group_name = resource_group.first,
+                 .acquire_tokens = 0,
+                 .ru_consumption_delta = consumption_update_info.delta});
         }
         fetchTokensFromGAC(acquire_infos, "before stop");
 
