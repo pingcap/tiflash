@@ -52,7 +52,7 @@ public:
     bool uploadCheckpoint();
 
     // Set a flag for sync all data to remote store at next checkpoint
-    void setSyncAllData();
+    void setUploadAllData();
 
     UniversalPageStoragePtr getUniversalPageStorage() const { return uni_page_storage; }
     ~UniversalPageStorageService();
@@ -90,7 +90,7 @@ public:
 
     // Once this flag is set, all data will be synced to remote store at next time
     // `uploadCheckpoint` is called.
-    std::atomic_bool sync_all_at_next_upload{false};
+    std::atomic_bool upload_all_at_next_upload{false};
 
     Context & global_context;
     UniversalPageStoragePtr uni_page_storage;

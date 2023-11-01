@@ -45,7 +45,7 @@ struct ExternalDTFileInfo;
 
 namespace tests
 {
-class RegionKVStoreTest;
+class KVStoreTestBase;
 }
 
 class IAST;
@@ -226,10 +226,10 @@ public:
 
     /// Create `runner_cnt` threads to run ReadIndexWorker asynchronously and automatically.
     /// If there is other runtime framework, DO NOT invoke it.
-    void asyncRunReadIndexWorkers();
+    void asyncRunReadIndexWorkers() const;
 
     /// Stop workers after there is no more read-index task.
-    void stopReadIndexWorkers();
+    void stopReadIndexWorkers() const;
 
     /// TODO: if supported by runtime framework, run one round for specific runner by `id`.
     void runOneRoundOfReadIndexRunner(size_t runner_id);
@@ -272,7 +272,7 @@ private:
     using DBGInvokerPrinter = std::function<void(const std::string &)>;
     friend void dbgFuncRemoveRegion(Context &, const ASTs &, DBGInvokerPrinter);
     friend void dbgFuncPutRegion(Context &, const ASTs &, DBGInvokerPrinter);
-    friend class tests::RegionKVStoreTest;
+    friend class tests::KVStoreTestBase;
     friend class ReadIndexStressTest;
     struct StoreMeta
     {

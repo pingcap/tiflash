@@ -42,6 +42,6 @@ RU cpuTimeToRU(UInt64 cpu_time_ns)
 // 1ru = 64KB
 RU bytesToRU(UInt64 bytes)
 {
-    return static_cast<double>(bytes) / 1024.0 / 64.0;
+    return static_cast<double>(bytes) / bytes_of_one_ru;
 }
 } // namespace DB

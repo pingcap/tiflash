@@ -14,7 +14,6 @@
 
 #include <Common/FailPoint.h>
 #include <Common/TiFlashMetrics.h>
-#include <Storages/DeltaMerge/Remote/RNReadTask.h>
 #include <Storages/DeltaMerge/Remote/RNSegmentSourceOp.h>
 #include <Storages/DeltaMerge/Remote/RNWorkers.h>
 
@@ -68,7 +67,7 @@ OperatorStatus RNSegmentSourceOp::readImpl(Block & block)
     if (t_block.has_value())
     {
         std::swap(block, t_block.value());
-        action.transform(block, current_seg_task->meta.physical_table_id);
+        action.transform(block, current_seg_task->dm_context->physical_table_id);
         t_block.reset();
         return OperatorStatus::HAS_OUTPUT;
     }

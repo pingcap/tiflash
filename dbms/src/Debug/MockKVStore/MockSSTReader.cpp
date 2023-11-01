@@ -15,7 +15,7 @@
 #include "MockSSTReader.h"
 
 #include <Common/Exception.h>
-#include <Debug/MockRaftStoreProxy.h>
+#include <Debug/MockKVStore/MockRaftStoreProxy.h>
 
 #include <ext/scope_guard.h>
 

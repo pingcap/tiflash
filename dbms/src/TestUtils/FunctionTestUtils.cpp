@@ -92,7 +92,7 @@ template <typename ExpectedT, typename ActualT, typename ExpectedDisplayT, typen
 ::testing::AssertionResult columnEqual(
     const ColumnPtr & expected,
     const ColumnPtr & actual,
-    const ICollator * collator,
+    const TiDB::ITiDBCollator * collator,
     bool is_floating_point)
 {
     ASSERT_EQUAL(expected->getName(), actual->getName(), "Column name mismatch");
@@ -158,7 +158,7 @@ template <typename ExpectedT, typename ActualT, typename ExpectedDisplayT, typen
 ::testing::AssertionResult columnEqual(
     const ColumnWithTypeAndName & expected,
     const ColumnWithTypeAndName & actual,
-    const ICollator * collator)
+    const TiDB::ITiDBCollator * collator)
 {
     if (auto ret = dataTypeEqual(expected.type, actual.type); !ret)
         return ret;

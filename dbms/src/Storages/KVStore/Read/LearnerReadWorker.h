@@ -54,10 +54,11 @@ struct UnavailableRegions
 
     bool contains(RegionID region_id) const { return ids.contains(region_id); }
 
-    void add(RegionID id, RegionException::RegionReadStatus status_)
+    void addStatus(RegionID id, RegionException::RegionReadStatus status_, std::string && extra_msg_)
     {
         status = status_;
         ids.emplace(id);
+        extra_msg = std::move(extra_msg_);
     }
 
     void addRegionLock(RegionID region_id_, LockInfoPtr && region_lock_)
@@ -77,6 +78,7 @@ private:
     RegionException::UnavailableRegions ids;
     std::vector<std::pair<RegionID, LockInfoPtr>> region_locks;
     RegionException::RegionReadStatus status{RegionException::RegionReadStatus::NOT_FOUND};
+    std::string extra_msg;
 };
 
 using RegionsReadIndexResult = std::unordered_map<RegionID, kvrpcpb::ReadIndexResponse>;
@@ -116,7 +118,7 @@ private:
         const std::vector<kvrpcpb::ReadIndexRequest> & batch_read_index_req,
         UInt64 timeout_ms,
         RegionsReadIndexResult & batch_read_index_result);
-    void recordReadIndexError(RegionsReadIndexResult & read_index_result);
+    void recordReadIndexError(const LearnerReadSnapshot & regions_snapshot, RegionsReadIndexResult & read_index_result);
 
     RegionsReadIndexResult readIndex(
         const LearnerReadSnapshot & regions_snapshot,

@@ -83,7 +83,7 @@ protected:
         writers.clear();
         for (size_t i = 0; i < nums_writers; ++i)
         {
-            auto writer = std::make_shared<T>(ps, i, runtime_stat);
+            auto writer = std::make_shared<T>(ps, i, runtime_stat, options.logger);
             if (writer_configure)
             {
                 writer_configure(writer);
@@ -99,7 +99,7 @@ protected:
         readers.clear();
         for (size_t i = 0; i < nums_readers; ++i)
         {
-            auto reader = std::make_shared<T>(ps, i, runtime_stat);
+            auto reader = std::make_shared<T>(ps, i, runtime_stat, options.logger);
             if (reader_configure)
             {
                 reader_configure(reader);
@@ -173,7 +173,7 @@ public:
 
     String toWorkloadSelctedString() const
     {
-        String debug_string = "Selected Workloads : ";
+        String debug_string = "Selected Workloads: ";
         for (const auto & it : funcs)
         {
             if (options.situation_mask & it.first)
@@ -197,11 +197,7 @@ public:
 
     void runWorkload();
 
-    void stopWorkload()
-    {
-        if (running_workload)
-            running_workload->stop();
-    }
+    void stopWorkload();
 
 private:
     StressEnv options;

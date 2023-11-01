@@ -1,0 +1,101 @@
+From 92225a50ccbab5369fd40b99a310ef7fcaec1750 Mon Sep 17 00:00:00 2001
+From: JaySon-Huang <tshent@qq.com>
+Date: Thu, 6 Apr 2023 12:54:23 +0800
+Subject: [PATCH 1/2] More reliable way to check if there is anything in result
+ IOStream
+
+Signed-off-by: JaySon-Huang <tshent@qq.com>
+---
+ src/aws-cpp-sdk-core/source/client/AWSJsonClient.cpp     | 9 +++++----
+ src/aws-cpp-sdk-core/source/client/AWSXmlClient.cpp      | 6 +++---
+ .../source/internal/AWSHttpResourceClient.cpp            | 2 +-
+ 3 files changed, 9 insertions(+), 8 deletions(-)
+
+diff --git a/src/aws-cpp-sdk-core/source/client/AWSJsonClient.cpp b/src/aws-cpp-sdk-core/source/client/AWSJsonClient.cpp
+index f42a306156..3cd26203f0 100644
+--- a/src/aws-cpp-sdk-core/source/client/AWSJsonClient.cpp
++++ b/src/aws-cpp-sdk-core/source/client/AWSJsonClient.cpp
+@@ -115,7 +115,8 @@ JsonOutcome AWSJsonClient::MakeRequest(const Aws::Http::URI& uri,
+             {{TracingUtils::SMITHY_METHOD_DIMENSION, request.GetServiceRequestName()}, {TracingUtils::SMITHY_SERVICE_DIMENSION, this->GetServiceClientName()}});
+     }
+ 
+-    if (httpOutcome.GetResult()->GetResponseBody().tellp() > 0){
++    if (httpOutcome.GetResult()->GetResponseBody().peek() != std::char_traits<char>::eof())
++    {
+         return smithy::components::tracing::TracingUtils::MakeCallWithTiming<JsonOutcome>(
+             [&]() -> JsonOutcome {
+                 return JsonOutcome(AmazonWebServiceResult<JsonValue>(JsonValue(httpOutcome.GetResult()->GetResponseBody()),
+@@ -154,7 +155,7 @@ JsonOutcome AWSJsonClient::MakeRequest(const Aws::Http::URI& uri,
+             {{TracingUtils::SMITHY_METHOD_DIMENSION, requestName}, {TracingUtils::SMITHY_SERVICE_DIMENSION, this->GetServiceClientName()}});
+     }
+ 
+-    if (httpOutcome.GetResult()->GetResponseBody().tellp() > 0)
++    if (httpOutcome.GetResult()->GetResponseBody().peek() != std::char_traits<char>::eof())
+     {
+         JsonValue jsonValue(httpOutcome.GetResult()->GetResponseBody());
+         if (!jsonValue.WasParseSuccessful()) {
+@@ -203,7 +204,7 @@ JsonOutcome AWSJsonClient::MakeEventStreamRequest(std::shared_ptr<Aws::Http::Htt
+ 
+     HttpResponseOutcome httpOutcome(std::move(httpResponse));
+ 
+-    if (httpOutcome.GetResult()->GetResponseBody().tellp() > 0)
++    if (httpOutcome.GetResult()->GetResponseBody().peek() != std::char_traits<char>::eof())
+     {
+         JsonValue jsonValue(httpOutcome.GetResult()->GetResponseBody());
+         if (!jsonValue.WasParseSuccessful())
+@@ -229,7 +230,7 @@ AWSError<CoreErrors> AWSJsonClient::BuildAWSError(
+         bool retryable = httpResponse->GetClientErrorType() == CoreErrors::NETWORK_CONNECTION ? true : false;
+         error = AWSError<CoreErrors>(httpResponse->GetClientErrorType(), "", httpResponse->GetClientErrorMessage(), retryable);
+     }
+-    else if (!httpResponse->GetResponseBody() || httpResponse->GetResponseBody().tellp() < 1)
++    else if (!httpResponse->GetResponseBody() || httpResponse->GetResponseBody().peek() == std::char_traits<char>::eof())
+     {
+         auto responseCode = httpResponse->GetResponseCode();
+         auto errorCode = AWSClient::GuessBodylessErrorType(responseCode);
+diff --git a/src/aws-cpp-sdk-core/source/client/AWSXmlClient.cpp b/src/aws-cpp-sdk-core/source/client/AWSXmlClient.cpp
+index 443ea31cbc..c122c5d5a1 100644
+--- a/src/aws-cpp-sdk-core/source/client/AWSXmlClient.cpp
++++ b/src/aws-cpp-sdk-core/source/client/AWSXmlClient.cpp
+@@ -110,7 +110,7 @@ XmlOutcome AWSXMLClient::MakeRequest(const Aws::Http::URI& uri,
+             {{TracingUtils::SMITHY_METHOD_DIMENSION, request.GetServiceRequestName()}, {TracingUtils::SMITHY_SERVICE_DIMENSION, this->GetServiceClientName()}});
+     }
+ 
+-    if (httpOutcome.GetResult()->GetResponseBody().tellp() > 0)
++    if (httpOutcome.GetResult()->GetResponseBody().peek() != std::char_traits<char>::eof())
+     {
+         return smithy::components::tracing::TracingUtils::MakeCallWithTiming<XmlOutcome>(
+             [&]() -> XmlOutcome {
+@@ -152,7 +152,7 @@ XmlOutcome AWSXMLClient::MakeRequest(const Aws::Http::URI& uri,
+             {{TracingUtils::SMITHY_METHOD_DIMENSION, requestName}, {TracingUtils::SMITHY_SERVICE_DIMENSION, this->GetServiceClientName()}});
+     }
+ 
+-    if (httpOutcome.GetResult()->GetResponseBody().tellp() > 0)
++    if (httpOutcome.GetResult()->GetResponseBody().peek() != std::char_traits<char>::eof())
+     {
+         return smithy::components::tracing::TracingUtils::MakeCallWithTiming<XmlOutcome>(
+             [&]() -> XmlOutcome {
+@@ -182,7 +182,7 @@ AWSError<CoreErrors> AWSXMLClient::BuildAWSError(const std::shared_ptr<Http::Htt
+         bool retryable = httpResponse->GetClientErrorType() == CoreErrors::NETWORK_CONNECTION ? true : false;
+         error = AWSError<CoreErrors>(httpResponse->GetClientErrorType(), "", httpResponse->GetClientErrorMessage(), retryable);
+     }
+-    else if (!httpResponse->GetResponseBody() || httpResponse->GetResponseBody().tellp() < 1)
++    else if (!httpResponse->GetResponseBody() || httpResponse->GetResponseBody().peek() == std::char_traits<char>::eof())
+     {
+         auto responseCode = httpResponse->GetResponseCode();
+         auto errorCode = AWSClient::GuessBodylessErrorType(responseCode);
+diff --git a/src/aws-cpp-sdk-core/source/internal/AWSHttpResourceClient.cpp b/src/aws-cpp-sdk-core/source/internal/AWSHttpResourceClient.cpp
+index 723747bbf1..8d84083ba3 100644
+--- a/src/aws-cpp-sdk-core/source/internal/AWSHttpResourceClient.cpp
++++ b/src/aws-cpp-sdk-core/source/internal/AWSHttpResourceClient.cpp
+@@ -148,7 +148,7 @@ namespace Aws
+                         AWS_LOGSTREAM_ERROR(m_logtag.c_str(), "Http request to retrieve credentials failed");
+                         return AWSError<CoreErrors>(CoreErrors::NETWORK_CONNECTION, true); // Retryable
+                     }
+-                    else if (m_errorMarshaller && response->GetResponseBody().tellp() > 0)
++                    else if (m_errorMarshaller && response->GetResponseBody().peek() != std::char_traits<char>::eof())
+                     {
+                         return m_errorMarshaller->Marshall(*response);
+                     }
+-- 
+2.31.1
+

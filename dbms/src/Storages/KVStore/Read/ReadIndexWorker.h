@@ -136,14 +136,14 @@ private:
             size_t id_,
             size_t runner_cnt_,
             ReadIndexWorkers & workers_,
-            Poco::Logger * logger_,
+            LoggerPtr logger_,
             FnGetTickTime fn_min_dur_handle_region_,
             AsyncWaker::NotifierPtr global_notifier_);
 
         const size_t id;
         const size_t runner_cnt;
         ReadIndexWorkers & workers;
-        Poco::Logger * logger;
+        LoggerPtr logger;
         const FnGetTickTime fn_min_dur_handle_region;
         /// The workers belonged to runner share same notifier.
         AsyncWaker::NotifierPtr global_notifier;
@@ -157,7 +157,7 @@ private:
     std::vector<std::unique_ptr<ReadIndexRunner>> runners;
     /// Each worker controls read-index process of region(region_id % worker_cnt == worker_id).
     ReadIndexWorkers workers;
-    Poco::Logger * logger;
+    LoggerPtr logger;
 };
 
 struct ReadIndexNotifyCtrl;

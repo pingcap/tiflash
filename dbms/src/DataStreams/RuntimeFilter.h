@@ -61,6 +61,8 @@ public:
 
     void setINValuesSet(const std::shared_ptr<Set> & in_values_set_);
 
+    void setTimezoneInfo(const TimezoneInfo & timezone_info_);
+
     void build();
 
     void updateValues(const ColumnWithTypeAndName & values, const LoggerPtr & log);
@@ -85,6 +87,7 @@ private:
     tipb::Expr source_expr;
     tipb::Expr target_expr;
     const tipb::RuntimeFilterType rf_type;
+    TimezoneInfo timezone_info;
     // thread safe
     std::atomic<RuntimeFilterStatus> status = RuntimeFilterStatus::NOT_READY;
     // used for failed_reason thread safe

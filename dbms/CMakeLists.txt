@@ -67,6 +67,7 @@ add_headers_and_sources(dbms src/DataTypes)
 add_headers_and_sources(dbms src/Databases)
 add_headers_and_sources(dbms src/Debug)
 add_headers_and_sources(dbms src/Debug/MockExecutor)
+add_headers_and_sources(dbms src/Debug/MockKVStore)
 add_headers_and_sources(dbms src/Dictionaries)
 add_headers_and_sources(dbms src/Encryption)
 add_headers_and_sources(dbms src/Interpreters)
@@ -236,11 +237,6 @@ if (Poco_NetSSL_FOUND)
 endif()
 
 target_link_libraries (dbms ${Poco_Foundation_LIBRARY})
-
-if (USE_ICU)
-    target_link_libraries (dbms ${ICU_LIBS})
-    target_include_directories (dbms PRIVATE ${ICU_INCLUDE_DIR})
-endif ()
 
 target_link_libraries (dbms
     Threads::Threads

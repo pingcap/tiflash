@@ -21,7 +21,6 @@
 #include <map>
 #include <mutex>
 
-
 namespace DB
 {
 class KVStore;

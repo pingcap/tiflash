@@ -250,7 +250,7 @@ void SSTFilesToDTFilesOutputStream<ChildStream>::write()
     size_t cur_deleted_rows = 0;
     while (true)
     {
-        if (prehandle_task->abort_flag.load(std::memory_order_seq_cst))
+        if (prehandle_task->isAbort())
         {
             break;
         }
