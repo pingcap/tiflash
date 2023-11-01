@@ -12,7 +12,8 @@ set(AWS_PUBLIC_COMPILE_DEFS)
 set(AWS_PRIVATE_COMPILE_DEFS)
 set(AWS_PRIVATE_LIBS)
 
-# Versions
+# Versions. Note that we may update the patch under /aws-cmake to make it work
+# after upgrading the aws-sdk-cpp version.
 list(APPEND AWS_PUBLIC_COMPILE_DEFS "-DAWS_SDK_VERSION_MAJOR=1")
 list(APPEND AWS_PUBLIC_COMPILE_DEFS "-DAWS_SDK_VERSION_MINOR=11")
 list(APPEND AWS_PUBLIC_COMPILE_DEFS "-DAWS_SDK_VERSION_PATCH=186")
@@ -90,6 +91,42 @@ file(GLOB AWS_SDK_CORE_SRC
     "${AWS_SDK_CORE_DIR}/source/utils/threading/*.cpp"
     "${AWS_SDK_CORE_DIR}/source/utils/xml/*.cpp"
 )
+
+execute_process(
+  COMMAND grep "GetResponseBody().peek()" "${AWS_SDK_CORE_DIR}/source/client/AWSXmlClient.cpp"
+  RESULT_VARIABLE HAVE_APPLY_PATCH)
+# grep - Normally, the exit status is 0 if selected lines are found and 1 otherwise. But the exit status is 2 if an error occurred.
+if (HAVE_APPLY_PATCH EQUAL 1)
+  message(STATUS "aws patch not apply: ${HAVE_APPLY_PATCH}, patching...")
+  ## update the patch using `git format-patch` if you upgrade aws
+  set (AWS_PATCH_FILE "${TiFlash_SOURCE_DIR}/contrib/aws-cmake/0001-More-reliable-way-to-check-if-there-is-anything-in-r.patch")
+  # apply the patch
+  execute_process(
+    COMMAND git apply -v "${AWS_PATCH_FILE}"
+    WORKING_DIRECTORY "${AWS_SDK_CORE_DIR}"
+    COMMAND_ECHO STDOUT
+    RESULT_VARIABLE PATCH_SUCC)
+  if (NOT PATCH_SUCC EQUAL 0)
+    message(FATAL_ERROR "Can not apply aws patch ${AWS_PATCH_FILE}")
+  endif ()
+
+  set (AWS_PATCH_FILE "${TiFlash_SOURCE_DIR}/contrib/aws-cmake/0002-Reduce-verbose-error-logging-and-404-for-HEAD-reques.patch")
+  # apply the patch
+  execute_process(
+    COMMAND git apply -v "${AWS_PATCH_FILE}"
+    WORKING_DIRECTORY "${AWS_SDK_CORE_DIR}"
+    COMMAND_ECHO STDOUT
+    RESULT_VARIABLE PATCH_SUCC)
+  if (NOT PATCH_SUCC EQUAL 0)
+    message(FATAL_ERROR "Can not apply aws patch ${AWS_PATCH_FILE}")
+  else ()
+    message(STATUS "aws patch done")
+  endif ()
+elseif (HAVE_APPLY_PATCH EQUAL 0)
+  message(STATUS "aws patch have been applied: ${HAVE_APPLY_PATCH}")
+else ()
+  message(FATAL_ERROR "Can not check the aws patch status")
+endif ()
 
 if(OS_LINUX OR OS_DARWIN)
     file(GLOB AWS_SDK_CORE_NET_SRC "${AWS_SDK_CORE_DIR}/source/net/linux-shared/*.cpp")
