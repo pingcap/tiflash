@@ -193,9 +193,12 @@ std::optional<LocalAdmissionController::AcquireTokenInfo> LocalAdmissionControll
             DEFAULT_FETCH_GAC_INTERVAL.count(),
             ACQUIRE_RU_AMPLIFICATION);
 
-        if (acquire_tokens == 0.0 && resource_group->needNotifyStopTrickleMode(now))
+        if (acquire_tokens == 0.0 && token_consumption == 0.0 && resource_group->needNotifyStopTrickleMode(now))
         {
-            LOG_DEBUG(log, "force notify stop trickle mode");
+            // If acquire_tokens and token_consumption are both zero, will ignore send RPC to GAC.
+            // But we need to make sure trickle mode should exit timely, which needs to talk with GAC.
+            // So we force acquire 1RU.
+            LOG_DEBUG(log, "force acquire 1RU because of try to exit trickle mode");
             acquire_tokens = 1.0;
         }
 
