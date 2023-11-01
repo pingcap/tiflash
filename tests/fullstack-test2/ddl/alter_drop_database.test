@@ -22,7 +22,7 @@ mysql> create database d1;
 
 => DBGInvoke mapped_database_exists(d1)
 ┌─mapped_database_exists(d1)───┐
-│ true                         │
+│ false                        │
 └──────────────────────────────┘
 
 mysql> create table d1.t1 (a int);
