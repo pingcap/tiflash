@@ -434,6 +434,25 @@ public:
             LOG_INFO(log, "cannot consume ru for {}, maybe it has been deleted", name);
             return;
         }
+        LOG_DEBUG(log, "background threads joined");
+
+        // Report final RU consumption before stop:
+        // 1. to avoid RU consumption omission.
+        // 2. clear GAC's unique_client_id to avoid affecting burst limit calculation.
+        // This can happend when disagg CN is scaled-in/out frequently.
+        std::vector<AcquireTokenInfo> acquire_infos;
+        for (const auto & resource_group : resource_groups)
+        {
+            const auto consumption_update_info = resource_group.second->updateConsumptionSpeedInfoIfNecessary(
+                std::chrono::steady_clock::time_point::max(),
+                std::chrono::seconds(0));
+            assert(consumption_update_info.updated);
+            if (consumption_update_info.delta == 0.0)
+                continue;
+            acquire_infos.push_back(
+                {.resource_group_name = resource_group.first, .ru_consumption_delta = consumption_update_info.delta});
+        }
+        fetchTokensFromGAC(acquire_infos, "before stop");
 
         group->consumeResource(ru, cpu_time_in_ns);
         if (group->lowToken() || group->needNotifyStopTrickleMode(std::chrono::steady_clock::now()))
