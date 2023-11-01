@@ -91,14 +91,12 @@ public:
         size_t start_pack,
         size_t pack_count,
         const Field & value,
-        const DataTypePtr & type,
-        int nan_direction);
+        const DataTypePtr & type);
     RSResults checkGreaterEqual(
         size_t start_pack,
         size_t pack_count,
         const Field & value,
-        const DataTypePtr & type,
-        int nan_direction);
+        const DataTypePtr & type);
     RSResults checkIsNull(size_t start_pack, size_t pack_count);
 
     RSResults checkNullableEqual(size_t start_pack, size_t pack_count, const Field & value, const DataTypePtr & type);

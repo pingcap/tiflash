@@ -693,12 +693,7 @@ RSResults MinMaxIndex::checkNullableGreater(
     return results;
 }
 
-RSResults MinMaxIndex::checkGreater(
-    size_t start_pack,
-    size_t pack_count,
-    const Field & value,
-    const DataTypePtr & type,
-    int /*nan_direction_hint*/)
+RSResults MinMaxIndex::checkGreater(size_t start_pack, size_t pack_count, const Field & value, const DataTypePtr & type)
 {
     RSResults results(pack_count, RSResult::None);
     if (value.isNull())
@@ -888,8 +883,7 @@ RSResults MinMaxIndex::checkGreaterEqual(
     size_t start_pack,
     size_t pack_count,
     const Field & value,
-    const DataTypePtr & type,
-    int /*nan_direction_hint*/)
+    const DataTypePtr & type)
 {
     RSResults results(pack_count, RSResult::None);
     if (value.isNull())

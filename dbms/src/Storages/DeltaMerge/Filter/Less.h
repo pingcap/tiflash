@@ -32,7 +32,7 @@ public:
     {
         RSResults results(pack_count, RSResult::Some);
         GET_RSINDEX_FROM_PARAM_NOT_FOUND_RETURN_DIRECTLY(param, attr, rsindex, results);
-        results = rsindex.minmax->checkGreaterEqual(start_pack, pack_count, value, rsindex.type, null_direction);
+        results = rsindex.minmax->checkGreaterEqual(start_pack, pack_count, value, rsindex.type);
         std::transform(results.begin(), results.end(), results.begin(), [](RSResult result) { return !result; });
         return results;
     }
