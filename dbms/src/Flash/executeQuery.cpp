@@ -139,22 +139,10 @@ std::optional<QueryExecutorPtr> executeAsPipeline(Context & context, bool intern
     const auto & logger = dag_context.log;
     RUNTIME_ASSERT(logger);
 
-    if unlikely (!TaskScheduler::instance)
-    {
-        LOG_WARNING(
-            logger,
-            "The task scheduler of the pipeline model has not been initialized, which is an exception. It is necessary "
-            "to restart the TiFlash node.");
-        return {};
-    }
-    if (!Pipeline::isSupported(*dag_context.dag_request, context.getSettingsRef()))
-    {
-        LOG_DEBUG(
-            logger,
-            "Can't executed by pipeline model due to unsupported operator, and then fallback to block inputstream "
-            "model");
-        return {};
-    }
+    RUNTIME_ASSERT(
+        TaskScheduler::instance,
+        "The task scheduler of the pipeline model has not been initialized, which is an exception. "
+        "It is necessary to restart the TiFlash node.");
 
     prepareForExecute(context);
 
@@ -221,22 +209,9 @@ QueryExecutorPtr executeAsBlockIO(Context & context, bool internal)
 
 QueryExecutorPtr queryExecute(Context & context, bool internal)
 {
-    if (context.getSettingsRef().enforce_enable_resource_control)
-    {
-        RUNTIME_CHECK_MSG(
-            TaskScheduler::instance,
-            "The task scheduler of the pipeline model has not been initialized, which is an exception. It is necessary "
-            "to restart the TiFlash node.");
-        auto res = executeAsPipeline(context, internal);
-        RUNTIME_CHECK_MSG(
-            res,
-            "Failed to execute query using pipeline model, and an error is reported because the setting "
-            "enforce_enable_resource_control is true.");
-        return std::move(*res);
-    }
     if (context.getSettingsRef().enable_planner && context.getSettingsRef().enable_resource_control)
     {
-        if (auto res = executeAsPipeline(context, internal); res)
+        if (auto res = executeAsPipeline(context, internal); likely(res))
             return std::move(*res);
     }
     return executeAsBlockIO(context, internal);
