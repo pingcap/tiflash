@@ -130,13 +130,12 @@ static std::tuple<String, UInt64> parseDMFilePath(const String & path)
 }
 #endif
 
-static DMFilePtr restoreDMFile(const Remote::IDataStorePtr & data_store, const String & remote_fname)
+static DMFilePtr restoreDMFile([[maybe_unused]] const Remote::IDataStorePtr & data_store, const String & remote_fname)
 {
 #ifndef DBMS_PUBLIC_GTEST
     auto prepared = data_store->prepareDMFileByKey(remote_fname);
     auto dmfile = prepared->restore(DMFile::ReadMetaMode::all());
 #else
-    (void)data_store; // Disable warnning of unused parameter.
     auto [parent_path, file_id] = parseDMFilePath(remote_fname);
     auto key_manager = std::make_shared<MockKeyManager>(false);
     auto file_provider = std::make_shared<FileProvider>(key_manager, false);
