@@ -81,38 +81,48 @@ public:
 
     std::pair<UInt64, UInt64> getUInt64MinMax(size_t pack_index);
 
-    RSResults checkEqual(size_t start_pack, size_t pack_count, const Field & value, const DataTypePtr & type);
+    template <typename Op>
+    RSResults checkCmp(size_t start_pack, size_t pack_count, const Field & value, const DataTypePtr & type);
+    template <typename Op, typename T>
+    RSResults checkCmpImpl(size_t start_pack, size_t pack_count, const Field & value, const DataTypePtr & type);
+    template <typename Op>
+    RSResults checkNullableCmp(size_t start_pack, size_t pack_count, const Field & value, const DataTypePtr & type);
+    template <typename Op, typename T>
+    RSResults checkNullableCmpImpl(
+        const DB::ColumnNullable & column_nullable,
+        const DB::ColumnUInt8 & null_map,
+        size_t start_pack,
+        size_t pack_count,
+        const Field & value,
+        const DataTypePtr & type);
+
+    // TODO: merge with checkCmp
     RSResults checkIn(
         size_t start_pack,
         size_t pack_count,
         const std::vector<Field> & values,
         const DataTypePtr & type);
-    RSResults checkGreater(
+    template <typename T>
+    RSResults checkInImpl(
         size_t start_pack,
         size_t pack_count,
-        const Field & value,
-        const DataTypePtr & type,
-        int nan_direction);
-    RSResults checkGreaterEqual(
-        size_t start_pack,
-        size_t pack_count,
-        const Field & value,
-        const DataTypePtr & type,
-        int nan_direction);
-    RSResults checkIsNull(size_t start_pack, size_t pack_count);
-
-    RSResults checkNullableEqual(size_t start_pack, size_t pack_count, const Field & value, const DataTypePtr & type);
+        const std::vector<Field> & values,
+        const DataTypePtr & type);
     RSResults checkNullableIn(
         size_t start_pack,
         size_t pack_count,
         const std::vector<Field> & values,
         const DataTypePtr & type);
-    RSResults checkNullableGreater(size_t start_pack, size_t pack_count, const Field & value, const DataTypePtr & type);
-    RSResults checkNullableGreaterEqual(
+    template <typename T>
+    RSResults checkNullableInImpl(
+        const DB::ColumnNullable & column_nullable,
+        const DB::ColumnUInt8 & null_map,
         size_t start_pack,
         size_t pack_count,
-        const Field & value,
+        const std::vector<Field> & values,
         const DataTypePtr & type);
+
+    RSResults checkIsNull(size_t start_pack, size_t pack_count);
 
     static String toString();
 };
