@@ -454,7 +454,7 @@ private:
     void insertFromBlockInternal(Block * stored_block, size_t stream_index);
 
     Block joinBlockHash(ProbeProcessInfo & probe_process_info) const;
-    Block doJoinBlockHash(ProbeProcessInfo & probe_process_info) const;
+    Block doJoinBlockHash(ProbeProcessInfo & probe_process_info, const JoinBuildInfo & join_build_info) const;
 
     Block joinBlockNullAware(ProbeProcessInfo & probe_process_info) const;
 
