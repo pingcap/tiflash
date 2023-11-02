@@ -69,11 +69,11 @@ private:
         DB::PageStorageConfig config;
         initPageStorage(config, name());
 
-        metrics_dumper = std::make_shared<PSMetricsDumper>(1);
+        metrics_dumper = std::make_shared<PSMetricsDumper>(1, options.logger);
         metrics_dumper->start();
 
         {
-            stress_time = std::make_shared<StressTimeout>(30);
+            stress_time = std::make_shared<StressTimeout>(30, options.logger);
             stress_time->start();
 
             stop_watch.start();
@@ -96,7 +96,7 @@ private:
         }
 
         {
-            stress_time = std::make_shared<StressTimeout>(30);
+            stress_time = std::make_shared<StressTimeout>(30, options.logger);
             stress_time->start();
 
             stop_watch.start();
@@ -119,7 +119,7 @@ private:
         }
 
         {
-            stress_time = std::make_shared<StressTimeout>(30);
+            stress_time = std::make_shared<StressTimeout>(30, options.logger);
             stress_time->start();
 
             stop_watch.start();
@@ -142,7 +142,7 @@ private:
         }
 
         {
-            stress_time = std::make_shared<StressTimeout>(30);
+            stress_time = std::make_shared<StressTimeout>(30, options.logger);
             stress_time->start();
 
             stop_watch.start();

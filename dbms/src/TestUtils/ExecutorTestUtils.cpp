@@ -188,8 +188,6 @@ void ExecutorTest::executeExecutor(
     std::function<::testing::AssertionResult(const ColumnsWithTypeAndName &)> assert_func)
 {
     WRAP_FOR_TEST_BEGIN
-    if (enable_pipeline && !Pipeline::isSupported(*request, context.context->getSettingsRef()))
-        continue;
     std::vector<size_t> concurrencies{1, 2, 10};
     for (auto concurrency : concurrencies)
     {
@@ -212,8 +210,6 @@ void ExecutorTest::checkBlockSorted(
         assert_func)
 {
     WRAP_FOR_TEST_BEGIN
-    if (enable_pipeline && !Pipeline::isSupported(*request, context.context->getSettingsRef()))
-        continue;
     std::vector<size_t> concurrencies{2, 5, 10};
     for (auto concurrency : concurrencies)
     {
@@ -318,7 +314,6 @@ void ExecutorTest::enablePlanner(bool is_enable) const
 void ExecutorTest::enablePipeline(bool is_enable) const
 {
     context.context->setSetting("enable_resource_control", is_enable ? "true" : "false");
-    context.context->setSetting("enforce_enable_resource_control", is_enable ? "true" : "false");
 }
 
 // ywq todo rename
@@ -376,8 +371,7 @@ void ExecutorTest::testForExecutionSummary(
     statistics_collector.initialize(&dag_context);
     auto summaries = statistics_collector.genExecutionSummaryResponse().execution_summaries();
     bool enable_planner = context.context->getSettingsRef().enable_planner;
-    bool enable_pipeline = context.context->getSettingsRef().enable_resource_control
-        || context.context->getSettingsRef().enforce_enable_resource_control;
+    bool enable_pipeline = context.context->getSettingsRef().enable_resource_control;
     ASSERT_EQ(summaries.size(), expect.size())
         << "\n"
         << testInfoMsg(request, enable_planner, enable_pipeline, concurrency, DEFAULT_BLOCK_SIZE);

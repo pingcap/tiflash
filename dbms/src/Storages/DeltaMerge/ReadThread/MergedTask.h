@@ -38,7 +38,7 @@ class MergedTask
 public:
     static int64_t getPassiveMergedSegments() { return passive_merged_segments.load(std::memory_order_relaxed); }
 
-    MergedTask(uint64_t seg_id_, std::vector<MergedUnit> && units_)
+    MergedTask(const GlobalSegmentID & seg_id_, std::vector<MergedUnit> && units_)
         : seg_id(seg_id_)
         , units(std::move(units_))
         , inited(false)
@@ -62,7 +62,7 @@ public:
 
     bool allStreamsFinished() const { return finished_count >= units.size(); }
 
-    uint64_t getSegmentId() const { return seg_id; }
+    const GlobalSegmentID & getSegmentId() const { return seg_id; }
 
     size_t getPoolCount() const { return units.size(); }
 
@@ -125,7 +125,7 @@ private:
             setStreamFinished(i);
         }
     }
-    uint64_t seg_id;
+    GlobalSegmentID seg_id;
     std::vector<MergedUnit> units;
     bool inited;
     int cur_idx;

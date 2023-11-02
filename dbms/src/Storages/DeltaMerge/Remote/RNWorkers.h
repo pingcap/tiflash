@@ -28,7 +28,7 @@ namespace DB::DM::Remote
 class RNWorkers : private boost::noncopyable
 {
 public:
-    using Channel = MPMCQueue<RNReadSegmentTaskPtr>;
+    using Channel = MPMCQueue<SegmentReadTaskPtr>;
     using ChannelPtr = std::shared_ptr<Channel>;
 
 public:
@@ -45,19 +45,21 @@ public:
     struct Options
     {
         const LoggerPtr log;
-        const RNReadTaskPtr & read_task;
         const ColumnDefinesPtr & columns_to_read;
         const UInt64 read_tso;
         const PushDownFilterPtr & push_down_filter;
         const ReadMode read_mode;
-        const pingcap::kv::Cluster * cluster;
     };
 
-    explicit RNWorkers(const Context & context, const Options & options, size_t num_streams);
+    RNWorkers(const Context & context, SegmentReadTasks && read_tasks, const Options & options, size_t num_streams);
 
-    static RNWorkersPtr create(const Context & context, const Options & options, size_t num_streams)
+    static RNWorkersPtr create(
+        const Context & context,
+        SegmentReadTasks && read_tasks,
+        const Options & options,
+        size_t num_streams)
     {
-        return std::make_shared<RNWorkers>(context, options, num_streams);
+        return std::make_shared<RNWorkers>(context, std::move(read_tasks), options, num_streams);
     }
 
 private:

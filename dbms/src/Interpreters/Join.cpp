@@ -1733,12 +1733,15 @@ bool Join::finishOneBuild(size_t stream_index)
 
 void Join::finalizeBuild()
 {
-    std::unique_lock lock(build_probe_mutex);
-    if (hash_join_spill_context->getBuildSpiller())
-        hash_join_spill_context->getBuildSpiller()->finishSpill();
-    assert(active_build_threads == 0);
-    build_finished = true;
-    build_cv.notify_all();
+    {
+        std::unique_lock lock(build_probe_mutex);
+        if (hash_join_spill_context->getBuildSpiller())
+            hash_join_spill_context->getBuildSpiller()->finishSpill();
+        assert(active_build_threads == 0);
+        build_finished = true;
+        build_cv.notify_all();
+    }
+    LOG_INFO(log, "build finalize with {} entries from {} rows.", getTotalRowCount(), getTotalBuildInputRows());
 }
 
 void Join::workAfterBuildFinish(size_t stream_index)

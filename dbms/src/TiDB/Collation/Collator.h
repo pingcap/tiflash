@@ -14,7 +14,6 @@
 
 #pragma once
 
-#include <Columns/Collator.h>
 #include <TiDB/Collation/CollatorCompare.h>
 #include <common/StringRef.h>
 
@@ -23,11 +22,10 @@
 
 namespace TiDB
 {
-
 using TiDBCollatorPtr = class ITiDBCollator const *;
 using TiDBCollators = std::vector<TiDBCollatorPtr>;
 
-class ITiDBCollator : public ICollator
+class ITiDBCollator
 {
 public:
     enum
@@ -85,9 +83,9 @@ public:
         IPattern() = default;
     };
 
-    ~ITiDBCollator() override = default;
+    virtual ~ITiDBCollator() = default;
 
-    int compare(const char * s1, size_t length1, const char * s2, size_t length2) const override = 0;
+    virtual int compare(const char * s1, size_t length1, const char * s2, size_t length2) const = 0;
 
     ALWAYS_INLINE inline int compareFastPath(const char * s1, size_t length1, const char * s2, size_t length2) const
     {

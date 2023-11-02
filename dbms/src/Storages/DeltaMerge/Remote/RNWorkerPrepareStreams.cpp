@@ -16,7 +16,6 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Storages/DeltaMerge/DeltaIndex.h>
-#include <Storages/DeltaMerge/Remote/RNReadTask.h>
 #include <Storages/DeltaMerge/Remote/RNWorkerPrepareStreams.h>
 #include <Storages/DeltaMerge/Segment.h>
 
@@ -28,7 +27,7 @@ extern const int DT_DELTA_INDEX_ERROR;
 namespace DB::DM::Remote
 {
 
-bool RNWorkerPrepareStreams::initInputStream(const RNReadSegmentTaskPtr & task, bool enable_delta_index_error_fallback)
+bool RNWorkerPrepareStreams::initInputStream(const SegmentReadTaskPtr & task, bool enable_delta_index_error_fallback)
 {
     try
     {
@@ -39,7 +38,7 @@ bool RNWorkerPrepareStreams::initInputStream(const RNReadSegmentTaskPtr & task, 
     {
         if (enable_delta_index_error_fallback && e.code() == ErrorCodes::DT_DELTA_INDEX_ERROR)
         {
-            LOG_ERROR(task->meta.segment_snap->log, "{}", e.message());
+            LOG_ERROR(task->read_snapshot->log, "{}", e.message());
             return false;
         }
         else
@@ -49,7 +48,7 @@ bool RNWorkerPrepareStreams::initInputStream(const RNReadSegmentTaskPtr & task, 
     }
 }
 
-RNReadSegmentTaskPtr RNWorkerPrepareStreams::doWork(const RNReadSegmentTaskPtr & task)
+SegmentReadTaskPtr RNWorkerPrepareStreams::doWork(const SegmentReadTaskPtr & task)
 {
     Stopwatch watch_work{CLOCK_MONOTONIC_COARSE};
     SCOPE_EXIT({
@@ -58,19 +57,18 @@ RNReadSegmentTaskPtr RNWorkerPrepareStreams::doWork(const RNReadSegmentTaskPtr &
             .Observe(watch_work.elapsedSeconds());
     });
 
-    if (likely(initInputStream(
-            task,
-            task->meta.dm_context->db_context.getSettingsRef().dt_enable_delta_index_error_fallback)))
+    if (likely(
+            initInputStream(task, task->dm_context->db_context.getSettingsRef().dt_enable_delta_index_error_fallback)))
     {
         return task;
     }
 
     // Exception DT_DELTA_INDEX_ERROR raised. Reset delta index and try again.
     DeltaIndex empty_delta_index;
-    task->meta.segment_snap->delta->getSharedDeltaIndex()->swap(empty_delta_index);
-    if (auto cache = task->meta.dm_context->db_context.getSharedContextDisagg()->rn_delta_index_cache; cache)
+    task->read_snapshot->delta->getSharedDeltaIndex()->swap(empty_delta_index);
+    if (auto cache = task->dm_context->db_context.getSharedContextDisagg()->rn_delta_index_cache; cache)
     {
-        cache->setDeltaIndex(task->meta.segment_snap->delta->getSharedDeltaIndex());
+        cache->setDeltaIndex(task->read_snapshot->delta->getSharedDeltaIndex());
     }
     initInputStream(task, false);
     return task;

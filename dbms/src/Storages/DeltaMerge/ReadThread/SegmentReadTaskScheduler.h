@@ -21,7 +21,6 @@
 namespace DB::DM
 {
 using SegmentReadTaskPoolList = CircularScanList<SegmentReadTaskPool>;
-
 // SegmentReadTaskScheduler is a global singleton.
 // All SegmentReadTaskPool will be added to it and be scheduled by it.
 
@@ -62,7 +61,7 @@ private:
     bool needScheduleToRead(const SegmentReadTaskPoolPtr & pool);
     SegmentReadTaskPools getPoolsUnlock(const std::vector<uint64_t> & pool_ids);
     // <seg_id, pool_ids>
-    std::optional<std::pair<uint64_t, std::vector<uint64_t>>> scheduleSegmentUnlock(
+    std::optional<std::pair<GlobalSegmentID, std::vector<UInt64>>> scheduleSegmentUnlock(
         const SegmentReadTaskPoolPtr & pool);
     SegmentReadTaskPoolPtr scheduleSegmentReadTaskPoolUnlock();
 
@@ -70,8 +69,9 @@ private:
     std::mutex add_mtx;
     std::mutex mtx;
     SegmentReadTaskPoolList read_pools;
-    // table_id -> {seg_id -> pool_ids, seg_id -> pool_ids, ...}
-    std::unordered_map<int64_t, std::unordered_map<uint64_t, std::vector<uint64_t>>> merging_segments;
+
+    // GlobalSegmentID -> pool_ids
+    MergingSegments merging_segments;
 
     MergedTaskPool merged_task_pool;
 

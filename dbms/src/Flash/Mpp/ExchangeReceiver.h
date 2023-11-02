@@ -109,8 +109,7 @@ public:
         const String & req_id,
         const String & executor_id,
         uint64_t fine_grained_shuffle_stream_count,
-        const Settings & settings,
-        const std::vector<RequestAndRegionIDs> & disaggregated_dispatch_reqs_ = {});
+        const Settings & settings);
 
     ~ExchangeReceiverBase();
 
@@ -197,12 +196,6 @@ private:
     void setUpConnectionWithReadLoop(Request && req);
     void setUpLocalConnections(std::vector<Request> & requests, bool has_remote_conn);
 
-    bool isReceiverForTiFlashStorage()
-    {
-        // If not empty, need to send MPPTask to tiflash_storage.
-        return !disaggregated_dispatch_reqs.empty();
-    }
-
 private:
     LoggerPtr exc_log;
 
@@ -237,9 +230,6 @@ private:
     Int32 async_recv_version;
 
     std::atomic<Int64> data_size_in_queue;
-
-    // For tiflash_compute node, need to send MPPTask to tiflash_storage node.
-    std::vector<RequestAndRegionIDs> disaggregated_dispatch_reqs;
 };
 
 class ExchangeReceiver : public ExchangeReceiverBase<GRPCReceiverContext>

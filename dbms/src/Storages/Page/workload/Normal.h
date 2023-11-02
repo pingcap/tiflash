@@ -46,7 +46,7 @@ public:
         {
             static constexpr PageIdU64 MAX_PAGE_ID_DEFAULT = 1000;
             initPages(MAX_PAGE_ID_DEFAULT);
-            LOG_INFO(StressEnv::logger, "All pages have been init.");
+            LOG_INFO(options.logger, "All pages have been init.");
         }
 
         RUNTIME_CHECK(options.avg_page_size > 1000);
