@@ -446,7 +446,7 @@ RSResults MinMaxIndex::checkCmp(size_t start_pack, size_t pack_count, const Fiel
             pos = i * 2 + 1;
             prev_offset = offsets[pos - 1];
             auto max = String(reinterpret_cast<const char *>(&chars[prev_offset]), offsets[pos] - prev_offset - 1);
-            results[i - start_pack] = Op::template check<StringRef>(value, type, min, max);
+            results[i - start_pack] = Op::template check<String>(value, type, min, max);
         }
         return results;
     }
