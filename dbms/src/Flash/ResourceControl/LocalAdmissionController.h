@@ -448,26 +448,6 @@ public:
             return;
         }
 
-        // Report final RU consumption before stop:
-        // 1. to avoid RU consumption omission.
-        // 2. clear GAC's unique_client_id to avoid affecting burst limit calculation.
-        // This can happend when disagg CN is scaled-in/out frequently.
-        std::vector<AcquireTokenInfo> acquire_infos;
-        for (const auto & resource_group : resource_groups)
-        {
-            const auto consumption_update_info = resource_group.second->updateConsumptionSpeedInfoIfNecessary(
-                SteadyClock::time_point::max(),
-                std::chrono::seconds(0));
-            assert(consumption_update_info.updated);
-            if (consumption_update_info.delta == 0.0)
-                continue;
-            acquire_infos.push_back(
-                {.resource_group_name = resource_group.first,
-                 .acquire_tokens = 0,
-                 .ru_consumption_delta = consumption_update_info.delta});
-        }
-        fetchTokensFromGAC(acquire_infos, "before stop");
-
         group->consumeResource(ru, cpu_time_in_ns);
         if (group->lowToken() || group->trickleModeLeaseExpire(SteadyClock::now()))
         {
@@ -545,6 +525,26 @@ private:
             if (thread.joinable())
                 thread.join();
         }
+
+        // Report final RU consumption before stop:
+        // 1. to avoid RU consumption omission.
+        // 2. clear GAC's unique_client_id to avoid affecting burst limit calculation.
+        // This can happend when disagg CN is scaled-in/out frequently.
+        std::vector<AcquireTokenInfo> acquire_infos;
+        for (const auto & resource_group : resource_groups)
+        {
+            const auto consumption_update_info = resource_group.second->updateConsumptionSpeedInfoIfNecessary(
+                SteadyClock::time_point::max(),
+                std::chrono::seconds(0));
+            assert(consumption_update_info.updated);
+            if (consumption_update_info.delta == 0.0)
+                continue;
+            acquire_infos.push_back(
+                {.resource_group_name = resource_group.first,
+                 .acquire_tokens = 0,
+                 .ru_consumption_delta = consumption_update_info.delta});
+        }
+        fetchTokensFromGAC(acquire_infos, "before stop");
 
         if (need_reset_unique_client_id.load())
         {
