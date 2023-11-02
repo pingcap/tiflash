@@ -278,42 +278,4 @@ PipelineEvents Pipeline::doToEvents(
     all_events.insert(all_events.end(), self_events.events.cbegin(), self_events.events.cend());
     return self_events;
 }
-
-bool Pipeline::isSupported(const tipb::DAGRequest & dag_request, const Settings & settings)
-{
-    bool is_supported = true;
-    traverseExecutors(&dag_request, [&](const tipb::Executor & executor) {
-        switch (executor.tp())
-        {
-        case tipb::ExecType::TypeTableScan:
-        case tipb::ExecType::TypePartitionTableScan:
-        case tipb::ExecType::TypeProjection:
-        case tipb::ExecType::TypeSelection:
-        case tipb::ExecType::TypeLimit:
-        case tipb::ExecType::TypeTopN:
-        case tipb::ExecType::TypeExchangeSender:
-        case tipb::ExecType::TypeExchangeReceiver:
-        case tipb::ExecType::TypeExpand:
-        case tipb::ExecType::TypeExpand2:
-        case tipb::ExecType::TypeAggregation:
-        case tipb::ExecType::TypeStreamAgg:
-        case tipb::ExecType::TypeWindow:
-        case tipb::ExecType::TypeSort:
-        case tipb::ExecType::TypeJoin:
-            return true;
-        default:
-            if (settings.enforce_enable_resource_control)
-                throw Exception(fmt::format(
-                    "Pipeline mode does not support {}, and an error is reported because the setting "
-                    "enforce_enable_resource_control is true.",
-                    magic_enum::enum_name(executor.tp())));
-            is_supported = false;
-            return false;
-        }
-    });
-    if (settings.enforce_enable_resource_control && !is_supported)
-        throw Exception("There is an unsupported operator in pipeline model, and an error is reported because the "
-                        "setting enforce_enable_resource_control is true.");
-    return is_supported;
-}
 } // namespace DB

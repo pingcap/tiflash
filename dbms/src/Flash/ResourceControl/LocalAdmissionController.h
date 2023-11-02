@@ -672,4 +672,45 @@ private:
 
     const LoggerPtr log = Logger::get("LocalAdmissionController");
 };
+
+// This is to reduce the calling frequence of LAC::consumeResource() to avoid lock contension.
+// TODO: Need to optimize LAC::consumeResource().
+// Because the lock contension still increase when the thread num of storage layer or the data to be read is very large.
+class LACBytesCollector
+{
+public:
+    explicit LACBytesCollector(const std::string & name)
+        : resource_group_name(name)
+        , delta_bytes(0)
+    {}
+
+    ~LACBytesCollector()
+    {
+        if (delta_bytes != 0)
+            consume();
+    }
+
+    void collect(uint64_t bytes)
+    {
+        delta_bytes += bytes;
+        // Call LAC::consumeResource() when accumulated to `bytes_of_one_hundred_ru` to avoid lock contension.
+        if (delta_bytes >= bytes_of_one_hundred_ru)
+        {
+            consume();
+            delta_bytes = 0;
+        }
+    }
+
+private:
+    void consume()
+    {
+        assert(delta_bytes != 0);
+        if (!resource_group_name.empty())
+            LocalAdmissionController::global_instance->consumeResource(resource_group_name, bytesToRU(delta_bytes), 0);
+    }
+
+    const std::string resource_group_name;
+    uint64_t delta_bytes;
+};
+using LACBytesCollectorPtr = std::unique_ptr<LACBytesCollector>;
 } // namespace DB
