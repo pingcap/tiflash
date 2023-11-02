@@ -860,10 +860,15 @@ void Join::handleOtherConditions(
     auto & filter = filter_column->getData();
     mergeNullAndFilterResult(block, filter, non_equal_conditions.other_cond_name, false);
 
-    ColumnUInt8::Container row_filter(filter.size(), 0);
+    ColumnUInt8::Container row_filter(block.rows(), 0);
 
     if (isLeftOuterSemiFamily(kind))
     {
+        if (filter.size() != block.rows())
+        {
+            assert(filter.empty());
+            filter.assign(block.rows(), static_cast<UInt8>(1));
+        }
         const auto helper_pos = block.getPositionByName(match_helper_name);
 
         const auto * old_match_nullable
@@ -950,6 +955,7 @@ void Join::handleOtherConditions(
     /// otherwise, it will check other_eq_filter_from_in_column, if other_eq_filter_from_in_column return false, this row should
     /// be returned, if other_eq_filter_from_in_column return true or null this row should not be returned.
     mergeNullAndFilterResult(block, filter, non_equal_conditions.other_eq_cond_from_in_name, isAntiJoin(kind));
+    assert(block.rows() == filter.size());
 
     if ((isInnerJoin(kind) && original_strictness == ASTTableJoin::Strictness::All)
         || isNecessaryKindToUseRowFlaggedHashMap(kind))
@@ -1049,6 +1055,11 @@ void Join::handleOtherConditionsForOneProbeRow(Block & block, ProbeProcessInfo &
     UInt64 matched_row_count_in_current_block = 0;
     if (isLeftOuterSemiFamily(kind) && !non_equal_conditions.other_eq_cond_from_in_name.empty())
     {
+        if (filter.size() != block.rows())
+        {
+            assert(filter.empty());
+            filter.assign(block.rows(), static_cast<UInt8>(1));
+        }
         assert(probe_process_info.has_row_matched == false);
         ColumnPtr eq_in_column = block.getByName(non_equal_conditions.other_eq_cond_from_in_name).column;
         auto [eq_in_vec, eq_in_nullmap] = getDataAndNullMapVectorFromFilterColumn(eq_in_column);
@@ -1068,6 +1079,7 @@ void Join::handleOtherConditionsForOneProbeRow(Block & block, ProbeProcessInfo &
     else
     {
         mergeNullAndFilterResult(block, filter, non_equal_conditions.other_eq_cond_from_in_name, isAntiJoin(kind));
+        assert(filter.size() == block.rows());
         matched_row_count_in_current_block = countBytesInFilter(filter);
         probe_process_info.has_row_matched |= matched_row_count_in_current_block != 0;
     }
