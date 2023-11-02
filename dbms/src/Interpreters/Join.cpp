@@ -817,7 +817,7 @@ void mergeNullAndFilterResult(
             else
             {
                 for (size_t i = 0; i < nullmap_vec->size(); ++i)
-                    filter_column[i] = filter_column[i] && (*nullmap_vec)[i] == 0 && (*filter_vec)[i];
+                    filter_column[i] = filter_column[i] && !(*nullmap_vec)[i] && (*filter_vec)[i];
             }
         }
     }

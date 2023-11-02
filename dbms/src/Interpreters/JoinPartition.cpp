@@ -1479,10 +1479,6 @@ void NO_INLINE probeBlockImplTypeCase(
     if (join_build_info.needVirtualDispatchForProbeBlock())
     {
         assert(!(join_build_info.restore_round > 0 && join_build_info.enable_fine_grained_shuffle));
-        /// TODO: consider adding a virtual column in Sender side to avoid computing cost and potential inconsistency by heterogeneous envs(AMD64, ARM64)
-        /// Note: 1. Not sure, if inconsistency will do happen in heterogeneous envs
-        ///       2. Virtual column would take up a little more network bandwidth, might lead to poor performance if network was bottleneck
-        /// Currently, the computation cost is tolerable, since it's a very simple crc32 hash algorithm, and heterogeneous envs support is not considered
         assert(probe_process_info.hash_data->getData().size() == rows);
     }
 

@@ -51,7 +51,11 @@ struct ProbeProcessInfo
     /// for hash probe
     Columns materialized_columns;
     ColumnRawPtrs key_columns;
-    std::unique_ptr<WeakHash32> hash_data; /// reproduce hash values according to build stage
+    /// TODO: consider adding a virtual column in Sender side to avoid computing cost and potential inconsistency by heterogeneous envs(AMD64, ARM64)
+    /// Note: 1. Not sure, if inconsistency will do happen in heterogeneous envs
+    ///       2. Virtual column would take up a little more network bandwidth, might lead to poor performance if network was bottleneck
+    /// Currently, the computation cost is tolerable, since it's a very simple crc32 hash algorithm, and heterogeneous envs support is not considered
+    std::unique_ptr<WeakHash32> hash_data; /// to reproduce hash values according to build stage
 
     /// for cross probe
     Block result_block_schema;
