@@ -305,10 +305,10 @@ RSResults MinMaxIndex::checkNullableEqual(
             size_t pos = i * 2;
             size_t prev_offset = pos == 0 ? 0 : offsets[pos - 1];
             // todo use StringRef instead of String
-            auto min = String(chars[prev_offset], offsets[pos] - prev_offset - 1);
+            auto min = String(reinterpret_cast<const char *>(&chars[prev_offset]), offsets[pos] - prev_offset - 1);
             pos = i * 2 + 1;
             prev_offset = offsets[pos - 1];
-            auto max = String(chars[prev_offset], offsets[pos] - prev_offset - 1);
+            auto max = String(reinterpret_cast<const char *>(&chars[prev_offset]), offsets[pos] - prev_offset - 1);
             results[i - start_pack] = RoughCheck::checkEqual<String>(value, type, min, max);
         }
         return results;
@@ -404,10 +404,10 @@ RSResults MinMaxIndex::checkNullableIn(
             size_t pos = i * 2;
             size_t prev_offset = pos == 0 ? 0 : offsets[pos - 1];
             // todo use StringRef instead of String
-            auto min = String(chars[prev_offset], offsets[pos] - prev_offset - 1);
+            auto min = String(reinterpret_cast<const char *>(&chars[prev_offset]), offsets[pos] - prev_offset - 1);
             pos = i * 2 + 1;
             prev_offset = offsets[pos - 1];
-            auto max = String(chars[prev_offset], offsets[pos] - prev_offset - 1);
+            auto max = String(reinterpret_cast<const char *>(&chars[prev_offset]), offsets[pos] - prev_offset - 1);
             results[i - start_pack] = RoughCheck::checkIn<String>(values, type, min, max);
         }
         return results;
@@ -495,10 +495,10 @@ RSResults MinMaxIndex::checkEqual(size_t start_pack, size_t pack_count, const Fi
             size_t pos = i * 2;
             size_t prev_offset = pos == 0 ? 0 : offsets[pos - 1];
             // todo use StringRef instead of String
-            auto min = String(chars[prev_offset], offsets[pos] - prev_offset - 1);
+            auto min = String(reinterpret_cast<const char *>(&chars[prev_offset]), offsets[pos] - prev_offset - 1);
             pos = i * 2 + 1;
             prev_offset = offsets[pos - 1];
-            auto max = String(chars[prev_offset], offsets[pos] - prev_offset - 1);
+            auto max = String(reinterpret_cast<const char *>(&chars[prev_offset]), offsets[pos] - prev_offset - 1);
             results[i - start_pack] = RoughCheck::checkEqual<String>(value, type, min, max);
         }
         return results;
@@ -588,10 +588,10 @@ RSResults MinMaxIndex::checkIn(
             size_t pos = i * 2;
             size_t prev_offset = pos == 0 ? 0 : offsets[pos - 1];
             // todo use StringRef instead of String
-            auto min = String(chars[prev_offset], offsets[pos] - prev_offset - 1);
+            auto min = String(reinterpret_cast<const char *>(&chars[prev_offset]), offsets[pos] - prev_offset - 1);
             pos = i * 2 + 1;
             prev_offset = offsets[pos - 1];
-            auto max = String(chars[prev_offset], offsets[pos] - prev_offset - 1);
+            auto max = String(reinterpret_cast<const char *>(&chars[prev_offset]), offsets[pos] - prev_offset - 1);
             results[i - start_pack] = RoughCheck::checkIn<String>(values, type, min, max);
         }
         return results;
@@ -682,10 +682,10 @@ RSResults MinMaxIndex::checkNullableGreater(
             size_t pos = i * 2;
             size_t prev_offset = pos == 0 ? 0 : offsets[pos - 1];
             // todo use StringRef instead of String
-            auto min = String(chars[prev_offset], offsets[pos] - prev_offset - 1);
+            auto min = String(reinterpret_cast<const char *>(&chars[prev_offset]), offsets[pos] - prev_offset - 1);
             pos = i * 2 + 1;
             prev_offset = offsets[pos - 1];
-            auto max = String(chars[prev_offset], offsets[pos] - prev_offset - 1);
+            auto max = String(reinterpret_cast<const char *>(&chars[prev_offset]), offsets[pos] - prev_offset - 1);
             results[i - start_pack] = RoughCheck::checkGreater<String>(value, type, min, max);
         }
         return results;
@@ -778,10 +778,10 @@ RSResults MinMaxIndex::checkGreater(
             size_t pos = i * 2;
             size_t prev_offset = pos == 0 ? 0 : offsets[pos - 1];
             // todo use StringRef instead of String
-            auto min = String(chars[prev_offset], offsets[pos] - prev_offset - 1);
+            auto min = String(reinterpret_cast<const char *>(&chars[prev_offset]), offsets[pos] - prev_offset - 1);
             pos = i * 2 + 1;
             prev_offset = offsets[pos - 1];
-            auto max = String(chars[prev_offset], offsets[pos] - prev_offset - 1);
+            auto max = String(reinterpret_cast<const char *>(&chars[prev_offset]), offsets[pos] - prev_offset - 1);
             results[i - start_pack] = RoughCheck::checkGreater<String>(value, type, min, max);
         }
         return results;
