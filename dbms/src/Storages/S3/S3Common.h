@@ -44,8 +44,9 @@ namespace DB::S3
 inline String S3ErrorMessage(const Aws::S3::S3Error & e)
 {
     return fmt::format(
-        " s3error={} s3msg={} request_id={}",
+        " s3error={} s3exception_name={} s3msg={} request_id={}",
         magic_enum::enum_name(e.GetErrorType()),
+        e.GetExceptionName(),
         e.GetMessage(),
         e.GetRequestId());
 }
