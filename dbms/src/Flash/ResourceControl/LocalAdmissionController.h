@@ -35,6 +35,7 @@
 namespace DB
 {
 class LocalAdmissionController;
+using SteadyClock = std::chrono::steady_clock;
 
 // gac_resp.burst_limit < 0: resource group is burstable, and will not use bucket at all.
 // gac_resp.burst_limit >= 0: resource group is not burstable, will use bucket to limit the speed of the resource group.
@@ -263,7 +264,7 @@ private:
 
         std::string ori_bucket_info = bucket->toString();
         bucket->reConfig(TokenBucket::TokenBucketConfig(bucket->peek(), new_fill_rate, new_capacity));
-        stop_trickle_timepoint = std::chrono::steady_clock::now() + std::chrono::milliseconds(trickle_ms);
+        stop_trickle_timepoint = SteadyClock::now() + std::chrono::milliseconds(trickle_ms);
         LOG_DEBUG(
             log,
             "token bucket of rg {} reconfig to trickle mode: from: {}, to: {}",
@@ -306,7 +307,7 @@ private:
     };
 
     ConsumptionUpdateInfo updateConsumptionSpeedInfoIfNecessary(
-        const std::chrono::steady_clock::time_point & now,
+        const SteadyClock::time_point & now,
         const std::chrono::seconds & dura)
     {
         ConsumptionUpdateInfo info;
@@ -335,14 +336,13 @@ private:
         return info;
     }
 
-    bool needFetchTokenPeridically(const std::chrono::steady_clock::time_point & now, const std::chrono::seconds & dura)
-        const
+    bool needFetchTokenPeridically(const SteadyClock::time_point & now, const std::chrono::seconds & dura) const
     {
         std::lock_guard lock(mu);
         return std::chrono::duration_cast<std::chrono::seconds>(now - last_fetch_tokens_from_gac_timepoint) > dura;
     }
 
-    void updateFetchTokenTimepoint(const std::chrono::steady_clock::time_point & tp)
+    void updateFetchTokenTimepoint(const SteadyClock::time_point & tp)
     {
         std::lock_guard lock(mu);
         assert(last_fetch_tokens_from_gac_timepoint <= tp);
@@ -350,13 +350,13 @@ private:
         ++fetch_tokens_from_gac_count;
     }
 
-    bool inTrickleModeLease(const std::chrono::steady_clock::time_point & tp)
+    bool inTrickleModeLease(const SteadyClock::time_point & tp)
     {
         std::lock_guard lock(mu);
         return bucket_mode == trickle_mode && tp < stop_trickle_timepoint;
     }
 
-    bool needNotifyStopTrickleMode(const std::chrono::steady_clock::time_point & tp)
+    bool needNotifyStopTrickleMode(const SteadyClock::time_point & tp)
     {
         std::lock_guard lock(mu);
         return bucket_mode == trickle_mode && tp >= stop_trickle_timepoint;
@@ -399,14 +399,14 @@ private:
 
     LoggerPtr log;
 
-    std::chrono::steady_clock::time_point last_fetch_tokens_from_gac_timepoint = std::chrono::steady_clock::now();
-    std::chrono::steady_clock::time_point stop_trickle_timepoint = std::chrono::steady_clock::now();
+    SteadyClock::time_point last_fetch_tokens_from_gac_timepoint = SteadyClock::now();
+    SteadyClock::time_point stop_trickle_timepoint = SteadyClock::now();
     uint64_t fetch_tokens_from_gac_count = 0;
     double total_ru_consumption = 0.0;
 
     double ru_consumption_delta = 0.0;
     double ru_consumption_speed = 0.0;
-    std::chrono::steady_clock::time_point last_update_ru_consumption_timepoint = std::chrono::steady_clock::now();
+    SteadyClock::time_point last_update_ru_consumption_timepoint = SteadyClock::now();
 };
 
 using ResourceGroupPtr = std::shared_ptr<ResourceGroup>;
@@ -456,7 +456,7 @@ public:
         for (const auto & resource_group : resource_groups)
         {
             const auto consumption_update_info = resource_group.second->updateConsumptionSpeedInfoIfNecessary(
-                std::chrono::steady_clock::time_point::max(),
+                SteadyClock::time_point::max(),
                 std::chrono::seconds(0));
             assert(consumption_update_info.updated);
             if (consumption_update_info.delta == 0.0)
@@ -469,7 +469,7 @@ public:
         fetchTokensFromGAC(acquire_infos, "before stop");
 
         group->consumeResource(ru, cpu_time_in_ns);
-        if (group->lowToken() || group->needNotifyStopTrickleMode(std::chrono::steady_clock::now()))
+        if (group->lowToken() || group->needNotifyStopTrickleMode(SteadyClock::now()))
         {
             {
                 std::lock_guard lock(mu);
@@ -659,8 +659,7 @@ private:
     std::unordered_set<std::string> low_token_resource_groups;
 
     std::atomic<uint64_t> max_ru_per_sec = 0;
-    std::chrono::time_point<std::chrono::steady_clock> last_fetch_tokens_from_gac_timepoint
-        = std::chrono::steady_clock::now();
+    std::chrono::time_point<SteadyClock> last_fetch_tokens_from_gac_timepoint = SteadyClock::now();
 
     ::pingcap::kv::Cluster * cluster = nullptr;
     std::atomic<bool> need_reset_unique_client_id{false};

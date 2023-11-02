@@ -77,7 +77,7 @@ void LocalAdmissionController::startBackgroudJob()
     }
     LOG_INFO(log, "get unique_client_id succeed: {}", unique_client_id);
 
-    auto last_metric_time_point = std::chrono::steady_clock::now();
+    auto last_metric_time_point = SteadyClock::now();
     while (!stopped.load())
     {
         bool fetch_token_periodically = false;
@@ -85,7 +85,7 @@ void LocalAdmissionController::startBackgroudJob()
         {
             std::unique_lock<std::mutex> lock(mu);
 
-            auto now = std::chrono::steady_clock::now();
+            auto now = SteadyClock::now();
             if (now - last_metric_time_point >= COLLECT_METRIC_INTERVAL)
             {
                 last_metric_time_point = now;
@@ -169,7 +169,7 @@ std::optional<LocalAdmissionController::AcquireTokenInfo> LocalAdmissionControll
 {
     double token_consumption = 0.0;
     double acquire_tokens = 0.0;
-    const auto now = std::chrono::steady_clock::now();
+    const auto now = SteadyClock::now();
 
     const auto consumption_update_info
         = resource_group->updateConsumptionSpeedInfoIfNecessary(now, DEFAULT_FETCH_GAC_INTERVAL);
@@ -224,7 +224,7 @@ void LocalAdmissionController::fetchTokensFromGAC(
     {
         // In theory last_fetch_tokens_from_gac_timepoint should only be updated when network to GAC is ok,
         // but we still update here to avoid resource groups that has enough RU goto degrade mode.
-        last_fetch_tokens_from_gac_timepoint = std::chrono::steady_clock::now();
+        last_fetch_tokens_from_gac_timepoint = SteadyClock::now();
         return;
     }
 
@@ -292,7 +292,7 @@ void LocalAdmissionController::fetchTokensFromGAC(
 
 void LocalAdmissionController::checkDegradeMode()
 {
-    auto now = std::chrono::steady_clock::now();
+    auto now = SteadyClock::now();
     std::lock_guard lock(mu);
     if ((now - last_fetch_tokens_from_gac_timepoint) >= DEGRADE_MODE_DURATION)
     {
@@ -316,7 +316,8 @@ std::vector<std::string> LocalAdmissionController::handleTokenBucketsResp(
     std::vector<std::string> handled_resource_group_names;
     handled_resource_group_names.reserve(resp.responses_size());
     // Network to GAC is ok, update timepoint.
-    last_fetch_tokens_from_gac_timepoint = std::chrono::steady_clock::now();
+    const auto now = SteadyClock::now();
+    last_fetch_tokens_from_gac_timepoint = now;
 
     if (resp.responses().empty())
     {
@@ -324,7 +325,6 @@ std::vector<std::string> LocalAdmissionController::handleTokenBucketsResp(
         return {};
     }
 
-    const auto now = std::chrono::steady_clock::now();
     for (const resource_manager::TokenBucketResponse & one_resp : resp.responses())
     {
         // For each resource group.

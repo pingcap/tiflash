@@ -92,9 +92,7 @@ public:
 
     std::string toString() const
     {
-        FmtBuffer fmt_buf;
-        fmt_buf.fmtAppend("tokens: {}, fill_rate: {}, capacity: {}", tokens, fill_rate, capacity);
-        return fmt_buf.toString();
+        return fmt::format("tokens: {}, fill_rate: {}, capacity: {}", tokens, fill_rate, capacity);
     }
 
 private:
