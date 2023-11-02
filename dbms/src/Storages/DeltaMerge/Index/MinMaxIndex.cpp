@@ -257,22 +257,6 @@ RSResults MinMaxIndex::checkNullableIn(
         return checkNullableInImpl<TYPE>(column_nullable, null_map, start_pack, pack_count, values, type);
     FOR_NUMERIC_TYPES(DISPATCH)
 #undef DISPATCH
-    if (typeid_cast<const DataTypeDate *>(raw_type))
-        return checkNullableInImpl<DataTypeDate::FieldType>(
-            column_nullable,
-            null_map,
-            start_pack,
-            pack_count,
-            values,
-            type);
-    if (typeid_cast<const DataTypeDateTime *>(raw_type))
-        return checkNullableInImpl<DataTypeDateTime::FieldType>(
-            column_nullable,
-            null_map,
-            start_pack,
-            pack_count,
-            values,
-            type);
     if (typeid_cast<const DataTypeMyDateTime *>(raw_type) || typeid_cast<const DataTypeMyDate *>(raw_type))
     {
         // For DataTypeMyDateTime / DataTypeMyDate, simply compare them as comparing UInt64 is OK.
@@ -305,6 +289,27 @@ RSResults MinMaxIndex::checkNullableIn(
             results[i - start_pack] = RoughCheck::CheckIn::check<String>(values, type, min, max);
         }
         return results;
+    }
+    // Should not happen, because TiDB use DataTypeMyDateTime and DataTypeMyDate
+    if (typeid_cast<const DataTypeDate *>(raw_type))
+    {
+        return checkNullableInImpl<DataTypeDate::FieldType>(
+            column_nullable,
+            null_map,
+            start_pack,
+            pack_count,
+            values,
+            type);
+    }
+    if (typeid_cast<const DataTypeDateTime *>(raw_type))
+    {
+        return checkNullableInImpl<DataTypeDateTime::FieldType>(
+            column_nullable,
+            null_map,
+            start_pack,
+            pack_count,
+            values,
+            type);
     }
     return results;
 }
@@ -347,10 +352,6 @@ RSResults MinMaxIndex::checkIn(
         return checkInImpl<TYPE>(start_pack, pack_count, values, type);
     FOR_NUMERIC_TYPES(DISPATCH)
 #undef DISPATCH
-    if (typeid_cast<const DataTypeDate *>(raw_type))
-        return checkInImpl<DataTypeDate::FieldType>(start_pack, pack_count, values, type);
-    if (typeid_cast<const DataTypeDateTime *>(raw_type))
-        return checkInImpl<DataTypeDateTime::FieldType>(start_pack, pack_count, values, type);
     if (typeid_cast<const DataTypeMyDateTime *>(raw_type) || typeid_cast<const DataTypeMyDate *>(raw_type))
     {
         // For DataTypeMyDateTime / DataTypeMyDate, simply compare them as comparing UInt64 is OK.
@@ -377,6 +378,11 @@ RSResults MinMaxIndex::checkIn(
         }
         return results;
     }
+    // Should not happen, because TiDB use DataTypeMyDateTime and DataTypeMyDate
+    if (typeid_cast<const DataTypeDate *>(raw_type))
+        return checkInImpl<DataTypeDate::FieldType>(start_pack, pack_count, values, type);
+    if (typeid_cast<const DataTypeDateTime *>(raw_type))
+        return checkInImpl<DataTypeDateTime::FieldType>(start_pack, pack_count, values, type);
     return RSResults(pack_count, RSResult::Some);
 }
 
@@ -412,10 +418,6 @@ RSResults MinMaxIndex::checkCmp(size_t start_pack, size_t pack_count, const Fiel
         return checkCmpImpl<Op, TYPE>(start_pack, pack_count, value, type);
     FOR_NUMERIC_TYPES(DISPATCH)
 #undef DISPATCH
-    if (typeid_cast<const DataTypeDate *>(raw_type))
-        return checkCmpImpl<Op, DataTypeDate::FieldType>(start_pack, pack_count, value, type);
-    if (typeid_cast<const DataTypeDateTime *>(raw_type))
-        return checkCmpImpl<Op, DataTypeDateTime::FieldType>(start_pack, pack_count, value, type);
     if (typeid_cast<const DataTypeMyDateTime *>(raw_type) || typeid_cast<const DataTypeMyDate *>(raw_type))
     {
         // For DataTypeMyDateTime / DataTypeMyDate, simply compare them as comparing UInt64 is OK.
@@ -442,8 +444,29 @@ RSResults MinMaxIndex::checkCmp(size_t start_pack, size_t pack_count, const Fiel
         }
         return results;
     }
+    // Should not happen, because TiDB use DataTypeMyDateTime and DataTypeMyDate
+    if (typeid_cast<const DataTypeDate *>(raw_type))
+        return checkCmpImpl<Op, DataTypeDate::FieldType>(start_pack, pack_count, value, type);
+    if (typeid_cast<const DataTypeDateTime *>(raw_type))
+        return checkCmpImpl<Op, DataTypeDateTime::FieldType>(start_pack, pack_count, value, type);
     return RSResults(pack_count, RSResult::Some);
 }
+
+template RSResults MinMaxIndex::checkCmp<RoughCheck::CheckEqual>(
+    size_t start_pack,
+    size_t pack_count,
+    const Field & value,
+    const DataTypePtr & type);
+template RSResults MinMaxIndex::checkCmp<RoughCheck::CheckGreater>(
+    size_t start_pack,
+    size_t pack_count,
+    const Field & value,
+    const DataTypePtr & type);
+template RSResults MinMaxIndex::checkCmp<RoughCheck::CheckGreaterEqual>(
+    size_t start_pack,
+    size_t pack_count,
+    const Field & value,
+    const DataTypePtr & type);
 
 template <typename Op, typename T>
 RSResults MinMaxIndex::checkNullableCmpImpl(
@@ -486,26 +509,6 @@ RSResults MinMaxIndex::checkNullableCmp(
         return checkNullableCmpImpl<Op, TYPE>(column_nullable, null_map, start_pack, pack_count, value, type);
     FOR_NUMERIC_TYPES(DISPATCH)
 #undef DISPATCH
-    if (typeid_cast<const DataTypeDate *>(raw_type))
-    {
-        return checkNullableCmpImpl<Op, DataTypeDate::FieldType>(
-            column_nullable,
-            null_map,
-            start_pack,
-            pack_count,
-            value,
-            type);
-    }
-    if (typeid_cast<const DataTypeDateTime *>(raw_type))
-    {
-        return checkNullableCmpImpl<Op, DataTypeDateTime::FieldType>(
-            column_nullable,
-            null_map,
-            start_pack,
-            pack_count,
-            value,
-            type);
-    }
     if (typeid_cast<const DataTypeMyDateTime *>(raw_type) || typeid_cast<const DataTypeMyDate *>(raw_type))
     {
         // For DataTypeMyDateTime / DataTypeMyDate, simply compare them as comparing UInt64 is OK.
@@ -538,6 +541,27 @@ RSResults MinMaxIndex::checkNullableCmp(
         }
         return results;
     }
+    // Should not happen, because TiDB use DataTypeMyDateTime and DataTypeMyDate
+    if (typeid_cast<const DataTypeDate *>(raw_type))
+    {
+        return checkNullableCmpImpl<Op, DataTypeDate::FieldType>(
+            column_nullable,
+            null_map,
+            start_pack,
+            pack_count,
+            value,
+            type);
+    }
+    if (typeid_cast<const DataTypeDateTime *>(raw_type))
+    {
+        return checkNullableCmpImpl<Op, DataTypeDateTime::FieldType>(
+            column_nullable,
+            null_map,
+            start_pack,
+            pack_count,
+            value,
+            type);
+    }
     return results;
 }
 
@@ -556,21 +580,5 @@ String MinMaxIndex::toString()
 {
     return "";
 }
-
-template RSResults MinMaxIndex::checkCmp<RoughCheck::CheckEqual>(
-    size_t start_pack,
-    size_t pack_count,
-    const Field & value,
-    const DataTypePtr & type);
-template RSResults MinMaxIndex::checkCmp<RoughCheck::CheckGreater>(
-    size_t start_pack,
-    size_t pack_count,
-    const Field & value,
-    const DataTypePtr & type);
-template RSResults MinMaxIndex::checkCmp<RoughCheck::CheckGreaterEqual>(
-    size_t start_pack,
-    size_t pack_count,
-    const Field & value,
-    const DataTypePtr & type);
 
 } // namespace DB::DM
