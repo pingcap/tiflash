@@ -1567,7 +1567,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     // For test mode, TaskScheduler and LAC is controlled by test case.
     // TODO: resource control is not supported for WN. So disable pipeline model and LAC.
     const bool init_pipeline_and_lac
-        = !global_context->isTest() && global_context->getSharedContextDisagg()->isDisaggregatedStorageMode();
+        = !global_context->isTest() && !global_context->getSharedContextDisagg()->isDisaggregatedStorageMode();
     if (init_pipeline_and_lac)
     {
 #ifdef DBMS_PUBLIC_GTEST
