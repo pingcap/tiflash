@@ -356,7 +356,7 @@ private:
         return bucket_mode == trickle_mode && tp < stop_trickle_timepoint;
     }
 
-    bool needNotifyStopTrickleMode(const SteadyClock::time_point & tp)
+    bool trickleModeLeaseExpire(const SteadyClock::time_point & tp)
     {
         std::lock_guard lock(mu);
         return bucket_mode == trickle_mode && tp >= stop_trickle_timepoint;
@@ -469,7 +469,7 @@ public:
         fetchTokensFromGAC(acquire_infos, "before stop");
 
         group->consumeResource(ru, cpu_time_in_ns);
-        if (group->lowToken() || group->needNotifyStopTrickleMode(SteadyClock::now()))
+        if (group->lowToken() || group->trickleModeLeaseExpire(SteadyClock::now()))
         {
             {
                 std::lock_guard lock(mu);
