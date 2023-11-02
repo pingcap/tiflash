@@ -230,6 +230,7 @@ RSResults MinMaxIndex::checkNullableInImpl(
     const auto & minmaxes_data = toColumnVectorData<T>(column_nullable.getNestedColumnPtr());
     for (size_t i = start_pack; i < start_pack + pack_count; ++i)
     {
+        // if min is null, result is Some
         if (null_map.getElement(i * 2))
             continue;
         auto min = minmaxes_data[i * 2];
@@ -457,6 +458,7 @@ RSResults MinMaxIndex::checkNullableCmpImpl(
     const auto & minmaxes_data = toColumnVectorData<T>(column_nullable.getNestedColumnPtr());
     for (size_t i = start_pack; i < start_pack + pack_count; ++i)
     {
+        // if min is null, result is Some
         if (null_map.getElement(i * 2))
             continue;
         auto min = minmaxes_data[i * 2];
