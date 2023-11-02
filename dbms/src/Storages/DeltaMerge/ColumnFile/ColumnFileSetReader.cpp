@@ -89,6 +89,7 @@ ColumnFileSetReader::ColumnFileSetReader(
     , snapshot(snapshot_)
     , col_defs(col_defs_)
     , segment_range(segment_range_)
+    , lac_bytes_collector(context_.scan_context ? context_.scan_context->resource_group_name : "")
 {
     size_t total_rows = 0;
     for (auto & f : snapshot->getColumnFiles())
@@ -185,17 +186,15 @@ size_t ColumnFileSetReader::readRows(
             }
         }
     }
+
+    UInt64 delta_bytes = 0;
     for (const auto & col : output_columns)
-    {
-        const auto delta_bytes = col->byteSize();
+        delta_bytes += col->byteSize();
+
+    lac_bytes_collector.collect(delta_bytes);
+    if (likely(context.scan_context))
         context.scan_context->total_user_read_bytes += delta_bytes;
 
-        if (context.scan_context->enable_resource_control)
-            LocalAdmissionController::global_instance->consumeResource(
-                context.scan_context->resource_group_name,
-                bytesToRU(delta_bytes),
-                0);
-    }
     return actual_read;
 }
 

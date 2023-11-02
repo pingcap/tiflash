@@ -21,6 +21,8 @@
 #include <Storages/KVStore/FFI/ProxyFFICommon.h>
 #include <Storages/KVStore/KVStore.h>
 #include <Storages/KVStore/TMTContext.h>
+#include <Storages/S3/S3GCManager.h>
+#include <TiDB/OwnerManager.h>
 #include <fmt/core.h>
 
 #include <boost/algorithm/string.hpp>
@@ -55,7 +57,8 @@ HttpRequestRes HandleHttpRequestSyncStatus(
             status = HttpRequestStatus::ErrorParam;
             return HttpRequestRes{
                 .status = status,
-                .res = CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{nullptr, 0}}};
+                .res = CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{nullptr, 0}},
+            };
         }
 
 
@@ -79,7 +82,8 @@ HttpRequestRes HandleHttpRequestSyncStatus(
         if (status != HttpRequestStatus::Ok)
             return HttpRequestRes{
                 .status = status,
-                .res = CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{nullptr, 0}}};
+                .res = CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{nullptr, 0}},
+            };
     }
 
     auto & tmt = *server->tmt;
@@ -143,8 +147,9 @@ HttpRequestRes HandleHttpRequestSyncStatus(
     return HttpRequestRes{
         .status = status,
         .res = CppStrWithView{
-            .inner = GenRawCppPtr(s, RawCppPtrTypeImpl::String),
-            .view = BaseBuffView{s->data(), s->size()}}};
+            .inner = GenRawCppPtr(s, RawCppPtrTypeImpl::String), .view = BaseBuffView{s->data(), s->size()},
+        },
+    };
 }
 
 // Return store status of this tiflash node
@@ -158,13 +163,14 @@ HttpRequestRes HandleHttpRequestStoreStatus(
     auto * name = RawCppString::New(IntoStoreStatusName(server->tmt->getStoreStatus(std::memory_order_relaxed)));
     return HttpRequestRes{
         .status = HttpRequestStatus::Ok,
-        .res = CppStrWithView{
-            .inner = GenRawCppPtr(name, RawCppPtrTypeImpl::String),
-            .view = BaseBuffView{name->data(), name->size()}}};
+        .res= CppStrWithView{
+            .inner = GenRawCppPtr(name, RawCppPtrTypeImpl::String), .view = BaseBuffView{name->data(), name->size()},
+        },
+    };
 }
 
 /// set a flag for upload all PageData to remote store from local UniPS
-HttpRequestRes HandleHttpRequestRemoteStoreSync(
+HttpRequestRes HandleHttpRequestRemoteReUpload(
     EngineStoreServerWrap * server,
     std::string_view,
     const std::string &,
@@ -179,17 +185,95 @@ HttpRequestRes HandleHttpRequestRemoteStoreSync(
             magic_enum::enum_name(global_ctx.getSharedContextDisagg()->disaggregated_mode)));
         return HttpRequestRes{
             .status = HttpRequestStatus::ErrorParam,
-            .res
-            = CppStrWithView{.inner = GenRawCppPtr(body, RawCppPtrTypeImpl::String), .view = BaseBuffView{body->data(), body->size()}},
+            .res = CppStrWithView{
+                .inner = GenRawCppPtr(body, RawCppPtrTypeImpl::String),
+                .view = BaseBuffView{body->data(), body->size()},
+            },
         };
     }
 
-    bool flag_set = global_ctx.trySyncAllDataToRemoteStore();
+    bool flag_set = global_ctx.tryUploadAllDataToRemoteStore();
     auto * body = RawCppString::New(fmt::format(R"json({{"message":"flag_set={}"}})json", flag_set));
     return HttpRequestRes{
         .status = flag_set ? HttpRequestStatus::Ok : HttpRequestStatus::ErrorParam,
-        .res
-        = CppStrWithView{.inner = GenRawCppPtr(body, RawCppPtrTypeImpl::String), .view = BaseBuffView{body->data(), body->size()}},
+        .res = CppStrWithView{
+            .inner = GenRawCppPtr(body, RawCppPtrTypeImpl::String),
+            .view = BaseBuffView{body->data(), body->size()},
+        },
+    };
+}
+
+// get the remote gc owner info
+HttpRequestRes HandleHttpRequestRemoteOwnerInfo(
+    EngineStoreServerWrap * server,
+    std::string_view,
+    const std::string &,
+    std::string_view,
+    std::string_view)
+{
+    const auto & owner = server->tmt->getS3GCOwnerManager();
+    const auto owner_info = owner->getOwnerID();
+    auto * body = RawCppString::New(fmt::format(
+        R"json({{"status":"{}","owner_id":"{}"}})json",
+        magic_enum::enum_name(owner_info.status),
+        owner_info.owner_id));
+    return HttpRequestRes{
+        .status = HttpRequestStatus::Ok,
+        .res = CppStrWithView{
+            .inner = GenRawCppPtr(body, RawCppPtrTypeImpl::String),
+            .view = BaseBuffView{body->data(), body->size()},
+        },
+    };
+}
+
+// resign if this node is the remote gc owner
+HttpRequestRes HandleHttpRequestRemoteOwnerResign(
+    EngineStoreServerWrap * server,
+    std::string_view,
+    const std::string &,
+    std::string_view,
+    std::string_view)
+{
+    const auto & owner = server->tmt->getS3GCOwnerManager();
+    bool has_resign = owner->resignOwner();
+    String msg = has_resign ? "Done" : "This node is not the remote gc owner, can't be resigned.";
+    auto * body = RawCppString::New(fmt::format(R"json({{"message":"{}"}})json", msg));
+    return HttpRequestRes{
+        .status = HttpRequestStatus::Ok,
+        .res = CppStrWithView{
+            .inner = GenRawCppPtr(body, RawCppPtrTypeImpl::String),
+            .view = BaseBuffView{body->data(), body->size()},
+        },
+    };
+}
+
+// execute remote gc if this node is the remote gc owner
+HttpRequestRes HandleHttpRequestRemoteGC(
+    EngineStoreServerWrap * server,
+    std::string_view,
+    const std::string &,
+    std::string_view,
+    std::string_view)
+{
+    const auto & owner = server->tmt->getS3GCOwnerManager();
+    const auto owner_info = owner->getOwnerID();
+    bool gc_is_executed = false;
+    if (owner_info.status == OwnerType::IsOwner)
+    {
+        server->tmt->getS3GCManager()->wake();
+        gc_is_executed = true;
+    }
+    auto * body = RawCppString::New(fmt::format(
+        R"json({{"status":"{}","owner_id":"{}","execute":"{}"}})json",
+        magic_enum::enum_name(owner_info.status),
+        owner_info.owner_id,
+        gc_is_executed));
+    return HttpRequestRes{
+        .status = HttpRequestStatus::Ok,
+        .res = CppStrWithView{
+            .inner = GenRawCppPtr(body, RawCppPtrTypeImpl::String),
+            .view = BaseBuffView{body->data(), body->size()},
+        },
     };
 }
 
@@ -203,7 +287,10 @@ using HANDLE_HTTP_URI_METHOD = HttpRequestRes (*)(
 static const std::map<std::string, HANDLE_HTTP_URI_METHOD> AVAILABLE_HTTP_URI = {
     {"/tiflash/sync-status/", HandleHttpRequestSyncStatus},
     {"/tiflash/store-status", HandleHttpRequestStoreStatus},
-    {"/tiflash/sync-remote-store", HandleHttpRequestRemoteStoreSync},
+    {"/tiflash/remote/owner/info", HandleHttpRequestRemoteOwnerInfo},
+    {"/tiflash/remote/owner/resign", HandleHttpRequestRemoteOwnerResign},
+    {"/tiflash/remote/gc", HandleHttpRequestRemoteGC},
+    {"/tiflash/remote/upload", HandleHttpRequestRemoteReUpload},
 };
 
 uint8_t CheckHttpUriAvailable(BaseBuffView path_)
@@ -239,7 +326,8 @@ HttpRequestRes HandleHttpRequest(
     }
     return HttpRequestRes{
         .status = HttpRequestStatus::ErrorParam,
-        .res = CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{nullptr, 0}}};
+        .res = CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{nullptr, 0}},
+    };
 }
 
 } // namespace DB
