@@ -33,7 +33,7 @@ public:
     {
         RSResults results(pack_count, RSResult::Some);
         GET_RSINDEX_FROM_PARAM_NOT_FOUND_RETURN_DIRECTLY(param, attr, rsindex, results);
-        results = rsindex.minmax->check<RoughCheck::CheckGreaterEqual>(start_pack, pack_count, value, rsindex.type);
+        results = rsindex.minmax->checkCmp<RoughCheck::CheckGreaterEqual>(start_pack, pack_count, value, rsindex.type);
         std::transform(results.begin(), results.end(), results.begin(), [](RSResult result) { return !result; });
         return results;
     }

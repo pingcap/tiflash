@@ -82,16 +82,41 @@ public:
     std::pair<UInt64, UInt64> getUInt64MinMax(size_t pack_index);
 
     template <template <typename> class Op>
-    RSResults check(size_t start_pack, size_t pack_count, const Field & value, const DataTypePtr & type);
+    RSResults checkCmp(size_t start_pack, size_t pack_count, const Field & value, const DataTypePtr & type);
+    template <template <typename> class Op, typename T>
+    RSResults checkCmpImpl(size_t start_pack, size_t pack_count, const Field & value, const DataTypePtr & type);
     template <template <typename> class Op>
-    RSResults checkNullable(size_t start_pack, size_t pack_count, const Field & value, const DataTypePtr & type);
+    RSResults checkNullableCmp(size_t start_pack, size_t pack_count, const Field & value, const DataTypePtr & type);
+    template <template <typename> class Op, typename T>
+    RSResults checkNullableCmpImpl(
+        const DB::ColumnNullable & column_nullable,
+        const DB::ColumnUInt8 & null_map,
+        size_t start_pack,
+        size_t pack_count,
+        const Field & value,
+        const DataTypePtr & type);
 
+    // TODO: merge with checkCmp
     RSResults checkIn(
         size_t start_pack,
         size_t pack_count,
         const std::vector<Field> & values,
         const DataTypePtr & type);
+    template <typename T>
+    RSResults checkInImpl(
+        size_t start_pack,
+        size_t pack_count,
+        const std::vector<Field> & values,
+        const DataTypePtr & type);
     RSResults checkNullableIn(
+        size_t start_pack,
+        size_t pack_count,
+        const std::vector<Field> & values,
+        const DataTypePtr & type);
+    template <typename T>
+    RSResults checkNullableInImpl(
+        const DB::ColumnNullable & column_nullable,
+        const DB::ColumnUInt8 & null_map,
         size_t start_pack,
         size_t pack_count,
         const std::vector<Field> & values,

@@ -33,7 +33,7 @@ public:
     {
         RSResults results(pack_count, RSResult::Some);
         GET_RSINDEX_FROM_PARAM_NOT_FOUND_RETURN_DIRECTLY(param, attr, rsindex, results);
-        return rsindex.minmax->check<RoughCheck::CheckGreater>(start_pack, pack_count, value, rsindex.type);
+        return rsindex.minmax->checkCmp<RoughCheck::CheckGreater>(start_pack, pack_count, value, rsindex.type);
     }
 
     RSOperatorPtr switchDirection() override { return createLess(attr, value, null_direction); }
