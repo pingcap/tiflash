@@ -494,7 +494,7 @@ void SegmentReadTask::doFetchPages(const disaggregated::FetchDisaggPagesRequest 
     {
         Stopwatch sw_read_packet;
         auto packet = std::make_shared<disaggregated::PagesPacket>();
-        if (bool more = stream_resp->Read(packet.get()); !more)
+        if (!stream_resp->Read(packet.get()))
             break;
         if (packet->has_error())
             throw Exception(ErrorCodes::FETCH_PAGES_ERROR, "{} (from {})", packet->error().msg(), *this);
