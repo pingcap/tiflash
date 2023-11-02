@@ -305,6 +305,9 @@ RSResults MinMaxIndex::checkNullableEqual(
             size_t pos = i * 2;
             size_t prev_offset = pos == 0 ? 0 : offsets[pos - 1];
             // todo use StringRef instead of String
+            // When using String, we should use reinterpret_cast<const char *>(&chars[prev_offset]) instead of chars[prev_offset]
+            // so that it will call constructor `constexpr basic_string( const CharT* s, const Allocator& alloc = Allocator())`
+            // rather than `constexpr basic_string( size_type count, CharT ch, const Allocator& alloc = Allocator() );`
             auto min = String(reinterpret_cast<const char *>(&chars[prev_offset]), offsets[pos] - prev_offset - 1);
             pos = i * 2 + 1;
             prev_offset = offsets[pos - 1];
