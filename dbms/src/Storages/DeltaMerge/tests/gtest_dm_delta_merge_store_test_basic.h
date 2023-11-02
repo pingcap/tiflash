@@ -109,9 +109,8 @@ public:
         HandleRange range(min_pk, max_pk + 1);
         auto handle_range = RowKeyRange::fromHandleRange(range);
         auto external_file = ExternalDTFileInfo{.id = file_id, .range = handle_range};
-        return {
-            handle_range,
-            {external_file}}; // There are some duplicated info. This is to minimize the change to our test code.
+        // There are some duplicated info. This is to minimize the change to our test code.
+        return {handle_range, {external_file}}; 
     }
 
 protected:
