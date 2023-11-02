@@ -1185,7 +1185,7 @@ void Join::handleOtherConditionsForOneProbeRow(Block & block, ProbeProcessInfo &
     throw Exception("Logical error: unknown combination of JOIN", ErrorCodes::LOGICAL_ERROR);
 }
 
-Block Join::doJoinBlockHash(ProbeProcessInfo & probe_process_info) const
+Block Join::doJoinBlockHash(ProbeProcessInfo & probe_process_info, const JoinBuildInfo & join_build_info) const
 {
     assert(probe_process_info.prepare_for_probe_done);
     probe_process_info.updateStartRow<false>();
@@ -1251,13 +1251,6 @@ Block Join::doJoinBlockHash(ProbeProcessInfo & probe_process_info) const
     auto & filter = probe_process_info.filter;
     auto & offsets_to_replicate = probe_process_info.offsets_to_replicate;
 
-    JoinBuildInfo join_build_info{
-        enable_fine_grained_shuffle,
-        fine_grained_shuffle_count,
-        isEnableSpill(),
-        hash_join_spill_context->isSpilled(),
-        build_concurrency,
-        restore_round};
     JoinPartition::probeBlock(
         partitions,
         rows,
@@ -1387,19 +1380,24 @@ Block Join::joinBlockHash(ProbeProcessInfo & probe_process_info) const
 {
     std::vector<Block> result_blocks;
     size_t result_rows = 0;
-    bool need_compute_hash = enable_fine_grained_shuffle
-        || (hash_join_spill_context->isSpillEnabled() && !hash_join_spill_context->isSpilled());
+    JoinBuildInfo join_build_info{
+        enable_fine_grained_shuffle,
+        fine_grained_shuffle_count,
+        isEnableSpill(),
+        hash_join_spill_context->isSpilled(),
+        build_concurrency,
+        restore_round};
     probe_process_info.prepareForHashProbe(
         key_names_left,
         non_equal_conditions.left_filter_column,
         kind,
         strictness,
-        need_compute_hash,
+        join_build_info.needVirtualDispatchForProbeBlock(),
         collators,
         restore_round);
     while (true)
     {
-        auto block = doJoinBlockHash(probe_process_info);
+        auto block = doJoinBlockHash(probe_process_info, join_build_info);
         assert(block);
         block = removeUselessColumn(block);
         result_rows += block.rows();
