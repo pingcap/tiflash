@@ -370,7 +370,11 @@ FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, u
             }
             else
             {
-                LOG_INFO(log, "Add new task fail(queue full) [new_peer_id={}] [region_id={}]", new_peer_id, region_id);
+                LOG_WARNING(
+                    log,
+                    "Add new task fail(queue full) [new_peer_id={}] [region_id={}]",
+                    new_peer_id,
+                    region_id);
                 return genFastAddPeerRes(FastAddPeerStatus::WaitForData, "", "");
             }
         }

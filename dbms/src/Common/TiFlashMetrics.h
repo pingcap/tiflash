@@ -371,6 +371,17 @@ namespace DB
       Counter,                                                                                                                      \
       F(type_cftiny_read, {{"type", "cftiny_read"}}),                                                                               \
       F(type_cftiny_fetch, {{"type", "cftiny_fetch"}}))                                                                             \
+    M(tiflash_fap_task_state,                                                                                                       \
+      "",                                                                                                                           \
+      Gauge,                                                                                                                        \
+      F(type_ongoing, {{"type", "ongoing"}}),                                                                                       \
+      F(type_failed, {{"type", "failed"}}),                                                                                         \
+      F(type_succeed, {{"type", "succeed"}}))                                                                                       \
+    M(tiflash_fap_task_duration_seconds,                                                                                            \
+      "",                                                                                                                           \
+      Histogram,                                                                                                                    \
+      F(type_ingest, {{"type", "ingest"}}, ExpBuckets{0.01, 2, 60}),                                                                \
+      F(type_total, {{"type", "total"}}, ExpBuckets{0.01, 2, 60}))                                                                  \
     M(tiflash_raft_command_duration_seconds,                                                                                        \
       "Bucketed histogram of some raft command: apply snapshot and ingest SST",                                                     \
       Histogram, /* these command usually cost several seconds, increase the start bucket to 50ms */                                \

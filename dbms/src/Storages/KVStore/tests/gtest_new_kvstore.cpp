@@ -14,6 +14,7 @@
 
 #include <Debug/MockKVStore/MockSSTGenerator.h>
 #include <Storages/KVStore/Read/LearnerRead.h>
+#include <Storages/KVStore/Utils/AsyncTasks.h>
 #include <Storages/RegionQueryInfo.h>
 
 #include "region_kvstore_test.h"
@@ -686,6 +687,60 @@ try
 }
 CATCH
 
+TEST_F(RegionKVStoreTest, AsyncTasks)
+{
+    using namespace std::chrono_literals;
+
+    using TestAsyncTasks = AsyncTasks<uint64_t, std::function<int()>, int>;
+    auto async_tasks = std::make_unique<TestAsyncTasks>(1, 1, 1);
+
+    int total = 5;
+    std::vector<bool> f(total, false);
+    while (true)
+    {
+        auto count = std::accumulate(f.begin(), f.end(), 0, [&](int a, bool b) -> int { return a + int(b); });
+        if (count >= total)
+        {
+            break;
+        }
+        else
+        {
+            LOG_DEBUG(log, "finished {}/{}", count, total);
+        }
+        for (int i = 0; i < total; i++)
+        {
+            if (!async_tasks->isScheduled(i))
+            {
+                auto res = async_tasks->addTask(i, []() {
+                    std::this_thread::sleep_for(1000ms);
+                    return 1;
+                });
+                if (i == 0)
+                {
+                    ASSERT_EQ(res, true);
+                }
+                else
+                {
+                    ASSERT_EQ(res, false);
+                }
+            }
+        }
+
+        for (int i = 0; i < total; i++)
+        {
+            if (!f[i])
+            {
+                if (async_tasks->isReady(i))
+                {
+                    auto r = async_tasks->fetchResult(i);
+                    UNUSED(r);
+                    f[i] = true;
+                }
+            }
+        }
+        std::this_thread::sleep_for(1000ms);
+    }
+}
 
 } // namespace tests
 } // namespace DB
