@@ -39,9 +39,9 @@ using Cmp = ValueComparision<Op>;
     (Cmp<GreaterOrEqualsOp>::compare(lef_field, type, right_value) == ValueCompareResult::True)
 
 
-template <typename T>
 struct CheckEqual
 {
+    template <typename T>
     static RSResult check(const Field & v, const DataTypePtr & type, const T & min, const T & max)
     {
         if (!IS_LEGAL(v, min))
@@ -63,9 +63,9 @@ struct CheckEqual
     }
 };
 
-template <typename T>
 struct CheckIn
 {
+    template <typename T>
     static RSResult check(const std::vector<Field> & values, const DataTypePtr & type, const T & min, const T & max)
     {
         RSResult result = None;
@@ -76,15 +76,15 @@ struct CheckIn
             // skip null value
             if (v.isNull())
                 continue;
-            result = result || CheckEqual<T>::check(v, type, min, max);
+            result = result || CheckEqual::check<T>(v, type, min, max);
         }
         return result;
     }
 };
 
-template <typename T>
 struct CheckGreater
 {
+    template <typename T>
     static RSResult check(const Field & v, const DataTypePtr & type, const T & min, const T & max)
     {
         if (!IS_LEGAL(v, min))
@@ -105,9 +105,9 @@ struct CheckGreater
     }
 };
 
-template <typename T>
 struct CheckGreaterEqual
 {
+    template <typename T>
     static RSResult check(const Field & v, const DataTypePtr & type, T min, T max)
     {
         if (!IS_LEGAL(v, min))

@@ -234,7 +234,7 @@ RSResults MinMaxIndex::checkNullableInImpl(
             continue;
         auto min = minmaxes_data[i * 2];
         auto max = minmaxes_data[i * 2 + 1];
-        results[i - start_pack] = RoughCheck::CheckIn<T>::check(values, type, min, max);
+        results[i - start_pack] = RoughCheck::CheckIn::check<T>(values, type, min, max);
     }
     return results;
 }
@@ -301,7 +301,7 @@ RSResults MinMaxIndex::checkNullableIn(
             pos = i * 2 + 1;
             prev_offset = offsets[pos - 1];
             auto max = String(chars[prev_offset], offsets[pos] - prev_offset - 1);
-            results[i - start_pack] = RoughCheck::CheckIn<String>::check(values, type, min, max);
+            results[i - start_pack] = RoughCheck::CheckIn::check<String>(values, type, min, max);
         }
         return results;
     }
@@ -323,7 +323,7 @@ RSResults MinMaxIndex::checkInImpl(
             continue;
         auto min = minmaxes_data[i * 2];
         auto max = minmaxes_data[i * 2 + 1];
-        results[i - start_pack] = RoughCheck::CheckIn<T>::check(values, type, min, max);
+        results[i - start_pack] = RoughCheck::CheckIn::check<T>(values, type, min, max);
     }
     return results;
 }
@@ -372,14 +372,14 @@ RSResults MinMaxIndex::checkIn(
             pos = i * 2 + 1;
             prev_offset = offsets[pos - 1];
             auto max = String(chars[prev_offset], offsets[pos] - prev_offset - 1);
-            results[i - start_pack] = RoughCheck::CheckIn<String>::check(values, type, min, max);
+            results[i - start_pack] = RoughCheck::CheckIn::check<String>(values, type, min, max);
         }
         return results;
     }
     return RSResults(pack_count, RSResult::Some);
 }
 
-template <template <typename> class Op, typename T>
+template <typename Op, typename T>
 RSResults MinMaxIndex::checkCmpImpl(size_t start_pack, size_t pack_count, const Field & value, const DataTypePtr & type)
 {
     RSResults results(pack_count, RSResult::None);
@@ -390,12 +390,12 @@ RSResults MinMaxIndex::checkCmpImpl(size_t start_pack, size_t pack_count, const 
             continue;
         auto min = minmaxes_data[i * 2];
         auto max = minmaxes_data[i * 2 + 1];
-        results[i - start_pack] = Op<T>::check(value, type, min, max);
+        results[i - start_pack] = Op::template check<T>(value, type, min, max);
     }
     return results;
 }
 
-template <template <typename> class Op>
+template <typename Op>
 RSResults MinMaxIndex::checkCmp(size_t start_pack, size_t pack_count, const Field & value, const DataTypePtr & type)
 {
     RSResults results(pack_count, RSResult::None);
@@ -437,14 +437,14 @@ RSResults MinMaxIndex::checkCmp(size_t start_pack, size_t pack_count, const Fiel
             pos = i * 2 + 1;
             prev_offset = offsets[pos - 1];
             auto max = String(chars[prev_offset], offsets[pos] - prev_offset - 1);
-            results[i - start_pack] = Op<String>::check(value, type, min, max);
+            results[i - start_pack] = Op::template check<String>(value, type, min, max);
         }
         return results;
     }
     return RSResults(pack_count, RSResult::Some);
 }
 
-template <template <typename> class Op, typename T>
+template <typename Op, typename T>
 RSResults MinMaxIndex::checkNullableCmpImpl(
     const DB::ColumnNullable & column_nullable,
     const DB::ColumnUInt8 & null_map,
@@ -461,12 +461,12 @@ RSResults MinMaxIndex::checkNullableCmpImpl(
             continue;
         auto min = minmaxes_data[i * 2];
         auto max = minmaxes_data[i * 2 + 1];
-        results[i - start_pack] = Op<T>::check(value, type, min, max);
+        results[i - start_pack] = Op::template check<T>(value, type, min, max);
     }
     return results;
 }
 
-template <template <typename> class Op>
+template <typename Op>
 RSResults MinMaxIndex::checkNullableCmp(
     size_t start_pack,
     size_t pack_count,
@@ -532,7 +532,7 @@ RSResults MinMaxIndex::checkNullableCmp(
             pos = i * 2 + 1;
             prev_offset = offsets[pos - 1];
             auto max = String(chars[prev_offset], offsets[pos] - prev_offset - 1);
-            results[i - start_pack] = Op<String>::check(value, type, min, max);
+            results[i - start_pack] = Op::template check<String>(value, type, min, max);
         }
         return results;
     }
