@@ -126,7 +126,6 @@ Join::Join(
     const Names & key_names_left_,
     const Names & key_names_right_,
     ASTTableJoin::Kind kind_,
-    ASTTableJoin::Strictness strictness_,
     const String & req_id,
     bool enable_fine_grained_shuffle_,
     size_t fine_grained_shuffle_count_,
@@ -151,10 +150,8 @@ Join::Join(
     , match_helper_name(match_helper_name_)
     , flag_mapped_entry_helper_name(flag_mapped_entry_helper_name_)
     , kind(kind_)
-    , strictness(strictness_)
-    , original_strictness(strictness)
     , join_req_id(req_id)
-    , may_probe_side_expanded_after_join(mayProbeSideExpandedAfterJoin(kind, strictness))
+    , may_probe_side_expanded_after_join(mayProbeSideExpandedAfterJoin(kind))
     , key_names_left(key_names_left_)
     , key_names_right(key_names_right_)
     , build_concurrency(0)
@@ -179,26 +176,18 @@ Join::Join(
     , enable_fine_grained_shuffle(enable_fine_grained_shuffle_)
     , fine_grained_shuffle_count(fine_grained_shuffle_count_)
 {
-    if (non_equal_conditions.other_cond_expr != nullptr)
-    {
-        /// if there is other_condition, then should keep all the valid rows during probe stage
-        if (strictness == ASTTableJoin::Strictness::Any)
-        {
-            strictness = ASTTableJoin::Strictness::All;
-        }
-        has_other_condition = true;
-    }
+    has_other_condition = non_equal_conditions.other_cond_expr != nullptr;
+    if ((isSemiFamily(kind) || isLeftOuterSemiFamily(kind) || isNullAwareSemiFamily(kind)) && !has_other_condition)
+        strictness = ASTTableJoin::Strictness::Any;
     else
-    {
-        has_other_condition = false;
-    }
+        strictness = ASTTableJoin::Strictness::All;
 
-    if (unlikely(kind == ASTTableJoin::Kind::Cross_RightOuter))
+    if unlikely (kind == ASTTableJoin::Kind::Cross_RightOuter)
         throw Exception("Cross right outer join should be converted to cross Left outer join during compile");
     RUNTIME_CHECK(!(isNecessaryKindToUseRowFlaggedHashMap(kind) && strictness == ASTTableJoin::Strictness::Any));
-    String err = non_equal_conditions.validate(kind);
-    if (unlikely(!err.empty()))
-        throw Exception("Validate join conditions error: {}" + err);
+    const char * err = non_equal_conditions.validate(kind);
+    if unlikely (err != nullptr)
+        throw Exception("Validate join conditions error: {}" + String(err));
 
     hash_join_spill_context = std::make_shared<HashJoinSpillContext>(
         build_spill_config,
@@ -378,7 +367,6 @@ std::shared_ptr<Join> Join::createRestoreJoin(size_t max_bytes_before_external_j
         key_names_left,
         key_names_right,
         kind,
-        original_strictness,
         join_req_id,
         false,
         0,
@@ -927,8 +915,7 @@ void Join::handleOtherConditions(
     /// be returned, if other_eq_filter_from_in_column return true or null this row should not be returned.
     mergeNullAndFilterResult(block, filter, non_equal_conditions.other_eq_cond_from_in_name, isAntiJoin(kind));
 
-    if ((isInnerJoin(kind) && original_strictness == ASTTableJoin::Strictness::All)
-        || isNecessaryKindToUseRowFlaggedHashMap(kind))
+    if (isInnerJoin(kind) || isNecessaryKindToUseRowFlaggedHashMap(kind))
     {
         /// inner | rightSemi | rightAnti | rightOuter join,  just use other_filter_column to filter result
         for (size_t i = 0; i < block.columns(); ++i)
@@ -936,20 +923,20 @@ void Join::handleOtherConditions(
         return;
     }
 
+    bool is_semi_family = isSemiFamily(kind) || isLeftOuterSemiFamily(kind);
     for (size_t i = 0, prev_offset = 0; i < offsets_to_replicate->size(); ++i)
     {
         size_t current_offset = (*offsets_to_replicate)[i];
         bool has_row_kept = false;
         for (size_t index = prev_offset; index < current_offset; index++)
         {
-            if (original_strictness == ASTTableJoin::Strictness::Any)
+            if (is_semi_family)
             {
                 /// for semi/anti join, at most one row is kept
                 row_filter[index] = !has_row_kept && filter[index];
             }
             else
             {
-                /// original strictness = ALL && kind = Anti should not happen
                 row_filter[index] = filter[index];
             }
             if (row_filter[index])
@@ -996,7 +983,7 @@ void Join::handleOtherConditions(
             block.getByPosition(i).column = block.getByPosition(i).column->filter(row_filter, -1);
         return;
     }
-    if (isInnerJoin(kind) || isAntiJoin(kind))
+    if (is_semi_family)
     {
         /// for semi/anti join, filter out not matched rows
         for (size_t i = 0; i < block.columns(); ++i)
@@ -1049,7 +1036,7 @@ void Join::handleOtherConditionsForOneProbeRow(Block & block, ProbeProcessInfo &
         probe_process_info.has_row_matched |= matched_row_count_in_current_block != 0;
     }
     /// case 1, inner join
-    if (kind == ASTTableJoin::Kind::Cross && original_strictness == ASTTableJoin::Strictness::All)
+    if (kind == ASTTableJoin::Kind::Cross)
     {
         if (matched_row_count_in_current_block > 0)
         {
@@ -1066,7 +1053,6 @@ void Join::handleOtherConditionsForOneProbeRow(Block & block, ProbeProcessInfo &
     /// case 2, left outer join
     if (kind == ASTTableJoin::Kind::Cross_LeftOuter)
     {
-        assert(original_strictness == ASTTableJoin::Strictness::All);
         if (matched_row_count_in_current_block > 0)
         {
             for (size_t i = 0; i < block.columns(); ++i)
@@ -1099,7 +1085,7 @@ void Join::handleOtherConditionsForOneProbeRow(Block & block, ProbeProcessInfo &
         return;
     }
     /// case 3, semi join
-    if (kind == ASTTableJoin::Kind::Cross && original_strictness == ASTTableJoin::Strictness::Any)
+    if (kind == ASTTableJoin::Kind::Cross_Semi)
     {
         if (probe_process_info.has_row_matched)
         {
@@ -1299,7 +1285,7 @@ Block Join::doJoinBlockHash(ProbeProcessInfo & probe_process_info) const
                 if (isLeftOuterSemiFamily(kind))
                 {
                     auto helper_col = block.getByName(match_helper_name).column;
-                    helper_col = helper_col->cut(probe_process_info.start_row, probe_process_info.end_row);
+                    helper_col = helper_col->cut(probe_process_info.start_row, process_rows);
                 }
                 offsets_to_replicate->assign(
                     offsets_to_replicate->begin() + probe_process_info.start_row,
@@ -1580,7 +1566,7 @@ Block Join::joinBlockNullAware(ProbeProcessInfo & probe_process_info) const
 
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_join_prob_failpoint);
 
-    /// Null aware join never expand the left block, just handle the whole block at one time is enough
+    /// Null aware semi join never expand the left block, just handle the whole block at one time is enough
     probe_process_info.all_rows_joined_finish = true;
 
     return removeUselessColumn(block);
@@ -1992,7 +1978,6 @@ Block Join::joinBlock(ProbeProcessInfo & probe_process_info, bool dry_run) const
 
     Block block{};
 
-    using enum ASTTableJoin::Strictness;
     using enum ASTTableJoin::Kind;
     if (isCrossJoin(kind))
         block = joinBlockCross(probe_process_info);

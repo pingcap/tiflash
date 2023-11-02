@@ -158,7 +158,6 @@ public:
         const Names & key_names_left_,
         const Names & key_names_right_,
         ASTTableJoin::Kind kind_,
-        ASTTableJoin::Strictness strictness_,
         const String & req_id,
         bool enable_fine_grained_shuffle_,
         size_t fine_grained_shuffle_count_,
@@ -326,7 +325,6 @@ private:
     ASTTableJoin::Kind kind;
     ASTTableJoin::Strictness strictness;
     bool has_other_condition;
-    ASTTableJoin::Strictness original_strictness;
     String join_req_id;
     const bool may_probe_side_expanded_after_join;
 
