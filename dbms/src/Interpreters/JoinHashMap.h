@@ -33,18 +33,29 @@ struct RowRef
     {}
 };
 
+struct CachedColumnInfo
+{
+    std::mutex cached_columns_mu;
+    Columns cached_columns;
+    bool generate_cached_columns = false;
+};
+
 /// Single linked list of references to rows. Used for ALL JOINs (non-unique JOINs)
 struct RowRefList : RowRef
 {
     RowRefList * next = nullptr;
-    mutable std::mutex cached_columns_mu;
-    mutable Columns cached_columns;
-    mutable bool generate_cached_columns = false;
-    mutable std::atomic<UInt64> rows;
+    size_t list_length = 0;
+    /// todo use raw point and allocate memory in pool?
+    std::unique_ptr<CachedColumnInfo> cached_column_info;
 
     RowRefList() = default;
     RowRefList(const Block * block_, size_t row_num_)
         : RowRef(block_, row_num_)
+    {}
+    /// for head node
+    RowRefList(const Block * block_, size_t row_num_, bool sentinel_head)
+        : RowRef(block_, row_num_)
+        , list_length(sentinel_head ? 0 : 1)
     {}
 };
 
@@ -54,9 +65,9 @@ struct RowRefListWithUsedFlag : RowRef
     using Base_t = RowRefListWithUsedFlag;
     mutable std::atomic<bool> used{};
     RowRefListWithUsedFlag * next = nullptr;
-    mutable std::mutex cached_columns_mu;
-    mutable Columns cached_columns;
-    mutable bool generate_cached_columns = false;
+    size_t list_length = 0;
+    /// todo use raw point and allocate memory in pool?
+    std::unique_ptr<CachedColumnInfo> cached_column_info;
 
     void setUsed() const
     {
@@ -67,6 +78,11 @@ struct RowRefListWithUsedFlag : RowRef
     RowRefListWithUsedFlag() = default;
     RowRefListWithUsedFlag(const Block * block_, size_t row_num_)
         : RowRef(block_, row_num_)
+    {}
+    /// for head node
+    RowRefListWithUsedFlag(const Block * block_, size_t row_num_, bool sentinel_head)
+        : RowRef(block_, row_num_)
+        , list_length(sentinel_head ? 0 : 1)
     {}
 };
 

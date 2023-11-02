@@ -225,10 +225,7 @@ public:
             return assumeMutable();
     }
 
-    MutablePtr mutateWithClone() const
-    {
-        return derived()->clone();
-    }
+    MutablePtr mutateWithClone() const { return derived()->clone(); }
 
     MutablePtr assumeMutable() const { return const_cast<COWPtr *>(this)->getPtr(); }
 

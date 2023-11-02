@@ -37,10 +37,15 @@ extern const char random_fail_in_resize_callback[];
 namespace
 {
 template <typename List, typename Elem>
-void insertRowToList(List * list, Elem * elem)
+void insertRowToList(List * list, Elem * elem, size_t cache_columns_threshold)
 {
     elem->next = list->next; // NOLINT(clang-analyzer-core.NullDereference)
     list->next = elem;
+    ++list->list_length;
+    if unlikely (cache_columns_threshold == list->list_length)
+    {
+        list->cached_columns_info = std::make_unique<CachedColumnInfo>();
+    }
 }
 } // namespace
 
@@ -68,7 +73,8 @@ void RowsNotInsertToMap::insertRow(Block * stored_block, size_t index, bool need
     {
         auto * elem = reinterpret_cast<RowRefList *>(pool.alloc(sizeof(RowRefList)));
         new (elem) RowRefList(stored_block, index);
-        insertRowToList(&head, elem);
+        /// don't need cache column since it will explicitly materialize of need_materialize is true
+        insertRowToList(&head, elem, std::numeric_limits<size_t>::max());
     }
     ++total_size;
 }
@@ -453,7 +459,8 @@ struct Inserter
         Block * stored_block,
         size_t i,
         Arena & pool,
-        std::vector<String> & sort_key_containers);
+        std::vector<String> & sort_key_containers,
+        size_t cache_column_threshold);
 };
 
 template <typename Map, typename KeyGetter>
@@ -465,7 +472,8 @@ struct Inserter<ASTTableJoin::Strictness::Any, Map, KeyGetter>
         Block * stored_block,
         size_t i,
         Arena & pool,
-        std::vector<String> & sort_key_container)
+        std::vector<String> & sort_key_container,
+        size_t /* cache_column_threshold */)
     {
         auto emplace_result = key_getter.emplaceKey(map, i, pool, sort_key_container);
 
@@ -484,12 +492,13 @@ struct Inserter<ASTTableJoin::Strictness::All, Map, KeyGetter>
         Block * stored_block,
         size_t i,
         Arena & pool,
-        std::vector<String> & sort_key_container)
+        std::vector<String> & sort_key_container,
+        size_t cache_column_threshold)
     {
         auto emplace_result = key_getter.emplaceKey(map, i, pool, sort_key_container);
 
         if (emplace_result.isInserted())
-            new (&emplace_result.getMapped()) typename Map::mapped_type(stored_block, i);
+            new (&emplace_result.getMapped()) typename Map::mapped_type(stored_block, i, 0);
         else
         {
             /** The first element of the list is stored in the value of the hash table, the rest in the pool.
@@ -498,7 +507,7 @@ struct Inserter<ASTTableJoin::Strictness::All, Map, KeyGetter>
                  */
             auto elem = reinterpret_cast<MappedType *>(pool.alloc(sizeof(MappedType)));
             new (elem) typename Map::mapped_type(stored_block, i);
-            insertRowToList(&emplace_result.getMapped(), elem);
+            insertRowToList(&emplace_result.getMapped(), elem, cache_column_threshold);
         }
     }
 };
@@ -625,17 +634,17 @@ void NO_INLINE insertBlockIntoMapsTypeCase(
         insert_indexes.emplace_back(insert_index);
     }
 
-#define INSERT_TO_MAP(join_partition, segment_index)            \
-    auto & current_map = (join_partition) -> getHashMap<Map>(); \
-    for (auto & s_i : (segment_index))                          \
-    {                                                           \
-        Inserter<STRICTNESS, Map, KeyGetter>::insert(           \
-            current_map,                                        \
-            key_getter,                                         \
-            stored_block,                                       \
-            s_i,                                                \
-            pool,                                               \
-            sort_key_containers);                               \
+#define INSERT_TO_MAP(join_partition, segment_index)          \
+    auto & current_map = (join_partition)->getHashMap<Map>(); \
+    for (auto & s_i : (segment_index))                        \
+    {                                                         \
+        Inserter<STRICTNESS, Map, KeyGetter>::insert(         \
+            current_map,                                      \
+            key_getter,                                       \
+            stored_block,                                     \
+            s_i,                                              \
+            pool,                                             \
+            sort_key_containers);                             \
     }
 
 #define INSERT_TO_NOT_INSERTED_MAP                                                                      \
@@ -1304,19 +1313,10 @@ struct Adder<KIND, ASTTableJoin::Strictness::All, Map>
         const std::vector<size_t> & right_indexes,
         ProbeProcessInfo & probe_process_info)
     {
-        const auto & mapped_value = static_cast<const typename Map::mapped_type::Base_t &>(it->getMapped());
-        size_t rows_joined = mapped_value.rows;
+        auto & mapped_value = static_cast<const typename Map::mapped_type::Base_t &>(it->getMapped());
+        size_t rows_joined = mapped_value.list_length;
         // If there are too many rows in the column to split, record the number of rows that have been expanded for next read.
         // and it means the rows in this block are not joined finish.
-        if (rows_joined == 0)
-        {
-            for (auto current = &mapped_value;
-                 current != nullptr;
-                 current = current->next)
-                ++rows_joined;
-            mapped_value.rows = rows_joined;
-        }
-
         if (current_offset && current_offset + rows_joined > probe_process_info.max_block_size)
         {
             return true;
@@ -1328,6 +1328,7 @@ struct Adder<KIND, ASTTableJoin::Strictness::All, Map>
         {
             bool has_cached_columns = false;
             {
+                assert(mapped_value.cached_columns_info != nullptr);
                 std::unique_lock lock(mapped_value.cached_columns_mu);
                 has_cached_columns = !mapped_value.cached_columns.empty();
                 if (!has_cached_columns)
@@ -1367,9 +1368,7 @@ struct Adder<KIND, ASTTableJoin::Strictness::All, Map>
             }
         }
 
-        for (auto current = &static_cast<const typename Map::mapped_type::Base_t &>(it->getMapped());
-             current != nullptr;
-             current = current->next)
+        for (auto current = &mapped_value; current != nullptr; current = current->next)
         {
             for (size_t j = 0; j < num_columns_to_add; ++j)
                 added_columns[j]->insertFrom(
@@ -1459,22 +1458,16 @@ struct RowFlaggedHashMapAdder
         ProbeProcessInfo & probe_process_info,
         MutableColumnPtr & ptr_col)
     {
-        size_t rows_joined = 0;
+        auto & mapped_value = static_cast<const typename Map::mapped_type::Base_t &>(it->getMapped());
+        size_t rows_joined = mapped_value.list_length;
         // If there are too many rows in the column to split, record the number of rows that have been expanded for next read.
         // and it means the rows in this block are not joined finish.
-
-        for (auto current = &static_cast<const typename Map::mapped_type::Base_t &>(it->getMapped());
-             current != nullptr;
-             current = current->next)
-            ++rows_joined;
-
         if (current_offset && current_offset + rows_joined > probe_process_info.max_block_size)
         {
             return true;
         }
 
         bool need_generated_cached_columns = false;
-        const auto & mapped_value = static_cast<const typename Map::mapped_type::Base_t &>(it->getMapped());
         if unlikely (
             probe_process_info.cache_columns_threshold > 0 && rows_joined > probe_process_info.cache_columns_threshold)
         {
@@ -1517,9 +1510,7 @@ struct RowFlaggedHashMapAdder
 
         auto & actual_ptr_col = static_cast<PointerHelper::ColumnType &>(*ptr_col);
         auto & container = static_cast<PointerHelper::ArrayType &>(actual_ptr_col.getData());
-        for (auto current = &static_cast<const typename Map::mapped_type::Base_t &>(it->getMapped());
-             current != nullptr;
-             current = current->next)
+        for (auto current = &mapped_value; current != nullptr; current = current->next)
         {
             for (size_t j = 0; j < num_columns_to_add; ++j)
                 added_columns[j]->insertFrom(
