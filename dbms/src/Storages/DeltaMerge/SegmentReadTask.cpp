@@ -439,8 +439,8 @@ struct WritePageTask
     {}
     Remote::RNLocalPageCache * page_cache;
     UniversalWriteBatch wb;
-    std::list<DM::RemotePb::RemotePage> remote_pages; // Hold the data of wb.
-    std::list<MemTrackerWrapper> remote_page_mem_tracker_wrappers; // Hold the memory stat of remote_pages.
+    std::forward_list<DM::RemotePb::RemotePage> remote_pages; // Hold the data of wb.
+    std::forward_list<MemTrackerWrapper> remote_page_mem_tracker_wrappers; // Hold the memory stat of remote_pages.
 };
 using WritePageTaskPtr = std::unique_ptr<WritePageTask>;
 
@@ -513,10 +513,10 @@ void SegmentReadTask::doFetchPages(const disaggregated::FetchDisaggPagesRequest 
                 write_page_task = std::make_unique<WritePageTask>(
                     dm_context->db_context.getSharedContextDisagg()->rn_page_cache.get());
             }
-            auto & remote_page = write_page_task->remote_pages.emplace_back(); // NOLINT(bugprone-use-after-move)
+            auto & remote_page = write_page_task->remote_pages.emplace_front(); // NOLINT(bugprone-use-after-move)
             bool parsed = remote_page.ParseFromString(page);
             RUNTIME_CHECK_MSG(parsed, "Failed to parse page data (from {})", *this);
-            write_page_task->remote_page_mem_tracker_wrappers.emplace_back(
+            write_page_task->remote_page_mem_tracker_wrappers.emplace_front(
                 remote_page.SpaceUsedLong(),
                 fetch_pages_mem_tracker.get());
 
