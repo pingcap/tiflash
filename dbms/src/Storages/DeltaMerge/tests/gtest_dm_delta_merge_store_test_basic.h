@@ -110,7 +110,7 @@ public:
         auto handle_range = RowKeyRange::fromHandleRange(range);
         auto external_file = ExternalDTFileInfo{.id = file_id, .range = handle_range};
         // There are some duplicated info. This is to minimize the change to our test code.
-        return {handle_range, {external_file}}; 
+        return {handle_range, {external_file}};
     }
 
 protected:
