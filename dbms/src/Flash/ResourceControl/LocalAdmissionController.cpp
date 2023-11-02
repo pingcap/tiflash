@@ -77,7 +77,7 @@ void LocalAdmissionController::startBackgroudJob()
     }
     LOG_INFO(log, "get unique_client_id succeed: {}", unique_client_id);
 
-    auto last_metric_time_point = std::chrono::steady_clock::now();
+    auto last_metric_time_point = SteadyClock::now();
     while (!stopped.load())
     {
         bool fetch_token_periodically = false;
@@ -85,7 +85,7 @@ void LocalAdmissionController::startBackgroudJob()
         {
             std::unique_lock<std::mutex> lock(mu);
 
-            auto now = std::chrono::steady_clock::now();
+            auto now = SteadyClock::now();
             if (now - last_metric_time_point >= COLLECT_METRIC_INTERVAL)
             {
                 last_metric_time_point = now;
@@ -167,15 +167,20 @@ std::optional<LocalAdmissionController::AcquireTokenInfo> LocalAdmissionControll
     const ResourceGroupPtr & resource_group,
     bool is_periodically_fetch)
 {
-    double token_consumption = resource_group->getAndCleanConsumptionDelta();
+    double token_consumption = 0.0;
     double acquire_tokens = 0.0;
+    const auto now = SteadyClock::now();
+
+    const auto consumption_update_info
+        = resource_group->updateConsumptionSpeedInfoIfNecessary(now, DEFAULT_FETCH_GAC_INTERVAL);
+    if (consumption_update_info.updated)
+        token_consumption = consumption_update_info.delta;
 
     auto get_acquire_tokens = [&]() {
         if (resource_group->burstable)
             return;
 
         // To avoid periodically_token_fetch after low_token_fetch immediately
-        const auto now = std::chrono::steady_clock::now();
         if (is_periodically_fetch && !resource_group->needFetchTokenPeridically(now, DEFAULT_FETCH_GAC_INTERVAL))
             return;
 
@@ -183,7 +188,20 @@ std::optional<LocalAdmissionController::AcquireTokenInfo> LocalAdmissionControll
         if (resource_group->inTrickleModeLease(now))
             return;
 
-        acquire_tokens = resource_group->getAcquireRUNum(DEFAULT_FETCH_GAC_INTERVAL.count(), ACQUIRE_RU_AMPLIFICATION);
+        acquire_tokens = resource_group->getAcquireRUNum(
+            consumption_update_info.speed,
+            DEFAULT_FETCH_GAC_INTERVAL.count(),
+            ACQUIRE_RU_AMPLIFICATION);
+
+        if (acquire_tokens == 0.0 && token_consumption == 0.0 && resource_group->trickleModeLeaseExpire(now))
+        {
+            // If acquire_tokens and token_consumption are both zero, will ignore send RPC to GAC.
+            // But we need to make sure trickle mode should exit timely, which needs to talk with GAC.
+            // So we force acquire 1RU.
+            LOG_DEBUG(log, "force acquire 1RU because of try to exit trickle mode");
+            acquire_tokens = 1.0;
+        }
+
         assert(acquire_tokens >= 0.0);
     };
 
@@ -206,7 +224,7 @@ void LocalAdmissionController::fetchTokensFromGAC(
     {
         // In theory last_fetch_tokens_from_gac_timepoint should only be updated when network to GAC is ok,
         // but we still update here to avoid resource groups that has enough RU goto degrade mode.
-        last_fetch_tokens_from_gac_timepoint = std::chrono::steady_clock::now();
+        last_fetch_tokens_from_gac_timepoint = SteadyClock::now();
         return;
     }
 
@@ -274,7 +292,7 @@ void LocalAdmissionController::fetchTokensFromGAC(
 
 void LocalAdmissionController::checkDegradeMode()
 {
-    auto now = std::chrono::steady_clock::now();
+    auto now = SteadyClock::now();
     std::lock_guard lock(mu);
     if ((now - last_fetch_tokens_from_gac_timepoint) >= DEGRADE_MODE_DURATION)
     {
@@ -298,7 +316,8 @@ std::vector<std::string> LocalAdmissionController::handleTokenBucketsResp(
     std::vector<std::string> handled_resource_group_names;
     handled_resource_group_names.reserve(resp.responses_size());
     // Network to GAC is ok, update timepoint.
-    last_fetch_tokens_from_gac_timepoint = std::chrono::steady_clock::now();
+    const auto now = SteadyClock::now();
+    last_fetch_tokens_from_gac_timepoint = now;
 
     if (resp.responses().empty())
     {
@@ -306,7 +325,6 @@ std::vector<std::string> LocalAdmissionController::handleTokenBucketsResp(
         return {};
     }
 
-    const auto now = std::chrono::steady_clock::now();
     for (const resource_manager::TokenBucketResponse & one_resp : resp.responses())
     {
         // For each resource group.
