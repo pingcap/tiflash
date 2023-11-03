@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include <Common/StringUtils/StringUtils.h>
-#include <Encryption/MockKeyManager.h>
 #include <IO/CompressedReadBuffer.h>
 #include <IO/CompressedWriteBuffer.h>
 #include <Interpreters/Context.h>
