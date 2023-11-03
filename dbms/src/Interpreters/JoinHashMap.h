@@ -35,8 +35,8 @@ struct RowRef
 
 struct CachedColumnInfo
 {
-    std::mutex cached_columns_mu;
-    Columns cached_columns;
+    std::mutex mu;
+    Columns columns;
     bool generate_cached_columns = false;
 };
 

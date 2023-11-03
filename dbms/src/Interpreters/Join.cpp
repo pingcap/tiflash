@@ -170,7 +170,11 @@ Join::Join(
     , is_test(is_test_)
     , log(Logger::get(
           restore_config.restore_round == 0 ? join_req_id
-                             : fmt::format("{}_round_{}_part_{}", join_req_id, restore_config.restore_round, restore_config.restore_partition_id)))
+                                            : fmt::format(
+                                                "{}_round_{}_part_{}",
+                                                join_req_id,
+                                                restore_config.restore_round,
+                                                restore_config.restore_partition_id)))
     , enable_fine_grained_shuffle(fine_grained_shuffle_count_ > 0)
     , fine_grained_shuffle_count(fine_grained_shuffle_count_)
 {
@@ -369,8 +373,10 @@ std::shared_ptr<Join> Join::createRestoreJoin(size_t max_bytes_before_external_j
         /// restore join never enable fine grained shuffle
         0,
         max_bytes_before_external_join_,
-        hash_join_spill_context->createBuildSpillConfig(fmt::format("{}_{}_build", join_req_id, restore_config.restore_round + 1)),
-        hash_join_spill_context->createProbeSpillConfig(fmt::format("{}_{}_probe", join_req_id, restore_config.restore_round + 1)),
+        hash_join_spill_context->createBuildSpillConfig(
+            fmt::format("{}_{}_build", join_req_id, restore_config.restore_round + 1)),
+        hash_join_spill_context->createProbeSpillConfig(
+            fmt::format("{}_{}_probe", join_req_id, restore_config.restore_round + 1)),
         RestoreConfig{restore_config.join_restore_concurrency, restore_config.restore_round + 1, restore_partition_id},
         tidb_output_column_names,
         register_operator_spill_context,
@@ -732,7 +738,8 @@ void Join::insertFromBlockInternal(Block * stored_block, size_t stream_index)
             stream_index,
             getBuildConcurrency(),
             enable_fine_grained_shuffle,
-            enable_join_spill);
+            enable_join_spill,
+            probe_cache_column_threshold);
     }
 
     // generator in runtime filter

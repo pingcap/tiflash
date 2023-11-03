@@ -166,7 +166,8 @@ public:
         size_t stream_index,
         size_t insert_concurrency,
         bool enable_fine_grained_shuffle,
-        bool enable_join_spill);
+        bool enable_join_spill,
+        size_t probe_cache_column_threshold);
 
     /// probe the block using hash maps in `JoinPartitions`
     static void probeBlock(

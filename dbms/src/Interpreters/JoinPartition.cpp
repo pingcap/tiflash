@@ -44,7 +44,7 @@ void insertRowToList(List * list, Elem * elem, size_t cache_columns_threshold)
     ++list->list_length;
     if unlikely (cache_columns_threshold == list->list_length)
     {
-        list->cached_columns_info = std::make_unique<CachedColumnInfo>();
+        list->cached_column_info = std::make_unique<CachedColumnInfo>();
     }
 }
 } // namespace
@@ -527,7 +527,8 @@ void NO_INLINE insertBlockIntoMapTypeCase(
     const TiDB::TiDBCollators & collators,
     Block * stored_block,
     ConstNullMapPtr null_map,
-    RowsNotInsertToMap * rows_not_inserted_to_map)
+    RowsNotInsertToMap * rows_not_inserted_to_map,
+    size_t probe_cache_column_threshold)
 {
     auto & pool = *join_partition.getPartitionPool();
 
@@ -552,7 +553,14 @@ void NO_INLINE insertBlockIntoMapTypeCase(
             }
         }
 
-        Inserter<STRICTNESS, Map, KeyGetter>::insert(map, key_getter, stored_block, i, pool, sort_key_containers);
+        Inserter<STRICTNESS, Map, KeyGetter>::insert(
+            map,
+            key_getter,
+            stored_block,
+            i,
+            pool,
+            sort_key_containers,
+            probe_cache_column_threshold);
     }
 }
 
@@ -572,7 +580,8 @@ void NO_INLINE insertBlockIntoMapsTypeCase(
     Block * stored_block,
     ConstNullMapPtr null_map,
     size_t stream_index,
-    RowsNotInsertToMap * rows_not_inserted_to_map)
+    RowsNotInsertToMap * rows_not_inserted_to_map,
+    size_t probe_cache_column_threshold)
 {
     auto & current_join_partition = join_partitions[stream_index];
     auto & pool = *current_join_partition->getPartitionPool();
@@ -644,7 +653,8 @@ void NO_INLINE insertBlockIntoMapsTypeCase(
             stored_block,                                       \
             s_i,                                                \
             pool,                                               \
-            sort_key_containers);                               \
+            sort_key_containers,                                \
+            probe_cache_column_threshold);                      \
     }
 
 #define INSERT_TO_NOT_INSERTED_MAP                                                                      \
@@ -719,7 +729,8 @@ void insertBlockIntoMapsImplType(
     size_t stream_index,
     size_t insert_concurrency,
     bool enable_fine_grained_shuffle,
-    bool enable_join_spill)
+    bool enable_join_spill,
+    size_t probe_cache_column_threshold)
 {
     auto & current_join_partition = join_partitions[stream_index];
     auto * rows_not_inserted_to_map = current_join_partition->getRowsNotInsertedToMap();
@@ -737,7 +748,8 @@ void insertBlockIntoMapsImplType(
                     collators,
                     stored_block,
                     null_map,
-                    rows_not_inserted_to_map);
+                    rows_not_inserted_to_map,
+                    probe_cache_column_threshold);
             else
                 insertBlockIntoMapTypeCase<STRICTNESS, KeyGetter, Map, true, false>(
                     *current_join_partition,
@@ -747,7 +759,8 @@ void insertBlockIntoMapsImplType(
                     collators,
                     stored_block,
                     null_map,
-                    nullptr);
+                    nullptr,
+                    probe_cache_column_threshold);
         }
         else
         {
@@ -759,7 +772,8 @@ void insertBlockIntoMapsImplType(
                 collators,
                 stored_block,
                 null_map,
-                nullptr);
+                nullptr,
+                probe_cache_column_threshold);
         }
         return;
     }
@@ -777,7 +791,8 @@ void insertBlockIntoMapsImplType(
                     collators,
                     stored_block,
                     null_map,
-                    rows_not_inserted_to_map);
+                    rows_not_inserted_to_map,
+                    probe_cache_column_threshold);
             else
                 insertBlockIntoMapTypeCase<STRICTNESS, KeyGetter, Map, true, false>(
                     *current_join_partition,
@@ -787,7 +802,8 @@ void insertBlockIntoMapsImplType(
                     collators,
                     stored_block,
                     null_map,
-                    nullptr);
+                    nullptr,
+                    probe_cache_column_threshold);
         }
         else
         {
@@ -799,7 +815,8 @@ void insertBlockIntoMapsImplType(
                 collators,
                 stored_block,
                 null_map,
-                nullptr);
+                nullptr,
+                probe_cache_column_threshold);
         }
     }
     else if (insert_concurrency > 1)
@@ -817,7 +834,8 @@ void insertBlockIntoMapsImplType(
                     stored_block,
                     null_map,
                     stream_index,
-                    rows_not_inserted_to_map);
+                    rows_not_inserted_to_map,
+                    probe_cache_column_threshold);
             else
                 insertBlockIntoMapsTypeCase<STRICTNESS, KeyGetter, Map, true, false>(
                     join_partitions,
@@ -828,7 +846,8 @@ void insertBlockIntoMapsImplType(
                     stored_block,
                     null_map,
                     stream_index,
-                    nullptr);
+                    nullptr,
+                    probe_cache_column_threshold);
         }
         else
         {
@@ -841,7 +860,8 @@ void insertBlockIntoMapsImplType(
                 stored_block,
                 null_map,
                 stream_index,
-                nullptr);
+                nullptr,
+                probe_cache_column_threshold);
         }
     }
     else
@@ -859,7 +879,8 @@ void insertBlockIntoMapsImplType(
                     collators,
                     stored_block,
                     null_map,
-                    rows_not_inserted_to_map);
+                    rows_not_inserted_to_map,
+                    probe_cache_column_threshold);
             else
                 insertBlockIntoMapTypeCase<STRICTNESS, KeyGetter, Map, true, false>(
                     *current_join_partition,
@@ -869,7 +890,8 @@ void insertBlockIntoMapsImplType(
                     collators,
                     stored_block,
                     null_map,
-                    nullptr);
+                    nullptr,
+                    probe_cache_column_threshold);
         }
         else
         {
@@ -881,7 +903,8 @@ void insertBlockIntoMapsImplType(
                 collators,
                 stored_block,
                 null_map,
-                nullptr);
+                nullptr,
+                probe_cache_column_threshold);
         }
     }
 }
@@ -898,7 +921,8 @@ void insertBlockIntoMapsImpl(
     size_t stream_index,
     size_t insert_concurrency,
     bool enable_fine_grained_shuffle,
-    bool enable_join_spill)
+    bool enable_join_spill,
+    size_t probe_cache_column_threshold)
 {
     switch (join_partitions[stream_index]->getJoinMapMethod())
     {
@@ -923,7 +947,8 @@ void insertBlockIntoMapsImpl(
             stream_index,                                                                        \
             insert_concurrency,                                                                  \
             enable_fine_grained_shuffle,                                                         \
-            enable_join_spill);                                                                  \
+            enable_join_spill,                                                                   \
+            probe_cache_column_threshold);                                                       \
         break;
         APPLY_FOR_JOIN_VARIANTS(M)
 #undef M
@@ -972,7 +997,8 @@ void JoinPartition::insertBlockIntoMaps(
     size_t stream_index,
     size_t insert_concurrency,
     bool enable_fine_grained_shuffle,
-    bool enable_join_spill)
+    bool enable_join_spill,
+    size_t probe_cache_column_threshold)
 {
     auto & current_join_partition = join_partitions[stream_index];
     assert(!current_join_partition->isSpill());
@@ -991,7 +1017,8 @@ void JoinPartition::insertBlockIntoMaps(
                 stream_index,
                 insert_concurrency,
                 enable_fine_grained_shuffle,
-                enable_join_spill);
+                enable_join_spill,
+                probe_cache_column_threshold);
         else
             insertBlockIntoMapsImpl<ASTTableJoin::Strictness::All, MapsAll>(
                 join_partitions,
@@ -1004,7 +1031,8 @@ void JoinPartition::insertBlockIntoMaps(
                 stream_index,
                 insert_concurrency,
                 enable_fine_grained_shuffle,
-                enable_join_spill);
+                enable_join_spill,
+                probe_cache_column_threshold);
     }
     else if (isNecessaryKindToUseRowFlaggedHashMap(current_kind))
     {
@@ -1020,7 +1048,8 @@ void JoinPartition::insertBlockIntoMaps(
                 stream_index,
                 insert_concurrency,
                 enable_fine_grained_shuffle,
-                enable_join_spill);
+                enable_join_spill,
+                probe_cache_column_threshold);
         else
             insertBlockIntoMapsImpl<ASTTableJoin::Strictness::All, MapsAllFull>(
                 join_partitions,
@@ -1033,7 +1062,8 @@ void JoinPartition::insertBlockIntoMaps(
                 stream_index,
                 insert_concurrency,
                 enable_fine_grained_shuffle,
-                enable_join_spill);
+                enable_join_spill,
+                probe_cache_column_threshold);
     }
     else if (getFullness(current_kind))
     {
@@ -1049,7 +1079,8 @@ void JoinPartition::insertBlockIntoMaps(
                 stream_index,
                 insert_concurrency,
                 enable_fine_grained_shuffle,
-                enable_join_spill);
+                enable_join_spill,
+                probe_cache_column_threshold);
         else
             insertBlockIntoMapsImpl<ASTTableJoin::Strictness::All, MapsAllFull>(
                 join_partitions,
@@ -1062,7 +1093,8 @@ void JoinPartition::insertBlockIntoMaps(
                 stream_index,
                 insert_concurrency,
                 enable_fine_grained_shuffle,
-                enable_join_spill);
+                enable_join_spill,
+                probe_cache_column_threshold);
     }
     else
     {
@@ -1078,7 +1110,8 @@ void JoinPartition::insertBlockIntoMaps(
                 stream_index,
                 insert_concurrency,
                 enable_fine_grained_shuffle,
-                enable_join_spill);
+                enable_join_spill,
+                probe_cache_column_threshold);
         else
             insertBlockIntoMapsImpl<ASTTableJoin::Strictness::All, MapsAll>(
                 join_partitions,
@@ -1091,7 +1124,8 @@ void JoinPartition::insertBlockIntoMaps(
                 stream_index,
                 insert_concurrency,
                 enable_fine_grained_shuffle,
-                enable_join_spill);
+                enable_join_spill,
+                probe_cache_column_threshold);
     }
 }
 namespace
@@ -1328,33 +1362,32 @@ struct Adder<KIND, ASTTableJoin::Strictness::All, Map>
         {
             bool has_cached_columns = false;
             {
-                assert(mapped_value.cached_columns_info != nullptr);
-                std::unique_lock lock(mapped_value.cached_columns_mu);
-                has_cached_columns = !mapped_value.cached_columns.empty();
+                assert(mapped_value.cached_column_info != nullptr);
+                std::unique_lock lock(mapped_value.cached_column_info->mu);
+                has_cached_columns = !mapped_value.cached_column_info->columns.empty();
                 if (!has_cached_columns)
                 {
-                    if (!mapped_value.generate_cached_columns)
+                    if (!mapped_value.cached_column_info->generate_cached_columns)
                     {
-                        mapped_value.generate_cached_columns = true;
+                        mapped_value.cached_column_info->generate_cached_columns = true;
                         need_generated_cached_columns = true;
                     }
                 }
             }
             if (has_cached_columns)
             {
-                /// todo skip copy if added_columns has no rows
                 if (added_columns[0]->empty())
                 {
                     for (size_t j = 0; j < num_columns_to_add; ++j)
                     {
-                        added_columns[j] = mapped_value.cached_columns[j]->mutateWithClone();
+                        added_columns[j] = mapped_value.cached_column_info->columns[j]->mutateWithClone();
                     }
                 }
                 else
                 {
                     for (size_t j = 0; j < num_columns_to_add; ++j)
                     {
-                        added_columns[j]->insertRangeFrom(*mapped_value.cached_columns[j], 0, rows_joined);
+                        added_columns[j]->insertRangeFrom(*mapped_value.cached_column_info->columns[j], 0, rows_joined);
                     }
                 }
                 current_offset += rows_joined;
@@ -1402,9 +1435,9 @@ struct Adder<KIND, ASTTableJoin::Strictness::All, Map>
                     cached_columns.push_back(added_columns[j]->cut(start_offset, rows_joined));
                 }
             }
-            std::unique_lock lock(mapped_value.cached_columns_mu);
-            mapped_value.cached_columns.insert(
-                mapped_value.cached_columns.end(),
+            std::unique_lock lock(mapped_value.cached_column_info->mu);
+            mapped_value.cached_column_info->columns.insert(
+                mapped_value.cached_column_info->columns.end(),
                 cached_columns.begin(),
                 cached_columns.end());
         }
@@ -1473,35 +1506,34 @@ struct RowFlaggedHashMapAdder
         {
             bool has_cached_columns = false;
             {
-                std::unique_lock lock(mapped_value.cached_columns_mu);
-                has_cached_columns = !mapped_value.cached_columns.empty();
+                std::unique_lock lock(mapped_value.cached_column_info->mu);
+                has_cached_columns = !mapped_value.cached_column_info->columns.empty();
                 if (!has_cached_columns)
                 {
-                    if (!mapped_value.generate_cached_columns)
+                    if (!mapped_value.cached_column_info->generate_cached_columns)
                     {
-                        mapped_value.generate_cached_columns = true;
+                        mapped_value.cached_column_info->generate_cached_columns = true;
                         need_generated_cached_columns = true;
                     }
                 }
             }
             if (has_cached_columns)
             {
-                /// todo skip copy if added_columns has no rows
                 if (added_columns[0]->empty())
                 {
                     for (size_t j = 0; j < num_columns_to_add; ++j)
                     {
-                        added_columns[j] = mapped_value.cached_columns[j]->mutateWithClone();
+                        added_columns[j] = mapped_value.cached_column_info->columns[j]->mutateWithClone();
                     }
                 }
                 else
                 {
                     for (size_t j = 0; j < num_columns_to_add; ++j)
                     {
-                        added_columns[j]->insertRangeFrom(*mapped_value.cached_columns[j], 0, rows_joined);
+                        added_columns[j]->insertRangeFrom(*mapped_value.cached_column_info->columns[j], 0, rows_joined);
                     }
                 }
-                ptr_col->insertRangeFrom(*mapped_value.cached_columns[num_columns_to_add], 0, rows_joined);
+                ptr_col->insertRangeFrom(*mapped_value.cached_column_info->columns[num_columns_to_add], 0, rows_joined);
                 current_offset += rows_joined;
                 (*offsets)[i] = current_offset;
                 return false;
@@ -1540,9 +1572,9 @@ struct RowFlaggedHashMapAdder
                 }
             }
             cached_columns.push_back(ptr_col->cut(start_offset, rows_joined));
-            std::unique_lock lock(mapped_value.cached_columns_mu);
-            mapped_value.cached_columns.insert(
-                mapped_value.cached_columns.end(),
+            std::unique_lock lock(mapped_value.cached_column_info->mu);
+            mapped_value.cached_column_info->columns.insert(
+                mapped_value.cached_column_info->columns.end(),
                 cached_columns.begin(),
                 cached_columns.end());
         }
