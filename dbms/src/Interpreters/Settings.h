@@ -319,7 +319,7 @@ struct Settings
     M(SettingBool, enable_cop_stream_for_remote_read, false, "Enable cop stream for remote read")                                                                                                                                        \
     M(SettingUInt64, cop_timeout_for_remote_read, 60, "cop timeout seconds for remote read")                                                                                                                                            \
     M(SettingUInt64, auto_spill_check_min_interval_ms, 10, "The minimum interval in millisecond between two successive auto spill check, default value is 100, 0 means no limit")                                                        \
-    M(SettingUInt64, join_probe_cache_columns_threshold, 1000, "The minimum interval in millisecond between two successive auto spill check, default value is 100, 0 means no limit")
+    M(SettingUInt64, join_probe_cache_columns_threshold, 1000, "The threshold that a join key will cache its output columns during probe stage, 0 means never cache")
 
 
 // clang-format on
