@@ -679,8 +679,10 @@ public:
                     LOG_INFO(log, "tcp_port_secure is closed because tls config is set");
                 }
 
+                // No TCP server is normal now because we only enable the TCP server
+                // under testing deployment
                 if (servers.empty())
-                    LOG_WARNING(log, "No TCP and HTTP servers are created");
+                    LOG_INFO(log, "No TCP server is created");
             }
             catch (const Poco::Net::NetException & e)
             {
