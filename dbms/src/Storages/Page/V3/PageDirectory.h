@@ -681,7 +681,7 @@ struct fmt::formatter<DB::PS::V3::EntryOrDelete>
     template <typename FormatContext>
     auto format(const DB::PS::V3::EntryOrDelete & entry, FormatContext & ctx) const
     {
-        return format_to(
+        return fmt::format_to(
             ctx.out(),
             "{{is_delete:{}, entry:{}, being_ref_count:{}}}",
             entry.is_delete,

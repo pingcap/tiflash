@@ -129,7 +129,7 @@ struct fmt::formatter<DB::DM::SegmentReadTaskPtr>
     template <typename FormatContext>
     auto format(const DB::DM::SegmentReadTaskPtr & t, FormatContext & ctx) const
     {
-        return format_to(
+        return fmt::format_to(
             ctx.out(),
             "s{}_ks{}_t{}_{}_{}_{}",
             t->store_id,
@@ -149,7 +149,7 @@ struct fmt::formatter<DB::DM::GlobalSegmentID>
     template <typename FormatContext>
     auto format(const DB::DM::GlobalSegmentID & t, FormatContext & ctx) const
     {
-        return format_to(
+        return fmt::format_to(
             ctx.out(),
             "s{}_ks{}_t{}_{}_{}",
             t.store_id,
