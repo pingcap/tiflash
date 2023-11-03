@@ -692,12 +692,14 @@ TEST_F(RegionKVStoreTest, AsyncTasks)
     using namespace std::chrono_literals;
 
     using TestAsyncTasks = AsyncTasks<uint64_t, std::function<int()>, int>;
-    auto async_tasks = std::make_unique<TestAsyncTasks>(1, 1, 1);
+    auto async_tasks = std::make_unique<TestAsyncTasks>(1, 1, 2);
 
     int total = 5;
     std::vector<bool> f(total, false);
+    bool initial_loop = true;
     while (true)
     {
+        SCOPE_EXIT({ initial_loop = false; });
         auto count = std::accumulate(f.begin(), f.end(), 0, [&](int a, bool b) -> int { return a + int(b); });
         if (count >= total)
         {
@@ -712,16 +714,19 @@ TEST_F(RegionKVStoreTest, AsyncTasks)
             if (!async_tasks->isScheduled(i))
             {
                 auto res = async_tasks->addTask(i, []() {
-                    std::this_thread::sleep_for(1000ms);
+                    std::this_thread::sleep_for(200ms);
                     return 1;
                 });
-                if (i == 0)
+                if (initial_loop)
                 {
-                    ASSERT_EQ(res, true);
-                }
-                else
-                {
-                    ASSERT_EQ(res, false);
+                    if (i <= 1)
+                    {
+                        ASSERT_EQ(res, true);
+                    }
+                    else
+                    {
+                        ASSERT_EQ(res, false);
+                    }
                 }
             }
         }
@@ -738,7 +743,7 @@ TEST_F(RegionKVStoreTest, AsyncTasks)
                 }
             }
         }
-        std::this_thread::sleep_for(1000ms);
+        std::this_thread::sleep_for(200ms);
     }
 }
 

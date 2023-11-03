@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/FailPoint.h>
+#include <Common/TiFlashMetrics.h>
 #include <Encryption/PosixRandomAccessFile.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
@@ -174,6 +175,7 @@ std::optional<std::tuple<CheckpointInfoPtr, RegionPtr, RaftApplyState, RegionLoc
         }
         else
         {
+            GET_METRIC(tiflash_fap_nomatch_reason, type_no_meta).Increment();
             LOG_DEBUG(log, "Failed to find region key [region_id={}]", region_id);
             return std::nullopt;
         }
@@ -191,6 +193,7 @@ std::optional<std::tuple<CheckpointInfoPtr, RegionPtr, RaftApplyState, RegionLoc
         }
         else
         {
+            GET_METRIC(tiflash_fap_nomatch_reason, type_no_meta).Increment();
             LOG_DEBUG(log, "Failed to find apply state key [region_id={}]", region_id);
             return std::nullopt;
         }
@@ -207,6 +210,7 @@ std::optional<std::tuple<CheckpointInfoPtr, RegionPtr, RaftApplyState, RegionLoc
         }
         else
         {
+            GET_METRIC(tiflash_fap_nomatch_reason, type_no_meta).Increment();
             LOG_DEBUG(log, "Failed to find region local state key [region_id={}]", region_id);
             return std::nullopt;
         }
@@ -225,6 +229,7 @@ bool tryResetPeerIdInRegion(RegionPtr region, const RegionLocalState & region_st
     auto peer_state = region_state.state();
     if (peer_state == PeerState::Tombstone || peer_state == PeerState::Applying)
     {
+        GET_METRIC(tiflash_fap_nomatch_reason, type_region_state).Increment();
         return false;
     }
     for (const auto & peer : region_state.region().peers())
@@ -236,6 +241,7 @@ bool tryResetPeerIdInRegion(RegionPtr region, const RegionLocalState & region_st
             return true;
         }
     }
+    GET_METRIC(tiflash_fap_nomatch_reason, type_conf).Increment();
     return false;
 }
 
@@ -294,6 +300,7 @@ FastAddPeerRes FastAddPeerImpl(EngineStoreServerWrap * server, uint64_t region_i
                             watch.elapsedSeconds(),
                             candidate_store_ids.size(),
                             region_id);
+                        GET_METRIC(tiflash_fap_task_duration_seconds, type_build).Observe(watch.elapsedSeconds());
                         break;
                     }
                     else
@@ -310,11 +317,16 @@ FastAddPeerRes FastAddPeerImpl(EngineStoreServerWrap * server, uint64_t region_i
             if (!success)
             {
                 if (watch.elapsedSeconds() >= settings.fap_wait_checkpoint_timeout_seconds)
+                {
+                    GET_METRIC(tiflash_fap_task_result, type_failed_timeout).Increment();
                     return genFastAddPeerRes(FastAddPeerStatus::NoSuitable, "", "");
+                }
                 std::this_thread::sleep_for(std::chrono::milliseconds(1000));
             }
         }
 
+        Stopwatch watch_ingest;
+        GET_METRIC(tiflash_fap_task_state, type_building).Decrement();
         auto kvstore = server->tmt->getKVStore();
         kvstore->handleIngestCheckpoint(region, checkpoint_info, *server->tmt);
 
@@ -334,6 +346,7 @@ FastAddPeerRes FastAddPeerImpl(EngineStoreServerWrap * server, uint64_t region_i
             });
         auto wn_ps = server->tmt->getContext().getWriteNodePageStorage();
         wn_ps->write(std::move(wb));
+        GET_METRIC(tiflash_fap_task_duration_seconds, type_ingest).Observe(watch_ingest.elapsedSeconds());
 
         return genFastAddPeerRes(
             FastAddPeerStatus::Ok,
@@ -366,23 +379,25 @@ FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, u
             });
             if (res)
             {
+                GET_METRIC(tiflash_fap_task_state, type_ongoing).Increment();
+                GET_METRIC(tiflash_fap_task_state, type_building).Increment();
                 LOG_INFO(log, "Add new task [new_peer_id={}] [region_id={}]", new_peer_id, region_id);
             }
             else
             {
-                LOG_WARNING(
-                    log,
-                    "Add new task fail(queue full) [new_peer_id={}] [region_id={}]",
-                    new_peer_id,
-                    region_id);
-                return genFastAddPeerRes(FastAddPeerStatus::WaitForData, "", "");
+                // If the queue is full, the task won't be registered, return OtherError for quick fallback.
+                LOG_ERROR(log, "Add new task fail(queue full) [new_peer_id={}] [region_id={}]", new_peer_id, region_id);
+                return genFastAddPeerRes(FastAddPeerStatus::OtherError, "", "");
             }
         }
 
         if (fap_ctx->tasks_trace->isReady(region_id))
         {
             LOG_INFO(log, "Fetch task result [new_peer_id={}] [region_id={}]", new_peer_id, region_id);
-            return fap_ctx->tasks_trace->fetchResult(region_id);
+            GET_METRIC(tiflash_fap_task_state, type_ongoing).Decrement();
+            auto [result, elapsed] = fap_ctx->tasks_trace->fetchResultAndElapsed(region_id);
+            GET_METRIC(tiflash_fap_task_duration_seconds, type_total).Observe(elapsed / 1000.0);
+            return result;
         }
         else
         {

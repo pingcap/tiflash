@@ -371,17 +371,31 @@ namespace DB
       Counter,                                                                                                                      \
       F(type_cftiny_read, {{"type", "cftiny_read"}}),                                                                               \
       F(type_cftiny_fetch, {{"type", "cftiny_fetch"}}))                                                                             \
+    M(tiflash_fap_task_result,                                                                                                      \
+      "",                                                                                                                           \
+      Counter,                                                                                                                      \
+      F(type_failed, {{"type", "failed"}}),                                                                                         \
+      F(type_failed_cancel, {{"type", "failed_cancel"}}),                                                                           \
+      F(type_failed_timeout, {{"type", "failed_timeout"}}),                                                                         \
+      F(type_succeed, {{"type", "succeed"}}))                                                                                       \
     M(tiflash_fap_task_state,                                                                                                       \
       "",                                                                                                                           \
       Gauge,                                                                                                                        \
       F(type_ongoing, {{"type", "ongoing"}}),                                                                                       \
-      F(type_failed, {{"type", "failed"}}),                                                                                         \
-      F(type_succeed, {{"type", "succeed"}}))                                                                                       \
+      F(type_building, {{"type", "building"}}))                                                                                     \
+    M(tiflash_fap_nomatch_reason,                                                                                                   \
+      "",                                                                                                                           \
+      Counter,                                                                                                                      \
+      F(type_conf, {{"type", "conf"}}),                                                                                             \
+      F(type_region_state, {{"type", "region_state"}}),                                                                             \
+      F(type_no_meta, {{"type", "no_meta"}}))                                                                                       \
     M(tiflash_fap_task_duration_seconds,                                                                                            \
       "",                                                                                                                           \
       Histogram,                                                                                                                    \
-      F(type_ingest, {{"type", "ingest"}}, ExpBuckets{0.01, 2, 60}),                                                                \
-      F(type_total, {{"type", "total"}}, ExpBuckets{0.01, 2, 60}))                                                                  \
+      F(type_build, {{"type", "build"}}, ExpBuckets{0.05, 2, 60}),                                                                  \
+      F(type_success, {{"type", "success"}}, ExpBuckets{0.05, 2, 60}),                                                              \
+      F(type_ingest, {{"type", "ingest"}}, ExpBuckets{0.05, 2, 60}),                                                                \
+      F(type_total, {{"type", "total"}}, ExpBuckets{0.05, 2, 60}))                                                                  \
     M(tiflash_raft_command_duration_seconds,                                                                                        \
       "Bucketed histogram of some raft command: apply snapshot and ingest SST",                                                     \
       Histogram, /* these command usually cost several seconds, increase the start bucket to 50ms */                                \
