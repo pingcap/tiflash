@@ -130,7 +130,7 @@ public:
 
     void initColumnFileDataProvider(const Remote::RNLocalPageCacheGuardPtr & pages_guard);
 
-    bool doInitInputStream(
+    bool doInitInputStreamWithErrorFallback(
         const ColumnDefines & columns_to_read,
         UInt64 read_tso,
         const PushDownFilterPtr & push_down_filter,

@@ -85,12 +85,23 @@ try
         RowKeyRanges{first->getRowKeyRange()});
 
     const auto & column_defines = *tableColumns();
-    ASSERT_FALSE(task->doInitInputStream(column_defines, 0, nullptr, ReadMode::Bitmap, DEFAULT_BLOCK_SIZE, true));
+    ASSERT_FALSE(task->doInitInputStreamWithErrorFallback(
+        column_defines,
+        0,
+        nullptr,
+        ReadMode::Bitmap,
+        DEFAULT_BLOCK_SIZE,
+        true));
 
     try
     {
-        [[maybe_unused]] auto succ
-            = task->doInitInputStream(column_defines, 0, nullptr, ReadMode::Bitmap, DEFAULT_BLOCK_SIZE, false);
+        [[maybe_unused]] auto succ = task->doInitInputStreamWithErrorFallback(
+            column_defines,
+            0,
+            nullptr,
+            ReadMode::Bitmap,
+            DEFAULT_BLOCK_SIZE,
+            false);
         FAIL() << "Should not come here.";
     }
     catch (const Exception & e)

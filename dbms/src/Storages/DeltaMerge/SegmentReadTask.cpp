@@ -232,7 +232,7 @@ void SegmentReadTask::initInputStream(
     size_t expected_block_size,
     bool enable_delta_index_error_fallback)
 {
-    if (likely(doInitInputStream(
+    if (likely(doInitInputStreamWithErrorFallback(
             columns_to_read,
             read_tso,
             push_down_filter,
@@ -253,7 +253,7 @@ void SegmentReadTask::initInputStream(
     doInitInputStream(columns_to_read, read_tso, push_down_filter, read_mode, expected_block_size);
 }
 
-bool SegmentReadTask::doInitInputStream(
+bool SegmentReadTask::doInitInputStreamWithErrorFallback(
     const ColumnDefines & columns_to_read,
     UInt64 read_tso,
     const PushDownFilterPtr & push_down_filter,
