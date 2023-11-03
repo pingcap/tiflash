@@ -4,7 +4,7 @@
 # emacs files
 *~
 *\#
-tramp_history
+.tramp_history
 
 # Netbeans project files
 nbproject/*
