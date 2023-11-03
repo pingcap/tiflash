@@ -260,7 +260,7 @@ void DAGQueryBlockInterpreter::handleJoin(
         = tiflash_join.genJoinOutputColumns(left_input_header, right_input_header, match_helper_name);
     /// add necessary transformation if the join key is an expression
 
-    bool is_tiflash_right_join = tiflash_join.isTiFlashRightOuterJoin();
+    bool is_tiflash_right_join = isRightOuterJoin(tiflash_join.kind);
 
     JoinNonEqualConditions join_non_equal_conditions;
     // prepare probe side
@@ -331,7 +331,6 @@ void DAGQueryBlockInterpreter::handleJoin(
         probe_key_names,
         build_key_names,
         tiflash_join.kind,
-        tiflash_join.strictness,
         log->identifier(),
         enableFineGrainedShuffle(fine_grained_shuffle_count),
         fine_grained_shuffle_count,
