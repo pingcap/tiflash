@@ -1388,7 +1388,7 @@ Block Join::joinBlockHash(ProbeProcessInfo & probe_process_info) const
         isEnableSpill(),
         hash_join_spill_context->isSpilled(),
         build_concurrency,
-        restore_round};
+        restore_config.restore_round};
     probe_process_info.prepareForHashProbe(
         key_names_left,
         non_equal_conditions.left_filter_column,
@@ -1396,7 +1396,7 @@ Block Join::joinBlockHash(ProbeProcessInfo & probe_process_info) const
         strictness,
         join_build_info.needVirtualDispatchForProbeBlock(),
         collators,
-        restore_round);
+        restore_config.restore_round);
     while (true)
     {
         auto block = doJoinBlockHash(probe_process_info, join_build_info);
