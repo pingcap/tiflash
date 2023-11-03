@@ -14,6 +14,8 @@
 
 #include <Common/Logger.h>
 #include <Core/BlockUtils.h>
+#include <Interpreters/SharedContexts/Disagg.h>
+#include <Storages/DeltaMerge/Remote/DataStore/DataStoreMock.h>
 #include <Storages/DeltaMerge/Remote/DisaggSnapshot.h>
 #include <Storages/DeltaMerge/Remote/Serializer.h>
 #include <Storages/DeltaMerge/SegmentReadTask.h>
@@ -23,7 +25,6 @@
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/InputStreamTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
-
 using namespace DB::tests;
 
 namespace DB::ErrorCodes
@@ -188,6 +189,10 @@ try
     auto remote_table_pb = Remote::Serializer::serializeTo(snap, /*task_id*/ {}, mem_tracker_wrapper);
 
     ASSERT_GT(remote_table_pb.segments_size(), 0);
+
+    db_context->getSharedContextDisagg()->remote_data_store
+        = std::make_shared<DM::Remote::DataStoreMock>(db_context->getFileProvider());
+
     for (const auto & remote_seg : remote_table_pb.segments())
     {
         auto seg_task = std::make_shared<SegmentReadTask>(

@@ -115,40 +115,6 @@ RemotePb::RemoteSegment Serializer::serializeTo(
     return remote;
 }
 
-#ifdef DBMS_PUBLIC_GTEST
-static std::tuple<String, UInt64> parseDMFilePath(const String & path)
-{
-    // Path likes /disk1/data/t_100/stable/dmf_2.
-    auto pos = path.find_last_of('_');
-    RUNTIME_CHECK(pos != std::string::npos, path);
-    auto file_id = stoul(path.substr(pos + 1));
-
-    pos = path.rfind("/dmf_");
-    RUNTIME_CHECK(pos != std::string::npos, path);
-    auto parent_path = path.substr(0, pos);
-    return std::tuple<String, UInt64>{parent_path, file_id};
-}
-#endif
-
-static DMFilePtr restoreDMFile([[maybe_unused]] const Remote::IDataStorePtr & data_store, const String & remote_fname)
-{
-#ifndef DBMS_PUBLIC_GTEST
-    auto prepared = data_store->prepareDMFileByKey(remote_fname);
-    auto dmfile = prepared->restore(DMFile::ReadMetaMode::all());
-#else
-    auto [parent_path, file_id] = parseDMFilePath(remote_fname);
-    auto key_manager = std::make_shared<MockKeyManager>(false);
-    auto file_provider = std::make_shared<FileProvider>(key_manager, false);
-    auto dmfile = DMFile::restore(
-        file_provider,
-        file_id,
-        /*page_id*/ 0,
-        parent_path,
-        DMFile::ReadMetaMode::all());
-#endif
-    return dmfile;
-}
-
 SegmentSnapshotPtr Serializer::deserializeSegmentSnapshotFrom(
     const DMContext & dm_context,
     StoreID remote_store_id,
@@ -198,7 +164,8 @@ SegmentSnapshotPtr Serializer::deserializeSegmentSnapshotFrom(
     for (const auto & stable_file : proto.stable_pages())
     {
         auto remote_key = stable_file.checkpoint_info().data_file_id();
-        auto dmfile = restoreDMFile(data_store, remote_key);
+        auto prepared = data_store->prepareDMFileByKey(remote_key);
+        auto dmfile = prepared->restore(DMFile::ReadMetaMode::all());
         RUNTIME_CHECK(dmfile != nullptr, remote_key);
         dmfiles.emplace_back(std::move(dmfile));
     }
@@ -426,7 +393,8 @@ ColumnFileBigPtr Serializer::deserializeCFBig(
 {
     RUNTIME_CHECK(proto.has_checkpoint_info());
     LOG_DEBUG(Logger::get(), "Rebuild local ColumnFileBig from remote, key={}", proto.checkpoint_info().data_file_id());
-    auto dmfile = restoreDMFile(data_store, proto.checkpoint_info().data_file_id());
+    auto prepared = data_store->prepareDMFileByKey(proto.checkpoint_info().data_file_id());
+    auto dmfile = prepared->restore(DMFile::ReadMetaMode::all());
     auto * cf_big = new ColumnFileBig(dmfile, proto.valid_rows(), proto.valid_bytes(), segment_range);
     return std::shared_ptr<ColumnFileBig>(cf_big); // The constructor is private, so we cannot use make_shared.
 }
