@@ -1558,6 +1558,209 @@ int Server::main(const std::vector<std::string> & /*args*/)
     });
 
     auto & tmt_context = global_context->getTMTContext();
+
+    if (settings.enable_async_grpc_client)
+    {
+        auto size = settings.grpc_completion_queue_pool_size;
+        if (size == 0)
+            size = std::thread::hardware_concurrency();
+        GRPCCompletionQueuePool::global_instance = std::make_unique<GRPCCompletionQueuePool>(size);
+    }
+
+    // FIXME: (bootstrap) we should bootstrap the tiflash node more early!
+    if (global_context->getSharedContextDisagg()->notDisaggregatedMode()
+        || /*has_been_bootstrap*/ store_ident.has_value())
+    {
+        // If S3 enabled, wait for all DeltaMergeStores' initialization
+        // before this instance can accept requests.
+        // Else it just do nothing.
+        bg_init_stores.waitUntilFinish();
+    }
+
+    if (global_context->getSharedContextDisagg()->isDisaggregatedStorageMode()
+        && /*has_been_bootstrap*/ store_ident.has_value())
+    {
+        // Only disagg write node that has been bootstrap need wait. For the write node does not bootstrap, its
+        // store id is allocated later.
+        // Wait until all CheckpointInfo are restored from S3
+        auto wn_ps = global_context->getWriteNodePageStorage();
+        wn_ps->waitUntilInitedFromRemoteStore();
+    }
+
+    TcpHttpServersHolder tcpHttpServersHolder(*this, settings, log);
+
+    main_config_reloader->addConfigObject(global_context->getSecurityConfig());
+    main_config_reloader->start();
+    if (users_config_reloader)
+        users_config_reloader->start();
+
+    {
+        // on ARM processors it can show only enabled at current moment cores
+        CurrentMetrics::set(CurrentMetrics::LogicalCPUCores, server_info.cpu_info.logical_cores);
+        CurrentMetrics::set(CurrentMetrics::MemoryCapacity, server_info.memory_info.capacity);
+        LOG_INFO(
+            log,
+            "Available RAM = {}; physical cores = {}; logical cores = {}.",
+            server_info.memory_info.capacity,
+            server_info.cpu_info.physical_cores,
+            server_info.cpu_info.logical_cores);
+    }
+
+    LOG_INFO(log, "Ready for connections.");
+
+    SCOPE_EXIT({
+        is_cancelled = true;
+
+        tcpHttpServersHolder.onExit();
+
+        main_config_reloader.reset();
+        users_config_reloader.reset();
+    });
+
+    /// This object will periodically calculate some metrics.
+    /// should init after `createTMTContext` cause we collect some data from the TiFlash context object.
+    AsynchronousMetrics async_metrics(*global_context);
+    attachSystemTablesAsync(*global_context->getDatabase("system"), async_metrics);
+
+    std::vector<std::unique_ptr<MetricsTransmitter>> metrics_transmitters;
+    for (const auto & graphite_key : DB::getMultipleKeysFromConfig(config(), "", "graphite"))
+    {
+        metrics_transmitters.emplace_back(
+            std::make_unique<MetricsTransmitter>(*global_context, async_metrics, graphite_key));
+    }
+
+    auto metrics_prometheus = std::make_unique<MetricsPrometheus>(*global_context, async_metrics);
+
+    SessionCleaner session_cleaner(*global_context);
+
+    if (proxy_conf.is_proxy_runnable)
+    {
+        // If a TiFlash starts before any TiKV starts, then the very first Region will be created in TiFlash's proxy and it must be the peer as a leader role.
+        // This conflicts with the assumption that tiflash does not contain any Region leader peer and leads to unexpected errors
+        LOG_INFO(log, "Waiting for TiKV cluster to be bootstrapped");
+        while (!tmt_context.getPDClient()->isClusterBootstrapped())
+        {
+            const int wait_seconds = 3;
+            LOG_ERROR(
+                log,
+                "Waiting for cluster to be bootstrapped, we will sleep for {} seconds and try again.",
+                wait_seconds);
+            ::sleep(wait_seconds);
+        }
+
+        tiflash_instance_wrap.tmt = &tmt_context;
+        LOG_INFO(log, "Let tiflash proxy start all services");
+        // Set tiflash instance status to running, then wait for proxy enter running status
+        tiflash_instance_wrap.status = EngineStoreServerStatus::Running;
+        while (tiflash_instance_wrap.proxy_helper->getProxyStatus() == RaftProxyStatus::Idle)
+            std::this_thread::sleep_for(std::chrono::milliseconds(200));
+
+        // proxy update store-id before status set `RaftProxyStatus::Running`
+        assert(tiflash_instance_wrap.proxy_helper->getProxyStatus() == RaftProxyStatus::Running);
+        const auto store_id = tmt_context.getKVStore()->getStoreID(std::memory_order_seq_cst);
+        if (store_ident)
+        {
+            RUNTIME_ASSERT(
+                store_id == store_ident->store_id(),
+                log,
+                "store id mismatch store_id={} store_ident.store_id={}",
+                store_id,
+                store_ident->store_id());
+        }
+        if (global_context->getSharedContextDisagg()->isDisaggregatedComputeMode())
+        {
+            // compute node do not need to handle read index
+            LOG_INFO(log, "store_id={}, tiflash proxy is ready to serve", store_id);
+        }
+        else
+        {
+            LOG_INFO(
+                log,
+                "store_id={}, tiflash proxy is ready to serve, try to wake up all regions' leader",
+                store_id);
+
+            if (global_context->getSharedContextDisagg()->isDisaggregatedStorageMode() && !store_ident.has_value())
+            {
+                // Not disagg node done it before
+                // For the disagg node has not been bootstrap, begin the very first schema sync with TiDB.
+                // FIXME: (bootstrap) we should bootstrap the tiflash node more early!
+                syncSchemaWithTiDB(storage_config, bg_init_stores, global_context, log);
+                bg_init_stores.waitUntilFinish();
+            }
+
+            // if set 0, DO NOT enable read-index worker
+            size_t runner_cnt = config().getUInt("flash.read_index_runner_count", 1);
+            if (runner_cnt > 0)
+            {
+                auto & kvstore_ptr = tmt_context.getKVStore();
+                kvstore_ptr->initReadIndexWorkers(
+                    [&]() {
+                        // get from tmt context
+                        return std::chrono::milliseconds(tmt_context.readIndexWorkerTick());
+                    },
+                    /*running thread count*/ runner_cnt);
+                tmt_context.getKVStore()->asyncRunReadIndexWorkers();
+                WaitCheckRegionReady(tmt_context, *kvstore_ptr, terminate_signals_counter);
+            }
+        }
+    }
+    SCOPE_EXIT({
+        if (!proxy_conf.is_proxy_runnable)
+        {
+            tmt_context.setStatusTerminated();
+            return;
+        }
+        if (proxy_conf.is_proxy_runnable && tiflash_instance_wrap.status != EngineStoreServerStatus::Running)
+        {
+            LOG_ERROR(log, "Current status of engine-store is NOT Running, should not happen");
+            exit(-1);
+        }
+        LOG_INFO(log, "Set store context status Stopping");
+        tmt_context.setStatusStopping();
+        {
+            // Wait until there is no read-index task.
+            while (tmt_context.getKVStore()->getReadIndexEvent())
+                std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        }
+        tmt_context.setStatusTerminated();
+        tmt_context.getKVStore()->stopReadIndexWorkers();
+        LOG_INFO(log, "Set store context status Terminated");
+        {
+            // update status and let proxy stop all services except encryption.
+            tiflash_instance_wrap.status = EngineStoreServerStatus::Stopping;
+            LOG_INFO(log, "Set engine store server status Stopping");
+        }
+        // wait proxy to stop services
+        if (proxy_conf.is_proxy_runnable)
+        {
+            LOG_INFO(log, "Let tiflash proxy to stop all services");
+            while (tiflash_instance_wrap.proxy_helper->getProxyStatus() != RaftProxyStatus::Stopped)
+                std::this_thread::sleep_for(std::chrono::milliseconds(200));
+            LOG_INFO(log, "All services in tiflash proxy are stopped");
+        }
+    });
+
+    {
+        // Report the unix timestamp, git hash, release version
+        Poco::Timestamp ts;
+        GET_METRIC(tiflash_server_info, start_time).Set(ts.epochTime());
+    }
+
+    tmt_context.setStatusRunning();
+
+    try
+    {
+        // Bind CPU affinity after all threads started.
+        CPUAffinityManager::getInstance().bindThreadCPUAffinity();
+    }
+    catch (...)
+    {
+        LOG_ERROR(log, "CPUAffinityManager::bindThreadCPUAffinity throws exception.");
+    }
+
+    // Startup grpc server to serve raft and/or flash services.
+    FlashGrpcServerHolder flash_grpc_server_holder(this->context(), this->config(), raft_config, log);
+
     const bool is_disagg_storage = global_context->getSharedContextDisagg()->isDisaggregatedStorageMode();
     const bool is_prod = !global_context->isTest();
 
@@ -1601,216 +1804,12 @@ int Server::main(const std::vector<std::string> & /*args*/)
         }
     });
 
-    if (settings.enable_async_grpc_client)
-    {
-        auto size = settings.grpc_completion_queue_pool_size;
-        if (size == 0)
-            size = std::thread::hardware_concurrency();
-        GRPCCompletionQueuePool::global_instance = std::make_unique<GRPCCompletionQueuePool>(size);
-    }
-
-    // FIXME: (bootstrap) we should bootstrap the tiflash node more early!
-    if (global_context->getSharedContextDisagg()->notDisaggregatedMode()
-        || /*has_been_bootstrap*/ store_ident.has_value())
-    {
-        // If S3 enabled, wait for all DeltaMergeStores' initialization
-        // before this instance can accept requests.
-        // Else it just do nothing.
-        bg_init_stores.waitUntilFinish();
-    }
-
-    if (global_context->getSharedContextDisagg()->isDisaggregatedStorageMode()
-        && /*has_been_bootstrap*/ store_ident.has_value())
-    {
-        // Only disagg write node that has been bootstrap need wait. For the write node does not bootstrap, its
-        // store id is allocated later.
-        // Wait until all CheckpointInfo are restored from S3
-        auto wn_ps = global_context->getWriteNodePageStorage();
-        wn_ps->waitUntilInitedFromRemoteStore();
-    }
-
-    /// Then, startup grpc server to serve raft and/or flash services.
-    FlashGrpcServerHolder flash_grpc_server_holder(this->context(), this->config(), raft_config, log);
+    LOG_INFO(log, "Start to wait for terminal signal");
+    waitForTerminationRequest();
 
     {
-        TcpHttpServersHolder tcpHttpServersHolder(*this, settings, log);
-
-        main_config_reloader->addConfigObject(global_context->getSecurityConfig());
-        main_config_reloader->start();
-        if (users_config_reloader)
-            users_config_reloader->start();
-
-        {
-            // on ARM processors it can show only enabled at current moment cores
-            CurrentMetrics::set(CurrentMetrics::LogicalCPUCores, server_info.cpu_info.logical_cores);
-            CurrentMetrics::set(CurrentMetrics::MemoryCapacity, server_info.memory_info.capacity);
-            LOG_INFO(
-                log,
-                "Available RAM = {}; physical cores = {}; logical cores = {}.",
-                server_info.memory_info.capacity,
-                server_info.cpu_info.physical_cores,
-                server_info.cpu_info.logical_cores);
-        }
-
-        LOG_INFO(log, "Ready for connections.");
-
-        SCOPE_EXIT({
-            is_cancelled = true;
-
-            tcpHttpServersHolder.onExit();
-
-            main_config_reloader.reset();
-            users_config_reloader.reset();
-        });
-
-        /// This object will periodically calculate some metrics.
-        /// should init after `createTMTContext` cause we collect some data from the TiFlash context object.
-        AsynchronousMetrics async_metrics(*global_context);
-        attachSystemTablesAsync(*global_context->getDatabase("system"), async_metrics);
-
-        std::vector<std::unique_ptr<MetricsTransmitter>> metrics_transmitters;
-        for (const auto & graphite_key : DB::getMultipleKeysFromConfig(config(), "", "graphite"))
-        {
-            metrics_transmitters.emplace_back(
-                std::make_unique<MetricsTransmitter>(*global_context, async_metrics, graphite_key));
-        }
-
-        auto metrics_prometheus = std::make_unique<MetricsPrometheus>(*global_context, async_metrics);
-
-        SessionCleaner session_cleaner(*global_context);
-
-        if (proxy_conf.is_proxy_runnable)
-        {
-            // If a TiFlash starts before any TiKV starts, then the very first Region will be created in TiFlash's proxy and it must be the peer as a leader role.
-            // This conflicts with the assumption that tiflash does not contain any Region leader peer and leads to unexpected errors
-            LOG_INFO(log, "Waiting for TiKV cluster to be bootstrapped");
-            while (!tmt_context.getPDClient()->isClusterBootstrapped())
-            {
-                const int wait_seconds = 3;
-                LOG_ERROR(
-                    log,
-                    "Waiting for cluster to be bootstrapped, we will sleep for {} seconds and try again.",
-                    wait_seconds);
-                ::sleep(wait_seconds);
-            }
-
-            tiflash_instance_wrap.tmt = &tmt_context;
-            LOG_INFO(log, "Let tiflash proxy start all services");
-            // Set tiflash instance status to running, then wait for proxy enter running status
-            tiflash_instance_wrap.status = EngineStoreServerStatus::Running;
-            while (tiflash_instance_wrap.proxy_helper->getProxyStatus() == RaftProxyStatus::Idle)
-                std::this_thread::sleep_for(std::chrono::milliseconds(200));
-
-            // proxy update store-id before status set `RaftProxyStatus::Running`
-            assert(tiflash_instance_wrap.proxy_helper->getProxyStatus() == RaftProxyStatus::Running);
-            const auto store_id = tmt_context.getKVStore()->getStoreID(std::memory_order_seq_cst);
-            if (store_ident)
-            {
-                RUNTIME_ASSERT(
-                    store_id == store_ident->store_id(),
-                    log,
-                    "store id mismatch store_id={} store_ident.store_id={}",
-                    store_id,
-                    store_ident->store_id());
-            }
-            if (global_context->getSharedContextDisagg()->isDisaggregatedComputeMode())
-            {
-                // compute node do not need to handle read index
-                LOG_INFO(log, "store_id={}, tiflash proxy is ready to serve", store_id);
-            }
-            else
-            {
-                LOG_INFO(
-                    log,
-                    "store_id={}, tiflash proxy is ready to serve, try to wake up all regions' leader",
-                    store_id);
-
-                if (global_context->getSharedContextDisagg()->isDisaggregatedStorageMode() && !store_ident.has_value())
-                {
-                    // Not disagg node done it before
-                    // For the disagg node has not been bootstrap, begin the very first schema sync with TiDB.
-                    // FIXME: (bootstrap) we should bootstrap the tiflash node more early!
-                    syncSchemaWithTiDB(storage_config, bg_init_stores, global_context, log);
-                    bg_init_stores.waitUntilFinish();
-                }
-
-                // if set 0, DO NOT enable read-index worker
-                size_t runner_cnt = config().getUInt("flash.read_index_runner_count", 1);
-                if (runner_cnt > 0)
-                {
-                    auto & kvstore_ptr = tmt_context.getKVStore();
-                    kvstore_ptr->initReadIndexWorkers(
-                        [&]() {
-                            // get from tmt context
-                            return std::chrono::milliseconds(tmt_context.readIndexWorkerTick());
-                        },
-                        /*running thread count*/ runner_cnt);
-                    tmt_context.getKVStore()->asyncRunReadIndexWorkers();
-                    WaitCheckRegionReady(tmt_context, *kvstore_ptr, terminate_signals_counter);
-                }
-            }
-        }
-        SCOPE_EXIT({
-            if (!proxy_conf.is_proxy_runnable)
-            {
-                tmt_context.setStatusTerminated();
-                return;
-            }
-            if (proxy_conf.is_proxy_runnable && tiflash_instance_wrap.status != EngineStoreServerStatus::Running)
-            {
-                LOG_ERROR(log, "Current status of engine-store is NOT Running, should not happen");
-                exit(-1);
-            }
-            LOG_INFO(log, "Set store context status Stopping");
-            tmt_context.setStatusStopping();
-            {
-                // Wait until there is no read-index task.
-                while (tmt_context.getKVStore()->getReadIndexEvent())
-                    std::this_thread::sleep_for(std::chrono::milliseconds(200));
-            }
-            tmt_context.setStatusTerminated();
-            tmt_context.getKVStore()->stopReadIndexWorkers();
-            LOG_INFO(log, "Set store context status Terminated");
-            {
-                // update status and let proxy stop all services except encryption.
-                tiflash_instance_wrap.status = EngineStoreServerStatus::Stopping;
-                LOG_INFO(log, "Set engine store server status Stopping");
-            }
-            // wait proxy to stop services
-            if (proxy_conf.is_proxy_runnable)
-            {
-                LOG_INFO(log, "Let tiflash proxy to stop all services");
-                while (tiflash_instance_wrap.proxy_helper->getProxyStatus() != RaftProxyStatus::Stopped)
-                    std::this_thread::sleep_for(std::chrono::milliseconds(200));
-                LOG_INFO(log, "All services in tiflash proxy are stopped");
-            }
-        });
-
-        {
-            // Report the unix timestamp, git hash, release version
-            Poco::Timestamp ts;
-            GET_METRIC(tiflash_server_info, start_time).Set(ts.epochTime());
-        }
-
-        tmt_context.setStatusRunning();
-
-        try
-        {
-            // Bind CPU affinity after all threads started.
-            CPUAffinityManager::getInstance().bindThreadCPUAffinity();
-        }
-        catch (...)
-        {
-            LOG_ERROR(log, "CPUAffinityManager::bindThreadCPUAffinity throws exception.");
-        }
-
-        LOG_INFO(log, "Start to wait for terminal signal");
-        waitForTerminationRequest();
-
-        {
-            // Set limiters stopping and wakeup threads in waitting queue.
-            global_context->getIORateLimiter().setStop();
-        }
+        // Set limiters stopping and wakeup threads in waitting queue.
+        global_context->getIORateLimiter().setStop();
     }
 
     return Application::EXIT_OK;
