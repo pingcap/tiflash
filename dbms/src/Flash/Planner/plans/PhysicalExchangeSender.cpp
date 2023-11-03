@@ -55,7 +55,6 @@ void PhysicalExchangeSender::transformImpl(DAGPipeline & pipeline, Context & con
     child->transform(pipeline, context, max_streams);
 
     auto & dag_context = *context.getDAGContext();
-    restoreConcurrency(pipeline, dag_context.final_concurrency, log);
 
     RUNTIME_ASSERT(dag_context.isMPPTask() && dag_context.tunnel_set != nullptr, log, "exchange_sender only run in MPP");
 
@@ -65,6 +64,10 @@ void PhysicalExchangeSender::transformImpl(DAGPipeline & pipeline, Context & con
         extra_info = String(enableFineGrainedShuffleExtraInfo);
         RUNTIME_CHECK(exchange_type == tipb::ExchangeType::Hash, ExchangeType_Name(exchange_type));
         RUNTIME_CHECK(fine_grained_shuffle.stream_count <= 1024, fine_grained_shuffle.stream_count);
+    }
+    else
+    {
+        restoreConcurrency(pipeline, dag_context.final_concurrency, log);
     }
     pipeline.transform([&](auto & stream) {
         // construct writer
