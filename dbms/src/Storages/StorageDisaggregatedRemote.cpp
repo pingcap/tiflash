@@ -514,8 +514,7 @@ std::variant<DM::Remote::RNWorkersPtr, DM::SegmentReadTaskPoolPtr> StorageDisagg
     LOG_INFO(
         log,
         "packSegmentReadTasks: enable_read_thread={} read_mode={} is_fast_scan={} keep_order={} task_count={} "
-        "num_streams={} "
-        "column_defines={}",
+        "num_streams={} column_defines={}",
         enable_read_thread,
         magic_enum::enum_name(read_mode),
         table_scan.isFastScan(),
@@ -555,58 +554,32 @@ std::variant<DM::Remote::RNWorkersPtr, DM::SegmentReadTaskPoolPtr> StorageDisagg
     }
 }
 
-static BlockInputStreamPtr buildInputStream(
-    const String & tracing_id,
-    const DM::ColumnDefines & columns_to_read,
-    int extra_table_id_index,
-    const std::variant<DM::Remote::RNWorkersPtr, DM::SegmentReadTaskPoolPtr> & packed_read_tasks)
+struct InputStreamBuilder
 {
-    if (const auto * workers = std::get_if<DM::Remote::RNWorkersPtr>(&packed_read_tasks); workers)
+    const String & tracing_id;
+    const DM::ColumnDefinesPtr & columns_to_read;
+    int extra_table_id_index;
+
+    BlockInputStreamPtr operator()(DM::Remote::RNWorkersPtr & workers) const
     {
-        return DM::Remote::RNSegmentInputStream::create({
+        return DM::Remote::RNSegmentInputStream::create(DM::Remote::RNSegmentInputStream::Options{
             .debug_tag = tracing_id,
-            .workers = *workers,
-            .columns_to_read = columns_to_read,
+            .workers = workers,
+            .columns_to_read = *columns_to_read,
             .extra_table_id_index = extra_table_id_index,
         });
     }
-    else
+
+    BlockInputStreamPtr operator()(DM::SegmentReadTaskPoolPtr & read_tasks) const
     {
         return std::make_shared<DM::UnorderedInputStream>(
-            std::get<DM::SegmentReadTaskPoolPtr>(packed_read_tasks),
-            columns_to_read,
+            read_tasks,
+            *columns_to_read,
             extra_table_id_index,
             tracing_id);
     }
-}
+};
 
-static SourceOpPtr buildSourceOp(
-    const String & tracing_id,
-    const DM::ColumnDefines & column_defines,
-    int extra_table_id_index,
-    PipelineExecutorContext & exec_context,
-    const std::variant<DM::Remote::RNWorkersPtr, DM::SegmentReadTaskPoolPtr> & packed_read_tasks)
-{
-    if (const auto * workers = std::get_if<DM::Remote::RNWorkersPtr>(&packed_read_tasks); workers)
-    {
-        return DM::Remote::RNSegmentSourceOp::create({
-            .debug_tag = tracing_id,
-            .exec_context = exec_context,
-            .workers = *workers,
-            .columns_to_read = column_defines,
-            .extra_table_id_index = extra_table_id_index,
-        });
-    }
-    else
-    {
-        return std::make_unique<UnorderedSourceOp>(
-            exec_context,
-            std::get<DM::SegmentReadTaskPoolPtr>(packed_read_tasks),
-            column_defines,
-            extra_table_id_index,
-            tracing_id);
-    }
-}
 
 void StorageDisaggregated::buildRemoteSegmentInputStreams(
     const Context & db_context,
@@ -620,10 +593,15 @@ void StorageDisaggregated::buildRemoteSegmentInputStreams(
         = packSegmentReadTasks(db_context, std::move(read_tasks), column_defines, num_streams, extra_table_id_index);
     RUNTIME_CHECK(num_streams > 0, num_streams);
     pipeline.streams.reserve(num_streams);
+
+    InputStreamBuilder builder{
+        .tracing_id = log->identifier(),
+        .columns_to_read = column_defines,
+        .extra_table_id_index = extra_table_id_index,
+    };
     for (size_t stream_idx = 0; stream_idx < num_streams; ++stream_idx)
     {
-        pipeline.streams.emplace_back(
-            buildInputStream(log->identifier(), *column_defines, extra_table_id_index, packed_read_tasks));
+        pipeline.streams.emplace_back(std::visit(builder, packed_read_tasks));
     }
 
     const auto & executor_id = table_scan.getTableScanExecutorID();
@@ -635,6 +613,35 @@ void StorageDisaggregated::buildRemoteSegmentInputStreams(
         profile_streams.push_back(stream);
     });
 }
+
+struct SrouceOpBuilder
+{
+    const String & tracing_id;
+    const DM::ColumnDefinesPtr & column_defines;
+    int extra_table_id_index;
+    PipelineExecutorContext & exec_context;
+
+    SourceOpPtr operator()(DM::Remote::RNWorkersPtr & workers) const
+    {
+        return DM::Remote::RNSegmentSourceOp::create({
+            .debug_tag = tracing_id,
+            .exec_context = exec_context,
+            .workers = workers,
+            .columns_to_read = *column_defines,
+            .extra_table_id_index = extra_table_id_index,
+        });
+    }
+
+    SourceOpPtr operator()(DM::SegmentReadTaskPoolPtr & read_tasks) const
+    {
+        return std::make_unique<UnorderedSourceOp>(
+            exec_context,
+            read_tasks,
+            *column_defines,
+            extra_table_id_index,
+            tracing_id);
+    }
+};
 
 void StorageDisaggregated::buildRemoteSegmentSourceOps(
     PipelineExecutorContext & exec_context,
@@ -649,10 +656,15 @@ void StorageDisaggregated::buildRemoteSegmentSourceOps(
         = packSegmentReadTasks(db_context, std::move(read_tasks), column_defines, num_streams, extra_table_id_index);
 
     RUNTIME_CHECK(num_streams > 0, num_streams);
+    SrouceOpBuilder builder{
+        .tracing_id = log->identifier(),
+        .column_defines = column_defines,
+        .extra_table_id_index = extra_table_id_index,
+        .exec_context = exec_context,
+    };
     for (size_t i = 0; i < num_streams; ++i)
     {
-        group_builder.addConcurrency(
-            buildSourceOp(log->identifier(), *column_defines, extra_table_id_index, exec_context, packed_read_tasks));
+        group_builder.addConcurrency(std::visit(builder, packed_read_tasks));
     }
     db_context.getDAGContext()->addInboundIOProfileInfos(
         table_scan.getTableScanExecutorID(),
