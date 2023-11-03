@@ -124,7 +124,7 @@ struct fmt::formatter<DB::DM::Remote::RemoteGCThreshold>
     template <typename FormatContext>
     auto format(const DB::DM::Remote::RemoteGCThreshold & v, FormatContext & ctx) const -> decltype(ctx.out())
     {
-        return format_to(
+        return fmt::format_to(
             ctx.out(),
             "RemoteGCThreshold{{min_age={} min_file_threshold={} valid_rate={:2.2f}%}}",
             v.min_age_seconds,
