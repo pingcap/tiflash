@@ -47,7 +47,6 @@ void MergedTask::initOnce()
             setStreamFinished(cur_idx);
             continue;
         }
-        task->fetchPages();
         stream = pool->buildInputStream(task);
         fiu_do_on(FailPoints::exception_in_merged_task_init, {
             throw Exception("Fail point exception_in_merged_task_init is triggered.", ErrorCodes::FAIL_POINT_ERROR);
