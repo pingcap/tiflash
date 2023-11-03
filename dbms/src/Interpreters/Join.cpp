@@ -1241,12 +1241,15 @@ Block Join::doJoinBlockHash(ProbeProcessInfo & probe_process_info, const JoinBui
 
     /// For RightSemi/RightAnti join with other conditions, using this column to record hash entries that matches keys
     /// Note: this column will record map entry addresses, so should use it carefully and better limit its usage in this function only.
-    MutableColumnPtr flag_mapped_entry_helper_column = nullptr;
-    if (useRowFlaggedHashMap(kind, has_other_condition))
+    //MutableColumnPtr flag_mapped_entry_helper_column = nullptr;
+    bool use_row_flagged_hash_map = useRowFlaggedHashMap(kind, has_other_condition);
+    if (use_row_flagged_hash_map)
     {
-        flag_mapped_entry_helper_column = flag_mapped_entry_helper_type->createColumn();
+        //flag_mapped_entry_helper_column = flag_mapped_entry_helper_type->createColumn();
         // todo figure out more accurate `rows`
-        flag_mapped_entry_helper_column->reserve(rows);
+        //flag_mapped_entry_helper_column->reserve(rows);
+        added_columns.push_back(flag_mapped_entry_helper_type->createColumn());
+        added_columns.back()->reserve(rows);
     }
 
     IColumn::Offset current_offset = 0;
@@ -1266,11 +1269,10 @@ Block Join::doJoinBlockHash(ProbeProcessInfo & probe_process_info, const JoinBui
         right_indexes,
         collators,
         join_build_info,
-        probe_process_info,
-        flag_mapped_entry_helper_column);
+        probe_process_info);
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_join_prob_failpoint);
     /// For RIGHT_SEMI/RIGHT_ANTI join without other conditions, hash table has been marked already, just return empty build table header
-    if (isRightSemiFamily(kind) && !flag_mapped_entry_helper_column)
+    if (isRightSemiFamily(kind) && !use_row_flagged_hash_map)
     {
         return sample_block_with_columns_to_add;
     }
@@ -1280,9 +1282,9 @@ Block Join::doJoinBlockHash(ProbeProcessInfo & probe_process_info, const JoinBui
         const ColumnWithTypeAndName & sample_col = sample_block_with_columns_to_add.getByPosition(i);
         block.insert(ColumnWithTypeAndName(std::move(added_columns[i]), sample_col.type, sample_col.name));
     }
-    if (flag_mapped_entry_helper_column)
+    if (use_row_flagged_hash_map)
         block.insert(ColumnWithTypeAndName(
-            std::move(flag_mapped_entry_helper_column),
+            std::move(added_columns[num_columns_to_add]),
             flag_mapped_entry_helper_type,
             flag_mapped_entry_helper_name));
 

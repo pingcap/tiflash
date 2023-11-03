@@ -1380,7 +1380,7 @@ struct Adder<KIND, ASTTableJoin::Strictness::All, Map>
                 {
                     for (size_t j = 0; j < num_columns_to_add; ++j)
                     {
-                        added_columns[j] = mapped_value.cached_column_info->columns[j]->mutateWithClone();
+                        added_columns[j] = mapped_value.cached_column_info->columns[j]->mutate();
                     }
                 }
                 else
@@ -1425,7 +1425,7 @@ struct Adder<KIND, ASTTableJoin::Strictness::All, Map>
             {
                 for (size_t j = 0; j < num_columns_to_add; ++j)
                 {
-                    cached_columns.push_back(added_columns[j]->mutateWithClone());
+                    cached_columns.push_back(added_columns[j]->mutate());
                 }
             }
             else
@@ -1488,8 +1488,7 @@ struct RowFlaggedHashMapAdder
         IColumn::Offset & current_offset,
         IColumn::Offsets * offsets,
         const std::vector<size_t> & right_indexes,
-        ProbeProcessInfo & probe_process_info,
-        MutableColumnPtr & ptr_col)
+        ProbeProcessInfo & probe_process_info)
     {
         auto & mapped_value = static_cast<const typename Map::mapped_type::Base_t &>(it->getMapped());
         size_t rows_joined = mapped_value.list_length;
@@ -1502,7 +1501,7 @@ struct RowFlaggedHashMapAdder
 
         bool need_generated_cached_columns = false;
         if unlikely (
-            probe_process_info.cache_columns_threshold > 0 && rows_joined > probe_process_info.cache_columns_threshold)
+            probe_process_info.cache_columns_threshold > 0 && rows_joined >= probe_process_info.cache_columns_threshold)
         {
             bool has_cached_columns = false;
             {
@@ -1521,26 +1520,25 @@ struct RowFlaggedHashMapAdder
             {
                 if (added_columns[0]->empty())
                 {
-                    for (size_t j = 0; j < num_columns_to_add; ++j)
+                    for (size_t j = 0; j < num_columns_to_add + 1; ++j)
                     {
-                        added_columns[j] = mapped_value.cached_column_info->columns[j]->mutateWithClone();
+                        added_columns[j] = mapped_value.cached_column_info->columns[j]->mutate();
                     }
                 }
                 else
                 {
-                    for (size_t j = 0; j < num_columns_to_add; ++j)
+                    for (size_t j = 0; j < num_columns_to_add + 1; ++j)
                     {
                         added_columns[j]->insertRangeFrom(*mapped_value.cached_column_info->columns[j], 0, rows_joined);
                     }
                 }
-                ptr_col->insertRangeFrom(*mapped_value.cached_column_info->columns[num_columns_to_add], 0, rows_joined);
                 current_offset += rows_joined;
                 (*offsets)[i] = current_offset;
                 return false;
             }
         }
 
-        auto & actual_ptr_col = static_cast<PointerHelper::ColumnType &>(*ptr_col);
+        auto & actual_ptr_col = static_cast<PointerHelper::ColumnType &>(*added_columns[num_columns_to_add]);
         auto & container = static_cast<PointerHelper::ArrayType &>(actual_ptr_col.getData());
         for (auto current = &mapped_value; current != nullptr; current = current->next)
         {
@@ -1559,19 +1557,18 @@ struct RowFlaggedHashMapAdder
             size_t start_offset = added_columns[0]->size() - rows_joined;
             if (start_offset == 0)
             {
-                for (size_t j = 0; j < num_columns_to_add; ++j)
+                for (size_t j = 0; j < num_columns_to_add + 1; ++j)
                 {
-                    cached_columns.push_back(added_columns[j]->mutateWithClone());
+                    cached_columns.push_back(added_columns[j]->mutate());
                 }
             }
             else
             {
-                for (size_t j = 0; j < num_columns_to_add; ++j)
+                for (size_t j = 0; j < num_columns_to_add + 1; ++j)
                 {
                     cached_columns.push_back(added_columns[j]->cut(start_offset, rows_joined));
                 }
             }
-            cached_columns.push_back(ptr_col->cut(start_offset, rows_joined));
             std::unique_lock lock(mapped_value.cached_column_info->mu);
             mapped_value.cached_column_info->columns.insert(
                 mapped_value.cached_column_info->columns.end(),
@@ -1608,8 +1605,7 @@ void NO_INLINE probeBlockImplTypeCase(
     const std::vector<size_t> & right_indexes,
     const TiDB::TiDBCollators & collators,
     const JoinBuildInfo & join_build_info,
-    ProbeProcessInfo & probe_process_info,
-    MutableColumnPtr & record_mapped_entry_column)
+    ProbeProcessInfo & probe_process_info)
 {
     if (rows == 0)
     {
@@ -1731,8 +1727,7 @@ void NO_INLINE probeBlockImplTypeCase(
                         current_offset,
                         offsets_to_replicate.get(),
                         right_indexes,
-                        probe_process_info,
-                        record_mapped_entry_column);
+                        probe_process_info);
                 }
                 else if constexpr (KIND == ASTTableJoin::Kind::RightSemi || KIND == ASTTableJoin::Kind::RightAnti)
                 {
@@ -1805,8 +1800,7 @@ void probeBlockImplType(
     const std::vector<size_t> & right_indexes,
     const TiDB::TiDBCollators & collators,
     const JoinBuildInfo & join_build_info,
-    ProbeProcessInfo & probe_process_info,
-    MutableColumnPtr & record_mapped_entry_column)
+    ProbeProcessInfo & probe_process_info)
 {
     if (null_map)
     {
@@ -1823,8 +1817,7 @@ void probeBlockImplType(
             right_indexes,
             collators,
             join_build_info,
-            probe_process_info,
-            record_mapped_entry_column);
+            probe_process_info);
     }
     else
     {
@@ -1841,8 +1834,7 @@ void probeBlockImplType(
             right_indexes,
             collators,
             join_build_info,
-            probe_process_info,
-            record_mapped_entry_column);
+            probe_process_info);
     }
 }
 template <
@@ -2057,14 +2049,14 @@ void JoinPartition::probeBlock(
     const std::vector<size_t> & right_indexes,
     const TiDB::TiDBCollators & collators,
     const JoinBuildInfo & join_build_info,
-    ProbeProcessInfo & probe_process_info,
-    MutableColumnPtr & record_mapped_entry_column)
+    ProbeProcessInfo & probe_process_info)
 {
     using enum ASTTableJoin::Strictness;
     using enum ASTTableJoin::Kind;
     const auto & current_partition = join_partitions[probe_process_info.partition_index];
     auto kind = current_partition->kind;
     auto strictness = current_partition->strictness;
+    bool use_row_flagged_map = added_columns.size() > right_indexes.size();
     assert(rows == 0 || !current_partition->isSpill());
 
 #define CALL(KIND, STRICTNESS, MAP, row_flagged_map)        \
@@ -2081,8 +2073,7 @@ void JoinPartition::probeBlock(
         right_indexes,                                      \
         collators,                                          \
         join_build_info,                                    \
-        probe_process_info,                                 \
-        record_mapped_entry_column);
+        probe_process_info);
 
     if (kind == Inner && strictness == All)
         CALL(Inner, All, MapsAll, false)
@@ -2094,9 +2085,9 @@ void JoinPartition::probeBlock(
         CALL(LeftOuter, Any, MapsAnyFull, false)
     else if (kind == Full && strictness == All)
         CALL(LeftOuter, All, MapsAllFull, false)
-    else if (kind == RightOuter && strictness == All && !record_mapped_entry_column)
+    else if (kind == RightOuter && strictness == All && !use_row_flagged_map)
         CALL(Inner, All, MapsAllFull, false)
-    else if (kind == RightOuter && strictness == All && record_mapped_entry_column)
+    else if (kind == RightOuter && strictness == All && use_row_flagged_map)
         CALL(RightOuter, All, MapsAllFullWithRowFlag, true)
     else if (kind == Semi && strictness == Any)
         CALL(Semi, Any, MapsAny, false)
@@ -2114,13 +2105,13 @@ void JoinPartition::probeBlock(
         CALL(LeftOuterSemi, Any, MapsAny, false)
     else if (kind == LeftOuterAnti && strictness == All)
         CALL(LeftOuterSemi, All, MapsAll, false)
-    else if (kind == RightSemi && record_mapped_entry_column)
+    else if (kind == RightSemi && use_row_flagged_map)
         CALL(RightSemi, All, MapsAllFullWithRowFlag, true)
-    else if (kind == RightSemi && !record_mapped_entry_column)
+    else if (kind == RightSemi && !use_row_flagged_map)
         CALL(RightSemi, All, MapsAllFull, false)
-    else if (kind == RightAnti && record_mapped_entry_column)
+    else if (kind == RightAnti && use_row_flagged_map)
         CALL(RightAnti, All, MapsAllFullWithRowFlag, true)
-    else if (kind == RightAnti && !record_mapped_entry_column)
+    else if (kind == RightAnti && !use_row_flagged_map)
         CALL(RightAnti, All, MapsAllFull, false)
     else
         throw Exception("Logical error: unknown combination of JOIN", ErrorCodes::LOGICAL_ERROR);
@@ -2141,8 +2132,7 @@ void JoinPartition::probeBlockImpl(
     const std::vector<size_t> & right_indexes,
     const TiDB::TiDBCollators & collators,
     const JoinBuildInfo & join_build_info,
-    ProbeProcessInfo & probe_process_info,
-    MutableColumnPtr & record_mapped_entry_column)
+    ProbeProcessInfo & probe_process_info)
 {
     const auto & current_join_partition = join_partitions[probe_process_info.partition_index];
     auto method = current_join_partition->join_map_method;
@@ -2168,8 +2158,7 @@ void JoinPartition::probeBlockImpl(
             right_indexes,                                                                       \
             collators,                                                                           \
             join_build_info,                                                                     \
-            probe_process_info,                                                                  \
-            record_mapped_entry_column);                                                         \
+            probe_process_info);                                                                 \
         break;
         APPLY_FOR_JOIN_VARIANTS(M)
 #undef M

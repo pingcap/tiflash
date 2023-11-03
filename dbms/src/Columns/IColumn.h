@@ -390,13 +390,13 @@ public:
         return res;
     }
 
-    MutablePtr mutateWithClone() const
+    /// equal to clone, but clone is a private method
+    MutablePtr mutate() const &
     {
-        MutablePtr res = COWPtr<IColumn>::mutateWithClone();
-        res->forEachSubcolumn([](Ptr & subcolumn) { subcolumn = subcolumn->mutateWithClone(); });
+        MutablePtr res = clone();
+        res->forEachSubcolumn([](Ptr & subcolumn) { subcolumn = subcolumn->clone(); });
         return res;
     }
-
 
     /** Some columns can contain another columns inside.
       * So, we have a tree of columns. But not all combinations are possible.

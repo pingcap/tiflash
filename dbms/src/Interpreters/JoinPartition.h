@@ -183,8 +183,7 @@ public:
         const std::vector<size_t> & right_indexes,
         const TiDB::TiDBCollators & collators,
         const JoinBuildInfo & join_build_info,
-        ProbeProcessInfo & probe_process_info,
-        MutableColumnPtr & record_mapped_entry_column);
+        ProbeProcessInfo & probe_process_info);
     template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps, bool row_flagged_map>
     static void probeBlockImpl(
         const JoinPartitions & join_partitions,
@@ -199,8 +198,7 @@ public:
         const std::vector<size_t> & right_indexes,
         const TiDB::TiDBCollators & collators,
         const JoinBuildInfo & join_build_info,
-        ProbeProcessInfo & probe_process_info,
-        MutableColumnPtr & record_mapped_entry_column);
+        ProbeProcessInfo & probe_process_info);
 
     template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
     static std::pair<PaddedPODArray<NASemiJoinResult<KIND, STRICTNESS>>, std::list<NASemiJoinResult<KIND, STRICTNESS> *>> probeBlockNullAware(
