@@ -902,8 +902,8 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     {
         TiDBTableScan table_scan(query_block.source, query_block.source_name, dagContext());
         if (!table_scan.getPushedDownFilters().empty() && unlikely(!context.getSettingsRef().dt_enable_bitmap_filter))
-            throw Exception("Enable late materialization but disable bitmap filter, please set the config "
-                            "`dt_enable_bitmap_filter` of TiFlash to true,"
+            throw Exception("Running late materialization but bitmap filter is disabled, please set the config "
+                            "`profiles.default.dt_enable_bitmap_filter` of TiFlash to true,"
                             "or disable late materialization by set tidb variable "
                             "`tidb_opt_enable_late_materialization` to false.");
         if (unlikely(context.isTest()))
