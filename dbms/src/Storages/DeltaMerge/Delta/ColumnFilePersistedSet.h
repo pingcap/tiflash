@@ -48,11 +48,7 @@ class ColumnFilePersistedSet
     : public std::enable_shared_from_this<ColumnFilePersistedSet>
     , private boost::noncopyable
 {
-#ifndef DBMS_PUBLIC_GTEST
 private:
-#else
-public:
-#endif
     PageIdU64 metadata_id;
     ColumnFilePersisteds persisted_files;
     // TODO: check the proper memory_order when use this atomic variable
@@ -108,6 +104,8 @@ public:
     }
     /// Thread safe part end
     String detailInfo() const { return columnFilesToString(persisted_files); }
+
+    const ColumnFilePersisteds & getFiles() const { return persisted_files; }
 
     void saveMeta(WriteBatches & wbs) const;
 

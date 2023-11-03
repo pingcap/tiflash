@@ -176,6 +176,7 @@ try
     MemTrackerWrapper mem_tracker_wrapper(nullptr);
     auto remote_table_pb = Remote::Serializer::serializeTo(snap, /*task_id*/ {}, mem_tracker_wrapper);
 
+    ASSERT_GT(remote_table_pb.segments_size(), 0);
     for (const auto & remote_seg : remote_table_pb.segments())
     {
         auto seg_task = std::make_shared<SegmentReadTask>(
@@ -208,7 +209,7 @@ try
         ASSERT_NE(stable_cn, nullptr) << seg_id;
 
         // Check Delta
-        ASSERT_EQ(delta_wn->delta_index_epoch, delta_cn->delta_index_epoch);
+        ASSERT_EQ(delta_wn->getDeltaIndexEpoch(), delta_cn->getDeltaIndexEpoch());
         ASSERT_EQ(delta_wn->simpleInfo(), delta_cn->simpleInfo());
         ASSERT_EQ(delta_wn->info(), delta_cn->info());
         ASSERT_EQ(delta_wn->getId(), delta_cn->getId());
@@ -310,8 +311,8 @@ try
         ASSERT_EQ(persist_set_wn->detailInfo(), persist_set_cn->detailInfo());
         for (size_t i = 0; i < persist_set_wn->getColumnFileCount(); i++)
         {
-            auto cf_wn = persist_set_wn->persisted_files[i];
-            auto cf_cn = persist_set_cn->persisted_files[i];
+            auto cf_wn = persist_set_wn->getFiles()[i];
+            auto cf_cn = persist_set_cn->getFiles()[i];
 
             if (i == 0)
             {
