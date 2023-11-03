@@ -51,3 +51,4 @@ ignore_databases = "system,default"
 [profiles]
 [profiles.default]
 force_push_down_all_filters_to_scan = 1
+dt_enable_read_thread = 0

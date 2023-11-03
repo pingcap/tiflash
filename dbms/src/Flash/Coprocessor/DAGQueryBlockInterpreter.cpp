@@ -444,7 +444,7 @@ void DAGQueryBlockInterpreter::executeWhere(
     DAGPipeline & pipeline,
     const ExpressionActionsPtr & expr,
     String & filter_column,
-    const String & extra_info)
+    const String & extra_info) const
 {
     pipeline.transform([&](auto & stream) {
         stream = std::make_shared<FilterBlockInputStream>(stream, expr, filter_column, log->identifier());
@@ -594,12 +594,12 @@ void DAGQueryBlockInterpreter::executeAggregation(
 void DAGQueryBlockInterpreter::executeWindowOrder(
     DAGPipeline & pipeline,
     SortDescription sort_desc,
-    bool enable_fine_grained_shuffle)
+    bool enable_fine_grained_shuffle) const
 {
     orderStreams(pipeline, max_streams, sort_desc, 0, enable_fine_grained_shuffle, context, log);
 }
 
-void DAGQueryBlockInterpreter::executeOrder(DAGPipeline & pipeline, const NamesAndTypes & order_columns)
+void DAGQueryBlockInterpreter::executeOrder(DAGPipeline & pipeline, const NamesAndTypes & order_columns) const
 {
     Int64 limit = query_block.limit_or_topn->topn().limit();
     orderStreams(
@@ -901,9 +901,9 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     else if (query_block.isTableScanSource())
     {
         TiDBTableScan table_scan(query_block.source, query_block.source_name, dagContext());
-        if (!table_scan.getPushedDownFilters().empty() && unlikely(!context.getSettingsRef().dt_enable_read_thread))
+        if (!table_scan.getPushedDownFilters().empty() && unlikely(!context.getSettingsRef().dt_enable_bitmap_filter))
             throw Exception("Enable late materialization but disable read thread pool, please set the config "
-                            "`dt_enable_read_thread` of TiFlash to true,"
+                            "`dt_enable_bitmap_filter` of TiFlash to true,"
                             "or disable late materialization by set tidb variable "
                             "`tidb_opt_enable_late_materialization` to false.");
         if (unlikely(context.isTest()))
@@ -1030,7 +1030,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
 void DAGQueryBlockInterpreter::executeProject(
     DAGPipeline & pipeline,
     NamesWithAliases & project_cols,
-    const String & extra_info)
+    const String & extra_info) const
 {
     if (project_cols.empty())
         return;
@@ -1063,7 +1063,7 @@ void DAGQueryBlockInterpreter::executeLimit(DAGPipeline & pipeline)
     }
 }
 
-void DAGQueryBlockInterpreter::executeExpand(DAGPipeline & pipeline, const ExpressionActionsPtr & expr)
+void DAGQueryBlockInterpreter::executeExpand(DAGPipeline & pipeline, const ExpressionActionsPtr & expr) const
 {
     String expand_extra_info
         = fmt::format("expand: grouping set {}", expr->getActions().back().expand->getGroupingSetsDes());
@@ -1073,7 +1073,7 @@ void DAGQueryBlockInterpreter::executeExpand(DAGPipeline & pipeline, const Expre
     });
 }
 
-void DAGQueryBlockInterpreter::executeExpand2(DAGPipeline & pipeline, const Expand2Ptr & expand)
+void DAGQueryBlockInterpreter::executeExpand2(DAGPipeline & pipeline, const Expand2Ptr & expand) const
 {
     String expand_extra_info = fmt::format("expand: leveled projection: {}", expand->getLevelProjectionDes());
     pipeline.transform([&](auto & stream) {
@@ -1125,7 +1125,7 @@ void DAGQueryBlockInterpreter::handleExchangeSender(DAGPipeline & pipeline)
     });
 }
 
-void DAGQueryBlockInterpreter::handleMockExchangeSender(DAGPipeline & pipeline)
+void DAGQueryBlockInterpreter::handleMockExchangeSender(DAGPipeline & pipeline) const
 {
     pipeline.transform(
         [&](auto & stream) { stream = std::make_shared<MockExchangeSenderInputStream>(stream, log->identifier()); });

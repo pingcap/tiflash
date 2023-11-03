@@ -21,6 +21,8 @@
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 
+#include "Interpreters/Context.h"
+
 namespace DB
 {
 namespace FailPoints
