@@ -1135,22 +1135,22 @@ template <typename Map>
 struct Adder<ASTTableJoin::Kind::Semi, ASTTableJoin::Strictness::Any, Map>
 {
     static bool addFound(
-        const typename Map::ConstLookupResult & it,
-        size_t num_columns_to_add,
-        MutableColumns & added_columns,
+        const typename Map::ConstLookupResult &,
+        size_t,
+        MutableColumns &,
         size_t i,
         IColumn::Filter * filter,
         IColumn::Offset & /*current_offset*/,
         IColumn::Offsets * /*offsets*/,
-        const std::vector<size_t> & right_indexes,
+        const std::vector<size_t> &,
         ProbeProcessInfo & /*probe_process_info*/)
     {
         (*filter)[i] = 1;
 
-        for (size_t j = 0; j < num_columns_to_add; ++j)
+        /*for (size_t j = 0; j < num_columns_to_add; ++j)
             added_columns[j]->insertFrom(
                 *it->getMapped().block->getByPosition(right_indexes[j]).column.get(),
-                it->getMapped().row_num);
+                it->getMapped().row_num);*/
 
         return false;
     }
@@ -1188,8 +1188,8 @@ struct Adder<ASTTableJoin::Kind::Anti, ASTTableJoin::Strictness::Any, Map>
     }
 
     static bool addNotFound(
-        size_t num_columns_to_add,
-        MutableColumns & added_columns,
+        size_t ,
+        MutableColumns & ,
         size_t i,
         IColumn::Filter * filter,
         IColumn::Offset & /*current_offset*/,
@@ -1197,8 +1197,8 @@ struct Adder<ASTTableJoin::Kind::Anti, ASTTableJoin::Strictness::Any, Map>
         ProbeProcessInfo & /*probe_process_info*/)
     {
         (*filter)[i] = 1;
-        for (size_t j = 0; j < num_columns_to_add; ++j)
-            added_columns[j]->insertDefault();
+        /*for (size_t j = 0; j < num_columns_to_add; ++j)
+            added_columns[j]->insertDefault();*/
         return false;
     }
 };
