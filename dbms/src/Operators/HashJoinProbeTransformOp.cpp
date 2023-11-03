@@ -30,11 +30,10 @@ HashJoinProbeTransformOp::HashJoinProbeTransformOp(
     const JoinPtr & join_,
     size_t op_index_,
     size_t max_block_size,
-    size_t cache_columns_threshold,
     const Block & input_header)
     : TransformOp(exec_context_, req_id)
     , origin_join(join_)
-    , probe_process_info(max_block_size, cache_columns_threshold)
+    , probe_process_info(max_block_size, join_->getProbeCacheColumnThreshold())
 {
     RUNTIME_CHECK_MSG(origin_join != nullptr, "join ptr should not be null.");
     RUNTIME_CHECK_MSG(origin_join->getProbeConcurrency() > 0, "Join probe concurrency must be greater than 0");

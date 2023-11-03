@@ -29,7 +29,6 @@ public:
         const JoinPtr & join_,
         size_t op_index_,
         size_t max_block_size,
-        size_t cache_columns_threshold_,
         const Block & input_header);
 
     String getName() const override { return "HashJoinProbeTransformOp"; }

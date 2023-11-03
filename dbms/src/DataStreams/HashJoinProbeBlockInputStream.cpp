@@ -25,8 +25,7 @@ HashJoinProbeBlockInputStream::HashJoinProbeBlockInputStream(
     const JoinPtr & join_,
     size_t stream_index,
     const String & req_id,
-    UInt64 max_block_size_,
-    UInt64 cache_columns_threshold_)
+    UInt64 max_block_size_)
     : log(Logger::get(req_id))
     , original_join(join_)
 {
@@ -40,8 +39,7 @@ HashJoinProbeBlockInputStream::HashJoinProbeBlockInputStream(
         original_join,
         stream_index,
         input,
-        max_block_size_,
-        cache_columns_threshold_));
+        max_block_size_));
     probe_exec->setCancellationHook([&]() { return isCancelledOrThrowIfKilled(); });
 
     ProbeProcessInfo header_probe_process_info(0, 0);

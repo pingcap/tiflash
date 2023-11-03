@@ -54,7 +54,6 @@ void PhysicalJoinProbe::buildPipelineExecGroupImpl(
             join_ptr,
             probe_index++,
             max_block_size,
-            context.getSettingsRef().join_probe_cache_columns_threshold,
             input_header));
     });
     join_ptr.reset();

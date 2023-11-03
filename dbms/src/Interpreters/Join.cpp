@@ -127,12 +127,11 @@ Join::Join(
     const Names & key_names_right_,
     ASTTableJoin::Kind kind_,
     const String & req_id,
-    bool enable_fine_grained_shuffle_,
     size_t fine_grained_shuffle_count_,
     size_t max_bytes_before_external_join,
     const SpillConfig & build_spill_config,
     const SpillConfig & probe_spill_config,
-    Int64 join_restore_concurrency_,
+    const RestoreConfig & restore_config_,
     const Names & tidb_output_column_names_,
     const RegisterOperatorSpillContext & register_operator_spill_context_,
     AutoSpillTrigger * auto_spill_trigger_,
@@ -142,11 +141,10 @@ Join::Join(
     size_t shallow_copy_cross_probe_threshold_,
     const String & match_helper_name_,
     const String & flag_mapped_entry_helper_name_,
-    size_t restore_round_,
-    size_t restore_part,
+    size_t probe_cache_column_threshold_,
     bool is_test_,
     const std::vector<RuntimeFilterPtr> & runtime_filter_list_)
-    : restore_round(restore_round_)
+    : restore_config(restore_config_)
     , match_helper_name(match_helper_name_)
     , flag_mapped_entry_helper_name(flag_mapped_entry_helper_name_)
     , kind(kind_)
@@ -162,18 +160,18 @@ Join::Join(
     , non_equal_conditions(non_equal_conditions_)
     , max_block_size(max_block_size_)
     , runtime_filter_list(runtime_filter_list_)
-    , join_restore_concurrency(join_restore_concurrency_)
     , register_operator_spill_context(register_operator_spill_context_)
     , auto_spill_trigger(auto_spill_trigger_)
     , shallow_copy_cross_probe_threshold(
           shallow_copy_cross_probe_threshold_ > 0 ? shallow_copy_cross_probe_threshold_
                                                   : std::max(1, max_block_size / 10))
+    , probe_cache_column_threshold(probe_cache_column_threshold_)
     , tidb_output_column_names(tidb_output_column_names_)
     , is_test(is_test_)
     , log(Logger::get(
-          restore_round == 0 ? join_req_id
-                             : fmt::format("{}_round_{}_part_{}", join_req_id, restore_round, restore_part)))
-    , enable_fine_grained_shuffle(enable_fine_grained_shuffle_)
+          restore_config.restore_round == 0 ? join_req_id
+                             : fmt::format("{}_round_{}_part_{}", join_req_id, restore_config.restore_round, restore_config.restore_partition_id)))
+    , enable_fine_grained_shuffle(fine_grained_shuffle_count_ > 0)
     , fine_grained_shuffle_count(fine_grained_shuffle_count_)
 {
     has_other_condition = non_equal_conditions.other_cond_expr != nullptr;
@@ -199,7 +197,7 @@ Join::Join(
     max_restore_round = MAX_RESTORE_ROUND_IN_GTEST;
 #endif
 
-    if (hash_join_spill_context->supportSpill() && restore_round >= max_restore_round)
+    if (hash_join_spill_context->supportSpill() && restore_config.restore_round >= max_restore_round)
     {
         LOG_WARNING(log, fmt::format("restore round reach to {}, spilling will be disabled.", max_restore_round));
         hash_join_spill_context->disableSpill();
@@ -368,12 +366,12 @@ std::shared_ptr<Join> Join::createRestoreJoin(size_t max_bytes_before_external_j
         key_names_right,
         kind,
         join_req_id,
-        false,
+        /// restore join never enable fine grained shuffle
         0,
         max_bytes_before_external_join_,
-        hash_join_spill_context->createBuildSpillConfig(fmt::format("{}_{}_build", join_req_id, restore_round + 1)),
-        hash_join_spill_context->createProbeSpillConfig(fmt::format("{}_{}_probe", join_req_id, restore_round + 1)),
-        join_restore_concurrency,
+        hash_join_spill_context->createBuildSpillConfig(fmt::format("{}_{}_build", join_req_id, restore_config.restore_round + 1)),
+        hash_join_spill_context->createProbeSpillConfig(fmt::format("{}_{}_probe", join_req_id, restore_config.restore_round + 1)),
+        RestoreConfig{restore_config.join_restore_concurrency, restore_config.restore_round + 1, restore_partition_id},
         tidb_output_column_names,
         register_operator_spill_context,
         auto_spill_trigger,
@@ -383,8 +381,7 @@ std::shared_ptr<Join> Join::createRestoreJoin(size_t max_bytes_before_external_j
         shallow_copy_cross_probe_threshold,
         match_helper_name,
         flag_mapped_entry_helper_name,
-        restore_round + 1,
-        restore_partition_id,
+        probe_cache_column_threshold,
         is_test);
 }
 
@@ -622,7 +619,7 @@ bool Join::isEnableSpill() const
 
 bool Join::isRestoreJoin() const
 {
-    return restore_round > 0;
+    return restore_config.restore_round > 0;
 }
 
 void Join::insertFromBlockInternal(Block * stored_block, size_t stream_index)
@@ -2141,7 +2138,7 @@ IColumn::Selector Join::selectDispatchBlock(const Strings & key_columns_names, c
     sort_key_containers.resize(key_columns.size());
 
     WeakHash32 hash(0);
-    computeDispatchHash(num_rows, key_columns, collators, sort_key_containers, restore_round, hash);
+    computeDispatchHash(num_rows, key_columns, collators, sort_key_containers, restore_config.restore_round, hash);
     return hashToSelector(hash);
 }
 
@@ -2186,7 +2183,7 @@ void Join::spillMostMemoryUsedPartitionIfNeed(size_t stream_index)
 
 #ifdef DBMS_PUBLIC_GTEST
         // for join spill to disk gtest
-        if (restore_round == std::max(2, MAX_RESTORE_ROUND_IN_GTEST) - 1
+        if (restore_config.restore_round == std::max(2, MAX_RESTORE_ROUND_IN_GTEST) - 1
             && hash_join_spill_context->spilledPartitionCount() >= partitions.size() / 2)
             return;
 #endif
@@ -2201,7 +2198,7 @@ void Join::spillMostMemoryUsedPartitionIfNeed(size_t stream_index)
                 log,
                 fmt::format(
                     "Join with restore round: {}, used {} bytes, will spill partition: {}.",
-                    restore_round,
+                    restore_config.restore_round,
                     getTotalByteCount(),
                     partition_to_be_spilled));
 
@@ -2261,7 +2258,7 @@ std::optional<RestoreInfo> Join::getOneRestoreStream(size_t max_block_size_)
                 restore_join_build_concurrency = getRestoreJoinBuildConcurrency(
                     partitions.size(),
                     remaining_partition_indexes_to_restore.size(),
-                    join_restore_concurrency,
+                    restore_config.join_restore_concurrency,
                     probe_concurrency);
             /// for restore join we make sure that the restore_join_build_concurrency is at least 2, so it can be spill again.
             /// And restore_join_build_concurrency should not be greater than probe_concurrency, Otherwise some restore_stream will never be executed.
@@ -2275,7 +2272,7 @@ std::optional<RestoreInfo> Join::getOneRestoreStream(size_t max_block_size_)
                 log,
                 "Begin restore data from disk for hash join, partition {}, restore round {}, build concurrency {}.",
                 spilled_partition_index,
-                restore_round,
+                restore_config.restore_round,
                 restore_join_build_concurrency);
 
             auto restore_build_streams = hash_join_spill_context->getBuildSpiller()->restoreBlocks(
