@@ -89,8 +89,7 @@ void ProbeProcessInfo::prepareForHashProbe(
                 convertColumnToNullable(block.getByPosition(i));
         }
     }
-    if (((kind == ASTTableJoin::Kind::Inner || kind == ASTTableJoin::Kind::RightOuter)
-         && strictness == ASTTableJoin::Strictness::Any)
+    if ((kind == ASTTableJoin::Kind::Semi && strictness == ASTTableJoin::Strictness::Any)
         || kind == ASTTableJoin::Kind::Anti)
         filter = std::make_unique<IColumn::Filter>(block.rows());
     if (strictness == ASTTableJoin::Strictness::All)
