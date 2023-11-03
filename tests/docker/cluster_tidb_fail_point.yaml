@@ -51,7 +51,7 @@ services:
   tidb0:
     image: hub.pingcap.net/qa/tidb:${TIDB_BRANCH:-master}-failpoint
     environment:
-      GO_FAILPOINTS: "github.com/pingcap/tidb/pkg/server/enableTestAPI=return"
+      GO_FAILPOINTS: "github.com/pingcap/tidb/server/enableTestAPI=return"
     volumes:
       - ./config/tidb.toml:/tidb.toml:ro
       - ./log/tidb0:/log
