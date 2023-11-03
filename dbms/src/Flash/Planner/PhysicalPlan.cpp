@@ -78,8 +78,8 @@ void PhysicalPlan::buildTableScan(const String & executor_id, const tipb::Execut
     TiDBTableScan table_scan(executor, executor_id, dagContext());
     if (!table_scan.getPushedDownFilters().empty() && unlikely(!context.getSettingsRef().dt_enable_bitmap_filter))
         throw Exception(
-            "Running late materialization but bitmap filter is disabled, please set the config `profiles.default.dt_enable_bitmap_filter` "
-            "of TiFlash to true,"
+            "Running late materialization but bitmap filter is disabled, please set the config "
+            "`profiles.default.dt_enable_bitmap_filter` of TiFlash to true,"
             "or disable late materialization by set tidb variable `tidb_opt_enable_late_materialization` to false.");
     LOG_DEBUG(log, "tidb table scan has runtime filter size:{}", table_scan.getRuntimeFilterIDs().size());
     if (unlikely(context.isTest()))
