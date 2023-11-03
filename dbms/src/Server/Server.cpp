@@ -1674,10 +1674,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         }
         else
         {
-            LOG_INFO(
-                log,
-                "store_id={}, tiflash proxy is ready to serve, try to wake up all regions' leader",
-                store_id);
+            LOG_INFO(log, "store_id={}, tiflash proxy is ready to serve, try to wake up all regions' leader", store_id);
 
             if (global_context->getSharedContextDisagg()->isDisaggregatedStorageMode() && !store_ident.has_value())
             {
