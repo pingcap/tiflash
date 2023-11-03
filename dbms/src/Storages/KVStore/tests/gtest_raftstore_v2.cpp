@@ -28,6 +28,73 @@ extern const char force_set_sst_to_dtfile_block_size[];
 namespace tests
 {
 
+// Test if active cancel from proxy.
+TEST_F(RegionKVStoreTest, KVStoreSingleSnapCancel)
+try
+{
+    auto ctx = TiFlashTestEnv::getGlobalContext();
+    proxy_instance->cluster_ver = RaftstoreVer::V2;
+    ASSERT_NE(proxy_helper->sst_reader_interfaces.fn_key, nullptr);
+    ASSERT_NE(proxy_helper->fn_get_config_json, nullptr);
+    UInt64 region_id = 1;
+    TableID table_id;
+    FailPointHelper::enableFailPoint(FailPoints::force_set_parallel_prehandle_threshold, static_cast<size_t>(0));
+    FailPointHelper::enableFailPoint(FailPoints::force_set_sst_to_dtfile_block_size, static_cast<size_t>(1));
+    SCOPE_EXIT({ FailPointHelper::disableFailPoint("force_set_sst_to_dtfile_block_size"); });
+    SCOPE_EXIT({ FailPointHelper::disableFailPoint("force_set_parallel_prehandle_threshold"); });
+    {
+        region_id = 2;
+        initStorages();
+        KVStore & kvs = getKVS();
+        HandleID table_limit = 40;
+        HandleID sst_limit = 40;
+        table_id = proxy_instance->bootstrapTable(ctx, kvs, ctx.getTMTContext());
+        auto start = RecordKVFormat::genKey(table_id, 0);
+        auto end = RecordKVFormat::genKey(table_id, table_limit);
+        proxy_instance->bootstrapWithRegion(
+            kvs,
+            ctx.getTMTContext(),
+            region_id,
+            std::make_pair(start.toString(), end.toString()));
+        auto r1 = proxy_instance->getRegion(region_id);
+
+        auto [value_write, value_default] = proxy_instance->generateTiKVKeyValue(111, 999);
+        auto kkk = RecordKVFormat::decodeWriteCfValue(TiKVValue::copyFrom(value_write));
+        {
+            MockSSTReader::getMockSSTData().clear();
+            MockRaftStoreProxy::Cf default_cf{region_id, table_id, ColumnFamilyType::Default};
+            for (HandleID h = 1; h < sst_limit; h++)
+            {
+                auto k = RecordKVFormat::genKey(table_id, h, 111);
+                default_cf.insert_raw(k, value_default);
+            }
+            default_cf.finish_file(SSTFormatKind::KIND_TABLET);
+            default_cf.freeze();
+            MockRaftStoreProxy::Cf write_cf{region_id, table_id, ColumnFamilyType::Write};
+            for (HandleID h = 1; h < sst_limit; h++)
+            {
+                auto k = RecordKVFormat::genKey(table_id, h, 111);
+                write_cf.insert_raw(k, value_write);
+            }
+            write_cf.finish_file(SSTFormatKind::KIND_TABLET);
+            write_cf.freeze();
+
+            auto sp = SyncPointCtl::enableInScope("before_SSTFilesToDTFilesOutputStream::handle_one");
+            std::thread t([&]() {
+                auto [kvr1, res]
+                    = proxy_instance
+                          ->snapshot(kvs, ctx.getTMTContext(), region_id, {default_cf, write_cf}, 0, 0, std::nullopt);
+            });
+            sp.waitAndPause();
+            kvs.abortPreHandleSnapshot(region_id, ctx.getTMTContext());
+            sp.next();
+            sp.disable();
+            t.join();
+        }
+    }
+}
+CATCH
+
 // Test several uncommitted keys with only one version.
 TEST_F(RegionKVStoreTest, KVStoreSingleSnap1)
 try
@@ -74,7 +141,7 @@ try
                 auto k = RecordKVFormat::genKey(table_id, h, 111);
                 if (h == uncommitted)
                     continue;
-                write_cf.insert_raw(k, value_default);
+                write_cf.insert_raw(k, value_write);
             }
             write_cf.finish_file(SSTFormatKind::KIND_TABLET);
             write_cf.freeze();
@@ -154,7 +221,7 @@ try
             {
                 auto [value_write, value_default] = proxy_instance->generateTiKVKeyValue(tso, 999);
                 auto k = RecordKVFormat::genKey(table_id, 10, tso);
-                write_cf.insert_raw(k, value_default);
+                write_cf.insert_raw(k, value_write);
             }
             write_cf.finish_file(SSTFormatKind::KIND_TABLET);
             write_cf.freeze();
@@ -216,7 +283,7 @@ try
             for (HandleID h = 1; h < sst_limit; h++)
             {
                 auto k = RecordKVFormat::genKey(table_id, h, 111);
-                write_cf.insert_raw(k, value_default);
+                write_cf.insert_raw(k, value_write);
             }
             write_cf.finish_file(SSTFormatKind::KIND_TABLET);
             write_cf.freeze();
@@ -275,7 +342,7 @@ try
             for (HandleID h = 1; h < sst_limit; h++)
             {
                 auto k = RecordKVFormat::genKey(table_id, h, 111);
-                write_cf.insert_raw(k, value_default);
+                write_cf.insert_raw(k, value_write);
             }
             write_cf.finish_file(SSTFormatKind::KIND_TABLET);
             write_cf.freeze();
@@ -348,7 +415,7 @@ try
             for (HandleID h = table_limit_start + 10; h < table_limit_end - 10; h++)
             {
                 auto k = RecordKVFormat::genKey(table_id, h, 111);
-                write_cf.insert_raw(k, value_default);
+                write_cf.insert_raw(k, value_write);
             }
             write_cf.finish_file(SSTFormatKind::KIND_TABLET);
             write_cf.freeze();

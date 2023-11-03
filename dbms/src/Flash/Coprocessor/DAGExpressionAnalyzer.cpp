@@ -1375,6 +1375,7 @@ void DAGExpressionAnalyzer::appendRuntimeFilterProperties(RuntimeFilterPtr & run
         header.insert(ColumnWithTypeAndName(name_and_type.type->createColumn(), name_and_type.type, "_" + toString(1)));
         in_values_set->setHeader(header);
         runtime_filter->setINValuesSet(in_values_set);
+        runtime_filter->setTimezoneInfo(context.getTimezoneInfo());
         break;
     case tipb::MIN_MAX:
     case tipb::BLOOM_FILTER:
@@ -1511,8 +1512,6 @@ void DAGExpressionAnalyzer::appendCastForRootFinalProjection(
     String tz_col;
     String tz_cast_func_name
         = context.getTimezoneInfo().is_name_based ? "ConvertTimeZoneToUTC" : "ConvertTimeZoneByOffsetToUTC";
-    // <origin_column_name, offset>
-    std::unordered_map<String, size_t> had_casted_map;
 
     const auto & current_columns = getCurrentInputColumns();
     NamesAndTypes after_cast_columns = current_columns;
@@ -1530,35 +1529,23 @@ void DAGExpressionAnalyzer::appendCastForRootFinalProjection(
             || need_append_type_cast_vec[index])
         {
             const String & origin_column_name = current_columns[offset].name;
-            auto it = had_casted_map.find(origin_column_name);
-            if (it == had_casted_map.end())
+            String updated_name = origin_column_name;
+            auto updated_type = current_columns[offset].type;
+            /// first add timestamp cast
+            if (need_append_timezone_cast && require_schema[offset].tp() == TiDB::TypeTimestamp)
             {
-                String updated_name = origin_column_name;
-                auto updated_type = current_columns[offset].type;
-                /// first add timestamp cast
-                if (need_append_timezone_cast && require_schema[offset].tp() == TiDB::TypeTimestamp)
-                {
-                    if (tz_col.empty())
-                        tz_col = getActions(tz_expr, actions);
-                    updated_name = appendTimeZoneCast(tz_col, updated_name, tz_cast_func_name, actions);
-                }
-                /// then add type cast
-                if (need_append_type_cast_vec[index])
-                {
-                    updated_type = getDataTypeByFieldTypeForComputingLayer(require_schema[offset]);
-                    updated_name = appendCast(updated_type, actions, updated_name);
-                }
-                had_casted_map[origin_column_name] = offset;
-
-                after_cast_columns[offset].name = updated_name;
-                after_cast_columns[offset].type = updated_type;
+                if (tz_col.empty())
+                    tz_col = getActions(tz_expr, actions);
+                updated_name = appendTimeZoneCast(tz_col, updated_name, tz_cast_func_name, actions);
             }
-            else
+            /// then add type cast
+            if (need_append_type_cast_vec[index])
             {
-                size_t pre_casted_offset = it->second;
-                assert(after_cast_columns.size() > pre_casted_offset);
-                after_cast_columns[offset] = after_cast_columns[pre_casted_offset];
+                updated_type = getDataTypeByFieldTypeForComputingLayer(require_schema[offset]);
+                updated_name = appendCast(updated_type, actions, updated_name);
             }
+            after_cast_columns[offset].name = updated_name;
+            after_cast_columns[offset].type = updated_type;
         }
     }
 

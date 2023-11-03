@@ -106,6 +106,19 @@ ColumnDefine getColumnDefineForColumnExpr(const tipb::Expr & expr, const ColumnD
     return columns_to_read[column_index];
 }
 
+// convert literal value from timezone specified in cop request to UTC in-place
+inline void convertFieldWithTimezone(Field & value, const TimezoneInfo & timezone_info)
+{
+    static const auto & time_zone_utc = DateLUT::instance("UTC");
+    UInt64 from_time = value.get<UInt64>();
+    UInt64 result_time = from_time;
+    if (timezone_info.is_name_based)
+        convertTimeZone(from_time, result_time, *timezone_info.timezone, time_zone_utc);
+    else if (timezone_info.timezone_offset != 0)
+        convertTimeZoneByOffset(from_time, result_time, false, timezone_info.timezone_offset);
+    value = Field(result_time);
+}
+
 enum class OperandType
 {
     Unknown = 0,
@@ -190,16 +203,7 @@ inline RSOperatorPtr parseTiCompareExpr( //
                         false);
                 // convert literal value from timezone specified in cop request to UTC
                 if (literal_type == TiDB::TypeDatetime && !timezone_info.is_utc_timezone)
-                {
-                    static const auto & time_zone_utc = DateLUT::instance("UTC");
-                    UInt64 from_time = value.get<UInt64>();
-                    UInt64 result_time = from_time;
-                    if (timezone_info.is_name_based)
-                        convertTimeZone(from_time, result_time, *timezone_info.timezone, time_zone_utc);
-                    else if (timezone_info.timezone_offset != 0)
-                        convertTimeZoneByOffset(from_time, result_time, false, timezone_info.timezone_offset);
-                    value = Field(result_time);
-                }
+                    convertFieldWithTimezone(value, timezone_info);
             }
             values.push_back(value);
         }
@@ -474,7 +478,8 @@ RSOperatorPtr FilterParser::parseRFInExpr(
     const tipb::RuntimeFilterType rf_type,
     const tipb::Expr & target_expr,
     const ColumnDefines & columns_to_read,
-    const std::set<Field> & setElements)
+    const std::set<Field> & setElements,
+    const TimezoneInfo & timezone_info)
 {
     // todo check if set elements is empty
     Attr attr;
@@ -488,9 +493,23 @@ RSOperatorPtr FilterParser::parseRFInExpr(
             return createUnsupported(target_expr.ShortDebugString(), "rf target expr is not column expr", false);
         }
         auto column_define = cop::getColumnDefineForColumnExpr(target_expr, columns_to_read);
-        attr = Attr{.col_name = column_define.name, .col_id = column_define.id, .type = column_define.type};
-        std::for_each(setElements.begin(), setElements.end(), [&](Field element) { values.push_back(element); });
-        return createIn(attr, values);
+        auto attr = Attr{.col_name = column_define.name, .col_id = column_define.id, .type = column_define.type};
+        if (target_expr.field_type().tp() == TiDB::TypeTimestamp && !timezone_info.is_utc_timezone)
+        {
+            Fields values;
+            values.reserve(setElements.size());
+            std::for_each(setElements.begin(), setElements.end(), [&](Field element) {
+                // convert literal value from timezone specified in cop request to UTC
+                cop::convertFieldWithTimezone(element, timezone_info);
+                values.push_back(element);
+            });
+            return createIn(attr, values);
+        }
+        else
+        {
+            Fields values(setElements.begin(), setElements.end());
+            return createIn(attr, values);
+        }
     }
     case tipb::MIN_MAX:
     case tipb::BLOOM_FILTER:

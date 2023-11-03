@@ -20,8 +20,9 @@ namespace DB
 void JoinStatistics::appendExtraJson(FmtBuffer & fmt_buffer) const
 {
     fmt_buffer.fmtAppend(
-        R"("peak_build_bytes_usage":{},"build_side_child":"{}","is_spill_enabled":{},"is_spilled":{})"
-        R"("join_build_inbound_rows":{},"join_build_inbound_blocks":{},"join_build_inbound_bytes":{},"join_build_inbound_allocated_bytes":{}, "join_build_execution_time_ns":{})",
+        R"("peak_build_bytes_usage":{},"build_side_child":"{}","is_spill_enabled":{},"is_spilled":{},)"
+        R"("join_build_inbound_rows":{},"join_build_inbound_blocks":{},"join_build_inbound_bytes":{},)"
+        R"("join_build_inbound_allocated_bytes":{},"join_build_concurrency":{},"join_build_execution_time_ns":{})",
         peak_build_bytes_usage,
         build_side_child,
         is_spill_enabled,
@@ -30,6 +31,7 @@ void JoinStatistics::appendExtraJson(FmtBuffer & fmt_buffer) const
         join_build_base.blocks,
         join_build_base.bytes,
         join_build_base.allocated_bytes,
+        join_build_base.concurrency,
         join_build_base.execution_time_ns);
 }
 

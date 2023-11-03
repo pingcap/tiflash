@@ -209,11 +209,7 @@ void DatabaseTiFlash::loadTables(Context & context, ThreadPool * thread_pool, bo
 }
 
 
-void DatabaseTiFlash::createTable(
-    const Context & context,
-    const String & table_name,
-    const StoragePtr & table,
-    const ASTPtr & query)
+void DatabaseTiFlash::createTable(const Context & context, const String & table_name, const ASTPtr & query)
 {
     const auto & settings = context.getSettingsRef();
 
@@ -259,15 +255,6 @@ void DatabaseTiFlash::createTable(
 
     try
     {
-        /// Add a table to the map of known tables.
-        {
-            std::lock_guard lock(mutex);
-            if (!tables.emplace(table_name, table).second)
-                throw Exception(
-                    "Table " + name + "." + table_name + " already exists.",
-                    ErrorCodes::TABLE_ALREADY_EXISTS);
-        }
-
         /// If it was ATTACH query and file with table metadata already exist
         /// (so, ATTACH is done after DETACH), then rename atomically replaces old file with new one.
         context.getFileProvider()->renameFile(

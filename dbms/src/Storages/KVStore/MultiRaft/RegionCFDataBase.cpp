@@ -47,6 +47,7 @@ RegionDataRes RegionCFDataBase<Trait>::insert(TiKVKey && key, TiKVValue && value
 
     if (!kv_pair)
         return 0;
+
     return insert(std::move(*kv_pair), mode);
 }
 

@@ -83,6 +83,8 @@ QueryExecutorPtr doExecuteAsBlockIO(IQuerySource & dag, Context & context, bool 
 {
     RUNTIME_ASSERT(context.getDAGContext());
     auto & dag_context = *context.getDAGContext();
+    // Resource control should only works for pipeline model.
+    dag_context.clearResourceGroupName();
     const auto & logger = dag_context.log;
     RUNTIME_ASSERT(logger);
 
@@ -155,7 +157,6 @@ std::optional<QueryExecutorPtr> executeAsPipeline(Context & context, bool intern
     }
 
     prepareForExecute(context);
-    dag_context.enableResourceControl();
 
     ProcessList::EntryPtr process_list_entry;
     if (likely(!internal))
