@@ -347,6 +347,7 @@ FastAddPeerRes FastAddPeerImpl(EngineStoreServerWrap * server, uint64_t region_i
         auto wn_ps = server->tmt->getContext().getWriteNodePageStorage();
         wn_ps->write(std::move(wb));
         GET_METRIC(tiflash_fap_task_duration_seconds, type_ingest).Observe(watch_ingest.elapsedSeconds());
+        GET_METRIC(tiflash_fap_task_result, type_succeed).Increment();
 
         return genFastAddPeerRes(
             FastAddPeerStatus::Ok,
@@ -396,6 +397,7 @@ FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, u
             LOG_INFO(log, "Fetch task result [new_peer_id={}] [region_id={}]", new_peer_id, region_id);
             GET_METRIC(tiflash_fap_task_state, type_ongoing).Decrement();
             auto [result, elapsed] = fap_ctx->tasks_trace->fetchResultAndElapsed(region_id);
+            GET_METRIC(tiflash_fap_task_result, type_total).Increment();
             GET_METRIC(tiflash_fap_task_duration_seconds, type_total).Observe(elapsed / 1000.0);
             return result;
         }
