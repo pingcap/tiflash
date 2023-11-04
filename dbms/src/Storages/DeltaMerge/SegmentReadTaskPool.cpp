@@ -84,30 +84,28 @@ bool SegmentReadTasksWrapper::empty() const
 
 BlockInputStreamPtr SegmentReadTaskPool::buildInputStream(SegmentReadTaskPtr & t)
 {
+    // Call fetchPages before MemoryTrackerSetter, because its memory usage is tracked by `fetch_pages_mem_tracker`.
+    t->fetchPages();
+
     MemoryTrackerSetter setter(true, mem_tracker.get());
-    BlockInputStreamPtr stream;
-    auto block_size = std::max(
-        expected_block_size,
-        static_cast<size_t>(t->dm_context->db_context.getSettingsRef().dt_segment_stable_pack_rows));
-    stream = t->segment->getInputStream(
-        read_mode,
-        *(t->dm_context),
+
+    t->initInputStream(
         columns_to_read,
-        t->read_snapshot,
-        t->ranges,
-        filter,
         max_version,
-        block_size);
-    stream = std::make_shared<AddExtraTableIDColumnInputStream>(
-        stream,
+        filter,
+        read_mode,
+        expected_block_size,
+        t->dm_context->db_context.getSettingsRef().dt_enable_delta_index_error_fallback);
+    BlockInputStreamPtr stream = std::make_shared<AddExtraTableIDColumnInputStream>(
+        t->getInputStream(),
         extra_table_id_index,
         t->dm_context->physical_table_id);
     LOG_DEBUG(
         log,
-        "getInputStream succ, read_mode={}, pool_id={} segment_id={}",
+        "buildInputStream: read_mode={}, pool_id={} segment={}",
         magic_enum::enum_name(read_mode),
         pool_id,
-        t->segment->segmentId());
+        t);
     return stream;
 }
 

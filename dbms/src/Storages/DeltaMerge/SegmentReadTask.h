@@ -16,7 +16,7 @@
 
 #include <Storages/DeltaMerge/Remote/DisaggTaskId.h>
 #include <Storages/DeltaMerge/Remote/Proto/remote.pb.h>
-#include <Storages/DeltaMerge/Remote/RNLocalPageCache_fwd.h>
+#include <Storages/DeltaMerge/Remote/RNLocalPageCache.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/KVStore/Types.h>
@@ -51,6 +51,7 @@ struct ExtraRemoteSegmentInfo
 
 struct SegmentReadTask
 {
+public:
     const StoreID store_id;
     SegmentPtr segment; // Contains segment_id, segment_epoch
     SegmentSnapshotPtr read_snapshot;
@@ -59,11 +60,9 @@ struct SegmentReadTask
 
     std::optional<ExtraRemoteSegmentInfo> extra_remote_info;
 
-    BlockInputStreamPtr input_stream;
-
     // Constructor for op-mode.
     SegmentReadTask(
-        const SegmentPtr & segment_, //
+        const SegmentPtr & segment_,
         const SegmentSnapshotPtr & read_snapshot_,
         const DMContextPtr & dm_context_,
         const RowKeyRanges & ranges_ = {});
@@ -82,28 +81,6 @@ struct SegmentReadTask
 
     ~SegmentReadTask();
 
-    void addRange(const RowKeyRange & range);
-
-    void mergeRanges();
-
-    static SegmentReadTasks trySplitReadTasks(const SegmentReadTasks & tasks, size_t expected_size);
-
-    /// Called from RNWorkerFetchPages.
-    void initColumnFileDataProvider(const Remote::RNLocalPageCacheGuardPtr & pages_guard);
-
-    /// Called from RNWorkerPrepareStreams.
-    void initInputStream(
-        const ColumnDefines & columns_to_read,
-        UInt64 read_tso,
-        const PushDownFilterPtr & push_down_filter,
-        ReadMode read_mode);
-
-    BlockInputStreamPtr getInputStream() const
-    {
-        RUNTIME_CHECK(input_stream != nullptr);
-        return input_stream;
-    }
-
     GlobalSegmentID getGlobalSegmentID() const
     {
         return GlobalSegmentID{
@@ -114,12 +91,87 @@ struct SegmentReadTask
             .segment_epoch = segment->segmentEpoch(),
         };
     }
+
+    void addRange(const RowKeyRange & range);
+
+    void mergeRanges();
+
+    static SegmentReadTasks trySplitReadTasks(const SegmentReadTasks & tasks, size_t expected_size);
+
+    void fetchPages();
+
+    void initInputStream(
+        const ColumnDefines & columns_to_read,
+        UInt64 read_tso,
+        const PushDownFilterPtr & push_down_filter,
+        ReadMode read_mode,
+        size_t expected_block_size,
+        bool enable_delta_index_error_fallback);
+
+    BlockInputStreamPtr getInputStream() const
+    {
+        RUNTIME_CHECK(input_stream != nullptr);
+        return input_stream;
+    }
+
+#ifndef DBMS_PUBLIC_GTEST
+private:
+#else
+public:
+#endif
+    std::vector<Remote::PageOID> buildRemotePageOID() const;
+
+    Remote::RNLocalPageCache::OccupySpaceResult blockingOccupySpaceForTask() const;
+
+    disaggregated::FetchDisaggPagesRequest buildFetchPagesRequest(
+        const std::vector<Remote::PageOID> & pages_not_in_cache) const;
+
+    void doFetchPages(const disaggregated::FetchDisaggPagesRequest & request);
+
+    void initColumnFileDataProvider(const Remote::RNLocalPageCacheGuardPtr & pages_guard);
+
+    bool doInitInputStreamWithErrorFallback(
+        const ColumnDefines & columns_to_read,
+        UInt64 read_tso,
+        const PushDownFilterPtr & push_down_filter,
+        ReadMode read_mode,
+        size_t expected_block_size,
+        bool enable_delta_index_error_fallback);
+
+    void doInitInputStream(
+        const ColumnDefines & columns_to_read,
+        UInt64 read_tso,
+        const PushDownFilterPtr & push_down_filter,
+        ReadMode read_mode,
+        size_t expected_block_size);
+
+    BlockInputStreamPtr input_stream;
 };
 
 // Used in SegmentReadTaskScheduler, SegmentReadTaskPool.
 using MergingSegments = std::unordered_map<GlobalSegmentID, std::vector<UInt64>>;
 
 } // namespace DB::DM
+
+template <>
+struct fmt::formatter<DB::DM::SegmentReadTask>
+{
+    static constexpr auto parse(format_parse_context & ctx) { return ctx.begin(); }
+
+    template <typename FormatContext>
+    auto format(const DB::DM::SegmentReadTask & t, FormatContext & ctx) const
+    {
+        return fmt::format_to(
+            ctx.out(),
+            "s{}_ks{}_t{}_{}_{}_{}",
+            t.store_id,
+            t.dm_context->keyspace_id,
+            t.dm_context->physical_table_id,
+            t.segment->segmentId(),
+            t.segment->segmentEpoch(),
+            t.read_snapshot->delta->getDeltaIndexEpoch());
+    }
+};
 
 template <>
 struct fmt::formatter<DB::DM::SegmentReadTaskPtr>
@@ -129,15 +181,7 @@ struct fmt::formatter<DB::DM::SegmentReadTaskPtr>
     template <typename FormatContext>
     auto format(const DB::DM::SegmentReadTaskPtr & t, FormatContext & ctx) const
     {
-        return fmt::format_to(
-            ctx.out(),
-            "s{}_ks{}_t{}_{}_{}_{}",
-            t->store_id,
-            t->dm_context->keyspace_id,
-            t->dm_context->physical_table_id,
-            t->segment->segmentId(),
-            t->segment->segmentEpoch(),
-            t->read_snapshot->delta->getDeltaIndexEpoch());
+        return fmt::formatter<DB::DM::SegmentReadTask>().format(*t, ctx);
     }
 };
 
