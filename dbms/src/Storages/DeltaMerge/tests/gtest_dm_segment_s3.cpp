@@ -142,7 +142,7 @@ protected:
     {
         *table_columns = *columns;
 
-        dm_context = std::make_unique<DMContext>(
+        dm_context = DMContext::createUnique(
             *db_context,
             storage_path_pool,
             storage_pool,
@@ -210,7 +210,7 @@ try
     std::vector<SegmentPtr> ordered_segments = {left, right};
     segment = Segment::merge(dmContext(), tableColumns(), ordered_segments);
 
-    auto wn_ps = dmContext().db_context.getWriteNodePageStorage();
+    auto wn_ps = dmContext().global_context.getWriteNodePageStorage();
     wn_ps->gc(/*not_skip*/ true);
     {
         auto valid_external_ids = wn_ps->page_directory->getAliveExternalIds(

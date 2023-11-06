@@ -12,10 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Storages/DeltaMerge/DMContext.h>
-
-#include <utility>
-
 #pragma once
 
 #include <Columns/ColumnVector.h>
@@ -29,6 +25,8 @@
 #include <Storages/ColumnsDescription.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <TiDB/Schema/TiDB.h>
+
+#include <utility>
 
 namespace DB
 {

@@ -127,7 +127,7 @@ SegmentSnapshotPtr Serializer::deserializeSegmentSnapshotFrom(
         segment_range = RowKeyRange::deserialize(rb);
     }
 
-    auto data_store = dm_context.db_context.getSharedContextDisagg()->remote_data_store;
+    auto data_store = dm_context.global_context.getSharedContextDisagg()->remote_data_store;
 
     auto delta_snap = std::make_shared<DeltaValueSnapshot>(CurrentMetrics::DT_SnapshotOfDisaggReadNodeRead);
     delta_snap->is_update = false;
@@ -138,7 +138,7 @@ SegmentSnapshotPtr Serializer::deserializeSegmentSnapshotFrom(
     // Note: At this moment, we still cannot read from `delta_snap->mem_table_snap` and `delta_snap->persisted_files_snap`,
     // because they are constructed using ColumnFileDataProviderNop.
 
-    auto delta_index_cache = dm_context.db_context.getSharedContextDisagg()->rn_delta_index_cache;
+    auto delta_index_cache = dm_context.global_context.getSharedContextDisagg()->rn_delta_index_cache;
     if (delta_index_cache)
     {
         delta_snap->shared_delta_index = delta_index_cache->getDeltaIndex({
