@@ -34,7 +34,6 @@ namespace DM
 class RSOperator;
 using RSOperatorPtr = std::shared_ptr<RSOperator>;
 
-inline static const size_t DMFILE_READ_ROWS_THRESHOLD = DEFAULT_MERGE_BLOCK_SIZE * 3;
 
 class DMFileReader
 {
