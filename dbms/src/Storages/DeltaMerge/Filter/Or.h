@@ -43,8 +43,6 @@ public:
         }
         return res;
     }
-
-    // TODO: override optimize()
 };
 
 } // namespace DB::DM

@@ -33,11 +33,11 @@ namespace DB::DM
 // clang-format off
 RSOperatorPtr createAnd(const RSOperators & children)                                           { return std::make_shared<And>(children); }
 RSOperatorPtr createEqual(const Attr & attr, const Field & value)                               { return std::make_shared<Equal>(attr, value); }
-RSOperatorPtr createGreater(const Attr & attr, const Field & value, int null_direction)         { return std::make_shared<Greater>(attr, value, null_direction); }
-RSOperatorPtr createGreaterEqual(const Attr & attr, const Field & value, int null_direction)    { return std::make_shared<GreaterEqual>(attr, value, null_direction); }
+RSOperatorPtr createGreater(const Attr & attr, const Field & value)                             { return std::make_shared<Greater>(attr, value); }
+RSOperatorPtr createGreaterEqual(const Attr & attr, const Field & value)                        { return std::make_shared<GreaterEqual>(attr, value); }
 RSOperatorPtr createIn(const Attr & attr, const Fields & values)                                { return std::make_shared<In>(attr, values); }
-RSOperatorPtr createLess(const Attr & attr, const Field & value, int null_direction)            { return std::make_shared<Less>(attr, value, null_direction); }
-RSOperatorPtr createLessEqual(const Attr & attr, const Field & value, int null_direction)       { return std::make_shared<LessEqual>(attr, value, null_direction); }
+RSOperatorPtr createLess(const Attr & attr, const Field & value)                                { return std::make_shared<Less>(attr, value); }
+RSOperatorPtr createLessEqual(const Attr & attr, const Field & value)                           { return std::make_shared<LessEqual>(attr, value); }
 RSOperatorPtr createLike(const Attr & attr, const Field & value)                                { return std::make_shared<Like>(attr, value); }
 RSOperatorPtr createNot(const RSOperatorPtr & op)                                               { return std::make_shared<Not>(op); }
 RSOperatorPtr createNotEqual(const Attr & attr, const Field & value)                            { return std::make_shared<NotEqual>(attr, value); }

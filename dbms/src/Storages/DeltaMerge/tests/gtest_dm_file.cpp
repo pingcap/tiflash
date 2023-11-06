@@ -1020,8 +1020,8 @@ namespace
 RSOperatorPtr toRSFilter(const ColumnDefine & cd, const HandleRange & range)
 {
     Attr attr = {cd.name, cd.id, cd.type};
-    auto left = createGreaterEqual(attr, Field(range.start), -1);
-    auto right = createLess(attr, Field(range.end), -1);
+    auto left = createGreaterEqual(attr, Field(range.start));
+    auto right = createLess(attr, Field(range.end));
     return createAnd({left, right});
 }
 } // namespace

@@ -38,12 +38,7 @@ struct RSCheckParam
 class RSOperator : public std::enable_shared_from_this<RSOperator>
 {
 protected:
-    RSOperators children;
-
     RSOperator() = default;
-    explicit RSOperator(const RSOperators & children_)
-        : children(children_)
-    {}
 
 public:
     virtual ~RSOperator() = default;
@@ -54,9 +49,6 @@ public:
     virtual RSResults roughCheck(size_t start_pack, size_t pack_count, const RSCheckParam & param) = 0;
 
     virtual Attrs getAttrs() = 0;
-
-    virtual RSOperatorPtr optimize() { return shared_from_this(); };
-    virtual RSOperatorPtr switchDirection() { return shared_from_this(); };
 };
 
 class ColCmpVal : public RSOperator
@@ -64,31 +56,34 @@ class ColCmpVal : public RSOperator
 protected:
     Attr attr;
     Field value;
-    int null_direction;
 
 public:
-    ColCmpVal(const Attr & attr_, const Field & value_, int null_direction_)
+    ColCmpVal(const Attr & attr_, const Field & value_)
         : attr(attr_)
         , value(value_)
-        , null_direction(null_direction_)
     {}
 
     Attrs getAttrs() override { return {attr}; }
 
     String toDebugString() override
     {
-        return R"({"op":")" + name() + //
-            R"(","col":")" + attr.col_name + //
-            R"(","value":")" + applyVisitor(FieldVisitorToDebugString(), value) + "\"}";
+        return fmt::format(
+            R"({{"op":"{}","col":"{}","value":"{}"}})",
+            name(),
+            attr.col_name,
+            applyVisitor(FieldVisitorToDebugString(), value));
     }
 };
 
 
 class LogicalOp : public RSOperator
 {
+protected:
+    RSOperators children;
+
 public:
     explicit LogicalOp(const RSOperators & children_)
-        : RSOperator(children_)
+        : children(std::move(children_))
     {}
 
     Attrs getAttrs() override
@@ -104,11 +99,15 @@ public:
 
     String toDebugString() override
     {
-        String s = R"({"op":")" + name() + R"(","children":[)";
-        for (auto & child : children)
-            s += child->toDebugString() + ",";
-        s.pop_back();
-        return s + "]}";
+        FmtBuffer buf;
+        buf.fmtAppend(R"({{"op":"{}","children":[)", name());
+        buf.joinStr(
+            children.cbegin(),
+            children.cend(),
+            [](const auto & child, FmtBuffer & fb) { fb.append(child->toDebugString()); },
+            ", ");
+        buf.append("]}");
+        return buf.toString();
     }
 };
 
@@ -127,10 +126,10 @@ RSOperatorPtr createAnd(const RSOperators & children);
 // compare
 RSOperatorPtr createEqual(const Attr & attr, const Field & value);
 RSOperatorPtr createNotEqual(const Attr & attr, const Field & value);
-RSOperatorPtr createGreater(const Attr & attr, const Field & value, int null_direction);
-RSOperatorPtr createGreaterEqual(const Attr & attr, const Field & value, int null_direction);
-RSOperatorPtr createLess(const Attr & attr, const Field & value, int null_direction);
-RSOperatorPtr createLessEqual(const Attr & attr, const Field & value, int null_direction);
+RSOperatorPtr createGreater(const Attr & attr, const Field & value);
+RSOperatorPtr createGreaterEqual(const Attr & attr, const Field & value);
+RSOperatorPtr createLess(const Attr & attr, const Field & value);
+RSOperatorPtr createLessEqual(const Attr & attr, const Field & value);
 // set
 RSOperatorPtr createIn(const Attr & attr, const Fields & values);
 //

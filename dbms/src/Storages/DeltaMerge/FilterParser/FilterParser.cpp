@@ -213,24 +213,24 @@ inline RSOperatorPtr parseTiCompareExpr( //
         return createNotEqual(attr, values[0]);
     case FilterParser::RSFilterType::Greater:
         if (inverse_cmp)
-            return createLess(attr, values[0], -1);
+            return createLess(attr, values[0]);
         else
-            return createGreater(attr, values[0], -1);
+            return createGreater(attr, values[0]);
     case FilterParser::RSFilterType::GreaterEqual:
         if (inverse_cmp)
-            return createLessEqual(attr, values[0], -1);
+            return createLessEqual(attr, values[0]);
         else
-            return createGreaterEqual(attr, values[0], -1);
+            return createGreaterEqual(attr, values[0]);
     case FilterParser::RSFilterType::Less:
         if (inverse_cmp)
-            return createGreater(attr, values[0], -1);
+            return createGreater(attr, values[0]);
         else
-            return createLess(attr, values[0], -1);
+            return createLess(attr, values[0]);
     case FilterParser::RSFilterType::LessEqual:
         if (inverse_cmp)
-            return createGreaterEqual(attr, values[0], -1);
+            return createGreaterEqual(attr, values[0]);
         else
-            return createLessEqual(attr, values[0], -1);
+            return createLessEqual(attr, values[0]);
     case FilterParser::RSFilterType::In:
         return createIn(attr, values);
     default:

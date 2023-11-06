@@ -23,7 +23,7 @@ class Like : public ColCmpVal
 {
 public:
     Like(const Attr & attr_, const Field & value_)
-        : ColCmpVal(attr_, value_, 0)
+        : ColCmpVal(attr_, value_)
     {}
 
     String name() override { return "like"; }

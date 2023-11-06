@@ -41,10 +41,12 @@ public:
 
     String toDebugString() override
     {
-        return R"({"op":")" + name() + //
-            R"(","reason":")" + reason + //
-            R"(","content":")" + content + //
-            R"(","is_not":")" + DB::toString(is_not) + "\"}";
+        return fmt::format(
+            R"({{"op":"{}","reason":"{}","content":"{}","is_not":"{}"}})",
+            name(),
+            reason,
+            content,
+            is_not);
     }
 
     RSResults roughCheck(size_t /*start_pack*/, size_t pack_count, const RSCheckParam & /*param*/) override
