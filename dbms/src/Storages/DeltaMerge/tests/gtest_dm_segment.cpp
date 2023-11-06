@@ -100,7 +100,7 @@ protected:
     {
         *table_columns = *columns;
 
-        dm_context = std::make_unique<DMContext>(
+        dm_context = DMContext::createUnique(
             *db_context,
             storage_path_pool,
             storage_pool,
@@ -930,7 +930,7 @@ try
 
                 ASSERT_EQ(c1->size(), c2->size());
 
-                for (Int64 i = 0; i < Int64(c1->size()); i++)
+                for (Int64 i = 0; i < static_cast<Int64>(c1->size()); i++)
                 {
                     if (iter1->name == DMTestEnv::pk_name)
                     {
@@ -986,7 +986,7 @@ CATCH
 TEST_F(SegmentTest, MassiveSplit)
 try
 {
-    Settings settings = dmContext().db_context.getSettings();
+    Settings settings = dmContext().global_context.getSettings();
     settings.dt_segment_limit_rows = 11;
     settings.dt_segment_delta_limit_rows = 7;
 
@@ -1015,8 +1015,8 @@ try
             // if pk % 5 < 2, then the record would be deleted
             // if pk % 5 >= 2, then the record would be reserved
             HandleRange del{
-                Int64((num_batches_written - 1) * num_rows_per_write),
-                Int64((num_batches_written - 1) * num_rows_per_write + 2)};
+                static_cast<Int64>((num_batches_written - 1) * num_rows_per_write),
+                static_cast<Int64>((num_batches_written - 1) * num_rows_per_write + 2)};
             segment->write(dmContext(), {RowKeyRange::fromHandleRange(del)});
         }
 
@@ -1029,7 +1029,7 @@ try
              i < num_batches_written * num_rows_per_write;
              i++)
         {
-            temp.push_back(Int64(i));
+            temp.push_back(static_cast<Int64>(i));
         }
 
         {
@@ -1157,7 +1157,7 @@ try
             case SegmentTestMode::V3_FileOnly:
             {
                 auto delegate = dmContext().path_pool->getStableDiskDelegator();
-                auto file_provider = dmContext().db_context.getFileProvider();
+                auto file_provider = dmContext().global_context.getFileProvider();
                 auto [range, file_ids] = genDMFile(dmContext(), block);
                 auto file_id = file_ids[0];
                 auto file_parent_path = delegate.getDTFilePath(file_id);
@@ -1548,7 +1548,7 @@ CATCH
 TEST_F(SegmentTest, CalculateDTFileProperty)
 try
 {
-    Settings settings = dmContext().db_context.getSettings();
+    Settings settings = dmContext().global_context.getSettings();
     settings.dt_segment_stable_pack_rows = 10;
 
     segment = reload(DMTestEnv::getDefaultColumns(), std::move(settings));
@@ -1589,7 +1589,7 @@ CATCH
 TEST_F(SegmentTest, CalculateDTFilePropertyWithPropertyFileDeleted)
 try
 {
-    Settings settings = dmContext().db_context.getSettings();
+    Settings settings = dmContext().global_context.getSettings();
     settings.dt_segment_stable_pack_rows = 10;
 
     segment = reload(DMTestEnv::getDefaultColumns(), std::move(settings));

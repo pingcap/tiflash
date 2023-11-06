@@ -49,7 +49,7 @@ protected:
     {
         auto dm_context = createDMContext();
         return GlobalSegmentID{
-            .store_id = dm_context->db_context.getTMTContext().getKVStore()->getStoreID(),
+            .store_id = dm_context->global_context.getTMTContext().getKVStore()->getStoreID(),
             .keyspace_id = dm_context->keyspace_id,
             .physical_table_id = dm_context->physical_table_id,
             .segment_id = seg_id,

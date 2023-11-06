@@ -46,7 +46,7 @@ SegmentReadTask::SegmentReadTask(
     const SegmentSnapshotPtr & read_snapshot_,
     const DMContextPtr & dm_context_,
     const RowKeyRanges & ranges_)
-    : store_id(dm_context_->db_context.getTMTContext().getKVStore()->getStoreID())
+    : store_id(dm_context_->global_context.getTMTContext().getKVStore()->getStoreID())
     , segment(segment_)
     , read_snapshot(read_snapshot_)
     , dm_context(dm_context_)
@@ -78,7 +78,7 @@ SegmentReadTask::SegmentReadTask(
     auto rb = ReadBufferFromString(proto.key_range());
     auto segment_range = RowKeyRange::deserialize(rb);
 
-    dm_context = std::make_shared<DMContext>(
+    dm_context = DMContext::create(
         db_context,
         /* path_pool */ nullptr,
         /* storage_pool */ nullptr,
@@ -215,7 +215,7 @@ void SegmentReadTask::initColumnFileDataProvider(const Remote::RNLocalPageCacheG
     RUNTIME_CHECK(std::dynamic_pointer_cast<ColumnFileDataProviderNop>(data_provider));
 
     RUNTIME_CHECK(extra_remote_info.has_value());
-    auto page_cache = dm_context->db_context.getSharedContextDisagg()->rn_page_cache;
+    auto page_cache = dm_context->global_context.getSharedContextDisagg()->rn_page_cache;
     data_provider = std::make_shared<Remote::ColumnFileDataProviderRNLocalPageCache>(
         page_cache,
         pages_guard,
@@ -246,7 +246,7 @@ void SegmentReadTask::initInputStream(
     // Exception DT_DELTA_INDEX_ERROR raised. Reset delta index and try again.
     DeltaIndex empty_delta_index;
     read_snapshot->delta->getSharedDeltaIndex()->swap(empty_delta_index);
-    if (auto cache = dm_context->db_context.getSharedContextDisagg()->rn_delta_index_cache; cache)
+    if (auto cache = dm_context->global_context.getSharedContextDisagg()->rn_delta_index_cache; cache)
     {
         cache->setDeltaIndex(read_snapshot->delta->getSharedDeltaIndex());
     }
@@ -402,7 +402,7 @@ Remote::RNLocalPageCache::OccupySpaceResult SegmentReadTask::blockingOccupySpace
         GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_cache_occupy)
             .Observe(w_occupy.elapsedSeconds());
     });
-    auto page_cache = dm_context->db_context.getSharedContextDisagg()->rn_page_cache;
+    auto page_cache = dm_context->global_context.getSharedContextDisagg()->rn_page_cache;
     auto scan_context = dm_context->scan_context;
     return page_cache->occupySpace(cf_tiny_oids, extra_remote_info->remote_page_sizes, scan_context);
 }
@@ -455,7 +455,7 @@ void SegmentReadTask::doFetchPages(const disaggregated::FetchDisaggPagesRequest 
     UInt64 wait_write_page_ns = 0;
 
     Stopwatch sw_total;
-    const auto * cluster = dm_context->db_context.getTMTContext().getKVCluster();
+    const auto * cluster = dm_context->global_context.getTMTContext().getKVCluster();
     pingcap::kv::RpcCall<pingcap::kv::RPC_NAME(FetchDisaggPages)> rpc(
         cluster->rpc_client,
         extra_remote_info->store_address);
@@ -511,7 +511,7 @@ void SegmentReadTask::doFetchPages(const disaggregated::FetchDisaggPagesRequest 
             if (write_page_task == nullptr)
             {
                 write_page_task = std::make_unique<WritePageTask>(
-                    dm_context->db_context.getSharedContextDisagg()->rn_page_cache.get());
+                    dm_context->global_context.getSharedContextDisagg()->rn_page_cache.get());
             }
             auto & remote_page = write_page_task->remote_pages.emplace_front(); // NOLINT(bugprone-use-after-move)
             bool parsed = remote_page.ParseFromString(page);
@@ -547,7 +547,7 @@ void SegmentReadTask::doFetchPages(const disaggregated::FetchDisaggPagesRequest 
             auto page_id = Remote::RNLocalPageCache::buildCacheId(oid);
             write_page_task->wb
                 .putPage(page_id, 0, std::move(read_buffer), remote_page.data().size(), std::move(field_sizes));
-            auto write_batch_limit_size = dm_context->db_context.getSettingsRef().dt_write_page_cache_limit_size;
+            auto write_batch_limit_size = dm_context->global_context.getSettingsRef().dt_write_page_cache_limit_size;
             if (write_page_task->wb.getTotalDataSize() >= write_batch_limit_size)
             {
                 write_page_results.push_back(

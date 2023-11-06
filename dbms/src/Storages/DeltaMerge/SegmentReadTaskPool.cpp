@@ -95,7 +95,7 @@ BlockInputStreamPtr SegmentReadTaskPool::buildInputStream(SegmentReadTaskPtr & t
         filter,
         read_mode,
         expected_block_size,
-        t->dm_context->db_context.getSettingsRef().dt_enable_delta_index_error_fallback);
+        t->dm_context->global_context.getSettingsRef().dt_enable_delta_index_error_fallback);
     BlockInputStreamPtr stream = std::make_shared<AddExtraTableIDColumnInputStream>(
         t->getInputStream(),
         extra_table_id_index,
