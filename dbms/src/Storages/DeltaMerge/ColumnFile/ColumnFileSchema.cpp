@@ -129,9 +129,9 @@ ColumnFileSchemaPtr SharedBlockSchemas::getOrCreate(const Block & block)
     return schema;
 }
 
-std::shared_ptr<DB::DM::SharedBlockSchemas> getSharedBlockSchemas(const DMContext & context)
+std::shared_ptr<DB::DM::SharedBlockSchemas> getSharedBlockSchemas(const DMContext & dm_context)
 {
-    return context.db_context.getSharedBlockSchemas();
+    return dm_context.global_context.getSharedBlockSchemas();
 }
 } // namespace DM
 } // namespace DB

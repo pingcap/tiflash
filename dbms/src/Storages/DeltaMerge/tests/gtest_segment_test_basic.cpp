@@ -522,7 +522,7 @@ void SegmentTestBasic::ingestDTFileIntoDelta(
         auto ref_id = storage_pool->newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
         wbs.data.putRefPage(ref_id, dm_file->pageId());
         auto ref_file = DMFile::restore(
-            dm_context->db_context.getFileProvider(),
+            dm_context->global_context.getFileProvider(),
             file_id,
             ref_id,
             parent_path,
@@ -581,7 +581,7 @@ void SegmentTestBasic::ingestDTFileByReplace(
         auto ref_id = storage_pool->newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
         wbs.data.putRefPage(ref_id, dm_file->pageId());
         auto ref_file = DMFile::restore(
-            dm_context->db_context.getFileProvider(),
+            dm_context->global_context.getFileProvider(),
             file_id,
             ref_id,
             parent_path,
@@ -849,6 +849,7 @@ void SegmentTestBasic::reloadDMContext()
 std::unique_ptr<DMContext> SegmentTestBasic::createDMContext()
 {
     return std::make_unique<DMContext>(
+        *db_context,
         *db_context,
         storage_path_pool,
         storage_pool,

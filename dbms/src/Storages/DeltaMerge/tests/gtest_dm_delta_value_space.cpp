@@ -105,6 +105,7 @@ protected:
 
         dm_context = std::make_unique<DMContext>(
             *db_context,
+            *db_context,
             storage_path_pool,
             storage_pool,
             /*min_version_*/ 0,

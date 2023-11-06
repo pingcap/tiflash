@@ -455,6 +455,7 @@ DMContextPtr DeltaMergeStore::newDMContext(
     // Because db_context could be a temporary object and won't last long enough during the query process.
     // Like the context created by InterpreterSelectWithUnionQuery.
     auto * ctx = new DMContext(
+        db_context,
         db_context.getGlobalContext(),
         path_pool,
         storage_pool,
@@ -1375,17 +1376,17 @@ Remote::DisaggPhysicalTableReadSnapshotPtr DeltaMergeStore::writeNodeBuildRemote
 
 size_t forceMergeDeltaRows(const DMContextPtr & dm_context)
 {
-    return dm_context->db_context.getSettingsRef().dt_segment_force_merge_delta_rows;
+    return dm_context->session_context.getSettingsRef().dt_segment_force_merge_delta_rows;
 }
 
 size_t forceMergeDeltaBytes(const DMContextPtr & dm_context)
 {
-    return dm_context->db_context.getSettingsRef().dt_segment_force_merge_delta_size;
+    return dm_context->session_context.getSettingsRef().dt_segment_force_merge_delta_size;
 }
 
 size_t forceMergeDeltaDeletes(const DMContextPtr & dm_context)
 {
-    return dm_context->db_context.getSettingsRef().dt_segment_force_merge_delta_deletes;
+    return dm_context->session_context.getSettingsRef().dt_segment_force_merge_delta_deletes;
 }
 
 void DeltaMergeStore::waitForWrite(const DMContextPtr & dm_context, const SegmentPtr & segment)
@@ -1406,9 +1407,9 @@ void DeltaMergeStore::waitForWrite(const DMContextPtr & dm_context, const Segmen
     // The speed of delta merge in a very bad situation we assume. It should be a very conservative value.
     const size_t k10mb = 10 << 20;
 
-    size_t stop_write_delta_rows = dm_context->db_context.getSettingsRef().dt_segment_stop_write_delta_rows;
-    size_t stop_write_delta_bytes = dm_context->db_context.getSettingsRef().dt_segment_stop_write_delta_size;
-    size_t wait_duration_factor = dm_context->db_context.getSettingsRef().dt_segment_wait_duration_factor;
+    size_t stop_write_delta_rows = dm_context->session_context.getSettingsRef().dt_segment_stop_write_delta_rows;
+    size_t stop_write_delta_bytes = dm_context->session_context.getSettingsRef().dt_segment_stop_write_delta_size;
+    size_t wait_duration_factor = dm_context->session_context.getSettingsRef().dt_segment_wait_duration_factor;
 
     size_t sleep_ms;
     if (delta_rows >= stop_write_delta_rows || delta_bytes >= stop_write_delta_bytes)
@@ -1528,7 +1529,7 @@ bool DeltaMergeStore::checkSegmentUpdate(
         && std::max(static_cast<Int64>(column_file_count) - delta_last_try_compact_column_files, 0) >= 15;
 
     // Don't do background place index if we limit DeltaIndex cache.
-    bool should_place_delta_index = !dm_context->db_context.isDeltaIndexLimited()
+    bool should_place_delta_index = !dm_context->session_context.isDeltaIndexLimited()
         && (delta_rows - placed_delta_rows >= delta_cache_limit_rows * 3
             && delta_rows - delta_last_try_place_delta_index_rows >= delta_cache_limit_rows);
 

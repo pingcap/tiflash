@@ -277,13 +277,13 @@ ColumnFileTinyPtr ColumnFileTiny::writeColumnFile(
 }
 
 PageIdU64 ColumnFileTiny::writeColumnFileData(
-    const DMContext & context,
+    const DMContext & dm_context,
     const Block & block,
     size_t offset,
     size_t limit,
     WriteBatches & wbs)
 {
-    auto page_id = context.storage_pool->newLogPageId();
+    auto page_id = dm_context.storage_pool->newLogPageId();
 
     MemoryWriteBuffer write_buf;
     PageFieldSizes col_data_sizes;
@@ -296,8 +296,8 @@ PageIdU64 ColumnFileTiny::writeColumnFileData(
             col.type,
             offset,
             limit,
-            context.db_context.getSettingsRef().dt_compression_method,
-            context.db_context.getSettingsRef().dt_compression_level);
+            dm_context.global_context.getSettingsRef().dt_compression_method,
+            dm_context.global_context.getSettingsRef().dt_compression_level);
         size_t serialized_size = write_buf.count() - last_buf_size;
         RUNTIME_CHECK_MSG(
             serialized_size != 0,

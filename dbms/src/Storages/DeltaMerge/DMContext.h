@@ -43,7 +43,8 @@ using DMContextPtr = std::shared_ptr<DMContext>;
  */
 struct DMContext : private boost::noncopyable
 {
-    const Context & db_context;
+    const Context & session_context;
+    const Context & global_context;
 
     // leaving these pointers possible to be nullptr is dangerous for only reading from/writing to local storage. Find a better way to handle it later
     StoragePathPoolPtr path_pool;
@@ -94,7 +95,8 @@ struct DMContext : private boost::noncopyable
 
 public:
     DMContext(
-        const Context & db_context_,
+        const Context & session_context_,
+        const Context & global_context_,
         const StoragePathPoolPtr & path_pool_,
         const StoragePoolPtr & storage_pool_,
         const DB::Timestamp min_version_,
@@ -105,7 +107,8 @@ public:
         const DB::Settings & settings,
         const ScanContextPtr scan_context_ = nullptr,
         const String & tracing_id_ = "")
-        : db_context(db_context_)
+        : session_context(session_context_)
+        , global_context(global_context_)
         , path_pool(path_pool_)
         , storage_pool(storage_pool_)
         , min_version(min_version_)
@@ -135,7 +138,7 @@ public:
     WriteLimiterPtr getWriteLimiter() const;
     ReadLimiterPtr getReadLimiter() const;
 
-    DM::DMConfigurationOpt createChecksumConfig() const { return DMChecksumConfig::fromDBContext(db_context); }
+    DM::DMConfigurationOpt createChecksumConfig() const { return DMChecksumConfig::fromDBContext(session_context); }
 };
 
 } // namespace DM
