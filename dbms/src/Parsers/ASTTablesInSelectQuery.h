@@ -97,11 +97,13 @@ struct ASTTableJoin : public IAST
         Full,
         Cross, /// Direct product. Strictness and condition doesn't matter.
         Comma, /// Same as direct product. Intended to be converted to INNER JOIN with conditions from WHERE.
+        Semi, /// semi join, return joined rows of the left table
         Anti, /// anti join, return un-joined rows of the left table
         LeftOuterSemi, /// left outer semi join, used by TiFlash, it means if row a in table A matches some rows in B, output (a, true), otherwise, output (a, false).
         LeftOuterAnti, /// anti left outer semi join, used by TiFlash, it means if row a in table A matches some rows in B, output (a, false), otherwise, output (a, true).
         Cross_LeftOuter, /// cartesian left out join, used by TiFlash
         Cross_RightOuter, /// cartesian right out join, used by TiFlash, in the implementation, it will be converted to cartesian left out join
+        Cross_Semi, /// cartesian semi join, used by TiFlash
         Cross_Anti, /// cartesian anti join, used by TiFlash
         Cross_LeftOuterSemi, /// cartesian version of left outer semi join, used by TiFlash.
         Cross_LeftOuterAnti, /// cartesian version of left outer anti semi join, used by TiFlash.

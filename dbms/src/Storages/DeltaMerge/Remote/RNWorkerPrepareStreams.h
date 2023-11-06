@@ -15,9 +15,9 @@
 #pragma once
 
 #include <Common/ThreadedWorker.h>
+#include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/Filter/PushDownFilter.h>
-#include <Storages/DeltaMerge/SegmentReadTaskPool.h>
-#include <pingcap/kv/Cluster.h>
+#include <Storages/DeltaMerge/SegmentReadTask.h>
 
 #include <boost/noncopyable.hpp>
 
@@ -35,7 +35,18 @@ class RNWorkerPrepareStreams
     , public ThreadedWorker<SegmentReadTaskPtr, SegmentReadTaskPtr>
 {
 protected:
-    SegmentReadTaskPtr doWork(const SegmentReadTaskPtr & task) override;
+    SegmentReadTaskPtr doWork(const SegmentReadTaskPtr & task) override
+    {
+        const auto & settings = task->dm_context->db_context.getSettingsRef();
+        task->initInputStream(
+            *columns_to_read,
+            read_tso,
+            push_down_filter,
+            read_mode,
+            settings.max_block_size,
+            settings.dt_enable_delta_index_error_fallback);
+        return task;
+    }
 
     String getName() const noexcept override { return "PrepareStreams"; }
 
@@ -76,11 +87,6 @@ public:
     {}
 
     ~RNWorkerPrepareStreams() override { wait(); }
-
-    bool initInputStream(const SegmentReadTaskPtr & task, bool enable_delta_index_error_fallback);
-
-    // Only use in unit-test.
-    SegmentReadTaskPtr testDoWork(const SegmentReadTaskPtr & task) { return doWork(task); }
 };
 
 } // namespace DB::DM::Remote

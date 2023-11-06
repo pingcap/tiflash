@@ -1,10 +1,28 @@
+# Mac OS
+.DS_Store
+
 # emacs files
 *~
 *\#
 .tramp_history
 
+# Netbeans project files
+nbproject/*
+
+# JetBrains project files
+.idea
+
+# Microsoft Visual Studio Code
+.vscode
 # vscode clangd cache
 .cache
+
+# ignore sublime project files
+*.sublime-*
+
+# CCACHE
+ccache.tar
+.ccache/
 
 # JSON Compilation Database Format Specification
 # https://clang.llvm.org/docs/JSONCompilationDatabase.html
@@ -16,28 +34,8 @@ compile_commands.json
 # vim cache files
 *.swp
 
-# auto generated files
-*.logrt
-
-/build
-/build-debug
-/build-release
-/docs/en_single_page/
-/docs/ru_single_page/
-/docs/venv/
-
 # callgrind files
 callgrind.out.*
-
-# ignore kdevelop files
-*.kdev4
-*.kdev_include_paths
-
-# ignore sublime project files
-*.sublime-*
-
-# Qt Creator files
-*.user
 
 # ignore perf output
 */perf.data
@@ -51,70 +49,13 @@ CTestTestfile.cmake
 *.a
 *.o
 cmake-build-*
+/build
+/build-debug
+/build-release
 
 # Python cache
 *.pyc
 __pycache__
-
-# ignore generated files
-*-metrika-yandex
-
-test.cpp
-dbms/src/Common/tests/arena_with_free_lists
-dbms/src/Common/tests/auto_array
-dbms/src/Common/tests/compact_array
-dbms/src/Common/tests/hash_table
-dbms/src/Common/tests/hashes_test
-dbms/src/Common/tests/int_hashes_perf
-dbms/src/Common/tests/lru_cache
-dbms/src/Common/tests/parallel_aggregation
-dbms/src/Common/tests/parallel_aggregation2
-dbms/src/Common/tests/radix_sort
-dbms/src/Common/tests/shell_command_test
-dbms/src/Common/tests/simple_cache
-dbms/src/Common/tests/sip_hash
-dbms/src/Common/tests/sip_hash_perf
-dbms/src/Common/tests/small_table
-dbms/src/Core/tests/exception
-dbms/src/Core/tests/field
-dbms/src/Core/tests/rvo_test
-dbms/src/Core/tests/string_pool
-dbms/src/DataTypes/tests/data_type_string
-dbms/src/DataTypes/tests/data_types_number_fixed
-dbms/src/IO/tests/async_write
-dbms/src/IO/tests/cached_compressed_read_buffer
-dbms/src/IO/tests/compressed_buffer
-dbms/src/IO/tests/hashing_read_buffer
-dbms/src/IO/tests/hashing_write_buffer
-dbms/src/IO/tests/io_and_exceptions
-dbms/src/IO/tests/io_operators
-dbms/src/IO/tests/mempbrk
-dbms/src/IO/tests/o_direct_and_dirty_pages
-dbms/src/IO/tests/parse_int_perf
-dbms/src/IO/tests/parse_int_perf2
-dbms/src/IO/tests/read_buffer
-dbms/src/IO/tests/read_buffer_aio
-dbms/src/IO/tests/read_buffer_perf
-dbms/src/IO/tests/read_escaped_string
-dbms/src/IO/tests/read_float_perf
-dbms/src/IO/tests/read_write_int
-dbms/src/IO/tests/valid_utf8
-dbms/src/IO/tests/valid_utf8_perf
-dbms/src/IO/tests/var_uint
-dbms/src/IO/tests/write_buffer
-dbms/src/IO/tests/write_buffer_aio
-dbms/src/IO/tests/write_buffer_perf
-dbms/src/Parsers/tests/create_parser
-dbms/src/Parsers/tests/select_parser
-dbms/src/Storages/tests/hit_log
-dbms/src/Storages/tests/seek_speed_test
-
-dbms/src/Server/data/*
-dbms/src/Server/metadata/*
-dbms/src/Server/status
-config-9001.xml
-
-*-preprocessed.xml
 
 core
 !core/
@@ -130,50 +71,18 @@ debian/*.debhelper.log
 debian/*.debhelper
 debian/*.substvars
 
-*.bin
-*.mrk
-
-.dupload.conf
-
-# Netbeans project files
-nbproject/*
-
-# JetBrains project files
-.idea
-
-# Microsoft Visual Studio Code
-.vscode
-
-config-preprocessed.xml
-
 # Protobuf
 *.pb.cc
 *.pb.cpp
 *.pb.h
 
-# Mac OS
-.DS_Store
-
-# Ignore symlink to private repository
-/private
-
-# Gulp dependencies used to minify website
-node_modules
-public
-website/docs
-website/presentations
-
-# TiCS built and test files
-build_docker
-docker/builder/tics
+# TiFlash built and test files
 release-centos7/tiflash
 release-centos7/build-release
 release-darwin/tiflash
 release-darwin/build-release
-libs/libtiflash-proxy
 
 tmp/
-
 tests/fullstack-test2/auto_gen
 tests/docker/data
 tests/docker/log
@@ -183,7 +92,3 @@ CoverageReport
 # installation and sysroot path
 release-centos7-llvm/tiflash
 release-centos7-llvm/build-release
-
-# CCACHE
-ccache.tar
-.ccache/

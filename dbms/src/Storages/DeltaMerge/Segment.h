@@ -154,13 +154,13 @@ public:
 
     struct SegmentMetaInfo
     {
-        SegmentFormat::Version version;
-        UInt64 epoch;
+        SegmentFormat::Version version{};
+        UInt64 epoch{};
         RowKeyRange range;
-        PageIdU64 segment_id;
-        PageIdU64 next_segment_id;
-        PageIdU64 delta_id;
-        PageIdU64 stable_id;
+        PageIdU64 segment_id{};
+        PageIdU64 next_segment_id{};
+        PageIdU64 delta_id{};
+        PageIdU64 stable_id{};
     };
 
     using SegmentMetaInfos = std::vector<SegmentMetaInfo>;
@@ -650,7 +650,7 @@ public:
         bool relevant_place) const;
 
     static bool useCleanRead(const SegmentSnapshotPtr & segment_snap, const ColumnDefines & columns_to_read);
-    RowKeyRanges shrinkRowKeyRanges(const RowKeyRanges & read_ranges);
+    RowKeyRanges shrinkRowKeyRanges(const RowKeyRanges & read_ranges) const;
     BitmapFilterPtr buildBitmapFilter(
         const DMContext & dm_context,
         const SegmentSnapshotPtr & segment_snap,

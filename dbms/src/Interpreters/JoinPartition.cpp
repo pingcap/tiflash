@@ -1132,7 +1132,7 @@ struct Adder<ASTTableJoin::Kind::LeftOuter, ASTTableJoin::Strictness::Any, Map>
 };
 
 template <typename Map>
-struct Adder<ASTTableJoin::Kind::Inner, ASTTableJoin::Strictness::Any, Map>
+struct Adder<ASTTableJoin::Kind::Semi, ASTTableJoin::Strictness::Any, Map>
 {
     static bool addFound(
         const typename Map::ConstLookupResult & it,
@@ -1348,7 +1348,7 @@ struct Adder<KIND, ASTTableJoin::Strictness::All, Map>
         IColumn::Offsets * offsets,
         ProbeProcessInfo & probe_process_info)
     {
-        if constexpr (KIND == ASTTableJoin::Kind::Inner)
+        if constexpr (KIND == ASTTableJoin::Kind::Inner || KIND == ASTTableJoin::Kind::Semi)
         {
             (*offsets)[i] = current_offset;
         }
@@ -1476,24 +1476,14 @@ void NO_INLINE probeBlockImplTypeCase(
     std::vector<std::string> sort_key_containers;
     sort_key_containers.resize(key_columns.size());
     Arena pool;
-    WeakHash32 build_hash(0); /// reproduce hash values according to build stage
-    if (join_build_info.needVirtualDispatchForProbeBlock())
+    bool need_virtual_dispatch_for_probe_block = join_build_info.needVirtualDispatchForProbeBlock();
+    if (need_virtual_dispatch_for_probe_block)
     {
         assert(!(join_build_info.restore_round > 0 && join_build_info.enable_fine_grained_shuffle));
-        /// TODO: consider adding a virtual column in Sender side to avoid computing cost and potential inconsistency by heterogeneous envs(AMD64, ARM64)
-        /// Note: 1. Not sure, if inconsistency will do happen in heterogeneous envs
-        ///       2. Virtual column would take up a little more network bandwidth, might lead to poor performance if network was bottleneck
-        /// Currently, the computation cost is tolerable, since it's a very simple crc32 hash algorithm, and heterogeneous envs support is not considered
-        computeDispatchHash(
-            rows,
-            key_columns,
-            collators,
-            sort_key_containers,
-            join_build_info.restore_round,
-            build_hash);
+        assert(probe_process_info.hash_data->getData().size() == rows);
     }
 
-    const auto & build_hash_data = build_hash.getData();
+    const auto & build_hash_data = probe_process_info.hash_data->getData();
     assert(probe_process_info.start_row < rows);
     size_t i;
     bool block_full = false;
@@ -1536,7 +1526,7 @@ void NO_INLINE probeBlockImplTypeCase(
             {
                 segment_index = probe_process_info.partition_index;
             }
-            else if (join_build_info.needVirtualDispatchForProbeBlock())
+            else if (need_virtual_dispatch_for_probe_block)
             {
                 /// Need to calculate the correct segment_index so that rows with same key will map to the same segment_index both in Build and Prob
                 /// The "reproduce" of segment_index generated in Build phase relies on the facts that:
@@ -1855,7 +1845,7 @@ std::pair<PaddedPODArray<NASemiJoinResult<KIND, STRICTNESS>>, std::list<NASemiJo
     const NALeftSideInfo & left_side_info,
     const NARightSideInfo & right_side_info)
 {
-#define impl(has_null_map, has_filter_map)                                                              \
+#define CALL(has_null_map, has_filter_map)                                                              \
     return probeBlockNullAwareInternal<KIND, STRICTNESS, KeyGetter, Map, has_null_map, has_filter_map>( \
         join_partitions,                                                                                \
         block,                                                                                          \
@@ -1869,24 +1859,25 @@ std::pair<PaddedPODArray<NASemiJoinResult<KIND, STRICTNESS>>, std::list<NASemiJo
     {
         if (left_side_info.filter_map)
         {
-            impl(true, true);
+            CALL(true, true);
         }
         else
         {
-            impl(true, false);
+            CALL(true, false);
         }
     }
     else
     {
         if (left_side_info.filter_map)
         {
-            impl(false, true);
+            CALL(false, true);
         }
         else
         {
-            impl(false, false);
+            CALL(false, false);
         }
     }
+#undef CALL
 }
 } // namespace
 void JoinPartition::probeBlock(
@@ -1929,24 +1920,24 @@ void JoinPartition::probeBlock(
         probe_process_info,                                 \
         record_mapped_entry_column);
 
-    if (kind == LeftOuter && strictness == Any)
+    if (kind == Inner && strictness == All)
+        CALL(Inner, All, MapsAll, false)
+    else if (kind == LeftOuter && strictness == Any)
         CALL(LeftOuter, Any, MapsAny, false)
-    else if (kind == Inner && strictness == Any)
-        CALL(Inner, Any, MapsAny, false)
     else if (kind == LeftOuter && strictness == All)
         CALL(LeftOuter, All, MapsAll, false)
-    else if (kind == Inner && strictness == All)
-        CALL(Inner, All, MapsAll, false)
     else if (kind == Full && strictness == Any)
         CALL(LeftOuter, Any, MapsAnyFull, false)
-    else if (kind == RightOuter && strictness == Any)
-        CALL(Inner, Any, MapsAnyFull, false)
     else if (kind == Full && strictness == All)
         CALL(LeftOuter, All, MapsAllFull, false)
     else if (kind == RightOuter && strictness == All && !record_mapped_entry_column)
         CALL(Inner, All, MapsAllFull, false)
     else if (kind == RightOuter && strictness == All && record_mapped_entry_column)
         CALL(RightOuter, All, MapsAllFullWithRowFlag, true)
+    else if (kind == Semi && strictness == Any)
+        CALL(Semi, Any, MapsAny, false)
+    else if (kind == Semi && strictness == All)
+        CALL(Semi, All, MapsAll, false)
     else if (kind == Anti && strictness == Any)
         CALL(Anti, Any, MapsAny, false)
     else if (kind == Anti && strictness == All)

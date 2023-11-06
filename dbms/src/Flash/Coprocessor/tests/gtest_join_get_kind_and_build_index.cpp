@@ -81,7 +81,7 @@ TEST(JoinKindAndBuildIndexTestRunner, TestCrossJoins)
 
     /// Cross Semi/Anti, expects right table as build side only, otherwise throws exceptions
     result = JoinInterpreterHelper::getJoinKindAndBuildSideIndex(tipb::JoinType::TypeSemiJoin, 1, false, 0);
-    ASSERT_TRUE(result.first == ASTTableJoin::Kind::Cross && result.second == 1);
+    ASSERT_TRUE(result.first == ASTTableJoin::Kind::Cross_Semi && result.second == 1);
     result = JoinInterpreterHelper::getJoinKindAndBuildSideIndex(tipb::JoinType::TypeAntiSemiJoin, 1, false, 0);
     ASSERT_TRUE(result.first == ASTTableJoin::Kind::Cross_Anti && result.second == 1);
 
@@ -121,7 +121,7 @@ TEST(JoinKindAndBuildIndexTestRunner, TestEqualJoins)
 
     /// Semi/Anti
     result = JoinInterpreterHelper::getJoinKindAndBuildSideIndex(tipb::JoinType::TypeSemiJoin, 1, false, 1);
-    ASSERT_TRUE(result.first == ASTTableJoin::Kind::Inner && result.second == 1);
+    ASSERT_TRUE(result.first == ASTTableJoin::Kind::Semi && result.second == 1);
     result = JoinInterpreterHelper::getJoinKindAndBuildSideIndex(tipb::JoinType::TypeSemiJoin, 0, false, 1);
     ASSERT_TRUE(result.first == ASTTableJoin::Kind::RightSemi && result.second == 0);
     result = JoinInterpreterHelper::getJoinKindAndBuildSideIndex(tipb::JoinType::TypeAntiSemiJoin, 1, false, 1);

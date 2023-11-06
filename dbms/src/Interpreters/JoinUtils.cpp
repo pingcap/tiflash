@@ -132,19 +132,10 @@ void computeDispatchHash(
     }
 }
 
-bool mayProbeSideExpandedAfterJoin(ASTTableJoin::Kind kind, ASTTableJoin::Strictness strictness)
+bool mayProbeSideExpandedAfterJoin(ASTTableJoin::Kind kind)
 {
-    /// null aware semi/left outer semi/anti join never expand the probe side
-    if (isNullAwareSemiFamily(kind))
-        return false;
-    if (isLeftOuterSemiFamily(kind))
-        return false;
-    if (isAntiJoin(kind))
-        return false;
-    /// strictness == Any means semi join, it never expand the probe side
-    if (strictness == ASTTableJoin::Strictness::Any)
-        return false;
-    /// for all the other cases, return true by default
-    return true;
+    /// null aware semi/left outer semi/semi/anti/right semi join never expand the probe side
+    return !isNullAwareSemiFamily(kind) && !isLeftOuterSemiFamily(kind) && !isSemiFamily(kind)
+        && !isRightSemiFamily(kind);
 }
 } // namespace DB
