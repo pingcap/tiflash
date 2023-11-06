@@ -48,7 +48,7 @@ public:
 
     virtual RSResults roughCheck(size_t start_pack, size_t pack_count, const RSCheckParam & param) = 0;
 
-    virtual Attrs getAttrs() = 0;
+    virtual ColIds getColumnIDs() = 0;
 };
 
 class ColCmpVal : public RSOperator
@@ -63,7 +63,7 @@ public:
         , value(value_)
     {}
 
-    Attrs getAttrs() override { return {attr}; }
+    ColIds getColumnIDs() override { return {attr.col_id}; }
 
     String toDebugString() override
     {
@@ -83,18 +83,18 @@ protected:
 
 public:
     explicit LogicalOp(const RSOperators & children_)
-        : children(std::move(children_))
+        : children(children_)
     {}
 
-    Attrs getAttrs() override
+    ColIds getColumnIDs() override
     {
-        Attrs attrs;
-        for (auto & child : children)
+        ColIds col_ids;
+        for (const auto & child : children)
         {
-            auto child_attrs = child->getAttrs();
-            attrs.insert(attrs.end(), child_attrs.begin(), child_attrs.end());
+            auto child_col_ids = child->getColumnIDs();
+            col_ids.insert(col_ids.end(), child_col_ids.begin(), child_col_ids.end());
         }
-        return attrs;
+        return col_ids;
     }
 
     String toDebugString() override
@@ -105,7 +105,7 @@ public:
             children.cbegin(),
             children.cend(),
             [](const auto & child, FmtBuffer & fb) { fb.append(child->toDebugString()); },
-            ", ");
+            ",");
         buf.append("]}");
         return buf.toString();
     }

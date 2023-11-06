@@ -32,7 +32,7 @@ public:
 
     String name() override { return "in"; }
 
-    Attrs getAttrs() override { return {attr}; }
+    ColIds getColumnIDs() override { return {attr.col_id}; }
 
     String toDebugString() override
     {

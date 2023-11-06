@@ -37,7 +37,7 @@ public:
 
     String name() override { return "unsupported"; }
 
-    Attrs getAttrs() override { return {}; }
+    ColIds getColumnIDs() override { return {}; }
 
     String toDebugString() override
     {
@@ -46,7 +46,7 @@ public:
             name(),
             reason,
             content,
-            is_not);
+            DB::toString(is_not));
     }
 
     RSResults roughCheck(size_t /*start_pack*/, size_t pack_count, const RSCheckParam & /*param*/) override

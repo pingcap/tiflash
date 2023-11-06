@@ -202,10 +202,10 @@ private:
         if (filter)
         {
             // Load index based on filter.
-            Attrs attrs = filter->getAttrs();
-            for (auto & attr : attrs)
+            ColIds ids = filter->getColumnIDs();
+            for (auto & id : ids)
             {
-                tryLoadIndex(attr.col_id);
+                tryLoadIndex(id);
             }
 
             Stopwatch watch;
