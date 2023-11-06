@@ -1359,7 +1359,7 @@ struct Adder<ASTTableJoin::Kind::LeftOuterSemi, ASTTableJoin::Strictness::All, M
         size_t rows_joined = mapped_value.list_length;
         bool need_generate_cached_columns = false;
         if unlikely (
-            probe_process_info.cache_columns_threshold > 0 && rows_joined > probe_process_info.cache_columns_threshold)
+            probe_process_info.cache_columns_threshold > 0 && rows_joined >= probe_process_info.cache_columns_threshold)
         {
             assert(mapped_value.cached_column_info != nullptr);
             auto check_result = checkCachedColumnInfo(mapped_value.cached_column_info);
@@ -1450,7 +1450,7 @@ struct Adder<KIND, ASTTableJoin::Strictness::All, Map>
 
         bool need_generate_cached_columns = false;
         if unlikely (
-            probe_process_info.cache_columns_threshold > 0 && rows_joined > probe_process_info.cache_columns_threshold)
+            probe_process_info.cache_columns_threshold > 0 && rows_joined >= probe_process_info.cache_columns_threshold)
         {
             assert(mapped_value.cached_column_info != nullptr);
             auto check_result = checkCachedColumnInfo(mapped_value.cached_column_info);
