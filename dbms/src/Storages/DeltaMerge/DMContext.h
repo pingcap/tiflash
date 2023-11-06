@@ -164,7 +164,7 @@ private:
         const DB::Settings & settings,
         const ScanContextPtr & scan_context_ = nullptr,
         const String & tracing_id_ = "")
-        : global_context(session_context_.getGlobalContext())
+        : global_context(session_context_.getGlobalContext()) // always save the global context
         , path_pool(path_pool_)
         , storage_pool(storage_pool_)
         , min_version(min_version_)
