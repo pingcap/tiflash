@@ -68,7 +68,7 @@ query_cpu_percent=77
         auto config = CPUAffinityManager::readConfig(*loadConfigFromString(s));
         ASSERT_EQ(config.query_cpu_percent, vi[i]);
         ASSERT_EQ(config.cpu_cores, static_cast<int>(std::thread::hardware_concurrency()));
-        auto default_query_threads = std::vector<std::string>{"cop-pool", "batch-cop-pool", "grpcpp_sync_ser"};
+        auto default_query_threads = std::vector<std::string>{"grpcpp_sync_ser"};
         ASSERT_EQ(config.query_threads, default_query_threads);
     }
 }
