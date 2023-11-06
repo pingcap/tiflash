@@ -374,7 +374,8 @@ namespace DB
     M(tiflash_fap_task_result,                                                                                                      \
       "",                                                                                                                           \
       Counter,                                                                                                                      \
-      F(type_total, {{"type", "total"}}),                                                                                         \
+      F(type_total, {{"type", "total"}}),                                                                                           \
+      F(type_failed_other, {{"type", "failed_other"}}),                                                                                           \
       F(type_failed_cancel, {{"type", "failed_cancel"}}),                                                                           \
       F(type_failed_timeout, {{"type", "failed_timeout"}}),                                                                         \
       F(type_succeed, {{"type", "succeed"}}))                                                                                       \

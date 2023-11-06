@@ -247,6 +247,14 @@ bool tryResetPeerIdInRegion(RegionPtr region, const RegionLocalState & region_st
 
 FastAddPeerRes FastAddPeerImpl(EngineStoreServerWrap * server, uint64_t region_id, uint64_t new_peer_id)
 {
+    bool is_building_finish_recorded = false;
+    auto after_build = [](){
+        if (!is_building_finish_recorded) {
+            GET_METRIC(tiflash_fap_task_state, type_building).Decrement();
+            is_building_finish_recorded = true;
+        }
+    }
+    SCOPE_EXIT({ after_build(); });
     try
     {
         auto * log = &Poco::Logger::get("FastAddPeer");
@@ -324,9 +332,9 @@ FastAddPeerRes FastAddPeerImpl(EngineStoreServerWrap * server, uint64_t region_i
                 std::this_thread::sleep_for(std::chrono::milliseconds(1000));
             }
         }
+        after_build();
 
         Stopwatch watch_ingest;
-        GET_METRIC(tiflash_fap_task_state, type_building).Decrement();
         auto kvstore = server->tmt->getKVStore();
         kvstore->handleIngestCheckpoint(region, checkpoint_info, *server->tmt);
 
@@ -388,6 +396,7 @@ FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, u
             {
                 // If the queue is full, the task won't be registered, return OtherError for quick fallback.
                 LOG_ERROR(log, "Add new task fail(queue full) [new_peer_id={}] [region_id={}]", new_peer_id, region_id);
+                GET_METRIC(tiflash_fap_task_result, type_failed_other).Increment();
                 return genFastAddPeerRes(FastAddPeerStatus::OtherError, "", "");
             }
         }
