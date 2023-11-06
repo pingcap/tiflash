@@ -1239,15 +1239,12 @@ Block Join::doJoinBlockHash(ProbeProcessInfo & probe_process_info, const JoinBui
         right_indexes.push_back(num_columns_to_skip + i);
     }
 
-    /// For RightSemi/RightAnti join with other conditions, using this column to record hash entries that matches keys
-    /// Note: this column will record map entry addresses, so should use it carefully and better limit its usage in this function only.
-    //MutableColumnPtr flag_mapped_entry_helper_column = nullptr;
     bool use_row_flagged_hash_map = useRowFlaggedHashMap(kind, has_other_condition);
     if (use_row_flagged_hash_map)
     {
-        //flag_mapped_entry_helper_column = flag_mapped_entry_helper_type->createColumn();
+        /// For RightSemi/RightAnti join with other conditions, using this column to record hash entries that matches keys
+        /// Note: this column will record map entry addresses, so should use it carefully and better limit its usage in this function only.
         // todo figure out more accurate `rows`
-        //flag_mapped_entry_helper_column->reserve(rows);
         added_columns.push_back(flag_mapped_entry_helper_type->createColumn());
         added_columns.back()->reserve(rows);
     }
