@@ -45,7 +45,6 @@ struct RowRefList : RowRef
 {
     RowRefList * next = nullptr;
     size_t list_length = 0;
-    /// todo use raw point and allocate memory in pool?
     std::unique_ptr<CachedColumnInfo> cached_column_info;
 
     RowRefList() = default;
@@ -66,7 +65,6 @@ struct RowRefListWithUsedFlag : RowRef
     mutable std::atomic<bool> used{};
     RowRefListWithUsedFlag * next = nullptr;
     size_t list_length = 0;
-    /// todo use raw point and allocate memory in pool?
     std::unique_ptr<CachedColumnInfo> cached_column_info;
 
     void setUsed() const
