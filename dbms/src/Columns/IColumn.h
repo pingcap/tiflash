@@ -390,8 +390,7 @@ public:
         return res;
     }
 
-    /// equal to clone, but clone is a private method
-    MutablePtr mutate() const &
+    MutablePtr cloneFullColumn() const
     {
         MutablePtr res = clone();
         res->forEachSubcolumn([](Ptr & subcolumn) { subcolumn = subcolumn->clone(); });

@@ -1282,6 +1282,65 @@ struct Adder<ASTTableJoin::Kind::LeftOuterSemi, ASTTableJoin::Strictness::Any, M
     }
 };
 
+/// return {has_cached_columns, need_generate_cached_columns}
+std::pair<bool, bool> checkCachedColumnInfo(const std::unique_ptr<CachedColumnInfo> & cached_column_info)
+{
+    std::unique_lock lock(cached_column_info->mu);
+    bool has_cached_columns = !cached_column_info->columns.empty();
+    if (!has_cached_columns)
+    {
+        if (!cached_column_info->generate_cached_columns)
+        {
+            cached_column_info->generate_cached_columns = true;
+            return {false, true};
+        }
+        else
+        {
+            return {false, false};
+        }
+    }
+    return {true, false};
+}
+
+void insertCachedColumns(
+    const std::unique_ptr<CachedColumnInfo> & cached_column_info,
+    MutableColumns & added_columns,
+    size_t rows_added,
+    size_t columns_to_added)
+{
+    if (added_columns[0]->empty())
+    {
+        for (size_t j = 0; j < columns_to_added; ++j)
+        {
+            added_columns[j] = cached_column_info->columns[j]->cloneFullColumn();
+        }
+    }
+    else
+    {
+        for (size_t j = 0; j < columns_to_added; ++j)
+        {
+            added_columns[j]->insertRangeFrom(*cached_column_info->columns[j], 0, rows_added);
+        }
+    }
+}
+
+Columns constructCachedColumns(MutableColumns & added_columns, size_t rows, size_t columns)
+{
+    Columns cached_columns;
+    size_t start_offset = added_columns[0]->size() - rows;
+    if (start_offset == 0)
+    {
+        for (size_t j = 0; j < columns; ++j)
+            cached_columns.push_back(added_columns[j]->cloneFullColumn());
+    }
+    else
+    {
+        for (size_t j = 0; j < columns; ++j)
+            cached_columns.push_back(added_columns[j]->cut(start_offset, rows));
+    }
+    return cached_columns;
+}
+
 template <typename Map>
 struct Adder<ASTTableJoin::Kind::LeftOuterSemi, ASTTableJoin::Strictness::All, Map>
 {
@@ -1294,11 +1353,33 @@ struct Adder<ASTTableJoin::Kind::LeftOuterSemi, ASTTableJoin::Strictness::All, M
         IColumn::Offset & current_offset,
         IColumn::Offsets * offsets,
         const std::vector<size_t> & right_indexes,
-        ProbeProcessInfo & /*probe_process_info*/)
+        ProbeProcessInfo & probe_process_info)
     {
-        for (auto current = &static_cast<const typename Map::mapped_type::Base_t &>(it->getMapped());
-             current != nullptr;
-             current = current->next)
+        auto & mapped_value = static_cast<const typename Map::mapped_type::Base_t &>(it->getMapped());
+        size_t rows_joined = mapped_value.list_length;
+        bool need_generate_cached_columns = false;
+        if unlikely (
+            probe_process_info.cache_columns_threshold > 0 && rows_joined > probe_process_info.cache_columns_threshold)
+        {
+            assert(mapped_value.cached_column_info != nullptr);
+            auto check_result = checkCachedColumnInfo(mapped_value.cached_column_info);
+            need_generate_cached_columns = check_result.second;
+            if (check_result.first)
+            {
+                insertCachedColumns(
+                    mapped_value.cached_column_info,
+                    added_columns,
+                    rows_joined,
+                    num_columns_to_add - 1);
+                current_offset += rows_joined;
+                (*offsets)[i] = current_offset;
+                /// we insert only one row to `match-helper` for each row of left block
+                /// so before the execution of `HandleOtherConditions`, column sizes of temporary block may be different.
+                added_columns[num_columns_to_add - 1]->insert(FIELD_INT8_1);
+                return false;
+            }
+        }
+        for (auto current = &mapped_value; current != nullptr; current = current->next)
         {
             for (size_t j = 0; j < num_columns_to_add - 1; ++j)
                 added_columns[j]->insertFrom(
@@ -1310,6 +1391,17 @@ struct Adder<ASTTableJoin::Kind::LeftOuterSemi, ASTTableJoin::Strictness::All, M
         /// we insert only one row to `match-helper` for each row of left block
         /// so before the execution of `HandleOtherConditions`, column sizes of temporary block may be different.
         added_columns[num_columns_to_add - 1]->insert(FIELD_INT8_1);
+
+        if unlikely (need_generate_cached_columns)
+        {
+            auto cached_columns = constructCachedColumns(added_columns, rows_joined, num_columns_to_add - 1);
+            std::unique_lock lock(mapped_value.cached_column_info->mu);
+            assert(mapped_value.cached_column_info->columns.empty());
+            mapped_value.cached_column_info->columns.insert(
+                mapped_value.cached_column_info->columns.end(),
+                cached_columns.begin(),
+                cached_columns.end());
+        }
         return false;
     }
 
@@ -1356,40 +1448,16 @@ struct Adder<KIND, ASTTableJoin::Strictness::All, Map>
             return true;
         }
 
-        bool need_generated_cached_columns = false;
+        bool need_generate_cached_columns = false;
         if unlikely (
             probe_process_info.cache_columns_threshold > 0 && rows_joined > probe_process_info.cache_columns_threshold)
         {
-            bool has_cached_columns = false;
+            assert(mapped_value.cached_column_info != nullptr);
+            auto check_result = checkCachedColumnInfo(mapped_value.cached_column_info);
+            need_generate_cached_columns = check_result.second;
+            if (check_result.first)
             {
-                assert(mapped_value.cached_column_info != nullptr);
-                std::unique_lock lock(mapped_value.cached_column_info->mu);
-                has_cached_columns = !mapped_value.cached_column_info->columns.empty();
-                if (!has_cached_columns)
-                {
-                    if (!mapped_value.cached_column_info->generate_cached_columns)
-                    {
-                        mapped_value.cached_column_info->generate_cached_columns = true;
-                        need_generated_cached_columns = true;
-                    }
-                }
-            }
-            if (has_cached_columns)
-            {
-                if (added_columns[0]->empty())
-                {
-                    for (size_t j = 0; j < num_columns_to_add; ++j)
-                    {
-                        added_columns[j] = mapped_value.cached_column_info->columns[j]->mutate();
-                    }
-                }
-                else
-                {
-                    for (size_t j = 0; j < num_columns_to_add; ++j)
-                    {
-                        added_columns[j]->insertRangeFrom(*mapped_value.cached_column_info->columns[j], 0, rows_joined);
-                    }
-                }
+                insertCachedColumns(mapped_value.cached_column_info, added_columns, rows_joined, num_columns_to_add);
                 current_offset += rows_joined;
                 (*offsets)[i] = current_offset;
                 if constexpr (KIND == ASTTableJoin::Kind::Anti)
@@ -1417,31 +1485,16 @@ struct Adder<KIND, ASTTableJoin::Strictness::All, Map>
             /// to indicate that the row is matched during probe stage, this will be used in handleOtherConditions
             (*filter)[i] = 0;
 
-        if unlikely (need_generated_cached_columns)
+        if unlikely (need_generate_cached_columns)
         {
-            Columns cached_columns;
-            size_t start_offset = added_columns[0]->size() - rows_joined;
-            if (start_offset == 0)
-            {
-                for (size_t j = 0; j < num_columns_to_add; ++j)
-                {
-                    cached_columns.push_back(added_columns[j]->mutate());
-                }
-            }
-            else
-            {
-                for (size_t j = 0; j < num_columns_to_add; ++j)
-                {
-                    cached_columns.push_back(added_columns[j]->cut(start_offset, rows_joined));
-                }
-            }
+            auto cached_columns = constructCachedColumns(added_columns, rows_joined, num_columns_to_add);
             std::unique_lock lock(mapped_value.cached_column_info->mu);
+            assert(mapped_value.cached_column_info->columns.empty());
             mapped_value.cached_column_info->columns.insert(
                 mapped_value.cached_column_info->columns.end(),
                 cached_columns.begin(),
                 cached_columns.end());
         }
-
         return false;
     }
 
@@ -1490,6 +1543,8 @@ struct RowFlaggedHashMapAdder
         const std::vector<size_t> & right_indexes,
         ProbeProcessInfo & probe_process_info)
     {
+        /// the last column in added_columns is the ptr_col
+        assert(num_columns_to_add + 1 == added_columns.size());
         auto & mapped_value = static_cast<const typename Map::mapped_type::Base_t &>(it->getMapped());
         size_t rows_joined = mapped_value.list_length;
         // If there are too many rows in the column to split, record the number of rows that have been expanded for next read.
@@ -1499,39 +1554,20 @@ struct RowFlaggedHashMapAdder
             return true;
         }
 
-        bool need_generated_cached_columns = false;
+        bool need_generate_cached_columns = false;
         if unlikely (
             probe_process_info.cache_columns_threshold > 0 && rows_joined >= probe_process_info.cache_columns_threshold)
         {
-            bool has_cached_columns = false;
+            assert(mapped_value.cached_column_info != nullptr);
+            auto check_result = checkCachedColumnInfo(mapped_value.cached_column_info);
+            need_generate_cached_columns = check_result.second;
+            if (check_result.first)
             {
-                std::unique_lock lock(mapped_value.cached_column_info->mu);
-                has_cached_columns = !mapped_value.cached_column_info->columns.empty();
-                if (!has_cached_columns)
-                {
-                    if (!mapped_value.cached_column_info->generate_cached_columns)
-                    {
-                        mapped_value.cached_column_info->generate_cached_columns = true;
-                        need_generated_cached_columns = true;
-                    }
-                }
-            }
-            if (has_cached_columns)
-            {
-                if (added_columns[0]->empty())
-                {
-                    for (size_t j = 0; j < num_columns_to_add + 1; ++j)
-                    {
-                        added_columns[j] = mapped_value.cached_column_info->columns[j]->mutate();
-                    }
-                }
-                else
-                {
-                    for (size_t j = 0; j < num_columns_to_add + 1; ++j)
-                    {
-                        added_columns[j]->insertRangeFrom(*mapped_value.cached_column_info->columns[j], 0, rows_joined);
-                    }
-                }
+                insertCachedColumns(
+                    mapped_value.cached_column_info,
+                    added_columns,
+                    rows_joined,
+                    num_columns_to_add + 1);
                 current_offset += rows_joined;
                 (*offsets)[i] = current_offset;
                 return false;
@@ -1551,25 +1587,11 @@ struct RowFlaggedHashMapAdder
             ++current_offset;
         }
         (*offsets)[i] = current_offset;
-        if unlikely (need_generated_cached_columns)
+        if unlikely (need_generate_cached_columns)
         {
-            Columns cached_columns;
-            size_t start_offset = added_columns[0]->size() - rows_joined;
-            if (start_offset == 0)
-            {
-                for (size_t j = 0; j < num_columns_to_add + 1; ++j)
-                {
-                    cached_columns.push_back(added_columns[j]->mutate());
-                }
-            }
-            else
-            {
-                for (size_t j = 0; j < num_columns_to_add + 1; ++j)
-                {
-                    cached_columns.push_back(added_columns[j]->cut(start_offset, rows_joined));
-                }
-            }
+            auto cached_columns = constructCachedColumns(added_columns, rows_joined, num_columns_to_add + 1);
             std::unique_lock lock(mapped_value.cached_column_info->mu);
+            assert(mapped_value.cached_column_info->columns.empty());
             mapped_value.cached_column_info->columns.insert(
                 mapped_value.cached_column_info->columns.end(),
                 cached_columns.begin(),
