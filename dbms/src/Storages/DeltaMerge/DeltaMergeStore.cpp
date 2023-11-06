@@ -1529,7 +1529,7 @@ bool DeltaMergeStore::checkSegmentUpdate(
         && std::max(static_cast<Int64>(column_file_count) - delta_last_try_compact_column_files, 0) >= 15;
 
     // Don't do background place index if we limit DeltaIndex cache.
-    bool should_place_delta_index = !dm_context->session_context.isDeltaIndexLimited()
+    bool should_place_delta_index = !dm_context->global_context.isDeltaIndexLimited()
         && (delta_rows - placed_delta_rows >= delta_cache_limit_rows * 3
             && delta_rows - delta_last_try_place_delta_index_rows >= delta_cache_limit_rows);
 

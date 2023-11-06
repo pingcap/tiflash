@@ -764,8 +764,11 @@ BlockInputStreamPtr Segment::getInputStream(
     UInt64 max_version,
     size_t expected_block_size)
 {
-    auto clipped_block_rows
-        = clipBlockRows(dm_context.session_context, expected_block_size, columns_to_read, segment_snap->stable->stable);
+    auto clipped_block_rows = clipBlockRows( //
+        dm_context.session_context,
+        expected_block_size,
+        columns_to_read,
+        segment_snap->stable->stable);
     switch (read_mode)
     {
     case ReadMode::Normal:
@@ -786,7 +789,12 @@ BlockInputStreamPtr Segment::getInputStream(
             filter ? filter->rs_operator : EMPTY_RS_OPERATOR,
             clipped_block_rows);
     case ReadMode::Raw:
-        return getInputStreamModeRaw(dm_context, columns_to_read, segment_snap, read_ranges, clipped_block_rows);
+        return getInputStreamModeRaw( //
+            dm_context,
+            columns_to_read,
+            segment_snap,
+            read_ranges,
+            clipped_block_rows);
     case ReadMode::Bitmap:
         return getBitmapFilterInputStream(
             dm_context,

@@ -19,6 +19,7 @@
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/Settings.h>
 #include <Storages/DeltaMerge/DMChecksumConfig.h>
+#include <Storages/DeltaMerge/DMContext_fwd.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 
@@ -35,8 +36,6 @@ namespace DM
 class StoragePool;
 using StoragePoolPtr = std::shared_ptr<StoragePool>;
 using NotCompress = std::unordered_set<ColId>;
-struct DMContext;
-using DMContextPtr = std::shared_ptr<DMContext>;
 
 /**
  * This context object carries table infos. And those infos are only meaningful to current context.
