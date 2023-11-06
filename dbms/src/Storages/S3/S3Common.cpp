@@ -755,10 +755,12 @@ bool ensureLifecycleRuleExist(const TiFlashS3Client & client, Int32 expire_days)
         {
             const auto & error = outcome.GetError();
             // The life cycle is not added at all
-            if (error.GetExceptionName() == "NoSuchLifecycleConfiguration")
+            if (error.GetErrorType() == Aws::S3::S3Errors::RESOURCE_NOT_FOUND
+                || error.GetExceptionName() == "NoSuchLifecycleConfiguration")
             {
                 break;
             }
+
             LOG_WARNING(
                 client.log,
                 "GetBucketLifecycle fail, please check the bucket lifecycle configuration or create the lifecycle rule "

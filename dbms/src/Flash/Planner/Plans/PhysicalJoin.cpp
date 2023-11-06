@@ -89,7 +89,7 @@ PhysicalPlanNodePtr PhysicalJoin::build(
 
     /// add necessary transformation if the join key is an expression
 
-    bool is_tiflash_right_join = tiflash_join.isTiFlashRightOuterJoin();
+    bool is_tiflash_right_join = isRightOuterJoin(tiflash_join.kind);
 
     JoinNonEqualConditions join_non_equal_conditions;
     // prepare probe side
@@ -169,7 +169,6 @@ PhysicalPlanNodePtr PhysicalJoin::build(
         probe_key_names,
         build_key_names,
         tiflash_join.kind,
-        tiflash_join.strictness,
         join_req_id,
         fine_grained_shuffle.enable(),
         fine_grained_shuffle.stream_count,

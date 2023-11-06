@@ -38,6 +38,7 @@ void ProbeProcessInfo::resetBlock(Block && block_, size_t partition_index_)
     offsets_to_replicate.reset();
     key_columns.clear();
     materialized_columns.clear();
+    hash_data = nullptr;
     result_block_schema.clear();
     right_column_index.clear();
     right_rows_to_be_added_when_matched = 0;
@@ -53,7 +54,10 @@ void ProbeProcessInfo::prepareForHashProbe(
     const Names & key_names,
     const String & filter_column,
     ASTTableJoin::Kind kind,
-    ASTTableJoin::Strictness strictness)
+    ASTTableJoin::Strictness strictness,
+    bool need_compute_hash,
+    const TiDB::TiDBCollators & collators,
+    size_t restore_round)
 {
     if (prepare_for_probe_done)
         return;
@@ -85,12 +89,19 @@ void ProbeProcessInfo::prepareForHashProbe(
                 convertColumnToNullable(block.getByPosition(i));
         }
     }
-    if (((kind == ASTTableJoin::Kind::Inner || kind == ASTTableJoin::Kind::RightOuter)
-         && strictness == ASTTableJoin::Strictness::Any)
+    if ((kind == ASTTableJoin::Kind::Semi && strictness == ASTTableJoin::Strictness::Any)
         || kind == ASTTableJoin::Kind::Anti)
         filter = std::make_unique<IColumn::Filter>(block.rows());
     if (strictness == ASTTableJoin::Strictness::All)
         offsets_to_replicate = std::make_unique<IColumn::Offsets>(block.rows());
+
+    hash_data = std::make_unique<WeakHash32>(0);
+    if (need_compute_hash)
+    {
+        std::vector<std::string> sort_key_containers;
+        sort_key_containers.resize(key_columns.size());
+        computeDispatchHash(block.rows(), key_columns, collators, sort_key_containers, restore_round, *hash_data);
+    }
     prepare_for_probe_done = true;
 }
 

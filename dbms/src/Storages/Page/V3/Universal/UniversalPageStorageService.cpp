@@ -98,9 +98,9 @@ bool CheckpointUploadFunctor::operator()(const PS::V3::LocalCheckpointFiles & ch
     return remote_store->putCheckpointFiles(checkpoint, store_id, sequence);
 }
 
-void UniversalPageStorageService::setSyncAllData()
+void UniversalPageStorageService::setUploadAllData()
 {
-    sync_all_at_next_upload = true;
+    upload_all_at_next_upload = true;
     gc_handle->wake();
     LOG_INFO(log, "sync_all flag is set, next checkpoint will upload all existing data");
 }
@@ -144,10 +144,10 @@ bool UniversalPageStorageService::uploadCheckpoint()
         return false;
     }
     auto s3lock_client = tmt.getS3LockClient();
-    const bool force_sync = sync_all_at_next_upload.load();
-    bool upload_done = uploadCheckpointImpl(store_info, s3lock_client, remote_store, force_sync);
-    if (force_sync && upload_done)
-        sync_all_at_next_upload = false;
+    const bool force_upload = upload_all_at_next_upload.load();
+    bool upload_done = uploadCheckpointImpl(store_info, s3lock_client, remote_store, force_upload);
+    if (force_upload && upload_done)
+        upload_all_at_next_upload = false;
     // always return false to run at fixed rate
     return false;
 }

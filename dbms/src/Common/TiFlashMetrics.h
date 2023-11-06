@@ -365,7 +365,8 @@ namespace DB
       F(type_worker_fetch_page, {{"type", "worker_fetch_page"}}, ExpBuckets{0.01, 2, 20}),                                          \
       F(type_worker_prepare_stream, {{"type", "worker_prepare_stream"}}, ExpBuckets{0.01, 2, 20}),                                  \
       F(type_stream_wait_next_task, {{"type", "stream_wait_next_task"}}, ExpBuckets{0.01, 2, 20}),                                  \
-      F(type_stream_read, {{"type", "stream_read"}}, ExpBuckets{0.01, 2, 20}))                                                      \
+      F(type_stream_read, {{"type", "stream_read"}}, ExpBuckets{0.01, 2, 20}),                                                      \
+      F(type_deserialize_page, {{"type", "deserialize_page"}}, ExpBuckets{0.01, 2, 20}))                                            \
     M(tiflash_disaggregated_details,                                                                                                \
       "",                                                                                                                           \
       Counter,                                                                                                                      \
@@ -405,6 +406,7 @@ namespace DB
       F(type_ingest_sst_sst2dt, {{"type", "ingest_sst_sst2dt"}}, ExpBuckets{0.05, 2, 10}),                                          \
       F(type_ingest_sst_upload, {{"type", "ingest_sst_upload"}}, ExpBuckets{0.05, 2, 10}),                                          \
       F(type_apply_snapshot_predecode, {{"type", "snapshot_predecode"}}, ExpBuckets{0.05, 2, 15}),                                  \
+      F(type_apply_snapshot_total, {{"type", "snapshot_total"}}, ExpBuckets{0.2, 2, 60}),                                           \
       F(type_apply_snapshot_predecode_sst2dt, {{"type", "snapshot_predecode_sst2dt"}}, ExpBuckets{0.05, 2, 15}),                    \
       F(type_apply_snapshot_predecode_parallel_wait,                                                                                \
         {{"type", "snapshot_predecode_parallel_wait"}},                                                                             \

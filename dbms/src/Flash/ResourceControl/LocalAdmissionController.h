@@ -35,6 +35,7 @@
 namespace DB
 {
 class LocalAdmissionController;
+using SteadyClock = std::chrono::steady_clock;
 
 // gac_resp.burst_limit < 0: resource group is burstable, and will not use bucket at all.
 // gac_resp.burst_limit >= 0: resource group is not burstable, will use bucket to limit the speed of the resource group.
@@ -175,23 +176,21 @@ private:
     }
 
     // Return how many tokens should acquire from GAC for the next n seconds.
-    double getAcquireRUNum(uint32_t n, double amplification) const
+    double getAcquireRUNum(double speed, uint32_t n_sec, double amplification) const
     {
         assert(amplification >= 1.0);
 
-        double avg_speed = 0.0;
         double remaining_ru = 0.0;
         double base = 0.0;
         {
             std::lock_guard lock(mu);
-            avg_speed = bucket->getAvgSpeedPerSec();
             remaining_ru = bucket->peek();
             base = static_cast<double>(user_ru_per_sec);
         }
 
         // Appropriate amplification is necessary to prevent situation that GAC has sufficient RU,
         // but user query speed is limited due to LAC requests too few RU.
-        double acquire_num = avg_speed * n * amplification;
+        double acquire_num = speed * n_sec * amplification;
 
         // Prevent avg_speed from being 0 due to RU exhaustion.
         if (acquire_num == 0.0 && remaining_ru <= 0.0)
@@ -205,7 +204,7 @@ private:
             "acquire num for rg {}: avg_speed: {}, remaining_ru: {}, base: {}, amplification: {}, "
             "acquire num: {}",
             name,
-            avg_speed,
+            speed,
             remaining_ru,
             base,
             amplification,
@@ -265,7 +264,7 @@ private:
 
         std::string ori_bucket_info = bucket->toString();
         bucket->reConfig(TokenBucket::TokenBucketConfig(bucket->peek(), new_fill_rate, new_capacity));
-        stop_trickle_timepoint = std::chrono::steady_clock::now() + std::chrono::milliseconds(trickle_ms);
+        stop_trickle_timepoint = SteadyClock::now() + std::chrono::milliseconds(trickle_ms);
         LOG_DEBUG(
             log,
             "token bucket of rg {} reconfig to trickle mode: from: {}, to: {}",
@@ -282,11 +281,10 @@ private:
             return;
 
         bucket_mode = TokenBucketMode::degrade_mode;
-        double avg_speed = bucket->getAvgSpeedPerSec();
         auto config = bucket->getConfig();
         std::string ori_bucket_info = bucket->toString();
 
-        config.fill_rate = avg_speed;
+        config.fill_rate = ru_consumption_speed;
         bucket->reConfig(config);
         LOG_INFO(
             log,
@@ -296,23 +294,55 @@ private:
             bucket->toString());
     }
 
-    double getAndCleanConsumptionDelta()
+    struct ConsumptionUpdateInfo
     {
-        std::lock_guard lock(mu);
-        auto ori = ru_consumption_delta;
-        ru_consumption_delta = 0.0;
-        total_consumption += ori;
-        return ori;
+        // Avg speed of RU consumption of time range [last_update_ru_consumption_timepoint, now].
+        double speed = 0.0;
+        // RU consumption since last_update_ru_consumption_timepoint.
+        double delta = 0.0;
+        // Total RU consumption of all time.
+        double total = 0.0;
+        // If speed or delta is updated or not.
+        bool updated = false;
+    };
+
+    ConsumptionUpdateInfo updateConsumptionSpeedInfoIfNecessary(
+        const SteadyClock::time_point & now,
+        const std::chrono::seconds & dura)
+    {
+        ConsumptionUpdateInfo info;
+        {
+            std::lock_guard lock(mu);
+            const auto elapsed
+                = std::chrono::duration_cast<std::chrono::seconds>(now - last_update_ru_consumption_timepoint);
+
+            if (elapsed < dura)
+                return {.speed = ru_consumption_speed, .delta = ru_consumption_delta, .updated = false};
+
+            ru_consumption_speed = ru_consumption_delta / elapsed.count();
+            total_ru_consumption += ru_consumption_delta;
+
+            info.speed = ru_consumption_speed;
+            info.total = total_ru_consumption;
+            info.delta = ru_consumption_delta;
+            info.updated = true;
+
+            ru_consumption_delta = 0;
+            last_update_ru_consumption_timepoint = now;
+        }
+
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_avg_speed, name).Set(info.speed);
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_total_consumption, name).Set(info.total);
+        return info;
     }
 
-    bool needFetchTokenPeridically(const std::chrono::steady_clock::time_point & now, const std::chrono::seconds & dura)
-        const
+    bool needFetchTokenPeridically(const SteadyClock::time_point & now, const std::chrono::seconds & dura) const
     {
         std::lock_guard lock(mu);
         return std::chrono::duration_cast<std::chrono::seconds>(now - last_fetch_tokens_from_gac_timepoint) > dura;
     }
 
-    void updateFetchTokenTimepoint(const std::chrono::steady_clock::time_point & tp)
+    void updateFetchTokenTimepoint(const SteadyClock::time_point & tp)
     {
         std::lock_guard lock(mu);
         assert(last_fetch_tokens_from_gac_timepoint <= tp);
@@ -320,23 +350,32 @@ private:
         ++fetch_tokens_from_gac_count;
     }
 
-    bool inTrickleModeLease(const std::chrono::steady_clock::time_point & tp)
+    bool inTrickleModeLease(const SteadyClock::time_point & tp)
     {
         std::lock_guard lock(mu);
         return bucket_mode == trickle_mode && tp < stop_trickle_timepoint;
     }
 
-    void collectMetrics() const
+    bool trickleModeLeaseExpire(const SteadyClock::time_point & tp)
     {
         std::lock_guard lock(mu);
-        const auto & config = bucket->getConfig();
-        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_remaining_tokens, name).Set(config.tokens);
-        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_avg_speed, name).Set(bucket->getAvgSpeedPerSec());
-        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_total_consumption, name).Set(total_consumption);
-        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_bucket_fill_rate, name).Set(config.fill_rate);
-        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_bucket_capacity, name).Set(config.capacity);
+        return bucket_mode == trickle_mode && tp >= stop_trickle_timepoint;
+    }
+
+    void collectMetrics() const
+    {
+        TokenBucket::TokenBucketConfig local_config;
+        uint64_t local_fetch_count = 0;
+        {
+            std::lock_guard lock(mu);
+            local_config = bucket->getConfig();
+            local_fetch_count = fetch_tokens_from_gac_count;
+        }
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_remaining_tokens, name).Set(local_config.tokens);
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_bucket_fill_rate, name).Set(local_config.fill_rate);
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_bucket_capacity, name).Set(local_config.capacity);
         GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_fetch_tokens_from_gac_count, name)
-            .Set(fetch_tokens_from_gac_count);
+            .Set(local_fetch_count);
     }
 
     const std::string name;
@@ -358,15 +397,16 @@ private:
 
     TokenBucketMode bucket_mode = TokenBucketMode::normal_mode;
 
-    double ru_consumption_delta = 0.0;
-
     LoggerPtr log;
 
-    std::chrono::time_point<std::chrono::steady_clock> last_fetch_tokens_from_gac_timepoint
-        = std::chrono::steady_clock::now();
-    std::chrono::time_point<std::chrono::steady_clock> stop_trickle_timepoint = std::chrono::steady_clock::now();
+    SteadyClock::time_point last_fetch_tokens_from_gac_timepoint = SteadyClock::now();
+    SteadyClock::time_point stop_trickle_timepoint = SteadyClock::now();
     uint64_t fetch_tokens_from_gac_count = 0;
-    double total_consumption = 0.0;
+    double total_ru_consumption = 0.0;
+
+    double ru_consumption_delta = 0.0;
+    double ru_consumption_speed = 0.0;
+    SteadyClock::time_point last_update_ru_consumption_timepoint = SteadyClock::now();
 };
 
 using ResourceGroupPtr = std::shared_ptr<ResourceGroup>;
@@ -409,7 +449,7 @@ public:
         }
 
         group->consumeResource(ru, cpu_time_in_ns);
-        if (group->lowToken())
+        if (group->lowToken() || group->trickleModeLeaseExpire(SteadyClock::now()))
         {
             {
                 std::lock_guard lock(mu);
@@ -486,6 +526,26 @@ private:
                 thread.join();
         }
 
+        // Report final RU consumption before stop:
+        // 1. to avoid RU consumption omission.
+        // 2. clear GAC's unique_client_id to avoid affecting burst limit calculation.
+        // This can happend when disagg CN is scaled-in/out frequently.
+        std::vector<AcquireTokenInfo> acquire_infos;
+        for (const auto & resource_group : resource_groups)
+        {
+            const auto consumption_update_info = resource_group.second->updateConsumptionSpeedInfoIfNecessary(
+                SteadyClock::time_point::max(),
+                std::chrono::seconds(0));
+            assert(consumption_update_info.updated);
+            if (consumption_update_info.delta == 0.0)
+                continue;
+            acquire_infos.push_back(
+                {.resource_group_name = resource_group.first,
+                 .acquire_tokens = 0,
+                 .ru_consumption_delta = consumption_update_info.delta});
+        }
+        fetchTokensFromGAC(acquire_infos, "before stop");
+
         if (need_reset_unique_client_id.load())
         {
             try
@@ -510,7 +570,7 @@ private:
     static constexpr auto DEGRADE_MODE_DURATION = std::chrono::seconds(120);
     static constexpr auto TARGET_REQUEST_PERIOD_MS = std::chrono::milliseconds(5000);
     static constexpr auto COLLECT_METRIC_INTERVAL = std::chrono::seconds(5);
-    static constexpr double ACQUIRE_RU_AMPLIFICATION = 1.1;
+    static constexpr double ACQUIRE_RU_AMPLIFICATION = 1.5;
 
     static const std::string GAC_RESOURCE_GROUP_ETCD_PATH;
     static const std::string WATCH_GAC_ERR_PREFIX;
@@ -576,7 +636,7 @@ private:
     // Utilities for fetch token from GAC.
     void fetchTokensForLowTokenResourceGroups();
     void fetchTokensForAllResourceGroups();
-    static std::optional<AcquireTokenInfo> buildAcquireInfo(
+    std::optional<AcquireTokenInfo> buildAcquireInfo(
         const ResourceGroupPtr & resource_group,
         bool is_periodically_fetch);
 
@@ -599,8 +659,7 @@ private:
     std::unordered_set<std::string> low_token_resource_groups;
 
     std::atomic<uint64_t> max_ru_per_sec = 0;
-    std::chrono::time_point<std::chrono::steady_clock> last_fetch_tokens_from_gac_timepoint
-        = std::chrono::steady_clock::now();
+    std::chrono::time_point<SteadyClock> last_fetch_tokens_from_gac_timepoint = SteadyClock::now();
 
     ::pingcap::kv::Cluster * cluster = nullptr;
     std::atomic<bool> need_reset_unique_client_id{false};
@@ -613,4 +672,45 @@ private:
 
     const LoggerPtr log = Logger::get("LocalAdmissionController");
 };
+
+// This is to reduce the calling frequence of LAC::consumeResource() to avoid lock contension.
+// TODO: Need to optimize LAC::consumeResource().
+// Because the lock contension still increase when the thread num of storage layer or the data to be read is very large.
+class LACBytesCollector
+{
+public:
+    explicit LACBytesCollector(const std::string & name)
+        : resource_group_name(name)
+        , delta_bytes(0)
+    {}
+
+    ~LACBytesCollector()
+    {
+        if (delta_bytes != 0)
+            consume();
+    }
+
+    void collect(uint64_t bytes)
+    {
+        delta_bytes += bytes;
+        // Call LAC::consumeResource() when accumulated to `bytes_of_one_hundred_ru` to avoid lock contension.
+        if (delta_bytes >= bytes_of_one_hundred_ru)
+        {
+            consume();
+            delta_bytes = 0;
+        }
+    }
+
+private:
+    void consume()
+    {
+        assert(delta_bytes != 0);
+        if (!resource_group_name.empty())
+            LocalAdmissionController::global_instance->consumeResource(resource_group_name, bytesToRU(delta_bytes), 0);
+    }
+
+    const std::string resource_group_name;
+    uint64_t delta_bytes;
+};
+using LACBytesCollectorPtr = std::unique_ptr<LACBytesCollector>;
 } // namespace DB

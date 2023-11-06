@@ -3114,7 +3114,7 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(
         dm_context.tracing_id);
 }
 
-RowKeyRanges Segment::shrinkRowKeyRanges(const RowKeyRanges & read_ranges)
+RowKeyRanges Segment::shrinkRowKeyRanges(const RowKeyRanges & read_ranges) const
 {
     RowKeyRanges real_ranges;
     for (const auto & read_range : read_ranges)

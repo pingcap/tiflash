@@ -80,7 +80,7 @@ struct fmt::formatter<DB::PageIdV3Internal>
     template <typename FormatContext>
     auto format(const DB::PageIdV3Internal & value, FormatContext & ctx) const
     {
-        return format_to(ctx.out(), "{}.{}", value.high, value.low);
+        return fmt::format_to(ctx.out(), "{}.{}", value.high, value.low);
     }
 };
 
@@ -100,6 +100,6 @@ struct fmt::formatter<DB::PageFileIdAndLevel>
     template <typename FormatContext>
     auto format(const DB::PageFileIdAndLevel & id_lvl, FormatContext & ctx) const
     {
-        return format_to(ctx.out(), "{}_{}", id_lvl.first, id_lvl.second);
+        return fmt::format_to(ctx.out(), "{}_{}", id_lvl.first, id_lvl.second);
     }
 };

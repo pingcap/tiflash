@@ -733,7 +733,7 @@ private:
     void removeLocalStableFilesIfDisagg() const;
 
     SegmentReadTasks getReadTasksByRanges(
-        DMContext & dm_context,
+        const DMContextPtr & dm_context,
         const RowKeyRanges & sorted_ranges,
         size_t expected_tasks_count = 1,
         const SegmentIdSet & read_segments = {},
