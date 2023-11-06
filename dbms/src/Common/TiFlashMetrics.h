@@ -380,6 +380,7 @@ namespace DB
       F(type_ingest_sst_sst2dt, {{"type", "ingest_sst_sst2dt"}}, ExpBuckets{0.05, 2, 10}),                                          \
       F(type_ingest_sst_upload, {{"type", "ingest_sst_upload"}}, ExpBuckets{0.05, 2, 10}),                                          \
       F(type_apply_snapshot_predecode, {{"type", "snapshot_predecode"}}, ExpBuckets{0.05, 2, 15}),                                  \
+      F(type_apply_snapshot_total, {{"type", "snapshot_total"}}, ExpBuckets{0.2, 2, 60}),                                           \
       F(type_apply_snapshot_predecode_sst2dt, {{"type", "snapshot_predecode_sst2dt"}}, ExpBuckets{0.05, 2, 15}),                    \
       F(type_apply_snapshot_predecode_parallel_wait,                                                                                \
         {{"type", "snapshot_predecode_parallel_wait"}},                                                                             \
