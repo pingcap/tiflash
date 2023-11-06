@@ -79,7 +79,7 @@ SegmentReadTask::SegmentReadTask(
     auto segment_range = RowKeyRange::deserialize(rb);
 
     dm_context = std::make_shared<DMContext>(
-        db_context,
+        db_context.getGlobalContext(),
         /* path_pool */ nullptr,
         /* storage_pool */ nullptr,
         /* min_version */ 0,
