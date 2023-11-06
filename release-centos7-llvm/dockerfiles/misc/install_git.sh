@@ -19,12 +19,12 @@
 function install_git() {
     # $1: git version
     wget -O git.tar.gz https://github.com/git/git/archive/refs/tags/v$1.tar.gz
-	tar -xzvf git.tar.gz --transform="s,^git-$1/,git/,1"
-    cd git
-	make configure
-	./configure --with-openssl $OPENSSL_ROOT_DIR --prefix /usr/local
-	make -j
-	make install
-	cd ..
-	rm -rf git git.tar.gz
+    mkdir git && cd git
+    tar -xzvf ../git.tar.gz --strip-components=1
+    make configure
+    ./configure --with-openssl $OPENSSL_ROOT_DIR --prefix /usr/local
+    make -j
+    make install
+    cd ..
+    rm -rf git git.tar.gz
 }
