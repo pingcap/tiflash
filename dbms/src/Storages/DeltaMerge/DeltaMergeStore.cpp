@@ -449,14 +449,11 @@ DMContextPtr DeltaMergeStore::newDMContext(
     const String & tracing_id,
     ScanContextPtr scan_context_)
 {
-    std::shared_lock lock(read_write_mutex);
-
     // Here we use global context from db_context, instead of db_context directly.
     // Because db_context could be a temporary object and won't last long enough during the query process.
     // Like the context created by InterpreterSelectWithUnionQuery.
-    auto * ctx = new DMContext(
+    return DMContext::create(
         db_context,
-        db_context.getGlobalContext(),
         path_pool,
         storage_pool,
         latest_gc_safe_point.load(std::memory_order_acquire),
@@ -467,7 +464,6 @@ DMContextPtr DeltaMergeStore::newDMContext(
         db_settings,
         scan_context_,
         tracing_id);
-    return DMContextPtr(ctx);
 }
 
 inline Block getSubBlock(const Block & block, size_t offset, size_t limit)
@@ -1376,17 +1372,17 @@ Remote::DisaggPhysicalTableReadSnapshotPtr DeltaMergeStore::writeNodeBuildRemote
 
 size_t forceMergeDeltaRows(const DMContextPtr & dm_context)
 {
-    return dm_context->session_context.getSettingsRef().dt_segment_force_merge_delta_rows;
+    return dm_context->global_context.getSettingsRef().dt_segment_force_merge_delta_rows;
 }
 
 size_t forceMergeDeltaBytes(const DMContextPtr & dm_context)
 {
-    return dm_context->session_context.getSettingsRef().dt_segment_force_merge_delta_size;
+    return dm_context->global_context.getSettingsRef().dt_segment_force_merge_delta_size;
 }
 
 size_t forceMergeDeltaDeletes(const DMContextPtr & dm_context)
 {
-    return dm_context->session_context.getSettingsRef().dt_segment_force_merge_delta_deletes;
+    return dm_context->global_context.getSettingsRef().dt_segment_force_merge_delta_deletes;
 }
 
 void DeltaMergeStore::waitForWrite(const DMContextPtr & dm_context, const SegmentPtr & segment)
@@ -1407,9 +1403,9 @@ void DeltaMergeStore::waitForWrite(const DMContextPtr & dm_context, const Segmen
     // The speed of delta merge in a very bad situation we assume. It should be a very conservative value.
     const size_t k10mb = 10 << 20;
 
-    size_t stop_write_delta_rows = dm_context->session_context.getSettingsRef().dt_segment_stop_write_delta_rows;
-    size_t stop_write_delta_bytes = dm_context->session_context.getSettingsRef().dt_segment_stop_write_delta_size;
-    size_t wait_duration_factor = dm_context->session_context.getSettingsRef().dt_segment_wait_duration_factor;
+    size_t stop_write_delta_rows = dm_context->global_context.getSettingsRef().dt_segment_stop_write_delta_rows;
+    size_t stop_write_delta_bytes = dm_context->global_context.getSettingsRef().dt_segment_stop_write_delta_size;
+    size_t wait_duration_factor = dm_context->global_context.getSettingsRef().dt_segment_wait_duration_factor;
 
     size_t sleep_ms;
     if (delta_rows >= stop_write_delta_rows || delta_bytes >= stop_write_delta_bytes)

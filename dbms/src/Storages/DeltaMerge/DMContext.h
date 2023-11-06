@@ -16,7 +16,7 @@
 
 #include <Common/Logger.h>
 #include <Core/Types.h>
-#include <Interpreters/Context_fwd.h>
+#include <Interpreters/Context.h>
 #include <Interpreters/Settings.h>
 #include <Storages/DeltaMerge/DMChecksumConfig.h>
 #include <Storages/DeltaMerge/DMContext_fwd.h>
@@ -43,7 +43,7 @@ using NotCompress = std::unordered_set<ColId>;
 struct DMContext : private boost::noncopyable
 {
     // The session_context is the Context for given query
-    const Context & session_context;
+    // const Context & session_context;
     const Context & global_context;
 
     // leaving these pointers possible to be nullptr is dangerous for only reading from/writing to local storage. Find a better way to handle it later
@@ -94,9 +94,68 @@ struct DMContext : private boost::noncopyable
     const ScanContextPtr scan_context;
 
 public:
+    static DMContextPtr create(
+        const Context & session_context_,
+        const StoragePathPoolPtr & path_pool_,
+        const StoragePoolPtr & storage_pool_,
+        DB::Timestamp min_version_,
+        KeyspaceID keyspace_id_,
+        TableID physical_table_id_,
+        bool is_common_handle_,
+        size_t rowkey_column_size_,
+        const DB::Settings & settings,
+        const ScanContextPtr & scan_context_,
+        const String & tracing_id_)
+    {
+        return std::shared_ptr<DMContext>(new DMContext(
+            session_context_,
+            path_pool_,
+            storage_pool_,
+            min_version_,
+            keyspace_id_,
+            physical_table_id_,
+            is_common_handle_,
+            rowkey_column_size_,
+            settings,
+            scan_context_,
+            tracing_id_));
+    }
+
+    static std::unique_ptr<DMContext> createUnique(
+        const Context & session_context_,
+        const StoragePathPoolPtr & path_pool_,
+        const StoragePoolPtr & storage_pool_,
+        DB::Timestamp min_version_,
+        KeyspaceID keyspace_id_,
+        TableID physical_table_id_,
+        bool is_common_handle_,
+        size_t rowkey_column_size_,
+        const DB::Settings & settings,
+        const ScanContextPtr & scan_context_ = nullptr,
+        const String & tracing_id_ = "")
+    {
+        return std::unique_ptr<DMContext>(new DMContext(
+            session_context_,
+            path_pool_,
+            storage_pool_,
+            min_version_,
+            keyspace_id_,
+            physical_table_id_,
+            is_common_handle_,
+            rowkey_column_size_,
+            settings,
+            scan_context_,
+            tracing_id_));
+    }
+
+    WriteLimiterPtr getWriteLimiter() const;
+    ReadLimiterPtr getReadLimiter() const;
+
+    DM::DMConfigurationOpt createChecksumConfig() const { return DMChecksumConfig::fromDBContext(global_context); }
+
+private:
     DMContext(
         const Context & session_context_,
-        const Context & global_context_,
         const StoragePathPoolPtr & path_pool_,
         const StoragePoolPtr & storage_pool_,
         const DB::Timestamp min_version_,
@@ -105,10 +164,9 @@ public:
         bool is_common_handle_,
         size_t rowkey_column_size_,
         const DB::Settings & settings,
-        const ScanContextPtr scan_context_ = nullptr,
+        const ScanContextPtr & scan_context_ = nullptr,
         const String & tracing_id_ = "")
-        : session_context(session_context_)
-        , global_context(global_context_)
+        : global_context(session_context_.getGlobalContext())
         , path_pool(path_pool_)
         , storage_pool(storage_pool_)
         , min_version(min_version_)
@@ -134,11 +192,6 @@ public:
         , tracing_id(tracing_id_)
         , scan_context(scan_context_ ? scan_context_ : std::make_shared<ScanContext>())
     {}
-
-    WriteLimiterPtr getWriteLimiter() const;
-    ReadLimiterPtr getReadLimiter() const;
-
-    DM::DMConfigurationOpt createChecksumConfig() const { return DMChecksumConfig::fromDBContext(session_context); }
 };
 
 } // namespace DM

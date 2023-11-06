@@ -175,7 +175,7 @@ void ColumnFileBigReader::initStream()
     if (file_stream)
         return;
 
-    DMFileBlockInputStreamBuilder builder(dm_context.session_context);
+    DMFileBlockInputStreamBuilder builder(dm_context.global_context);
     file_stream = builder.setTracingID(dm_context.tracing_id)
                       .build(
                           column_file.getFile(),

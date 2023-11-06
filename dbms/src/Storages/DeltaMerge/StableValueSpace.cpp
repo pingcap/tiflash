@@ -333,7 +333,7 @@ void StableValueSpace::calculateStableProperty(
             //
             // If we pass `segment_range` instead,
             // then the returned stream is a `SkippableBlockInputStream` which will complicate the implementation
-            DMFileBlockInputStreamBuilder builder(context.session_context);
+            DMFileBlockInputStreamBuilder builder(context.global_context);
             BlockInputStreamPtr data_stream
                 = builder
                       .setRowsThreshold(std::numeric_limits<UInt64>::max()) // because we just read one pack at a time
@@ -470,7 +470,7 @@ SkippableBlockInputStreamPtr StableValueSpace::Snapshot::getInputStream(
     rows.reserve(stable->files.size());
     for (size_t i = 0; i < stable->files.size(); i++)
     {
-        DMFileBlockInputStreamBuilder builder(context.session_context);
+        DMFileBlockInputStreamBuilder builder(context.global_context);
         builder.enableCleanRead(enable_handle_clean_read, is_fast_scan, enable_del_clean_read, max_data_version)
             .setRSOperator(filter)
             .setColumnCache(column_caches[i])

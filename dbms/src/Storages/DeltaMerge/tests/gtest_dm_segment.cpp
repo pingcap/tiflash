@@ -100,8 +100,7 @@ protected:
     {
         *table_columns = *columns;
 
-        dm_context = std::make_unique<DMContext>(
-            *db_context,
+        dm_context = DMContext::createUnique(
             *db_context,
             storage_path_pool,
             storage_pool,
@@ -987,7 +986,7 @@ CATCH
 TEST_F(SegmentTest, MassiveSplit)
 try
 {
-    Settings settings = dmContext().session_context.getSettings();
+    Settings settings = dmContext().global_context.getSettings();
     settings.dt_segment_limit_rows = 11;
     settings.dt_segment_delta_limit_rows = 7;
 
@@ -1549,7 +1548,7 @@ CATCH
 TEST_F(SegmentTest, CalculateDTFileProperty)
 try
 {
-    Settings settings = dmContext().session_context.getSettings();
+    Settings settings = dmContext().global_context.getSettings();
     settings.dt_segment_stable_pack_rows = 10;
 
     segment = reload(DMTestEnv::getDefaultColumns(), std::move(settings));
@@ -1590,7 +1589,7 @@ CATCH
 TEST_F(SegmentTest, CalculateDTFilePropertyWithPropertyFileDeleted)
 try
 {
-    Settings settings = dmContext().session_context.getSettings();
+    Settings settings = dmContext().global_context.getSettings();
     settings.dt_segment_stable_pack_rows = 10;
 
     segment = reload(DMTestEnv::getDefaultColumns(), std::move(settings));

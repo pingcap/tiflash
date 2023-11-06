@@ -78,9 +78,8 @@ SegmentReadTask::SegmentReadTask(
     auto rb = ReadBufferFromString(proto.key_range());
     auto segment_range = RowKeyRange::deserialize(rb);
 
-    dm_context = std::make_shared<DMContext>(
+    dm_context = DMContext::create(
         db_context,
-        db_context.getGlobalContext(),
         /* path_pool */ nullptr,
         /* storage_pool */ nullptr,
         /* min_version */ 0,
@@ -548,7 +547,7 @@ void SegmentReadTask::doFetchPages(const disaggregated::FetchDisaggPagesRequest 
             auto page_id = Remote::RNLocalPageCache::buildCacheId(oid);
             write_page_task->wb
                 .putPage(page_id, 0, std::move(read_buffer), remote_page.data().size(), std::move(field_sizes));
-            auto write_batch_limit_size = dm_context->session_context.getSettingsRef().dt_write_page_cache_limit_size;
+            auto write_batch_limit_size = dm_context->global_context.getSettingsRef().dt_write_page_cache_limit_size;
             if (write_page_task->wb.getTotalDataSize() >= write_batch_limit_size)
             {
                 write_page_results.push_back(

@@ -133,7 +133,7 @@ DMFilePtr writeIntoNewDMFile(
         dm_context.createChecksumConfig(),
         dm_context.global_context.getSettingsRef().dt_small_file_size_threshold,
         dm_context.global_context.getSettingsRef().dt_merged_file_max_size);
-    auto output_stream = std::make_shared<DMFileBlockOutputStream>(dm_context.session_context, dmfile, *schema_snap);
+    auto output_stream = std::make_shared<DMFileBlockOutputStream>(dm_context.global_context, dmfile, *schema_snap);
     const auto * mvcc_stream
         = typeid_cast<const DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT> *>(input_stream.get());
 
@@ -604,7 +604,7 @@ bool Segment::isDefinitelyEmpty(DMContext & dm_context, const SegmentSnapshotPtr
         SkippableBlockInputStreams streams;
         for (const auto & file : segment_snap->stable->getDMFiles())
         {
-            DMFileBlockInputStreamBuilder builder(dm_context.session_context);
+            DMFileBlockInputStreamBuilder builder(dm_context.global_context);
             auto stream = builder
                               .setRowsThreshold(
                                   std::numeric_limits<UInt64>::max()) // TODO: May be we could have some better settings
@@ -765,7 +765,7 @@ BlockInputStreamPtr Segment::getInputStream(
     size_t expected_block_size)
 {
     auto clipped_block_rows = clipBlockRows( //
-        dm_context.session_context,
+        dm_context.global_context,
         expected_block_size,
         columns_to_read,
         segment_snap->stable->stable);
@@ -1453,7 +1453,7 @@ std::optional<RowKeyValue> Segment::getSplitPointFast(DMContext & dm_context, co
     if (unlikely(!read_file))
         throw Exception("Logical error: failed to find split point");
 
-    DMFileBlockInputStreamBuilder builder(dm_context.session_context);
+    DMFileBlockInputStreamBuilder builder(dm_context.global_context);
     auto stream = builder.setColumnCache(stable_snap->getColumnCaches()[file_index])
                       .setReadPacks(read_pack)
                       .setTracingID(fmt::format("{}-getSplitPointFast", dm_context.tracing_id))
