@@ -46,7 +46,7 @@ SegmentReadTask::SegmentReadTask(
     const SegmentSnapshotPtr & read_snapshot_,
     const DMContextPtr & dm_context_,
     const RowKeyRanges & ranges_)
-    : store_id(dm_context_->session_context.getTMTContext().getKVStore()->getStoreID())
+    : store_id(dm_context_->global_context.getTMTContext().getKVStore()->getStoreID())
     , segment(segment_)
     , read_snapshot(read_snapshot_)
     , dm_context(dm_context_)

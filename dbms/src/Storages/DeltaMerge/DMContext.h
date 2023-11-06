@@ -42,6 +42,7 @@ using NotCompress = std::unordered_set<ColId>;
  */
 struct DMContext : private boost::noncopyable
 {
+    // The session_context is the Context for given query
     const Context & session_context;
     const Context & global_context;
 
