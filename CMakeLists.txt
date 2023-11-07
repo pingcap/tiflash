@@ -70,7 +70,7 @@ if (ENABLE_TIME_TRACES)
     set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CLANG_TIME_TRACES_FLAGS}")
 endif ()
 
-option(ENABLE_TSA "Enable clang feature thread safety analysis " OFF)
+option(ENABLE_TSA "Enable clang feature thread safety analysis " ON)
 if (ENABLE_TSA)
     set (CLANG_TSA_FLAGS "-Wthread-safety")
     add_definitions(-D_LIBCPP_ENABLE_THREAD_SAFETY_ANNOTATIONS)
