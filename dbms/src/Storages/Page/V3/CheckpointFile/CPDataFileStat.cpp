@@ -202,7 +202,7 @@ struct fmt::formatter<DB::PS::V3::FileInfo>
     template <typename FormatContext>
     auto format(const DB::PS::V3::FileInfo & value, FormatContext & ctx) const -> decltype(ctx.out())
     {
-        return format_to(
+        return fmt::format_to(
             ctx.out(),
             "{{key={} age={:.3f} size={} rate={:2.2f}%}}",
             value.file_id,
@@ -220,6 +220,6 @@ struct fmt::formatter<DB::PS::V3::RemoteFilesInfo>
     template <typename FormatContext>
     auto format(const DB::PS::V3::RemoteFilesInfo & v, FormatContext & ctx) const -> decltype(ctx.out())
     {
-        return format_to(ctx.out(), "{{compaction={} unchanged={}}}", v.to_compact, v.unchanged);
+        return fmt::format_to(ctx.out(), "{{compaction={} unchanged={}}}", v.to_compact, v.unchanged);
     }
 };

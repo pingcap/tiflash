@@ -17,6 +17,7 @@
 #include <Core/Block.h>
 #include <Interpreters/Context_fwd.h>
 #include <Storages/BackgroundProcessingPool.h>
+#include <Storages/DeltaMerge/DMContext_fwd.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/Remote/Serializer_fwd.h>

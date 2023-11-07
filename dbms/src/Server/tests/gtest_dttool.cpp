@@ -84,7 +84,7 @@ struct DTToolTest : public DB::base::TiFlashStorageTestBasic
         auto storage_pool
             = std::make_shared<DB::DM::StoragePool>(*db_context, NullspaceID, /*ns_id*/ 1, *path_pool, "test.t1");
         auto dm_settings = DB::DM::DeltaMergeStore::Settings{};
-        auto dm_context = std::make_unique<DB::DM::DMContext>( //
+        auto dm_context = DB::DM::DMContext::createUnique(
             *db_context,
             path_pool,
             storage_pool,

@@ -77,7 +77,7 @@ protected:
     {
         *table_columns_ = *columns;
 
-        dm_context_ = std::make_unique<DMContext>(
+        dm_context_ = DMContext::createUnique(
             *db_context,
             path_pool,
             storage_pool,
@@ -925,7 +925,7 @@ CATCH
 TEST_F(SegmentCommonHandleTest, MassiveSplit)
 try
 {
-    Settings settings = dmContext().db_context.getSettings();
+    Settings settings = dmContext().global_context.getSettings();
     settings.dt_segment_limit_rows = 11;
     settings.dt_segment_delta_limit_rows = 7;
 

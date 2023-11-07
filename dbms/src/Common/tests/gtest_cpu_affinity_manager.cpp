@@ -68,7 +68,7 @@ query_cpu_percent=77
         auto config = CPUAffinityManager::readConfig(*loadConfigFromString(s));
         ASSERT_EQ(config.query_cpu_percent, vi[i]);
         ASSERT_EQ(config.cpu_cores, static_cast<int>(std::thread::hardware_concurrency()));
-        auto default_query_threads = std::vector<std::string>{"cop-pool", "batch-cop-pool", "grpcpp_sync_ser"};
+        auto default_query_threads = std::vector<std::string>{"grpcpp_sync_ser"};
         ASSERT_EQ(config.query_threads, default_query_threads);
     }
 }
@@ -117,7 +117,7 @@ TEST(CPUAffinityManagerTest, CPUAffinityManager)
     ASSERT_TRUE(cpu_affinity.enable());
 
     std::vector<int> except_other_cpu_set;
-    for (int i = 0; i < cpu_affinity.getOtherCPUCores(); i++)
+    for (int i = 0; i < cpu_affinity.getOtherCPUCores(); ++i)
     {
         except_other_cpu_set.push_back(i);
     }
@@ -125,7 +125,7 @@ TEST(CPUAffinityManagerTest, CPUAffinityManager)
     ASSERT_EQ(other_cpu_set, except_other_cpu_set);
 
     std::vector<int> except_query_cpu_set;
-    for (int i = 0; i < cpu_affinity.getQueryCPUCores(); i++)
+    for (int i = 0; i < cpu_affinity.getQueryCPUCores(); ++i)
     {
         except_query_cpu_set.push_back(cpu_affinity.getOtherCPUCores() + i);
     }
@@ -144,8 +144,6 @@ TEST(CPUAffinityManagerTest, CPUAffinityManager)
     ASSERT_EQ(ret, 0) << strerror(errno);
     ASSERT_TRUE(CPU_EQUAL(&cpu_set3, &(cpu_affinity.other_cpu_set)));
 
-    ASSERT_TRUE(cpu_affinity.isQueryThread("cop-pool0"));
-    ASSERT_FALSE(cpu_affinity.isQueryThread("cop-po"));
     ASSERT_TRUE(cpu_affinity.isQueryThread("grpcpp_sync_server"));
     ASSERT_FALSE(cpu_affinity.isQueryThread("grpcpp_sync"));
 }
