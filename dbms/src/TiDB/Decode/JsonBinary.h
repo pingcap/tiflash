@@ -123,7 +123,7 @@ public:
     struct Opaque
     {
         // TypeCode is the same with TiDB database type code
-        UInt8 type;
+        UInt8 type{TYPE_CODE_OBJECT};
         // Buf is the underlying bytes of the data
         StringRef data;
     };

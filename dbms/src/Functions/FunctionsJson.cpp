@@ -14,11 +14,18 @@
 
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionsJson.h>
+#include <Functions/GatherUtils/Sources.h>
+#include <Functions/GatherUtils/Sinks.h>
+#include <TiDB/Decode/JsonBinary.h>
+
+#include <ext/range.h>
 
 namespace DB
 {
 namespace
 {
+using namespace GatherUtils;
+
 class FunctionsJsonExtract : public IFunction
 {
 public:
@@ -293,6 +300,89 @@ public:
             throw Exception(
                 fmt::format("Illegal column {} of argument of function {}", column->getName(), getName()),
                 ErrorCodes::ILLEGAL_COLUMN);
+    }
+};
+
+class FunctionsJsonArray : public IFunction
+{
+public:
+    static constexpr auto name = "json_array";
+    static FunctionPtr create(const Context &) { return std::make_shared<FunctionsJsonArray>(); }
+
+    String getName() const override { return name; }
+
+    size_t getNumberOfArguments() const override { return 0; }
+
+    bool isVariadic() const override { return true; }
+
+    bool useDefaultImplementationForNulls() const override { return false; }
+    bool useDefaultImplementationForConstants() const override { return true; }
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        for (const auto arg_idx : ext::range(0, arguments.size()))
+        {
+            if (!arguments[arg_idx]->onlyNull())
+            {
+                const auto * arg = removeNullable(arguments[arg_idx]).get();
+                if (!arg->isString())
+                    throw Exception(
+                        ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
+                        "Illegal type {} of argument {} of function {}",
+                        arg->getName(),
+                        arg_idx + 1,
+                        getName());
+            }
+        }
+        return std::make_shared<DataTypeString>();
+    }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
+    {
+        Block nested_block = createBlockWithNestedColumns(block, arguments, result);
+        StringSources sources;
+        for (auto column_number : arguments)
+        {
+            if (!block.getByPosition(column_number).type->onlyNull())
+                sources.push_back(createDynamicStringSource(*nested_block.getByPosition(column_number).column));
+            else
+                sources.push_back(nullptr);
+        }
+
+        auto rows = block.rows();
+        auto res = ColumnString::create();
+        StringSink sink(*res, rows);
+        for (size_t row = 0; row < block.rows(); ++row)
+        {
+            std::vector<JsonBinary> cur_buffer;
+            cur_buffer.reserve(sources.size());
+            for (size_t col = 0; col < sources.size(); ++col)
+            {
+                if (!sources[col])
+                {
+                    JsonBinary binary{TYPE_CODE_LITERAL};
+                }
+                else
+                {
+
+                }
+            }
+            for (auto column_number : arguments)
+            {
+
+            }
+            if (!block.getByPosition(not_only_null_arguments[col]).column->isNullAt(row))
+            {
+                if (has_not_null)
+                    writeSlice(sources[0]->getWhole(), sink);
+                else
+                    has_not_null = true;
+                writeSlice(sources[col]->getWhole(), sink);
+            }
+            for (auto & source : sources)
+                source->next();
+            sink.next();
+        }
+        block.getByPosition(result).column = std::move(res);
     }
 };
 }
