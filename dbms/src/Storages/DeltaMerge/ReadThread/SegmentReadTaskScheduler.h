@@ -65,7 +65,7 @@ private:
     SegmentReadTaskPools getPoolsUnlock(const std::vector<uint64_t> & pool_ids) EXCLUSIVE_LOCKS_REQUIRED(mtx);
 
     // To restrict the instantaneous concurrency of `add` and avoid `schedule` from always failing to acquire the lock.
-    std::mutex add_mtx;
+    std::mutex add_mtx ACQUIRED_BEFORE(mtx);
 
     std::mutex mtx;
     SegmentReadTaskPoolList read_pools GUARDED_BY(mtx);
