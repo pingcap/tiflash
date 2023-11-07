@@ -29,6 +29,7 @@ function install_ccache() {
       -DCMAKE_INSTALL_PREFIX="/usr/local" \
       -GNinja
     ninja && ninja install
+    mkdir -p /usr/lib64/ccache && ln -s `which ccache` /usr/lib64/ccache/clang &&  ln -s `which ccache` /usr/lib64/ccache/clang++
     cd ../..
     rm -rf "ccache-$1"
 }
