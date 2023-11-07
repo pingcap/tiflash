@@ -161,6 +161,8 @@ public:
         const std::vector<JsonBinary> & json_binary_vec,
         JsonBinaryWriteBuffer & write_buffer);
 
+    static UInt64 getJsonLength(const std::string_view & raw_value);
+
 private:
     Int64 getInt64() const;
     UInt64 getUInt64() const;
