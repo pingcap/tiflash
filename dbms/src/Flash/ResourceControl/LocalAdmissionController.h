@@ -537,14 +537,12 @@ private:
                 SteadyClock::time_point::max(),
                 std::chrono::seconds(0));
             assert(consumption_update_info.updated);
-            if (consumption_update_info.delta == 0.0)
-                continue;
             acquire_infos.push_back(
                 {.resource_group_name = resource_group.first,
                  .acquire_tokens = 0,
                  .ru_consumption_delta = consumption_update_info.delta});
         }
-        fetchTokensFromGAC(acquire_infos, "before stop");
+        fetchTokensFromGAC(acquire_infos, "before stop", true);
 
         if (need_reset_unique_client_id.load())
         {
@@ -629,7 +627,7 @@ private:
     // 3. Check if resource group need to goto degrade mode.
     // 4. Watch GAC event to delete resource group.
     void startBackgroudJob();
-    void fetchTokensFromGAC(const std::vector<AcquireTokenInfo> & acquire_infos, const std::string & desc_str);
+    void fetchTokensFromGAC(const std::vector<AcquireTokenInfo> & acquire_infos, const std::string & desc_str, bool final_report = false);
     void checkDegradeMode();
     void watchGAC();
 
@@ -687,30 +685,35 @@ public:
     ~LACBytesCollector()
     {
         if (delta_bytes != 0)
-            consume();
+            consume("storage destroy");
     }
 
-    void collect(uint64_t bytes)
+    void collect(uint64_t bytes, const std::string & desc_str)
     {
         delta_bytes += bytes;
         // Call LAC::consumeResource() when accumulated to `bytes_of_one_hundred_ru` to avoid lock contension.
         if (delta_bytes >= bytes_of_one_hundred_ru)
         {
-            consume();
+            consume(desc_str);
             delta_bytes = 0;
         }
     }
 
 private:
-    void consume()
+    void consume(const std::string & desc_str)
     {
         assert(delta_bytes != 0);
         if (!resource_group_name.empty())
+        {
+            LOG_DEBUG(log, "gjt debug {}: bytes: {}, ru: {}", desc_str, delta_bytes, bytesToRU(delta_bytes));
             LocalAdmissionController::global_instance->consumeResource(resource_group_name, bytesToRU(delta_bytes), 0);
+
+        }
     }
 
     const std::string resource_group_name;
     uint64_t delta_bytes;
+    const LoggerPtr log = Logger::get();
 };
 using LACBytesCollectorPtr = std::unique_ptr<LACBytesCollector>;
 } // namespace DB

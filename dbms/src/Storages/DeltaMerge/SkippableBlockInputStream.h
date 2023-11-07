@@ -221,7 +221,7 @@ private:
         if (likely(scan_context != nullptr))
         {
             scan_context->total_user_read_bytes += bytes;
-            lac_bytes_collector.collect(bytes);
+            lac_bytes_collector.collect(bytes, "storage skippable block input stream");
         }
     }
     BlockInputStreams::iterator current_stream;
