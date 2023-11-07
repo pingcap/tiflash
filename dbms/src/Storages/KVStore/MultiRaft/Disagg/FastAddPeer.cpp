@@ -14,6 +14,7 @@
 
 #include <Common/FailPoint.h>
 #include <Common/TiFlashMetrics.h>
+#include <Common/setThreadName.h>
 #include <Encryption/PosixRandomAccessFile.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
@@ -248,12 +249,12 @@ bool tryResetPeerIdInRegion(RegionPtr region, const RegionLocalState & region_st
 FastAddPeerRes FastAddPeerImpl(EngineStoreServerWrap * server, uint64_t region_id, uint64_t new_peer_id)
 {
     bool is_building_finish_recorded = false;
-    auto after_build = [](){
+    auto after_build = [&](){
         if (!is_building_finish_recorded) {
             GET_METRIC(tiflash_fap_task_state, type_building).Decrement();
             is_building_finish_recorded = true;
         }
-    }
+    };
     SCOPE_EXIT({ after_build(); });
     try
     {
@@ -384,6 +385,9 @@ FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, u
         {
             // We need to schedule the task.
             auto res = fap_ctx->tasks_trace->addTask(region_id, [server, region_id, new_peer_id]() {
+                std::string origin_name = getThreadName();
+                SCOPE_EXIT({ setThreadName(origin_name.c_str()); });
+                setThreadName("fap-worker");
                 return FastAddPeerImpl(server, region_id, new_peer_id);
             });
             if (res)
