@@ -172,7 +172,7 @@ public:
         const SpillConfig & build_spill_config_,
         const SpillConfig & probe_spill_config_,
         const RestoreConfig & restore_config_,
-        const Names & tidb_output_column_names_,
+        const NamesAndTypes & output_columns_,
         const RegisterOperatorSpillContext & register_operator_spill_context_,
         AutoSpillTrigger * auto_spill_trigger_,
         const TiDB::TiDBCollators & collators_,
@@ -325,6 +325,9 @@ public:
 
     const JoinProfileInfoPtr profile_info = std::make_shared<JoinProfileInfo>();
     HashJoinSpillContextPtr hash_join_spill_context;
+    const Block & getOutputBlock() const { return output_block_after_finalize; }
+    const Names & getRequiredColumns() const { return required_columns; }
+    void finalize(const Names & parent_require);
 
 private:
     friend class ScanHashMapAfterProbeBlockInputStream;
@@ -409,11 +412,16 @@ private:
     Sizes key_sizes;
 
     /// Block with columns from the right-side table except key columns.
-    Block sample_block_with_columns_to_add;
+    Block sample_block_without_keys;
     /// Block with key columns in the same order they appear in the right-side table.
-    Block sample_block_with_keys;
+    Block sample_block_only_keys;
 
-    Names tidb_output_column_names;
+    NamesAndTypes output_columns;
+    NamesAndTypes output_columns_after_finalize;
+    Block output_block_after_finalize;
+    NameSet output_column_names_set_after_finalize;
+    NameSet output_columns_names_set_for_other_condition_after_finalize;
+    Names required_columns;
 
     bool is_test;
 

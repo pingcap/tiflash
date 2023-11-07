@@ -205,11 +205,11 @@ ScanHashMapAfterProbeBlockInputStream::ScanHashMapAfterProbeBlockInputStream(
     else
         result_sample_block = materializeBlock(left_sample_block);
 
-    size_t num_columns_right = parent.sample_block_with_columns_to_add.columns();
+    size_t num_columns_right = parent.sample_block_without_keys.columns();
     /// Add columns from the right-side table to the block.
     for (size_t i = 0; i < num_columns_right; ++i)
     {
-        const ColumnWithTypeAndName & src_column = parent.sample_block_with_columns_to_add.getByPosition(i);
+        const ColumnWithTypeAndName & src_column = parent.sample_block_without_keys.getByPosition(i);
         result_sample_block.insert(src_column.cloneEmpty());
     }
 
@@ -239,11 +239,7 @@ ScanHashMapAfterProbeBlockInputStream::ScanHashMapAfterProbeBlockInputStream(
     columns_right.resize(num_columns_right);
     current_partition_index = index;
 
-    for (const auto & name : parent.tidb_output_column_names)
-    {
-        auto & column = result_sample_block.getByName(name);
-        projected_sample_block.insert(column);
-    }
+    projected_sample_block = parent.removeUselessColumn(result_sample_block);
 }
 
 Block ScanHashMapAfterProbeBlockInputStream::readImpl()
@@ -342,14 +338,7 @@ Block ScanHashMapAfterProbeBlockInputStream::readImpl()
     for (size_t i = 0; i < num_columns_right; ++i)
         res.getByPosition(column_indices_right[i]).column = std::move(columns_right[i]);
 
-    /// remove useless columns
-    Block projected_block;
-    for (const auto & name : parent.tidb_output_column_names)
-    {
-        auto & column = res.getByName(name);
-        projected_block.insert(std::move(column));
-    }
-    return projected_block;
+    return parent.removeUselessColumn(res);
 }
 
 template <bool row_flagged, bool output_joined_rows>

@@ -137,7 +137,7 @@ void ProbeProcessInfo::prepareForCrossProbe(
         const ColumnWithTypeAndName & src_column = sample_block_with_columns_to_add.getByPosition(i);
         RUNTIME_CHECK_MSG(
             !result_block_schema.has(src_column.name),
-            "block from probe side has a column with the same name: {} as a column in sample_block_with_columns_to_add",
+            "block from probe side has a column with the same name: {} as a column in sample_block_without_keys",
             src_column.name);
         result_block_schema.insert(src_column);
     }

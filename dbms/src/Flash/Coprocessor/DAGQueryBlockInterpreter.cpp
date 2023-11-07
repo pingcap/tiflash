@@ -324,9 +324,6 @@ void DAGQueryBlockInterpreter::handleJoin(
         left_input_header,
         right_input_header,
         join_non_equal_conditions.other_cond_expr != nullptr);
-    Names join_output_column_names;
-    for (const auto & col : join_output_columns)
-        join_output_column_names.emplace_back(col.name);
     JoinPtr join_ptr = std::make_shared<Join>(
         probe_key_names,
         build_key_names,
@@ -338,7 +335,7 @@ void DAGQueryBlockInterpreter::handleJoin(
         build_spill_config,
         probe_spill_config,
         RestoreConfig{settings.join_restore_concurrency, 0, 0},
-        join_output_column_names,
+        join_output_columns,
         [&](const OperatorSpillContextPtr & operator_spill_context) {
             if (context.getDAGContext() != nullptr)
             {
