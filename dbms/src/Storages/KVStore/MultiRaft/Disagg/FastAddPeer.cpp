@@ -388,7 +388,7 @@ FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, u
             auto res = fap_ctx->tasks_trace->addTask(region_id, [server, region_id, new_peer_id]() {
                 std::string origin_name = getThreadName();
                 SCOPE_EXIT({ setThreadName(origin_name.c_str()); });
-                setThreadName("fap-worker");
+                setThreadName("fap-builder");
                 return FastAddPeerImpl(server, region_id, new_peer_id);
             });
             if (res)
