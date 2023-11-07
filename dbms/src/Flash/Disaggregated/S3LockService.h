@@ -74,9 +74,9 @@ private:
         std::mutex file_mutex;
         UInt32 ref_count = 0;
 
-        void lock() { file_mutex.lock(); }
+        void lock() NO_THREAD_SAFETY_ANALYSIS { file_mutex.lock(); }
 
-        void unlock() { file_mutex.unlock(); }
+        void unlock() NO_THREAD_SAFETY_ANALYSIS { file_mutex.unlock(); }
 
         // must be protected by the mutex on the whole map
         void addRefCount() { ++ref_count; }

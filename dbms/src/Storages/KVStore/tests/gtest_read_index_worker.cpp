@@ -189,7 +189,7 @@ void ReadIndexTest::testError()
     ASSERT(GCMonitor::instance().checkClean());
     ASSERT(!GCMonitor::instance().empty());
 }
-size_t ReadIndexTest::computeCntUseHistoryTasks(ReadIndexWorkerManager & manager)
+size_t ReadIndexTest::computeCntUseHistoryTasks(ReadIndexWorkerManager & manager) NO_THREAD_SAFETY_ANALYSIS
 {
     size_t cnt_use_history_tasks = 0;
     for (auto & worker : manager.workers)
@@ -227,7 +227,7 @@ void ReadIndexTest::testBasic()
         // lock wrap
         struct TestMutexLockWrap : MutexLockWrap
         {
-            void test()
+            void test() NO_THREAD_SAFETY_ANALYSIS
             {
                 {
                     auto lock = genLockGuard();

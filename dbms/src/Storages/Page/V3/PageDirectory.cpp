@@ -77,6 +77,7 @@ namespace PS::V3
 
 template <typename Trait>
 void VersionedPageEntries<Trait>::createNewEntry(const PageVersion & ver, const PageEntryV3 & entry)
+    NO_THREAD_SAFETY_ANALYSIS
 {
     auto page_lock = acquireLock();
     if (type == EditRecordType::VAR_DELETE)
@@ -135,7 +136,7 @@ template <typename Trait>
 typename VersionedPageEntries<Trait>::PageId VersionedPageEntries<Trait>::createUpsertEntry(
     const PageVersion & ver,
     const PageEntryV3 & entry,
-    bool strict_check)
+    bool strict_check) NO_THREAD_SAFETY_ANALYSIS
 {
     auto page_lock = acquireLock();
 
@@ -232,7 +233,7 @@ typename VersionedPageEntries<Trait>::PageId VersionedPageEntries<Trait>::create
 template <typename Trait>
 std::shared_ptr<typename VersionedPageEntries<Trait>::PageId> VersionedPageEntries<Trait>::createNewExternal(
     const PageVersion & ver,
-    const PageEntryV3 & entry)
+    const PageEntryV3 & entry) NO_THREAD_SAFETY_ANALYSIS
 {
     auto page_lock = acquireLock();
     if (type == EditRecordType::VAR_DELETE)
@@ -288,7 +289,7 @@ std::shared_ptr<typename VersionedPageEntries<Trait>::PageId> VersionedPageEntri
 
 // Create a new delete version with version=`ver`.
 template <typename Trait>
-void VersionedPageEntries<Trait>::createDelete(const PageVersion & ver)
+void VersionedPageEntries<Trait>::createDelete(const PageVersion & ver) NO_THREAD_SAFETY_ANALYSIS
 {
     auto page_lock = acquireLock();
     if (type == EditRecordType::VAR_ENTRY)
@@ -323,6 +324,7 @@ void VersionedPageEntries<Trait>::createDelete(const PageVersion & ver)
 
 template <typename Trait>
 bool VersionedPageEntries<Trait>::updateLocalCacheForRemotePage(const PageVersion & ver, const PageEntryV3 & entry)
+    NO_THREAD_SAFETY_ANALYSIS
 {
     auto page_lock = acquireLock();
     if (type == EditRecordType::VAR_ENTRY)
@@ -353,6 +355,7 @@ bool VersionedPageEntries<Trait>::updateLocalCacheForRemotePage(const PageVersio
 // If create success, then return true, otherwise return false.
 template <typename Trait>
 bool VersionedPageEntries<Trait>::createNewRef(const PageVersion & ver, const PageId & ori_page_id_)
+    NO_THREAD_SAFETY_ANALYSIS
 {
     auto page_lock = acquireLock();
     if (type == EditRecordType::VAR_DELETE)
@@ -408,7 +411,7 @@ bool VersionedPageEntries<Trait>::createNewRef(const PageVersion & ver, const Pa
 
 template <typename Trait>
 std::shared_ptr<typename VersionedPageEntries<Trait>::PageId> VersionedPageEntries<Trait>::fromRestored(
-    const typename PageEntriesEdit::EditRecord & rec)
+    const typename PageEntriesEdit::EditRecord & rec) NO_THREAD_SAFETY_ANALYSIS
 {
     auto page_lock = acquireLock();
     switch (rec.type)
@@ -448,7 +451,7 @@ std::shared_ptr<typename VersionedPageEntries<Trait>::PageId> VersionedPageEntri
 
 template <typename Trait>
 std::tuple<ResolveResult, typename VersionedPageEntries<Trait>::PageId, PageVersion> VersionedPageEntries<
-    Trait>::resolveToPageId(UInt64 seq, bool ignore_delete, PageEntryV3 * entry)
+    Trait>::resolveToPageId(UInt64 seq, bool ignore_delete, PageEntryV3 * entry) NO_THREAD_SAFETY_ANALYSIS
 {
     auto page_lock = acquireLock();
     if (type == EditRecordType::VAR_ENTRY)
@@ -512,7 +515,7 @@ std::tuple<ResolveResult, typename VersionedPageEntries<Trait>::PageId, PageVers
 }
 
 template <typename Trait>
-std::optional<PageEntryV3> VersionedPageEntries<Trait>::getEntry(UInt64 seq) const
+std::optional<PageEntryV3> VersionedPageEntries<Trait>::getEntry(UInt64 seq) const NO_THREAD_SAFETY_ANALYSIS
 {
     auto page_lock = acquireLock();
     if (type == EditRecordType::VAR_ENTRY)
@@ -530,6 +533,7 @@ std::optional<PageEntryV3> VersionedPageEntries<Trait>::getEntry(UInt64 seq) con
 
 template <typename Trait>
 std::optional<PageEntryV3> VersionedPageEntries<Trait>::getLastEntry(std::optional<UInt64> seq) const
+    NO_THREAD_SAFETY_ANALYSIS
 {
     auto page_lock = acquireLock();
     if (type == EditRecordType::VAR_ENTRY)
@@ -549,6 +553,7 @@ std::optional<PageEntryV3> VersionedPageEntries<Trait>::getLastEntry(std::option
 
 template <typename Trait>
 void VersionedPageEntries<Trait>::copyCheckpointInfoFromEdit(const typename PageEntriesEdit::EditRecord & edit)
+    NO_THREAD_SAFETY_ANALYSIS
 {
     // We have a running PageStorage instance, and did a checkpoint dump. The checkpoint dump is encoded using
     // PageEntriesEdit. During the checkpoint dump, this function is invoked so that we can write back where
@@ -601,7 +606,7 @@ void VersionedPageEntries<Trait>::copyCheckpointInfoFromEdit(const typename Page
 // If this page id is marked as deleted or not created, it is "not visible".
 // Note that not visible does not means this id can be GC.
 template <typename Trait>
-bool VersionedPageEntries<Trait>::isVisible(UInt64 seq) const
+bool VersionedPageEntries<Trait>::isVisible(UInt64 seq) const NO_THREAD_SAFETY_ANALYSIS
 {
     auto page_lock = acquireLock();
     if (type == EditRecordType::VAR_DELETE)
@@ -636,6 +641,7 @@ bool VersionedPageEntries<Trait>::isVisible(UInt64 seq) const
 
 template <typename Trait>
 Int64 VersionedPageEntries<Trait>::incrRefCount(const PageVersion & target_ver, const PageVersion & ref_ver)
+    NO_THREAD_SAFETY_ANALYSIS
 {
     auto page_lock = acquireLock();
     if (type == EditRecordType::VAR_ENTRY)
@@ -687,7 +693,7 @@ PageSize VersionedPageEntries<Trait>::getEntriesByBlobIds(
     const std::unordered_set<BlobFileId> & blob_ids,
     const PageId & page_id,
     GcEntriesMap & blob_versioned_entries,
-    std::map<PageId, std::tuple<PageId, PageVersion>> & ref_ids_maybe_rewrite)
+    std::map<PageId, std::tuple<PageId, PageVersion>> & ref_ids_maybe_rewrite) NO_THREAD_SAFETY_ANALYSIS
 {
     // `blob_versioned_entries`:
     // blob_file_0, [<page_id_0, ver0, entry0>,
@@ -857,7 +863,7 @@ bool VersionedPageEntries<Trait>::derefAndClean(
     const typename Trait::PageId & page_id,
     const PageVersion & deref_ver,
     const Int64 deref_count,
-    PageEntriesV3 * entries_removed)
+    PageEntriesV3 * entries_removed) NO_THREAD_SAFETY_ANALYSIS
 {
     auto page_lock = acquireLock();
     if (type == EditRecordType::VAR_EXTERNAL)
@@ -913,6 +919,7 @@ bool VersionedPageEntries<Trait>::derefAndClean(
 
 template <typename Trait>
 void VersionedPageEntries<Trait>::collapseTo(const UInt64 seq, const PageId & page_id, PageEntriesEdit & edit)
+    NO_THREAD_SAFETY_ANALYSIS
 {
     auto page_lock = acquireLock();
     if (type == EditRecordType::VAR_REF)
@@ -2040,6 +2047,7 @@ size_t PageDirectory<Trait>::copyCheckpointInfoFromEdit(const PageEntriesEdit & 
 
 template <typename Trait>
 typename PageDirectory<Trait>::PageEntries PageDirectory<Trait>::gcInMemEntries(const InMemGCOption & options)
+    NO_THREAD_SAFETY_ANALYSIS
 {
     UInt64 lowest_seq = sequence.load();
 

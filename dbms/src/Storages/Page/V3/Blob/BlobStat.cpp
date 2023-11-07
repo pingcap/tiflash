@@ -189,7 +189,7 @@ void BlobStats::eraseStat(BlobFileId blob_file_id, const std::lock_guard<std::mu
     eraseStat(std::move(stat), lock);
 }
 
-void BlobStats::setAllToReadOnly()
+void BlobStats::setAllToReadOnly() NO_THREAD_SAFETY_ANALYSIS
 {
     auto lock_stats = lock();
     for (const auto & [path, stats] : stats_map)
@@ -258,7 +258,7 @@ std::pair<BlobStats::BlobStatPtr, BlobFileId> BlobStats::chooseStat(
     return std::make_pair(nullptr, next_id);
 }
 
-BlobStats::BlobStatPtr BlobStats::blobIdToStat(BlobFileId file_id, bool ignore_not_exist)
+BlobStats::BlobStatPtr BlobStats::blobIdToStat(BlobFileId file_id, bool ignore_not_exist) NO_THREAD_SAFETY_ANALYSIS
 {
     auto guard = lock();
     for (const auto & [path, stats] : stats_map)
