@@ -33,7 +33,7 @@ struct fmt::formatter<DB::PS::V3::BlobFileGCInfo>
     template <typename FormatContext>
     auto format(const DB::PS::V3::BlobFileGCInfo & i, FormatContext & ctx) const
     {
-        return format_to(ctx.out(), "<id:{} rate:{:.2f}>", i.blob_id, i.valid_rate);
+        return fmt::format_to(ctx.out(), "<id:{} rate:{:.2f}>", i.blob_id, i.valid_rate);
     }
 };
 template <>
@@ -51,7 +51,7 @@ struct fmt::formatter<DB::PS::V3::BlobFileTruncateInfo>
     template <typename FormatContext>
     auto format(const DB::PS::V3::BlobFileTruncateInfo & i, FormatContext & ctx) const
     {
-        return format_to(
+        return fmt::format_to(
             ctx.out(),
             "<id:{} origin:{} truncate:{} rate:{:.2f}>",
             i.blob_id,

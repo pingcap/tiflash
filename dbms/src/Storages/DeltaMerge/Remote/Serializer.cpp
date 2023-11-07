@@ -93,7 +93,9 @@ RemotePb::RemoteSegment Serializer::serializeTo(
         auto * remote_file = remote.add_stable_pages();
         remote_file->set_page_id(dt_file->pageId());
         auto * checkpoint_info = remote_file->mutable_checkpoint_info();
+#ifndef DBMS_PUBLIC_GTEST // Don't not check path in unittests.
         RUNTIME_CHECK(startsWith(dt_file->path(), "s3://"), dt_file->path());
+#endif
         checkpoint_info->set_data_file_id(dt_file->path()); // It should be a key to remote path
     }
     remote.mutable_column_files_memtable()->CopyFrom(
@@ -125,7 +127,7 @@ SegmentSnapshotPtr Serializer::deserializeSegmentSnapshotFrom(
         segment_range = RowKeyRange::deserialize(rb);
     }
 
-    auto data_store = dm_context.db_context.getSharedContextDisagg()->remote_data_store;
+    auto data_store = dm_context.global_context.getSharedContextDisagg()->remote_data_store;
 
     auto delta_snap = std::make_shared<DeltaValueSnapshot>(CurrentMetrics::DT_SnapshotOfDisaggReadNodeRead);
     delta_snap->is_update = false;
@@ -136,7 +138,7 @@ SegmentSnapshotPtr Serializer::deserializeSegmentSnapshotFrom(
     // Note: At this moment, we still cannot read from `delta_snap->mem_table_snap` and `delta_snap->persisted_files_snap`,
     // because they are constructed using ColumnFileDataProviderNop.
 
-    auto delta_index_cache = dm_context.db_context.getSharedContextDisagg()->rn_delta_index_cache;
+    auto delta_index_cache = dm_context.global_context.getSharedContextDisagg()->rn_delta_index_cache;
     if (delta_index_cache)
     {
         delta_snap->shared_delta_index = delta_index_cache->getDeltaIndex({
@@ -163,6 +165,7 @@ SegmentSnapshotPtr Serializer::deserializeSegmentSnapshotFrom(
         auto remote_key = stable_file.checkpoint_info().data_file_id();
         auto prepared = data_store->prepareDMFileByKey(remote_key);
         auto dmfile = prepared->restore(DMFile::ReadMetaMode::all());
+        RUNTIME_CHECK(dmfile != nullptr, remote_key);
         dmfiles.emplace_back(std::move(dmfile));
     }
     new_stable->setFiles(dmfiles, segment_range, &dm_context);
@@ -389,7 +392,6 @@ ColumnFileBigPtr Serializer::deserializeCFBig(
 {
     RUNTIME_CHECK(proto.has_checkpoint_info());
     LOG_DEBUG(Logger::get(), "Rebuild local ColumnFileBig from remote, key={}", proto.checkpoint_info().data_file_id());
-
     auto prepared = data_store->prepareDMFileByKey(proto.checkpoint_info().data_file_id());
     auto dmfile = prepared->restore(DMFile::ReadMetaMode::all());
     auto * cf_big = new ColumnFileBig(dmfile, proto.valid_rows(), proto.valid_bytes(), segment_range);

@@ -105,6 +105,8 @@ public:
     /// Thread safe part end
     String detailInfo() const { return columnFilesToString(persisted_files); }
 
+    const ColumnFilePersisteds & getFiles() const { return persisted_files; }
+
     void saveMeta(WriteBatches & wbs) const;
 
     void recordRemoveColumnFilesPages(WriteBatches & wbs) const;

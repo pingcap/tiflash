@@ -80,12 +80,12 @@ private:
         DAGPipeline & pipeline,
         const ExpressionActionsPtr & expressionActionsPtr,
         String & filter_column,
-        const String & extra_info = "");
-    void executeWindowOrder(DAGPipeline & pipeline, SortDescription sort_desc, bool enable_fine_grained_shuffle);
-    void executeOrder(DAGPipeline & pipeline, const NamesAndTypes & order_columns);
+        const String & extra_info = "") const;
+    void executeWindowOrder(DAGPipeline & pipeline, SortDescription sort_desc, bool enable_fine_grained_shuffle) const;
+    void executeOrder(DAGPipeline & pipeline, const NamesAndTypes & order_columns) const;
     void executeLimit(DAGPipeline & pipeline);
-    void executeExpand(DAGPipeline & pipeline, const ExpressionActionsPtr & expr);
-    void executeExpand2(DAGPipeline & pipeline, const Expand2Ptr & expand);
+    void executeExpand(DAGPipeline & pipeline, const ExpressionActionsPtr & expr) const;
+    void executeExpand2(DAGPipeline & pipeline, const Expand2Ptr & expand) const;
     void executeWindow(
         DAGPipeline & pipeline,
         WindowDescription & window_description,
@@ -98,9 +98,9 @@ private:
         AggregateDescriptions & aggregate_descriptions,
         bool is_final_agg,
         bool enable_fine_grained_shuffle);
-    void executeProject(DAGPipeline & pipeline, NamesWithAliases & project_cols, const String & extra_info = "");
+    void executeProject(DAGPipeline & pipeline, NamesWithAliases & project_cols, const String & extra_info = "") const;
     void handleExchangeSender(DAGPipeline & pipeline);
-    void handleMockExchangeSender(DAGPipeline & pipeline);
+    void handleMockExchangeSender(DAGPipeline & pipeline) const;
 
     void recordProfileStreams(DAGPipeline & pipeline, const String & key);
 

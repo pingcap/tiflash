@@ -46,13 +46,13 @@ void SegmentReadTaskScheduler::add(const SegmentReadTaskPoolPtr & pool)
     auto block_slots = pool->getFreeBlockSlots();
     LOG_DEBUG(
         log,
-        "Added, pool_id={} block_slots={} segment_count={} pool_count={} cost={}ns do_add_cost={}ns", //
+        "Added, pool_id={} block_slots={} segment_count={} pool_count={} cost={:.3f}us do_add_cost={:.3f}us", //
         pool->pool_id,
         block_slots,
         tasks.size(),
         read_pools.size(),
-        sw_add.elapsed(),
-        sw_do_add.elapsed());
+        sw_add.elapsed() / 1000.0,
+        sw_do_add.elapsed() / 1000.0);
 }
 
 std::pair<MergedTaskPtr, bool> SegmentReadTaskScheduler::scheduleMergedTask()

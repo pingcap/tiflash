@@ -49,10 +49,9 @@ struct CPUAffinityConfig
     int query_cpu_percent;
     int cpu_cores;
     // query_threads are the {thread name prefix}.
-    // cop-pool and batch-cop-pool are the thread name of thread-pool that handle coprocessor request.
     // grpcpp_sync_ser is the thread name of grpc sync request thread-pool. However, this thread-pool is resize dynamically and we set these threads' cpu affinity in FlashService for simplicity.
     // Query threads of MPP tasks are created dynamiccally and we set these threads' cpu affinity when they are created.
-    std::vector<std::string> query_threads = {"cop-pool", "batch-cop-pool", "grpcpp_sync_ser"};
+    std::vector<std::string> query_threads = {"grpcpp_sync_ser"};
 };
 
 // CPUAffinityManager is a singleton.
