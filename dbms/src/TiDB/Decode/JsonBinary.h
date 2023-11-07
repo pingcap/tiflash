@@ -122,8 +122,13 @@ public:
     /// Opaque represents a raw database binary type
     struct Opaque
     {
+        Opaque(UInt8 type_, const StringRef & data_)
+            : type(type_)
+            , data(data_)
+        {}
+
         // TypeCode is the same with TiDB database type code
-        UInt8 type{TYPE_CODE_OBJECT};
+        UInt8 type;
         // Buf is the underlying bytes of the data
         StringRef data;
     };
