@@ -22,7 +22,9 @@
 #include <common/StringRef.h>
 #include <common/memcpy.h>
 
+#include <type_traits>
 #include <unordered_set>
+#include "common/types.h"
 
 namespace DB
 {
@@ -152,6 +154,12 @@ public:
     static void SkipJson(size_t & cursor, const String & raw_value);
     static String DecodeJsonAsBinary(size_t & cursor, const String & raw_value);
 
+    static void appendJsonBinary(JsonBinaryWriteBuffer & write_buffer, bool value);
+    static void appendJsonBinary(JsonBinaryWriteBuffer & write_buffer, UInt64 value);
+    static void appendJsonBinary(JsonBinaryWriteBuffer & write_buffer, Int64 value);
+    static void appendJsonBinary(JsonBinaryWriteBuffer & write_buffer, Float64 value);
+    static void appendJsonBinary(JsonBinaryWriteBuffer & write_buffer, const StringRef & value);
+
 private:
     Int64 getInt64() const;
     UInt64 getUInt64() const;
@@ -196,6 +204,7 @@ private:
     static void marshalOpaqueTo(JsonBinaryWriteBuffer & write_buffer, const Opaque & o);
     static void marshalDurationTo(JsonBinaryWriteBuffer & write_buffer, Int64 duration, UInt32 fsp);
 
+private:
     JsonType type;
     /// 'data' doesn't contain type byte.
     /// In this way, when we construct new JsonBinary object for child field, new object's 'data' field can directly reference original object's data memory as a slice

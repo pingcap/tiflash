@@ -64,6 +64,14 @@ inline T decodeNumeric(size_t & cursor, const StringRef & raw_value)
     return res;
 }
 
+template <typename T>
+inline void encodeNumeric(JsonBinary::JsonBinaryWriteBuffer & write_buffer, T value)
+{
+    toLittleEndianInPlace(value);
+    const char * from = reinterpret_cast<const char *>(&value);
+    write_buffer.write(from, sizeof(T));
+}
+
 char JsonBinary::getChar(size_t offset) const
 {
     RUNTIME_CHECK(offset < data.size);
@@ -785,9 +793,8 @@ void JsonBinary::buildBinaryJsonElementsInBuffer(
         }
         else
         {
-            auto endian_value_offset = value_offset;
-            toLittleEndianInPlace<UInt32>(endian_value_offset);
-            write_buffer.write(reinterpret_cast<const char *>(&endian_value_offset), sizeof(endian_value_offset));
+            UInt32 endian_value_offset = value_offset;
+            encodeNumeric(write_buffer, endian_value_offset);
             /// update value_offset
             value_offset += bj.data.size;
         }
@@ -815,11 +822,9 @@ void JsonBinary::buildBinaryJsonArrayInBuffer(
 
     write_buffer.write(TYPE_CODE_ARRAY);
     UInt32 element_count = json_binary_vec.size();
-    toLittleEndianInPlace<UInt32>(element_count);
-    write_buffer.write(reinterpret_cast<const char *>(&element_count), sizeof(element_count));
+    encodeNumeric(write_buffer, element_count);
 
-    toLittleEndianInPlace<UInt32>(total_size);
-    write_buffer.write(reinterpret_cast<const char *>(&total_size), sizeof(total_size));
+    encodeNumeric(write_buffer, total_size);
     buildBinaryJsonElementsInBuffer(json_binary_vec, write_buffer);
 }
 
@@ -839,5 +844,36 @@ UInt64 GetJsonLength(const std::string_view & raw_value)
     default:
         return 1;
     }
+}
+
+void JsonBinary::appendJsonBinary(JsonBinaryWriteBuffer & write_buffer, bool value)
+{
+    write_buffer.write(TYPE_CODE_LITERAL);
+    write_buffer.write(value ? LITERAL_TRUE : LITERAL_FALSE);
+}
+
+void JsonBinary::appendJsonBinary(JsonBinaryWriteBuffer & write_buffer, UInt64 value)
+{
+    write_buffer.write(TYPE_CODE_UINT64);
+    encodeNumeric(write_buffer, value);
+}
+
+void JsonBinary::appendJsonBinary(JsonBinaryWriteBuffer & write_buffer, Int64 value)
+{
+    write_buffer.write(TYPE_CODE_INT64);
+    encodeNumeric(write_buffer, value);
+}
+
+void JsonBinary::appendJsonBinary(JsonBinaryWriteBuffer & write_buffer, Float64 value)
+{
+    write_buffer.write(TYPE_CODE_FLOAT64);
+    encodeNumeric(write_buffer, value);
+}
+
+void JsonBinary::appendJsonBinary(JsonBinaryWriteBuffer & write_buffer, const StringRef & value)
+{
+    write_buffer.write(TYPE_CODE_STRING);
+    EncodeVarUInt(static_cast<UInt64>(value.size), write_buffer);
+    write_buffer.write(value.data, value.size);
 }
 } // namespace DB
