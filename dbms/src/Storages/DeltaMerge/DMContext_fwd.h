@@ -12,18 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Interpreters/Context.h>
-#include <Storages/DeltaMerge/DMContext.h>
+#pragma once
+
+#include <memory>
 
 namespace DB::DM
 {
-WriteLimiterPtr DMContext::getWriteLimiter() const
-{
-    return global_context.getWriteLimiter();
-}
-ReadLimiterPtr DMContext::getReadLimiter() const
-{
-    return global_context.getReadLimiter();
-}
+
+struct DMContext;
+using DMContextPtr = std::shared_ptr<DMContext>;
 
 } // namespace DB::DM

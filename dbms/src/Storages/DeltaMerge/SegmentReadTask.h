@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/Remote/DisaggTaskId.h>
 #include <Storages/DeltaMerge/Remote/Proto/remote.pb.h>
 #include <Storages/DeltaMerge/Remote/RNLocalPageCache.h>
