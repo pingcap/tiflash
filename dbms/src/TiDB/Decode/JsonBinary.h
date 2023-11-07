@@ -152,6 +152,10 @@ public:
     static void SkipJson(size_t & cursor, const String & raw_value);
     static String DecodeJsonAsBinary(size_t & cursor, const String & raw_value);
 
+    static void buildBinaryJsonArrayInBuffer(
+        const std::vector<JsonBinary> & json_binary_vec,
+        JsonBinaryWriteBuffer & write_buffer);
+
 private:
     Int64 getInt64() const;
     UInt64 getUInt64() const;
@@ -184,9 +188,6 @@ private:
     template <class WriteBuffer>
     static void unquoteJsonStringInBuffer(const StringRef & ref, WriteBuffer & write_buffer);
     static void buildBinaryJsonElementsInBuffer(
-        const std::vector<JsonBinary> & json_binary_vec,
-        JsonBinaryWriteBuffer & write_buffer);
-    static void buildBinaryJsonArrayInBuffer(
         const std::vector<JsonBinary> & json_binary_vec,
         JsonBinaryWriteBuffer & write_buffer);
     static void marshalFloat64To(JsonBinaryWriteBuffer & write_buffer, double f);

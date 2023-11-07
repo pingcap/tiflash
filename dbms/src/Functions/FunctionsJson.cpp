@@ -15,7 +15,6 @@
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionsJson.h>
 #include <Functions/GatherUtils/Sources.h>
-#include <Functions/GatherUtils/Sinks.h>
 #include <TiDB/Decode/JsonBinary.h>
 
 #include <ext/range.h>
@@ -324,7 +323,7 @@ public:
             if (!arguments[arg_idx]->onlyNull())
             {
                 const auto * arg = removeNullable(arguments[arg_idx]).get();
-                if (!arg->isString())
+                if (!arg->isStringOrFixedString())
                     throw Exception(
                         ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
                         "Illegal type {} of argument {} of function {}",
@@ -342,50 +341,49 @@ public:
         StringSources sources;
         for (auto column_number : arguments)
         {
-            if (!block.getByPosition(column_number).type->onlyNull())
-                sources.push_back(createDynamicStringSource(*nested_block.getByPosition(column_number).column));
-            else
-                sources.push_back(nullptr);
+            const auto & col = block.getByPosition(column_number);
+            sources.push_back(col.type->onlyNull() ? nullptr : createDynamicStringSource(*col.column));
         }
 
         auto rows = block.rows();
-        auto res = ColumnString::create();
-        StringSink sink(*res, rows);
-        for (size_t row = 0; row < block.rows(); ++row)
+        auto col_to = ColumnString::create();
+        ColumnString::Chars_t & data_to = col_to->getChars();
+        WriteBufferFromVector<ColumnString::Chars_t> write_buffer(data_to);
+        ColumnString::Offsets & offsets_to = col_to->getOffsets();
+        offsets_to.resize(rows);
+
+        std::vector<JsonBinary> jsons;
+        jsons.reserve(sources.size());
+        for (size_t i = 0; i < rows; ++i)
         {
-            std::vector<JsonBinary> cur_buffer;
-            cur_buffer.reserve(sources.size());
             for (size_t col = 0; col < sources.size(); ++col)
             {
-                if (!sources[col])
+                if (sources[col] && !block.getByPosition(arguments[col]).column->isNullAt(i))
                 {
-                    JsonBinary binary{TYPE_CODE_LITERAL};
+                    const auto & data_from = sources[col]->getWhole();
+                    jsons.emplace_back(data_from.data[0], StringRef(&data_from.data[1], data_from.size - 1));
                 }
                 else
                 {
-
+                    jsons.emplace_back(JsonBinary::TYPE_CODE_LITERAL, StringRef(&JsonBinary::LITERAL_NIL, 1));
                 }
             }
-            for (auto column_number : arguments)
+            JsonBinary::buildBinaryJsonArrayInBuffer(jsons, write_buffer);
+            jsons.clear();
+            writeChar(0, write_buffer);
+            offsets_to[i] = write_buffer.count();
+            for (const auto & source : sources)
             {
-
+                if (source)
+                    source->next();
             }
-            if (!block.getByPosition(not_only_null_arguments[col]).column->isNullAt(row))
-            {
-                if (has_not_null)
-                    writeSlice(sources[0]->getWhole(), sink);
-                else
-                    has_not_null = true;
-                writeSlice(sources[col]->getWhole(), sink);
-            }
-            for (auto & source : sources)
-                source->next();
-            sink.next();
         }
-        block.getByPosition(result).column = std::move(res);
+        data_to.resize(write_buffer.count());
+
+        block.getByPosition(result).column = std::move(col_to);
     }
 };
-}
+} // namespace
 
 void registerFunctionsJson(FunctionFactory & factory)
 {
@@ -393,5 +391,6 @@ void registerFunctionsJson(FunctionFactory & factory)
     factory.registerFunction<FunctionsJsonUnquote>();
     factory.registerFunction<FunctionsCastJsonAsString>();
     factory.registerFunction<FunctionJsonLength>();
+    factory.registerFunction<FunctionsJsonArray>();
 }
 } // namespace DB
