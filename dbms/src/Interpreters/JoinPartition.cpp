@@ -1286,12 +1286,12 @@ struct Adder<ASTTableJoin::Kind::LeftOuterSemi, ASTTableJoin::Strictness::Any, M
 std::pair<bool, bool> checkCachedColumnInfo(const std::unique_ptr<CachedColumnInfo> & cached_column_info)
 {
     std::unique_lock lock(cached_column_info->mu);
-    bool has_cached_columns = !cached_column_info->columns.empty();
+    bool has_cached_columns = cached_column_info->state == CachedColumnState::CACHED;
     if (!has_cached_columns)
     {
-        if (!cached_column_info->generate_cached_columns)
+        if (cached_column_info->state == CachedColumnState::NOT_CACHED)
         {
-            cached_column_info->generate_cached_columns = true;
+            cached_column_info->state = CachedColumnState::CONSTRUCT_CACHE;
             return {false, true};
         }
         else
@@ -1308,6 +1308,8 @@ void insertCachedColumns(
     size_t rows_added,
     size_t columns_to_added)
 {
+    if (columns_to_added == 0)
+        return;
     if (added_columns[0]->empty())
     {
         for (size_t j = 0; j < columns_to_added; ++j)
@@ -1324,21 +1326,38 @@ void insertCachedColumns(
     }
 }
 
-Columns constructCachedColumns(MutableColumns & added_columns, size_t rows, size_t columns)
+void cacheColumns(
+    const std::unique_ptr<CachedColumnInfo> & cached_column_info,
+    MutableColumns & added_columns,
+    size_t rows,
+    size_t columns)
 {
     Columns cached_columns;
-    size_t start_offset = added_columns[0]->size() - rows;
-    if (start_offset == 0)
+    if (columns > 0)
     {
-        for (size_t j = 0; j < columns; ++j)
-            cached_columns.push_back(added_columns[j]->cloneFullColumn());
+        assert(added_columns[0]->size() >= rows);
+        size_t start_offset = added_columns[0]->size() - rows;
+        if (start_offset == 0)
+        {
+            for (size_t j = 0; j < columns; ++j)
+                cached_columns.push_back(added_columns[j]->cloneFullColumn());
+        }
+        else
+        {
+            for (size_t j = 0; j < columns; ++j)
+                cached_columns.push_back(added_columns[j]->cut(start_offset, rows));
+        }
     }
-    else
+    std::unique_lock lock(cached_column_info->mu);
+    if (!cached_columns.empty())
     {
-        for (size_t j = 0; j < columns; ++j)
-            cached_columns.push_back(added_columns[j]->cut(start_offset, rows));
+        assert(cached_column_info->columns.empty());
+        cached_column_info->columns.insert(
+            cached_column_info->columns.end(),
+            cached_columns.begin(),
+            cached_columns.end());
     }
-    return cached_columns;
+    cached_column_info->state = CachedColumnState::CACHED;
 }
 
 template <typename Map>
@@ -1394,13 +1413,7 @@ struct Adder<ASTTableJoin::Kind::LeftOuterSemi, ASTTableJoin::Strictness::All, M
 
         if unlikely (need_generate_cached_columns)
         {
-            auto cached_columns = constructCachedColumns(added_columns, rows_joined, num_columns_to_add - 1);
-            std::unique_lock lock(mapped_value.cached_column_info->mu);
-            assert(mapped_value.cached_column_info->columns.empty());
-            mapped_value.cached_column_info->columns.insert(
-                mapped_value.cached_column_info->columns.end(),
-                cached_columns.begin(),
-                cached_columns.end());
+            cacheColumns(mapped_value.cached_column_info, added_columns, rows_joined, num_columns_to_add - 1);
         }
         return false;
     }
@@ -1487,13 +1500,7 @@ struct Adder<KIND, ASTTableJoin::Strictness::All, Map>
 
         if unlikely (need_generate_cached_columns)
         {
-            auto cached_columns = constructCachedColumns(added_columns, rows_joined, num_columns_to_add);
-            std::unique_lock lock(mapped_value.cached_column_info->mu);
-            assert(mapped_value.cached_column_info->columns.empty());
-            mapped_value.cached_column_info->columns.insert(
-                mapped_value.cached_column_info->columns.end(),
-                cached_columns.begin(),
-                cached_columns.end());
+            cacheColumns(mapped_value.cached_column_info, added_columns, rows_joined, num_columns_to_add);
         }
         return false;
     }
@@ -1589,13 +1596,7 @@ struct RowFlaggedHashMapAdder
         (*offsets)[i] = current_offset;
         if unlikely (need_generate_cached_columns)
         {
-            auto cached_columns = constructCachedColumns(added_columns, rows_joined, num_columns_to_add + 1);
-            std::unique_lock lock(mapped_value.cached_column_info->mu);
-            assert(mapped_value.cached_column_info->columns.empty());
-            mapped_value.cached_column_info->columns.insert(
-                mapped_value.cached_column_info->columns.end(),
-                cached_columns.begin(),
-                cached_columns.end());
+            cacheColumns(mapped_value.cached_column_info, added_columns, rows_joined, num_columns_to_add + 1);
         }
         return false;
     }

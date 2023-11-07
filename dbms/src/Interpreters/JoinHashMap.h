@@ -33,11 +33,17 @@ struct RowRef
     {}
 };
 
+enum class CachedColumnState
+{
+    NOT_CACHED,
+    CONSTRUCT_CACHE,
+    CACHED,
+};
 struct CachedColumnInfo
 {
     std::mutex mu;
     Columns columns;
-    bool generate_cached_columns = false;
+    CachedColumnState state = CachedColumnState::NOT_CACHED;
 };
 
 /// Single linked list of references to rows. Used for ALL JOINs (non-unique JOINs)
