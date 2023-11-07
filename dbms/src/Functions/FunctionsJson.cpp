@@ -25,6 +25,11 @@ namespace
 {
 using namespace GatherUtils;
 
+/**
+  * json_extract(json_object, path_string...)
+  *     The function takes 1 or more path_string parameters. Return the extracted JsonObject.
+  *     Throw exception if any path_string failed to parse.
+  */
 class FunctionsJsonExtract : public IFunction
 {
 public:
@@ -246,6 +251,9 @@ private:
 };
 
 
+/**
+  * json_unquote(json_string)
+  */
 class FunctionsJsonUnquote : public IFunction
 {
 public:
@@ -302,6 +310,9 @@ public:
     }
 };
 
+/**
+  * json_array(json_object...)
+  */
 class FunctionsJsonArray : public IFunction
 {
 public:

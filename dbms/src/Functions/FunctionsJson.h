@@ -27,14 +27,8 @@
 
 namespace DB
 {
-/** Json related functions:
-  *
-  * json_extract(json_object, path_string...) -
-  *     The function takes 1 or more path_string parameters. Return the extracted JsonObject.
-  *     Throw exception if any path_string failed to parse.
-  * json_unquote(json_string)
-  * cast_json_as_string(json_object)
-  *
+/**
+  * Json related functions
   */
 
 namespace ErrorCodes
@@ -47,6 +41,9 @@ inline bool isNullJsonBinary(size_t size)
     return size == 0;
 }
 
+/**
+  * cast_json_as_string(json_object)
+  */
 class FunctionsCastJsonAsString : public IFunction
 {
 public:
@@ -117,6 +114,9 @@ public:
 
 extern UInt64 GetJsonLength(const std::string_view & sv);
 
+/**
+  * json_length(json_object)
+  */
 class FunctionJsonLength : public IFunction
 {
 public:
