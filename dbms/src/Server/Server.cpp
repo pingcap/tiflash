@@ -679,8 +679,10 @@ public:
                     LOG_INFO(log, "tcp_port_secure is closed because tls config is set");
                 }
 
+                // No TCP server is normal now because we only enable the TCP server
+                // under testing deployment
                 if (servers.empty())
-                    LOG_WARNING(log, "No TCP and HTTP servers are created");
+                    LOG_INFO(log, "No TCP server is created");
             }
             catch (const Poco::Net::NetException & e)
             {
@@ -705,12 +707,13 @@ public:
             server->start();
     }
 
+    // terminate all TCP servers when receive exit signal
     void onExit()
     {
         auto & config = server.config();
 
-        LOG_DEBUG(log, "Received termination signal.");
-        LOG_DEBUG(log, "Waiting for current connections to close.");
+        LOG_INFO(log, "Received termination signal, stopping server...");
+        LOG_INFO(log, "Waiting for current connections to close.");
 
         int current_connections = 0;
         for (auto & server : servers)
@@ -718,15 +721,11 @@ public:
             server->stop();
             current_connections += server->currentConnections();
         }
+
         String debug_msg = "Closed all listening sockets.";
-
-        if (current_connections)
-            LOG_DEBUG(log, "{} Waiting for {} outstanding connections.", debug_msg, current_connections);
-        else
-            LOG_DEBUG(log, debug_msg);
-
         if (current_connections)
         {
+            LOG_INFO(log, "{} Waiting for {} outstanding connections.", debug_msg, current_connections);
             const int sleep_max_ms = 1000 * config.getInt("shutdown_wait_unfinished", 5);
             const int sleep_one_ms = 100;
             int sleep_current_ms = 0;
@@ -741,18 +740,21 @@ public:
                 std::this_thread::sleep_for(std::chrono::milliseconds(sleep_one_ms));
             }
         }
+        else
+        {
+            LOG_INFO(log, debug_msg);
+        }
 
         debug_msg = "Closed connections.";
-
         if (current_connections)
-            LOG_DEBUG(
+            LOG_INFO(
                 log,
                 "{} But {} remains."
                 " Tip: To increase wait time add to config: <shutdown_wait_unfinished>60</shutdown_wait_unfinished>",
                 debug_msg,
                 current_connections);
         else
-            LOG_DEBUG(log, debug_msg);
+            LOG_INFO(log, debug_msg);
     }
 
 private:

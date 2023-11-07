@@ -1815,12 +1815,12 @@ UniversalPageStoragePtr Context::tryGetWriteNodePageStorage() const
     return nullptr;
 }
 
-bool Context::trySyncAllDataToRemoteStore() const
+bool Context::tryUploadAllDataToRemoteStore() const
 {
     auto lock = getLock();
     if (shared->ctx_disagg->isDisaggregatedStorageMode() && shared->ps_write)
     {
-        shared->ps_write->setSyncAllData();
+        shared->ps_write->setUploadAllData();
         return true;
     }
     return false;

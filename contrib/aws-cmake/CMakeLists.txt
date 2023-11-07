@@ -12,7 +12,14 @@ set(AWS_PUBLIC_COMPILE_DEFS)
 set(AWS_PRIVATE_COMPILE_DEFS)
 set(AWS_PRIVATE_LIBS)
 
-list(APPEND AWS_PRIVATE_COMPILE_DEFS "-DENABLE_CURL_CLIENT")
+# Versions. Note that we may update the patch under /aws-cmake to make it work
+# after upgrading the aws-sdk-cpp version.
+list(APPEND AWS_PUBLIC_COMPILE_DEFS "-DAWS_SDK_VERSION_MAJOR=1")
+list(APPEND AWS_PUBLIC_COMPILE_DEFS "-DAWS_SDK_VERSION_MINOR=11")
+list(APPEND AWS_PUBLIC_COMPILE_DEFS "-DAWS_SDK_VERSION_PATCH=186")
+
+# ignore the symbols defined in `aws/common/external/ittnotify.h`
+list(APPEND AWS_PRIVATE_COMPILE_DEFS "-DENABLE_CURL_CLIENT -DINTEL_NO_ITTNOTIFY_API")
 
 if (CMAKE_BUILD_TYPE_UC STREQUAL "DEBUG")
     list(APPEND AWS_PRIVATE_COMPILE_DEFS "-DDEBUG_BUILD")
@@ -48,7 +55,6 @@ SET(AWS_S2N_TLS_DIR "${TiFlash_SOURCE_DIR}/contrib/aws-s2n-tls")
 SET(AWS_S3_DIR "${TiFlash_SOURCE_DIR}/contrib/aws-c-s3")
 SET(AWS_SDKUTILS_DIR "${TiFlash_SOURCE_DIR}/contrib/aws-c-sdkutils")
 
-
 # aws-cpp-sdk-core
 file(GLOB AWS_SDK_CORE_SRC
     "${AWS_SDK_CORE_DIR}/source/*.cpp"
@@ -64,15 +70,18 @@ file(GLOB AWS_SDK_CORE_SRC
     "${AWS_SDK_CORE_DIR}/source/external/cjson/*.cpp"
     "${AWS_SDK_CORE_DIR}/source/external/tinyxml2/*.cpp"
     "${AWS_SDK_CORE_DIR}/source/http/*.cpp"
-    "${AWS_SDK_CORE_DIR}/source/http/standard/*.cpp"
     "${AWS_SDK_CORE_DIR}/source/http/curl/*.cpp"
+    "${AWS_SDK_CORE_DIR}/source/http/standard/*.cpp"
     "${AWS_SDK_CORE_DIR}/source/internal/*.cpp"
     "${AWS_SDK_CORE_DIR}/source/monitoring/*.cpp"
+    "${AWS_SDK_CORE_DIR}/source/smithy/*.cpp"
+    "${AWS_SDK_CORE_DIR}/source/smithy/tracing/*.cpp"
     "${AWS_SDK_CORE_DIR}/source/utils/*.cpp"
     "${AWS_SDK_CORE_DIR}/source/utils/base64/*.cpp"
+    "${AWS_SDK_CORE_DIR}/source/utils/component-registry/*.cpp"
     "${AWS_SDK_CORE_DIR}/source/utils/crypto/*.cpp"
-    "${AWS_SDK_CORE_DIR}/source/utils/crypto/openssl/*.cpp"
     "${AWS_SDK_CORE_DIR}/source/utils/crypto/factory/*.cpp"
+    "${AWS_SDK_CORE_DIR}/source/utils/crypto/openssl/*.cpp"
     "${AWS_SDK_CORE_DIR}/source/utils/event/*.cpp"
     "${AWS_SDK_CORE_DIR}/source/utils/json/*.cpp"
     "${AWS_SDK_CORE_DIR}/source/utils/logging/*.cpp"
@@ -82,6 +91,42 @@ file(GLOB AWS_SDK_CORE_SRC
     "${AWS_SDK_CORE_DIR}/source/utils/threading/*.cpp"
     "${AWS_SDK_CORE_DIR}/source/utils/xml/*.cpp"
 )
+
+execute_process(
+  COMMAND grep "GetResponseBody().peek()" "${AWS_SDK_CORE_DIR}/source/client/AWSXmlClient.cpp"
+  RESULT_VARIABLE HAVE_APPLY_PATCH)
+# grep - Normally, the exit status is 0 if selected lines are found and 1 otherwise. But the exit status is 2 if an error occurred.
+if (HAVE_APPLY_PATCH EQUAL 1)
+  message(STATUS "aws patch not apply: ${HAVE_APPLY_PATCH}, patching...")
+  ## update the patch using `git format-patch` if you upgrade aws
+  set (AWS_PATCH_FILE "${TiFlash_SOURCE_DIR}/contrib/aws-cmake/0001-More-reliable-way-to-check-if-there-is-anything-in-r.patch")
+  # apply the patch
+  execute_process(
+    COMMAND git apply -v "${AWS_PATCH_FILE}"
+    WORKING_DIRECTORY "${AWS_SDK_CORE_DIR}"
+    COMMAND_ECHO STDOUT
+    RESULT_VARIABLE PATCH_SUCC)
+  if (NOT PATCH_SUCC EQUAL 0)
+    message(FATAL_ERROR "Can not apply aws patch ${AWS_PATCH_FILE}")
+  endif ()
+
+  set (AWS_PATCH_FILE "${TiFlash_SOURCE_DIR}/contrib/aws-cmake/0002-Reduce-verbose-error-logging-and-404-for-HEAD-reques.patch")
+  # apply the patch
+  execute_process(
+    COMMAND git apply -v "${AWS_PATCH_FILE}"
+    WORKING_DIRECTORY "${AWS_SDK_CORE_DIR}"
+    COMMAND_ECHO STDOUT
+    RESULT_VARIABLE PATCH_SUCC)
+  if (NOT PATCH_SUCC EQUAL 0)
+    message(FATAL_ERROR "Can not apply aws patch ${AWS_PATCH_FILE}")
+  else ()
+    message(STATUS "aws patch done")
+  endif ()
+elseif (HAVE_APPLY_PATCH EQUAL 0)
+  message(STATUS "aws patch have been applied: ${HAVE_APPLY_PATCH}")
+else ()
+  message(FATAL_ERROR "Can not check the aws patch status")
+endif ()
 
 if(OS_LINUX OR OS_DARWIN)
     file(GLOB AWS_SDK_CORE_NET_SRC "${AWS_SDK_CORE_DIR}/source/net/linux-shared/*.cpp")
@@ -95,10 +140,6 @@ OPTION(USE_AWS_MEMORY_MANAGEMENT "Aws memory management" OFF)
 configure_file("${AWS_SDK_CORE_DIR}/include/aws/core/SDKConfig.h.in"
     "${CMAKE_CURRENT_BINARY_DIR}/include/aws/core/SDKConfig.h" @ONLY)
 
-list(APPEND AWS_PUBLIC_COMPILE_DEFS "-DAWS_SDK_VERSION_MAJOR=1")
-list(APPEND AWS_PUBLIC_COMPILE_DEFS "-DAWS_SDK_VERSION_MINOR=10")
-list(APPEND AWS_PUBLIC_COMPILE_DEFS "-DAWS_SDK_VERSION_PATCH=36")
-    
 list(APPEND AWS_SOURCES ${AWS_SDK_CORE_SRC} ${AWS_SDK_CORE_NET_SRC} ${AWS_SDK_CORE_PLATFORM_SRC})
 
 list(APPEND AWS_PUBLIC_INCLUDES
@@ -140,6 +181,8 @@ file(GLOB AWS_CAL_SRC
 )
 
 if (ENABLE_OPENSSL_ENCRYPTION)
+    # Note: We use `unix/*.c` for both OS_LINUX and OS_DARWIN
+    # `darwin/*.c` lead to compile errors
     file(GLOB AWS_CAL_OS_SRC
         "${AWS_CAL_DIR}/source/unix/*.c"
     )
@@ -204,9 +247,6 @@ list(APPEND AWS_PUBLIC_INCLUDES
 # aws-checksums
 file(GLOB AWS_CHECKSUMS_SRC
     "${AWS_CHECKSUMS_DIR}/source/*.c"
-    "${AWS_CHECKSUMS_DIR}/source/intel/*.c"
-    "${AWS_CHECKSUMS_DIR}/source/intel/asm/*.c"
-    "${AWS_CHECKSUMS_DIR}/source/arm/*.c"
 )
 
 if(AWS_ARCH_INTEL AND AWS_HAVE_GCC_INLINE_ASM)
@@ -220,14 +260,6 @@ if (AWS_ARCH_ARM64)
         "${AWS_CHECKSUMS_DIR}/source/arm/*.c"
     )
     set_source_files_properties("${AWS_CHECKSUMS_DIR}/source/arm/crc32c_arm.c" PROPERTIES COMPILE_FLAGS -march=armv8-a+crc)
-elseif (AWS_ARCH_ARM32)
-    if (AWS_ARM32_CRC)
-        file(GLOB AWS_CHECKSUMS_ARCH_SRC
-            "${AWS_CHECKSUMS_DIR}/source/arm/*.c"
-            "${AWS_CHECKSUMS_DIR}/source/arm/asm/*.c"
-        )
-        set_source_files_properties(source/arm/crc32c_arm.c PROPERTIES COMPILE_FLAGS -march=armv8-a+crc)
-    endif()
 endif()
 
 list(APPEND AWS_SOURCES ${AWS_CHECKSUMS_SRC} ${AWS_CHECKSUMS_ARCH_SRC})
@@ -248,6 +280,8 @@ elseif (OS_DARWIN)
     file(GLOB AWS_IO_OS_SRC
         "${AWS_IO_DIR}/source/bsd/*.c"
         "${AWS_IO_DIR}/source/posix/*.c"
+        # Note darwin source files leads to compile errors, ignore them
+        # "${AWS_IO_DIR}/source/darwin/*.c"
     )
 endif()
 
@@ -290,13 +324,14 @@ file(GLOB AWS_CRT_SRC
     "${AWS_CRT_DIR}/source/auth/*.cpp"
     "${AWS_CRT_DIR}/source/crypto/*.cpp"
     "${AWS_CRT_DIR}/source/endpoints/*.cpp"
-    "${AWS_CRT_DIR}/source/external/*.cpp"
     "${AWS_CRT_DIR}/source/http/*.cpp"
     "${AWS_CRT_DIR}/source/io/*.cpp"
 )
 
 list(APPEND AWS_SOURCES ${AWS_CRT_SRC})
 list(APPEND AWS_PUBLIC_INCLUDES "${AWS_CRT_DIR}/include/")
+configure_file("${AWS_CRT_DIR}/include/aws/crt/Config.h.in"
+    ${CMAKE_CURRENT_BINARY_DIR}/include/aws/crt/Config.h @ONLY)
 
 
 # aws-c-mqtt
