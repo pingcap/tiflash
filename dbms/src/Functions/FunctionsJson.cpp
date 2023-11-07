@@ -348,19 +348,21 @@ public:
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
-        Block nested_block = createBlockWithNestedColumns(block, arguments, result);
+        auto nested_block = createBlockWithNestedColumns(block, arguments, result);
         StringSources sources;
         for (auto column_number : arguments)
         {
-            const auto & col = block.getByPosition(column_number);
-            sources.push_back(col.type->onlyNull() ? nullptr : createDynamicStringSource(*col.column));
+            sources.push_back(
+                block.getByPosition(column_number).type->onlyNull()
+                    ? nullptr
+                    : createDynamicStringSource(*nested_block.getByPosition(column_number).column));
         }
 
         auto rows = block.rows();
         auto col_to = ColumnString::create();
-        ColumnString::Chars_t & data_to = col_to->getChars();
+        auto & data_to = col_to->getChars();
         WriteBufferFromVector<ColumnString::Chars_t> write_buffer(data_to);
-        ColumnString::Offsets & offsets_to = col_to->getOffsets();
+        auto & offsets_to = col_to->getOffsets();
         offsets_to.resize(rows);
 
         std::vector<JsonBinary> jsons;
