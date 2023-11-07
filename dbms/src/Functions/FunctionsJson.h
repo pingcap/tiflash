@@ -30,8 +30,16 @@
 
 namespace DB
 {
-/**
-  * Json related functions
+/** Json related functions:
+  *
+  * json_extract(json_object, path_string...) -
+  *     The function takes 1 or more path_string parameters. Return the extracted JsonObject.
+  *     Throw exception if any path_string failed to parse.
+  * json_unquote(json_string)
+  * cast_json_as_string(json_object)
+  * json_length(json_object)
+  * json_array(json_object...)
+  *
   */
 
 namespace ErrorCodes
@@ -46,11 +54,6 @@ inline bool isNullJsonBinary(size_t size)
 
 using namespace GatherUtils;
 
-/**
-  * json_extract(json_object, path_string...)
-  *     The function takes 1 or more path_string parameters. Return the extracted JsonObject.
-  *     Throw exception if any path_string failed to parse.
-  */
 class FunctionsJsonExtract : public IFunction
 {
 public:
@@ -272,9 +275,6 @@ private:
 };
 
 
-/**
-  * json_unquote(json_string)
-  */
 class FunctionsJsonUnquote : public IFunction
 {
 public:
@@ -332,9 +332,6 @@ public:
 };
 
 
-/**
-  * cast_json_as_string(json_object)
-  */
 class FunctionsCastJsonAsString : public IFunction
 {
 public:
@@ -404,9 +401,6 @@ public:
 };
 
 
-/**
-  * json_length(json_object)
-  */
 class FunctionJsonLength : public IFunction
 {
 public:
@@ -462,9 +456,6 @@ public:
 };
 
 
-/**
-  * json_array(json_object...)
-  */
 class FunctionsJsonArray : public IFunction
 {
 public:
