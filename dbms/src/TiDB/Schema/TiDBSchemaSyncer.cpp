@@ -60,7 +60,7 @@ bool TiDBSchemaSyncer<mock_getter, mock_mapper>::syncSchemasByGetter(Context & c
     }
     else
     {
-        if (version <= cur_version)
+        if (version == cur_version)
         {
             return false;
         }
@@ -76,6 +76,17 @@ bool TiDBSchemaSyncer<mock_getter, mock_mapper>::syncSchemasByGetter(Context & c
             // first load all db and tables
             Int64 version_after_load_all = syncAllSchemas(context, getter, version);
             cur_version = version_after_load_all;
+        }
+        // if the `version` is less than `cur_version`, it means that the schema version in TiKV has been rolled back by restore.
+        // We should sync the schema again.
+        else if (version < cur_version)
+        {
+            LOG_INFO(
+                log,
+                "The latest schema version is less than current version, sync all schema, version={} cur_version={}",
+                version,
+                cur_version);
+            cur_version = syncAllSchemas(context, getter, version);
         }
         else
         {
@@ -113,30 +124,33 @@ Int64 TiDBSchemaSyncer<mock_getter, mock_mapper>::syncSchemaDiffs(
     Getter & getter,
     Int64 latest_version)
 {
-    Int64 used_version = cur_version;
+    Int64 version_of_diff = cur_version;
     // TODO:try to use parallel to speed up
-    while (used_version < latest_version)
+    while (version_of_diff < latest_version)
     {
-        used_version++;
-        std::optional<SchemaDiff> diff = getter.getSchemaDiff(used_version);
+        version_of_diff++;
+        std::optional<SchemaDiff> diff = getter.getSchemaDiff(version_of_diff);
 
-        if (used_version == latest_version && !diff)
+        if (version_of_diff == latest_version && !diff)
         {
-            --used_version;
+            --version_of_diff;
             break;
         }
 
         if (diff->regenerate_schema_map)
         {
             // If `schema_diff.regenerate_schema_map` == true, return `-1` directly, let TiFlash reload schema info from TiKV.
-            LOG_INFO(log, "Meets a schema diff with regenerate_schema_map flag");
+            LOG_INFO(
+                log,
+                "Meets a schema diff with regenerate_schema_map flag, sync all schema, version_of_diff={}",
+                version_of_diff);
             return -1;
         }
 
         SchemaBuilder<Getter, NameMapper> builder(getter, context, databases, table_id_map, shared_mutex_for_databases);
         builder.applyDiff(*diff);
     }
-    return used_version;
+    return version_of_diff;
 }
 
 template <bool mock_getter, bool mock_mapper>
