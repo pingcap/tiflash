@@ -24,12 +24,122 @@ namespace DB::tests
 {
 class TestJsonArray : public DB::tests::FunctionTest
 {
+public:
+    ColumnWithTypeAndName executeFunctionWithCast(
+        const ColumnNumbers & argument_column_numbers,
+        const ColumnsWithTypeAndName & columns)
+    {
+        auto json_column = executeFunction("json_array", argument_column_numbers, columns);
+        static auto json_array_return_type = std::make_shared<DataTypeString>();
+        assert(json_array_return_type->equals(*json_column.type));
+        // The `json_binary` should be cast as a string to improve readability.
+        return executeFunction("cast_json_as_string", {json_column});
+    }
 };
 
 TEST_F(TestJsonArray, TestAll)
 try
 {
-    // todo
+    auto const not_null_json_type = std::make_shared<DataTypeString>();
+    auto const nullable_json_type = makeNullable(std::make_shared<DataTypeString>());
+
+    /// prepare has value json column/const
+    // []
+    // clang-format off
+    const UInt8 empty_array[] = {
+        JsonBinary::TYPE_CODE_ARRAY, // array_type
+        0x0, 0x0, 0x0, 0x0, // element_count
+        0x8, 0x0, 0x0, 0x0}; // total_size
+    // clang-format on
+    ColumnWithTypeAndName not_null_column;
+    {
+        auto empty_array_json = ColumnString::create();
+        empty_array_json->insertData(reinterpret_cast<const char *>(empty_array), sizeof(empty_array) / sizeof(UInt8));
+        not_null_column = ColumnWithTypeAndName(std::move(empty_array_json), not_null_json_type);
+    }
+    ColumnWithTypeAndName not_null_const;
+    {
+        auto empty_array_json = ColumnString::create();
+        empty_array_json->insertData(reinterpret_cast<const char *>(empty_array), sizeof(empty_array) / sizeof(UInt8));
+        auto const_col = ColumnConst::create(std::move(empty_array_json), 1);
+        not_null_const = ColumnWithTypeAndName(std::move(const_col), not_null_json_type);
+    }
+    ColumnWithTypeAndName nullable_but_not_null_column;
+    {
+        auto empty_array_json = ColumnString::create();
+        empty_array_json->insertData(reinterpret_cast<const char *>(empty_array), sizeof(empty_array) / sizeof(UInt8));
+        ColumnUInt8::MutablePtr col_null_map = ColumnUInt8::create(1, 0);
+        auto json_col = ColumnNullable::create(std::move(empty_array_json), std::move(col_null_map));
+        nullable_but_not_null_column = ColumnWithTypeAndName(std::move(json_col), nullable_json_type);
+    }
+
+    /// prepare null value json column/const
+    ColumnWithTypeAndName null_column;
+    {
+        auto str_col = ColumnString::create();
+        str_col->insertData("", 0);
+        ColumnUInt8::MutablePtr col_null_map = ColumnUInt8::create(1, 1);
+        auto json_col = ColumnNullable::create(std::move(str_col), std::move(col_null_map));
+        null_column = ColumnWithTypeAndName(std::move(json_col), nullable_json_type);
+    }
+    ColumnWithTypeAndName null_const = createConstColumn<Nullable<String>>(1, {});
+
+    /// prepare only null column
+    ColumnWithTypeAndName only_null_const = createOnlyNullColumnConst(1);
+
+
+    /// prepare input columns
+    ColumnsWithTypeAndName inputs(
+        {not_null_column, not_null_const, nullable_but_not_null_column, null_column, null_const, only_null_const});
+
+    // json_array()
+    {
+        auto res = executeFunctionWithCast({}, inputs);
+        auto expect = createColumn<Nullable<String>>({"[]"});
+        ASSERT_COLUMN_EQ(expect, res);
+    }
+
+    // json_array(all columns)
+    {
+        auto res = executeFunctionWithCast({0, 1, 2, 3, 4, 5}, inputs);
+        auto expect = createColumn<Nullable<String>>({"[[], [], [], null, null, null]"});
+        ASSERT_COLUMN_EQ(expect, res);
+    }
+
+    // json_array(only_null, only_null)
+    {
+        auto res = executeFunctionWithCast({5, 5}, inputs);
+        auto expect = createConstColumn<Nullable<String>>(1, "[null, null]");
+        ASSERT_COLUMN_EQ(expect, res);
+    }
+
+    // json_array(null_const, not_null_const, only_null)
+    {
+        auto res = executeFunctionWithCast({4, 1, 5}, inputs);
+        auto expect = createConstColumn<Nullable<String>>(1, "[null, [], null]");
+        ASSERT_COLUMN_EQ(expect, res);
+    }
+
+    // json_array(not_null_const, not_null_const)
+    {
+        auto res = executeFunctionWithCast({1, 1}, inputs);
+        auto expect = createConstColumn<Nullable<String>>(1, "[[], []]");
+        ASSERT_COLUMN_EQ(expect, res);
+    }
+
+    // json_array(not_null_column, null_column)
+    {
+        auto res = executeFunctionWithCast({0, 3}, inputs);
+        auto expect = createColumn<Nullable<String>>({"[[], null]"});
+        ASSERT_COLUMN_EQ(expect, res);
+    }
+
+    // json_array(not_null_column, not_null_const)
+    {
+        auto res = executeFunctionWithCast({0, 1}, inputs);
+        auto expect = createColumn<Nullable<String>>({"[[], []]"});
+        ASSERT_COLUMN_EQ(expect, res);
+    }
 }
 CATCH
 
