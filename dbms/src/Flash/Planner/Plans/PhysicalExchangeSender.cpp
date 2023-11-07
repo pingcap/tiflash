@@ -58,7 +58,6 @@ void PhysicalExchangeSender::buildBlockInputStreamImpl(DAGPipeline & pipeline, C
     child->buildBlockInputStream(pipeline, context, max_streams);
 
     auto & dag_context = *context.getDAGContext();
-    restoreConcurrency(pipeline, dag_context.final_concurrency, log);
 
     String extra_info;
     if (fine_grained_shuffle.enable())
@@ -66,6 +65,10 @@ void PhysicalExchangeSender::buildBlockInputStreamImpl(DAGPipeline & pipeline, C
         extra_info = String(enableFineGrainedShuffleExtraInfo);
         RUNTIME_CHECK(exchange_type == tipb::ExchangeType::Hash, ExchangeType_Name(exchange_type));
         RUNTIME_CHECK(fine_grained_shuffle.stream_count <= maxFineGrainedStreamCount, fine_grained_shuffle.stream_count);
+    }
+    else
+    {
+        restoreConcurrency(pipeline, dag_context.final_concurrency, log);
     }
     pipeline.transform([&](auto & stream) {
         // construct writer
