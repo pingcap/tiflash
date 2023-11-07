@@ -249,8 +249,9 @@ bool tryResetPeerIdInRegion(RegionPtr region, const RegionLocalState & region_st
 FastAddPeerRes FastAddPeerImpl(EngineStoreServerWrap * server, uint64_t region_id, uint64_t new_peer_id)
 {
     bool is_building_finish_recorded = false;
-    auto after_build = [&](){
-        if (!is_building_finish_recorded) {
+    auto after_build = [&]() {
+        if (!is_building_finish_recorded)
+        {
             GET_METRIC(tiflash_fap_task_state, type_building).Decrement();
             is_building_finish_recorded = true;
         }
