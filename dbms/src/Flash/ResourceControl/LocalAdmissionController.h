@@ -35,7 +35,6 @@
 namespace DB
 {
 class LocalAdmissionController;
-using SteadyClock = std::chrono::steady_clock;
 
 // gac_resp.burst_limit < 0: resource group is burstable, and will not use bucket at all.
 // gac_resp.burst_limit >= 0: resource group is not burstable, will use bucket to limit the speed of the resource group.
@@ -110,13 +109,16 @@ private:
 
     std::string getName() const { return name; }
 
-    void consumeResource(double ru, uint64_t cpu_time_in_ns_)
+    bool consumeResource(double ru, uint64_t cpu_time_in_ns_, const SteadyClock::time_point & time_point)
     {
         std::lock_guard lock(mu);
+        if (bucket_mode == TokenBucketMode::normal_mode && bucket->willBeThrottle(ru, time_point))
+            return false;
         cpu_time_in_ns += cpu_time_in_ns_;
         ru_consumption_delta += ru;
         if (!burstable)
             bucket->consume(ru);
+        return true;
     }
 
     // Priority greater than zero: Less number means higher priority.
@@ -433,6 +435,7 @@ public:
 
     ~LocalAdmissionController() { stop(); }
 
+    // May throw exception when resource is throttled.
     void consumeResource(const std::string & name, double ru, uint64_t cpu_time_in_ns)
     {
         assert(!stopped);
@@ -448,8 +451,11 @@ public:
             return;
         }
 
-        group->consumeResource(ru, cpu_time_in_ns);
-        if (group->lowToken() || group->trickleModeLeaseExpire(SteadyClock::now()))
+        const auto now = SteadyClock::now();
+        if unlikely (group->consumeResource(ru, cpu_time_in_ns, now + MAX_THROTTLE_DURATION))
+            throw ::DB::Exception("Exceeded resource group({}) quota limitation", name);
+
+        if (group->lowToken() || group->trickleModeLeaseExpire(now))
         {
             {
                 std::lock_guard lock(mu);
@@ -480,6 +486,7 @@ public:
     // Throw exception if got error when fetching from GAC.
     void warmupResourceGroupInfoCache(const std::string & name);
 
+    // todo why Minus 1 because uint64 max is used as special flag.
     static bool isRUExhausted(uint64_t priority) { return priority == std::numeric_limits<uint64_t>::max(); }
 
     void registerRefillTokenCallback(const std::function<void()> & cb)
@@ -571,6 +578,9 @@ private:
     static constexpr auto TARGET_REQUEST_PERIOD_MS = std::chrono::milliseconds(5000);
     static constexpr auto COLLECT_METRIC_INTERVAL = std::chrono::seconds(5);
     static constexpr double ACQUIRE_RU_AMPLIFICATION = 1.5;
+    // If the number of tokens the caller wants to consume exceeds
+    // the accumulated amount within MAX_THROTTLE_DURATION seconds, raise an error.
+    static constexpr auto MAX_THROTTLE_DURATION = std::chrono::seconds(30);
 
     static const std::string GAC_RESOURCE_GROUP_ETCD_PATH;
     static const std::string WATCH_GAC_ERR_PREFIX;

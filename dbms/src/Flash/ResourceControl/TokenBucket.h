@@ -22,6 +22,7 @@
 
 namespace DB
 {
+using SteadyClock = std::chrono::steady_clock;
 
 // There are two mode of TokenBucket:
 // 1. fill_rate == 0: Bucket is static, will not fill tokens itself.
@@ -31,7 +32,7 @@ namespace DB
 class TokenBucket final
 {
 public:
-    using TimePoint = std::chrono::steady_clock::time_point;
+    using TimePoint = SteadyClock::time_point;
 
     TokenBucket(
         double fill_rate_,
@@ -42,7 +43,7 @@ public:
         , fill_rate_ms(fill_rate_ / 1000)
         , tokens(init_tokens_)
         , capacity(capacity_)
-        , last_compact_timepoint(std::chrono::steady_clock::now())
+        , last_compact_timepoint(SteadyClock::now())
         , low_token_threshold(LOW_TOKEN_THRESHOLD_RATE * capacity_)
         , log(Logger::get(log_id))
     {}
@@ -74,13 +75,13 @@ public:
     bool consume(double n);
 
     // Return current tokens count.
-    double peek() const { return peek(std::chrono::steady_clock::now()); }
+    double peek() const { return peek(SteadyClock::now()); }
 
     double peek(const TimePoint & timepoint) const;
 
     void reConfig(const TokenBucketConfig & config);
 
-    TokenBucketConfig getConfig(const std::chrono::steady_clock::time_point & tp = std::chrono::steady_clock::now())
+    TokenBucketConfig getConfig(const TimePoint & tp = SteadyClock::now())
     {
         compact(tp);
         return {tokens, fill_rate, capacity};
@@ -94,6 +95,9 @@ public:
     {
         return fmt::format("tokens: {}, fill_rate: {}, capacity: {}", tokens, fill_rate, capacity);
     }
+
+    // Return true when token bucket cannot generate enough tokens at time_point.
+    bool willBeThrottle(double n, const TimePoint & time_point) const { return peek(time_point) < n; }
 
 private:
     static constexpr auto LOW_TOKEN_THRESHOLD_RATE = 0.3;
