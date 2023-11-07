@@ -230,10 +230,14 @@ void MultiLevelFeedbackQueue<TimeGetter>::drainTaskQueueWithoutLock()
 }
 
 template <typename TimeGetter>
-void MultiLevelFeedbackQueue<TimeGetter>::updateStatistics(const TaskPtr & task, ExecTaskStatus, UInt64 inc_ns)
+std::exception_ptr MultiLevelFeedbackQueue<TimeGetter>::updateStatistics(
+    const TaskPtr & task,
+    ExecTaskStatus,
+    UInt64 inc_ns)
 {
     assert(task);
     level_queues[task->mlfq_level]->accu_consume_time_microsecond += (inc_ns / 1000);
+    return nullptr;
 }
 
 template <typename TimeGetter>

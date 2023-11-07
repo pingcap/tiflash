@@ -109,15 +109,21 @@ private:
 
     std::string getName() const { return name; }
 
-    bool consumeResource(double ru, uint64_t cpu_time_in_ns_, const SteadyClock::time_point & time_point)
+    bool consumeResource(
+        double ru,
+        uint64_t cpu_time_in_ns_,
+        const SteadyClock::time_point & now,
+        uint64_t max_wait_sec)
     {
         std::lock_guard lock(mu);
-        if (bucket_mode == TokenBucketMode::normal_mode && bucket->willBeThrottle(ru, time_point))
-            return false;
+        if (!burstable)
+        {
+            if (bucket->willBeThrottled(ru, now, max_wait_sec))
+                return false;
+            bucket->consume(ru);
+        }
         cpu_time_in_ns += cpu_time_in_ns_;
         ru_consumption_delta += ru;
-        if (!burstable)
-            bucket->consume(ru);
         return true;
     }
 
@@ -452,8 +458,8 @@ public:
         }
 
         const auto now = SteadyClock::now();
-        if unlikely (group->consumeResource(ru, cpu_time_in_ns, now + MAX_THROTTLE_DURATION))
-            throw ::DB::Exception("Exceeded resource group({}) quota limitation", name);
+        if unlikely (group->consumeResource(ru, cpu_time_in_ns, now, MAX_THROTTLE_DURATION_SEC))
+            throw ::DB::Exception(fmt::format("Exceeded resource group({}) quota limitation", name));
 
         if (group->lowToken() || group->trickleModeLeaseExpire(now))
         {
@@ -579,8 +585,8 @@ private:
     static constexpr auto COLLECT_METRIC_INTERVAL = std::chrono::seconds(5);
     static constexpr double ACQUIRE_RU_AMPLIFICATION = 1.5;
     // If the number of tokens the caller wants to consume exceeds
-    // the accumulated amount within MAX_THROTTLE_DURATION seconds, raise an error.
-    static constexpr auto MAX_THROTTLE_DURATION = std::chrono::seconds(30);
+    // the accumulated amount within MAX_THROTTLE_DURATION_SEC seconds, raise an error.
+    static constexpr auto MAX_THROTTLE_DURATION_SEC = 60;
 
     static const std::string GAC_RESOURCE_GROUP_ETCD_PATH;
     static const std::string WATCH_GAC_ERR_PREFIX;

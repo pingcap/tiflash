@@ -83,7 +83,7 @@ void IOPriorityQueue::drainTaskQueueWithoutLock()
     }
 }
 
-void IOPriorityQueue::updateStatistics(const TaskPtr &, ExecTaskStatus exec_task_status, UInt64 inc_ns)
+std::exception_ptr IOPriorityQueue::updateStatistics(const TaskPtr &, ExecTaskStatus exec_task_status, UInt64 inc_ns)
 {
     switch (exec_task_status)
     {
@@ -95,6 +95,7 @@ void IOPriorityQueue::updateStatistics(const TaskPtr &, ExecTaskStatus exec_task
         break;
     default:; // ignore not io status.
     }
+    return nullptr;
 }
 
 bool IOPriorityQueue::empty() const

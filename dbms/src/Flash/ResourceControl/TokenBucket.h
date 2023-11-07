@@ -97,7 +97,16 @@ public:
     }
 
     // Return true when token bucket cannot generate enough tokens at time_point.
-    bool willBeThrottle(double n, const TimePoint & time_point) const { return peek(time_point) < n; }
+    bool willBeThrottled(double n, const TimePoint & now, uint64_t max_wait_sec) const
+    {
+        if (fill_rate > 0)
+        {
+            auto num = peek(now) - n;
+            if (num < 0 && (-num) / fill_rate > max_wait_sec)
+                return false;
+        }
+        return true;
+    }
 
 private:
     static constexpr auto LOW_TOKEN_THRESHOLD_RATE = 0.3;

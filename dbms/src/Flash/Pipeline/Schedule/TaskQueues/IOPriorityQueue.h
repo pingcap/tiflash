@@ -41,7 +41,7 @@ public:
 
     bool take(TaskPtr & task) override;
 
-    void updateStatistics(const TaskPtr &, ExecTaskStatus exec_task_status, UInt64 inc_ns) override;
+    std::exception_ptr updateStatistics(const TaskPtr &, ExecTaskStatus exec_task_status, UInt64 inc_ns) override;
 
     bool empty() const override;
 
