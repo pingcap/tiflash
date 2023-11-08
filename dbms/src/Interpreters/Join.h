@@ -422,6 +422,7 @@ private:
     NameSet output_column_names_set_after_finalize;
     NameSet output_columns_names_set_for_other_condition_after_finalize;
     Names required_columns;
+    bool finalized = false;
 
     bool is_test;
 

@@ -411,6 +411,7 @@ std::shared_ptr<Join> Join::createRestoreJoin(size_t max_bytes_before_external_j
         = output_columns_names_set_for_other_condition_after_finalize;
     ret->required_columns = required_columns;
     ret->output_block_after_finalize = output_block_after_finalize;
+    ret->finalized = true;
     return ret;
 }
 
@@ -2112,6 +2113,7 @@ BlockInputStreamPtr Join::createScanHashMapAfterProbeStream(
     size_t step,
     size_t max_block_size_) const
 {
+    RUNTIME_CHECK_MSG(finalized, "Create ScanHashMapAfterProbeStream before join be finalized");
     return std::make_shared<ScanHashMapAfterProbeBlockInputStream>(
         *this,
         left_sample_block,
@@ -2483,6 +2485,7 @@ void Join::finalize(const Names & parent_require)
         required_columns.push_back(name);
     for (const auto & name : key_names_left)
         required_columns.push_back(name);
+    finalized = true;
 }
 
 } // namespace DB
