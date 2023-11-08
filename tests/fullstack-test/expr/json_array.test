@@ -1,0 +1,85 @@
+# Copyright 2023 PingCAP, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+mysql> drop table if exists test.t
+mysql> create table test.t(a json, b json, c json, d json, e json)
+mysql> alter table test.t set tiflash replica 1
+mysql> insert into test.t values(null, '{\"a\" : \"b\", \"aa\" : \"bb\"}', '[1,2,[3,4]]', '[1,2,{\"a\":\"b\"}]', '\"hello world\"') #NO_UNESCAPE
+
+func> wait_table test t
+
+# json_array(null_value in column)
+mysql> set tidb_allow_mpp=1;set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash'; select json_array(a) from test.t;
++---------------+
+| json_array(a) |
++---------------+
+| [null]        |
++---------------+
+
+# json_array(not_null_value in column)
+mysql> set tidb_allow_mpp=1;set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash'; select json_array(b) from test.t;
++--------------------------+
+| json_array(b)            |
++--------------------------+
+| [{"a": "b", "aa": "bb"}] |
++--------------------------+
+
+mysql> set tidb_allow_mpp=1;set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash'; select json_array(b, c, d, e) from test.t;
++-----------------------------------------------------------------------------+
+| json_array(b, c, d, e)                                                      |
++-----------------------------------------------------------------------------+
+| [{"a": "b", "aa": "bb"}, [1, 2, [3, 4]], [1, 2, {"a": "b"}], "hello world"] |
++-----------------------------------------------------------------------------+
+
+# json_array(null_value in column + not_null_value in column)
+mysql> set tidb_allow_mpp=1;set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash'; select json_array(a, b, c, d, e) from test.t;
++-----------------------------------------------------------------------------------+
+| json_array(a, b, c, d, e)                                                         |
++-----------------------------------------------------------------------------------+
+| [null, {"a": "b", "aa": "bb"}, [1, 2, [3, 4]], [1, 2, {"a": "b"}], "hello world"] |
++-----------------------------------------------------------------------------------+
+
+# json_array(null_value in column + only_null_const)
+mysql> set tidb_allow_mpp=1;set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash'; select json_array(a, null) from test.t;
++---------------------+
+| json_array(a, null) |
++---------------------+
+| [null, null]        |
++---------------------+
+
+mysql> set tidb_allow_mpp=1;set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash'; select json_array(null, a) from test.t;
++---------------------+
+| json_array(null, a) |
++---------------------+
+| [null, null]        |
++---------------------+
+
+# json_array(not_null_value in column + only_null_const)
+mysql> set tidb_allow_mpp=1;set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash'; select json_array(null, b, c, null, null, d, e, null) from test.t;
++-----------------------------------------------------------------------------------------------------+
+| json_array(null, b, c, null, null, d, e, null)                                                      |
++-----------------------------------------------------------------------------------------------------+
+| [null, {"a": "b", "aa": "bb"}, [1, 2, [3, 4]], null, null, [1, 2, {"a": "b"}], "hello world", null] |
++-----------------------------------------------------------------------------------------------------+
+
+# json_array(null_value in column + not_null_value in column + only_null_const)
+mysql> set tidb_allow_mpp=1;set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash'; select json_array(null, a, null, b, c, null, null, d, e, null) from test.t;
++-----------------------------------------------------------------------------------------------------------------+
+| json_array(null, a, null, b, c, null, null, d, e, null)                                                         |
++-----------------------------------------------------------------------------------------------------------------+
+| [null, null, null, {"a": "b", "aa": "bb"}, [1, 2, [3, 4]], null, null, [1, 2, {"a": "b"}], "hello world", null] |
++-----------------------------------------------------------------------------------------------------------------+
+
+# Clean up.
+mysql> drop table if exists test.t;
