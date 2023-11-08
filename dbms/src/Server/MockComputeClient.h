@@ -42,7 +42,7 @@ public:
         {
             throw Exception(fmt::format(
                 "Meet error while dispatch mpp task, error code = {}, message = {}",
-                status.error_code(),
+                magic_enum::enum_name(status.error_code()),
                 status.error_message()));
         }
         if (response.has_error())
@@ -63,7 +63,7 @@ public:
         {
             throw Exception(fmt::format(
                 "Meet error while run coprocessor task, error code = {}, message = {}",
-                status.error_code(),
+                magic_enum::enum_name(status.error_code()),
                 status.error_message()));
         }
 

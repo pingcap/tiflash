@@ -18,6 +18,7 @@
 #include <Common/nocopyable.h>
 #include <Server/StorageConfigParser.h>
 #include <fmt/core.h>
+#include <fmt/std.h>
 
 #include <atomic>
 #include <chrono>
