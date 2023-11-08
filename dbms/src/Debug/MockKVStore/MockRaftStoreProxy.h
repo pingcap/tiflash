@@ -252,7 +252,7 @@ struct MockRaftStoreProxy : MutexLockWrap
     void reload();
     void replay(KVStore & kvs, TMTContext & tmt, uint64_t region_id, uint64_t to);
 
-    void clear()
+    void clear() NO_THREAD_SAFETY_ANALYSIS
     {
         auto _ = genLockGuard();
         regions.clear();

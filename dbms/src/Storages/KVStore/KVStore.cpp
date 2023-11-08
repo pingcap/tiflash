@@ -153,7 +153,7 @@ RegionMap KVStore::getRegionsByRangeOverlap(const RegionRange & range) const
     return manage_lock.index.findByRangeOverlap(range);
 }
 
-RegionTaskLock RegionTaskCtrl::genRegionTaskLock(RegionID region_id) const
+RegionTaskLock RegionTaskCtrl::genRegionTaskLock(RegionID region_id) const NO_THREAD_SAFETY_ANALYSIS
 {
     RegionTaskElement * e = nullptr;
     {
