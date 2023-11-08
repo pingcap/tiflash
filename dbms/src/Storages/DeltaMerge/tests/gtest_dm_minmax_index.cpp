@@ -2114,7 +2114,7 @@ try
 }
 CATCH
 
-TEST_F(c, ParseIn)
+TEST_F(DMMinMaxIndexTest, ParseIn)
 try
 {
     const google::protobuf::RepeatedPtrField<tipb::Expr> pushed_down_filters{};
