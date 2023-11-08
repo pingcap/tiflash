@@ -46,11 +46,11 @@ using KeyspaceDatabaseID = std::pair<KeyspaceID, DatabaseID>;
 using ColumnID = Int64;
 
 // Constants for column id, prevent conflict with TiDB.
-static constexpr Int64 TiDBPkColumnID = -1;
-static constexpr Int64 ExtraTableIDColumnID = -3;
-static constexpr Int64 VersionColumnID = -1024;
-static constexpr Int64 DelMarkColumnID = -1025;
-static constexpr Int64 InvalidColumnID = -10000;
+static constexpr ColumnID TiDBPkColumnID = -1;
+static constexpr ColumnID ExtraTableIDColumnID = -3;
+static constexpr ColumnID VersionColumnID = -1024;
+static constexpr ColumnID DelMarkColumnID = -1025;
+static constexpr ColumnID InvalidColumnID = -10000;
 
 
 using HandleID = Int64;
