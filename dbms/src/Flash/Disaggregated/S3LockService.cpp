@@ -176,7 +176,7 @@ bool S3LockService::tryAddLockImpl(
     const String & data_file_key,
     UInt64 lock_store_id,
     UInt64 lock_seq,
-    disaggregated::TryAddLockResponse * response)
+    disaggregated::TryAddLockResponse * response) NO_THREAD_SAFETY_ANALYSIS
 {
     GET_METRIC(tiflash_disaggregated_object_lock_request_count, type_lock).Increment();
     const S3FilenameView key_view = S3FilenameView::fromKey(data_file_key);
