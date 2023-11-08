@@ -22,9 +22,7 @@
 #include <common/StringRef.h>
 #include <common/memcpy.h>
 
-#include <type_traits>
 #include <unordered_set>
-#include "common/types.h"
 
 namespace DB
 {

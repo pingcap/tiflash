@@ -25,7 +25,6 @@
 #include <Functions/IFunction.h>
 #include <TiDB/Decode/JsonBinary.h>
 #include <TiDB/Decode/JsonPathExprRef.h>
-#include <Core/Types.h>
 
 #include <ext/range.h>
 
