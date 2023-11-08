@@ -539,4 +539,30 @@ public:
         block.getByPosition(result).column = std::move(col_to);
     }
 };
+
+
+class FunctionsCastJsonAsJson : public IFunction
+{
+public:
+    static constexpr auto name = "cast_json_as_json";
+    static FunctionPtr create(const Context &) { return std::make_shared<FunctionsCastJsonAsJson>(); }
+
+    String getName() const override { return name; }
+
+    size_t getNumberOfArguments() const override { return 1; }
+
+    bool useDefaultImplementationForNulls() const override { return false; }
+    bool useDefaultImplementationForConstants() const override { return false; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        return arguments[0];
+    }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
+    {
+        auto from = block.getByPosition(arguments[0]).column;
+        block.getByPosition(result).column = std::move(from);
+    }
+};
 } // namespace DB
