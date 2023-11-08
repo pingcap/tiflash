@@ -14,7 +14,6 @@
 
 #pragma once
 
-#include <TiDB/Decode/JsonBinary.h>
 #include <Columns/ColumnConst.h>
 #include <Columns/ColumnFixedString.h>
 #include <Columns/ColumnNullable.h>
@@ -1798,77 +1797,6 @@ private:
     bool in_union;
     const tipb::FieldType & tidb_tp;
     const Context & context;
-};
-
-/// cast json/int/real/decimal/time as json
-template <typename FromDataType, bool return_nullable>
-struct TiDBConvertToJson
-{
-    using FromFieldType = typename FromDataType::FieldType;
-
-    static void execute(
-        Block & block,
-        const ColumnNumbers & arguments,
-        size_t result,
-        bool,
-        const tipb::FieldType & tp,
-        const Context & context)
-    {
-        size_t size = block.getByPosition(arguments[0]).column->size();
-        ColumnUInt8::MutablePtr col_null_map_to;
-        ColumnUInt8::Container * vec_null_map_to [[maybe_unused]] = nullptr;
-        if constexpr (return_nullable)
-        {
-            col_null_map_to = ColumnUInt8::create(size, 0);
-            vec_null_map_to = &col_null_map_to->getData();
-        }
-
-        auto col_to = ColumnString::create();
-        auto & data_to = col_to->getChars();
-        JsonBinary::JsonBinaryWriteBuffer write_buffer(data_to);
-        auto & offsets_to = col_to->getOffsets();
-        offsets_to.resize(size);
-
-        const auto & from = block.getByPosition(arguments[0]).column;
-        if constexpr (IsDecimal<FromFieldType>)
-        {
-            const auto * column_from = checkAndGetColumn<ColumnDecimal<FromFieldType>>(from.get());
-            RUNTIME_CHECK(column_from);
-            for (size_t i = 0; i < column_from->size(); ++i)
-            {
-                const auto & field = (*column_from)[i].template safeGet<DecimalField<FromFieldType>>();
-                JsonBinary::appendJsonBinary(write_buffer, TiDBConvertToFloat<FromFieldType, Float64, return_nullable, false>::toFloat(field));
-                writeChar(0, write_buffer);
-                offsets_to[i] = write_buffer.count();
-            }
-        }
-        else
-        {
-            throw Exception(
-                fmt::format(
-                    "Illegal column {} of first argument of function tidb_cast",
-                    block.getByPosition(arguments[0]).column->getName()),
-                ErrorCodes::ILLEGAL_COLUMN);
-        }
-
-        data_to.resize(write_buffer.count());
-        if constexpr (return_nullable)
-            block.getByPosition(result).column = ColumnNullable::create(std::move(col_to), std::move(col_null_map_to));
-        else
-            block.getByPosition(result).column = std::move(col_to);
-    }
-
-    static Int64 round(Int64 x, int fsp)
-    {
-        Int64 scale = pow10[fsp];
-        bool negative = x < 0;
-        if (negative)
-            x = -x;
-        x = (x + scale / 2) / scale * scale;
-        if (negative)
-            x = -x;
-        return x;
-    }
 };
 
 using MonotonicityForRange
