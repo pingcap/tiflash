@@ -110,10 +110,16 @@ private:
 
     std::string getName() const { return name; }
 
-    void consumeResource(double ru, uint64_t cpu_time_in_ns_)
+    void consumeResource(double ru, uint64_t cpu_time_in_ns_, uint64_t storage_bytes, bool is_compute)
     {
         std::lock_guard lock(mu);
         cpu_time_in_ns += cpu_time_in_ns_;
+        debug_cpu_ns += cpu_time_in_ns_;
+        debug_storage_bytes += storage_bytes;
+        if (is_compute)
+            debug_compute_ru += ru;
+        else
+            debug_storage_ru += ru;
         ru_consumption_delta += ru;
         if (!burstable)
             bucket->consume(ru);
@@ -329,6 +335,14 @@ private:
 
             ru_consumption_delta = 0;
             last_update_ru_consumption_timepoint = now;
+
+            LOG_INFO(log, "gjt debug name: {}, compute: {}, {}; stroage: {}, {}; delta: ori: {}, new: {}",
+                    name, debug_cpu_ns, debug_compute_ru, debug_storage_bytes, debug_storage_ru,
+                    info.delta, ru_consumption_delta);
+            debug_cpu_ns = 0;
+            debug_compute_ru = 0.0;
+            debug_storage_bytes = 0;
+            debug_storage_ru = 0.0;
         }
 
         GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_avg_speed, name).Set(info.speed);
@@ -407,6 +421,11 @@ private:
     double ru_consumption_delta = 0.0;
     double ru_consumption_speed = 0.0;
     SteadyClock::time_point last_update_ru_consumption_timepoint = SteadyClock::now();
+
+    uint64_t debug_cpu_ns = 0;
+    double debug_compute_ru = 0.0;
+    uint64_t debug_storage_bytes = 0;
+    double debug_storage_ru = 0.0;
 };
 
 using ResourceGroupPtr = std::shared_ptr<ResourceGroup>;
@@ -433,7 +452,7 @@ public:
 
     ~LocalAdmissionController() { stop(); }
 
-    void consumeResource(const std::string & name, double ru, uint64_t cpu_time_in_ns)
+    void consumeResource(const std::string & name, double ru, uint64_t cpu_time_in_ns, uint64_t storage_bytes, bool is_compute)
     {
         assert(!stopped);
 
@@ -448,7 +467,7 @@ public:
             return;
         }
 
-        group->consumeResource(ru, cpu_time_in_ns);
+        group->consumeResource(ru, cpu_time_in_ns, storage_bytes, is_compute);
         if (group->lowToken() || group->trickleModeLeaseExpire(SteadyClock::now()))
         {
             {
@@ -706,7 +725,7 @@ private:
     {
         assert(delta_bytes != 0);
         if (!resource_group_name.empty())
-            LocalAdmissionController::global_instance->consumeResource(resource_group_name, bytesToRU(delta_bytes), 0);
+            LocalAdmissionController::global_instance->consumeResource(resource_group_name, bytesToRU(delta_bytes), 0, delta_bytes, false);
     }
 
     const std::string resource_group_name;
