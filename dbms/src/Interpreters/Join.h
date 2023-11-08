@@ -494,6 +494,7 @@ private:
     void joinBlockNullAwareImpl(
         Block & block,
         size_t left_columns,
+        const std::vector<size_t> & right_column_indices_to_add,
         const ColumnRawPtrs & key_columns,
         const ConstNullMapPtr & null_map,
         const ConstNullMapPtr & filter_map,

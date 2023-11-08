@@ -1593,12 +1593,11 @@ void Join::checkTypes(const Block & block) const
 
 Block Join::joinBlockNullAware(ProbeProcessInfo & probe_process_info) const
 {
-    Block block = probe_process_info.block;
-
     /// Rare case, when keys are constant. To avoid code bloat, simply materialize them.
     /// Note: this variable can't be removed because it will take smart pointers' lifecycle to the end of this function.
     Columns materialized_columns;
-    ColumnRawPtrs key_columns = extractAndMaterializeKeyColumns(block, materialized_columns, key_names_left);
+    ColumnRawPtrs key_columns
+        = extractAndMaterializeKeyColumns(probe_process_info.block, materialized_columns, key_names_left);
 
     /// Note that `extractAllKeyNullMap` must be done before `extractNestedColumnsAndNullMap`
     /// because `extractNestedColumnsAndNullMap` will change the nullable column to its nested column.
@@ -1612,21 +1611,37 @@ Block Join::joinBlockNullAware(ProbeProcessInfo & probe_process_info) const
 
     ColumnPtr filter_map_holder;
     ConstNullMapPtr filter_map{};
-    recordFilteredRows(block, non_equal_conditions.left_filter_column, filter_map_holder, filter_map);
+    recordFilteredRows(
+        probe_process_info.block,
+        non_equal_conditions.left_filter_column,
+        filter_map_holder,
+        filter_map);
+
+    Block block{};
+    for (size_t i = 0; i < probe_process_info.block.columns(); ++i)
+    {
+        const auto & column = probe_process_info.block.getByPosition(i);
+        if (output_columns_names_set_for_other_condition_after_finalize.contains(column.name))
+            block.insert(column);
+    }
 
     size_t existing_columns = block.columns();
 
     /// Add new columns to the block.
-    size_t num_columns_to_add = sample_block_without_keys.columns();
+    std::vector<size_t> right_column_indices_to_add;
 
-    for (size_t i = 0; i < num_columns_to_add; ++i)
+    for (size_t i = 0; i < sample_block_without_keys.columns(); ++i)
     {
-        const ColumnWithTypeAndName & src_column = sample_block_without_keys.getByPosition(i);
-        RUNTIME_CHECK_MSG(
-            !block.has(src_column.name),
-            "block from probe side has a column with the same name: {} as a column in sample_block_without_keys",
-            src_column.name);
-        block.insert(src_column);
+        const auto & column = sample_block_without_keys.getByPosition(i);
+        if (output_columns_names_set_for_other_condition_after_finalize.contains(column.name))
+        {
+            RUNTIME_CHECK_MSG(
+                !block.has(column.name),
+                "block from probe side has a column with the same name: {} as a column in sample_block_without_keys",
+                column.name);
+            block.insert(column);
+            right_column_indices_to_add.push_back(i);
+        }
     }
 
     using enum ASTTableJoin::Strictness;
@@ -1635,6 +1650,7 @@ Block Join::joinBlockNullAware(ProbeProcessInfo & probe_process_info) const
         joinBlockNullAwareImpl<NullAware_Anti, All, MapsAll>(
             block,
             existing_columns,
+            right_column_indices_to_add,
             key_columns,
             null_map,
             filter_map,
@@ -1643,6 +1659,7 @@ Block Join::joinBlockNullAware(ProbeProcessInfo & probe_process_info) const
         joinBlockNullAwareImpl<NullAware_Anti, Any, MapsAny>(
             block,
             existing_columns,
+            right_column_indices_to_add,
             key_columns,
             null_map,
             filter_map,
@@ -1651,6 +1668,7 @@ Block Join::joinBlockNullAware(ProbeProcessInfo & probe_process_info) const
         joinBlockNullAwareImpl<NullAware_LeftOuterSemi, All, MapsAll>(
             block,
             existing_columns,
+            right_column_indices_to_add,
             key_columns,
             null_map,
             filter_map,
@@ -1659,6 +1677,7 @@ Block Join::joinBlockNullAware(ProbeProcessInfo & probe_process_info) const
         joinBlockNullAwareImpl<NullAware_LeftOuterSemi, Any, MapsAny>(
             block,
             existing_columns,
+            right_column_indices_to_add,
             key_columns,
             null_map,
             filter_map,
@@ -1667,6 +1686,7 @@ Block Join::joinBlockNullAware(ProbeProcessInfo & probe_process_info) const
         joinBlockNullAwareImpl<NullAware_LeftOuterAnti, All, MapsAll>(
             block,
             existing_columns,
+            right_column_indices_to_add,
             key_columns,
             null_map,
             filter_map,
@@ -1675,6 +1695,7 @@ Block Join::joinBlockNullAware(ProbeProcessInfo & probe_process_info) const
         joinBlockNullAwareImpl<NullAware_LeftOuterAnti, Any, MapsAny>(
             block,
             existing_columns,
+            right_column_indices_to_add,
             key_columns,
             null_map,
             filter_map,
@@ -1694,11 +1715,13 @@ template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename
 void Join::joinBlockNullAwareImpl(
     Block & block,
     size_t left_columns,
+    const std::vector<size_t> & right_column_indices_to_add,
     const ColumnRawPtrs & key_columns,
     const ConstNullMapPtr & null_map,
     const ConstNullMapPtr & filter_map,
     const ConstNullMapPtr & all_key_null_map) const
 {
+    assert(left_columns > 0);
     size_t rows = block.rows();
     std::vector<RowsNotInsertToMap *> null_rows(partitions.size(), nullptr);
     for (size_t i = 0; i < partitions.size(); ++i)
@@ -1721,12 +1744,16 @@ void Join::joinBlockNullAwareImpl(
 
     RUNTIME_ASSERT(res.size() == rows, "NASemiJoinResult size {} must be equal to block size {}", res.size(), rows);
 
-    size_t right_columns = block.columns() - left_columns;
-
     if (!res_list.empty())
     {
-        NASemiJoinHelper<KIND, STRICTNESS, typename Maps::MappedType::Base_t>
-            helper(block, left_columns, right_columns, blocks, null_rows, max_block_size, non_equal_conditions);
+        NASemiJoinHelper<KIND, STRICTNESS, typename Maps::MappedType::Base_t> helper(
+            block,
+            left_columns,
+            right_column_indices_to_add,
+            blocks,
+            null_rows,
+            max_block_size,
+            non_equal_conditions);
 
         helper.joinResult(res_list);
 
@@ -1739,6 +1766,7 @@ void Join::joinBlockNullAwareImpl(
     if constexpr (KIND == ASTTableJoin::Kind::NullAware_Anti)
         filter = std::make_unique<IColumn::Filter>(rows);
 
+    auto right_columns = right_column_indices_to_add.size();
     MutableColumns added_columns(right_columns);
     for (size_t i = 0; i < right_columns; ++i)
         added_columns[i] = block.getByPosition(i + left_columns).column->cloneEmpty();
@@ -1796,20 +1824,28 @@ void Join::joinBlockNullAwareImpl(
 
     for (size_t i = 0; i < right_columns; ++i)
     {
-        if constexpr (KIND == ASTTableJoin::Kind::NullAware_Anti)
-            added_columns[i]->insertManyDefaults(rows_for_anti);
-        else if (i < right_columns - 1)
+        auto & column = block.getByPosition(i + left_columns);
+        if (output_column_names_set_after_finalize.contains(column.name))
         {
-            /// The last column is match_helper_name.
-            added_columns[i]->insertManyDefaults(rows);
+            if constexpr (KIND == ASTTableJoin::Kind::NullAware_Anti)
+                added_columns[i]->insertManyDefaults(rows_for_anti);
+            else if (i < right_columns - 1)
+            {
+                /// The last column is match_helper_name.
+                added_columns[i]->insertManyDefaults(rows);
+            }
         }
-        block.getByPosition(i + left_columns).column = std::move(added_columns[i]);
+        column.column = std::move(added_columns[i]);
     }
 
     if constexpr (KIND == ASTTableJoin::Kind::NullAware_Anti)
     {
         for (size_t i = 0; i < left_columns; ++i)
-            block.getByPosition(i).column = block.getByPosition(i).column->filter(*filter, rows_for_anti);
+        {
+            auto & column = block.getByPosition(i);
+            if (output_column_names_set_after_finalize.contains(column.name))
+                block.getByPosition(i).column = block.getByPosition(i).column->filter(*filter, rows_for_anti);
+        }
     }
 }
 
