@@ -28,6 +28,7 @@
 
 #include <ext/range.h>
 #include <magic_enum.hpp>
+#include "Core/Types.h"
 
 namespace DB
 {
@@ -693,6 +694,81 @@ private:
         {
             const auto & field = (*column_from)[i].template safeGet<DecimalField<FromType>>();
             JsonBinary::appendJsonBinary(data_to, static_cast<Float64>(field));
+            writeChar(0, data_to);
+            offsets_to[i] = data_to.count();
+        }
+    }
+};
+
+class FunctionsCastIntAsJson : public IFunction
+{
+public:
+    static constexpr auto name = "cast_int_as_json";
+    static FunctionPtr create(const Context &) { return std::make_shared<FunctionsCastIntAsJson>(); }
+
+    String getName() const override { return name; }
+
+    size_t getNumberOfArguments() const override { return 1; }
+
+    bool useDefaultImplementationForNulls() const override { return true; }
+    bool useDefaultImplementationForConstants() const override { return true; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        switch(arguments[0]->getTypeId())
+        {
+        case TypeIndex::Int64:
+        case TypeIndex::UInt64:
+        case TypeIndex::UInt8:
+            return std::make_shared<DataTypeString>();
+        default:
+            throw Exception(
+                fmt::format("Illegal type {} of argument of function {}", arguments[0]->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        }
+    }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
+    {
+        auto col_to = ColumnString::create();
+        auto & data_to = col_to->getChars();
+        JsonBinary::JsonBinaryWriteBuffer write_buffer(data_to);
+        auto & offsets_to = col_to->getOffsets();
+        auto rows = block.rows();
+        offsets_to.resize(rows);
+
+        const auto & from = block.getByPosition(arguments[0]);
+        TypeIndex from_type_index = from.type->getTypeId();
+        switch (from_type_index)
+        {
+        case TypeIndex::Int64:
+            doExecute<Int64, Int64>(write_buffer, offsets_to, from.column);
+            break;
+        case TypeIndex::UInt64:
+            doExecute<UInt64, UInt64>(write_buffer, offsets_to, from.column);
+            break;
+        case TypeIndex::UInt8:
+            doExecute<UInt8, bool>(write_buffer, offsets_to, from.column);
+            break;
+        default:
+            throw Exception(
+                fmt::format("Illegal type {} of argument of function {}", magic_enum::enum_name(from_type_index), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        }
+        data_to.resize(write_buffer.count());
+        block.getByPosition(result).column = std::move(col_to);
+    }
+
+private:
+    template<typename FromType, typename ToType>
+    static void doExecute(JsonBinary::JsonBinaryWriteBuffer & data_to, ColumnString::Offsets & offsets_to, const ColumnPtr & column_ptr_from)
+    {
+        const auto * column_from = checkAndGetColumn<ColumnVector<FromType>>(column_ptr_from.get());
+        RUNTIME_CHECK(column_from);
+        const auto & data_from = column_from->getData();
+        for (size_t i = 0; i < data_from.size(); ++i)
+        {
+            JsonBinary::appendJsonBinary(data_to, static_cast<ToType>(data_from[i]));
             writeChar(0, data_to);
             offsets_to[i] = data_to.count();
         }
