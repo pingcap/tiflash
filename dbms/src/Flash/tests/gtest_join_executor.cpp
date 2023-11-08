@@ -2344,12 +2344,12 @@ try
              {JoinType::TypeLeftOuterSemiJoin, JoinType::TypeAntiLeftOuterSemiJoin, JoinType::TypeAntiSemiJoin})
         {
             auto reference = genSemiJoinResult(type, left, res);
-            /// nullaware hash join
+            /// null-aware hash join
             auto request = context.scan("null_aware_semi", "t")
                                .join(context.scan("null_aware_semi", "s"), type, {col("a")}, {}, {}, {}, {}, 0, true)
                                .build(context);
             executeAndAssertColumnsEqual(request, reference);
-            /// nullaware cross join
+            /// null-aware cross join
             for (const auto shallow_copy_threshold : cross_join_shallow_copy_thresholds)
             {
                 context.context->setSetting(

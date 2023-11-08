@@ -147,4 +147,7 @@ void recordFilteredRows(
     const String & filter_column,
     ColumnPtr & null_map_holder,
     ConstNullMapPtr & null_map);
+
+std::pair<const ColumnUInt8::Container *, ConstNullMapPtr> getDataAndNullMapVectorFromFilterColumn(
+    ColumnPtr & filter_column);
 } // namespace DB

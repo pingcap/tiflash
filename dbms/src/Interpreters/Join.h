@@ -454,7 +454,9 @@ private:
     Block joinBlockHash(ProbeProcessInfo & probe_process_info) const;
     Block doJoinBlockHash(ProbeProcessInfo & probe_process_info, const JoinBuildInfo & join_build_info) const;
 
-    Block joinBlockNullAware(ProbeProcessInfo & probe_process_info) const;
+    Block joinBlockNullAwareSemi(ProbeProcessInfo & probe_process_info) const;
+
+    Block joinBlockSemi(ProbeProcessInfo & probe_process_info) const;
 
     Block joinBlockCross(ProbeProcessInfo & probe_process_info) const;
 
@@ -475,13 +477,18 @@ private:
     Block doJoinBlockCross(ProbeProcessInfo & probe_process_info) const;
 
     template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
-    void joinBlockNullAwareImpl(
+    void joinBlockNullAwareSemiImpl(
         Block & block,
-        size_t left_columns,
         const ColumnRawPtrs & key_columns,
         const ConstNullMapPtr & null_map,
         const ConstNullMapPtr & filter_map,
         const ConstNullMapPtr & all_key_null_map) const;
+
+    template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
+    void joinBlockSemiImpl(
+        Block & block,
+        const JoinBuildInfo & join_build_info,
+        const ProbeProcessInfo & probe_process_info) const;
 
     IColumn::Selector hashToSelector(const WeakHash32 & hash) const;
     IColumn::Selector selectDispatchBlock(const Strings & key_columns_names, const Block & from_block);

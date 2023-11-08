@@ -17,8 +17,8 @@
 #include <Common/Logger.h>
 #include <Core/Block.h>
 #include <Flash/Coprocessor/JoinInterpreterHelper.h>
+#include <Interpreters/SemiJoinHelper.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
-
 
 namespace DB
 {
@@ -39,13 +39,6 @@ enum class NASemiJoinStep : UInt8
     NULL_KEY_CHECK_ALL_BLOCKS,
     /// Work is done.
     DONE,
-};
-
-enum class NASemiJoinResultType : UInt8
-{
-    FALSE_VALUE,
-    TRUE_VALUE,
-    NULL_VALUE,
 };
 
 struct NARightSideInfo
@@ -89,7 +82,7 @@ public:
 
     /// For convenience, callers can only consider the result of left outer semi join.
     /// This function will correct the result if it's not left outer semi join.
-    template <NASemiJoinResultType RES>
+    template <SemiJoinResultType RES>
     void setResult()
     {
         step = NASemiJoinStep::DONE;
@@ -98,16 +91,16 @@ public:
             result = RES;
             return;
         }
-        /// For (left) anti semi join
-        if constexpr (RES == NASemiJoinResultType::FALSE_VALUE)
-            result = NASemiJoinResultType::TRUE_VALUE;
-        else if constexpr (RES == NASemiJoinResultType::TRUE_VALUE)
-            result = NASemiJoinResultType::FALSE_VALUE;
+        /// For (left outer) anti semi join
+        if constexpr (RES == SemiJoinResultType::FALSE_VALUE)
+            result = SemiJoinResultType::TRUE_VALUE;
+        else if constexpr (RES == SemiJoinResultType::TRUE_VALUE)
+            result = SemiJoinResultType::FALSE_VALUE;
         else
-            result = NASemiJoinResultType::NULL_VALUE;
+            result = SemiJoinResultType::NULL_VALUE;
     }
 
-    NASemiJoinResultType getResult() const
+    SemiJoinResultType getResult() const
     {
         if (unlikely(step != NASemiJoinStep::DONE))
             throw Exception("null-aware semi join result is not ready");
@@ -133,7 +126,7 @@ public:
     template <NASemiJoinStep STEP>
     void checkExprResult(
         ConstNullMapPtr eq_null_map,
-        const PaddedPODArray<UInt8> & other_column,
+        const ColumnUInt8::Container & other_column,
         ConstNullMapPtr other_null_map,
         size_t offset_begin,
         size_t offset_end);
@@ -146,7 +139,7 @@ private:
 
     NASemiJoinStep step;
     bool step_end;
-    NASemiJoinResultType result;
+    SemiJoinResultType result;
 
     size_t pace;
     /// Position in null rows.
@@ -201,7 +194,7 @@ private:
     const JoinNonEqualConditions & non_equal_conditions;
 };
 
-#define APPLY_FOR_NULL_AWARE_JOIN(M)                                                                   \
+#define APPLY_FOR_NULL_AWARE_SEMI_JOIN(M)                                                              \
     M(DB::ASTTableJoin::Kind::NullAware_LeftOuterSemi, DB::ASTTableJoin::Strictness::Any, DB::MapsAny) \
     M(DB::ASTTableJoin::Kind::NullAware_LeftOuterSemi, DB::ASTTableJoin::Strictness::All, DB::MapsAll) \
     M(DB::ASTTableJoin::Kind::NullAware_LeftOuterAnti, DB::ASTTableJoin::Strictness::Any, DB::MapsAny) \

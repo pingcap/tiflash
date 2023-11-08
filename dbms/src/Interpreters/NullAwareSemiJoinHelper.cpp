@@ -27,7 +27,7 @@ NASemiJoinResult<KIND, STRICTNESS>::NASemiJoinResult(size_t row_num_, NASemiJoin
     : row_num(row_num_)
     , step(step_)
     , step_end(false)
-    , result(NASemiJoinResultType::NULL_VALUE)
+    , result(SemiJoinResultType::NULL_VALUE)
     , pace(1)
     , pos_in_null_rows(0)
     , pos_in_columns_vector(0)
@@ -128,7 +128,7 @@ void NASemiJoinResult<KIND, STRICTNESS>::checkExprResult(
     static_assert(STRICTNESS == Any);
     static_assert(STEP != NASemiJoinStep::DONE);
 
-    for (size_t i = offset_begin; i < offset_end; i++)
+    for (size_t i = offset_begin; i < offset_end; ++i)
     {
         /// Only care about null map because if the equal expr can be true, the result
         /// should be known during probing hash table, not here.
@@ -136,7 +136,7 @@ void NASemiJoinResult<KIND, STRICTNESS>::checkExprResult(
         {
             /// equal expr is NULL, the result is NULL.
             /// E.g. (1,2) in ((1,null)) or (1,2) in ((null,2)) or (1,null) in ((1,2)).
-            setResult<NASemiJoinResultType::NULL_VALUE>();
+            setResult<SemiJoinResultType::NULL_VALUE>();
             return;
         }
     }
@@ -148,7 +148,7 @@ template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS>
 template <NASemiJoinStep STEP>
 void NASemiJoinResult<KIND, STRICTNESS>::checkExprResult(
     ConstNullMapPtr eq_null_map,
-    const PaddedPODArray<UInt8> & other_column,
+    const ColumnUInt8::Container & other_column,
     ConstNullMapPtr other_null_map,
     size_t offset_begin,
     size_t offset_end)
@@ -156,7 +156,7 @@ void NASemiJoinResult<KIND, STRICTNESS>::checkExprResult(
     static_assert(STRICTNESS == All);
     static_assert(STEP != NASemiJoinStep::DONE);
 
-    for (size_t i = offset_begin; i < offset_end; i++)
+    for (size_t i = offset_begin; i < offset_end; ++i)
     {
         if ((other_null_map && (*other_null_map)[i]) || !other_column[i])
         {
@@ -166,14 +166,14 @@ void NASemiJoinResult<KIND, STRICTNESS>::checkExprResult(
         if constexpr (STEP == NASemiJoinStep::NOT_NULL_KEY_CHECK_MATCHED_ROWS)
         {
             /// other expr is true, so the result is true for this row that has matched right row(s).
-            setResult<NASemiJoinResultType::TRUE_VALUE>();
+            setResult<SemiJoinResultType::TRUE_VALUE>();
             return;
         }
         if ((*eq_null_map)[i])
         {
             /// other expr is true and equal expr is NULL, the result is NULL.
             /// E.g. (1,2) in ((1,null)) or (1,2) in ((null,2)) or (1,null) in ((1,2)).
-            setResult<NASemiJoinResultType::NULL_VALUE>();
+            setResult<SemiJoinResultType::NULL_VALUE>();
             return;
         }
     }
@@ -204,7 +204,7 @@ void NASemiJoinResult<KIND, STRICTNESS>::checkStepEnd()
         /// If it doesn't have null join key, the result is false after checking all right rows
         /// with null join key.
         /// E.g. (1,2) in () or (1,2) in ((1,3),(2,2),(2,null),(null,1)).
-        setResult<NASemiJoinResultType::FALSE_VALUE>();
+        setResult<SemiJoinResultType::FALSE_VALUE>();
     }
     else if constexpr (STEP == NASemiJoinStep::NULL_KEY_CHECK_NULL_ROWS)
     {
@@ -345,7 +345,7 @@ void NASemiJoinHelper<KIND, STRICTNESS, Mapped>::runStep(
                         current_offset - prev_offset);
             }
 
-            offsets.push_back(current_offset);
+            offsets.emplace_back(current_offset);
             if (current_offset >= max_block_size)
                 break;
         }
@@ -398,7 +398,7 @@ void NASemiJoinHelper<KIND, STRICTNESS, Mapped>::runStepAllBlocks(std::list<NASe
         {
             /// After iterating to the end of right blocks, the result is false.
             /// E.g. (1,null) in () or (1,null,2) in ((2,null,2),(1,null,3),(null,1,4)).
-            res->template setResult<NASemiJoinResultType::FALSE_VALUE>();
+            res->template setResult<SemiJoinResultType::FALSE_VALUE>();
             res_list.pop_front();
         }
     }
@@ -432,17 +432,14 @@ void NASemiJoinHelper<KIND, STRICTNESS, Mapped>::runAndCheckExprResult(
         non_equal_conditions.other_cond_expr->execute(exec_block);
 
     ConstNullMapPtr eq_null_map = nullptr;
+    ColumnPtr eq_column;
     if constexpr (STEP != NASemiJoinStep::NOT_NULL_KEY_CHECK_MATCHED_ROWS)
     {
         non_equal_conditions.null_aware_eq_cond_expr->execute(exec_block);
 
-        auto eq_column = exec_block.getByName(non_equal_conditions.null_aware_eq_cond_name).column;
+        eq_column = exec_block.getByName(non_equal_conditions.null_aware_eq_cond_name).column;
         if (eq_column->isColumnConst())
-        {
             eq_column = eq_column->convertToFullColumnIfConst();
-            /// Attention: must set the full column to the original column otherwise eq_null_map will be a dangling pointer.
-            exec_block.getByName(non_equal_conditions.null_aware_eq_cond_name).column = eq_column;
-        }
 
         RUNTIME_CHECK_MSG(
             eq_column->isColumnNullable(),
@@ -484,23 +481,8 @@ void NASemiJoinHelper<KIND, STRICTNESS, Mapped>::runAndCheckExprResult(
     else
     {
         auto other_column = exec_block.getByName(non_equal_conditions.other_cond_name).column;
-        if (other_column->isColumnConst())
-            other_column = other_column->convertToFullColumnIfConst();
 
-        const PaddedPODArray<UInt8> * other_column_data = nullptr;
-        ConstNullMapPtr other_null_map = nullptr;
-        if (other_column->isColumnNullable())
-        {
-            const auto * nullable_other_column = typeid_cast<const ColumnNullable *>(other_column.get());
-            other_column_data
-                = &typeid_cast<const ColumnVector<UInt8> *>(nullable_other_column->getNestedColumnPtr().get())
-                       ->getData();
-            other_null_map = &nullable_other_column->getNullMapData();
-        }
-        else
-        {
-            other_column_data = &typeid_cast<const ColumnVector<UInt8> *>(other_column.get())->getData();
-        }
+        auto [other_column_data, other_null_map] = getDataAndNullMapVectorFromFilterColumn(other_column);
 
         size_t prev_offset = 0;
         auto it = res_list.begin();
@@ -529,10 +511,10 @@ void NASemiJoinHelper<KIND, STRICTNESS, Mapped>::runAndCheckExprResult(
 }
 
 #define M(KIND, STRICTNESS, MAPTYPE) template class NASemiJoinResult<KIND, STRICTNESS>;
-APPLY_FOR_NULL_AWARE_JOIN(M)
+APPLY_FOR_NULL_AWARE_SEMI_JOIN(M)
 #undef M
 
 #define M(KIND, STRICTNESS, MAPTYPE) template class NASemiJoinHelper<KIND, STRICTNESS, MAPTYPE::MappedType::Base_t>;
-APPLY_FOR_NULL_AWARE_JOIN(M)
+APPLY_FOR_NULL_AWARE_SEMI_JOIN(M)
 #undef M
 } // namespace DB
