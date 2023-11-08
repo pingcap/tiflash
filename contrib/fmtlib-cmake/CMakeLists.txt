@@ -1,5 +1,4 @@
 set (SRCS
-    ../fmtlib/src/fmt.cc
     ../fmtlib/src/format.cc
     ../fmtlib/src/os.cc
 
