@@ -26,8 +26,6 @@
 #include <TiDB/Decode/JsonPathExprRef.h>
 #include <Core/Types.h>
 
-#include <magic_enum.hpp>
-
 namespace DB
 {
 /** Json related functions:
@@ -392,57 +390,6 @@ public:
             throw Exception(
                 fmt::format("Illegal column {} of argument of function {}", column->getName(), getName()),
                 ErrorCodes::ILLEGAL_COLUMN);
-    }
-};
-
-class FunctionsCastAsJson : public IFunction
-{
-public:
-    static constexpr auto name = "cast_as_json";
-    static FunctionPtr create(const Context &) { return std::make_shared<FunctionsCastAsJson>(); }
-
-    String getName() const override { return name; }
-
-    size_t getNumberOfArguments() const override { return 1; }
-
-    bool useDefaultImplementationForConstants() const override { return true; }
-
-    DataTypePtr getReturnTypeImpl(const DataTypes & /*arguments*/) const override
-    {
-        return makeNullable(std::make_shared<DataTypeString>());
-    }
-
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
-    {
-        const auto & from = block.getByPosition(arguments[0]);
-        TypeIndex from_type_index = from.type->getTypeId();
-        switch (from_type_index)
-        {
-        case TypeIndex::UInt8:
-            break;
-        case TypeIndex::UInt64:
-            break;
-        case TypeIndex::Int64:
-            break;
-        case TypeIndex::Float32:
-            break;
-        case TypeIndex::Float64:
-            break;
-        case TypeIndex::Decimal32:
-            break;
-        case TypeIndex::Decimal64:
-            break;
-        case TypeIndex::Decimal128:
-            break;
-        case TypeIndex::Decimal256:
-            break;
-        case TypeIndex::String:
-            break;
-        default:
-            throw Exception(
-                fmt::format("Illegal type {} of argument of function {}", magic_enum::enum_name(from_type_index), getName()),
-                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-        }
     }
 };
 } // namespace DB
