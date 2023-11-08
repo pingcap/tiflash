@@ -1430,6 +1430,11 @@ bool hasUnsignedFlag(const tipb::FieldType & tp)
     return tp.flag() & TiDB::ColumnFlagUnsigned;
 }
 
+bool hasParseToJSONFlag(const tipb::FieldType & tp)
+{
+    return tp.flag() & TiDB::ColumnFlagParseToJSON;
+}
+
 void assertBlockSchema(const DataTypes & expected_types, const Block & block, const String & context_description)
 {
     assertBlockSchema(

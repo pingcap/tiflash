@@ -876,4 +876,9 @@ void JsonBinary::appendJsonBinary(JsonBinaryWriteBuffer & write_buffer, const St
     EncodeVarUInt(static_cast<UInt64>(value.size), write_buffer);
     write_buffer.write(value.data, value.size);
 }
+
+void JsonBinary::appendJsonBinary(JsonBinaryWriteBuffer & /*write_buffer*/, const Opaque & /*value*/)
+{
+
+}
 } // namespace DB

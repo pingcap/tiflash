@@ -25,6 +25,7 @@
 #include <Functions/IFunction.h>
 #include <TiDB/Decode/JsonBinary.h>
 #include <TiDB/Decode/JsonPathExprRef.h>
+#include <Flash/Coprocessor/DAGUtils.h>
 
 #include <ext/range.h>
 #include <magic_enum.hpp>
@@ -812,16 +813,81 @@ public:
 
         const auto & from = block.getByPosition(arguments[0]);
         auto source = createDynamicStringSource(*from.column);
-        for (size_t i = 0; i < block.rows(); ++i)
+
+        if (collator->isBinary())
         {
-            const auto & slice = source->getWhole();
-            JsonBinary::appendJsonBinary(write_buffer, StringRef{slice.data, slice.size});
-            writeChar(0, write_buffer);
-            offsets_to[i] = write_buffer.count();
-            source->next();
+            if (tidb_tp.tp() == tipb::String)
+            {
+                doExecuteForBinary<true>(write_buffer, offsets_to, source, tidb_tp.tp(), block.rows());
+            }
+            else
+            {
+                doExecuteForBinary<false>(write_buffer, offsets_to, source, tidb_tp.tp(), block.rows());
+            }
         }
+        else if (hasParseToJSONFlag(tidb_tp))
+        {
+            doExecuteForParsingJson(write_buffer, offsets_to, source, block.rows());
+        }
+        else
+        {
+            doExecuteForOthers(write_buffer, offsets_to, source, block.rows());
+        }
+
         data_to.resize(write_buffer.count());
         block.getByPosition(result).column = std::move(col_to);
+    }
+
+private:
+    template<bool is_binary_str>
+    static void doExecuteForBinary(
+        JsonBinary::JsonBinaryWriteBuffer & data_to,
+        ColumnString::Offsets & offsets_to,
+        const std::unique_ptr<IStringSource> & from_data,
+        UInt8 from_type_code,
+        size_t size)
+    {
+        for (size_t i = 0; i < size; ++i)
+        {
+            const auto & slice = from_data->getWhole();
+            JsonBinary::Opaque opaque{from_type_code, StringRef{slice.data, slice.size}};
+            JsonBinary::appendJsonBinary(data_to, opaque);
+            writeChar(0, data_to);
+            offsets_to[i] = data_to.count();
+            from_data->next();
+        }
+    }
+
+    static void doExecuteForParsingJson(
+        JsonBinary::JsonBinaryWriteBuffer & data_to,
+        ColumnString::Offsets & offsets_to,
+        const std::unique_ptr<IStringSource> & from_data,
+        size_t size)
+    {
+        for (size_t i = 0; i < size; ++i)
+        {
+            const auto & slice = from_data->getWhole();
+            JsonBinary::appendJsonBinary(data_to, StringRef{slice.data, slice.size});
+            writeChar(0, data_to);
+            offsets_to[i] = data_to.count();
+            from_data->next();
+        }
+    }
+
+    static void doExecuteForOthers(
+        JsonBinary::JsonBinaryWriteBuffer & data_to,
+        ColumnString::Offsets & offsets_to,
+        const std::unique_ptr<IStringSource> & from_data,
+        size_t size)
+    {
+        for (size_t i = 0; i < size; ++i)
+        {
+            const auto & slice = from_data->getWhole();
+            JsonBinary::appendJsonBinary(data_to, StringRef{slice.data, slice.size});
+            writeChar(0, data_to);
+            offsets_to[i] = data_to.count();
+            from_data->next();
+        }
     }
 
 private:

@@ -168,6 +168,7 @@ public:
     static void appendJsonBinary(JsonBinaryWriteBuffer & write_buffer, Int64 value);
     static void appendJsonBinary(JsonBinaryWriteBuffer & write_buffer, Float64 value);
     static void appendJsonBinary(JsonBinaryWriteBuffer & write_buffer, const StringRef & value);
+    static void appendJsonBinary(JsonBinaryWriteBuffer & write_buffer, const Opaque & value);
 
 private:
     Int64 getInt64() const;
