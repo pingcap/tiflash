@@ -29,19 +29,19 @@
 
 namespace DB
 {
-raft_serverpb::RegionLocalState MockProxyRegion::getState()
+raft_serverpb::RegionLocalState MockProxyRegion::getState() NO_THREAD_SAFETY_ANALYSIS
 {
     auto _ = genLockGuard();
     return state;
 }
 
-raft_serverpb::RaftApplyState MockProxyRegion::getApply()
+raft_serverpb::RaftApplyState MockProxyRegion::getApply() NO_THREAD_SAFETY_ANALYSIS
 {
     auto _ = genLockGuard();
     return apply;
 }
 
-void MockProxyRegion::updateAppliedIndex(uint64_t index, bool persist_at_once)
+void MockProxyRegion::updateAppliedIndex(uint64_t index, bool persist_at_once) NO_THREAD_SAFETY_ANALYSIS
 {
     auto l = genLockGuard();
     this->apply.set_applied_index(index);
@@ -51,7 +51,7 @@ void MockProxyRegion::updateAppliedIndex(uint64_t index, bool persist_at_once)
     }
 }
 
-void MockProxyRegion::persistAppliedIndex()
+void MockProxyRegion::persistAppliedIndex() NO_THREAD_SAFETY_ANALYSIS
 {
     auto _ = genLockGuard();
     this->persisted_apply = apply;
@@ -62,26 +62,26 @@ void MockProxyRegion::persistAppliedIndex(const std::lock_guard<Mutex> &)
     this->persisted_apply = apply;
 }
 
-uint64_t MockProxyRegion::getPersistedAppliedIndex()
+uint64_t MockProxyRegion::getPersistedAppliedIndex() NO_THREAD_SAFETY_ANALYSIS
 {
     // Assume persist after every advance for simplicity.
     auto _ = genLockGuard();
     return this->persisted_apply.applied_index();
 }
 
-uint64_t MockProxyRegion::getLatestAppliedIndex()
+uint64_t MockProxyRegion::getLatestAppliedIndex() NO_THREAD_SAFETY_ANALYSIS
 {
     auto _ = genLockGuard();
     return this->apply.applied_index();
 }
 
-uint64_t MockProxyRegion::getLatestCommitTerm()
+uint64_t MockProxyRegion::getLatestCommitTerm() NO_THREAD_SAFETY_ANALYSIS
 {
     auto _ = genLockGuard();
     return this->apply.commit_term();
 }
 
-uint64_t MockProxyRegion::getLatestCommitIndex()
+uint64_t MockProxyRegion::getLatestCommitIndex() NO_THREAD_SAFETY_ANALYSIS
 {
     auto _ = genLockGuard();
     return this->apply.commit_index();
@@ -96,19 +96,19 @@ void MockProxyRegion::tryUpdateTruncatedState(uint64_t index, uint64_t term)
     }
 }
 
-void MockProxyRegion::updateCommitIndex(uint64_t index)
+void MockProxyRegion::updateCommitIndex(uint64_t index) NO_THREAD_SAFETY_ANALYSIS
 {
     auto _ = genLockGuard();
     this->apply.set_commit_index(index);
 }
 
-void MockProxyRegion::setState(raft_serverpb::RegionLocalState s)
+void MockProxyRegion::setState(raft_serverpb::RegionLocalState s) NO_THREAD_SAFETY_ANALYSIS
 {
     auto _ = genLockGuard();
     this->state = s;
 }
 
-void MockProxyRegion::reload()
+void MockProxyRegion::reload() NO_THREAD_SAFETY_ANALYSIS
 {
     auto _ = genLockGuard();
     this->apply.set_applied_index(this->persisted_apply.applied_index());
@@ -126,7 +126,7 @@ MockProxyRegion::MockProxyRegion(uint64_t id_)
     state.mutable_region()->set_id(id);
 }
 
-UniversalWriteBatch MockProxyRegion::persistMeta()
+UniversalWriteBatch MockProxyRegion::persistMeta() NO_THREAD_SAFETY_ANALYSIS
 {
     auto _ = genLockGuard();
     auto wb = UniversalWriteBatch();
@@ -158,7 +158,7 @@ UniversalWriteBatch MockProxyRegion::persistMeta()
     return wb;
 }
 
-void MockProxyRegion::addPeer(uint64_t store_id, uint64_t peer_id, metapb::PeerRole role)
+void MockProxyRegion::addPeer(uint64_t store_id, uint64_t peer_id, metapb::PeerRole role) NO_THREAD_SAFETY_ANALYSIS
 {
     auto _ = genLockGuard();
     auto & peer = *state.mutable_region()->mutable_peers()->Add();

@@ -91,7 +91,7 @@ BlobStore<Trait>::BlobStore(
 {}
 
 template <typename Trait>
-void BlobStore<Trait>::registerPaths()
+void BlobStore<Trait>::registerPaths() NO_THREAD_SAFETY_ANALYSIS
 {
     for (const auto & path : delegator->listPaths())
     {
@@ -153,7 +153,7 @@ void BlobStore<Trait>::reloadConfig(const BlobConfig & rhs)
 }
 
 template <typename Trait>
-FileUsageStatistics BlobStore<Trait>::getFileUsageStatistics() const
+FileUsageStatistics BlobStore<Trait>::getFileUsageStatistics() const NO_THREAD_SAFETY_ANALYSIS
 {
     FileUsageStatistics usage;
 
@@ -667,7 +667,7 @@ void BlobStore<Trait>::freezeBlobFiles()
 }
 
 template <typename Trait>
-void BlobStore<Trait>::remove(const PageEntries & del_entries)
+void BlobStore<Trait>::remove(const PageEntries & del_entries) NO_THREAD_SAFETY_ANALYSIS
 {
     std::set<BlobFileId> blob_updated;
     for (const auto & entry : del_entries)
@@ -725,11 +725,12 @@ void BlobStore<Trait>::remove(const PageEntries & del_entries)
 
 template <typename Trait>
 std::pair<BlobFileId, BlobFileOffset> BlobStore<Trait>::getPosFromStats(size_t size, PageType page_type)
+    NO_THREAD_SAFETY_ANALYSIS
 {
     Stopwatch watch;
     BlobStatPtr stat;
 
-    auto lock_stat = [size, this, &stat, &page_type]() {
+    auto lock_stat = [size, this, &stat, &page_type]() NO_THREAD_SAFETY_ANALYSIS {
         auto lock_stats = blob_stats.lock();
         BlobFileId blob_file_id = INVALID_BLOBFILE_ID;
         std::tie(stat, blob_file_id) = blob_stats.chooseStat(size, page_type, lock_stats);
@@ -782,6 +783,7 @@ std::pair<BlobFileId, BlobFileOffset> BlobStore<Trait>::getPosFromStats(size_t s
 
 template <typename Trait>
 void BlobStore<Trait>::removePosFromStats(BlobFileId blob_id, BlobFileOffset offset, size_t size)
+    NO_THREAD_SAFETY_ANALYSIS
 {
     const auto & stat = blob_stats.blobIdToStat(blob_id);
     {
@@ -1165,7 +1167,7 @@ BlobFilePtr BlobStore<Trait>::read(
 
 
 template <typename Trait>
-typename BlobStore<Trait>::PageTypeAndBlobIds BlobStore<Trait>::getGCStats()
+typename BlobStore<Trait>::PageTypeAndBlobIds BlobStore<Trait>::getGCStats() NO_THREAD_SAFETY_ANALYSIS
 {
     // Get a copy of stats map to avoid the big lock on stats map
     const auto stats_list = blob_stats.getStats();
