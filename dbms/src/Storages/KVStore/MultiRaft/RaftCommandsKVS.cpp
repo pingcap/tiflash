@@ -29,6 +29,8 @@
 #include <Storages/StorageDeltaMergeHelpers.h>
 #include <common/likely.h>
 
+#include <magic_enum.hpp>
+
 namespace DB
 {
 
@@ -135,7 +137,7 @@ EngineStoreApplyRes KVStore::handleUselessAdminRaftCmd(
             curr_region,
             &region_task_lock,
             PersistRegionReason::UselessAdminCommand,
-            fmt::format("{}", cmd_type).c_str());
+            raft_cmdpb::AdminCmdType_Name(cmd_type).c_str());
         return EngineStoreApplyRes::Persist;
     }
     return EngineStoreApplyRes::None;

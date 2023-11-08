@@ -820,11 +820,11 @@ void DMFile::initializeIndices()
         }
         catch (const std::invalid_argument & err)
         {
-            throw DB::Exception(fmt::format("invalid ColId: {} from file: {}", err.what(), data));
+            throw DB::Exception(fmt::format("invalid ColId: {} from file: {}", err.what(), data.toStringView()));
         }
         catch (const std::out_of_range & err)
         {
-            throw DB::Exception(fmt::format("invalid ColId: {} from file: {}", err.what(), data));
+            throw DB::Exception(fmt::format("invalid ColId: {} from file: {}", err.what(), data.toStringView()));
         }
     };
 

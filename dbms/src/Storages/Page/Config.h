@@ -138,15 +138,15 @@ struct PageStorageConfig
             "gc_min_legacy_num: {}, gc_max_expect_legacy: {}, gc_max_valid_rate_bound: {:.3f}, "
             "prob_do_gc_when_write_is_low: {}, "
             "open_file_max_idle_time: {}}}",
-            gc_min_files,
-            gc_min_bytes,
+            gc_min_files.toString(),
+            gc_min_bytes.toString(),
             gc_force_hardlink_rate.get(),
             gc_max_valid_rate.get(),
-            gc_min_legacy_num,
+            gc_min_legacy_num.toString(),
             gc_max_expect_legacy_files.get(),
             gc_max_valid_rate_bound.get(),
-            prob_do_gc_when_write_is_low,
-            open_file_max_idle_time);
+            prob_do_gc_when_write_is_low.toString(),
+            open_file_max_idle_time.toString());
     }
 
     String toDebugStringV3() const

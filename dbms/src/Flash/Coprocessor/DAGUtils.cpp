@@ -803,7 +803,9 @@ String getExchangeTypeName(const tipb::ExchangeType & tp)
     case tipb::ExchangeType::Hash:
         return "Hash";
     default:
-        throw TiFlashException(fmt::format("Not supported Exchange type: {}", tp), Errors::Coprocessor::Internal);
+        throw TiFlashException(
+            fmt::format("Not supported Exchange type: {}", fmt::underlying(tp)),
+            Errors::Coprocessor::Internal);
     }
 }
 
@@ -826,7 +828,9 @@ String getJoinTypeName(const tipb::JoinType & tp)
     case tipb::JoinType::TypeSemiJoin:
         return "SemiJoin";
     default:
-        throw TiFlashException(fmt::format("Not supported Join type: {}", tp), Errors::Coprocessor::Internal);
+        throw TiFlashException(
+            fmt::format("Not supported Join type: {}", fmt::underlying(tp)),
+            Errors::Coprocessor::Internal);
     }
 }
 
@@ -838,7 +842,7 @@ String getJoinExecTypeName(const tipb::JoinExecType & tp)
         return "HashJoin";
     default:
         throw TiFlashException(
-            fmt::format("Not supported Join exectution type: {}", tp),
+            fmt::format("Not supported Join exectution type: {}", fmt::underlying(tp)),
             Errors::Coprocessor::Internal);
     }
 }
