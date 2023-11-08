@@ -203,7 +203,7 @@ private:
         {
             // Load index based on filter.
             ColIds ids = filter->getColumnIDs();
-            for (auto & id : ids)
+            for (const auto & id : ids)
             {
                 tryLoadIndex(id);
             }
