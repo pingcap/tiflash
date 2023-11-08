@@ -757,7 +757,7 @@ const String & getAggFunctionName(const tipb::Expr & expr)
         Errors::Coprocessor::Unimplemented,
         "{}(distinct={}) is not supported.",
         tipb::ExprType_Name(expr.tp()),
-        expr.has_distinct() ? "true" : "false");
+        expr.has_distinct());
 }
 
 const String & getWindowFunctionName(const tipb::Expr & expr)
