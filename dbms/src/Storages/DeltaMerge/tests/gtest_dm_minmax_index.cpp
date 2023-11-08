@@ -2114,7 +2114,7 @@ try
 }
 CATCH
 
-TEST_F(DMMinMaxIndexTest, ParseIn)
+TEST_F(c, ParseIn)
 try
 {
     const google::protobuf::RepeatedPtrField<tipb::Expr> pushed_down_filters{};
@@ -2257,10 +2257,10 @@ try
         "ColumnRef val: \"\\200\\000\\000\\000\\000\\000\\000\\001\" field_type { tp: 1 flag: 0 } } children { tp: "
         "Int64 val: \"\\200\\000\\000\\000\\000\\000\\000\\001\" } children { tp: ColumnRef val: "
         "\"\\200\\000\\000\\000\\000\\000\\000\\002\" field_type { tp: 1 flag: 0 } } sig: "
-        "InInt\",\"is_not\":\"0\"},{\"op\":\"unsupported\",\"reason\":\"Multiple ColumnRef in expression is not "
+        "InInt\"},{\"op\":\"unsupported\",\"reason\":\"Multiple ColumnRef in expression is not "
         "supported\",\"content\":\"tp: ScalarFunc children { tp: ColumnRef val: "
         "\"\\200\\000\\000\\000\\000\\000\\000\\001\" field_type { tp: 1 flag: 0 } } children { tp: ColumnRef val: "
-        "\"\\200\\000\\000\\000\\000\\000\\000\\002\" field_type { tp: 1 flag: 0 } } sig: InInt\",\"is_not\":\"0\"}]}");
+        "\"\\200\\000\\000\\000\\000\\000\\000\\002\" field_type { tp: 1 flag: 0 } } sig: InInt\"}]}");
 }
 CATCH
 

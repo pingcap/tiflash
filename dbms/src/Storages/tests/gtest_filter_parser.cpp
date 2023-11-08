@@ -396,9 +396,9 @@ try
             "{\"op\":\"and\",\"children\":[{\"op\":\"unsupported\",\"reason\":\"child of logical and is not "
             "function\",\"content\":\"tp: ColumnRef val: \"\\200\\000\\000\\000\\000\\000\\000\\001\" field_type { tp: "
             "8 flag: 4097 flen: 0 decimal: 0 collate: 0 "
-            "}\",\"is_not\":\"0\"},{\"op\":\"unsupported\",\"reason\":\"child of logical and is not "
+            "}\"},{\"op\":\"unsupported\",\"reason\":\"child of logical and is not "
             "function\",\"content\":\"tp: Uint64 val: \"\\000\\000\\000\\000\\000\\000\\000\\001\" field_type { tp: 1 "
-            "flag: 4129 flen: 0 decimal: 0 collate: 0 }\",\"is_not\":\"0\"}]}");
+            "flag: 4129 flen: 0 decimal: 0 collate: 0 }\"}]}");
     }
 
     std::cout << " do query select * from default.t_111 where col_6 or 1 " << std::endl;
@@ -411,9 +411,9 @@ try
             "{\"op\":\"or\",\"children\":[{\"op\":\"unsupported\",\"reason\":\"child of logical operator is not "
             "function\",\"content\":\"tp: ColumnRef val: \"\\200\\000\\000\\000\\000\\000\\000\\001\" field_type { tp: "
             "8 flag: 4097 flen: 0 decimal: 0 collate: 0 "
-            "}\",\"is_not\":\"0\"},{\"op\":\"unsupported\",\"reason\":\"child of logical operator is not "
+            "}\"},{\"op\":\"unsupported\",\"reason\":\"child of logical operator is not "
             "function\",\"content\":\"tp: Uint64 val: \"\\000\\000\\000\\000\\000\\000\\000\\001\" field_type { tp: 1 "
-            "flag: 4129 flen: 0 decimal: 0 collate: 0 }\",\"is_not\":\"0\"}]}");
+            "flag: 4129 flen: 0 decimal: 0 collate: 0 }\"}]}");
     }
 
     {

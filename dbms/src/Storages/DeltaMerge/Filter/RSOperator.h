@@ -137,6 +137,6 @@ RSOperatorPtr createLike(const Attr & attr, const Field & value);
 //
 RSOperatorPtr createIsNull(const Attr & attr);
 //
-RSOperatorPtr createUnsupported(const String & content, const String & reason, bool is_not);
+RSOperatorPtr createUnsupported(const String & content, const String & reason);
 
 } // namespace DB::DM
