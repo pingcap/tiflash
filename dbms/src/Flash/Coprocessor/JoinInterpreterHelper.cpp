@@ -26,7 +26,6 @@
 #include <common/logger_useful.h>
 #include <fmt/format.h>
 
-#include <magic_enum.hpp>
 #include <unordered_map>
 
 namespace DB

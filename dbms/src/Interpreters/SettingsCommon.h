@@ -91,6 +91,12 @@ private:
     std::atomic<IntType> value;
 };
 
+// Make SettingInt formatable by fmtlib
+template <typename IntType>
+ALWAYS_INLINE inline auto format_as(SettingInt<IntType> s)
+{
+    return s.get();
+}
 
 using SettingUInt64 = SettingInt<UInt64>;
 using SettingInt64 = SettingInt<Int64>;
@@ -338,6 +344,12 @@ private:
     std::atomic<float> value;
 };
 
+// Make SettingFloat formatable by fmtlib
+ALWAYS_INLINE inline auto format_as(SettingFloat s)
+{
+    return s.get();
+}
+
 /// MemoryLimit can either be an UInt64 (means memory limit in bytes),
 /// or be a float-point number (means memory limit ratio of total RAM, from 0.0 to 1.0).
 /// 0 or 0.0 means unlimited.
@@ -438,6 +450,12 @@ public:
 private:
     std::atomic<double> value;
 };
+
+// Make SettingDouble formatable by fmtlib
+ALWAYS_INLINE inline auto format_as(SettingDouble s)
+{
+    return s.get();
+}
 
 enum class LoadBalancing
 {
@@ -830,39 +848,3 @@ private:
 };
 
 } // namespace DB
-
-template <typename T>
-struct fmt::formatter<DB::SettingInt<T>>
-{
-    static constexpr auto parse(format_parse_context & ctx) { return ctx.begin(); }
-
-    template <typename FormatContext>
-    auto format(const DB::SettingInt<T> & s, FormatContext & ctx) const
-    {
-        return fmt::format_to(ctx.out(), "{}", s.get());
-    }
-};
-
-template <>
-struct fmt::formatter<DB::SettingFloat>
-{
-    static constexpr auto parse(format_parse_context & ctx) { return ctx.begin(); }
-
-    template <typename FormatContext>
-    auto format(const DB::SettingFloat & s, FormatContext & ctx) const
-    {
-        return fmt::format_to(ctx.out(), "{:.3f}", s.get());
-    }
-};
-
-template <>
-struct fmt::formatter<DB::SettingDouble>
-{
-    static constexpr auto parse(format_parse_context & ctx) { return ctx.begin(); }
-
-    template <typename FormatContext>
-    auto format(const DB::SettingDouble & s, FormatContext & ctx) const
-    {
-        return fmt::format_to(ctx.out(), "{:.3f}", s.get());
-    }
-};
