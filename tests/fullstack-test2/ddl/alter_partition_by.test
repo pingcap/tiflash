@@ -143,6 +143,7 @@ mysql> create table test.t2 (a int primary key, b varchar(255), c int, key (b), 
 mysql> alter table test.t2 set tiflash replica 1;
 mysql> insert into test.t2 select * from test.t;
 func> wait_table test t2
+mysql> drop table test.t;
 
 mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t2 order by a;
 +---------+---------+----------+
@@ -166,8 +167,6 @@ mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t2 
 | 1500004 | 1500004 | -1500004 |
 +---------+---------+----------+
 
-mysql> drop table test.t;
-
 # check the t2 is created in TiFlash
 >> select tidb_database,tidb_name from system.tables where tidb_database = 'test' and tidb_name = 't2' and is_tombstone = 0
 ┌─tidb_database─┬─tidb_name─┐
@@ -176,6 +175,9 @@ mysql> drop table test.t;
 
 mysql> alter table test.t2 partition by hash (a) partitions 3;
 mysql> analyze table test.t2;
+
+#TODO this is just a workaround, the tidb return before waitting tiflash replica available for the new partitions
+SLEEP 10
 
 mysql> set session tidb_isolation_read_engines='tiflash'; select count(*) from test.t2 partition (p0);
 +----------+
