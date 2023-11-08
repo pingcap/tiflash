@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Interpreters/SemiJoinHelper.h>
-#include <Interpreters/JoinPartition.h>
 #include <Common/Logger.h>
 #include <Core/Block.h>
+#include <Interpreters/JoinPartition.h>
+#include <Interpreters/SemiJoinHelper.h>
 
 namespace DB
 {
@@ -68,7 +68,7 @@ void SemiJoinResult<KIND, All>::fillRightColumns(
 }
 
 template <ASTTableJoin::Kind KIND>
-template<bool has_other_eq_cond_from_in, bool has_other_cond, bool has_other_cond_null_map>
+template <bool has_other_eq_cond_from_in, bool has_other_cond, bool has_other_cond_null_map>
 bool SemiJoinResult<KIND, All>::checkExprResult(
     const ColumnUInt8::Container & other_eq_column,
     ConstNullMapPtr other_eq_null_map,
@@ -220,7 +220,7 @@ void SemiJoinHelper<KIND, Mapped>::joinResult(std::list<Result *> & res_list)
 
         non_equal_conditions.other_cond_expr->execute(exec_block);
 
-        const ColumnUInt8::Container * other_eq_from_in_column_data, * other_column_data;
+        const ColumnUInt8::Container *other_eq_from_in_column_data, *other_column_data;
         ConstNullMapPtr other_eq_from_in_null_map, other_null_map;
         ColumnPtr other_eq_from_in_column, other_column;
 
@@ -232,7 +232,8 @@ void SemiJoinHelper<KIND, Mapped>::joinResult(std::list<Result *> & res_list)
                 other_eq_from_in_column->isColumnNullable(),
                 "The equal condition from in column should be nullable, otherwise it should be used as join key");
 
-            std::tie(other_eq_from_in_column_data, other_eq_from_in_null_map) = getDataAndNullMapVectorFromFilterColumn(other_eq_from_in_column);
+            std::tie(other_eq_from_in_column_data, other_eq_from_in_null_map)
+                = getDataAndNullMapVectorFromFilterColumn(other_eq_from_in_column);
         }
 
         bool has_other_cond = !non_equal_conditions.other_cond_name.empty();
@@ -244,14 +245,14 @@ void SemiJoinHelper<KIND, Mapped>::joinResult(std::list<Result *> & res_list)
             has_other_cond_null_map = other_null_map != nullptr;
         }
 
-#define CALL(has_other_eq_cond_from_in, has_other_cond, has_other_cond_null_map) \
-            checkAllExprResult<has_other_eq_cond_from_in, has_other_cond, has_other_cond_null_map> ( \
-                offsets,                                \
-                res_list,             \
-                *other_eq_from_in_column_data,                           \
-                other_eq_from_in_null_map,                         \
-                *other_column_data,          \
-                other_null_map);
+#define CALL(has_other_eq_cond_from_in, has_other_cond, has_other_cond_null_map)            \
+    checkAllExprResult<has_other_eq_cond_from_in, has_other_cond, has_other_cond_null_map>( \
+        offsets,                                                                            \
+        res_list,                                                                           \
+        *other_eq_from_in_column_data,                                                      \
+        other_eq_from_in_null_map,                                                          \
+        *other_column_data,                                                                 \
+        other_null_map);
 
         if (has_other_eq_cond_from_in)
         {
@@ -288,7 +289,7 @@ void SemiJoinHelper<KIND, Mapped>::joinResult(std::list<Result *> & res_list)
 }
 
 template <ASTTableJoin::Kind KIND, typename Mapped>
-template<bool has_other_eq_cond_from_in, bool has_other_cond, bool has_other_cond_null_map>
+template <bool has_other_eq_cond_from_in, bool has_other_cond, bool has_other_cond_null_map>
 void SemiJoinHelper<KIND, Mapped>::checkAllExprResult(
     const std::vector<size_t> & offsets,
     std::list<Result *> & res_list,
@@ -302,12 +303,12 @@ void SemiJoinHelper<KIND, Mapped>::checkAllExprResult(
     for (size_t i = 0, size = offsets.size(); i < size && it != res_list.end(); ++i)
     {
         if ((*it)->template checkExprResult<has_other_eq_cond_from_in, has_other_cond, has_other_cond_null_map>(
-            other_eq_column,
-            other_eq_null_map,
-            other_column,
-            other_null_map,
-            prev_offset,
-            offsets[i]))
+                other_eq_column,
+                other_eq_null_map,
+                other_column,
+                other_null_map,
+                prev_offset,
+                offsets[i]))
         {
             it = res_list.erase(it);
         }

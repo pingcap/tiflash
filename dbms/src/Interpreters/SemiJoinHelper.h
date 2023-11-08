@@ -46,10 +46,7 @@ public:
         }
     }
 
-    bool getResult() const
-    {
-        return result;
-    }
+    bool getResult() const { return result; }
 
 private:
     bool result;
@@ -98,7 +95,7 @@ public:
         size_t & current_offset,
         size_t max_pace);
 
-    template<bool has_other_eq_cond_from_in, bool has_other_cond, bool has_other_cond_null_map>
+    template <bool has_other_eq_cond_from_in, bool has_other_cond, bool has_other_cond_null_map>
     bool checkExprResult(
         const ColumnUInt8::Container & other_eq_column,
         ConstNullMapPtr other_eq_null_map,
@@ -134,7 +131,7 @@ public:
     void joinResult(std::list<Result *> & res_list);
 
 private:
-    template<bool has_other_eq_cond_from_in, bool has_other_cond, bool has_other_cond_null_map>
+    template <bool has_other_eq_cond_from_in, bool has_other_cond, bool has_other_cond_null_map>
     void checkAllExprResult(
         const std::vector<size_t> & offsets,
         std::list<Result *> & res_list,
@@ -151,13 +148,13 @@ private:
     const JoinNonEqualConditions & non_equal_conditions;
 };
 
-#define APPLY_FOR_SEMI_JOIN(M)                                                                   \
+#define APPLY_FOR_SEMI_JOIN(M)                                                               \
     M(DB::ASTTableJoin::Kind::LeftOuterSemi, DB::ASTTableJoin::Strictness::Any, DB::MapsAny) \
     M(DB::ASTTableJoin::Kind::LeftOuterSemi, DB::ASTTableJoin::Strictness::All, DB::MapsAll) \
     M(DB::ASTTableJoin::Kind::LeftOuterAnti, DB::ASTTableJoin::Strictness::Any, DB::MapsAny) \
     M(DB::ASTTableJoin::Kind::LeftOuterAnti, DB::ASTTableJoin::Strictness::All, DB::MapsAll) \
-    M(DB::ASTTableJoin::Kind::Semi, DB::ASTTableJoin::Strictness::Any, DB::MapsAny)    \
-    M(DB::ASTTableJoin::Kind::Semi, DB::ASTTableJoin::Strictness::All, DB::MapsAll) \
+    M(DB::ASTTableJoin::Kind::Semi, DB::ASTTableJoin::Strictness::Any, DB::MapsAny)          \
+    M(DB::ASTTableJoin::Kind::Semi, DB::ASTTableJoin::Strictness::All, DB::MapsAll)          \
     M(DB::ASTTableJoin::Kind::Anti, DB::ASTTableJoin::Strictness::Any, DB::MapsAny)          \
     M(DB::ASTTableJoin::Kind::Anti, DB::ASTTableJoin::Strictness::All, DB::MapsAll)
 
