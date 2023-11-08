@@ -28,7 +28,8 @@
 
 #include <ext/range.h>
 #include <magic_enum.hpp>
-#include "Core/Types.h"
+#include <tipb/expression.pb.h>
+#include <Core/Types.h>
 
 namespace DB
 {
@@ -773,5 +774,58 @@ private:
             offsets_to[i] = data_to.count();
         }
     }
+};
+
+class FunctionsCastStringAsJson : public IFunction
+{
+public:
+    static constexpr auto name = "cast_string_as_json";
+    static FunctionPtr create(const Context &) { return std::make_shared<FunctionsCastStringAsJson>(); }
+
+    String getName() const override { return name; }
+
+    size_t getNumberOfArguments() const override { return 1; }
+
+    bool useDefaultImplementationForNulls() const override { return true; }
+    bool useDefaultImplementationForConstants() const override { return true; }
+
+    void setTiDBFieldType(const tipb::FieldType & tidb_tp_) { tidb_tp = tidb_tp_; }
+    void setCollator(const TiDB::TiDBCollatorPtr & collator_) override { collator = collator_; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        if unlikely (!arguments[0]->isStringOrFixedString())
+            throw Exception(
+                fmt::format("Illegal type {} of argument of function {}", arguments[0]->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        return makeNullable(std::make_shared<DataTypeString>());
+    }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
+    {
+        auto col_to = ColumnString::create();
+        auto & data_to = col_to->getChars();
+        JsonBinary::JsonBinaryWriteBuffer write_buffer(data_to);
+        auto & offsets_to = col_to->getOffsets();
+        auto rows = block.rows();
+        offsets_to.resize(rows);
+
+        const auto & from = block.getByPosition(arguments[0]);
+        auto source = createDynamicStringSource(*from.column);
+        for (size_t i = 0; i < block.rows(); ++i)
+        {
+            const auto & slice = source->getWhole();
+            JsonBinary::appendJsonBinary(write_buffer, StringRef{slice.data, slice.size});
+            writeChar(0, write_buffer);
+            offsets_to[i] = write_buffer.count();
+            source->next();
+        }
+        data_to.resize(write_buffer.count());
+        block.getByPosition(result).column = std::move(col_to);
+    }
+
+private:
+    tipb::FieldType tidb_tp;
+    TiDB::TiDBCollatorPtr collator = nullptr;
 };
 } // namespace DB

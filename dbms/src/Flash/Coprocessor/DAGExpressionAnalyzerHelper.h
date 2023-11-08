@@ -71,6 +71,11 @@ public:
         const tipb::Expr & expr,
         const ExpressionActionsPtr & actions);
 
+    static String buildCastStringAsJson(
+        DAGExpressionAnalyzer * analyzer,
+        const tipb::Expr & expr,
+        const ExpressionActionsPtr & actions);
+
     template <typename Impl>
     static String buildDateAddOrSubFunction(
         DAGExpressionAnalyzer * analyzer,
