@@ -882,7 +882,7 @@ void Join::handleOtherConditions(
         for (size_t i = 0; i < input_block.columns();)
         {
             auto & col_name = input_block.getByPosition(i).name;
-            if (col_name == flag_mapped_entry_helper_name
+            if ((!flag_mapped_entry_helper_name.empty() && col_name == flag_mapped_entry_helper_name)
                 || output_column_names_set_after_finalize.find(col_name)
                     != output_column_names_set_after_finalize.end())
                 ++i;
@@ -1082,6 +1082,19 @@ void Join::handleOtherConditionsForOneProbeRow(Block & block, ProbeProcessInfo &
     assert(probe_process_info.offsets_to_replicate->size() == 1);
     assert((*probe_process_info.offsets_to_replicate)[0] == block.rows());
 
+    auto erase_useless_column = [&](Block & input_block) {
+        for (size_t i = 0; i < input_block.columns();)
+        {
+            auto & col_name = input_block.getByPosition(i).name;
+            if ((!flag_mapped_entry_helper_name.empty() && col_name == flag_mapped_entry_helper_name)
+                || output_column_names_set_after_finalize.find(col_name)
+                    != output_column_names_set_after_finalize.end())
+                ++i;
+            else
+                input_block.erase(i);
+        }
+    };
+
     non_equal_conditions.other_cond_expr->execute(block);
     auto filter_column = ColumnUInt8::create();
     auto & filter = filter_column->getData();
@@ -1120,6 +1133,7 @@ void Join::handleOtherConditionsForOneProbeRow(Block & block, ProbeProcessInfo &
     /// case 1, inner join
     if (kind == ASTTableJoin::Kind::Cross && original_strictness == ASTTableJoin::Strictness::All)
     {
+        erase_useless_column(block);
         if (matched_row_count_in_current_block > 0)
         {
             for (size_t i = 0; i < block.columns(); ++i)
@@ -1138,6 +1152,7 @@ void Join::handleOtherConditionsForOneProbeRow(Block & block, ProbeProcessInfo &
         assert(original_strictness == ASTTableJoin::Strictness::All);
         if (matched_row_count_in_current_block > 0)
         {
+            erase_useless_column(block);
             for (size_t i = 0; i < block.columns(); ++i)
                 block.safeGetByPosition(i).column
                     = block.safeGetByPosition(i).column->filter(filter, matched_row_count_in_current_block);
@@ -1148,7 +1163,7 @@ void Join::handleOtherConditionsForOneProbeRow(Block & block, ProbeProcessInfo &
             for (size_t i = 0; i < block.columns(); ++i)
                 block.getByPosition(i).column = block.getByPosition(i).column->cut(0, 1);
             filter.resize(1);
-            for (size_t right_table_column : probe_process_info.right_column_index)
+            for (size_t right_table_column : probe_process_info.right_column_index_in_result_block)
             {
                 auto & column = block.getByPosition(right_table_column);
                 auto full_column
@@ -1162,14 +1177,19 @@ void Join::handleOtherConditionsForOneProbeRow(Block & block, ProbeProcessInfo &
                 static_cast<ColumnNullable &>(*result_column).applyNegatedNullMap(*filter_column);
                 column.column = std::move(result_column);
             }
+            erase_useless_column(block);
         }
         else
+        {
+            erase_useless_column(block);
             block = block.cloneEmpty();
+        }
         return;
     }
     /// case 3, semi join
     if (kind == ASTTableJoin::Kind::Cross && original_strictness == ASTTableJoin::Strictness::Any)
     {
+        erase_useless_column(block);
         if (probe_process_info.has_row_matched)
         {
             /// has matched rows, return the first row, and set the current row probe done
@@ -1187,6 +1207,7 @@ void Join::handleOtherConditionsForOneProbeRow(Block & block, ProbeProcessInfo &
     /// case 4, anti join
     if (kind == ASTTableJoin::Kind::Cross_Anti)
     {
+        erase_useless_column(block);
         if (probe_process_info.has_row_matched)
         {
             block = block.cloneEmpty();
@@ -1206,6 +1227,7 @@ void Join::handleOtherConditionsForOneProbeRow(Block & block, ProbeProcessInfo &
     /// case 5, left outer semi join
     if (isLeftOuterSemiFamily(kind))
     {
+        erase_useless_column(block);
         if (probe_process_info.has_row_matched || probe_process_info.isCurrentProbeRowFinished())
         {
             for (size_t i = 0; i < block.columns(); ++i)
@@ -1485,7 +1507,7 @@ Block Join::doJoinBlockCross(ProbeProcessInfo & probe_process_info) const
                 block,
                 probe_process_info.filter,
                 probe_process_info.offsets_to_replicate,
-                probe_process_info.right_column_index);
+                probe_process_info.right_column_index_in_result_block);
         }
         return block;
     }
@@ -1510,11 +1532,9 @@ Block Join::doJoinBlockCross(ProbeProcessInfo & probe_process_info) const
             }
             if (isLeftOuterSemiFamily(kind))
             {
-                auto helper_index
-                    = probe_process_info.block.columns() + probe_process_info.right_column_index.size() - 1;
-                if (block.getByPosition(helper_index).column->isColumnConst())
-                    block.getByPosition(helper_index).column
-                        = block.getByPosition(helper_index).column->convertToFullColumnIfConst();
+                auto & help_column = block.getByName(match_helper_name);
+                if (help_column.column->isColumnConst())
+                    help_column.column = help_column.column->convertToFullColumnIfConst();
             }
         }
         else if (non_equal_conditions.other_cond_expr != nullptr)
@@ -1524,7 +1544,7 @@ Block Join::doJoinBlockCross(ProbeProcessInfo & probe_process_info) const
                 block,
                 probe_process_info.filter,
                 probe_process_info.offsets_to_replicate,
-                probe_process_info.right_column_index);
+                probe_process_info.right_column_index_in_result_block);
         }
         return block;
     }
@@ -1541,6 +1561,8 @@ Block Join::joinBlockCross(ProbeProcessInfo & probe_process_info) const
         kind,
         strictness,
         sample_block_without_keys,
+        has_other_condition ? output_columns_names_set_for_other_condition_after_finalize
+                            : output_column_names_set_after_finalize,
         right_rows_to_be_added_when_matched_for_cross_join,
         cross_probe_mode,
         blocks.size());

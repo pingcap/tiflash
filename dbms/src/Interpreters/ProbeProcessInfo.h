@@ -60,7 +60,9 @@ struct ProbeProcessInfo
 
     /// for cross probe
     Block result_block_schema;
-    std::vector<size_t> right_column_index;
+    std::vector<size_t> right_column_index_in_result_block;
+    std::vector<size_t> right_column_index_in_right_block;
+    std::vector<size_t> left_column_index_in_left_block;
     size_t right_rows_to_be_added_when_matched = 0;
     CrossProbeMode cross_probe_mode = CrossProbeMode::DEEP_COPY_RIGHT_BLOCK;
     /// the following fields are used for NO_COPY_RIGHT_BLOCK probe
@@ -133,7 +135,8 @@ struct ProbeProcessInfo
         const String & filter_column,
         ASTTableJoin::Kind kind,
         ASTTableJoin::Strictness strictness,
-        const Block & sample_block_with_columns_to_add,
+        const Block & sample_block_without_keys,
+        const NameSet & output_column_names_set,
         size_t right_rows_to_be_added_when_matched,
         CrossProbeMode cross_probe_mode,
         size_t right_block_size);
