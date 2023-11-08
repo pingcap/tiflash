@@ -20,7 +20,7 @@ mysql> insert into test.t values(null, '{\"a\" : \"b\", \"aa\" : \"bb\"}', '[1,2
 func> wait_table test t
 
 # json_array(null_value in column)
-mysql> set tidb_allow_mpp=1;set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash'; select json_array(a) from t;
+mysql> set tidb_allow_mpp=1;set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash'; select json_array(a) from test.t;
 +---------------+
 | json_array(a) |
 +---------------+
@@ -28,14 +28,14 @@ mysql> set tidb_allow_mpp=1;set tidb_enforce_mpp=1; set tidb_isolation_read_engi
 +---------------+
 
 # json_array(not_null_value in column)
-mysql> set tidb_allow_mpp=1;set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash'; select json_array(b) from t;
+mysql> set tidb_allow_mpp=1;set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash'; select json_array(b) from test.t;
 +--------------------------+
 | json_array(b)            |
 +--------------------------+
 | [{"a": "b", "aa": "bb"}] |
 +--------------------------+
 
-mysql> set tidb_allow_mpp=1;set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash'; select json_array(b, c, d, e) from t;
+mysql> set tidb_allow_mpp=1;set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash'; select json_array(b, c, d, e) from test.t;
 +-----------------------------------------------------------------------------+
 | json_array(b, c, d, e)                                                      |
 +-----------------------------------------------------------------------------+
@@ -43,7 +43,7 @@ mysql> set tidb_allow_mpp=1;set tidb_enforce_mpp=1; set tidb_isolation_read_engi
 +-----------------------------------------------------------------------------+
 
 # json_array(null_value in column + not_null_value in column)
-mysql> set tidb_allow_mpp=1;set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash'; select json_array(a, b, c, d, e) from t;
+mysql> set tidb_allow_mpp=1;set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash'; select json_array(a, b, c, d, e) from test.t;
 +-----------------------------------------------------------------------------------+
 | json_array(a, b, c, d, e)                                                         |
 +-----------------------------------------------------------------------------------+
@@ -51,14 +51,14 @@ mysql> set tidb_allow_mpp=1;set tidb_enforce_mpp=1; set tidb_isolation_read_engi
 +-----------------------------------------------------------------------------------+
 
 # json_array(null_value in column + only_null_const)
-mysql> set tidb_allow_mpp=1;set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash'; select json_array(a, null) from t;
+mysql> set tidb_allow_mpp=1;set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash'; select json_array(a, null) from test.t;
 +---------------------+
 | json_array(a, null) |
 +---------------------+
 | [null, null]        |
 +---------------------+
 
-mysql> set tidb_allow_mpp=1;set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash'; select json_array(null, a) from t;
+mysql> set tidb_allow_mpp=1;set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash'; select json_array(null, a) from test.t;
 +---------------------+
 | json_array(null, a) |
 +---------------------+
@@ -66,7 +66,7 @@ mysql> set tidb_allow_mpp=1;set tidb_enforce_mpp=1; set tidb_isolation_read_engi
 +---------------------+
 
 # json_array(not_null_value in column + only_null_const)
-mysql> set tidb_allow_mpp=1;set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash'; select json_array(null, b, c, null, null, d, e, null) from t;
+mysql> set tidb_allow_mpp=1;set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash'; select json_array(null, b, c, null, null, d, e, null) from test.t;
 +-----------------------------------------------------------------------------------------------------+
 | json_array(null, b, c, null, null, d, e, null)                                                      |
 +-----------------------------------------------------------------------------------------------------+
@@ -74,7 +74,7 @@ mysql> set tidb_allow_mpp=1;set tidb_enforce_mpp=1; set tidb_isolation_read_engi
 +-----------------------------------------------------------------------------------------------------+
 
 # json_array(null_value in column + not_null_value in column + only_null_const)
-mysql> set tidb_allow_mpp=1;set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash'; select json_array(null, a, null, b, c, null, null, d, e, null) from t;
+mysql> set tidb_allow_mpp=1;set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash'; select json_array(null, a, null, b, c, null, null, d, e, null) from test.t;
 +-----------------------------------------------------------------------------------------------------------------+
 | json_array(null, a, null, b, c, null, null, d, e, null)                                                         |
 +-----------------------------------------------------------------------------------------------------------------+
