@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <common/defines.h>
 #include <fmt/format.h>
 
 #include <string>
@@ -29,7 +30,7 @@ enum MppVersion : int64_t
     MppVersionMAX,
 };
 // Make MppVersion formatable by fmtlib
-auto format_as(MppVersion v)
+ALWAYS_INLINE inline auto format_as(MppVersion v)
 {
     return fmt::underlying(v);
 }
@@ -42,7 +43,7 @@ enum MPPDataPacketVersion : int64_t
     MPPDataPacketMAX,
 };
 // Make MPPDataPacketVersion formatable by fmtlib
-auto format_as(MPPDataPacketVersion v)
+ALWAYS_INLINE inline auto format_as(MPPDataPacketVersion v)
 {
     return fmt::underlying(v);
 }

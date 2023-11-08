@@ -29,8 +29,6 @@
 #include <Storages/StorageDeltaMergeHelpers.h>
 #include <common/likely.h>
 
-#include <magic_enum.hpp>
-
 namespace DB
 {
 

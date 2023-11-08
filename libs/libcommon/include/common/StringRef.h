@@ -15,6 +15,7 @@
 #pragma once
 
 #include <city.h>
+#include <common/defines.h>
 #include <common/mem_utils.h>
 #include <common/mem_utils_opt.h>
 #include <common/types.h>
@@ -253,7 +254,7 @@ inline void set(StringRef & x)
 
 std::ostream & operator<<(std::ostream & os, const StringRef & str);
 
-inline auto format_as(StringRef ref)
+ALWAYS_INLINE inline auto format_as(StringRef ref)
 {
     return ref.toStringView();
 }

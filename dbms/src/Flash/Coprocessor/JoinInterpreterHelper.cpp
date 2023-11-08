@@ -122,7 +122,7 @@ std::pair<ASTTableJoin::Kind, size_t> getJoinKindAndBuildSideIndex(
         throw TiFlashException(
             Errors::Coprocessor::BadRequest,
             "Unknown join type in dag request {} {}",
-            magic_enum::enum_name(tipb_join_type),
+            fmt::underlying(tipb_join_type),
             inner_index);
     return join_type_it->second;
 }

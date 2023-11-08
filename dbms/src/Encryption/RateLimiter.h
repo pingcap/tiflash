@@ -18,6 +18,7 @@
 #include <Common/nocopyable.h>
 #include <Server/StorageConfigParser.h>
 #include <fmt/core.h>
+#include <fmt/std.h>
 
 #include <atomic>
 #include <chrono>
@@ -62,7 +63,7 @@ struct ReadInfo
 
     std::string toString() const
     {
-        return fmt::format("fg_read_bytes {} bg_read_bytes {}", fg_read_bytes.load(), bg_read_bytes.load());
+        return fmt::format("fg_read_bytes {} bg_read_bytes {}", fg_read_bytes, bg_read_bytes);
     }
 };
 

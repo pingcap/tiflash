@@ -115,7 +115,7 @@ public:
         case ExchangeReceiver:
             return "exchange_receiver_0";
         default:
-            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Unknown Executor Source type {}", magic_enum::enum_name(type));
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Unknown Executor Source type {}", fmt::underlying(type));
         }
     }
 
