@@ -43,35 +43,34 @@ public:
     DISALLOW_COPY_AND_MOVE(SegmentReadTaskScheduler);
 
     // Add SegmentReadTaskPool to `read_pools` and index segments into merging_segments.
-    void add(const SegmentReadTaskPoolPtr & pool);
+    void add(const SegmentReadTaskPoolPtr & pool) LOCKS_EXCLUDED(add_mtx, mtx);
 
     void pushMergedTask(const MergedTaskPtr & p) { merged_task_pool.push(p); }
 
 private:
     SegmentReadTaskScheduler();
 
-    // Choose segment to read.
-    // Returns <MergedTaskPtr, run_next_schedule_immediately>
-    std::pair<MergedTaskPtr, bool> scheduleMergedTask();
-
     void setStop();
     bool isStop() const;
-    bool schedule();
-    void schedLoop();
     bool needScheduleToRead(const SegmentReadTaskPoolPtr & pool);
-    SegmentReadTaskPools getPoolsUnlock(const std::vector<uint64_t> & pool_ids);
-    // <seg_id, pool_ids>
+
+    bool schedule() LOCKS_EXCLUDED(mtx);
+    void schedLoop() LOCKS_EXCLUDED(mtx);
+    // Choose segment to read, returns <MergedTaskPtr, run_next_schedule_immediately>.
+    std::pair<MergedTaskPtr, bool> scheduleMergedTask() EXCLUSIVE_LOCKS_REQUIRED(mtx);
+    SegmentReadTaskPoolPtr scheduleSegmentReadTaskPoolUnlock() EXCLUSIVE_LOCKS_REQUIRED(mtx);
+    // Returns <seg_id, pool_ids>.
     std::optional<std::pair<GlobalSegmentID, std::vector<UInt64>>> scheduleSegmentUnlock(
-        const SegmentReadTaskPoolPtr & pool);
-    SegmentReadTaskPoolPtr scheduleSegmentReadTaskPoolUnlock();
+        const SegmentReadTaskPoolPtr & pool) EXCLUSIVE_LOCKS_REQUIRED(mtx);
+    SegmentReadTaskPools getPoolsUnlock(const std::vector<uint64_t> & pool_ids) EXCLUSIVE_LOCKS_REQUIRED(mtx);
 
     // To restrict the instantaneous concurrency of `add` and avoid `schedule` from always failing to acquire the lock.
-    std::mutex add_mtx;
-    std::mutex mtx;
-    SegmentReadTaskPoolList read_pools;
+    std::mutex add_mtx ACQUIRED_BEFORE(mtx);
 
+    std::mutex mtx;
+    SegmentReadTaskPoolList read_pools GUARDED_BY(mtx);
     // GlobalSegmentID -> pool_ids
-    MergingSegments merging_segments;
+    MergingSegments merging_segments GUARDED_BY(mtx);
 
     MergedTaskPool merged_task_pool;
 

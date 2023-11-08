@@ -94,6 +94,7 @@ kvrpcpb::ReadIndexRequest make_read_index_reqs(uint64_t region_id, uint64_t star
 }
 
 std::optional<kvrpcpb::ReadIndexResponse> RawMockReadIndexTask::poll(std::shared_ptr<MockAsyncNotifier> waker)
+    NO_THREAD_SAFETY_ANALYSIS
 {
     auto _ = genLockGuard();
 
@@ -119,7 +120,7 @@ std::optional<kvrpcpb::ReadIndexResponse> RawMockReadIndexTask::poll(std::shared
     return resp;
 }
 
-void RawMockReadIndexTask::update(bool lock, bool region_error)
+void RawMockReadIndexTask::update(bool lock, bool region_error) NO_THREAD_SAFETY_ANALYSIS
 {
     {
         auto _ = genLockGuard();
