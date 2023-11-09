@@ -111,7 +111,7 @@ private:
     UInt64 start_ns = 0;
     UInt64 stop_ns = 0;
     UInt64 last_ns = 0;
-    const clockid_t clock_type;
+    clockid_t clock_type;
     bool is_running = false;
 
     // Get current nano seconds, ensuring the return value is not
