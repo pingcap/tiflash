@@ -549,14 +549,13 @@ private:
                 SteadyClock::time_point::max(),
                 std::chrono::seconds(0));
             assert(consumption_update_info.updated);
-            if (consumption_update_info.delta == 0.0)
-                continue;
+
             acquire_infos.push_back(
                 {.resource_group_name = resource_group.first,
                  .acquire_tokens = 0,
                  .ru_consumption_delta = consumption_update_info.delta});
         }
-        fetchTokensFromGAC(acquire_infos, "before stop");
+        fetchTokensFromGAC(acquire_infos, "before stop", /*is_final_report=*/true);
 
         if (need_reset_unique_client_id.load())
         {
@@ -641,7 +640,10 @@ private:
     // 3. Check if resource group need to goto degrade mode.
     // 4. Watch GAC event to delete resource group.
     void startBackgroudJob();
-    void fetchTokensFromGAC(const std::vector<AcquireTokenInfo> & acquire_infos, const std::string & desc_str);
+    void fetchTokensFromGAC(
+        const std::vector<AcquireTokenInfo> & acquire_infos,
+        const std::string & desc_str,
+        bool is_final_report = false);
     void checkDegradeMode();
     void watchGAC();
 

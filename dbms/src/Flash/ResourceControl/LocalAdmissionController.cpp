@@ -218,7 +218,8 @@ std::optional<LocalAdmissionController::AcquireTokenInfo> LocalAdmissionControll
 
 void LocalAdmissionController::fetchTokensFromGAC(
     const std::vector<AcquireTokenInfo> & acquire_infos,
-    const std::string & desc_str)
+    const std::string & desc_str,
+    bool is_final_report)
 {
     if (acquire_infos.empty())
     {
@@ -240,14 +241,14 @@ void LocalAdmissionController::fetchTokensFromGAC(
         auto * single_group_req = gac_req.add_requests();
         single_group_req->set_resource_group_name(info.resource_group_name);
         assert(info.acquire_tokens > 0.0 || info.ru_consumption_delta > 0.0);
-        if (info.acquire_tokens > 0.0)
+        if (info.acquire_tokens > 0.0 || unlikely(is_final_report))
         {
             auto * ru_items = single_group_req->mutable_ru_items();
             auto * req_ru = ru_items->add_request_r_u();
             req_ru->set_type(resource_manager::RequestUnitType::RU);
             req_ru->set_value(info.acquire_tokens);
         }
-        if (info.ru_consumption_delta > 0.0)
+        if (info.ru_consumption_delta > 0.0 || unlikely(is_final_report))
         {
             single_group_req->set_is_tiflash(true);
             auto * tiflash_consumption = single_group_req->mutable_consumption_since_last_request();
