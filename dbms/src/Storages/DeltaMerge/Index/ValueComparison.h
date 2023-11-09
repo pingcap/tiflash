@@ -177,7 +177,7 @@ private:
             if constexpr (std::is_same_v<Field, Right>)
                 right_field = right;
             else
-                right_field = Field((typename NearestFieldType<Right>::Type)right);
+                right_field = Field(static_cast<typename NearestFieldType<Right>::Type>(right));
             if (left_field.getType() == right_field.getType())
             {
                 if constexpr (std::is_same_v<OpInt, EqualsInt>)
