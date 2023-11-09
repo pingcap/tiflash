@@ -70,9 +70,9 @@ void SemiJoinResult<KIND, All>::fillRightColumns(
 template <ASTTableJoin::Kind KIND>
 template <bool has_other_eq_cond_from_in, bool has_other_cond, bool has_other_cond_null_map>
 bool SemiJoinResult<KIND, All>::checkExprResult(
-    const ColumnUInt8::Container & other_eq_column,
+    const ColumnUInt8::Container * other_eq_column,
     ConstNullMapPtr other_eq_null_map,
-    const ColumnUInt8::Container & other_column,
+    const ColumnUInt8::Container * other_column,
     ConstNullMapPtr other_null_map,
     size_t offset_begin,
     size_t offset_end)
@@ -93,7 +93,7 @@ bool SemiJoinResult<KIND, All>::checkExprResult(
                     continue;
                 }
             }
-            if (!other_column[i])
+            if (!(*other_column)[i])
             {
                 /// If other expr is 0, this row is not included in the result set.
                 continue;
@@ -106,7 +106,7 @@ bool SemiJoinResult<KIND, All>::checkExprResult(
                 has_null_eq_from_in = true;
                 continue;
             }
-            if (other_eq_column[i])
+            if ((*other_eq_column)[i])
             {
                 setResult<SemiJoinResultType::TRUE_VALUE>();
                 return true;
@@ -220,8 +220,8 @@ void SemiJoinHelper<KIND, Mapped>::joinResult(std::list<Result *> & res_list)
 
         non_equal_conditions.other_cond_expr->execute(exec_block);
 
-        const ColumnUInt8::Container *other_eq_from_in_column_data, *other_column_data;
-        ConstNullMapPtr other_eq_from_in_null_map, other_null_map;
+        const ColumnUInt8::Container *other_eq_from_in_column_data = nullptr, *other_column_data = nullptr;
+        ConstNullMapPtr other_eq_from_in_null_map = nullptr, other_null_map = nullptr;
         ColumnPtr other_eq_from_in_column, other_column;
 
         bool has_other_eq_cond_from_in = !non_equal_conditions.other_eq_cond_from_in_name.empty();
@@ -249,9 +249,9 @@ void SemiJoinHelper<KIND, Mapped>::joinResult(std::list<Result *> & res_list)
     checkAllExprResult<has_other_eq_cond_from_in, has_other_cond, has_other_cond_null_map>( \
         offsets,                                                                            \
         res_list,                                                                           \
-        *other_eq_from_in_column_data,                                                      \
+        other_eq_from_in_column_data,                                                      \
         other_eq_from_in_null_map,                                                          \
-        *other_column_data,                                                                 \
+        other_column_data,                                                                 \
         other_null_map);
 
         if (has_other_eq_cond_from_in)
@@ -293,9 +293,9 @@ template <bool has_other_eq_cond_from_in, bool has_other_cond, bool has_other_co
 void SemiJoinHelper<KIND, Mapped>::checkAllExprResult(
     const std::vector<size_t> & offsets,
     std::list<Result *> & res_list,
-    const ColumnUInt8::Container & other_eq_column,
+    const ColumnUInt8::Container * other_eq_column,
     ConstNullMapPtr other_eq_null_map,
-    const ColumnUInt8::Container & other_column,
+    const ColumnUInt8::Container * other_column,
     ConstNullMapPtr other_null_map)
 {
     size_t prev_offset = 0;

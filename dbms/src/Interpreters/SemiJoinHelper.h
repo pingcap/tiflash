@@ -97,9 +97,9 @@ public:
 
     template <bool has_other_eq_cond_from_in, bool has_other_cond, bool has_other_cond_null_map>
     bool checkExprResult(
-        const ColumnUInt8::Container & other_eq_column,
+        const ColumnUInt8::Container * other_eq_column,
         ConstNullMapPtr other_eq_null_map,
-        const ColumnUInt8::Container & other_column,
+        const ColumnUInt8::Container * other_column,
         ConstNullMapPtr other_null_map,
         size_t offset_begin,
         size_t offset_end);
@@ -135,9 +135,9 @@ private:
     void checkAllExprResult(
         const std::vector<size_t> & offsets,
         std::list<Result *> & res_list,
-        const ColumnUInt8::Container & other_eq_column,
+        const ColumnUInt8::Container * other_eq_column,
         ConstNullMapPtr other_eq_null_map,
-        const ColumnUInt8::Container & other_column,
+        const ColumnUInt8::Container * other_column,
         ConstNullMapPtr other_null_map);
 
     Block & block;
