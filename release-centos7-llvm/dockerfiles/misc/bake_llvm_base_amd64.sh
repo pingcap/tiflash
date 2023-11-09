@@ -43,6 +43,10 @@ function bake_llvm_base_amd64() {
     install_openssl "1_1_1t"
     export OPENSSL_ROOT_DIR="/usr/local/opt/openssl"
 
+    # Git
+    source $SCRIPTPATH/install_git.sh
+    install_git "2.40.1"
+
     # Go
     source $SCRIPTPATH/install_go.sh
     install_go "1.20" "amd64"

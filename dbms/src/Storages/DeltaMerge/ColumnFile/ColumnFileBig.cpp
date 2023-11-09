@@ -36,9 +36,9 @@ ColumnFileBig::ColumnFileBig(const DMContext & context, const DMFilePtr & file_,
     calculateStat(context);
 }
 
-void ColumnFileBig::calculateStat(const DMContext & context)
+void ColumnFileBig::calculateStat(const DMContext & dm_context)
 {
-    auto index_cache = context.db_context.getGlobalContext().getMinMaxIndexCache();
+    auto index_cache = dm_context.global_context.getMinMaxIndexCache();
 
     auto pack_filter = DMFilePackFilter::loadFrom(
         file,
@@ -47,10 +47,10 @@ void ColumnFileBig::calculateStat(const DMContext & context)
         {segment_range},
         EMPTY_RS_OPERATOR,
         {},
-        context.db_context.getFileProvider(),
-        context.getReadLimiter(),
-        context.scan_context,
-        /*tracing_id*/ context.tracing_id);
+        dm_context.global_context.getFileProvider(),
+        dm_context.getReadLimiter(),
+        dm_context.scan_context,
+        /*tracing_id*/ dm_context.tracing_id);
 
     std::tie(valid_rows, valid_bytes) = pack_filter.validRowsAndBytes();
 }
@@ -79,7 +79,7 @@ void ColumnFileBig::serializeMetadata(WriteBuffer & buf, bool /*save_schema*/) c
 }
 
 ColumnFilePersistedPtr ColumnFileBig::deserializeMetadata(
-    const DMContext & context, //
+    const DMContext & dm_context, //
     const RowKeyRange & segment_range,
     ReadBuffer & buf)
 {
@@ -92,13 +92,16 @@ ColumnFilePersistedPtr ColumnFileBig::deserializeMetadata(
 
     String file_parent_path;
     DMFilePtr dmfile;
-    auto remote_data_store = context.db_context.getSharedContextDisagg()->remote_data_store;
-    auto path_delegate = context.path_pool->getStableDiskDelegator();
+    auto remote_data_store = dm_context.global_context.getSharedContextDisagg()->remote_data_store;
+    auto path_delegate = dm_context.path_pool->getStableDiskDelegator();
     if (remote_data_store)
     {
-        auto wn_ps = context.db_context.getWriteNodePageStorage();
+        auto wn_ps = dm_context.global_context.getWriteNodePageStorage();
         auto full_page_id = UniversalPageIdFormat::toFullPageId(
-            UniversalPageIdFormat::toFullPrefix(context.keyspace_id, StorageType::Data, context.physical_table_id),
+            UniversalPageIdFormat::toFullPrefix(
+                dm_context.keyspace_id,
+                StorageType::Data,
+                dm_context.physical_table_id),
             file_page_id);
         auto full_external_id = wn_ps->getNormalPageId(full_page_id);
         auto local_external_id = UniversalPageIdFormat::getU64ID(full_external_id);
@@ -112,10 +115,10 @@ ColumnFilePersistedPtr ColumnFileBig::deserializeMetadata(
     }
     else
     {
-        auto file_id = context.storage_pool->dataReader()->getNormalPageId(file_page_id);
-        file_parent_path = context.path_pool->getStableDiskDelegator().getDTFilePath(file_id);
+        auto file_id = dm_context.storage_pool->dataReader()->getNormalPageId(file_page_id);
+        file_parent_path = dm_context.path_pool->getStableDiskDelegator().getDTFilePath(file_id);
         dmfile = DMFile::restore(
-            context.db_context.getFileProvider(),
+            dm_context.global_context.getFileProvider(),
             file_id,
             file_page_id,
             file_parent_path,
@@ -129,7 +132,7 @@ ColumnFilePersistedPtr ColumnFileBig::deserializeMetadata(
 }
 
 ColumnFilePersistedPtr ColumnFileBig::createFromCheckpoint(
-    DMContext & context, //
+    DMContext & dm_context, //
     const RowKeyRange & target_range,
     ReadBuffer & buf,
     UniversalPageStoragePtr temp_ps,
@@ -143,21 +146,21 @@ ColumnFilePersistedPtr ColumnFileBig::createFromCheckpoint(
     readIntBinary(valid_bytes, buf);
 
     auto remote_page_id = UniversalPageIdFormat::toFullPageId(
-        UniversalPageIdFormat::toFullPrefix(context.keyspace_id, StorageType::Data, context.physical_table_id),
+        UniversalPageIdFormat::toFullPrefix(dm_context.keyspace_id, StorageType::Data, dm_context.physical_table_id),
         file_page_id);
     auto remote_data_location = temp_ps->getCheckpointLocation(remote_page_id);
     auto data_key_view = S3::S3FilenameView::fromKey(*(remote_data_location->data_file_id)).asDataFile();
     auto file_oid = data_key_view.getDMFileOID();
     auto data_key = data_key_view.toFullKey();
-    auto delegator = context.path_pool->getStableDiskDelegator();
-    auto new_local_page_id = context.storage_pool->newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
+    auto delegator = dm_context.path_pool->getStableDiskDelegator();
+    auto new_local_page_id = dm_context.storage_pool->newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
     PS::V3::CheckpointLocation loc{
         .data_file_id = std::make_shared<String>(data_key),
         .offset_in_file = 0,
         .size_in_file = 0,
     };
     wbs.data.putRemoteExternal(new_local_page_id, loc);
-    auto remote_data_store = context.db_context.getSharedContextDisagg()->remote_data_store;
+    auto remote_data_store = dm_context.global_context.getSharedContextDisagg()->remote_data_store;
     auto prepared = remote_data_store->prepareDMFile(file_oid, new_local_page_id);
     auto dmfile = prepared->restore(DMFile::ReadMetaMode::all());
     wbs.writeLogAndData();
@@ -172,10 +175,13 @@ void ColumnFileBigReader::initStream()
     if (file_stream)
         return;
 
-    DMFileBlockInputStreamBuilder builder(context.db_context);
-    file_stream
-        = builder.setTracingID(context.tracing_id)
-              .build(column_file.getFile(), *col_defs, RowKeyRanges{column_file.segment_range}, context.scan_context);
+    DMFileBlockInputStreamBuilder builder(dm_context.global_context);
+    file_stream = builder.setTracingID(dm_context.tracing_id)
+                      .build(
+                          column_file.getFile(),
+                          *col_defs,
+                          RowKeyRanges{column_file.segment_range},
+                          dm_context.scan_context);
 
     header = file_stream->getHeader();
     // If we only need to read pk and version columns, then cache columns data in memory.
@@ -383,7 +389,7 @@ size_t ColumnFileBigReader::skipNextBlock()
 ColumnFileReaderPtr ColumnFileBigReader::createNewReader(const ColumnDefinesPtr & new_col_defs)
 {
     // Currently we don't reuse the cache data.
-    return std::make_shared<ColumnFileBigReader>(context, column_file, new_col_defs);
+    return std::make_shared<ColumnFileBigReader>(dm_context, column_file, new_col_defs);
 }
 
 } // namespace DM

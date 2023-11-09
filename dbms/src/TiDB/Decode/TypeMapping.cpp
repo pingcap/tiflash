@@ -169,7 +169,7 @@ DataTypePtr TypeMapping::getDataType(const ColumnInfo & column_info)
         iter != type_map.end(),
         "Invalid type from column info, column_id={} tp={} flag={}",
         column_info.id,
-        column_info.tp,
+        fmt::underlying(column_info.tp),
         column_info.flag);
     return (iter->second)(column_info);
 }

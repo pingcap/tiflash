@@ -266,7 +266,7 @@ void EtcdOwnerManager::camaignLoop(Etcd::SessionPtr session)
                     "failed to campaign, id={} lease={:x} code={} msg={}",
                     id,
                     lease_id,
-                    status.error_code(),
+                    magic_enum::enum_name(status.error_code()),
                     status.error_message());
                 static constexpr std::chrono::milliseconds CampaignRetryInterval(200);
                 std::this_thread::sleep_for(CampaignRetryInterval);
@@ -341,7 +341,7 @@ void EtcdOwnerManager::watchOwner(const String & owner_key, grpc::ClientContext 
         if (!ok)
         {
             auto s = rw->Finish();
-            LOG_DEBUG(log, "watch finish, code={} msg={}", s.error_code(), s.error_message());
+            LOG_DEBUG(log, "watch finish, code={} msg={}", magic_enum::enum_name(s.error_code()), s.error_message());
             return;
         }
 
@@ -372,7 +372,7 @@ void EtcdOwnerManager::watchOwner(const String & owner_key, grpc::ClientContext 
             }
         } // loop until key deleted or failed
         auto s = rw->Finish();
-        LOG_DEBUG(log, "watch finish, code={} msg={}", s.error_code(), s.error_message());
+        LOG_DEBUG(log, "watch finish, code={} msg={}", magic_enum::enum_name(s.error_code()), s.error_message());
     }
     catch (...)
     {
@@ -385,7 +385,11 @@ std::optional<String> EtcdOwnerManager::getOwnerKey(const String & expect_id)
     const auto & [kv, status] = client->leader(campaign_name);
     if (!status.ok())
     {
-        LOG_INFO(log, "failed to get leader, code={} msg={}", status.error_code(), status.error_message());
+        LOG_INFO(
+            log,
+            "failed to get leader, code={} msg={}",
+            magic_enum::enum_name(status.error_code()),
+            status.error_message());
         return std::nullopt;
     }
     // Check whether the owner id get from etcd is the same as this node
@@ -501,7 +505,7 @@ void EtcdOwnerManager::revokeEtcdSession(Etcd::LeaseID lease_id)
     // revoke the session lease
     // if revoke takes longer than the ttl, lease is expired anyway. it is safe to ignore error here.
     auto status = client->leaseRevoke(lease_id);
-    LOG_INFO(log, "revoke session, code={} msg={}", status.error_code(), status.error_message());
+    LOG_INFO(log, "revoke session, code={} msg={}", magic_enum::enum_name(status.error_code()), status.error_message());
 }
 
 OwnerInfo EtcdOwnerManager::getOwnerID()
@@ -519,7 +523,8 @@ OwnerInfo EtcdOwnerManager::getOwnerID()
     if (!status.ok())
         return OwnerInfo{
             .status = OwnerType::GrpcError,
-            .owner_id = fmt::format("code={} msg={}", status.error_code(), status.error_message()),
+            .owner_id
+            = fmt::format("code={} msg={}", magic_enum::enum_name(status.error_code()), status.error_message()),
         };
     if (val.empty())
         return OwnerInfo{

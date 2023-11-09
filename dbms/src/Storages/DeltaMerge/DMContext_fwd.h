@@ -12,17 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Functions/FunctionFactory.h>
-#include <Functions/FunctionsJson.h>
+#pragma once
 
-namespace DB
+#include <memory>
+
+namespace DB::DM
 {
-void registerFunctionsJson(FunctionFactory & factory)
-{
-    factory.registerFunction<FunctionsJsonExtract>();
-    factory.registerFunction<FunctionsJsonUnquote>();
-    factory.registerFunction<FunctionsCastJsonAsString>();
-    factory.registerFunction<FunctionJsonLength>();
-    factory.registerFunction<FunctionsJsonArray>();
-}
-} // namespace DB
+
+struct DMContext;
+using DMContextPtr = std::shared_ptr<DMContext>;
+
+} // namespace DB::DM

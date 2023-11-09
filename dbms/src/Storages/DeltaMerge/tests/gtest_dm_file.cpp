@@ -129,7 +129,7 @@ public:
         if (table_columns != cols)
             *table_columns = *cols;
         *path_pool = db_context->getPathPool().withTable("test", "t1", false);
-        dm_context = std::make_unique<DMContext>( //
+        dm_context = DMContext::createUnique(
             *db_context,
             path_pool,
             storage_pool,
@@ -1460,7 +1460,7 @@ public:
 
         *table_columns = *cols;
 
-        dm_context = std::make_unique<DMContext>( //
+        dm_context = DMContext::createUnique(
             *db_context,
             path_pool,
             storage_pool,
