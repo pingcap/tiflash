@@ -342,7 +342,7 @@ ColumnWithTypeAndName executeFunction(
     for (size_t i = 0; i < columns.size(); ++i)
         argument_column_numbers.push_back(i);
 
-    /// Replace `std::random_device` with `std::chrono::system_clock` here to avoid 
+    /// Replace `std::random_device` with `std::chrono::system_clock` here to avoid
     /// exceptions like 'random_device failed to open /dev/urandom: Operation not permitted'.
     /// The reason of exceptions is unknown, but the probability of its occurrence in unittests
     /// TestDateTimeDayMonthYear.dayMonthYearTest is not low.
