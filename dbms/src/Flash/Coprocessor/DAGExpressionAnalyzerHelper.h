@@ -71,7 +71,7 @@ public:
         const tipb::Expr & expr,
         const ExpressionActionsPtr & actions);
 
-    static String buildCastStringAsJson(
+    static String buildCastAsJsonWithTiDBField(
         DAGExpressionAnalyzer * analyzer,
         const tipb::Expr & expr,
         const ExpressionActionsPtr & actions);

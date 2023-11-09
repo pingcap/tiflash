@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Columns/ColumnString.h>
+#include <Common/MyTime.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/UTF8Helpers.h>
 #include <Core/Types.h>
@@ -173,6 +174,10 @@ public:
     static void appendJsonBinary(JsonBinaryWriteBuffer & write_buffer, Float64 value);
     static void appendJsonBinary(JsonBinaryWriteBuffer & write_buffer, const StringRef & value);
     static void appendJsonBinary(JsonBinaryWriteBuffer & write_buffer, const Opaque & value);
+    static void appendJsonBinary(JsonBinaryWriteBuffer & write_buffer, const MyDate & value);
+    static void appendTimestamp(JsonBinaryWriteBuffer & write_buffer, const MyDateTime & value);
+    static void appendDatetime(JsonBinaryWriteBuffer & write_buffer, const MyDateTime & value);
+    static void appendNull(JsonBinaryWriteBuffer & write_buffer);
 
 private:
     Int64 getInt64() const;

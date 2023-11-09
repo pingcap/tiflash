@@ -18,6 +18,8 @@
 #include <Columns/ColumnFixedString.h>
 #include <Columns/ColumnString.h>
 #include <Core/Types.h>
+#include <DataTypes/DataTypeMyDate.h>
+#include <DataTypes/DataTypeMyDateTime.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
@@ -27,6 +29,7 @@
 #include <Functions/IFunction.h>
 #include <TiDB/Decode/JsonBinary.h>
 #include <TiDB/Decode/JsonPathExprRef.h>
+#include <TiDB/Schema/TiDB.h>
 #include <tipb/expression.pb.h>
 
 #include <ext/range.h>
@@ -59,11 +62,11 @@ inline bool isNullJsonBinary(size_t size)
 
 using namespace GatherUtils;
 
-class FunctionsJsonExtract : public IFunction
+class FunctionJsonExtract : public IFunction
 {
 public:
     static constexpr auto name = "json_extract";
-    static FunctionPtr create(const Context &) { return std::make_shared<FunctionsJsonExtract>(); }
+    static FunctionPtr create(const Context &) { return std::make_shared<FunctionJsonExtract>(); }
 
     String getName() const override { return name; }
 
@@ -280,11 +283,11 @@ private:
 };
 
 
-class FunctionsJsonUnquote : public IFunction
+class FunctionJsonUnquote : public IFunction
 {
 public:
     static constexpr auto name = "json_unquote";
-    static FunctionPtr create(const Context &) { return std::make_shared<FunctionsJsonUnquote>(); }
+    static FunctionPtr create(const Context &) { return std::make_shared<FunctionJsonUnquote>(); }
 
     String getName() const override { return name; }
 
@@ -337,11 +340,11 @@ public:
 };
 
 
-class FunctionsCastJsonAsString : public IFunction
+class FunctionCastJsonAsString : public IFunction
 {
 public:
     static constexpr auto name = "cast_json_as_string";
-    static FunctionPtr create(const Context &) { return std::make_shared<FunctionsCastJsonAsString>(); }
+    static FunctionPtr create(const Context &) { return std::make_shared<FunctionCastJsonAsString>(); }
 
     String getName() const override { return name; }
 
@@ -461,11 +464,11 @@ public:
 };
 
 
-class FunctionsJsonArray : public IFunction
+class FunctionJsonArray : public IFunction
 {
 public:
     static constexpr auto name = "json_array";
-    static FunctionPtr create(const Context &) { return std::make_shared<FunctionsJsonArray>(); }
+    static FunctionPtr create(const Context &) { return std::make_shared<FunctionJsonArray>(); }
 
     String getName() const override { return name; }
 
@@ -546,11 +549,11 @@ public:
 };
 
 
-class FunctionsCastJsonAsJson : public IFunction
+class FunctionCastJsonAsJson : public IFunction
 {
 public:
     static constexpr auto name = "cast_json_as_json";
-    static FunctionPtr create(const Context &) { return std::make_shared<FunctionsCastJsonAsJson>(); }
+    static FunctionPtr create(const Context &) { return std::make_shared<FunctionCastJsonAsJson>(); }
 
     String getName() const override { return name; }
 
@@ -568,11 +571,11 @@ public:
     }
 };
 
-class FunctionsCastRealAsJson : public IFunction
+class FunctionCastRealAsJson : public IFunction
 {
 public:
     static constexpr auto name = "cast_real_as_json";
-    static FunctionPtr create(const Context &) { return std::make_shared<FunctionsCastRealAsJson>(); }
+    static FunctionPtr create(const Context &) { return std::make_shared<FunctionCastRealAsJson>(); }
 
     String getName() const override { return name; }
 
@@ -631,11 +634,11 @@ private:
     }
 };
 
-class FunctionsCastDecimalAsJson : public IFunction
+class FunctionCastDecimalAsJson : public IFunction
 {
 public:
     static constexpr auto name = "cast_decimal_as_json";
-    static FunctionPtr create(const Context &) { return std::make_shared<FunctionsCastDecimalAsJson>(); }
+    static FunctionPtr create(const Context &) { return std::make_shared<FunctionCastDecimalAsJson>(); }
 
     String getName() const override { return name; }
 
@@ -709,11 +712,11 @@ private:
     }
 };
 
-class FunctionsCastIntAsJson : public IFunction
+class FunctionCastIntAsJson : public IFunction
 {
 public:
     static constexpr auto name = "cast_int_as_json";
-    static FunctionPtr create(const Context &) { return std::make_shared<FunctionsCastIntAsJson>(); }
+    static FunctionPtr create(const Context &) { return std::make_shared<FunctionCastIntAsJson>(); }
 
     String getName() const override { return name; }
 
@@ -790,11 +793,11 @@ private:
     }
 };
 
-class FunctionsCastStringAsJson : public IFunction
+class FunctionCastStringAsJson : public IFunction
 {
 public:
     static constexpr auto name = "cast_string_as_json";
-    static FunctionPtr create(const Context &) { return std::make_shared<FunctionsCastStringAsJson>(); }
+    static FunctionPtr create(const Context &) { return std::make_shared<FunctionCastStringAsJson>(); }
 
     String getName() const override { return name; }
 
@@ -829,7 +832,7 @@ public:
 
         if (collator->isBinary())
         {
-            if (tidb_tp.tp() == tipb::String)
+            if (tidb_tp.tp() == TiDB::TypeString)
             {
                 doExecuteForBinary<true>(write_buffer, offsets_to, source, tidb_tp.tp(), tidb_tp.flen(), block.rows());
             }
@@ -904,7 +907,7 @@ private:
         {
             const auto & slice = from_data->getWhole();
             if (unlikely(slice.size == 0))
-                throw Exception("");
+                throw Exception("The document is empty");
 
             Poco::JSON::Parser parser;
             Poco::Dynamic::Var result = parser.parse(StringRef{slice.data, slice.size}.toString());
@@ -986,8 +989,7 @@ private:
         }
         else if (var.isEmpty())
         {
-            write_buffer.write(JsonBinary::TYPE_CODE_LITERAL);
-            write_buffer.write(JsonBinary::LITERAL_NIL);
+            JsonBinary::appendNull(write_buffer);
         }
         else
         {
@@ -998,5 +1000,92 @@ private:
 private:
     tipb::FieldType tidb_tp;
     TiDB::TiDBCollatorPtr collator = nullptr;
+};
+
+class FunctionCastTimeAsJson : public IFunction
+{
+public:
+    static constexpr auto name = "cast_time_as_json";
+    static FunctionPtr create(const Context &) { return std::make_shared<FunctionCastTimeAsJson>(); }
+
+    String getName() const override { return name; }
+
+    size_t getNumberOfArguments() const override { return 1; }
+
+    bool useDefaultImplementationForNulls() const override { return true; }
+    bool useDefaultImplementationForConstants() const override { return true; }
+
+    void setTiDBFieldType(const tipb::FieldType & tidb_tp_) { tidb_tp = tidb_tp_; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        if unlikely (!arguments[0]->isMyDateOrMyDateTime())
+            throw Exception(
+                fmt::format("Illegal type {} of argument of function {}", arguments[0]->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        return std::make_shared<DataTypeString>();
+    }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
+    {
+        auto col_to = ColumnString::create();
+        auto & data_to = col_to->getChars();
+        JsonBinary::JsonBinaryWriteBuffer write_buffer(data_to);
+        auto & offsets_to = col_to->getOffsets();
+        auto rows = block.rows();
+        offsets_to.resize(rows);
+
+        const auto & from = block.getByPosition(arguments[0]);
+        if (checkDataType<DataTypeMyDateTime>(from.type.get()))
+        {
+            doExecute<DataTypeMyDateTime, false>(write_buffer, offsets_to, from.column);
+        }
+        else if (checkDataType<DataTypeMyDate>(from.type.get()))
+        {
+            bool is_timestamp = tidb_tp.tp() == TiDB::TypeTimestamp;
+            if (is_timestamp)
+                doExecute<DataTypeMyDate, true>(write_buffer, offsets_to, from.column);
+            else
+                doExecute<DataTypeMyDate, false>(write_buffer, offsets_to, from.column);
+        }
+
+        data_to.resize(write_buffer.count());
+        block.getByPosition(result).column = std::move(col_to);
+    }
+
+private:
+    template <typename FromDataType, bool is_timestamp>
+    static void doExecute(
+        JsonBinary::JsonBinaryWriteBuffer & data_to,
+        ColumnString::Offsets & offsets_to,
+        const ColumnPtr & column_ptr_from)
+    {
+        const auto * column_from
+            = checkAndGetColumn<ColumnVector<typename FromDataType::FieldType>>(column_ptr_from.get());
+        RUNTIME_CHECK(column_from);
+        const auto & data_from = column_from->getData();
+        for (size_t i = 0; i < data_from.size(); ++i)
+        {
+            if constexpr (std::is_same_v<DataTypeMyDate, FromDataType>)
+            {
+                MyDate date(data_from[i]);
+                JsonBinary::appendJsonBinary(data_to, date);
+            }
+            else
+            {
+                MyDateTime date_time(data_from[i]);
+                if constexpr (is_timestamp)
+                    JsonBinary::appendTimestamp(data_to, date_time);
+                else
+                    JsonBinary::appendDatetime(data_to, date_time);
+            }
+
+            writeChar(0, data_to);
+            offsets_to[i] = data_to.count();
+        }
+    }
+
+private:
+    tipb::FieldType tidb_tp;
 };
 } // namespace DB

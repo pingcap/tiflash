@@ -281,7 +281,7 @@ String DAGExpressionAnalyzerHelper::buildCastFunction(
     return buildCastFunctionInternal(analyzer, {name, type_expr_name}, false, expr.field_type(), actions);
 }
 
-String DAGExpressionAnalyzerHelper::buildCastStringAsJson(
+String DAGExpressionAnalyzerHelper::buildCastAsJsonWithTiDBField(
     DAGExpressionAnalyzer * analyzer,
     const tipb::Expr & expr,
     const ExpressionActionsPtr & actions)
@@ -292,7 +292,7 @@ String DAGExpressionAnalyzerHelper::buildCastStringAsJson(
         throw TiFlashException("CAST function without valid field type", Errors::Coprocessor::BadRequest);
 
     String arg = analyzer->getActions(expr.children(0), actions);
-    static constexpr auto func_name = "cast_string_as_json";
+    auto func_name = getFunctionName(expr);
 
     const auto & collator = getCollatorFromExpr(expr);
     String result_name = genFuncString(func_name, {arg}, {collator});
@@ -303,11 +303,21 @@ String DAGExpressionAnalyzerHelper::buildCastStringAsJson(
     const ExpressionAction & action = ExpressionAction::applyFunction(function_builder, {arg}, result_name, collator);
     actions->add(action);
 
-    assert(action.function);
-    auto * function_cast_string_as_json = dynamic_cast<FunctionsCastStringAsJson *>(action.function.get());
-    assert(function_cast_string_as_json);
-    function_cast_string_as_json->setTiDBFieldType(expr.field_type());
-
+    RUNTIME_CHECK(action.function);
+    if (auto * function_cast_string_as_json = dynamic_cast<FunctionCastStringAsJson *>(action.function.get());
+        function_cast_string_as_json)
+    {
+        function_cast_string_as_json->setTiDBFieldType(expr.field_type());
+    }
+    else if (auto * function_cast_time_as_json = dynamic_cast<FunctionCastTimeAsJson *>(action.function.get());
+             function_cast_time_as_json)
+    {
+        function_cast_time_as_json->setTiDBFieldType(expr.field_type());
+    }
+    else
+    {
+        throw Exception(fmt::format("Unexpected func {} in buildCastAsJsonWithTiDBField", func_name));
+    }
     return result_name;
 }
 
@@ -509,7 +519,8 @@ DAGExpressionAnalyzerHelper::FunctionBuilderMap DAGExpressionAnalyzerHelper::fun
      {"ifNull", DAGExpressionAnalyzerHelper::buildIfNullFunction},
      {"multiIf", DAGExpressionAnalyzerHelper::buildMultiIfFunction},
      {"tidb_cast", DAGExpressionAnalyzerHelper::buildCastFunction},
-     {"cast_string_as_json", DAGExpressionAnalyzerHelper::buildCastStringAsJson},
+     {"cast_string_as_json", DAGExpressionAnalyzerHelper::buildCastAsJsonWithTiDBField},
+     {"cast_time_as_json", DAGExpressionAnalyzerHelper::buildCastAsJsonWithTiDBField},
      {"and", DAGExpressionAnalyzerHelper::buildLogicalFunction},
      {"or", DAGExpressionAnalyzerHelper::buildLogicalFunction},
      {"xor", DAGExpressionAnalyzerHelper::buildLogicalFunction},

@@ -925,4 +925,28 @@ void JsonBinary::appendJsonBinary(JsonBinaryWriteBuffer & write_buffer, const Op
     EncodeVarUInt(static_cast<UInt64>(value.data.size), write_buffer);
     write_buffer.write(value.data.data, value.data.size);
 }
+
+void JsonBinary::appendJsonBinary(JsonBinaryWriteBuffer & write_buffer, const MyDate & value)
+{
+    write_buffer.write(TYPE_CODE_DATE);
+    encodeNumeric(write_buffer, value.toCoreTime());
+}
+
+void JsonBinary::appendTimestamp(JsonBinaryWriteBuffer & write_buffer, const MyDateTime & value)
+{
+    write_buffer.write(TYPE_CODE_TIMESTAMP);
+    encodeNumeric(write_buffer, value.toCoreTime());
+}
+
+void JsonBinary::appendDatetime(JsonBinaryWriteBuffer & write_buffer, const MyDateTime & value)
+{
+    write_buffer.write(TYPE_CODE_DATETIME);
+    encodeNumeric(write_buffer, value.toCoreTime());
+}
+
+void JsonBinary::appendNull(JsonBinaryWriteBuffer & write_buffer)
+{
+    write_buffer.write(JsonBinary::TYPE_CODE_LITERAL);
+    write_buffer.write(JsonBinary::LITERAL_NIL);
+}
 } // namespace DB
