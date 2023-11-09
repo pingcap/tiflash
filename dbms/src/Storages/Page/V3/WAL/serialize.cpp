@@ -63,7 +63,7 @@ inline void serializeEntryTo(const PageEntryV3 & entry, WriteBuffer & buf, bool 
         if (!entry.checkpoint_info.data_location.data_file_id)
         {
             LOG_ERROR(
-                &Poco::Logger::get("serializeEntryTo"),
+                DB::Logger::get(),
                 "data_file_id is empty file_id={} offset={} checkpoint_info={}",
                 entry.file_id,
                 entry.offset,
