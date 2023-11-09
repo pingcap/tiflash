@@ -844,7 +844,7 @@ void SchemaBuilder<Getter, NameMapper>::applyDropSchema(const String & db_name)
     auto db = context.tryGetDatabase(db_name);
     if (db == nullptr)
     {
-        LOG_INFO(log, "Database {} does not exists", db_name);
+        LOG_INFO(log, "Database does not exist, db_name={}", db_name);
         return;
     }
 
@@ -1046,7 +1046,7 @@ void SchemaBuilder<Getter, NameMapper>::applyDropPhysicalTable(const String & db
     auto storage = tmt_context.getStorages().get(keyspace_id, table_id);
     if (storage == nullptr)
     {
-        LOG_DEBUG(log, "table {} does not exist.", table_id);
+        LOG_DEBUG(log, "table does not exist, table_id={}", table_id);
         return;
     }
     GET_METRIC(tiflash_schema_internal_ddl_count, type_drop_table).Increment();
@@ -1087,7 +1087,7 @@ void SchemaBuilder<Getter, NameMapper>::applyDropTable(DatabaseID database_id, T
     auto * storage = tmt_context.getStorages().get(keyspace_id, table_id).get();
     if (storage == nullptr)
     {
-        LOG_DEBUG(log, "table {} does not exist.", table_id);
+        LOG_DEBUG(log, "table does not exist, table_id={}", table_id);
         return;
     }
     const auto & table_info = storage->getTableInfo();
