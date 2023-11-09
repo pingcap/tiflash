@@ -919,7 +919,7 @@ grpc::Status FlashService::EstablishDisaggTask(
         "EstablishDisaggTask should only be called on write node");
 
     const auto & meta = request->meta();
-    DM::DisaggTaskId task_id(meta);
+    DM::DisaggTaskId task_id(meta\);
     auto logger = Logger::get(task_id);
 
     auto record_other_error = [&](int flash_err_code, const String & err_msg) {

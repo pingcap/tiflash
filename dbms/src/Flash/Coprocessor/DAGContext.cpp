@@ -164,7 +164,8 @@ DAGContext::DAGContext(tipb::DAGRequest & dag_request_, String log_identifier, s
     , warnings(max_recorded_error_count)
     , warning_count(0)
 {
-    query_operator_spill_contexts = std::make_shared<QueryOperatorSpillContexts>(MPPQueryId(0, 0, 0, 0, ""), 100);
+    query_operator_spill_contexts
+        = std::make_shared<QueryOperatorSpillContexts>(MPPQueryId(0, 0, 0, 0, "", 0, ""), 100);
     initOutputInfo();
 }
 
