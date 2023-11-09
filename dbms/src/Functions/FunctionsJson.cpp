@@ -30,5 +30,6 @@ void registerFunctionsJson(FunctionFactory & factory)
     factory.registerFunction<FunctionCastIntAsJson>();
     factory.registerFunction<FunctionCastStringAsJson>();
     factory.registerFunction<FunctionCastTimeAsJson>();
+    factory.registerFunction<FunctionCastDurationAsJson>();
 }
 } // namespace DB

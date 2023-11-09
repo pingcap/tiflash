@@ -20,6 +20,7 @@
 #include <Core/Types.h>
 #include <DataTypes/DataTypeMyDate.h>
 #include <DataTypes/DataTypeMyDateTime.h>
+#include <DataTypes/DataTypeMyDuration.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
@@ -627,7 +628,7 @@ private:
         const auto & data_from = column_from->getData();
         for (size_t i = 0; i < data_from.size(); ++i)
         {
-            JsonBinary::appendJsonBinary(data_to, static_cast<Float64>(data_from[i]));
+            JsonBinary::appendNumber(data_to, static_cast<Float64>(data_from[i]));
             writeChar(0, data_to);
             offsets_to[i] = data_to.count();
         }
@@ -705,7 +706,7 @@ private:
         for (size_t i = 0; i < column_from->size(); ++i)
         {
             const auto & field = (*column_from)[i].template safeGet<DecimalField<FromType>>();
-            JsonBinary::appendJsonBinary(data_to, static_cast<Float64>(field));
+            JsonBinary::appendNumber(data_to, static_cast<Float64>(field));
             writeChar(0, data_to);
             offsets_to[i] = data_to.count();
         }
@@ -786,7 +787,7 @@ private:
         const auto & data_from = column_from->getData();
         for (size_t i = 0; i < data_from.size(); ++i)
         {
-            JsonBinary::appendJsonBinary(data_to, static_cast<ToType>(data_from[i]));
+            JsonBinary::appendNumber(data_to, static_cast<ToType>(data_from[i]));
             writeChar(0, data_to);
             offsets_to[i] = data_to.count();
         }
@@ -871,7 +872,7 @@ private:
             {
                 if (slice.size >= flen)
                 {
-                    JsonBinary::appendJsonBinary(
+                    JsonBinary::appendOpaque(
                         data_to,
                         JsonBinary::Opaque{from_type_code, StringRef{slice.data, slice.size}});
                 }
@@ -880,14 +881,12 @@ private:
                     ColumnString::Chars_t buf;
                     buf.resize_fill(flen, 0);
                     std::memcpy(buf.data(), slice.data, slice.size);
-                    JsonBinary::appendJsonBinary(
-                        data_to,
-                        JsonBinary::Opaque{from_type_code, StringRef{buf.data(), flen}});
+                    JsonBinary::appendOpaque(data_to, JsonBinary::Opaque{from_type_code, StringRef{buf.data(), flen}});
                 }
             }
             else
             {
-                JsonBinary::appendJsonBinary(
+                JsonBinary::appendOpaque(
                     data_to,
                     JsonBinary::Opaque{from_type_code, StringRef{slice.data, slice.size}});
             }
@@ -928,7 +927,7 @@ private:
         for (size_t i = 0; i < size; ++i)
         {
             const auto & slice = from_data->getWhole();
-            JsonBinary::appendJsonBinary(data_to, StringRef{slice.data, slice.size});
+            JsonBinary::appendStringRef(data_to, StringRef{slice.data, slice.size});
             writeChar(0, data_to);
             offsets_to[i] = data_to.count();
             from_data->next();
@@ -970,22 +969,22 @@ private:
         }
         else if (var.type() == typeid(bool))
         {
-            JsonBinary::appendJsonBinary(write_buffer, var.extract<bool>());
+            JsonBinary::appendNumber(write_buffer, var.extract<bool>());
         }
         else if (var.type() == typeid(Float32) || var.type() == typeid(Float64))
         {
-            JsonBinary::appendJsonBinary(write_buffer, var.convert<Float64>());
+            JsonBinary::appendNumber(write_buffer, var.convert<Float64>());
         }
         else if (var.isNumeric())
         {
             if (var.isSigned())
-                JsonBinary::appendJsonBinary(write_buffer, var.convert<Int64>());
+                JsonBinary::appendNumber(write_buffer, var.convert<Int64>());
             else
-                JsonBinary::appendJsonBinary(write_buffer, var.convert<UInt64>());
+                JsonBinary::appendNumber(write_buffer, var.convert<UInt64>());
         }
         else if (var.isString())
         {
-            JsonBinary::appendJsonBinary(write_buffer, var.extract<String>());
+            JsonBinary::appendStringRef(write_buffer, var.extract<String>());
         }
         else if (var.isEmpty())
         {
@@ -1069,7 +1068,7 @@ private:
             if constexpr (std::is_same_v<DataTypeMyDate, FromDataType>)
             {
                 MyDate date(data_from[i]);
-                JsonBinary::appendJsonBinary(data_to, date);
+                JsonBinary::appendDate(data_to, date);
             }
             else
             {
@@ -1087,5 +1086,62 @@ private:
 
 private:
     tipb::FieldType tidb_tp;
+};
+
+class FunctionCastDurationAsJson : public IFunction
+{
+public:
+    static constexpr auto name = "cast_duration_as_json";
+    static FunctionPtr create(const Context &) { return std::make_shared<FunctionCastDurationAsJson>(); }
+
+    String getName() const override { return name; }
+
+    size_t getNumberOfArguments() const override { return 1; }
+
+    bool useDefaultImplementationForNulls() const override { return true; }
+    bool useDefaultImplementationForConstants() const override { return true; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        if unlikely (!arguments[0]->isMyTime())
+            throw Exception(
+                fmt::format("Illegal type {} of argument of function {}", arguments[0]->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        return std::make_shared<DataTypeString>();
+    }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
+    {
+        auto col_to = ColumnString::create();
+        auto & data_to = col_to->getChars();
+        JsonBinary::JsonBinaryWriteBuffer write_buffer(data_to);
+        auto & offsets_to = col_to->getOffsets();
+        auto rows = block.rows();
+        offsets_to.resize(rows);
+
+        const auto & from = block.getByPosition(arguments[0]);
+        if (const auto * duration_type = checkAndGetDataType<DataTypeMyDuration>(from.type.get());
+            likely(duration_type))
+        {
+            auto fsp = duration_type->getFsp();
+            const auto & col_from = checkAndGetColumn<ColumnVector<DataTypeMyDuration::FieldType>>(from.column.get());
+            const auto & data_from = col_from->getData();
+            for (size_t i = 0; i < data_from.size(); ++i)
+            {
+                JsonBinary::appendDuration(write_buffer, data_from[i], fsp);
+                writeChar(0, write_buffer);
+                offsets_to[i] = write_buffer.count();
+            }
+        }
+        else
+        {
+            throw Exception(
+                fmt::format("Illegal type {} of argument of function {}", from.type->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        }
+
+        data_to.resize(write_buffer.count());
+        block.getByPosition(result).column = std::move(col_to);
+    }
 };
 } // namespace DB

@@ -168,15 +168,16 @@ public:
 
     static UInt64 getJsonLength(const std::string_view & raw_value);
 
-    static void appendJsonBinary(JsonBinaryWriteBuffer & write_buffer, bool value);
-    static void appendJsonBinary(JsonBinaryWriteBuffer & write_buffer, UInt64 value);
-    static void appendJsonBinary(JsonBinaryWriteBuffer & write_buffer, Int64 value);
-    static void appendJsonBinary(JsonBinaryWriteBuffer & write_buffer, Float64 value);
-    static void appendJsonBinary(JsonBinaryWriteBuffer & write_buffer, const StringRef & value);
-    static void appendJsonBinary(JsonBinaryWriteBuffer & write_buffer, const Opaque & value);
-    static void appendJsonBinary(JsonBinaryWriteBuffer & write_buffer, const MyDate & value);
+    static void appendNumber(JsonBinaryWriteBuffer & write_buffer, bool value);
+    static void appendNumber(JsonBinaryWriteBuffer & write_buffer, UInt64 value);
+    static void appendNumber(JsonBinaryWriteBuffer & write_buffer, Int64 value);
+    static void appendNumber(JsonBinaryWriteBuffer & write_buffer, Float64 value);
+    static void appendStringRef(JsonBinaryWriteBuffer & write_buffer, const StringRef & value);
+    static void appendOpaque(JsonBinaryWriteBuffer & write_buffer, const Opaque & value);
+    static void appendDate(JsonBinaryWriteBuffer & write_buffer, const MyDate & value);
     static void appendTimestamp(JsonBinaryWriteBuffer & write_buffer, const MyDateTime & value);
     static void appendDatetime(JsonBinaryWriteBuffer & write_buffer, const MyDateTime & value);
+    static void appendDuration(JsonBinaryWriteBuffer & write_buffer, Int64 duration, UInt64 fsp);
     static void appendNull(JsonBinaryWriteBuffer & write_buffer);
 
 private:

@@ -887,38 +887,38 @@ UInt64 JsonBinary::getJsonLength(const std::string_view & raw_value)
     }
 }
 
-void JsonBinary::appendJsonBinary(JsonBinaryWriteBuffer & write_buffer, bool value)
+void JsonBinary::appendNumber(JsonBinaryWriteBuffer & write_buffer, bool value)
 {
     write_buffer.write(TYPE_CODE_LITERAL);
     write_buffer.write(value ? LITERAL_TRUE : LITERAL_FALSE);
 }
 
-void JsonBinary::appendJsonBinary(JsonBinaryWriteBuffer & write_buffer, UInt64 value)
+void JsonBinary::appendNumber(JsonBinaryWriteBuffer & write_buffer, UInt64 value)
 {
     write_buffer.write(TYPE_CODE_UINT64);
     encodeNumeric(write_buffer, value);
 }
 
-void JsonBinary::appendJsonBinary(JsonBinaryWriteBuffer & write_buffer, Int64 value)
+void JsonBinary::appendNumber(JsonBinaryWriteBuffer & write_buffer, Int64 value)
 {
     write_buffer.write(TYPE_CODE_INT64);
     encodeNumeric(write_buffer, value);
 }
 
-void JsonBinary::appendJsonBinary(JsonBinaryWriteBuffer & write_buffer, Float64 value)
+void JsonBinary::appendNumber(JsonBinaryWriteBuffer & write_buffer, Float64 value)
 {
     write_buffer.write(TYPE_CODE_FLOAT64);
     encodeNumeric(write_buffer, value);
 }
 
-void JsonBinary::appendJsonBinary(JsonBinaryWriteBuffer & write_buffer, const StringRef & value)
+void JsonBinary::appendStringRef(JsonBinaryWriteBuffer & write_buffer, const StringRef & value)
 {
     write_buffer.write(TYPE_CODE_STRING);
     EncodeVarUInt(static_cast<UInt64>(value.size), write_buffer);
     write_buffer.write(value.data, value.size);
 }
 
-void JsonBinary::appendJsonBinary(JsonBinaryWriteBuffer & write_buffer, const Opaque & value)
+void JsonBinary::appendOpaque(JsonBinaryWriteBuffer & write_buffer, const Opaque & value)
 {
     write_buffer.write(TYPE_CODE_OPAQUE);
     write_buffer.write(value.type);
@@ -926,7 +926,7 @@ void JsonBinary::appendJsonBinary(JsonBinaryWriteBuffer & write_buffer, const Op
     write_buffer.write(value.data.data, value.data.size);
 }
 
-void JsonBinary::appendJsonBinary(JsonBinaryWriteBuffer & write_buffer, const MyDate & value)
+void JsonBinary::appendDate(JsonBinaryWriteBuffer & write_buffer, const MyDate & value)
 {
     write_buffer.write(TYPE_CODE_DATE);
     encodeNumeric(write_buffer, value.toCoreTime());
@@ -942,6 +942,13 @@ void JsonBinary::appendDatetime(JsonBinaryWriteBuffer & write_buffer, const MyDa
 {
     write_buffer.write(TYPE_CODE_DATETIME);
     encodeNumeric(write_buffer, value.toCoreTime());
+}
+
+void JsonBinary::appendDuration(JsonBinaryWriteBuffer & write_buffer, Int64 duration, UInt64 fsp)
+{
+    write_buffer.write(TYPE_CODE_DATETIME);
+    encodeNumeric(write_buffer, static_cast<UInt64>(duration));
+    encodeNumeric(write_buffer, static_cast<UInt32>(fsp));
 }
 
 void JsonBinary::appendNull(JsonBinaryWriteBuffer & write_buffer)
