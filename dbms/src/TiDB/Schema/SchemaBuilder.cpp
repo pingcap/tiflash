@@ -1094,12 +1094,12 @@ void SchemaBuilder<Getter, NameMapper>::applyDropTable(DatabaseID database_id, T
             if (TableID latest_logical_table_id = table_id_map.findTableIDInPartitionMap(part_def.id);
                 latest_logical_table_id == -1 || latest_logical_table_id != table_info.id)
             {
-                // The partition is managed by another logical table now, skip dropping this partition
-                // when dropping the old logical table
+                // The partition is managed by another logical table now (caused by `alter table X partition by ...`),
+                // skip dropping this partition when dropping the old logical table
                 LOG_INFO(
                     log,
                     "The partition is not managed by current logical table, skip, partition_table_id={} "
-                    "new_logical_table_id={} current_table_id={}",
+                    "new_logical_table_id={} current_logical_table_id={}",
                     part_def.id,
                     latest_logical_table_id,
                     table_info.id);
