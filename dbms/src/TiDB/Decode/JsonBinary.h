@@ -122,6 +122,11 @@ public:
     /// Opaque represents a raw database binary type
     struct Opaque
     {
+        Opaque(UInt8 type_, const StringRef & data_)
+            : type(type_)
+            , data(data_)
+        {}
+
         // TypeCode is the same with TiDB database type code
         UInt8 type;
         // Buf is the underlying bytes of the data
@@ -151,6 +156,12 @@ public:
 
     static void SkipJson(size_t & cursor, const String & raw_value);
     static String DecodeJsonAsBinary(size_t & cursor, const String & raw_value);
+
+    static void buildBinaryJsonArrayInBuffer(
+        const std::vector<JsonBinary> & json_binary_vec,
+        JsonBinaryWriteBuffer & write_buffer);
+
+    static UInt64 getJsonLength(const std::string_view & raw_value);
 
 private:
     Int64 getInt64() const;
@@ -184,9 +195,6 @@ private:
     template <class WriteBuffer>
     static void unquoteJsonStringInBuffer(const StringRef & ref, WriteBuffer & write_buffer);
     static void buildBinaryJsonElementsInBuffer(
-        const std::vector<JsonBinary> & json_binary_vec,
-        JsonBinaryWriteBuffer & write_buffer);
-    static void buildBinaryJsonArrayInBuffer(
         const std::vector<JsonBinary> & json_binary_vec,
         JsonBinaryWriteBuffer & write_buffer);
     static void marshalFloat64To(JsonBinaryWriteBuffer & write_buffer, double f);

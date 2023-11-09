@@ -2763,7 +2763,7 @@ try
         auto config = BlobConfig{};
         BlobStats stats(log, delegator, config);
         {
-            const auto & lock = stats.lock();
+            std::lock_guard lock(stats.lock_stats);
             stats.createStatNotChecking(file_id1, BLOBFILE_LIMIT_SIZE, lock);
             stats.createStatNotChecking(file_id2, BLOBFILE_LIMIT_SIZE, lock);
         }

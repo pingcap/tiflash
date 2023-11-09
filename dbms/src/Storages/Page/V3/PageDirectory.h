@@ -355,7 +355,7 @@ public:
 
     void collapseTo(UInt64 seq, const PageId & page_id, PageEntriesEdit & edit);
 
-    size_t size() const
+    size_t size() const NO_THREAD_SAFETY_ANALYSIS
     {
         auto lock = acquireLock();
         return entries.size();

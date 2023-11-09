@@ -98,7 +98,7 @@ std::tuple<WaitIndexResult, double> Region::waitIndex(
                 toString(false),
                 index,
                 appliedIndex(),
-                peerState());
+                fmt::underlying(peerState()));
             return {wait_idx_res, elapsed_secs};
         }
         }
