@@ -1277,21 +1277,15 @@ void NO_INLINE probeBlockImplTypeCase(
     ProbeProcessInfo & probe_process_info,
     MutableColumnPtr & record_mapped_entry_column)
 {
-    if (rows == 0)
-    {
-        probe_process_info.all_rows_joined_finish = true;
-        return;
-    }
-
-    assert(probe_process_info.start_row < rows);
+    RUNTIME_ASSERT(probe_process_info.start_row < rows);
     size_t segment_size = join_partitions.size();
-    assert(segment_size > 0);
+    RUNTIME_ASSERT(segment_size > 0);
     std::vector<Map *> all_maps(segment_size, nullptr);
     for (size_t i = 0; i < segment_size; ++i)
     {
         if (join_partitions[i]->isSpill())
         {
-            assert(i != probe_process_info.partition_index);
+            RUNTIME_ASSERT(i != probe_process_info.partition_index);
             all_maps[i] = nullptr;
         }
         else
@@ -1309,12 +1303,11 @@ void NO_INLINE probeBlockImplTypeCase(
     bool need_virtual_dispatch_for_probe_block = join_build_info.needVirtualDispatchForProbeBlock();
     if (need_virtual_dispatch_for_probe_block)
     {
-        assert(!(join_build_info.restore_round > 0 && join_build_info.enable_fine_grained_shuffle));
-        assert(probe_process_info.hash_data->getData().size() == rows);
+        RUNTIME_ASSERT(!(join_build_info.restore_round > 0 && join_build_info.enable_fine_grained_shuffle));
+        RUNTIME_ASSERT(probe_process_info.hash_data->getData().size() == rows);
     }
 
     const auto & build_hash_data = probe_process_info.hash_data->getData();
-    assert(probe_process_info.start_row < rows);
     size_t i;
     bool block_full = false;
     for (i = probe_process_info.start_row; i < rows; ++i)
@@ -1716,13 +1709,13 @@ probeBlockSemiInternal(
     static_assert(STRICTNESS == ASTTableJoin::Strictness::Any || STRICTNESS == ASTTableJoin::Strictness::All);
 
     size_t segment_size = join_partitions.size();
-    assert(segment_size > 0);
+    RUNTIME_ASSERT(segment_size > 0);
     std::vector<Map *> all_maps(segment_size, nullptr);
     for (size_t i = 0; i < segment_size; ++i)
     {
         if (join_partitions[i]->isSpill())
         {
-            assert(i != probe_process_info.partition_index);
+            RUNTIME_ASSERT(i != probe_process_info.partition_index);
             all_maps[i] = nullptr;
         }
         else
@@ -1738,8 +1731,8 @@ probeBlockSemiInternal(
     bool need_virtual_dispatch_for_probe_block = join_build_info.needVirtualDispatchForProbeBlock();
     if (need_virtual_dispatch_for_probe_block)
     {
-        assert(!(join_build_info.restore_round > 0 && join_build_info.enable_fine_grained_shuffle));
-        assert(probe_process_info.hash_data->getData().size() == rows);
+        RUNTIME_ASSERT(!(join_build_info.restore_round > 0 && join_build_info.enable_fine_grained_shuffle));
+        RUNTIME_ASSERT(probe_process_info.hash_data->getData().size() == rows);
     }
 
     PaddedPODArray<SemiJoinResult<KIND, STRICTNESS>> res;
@@ -1897,12 +1890,18 @@ void JoinPartition::probeBlock(
     ProbeProcessInfo & probe_process_info,
     MutableColumnPtr & record_mapped_entry_column)
 {
+    if (rows == 0)
+    {
+        probe_process_info.all_rows_joined_finish = true;
+        return;
+    }
+
     using enum ASTTableJoin::Strictness;
     using enum ASTTableJoin::Kind;
     const auto & current_partition = join_partitions[probe_process_info.partition_index];
     auto kind = current_partition->kind;
     auto strictness = current_partition->strictness;
-    assert(rows == 0 || !current_partition->isSpill());
+    RUNTIME_ASSERT(!current_partition->isSpill());
 
 #define CALL(KIND, STRICTNESS, MAP, row_flagged_map)        \
     probeBlockImpl<KIND, STRICTNESS, MAP, row_flagged_map>( \
@@ -2058,11 +2057,12 @@ std::pair<PaddedPODArray<SemiJoinResult<KIND, STRICTNESS>>, std::list<SemiJoinRe
         const JoinBuildInfo & join_build_info,
         const ProbeProcessInfo & probe_process_info)
 {
-    using enum ASTTableJoin::Strictness;
-    using enum ASTTableJoin::Kind;
+    if (rows == 0)
+        return {};
+
     const auto & current_partition = join_partitions[probe_process_info.partition_index];
     auto method = current_partition->join_map_method;
-    assert(rows == 0 || !current_partition->isSpill());
+    assert(!current_partition->isSpill());
 
     switch (method)
     {

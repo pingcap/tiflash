@@ -1665,6 +1665,8 @@ void Join::joinBlockNullAwareSemiImpl(
 
 Block Join::joinBlockSemi(ProbeProcessInfo & probe_process_info) const
 {
+    Block block = probe_process_info.block;
+
     JoinBuildInfo join_build_info{
         enable_fine_grained_shuffle,
         fine_grained_shuffle_count,
@@ -1681,8 +1683,6 @@ Block Join::joinBlockSemi(ProbeProcessInfo & probe_process_info) const
         join_build_info.needVirtualDispatchForProbeBlock(),
         collators,
         restore_round);
-
-    Block block = probe_process_info.block;
 
 #define CALL(KIND, STRICTNESS, MAP) \
     joinBlockSemiImpl<KIND, STRICTNESS, MAP>(block, join_build_info, probe_process_info);
