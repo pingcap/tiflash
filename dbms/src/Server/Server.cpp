@@ -367,7 +367,7 @@ pingcap::ClusterConfig getClusterConfig(
         ca_path,
         cert_path,
         key_path,
-        config.api_version);
+        fmt::underlying(config.api_version));
     return config;
 }
 

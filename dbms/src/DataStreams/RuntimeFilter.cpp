@@ -75,7 +75,7 @@ void RuntimeFilter::build()
         throw TiFlashException(
             Errors::Coprocessor::BadRequest,
             "The source expr {} of rf {} should be column ref",
-            source_expr.tp(),
+            tipb::ExprType_Name(source_expr.tp()),
             id);
     }
 }

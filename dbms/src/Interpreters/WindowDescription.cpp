@@ -48,7 +48,7 @@ WindowFrame::FrameType getFrameTypeFromTipb(const tipb::WindowFrameType & type)
     case tipb::WindowFrameType::Groups:
         return WindowFrame::FrameType::Groups;
     default:
-        throw Exception(ErrorCodes::BAD_ARGUMENTS, "Unknown frame type {}", type);
+        throw Exception(ErrorCodes::BAD_ARGUMENTS, "Unknown frame type {}", fmt::underlying(type));
     }
 }
 
