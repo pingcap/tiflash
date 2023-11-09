@@ -459,7 +459,7 @@ public:
 
         const auto now = SteadyClock::now();
         if unlikely (group->consumeResource(ru, cpu_time_in_ns, now, MAX_THROTTLE_DURATION_SEC))
-            throw ::DB::Exception(fmt::format("Exceeded resource group({}) quota limitation", name));
+            throw ::DB::Exception(fmt::format("Exceeded resource group quota limitation: ", name));
 
         if (group->lowToken() || group->trickleModeLeaseExpire(now))
         {
@@ -586,7 +586,7 @@ private:
     static constexpr double ACQUIRE_RU_AMPLIFICATION = 1.5;
     // If the number of tokens the caller wants to consume exceeds
     // the accumulated amount within MAX_THROTTLE_DURATION_SEC seconds, raise an error.
-    static constexpr auto MAX_THROTTLE_DURATION_SEC = 60;
+    static constexpr auto MAX_THROTTLE_DURATION_SEC = 120;
 
     static const std::string GAC_RESOURCE_GROUP_ETCD_PATH;
     static const std::string WATCH_GAC_ERR_PREFIX;

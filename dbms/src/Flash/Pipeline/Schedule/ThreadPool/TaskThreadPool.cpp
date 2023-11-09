@@ -106,7 +106,11 @@ void TaskThreadPool<Impl>::handleTask(TaskPtr & task)
         if (!Impl::isTargetStatus(status_after_exec) || total_time_spent >= YIELD_MAX_TIME_SPENT_NS)
             break;
     }
-    task_queue->updateStatistics(task, status_before_exec, total_time_spent);
+    if (const auto & exception_ptr = task_queue->updateStatistics(task, status_before_exec, total_time_spent);
+        exception_ptr)
+    {
+        task->onErrorOccurred(exception_ptr);
+    }
     metrics.addExecuteTime(task, total_time_spent);
     metrics.decExecutingTask();
     switch (status_after_exec)
