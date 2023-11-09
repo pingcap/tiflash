@@ -573,11 +573,6 @@ try
     }
 
     num = json->getValue<UInt64>("num");
-
-    if (json->has("new_table_id"))
-    {
-        new_table_id = json->getValue<UInt64>("new_table_id");
-    }
 }
 catch (const Poco::Exception & e)
 {

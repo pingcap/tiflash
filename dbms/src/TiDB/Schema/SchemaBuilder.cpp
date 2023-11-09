@@ -527,12 +527,6 @@ void SchemaBuilder<Getter, NameMapper>::applyPartitionDiff(
         }
     }
 
-    if (table_info->partition.new_table_id != DB::InvalidTableID)
-    {
-        // TODO: maybe we should create the new_logical_table here? But we don't know
-        //       the database_id of new_logical_table
-    }
-
     auto alter_lock = storage->lockForAlter(getThreadNameAndID());
     storage->alterSchemaChange(
         alter_lock,
