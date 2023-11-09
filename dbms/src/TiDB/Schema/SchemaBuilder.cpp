@@ -253,8 +253,14 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
         else
         {
             /// The new non-partitioned table will have a new id
-            applyDropTable(diff.schema_id, diff.old_table_id);
+            // Create the new table. If the new table is a partition table,
+            // this will also overwrite the partition id mapping to the
+            // new logical table.
             applyCreateTable(diff.schema_id, diff.table_id);
+            // try to renew the partition info for the new table
+            applyPartitionDiff(diff.schema_id, diff.table_id);
+            // drop the old table
+            applyDropTable(diff.schema_id, diff.old_table_id);
         }
         break;
     }
@@ -410,34 +416,28 @@ void SchemaBuilder<Getter, NameMapper>::applyPartitionDiff(
     const TableInfoPtr & table_info,
     const ManageableStoragePtr & storage)
 {
-    const auto & orig_table_info = storage->getTableInfo();
-    if (!orig_table_info.isLogicalPartitionTable())
+    const auto & local_table_info = storage->getTableInfo();
+    // ALTER TABLE t PARTITION BY ... may turn a non-partition table into partition table
+    if (!local_table_info.isLogicalPartitionTable())
     {
-        LOG_ERROR(
+        LOG_INFO(
             log,
-            "old table in TiFlash not partition table {} with database_id={}, table_id={}",
-            name_mapper.debugCanonicalName(*db_info, orig_table_info),
+            "Altering non-partition table to be a partition table {} with database_id={}, table_id={}",
+            name_mapper.debugCanonicalName(*db_info, local_table_info),
             db_info->id,
-            orig_table_info.id);
-        return;
+            local_table_info.id);
     }
 
-    const auto & orig_defs = orig_table_info.partition.definitions;
+    const auto & local_defs = local_table_info.partition.definitions;
     const auto & new_defs = table_info->partition.definitions;
 
-    std::unordered_set<TableID> orig_part_id_set, new_part_id_set;
-    std::vector<String> orig_part_ids, new_part_ids;
-    std::for_each(orig_defs.begin(), orig_defs.end(), [&orig_part_id_set, &orig_part_ids](const auto & def) {
-        orig_part_id_set.emplace(def.id);
-        orig_part_ids.emplace_back(std::to_string(def.id));
+    std::unordered_set<TableID> local_part_id_set, new_part_id_set;
+    std::for_each(local_defs.begin(), local_defs.end(), [&local_part_id_set](const auto & def) {
+        local_part_id_set.emplace(def.id);
     });
-    std::for_each(new_defs.begin(), new_defs.end(), [&new_part_id_set, &new_part_ids](const auto & def) {
+    std::for_each(new_defs.begin(), new_defs.end(), [&new_part_id_set](const auto & def) {
         new_part_id_set.emplace(def.id);
-        new_part_ids.emplace_back(std::to_string(def.id));
     });
-
-    auto orig_part_ids_str = boost::algorithm::join(orig_part_ids, ", ");
-    auto new_part_ids_str = boost::algorithm::join(new_part_ids, ", ");
 
     LOG_INFO(
         log,
@@ -445,38 +445,48 @@ void SchemaBuilder<Getter, NameMapper>::applyPartitionDiff(
         name_mapper.debugCanonicalName(*db_info, *table_info),
         db_info->id,
         table_info->id,
-        orig_part_ids_str,
-        new_part_ids_str);
+        local_part_id_set,
+        new_part_id_set);
 
-    if (orig_part_id_set == new_part_id_set)
+    if (local_part_id_set == new_part_id_set)
     {
         LOG_INFO(
             log,
-            "No partition changes {} with database_id={}, table_id={}",
+            "No partition changes, paritions_size={} {} with database_id={}, table_id={}",
             name_mapper.debugCanonicalName(*db_info, *table_info),
+            new_part_id_set.size(),
             db_info->id,
             table_info->id);
         return;
     }
 
-    auto updated_table_info = orig_table_info;
+    // Copy the local table info and update fileds on the copy
+    auto updated_table_info = local_table_info;
+    updated_table_info.is_partition_table = true;
+    updated_table_info.belonging_table_id = table_info->belonging_table_id;
     updated_table_info.partition = table_info->partition;
 
     /// Apply changes to physical tables.
-    for (const auto & orig_def : orig_defs)
+    for (const auto & local_def : local_defs)
     {
-        if (new_part_id_set.count(orig_def.id) == 0)
+        if (!new_part_id_set.contains(local_def.id))
         {
-            applyDropPhysicalTable(name_mapper.mapDatabaseName(*db_info), orig_def.id);
+            applyDropPhysicalTable(name_mapper.mapDatabaseName(*db_info), local_def.id);
         }
     }
 
     for (const auto & new_def : new_defs)
     {
-        if (orig_part_id_set.count(new_def.id) == 0)
+        if (!local_part_id_set.contains(new_def.id))
         {
             table_id_map.emplacePartitionTableID(new_def.id, updated_table_info.id);
         }
+    }
+
+    if (table_info->partition.new_table_id != DB::InvalidTableID)
+    {
+        // TODO: maybe we should create the new_logical_table here? But we don't know
+        //       the database_id of new_logical_table
     }
 
     auto alter_lock = storage->lockForAlter(getThreadNameAndID());
@@ -1041,6 +1051,21 @@ void SchemaBuilder<Getter, NameMapper>::applyDropTable(DatabaseID database_id, T
     {
         for (const auto & part_def : table_info.partition.definitions)
         {
+            if (TableID latest_logical_table_id = table_id_map.findTableIDInPartitionMap(part_def.id);
+                latest_logical_table_id == -1 || latest_logical_table_id != table_info.id)
+            {
+                // The partition is managed by another logical table now, skip dropping this partition
+                // when dropping the old logical table
+                LOG_INFO(
+                    log,
+                    "The partition is not managed by current logical table, skip, partition_table_id={} "
+                    "new_logical_table_id={} current_table_id={}",
+                    part_def.id,
+                    latest_logical_table_id,
+                    table_info.id);
+                continue;
+            }
+
             applyDropPhysicalTable(name_mapper.mapDatabaseName(database_id, keyspace_id), part_def.id);
         }
     }

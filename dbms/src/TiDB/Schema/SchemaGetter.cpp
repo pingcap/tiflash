@@ -251,6 +251,7 @@ std::optional<SchemaDiff> SchemaGetter::getSchemaDiff(Int64 ver)
         LOG_WARNING(log, "The schema diff for version {}, key {} is empty.", ver, key);
         return std::nullopt;
     }
+    LOG_DEBUG(log, "Get SchemaDiff from TiKV: {}", data); // TODO: turn it into trace level
     SchemaDiff diff;
     diff.deserialize(data);
     return diff;

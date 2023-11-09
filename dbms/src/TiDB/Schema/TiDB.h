@@ -266,6 +266,8 @@ struct PartitionInfo
     bool enable = false;
     std::vector<PartitionDefinition> definitions;
     UInt64 num = 0;
+
+    TableID new_table_id = DB::InvalidTableID;
 };
 
 struct DBInfo
