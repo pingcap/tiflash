@@ -176,9 +176,6 @@ mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t2 
 mysql> alter table test.t2 partition by hash (a) partitions 3;
 mysql> analyze table test.t2;
 
-#TODO this is just a workaround, the tidb return before waitting tiflash replica available for the new partitions
-SLEEP 10
-
 mysql> set session tidb_isolation_read_engines='tiflash'; select count(*) from test.t2 partition (p0);
 +----------+
 | count(*) |
