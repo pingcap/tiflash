@@ -583,8 +583,7 @@ try
 
     auto filter = createGreater(
         Attr{col_a_define.name, col_a_define.id, DataTypeFactory::instance().get("Int64")},
-        Field(static_cast<Int64>(10000)),
-        0);
+        Field(static_cast<Int64>(10000)));
     scan_context = std::make_shared<ScanContext>();
     in = store->read(
         *db_context,
