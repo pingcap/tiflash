@@ -120,7 +120,7 @@ public:
     }
 
 private:
-    Stopwatch stopwatch{CLOCK_MONOTONIC_COARSE};
+    Stopwatch stopwatch;
 
     UInt64 cpu_execute_max_time_ns_per_round = 0;
     UInt64 io_execute_max_time_ns_per_round = 0;
