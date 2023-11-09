@@ -17,20 +17,20 @@
 #include <Columns/ColumnConst.h>
 #include <Columns/ColumnFixedString.h>
 #include <Columns/ColumnString.h>
+#include <Core/Types.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
+#include <Flash/Coprocessor/DAGUtils.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/GatherUtils/Sources.h>
 #include <Functions/IFunction.h>
 #include <TiDB/Decode/JsonBinary.h>
 #include <TiDB/Decode/JsonPathExprRef.h>
-#include <Flash/Coprocessor/DAGUtils.h>
+#include <tipb/expression.pb.h>
 
 #include <ext/range.h>
 #include <magic_enum.hpp>
-#include <tipb/expression.pb.h>
-#include <Core/Types.h>
 
 namespace DB
 {
@@ -49,7 +49,8 @@ namespace DB
 namespace ErrorCodes
 {
 extern const int ILLEGAL_COLUMN;
-}
+extern const int UNKNOWN_TYPE;
+} // namespace ErrorCodes
 
 inline bool isNullJsonBinary(size_t size)
 {
@@ -558,10 +559,7 @@ public:
     bool useDefaultImplementationForNulls() const override { return false; }
     bool useDefaultImplementationForConstants() const override { return false; }
 
-    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
-    {
-        return arguments[0];
-    }
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override { return arguments[0]; }
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
@@ -615,8 +613,11 @@ public:
     }
 
 private:
-    template<typename FromType>
-    static void doExecute(JsonBinary::JsonBinaryWriteBuffer & data_to, ColumnString::Offsets & offsets_to, const ColumnPtr & column_ptr_from)
+    template <typename FromType>
+    static void doExecute(
+        JsonBinary::JsonBinaryWriteBuffer & data_to,
+        ColumnString::Offsets & offsets_to,
+        const ColumnPtr & column_ptr_from)
     {
         const auto * column_from = checkAndGetColumn<ColumnVector<FromType>>(column_ptr_from.get());
         RUNTIME_CHECK(column_from);
@@ -679,7 +680,10 @@ public:
             break;
         default:
             throw Exception(
-                fmt::format("Illegal type {} of argument of function {}", magic_enum::enum_name(from_type_index), getName()),
+                fmt::format(
+                    "Illegal type {} of argument of function {}",
+                    magic_enum::enum_name(from_type_index),
+                    getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         }
         data_to.resize(write_buffer.count());
@@ -687,8 +691,11 @@ public:
     }
 
 private:
-    template<typename FromType>
-    static void doExecute(JsonBinary::JsonBinaryWriteBuffer & data_to, ColumnString::Offsets & offsets_to, const ColumnPtr & column_ptr_from)
+    template <typename FromType>
+    static void doExecute(
+        JsonBinary::JsonBinaryWriteBuffer & data_to,
+        ColumnString::Offsets & offsets_to,
+        const ColumnPtr & column_ptr_from)
     {
         const auto * column_from = checkAndGetColumn<ColumnDecimal<FromType>>(column_ptr_from.get());
         RUNTIME_CHECK(column_from);
@@ -717,7 +724,7 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
-        switch(arguments[0]->getTypeId())
+        switch (arguments[0]->getTypeId())
         {
         case TypeIndex::Int64:
         case TypeIndex::UInt64:
@@ -754,7 +761,10 @@ public:
             break;
         default:
             throw Exception(
-                fmt::format("Illegal type {} of argument of function {}", magic_enum::enum_name(from_type_index), getName()),
+                fmt::format(
+                    "Illegal type {} of argument of function {}",
+                    magic_enum::enum_name(from_type_index),
+                    getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         }
         data_to.resize(write_buffer.count());
@@ -762,8 +772,11 @@ public:
     }
 
 private:
-    template<typename FromType, typename ToType>
-    static void doExecute(JsonBinary::JsonBinaryWriteBuffer & data_to, ColumnString::Offsets & offsets_to, const ColumnPtr & column_ptr_from)
+    template <typename FromType, typename ToType>
+    static void doExecute(
+        JsonBinary::JsonBinaryWriteBuffer & data_to,
+        ColumnString::Offsets & offsets_to,
+        const ColumnPtr & column_ptr_from)
     {
         const auto * column_from = checkAndGetColumn<ColumnVector<FromType>>(column_ptr_from.get());
         RUNTIME_CHECK(column_from);
@@ -799,7 +812,7 @@ public:
             throw Exception(
                 fmt::format("Illegal type {} of argument of function {}", arguments[0]->getName(), getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-        return makeNullable(std::make_shared<DataTypeString>());
+        return std::make_shared<DataTypeString>();
     }
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
@@ -818,11 +831,11 @@ public:
         {
             if (tidb_tp.tp() == tipb::String)
             {
-                doExecuteForBinary<true>(write_buffer, offsets_to, source, tidb_tp.tp(), block.rows());
+                doExecuteForBinary<true>(write_buffer, offsets_to, source, tidb_tp.tp(), tidb_tp.flen(), block.rows());
             }
             else
             {
-                doExecuteForBinary<false>(write_buffer, offsets_to, source, tidb_tp.tp(), block.rows());
+                doExecuteForBinary<false>(write_buffer, offsets_to, source, tidb_tp.tp(), tidb_tp.flen(), block.rows());
             }
         }
         else if (hasParseToJSONFlag(tidb_tp))
@@ -839,19 +852,42 @@ public:
     }
 
 private:
-    template<bool is_binary_str>
+    template <bool is_binary_str>
     static void doExecuteForBinary(
         JsonBinary::JsonBinaryWriteBuffer & data_to,
         ColumnString::Offsets & offsets_to,
         const std::unique_ptr<IStringSource> & from_data,
         UInt8 from_type_code,
+        size_t flen,
         size_t size)
     {
         for (size_t i = 0; i < size; ++i)
         {
             const auto & slice = from_data->getWhole();
-            JsonBinary::Opaque opaque{from_type_code, StringRef{slice.data, slice.size}};
-            JsonBinary::appendJsonBinary(data_to, opaque);
+            if constexpr (is_binary_str)
+            {
+                if (slice.size >= flen)
+                {
+                    JsonBinary::appendJsonBinary(
+                        data_to,
+                        JsonBinary::Opaque{from_type_code, StringRef{slice.data, slice.size}});
+                }
+                else
+                {
+                    ColumnString::Chars_t buf;
+                    buf.resize_fill(flen, 0);
+                    std::memcpy(buf.data(), slice.data, slice.size);
+                    JsonBinary::appendJsonBinary(
+                        data_to,
+                        JsonBinary::Opaque{from_type_code, StringRef{buf.data(), flen}});
+                }
+            }
+            else
+            {
+                JsonBinary::appendJsonBinary(
+                    data_to,
+                    JsonBinary::Opaque{from_type_code, StringRef{slice.data, slice.size}});
+            }
             writeChar(0, data_to);
             offsets_to[i] = data_to.count();
             from_data->next();
@@ -867,7 +903,13 @@ private:
         for (size_t i = 0; i < size; ++i)
         {
             const auto & slice = from_data->getWhole();
-            JsonBinary::appendJsonBinary(data_to, StringRef{slice.data, slice.size});
+            if (unlikely(slice.size == 0))
+                throw Exception("");
+
+            Poco::JSON::Parser parser;
+            Poco::Dynamic::Var result = parser.parse(StringRef{slice.data, slice.size}.toString());
+            extractJsonVar(result, data_to);
+
             writeChar(0, data_to);
             offsets_to[i] = data_to.count();
             from_data->next();
@@ -887,6 +929,69 @@ private:
             writeChar(0, data_to);
             offsets_to[i] = data_to.count();
             from_data->next();
+        }
+    }
+
+    static void extractJsonVar(const Poco::Dynamic::Var & var, JsonBinary::JsonBinaryWriteBuffer & write_buffer)
+    {
+        if (var.type() == typeid(Poco::JSON::Object::Ptr))
+        {
+            const auto & obj = var.extract<Poco::JSON::Object::Ptr>();
+            std::map<String, JsonBinary> json_elems;
+            ColumnString::Chars_t tmp_buf;
+            JsonBinary::JsonBinaryWriteBuffer tmp_write_buffer(tmp_buf);
+            for (const auto & [key, value] : *obj)
+            {
+                size_t begin = tmp_write_buffer.count();
+                extractJsonVar(value, tmp_write_buffer);
+                size_t size = tmp_write_buffer.count() - begin;
+                json_elems.emplace(key, JsonBinary{tmp_buf[begin], StringRef(&tmp_buf[begin + 1], size - 1)});
+            }
+            JsonBinary::buildBinaryJsonObjectInBuffer(json_elems, write_buffer);
+        }
+        else if (var.type() == typeid(Poco::JSON::Array::Ptr))
+        {
+            const auto & array = var.extract<Poco::JSON::Array::Ptr>();
+            std::vector<JsonBinary> json_elems;
+            json_elems.reserve(array->size());
+            ColumnString::Chars_t tmp_buf;
+            JsonBinary::JsonBinaryWriteBuffer tmp_write_buffer(tmp_buf);
+            for (const auto & elem : *array)
+            {
+                size_t begin = tmp_write_buffer.count();
+                extractJsonVar(elem, tmp_write_buffer);
+                size_t size = tmp_write_buffer.count() - begin;
+                json_elems.emplace_back(tmp_buf[begin], StringRef(&tmp_buf[begin + 1], size - 1));
+            }
+            JsonBinary::buildBinaryJsonArrayInBuffer(json_elems, write_buffer);
+        }
+        else if (var.type() == typeid(bool))
+        {
+            JsonBinary::appendJsonBinary(write_buffer, var.extract<bool>());
+        }
+        else if (var.type() == typeid(Float32) || var.type() == typeid(Float64))
+        {
+            JsonBinary::appendJsonBinary(write_buffer, var.convert<Float64>());
+        }
+        else if (var.isNumeric())
+        {
+            if (var.isSigned())
+                JsonBinary::appendJsonBinary(write_buffer, var.convert<Int64>());
+            else
+                JsonBinary::appendJsonBinary(write_buffer, var.convert<UInt64>());
+        }
+        else if (var.isString())
+        {
+            JsonBinary::appendJsonBinary(write_buffer, var.extract<String>());
+        }
+        else if (var.isEmpty())
+        {
+            write_buffer.write(JsonBinary::TYPE_CODE_LITERAL);
+            write_buffer.write(JsonBinary::LITERAL_NIL);
+        }
+        else
+        {
+            throw Exception(ErrorCodes::UNKNOWN_TYPE, "unknown type: {}", var.type().name());
         }
     }
 

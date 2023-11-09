@@ -23,9 +23,9 @@
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionsGrouping.h>
+#include <Functions/FunctionsJson.h>
 #include <Functions/FunctionsTiDBConversion.h>
 #include <TiDB/Decode/TypeMapping.h>
-#include <Functions/FunctionsJson.h>
 
 namespace DB
 {

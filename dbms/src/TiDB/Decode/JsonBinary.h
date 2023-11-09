@@ -161,6 +161,10 @@ public:
         const std::vector<JsonBinary> & json_binary_vec,
         JsonBinaryWriteBuffer & write_buffer);
 
+    static void buildBinaryJsonObjectInBuffer(
+        const std::map<String, JsonBinary> & json_binary_map,
+        JsonBinaryWriteBuffer & write_buffer);
+
     static UInt64 getJsonLength(const std::string_view & raw_value);
 
     static void appendJsonBinary(JsonBinaryWriteBuffer & write_buffer, bool value);

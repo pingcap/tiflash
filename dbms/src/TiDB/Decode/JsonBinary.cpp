@@ -793,8 +793,7 @@ void JsonBinary::buildBinaryJsonElementsInBuffer(
         }
         else
         {
-            UInt32 endian_value_offset = value_offset;
-            encodeNumeric(write_buffer, endian_value_offset);
+            encodeNumeric(write_buffer, value_offset);
             /// update value_offset
             value_offset += bj.data.size;
         }
@@ -826,6 +825,48 @@ void JsonBinary::buildBinaryJsonArrayInBuffer(
 
     encodeNumeric(write_buffer, total_size);
     buildBinaryJsonElementsInBuffer(json_binary_vec, write_buffer);
+}
+
+void JsonBinary::buildBinaryJsonObjectInBuffer(
+    const std::map<String, JsonBinary> & json_binary_map,
+    JsonBinaryWriteBuffer & write_buffer)
+{
+    write_buffer.write(TYPE_CODE_OBJECT);
+
+    UInt32 total_size = HEADER_SIZE + json_binary_map.size() * (KEY_ENTRY_SIZE + VALUE_ENTRY_SIZE);
+    for (const auto & [key, value] : json_binary_map)
+    {
+        if (unlikely(key.size() > std::numeric_limits<UInt16>::max()))
+            throw Exception("TiDB/TiFlash does not yet support JSON objects with the key length >= 65536");
+        total_size += key.size();
+        /// Literal type value are inlined in the value_entry memory
+        if (value.type != TYPE_CODE_LITERAL)
+            total_size += value.data.size;
+    }
+
+    UInt32 element_count = json_binary_map.size();
+    encodeNumeric(write_buffer, element_count);
+
+    encodeNumeric(write_buffer, total_size);
+
+    /// first write key entry with key offset.
+    UInt32 key_offset = HEADER_SIZE + json_binary_map.size() * KEY_ENTRY_SIZE;
+    for (const auto & [key, _] : json_binary_map)
+    {
+        encodeNumeric(write_buffer, key_offset);
+        key_offset += key.size();
+        UInt16 key_len = key.size();
+        encodeNumeric(write_buffer, key_len);
+    }
+    for (const auto & [key, _] : json_binary_map)
+        write_buffer.write(key.data(), key.size());
+
+    /// next write values.
+    std::vector<JsonBinary> value_vec;
+    value_vec.reserve(json_binary_map.size());
+    for (const auto & [_, value] : json_binary_map)
+        value_vec.push_back(value);
+    buildBinaryJsonElementsInBuffer(value_vec, write_buffer);
 }
 
 UInt64 JsonBinary::getJsonLength(const std::string_view & raw_value)
@@ -877,8 +918,11 @@ void JsonBinary::appendJsonBinary(JsonBinaryWriteBuffer & write_buffer, const St
     write_buffer.write(value.data, value.size);
 }
 
-void JsonBinary::appendJsonBinary(JsonBinaryWriteBuffer & /*write_buffer*/, const Opaque & /*value*/)
+void JsonBinary::appendJsonBinary(JsonBinaryWriteBuffer & write_buffer, const Opaque & value)
 {
-
+    write_buffer.write(TYPE_CODE_OPAQUE);
+    write_buffer.write(value.type);
+    EncodeVarUInt(static_cast<UInt64>(value.data.size), write_buffer);
+    write_buffer.write(value.data.data, value.data.size);
 }
 } // namespace DB
