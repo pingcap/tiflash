@@ -319,6 +319,15 @@ private:
             if (elapsed < dura)
                 return {.speed = ru_consumption_speed, .delta = ru_consumption_delta, .updated = false};
 
+            // TODO: Add this to avoid bug that cause RU usage is very large. Remove it after tiflash resource control is stable.
+            // For serverless tier, the fillrate is 2M, so set it as 2M*5sec, and multiple 5 to avoid limit speed.
+            if unlikely(ru_consumption_delta >= 50'000'000L)
+            {
+                LOG_ERROR(log, "too much ru consumption({}), reset it as zero!", ru_consumption_delta);
+                ru_consumption_delta = 0;
+                return {.speed = ru_consumption_speed, .delta = ru_consumption_delta, .updated = false};
+            }
+
             ru_consumption_speed = ru_consumption_delta / elapsed.count();
             total_ru_consumption += ru_consumption_delta;
 
@@ -544,6 +553,7 @@ private:
                  .acquire_tokens = 0,
                  .ru_consumption_delta = consumption_update_info.delta});
         }
+        LOG_DEBUG(log, "final report done(report size: {})", acquire_infos.size());
         fetchTokensFromGAC(acquire_infos, "before stop");
 
         if (need_reset_unique_client_id.load())

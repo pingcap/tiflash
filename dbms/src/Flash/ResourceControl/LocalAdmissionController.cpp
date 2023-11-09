@@ -247,7 +247,7 @@ void LocalAdmissionController::fetchTokensFromGAC(
             req_ru->set_type(resource_manager::RequestUnitType::RU);
             req_ru->set_value(info.acquire_tokens);
         }
-        if (info.ru_consumption_delta > 0.0)
+        if (info.ru_consumption_delta > 0.0 || final_report)
         {
             single_group_req->set_is_tiflash(true);
             auto * tiflash_consumption = single_group_req->mutable_consumption_since_last_request();
