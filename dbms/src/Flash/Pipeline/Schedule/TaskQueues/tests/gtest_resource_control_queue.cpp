@@ -92,7 +92,7 @@ void dynamicConsumeResource(const std::string & name, double ru, uint64_t cpu_ti
     auto & resource_groups = LocalAdmissionController::global_instance->resource_groups;
     auto iter = resource_groups.find(name);
     RUNTIME_ASSERT(iter != resource_groups.end());
-    iter->second->consumeResource(ru, cpu_time_ns);
+    iter->second->consumeResource(ru, cpu_time_ns, std::chrono::steady_clock::now());
 }
 
 uint64_t dynamicGetPriority(const std::string & name)
