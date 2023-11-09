@@ -249,9 +249,9 @@ void SemiJoinHelper<KIND, Mapped>::joinResult(std::list<Result *> & res_list)
     checkAllExprResult<has_other_eq_cond_from_in, has_other_cond, has_other_cond_null_map>( \
         offsets,                                                                            \
         res_list,                                                                           \
-        other_eq_from_in_column_data,                                                      \
+        other_eq_from_in_column_data,                                                       \
         other_eq_from_in_null_map,                                                          \
-        other_column_data,                                                                 \
+        other_column_data,                                                                  \
         other_null_map);
 
         if (has_other_eq_cond_from_in)
