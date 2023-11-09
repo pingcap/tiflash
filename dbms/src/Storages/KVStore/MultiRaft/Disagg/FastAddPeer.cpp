@@ -252,7 +252,7 @@ FastAddPeerRes FastAddPeerImpl(EngineStoreServerWrap * server, uint64_t region_i
     auto after_build = [&]() {
         if (!is_building_finish_recorded)
         {
-            GET_METRIC(tiflash_fap_task_state, type_building).Decrement();
+            GET_METRIC(tiflash_fap_task_state, type_building_stage).Decrement();
             is_building_finish_recorded = true;
         }
     };
@@ -310,7 +310,7 @@ FastAddPeerRes FastAddPeerImpl(EngineStoreServerWrap * server, uint64_t region_i
                             watch.elapsedSeconds(),
                             candidate_store_ids.size(),
                             region_id);
-                        GET_METRIC(tiflash_fap_task_duration_seconds, type_build).Observe(watch.elapsedSeconds());
+                        GET_METRIC(tiflash_fap_task_duration_seconds, type_build_stage).Observe(watch.elapsedSeconds());
                         break;
                     }
                     else
@@ -356,7 +356,7 @@ FastAddPeerRes FastAddPeerImpl(EngineStoreServerWrap * server, uint64_t region_i
             });
         auto wn_ps = server->tmt->getContext().getWriteNodePageStorage();
         wn_ps->write(std::move(wb));
-        GET_METRIC(tiflash_fap_task_duration_seconds, type_ingest).Observe(watch_ingest.elapsedSeconds());
+        GET_METRIC(tiflash_fap_task_duration_seconds, type_ingest_stage).Observe(watch_ingest.elapsedSeconds());
         GET_METRIC(tiflash_fap_task_result, type_succeed).Increment();
 
         return genFastAddPeerRes(
@@ -394,7 +394,7 @@ FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, u
             if (res)
             {
                 GET_METRIC(tiflash_fap_task_state, type_ongoing).Increment();
-                GET_METRIC(tiflash_fap_task_state, type_building).Increment();
+                GET_METRIC(tiflash_fap_task_state, type_building_stage).Increment();
                 LOG_INFO(log, "Add new task [new_peer_id={}] [region_id={}]", new_peer_id, region_id);
             }
             else

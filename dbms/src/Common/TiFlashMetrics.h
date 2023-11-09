@@ -384,7 +384,8 @@ namespace DB
       "",                                                                                                                           \
       Gauge,                                                                                                                        \
       F(type_ongoing, {{"type", "ongoing"}}),                                                                                       \
-      F(type_building, {{"type", "building"}}))                                                                                     \
+      F(type_ingesting_stage, {{"type", "ingesting_stage"}}),                                                                       \
+      F(type_building_stage, {{"type", "building_stage"}}))                                                                         \
     M(tiflash_fap_nomatch_reason,                                                                                                   \
       "",                                                                                                                           \
       Counter,                                                                                                                      \
@@ -394,9 +395,9 @@ namespace DB
     M(tiflash_fap_task_duration_seconds,                                                                                            \
       "",                                                                                                                           \
       Histogram,                                                                                                                    \
-      F(type_build, {{"type", "build"}}, ExpBuckets{0.05, 2, 60}),                                                                  \
+      F(type_build_stage, {{"type", "build_stage"}}, ExpBuckets{0.05, 2, 60}),                                                      \
       F(type_success, {{"type", "success"}}, ExpBuckets{0.05, 2, 60}),                                                              \
-      F(type_ingest, {{"type", "ingest"}}, ExpBuckets{0.05, 2, 60}),                                                                \
+      F(type_ingest_stage, {{"type", "ingest_stage"}}, ExpBuckets{0.05, 2, 60}),                                                    \
       F(type_total, {{"type", "total"}}, ExpBuckets{0.05, 2, 60}))                                                                  \
     M(tiflash_raft_command_duration_seconds,                                                                                        \
       "Bucketed histogram of some raft command: apply snapshot and ingest SST",                                                     \
