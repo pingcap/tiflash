@@ -135,6 +135,8 @@ void LocalAdmissionController::fetchTokensForAllResourceGroups()
             if (acquire_info.has_value())
                 acquire_infos.push_back(acquire_info.value());
         }
+        // Also clear low token, because will fetch tokens for all groups.
+        low_token_resource_groups.clear();
     }
 
     static const std::string log_desc_str = fmt::format("periodically({}sec)", DEFAULT_FETCH_GAC_INTERVAL.count());
@@ -181,7 +183,11 @@ std::optional<LocalAdmissionController::AcquireTokenInfo> LocalAdmissionControll
             return;
 
         // To avoid periodically_token_fetch after low_token_fetch immediately
-        if (is_periodically_fetch && !resource_group->needFetchTokenPeridically(now, DEFAULT_FETCH_GAC_INTERVAL))
+        if (is_periodically_fetch && !resource_group->needFetchToken(now, DEFAULT_FETCH_GAC_INTERVAL))
+            return;
+
+        // To avoid low token fetch too frequent.
+        if (!is_periodically_fetch && !resource_group->needFetchToken(now, MIN_LOW_TOKEN_FETCH_INTERVAL))
             return;
 
         // During trickle mode, no need to fetch tokens from GAC.
