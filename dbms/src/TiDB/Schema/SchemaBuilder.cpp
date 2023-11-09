@@ -462,6 +462,8 @@ void SchemaBuilder<Getter, NameMapper>::applyPartitionDiff(
 {
     const auto & local_table_info = storage->getTableInfo();
     // ALTER TABLE t PARTITION BY ... may turn a non-partition table into partition table
+    // with some partition ids in `partition.adding_definitions`/`partition.definitions`
+    // and `partition.dropping_definitions`. We need to create those partitions.
     if (!local_table_info.isLogicalPartitionTable())
     {
         LOG_INFO(
