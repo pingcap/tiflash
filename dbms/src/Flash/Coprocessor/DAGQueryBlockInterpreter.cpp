@@ -392,6 +392,11 @@ void DAGQueryBlockInterpreter::handleJoin(
 
     right_query.source = build_pipeline.firstStream();
     right_query.join = join_ptr;
+
+    Names used_columns;
+    for (const auto & column : join_output_columns)
+        used_columns.push_back(column.name);
+    join_ptr->finalize(used_columns);
     join_ptr->initBuild(right_query.source->getHeader(), join_build_concurrency);
 
     /// probe side streams

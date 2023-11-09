@@ -187,6 +187,8 @@ public:
     /// - If output_columns is empty, leaves one arbitrary column (so that the number of rows in the block is not lost).
     void finalize(const Names & output_columns);
 
+    void pruneInputColumns(const Names & output_columns);
+
     const Actions & getActions() const { return actions; }
 
     /// Get a list of input columns.
@@ -208,7 +210,29 @@ public:
 
     std::string dumpActions() const;
 
-    static std::string getSmallestColumn(const NamesAndTypesList & columns);
+    template <class NameAndTypeContainer>
+    static std::string getSmallestColumn(const NameAndTypeContainer & columns)
+    {
+        std::optional<size_t> min_size;
+        String res;
+
+        for (const auto & column : columns)
+        {
+            /// @todo resolve evil constant
+            size_t size = column.type->haveMaximumSizeOfValue() ? column.type->getMaximumSizeOfValueInMemory() : 100;
+
+            if (!min_size || size < *min_size)
+            {
+                min_size = size;
+                res = column.name;
+            }
+        }
+
+        if (!min_size)
+            throw Exception("No available columns", ErrorCodes::LOGICAL_ERROR);
+
+        return res;
+    }
 
 private:
     NamesAndTypesList input_columns;

@@ -325,7 +325,7 @@ public:
 
     const JoinProfileInfoPtr profile_info = std::make_shared<JoinProfileInfo>();
     HashJoinSpillContextPtr hash_join_spill_context;
-    const Block & getOutputBlock() const { return output_block_after_finalize; }
+    const Block & getOutputBlock() const { return finalized ? output_block_after_finalize : output_block; }
     const Names & getRequiredColumns() const { return required_columns; }
     void finalize(const Names & parent_require);
 
@@ -417,6 +417,7 @@ private:
     Block sample_block_only_keys;
 
     NamesAndTypes output_columns;
+    Block output_block;
     NamesAndTypes output_columns_after_finalize;
     Block output_block_after_finalize;
     NameSet output_column_names_set_after_finalize;

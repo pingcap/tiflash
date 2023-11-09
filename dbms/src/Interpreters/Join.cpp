@@ -220,6 +220,7 @@ Join::Join(
         LOG_WARNING(log, fmt::format("restore round reach to {}, spilling will be disabled.", max_restore_round));
         hash_join_spill_context->disableSpill();
     }
+    output_block = Block(output_columns);
 
     LOG_DEBUG(
         log,
@@ -2118,6 +2119,7 @@ void Join::finishOneNonJoin(size_t partition_index)
 Block Join::joinBlock(ProbeProcessInfo & probe_process_info, bool dry_run) const
 {
     assert(!probe_process_info.all_rows_joined_finish);
+    assert(finalized);
     if unlikely (dry_run)
     {
         assert(probe_process_info.block.rows() == 0);
@@ -2496,6 +2498,8 @@ void Join::wakeUpAllWaitingThreads()
 
 void Join::finalize(const Names & parent_require)
 {
+    if unlikely (finalized)
+        return;
     /// finalize will do 3 things
     /// 1. update expected_output_schema
     /// 2. set expected_output_schema_for_other_condition
@@ -2503,6 +2507,11 @@ void Join::finalize(const Names & parent_require)
     NameSet required_names_set;
     for (const auto & name : parent_require)
         required_names_set.insert(name);
+    if unlikely (!match_helper_name.empty() && !required_names_set.contains(match_helper_name))
+    {
+        /// should only happens in some tests
+        required_names_set.insert(match_helper_name);
+    }
     for (const auto & name_and_type : output_columns)
     {
         if (required_names_set.find(name_and_type.name) != required_names_set.end())
@@ -2512,36 +2521,58 @@ void Join::finalize(const Names & parent_require)
         }
     }
     output_block_after_finalize = Block(output_columns_after_finalize);
-    Names updated_require = parent_require;
+    Names updated_require;
+    if (match_helper_name.empty())
+        updated_require = parent_require;
+    else
+    {
+        for (const auto & name : required_names_set)
+            if (name != match_helper_name)
+                updated_require.push_back(name);
+        required_names_set.erase(match_helper_name);
+    }
     if (!non_equal_conditions.null_aware_eq_cond_name.empty())
     {
         updated_require.push_back(non_equal_conditions.null_aware_eq_cond_name);
-        non_equal_conditions.null_aware_eq_cond_expr->finalize(updated_require);
-        updated_require = non_equal_conditions.null_aware_eq_cond_expr->getRequiredColumns();
     }
     if (!non_equal_conditions.other_eq_cond_from_in_name.empty())
         updated_require.push_back(non_equal_conditions.other_eq_cond_from_in_name);
     if (!non_equal_conditions.other_cond_name.empty())
         updated_require.push_back(non_equal_conditions.other_cond_name);
+    if (non_equal_conditions.null_aware_eq_cond_expr != nullptr)
+    {
+        non_equal_conditions.null_aware_eq_cond_expr->pruneInputColumns(updated_require);
+        updated_require = non_equal_conditions.null_aware_eq_cond_expr->getRequiredColumns();
+    }
     if (non_equal_conditions.other_cond_expr != nullptr)
     {
-        non_equal_conditions.other_cond_expr->finalize(updated_require);
+        non_equal_conditions.other_cond_expr->pruneInputColumns(updated_require);
         updated_require = non_equal_conditions.other_cond_expr->getRequiredColumns();
     }
-    if (non_equal_conditions.other_cond_expr != nullptr || non_equal_conditions.null_aware_eq_cond_expr != nullptr)
-    {
-        for (const auto & name : updated_require)
-            output_columns_names_set_for_other_condition_after_finalize.insert(name);
-        required_columns = updated_require;
-    }
-    else
-    {
-        required_columns = parent_require;
-    }
+    /// remove duplicated column
+    required_names_set.clear();
+    for (const auto & name : updated_require)
+        required_names_set.insert(name);
+    /// add some internal used columns
+    if (!non_equal_conditions.left_filter_column.empty())
+        required_names_set.insert(non_equal_conditions.left_filter_column);
+    if (!non_equal_conditions.right_filter_column.empty())
+        required_names_set.insert(non_equal_conditions.right_filter_column);
     /// add join key to required_columns
     for (const auto & name : key_names_right)
-        required_columns.push_back(name);
+        required_names_set.insert(name);
     for (const auto & name : key_names_left)
+        required_names_set.insert(name);
+
+
+    if (non_equal_conditions.other_cond_expr != nullptr || non_equal_conditions.null_aware_eq_cond_expr != nullptr)
+    {
+        for (const auto & name : required_names_set)
+            output_columns_names_set_for_other_condition_after_finalize.insert(name);
+        if (!match_helper_name.empty())
+            output_columns_names_set_for_other_condition_after_finalize.insert(match_helper_name);
+    }
+    for (const auto & name : required_names_set)
         required_columns.push_back(name);
     finalized = true;
 }

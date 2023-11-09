@@ -68,11 +68,11 @@ PhysicalPlanNodePtr PhysicalJoin::build(
     RUNTIME_CHECK(left);
     RUNTIME_CHECK(right);
 
-    left->finalize();
-    right->finalize();
+    //left->finalize();
+    //right->finalize();
 
-    const Block & left_input_header = left->getSampleBlock();
-    const Block & right_input_header = right->getSampleBlock();
+    const Block & left_input_header = Block(left->getSchema());
+    const Block & right_input_header = Block(right->getSchema());
 
     JoinInterpreterHelper::TiFlashJoin tiflash_join(join, context.isTest());
 
@@ -365,8 +365,18 @@ void PhysicalJoin::finalize(const Names & parent_require)
     if (has_missed_column)
         throw Exception("Meet unknown column");
     build_side_prepare_actions->finalize(build_required);
-    build()->finalize(build_side_prepare_actions->getRequiredColumns());
+    auto required_columns = build_side_prepare_actions->getRequiredColumns();
+    if unlikely (required_input_columns.empty())
+    {
+        required_input_columns.push_back(ExpressionActions::getSmallestColumn(build()->getSchema()));
+    }
+    build()->finalize(required_input_columns);
     probe_side_prepare_actions->finalize(probe_required);
+    required_input_columns = probe_side_prepare_actions->getRequiredColumns();
+    if unlikely (required_input_columns.empty())
+    {
+        required_input_columns.push_back(ExpressionActions::getSmallestColumn(probe()->getSchema()));
+    }
     probe()->finalize(probe_side_prepare_actions->getRequiredColumns());
 }
 
