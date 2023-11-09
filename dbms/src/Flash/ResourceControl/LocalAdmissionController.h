@@ -100,6 +100,9 @@ private:
     static constexpr int32_t LowPriorityValue = 1;
     static constexpr int32_t MediumPriorityValue = 8;
     static constexpr int32_t HighPriorityValue = 16;
+    // If the number of tokens the caller wants to consume exceeds
+    // the accumulated amount within MAX_THROTTLE_DURATION_SEC seconds, raise an error.
+    static constexpr auto MAX_THROTTLE_DURATION_SEC = 120;
 
     // Minus 1 because uint64 max is used as special flag.
     static constexpr uint64_t MAX_VIRTUAL_TIME = (std::numeric_limits<uint64_t>::max() >> 4) - 1;
@@ -109,16 +112,12 @@ private:
 
     std::string getName() const { return name; }
 
-    bool consumeResource(
-        double ru,
-        uint64_t cpu_time_in_ns_,
-        const SteadyClock::time_point & now,
-        uint64_t max_wait_sec)
+    bool consumeResource(double ru, uint64_t cpu_time_in_ns_, const SteadyClock::time_point & now)
     {
         std::lock_guard lock(mu);
         if (!burstable)
         {
-            if (bucket->willBeThrottled(ru, now, max_wait_sec))
+            if (bucket->willBeThrottled(ru, now, MAX_THROTTLE_DURATION_SEC))
                 return false;
             bucket->consume(ru);
         }
@@ -458,7 +457,7 @@ public:
         }
 
         const auto now = SteadyClock::now();
-        if unlikely (group->consumeResource(ru, cpu_time_in_ns, now, MAX_THROTTLE_DURATION_SEC))
+        if unlikely (group->consumeResource(ru, cpu_time_in_ns, now))
             throw ::DB::Exception(fmt::format("Exceeded resource group quota limitation: ", name));
 
         if (group->lowToken() || group->trickleModeLeaseExpire(now))
@@ -584,9 +583,6 @@ private:
     static constexpr auto TARGET_REQUEST_PERIOD_MS = std::chrono::milliseconds(5000);
     static constexpr auto COLLECT_METRIC_INTERVAL = std::chrono::seconds(5);
     static constexpr double ACQUIRE_RU_AMPLIFICATION = 1.5;
-    // If the number of tokens the caller wants to consume exceeds
-    // the accumulated amount within MAX_THROTTLE_DURATION_SEC seconds, raise an error.
-    static constexpr auto MAX_THROTTLE_DURATION_SEC = 120;
 
     static const std::string GAC_RESOURCE_GROUP_ETCD_PATH;
     static const std::string WATCH_GAC_ERR_PREFIX;

@@ -96,7 +96,6 @@ public:
         return fmt::format("tokens: {}, fill_rate: {}, capacity: {}", tokens, fill_rate, capacity);
     }
 
-    // Return true when token bucket cannot generate enough tokens at time_point.
     bool willBeThrottled(double n, const TimePoint & now, uint64_t dura_sec) const
     {
         if (fill_rate > 0)
