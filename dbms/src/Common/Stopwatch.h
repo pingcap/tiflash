@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <common/defines.h>
 #include <common/types.h>
 #include <time.h>
 
@@ -23,25 +24,28 @@
 #include <common/apple_rt.h>
 #endif
 
-
-namespace StopWatchDetail
+inline UInt64 clock_gettime_ns(clockid_t clock_type = CLOCK_MONOTONIC)
 {
-inline UInt64 nanoseconds(clockid_t clock_type)
-{
-    struct timespec ts;
+    struct timespec ts
+    {
+    };
     clock_gettime(clock_type, &ts);
-<<<<<<< HEAD
-    return ts.tv_sec * 1000000000ULL + ts.tv_nsec;
-=======
     return static_cast<UInt64>(ts.tv_sec * 1000000000ULL + ts.tv_nsec);
->>>>>>> c81fd4196a (*: Fix time step backward for `Stopwatch::elapsedFromLastTime` (#8338))
 }
-inline UInt64 seconds(clockid_t clock_type)
-{
-    return nanoseconds(clock_type) / 1000000000ULL;
-}
-} // namespace StopWatchDetail
 
+/// Sometimes monotonic clock may not be monotonic (due to bug in kernel?).
+/// It may cause some operations to fail with "Timeout exceeded: elapsed 18446744073.709553 seconds".
+/// Takes previously returned value and returns it again if time stepped back for some reason.
+inline UInt64 clock_gettime_ns_adjusted(UInt64 prev_time, clockid_t clock_type = CLOCK_MONOTONIC)
+{
+    UInt64 current_time = clock_gettime_ns(clock_type);
+    if (likely(prev_time <= current_time))
+        return current_time;
+
+    /// Something probably went completely wrong if time stepped back for more than 1 second.
+    assert(prev_time - current_time <= 1000000000ULL);
+    return prev_time;
+}
 
 /** Differs from Poco::Stopwatch only by using 'clock_gettime' instead of 'gettimeofday',
   *  returns nanoseconds instead of microseconds, and also by other minor differencies.
@@ -110,13 +114,9 @@ private:
     clockid_t clock_type;
     bool is_running = false;
 
-<<<<<<< HEAD
-    UInt64 nanoseconds() const { return StopWatchDetail::nanoseconds(clock_type); }
-=======
     // Get current nano seconds, ensuring the return value is not
     // less than `lower_bound`.
     UInt64 nanosecondsWithBound(UInt64 lower_bound) const { return clock_gettime_ns_adjusted(lower_bound, clock_type); }
->>>>>>> c81fd4196a (*: Fix time step backward for `Stopwatch::elapsedFromLastTime` (#8338))
 };
 
 
@@ -124,13 +124,18 @@ class AtomicStopwatch
 {
 public:
     explicit AtomicStopwatch(clockid_t clock_type_ = CLOCK_MONOTONIC)
-        : clock_type(clock_type_)
+        : start_ns(0)
+        , clock_type(clock_type_)
     {
         restart();
     }
 
-    void restart() { start_ns = nanoseconds(); }
-    UInt64 elapsed() const { return nanoseconds() - start_ns; }
+    void restart() { start_ns = nanoseconds(0); }
+    UInt64 elapsed() const
+    {
+        UInt64 current_start_ns = start_ns;
+        return nanoseconds(current_start_ns) - start_ns;
+    }
     UInt64 elapsedMilliseconds() const { return elapsed() / 1000000UL; }
     double elapsedSeconds() const { return static_cast<double>(elapsed()) / 1000000000ULL; }
 
@@ -141,8 +146,8 @@ public:
     bool compareAndRestart(double seconds)
     {
         UInt64 threshold = seconds * 1000000000ULL;
-        UInt64 current_ns = nanoseconds();
         UInt64 current_start_ns = start_ns;
+        UInt64 current_ns = nanoseconds(current_start_ns);
 
         while (true)
         {
@@ -187,8 +192,8 @@ public:
     Lock compareAndRestartDeferred(double seconds)
     {
         UInt64 threshold = seconds * 1000000000ULL;
-        UInt64 current_ns = nanoseconds();
         UInt64 current_start_ns = start_ns;
+        UInt64 current_ns = nanoseconds(current_start_ns);
 
         while (true)
         {
@@ -209,5 +214,5 @@ private:
     clockid_t clock_type;
 
     /// Most significant bit is a lock. When it is set, compareAndRestartDeferred method will return false.
-    UInt64 nanoseconds() const { return StopWatchDetail::nanoseconds(clock_type) & 0x7FFFFFFFFFFFFFFFULL; }
+    UInt64 nanoseconds(UInt64 prev_time) const { return clock_gettime_ns_adjusted(prev_time, clock_type) & 0x7FFFFFFFFFFFFFFFULL; }
 };
