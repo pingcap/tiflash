@@ -76,22 +76,26 @@ void SchemaBuilder<Getter, NameMapper>::applyCreateTable(DatabaseID database_id,
     table_id_map.emplaceTableID(table_id, database_id);
     LOG_DEBUG(log, "register table to table_id_map, database_id={} table_id={}", database_id, table_id);
 
-    if (table_info->isLogicalPartitionTable())
+    // non partition table, done
+    if (!table_info->isLogicalPartitionTable())
     {
-        // If table is partition table, we will create the logical table here.
-        // Because we get the table_info, so we can ensure new_db_info will not be nullptr.
-        auto new_db_info = getter.getDatabase(database_id);
-        applyCreateStorageInstance(new_db_info, table_info);
+        return;
+    }
 
-        for (const auto & part_def : table_info->partition.definitions)
-        {
-            LOG_DEBUG(
-                log,
-                "register table to table_id_map for partition table, logical_table_id={} physical_table_id={}",
-                table_id,
-                part_def.id);
-            table_id_map.emplacePartitionTableID(part_def.id, table_id);
-        }
+    // If table is partition table, we will create the logical table here.
+    // Because we get the table_info, so we can ensure new_db_info will not be nullptr.
+    auto new_db_info = getter.getDatabase(database_id);
+    applyCreateStorageInstance(new_db_info, table_info);
+
+    // Register the partition_id -> logical_table_id mapping
+    for (const auto & part_def : table_info->partition.definitions)
+    {
+        LOG_DEBUG(
+            log,
+            "register table to table_id_map for partition table, logical_table_id={} physical_table_id={}",
+            table_id,
+            part_def.id);
+        table_id_map.emplacePartitionTableID(part_def.id, table_id);
     }
 }
 
@@ -254,9 +258,8 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
         {
             // Create the new table.
             // If the new table is a partition table, this will also overwrite
-            // the partition id mapping to the new logical table and renew the
-            // partition info.
-            applyPartitionAlter(diff.schema_id, diff.table_id);
+            // the partition id mapping to the new logical table
+            applyCreateTable(diff.schema_id, diff.table_id);
             // Drop the old table. if the previous partitions of the old table are
             // not mapping to the old logical table now, they will not be removed.
             applyDropTable(diff.schema_id, diff.old_table_id);
@@ -376,51 +379,6 @@ void SchemaBuilder<Getter, NameMapper>::applySetTiFlashReplica(DatabaseID databa
             }
         }
     }
-}
-
-template <typename Getter, typename NameMapper>
-void SchemaBuilder<Getter, NameMapper>::applyPartitionAlter(DatabaseID database_id, TableID table_id)
-{
-    auto table_info = getter.getTableInfo(database_id, table_id);
-    if (table_info == nullptr) // the database maybe dropped
-    {
-        LOG_DEBUG(log, "table is not exist in TiKV, may have been dropped, table_id={}", table_id);
-        return;
-    }
-
-    table_id_map.emplaceTableID(table_id, database_id);
-    LOG_DEBUG(log, "register table to table_id_map, database_id={} table_id={}", database_id, table_id);
-
-    if (!table_info->isLogicalPartitionTable())
-    {
-        return;
-    }
-
-    // If table is partition table, we will create the logical table here.
-    // Because we get the table_info, so we can ensure new_db_info will not be nullptr.
-    auto new_db_info = getter.getDatabase(database_id);
-    applyCreateStorageInstance(new_db_info, table_info);
-
-    for (const auto & part_def : table_info->partition.definitions)
-    {
-        LOG_DEBUG(
-            log,
-            "register table to table_id_map for partition table, logical_table_id={} physical_table_id={}",
-            table_id,
-            part_def.id);
-        table_id_map.emplacePartitionTableID(part_def.id, table_id);
-    }
-
-    auto & tmt_context = context.getTMTContext();
-    auto storage = tmt_context.getStorages().get(keyspace_id, table_info->id);
-    if (storage == nullptr)
-    {
-        LOG_ERROR(log, "table is not exist in TiFlash, table_id={}", table_id);
-        return;
-    }
-
-    // Try to renew the partition info for the new table
-    applyPartitionDiff(new_db_info, table_info, storage);
 }
 
 template <typename Getter, typename NameMapper>
@@ -945,7 +903,7 @@ void SchemaBuilder<Getter, NameMapper>::applyCreateStorageInstance(
     GET_METRIC(tiflash_schema_internal_ddl_count, type_create_table).Increment();
     LOG_INFO(
         log,
-        "Creating table {} with database_id={}, table_id={}",
+        "Create table {} begin, database_id={}, table_id={}",
         name_mapper.debugCanonicalName(*db_info, *table_info),
         db_info->id,
         table_info->id);
@@ -1028,7 +986,7 @@ void SchemaBuilder<Getter, NameMapper>::applyCreateStorageInstance(
     interpreter.execute();
     LOG_INFO(
         log,
-        "Created table {}, database_id={} table_id={}",
+        "Creat table {} end, database_id={} table_id={}",
         name_mapper.debugCanonicalName(*db_info, *table_info),
         db_info->id,
         table_info->id);

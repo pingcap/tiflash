@@ -206,8 +206,6 @@ private:
     /// Parameter schema_name should be mapped.
     void applyDropPhysicalTable(const String & db_name, TableID table_id);
 
-    void applyPartitionAlter(DatabaseID database_id, TableID table_id);
-
     void applyPartitionDiff(DatabaseID database_id, TableID table_id);
     void applyPartitionDiff(
         const TiDB::DBInfoPtr & db_info,
