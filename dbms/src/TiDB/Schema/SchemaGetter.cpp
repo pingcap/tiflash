@@ -221,9 +221,10 @@ std::optional<SchemaDiff> SchemaGetter::getSchemaDiff(Int64 ver)
     String data = TxnStructure::get(snap, key);
     if (data.empty())
     {
-        LOG_WARNING(log, "The schema diff for version {}, key {} is empty.", ver, key);
+        LOG_WARNING(log, "The schema diff is empty, schema_version={} key={}", ver, key);
         return std::nullopt;
     }
+    LOG_TRACE(log, "Get SchemaDiff from TiKV, schema_version={} data={}", ver, data);
     SchemaDiff diff;
     diff.deserialize(data);
     return diff;
@@ -247,7 +248,7 @@ TiDB::DBInfoPtr SchemaGetter::getDatabase(DatabaseID db_id)
     if (json.empty())
         return nullptr;
 
-    LOG_DEBUG(log, "Get DB Info from TiKV : " + json);
+    LOG_DEBUG(log, "Get DB Info from TiKV: {}", json);
     auto db_info = std::make_shared<TiDB::DBInfo>(json, keyspace_id);
     return db_info;
 }
@@ -257,6 +258,7 @@ TiDB::TableInfoPtr SchemaGetter::getTableInfo(DatabaseID db_id, TableID table_id
     String db_key = getDBKey(db_id);
     if (!checkDBExists(db_key))
     {
+<<<<<<< HEAD
         throw Exception();
     }
     String table_key = getTableKey(table_id);
@@ -264,10 +266,70 @@ TiDB::TableInfoPtr SchemaGetter::getTableInfo(DatabaseID db_id, TableID table_id
     if (table_info_json.empty())
         return nullptr;
     LOG_DEBUG(log, "Get Table Info from TiKV : " + table_info_json);
+=======
+        LOG_ERROR(log, "The database does not exist, database_id={}", db_id);
+        return nullptr;
+    }
+    String table_key = getTableKey(table_id);
+    String table_info_json = TxnStructure::hGet(snap, db_key, table_key);
+    if (table_info_json.empty())
+    {
+        LOG_WARNING(log, "The table is dropped in TiKV, try to get the latest table_info, table_id={}", table_id);
+        table_info_json = TxnStructure::mvccGet(snap, db_key, table_key);
+        if (table_info_json.empty())
+        {
+            LOG_ERROR(
+                log,
+                "The table is dropped in TiKV, and the latest table_info is still empty, it should be GCed, "
+                "table_id={}",
+                table_id);
+            return nullptr;
+        }
+    }
+    LOG_DEBUG(log, "Get Table Info from TiKV: {}", table_info_json);
+>>>>>>> 27de3d301a (ddl: Fix potential data lost of `alter_partition_by` (#8337))
     TiDB::TableInfoPtr table_info = std::make_shared<TiDB::TableInfo>(table_info_json, keyspace_id);
     return table_info;
 }
 
+<<<<<<< HEAD
+=======
+std::tuple<TiDB::DBInfoPtr, TiDB::TableInfoPtr> SchemaGetter::getDatabaseAndTableInfo(
+    DatabaseID db_id,
+    TableID table_id)
+{
+    String db_key = getDBKey(db_id);
+    String db_json = TxnStructure::hGet(snap, DBs, db_key);
+
+    if (db_json.empty())
+        return std::make_tuple(nullptr, nullptr);
+
+    LOG_DEBUG(log, "Get DB Info from TiKV: {}", db_json);
+    auto db_info = std::make_shared<TiDB::DBInfo>(db_json, keyspace_id);
+
+    String table_key = getTableKey(table_id);
+    String table_info_json = TxnStructure::hGet(snap, db_key, table_key);
+    if (table_info_json.empty())
+    {
+        LOG_WARNING(log, "The table is dropped in TiKV, try to get the latest table_info, table_id={}", table_id);
+        table_info_json = TxnStructure::mvccGet(snap, db_key, table_key);
+        if (table_info_json.empty())
+        {
+            LOG_ERROR(
+                log,
+                "The table is dropped in TiKV, and the latest table_info is still empty, it should be GCed, "
+                "table_id={}",
+                table_id);
+            return std::make_tuple(db_info, nullptr);
+        }
+    }
+    LOG_DEBUG(log, "Get Table Info from TiKV: {}", table_info_json);
+    TiDB::TableInfoPtr table_info = std::make_shared<TiDB::TableInfo>(table_info_json, keyspace_id);
+
+    return std::make_tuple(db_info, table_info);
+}
+
+>>>>>>> 27de3d301a (ddl: Fix potential data lost of `alter_partition_by` (#8337))
 std::vector<TiDB::DBInfoPtr> SchemaGetter::listDBs()
 {
     std::vector<TiDB::DBInfoPtr> res;

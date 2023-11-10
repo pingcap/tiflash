@@ -63,20 +63,32 @@ private:
 
     void applyCreateSchema(const TiDB::DBInfoPtr & db_info);
 
+<<<<<<< HEAD
     void applyCreateTable(const TiDB::DBInfoPtr & db_info, TableID table_id);
 
     void applyCreateLogicalTable(const TiDB::DBInfoPtr & db_info, const TiDB::TableInfoPtr & table_info);
 
     void applyCreatePhysicalTable(const TiDB::DBInfoPtr & db_info, const TiDB::TableInfoPtr & table_info);
+=======
+    void applyCreateStorageInstance(const TiDB::DBInfoPtr & db_info, const TiDB::TableInfoPtr & table_info);
+>>>>>>> 27de3d301a (ddl: Fix potential data lost of `alter_partition_by` (#8337))
 
     void applyDropTable(const TiDB::DBInfoPtr & db_info, TableID table_id);
 
     /// Parameter schema_name should be mapped.
     void applyDropPhysicalTable(const String & db_name, TableID table_id);
 
+<<<<<<< HEAD
     void applyPartitionDiff(const TiDB::DBInfoPtr & db_info, TableID table_id);
 
     void applyPartitionDiff(const TiDB::DBInfoPtr & db_info, const TiDB::TableInfoPtr & table_info, const ManageableStoragePtr & storage);
+=======
+    void applyPartitionDiff(DatabaseID database_id, TableID table_id);
+    void applyPartitionDiff(
+        const TiDB::DBInfoPtr & db_info,
+        const TiDB::TableInfoPtr & table_info,
+        const ManageableStoragePtr & storage);
+>>>>>>> 27de3d301a (ddl: Fix potential data lost of `alter_partition_by` (#8337))
 
     void applyAlterTable(const TiDB::DBInfoPtr & db_info, TableID table_id);
 

@@ -26,12 +26,16 @@ func> wait_table test t
 │ test          │ t         │
 └───────────────┴───────────┘
 
+<<<<<<< HEAD
 mysql> insert into test.t values (1,"1",-1);
 mysql> insert into test.t select a+1,a+1,-(a+1) from test.t;
 mysql> insert into test.t select a+2,a+2,-(a+2) from test.t;
 mysql> insert into test.t select a+500000,a+500000,-(a+500000) from test.t;
 mysql> insert into test.t select a+1000000,a+1000000,-(a+1000000) from test.t;
 mysql> select /*+ READ_FROM_STORAGE(TIKV[t]) */ count(*) from test.t partition (p0);
+=======
+mysql> set session tidb_isolation_read_engines='tikv'; select count(*) from test.t partition (p0);
+>>>>>>> 27de3d301a (ddl: Fix potential data lost of `alter_partition_by` (#8337))
 +----------+
 | count(*) |
 +----------+
@@ -39,7 +43,7 @@ mysql> select /*+ READ_FROM_STORAGE(TIKV[t]) */ count(*) from test.t partition (
 +----------+
 
 mysql> show warnings;
-mysql> select /*+ READ_FROM_STORAGE(TIFLASH[t]) */ count(*) from test.t partition (p0);
+mysql> set session tidb_isolation_read_engines='tiflash'; select count(*) from test.t partition (p0);
 +----------+
 | count(*) |
 +----------+
@@ -47,14 +51,22 @@ mysql> select /*+ READ_FROM_STORAGE(TIFLASH[t]) */ count(*) from test.t partitio
 +----------+
 
 mysql> show warnings;
+<<<<<<< HEAD
 mysql> select /*+ READ_FROM_STORAGE(TIKV[t]) */ count(*) from test.t partition (p0);
+=======
+mysql> set session tidb_isolation_read_engines='tikv'; select count(*) from test.t partition (p1M);
+>>>>>>> 27de3d301a (ddl: Fix potential data lost of `alter_partition_by` (#8337))
 +----------+
 | count(*) |
 +----------+
 |        8 |
 +----------+
 
+<<<<<<< HEAD
 mysql> select /*+ READ_FROM_STORAGE(TIFLASH[t]) */ count(*) from test.t partition (p0);
+=======
+mysql> set session tidb_isolation_read_engines='tiflash'; select count(*) from test.t partition (p1M);
+>>>>>>> 27de3d301a (ddl: Fix potential data lost of `alter_partition_by` (#8337))
 +----------+
 | count(*) |
 +----------+
@@ -65,7 +77,7 @@ mysql> show warnings;
 
 mysql> alter table test.t reorganize partition p0 INTO (partition p0 values less than (500000), partition p500k values less than (1000000));
 
-mysql> select /*+ READ_FROM_STORAGE(TIFLASH[t]) */ count(*) from test.t partition (p0);
+mysql> set session tidb_isolation_read_engines='tiflash'; select count(*) from test.t partition (p0);
 +----------+
 | count(*) |
 +----------+
@@ -74,7 +86,7 @@ mysql> select /*+ READ_FROM_STORAGE(TIFLASH[t]) */ count(*) from test.t partitio
 
 mysql> show warnings;
 
-mysql> select /*+ READ_FROM_STORAGE(TIFLASH[t]) */ count(*) from test.t partition (p500k);
+mysql> set session tidb_isolation_read_engines='tiflash'; select count(*) from test.t partition (p500k);
 +----------+
 | count(*) |
 +----------+
@@ -83,14 +95,14 @@ mysql> select /*+ READ_FROM_STORAGE(TIFLASH[t]) */ count(*) from test.t partitio
 
 mysql> show warnings;
 
-mysql> select /*+ READ_FROM_STORAGE(TIKV[t]) */ count(*) from test.t partition (p0);
+mysql> set session tidb_isolation_read_engines='tikv'; select count(*) from test.t partition (p0);
 +----------+
 | count(*) |
 +----------+
 |        4 |
 +----------+
 
-mysql> select /*+ READ_FROM_STORAGE(TIKV[t]) */ count(*) from test.t partition (p500k);
+mysql> set session tidb_isolation_read_engines='tikv'; select count(*) from test.t partition (p500k);
 +----------+
 | count(*) |
 +----------+
@@ -99,3 +111,66 @@ mysql> select /*+ READ_FROM_STORAGE(TIKV[t]) */ count(*) from test.t partition (
 
 mysql> show warnings;
 
+<<<<<<< HEAD
+=======
+mysql> set session tidb_isolation_read_engines='tikv'; select count(*) from test.t partition (p1M);
++----------+
+| count(*) |
++----------+
+|        8 |
++----------+
+
+mysql> set session tidb_isolation_read_engines='tiflash'; select count(*) from test.t partition (p1M);
++----------+
+| count(*) |
++----------+
+|        8 |
++----------+
+
+mysql> drop table test.t;
+
+
+# do ddl and insert before action reorganize partition
+
+mysql> drop table if exists test.t1
+mysql> create table test.t1(id INT NOT NULL,name VARCHAR(30)) PARTITION BY RANGE (id) ( PARTITION p0 VALUES LESS THAN (50),PARTITION p1 VALUES LESS THAN (100));
+mysql> alter table test.t1 set tiflash replica 1;
+
+mysql> insert into test.t1 values (1, 'abc');
+mysql> insert into test.t1 values (60, 'cba');
+
+func> wait_table test t1
+
+=> DBGInvoke __enable_schema_sync_service('false') 
+=> DBGInvoke __init_fail_point()
+
+mysql> alter table test.t1 add column c int;
+
+>> DBGInvoke __enable_fail_point(pause_before_apply_raft_cmd)
+
+# exactly write until fail point "pause_before_apply_raft_cmd" to be disable
+mysql> insert into test.t1 values(80, 'aaa', 2);
+
+mysql> alter table test.t1 reorganize partition p1 INTO (partition p1 values less than (70), partition p2 values less than (100));
+
+=> DBGInvoke __refresh_schemas()
+
+# make write cmd take effect
+>> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
+
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t1 partition (p1);
++----+------+----+
+| id | name |  c |
++----+------+----+
+| 60 | cba  |NULL|
++----+------+----+
+
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t1 partition (p2);
++----+------+----+
+| id | name |  c |
++----+------+----+
+| 80 | aaa  | 2  |
++----+------+----+
+
+mysql> drop table test.t1;
+>>>>>>> 27de3d301a (ddl: Fix potential data lost of `alter_partition_by` (#8337))
