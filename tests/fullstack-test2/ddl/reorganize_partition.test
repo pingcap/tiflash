@@ -34,7 +34,7 @@ func> wait_table test t
 │ test          │ t         │
 └───────────────┴───────────┘
 
-mysql> select /*+ READ_FROM_STORAGE(TIKV[t]) */ count(*) from test.t partition (p0);
+mysql> set session tidb_isolation_read_engines='tikv'; select count(*) from test.t partition (p0);
 +----------+
 | count(*) |
 +----------+
@@ -42,7 +42,7 @@ mysql> select /*+ READ_FROM_STORAGE(TIKV[t]) */ count(*) from test.t partition (
 +----------+
 
 mysql> show warnings;
-mysql> select /*+ READ_FROM_STORAGE(TIFLASH[t]) */ count(*) from test.t partition (p0);
+mysql> set session tidb_isolation_read_engines='tiflash'; select count(*) from test.t partition (p0);
 +----------+
 | count(*) |
 +----------+
@@ -50,14 +50,14 @@ mysql> select /*+ READ_FROM_STORAGE(TIFLASH[t]) */ count(*) from test.t partitio
 +----------+
 
 mysql> show warnings;
-mysql> select /*+ READ_FROM_STORAGE(TIKV[t]) */ count(*) from test.t partition (p1M);
+mysql> set session tidb_isolation_read_engines='tikv'; select count(*) from test.t partition (p1M);
 +----------+
 | count(*) |
 +----------+
 |        8 |
 +----------+
 
-mysql> select /*+ READ_FROM_STORAGE(TIFLASH[t]) */ count(*) from test.t partition (p1M);
+mysql> set session tidb_isolation_read_engines='tiflash'; select count(*) from test.t partition (p1M);
 +----------+
 | count(*) |
 +----------+
@@ -68,7 +68,7 @@ mysql> show warnings;
 
 mysql> alter table test.t reorganize partition p0 INTO (partition p0 values less than (500000), partition p500k values less than (1000000));
 
-mysql> select /*+ READ_FROM_STORAGE(TIFLASH[t]) */ count(*) from test.t partition (p0);
+mysql> set session tidb_isolation_read_engines='tiflash'; select count(*) from test.t partition (p0);
 +----------+
 | count(*) |
 +----------+
@@ -77,7 +77,7 @@ mysql> select /*+ READ_FROM_STORAGE(TIFLASH[t]) */ count(*) from test.t partitio
 
 mysql> show warnings;
 
-mysql> select /*+ READ_FROM_STORAGE(TIFLASH[t]) */ count(*) from test.t partition (p500k);
+mysql> set session tidb_isolation_read_engines='tiflash'; select count(*) from test.t partition (p500k);
 +----------+
 | count(*) |
 +----------+
@@ -86,14 +86,14 @@ mysql> select /*+ READ_FROM_STORAGE(TIFLASH[t]) */ count(*) from test.t partitio
 
 mysql> show warnings;
 
-mysql> select /*+ READ_FROM_STORAGE(TIKV[t]) */ count(*) from test.t partition (p0);
+mysql> set session tidb_isolation_read_engines='tikv'; select count(*) from test.t partition (p0);
 +----------+
 | count(*) |
 +----------+
 |        4 |
 +----------+
 
-mysql> select /*+ READ_FROM_STORAGE(TIKV[t]) */ count(*) from test.t partition (p500k);
+mysql> set session tidb_isolation_read_engines='tikv'; select count(*) from test.t partition (p500k);
 +----------+
 | count(*) |
 +----------+
@@ -102,14 +102,14 @@ mysql> select /*+ READ_FROM_STORAGE(TIKV[t]) */ count(*) from test.t partition (
 
 mysql> show warnings;
 
-mysql> select /*+ READ_FROM_STORAGE(TIKV[t]) */ count(*) from test.t partition (p1M);
+mysql> set session tidb_isolation_read_engines='tikv'; select count(*) from test.t partition (p1M);
 +----------+
 | count(*) |
 +----------+
 |        8 |
 +----------+
 
-mysql> select /*+ READ_FROM_STORAGE(TIFLASH[t]) */ count(*) from test.t partition (p1M);
+mysql> set session tidb_isolation_read_engines='tiflash'; select count(*) from test.t partition (p1M);
 +----------+
 | count(*) |
 +----------+
@@ -147,14 +147,14 @@ mysql> alter table test.t1 reorganize partition p1 INTO (partition p1 values les
 # make write cmd take effect
 >> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
 
-mysql> select /*+ READ_FROM_STORAGE(TIFLASH[test.t1]) */ * from test.t1 partition (p1);
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t1 partition (p1);
 +----+------+----+
 | id | name |  c |
 +----+------+----+
 | 60 | cba  |NULL|
 +----+------+----+
 
-mysql> select /*+ READ_FROM_STORAGE(TIFLASH[test.t1]) */ * from test.t1 partition (p2);
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t1 partition (p2);
 +----+------+----+
 | id | name |  c |
 +----+------+----+

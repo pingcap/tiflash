@@ -87,7 +87,7 @@ try
     ASSERT_EQ(file_id4, 30);
 
     {
-        const auto & lock = stats.lock();
+        std::lock_guard lock(stats.lock_stats);
         stats.createStatNotChecking(file_id1, config.file_limit_size, lock);
         stats.createStatNotChecking(file_id2, config.file_limit_size, lock);
         stats.createStatNotChecking(file_id3, config.file_limit_size, lock);
@@ -173,7 +173,7 @@ try
     BlobFileId file_id1 = 11;
 
     {
-        const auto & lock = stats.lock();
+        std::lock_guard lock(stats.lock_stats);
         stats.createStatNotChecking(file_id1, config.file_limit_size, lock);
     }
 
@@ -232,7 +232,7 @@ TEST_F(BlobStoreStatsTest, testStats)
     BlobFileId file_id1 = PageTypeUtils::nextFileID(PageType::Normal, file_id0);
     BlobFileId file_id2 = PageTypeUtils::nextFileID(PageType::Normal, file_id1);
     {
-        auto lock = stats.lock();
+        std::lock_guard lock(stats.lock_stats);
         stats.createStat(file_id1, config.file_limit_size, lock);
         stats.createStat(file_id2, config.file_limit_size, lock);
     }
@@ -371,7 +371,7 @@ TEST_F(BlobStoreStatsTest, testFullStats)
     BlobStats stats(logger, delegator, config);
 
     {
-        auto lock = stats.lock();
+        std::lock_guard lock(stats.lock_stats);
         BlobFileId file_id = 10;
         BlobStats::BlobStatPtr stat = stats.createStat(file_id, config.file_limit_size, lock);
         auto offset = stat->getPosFromStat(BLOBFILE_LIMIT_SIZE - 1, stat->lock());

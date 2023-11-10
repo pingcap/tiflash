@@ -823,7 +823,7 @@ void JsonBinary::buildBinaryJsonArrayInBuffer(
     buildBinaryJsonElementsInBuffer(json_binary_vec, write_buffer);
 }
 
-UInt64 GetJsonLength(const std::string_view & raw_value)
+UInt64 JsonBinary::getJsonLength(const std::string_view & raw_value)
 {
     if (raw_value.empty())
     {
