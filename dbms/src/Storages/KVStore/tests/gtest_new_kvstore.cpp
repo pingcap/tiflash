@@ -709,7 +709,7 @@ TEST_F(RegionKVStoreTest, AsyncTasks)
         {
             LOG_DEBUG(log, "finished {}/{}", count, total);
         }
-        for (int i = 0; i < total; i++)
+        for (int i = 0; i < total; ++i)
         {
             if (!async_tasks->isScheduled(i))
             {
