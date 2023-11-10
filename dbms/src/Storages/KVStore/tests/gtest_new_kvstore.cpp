@@ -718,16 +718,7 @@ TEST_F(RegionKVStoreTest, AsyncTasks)
                     return 1;
                 });
                 if (initial_loop)
-                {
-                    if (i <= 1)
-                    {
-                        ASSERT_EQ(res, true);
-                    }
-                    else
-                    {
-                        ASSERT_EQ(res, false);
-                    }
-                }
+                    ASSERT_EQ(res, i <= 1);
             }
         }
 
