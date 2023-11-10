@@ -731,7 +731,7 @@ TEST_F(RegionKVStoreTest, AsyncTasks)
             }
         }
 
-        for (int i = 0; i < total; i++)
+        for (int i = 0; i < total; ++i)
         {
             if (!f[i])
             {
