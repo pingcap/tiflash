@@ -19,7 +19,6 @@
 #include <Common/TiFlashMetrics.h>
 #include <Encryption/ReadBufferFromFileProvider.h>
 #include <Encryption/createReadBufferFromFileBaseByFileProvider.h>
-#include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/Filter/FilterHelper.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
@@ -195,10 +194,10 @@ private:
         if (filter_)
         {
             // Load index based on filter.
-            Attrs attrs = filter_->getAttrs();
-            for (auto & attr : attrs)
+            ColIds ids = filter->getColumnIDs();
+            for (const auto & id : ids)
             {
-                tryLoadIndex(attr.col_id);
+                tryLoadIndex(id);
             }
 
             Stopwatch watch;

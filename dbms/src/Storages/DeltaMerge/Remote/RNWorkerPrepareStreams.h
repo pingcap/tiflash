@@ -37,7 +37,7 @@ class RNWorkerPrepareStreams
 protected:
     SegmentReadTaskPtr doWork(const SegmentReadTaskPtr & task) override
     {
-        const auto & settings = task->dm_context->db_context.getSettingsRef();
+        const auto & settings = task->dm_context->global_context.getSettingsRef();
         task->initInputStream(
             *columns_to_read,
             read_tso,

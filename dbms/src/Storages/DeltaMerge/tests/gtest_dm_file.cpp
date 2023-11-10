@@ -129,7 +129,7 @@ public:
         if (table_columns != cols)
             *table_columns = *cols;
         *path_pool = db_context->getPathPool().withTable("test", "t1", false);
-        dm_context = std::make_unique<DMContext>( //
+        dm_context = DMContext::createUnique(
             *db_context,
             path_pool,
             storage_pool,
@@ -1020,8 +1020,8 @@ namespace
 RSOperatorPtr toRSFilter(const ColumnDefine & cd, const HandleRange & range)
 {
     Attr attr = {cd.name, cd.id, cd.type};
-    auto left = createGreaterEqual(attr, Field(range.start), -1);
-    auto right = createLess(attr, Field(range.end), -1);
+    auto left = createGreaterEqual(attr, Field(range.start));
+    auto right = createLess(attr, Field(range.end));
     return createAnd({left, right});
 }
 } // namespace
@@ -1145,10 +1145,10 @@ try
     filters.emplace_back(one_part_filter, span_per_part); // only first part
     // <filter, num_rows_should_read>
     // (first range) And (Unsuppported) -> should filter some chunks by range
-    filters.emplace_back(createAnd({one_part_filter, createUnsupported("test", "test", false)}), span_per_part);
+    filters.emplace_back(createAnd({one_part_filter, createUnsupported("test", "test")}), span_per_part);
     // <filter, num_rows_should_read>
     // (first range) Or (Unsupported) -> should NOT filter any chunk
-    filters.emplace_back(createOr({one_part_filter, createUnsupported("test", "test", false)}), num_rows_write);
+    filters.emplace_back(createOr({one_part_filter, createUnsupported("test", "test")}), num_rows_write);
     auto test_read_filter = [&](const DM::RSOperatorPtr & filter, const size_t num_rows_should_read) {
         // Test read
         DMFileBlockInputStreamBuilder builder(dbContext());
@@ -1460,7 +1460,7 @@ public:
 
         *table_columns = *cols;
 
-        dm_context = std::make_unique<DMContext>( //
+        dm_context = DMContext::createUnique(
             *db_context,
             path_pool,
             storage_pool,

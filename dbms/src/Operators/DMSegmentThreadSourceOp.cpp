@@ -76,7 +76,7 @@ OperatorStatus DMSegmentThreadSourceOp::readImpl(Block & block)
 
 OperatorStatus DMSegmentThreadSourceOp::executeIOImpl()
 {
-    if unlikely (done)
+    if (unlikely(done))
         return OperatorStatus::HAS_OUTPUT;
 
     while (!cur_stream)
@@ -92,7 +92,7 @@ OperatorStatus DMSegmentThreadSourceOp::executeIOImpl()
 
         auto block_size = std::max(
             expected_block_size,
-            static_cast<size_t>(dm_context->db_context.getSettingsRef().dt_segment_stable_pack_rows));
+            static_cast<size_t>(dm_context->global_context.getSettingsRef().dt_segment_stable_pack_rows));
         cur_stream = task->segment->getInputStream(
             read_mode,
             *dm_context,

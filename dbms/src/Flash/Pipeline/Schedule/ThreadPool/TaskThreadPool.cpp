@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/CPUAffinityManager.h>
 #include <Common/Exception.h>
 #include <Common/Stopwatch.h>
 #include <Common/setThreadName.h>
@@ -56,6 +57,7 @@ void TaskThreadPool<Impl>::loop(size_t thread_no)
 {
     try
     {
+        CPUAffinityManager::getInstance().bindSelfQueryThread();
         doLoop(thread_no);
     }
     CATCH_AND_TERMINATE(logger)

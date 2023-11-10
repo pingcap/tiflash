@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/CPUAffinityManager.h>
 #include <Debug/MockExecutor/AstToPBUtils.h>
 #include <Flash/EstablishCall.h>
 #include <Interpreters/Context.h>
@@ -33,6 +34,8 @@ namespace
 {
 void handleRpcs(grpc::ServerCompletionQueue * curcq, const LoggerPtr & log)
 {
+    CPUAffinityManager::getInstance().bindSelfQueryThread();
+
     GET_METRIC(tiflash_thread_count, type_total_rpc_async_worker).Increment();
     SCOPE_EXIT({ GET_METRIC(tiflash_thread_count, type_total_rpc_async_worker).Decrement(); });
     void * tag = nullptr; // uniquely identifies a request.

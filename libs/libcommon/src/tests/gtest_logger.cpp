@@ -21,7 +21,9 @@
 #include <Poco/FormattingChannel.h>
 #include <Poco/Logger.h>
 #include <Poco/PatternFormatter.h>
+#include <common/StringRef.h>
 #include <common/logger_useful.h>
+#include <fmt/format.h>
 #include <gtest/gtest.h>
 
 #include <iomanip>
@@ -67,6 +69,14 @@ TEST_F(LoggerUsefulTest, Log)
     std::string msg_in_log;
     msg_in_log = "hello tiflash";
     LOG_DEBUG(log, msg_in_log);
+}
+
+TEST(FmtTest, StringRef)
+{
+    const char * str = "abcdefg\0\0\0\0";
+    ASSERT_EQ("abc", fmt::format("{}", StringRef(str, 3)));
+    ASSERT_EQ("abcdefg", fmt::format("{}", StringRef(str, 7)));
+    ASSERT_EQ(std::string_view("abcdefg\0", 8), fmt::format("{}", StringRef(str, 8)));
 }
 
 } // namespace tests
