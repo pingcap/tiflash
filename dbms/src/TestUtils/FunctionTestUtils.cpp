@@ -327,10 +327,13 @@ ColumnWithTypeAndName executeFunction(
     for (size_t i = 0; i < columns.size(); ++i)
         argument_column_numbers.push_back(i);
 
+    /// Replace `std::random_device` with `std::chrono::system_clock` here to avoid
+    /// exceptions like 'random_device failed to open /dev/urandom: Operation not permitted'.
+    /// The reason of exceptions is unknown, but the probability of its occurrence in unittests
+    /// TestDateTimeDayMonthYear.dayMonthYearTest is not low.
+    /// Since this function is just used for testing, using current timestamp as a random seed is not a problem.
+    std::mt19937 g(std::chrono::system_clock::to_time_t(std::chrono::system_clock::now()));
     /// shuffle input columns to assure function correctly use physical offsets instead of logical offsets
-    std::random_device rd;
-    std::mt19937 g(rd());
-
     std::shuffle(argument_column_numbers.begin(), argument_column_numbers.end(), g);
     const auto columns_reordered = toColumnsReordered(columns, argument_column_numbers);
 
