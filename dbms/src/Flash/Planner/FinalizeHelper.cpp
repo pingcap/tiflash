@@ -69,6 +69,8 @@ void checkSampleBlockContainsParentRequire(const Block & sample_block, const Nam
 {
     for (const auto & parent_require_column : parent_require)
     {
+        if (!sample_block.has(parent_require_column))
+            throw Exception("test");
         RUNTIME_CHECK(sample_block.has(parent_require_column), sample_block.dumpJsonStructure(), parent_require_column);
     }
 }

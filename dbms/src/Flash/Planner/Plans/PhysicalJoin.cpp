@@ -365,19 +365,19 @@ void PhysicalJoin::finalize(const Names & parent_require)
     if (has_missed_column)
         throw Exception("Meet unknown column");
     build_side_prepare_actions->finalize(build_required);
-    auto required_columns = build_side_prepare_actions->getRequiredColumns();
-    if unlikely (required_input_columns.empty())
+    auto child_required_columns = build_side_prepare_actions->getRequiredColumns();
+    if unlikely (child_required_columns.empty())
     {
-        required_input_columns.push_back(ExpressionActions::getSmallestColumn(build()->getSchema()));
+        child_required_columns.push_back(ExpressionActions::getSmallestColumn(build()->getSchema()));
     }
-    build()->finalize(required_input_columns);
+    build()->finalize(child_required_columns);
     probe_side_prepare_actions->finalize(probe_required);
-    required_input_columns = probe_side_prepare_actions->getRequiredColumns();
-    if unlikely (required_input_columns.empty())
+    child_required_columns = probe_side_prepare_actions->getRequiredColumns();
+    if unlikely (child_required_columns.empty())
     {
-        required_input_columns.push_back(ExpressionActions::getSmallestColumn(probe()->getSchema()));
+        child_required_columns.push_back(ExpressionActions::getSmallestColumn(probe()->getSchema()));
     }
-    probe()->finalize(probe_side_prepare_actions->getRequiredColumns());
+    probe()->finalize(child_required_columns);
 }
 
 const Block & PhysicalJoin::getSampleBlock() const

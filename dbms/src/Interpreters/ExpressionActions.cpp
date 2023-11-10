@@ -539,6 +539,30 @@ void ExpressionActions::execute(Block & block) const
         action.execute(block);
 }
 
+template <class NameAndTypeContainer>
+std::string ExpressionActions::getSmallestColumn(const NameAndTypeContainer & columns)
+{
+    std::optional<size_t> min_size;
+    String res;
+
+    for (const auto & column : columns)
+    {
+        /// @todo resolve evil constant
+        size_t size = column.type->haveMaximumSizeOfValue() ? column.type->getMaximumSizeOfValueInMemory() : 100;
+
+        if (!min_size || size < *min_size)
+        {
+            min_size = size;
+            res = column.name;
+        }
+    }
+
+    if (!min_size)
+        throw Exception("No available columns", ErrorCodes::LOGICAL_ERROR);
+
+    return res;
+}
+
 void ExpressionActions::pruneInputColumns(const Names & output_columns)
 {
     NameSet final_columns;
@@ -836,5 +860,8 @@ std::string ExpressionActionsChain::dumpChain()
 
     return ss.str();
 }
+
+template std::string ExpressionActions::getSmallestColumn(const NamesAndTypesList & columns);
+template std::string ExpressionActions::getSmallestColumn(const NamesAndTypes & columns);
 
 } // namespace DB

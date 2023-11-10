@@ -211,28 +211,7 @@ public:
     std::string dumpActions() const;
 
     template <class NameAndTypeContainer>
-    static std::string getSmallestColumn(const NameAndTypeContainer & columns)
-    {
-        std::optional<size_t> min_size;
-        String res;
-
-        for (const auto & column : columns)
-        {
-            /// @todo resolve evil constant
-            size_t size = column.type->haveMaximumSizeOfValue() ? column.type->getMaximumSizeOfValueInMemory() : 100;
-
-            if (!min_size || size < *min_size)
-            {
-                min_size = size;
-                res = column.name;
-            }
-        }
-
-        if (!min_size)
-            throw Exception("No available columns", ErrorCodes::LOGICAL_ERROR);
-
-        return res;
-    }
+    static std::string getSmallestColumn(const NameAndTypeContainer & columns);
 
 private:
     NamesAndTypesList input_columns;
