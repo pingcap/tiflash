@@ -81,7 +81,7 @@ void SchemaBuilder<Getter, NameMapper>::applyCreateTable(DatabaseID database_id,
         // If table is partition table, we will create the logical table here.
         // Because we get the table_info, so we can ensure new_db_info will not be nullptr.
         auto new_db_info = getter.getDatabase(database_id);
-        applyCreatePhysicalTable(new_db_info, table_info);
+        applyCreateStorageInstance(new_db_info, table_info);
 
         for (const auto & part_def : table_info->partition.definitions)
         {
@@ -399,7 +399,7 @@ void SchemaBuilder<Getter, NameMapper>::applyPartitionAlter(DatabaseID database_
     // If table is partition table, we will create the logical table here.
     // Because we get the table_info, so we can ensure new_db_info will not be nullptr.
     auto new_db_info = getter.getDatabase(database_id);
-    applyCreatePhysicalTable(new_db_info, table_info);
+    applyCreateStorageInstance(new_db_info, table_info);
 
     for (const auto & part_def : table_info->partition.definitions)
     {
@@ -783,7 +783,7 @@ template <typename Getter, typename NameMapper>
 void SchemaBuilder<Getter, NameMapper>::applyCreateSchema(const TiDB::DBInfoPtr & db_info)
 {
     GET_METRIC(tiflash_schema_internal_ddl_count, type_create_db).Increment();
-    LOG_INFO(log, "Creating database {} with database_id={}", name_mapper.debugDatabaseName(*db_info), db_info->id);
+    LOG_INFO(log, "Create database {} begin, database_id={}", name_mapper.debugDatabaseName(*db_info), db_info->id);
 
     auto statement = createDatabaseStmt(context, *db_info, name_mapper);
 
@@ -799,7 +799,7 @@ void SchemaBuilder<Getter, NameMapper>::applyCreateSchema(const TiDB::DBInfoPtr 
         databases.emplace(db_info->id, db_info);
     }
 
-    LOG_INFO(log, "Created database {} with database_id={}", name_mapper.debugDatabaseName(*db_info), db_info->id);
+    LOG_INFO(log, "Create database {} end, database_id={}", name_mapper.debugDatabaseName(*db_info), db_info->id);
 }
 
 template <typename Getter, typename NameMapper>
@@ -836,7 +836,7 @@ template <typename Getter, typename NameMapper>
 void SchemaBuilder<Getter, NameMapper>::applyDropSchema(const String & db_name)
 {
     GET_METRIC(tiflash_schema_internal_ddl_count, type_drop_db).Increment();
-    LOG_INFO(log, "Tombstoning database {}", db_name);
+    LOG_INFO(log, "Tombstone database begin, db_name={}", db_name);
     auto db = context.tryGetDatabase(db_name);
     if (db == nullptr)
     {
@@ -857,7 +857,7 @@ void SchemaBuilder<Getter, NameMapper>::applyDropSchema(const String & db_name)
     auto tombstone = tmt_context.getPDClient()->getTS();
     db->alterTombstone(context, tombstone);
 
-    LOG_INFO(log, "Tombstoned database {}", db_name);
+    LOG_INFO(log, "Tombstone database end, db_name={}", db_name);
 }
 
 std::tuple<NamesAndTypes, Strings> parseColumnsFromTableInfo(const TiDB::TableInfo & table_info)
@@ -938,7 +938,7 @@ String createTableStmt(
 }
 
 template <typename Getter, typename NameMapper>
-void SchemaBuilder<Getter, NameMapper>::applyCreatePhysicalTable(
+void SchemaBuilder<Getter, NameMapper>::applyCreateStorageInstance(
     const TiDB::DBInfoPtr & db_info,
     const TableInfoPtr & table_info)
 {
@@ -1048,7 +1048,7 @@ void SchemaBuilder<Getter, NameMapper>::applyDropPhysicalTable(const String & db
     GET_METRIC(tiflash_schema_internal_ddl_count, type_drop_table).Increment();
     LOG_INFO(
         log,
-        "Tombstoning table {}.{}, table_id={}",
+        "Tombstone table {}.{} begin, table_id={}",
         db_name,
         name_mapper.debugTableName(storage->getTableInfo()),
         table_id);
@@ -1070,7 +1070,7 @@ void SchemaBuilder<Getter, NameMapper>::applyDropPhysicalTable(const String & db
     storage->updateTombstone(alter_lock, commands, db_name, storage->getTableInfo(), name_mapper, context);
     LOG_INFO(
         log,
-        "Tombstoned table {}.{}, table_id={}",
+        "Tombstone table {}.{} end, table_id={}",
         db_name,
         name_mapper.debugTableName(storage->getTableInfo()),
         table_id);
@@ -1120,7 +1120,7 @@ void SchemaBuilder<Getter, NameMapper>::applyDropTable(DatabaseID database_id, T
 template <typename Getter, typename NameMapper>
 void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
 {
-    LOG_INFO(log, "Syncing all schemas.");
+    LOG_INFO(log, "Sync all schemas begin");
 
     /// Create all databases.
     std::vector<DBInfoPtr> all_schemas = getter.listDBs();
@@ -1181,7 +1181,7 @@ void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
                 table_id_map.emplaceTableID(table->id, db->id);
                 LOG_DEBUG(log, "register table to table_id_map, database_id={} table_id={}", db->id, table->id);
 
-                applyCreatePhysicalTable(db, table);
+                applyCreateStorageInstance(db, table);
                 if (table->isLogicalPartitionTable())
                 {
                     for (const auto & part_def : table->partition.definitions)
@@ -1238,7 +1238,7 @@ void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
         }
     }
 
-    LOG_INFO(log, "Loaded all schemas.");
+    LOG_INFO(log, "Sync all schemas end");
 }
 
 template <typename Getter, typename NameMapper>
@@ -1295,7 +1295,7 @@ void SchemaBuilder<Getter, NameMapper>::applyTable(
             return;
         }
 
-        applyCreatePhysicalTable(db_info, table_info);
+        applyCreateStorageInstance(db_info, table_info);
     }
     else
     {
@@ -1320,7 +1320,7 @@ void SchemaBuilder<Getter, NameMapper>::applyTable(
 template <typename Getter, typename NameMapper>
 void SchemaBuilder<Getter, NameMapper>::dropAllSchema()
 {
-    LOG_INFO(log, "Dropping all schemas.");
+    LOG_INFO(log, "Drop all schemas begin");
 
     auto & tmt_context = context.getTMTContext();
 
@@ -1355,7 +1355,7 @@ void SchemaBuilder<Getter, NameMapper>::dropAllSchema()
         LOG_DEBUG(log, "DB {} dropped during drop all schemas", db.first);
     }
 
-    LOG_INFO(log, "Dropped all schemas.");
+    LOG_INFO(log, "Drop all schemas end");
 }
 
 // product env
