@@ -157,6 +157,8 @@ public:
         const String & tidb_host_,
         DAGRequestKind cop_kind_,
         const String & resource_group_name,
+        UInt64 connection_id_,
+        const String & connection_alias_,
         LoggerPtr log_);
 
     // for mpp
@@ -447,6 +449,11 @@ private:
     // - Stream: execute with block input stream
     // - Pipeline: execute with pipeline model
     ExecutionMode execution_mode = ExecutionMode::None;
+
+    // It's the session id between client and tidb
+    UInt64 connection_id;
+    // It's the session alias between client and tidb
+    String connection_alias;
 };
 
 } // namespace DB

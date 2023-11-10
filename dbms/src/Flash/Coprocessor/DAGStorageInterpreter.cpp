@@ -714,7 +714,7 @@ std::vector<pingcap::coprocessor::CopTask> DAGStorageInterpreter::buildCopTasks(
         std::multimap<std::string, std::string> meta_data;
         meta_data.emplace("is_remote_read", "true");
 
-        auto tasks = pingcap::coprocessor::buildCopTasks(
+        auto tasks = pingcap::coprocessor::buildCopTasks( // Here
             bo,
             cluster,
             remote_request.key_ranges,
@@ -733,7 +733,8 @@ std::vector<pingcap::coprocessor::CopTask> DAGStorageInterpreter::buildCopTasks(
 
 CoprocessorReaderPtr DAGStorageInterpreter::buildCoprocessorReader(const std::vector<RemoteRequest> & remote_requests)
 {
-    std::vector<pingcap::coprocessor::CopTask> all_tasks = buildCopTasks(remote_requests);
+    std::vector<pingcap::coprocessor::CopTask> all_tasks
+        = buildCopTasks(remote_requests); // put the id and alias into CopTasks
     const DAGSchema & schema = remote_requests[0].schema;
     pingcap::kv::Cluster * cluster = tmt.getKVCluster();
     bool has_enforce_encode_type

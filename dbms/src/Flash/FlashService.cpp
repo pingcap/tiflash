@@ -279,7 +279,8 @@ grpc::Status FlashService::Coprocessor(
         });
         CoprocessorContext cop_context(*db_context, request->context(), *grpc_context);
         auto request_identifier = fmt::format(
-            "Coprocessor, is_remote_read: {}, start_ts: {}, region_info: {}, resource_group: {}, conn_id: {}, conn_alias: {}",
+            "Coprocessor, is_remote_read: {}, start_ts: {}, region_info: {}, resource_group: {}, conn_id: {}, "
+            "conn_alias: {}",
             is_remote_read,
             request->start_ts(),
             region_info,
