@@ -448,7 +448,7 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::JsonRemoveSig, "cast"},
     //{tipb::ScalarFuncSig::JsonMergeSig, "cast"},
     //{tipb::ScalarFuncSig::JsonObjectSig, "cast"},
-    //{tipb::ScalarFuncSig::JsonArraySig, "cast"},
+    {tipb::ScalarFuncSig::JsonArraySig, "json_array"},
     //{tipb::ScalarFuncSig::JsonValidJsonSig, "cast"},
     //{tipb::ScalarFuncSig::JsonContainsSig, "cast"},
     //{tipb::ScalarFuncSig::JsonArrayAppendSig, "cast"},
@@ -753,11 +753,11 @@ const String & getAggFunctionName(const tipb::Expr & expr)
             return it->second;
     }
 
-    const auto errmsg = fmt::format(
+    throw TiFlashException(
+        Errors::Coprocessor::Unimplemented,
         "{}(distinct={}) is not supported.",
         tipb::ExprType_Name(expr.tp()),
-        expr.has_distinct() ? "true" : "false");
-    throw TiFlashException(errmsg, Errors::Coprocessor::Unimplemented);
+        expr.has_distinct());
 }
 
 const String & getWindowFunctionName(const tipb::Expr & expr)
@@ -766,8 +766,7 @@ const String & getWindowFunctionName(const tipb::Expr & expr)
     if (it != window_func_map.end())
         return it->second;
 
-    const auto errmsg = fmt::format("{} is not supported.", tipb::ExprType_Name(expr.tp()));
-    throw TiFlashException(errmsg, Errors::Coprocessor::Unimplemented);
+    throw TiFlashException(Errors::Coprocessor::Unimplemented, "{} is not supported.", tipb::ExprType_Name(expr.tp()));
 }
 
 
@@ -786,8 +785,9 @@ const String & getFunctionName(const tipb::Expr & expr)
         auto it = scalar_func_map.find(expr.sig());
         if (it == scalar_func_map.end())
             throw TiFlashException(
-                tipb::ScalarFuncSig_Name(expr.sig()) + " is not supported.",
-                Errors::Coprocessor::Unimplemented);
+                Errors::Coprocessor::Unimplemented,
+                "{} is not supported.",
+                tipb::ScalarFuncSig_Name(expr.sig()));
         return it->second;
     }
 }
@@ -803,7 +803,7 @@ String getExchangeTypeName(const tipb::ExchangeType & tp)
     case tipb::ExchangeType::Hash:
         return "Hash";
     default:
-        throw TiFlashException(fmt::format("Not supported Exchange type: {}", tp), Errors::Coprocessor::Internal);
+        throw TiFlashException(Errors::Coprocessor::Internal, "Not supported Exchange type: {}", fmt::underlying(tp));
     }
 }
 
@@ -826,7 +826,7 @@ String getJoinTypeName(const tipb::JoinType & tp)
     case tipb::JoinType::TypeSemiJoin:
         return "SemiJoin";
     default:
-        throw TiFlashException(fmt::format("Not supported Join type: {}", tp), Errors::Coprocessor::Internal);
+        throw TiFlashException(Errors::Coprocessor::Internal, "Not supported Join type: {}", fmt::underlying(tp));
     }
 }
 
@@ -838,8 +838,9 @@ String getJoinExecTypeName(const tipb::JoinExecType & tp)
         return "HashJoin";
     default:
         throw TiFlashException(
-            fmt::format("Not supported Join exectution type: {}", tp),
-            Errors::Coprocessor::Internal);
+            Errors::Coprocessor::Internal,
+            "Not supported Join exectution type: {}",
+            fmt::underlying(tp));
     }
 }
 
@@ -882,7 +883,7 @@ String getFieldTypeName(Int32 tp)
     case TiDB::TypeString:
         return "String";
     default:
-        throw TiFlashException(fmt::format("Not supported field type: {}", tp), Errors::Coprocessor::Internal);
+        throw TiFlashException(Errors::Coprocessor::Internal, "Not supported field type: {}", tp);
     }
 }
 

@@ -23,8 +23,8 @@ namespace DB::DM
 class Greater : public ColCmpVal
 {
 public:
-    Greater(const Attr & attr_, const Field & value_, int null_direction_)
-        : ColCmpVal(attr_, value_, null_direction_)
+    Greater(const Attr & attr_, const Field & value_)
+        : ColCmpVal(attr_, value_)
     {}
 
     String name() override { return "greater"; }
@@ -35,8 +35,6 @@ public:
         GET_RSINDEX_FROM_PARAM_NOT_FOUND_RETURN_DIRECTLY(param, attr, rsindex, results);
         return rsindex.minmax->checkCmp<RoughCheck::CheckGreater>(start_pack, pack_count, value, rsindex.type);
     }
-
-    RSOperatorPtr switchDirection() override { return createLess(attr, value, null_direction); }
 };
 
 } // namespace DB::DM

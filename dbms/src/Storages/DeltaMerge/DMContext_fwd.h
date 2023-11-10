@@ -14,24 +14,12 @@
 
 #pragma once
 
-#include <Storages/DeltaMerge/Filter/RSOperator.h>
+#include <memory>
 
 namespace DB::DM
 {
 
-class Like : public ColCmpVal
-{
-public:
-    Like(const Attr & attr_, const Field & value_)
-        : ColCmpVal(attr_, value_)
-    {}
-
-    String name() override { return "like"; }
-
-    RSResults roughCheck(size_t /*start_pack*/, size_t pack_count, const RSCheckParam & /*param*/) override
-    {
-        return RSResults(pack_count, Some);
-    }
-};
+struct DMContext;
+using DMContextPtr = std::shared_ptr<DMContext>;
 
 } // namespace DB::DM
