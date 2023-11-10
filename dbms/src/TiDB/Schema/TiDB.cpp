@@ -540,6 +540,10 @@ try
         part_id_set.emplace(definition.id);
     }
 
+    /// Treat `adding_definitions` and `dropping_definitions` as the normal `definitions`
+    /// in TiFlash. Because TiFlash need to create the physical IStorage instance
+    /// to handle the data on those partitions during DDL.
+
     auto add_defs_json = json->getArray("adding_definitions");
     if (!add_defs_json.isNull())
     {
@@ -851,8 +855,6 @@ TableInfo::TableInfo(const String & table_info_json, KeyspaceID keyspace_id_)
 String TableInfo::serialize() const
 try
 {
-    std::stringstream buf;
-
     Poco::JSON::Object::Ptr json = new Poco::JSON::Object();
     json->set("id", id);
     json->set("keyspace_id", keyspace_id);
@@ -867,8 +869,8 @@ try
         auto col_obj = col_info.getJSONObject();
         cols_arr->add(col_obj);
     }
-
     json->set("cols", cols_arr);
+
     Poco::JSON::Array::Ptr index_arr = new Poco::JSON::Array();
     for (const auto & index_info : index_infos)
     {
@@ -904,8 +906,8 @@ try
 
     json->set("tiflash_replica", replica_info.getJSONObject());
 
+    std::stringstream buf;
     json->stringify(buf);
-
     return buf.str();
 }
 catch (const Poco::Exception & e)

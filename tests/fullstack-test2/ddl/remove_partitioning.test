@@ -28,13 +28,35 @@ mysql> insert into test.t select a+1000000,a+1000000,-(a+1000000) from test.t;
 
 func> wait_table test t
 
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;
++---------+---------+----------+
+| a       | b       | c        |
++---------+---------+----------+
+|       1 | 1       |       -1 |
+|       2 | 2       |       -2 |
+|       3 | 3       |       -3 |
+|       4 | 4       |       -4 |
+|  500001 | 500001  |  -500001 |
+|  500002 | 500002  |  -500002 |
+|  500003 | 500003  |  -500003 |
+|  500004 | 500004  |  -500004 |
+| 1000001 | 1000001 | -1000001 |
+| 1000002 | 1000002 | -1000002 |
+| 1000003 | 1000003 | -1000003 |
+| 1000004 | 1000004 | -1000004 |
+| 1500001 | 1500001 | -1500001 |
+| 1500002 | 1500002 | -1500002 |
+| 1500003 | 1500003 | -1500003 |
+| 1500004 | 1500004 | -1500004 |
++---------+---------+----------+
+
 # check table info in tiflash
 >> select tidb_database,tidb_name from system.tables where tidb_database = 'test' and tidb_name = 't' and is_tombstone = 0
 ┌─tidb_database─┬─tidb_name─┐
 │ test          │ t         │
 └───────────────┴───────────┘
 
-mysql> select /*+ READ_FROM_STORAGE(TIKV[t]) */ count(*) from test.t partition (p0);
+mysql> set session tidb_isolation_read_engines='tikv'; select count(*) from test.t partition (p0);
 +----------+
 | count(*) |
 +----------+
@@ -42,7 +64,7 @@ mysql> select /*+ READ_FROM_STORAGE(TIKV[t]) */ count(*) from test.t partition (
 +----------+
 
 mysql> show warnings;
-mysql> select /*+ READ_FROM_STORAGE(TIFLASH[t]) */ count(*) from test.t partition (p0);
+mysql> set session tidb_isolation_read_engines='tiflash'; select count(*) from test.t partition (p0);
 +----------+
 | count(*) |
 +----------+
@@ -50,14 +72,14 @@ mysql> select /*+ READ_FROM_STORAGE(TIFLASH[t]) */ count(*) from test.t partitio
 +----------+
 
 mysql> show warnings;
-mysql> select /*+ READ_FROM_STORAGE(TIKV[t]) */ count(*) from test.t partition (p1M);
+mysql> set session tidb_isolation_read_engines='tikv'; select count(*) from test.t partition (p1M);
 +----------+
 | count(*) |
 +----------+
 |        8 |
 +----------+
 
-mysql> select /*+ READ_FROM_STORAGE(TIFLASH[t]) */ count(*) from test.t partition (p1M);
+mysql> set session tidb_isolation_read_engines='tiflash'; select count(*) from test.t partition (p1M);
 +----------+
 | count(*) |
 +----------+
@@ -68,7 +90,7 @@ mysql> show warnings;
 
 mysql> alter table test.t remove partitioning;
 
-mysql> select /*+ READ_FROM_STORAGE(TIFLASH[t]) */ count(*) from test.t;
+mysql> set session tidb_isolation_read_engines='tiflash'; select count(*) from test.t;
 +----------+
 | count(*) |
 +----------+
@@ -77,7 +99,7 @@ mysql> select /*+ READ_FROM_STORAGE(TIFLASH[t]) */ count(*) from test.t;
 
 mysql> show warnings;
 
-mysql> select /*+ READ_FROM_STORAGE(TIKV[t]) */ count(*) from test.t;
+mysql> set session tidb_isolation_read_engines='tikv'; select count(*) from test.t;
 +----------+
 | count(*) |
 +----------+
