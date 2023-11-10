@@ -195,7 +195,7 @@ private:
 
     void applyCreateSchema(const TiDB::DBInfoPtr & db_info);
 
-    void applyCreatePhysicalTable(const TiDB::DBInfoPtr & db_info, const TiDB::TableInfoPtr & table_info);
+    void applyCreateStorageInstance(const TiDB::DBInfoPtr & db_info, const TiDB::TableInfoPtr & table_info);
 
     void applyDropTable(DatabaseID database_id, TableID table_id);
 
@@ -207,7 +207,6 @@ private:
     void applyDropPhysicalTable(const String & db_name, TableID table_id);
 
     void applyPartitionDiff(DatabaseID database_id, TableID table_id);
-
     void applyPartitionDiff(
         const TiDB::DBInfoPtr & db_info,
         const TiDB::TableInfoPtr & table_info,
