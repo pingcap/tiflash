@@ -405,6 +405,7 @@ Segment::SegmentMetaInfos Segment::readAllSegmentsMetaInfoInRange( //
     bool is_cache_ready = end_to_segment_id_cache->isReady(lock);
     if (is_cache_ready)
     {
+        // TODO bisect for end
         current_segment_id
             = end_to_segment_id_cache->getSegmentIdContainingKey(lock, target_range.getStart().toRowKeyValue());
     }
