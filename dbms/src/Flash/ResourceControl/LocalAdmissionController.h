@@ -121,9 +121,9 @@ private:
         else
             debug_storage_ru += ru;
         ru_consumption_delta += ru;
-        if unlikely(ru_consumption_delta > 10000000)
+        if unlikely(ru_consumption_delta > 1000000)
         {
-            LOG_INFO(log,"gjt debug {}, {}, {}, {}, {}, {}, {}", is_compute, cpu_time_in_ns_, storage_bytes, debug_cpu_ns, debug_storage_bytes, ru, ru_consumption_delta);
+            LOG_INFO(log,"gjt debug big ru {}, {}, {}, {}, {}, {}, {}", is_compute, cpu_time_in_ns_, storage_bytes, debug_cpu_ns, debug_storage_bytes, ru, ru_consumption_delta);
         }
         if (!burstable)
             bucket->consume(ru);
