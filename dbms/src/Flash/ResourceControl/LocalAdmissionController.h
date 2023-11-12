@@ -112,7 +112,14 @@ private:
 
     std::string getName() const { return name; }
 
-    bool consumeResource(double ru, uint64_t cpu_time_in_ns_, const SteadyClock::time_point & now)
+    void consumeResource(double ru, uint64_t cpu_time_in_ns_, const SteadyClock::time_point & now)
+    {
+        if unlikely (!consumeResourceNoExcept(ru, cpu_time_in_ns_, now))
+            throw ::DB::Exception(fmt::format("Exceeded resource group quota limitation: ", name));
+    }
+
+    // Return true if consume succeed.
+    bool consumeResourceNoExcept(double ru, uint64_t cpu_time_in_ns_, const SteadyClock::time_point & now)
     {
         std::lock_guard lock(mu);
         if (!burstable)
@@ -440,7 +447,6 @@ public:
 
     ~LocalAdmissionController() { stop(); }
 
-    // May throw exception when resource is throttled.
     void consumeResource(const std::string & name, double ru, uint64_t cpu_time_in_ns)
     {
         assert(!stopped);
@@ -457,8 +463,8 @@ public:
         }
 
         const auto now = SteadyClock::now();
-        if unlikely (group->consumeResource(ru, cpu_time_in_ns, now))
-            throw ::DB::Exception(fmt::format("Exceeded resource group quota limitation: ", name));
+        // May throw exception when resource is throttled.
+        group->consumeResource(ru, cpu_time_in_ns, now);
 
         if (group->lowToken() || group->trickleModeLeaseExpire(now))
         {

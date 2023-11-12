@@ -96,15 +96,16 @@ public:
         return fmt::format("tokens: {}, fill_rate: {}, capacity: {}", tokens, fill_rate, capacity);
     }
 
+    // Return true if throttled, a.k.a. return true when the tokens of the future dura_sec cannot covert acquired tokens.
     bool willBeThrottled(double n, const TimePoint & now, uint64_t dura_sec) const
     {
         if (fill_rate > 0)
         {
             auto num = peek(now) - n;
             if (num < 0 && ((-num) / fill_rate) > dura_sec)
-                return false;
+                return true;
         }
-        return true;
+        return false;
     }
 
 private:
