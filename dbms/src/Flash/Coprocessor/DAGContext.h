@@ -342,6 +342,9 @@ public:
     void setAutoSpillMode() { in_auto_spill_mode = true; }
     bool isInAutoSpillMode() const { return in_auto_spill_mode; }
 
+    UInt64 getConnectionID() const { return connection_id; }
+    const String & getConnectionAlias() const { return connection_alias; }
+
 public:
     DAGRequest dag_request;
     /// Some existing code inherited from Clickhouse assume that each query must have a valid query string and query ast,

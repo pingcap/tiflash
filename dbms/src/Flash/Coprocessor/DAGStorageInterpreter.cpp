@@ -721,6 +721,8 @@ std::vector<pingcap::coprocessor::CopTask> DAGStorageInterpreter::buildCopTasks(
             req,
             store_type,
             dagContext().getKeyspaceID(),
+            remote_request.connection_id,
+            remote_request.connection_alias,
             &Poco::Logger::get("pingcap/coprocessor"),
             std::move(meta_data),
             [&] { GET_METRIC(tiflash_coprocessor_request_count, type_remote_read_sent).Increment(); });
@@ -1552,6 +1554,8 @@ std::vector<RemoteRequest> DAGStorageInterpreter::buildRemoteRequests(const DM::
         retry_regions_map[region_id_to_table_id_map[r.get().region_id]].emplace_back(r);
     }
 
+    UInt64 connection_id = dagContext().getConnectionID();
+    const String & connection_alias = dagContext().getConnectionAlias();
     for (const auto physical_table_id : table_scan.getPhysicalTableIDs())
     {
         const auto & retry_regions = retry_regions_map[physical_table_id];
@@ -1569,6 +1573,8 @@ std::vector<RemoteRequest> DAGStorageInterpreter::buildRemoteRequests(const DM::
             table_scan,
             storages_with_structure_lock[physical_table_id].storage->getTableInfo(),
             filter_conditions,
+            connection_id,
+            connection_alias,
             log));
     }
     LOG_DEBUG(log, "remote request size: {}", remote_requests.size());
