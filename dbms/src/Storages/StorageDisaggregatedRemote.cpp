@@ -126,7 +126,7 @@ DM::SegmentReadTasks StorageDisaggregated::buildReadTaskWithBackoff(const Contex
 {
     using namespace pingcap;
 
-    auto scan_context = std::make_shared<DM::ScanContext>();
+    auto scan_context = std::make_shared<DM::ScanContext>(context.getDAGContext()->getResourceGroupName());
     context.getDAGContext()->scan_context_map[table_scan.getTableScanExecutorID()] = scan_context;
 
     DM::SegmentReadTasks read_task;
