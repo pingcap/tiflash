@@ -44,11 +44,11 @@ struct EncryptionPath;
 
 #define InitCipherContext(ctx)              \
     ctx = EVP_CIPHER_CTX_new();             \
-    if (ctx != nullptr)                     \
+    if ((ctx) != nullptr)                   \
     {                                       \
         if (EVP_CIPHER_CTX_reset(ctx) != 1) \
         {                                   \
-            ctx = nullptr;                  \
+            (ctx) = nullptr;                \
         }                                   \
     }
 
@@ -115,12 +115,12 @@ private:
 
     inline void initIV(uint64_t block_index, unsigned char * iv) const;
 
-    const EVP_CIPHER * cipher_;
-    const std::string key_;
-    const uint64_t initial_iv_high_;
-    const uint64_t initial_iv_low_;
+    const EVP_CIPHER * cipher_; // NOLINT
+    const std::string key_; // NOLINT
+    const uint64_t initial_iv_high_; // NOLINT
+    const uint64_t initial_iv_low_; // NOLINT
 #if USE_GM_SSL
-    SM4_KEY sm4_key_;
+    SM4_KEY sm4_key_{}; // NOLINT
 #endif
 };
 } // namespace DB

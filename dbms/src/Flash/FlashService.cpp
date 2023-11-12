@@ -300,7 +300,12 @@ grpc::Status FlashService::Coprocessor(
     };
     grpc::Status ret = cop_limiter->executeFor(std::move(exec_func), max_queued_duration_ms, std::move(timeout_func));
 
-    LOG_IMPL(log, log_level, "Handle coprocessor request done: {}, {}", ret.error_code(), ret.error_message());
+    LOG_IMPL(
+        log,
+        log_level,
+        "Handle coprocessor request done: {}, {}",
+        magic_enum::enum_name(ret.error_code()),
+        ret.error_message());
     return ret;
 }
 
@@ -342,7 +347,11 @@ grpc::Status FlashService::BatchCoprocessor(
         return cop_handler.execute();
     });
 
-    LOG_INFO(log, "Handle batch coprocessor request done: {}, {}", ret.error_code(), ret.error_message());
+    LOG_INFO(
+        log,
+        "Handle batch coprocessor request done: {}, {}",
+        magic_enum::enum_name(ret.error_code()),
+        ret.error_message());
     return ret;
 }
 
@@ -459,7 +468,12 @@ grpc::Status FlashService::CoprocessorStream(
     grpc::Status ret
         = cop_stream_limiter->executeFor(std::move(exec_func), max_queued_duration_ms, std::move(timeout_func));
 
-    LOG_IMPL(log, log_level, "Handle coprocessor stream request done: {}, {}", ret.error_code(), ret.error_message());
+    LOG_IMPL(
+        log,
+        log_level,
+        "Handle coprocessor stream request done: {}, {}",
+        magic_enum::enum_name(ret.error_code()),
+        ret.error_message());
     return ret;
 }
 
