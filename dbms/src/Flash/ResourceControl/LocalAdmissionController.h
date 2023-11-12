@@ -124,7 +124,7 @@ private:
         std::lock_guard lock(mu);
         if (!burstable)
         {
-            if (bucket->willBeThrottled(ru, now, MAX_THROTTLE_DURATION_SEC))
+            if unlikely (bucket->willBeThrottled(ru, now, MAX_THROTTLE_DURATION_SEC))
                 return false;
             bucket->consume(ru);
         }
