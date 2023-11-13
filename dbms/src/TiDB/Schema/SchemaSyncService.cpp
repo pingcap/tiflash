@@ -208,7 +208,7 @@ bool SchemaSyncService::gc(Timestamp gc_safepoint, KeyspaceID keyspace_id)
     if (gc_safepoint == 0)
         return false;
     // the gc safepoint is not changed since last schema gc run, skip it
-    if (last_gc_safepoint != std::nullopt && gc_safepoint == *last_gc_safepoint)
+    if (last_gc_safepoint.has_value() && gc_safepoint == *last_gc_safepoint)
         return false;
 
     auto keyspace_log = log->getChild(fmt::format("keyspace={}", keyspace_id));
