@@ -74,7 +74,7 @@ int MergedTask::readOneBlock()
             continue;
         }
 
-        if (pool->getFreeBlockSlots() <= 0)
+        if (pool->getFreeBlockSlots() <= 0 || pool->isRUExhausted())
         {
             continue;
         }

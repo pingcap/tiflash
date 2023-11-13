@@ -132,7 +132,8 @@ public:
         AfterSegmentRead after_segment_read_,
         const String & tracing_id,
         bool enable_read_thread_,
-        Int64 num_streams_);
+        Int64 num_streams_,
+        const String & res_group_name_);
 
     ~SegmentReadTaskPool()
     {
@@ -206,6 +207,8 @@ public:
         }
     }
 
+    bool isRUExhausted();
+
 private:
     Int64 getFreeActiveSegmentsUnlock() const;
     bool exceptionHappened() const;
@@ -240,9 +243,16 @@ private:
     const Int64 block_slot_limit;
     const Int64 active_segment_limit;
 
+    const String res_group_name;
+    std::mutex ru_mu;
+    std::atomic<Int64> last_time_check_ru = 0;
+    std::atomic<bool> ru_is_exhausted = false;
+    std::atomic<UInt64> read_bytes_after_last_check = 0;
+
     inline static std::atomic<uint64_t> pool_id_gen{1};
     inline static BlockStat global_blk_stat;
     static uint64_t nextPoolId() { return pool_id_gen.fetch_add(1, std::memory_order_relaxed); }
+    inline static constexpr Int64 check_ru_interval_ms = 100;
 };
 
 using SegmentReadTaskPoolPtr = std::shared_ptr<SegmentReadTaskPool>;

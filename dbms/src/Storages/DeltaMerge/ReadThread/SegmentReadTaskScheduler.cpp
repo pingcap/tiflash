@@ -122,6 +122,7 @@ SegmentReadTaskPools SegmentReadTaskScheduler::getPoolsUnlock(const std::vector<
 bool SegmentReadTaskScheduler::needScheduleToRead(const SegmentReadTaskPoolPtr & pool)
 {
     return pool->getFreeBlockSlots() > 0 && // Block queue is not full and
+        !pool->isRUExhausted() && // RU is not exhausted and
         (merged_task_pool.has(pool->pool_id) || // can schedule a segment from MergedTaskPool or
          pool->getFreeActiveSegments() > 0); // schedule a new segment.
 }

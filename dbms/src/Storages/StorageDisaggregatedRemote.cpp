@@ -537,7 +537,8 @@ std::variant<DM::Remote::RNWorkersPtr, DM::SegmentReadTaskPoolPtr> StorageDisagg
             /*after_segment_read*/ [](const DM::DMContextPtr &, const DM::SegmentPtr &) {},
             executor_id,
             /*enable_read_thread*/ true,
-            num_streams);
+            num_streams,
+            context.getDAGContext()->getResourceGroupName());
     }
     else
     {
