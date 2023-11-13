@@ -75,14 +75,14 @@ void SchemaSyncService::addKeyspaceGCTasks()
                     /// They must be performed synchronously,
                     /// otherwise table may get mis-GC-ed if RECOVER was not properly synced caused by schema sync pause but GC runs too aggressively.
                     // GC safe point must be obtained ahead of syncing schema.
-                    auto gc_safe_point
-                        = PDClientHelper::getGCSafePointWithRetry(context.getTMTContext().getPDClient(), keyspace);
                     stage = "Sync schemas";
                     done_anything = syncSchemas(keyspace);
                     if (done_anything)
                         GET_METRIC(tiflash_schema_trigger_count, type_timer).Increment();
 
                     stage = "GC";
+                    auto gc_safe_point
+                        = PDClientHelper::getGCSafePointWithRetry(context.getTMTContext().getPDClient(), keyspace);
                     done_anything = gc(gc_safe_point, keyspace);
 
                     return done_anything;
@@ -173,7 +173,7 @@ Timestamp SchemaSyncService::lastGcSafePoint(KeyspaceID keyspace_id) const
     std::shared_lock lock(keyspace_map_mutex);
     auto iter = keyspace_gc_context.find(keyspace_id);
     if (iter == keyspace_gc_context.end())
-        return 0;
+        return INVALID_GC_SAFEPOINT;
     return iter->second.last_gc_safepoint;
 }
 
@@ -186,7 +186,11 @@ void SchemaSyncService::updateLastGcSafepoint(KeyspaceID keyspace_id, Timestamp 
 bool SchemaSyncService::gc(Timestamp gc_safepoint, KeyspaceID keyspace_id)
 {
     const Timestamp last_gc_safepoint = lastGcSafePoint(keyspace_id);
-    if (last_gc_safepoint != 0 && gc_safepoint == last_gc_safepoint)
+    // for new deploy cluster, there is an interval that gc_safepoint return 0, skip it
+    if (gc_safepoint == 0)
+        return false;
+    // the gc safepoint is not changed since last schema gc run, skip it
+    if (last_gc_safepoint != INVALID_GC_SAFEPOINT && gc_safepoint == last_gc_safepoint)
         return false;
 
     auto keyspace_log = log->getChild(fmt::format("keyspace={}", keyspace_id));
