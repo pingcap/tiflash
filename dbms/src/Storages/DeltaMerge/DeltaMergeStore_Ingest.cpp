@@ -1126,7 +1126,7 @@ bool DeltaMergeStore::ingestSegmentDataIntoSegmentUsingSplit(
 void DeltaMergeStore::ingestSegmentsFromCheckpointInfo(
     const DMContextPtr & dm_context,
     const DM::RowKeyRange & range,
-    CheckpointInfoPtr checkpoint_info)
+    CheckpointIngestInfoPtr checkpoint_info)
 {
     if (unlikely(shutdown_called.load(std::memory_order_relaxed)))
     {

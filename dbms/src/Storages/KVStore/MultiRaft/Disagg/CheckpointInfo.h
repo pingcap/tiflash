@@ -29,4 +29,8 @@ struct CheckpointInfo
     UniversalPageStoragePtr temp_ps;
 };
 using CheckpointInfoPtr = std::shared_ptr<CheckpointInfo>;
+struct CheckpointIngestInfo {
+};
+using CheckpointIngestInfoPtr = std::shared_ptr<CheckpointIngestInfo>;
+
 } // namespace DB

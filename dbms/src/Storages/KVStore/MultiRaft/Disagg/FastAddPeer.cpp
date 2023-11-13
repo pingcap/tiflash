@@ -336,11 +336,9 @@ FastAddPeerRes FastAddPeerImpl(EngineStoreServerWrap * server, uint64_t region_i
         }
         after_build();
 
-        Stopwatch watch_ingest;
-        auto kvstore = server->tmt->getKVStore();
-        kvstore->handleIngestCheckpoint(region, checkpoint_info, *server->tmt);
-
-        // Write raft log to uni ps
+        // Write raft log to uni ps, we do this here because we store raft log seperately.
+        // TODO(fap) Move this to `ApplyFapSnapshot` if the peer is not the first one of this region.
+        // TODO(fap) Maybe need to clean stale data.
         UniversalWriteBatch wb;
         RaftDataReader raft_data_reader(*(checkpoint_info->temp_ps));
         raft_data_reader.traverseRemoteRaftLogForRegion(
@@ -356,8 +354,6 @@ FastAddPeerRes FastAddPeerImpl(EngineStoreServerWrap * server, uint64_t region_i
             });
         auto wn_ps = server->tmt->getContext().getWriteNodePageStorage();
         wn_ps->write(std::move(wb));
-        GET_METRIC(tiflash_fap_task_duration_seconds, type_ingest_stage).Observe(watch_ingest.elapsedSeconds());
-        GET_METRIC(tiflash_fap_task_result, type_succeed).Increment();
 
         return genFastAddPeerRes(
             FastAddPeerStatus::Ok,
@@ -366,8 +362,26 @@ FastAddPeerRes FastAddPeerImpl(EngineStoreServerWrap * server, uint64_t region_i
     }
     catch (...)
     {
-        DB::tryLogCurrentException("FastAddPeer", "Failed when try to restore from checkpoint");
+        DB::tryLogCurrentException("FastAddPeerImpl", "Failed when try to restore from checkpoint region_id={} new_peer_id={}", region_id, new_peer_id);
         return genFastAddPeerRes(FastAddPeerStatus::BadData, "", "");
+    }
+}
+
+void ApplyFapSnapshot(EngineStoreServerWrap * server, uint64_t region_id, uint64_t peer_id) {
+    try
+    {
+        Stopwatch watch_ingest;
+        auto kvstore = server->tmt->getKVStore();
+        kvstore->handleIngestCheckpoint(region, checkpoint_info, *server->tmt);
+        GET_METRIC(tiflash_fap_task_duration_seconds, type_ingest_stage).Observe(watch_ingest.elapsedSeconds());
+        GET_METRIC(tiflash_fap_task_result, type_succeed).Increment();
+    }
+    catch (...)
+    {
+        DB::tryLogCurrentException(
+            "FastAddPeerApply",
+            fmt::format("Failed when try to apply fap snapshot region_id={} peer_id={} {}", region_id, peer_id, StackTrace().toString()));
+        return;
     }
 }
 
@@ -425,7 +439,7 @@ FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, u
     {
         DB::tryLogCurrentException(
             "FastAddPeer",
-            fmt::format("Failed when try to restore from checkpoint {}", StackTrace().toString()));
+            fmt::format("Failed when try to restore from checkpoint region_id={} new_peer_id={} {}", region_id, new_peer_id, StackTrace().toString()));
         return genFastAddPeerRes(FastAddPeerStatus::OtherError, "", "");
     }
 }
