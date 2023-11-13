@@ -68,9 +68,6 @@ PhysicalPlanNodePtr PhysicalJoin::build(
     RUNTIME_CHECK(left);
     RUNTIME_CHECK(right);
 
-    //left->finalize();
-    //right->finalize();
-
     const Block & left_input_header = Block(left->getSchema());
     const Block & right_input_header = Block(right->getSchema());
 
@@ -323,7 +320,6 @@ void PhysicalJoin::buildPipeline(PipelineBuilder & builder, Context & context, P
 
 void PhysicalJoin::finalize(const Names & parent_require)
 {
-    // schema.size() >= parent_require.size()
     FinalizeHelper::checkSchemaContainsParentRequire(schema, parent_require);
     join_ptr->finalize(parent_require);
     NamesAndTypes updated_schema;
@@ -350,6 +346,7 @@ void PhysicalJoin::finalize(const Names & parent_require)
     Names build_required;
     Names probe_required;
     bool has_missed_column = false;
+    String missed_column_name;
     for (const auto & name : required_input_columns)
     {
         if (build_schema_sets.find(name) != build_schema_sets.end())
@@ -359,11 +356,12 @@ void PhysicalJoin::finalize(const Names & parent_require)
         else
         {
             has_missed_column = true;
+            missed_column_name = name;
             break;
         }
     }
     if (has_missed_column)
-        throw Exception("Meet unknown column");
+        throw Exception("Meet unknown column: {}", missed_column_name);
     build_side_prepare_actions->finalize(build_required);
     auto child_required_columns = build_side_prepare_actions->getRequiredColumns();
     if unlikely (child_required_columns.empty())
