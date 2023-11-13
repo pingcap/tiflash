@@ -54,9 +54,10 @@ SchemaSyncService::SchemaSyncService(DB::Context & context_)
 void SchemaSyncService::addKeyspaceGCTasks()
 {
     const auto keyspaces = context.getTMTContext().getStorages().getAllKeyspaces();
-    std::unique_lock<std::shared_mutex> lock(keyspace_map_mutex);
 
+    UInt64 num_add_tasks = 0;
     // Add new sync schema task for new keyspace.
+    std::unique_lock<std::shared_mutex> lock(keyspace_map_mutex);
     for (auto const iter : keyspaces)
     {
         auto keyspace = iter.first;
@@ -110,15 +111,20 @@ void SchemaSyncService::addKeyspaceGCTasks()
             context.getSettingsRef().ddl_sync_interval_seconds * 1000);
 
         keyspace_handle_map.emplace(keyspace, task_handle);
+        num_add_tasks += 1;
     }
+
+    auto log_level = num_add_tasks > 0 ? Poco::Message::PRIO_INFORMATION : Poco::Message::PRIO_DEBUG;
+    LOG_IMPL(log, log_level, "add sync schema task for keyspaces done, num_add_tasks={}", num_add_tasks);
 }
 
 void SchemaSyncService::removeKeyspaceGCTasks()
 {
     const auto keyspaces = context.getTMTContext().getStorages().getAllKeyspaces();
-    std::unique_lock<std::shared_mutex> lock(keyspace_map_mutex);
 
+    UInt64 num_remove_tasks = 0;
     // Remove stale sync schema task.
+    std::unique_lock<std::shared_mutex> lock(keyspace_map_mutex);
     for (auto keyspace_handle_iter = keyspace_handle_map.begin(); keyspace_handle_iter != keyspace_handle_map.end();
          /*empty*/)
     {
@@ -128,6 +134,7 @@ void SchemaSyncService::removeKeyspaceGCTasks()
             ++keyspace_handle_iter;
             continue;
         }
+
         auto keyspace_log = log->getChild(fmt::format("keyspace={}", keyspace));
         LOG_INFO(keyspace_log, "remove sync schema task");
         background_pool.removeTask(keyspace_handle_iter->second);
@@ -135,9 +142,11 @@ void SchemaSyncService::removeKeyspaceGCTasks()
 
         context.getTMTContext().getSchemaSyncerManager()->removeSchemaSyncer(keyspace);
         PDClientHelper::remove_ks_gc_sp(keyspace);
-
-        keyspace_gc_context.erase(keyspace);
+        keyspace_gc_context.erase(keyspace); // clear the last gc safepoint
     }
+
+    auto log_level = num_remove_tasks > 0 ? Poco::Message::PRIO_INFORMATION : Poco::Message::PRIO_DEBUG;
+    LOG_IMPL(log, log_level, "remove sync schema task for keyspaces done, num_remove_tasks={}", num_remove_tasks);
 }
 
 SchemaSyncService::~SchemaSyncService()
