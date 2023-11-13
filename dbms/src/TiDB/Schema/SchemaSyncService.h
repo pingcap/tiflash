@@ -61,10 +61,9 @@ private:
 
     friend void dbgFuncGcSchemas(Context &, const ASTs &, DBGInvokerPrinter);
 
-    static constexpr Timestamp INVALID_GC_SAFEPOINT = -1;
     struct KeyspaceGCContext
     {
-        Timestamp last_gc_safepoint = INVALID_GC_SAFEPOINT;
+        Timestamp last_gc_safepoint = 0;
     };
 
     BackgroundProcessingPool & background_pool;
