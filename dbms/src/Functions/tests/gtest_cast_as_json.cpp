@@ -18,6 +18,7 @@
 #include <TiDB/Decode/JsonBinary.h>
 
 #include <string>
+#include <type_traits>
 #include <vector>
 
 namespace DB::tests
@@ -30,31 +31,38 @@ namespace DB::tests
   *    ```
   * there is no need to test const, null_value, and only value.
   *
-  * CastStringAsJson and CastDurationAsJson rely on tipb::FieldType,
-  * so they cannot be tested in unit tests.
-  * They will be tested in integration tests.
+  * CastIntAsJson, CastStringAsJson and CastDurationAsJson can only test the case where input_tidb_tp is nullptr
   */
 class TestCastAsJson : public DB::tests::FunctionTest
 {
 public:
+    template<bool is_raw = false>
     ColumnWithTypeAndName executeFunctionWithCast(const String & func_name, const ColumnsWithTypeAndName & columns)
     {
-        auto json_column = executeFunction(func_name, columns);
+        ColumnWithTypeAndName json_column;
+        if constexpr (is_raw)
+        {
+            json_column = executeFunction(func_name, columns, nullptr, true);
+        }
+        else
+        {
+            json_column = executeFunction(func_name, columns);
+        }
         static auto json_return_type = std::make_shared<DataTypeString>();
         assert(json_return_type->equals(*json_column.type));
         // The `json_binary` should be cast as a string to improve readability.
         return executeFunction("cast_json_as_string", {json_column});
     }
 
-    template <typename Input>
+    template <typename Input, bool is_raw = false>
     void executeAndAssert(const String & func_name, const Input & input, const String & expect)
     {
         ASSERT_COLUMN_EQ(
             createColumn<Nullable<String>>({expect}),
-            executeFunctionWithCast(func_name, {createColumn<Input>({input})}));
+            executeFunctionWithCast<is_raw>(func_name, {createColumn<Input>({input})}));
     }
 
-    template <typename Input>
+    template <typename Input, bool is_raw = false>
     typename std::enable_if<IsDecimal<Input>, void>::type executeAndAssert(
         const String & func_name,
         const DecimalField<Input> & input,
@@ -63,7 +71,32 @@ public:
         auto meta = std::make_tuple(19, input.getScale());
         ASSERT_COLUMN_EQ(
             createColumn<Nullable<String>>({expect}),
-            executeFunctionWithCast(func_name, {createColumn<Input>(meta, {input})}));
+            executeFunctionWithCast<is_raw>(func_name, {createColumn<Input>(meta, {input})}));
+    }
+
+    template <typename IntType>
+    typename std::enable_if<std::is_integral_v<IntType>, void>::type testForInt()
+    {
+        // Only raw function test is tested, so input_tidb_tp is always nullptr.
+        String func_name = "cast_int_as_json";
+        executeAndAssert<IntType, true>(func_name, 0, "0");
+        executeAndAssert<IntType, true>(func_name, 99, "99");
+        if constexpr (std::is_signed_v<IntType>)
+        {
+            executeAndAssert<IntType, true>(func_name, -99, "-99");
+        }
+        executeAndAssert<IntType, true>(
+            func_name,
+            std::numeric_limits<IntType>::max(),
+            fmt::format("{}", std::numeric_limits<IntType>::max()));
+        executeAndAssert<IntType, true>(
+            func_name,
+            std::numeric_limits<IntType>::min(),
+            fmt::format("{}", std::numeric_limits<IntType>::min()));
+        executeAndAssert<IntType, true>(
+            func_name,
+            std::numeric_limits<IntType>::lowest(),
+            fmt::format("{}", std::numeric_limits<IntType>::lowest()));
     }
 };
 
@@ -100,33 +133,15 @@ CATCH
 TEST_F(TestCastAsJson, CastIntAsJson)
 try
 {
-    const String func_name = "cast_int_as_json";
+    testForInt<UInt8>();
+    testForInt<UInt16>();
+    testForInt<UInt32>();
+    testForInt<UInt64>();
 
-    /// UInt8
-    executeAndAssert<UInt8>(func_name, 1, "true");
-    executeAndAssert<UInt8>(func_name, std::numeric_limits<UInt8>::max(), "true");
-    executeAndAssert<UInt8>(func_name, 0, "false");
-
-    /// UInt64
-    executeAndAssert<UInt64>(func_name, 0, "0");
-    executeAndAssert<UInt64>(func_name, 999, "999");
-    executeAndAssert<UInt64>(
-        func_name,
-        std::numeric_limits<UInt64>::max(),
-        fmt::format("{}", std::numeric_limits<UInt64>::max()));
-
-    /// Int64
-    executeAndAssert<Int64>(func_name, 0, "0");
-    executeAndAssert<Int64>(func_name, 999, "999");
-    executeAndAssert<Int64>(func_name, -999, "-999");
-    executeAndAssert<Int64>(
-        func_name,
-        std::numeric_limits<Int64>::max(),
-        fmt::format("{}", std::numeric_limits<Int64>::max()));
-    executeAndAssert<Int64>(
-        func_name,
-        std::numeric_limits<Int64>::min(),
-        fmt::format("{}", std::numeric_limits<Int64>::min()));
+    testForInt<Int8>();
+    testForInt<Int16>();
+    testForInt<Int32>();
+    testForInt<Int64>();
 }
 CATCH
 
@@ -147,6 +162,10 @@ try
         func_name,
         std::numeric_limits<Float32>::min(),
         fmt::format("{}", static_cast<Float64>(std::numeric_limits<Float32>::min())));
+    executeAndAssert<Float32>(
+        func_name,
+        std::numeric_limits<Float32>::lowest(),
+        fmt::format("{}", static_cast<Float64>(std::numeric_limits<Float32>::lowest())));
 
     /// Float64
     executeAndAssert<Float64>(func_name, 0, "0");
@@ -160,6 +179,10 @@ try
         func_name,
         std::numeric_limits<Float64>::min(),
         fmt::format("{}", std::numeric_limits<Float64>::min()));
+    executeAndAssert<Float64>(
+        func_name,
+        std::numeric_limits<Float64>::lowest(),
+        fmt::format("{}", std::numeric_limits<Float64>::lowest()));
 }
 CATCH
 
@@ -196,6 +219,15 @@ try
     executeAndAssert<Decimal256>(func_name, DecimalField256(static_cast<Int256>(-1011), 1), "-101.1");
     executeAndAssert<Decimal256>(func_name, DecimalField256(static_cast<Int256>(9999), 1), "999.9");
     executeAndAssert<Decimal256>(func_name, DecimalField256(static_cast<Int256>(-9999), 1), "-999.9");
+}
+CATCH
+
+TEST_F(TestCastAsJson, CastStringAsJson)
+try
+{
+    // Only raw function test is tested, so input_tidb_tp is always nullptr and only the case of parsing json is tested here.
+
+    const String func_name = "cast_string_as_json";
 }
 CATCH
 

@@ -28,6 +28,7 @@
 #include <Functions/FunctionHelpers.h>
 #include <Functions/GatherUtils/Sources.h>
 #include <Functions/IFunction.h>
+#include <Functions/castTypeToEither.h>
 #include <TiDB/Decode/JsonBinary.h>
 #include <TiDB/Decode/JsonPathExprRef.h>
 #include <TiDB/Schema/TiDB.h>
@@ -35,6 +36,9 @@
 
 #include <ext/range.h>
 #include <magic_enum.hpp>
+#include <type_traits>
+
+#include "common/types.h"
 
 namespace DB
 {
@@ -726,19 +730,16 @@ public:
     bool useDefaultImplementationForNulls() const override { return true; }
     bool useDefaultImplementationForConstants() const override { return true; }
 
+    void setInputTiDBFieldType(const tipb::FieldType & tidb_tp_) { input_tidb_tp = &tidb_tp_; }
+
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
-        switch (arguments[0]->getTypeId())
-        {
-        case TypeIndex::Int64:
-        case TypeIndex::UInt64:
-        case TypeIndex::UInt8:
-            return std::make_shared<DataTypeString>();
-        default:
+        if (unlikely(!arguments[0]->isInteger()))
             throw Exception(
                 fmt::format("Illegal type {} of argument of function {}", arguments[0]->getName(), getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-        }
+
+        return std::make_shared<DataTypeString>();
     }
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
@@ -750,32 +751,50 @@ public:
         auto rows = block.rows();
         offsets_to.resize(rows);
 
-        const auto & from = block.getByPosition(arguments[0]);
-        TypeIndex from_type_index = from.type->getTypeId();
-        switch (from_type_index)
-        {
-        case TypeIndex::Int64:
-            doExecute<Int64, Int64>(write_buffer, offsets_to, from.column);
-            break;
-        case TypeIndex::UInt64:
-            doExecute<UInt64, UInt64>(write_buffer, offsets_to, from.column);
-            break;
-        case TypeIndex::UInt8:
-            doExecute<UInt8, bool>(write_buffer, offsets_to, from.column);
-            break;
-        default:
+        const auto & int_base_type = block.getByPosition(arguments[0]).type;
+        bool is_types_valid = getIntType(int_base_type, [&](const auto & int_type, bool) {
+            using IntType = std::decay_t<decltype(int_type)>;
+            using IntFieldType = typename IntType::FieldType;
+            const auto & from = block.getByPosition(arguments[0]);
+            // In raw function test, input_tidb_tp is nullptr.
+            if (unlikely(input_tidb_tp == nullptr) || !hasIsBooleanFlag(*input_tidb_tp))
+            {
+                if constexpr (std::is_unsigned_v<IntFieldType>)
+                    doExecute<IntFieldType, UInt64>(write_buffer, offsets_to, from.column);
+                else
+                    doExecute<IntFieldType, Int64>(write_buffer, offsets_to, from.column);
+            }
+            else
+            {
+                doExecute<IntFieldType, bool>(write_buffer, offsets_to, from.column);
+            }
+
+            data_to.resize(write_buffer.count());
+            block.getByPosition(result).column = std::move(col_to);
+            return true;
+        });
+
+        if (unlikely(!is_types_valid))
             throw Exception(
-                fmt::format(
-                    "Illegal type {} of argument of function {}",
-                    magic_enum::enum_name(from_type_index),
-                    getName()),
+                fmt::format("Illegal types {} arguments of function {}", int_base_type->getName(), getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-        }
-        data_to.resize(write_buffer.count());
-        block.getByPosition(result).column = std::move(col_to);
     }
 
 private:
+    template <typename F>
+    static bool getIntType(DataTypePtr type, F && f)
+    {
+        return castTypeToEither<
+            DataTypeInt8,
+            DataTypeInt16,
+            DataTypeInt32,
+            DataTypeInt64,
+            DataTypeUInt8,
+            DataTypeUInt16,
+            DataTypeUInt32,
+            DataTypeUInt64>(type.get(), std::forward<F>(f));
+    }
+
     template <typename FromType, typename ToType>
     static void doExecute(
         JsonBinary::JsonBinaryWriteBuffer & data_to,
@@ -792,6 +811,9 @@ private:
             offsets_to[i] = data_to.count();
         }
     }
+
+private:
+    const tipb::FieldType * input_tidb_tp = nullptr;
 };
 
 class FunctionCastStringAsJson : public IFunction
@@ -807,7 +829,7 @@ public:
     bool useDefaultImplementationForNulls() const override { return true; }
     bool useDefaultImplementationForConstants() const override { return true; }
 
-    void setTiDBFieldType(const tipb::FieldType & tidb_tp_) { tidb_tp = tidb_tp_; }
+    void setInputTiDBFieldType(const tipb::FieldType & tidb_tp_) { input_tidb_tp = &tidb_tp_; }
     void setCollator(const TiDB::TiDBCollatorPtr & collator_) override { collator = collator_; }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
@@ -831,18 +853,31 @@ public:
         const auto & from = block.getByPosition(arguments[0]);
         auto source = createDynamicStringSource(*from.column);
 
+        // In raw function test, input_tidb_tp is nullptr.
         if (collator->isBinary())
         {
-            if (tidb_tp.tp() == TiDB::TypeString)
+            if ((unlikely(input_tidb_tp == nullptr)) || input_tidb_tp->tp() == TiDB::TypeString)
             {
-                doExecuteForBinary<true>(write_buffer, offsets_to, source, tidb_tp.tp(), tidb_tp.flen(), block.rows());
+                doExecuteForBinary<true>(
+                    write_buffer,
+                    offsets_to,
+                    source,
+                    input_tidb_tp->tp(),
+                    input_tidb_tp->flen(),
+                    block.rows());
             }
             else
             {
-                doExecuteForBinary<false>(write_buffer, offsets_to, source, tidb_tp.tp(), tidb_tp.flen(), block.rows());
+                doExecuteForBinary<false>(
+                    write_buffer,
+                    offsets_to,
+                    source,
+                    input_tidb_tp->tp(),
+                    input_tidb_tp->flen(),
+                    block.rows());
             }
         }
-        else if (hasParseToJSONFlag(tidb_tp))
+        else if ((unlikely(input_tidb_tp == nullptr)) || hasParseToJSONFlag(*input_tidb_tp))
         {
             doExecuteForParsingJson(write_buffer, offsets_to, source, block.rows());
         }
@@ -997,7 +1032,7 @@ private:
     }
 
 private:
-    tipb::FieldType tidb_tp;
+    const tipb::FieldType * input_tidb_tp = nullptr;
     TiDB::TiDBCollatorPtr collator = nullptr;
 };
 
@@ -1014,7 +1049,7 @@ public:
     bool useDefaultImplementationForNulls() const override { return true; }
     bool useDefaultImplementationForConstants() const override { return true; }
 
-    void setTiDBFieldType(const tipb::FieldType & tidb_tp_) { tidb_tp = tidb_tp_; }
+    void setInputTiDBFieldType(const tipb::FieldType & tidb_tp_) { input_tidb_tp = &tidb_tp_; }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
@@ -1041,7 +1076,8 @@ public:
         }
         else if (checkDataType<DataTypeMyDate>(from.type.get()))
         {
-            bool is_timestamp = tidb_tp.tp() == TiDB::TypeTimestamp;
+            // In raw function test, input_tidb_tp is nullptr.
+            bool is_timestamp = (unlikely(input_tidb_tp == nullptr)) || input_tidb_tp->tp() == TiDB::TypeTimestamp;
             if (is_timestamp)
                 doExecute<DataTypeMyDate, true>(write_buffer, offsets_to, from.column);
             else
@@ -1085,7 +1121,7 @@ private:
     }
 
 private:
-    tipb::FieldType tidb_tp;
+    const tipb::FieldType * input_tidb_tp = nullptr;
 };
 
 class FunctionCastDurationAsJson : public IFunction

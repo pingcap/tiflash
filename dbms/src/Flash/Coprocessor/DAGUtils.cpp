@@ -25,6 +25,8 @@
 #include <TiDB/Decode/Datum.h>
 
 #include <unordered_map>
+
+#include "TiDB/Schema/TiDB.h"
 namespace DB
 {
 const Int8 VAR_SIZE = 0;
@@ -1428,6 +1430,11 @@ TiDB::TiDBCollatorPtr getCollatorFromFieldType(const tipb::FieldType & field_typ
 bool hasUnsignedFlag(const tipb::FieldType & tp)
 {
     return tp.flag() & TiDB::ColumnFlagUnsigned;
+}
+
+bool hasIsBooleanFlag(const tipb::FieldType & tp)
+{
+    return tp.flag() & TiDB::ColumnFlagIsBooleanFlag;
 }
 
 bool hasParseToJSONFlag(const tipb::FieldType & tp)

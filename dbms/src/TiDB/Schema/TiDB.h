@@ -121,6 +121,7 @@ enum TP
     M(PartKey, (1 << 14))        \
     M(Num, (1 << 15))            \
     M(ParseToJSON, (1 << 18))    \
+    M(IsBooleanFlag, (1 << 19))  \
     M(GeneratedColumn, (1 << 23))
 
 enum ColumnFlag
@@ -202,19 +203,10 @@ struct ColumnInfo
 #ifdef M
 #error "Please undefine macro M first."
 #endif
-#define M(f, v)                      \
-    inline bool has##f##Flag() const \
-    {                                \
-        return (flag & (v)) != 0;    \
-    }                                \
-    inline void set##f##Flag()       \
-    {                                \
-        flag |= (v);                 \
-    }                                \
-    inline void clear##f##Flag()     \
-    {                                \
-        flag &= (~(v));              \
-    }
+#define M(f, v)                                                    \
+    inline bool has##f##Flag() const { return (flag & (v)) != 0; } \
+    inline void set##f##Flag() { flag |= (v); }                    \
+    inline void clear##f##Flag() { flag &= (~(v)); }
     COLUMN_FLAGS(M)
 #undef M
 
