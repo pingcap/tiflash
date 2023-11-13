@@ -453,9 +453,9 @@ private:
     // - Pipeline: execute with pipeline model
     ExecutionMode execution_mode = ExecutionMode::None;
 
-    // It's the session id between client and tidb
+    // It's the session id between mysql client and tidb
     UInt64 connection_id;
-    // It's the session alias between client and tidb
+    // It's the session alias between mysql client and tidb
     String connection_alias;
 };
 
