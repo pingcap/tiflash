@@ -946,7 +946,7 @@ void JsonBinary::appendDatetime(JsonBinaryWriteBuffer & write_buffer, const MyDa
 
 void JsonBinary::appendDuration(JsonBinaryWriteBuffer & write_buffer, Int64 duration, UInt64 fsp)
 {
-    write_buffer.write(TYPE_CODE_DATETIME);
+    write_buffer.write(TYPE_CODE_DURATION);
     encodeNumeric(write_buffer, static_cast<UInt64>(duration));
     encodeNumeric(write_buffer, static_cast<UInt32>(fsp));
 }
