@@ -153,7 +153,7 @@ std::exception_ptr ResourceControlQueue<NestedTaskQueueType>::updateStatistics(
     UInt64 inc_value)
 {
     assert(task);
-    auto ru = cpuTimeToRU(inc_value);
+    const auto ru = cpuTimeToRU(inc_value);
     const String & name = task->getResourceGroupName();
     LOG_TRACE(logger, "resource group {} will consume {} RU(or {} cpu time in ns)", name, ru, inc_value);
     try

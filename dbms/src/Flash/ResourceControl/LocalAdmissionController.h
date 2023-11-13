@@ -497,7 +497,6 @@ public:
     // Throw exception if got error when fetching from GAC.
     void warmupResourceGroupInfoCache(const std::string & name);
 
-    // todo why Minus 1 because uint64 max is used as special flag.
     static bool isRUExhausted(uint64_t priority) { return priority == std::numeric_limits<uint64_t>::max(); }
 
     void registerRefillTokenCallback(const std::function<void()> & cb)

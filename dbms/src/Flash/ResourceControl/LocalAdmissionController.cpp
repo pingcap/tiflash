@@ -135,7 +135,7 @@ void LocalAdmissionController::fetchTokensForAllResourceGroups()
             if (acquire_info.has_value())
                 acquire_infos.push_back(acquire_info.value());
         }
-        // Also clear low token, because will fetch tokens for all groups.
+        // Also clear low token, because we are going to fetch tokens for all groups.
         low_token_resource_groups.clear();
     }
 
