@@ -1568,10 +1568,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
     if (init_pipeline_and_lac)
     {
 #ifdef DBMS_PUBLIC_GTEST
-        LOG_INFO(log, "Create MockLocalAdmissionController");
         LocalAdmissionController::global_instance = std::make_unique<MockLocalAdmissionController>();
 #else
-        LOG_INFO(log, "Create LocalAdmissionController");
         LocalAdmissionController::global_instance
             = std::make_unique<LocalAdmissionController>(tmt_context.getKVCluster(), tmt_context.getEtcdClient());
 #endif
