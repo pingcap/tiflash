@@ -1095,40 +1095,6 @@ struct Adder;
 template <typename Map>
 struct RowFlaggedHashMapAdder;
 
-template <typename Map>
-struct Adder<ASTTableJoin::Kind::LeftOuter, ASTTableJoin::Strictness::Any, Map>
-{
-    static bool addFound(
-        const typename Map::ConstLookupResult & it,
-        size_t num_columns_to_add,
-        MutableColumns & added_columns,
-        size_t /*i*/,
-        IColumn::Offset & /*current_offset*/,
-        IColumn::Offsets * /*offsets*/,
-        const std::vector<size_t> & right_indexes,
-        ProbeProcessInfo & /*probe_process_info*/)
-    {
-        for (size_t j = 0; j < num_columns_to_add; ++j)
-            added_columns[j]->insertFrom(
-                *it->getMapped().block->getByPosition(right_indexes[j]).column.get(),
-                it->getMapped().row_num);
-        return false;
-    }
-
-    static bool addNotFound(
-        size_t num_columns_to_add,
-        MutableColumns & added_columns,
-        size_t /*i*/,
-        IColumn::Offset & /*current_offset*/,
-        IColumn::Offsets * /*offsets*/,
-        ProbeProcessInfo & /*probe_process_info*/)
-    {
-        for (size_t j = 0; j < num_columns_to_add; ++j)
-            added_columns[j]->insertDefault();
-        return false;
-    }
-};
-
 template <ASTTableJoin::Kind KIND, typename Map>
 struct Adder<KIND, ASTTableJoin::Strictness::All, Map>
 {
@@ -1921,12 +1887,8 @@ void JoinPartition::probeBlock(
 
     if (kind == Inner && strictness == All)
         CALL(Inner, All, MapsAll, false)
-    else if (kind == LeftOuter && strictness == Any)
-        CALL(LeftOuter, Any, MapsAny, false)
     else if (kind == LeftOuter && strictness == All)
         CALL(LeftOuter, All, MapsAll, false)
-    else if (kind == Full && strictness == Any)
-        CALL(LeftOuter, Any, MapsAnyFull, false)
     else if (kind == Full && strictness == All)
         CALL(LeftOuter, All, MapsAllFull, false)
     else if (kind == RightOuter && strictness == All && !record_mapped_entry_column)
