@@ -115,7 +115,7 @@ private:
     void consumeResource(double ru, uint64_t cpu_time_in_ns_)
     {
         if unlikely (!consumeResourceNoExcept(ru, cpu_time_in_ns_))
-            throw ::DB::Exception(fmt::format("Exceeded resource group quota limitation: ", name));
+            throw ::DB::Exception(fmt::format("Exceeded resource group quota limitation: {}", name));
     }
 
     // Return true if consume succeed.

@@ -108,7 +108,7 @@ public:
             return true;
 
         const auto num = peek() - n;
-        return num < 0 && ((-num) / fill_rate) > dura_sec;
+        return num < 0 && ((-num) / tmp_fill_rate) > dura_sec;
     }
 
 private:
