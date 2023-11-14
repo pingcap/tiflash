@@ -705,8 +705,19 @@ public:
 
     ~LACBytesCollector()
     {
-        if (delta_bytes != 0)
+        if unlikely (delta_bytes != 0)
+        {
+            LOG_ERROR(log, "lac_bytes_collector missing calling forceCollect");
+        }
+
+        try
+        {
             consume();
+        }
+        catch (...)
+        {
+            LOG_ERROR(log, "got exception in destructor of lac_bytes_collector: {}", getCurrentExceptionMessage(true));
+        }
     }
 
     void collect(uint64_t bytes)
@@ -720,6 +731,12 @@ public:
         }
     }
 
+    void forceCollect()
+    {
+        if (delta_bytes != 0)
+            consume();
+    }
+
 private:
     void consume()
     {
@@ -730,6 +747,7 @@ private:
 
     const std::string resource_group_name;
     uint64_t delta_bytes;
+    const LoggerPtr log = Logger::get("LACBytesCollector");
 };
 using LACBytesCollectorPtr = std::unique_ptr<LACBytesCollector>;
 } // namespace DB

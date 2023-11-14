@@ -195,6 +195,9 @@ size_t ColumnFileSetReader::readRows(
     if (likely(context.scan_context))
         context.scan_context->total_user_read_bytes += delta_bytes;
 
+    if (actual_read == 0)
+        lac_bytes_collector.forceCollect();
+
     return actual_read;
 }
 

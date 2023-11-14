@@ -170,6 +170,7 @@ public:
                 (*current_stream)->readSuffix();
                 precede_stream_rows += rows[current_stream - children.begin()];
                 ++current_stream;
+                lac_bytes_collector.forceCollect();
             }
         }
         return res;
@@ -198,6 +199,7 @@ public:
                 (*current_stream)->readSuffix();
                 precede_stream_rows += rows[current_stream - children.begin()];
                 ++current_stream;
+                lac_bytes_collector.forceCollect();
             }
         }
 
