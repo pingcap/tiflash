@@ -58,12 +58,19 @@ mysql> insert into test.test_json values('[1, 2, null, [], {}, 1.11, \"a\", "a"]
 mysql> insert into test.test_json values('{"a":1, "b":1.11, "c":[], "d":"d", "e":{}}');
 mysql> alter table test.test_json set tiflash replica 1;
 
+mysql> drop table if exists test.test_decimal;
+mysql> CREATE TABLE test.test_decimal (col32 decimal(9, 1), col64 decimal(18, 1), col128 decimal(38, 1), col256 decimal(65, 1));
+mysql> insert into test.test_decimal values(null, null, null, null);
+mysql> insert into test.test_decimal values(0.1, 0.1, 0.1, 0.1);
+mysql> alter table test.test_decimal set tiflash replica 1;
+
 func> wait_table test test_int
 func> wait_table test test_float
 func> wait_table test test_str
 func> wait_table test test_time
 func> wait_table test test_duration
 func> wait_table test test_json
+func> wait_table test test_decimal
 
 # test
 ## cast int as json
@@ -363,34 +370,13 @@ mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; 
 +----------------------+
 
 ## cast time as json
-mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(col_d as json) from test.test_time;
-+---------------------+
-| cast(col_d as json) |
-+---------------------+
-| NULL                |
-| "2023-11-14"        |
-+---------------------+
-mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(col_dt as json) from test.test_time;
-+------------------------------+
-| cast(col_dt as json)         |
-+------------------------------+
-| NULL                         |
-| "2023-11-14 21:59:59.000000" |
-+------------------------------+
-mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(col_ts as json) from test.test_time;
-+------------------------------+
-| cast(col_ts as json)         |
-+------------------------------+
-| NULL                         |
-| "2023-11-14 21:59:59.000000" |
-+------------------------------+
-mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(col_y as json) from test.test_time;
-+---------------------+
-| cast(col_y as json) |
-+---------------------+
-| NULL                |
-| 2023                |
-+---------------------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(col_d as json),cast(col_dt as json),cast(col_ts as json),cast(col_y as json) from test.test_time;
++---------------------+------------------------------+------------------------------+---------------------+
+| cast(col_d as json) | cast(col_dt as json)         | cast(col_ts as json)         | cast(col_y as json) |
++---------------------+------------------------------+------------------------------+---------------------+
+| NULL                | NULL                         | NULL                         | NULL                |
+| "2023-11-14"        | "2023-11-14 21:59:59.000000" | "2023-11-14 21:59:59.000000" | 2023                |
++---------------------+------------------------------+------------------------------+---------------------+
 
 ## cast duration as json
 mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(col as json) from test.test_duration;
@@ -411,6 +397,15 @@ mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; 
 | {"a": 1, "b": 1.11, "c": [], "d": "d", "e": {}} |
 +-------------------------------------------------+
 
+# cast decimal as json
+mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(col32 as json),cast(col64 as json),cast(col128 as json),cast(col256 as json) from test.test_decimal;
++---------------------+---------------------+----------------------+----------------------+
+| cast(col32 as json) | cast(col64 as json) | cast(col128 as json) | cast(col256 as json) |
++---------------------+---------------------+----------------------+----------------------+
+| NULL                | NULL                | NULL                 | NULL                 |
+| 0.1                 | 0.1                 | 0.1                  | 0.1                  |
++---------------------+---------------------+----------------------+----------------------+
+
 # Clean up.
 mysql> drop table if exists test.test_int;
 mysql> drop table if exists test.test_float;
@@ -418,3 +413,4 @@ mysql> drop table if exists test.test_str;
 mysql> drop table if exists test.test_time;
 mysql> drop table if exists test.test_duration;
 mysql> drop table if exists test.test_json;
+mysql> drop table if exists test.test_decimal;
