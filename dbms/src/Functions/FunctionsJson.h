@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <common/JSON.h>
 #include <Columns/ColumnConst.h>
 #include <Columns/ColumnFixedString.h>
 #include <Columns/ColumnString.h>
@@ -38,8 +39,6 @@
 #include <magic_enum.hpp>
 #include <type_traits>
 
-#include "common/types.h"
-
 namespace DB
 {
 /** Json related functions:
@@ -51,6 +50,7 @@ namespace DB
   * cast_json_as_string(json_object)
   * json_length(json_object)
   * json_array(json_object...)
+  * cast(column as json)
   *
   */
 
@@ -826,7 +826,7 @@ public:
 
     size_t getNumberOfArguments() const override { return 1; }
 
-    bool useDefaultImplementationForNulls() const override { return true; }
+    bool useDefaultImplementationForNulls() const override { return false; }
     bool useDefaultImplementationForConstants() const override { return true; }
 
     void setInputTiDBFieldType(const tipb::FieldType & tidb_tp_) { input_tidb_tp = &tidb_tp_; }
@@ -834,15 +834,33 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
-        if unlikely (!arguments[0]->isStringOrFixedString())
+        const auto & input_type = arguments[0];
+        if (input_type->onlyNull())
+        {
+            return input_type;
+        }
+
+        if unlikely (!removeNullable(input_type)->isStringOrFixedString())
             throw Exception(
                 fmt::format("Illegal type {} of argument of function {}", arguments[0]->getName(), getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-        return std::make_shared<DataTypeString>();
+        auto return_type = std::make_shared<DataTypeString>();
+        return input_type->isNullable() ? makeNullable(return_type) : return_type;
     }
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
+        const auto & from = block.getByPosition(arguments[0]);
+        if (from.type->onlyNull())
+        {
+            auto only_null_column = from.column;
+            block.getByPosition(result).column = std::move(only_null_column);
+            return;
+        }
+
+        auto nested_block = createBlockWithNestedColumns(block, arguments);
+        auto input_source = createDynamicStringSource(*nested_block.getByPosition(arguments[0]).column);
+
         auto col_to = ColumnString::create();
         auto & data_to = col_to->getChars();
         JsonBinary::JsonBinaryWriteBuffer write_buffer(data_to);
@@ -850,18 +868,15 @@ public:
         auto rows = block.rows();
         offsets_to.resize(rows);
 
-        const auto & from = block.getByPosition(arguments[0]);
-        auto source = createDynamicStringSource(*from.column);
-
         // In raw function test, input_tidb_tp is nullptr.
-        if (collator->isBinary())
+        if (collator && collator->isBinary())
         {
             if ((unlikely(input_tidb_tp == nullptr)) || input_tidb_tp->tp() == TiDB::TypeString)
             {
                 doExecuteForBinary<true>(
                     write_buffer,
                     offsets_to,
-                    source,
+                    input_source,
                     input_tidb_tp->tp(),
                     input_tidb_tp->flen(),
                     block.rows());
@@ -871,7 +886,7 @@ public:
                 doExecuteForBinary<false>(
                     write_buffer,
                     offsets_to,
-                    source,
+                    input_source,
                     input_tidb_tp->tp(),
                     input_tidb_tp->flen(),
                     block.rows());
@@ -879,15 +894,32 @@ public:
         }
         else if ((unlikely(input_tidb_tp == nullptr)) || hasParseToJSONFlag(*input_tidb_tp))
         {
-            doExecuteForParsingJson(write_buffer, offsets_to, source, block.rows());
+            if (from.column->isColumnNullable())
+            {
+                const auto & column_nullable = static_cast<const ColumnNullable &>(*from.column);
+                doExecuteForParsingJson2<true>(write_buffer, offsets_to, input_source, column_nullable.getNullMapData(), block.rows());
+            }
+            else
+            {
+                auto tmp_null_map = ColumnUInt8::create(0, 0);
+                doExecuteForParsingJson2<false>(write_buffer, offsets_to, input_source, tmp_null_map->getData(), block.rows());
+            }
         }
         else
         {
-            doExecuteForOthers(write_buffer, offsets_to, source, block.rows());
+            doExecuteForOthers(write_buffer, offsets_to, input_source, block.rows());
         }
 
         data_to.resize(write_buffer.count());
-        block.getByPosition(result).column = std::move(col_to);
+        if (from.column->isColumnNullable())
+        {
+            auto null_map = static_cast<const ColumnNullable &>(*from.column).getNullMapColumnPtr();
+            block.getByPosition(result).column = ColumnNullable::create(std::move(col_to), std::move(null_map));
+        }
+        else
+        {
+            block.getByPosition(result).column = std::move(col_to);
+        }
     }
 
 private:
@@ -895,14 +927,14 @@ private:
     static void doExecuteForBinary(
         JsonBinary::JsonBinaryWriteBuffer & data_to,
         ColumnString::Offsets & offsets_to,
-        const std::unique_ptr<IStringSource> & from_data,
+        const std::unique_ptr<IStringSource> & data_from,
         UInt8 from_type_code,
         size_t flen,
         size_t size)
     {
         for (size_t i = 0; i < size; ++i)
         {
-            const auto & slice = from_data->getWhole();
+            const auto & slice = data_from->getWhole();
             if constexpr (is_binary_str)
             {
                 if (slice.size >= flen)
@@ -927,29 +959,93 @@ private:
             }
             writeChar(0, data_to);
             offsets_to[i] = data_to.count();
-            from_data->next();
+            data_from->next();
         }
     }
 
+    template<bool is_nullable>
     static void doExecuteForParsingJson(
         JsonBinary::JsonBinaryWriteBuffer & data_to,
         ColumnString::Offsets & offsets_to,
-        const std::unique_ptr<IStringSource> & from_data,
+        const std::unique_ptr<IStringSource> & data_from,
+        const NullMap & null_map_from,
         size_t size)
     {
+        Poco::JSON::Parser parser;
         for (size_t i = 0; i < size; ++i)
         {
-            const auto & slice = from_data->getWhole();
-            if (unlikely(slice.size == 0))
-                throw Exception("The document is empty");
+            if constexpr (is_nullable)
+            {
+                if (null_map_from[i])
+                {
+                    writeChar(0, data_to);
+                    offsets_to[i] = data_to.count();
+                    data_from->next();
+                    continue;
+                }
+            }
 
-            Poco::JSON::Parser parser;
-            Poco::Dynamic::Var result = parser.parse(StringRef{slice.data, slice.size}.toString());
+            const auto & slice = data_from->getWhole();
+            if (unlikely(slice.size == 0))
+                throw Exception("Invalid JSON text: The document is empty.");
+
+            parser.reset();
+            Poco::Dynamic::Var result;
+            try
+            {
+                result = parser.parse(StringRef{slice.data, slice.size}.toString());
+            }
+            catch (Poco::Exception & e)
+            {
+                throw Exception(fmt::format("Invalid JSON text: The document root must not be followed by other values, details: {}", e.message()));
+            }
             extractJsonVar(result, data_to);
 
             writeChar(0, data_to);
             offsets_to[i] = data_to.count();
-            from_data->next();
+            data_from->next();
+        }
+    }
+
+    template<bool is_nullable>
+    static void doExecuteForParsingJson2(
+        JsonBinary::JsonBinaryWriteBuffer & data_to,
+        ColumnString::Offsets & offsets_to,
+        const std::unique_ptr<IStringSource> & data_from,
+        const NullMap & null_map_from,
+        size_t size)
+    {
+        for (size_t i = 0; i < size; ++i)
+        {
+            if constexpr (is_nullable)
+            {
+                if (null_map_from[i])
+                {
+                    writeChar(0, data_to);
+                    offsets_to[i] = data_to.count();
+                    data_from->next();
+                    continue;
+                }
+            }
+
+            const auto & slice = data_from->getWhole();
+            if (unlikely(slice.size == 0))
+                throw Exception("Invalid JSON text: The document is empty.");
+
+            try
+            {
+                const char * data_begin = reinterpret_cast<const char *>(slice.data);
+                JSON json_var(data_begin, data_begin + slice.size);
+                extractJsonVar2(json_var, data_to);
+            }
+            catch (JSONException & e)
+            {
+                throw Exception(fmt::format("Invalid JSON text: The document root must not be followed by other values, details: {}", e.message()));
+            }
+
+            writeChar(0, data_to);
+            offsets_to[i] = data_to.count();
+            data_from->next();
         }
     }
 
@@ -1028,6 +1124,60 @@ private:
         else
         {
             throw Exception(ErrorCodes::UNKNOWN_TYPE, "unknown type: {}", var.type().name());
+        }
+    }
+
+    static void extractJsonVar2(const JSON & json, JsonBinary::JsonBinaryWriteBuffer & write_buffer)
+    {
+        if (json.isObject())
+        {
+            std::map<String, JsonBinary> json_elems;
+            ColumnString::Chars_t tmp_buf;
+            JsonBinary::JsonBinaryWriteBuffer tmp_write_buffer(tmp_buf);
+            for (const auto & entry : json)
+            {
+                if (unlikely(!entry.isNameValuePair()))
+                    throw JSONException("");
+                size_t begin = tmp_write_buffer.count();
+                extractJsonVar2(entry.getValue(), tmp_write_buffer);
+                size_t size = tmp_write_buffer.count() - begin;
+                json_elems.emplace(entry.getName(), JsonBinary{tmp_buf[begin], StringRef(&tmp_buf[begin + 1], size - 1)});
+            }
+            JsonBinary::buildBinaryJsonObjectInBuffer(json_elems, write_buffer);
+        }
+        else if (json.isArray())
+        {
+            std::vector<JsonBinary> json_elems;
+            ColumnString::Chars_t tmp_buf;
+            JsonBinary::JsonBinaryWriteBuffer tmp_write_buffer(tmp_buf);
+            for (const auto & elem : json)
+            {
+                size_t begin = tmp_write_buffer.count();
+                extractJsonVar2(elem, tmp_write_buffer);
+                size_t size = tmp_write_buffer.count() - begin;
+                json_elems.emplace_back(tmp_buf[begin], StringRef(&tmp_buf[begin + 1], size - 1));
+            }
+            JsonBinary::buildBinaryJsonArrayInBuffer(json_elems, write_buffer);
+        }
+        else if (json.isBool())
+        {
+            JsonBinary::appendNumber(write_buffer, json.getBool());
+        }
+        else if (json.isNumber())
+        {
+            JsonBinary::appendNumber(write_buffer, json.getDouble());
+        }
+        else if (json.isString())
+        {
+            JsonBinary::appendStringRef(write_buffer, json.getRawString());
+        }
+        else if (json.isNull())
+        {
+            JsonBinary::appendNull(write_buffer);
+        }
+        else
+        {
+            throw Exception(ErrorCodes::UNKNOWN_TYPE, "unknown type: {}", magic_enum::enum_name(json.getType()));
         }
     }
 

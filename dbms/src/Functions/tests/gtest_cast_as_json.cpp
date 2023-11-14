@@ -16,15 +16,17 @@
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TiDB/Decode/JsonBinary.h>
+#include <gtest/gtest.h>
 
 #include <string>
 #include <type_traits>
 #include <vector>
+#include <Common/Exception.h>
 
 namespace DB::tests
 {
 /**
-  * Because all the functions that cast xx as json have 
+  * Because all the functions(except cast string as json) that cast xx as json have 
   *    ```
   *    bool useDefaultImplementationForNulls() const override { return true; }
   *    bool useDefaultImplementationForConstants() const override { return true; }
@@ -48,8 +50,6 @@ public:
         {
             json_column = executeFunction(func_name, columns);
         }
-        static auto json_return_type = std::make_shared<DataTypeString>();
-        assert(json_return_type->equals(*json_column.type));
         // The `json_binary` should be cast as a string to improve readability.
         return executeFunction("cast_json_as_string", {json_column});
     }
@@ -222,12 +222,102 @@ try
 }
 CATCH
 
+// TODO
 TEST_F(TestCastAsJson, CastStringAsJson)
 try
 {
     // Only raw function test is tested, so input_tidb_tp is always nullptr and only the case of parsing json is tested here.
+    // Because of `bool useDefaultImplementationForNulls() const override { return true; }`, null column is need to be tested here.
 
     const String func_name = "cast_string_as_json";
+
+    /// case1 only null
+    {
+        ColumnWithTypeAndName only_null_const = createOnlyNullColumnConst(1);
+        ColumnsWithTypeAndName input{only_null_const};
+        auto res = executeFunction(func_name, input, nullptr, true);
+        ASSERT_COLUMN_EQ(only_null_const, res);
+    }
+
+    /// case2 nullable column
+    {
+        ColumnWithTypeAndName nullable_column = createColumn<Nullable<String>>({{}, "[]"});
+        auto res = executeFunctionWithCast<true>(func_name, {nullable_column});
+        ASSERT_COLUMN_EQ(nullable_column, res);
+    }
+    // invalid json text.
+    {
+        ColumnWithTypeAndName nullable_column = createColumn<Nullable<String>>({""});
+        ASSERT_THROW(executeFunctionWithCast<true>(func_name, {nullable_column}), Exception);
+    }
+    {
+        ColumnWithTypeAndName nullable_column = createColumn<Nullable<String>>({"dsadhgashg"});
+        ASSERT_THROW(executeFunctionWithCast<true>(func_name, {nullable_column}), Exception);
+    }
+
+    /// case3 not null
+    // invalid json text
+    {
+        ColumnWithTypeAndName nullable_column = createColumn<Nullable<String>>({""});
+        ASSERT_THROW(executeFunctionWithCast<true>(func_name, {nullable_column}), Exception);
+    }
+    {
+        ColumnWithTypeAndName nullable_column = createColumn<Nullable<String>>({"a"});
+        ASSERT_THROW(executeFunctionWithCast<true>(func_name, {nullable_column}), Exception);
+    }
+    {
+        ColumnWithTypeAndName nullable_column = createColumn<Nullable<String>>({"{fds, 1}"});
+        ASSERT_THROW(executeFunctionWithCast<true>(func_name, {nullable_column}), Exception);
+    }
+    // valid json text
+    // a. literal
+    executeAndAssert<String, true>(func_name, "1", "1");
+    executeAndAssert<String, true>(func_name, "1.11", "1.11");
+    executeAndAssert<String, true>(func_name, "\"a\"", "\"a\"");
+    executeAndAssert<String, true>(func_name, "true", "true");
+    executeAndAssert<String, true>(func_name, "false", "false");
+    executeAndAssert<String, true>(func_name, "null", "null");
+    // b. json array
+    executeAndAssert<String, true>(func_name, "[]", "[]");
+    executeAndAssert<String, true>(func_name, "[1, 1000, 2.22, \"a\", null]", "[1, 1000, 2.22, \"a\", null]");
+    // executeAndAssert<String, true>(func_name, R"([1, 1000, 2.22, "a", null, {"a":1.11}])", R"([1, 1000, 2.22, "a", null, {"a":1.11}])");
+    // executeAndAssert<String, true>(func_name, "[[[[[[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]]]]]]", "[[[[[[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]]]]]]");
+    // c. json object
+    // executeAndAssert<String, true>(func_name, "{}", "{}");
+    // todo fix bug of encode json obj
+    // executeAndAssert<String, true>(func_name, "{\"a\":1}", "{\"a\":1}");
+    // executeAndAssert<String, true>(func_name, R"({"a":null,"b":1,"c":1.11,"d":[],"e":{}})", R"({"a":null,"b":1,"c":1.11,"d":[],"e":{}})");
+}
+CATCH
+
+TEST_F(TestCastAsJson, CastTimeAsJson)
+try
+{
+    static auto const datetime_type_ptr = std::make_shared<DataTypeMyDateTime>(6);
+    static auto const date_type_ptr = std::make_shared<DataTypeMyDate>();
+
+    // DataTypeMyDateTime
+    {
+        auto data_col_ptr = createColumn<DataTypeMyDateTime::FieldType>({
+            MyDateTime(2023, 1, 2, 3, 4, 5, 6).toPackedUInt(),
+            MyDateTime(0, 0, 0, 0, 0, 0, 0).toPackedUInt()}).column;
+        ColumnWithTypeAndName input(data_col_ptr, datetime_type_ptr, "");
+        auto res = executeFunctionWithCast("cast_time_as_json", {input});
+        auto expect = createColumn<Nullable<String>>({"\"2023-01-02 03:04:05.000006\"", "\"0000-00-00 00:00:00.000000\""});
+        ASSERT_COLUMN_EQ(expect, res);
+    }
+
+    // DataTypeMyDate
+    // Only raw function test is tested, so input_tidb_tp is always nullptr and only the case of TiDB::TypeTimestamp is tested here.
+    {
+        auto data_col_ptr = createColumn<DataTypeMyDate::FieldType>({
+                                                               MyDate(2023, 12, 31).toPackedUInt(),
+                                                               MyDate(0, 0, 0).toPackedUInt()}).column;
+        ColumnWithTypeAndName input(data_col_ptr, date_type_ptr, "");
+        auto res = executeFunctionWithCast("cast_time_as_json", {input});
+        auto expect = createColumn<Nullable<String>>({"\"2023-12-31\"", "\"0000-00-00\""});
+        ASSERT_COLUMN_EQ(expect, res);
+    }
 }
 CATCH
 
