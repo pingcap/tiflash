@@ -132,7 +132,7 @@ bool SegmentReadTaskScheduler::needScheduleToRead(const SegmentReadTaskPoolPtr &
         GET_METRIC(tiflash_storage_read_thread_counter, type_sche_no_ru).Increment();
         return false;
     }
-    
+
     // No segment to be scheduled.
     if (!merged_task_pool.has(pool->pool_id) && pool->getFreeActiveSegments() <= 0)
     {
