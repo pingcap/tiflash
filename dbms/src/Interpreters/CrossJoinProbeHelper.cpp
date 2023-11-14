@@ -601,7 +601,7 @@ std::pair<Block, bool> crossProbeBlockShallowCopyRightBlockImpl(
     {
         /// left columns
         auto left_column_index = probe_process_info.left_column_index_in_left_block[i];
-        assert(block.getByPosition(left_column_index).column != nullptr);
+        assert(probe_process_info.block.getByPosition(left_column_index).column != nullptr);
         Field value;
         probe_process_info.block.getByPosition(left_column_index).column->get(probe_process_info.start_row, value);
         block.getByPosition(i).column = block.getByPosition(i).type->createColumnConst(right_row, value);

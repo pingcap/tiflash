@@ -1526,10 +1526,17 @@ Block Join::doJoinBlockCross(ProbeProcessInfo & probe_process_info) const
                 /// state is saved in `probe_process_info`
                 handleOtherConditionsForOneProbeRow(block, probe_process_info);
             }
-            for (size_t i = 0; i < probe_process_info.block.columns(); ++i)
+            for (size_t i = 0; i < probe_process_info.left_column_index_in_left_block.size(); ++i)
             {
-                if (block.getByPosition(i).column->isColumnConst())
-                    block.getByPosition(i).column = block.getByPosition(i).column->convertToFullColumnIfConst();
+                auto & name
+                    = probe_process_info.block.getByPosition(probe_process_info.left_column_index_in_left_block[i])
+                          .name;
+                if (block.has(name))
+                {
+                    auto & column_and_name = block.getByName(name);
+                    if (column_and_name.column->isColumnConst())
+                        column_and_name.column = column_and_name.column->convertToFullColumnIfConst();
+                }
             }
             if (isLeftOuterSemiFamily(kind))
             {
