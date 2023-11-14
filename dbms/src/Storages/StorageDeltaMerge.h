@@ -36,6 +36,8 @@ namespace DB
 {
 struct CheckpointInfo;
 using CheckpointInfoPtr = std::shared_ptr<CheckpointInfo>;
+struct CheckpointIngestInfo;
+using CheckpointIngestInfoPtr = std::shared_ptr<CheckpointIngestInfo>;
 namespace DM
 {
 struct RowKeyRange;
@@ -119,6 +121,11 @@ public:
         const DM::RowKeyRange & range,
         const std::vector<DM::ExternalDTFileInfo> & external_files,
         bool clear_data_in_range,
+        const Settings & settings);
+
+    void buildSegmentsFromCheckpointInfo(
+        const DM::RowKeyRange & range,
+        CheckpointInfoPtr checkpoint_info,
         const Settings & settings);
 
     void ingestSegmentsFromCheckpointInfo(

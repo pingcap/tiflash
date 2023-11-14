@@ -21,6 +21,8 @@
 namespace DB
 {
 using FAPAsyncTasks = AsyncTasks<uint64_t, std::function<FastAddPeerRes()>, FastAddPeerRes>;
+struct CheckpointIngestInfo;
+using CheckpointIngestInfoPtr = std::shared_ptr<CheckpointIngestInfo>;
 
 class FastAddPeerContext
 {
@@ -32,6 +34,12 @@ public:
         Context & context,
         UInt64 store_id,
         UInt64 required_seq);
+
+    CheckpointIngestInfoPtr getOrCreateCheckpointIngestInfo(
+        TMTContext & tmt,
+        const struct TiFlashRaftProxyHelper * proxy_helper,
+        UInt64 region_id,
+        UInt64 peer_id);
 
 public:
     std::shared_ptr<FAPAsyncTasks> tasks_trace;
@@ -61,6 +69,9 @@ private:
     // Store the latest manifest data for every store
     // StoreId -> std::pair<UploadSeq, CheckpointCacheElementPtr>
     std::unordered_map<UInt64, std::pair<UInt64, CheckpointCacheElementPtr>> checkpoint_cache_map;
+
+    // Checkpoint that is persisted, but yet to be ingested into DeltaTree.
+    std::map<UInt64, CheckpointIngestInfoPtr> checkpoint_ingest_info_map;
 
     LoggerPtr log;
 };

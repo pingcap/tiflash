@@ -32,6 +32,7 @@
 #include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 #include <Storages/KVStore/Decode/DecodingStorageSchemaSnapshot.h>
+#include <Storages/KVStore/MultiRaft/Disagg/CheckpointIngestInfo.h>
 #include <Storages/Page/PageStorage_fwd.h>
 #include <TiDB/Schema/TiDB.h>
 
@@ -338,6 +339,21 @@ public:
         const SegmentPtr & segment,
         const RowKeyRange & ingest_range,
         const SegmentPtr & segment_to_ingest);
+
+    void buildSegmentsFromCheckpointInfo(
+        const DMContextPtr & dm_context,
+        const DM::RowKeyRange & range,
+        CheckpointInfoPtr checkpoint_info);
+
+    void buildSegmentsFromCheckpointInfo(
+        const Context & db_context,
+        const DB::Settings & db_settings,
+        const DM::RowKeyRange & range,
+        CheckpointInfoPtr checkpoint_info)
+    {
+        auto dm_context = newDMContext(db_context, db_settings);
+        return buildSegmentsFromCheckpointInfo(dm_context, range, checkpoint_info);
+    }
 
     void ingestSegmentsFromCheckpointInfo(
         const DMContextPtr & dm_context,

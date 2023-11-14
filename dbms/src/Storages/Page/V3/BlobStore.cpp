@@ -150,6 +150,7 @@ void BlobStore<Trait>::reloadConfig(const BlobConfig & rhs)
     reload_page_type_config(
         PageType::RaftData,
         PageTypeConfig{.heavy_gc_valid_rate = config.heavy_gc_valid_rate_raft_data});
+    reload_page_type_config(PageType::Local, PageTypeConfig{.heavy_gc_valid_rate = config.heavy_gc_valid_rate});
 }
 
 template <typename Trait>

@@ -23,6 +23,8 @@
 #include <Storages/Page/V3/Universal/UniversalPageId.h>
 #include <fmt/format.h>
 
+#include <magic_enum.hpp>
+
 namespace DB
 {
 // General UniversalPageId Format: Prefix + PageIdU64.
@@ -95,6 +97,7 @@ public:
 
     static constexpr char RAFT_PREFIX = 0x01;
     static constexpr char KV_PREFIX = 0x02;
+    static constexpr char LOCAL_KV_PREFIX = 0x03;
 
     // data is in kv engine, so it is prepended by KV_PREFIX
     // KV_PREFIX LOCAL_PREFIX REGION_RAFT_PREFIX region_id APPLY_STATE_SUFFIX
@@ -143,6 +146,22 @@ public:
         writeChar(0x02, buff);
         encodeUInt64(region_id, buff);
         writeChar(0x01, buff);
+        return buff.releaseStr();
+    }
+
+    enum class LocalKVKeyType : uint64_t
+    {
+        FAPIngestRegion = 1,
+        FAPIngestSegments,
+    };
+
+    // LOCAL_PREFIX type region_id
+    static String toLocalKVPrefix(LocalKVKeyType type, UInt64 region_id)
+    {
+        WriteBufferFromOwnString buff;
+        writeChar(LOCAL_KV_PREFIX, buff);
+        encodeUInt64(magic_enum::enum_underlying(type), buff);
+        encodeUInt64(region_id, buff);
         return buff.releaseStr();
     }
 

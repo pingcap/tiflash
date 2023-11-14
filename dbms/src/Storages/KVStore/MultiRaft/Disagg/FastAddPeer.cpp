@@ -22,6 +22,7 @@
 #include <Storages/KVStore/FFI/ProxyFFICommon.h>
 #include <Storages/KVStore/KVStore.h>
 #include <Storages/KVStore/MultiRaft/Disagg/CheckpointInfo.h>
+#include <Storages/KVStore/MultiRaft/Disagg/CheckpointIngestInfo.h>
 #include <Storages/KVStore/MultiRaft/Disagg/FastAddPeer.h>
 #include <Storages/KVStore/MultiRaft/Disagg/FastAddPeerCache.h>
 #include <Storages/KVStore/Region.h>
@@ -39,89 +40,13 @@
 #include <Storages/S3/S3Filename.h>
 #include <Storages/S3/S3GCManager.h>
 #include <Storages/S3/S3RandomAccessFile.h>
+#include <Storages/StorageDeltaMerge.h>
 #include <fmt/core.h>
+
+#include <memory>
 
 namespace DB
 {
-FastAddPeerContext::FastAddPeerContext(uint64_t thread_count)
-    : log(Logger::get())
-{
-    if (thread_count == 0)
-    {
-        static constexpr int ffi_handle_sec = 5;
-        static constexpr int region_per_sec = 2;
-        thread_count = ffi_handle_sec * region_per_sec;
-    }
-    tasks_trace = std::make_shared<FAPAsyncTasks>(thread_count);
-}
-
-ParsedCheckpointDataHolderPtr FastAddPeerContext::CheckpointCacheElement::getParsedCheckpointData(Context & context)
-{
-    std::unique_lock lock(mu);
-    if (!parsed_checkpoint_data)
-    {
-        parsed_checkpoint_data = buildParsedCheckpointData(context, manifest_key, dir_seq);
-    }
-    return parsed_checkpoint_data;
-}
-
-std::pair<UInt64, ParsedCheckpointDataHolderPtr> FastAddPeerContext::getNewerCheckpointData(
-    Context & context,
-    UInt64 store_id,
-    UInt64 required_seq)
-{
-    CheckpointCacheElementPtr cache_element = nullptr;
-    UInt64 cache_seq = 0;
-    {
-        std::unique_lock lock{cache_mu};
-        auto iter = checkpoint_cache_map.find(store_id);
-        if (iter != checkpoint_cache_map.end() && (iter->second.first > required_seq))
-        {
-            cache_seq = iter->second.first;
-            cache_element = iter->second.second;
-        }
-    }
-
-    if (!cache_element)
-    {
-        auto s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
-        const auto manifests = S3::CheckpointManifestS3Set::getFromS3(*s3_client, store_id);
-        if (manifests.empty())
-        {
-            LOG_DEBUG(log, "no manifest on this store, skip store_id={}", store_id);
-            return std::make_pair(required_seq, nullptr);
-        }
-        const auto & latest_manifest_key = manifests.latestManifestKey();
-        auto latest_manifest_key_view = S3::S3FilenameView::fromKey(latest_manifest_key);
-        auto latest_upload_seq = latest_manifest_key_view.getUploadSequence();
-        if (latest_upload_seq <= required_seq)
-        {
-            return std::make_pair(required_seq, nullptr);
-        }
-        // check whether there is some other thread downloading the current or newer manifest
-        {
-            std::unique_lock lock{cache_mu};
-            auto iter = checkpoint_cache_map.find(store_id);
-            if (iter != checkpoint_cache_map.end() && (iter->second.first >= latest_upload_seq))
-            {
-                cache_seq = iter->second.first;
-                cache_element = iter->second.second;
-            }
-            else
-            {
-                checkpoint_cache_map.erase(store_id);
-                cache_seq = latest_upload_seq;
-                cache_element = std::make_shared<CheckpointCacheElement>(latest_manifest_key, temp_ps_dir_sequence++);
-                checkpoint_cache_map.emplace(store_id, std::make_pair(latest_upload_seq, cache_element));
-            }
-        }
-    }
-
-    // Now we try to parse the lastest manifest of this store.
-    auto checkpoint_data = cache_element->getParsedCheckpointData(context);
-    return std::make_pair(cache_seq, checkpoint_data);
-}
-
 FastAddPeerRes genFastAddPeerRes(FastAddPeerStatus status, std::string && apply_str, std::string && region_str)
 {
     auto * apply = RawCppString::New(apply_str);
@@ -336,6 +261,20 @@ FastAddPeerRes FastAddPeerImpl(EngineStoreServerWrap * server, uint64_t region_i
         }
         after_build();
 
+        // Ingest segments
+        auto & storages = server->tmt->getStorages();
+        auto keyspace_id = region->getKeyspaceID();
+        auto table_id = region->getMappedTableID();
+        auto storage = storages.get(keyspace_id, table_id);
+        if (storage && storage->engineType() == TiDB::StorageEngine::DT)
+        {
+            auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
+        }
+        else
+        {
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "unsupported storage engine");
+        }
+
         // Write raft log to uni ps, we do this here because we store raft log seperately.
         // TODO(fap) Move this to `ApplyFapSnapshot` if the peer is not the first one of this region.
         // TODO(fap) Maybe need to clean stale data.
@@ -362,17 +301,27 @@ FastAddPeerRes FastAddPeerImpl(EngineStoreServerWrap * server, uint64_t region_i
     }
     catch (...)
     {
-        DB::tryLogCurrentException("FastAddPeerImpl", "Failed when try to restore from checkpoint region_id={} new_peer_id={}", region_id, new_peer_id);
+        DB::tryLogCurrentException(
+            "FastAddPeerImpl",
+            fmt::format(
+                "Failed when try to restore from checkpoint region_id={} new_peer_id={}",
+                region_id,
+                new_peer_id));
         return genFastAddPeerRes(FastAddPeerStatus::BadData, "", "");
     }
 }
 
-void ApplyFapSnapshot(EngineStoreServerWrap * server, uint64_t region_id, uint64_t peer_id) {
+void ApplyFapSnapshot(EngineStoreServerWrap * server, uint64_t region_id, uint64_t peer_id)
+{
     try
     {
         Stopwatch watch_ingest;
+        RUNTIME_CHECK_MSG(server->tmt, "TMTContext is null");
         auto kvstore = server->tmt->getKVStore();
-        kvstore->handleIngestCheckpoint(region, checkpoint_info, *server->tmt);
+        auto fap_ctx = server->tmt->getContext().getSharedContextDisagg()->fap_context;
+        auto checkpoint_ingest_info
+            = fap_ctx->getOrCreateCheckpointIngestInfo(*server->tmt, server->proxy_helper, region_id, peer_id);
+        kvstore->handleIngestCheckpoint(checkpoint_ingest_info->getRegion(), checkpoint_ingest_info, *server->tmt);
         GET_METRIC(tiflash_fap_task_duration_seconds, type_ingest_stage).Observe(watch_ingest.elapsedSeconds());
         GET_METRIC(tiflash_fap_task_result, type_succeed).Increment();
     }
@@ -380,7 +329,11 @@ void ApplyFapSnapshot(EngineStoreServerWrap * server, uint64_t region_id, uint64
     {
         DB::tryLogCurrentException(
             "FastAddPeerApply",
-            fmt::format("Failed when try to apply fap snapshot region_id={} peer_id={} {}", region_id, peer_id, StackTrace().toString()));
+            fmt::format(
+                "Failed when try to apply fap snapshot region_id={} peer_id={} {}",
+                region_id,
+                peer_id,
+                StackTrace().toString()));
         return;
     }
 }
@@ -439,7 +392,11 @@ FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, u
     {
         DB::tryLogCurrentException(
             "FastAddPeer",
-            fmt::format("Failed when try to restore from checkpoint region_id={} new_peer_id={} {}", region_id, new_peer_id, StackTrace().toString()));
+            fmt::format(
+                "Failed when try to restore from checkpoint region_id={} new_peer_id={} {}",
+                region_id,
+                new_peer_id,
+                StackTrace().toString()));
         return genFastAddPeerRes(FastAddPeerStatus::OtherError, "", "");
     }
 }

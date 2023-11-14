@@ -324,7 +324,7 @@ template void KVStore::onSnapshot<RegionPtrWithSnapshotFiles>(
     UInt64,
     TMTContext &);
 
-void KVStore::handleIngestCheckpoint(RegionPtr region, CheckpointInfoPtr checkpoint_info, TMTContext & tmt)
+void KVStore::handleIngestCheckpoint(RegionPtr region, CheckpointIngestInfoPtr checkpoint_info, TMTContext & tmt)
 {
     applyPreHandledSnapshot(RegionPtrWithCheckpointInfo{region, checkpoint_info}, tmt);
 }
