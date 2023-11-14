@@ -16,6 +16,7 @@
 
 #include <Common/Logger.h>
 #include <common/logger_useful.h>
+#include <common/likely.h>
 
 #include <chrono>
 #include <memory>
@@ -97,15 +98,17 @@ public:
     }
 
     // Return true if wll be throttled, a.k.a. when the future dura_sec tokens cannot cover.
-    bool willBeThrottled(double n, const TimePoint & now, uint64_t dura_sec) const
+    bool willBeThrottled(double n, uint64_t user_ru_per_sec, uint64_t dura_sec) const
     {
-        if (fill_rate > 0)
-        {
-            auto num = peek(now) - n;
-            if (num < 0 && ((-num) / fill_rate) > dura_sec)
-                return true;
-        }
-        return false;
+        double tmp_fill_rate = fill_rate;
+        if (tmp_fill_rate == 0.0)
+            tmp_fill_rate = static_cast<double>(user_ru_per_sec);
+
+        if unlikely (tmp_fill_rate == 0.0)
+            return true;
+
+        const auto num = peek() - n;
+        return num < 0 && ((-num) / fill_rate) > dura_sec;
     }
 
 private:

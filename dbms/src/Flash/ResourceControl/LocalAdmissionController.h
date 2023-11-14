@@ -112,19 +112,19 @@ private:
 
     std::string getName() const { return name; }
 
-    void consumeResource(double ru, uint64_t cpu_time_in_ns_, const SteadyClock::time_point & now)
+    void consumeResource(double ru, uint64_t cpu_time_in_ns_)
     {
-        if unlikely (!consumeResourceNoExcept(ru, cpu_time_in_ns_, now))
+        if unlikely (!consumeResourceNoExcept(ru, cpu_time_in_ns_))
             throw ::DB::Exception(fmt::format("Exceeded resource group quota limitation: ", name));
     }
 
     // Return true if consume succeed.
-    bool consumeResourceNoExcept(double ru, uint64_t cpu_time_in_ns_, const SteadyClock::time_point & now)
+    bool consumeResourceNoExcept(double ru, uint64_t cpu_time_in_ns_)
     {
         std::lock_guard lock(mu);
         if (!burstable)
         {
-            if unlikely (bucket->willBeThrottled(ru, now, MAX_THROTTLE_DURATION_SEC))
+            if unlikely (bucket->willBeThrottled(ru, user_ru_per_sec, MAX_THROTTLE_DURATION_SEC))
                 return false;
             bucket->consume(ru);
         }
@@ -462,11 +462,10 @@ public:
             return;
         }
 
-        const auto now = SteadyClock::now();
         // May throw exception when resource is throttled.
-        group->consumeResource(ru, cpu_time_in_ns, now);
+        group->consumeResource(ru, cpu_time_in_ns);
 
-        if (group->lowToken() || group->trickleModeLeaseExpire(now))
+        if (group->lowToken() || group->trickleModeLeaseExpire(SteadyClock::now()))
         {
             {
                 std::lock_guard lock(mu);
