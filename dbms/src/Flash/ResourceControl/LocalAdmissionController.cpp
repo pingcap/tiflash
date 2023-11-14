@@ -187,7 +187,7 @@ std::optional<LocalAdmissionController::AcquireTokenInfo> LocalAdmissionControll
             return;
 
         // To avoid low token fetch too frequent.
-        if (!is_periodically_fetch && !resource_group->needFetchToken(now, MIN_LOW_TOKEN_FETCH_INTERVAL))
+        if (!is_periodically_fetch && !resource_group->needFetchToken(now, DEFAULT_LOW_TOKEN_FETCH_INTERVAL))
             return;
 
         // During trickle mode, no need to fetch tokens from GAC.
