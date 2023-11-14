@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Columns/ColumnNullable.h>
+#include <Common/Exception.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TiDB/Decode/JsonBinary.h>
@@ -21,7 +22,6 @@
 #include <string>
 #include <type_traits>
 #include <vector>
-#include <Common/Exception.h>
 
 namespace DB::tests
 {
@@ -38,7 +38,7 @@ namespace DB::tests
 class TestCastAsJson : public DB::tests::FunctionTest
 {
 public:
-    template<bool is_raw = false>
+    template <bool is_raw = false>
     ColumnWithTypeAndName executeFunctionWithCast(const String & func_name, const ColumnsWithTypeAndName & columns)
     {
         ColumnWithTypeAndName json_column;
@@ -298,21 +298,23 @@ try
 
     // DataTypeMyDateTime
     {
-        auto data_col_ptr = createColumn<DataTypeMyDateTime::FieldType>({
-            MyDateTime(2023, 1, 2, 3, 4, 5, 6).toPackedUInt(),
-            MyDateTime(0, 0, 0, 0, 0, 0, 0).toPackedUInt()}).column;
+        auto data_col_ptr
+            = createColumn<DataTypeMyDateTime::FieldType>(
+                  {MyDateTime(2023, 1, 2, 3, 4, 5, 6).toPackedUInt(), MyDateTime(0, 0, 0, 0, 0, 0, 0).toPackedUInt()})
+                  .column;
         ColumnWithTypeAndName input(data_col_ptr, datetime_type_ptr, "");
         auto res = executeFunctionWithCast("cast_time_as_json", {input});
-        auto expect = createColumn<Nullable<String>>({"\"2023-01-02 03:04:05.000006\"", "\"0000-00-00 00:00:00.000000\""});
+        auto expect
+            = createColumn<Nullable<String>>({"\"2023-01-02 03:04:05.000006\"", "\"0000-00-00 00:00:00.000000\""});
         ASSERT_COLUMN_EQ(expect, res);
     }
 
     // DataTypeMyDate
     // Only raw function test is tested, so input_tidb_tp is always nullptr and only the case of TiDB::TypeTimestamp is tested here.
     {
-        auto data_col_ptr = createColumn<DataTypeMyDate::FieldType>({
-                                                               MyDate(2023, 12, 31).toPackedUInt(),
-                                                               MyDate(0, 0, 0).toPackedUInt()}).column;
+        auto data_col_ptr = createColumn<DataTypeMyDate::FieldType>(
+                                {MyDate(2023, 12, 31).toPackedUInt(), MyDate(0, 0, 0).toPackedUInt()})
+                                .column;
         ColumnWithTypeAndName input(data_col_ptr, date_type_ptr, "");
         auto res = executeFunctionWithCast("cast_time_as_json", {input});
         auto expect = createColumn<Nullable<String>>({"\"2023-12-31\"", "\"0000-00-00\""});

@@ -26,7 +26,6 @@
 
 #include <unordered_map>
 
-#include "TiDB/Schema/TiDB.h"
 namespace DB
 {
 const Int8 VAR_SIZE = 0;

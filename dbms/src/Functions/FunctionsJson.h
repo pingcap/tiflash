@@ -14,7 +14,6 @@
 
 #pragma once
 
-#include <common/JSON.h>
 #include <Columns/ColumnConst.h>
 #include <Columns/ColumnFixedString.h>
 #include <Columns/ColumnString.h>
@@ -33,6 +32,7 @@
 #include <TiDB/Decode/JsonBinary.h>
 #include <TiDB/Decode/JsonPathExprRef.h>
 #include <TiDB/Schema/TiDB.h>
+#include <common/JSON.h>
 #include <tipb/expression.pb.h>
 
 #include <ext/range.h>
@@ -897,12 +897,22 @@ public:
             if (from.column->isColumnNullable())
             {
                 const auto & column_nullable = static_cast<const ColumnNullable &>(*from.column);
-                doExecuteForParsingJson2<true>(write_buffer, offsets_to, input_source, column_nullable.getNullMapData(), block.rows());
+                doExecuteForParsingJson2<true>(
+                    write_buffer,
+                    offsets_to,
+                    input_source,
+                    column_nullable.getNullMapData(),
+                    block.rows());
             }
             else
             {
                 auto tmp_null_map = ColumnUInt8::create(0, 0);
-                doExecuteForParsingJson2<false>(write_buffer, offsets_to, input_source, tmp_null_map->getData(), block.rows());
+                doExecuteForParsingJson2<false>(
+                    write_buffer,
+                    offsets_to,
+                    input_source,
+                    tmp_null_map->getData(),
+                    block.rows());
             }
         }
         else
@@ -963,7 +973,7 @@ private:
         }
     }
 
-    template<bool is_nullable>
+    template <bool is_nullable>
     static void doExecuteForParsingJson(
         JsonBinary::JsonBinaryWriteBuffer & data_to,
         ColumnString::Offsets & offsets_to,
@@ -997,7 +1007,9 @@ private:
             }
             catch (Poco::Exception & e)
             {
-                throw Exception(fmt::format("Invalid JSON text: The document root must not be followed by other values, details: {}", e.message()));
+                throw Exception(fmt::format(
+                    "Invalid JSON text: The document root must not be followed by other values, details: {}",
+                    e.message()));
             }
             extractJsonVar(result, data_to);
 
@@ -1007,7 +1019,7 @@ private:
         }
     }
 
-    template<bool is_nullable>
+    template <bool is_nullable>
     static void doExecuteForParsingJson2(
         JsonBinary::JsonBinaryWriteBuffer & data_to,
         ColumnString::Offsets & offsets_to,
@@ -1040,7 +1052,9 @@ private:
             }
             catch (JSONException & e)
             {
-                throw Exception(fmt::format("Invalid JSON text: The document root must not be followed by other values, details: {}", e.message()));
+                throw Exception(fmt::format(
+                    "Invalid JSON text: The document root must not be followed by other values, details: {}",
+                    e.message()));
             }
 
             writeChar(0, data_to);
@@ -1141,7 +1155,9 @@ private:
                 size_t begin = tmp_write_buffer.count();
                 extractJsonVar2(entry.getValue(), tmp_write_buffer);
                 size_t size = tmp_write_buffer.count() - begin;
-                json_elems.emplace(entry.getName(), JsonBinary{tmp_buf[begin], StringRef(&tmp_buf[begin + 1], size - 1)});
+                json_elems.emplace(
+                    entry.getName(),
+                    JsonBinary{tmp_buf[begin], StringRef(&tmp_buf[begin + 1], size - 1)});
             }
             JsonBinary::buildBinaryJsonObjectInBuffer(json_elems, write_buffer);
         }

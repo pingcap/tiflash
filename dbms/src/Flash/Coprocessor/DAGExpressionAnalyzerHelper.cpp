@@ -26,7 +26,6 @@
 #include <Functions/FunctionsJson.h>
 #include <Functions/FunctionsTiDBConversion.h>
 #include <TiDB/Decode/TypeMapping.h>
-#include "Functions/IFunction.h"
 
 namespace DB
 {
