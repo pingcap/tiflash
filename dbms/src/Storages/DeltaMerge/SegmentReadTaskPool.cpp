@@ -378,7 +378,7 @@ bool SegmentReadTaskPool::isRUExhaustedImpl()
     // Check and reset everything.
     read_bytes_after_last_check = 0;
     ru_is_exhausted = checkIsRUExhausted(res_group_name);
-    last_time_check_ru = currentMS();
+    last_time_check_ru = ms;
     return ru_is_exhausted;
 }
 
