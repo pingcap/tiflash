@@ -15,8 +15,8 @@
 #pragma once
 
 #include <Common/Logger.h>
-#include <common/logger_useful.h>
 #include <common/likely.h>
+#include <common/logger_useful.h>
 
 #include <chrono>
 #include <memory>
