@@ -302,7 +302,7 @@ String DAGExpressionAnalyzerHelper::buildCastAsJsonWithInputTiDBField(
 
     const FunctionBuilderPtr & function_builder = FunctionFactory::instance().get(func_name, analyzer->getContext());
     auto * function_build_ptr = function_builder.get();
-    if (auto * function_builder = dynamic_cast<DefaultFunctionBuilder *>(function_build_ptr))
+    if (auto * function_builder = dynamic_cast<DefaultFunctionBuilder *>(function_build_ptr); function_builder)
     {
         auto * function_impl = function_builder->getFunctionImpl().get();
         if (auto * function_cast_int_as_json = dynamic_cast<FunctionCastIntAsJson *>(function_impl);
@@ -332,9 +332,6 @@ String DAGExpressionAnalyzerHelper::buildCastAsJsonWithInputTiDBField(
 
     const ExpressionAction & action = ExpressionAction::applyFunction(function_builder, {arg}, result_name, collator);
     actions->add(action);
-
-    const auto & func_action = actions->getActions().back();
-    RUNTIME_CHECK(func_action.function != nullptr);
     return result_name;
 }
 
