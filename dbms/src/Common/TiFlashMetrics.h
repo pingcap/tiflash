@@ -538,6 +538,7 @@ namespace DB
       F(type_sche_no_segment, {"type", "sche_no_segment"}),                                                                         \
       F(type_sche_from_cache, {"type", "sche_from_cache"}),                                                                         \
       F(type_sche_new_task, {"type", "sche_new_task"}),                                                                             \
+      F(type_ru_exhausted, {"type", "ru_exhausted"}),                                                                               \
       F(type_add_cache_succ, {"type", "add_cache_succ"}),                                                                           \
       F(type_add_cache_stale, {"type", "add_cache_stale"}),                                                                         \
       F(type_get_cache_miss, {"type", "get_cache_miss"}),                                                                           \

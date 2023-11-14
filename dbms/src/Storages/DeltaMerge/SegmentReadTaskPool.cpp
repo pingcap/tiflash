@@ -341,6 +341,16 @@ static bool checkIsRUExhausted(const String & res_group_name)
 
 bool SegmentReadTaskPool::isRUExhausted()
 {
+    auto res = isRUExhaustedImpl();
+    if (res)
+    {
+        GET_METRIC(tiflash_storage_read_thread_counter, type_ru_exhausted).Increment();
+    }
+    return res;
+}
+
+bool SegmentReadTaskPool::isRUExhaustedImpl()
+{
     if (unlikely(res_group_name.empty() || LocalAdmissionController::global_instance == nullptr))
     {
         return false;

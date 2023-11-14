@@ -215,6 +215,8 @@ private:
     void finishSegment(const SegmentReadTaskPtr & seg);
     void pushBlock(Block && block);
 
+    bool isRUExhaustedImpl();
+
     const int extra_table_id_index;
     ColumnDefines columns_to_read;
     PushDownFilterPtr filter;
