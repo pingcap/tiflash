@@ -31,12 +31,12 @@ mysql> drop table if exists test.test_str;
 mysql> CREATE TABLE test.test_str (flag tinyint,str_ch CHAR,str_vch VARCHAR(100),str_tb TINYBLOB,str_tt TINYTEXT,str_b BLOB,str_t TEXT,str_mb MEDIUMBLOB,str_mt MEDIUMTEXT,str_lb LONGBLOB,str_lt LONGTEXT);
 mysql> insert into test.test_str values(0, null, null, null, null, null, null, null, null, null, null);
 mysql> insert into test.test_str values(1, '', '', '', '', '', '', '', '', '', '');
-mysql> insert into test.test_str values(2, 'a', '[1, \"1\", {\"1\":\"1\"}]', 'helloword', '[1, \"1\", {\"1\":\"1\"}]', 'helloword', '[1, \"1\", {\"1\":\"1\"}]', 'helloword', '[1, \"1\", {\"1\":\"1\"}]', 'helloword', '[1, \"1\", {\"1\":\"1\"}]');
-mysql> insert into test.test_str values(3, null, '"a"', null, null, null, null, null, null, null, null);
-mysql> insert into test.test_str values(3, null, '\"a\"', null, null, null, null, null, null, null, null);
-mysql> insert into test.test_str values(3, null, '1', null, null, null, null, null, null, null, null);
-mysql> insert into test.test_str values(3, null, '1.11', null, null, null, null, null, null, null, null);
-mysql> insert into test.test_str values(3, null, 'true', null, null, null, null, null, null, null, null);
+mysql> insert into test.test_str values(2, 'a', '[1, \"1\", {\"1\":\"1\"}]', 'helloword', '[1, \"1\", {\"1\":\"1\"}]', 'helloword', '[1, \"1\", {\"1\":\"1\"}]', 'helloword', '[1, \"1\", {\"1\":\"1\"}]', 'helloword', '[1, \"1\", {\"1\":\"1\"}]');  #NO_UNESCAPE
+mysql> insert into test.test_str values(3, null, '"a"', null, null, null, null, null, null, null, null);  #NO_UNESCAPE
+mysql> insert into test.test_str values(3, null, '\"a\"', null, null, null, null, null, null, null, null);  #NO_UNESCAPE
+mysql> insert into test.test_str values(3, null, '1', null, null, null, null, null, null, null, null);  #NO_UNESCAPE
+mysql> insert into test.test_str values(3, null, '1.11', null, null, null, null, null, null, null, null);  #NO_UNESCAPE
+mysql> insert into test.test_str values(3, null, 'true', null, null, null, null, null, null, null, null);  #NO_UNESCAPE
 mysql> alter table test.test_str set tiflash replica 1;
 
 mysql> drop table if exists test.test_time;
@@ -54,8 +54,8 @@ mysql> alter table test.test_duration set tiflash replica 1;
 mysql> drop table if exists test.test_json;
 mysql> CREATE TABLE test.test_json (col json);
 mysql> insert into test.test_json values(null);
-mysql> insert into test.test_json values('[1, 2, null, [], {}, 1.11, \"a\", "a"]');
-mysql> insert into test.test_json values('{"a":1, "b":1.11, "c":[], "d":"d", "e":{}}');
+mysql> insert into test.test_json values('[1, 2, null, [], {}, 1.11, \"a\", "a"]');  #NO_UNESCAPE
+mysql> insert into test.test_json values('{"a":1, "b":1.11, "c":[], "d":"d", "e":{}}');  #NO_UNESCAPE
 mysql> alter table test.test_json set tiflash replica 1;
 
 mysql> drop table if exists test.test_decimal;
