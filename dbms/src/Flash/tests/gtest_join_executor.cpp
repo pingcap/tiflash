@@ -2357,13 +2357,17 @@ try
         context.addMockTable("null_aware_semi", "s", {{"a", TiDB::TP::TypeLong}}, right);
 
         for (const auto type :
-             {JoinType::TypeLeftOuterSemiJoin, JoinType::TypeAntiLeftOuterSemiJoin, JoinType::TypeSemiJoin, JoinType::TypeAntiSemiJoin})
+             {JoinType::TypeLeftOuterSemiJoin,
+              JoinType::TypeAntiLeftOuterSemiJoin,
+              JoinType::TypeSemiJoin,
+              JoinType::TypeAntiSemiJoin})
         {
             auto reference = genSemiJoinResult(type, left, res);
             bool is_null_aware = type != JoinType::TypeSemiJoin;
-            auto request = context.scan("null_aware_semi", "t")
-                               .join(context.scan("null_aware_semi", "s"), type, {col("a")}, {}, {}, {}, {}, 0, is_null_aware)
-                               .build(context);
+            auto request
+                = context.scan("null_aware_semi", "t")
+                      .join(context.scan("null_aware_semi", "s"), type, {col("a")}, {}, {}, {}, {}, 0, is_null_aware)
+                      .build(context);
             executeAndAssertColumnsEqual(request, reference);
             for (const auto shallow_copy_threshold : cross_join_shallow_copy_thresholds)
             {
@@ -2427,7 +2431,10 @@ try
         context.addMockTable("null_aware_semi", "s", {{"a", TiDB::TP::TypeLong}, {"c", TiDB::TP::TypeLong}}, right);
 
         for (const auto type :
-             {JoinType::TypeLeftOuterSemiJoin, JoinType::TypeAntiLeftOuterSemiJoin, JoinType::TypeSemiJoin, JoinType::TypeAntiSemiJoin})
+             {JoinType::TypeLeftOuterSemiJoin,
+              JoinType::TypeAntiLeftOuterSemiJoin,
+              JoinType::TypeSemiJoin,
+              JoinType::TypeAntiSemiJoin})
         {
             auto reference = genSemiJoinResult(type, left, res);
             bool is_null_aware = type != JoinType::TypeSemiJoin;
@@ -2508,14 +2515,25 @@ try
         context.addMockTable("null_aware_semi", "s", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}}, right);
 
         for (const auto type :
-             {JoinType::TypeLeftOuterSemiJoin, JoinType::TypeAntiLeftOuterSemiJoin, JoinType::TypeSemiJoin, JoinType::TypeAntiSemiJoin})
+             {JoinType::TypeLeftOuterSemiJoin,
+              JoinType::TypeAntiLeftOuterSemiJoin,
+              JoinType::TypeSemiJoin,
+              JoinType::TypeAntiSemiJoin})
         {
             auto reference = genSemiJoinResult(type, left, res);
             bool is_null_aware = type != JoinType::TypeSemiJoin;
-            auto request
-                = context.scan("null_aware_semi", "t")
-                      .join(context.scan("null_aware_semi", "s"), type, {col("a"), col("b")}, {}, {}, {}, {}, 0, is_null_aware)
-                      .build(context);
+            auto request = context.scan("null_aware_semi", "t")
+                               .join(
+                                   context.scan("null_aware_semi", "s"),
+                                   type,
+                                   {col("a"), col("b")},
+                                   {},
+                                   {},
+                                   {},
+                                   {},
+                                   0,
+                                   is_null_aware)
+                               .build(context);
             executeAndAssertColumnsEqual(request, reference);
             for (const auto shallow_copy_threshold : cross_join_shallow_copy_thresholds)
             {
@@ -2637,7 +2655,10 @@ try
             right);
 
         for (const auto type :
-             {JoinType::TypeLeftOuterSemiJoin, JoinType::TypeAntiLeftOuterSemiJoin, JoinType::TypeSemiJoin, JoinType::TypeAntiSemiJoin})
+             {JoinType::TypeLeftOuterSemiJoin,
+              JoinType::TypeAntiLeftOuterSemiJoin,
+              JoinType::TypeSemiJoin,
+              JoinType::TypeAntiSemiJoin})
         {
             auto reference = genSemiJoinResult(type, left, res);
             bool is_null_aware = type != JoinType::TypeSemiJoin;
@@ -2716,7 +2737,10 @@ try
             right);
 
         for (const auto type :
-             {JoinType::TypeLeftOuterSemiJoin, JoinType::TypeAntiLeftOuterSemiJoin, JoinType::TypeSemiJoin, JoinType::TypeAntiSemiJoin})
+             {JoinType::TypeLeftOuterSemiJoin,
+              JoinType::TypeAntiLeftOuterSemiJoin,
+              JoinType::TypeSemiJoin,
+              JoinType::TypeAntiSemiJoin})
         {
             auto reference = genSemiJoinResult(type, left, res);
             bool is_null_aware = type != JoinType::TypeSemiJoin;
@@ -2786,14 +2810,25 @@ try
         context.addMockTable("null_aware_semi", "s", {{"a", TiDB::TP::TypeString}, {"b", TiDB::TP::TypeString}}, right);
 
         for (const auto type :
-             {JoinType::TypeLeftOuterSemiJoin, JoinType::TypeAntiLeftOuterSemiJoin, JoinType::TypeSemiJoin, JoinType::TypeAntiSemiJoin})
+             {JoinType::TypeLeftOuterSemiJoin,
+              JoinType::TypeAntiLeftOuterSemiJoin,
+              JoinType::TypeSemiJoin,
+              JoinType::TypeAntiSemiJoin})
         {
             auto reference = genSemiJoinResult(type, left, res);
             bool is_null_aware = type != JoinType::TypeSemiJoin;
-            auto request
-                = context.scan("null_aware_semi", "t")
-                      .join(context.scan("null_aware_semi", "s"), type, {col("a"), col("b")}, {}, {}, {}, {}, 0, is_null_aware)
-                      .build(context);
+            auto request = context.scan("null_aware_semi", "t")
+                               .join(
+                                   context.scan("null_aware_semi", "s"),
+                                   type,
+                                   {col("a"), col("b")},
+                                   {},
+                                   {},
+                                   {},
+                                   {},
+                                   0,
+                                   is_null_aware)
+                               .build(context);
             executeAndAssertColumnsEqual(request, reference);
             for (const auto shallow_copy_threshold : cross_join_shallow_copy_thresholds)
             {
@@ -2858,12 +2893,13 @@ try
         context.addMockTable("semi", "s", {{"a", TiDB::TP::TypeLong, false}}, right);
 
         for (const auto type :
-             {JoinType::TypeLeftOuterSemiJoin, JoinType::TypeAntiLeftOuterSemiJoin, JoinType::TypeSemiJoin, JoinType::TypeAntiSemiJoin})
+             {JoinType::TypeLeftOuterSemiJoin,
+              JoinType::TypeAntiLeftOuterSemiJoin,
+              JoinType::TypeSemiJoin,
+              JoinType::TypeAntiSemiJoin})
         {
             auto reference = genSemiJoinResult(type, left, res);
-            auto request = context.scan("semi", "t")
-                               .join(context.scan("semi", "s"), type, {col("a")})
-                               .build(context);
+            auto request = context.scan("semi", "t").join(context.scan("semi", "s"), type, {col("a")}).build(context);
             executeAndAssertColumnsEqual(request, reference);
         }
     }
@@ -2898,19 +2934,16 @@ try
         context.addMockTable("semi", "s", {{"a", TiDB::TP::TypeLong, false}, {"c", TiDB::TP::TypeLong}}, right);
 
         for (const auto type :
-             {JoinType::TypeLeftOuterSemiJoin, JoinType::TypeAntiLeftOuterSemiJoin, JoinType::TypeSemiJoin, JoinType::TypeAntiSemiJoin})
+             {JoinType::TypeLeftOuterSemiJoin,
+              JoinType::TypeAntiLeftOuterSemiJoin,
+              JoinType::TypeSemiJoin,
+              JoinType::TypeAntiSemiJoin})
         {
             auto reference = genSemiJoinResult(type, left, res);
-            auto request = context.scan("semi", "t")
-                               .join(
-                                   context.scan("semi", "s"),
-                                   type,
-                                   {col("a")},
-                                   {},
-                                   {},
-                                   {lt(col("t.c"), col("s.c"))},
-                                   {})
-                               .build(context);
+            auto request
+                = context.scan("semi", "t")
+                      .join(context.scan("semi", "s"), type, {col("a")}, {}, {}, {lt(col("t.c"), col("s.c"))}, {})
+                      .build(context);
             executeAndAssertColumnsEqual(request, reference);
         }
     }
@@ -2946,13 +2979,15 @@ try
         context.addMockTable("semi", "s", {{"a", TiDB::TP::TypeLong, false}, {"b", TiDB::TP::TypeLong, false}}, right);
 
         for (const auto type :
-             {JoinType::TypeLeftOuterSemiJoin, JoinType::TypeAntiLeftOuterSemiJoin, JoinType::TypeSemiJoin, JoinType::TypeAntiSemiJoin})
+             {JoinType::TypeLeftOuterSemiJoin,
+              JoinType::TypeAntiLeftOuterSemiJoin,
+              JoinType::TypeSemiJoin,
+              JoinType::TypeAntiSemiJoin})
         {
             auto reference = genSemiJoinResult(type, left, res);
-            auto request
-                = context.scan("semi", "t")
-                      .join(context.scan("semi", "s"), type, {col("a"), col("b")}, {})
-                      .build(context);
+            auto request = context.scan("semi", "t")
+                               .join(context.scan("semi", "s"), type, {col("a"), col("b")}, {})
+                               .build(context);
             executeAndAssertColumnsEqual(request, reference);
         }
     }
@@ -3019,7 +3054,10 @@ try
             right);
 
         for (const auto type :
-             {JoinType::TypeLeftOuterSemiJoin, JoinType::TypeAntiLeftOuterSemiJoin, JoinType::TypeSemiJoin, JoinType::TypeAntiSemiJoin})
+             {JoinType::TypeLeftOuterSemiJoin,
+              JoinType::TypeAntiLeftOuterSemiJoin,
+              JoinType::TypeSemiJoin,
+              JoinType::TypeAntiSemiJoin})
         {
             auto reference = genSemiJoinResult(type, left, res);
             auto request = context.scan("semi", "t")
@@ -3041,27 +3079,26 @@ try
     context.setCollation(TiDB::ITiDBCollator::UTF8MB4_UNICODE_CI);
     const std::vector<std::tuple<ColumnsWithTypeAndName, ColumnsWithTypeAndName, ColumnWithTypeAndName>> t6 = {
         {
-            {toVec<String>("a", {"a", "b", "c", "d", "e"}),
-             toVec<String>("b", {"A", "b", "c", "dd", "e"})},
-            {toVec<String>("a", {"a", "b", "c", "D", "E"}),
-             toVec<String>("b", {"a", "bb", "c", "DD", "d"})},
+            {toVec<String>("a", {"a", "b", "c", "d", "e"}), toVec<String>("b", {"A", "b", "c", "dd", "e"})},
+            {toVec<String>("a", {"a", "b", "c", "D", "E"}), toVec<String>("b", {"a", "bb", "c", "DD", "d"})},
             toNullableVec<Int8>({1, 0, 1, 1, 0}),
         },
     };
 
     for (const auto & [left, right, res] : t6)
     {
-        context.addMockTable("semi", "t", {{"a", TiDB::TP::TypeString, false}, {"b", TiDB::TP::TypeString, false}}, left);
-        context.addMockTable("semi", "s", {{"a", TiDB::TP::TypeString, false}, {"b", TiDB::TP::TypeString, false}}, right);
+        context
+            .addMockTable("semi", "t", {{"a", TiDB::TP::TypeString, false}, {"b", TiDB::TP::TypeString, false}}, left);
+        context
+            .addMockTable("semi", "s", {{"a", TiDB::TP::TypeString, false}, {"b", TiDB::TP::TypeString, false}}, right);
 
         for (const auto type :
              {JoinType::TypeLeftOuterSemiJoin, JoinType::TypeAntiLeftOuterSemiJoin, JoinType::TypeAntiSemiJoin})
         {
             auto reference = genSemiJoinResult(type, left, res);
-            auto request
-                = context.scan("semi", "t")
-                      .join(context.scan("semi", "s"), type, {col("a"), col("b")}, {})
-                      .build(context);
+            auto request = context.scan("semi", "t")
+                               .join(context.scan("semi", "s"), type, {col("a"), col("b")}, {})
+                               .build(context);
             executeAndAssertColumnsEqual(request, reference);
         }
     }
