@@ -82,7 +82,8 @@ using raft_serverpb::PeerState;
 using raft_serverpb::RaftApplyState;
 using raft_serverpb::RegionLocalState;
 
-std::optional<std::tuple<CheckpointInfoPtr, RegionPtr, RaftApplyState, RegionLocalState>> tryParseRegionInfoFromCheckpointData(
+
+std::optional<CheckpointRegionInfoAndData> tryParseRegionInfoFromCheckpointData(
     ParsedCheckpointDataHolderPtr checkpoint_data_holder,
     UInt64 remote_store_id,
     UInt64 region_id,
@@ -171,7 +172,11 @@ bool tryResetPeerIdInRegion(RegionPtr region, const RegionLocalState & region_st
     return false;
 }
 
-FastAddPeerRes FastAddPeerImpl(EngineStoreServerWrap * server, uint64_t region_id, uint64_t new_peer_id)
+std::variant<CheckpointRegionInfoAndData, FastAddPeerRes> FastAddPeerImplBuild(
+    TMTContext & tmt,
+    TiFlashRaftProxyHelper * proxy_helper,
+    uint64_t region_id,
+    uint64_t new_peer_id)
 {
     bool is_building_finish_recorded = false;
     auto after_build = [&]() {
@@ -182,122 +187,179 @@ FastAddPeerRes FastAddPeerImpl(EngineStoreServerWrap * server, uint64_t region_i
         }
     };
     SCOPE_EXIT({ after_build(); });
+
+    auto * log = &Poco::Logger::get("FastAddPeer");
+    Stopwatch watch;
+    std::unordered_map<StoreID, UInt64> checked_seq_map;
+    auto fap_ctx = tmt.getContext().getSharedContextDisagg()->fap_context;
+    const auto & settings = tmt.getContext().getSettingsRef();
+    auto current_store_id = tmt.getKVStore()->getStoreMeta().id();
+    auto candidate_store_ids = getCandidateStoreIDsForRegion(tmt, region_id, current_store_id);
+    if (candidate_store_ids.empty())
+    {
+        LOG_DEBUG(log, "No suitable candidate peer for region_id={}", region_id);
+        return genFastAddPeerRes(FastAddPeerStatus::NoSuitable, "", "");
+    }
+    LOG_DEBUG(log, "Begin to select checkpoint for region_id={}", region_id);
+    // It will return with FastAddPeerRes or failed with timeout result wrapped in FastAddPeerRes.
+    while (true)
+    {
+        // Check all candidate stores in this loop.
+        for (const auto store_id : candidate_store_ids)
+        {
+            RUNTIME_CHECK(store_id != current_store_id);
+            auto iter = checked_seq_map.find(store_id);
+            auto checked_seq = (iter == checked_seq_map.end()) ? 0 : iter->second;
+            auto [data_seq, checkpoint_data] = fap_ctx->getNewerCheckpointData(tmt.getContext(), store_id, checked_seq);
+            checked_seq_map[store_id] = data_seq;
+            if (data_seq > checked_seq)
+            {
+                RUNTIME_CHECK(checkpoint_data != nullptr);
+                auto maybe_region_info
+                    = tryParseRegionInfoFromCheckpointData(checkpoint_data, store_id, region_id, proxy_helper);
+                if (!maybe_region_info.has_value())
+                    continue;
+                const auto & checkpoint_info = std::get<0>(maybe_region_info.value());
+                auto & region = std::get<1>(maybe_region_info.value());
+                auto & region_state = std::get<3>(maybe_region_info.value());
+                if (tryResetPeerIdInRegion(region, region_state, new_peer_id))
+                {
+                    LOG_INFO(
+                        log,
+                        "Select checkpoint with seq {} from store {} takes {} seconds, candidate_store_id size {} "
+                        "[region_id={}]",
+                        data_seq,
+                        checkpoint_info->remote_store_id,
+                        watch.elapsedSeconds(),
+                        candidate_store_ids.size(),
+                        region_id);
+                    GET_METRIC(tiflash_fap_task_duration_seconds, type_build_stage).Observe(watch.elapsedSeconds());
+                    return maybe_region_info.value();
+                }
+                else
+                {
+                    LOG_DEBUG(
+                        log,
+                        "Checkpoint with seq {} from store {} doesn't contain reusable region info [region_id={}]",
+                        data_seq,
+                        store_id,
+                        region_id);
+                }
+            }
+        }
+        {
+            if (watch.elapsedSeconds() >= settings.fap_wait_checkpoint_timeout_seconds)
+            {
+                GET_METRIC(tiflash_fap_task_result, type_failed_timeout).Increment();
+                return genFastAddPeerRes(FastAddPeerStatus::NoSuitable, "", "");
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+        }
+    }
+}
+
+FastAddPeerRes FastAddPeerImplIngest(
+    TMTContext & tmt,
+    TiFlashRaftProxyHelper * proxy_helper,
+    uint64_t region_id,
+    uint64_t new_peer_id,
+    CheckpointRegionInfoAndData && checkpoint)
+{
+    auto * log = &Poco::Logger::get("FastAddPeer");
+    auto fap_ctx = tmt.getContext().getSharedContextDisagg()->fap_context;
+    const auto & settings = tmt.getContext().getSettingsRef();
+
+    CheckpointInfoPtr checkpoint_info;
+    RegionPtr region;
+    RaftApplyState apply_state;
+    RegionLocalState region_state;
+    std::tie(checkpoint_info, region, apply_state, region_state) = checkpoint;
+
+    auto & storages = tmt.getStorages();
+    auto keyspace_id = region->getKeyspaceID();
+    auto table_id = region->getMappedTableID();
+    auto storage = storages.get(keyspace_id, table_id);
+    if (!storage)
+    {
+        throw Exception(
+            ErrorCodes::LOGICAL_ERROR,
+            "Can't get storage engine keyspace_id={} table_id={}",
+            keyspace_id,
+            table_id);
+    }
+    if (storage->engineType() == TiDB::StorageEngine::DT)
+    {
+        auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
+        auto new_key_range = DM::RowKeyRange::fromRegionRange(
+            region->getRange(),
+            table_id,
+            storage->isCommonHandle(),
+            storage->getRowKeyColumnSize());
+
+        auto segments = dm_storage->buildSegmentsFromCheckpointInfo(new_key_range, checkpoint_info, settings);
+
+        fap_ctx->getOrRestoreCheckpointIngestInfo(tmt, proxy_helper, region_id, new_peer_id);
+    }
+    else
+    {
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "ingest into unsupported storage engine");
+    }
+
+    // Write raft log to uni ps, we do this here because we store raft log seperately.
+    // TODO(fap) Move this to `ApplyFapSnapshot` if the peer is not the first one of this region.
+    // TODO(fap) Maybe need to clean stale data.
+    UniversalWriteBatch wb;
+    RaftDataReader raft_data_reader(*(checkpoint_info->temp_ps));
+    raft_data_reader.traverseRemoteRaftLogForRegion(
+        region_id,
+        [&](const UniversalPageId & page_id, PageSize size, const PS::V3::CheckpointLocation & location) {
+            LOG_DEBUG(
+                log,
+                "Write raft log size {}, region_id={} index={}",
+                size,
+                region_id,
+                UniversalPageIdFormat::getU64ID(page_id));
+            wb.putRemotePage(page_id, 0, size, location, {});
+        });
+    auto wn_ps = tmt.getContext().getWriteNodePageStorage();
+    wn_ps->write(std::move(wb));
+
+    return genFastAddPeerRes(
+        FastAddPeerStatus::Ok,
+        apply_state.SerializeAsString(),
+        region_state.region().SerializeAsString());
+}
+
+FastAddPeerRes FastAddPeerImpl(
+    TMTContext & tmt,
+    TiFlashRaftProxyHelper * proxy_helper,
+    uint64_t region_id,
+    uint64_t new_peer_id)
+{
     try
     {
-        auto * log = &Poco::Logger::get("FastAddPeer");
-        Stopwatch watch;
-        CheckpointInfoPtr checkpoint_info;
-        RegionPtr region;
-        RaftApplyState apply_state;
-        RegionLocalState region_state;
-        std::unordered_map<StoreID, UInt64> checked_seq_map;
-        auto fap_ctx = server->tmt->getContext().getSharedContextDisagg()->fap_context;
-        const auto & settings = server->tmt->getContext().getSettingsRef();
-        auto current_store_id = server->tmt->getKVStore()->getStoreMeta().id();
-        auto candidate_store_ids = getCandidateStoreIDsForRegion(*(server->tmt), region_id, current_store_id);
-        if (candidate_store_ids.empty())
+        auto res = FastAddPeerImplBuild(tmt, proxy_helper, region_id, new_peer_id);
+        if (std::holds_alternative<CheckpointRegionInfoAndData>(res))
         {
-            LOG_DEBUG(log, "No suitable candidate peer for region_id={}", region_id);
-            return genFastAddPeerRes(FastAddPeerStatus::NoSuitable, "", "");
+            return FastAddPeerImplIngest(
+                tmt,
+                proxy_helper,
+                region_id,
+                new_peer_id,
+                std::move(std::get<CheckpointRegionInfoAndData>(res)));
         }
-        bool success = false;
-        LOG_DEBUG(log, "Begin to select checkpoint for region_id={}", region_id);
-        while (!success)
-        {
-            for (const auto store_id : candidate_store_ids)
-            {
-                RUNTIME_CHECK(store_id != current_store_id);
-                auto iter = checked_seq_map.find(store_id);
-                auto checked_seq = (iter == checked_seq_map.end()) ? 0 : iter->second;
-                auto [data_seq, checkpoint_data]
-                    = fap_ctx->getNewerCheckpointData(server->tmt->getContext(), store_id, checked_seq);
-                checked_seq_map[store_id] = data_seq;
-                if (data_seq > checked_seq)
-                {
-                    RUNTIME_CHECK(checkpoint_data != nullptr);
-                    auto maybe_region_info = tryParseRegionInfoFromCheckpointData(
-                        checkpoint_data,
-                        store_id,
-                        region_id,
-                        server->proxy_helper);
-                    if (!maybe_region_info.has_value())
-                        continue;
-                    std::tie(checkpoint_info, region, apply_state, region_state) = *maybe_region_info;
-                    if (tryResetPeerIdInRegion(region, region_state, new_peer_id))
-                    {
-                        success = true;
-                        LOG_INFO(
-                            log,
-                            "Select checkpoint with seq {} from store {} takes {} seconds, candidate_store_id size {} "
-                            "[region_id={}]",
-                            data_seq,
-                            checkpoint_info->remote_store_id,
-                            watch.elapsedSeconds(),
-                            candidate_store_ids.size(),
-                            region_id);
-                        GET_METRIC(tiflash_fap_task_duration_seconds, type_build_stage).Observe(watch.elapsedSeconds());
-                        break;
-                    }
-                    else
-                    {
-                        LOG_DEBUG(
-                            log,
-                            "Checkpoint with seq {} from store {} doesn't contain reusable region info [region_id={}]",
-                            data_seq,
-                            store_id,
-                            region_id);
-                    }
-                }
-            }
-            if (!success)
-            {
-                if (watch.elapsedSeconds() >= settings.fap_wait_checkpoint_timeout_seconds)
-                {
-                    GET_METRIC(tiflash_fap_task_result, type_failed_timeout).Increment();
-                    return genFastAddPeerRes(FastAddPeerStatus::NoSuitable, "", "");
-                }
-                std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-            }
-        }
-        after_build();
-
-        // Ingest segments
-        auto & storages = server->tmt->getStorages();
-        auto keyspace_id = region->getKeyspaceID();
-        auto table_id = region->getMappedTableID();
-        auto storage = storages.get(keyspace_id, table_id);
-        if (storage && storage->engineType() == TiDB::StorageEngine::DT)
-        {
-            auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
-        }
-        else
-        {
-            throw Exception(ErrorCodes::LOGICAL_ERROR, "unsupported storage engine");
-        }
-
-        // Write raft log to uni ps, we do this here because we store raft log seperately.
-        // TODO(fap) Move this to `ApplyFapSnapshot` if the peer is not the first one of this region.
-        // TODO(fap) Maybe need to clean stale data.
-        UniversalWriteBatch wb;
-        RaftDataReader raft_data_reader(*(checkpoint_info->temp_ps));
-        raft_data_reader.traverseRemoteRaftLogForRegion(
-            region_id,
-            [&](const UniversalPageId & page_id, PageSize size, const PS::V3::CheckpointLocation & location) {
-                LOG_DEBUG(
-                    log,
-                    "Write raft log size {}, region_id={} index={}",
-                    size,
-                    region_id,
-                    UniversalPageIdFormat::getU64ID(page_id));
-                wb.putRemotePage(page_id, 0, size, location, {});
-            });
-        auto wn_ps = server->tmt->getContext().getWriteNodePageStorage();
-        wn_ps->write(std::move(wb));
-
-        return genFastAddPeerRes(
-            FastAddPeerStatus::Ok,
-            apply_state.SerializeAsString(),
-            region_state.region().SerializeAsString());
+        return std::get<FastAddPeerRes>(res);
+    }
+    catch (const Exception & e)
+    {
+        DB::tryLogCurrentException(
+            "FastAddPeerImpl",
+            fmt::format(
+                "Failed when try to restore from checkpoint region_id={} new_peer_id={} {}",
+                region_id,
+                new_peer_id,
+                e.message()));
+        return genFastAddPeerRes(FastAddPeerStatus::BadData, "", "");
     }
     catch (...)
     {
@@ -320,7 +382,7 @@ void ApplyFapSnapshot(EngineStoreServerWrap * server, uint64_t region_id, uint64
         auto kvstore = server->tmt->getKVStore();
         auto fap_ctx = server->tmt->getContext().getSharedContextDisagg()->fap_context;
         auto checkpoint_ingest_info
-            = fap_ctx->getOrCreateCheckpointIngestInfo(*server->tmt, server->proxy_helper, region_id, peer_id);
+            = fap_ctx->getOrRestoreCheckpointIngestInfo(*server->tmt, server->proxy_helper, region_id, peer_id);
         kvstore->handleIngestCheckpoint(checkpoint_ingest_info->getRegion(), checkpoint_ingest_info, *server->tmt);
         GET_METRIC(tiflash_fap_task_duration_seconds, type_ingest_stage).Observe(watch_ingest.elapsedSeconds());
         GET_METRIC(tiflash_fap_task_result, type_succeed).Increment();
@@ -356,7 +418,7 @@ FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, u
                 std::string origin_name = getThreadName();
                 SCOPE_EXIT({ setThreadName(origin_name.c_str()); });
                 setThreadName("fap-builder");
-                return FastAddPeerImpl(server, region_id, new_peer_id);
+                return FastAddPeerImpl(*(server->tmt), server->proxy_helper, region_id, new_peer_id);
             });
             if (res)
             {

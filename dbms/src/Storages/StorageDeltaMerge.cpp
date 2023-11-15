@@ -1180,6 +1180,14 @@ UInt64 StorageDeltaMerge::ingestFiles(
     return getAndMaybeInitStore()->ingestFiles(global_context, settings, range, external_files, clear_data_in_range);
 }
 
+DM::Segments StorageDeltaMerge::buildSegmentsFromCheckpointInfo(
+    const DM::RowKeyRange & range,
+    CheckpointInfoPtr checkpoint_info,
+    const Settings & settings)
+{
+    return getAndMaybeInitStore()->buildSegmentsFromCheckpointInfo(global_context, settings, range, checkpoint_info);
+}
+
 void StorageDeltaMerge::ingestSegmentsFromCheckpointInfo(
     const DM::RowKeyRange & range,
     CheckpointIngestInfoPtr checkpoint_info,

@@ -340,12 +340,12 @@ public:
         const RowKeyRange & ingest_range,
         const SegmentPtr & segment_to_ingest);
 
-    void buildSegmentsFromCheckpointInfo(
+    Segments buildSegmentsFromCheckpointInfo(
         const DMContextPtr & dm_context,
         const DM::RowKeyRange & range,
         CheckpointInfoPtr checkpoint_info);
 
-    void buildSegmentsFromCheckpointInfo(
+    Segments buildSegmentsFromCheckpointInfo(
         const Context & db_context,
         const DB::Settings & db_settings,
         const DM::RowKeyRange & range,

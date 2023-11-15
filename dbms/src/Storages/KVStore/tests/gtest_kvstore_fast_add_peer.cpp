@@ -38,6 +38,17 @@ using raft_serverpb::RegionLocalState;
 namespace DB
 {
 FastAddPeerRes genFastAddPeerRes(FastAddPeerStatus status, std::string && apply_str, std::string && region_str);
+FastAddPeerRes FastAddPeerImpl(
+    TMTContext & tmt,
+    TiFlashRaftProxyHelper * proxy_helper,
+    uint64_t region_id,
+    uint64_t new_peer_id);
+FastAddPeerRes FastAddPeerImplIngest(
+    TMTContext & tmt,
+    TiFlashRaftProxyHelper * proxy_helper,
+    uint64_t region_id,
+    uint64_t new_peer_id,
+    CheckpointRegionInfoAndData && checkpoint);
 
 namespace tests
 {
@@ -46,6 +57,11 @@ class RegionKVStoreTestFAP : public KVStoreTestBase
 public:
     void SetUp() override
     {
+        KVStoreTestBase::SetUp();
+        DB::tests::TiFlashTestEnv::enableS3Config();
+        auto s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
+        ASSERT_TRUE(::DB::tests::TiFlashTestEnv::createBucketIfNotExist(*s3_client));
+
         auto & global_context = TiFlashTestEnv::getGlobalContext();
         if (global_context.getSharedContextDisagg()->remote_data_store == nullptr)
         {
@@ -58,6 +74,18 @@ public:
         else
         {
             already_initialize_data_store = true;
+        }
+        if (global_context.getWriteNodePageStorage() == nullptr)
+        {
+            already_initialize_write_ps = false;
+            orig_mode = global_context.getPageStorageRunMode();
+            global_context.setPageStorageRunMode(PageStorageRunMode::UNI_PS);
+            global_context.tryReleaseWriteNodePageStorageForTest();
+            global_context.initializeWriteNodePageStorageIfNeed(global_context.getPathPool());
+        }
+        else
+        {
+            already_initialize_write_ps = true;
         }
         orig_mode = global_context.getPageStorageRunMode();
         global_context.setPageStorageRunMode(PageStorageRunMode::UNI_PS);
@@ -83,6 +111,7 @@ protected:
         auto page_storage = global_context.getWriteNodePageStorage();
         KVStore & kvs = getKVS();
         auto store_id = kvs.getStore().store_id.load();
+        LOG_DEBUG(log, "dumpCheckpoint for checkpoint {}", store_id);
         auto wi = PS::V3::CheckpointProto::WriterInfo();
         {
             wi.set_store_id(store_id);
@@ -115,6 +144,7 @@ protected:
 private:
     ContextPtr context;
     bool already_initialize_data_store = false;
+    bool already_initialize_write_ps = false;
     DB::PageStorageRunMode orig_mode;
 };
 
@@ -193,5 +223,52 @@ try
     }
 }
 CATCH
+
+TEST_F(RegionKVStoreTestFAP, RestoreFromRestart)
+try
+{
+    auto & global_context = TiFlashTestEnv::getGlobalContext();
+    uint64_t region_id = 1;
+    auto peer_id = 1;
+    initStorages();
+    KVStore & kvs = getKVS();
+    auto page_storage = global_context.getWriteNodePageStorage();
+    proxy_instance->bootstrapTable(global_context, kvs, global_context.getTMTContext());
+    proxy_instance->bootstrapWithRegion(kvs, global_context.getTMTContext(), region_id, std::nullopt);
+    auto proxy_helper = proxy_instance->generateProxyHelper();
+    auto region = proxy_instance->getRegion(region_id);
+    auto store_id = kvs.getStore().store_id.load();
+    region->addPeer(store_id, peer_id, metapb::PeerRole::Learner);
+
+    // Write some data, and persist meta.
+    auto [index, term]
+        = proxy_instance->normalWrite(region_id, {34}, {"v2"}, {WriteCmdType::Put}, {ColumnFamilyType::Default});
+    kvs.setRegionCompactLogConfig(0, 0, 0, 0);
+    persistAfterWrite(global_context, kvs, proxy_instance, page_storage, region_id, index);
+
+    LOG_INFO(log, "!!!! test 111");
+    auto s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
+    ASSERT_TRUE(::DB::tests::TiFlashTestEnv::createBucketIfNotExist(*s3_client));
+    LOG_INFO(log, "!!!! test 222");
+    dumpCheckpoint();
+    LOG_INFO(log, "!!!! test 333");
+
+    const auto manifest_key = S3::S3Filename::newCheckpointManifest(kvs.getStoreID(), upload_sequence).toFullKey();
+    auto checkpoint_info = std::make_shared<CheckpointInfo>();
+    checkpoint_info->remote_store_id = kvs.getStoreID();
+    checkpoint_info->region_id = 1000;
+    checkpoint_info->checkpoint_data_holder = buildParsedCheckpointData(global_context, manifest_key, /*dir_seq*/ 100);
+    checkpoint_info->temp_ps = checkpoint_info->checkpoint_data_holder->getUniversalPageStorage();
+    RegionPtr kv_region = kvs.getRegion(1);
+    CheckpointRegionInfoAndData mock_data = std::make_tuple(
+        checkpoint_info,
+        kv_region,
+        kv_region->mutMeta().clonedApplyState(),
+        kv_region->mutMeta().clonedRegionState());
+
+    FastAddPeerImplIngest(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333, std::move(mock_data));
+}
+CATCH
+
 } // namespace tests
 } // namespace DB

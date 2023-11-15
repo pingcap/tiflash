@@ -144,7 +144,10 @@ void CheckpointIngestInfo::persistToPS()
     uni_ps->write(std::move(wb), DB::PS::V3::PageType::Local, nullptr);
 }
 
-void CheckpointIngestInfo::removeFromPS() {}
+void CheckpointIngestInfo::removeFromPS()
+{
+    // TODO(fap)
+}
 
 CheckpointIngestInfo::~CheckpointIngestInfo()
 {

@@ -47,6 +47,9 @@ using DeltaMergeStorePtr = std::shared_ptr<DeltaMergeStore>;
 using RowKeyRanges = std::vector<RowKeyRange>;
 struct ExternalDTFileInfo;
 struct GCOptions;
+class Segment;
+using SegmentPtr = std::shared_ptr<Segment>;
+using Segments = std::vector<SegmentPtr>;
 } // namespace DM
 
 class StorageDeltaMerge
@@ -123,7 +126,7 @@ public:
         bool clear_data_in_range,
         const Settings & settings);
 
-    void buildSegmentsFromCheckpointInfo(
+    DM::Segments buildSegmentsFromCheckpointInfo(
         const DM::RowKeyRange & range,
         CheckpointInfoPtr checkpoint_info,
         const Settings & settings);

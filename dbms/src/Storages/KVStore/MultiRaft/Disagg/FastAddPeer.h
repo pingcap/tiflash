@@ -21,8 +21,21 @@
 namespace DB
 {
 using FAPAsyncTasks = AsyncTasks<uint64_t, std::function<FastAddPeerRes()>, FastAddPeerRes>;
+struct CheckpointInfo;
+using CheckpointInfoPtr = std::shared_ptr<CheckpointInfo>;
+class Region;
+using RegionPtr = std::shared_ptr<Region>;
+using CheckpointRegionInfoAndData
+    = std::tuple<CheckpointInfoPtr, RegionPtr, raft_serverpb::RaftApplyState, raft_serverpb::RegionLocalState>;
 struct CheckpointIngestInfo;
 using CheckpointIngestInfoPtr = std::shared_ptr<CheckpointIngestInfo>;
+
+namespace DM
+{
+class Segment;
+using SegmentPtr = std::shared_ptr<Segment>;
+using Segments = std::vector<SegmentPtr>;
+} // namespace DM
 
 class FastAddPeerContext
 {
@@ -35,11 +48,19 @@ public:
         UInt64 store_id,
         UInt64 required_seq);
 
-    CheckpointIngestInfoPtr getOrCreateCheckpointIngestInfo(
+    CheckpointIngestInfoPtr getOrRestoreCheckpointIngestInfo(
         TMTContext & tmt,
         const struct TiFlashRaftProxyHelper * proxy_helper,
         UInt64 region_id,
         UInt64 peer_id);
+
+    void insertCheckpointIngestInfo(
+        TMTContext & tmt,
+        UInt64 region_id,
+        UInt64 peer_id,
+        UInt64 remote_store_id,
+        RegionPtr region,
+        DM::Segments && segments);
 
 public:
     std::shared_ptr<FAPAsyncTasks> tasks_trace;

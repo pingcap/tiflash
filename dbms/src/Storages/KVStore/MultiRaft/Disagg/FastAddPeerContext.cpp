@@ -105,7 +105,7 @@ std::pair<UInt64, ParsedCheckpointDataHolderPtr> FastAddPeerContext::getNewerChe
     return std::make_pair(cache_seq, checkpoint_data);
 }
 
-CheckpointIngestInfoPtr FastAddPeerContext::getOrCreateCheckpointIngestInfo(
+CheckpointIngestInfoPtr FastAddPeerContext::getOrRestoreCheckpointIngestInfo(
     TMTContext & tmt,
     const struct TiFlashRaftProxyHelper * proxy_helper,
     UInt64 region_id,
@@ -116,6 +116,30 @@ CheckpointIngestInfoPtr FastAddPeerContext::getOrCreateCheckpointIngestInfo(
         checkpoint_ingest_info_map[region_id]
             = std::make_shared<CheckpointIngestInfo>(tmt, proxy_helper, region_id, peer_id);
     return checkpoint_ingest_info_map.at(region_id);
+}
+
+void FastAddPeerContext::insertCheckpointIngestInfo(
+    TMTContext & tmt,
+    UInt64 region_id,
+    UInt64 peer_id,
+    UInt64 remote_store_id,
+    RegionPtr region,
+    DM::Segments && segments)
+{
+    auto * log = &Poco::Logger::get("FastAddPeerContext");
+    if (checkpoint_ingest_info_map.contains(region_id))
+    {
+        // TODO(fap) should we throw here?
+        LOG_ERROR(
+            log,
+            "Repeated ingest for region_id={} peer_id={} old_peer_id={}",
+            region_id,
+            peer_id,
+            checkpoint_ingest_info_map[region_id]->peerId());
+    }
+
+    checkpoint_ingest_info_map[region_id]
+        = std::make_shared<CheckpointIngestInfo>(tmt, region_id, peer_id, remote_store_id, region, std::move(segments));
 }
 
 } // namespace DB

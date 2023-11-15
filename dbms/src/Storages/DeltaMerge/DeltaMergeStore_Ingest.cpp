@@ -1123,14 +1123,14 @@ bool DeltaMergeStore::ingestSegmentDataIntoSegmentUsingSplit(
     }
 }
 
-void DeltaMergeStore::buildSegmentsFromCheckpointInfo(
+Segments DeltaMergeStore::buildSegmentsFromCheckpointInfo(
     const DMContextPtr & dm_context,
     const DM::RowKeyRange & range,
     CheckpointInfoPtr checkpoint_info)
 {
     if (unlikely(range.none()))
     {
-        return;
+        return {};
     }
     LOG_INFO(
         log,
@@ -1152,9 +1152,10 @@ void DeltaMergeStore::buildSegmentsFromCheckpointInfo(
     if (restored_segments.empty())
     {
         LOG_DEBUG(log, "No segments to ingest.");
-        return;
+        return {};
     }
     wbs.writeLogAndData();
+    return restored_segments;
 }
 
 void DeltaMergeStore::ingestSegmentsFromCheckpointInfo(
