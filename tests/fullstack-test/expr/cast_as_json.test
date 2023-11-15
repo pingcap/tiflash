@@ -73,136 +73,72 @@ func> wait_table test test_decimal
 
 # test
 ## cast int as json
-mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(bool_col as json) from test.test_int;
-+------------------------+
-| cast(bool_col as json) |
-+------------------------+
-| NULL                   |
-| 0                      |
-| 1                      |
-+------------------------+
-mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(bool_col > 0 as json) from test.test_int;
-+----------------------------+
-| cast(bool_col > 0 as json) |
-+----------------------------+
-| NULL                       |
-| false                      |
-| true                       |
-+----------------------------+
-mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(tiny_us as json) from test.test_int;
-+-----------------------+
-| cast(tiny_us as json) |
-+-----------------------+
-| NULL                  |
-| 0                     |
-| 1                     |
-+-----------------------+
-mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(tiny_s as json) from test.test_int;
-+----------------------+
-| cast(tiny_s as json) |
-+----------------------+
-| NULL                 |
-| 0                    |
-| -1                   |
-+----------------------+
-mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(small_us as json) from test.test_int;
-+------------------------+
-| cast(small_us as json) |
-+------------------------+
-| NULL                   |
-| 0                      |
-| 1                      |
-+------------------------+
-mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(small_s as json) from test.test_int;
-+-----------------------+
-| cast(small_s as json) |
-+-----------------------+
-| NULL                  |
-| 0                     |
-| -1                    |
-+-----------------------+
-mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(medium_us as json) from test.test_int;
-+-------------------------+
-| cast(medium_us as json) |
-+-------------------------+
-| NULL                    |
-| 0                       |
-| 1                       |
-+-------------------------+
-mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(medium_s as json) from test.test_int;
-+------------------------+
-| cast(medium_s as json) |
-+------------------------+
-| NULL                   |
-| 0                      |
-| -1                     |
-+------------------------+
-mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(int_us as json) from test.test_int;
-+----------------------+
-| cast(int_us as json) |
-+----------------------+
-| NULL                 |
-| 0                    |
-| 1                    |
-+----------------------+
-mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(int_s as json) from test.test_int;
-+---------------------+
-| cast(int_s as json) |
-+---------------------+
-| NULL                |
-| 0                   |
-| -1                  |
-+---------------------+
-mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(bigint_us as json) from test.test_int;
-+-------------------------+
-| cast(bigint_us as json) |
-+-------------------------+
-| NULL                    |
-| 0                       |
-| 1                       |
-+-------------------------+
-mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(bigint_s as json) from test.test_int;
-+------------------------+
-| cast(bigint_s as json) |
-+------------------------+
-| NULL                   |
-| 0                      |
-| -1                     |
-+------------------------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(bool_col as json), cast(bool_col > 0 as json) from test.test_int;
++------------------------+----------------------------+
+| cast(bool_col as json) | cast(bool_col > 0 as json) |
++------------------------+----------------------------+
+| NULL                   | NULL                       |
+| 0                      | false                      |
+| 1                      | true                       |
++------------------------+----------------------------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(tiny_us as json), cast(tiny_s as json) from test.test_int;
++-----------------------+----------------------+
+| cast(tiny_us as json) | cast(tiny_s as json) |
++-----------------------+----------------------+
+| NULL                  | NULL                 |
+| 0                     | 0                    |
+| 1                     | -1                   |
++-----------------------+----------------------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(small_us as json), cast(small_s as json) from test.test_int;
++------------------------+-----------------------+
+| cast(small_us as json) | cast(small_s as json) |
++------------------------+-----------------------+
+| NULL                   | NULL                  |
+| 0                      | 0                     |
+| 1                      | -1                    |
++------------------------+-----------------------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(medium_us as json), cast(medium_s as json) from test.test_int;
++-------------------------+------------------------+
+| cast(medium_us as json) | cast(medium_s as json) |
++-------------------------+------------------------+
+| NULL                    | NULL                   |
+| 0                       | 0                      |
+| 1                       | -1                     |
++-------------------------+------------------------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(int_us as json), cast(int_s as json) from test.test_int;
++----------------------+---------------------+
+| cast(int_us as json) | cast(int_s as json) |
++----------------------+---------------------+
+| NULL                 | NULL                |
+| 0                    | 0                   |
+| 1                    | -1                  |
++----------------------+---------------------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(bigint_us as json), cast(bigint_s as json) from test.test_int;
++-------------------------+------------------------+
+| cast(bigint_us as json) | cast(bigint_s as json) |
++-------------------------+------------------------+
+| NULL                    | NULL                   |
+| 0                       | 0                      |
+| 1                       | -1                     |
++-------------------------+------------------------+
 
 ## cast real as json
-mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(float_s as json) from test.test_float;
-+-----------------------+
-| cast(float_s as json) |
-+-----------------------+
-| NULL                  |
-| 0                     |
-| -999.9990234375       |
-+-----------------------+
-mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(float_us as json) from test.test_float;
-+------------------------+
-| cast(float_us as json) |
-+------------------------+
-| NULL                   |
-| 0                      |
-| 999.9990234375         |
-+------------------------+
-mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(double_s as json) from test.test_float;
-+------------------------+
-| cast(double_s as json) |
-+------------------------+
-| NULL                   |
-| 0                      |
-| -999.999               |
-+------------------------+
-mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(double_us as json) from test.test_float;
-+-------------------------+
-| cast(double_us as json) |
-+-------------------------+
-| NULL                    |
-| 0                       |
-| 999.999                 |
-+-------------------------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(float_s as json), cast(float_us as json) from test.test_float;
++-----------------------+------------------------+
+| cast(float_s as json) | cast(float_us as json) |
++-----------------------+------------------------+
+| NULL                  | NULL                   |
+| 0                     | 0                      |
+| -999.9990234375       | 999.9990234375         |
++-----------------------+------------------------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(double_s as json), cast(double_us as json) from test.test_float;
++------------------------+-------------------------+
+| cast(double_s as json) | cast(double_us as json) |
++------------------------+-------------------------+
+| NULL                   | NULL                    |
+| 0                      | 0                       |
+| -999.999               | 999.999                 |
++------------------------+-------------------------+
 
 ## cast string as json
 mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(str_ch as json) from test.test_str where flag = 0;
@@ -238,22 +174,12 @@ mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; 
 | 1.11                  |
 | true                  |
 +-----------------------+
-mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(str_tb as json) from test.test_str where flag = 0;
-+----------------------+
-| cast(str_tb as json) |
-+----------------------+
-| NULL                 |
-+----------------------+
-mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(str_tb as json) from test.test_str where flag = 1;
+mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(str_tb as json) from test.test_str where flag in (0, 1, 2);
 +-------------------------------+
 | cast(str_tb as json)          |
 +-------------------------------+
-| "base64:type249:aGVsbG93b3Jk" |
-+-------------------------------+
-mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(str_tb as json) from test.test_str where flag = 2;
-+-------------------------------+
-| cast(str_tb as json)          |
-+-------------------------------+
+| NULL                          |
+| "base64:type249:"             |
 | "base64:type249:aGVsbG93b3Jk" |
 +-------------------------------+
 mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(str_tt as json) from test.test_str where flag = 0;
@@ -270,22 +196,12 @@ mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; 
 +----------------------+
 | [1, "1", {"1": "1"}] |
 +----------------------+
-mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(str_b as json) from test.test_str where flag = 0;
-+---------------------+
-| cast(str_b as json) |
-+---------------------+
-| NULL                |
-+---------------------+
-mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(str_b as json) from test.test_str where flag = 1;
-+---------------------+
-| cast(str_b as json) |
-+---------------------+
-| "base64:type252:"   |
-+---------------------+
-mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(str_b as json) from test.test_str where flag = 2;
+mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(str_b as json) from test.test_str where flag in (0, 1, 2);
 +-------------------------------+
 | cast(str_b as json)           |
 +-------------------------------+
+| NULL                          |
+| "base64:type252:"             |
 | "base64:type252:aGVsbG93b3Jk" |
 +-------------------------------+
 mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(str_t as json) from test.test_str where flag = 0;
@@ -302,22 +218,12 @@ mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; 
 +----------------------+
 | [1, "1", {"1": "1"}] |
 +----------------------+
-mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(str_mb as json) from test.test_str where flag = 0;
-+----------------------+
-| cast(str_mb as json) |
-+----------------------+
-| NULL                 |
-+----------------------+
-mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(str_mb as json) from test.test_str where flag = 1;
+mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(str_mb as json) from test.test_str where flag in (0, 1, 2);
 +-------------------------------+
 | cast(str_mb as json)          |
 +-------------------------------+
-| "base64:type250:aGVsbG93b3Jk" |
-+-------------------------------+
-mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(str_mb as json) from test.test_str where flag = 2;
-+-------------------------------+
-| cast(str_mb as json)          |
-+-------------------------------+
+| NULL                          |
+| "base64:type250:"             |
 | "base64:type250:aGVsbG93b3Jk" |
 +-------------------------------+
 mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(str_mt as json) from test.test_str where flag = 0;
@@ -334,22 +240,12 @@ mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; 
 +----------------------+
 | [1, "1", {"1": "1"}] |
 +----------------------+
-mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(str_lb as json) from test.test_str where flag = 0;
-+----------------------+
-| cast(str_lb as json) |
-+----------------------+
-| NULL                 |
-+----------------------+
-mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(str_lb as json) from test.test_str where flag = 1;
-+----------------------+
-| cast(str_lb as json) |
-+----------------------+
-| "base64:type251:"    |
-+----------------------+
-mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(str_lb as json) from test.test_str where flag = 2;
+mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(str_lb as json) from test.test_str where flag in (0, 1, 2);
 +-------------------------------+
 | cast(str_lb as json)          |
 +-------------------------------+
+| NULL                          |
+| "base64:type251:"             |
 | "base64:type251:aGVsbG93b3Jk" |
 +-------------------------------+
 mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(str_lt as json) from test.test_str where flag = 0;

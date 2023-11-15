@@ -18,8 +18,6 @@
 #include <TiDB/Decode/JsonBinary.h>
 #include <TiDB/Decode/JsonPathExprRef.h>
 
-#include <string_view>
-
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #include <Poco/Base64Decoder.h>
@@ -835,7 +833,8 @@ void JsonBinary::buildBinaryJsonObjectInBuffer(
 {
     write_buffer.write(TYPE_CODE_OBJECT);
 
-    UInt32 total_size = HEADER_SIZE + json_binary_map.size() * (KEY_ENTRY_SIZE + VALUE_ENTRY_SIZE);
+    UInt32 data_offset = HEADER_SIZE + json_binary_map.size() * (KEY_ENTRY_SIZE + VALUE_ENTRY_SIZE);
+    UInt32 total_size = data_offset;
     for (const auto & [key, value] : json_binary_map)
     {
         if (unlikely(key.size() > std::numeric_limits<UInt16>::max()))
@@ -851,24 +850,44 @@ void JsonBinary::buildBinaryJsonObjectInBuffer(
 
     encodeNumeric(write_buffer, total_size);
 
-    /// first write key entry with key offset.
-    UInt32 key_offset = HEADER_SIZE + json_binary_map.size() * KEY_ENTRY_SIZE;
+    // 1.write key entry with key offset.
     for (const auto & [key, _] : json_binary_map)
     {
-        encodeNumeric(write_buffer, key_offset);
-        key_offset += key.size();
+        encodeNumeric(write_buffer, data_offset);
+        data_offset += key.size();
         UInt16 key_len = key.size();
         encodeNumeric(write_buffer, key_len);
     }
+
+    // 2.write value entry with value offset
+    for (const auto & [_, value] : json_binary_map)
+    {
+        write_buffer.write(value.type);
+        if (value.type == TYPE_CODE_LITERAL)
+        {
+            /// Literal values are inlined in the value entry, total takes 4 bytes
+            write_buffer.write(value.data.data[0]);
+            write_buffer.write(0);
+            write_buffer.write(0);
+            write_buffer.write(0);
+        }
+        else
+        {
+            encodeNumeric(write_buffer, data_offset);
+            /// update value_offset
+            data_offset += value.data.size;
+        }
+    }
+
+    // 3.write key data.
     for (const auto & [key, _] : json_binary_map)
         write_buffer.write(key.data(), key.size());
-
-    /// next write values.
-    std::vector<JsonBinary> value_vec;
-    value_vec.reserve(json_binary_map.size());
+    // 4.write value data.
     for (const auto & [_, value] : json_binary_map)
-        value_vec.push_back(value);
-    buildBinaryJsonElementsInBuffer(value_vec, write_buffer);
+    {
+        if (value.type != TYPE_CODE_LITERAL)
+            write_buffer.write(value.data.data, value.data.size);
+    }
 }
 
 UInt64 JsonBinary::getJsonLength(const std::string_view & raw_value)

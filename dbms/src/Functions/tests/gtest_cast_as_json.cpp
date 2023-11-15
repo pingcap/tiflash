@@ -222,7 +222,6 @@ try
 }
 CATCH
 
-// TODO
 TEST_F(TestCastAsJson, CastStringAsJson)
 try
 {
@@ -271,8 +270,11 @@ try
     }
     // valid json text
     // a. literal
+    executeAndAssert<String, true>(func_name, "0", "0");
     executeAndAssert<String, true>(func_name, "1", "1");
+    executeAndAssert<String, true>(func_name, "-1", "-1");
     executeAndAssert<String, true>(func_name, "1.11", "1.11");
+    executeAndAssert<String, true>(func_name, "-1.11", "-1.11");
     executeAndAssert<String, true>(func_name, "\"a\"", "\"a\"");
     executeAndAssert<String, true>(func_name, "true", "true");
     executeAndAssert<String, true>(func_name, "false", "false");
@@ -280,16 +282,15 @@ try
     // b. json array
     executeAndAssert<String, true>(func_name, "[]", "[]");
     executeAndAssert<String, true>(func_name, "[1, 1000, 2.22, \"a\", null]", "[1, 1000, 2.22, \"a\", null]");
-    // executeAndAssert<String, true>(func_name, R"([1, 1000, 2.22, "a", null, {"a":1.11}])", R"([1, 1000, 2.22, "a", null, {"a":1.11}])");
+    executeAndAssert<String, true>(func_name, R"([1, 1000, 2.22, "a", null, {"a":1.11}])", R"([1, 1000, 2.22, "a", null, {"a": 1.11}])");
     executeAndAssert<String, true>(
         func_name,
         "[[[[[[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]]]]]]",
         "[[[[[[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]]]]]]");
     // c. json object
     executeAndAssert<String, true>(func_name, "{}", "{}");
-    // todo fix bug of encode json obj
-    // executeAndAssert<String, true>(func_name, "{\"a\":1}", "{\"a\":1}");
-    // executeAndAssert<String, true>(func_name, R"({"a":null,"b":1,"c":1.11,"d":[],"e":{}})", R"({"a":null,"b":1,"c":1.11,"d":[],"e":{}})");
+    executeAndAssert<String, true>(func_name, "{\"a\":1}", "{\"a\": 1}");
+    executeAndAssert<String, true>(func_name, R"({"a":null,"b":1,"c":1.11,"d":[],"e":{}})", R"({"a": null, "b": 1, "c": 1.11, "d": [], "e": {}})");
 }
 CATCH
 
