@@ -111,11 +111,17 @@ CheckpointIngestInfoPtr FastAddPeerContext::getOrRestoreCheckpointIngestInfo(
     UInt64 region_id,
     UInt64 peer_id)
 {
-    std::unique_lock<std::mutex> lock;
+    std::unique_lock<std::mutex> lock(ingest_info_mu);
     if (!checkpoint_ingest_info_map.contains(region_id))
         checkpoint_ingest_info_map[region_id]
             = std::make_shared<CheckpointIngestInfo>(tmt, proxy_helper, region_id, peer_id);
     return checkpoint_ingest_info_map.at(region_id);
+}
+
+void FastAddPeerContext::debugRemoveCheckpointIngestInfo(UInt64 region_id)
+{
+    std::unique_lock<std::mutex> lock(ingest_info_mu);
+    checkpoint_ingest_info_map.erase(region_id);
 }
 
 void FastAddPeerContext::insertCheckpointIngestInfo(
@@ -127,6 +133,7 @@ void FastAddPeerContext::insertCheckpointIngestInfo(
     DM::Segments && segments)
 {
     auto * log = &Poco::Logger::get("FastAddPeerContext");
+    std::unique_lock<std::mutex> lock(ingest_info_mu);
     if (checkpoint_ingest_info_map.contains(region_id))
     {
         // TODO(fap) should we throw here?

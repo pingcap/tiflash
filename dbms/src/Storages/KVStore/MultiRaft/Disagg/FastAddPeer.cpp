@@ -260,7 +260,6 @@ std::variant<CheckpointRegionInfoAndData, FastAddPeerRes> FastAddPeerImplBuild(
 
 FastAddPeerRes FastAddPeerImplIngest(
     TMTContext & tmt,
-    TiFlashRaftProxyHelper * proxy_helper,
     uint64_t region_id,
     uint64_t new_peer_id,
     CheckpointRegionInfoAndData && checkpoint)
@@ -297,8 +296,7 @@ FastAddPeerRes FastAddPeerImplIngest(
             storage->getRowKeyColumnSize());
 
         auto segments = dm_storage->buildSegmentsFromCheckpointInfo(new_key_range, checkpoint_info, settings);
-
-        fap_ctx->getOrRestoreCheckpointIngestInfo(tmt, proxy_helper, region_id, new_peer_id);
+        fap_ctx->insertCheckpointIngestInfo(tmt, region_id, new_peer_id, checkpoint_info->remote_store_id, region, std::move(segments));
     }
     else
     {
@@ -343,7 +341,6 @@ FastAddPeerRes FastAddPeerImpl(
         {
             return FastAddPeerImplIngest(
                 tmt,
-                proxy_helper,
                 region_id,
                 new_peer_id,
                 std::move(std::get<CheckpointRegionInfoAndData>(res)));
@@ -373,21 +370,19 @@ FastAddPeerRes FastAddPeerImpl(
     }
 }
 
-void ApplyFapSnapshot(EngineStoreServerWrap * server, uint64_t region_id, uint64_t peer_id)
-{
+void ApplyFapSnapshotImpl(TMTContext & tmt, TiFlashRaftProxyHelper * proxy_helper, uint64_t region_id, uint64_t peer_id) {
     try
     {
         Stopwatch watch_ingest;
-        RUNTIME_CHECK_MSG(server->tmt, "TMTContext is null");
-        auto kvstore = server->tmt->getKVStore();
-        auto fap_ctx = server->tmt->getContext().getSharedContextDisagg()->fap_context;
+        auto kvstore = tmt.getKVStore();
+        auto fap_ctx = tmt.getContext().getSharedContextDisagg()->fap_context;
         auto checkpoint_ingest_info
-            = fap_ctx->getOrRestoreCheckpointIngestInfo(*server->tmt, server->proxy_helper, region_id, peer_id);
-        kvstore->handleIngestCheckpoint(checkpoint_ingest_info->getRegion(), checkpoint_ingest_info, *server->tmt);
+            = fap_ctx->getOrRestoreCheckpointIngestInfo(tmt, proxy_helper, region_id, peer_id);
+        kvstore->handleIngestCheckpoint(checkpoint_ingest_info->getRegion(), checkpoint_ingest_info, tmt);
         GET_METRIC(tiflash_fap_task_duration_seconds, type_ingest_stage).Observe(watch_ingest.elapsedSeconds());
         GET_METRIC(tiflash_fap_task_result, type_succeed).Increment();
     }
-    catch (...)
+    catch (Exception & e)
     {
         DB::tryLogCurrentException(
             "FastAddPeerApply",
@@ -395,9 +390,17 @@ void ApplyFapSnapshot(EngineStoreServerWrap * server, uint64_t region_id, uint64
                 "Failed when try to apply fap snapshot region_id={} peer_id={} {}",
                 region_id,
                 peer_id,
-                StackTrace().toString()));
-        return;
+                e.message()
+            ));
+        exit(-1);
     }
+}
+
+void ApplyFapSnapshot(EngineStoreServerWrap * server, uint64_t region_id, uint64_t peer_id)
+{
+    RUNTIME_CHECK_MSG(server->tmt, "TMTContext is null");
+    RUNTIME_CHECK_MSG(server->proxy_helper, "proxy_helper is null");
+    ApplyFapSnapshotImpl(*server->tmt, server->proxy_helper, region_id, peer_id);
 }
 
 FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, uint64_t new_peer_id)

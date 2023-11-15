@@ -62,6 +62,8 @@ public:
         RegionPtr region,
         DM::Segments && segments);
 
+    void debugRemoveCheckpointIngestInfo(UInt64 region_id);
+
 public:
     std::shared_ptr<FAPAsyncTasks> tasks_trace;
 
@@ -92,6 +94,7 @@ private:
     std::unordered_map<UInt64, std::pair<UInt64, CheckpointCacheElementPtr>> checkpoint_cache_map;
 
     // Checkpoint that is persisted, but yet to be ingested into DeltaTree.
+    std::mutex ingest_info_mu;
     std::map<UInt64, CheckpointIngestInfoPtr> checkpoint_ingest_info_map;
 
     LoggerPtr log;

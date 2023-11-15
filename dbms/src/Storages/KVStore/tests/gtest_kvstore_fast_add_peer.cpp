@@ -26,6 +26,8 @@
 #include <TestUtils/TiFlashTestEnv.h>
 #include <aws/s3/model/CreateBucketRequest.h>
 #include <common/logger_useful.h>
+#include <Storages/DeltaMerge/Filter/PushDownFilter.h>
+#include <TestUtils/InputStreamTestUtils.h>
 
 #include <chrono>
 #include <numeric>
@@ -45,10 +47,10 @@ FastAddPeerRes FastAddPeerImpl(
     uint64_t new_peer_id);
 FastAddPeerRes FastAddPeerImplIngest(
     TMTContext & tmt,
-    TiFlashRaftProxyHelper * proxy_helper,
     uint64_t region_id,
     uint64_t new_peer_id,
     CheckpointRegionInfoAndData && checkpoint);
+void ApplyFapSnapshotImpl(TMTContext & tmt, TiFlashRaftProxyHelper * proxy_helper, uint64_t region_id, uint64_t peer_id);
 
 namespace tests
 {
@@ -101,6 +103,13 @@ public:
             global_context.getSharedContextDisagg()->remote_data_store = nullptr;
         }
         global_context.setPageStorageRunMode(orig_mode);
+        if (!already_initialize_write_ps)
+        {
+            global_context.setPageStorageRunMode(orig_mode);
+        }
+        auto s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
+        ::DB::tests::TiFlashTestEnv::deleteBucket(*s3_client);
+        DB::tests::TiFlashTestEnv::disableS3Config();
     }
 
 protected:
@@ -224,6 +233,27 @@ try
 }
 CATCH
 
+
+void verifyRows(Context & ctx, DM::DeltaMergeStorePtr store, const DM::RowKeyRange & range, size_t rows)
+{
+    const auto & columns = store->getTableColumns();
+    BlockInputStreamPtr in = store->read(
+        ctx,
+        ctx.getSettingsRef(),
+        columns,
+        {range},
+        /* num_streams= */ 1,
+        /* max_version= */ std::numeric_limits<UInt64>::max(),
+        DM::EMPTY_FILTER,
+        std::vector<RuntimeFilterPtr>{},
+        0,
+        "KVStoreFastAddPeer",
+        /* keep_order= */ false,
+        /* is_fast_scan= */ false,
+        /* expected_block_size= */ 1024)[0];
+    ASSERT_INPUTSTREAM_NROWS(in, rows);
+}
+
 TEST_F(RegionKVStoreTestFAP, RestoreFromRestart)
 try
 {
@@ -232,8 +262,10 @@ try
     auto peer_id = 1;
     initStorages();
     KVStore & kvs = getKVS();
+    global_context.getTMTContext().debugSetKVStore(kvstore);
     auto page_storage = global_context.getWriteNodePageStorage();
-    proxy_instance->bootstrapTable(global_context, kvs, global_context.getTMTContext());
+    TableID table_id = proxy_instance->bootstrapTable(global_context, kvs, global_context.getTMTContext());
+    auto fap_context = global_context.getSharedContextDisagg()->fap_context;
     proxy_instance->bootstrapWithRegion(kvs, global_context.getTMTContext(), region_id, std::nullopt);
     auto proxy_helper = proxy_instance->generateProxyHelper();
     auto region = proxy_instance->getRegion(region_id);
@@ -241,17 +273,16 @@ try
     region->addPeer(store_id, peer_id, metapb::PeerRole::Learner);
 
     // Write some data, and persist meta.
+    auto k1 = RecordKVFormat::genKey(table_id, 1, 111);
+    auto && [value_write1, value_default1] = proxy_instance->generateTiKVKeyValue(111, 999);
     auto [index, term]
-        = proxy_instance->normalWrite(region_id, {34}, {"v2"}, {WriteCmdType::Put}, {ColumnFamilyType::Default});
+        = proxy_instance->rawWrite(region_id, {k1, k1}, {value_default1, value_write1}, {WriteCmdType::Put, WriteCmdType::Put}, {ColumnFamilyType::Default, ColumnFamilyType::Write});
     kvs.setRegionCompactLogConfig(0, 0, 0, 0);
     persistAfterWrite(global_context, kvs, proxy_instance, page_storage, region_id, index);
 
-    LOG_INFO(log, "!!!! test 111");
     auto s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
     ASSERT_TRUE(::DB::tests::TiFlashTestEnv::createBucketIfNotExist(*s3_client));
-    LOG_INFO(log, "!!!! test 222");
     dumpCheckpoint();
-    LOG_INFO(log, "!!!! test 333");
 
     const auto manifest_key = S3::S3Filename::newCheckpointManifest(kvs.getStoreID(), upload_sequence).toFullKey();
     auto checkpoint_info = std::make_shared<CheckpointInfo>();
@@ -266,7 +297,18 @@ try
         kv_region->mutMeta().clonedApplyState(),
         kv_region->mutMeta().clonedRegionState());
 
-    FastAddPeerImplIngest(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333, std::move(mock_data));
+    FastAddPeerImplIngest(global_context.getTMTContext(), region_id, 2333, std::move(mock_data));
+    fap_context->debugRemoveCheckpointIngestInfo(region_id);
+    ApplyFapSnapshotImpl(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333);
+    {
+        auto keyspace_id = kv_region->getKeyspaceID();
+        auto table_id = kv_region->getMappedTableID();
+        auto storage = global_context.getTMTContext().getStorages().get(keyspace_id, table_id);
+        ASSERT_TRUE(storage && storage->engineType() == TiDB::StorageEngine::DT);
+        auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
+        auto store = dm_storage->getStore();
+        verifyRows(global_context, store, DM::RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()), 1);
+    }
 }
 CATCH
 

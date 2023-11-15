@@ -43,7 +43,8 @@ struct CheckpointIngestInfo
     RegionPtr getRegion() const;
     UInt64 regionId() const { return region_id; }
     UInt64 peerId() const { return peer_id; }
-
+    
+    // Create from build
     CheckpointIngestInfo(
         TMTContext & tmt_,
         UInt64 region_id_,
@@ -59,8 +60,11 @@ struct CheckpointIngestInfo
         , restored_segments(std::move(restored_segments_))
         , in_memory(true)
         , clean_when_destruct(false)
-    {}
+    {
+        persistToPS();
+    }
 
+    // Create from restore
     CheckpointIngestInfo(
         TMTContext & tmt_,
         const struct TiFlashRaftProxyHelper * proxy_helper,
