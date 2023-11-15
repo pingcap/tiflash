@@ -493,68 +493,63 @@ void SchemaBuilder<Getter, NameMapper>::applySetTiFlashReplica(DatabaseID databa
         }
 
         applyDropTable(db_info->id, table_id);
+        return;
     }
-    else
+
+    assert(table_info->replica_info.count != 0);
+    // if set not 0, we first check whether the storage exists, and then check the replica_count and available
+    auto & tmt_context = context.getTMTContext();
+    auto storage = tmt_context.getStorages().get(keyspace_id, table_info->id);
+    if (storage == nullptr)
     {
-        // if set not 0, we first check whether the storage exists, and then check the replica_count and available
-        auto & tmt_context = context.getTMTContext();
-        auto storage = tmt_context.getStorages().get(keyspace_id, table_info->id);
-        if (storage != nullptr)
+        if (!table_id_map.tableIDInDatabaseIdMap(table_id))
         {
-            if (storage->getTombstone() == 0)
+            applyCreateTable(db_info->id, table_id);
+        }
+        return;
+    }
+
+    if (storage->getTombstone() != 0)
+    {
+        applyRecoverTable(db_info->id, table_id);
+        return;
+    }
+
+    auto managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage);
+    auto storage_replica_info = managed_storage->getTableInfo().replica_info;
+    if (storage_replica_info.count == table_info->replica_info.count
+        && storage_replica_info.available == table_info->replica_info.available)
+    {
+        return;
+    }
+
+    if (table_info->isLogicalPartitionTable())
+    {
+        for (const auto & part_def : table_info->partition.definitions)
+        {
+            auto new_part_table_info = table_info->producePartitionTableInfo(part_def.id, name_mapper);
+            auto part_storage = tmt_context.getStorages().get(keyspace_id, new_part_table_info->id);
+            if (part_storage != nullptr)
             {
-                auto managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage);
-                auto storage_replica_info = managed_storage->getTableInfo().replica_info;
-                if (storage_replica_info.count == table_info->replica_info.count
-                    && storage_replica_info.available == table_info->replica_info.available)
-                {
-                    return;
-                }
-                else
-                {
-                    if (table_info->isLogicalPartitionTable())
-                    {
-                        for (const auto & part_def : table_info->partition.definitions)
-                        {
-                            auto new_part_table_info = table_info->producePartitionTableInfo(part_def.id, name_mapper);
-                            auto part_storage = tmt_context.getStorages().get(keyspace_id, new_part_table_info->id);
-                            if (part_storage != nullptr)
-                            {
-                                auto alter_lock = part_storage->lockForAlter(getThreadNameAndID());
-                                part_storage->alterSchemaChange(
-                                    alter_lock,
-                                    *new_part_table_info,
-                                    name_mapper.mapDatabaseName(db_info->id, keyspace_id),
-                                    name_mapper.mapTableName(*new_part_table_info),
-                                    context);
-                            }
-                            else
-                                table_id_map.emplacePartitionTableID(part_def.id, table_id);
-                        }
-                    }
-                    auto alter_lock = storage->lockForAlter(getThreadNameAndID());
-                    storage->alterSchemaChange(
-                        alter_lock,
-                        *table_info,
-                        name_mapper.mapDatabaseName(db_info->id, keyspace_id),
-                        name_mapper.mapTableName(*table_info),
-                        context);
-                }
-                return;
+                auto alter_lock = part_storage->lockForAlter(getThreadNameAndID());
+                part_storage->alterSchemaChange(
+                    alter_lock,
+                    *new_part_table_info,
+                    name_mapper.mapDatabaseName(db_info->id, keyspace_id),
+                    name_mapper.mapTableName(*new_part_table_info),
+                    context);
             }
             else
-            {
-                applyRecoverTable(db_info->id, table_id);
-            }
-        }
-        else
-        {
-            if (!table_id_map.tableIDInDatabaseIdMap(table_id))
-            {
-                applyCreateTable(db_info->id, table_id);
-            }
+                table_id_map.emplacePartitionTableID(part_def.id, table_id);
         }
     }
+    auto alter_lock = storage->lockForAlter(getThreadNameAndID());
+    storage->alterSchemaChange(
+        alter_lock,
+        *table_info,
+        name_mapper.mapDatabaseName(db_info->id, keyspace_id),
+        name_mapper.mapTableName(*table_info),
+        context);
 }
 
 template <typename Getter, typename NameMapper>
@@ -807,15 +802,17 @@ void SchemaBuilder<Getter, NameMapper>::applyRecoverTable(DatabaseID database_id
         for (const auto & part_def : table_info->partition.definitions)
         {
             auto new_table_info = table_info->producePartitionTableInfo(part_def.id, name_mapper);
-            applyRecoverPhysicalTable(db_info, new_table_info);
+            tryRecoverPhysicalTable(db_info, new_table_info);
         }
     }
 
-    applyRecoverPhysicalTable(db_info, table_info);
+    tryRecoverPhysicalTable(db_info, table_info);
 }
 
+// Return true - the Storage instance exists and is recovered (or not tombstone)
+//        false - the Storage instance does not exist
 template <typename Getter, typename NameMapper>
-void SchemaBuilder<Getter, NameMapper>::applyRecoverPhysicalTable(
+bool SchemaBuilder<Getter, NameMapper>::tryRecoverPhysicalTable(
     const TiDB::DBInfoPtr & db_info,
     const TiDB::TableInfoPtr & table_info)
 {
@@ -827,48 +824,47 @@ void SchemaBuilder<Getter, NameMapper>::applyRecoverPhysicalTable(
             log,
             "Storage instance does not exist, tryRecoverPhysicalTable is ignored, table_id={}",
             table_info->id);
+        return false;
     }
-    else
-    {
-        if (!storage->isTombstone())
-        {
-            LOG_INFO(
-                log,
-                "Trying to recover table {} but it is not marked as tombstone, skip, database_id={} table_id={}",
-                name_mapper.debugCanonicalName(*db_info, *table_info),
-                db_info->id,
-                table_info->id);
-            return;
-        }
 
+    if (!storage->isTombstone())
+    {
         LOG_INFO(
             log,
-            "Create table {} by recover begin, database_id={} table_id={}",
+            "Trying to recover table {} but it is not marked as tombstone, skip, database_id={} table_id={}",
             name_mapper.debugCanonicalName(*db_info, *table_info),
             db_info->id,
             table_info->id);
-        AlterCommands commands;
-        {
-            AlterCommand command;
-            command.type = AlterCommand::RECOVER;
-            commands.emplace_back(std::move(command));
-        }
-        auto alter_lock = storage->lockForAlter(getThreadNameAndID());
-        storage->updateTombstone(
-            alter_lock,
-            commands,
-            name_mapper.mapDatabaseName(*db_info),
-            *table_info,
-            name_mapper,
-            context);
-        LOG_INFO(
-            log,
-            "Create table {} by recover end, database_id={} table_id={}",
-            name_mapper.debugCanonicalName(*db_info, *table_info),
-            db_info->id,
-            table_info->id);
-        return;
+        return true;
     }
+
+    LOG_INFO(
+        log,
+        "Create table {} by recover begin, database_id={} table_id={}",
+        name_mapper.debugCanonicalName(*db_info, *table_info),
+        db_info->id,
+        table_info->id);
+    AlterCommands commands;
+    {
+        AlterCommand command;
+        command.type = AlterCommand::RECOVER;
+        commands.emplace_back(std::move(command));
+    }
+    auto alter_lock = storage->lockForAlter(getThreadNameAndID());
+    storage->updateTombstone(
+        alter_lock,
+        commands,
+        name_mapper.mapDatabaseName(*db_info),
+        *table_info,
+        name_mapper,
+        context);
+    LOG_INFO(
+        log,
+        "Create table {} by recover end, database_id={} table_id={}",
+        name_mapper.debugCanonicalName(*db_info, *table_info),
+        db_info->id,
+        table_info->id);
+    return true;
 }
 
 static ASTPtr parseCreateStatement(const String & statement)
@@ -1098,53 +1094,12 @@ void SchemaBuilder<Getter, NameMapper>::applyCreateStorageInstance(
         db_info->id,
         table_info->id);
 
-    /// Check if this is a RECOVER table.
+    /// Try to recover the existing storage instance
+    if (tryRecoverPhysicalTable(db_info, table_info))
     {
-        auto & tmt_context = context.getTMTContext();
-        if (auto * storage = tmt_context.getStorages().get(keyspace_id, table_info->id).get(); storage)
-        {
-            if (!storage->isTombstone())
-            {
-                LOG_DEBUG(
-                    log,
-                    "Trying to create table {}, but it already exists and is not marked as tombstone, database_id={} "
-                    "table_id={}",
-                    name_mapper.debugCanonicalName(*db_info, *table_info),
-                    db_info->id,
-                    table_info->id);
-                return;
-            }
-
-            LOG_DEBUG(
-                log,
-                "Recovering table {} with database_id={}, table_id={}",
-                name_mapper.debugCanonicalName(*db_info, *table_info),
-                db_info->id,
-                table_info->id);
-            AlterCommands commands;
-            {
-                AlterCommand command;
-                command.type = AlterCommand::RECOVER;
-                commands.emplace_back(std::move(command));
-            }
-            auto alter_lock = storage->lockForAlter(getThreadNameAndID());
-            storage->updateTombstone(
-                alter_lock,
-                commands,
-                name_mapper.mapDatabaseName(*db_info),
-                *table_info,
-                name_mapper,
-                context);
-            LOG_INFO(
-                log,
-                "Created table {}, database_id={} table_id={}",
-                name_mapper.debugCanonicalName(*db_info, *table_info),
-                db_info->id,
-                table_info->id);
-            return;
-        }
+        return;
     }
-
+    // Else the storage instance does not exist, create it.
     /// Normal CREATE table.
     if (table_info->engine_type == StorageEngine::UNSPECIFIED)
     {

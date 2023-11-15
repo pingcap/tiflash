@@ -72,8 +72,6 @@ private:
         }
     }
 
-    std::tuple<bool, DatabaseID, TableID> findDatabaseIDAndTableID(TableID physical_table_id);
-
 public:
     TiDBSchemaSyncer(KVClusterPtr cluster_, KeyspaceID keyspace_id_)
         : cluster(std::move(cluster_))

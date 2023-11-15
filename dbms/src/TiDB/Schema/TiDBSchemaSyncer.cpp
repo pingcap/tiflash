@@ -153,29 +153,6 @@ Int64 TiDBSchemaSyncer<mock_getter, mock_mapper>::syncAllSchemas(Context & conte
 }
 
 template <bool mock_getter, bool mock_mapper>
-std::tuple<bool, DatabaseID, TableID> TiDBSchemaSyncer<mock_getter, mock_mapper>::findDatabaseIDAndTableID(
-    TableID physical_table_id)
-{
-    auto database_id = table_id_map.findTableIDInDatabaseMap(physical_table_id);
-    TableID logical_table_id = physical_table_id;
-    if (database_id == -1)
-    {
-        /// if we can't find physical_table_id in table_id_to_database_id,
-        /// we should first try to find it in partition_id_to_logical_id because it could be the pysical_table_id of partition tables
-        logical_table_id = table_id_map.findTableIDInPartitionMap(physical_table_id);
-        if (logical_table_id != -1)
-            database_id = table_id_map.findTableIDInDatabaseMap(logical_table_id);
-    }
-
-    if (database_id != -1 && logical_table_id != -1)
-    {
-        return std::make_tuple(true, database_id, logical_table_id);
-    }
-
-    return std::make_tuple(false, 0, 0);
-}
-
-template <bool mock_getter, bool mock_mapper>
 std::tuple<bool, String> TiDBSchemaSyncer<mock_getter, mock_mapper>::trySyncTableSchema(
     Context & context,
     TableID physical_table_id,
@@ -184,7 +161,7 @@ std::tuple<bool, String> TiDBSchemaSyncer<mock_getter, mock_mapper>::trySyncTabl
 {
     // Get logical_table_id and database_id by physical_table_id.
     // If the table is a partition table, logical_table_id != physical_table_id, otherwise, logical_table_id == physical_table_id;
-    auto [found, database_id, logical_table_id] = findDatabaseIDAndTableID(physical_table_id);
+    auto [found, database_id, logical_table_id] = table_id_map.findDatabaseIDAndLogicalTableID(physical_table_id);
     if (!found)
     {
         String message = fmt::format(

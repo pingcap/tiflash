@@ -191,7 +191,7 @@ private:
 
     void applyRecoverTable(DatabaseID database_id, TiDB::TableID table_id);
 
-    void applyRecoverPhysicalTable(const TiDB::DBInfoPtr & db_info, const TiDB::TableInfoPtr & table_info);
+    bool tryRecoverPhysicalTable(const TiDB::DBInfoPtr & db_info, const TiDB::TableInfoPtr & table_info);
 
     /// Parameter schema_name should be mapped.
     void applyDropPhysicalTable(const String & db_name, TableID table_id);
