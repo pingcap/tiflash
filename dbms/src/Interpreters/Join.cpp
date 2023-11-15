@@ -656,6 +656,13 @@ bool Join::isRestoreJoin() const
 void Join::insertFromBlockInternal(Block * stored_block, size_t stream_index)
 {
     size_t keys_size = key_names_right.size();
+    Block key_block;
+    if (!runtime_filter_list.empty())
+    {
+        /// save the key column for runtime filter
+        for (const auto & name : key_names_right)
+            key_block.insert(stored_block->getByName(name));
+    }
 
     const Block & block = *stored_block;
 
@@ -768,7 +775,8 @@ void Join::insertFromBlockInternal(Block * stored_block, size_t stream_index)
     }
 
     // generator in runtime filter
-    generateRuntimeFilterValues(block);
+    if (!runtime_filter_list.empty())
+        generateRuntimeFilterValues(key_block);
 }
 
 void Join::generateRuntimeFilterValues(const Block & block)

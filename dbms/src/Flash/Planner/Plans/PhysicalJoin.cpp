@@ -155,7 +155,14 @@ PhysicalPlanNodePtr PhysicalJoin::build(
         right_input_header,
         join_non_equal_conditions.other_cond_expr != nullptr);
 
-    auto runtime_filter_list = tiflash_join.genRuntimeFilterList(context, build_side_header, log);
+    assert(build_key_names.size() == original_build_key_names.size());
+    std::unordered_map<String, String> build_key_names_map;
+    for (size_t i = 0; i < original_build_key_names.size(); ++i)
+    {
+        build_key_names_map[original_build_key_names[i]] = build_key_names[i];
+    }
+    assert(build_key_names_map.size() == original_build_key_names.size());
+    auto runtime_filter_list = tiflash_join.genRuntimeFilterList(context, build_side_header, build_key_names_map, log);
     LOG_DEBUG(log, "before register runtime filter list, list size:{}", runtime_filter_list.size());
     context.getDAGContext()->runtime_filter_mgr.registerRuntimeFilterList(runtime_filter_list);
 

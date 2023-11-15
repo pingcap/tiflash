@@ -215,6 +215,7 @@ struct TiFlashJoin
     std::vector<RuntimeFilterPtr> genRuntimeFilterList(
         const Context & context,
         const Block & input_header,
+        const std::unordered_map<String, String> & key_names_map,
         const LoggerPtr & log);
 };
 
