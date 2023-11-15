@@ -24,7 +24,7 @@ using Sizes = std::vector<size_t>;
 struct RowRef
 {
     const Block * block;
-    size_t row_num;
+    UInt32 row_num;
 
     RowRef() = default;
     RowRef(const Block * block_, size_t row_num_)
@@ -44,14 +44,21 @@ struct CachedColumnInfo
     std::mutex mu;
     Columns columns;
     CachedColumnState state = CachedColumnState::NOT_CACHED;
+    void * next;
+    CachedColumnInfo(void * next_)
+        : next(next_)
+    {}
 };
 
 /// Single linked list of references to rows. Used for ALL JOINs (non-unique JOINs)
 struct RowRefList : RowRef
 {
-    RowRefList * next = nullptr;
-    size_t list_length = 0;
-    std::unique_ptr<CachedColumnInfo> cached_column_info;
+    UInt32 list_length = 0;
+    union
+    {
+        RowRefList * next = nullptr;
+        CachedColumnInfo * cached_column_info;
+    };
 
     RowRefList() = default;
     RowRefList(const Block * block_, size_t row_num_)
@@ -67,11 +74,14 @@ struct RowRefList : RowRef
 /// Single linked list of references to rows with used flag for each row
 struct RowRefListWithUsedFlag : RowRef
 {
+    UInt32 list_length = 0;
     using Base_t = RowRefListWithUsedFlag;
     mutable std::atomic<bool> used{};
-    RowRefListWithUsedFlag * next = nullptr;
-    size_t list_length = 0;
-    std::unique_ptr<CachedColumnInfo> cached_column_info;
+    union
+    {
+        RowRefListWithUsedFlag * next = nullptr;
+        CachedColumnInfo * cached_column_info;
+    };
 
     void setUsed() const
     {
