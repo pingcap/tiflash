@@ -191,7 +191,8 @@ size_t ColumnFileSetReader::readRows(
     for (const auto & col : output_columns)
         delta_bytes += col->byteSize();
 
-    lac_bytes_collector.collect(delta_bytes);
+    if (row_ids == nullptr)
+        lac_bytes_collector.collect(delta_bytes);
     if (likely(context.scan_context))
         context.scan_context->total_user_read_bytes += delta_bytes;
 
