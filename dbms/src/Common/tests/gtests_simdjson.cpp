@@ -40,6 +40,11 @@ TEST(TestSIMDJson, error)
         auto res = parser.parse(json_str);
         ASSERT_TRUE(res.error());
     }
+    {
+        std::string json_str{"[[], [[fdjfhdjf]]]"};
+        auto res = parser.parse(json_str);
+        ASSERT_TRUE(res.error());
+    }
 }
 
 TEST(TestSIMDJson, literal)

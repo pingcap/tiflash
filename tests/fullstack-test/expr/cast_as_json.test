@@ -32,7 +32,6 @@ mysql> CREATE TABLE test.test_str (flag tinyint,str_ch CHAR,str_vch VARCHAR(100)
 mysql> insert into test.test_str values(0, null, null, null, null, null, null, null, null, null, null);
 mysql> insert into test.test_str values(1, '', '', '', '', '', '', '', '', '', '');
 mysql> insert into test.test_str values(2, 'a', '[1, \"1\", {\"1\":\"1\"}]', 'helloword', '[1, \"1\", {\"1\":\"1\"}]', 'helloword', '[1, \"1\", {\"1\":\"1\"}]', 'helloword', '[1, \"1\", {\"1\":\"1\"}]', 'helloword', '[1, \"1\", {\"1\":\"1\"}]');  #NO_UNESCAPE
-mysql> insert into test.test_str values(3, null, '"a"', null, null, null, null, null, null, null, null);  #NO_UNESCAPE
 mysql> insert into test.test_str values(3, null, '\"a\"', null, null, null, null, null, null, null, null);  #NO_UNESCAPE
 mysql> insert into test.test_str values(3, null, '1', null, null, null, null, null, null, null, null);  #NO_UNESCAPE
 mysql> insert into test.test_str values(3, null, '1.11', null, null, null, null, null, null, null, null);  #NO_UNESCAPE
@@ -234,7 +233,6 @@ mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; 
 +-----------------------+
 | cast(str_vch as json) |
 +-----------------------+
-| "a"                   |
 | "a"                   |
 | 1                     |
 | 1.11                  |

@@ -163,7 +163,7 @@ public:
         JsonBinaryWriteBuffer & write_buffer);
 
     static void buildBinaryJsonObjectInBuffer(
-        const std::map<String, JsonBinary> & json_binary_map,
+        const std::map<std::string_view, JsonBinary> & json_binary_map,
         JsonBinaryWriteBuffer & write_buffer);
 
     static UInt64 getJsonLength(const std::string_view & raw_value);

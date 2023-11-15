@@ -37,6 +37,8 @@
 
 #include <ext/range.h>
 #include <magic_enum.hpp>
+#include <simdjson.h>
+#include <string_view>
 #include <type_traits>
 
 namespace DB
@@ -897,7 +899,7 @@ public:
             if (from.column->isColumnNullable())
             {
                 const auto & column_nullable = static_cast<const ColumnNullable &>(*from.column);
-                doExecuteForParsingJson2<true>(
+                doExecuteForParsingJson<true>(
                     write_buffer,
                     offsets_to,
                     input_source,
@@ -907,7 +909,7 @@ public:
             else
             {
                 auto tmp_null_map = ColumnUInt8::create(0, 0);
-                doExecuteForParsingJson2<false>(
+                doExecuteForParsingJson<false>(
                     write_buffer,
                     offsets_to,
                     input_source,
@@ -981,7 +983,7 @@ private:
         const NullMap & null_map_from,
         size_t size)
     {
-        Poco::JSON::Parser parser;
+        simdjson::dom::parser parser;
         for (size_t i = 0; i < size; ++i)
         {
             if constexpr (is_nullable)
@@ -999,63 +1001,14 @@ private:
             if (unlikely(slice.size == 0))
                 throw Exception("Invalid JSON text: The document is empty.");
 
-            parser.reset();
-            Poco::Dynamic::Var result;
-            try
-            {
-                result = parser.parse(StringRef{slice.data, slice.size}.toString());
-            }
-            catch (Poco::Exception & e)
+            const auto & json_elem = parser.parse(slice.data, slice.size);
+            if (unlikely(json_elem.error()))
             {
                 throw Exception(fmt::format(
                     "Invalid JSON text: The document root must not be followed by other values, details: {}",
-                    e.message()));
+                    simdjson::error_message(json_elem.error())));
             }
-            extractJsonVar(result, data_to);
-
-            writeChar(0, data_to);
-            offsets_to[i] = data_to.count();
-            data_from->next();
-        }
-    }
-
-    template <bool is_nullable>
-    static void doExecuteForParsingJson2(
-        JsonBinary::JsonBinaryWriteBuffer & data_to,
-        ColumnString::Offsets & offsets_to,
-        const std::unique_ptr<IStringSource> & data_from,
-        const NullMap & null_map_from,
-        size_t size)
-    {
-        for (size_t i = 0; i < size; ++i)
-        {
-            if constexpr (is_nullable)
-            {
-                if (null_map_from[i])
-                {
-                    writeChar(0, data_to);
-                    offsets_to[i] = data_to.count();
-                    data_from->next();
-                    continue;
-                }
-            }
-
-            const auto & slice = data_from->getWhole();
-            if (unlikely(slice.size == 0))
-                throw Exception("Invalid JSON text: The document is empty.");
-
-            try
-            {
-                const char * data_begin = reinterpret_cast<const char *>(slice.data);
-                JSON json_var(data_begin, data_begin + slice.size);
-                extractJsonVar2(json_var, data_to);
-            }
-            catch (JSONException & e)
-            {
-                throw Exception(fmt::format(
-                    "Invalid JSON text: The document root must not be followed by other values, details: {}",
-                    e.message()));
-            }
+            extractJsonElem(json_elem.value_unsafe(), data_to);
 
             writeChar(0, data_to);
             offsets_to[i] = data_to.count();
@@ -1079,121 +1032,59 @@ private:
         }
     }
 
-    static void extractJsonVar(const Poco::Dynamic::Var & var, JsonBinary::JsonBinaryWriteBuffer & write_buffer)
+    static void extractJsonElem(const simdjson::dom::element & json_elem, JsonBinary::JsonBinaryWriteBuffer & write_buffer)
     {
-        if (var.type() == typeid(Poco::JSON::Object::Ptr))
+        if (json_elem.is_object())
         {
-            const auto & obj = var.extract<Poco::JSON::Object::Ptr>();
-            std::map<String, JsonBinary> json_elems;
+            std::map<std::string_view, JsonBinary> json_elems;
             ColumnString::Chars_t tmp_buf;
             JsonBinary::JsonBinaryWriteBuffer tmp_write_buffer(tmp_buf);
-            for (const auto & [key, value] : *obj)
+            const auto & obj = json_elem.get_object().value_unsafe();
+            for (const auto & entry : obj)
             {
                 size_t begin = tmp_write_buffer.count();
-                extractJsonVar(value, tmp_write_buffer);
-                size_t size = tmp_write_buffer.count() - begin;
-                json_elems.emplace(key, JsonBinary{tmp_buf[begin], StringRef(&tmp_buf[begin + 1], size - 1)});
-            }
-            JsonBinary::buildBinaryJsonObjectInBuffer(json_elems, write_buffer);
-        }
-        else if (var.type() == typeid(Poco::JSON::Array::Ptr))
-        {
-            const auto & array = var.extract<Poco::JSON::Array::Ptr>();
-            std::vector<JsonBinary> json_elems;
-            json_elems.reserve(array->size());
-            ColumnString::Chars_t tmp_buf;
-            JsonBinary::JsonBinaryWriteBuffer tmp_write_buffer(tmp_buf);
-            for (const auto & elem : *array)
-            {
-                size_t begin = tmp_write_buffer.count();
-                extractJsonVar(elem, tmp_write_buffer);
-                size_t size = tmp_write_buffer.count() - begin;
-                json_elems.emplace_back(tmp_buf[begin], StringRef(&tmp_buf[begin + 1], size - 1));
-            }
-            JsonBinary::buildBinaryJsonArrayInBuffer(json_elems, write_buffer);
-        }
-        else if (var.type() == typeid(bool))
-        {
-            JsonBinary::appendNumber(write_buffer, var.extract<bool>());
-        }
-        else if (var.type() == typeid(Float32) || var.type() == typeid(Float64))
-        {
-            JsonBinary::appendNumber(write_buffer, var.convert<Float64>());
-        }
-        else if (var.isNumeric())
-        {
-            if (var.isSigned())
-                JsonBinary::appendNumber(write_buffer, var.convert<Int64>());
-            else
-                JsonBinary::appendNumber(write_buffer, var.convert<UInt64>());
-        }
-        else if (var.isString())
-        {
-            JsonBinary::appendStringRef(write_buffer, var.extract<String>());
-        }
-        else if (var.isEmpty())
-        {
-            JsonBinary::appendNull(write_buffer);
-        }
-        else
-        {
-            throw Exception(ErrorCodes::UNKNOWN_TYPE, "unknown type: {}", var.type().name());
-        }
-    }
-
-    static void extractJsonVar2(const JSON & json, JsonBinary::JsonBinaryWriteBuffer & write_buffer)
-    {
-        if (json.isObject())
-        {
-            std::map<String, JsonBinary> json_elems;
-            ColumnString::Chars_t tmp_buf;
-            JsonBinary::JsonBinaryWriteBuffer tmp_write_buffer(tmp_buf);
-            for (const auto & entry : json)
-            {
-                if (unlikely(!entry.isNameValuePair()))
-                    throw JSONException("");
-                size_t begin = tmp_write_buffer.count();
-                extractJsonVar2(entry.getValue(), tmp_write_buffer);
+                extractJsonElem(entry.value, tmp_write_buffer);
                 size_t size = tmp_write_buffer.count() - begin;
                 json_elems.emplace(
-                    entry.getName(),
+                    entry.key,
                     JsonBinary{tmp_buf[begin], StringRef(&tmp_buf[begin + 1], size - 1)});
             }
             JsonBinary::buildBinaryJsonObjectInBuffer(json_elems, write_buffer);
         }
-        else if (json.isArray())
+        else if (json_elem.is_array())
         {
             std::vector<JsonBinary> json_elems;
             ColumnString::Chars_t tmp_buf;
             JsonBinary::JsonBinaryWriteBuffer tmp_write_buffer(tmp_buf);
-            for (const auto & elem : json)
+            const auto & array = json_elem.get_array().value_unsafe();
+            for (const auto & elem : array)
             {
                 size_t begin = tmp_write_buffer.count();
-                extractJsonVar2(elem, tmp_write_buffer);
+                extractJsonElem(elem, tmp_write_buffer);
                 size_t size = tmp_write_buffer.count() - begin;
                 json_elems.emplace_back(tmp_buf[begin], StringRef(&tmp_buf[begin + 1], size - 1));
             }
             JsonBinary::buildBinaryJsonArrayInBuffer(json_elems, write_buffer);
         }
-        else if (json.isBool())
+        else if (json_elem.is_bool())
         {
-            JsonBinary::appendNumber(write_buffer, json.getBool());
+            JsonBinary::appendNumber(write_buffer, json_elem.get_bool().value_unsafe());
         }
-        else if (json.isNumber())
+        else if (json_elem.is_number())
         {
-            JsonBinary::appendNumber(write_buffer, json.getDouble());
+            JsonBinary::appendNumber(write_buffer, json_elem.get_double().value_unsafe());
         }
-        else if (json.isString())
+        else if (json_elem.is_string())
         {
-            JsonBinary::appendStringRef(write_buffer, json.getRawString());
+            JsonBinary::appendStringRef(write_buffer, json_elem.get_string().value_unsafe());
         }
-        else if (json.isNull())
+        else if (json_elem.is_null())
         {
             JsonBinary::appendNull(write_buffer);
         }
         else
         {
-            throw Exception(ErrorCodes::UNKNOWN_TYPE, "unknown type: {}", magic_enum::enum_name(json.getType()));
+            throw Exception(ErrorCodes::UNKNOWN_TYPE, "unknown type: {}", magic_enum::enum_name(json_elem.type()));
         }
     }
 
