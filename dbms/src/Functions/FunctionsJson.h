@@ -33,11 +33,11 @@
 #include <TiDB/Decode/JsonPathExprRef.h>
 #include <TiDB/Schema/TiDB.h>
 #include <common/JSON.h>
+#include <simdjson.h>
 #include <tipb/expression.pb.h>
 
 #include <ext/range.h>
 #include <magic_enum.hpp>
-#include <simdjson.h>
 #include <string_view>
 #include <type_traits>
 
@@ -1032,7 +1032,9 @@ private:
         }
     }
 
-    static void extractJsonElem(const simdjson::dom::element & json_elem, JsonBinary::JsonBinaryWriteBuffer & write_buffer)
+    static void extractJsonElem(
+        const simdjson::dom::element & json_elem,
+        JsonBinary::JsonBinaryWriteBuffer & write_buffer)
     {
         if (json_elem.is_object())
         {
@@ -1045,9 +1047,7 @@ private:
                 size_t begin = tmp_write_buffer.count();
                 extractJsonElem(entry.value, tmp_write_buffer);
                 size_t size = tmp_write_buffer.count() - begin;
-                json_elems.emplace(
-                    entry.key,
-                    JsonBinary{tmp_buf[begin], StringRef(&tmp_buf[begin + 1], size - 1)});
+                json_elems.emplace(entry.key, JsonBinary{tmp_buf[begin], StringRef(&tmp_buf[begin + 1], size - 1)});
             }
             JsonBinary::buildBinaryJsonObjectInBuffer(json_elems, write_buffer);
         }

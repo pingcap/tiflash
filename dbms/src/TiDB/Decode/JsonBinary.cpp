@@ -17,6 +17,7 @@
 #include <TiDB/Decode/DatumCodec.h>
 #include <TiDB/Decode/JsonBinary.h>
 #include <TiDB/Decode/JsonPathExprRef.h>
+
 #include <string_view>
 
 #pragma GCC diagnostic push
