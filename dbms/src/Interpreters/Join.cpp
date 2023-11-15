@@ -1780,8 +1780,14 @@ void Join::joinBlockSemiImpl(
         auto * left_semi_column = typeid_cast<ColumnNullable *>(added_columns[right_columns - 1].get());
         left_semi_column_data = &typeid_cast<ColumnVector<Int8> &>(left_semi_column->getNestedColumn()).getData();
         left_semi_null_map = &left_semi_column->getNullMapColumn().getData();
-        left_semi_column_data->reserve(rows);
-        left_semi_null_map->reserve(rows);
+        if constexpr (STRICTNESS == ASTTableJoin::Strictness::Any)
+        {
+            left_semi_null_map->resize_fill(rows, 0);
+        }
+        else
+        {
+            left_semi_null_map->reserve(rows);
+        }
     }
 
     size_t rows_for_semi_anti = 0;
@@ -1807,7 +1813,6 @@ void Join::joinBlockSemiImpl(
             else
             {
                 left_semi_column_data->push_back(result);
-                left_semi_null_map->push_back(0);
             }
         }
         else
