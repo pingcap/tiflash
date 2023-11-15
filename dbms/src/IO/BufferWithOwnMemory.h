@@ -63,9 +63,9 @@ struct Memory
 
     size_t size() const { return m_size; }
     const char & operator[](size_t i) const { return m_data[i]; }
-    char & operator[](size_t i) { return m_data[i]; }
+    char & operator[](size_t i) { return m_data[i]; } // NOLINT(readability-make-member-function-const)
     const char * data() const { return m_data; }
-    char * data() { return m_data; }
+    char * data() { return m_data; } // NOLINT(readability-make-member-function-const)
 
     void resize(size_t new_size)
     {

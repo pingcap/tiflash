@@ -23,8 +23,8 @@ namespace DB::DM
 class LessEqual : public ColCmpVal
 {
 public:
-    LessEqual(const Attr & attr_, const Field & value_, int null_direction)
-        : ColCmpVal(attr_, value_, null_direction)
+    LessEqual(const Attr & attr_, const Field & value_)
+        : ColCmpVal(attr_, value_)
     {}
 
     String name() override { return "less_equal"; }
@@ -37,8 +37,6 @@ public:
         std::transform(results.begin(), results.end(), results.begin(), [](const auto result) { return !result; });
         return results;
     }
-
-    RSOperatorPtr switchDirection() override { return createGreater(attr, value, null_direction); }
 };
 
 } // namespace DB::DM

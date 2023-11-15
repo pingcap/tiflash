@@ -274,7 +274,6 @@ try
     auto table_ids = MockTiDB::instance().newTables(db_name, tables, pd_client->getTS(), "dt");
 
     refreshSchema();
-
     for (auto table_id : table_ids)
     {
         refreshTableSchema(table_id);
@@ -286,15 +285,26 @@ try
     MockTiDB::instance().dropTable(global_ctx, db_name, "t1", true);
 
     refreshSchema();
+    for (auto table_id : table_ids)
+    {
+        refreshTableSchema(table_id);
+    }
 
     global_ctx.initializeSchemaSyncService();
     auto sync_service = global_ctx.getSchemaSyncService();
+    // run gc with safepoint == 0, will be skip
+    ASSERT_FALSE(sync_service->gc(0, NullspaceID));
     ASSERT_TRUE(sync_service->gc(10000000, NullspaceID));
     // run gc with the same safepoint, will be skip
     ASSERT_FALSE(sync_service->gc(10000000, NullspaceID));
-    // run gc for another keyspace
+    // run gc for another keyspace with same safepoint, will be executed
+    ASSERT_TRUE(sync_service->gc(10000000, 1024));
+    // run gc with changed safepoint
     ASSERT_TRUE(sync_service->gc(20000000, 1024));
+    // run gc with the same safepoint
     ASSERT_FALSE(sync_service->gc(20000000, 1024));
+
+    sync_service->shutdown();
 }
 CATCH
 

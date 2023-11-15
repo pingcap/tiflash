@@ -31,6 +31,8 @@
 #include <TiDB/Schema/SchemaSyncer.h>
 #include <TiDB/Schema/TiDBSchemaManager.h>
 
+#include <chrono>
+
 namespace CurrentMetrics
 {
 extern const Metric RaftNumPrehandlingSubTasks;
@@ -241,6 +243,9 @@ PrehandleResult KVStore::preHandleSnapshotToFiles(
     new_region->beforePrehandleSnapshot(new_region->id(), deadline_index);
     ongoing_prehandle_task_count.fetch_add(1);
     PrehandleResult result;
+    uint64_t start_time
+        = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch())
+              .count();
     try
     {
         SCOPE_EXIT({
@@ -254,6 +259,7 @@ PrehandleResult KVStore::preHandleSnapshotToFiles(
             term,
             DM::FileConvertJobType::ApplySnapshot,
             tmt);
+        result.stats.start_time = start_time;
     }
     catch (DB::Exception & e)
     {

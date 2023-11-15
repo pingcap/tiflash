@@ -31,7 +31,7 @@ struct CompressedSeekableReaderBuffer : public BufferWithOwnMemory<ReadBuffer>
 {
     virtual void setProfileCallback(
         const ReadBufferFromFileBase::ProfileCallback & profile_callback_,
-        clockid_t clock_type_ = CLOCK_MONOTONIC_COARSE)
+        clockid_t clock_type_)
         = 0;
 
     virtual void seek(size_t offset_in_compressed_file, size_t offset_in_decompressed_block) = 0;
@@ -95,9 +95,8 @@ public:
 
     size_t readBig(char * to, size_t n) override;
 
-    void setProfileCallback(
-        const ReadBufferFromFileBase::ProfileCallback & profile_callback_,
-        clockid_t clock_type_ = CLOCK_MONOTONIC_COARSE) override
+    void setProfileCallback(const ReadBufferFromFileBase::ProfileCallback & profile_callback_, clockid_t clock_type_)
+        override
     {
         file_in.setProfileCallback(profile_callback_, clock_type_);
     }
