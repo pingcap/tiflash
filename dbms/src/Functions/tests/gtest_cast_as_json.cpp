@@ -26,7 +26,7 @@
 namespace DB::tests
 {
 /**
-  * Because all the functions(except cast string as json) that cast xx as json have 
+  * Because most functions(except cast string as json) have 
   *    ```
   *    bool useDefaultImplementationForNulls() const override { return true; }
   *    bool useDefaultImplementationForConstants() const override { return true; }
