@@ -17,6 +17,7 @@
 #include <TiDB/Decode/DatumCodec.h>
 #include <TiDB/Decode/JsonBinary.h>
 #include <TiDB/Decode/JsonPathExprRef.h>
+#include "simdjson/dom/element.h"
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
@@ -28,13 +29,18 @@
 #include <cmath>
 #pragma GCC diagnostic pop
 
+#include <magic_enum.hpp>
+
 namespace DB
 {
 namespace ErrorCodes
 {
 extern const int LOGICAL_ERROR;
+extern const int UNKNOWN_TYPE;
 }
 
+namespace
+{
 constexpr char ELEM_SEPARATOR[] = ", ";
 constexpr char KEY_VALUE_SEPARATOR[] = ": ";
 constexpr size_t HEADER_SIZE = 8; // element size + data size.
@@ -70,6 +76,274 @@ inline void encodeNumeric(JsonBinary::JsonBinaryWriteBuffer & write_buffer, T va
     toLittleEndianInPlace(value);
     const char * from = reinterpret_cast<const char *>(&value);
     write_buffer.write(from, sizeof(T));
+}
+
+template <bool doDecode>
+struct NeedDecode
+{
+};
+
+template <>
+struct NeedDecode<true>
+{
+    using Type = String;
+};
+
+template <>
+struct NeedDecode<false>
+{
+    using Type = void;
+};
+
+template <bool doDecode>
+typename NeedDecode<doDecode>::Type DecodeJson(size_t & cursor, const String & raw_value)
+{
+    size_t base = cursor;
+    UInt8 type = raw_value[cursor++];
+    size_t size = 0;
+
+    switch (type) // JSON Root element type
+    {
+    case JsonBinary::TYPE_CODE_OBJECT:
+        cursor += 4;
+        size = decodeNumeric<UInt32>(cursor, raw_value);
+        break;
+    case JsonBinary::TYPE_CODE_ARRAY:
+        cursor += 4;
+        size = decodeNumeric<UInt32>(cursor, raw_value);
+        break;
+    case JsonBinary::TYPE_CODE_LITERAL:
+        size = 1;
+        break;
+    case JsonBinary::TYPE_CODE_INT64:
+    case JsonBinary::TYPE_CODE_UINT64:
+    case JsonBinary::TYPE_CODE_FLOAT64:
+        size = 8;
+        break;
+    case JsonBinary::TYPE_CODE_STRING:
+        size = DecodeVarUInt(cursor, raw_value);
+        size += (cursor - base - 1);
+        break;
+    default:
+        throw Exception(
+            "DecodeJsonBinary: Unknown JSON Element Type:" + std::to_string(type),
+            ErrorCodes::LOGICAL_ERROR);
+    }
+
+    size++;
+    cursor = base + size;
+    if constexpr (!doDecode)
+        return static_cast<typename NeedDecode<false>::Type>(0);
+    else
+        return static_cast<typename NeedDecode<true>::Type>(raw_value.substr(base, size));
+}
+
+String encodeBase64(const StringRef & str)
+{
+    std::ostringstream oss;
+    Poco::Base64Encoder encoder(oss, Poco::BASE64_NO_PADDING);
+    encoder.rdbuf()->setLineLength(0); /// No newline characters would be added
+    Poco::MemoryInputStream mis(str.data, str.size);
+    Poco::StreamCopier::copyStream(mis, encoder);
+    encoder.close();
+    return oss.str();
+}
+
+bool jsonFinished(std::vector<JsonBinary> & json_binary_vec, bool one)
+{
+    return one && !json_binary_vec.empty();
+}
+
+inline JsonBinary::JsonType getJsonType(const simdjson::dom::element & elem)
+{
+    if (elem.is_object())
+    {
+        return JsonBinary::TYPE_CODE_OBJECT;
+    }
+    else if (elem.is_array())
+    {
+         return JsonBinary::TYPE_CODE_ARRAY;
+    }
+    else if (elem.is_bool() || elem.is_null())
+    {
+       return JsonBinary::TYPE_CODE_LITERAL;
+    }
+    else if (elem.is_number())
+    {
+        return JsonBinary::TYPE_CODE_FLOAT64;
+    }
+    else if (elem.is_string())
+    {
+        return JsonBinary::TYPE_CODE_STRING;
+    }
+    else
+    {
+        throw Exception(ErrorCodes::UNKNOWN_TYPE, "unknown type: {}", magic_enum::enum_name(elem.type()));
+    }
+}
+
+// return depth.
+inline UInt64 appendValueOfSIMDJsonElem(JsonBinary::JsonBinaryWriteBuffer & write_buffer, const simdjson::dom::element & elem)
+{
+    if (elem.is_object())
+    {
+        const auto & obj = elem.get_object();
+        UInt32 buffer_start = write_buffer.offset();
+
+        // 1. write elem count
+        UInt32 element_count = obj.size();
+        encodeNumeric(write_buffer, element_count);
+
+        // 2. reserve space for total size
+        auto total_size_offset = write_buffer.offset();
+        write_buffer.resizeFill(4);
+
+        // 3. write key entry with key offset.
+        UInt32 data_offset_start = HEADER_SIZE + obj.size() * (KEY_ENTRY_SIZE + VALUE_ENTRY_SIZE);
+        UInt32 data_offset = data_offset_start;
+        for (const auto & [key, _] : obj)
+        {
+            encodeNumeric(write_buffer, data_offset);
+            data_offset += key.size();
+            if (unlikely(key.size() > std::numeric_limits<UInt16>::max()))
+                throw Exception("TiDB/TiFlash does not yet support JSON objects with the key length >= 65536");
+            UInt16 key_len = key.size();
+            encodeNumeric(write_buffer, key_len);
+        }
+        UInt32 value_entry_start = write_buffer.offset();
+
+        // 4. write key value.
+        write_buffer.setOffset(buffer_start + data_offset_start);
+        for (const auto & [key, _] : obj)
+            write_buffer.write(key.data(), key.size());
+
+        // 5. write value entry with value offset and value data.
+        write_buffer.setOffset(value_entry_start);
+        UInt64 max_child_depth = 0;
+        for (const auto & [_, value] : obj)
+        {
+            auto type = getJsonType(value);
+            write_buffer.write(type);
+            if (type == JsonBinary::TYPE_CODE_LITERAL)
+            {
+                /// Literal values are inlined in the value entry, total takes 4 bytes
+                auto child_depth = appendValueOfSIMDJsonElem(write_buffer, value); // 1 byte
+                max_child_depth = std::max(max_child_depth, child_depth);
+                write_buffer.write(0);
+                write_buffer.write(0);
+                write_buffer.write(0);
+            }
+            else
+            {
+                encodeNumeric(write_buffer, data_offset);
+                auto tmp_entry_offset = write_buffer.offset();
+
+                // write value data.
+                write_buffer.setOffset(data_offset + buffer_start);
+                auto child_depth = appendValueOfSIMDJsonElem(write_buffer, value);
+                max_child_depth = std::max(max_child_depth, child_depth);
+                JsonBinary::assertJsonDepth(max_child_depth);
+                /// update data_offset
+                data_offset = write_buffer.offset() - buffer_start;
+
+                write_buffer.setOffset(tmp_entry_offset);
+            }
+        }
+        UInt64 depth = max_child_depth + 1;
+        JsonBinary::assertJsonDepth(depth);
+
+        // 6. write total size in total_size_offset.
+        UInt32 total_size = data_offset;
+        write_buffer.setOffset(total_size_offset);
+        encodeNumeric(write_buffer, total_size);
+        write_buffer.setOffset(buffer_start + data_offset);
+
+        return depth;
+    }
+    else if (elem.is_array())
+    {
+        const auto & array = elem.get_array();
+        UInt32 buffer_start = write_buffer.offset();
+
+        // 1. write elem count
+        UInt32 element_count = array.size();
+        encodeNumeric(write_buffer, element_count);
+
+        // 2. reserve space for total size
+        auto total_size_offset = write_buffer.offset();
+        write_buffer.resizeFill(4);
+
+        // 3. write value entry with value offset and value data.
+        UInt32 data_offset = HEADER_SIZE + array.size() * VALUE_ENTRY_SIZE;
+        UInt64 max_child_depth = 0;
+        for (const auto & value : array)
+        {
+            auto type = getJsonType(value);
+            write_buffer.write(type);
+            if (type == JsonBinary::TYPE_CODE_LITERAL)
+            {
+                /// Literal values are inlined in the value entry, total takes 4 bytes
+                auto child_depth = appendValueOfSIMDJsonElem(write_buffer, value); // 1 byte
+                max_child_depth = std::max(max_child_depth, child_depth);
+                JsonBinary::assertJsonDepth(max_child_depth);
+                write_buffer.write(0);
+                write_buffer.write(0);
+                write_buffer.write(0);
+            }
+            else
+            {
+                encodeNumeric(write_buffer, data_offset);
+                auto tmp_entry_offset = write_buffer.offset();
+
+                // write value data.
+                write_buffer.setOffset(buffer_start + data_offset);
+                auto child_depth = appendValueOfSIMDJsonElem(write_buffer, value);
+                max_child_depth = std::max(max_child_depth, child_depth);
+                JsonBinary::assertJsonDepth(max_child_depth);
+                /// update data_offset
+                data_offset = write_buffer.offset() - buffer_start;
+
+                write_buffer.setOffset(tmp_entry_offset);
+            }
+        }
+        UInt64 depth = max_child_depth + 1;
+        JsonBinary::assertJsonDepth(depth);
+
+        // 4. write total size in total_size_offset.
+        UInt32 total_size = data_offset;
+        write_buffer.setOffset(total_size_offset);
+        encodeNumeric(write_buffer, total_size);
+        write_buffer.setOffset(buffer_start + data_offset);
+
+        return depth;
+    }
+    else if (elem.is_bool())
+    {
+        write_buffer.write(elem.get_bool().value_unsafe() ? JsonBinary::LITERAL_TRUE : JsonBinary::LITERAL_FALSE);
+        return 1;
+    }
+    else if (elem.is_number())
+    {
+        encodeNumeric(write_buffer, elem.get_double().value_unsafe());
+        return 1;
+    }
+    else if (elem.is_string())
+    {
+        const auto & value = elem.get_string().value_unsafe();
+        writeVarUInt(static_cast<UInt64>(value.size()), write_buffer);
+        write_buffer.write(value.data(), value.size());
+        return 1;
+    }
+    else if (elem.is_null())
+    {
+        write_buffer.write(JsonBinary::LITERAL_NIL);
+        return 1;
+    }
+    else
+    {
+        throw Exception(ErrorCodes::UNKNOWN_TYPE, "unknown type: {}", magic_enum::enum_name(elem.type()));
+    }
+}
 }
 
 char JsonBinary::getChar(size_t offset) const
@@ -219,66 +493,6 @@ JsonBinary::Opaque JsonBinary::getOpaque() const
     size_t data_length = DecodeVarUInt(cursor, data);
     size_t data_start = cursor;
     return Opaque{opaque_type, getSubRef(data_start, data_length)};
-}
-
-template <bool doDecode>
-struct NeedDecode
-{
-};
-
-template <>
-struct NeedDecode<true>
-{
-    using Type = String;
-};
-
-template <>
-struct NeedDecode<false>
-{
-    using Type = void;
-};
-
-template <bool doDecode>
-typename NeedDecode<doDecode>::Type DecodeJson(size_t & cursor, const String & raw_value)
-{
-    size_t base = cursor;
-    UInt8 type = raw_value[cursor++];
-    size_t size = 0;
-
-    switch (type) // JSON Root element type
-    {
-    case JsonBinary::TYPE_CODE_OBJECT:
-        cursor += 4;
-        size = decodeNumeric<UInt32>(cursor, raw_value);
-        break;
-    case JsonBinary::TYPE_CODE_ARRAY:
-        cursor += 4;
-        size = decodeNumeric<UInt32>(cursor, raw_value);
-        break;
-    case JsonBinary::TYPE_CODE_LITERAL:
-        size = 1;
-        break;
-    case JsonBinary::TYPE_CODE_INT64:
-    case JsonBinary::TYPE_CODE_UINT64:
-    case JsonBinary::TYPE_CODE_FLOAT64:
-        size = 8;
-        break;
-    case JsonBinary::TYPE_CODE_STRING:
-        size = DecodeVarUInt(cursor, raw_value);
-        size += (cursor - base - 1);
-        break;
-    default:
-        throw Exception(
-            "DecodeJsonBinary: Unknown JSON Element Type:" + std::to_string(type),
-            ErrorCodes::LOGICAL_ERROR);
-    }
-
-    size++;
-    cursor = base + size;
-    if constexpr (!doDecode)
-        return static_cast<typename NeedDecode<false>::Type>(0);
-    else
-        return static_cast<typename NeedDecode<true>::Type>(raw_value.substr(base, size));
 }
 
 void JsonBinary::SkipJson(size_t & cursor, const String & raw_value)
@@ -458,17 +672,6 @@ void JsonBinary::marshalStringTo(JsonBinaryWriteBuffer & write_buffer, const Str
     write_buffer.write('"');
 }
 
-String encodeBase64(const StringRef & str)
-{
-    std::ostringstream oss;
-    Poco::Base64Encoder encoder(oss, Poco::BASE64_NO_PADDING);
-    encoder.rdbuf()->setLineLength(0); /// No newline characters would be added
-    Poco::MemoryInputStream mis(str.data, str.size);
-    Poco::StreamCopier::copyStream(mis, encoder);
-    encoder.close();
-    return oss.str();
-}
-
 void JsonBinary::marshalOpaqueTo(JsonBinaryWriteBuffer & write_buffer, const Opaque & opaque)
 {
     const String base64_padding_ends[] = {"", "===", "==", "="};
@@ -645,11 +848,6 @@ bool JsonBinary::extract(
         buildBinaryJsonArrayInBuffer(extracted_json_binary_vec, write_buffer);
     }
     return found;
-}
-
-bool jsonFinished(std::vector<JsonBinary> & json_binary_vec, bool one)
-{
-    return one && !json_binary_vec.empty();
 }
 
 std::optional<JsonBinary> JsonBinary::searchObjectKey(JsonPathObjectKey & key) const
@@ -1020,5 +1218,11 @@ void JsonBinary::assertJsonDepth(UInt64 depth)
     if (unlikely((depth - 1) > MAX_JSON_DEPTH))
         throw Exception(
             fmt::format("Invalid JSON text: The JSON document exceeds the maximum depth {}.", MAX_JSON_DEPTH));
+}
+
+void JsonBinary::appendSIMDJsonElem(JsonBinaryWriteBuffer & write_buffer, const simdjson::dom::element & elem)
+{
+    write_buffer.write(getJsonType(elem));
+    appendValueOfSIMDJsonElem(write_buffer, elem);
 }
 } // namespace DB

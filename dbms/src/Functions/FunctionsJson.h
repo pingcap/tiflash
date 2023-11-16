@@ -1021,7 +1021,7 @@ private:
                     "Invalid JSON text: The document root must not be followed by other values, details: {}",
                     simdjson::error_message(json_elem.error())));
             }
-            extractJsonElem(json_elem.value_unsafe(), data_to);
+            JsonBinary::appendSIMDJsonElem(data_to, json_elem.value_unsafe());
 
             writeChar(0, data_to);
             offsets_to[i] = data_to.count();
@@ -1042,77 +1042,6 @@ private:
             writeChar(0, data_to);
             offsets_to[i] = data_to.count();
             from_data->next();
-        }
-    }
-
-    // return depth.
-    static UInt64 extractJsonElem(
-        const simdjson::dom::element & json_elem,
-        JsonBinary::JsonBinaryWriteBuffer & write_buffer)
-    {
-        if (json_elem.is_object())
-        {
-            std::map<std::string_view, JsonBinary> json_elems;
-            ColumnString::Chars_t tmp_buf;
-            JsonBinary::JsonBinaryWriteBuffer tmp_write_buffer(tmp_buf);
-            const auto & obj = json_elem.get_object().value_unsafe();
-            UInt64 max_child_depth = 0;
-            for (const auto & entry : obj)
-            {
-                size_t begin = tmp_write_buffer.count();
-                max_child_depth = std::max(extractJsonElem(entry.value, tmp_write_buffer), max_child_depth);
-                JsonBinary::assertJsonDepth(max_child_depth);
-                size_t size = tmp_write_buffer.count() - begin;
-                json_elems.emplace(entry.key, JsonBinary{tmp_buf[begin], StringRef(&tmp_buf[begin + 1], size - 1)});
-            }
-            UInt64 depth = max_child_depth + 1;
-            JsonBinary::assertJsonDepth(depth);
-            JsonBinary::buildBinaryJsonObjectInBuffer(json_elems, write_buffer);
-            return depth;
-        }
-        else if (json_elem.is_array())
-        {
-            std::vector<JsonBinary> json_elems;
-            ColumnString::Chars_t tmp_buf;
-            JsonBinary::JsonBinaryWriteBuffer tmp_write_buffer(tmp_buf);
-            const auto & array = json_elem.get_array().value_unsafe();
-            UInt64 max_child_depth = 0;
-            for (const auto & elem : array)
-            {
-                size_t begin = tmp_write_buffer.count();
-                max_child_depth = std::max(extractJsonElem(elem, tmp_write_buffer), max_child_depth);
-                JsonBinary::assertJsonDepth(max_child_depth);
-                size_t size = tmp_write_buffer.count() - begin;
-                json_elems.emplace_back(tmp_buf[begin], StringRef(&tmp_buf[begin + 1], size - 1));
-            }
-            UInt64 depth = max_child_depth + 1;
-            JsonBinary::assertJsonDepth(depth);
-            JsonBinary::buildBinaryJsonArrayInBuffer(json_elems, write_buffer);
-            return depth;
-        }
-        else if (json_elem.is_bool())
-        {
-            JsonBinary::appendNumber(write_buffer, json_elem.get_bool().value_unsafe());
-            return 1;
-        }
-        else if (json_elem.is_number())
-        {
-            JsonBinary::appendNumber(write_buffer, json_elem.get_double().value_unsafe());
-            return 1;
-        }
-        else if (json_elem.is_string())
-        {
-            JsonBinary::appendStringRef(write_buffer, json_elem.get_string().value_unsafe());
-            return 1;
-        }
-        else if (json_elem.is_null())
-        {
-            JsonBinary::appendNull(write_buffer);
-            return 1;
-        }
-        else
-        {
-            throw Exception(ErrorCodes::UNKNOWN_TYPE, "unknown type: {}", magic_enum::enum_name(json_elem.type()));
         }
     }
 

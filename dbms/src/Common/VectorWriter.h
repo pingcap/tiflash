@@ -38,7 +38,7 @@ public:
 
     inline void write(char x)
     {
-        reserve();
+        reserve(1);
         *pos = x;
         ++pos;
     }
@@ -60,14 +60,15 @@ public:
 
     void resizeFill(size_t n)
     {
-        size_t old_size = vector.size();
-        if (old_size >= n)
+        size_t old_cap = vector.size();
+        size_t new_request_cap = count() + n;
+        if (old_cap >= new_request_cap)
         {
             pos += n;
             return;
         }
         size_t pos_offset = offset();
-        vector.resize(old_size + n);
+        vector.resize(old_cap + n);
         pos = reinterpret_cast<Position>(vector.data() + pos_offset + n);
         end = reinterpret_cast<Position>(vector.data() + vector.size());
     }
@@ -93,8 +94,8 @@ public:
     ~VectorWriter()
     {
         vector.resize(count());
-        pos = reinterpret_cast<Position>(vector.data() + vector.size());
-        end = pos;
+        pos = nullptr;
+        end = nullptr;
     }
 
 private:
@@ -104,7 +105,7 @@ private:
         {
             size_t old_size = vector.size();
             size_t pos_offset = offset();
-            size_t append_new = std::max(expect_new, old_size * (size_multiplier - 1));
+            size_t append_new = std::max(1, std::max(expect_new, old_size * (size_multiplier - 1)));
             vector.resize(old_size + append_new);
             pos = reinterpret_cast<Position>(vector.data() + pos_offset);
             end = reinterpret_cast<Position>(vector.data() + vector.size());

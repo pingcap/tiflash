@@ -24,7 +24,10 @@
 #include <common/StringRef.h>
 #include <common/memcpy.h>
 
+#include <simdjson.h>
+
 #include <unordered_set>
+#include "simdjson/dom/element.h"
 
 namespace DB
 {
@@ -186,6 +189,8 @@ public:
     static void appendDatetime(JsonBinaryWriteBuffer & write_buffer, const MyDateTime & value);
     static void appendDuration(JsonBinaryWriteBuffer & write_buffer, Int64 duration, UInt64 fsp);
     static void appendNull(JsonBinaryWriteBuffer & write_buffer);
+
+    static void appendSIMDJsonElem(JsonBinaryWriteBuffer & write_buffer, const simdjson::dom::element & elem);
 
     static void assertJsonDepth(UInt64 depth);
 
