@@ -74,7 +74,7 @@ struct AdderMapEntry<ASTTableJoin::Strictness::All, Mapped>
     {
         size_t rows_added = 0;
         assert(rows_added < max_row_added);
-        auto current = &static_cast<const typename Mapped::Base_t &>(mapped);
+        const auto * current = &static_cast<const typename Mapped::Base_t &>(mapped);
 
         auto add_one_row = [&]() {
             /// handle left columns later to utilize insertManyDefaults

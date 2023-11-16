@@ -40,14 +40,13 @@ template <typename List, typename Elem>
 void insertRowToList(JoinArenaPool & pool, List * list, Elem * elem, size_t cache_columns_threshold)
 {
     ++list->list_length;
-    if unlikely (cache_columns_threshold > 0 && cache_columns_threshold <= list->list_length)
+    if unlikely (cache_columns_threshold > 0 && list->list_length >= cache_columns_threshold)
     {
         if unlikely (cache_columns_threshold == list->list_length)
         {
-            void * original_next = list->next;
             auto * cached_column_info
                 = reinterpret_cast<CachedColumnInfo *>(pool.arena.alloc(sizeof(CachedColumnInfo)));
-            new (cached_column_info) CachedColumnInfo(original_next);
+            new (cached_column_info) CachedColumnInfo(list->next);
             pool.cached_column_infos.push_back(cached_column_info);
             list->cached_column_info = cached_column_info;
         }
@@ -87,7 +86,7 @@ void RowsNotInsertToMap::insertRow(Block * stored_block, size_t index, bool need
         auto * elem = reinterpret_cast<RowRefList *>(pool.arena.alloc(sizeof(RowRefList)));
         new (elem) RowRefList(stored_block, index);
         /// don't need cache column since it will explicitly materialize of need_materialize is true
-        insertRowToList(pool, &head, elem, std::numeric_limits<size_t>::max());
+        insertRowToList(pool, &head, elem, 0);
     }
     ++total_size;
 }
