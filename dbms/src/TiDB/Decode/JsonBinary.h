@@ -25,8 +25,6 @@
 
 #include <unordered_set>
 
-#include "common/types.h"
-
 namespace DB
 {
 struct JsonPathExprRef;
