@@ -253,6 +253,8 @@ void LocalAdmissionController::fetchTokensFromGAC(
             auto * tiflash_consumption = single_group_req->mutable_consumption_since_last_request();
             tiflash_consumption->set_r_r_u(info.ru_consumption_delta);
         }
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_gac_req_acquire_tokens, info.resource_group_name).Set(info.acquire_tokens);
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_gac_req_ru_consumption_delta, info.resource_group_name).Set(info.ru_consumption_delta);
     }
 
     auto resp = cluster->pd_client->acquireTokenBuckets(gac_req);
@@ -351,7 +353,8 @@ std::vector<std::string> LocalAdmissionController::handleTokenBucketsResp(
             continue;
         }
 
-        auto resource_group = findResourceGroup(one_resp.resource_group_name());
+        const auto & name = one_resp.resource_group_name();
+        auto resource_group = findResourceGroup(name);
         if (resource_group == nullptr)
             continue;
 
@@ -369,6 +372,9 @@ std::vector<std::string> LocalAdmissionController::handleTokenBucketsResp(
         RUNTIME_CHECK(added_tokens >= 0);
 
         int64_t capacity = granted_token_bucket.granted_tokens().settings().burst_limit();
+
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_gac_resp_tokens, name).Set(added_tokens);
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_gac_resp_capacity, name).Set(capacity);
 
         // fill_rate should never be setted.
         RUNTIME_CHECK(granted_token_bucket.granted_tokens().settings().fill_rate() == 0);
