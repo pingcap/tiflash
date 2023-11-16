@@ -735,8 +735,7 @@ std::vector<pingcap::coprocessor::CopTask> DAGStorageInterpreter::buildCopTasks(
 
 CoprocessorReaderPtr DAGStorageInterpreter::buildCoprocessorReader(const std::vector<RemoteRequest> & remote_requests)
 {
-    std::vector<pingcap::coprocessor::CopTask> all_tasks
-        = buildCopTasks(remote_requests);
+    std::vector<pingcap::coprocessor::CopTask> all_tasks = buildCopTasks(remote_requests);
     const DAGSchema & schema = remote_requests[0].schema;
     pingcap::kv::Cluster * cluster = tmt.getKVCluster();
     bool has_enforce_encode_type
