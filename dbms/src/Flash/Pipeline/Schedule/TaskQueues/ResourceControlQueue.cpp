@@ -136,6 +136,10 @@ bool ResourceControlQueue<NestedTaskQueueType>::take(TaskPtr & task)
                 mustTakeTask(group_info.task_queue, task);
                 return true;
             }
+            else
+            {
+                GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_compute_ru_exhausted, group_info.name).Increment();
+            }
         }
 
         assert(!task);
