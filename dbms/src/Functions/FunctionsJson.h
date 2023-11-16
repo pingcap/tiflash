@@ -32,6 +32,7 @@
 #include <Functions/castTypeToEither.h>
 #include <TiDB/Decode/JsonBinary.h>
 #include <TiDB/Decode/JsonPathExprRef.h>
+#include <TiDB/Decode/JsonScanner.h>
 #include <TiDB/Schema/TiDB.h>
 #include <common/JSON.h>
 #include <simdjson.h>
@@ -332,6 +333,13 @@ public:
             {
                 size_t next_offset = offsets_from[i];
                 size_t data_length = next_offset - current_offset - 1;
+                if (data_length >= 2 &&
+                    data_from[current_offset] == '"' && data_from[next_offset - 1] == '"' &&
+                    !checkJsonValid(reinterpret_cast<const char *>(&data_from[current_offset]), data_length)) {
+                    throw Exception(
+                        "Invalid JSON text: The document root must not be followed by other values.",
+                        ErrorCodes::ILLEGAL_COLUMN);
+                }
                 JsonBinary::unquoteStringInBuffer(StringRef(&data_from[current_offset], data_length), write_buffer);
                 writeChar(0, write_buffer);
                 offsets_to[i] = write_buffer.count();
