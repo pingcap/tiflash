@@ -961,14 +961,18 @@ private:
                     auto size_t_flen = static_cast<size_t>(flen);
                     if (slice.size >= size_t_flen)
                     {
-                        JsonBinary::appendOpaque(data_to, JsonBinary::Opaque{from_type_code, StringRef{slice.data, size_t_flen}});
+                        JsonBinary::appendOpaque(
+                            data_to,
+                            JsonBinary::Opaque{from_type_code, StringRef{slice.data, size_t_flen}});
                     }
                     else
                     {
                         ColumnString::Chars_t buf;
                         buf.resize_fill(size_t_flen, 0);
                         std::memcpy(buf.data(), slice.data, slice.size);
-                        JsonBinary::appendOpaque(data_to, JsonBinary::Opaque{from_type_code, StringRef{buf.data(), size_t_flen}});
+                        JsonBinary::appendOpaque(
+                            data_to,
+                            JsonBinary::Opaque{from_type_code, StringRef{buf.data(), size_t_flen}});
                     }
                 }
             }

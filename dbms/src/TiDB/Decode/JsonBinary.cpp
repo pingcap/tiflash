@@ -96,8 +96,8 @@ UInt64 JsonBinary::getElemDepth() const
         {
             const auto & value = getObjectValue(i);
             auto depth = value.getElemDepth();
-			if (depth > max_depth)
-				max_depth = depth;
+            if (depth > max_depth)
+                max_depth = depth;
         }
         return max_depth + 1;
     }
@@ -109,8 +109,8 @@ UInt64 JsonBinary::getElemDepth() const
         {
             const auto & obj = getArrayElement(i);
             auto depth = obj.getElemDepth();
-			if (depth > max_depth)
-				max_depth = depth;
+            if (depth > max_depth)
+                max_depth = depth;
         }
         return max_depth + 1;
     }
@@ -1016,8 +1016,7 @@ void JsonBinary::appendNull(JsonBinaryWriteBuffer & write_buffer)
 void JsonBinary::assertJsonDepth(UInt64 depth)
 {
     if (unlikely((depth - 1) > MAX_JSON_DEPTH))
-        throw Exception(fmt::format(
-            "Invalid JSON text: The JSON document exceeds the maximum depth {}.",
-            MAX_JSON_DEPTH));
+        throw Exception(
+            fmt::format("Invalid JSON text: The JSON document exceeds the maximum depth {}.", MAX_JSON_DEPTH));
 }
 } // namespace DB
