@@ -469,8 +469,11 @@ struct Inserter<ASTTableJoin::Strictness::Any, Map, KeyGetter>
     {
         auto emplace_result = key_getter.emplaceKey(map, i, pool, sort_key_container);
 
-        if (emplace_result.isInserted())
-            new (&emplace_result.getMapped()) typename Map::mapped_type(stored_block, i);
+        if constexpr (!std::is_same<typename Map::mapped_type, VoidMapped>::value)
+        {
+            if (emplace_result.isInserted())
+                new (&emplace_result.getMapped()) typename Map::mapped_type(stored_block, i);
+        }
     }
 };
 
@@ -1096,61 +1099,20 @@ template <typename Map>
 struct RowFlaggedHashMapAdder;
 
 template <typename Map>
-struct Adder<ASTTableJoin::Kind::LeftOuter, ASTTableJoin::Strictness::Any, Map>
-{
-    static bool addFound(
-        const typename Map::ConstLookupResult & it,
-        size_t num_columns_to_add,
-        MutableColumns & added_columns,
-        size_t /*i*/,
-        IColumn::Filter * /*filter*/,
-        IColumn::Offset & /*current_offset*/,
-        IColumn::Offsets * /*offsets*/,
-        const std::vector<size_t> & right_indexes,
-        ProbeProcessInfo & /*probe_process_info*/)
-    {
-        for (size_t j = 0; j < num_columns_to_add; ++j)
-            added_columns[j]->insertFrom(
-                *it->getMapped().block->getByPosition(right_indexes[j]).column.get(),
-                it->getMapped().row_num);
-        return false;
-    }
-
-    static bool addNotFound(
-        size_t num_columns_to_add,
-        MutableColumns & added_columns,
-        size_t /*i*/,
-        IColumn::Filter * /*filter*/,
-        IColumn::Offset & /*current_offset*/,
-        IColumn::Offsets * /*offsets*/,
-        ProbeProcessInfo & /*probe_process_info*/)
-    {
-        for (size_t j = 0; j < num_columns_to_add; ++j)
-            added_columns[j]->insertDefault();
-        return false;
-    }
-};
-
-template <typename Map>
 struct Adder<ASTTableJoin::Kind::Semi, ASTTableJoin::Strictness::Any, Map>
 {
     static bool addFound(
-        const typename Map::ConstLookupResult & it,
-        size_t num_columns_to_add,
-        MutableColumns & added_columns,
+        const typename Map::ConstLookupResult &,
+        size_t,
+        MutableColumns &,
         size_t i,
         IColumn::Filter * filter,
         IColumn::Offset & /*current_offset*/,
         IColumn::Offsets * /*offsets*/,
-        const std::vector<size_t> & right_indexes,
+        const std::vector<size_t> &,
         ProbeProcessInfo & /*probe_process_info*/)
     {
         (*filter)[i] = 1;
-
-        for (size_t j = 0; j < num_columns_to_add; ++j)
-            added_columns[j]->insertFrom(
-                *it->getMapped().block->getByPosition(right_indexes[j]).column.get(),
-                it->getMapped().row_num);
 
         return false;
     }
@@ -1577,7 +1539,10 @@ void NO_INLINE probeBlockImplTypeCase(
                 }
                 else
                 {
-                    it->getMapped().setUsed();
+                    if constexpr (!std::is_same<typename Map::mapped_type, VoidMapped>::value)
+                    {
+                        it->getMapped().setUsed();
+                    }
                     block_full = Adder<KIND, STRICTNESS, Map>::addFound(
                         it,
                         num_columns_to_add,
@@ -1786,7 +1751,7 @@ probeBlockNullAwareInternal(
         if (it != internal_map.end())
         {
             /// Find the matched row(s).
-            if (STRICTNESS == ASTTableJoin::Strictness::Any)
+            if constexpr (STRICTNESS == ASTTableJoin::Strictness::Any)
             {
                 /// If strictness is any, the result is true.
                 /// E.g. (1,2) in ((1,2),(1,3),(null,3))
@@ -1922,12 +1887,8 @@ void JoinPartition::probeBlock(
 
     if (kind == Inner && strictness == All)
         CALL(Inner, All, MapsAll, false)
-    else if (kind == LeftOuter && strictness == Any)
-        CALL(LeftOuter, Any, MapsAny, false)
     else if (kind == LeftOuter && strictness == All)
         CALL(LeftOuter, All, MapsAll, false)
-    else if (kind == Full && strictness == Any)
-        CALL(LeftOuter, Any, MapsAnyFull, false)
     else if (kind == Full && strictness == All)
         CALL(LeftOuter, All, MapsAllFull, false)
     else if (kind == RightOuter && strictness == All && !record_mapped_entry_column)
