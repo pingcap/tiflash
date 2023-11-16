@@ -33,7 +33,7 @@ namespace DB::tests
   *    ```
   * there is no need to test const, null_value, and only value.
   *
-  * CastIntAsJson, CastStringAsJson and CastDurationAsJson can only test the case where input_tidb_tp is nullptr
+  * CastIntAsJson, CastStringAsJson and CastDurationAsJson can only test the case where input_tidb_tp/output_tidb_tp is nullptr
   */
 class TestCastAsJson : public DB::tests::FunctionTest
 {
