@@ -832,6 +832,7 @@ public:
     bool useDefaultImplementationForConstants() const override { return true; }
 
     void setInputTiDBFieldType(const tipb::FieldType & tidb_tp_) { input_tidb_tp = &tidb_tp_; }
+    void setOutputTiDBFieldType(const tipb::FieldType & tidb_tp_) { output_tidb_tp = &tidb_tp_; }
     void setCollator(const TiDB::TiDBCollatorPtr & collator_) override { collator = collator_; }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
@@ -894,7 +895,7 @@ public:
                     block.rows());
             }
         }
-        else if ((unlikely(input_tidb_tp == nullptr)) || hasParseToJSONFlag(*input_tidb_tp))
+        else if ((unlikely(output_tidb_tp == nullptr)) || hasParseToJSONFlag(*output_tidb_tp))
         {
             if (from.column->isColumnNullable())
             {
@@ -941,7 +942,7 @@ private:
         ColumnString::Offsets & offsets_to,
         const std::unique_ptr<IStringSource> & data_from,
         UInt8 from_type_code,
-        size_t flen,
+        Int32 flen,
         size_t size)
     {
         for (size_t i = 0; i < size; ++i)
@@ -949,7 +950,7 @@ private:
             const auto & slice = data_from->getWhole();
             if constexpr (is_binary_str)
             {
-                if (slice.size >= flen)
+                if (unlikely(flen <= 0))
                 {
                     JsonBinary::appendOpaque(
                         data_to,
@@ -957,10 +958,18 @@ private:
                 }
                 else
                 {
-                    ColumnString::Chars_t buf;
-                    buf.resize_fill(flen, 0);
-                    std::memcpy(buf.data(), slice.data, slice.size);
-                    JsonBinary::appendOpaque(data_to, JsonBinary::Opaque{from_type_code, StringRef{buf.data(), flen}});
+                    auto size_t_flen = static_cast<size_t>(flen);
+                    if (slice.size >= size_t_flen)
+                    {
+                        JsonBinary::appendOpaque(data_to, JsonBinary::Opaque{from_type_code, StringRef{slice.data, size_t_flen}});
+                    }
+                    else
+                    {
+                        ColumnString::Chars_t buf;
+                        buf.resize_fill(size_t_flen, 0);
+                        std::memcpy(buf.data(), slice.data, slice.size);
+                        JsonBinary::appendOpaque(data_to, JsonBinary::Opaque{from_type_code, StringRef{buf.data(), size_t_flen}});
+                    }
                 }
             }
             else
@@ -1032,7 +1041,8 @@ private:
         }
     }
 
-    static void extractJsonElem(
+    // return depth.
+    static UInt64 extractJsonElem(
         const simdjson::dom::element & json_elem,
         JsonBinary::JsonBinaryWriteBuffer & write_buffer)
     {
@@ -1042,14 +1052,19 @@ private:
             ColumnString::Chars_t tmp_buf;
             JsonBinary::JsonBinaryWriteBuffer tmp_write_buffer(tmp_buf);
             const auto & obj = json_elem.get_object().value_unsafe();
+            UInt64 max_child_depth = 0;
             for (const auto & entry : obj)
             {
                 size_t begin = tmp_write_buffer.count();
-                extractJsonElem(entry.value, tmp_write_buffer);
+                max_child_depth = std::max(extractJsonElem(entry.value, tmp_write_buffer), max_child_depth);
+                JsonBinary::assertJsonDepth(max_child_depth);
                 size_t size = tmp_write_buffer.count() - begin;
                 json_elems.emplace(entry.key, JsonBinary{tmp_buf[begin], StringRef(&tmp_buf[begin + 1], size - 1)});
             }
+            UInt64 depth = max_child_depth + 1;
+            JsonBinary::assertJsonDepth(depth);
             JsonBinary::buildBinaryJsonObjectInBuffer(json_elems, write_buffer);
+            return depth;
         }
         else if (json_elem.is_array())
         {
@@ -1057,30 +1072,39 @@ private:
             ColumnString::Chars_t tmp_buf;
             JsonBinary::JsonBinaryWriteBuffer tmp_write_buffer(tmp_buf);
             const auto & array = json_elem.get_array().value_unsafe();
+            UInt64 max_child_depth = 0;
             for (const auto & elem : array)
             {
                 size_t begin = tmp_write_buffer.count();
-                extractJsonElem(elem, tmp_write_buffer);
+                max_child_depth = std::max(extractJsonElem(elem, tmp_write_buffer), max_child_depth);
+                JsonBinary::assertJsonDepth(max_child_depth);
                 size_t size = tmp_write_buffer.count() - begin;
                 json_elems.emplace_back(tmp_buf[begin], StringRef(&tmp_buf[begin + 1], size - 1));
             }
+            UInt64 depth = max_child_depth + 1;
+            JsonBinary::assertJsonDepth(depth);
             JsonBinary::buildBinaryJsonArrayInBuffer(json_elems, write_buffer);
+            return depth;
         }
         else if (json_elem.is_bool())
         {
             JsonBinary::appendNumber(write_buffer, json_elem.get_bool().value_unsafe());
+            return 1;
         }
         else if (json_elem.is_number())
         {
             JsonBinary::appendNumber(write_buffer, json_elem.get_double().value_unsafe());
+            return 1;
         }
         else if (json_elem.is_string())
         {
             JsonBinary::appendStringRef(write_buffer, json_elem.get_string().value_unsafe());
+            return 1;
         }
         else if (json_elem.is_null())
         {
             JsonBinary::appendNull(write_buffer);
+            return 1;
         }
         else
         {
@@ -1090,6 +1114,7 @@ private:
 
 private:
     const tipb::FieldType * input_tidb_tp = nullptr;
+    const tipb::FieldType * output_tidb_tp = nullptr;
     TiDB::TiDBCollatorPtr collator = nullptr;
 };
 

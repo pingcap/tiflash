@@ -24,6 +24,7 @@
 #include <common/memcpy.h>
 
 #include <unordered_set>
+#include "common/types.h"
 
 namespace DB
 {
@@ -120,6 +121,8 @@ public:
     static constexpr UInt8 LITERAL_TRUE = 0x01; // LiteralTrue represents JSON true.
     static constexpr UInt8 LITERAL_FALSE = 0x02; // LiteralFalse represents JSON false.
 
+    static constexpr UInt64 MAX_JSON_DEPTH = 100;
+
     /// Opaque represents a raw database binary type
     struct Opaque
     {
@@ -138,6 +141,10 @@ public:
         : type(type_)
         , data(ref)
     {}
+
+    // GetElemDepth for JSON_DEPTH
+    // Ref https://github.com/pingcap/tidb/blob/5960d0d9bbbeb4df4893295d5a0bafb67687adda/pkg/types/json_binary_functions.go#L1147-L1157
+    UInt64 getElemDepth() const;
 
     /// getElementCount gets the count of Object or Array only.
     UInt32 getElementCount() const;
@@ -179,6 +186,8 @@ public:
     static void appendDatetime(JsonBinaryWriteBuffer & write_buffer, const MyDateTime & value);
     static void appendDuration(JsonBinaryWriteBuffer & write_buffer, Int64 duration, UInt64 fsp);
     static void appendNull(JsonBinaryWriteBuffer & write_buffer);
+
+    static void assertJsonDepth(UInt64 depth);
 
 private:
     Int64 getInt64() const;

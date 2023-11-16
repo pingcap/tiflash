@@ -38,6 +38,27 @@ mysql> insert into test.test_str values(3, null, '1.11', null, null, null, null,
 mysql> insert into test.test_str values(3, null, 'true', null, null, null, null, null, null, null, null);  #NO_UNESCAPE
 mysql> alter table test.test_str set tiflash replica 1;
 
+mysql> drop table if exists test.test_binary;
+mysql> CREATE TABLE test.test_binary (col_b binary(5), col_br varbinary(5));
+mysql> insert into test.test_binary values(null, null);
+mysql> insert into test.test_binary values('12345', '12345');
+mysql> insert into test.test_binary values('12', '12');
+mysql> insert into test.test_binary values('', '');
+mysql> alter table test.test_binary set tiflash replica 1;
+
+mysql> drop table if exists test.test_bin_str;
+mysql> create table test.test_bin_str(col varchar(5)) COLLATE=binary;
+mysql> insert into test.test_bin_str values(null);
+mysql> insert into test.test_bin_str values('12345');
+mysql> insert into test.test_bin_str values('12');
+mysql> insert into test.test_bin_str values('');
+mysql> alter table test.test_bin_str set tiflash replica 1;
+
+mysql> drop table if exists test.test_long_str;
+mysql> create table test.test_long_str(col varchar(500));
+mysql> insert into test.test_long_str values('[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]');
+mysql> alter table test.test_long_str set tiflash replica 1;
+
 mysql> drop table if exists test.test_time;
 mysql> CREATE TABLE test.test_time (col_d DATE, col_dt DATETIME, col_ts TIMESTAMP, col_y YEAR);
 mysql> insert into test.test_time values(null, null, null, null);
@@ -66,6 +87,9 @@ mysql> alter table test.test_decimal set tiflash replica 1;
 func> wait_table test test_int
 func> wait_table test test_float
 func> wait_table test test_str
+func> wait_table test test_binary
+func> wait_table test test_bin_str
+func> wait_table test test_long_str
 func> wait_table test test_time
 func> wait_table test test_duration
 func> wait_table test test_json
@@ -262,6 +286,26 @@ mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; 
 +----------------------+
 | [1, "1", {"1": "1"}] |
 +----------------------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(col_b as json), cast(col_br as json) from test.test_binary;
++---------------------------+--------------------------+
+| cast(col_b as json)       | cast(col_br as json)     |
++---------------------------+--------------------------+
+| NULL                      | NULL                     |
+| "base64:type254:MTIzNDU=" | "base64:type15:MTIzNDU=" |
+| "base64:type254:MTIAAAA=" | "base64:type15:MTI="     |
+| "base64:type254:AAAAAAA=" | "base64:type15:"         |
++---------------------------+--------------------------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(col as json) from test.test_bin_str;
++--------------------------+
+| cast(col as json)        |
++--------------------------+
+| NULL                     |
+| "base64:type15:MTIzNDU=" |
+| "base64:type15:MTI="     |
+| "base64:type15:"         |
++--------------------------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(col as json) from test.test_long_str;
+{#REGEXP}.*Invalid.*
 
 ## cast time as json
 mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(col_d as json),cast(col_dt as json),cast(col_ts as json),cast(col_y as json) from test.test_time;
@@ -304,6 +348,9 @@ mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; 
 mysql> drop table if exists test.test_int;
 mysql> drop table if exists test.test_float;
 mysql> drop table if exists test.test_str;
+mysql> drop table if exists test.test_binary;
+mysql> drop table if exists test.test_bin_str;
+mysql> drop table if exists test.test_long_str;
 mysql> drop table if exists test.test_time;
 mysql> drop table if exists test.test_duration;
 mysql> drop table if exists test.test_json;

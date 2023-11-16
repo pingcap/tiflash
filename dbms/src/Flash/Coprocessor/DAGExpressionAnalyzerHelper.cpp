@@ -314,6 +314,7 @@ String DAGExpressionAnalyzerHelper::buildCastAsJsonWithInputTiDBField(
                  function_cast_string_as_json)
         {
             function_cast_string_as_json->setInputTiDBFieldType(input_expr.field_type());
+            function_cast_string_as_json->setOutputTiDBFieldType(expr.field_type());
         }
         else if (auto * function_cast_time_as_json = dynamic_cast<FunctionCastTimeAsJson *>(function_impl);
                  function_cast_time_as_json)

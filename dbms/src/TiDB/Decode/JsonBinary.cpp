@@ -84,6 +84,41 @@ StringRef JsonBinary::getSubRef(size_t offset, size_t length) const
     return StringRef(data.data + offset, length);
 }
 
+UInt64 JsonBinary::getElemDepth() const
+{
+    switch (type)
+    {
+    case TYPE_CODE_OBJECT:
+    {
+        UInt64 max_depth = 0;
+        auto elem_count = getElementCount();
+        for (UInt32 i = 0; i < elem_count; ++i)
+        {
+            const auto & value = getObjectValue(i);
+            auto depth = value.getElemDepth();
+			if (depth > max_depth)
+				max_depth = depth;
+        }
+        return max_depth + 1;
+    }
+    case TYPE_CODE_ARRAY:
+    {
+        UInt64 max_depth = 0;
+        auto elem_count = getElementCount();
+        for (UInt32 i = 0; i < elem_count; ++i)
+        {
+            const auto & obj = getArrayElement(i);
+            auto depth = obj.getElemDepth();
+			if (depth > max_depth)
+				max_depth = depth;
+        }
+        return max_depth + 1;
+    }
+    default:
+        return 1;
+    }
+}
+
 UInt32 JsonBinary::getElementCount() const
 {
     size_t cursor = 0;
@@ -976,5 +1011,13 @@ void JsonBinary::appendNull(JsonBinaryWriteBuffer & write_buffer)
 {
     write_buffer.write(JsonBinary::TYPE_CODE_LITERAL);
     write_buffer.write(JsonBinary::LITERAL_NIL);
+}
+
+void JsonBinary::assertJsonDepth(UInt64 depth)
+{
+    if (unlikely((depth - 1) > MAX_JSON_DEPTH))
+        throw Exception(fmt::format(
+            "Invalid JSON text: The JSON document exceeds the maximum depth {}.",
+            MAX_JSON_DEPTH));
 }
 } // namespace DB
