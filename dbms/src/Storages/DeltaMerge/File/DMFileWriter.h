@@ -145,7 +145,7 @@ public:
     void write(const Block & block, const BlockProperty & block_property);
     void finalize();
 
-    const DMFilePtr getFile() const { return dmfile; }
+    DMFilePtr getFile() const { return dmfile; }
 
 private:
     void finalizeColumn(ColId col_id, DataTypePtr type);

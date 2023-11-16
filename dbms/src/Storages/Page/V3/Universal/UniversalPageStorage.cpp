@@ -550,17 +550,7 @@ PS::V3::CPDataDumpStats UniversalPageStorage::dumpIncrementalCheckpoint(
     writer.reset();
     auto dump_data_seconds = sw.elapsedMillisecondsFromLastTime() / 1000.0;
 
-    // Persist the checkpoint to remote store.
-    // If not persisted or exception throw, then we can not apply the checkpoint
-    // info to directory. Neither update `last_checkpoint_sequence`.
-
-    auto checkpoint = PS::V3::LocalCheckpointFiles{
-        .data_files = data_file_paths,
-        .manifest_file = {manifest_file_path},
-    };
-    bool persist_done = options.persist_checkpoint(checkpoint);
-    RUNTIME_CHECK(persist_done);
-
+    // TODO: remove upload_seconds
     auto upload_seconds = sw.elapsedMillisecondsFromLastTime() / 1000.0;
 
     SYNC_FOR("before_PageStorage::dumpIncrementalCheckpoint_copyInfo");

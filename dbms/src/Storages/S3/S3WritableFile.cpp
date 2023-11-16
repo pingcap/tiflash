@@ -341,11 +341,4 @@ void S3WritableFile::processPutRequest(const PutObjectTask & task)
     }
 }
 
-std::shared_ptr<S3WritableFile> S3WritableFile::create(const String & remote_fname_)
-{
-    return std::make_shared<S3WritableFile>(
-        S3::ClientFactory::instance().sharedTiFlashClient(),
-        remote_fname_,
-        WriteSettings{});
-}
 } // namespace DB::S3

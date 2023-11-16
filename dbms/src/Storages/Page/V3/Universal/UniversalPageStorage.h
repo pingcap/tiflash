@@ -194,14 +194,6 @@ public:
         const std::unordered_set<String> & must_locked_files = {};
 
         /**
-         * A callback to persist the checkpoint to remote data store.
-         *
-         * If the checkpoint persist failed, it must throw an exception or return false
-         * to prevent the incremental data lost between checkpoints.
-         */
-        const std::function<bool(const PS::V3::LocalCheckpointFiles &)> persist_checkpoint;
-
-        /**
          * Override the value of `seq` placeholder in the data files and manifest file.
          * By default it is std::nullopt, use the snapshot->sequence as `seq` value.
          */

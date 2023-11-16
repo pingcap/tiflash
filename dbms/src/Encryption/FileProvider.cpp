@@ -66,17 +66,10 @@ WritableFilePtr FileProvider::newWritableFile(
     int flags,
     mode_t mode) const
 {
-    WritableFilePtr file;
-    if (auto view = S3::S3FilenameView::fromKeyWithPrefix(file_path_); view.isValid())
-    {
-        file = S3::S3WritableFile::create(view.toFullKey());
-    }
-    else
-    {
-        // Unrecognized xx:// protocol.
-        RUNTIME_CHECK_MSG(file_path_.find("://") == std::string::npos, "Unsupported protocol in path {}", file_path_);
-        file = std::make_shared<PosixWritableFile>(file_path_, truncate_if_exists_, flags, mode, write_limiter_);
-    }
+    // Unrecognized xx:// protocol.
+    RUNTIME_CHECK_MSG(file_path_.find("://") == std::string::npos, "Unsupported protocol in path {}", file_path_);
+    WritableFilePtr file
+        = std::make_shared<PosixWritableFile>(file_path_, truncate_if_exists_, flags, mode, write_limiter_);
     if (encryption_enabled && create_new_encryption_info_)
     {
         auto encryption_info = key_manager->newFile(encryption_path_.full_path);

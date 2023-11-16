@@ -16,10 +16,12 @@
 
 #include <Common/Exception.h>
 #include <IO/CompressedWriteBuffer.h>
-#include <IO/WriteBufferFromFile.h>
+#include <IO/WriteBufferFromWritableFile.h>
 #include <Storages/Page/V3/CheckpointFile/Proto/manifest_file.pb.h>
 #include <Storages/Page/V3/CheckpointFile/fwd.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
+#include <Storages/S3/S3Filename.h>
+#include <Storages/S3/S3WritableFile.h>
 
 #include <string>
 
@@ -41,7 +43,10 @@ public:
     }
 
     explicit CPManifestFileWriter(Options options)
-        : file_writer(std::make_unique<WriteBufferFromFile>(options.file_path))
+        : file_writer(std::make_unique<WriteBufferFromWritableFile>(std::make_shared<S3::S3WritableFile>(
+            S3::ClientFactory::instance().sharedTiFlashClient(),
+            S3::S3FilenameView::fromKeyWithPrefix(options.file_path).toFullKey(),
+            S3::WriteSettings{})))
         , compressed_writer(std::make_unique<CompressedWriteBuffer<true>>(*file_writer, CompressionSettings()))
         , max_edit_records_per_part(options.max_edit_records_per_part)
     {
@@ -78,8 +83,11 @@ private:
         WritingFinished,
     };
 
-    // compressed<plain_file>
-    const std::unique_ptr<WriteBufferFromFile> file_writer;
+    // WriteBuffer from S3WritableFile
+    // So the data will be uploaded to S3 when the buffer is full.
+    // no checksum, no encryption
+    const std::unique_ptr<WriteBufferFromWritableFile> file_writer;
+    // compressed<file_writer>
     const WriteBufferPtr compressed_writer;
     const UInt64 max_edit_records_per_part;
 

@@ -90,43 +90,6 @@ void DataStoreS3::putDMFile(DMFilePtr local_dmfile, const S3::DMFileOID & oid, b
     LOG_INFO(log, "Upload DMFile finished, key={}, cost={}ms", remote_dir, sw.elapsedMilliseconds());
 }
 
-bool DataStoreS3::putCheckpointFiles(
-    const PS::V3::LocalCheckpointFiles & local_files,
-    StoreID store_id,
-    UInt64 upload_seq)
-{
-    auto s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
-
-    /// First upload all CheckpointData files and their locks,
-    /// then upload the CheckpointManifest to make the files within
-    /// `upload_seq` public to S3GCManager.
-
-    std::vector<std::future<void>> upload_results;
-    // upload in parallel
-    for (size_t file_idx = 0; file_idx < local_files.data_files.size(); ++file_idx)
-    {
-        auto task = std::make_shared<std::packaged_task<void()>>([&, idx = file_idx] {
-            const auto & local_datafile = local_files.data_files[idx];
-            auto s3key = S3::S3Filename::newCheckpointData(store_id, upload_seq, idx);
-            auto lock_key = s3key.toView().getLockKey(store_id, upload_seq);
-            S3::uploadFile(*s3_client, local_datafile, s3key.toFullKey());
-            S3::uploadEmptyFile(*s3_client, lock_key);
-        });
-        upload_results.push_back(task->get_future());
-        DataStoreS3Pool::get().scheduleOrThrowOnError([task] { (*task)(); });
-    }
-    for (auto & f : upload_results)
-    {
-        f.get();
-    }
-
-    // upload manifest after all CheckpointData uploaded
-    auto s3key = S3::S3Filename::newCheckpointManifest(store_id, upload_seq);
-    S3::uploadFile(*s3_client, local_files.manifest_file, s3key.toFullKey());
-
-    return true; // upload success
-}
-
 std::unordered_map<String, IDataStore::DataFileInfo> DataStoreS3::getDataFilesInfo(
     const std::unordered_set<String> & lock_keys)
 {

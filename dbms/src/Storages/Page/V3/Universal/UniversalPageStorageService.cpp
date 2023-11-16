@@ -94,12 +94,6 @@ UniversalPageStorageServicePtr UniversalPageStorageService::createForTest(
     return service;
 }
 
-bool CheckpointUploadFunctor::operator()(const PS::V3::LocalCheckpointFiles & checkpoint) const
-{
-    // Persist checkpoint to remote_source
-    return remote_store->putCheckpointFiles(checkpoint, store_id, sequence);
-}
-
 void UniversalPageStorageService::setUploadAllData()
 {
     upload_all_at_next_upload = true;
@@ -208,14 +202,6 @@ bool UniversalPageStorageService::uploadCheckpointImpl(
     // TODO: directly write into remote store. But take care of the order
     //       of CheckpointData files, lock files, and CheckpointManifest.
     const auto upload_info = uni_page_storage->allocateNewUploadLocksInfo();
-    auto local_dir = getCheckpointLocalDir(upload_info.upload_sequence);
-    Poco::File(local_dir).createDirectories();
-    auto local_dir_str = local_dir.toString() + "/";
-    SCOPE_EXIT({
-        // No matter the local checkpoint files are uploaded successfully or fails, delete them directly.
-        // Since the directory has been created before, it should exists.
-        Poco::File(local_dir).remove(true);
-    });
 
     /*
      * If using `snapshot->sequence` as a part of manifest name, we can NOT
@@ -248,19 +234,12 @@ bool UniversalPageStorageService::uploadCheckpointImpl(
         LOG_INFO(log, "Upload checkpoint with all existing data");
     }
     UniversalPageStorage::DumpCheckpointOptions opts{
-        .data_file_id_pattern = S3::S3Filename::newCheckpointDataNameTemplate(store_info.id(), upload_info.upload_sequence),
-        .data_file_path_pattern = local_dir_str + "dat_{seq}_{index}",
+        .data_file_id_pattern = S3::S3Filename::newLockNameTemplate(store_info.id(), upload_info.upload_sequence),
+        .data_file_path_pattern = fmt::format("s3://{}", S3::S3Filename::newCheckpointDataNameTemplate(store_info.id())),
         .manifest_file_id_pattern = S3::S3Filename::newCheckpointManifestNameTemplate(store_info.id()),
-        .manifest_file_path_pattern = local_dir_str + "mf_{seq}",
+        .manifest_file_path_pattern = fmt::format("s3://{}", S3::S3Filename::newCheckpointManifestNameTemplate(store_info.id())),
         .writer_info = wi,
         .must_locked_files = upload_info.pre_lock_keys,
-        .persist_checkpoint = CheckpointUploadFunctor{
-            .store_id = store_info.id(),
-            // Note that we use `upload_sequence` but not `snapshot.sequence` for
-            // the S3 key.
-            .sequence = upload_info.upload_sequence,
-            .remote_store = remote_store,
-        },
         .override_sequence = upload_info.upload_sequence, // override by upload_sequence
         .full_compact = force_sync_data,
         .compact_getter = FileIdsToCompactGetter{

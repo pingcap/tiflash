@@ -87,20 +87,6 @@ public:
 
     virtual IPreparedDMFileTokenPtr prepareDMFileByKey(const String & remote_key) = 0;
 
-    /**
-     * Blocks until all checkpoint files are successfully put in the remote data store.
-     * Returns true if all files are successfully uploaded.
-     * Should be used by a write node.
-     *
-     * Note that this function ensure CheckpointManifest is the last file to be seen in the
-     * remote data source for a given `upload_seq`.
-     */
-    virtual bool putCheckpointFiles(
-        const PS::V3::LocalCheckpointFiles & local_files,
-        StoreID store_id,
-        UInt64 upload_seq)
-        = 0;
-
     struct DataFileInfo
     {
         Int64 size = -1;
