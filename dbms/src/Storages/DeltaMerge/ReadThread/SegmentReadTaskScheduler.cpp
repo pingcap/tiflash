@@ -133,14 +133,27 @@ bool SegmentReadTaskScheduler::needScheduleToRead(const SegmentReadTaskPoolPtr &
         return false;
     }
 
-    // No segment to be scheduled.
-    if (!merged_task_pool.has(pool->pool_id) && pool->getFreeActiveSegments() <= 0)
+    // Check if there are segments that can be scheduled:
+    // 1. There are already activated segments.
+    if (merged_task_pool.has(pool->pool_id))
     {
-        GET_METRIC(tiflash_storage_read_thread_counter, type_sche_no_segment).Increment();
-        return false;
+        return true;
+    }
+    // 2. Not reach limitation, we can activate a segment.
+    if (pool->getFreeActiveSegments() > 0 && pool->getPendingSegmentCount() > 0)
+    {
+        return true;
     }
 
-    return true;
+    if (pool->getFreeActiveSegments() <= 0)
+    {
+        GET_METRIC(tiflash_storage_read_thread_counter, type_sche_active_segment_limit).Increment();
+    }
+    else
+    {
+        GET_METRIC(tiflash_storage_read_thread_counter, type_sche_no_segment).Increment();
+    }
+    return false;
 }
 
 SegmentReadTaskPoolPtr SegmentReadTaskScheduler::scheduleSegmentReadTaskPoolUnlock()

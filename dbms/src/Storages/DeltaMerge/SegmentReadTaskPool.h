@@ -179,6 +179,7 @@ public:
     Int64 decreaseUnorderedInputStreamRefCount();
     Int64 getFreeBlockSlots() const;
     Int64 getFreeActiveSegments() const;
+    Int64 getPendingSegmentCount() const;
     bool valid() const;
     void setException(const DB::Exception & e);
 

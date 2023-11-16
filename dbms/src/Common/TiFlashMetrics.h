@@ -536,6 +536,7 @@ namespace DB
       F(type_sche_no_slot, {"type", "sche_no_slot"}),                                                                               \
       F(type_sche_no_ru, {"type", "sche_no_ru"}),                                                                                   \
       F(type_sche_no_segment, {"type", "sche_no_segment"}),                                                                         \
+      F(type_sche_active_segment_limit, {"type", "sche_active_segment_limit"}),                                                     \
       F(type_sche_from_cache, {"type", "sche_from_cache"}),                                                                         \
       F(type_sche_new_task, {"type", "sche_new_task"}),                                                                             \
       F(type_ru_exhausted, {"type", "ru_exhausted"}),                                                                               \

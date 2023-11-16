@@ -308,6 +308,12 @@ Int64 SegmentReadTaskPool::getFreeActiveSegmentsUnlock() const
     return active_segment_limit - static_cast<Int64>(active_segment_ids.size());
 }
 
+Int64 SegmentReadTaskPool::getPendingSegmentCount() const
+{
+    std::lock_guard lock(mutex);
+    return tasks_wrapper.getTasks().size();
+}
+
 bool SegmentReadTaskPool::exceptionHappened() const
 {
     return exception_happened.load(std::memory_order_relaxed);
