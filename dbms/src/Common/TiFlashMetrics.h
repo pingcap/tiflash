@@ -722,6 +722,9 @@ namespace DB
       F(type_total_consumption, {"type", "total_consumption"}),                                                                     \
       F(type_bucket_fill_rate, {"type", "bucket_fill_rate"}),                                                                       \
       F(type_bucket_capacity, {"type", "bucket_capacity"}),                                                                         \
+      F(type_compute_ru_consumption, {"type", "compute_ru_consumption"}),                                                           \
+      F(type_storage_ru_consumption, {"type", "storage_ru_consumption"}),                                                           \
+      F(type_compute_ru_exhausted, {"type", "compute_ru_exhausted"}),                                                           \
       F(type_fetch_tokens_from_gac_count, {"type", "fetch_tokens_from_gac_count"}))
 
 

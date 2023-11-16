@@ -117,6 +117,11 @@ private:
         ru_consumption_delta += ru;
         if (!burstable)
             bucket->consume(ru);
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_remaining_tokens, name).Set(bucket->peek());
+        if (cpu_time_in_ns_ == 0)
+            GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_compute_ru_consumption, name).Set(ru);
+        else
+            GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_storage_ru_consumption, name).Set(ru);
     }
 
     // Priority greater than zero: Less number means higher priority.
@@ -236,6 +241,10 @@ private:
             name,
             ori_bucket_info,
             bucket->toString());
+
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_bucket_fill_rate, name).Set(config.fill_rate);
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_bucket_capacity, name).Set(config.capacity);
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_remaining_tokens, name).Set(config.tokens);
     }
 
     void updateTrickleMode(double add_tokens, double new_capacity, int64_t trickle_ms)
@@ -263,7 +272,8 @@ private:
             trickle_sec);
 
         std::string ori_bucket_info = bucket->toString();
-        bucket->reConfig(TokenBucket::TokenBucketConfig(bucket->peek(), new_fill_rate, new_capacity));
+        const auto ori_tokens = bucket->peek();
+        bucket->reConfig(TokenBucket::TokenBucketConfig(ori_tokens, new_fill_rate, new_capacity));
         stop_trickle_timepoint = SteadyClock::now() + std::chrono::milliseconds(trickle_ms);
         LOG_DEBUG(
             log,
@@ -271,6 +281,10 @@ private:
             name,
             ori_bucket_info,
             bucket->toString());
+
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_bucket_fill_rate, name).Set(new_fill_rate);
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_bucket_capacity, name).Set(new_capacity);
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_remaining_tokens, name).Set(ori_tokens);
     }
 
     // If we have network problem with GAC, enter degrade mode.
@@ -292,6 +306,10 @@ private:
             name,
             ori_bucket_info,
             bucket->toString());
+
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_bucket_fill_rate, name).Set(config.fill_rate);
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_bucket_capacity, name).Set(config.capacity);
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_remaining_tokens, name).Set(config.tokens);
     }
 
     struct ConsumptionUpdateInfo
@@ -371,9 +389,6 @@ private:
             local_config = bucket->getConfig();
             local_fetch_count = fetch_tokens_from_gac_count;
         }
-        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_remaining_tokens, name).Set(local_config.tokens);
-        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_bucket_fill_rate, name).Set(local_config.fill_rate);
-        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_bucket_capacity, name).Set(local_config.capacity);
         GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_fetch_tokens_from_gac_count, name)
             .Set(local_fetch_count);
     }
