@@ -596,6 +596,7 @@ PS::V3::CPDataDumpStats UniversalPageStorage::dumpIncrementalCheckpoint(
         sequence,
         checkpoint_dump_stats);
     SetMetrics(checkpoint_dump_stats);
+    LOG_INFO(log, "!!!!!! FIFIFIFIF");
     return checkpoint_dump_stats;
 }
 

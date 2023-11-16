@@ -145,6 +145,7 @@ protected:
             .override_sequence = upload_sequence, // override by upload_sequence
         };
         page_storage->dumpIncrementalCheckpoint(opts);
+        LOG_DEBUG(log, "!!!!! end dumpCheckpoint for checkpoint {}", store_id);
     }
 
 protected:
@@ -284,6 +285,7 @@ try
     ASSERT_TRUE(::DB::tests::TiFlashTestEnv::createBucketIfNotExist(*s3_client));
     dumpCheckpoint();
 
+    LOG_INFO(log, "!!!!! SEUP 1");
     const auto manifest_key = S3::S3Filename::newCheckpointManifest(kvs.getStoreID(), upload_sequence).toFullKey();
     auto checkpoint_info = std::make_shared<CheckpointInfo>();
     checkpoint_info->remote_store_id = kvs.getStoreID();
@@ -297,8 +299,10 @@ try
         kv_region->mutMeta().clonedApplyState(),
         kv_region->mutMeta().clonedRegionState());
 
+    LOG_INFO(log, "!!!!! SEUP 2");
+
     FastAddPeerImplIngest(global_context.getTMTContext(), region_id, 2333, std::move(mock_data));
-    fap_context->debugRemoveCheckpointIngestInfo(region_id);
+    fap_context->removeCheckpointIngestInfo(region_id);
     ApplyFapSnapshotImpl(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333);
     {
         auto keyspace_id = kv_region->getKeyspaceID();
@@ -309,6 +313,7 @@ try
         auto store = dm_storage->getStore();
         verifyRows(global_context, store, DM::RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()), 1);
     }
+    ASSERT_TRUE(!fap_context->tryGetCheckpointIngestInfo(region_id).has_value());
 }
 CATCH
 

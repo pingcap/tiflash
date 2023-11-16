@@ -31,6 +31,7 @@ enum class StorageType
     KVStore = 4,
     RaftEngine = 5,
     KVEngine = 6,
+    LocalKV = 7,
 
     _MAX_STORAGE_TYPE_, // NOLINT(bugprone-reserved-identifier)
 };

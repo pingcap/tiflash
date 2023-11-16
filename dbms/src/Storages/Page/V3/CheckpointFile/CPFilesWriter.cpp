@@ -100,6 +100,10 @@ CPDataDumpStats CPFilesWriter::writeEditsAndApplyCheckpointInfo(
         StorageType id_storage_type = StorageType::Unknown;
         {
             id_storage_type = UniversalPageIdFormat::getUniversalPageIdType(rec_edit.page_id);
+            if (id_storage_type == StorageType::LocalKV) {
+                // These pages only contains local data which will not be dumped into checkpoint.
+                continue;
+            }
             // all keys are included in the manifest
             write_down_stats.num_keys[static_cast<size_t>(id_storage_type)] += 1;
             // this is the page data size of all latest version keys, including some uploaded in the

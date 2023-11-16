@@ -16,6 +16,7 @@
 #include <Storages/Page/PageConstants.h>
 #include <Storages/Page/V3/CheckpointFile/CPDumpStat.h>
 #include <fmt/core.h>
+#include "common/logger_useful.h"
 
 namespace DB::PS::V3
 {
@@ -77,6 +78,7 @@ void SetMetrics(const CPDataDumpStats & stats)
             break;
         }
         default:
+            LOG_FATAL(&Poco::Logger::get("SetMetrics"), "unsupported storage type {}", magic_enum::enum_name(type));
             __builtin_unreachable();
         }
     }

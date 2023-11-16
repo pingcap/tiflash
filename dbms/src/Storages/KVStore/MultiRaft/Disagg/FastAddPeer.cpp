@@ -379,20 +379,23 @@ void ApplyFapSnapshotImpl(TMTContext & tmt, TiFlashRaftProxyHelper * proxy_helpe
         auto checkpoint_ingest_info
             = fap_ctx->getOrRestoreCheckpointIngestInfo(tmt, proxy_helper, region_id, peer_id);
         kvstore->handleIngestCheckpoint(checkpoint_ingest_info->getRegion(), checkpoint_ingest_info, tmt);
+        checkpoint_ingest_info->markDelete();
+        // TODO(fap) We can move checkpoint_ingest_info to a dedicated queue, and schedule a timed task to clean it.
+        // However, we have to make sure the clean task will not override if a new fap snapshot of the same region comes later.
+        fap_ctx->removeCheckpointIngestInfo(region_id);
         GET_METRIC(tiflash_fap_task_duration_seconds, type_ingest_stage).Observe(watch_ingest.elapsedSeconds());
         GET_METRIC(tiflash_fap_task_result, type_succeed).Increment();
     }
-    catch (Exception & e)
+    catch (...)
     {
         DB::tryLogCurrentException(
             "FastAddPeerApply",
             fmt::format(
-                "Failed when try to apply fap snapshot region_id={} peer_id={} {}",
+                "Failed when try to apply fap snapshot region_id={} peer_id={}",
                 region_id,
-                peer_id,
-                e.message()
+                peer_id
             ));
-        exit(-1);
+        throw;
     }
 }
 

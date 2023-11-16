@@ -1190,7 +1190,6 @@ void DeltaMergeStore::ingestSegmentsFromCheckpointInfo(
         restored_segments.size());
 
 
-    // TODO(fap) is this necessary?
     WriteBatches wbs{*dm_context->storage_pool};
     for (auto & segment : restored_segments)
     {
@@ -1201,6 +1200,7 @@ void DeltaMergeStore::ingestSegmentsFromCheckpointInfo(
         wbs.writeRemoves();
     }
 
+    // TODO(fap) This could be executed in a dedicated thread if it's a problem.
     for (auto & segment : updated_segments)
         checkSegmentUpdate(dm_context, segment, ThreadType::Write, InputType::NotRaft);
 }

@@ -62,7 +62,9 @@ public:
         RegionPtr region,
         DM::Segments && segments);
 
-    void debugRemoveCheckpointIngestInfo(UInt64 region_id);
+    void removeCheckpointIngestInfo(UInt64 region_id);
+
+    std::optional<CheckpointIngestInfoPtr> tryGetCheckpointIngestInfo(UInt64 region_id);
 
 public:
     std::shared_ptr<FAPAsyncTasks> tasks_trace;

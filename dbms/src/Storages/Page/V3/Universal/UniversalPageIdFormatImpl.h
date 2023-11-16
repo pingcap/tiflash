@@ -253,6 +253,10 @@ public:
         {
             return StorageType::KVEngine;
         }
+        else if (page_id_str[0] == LOCAL_KV_PREFIX)
+        {
+            return StorageType::LocalKV;
+        }
         else
         {
             auto page_id_without_keyspace

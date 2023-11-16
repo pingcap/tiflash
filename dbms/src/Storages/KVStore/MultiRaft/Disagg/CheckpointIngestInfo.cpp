@@ -133,8 +133,6 @@ void CheckpointIngestInfo::persistToPS()
             buffer.count(), region_size,
             read_buf->count(), read_buf->offset(), read_buf->hasPendingData()
         );
-        // char tototototo[11111];
-        // read_buf->readStrict(tototototo, read_buf->count());
         LOG_INFO(log, "!!!!! ffff22222");
         RUNTIME_CHECK_MSG(buffer.count() == region_size, "buffer {} != region_size {}", buffer.count(), region_size);
         auto page_id
@@ -172,7 +170,14 @@ void CheckpointIngestInfo::persistToPS()
 
 void CheckpointIngestInfo::removeFromPS()
 {
-    // TODO(fap)
+    auto * log = &Poco::Logger::get("CheckpointIngestInfo");
+    auto uni_ps = tmt.getContext().getWriteNodePageStorage();
+    LOG_INFO(log, "!!!!! removeFromPS 111");
+    UniversalWriteBatch del_batch;
+    del_batch.delPage(UniversalPageIdFormat::toLocalKVPrefix(UniversalPageIdFormat::LocalKVKeyType::FAPIngestRegion, region_id));
+    del_batch.delPage(UniversalPageIdFormat::toLocalKVPrefix(UniversalPageIdFormat::LocalKVKeyType::FAPIngestSegments, region_id));
+    LOG_INFO(log, "!!!!! removeFromPS 222");
+    uni_ps->write(std::move(del_batch), PageType::Local);
 }
 
 CheckpointIngestInfo::~CheckpointIngestInfo()

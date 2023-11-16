@@ -412,6 +412,7 @@ Segment::SegmentMetaInfos Segment::readAllSegmentsMetaInfoInRange( //
     LOG_DEBUG(Logger::get(), "Read segment meta info from segment {}", current_segment_id);
     std::vector<std::pair<DM::RowKeyValue, UInt64>> end_key_and_segment_ids;
     SegmentMetaInfos segment_infos;
+    // TODO(fap) After #7642
     while (current_segment_id != 0)
     {
         Segment::SegmentMetaInfo segment_info;
