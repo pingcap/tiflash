@@ -116,6 +116,8 @@ public:
         DB::tests::TiFlashTestEnv::disableS3Config();
     }
 
+    CheckpointRegionInfoAndData prepareForRestart();
+
 protected:
     void dumpCheckpoint()
     {
@@ -149,7 +151,6 @@ protected:
             .override_sequence = upload_sequence, // override by upload_sequence
         };
         page_storage->dumpIncrementalCheckpoint(opts);
-        LOG_DEBUG(log, "!!!!! end dumpCheckpoint for checkpoint {}", store_id);
     }
 
 protected:
@@ -259,8 +260,7 @@ void verifyRows(Context & ctx, DM::DeltaMergeStorePtr store, const DM::RowKeyRan
     ASSERT_INPUTSTREAM_NROWS(in, rows);
 }
 
-TEST_F(RegionKVStoreTestFAP, RestoreFromRestart)
-try
+CheckpointRegionInfoAndData RegionKVStoreTestFAP::prepareForRestart()
 {
     auto & global_context = TiFlashTestEnv::getGlobalContext();
     uint64_t region_id = 1;
@@ -290,10 +290,9 @@ try
     persistAfterWrite(global_context, kvs, proxy_instance, page_storage, region_id, index);
 
     auto s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
-    ASSERT_TRUE(::DB::tests::TiFlashTestEnv::createBucketIfNotExist(*s3_client));
+    RUNTIME_CHECK(::DB::tests::TiFlashTestEnv::createBucketIfNotExist(*s3_client));
     dumpCheckpoint();
 
-    LOG_INFO(log, "!!!!! SEUP 1");
     const auto manifest_key = S3::S3Filename::newCheckpointManifest(kvs.getStoreID(), upload_sequence).toFullKey();
     auto checkpoint_info = std::make_shared<CheckpointInfo>();
     checkpoint_info->remote_store_id = kvs.getStoreID();
@@ -306,12 +305,23 @@ try
         kv_region,
         kv_region->mutMeta().clonedApplyState(),
         kv_region->mutMeta().clonedRegionState());
+    return mock_data;
+}
 
-    LOG_INFO(log, "!!!!! SEUP 2");
+TEST_F(RegionKVStoreTestFAP, RestoreFromRestart1)
+try
+{
+    CheckpointRegionInfoAndData mock_data = prepareForRestart();
+    KVStore & kvs = getKVS();
+    RegionPtr kv_region = kvs.getRegion(1);
 
+    auto & global_context = TiFlashTestEnv::getGlobalContext();
+    auto fap_context = global_context.getSharedContextDisagg()->fap_context;
+    uint64_t region_id = 1;
     FastAddPeerImplIngest(global_context.getTMTContext(), region_id, 2333, std::move(mock_data));
     fap_context->removeCheckpointIngestInfo(region_id);
     ApplyFapSnapshotImpl(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333);
+
     {
         auto keyspace_id = kv_region->getKeyspaceID();
         auto table_id = kv_region->getMappedTableID();
@@ -325,6 +335,23 @@ try
             DM::RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()),
             1);
     }
+    ASSERT_TRUE(!fap_context->tryGetCheckpointIngestInfo(region_id).has_value());
+}
+CATCH
+
+TEST_F(RegionKVStoreTestFAP, RestoreFromRestart2)
+try
+{
+    CheckpointRegionInfoAndData mock_data = prepareForRestart();
+    KVStore & kvs = getKVS();
+    RegionPtr kv_region = kvs.getRegion(1);
+
+    auto & global_context = TiFlashTestEnv::getGlobalContext();
+    auto fap_context = global_context.getSharedContextDisagg()->fap_context;
+    uint64_t region_id = 1;
+    FastAddPeerImplIngest(global_context.getTMTContext(), region_id, 2333, std::move(mock_data));
+    fap_context->removeCheckpointIngestInfo(region_id);
+    kvstore->handleDestroy(region_id, global_context.getTMTContext());
     ASSERT_TRUE(!fap_context->tryGetCheckpointIngestInfo(region_id).has_value());
 }
 CATCH

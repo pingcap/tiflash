@@ -31,6 +31,9 @@ using DMContextPtr = std::shared_ptr<DMContext>;
 class Region;
 using RegionPtr = std::shared_ptr<Region>;
 class TMTContext;
+class UniversalPageStorage;
+using UniversalPageStoragePtr = std::shared_ptr<UniversalPageStorage>;
+
 
 struct CheckpointIngestInfo
 {
@@ -79,10 +82,12 @@ struct CheckpointIngestInfo
         loadFromPS(proxy_helper);
     }
 
+    static bool forciblyClean(TMTContext & tmt, UInt64 region_id);
+
     ~CheckpointIngestInfo();
 
 private:
-    void loadFromPS(const struct TiFlashRaftProxyHelper * proxy_helper);
+    bool loadFromPS(const struct TiFlashRaftProxyHelper * proxy_helper);
     // Safety: raftstore ensures a region is handled in a single thread.
     // `persistToPS` is called at a fixed place in this thread.
     void persistToPS();

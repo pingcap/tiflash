@@ -58,51 +58,97 @@ RegionPtr CheckpointIngestInfo::getRegion() const
     return region;
 }
 
-void CheckpointIngestInfo::loadFromPS(const TiFlashRaftProxyHelper * proxy_helper)
+bool CheckpointIngestInfo::forciblyClean(TMTContext & tmt, UInt64 region_id)
+{
+    auto log = DB::Logger::get("CheckpointIngestInfo");
+    auto uni_ps = tmt.getContext().getWriteNodePageStorage();
+    auto snapshot = uni_ps->getSnapshot(fmt::format("read_l_{}", region_id));
+    UniversalWriteBatch del_batch;
+    bool has_data = false;
+    {
+        auto page_id
+            = UniversalPageIdFormat::toLocalKVPrefix(UniversalPageIdFormat::LocalKVKeyType::FAPIngestRegion, region_id);
+        Page page = uni_ps->read(page_id, nullptr, snapshot, /*throw_on_not_exist*/ false);
+        has_data = true;
+        if (page.isValid())
+        {
+            del_batch.delPage(UniversalPageIdFormat::toLocalKVPrefix(
+                UniversalPageIdFormat::LocalKVKeyType::FAPIngestRegion,
+                region_id));
+        }
+    }
+    {
+        auto page_id = UniversalPageIdFormat::toLocalKVPrefix(
+            UniversalPageIdFormat::LocalKVKeyType::FAPIngestSegments,
+            region_id);
+        Page page = uni_ps->read(page_id, nullptr, snapshot, /*throw_on_not_exist*/ false);
+        has_data = true;
+        del_batch.delPage(UniversalPageIdFormat::toLocalKVPrefix(
+            UniversalPageIdFormat::LocalKVKeyType::FAPIngestSegments,
+            region_id));
+        uni_ps->write(std::move(del_batch), PageType::Local);
+    }
+    if (has_data)
+        uni_ps->write(std::move(del_batch), DB::PS::V3::PageType::Local, nullptr);
+    return has_data;
+}
+
+bool CheckpointIngestInfo::loadFromPS(const TiFlashRaftProxyHelper * proxy_helper)
 {
     RUNTIME_CHECK_MSG(!in_memory && restored_segments.empty(), "CheckpointIngestInfo is already inited");
     auto log = DB::Logger::get("CheckpointIngestInfo");
     auto uni_ps = tmt.getContext().getWriteNodePageStorage();
     auto snapshot = uni_ps->getSnapshot(fmt::format("read_l_{}", region_id));
 
-    auto page_id
-        = UniversalPageIdFormat::toLocalKVPrefix(UniversalPageIdFormat::LocalKVKeyType::FAPIngestRegion, region_id);
-    auto page = uni_ps->read(page_id, nullptr, snapshot, /*throw_on_not_exist*/ false);
-    ReadBufferFromMemory buf(page.data.begin(), page.data.size());
-    region = Region::deserialize(buf, proxy_helper);
-
-    auto & storages = tmt.getStorages();
-    auto keyspace_id = region->getKeyspaceID();
-    auto table_id = region->getMappedTableID();
-    auto storage = storages.get(keyspace_id, table_id);
-    if (storage && storage->engineType() == TiDB::StorageEngine::DT)
     {
-        auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
-        auto dm_context = dm_storage->getStore()->newDMContext(tmt.getContext(), tmt.getContext().getSettingsRef());
-        auto page_id = UniversalPageIdFormat::toLocalKVPrefix(
-            UniversalPageIdFormat::LocalKVKeyType::FAPIngestSegments,
-            region_id);
-        auto page = uni_ps->read(page_id, nullptr, snapshot, /*throw_on_not_exist*/ false);
+        auto page_id
+            = UniversalPageIdFormat::toLocalKVPrefix(UniversalPageIdFormat::LocalKVKeyType::FAPIngestRegion, region_id);
+        Page page = uni_ps->read(page_id, nullptr, snapshot, /*throw_on_not_exist*/ false);
+        if (!page.isValid())
+            return false;
         ReadBufferFromMemory buf(page.data.begin(), page.data.size());
-        auto count = readBinary2<UInt64>(buf);
-        for (size_t i = 0; i < count; i++)
-        {
-            auto segment_id = readBinary2<UInt64>(buf);
-            restored_segments.emplace_back(DM::Segment::restoreSegment(log, *dm_context, segment_id));
-        }
+        region = Region::deserialize(buf, proxy_helper);
     }
-    else
+
     {
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "unsupported storage engine");
+        auto & storages = tmt.getStorages();
+        auto keyspace_id = region->getKeyspaceID();
+        auto table_id = region->getMappedTableID();
+        auto storage = storages.get(keyspace_id, table_id);
+        if (storage && storage->engineType() == TiDB::StorageEngine::DT)
+        {
+            auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
+            auto dm_context = dm_storage->getStore()->newDMContext(tmt.getContext(), tmt.getContext().getSettingsRef());
+            auto page_id = UniversalPageIdFormat::toLocalKVPrefix(
+                UniversalPageIdFormat::LocalKVKeyType::FAPIngestSegments,
+                region_id);
+            auto page = uni_ps->read(page_id, nullptr, snapshot, /*throw_on_not_exist*/ false);
+            if (!page.isValid())
+                return false;
+            ReadBufferFromMemory buf(page.data.begin(), page.data.size());
+            auto count = readBinary2<UInt64>(buf);
+            for (size_t i = 0; i < count; i++)
+            {
+                auto segment_id = readBinary2<UInt64>(buf);
+                restored_segments.emplace_back(DM::Segment::restoreSegment(log, *dm_context, segment_id));
+            }
+        }
+        else
+        {
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "unsupported storage engine");
+        }
+
+        LOG_INFO(
+            log,
+            "CheckpointIngestInfo restore success, region_id={} table_id={} keyspace_id={} region={}",
+            region_id,
+            table_id,
+            keyspace_id,
+            region->getDebugString());
     }
-    LOG_INFO(
-        log,
-        "CheckpointIngestInfo restore success, region_id={} table_id={} keyspace_id={} region={}",
-        region_id,
-        table_id,
-        keyspace_id,
-        region->getDebugString());
+
     in_memory = true;
+    return true;
 }
 
 void CheckpointIngestInfo::persistToPS()

@@ -16,9 +16,11 @@
 #include <Common/TiFlashMetrics.h>
 #include <Common/setThreadName.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/SharedContexts/Disagg.h>
 #include <Storages/KVStore/Decode/RegionTable.h>
 #include <Storages/KVStore/FFI/ProxyFFI.h>
 #include <Storages/KVStore/KVStore.h>
+#include <Storages/KVStore/MultiRaft/Disagg/FastAddPeer.h>
 #include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/StorageDeltaMerge.h>
@@ -115,6 +117,16 @@ void KVStore::checkAndApplyPreHandledSnapshot(const RegionPtrWrap & new_region, 
     }
 
     onSnapshot(new_region, old_region, old_applied_index, tmt);
+
+    if (tmt.getContext().getSharedContextDisagg()->isDisaggregatedStorageMode())
+    {
+        // Everytime we meet a legacy snapshot, we try to clean obsolette fap ingest info.
+        if constexpr (!std::is_same_v<RegionPtrWrap, RegionPtrWithCheckpointInfo>)
+        {
+            auto fap_ctx = tmt.getContext().getSharedContextDisagg()->fap_context;
+            fap_ctx->forceCleanCheckpointIngestInfo(tmt, new_region->id());
+        }
+    }
 }
 
 // This function get tiflash replica count from local schema.
