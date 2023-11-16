@@ -73,8 +73,7 @@ struct AdderMapEntry<ASTTableJoin::Strictness::All, Mapped>
         const size_t max_row_added)
     {
         size_t rows_added = 0;
-        if unlikely (rows_added == max_row_added)
-            return rows_added;
+        assert(rows_added < max_row_added);
         auto current = &static_cast<const typename Mapped::Base_t &>(mapped);
 
         auto add_one_row = [&]() {
@@ -132,8 +131,7 @@ struct AdderRowFlaggedMapEntry
         const size_t max_row_added)
     {
         size_t rows_added = 0;
-        if unlikely (rows_added == max_row_added)
-            return rows_added;
+        assert(rows_added < max_row_added);
         const auto * current = &static_cast<const typename Mapped::Base_t &>(mapped);
 
         auto check_and_add_one_row = [&]() {

@@ -2262,11 +2262,13 @@ try
                     Field(static_cast<UInt64>(threshold)));
                 ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams))
                     << "left_table_name = " << left_table_name
-                    << ", right_exchange_receiver_concurrency = " << exchange_concurrency;
+                    << ", right_exchange_receiver_concurrency = " << exchange_concurrency
+                    << ", join_probe_cache_columns_threshold = " << threshold;
                 if (original_max_streams_small < exchange_concurrency)
                     ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams_small))
                         << "left_table_name = " << left_table_name
-                        << ", right_exchange_receiver_concurrency = " << exchange_concurrency;
+                        << ", right_exchange_receiver_concurrency = " << exchange_concurrency
+                        << ", join_probe_cache_columns_threshold = " << threshold;
             }
             WRAP_FOR_JOIN_TEST_END
         }
@@ -2880,7 +2882,8 @@ try
                         "join_probe_cache_columns_threshold",
                         Field(static_cast<UInt64>(threshold)));
                     ASSERT_COLUMNS_EQ_UR(reference, executeStreams(request, max_streams))
-                        << "left_table_name = " << left_table_name << ", right_table_name = " << right_table_name;
+                        << "left_table_name = " << left_table_name << ", right_table_name = " << right_table_name
+                        << ", join_probe_cache_columns_threshold = " << threshold;
                 }
             }
         }
