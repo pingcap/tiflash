@@ -225,7 +225,7 @@ CATCH
 TEST_F(TestCastAsJson, CastStringAsJson)
 try
 {
-    // Only raw function test is tested, so input_tidb_tp is always nullptr and only the case of parsing json is tested here.
+    // Only raw function test is tested, so output_tidb_tp is always nullptr and only the case of parsing json is tested here.
     // Because of `bool useDefaultImplementationForNulls() const override { return true; }`, null column is need to be tested here.
 
     const String func_name = "cast_string_as_json";
@@ -257,15 +257,23 @@ try
     /// case3 not null
     // invalid json text
     {
+        // empty document
         ColumnWithTypeAndName nullable_column = createColumn<Nullable<String>>({""});
         ASSERT_THROW(executeFunctionWithCast<true>(func_name, {nullable_column}), Exception);
     }
     {
+        // invaild json
         ColumnWithTypeAndName nullable_column = createColumn<Nullable<String>>({"a"});
         ASSERT_THROW(executeFunctionWithCast<true>(func_name, {nullable_column}), Exception);
     }
     {
+        // invaild json
         ColumnWithTypeAndName nullable_column = createColumn<Nullable<String>>({"{fds, 1}"});
+        ASSERT_THROW(executeFunctionWithCast<true>(func_name, {nullable_column}), Exception);
+    }
+    {
+        // too deep
+        ColumnWithTypeAndName nullable_column = createColumn<Nullable<String>>({"[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]"});
         ASSERT_THROW(executeFunctionWithCast<true>(func_name, {nullable_column}), Exception);
     }
     // valid json text
