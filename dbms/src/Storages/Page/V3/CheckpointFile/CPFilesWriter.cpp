@@ -100,7 +100,8 @@ CPDataDumpStats CPFilesWriter::writeEditsAndApplyCheckpointInfo(
         StorageType id_storage_type = StorageType::Unknown;
         {
             id_storage_type = UniversalPageIdFormat::getUniversalPageIdType(rec_edit.page_id);
-            if (id_storage_type == StorageType::LocalKV) {
+            if (id_storage_type == StorageType::LocalKV)
+            {
                 // These pages only contains local data which will not be dumped into checkpoint.
                 continue;
             }

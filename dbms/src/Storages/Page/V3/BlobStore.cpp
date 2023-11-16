@@ -531,10 +531,13 @@ typename BlobStore<Trait>::PageEntriesEdit BlobStore<Trait>::write(
             ChecksumClass digest;
             PageEntryV3 entry;
 
-            LOG_INFO(&Poco::Logger::get("!!!! readStrict"), "!!!!! write.size {} size {} off {} z {}",
-                write.size, write.read_buffer->buffer().size(), buffer_pos - buffer,
-                static_cast<size_t>(write.read_buffer->buffer().end() - write.read_buffer->position())
-            );
+            LOG_INFO(
+                &Poco::Logger::get("!!!! readStrict"),
+                "!!!!! write.size {} size {} off {} z {}",
+                write.size,
+                write.read_buffer->buffer().size(),
+                buffer_pos - buffer,
+                static_cast<size_t>(write.read_buffer->buffer().end() - write.read_buffer->position()));
             write.read_buffer->readStrict(buffer_pos, write.size);
 
             entry.file_id = blob_id;

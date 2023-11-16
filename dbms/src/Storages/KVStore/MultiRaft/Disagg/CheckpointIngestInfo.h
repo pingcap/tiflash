@@ -43,7 +43,7 @@ struct CheckpointIngestInfo
     RegionPtr getRegion() const;
     UInt64 regionId() const { return region_id; }
     UInt64 peerId() const { return peer_id; }
-    
+
     // Create from build
     CheckpointIngestInfo(
         TMTContext & tmt_,

@@ -14,6 +14,7 @@
 
 #include <Debug/MockKVStore/MockRaftStoreProxy.h>
 #include <Interpreters/SharedContexts/Disagg.h>
+#include <Storages/DeltaMerge/Filter/PushDownFilter.h>
 #include <Storages/KVStore/FFI/ProxyFFI.h>
 #include <Storages/KVStore/MultiRaft/Disagg/FastAddPeer.h>
 #include <Storages/KVStore/MultiRaft/Disagg/FastAddPeerCache.h>
@@ -23,11 +24,10 @@
 #include <Storages/Page/V3/Universal/UniversalPageStorageService.h>
 #include <Storages/S3/CheckpointManifestS3Set.h>
 #include <Storages/S3/S3Common.h>
+#include <TestUtils/InputStreamTestUtils.h>
 #include <TestUtils/TiFlashTestEnv.h>
 #include <aws/s3/model/CreateBucketRequest.h>
 #include <common/logger_useful.h>
-#include <Storages/DeltaMerge/Filter/PushDownFilter.h>
-#include <TestUtils/InputStreamTestUtils.h>
 
 #include <chrono>
 #include <numeric>
@@ -50,7 +50,11 @@ FastAddPeerRes FastAddPeerImplIngest(
     uint64_t region_id,
     uint64_t new_peer_id,
     CheckpointRegionInfoAndData && checkpoint);
-void ApplyFapSnapshotImpl(TMTContext & tmt, TiFlashRaftProxyHelper * proxy_helper, uint64_t region_id, uint64_t peer_id);
+void ApplyFapSnapshotImpl(
+    TMTContext & tmt,
+    TiFlashRaftProxyHelper * proxy_helper,
+    uint64_t region_id,
+    uint64_t peer_id);
 
 namespace tests
 {
@@ -276,8 +280,12 @@ try
     // Write some data, and persist meta.
     auto k1 = RecordKVFormat::genKey(table_id, 1, 111);
     auto && [value_write1, value_default1] = proxy_instance->generateTiKVKeyValue(111, 999);
-    auto [index, term]
-        = proxy_instance->rawWrite(region_id, {k1, k1}, {value_default1, value_write1}, {WriteCmdType::Put, WriteCmdType::Put}, {ColumnFamilyType::Default, ColumnFamilyType::Write});
+    auto [index, term] = proxy_instance->rawWrite(
+        region_id,
+        {k1, k1},
+        {value_default1, value_write1},
+        {WriteCmdType::Put, WriteCmdType::Put},
+        {ColumnFamilyType::Default, ColumnFamilyType::Write});
     kvs.setRegionCompactLogConfig(0, 0, 0, 0);
     persistAfterWrite(global_context, kvs, proxy_instance, page_storage, region_id, index);
 
@@ -311,7 +319,11 @@ try
         ASSERT_TRUE(storage && storage->engineType() == TiDB::StorageEngine::DT);
         auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
         auto store = dm_storage->getStore();
-        verifyRows(global_context, store, DM::RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()), 1);
+        verifyRows(
+            global_context,
+            store,
+            DM::RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()),
+            1);
     }
     ASSERT_TRUE(!fap_context->tryGetCheckpointIngestInfo(region_id).has_value());
 }

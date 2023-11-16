@@ -296,7 +296,13 @@ FastAddPeerRes FastAddPeerImplIngest(
             storage->getRowKeyColumnSize());
 
         auto segments = dm_storage->buildSegmentsFromCheckpointInfo(new_key_range, checkpoint_info, settings);
-        fap_ctx->insertCheckpointIngestInfo(tmt, region_id, new_peer_id, checkpoint_info->remote_store_id, region, std::move(segments));
+        fap_ctx->insertCheckpointIngestInfo(
+            tmt,
+            region_id,
+            new_peer_id,
+            checkpoint_info->remote_store_id,
+            region,
+            std::move(segments));
     }
     else
     {
@@ -370,14 +376,14 @@ FastAddPeerRes FastAddPeerImpl(
     }
 }
 
-void ApplyFapSnapshotImpl(TMTContext & tmt, TiFlashRaftProxyHelper * proxy_helper, uint64_t region_id, uint64_t peer_id) {
+void ApplyFapSnapshotImpl(TMTContext & tmt, TiFlashRaftProxyHelper * proxy_helper, uint64_t region_id, uint64_t peer_id)
+{
     try
     {
         Stopwatch watch_ingest;
         auto kvstore = tmt.getKVStore();
         auto fap_ctx = tmt.getContext().getSharedContextDisagg()->fap_context;
-        auto checkpoint_ingest_info
-            = fap_ctx->getOrRestoreCheckpointIngestInfo(tmt, proxy_helper, region_id, peer_id);
+        auto checkpoint_ingest_info = fap_ctx->getOrRestoreCheckpointIngestInfo(tmt, proxy_helper, region_id, peer_id);
         kvstore->handleIngestCheckpoint(checkpoint_ingest_info->getRegion(), checkpoint_ingest_info, tmt);
         checkpoint_ingest_info->markDelete();
         // TODO(fap) We can move checkpoint_ingest_info to a dedicated queue, and schedule a timed task to clean it.
@@ -390,11 +396,7 @@ void ApplyFapSnapshotImpl(TMTContext & tmt, TiFlashRaftProxyHelper * proxy_helpe
     {
         DB::tryLogCurrentException(
             "FastAddPeerApply",
-            fmt::format(
-                "Failed when try to apply fap snapshot region_id={} peer_id={}",
-                region_id,
-                peer_id
-            ));
+            fmt::format("Failed when try to apply fap snapshot region_id={} peer_id={}", region_id, peer_id));
         throw;
     }
 }

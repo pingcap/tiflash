@@ -79,8 +79,9 @@ void CheckpointIngestInfo::loadFromPS(const TiFlashRaftProxyHelper * proxy_helpe
     {
         auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
         auto dm_context = dm_storage->getStore()->newDMContext(tmt.getContext(), tmt.getContext().getSettingsRef());
-        auto page_id
-            = UniversalPageIdFormat::toLocalKVPrefix(UniversalPageIdFormat::LocalKVKeyType::FAPIngestSegments, region_id);
+        auto page_id = UniversalPageIdFormat::toLocalKVPrefix(
+            UniversalPageIdFormat::LocalKVKeyType::FAPIngestSegments,
+            region_id);
         auto page = uni_ps->read(page_id, nullptr, snapshot, /*throw_on_not_exist*/ false);
         ReadBufferFromMemory buf(page.data.begin(), page.data.size());
         auto count = readBinary2<UInt64>(buf);
@@ -96,10 +97,13 @@ void CheckpointIngestInfo::loadFromPS(const TiFlashRaftProxyHelper * proxy_helpe
     {
         throw Exception(ErrorCodes::LOGICAL_ERROR, "unsupported storage engine");
     }
-    LOG_INFO(log, "CheckpointIngestInfo restore success, region_id={} table_id={} keyspace_id={} region={}",
-        region_id, table_id, keyspace_id,
-        region->getDebugString()
-    );
+    LOG_INFO(
+        log,
+        "CheckpointIngestInfo restore success, region_id={} table_id={} keyspace_id={} region={}",
+        region_id,
+        table_id,
+        keyspace_id,
+        region->getDebugString());
     in_memory = true;
 }
 
@@ -107,7 +111,7 @@ void CheckpointIngestInfo::persistToPS()
 {
     auto * log = &Poco::Logger::get("CheckpointIngestInfo");
     auto uni_ps = tmt.getContext().getWriteNodePageStorage();
-    
+
     // Write:
     // - The region, which is actually data and meta in KVStore.
     // - The segment ids point to segments which are already persisted but not ingested.
@@ -125,14 +129,15 @@ void CheckpointIngestInfo::persistToPS()
             return;
         }
         auto read_buf = buffer.tryGetReadBuffer();
-        RUNTIME_CHECK_MSG(
-            read_buf != nullptr,
-            "failed to gen buffer for region {}",
-            region->toString(true));
-        LOG_INFO(log, "!!!!! ffff {} {} Cnt {} Off {} Pending {}", 
-            buffer.count(), region_size,
-            read_buf->count(), read_buf->offset(), read_buf->hasPendingData()
-        );
+        RUNTIME_CHECK_MSG(read_buf != nullptr, "failed to gen buffer for region {}", region->toString(true));
+        LOG_INFO(
+            log,
+            "!!!!! ffff {} {} Cnt {} Off {} Pending {}",
+            buffer.count(),
+            region_size,
+            read_buf->count(),
+            read_buf->offset(),
+            read_buf->hasPendingData());
         LOG_INFO(log, "!!!!! ffff22222");
         RUNTIME_CHECK_MSG(buffer.count() == region_size, "buffer {} != region_size {}", buffer.count(), region_size);
         auto page_id
@@ -156,16 +161,19 @@ void CheckpointIngestInfo::persistToPS()
             UniversalPageIdFormat::LocalKVKeyType::FAPIngestSegments,
             region_id);
         auto read_buf = buffer.tryGetReadBuffer();
-        LOG_INFO(log, "!!!!! gggg buffer.count {} data_size {} Cnt {} Off {} Pending {}", 
-            buffer.count(), data_size,
-            read_buf->count(), read_buf->offset(), read_buf->hasPendingData()
-        );
+        LOG_INFO(
+            log,
+            "!!!!! gggg buffer.count {} data_size {} Cnt {} Off {} Pending {}",
+            buffer.count(),
+            data_size,
+            read_buf->count(),
+            read_buf->offset(),
+            read_buf->hasPendingData());
         RUNTIME_CHECK_MSG(buffer.count() == data_size, "buffer {} != data_size {}", buffer.count(), data_size);
         wb.putPage(UniversalPageId(page_id.data(), page_id.size()), 0, read_buf, data_size);
         uni_ps->write(std::move(wb), DB::PS::V3::PageType::Local, nullptr);
         LOG_INFO(log, "!!!!! persistToPS after segment {} {}", data_size, restored_segments.size());
     }
-    
 }
 
 void CheckpointIngestInfo::removeFromPS()
@@ -174,8 +182,10 @@ void CheckpointIngestInfo::removeFromPS()
     auto uni_ps = tmt.getContext().getWriteNodePageStorage();
     LOG_INFO(log, "!!!!! removeFromPS 111");
     UniversalWriteBatch del_batch;
-    del_batch.delPage(UniversalPageIdFormat::toLocalKVPrefix(UniversalPageIdFormat::LocalKVKeyType::FAPIngestRegion, region_id));
-    del_batch.delPage(UniversalPageIdFormat::toLocalKVPrefix(UniversalPageIdFormat::LocalKVKeyType::FAPIngestSegments, region_id));
+    del_batch.delPage(
+        UniversalPageIdFormat::toLocalKVPrefix(UniversalPageIdFormat::LocalKVKeyType::FAPIngestRegion, region_id));
+    del_batch.delPage(
+        UniversalPageIdFormat::toLocalKVPrefix(UniversalPageIdFormat::LocalKVKeyType::FAPIngestSegments, region_id));
     LOG_INFO(log, "!!!!! removeFromPS 222");
     uni_ps->write(std::move(del_batch), PageType::Local);
 }
