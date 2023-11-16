@@ -45,7 +45,7 @@ struct CachedColumnInfo
     Columns columns;
     CachedColumnState state = CachedColumnState::NOT_CACHED;
     void * next;
-    CachedColumnInfo(void * next_)
+    explicit CachedColumnInfo(void * next_)
         : next(next_)
     {}
 };

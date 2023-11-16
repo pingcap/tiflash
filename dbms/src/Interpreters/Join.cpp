@@ -184,6 +184,9 @@ Join::Join(
     else
         strictness = ASTTableJoin::Strictness::All;
 
+    if (isNullAwareSemiFamily(kind))
+        probe_cache_column_threshold = 0;
+
     if unlikely (kind == ASTTableJoin::Kind::Cross_RightOuter)
         throw Exception("Cross right outer join should be converted to cross Left outer join during compile");
     RUNTIME_CHECK(!(isNecessaryKindToUseRowFlaggedHashMap(kind) && strictness == ASTTableJoin::Strictness::Any));

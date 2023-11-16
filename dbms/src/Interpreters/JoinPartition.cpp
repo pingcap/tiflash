@@ -1387,6 +1387,12 @@ struct Adder<ASTTableJoin::Kind::LeftOuterSemi, ASTTableJoin::Strictness::All, M
         size_t rows_joined = mapped_value.list_length;
         bool need_generate_cached_columns = false;
         auto * current = &mapped_value;
+        auto add_one_row = [&]() {
+            for (size_t j = 0; j < num_columns_to_add - 1; ++j)
+                added_columns[j]->insertFrom(
+                    *current->block->getByPosition(right_indexes[j]).column.get(),
+                    current->row_num);
+        };
         if unlikely (
             probe_process_info.cache_columns_threshold > 0 && rows_joined >= probe_process_info.cache_columns_threshold)
         {
@@ -1407,18 +1413,12 @@ struct Adder<ASTTableJoin::Kind::LeftOuterSemi, ASTTableJoin::Strictness::All, M
                 added_columns[num_columns_to_add - 1]->insert(FIELD_INT8_1);
                 return false;
             }
-            for (size_t j = 0; j < num_columns_to_add - 1; ++j)
-                added_columns[j]->insertFrom(
-                    *current->block->getByPosition(right_indexes[j]).column.get(),
-                    current->row_num);
+            add_one_row();
             current = static_cast<const typename Map::mapped_type::Base_t *>(current->cached_column_info->next);
         }
         for (; current != nullptr; current = current->next)
         {
-            for (size_t j = 0; j < num_columns_to_add - 1; ++j)
-                added_columns[j]->insertFrom(
-                    *current->block->getByPosition(right_indexes[j]).column.get(),
-                    current->row_num);
+            add_one_row();
         }
         current_offset += rows_joined;
         (*offsets)[i] = current_offset;
@@ -1478,6 +1478,12 @@ struct Adder<KIND, ASTTableJoin::Strictness::All, Map>
 
         bool need_generate_cached_columns = false;
         auto * current = &mapped_value;
+        auto add_one_row = [&]() {
+            for (size_t j = 0; j < num_columns_to_add; ++j)
+                added_columns[j]->insertFrom(
+                    *current->block->getByPosition(right_indexes[j]).column.get(),
+                    current->row_num);
+        };
         if unlikely (
             probe_process_info.cache_columns_threshold > 0 && rows_joined >= probe_process_info.cache_columns_threshold)
         {
@@ -1496,19 +1502,13 @@ struct Adder<KIND, ASTTableJoin::Strictness::All, Map>
                     (*filter)[i] = 0;
                 return false;
             }
-            for (size_t j = 0; j < num_columns_to_add; ++j)
-                added_columns[j]->insertFrom(
-                    *current->block->getByPosition(right_indexes[j]).column.get(),
-                    current->row_num);
+            add_one_row();
             current = static_cast<const typename Map::mapped_type::Base_t *>(current->cached_column_info->next);
         }
 
         for (; current != nullptr; current = current->next)
         {
-            for (size_t j = 0; j < num_columns_to_add; ++j)
-                added_columns[j]->insertFrom(
-                    *current->block->getByPosition(right_indexes[j]).column.get(),
-                    current->row_num);
+            add_one_row();
         }
 
         current_offset += rows_joined;
@@ -1586,6 +1586,13 @@ struct RowFlaggedHashMapAdder
         auto * current = &mapped_value;
         auto & actual_ptr_col = static_cast<PointerHelper::ColumnType &>(*added_columns[num_columns_to_add]);
         auto & container = static_cast<PointerHelper::ArrayType &>(actual_ptr_col.getData());
+        auto add_one_row = [&]() {
+            for (size_t j = 0; j < num_columns_to_add; ++j)
+                added_columns[j]->insertFrom(
+                    *current->block->getByPosition(right_indexes[j]).column.get(),
+                    current->row_num);
+            container.template push_back(reinterpret_cast<std::intptr_t>(current));
+        };
         if unlikely (
             probe_process_info.cache_columns_threshold > 0 && rows_joined >= probe_process_info.cache_columns_threshold)
         {
@@ -1603,22 +1610,13 @@ struct RowFlaggedHashMapAdder
                 (*offsets)[i] = current_offset;
                 return false;
             }
-            for (size_t j = 0; j < num_columns_to_add; ++j)
-                added_columns[j]->insertFrom(
-                    *current->block->getByPosition(right_indexes[j]).column.get(),
-                    current->row_num);
-            container.template push_back(reinterpret_cast<std::intptr_t>(current));
+            add_one_row();
             current = static_cast<const typename Map::mapped_type::Base_t *>(current->cached_column_info->next);
         }
 
         for (; current != nullptr; current = current->next)
         {
-            for (size_t j = 0; j < num_columns_to_add; ++j)
-                added_columns[j]->insertFrom(
-                    *current->block->getByPosition(right_indexes[j]).column.get(),
-                    current->row_num);
-
-            container.template push_back(reinterpret_cast<std::intptr_t>(current));
+            add_one_row();
         }
 
         current_offset += rows_joined;
