@@ -549,9 +549,10 @@ String JsonBinary::toString() const
 {
     ColumnString::Chars_t data_to;
     data_to.reserve(data.size * 3 / 2);
-    JsonBinaryWriteBuffer write_buffer(data_to);
-    marshalTo(write_buffer);
-    write_buffer.finalize();
+    {
+        JsonBinaryWriteBuffer write_buffer(data_to);
+        marshalTo(write_buffer);
+    }
     return String(reinterpret_cast<char *>(data_to.data()), data_to.size());
 }
 
@@ -563,9 +564,10 @@ void JsonBinary::toStringInBuffer(JsonBinaryWriteBuffer & write_buffer) const
 String JsonBinary::unquoteJsonString(const StringRef & ref)
 {
     String result;
-    WriteBufferFromVector<String> write_buffer(result);
-    unquoteJsonStringInBuffer(ref, write_buffer);
-    write_buffer.finalize();
+    {
+        WriteBufferFromVector<String> write_buffer(result);
+        unquoteJsonStringInBuffer(ref, write_buffer);
+    }
     return result;
 }
 
@@ -970,7 +972,7 @@ void JsonBinary::appendNumber(JsonBinaryWriteBuffer & write_buffer, Float64 valu
 void JsonBinary::appendStringRef(JsonBinaryWriteBuffer & write_buffer, const StringRef & value)
 {
     write_buffer.write(TYPE_CODE_STRING);
-    EncodeVarUInt(static_cast<UInt64>(value.size), write_buffer);
+    writeVarUInt(static_cast<UInt64>(value.size), write_buffer);
     write_buffer.write(value.data, value.size);
 }
 
@@ -978,7 +980,7 @@ void JsonBinary::appendOpaque(JsonBinaryWriteBuffer & write_buffer, const Opaque
 {
     write_buffer.write(TYPE_CODE_OPAQUE);
     write_buffer.write(value.type);
-    EncodeVarUInt(static_cast<UInt64>(value.data.size), write_buffer);
+    writeVarUInt(static_cast<UInt64>(value.data.size), write_buffer);
     write_buffer.write(value.data.data, value.data.size);
 }
 

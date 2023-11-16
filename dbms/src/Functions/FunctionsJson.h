@@ -239,7 +239,7 @@ private:
         offsets_to.resize(rows);
         ColumnUInt8::MutablePtr col_null_map = ColumnUInt8::create(rows, 0);
         ColumnUInt8::Container & vec_null_map = col_null_map->getData();
-        WriteBufferFromVector<ColumnString::Chars_t> write_buffer(data_to);
+        JsonBinary::JsonBinaryWriteBuffer write_buffer(data_to);
         size_t current_offset = 0;
         for (size_t i = 0; i < rows; ++i)
         {
@@ -325,7 +325,7 @@ public:
             ColumnString::Offsets & offsets_to = col_to->getOffsets();
             offsets_to.resize(rows);
             ColumnUInt8::MutablePtr col_null_map = ColumnUInt8::create(rows, 0);
-            WriteBufferFromVector<ColumnString::Chars_t> write_buffer(data_to);
+            JsonBinary::JsonBinaryWriteBuffer write_buffer(data_to);
             size_t current_offset = 0;
             for (size_t i = 0; i < block.rows(); ++i)
             {
@@ -384,7 +384,7 @@ public:
             offsets_to.resize(rows);
             ColumnUInt8::MutablePtr col_null_map = ColumnUInt8::create(rows, 0);
             ColumnUInt8::Container & vec_null_map = col_null_map->getData();
-            WriteBufferFromVector<ColumnString::Chars_t> write_buffer(data_to);
+            JsonBinary::JsonBinaryWriteBuffer write_buffer(data_to);
             size_t current_offset = 0;
             for (size_t i = 0; i < block.rows(); ++i)
             {
@@ -519,7 +519,7 @@ public:
         auto rows = block.rows();
         auto col_to = ColumnString::create();
         auto & data_to = col_to->getChars();
-        WriteBufferFromVector<ColumnString::Chars_t> write_buffer(data_to);
+        JsonBinary::JsonBinaryWriteBuffer write_buffer(data_to);
         auto & offsets_to = col_to->getOffsets();
         offsets_to.resize(rows);
 

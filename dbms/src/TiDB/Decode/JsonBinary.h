@@ -16,6 +16,7 @@
 
 #include <Columns/ColumnString.h>
 #include <Common/MyTime.h>
+#include <Common/VectorWriter.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/UTF8Helpers.h>
 #include <Core/Types.h>
@@ -102,7 +103,7 @@ class JsonBinary
 public:
     using JsonType = UInt8;
     using DupCheckSet = std::unique_ptr<std::unordered_set<const char *>>;
-    using JsonBinaryWriteBuffer = WriteBufferFromVector<ColumnString::Chars_t>;
+    using JsonBinaryWriteBuffer = VectorWriter<ColumnString::Chars_t>;
     static constexpr JsonType TYPE_CODE_OBJECT = 0x01; // TypeCodeObject indicates the JSON is an object.
     static constexpr JsonType TYPE_CODE_ARRAY = 0x03; // TypeCodeArray indicates the JSON is an array.
     static constexpr JsonType TYPE_CODE_LITERAL = 0x04; // TypeCodeLiteral indicates the JSON is a literal.
