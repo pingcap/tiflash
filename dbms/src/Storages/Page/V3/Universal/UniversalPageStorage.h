@@ -59,7 +59,6 @@ using S3LockLocalManagerPtr = std::unique_ptr<S3LockLocalManager>;
 } // namespace PS::V3
 using PS::V3::PageType;
 using PS::V3::PageTypeAndConfig;
-using PS::V3::PageTypeConfig;
 
 class UniversalPageStorage;
 using UniversalPageStoragePtr = std::shared_ptr<UniversalPageStorage>;

@@ -42,6 +42,8 @@
 
 namespace DB
 {
+using PS::V3::PageTypeConfig;
+
 UniversalPageStoragePtr UniversalPageStorage::create(
     const String & name,
     PSDiskDelegatorPtr delegator,

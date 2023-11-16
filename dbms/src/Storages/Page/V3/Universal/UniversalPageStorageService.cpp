@@ -52,6 +52,7 @@ UniversalPageStorageServicePtr UniversalPageStorageService::create(
     PSDiskDelegatorPtr delegator,
     const PageStorageConfig & config)
 {
+    // NOLINTNEXTLINE (modernize-make-shared), private constructor
     auto service = UniversalPageStorageServicePtr(new UniversalPageStorageService(context));
     service->uni_page_storage = UniversalPageStorage::create(name, delegator, config, context.getFileProvider());
     service->uni_page_storage->restore();
@@ -85,6 +86,7 @@ UniversalPageStorageServicePtr UniversalPageStorageService::createForTest(
     PSDiskDelegatorPtr delegator,
     const PageStorageConfig & config)
 {
+    // NOLINTNEXTLINE (modernize-make-shared), private constructor
     auto service = UniversalPageStorageServicePtr(new UniversalPageStorageService(context));
     service->uni_page_storage = UniversalPageStorage::create(name, delegator, config, context.getFileProvider());
     service->uni_page_storage->restore();
