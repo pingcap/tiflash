@@ -161,7 +161,6 @@ PhysicalPlanNodePtr PhysicalJoin::build(
     {
         build_key_names_map[original_build_key_names[i]] = build_key_names[i];
     }
-    assert(build_key_names_map.size() == original_build_key_names.size());
     auto runtime_filter_list = tiflash_join.genRuntimeFilterList(context, build_side_header, build_key_names_map, log);
     LOG_DEBUG(log, "before register runtime filter list, list size:{}", runtime_filter_list.size());
     context.getDAGContext()->runtime_filter_mgr.registerRuntimeFilterList(runtime_filter_list);
