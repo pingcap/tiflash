@@ -34,6 +34,7 @@
 #include <TestUtils/TiFlashTestEnv.h>
 #include <aws/s3/S3Client.h>
 #include <aws/s3/model/CreateBucketRequest.h>
+#include <gtest/gtest.h>
 
 #include <future>
 #include <limits>
@@ -106,9 +107,9 @@ public:
             .manifest_file_path_pattern = dir + "{seq}.manifest",
             .writer_info = *writer_info,
             .must_locked_files = {},
-            .compact_getter = [=] { return file_ids_to_compact; },
             .max_data_file_size = max_data_file_size,
             .max_edit_records_per_part = max_edit_records_per_part,
+            .compact_getter = [=] { return file_ids_to_compact; },
         });
     }
 

@@ -259,13 +259,14 @@ void CPFilesWriter::newDataWriter()
         fmt::runtime(data_file_path_pattern),
         fmt::arg("seq", sequence),
         fmt::arg("index", data_file_index)));
-    data_writer = CPDataFileWriter::create(
-        {.file_path = data_file_paths.back(),
-         .file_id = fmt::format(
-             fmt::runtime(data_file_id_pattern),
-             fmt::arg("seq", sequence),
-             fmt::arg("index", data_file_index)),
-         .max_data_file_size = max_data_file_size});
+    data_writer = CPDataFileWriter::create({
+        .file_path = data_file_paths.back(),
+        .file_id = fmt::format(
+            fmt::runtime(data_file_id_pattern),
+            fmt::arg("seq", sequence),
+            fmt::arg("index", data_file_index)),
+        .max_data_file_size = max_data_file_size,
+    });
     data_prefix.set_create_at_ms(Poco::Timestamp().epochMicroseconds() / 1000);
     data_prefix.set_sub_file_index(data_file_index);
     data_writer->writePrefix(data_prefix);

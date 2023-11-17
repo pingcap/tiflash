@@ -51,7 +51,8 @@ public:
             S3::S3FilenameView::fromKeyWithPrefix(options.file_path).toFullKey(),
             S3::WriteSettings{
                 // Since there is exactly only a thread to write checkpoint files, set buffer size as max file size is ok.
-                .max_single_part_upload_size = options.max_data_file_size})))
+                .max_single_part_upload_size = options.max_data_file_size,
+            })))
         , file_id(std::make_shared<std::string>(options.file_id))
     {
         // TODO: FramedChecksumWriteBuffer does not support random access for arbitrary frame sizes.

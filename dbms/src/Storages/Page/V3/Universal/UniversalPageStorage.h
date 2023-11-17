@@ -199,10 +199,17 @@ public:
          */
         std::optional<UInt64> override_sequence = std::nullopt;
 
+
         /**
-         * Trigger a full compaction aka re-upload all local page data to S3.
+         * Max checkpoint data file size. If total page data size is larger than this value, split.
          */
-        bool full_compact = false;
+        UInt64 max_data_file_size = 256 * 1024 * 1024; // 256MB
+
+        /**
+         * Max edit records per part in checkpoint manifest file. If total edit records is larger than this value, split.
+         */
+        UInt64 max_edit_records_per_part = 100000;
+
         /**
          * When full_compact is false, try use this callback to get the S3 data
          * file list for compaction.
@@ -210,12 +217,14 @@ public:
         const std::function<std::unordered_set<String>()> compact_getter = nullptr;
 
         /**
+         * Trigger a full compaction aka re-upload all local page data to S3.
+         */
+        bool full_compact = false;
+
+        /**
          * Only upload the manifest file.
          */
         bool only_upload_manifest = false;
-
-        UInt64 max_data_file_size = 256 * 1024 * 1024; // 256MB
-        UInt64 max_edit_records_per_part = 100000;
     };
 
     PS::V3::CPDataDumpStats dumpIncrementalCheckpoint(const DumpCheckpointOptions & options);

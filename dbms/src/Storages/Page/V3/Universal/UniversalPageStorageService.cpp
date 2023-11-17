@@ -241,13 +241,13 @@ bool UniversalPageStorageService::uploadCheckpointImpl(
         .writer_info = wi,
         .must_locked_files = upload_info.pre_lock_keys,
         .override_sequence = upload_info.upload_sequence, // override by upload_sequence
-        .full_compact = force_sync_data,
         .compact_getter = FileIdsToCompactGetter{
             .uni_page_storage = uni_page_storage,
             .gc_threshold = gc_threshold,
             .remote_store = remote_store,
             .log = log,
         },
+        .full_compact = force_sync_data,
         .only_upload_manifest = settings.remote_checkpoint_only_upload_manifest,
     };
 
