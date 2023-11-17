@@ -66,8 +66,8 @@ try
         {"d", TiDB::TP::TypeLongLong},
         {"e", TiDB::TP::TypeLongLong}};
     ColumnsWithTypeAndName column_datas;
-    size_t table_rows = 102400;
-    size_t duplicated_rows = 51200;
+    size_t table_rows = 51200;
+    size_t duplicated_rows = 25600;
     UInt64 max_block_size = 500;
     size_t original_max_streams = 20;
     size_t total_data_size = 0;
