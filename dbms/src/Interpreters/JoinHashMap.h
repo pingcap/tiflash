@@ -215,7 +215,6 @@ using ConcurrentMapsAnyFull = ConcurrentMapsTemplate<WithUsedFlag<true, RowRef>>
 using ConcurrentMapsAllFull = ConcurrentMapsTemplate<WithUsedFlag<true, RowRefList>>;
 using ConcurrentMapsAllFullWithRowFlag = ConcurrentMapsTemplate<RowRefListWithUsedFlag>;
 
-//using MapsAny = MapsTemplate<WithUsedFlag<false, RowRef>>;
 using MapsAll = MapsTemplate<WithUsedFlag<false, RowRefList>>;
 using MapsAnyFull = MapsTemplate<WithUsedFlag<true, RowRef>>;
 using MapsAllFull = MapsTemplate<WithUsedFlag<true, RowRefList>>;
