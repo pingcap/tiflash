@@ -188,18 +188,17 @@ std::optional<LocalAdmissionController::AcquireTokenInfo> LocalAdmissionControll
         if (resource_group->inTrickleModeLease(now))
             return;
 
-        acquire_tokens = resource_group->getAcquireRUNum(
-            consumption_update_info.speed,
-            DEFAULT_FETCH_GAC_INTERVAL.count(),
-            ACQUIRE_RU_AMPLIFICATION);
-
-        if (acquire_tokens == 0.0 && token_consumption == 0.0 && resource_group->trickleModeLeaseExpire(now))
+        if (resource_group->trickleModeLeaseExpire(now))
         {
-            // If acquire_tokens and token_consumption are both zero, will ignore send RPC to GAC.
-            // But we need to make sure trickle mode should exit timely, which needs to talk with GAC.
-            // So we force acquire 1RU.
-            LOG_DEBUG(log, "force acquire 1RU because of try to exit trickle mode");
-            acquire_tokens = 1.0;
+            acquire_tokens = consumption_update_info.speed * DEFAULT_FETCH_GAC_INTERVAL.count() * ACQUIRE_RU_AMPLIFICATION;
+            LOG_DEBUG(log, "trickle lease expire: speed: {}, acquire_tokens: {}", consumption_update_info.speed, acquire_tokens);
+        }
+        else
+        {
+            acquire_tokens = resource_group->getAcquireRUNum(
+                consumption_update_info.speed,
+                DEFAULT_FETCH_GAC_INTERVAL.count(),
+                ACQUIRE_RU_AMPLIFICATION);
         }
 
         assert(acquire_tokens >= 0.0);
