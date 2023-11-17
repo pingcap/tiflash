@@ -960,7 +960,8 @@ BlockInputStreams DeltaMergeStore::readRaw(
         after_segment_read,
         req_info,
         enable_read_thread,
-        final_num_stream);
+        final_num_stream,
+        dm_context->scan_context->resource_group_name);
 
     BlockInputStreams res;
     for (size_t i = 0; i < final_num_stream; ++i)
@@ -1062,7 +1063,8 @@ void DeltaMergeStore::readRaw(
         after_segment_read,
         req_info,
         enable_read_thread,
-        final_num_stream);
+        final_num_stream,
+        dm_context->scan_context->resource_group_name);
 
     if (enable_read_thread)
     {
@@ -1196,7 +1198,8 @@ BlockInputStreams DeltaMergeStore::read(
         after_segment_read,
         log_tracing_id,
         enable_read_thread,
-        final_num_stream);
+        final_num_stream,
+        dm_context->scan_context->resource_group_name);
 
     BlockInputStreams res;
     for (size_t i = 0; i < final_num_stream; ++i)
@@ -1299,7 +1302,13 @@ void DeltaMergeStore::read(
         after_segment_read,
         log_tracing_id,
         enable_read_thread,
+<<<<<<< HEAD
         final_num_stream);
+=======
+        final_num_stream,
+        dm_context->scan_context->resource_group_name);
+    const auto & columns_after_cast = filter && filter->extra_cast ? *filter->columns_after_cast : columns_to_read;
+>>>>>>> 1123f886c3 (Check RU in read thread of Storage. (#8369))
 
     if (enable_read_thread)
     {

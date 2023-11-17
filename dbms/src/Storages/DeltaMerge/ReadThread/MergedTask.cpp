@@ -47,6 +47,10 @@ void MergedTask::initOnce()
             setStreamFinished(cur_idx);
             continue;
         }
+        if (pool->isRUExhausted())
+        {
+            continue;
+        }
         stream = pool->buildInputStream(task);
         fiu_do_on(FailPoints::exception_in_merged_task_init, {
             throw Exception("Fail point exception_in_merged_task_init is triggered.", ErrorCodes::FAIL_POINT_ERROR);
@@ -74,12 +78,21 @@ int MergedTask::readOneBlock()
             continue;
         }
 
-        if (pool->getFreeBlockSlots() <= 0)
+        if (pool->getFreeBlockSlots() <= 0 || pool->isRUExhausted())
         {
             continue;
         }
 
+<<<<<<< HEAD
         if (pool->readOneBlock(stream, task->segment))
+=======
+        if (stream == nullptr)
+        {
+            stream = pool->buildInputStream(task);
+        }
+
+        if (pool->readOneBlock(stream, task))
+>>>>>>> 1123f886c3 (Check RU in read thread of Storage. (#8369))
         {
             read_block_count++;
         }

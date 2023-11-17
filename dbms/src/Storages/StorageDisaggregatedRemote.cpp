@@ -516,6 +516,7 @@ DM::Remote::RNWorkersPtr StorageDisaggregated::buildRNWorkers(
         num_streams,
         *column_defines);
 
+<<<<<<< HEAD
     return DM::Remote::RNWorkers::create(
         db_context,
         {
@@ -528,6 +529,38 @@ DM::Remote::RNWorkersPtr StorageDisaggregated::buildRNWorkers(
             .cluster = db_context.getTMTContext().getKVCluster(),
         },
         num_streams);
+=======
+    if (enable_read_thread)
+    {
+        return std::make_shared<DM::SegmentReadTaskPool>(
+            extra_table_id_index,
+            *column_defines,
+            push_down_filter,
+            read_tso,
+            db_context.getSettingsRef().max_block_size,
+            read_mode,
+            std::move(read_tasks),
+            /*after_segment_read*/ [](const DM::DMContextPtr &, const DM::SegmentPtr &) {},
+            executor_id,
+            /*enable_read_thread*/ true,
+            num_streams,
+            context.getDAGContext()->getResourceGroupName());
+    }
+    else
+    {
+        return DM::Remote::RNWorkers::create(
+            db_context,
+            std::move(read_tasks),
+            {
+                .log = log->getChild(executor_id),
+                .columns_to_read = column_defines,
+                .read_tso = read_tso,
+                .push_down_filter = push_down_filter,
+                .read_mode = read_mode,
+            },
+            num_streams);
+    }
+>>>>>>> 1123f886c3 (Check RU in read thread of Storage. (#8369))
 }
 
 void StorageDisaggregated::buildRemoteSegmentInputStreams(
