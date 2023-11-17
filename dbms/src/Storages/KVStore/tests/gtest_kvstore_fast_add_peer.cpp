@@ -118,56 +118,6 @@ private:
     DB::PageStorageRunMode orig_mode;
 };
 
-TEST_F(RegionKVStoreTestFAP, FAPThreadPool)
-try
-{
-    auto * log = &Poco::Logger::get("RegionKVStoreTestFAP");
-    using namespace std::chrono_literals;
-    auto fap_context = std::make_shared<FastAddPeerContext>(1);
-    auto async_tasks = fap_context->tasks_trace;
-
-    int total = 5;
-    std::vector<bool> f(total, false);
-    while (true)
-    {
-        auto count = std::accumulate(f.begin(), f.end(), 0, [&](int a, bool b) -> int { return a + int(b); });
-        if (count >= total)
-        {
-            break;
-        }
-        else
-        {
-            LOG_DEBUG(log, "finished {}/{}", count, total);
-        }
-        for (int i = 0; i < total; i++)
-        {
-            if (!async_tasks->isScheduled(i))
-            {
-                auto res = async_tasks->addTask(i, []() {
-                    std::this_thread::sleep_for(1000ms);
-                    return genFastAddPeerRes(FastAddPeerStatus::WaitForData, "", "");
-                });
-                UNUSED(res);
-            }
-        }
-
-        for (int i = 0; i < total; i++)
-        {
-            if (!f[i])
-            {
-                if (async_tasks->isReady(i))
-                {
-                    auto r = async_tasks->fetchResult(i);
-                    UNUSED(r);
-                    f[i] = true;
-                }
-            }
-        }
-        std::this_thread::sleep_for(1000ms);
-    }
-}
-CATCH
-
 void persistAfterWrite(
     Context & ctx,
     KVStore & kvs,
