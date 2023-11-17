@@ -45,7 +45,7 @@ FastAddPeerRes FastAddPeerImpl(
     TiFlashRaftProxyHelper * proxy_helper,
     uint64_t region_id,
     uint64_t new_peer_id);
-FastAddPeerRes FastAddPeerImplIngest(
+FastAddPeerRes FastAddPeerImplTransform(
     TMTContext & tmt,
     uint64_t region_id,
     uint64_t new_peer_id,
@@ -318,7 +318,7 @@ try
     auto & global_context = TiFlashTestEnv::getGlobalContext();
     auto fap_context = global_context.getSharedContextDisagg()->fap_context;
     uint64_t region_id = 1;
-    FastAddPeerImplIngest(global_context.getTMTContext(), region_id, 2333, std::move(mock_data));
+    FastAddPeerImplTransform(global_context.getTMTContext(), region_id, 2333, std::move(mock_data));
     fap_context->removeCheckpointIngestInfo(region_id);
     ApplyFapSnapshotImpl(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333);
 
@@ -349,7 +349,7 @@ try
     auto & global_context = TiFlashTestEnv::getGlobalContext();
     auto fap_context = global_context.getSharedContextDisagg()->fap_context;
     uint64_t region_id = 1;
-    FastAddPeerImplIngest(global_context.getTMTContext(), region_id, 2333, std::move(mock_data));
+    FastAddPeerImplTransform(global_context.getTMTContext(), region_id, 2333, std::move(mock_data));
     fap_context->removeCheckpointIngestInfo(region_id);
     kvstore->handleDestroy(region_id, global_context.getTMTContext());
     ASSERT_TRUE(!fap_context->tryGetCheckpointIngestInfo(region_id).has_value());

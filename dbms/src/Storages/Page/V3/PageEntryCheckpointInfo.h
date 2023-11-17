@@ -51,11 +51,15 @@ struct CheckpointLocation
 
     std::string toDebugString() const
     {
-        return fmt::format(
-            "{{data_file_id: {}, offset_in_file: {}, size_in_file: {}}}",
-            *data_file_id,
-            offset_in_file,
-            size_in_file);
+        if (isValid())
+        {
+            return fmt::format(
+                "{{data_file_id: {}, offset_in_file: {}, size_in_file: {}}}",
+                *data_file_id,
+                offset_in_file,
+                size_in_file);
+        }
+        return "invalid location";
     }
 };
 

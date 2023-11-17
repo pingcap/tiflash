@@ -120,7 +120,7 @@ void KVStore::checkAndApplyPreHandledSnapshot(const RegionPtrWrap & new_region, 
 
     if (tmt.getContext().getSharedContextDisagg()->isDisaggregatedStorageMode())
     {
-        // Everytime we meet a legacy snapshot, we try to clean obsolette fap ingest info.
+        // Everytime we meet a legacy snapshot, we try to clean obsolete fap ingest info.
         if constexpr (!std::is_same_v<RegionPtrWrap, RegionPtrWithCheckpointInfo>)
         {
             auto fap_ctx = tmt.getContext().getSharedContextDisagg()->fap_context;

@@ -51,6 +51,8 @@ class StoragePathPool;
 class PipelineExecutorContext;
 class PipelineExecGroupBuilder;
 
+struct CheckpointIngestInfo;
+
 namespace DM
 {
 class StoragePool;
@@ -178,6 +180,7 @@ class DeltaMergeStore : private boost::noncopyable
 {
 public:
     friend class ::DB::DM::tests::DeltaMergeStoreTest;
+    friend struct DB::CheckpointIngestInfo;
     struct Settings
     {
         NotCompress not_compress_columns{};

@@ -396,9 +396,9 @@ namespace DB
       "",                                                                                                                           \
       Histogram,                                                                                                                    \
       F(type_build_stage, {{"type", "build_stage"}}, ExpBuckets{0.05, 2, 60}),                                                      \
-      F(type_success, {{"type", "success"}}, ExpBuckets{0.05, 2, 60}),                                                              \
+      F(type_transform_stage, {{"type", "transform_stage"}}, ExpBuckets{0.05, 2, 60}),                                              \
       F(type_ingest_stage, {{"type", "ingest_stage"}}, ExpBuckets{0.05, 2, 60}),                                                    \
-      F(type_total, {{"type", "total"}}, ExpBuckets{0.05, 2, 60}))                                                                  \
+      F(type_stage1_total, {{"type", "stage1_total"}}, ExpBuckets{0.05, 2, 60}))                                                    \
     M(tiflash_raft_command_duration_seconds,                                                                                        \
       "Bucketed histogram of some raft command: apply snapshot and ingest SST",                                                     \
       Histogram, /* these command usually cost several seconds, increase the start bucket to 50ms */                                \
@@ -617,6 +617,7 @@ namespace DB
       F(type_data, {"type", "data"}),                                                                                               \
       F(type_log, {"type", "log"}),                                                                                                 \
       F(type_meta, {"type", "kvstore"}),                                                                                            \
+      F(type_localkv, {"type", "localkv"}),                                                                                         \
       F(type_unknown, {"type", "unknown"}))                                                                                         \
     M(tiflash_storage_checkpoint_flow_by_types,                                                                                     \
       "The bytes flow cause by remote checkpoint",                                                                                  \
@@ -627,6 +628,7 @@ namespace DB
       F(type_data, {"type", "data"}),                                                                                               \
       F(type_log, {"type", "log"}),                                                                                                 \
       F(type_meta, {"type", "kvstore"}),                                                                                            \
+      F(type_localkv, {"type", "localkv"}),                                                                                         \
       F(type_unknown, {"type", "unknown"}))                                                                                         \
     M(tiflash_storage_page_data_by_types,                                                                                           \
       "The existing bytes stored in UniPageStorage",                                                                                \
@@ -637,6 +639,7 @@ namespace DB
       F(type_data, {"type", "data"}),                                                                                               \
       F(type_log, {"type", "log"}),                                                                                                 \
       F(type_meta, {"type", "kvstore"}),                                                                                            \
+      F(type_localkv, {"type", "localkv"}),                                                                                         \
       F(type_unknown, {"type", "unknown"}))                                                                                         \
     M(tiflash_storage_s3_request_seconds,                                                                                           \
       "S3 request duration in seconds",                                                                                             \
