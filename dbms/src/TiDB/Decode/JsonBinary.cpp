@@ -18,8 +18,6 @@
 #include <TiDB/Decode/JsonBinary.h>
 #include <TiDB/Decode/JsonPathExprRef.h>
 
-#include "simdjson/dom/element.h"
-
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #include <Poco/Base64Decoder.h>

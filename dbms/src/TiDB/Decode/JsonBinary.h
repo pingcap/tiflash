@@ -27,8 +27,6 @@
 
 #include <unordered_set>
 
-#include "simdjson/dom/element.h"
-
 namespace DB
 {
 struct JsonPathExprRef;
