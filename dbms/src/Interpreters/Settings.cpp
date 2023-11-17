@@ -210,7 +210,8 @@ String Settings::toString() const
     APPLY_FOR_SETTINGS(WRITE)
 
 #undef WRITE
-    buf.resize(buf.size() - 2);
+    if (buf.size() > 2)
+        buf.resize(buf.size() - 2);
     return buf.toString();
 }
 
