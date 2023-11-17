@@ -145,10 +145,6 @@ public:
         , data(ref)
     {}
 
-    // GetElemDepth for JSON_DEPTH
-    // Ref https://github.com/pingcap/tidb/blob/5960d0d9bbbeb4df4893295d5a0bafb67687adda/pkg/types/json_binary_functions.go#L1147-L1157
-    UInt64 getElemDepth() const;
-
     /// getElementCount gets the count of Object or Array only.
     UInt32 getElementCount() const;
     String toString() const; /// For test usage, not efficient at all
@@ -170,10 +166,6 @@ public:
 
     static void buildBinaryJsonArrayInBuffer(
         const std::vector<JsonBinary> & json_binary_vec,
-        JsonBinaryWriteBuffer & write_buffer);
-
-    static void buildBinaryJsonObjectInBuffer(
-        const std::map<std::string_view, JsonBinary> & json_binary_map,
         JsonBinaryWriteBuffer & write_buffer);
 
     static UInt64 getJsonLength(const std::string_view & raw_value);

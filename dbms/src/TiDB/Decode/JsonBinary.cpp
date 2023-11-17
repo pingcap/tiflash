@@ -358,41 +358,6 @@ StringRef JsonBinary::getSubRef(size_t offset, size_t length) const
     return StringRef(data.data + offset, length);
 }
 
-UInt64 JsonBinary::getElemDepth() const
-{
-    switch (type)
-    {
-    case TYPE_CODE_OBJECT:
-    {
-        UInt64 max_depth = 0;
-        auto elem_count = getElementCount();
-        for (UInt32 i = 0; i < elem_count; ++i)
-        {
-            const auto & value = getObjectValue(i);
-            auto depth = value.getElemDepth();
-            if (depth > max_depth)
-                max_depth = depth;
-        }
-        return max_depth + 1;
-    }
-    case TYPE_CODE_ARRAY:
-    {
-        UInt64 max_depth = 0;
-        auto elem_count = getElementCount();
-        for (UInt32 i = 0; i < elem_count; ++i)
-        {
-            const auto & obj = getArrayElement(i);
-            auto depth = obj.getElemDepth();
-            if (depth > max_depth)
-                max_depth = depth;
-        }
-        return max_depth + 1;
-    }
-    default:
-        return 1;
-    }
-}
-
 UInt32 JsonBinary::getElementCount() const
 {
     size_t cursor = 0;
@@ -1060,69 +1025,6 @@ void JsonBinary::buildBinaryJsonArrayInBuffer(
 
     encodeNumeric(write_buffer, total_size);
     buildBinaryJsonElementsInBuffer(json_binary_vec, write_buffer);
-}
-
-void JsonBinary::buildBinaryJsonObjectInBuffer(
-    const std::map<std::string_view, JsonBinary> & json_binary_map,
-    JsonBinaryWriteBuffer & write_buffer)
-{
-    write_buffer.write(TYPE_CODE_OBJECT);
-
-    UInt32 data_offset = HEADER_SIZE + json_binary_map.size() * (KEY_ENTRY_SIZE + VALUE_ENTRY_SIZE);
-    UInt32 total_size = data_offset;
-    for (const auto & [key, value] : json_binary_map)
-    {
-        if (unlikely(key.size() > std::numeric_limits<UInt16>::max()))
-            throw Exception("TiDB/TiFlash does not yet support JSON objects with the key length >= 65536");
-        total_size += key.size();
-        /// Literal type value are inlined in the value_entry memory
-        if (value.type != TYPE_CODE_LITERAL)
-            total_size += value.data.size;
-    }
-
-    UInt32 element_count = json_binary_map.size();
-    encodeNumeric(write_buffer, element_count);
-
-    encodeNumeric(write_buffer, total_size);
-
-    // 1.write key entry with key offset.
-    for (const auto & [key, _] : json_binary_map)
-    {
-        encodeNumeric(write_buffer, data_offset);
-        data_offset += key.size();
-        UInt16 key_len = key.size();
-        encodeNumeric(write_buffer, key_len);
-    }
-
-    // 2.write value entry with value offset
-    for (const auto & [_, value] : json_binary_map)
-    {
-        write_buffer.write(value.type);
-        if (value.type == TYPE_CODE_LITERAL)
-        {
-            /// Literal values are inlined in the value entry, total takes 4 bytes
-            write_buffer.write(value.data.data[0]);
-            write_buffer.write(0);
-            write_buffer.write(0);
-            write_buffer.write(0);
-        }
-        else
-        {
-            encodeNumeric(write_buffer, data_offset);
-            /// update value_offset
-            data_offset += value.data.size;
-        }
-    }
-
-    // 3.write key data.
-    for (const auto & [key, _] : json_binary_map)
-        write_buffer.write(key.data(), key.size());
-    // 4.write value data.
-    for (const auto & [_, value] : json_binary_map)
-    {
-        if (value.type != TYPE_CODE_LITERAL)
-            write_buffer.write(value.data.data, value.data.size);
-    }
 }
 
 UInt64 JsonBinary::getJsonLength(const std::string_view & raw_value)

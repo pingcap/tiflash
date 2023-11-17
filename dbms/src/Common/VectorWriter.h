@@ -16,8 +16,6 @@
 
 #include <common/types.h>
 
-#include <vector>
-
 namespace DB
 {
 template <typename VectorType, size_t initial_size = 32>
