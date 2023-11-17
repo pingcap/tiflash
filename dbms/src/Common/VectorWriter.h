@@ -67,7 +67,7 @@ public:
             return;
         }
         size_t pos_offset = offset();
-        vector.resize(old_cap + n);
+        vector.resize(new_request_cap);
         pos = reinterpret_cast<Position>(vector.data() + pos_offset + n);
         end = reinterpret_cast<Position>(vector.data() + vector.size());
     }

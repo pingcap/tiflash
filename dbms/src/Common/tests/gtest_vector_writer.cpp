@@ -58,6 +58,36 @@ try
 }
 CATCH
 
+TEST_F(TestVectorWriter, resizeFillFirst)
+try
+{
+    PaddedPODArray<UInt8> vector;
+    {
+        VectorWriter<PaddedPODArray<UInt8>, 1> writer(vector);
+        ASSERT_EQ(writer.offset(), 0);
+
+        writer.resizeFill(3);
+        ASSERT_EQ(writer.offset(), 3);
+
+        writer.write('a');
+        ASSERT_EQ(writer.offset(), 4);
+
+        PaddedPODArray<UInt8> tmp;
+        tmp.resize_fill(5, 'a');
+        writer.write(reinterpret_cast<char *>(tmp.data()), tmp.size());
+        ASSERT_EQ(writer.offset(), 9);
+
+        writer.setOffset(0);
+        writer.write('a');
+        writer.write('b');
+        writer.write('c');
+        writer.setOffset(9);
+    }
+    ASSERT_EQ(vector.size(), 9);
+    StringRef str(reinterpret_cast<char *>(vector.data()), vector.size());
+    ASSERT_EQ(str, "abcaaaaaa");
+}
+CATCH
 
 } // namespace tests
 } // namespace DB
