@@ -17,6 +17,7 @@
 #include <TiDB/Decode/DatumCodec.h>
 #include <TiDB/Decode/JsonBinary.h>
 #include <TiDB/Decode/JsonPathExprRef.h>
+
 #include "simdjson/dom/element.h"
 
 #pragma GCC diagnostic push
@@ -37,7 +38,7 @@ namespace ErrorCodes
 {
 extern const int LOGICAL_ERROR;
 extern const int UNKNOWN_TYPE;
-}
+} // namespace ErrorCodes
 
 namespace
 {
@@ -162,11 +163,11 @@ inline JsonBinary::JsonType getJsonType(const simdjson::dom::element & elem)
     }
     else if (elem.is_array())
     {
-         return JsonBinary::TYPE_CODE_ARRAY;
+        return JsonBinary::TYPE_CODE_ARRAY;
     }
     else if (elem.is_bool() || elem.is_null())
     {
-       return JsonBinary::TYPE_CODE_LITERAL;
+        return JsonBinary::TYPE_CODE_LITERAL;
     }
     else if (elem.is_number())
     {
@@ -183,7 +184,9 @@ inline JsonBinary::JsonType getJsonType(const simdjson::dom::element & elem)
 }
 
 // return depth.
-inline UInt64 appendValueOfSIMDJsonElem(JsonBinary::JsonBinaryWriteBuffer & write_buffer, const simdjson::dom::element & elem)
+inline UInt64 appendValueOfSIMDJsonElem(
+    JsonBinary::JsonBinaryWriteBuffer & write_buffer,
+    const simdjson::dom::element & elem)
 {
     if (elem.is_object())
     {
@@ -344,7 +347,7 @@ inline UInt64 appendValueOfSIMDJsonElem(JsonBinary::JsonBinaryWriteBuffer & writ
         throw Exception(ErrorCodes::UNKNOWN_TYPE, "unknown type: {}", magic_enum::enum_name(elem.type()));
     }
 }
-}
+} // namespace
 
 char JsonBinary::getChar(size_t offset) const
 {

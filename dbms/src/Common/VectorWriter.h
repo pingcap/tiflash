@@ -24,7 +24,8 @@ class VectorWriter
 public:
     using Position = char *;
 
-    explicit VectorWriter(VectorType & vector_): vector(vector_)
+    explicit VectorWriter(VectorType & vector_)
+        : vector(vector_)
     {
         if (vector.empty())
         {
@@ -120,13 +121,13 @@ private:
     static constexpr size_t size_multiplier = 2;
 };
 
-template<typename VectorWriter>
+template <typename VectorWriter>
 inline void writeChar(char x, VectorWriter & writer)
 {
     writer.write(x);
 }
 
-template<typename VectorWriter>
+template <typename VectorWriter>
 inline void writeVarUInt(UInt64 x, VectorWriter & writer)
 {
     while (x >= 0x80)

@@ -16,17 +16,17 @@
 
 #include <Columns/ColumnString.h>
 #include <Common/MyTime.h>
-#include <Common/VectorWriter.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/UTF8Helpers.h>
+#include <Common/VectorWriter.h>
 #include <Core/Types.h>
 #include <IO/WriteBufferFromVector.h>
 #include <common/StringRef.h>
 #include <common/memcpy.h>
-
 #include <simdjson.h>
 
 #include <unordered_set>
+
 #include "simdjson/dom/element.h"
 
 namespace DB
