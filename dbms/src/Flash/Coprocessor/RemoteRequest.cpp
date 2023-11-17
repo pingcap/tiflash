@@ -27,6 +27,8 @@ RemoteRequest RemoteRequest::build(
     const TiDBTableScan & table_scan,
     const TiDB::TableInfo & table_info,
     const FilterConditions & filter_conditions,
+    UInt64 connection_id,
+    const String & connection_alias,
     const LoggerPtr & log)
 {
     LOG_INFO(log, "{}", printRetryRegions(retry_regions, table_info.id));
@@ -86,7 +88,7 @@ RemoteRequest RemoteRequest::build(
         dag_req.set_time_zone_offset(original_dag_req.time_zone_offset());
 
     std::vector<pingcap::coprocessor::KeyRange> key_ranges = buildKeyRanges(retry_regions);
-    return {std::move(dag_req), std::move(schema), std::move(key_ranges)};
+    return {std::move(dag_req), std::move(schema), std::move(key_ranges), connection_id, connection_alias};
 }
 
 std::vector<pingcap::coprocessor::KeyRange> RemoteRequest::buildKeyRanges(const RegionRetryList & retry_regions)
