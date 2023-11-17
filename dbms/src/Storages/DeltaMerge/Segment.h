@@ -69,6 +69,13 @@ struct SegmentSnapshot : private boost::noncopyable
     UInt64 getRows() const { return delta->getRows() + stable->getRows(); }
 
     bool isForUpdate() const { return delta->isForUpdate(); }
+
+    UInt64 estimatedBytesOfInternalColumns() const
+    {
+        // TODO: how about cluster index?
+        // handle + version + flag
+        return (sizeof(Int64) + sizeof(UInt64) + sizeof(UInt8)) * getRows();
+    }
 };
 
 /// A segment contains many rows of a table. A table is split into segments by consecutive ranges.
