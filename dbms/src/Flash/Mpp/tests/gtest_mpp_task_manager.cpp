@@ -66,7 +66,7 @@ try
     /// find async tunnel create alarm if task is not visible
     EstablishCallData establish_call_data;
     mpp::EstablishMPPConnectionRequest establish_req;
-    auto gather_id = MPPGatherId(1, MPPQueryId(1, 1, 1, 1, ""));
+    auto gather_id = MPPGatherId(1, MPPQueryId(1, 1, 1, 1, "", 1, ""));
     auto * receiver_meta = establish_req.mutable_receiver_meta();
     fillTaskMeta(receiver_meta, 2, gather_id);
     auto * sender_meta = establish_req.mutable_sender_meta();
@@ -77,7 +77,7 @@ try
     ASSERT_TRUE(find_tunnel_result.first == nullptr && find_tunnel_result.second.empty());
 
     /// `findAsyncTunnel` will create GatherTaskSet
-    auto gather_task_set = mpp_task_manager->getGatherTaskSet(MPPGatherId(1, MPPQueryId(1, 1, 1, 1, "")));
+    auto gather_task_set = mpp_task_manager->getGatherTaskSet(MPPGatherId(1, MPPQueryId(1, 1, 1, 1, "", 1, "")));
     ASSERT_TRUE(gather_task_set.first != nullptr);
     ASSERT_TRUE(!gather_task_set.first->hasMPPTask());
     ASSERT_TRUE(gather_task_set.first->hasAlarm());
@@ -98,7 +98,7 @@ try
 
     /// unregister task should clean the related alarms
     mpp_task_manager->unregisterTask(mpp_task_1->getId(), "");
-    gather_task_set = mpp_task_manager->getGatherTaskSet(MPPGatherId(1, MPPQueryId(1, 1, 1, 1, "")));
+    gather_task_set = mpp_task_manager->getGatherTaskSet(MPPGatherId(1, MPPQueryId(1, 1, 1, 1, "", 1, "")));
     ASSERT_TRUE(gather_task_set.first->hasMPPTask());
     ASSERT_TRUE(!gather_task_set.first->hasAlarm());
 
@@ -114,7 +114,7 @@ try
 
     /// if all task is unregistered, min tso should be updated
     mpp_task_manager->unregisterTask(mpp_task_2->getId(), "");
-    gather_task_set = mpp_task_manager->getGatherTaskSet(MPPGatherId(1, MPPQueryId(1, 1, 1, 1, "")));
+    gather_task_set = mpp_task_manager->getGatherTaskSet(MPPGatherId(1, MPPQueryId(1, 1, 1, 1, "", 1, "")));
     ASSERT_TRUE(gather_task_set.first == nullptr);
     ASSERT_TRUE(
         mpp_task_manager->getCurrentMinTSOQueryId(gather_id.query_id.resource_group_name) == MPPTaskId::Max_Query_Id);
@@ -129,7 +129,7 @@ try
     auto mpp_task_manager = context->getTMTContext().getMPPTaskManager();
     {
         mpp::EstablishMPPConnectionRequest establish_req;
-        auto gather_id = MPPGatherId(1, MPPQueryId(1, 1, 1, 1, ""));
+        auto gather_id = MPPGatherId(1, MPPQueryId(1, 1, 1, 1, "", 1, ""));
         auto * sender_meta = establish_req.mutable_sender_meta();
         fillTaskMeta(sender_meta, 1, gather_id);
         original_task = MPPTask::newTaskForTest(*sender_meta, context);
