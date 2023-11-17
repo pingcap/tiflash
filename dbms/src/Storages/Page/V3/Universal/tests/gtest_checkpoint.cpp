@@ -95,7 +95,6 @@ public:
     }
 
     void dumpCheckpoint(
-        bool upload_success = true,
         std::unordered_set<String> file_ids_to_compact = {},
         UInt64 max_data_file_size = 256 * 1024 * 1024,
         UInt64 max_edit_records_per_part = std::numeric_limits<UInt64>::max())
@@ -107,7 +106,6 @@ public:
             .manifest_file_path_pattern = dir + "{seq}.manifest",
             .writer_info = *writer_info,
             .must_locked_files = {},
-            .persist_checkpoint = [upload_success](const PS::V3::LocalCheckpointFiles &) { return upload_success; },
             .compact_getter = [=] { return file_ids_to_compact; },
             .max_data_file_size = max_data_file_size,
             .max_edit_records_per_part = max_edit_records_per_part,
@@ -417,7 +415,7 @@ try
         batch.putPage("7", tag, "alas, but where had Lord Rukkhadevata gone"); // New
         page_storage->write(std::move(batch));
     }
-    dumpCheckpoint(/*upload_success*/ true, /*file_ids_to_compact*/ {"4_0.data"});
+    dumpCheckpoint(/*file_ids_to_compact*/ {"4_0.data"});
     {
         ASSERT_TRUE(Poco::File(dir + "5.manifest").exists());
         ASSERT_TRUE(Poco::File(dir + "5_0.data").exists());
@@ -472,7 +470,7 @@ try
     // mock that local files are generated, but uploading to remote data source is failed
     try
     {
-        dumpCheckpoint(/*upload_success*/ false);
+        dumpCheckpoint();
         FAIL() << "Uploading checkpoint failed would throw exception, should not come here.";
     }
     catch (...)
@@ -514,7 +512,7 @@ try
         batch.putPage("5", tag, "Dreamed of the day that she was born"); // New
         page_storage->write(std::move(batch));
     }
-    dumpCheckpoint(/*upload_success*/ true);
+    dumpCheckpoint();
     {
         ASSERT_TRUE(Poco::File(dir + "4.manifest").exists());
         ASSERT_TRUE(Poco::File(dir + "4_0.data").exists());
@@ -797,7 +795,7 @@ try
         batch.putRemoteExternal("9", data_location);
         page_storage->write(std::move(batch));
     }
-    dumpCheckpoint(true, {}, 1); // One record per file.
+    dumpCheckpoint({}, 1); // One record per file.
 
     // valid record in data file: put 10, put 3, put 5
     ASSERT_TRUE(Poco::File(dir + "9.manifest").exists());
@@ -878,7 +876,6 @@ try
         page_storage->write(std::move(batch));
     }
     dumpCheckpoint(
-        /*upload_success*/ true,
         /*file_ids_to_compact*/ {},
         /*max_data_file_size*/ 1,
         /*max_edit_records_per_part*/ 1);
@@ -1015,7 +1012,7 @@ protected:
     UInt64 tag = 0;
     UInt64 store_id = 2;
 
-    bool old_remote_checkpoint_only_upload_manifest;
+    bool old_remote_checkpoint_only_upload_manifest{};
 
     LoggerPtr log;
 };

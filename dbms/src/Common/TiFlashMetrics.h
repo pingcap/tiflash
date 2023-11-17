@@ -601,7 +601,6 @@ namespace DB
       Histogram, /* these command usually cost several seconds, increase the start bucket to 50ms */                                \
       F(type_dump_checkpoint_snapshot, {{"type", "dump_checkpoint_snapshot"}}, ExpBuckets{0.05, 2, 20}),                            \
       F(type_dump_checkpoint_data, {{"type", "dump_checkpoint_data"}}, ExpBuckets{0.05, 2, 20}),                                    \
-      F(type_upload_checkpoint, {{"type", "upload_checkpoint"}}, ExpBuckets{0.05, 2, 20}),                                          \
       F(type_copy_checkpoint_info, {{"type", "copy_checkpoint_info"}}, ExpBuckets{0.05, 2, 20}))                                    \
     M(tiflash_storage_checkpoint_flow,                                                                                              \
       "The bytes flow cause by remote checkpoint",                                                                                  \

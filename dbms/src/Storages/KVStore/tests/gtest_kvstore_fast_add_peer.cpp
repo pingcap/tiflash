@@ -91,19 +91,12 @@ protected:
         auto remote_store = global_context.getSharedContextDisagg()->remote_data_store;
         assert(remote_store != nullptr);
         UniversalPageStorage::DumpCheckpointOptions opts{
-            .data_file_id_pattern = S3::S3Filename::newCheckpointDataNameTemplate(store_id, upload_sequence),
+            .data_file_id_pattern = S3::S3Filename::newLockNameTemplate(store_id, upload_sequence),
             .data_file_path_pattern = temp_dir + "dat_{seq}_{index}",
             .manifest_file_id_pattern = S3::S3Filename::newCheckpointManifestNameTemplate(store_id),
             .manifest_file_path_pattern = temp_dir + "mf_{seq}",
             .writer_info = wi,
             .must_locked_files = {},
-            .persist_checkpoint = CheckpointUploadFunctor{
-                .store_id = store_id,
-                // Note that we use `upload_sequence` but not `snapshot.sequence` for
-                // the S3 key.
-                .sequence = upload_sequence,
-                .remote_store = remote_store,
-            },
             .override_sequence = upload_sequence, // override by upload_sequence
         };
         page_storage->dumpIncrementalCheckpoint(opts);

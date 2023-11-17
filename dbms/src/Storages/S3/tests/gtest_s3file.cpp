@@ -500,10 +500,6 @@ try
         {
             writeLocalFile(data_files[i], test_infos[i].total_size);
         }
-        Poco::File(manifest_file).createFile();
-        PS::V3::LocalCheckpointFiles checkpoint{.data_files = data_files, .manifest_file = manifest_file};
-        // test upload
-        data_store->putCheckpointFiles(checkpoint, store_id, sequence);
     }
 
     Strings df_keys;

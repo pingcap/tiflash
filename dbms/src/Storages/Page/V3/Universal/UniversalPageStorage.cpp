@@ -550,9 +550,6 @@ PS::V3::CPDataDumpStats UniversalPageStorage::dumpIncrementalCheckpoint(
     writer.reset();
     auto dump_data_seconds = sw.elapsedMillisecondsFromLastTime() / 1000.0;
 
-    // TODO: remove upload_seconds
-    auto upload_seconds = sw.elapsedMillisecondsFromLastTime() / 1000.0;
-
     SYNC_FOR("before_PageStorage::dumpIncrementalCheckpoint_copyInfo");
 
     // TODO: Currently, even when has_new_data == false,
@@ -571,17 +568,15 @@ PS::V3::CPDataDumpStats UniversalPageStorage::dumpIncrementalCheckpoint(
 
     GET_METRIC(tiflash_storage_checkpoint_seconds, type_dump_checkpoint_snapshot).Observe(dump_snapshot_seconds);
     GET_METRIC(tiflash_storage_checkpoint_seconds, type_dump_checkpoint_data).Observe(dump_data_seconds);
-    GET_METRIC(tiflash_storage_checkpoint_seconds, type_upload_checkpoint).Observe(upload_seconds);
     GET_METRIC(tiflash_storage_checkpoint_seconds, type_copy_checkpoint_info).Observe(copy_checkpoint_info_seconds);
     LOG_INFO(
         log,
-        "Checkpoint result: files={} dump_snapshot={:.3f}s dump_data={:.3f}s upload={:.3f}s "
+        "Checkpoint result: files={} dump_snapshot={:.3f}s dump_data={:.3f}s "
         "copy_checkpoint_info={:.3f}s "
         "total={:.3f}s sequence={} {}",
         data_file_paths,
         dump_snapshot_seconds,
         dump_data_seconds,
-        upload_seconds,
         copy_checkpoint_info_seconds,
         sw.elapsedSeconds(),
         sequence,

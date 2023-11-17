@@ -41,6 +41,7 @@ namespace DB
 {
 namespace PS::universal::tests
 {
+using PS::V3::PageTypeConfig;
 class UniPageStorageRemoteReadTest : public DB::base::TiFlashStorageTestBasic
 {
 public:
