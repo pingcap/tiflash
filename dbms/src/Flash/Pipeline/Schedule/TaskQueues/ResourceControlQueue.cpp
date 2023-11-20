@@ -146,7 +146,7 @@ bool ResourceControlQueue<NestedTaskQueueType>::take(TaskPtr & task)
         // Wakeup when:
         // 1. finish() is called.
         // 2. refill_token_callback is called by LAC.
-        cv.wait(lock);
+        cv.wait_for(lock, std::chrono::milliseconds(100));
     }
 }
 
