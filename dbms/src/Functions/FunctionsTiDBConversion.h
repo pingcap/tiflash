@@ -77,29 +77,29 @@ namespace
 constexpr static Int64 pow10[] = {1, 10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000, 1000000000};
 }
 
+ALWAYS_INLINE inline size_t charLengthToByteLengthFromUTF8(const char * data, size_t length, size_t char_length)
+{
+    size_t ret = 0;
+    for (size_t char_index = 0; char_index < char_length && ret < length; char_index++)
+    {
+        uint8_t c = data[ret];
+        if (c < 0x80)
+            ret += 1;
+        else if (c < 0xE0)
+            ret += 2;
+        else if (c < 0xF0)
+            ret += 3;
+        else
+            ret += 4;
+    }
+    return ret;
+}
+
 /// cast int/real/decimal/time as string
 template <typename FromDataType, bool return_nullable>
 struct TiDBConvertToString
 {
     using FromFieldType = typename FromDataType::FieldType;
-
-    static size_t charLengthToByteLengthFromUTF8(const char * data, size_t length, size_t char_length)
-    {
-        size_t ret = 0;
-        for (size_t char_index = 0; char_index < char_length && ret < length; char_index++)
-        {
-            uint8_t c = data[ret];
-            if (c < 0x80)
-                ret += 1;
-            else if (c < 0xE0)
-                ret += 2;
-            else if (c < 0xF0)
-                ret += 3;
-            else
-                ret += 4;
-        }
-        return ret;
-    }
 
     static void execute(
         Block & block,

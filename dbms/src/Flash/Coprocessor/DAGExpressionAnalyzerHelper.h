@@ -76,6 +76,16 @@ public:
         const tipb::Expr & expr,
         const ExpressionActionsPtr & actions);
 
+    static String buildJsonUnquoteFunction(
+        DAGExpressionAnalyzer * analyzer,
+        const tipb::Expr & expr,
+        const ExpressionActionsPtr & actions);
+
+    static String buildCastJsonAsStringFunction(
+        DAGExpressionAnalyzer * analyzer,
+        const tipb::Expr & expr,
+        const ExpressionActionsPtr & actions);
+
     template <typename Impl>
     static String buildDateAddOrSubFunction(
         DAGExpressionAnalyzer * analyzer,
