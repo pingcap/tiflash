@@ -68,7 +68,7 @@ TEST(WriteLimiterTest, Rate)
         auto elapsed = watch.elapsedSeconds();
         auto actual_rate = write_limiter->getTotalBytesThrough() / elapsed;
         // For environments with high loads, latency can be very large.
-        // In theory, the upper bould of `elapsed` cannot be guaranteed.
+        // In theory, the upper bound of `elapsed` cannot be guaranteed.
         // So that we cannot guarantee the lower bound of `actual_rate`.
         // EXPECT_GE(actual_rate / target, 0.75);
         EXPECT_LE(actual_rate / target, 1.30);
