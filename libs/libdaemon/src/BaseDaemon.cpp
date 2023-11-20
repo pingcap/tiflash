@@ -558,7 +558,7 @@ private:
                 auto * result = abi::__cxa_demangle(name, nullptr, nullptr, &status);
                 return std::pair<const char *, int>{result, status};
             };
-            StackTrace::addr2line(demangle_func, output, frames[f]);
+            //StackTrace::addr2line(demangle_func, output, frames[f]);
         }
         LOG_ERROR(log, output.toString());
     }
