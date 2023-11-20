@@ -58,8 +58,6 @@ inline void serializeEntryTo(const PageEntryV3 & entry, WriteBuffer & buf, bool 
     }
     if (has_checkpoint_info)
     {
-        writeIntBinary(entry.checkpoint_info.data_location.offset_in_file, buf);
-        writeIntBinary(entry.checkpoint_info.data_location.size_in_file, buf);
         if (!entry.checkpoint_info.has_value() || !entry.checkpoint_info.data_location.isValid())
         {
             LOG_ERROR(
@@ -69,6 +67,8 @@ inline void serializeEntryTo(const PageEntryV3 & entry, WriteBuffer & buf, bool 
                 entry.offset,
                 entry.checkpoint_info.toDebugString());
         }
+        writeIntBinary(entry.checkpoint_info.data_location.offset_in_file, buf);
+        writeIntBinary(entry.checkpoint_info.data_location.size_in_file, buf);
         writeStringBinary(*(entry.checkpoint_info.data_location.data_file_id), buf);
     }
 }
