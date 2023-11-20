@@ -84,9 +84,10 @@ public:
         }
         else
         {
-            vector.resize(new_offset);
-            pos = reinterpret_cast<Position>(vector.data() + vector.size());
-            end = pos;
+            // `+ initial_size` is to avoid resize for subsequent writes.
+            vector.resize(new_offset + initial_size);
+            pos = reinterpret_cast<Position>(vector.data() + new_offset);
+            end = reinterpret_cast<Position>(vector.data() + vector.size());
         }
     }
 
