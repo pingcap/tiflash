@@ -89,11 +89,6 @@ BlockInputStreamPtr SegmentReadTaskPool::buildInputStream(SegmentReadTaskPtr & t
 
     MemoryTrackerSetter setter(true, mem_tracker.get());
 
-    if (likely(read_mode == ReadMode::Bitmap && !res_group_name.empty()))
-    {
-        auto bytes = t->read_snapshot->estimatedBytesOfInternalColumns();
-        LocalAdmissionController::global_instance->consumeResource(res_group_name, bytesToRU(bytes), 0);
-    }
     t->initInputStream(
         columns_to_read,
         max_version,

@@ -225,6 +225,10 @@ private:
             {
                 lac_bytes_collector.collect(bytes);
             }
+            // When `need_row_id` is true, it read for building MVCC bitmap filter.
+            // Before building MVCC bitmap filter, we performa a calculation of
+            // how many bytes will be read and then consuming it in advance.
+            // So, there is no need to count the amount of data read for building MVCC bitmap here.
         }
     }
     BlockInputStreams::iterator current_stream;

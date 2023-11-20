@@ -198,6 +198,10 @@ size_t ColumnFileSetReader::readRows(
 
     if (auto delta_bytes = columnsSize(output_columns) - bytes_before_read; delta_bytes > 0)
     {
+        // When `row_ids` is not null, it read for building MVCC bitmap filter.
+        // Before building MVCC bitmap filter, we performa a calculation of
+        // how many bytes will be read and then consuming it in advance.
+        // So, there is no need to count the amount of data read for building MVCC bitmap here.
         if (row_ids == nullptr)
             lac_bytes_collector.collect(delta_bytes);
         if (likely(context.scan_context))
