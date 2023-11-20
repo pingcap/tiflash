@@ -226,7 +226,7 @@ std::string getExceptionMessage(const Exception & e, bool with_stacktrace, bool 
         buffer.fmtAppend("Code: {}, e.displayText() = {}, e.what() = {}", e.code(), text, e.what());
 
         if (with_stacktrace && !has_embedded_stack_trace)
-            buffer.append(", Stack trace:\n\n").append(e.getStackTrace().toString());
+            buffer.append(", Stack trace:\n\n").append("hacked empty");
     }
     catch (...)
     {}
