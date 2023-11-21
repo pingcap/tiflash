@@ -105,8 +105,12 @@ private:
     Int64 syncSchemaDiffs(Context & context, Getter & getter, Int64 latest_version);
     Int64 syncAllSchemas(Context & context, Getter & getter, Int64 version);
 
-    bool syncSchemasByGetter(Context & context, Getter &getter);
-    std::tuple<bool, String> trySyncTableSchema(Context & context, TableID physical_table_id, Getter & getter, const char * next_action);
+    bool syncSchemasByGetter(Context & context, Getter & getter);
+    std::tuple<bool, String> trySyncTableSchema(
+        Context & context,
+        TableID physical_table_id,
+        Getter & getter,
+        const char * next_action);
 
     TiDB::DBInfoPtr getDBInfoByName(const String & database_name) override
     {
