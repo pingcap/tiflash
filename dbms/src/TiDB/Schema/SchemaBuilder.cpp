@@ -58,6 +58,128 @@ extern const int DDL_ERROR;
 extern const int SYNTAX_ERROR;
 } // namespace ErrorCodes
 
+void TableIDMap::doEmplaceTableID(
+    TableID table_id,
+    DatabaseID database_id,
+    std::string_view log_prefix,
+    const std::unique_lock<std::shared_mutex> &)
+{
+    if (auto iter = table_id_to_database_id.find(table_id); //
+        iter != table_id_to_database_id.end())
+    {
+        if (iter->second != database_id)
+        {
+            LOG_WARNING(
+                log,
+                "{}table_id to database_id is being overwrite, table_id={}"
+                " old_database_id={} new_database_id={}",
+                log_prefix,
+                table_id,
+                iter->second,
+                database_id);
+            iter->second = database_id;
+        }
+    }
+    else
+        table_id_to_database_id.emplace(table_id, database_id);
+}
+
+void TableIDMap::doEmplacePartitionTableID(
+    TableID partition_id,
+    TableID table_id,
+    std::string_view log_prefix,
+    const std::unique_lock<std::shared_mutex> &)
+{
+    if (auto iter = partition_id_to_logical_id.find(partition_id); //
+        iter != partition_id_to_logical_id.end())
+    {
+        if (iter->second != table_id)
+        {
+            LOG_WARNING(
+                log,
+                "{}partition_id to table_id is being overwrite, physical_table_id={}"
+                " old_logical_table_id={} new_logical_table_id={}",
+                log_prefix,
+                partition_id,
+                iter->second,
+                table_id);
+            iter->second = table_id;
+        }
+    }
+    else
+        partition_id_to_logical_id.emplace(partition_id, table_id);
+}
+
+void TableIDMap::exchangeTablePartition(
+    DatabaseID non_partition_database_id,
+    TableID non_partition_table_id,
+    DatabaseID /*partition_database_id*/,
+    TableID partition_logical_table_id,
+    TableID partition_physical_table_id)
+{
+    // Change all under the same lock
+    std::unique_lock lock(mtx_id_mapping);
+    // erase the non partition table
+    if (auto iter = table_id_to_database_id.find(non_partition_table_id); iter != table_id_to_database_id.end())
+        table_id_to_database_id.erase(iter);
+    else
+        LOG_WARNING(
+            log,
+            "ExchangeTablePartition: non partition table not in table_id_to_database_id, table_id={}",
+            non_partition_table_id);
+
+    // make the partition table to be a non-partition table
+    doEmplaceTableID(partition_physical_table_id, non_partition_database_id, "ExchangeTablePartition: ", lock);
+
+    // remove the partition table to logical table mapping
+    if (auto iter = partition_id_to_logical_id.find(partition_physical_table_id);
+        iter != partition_id_to_logical_id.end())
+    {
+        partition_id_to_logical_id.erase(iter);
+    }
+    else
+    {
+        LOG_WARNING(
+            log,
+            "ExchangeTablePartition: partition table not in partition_id_to_logical_id, physical_table_id={}",
+            partition_physical_table_id);
+    }
+
+    // make the non partition table as a partition to logical table
+    doEmplacePartitionTableID(non_partition_table_id, partition_logical_table_id, "ExchangeTablePartition: ", lock);
+}
+
+std::tuple<bool, DatabaseID, TableID> TableIDMap::findDatabaseIDAndLogicalTableID(TableID physical_table_id) const
+{
+    std::shared_lock<std::shared_mutex> lock(mtx_id_mapping);
+    DatabaseID database_id = -1;
+    if (auto database_iter = table_id_to_database_id.find(physical_table_id);
+        database_iter != table_id_to_database_id.end())
+    {
+        database_id = database_iter->second;
+        // This is a non-partition table or the logical_table of partition table.
+        return {true, database_id, physical_table_id};
+    }
+
+    /// if we can't find physical_table_id in table_id_to_database_id,
+    /// we should first try to find it in partition_id_to_logical_id because it could be the pysical_table_id of partition tables
+    TableID logical_table_id = -1;
+    if (auto logical_table_iter = partition_id_to_logical_id.find(physical_table_id);
+        logical_table_iter != partition_id_to_logical_id.end())
+    {
+        logical_table_id = logical_table_iter->second;
+        // try to get the database_id of logical_table_id
+        if (auto database_iter = table_id_to_database_id.find(logical_table_id);
+            database_iter != table_id_to_database_id.end())
+        {
+            database_id = database_iter->second;
+            // This is a non-partition table or the logical_table of partition table.
+            return {true, database_id, logical_table_id};
+        }
+    }
+    return {false, 0, 0};
+}
+
 bool isReservedDatabase(Context & context, const String & database_name)
 {
     return context.getTMTContext().getIgnoreDatabases().count(database_name) > 0;
@@ -115,70 +237,120 @@ void SchemaBuilder<Getter, NameMapper>::applyExchangeTablePartition(const Schema
             diff.table_id);
         return;
     }
-    LOG_DEBUG(
-        log,
-        "Table and partition is exchanged. database_id={} table_id={}, part_db_id={}, part_table_id={} partition_id={}",
-        diff.old_schema_id,
-        diff.old_table_id,
-        diff.affected_opts[0].schema_id,
-        diff.affected_opts[0].table_id,
-        diff.table_id);
-    /// Table_id in diff is the partition id of which will be exchanged,
+
+    if (diff.affected_opts.empty())
+    {
+        throw TiFlashException(
+            Errors::DDL::Internal,
+            "Invalid exchange partition schema diff without affected_opts, affected_opts_size={}",
+            diff.affected_opts.size());
+    }
+
+    /// `ALTER TABLE partition_table EXCHANGE PARTITION partition_name WITH TABLE non_partition_table`
+    /// Table_id in diff is the partition id of which will be exchanged
     /// Schema_id in diff is the non-partition table's schema id
     /// Old_table_id in diff is the non-partition table's table id
     /// Table_id in diff.affected_opts[0] is the table id of the partition table
     /// Schema_id in diff.affected_opts[0] is the schema id of the partition table
-    table_id_map.eraseTableIDOrLogError(diff.old_table_id);
-    table_id_map.emplaceTableID(diff.table_id, diff.schema_id);
-    table_id_map.erasePartitionTableIDOrLogError(diff.table_id);
-    table_id_map.emplacePartitionTableID(diff.old_table_id, diff.affected_opts[0].table_id);
+    const auto non_partition_database_id = diff.old_schema_id;
+    const auto non_partition_table_id = diff.old_table_id;
+    const auto partition_database_id = diff.affected_opts[0].schema_id;
+    const auto partition_logical_table_id = diff.affected_opts[0].table_id;
+    const auto partition_physical_table_id = diff.table_id;
+    LOG_INFO(
+        log,
+        "Execute exchange partition begin. database_id={} table_id={} part_database_id={} part_logical_table_id={}"
+        " physical_table_id={}",
+        non_partition_database_id,
+        non_partition_table_id,
+        partition_database_id,
+        partition_logical_table_id,
+        partition_physical_table_id);
+    GET_METRIC(tiflash_schema_internal_ddl_count, type_exchange_partition).Increment();
 
-    if (diff.schema_id != diff.affected_opts[0].schema_id)
+    table_id_map.exchangeTablePartition(
+        non_partition_database_id,
+        non_partition_table_id,
+        partition_database_id,
+        partition_logical_table_id,
+        partition_physical_table_id);
+
+    if (non_partition_database_id != partition_database_id)
     {
-        // rename old_table_id(non-partition table)
+        // Rename old non-partition table belonging new database. Now it should be belong to
+        // the database of partition table.
+        auto & tmt_context = context.getTMTContext();
+        do
         {
+            // skip if the instance is not created
+            auto storage = tmt_context.getStorages().get(keyspace_id, non_partition_table_id);
+            if (storage == nullptr)
+            {
+                LOG_INFO(
+                    log,
+                    "ExchangeTablePartition: non_partition_table instance is not created in TiFlash, rename is"
+                    " ignored, table_id={}",
+                    non_partition_table_id);
+                break;
+            }
+
             auto [new_db_info, new_table_info]
-                = getter.getDatabaseAndTableInfo(diff.affected_opts[0].schema_id, diff.affected_opts[0].table_id);
+                = getter.getDatabaseAndTableInfo(partition_database_id, partition_logical_table_id);
             if (new_table_info == nullptr)
             {
-                LOG_ERROR(log, "table is not exist in TiKV, table_id={}", diff.affected_opts[0].table_id);
-                return;
+                LOG_INFO(
+                    log,
+                    "ExchangeTablePartition: part_logical_table table is not exist in TiKV, rename is ignored,"
+                    " table_id={}",
+                    partition_logical_table_id);
+                break;
             }
 
-            auto & tmt_context = context.getTMTContext();
-            auto storage = tmt_context.getStorages().get(keyspace_id, diff.old_table_id);
-            if (storage == nullptr)
-            {
-                LOG_ERROR(log, "table is not exist in TiFlash, table_id={}", diff.old_table_id);
-                return;
-            }
-
-            auto part_table_info = new_table_info->producePartitionTableInfo(diff.old_table_id, name_mapper);
+            auto part_table_info = new_table_info->producePartitionTableInfo(non_partition_table_id, name_mapper);
             applyRenamePhysicalTable(new_db_info, *part_table_info, storage);
-        }
+        } while (false);
 
-        // rename table_id(the exchanged partition table)
+        // Rename the exchanged partition table belonging new database. Now it should belong to
+        // the database of non-partition table
+        do
         {
-            auto [new_db_info, new_table_info] = getter.getDatabaseAndTableInfo(diff.schema_id, diff.table_id);
-            if (new_table_info == nullptr)
-            {
-                LOG_ERROR(log, "table is not exist in TiKV, table_id={}", diff.table_id);
-                return;
-            }
-
-            auto & tmt_context = context.getTMTContext();
-            auto storage = tmt_context.getStorages().get(keyspace_id, diff.table_id);
+            // skip if the instance is not created
+            auto storage = tmt_context.getStorages().get(keyspace_id, partition_physical_table_id);
             if (storage == nullptr)
             {
-                LOG_ERROR(log, "table is not exist in TiFlash, table_id={}", diff.old_table_id);
-                return;
+                LOG_INFO(
+                    log,
+                    "ExchangeTablePartition: partition_physical_table instance is not created in TiFlash, rename is"
+                    " ignored, table_id={}",
+                    partition_physical_table_id);
+                break;
+            }
+
+            auto [new_db_info, new_table_info]
+                = getter.getDatabaseAndTableInfo(non_partition_database_id, partition_physical_table_id);
+            if (new_table_info == nullptr)
+            {
+                LOG_INFO(
+                    log,
+                    "ExchangeTablePartition: partition_physical_table is not exist in TiKV, rename is ignored,"
+                    " table_id={}",
+                    partition_physical_table_id);
+                break;
             }
 
             applyRenamePhysicalTable(new_db_info, *new_table_info, storage);
-        }
+        } while (false);
     }
 
-    GET_METRIC(tiflash_schema_internal_ddl_count, type_exchange_partition).Increment();
+    LOG_INFO(
+        log,
+        "Execute exchange partition end. database_id={} table_id={} part_database_id={} part_logical_table_id={}"
+        " physical_table_id={}",
+        non_partition_database_id,
+        non_partition_table_id,
+        partition_database_id,
+        partition_logical_table_id,
+        partition_physical_table_id);
 }
 
 template <typename Getter, typename NameMapper>
