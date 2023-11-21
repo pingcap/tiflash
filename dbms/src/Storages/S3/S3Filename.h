@@ -142,9 +142,9 @@ struct S3Filename
     // Generate an id template for checkpoint manifest id
     // Available placeholders: {seq}.
     static String newCheckpointManifestNameTemplate(StoreID store_id);
-    // Generate an id template for lock id
+    // Generate an id template for checkpoint data lock id
     // Available placeholders: {seq}, {index}.
-    static String newLockNameTemplate(StoreID store_id, UInt64 lock_seq);
+    static String newCheckpointLockNameTemplate(StoreID store_id, UInt64 lock_seq);
 
     String toFullKey() const;
 

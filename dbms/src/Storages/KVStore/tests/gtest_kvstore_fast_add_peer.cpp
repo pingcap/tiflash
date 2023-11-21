@@ -79,7 +79,6 @@ protected:
     void dumpCheckpoint()
     {
         auto & global_context = TiFlashTestEnv::getGlobalContext();
-        auto temp_dir = TiFlashTestEnv::getTemporaryPath() + "/";
         auto page_storage = global_context.getWriteNodePageStorage();
         KVStore & kvs = getKVS();
         auto store_id = kvs.getStore().store_id.load();
@@ -91,10 +90,10 @@ protected:
         auto remote_store = global_context.getSharedContextDisagg()->remote_data_store;
         assert(remote_store != nullptr);
         UniversalPageStorage::DumpCheckpointOptions opts{
-            .data_file_id_pattern = S3::S3Filename::newLockNameTemplate(store_id, upload_sequence),
-            .data_file_path_pattern = temp_dir + "dat_{seq}_{index}",
+            .data_file_id_pattern = S3::S3Filename::newCheckpointLockNameTemplate(store_id, upload_sequence),
+            .data_file_path_pattern = S3::S3Filename::newCheckpointDataNameTemplate(store_id),
             .manifest_file_id_pattern = S3::S3Filename::newCheckpointManifestNameTemplate(store_id),
-            .manifest_file_path_pattern = temp_dir + "mf_{seq}",
+            .manifest_file_path_pattern = S3::S3Filename::newCheckpointManifest(store_id, upload_sequence).toFullKey(),
             .writer_info = wi,
             .must_locked_files = {},
             .override_sequence = upload_sequence, // override by upload_sequence
@@ -108,7 +107,7 @@ protected:
 private:
     ContextPtr context;
     bool already_initialize_data_store = false;
-    DB::PageStorageRunMode orig_mode;
+    DB::PageStorageRunMode orig_mode{};
 };
 
 void persistAfterWrite(

@@ -48,7 +48,7 @@ public:
     explicit CPDataFileWriter(Options options)
         : file_writer(std::make_unique<WriteBufferFromWritableFile>(std::make_shared<S3::S3WritableFile>(
             S3::ClientFactory::instance().sharedTiFlashClient(),
-            S3::S3FilenameView::fromKeyWithPrefix(options.file_path).toFullKey(),
+            options.file_path,
             S3::WriteSettings{
                 // Since there is exactly only a thread to write checkpoint files, set buffer size as max file size is ok.
                 .max_single_part_upload_size = options.max_data_file_size,

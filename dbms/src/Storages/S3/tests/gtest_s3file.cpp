@@ -26,6 +26,8 @@
 #include <Storages/DeltaMerge/Remote/DataStore/DataStoreS3.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
 #include <Storages/Page/V3/CheckpointFile/CPDataFileStat.h>
+#include <Storages/Page/V3/CheckpointFile/CPFilesWriter.h>
+#include <Storages/Page/V3/CheckpointFile/CPWriteDataSource.h>
 #include <Storages/Page/V3/CheckpointFile/CheckpointFiles.h>
 #include <Storages/S3/MockS3Client.h>
 #include <Storages/S3/S3Common.h>
@@ -90,20 +92,6 @@ public:
     void TearDown() override { DB::tests::TiFlashTestEnv::disableS3Config(); }
 
 protected:
-    void writeLocalFile(const String & path, size_t size)
-    {
-        PosixWritableFile file(path, /*truncate_when_exists*/ true, -1, 0600);
-        size_t write_size = 0;
-        while (write_size < size)
-        {
-            auto to_write = std::min(buf_unit.size(), size - write_size);
-            auto n = file.write(buf_unit.data(), to_write);
-            ASSERT_EQ(n, to_write);
-            write_size += n;
-        }
-        ASSERT_EQ(file.fsync(), 0);
-    }
-
     void writeFile(const String & key, size_t size, const WriteSettings & write_setting)
     {
         S3WritableFile file(s3_client, key, write_setting);
@@ -465,8 +453,8 @@ CATCH
 
 struct TestFileInfo
 {
-    Int64 total_size{};
-    Int64 valid_size{};
+    UInt64 data_size{};
+    UInt64 valid_size{};
     std::chrono::system_clock::time_point mtime;
 };
 
@@ -479,46 +467,70 @@ try
     UInt64 sequence = 200;
     const std::vector<TestFileInfo> test_infos{
         // old, big, valid rate is high
-        TestFileInfo{.total_size = 345 * 1024, .valid_size = 300 * 1024, .mtime = timepoint - 7200s},
+        TestFileInfo{.data_size = 345 * 1024, .valid_size = 300 * 1024, .mtime = timepoint - 7200s},
         // old, big, valid rate is low
-        TestFileInfo{.total_size = 156 * 1024, .valid_size = 16 * 1024, .mtime = timepoint - 7200s},
+        TestFileInfo{.data_size = 156 * 1024, .valid_size = 16 * 1024, .mtime = timepoint - 7200s},
         // old, small
-        TestFileInfo{.total_size = 1234, .valid_size = 1234, .mtime = timepoint - 7200s},
+        TestFileInfo{.data_size = 1234, .valid_size = 1234, .mtime = timepoint - 7200s},
         // fresh, small
-        TestFileInfo{.total_size = 1234, .valid_size = 1024, .mtime = timepoint - 30s},
+        TestFileInfo{.data_size = 1234, .valid_size = 1024, .mtime = timepoint - 30s},
     };
-    // prepare
-    {
-        Strings data_files{
-            getTemporaryPath() + "/data_file_11",
-            getTemporaryPath() + "/data_file_12",
-            getTemporaryPath() + "/data_file_13",
-            getTemporaryPath() + "/data_file_14",
-        };
-        String manifest_file = getTemporaryPath() + "/manifest";
-        for (size_t i = 0; i < test_infos.size(); ++i)
-        {
-            writeLocalFile(data_files[i], test_infos[i].total_size);
-        }
-    }
-
+    // test 1: write checkpoint files, ensure CheckpointDataFile, theirs lock file and CheckpointManifest are uploaded
     Strings df_keys;
     Strings lock_keys;
     std::unordered_set<String> lock_keyset;
-    auto s3client = S3::ClientFactory::instance().sharedTiFlashClient();
-    /// test 1: ensure CheckpointDataFile, theirs lock file and CheckpointManifest are uploaded
     {
+        String data_file_id_pattern = S3::S3Filename::newCheckpointLockNameTemplate(store_id, sequence);
+        String data_file_path_pattern = S3::S3Filename::newCheckpointDataNameTemplate(store_id);
+        String manifest_file_path = S3::S3Filename::newCheckpointManifest(store_id, sequence).toFullKey();
+        String manifest_file_id = S3::S3Filename::newCheckpointManifest(store_id, sequence).toFullKey();
+        std::unordered_map<size_t, std::string> data_sources;
+        for (size_t idx = 0; idx < test_infos.size(); ++idx)
+        {
+            data_sources.emplace(idx * 1000 * 1024, std::string(test_infos[idx].data_size, 'a'));
+        }
+        auto writer = PS::V3::CPFilesWriter::create({
+            .data_file_path_pattern = data_file_path_pattern,
+            .data_file_id_pattern = data_file_id_pattern,
+            .manifest_file_path = manifest_file_path,
+            .manifest_file_id = manifest_file_id,
+            .data_source = PS::V3::CPWriteDataSourceFixture::create(data_sources),
+            .sequence = sequence,
+        });
+        writer->writePrefix({
+            .writer = {},
+            .sequence = sequence,
+            .last_sequence = sequence - 1,
+        });
+        for (size_t idx = 0; idx < test_infos.size(); ++idx)
+        {
+            auto edits = PS::V3::universal::PageEntriesEdit{};
+            edits.appendRecord({
+                .type = PS::V3::EditRecordType::VAR_ENTRY,
+                .page_id = std::to_string(idx),
+                .entry = {
+                    .size = test_infos[idx].data_size,
+                    .offset = idx * 1000 * 1024,
+                },
+            });
+            writer->writeEditsAndApplyCheckpointInfo(edits);
+        }
+
+        auto data_file_paths = writer->writeSuffix();
+        ASSERT_EQ(data_file_paths.size(), 4);
+        writer.reset();
+
         for (size_t idx = 0; idx < test_infos.size(); ++idx)
         {
             auto cp_data = S3::S3Filename::newCheckpointData(store_id, sequence, idx);
-            ASSERT_TRUE(S3::objectExists(*s3client, cp_data.toFullKey()));
+            ASSERT_TRUE(S3::objectExists(*s3_client, cp_data.toFullKey()));
             df_keys.emplace_back(cp_data.toFullKey());
-            ASSERT_TRUE(S3::objectExists(*s3client, cp_data.toView().getLockKey(store_id, sequence)));
+            ASSERT_TRUE(S3::objectExists(*s3_client, cp_data.toView().getLockKey(store_id, sequence)));
             lock_keys.emplace_back(cp_data.toView().getLockKey(store_id, sequence));
             lock_keyset.insert(lock_keys.back());
         }
         // manifest
-        ASSERT_TRUE(S3::objectExists(*s3client, S3::S3Filename::newCheckpointManifest(store_id, sequence).toFullKey()));
+        ASSERT_TRUE(S3::objectExists(*s3_client, manifest_file_path));
     }
 
     /// test 2: check get data file infos from remote store
@@ -541,7 +553,8 @@ try
     ASSERT_EQ(remote_files_info.size(), 5);
     for (size_t idx = 0; idx < test_infos.size(); ++idx)
     {
-        ASSERT_EQ(remote_files_info.at(lock_keys[idx]).size, test_infos[idx].total_size);
+        // data file contains prefix and suffix, so the size is bigger than the size in test_infos
+        ASSERT_GT(remote_files_info.at(lock_keys[idx]).size, test_infos[idx].data_size);
         ASSERT_EQ(remote_files_info.at(lock_keys[idx]).mtime, test_infos[idx].mtime) << fmt::format(
             "remote_mtime:{:%Y-%m-%d %H:%M:%S} test_mtime:{:%Y-%m-%d %H:%M:%S}",
             remote_files_info.at(lock_keys[idx]).mtime,
@@ -587,7 +600,7 @@ try
         // total size are updated after `getRemoteFileIdsNeedCompact`
         for (size_t idx = 0; idx < test_infos.size(); ++idx)
         {
-            EXPECT_EQ(stats.at(lock_keys[idx]).total_size, test_infos[idx].total_size);
+            EXPECT_GT(stats.at(lock_keys[idx]).total_size, test_infos[idx].data_size);
             EXPECT_EQ(stats.at(lock_keys[idx]).valid_size, test_infos[idx].valid_size);
             EXPECT_EQ(stats.at(lock_keys[idx]).mtime, test_infos[idx].mtime);
         }
@@ -601,7 +614,7 @@ try
         auto stats = cache.getCopy();
         for (size_t idx = 0; idx < test_infos.size(); ++idx)
         {
-            EXPECT_EQ(stats.at(lock_keys[idx]).total_size, test_infos[idx].total_size);
+            EXPECT_GT(stats.at(lock_keys[idx]).total_size, test_infos[idx].data_size);
             EXPECT_EQ(stats.at(lock_keys[idx]).valid_size, test_infos[idx].valid_size);
             EXPECT_EQ(stats.at(lock_keys[idx]).mtime, test_infos[idx].mtime);
         }
@@ -639,8 +652,7 @@ try
                 3);
         }
         catch (...)
-        {
-        }
+        {}
         ASSERT_EQ(retry, 2);
     }
 

@@ -232,6 +232,13 @@ std::vector<String> CPFilesWriter::writeSuffix()
 
     data_writer->writeSuffix();
     data_writer->flush();
+    // upload empty file as LockFile to S3
+    S3::uploadEmptyFile(
+        *S3::ClientFactory::instance().sharedTiFlashClient(),
+        fmt::format(
+            fmt::runtime(data_file_id_pattern),
+            fmt::arg("seq", sequence),
+            fmt::arg("index", data_file_index - 1)));
     manifest_writer->writeSuffix();
     manifest_writer->flush();
 

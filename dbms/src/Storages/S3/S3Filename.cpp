@@ -437,7 +437,7 @@ String S3Filename::newCheckpointDataNameTemplate(StoreID store_id)
         fmt::arg("subpath", details::fmt_subpath_checkpoint_data)); // available placeholder `seq`, `index`
 }
 
-String S3Filename::newLockNameTemplate(StoreID store_id, UInt64 lock_seq)
+String S3Filename::newCheckpointLockNameTemplate(StoreID store_id, UInt64 lock_seq)
 {
     return fmt::format(
         details::fmt_lock_file,

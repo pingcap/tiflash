@@ -45,7 +45,7 @@ public:
     explicit CPManifestFileWriter(Options options)
         : file_writer(std::make_unique<WriteBufferFromWritableFile>(std::make_shared<S3::S3WritableFile>(
             S3::ClientFactory::instance().sharedTiFlashClient(),
-            S3::S3FilenameView::fromKeyWithPrefix(options.file_path).toFullKey(),
+            options.file_path,
             S3::WriteSettings{})))
         , compressed_writer(std::make_unique<CompressedWriteBuffer<true>>(*file_writer, CompressionSettings()))
         , max_edit_records_per_part(options.max_edit_records_per_part)
