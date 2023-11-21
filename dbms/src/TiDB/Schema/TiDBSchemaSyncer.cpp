@@ -184,8 +184,8 @@ std::tuple<bool, String> TiDBSchemaSyncer<mock_getter, mock_mapper>::trySyncTabl
 {
     // Get logical_table_id and database_id by physical_table_id.
     // If the table is a partition table, logical_table_id != physical_table_id, otherwise, logical_table_id == physical_table_id;
-    auto [find, database_id, logical_table_id] = findDatabaseIDAndTableID(physical_table_id);
-    if (!find)
+    auto [found, database_id, logical_table_id] = findDatabaseIDAndTableID(physical_table_id);
+    if (!found)
     {
         String message = fmt::format(
             "Can not find related database_id and logical_table_id from table_id_map, {}."
