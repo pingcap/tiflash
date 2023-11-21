@@ -56,17 +56,8 @@ inline void serializeEntryTo(const PageEntryV3 & entry, WriteBuffer & buf, bool 
         writeIntBinary(off, buf);
         writeIntBinary(checksum, buf);
     }
-    if (has_checkpoint_info)
+    if (has_checkpoint_info && entry.checkpoint_info.data_location.isValid())
     {
-        if (!entry.checkpoint_info.has_value() || !entry.checkpoint_info.data_location.isValid())
-        {
-            LOG_ERROR(
-                DB::Logger::get(),
-                "data_file_id is empty file_id={} offset={} checkpoint_info={}",
-                entry.file_id,
-                entry.offset,
-                entry.checkpoint_info.toDebugString());
-        }
         writeIntBinary(entry.checkpoint_info.data_location.offset_in_file, buf);
         writeIntBinary(entry.checkpoint_info.data_location.size_in_file, buf);
         writeStringBinary(*(entry.checkpoint_info.data_location.data_file_id), buf);

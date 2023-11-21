@@ -655,7 +655,7 @@ try
                     .size = entry_data.size(),
                     .offset = entry_data.size(),
                     .checkpoint_info
-                    = OptionalCheckpointInfo{}, // an entry written by this node, do not contains checkpoint_info
+                    = OptionalCheckpointInfo(), // an entry written by this node, do not contains checkpoint_info
                 },
                 1);
             writer->writeEditsAndApplyCheckpointInfo(edits);
@@ -692,7 +692,7 @@ try
                     .size = entry_data.size(),
                     .offset = 0,
                     .checkpoint_info
-                    = OptionalCheckpointInfo{}, // an entry written by this node, do not contains checkpoint_info
+                    = OptionalCheckpointInfo(), // an entry written by this node, do not contains checkpoint_info
                 },
                 1);
             writer->writeEditsAndApplyCheckpointInfo(edits);

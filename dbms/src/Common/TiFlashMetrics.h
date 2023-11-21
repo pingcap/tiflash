@@ -374,10 +374,12 @@ namespace DB
       F(type_cftiny_fetch, {{"type", "cftiny_fetch"}}))                                                                             \
     M(tiflash_fap_task_result,                                                                                                      \
       "",                                                                                                                           \
-      Counter,                                                                                                                      \
+      Gauge,                                                                                                                      \
       F(type_total, {{"type", "total"}}),                                                                                           \
+      F(type_success_transform, {{"type", "success_transform"}}),                                                                                           \
       F(type_failed_other, {{"type", "failed_other"}}),                                                                             \
       F(type_failed_cancel, {{"type", "failed_cancel"}}),                                                                           \
+      F(type_failed_no_suitable, {{"type", "failed_no_suitable"}}),                                                                           \
       F(type_failed_timeout, {{"type", "failed_timeout"}}),                                                                         \
       F(type_succeed, {{"type", "succeed"}}))                                                                                       \
     M(tiflash_fap_task_state,                                                                                                       \

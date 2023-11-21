@@ -198,6 +198,7 @@ std::variant<CheckpointRegionInfoAndData, FastAddPeerRes> FastAddPeerImplBuild(
     if (candidate_store_ids.empty())
     {
         LOG_DEBUG(log, "No suitable candidate peer for region_id={}", region_id);
+        GET_METRIC(tiflash_fap_task_result, type_failed_no_suitable).Increment();
         return genFastAddPeerRes(FastAddPeerStatus::NoSuitable, "", "");
     }
     LOG_DEBUG(log, "Begin to select checkpoint for region_id={}", region_id);
@@ -349,11 +350,13 @@ FastAddPeerRes FastAddPeerImpl(
         auto res = FastAddPeerImplBuild(tmt, proxy_helper, region_id, new_peer_id);
         if (std::holds_alternative<CheckpointRegionInfoAndData>(res))
         {
-            return FastAddPeerImplTransform(
+            auto final_res = FastAddPeerImplTransform(
                 tmt,
                 region_id,
                 new_peer_id,
                 std::move(std::get<CheckpointRegionInfoAndData>(res)));
+            GET_METRIC(tiflash_fap_task_result, type_success_transform).Increment();
+            return final_res;
         }
         return std::get<FastAddPeerRes>(res);
     }
@@ -384,6 +387,8 @@ void ApplyFapSnapshotImpl(TMTContext & tmt, TiFlashRaftProxyHelper * proxy_helpe
 {
     try
     {
+        auto * log = &Poco::Logger::get("FastAddPeer");
+        LOG_INFO(log, "Begin apply fap snapshot, region_id={}, peer_id={}", region_id, peer_id);
         Stopwatch watch_ingest;
         auto kvstore = tmt.getKVStore();
         auto fap_ctx = tmt.getContext().getSharedContextDisagg()->fap_context;

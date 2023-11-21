@@ -68,11 +68,11 @@ typename PageEntriesEdit<UniversalPageId>::EditRecord PageEntriesEdit<UniversalP
         auto checkpoint_loc = CheckpointLocation::fromProto(proto_edit.entry_location(), strings_map);
         if (checkpoint_loc.isValid())
         {
-            rec.entry.checkpoint_info = OptionalCheckpointInfo{
-                .data_location = std::move(checkpoint_loc),
-                .is_valid = true,
-                .is_local_data_reclaimed = true,
-            };
+            rec.entry.checkpoint_info = OptionalCheckpointInfo(
+                std::move(checkpoint_loc),
+                true,
+                true
+            );
         }
         rec.entry.size = proto_edit.entry_size();
         rec.entry.checksum = proto_edit.entry_checksum();
@@ -89,11 +89,11 @@ typename PageEntriesEdit<UniversalPageId>::EditRecord PageEntriesEdit<UniversalP
     }
     if (rec.type == EditRecordType::VAR_EXTERNAL)
     {
-        rec.entry.checkpoint_info = OptionalCheckpointInfo{
-            .data_location = CheckpointLocation::fromProto(proto_edit.entry_location(), strings_map),
-            .is_valid = true,
-            .is_local_data_reclaimed = true,
-        };
+        rec.entry.checkpoint_info = OptionalCheckpointInfo(
+            CheckpointLocation::fromProto(proto_edit.entry_location(), strings_map),
+            true,
+            true
+        );
     }
     return rec;
 }

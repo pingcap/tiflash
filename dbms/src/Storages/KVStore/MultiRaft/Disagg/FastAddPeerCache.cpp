@@ -150,6 +150,13 @@ ParsedCheckpointDataHolderPtr buildParsedCheckpointData(Context & context, const
         {
             if (record.type == PS::V3::EditRecordType::VAR_ENTRY)
             {
+                // TODO(fap) may be it could be a soft error
+                if(!record.entry.checkpoint_info.data_location.isValid()) {
+                    throw Exception(ErrorCodes::LOGICAL_ERROR, fmt::format(
+                        "buildParsedCheckpointData: can't put remote page with empty data_location, page_id={}",
+                        record.page_id
+                    ));
+                }
                 wb.putRemotePage(
                     record.page_id,
                     record.entry.tag,
@@ -167,7 +174,14 @@ ParsedCheckpointDataHolderPtr buildParsedCheckpointData(Context & context, const
             }
             else if (record.type == PS::V3::EditRecordType::VAR_EXTERNAL)
             {
+                // TODO(fap) may be it could be a soft error
                 RUNTIME_CHECK(record.entry.checkpoint_info.has_value());
+                if(!record.entry.checkpoint_info.data_location.isValid()) {
+                    throw Exception(ErrorCodes::LOGICAL_ERROR, fmt::format(
+                        "buildParsedCheckpointData: can't put external page with empty data_location, page_id={}",
+                        record.page_id
+                    ));
+                }
                 wb.putRemoteExternal(record.page_id, record.entry.checkpoint_info.data_location);
             }
             else
