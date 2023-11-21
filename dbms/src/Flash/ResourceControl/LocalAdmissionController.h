@@ -130,6 +130,12 @@ private:
         }
     }
 
+    uint64_t estWaitDuraMS(uint64_t max_wait_dura_ms) const
+    {
+        std::lock_guard lock(mu);
+        return bucket->estWaitDuraMS(max_wait_dura_ms);
+    }
+
     // Priority greater than zero: Less number means higher priority.
     // Zero priority means has no RU left, should not schedule this resource group at all.
     uint64_t getPriority(uint64_t max_ru_per_sec) const
@@ -480,6 +486,20 @@ public:
         }
     }
 
+    uint64_t estWaitDuraMS(const std::string & name) const
+    {
+        if (name.empty())
+            return 0;
+
+        ResourceGroupPtr group = findResourceGroup(name);
+        if unlikely (!group)
+        {
+            LOG_INFO(log, "cannot get priority for {}, maybe it has been deleted", name);
+            return 0;
+        }
+        return group->estWaitDuraMS(DEFAULT_FETCH_GAC_INTERVAL_MS);
+    }
+
     std::optional<uint64_t> getPriority(const std::string & name)
     {
         assert(!stopped);
@@ -526,6 +546,10 @@ public:
 #else
     static std::unique_ptr<LocalAdmissionController> global_instance;
 #endif
+
+    // Interval of fetch from GAC periodically.
+    static constexpr auto DEFAULT_FETCH_GAC_INTERVAL = std::chrono::seconds(5);
+    static constexpr auto DEFAULT_FETCH_GAC_INTERVAL_MS = 5000;
 
 private:
     void stop()
@@ -583,8 +607,6 @@ private:
         }
     }
 
-    // Interval of fetch from GAC periodically.
-    static constexpr auto DEFAULT_FETCH_GAC_INTERVAL = std::chrono::seconds(5);
     // If we cannot get GAC resp for DEGRADE_MODE_DURATION seconds, enter degrade mode.
     static constexpr auto DEGRADE_MODE_DURATION = std::chrono::seconds(120);
     static constexpr auto TARGET_REQUEST_PERIOD_MS = std::chrono::milliseconds(5000);
@@ -597,7 +619,7 @@ private:
     // findResourceGroup() should be private,
     // this is to avoid user call member function of ResourceGroup directly.
     // So we can avoid dead lock.
-    ResourceGroupPtr findResourceGroup(const std::string & name)
+    ResourceGroupPtr findResourceGroup(const std::string & name) const
     {
         std::lock_guard lock(mu);
         auto iter = resource_groups.find(name);
@@ -669,7 +691,7 @@ private:
         std::string & parsed_rg_name,
         std::string & err_msg);
 
-    std::mutex mu;
+    mutable std::mutex mu;
     std::condition_variable cv;
 
     std::atomic<bool> stopped = false;
