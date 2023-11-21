@@ -172,7 +172,7 @@ BlockInputStreamPtr SegmentReadTaskPool::buildInputStream(SegmentReadTaskPtr & t
     if (likely(read_mode == ReadMode::Bitmap && !res_group_name.empty()))
     {
         auto bytes = t->read_snapshot->estimatedBytesOfInternalColumns();
-        LocalAdmissionController::global_instance->consumeResource(res_group_name, bytesToRU(bytes), 0);
+        LocalAdmissionController::global_instance->consumeBytesResource(res_group_name, bytesToRU(bytes));
     }
     stream = t->segment->getInputStream(
         read_mode,

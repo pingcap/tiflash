@@ -728,8 +728,7 @@ namespace DB
       F(type_gac_req_acquire_tokens, {"type", "gac_req_acquire_tokens"}),                                                           \
       F(type_gac_req_ru_consumption_delta, {"type", "gac_req_ru_consumption_delta"}),                                                           \
       F(type_gac_resp_tokens, {"type", "gac_resp_tokens"}),                                                           \
-      F(type_gac_resp_capacity, {"type", "gac_resp_capacity"}),                                                           \
-      F(type_fetch_tokens_from_gac_count, {"type", "fetch_tokens_from_gac_count"}))
+      F(type_gac_resp_capacity, {"type", "gac_resp_capacity"}))
 
 
 /// Buckets with boundaries [start * base^0, start * base^1, ..., start * base^(size-1)]
