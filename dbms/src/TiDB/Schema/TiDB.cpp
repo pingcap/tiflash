@@ -29,6 +29,7 @@
 #include <TiDB/Schema/TiDB.h>
 #include <common/logger_useful.h>
 
+#include <algorithm>
 #include <cmath>
 
 namespace DB
