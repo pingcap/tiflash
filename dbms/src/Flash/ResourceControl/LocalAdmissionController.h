@@ -642,6 +642,9 @@ private:
         LOG_INFO(log, "add new resource group, info: {}", new_group_pb.DebugString());
         auto new_group = std::make_shared<ResourceGroup>(new_group_pb);
         resource_groups.insert({new_group_pb.name(), new_group});
+
+        if (refill_token_callback)
+            refill_token_callback();
     }
 
     std::vector<std::string> handleTokenBucketsResp(const resource_manager::TokenBucketsResponse & resp);
