@@ -511,7 +511,7 @@ public:
         for (auto column_number : arguments)
         {
             sources.push_back(
-                block.getByPosition(column_number).type->onlyNull()
+                block.getByPosition(column_number).column->onlyNull()
                     ? nullptr
                     : createDynamicStringSource(*nested_block.getByPosition(column_number).column));
         }
