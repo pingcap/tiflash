@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
 #include <Common/FailPoint.h>
 #include <Common/FmtUtils.h>
 #include <Common/TiFlashException.h>
@@ -719,7 +720,10 @@ void SchemaBuilder<Getter, NameMapper>::applyRenameLogicalTable(
             auto part_storage = tmt_context.getStorages().get(keyspace_id, part_def.id);
             if (part_storage == nullptr)
             {
-                LOG_ERROR(log, "table is not exist in TiFlash, physical_table_id={}", part_def.id);
+                LOG_ERROR(
+                    log,
+                    "table is not exist in TiFlash, applyRenamePhysicalTable is ignored, physical_table_id={}",
+                    part_def.id);
                 return;
             }
             auto part_table_info = new_table_info->producePartitionTableInfo(part_def.id, name_mapper);
@@ -1379,7 +1383,7 @@ void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
         if (created_db_set.count(it->first) == 0 && !isReservedDatabase(context, it->first))
         {
             applyDropSchema(it->first);
-            LOG_DEBUG(log, "DB {} dropped during sync all schemas", it->first);
+            LOG_INFO(log, "Database {} dropped during sync all schemas", it->first);
         }
     }
 
