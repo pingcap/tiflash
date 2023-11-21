@@ -77,21 +77,12 @@ void LocalAdmissionController::startBackgroudJob()
     }
     LOG_INFO(log, "get unique_client_id succeed: {}", unique_client_id);
 
-    auto last_metric_time_point = SteadyClock::now();
     while (!stopped.load())
     {
         bool fetch_token_periodically = false;
 
         {
             std::unique_lock<std::mutex> lock(mu);
-
-            auto now = SteadyClock::now();
-            if (now - last_metric_time_point >= COLLECT_METRIC_INTERVAL)
-            {
-                last_metric_time_point = now;
-                for (const auto & resource_group : resource_groups)
-                    resource_group.second->collectMetrics();
-            }
 
             if (low_token_resource_groups.empty())
             {

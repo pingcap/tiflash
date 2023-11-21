@@ -118,16 +118,6 @@ private:
         if (!burstable)
             bucket->consume(ru);
         GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_remaining_tokens, name).Set(bucket->peek());
-        if (cpu_time_in_ns_ == 0)
-        {
-            LOG_INFO(log, "gjt debug storage consume ru: {}, delta: {}", ru, ru_consumption_delta);
-            GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_compute_ru_consumption, name).Set(ru);
-        }
-        else
-        {
-            LOG_INFO(log, "gjt debug compute consume ru: {}, delta: {}", ru, ru_consumption_delta);
-            GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_storage_ru_consumption, name).Set(ru);
-        }
     }
 
     uint64_t estWaitDuraMS(uint64_t max_wait_dura_ms) const
@@ -144,7 +134,10 @@ private:
 
         const auto remaining_token = bucket->peek();
         if (!burstable && remaining_token <= 0.0)
+        {
+            GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_compute_ru_exhausted, name).Increment();
             return std::numeric_limits<uint64_t>::max();
+        }
 
         // This should not happens because tidb will check except for unittest(test static token bucket).
         if unlikely (user_ru_per_sec == 0)
@@ -392,19 +385,6 @@ private:
         return bucket_mode == trickle_mode && tp >= stop_trickle_timepoint;
     }
 
-    void collectMetrics() const
-    {
-        TokenBucket::TokenBucketConfig local_config;
-        uint64_t local_fetch_count = 0;
-        {
-            std::lock_guard lock(mu);
-            local_config = bucket->getConfig();
-            local_fetch_count = fetch_tokens_from_gac_count;
-        }
-        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_fetch_tokens_from_gac_count, name)
-            .Set(local_fetch_count);
-    }
-
     const std::string name;
 
     uint32_t user_priority = 0;
@@ -460,30 +440,16 @@ public:
 
     ~LocalAdmissionController() { stop(); }
 
-    void consumeResource(const std::string & name, double ru, uint64_t cpu_time_in_ns)
+    void consumeCPUResource(const std::string & name, double ru, uint64_t cpu_time_in_ns)
     {
-        assert(!stopped);
+        consumeResource(name, ru, cpu_time_in_ns);
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_compute_ru_consumption, name).Set(ru);
+    }
 
-        // When tidb_enable_resource_control is disabled, resource group name is empty.
-        if (name.empty())
-            return;
-
-        ResourceGroupPtr group = findResourceGroup(name);
-        if unlikely (!group)
-        {
-            LOG_INFO(log, "cannot consume ru for {}, maybe it has been deleted", name);
-            return;
-        }
-
-        group->consumeResource(ru, cpu_time_in_ns);
-        if (group->lowToken() || group->trickleModeLeaseExpire(SteadyClock::now()))
-        {
-            {
-                std::lock_guard lock(mu);
-                low_token_resource_groups.insert(name);
-            }
-            cv.notify_one();
-        }
+    void consumeBytesResource(const std::string & name, double ru)
+    {
+        consumeResource(name, ru, 0);
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_storage_ru_consumption, name).Set(ru);
     }
 
     uint64_t estWaitDuraMS(const std::string & name) const
@@ -552,6 +518,32 @@ public:
     static constexpr auto DEFAULT_FETCH_GAC_INTERVAL_MS = 5000;
 
 private:
+    void consumeResource(const std::string & name, double ru, uint64_t cpu_time_in_ns)
+    {
+        assert(!stopped);
+
+        // When tidb_enable_resource_control is disabled, resource group name is empty.
+        if (name.empty())
+            return;
+
+        ResourceGroupPtr group = findResourceGroup(name);
+        if unlikely (!group)
+        {
+            LOG_INFO(log, "cannot consume ru for {}, maybe it has been deleted", name);
+            return;
+        }
+
+        group->consumeResource(ru, cpu_time_in_ns);
+        if (group->lowToken() || group->trickleModeLeaseExpire(SteadyClock::now()))
+        {
+            {
+                std::lock_guard lock(mu);
+                low_token_resource_groups.insert(name);
+            }
+            cv.notify_one();
+        }
+    }
+
     void stop()
     {
         if (stopped)
@@ -612,7 +604,6 @@ private:
     static constexpr auto DEFAULT_LOW_TOKEN_INTERVAL = std::chrono::milliseconds(300);
 
     static constexpr auto TARGET_REQUEST_PERIOD_MS = std::chrono::milliseconds(5000);
-    static constexpr auto COLLECT_METRIC_INTERVAL = std::chrono::seconds(5);
     static constexpr double ACQUIRE_RU_AMPLIFICATION = 1.5;
 
     static const std::string GAC_RESOURCE_GROUP_ETCD_PATH;
@@ -752,7 +743,7 @@ private:
     {
         assert(delta_bytes != 0);
         if (!resource_group_name.empty())
-            LocalAdmissionController::global_instance->consumeResource(resource_group_name, bytesToRU(delta_bytes), 0);
+            LocalAdmissionController::global_instance->consumeBytesResource(resource_group_name, bytesToRU(delta_bytes));
     }
 
     const std::string resource_group_name;
