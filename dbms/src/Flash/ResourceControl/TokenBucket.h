@@ -95,6 +95,19 @@ public:
         return fmt::format("tokens: {}, fill_rate: {}, capacity: {}", tokens, fill_rate, capacity);
     }
 
+    uint64_t estWaitDuraMS(uint64_t max_wait_dura_ms) const
+    {
+        const auto tokens = peek();
+        if (tokens > 0 || fill_rate_ms == 0.0)
+            return 100;
+
+        auto est_dura_ms = static_cast<uint64_t>(std::ceil(-tokens / fill_rate_ms)) + 100;
+        if (est_dura_ms > max_wait_dura_ms)
+            est_dura_ms = max_wait_dura_ms;
+
+        return est_dura_ms;
+    }
+
 private:
     static constexpr auto LOW_TOKEN_THRESHOLD_RATE = 0.3;
     static constexpr auto MIN_COMPACT_INTERVAL = std::chrono::milliseconds(10);

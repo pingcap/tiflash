@@ -114,6 +114,7 @@ bool ResourceControlQueue<NestedTaskQueueType>::take(TaskPtr & task)
         if unlikely (updateResourceGroupInfosWithoutLock())
             continue;
 
+        UInt64 wait_dura = LocalAdmissionController::DEFAULT_FETCH_GAC_INTERVAL_MS;
         if (!resource_group_infos.empty())
         {
             const ResourceGroupInfo & group_info = resource_group_infos.top();
@@ -140,13 +141,14 @@ bool ResourceControlQueue<NestedTaskQueueType>::take(TaskPtr & task)
             {
                 GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_compute_ru_exhausted, group_info.name).Increment();
             }
+            wait_dura = LocalAdmissionController::global_instance->estWaitDuraMS(group_info.name);
         }
 
         assert(!task);
         // Wakeup when:
         // 1. finish() is called.
         // 2. refill_token_callback is called by LAC.
-        cv.wait_for(lock, std::chrono::milliseconds(100));
+        cv.wait_for(lock, std::chrono::milliseconds(wait_dura));
     }
 }
 
