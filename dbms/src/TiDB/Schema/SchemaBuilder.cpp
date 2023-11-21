@@ -69,7 +69,10 @@ void SchemaBuilder<Getter, NameMapper>::applyCreateTable(DatabaseID database_id,
     auto table_info = getter.getTableInfo(database_id, table_id);
     if (table_info == nullptr) // the database maybe dropped
     {
-        LOG_DEBUG(log, "table is not exist in TiKV, may have been dropped, table_id={}", table_id);
+        LOG_INFO(
+            log,
+            "table is not exist in TiKV, may have been dropped, applyCreateTable is ignored, table_id={}",
+            table_id);
         return;
     }
 
@@ -281,13 +284,13 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
     {
         if (diff.type < SchemaActionType::MaxRecognizedType)
         {
-            LOG_INFO(log, "Ignore change type: {}", magic_enum::enum_name(diff.type));
+            LOG_INFO(log, "Ignore change type: {}, diff_version={}", magic_enum::enum_name(diff.type), diff.version);
         }
         else
         {
             // >= SchemaActionType::MaxRecognizedType
             // log down the Int8 value directly
-            LOG_ERROR(log, "Unsupported change type: {}", static_cast<Int8>(diff.type));
+            LOG_ERROR(log, "Unsupported change type: {}, diff_version={}", static_cast<Int8>(diff.type), diff.version);
         }
 
         break;
@@ -301,7 +304,7 @@ void SchemaBuilder<Getter, NameMapper>::applySetTiFlashReplica(DatabaseID databa
     auto [db_info, table_info] = getter.getDatabaseAndTableInfo(database_id, table_id);
     if (unlikely(table_info == nullptr))
     {
-        LOG_ERROR(log, "table is not exist in TiKV, table_id={}", table_id);
+        LOG_ERROR(log, "table is not exist in TiKV, applySetTiFlashReplica is ignored, table_id={}", table_id);
         return;
     }
 
@@ -312,7 +315,7 @@ void SchemaBuilder<Getter, NameMapper>::applySetTiFlashReplica(DatabaseID databa
         auto storage = tmt_context.getStorages().get(keyspace_id, table_info->id);
         if (unlikely(storage == nullptr))
         {
-            LOG_ERROR(log, "table is not exist in TiFlash, table_id={}", table_id);
+            LOG_ERROR(log, "table is not exist in TiFlash, applySetTiFlashReplica is ignored, table_id={}", table_id);
             return;
         }
 
@@ -387,14 +390,14 @@ void SchemaBuilder<Getter, NameMapper>::applyPartitionDiff(DatabaseID database_i
     auto [db_info, table_info] = getter.getDatabaseAndTableInfo(database_id, table_id);
     if (table_info == nullptr)
     {
-        LOG_ERROR(log, "table is not exist in TiKV, table_id={}", table_id);
+        LOG_ERROR(log, "table is not exist in TiKV, applyPartitionDiff is ignored, table_id={}", table_id);
         return;
     }
     if (!table_info->isLogicalPartitionTable())
     {
         LOG_ERROR(
             log,
-            "new table in TiKV not partition table {} with database_id={}, table_id={}",
+            "new table in TiKV is not a partition table {}, database_id={} table_id={}",
             name_mapper.debugCanonicalName(*db_info, *table_info),
             db_info->id,
             table_info->id);
@@ -510,7 +513,7 @@ void SchemaBuilder<Getter, NameMapper>::applyRenameTable(DatabaseID database_id,
     auto [new_db_info, new_table_info] = getter.getDatabaseAndTableInfo(database_id, table_id);
     if (new_table_info == nullptr)
     {
-        LOG_ERROR(log, "table is not exist in TiKV, table_id={}", table_id);
+        LOG_ERROR(log, "table is not exist in TiKV, applyRenameTable is ignored, table_id={}", table_id);
         return;
     }
 
@@ -518,7 +521,7 @@ void SchemaBuilder<Getter, NameMapper>::applyRenameTable(DatabaseID database_id,
     auto storage = tmt_context.getStorages().get(keyspace_id, table_id);
     if (storage == nullptr)
     {
-        LOG_ERROR(log, "table is not exist in TiFlash, table_id={}", table_id);
+        LOG_ERROR(log, "table is not exist in TiFlash, applyRenameTable is ignored, table_id={}", table_id);
         return;
     }
 
@@ -577,7 +580,7 @@ void SchemaBuilder<Getter, NameMapper>::applyRenamePhysicalTable(
     GET_METRIC(tiflash_schema_internal_ddl_count, type_rename_table).Increment();
     LOG_INFO(
         log,
-        "Renaming table {}.{} (display name: {}) to {} with database_id={}, table_id={}",
+        "Rename table {}.{} (display name: {}) to {} begin, database_id={} table_id={}",
         old_mapped_db_name,
         old_mapped_tbl_name,
         old_display_table_name,
@@ -599,7 +602,7 @@ void SchemaBuilder<Getter, NameMapper>::applyRenamePhysicalTable(
 
     LOG_INFO(
         log,
-        "Renamed table {}.{} (display name: {}) to {} with database_id={}, table_id={}",
+        "Rename table {}.{} (display name: {}) to {} end, database_id={} table_id={}",
         old_mapped_db_name,
         old_mapped_tbl_name,
         old_display_table_name,
@@ -615,7 +618,10 @@ void SchemaBuilder<Getter, NameMapper>::applyRecoverTable(DatabaseID database_id
     if (table_info == nullptr)
     {
         // this table is dropped.
-        LOG_DEBUG(log, "table is not exist in TiKV, may have been dropped, table_id={}", table_id);
+        LOG_INFO(
+            log,
+            "table is not exist in TiKV, may have been dropped, recover table is ignored, table_id={}",
+            table_id);
         return;
     }
 
@@ -637,23 +643,30 @@ void SchemaBuilder<Getter, NameMapper>::applyRecoverPhysicalTable(
     const TiDB::TableInfoPtr & table_info)
 {
     auto & tmt_context = context.getTMTContext();
-    if (auto * storage = tmt_context.getStorages().get(keyspace_id, table_info->id).get(); storage)
+    auto storage = tmt_context.getStorages().get(keyspace_id, table_info->id);
+    if (storage == nullptr)
+    {
+        LOG_INFO(
+            log,
+            "Storage instance does not exist, tryRecoverPhysicalTable is ignored, table_id={}",
+            table_info->id);
+    }
+    else
     {
         if (!storage->isTombstone())
         {
-            LOG_DEBUG(
+            LOG_INFO(
                 log,
-                "Trying to recover table {} but it already exists and is not marked as tombstone, database_id={} "
-                "table_id={}",
+                "Trying to recover table {} but it is not marked as tombstone, skip, database_id={} table_id={}",
                 name_mapper.debugCanonicalName(*db_info, *table_info),
                 db_info->id,
                 table_info->id);
             return;
         }
 
-        LOG_DEBUG(
+        LOG_INFO(
             log,
-            "Recovering table {} with database_id={}, table_id={}",
+            "Create table {} by recover begin, database_id={} table_id={}",
             name_mapper.debugCanonicalName(*db_info, *table_info),
             db_info->id,
             table_info->id);
@@ -673,7 +686,7 @@ void SchemaBuilder<Getter, NameMapper>::applyRecoverPhysicalTable(
             context);
         LOG_INFO(
             log,
-            "Created table {} with database_id={}, table_id={}",
+            "Create table {} by recover end, database_id={} table_id={}",
             name_mapper.debugCanonicalName(*db_info, *table_info),
             db_info->id,
             table_info->id);
@@ -966,7 +979,7 @@ void SchemaBuilder<Getter, NameMapper>::applyCreateStorageInstance(
 
     LOG_INFO(
         log,
-        "Creating table {} (database_id={} table_id={}) with statement: {}",
+        "Create table {} (database_id={} table_id={}) with statement: {}",
         name_mapper.debugCanonicalName(*db_info, *table_info),
         db_info->id,
         table_info->id,
@@ -1000,9 +1013,10 @@ void SchemaBuilder<Getter, NameMapper>::applyDropPhysicalTable(const String & db
     auto storage = tmt_context.getStorages().get(keyspace_id, table_id);
     if (storage == nullptr)
     {
-        LOG_DEBUG(log, "table does not exist, table_id={}", table_id);
+        LOG_INFO(log, "Storage instance does not exist, applyDropPhysicalTable is ignored, table_id={}", table_id);
         return;
     }
+
     GET_METRIC(tiflash_schema_internal_ddl_count, type_drop_table).Increment();
     LOG_INFO(
         log,
@@ -1038,10 +1052,10 @@ template <typename Getter, typename NameMapper>
 void SchemaBuilder<Getter, NameMapper>::applyDropTable(DatabaseID database_id, TableID table_id)
 {
     auto & tmt_context = context.getTMTContext();
-    auto * storage = tmt_context.getStorages().get(keyspace_id, table_id).get();
+    auto storage = tmt_context.getStorages().get(keyspace_id, table_id);
     if (storage == nullptr)
     {
-        LOG_DEBUG(log, "table does not exist, table_id={}", table_id);
+        LOG_INFO(log, "Storage instance does not exist, applyDropTable is ignored, table_id={}", table_id);
         return;
     }
     const auto & table_info = storage->getTableInfo();
@@ -1106,7 +1120,7 @@ void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
                         created_db_set.emplace(name_mapper.mapDatabaseName(*db));
                     }
 
-                    LOG_DEBUG(
+                    LOG_INFO(
                         log,
                         "Database {} created during sync all schemas, database_id={}",
                         name_mapper.debugDatabaseName(*db),
@@ -1171,7 +1185,7 @@ void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
         if (!table_id_map.tableIDInTwoMaps(table_info.id))
         {
             applyDropPhysicalTable(it->second->getDatabaseName(), table_info.id);
-            LOG_DEBUG(
+            LOG_INFO(
                 log,
                 "Table {}.{} dropped during sync all schemas, table_id={}",
                 it->second->getDatabaseName(),
@@ -1292,7 +1306,7 @@ void SchemaBuilder<Getter, NameMapper>::dropAllSchema()
             continue;
         }
         applyDropPhysicalTable(storage.second->getDatabaseName(), table_info.id);
-        LOG_DEBUG(
+        LOG_INFO(
             log,
             "Table {}.{} dropped during drop all schemas, table_id={}",
             storage.second->getDatabaseName(),
@@ -1310,7 +1324,7 @@ void SchemaBuilder<Getter, NameMapper>::dropAllSchema()
             continue;
         }
         applyDropSchema(db.first);
-        LOG_DEBUG(log, "DB {} dropped during drop all schemas", db.first);
+        LOG_INFO(log, "Database {} dropped during drop all schemas", db.first);
     }
 
     LOG_INFO(log, "Drop all schemas end");

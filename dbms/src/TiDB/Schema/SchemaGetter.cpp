@@ -275,7 +275,7 @@ TiDB::DBInfoPtr SchemaGetter::getDatabase(DatabaseID db_id)
     if (json.empty())
         return nullptr;
 
-    LOG_DEBUG(log, "Get DB Info from TiKV: {}", json);
+    LOG_DEBUG(log, "Get DB Info from TiKV, database_id={} {}", db_id, json);
     auto db_info = std::make_shared<TiDB::DBInfo>(json, keyspace_id);
     return db_info;
 }
@@ -304,7 +304,7 @@ TiDB::TableInfoPtr SchemaGetter::getTableInfo(DatabaseID db_id, TableID table_id
             return nullptr;
         }
     }
-    LOG_DEBUG(log, "Get Table Info from TiKV: {}", table_info_json);
+    LOG_DEBUG(log, "Get Table Info from TiKV, table_id={} {}", table_id, table_info_json);
     TiDB::TableInfoPtr table_info = std::make_shared<TiDB::TableInfo>(table_info_json, keyspace_id);
 
     return table_info;
@@ -339,7 +339,7 @@ std::tuple<TiDB::DBInfoPtr, TiDB::TableInfoPtr> SchemaGetter::getDatabaseAndTabl
             return std::make_tuple(db_info, nullptr);
         }
     }
-    LOG_DEBUG(log, "Get Table Info from TiKV: {}", table_info_json);
+    LOG_DEBUG(log, "Get Table Info from TiKV, table_id={} {}", table_id, table_info_json);
     TiDB::TableInfoPtr table_info = std::make_shared<TiDB::TableInfo>(table_info_json, keyspace_id);
 
     return std::make_tuple(db_info, table_info);
