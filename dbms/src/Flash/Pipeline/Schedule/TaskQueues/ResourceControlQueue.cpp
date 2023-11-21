@@ -137,11 +137,6 @@ bool ResourceControlQueue<NestedTaskQueueType>::take(TaskPtr & task)
                 mustTakeTask(group_info.task_queue, task);
                 return true;
             }
-            else
-            {
-                GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_compute_ru_exhausted, group_info.name)
-                    .Increment();
-            }
             wait_dura = LocalAdmissionController::global_instance->estWaitDuraMS(group_info.name);
         }
 
@@ -149,6 +144,7 @@ bool ResourceControlQueue<NestedTaskQueueType>::take(TaskPtr & task)
         // Wakeup when:
         // 1. finish() is called.
         // 2. refill_token_callback is called by LAC.
+        // 3. token refilled in trickle mode.
         cv.wait_for(lock, std::chrono::milliseconds(wait_dura));
     }
 }
