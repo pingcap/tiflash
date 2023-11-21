@@ -477,7 +477,7 @@ void SchemaBuilder<Getter, NameMapper>::applySetTiFlashReplica(DatabaseID databa
     auto [db_info, table_info] = getter.getDatabaseAndTableInfo(database_id, table_id);
     if (unlikely(table_info == nullptr))
     {
-        LOG_ERROR(log, "table is not exist in TiKV, applySetTiFlashReplica is ignored, table_id={}", table_id);
+        LOG_WARNING(log, "table is not exist in TiKV, applySetTiFlashReplica is ignored, table_id={}", table_id);
         return;
     }
 
@@ -633,8 +633,8 @@ void SchemaBuilder<Getter, NameMapper>::applyPartitionDiff(
         LOG_INFO(
             log,
             "No partition changes, paritions_size={} {} with database_id={}, table_id={}",
-            name_mapper.debugCanonicalName(*db_info, *table_info),
             new_part_id_set.size(),
+            name_mapper.debugCanonicalName(*db_info, *table_info),
             db_info->id,
             table_info->id);
         return;
@@ -697,7 +697,7 @@ void SchemaBuilder<Getter, NameMapper>::applyRenameTable(DatabaseID database_id,
     auto storage = tmt_context.getStorages().get(keyspace_id, table_id);
     if (storage == nullptr)
     {
-        LOG_ERROR(log, "table is not exist in TiFlash, applyRenameTable is ignored, table_id={}", table_id);
+        LOG_WARNING(log, "table is not exist in TiFlash, applyRenameTable is ignored, table_id={}", table_id);
         return;
     }
 
