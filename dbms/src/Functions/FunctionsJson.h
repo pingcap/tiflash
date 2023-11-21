@@ -506,6 +506,22 @@ public:
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
+        if (arguments.empty())
+        {
+            // clang-format off
+            const UInt8 empty_array_json_value[] = {
+                JsonBinary::TYPE_CODE_ARRAY, // array_type
+                0x0, 0x0, 0x0, 0x0, // element_count
+                0x8, 0x0, 0x0, 0x0}; // total_size
+            // clang-format on
+            auto empty_array_json = ColumnString::create();
+            empty_array_json->insertData(
+                reinterpret_cast<const char *>(empty_array_json_value),
+                sizeof(empty_array_json_value) / sizeof(UInt8));
+            block.getByPosition(result).column = ColumnConst::create(std::move(empty_array_json), block.rows());
+            return;
+        }
+
         auto nested_block = createBlockWithNestedColumns(block, arguments);
         StringSources sources;
         for (auto column_number : arguments)
@@ -567,7 +583,8 @@ private:
             {
                 if constexpr (is_input_nullable)
                 {
-                    if (!sources[col] || (nullmaps[col] && nullmaps[col][i] != 0))
+                    const auto * nullmap = nullmaps[col];
+                    if (!sources[col] || (nullmap && (*nullmap)[i]))
                     {
                         jsons.emplace_back(JsonBinary::TYPE_CODE_LITERAL, StringRef(&JsonBinary::LITERAL_NIL, 1));
                     }
