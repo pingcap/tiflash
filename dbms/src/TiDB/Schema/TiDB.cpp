@@ -1157,9 +1157,10 @@ TableInfoPtr TableInfo::producePartitionTableInfo(TableID table_or_partition_id,
     // Some sanity checks for partition table.
     if (unlikely(!(is_partition_table && partition.enable)))
         throw Exception(
-            "Table ID " + std::to_string(id) + " seeing partition ID " + std::to_string(table_or_partition_id)
-                + " but it's not a partition table",
-            DB::ErrorCodes::LOGICAL_ERROR);
+            DB::ErrorCodes::LOGICAL_ERROR,
+            "Try to produce partition table on a non-partition table, table_id={} partition_table_id={}",
+            id,
+            table_or_partition_id);
 
     if (unlikely(
             std::find_if(
@@ -1167,10 +1168,20 @@ TableInfoPtr TableInfo::producePartitionTableInfo(TableID table_or_partition_id,
                 partition.definitions.end(),
                 [table_or_partition_id](const auto & d) { return d.id == table_or_partition_id; })
             == partition.definitions.end()))
+    {
+        std::vector<TableID> part_ids;
+        std::for_each(
+            partition.definitions.begin(),
+            partition.definitions.end(),
+            [&part_ids](const PartitionDefinition & part) { part_ids.emplace_back(part.id); });
         throw Exception(
-            "Couldn't find partition with ID " + std::to_string(table_or_partition_id) + " in table ID "
-                + std::to_string(id),
-            DB::ErrorCodes::LOGICAL_ERROR);
+            DB::ErrorCodes::LOGICAL_ERROR,
+            "Can not find partition id in partition table, partition_table_id={} logical_table_id={} "
+            "available_ids={}",
+            table_or_partition_id,
+            id,
+            part_ids);
+    }
 
     // This is a TiDB partition table, adjust the table ID by making it to physical table ID (partition ID).
     auto new_table = std::make_shared<TableInfo>();

@@ -1339,7 +1339,11 @@ std::unordered_map<TableID, DAGStorageInterpreter::StorageWithStructureLock> DAG
         if (!table_store)
         {
             if (schema_synced)
-                throw TiFlashException(fmt::format("Table {} doesn't exist.", table_id), Errors::Table::NotExists);
+                throw TiFlashException(
+                    Errors::Table::NotExists,
+                    "Table doesn't exist, keyspace={} table_id={}",
+                    keyspace_id,
+                    table_id);
             else
                 return {{}, {}};
         }
