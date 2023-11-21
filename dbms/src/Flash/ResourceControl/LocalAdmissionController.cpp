@@ -148,6 +148,7 @@ void LocalAdmissionController::fetchTokensForLowTokenResourceGroups()
                     acquire_infos.push_back(acquire_info.value());
             }
         }
+        low_token_resource_groups.clear();
     }
 
     static const std::string log_desc_str = "because of low token";
@@ -183,11 +184,6 @@ std::optional<LocalAdmissionController::AcquireTokenInfo> LocalAdmissionControll
         {
             acquire_tokens
                 = consumption_update_info.speed * DEFAULT_FETCH_GAC_INTERVAL.count() * ACQUIRE_RU_AMPLIFICATION;
-            LOG_DEBUG(
-                log,
-                "trickle lease expire: speed: {}, acquire_tokens: {}",
-                consumption_update_info.speed,
-                acquire_tokens);
         }
         else
         {

@@ -116,8 +116,10 @@ private:
         cpu_time_in_ns += cpu_time_in_ns_;
         ru_consumption_delta += ru;
         if (!burstable)
+        {
             bucket->consume(ru);
-        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_remaining_tokens, name).Set(bucket->peek());
+            GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_remaining_tokens, name).Set(bucket->peek());
+        }
     }
 
     uint64_t estWaitDuraMS(uint64_t max_wait_dura_ms) const
@@ -151,9 +153,9 @@ private:
 
         uint64_t priority = (((static_cast<uint64_t>(user_priority) - 1) << 60) | virtual_time);
 
-        LOG_DEBUG(
+        LOG_TRACE(
             log,
-            "gjt debug getPriority detailed info: resource group name: {}, weight: {}, virtual_time: {}, "
+            "getPriority detailed info: resource group name: {}, weight: {}, virtual_time: {}, "
             "user_priority: {}, "
             "priority: {}, remaining_token: {}",
             name,
