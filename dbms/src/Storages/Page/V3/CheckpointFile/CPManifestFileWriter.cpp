@@ -14,6 +14,7 @@
 
 #include <Storages/Page/V3/CheckpointFile/CPManifestFileWriter.h>
 #include <Storages/Page/V3/CheckpointFile/ProtoHelper.h>
+#include <Storages/Page/V3/Universal/UniversalPageIdFormatImpl.h>
 
 #include <magic_enum.hpp>
 
@@ -64,6 +65,11 @@ void CPManifestFileWriter::writeEditsPart(const universal::PageEntriesEdit & edi
     for (UInt64 i = 0; i < limit; ++i)
     {
         auto * out_record = part.add_edits();
+        auto id_storage_type = UniversalPageIdFormat::getUniversalPageIdType(records[start + i].page_id);
+        if (id_storage_type == StorageType::LocalKV)
+        {
+            continue;
+        }
         *out_record = records[start + i].toProto();
     }
     details::writeMessageWithLength(*compressed_writer, part);

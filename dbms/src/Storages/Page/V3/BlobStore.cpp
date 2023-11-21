@@ -348,11 +348,7 @@ typename BlobStore<Trait>::PageEntriesEdit BlobStore<Trait>::handleLargeWrite(
             entry.file_id = INVALID_BLOBFILE_ID;
             entry.size = write.size;
             entry.tag = write.tag;
-            entry.checkpoint_info = OptionalCheckpointInfo(
-                *write.data_location,
-                true,
-                true
-            );
+            entry.checkpoint_info = OptionalCheckpointInfo(*write.data_location, true, true);
             if (!write.offsets.empty())
             {
                 entry.field_offsets.swap(write.offsets);
@@ -375,11 +371,7 @@ typename BlobStore<Trait>::PageEntriesEdit BlobStore<Trait>::handleLargeWrite(
             PageEntryV3 entry;
             if (write.data_location.has_value())
             {
-                entry.checkpoint_info = OptionalCheckpointInfo(
-                    *write.data_location,
-                    true,
-                    true
-                );
+                entry.checkpoint_info = OptionalCheckpointInfo(*write.data_location, true, true);
             }
             edit.putExternal(wb.getFullPageId(write.page_id), entry);
             break;
@@ -418,18 +410,16 @@ typename BlobStore<Trait>::PageEntriesEdit BlobStore<Trait>::write(
                 entry.file_id = INVALID_BLOBFILE_ID;
                 entry.size = write.size;
                 entry.tag = write.tag;
-                if (!write.data_location) {
-                    throw Exception(ErrorCodes::LOGICAL_ERROR, fmt::format(
-                        "BlobStore::write remote empty data_location, page_id={}, size={}",
-                        write.page_id,
-                        write.size
-                    ));
+                if (!write.data_location)
+                {
+                    throw Exception(
+                        ErrorCodes::LOGICAL_ERROR,
+                        fmt::format(
+                            "BlobStore::write remote empty data_location, page_id={}, size={}",
+                            write.page_id,
+                            write.size));
                 }
-                entry.checkpoint_info = OptionalCheckpointInfo(
-                    *write.data_location,
-                    true,
-                    true
-                );
+                entry.checkpoint_info = OptionalCheckpointInfo(*write.data_location, true, true);
                 if (!write.offsets.empty())
                 {
                     entry.field_offsets.swap(write.offsets);
@@ -450,20 +440,18 @@ typename BlobStore<Trait>::PageEntriesEdit BlobStore<Trait>::write(
             case WriteBatchWriteType::PUT_EXTERNAL:
             {
                 PageEntryV3 entry;
-                if (!write.data_location) {
-                    throw Exception(ErrorCodes::LOGICAL_ERROR, fmt::format(
-                        "BlobStore::write external empty data_location, page_id={}, size={}",
-                        write.page_id,
-                        write.size
-                    ));
+                if (!write.data_location)
+                {
+                    throw Exception(
+                        ErrorCodes::LOGICAL_ERROR,
+                        fmt::format(
+                            "BlobStore::write external empty data_location, page_id={}, size={}",
+                            write.page_id,
+                            write.size));
                 }
                 if (write.data_location.has_value())
                 {
-                    entry.checkpoint_info = OptionalCheckpointInfo(
-                        *write.data_location,
-                        true,
-                        true
-                    );
+                    entry.checkpoint_info = OptionalCheckpointInfo(*write.data_location, true, true);
                 }
                 edit.putExternal(wb.getFullPageId(write.page_id), entry);
                 break;
@@ -595,18 +583,16 @@ typename BlobStore<Trait>::PageEntriesEdit BlobStore<Trait>::write(
             entry.file_id = INVALID_BLOBFILE_ID;
             entry.size = write.size;
             entry.tag = write.tag;
-            if (!write.data_location) {
-                throw Exception(ErrorCodes::LOGICAL_ERROR, fmt::format(
-                    "BlobStore::write remote empty data_location, page_id={}, size={}",
-                    write.page_id,
-                    write.size
-                ));
+            if (!write.data_location)
+            {
+                throw Exception(
+                    ErrorCodes::LOGICAL_ERROR,
+                    fmt::format(
+                        "BlobStore::write remote empty data_location, page_id={}, size={}",
+                        write.page_id,
+                        write.size));
             }
-            entry.checkpoint_info = OptionalCheckpointInfo(
-                *write.data_location,
-                true,
-                true
-            );
+            entry.checkpoint_info = OptionalCheckpointInfo(*write.data_location, true, true);
             if (!write.offsets.empty())
             {
                 entry.field_offsets.swap(write.offsets);
@@ -629,11 +615,7 @@ typename BlobStore<Trait>::PageEntriesEdit BlobStore<Trait>::write(
             PageEntryV3 entry;
             if (write.data_location.has_value())
             {
-                entry.checkpoint_info = OptionalCheckpointInfo(
-                    *write.data_location,
-                    true,
-                    true
-                );
+                entry.checkpoint_info = OptionalCheckpointInfo(*write.data_location, true, true);
             }
             edit.putExternal(wb.getFullPageId(write.page_id), entry);
             break;

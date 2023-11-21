@@ -148,14 +148,23 @@ ParsedCheckpointDataHolderPtr buildParsedCheckpointData(Context & context, const
         // Note the `data_file_id` in temp ps is all lock key, we need transform them to data key before write to local ps.
         for (auto & record : records)
         {
+            {
+                auto id_storage_type = UniversalPageIdFormat::getUniversalPageIdType(record.page_id);
+                // Filter remote peer's local page storage pages.
+                if (id_storage_type == StorageType::LocalKV)
+                {
+                    continue;
+                }
+            }
             if (record.type == PS::V3::EditRecordType::VAR_ENTRY)
             {
-                // TODO(fap) may be it could be a soft error
-                if(!record.entry.checkpoint_info.data_location.isValid()) {
-                    throw Exception(ErrorCodes::LOGICAL_ERROR, fmt::format(
-                        "buildParsedCheckpointData: can't put remote page with empty data_location, page_id={}",
-                        record.page_id
-                    ));
+                if (!record.entry.checkpoint_info.data_location.isValid())
+                {
+                    throw Exception(
+                        ErrorCodes::LOGICAL_ERROR,
+                        fmt::format(
+                            "buildParsedCheckpointData: can't put remote page with empty data_location, page_id={}",
+                            record.page_id));
                 }
                 wb.putRemotePage(
                     record.page_id,
@@ -176,11 +185,13 @@ ParsedCheckpointDataHolderPtr buildParsedCheckpointData(Context & context, const
             {
                 // TODO(fap) may be it could be a soft error
                 RUNTIME_CHECK(record.entry.checkpoint_info.has_value());
-                if(!record.entry.checkpoint_info.data_location.isValid()) {
-                    throw Exception(ErrorCodes::LOGICAL_ERROR, fmt::format(
-                        "buildParsedCheckpointData: can't put external page with empty data_location, page_id={}",
-                        record.page_id
-                    ));
+                if (!record.entry.checkpoint_info.data_location.isValid())
+                {
+                    throw Exception(
+                        ErrorCodes::LOGICAL_ERROR,
+                        fmt::format(
+                            "buildParsedCheckpointData: can't put external page with empty data_location, page_id={}",
+                            record.page_id));
                 }
                 wb.putRemoteExternal(record.page_id, record.entry.checkpoint_info.data_location);
             }

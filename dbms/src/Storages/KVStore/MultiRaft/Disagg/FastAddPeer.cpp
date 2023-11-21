@@ -241,16 +241,18 @@ std::variant<CheckpointRegionInfoAndData, FastAddPeerRes> FastAddPeerImplBuild(
                 {
                     LOG_DEBUG(
                         log,
-                        "Checkpoint with seq {} from store {} doesn't contain reusable region info [region_id={}]",
+                        "Checkpoint with seq {} doesn't contain reusable region info region_id={} from_store_id={}",
                         data_seq,
-                        store_id,
-                        region_id);
+                        region_id,
+                        store_id);
                 }
             }
         }
         {
             if (watch.elapsedSeconds() >= settings.fap_wait_checkpoint_timeout_seconds)
             {
+                // TODO(fap) remove from AsyncTasks
+                LOG_INFO(log, "FastAddPeer timeout region_id={} new_peer_id={}", region_id, new_peer_id);
                 GET_METRIC(tiflash_fap_task_result, type_failed_timeout).Increment();
                 return genFastAddPeerRes(FastAddPeerStatus::NoSuitable, "", "");
             }
@@ -362,6 +364,8 @@ FastAddPeerRes FastAddPeerImpl(
     }
     catch (const Exception & e)
     {
+        // Could be like:
+        // - can't put remote page with empty data_location
         DB::tryLogCurrentException(
             "FastAddPeerImpl",
             fmt::format(
@@ -369,6 +373,7 @@ FastAddPeerRes FastAddPeerImpl(
                 region_id,
                 new_peer_id,
                 e.message()));
+        GET_METRIC(tiflash_fap_task_result, type_failed_baddata).Increment();
         return genFastAddPeerRes(FastAddPeerStatus::BadData, "", "");
     }
     catch (...)
@@ -379,6 +384,7 @@ FastAddPeerRes FastAddPeerImpl(
                 "Failed when try to restore from checkpoint region_id={} new_peer_id={}",
                 region_id,
                 new_peer_id));
+        GET_METRIC(tiflash_fap_task_result, type_failed_baddata).Increment();
         return genFastAddPeerRes(FastAddPeerStatus::BadData, "", "");
     }
 }
@@ -414,6 +420,8 @@ void ApplyFapSnapshot(EngineStoreServerWrap * server, uint64_t region_id, uint64
 {
     RUNTIME_CHECK_MSG(server->tmt, "TMTContext is null");
     RUNTIME_CHECK_MSG(server->proxy_helper, "proxy_helper is null");
+    if (!server->tmt->getContext().getSharedContextDisagg()->isDisaggregatedStorageMode())
+        return;
     ApplyFapSnapshotImpl(*server->tmt, server->proxy_helper, region_id, peer_id);
 }
 
@@ -422,6 +430,8 @@ FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, u
     try
     {
         auto * log = &Poco::Logger::get("FastAddPeer");
+        if (!server->tmt->getContext().getSharedContextDisagg()->isDisaggregatedStorageMode())
+            return genFastAddPeerRes(FastAddPeerStatus::OtherError, "", "");
         auto fap_ctx = server->tmt->getContext().getSharedContextDisagg()->fap_context;
         if (fap_ctx == nullptr)
         {

@@ -190,11 +190,7 @@ CPDataDumpStats CPFilesWriter::writeEditsAndApplyCheckpointInfo(
             RUNTIME_CHECK(page.data.size() == rec_edit.entry.size, page.data.size(), rec_edit.entry.size);
             bool is_local_data_reclaimed
                 = rec_edit.entry.checkpoint_info.has_value() && rec_edit.entry.checkpoint_info.is_local_data_reclaimed;
-            rec_edit.entry.checkpoint_info = OptionalCheckpointInfo(
-                data_location,
-                true,
-                is_local_data_reclaimed
-            );
+            rec_edit.entry.checkpoint_info = OptionalCheckpointInfo(data_location, true, is_local_data_reclaimed);
             locked_files.emplace(*data_location.data_file_id);
             if (is_compaction)
             {
