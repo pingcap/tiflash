@@ -175,12 +175,6 @@ std::optional<LocalAdmissionController::AcquireTokenInfo> LocalAdmissionControll
         if (is_periodically_fetch && !resource_group->needFetchToken(now, DEFAULT_FETCH_GAC_INTERVAL))
             return;
 
-        if (!is_periodically_fetch
-            && !resource_group->needFetchToken(
-                now,
-                std::chrono::duration_cast<std::chrono::seconds>(DEFAULT_LOW_TOKEN_INTERVAL)))
-            return;
-
         // During trickle mode, no need to fetch tokens from GAC.
         if (resource_group->inTrickleModeLease(now))
             return;

@@ -500,6 +500,7 @@ public:
         RUNTIME_CHECK_MSG(refill_token_callback == nullptr, "callback cannot be registered multiple times");
         refill_token_callback = cb;
     }
+
     void unregisterRefillTokenCallback()
     {
         assert(!stopped);
