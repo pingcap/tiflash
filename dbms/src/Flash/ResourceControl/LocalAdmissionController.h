@@ -119,9 +119,15 @@ private:
             bucket->consume(ru);
         GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_remaining_tokens, name).Set(bucket->peek());
         if (cpu_time_in_ns_ == 0)
+        {
+            LOG_INFO(log, "gjt debug storage consume ru: {}, delta: {}", ru, ru_consumption_delta);
             GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_compute_ru_consumption, name).Set(ru);
+        }
         else
+        {
+            LOG_INFO(log, "gjt debug compute consume ru: {}, delta: {}", ru, ru_consumption_delta);
             GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_storage_ru_consumption, name).Set(ru);
+        }
     }
 
     // Priority greater than zero: Less number means higher priority.
@@ -146,9 +152,9 @@ private:
 
         uint64_t priority = (((static_cast<uint64_t>(user_priority) - 1) << 60) | virtual_time);
 
-        LOG_TRACE(
+        LOG_DEBUG(
             log,
-            "getPriority detailed info: resource group name: {}, weight: {}, virtual_time: {}, user_priority: {}, "
+            "gjt debug getPriority detailed info: resource group name: {}, weight: {}, virtual_time: {}, user_priority: {}, "
             "priority: {}, remaining_token: {}",
             name,
             weight,
