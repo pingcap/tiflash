@@ -506,7 +506,7 @@ public:
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
-        auto nested_block = createBlockWithNestedColumns(block, arguments, result);
+        auto nested_block = createBlockWithNestedColumns(block, arguments);
         StringSources sources;
         for (auto column_number : arguments)
         {
@@ -523,20 +523,65 @@ public:
         auto & offsets_to = col_to->getOffsets();
         offsets_to.resize(rows);
 
+        std::vector<const NullMap *> nullmaps;
+        nullmaps.reserve(sources.size());
+        bool is_input_nullable = false;
+        for (auto column_number : arguments)
+        {
+            const auto & col = block.getByPosition(column_number).column;
+            if (col->isColumnNullable())
+            {
+                const auto & column_nullable = static_cast<const ColumnNullable &>(*col);
+                nullmaps.push_back(&(column_nullable.getNullMapData()));
+                is_input_nullable = true;
+            }
+            else
+            {
+                nullmaps.push_back(nullptr);
+            }
+        }
+
+        if (is_input_nullable)
+            doExecuteImpl<true>(sources, rows, write_buffer, offsets_to, nullmaps);
+        else
+            doExecuteImpl<false>(sources, rows, write_buffer, offsets_to, nullmaps);
+
+        data_to.resize(write_buffer.count());
+        block.getByPosition(result).column = std::move(col_to);
+    }
+
+private:
+    template <bool is_input_nullable>
+    static void doExecuteImpl(
+        StringSources & sources,
+        size_t rows,
+        JsonBinary::JsonBinaryWriteBuffer & write_buffer,
+        ColumnString::Offsets & offsets_to,
+        const std::vector<const NullMap *> & nullmaps)
+    {
         std::vector<JsonBinary> jsons;
         jsons.reserve(sources.size());
         for (size_t i = 0; i < rows; ++i)
         {
             for (size_t col = 0; col < sources.size(); ++col)
             {
-                if (sources[col] && !block.getByPosition(arguments[col]).column->isNullAt(i))
+                if constexpr (is_input_nullable)
                 {
-                    const auto & data_from = sources[col]->getWhole();
-                    jsons.emplace_back(data_from.data[0], StringRef(&data_from.data[1], data_from.size - 1));
+                    if (!sources[col] || (nullmaps[col] && nullmaps[col][i] != 0))
+                    {
+                        jsons.emplace_back(JsonBinary::TYPE_CODE_LITERAL, StringRef(&JsonBinary::LITERAL_NIL, 1));
+                    }
+                    else
+                    {
+                        const auto & data_from = sources[col]->getWhole();
+                        jsons.emplace_back(data_from.data[0], StringRef(&data_from.data[1], data_from.size - 1));
+                    }
                 }
                 else
                 {
-                    jsons.emplace_back(JsonBinary::TYPE_CODE_LITERAL, StringRef(&JsonBinary::LITERAL_NIL, 1));
+                    assert(sources[col]);
+                    const auto & data_from = sources[col]->getWhole();
+                    jsons.emplace_back(data_from.data[0], StringRef(&data_from.data[1], data_from.size - 1));
                 }
             }
             JsonBinary::buildBinaryJsonArrayInBuffer(jsons, write_buffer);
@@ -545,13 +590,18 @@ public:
             offsets_to[i] = write_buffer.count();
             for (const auto & source : sources)
             {
-                if (source)
+                if constexpr (is_input_nullable)
+                {
+                    if (source)
+                        source->next();
+                }
+                else
+                {
+                    assert(source);
                     source->next();
+                }
             }
         }
-        data_to.resize(write_buffer.count());
-
-        block.getByPosition(result).column = std::move(col_to);
     }
 };
 
