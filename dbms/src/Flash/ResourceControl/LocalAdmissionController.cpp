@@ -175,7 +175,10 @@ std::optional<LocalAdmissionController::AcquireTokenInfo> LocalAdmissionControll
         if (is_periodically_fetch && !resource_group->needFetchToken(now, DEFAULT_FETCH_GAC_INTERVAL))
             return;
 
-        if (!is_periodically_fetch && !resource_group->needFetchToken(now, std::chrono::duration_cast<std::chrono::seconds>(DEFAULT_LOW_TOKEN_INTERVAL)))
+        if (!is_periodically_fetch
+            && !resource_group->needFetchToken(
+                now,
+                std::chrono::duration_cast<std::chrono::seconds>(DEFAULT_LOW_TOKEN_INTERVAL)))
             return;
 
         // During trickle mode, no need to fetch tokens from GAC.
@@ -184,8 +187,13 @@ std::optional<LocalAdmissionController::AcquireTokenInfo> LocalAdmissionControll
 
         if (resource_group->trickleModeLeaseExpire(now))
         {
-            acquire_tokens = consumption_update_info.speed * DEFAULT_FETCH_GAC_INTERVAL.count() * ACQUIRE_RU_AMPLIFICATION;
-            LOG_DEBUG(log, "trickle lease expire: speed: {}, acquire_tokens: {}", consumption_update_info.speed, acquire_tokens);
+            acquire_tokens
+                = consumption_update_info.speed * DEFAULT_FETCH_GAC_INTERVAL.count() * ACQUIRE_RU_AMPLIFICATION;
+            LOG_DEBUG(
+                log,
+                "trickle lease expire: speed: {}, acquire_tokens: {}",
+                consumption_update_info.speed,
+                acquire_tokens);
         }
         else
         {
@@ -240,14 +248,19 @@ void LocalAdmissionController::fetchTokensFromGAC(
             auto * req_ru = ru_items->add_request_r_u();
             req_ru->set_type(resource_manager::RequestUnitType::RU);
             req_ru->set_value(info.acquire_tokens);
-            GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_gac_req_acquire_tokens, info.resource_group_name).Set(info.acquire_tokens);
+            GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_gac_req_acquire_tokens, info.resource_group_name)
+                .Set(info.acquire_tokens);
         }
         if (info.ru_consumption_delta > 0.0 || is_final_report)
         {
             single_group_req->set_is_tiflash(true);
             auto * tiflash_consumption = single_group_req->mutable_consumption_since_last_request();
             tiflash_consumption->set_r_r_u(info.ru_consumption_delta);
-            GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_gac_req_ru_consumption_delta, info.resource_group_name).Set(info.ru_consumption_delta);
+            GET_RESOURCE_GROUP_METRIC(
+                tiflash_resource_group,
+                type_gac_req_ru_consumption_delta,
+                info.resource_group_name)
+                .Set(info.ru_consumption_delta);
         }
     }
 

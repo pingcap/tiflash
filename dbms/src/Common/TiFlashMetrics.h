@@ -724,10 +724,10 @@ namespace DB
       F(type_bucket_capacity, {"type", "bucket_capacity"}),                                                                         \
       F(type_compute_ru_consumption, {"type", "compute_ru_consumption"}),                                                           \
       F(type_storage_ru_consumption, {"type", "storage_ru_consumption"}),                                                           \
-      F(type_compute_ru_exhausted, {"type", "compute_ru_exhausted"}),                                                           \
+      F(type_compute_ru_exhausted, {"type", "compute_ru_exhausted"}),                                                               \
       F(type_gac_req_acquire_tokens, {"type", "gac_req_acquire_tokens"}),                                                           \
-      F(type_gac_req_ru_consumption_delta, {"type", "gac_req_ru_consumption_delta"}),                                                           \
-      F(type_gac_resp_tokens, {"type", "gac_resp_tokens"}),                                                           \
+      F(type_gac_req_ru_consumption_delta, {"type", "gac_req_ru_consumption_delta"}),                                               \
+      F(type_gac_resp_tokens, {"type", "gac_resp_tokens"}),                                                                         \
       F(type_gac_resp_capacity, {"type", "gac_resp_capacity"}))
 
 
