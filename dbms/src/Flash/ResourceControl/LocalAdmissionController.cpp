@@ -148,7 +148,6 @@ void LocalAdmissionController::fetchTokensForLowTokenResourceGroups()
                     acquire_infos.push_back(acquire_info.value());
             }
         }
-        low_token_resource_groups.clear();
     }
 
     static const std::string log_desc_str = "because of low token";
