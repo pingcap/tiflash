@@ -164,7 +164,12 @@ struct SchemaGetter
 
     TiDB::DBInfoPtr getDatabase(DatabaseID db_id);
 
-    TiDB::TableInfoPtr getTableInfo(DatabaseID db_id, TableID table_id);
+    TiDB::TableInfoPtr getTableInfo(DatabaseID db_id, TableID table_id, bool try_mvcc = true)
+    {
+        if (try_mvcc)
+            return getTableInfoImpl</*mvcc_get*/ true>(db_id, table_id);
+        return getTableInfoImpl</*mvcc_get*/ false>(db_id, table_id);
+    }
 
     std::tuple<TiDB::DBInfoPtr, TiDB::TableInfoPtr> getDatabaseAndTableInfo(DatabaseID db_id, TableID table_id);
 
@@ -173,6 +178,10 @@ struct SchemaGetter
     std::vector<TiDB::TableInfoPtr> listTables(DatabaseID db_id);
 
     KeyspaceID getKeyspaceID() const { return keyspace_id; }
+
+private:
+    template <bool mvcc_get>
+    TiDB::TableInfoPtr getTableInfoImpl(DatabaseID db_id, TableID table_id);
 };
 
 } // namespace DB

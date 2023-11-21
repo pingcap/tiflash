@@ -517,6 +517,9 @@ void SchemaBuilder<Getter, NameMapper>::applyRenameTable(DatabaseID database_id,
         return;
     }
 
+    // update the table_id_map no matter storage instance is created or not
+    table_id_map.emplaceTableID(table_id, database_id);
+
     auto & tmt_context = context.getTMTContext();
     auto storage = tmt_context.getStorages().get(keyspace_id, table_id);
     if (storage == nullptr)
@@ -526,8 +529,6 @@ void SchemaBuilder<Getter, NameMapper>::applyRenameTable(DatabaseID database_id,
     }
 
     applyRenameLogicalTable(new_db_info, new_table_info, storage);
-
-    table_id_map.emplaceTableID(table_id, database_id);
 }
 
 template <typename Getter, typename NameMapper>
@@ -1214,45 +1215,58 @@ void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
 }
 
 template <typename Getter, typename NameMapper>
-void SchemaBuilder<Getter, NameMapper>::applyTable(
+bool SchemaBuilder<Getter, NameMapper>::applyTable(
     DatabaseID database_id,
     TableID logical_table_id,
     TableID physical_table_id)
 {
-    auto table_info = getter.getTableInfo(database_id, logical_table_id);
+    // Here we get table info without mvcc. If the table has been renamed to another
+    // database, it will return false and the caller should update the table_id_map
+    // then retry.
+    auto table_info = getter.getTableInfo(database_id, logical_table_id, /*try_mvcc*/ false);
     if (table_info == nullptr)
     {
-        LOG_ERROR(log, "table is not exist in TiKV, database_id={} logical_table_id={}", database_id, logical_table_id);
-        return;
+        LOG_WARNING(
+            log,
+            "table is not exist in TiKV, applyTable need retry, database_id={} logical_table_id={}",
+            database_id,
+            logical_table_id);
+        return false;
     }
 
+    // For physical table of partition table
     if (logical_table_id != physical_table_id)
     {
         if (!table_info->isLogicalPartitionTable())
         {
-            LOG_ERROR(
+            LOG_WARNING(
                 log,
-                "new table in TiKV is not partition table {}, database_id={} table_id={}",
+                "new table info in TiKV is not partition table {}, applyTable need retry, database_id={} table_id={}",
                 name_mapper.debugCanonicalName(*table_info, database_id, keyspace_id),
                 database_id,
                 table_info->id);
-            return;
+            return false;
         }
+
         try
         {
+            // Try to produce table info by the logical table
             table_info = table_info->producePartitionTableInfo(physical_table_id, name_mapper);
         }
         catch (const Exception & e)
         {
-            /// when we do a ddl and insert, then we do reorganize partition.
-            /// Besides, reorganize reach tiflash before insert, so when insert,
-            /// the old partition_id is not exist, so we just ignore it.
+            // The following DDLs could change to mapping:
+            //  - ALTER TABLE ... EXCHANGE PARTITION
+            //  - ALTER TABLE ... PARTITION BY
+            //  - ALTER TABLE ... REMOVE PARTITIONING
+            // If the physical_table does not belong to the logical table in the
+            // latest table info. It could now become a normal table or belong to another
+            // logical table now. The caller should update the table_id_map then retry.
             LOG_WARNING(
                 log,
-                "producePartitionTableInfo meet exception : {} \n stack is {}",
-                e.displayText(),
-                e.getStackTrace().toString());
-            return;
+                "producePartitionTableInfo meet exception, applyTable need retry, message={}",
+                e.message());
+            return false;
         }
     }
 
@@ -1263,30 +1277,38 @@ void SchemaBuilder<Getter, NameMapper>::applyTable(
         auto db_info = getter.getDatabase(database_id);
         if (db_info == nullptr)
         {
-            LOG_ERROR(log, "database is not exist in TiKV, database_id={}", database_id);
-            return;
+            LOG_ERROR(log, "database is not exist in TiKV, applyTable need retry, database_id={}", database_id);
+            return false;
         }
 
+        // Create the instance with the latest table info
         applyCreateStorageInstance(db_info, table_info);
+        return true;
     }
-    else
-    {
-        LOG_INFO(
-            log,
-            "Altering table {}, database_id={} table_id={}",
-            name_mapper.debugCanonicalName(*table_info, database_id, keyspace_id),
-            database_id,
-            table_info->id);
-        GET_METRIC(tiflash_schema_internal_ddl_count, type_modify_column).Increment();
-        auto alter_lock = storage->lockForAlter(getThreadNameAndID());
 
-        storage->alterSchemaChange(
-            alter_lock,
-            *table_info,
-            name_mapper.mapDatabaseName(database_id, keyspace_id),
-            name_mapper.mapTableName(*table_info),
-            context);
-    }
+    // Alter the existing instance with the latest table info
+    LOG_INFO(
+        log,
+        "Alter table {} begin, database_id={} table_id={}",
+        name_mapper.debugCanonicalName(*table_info, database_id, keyspace_id),
+        database_id,
+        table_info->id);
+    GET_METRIC(tiflash_schema_internal_ddl_count, type_modify_column).Increment();
+    auto alter_lock = storage->lockForAlter(getThreadNameAndID());
+    storage->alterSchemaChange(
+        alter_lock,
+        *table_info,
+        name_mapper.mapDatabaseName(database_id, keyspace_id),
+        name_mapper.mapTableName(*table_info),
+        context);
+
+    LOG_INFO(
+        log,
+        "Alter table {} end, database_id={} table_id={}",
+        name_mapper.debugCanonicalName(*table_info, database_id, keyspace_id),
+        database_id,
+        table_info->id);
+    return true;
 }
 
 template <typename Getter, typename NameMapper>
