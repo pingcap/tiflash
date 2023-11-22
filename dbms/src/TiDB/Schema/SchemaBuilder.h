@@ -134,6 +134,7 @@ private:
 template <typename Getter, typename NameMapper>
 struct SchemaBuilder
 {
+private:
     NameMapper name_mapper;
 
     Getter & getter;
@@ -150,6 +151,7 @@ struct SchemaBuilder
 
     LoggerPtr log;
 
+public:
     SchemaBuilder(
         Getter & getter_,
         Context & context_,

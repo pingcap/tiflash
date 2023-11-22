@@ -1390,15 +1390,27 @@ void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
     LOG_INFO(log, "Sync all schemas end");
 }
 
+/**
+ * Update the schema of given `physical_table_id`.
+ * Param `database_id`, `logical_table_id` is to key to fetch the latest table info. If
+ * something wrong when generating the table info of `physical_table_id`, it means the
+ * TableID mapping is not up-to-date. This function will return false and the caller
+ * should update the TableID mapping then retry.
+ * This function ensure only the lock of `physical_table_id` is involved.
+ */
 template <typename Getter, typename NameMapper>
 bool SchemaBuilder<Getter, NameMapper>::applyTable(
     DatabaseID database_id,
     TableID logical_table_id,
     TableID physical_table_id)
 {
-    // Here we get table info without mvcc. If the table has been renamed to another
-    // database, it will return false and the caller should update the table_id_map
-    // then retry.
+    // Here we get table info without mvcc. So we can detect that whether the table
+    // has been renamed to another database or dropped.
+    // If the table has been renamed to another database, it is dangerous to use the
+    // old table info from the old database because some new columns may have been
+    // added to the new table.
+    // For the reason above, if we can not get table info without mvcc, this function
+    // will return false and the caller should update the table_id_map then retry.
     auto table_info = getter.getTableInfo(database_id, logical_table_id, /*try_mvcc*/ false);
     if (table_info == nullptr)
     {

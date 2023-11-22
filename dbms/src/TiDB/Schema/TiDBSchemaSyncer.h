@@ -48,12 +48,11 @@ private:
 
     Int64 cur_version;
 
-    // for syncSchemas
+    // Ensure `syncSchemas` will only executed by one thread.
     std::mutex mutex_for_sync_schema;
 
     // mutex for databases
     std::shared_mutex shared_mutex_for_databases;
-
     std::unordered_map<DB::DatabaseID, TiDB::DBInfoPtr> databases;
 
     LoggerPtr log;
@@ -62,13 +61,13 @@ private:
 
     Getter createSchemaGetter(KeyspaceID keyspace_id)
     {
-        [[maybe_unused]] auto tso = cluster->pd_client->getTS();
         if constexpr (mock_getter)
         {
             return Getter();
         }
         else
         {
+            auto tso = cluster->pd_client->getTS();
             return Getter(cluster.get(), tso, keyspace_id);
         }
     }
