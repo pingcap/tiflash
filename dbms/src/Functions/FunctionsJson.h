@@ -951,7 +951,17 @@ public:
         // In raw function test, input_tidb_tp/output_tidb_tp is nullptr.
         if (collator && collator->isBinary())
         {
-            if ((unlikely(input_tidb_tp == nullptr)) || input_tidb_tp->tp() == TiDB::TypeString)
+            if (unlikely(input_tidb_tp == nullptr))
+            {
+                doExecuteForBinary<false>(
+                    data_to,
+                    offsets_to,
+                    input_source,
+                    input_tidb_tp->tp(),
+                    -1,
+                    block.rows());
+            }
+            else if (input_tidb_tp->tp() == TiDB::TypeString)
             {
                 doExecuteForBinary<true>(
                     data_to,
