@@ -32,13 +32,13 @@ try
 {
     PaddedPODArray<UInt8> vector;
     {
-        VectorWriter<PaddedPODArray<UInt8>, 1> writer(vector);
+        VectorWriter writer(vector, 1);
         ASSERT_EQ(writer.offset(), 0);
 
         writer.write('a');
         ASSERT_EQ(writer.offset(), 1);
 
-        writer.resizeFill(3);
+        writer.alloc(3);
         ASSERT_EQ(writer.offset(), 4);
 
         PaddedPODArray<UInt8> tmp;
@@ -58,15 +58,15 @@ try
 }
 CATCH
 
-TEST_F(TestVectorWriter, resizeFillFirst)
+TEST_F(TestVectorWriter, allocFirst)
 try
 {
     PaddedPODArray<UInt8> vector;
     {
-        VectorWriter<PaddedPODArray<UInt8>, 1> writer(vector);
+        VectorWriter writer(vector, 1);
         ASSERT_EQ(writer.offset(), 0);
 
-        writer.resizeFill(3);
+        writer.alloc(3);
         ASSERT_EQ(writer.offset(), 3);
 
         writer.write('a');

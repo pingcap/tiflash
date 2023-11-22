@@ -189,6 +189,44 @@ inline JsonBinary::JsonType getJsonType(const simdjson::dom::element & elem)
     }
 }
 
+inline UInt64 appendValueOfSIMDJsonElem(
+    JsonBinary::JsonBinaryWriteBuffer & write_buffer,
+    const simdjson::dom::element & elem);
+
+// return depth.
+inline UInt64 appendValueEntryAndData(
+    size_t buffer_start,
+    UInt32 & data_offset,
+    const simdjson::dom::element & value,
+    JsonBinary::JsonBinaryWriteBuffer & write_buffer)
+{
+    auto type = getJsonType(value);
+    write_buffer.write(type);
+    if (type == JsonBinary::TYPE_CODE_LITERAL)
+    {
+        /// Literal values are inlined in the value entry, total takes 4 bytes
+        auto depth = appendValueOfSIMDJsonElem(write_buffer, value); // 1 byte
+        write_buffer.write(0);
+        write_buffer.write(0);
+        write_buffer.write(0);
+        return depth;
+    }
+    else
+    {
+        encodeNumeric(write_buffer, data_offset);
+        auto tmp_entry_offset = write_buffer.offset();
+
+        // write value data.
+        write_buffer.setOffset(data_offset + buffer_start);
+        auto depth = appendValueOfSIMDJsonElem(write_buffer, value);
+        /// update data_offset
+        data_offset = write_buffer.offset() - buffer_start;
+
+        write_buffer.setOffset(tmp_entry_offset);
+        return depth;
+    }
+}
+
 // return depth.
 inline UInt64 appendValueOfSIMDJsonElem(
     JsonBinary::JsonBinaryWriteBuffer & write_buffer,
@@ -210,9 +248,9 @@ inline UInt64 appendValueOfSIMDJsonElem(
         UInt32 element_count = obj.size();
         encodeNumeric(write_buffer, element_count);
 
-        // 2. reserve space for total size
+        // 2. alloc for total size
         auto total_size_offset = write_buffer.offset();
-        write_buffer.resizeFill(4);
+        write_buffer.alloc(4);
 
         // 3. write key entry with key offset.
         UInt32 data_offset_start = HEADER_SIZE + obj.size() * (KEY_ENTRY_SIZE + VALUE_ENTRY_SIZE);
@@ -238,31 +276,8 @@ inline UInt64 appendValueOfSIMDJsonElem(
         UInt64 max_child_depth = 0;
         for (const auto & [_, value] : obj)
         {
-            auto type = getJsonType(value);
-            write_buffer.write(type);
-            if (type == JsonBinary::TYPE_CODE_LITERAL)
-            {
-                /// Literal values are inlined in the value entry, total takes 4 bytes
-                auto child_depth = appendValueOfSIMDJsonElem(write_buffer, value); // 1 byte
-                max_child_depth = std::max(max_child_depth, child_depth);
-                write_buffer.write(0);
-                write_buffer.write(0);
-                write_buffer.write(0);
-            }
-            else
-            {
-                encodeNumeric(write_buffer, data_offset);
-                auto tmp_entry_offset = write_buffer.offset();
-
-                // write value data.
-                write_buffer.setOffset(data_offset + buffer_start);
-                auto child_depth = appendValueOfSIMDJsonElem(write_buffer, value);
-                max_child_depth = std::max(max_child_depth, child_depth);
-                /// update data_offset
-                data_offset = write_buffer.offset() - buffer_start;
-
-                write_buffer.setOffset(tmp_entry_offset);
-            }
+            auto child_depth = appendValueEntryAndData(buffer_start, data_offset, value, write_buffer);
+            max_child_depth = std::max(max_child_depth, child_depth);
         }
         UInt64 depth = max_child_depth + 1;
         JsonBinary::assertJsonDepth(depth);
@@ -289,40 +304,17 @@ inline UInt64 appendValueOfSIMDJsonElem(
         UInt32 element_count = array.size();
         encodeNumeric(write_buffer, element_count);
 
-        // 2. reserve space for total size
+        // 2. alloc for total size
         auto total_size_offset = write_buffer.offset();
-        write_buffer.resizeFill(4);
+        write_buffer.alloc(4);
 
         // 3. write value entry with value offset and value data.
         UInt32 data_offset = HEADER_SIZE + array.size() * VALUE_ENTRY_SIZE;
         UInt64 max_child_depth = 0;
         for (const auto & value : array)
         {
-            auto type = getJsonType(value);
-            write_buffer.write(type);
-            if (type == JsonBinary::TYPE_CODE_LITERAL)
-            {
-                /// Literal values are inlined in the value entry, total takes 4 bytes
-                auto child_depth = appendValueOfSIMDJsonElem(write_buffer, value); // 1 byte
-                max_child_depth = std::max(max_child_depth, child_depth);
-                write_buffer.write(0);
-                write_buffer.write(0);
-                write_buffer.write(0);
-            }
-            else
-            {
-                encodeNumeric(write_buffer, data_offset);
-                auto tmp_entry_offset = write_buffer.offset();
-
-                // write value data.
-                write_buffer.setOffset(buffer_start + data_offset);
-                auto child_depth = appendValueOfSIMDJsonElem(write_buffer, value);
-                max_child_depth = std::max(max_child_depth, child_depth);
-                /// update data_offset
-                data_offset = write_buffer.offset() - buffer_start;
-
-                write_buffer.setOffset(tmp_entry_offset);
-            }
+            auto child_depth = appendValueEntryAndData(buffer_start, data_offset, value, write_buffer);
+            max_child_depth = std::max(max_child_depth, child_depth);
         }
         UInt64 depth = max_child_depth + 1;
         JsonBinary::assertJsonDepth(depth);

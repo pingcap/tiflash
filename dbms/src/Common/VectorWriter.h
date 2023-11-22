@@ -14,48 +14,47 @@
 
 #pragma once
 
+#include <common/likely.h>
 #include <common/types.h>
+
+#include <cmath>
 
 namespace DB
 {
-template <typename VectorType, size_t initial_size = 32>
+template <typename VectorType>
 class VectorWriter
 {
 public:
     using Position = char *;
 
-    explicit VectorWriter(VectorType & vector_)
+    explicit VectorWriter(VectorType & vector_, size_t initial_size = 16)
         : vector(vector_)
     {
-        if (vector.empty())
-        {
+        if (vector.size() < initial_size)
             vector.resize(initial_size);
-        }
         pos = reinterpret_cast<Position>(vector.data());
         end = reinterpret_cast<Position>(vector.data() + vector.size());
     }
 
     inline void write(char x)
     {
-        reserve(1);
+        reserveForNextSize(1);
         *pos = x;
         ++pos;
     }
 
     void write(const char * from, size_t n)
     {
-        if (static_cast<size_t>(end - pos) < n)
-            reserve(n);
+        if (unlikely(n == 0))
+            return;
+        reserveForNextSize(n);
         std::memcpy(pos, from, n);
         pos += n;
     }
 
-    void resizeFill(size_t n)
+    void alloc(size_t n)
     {
-        size_t old_cap = vector.size();
-        size_t new_request_cap = count() + n;
-        if (old_cap < new_request_cap)
-            reserve(new_request_cap);
+        reserveForNextSize(n);
         pos += n;
     }
 
@@ -67,8 +66,8 @@ public:
     {
         if (new_offset > vector.size())
         {
-            // `+ initial_size` is to avoid resize for subsequent writes.
-            reserve(new_offset);
+            size_t request_size = (new_offset - count());
+            reserveForNextSize(request_size);
         }
         pos = reinterpret_cast<Position>(vector.data() + new_offset);
     }
@@ -81,16 +80,24 @@ public:
     }
 
 private:
-    void reserve(size_t expect_new = 0)
+    size_t remainingSize() const { return static_cast<size_t>(end - pos); }
+
+    void reserve(size_t new_size)
     {
-        if (pos == end)
+        size_t pos_offset = offset();
+        vector.resize(new_size);
+        pos = reinterpret_cast<Position>(vector.data() + pos_offset);
+        end = reinterpret_cast<Position>(vector.data() + vector.size());
+    }
+
+    void reserveForNextSize(size_t request_size = 1)
+    {
+        assert(request_size > 0);
+        if (remainingSize() < request_size)
         {
             size_t old_size = vector.size();
-            size_t pos_offset = offset();
-            size_t append_new = std::max(1, std::max(expect_new, old_size * (size_multiplier - 1)));
-            vector.resize(old_size + append_new);
-            pos = reinterpret_cast<Position>(vector.data() + pos_offset);
-            end = reinterpret_cast<Position>(vector.data() + vector.size());
+            size_t new_size = std::max(old_size + request_size, std::ceil(old_size * 1.5));
+            reserve(new_size);
         }
     }
 
@@ -100,8 +107,6 @@ private:
 
     Position pos = nullptr;
     Position end = nullptr;
-
-    static constexpr size_t size_multiplier = 2;
 };
 
 template <typename VectorWriter>

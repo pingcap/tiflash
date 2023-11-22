@@ -40,6 +40,7 @@
 #include <magic_enum.hpp>
 #include <string_view>
 #include <type_traits>
+
 #include "common/types.h"
 
 namespace DB
@@ -536,7 +537,6 @@ public:
         auto rows = block.rows();
         auto col_to = ColumnString::create();
         auto & data_to = col_to->getChars();
-        JsonBinary::JsonBinaryWriteBuffer write_buffer(data_to);
         auto & offsets_to = col_to->getOffsets();
         offsets_to.resize(rows);
 
@@ -559,11 +559,10 @@ public:
         }
 
         if (is_input_nullable)
-            doExecuteImpl<true>(sources, rows, write_buffer, offsets_to, nullmaps);
+            doExecuteImpl<true>(sources, rows, data_to, offsets_to, nullmaps);
         else
-            doExecuteImpl<false>(sources, rows, write_buffer, offsets_to, nullmaps);
+            doExecuteImpl<false>(sources, rows, data_to, offsets_to, nullmaps);
 
-        data_to.resize(write_buffer.count());
         block.getByPosition(result).column = std::move(col_to);
     }
 
@@ -572,10 +571,15 @@ private:
     static void doExecuteImpl(
         StringSources & sources,
         size_t rows,
-        JsonBinary::JsonBinaryWriteBuffer & write_buffer,
+        ColumnString::Chars_t & data_to,
         ColumnString::Offsets & offsets_to,
         const std::vector<const NullMap *> & nullmaps)
     {
+        size_t reserve_size = 0;
+        for (const auto & source : sources)
+            reserve_size += source ? source->getSizeForReserve() : 0;
+        JsonBinary::JsonBinaryWriteBuffer write_buffer(data_to, reserve_size);
+
         std::vector<JsonBinary> jsons;
         jsons.reserve(sources.size());
         for (size_t i = 0; i < rows; ++i)
@@ -673,39 +677,38 @@ public:
         auto rows = block.rows();
         auto col_to = ColumnString::create();
         auto & data_to = col_to->getChars();
-        data_to.resize(rows * (1 + sizeof(Float64)));
-        JsonBinary::JsonBinaryWriteBuffer write_buffer(data_to);
         auto & offsets_to = col_to->getOffsets();
         offsets_to.resize(rows);
 
         const auto & from = block.getByPosition(arguments[0]);
         if (from.type->getTypeId() == TypeIndex::Float32)
         {
-            doExecute<Float32>(write_buffer, offsets_to, from.column);
+            doExecute<Float32>(data_to, offsets_to, from.column);
         }
         else
         {
-            doExecute<Float64>(write_buffer, offsets_to, from.column);
+            doExecute<Float64>(data_to, offsets_to, from.column);
         }
-        data_to.resize(write_buffer.count());
         block.getByPosition(result).column = std::move(col_to);
     }
 
 private:
     template <typename FromType>
     static void doExecute(
-        JsonBinary::JsonBinaryWriteBuffer & data_to,
+        ColumnString::Chars_t & data_to,
         ColumnString::Offsets & offsets_to,
         const ColumnPtr & column_ptr_from)
     {
         const auto * column_from = checkAndGetColumn<ColumnVector<FromType>>(column_ptr_from.get());
         RUNTIME_CHECK(column_from);
         const auto & data_from = column_from->getData();
+        size_t reserve_size = data_from.size() * (1 + 1 + sizeof(Float64));
+        JsonBinary::JsonBinaryWriteBuffer write_buffer(data_to, reserve_size);
         for (size_t i = 0; i < data_from.size(); ++i)
         {
-            JsonBinary::appendNumber(data_to, static_cast<Float64>(data_from[i]));
-            writeChar(0, data_to);
-            offsets_to[i] = data_to.count();
+            JsonBinary::appendNumber(write_buffer, static_cast<Float64>(data_from[i]));
+            writeChar(0, write_buffer);
+            offsets_to[i] = write_buffer.count();
         }
     }
 };
@@ -737,8 +740,6 @@ public:
         auto rows = block.rows();
         auto col_to = ColumnString::create();
         auto & data_to = col_to->getChars();
-        data_to.resize(rows * (1 + sizeof(Float64)));
-        JsonBinary::JsonBinaryWriteBuffer write_buffer(data_to);
         auto & offsets_to = col_to->getOffsets();
         offsets_to.resize(rows);
 
@@ -747,16 +748,16 @@ public:
         switch (from_type_index)
         {
         case TypeIndex::Decimal32:
-            doExecute<Decimal32>(write_buffer, offsets_to, from.column);
+            doExecute<Decimal32>(data_to, offsets_to, from.column);
             break;
         case TypeIndex::Decimal64:
-            doExecute<Decimal64>(write_buffer, offsets_to, from.column);
+            doExecute<Decimal64>(data_to, offsets_to, from.column);
             break;
         case TypeIndex::Decimal128:
-            doExecute<Decimal128>(write_buffer, offsets_to, from.column);
+            doExecute<Decimal128>(data_to, offsets_to, from.column);
             break;
         case TypeIndex::Decimal256:
-            doExecute<Decimal256>(write_buffer, offsets_to, from.column);
+            doExecute<Decimal256>(data_to, offsets_to, from.column);
             break;
         default:
             throw Exception(
@@ -766,25 +767,26 @@ public:
                     getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         }
-        data_to.resize(write_buffer.count());
         block.getByPosition(result).column = std::move(col_to);
     }
 
 private:
     template <typename FromType>
     static void doExecute(
-        JsonBinary::JsonBinaryWriteBuffer & data_to,
+        ColumnString::Chars_t & data_to,
         ColumnString::Offsets & offsets_to,
         const ColumnPtr & column_ptr_from)
     {
         const auto * column_from = checkAndGetColumn<ColumnDecimal<FromType>>(column_ptr_from.get());
         RUNTIME_CHECK(column_from);
+        size_t reserve_size = column_from->size() * (1 + 1 + sizeof(Float64));
+        JsonBinary::JsonBinaryWriteBuffer write_buffer(data_to, reserve_size);
         for (size_t i = 0; i < column_from->size(); ++i)
         {
             const auto & field = (*column_from)[i].template safeGet<DecimalField<FromType>>();
-            JsonBinary::appendNumber(data_to, static_cast<Float64>(field));
-            writeChar(0, data_to);
-            offsets_to[i] = data_to.count();
+            JsonBinary::appendNumber(write_buffer, static_cast<Float64>(field));
+            writeChar(0, write_buffer);
+            offsets_to[i] = write_buffer.count();
         }
     }
 };
@@ -818,7 +820,6 @@ public:
     {
         auto col_to = ColumnString::create();
         auto & data_to = col_to->getChars();
-        JsonBinary::JsonBinaryWriteBuffer write_buffer(data_to);
         auto & offsets_to = col_to->getOffsets();
         auto rows = block.rows();
         offsets_to.resize(rows);
@@ -832,16 +833,15 @@ public:
             if (unlikely(input_tidb_tp == nullptr) || !hasIsBooleanFlag(*input_tidb_tp))
             {
                 if constexpr (std::is_unsigned_v<IntFieldType>)
-                    doExecute<IntFieldType, UInt64>(write_buffer, offsets_to, from.column);
+                    doExecute<IntFieldType, UInt64>(data_to, offsets_to, from.column);
                 else
-                    doExecute<IntFieldType, Int64>(write_buffer, offsets_to, from.column);
+                    doExecute<IntFieldType, Int64>(data_to, offsets_to, from.column);
             }
             else
             {
-                doExecute<IntFieldType, bool>(write_buffer, offsets_to, from.column);
+                doExecute<IntFieldType, bool>(data_to, offsets_to, from.column);
             }
 
-            data_to.resize(write_buffer.count());
             block.getByPosition(result).column = std::move(col_to);
             return true;
         });
@@ -869,18 +869,26 @@ private:
 
     template <typename FromType, typename ToType>
     static void doExecute(
-        JsonBinary::JsonBinaryWriteBuffer & data_to,
+        ColumnString::Chars_t & data_to,
         ColumnString::Offsets & offsets_to,
         const ColumnPtr & column_ptr_from)
     {
         const auto * column_from = checkAndGetColumn<ColumnVector<FromType>>(column_ptr_from.get());
         RUNTIME_CHECK(column_from);
         const auto & data_from = column_from->getData();
+
+        size_t reserve_size = 0;
+        if constexpr (std::is_same_v<bool, ToType>)
+            reserve_size = data_from.size() * (1 + 1 + 1);
+        else
+            reserve_size = data_from.size() * (1 + 1 + sizeof(ToType));
+        JsonBinary::JsonBinaryWriteBuffer write_buffer(data_to, reserve_size);
+
         for (size_t i = 0; i < data_from.size(); ++i)
         {
-            JsonBinary::appendNumber(data_to, static_cast<ToType>(data_from[i]));
-            writeChar(0, data_to);
-            offsets_to[i] = data_to.count();
+            JsonBinary::appendNumber(write_buffer, static_cast<ToType>(data_from[i]));
+            writeChar(0, write_buffer);
+            offsets_to[i] = write_buffer.count();
         }
     }
 
@@ -936,7 +944,6 @@ public:
 
         auto col_to = ColumnString::create();
         auto & data_to = col_to->getChars();
-        JsonBinary::JsonBinaryWriteBuffer write_buffer(data_to);
         auto & offsets_to = col_to->getOffsets();
         auto rows = block.rows();
         offsets_to.resize(rows);
@@ -947,7 +954,7 @@ public:
             if ((unlikely(input_tidb_tp == nullptr)) || input_tidb_tp->tp() == TiDB::TypeString)
             {
                 doExecuteForBinary<true>(
-                    write_buffer,
+                    data_to,
                     offsets_to,
                     input_source,
                     input_tidb_tp->tp(),
@@ -957,7 +964,7 @@ public:
             else
             {
                 doExecuteForBinary<false>(
-                    write_buffer,
+                    data_to,
                     offsets_to,
                     input_source,
                     input_tidb_tp->tp(),
@@ -971,7 +978,7 @@ public:
             {
                 const auto & column_nullable = static_cast<const ColumnNullable &>(*from.column);
                 doExecuteForParsingJson<true>(
-                    write_buffer,
+                    data_to,
                     offsets_to,
                     input_source,
                     column_nullable.getNullMapData(),
@@ -981,7 +988,7 @@ public:
             {
                 auto tmp_null_map = ColumnUInt8::create(0, 0);
                 doExecuteForParsingJson<false>(
-                    write_buffer,
+                    data_to,
                     offsets_to,
                     input_source,
                     tmp_null_map->getData(),
@@ -990,10 +997,9 @@ public:
         }
         else
         {
-            doExecuteForOthers(write_buffer, offsets_to, input_source, block.rows());
+            doExecuteForOthers(data_to, offsets_to, input_source, block.rows());
         }
 
-        data_to.resize(write_buffer.count());
         if (from.column->isColumnNullable())
         {
             auto null_map = static_cast<const ColumnNullable &>(*from.column).getNullMapColumnPtr();
@@ -1008,13 +1014,15 @@ public:
 private:
     template <bool is_binary_str>
     static void doExecuteForBinary(
-        JsonBinary::JsonBinaryWriteBuffer & data_to,
+        ColumnString::Chars_t & data_to,
         ColumnString::Offsets & offsets_to,
         const std::unique_ptr<IStringSource> & data_from,
         UInt8 from_type_code,
         Int32 flen,
         size_t size)
     {
+        size_t reserve_size = (size * (1 + 1)) + data_from->getSizeForReserve();
+        JsonBinary::JsonBinaryWriteBuffer write_buffer(data_to, reserve_size);
         for (size_t i = 0; i < size; ++i)
         {
             const auto & slice = data_from->getWhole();
@@ -1023,7 +1031,7 @@ private:
                 if (unlikely(flen <= 0))
                 {
                     JsonBinary::appendOpaque(
-                        data_to,
+                        write_buffer,
                         JsonBinary::Opaque{from_type_code, StringRef{slice.data, slice.size}});
                 }
                 else
@@ -1032,7 +1040,7 @@ private:
                     if (slice.size >= size_t_flen)
                     {
                         JsonBinary::appendOpaque(
-                            data_to,
+                            write_buffer,
                             JsonBinary::Opaque{from_type_code, StringRef{slice.data, size_t_flen}});
                     }
                     else
@@ -1041,7 +1049,7 @@ private:
                         buf.resize_fill(size_t_flen, 0);
                         std::memcpy(buf.data(), slice.data, slice.size);
                         JsonBinary::appendOpaque(
-                            data_to,
+                            write_buffer,
                             JsonBinary::Opaque{from_type_code, StringRef{buf.data(), size_t_flen}});
                     }
                 }
@@ -1049,23 +1057,25 @@ private:
             else
             {
                 JsonBinary::appendOpaque(
-                    data_to,
+                    write_buffer,
                     JsonBinary::Opaque{from_type_code, StringRef{slice.data, slice.size}});
             }
-            writeChar(0, data_to);
-            offsets_to[i] = data_to.count();
+            writeChar(0, write_buffer);
+            offsets_to[i] = write_buffer.count();
             data_from->next();
         }
     }
 
     template <bool is_nullable>
     static void doExecuteForParsingJson(
-        JsonBinary::JsonBinaryWriteBuffer & data_to,
+        ColumnString::Chars_t & data_to,
         ColumnString::Offsets & offsets_to,
         const std::unique_ptr<IStringSource> & data_from,
         const NullMap & null_map_from,
         size_t size)
     {
+        size_t reserve_size = (size * (1 + 1)) + data_from->getSizeForReserve();
+        JsonBinary::JsonBinaryWriteBuffer write_buffer(data_to, reserve_size);
         simdjson::dom::parser parser;
         for (size_t i = 0; i < size; ++i)
         {
@@ -1073,8 +1083,8 @@ private:
             {
                 if (null_map_from[i])
                 {
-                    writeChar(0, data_to);
-                    offsets_to[i] = data_to.count();
+                    writeChar(0, write_buffer);
+                    offsets_to[i] = write_buffer.count();
                     data_from->next();
                     continue;
                 }
@@ -1091,27 +1101,29 @@ private:
                     "Invalid JSON text: The document root must not be followed by other values, details: {}",
                     simdjson::error_message(json_elem.error())));
             }
-            JsonBinary::appendSIMDJsonElem(data_to, json_elem.value_unsafe());
+            JsonBinary::appendSIMDJsonElem(write_buffer, json_elem.value_unsafe());
 
-            writeChar(0, data_to);
-            offsets_to[i] = data_to.count();
+            writeChar(0, write_buffer);
+            offsets_to[i] = write_buffer.count();
             data_from->next();
         }
     }
 
     static void doExecuteForOthers(
-        JsonBinary::JsonBinaryWriteBuffer & data_to,
+        ColumnString::Chars_t & data_to,
         ColumnString::Offsets & offsets_to,
-        const std::unique_ptr<IStringSource> & from_data,
+        const std::unique_ptr<IStringSource> & data_from,
         size_t size)
     {
+        size_t reserve_size = (size * (1 + 1)) + data_from->getSizeForReserve();
+        JsonBinary::JsonBinaryWriteBuffer write_buffer(data_to, reserve_size);
         for (size_t i = 0; i < size; ++i)
         {
-            const auto & slice = from_data->getWhole();
-            JsonBinary::appendStringRef(data_to, StringRef{slice.data, slice.size});
-            writeChar(0, data_to);
-            offsets_to[i] = data_to.count();
-            from_data->next();
+            const auto & slice = data_from->getWhole();
+            JsonBinary::appendStringRef(write_buffer, StringRef{slice.data, slice.size});
+            writeChar(0, write_buffer);
+            offsets_to[i] = write_buffer.count();
+            data_from->next();
         }
     }
 
@@ -1149,7 +1161,6 @@ public:
     {
         auto col_to = ColumnString::create();
         auto & data_to = col_to->getChars();
-        JsonBinary::JsonBinaryWriteBuffer write_buffer(data_to);
         auto & offsets_to = col_to->getOffsets();
         auto rows = block.rows();
         offsets_to.resize(rows);
@@ -1157,26 +1168,25 @@ public:
         const auto & from = block.getByPosition(arguments[0]);
         if (checkDataType<DataTypeMyDateTime>(from.type.get()))
         {
-            doExecute<DataTypeMyDateTime, false>(write_buffer, offsets_to, from.column);
+            doExecute<DataTypeMyDateTime, false>(data_to, offsets_to, from.column);
         }
         else if (checkDataType<DataTypeMyDate>(from.type.get()))
         {
             // In raw function test, input_tidb_tp is nullptr.
             bool is_timestamp = (unlikely(input_tidb_tp == nullptr)) || input_tidb_tp->tp() == TiDB::TypeTimestamp;
             if (is_timestamp)
-                doExecute<DataTypeMyDate, true>(write_buffer, offsets_to, from.column);
+                doExecute<DataTypeMyDate, true>(data_to, offsets_to, from.column);
             else
-                doExecute<DataTypeMyDate, false>(write_buffer, offsets_to, from.column);
+                doExecute<DataTypeMyDate, false>(data_to, offsets_to, from.column);
         }
 
-        data_to.resize(write_buffer.count());
         block.getByPosition(result).column = std::move(col_to);
     }
 
 private:
     template <typename FromDataType, bool is_timestamp>
     static void doExecute(
-        JsonBinary::JsonBinaryWriteBuffer & data_to,
+        ColumnString::Chars_t & data_to,
         ColumnString::Offsets & offsets_to,
         const ColumnPtr & column_ptr_from)
     {
@@ -1184,24 +1194,26 @@ private:
             = checkAndGetColumn<ColumnVector<typename FromDataType::FieldType>>(column_ptr_from.get());
         RUNTIME_CHECK(column_from);
         const auto & data_from = column_from->getData();
+        size_t reserve_size = data_from.size() * (1 + 1 + sizeof(UInt64));
+        JsonBinary::JsonBinaryWriteBuffer write_buffer(data_to, reserve_size);
         for (size_t i = 0; i < data_from.size(); ++i)
         {
             if constexpr (std::is_same_v<DataTypeMyDate, FromDataType>)
             {
                 MyDate date(data_from[i]);
-                JsonBinary::appendDate(data_to, date);
+                JsonBinary::appendDate(write_buffer, date);
             }
             else
             {
                 MyDateTime date_time(data_from[i]);
                 if constexpr (is_timestamp)
-                    JsonBinary::appendTimestamp(data_to, date_time);
+                    JsonBinary::appendTimestamp(write_buffer, date_time);
                 else
-                    JsonBinary::appendDatetime(data_to, date_time);
+                    JsonBinary::appendDatetime(write_buffer, date_time);
             }
 
-            writeChar(0, data_to);
-            offsets_to[i] = data_to.count();
+            writeChar(0, write_buffer);
+            offsets_to[i] = write_buffer.count();
         }
     }
 
@@ -1235,7 +1247,6 @@ public:
     {
         auto col_to = ColumnString::create();
         auto & data_to = col_to->getChars();
-        JsonBinary::JsonBinaryWriteBuffer write_buffer(data_to);
         auto & offsets_to = col_to->getOffsets();
         auto rows = block.rows();
         offsets_to.resize(rows);
@@ -1247,6 +1258,8 @@ public:
             auto fsp = duration_type->getFsp();
             const auto & col_from = checkAndGetColumn<ColumnVector<DataTypeMyDuration::FieldType>>(from.column.get());
             const auto & data_from = col_from->getData();
+            size_t reserve_size = data_from.size() * (1 + 1 + sizeof(UInt64) + sizeof(UInt32));
+            JsonBinary::JsonBinaryWriteBuffer write_buffer(data_to, reserve_size);
             for (size_t i = 0; i < data_from.size(); ++i)
             {
                 JsonBinary::appendDuration(write_buffer, data_from[i], fsp);
@@ -1261,7 +1274,6 @@ public:
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         }
 
-        data_to.resize(write_buffer.count());
         block.getByPosition(result).column = std::move(col_to);
     }
 };
