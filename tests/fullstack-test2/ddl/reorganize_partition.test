@@ -161,4 +161,14 @@ mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t1 
 | 80 | aaa  | 2  |
 +----+------+----+
 
+# make sure the p0 is not affected
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t1 order by id;
++----+------+------+
+| id | name | c    |
++----+------+------+
+|  1 | abc  | NULL |
+| 60 | cba  | NULL |
+| 80 | aaa  |    2 |
++----+------+------+
+
 mysql> drop table test.t1;
