@@ -18,6 +18,7 @@
 #include <common/types.h>
 
 #include <atomic>
+#include <boost/noncopyable.hpp>
 
 extern std::atomic<Int64> real_rss, proc_num_threads, baseline_of_query_mem_tracker;
 extern std::atomic<UInt64> proc_virt_size;
@@ -66,7 +67,6 @@ class MemoryTracker : public std::enable_shared_from_this<MemoryTracker>
     std::atomic<const char *> description = nullptr;
 
     /// Make constructors private to ensure all objects of this class is created by `MemoryTracker::create`.
-    MemoryTracker() = default;
     explicit MemoryTracker(Int64 limit_)
         : limit(limit_)
     {}
@@ -186,8 +186,6 @@ void realloc(Int64 old_size, Int64 new_size);
 void free(Int64 size);
 } // namespace CurrentMemoryTracker
 
-
-#include <boost/noncopyable.hpp>
 
 struct TemporarilyDisableMemoryTracker : private boost::noncopyable
 {
