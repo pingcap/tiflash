@@ -33,3 +33,25 @@ mysql> set tidb_enforce_mpp=1; select cast(a as char) from test.t;
 | 3.01            |
 | "2020-01-02"    |
 +-----------------+
+
+mysql> set tidb_enforce_mpp=1; select cast(a as char(3)) from test.t;
++--------------------+
+| cast(a as char(3)) |
++--------------------+
+| NULL               |
+| [1,                |
+| {"a                |
+| 3.0                |
+| "20                |
++--------------------+
+
+mysql> set tidb_enforce_mpp=1; select cast(a as char(30)) as col from test.t;
++--------------+
+| col          |
++--------------+
+| NULL         |
+| [1, 2]       |
+| {"a": "b"}   |
+| 3.01         |
+| "2020-01-02" |
++--------------+

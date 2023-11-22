@@ -14,15 +14,15 @@
 
 #pragma once
 
-#include <fmt/format.h>
-#include <stack>
 #include <Core/Types.h>
 #include <common/StringRef.h>
 #include <common/memcpy.h>
+#include <fmt/format.h>
+
+#include <stack>
 
 namespace DB
 {
-
 // C++ implementation of https://github.com/golang/go/blob/master/src/encoding/json/scanner.go
 // Most of the comments are copied from go-lib directly.
 
@@ -61,7 +61,8 @@ enum JsonScanState
     JsonScanParseArrayValue, // parsing array value
 };
 
-struct JsonSyntaxError {
+struct JsonSyntaxError
+{
     String msg;
     Int64 offset;
 };
@@ -116,9 +117,11 @@ JsonScanAction stateError(JsonScanner & scanner, char c);
 // just got passed in.  (The indication must be delayed in order
 // to recognize the end of numbers: is 123 a whole value or
 // the beginning of 12345e+6?).
-struct JsonScanner {
+struct JsonScanner
+{
     // error records an error and switches to the error state.
-    JsonScanAction genError(String msg, char c) {
+    JsonScanAction genError(String msg, char c)
+    {
         stepFunc = &stateError;
         error.msg = fmt::format("invalid character {} {}", c, msg);
         error.offset = bytes;
@@ -127,18 +130,23 @@ struct JsonScanner {
 
     // eof tells the scanner that the end of input has been reached.
     // It returns a scan status just as s.step does.
-    JsonScanAction eof() {
-        if (!error.msg.empty()) {
+    JsonScanAction eof()
+    {
+        if (!error.msg.empty())
+        {
             return JsonScanError;
         }
-        if (end_top) {
+        if (end_top)
+        {
             return JsonScanEnd;
         }
         stepFunc(*this, ' ');
-        if (end_top) {
+        if (end_top)
+        {
             return JsonScanEnd;
         }
-        if (!error.msg.empty()) {
+        if (!error.msg.empty())
+        {
             error.msg = "unexpected end of JSON input";
             error.offset = bytes;
         }
@@ -147,9 +155,11 @@ struct JsonScanner {
 
     // pushParseState pushes a new parse state p onto the parse stack.
     // an error state is returned if maxNestingDepth was exceeded, otherwise successState is returned.
-    JsonScanAction pushParseState(char c, JsonScanState new_parse_state, JsonScanAction success_action) {
+    JsonScanAction pushParseState(char c, JsonScanState new_parse_state, JsonScanAction success_action)
+    {
         parse_state_stack.push(new_parse_state);
-        if (parse_state_stack.size() <= kJsonMaxNestingDepth) {
+        if (parse_state_stack.size() <= kJsonMaxNestingDepth)
+        {
             return success_action;
         }
         return genError("exceeded max depth", c);
@@ -157,12 +167,16 @@ struct JsonScanner {
 
     // popParseState pops a parse state (already obtained) off the stack
     // and updates s.step accordingly.
-    void popParseState() {
+    void popParseState()
+    {
         parse_state_stack.pop();
-        if (parse_state_stack.empty()) {
+        if (parse_state_stack.empty())
+        {
             stepFunc = &stateEndTop;
             end_top = true;
-        } else {
+        }
+        else
+        {
             stepFunc = stateEndValue;
         }
     }

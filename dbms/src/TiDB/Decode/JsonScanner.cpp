@@ -16,11 +16,14 @@
 
 namespace DB
 {
-bool JsonScanIsSpace(char c) {
-    return (static_cast<unsigned char>(c) <= static_cast<unsigned char>(' ')) && (c == ' ' || c == '\t' || c == '\r' || c == '\n');
+bool JsonScanIsSpace(char c)
+{
+    return (static_cast<unsigned char>(c) <= static_cast<unsigned char>(' '))
+        && (c == ' ' || c == '\t' || c == '\r' || c == '\n');
 }
 
-bool checkJsonValid(const char * data, size_t length) {
+bool checkJsonValid(const char * data, size_t length)
+{
     JsonScanner scanner;
     for (size_t i = 0; i < length; ++i)
     {
@@ -38,22 +41,28 @@ bool checkJsonValid(const char * data, size_t length) {
 }
 
 // stateBeginValueOrEmpty is the state after reading `[`.
-JsonScanAction stateBeginValueOrEmpty(JsonScanner & scanner, char c) {
-    if (JsonScanIsSpace(c)) {
+JsonScanAction stateBeginValueOrEmpty(JsonScanner & scanner, char c)
+{
+    if (JsonScanIsSpace(c))
+    {
         return JsonScanSkipSpace;
     }
-    if (c == ']') {
+    if (c == ']')
+    {
         return stateEndValue(scanner, c);
     }
     return stateBeginValue(scanner, c);
 }
 
 // stateBeginValue is the state at the beginning of the input.
-JsonScanAction stateBeginValue(JsonScanner & scanner, char c) {
-    if (JsonScanIsSpace(c)) {
+JsonScanAction stateBeginValue(JsonScanner & scanner, char c)
+{
+    if (JsonScanIsSpace(c))
+    {
         return JsonScanSkipSpace;
     }
-    switch (c) {
+    switch (c)
+    {
     case '{':
         scanner.stepFunc = stateBeginStringOrEmpty;
         return scanner.pushParseState(c, JsonScanParseObjectKey, JsonScanBeginObject);
@@ -81,7 +90,8 @@ JsonScanAction stateBeginValue(JsonScanner & scanner, char c) {
     default:
         break;
     }
-    if ('1' <= c && c <= '9') { // beginning of 1234.5
+    if ('1' <= c && c <= '9')
+    { // beginning of 1234.5
         scanner.stepFunc = state1;
         return JsonScanBeginLiteral;
     }
@@ -91,11 +101,14 @@ JsonScanAction stateBeginValue(JsonScanner & scanner, char c) {
 //////////==========================TODO==========================//////////
 
 // stateBeginStringOrEmpty is the state after reading `{`.
-JsonScanAction stateBeginStringOrEmpty(JsonScanner & scanner, char c) {
-    if (JsonScanIsSpace(c)) {
+JsonScanAction stateBeginStringOrEmpty(JsonScanner & scanner, char c)
+{
+    if (JsonScanIsSpace(c))
+    {
         return JsonScanSkipSpace;
     }
-    if (c == '}') {
+    if (c == '}')
+    {
         scanner.parse_state_stack.top() = JsonScanParseObjectValue;
         return stateEndValue(scanner, c);
     }
@@ -103,11 +116,14 @@ JsonScanAction stateBeginStringOrEmpty(JsonScanner & scanner, char c) {
 }
 
 // stateBeginString is the state after reading `{"key": value,`.
-JsonScanAction stateBeginString(JsonScanner & scanner, char c) {
-    if (JsonScanIsSpace(c)) {
+JsonScanAction stateBeginString(JsonScanner & scanner, char c)
+{
+    if (JsonScanIsSpace(c))
+    {
         return JsonScanSkipSpace;
     }
-    if (c == '"') {
+    if (c == '"')
+    {
         scanner.stepFunc = stateInString;
         return JsonScanBeginLiteral;
     }
@@ -116,43 +132,52 @@ JsonScanAction stateBeginString(JsonScanner & scanner, char c) {
 
 // stateEndValue is the state after completing a value,
 // such as after reading `{}` or `true` or `["x"`.
-JsonScanAction stateEndValue(JsonScanner & scanner, char c) {
+JsonScanAction stateEndValue(JsonScanner & scanner, char c)
+{
     size_t n = scanner.parse_state_stack.size();
-    if (n == 0) {
+    if (n == 0)
+    {
         // Completed top-level before the current byte.
         scanner.stepFunc = stateEndTop;
         scanner.end_top = true;
         return stateEndTop(scanner, c);
     }
-    if (JsonScanIsSpace(c)) {
+    if (JsonScanIsSpace(c))
+    {
         scanner.stepFunc = stateEndValue;
         return JsonScanSkipSpace;
     }
-    switch (scanner.parse_state_stack.top()) {
+    switch (scanner.parse_state_stack.top())
+    {
     case JsonScanParseObjectKey:
-        if (c == ':') {
+        if (c == ':')
+        {
             scanner.parse_state_stack.top() = JsonScanParseObjectValue;
             scanner.stepFunc = stateBeginValue;
             return JsonScanObjectKey;
         }
         return scanner.genError("after object key", c);
     case JsonScanParseObjectValue:
-        if (c == ',') {
+        if (c == ',')
+        {
             scanner.parse_state_stack.top() = JsonScanParseObjectKey;
             scanner.stepFunc = stateBeginString;
             return JsonScanObjectValue;
         }
-        if (c == '}') {
+        if (c == '}')
+        {
             scanner.popParseState();
             return JsonScanEndObject;
         }
         return scanner.genError("after object key:value pair", c);
     case JsonScanParseArrayValue:
-        if (c == ',') {
+        if (c == ',')
+        {
             scanner.stepFunc = stateBeginValue;
             return JsonScanArrayValue;
         }
-        if (c == ']') {
+        if (c == ']')
+        {
             scanner.popParseState();
             return JsonScanEndArray;
         }
@@ -166,8 +191,10 @@ JsonScanAction stateEndValue(JsonScanner & scanner, char c) {
 // stateEndTop is the state after finishing the top-level value,
 // such as after reading `{}` or `[1,2,3]`.
 // Only space characters should be seen now.
-JsonScanAction stateEndTop(JsonScanner & scanner, char c) {
-    if (!JsonScanIsSpace(c)) {
+JsonScanAction stateEndTop(JsonScanner & scanner, char c)
+{
+    if (!JsonScanIsSpace(c))
+    {
         // Complain about non-space byte on next call.
         scanner.genError("after top-level value", c);
     }
@@ -175,24 +202,30 @@ JsonScanAction stateEndTop(JsonScanner & scanner, char c) {
 }
 
 // stateInString is the state after reading `"`.
-JsonScanAction stateInString(JsonScanner & scanner, char c) {
-    if (c == '"') {
+JsonScanAction stateInString(JsonScanner & scanner, char c)
+{
+    if (c == '"')
+    {
         scanner.stepFunc = stateEndValue;
         return JsonScanContinue;
     }
-    if (c == '\\') {
+    if (c == '\\')
+    {
         scanner.stepFunc = stateInStringEsc;
         return JsonScanContinue;
     }
-    if (static_cast<unsigned char>(c) < 0x20) {
+    if (static_cast<unsigned char>(c) < 0x20)
+    {
         return scanner.genError("in string literal", c);
     }
     return JsonScanContinue;
 }
 
 // stateInStringEsc is the state after reading `"\` during a quoted string.
-JsonScanAction stateInStringEsc(JsonScanner & scanner, char c) {
-    switch (c) {
+JsonScanAction stateInStringEsc(JsonScanner & scanner, char c)
+{
+    switch (c)
+    {
     case 'b':
     case 'f':
     case 'n':
@@ -213,8 +246,10 @@ JsonScanAction stateInStringEsc(JsonScanner & scanner, char c) {
 }
 
 // stateInStringEscU is the state after reading `"\u` during a quoted string.
-JsonScanAction stateInStringEscU(JsonScanner & scanner, char c) {
-    if (('0' <= c && c <= '9') || ('a' <= c && c <= 'f') || ('A' <= c && c <= 'F')) {
+JsonScanAction stateInStringEscU(JsonScanner & scanner, char c)
+{
+    if (('0' <= c && c <= '9') || ('a' <= c && c <= 'f') || ('A' <= c && c <= 'F'))
+    {
         scanner.stepFunc = stateInStringEscU1;
         return JsonScanContinue;
     }
@@ -223,8 +258,10 @@ JsonScanAction stateInStringEscU(JsonScanner & scanner, char c) {
 }
 
 // stateInStringEscU1 is the state after reading `"\u1` during a quoted string.
-JsonScanAction stateInStringEscU1(JsonScanner & scanner, char c) {
-    if (('0' <= c && c <= '9') || ('a' <= c && c <= 'f') || ('A' <= c && c <= 'F')) {
+JsonScanAction stateInStringEscU1(JsonScanner & scanner, char c)
+{
+    if (('0' <= c && c <= '9') || ('a' <= c && c <= 'f') || ('A' <= c && c <= 'F'))
+    {
         scanner.stepFunc = stateInStringEscU12;
         return JsonScanContinue;
     }
@@ -233,8 +270,10 @@ JsonScanAction stateInStringEscU1(JsonScanner & scanner, char c) {
 }
 
 // stateInStringEscU12 is the state after reading `"\u12` during a quoted string.
-JsonScanAction stateInStringEscU12(JsonScanner & scanner, char c) {
-    if (('0' <= c && c <= '9') || ('a' <= c && c <= 'f') || ('A' <= c && c <= 'F')) {
+JsonScanAction stateInStringEscU12(JsonScanner & scanner, char c)
+{
+    if (('0' <= c && c <= '9') || ('a' <= c && c <= 'f') || ('A' <= c && c <= 'F'))
+    {
         scanner.stepFunc = stateInStringEscU123;
         return JsonScanContinue;
     }
@@ -243,8 +282,10 @@ JsonScanAction stateInStringEscU12(JsonScanner & scanner, char c) {
 }
 
 // stateInStringEscU123 is the state after reading `"\u123` during a quoted string.
-JsonScanAction stateInStringEscU123(JsonScanner & scanner, char c) {
-    if (('0' <= c && c <= '9') || ('a' <= c && c <= 'f') || ('A' <= c && c <= 'F')) {
+JsonScanAction stateInStringEscU123(JsonScanner & scanner, char c)
+{
+    if (('0' <= c && c <= '9') || ('a' <= c && c <= 'f') || ('A' <= c && c <= 'F'))
+    {
         scanner.stepFunc = stateInString;
         return JsonScanContinue;
     }
@@ -253,12 +294,15 @@ JsonScanAction stateInStringEscU123(JsonScanner & scanner, char c) {
 }
 
 // stateNeg is the state after reading `-` during a number.
-JsonScanAction stateNeg(JsonScanner & scanner, char c) {
-    if (c == '0') {
+JsonScanAction stateNeg(JsonScanner & scanner, char c)
+{
+    if (c == '0')
+    {
         scanner.stepFunc = state0;
         return JsonScanContinue;
     }
-    if ('1' <= c && c <= '9') {
+    if ('1' <= c && c <= '9')
+    {
         scanner.stepFunc = state1;
         return JsonScanContinue;
     }
@@ -267,8 +311,10 @@ JsonScanAction stateNeg(JsonScanner & scanner, char c) {
 
 // state1 is the state after reading a non-zero integer during a number,
 // such as after reading `1` or `100` but not `0`.
-JsonScanAction state1(JsonScanner & scanner, char c) {
-    if ('0' <= c && c <= '9') {
+JsonScanAction state1(JsonScanner & scanner, char c)
+{
+    if ('0' <= c && c <= '9')
+    {
         scanner.stepFunc = state1;
         return JsonScanContinue;
     }
@@ -276,12 +322,15 @@ JsonScanAction state1(JsonScanner & scanner, char c) {
 }
 
 // state0 is the state after reading `0` during a number.
-JsonScanAction state0(JsonScanner & scanner, char c) {
-    if (c == '.') {
+JsonScanAction state0(JsonScanner & scanner, char c)
+{
+    if (c == '.')
+    {
         scanner.stepFunc = stateDot;
         return JsonScanContinue;
     }
-    if (c == 'e' || c == 'E') {
+    if (c == 'e' || c == 'E')
+    {
         scanner.stepFunc = stateE;
         return JsonScanContinue;
     }
@@ -290,8 +339,10 @@ JsonScanAction state0(JsonScanner & scanner, char c) {
 
 // stateDot is the state after reading the integer and decimal point in a number,
 // such as after reading `1.`.
-JsonScanAction stateDot(JsonScanner & scanner, char c) {
-    if ('0' <= c && c <= '9') {
+JsonScanAction stateDot(JsonScanner & scanner, char c)
+{
+    if ('0' <= c && c <= '9')
+    {
         scanner.stepFunc = stateDot0;
         return JsonScanContinue;
     }
@@ -300,11 +351,14 @@ JsonScanAction stateDot(JsonScanner & scanner, char c) {
 
 // stateDot0 is the state after reading the integer, decimal point, and subsequent
 // digits of a number, such as after reading `3.14`.
-JsonScanAction stateDot0(JsonScanner & scanner, char c) {
-    if ('0' <= c && c <= '9') {
+JsonScanAction stateDot0(JsonScanner & scanner, char c)
+{
+    if ('0' <= c && c <= '9')
+    {
         return JsonScanContinue;
     }
-    if (c == 'e' || c == 'E') {
+    if (c == 'e' || c == 'E')
+    {
         scanner.stepFunc = stateE;
         return JsonScanContinue;
     }
@@ -313,8 +367,10 @@ JsonScanAction stateDot0(JsonScanner & scanner, char c) {
 
 // stateE is the state after reading the mantissa and e in a number,
 // such as after reading `314e` or `0.314e`.
-JsonScanAction stateE(JsonScanner & scanner, char c) {
-    if (c == '+' || c == '-') {
+JsonScanAction stateE(JsonScanner & scanner, char c)
+{
+    if (c == '+' || c == '-')
+    {
         scanner.stepFunc = stateESign;
         return JsonScanContinue;
     }
@@ -323,8 +379,10 @@ JsonScanAction stateE(JsonScanner & scanner, char c) {
 
 // stateESign is the state after reading the mantissa, e, and sign in a number,
 // such as after reading `314e-` or `0.314e+`.
-JsonScanAction stateESign(JsonScanner & scanner, char c) {
-    if ('0' <= c && c <= '9') {
+JsonScanAction stateESign(JsonScanner & scanner, char c)
+{
+    if ('0' <= c && c <= '9')
+    {
         scanner.stepFunc = stateE0;
         return JsonScanContinue;
     }
@@ -334,16 +392,20 @@ JsonScanAction stateESign(JsonScanner & scanner, char c) {
 // stateE0 is the state after reading the mantissa, e, optional sign,
 // and at least one digit of the exponent in a number,
 // such as after reading `314e-2` or `0.314e+1` or `3.14e0`.
-JsonScanAction stateE0(JsonScanner & scanner, char c) {
-    if ('0' <= c && c <= '9') {
+JsonScanAction stateE0(JsonScanner & scanner, char c)
+{
+    if ('0' <= c && c <= '9')
+    {
         return JsonScanContinue;
     }
     return stateEndValue(scanner, c);
 }
 
 // stateT is the state after reading `t`.
-JsonScanAction stateT(JsonScanner & scanner, char c) {
-    if (c == 'r') {
+JsonScanAction stateT(JsonScanner & scanner, char c)
+{
+    if (c == 'r')
+    {
         scanner.stepFunc = stateTr;
         return JsonScanContinue;
     }
@@ -351,8 +413,10 @@ JsonScanAction stateT(JsonScanner & scanner, char c) {
 }
 
 // stateTr is the state after reading `tr`.
-JsonScanAction stateTr(JsonScanner & scanner, char c) {
-    if (c == 'u') {
+JsonScanAction stateTr(JsonScanner & scanner, char c)
+{
+    if (c == 'u')
+    {
         scanner.stepFunc = stateTru;
         return JsonScanContinue;
     }
@@ -360,8 +424,10 @@ JsonScanAction stateTr(JsonScanner & scanner, char c) {
 }
 
 // stateTru is the state after reading `tru`.
-JsonScanAction stateTru(JsonScanner & scanner, char c) {
-    if (c == 'e') {
+JsonScanAction stateTru(JsonScanner & scanner, char c)
+{
+    if (c == 'e')
+    {
         scanner.stepFunc = stateEndValue;
         return JsonScanContinue;
     }
@@ -369,8 +435,10 @@ JsonScanAction stateTru(JsonScanner & scanner, char c) {
 }
 
 // stateF is the state after reading `f`.
-JsonScanAction stateF(JsonScanner & scanner, char c) {
-    if (c == 'a') {
+JsonScanAction stateF(JsonScanner & scanner, char c)
+{
+    if (c == 'a')
+    {
         scanner.stepFunc = stateFa;
         return JsonScanContinue;
     }
@@ -378,8 +446,10 @@ JsonScanAction stateF(JsonScanner & scanner, char c) {
 }
 
 // stateFa is the state after reading `fa`.
-JsonScanAction stateFa(JsonScanner & scanner, char c) {
-    if (c == 'l') {
+JsonScanAction stateFa(JsonScanner & scanner, char c)
+{
+    if (c == 'l')
+    {
         scanner.stepFunc = stateFal;
         return JsonScanContinue;
     }
@@ -387,8 +457,10 @@ JsonScanAction stateFa(JsonScanner & scanner, char c) {
 }
 
 // stateFal is the state after reading `fal`.
-JsonScanAction stateFal(JsonScanner & scanner, char c) {
-    if (c == 's') {
+JsonScanAction stateFal(JsonScanner & scanner, char c)
+{
+    if (c == 's')
+    {
         scanner.stepFunc = stateFals;
         return JsonScanContinue;
     }
@@ -396,8 +468,10 @@ JsonScanAction stateFal(JsonScanner & scanner, char c) {
 }
 
 // stateFals is the state after reading `fals`.
-JsonScanAction stateFals(JsonScanner & scanner, char c) {
-    if (c == 'e') {
+JsonScanAction stateFals(JsonScanner & scanner, char c)
+{
+    if (c == 'e')
+    {
         scanner.stepFunc = stateEndValue;
         return JsonScanContinue;
     }
@@ -405,8 +479,10 @@ JsonScanAction stateFals(JsonScanner & scanner, char c) {
 }
 
 // stateN is the state after reading `n`.
-JsonScanAction stateN(JsonScanner & scanner, char c) {
-    if (c == 'u') {
+JsonScanAction stateN(JsonScanner & scanner, char c)
+{
+    if (c == 'u')
+    {
         scanner.stepFunc = stateNu;
         return JsonScanContinue;
     }
@@ -414,8 +490,10 @@ JsonScanAction stateN(JsonScanner & scanner, char c) {
 }
 
 // stateNu is the state after reading `nu`.
-JsonScanAction stateNu(JsonScanner & scanner, char c) {
-    if (c == 'l') {
+JsonScanAction stateNu(JsonScanner & scanner, char c)
+{
+    if (c == 'l')
+    {
         scanner.stepFunc = stateNul;
         return JsonScanContinue;
     }
@@ -423,8 +501,10 @@ JsonScanAction stateNu(JsonScanner & scanner, char c) {
 }
 
 // stateNul is the state after reading `nul`.
-JsonScanAction stateNul(JsonScanner & scanner, char c) {
-    if (c == 'l') {
+JsonScanAction stateNul(JsonScanner & scanner, char c)
+{
+    if (c == 'l')
+    {
         scanner.stepFunc = stateEndValue;
         return JsonScanContinue;
     }
@@ -433,7 +513,8 @@ JsonScanAction stateNul(JsonScanner & scanner, char c) {
 
 // stateError is the state after reaching a syntax error,
 // such as after reading `[1}` or `5.1.2`.
-JsonScanAction stateError(JsonScanner &, char) {
+JsonScanAction stateError(JsonScanner &, char)
+{
     return JsonScanEnd;
 }
 } // namespace DB

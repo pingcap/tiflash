@@ -27,6 +27,7 @@
 #include <DataTypes/DataTypesNumber.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Functions/FunctionHelpers.h>
+#include <Functions/FunctionsTiDBConversion.h>
 #include <Functions/GatherUtils/Sources.h>
 #include <Functions/IFunction.h>
 #include <Functions/castTypeToEither.h>
@@ -344,7 +345,7 @@ public:
                 ErrorCodes::ILLEGAL_COLUMN);
     }
 
-    template<bool validCheck>
+    template <bool validCheck>
     void doUnquote(
         const Block & block,
         const ColumnString::Chars_t & data_from,
@@ -359,7 +360,7 @@ public:
             size_t data_length = next_offset - current_offset - 1;
             if constexpr (validCheck)
             {
-                if (data_length >= 2 && data_from[current_offset] == '"' && data_from[next_offset - 1] == '"'
+                if (data_length >= 2 && data_from[current_offset] == '"' && data_from[next_offset - 2] == '"'
                     && !checkJsonValid(reinterpret_cast<const char *>(&data_from[current_offset]), data_length))
                 {
                     throw Exception(
@@ -373,6 +374,7 @@ public:
             current_offset = next_offset;
         }
     }
+
 private:
     bool need_valid_check = false;
 };
@@ -416,12 +418,6 @@ public:
     {
         const ColumnPtr column = block.getByPosition(arguments[0]).column;
         size_t rows = block.rows();
-        bool need_padding = tidb_tp->tp() == TiDB::TypeString && tidb_tp->flen() > 0 && tidb_tp->collate() == TiDB::ITiDBCollator::BINARY;
-
-        String padding_string;
-        if (need_padding)
-            padding_string.resize(tidb_tp->flen(), 0);
-
         if (const auto * col_from = checkAndGetColumn<ColumnString>(column.get()))
         {
             const ColumnString::Chars_t & data_from = col_from->getChars();
@@ -435,7 +431,8 @@ public:
             ColumnUInt8::MutablePtr col_null_map = ColumnUInt8::create(rows, 0);
             ColumnUInt8::Container & vec_null_map = col_null_map->getData();
             JsonBinary::JsonBinaryWriteBuffer write_buffer(data_to);
-            if likely (!need_padding) {
+            if likely (tidb_tp->flen() <= 0)
+            {
                 size_t current_offset = 0;
                 for (size_t i = 0; i < block.rows(); ++i)
                 {
@@ -454,14 +451,16 @@ public:
                     offsets_to[i] = write_buffer.count();
                     current_offset = next_offset;
                 }
-            } else {
+            }
+            else
+            {
                 ColumnString::Chars_t container_per_element;
                 size_t current_offset = 0;
                 for (size_t i = 0; i < block.rows(); ++i)
                 {
                     size_t next_offset = offsets_from[i];
                     size_t json_length = next_offset - current_offset - 1;
-                    WriteBufferFromVector<ColumnString::Chars_t> element_write_buffer(container_per_element);
+                    JsonBinary::JsonBinaryWriteBuffer element_write_buffer(container_per_element);
                     if unlikely (isNullJsonBinary(json_length))
                         vec_null_map[i] = 1;
                     else
@@ -473,23 +472,15 @@ public:
                     }
 
                     size_t orig_length = element_write_buffer.count();
-                    size_t byte_length = orig_length;
-                    if (tidb_tp->flen() > 0)
-                    {
-                        byte_length = tidb_tp->flen();
-                        if (tidb_tp->charset() == "utf8" || tidb_tp->charset() == "utf8mb4")
-                            byte_length = charLengthToByteLengthFromUTF8(
-                                reinterpret_cast<char *>(container_per_element.data()),
-                                orig_length,
-                                byte_length);
-                        byte_length = std::min(byte_length, orig_length);
-                    }
+                    size_t byte_length = tidb_tp->flen();
+                    byte_length = charLengthToByteLengthFromUTF8(
+                        reinterpret_cast<char *>(container_per_element.data()),
+                        orig_length,
+                        byte_length);
+                    byte_length = std::min(byte_length, orig_length);
                     if (byte_length < element_write_buffer.count())
                         context.getDAGContext()->handleTruncateError("Data Too Long");
                     write_buffer.write(reinterpret_cast<char *>(container_per_element.data()), byte_length);
-                    if (need_padding && byte_length < static_cast<size_t>(tidb_tp->flen()))
-                        write_buffer.write(padding_string.data(), tidb_tp->flen() - byte_length);
-
                     writeChar(0, write_buffer);
                     offsets_to[i] = write_buffer.count();
                     current_offset = next_offset;
@@ -503,6 +494,7 @@ public:
                 fmt::format("Illegal column {} of argument of function {}", column->getName(), getName()),
                 ErrorCodes::ILLEGAL_COLUMN);
     }
+
 private:
     const tipb::FieldType * tidb_tp;
     const Context & context;
