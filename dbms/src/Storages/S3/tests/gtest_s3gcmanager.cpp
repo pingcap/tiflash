@@ -72,38 +72,14 @@ public:
         gc_mgr = std::make_unique<S3GCManager>(mock_pd_client, mock_gc_owner, mock_lock_client, data_store, config);
 
         ::DB::tests::TiFlashTestEnv::createBucketIfNotExist(*mock_s3_client);
-
-        tmp_dir = getTemporaryPath();
-        data_file_path_pattern1 = tmp_dir + "/data1_{index}";
-        data_file_id_pattern1 = "data1_{index}";
-        manifest_file_path1 = tmp_dir + "/manifest_foo1";
-        manifest_file_id1 = "manifest_foo1";
-        data_file_path_pattern2 = tmp_dir + "/data2_{index}";
-        data_file_id_pattern2 = "data2_{index}";
-        manifest_file_path2 = tmp_dir + "/manifest_foo2";
-        manifest_file_id2 = "manifest_foo2";
-        dropDataOnDisk(tmp_dir);
-        createIfNotExist(tmp_dir);
     }
 
     void TearDown() override { ::DB::tests::TiFlashTestEnv::deleteBucket(*mock_s3_client); }
 
 protected:
-    String tmp_dir;
-
     std::shared_ptr<TiFlashS3Client> mock_s3_client;
     std::unique_ptr<S3GCManager> gc_mgr;
     LoggerPtr log;
-
-    String data_file_id_pattern1;
-    String data_file_path_pattern1;
-    String manifest_file_id1;
-    String manifest_file_path1;
-
-    String data_file_id_pattern2;
-    String data_file_path_pattern2;
-    String manifest_file_id2;
-    String manifest_file_path2;
 };
 
 class S3GCManagerByScanDeleteTest : public S3GCManagerTest
@@ -607,20 +583,27 @@ TEST_F(S3GCManagerTest, ReadManifestFromS3)
 try
 {
     using namespace ::DB::PS::V3;
+    const UInt64 store_id = 100;
+    UInt64 sequence = 5;
+    String manifest_file_id_pattern = S3::S3Filename::newCheckpointManifestNameTemplate(store_id);
+    String manifest_file_path_pattern = S3::S3Filename::newCheckpointManifestNameTemplate(store_id);
     { // prepare the manifest on S3
         const String entry_data = "apple_value";
+        auto manifest_file_id = fmt::format(fmt::runtime(manifest_file_id_pattern), fmt::arg("seq", sequence));
+        auto manifest_file_path = fmt::format(fmt::runtime(manifest_file_path_pattern), fmt::arg("seq", sequence));
         auto writer = CPFilesWriter::create({
-            .data_file_path_pattern = data_file_path_pattern1,
-            .data_file_id_pattern = data_file_id_pattern1,
-            .manifest_file_path = manifest_file_path1,
-            .manifest_file_id = manifest_file_id1,
+            .data_file_path_pattern = S3::S3Filename::newCheckpointDataNameTemplate(store_id),
+            .data_file_id_pattern = S3::S3Filename::newCheckpointLockNameTemplate(store_id, sequence),
+            .manifest_file_path = manifest_file_path,
+            .manifest_file_id = manifest_file_id,
             .data_source = CPWriteDataSourceFixture::create({{0, entry_data}, {entry_data.size(), entry_data}}),
         });
 
+        // sequence 5
         writer->writePrefix({
             .writer = {},
-            .sequence = 5,
-            .last_sequence = 3,
+            .sequence = sequence,
+            .last_sequence = sequence - 1,
         });
         {
             auto edits = universal::PageEntriesEdit{};
@@ -663,16 +646,19 @@ try
         auto data_paths = writer->writeSuffix();
         LOG_DEBUG(log, "Checkpoint data paths: {}", data_paths);
         writer.reset();
-
-        S3::uploadFile(*mock_s3_client, manifest_file_path1, manifest_file_id1);
     }
-    { // prepare the second manifest on S3
+    {
+        // prepare the second manifest on S3
+        // sequence 6
+        sequence = 6;
         const String entry_data = "cherry_value";
+        auto manifest_file_id = fmt::format(fmt::runtime(manifest_file_id_pattern), fmt::arg("seq", sequence));
+        auto manifest_file_path = fmt::format(fmt::runtime(manifest_file_path_pattern), fmt::arg("seq", sequence));
         auto writer = CPFilesWriter::create({
-            .data_file_path_pattern = data_file_path_pattern2,
-            .data_file_id_pattern = data_file_id_pattern2,
-            .manifest_file_path = manifest_file_path2,
-            .manifest_file_id = manifest_file_id2,
+            .data_file_path_pattern = S3::S3Filename::newCheckpointDataNameTemplate(store_id),
+            .data_file_id_pattern = S3::S3Filename::newCheckpointLockNameTemplate(store_id, sequence),
+            .manifest_file_path = manifest_file_path,
+            .manifest_file_id = manifest_file_id,
             .data_source = CPWriteDataSourceFixture::create({
                 {0, entry_data},
             }),
@@ -680,8 +666,8 @@ try
 
         writer->writePrefix({
             .writer = {},
-            .sequence = 5,
-            .last_sequence = 3,
+            .sequence = sequence,
+            .last_sequence = sequence - 1,
         });
         {
             auto edits = universal::PageEntriesEdit{};
@@ -700,30 +686,31 @@ try
         auto data_paths = writer->writeSuffix();
         LOG_DEBUG(log, "Checkpoint data paths: {}", data_paths);
         writer.reset();
-
-        S3::uploadFile(*mock_s3_client, manifest_file_path2, manifest_file_id2);
     }
 
     // read from S3 key
     {
-        auto locks = gc_mgr->getValidLocksFromManifest({manifest_file_id1});
+        auto locks = gc_mgr->getValidLocksFromManifest(
+            {fmt::format(fmt::runtime(manifest_file_path_pattern), fmt::arg("seq", 5))});
         EXPECT_EQ(locks.size(), 3) << fmt::format("{}", locks);
         // the lock ingest by FAP
         EXPECT_TRUE(locks.contains("apple_lock")) << fmt::format("{}", locks);
         EXPECT_TRUE(locks.contains("banana_lock")) << fmt::format("{}", locks);
         // the lock generated by checkpoint dump
-        EXPECT_TRUE(locks.contains("data1_0")) << fmt::format("{}", locks);
+        EXPECT_TRUE(locks.contains("lock/s100/dat_0_0.lock_s100_5")) << fmt::format("{}", locks);
     }
     {
-        auto locks = gc_mgr->getValidLocksFromManifest({manifest_file_id1, manifest_file_id2});
+        auto locks = gc_mgr->getValidLocksFromManifest(
+            {fmt::format(fmt::runtime(manifest_file_path_pattern), fmt::arg("seq", 5)),
+             fmt::format(fmt::runtime(manifest_file_path_pattern), fmt::arg("seq", 6))});
         EXPECT_EQ(locks.size(), 4) << fmt::format("{}", locks);
         // the lock ingest by FAP
         EXPECT_TRUE(locks.contains("apple_lock")) << fmt::format("{}", locks);
         EXPECT_TRUE(locks.contains("banana_lock")) << fmt::format("{}", locks);
         // the lock generated by checkpoint dump
-        EXPECT_TRUE(locks.contains("data1_0")) << fmt::format("{}", locks);
+        EXPECT_TRUE(locks.contains("lock/s100/dat_0_0.lock_s100_5")) << fmt::format("{}", locks);
         // the lock in the second checkpoint
-        EXPECT_TRUE(locks.contains("data2_0")) << fmt::format("{}", locks);
+        EXPECT_TRUE(locks.contains("lock/s100/dat_0_0.lock_s100_6")) << fmt::format("{}", locks);
     }
 }
 CATCH

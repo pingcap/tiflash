@@ -213,7 +213,7 @@ protected:
             .data_file_id_pattern = S3::S3Filename::newCheckpointLockNameTemplate(store_id, upload_sequence),
             .data_file_path_pattern = S3::S3Filename::newCheckpointDataNameTemplate(store_id),
             .manifest_file_id_pattern = S3::S3Filename::newCheckpointManifestNameTemplate(store_id),
-            .manifest_file_path_pattern = S3::S3Filename::newCheckpointManifest(store_id, upload_sequence).toFullKey(),
+            .manifest_file_path_pattern = S3::S3Filename::newCheckpointManifestNameTemplate(store_id),
             .writer_info = wi,
             .must_locked_files = {},
             .override_sequence = upload_sequence, // override by upload_sequence

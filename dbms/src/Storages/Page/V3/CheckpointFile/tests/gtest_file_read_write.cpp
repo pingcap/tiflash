@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include <Common/FailPoint.h>
-#include <Encryption/PosixRandomAccessFile.h>
 #include <IO/ReadBufferFromRandomAccessFile.h>
 #include <Storages/Page/V3/CheckpointFile/CPFilesWriter.h>
 #include <Storages/Page/V3/CheckpointFile/CPManifestFileReader.h>
@@ -25,7 +24,6 @@
 #include <TestUtils/MockDiskDelegator.h>
 #include <TestUtils/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestBasic.h>
-#include <aws/s3/model/GetObjectRequest.h>
 
 #include <ext/scope_guard.h>
 
@@ -51,20 +49,24 @@ public:
         log = Logger::get("CheckpointFileTest");
     }
 
-    std::string readData(const V3::CheckpointLocation & location)
+    static std::string readData(const V3::CheckpointLocation & location)
     {
         RUNTIME_CHECK(location.offset_in_file > 0);
         RUNTIME_CHECK(location.data_file_id != nullptr && !location.data_file_id->empty());
 
-        Aws::S3::Model::GetObjectRequest req;
-        s3_client->setBucketAndKeyWithRoot(
-            req,
-            S3::S3FilenameView::fromKey(*location.data_file_id).asDataFile().toFullKey());
-        auto outcome = s3_client->GetObject(req);
-        RUNTIME_CHECK(outcome.IsSuccess());
-        Aws::StringStream ss;
-        ss << outcome.GetResult().GetBody().rdbuf();
-        return ss.str().substr(location.offset_in_file, location.size_in_file);
+        std::string ret;
+        ret.resize(location.size_in_file);
+
+        // parse from lockkey to data_file_key
+        auto data_file_key = S3::S3FilenameView::fromKey(*location.data_file_id).asDataFile().toFullKey();
+
+        auto data_file = S3::S3RandomAccessFile::create(data_file_key);
+        ReadBufferFromRandomAccessFile buf(data_file);
+        buf.seek(location.offset_in_file);
+        auto n = buf.readBig(ret.data(), location.size_in_file);
+        RUNTIME_CHECK(n == location.size_in_file);
+
+        return ret;
     }
 
 protected:

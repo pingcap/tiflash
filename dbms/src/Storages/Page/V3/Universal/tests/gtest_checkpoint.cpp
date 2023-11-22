@@ -14,7 +14,6 @@
 
 #include <Common/SyncPoint/SyncPoint.h>
 #include <Encryption/FileProvider.h>
-#include <Encryption/PosixRandomAccessFile.h>
 #include <Flash/Disaggregated/MockS3LockClient.h>
 #include <IO/ReadBufferFromFile.h>
 #include <Interpreters/Context.h>
@@ -33,7 +32,6 @@
 #include <TestUtils/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestEnv.h>
 #include <aws/s3/S3Client.h>
-#include <aws/s3/model/CreateBucketRequest.h>
 #include <gtest/gtest.h>
 
 #include <future>
@@ -51,15 +49,18 @@ public:
     PSCheckpointTest()
     {
         writer_info = std::make_shared<V3::CheckpointProto::WriterInfo>();
-        writer_info->set_store_id(1027);
+        writer_info->set_store_id(store_id);
     }
 
     void SetUp() override
     {
+        log = Logger::get("PSCheckpointTest");
         TiFlashStorageTestBasic::SetUp();
         auto path = getTemporaryPath();
         dropDataOnDisk(path);
         createIfNotExist(path);
+        s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
+        ::DB::tests::TiFlashTestEnv::createBucketIfNotExist(*s3_client);
         auto file_provider = DB::tests::TiFlashTestEnv::getDefaultFileProvider();
         auto delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
         page_storage = UniversalPageStorage::create(
@@ -68,13 +69,9 @@ public:
             PageStorageConfig{.blob_heavy_gc_valid_rate = 1.0},
             file_provider);
         page_storage->restore();
-
-        dir = getTemporaryPath() + "/checkpoint_output/";
-        dropDataOnDisk(dir);
-        createIfNotExist(dir);
     }
 
-    std::string readData(const V3::CheckpointLocation & location)
+    static std::string readData(const V3::CheckpointLocation & location)
     {
         RUNTIME_CHECK(location.offset_in_file > 0);
         RUNTIME_CHECK(location.data_file_id != nullptr && !location.data_file_id->empty());
@@ -87,7 +84,11 @@ public:
         // A DataReader will encapsulate this logic.
         // Currently there is no compression, so reading data is rather easy.
 
-        auto buf = ReadBufferFromFile(dir + *location.data_file_id);
+        // parse from lockkey to data_file_key
+        auto data_file_key = S3::S3FilenameView::fromKey(*location.data_file_id).asDataFile().toFullKey();
+
+        auto data_file = S3::S3RandomAccessFile::create(data_file_key);
+        ReadBufferFromRandomAccessFile buf(data_file);
         buf.seek(location.offset_in_file);
         auto n = buf.readBig(ret.data(), location.size_in_file);
         RUNTIME_CHECK(n == location.size_in_file);
@@ -96,28 +97,41 @@ public:
     }
 
     void dumpCheckpoint(
+        UInt64 sequence,
+        UInt64 files = 0,
         std::unordered_set<String> file_ids_to_compact = {},
         UInt64 max_data_file_size = 256 * 1024 * 1024,
-        UInt64 max_edit_records_per_part = std::numeric_limits<UInt64>::max())
+        UInt64 max_edit_records_per_part = 100000)
     {
         page_storage->dumpIncrementalCheckpoint(UniversalPageStorage::DumpCheckpointOptions{
-            .data_file_id_pattern = "{seq}_{index}.data",
-            .data_file_path_pattern = dir + "{seq}_{index}.data",
-            .manifest_file_id_pattern = "{seq}.manifest",
-            .manifest_file_path_pattern = dir + "{seq}.manifest",
+            .data_file_id_pattern = S3::S3Filename::newCheckpointLockNameTemplate(store_id, sequence),
+            .data_file_path_pattern = S3::S3Filename::newCheckpointDataNameTemplate(store_id),
+            .manifest_file_id_pattern = S3::S3Filename::newCheckpointManifestNameTemplate(store_id),
+            .manifest_file_path_pattern = S3::S3Filename::newCheckpointManifestNameTemplate(store_id),
             .writer_info = *writer_info,
             .must_locked_files = {},
+            .override_sequence = sequence,
             .max_data_file_size = max_data_file_size,
             .max_edit_records_per_part = max_edit_records_per_part,
             .compact_getter = [=] { return file_ids_to_compact; },
         });
+
+        for (UInt64 i = 0; i < files; ++i)
+        {
+            auto data_file = S3::S3Filename::newCheckpointData(store_id, sequence, i);
+            ASSERT_TRUE(S3::objectExists(*s3_client, data_file.toFullKey()));
+        }
+        ASSERT_TRUE(
+            S3::objectExists(*s3_client, S3::S3Filename::newCheckpointManifest(store_id, sequence).toFullKey()));
     }
 
 protected:
     std::shared_ptr<UniversalPageStorage> page_storage;
     std::shared_ptr<V3::CheckpointProto::WriterInfo> writer_info;
-    std::string dir; // Checkpoint output directory
+    std::shared_ptr<S3::TiFlashS3Client> s3_client;
+    UInt64 store_id = 1027;
     UInt64 tag = 0;
+    LoggerPtr log;
 };
 
 TEST_F(PSCheckpointTest, DumpAndRead)
@@ -126,29 +140,40 @@ try
     {
         UniversalWriteBatch batch;
         batch.putPage("5", tag, "The flower carriage rocked");
+        // 5
         batch.putPage("3", tag, "Said she just dreamed a dream");
+        // 5, 3
         page_storage->write(std::move(batch));
     }
     {
         UniversalWriteBatch batch;
         batch.disableRemoteLock();
         batch.delPage("1");
+        // 5, 3
         batch.putRefPage("2", "5");
+        // 5, 3, 2(->5)
         batch.putPage("10", tag, "Nahida opened her eyes");
+        // 5, 3, 2(->5), 10
         batch.delPage("3");
+        // 5, 2(->5), 10
         PS::V3::CheckpointLocation data_location{
             .data_file_id = std::make_shared<String>("dt file path"),
             .offset_in_file = 0,
             .size_in_file = 0,
         };
         batch.putRemoteExternal("9", data_location);
+        // 5, 2(->5), 10, 9(->dt file path)
         page_storage->write(std::move(batch));
     }
-    dumpCheckpoint();
-    ASSERT_TRUE(Poco::File(dir + "7.manifest").exists());
-    ASSERT_TRUE(Poco::File(dir + "7_0.data").exists());
+    const UInt64 sequence = 0;
+    dumpCheckpoint(sequence);
+    String lock_file_name = fmt::format(
+        fmt::runtime(S3::S3Filename::newCheckpointLockNameTemplate(store_id, sequence)),
+        fmt::arg("seq", sequence),
+        fmt::arg("index", 0));
 
-    auto manifest_file = PosixRandomAccessFile::create(dir + "7.manifest");
+    auto manifest_file
+        = S3::S3RandomAccessFile::create(S3::S3Filename::newCheckpointManifest(store_id, sequence).toFullKey());
     auto reader = CPManifestFileReader::create({
         .plain_file = manifest_file,
     });
@@ -162,7 +187,7 @@ try
     auto iter = records.begin();
     ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
     ASSERT_EQ("10", iter->page_id);
-    ASSERT_EQ("7_0.data", *iter->entry.checkpoint_info.data_location.data_file_id);
+    ASSERT_EQ(lock_file_name, *iter->entry.checkpoint_info.data_location.data_file_id);
     ASSERT_EQ("Nahida opened her eyes", readData(iter->entry.checkpoint_info.data_location));
 
     iter++;
@@ -172,7 +197,7 @@ try
     iter++;
     ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
     ASSERT_EQ("5", iter->page_id);
-    ASSERT_EQ("7_0.data", *iter->entry.checkpoint_info.data_location.data_file_id);
+    ASSERT_EQ(lock_file_name, *iter->entry.checkpoint_info.data_location.data_file_id);
     ASSERT_EQ("The flower carriage rocked", readData(iter->entry.checkpoint_info.data_location));
 
     iter++;
@@ -188,18 +213,24 @@ try
     {
         UniversalWriteBatch batch;
         batch.putPage("5", tag, "The flower carriage rocked");
+        // 5
         page_storage->write(std::move(batch));
     }
     {
         UniversalWriteBatch batch;
         batch.putPage("5", tag, "Said she just dreamed a dream");
+        // 5
         page_storage->write(std::move(batch));
     }
-    dumpCheckpoint();
-    ASSERT_TRUE(Poco::File(dir + "2.manifest").exists());
-    ASSERT_TRUE(Poco::File(dir + "2_0.data").exists());
+    const UInt64 sequence = 0;
+    dumpCheckpoint(sequence);
+    String lock_file_name = fmt::format(
+        fmt::runtime(S3::S3Filename::newCheckpointLockNameTemplate(store_id, sequence)),
+        fmt::arg("seq", sequence),
+        fmt::arg("index", 0));
 
-    auto manifest_file = PosixRandomAccessFile::create(dir + "2.manifest");
+    auto manifest_file
+        = S3::S3RandomAccessFile::create(S3::S3Filename::newCheckpointManifest(store_id, sequence).toFullKey());
     auto reader = CPManifestFileReader::create({
         .plain_file = manifest_file,
     });
@@ -213,7 +244,7 @@ try
     auto iter = records.begin();
     ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
     ASSERT_EQ("5", iter->page_id);
-    ASSERT_EQ("2_0.data", *iter->entry.checkpoint_info.data_location.data_file_id);
+    ASSERT_EQ(lock_file_name, *iter->entry.checkpoint_info.data_location.data_file_id);
     ASSERT_EQ("Said she just dreamed a dream", readData(iter->entry.checkpoint_info.data_location));
 }
 CATCH
@@ -224,15 +255,18 @@ try
     {
         UniversalWriteBatch batch;
         batch.putPage("3", tag, "Said she just dreamed a dream");
+        // 3
         batch.putPage("7", tag, "");
+        // 3, 7
         batch.putPage("14", tag, "The flower carriage rocked");
+        // 3, 7, 14
         page_storage->write(std::move(batch));
     }
-    dumpCheckpoint();
-    ASSERT_TRUE(Poco::File(dir + "3.manifest").exists());
-    ASSERT_TRUE(Poco::File(dir + "3_0.data").exists());
+    const UInt64 sequence = 0;
+    dumpCheckpoint(sequence);
 
-    auto manifest_file = PosixRandomAccessFile::create(dir + "3.manifest");
+    auto manifest_file
+        = S3::S3RandomAccessFile::create(S3::S3Filename::newCheckpointManifest(store_id, sequence).toFullKey());
     auto reader = CPManifestFileReader::create({
         .plain_file = manifest_file,
     });
@@ -266,18 +300,20 @@ try
     {
         UniversalWriteBatch batch;
         batch.putPage("3", tag, "The flower carriage rocked");
+        // 3
         page_storage->write(std::move(batch));
     }
     {
         UniversalWriteBatch batch;
         batch.delPage("3");
+        //
         page_storage->write(std::move(batch));
     }
-    dumpCheckpoint();
-    ASSERT_TRUE(Poco::File(dir + "2.manifest").exists());
-    ASSERT_TRUE(Poco::File(dir + "2_0.data").exists());
+    const UInt64 sequence = 0;
+    dumpCheckpoint(sequence);
 
-    auto manifest_file = PosixRandomAccessFile::create(dir + "2.manifest");
+    auto manifest_file
+        = S3::S3RandomAccessFile::create(S3::S3Filename::newCheckpointManifest(store_id, sequence).toFullKey());
     auto reader = CPManifestFileReader::create({
         .plain_file = manifest_file,
     });
@@ -306,11 +342,11 @@ try
         batch.putPage("3", tag, "Said she just dreamed a dream");
         page_storage->write(std::move(batch));
     }
-    dumpCheckpoint();
-    ASSERT_TRUE(Poco::File(dir + "3.manifest").exists());
-    ASSERT_TRUE(Poco::File(dir + "3_0.data").exists());
+    const UInt64 sequence = 0;
+    dumpCheckpoint(sequence);
 
-    auto manifest_file = PosixRandomAccessFile::create(dir + "3.manifest");
+    auto manifest_file
+        = S3::S3RandomAccessFile::create(S3::S3Filename::newCheckpointManifest(store_id, sequence).toFullKey());
     auto reader = CPManifestFileReader::create({
         .plain_file = manifest_file,
     });
@@ -334,15 +370,20 @@ try
     {
         UniversalWriteBatch batch;
         batch.putPage("3", tag, "The flower carriage rocked");
+        // 3
         batch.putPage("4", tag, "Nahida opened her eyes");
+        // 3, 4
         page_storage->write(std::move(batch));
     }
-    dumpCheckpoint();
+    UInt64 sequence = 0;
     {
-        ASSERT_TRUE(Poco::File(dir + "2.manifest").exists());
-        ASSERT_TRUE(Poco::File(dir + "2_0.data").exists());
-
-        auto manifest_file = PosixRandomAccessFile::create(dir + "2.manifest");
+        dumpCheckpoint(sequence);
+        String lock_file_name = fmt::format(
+            fmt::runtime(S3::S3Filename::newCheckpointLockNameTemplate(store_id, sequence)),
+            fmt::arg("seq", sequence),
+            fmt::arg("index", 0));
+        auto manifest_file
+            = S3::S3RandomAccessFile::create(S3::S3Filename::newCheckpointManifest(store_id, sequence).toFullKey());
         auto reader = CPManifestFileReader::create({
             .plain_file = manifest_file,
         });
@@ -356,13 +397,13 @@ try
         auto iter = records.begin();
         ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
         ASSERT_EQ("3", iter->page_id);
-        ASSERT_EQ("2_0.data", *iter->entry.checkpoint_info.data_location.data_file_id);
+        ASSERT_EQ(lock_file_name, *iter->entry.checkpoint_info.data_location.data_file_id);
         ASSERT_EQ("The flower carriage rocked", readData(iter->entry.checkpoint_info.data_location));
 
         iter++;
         ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
         ASSERT_EQ("4", iter->page_id);
-        ASSERT_EQ("2_0.data", *iter->entry.checkpoint_info.data_location.data_file_id);
+        ASSERT_EQ(lock_file_name, *iter->entry.checkpoint_info.data_location.data_file_id);
         ASSERT_EQ("Nahida opened her eyes", readData(iter->entry.checkpoint_info.data_location));
     }
 
@@ -371,15 +412,16 @@ try
     {
         UniversalWriteBatch batch;
         batch.putPage("3", tag, "Said she just dreamed a dream"); // Override
+        // 3, 4
         batch.putPage("5", tag, "Dreamed of the day that she was born"); // New
+        // 3, 4, 5
         page_storage->write(std::move(batch));
     }
-    dumpCheckpoint();
     {
-        ASSERT_TRUE(Poco::File(dir + "4.manifest").exists());
-        ASSERT_TRUE(Poco::File(dir + "4_0.data").exists());
-
-        auto manifest_file = PosixRandomAccessFile::create(dir + "4.manifest");
+        sequence = 1;
+        dumpCheckpoint(sequence);
+        auto manifest_file
+            = S3::S3RandomAccessFile::create(S3::S3Filename::newCheckpointManifest(store_id, sequence).toFullKey());
         auto reader = CPManifestFileReader::create({
             .plain_file = manifest_file,
         });
@@ -393,19 +435,34 @@ try
         auto iter = records.begin();
         ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
         ASSERT_EQ("3", iter->page_id);
-        ASSERT_EQ("4_0.data", *iter->entry.checkpoint_info.data_location.data_file_id);
+        ASSERT_EQ(
+            fmt::format(
+                fmt::runtime(S3::S3Filename::newCheckpointLockNameTemplate(store_id, sequence)),
+                fmt::arg("seq", 1),
+                fmt::arg("index", 0)),
+            *iter->entry.checkpoint_info.data_location.data_file_id); // sequence 1
         ASSERT_EQ("Said she just dreamed a dream", readData(iter->entry.checkpoint_info.data_location));
 
         iter++;
         ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
         ASSERT_EQ("4", iter->page_id);
-        ASSERT_EQ("2_0.data", *iter->entry.checkpoint_info.data_location.data_file_id);
+        ASSERT_EQ(
+            fmt::format(
+                fmt::runtime(S3::S3Filename::newCheckpointLockNameTemplate(store_id, 0)), // lock by sequence 0
+                fmt::arg("seq", 0),
+                fmt::arg("index", 0)),
+            *iter->entry.checkpoint_info.data_location.data_file_id); // sequence 0
         ASSERT_EQ("Nahida opened her eyes", readData(iter->entry.checkpoint_info.data_location));
 
         iter++;
         ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
         ASSERT_EQ("5", iter->page_id);
-        ASSERT_EQ("4_0.data", *iter->entry.checkpoint_info.data_location.data_file_id);
+        ASSERT_EQ(
+            fmt::format(
+                fmt::runtime(S3::S3Filename::newCheckpointLockNameTemplate(store_id, sequence)),
+                fmt::arg("seq", 1),
+                fmt::arg("index", 0)),
+            *iter->entry.checkpoint_info.data_location.data_file_id); // sequence 1
         ASSERT_EQ("Dreamed of the day that she was born", readData(iter->entry.checkpoint_info.data_location));
     }
 
@@ -414,14 +471,23 @@ try
     {
         UniversalWriteBatch batch;
         batch.putPage("7", tag, "alas, but where had Lord Rukkhadevata gone"); // New
+        // 3, 4, 5, 7
         page_storage->write(std::move(batch));
     }
-    dumpCheckpoint(/*file_ids_to_compact*/ {"4_0.data"});
     {
-        ASSERT_TRUE(Poco::File(dir + "5.manifest").exists());
-        ASSERT_TRUE(Poco::File(dir + "5_0.data").exists());
-
-        auto manifest_file = PosixRandomAccessFile::create(dir + "5.manifest");
+        sequence = 2;
+        dumpCheckpoint(
+            sequence,
+            1,
+            /*file_ids_to_compact*/
+            {
+                fmt::format(
+                    fmt::runtime(S3::S3Filename::newCheckpointLockNameTemplate(store_id, 1)),
+                    fmt::arg("seq", 1),
+                    fmt::arg("index", 0)), // compact sequence 1, page 3, 5 rewrite
+            });
+        auto manifest_file
+            = S3::S3RandomAccessFile::create(S3::S3Filename::newCheckpointManifest(store_id, sequence).toFullKey());
         auto reader = CPManifestFileReader::create({
             .plain_file = manifest_file,
         });
@@ -435,25 +501,45 @@ try
         auto iter = records.begin();
         ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
         EXPECT_EQ("3", iter->page_id);
-        EXPECT_EQ("5_0.data", *iter->entry.checkpoint_info.data_location.data_file_id); // rewrite
+        EXPECT_EQ(
+            fmt::format(
+                fmt::runtime(S3::S3Filename::newCheckpointLockNameTemplate(store_id, sequence)),
+                fmt::arg("seq", 2),
+                fmt::arg("index", 0)),
+            *iter->entry.checkpoint_info.data_location.data_file_id); // rewrite
         EXPECT_EQ("Said she just dreamed a dream", readData(iter->entry.checkpoint_info.data_location));
 
         iter++;
         ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
         EXPECT_EQ("4", iter->page_id);
-        EXPECT_EQ("2_0.data", *iter->entry.checkpoint_info.data_location.data_file_id); // not rewrite
+        EXPECT_EQ(
+            fmt::format(
+                fmt::runtime(S3::S3Filename::newCheckpointLockNameTemplate(store_id, 0)), // lock by sequence 0
+                fmt::arg("seq", 0),
+                fmt::arg("index", 0)),
+            *iter->entry.checkpoint_info.data_location.data_file_id); // not rewrite
         EXPECT_EQ("Nahida opened her eyes", readData(iter->entry.checkpoint_info.data_location));
 
         iter++;
         ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
         EXPECT_EQ("5", iter->page_id);
-        EXPECT_EQ("5_0.data", *iter->entry.checkpoint_info.data_location.data_file_id); // rewrite
+        EXPECT_EQ(
+            fmt::format(
+                fmt::runtime(S3::S3Filename::newCheckpointLockNameTemplate(store_id, sequence)),
+                fmt::arg("seq", 2),
+                fmt::arg("index", 0)),
+            *iter->entry.checkpoint_info.data_location.data_file_id); // rewrite
         EXPECT_EQ("Dreamed of the day that she was born", readData(iter->entry.checkpoint_info.data_location));
 
         iter++;
         ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
         EXPECT_EQ("7", iter->page_id);
-        EXPECT_EQ("5_0.data", *iter->entry.checkpoint_info.data_location.data_file_id); // new write
+        EXPECT_EQ(
+            fmt::format(
+                fmt::runtime(S3::S3Filename::newCheckpointLockNameTemplate(store_id, sequence)),
+                fmt::arg("seq", 2),
+                fmt::arg("index", 0)),
+            *iter->entry.checkpoint_info.data_location.data_file_id); // new write
         EXPECT_EQ("alas, but where had Lord Rukkhadevata gone", readData(iter->entry.checkpoint_info.data_location));
     }
 }
@@ -465,60 +551,40 @@ try
     {
         UniversalWriteBatch batch;
         batch.putPage("3", tag, "The flower carriage rocked");
+        // 3
         batch.putPage("4", tag, "Nahida opened her eyes");
+        // 3, 4
         page_storage->write(std::move(batch));
     }
-    // mock that local files are generated, but uploading to remote data source is failed
+    // mock that upload failed
+    MockS3Client::setPutObjectStatus(MockS3Client::S3Status::FAILED);
+    UInt64 sequence = 0;
     try
     {
-        dumpCheckpoint();
+        dumpCheckpoint(sequence);
         FAIL() << "Uploading checkpoint failed would throw exception, should not come here.";
     }
     catch (...)
     {
-        ASSERT_TRUE(Poco::File(dir + "2.manifest").exists());
-        ASSERT_TRUE(Poco::File(dir + "2_0.data").exists());
-
-        auto manifest_file = PosixRandomAccessFile::create(dir + "2.manifest");
-        auto reader = CPManifestFileReader::create({
-            .plain_file = manifest_file,
-        });
-        auto im = CheckpointProto::StringsInternMap{};
-        auto prefix = reader->readPrefix();
-        auto edits = reader->readEdits(im);
-        auto records = edits->getRecords();
-
-        ASSERT_EQ(2, records.size());
-
-        auto iter = records.begin();
-        ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
-        ASSERT_EQ("3", iter->page_id);
-        ASSERT_EQ("2_0.data", *iter->entry.checkpoint_info.data_location.data_file_id);
-        ASSERT_EQ("The flower carriage rocked", readData(iter->entry.checkpoint_info.data_location));
-
-        iter++;
-        ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
-        ASSERT_EQ("4", iter->page_id);
-        ASSERT_EQ("2_0.data", *iter->entry.checkpoint_info.data_location.data_file_id);
-        ASSERT_EQ("Nahida opened her eyes", readData(iter->entry.checkpoint_info.data_location));
+        LOG_DEBUG(log, "Upload checkpoint failed as expected.");
     }
 
     // Write and dump again.
-    // This time the checkpoint should also contains the
-    // data in previous write
+    // This time the checkpoint should also contains the data in previous write
 
+    MockS3Client::setPutObjectStatus(MockS3Client::S3Status::NORMAL);
     {
         UniversalWriteBatch batch;
         batch.putPage("3", tag, "Said she just dreamed a dream"); // Override
         batch.putPage("5", tag, "Dreamed of the day that she was born"); // New
+        // 3, 4, 5
         page_storage->write(std::move(batch));
     }
-    dumpCheckpoint();
     {
-        ASSERT_TRUE(Poco::File(dir + "4.manifest").exists());
-        ASSERT_TRUE(Poco::File(dir + "4_0.data").exists());
-
-        auto manifest_file = PosixRandomAccessFile::create(dir + "4.manifest");
+        sequence = 1;
+        dumpCheckpoint(sequence);
+        auto manifest_file
+            = S3::S3RandomAccessFile::create(S3::S3Filename::newCheckpointManifest(store_id, sequence).toFullKey());
         auto reader = CPManifestFileReader::create({
             .plain_file = manifest_file,
         });
@@ -529,23 +595,27 @@ try
 
         ASSERT_EQ(3, records.size());
 
+        String lock_file_name = fmt::format(
+            fmt::runtime(S3::S3Filename::newCheckpointLockNameTemplate(store_id, sequence)),
+            fmt::arg("seq", sequence),
+            fmt::arg("index", 0));
+
         auto iter = records.begin();
         ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
         ASSERT_EQ("3", iter->page_id);
-        ASSERT_EQ("4_0.data", *iter->entry.checkpoint_info.data_location.data_file_id);
+        ASSERT_EQ(lock_file_name, *iter->entry.checkpoint_info.data_location.data_file_id);
         ASSERT_EQ("Said she just dreamed a dream", readData(iter->entry.checkpoint_info.data_location));
 
         iter++;
         ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
         ASSERT_EQ("4", iter->page_id);
-        // 2_0.data is not uploaded and the data_location only get updated after success upload
-        ASSERT_EQ("4_0.data", *iter->entry.checkpoint_info.data_location.data_file_id);
+        ASSERT_EQ(lock_file_name, *iter->entry.checkpoint_info.data_location.data_file_id);
         ASSERT_EQ("Nahida opened her eyes", readData(iter->entry.checkpoint_info.data_location));
 
         iter++;
         ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
         ASSERT_EQ("5", iter->page_id);
-        ASSERT_EQ("4_0.data", *iter->entry.checkpoint_info.data_location.data_file_id);
+        ASSERT_EQ(lock_file_name, *iter->entry.checkpoint_info.data_location.data_file_id);
         ASSERT_EQ("Dreamed of the day that she was born", readData(iter->entry.checkpoint_info.data_location));
     }
 }
@@ -561,13 +631,11 @@ try
         page_storage->write(std::move(batch));
     }
 
-    dumpCheckpoint();
-
+    UInt64 sequence = 0;
     {
-        ASSERT_TRUE(Poco::File(dir + "2.manifest").exists());
-        ASSERT_TRUE(Poco::File(dir + "2_0.data").exists());
-
-        auto manifest_file = PosixRandomAccessFile::create(dir + "2.manifest");
+        dumpCheckpoint(sequence);
+        auto manifest_file
+            = S3::S3RandomAccessFile::create(S3::S3Filename::newCheckpointManifest(store_id, sequence).toFullKey());
         auto reader = CPManifestFileReader::create({
             .plain_file = manifest_file,
         });
@@ -579,12 +647,15 @@ try
     {
         UniversalWriteBatch batch;
         batch.putPage("5", tag, "Said she just dreamed a dream");
+        // 5
         page_storage->write(std::move(batch));
     }
     {
-        dumpCheckpoint();
+        sequence = 1;
+        dumpCheckpoint(sequence);
 
-        auto manifest_file = PosixRandomAccessFile::create(dir + "3.manifest");
+        auto manifest_file
+            = S3::S3RandomAccessFile::create(S3::S3Filename::newCheckpointManifest(store_id, sequence).toFullKey());
         auto reader = CPManifestFileReader::create({
             .plain_file = manifest_file,
         });
@@ -598,7 +669,12 @@ try
         auto iter = records.begin();
         ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
         ASSERT_EQ("5", iter->page_id);
-        ASSERT_EQ("3_0.data", *iter->entry.checkpoint_info.data_location.data_file_id);
+        ASSERT_EQ(
+            fmt::format(
+                fmt::runtime(S3::S3Filename::newCheckpointLockNameTemplate(store_id, sequence)),
+                fmt::arg("seq", sequence),
+                fmt::arg("index", 0)),
+            *iter->entry.checkpoint_info.data_location.data_file_id);
         ASSERT_EQ("Said she just dreamed a dream", readData(iter->entry.checkpoint_info.data_location));
     }
 }
@@ -619,14 +695,11 @@ try
         batch.delPage("6");
         page_storage->write(std::move(batch));
     }
-
-    dumpCheckpoint();
-
+    const UInt64 sequence = 0;
     {
-        ASSERT_TRUE(Poco::File(dir + "8.manifest").exists());
-        ASSERT_TRUE(Poco::File(dir + "8_0.data").exists());
-
-        auto manifest_file = PosixRandomAccessFile::create(dir + "8.manifest");
+        dumpCheckpoint(sequence);
+        auto manifest_file
+            = S3::S3RandomAccessFile::create(S3::S3Filename::newCheckpointManifest(store_id, sequence).toFullKey());
         auto reader = CPManifestFileReader::create({
             .plain_file = manifest_file,
         });
@@ -650,7 +723,7 @@ try
     }
     {
         auto sp_before_apply = SyncPointCtl::enableInScope("before_PageStorage::dumpIncrementalCheckpoint_copyInfo");
-        auto th_cp = std::async([&]() { dumpCheckpoint(); });
+        auto th_cp = std::async([&]() { dumpCheckpoint(0); });
         sp_before_apply.waitAndPause();
 
         page_storage->gc(/* not_skip */ true);
@@ -662,11 +735,10 @@ try
         sp_before_apply.next();
         th_cp.get();
     }
+    UInt64 sequence = 0;
     {
-        ASSERT_TRUE(Poco::File(dir + "3.manifest").exists());
-        ASSERT_TRUE(Poco::File(dir + "3_0.data").exists());
-
-        auto manifest_file = PosixRandomAccessFile::create(dir + "3.manifest");
+        auto manifest_file
+            = S3::S3RandomAccessFile::create(S3::S3Filename::newCheckpointManifest(store_id, sequence).toFullKey());
         auto reader = CPManifestFileReader::create({
             .plain_file = manifest_file,
         });
@@ -680,13 +752,20 @@ try
         auto iter = records.begin();
         ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
         ASSERT_EQ("foo", iter->page_id);
-        ASSERT_EQ("3_0.data", *iter->entry.checkpoint_info.data_location.data_file_id);
+        ASSERT_EQ(
+            fmt::format(
+                fmt::runtime(S3::S3Filename::newCheckpointLockNameTemplate(store_id, sequence)),
+                fmt::arg("seq", sequence),
+                fmt::arg("index", 0)),
+            *iter->entry.checkpoint_info.data_location.data_file_id);
         ASSERT_EQ("Value", readData(iter->entry.checkpoint_info.data_location));
     }
     {
-        dumpCheckpoint();
+        sequence = 1;
+        dumpCheckpoint(sequence);
 
-        auto manifest_file = PosixRandomAccessFile::create(dir + "4.manifest");
+        auto manifest_file
+            = S3::S3RandomAccessFile::create(S3::S3Filename::newCheckpointManifest(store_id, sequence).toFullKey());
         auto reader = CPManifestFileReader::create({
             .plain_file = manifest_file,
         });
@@ -704,7 +783,12 @@ try
         iter++;
         ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
         ASSERT_EQ("foo", iter->page_id);
-        ASSERT_EQ("3_0.data", *iter->entry.checkpoint_info.data_location.data_file_id);
+        ASSERT_EQ(
+            fmt::format(
+                fmt::runtime(S3::S3Filename::newCheckpointLockNameTemplate(store_id, 0)), // lock by sequence 0
+                fmt::arg("seq", 0),
+                fmt::arg("index", 0)),
+            *iter->entry.checkpoint_info.data_location.data_file_id);
         ASSERT_EQ("Value", readData(iter->entry.checkpoint_info.data_location));
     }
 }
@@ -719,9 +803,10 @@ try
         batch.delPage("3");
         page_storage->write(std::move(batch));
     }
+    UInt64 sequence = 0;
     {
         auto sp_before_apply = SyncPointCtl::enableInScope("before_PageStorage::dumpIncrementalCheckpoint_copyInfo");
-        auto th_cp = std::async([&]() { dumpCheckpoint(); });
+        auto th_cp = std::async([&]() { dumpCheckpoint(sequence); });
         sp_before_apply.waitAndPause();
 
         page_storage->gc(/* not_skip */ true);
@@ -734,10 +819,8 @@ try
         th_cp.get();
     }
     {
-        ASSERT_TRUE(Poco::File(dir + "2.manifest").exists());
-        ASSERT_TRUE(Poco::File(dir + "2_0.data").exists());
-
-        auto manifest_file = PosixRandomAccessFile::create(dir + "2.manifest");
+        auto manifest_file
+            = S3::S3RandomAccessFile::create(S3::S3Filename::newCheckpointManifest(store_id, sequence).toFullKey());
         auto reader = CPManifestFileReader::create({
             .plain_file = manifest_file,
         });
@@ -747,9 +830,10 @@ try
         ASSERT_TRUE(!edits.has_value());
     }
     {
-        dumpCheckpoint();
-
-        auto manifest_file = PosixRandomAccessFile::create(dir + "3.manifest");
+        sequence = 1;
+        dumpCheckpoint(sequence);
+        auto manifest_file
+            = S3::S3RandomAccessFile::create(S3::S3Filename::newCheckpointManifest(store_id, sequence).toFullKey());
         auto reader = CPManifestFileReader::create({
             .plain_file = manifest_file,
         });
@@ -763,12 +847,16 @@ try
         auto iter = records.begin();
         ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
         ASSERT_EQ("3", iter->page_id);
-        ASSERT_EQ("3_0.data", *iter->entry.checkpoint_info.data_location.data_file_id);
+        ASSERT_EQ(
+            fmt::format(
+                fmt::runtime(S3::S3Filename::newCheckpointLockNameTemplate(store_id, sequence)),
+                fmt::arg("seq", sequence),
+                fmt::arg("index", 0)),
+            *iter->entry.checkpoint_info.data_location.data_file_id);
         ASSERT_EQ("updated value", readData(iter->entry.checkpoint_info.data_location));
     }
 }
 CATCH
-
 
 TEST_F(PSCheckpointTest, DumpMultiFiles)
 try
@@ -796,16 +884,11 @@ try
         batch.putRemoteExternal("9", data_location);
         page_storage->write(std::move(batch));
     }
-    dumpCheckpoint({}, 1); // One record per file.
+    const UInt64 sequence = 0;
+    dumpCheckpoint(sequence, 3, {}, 1); // One record per file.
 
-    // valid record in data file: put 10, put 3, put 5
-    ASSERT_TRUE(Poco::File(dir + "9.manifest").exists());
-    ASSERT_TRUE(Poco::File(dir + "9_0.data").exists());
-    ASSERT_TRUE(Poco::File(dir + "9_1.data").exists());
-    ASSERT_TRUE(Poco::File(dir + "9_2.data").exists());
-    ASSERT_FALSE(Poco::File(dir + "9_3.data").exists());
-
-    auto manifest_file = PosixRandomAccessFile::create(dir + "9.manifest");
+    auto manifest_file
+        = S3::S3RandomAccessFile::create(S3::S3Filename::newCheckpointManifest(store_id, sequence).toFullKey());
     auto reader = CPManifestFileReader::create({
         .plain_file = manifest_file,
     });
@@ -819,7 +902,12 @@ try
     auto iter = records.begin();
     ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
     ASSERT_EQ("10", iter->page_id);
-    ASSERT_EQ("9_0.data", *iter->entry.checkpoint_info.data_location.data_file_id);
+    ASSERT_EQ(
+        fmt::format(
+            fmt::runtime(S3::S3Filename::newCheckpointLockNameTemplate(store_id, sequence)),
+            fmt::arg("seq", sequence),
+            fmt::arg("index", 0)),
+        *iter->entry.checkpoint_info.data_location.data_file_id);
     ASSERT_EQ("Nahida opened her eyes", readData(iter->entry.checkpoint_info.data_location));
 
     iter++;
@@ -830,13 +918,23 @@ try
     ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
     ASSERT_EQ("3", iter->page_id);
     ASSERT_TRUE(iter->entry.checkpoint_info.has_value());
-    ASSERT_EQ("9_1.data", *iter->entry.checkpoint_info.data_location.data_file_id);
+    ASSERT_EQ(
+        fmt::format(
+            fmt::runtime(S3::S3Filename::newCheckpointLockNameTemplate(store_id, sequence)),
+            fmt::arg("seq", sequence),
+            fmt::arg("index", 1)),
+        *iter->entry.checkpoint_info.data_location.data_file_id);
     ASSERT_EQ("Said she just dreamed a dream", readData(iter->entry.checkpoint_info.data_location));
 
     iter++;
     ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
     ASSERT_EQ("5", iter->page_id);
-    ASSERT_EQ("9_2.data", *iter->entry.checkpoint_info.data_location.data_file_id);
+    ASSERT_EQ(
+        fmt::format(
+            fmt::runtime(S3::S3Filename::newCheckpointLockNameTemplate(store_id, sequence)),
+            fmt::arg("seq", sequence),
+            fmt::arg("index", 2)),
+        *iter->entry.checkpoint_info.data_location.data_file_id);
     ASSERT_EQ("The flower carriage rocked", readData(iter->entry.checkpoint_info.data_location));
 
     iter++;
@@ -858,6 +956,7 @@ try
         batch.putPage("5", tag, "The flower carriage rocked");
         batch.putPage("3", tag, "Said she just dreamed a dream");
         batch.putPage("11", tag, "Said she just dreamed a dream");
+        // 5, 3, 11
         page_storage->write(std::move(batch));
     }
     {
@@ -874,15 +973,19 @@ try
             .size_in_file = 0,
         };
         batch.putRemoteExternal("9", data_location);
+        // 3, 10, 9
         page_storage->write(std::move(batch));
     }
+    const UInt64 sequence = 0;
     dumpCheckpoint(
+        sequence,
+        3,
         /*file_ids_to_compact*/ {},
         /*max_data_file_size*/ 1,
         /*max_edit_records_per_part*/ 1);
 
-    ASSERT_TRUE(Poco::File(dir + "9.manifest").exists());
-    auto manifest_file = PosixRandomAccessFile::create(dir + "9.manifest");
+    auto manifest_file
+        = S3::S3RandomAccessFile::create(S3::S3Filename::newCheckpointManifest(store_id, sequence).toFullKey());
     auto reader = CPManifestFileReader::create({
         .plain_file = manifest_file,
     });
@@ -906,7 +1009,12 @@ try
         case 1:
             ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
             ASSERT_EQ("10", iter->page_id);
-            ASSERT_EQ("9_0.data", *iter->entry.checkpoint_info.data_location.data_file_id);
+            ASSERT_EQ(
+                fmt::format(
+                    fmt::runtime(S3::S3Filename::newCheckpointLockNameTemplate(store_id, sequence)),
+                    fmt::arg("seq", sequence),
+                    fmt::arg("index", 0)),
+                *iter->entry.checkpoint_info.data_location.data_file_id);
             ASSERT_EQ("Nahida opened her eyes", readData(iter->entry.checkpoint_info.data_location));
             break;
         case 2:
@@ -917,13 +1025,23 @@ try
             ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
             ASSERT_EQ("3", iter->page_id);
             ASSERT_TRUE(iter->entry.checkpoint_info.has_value());
-            ASSERT_EQ("9_1.data", *iter->entry.checkpoint_info.data_location.data_file_id);
+            ASSERT_EQ(
+                fmt::format(
+                    fmt::runtime(S3::S3Filename::newCheckpointLockNameTemplate(store_id, sequence)),
+                    fmt::arg("seq", sequence),
+                    fmt::arg("index", 1)),
+                *iter->entry.checkpoint_info.data_location.data_file_id);
             ASSERT_EQ("Said she just dreamed a dream", readData(iter->entry.checkpoint_info.data_location));
             break;
         case 4:
             ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
             ASSERT_EQ("5", iter->page_id);
-            ASSERT_EQ("9_2.data", *iter->entry.checkpoint_info.data_location.data_file_id);
+            ASSERT_EQ(
+                fmt::format(
+                    fmt::runtime(S3::S3Filename::newCheckpointLockNameTemplate(store_id, sequence)),
+                    fmt::arg("seq", sequence),
+                    fmt::arg("index", 2)),
+                *iter->entry.checkpoint_info.data_location.data_file_id);
             ASSERT_EQ("The flower carriage rocked", readData(iter->entry.checkpoint_info.data_location));
             break;
         case 5:
@@ -1031,6 +1149,7 @@ try
         UniversalWriteBatch batch;
         batch.putPage("5", tag, "The flower carriage rocked");
         batch.putPage("3", tag, "Said she just dreamed a dream");
+        // 5, 3
         page_storage->write(std::move(batch));
     }
     {
@@ -1039,6 +1158,7 @@ try
         batch.putRefPage("2", "5");
         batch.putPage("10", tag, "Nahida opened her eyes");
         batch.delPage("3");
+        // 5, 2(->5), 10
         page_storage->write(std::move(batch));
     }
     uni_ps_service->uploadCheckpointImpl(store_info, s3lock_client, remote_store, false);

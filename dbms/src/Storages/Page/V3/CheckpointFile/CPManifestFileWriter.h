@@ -53,7 +53,10 @@ public:
         RUNTIME_CHECK(max_edit_records_per_part > 0, max_edit_records_per_part);
     }
 
-    ~CPManifestFileWriter() { flush(); }
+    // Because file_writer will write data to S3 directly, when we call flush(), the data will be uploaded to S3.
+    // But upload data to S3 may fail, then the Exception will not be caught.
+    // So do not call flush() in destructor, please make sure writeSuffix() is called before the object is destroyed.
+    ~CPManifestFileWriter() = default;
 
     /// Must be called first.
     void writePrefix(const CheckpointProto::ManifestFilePrefix & prefix);
