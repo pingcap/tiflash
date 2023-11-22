@@ -85,7 +85,7 @@ public:
         MemoryTracker * parent = nullptr,
         bool log_peak_memory_usage_in_destructor = true)
     {
-        std::shared_ptr<MemoryTracker> p = std::shared_ptr<MemoryTracker>(new MemoryTracker(limit));
+        auto p = std::shared_ptr<MemoryTracker>(new MemoryTracker(limit));
         p->setParent(parent);
         p->log_peak_memory_usage_in_destructor = log_peak_memory_usage_in_destructor;
         return p;
