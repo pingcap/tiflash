@@ -56,12 +56,23 @@ typename PageEntriesEdit<UniversalPageId>::EditRecord PageEntriesEdit<UniversalP
     CheckpointProto::StringsInternMap & strings_map)
 {
     EditRecord rec;
-    rec.type = typeFromProto(proto_edit.type());
-    rec.page_id = UniversalPageId(proto_edit.page_id());
-    rec.ori_page_id = UniversalPageId(proto_edit.ori_page_id());
-    rec.version.sequence = proto_edit.version_sequence();
-    rec.version.epoch = proto_edit.version_epoch();
-    rec.being_ref_count = 1;
+    try
+    {
+        rec.type = typeFromProto(proto_edit.type());
+        rec.page_id = UniversalPageId(proto_edit.page_id());
+        rec.ori_page_id = UniversalPageId(proto_edit.ori_page_id());
+        rec.version.sequence = proto_edit.version_sequence();
+        rec.version.epoch = proto_edit.version_epoch();
+        rec.being_ref_count = 1;
+    }
+    catch (const Exception & e)
+    {
+        tryLogCurrentException(
+            DB::Logger::get(),
+            fmt::format("EditRecord::fromProto failed, proto={}", proto_edit.DebugString()));
+        e.rethrow();
+    }
+
     if (rec.type == EditRecordType::VAR_ENTRY)
     {
         // uploading page data may be disabled

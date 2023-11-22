@@ -77,12 +77,20 @@ struct AsyncTasks
     {
         std::unique_lock<std::mutex> l(mtx);
         auto it = futures.find(key);
-        RUNTIME_CHECK_MSG(it != futures.end(), "fetchResult is empty");
+        RUNTIME_CHECK_MSG(it != futures.end(), "fetchResult meets empty key");
         auto fut = std::move(it->second);
         futures.erase(it);
         start_time.erase(key);
         l.unlock();
         return fut.get();
+    }
+
+    uint64_t queryElapsed(Key key)
+    {
+        std::unique_lock<std::mutex> l(mtx);
+        auto it2 = start_time.find(key);
+        RUNTIME_CHECK_MSG(it2 != start_time.end(), "queryElapsed meets empty key");
+        return getCurrentMillis() - it2->second;
     }
 
     std::pair<R, uint64_t> fetchResultAndElapsed(Key key)
@@ -91,7 +99,7 @@ struct AsyncTasks
         auto it = futures.find(key);
         auto fut = std::move(it->second);
         auto it2 = start_time.find(key);
-        RUNTIME_CHECK_MSG(it != futures.end() && it2 != start_time.end(), "fetchResultAndElapsed is empty");
+        RUNTIME_CHECK_MSG(it != futures.end() && it2 != start_time.end(), "fetchResultAndElapsed meets empty key");
         auto start = it2->second;
         futures.erase(it);
         start_time.erase(it2);

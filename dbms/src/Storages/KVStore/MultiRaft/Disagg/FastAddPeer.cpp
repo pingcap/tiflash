@@ -343,6 +343,7 @@ FastAddPeerRes FastAddPeerImplTransform(
 }
 
 FastAddPeerRes FastAddPeerImpl(
+    FastAddPeerContextPtr fap_ctx,
     TMTContext & tmt,
     TiFlashRaftProxyHelper * proxy_helper,
     uint64_t region_id,
@@ -350,6 +351,8 @@ FastAddPeerRes FastAddPeerImpl(
 {
     try
     {
+        auto elapsed = fap_ctx->tasks_trace->queryElapsed(region_id);
+        GET_METRIC(tiflash_fap_task_duration_seconds, type_queue_stage).Observe(elapsed / 1000.0);
         auto res = FastAddPeerImplBuild(tmt, proxy_helper, region_id, new_peer_id);
         if (std::holds_alternative<CheckpointRegionInfoAndData>(res))
         {
@@ -442,11 +445,11 @@ FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, u
         if (!fap_ctx->tasks_trace->isScheduled(region_id))
         {
             // We need to schedule the task.
-            auto res = fap_ctx->tasks_trace->addTask(region_id, [server, region_id, new_peer_id]() {
+            auto res = fap_ctx->tasks_trace->addTask(region_id, [server, region_id, new_peer_id, fap_ctx]() {
                 std::string origin_name = getThreadName();
                 SCOPE_EXIT({ setThreadName(origin_name.c_str()); });
                 setThreadName("fap-builder");
-                return FastAddPeerImpl(*(server->tmt), server->proxy_helper, region_id, new_peer_id);
+                return FastAddPeerImpl(fap_ctx, *(server->tmt), server->proxy_helper, region_id, new_peer_id);
             });
             if (res)
             {
