@@ -72,7 +72,7 @@ TEST(WriteLimiterTest, Rate)
         // In theory, the upper bound of `elapsed` cannot be guaranteed.
         // So that we cannot guarantee the lower bound of `actual_rate`.
         // EXPECT_GE(actual_rate / target, 0.75)
-            << fmt::format("actual_rate={} target={} elapsed={:.3f}s", actual_rate, target, elapsed);
+            // << fmt::format("actual_rate={} target={} elapsed={:.3f}s", actual_rate, target, elapsed);
         EXPECT_LE(actual_rate / target, 1.30)
             << fmt::format("actual_rate={} target={} elapsed={:.3f}s", actual_rate, target, elapsed);
     }
