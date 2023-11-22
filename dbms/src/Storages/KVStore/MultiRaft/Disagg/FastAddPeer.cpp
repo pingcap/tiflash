@@ -251,7 +251,7 @@ std::variant<CheckpointRegionInfoAndData, FastAddPeerRes> FastAddPeerImplBuild(
         {
             if (watch.elapsedSeconds() >= settings.fap_wait_checkpoint_timeout_seconds)
             {
-                // TODO(fap) remove from AsyncTasks
+                // TODO(fap) Cancel and remove from AsyncTasks
                 // This could happen if there are too many pending tasks in queue,
                 LOG_INFO(log, "FastAddPeer timeout region_id={} new_peer_id={}", region_id, new_peer_id);
                 GET_METRIC(tiflash_fap_task_result, type_failed_timeout).Increment();
@@ -318,8 +318,8 @@ FastAddPeerRes FastAddPeerImplTransform(
     }
 
     // Write raft log to uni ps, we do this here because we store raft log seperately.
-    // TODO(fap) Move this to `ApplyFapSnapshot` if the peer is not the first one of this region.
-    // TODO(fap) Maybe need to clean stale data.
+    // Currently, FAP only handle when the peer is newly created in this store.
+    // TODO(fap) However, Move this to `ApplyFapSnapshot` and clean stale data, if FAP can later handle all snapshots.
     UniversalWriteBatch wb;
     RaftDataReader raft_data_reader(*(checkpoint_info->temp_ps));
     raft_data_reader.traverseRemoteRaftLogForRegion(
@@ -405,7 +405,7 @@ void ApplyFapSnapshotImpl(TMTContext & tmt, TiFlashRaftProxyHelper * proxy_helpe
         auto checkpoint_ingest_info = fap_ctx->getOrRestoreCheckpointIngestInfo(tmt, proxy_helper, region_id, peer_id);
         kvstore->handleIngestCheckpoint(checkpoint_ingest_info->getRegion(), checkpoint_ingest_info, tmt);
         checkpoint_ingest_info->markDelete();
-        // TODO(fap) We can move checkpoint_ingest_info to a dedicated queue, and schedule a timed task to clean it.
+        // TODO(fap) We can move checkpoint_ingest_info to a dedicated queue, and schedule a timed task to clean it, if this costs much.
         // However, we have to make sure the clean task will not override if a new fap snapshot of the same region comes later.
         fap_ctx->removeCheckpointIngestInfo(region_id);
         GET_METRIC(tiflash_fap_task_duration_seconds, type_ingest_stage).Observe(watch_ingest.elapsedSeconds());

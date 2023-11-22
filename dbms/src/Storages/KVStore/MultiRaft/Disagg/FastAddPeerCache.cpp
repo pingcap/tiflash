@@ -183,7 +183,6 @@ ParsedCheckpointDataHolderPtr buildParsedCheckpointData(Context & context, const
             }
             else if (record.type == PS::V3::EditRecordType::VAR_EXTERNAL)
             {
-                // TODO(fap) may be it could be a soft error
                 RUNTIME_CHECK(record.entry.checkpoint_info.has_value());
                 if (!record.entry.checkpoint_info.data_location.isValid())
                 {
