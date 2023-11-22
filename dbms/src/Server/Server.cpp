@@ -1720,8 +1720,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
                     store_id,
                     store_ident->store_id());
             }
-            throw Exception("Mock exception thrown");
-
             if (global_context->getSharedContextDisagg()->isDisaggregatedComputeMode())
             {
                 // compute node do not need to handle read index
