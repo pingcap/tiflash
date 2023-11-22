@@ -77,6 +77,7 @@ void CPDataFileWriter::writeSuffix()
     google::protobuf::util::MessageToJsonString(file_suffix, &json);
     writeStringBinary(json, *file_writer);
 
+    flush();
     write_stage = WriteStage::WritingFinished;
 }
 

@@ -101,11 +101,7 @@ public:
      */
     [[nodiscard]] std::vector<String> writeSuffix();
 
-#ifndef DBMS_PUBLIC_GTEST
 private:
-#else
-public:
-#endif
     enum class WriteStage
     {
         WritingPrefix,

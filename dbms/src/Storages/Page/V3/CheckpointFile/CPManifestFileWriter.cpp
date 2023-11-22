@@ -130,8 +130,7 @@ void CPManifestFileWriter::writeSuffix()
     if (write_stage < WriteStage::WritingLocksFinished)
         writeLocksFinish(); // Trying to fast-forward. There may be exceptions.
 
-    // Currently we do nothing in write suffix.
-
+    flush();
     write_stage = WriteStage::WritingFinished;
 }
 

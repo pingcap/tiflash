@@ -61,26 +61,27 @@ public:
         // TODO: Support compressed data file.
     }
 
-    // Because file_writer will write data to S3 directly, when we call flush(), the data will be uploaded to S3.
-    // But upload data to S3 may fail, then the Exception will not be caught.
-    // So do not call flush() in destructor, please make sure writeSuffix() is called before the object is destroyed.
     ~CPDataFileWriter() = default;
 
     void writePrefix(const CheckpointProto::DataFilePrefix & prefix);
 
     CheckpointLocation write(UniversalPageId page_id, PageVersion version, const char * data, size_t n);
 
+    /**
+     * This function must be called, and must be called last, after other `writeXxx`.
+     * Otherwise, the checkpoint data file will be incomplete and some data may be lost.
+     */
     void writeSuffix();
 
+    size_t writtenRecords() const { return file_suffix.records_size(); }
+
+private:
     void flush()
     {
         file_writer->next();
         file_writer->sync();
     }
 
-    size_t writtenRecords() const { return file_suffix.records_size(); }
-
-private:
     enum class WriteStage
     {
         WritingPrefix,

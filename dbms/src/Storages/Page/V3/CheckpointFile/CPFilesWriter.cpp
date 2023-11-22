@@ -231,7 +231,6 @@ std::vector<String> CPFilesWriter::writeSuffix()
     manifest_writer->writeLocksFinish();
 
     data_writer->writeSuffix();
-    data_writer->flush();
     // upload empty file as LockFile to S3
     S3::uploadEmptyFile(
         *S3::ClientFactory::instance().sharedTiFlashClient(),
@@ -240,7 +239,6 @@ std::vector<String> CPFilesWriter::writeSuffix()
             fmt::arg("seq", sequence),
             fmt::arg("index", data_file_index - 1)));
     manifest_writer->writeSuffix();
-    manifest_writer->flush();
 
     write_stage = WriteStage::WritingFinished;
     return data_file_paths;
@@ -252,7 +250,6 @@ void CPFilesWriter::newDataWriter()
     {
         total_written_records += data_writer->writtenRecords();
         data_writer->writeSuffix();
-        data_writer->flush();
         // upload empty file as LockFile to S3
         S3::uploadEmptyFile(
             *S3::ClientFactory::instance().sharedTiFlashClient(),

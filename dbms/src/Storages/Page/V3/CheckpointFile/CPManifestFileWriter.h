@@ -53,9 +53,6 @@ public:
         RUNTIME_CHECK(max_edit_records_per_part > 0, max_edit_records_per_part);
     }
 
-    // Because file_writer will write data to S3 directly, when we call flush(), the data will be uploaded to S3.
-    // But upload data to S3 may fail, then the Exception will not be caught.
-    // So do not call flush() in destructor, please make sure writeSuffix() is called before the object is destroyed.
     ~CPManifestFileWriter() = default;
 
     /// Must be called first.
@@ -69,11 +66,14 @@ public:
     void writeLocks(const std::unordered_set<String> & lock_files);
     void writeLocksFinish();
 
+    /**
+     * This function must be called, and must be called last, after other `writeXxx`.
+     * Otherwise, some data may be lost.
+     */
     void writeSuffix();
 
-    void flush();
-
 private:
+    void flush();
     void writeEditsPart(const universal::PageEntriesEdit & edit, UInt64 start, UInt64 limit);
 
     enum class WriteStage
