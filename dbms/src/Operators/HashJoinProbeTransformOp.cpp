@@ -33,7 +33,7 @@ HashJoinProbeTransformOp::HashJoinProbeTransformOp(
     const Block & input_header)
     : TransformOp(exec_context_, req_id)
     , origin_join(join_)
-    , probe_process_info(max_block_size)
+    , probe_process_info(max_block_size, join_->getProbeCacheColumnThreshold())
 {
     RUNTIME_CHECK_MSG(origin_join != nullptr, "join ptr should not be null.");
     RUNTIME_CHECK_MSG(origin_join->getProbeConcurrency() > 0, "Join probe concurrency must be greater than 0");
@@ -56,7 +56,7 @@ HashJoinProbeTransformOp::HashJoinProbeTransformOp(
 
 void HashJoinProbeTransformOp::transformHeaderImpl(Block & header_)
 {
-    ProbeProcessInfo header_probe_process_info(0);
+    ProbeProcessInfo header_probe_process_info(0, 0);
     header_probe_process_info.resetBlock(std::move(header_));
     header_ = origin_join->joinBlock(header_probe_process_info, true);
 }
