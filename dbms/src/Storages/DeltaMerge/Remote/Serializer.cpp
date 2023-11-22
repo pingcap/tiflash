@@ -46,7 +46,8 @@ namespace DB::DM::Remote
 RemotePb::RemotePhysicalTable Serializer::serializePhysicalTable(
     const DisaggPhysicalTableReadSnapshotPtr & snap,
     const DisaggTaskId & task_id,
-    MemTrackerWrapper & mem_tracker_wrapper)
+    MemTrackerWrapper & mem_tracker_wrapper,
+    bool need_mem_data)
 {
     std::shared_lock read_lock(snap->mtx);
     RemotePb::RemotePhysicalTable remote_table;
@@ -61,7 +62,8 @@ RemotePb::RemotePhysicalTable Serializer::serializePhysicalTable(
             seg_task->segment->segmentEpoch(),
             seg_task->segment->getRowKeyRange(),
             /*read_ranges*/ seg_task->ranges,
-            mem_tracker_wrapper);
+            mem_tracker_wrapper,
+            need_mem_data);
         remote_table.mutable_segments()->Add(std::move(remote_seg));
     }
     return remote_table;
@@ -73,7 +75,8 @@ RemotePb::RemoteSegment Serializer::serializeSegment(
     UInt64 segment_epoch,
     const RowKeyRange & segment_range,
     const RowKeyRanges & read_ranges,
-    MemTrackerWrapper & mem_tracker_wrapper)
+    MemTrackerWrapper & mem_tracker_wrapper,
+    bool need_mem_data)
 {
     RemotePb::RemoteSegment remote;
     remote.set_segment_id(segment_id);
@@ -99,9 +102,9 @@ RemotePb::RemoteSegment Serializer::serializeSegment(
         checkpoint_info->set_data_file_id(dt_file->path()); // It should be a key to remote path
     }
     remote.mutable_column_files_memtable()->CopyFrom(
-        serializeColumnFileSet(snap->delta->getMemTableSetSnapshot(), mem_tracker_wrapper));
+        serializeColumnFileSet(snap->delta->getMemTableSetSnapshot(), mem_tracker_wrapper, need_mem_data));
     remote.mutable_column_files_persisted()->CopyFrom(
-        serializeColumnFileSet(snap->delta->getPersistedFileSetSnapshot(), mem_tracker_wrapper));
+        serializeColumnFileSet(snap->delta->getPersistedFileSetSnapshot(), mem_tracker_wrapper, true));
 
     // serialize the read ranges to read node
     for (const auto & read_range : read_ranges)
@@ -179,35 +182,44 @@ SegmentSnapshotPtr Serializer::deserializeSegment(
 
 RepeatedPtrField<RemotePb::ColumnFileRemote> Serializer::serializeColumnFileSet(
     const ColumnFileSetSnapshotPtr & snap,
-    MemTrackerWrapper & mem_tracker_wrapper)
+    MemTrackerWrapper & mem_tracker_wrapper,
+    bool need_mem_data)
 {
     RepeatedPtrField<RemotePb::ColumnFileRemote> ret;
     ret.Reserve(snap->column_files.size());
     for (const auto & file : snap->column_files)
     {
-        if (auto * cf_in_mem = file->tryToInMemoryFile(); cf_in_mem)
-        {
-            ret.Add(serializeCFInMemory(*cf_in_mem));
-        }
-        else if (auto * cf_tiny = file->tryToTinyFile(); cf_tiny)
-        {
-            ret.Add(serializeCFTiny(*cf_tiny, snap->getDataProvider()));
-        }
-        else if (auto * cf_delete_range = file->tryToDeleteRange(); cf_delete_range)
-        {
-            ret.Add(serializeCFDeleteRange(*cf_delete_range));
-        }
-        else if (auto * cf_big = file->tryToBigFile(); cf_big)
-        {
-            ret.Add(serializeCFBig(*cf_big));
-        }
-        else
-        {
-            RUNTIME_CHECK_MSG(false, "Unknown ColumnFile, type={}", magic_enum::enum_name(file->getType()));
-        }
+        ret.Add(serializeCF(file, snap->getDataProvider(), need_mem_data));
         mem_tracker_wrapper.alloc(ret.rbegin()->SpaceUsedLong());
     }
     return ret;
+}
+
+RemotePb::ColumnFileRemote Serializer::serializeCF(
+    const ColumnFilePtr & cf,
+    const IColumnFileDataProviderPtr & data_provider,
+    bool need_mem_data)
+{
+    if (auto * cf_in_mem = cf->tryToInMemoryFile(); cf_in_mem)
+    {
+        return serializeCFInMemory(*cf_in_mem, need_mem_data);
+    }
+    else if (auto * cf_tiny = cf->tryToTinyFile(); cf_tiny)
+    {
+        return serializeCFTiny(*cf_tiny, data_provider);
+    }
+    else if (auto * cf_delete_range = cf->tryToDeleteRange(); cf_delete_range)
+    {
+        return serializeCFDeleteRange(*cf_delete_range);
+    }
+    else if (auto * cf_big = cf->tryToBigFile(); cf_big)
+    {
+        return serializeCFBig(*cf_big);
+    }
+    else
+    {
+        RUNTIME_CHECK_MSG(false, "Unknown ColumnFile, type={}", magic_enum::enum_name(cf->getType()));
+    }
 }
 
 ColumnFileSetSnapshotPtr Serializer::deserializeColumnFileSet(
@@ -253,10 +265,17 @@ ColumnFileSetSnapshotPtr Serializer::deserializeColumnFileSet(
     return ret;
 }
 
-RemotePb::ColumnFileRemote Serializer::serializeCFInMemory(const ColumnFileInMemory & cf_in_mem)
+RemotePb::ColumnFileRemote Serializer::serializeCFInMemory(const ColumnFileInMemory & cf_in_mem, bool need_mem_data)
 {
     RemotePb::ColumnFileRemote ret;
     auto * remote_in_memory = ret.mutable_in_memory();
+    if (!need_mem_data)
+    {
+        std::scoped_lock lock(cf_in_mem.cache->mutex);
+        remote_in_memory->set_rows(cf_in_mem.cache->block.rows());
+        return ret;
+    }
+
     {
         auto wb = WriteBufferFromString(*remote_in_memory->mutable_schema());
         serializeSchema(wb, cf_in_mem.getSchema()->getSchema());
@@ -288,6 +307,11 @@ RemotePb::ColumnFileRemote Serializer::serializeCFInMemory(const ColumnFileInMem
 ColumnFileInMemoryPtr Serializer::deserializeCFInMemory(const RemotePb::ColumnFileInMemory & proto)
 {
     LOG_DEBUG(Logger::get(), "Rebuild local ColumnFileInMemory from remote, rows={}", proto.rows());
+
+    if (proto.block_columns().empty())
+    {
+        return std::make_shared<ColumnFileInMemory>(proto.rows());
+    }
 
     BlockPtr block_schema;
     {

@@ -1109,12 +1109,12 @@ grpc::Status FlashService::FetchDisaggPages(
         for (auto page_id : request->page_ids())
             read_ids.emplace_back(page_id);
 
-        auto stream_writer = WNFetchPagesStreamWriter::build(
-            task,
+        auto stream_writer = std::make_unique<WNFetchPagesStreamWriter>(
+            [sync_writer](const disaggregated::PagesPacket & packet) { sync_writer->Write(packet); },
+            task.seg_task,
             read_ids,
-            context->getSettingsRef().dt_fetch_pages_packet_limit_size);
-        stream_writer->pipeTo(sync_writer);
-        stream_writer.reset();
+            *context);
+        stream_writer->syncWrite();
 
         LOG_INFO(logger, "FetchDisaggPages respond finished, task_id={}", task_id);
         return grpc::Status::OK;
