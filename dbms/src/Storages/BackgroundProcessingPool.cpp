@@ -213,8 +213,7 @@ void BackgroundProcessingPool::threadFunction(size_t thread_idx) noexcept
     }
 
     // set up the thread local memory tracker
-    auto memory_tracker = MemoryTracker::create();
-    memory_tracker->setNext(root_of_non_query_mem_trackers.get());
+    auto memory_tracker = MemoryTracker::create(0, root_of_non_query_mem_trackers.get());
     memory_tracker->setMetric(CurrentMetrics::MemoryTrackingInBackgroundProcessingPool);
     current_memory_tracker = memory_tracker.get();
 
