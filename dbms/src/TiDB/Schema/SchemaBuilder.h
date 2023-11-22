@@ -57,7 +57,7 @@ public:
 
     void dropAllSchema();
 
-    bool applyTable(DatabaseID database_id, TableID logical_table_id, TableID physical_table_id);
+    bool applyTable(DatabaseID database_id, TableID logical_table_id, TableID physical_table_id, bool force);
 
 private:
     void applyDropSchema(DatabaseID schema_id);
@@ -74,7 +74,7 @@ private:
     void applyDropTable(DatabaseID database_id, TableID table_id);
 
     void applyRecoverTable(DatabaseID database_id, TiDB::TableID table_id);
-
+    void applyRecoverLogicalTable(const TiDB::DBInfoPtr & db_info, const TiDB::TableInfoPtr & table_info);
     bool tryRecoverPhysicalTable(const TiDB::DBInfoPtr & db_info, const TiDB::TableInfoPtr & table_info);
 
     /// Parameter schema_name should be mapped.

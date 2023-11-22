@@ -43,6 +43,7 @@
 #include <TiDB/Schema/SchemaNameMapper.h>
 #include <TiDB/Schema/TiDB.h>
 #include <common/logger_useful.h>
+#include <fmt/format.h>
 
 #include <boost/algorithm/string/join.hpp>
 #include <magic_enum.hpp>
@@ -340,7 +341,7 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
         {
             // >= SchemaActionType::MaxRecognizedType
             // log down the Int8 value directly
-            LOG_ERROR(log, "Unsupported change type: {}, diff_version={}", static_cast<Int8>(diff.type), diff.version);
+            LOG_ERROR(log, "Unsupported change type: {}, diff_version={}", fmt::underlying(diff.type), diff.version);
         }
 
         break;
@@ -358,10 +359,10 @@ void SchemaBuilder<Getter, NameMapper>::applySetTiFlashReplica(DatabaseID databa
         return;
     }
 
+    auto & tmt_context = context.getTMTContext();
     if (table_info->replica_info.count == 0)
     {
         // if set 0, drop table in TiFlash
-        auto & tmt_context = context.getTMTContext();
         auto storage = tmt_context.getStorages().get(keyspace_id, table_info->id);
         if (unlikely(storage == nullptr))
         {
@@ -377,8 +378,7 @@ void SchemaBuilder<Getter, NameMapper>::applySetTiFlashReplica(DatabaseID databa
     }
 
     assert(table_info->replica_info.count != 0);
-    // if set not 0, we first check whether the storage exists, and then check the replica_count and available
-    auto & tmt_context = context.getTMTContext();
+    // Replica info is set to non-zero, create the storage if not exists.
     auto storage = tmt_context.getStorages().get(keyspace_id, table_info->id);
     if (storage == nullptr)
     {
@@ -389,47 +389,85 @@ void SchemaBuilder<Getter, NameMapper>::applySetTiFlashReplica(DatabaseID databa
         return;
     }
 
-    if (storage->getTombstone() != 0)
+    // Recover the table if tombstoned
+    if (storage->isTombstone())
     {
-        applyRecoverTable(db_info->id, table_id);
+        applyRecoverLogicalTable(db_info, table_info);
         return;
     }
 
-    auto managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage);
-    auto storage_replica_info = managed_storage->getTableInfo().replica_info;
-    if (storage_replica_info.count == table_info->replica_info.count
-        && storage_replica_info.available == table_info->replica_info.available)
+    auto local_logical_storage_table_info = storage->getTableInfo(); // copy
+    // Check whether replica_count and available changed
+    if (const auto & local_logical_storage_replica_info = local_logical_storage_table_info.replica_info;
+        local_logical_storage_replica_info.count == table_info->replica_info.count
+        && local_logical_storage_replica_info.available == table_info->replica_info.available)
     {
-        return;
+        return; // nothing changed
     }
 
+    size_t old_replica_count = 0;
+    size_t new_replica_count = 0;
     if (table_info->isLogicalPartitionTable())
     {
         for (const auto & part_def : table_info->partition.definitions)
         {
             auto new_part_table_info = table_info->producePartitionTableInfo(part_def.id, name_mapper);
             auto part_storage = tmt_context.getStorages().get(keyspace_id, new_part_table_info->id);
-            if (part_storage != nullptr)
+            if (part_storage == nullptr)
+            {
+                table_id_map.emplacePartitionTableID(part_def.id, table_id);
+                continue;
+            }
             {
                 auto alter_lock = part_storage->lockForAlter(getThreadNameAndID());
+                auto local_table_info = part_storage->getTableInfo(); // copy
+                old_replica_count = local_table_info.replica_info.count;
+                new_replica_count = new_part_table_info->replica_info.count;
+                // Only update the replica info, do not change other fields. Or it may
+                // lead to other DDL is unexpectedly ignored.
+                local_table_info.replica_info = new_part_table_info->replica_info;
                 part_storage->alterSchemaChange(
                     alter_lock,
-                    *new_part_table_info,
+                    local_table_info,
                     name_mapper.mapDatabaseName(db_info->id, keyspace_id),
-                    name_mapper.mapTableName(*new_part_table_info),
+                    name_mapper.mapTableName(local_table_info),
                     context);
             }
-            else
-                table_id_map.emplacePartitionTableID(part_def.id, table_id);
+            LOG_INFO(
+                log,
+                "Updating replica info, replica count old={} new={} available={}"
+                " physical_table_id={} logical_table_id={}",
+                old_replica_count,
+                new_replica_count,
+                table_info->replica_info.available,
+                part_def.id,
+                table_id);
         }
     }
-    auto alter_lock = storage->lockForAlter(getThreadNameAndID());
-    storage->alterSchemaChange(
-        alter_lock,
-        *table_info,
-        name_mapper.mapDatabaseName(db_info->id, keyspace_id),
-        name_mapper.mapTableName(*table_info),
-        context);
+
+    {
+        auto alter_lock = storage->lockForAlter(getThreadNameAndID());
+        old_replica_count = local_logical_storage_table_info.replica_info.count;
+        new_replica_count = table_info->replica_info.count;
+        // Only update the replica info, do not change other fields. Or it may
+        // lead to other DDL is unexpectedly ignored.
+        local_logical_storage_table_info.replica_info = table_info->replica_info;
+        storage->alterSchemaChange(
+            alter_lock,
+            local_logical_storage_table_info,
+            name_mapper.mapDatabaseName(db_info->id, keyspace_id),
+            name_mapper.mapTableName(local_logical_storage_table_info),
+            context);
+    }
+    LOG_INFO(
+        log,
+        "Updating replica info, replica count old={} new={} available={}"
+        " physical_table_id={} logical_table_id={}",
+        old_replica_count,
+        new_replica_count,
+        table_info->replica_info.available,
+        table_id,
+        table_id);
 }
 
 template <typename Getter, typename NameMapper>
@@ -688,8 +726,8 @@ void SchemaBuilder<Getter, NameMapper>::applyRecoverTable(DatabaseID database_id
     {
         for (const auto & part_def : table_info->partition.definitions)
         {
-            auto new_table_info = table_info->producePartitionTableInfo(part_def.id, name_mapper);
-            tryRecoverPhysicalTable(db_info, new_table_info);
+            auto part_table_info = table_info->producePartitionTableInfo(part_def.id, name_mapper);
+            tryRecoverPhysicalTable(db_info, part_table_info);
         }
     }
 
@@ -1223,16 +1261,38 @@ void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
     LOG_INFO(log, "Sync all schemas end");
 }
 
+/**
+ * Update the schema of given `physical_table_id`.
+ * This function ensure only the lock of `physical_table_id` is involved.
+ *
+ * Param `database_id`, `logical_table_id` is to key to fetch the latest table info. If
+ * something wrong when generating the table info of `physical_table_id`, it means the
+ * TableID mapping is not up-to-date. This function will return false and the caller
+ * should update the TableID mapping then retry.
+ * If the caller ensure the TableID mapping is up-to-date, then it should call with
+ * `force == true`
+ */
 template <typename Getter, typename NameMapper>
 bool SchemaBuilder<Getter, NameMapper>::applyTable(
     DatabaseID database_id,
     TableID logical_table_id,
-    TableID physical_table_id)
+    TableID physical_table_id,
+    bool force)
 {
-    // Here we get table info without mvcc. If the table has been renamed to another
-    // database, it will return false and the caller should update the table_id_map
-    // then retry.
-    auto table_info = getter.getTableInfo(database_id, logical_table_id, /*try_mvcc*/ false);
+    // When `force==false`, we get table info without mvcc. So we can detect that whether
+    // the table has been renamed to another database or dropped.
+    // If the table has been renamed to another database, it is dangerous to use the
+    // old table info from the old database because some new columns may have been
+    // added to the new table.
+    // For the reason above, if we can not get table info without mvcc, this function
+    // will return false and the caller should update the table_id_map then retry.
+    //
+    // When `force==true`, the caller ensure the TableID mapping is up-to-date, so we
+    // need to get table info with mvcc. It can return the table info even if a table is
+    // dropped but not physically removed by TiDB/TiKV gc_safepoint.
+    // It is need for TiFlash correctly decoding the data and get ready for `RECOVER TABLE`
+    // and `RECOVER DATABASE`.
+    auto table_info = getter.getTableInfo(database_id, logical_table_id, /*try_mvcc*/ force);
     if (table_info == nullptr)
     {
         LOG_WARNING(

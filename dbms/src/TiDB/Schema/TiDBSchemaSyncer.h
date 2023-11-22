@@ -54,8 +54,8 @@ private:
 
     LoggerPtr log;
 
-    DatabaseInfoCache databases;
     TableIDMap table_id_map;
+    DatabaseInfoCache databases;
 
     Getter createSchemaGetter(KeyspaceID keyspace_id)
     {
@@ -105,6 +105,7 @@ private:
         Context & context,
         TableID physical_table_id,
         Getter & getter,
+        bool force,
         const char * next_action);
 
     TiDB::DBInfoPtr getDBInfoByName(const String & database_name) override
