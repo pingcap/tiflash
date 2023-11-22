@@ -102,7 +102,7 @@ public:
             already_initialize_write_ps = true;
         }
         resetStoreId(current_store_id);
-        global_context.getSharedContextDisagg()->initFastAddPeerContext();
+        global_context.getSharedContextDisagg()->initFastAddPeerContext(25);
     }
 
     void TearDown() override

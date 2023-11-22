@@ -28,6 +28,21 @@ struct AsyncTasks
         : thread_pool(std::make_unique<ThreadPool>(pool_size, free_pool_size, queue_size))
     {}
 
+    bool discardTask(Key k)
+    {
+        std::scoped_lock l(mtx);
+        if (futures.contains(k))
+        {
+            futures.erase(k);
+            if (start_time.contains(k))
+            {
+                start_time.erase(k);
+            }
+            return true;
+        }
+        return false;
+    }
+
     bool addTask(Key k, Func f)
     {
         using P = std::packaged_task<R()>;

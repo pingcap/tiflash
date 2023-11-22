@@ -252,6 +252,7 @@ std::variant<CheckpointRegionInfoAndData, FastAddPeerRes> FastAddPeerImplBuild(
             if (watch.elapsedSeconds() >= settings.fap_wait_checkpoint_timeout_seconds)
             {
                 // TODO(fap) remove from AsyncTasks
+                // This could happen if there are too many pending tasks in queue,
                 LOG_INFO(log, "FastAddPeer timeout region_id={} new_peer_id={}", region_id, new_peer_id);
                 GET_METRIC(tiflash_fap_task_result, type_failed_timeout).Increment();
                 return genFastAddPeerRes(FastAddPeerStatus::NoSuitable, "", "");
@@ -464,16 +465,22 @@ FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, u
 
         if (fap_ctx->tasks_trace->isReady(region_id))
         {
-            LOG_INFO(log, "Fetch task result [new_peer_id={}] [region_id={}]", new_peer_id, region_id);
             GET_METRIC(tiflash_fap_task_state, type_ongoing).Decrement();
             auto [result, elapsed] = fap_ctx->tasks_trace->fetchResultAndElapsed(region_id);
+            LOG_INFO(
+                log,
+                "Fetch task, result={} new_peer_id={} region_id={} elapsed={}",
+                magic_enum::enum_name(result.status),
+                new_peer_id,
+                region_id,
+                elapsed);
             GET_METRIC(tiflash_fap_task_result, type_total).Increment();
             GET_METRIC(tiflash_fap_task_duration_seconds, type_stage1_total).Observe(elapsed / 1000.0);
             return result;
         }
         else
         {
-            LOG_DEBUG(log, "Task is still pending [new_peer_id={}] [region_id={}]", new_peer_id, region_id);
+            LOG_DEBUG(log, "Task is still pending new_peer_id={} region_id={}", new_peer_id, region_id);
             return genFastAddPeerRes(FastAddPeerStatus::WaitForData, "", "");
         }
     }

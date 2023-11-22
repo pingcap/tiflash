@@ -120,11 +120,16 @@ void KVStore::checkAndApplyPreHandledSnapshot(const RegionPtrWrap & new_region, 
 
     if (tmt.getContext().getSharedContextDisagg()->isDisaggregatedStorageMode())
     {
+        auto fap_ctx = tmt.getContext().getSharedContextDisagg()->fap_context;
         // Everytime we meet a legacy snapshot, we try to clean obsolete fap ingest info.
         if constexpr (!std::is_same_v<RegionPtrWrap, RegionPtrWithCheckpointInfo>)
         {
-            auto fap_ctx = tmt.getContext().getSharedContextDisagg()->fap_context;
             fap_ctx->forceCleanCheckpointIngestInfo(tmt, new_region->id());
+        }
+        // Another FAP will not take place if this stage is not finished.
+        if (fap_ctx->tasks_trace->discardTask(new_region->id()))
+        {
+            LOG_ERROR(log, "FastAddPeer: find old fap task, region_id={}", new_region->id());
         }
     }
 }

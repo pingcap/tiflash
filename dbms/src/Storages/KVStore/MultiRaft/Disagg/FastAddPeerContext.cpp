@@ -34,7 +34,7 @@ FastAddPeerContext::FastAddPeerContext(uint64_t thread_count)
         // Estimate this much time to handle a ffi request.
         static constexpr int ffi_handle_sec = 5;
         // Estimate this many region added in one second.
-        static constexpr int region_per_sec = 2;
+        static constexpr int region_per_sec = 5;
         thread_count = ffi_handle_sec * region_per_sec;
     }
     tasks_trace = std::make_shared<FAPAsyncTasks>(thread_count, thread_count, 1000);

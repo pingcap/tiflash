@@ -95,7 +95,7 @@ public:
         }
         orig_mode = global_context.getPageStorageRunMode();
         global_context.setPageStorageRunMode(PageStorageRunMode::UNI_PS);
-        global_context.getSharedContextDisagg()->initFastAddPeerContext();
+        global_context.getSharedContextDisagg()->initFastAddPeerContext(25);
         KVStoreTestBase::SetUp();
     }
 
