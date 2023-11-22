@@ -54,10 +54,7 @@ public:
     {
         consumeResource(name, ru, cpu_time_ns);
     }
-    void consumeBytesResource(const std::string & name, double ru) const
-    {
-        consumeResource(name, ru, 0);
-    }
+    void consumeBytesResource(const std::string & name, double ru) const { consumeResource(name, ru, 0); }
     void consumeResource(const std::string & name, double ru, uint64_t cpu_time_ns) const
     {
         if (name.empty())
