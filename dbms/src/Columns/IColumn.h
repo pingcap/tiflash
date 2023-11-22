@@ -391,6 +391,12 @@ public:
         return res;
     }
 
+    MutablePtr cloneFullColumn() const
+    {
+        MutablePtr res = clone();
+        res->forEachSubcolumn([](Ptr & subcolumn) { subcolumn = subcolumn->clone(); });
+        return res;
+    }
 
     /** Some columns can contain another columns inside.
       * So, we have a tree of columns. But not all combinations are possible.

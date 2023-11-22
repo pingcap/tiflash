@@ -333,12 +333,11 @@ void DAGQueryBlockInterpreter::handleJoin(
         tiflash_join.kind,
         tiflash_join.strictness,
         log->identifier(),
-        enableFineGrainedShuffle(fine_grained_shuffle_count),
         fine_grained_shuffle_count,
         settings.max_bytes_before_external_join,
         build_spill_config,
         probe_spill_config,
-        settings.join_restore_concurrency,
+        RestoreConfig{settings.join_restore_concurrency, 0, 0},
         join_output_column_names,
         [&](const OperatorSpillContextPtr & operator_spill_context) {
             if (context.getDAGContext() != nullptr)
@@ -353,8 +352,7 @@ void DAGQueryBlockInterpreter::handleJoin(
         settings.shallow_copy_cross_probe_threshold,
         match_helper_name,
         flag_mapped_entry_helper_name,
-        0,
-        0,
+        settings.join_probe_cache_columns_threshold,
         context.isTest());
 
     recordJoinExecuteInfo(tiflash_join.build_side_index, join_ptr);
