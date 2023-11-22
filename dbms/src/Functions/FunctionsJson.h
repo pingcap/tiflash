@@ -40,6 +40,7 @@
 #include <magic_enum.hpp>
 #include <string_view>
 #include <type_traits>
+#include "common/types.h"
 
 namespace DB
 {
@@ -669,11 +670,12 @@ public:
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
+        auto rows = block.rows();
         auto col_to = ColumnString::create();
         auto & data_to = col_to->getChars();
+        data_to.resize(rows * (1 + sizeof(Float64)));
         JsonBinary::JsonBinaryWriteBuffer write_buffer(data_to);
         auto & offsets_to = col_to->getOffsets();
-        auto rows = block.rows();
         offsets_to.resize(rows);
 
         const auto & from = block.getByPosition(arguments[0]);
@@ -732,11 +734,12 @@ public:
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
+        auto rows = block.rows();
         auto col_to = ColumnString::create();
         auto & data_to = col_to->getChars();
+        data_to.resize(rows * (1 + sizeof(Float64)));
         JsonBinary::JsonBinaryWriteBuffer write_buffer(data_to);
         auto & offsets_to = col_to->getOffsets();
-        auto rows = block.rows();
         offsets_to.resize(rows);
 
         const auto & from = block.getByPosition(arguments[0]);

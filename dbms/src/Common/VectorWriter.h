@@ -44,32 +44,19 @@ public:
 
     void write(const char * from, size_t n)
     {
-        size_t bytes_copied = 0;
-
-        while (bytes_copied < n)
-        {
-            size_t remaining_bytes = n - bytes_copied;
-            reserve(remaining_bytes);
-            size_t bytes_to_copy = std::min(static_cast<size_t>(end - pos), remaining_bytes);
-            std::memcpy(pos, from + bytes_copied, bytes_to_copy);
-            pos += bytes_to_copy;
-            bytes_copied += bytes_to_copy;
-        }
+        if (static_cast<size_t>(end - pos) < n)
+            reserve(n);
+        std::memcpy(pos, from, n);
+        pos += n;
     }
 
     void resizeFill(size_t n)
     {
         size_t old_cap = vector.size();
         size_t new_request_cap = count() + n;
-        if (old_cap >= new_request_cap)
-        {
-            pos += n;
-            return;
-        }
-        size_t pos_offset = offset();
-        vector.resize(new_request_cap);
-        pos = reinterpret_cast<Position>(vector.data() + pos_offset + n);
-        end = reinterpret_cast<Position>(vector.data() + vector.size());
+        if (old_cap < new_request_cap)
+            reserve(new_request_cap);
+        pos += n;
     }
 
     size_t offset() { return pos - reinterpret_cast<Position>(vector.data()); }
@@ -78,17 +65,12 @@ public:
 
     void setOffset(size_t new_offset)
     {
-        if (new_offset <= vector.size())
-        {
-            pos = reinterpret_cast<Position>(vector.data() + new_offset);
-        }
-        else
+        if (new_offset > vector.size())
         {
             // `+ initial_size` is to avoid resize for subsequent writes.
-            vector.resize(new_offset + initial_size);
-            pos = reinterpret_cast<Position>(vector.data() + new_offset);
-            end = reinterpret_cast<Position>(vector.data() + vector.size());
+            reserve(new_offset);
         }
+        pos = reinterpret_cast<Position>(vector.data() + new_offset);
     }
 
     ~VectorWriter()

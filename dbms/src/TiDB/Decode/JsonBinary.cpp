@@ -167,7 +167,15 @@ inline JsonBinary::JsonType getJsonType(const simdjson::dom::element & elem)
     {
         return JsonBinary::TYPE_CODE_LITERAL;
     }
-    else if (elem.is_number())
+    else if (elem.is_int64())
+    {
+        return JsonBinary::TYPE_CODE_INT64;
+    }
+    else if (elem.is_uint64())
+    {
+        return JsonBinary::TYPE_CODE_UINT64;
+    }
+    else if (elem.is_double())
     {
         return JsonBinary::TYPE_CODE_FLOAT64;
     }
@@ -271,8 +279,8 @@ inline UInt64 appendValueOfSIMDJsonElem(
     {
         /// elem_count(4 bytes)
         /// total_size(4 bytes)
-        /// key_entries(obj.size() * KEY_ENTRY_SIZE)
-        /// key_datas
+        /// value_entries(obj.size() * VALUE_ENTRY_SIZE)
+        /// value_datas
 
         const auto & array = elem.get_array();
         UInt32 buffer_start = write_buffer.offset();
@@ -332,7 +340,17 @@ inline UInt64 appendValueOfSIMDJsonElem(
         write_buffer.write(elem.get_bool().value_unsafe() ? JsonBinary::LITERAL_TRUE : JsonBinary::LITERAL_FALSE);
         return 1;
     }
-    else if (elem.is_number())
+    else if (elem.is_int64())
+    {
+        encodeNumeric(write_buffer, elem.get_int64().value_unsafe());
+        return 1;
+    }
+    else if (elem.is_uint64())
+    {
+        encodeNumeric(write_buffer, elem.get_uint64().value_unsafe());
+        return 1;
+    }
+    else if (elem.is_double())
     {
         encodeNumeric(write_buffer, elem.get_double().value_unsafe());
         return 1;
@@ -1127,7 +1145,7 @@ void JsonBinary::appendNull(JsonBinaryWriteBuffer & write_buffer)
 
 void JsonBinary::assertJsonDepth(UInt64 depth)
 {
-    if (unlikely((depth - 1) > MAX_JSON_DEPTH))
+    if (unlikely(depth > (1 + MAX_JSON_DEPTH)))
         throw Exception(
             fmt::format("Invalid JSON text: The JSON document exceeds the maximum depth {}.", MAX_JSON_DEPTH));
 }
