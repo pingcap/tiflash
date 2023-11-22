@@ -186,7 +186,7 @@ try
     snap->column_defines = std::make_shared<ColumnDefines>(store->getTableColumns());
 
     MemTrackerWrapper mem_tracker_wrapper(nullptr);
-    auto remote_table_pb = Remote::Serializer::serializeTo(snap, /*task_id*/ {}, mem_tracker_wrapper);
+    auto remote_table_pb = Remote::Serializer::serializePhysicalTable(snap, /*task_id*/ {}, mem_tracker_wrapper);
 
     ASSERT_GT(remote_table_pb.segments_size(), 0);
 

@@ -100,12 +100,8 @@ SegmentReadTask::SegmentReadTask(
         nullptr,
         nullptr);
 
-    read_snapshot = Remote::Serializer::deserializeSegmentSnapshotFrom(
-        *dm_context,
-        store_id,
-        keyspace_id,
-        physical_table_id,
-        proto);
+    read_snapshot
+        = Remote::Serializer::deserializeSegment(*dm_context, store_id, keyspace_id, physical_table_id, proto);
 
     ranges.reserve(proto.read_key_ranges_size());
     for (const auto & read_key_range : proto.read_key_ranges())

@@ -32,25 +32,31 @@ try
     AbortedMPPGatherCache cache(capacity);
     for (size_t i = 0; i < capacity; i++)
     {
-        cache.add(MPPGatherId(i, MPPQueryId(1, 2, 3, 4, /*resource_group_name=*/"")), "");
+        cache.add(MPPGatherId(i, MPPQueryId(1, 2, 3, 4, /*resource_group_name=*/"", 5, "")), "");
     }
     for (size_t i = 0; i < capacity; i++)
     {
-        ASSERT_EQ(!cache.check(MPPGatherId(i, MPPQueryId(1, 2, 3, 4, /*resource_group_name=*/""))).empty(), true);
+        ASSERT_EQ(
+            !cache.check(MPPGatherId(i, MPPQueryId(1, 2, 3, 4, /*resource_group_name=*/"", 5, ""))).empty(),
+            true);
     }
     for (size_t i = 0; i < capacity; i++)
     {
-        cache.add(MPPGatherId(0, MPPQueryId(1, 2, 3, 4, /*resource_group_name=*/"")), "");
+        cache.add(MPPGatherId(0, MPPQueryId(1, 2, 3, 4, /*resource_group_name=*/"", 5, "")), "");
     }
     for (size_t i = 0; i < capacity; i++)
     {
-        ASSERT_EQ(!cache.check(MPPGatherId(i, MPPQueryId(1, 2, 3, 4, /*resource_group_name=*/""))).empty(), true);
+        ASSERT_EQ(
+            !cache.check(MPPGatherId(i, MPPQueryId(1, 2, 3, 4, /*resource_group_name=*/"", 5, ""))).empty(),
+            true);
     }
-    cache.add(MPPGatherId(capacity, MPPQueryId(1, 2, 3, 4, /*resource_group_name=*/"")), "");
-    ASSERT_EQ(!cache.check(MPPGatherId(0, MPPQueryId(1, 2, 3, 4, /*resource_group_name=*/""))).empty(), false);
+    cache.add(MPPGatherId(capacity, MPPQueryId(1, 2, 3, 4, /*resource_group_name=*/"", 5, "")), "");
+    ASSERT_EQ(!cache.check(MPPGatherId(0, MPPQueryId(1, 2, 3, 4, /*resource_group_name=*/"", 5, ""))).empty(), false);
     for (size_t i = 0; i < capacity; i++)
     {
-        ASSERT_EQ(!cache.check(MPPGatherId(i + 1, MPPQueryId(1, 2, 3, 4, /*resource_group_name=*/""))).empty(), true);
+        ASSERT_EQ(
+            !cache.check(MPPGatherId(i + 1, MPPQueryId(1, 2, 3, 4, /*resource_group_name=*/"", 5, ""))).empty(),
+            true);
     }
 }
 CATCH

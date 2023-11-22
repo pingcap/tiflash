@@ -40,10 +40,14 @@ struct RemoteRequest
     RemoteRequest(
         tipb::DAGRequest && dag_request_,
         DAGSchema && schema_,
-        std::vector<pingcap::coprocessor::KeyRange> && key_ranges_)
+        std::vector<pingcap::coprocessor::KeyRange> && key_ranges_,
+        UInt64 connection_id_,
+        const String & connection_alias_)
         : dag_request(std::move(dag_request_))
         , schema(std::move(schema_))
         , key_ranges(std::move(key_ranges_))
+        , connection_id(connection_id_)
+        , connection_alias(connection_alias_)
     {}
 
     static RemoteRequest build(
@@ -52,6 +56,8 @@ struct RemoteRequest
         const TiDBTableScan & table_scan,
         const TiDB::TableInfo & table_info,
         const FilterConditions & filter_conditions,
+        UInt64 connection_id,
+        const String & connection_alias,
         const LoggerPtr & log);
     static std::vector<pingcap::coprocessor::KeyRange> buildKeyRanges(const RegionRetryList & retry_regions);
     static std::string printRetryRegions(const RegionRetryList & retry_regions, TableID table_id);
@@ -60,5 +66,8 @@ struct RemoteRequest
     DAGSchema schema;
     /// the sorted key ranges
     std::vector<pingcap::coprocessor::KeyRange> key_ranges;
+
+    UInt64 connection_id;
+    String connection_alias;
 };
 } // namespace DB

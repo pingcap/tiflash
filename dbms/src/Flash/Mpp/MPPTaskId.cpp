@@ -107,7 +107,8 @@ String MPPTaskId::toString() const
 const MPPTaskId MPPTaskId::unknown_mpp_task_id = MPPTaskId{};
 
 constexpr UInt64 MAX_UINT64 = std::numeric_limits<UInt64>::max();
-const MPPQueryId MPPTaskId::Max_Query_Id = MPPQueryId(MAX_UINT64, MAX_UINT64, MAX_UINT64, MAX_UINT64, "");
+const MPPQueryId MPPTaskId::Max_Query_Id
+    = MPPQueryId(MAX_UINT64, MAX_UINT64, MAX_UINT64, MAX_UINT64, "", MAX_UINT64, "");
 
 bool operator==(const MPPTaskId & lid, const MPPTaskId & rid)
 {
