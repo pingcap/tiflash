@@ -1360,10 +1360,7 @@ void cacheColumns(CachedColumnInfo * cached_column_info, MutableColumns & added_
     if (!cached_columns.empty())
     {
         assert(cached_column_info->columns.empty());
-        cached_column_info->columns.insert(
-            cached_column_info->columns.end(),
-            cached_columns.begin(),
-            cached_columns.end());
+        cached_column_info->columns.swap(cached_columns);
     }
     cached_column_info->state = CachedColumnState::CACHED;
 }
