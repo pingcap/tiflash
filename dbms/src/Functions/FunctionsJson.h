@@ -953,13 +953,7 @@ public:
         {
             if (unlikely(input_tidb_tp == nullptr))
             {
-                doExecuteForBinary<false>(
-                    data_to,
-                    offsets_to,
-                    input_source,
-                    input_tidb_tp->tp(),
-                    -1,
-                    block.rows());
+                doExecuteForBinary<false>(data_to, offsets_to, input_source, input_tidb_tp->tp(), -1, block.rows());
             }
             else if (input_tidb_tp->tp() == TiDB::TypeString)
             {
