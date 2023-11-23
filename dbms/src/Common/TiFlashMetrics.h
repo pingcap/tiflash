@@ -388,7 +388,9 @@ namespace DB
       Gauge,                                                                                                                        \
       F(type_ongoing, {{"type", "ongoing"}}),                                                                                       \
       F(type_ingesting_stage, {{"type", "ingesting_stage"}}),                                                                       \
-      F(type_building_stage, {{"type", "building_stage"}}))                                                                         \
+      F(type_writing_stage, {{"type", "writing_stage"}}),                                                                           \
+      F(type_queueing_stage, {{"type", "queueing_stage"}}),                                                                         \
+      F(type_selecting_stage, {{"type", "selecting_stage"}}))                                                                       \
     M(tiflash_fap_nomatch_reason,                                                                                                   \
       "",                                                                                                                           \
       Counter,                                                                                                                      \
@@ -398,8 +400,8 @@ namespace DB
     M(tiflash_fap_task_duration_seconds,                                                                                            \
       "",                                                                                                                           \
       Histogram,                                                                                                                    \
-      F(type_build_stage, {{"type", "build_stage"}}, ExpBuckets{0.1, 2, 120}),                                                      \
-      F(type_transform_stage, {{"type", "transform_stage"}}, ExpBuckets{0.05, 2, 60}),                                              \
+      F(type_select_stage, {{"type", "select_stage"}}, ExpBuckets{0.1, 2, 120}),                                                    \
+      F(type_write_stage, {{"type", "write_stage"}}, ExpBuckets{0.05, 2, 60}),                                                      \
       F(type_ingest_stage, {{"type", "ingest_stage"}}, ExpBuckets{0.05, 2, 60}),                                                    \
       F(type_total, {{"type", "total"}}, ExpBuckets{0.5, 2, 200}),                                                                  \
       F(type_queue_stage, {{"type", "queue_stage"}}, ExpBuckets{0.5, 2, 120}),                                                      \

@@ -182,7 +182,7 @@ std::variant<CheckpointRegionInfoAndData, FastAddPeerRes> FastAddPeerImplBuild(
     auto after_build = [&]() {
         if (!is_building_finish_recorded)
         {
-            GET_METRIC(tiflash_fap_task_state, type_building_stage).Decrement();
+            GET_METRIC(tiflash_fap_task_state, type_selecting_stage).Decrement();
             is_building_finish_recorded = true;
         }
     };
@@ -234,7 +234,7 @@ std::variant<CheckpointRegionInfoAndData, FastAddPeerRes> FastAddPeerImplBuild(
                         watch.elapsedSeconds(),
                         candidate_store_ids.size(),
                         region_id);
-                    GET_METRIC(tiflash_fap_task_duration_seconds, type_build_stage).Observe(watch.elapsedSeconds());
+                    GET_METRIC(tiflash_fap_task_duration_seconds, type_select_stage).Observe(watch.elapsedSeconds());
                     return maybe_region_info.value();
                 }
                 else
@@ -274,8 +274,9 @@ FastAddPeerRes FastAddPeerImplTransform(
     const auto & settings = tmt.getContext().getSettingsRef();
 
     Stopwatch watch;
-    SCOPE_EXIT(
-        { GET_METRIC(tiflash_fap_task_duration_seconds, type_transform_stage).Observe(watch.elapsedSeconds()); });
+    SCOPE_EXIT({ GET_METRIC(tiflash_fap_task_duration_seconds, type_write_stage).Observe(watch.elapsedSeconds()); });
+    GET_METRIC(tiflash_fap_task_state, type_writing_stage).Increment();
+    SCOPE_EXIT({ GET_METRIC(tiflash_fap_task_state, type_writing_stage).Decrement(); });
 
     CheckpointInfoPtr checkpoint_info;
     RegionPtr region;
@@ -356,6 +357,7 @@ FastAddPeerRes FastAddPeerImpl(
     {
         auto elapsed = fap_ctx->tasks_trace->queryElapsed(region_id);
         GET_METRIC(tiflash_fap_task_duration_seconds, type_queue_stage).Observe(elapsed / 1000.0);
+        GET_METRIC(tiflash_fap_task_state, type_queueing_stage).Decrement();
         auto res = FastAddPeerImplBuild(tmt, proxy_helper, region_id, new_peer_id);
         if (std::holds_alternative<CheckpointRegionInfoAndData>(res))
         {
@@ -401,6 +403,8 @@ void ApplyFapSnapshotImpl(TMTContext & tmt, TiFlashRaftProxyHelper * proxy_helpe
 {
     auto * log = &Poco::Logger::get("FastAddPeer");
     LOG_INFO(log, "Begin apply fap snapshot, region_id={}, peer_id={}", region_id, peer_id);
+    GET_METRIC(tiflash_fap_task_state, type_ingesting_stage).Increment();
+    SCOPE_EXIT({ GET_METRIC(tiflash_fap_task_state, type_ingesting_stage).Decrement(); });
     Stopwatch watch_ingest;
     auto kvstore = tmt.getKVStore();
     auto fap_ctx = tmt.getContext().getSharedContextDisagg()->fap_context;
@@ -464,6 +468,7 @@ FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, u
         {
             // We need to schedule the task.
             auto current_time = FAPAsyncTasks::getCurrentMillis();
+            GET_METRIC(tiflash_fap_task_state, type_queueing_stage).Increment();
             auto res
                 = fap_ctx->tasks_trace->addTask(region_id, [server, region_id, new_peer_id, fap_ctx, current_time]() {
                       std::string origin_name = getThreadName();
@@ -480,7 +485,7 @@ FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, u
             if (res)
             {
                 GET_METRIC(tiflash_fap_task_state, type_ongoing).Increment();
-                GET_METRIC(tiflash_fap_task_state, type_building_stage).Increment();
+                GET_METRIC(tiflash_fap_task_state, type_selecting_stage).Increment();
                 LOG_INFO(log, "Add new task [new_peer_id={}] [region_id={}]", new_peer_id, region_id);
             }
             else
