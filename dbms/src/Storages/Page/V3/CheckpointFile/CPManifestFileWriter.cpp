@@ -17,6 +17,7 @@
 #include <Storages/Page/V3/Universal/UniversalPageIdFormatImpl.h>
 
 #include <magic_enum.hpp>
+
 #include "Common/Logger.h"
 
 namespace DB::PS::V3
@@ -76,7 +77,8 @@ void CPManifestFileWriter::writeEditsPart(const universal::PageEntriesEdit & edi
         auto * out_record = part.add_edits();
         *out_record = records[start + i].toProto();
     }
-    if(has_data){
+    if (has_data)
+    {
         details::writeMessageWithLength(*compressed_writer, part);
     }
 }

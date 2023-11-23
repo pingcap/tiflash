@@ -633,8 +633,7 @@ try
                     .checkpoint_info = OptionalCheckpointInfo(
                         CheckpointLocation{.data_file_id = std::make_shared<String>("apple_lock")},
                         true,
-                        false
-                    )},
+                        false)},
                 1);
             // remote external entry ingest from other node
             edits.varExternal(
@@ -644,8 +643,7 @@ try
                     .checkpoint_info = OptionalCheckpointInfo(
                         CheckpointLocation{.data_file_id = std::make_shared<String>("banana_lock")},
                         true,
-                        true
-                    )},
+                        true)},
                 1);
             edits.varDel("banana", PageVersion(4));
             edits.varEntry(

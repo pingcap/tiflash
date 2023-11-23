@@ -161,8 +161,14 @@ void FastAddPeerContext::insertCheckpointIngestInfo(
             checkpoint_ingest_info_map[region_id]->peerId());
     }
 
-    checkpoint_ingest_info_map[region_id]
-        = std::make_shared<CheckpointIngestInfo>(tmt, region_id, peer_id, remote_store_id, region, std::move(segments), start_time);
+    checkpoint_ingest_info_map[region_id] = std::make_shared<CheckpointIngestInfo>(
+        tmt,
+        region_id,
+        peer_id,
+        remote_store_id,
+        region,
+        std::move(segments),
+        start_time);
 }
 
 } // namespace DB

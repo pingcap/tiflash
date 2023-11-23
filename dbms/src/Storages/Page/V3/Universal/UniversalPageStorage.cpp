@@ -518,7 +518,6 @@ PS::V3::CPDataDumpStats UniversalPageStorage::dumpIncrementalCheckpoint(
 
     // TODO: After FAP is enabled, we need the `data_source` can read data from a remote store.
 
-    // LOG_INFO(log, "!!!!! YYYYY 1");
     auto writer = PS::V3::CPFilesWriter::create({
         .data_file_path_pattern = options.data_file_path_pattern,
         .data_file_id_pattern = options.data_file_id_pattern,
@@ -531,7 +530,6 @@ PS::V3::CPDataDumpStats UniversalPageStorage::dumpIncrementalCheckpoint(
         .max_edit_records_per_part = options.max_edit_records_per_part,
     });
 
-    // LOG_INFO(log, "!!!!! YYYYY 2");
     writer->writePrefix({
         .writer = options.writer_info,
         .sequence = snap->sequence,
@@ -544,7 +542,6 @@ PS::V3::CPDataDumpStats UniversalPageStorage::dumpIncrementalCheckpoint(
             return PS::V3::CPFilesWriter::CompactOptions(false);
         return PS::V3::CPFilesWriter::CompactOptions(options.compact_getter());
     }();
-    // LOG_INFO(log, "!!!!! YYYYY 4");
     // get the remote file ids that need to be compacted
     const auto checkpoint_dump_stats
         = writer->writeEditsAndApplyCheckpointInfo(edit_from_mem, compact_opts, options.only_upload_manifest);

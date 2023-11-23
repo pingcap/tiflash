@@ -414,10 +414,17 @@ void ApplyFapSnapshotImpl(TMTContext & tmt, TiFlashRaftProxyHelper * proxy_helpe
     GET_METRIC(tiflash_fap_task_duration_seconds, type_ingest_stage).Observe(elapsed);
     auto begin = checkpoint_ingest_info->beginTime();
     auto current = FAPAsyncTasks::getCurrentMillis();
-    if (begin) {
+    if (begin)
+    {
         GET_METRIC(tiflash_fap_task_duration_seconds, type_total).Observe((current - begin) / 1000.0);
     }
-    LOG_INFO(log, "Finish apply fap snapshot, region_id={} peer_id={} begin_time={} current_time={}", region_id, peer_id, begin, current);
+    LOG_INFO(
+        log,
+        "Finish apply fap snapshot, region_id={} peer_id={} begin_time={} current_time={}",
+        region_id,
+        peer_id,
+        begin,
+        current);
     GET_METRIC(tiflash_fap_task_result, type_succeed).Increment();
 }
 
@@ -435,9 +442,7 @@ void ApplyFapSnapshot(EngineStoreServerWrap * server, uint64_t region_id, uint64
     {
         DB::tryLogCurrentException(
             "FastAddPeerApply",
-            fmt::format("Failed when try to apply fap snapshot region_id={} peer_id={}", 
-                region_id, peer_id
-            ));
+            fmt::format("Failed when try to apply fap snapshot region_id={} peer_id={}", region_id, peer_id));
         exit(-1);
     }
 }
@@ -459,12 +464,19 @@ FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, u
         {
             // We need to schedule the task.
             auto current_time = FAPAsyncTasks::getCurrentMillis();
-            auto res = fap_ctx->tasks_trace->addTask(region_id, [server, region_id, new_peer_id, fap_ctx, current_time]() {
-                std::string origin_name = getThreadName();
-                SCOPE_EXIT({ setThreadName(origin_name.c_str()); });
-                setThreadName("fap-builder");
-                return FastAddPeerImpl(fap_ctx, *(server->tmt), server->proxy_helper, region_id, new_peer_id, current_time);
-            });
+            auto res
+                = fap_ctx->tasks_trace->addTask(region_id, [server, region_id, new_peer_id, fap_ctx, current_time]() {
+                      std::string origin_name = getThreadName();
+                      SCOPE_EXIT({ setThreadName(origin_name.c_str()); });
+                      setThreadName("fap-builder");
+                      return FastAddPeerImpl(
+                          fap_ctx,
+                          *(server->tmt),
+                          server->proxy_helper,
+                          region_id,
+                          new_peer_id,
+                          current_time);
+                  });
             if (res)
             {
                 GET_METRIC(tiflash_fap_task_state, type_ongoing).Increment();

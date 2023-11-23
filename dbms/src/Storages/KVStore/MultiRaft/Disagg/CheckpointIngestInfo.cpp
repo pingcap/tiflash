@@ -15,10 +15,10 @@
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/IManageableStorage.h>
+#include <Storages/KVStore/KVStore.h>
 #include <Storages/KVStore/MultiRaft/Disagg/CheckpointIngestInfo.h>
 #include <Storages/KVStore/MultiRaft/RegionPersister.h>
 #include <Storages/KVStore/TMTContext.h>
-#include <Storages/KVStore/KVStore.h>
 #include <Storages/Page/PageStorage.h>
 #include <Storages/Page/V3/Universal/UniversalPageIdFormatImpl.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
@@ -39,11 +39,15 @@ CheckpointIngestInfo::CheckpointIngestInfo(
     , clean_when_destruct(false)
     , begin_time(0)
 {
-    if(!loadFromPS(proxy_helper)) {
-        throw Exception(ErrorCodes::LOGICAL_ERROR, 
-            fmt::format("Failed to restore CheckpointIngestInfo, region_id={} peer_id={} store_id={}", 
-            region_id, peer_id, tmt.getKVStore()->getStoreID(std::memory_order_relaxed)
-        ));
+    if (!loadFromPS(proxy_helper))
+    {
+        throw Exception(
+            ErrorCodes::LOGICAL_ERROR,
+            fmt::format(
+                "Failed to restore CheckpointIngestInfo, region_id={} peer_id={} store_id={}",
+                region_id,
+                peer_id,
+                tmt.getKVStore()->getStoreID(std::memory_order_relaxed)));
     }
 }
 
@@ -125,8 +129,13 @@ bool CheckpointIngestInfo::loadFromPS(const TiFlashRaftProxyHelper * proxy_helpe
         auto page_id
             = UniversalPageIdFormat::toLocalKVPrefix(UniversalPageIdFormat::LocalKVKeyType::FAPIngestRegion, region_id);
         Page page = uni_ps->read(page_id, nullptr, snapshot, /*throw_on_not_exist*/ false);
-        if (!page.isValid()) {
-            LOG_ERROR(log, "Can't read region info from CheckpointIngestInfo, page_id={} region_id={}", page_id, region_id);
+        if (!page.isValid())
+        {
+            LOG_ERROR(
+                log,
+                "Can't read region info from CheckpointIngestInfo, page_id={} region_id={}",
+                page_id,
+                region_id);
             return false;
         }
         ReadBufferFromMemory buf(page.data.begin(), page.data.size());
@@ -146,8 +155,13 @@ bool CheckpointIngestInfo::loadFromPS(const TiFlashRaftProxyHelper * proxy_helpe
                 UniversalPageIdFormat::LocalKVKeyType::FAPIngestSegments,
                 region_id);
             auto page = uni_ps->read(page_id, nullptr, snapshot, /*throw_on_not_exist*/ false);
-            if (!page.isValid()) {
-                LOG_ERROR(log, "Can't read segment info from CheckpointIngestInfo, page_id={} region_id={}", page_id, region_id);
+            if (!page.isValid())
+            {
+                LOG_ERROR(
+                    log,
+                    "Can't read segment info from CheckpointIngestInfo, page_id={} region_id={}",
+                    page_id,
+                    region_id);
                 return false;
             }
             ReadBufferFromMemory buf(page.data.begin(), page.data.size());
@@ -220,7 +234,13 @@ void CheckpointIngestInfo::persistToPS()
         wb.putPage(UniversalPageId(page_id.data(), page_id.size()), 0, read_buf, data_size);
     }
     uni_ps->write(std::move(wb), DB::PS::V3::PageType::Local, nullptr);
-    LOG_INFO(log, "Successfully persist CheckpointIngestInfo, region_id={} peer_id={} remote_store_id={} region={}", region_id, peer_id, remote_store_id, region->getDebugString());
+    LOG_INFO(
+        log,
+        "Successfully persist CheckpointIngestInfo, region_id={} peer_id={} remote_store_id={} region={}",
+        region_id,
+        peer_id,
+        remote_store_id,
+        region->getDebugString());
 }
 
 void CheckpointIngestInfo::removeFromPS()
