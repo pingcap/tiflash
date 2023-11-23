@@ -19,6 +19,7 @@
 
 #include <chrono>
 #include <memory>
+#include <cassert>
 
 namespace DB
 {
@@ -98,14 +99,13 @@ public:
     uint64_t estWaitDuraMS(uint64_t max_wait_dura_ms) const
     {
         const auto tokens = peek();
-        if (tokens > 0 || fill_rate_ms == 0.0)
-            return 100;
+        static const uint64_t min_wait_dura_ms = 100;
+        assert(max_wait_dura_ms > min_wait_dura_ms);
 
-        auto est_dura_ms = static_cast<uint64_t>(std::ceil(-tokens / fill_rate_ms)) + 100;
-        if (est_dura_ms > max_wait_dura_ms)
-            est_dura_ms = max_wait_dura_ms;
-
-        return est_dura_ms;
+        if (tokens >= 0 || fill_rate_ms == 0.0)
+            return min_wait_dura_ms;
+        const auto est_dura_ms = static_cast<uint64_t>(std::ceil(-tokens / fill_rate_ms)) + min_wait_dura_ms;
+        return std::min(est_dura_ms, max_wait_dura_ms);
     }
 
 private:
