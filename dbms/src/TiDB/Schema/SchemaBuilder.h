@@ -173,7 +173,7 @@ public:
 
     void dropAllSchema();
 
-    bool applyTable(DatabaseID database_id, TableID logical_table_id, TableID physical_table_id);
+    bool applyTable(DatabaseID database_id, TableID logical_table_id, TableID physical_table_id, bool force);
 
 private:
     void applyDropSchema(DatabaseID schema_id);

@@ -509,47 +509,78 @@ void SchemaBuilder<Getter, NameMapper>::applySetTiFlashReplica(DatabaseID databa
         return;
     }
 
-    if (storage->getTombstone() != 0)
+    if (storage->isTombstone())
     {
         applyRecoverTable(db_info->id, table_id);
         return;
     }
 
-    auto managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage);
-    auto storage_replica_info = managed_storage->getTableInfo().replica_info;
-    if (storage_replica_info.count == table_info->replica_info.count
-        && storage_replica_info.available == table_info->replica_info.available)
+    auto local_logical_storage_table_info = storage->getTableInfo(); // copy
+    // nothing changed
+    if (const auto & local_logical_storage_replica_info = local_logical_storage_table_info.replica_info;
+        local_logical_storage_replica_info.count == table_info->replica_info.count
+        && local_logical_storage_replica_info.available == table_info->replica_info.available)
     {
         return;
     }
 
+    size_t old_replica_count = 0;
+    size_t new_replica_count = 0;
     if (table_info->isLogicalPartitionTable())
     {
         for (const auto & part_def : table_info->partition.definitions)
         {
             auto new_part_table_info = table_info->producePartitionTableInfo(part_def.id, name_mapper);
             auto part_storage = tmt_context.getStorages().get(keyspace_id, new_part_table_info->id);
-            if (part_storage != nullptr)
+            if (part_storage == nullptr)
+            {
+                table_id_map.emplacePartitionTableID(part_def.id, table_id);
+                continue;
+            }
             {
                 auto alter_lock = part_storage->lockForAlter(getThreadNameAndID());
+                // Only update the replica info
+                auto local_table_info = part_storage->getTableInfo(); // copy
+                old_replica_count = local_table_info.replica_info.count;
+                new_replica_count = new_part_table_info->replica_info.count;
+                local_table_info.replica_info = new_part_table_info->replica_info;
                 part_storage->alterSchemaChange(
                     alter_lock,
-                    *new_part_table_info,
+                    local_table_info,
                     name_mapper.mapDatabaseName(db_info->id, keyspace_id),
-                    name_mapper.mapTableName(*new_part_table_info),
+                    name_mapper.mapTableName(local_table_info),
                     context);
             }
-            else
-                table_id_map.emplacePartitionTableID(part_def.id, table_id);
+            LOG_INFO(
+                log,
+                "Updating replica info, replica count old={} new={} physical_table_id={} logical_table_id={}",
+                old_replica_count,
+                new_replica_count,
+                part_def.id,
+                table_id);
         }
     }
-    auto alter_lock = storage->lockForAlter(getThreadNameAndID());
-    storage->alterSchemaChange(
-        alter_lock,
-        *table_info,
-        name_mapper.mapDatabaseName(db_info->id, keyspace_id),
-        name_mapper.mapTableName(*table_info),
-        context);
+
+    {
+        auto alter_lock = storage->lockForAlter(getThreadNameAndID());
+        // Only update the replica info
+        old_replica_count = local_logical_storage_table_info.replica_info.count;
+        new_replica_count = table_info->replica_info.count;
+        local_logical_storage_table_info.replica_info = table_info->replica_info;
+        storage->alterSchemaChange(
+            alter_lock,
+            local_logical_storage_table_info,
+            name_mapper.mapDatabaseName(db_info->id, keyspace_id),
+            name_mapper.mapTableName(local_logical_storage_table_info),
+            context);
+    }
+    LOG_INFO(
+        log,
+        "Updating replica info, replica count old={} new={} physical_table_id={} logical_table_id={}",
+        old_replica_count,
+        new_replica_count,
+        table_id,
+        table_id);
 }
 
 template <typename Getter, typename NameMapper>
@@ -1357,7 +1388,8 @@ template <typename Getter, typename NameMapper>
 bool SchemaBuilder<Getter, NameMapper>::applyTable(
     DatabaseID database_id,
     TableID logical_table_id,
-    TableID physical_table_id)
+    TableID physical_table_id,
+    bool force)
 {
     // Here we get table info without mvcc. So we can detect that whether the table
     // has been renamed to another database or dropped.
@@ -1366,7 +1398,7 @@ bool SchemaBuilder<Getter, NameMapper>::applyTable(
     // added to the new table.
     // For the reason above, if we can not get table info without mvcc, this function
     // will return false and the caller should update the table_id_map then retry.
-    auto table_info = getter.getTableInfo(database_id, logical_table_id, /*try_mvcc*/ false);
+    auto table_info = getter.getTableInfo(database_id, logical_table_id, /*try_mvcc*/ force);
     if (table_info == nullptr)
     {
         LOG_WARNING(

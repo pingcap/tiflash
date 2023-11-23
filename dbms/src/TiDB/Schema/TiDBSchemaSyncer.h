@@ -107,6 +107,7 @@ private:
         Context & context,
         TableID physical_table_id,
         Getter & getter,
+        bool force,
         const char * next_action);
 
     TiDB::DBInfoPtr getDBInfoByName(const String & database_name) override
