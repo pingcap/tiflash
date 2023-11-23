@@ -144,7 +144,7 @@ mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.e2 
 |  3 | a     | b     |    3 |
 +----+-------+-------+------+
 
-# case 12, create partition table, non-partition table and execute exchagne partition immediately
+## case 12, create partition table, non-partition table and execute exchagne partition immediately
 mysql> drop table if exists test.e
 mysql> drop table if exists test.e2
 mysql> create table test.e(id INT NOT NULL,fname VARCHAR(30),lname VARCHAR(30)) PARTITION BY RANGE (id) ( PARTITION p0 VALUES LESS THAN (50),PARTITION p1 VALUES LESS THAN (100),PARTITION p2 VALUES LESS THAN (150), PARTITION p3 VALUES LESS THAN (MAXVALUE));
