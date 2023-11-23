@@ -172,7 +172,7 @@ bool tryResetPeerIdInRegion(RegionPtr region, const RegionLocalState & region_st
     return false;
 }
 
-std::variant<CheckpointRegionInfoAndData, FastAddPeerRes> FastAddPeerImplBuild(
+std::variant<CheckpointRegionInfoAndData, FastAddPeerRes> FastAddPeerImplSelect(
     TMTContext & tmt,
     TiFlashRaftProxyHelper * proxy_helper,
     uint64_t region_id,
@@ -262,10 +262,10 @@ std::variant<CheckpointRegionInfoAndData, FastAddPeerRes> FastAddPeerImplBuild(
     }
 }
 
-FastAddPeerRes FastAddPeerImplTransform(
+FastAddPeerRes FastAddPeerImplWrite(
     TMTContext & tmt,
-    uint64_t region_id,
-    uint64_t new_peer_id,
+    UInt64 region_id,
+    UInt64 new_peer_id,
     CheckpointRegionInfoAndData && checkpoint,
     UInt64 start_time)
 {
@@ -349,8 +349,8 @@ FastAddPeerRes FastAddPeerImpl(
     FastAddPeerContextPtr fap_ctx,
     TMTContext & tmt,
     TiFlashRaftProxyHelper * proxy_helper,
-    uint64_t region_id,
-    uint64_t new_peer_id,
+    UInt64 region_id,
+    UInt64 new_peer_id,
     UInt64 start_time)
 {
     try
@@ -358,10 +358,10 @@ FastAddPeerRes FastAddPeerImpl(
         auto elapsed = fap_ctx->tasks_trace->queryElapsed(region_id);
         GET_METRIC(tiflash_fap_task_duration_seconds, type_queue_stage).Observe(elapsed / 1000.0);
         GET_METRIC(tiflash_fap_task_state, type_queueing_stage).Decrement();
-        auto res = FastAddPeerImplBuild(tmt, proxy_helper, region_id, new_peer_id);
+        auto res = FastAddPeerImplSelect(tmt, proxy_helper, region_id, new_peer_id);
         if (std::holds_alternative<CheckpointRegionInfoAndData>(res))
         {
-            auto final_res = FastAddPeerImplTransform(
+            auto final_res = FastAddPeerImplWrite(
                 tmt,
                 region_id,
                 new_peer_id,

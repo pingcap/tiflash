@@ -40,17 +40,13 @@ using raft_serverpb::RegionLocalState;
 namespace DB
 {
 FastAddPeerRes genFastAddPeerRes(FastAddPeerStatus status, std::string && apply_str, std::string && region_str);
-FastAddPeerRes FastAddPeerImplTransform(
+FastAddPeerRes FastAddPeerImplWrite(
     TMTContext & tmt,
-    uint64_t region_id,
-    uint64_t new_peer_id,
+    UInt64 region_id,
+    UInt64 new_peer_id,
     CheckpointRegionInfoAndData && checkpoint,
     UInt64 start_time);
-void ApplyFapSnapshotImpl(
-    TMTContext & tmt,
-    TiFlashRaftProxyHelper * proxy_helper,
-    uint64_t region_id,
-    uint64_t peer_id);
+void ApplyFapSnapshotImpl(TMTContext & tmt, TiFlashRaftProxyHelper * proxy_helper, UInt64 region_id, UInt64 peer_id);
 
 namespace tests
 {
@@ -314,7 +310,7 @@ try
     auto & global_context = TiFlashTestEnv::getGlobalContext();
     auto fap_context = global_context.getSharedContextDisagg()->fap_context;
     uint64_t region_id = 1;
-    FastAddPeerImplTransform(global_context.getTMTContext(), region_id, 2333, std::move(mock_data), 0);
+    FastAddPeerImplWrite(global_context.getTMTContext(), region_id, 2333, std::move(mock_data), 0);
     fap_context->removeCheckpointIngestInfo(region_id);
     ApplyFapSnapshotImpl(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333);
 
@@ -336,6 +332,7 @@ try
 }
 CATCH
 
+// Test if region is destroyed before applied.
 TEST_F(RegionKVStoreTestFAP, RestoreFromRestart2)
 try
 {
@@ -346,7 +343,7 @@ try
     auto & global_context = TiFlashTestEnv::getGlobalContext();
     auto fap_context = global_context.getSharedContextDisagg()->fap_context;
     uint64_t region_id = 1;
-    FastAddPeerImplTransform(global_context.getTMTContext(), region_id, 2333, std::move(mock_data), 0);
+    FastAddPeerImplWrite(global_context.getTMTContext(), region_id, 2333, std::move(mock_data), 0);
     fap_context->removeCheckpointIngestInfo(region_id);
     kvstore->handleDestroy(region_id, global_context.getTMTContext());
     // CheckpointIngestInfo is removed.
@@ -354,6 +351,7 @@ try
 }
 CATCH
 
+// Test if we can parse from an uploaded manifest
 TEST_F(RegionKVStoreTestFAP, RestoreFromRestart3)
 try
 {
@@ -364,9 +362,9 @@ try
     auto & global_context = TiFlashTestEnv::getGlobalContext();
     auto fap_context = global_context.getSharedContextDisagg()->fap_context;
     uint64_t region_id = 1;
-    FastAddPeerImplTransform(global_context.getTMTContext(), region_id, 2333, std::move(mock_data), 0);
+    FastAddPeerImplWrite(global_context.getTMTContext(), region_id, 2333, std::move(mock_data), 0);
     dumpCheckpoint();
-    FastAddPeerImplTransform(global_context.getTMTContext(), region_id, 2333, std::move(mock_data), 0);
+    FastAddPeerImplWrite(global_context.getTMTContext(), region_id, 2333, std::move(mock_data), 0);
 
     auto s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
     const auto manifests = S3::CheckpointManifestS3Set::getFromS3(*s3_client, kvs.getStoreID());
