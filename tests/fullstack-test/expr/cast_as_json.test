@@ -66,9 +66,9 @@ mysql> insert into test.test_time values('2023-11-14', '2023-11-14 21:59:59', '2
 mysql> alter table test.test_time set tiflash replica 1;
 
 mysql> drop table if exists test.test_duration;
-mysql> CREATE TABLE test.test_duration (col time);
-mysql> insert into test.test_duration values(null);
-mysql> insert into test.test_duration values('08:00:00');
+mysql> CREATE TABLE test.test_duration (col1 time(1), col6 time(6));
+mysql> insert into test.test_duration values(null, null);
+mysql> insert into test.test_duration values('08:00:00', '08:00:00');
 mysql> alter table test.test_duration set tiflash replica 1;
 
 mysql> drop table if exists test.test_json;
@@ -317,13 +317,13 @@ mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; 
 +---------------------+------------------------------+------------------------------+---------------------+
 
 ## cast duration as json
-mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(col as json) from test.test_duration;
-+-------------------+
-| cast(col as json) |
-+-------------------+
-| NULL              |
-| "08:00:00.000000" |
-+-------------------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(col1 as json), cast(col6 as json) from test.test_duration;
++--------------------+--------------------+
+| cast(col1 as json) | cast(col6 as json) |
++--------------------+--------------------+
+| NULL               | NULL               |
+| "08:00:00.000000"  | "08:00:00.000000"  |
++--------------------+--------------------+
 
 ## cast json as json
 mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(col as json) from test.test_json;

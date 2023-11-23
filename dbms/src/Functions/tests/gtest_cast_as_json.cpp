@@ -351,17 +351,32 @@ CATCH
 TEST_F(TestCastAsJson, CastDurationAsJson)
 try
 {
-    ColumnWithTypeAndName input(
-        // 22hour, 22min, 22s, 222ms
-        createColumn<DataTypeMyDuration::FieldType>({(22 * 3600000 + 22 * 60000 + 22 * 1000 + 222) * 1000000L,
-                                                     -1 * (22 * 3600000 + 22 * 60000 + 22 * 1000 + 222) * 1000000L})
-            .column,
-        std::make_shared<DataTypeMyDuration>(6),
-        "");
+    {
+        ColumnWithTypeAndName input(
+            // 22hour, 22min, 22s, 222ms
+            createColumn<DataTypeMyDuration::FieldType>({(22 * 3600000 + 22 * 60000 + 22 * 1000 + 222) * 1000000L,
+                                                         -1 * (22 * 3600000 + 22 * 60000 + 22 * 1000 + 222) * 1000000L})
+                .column,
+            std::make_shared<DataTypeMyDuration>(6),
+            "");
 
-    auto res = executeFunctionWithCast("cast_duration_as_json", {input});
-    auto expect = createColumn<Nullable<String>>({"\"22:22:22.222000\"", "\"-22:22:22.222000\""});
-    ASSERT_COLUMN_EQ(expect, res);
+        auto res = executeFunctionWithCast("cast_duration_as_json", {input});
+        auto expect = createColumn<Nullable<String>>({"\"22:22:22.222000\"", "\"-22:22:22.222000\""});
+        ASSERT_COLUMN_EQ(expect, res);
+    }
+    {
+        ColumnWithTypeAndName input(
+            // 22hour, 22min, 22s, 222ms
+            createColumn<DataTypeMyDuration::FieldType>({(22 * 3600000 + 22 * 60000 + 22 * 1000 + 222) * 1000000L,
+                                                         -1 * (22 * 3600000 + 22 * 60000 + 22 * 1000 + 222) * 1000000L})
+                .column,
+            std::make_shared<DataTypeMyDuration>(1),
+            "");
+
+        auto res = executeFunctionWithCast("cast_duration_as_json", {input});
+        auto expect = createColumn<Nullable<String>>({"\"22:22:22.222000\"", "\"-22:22:22.222000\""});
+        ASSERT_COLUMN_EQ(expect, res);
+    }
 }
 CATCH
 

@@ -38,7 +38,7 @@ try
         writer.write('a');
         ASSERT_EQ(writer.offset(), 1);
 
-        writer.alloc(3);
+        writer.advance(3);
         ASSERT_EQ(writer.offset(), 4);
 
         PaddedPODArray<UInt8> tmp;
@@ -66,7 +66,7 @@ try
         VectorWriter writer(vector, 1);
         ASSERT_EQ(writer.offset(), 0);
 
-        writer.alloc(3);
+        writer.advance(3);
         ASSERT_EQ(writer.offset(), 3);
 
         writer.write('a');

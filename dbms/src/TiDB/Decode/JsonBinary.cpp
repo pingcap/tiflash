@@ -195,7 +195,7 @@ inline UInt64 appendValueOfSIMDJsonElem(
 
 // return depth.
 inline UInt64 appendValueEntryAndData(
-    size_t buffer_start,
+    size_t buffer_start_pos,
     UInt32 & data_offset,
     const simdjson::dom::element & value,
     JsonBinary::JsonBinaryWriteBuffer & write_buffer)
@@ -214,15 +214,15 @@ inline UInt64 appendValueEntryAndData(
     else
     {
         encodeNumeric(write_buffer, data_offset);
-        auto tmp_entry_offset = write_buffer.offset();
+        auto tmp_entry_pos = write_buffer.offset();
 
         // write value data.
-        write_buffer.setOffset(data_offset + buffer_start);
+        write_buffer.setOffset(data_offset + buffer_start_pos);
         auto depth = appendValueOfSIMDJsonElem(write_buffer, value);
         /// update data_offset
-        data_offset = write_buffer.offset() - buffer_start;
+        data_offset = write_buffer.offset() - buffer_start_pos;
 
-        write_buffer.setOffset(tmp_entry_offset);
+        write_buffer.setOffset(tmp_entry_pos);
         return depth;
     }
 }
@@ -242,15 +242,15 @@ inline UInt64 appendValueOfSIMDJsonElem(
         /// value_datas
 
         const auto & obj = elem.get_object();
-        UInt32 buffer_start = write_buffer.offset();
+        UInt32 buffer_start_pos = write_buffer.offset();
 
         // 1. write elem count
         UInt32 element_count = obj.size();
         encodeNumeric(write_buffer, element_count);
 
-        // 2. alloc for total size
-        auto total_size_offset = write_buffer.offset();
-        write_buffer.alloc(4);
+        // 2. advance for total size
+        auto total_size_pos = write_buffer.offset();
+        write_buffer.advance(4);
 
         // 3. write key entry with key offset.
         UInt32 data_offset_start = HEADER_SIZE + obj.size() * (KEY_ENTRY_SIZE + VALUE_ENTRY_SIZE);
@@ -264,19 +264,19 @@ inline UInt64 appendValueOfSIMDJsonElem(
             UInt16 key_len = key.size();
             encodeNumeric(write_buffer, key_len);
         }
-        UInt32 value_entry_start = write_buffer.offset();
+        UInt32 value_entry_start_pos = write_buffer.offset();
 
         // 4. write key value.
-        write_buffer.setOffset(buffer_start + data_offset_start);
+        write_buffer.setOffset(buffer_start_pos + data_offset_start);
         for (const auto & [key, _] : obj)
             write_buffer.write(key.data(), key.size());
 
         // 5. write value entry with value offset and value data.
-        write_buffer.setOffset(value_entry_start);
+        write_buffer.setOffset(value_entry_start_pos);
         UInt64 max_child_depth = 0;
         for (const auto & [_, value] : obj)
         {
-            auto child_depth = appendValueEntryAndData(buffer_start, data_offset, value, write_buffer);
+            auto child_depth = appendValueEntryAndData(buffer_start_pos, data_offset, value, write_buffer);
             max_child_depth = std::max(max_child_depth, child_depth);
         }
         UInt64 depth = max_child_depth + 1;
@@ -284,9 +284,9 @@ inline UInt64 appendValueOfSIMDJsonElem(
 
         // 6. write total size in total_size_offset.
         UInt32 total_size = data_offset;
-        write_buffer.setOffset(total_size_offset);
+        write_buffer.setOffset(total_size_pos);
         encodeNumeric(write_buffer, total_size);
-        write_buffer.setOffset(buffer_start + data_offset);
+        write_buffer.setOffset(buffer_start_pos + data_offset);
 
         return depth;
     }
@@ -298,22 +298,22 @@ inline UInt64 appendValueOfSIMDJsonElem(
         /// value_datas
 
         const auto & array = elem.get_array();
-        UInt32 buffer_start = write_buffer.offset();
+        UInt32 buffer_start_pos = write_buffer.offset();
 
         // 1. write elem count
         UInt32 element_count = array.size();
         encodeNumeric(write_buffer, element_count);
 
-        // 2. alloc for total size
-        auto total_size_offset = write_buffer.offset();
-        write_buffer.alloc(4);
+        // 2. advance for total size
+        auto total_size_pos = write_buffer.offset();
+        write_buffer.advance(4);
 
         // 3. write value entry with value offset and value data.
         UInt32 data_offset = HEADER_SIZE + array.size() * VALUE_ENTRY_SIZE;
         UInt64 max_child_depth = 0;
         for (const auto & value : array)
         {
-            auto child_depth = appendValueEntryAndData(buffer_start, data_offset, value, write_buffer);
+            auto child_depth = appendValueEntryAndData(buffer_start_pos, data_offset, value, write_buffer);
             max_child_depth = std::max(max_child_depth, child_depth);
         }
         UInt64 depth = max_child_depth + 1;
@@ -321,9 +321,9 @@ inline UInt64 appendValueOfSIMDJsonElem(
 
         // 4. write total size in total_size_offset.
         UInt32 total_size = data_offset;
-        write_buffer.setOffset(total_size_offset);
+        write_buffer.setOffset(total_size_pos);
         encodeNumeric(write_buffer, total_size);
-        write_buffer.setOffset(buffer_start + data_offset);
+        write_buffer.setOffset(buffer_start_pos + data_offset);
 
         return depth;
     }

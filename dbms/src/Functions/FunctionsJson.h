@@ -702,6 +702,7 @@ private:
         const auto * column_from = checkAndGetColumn<ColumnVector<FromType>>(column_ptr_from.get());
         RUNTIME_CHECK(column_from);
         const auto & data_from = column_from->getData();
+        // json_type + string end char 0 + value
         size_t reserve_size = data_from.size() * (1 + 1 + sizeof(Float64));
         JsonBinary::JsonBinaryWriteBuffer write_buffer(data_to, reserve_size);
         for (size_t i = 0; i < data_from.size(); ++i)
@@ -779,11 +780,14 @@ private:
     {
         const auto * column_from = checkAndGetColumn<ColumnDecimal<FromType>>(column_ptr_from.get());
         RUNTIME_CHECK(column_from);
+        // json_type + string end char 0 + value
         size_t reserve_size = column_from->size() * (1 + 1 + sizeof(Float64));
         JsonBinary::JsonBinaryWriteBuffer write_buffer(data_to, reserve_size);
         for (size_t i = 0; i < column_from->size(); ++i)
         {
             const auto & field = (*column_from)[i].template safeGet<DecimalField<FromType>>();
+            // same as https://github.com/pingcap/tidb/blob/90628349860718bb84c94fe7dc1e1f9bd9da4348/pkg/expression/builtin_cast.go#L854-L865
+            // TODO `select json_type(cast(1111.11 as json))` should return `DECIMAL`, we return `DOUBLE` now.
             JsonBinary::appendNumber(write_buffer, static_cast<Float64>(field));
             writeChar(0, write_buffer);
             offsets_to[i] = write_buffer.count();
@@ -877,6 +881,7 @@ private:
         RUNTIME_CHECK(column_from);
         const auto & data_from = column_from->getData();
 
+        // json_type + string end char 0 + value
         size_t reserve_size = 0;
         if constexpr (std::is_same_v<bool, ToType>)
             reserve_size = data_from.size() * (1 + 1 + 1);
@@ -951,26 +956,51 @@ public:
         // In raw function test, input_tidb_tp/output_tidb_tp is nullptr.
         if (collator && collator->isBinary())
         {
+            auto tmp_null_map = ColumnUInt8::create(0, 0);
             if (unlikely(input_tidb_tp == nullptr))
             {
-                doExecuteForBinary<false>(data_to, offsets_to, input_source, input_tidb_tp->tp(), -1, block.rows());
+                doExecuteForBinary<false, false>(
+                    data_to,
+                    offsets_to,
+                    input_source,
+                    tmp_null_map->getData(),
+                    TiDB::TypeVarchar,
+                    -1,
+                    block.rows());
             }
             else if (input_tidb_tp->tp() == TiDB::TypeString)
             {
-                doExecuteForBinary<true>(
-                    data_to,
-                    offsets_to,
-                    input_source,
-                    input_tidb_tp->tp(),
-                    input_tidb_tp->flen(),
-                    block.rows());
+                if (from.column->isColumnNullable())
+                {
+                    const auto & column_nullable = static_cast<const ColumnNullable &>(*from.column);
+                    doExecuteForBinary<true, true>(
+                        data_to,
+                        offsets_to,
+                        input_source,
+                        column_nullable.getNullMapData(),
+                        input_tidb_tp->tp(),
+                        input_tidb_tp->flen(),
+                        block.rows());
+                }
+                else
+                {
+                    doExecuteForBinary<true, false>(
+                        data_to,
+                        offsets_to,
+                        input_source,
+                        tmp_null_map->getData(),
+                        input_tidb_tp->tp(),
+                        input_tidb_tp->flen(),
+                        block.rows());
+                }
             }
             else
             {
-                doExecuteForBinary<false>(
+                doExecuteForBinary<false, false>(
                     data_to,
                     offsets_to,
                     input_source,
+                    tmp_null_map->getData(),
                     input_tidb_tp->tp(),
                     input_tidb_tp->flen(),
                     block.rows());
@@ -1016,22 +1046,38 @@ public:
     }
 
 private:
-    template <bool is_binary_str>
+    template <bool is_binary_str, bool check_null_for_binary_str>
     static void doExecuteForBinary(
         ColumnString::Chars_t & data_to,
         ColumnString::Offsets & offsets_to,
         const std::unique_ptr<IStringSource> & data_from,
+        const NullMap & null_map_from,
         UInt8 from_type_code,
         Int32 flen,
         size_t size)
     {
-        size_t reserve_size = (size * (1 + 1)) + data_from->getSizeForReserve();
+        size_t reserve_size = size * (1 + 1 + 1); // json_type + from_type_code + string end char 0
+        if constexpr (is_binary_str)
+            reserve_size += reserve_size <= 0 ? data_from->getSizeForReserve() : size * flen;
+        else
+            reserve_size += data_from->getSizeForReserve();
         JsonBinary::JsonBinaryWriteBuffer write_buffer(data_to, reserve_size);
+        ColumnString::Chars_t tmp_buf;
         for (size_t i = 0; i < size; ++i)
         {
             const auto & slice = data_from->getWhole();
             if constexpr (is_binary_str)
             {
+                if constexpr (check_null_for_binary_str)
+                {
+                    if (null_map_from[i])
+                    {
+                        writeChar(0, write_buffer);
+                        offsets_to[i] = write_buffer.count();
+                        data_from->next();
+                        continue;
+                    }
+                }
                 if (unlikely(flen <= 0))
                 {
                     JsonBinary::appendOpaque(
@@ -1049,12 +1095,13 @@ private:
                     }
                     else
                     {
-                        ColumnString::Chars_t buf;
-                        buf.resize_fill(size_t_flen, 0);
-                        std::memcpy(buf.data(), slice.data, slice.size);
+                        if (tmp_buf.size() < size_t_flen)
+                            tmp_buf.resize(size_t_flen);
+                        std::memcpy(tmp_buf.data(), slice.data, slice.size);
+                        std::fill(tmp_buf.data() + slice.size, tmp_buf.data() + size_t_flen, 0);
                         JsonBinary::appendOpaque(
                             write_buffer,
-                            JsonBinary::Opaque{from_type_code, StringRef{buf.data(), size_t_flen}});
+                            JsonBinary::Opaque{from_type_code, StringRef{tmp_buf.data(), size_t_flen}});
                     }
                 }
             }
@@ -1078,7 +1125,7 @@ private:
         const NullMap & null_map_from,
         size_t size)
     {
-        size_t reserve_size = (size * (1 + 1)) + data_from->getSizeForReserve();
+        size_t reserve_size = (size * (1 + 1)) + data_from->getSizeForReserve(); // json_type + string end char 0 + value
         JsonBinary::JsonBinaryWriteBuffer write_buffer(data_to, reserve_size);
         simdjson::dom::parser parser;
         for (size_t i = 0; i < size; ++i)
@@ -1172,16 +1219,16 @@ public:
         const auto & from = block.getByPosition(arguments[0]);
         if (checkDataType<DataTypeMyDateTime>(from.type.get()))
         {
-            doExecute<DataTypeMyDateTime, false>(data_to, offsets_to, from.column);
-        }
-        else if (checkDataType<DataTypeMyDate>(from.type.get()))
-        {
             // In raw function test, input_tidb_tp is nullptr.
             bool is_timestamp = (unlikely(input_tidb_tp == nullptr)) || input_tidb_tp->tp() == TiDB::TypeTimestamp;
             if (is_timestamp)
-                doExecute<DataTypeMyDate, true>(data_to, offsets_to, from.column);
+                doExecute<DataTypeMyDateTime, true>(data_to, offsets_to, from.column);
             else
-                doExecute<DataTypeMyDate, false>(data_to, offsets_to, from.column);
+                doExecute<DataTypeMyDateTime, false>(data_to, offsets_to, from.column);
+        }
+        else if (checkDataType<DataTypeMyDate>(from.type.get()))
+        {
+            doExecute<DataTypeMyDate, false>(data_to, offsets_to, from.column);
         }
 
         block.getByPosition(result).column = std::move(col_to);
@@ -1198,7 +1245,7 @@ private:
             = checkAndGetColumn<ColumnVector<typename FromDataType::FieldType>>(column_ptr_from.get());
         RUNTIME_CHECK(column_from);
         const auto & data_from = column_from->getData();
-        size_t reserve_size = data_from.size() * (1 + 1 + sizeof(UInt64));
+        size_t reserve_size = data_from.size() * (1 + 1 + sizeof(UInt64)); // json_type + string end char 0 + value
         JsonBinary::JsonBinaryWriteBuffer write_buffer(data_to, reserve_size);
         for (size_t i = 0; i < data_from.size(); ++i)
         {
@@ -1256,17 +1303,17 @@ public:
         offsets_to.resize(rows);
 
         const auto & from = block.getByPosition(arguments[0]);
-        if (const auto * duration_type = checkAndGetDataType<DataTypeMyDuration>(from.type.get());
-            likely(duration_type))
+        if (likely(checkDataType<DataTypeMyDuration>(from.type.get())))
         {
-            auto fsp = duration_type->getFsp();
             const auto & col_from = checkAndGetColumn<ColumnVector<DataTypeMyDuration::FieldType>>(from.column.get());
             const auto & data_from = col_from->getData();
-            size_t reserve_size = data_from.size() * (1 + 1 + sizeof(UInt64) + sizeof(UInt32));
+            size_t reserve_size = data_from.size() * (1 + 1 + sizeof(UInt64) + sizeof(UInt32)); // json_type + string end char 0 + value
             JsonBinary::JsonBinaryWriteBuffer write_buffer(data_to, reserve_size);
             for (size_t i = 0; i < data_from.size(); ++i)
             {
-                JsonBinary::appendDuration(write_buffer, data_from[i], fsp);
+                // from https://github.com/pingcap/tidb/blob/3543275dcf4b6454eb874c1362c87d31a963da6d/pkg/expression/builtin_cast.go#L921
+                // fsp always is MaxFsp.
+                JsonBinary::appendDuration(write_buffer, data_from[i], 6);
                 writeChar(0, write_buffer);
                 offsets_to[i] = write_buffer.count();
             }

@@ -52,16 +52,6 @@ public:
         pos += n;
     }
 
-    void alloc(size_t n)
-    {
-        reserveForNextSize(n);
-        pos += n;
-    }
-
-    size_t offset() { return pos - reinterpret_cast<Position>(vector.data()); }
-
-    size_t count() { return offset(); }
-
     void setOffset(size_t new_offset)
     {
         if (new_offset > vector.size())
@@ -71,6 +61,15 @@ public:
         }
         pos = reinterpret_cast<Position>(vector.data() + new_offset);
     }
+
+    void advance(size_t n)
+    {
+        setOffset(offset() + n);
+    }
+
+    size_t offset() { return pos - reinterpret_cast<Position>(vector.data()); }
+
+    size_t count() { return offset(); }
 
     ~VectorWriter()
     {
