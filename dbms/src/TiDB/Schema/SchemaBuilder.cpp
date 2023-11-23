@@ -44,6 +44,7 @@
 #include <TiDB/Schema/SchemaNameMapper.h>
 #include <TiDB/Schema/TiDB.h>
 #include <common/logger_useful.h>
+#include <fmt/format.h>
 
 #include <boost/algorithm/string/join.hpp>
 #include <magic_enum.hpp>
@@ -463,7 +464,7 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
         {
             // >= SchemaActionType::MaxRecognizedType
             // log down the Int8 value directly
-            LOG_ERROR(log, "Unsupported change type: {}, diff_version={}", static_cast<Int8>(diff.type), diff.version);
+            LOG_ERROR(log, "Unsupported change type: {}, diff_version={}", fmt::underlying(diff.type), diff.version);
         }
 
         break;
@@ -481,10 +482,10 @@ void SchemaBuilder<Getter, NameMapper>::applySetTiFlashReplica(DatabaseID databa
         return;
     }
 
+    auto & tmt_context = context.getTMTContext();
     if (table_info->replica_info.count == 0)
     {
         // if set 0, drop table in TiFlash
-        auto & tmt_context = context.getTMTContext();
         auto storage = tmt_context.getStorages().get(keyspace_id, table_info->id);
         if (unlikely(storage == nullptr))
         {
@@ -497,8 +498,7 @@ void SchemaBuilder<Getter, NameMapper>::applySetTiFlashReplica(DatabaseID databa
     }
 
     assert(table_info->replica_info.count != 0);
-    // if set not 0, we first check whether the storage exists, and then check the replica_count and available
-    auto & tmt_context = context.getTMTContext();
+    // Replica info is set to non-zero, create the storage if not exists.
     auto storage = tmt_context.getStorages().get(keyspace_id, table_info->id);
     if (storage == nullptr)
     {
@@ -509,19 +509,20 @@ void SchemaBuilder<Getter, NameMapper>::applySetTiFlashReplica(DatabaseID databa
         return;
     }
 
+    // Recover the table if tombstoned
     if (storage->isTombstone())
     {
-        applyRecoverTable(db_info->id, table_id);
+        applyRecoverLogicalTable(db_info, table_info);
         return;
     }
 
     auto local_logical_storage_table_info = storage->getTableInfo(); // copy
-    // nothing changed
+    // Check whether replica_count and available changed
     if (const auto & local_logical_storage_replica_info = local_logical_storage_table_info.replica_info;
         local_logical_storage_replica_info.count == table_info->replica_info.count
         && local_logical_storage_replica_info.available == table_info->replica_info.available)
     {
-        return;
+        return; // nothing changed
     }
 
     size_t old_replica_count = 0;
@@ -539,10 +540,11 @@ void SchemaBuilder<Getter, NameMapper>::applySetTiFlashReplica(DatabaseID databa
             }
             {
                 auto alter_lock = part_storage->lockForAlter(getThreadNameAndID());
-                // Only update the replica info
                 auto local_table_info = part_storage->getTableInfo(); // copy
                 old_replica_count = local_table_info.replica_info.count;
                 new_replica_count = new_part_table_info->replica_info.count;
+                // Only update the replica info, do not change other fields. Or it may
+                // lead to other DDL is unexpectedly ignored.
                 local_table_info.replica_info = new_part_table_info->replica_info;
                 part_storage->alterSchemaChange(
                     alter_lock,
@@ -553,9 +555,11 @@ void SchemaBuilder<Getter, NameMapper>::applySetTiFlashReplica(DatabaseID databa
             }
             LOG_INFO(
                 log,
-                "Updating replica info, replica count old={} new={} physical_table_id={} logical_table_id={}",
+                "Updating replica info, replica count old={} new={} available={}"
+                " physical_table_id={} logical_table_id={}",
                 old_replica_count,
                 new_replica_count,
+                table_info->replica_info.available,
                 part_def.id,
                 table_id);
         }
@@ -563,9 +567,10 @@ void SchemaBuilder<Getter, NameMapper>::applySetTiFlashReplica(DatabaseID databa
 
     {
         auto alter_lock = storage->lockForAlter(getThreadNameAndID());
-        // Only update the replica info
         old_replica_count = local_logical_storage_table_info.replica_info.count;
         new_replica_count = table_info->replica_info.count;
+        // Only update the replica info, do not change other fields. Or it may
+        // lead to other DDL is unexpectedly ignored.
         local_logical_storage_table_info.replica_info = table_info->replica_info;
         storage->alterSchemaChange(
             alter_lock,
@@ -576,9 +581,11 @@ void SchemaBuilder<Getter, NameMapper>::applySetTiFlashReplica(DatabaseID databa
     }
     LOG_INFO(
         log,
-        "Updating replica info, replica count old={} new={} physical_table_id={} logical_table_id={}",
+        "Updating replica info, replica count old={} new={} available={}"
+        " physical_table_id={} logical_table_id={}",
         old_replica_count,
         new_replica_count,
+        table_info->replica_info.available,
         table_id,
         table_id);
 }
@@ -828,12 +835,20 @@ void SchemaBuilder<Getter, NameMapper>::applyRecoverTable(DatabaseID database_id
         return;
     }
 
+    applyRecoverLogicalTable(db_info, table_info);
+}
+
+template <typename Getter, typename NameMapper>
+void SchemaBuilder<Getter, NameMapper>::applyRecoverLogicalTable(
+    const TiDB::DBInfoPtr & db_info,
+    const TiDB::TableInfoPtr & table_info)
+{
     if (table_info->isLogicalPartitionTable())
     {
         for (const auto & part_def : table_info->partition.definitions)
         {
-            auto new_table_info = table_info->producePartitionTableInfo(part_def.id, name_mapper);
-            tryRecoverPhysicalTable(db_info, new_table_info);
+            auto part_table_info = table_info->producePartitionTableInfo(part_def.id, name_mapper);
+            tryRecoverPhysicalTable(db_info, part_table_info);
         }
     }
 
