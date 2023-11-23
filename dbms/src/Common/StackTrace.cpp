@@ -20,13 +20,13 @@
 #include <execinfo.h>
 StackTrace::StackTrace()
 {
-    frames_size = backtrace(frames, STACK_TRACE_MAX_DEPTH);
+    frames_size = 0;
 }
 
 std::string StackTrace::toString() const
 {
     DB::FmtBuffer output;
-
+    output.append("\n");
     for (size_t f = 0; f < frames_size; ++f)
     {
         output.append("\n");
