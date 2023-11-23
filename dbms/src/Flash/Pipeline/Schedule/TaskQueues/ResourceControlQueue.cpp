@@ -147,13 +147,25 @@ bool ResourceControlQueue<NestedTaskQueueType>::take(TaskPtr & task)
 }
 
 template <typename NestedTaskQueueType>
-void ResourceControlQueue<NestedTaskQueueType>::updateStatistics(const TaskPtr & task, ExecTaskStatus, UInt64 inc_value)
+void ResourceControlQueue<NestedTaskQueueType>::updateStatistics(const TaskPtr & task, ExecTaskStatus exec_task_status, UInt64 inc_value)
 {
     assert(task);
     auto ru = cpuTimeToRU(inc_value);
-    const String & name = task->getResourceGroupName();
-    LOG_TRACE(logger, "resource group {} will consume {} RU(or {} cpu time in ns)", name, ru, inc_value);
-    LocalAdmissionController::global_instance->consumeResource(name, ru, inc_value);
+    const String & resource_group_name = task->getResourceGroupName();
+    LOG_TRACE(logger, "resource group {} will consume {} RU(or {} cpu time in ns)", resource_group_name, ru, inc_value);
+    LocalAdmissionController::global_instance->consumeResource(resource_group_name, ru, inc_value);
+
+    NestedTaskQueuePtr group_queue = nullptr;
+    {
+        std::lock_guard lock(mu);
+        auto iter = resource_group_task_queues.find(resource_group_name);
+        if (likely(iter != resource_group_task_queues.end()))
+            group_queue = iter->second;
+        else
+            return;
+    }
+    assert(group_queue);
+    group_queue->updateStatistics(task, exec_task_status, inc_value);
 }
 
 template <typename NestedTaskQueueType>
