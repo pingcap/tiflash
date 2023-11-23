@@ -42,6 +42,7 @@ struct AdderMapEntry<ASTTableJoin::Strictness::Any, Mapped>
         size_t num_columns_right,
         MutableColumns & columns_right,
         const void *&,
+        size_t,
         const size_t)
     {
         for (size_t j = 0; j < num_columns_left; ++j)
@@ -68,20 +69,40 @@ struct AdderMapEntry<ASTTableJoin::Strictness::All, Mapped>
         size_t num_columns_right,
         MutableColumns & columns_right,
         const void *& next_element_in_row_list,
+        size_t probe_cached_rows_threshold,
         const size_t max_row_added)
     {
         size_t rows_added = 0;
-        auto current = &static_cast<const typename Mapped::Base_t &>(mapped);
-        if unlikely (next_element_in_row_list != nullptr)
-            current = reinterpret_cast<const typename Mapped::Base_t *>(next_element_in_row_list);
-        for (; rows_added < max_row_added && current != nullptr; current = current->next)
-        {
+        assert(rows_added < max_row_added);
+        const auto * current = &static_cast<const typename Mapped::Base_t &>(mapped);
+
+        auto add_one_row = [&]() {
             /// handle left columns later to utilize insertManyDefaults
             for (size_t j = 0; j < num_columns_right; ++j)
                 columns_right[j]->insertFrom(
                     *current->block->getByPosition(key_num + j).column.get(),
                     current->row_num);
             ++rows_added;
+        };
+        if unlikely (next_element_in_row_list != nullptr)
+        {
+            current = reinterpret_cast<const typename Mapped::Base_t *>(next_element_in_row_list);
+        }
+        else
+        {
+            add_one_row();
+            if unlikely (probe_cached_rows_threshold > 0 && current->list_length >= probe_cached_rows_threshold)
+            {
+                current = reinterpret_cast<const typename Mapped::Base_t *>(current->cached_column_info->next);
+            }
+            else
+            {
+                current = current->next;
+            }
+        }
+        for (; rows_added < max_row_added && current != nullptr; current = current->next)
+        {
+            add_one_row();
         }
         for (size_t j = 0; j < num_columns_left; ++j)
             /// should fill the key column with key columns from right block
@@ -106,14 +127,14 @@ struct AdderRowFlaggedMapEntry
         size_t num_columns_right,
         MutableColumns & columns_right,
         const void *& next_element_in_row_list,
+        size_t probe_cached_rows_threshold,
         const size_t max_row_added)
     {
         size_t rows_added = 0;
+        assert(rows_added < max_row_added);
         const auto * current = &static_cast<const typename Mapped::Base_t &>(mapped);
-        if unlikely (next_element_in_row_list != nullptr)
-            current = reinterpret_cast<const typename Mapped::Base_t *>(next_element_in_row_list);
-        for (; rows_added < max_row_added && current != nullptr; current = current->next)
-        {
+
+        auto check_and_add_one_row = [&]() {
             bool flag = current->getUsed();
             if constexpr (!add_joined)
                 flag = !flag;
@@ -126,6 +147,24 @@ struct AdderRowFlaggedMapEntry
                         current->row_num);
                 ++rows_added;
             }
+        };
+        if unlikely (next_element_in_row_list != nullptr)
+            current = reinterpret_cast<const typename Mapped::Base_t *>(next_element_in_row_list);
+        else
+        {
+            check_and_add_one_row();
+            if unlikely (probe_cached_rows_threshold > 0 && current->list_length >= probe_cached_rows_threshold)
+            {
+                current = reinterpret_cast<const typename Mapped::Base_t *>(current->cached_column_info->next);
+            }
+            else
+            {
+                current = current->next;
+            }
+        }
+        for (; rows_added < max_row_added && current != nullptr; current = current->next)
+        {
+            check_and_add_one_row();
         }
         for (size_t j = 0; j < num_columns_left; ++j)
             /// should fill the key column with key columns from right block
@@ -488,6 +527,7 @@ void ScanHashMapAfterProbeBlockInputStream::fillColumns(
                 num_columns_right,
                 mutable_columns_right,
                 next_element_in_row_list,
+                parent.probe_cache_column_threshold,
                 row_count_info.availableRowCount()));
         else
         {
@@ -508,6 +548,7 @@ void ScanHashMapAfterProbeBlockInputStream::fillColumns(
                 num_columns_right,
                 mutable_columns_right,
                 next_element_in_row_list,
+                parent.probe_cache_column_threshold,
                 row_count_info.availableRowCount()));
         }
         assert(row_count_info.getCurrentRows() <= max_block_size);

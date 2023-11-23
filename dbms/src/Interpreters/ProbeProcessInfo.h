@@ -38,6 +38,7 @@ struct ProbeProcessInfo
     size_t start_row;
     size_t end_row;
     bool all_rows_joined_finish;
+    UInt64 cache_columns_threshold;
 
     /// these should be inited before probe each block
     bool prepare_for_probe_done = false;
@@ -72,13 +73,14 @@ struct ProbeProcessInfo
     /// used for left outer semi/left outer anti join
     bool has_row_null = false;
 
-    explicit ProbeProcessInfo(UInt64 max_block_size_)
+    ProbeProcessInfo(UInt64 max_block_size_, UInt64 cache_columns_threshold_)
         : partition_index(0)
         , max_block_size(max_block_size_)
         , min_result_block_size((max_block_size + 1) / 2)
         , start_row(0)
         , end_row(0)
-        , all_rows_joined_finish(true){};
+        , all_rows_joined_finish(true)
+        , cache_columns_threshold(cache_columns_threshold_){};
 
     void resetBlock(Block && block_, size_t partition_index_ = 0);
     template <bool is_shallow_cross_probe_mode>
