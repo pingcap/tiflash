@@ -28,10 +28,12 @@
 #include <Storages/IStorage.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/KVStore/TMTStorages.h>
+#include <Storages/KVStore/Types.h>
 #include <Storages/MutableSupport.h>
 #include <Storages/registerStorages.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TiDB/Schema/SchemaNameMapper.h>
+#include <TiDB/Schema/TiDB.h>
 #include <common/logger_useful.h>
 
 #include <optional>
@@ -968,7 +970,7 @@ try
         LOG_DEBUG(log, "After create [meta={}]", meta);
 
         DB::Timestamp tso = 1000;
-        db->alterTombstone(*ctx, tso);
+        db->alterTombstone(*ctx, tso, nullptr);
         EXPECT_TRUE(db->isTombstone());
         EXPECT_EQ(db->getTombstone(), tso);
 
@@ -977,8 +979,11 @@ try
         EXPECT_TRUE(db->isTombstone());
         EXPECT_EQ(db->getTombstone(), tso);
 
-        // Recover
-        db->alterTombstone(*ctx, 0);
+        // Recover, usually recover with a new database name
+        auto new_db_info = std::make_shared<TiDB::DBInfo>(
+            R"json({"charset":"utf8mb4","collate":"utf8mb4_bin","db_name":{"L":"test_new_db","O":"test_db"},"id":1010,"state":5})json",
+            NullspaceID);
+        db->alterTombstone(*ctx, 0, new_db_info);
         EXPECT_FALSE(db->isTombstone());
 
         // Try restore from disk

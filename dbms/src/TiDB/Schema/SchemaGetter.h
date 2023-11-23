@@ -23,6 +23,7 @@
 namespace DB
 {
 // The enum results are completely the same as the DDL Action listed in the "parser/model/ddl.go" of TiDB codebase, which must be keeping in sync.
+// https://github.com/pingcap/tidb/blob/9dfbccb01b76e6a5f2fc6f6562b8645dd5a151b1/pkg/parser/model/ddl.go#L29-L30
 enum class SchemaActionType : Int8
 {
     None = 0,

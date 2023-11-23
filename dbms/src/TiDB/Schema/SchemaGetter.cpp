@@ -13,8 +13,12 @@
 // limitations under the License.
 
 #include <Common/TiFlashException.h>
+#include <Storages/KVStore/TiKVHelpers/KeyspaceSnapshot.h>
 #include <TiDB/Decode/DatumCodec.h>
 #include <TiDB/Schema/SchemaGetter.h>
+#include <common/logger_useful.h>
+
+#include <utility>
 
 namespace DB
 {
@@ -49,7 +53,7 @@ struct TxnStructure
         stream.write(metaPrefix, 1);
 
         EncodeBytes(key, stream);
-        EncodeUInt<UInt64>(UInt64(StringData), stream);
+        EncodeUInt<UInt64>(static_cast<UInt64>(StringData), stream);
 
         return stream.releaseStr();
     }
@@ -61,7 +65,7 @@ struct TxnStructure
         stream.write(metaPrefix, 1);
 
         EncodeBytes(key, stream);
-        EncodeUInt<UInt64>(UInt64(HashData), stream);
+        EncodeUInt<UInt64>(static_cast<UInt64>(HashData), stream);
         EncodeBytes(field, stream);
 
         return stream.releaseStr();
@@ -74,7 +78,7 @@ struct TxnStructure
         stream.write(metaPrefix, 1);
 
         EncodeBytes(key, stream);
-        EncodeUInt<UInt64>(UInt64(HashData), stream);
+        EncodeUInt<UInt64>(static_cast<UInt64>(HashData), stream);
         return stream.releaseStr();
     }
 
@@ -91,11 +95,9 @@ struct TxnStructure
         String decode_key = DecodeBytes(idx, key);
 
         UInt64 tp = DecodeUInt<UInt64>(idx, key);
-        if (char(tp) != HashData)
+        if (static_cast<char>(tp) != HashData)
         {
-            throw TiFlashException(
-                "invalid encoded hash data key flag:" + std::to_string(tp),
-                Errors::Table::SyncError);
+            throw TiFlashException(Errors::Table::SyncError, "invalid encoded hash data key flag: {}", tp);
         }
 
         String field = DecodeBytes(idx, key);
@@ -113,6 +115,7 @@ public:
     static String hGet(KeyspaceSnapshot & snap, const String & key, const String & field)
     {
         String encode_key = encodeHashDataKey(key, field);
+        // LOG_INFO(Logger::get(), "hGet, encode_key={}", encode_key);
         String value = snap.Get(encode_key);
         return value;
     }
@@ -142,6 +145,24 @@ public:
         return target_value;
     }
 
+    static std::vector<std::pair<String, Int64>> mvccGetAll(
+        KeyspaceSnapshot & snap,
+        const String & key,
+        const String & field)
+    {
+        auto encode_key = encodeHashDataKey(key, field);
+        // LOG_INFO(Logger::get(), "mvccGetAll, encode_key={}", encode_key);
+        auto mvcc_info = snap.mvccGet(encode_key);
+        const auto & values = mvcc_info.values();
+
+        std::vector<std::pair<String, Int64>> res;
+        for (const auto & value_pair : values)
+        {
+            res.emplace_back(value_pair.value(), value_pair.start_ts());
+        }
+        return res;
+    }
+
     // For convinient, we only return values.
     static std::vector<std::pair<String, String>> hGetAll(KeyspaceSnapshot & snap, const String & key)
     {
@@ -156,6 +177,19 @@ public:
             auto field = pair.second;
             String value = scanner.value();
             res.push_back(std::make_pair(field, value));
+            scanner.next();
+        }
+        return res;
+    }
+
+    static std::vector<std::pair<String, String>> scan(KeyspaceSnapshot & snap, const String & key)
+    {
+        auto tikv_key_end = pingcap::kv::prefixNext(key);
+        auto scanner = snap.Scan(key, tikv_key_end);
+        std::vector<std::pair<String, String>> res;
+        while (scanner.valid)
+        {
+            res.push_back(std::make_pair(scanner.key(), scanner.value()));
             scanner.next();
         }
         return res;
@@ -251,7 +285,7 @@ std::optional<SchemaDiff> SchemaGetter::getSchemaDiff(Int64 ver)
         LOG_WARNING(log, "The schema diff is empty, schema_version={} key={}", ver, key);
         return std::nullopt;
     }
-    LOG_TRACE(log, "Get SchemaDiff from TiKV, schema_version={} data={}", ver, data);
+    LOG_DEBUG(log, "Get SchemaDiff from TiKV, schema_version={} data={}", ver, data);
     SchemaDiff diff;
     diff.deserialize(data);
     return diff;
@@ -271,7 +305,6 @@ TiDB::DBInfoPtr SchemaGetter::getDatabase(DatabaseID db_id)
 {
     String key = getDBKey(db_id);
     String json = TxnStructure::hGet(snap, DBs, key);
-
     if (json.empty())
         return nullptr;
 
@@ -284,11 +317,12 @@ template <bool mvcc_get>
 TiDB::TableInfoPtr SchemaGetter::getTableInfoImpl(DatabaseID db_id, TableID table_id)
 {
     String db_key = getDBKey(db_id);
-    if (!checkDBExists(db_key))
-    {
-        LOG_ERROR(log, "The database does not exist, database_id={}", db_id);
-        return nullptr;
-    }
+    // Don't check the existence for database
+    // if (!checkDBExistsImpl<mvcc_get>(db_key))
+    // {
+    //     LOG_ERROR(log, "The database does not exist, database_id={}", db_id);
+    //     return nullptr;
+    // }
     String table_key = getTableKey(table_id);
     String table_info_json = TxnStructure::hGet(snap, db_key, table_key);
     if (table_info_json.empty())

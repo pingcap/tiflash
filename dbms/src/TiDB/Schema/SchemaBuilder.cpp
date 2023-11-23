@@ -275,6 +275,11 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
         applyRecoverTable(diff.schema_id, diff.table_id);
         break;
     }
+    case SchemaActionType::ActionRecoverSchema:
+    {
+        applyRecoverDatabase(diff.schema_id);
+        break;
+    }
     case SchemaActionType::DropTable:
     case SchemaActionType::DropView:
     {
@@ -877,6 +882,44 @@ void SchemaBuilder<Getter, NameMapper>::applyCreateSchema(const TiDB::DBInfoPtr 
 }
 
 template <typename Getter, typename NameMapper>
+void SchemaBuilder<Getter, NameMapper>::applyRecoverDatabase(DatabaseID database_id)
+{
+    auto db_info = getter.getDatabase(database_id);
+    if (db_info == nullptr)
+    {
+        return;
+    }
+    LOG_INFO(log, "Recover database begin, database_id={}", database_id);
+    auto db_name = name_mapper.mapDatabaseName(database_id, keyspace_id);
+    auto db = context.tryGetDatabase(db_name);
+    if (!db)
+    {
+        LOG_INFO(
+            log,
+            "Recover database {} ignored because instance is not exists, may have been physically dropped, "
+            "database_id={}",
+            db_name,
+            database_id);
+        return;
+    }
+
+    {
+        //TODO: it seems may need a lot time, maybe we can do it in a background thread
+        auto table_ids = table_id_map.findTablesByDatabaseID(database_id);
+        for (auto table_id : table_ids)
+        {
+            auto table_info = getter.getTableInfo(database_id, table_id);
+            applyRecoverLogicalTable(db_info, table_info);
+        }
+    }
+
+    // Usually `FLASHBACK DATABASE ... TO ...` will rename the database
+    db->alterTombstone(context, 0, db_info);
+    databases.addDatabaseInfo(db_info); // add back database info cache
+    LOG_INFO(log, "Recover database end, database_id={}", database_id);
+}
+
+template <typename Getter, typename NameMapper>
 void SchemaBuilder<Getter, NameMapper>::applyDropSchema(DatabaseID schema_id)
 {
     TiDB::DBInfoPtr db_info = databases.getDBInfo(schema_id);
@@ -893,7 +936,7 @@ void SchemaBuilder<Getter, NameMapper>::applyDropSchema(DatabaseID schema_id)
             applyDropTable(schema_id, table_id);
     }
 
-    applyDropSchema(name_mapper.mapDatabaseName(*db_info));
+    applyDropSchema(name_mapper.mapDatabaseName(schema_id, keyspace_id));
 
     databases.eraseDBInfo(schema_id);
 }
@@ -921,7 +964,7 @@ void SchemaBuilder<Getter, NameMapper>::applyDropSchema(const String & db_name)
     // In such way our database (and its belonging tables) will be GC-ed later than TiDB, which is safe and correct.
     auto & tmt_context = context.getTMTContext();
     auto tombstone = tmt_context.getPDClient()->getTS();
-    db->alterTombstone(context, tombstone);
+    db->alterTombstone(context, tombstone, /*new_db_info*/nullptr); // keep the old db_info
 
     LOG_INFO(log, "Tombstone database end, db_name={}", db_name);
 }
