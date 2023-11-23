@@ -116,11 +116,6 @@ private:
         return databases.getDBInfoByName(database_name);
     }
 
-    TiDB::DBInfoPtr getDBInfoByMappedName(const String & mapped_database_name) override
-    {
-        return databases.getDBInfoByMappedName<NameMapper>(mapped_database_name);
-    }
-
     // clear all states.
     // just for testing restart
     void reset() override

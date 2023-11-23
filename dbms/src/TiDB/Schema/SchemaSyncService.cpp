@@ -255,6 +255,8 @@ bool SchemaSyncService::gc(Timestamp gc_safepoint, KeyspaceID keyspace_id)
         }
     }
 
+    auto schema_sync_manager = tmt_context.getSchemaSyncerManager();
+
     // Physically drop tables
     bool succeeded = true;
     for (auto & storage_ptr : storages_to_gc)
@@ -268,21 +270,18 @@ bool SchemaSyncService::gc(Timestamp gc_safepoint, KeyspaceID keyspace_id)
         String table_name = storage->getTableName();
         const auto & table_info = storage->getTableInfo();
 
-        tmt_context.getSchemaSyncerManager()->removeTableID(keyspace_id, table_info.id);
-
         auto canonical_name = [&]() {
-            // DB info maintenance is parallel with GC logic so we can't always assume one specific DB info's existence, thus checking its validity.
-            auto db_info = tmt_context.getSchemaSyncerManager()->getDBInfoByMappedName(keyspace_id, database_name);
-            return db_info ? fmt::format(
-                       "{}, database_id={} table_id={}",
-                       SchemaNameMapper().debugCanonicalName(*db_info, table_info),
-                       db_info->id,
-                       table_info.id)
-                           : fmt::format(
-                               "({}).{}, table_id={}",
-                               database_name,
-                               SchemaNameMapper().debugTableName(table_info),
-                               table_info.id);
+            auto database_id = SchemaNameMapper::tryGetDatabaseID(database_name);
+            if (!database_id.has_value())
+            {
+                return fmt::format("{}.{} table_id={}", database_name, table_name, table_info.id);
+            }
+            return fmt::format(
+                "{}.{} database_id={} table_id={}",
+                database_name,
+                table_name,
+                *database_id,
+                table_info.id);
         }();
         LOG_INFO(
             keyspace_log,
@@ -301,6 +300,8 @@ bool SchemaSyncService::gc(Timestamp gc_safepoint, KeyspaceID keyspace_id)
             InterpreterDropQuery drop_interpreter(ast_drop_query, context);
             drop_interpreter.execute();
             LOG_INFO(keyspace_log, "Physically dropped table {}", canonical_name);
+            // remove the id mapping after physically dropped
+            schema_sync_manager->removeTableID(keyspace_id, table_info.id);
             ++num_tables_removed;
         }
         catch (DB::Exception & e)

@@ -38,19 +38,6 @@ public:
         return it->second;
     }
 
-    template <typename NameMapper>
-    TiDB::DBInfoPtr getDBInfoByMappedName(const String & mapped_database_name) const
-    {
-        std::shared_lock lock(mtx_databases);
-
-        auto it = std::find_if(databases.begin(), databases.end(), [&](const auto & pair) {
-            return NameMapper().mapDatabaseName(*pair.second) == mapped_database_name;
-        });
-        if (it == databases.end())
-            return nullptr;
-        return it->second;
-    }
-
     void addDatabaseInfo(const TiDB::DBInfoPtr & db_info)
     {
         std::unique_lock lock(mtx_databases);
