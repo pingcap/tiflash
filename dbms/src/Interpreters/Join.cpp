@@ -1372,7 +1372,7 @@ Block Join::doJoinBlockHash(ProbeProcessInfo & probe_process_info, const JoinBui
     }
     if (use_row_flagged_hash_map)
         block.insert(ColumnWithTypeAndName(
-            std::move(added_columns[num_columns_to_add]),
+            std::move(added_columns[num_columns_to_add.size()]),
             flag_mapped_entry_helper_type,
             flag_mapped_entry_helper_name));
 
