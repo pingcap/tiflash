@@ -964,7 +964,7 @@ void SchemaBuilder<Getter, NameMapper>::applyDropSchema(const String & db_name)
     // In such way our database (and its belonging tables) will be GC-ed later than TiDB, which is safe and correct.
     auto & tmt_context = context.getTMTContext();
     auto tombstone = tmt_context.getPDClient()->getTS();
-    db->alterTombstone(context, tombstone, /*new_db_info*/nullptr); // keep the old db_info
+    db->alterTombstone(context, tombstone, /*new_db_info*/ nullptr); // keep the old db_info
 
     LOG_INFO(log, "Tombstone database end, db_name={}", db_name);
 }
