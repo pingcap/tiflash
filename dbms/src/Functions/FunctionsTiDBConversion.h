@@ -148,7 +148,7 @@ struct TiDBConvertToString
                 size_t next_offset = (*offsets_from)[i];
                 size_t org_length = next_offset - current_offset - 1;
                 size_t byte_length = org_length;
-                if (tp.flen() > 0)
+                if (tp.flen() >= 0)
                 {
                     byte_length = tp.flen();
                     if (tp.charset() == "utf8" || tp.charset() == "utf8mb4")
@@ -189,7 +189,7 @@ struct TiDBConvertToString
                 WriteBufferFromVector<ColumnString::Chars_t> element_write_buffer(container_per_element);
                 FormatImpl<FromDataType>::execute(vec_from[i], element_write_buffer, &type, nullptr);
                 size_t byte_length = element_write_buffer.count();
-                if (tp.flen() > 0)
+                if (tp.flen() >= 0)
                     byte_length = std::min(byte_length, tp.flen());
                 if (byte_length < element_write_buffer.count())
                     context.getDAGContext()->handleTruncateError("Data Too Long");
@@ -235,7 +235,7 @@ struct TiDBConvertToString
                 WriteBufferFromVector<ColumnString::Chars_t> element_write_buffer(container_per_element);
                 FormatImpl<FromDataType>::execute(vec_from[i], element_write_buffer, &type, nullptr);
                 size_t byte_length = element_write_buffer.count();
-                if (tp.flen() > 0)
+                if (tp.flen() >= 0)
                     byte_length = std::min(byte_length, tp.flen());
                 if (byte_length < element_write_buffer.count())
                     context.getDAGContext()->handleTruncateError("Data Too Long");

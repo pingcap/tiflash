@@ -212,6 +212,20 @@ try
     ASSERT_TRUE(context->getDAGContext()->getWarningCount() == 1);
     ASSERT_COLUMN_EQ(res, output_col);
 
+    output_col = createColumn<Nullable<String>>({R"()"});
+    field_type.set_flen(0);
+    context->getDAGContext()->clearWarnings();
+    res = executeCastJsonAsStringFunction(*context, input_col, field_type);
+    ASSERT_TRUE(context->getDAGContext()->getWarningCount() == 1);
+    ASSERT_COLUMN_EQ(res, output_col);
+
+    output_col = createColumn<Nullable<String>>({R"("你好")"});
+    field_type.set_flen(-1);
+    context->getDAGContext()->clearWarnings();
+    res = executeCastJsonAsStringFunction(*context, input_col, field_type);
+    ASSERT_COLUMN_EQ(res, output_col);
+    ASSERT_TRUE(context->getDAGContext()->getWarningCount() == 0);
+
     output_col = createColumn<Nullable<String>>({R"("你好")"});
     field_type.set_flen(4);
     context->getDAGContext()->clearWarnings();

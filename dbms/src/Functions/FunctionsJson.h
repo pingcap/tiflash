@@ -431,7 +431,7 @@ public:
             ColumnUInt8::MutablePtr col_null_map = ColumnUInt8::create(rows, 0);
             ColumnUInt8::Container & vec_null_map = col_null_map->getData();
             JsonBinary::JsonBinaryWriteBuffer write_buffer(data_to);
-            if likely (tidb_tp->flen() <= 0)
+            if likely (tidb_tp->flen() < 0)
             {
                 size_t current_offset = 0;
                 for (size_t i = 0; i < block.rows(); ++i)

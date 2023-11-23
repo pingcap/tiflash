@@ -33,11 +33,7 @@ bool checkJsonValid(const char * data, size_t length)
             return false;
         }
     }
-    if (scanner.eof() == JsonScanError)
-    {
-        return false;
-    }
-    return true;
+    return (scanner.eof() != JsonScanError);
 }
 
 // stateBeginValueOrEmpty is the state after reading `[`.

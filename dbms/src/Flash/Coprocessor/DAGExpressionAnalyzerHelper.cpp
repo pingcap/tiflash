@@ -288,9 +288,9 @@ String DAGExpressionAnalyzerHelper::buildCastAsJsonWithInputTiDBField(
     const ExpressionActionsPtr & actions)
 {
     if unlikely (expr.children_size() != 1)
-        throw TiFlashException("Cast function only support one argument", Errors::Coprocessor::BadRequest);
+        throw TiFlashException("JsonUnquote function only support one argument", Errors::Coprocessor::BadRequest);
     if unlikely (!exprHasValidFieldType(expr))
-        throw TiFlashException("CAST function without valid field type", Errors::Coprocessor::BadRequest);
+        throw TiFlashException("JsonUnquote function without valid field type", Errors::Coprocessor::BadRequest);
 
     const auto & input_expr = expr.children(0);
     auto func_name = getFunctionName(expr);
