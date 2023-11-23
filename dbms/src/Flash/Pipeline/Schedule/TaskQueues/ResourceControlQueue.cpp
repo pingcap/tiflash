@@ -147,7 +147,10 @@ bool ResourceControlQueue<NestedTaskQueueType>::take(TaskPtr & task)
 }
 
 template <typename NestedTaskQueueType>
-void ResourceControlQueue<NestedTaskQueueType>::updateStatistics(const TaskPtr & task, ExecTaskStatus exec_task_status, UInt64 inc_value)
+void ResourceControlQueue<NestedTaskQueueType>::updateStatistics(
+    const TaskPtr & task,
+    ExecTaskStatus exec_task_status,
+    UInt64 inc_value)
 {
     assert(task);
     auto ru = cpuTimeToRU(inc_value);
