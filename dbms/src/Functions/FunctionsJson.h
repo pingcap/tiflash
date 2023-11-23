@@ -575,7 +575,7 @@ private:
         ColumnString::Offsets & offsets_to,
         const std::vector<const NullMap *> & nullmaps)
     {
-        size_t reserve_size = 0;
+        size_t reserve_size = rows;
         for (const auto & source : sources)
             reserve_size += source ? source->getSizeForReserve() : 0;
         JsonBinary::JsonBinaryWriteBuffer write_buffer(data_to, reserve_size);
