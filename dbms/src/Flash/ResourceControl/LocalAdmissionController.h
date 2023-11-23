@@ -382,7 +382,7 @@ private:
         return bucket_mode == trickle_mode && tp >= stop_trickle_timepoint;
     }
 
-    void updateBucketMetrics(const TokenBucketConfig & config) const
+    void updateBucketMetrics(const TokenBucket::TokenBucketConfig & config) const
     {
         GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_bucket_fill_rate, name).Set(config.fill_rate);
         GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_bucket_capacity, name).Set(config.capacity);
