@@ -146,8 +146,7 @@ try
         GTEST_FAIL();
     }
     catch (Exception & e)
-    {
-    }
+    {}
 }
 CATCH
 
