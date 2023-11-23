@@ -61,7 +61,6 @@ UniversalPageStorageServicePtr UniversalPageStorageService::create(
     // for disagg tiflash write node
     if (S3::ClientFactory::instance().isEnabled() && !context.getSharedContextDisagg()->isDisaggregatedComputeMode())
     {
-        service->removeAllLocalCheckpointFiles();
         // TODO: make this interval reloadable
         auto interval_s = context.getSettingsRef().remote_checkpoint_interval_seconds;
         // Only upload checkpoint when S3 is enabled
@@ -199,8 +198,6 @@ bool UniversalPageStorageService::uploadCheckpointImpl(
         ri->set_root(client->root());
     }
 
-    // TODO: directly write into remote store. But take care of the order
-    //       of CheckpointData files, lock files, and CheckpointManifest.
     const auto upload_info = uni_page_storage->allocateNewUploadLocksInfo();
 
     /*
@@ -291,30 +288,6 @@ void UniversalPageStorageService::shutdown()
         bkg_pool.removeTask(gc_handle);
         gc_handle = nullptr;
     }
-}
-
-void UniversalPageStorageService::removeAllLocalCheckpointFiles() const
-{
-    Poco::File temp_dir(global_context.getTemporaryPath());
-    if (temp_dir.exists() && temp_dir.isDirectory())
-    {
-        std::vector<String> short_names;
-        temp_dir.list(short_names);
-        for (const auto & name : short_names)
-        {
-            if (startsWith(name, checkpoint_dirname_prefix))
-            {
-                auto checkpoint_dirname = global_context.getTemporaryPath() + "/" + name;
-                Poco::File(checkpoint_dirname).remove(true);
-            }
-        }
-    }
-}
-
-Poco::Path UniversalPageStorageService::getCheckpointLocalDir(UInt64 seq) const
-{
-    return Poco::Path(global_context.getTemporaryPath() + fmt::format("/{}{}", checkpoint_dirname_prefix, seq))
-        .absolute();
 }
 
 } // namespace DB

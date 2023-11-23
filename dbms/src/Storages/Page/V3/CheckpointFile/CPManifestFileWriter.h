@@ -53,6 +53,9 @@ public:
         RUNTIME_CHECK(max_edit_records_per_part > 0, max_edit_records_per_part);
     }
 
+    // Note: do not call `flush()` in destructor, because:
+    //  1. `flush()` may throw exceptions, and we should not throw exceptions in destructor.
+    //  2. Avoid incomplete data file flushed to S3.
     ~CPManifestFileWriter() = default;
 
     /// Must be called first.

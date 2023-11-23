@@ -68,6 +68,7 @@ S3WritableFile::S3WritableFile(
     allocateBuffer();
 }
 
+// TODO: abort multipart upload if exception happens?
 S3WritableFile::~S3WritableFile() = default;
 
 ssize_t S3WritableFile::write(char * buf, size_t size)

@@ -1406,69 +1406,7 @@ try
     }
     MockS3Client::setPutObjectStatus(MockS3Client::S3Status::FAILED);
     SCOPE_EXIT({ MockS3Client::setPutObjectStatus(MockS3Client::S3Status::NORMAL); });
-    try
-    {
-        uni_ps_service->uploadCheckpointImpl(store_info, s3lock_client, remote_store, false);
-        FAIL() << "Exception should be thrown above, should not come here.";
-    }
-    catch (...)
-    {
-        auto & global_context = DB::tests::TiFlashTestEnv::getGlobalContext();
-        const auto & tmp_path = global_context.getTemporaryPath();
-        std::vector<String> short_names;
-        Poco::File(tmp_path).list(short_names);
-        for (const auto & name : short_names)
-        {
-            ASSERT_FALSE(startsWith(name, UniversalPageStorageService::checkpoint_dirname_prefix)) << name;
-        }
-    }
-}
-CATCH
-
-TEST_F(UniversalPageStorageServiceCheckpointTest, removeAllLocalCheckpointFiles)
-try
-{
-    auto list_files = [](const String & dir) {
-        std::vector<String> filenames;
-        Poco::File(dir).list(filenames);
-        return std::set<String>(filenames.begin(), filenames.end());
-    };
-
-    auto remove_file = [](const String & fname) {
-        Poco::File f(fname);
-        if (f.exists())
-        {
-            f.remove(true);
-        }
-    };
-
-    auto & global_context = DB::tests::TiFlashTestEnv::getGlobalContext();
-    const auto & tmp_path = global_context.getTemporaryPath();
-
-    // Clean old data if necessary.
-    auto cp_dir1 = uni_ps_service->getCheckpointLocalDir(1);
-    remove_file(cp_dir1.toString());
-    auto cp_dir2 = uni_ps_service->getCheckpointLocalDir(2);
-    remove_file(cp_dir2.toString());
-    remove_file(tmp_path + "/" + "not_checkpoint");
-
-    auto fnames0 = list_files(tmp_path);
-
-    auto create_dir = [](const String & name) {
-        Poco::File f(name);
-        f.createDirectories();
-        ASSERT_TRUE(f.exists()) << name;
-    };
-
-    create_dir(cp_dir1.getFileName());
-    create_dir(cp_dir2.getFileName());
-    create_dir(tmp_path + "/" + "not_checkpoint");
-
-    uni_ps_service->removeAllLocalCheckpointFiles();
-
-    ASSERT_FALSE(Poco::File(cp_dir1).exists()) << cp_dir1.getFileName();
-    ASSERT_FALSE(Poco::File(cp_dir2).exists()) << cp_dir2.getFileName();
-    ASSERT_TRUE(Poco::File(tmp_path + "/" + "not_checkpoint").exists()) << tmp_path;
+    ASSERT_THROW(uni_ps_service->uploadCheckpointImpl(store_info, s3lock_client, remote_store, false), Exception);
 }
 CATCH
 

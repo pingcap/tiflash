@@ -29,6 +29,10 @@
 namespace DB::PS::V3
 {
 
+/*
+ * CPFilesWriter is used to write checkpoint files to S3.
+ * The order of writing is: data file -> lock file -> [data file -> lock file] -> manifest file.
+ */
 class CPFilesWriter : private boost::noncopyable
 {
 public:
