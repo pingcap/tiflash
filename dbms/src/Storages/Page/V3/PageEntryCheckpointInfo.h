@@ -85,6 +85,21 @@ struct OptionalCheckpointInfo
         }
     }
 
+    OptionalCheckpointInfo(CheckpointLocation data_location_, bool is_valid_)
+        : data_location(std::move(data_location_))
+        , is_valid(is_valid_)
+        , is_local_data_reclaimed(false)
+    {
+        if (!data_location.isValid())
+        {
+            LOG_ERROR(
+                DB::Logger::get("OptionalCheckpointInfo"),
+                "Invalid data location, is_local_data_reclaimed={}, {}",
+                is_local_data_reclaimed,
+                StackTrace().toString());
+        }
+    }
+
     CheckpointLocation data_location;
 
     /**

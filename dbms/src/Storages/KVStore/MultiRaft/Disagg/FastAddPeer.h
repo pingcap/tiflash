@@ -60,7 +60,8 @@ public:
         UInt64 peer_id,
         UInt64 remote_store_id,
         RegionPtr region,
-        DM::Segments && segments);
+        DM::Segments && segments,
+        UInt64 start_time);
     void removeCheckpointIngestInfo(UInt64 region_id);
     std::optional<CheckpointIngestInfoPtr> tryGetCheckpointIngestInfo(UInt64 region_id);
     void forceCleanCheckpointIngestInfo(TMTContext & tmt, UInt64 region_id);

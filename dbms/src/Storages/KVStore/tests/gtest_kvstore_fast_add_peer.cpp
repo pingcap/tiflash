@@ -40,16 +40,12 @@ using raft_serverpb::RegionLocalState;
 namespace DB
 {
 FastAddPeerRes genFastAddPeerRes(FastAddPeerStatus status, std::string && apply_str, std::string && region_str);
-FastAddPeerRes FastAddPeerImpl(
-    TMTContext & tmt,
-    TiFlashRaftProxyHelper * proxy_helper,
-    uint64_t region_id,
-    uint64_t new_peer_id);
 FastAddPeerRes FastAddPeerImplTransform(
     TMTContext & tmt,
     uint64_t region_id,
     uint64_t new_peer_id,
-    CheckpointRegionInfoAndData && checkpoint);
+    CheckpointRegionInfoAndData && checkpoint,
+    UInt64 start_time);
 void ApplyFapSnapshotImpl(
     TMTContext & tmt,
     TiFlashRaftProxyHelper * proxy_helper,
@@ -318,7 +314,7 @@ try
     auto & global_context = TiFlashTestEnv::getGlobalContext();
     auto fap_context = global_context.getSharedContextDisagg()->fap_context;
     uint64_t region_id = 1;
-    FastAddPeerImplTransform(global_context.getTMTContext(), region_id, 2333, std::move(mock_data));
+    FastAddPeerImplTransform(global_context.getTMTContext(), region_id, 2333, std::move(mock_data), 0);
     fap_context->removeCheckpointIngestInfo(region_id);
     ApplyFapSnapshotImpl(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333);
 
@@ -335,6 +331,7 @@ try
             DM::RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()),
             1);
     }
+    // CheckpointIngestInfo is removed.
     ASSERT_TRUE(!fap_context->tryGetCheckpointIngestInfo(region_id).has_value());
 }
 CATCH
@@ -349,10 +346,26 @@ try
     auto & global_context = TiFlashTestEnv::getGlobalContext();
     auto fap_context = global_context.getSharedContextDisagg()->fap_context;
     uint64_t region_id = 1;
-    FastAddPeerImplTransform(global_context.getTMTContext(), region_id, 2333, std::move(mock_data));
+    FastAddPeerImplTransform(global_context.getTMTContext(), region_id, 2333, std::move(mock_data), 0);
     fap_context->removeCheckpointIngestInfo(region_id);
     kvstore->handleDestroy(region_id, global_context.getTMTContext());
+    // CheckpointIngestInfo is removed.
     ASSERT_TRUE(!fap_context->tryGetCheckpointIngestInfo(region_id).has_value());
+}
+CATCH
+
+TEST_F(RegionKVStoreTestFAP, RestoreFromRestart3)
+try
+{
+    CheckpointRegionInfoAndData mock_data = prepareForRestart();
+    KVStore & kvs = getKVS();
+    RegionPtr kv_region = kvs.getRegion(1);
+
+    auto & global_context = TiFlashTestEnv::getGlobalContext();
+    auto fap_context = global_context.getSharedContextDisagg()->fap_context;
+    uint64_t region_id = 1;
+    FastAddPeerImplTransform(global_context.getTMTContext(), region_id, 2333, std::move(mock_data), 0);
+    dumpCheckpoint();
 }
 CATCH
 

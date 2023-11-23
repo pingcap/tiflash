@@ -266,7 +266,8 @@ FastAddPeerRes FastAddPeerImplTransform(
     TMTContext & tmt,
     uint64_t region_id,
     uint64_t new_peer_id,
-    CheckpointRegionInfoAndData && checkpoint)
+    CheckpointRegionInfoAndData && checkpoint,
+    UInt64 start_time)
 {
     auto * log = &Poco::Logger::get("FastAddPeer");
     auto fap_ctx = tmt.getContext().getSharedContextDisagg()->fap_context;
@@ -310,7 +311,8 @@ FastAddPeerRes FastAddPeerImplTransform(
             new_peer_id,
             checkpoint_info->remote_store_id,
             region,
-            std::move(segments));
+            std::move(segments),
+            start_time);
     }
     else
     {
@@ -347,7 +349,8 @@ FastAddPeerRes FastAddPeerImpl(
     TMTContext & tmt,
     TiFlashRaftProxyHelper * proxy_helper,
     uint64_t region_id,
-    uint64_t new_peer_id)
+    uint64_t new_peer_id,
+    UInt64 start_time)
 {
     try
     {
@@ -360,7 +363,8 @@ FastAddPeerRes FastAddPeerImpl(
                 tmt,
                 region_id,
                 new_peer_id,
-                std::move(std::get<CheckpointRegionInfoAndData>(res)));
+                std::move(std::get<CheckpointRegionInfoAndData>(res)),
+                start_time);
             GET_METRIC(tiflash_fap_task_result, type_success_transform).Increment();
             return final_res;
         }
@@ -395,38 +399,46 @@ FastAddPeerRes FastAddPeerImpl(
 
 void ApplyFapSnapshotImpl(TMTContext & tmt, TiFlashRaftProxyHelper * proxy_helper, uint64_t region_id, uint64_t peer_id)
 {
+    auto * log = &Poco::Logger::get("FastAddPeer");
+    LOG_INFO(log, "Begin apply fap snapshot, region_id={}, peer_id={}", region_id, peer_id);
+    Stopwatch watch_ingest;
+    auto kvstore = tmt.getKVStore();
+    auto fap_ctx = tmt.getContext().getSharedContextDisagg()->fap_context;
+    auto checkpoint_ingest_info = fap_ctx->getOrRestoreCheckpointIngestInfo(tmt, proxy_helper, region_id, peer_id);
+    kvstore->handleIngestCheckpoint(checkpoint_ingest_info->getRegion(), checkpoint_ingest_info, tmt);
+    checkpoint_ingest_info->markDelete();
+    // TODO(fap) We can move checkpoint_ingest_info to a dedicated queue, and schedule a timed task to clean it, if this costs much.
+    // However, we have to make sure the clean task will not override if a new fap snapshot of the same region comes later.
+    fap_ctx->removeCheckpointIngestInfo(region_id);
+    auto elapsed = watch_ingest.elapsedSeconds();
+    GET_METRIC(tiflash_fap_task_duration_seconds, type_ingest_stage).Observe(elapsed);
+    auto begin = checkpoint_ingest_info->beginTime();
+    if (begin) {
+        auto current = FAPAsyncTasks::getCurrentMillis();
+        GET_METRIC(tiflash_fap_task_duration_seconds, type_total).Observe((current - begin) / 1000.0);
+    }
+    GET_METRIC(tiflash_fap_task_result, type_succeed).Increment();
+}
+
+void ApplyFapSnapshot(EngineStoreServerWrap * server, uint64_t region_id, uint64_t peer_id)
+{
     try
     {
-        auto * log = &Poco::Logger::get("FastAddPeer");
-        LOG_INFO(log, "Begin apply fap snapshot, region_id={}, peer_id={}", region_id, peer_id);
-        Stopwatch watch_ingest;
-        auto kvstore = tmt.getKVStore();
-        auto fap_ctx = tmt.getContext().getSharedContextDisagg()->fap_context;
-        auto checkpoint_ingest_info = fap_ctx->getOrRestoreCheckpointIngestInfo(tmt, proxy_helper, region_id, peer_id);
-        kvstore->handleIngestCheckpoint(checkpoint_ingest_info->getRegion(), checkpoint_ingest_info, tmt);
-        checkpoint_ingest_info->markDelete();
-        // TODO(fap) We can move checkpoint_ingest_info to a dedicated queue, and schedule a timed task to clean it, if this costs much.
-        // However, we have to make sure the clean task will not override if a new fap snapshot of the same region comes later.
-        fap_ctx->removeCheckpointIngestInfo(region_id);
-        GET_METRIC(tiflash_fap_task_duration_seconds, type_ingest_stage).Observe(watch_ingest.elapsedSeconds());
-        GET_METRIC(tiflash_fap_task_result, type_succeed).Increment();
+        RUNTIME_CHECK_MSG(server->tmt, "TMTContext is null");
+        RUNTIME_CHECK_MSG(server->proxy_helper, "proxy_helper is null");
+        if (!server->tmt->getContext().getSharedContextDisagg()->isDisaggregatedStorageMode())
+            return;
+        ApplyFapSnapshotImpl(*server->tmt, server->proxy_helper, region_id, peer_id);
     }
     catch (...)
     {
         DB::tryLogCurrentException(
             "FastAddPeerApply",
-            fmt::format("Failed when try to apply fap snapshot region_id={} peer_id={}", region_id, peer_id));
-        throw;
+            fmt::format("Failed when try to apply fap snapshot region_id={} peer_id={}", 
+                region_id, peer_id
+            ));
+        exit(-1);
     }
-}
-
-void ApplyFapSnapshot(EngineStoreServerWrap * server, uint64_t region_id, uint64_t peer_id)
-{
-    RUNTIME_CHECK_MSG(server->tmt, "TMTContext is null");
-    RUNTIME_CHECK_MSG(server->proxy_helper, "proxy_helper is null");
-    if (!server->tmt->getContext().getSharedContextDisagg()->isDisaggregatedStorageMode())
-        return;
-    ApplyFapSnapshotImpl(*server->tmt, server->proxy_helper, region_id, peer_id);
 }
 
 FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, uint64_t new_peer_id)
@@ -445,11 +457,12 @@ FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, u
         if (!fap_ctx->tasks_trace->isScheduled(region_id))
         {
             // We need to schedule the task.
-            auto res = fap_ctx->tasks_trace->addTask(region_id, [server, region_id, new_peer_id, fap_ctx]() {
+            auto current_time = FAPAsyncTasks::getCurrentMillis();
+            auto res = fap_ctx->tasks_trace->addTask(region_id, [server, region_id, new_peer_id, fap_ctx, current_time]() {
                 std::string origin_name = getThreadName();
                 SCOPE_EXIT({ setThreadName(origin_name.c_str()); });
                 setThreadName("fap-builder");
-                return FastAddPeerImpl(fap_ctx, *(server->tmt), server->proxy_helper, region_id, new_peer_id);
+                return FastAddPeerImpl(fap_ctx, *(server->tmt), server->proxy_helper, region_id, new_peer_id, current_time);
             });
             if (res)
             {

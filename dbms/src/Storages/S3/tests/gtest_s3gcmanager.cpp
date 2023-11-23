@@ -630,22 +630,22 @@ try
                 PageVersion(2),
                 PageEntryV3{
                     .size = entry_data.size(),
-                    .checkpoint_info = {
-                        .data_location = CheckpointLocation{.data_file_id = std::make_shared<String>("apple_lock")},
-                        .is_valid = true,
-                        .is_local_data_reclaimed = false,
-                    }},
+                    .checkpoint_info = OptionalCheckpointInfo(
+                        CheckpointLocation{.data_file_id = std::make_shared<String>("apple_lock")},
+                        true,
+                        false
+                    )},
                 1);
             // remote external entry ingest from other node
             edits.varExternal(
                 "banana",
                 PageVersion(3),
                 PageEntryV3{
-                    .checkpoint_info = {
-                        .data_location = CheckpointLocation{.data_file_id = std::make_shared<String>("banana_lock")},
-                        .is_valid = true,
-                        .is_local_data_reclaimed = true,
-                    }},
+                    .checkpoint_info = OptionalCheckpointInfo(
+                        CheckpointLocation{.data_file_id = std::make_shared<String>("banana_lock")},
+                        true,
+                        true
+                    )},
                 1);
             edits.varDel("banana", PageVersion(4));
             edits.varEntry(

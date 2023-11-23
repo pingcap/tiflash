@@ -97,6 +97,7 @@ CPDataDumpStats CPFilesWriter::writeEditsAndApplyCheckpointInfo(
     write_down_stats.num_records = records.size();
     for (auto & rec_edit : records)
     {
+        // LOG_INFO(log, "!!!!! ZZZZZ {}", rec_edit.page_id);
         StorageType id_storage_type = StorageType::Unknown;
         {
             id_storage_type = UniversalPageIdFormat::getUniversalPageIdType(rec_edit.page_id);

@@ -17,6 +17,7 @@
 #include <Storages/Page/V3/Universal/UniversalPageIdFormatImpl.h>
 
 #include <magic_enum.hpp>
+#include "Common/Logger.h"
 
 namespace DB::PS::V3
 {
@@ -69,6 +70,7 @@ void CPManifestFileWriter::writeEditsPart(const universal::PageEntriesEdit & edi
         // auto id_storage_type = UniversalPageIdFormat::getUniversalPageIdType(records[start + i].page_id);
         // if (id_storage_type == StorageType::LocalKV)
         // {
+        //     LOG_INFO(DB::Logger::get(), "!!!!! XXXXX SKIP {}", records[start + i].page_id);
         //     continue;
         // }
         *out_record = records[start + i].toProto();

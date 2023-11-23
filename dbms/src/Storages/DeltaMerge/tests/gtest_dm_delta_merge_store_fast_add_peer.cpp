@@ -382,7 +382,8 @@ try
             2333,
             checkpoint_info->remote_store_id,
             dummy_region,
-            std::move(segments)));
+            std::move(segments),
+            0));
 
     // check data file lock exists
     {
@@ -509,7 +510,8 @@ try
                 2333,
                 checkpoint_info->remote_store_id,
                 dummy_region,
-                std::move(segments)));
+                std::move(segments),
+                0));
         verifyRows(RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()), num_rows_write / 2);
     }
 
@@ -532,7 +534,8 @@ try
                 2333,
                 checkpoint_info->remote_store_id,
                 dummy_region,
-                std::move(segments)));
+                std::move(segments),
+                0));
         verifyRows(RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()), num_rows_write);
     }
 }

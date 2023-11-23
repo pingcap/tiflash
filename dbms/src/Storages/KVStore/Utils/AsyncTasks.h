@@ -93,6 +93,14 @@ struct AsyncTasks
         return getCurrentMillis() - it2->second;
     }
 
+    uint64_t queryStartTime(Key key)
+    {
+        std::unique_lock<std::mutex> l(mtx);
+        auto it2 = start_time.find(key);
+        RUNTIME_CHECK_MSG(it2 != start_time.end(), "queryElapsed meets empty key");
+        return it2->second;
+    }
+
     std::pair<R, uint64_t> fetchResultAndElapsed(Key key)
     {
         std::unique_lock<std::mutex> l(mtx);
@@ -110,7 +118,6 @@ struct AsyncTasks
 
     std::unique_ptr<ThreadPool> & inner() { return thread_pool; }
 
-private:
     static uint64_t getCurrentMillis()
     {
         return std::chrono::duration_cast<std::chrono::milliseconds>(

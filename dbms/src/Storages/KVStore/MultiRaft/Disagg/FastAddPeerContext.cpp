@@ -145,7 +145,8 @@ void FastAddPeerContext::insertCheckpointIngestInfo(
     UInt64 peer_id,
     UInt64 remote_store_id,
     RegionPtr region,
-    DM::Segments && segments)
+    DM::Segments && segments,
+    UInt64 start_time)
 {
     auto * log = &Poco::Logger::get("FastAddPeerContext");
     std::unique_lock<std::mutex> lock(ingest_info_mu);
@@ -161,7 +162,7 @@ void FastAddPeerContext::insertCheckpointIngestInfo(
     }
 
     checkpoint_ingest_info_map[region_id]
-        = std::make_shared<CheckpointIngestInfo>(tmt, region_id, peer_id, remote_store_id, region, std::move(segments));
+        = std::make_shared<CheckpointIngestInfo>(tmt, region_id, peer_id, remote_store_id, region, std::move(segments), start_time);
 }
 
 } // namespace DB

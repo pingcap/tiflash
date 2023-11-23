@@ -46,6 +46,7 @@ struct CheckpointIngestInfo
     RegionPtr getRegion() const;
     UInt64 regionId() const { return region_id; }
     UInt64 peerId() const { return peer_id; }
+    UInt64 beginTime() const { return begin_time; }
 
     // Create from build
     CheckpointIngestInfo(
@@ -54,7 +55,8 @@ struct CheckpointIngestInfo
         UInt64 peer_id_,
         UInt64 remote_store_id_,
         RegionPtr region_,
-        DM::Segments && restored_segments_)
+        DM::Segments && restored_segments_,
+        UInt64 begin_time_)
         : tmt(tmt_)
         , region_id(region_id_)
         , peer_id(peer_id_)
@@ -63,6 +65,7 @@ struct CheckpointIngestInfo
         , restored_segments(std::move(restored_segments_))
         , in_memory(true)
         , clean_when_destruct(false)
+        , begin_time(begin_time_)
     {
         persistToPS();
     }
@@ -72,15 +75,7 @@ struct CheckpointIngestInfo
         TMTContext & tmt_,
         const struct TiFlashRaftProxyHelper * proxy_helper,
         UInt64 region_id_,
-        UInt64 peer_id_)
-        : tmt(tmt_)
-        , region_id(region_id_)
-        , peer_id(peer_id_)
-        , in_memory(false)
-        , clean_when_destruct(false)
-    {
-        loadFromPS(proxy_helper);
-    }
+        UInt64 peer_id_);
 
     static bool forciblyClean(TMTContext & tmt, UInt64 region_id);
 
@@ -102,6 +97,7 @@ private:
     DM::Segments restored_segments;
     bool in_memory;
     bool clean_when_destruct;
+    UInt64 begin_time;
 };
 using CheckpointIngestInfoPtr = std::shared_ptr<CheckpointIngestInfo>;
 } // namespace DB
