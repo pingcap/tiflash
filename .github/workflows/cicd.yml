@@ -20,18 +20,28 @@ jobs:
     timeout-minutes: 180
     steps:
       - name: Checkout repository and submodules
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           submodules: recursive
-          ref: ${{ github.ref_name }}
+          ref: ${{ github.event.inputs.branch }}
+          token: ${{ secrets.GIT_ACTION_BOT }}
           fetch-depth: 0
-
-      - name: Build Docker Image
-        run: |
-          docker build -f release-centos7-llvm/dockerfiles/Dockerfile-tiflash-cse-multiarch -t xexplorersun/tiflash:cse-${{ github.sha }}-arm64 .
-      - name: Push image
-        run: |
-          docker push xexplorersun/tiflash:cse-${{ github.sha }}-arm64
+      - name: Build and Push Images
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: release-centos7-llvm/dockerfiles/Dockerfile-tiflash-cse-multiarch
+          platforms: "linux/arm64"
+          push: true
+          tags: hub.pingcap.net/sunxiaoguang/serverless/tiflash:${{ github.sha }}-arm64
+      - name: Build and Push Images DockerHub
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: release-centos7-llvm/dockerfiles/Dockerfile-tiflash-cse-multiarch
+          platforms: "linux/arm64"
+          push: true
+          tags: xexplorersun/tiflash:cse-${{ github.sha }}-arm64
   build-amd64:
     name: Build AMD64 Image
     runs-on: amd64
@@ -40,21 +50,31 @@ jobs:
       image: tiflash-cse:${{ github.sha }}-amd64
     steps:
       - name: Checkout repository and submodules
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           submodules: recursive
           ref: ${{ github.event.inputs.branch }}
+          token: ${{ secrets.GIT_ACTION_BOT }}
           fetch-depth: 0
-
-      - name: Build Docker Image
-        run: |
-          docker build -f release-centos7-llvm/dockerfiles/Dockerfile-tiflash-cse-multiarch -t xexplorersun/tiflash:cse-${{ github.sha }}-amd64 .
-      - name: Push image
-        run: |
-          docker push xexplorersun/tiflash:cse-${{ github.sha }}-amd64
+      - name: Build and Push Images
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: release-centos7-llvm/dockerfiles/Dockerfile-tiflash-cse-multiarch
+          platforms: "linux/amd64"
+          push: true
+          tags: hub.pingcap.net/sunxiaoguang/serverless/tiflash:${{ github.sha }}-amd64
+      - name: Build and Push Images DockerHub
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: release-centos7-llvm/dockerfiles/Dockerfile-tiflash-cse-multiarch
+          platforms: "linux/amd64"
+          push: true
+          tags: xexplorersun/tiflash:cse-${{ github.sha }}-amd64
   multi-arch:
     name: Create Multi-Architecture Image
-    runs-on: arm64
+    runs-on: amd64
     needs: ["build-arm64", "build-amd64"]
     steps:
       - name: create-manifest
@@ -65,10 +85,18 @@ jobs:
       - name: push-manifest
         run: |
           docker manifest push xexplorersun/tiflash:cse-${{ github.sha }}
+      - name: create-manifest harbor
+        run: |
+          docker manifest create hub.pingcap.net/sunxiaoguang/serverless/tiflash:${{ github.sha }} \
+          --amend hub.pingcap.net/sunxiaoguang/serverless/tiflash:${{ github.sha }}-amd64 \
+          --amend hub.pingcap.net/sunxiaoguang/serverless/tiflash:${{ github.sha }}-arm64
+      - name: push-manifest harbor
+        run: |
+          docker manifest push hub.pingcap.net/sunxiaoguang/serverless/tiflash:${{ github.sha }}
 
   sync-image-tiflash:
     name: Sync image to GCR tiflash
-    runs-on: arm64
+    runs-on: amd64
     needs: ["multi-arch"]
     if: ${{ inputs.gcr_target == 'tiflash' }}
     steps:
@@ -86,7 +114,7 @@ jobs:
 
   sync-image-tiflash-compute:
     name: Sync image to GCR tiflash-compute
-    runs-on: arm64
+    runs-on: amd64
     needs: ["multi-arch"]
     if: ${{ inputs.gcr_target == 'tiflash-compute' }}
     steps:
