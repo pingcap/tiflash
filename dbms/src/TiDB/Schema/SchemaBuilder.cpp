@@ -1393,11 +1393,14 @@ void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
 
 /**
  * Update the schema of given `physical_table_id`.
+ * This function ensure only the lock of `physical_table_id` is involved.
+ *
  * Param `database_id`, `logical_table_id` is to key to fetch the latest table info. If
  * something wrong when generating the table info of `physical_table_id`, it means the
  * TableID mapping is not up-to-date. This function will return false and the caller
  * should update the TableID mapping then retry.
- * This function ensure only the lock of `physical_table_id` is involved.
+ * If the caller ensure the TableID mapping is up-to-date, then it should call with
+ * `force == true`
  */
 template <typename Getter, typename NameMapper>
 bool SchemaBuilder<Getter, NameMapper>::applyTable(
@@ -1406,13 +1409,19 @@ bool SchemaBuilder<Getter, NameMapper>::applyTable(
     TableID physical_table_id,
     bool force)
 {
-    // Here we get table info without mvcc. So we can detect that whether the table
-    // has been renamed to another database or dropped.
+    // When `force==false`, we get table info without mvcc. So we can detect that whether
+    // the table has been renamed to another database or dropped.
     // If the table has been renamed to another database, it is dangerous to use the
     // old table info from the old database because some new columns may have been
     // added to the new table.
     // For the reason above, if we can not get table info without mvcc, this function
     // will return false and the caller should update the table_id_map then retry.
+    //
+    // When `force==true`, the caller ensure the TableID mapping is up-to-date, so we
+    // need to get table info with mvcc. It can return the table info even if a table is
+    // dropped but not physically removed by TiDB/TiKV gc_safepoint.
+    // It is need for TiFlash correctly decoding the data and get ready for `RECOVER TABLE`
+    // and `RECOVER DATABASE`.
     auto table_info = getter.getTableInfo(database_id, logical_table_id, /*try_mvcc*/ force);
     if (table_info == nullptr)
     {
