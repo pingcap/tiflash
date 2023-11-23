@@ -39,7 +39,6 @@
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/MutableSupport.h>
 #include <TiDB/Decode/TypeMapping.h>
-#include <TiDB/Schema/SchemaBuilder-internal.h>
 #include <TiDB/Schema/SchemaBuilder.h>
 #include <TiDB/Schema/SchemaNameMapper.h>
 #include <TiDB/Schema/TiDB.h>
@@ -367,7 +366,10 @@ void SchemaBuilder<Getter, NameMapper>::applySetTiFlashReplica(DatabaseID databa
         auto storage = tmt_context.getStorages().get(keyspace_id, table_info->id);
         if (unlikely(storage == nullptr))
         {
-            LOG_ERROR(log, "table is not exist in TiFlash, applySetTiFlashReplica is ignored, table_id={}", table_id);
+            LOG_ERROR(
+                log,
+                "Storage instance is not exist in TiFlash, applySetTiFlashReplica is ignored, table_id={}",
+                table_id);
             return;
         }
 
@@ -492,7 +494,10 @@ void SchemaBuilder<Getter, NameMapper>::applyPartitionDiff(DatabaseID database_i
     auto storage = tmt_context.getStorages().get(keyspace_id, table_info->id);
     if (storage == nullptr)
     {
-        LOG_ERROR(log, "table is not exist in TiFlash, table_id={}", table_id);
+        LOG_ERROR(
+            log,
+            "logical_table storage instance is not exist in TiFlash, applyPartitionDiff is ignored, table_id={}",
+            table_id);
         return;
     }
 
@@ -608,7 +613,10 @@ void SchemaBuilder<Getter, NameMapper>::applyRenameTable(DatabaseID database_id,
     auto storage = tmt_context.getStorages().get(keyspace_id, table_id);
     if (storage == nullptr)
     {
-        LOG_WARNING(log, "table is not exist in TiFlash, applyRenameTable is ignored, table_id={}", table_id);
+        LOG_WARNING(
+            log,
+            "Storage instance is not exist in TiFlash, applyRenameTable is ignored, table_id={}",
+            table_id);
         return;
     }
 
@@ -633,7 +641,8 @@ void SchemaBuilder<Getter, NameMapper>::applyRenameLogicalTable(
             {
                 LOG_ERROR(
                     log,
-                    "table is not exist in TiFlash, applyRenamePhysicalTable is ignored, physical_table_id={}",
+                    "Storage instance is not exist in TiFlash, applyRenamePhysicalTable is ignored, "
+                    "physical_table_id={}",
                     part_def.id);
                 return;
             }
@@ -1165,24 +1174,27 @@ void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
     for (const auto & db : all_schemas)
     {
         auto task = [this, db, &created_db_set, &created_db_set_mutex] {
+            do
             {
-                std::shared_lock<std::shared_mutex> shared_lock(shared_mutex_for_databases);
-                if (databases.find(db->id) == databases.end())
                 {
-                    shared_lock.unlock();
-                    applyCreateSchema(db);
+                    std::shared_lock<std::shared_mutex> shared_lock(shared_mutex_for_databases);
+                    if (databases.find(db->id) != databases.end())
                     {
-                        std::unique_lock<std::mutex> created_db_set_lock(created_db_set_mutex);
-                        created_db_set.emplace(name_mapper.mapDatabaseName(*db));
+                        break;
                     }
-
-                    LOG_INFO(
-                        log,
-                        "Database {} created during sync all schemas, database_id={}",
-                        name_mapper.debugDatabaseName(*db),
-                        db->id);
+                } // release lock on `databases`
+                applyCreateSchema(db);
+                {
+                    std::unique_lock<std::mutex> created_db_set_lock(created_db_set_mutex);
+                    created_db_set.emplace(name_mapper.mapDatabaseName(*db));
                 }
-            }
+
+                LOG_INFO(
+                    log,
+                    "Database {} created during sync all schemas, database_id={}",
+                    name_mapper.debugDatabaseName(*db),
+                    db->id);
+            } while (false);
 
             std::vector<TableInfoPtr> tables = getter.listTables(db->id);
             for (auto & table : tables)
