@@ -250,9 +250,7 @@ private:
             ori_bucket_info,
             bucket->toString());
 
-        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_bucket_fill_rate, name).Set(config.fill_rate);
-        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_bucket_capacity, name).Set(config.capacity);
-        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_remaining_tokens, name).Set(config.tokens);
+        updateBucketMetrics(config);
     }
 
     void updateTrickleMode(double add_tokens, double new_capacity, int64_t trickle_ms)
@@ -290,9 +288,7 @@ private:
             ori_bucket_info,
             bucket->toString());
 
-        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_bucket_fill_rate, name).Set(new_fill_rate);
-        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_bucket_capacity, name).Set(new_capacity);
-        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_remaining_tokens, name).Set(ori_tokens);
+        updateBucketMetrics(bucket->getConfig());
     }
 
     // If we have network problem with GAC, enter degrade mode.
@@ -315,9 +311,7 @@ private:
             ori_bucket_info,
             bucket->toString());
 
-        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_bucket_fill_rate, name).Set(config.fill_rate);
-        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_bucket_capacity, name).Set(config.capacity);
-        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_remaining_tokens, name).Set(config.tokens);
+        updateBucketMetrics(config);
     }
 
     struct ConsumptionUpdateInfo
@@ -386,6 +380,13 @@ private:
     {
         std::lock_guard lock(mu);
         return bucket_mode == trickle_mode && tp >= stop_trickle_timepoint;
+    }
+
+    void updateBucketMetrics(const TokenBucketConfig & config) const
+    {
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_bucket_fill_rate, name).Set(config.fill_rate);
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_bucket_capacity, name).Set(config.capacity);
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_remaining_tokens, name).Set(config.tokens);
     }
 
     const std::string name;
@@ -605,8 +606,6 @@ private:
 
     // If we cannot get GAC resp for DEGRADE_MODE_DURATION seconds, enter degrade mode.
     static constexpr auto DEGRADE_MODE_DURATION = std::chrono::seconds(120);
-    static constexpr auto DEFAULT_LOW_TOKEN_INTERVAL = std::chrono::milliseconds(300);
-
     static constexpr auto TARGET_REQUEST_PERIOD_MS = std::chrono::milliseconds(5000);
     static constexpr double ACQUIRE_RU_AMPLIFICATION = 1.5;
 
