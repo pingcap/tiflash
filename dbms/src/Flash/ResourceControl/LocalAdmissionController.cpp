@@ -126,7 +126,6 @@ void LocalAdmissionController::fetchTokensForAllResourceGroups()
             if (acquire_info.has_value())
                 acquire_infos.push_back(acquire_info.value());
         }
-        low_token_resource_groups.clear();
     }
 
     static const std::string log_desc_str = fmt::format("periodically({}sec)", DEFAULT_FETCH_GAC_INTERVAL.count());
