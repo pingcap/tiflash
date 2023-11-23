@@ -47,7 +47,7 @@ public:
     TiDB::DBInfoPtr getDBInfo(DatabaseID database_id) const
     {
         std::shared_lock shared_lock(mtx_databases);
-        if (auto it = databases.find(database_id); likely(it == databases.end()))
+        if (auto it = databases.find(database_id); likely(it != databases.end()))
         {
             return it->second;
         }

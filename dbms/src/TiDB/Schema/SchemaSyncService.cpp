@@ -285,7 +285,7 @@ bool SchemaSyncService::gc(Timestamp gc_safepoint, KeyspaceID keyspace_id)
         }();
         LOG_INFO(
             keyspace_log,
-            "Physically dropping table, table_tombstone={} safepoint={} {}",
+            "Physically drop table begin, table_tombstone={} safepoint={} {}",
             storage->getTombstone(),
             gc_safepoint,
             canonical_name);
@@ -299,7 +299,7 @@ bool SchemaSyncService::gc(Timestamp gc_safepoint, KeyspaceID keyspace_id)
         {
             InterpreterDropQuery drop_interpreter(ast_drop_query, context);
             drop_interpreter.execute();
-            LOG_INFO(keyspace_log, "Physically dropped table {}", canonical_name);
+            LOG_INFO(keyspace_log, "Physically drop table {} end", canonical_name);
             // remove the id mapping after physically dropped
             schema_sync_manager->removeTableID(keyspace_id, table_info.id);
             ++num_tables_removed;
@@ -345,7 +345,7 @@ bool SchemaSyncService::gc(Timestamp gc_safepoint, KeyspaceID keyspace_id)
             continue;
         }
 
-        LOG_INFO(keyspace_log, "Physically dropping database, database_tombstone={} {}", db->getTombstone(), db_name);
+        LOG_INFO(keyspace_log, "Physically drop database begin, database_tombstone={} {}", db->getTombstone(), db_name);
         auto drop_query = std::make_shared<ASTDropQuery>();
         drop_query->database = db_name;
         drop_query->if_exists = true;
@@ -355,7 +355,7 @@ bool SchemaSyncService::gc(Timestamp gc_safepoint, KeyspaceID keyspace_id)
         {
             InterpreterDropQuery drop_interpreter(ast_drop_query, context);
             drop_interpreter.execute();
-            LOG_INFO(keyspace_log, "Physically dropped database {}, safepoint={}", db_name, gc_safepoint);
+            LOG_INFO(keyspace_log, "Physically drop database {} end, safepoint={}", db_name, gc_safepoint);
             ++num_databases_removed;
         }
         catch (DB::Exception & e)
