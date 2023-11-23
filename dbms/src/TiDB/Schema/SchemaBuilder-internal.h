@@ -25,10 +25,6 @@
 /// === Some Private struct / method for SchemaBuilder
 /// Notice that this file should only included by SchemaBuilder.cpp and unittest for this file.
 
-namespace Poco
-{
-class Logger;
-}
 namespace TiDB
 {
 struct TableInfo;
