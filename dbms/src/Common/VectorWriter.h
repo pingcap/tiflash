@@ -62,10 +62,7 @@ public:
         pos = reinterpret_cast<Position>(vector.data() + new_offset);
     }
 
-    void advance(size_t n)
-    {
-        setOffset(offset() + n);
-    }
+    void advance(size_t n) { setOffset(offset() + n); }
 
     size_t offset() { return pos - reinterpret_cast<Position>(vector.data()); }
 

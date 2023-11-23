@@ -1125,7 +1125,8 @@ private:
         const NullMap & null_map_from,
         size_t size)
     {
-        size_t reserve_size = (size * (1 + 1)) + data_from->getSizeForReserve(); // json_type + string end char 0 + value
+        size_t reserve_size
+            = (size * (1 + 1)) + data_from->getSizeForReserve(); // json_type + string end char 0 + value
         JsonBinary::JsonBinaryWriteBuffer write_buffer(data_to, reserve_size);
         simdjson::dom::parser parser;
         for (size_t i = 0; i < size; ++i)
@@ -1307,7 +1308,8 @@ public:
         {
             const auto & col_from = checkAndGetColumn<ColumnVector<DataTypeMyDuration::FieldType>>(from.column.get());
             const auto & data_from = col_from->getData();
-            size_t reserve_size = data_from.size() * (1 + 1 + sizeof(UInt64) + sizeof(UInt32)); // json_type + string end char 0 + value
+            size_t reserve_size
+                = data_from.size() * (1 + 1 + sizeof(UInt64) + sizeof(UInt32)); // json_type + string end char 0 + value
             JsonBinary::JsonBinaryWriteBuffer write_buffer(data_to, reserve_size);
             for (size_t i = 0; i < data_from.size(); ++i)
             {
