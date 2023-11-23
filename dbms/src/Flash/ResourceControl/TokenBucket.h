@@ -17,9 +17,9 @@
 #include <Common/Logger.h>
 #include <common/logger_useful.h>
 
+#include <cassert>
 #include <chrono>
 #include <memory>
-#include <cassert>
 
 namespace DB
 {
