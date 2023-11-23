@@ -413,10 +413,11 @@ void ApplyFapSnapshotImpl(TMTContext & tmt, TiFlashRaftProxyHelper * proxy_helpe
     auto elapsed = watch_ingest.elapsedSeconds();
     GET_METRIC(tiflash_fap_task_duration_seconds, type_ingest_stage).Observe(elapsed);
     auto begin = checkpoint_ingest_info->beginTime();
+    auto current = FAPAsyncTasks::getCurrentMillis();
     if (begin) {
-        auto current = FAPAsyncTasks::getCurrentMillis();
         GET_METRIC(tiflash_fap_task_duration_seconds, type_total).Observe((current - begin) / 1000.0);
     }
+    LOG_INFO(log, "Finish apply fap snapshot, region_id={} peer_id={} begin_time={} current_time={}", region_id, peer_id, begin, current);
     GET_METRIC(tiflash_fap_task_result, type_succeed).Increment();
 }
 

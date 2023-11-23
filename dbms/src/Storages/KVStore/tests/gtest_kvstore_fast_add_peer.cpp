@@ -366,6 +366,15 @@ try
     uint64_t region_id = 1;
     FastAddPeerImplTransform(global_context.getTMTContext(), region_id, 2333, std::move(mock_data), 0);
     dumpCheckpoint();
+    FastAddPeerImplTransform(global_context.getTMTContext(), region_id, 2333, std::move(mock_data), 0);
+    
+    auto s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
+    const auto manifests = S3::CheckpointManifestS3Set::getFromS3(*s3_client, kvs.getStoreID());
+    const auto & latest_manifest_key = manifests.latestManifestKey();
+    auto latest_manifest_key_view = S3::S3FilenameView::fromKey(latest_manifest_key);
+    auto latest_upload_seq = latest_manifest_key_view.getUploadSequence();
+    
+    buildParsedCheckpointData(global_context, latest_manifest_key, latest_upload_seq);
 }
 CATCH
 
