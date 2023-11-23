@@ -30,8 +30,9 @@ PhysicalPlanNode::PhysicalPlanNode(
     const PlanType & type_,
     const NamesAndTypes & schema_,
     const FineGrainedShuffle & fine_grained_shuffle_,
-    const String & req_id)
+    const String & req_id_)
     : executor_id(executor_id_)
+    , req_id(req_id_)
     , type(type_)
     , schema(schema_)
     , fine_grained_shuffle(fine_grained_shuffle_)

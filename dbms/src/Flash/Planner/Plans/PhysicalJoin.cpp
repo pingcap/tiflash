@@ -303,7 +303,7 @@ void PhysicalJoin::buildPipeline(PipelineBuilder & builder, Context & context, P
         executor_id,
         build()->getSchema(),
         fine_grained_shuffle,
-        log->identifier(),
+        req_id,
         build(),
         join_ptr,
         build_side_prepare_actions);
@@ -317,7 +317,7 @@ void PhysicalJoin::buildPipeline(PipelineBuilder & builder, Context & context, P
     auto join_probe = std::make_shared<PhysicalJoinProbe>(
         executor_id,
         schema,
-        log->identifier(),
+        req_id,
         probe(),
         join_ptr,
         probe_side_prepare_actions);

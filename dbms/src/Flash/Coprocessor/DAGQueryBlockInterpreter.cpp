@@ -301,7 +301,7 @@ void DAGQueryBlockInterpreter::handleJoin(
     const Settings & settings = context.getSettingsRef();
     SpillConfig build_spill_config(
         context.getTemporaryPath(),
-        fmt::format("{}_hash_join_0_build", log->identifier()),
+        fmt::format("{}_0_build", log->identifier()),
         settings.max_cached_data_bytes_in_spiller,
         settings.max_spilled_rows_per_file,
         settings.max_spilled_bytes_per_file,
@@ -310,7 +310,7 @@ void DAGQueryBlockInterpreter::handleJoin(
         settings.max_block_size);
     SpillConfig probe_spill_config(
         context.getTemporaryPath(),
-        fmt::format("{}_hash_join_0_probe", log->identifier()),
+        fmt::format("{}_0_probe", log->identifier()),
         settings.max_cached_data_bytes_in_spiller,
         settings.max_spilled_rows_per_file,
         settings.max_spilled_bytes_per_file,
@@ -497,7 +497,7 @@ void DAGQueryBlockInterpreter::executeAggregation(
     AggregationInterpreterHelper::fillArgColumnNumbers(aggregate_descriptions, before_agg_header);
     SpillConfig spill_config(
         context.getTemporaryPath(),
-        fmt::format("{}_aggregation", log->identifier()),
+        log->identifier(),
         settings.max_cached_data_bytes_in_spiller,
         settings.max_spilled_rows_per_file,
         settings.max_spilled_bytes_per_file,
