@@ -1056,7 +1056,8 @@ private:
         Int32 flen,
         size_t size)
     {
-        size_t reserve_size = size * (1 + 1 + 1); // json_type + from_type_code + string end char 0
+        // json_type + from_type_code + string end char 0
+        size_t reserve_size = size * (1 + 1 + 1);
         if constexpr (is_binary_str)
             reserve_size += reserve_size <= 0 ? data_from->getSizeForReserve() : size * flen;
         else
@@ -1125,8 +1126,8 @@ private:
         const NullMap & null_map_from,
         size_t size)
     {
-        size_t reserve_size
-            = (size * (1 + 1)) + data_from->getSizeForReserve(); // json_type + string end char 0 + value
+        // json_type + string end char 0 + value
+        size_t reserve_size = (size * (1 + 1)) + data_from->getSizeForReserve();
         JsonBinary::JsonBinaryWriteBuffer write_buffer(data_to, reserve_size);
         simdjson::dom::parser parser;
         for (size_t i = 0; i < size; ++i)
@@ -1167,6 +1168,7 @@ private:
         const std::unique_ptr<IStringSource> & data_from,
         size_t size)
     {
+        // json_type + from_type_code + string end char 0
         size_t reserve_size = (size * (1 + 1)) + data_from->getSizeForReserve();
         JsonBinary::JsonBinaryWriteBuffer write_buffer(data_to, reserve_size);
         for (size_t i = 0; i < size; ++i)
@@ -1246,7 +1248,8 @@ private:
             = checkAndGetColumn<ColumnVector<typename FromDataType::FieldType>>(column_ptr_from.get());
         RUNTIME_CHECK(column_from);
         const auto & data_from = column_from->getData();
-        size_t reserve_size = data_from.size() * (1 + 1 + sizeof(UInt64)); // json_type + string end char 0 + value
+        // json_type + string end char 0 + value
+        size_t reserve_size = data_from.size() * (1 + 1 + sizeof(UInt64));
         JsonBinary::JsonBinaryWriteBuffer write_buffer(data_to, reserve_size);
         for (size_t i = 0; i < data_from.size(); ++i)
         {
@@ -1308,8 +1311,8 @@ public:
         {
             const auto & col_from = checkAndGetColumn<ColumnVector<DataTypeMyDuration::FieldType>>(from.column.get());
             const auto & data_from = col_from->getData();
-            size_t reserve_size
-                = data_from.size() * (1 + 1 + sizeof(UInt64) + sizeof(UInt32)); // json_type + string end char 0 + value
+            // json_type + string end char 0 + value
+            size_t reserve_size = data_from.size() * (1 + 1 + sizeof(UInt64) + sizeof(UInt32));
             JsonBinary::JsonBinaryWriteBuffer write_buffer(data_to, reserve_size);
             for (size_t i = 0; i < data_from.size(); ++i)
             {
