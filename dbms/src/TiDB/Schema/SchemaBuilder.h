@@ -16,11 +16,13 @@
 
 #include <Interpreters/Context_fwd.h>
 #include <Storages/KVStore/TMTStorages.h>
+#include <TiDB/Schema/DatabaseInfoCache.h>
 #include <TiDB/Schema/SchemaGetter.h>
 #include <TiDB/Schema/TableIDMap.h>
 
 namespace DB
 {
+
 
 template <typename Getter, typename NameMapper>
 struct SchemaBuilder
@@ -32,9 +34,7 @@ private:
 
     Context & context;
 
-    std::shared_mutex & shared_mutex_for_databases;
-
-    std::unordered_map<DB::DatabaseID, TiDB::DBInfoPtr> & databases;
+    DatabaseInfoCache & databases;
 
     TableIDMap & table_id_map;
 
@@ -43,15 +43,9 @@ private:
     LoggerPtr log;
 
 public:
-    SchemaBuilder(
-        Getter & getter_,
-        Context & context_,
-        std::unordered_map<DB::DatabaseID, TiDB::DBInfoPtr> & dbs_,
-        TableIDMap & table_id_map_,
-        std::shared_mutex & shared_mutex_for_databases_)
+    SchemaBuilder(Getter & getter_, Context & context_, DatabaseInfoCache & dbs_, TableIDMap & table_id_map_)
         : getter(getter_)
         , context(context_)
-        , shared_mutex_for_databases(shared_mutex_for_databases_)
         , databases(dbs_)
         , table_id_map(table_id_map_)
         , keyspace_id(getter_.getKeyspaceID())

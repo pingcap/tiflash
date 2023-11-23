@@ -18,6 +18,7 @@
 #include <Common/Stopwatch.h>
 #include <Debug/MockSchemaGetter.h>
 #include <Debug/MockSchemaNameMapper.h>
+#include <TiDB/Schema/DatabaseInfoCache.h>
 #include <TiDB/Schema/SchemaBuilder.h>
 #include <TiDB/Schema/TableIDMap.h>
 #include <TiDB/Schema/TiDB.h>
@@ -52,13 +53,10 @@ private:
     // Ensure `syncSchemas` will only executed by one thread.
     std::mutex mutex_for_sync_schema;
 
-    // mutex for databases
-    std::shared_mutex shared_mutex_for_databases;
-    std::unordered_map<DB::DatabaseID, TiDB::DBInfoPtr> databases;
-
     LoggerPtr log;
 
     TableIDMap table_id_map;
+    DatabaseInfoCache databases;
 
     Getter createSchemaGetter(KeyspaceID keyspace_id)
     {
@@ -111,46 +109,23 @@ private:
         bool force,
         const char * next_action);
 
+    void dropAllSchema(Context & context) override;
+
     TiDB::DBInfoPtr getDBInfoByName(const String & database_name) override
     {
-        std::shared_lock<std::shared_mutex> lock(shared_mutex_for_databases);
-
-        auto it = std::find_if(databases.begin(), databases.end(), [&](const auto & pair) {
-            return pair.second->name == database_name;
-        });
-        if (it == databases.end())
-            return nullptr;
-        return it->second;
+        return databases.getDBInfoByName(database_name);
     }
 
     TiDB::DBInfoPtr getDBInfoByMappedName(const String & mapped_database_name) override
     {
-        std::shared_lock<std::shared_mutex> lock(shared_mutex_for_databases);
-
-        auto it = std::find_if(databases.begin(), databases.end(), [&](const auto & pair) {
-            return NameMapper().mapDatabaseName(*pair.second) == mapped_database_name;
-        });
-        if (it == databases.end())
-            return nullptr;
-        return it->second;
-    }
-
-    void dropAllSchema(Context & context) override
-    {
-        auto getter = createSchemaGetter(keyspace_id);
-        SchemaBuilder<Getter, NameMapper> builder(getter, context, databases, table_id_map, shared_mutex_for_databases);
-        builder.dropAllSchema();
+        return databases.getDBInfoByMappedName<NameMapper>(mapped_database_name);
     }
 
     // clear all states.
     // just for testing restart
     void reset() override
     {
-        {
-            std::unique_lock<std::shared_mutex> lock(shared_mutex_for_databases);
-            databases.clear();
-        }
-
+        databases.clear();
         table_id_map.clear();
         cur_version = 0;
     }

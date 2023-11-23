@@ -871,10 +871,7 @@ void SchemaBuilder<Getter, NameMapper>::applyCreateSchema(const TiDB::DBInfoPtr 
     interpreter.setForceRestoreData(false);
     interpreter.execute();
 
-    {
-        std::unique_lock<std::shared_mutex> lock(shared_mutex_for_databases);
-        databases.emplace(db_info->id, db_info);
-    }
+    databases.addDatabaseInfo(db_info);
 
     LOG_INFO(log, "Create database {} end, database_id={}", name_mapper.debugDatabaseName(*db_info), db_info->id);
 }
@@ -882,16 +879,11 @@ void SchemaBuilder<Getter, NameMapper>::applyCreateSchema(const TiDB::DBInfoPtr 
 template <typename Getter, typename NameMapper>
 void SchemaBuilder<Getter, NameMapper>::applyDropSchema(DatabaseID schema_id)
 {
-    TiDB::DBInfoPtr db_info;
+    TiDB::DBInfoPtr db_info = databases.getDBInfo(schema_id);
+    if (unlikely(db_info == nullptr))
     {
-        std::shared_lock<std::shared_mutex> shared_lock(shared_mutex_for_databases);
-        auto it = databases.find(schema_id);
-        if (unlikely(it == databases.end()))
-        {
-            LOG_INFO(log, "Try to drop database but not found, may has been dropped, database_id={}", schema_id);
-            return;
-        }
-        db_info = it->second;
+        LOG_INFO(log, "Try to drop database but not found, may has been dropped, database_id={}", schema_id);
+        return;
     }
 
     {
@@ -903,10 +895,7 @@ void SchemaBuilder<Getter, NameMapper>::applyDropSchema(DatabaseID schema_id)
 
     applyDropSchema(name_mapper.mapDatabaseName(*db_info));
 
-    {
-        std::unique_lock<std::shared_mutex> lock(shared_mutex_for_databases);
-        databases.erase(schema_id);
-    }
+    databases.eraseDBInfo(schema_id);
 }
 
 template <typename Getter, typename NameMapper>
@@ -1176,13 +1165,10 @@ void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
         auto task = [this, db, &created_db_set, &created_db_set_mutex] {
             do
             {
+                if (databases.exists(db->id))
                 {
-                    std::shared_lock<std::shared_mutex> shared_lock(shared_mutex_for_databases);
-                    if (databases.find(db->id) != databases.end())
-                    {
-                        break;
-                    }
-                } // release lock on `databases`
+                    break;
+                }
                 applyCreateSchema(db);
                 {
                     std::unique_lock<std::mutex> created_db_set_lock(created_db_set_mutex);
@@ -1194,7 +1180,7 @@ void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
                     "Database {} created during sync all schemas, database_id={}",
                     name_mapper.debugDatabaseName(*db),
                     db->id);
-            } while (false);
+            } while (false); // Ensure database existing
 
             std::vector<TableInfoPtr> tables = getter.listTables(db->id);
             for (auto & table : tables)

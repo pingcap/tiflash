@@ -133,7 +133,7 @@ Int64 TiDBSchemaSyncer<mock_getter, mock_mapper>::syncSchemaDiffs(
             return -1;
         }
 
-        SchemaBuilder<Getter, NameMapper> builder(getter, context, databases, table_id_map, shared_mutex_for_databases);
+        SchemaBuilder<Getter, NameMapper> builder(getter, context, databases, table_id_map);
         builder.applyDiff(*diff);
     }
     return used_version;
@@ -146,7 +146,7 @@ Int64 TiDBSchemaSyncer<mock_getter, mock_mapper>::syncAllSchemas(Context & conte
     {
         --version;
     }
-    SchemaBuilder<Getter, NameMapper> builder(getter, context, databases, table_id_map, shared_mutex_for_databases);
+    SchemaBuilder<Getter, NameMapper> builder(getter, context, databases, table_id_map);
     builder.syncAllSchema();
 
     return version;
@@ -176,7 +176,7 @@ std::tuple<bool, String> TiDBSchemaSyncer<mock_getter, mock_mapper>::trySyncTabl
     // Try to fetch the latest table info from TiKV.
     // If the table schema apply is failed, then we need to update the table-id-mapping
     // and retry.
-    SchemaBuilder<Getter, NameMapper> builder(getter, context, databases, table_id_map, shared_mutex_for_databases);
+    SchemaBuilder<Getter, NameMapper> builder(getter, context, databases, table_id_map);
     if (!builder.applyTable(database_id, logical_table_id, physical_table_id, force))
     {
         String message = fmt::format(
@@ -229,6 +229,14 @@ bool TiDBSchemaSyncer<mock_getter, mock_mapper>::syncTableSchema(Context & conte
     // Still fail, maybe some unknown bugs?
     LOG_ERROR(log, message);
     return false;
+}
+
+template <bool mock_getter, bool mock_mapper>
+void TiDBSchemaSyncer<mock_getter, mock_mapper>::dropAllSchema(Context & context)
+{
+    auto getter = createSchemaGetter(keyspace_id);
+    SchemaBuilder<Getter, NameMapper> builder(getter, context, databases, table_id_map);
+    builder.dropAllSchema();
 }
 
 template class TiDBSchemaSyncer<false, false>;
