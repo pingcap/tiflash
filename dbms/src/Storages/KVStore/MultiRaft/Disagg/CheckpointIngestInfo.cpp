@@ -94,9 +94,9 @@ bool CheckpointIngestInfo::forciblyClean(TMTContext & tmt, UInt64 region_id)
         auto page_id
             = UniversalPageIdFormat::toLocalKVPrefix(UniversalPageIdFormat::LocalKVKeyType::FAPIngestRegion, region_id);
         Page page = uni_ps->read(page_id, nullptr, snapshot, /*throw_on_not_exist*/ false);
-        has_data = true;
         if (page.isValid())
         {
+            has_data = true;
             del_batch.delPage(UniversalPageIdFormat::toLocalKVPrefix(
                 UniversalPageIdFormat::LocalKVKeyType::FAPIngestRegion,
                 region_id));
@@ -107,11 +107,13 @@ bool CheckpointIngestInfo::forciblyClean(TMTContext & tmt, UInt64 region_id)
             UniversalPageIdFormat::LocalKVKeyType::FAPIngestSegments,
             region_id);
         Page page = uni_ps->read(page_id, nullptr, snapshot, /*throw_on_not_exist*/ false);
-        has_data = true;
-        del_batch.delPage(UniversalPageIdFormat::toLocalKVPrefix(
-            UniversalPageIdFormat::LocalKVKeyType::FAPIngestSegments,
-            region_id));
-        uni_ps->write(std::move(del_batch), PageType::Local);
+        if (page.isValid())
+        {
+            has_data = true;
+            del_batch.delPage(UniversalPageIdFormat::toLocalKVPrefix(
+                UniversalPageIdFormat::LocalKVKeyType::FAPIngestSegments,
+                region_id));
+        }
     }
     if (has_data)
         uni_ps->write(std::move(del_batch), DB::PS::V3::PageType::Local, nullptr);
@@ -222,9 +224,9 @@ void CheckpointIngestInfo::persistToPS()
         uint64_t count = restored_segments.size();
         MemoryWriteBuffer buffer;
         data_size += writeBinary2(count, buffer);
-        for (auto it = restored_segments.begin(); it != restored_segments.end(); it++)
+        for (auto & restored_segment : restored_segments)
         {
-            data_size += writeBinary2((*it)->segmentId(), buffer);
+            data_size += writeBinary2(restored_segment->segmentId(), buffer);
         }
         auto page_id = UniversalPageIdFormat::toLocalKVPrefix(
             UniversalPageIdFormat::LocalKVKeyType::FAPIngestSegments,
