@@ -266,10 +266,9 @@ public:
                 {
                     throw Exception(
                         ErrorCodes::LOGICAL_ERROR,
-                        fmt::format(
-                            "Detected overflow when decoding integer of length {} with column type {}",
-                            std::to_string(length),
-                            this->getName()));
+                        "Detected overflow when decoding integer of length {} with column type {}",
+                        length,
+                        this->getName());
                 }
             }
 
