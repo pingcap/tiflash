@@ -360,6 +360,7 @@ public:
             size_t data_length = next_offset - current_offset - 1;
             if constexpr (validCheck)
             {
+                // TODO(hyb): use SIMDJson to check when SIMDJson is proved in practice
                 if (data_length >= 2 && data_from[current_offset] == '"' && data_from[next_offset - 2] == '"'
                     && !checkJsonValid(reinterpret_cast<const char *>(&data_from[current_offset]), data_length))
                 {

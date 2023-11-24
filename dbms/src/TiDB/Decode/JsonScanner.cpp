@@ -94,8 +94,6 @@ JsonScanAction stateBeginValue(JsonScanner & scanner, char c)
     return scanner.genError("looking for beginning of value", c);
 }
 
-//////////==========================TODO==========================//////////
-
 // stateBeginStringOrEmpty is the state after reading `{`.
 JsonScanAction stateBeginStringOrEmpty(JsonScanner & scanner, char c)
 {
