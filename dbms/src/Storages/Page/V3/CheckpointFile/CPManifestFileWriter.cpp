@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Logger.h>
 #include <Storages/Page/V3/CheckpointFile/CPManifestFileWriter.h>
 #include <Storages/Page/V3/CheckpointFile/ProtoHelper.h>
 #include <Storages/Page/V3/Universal/UniversalPageIdFormatImpl.h>
 
 #include <magic_enum.hpp>
 
-#include "Common/Logger.h"
 
 namespace DB::PS::V3
 {
@@ -67,7 +67,6 @@ void CPManifestFileWriter::writeEditsPart(const universal::PageEntriesEdit & edi
     part.set_has_more(true);
     for (UInt64 i = 0; i < limit; ++i)
     {
-        // TODO(fap) fix only one entry.
         auto id_storage_type = UniversalPageIdFormat::getUniversalPageIdType(records[start + i].page_id);
         if (id_storage_type == StorageType::LocalKV)
         {
