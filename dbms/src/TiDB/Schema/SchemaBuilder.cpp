@@ -67,12 +67,16 @@ bool isReservedDatabase(Context & context, const String & database_name)
 template <typename Getter, typename NameMapper>
 void SchemaBuilder<Getter, NameMapper>::applyCreateTable(DatabaseID database_id, TableID table_id)
 {
-    auto table_info = getter.getTableInfo(database_id, table_id);
-    if (table_info == nullptr) // the database maybe dropped
+    TableInfoPtr table_info;
+    bool get_by_mvcc = false;
+    std::tie(table_info, get_by_mvcc) = getter.getTableInfoAndCheckMvcc(database_id, table_id);
+    if (table_info == nullptr)
     {
         LOG_INFO(
             log,
-            "table is not exist in TiKV, may have been dropped, applyCreateTable is ignored, table_id={}",
+            "table is not exist in TiKV, may have been dropped, applyCreateTable is ignored, database_id={} "
+            "table_id={}",
+            database_id,
             table_id);
         return;
     }
@@ -87,16 +91,28 @@ void SchemaBuilder<Getter, NameMapper>::applyCreateTable(DatabaseID database_id,
     }
 
     // If table is partition table, we will create the logical table here.
-    // Because we get the table_info, so we can ensure new_db_info will not be nullptr.
     auto new_db_info = getter.getDatabase(database_id);
-    applyCreateStorageInstance(new_db_info, table_info);
+    if (new_db_info == nullptr)
+    {
+        // the database has been dropped
+        LOG_INFO(
+            log,
+            "database is not exist in TiKV, may have been dropped, applyCreateTable is ignored, database_id={} "
+            "table_id={}",
+            database_id,
+            table_id);
+        return;
+    }
+    applyCreateStorageInstance(new_db_info, table_info, get_by_mvcc);
 
     // Register the partition_id -> logical_table_id mapping
     for (const auto & part_def : table_info->partition.definitions)
     {
         LOG_DEBUG(
             log,
-            "register table to table_id_map for partition table, logical_table_id={} physical_table_id={}",
+            "register table to table_id_map for partition table, database_id={} logical_table_id={} "
+            "physical_table_id={}",
+            database_id,
             table_id,
             part_def.id);
         table_id_map.emplacePartitionTableID(part_def.id, table_id);
@@ -1001,6 +1017,7 @@ String createTableStmt(
     const DBInfo & db_info,
     const TableInfo & table_info,
     const SchemaNameMapper & name_mapper,
+    const UInt64 tombstone,
     const LoggerPtr & log)
 {
     LOG_DEBUG(log, "Analyzing table info : {}", table_info.serialize());
@@ -1034,13 +1051,14 @@ String createTableStmt(
         }
         writeString("), '", stmt_buf);
         writeEscapedString(table_info.serialize(), stmt_buf);
-        writeString("')", stmt_buf);
+        writeString(fmt::format("', {})", tombstone), stmt_buf);
     }
     else
     {
         throw TiFlashException(
-            fmt::format("Unknown engine type : {}", static_cast<int32_t>(table_info.engine_type)),
-            Errors::DDL::Internal);
+            Errors::DDL::Internal,
+            "Unknown engine type : {}",
+            fmt::underlying(table_info.engine_type));
     }
 
     return stmt;
@@ -1049,7 +1067,8 @@ String createTableStmt(
 template <typename Getter, typename NameMapper>
 void SchemaBuilder<Getter, NameMapper>::applyCreateStorageInstance(
     const TiDB::DBInfoPtr & db_info,
-    const TableInfoPtr & table_info)
+    const TableInfoPtr & table_info,
+    bool is_tombstone)
 {
     GET_METRIC(tiflash_schema_internal_ddl_count, type_create_table).Increment();
     LOG_INFO(
@@ -1072,7 +1091,13 @@ void SchemaBuilder<Getter, NameMapper>::applyCreateStorageInstance(
         table_info->engine_type = tmt_context.getEngineType();
     }
 
-    String stmt = createTableStmt(*db_info, *table_info, name_mapper, log);
+    UInt64 tombstone_ts = 0;
+    if (is_tombstone)
+    {
+        tombstone_ts = context.getTMTContext().getPDClient()->getTS();
+    }
+
+    String stmt = createTableStmt(*db_info, *table_info, name_mapper, tombstone_ts, log);
 
     LOG_INFO(
         log,
@@ -1250,7 +1275,11 @@ void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
                 table_id_map.emplaceTableID(table->id, db->id);
                 LOG_DEBUG(log, "register table to table_id_map, database_id={} table_id={}", db->id, table->id);
 
-                applyCreateStorageInstance(db, table);
+                // `SchemaGetter::listTables` only return non-tombstone tables.
+                // So `syncAllSchema` will not create tombstone tables. But if there are new rows/new snapshot
+                // sent to TiFlash, TiFlash can create the instance by `applyTable` with force==true in the
+                // related process.
+                applyCreateStorageInstance(db, table, false);
                 if (table->isLogicalPartitionTable())
                 {
                     for (const auto & part_def : table->partition.definitions)
@@ -1341,12 +1370,22 @@ bool SchemaBuilder<Getter, NameMapper>::applyTable(
     // dropped but not physically removed by TiDB/TiKV gc_safepoint.
     // It is need for TiFlash correctly decoding the data and get ready for `RECOVER TABLE`
     // and `RECOVER DATABASE`.
-    auto table_info = getter.getTableInfo(database_id, logical_table_id, /*try_mvcc*/ force);
+    TableInfoPtr table_info;
+    bool get_by_mvcc = false;
+    if (!force)
+    {
+        table_info = getter.getTableInfo(database_id, logical_table_id, /*try_mvcc*/ false);
+    }
+    else
+    {
+        std::tie(table_info, get_by_mvcc) = getter.getTableInfoAndCheckMvcc(database_id, logical_table_id);
+    }
     if (table_info == nullptr)
     {
         LOG_WARNING(
             log,
-            "table is not exist in TiKV, applyTable need retry, database_id={} logical_table_id={}",
+            "table is not exist in TiKV, applyTable need retry, get_by_mvcc={} database_id={} logical_table_id={}",
+            get_by_mvcc,
             database_id,
             logical_table_id);
         return false;
@@ -1400,7 +1439,8 @@ bool SchemaBuilder<Getter, NameMapper>::applyTable(
         }
 
         // Create the instance with the latest table info
-        applyCreateStorageInstance(db_info, table_info);
+        // If the table info is get by mvcc, it means the table is actually in "dropped" status
+        applyCreateStorageInstance(db_info, table_info, get_by_mvcc);
         return true;
     }
 

@@ -70,7 +70,7 @@ private:
 
     void applyRecoverDatabase(DatabaseID database_id);
 
-    void applyCreateStorageInstance(const TiDB::DBInfoPtr & db_info, const TiDB::TableInfoPtr & table_info);
+    void applyCreateStorageInstance(const TiDB::DBInfoPtr & db_info, const TiDB::TableInfoPtr & table_info, bool is_tombstone);
 
     void applyDropTable(DatabaseID database_id, TableID table_id);
 
