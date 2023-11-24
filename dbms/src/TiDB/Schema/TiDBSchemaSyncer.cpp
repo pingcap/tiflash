@@ -219,6 +219,9 @@ bool TiDBSchemaSyncer<mock_getter, mock_mapper>::syncTableSchema(Context & conte
     GET_METRIC(tiflash_schema_trigger_count, type_sync_table_schema).Increment();
     // Notice: must use the same getter
     syncSchemasByGetter(context, getter);
+    // Try to sync the table schema with `force==true`. Even the table is tombstone (but not physically
+    // dropped in TiKV), it will sync the table schema to handle snapshot or raft commands that come after
+    // table is dropped.
     std::tie(need_update_id_mapping, message)
         = trySyncTableSchema(context, physical_table_id, getter, true, "sync table schema fail");
     if (likely(!need_update_id_mapping))

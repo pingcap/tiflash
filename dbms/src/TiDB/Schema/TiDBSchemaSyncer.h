@@ -54,8 +54,8 @@ private:
 
     LoggerPtr log;
 
-    TableIDMap table_id_map;
     DatabaseInfoCache databases;
+    TableIDMap table_id_map;
 
     Getter createSchemaGetter(KeyspaceID keyspace_id)
     {
