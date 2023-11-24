@@ -751,6 +751,8 @@ void SchemaBuilder<Getter, NameMapper>::applyRecoverLogicalTable(
     const TiDB::DBInfoPtr & db_info,
     const TiDB::TableInfoPtr & table_info)
 {
+    assert(db_info != nullptr);
+    assert(table_info != nullptr);
     if (table_info->isLogicalPartitionTable())
     {
         for (const auto & part_def : table_info->partition.definitions)
