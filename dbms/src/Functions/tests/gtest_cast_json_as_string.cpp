@@ -17,7 +17,7 @@
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionHelpers.h>
-#include <Functions/FunctionsJson.h>
+#include <Interpreters/Context.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TiDB/Decode/JsonBinary.h>
@@ -29,49 +29,6 @@ namespace DB::tests
 {
 class TestCastJsonAsString : public DB::tests::FunctionTest
 {
-public:
-    ColumnWithTypeAndName executeCastJsonAsStringFunction(
-        Context & context,
-        const ColumnWithTypeAndName & input_column,
-        const tipb::FieldType & field_type)
-    {
-        auto & factory = FunctionFactory::instance();
-        ColumnsWithTypeAndName columns({input_column});
-        ColumnNumbers argument_column_numbers;
-        for (size_t i = 0; i < columns.size(); ++i)
-            argument_column_numbers.push_back(i);
-
-        ColumnsWithTypeAndName arguments;
-        for (const auto argument_column_number : argument_column_numbers)
-            arguments.push_back(columns.at(argument_column_number));
-
-        const String func_name = "cast_json_as_string";
-        auto builder = factory.tryGet(func_name, context);
-        if (!builder)
-            throw TiFlashTestException(fmt::format("Function {} not found!", func_name));
-        auto func = builder->build(arguments, nullptr);
-        auto * function_build_ptr = builder.get();
-        if (auto * default_function_builder = dynamic_cast<DefaultFunctionBuilder *>(function_build_ptr);
-            default_function_builder)
-        {
-            auto * function_impl = default_function_builder->getFunctionImpl().get();
-            if (auto * function_cast_json_as_string = dynamic_cast<FunctionsCastJsonAsString *>(function_impl);
-                function_cast_json_as_string)
-            {
-                function_cast_json_as_string->setOutputTiDBFieldType(field_type);
-            }
-            else
-            {
-                throw TiFlashTestException(fmt::format("Function {} not found!", func_name));
-            }
-        }
-
-        Block block(columns);
-        block.insert({nullptr, func->getReturnType(), "res"});
-        func->execute(block, argument_column_numbers, columns.size());
-
-        return block.getByPosition(columns.size());
-    }
 };
 
 TEST_F(TestCastJsonAsString, TestAll)
@@ -116,7 +73,7 @@ try
     field_type.set_flen(-1);
     field_type.set_collate(TiDB::ITiDBCollator::BINARY);
     field_type.set_tp(TiDB::TypeString);
-    auto res = executeCastJsonAsStringFunction(*context, input_col, field_type);
+    auto res = executeCastJsonAsStringFunction(input_col, field_type);
     ASSERT_COLUMN_EQ(res, output_col);
 
     /// ColumnVector(null)
@@ -129,13 +86,13 @@ try
     input_col = ColumnWithTypeAndName(std::move(json_col), nullable_string_type_ptr, "input0");
 
     output_col = createColumn<Nullable<String>>({{}, {}, {}});
-    res = executeCastJsonAsStringFunction(*context, input_col, field_type);
+    res = executeCastJsonAsStringFunction(input_col, field_type);
     ASSERT_COLUMN_EQ(res, output_col);
 
     /// ColumnConst(null)
     auto null_input_col = createConstColumn<Nullable<String>>(3, {});
     output_col = createConstColumn<Nullable<String>>(3, {});
-    res = executeCastJsonAsStringFunction(*context, null_input_col, field_type);
+    res = executeCastJsonAsStringFunction(null_input_col, field_type);
     ASSERT_COLUMN_EQ(res, output_col);
 
     /// ColumnVector(non-null)
@@ -144,7 +101,7 @@ try
     non_null_str_col->insertData(reinterpret_cast<const char *>(bj2), sizeof(bj2) / sizeof(UInt8));
     non_null_str_col->insertData(reinterpret_cast<const char *>(bj9), sizeof(bj9) / sizeof(UInt8));
     auto non_null_input_col = ColumnWithTypeAndName(std::move(non_null_str_col), string_type_ptr, "input0");
-    res = executeCastJsonAsStringFunction(*context, non_null_input_col, field_type);
+    res = executeCastJsonAsStringFunction(non_null_input_col, field_type);
     output_col = createColumn<Nullable<String>>(
         {R"([{"a": 1, "b": true}, 3, 3.5, "hello, world", null, true])",
          R"([{"a": 1, "b": true}, 3, 3.5, "hello, world", null, true])",
@@ -155,7 +112,7 @@ try
     non_null_str_col = ColumnString::create();
     non_null_str_col->insertData(reinterpret_cast<const char *>(bj2), sizeof(bj2) / sizeof(UInt8));
     auto const_non_null_input_col = ColumnConst::create(std::move(non_null_str_col), 3);
-    res = executeCastJsonAsStringFunction(*context, {std::move(const_non_null_input_col), string_type_ptr, ""}, field_type);
+    res = executeCastJsonAsStringFunction({std::move(const_non_null_input_col), string_type_ptr, ""}, field_type);
     output_col
         = createConstColumn<Nullable<String>>(3, {R"([{"a": 1, "b": true}, 3, 3.5, "hello, world", null, true])"});
     ASSERT_COLUMN_EQ(res, output_col);
@@ -168,7 +125,7 @@ try
     auto const_json_col = ColumnConst::create(std::move(json_col), 3);
     auto const_nullable_input_col
         = ColumnWithTypeAndName(std::move(const_json_col), nullable_string_type_ptr, "input0");
-    res = executeCastJsonAsStringFunction(*context, const_nullable_input_col, field_type);
+    res = executeCastJsonAsStringFunction(const_nullable_input_col, field_type);
     output_col = createConstColumn<Nullable<String>>(3, {"[[0, 1], [2, 3], [4, [5, 6]]]"});
     ASSERT_COLUMN_EQ(res, output_col);
 
@@ -184,7 +141,7 @@ try
 
     output_col = createColumn<Nullable<String>>({R"([{"a")", {}, "[[0, "});
     field_type.set_flen(5);
-    res = executeCastJsonAsStringFunction(*context, input_col, field_type);
+    res = executeCastJsonAsStringFunction(input_col, field_type);
     ASSERT_COLUMN_EQ(res, output_col);
     ASSERT_TRUE(context->getDAGContext()->getWarningCount() == 2);
 
@@ -201,35 +158,35 @@ try
     output_col = createColumn<Nullable<String>>({R"("你)"});
     field_type.set_flen(2);
     context->getDAGContext()->clearWarnings();
-    res = executeCastJsonAsStringFunction(*context, input_col, field_type);
+    res = executeCastJsonAsStringFunction(input_col, field_type);
     ASSERT_TRUE(context->getDAGContext()->getWarningCount() == 1);
     ASSERT_COLUMN_EQ(res, output_col);
 
     output_col = createColumn<Nullable<String>>({R"()"});
     field_type.set_flen(0);
     context->getDAGContext()->clearWarnings();
-    res = executeCastJsonAsStringFunction(*context, input_col, field_type);
+    res = executeCastJsonAsStringFunction(input_col, field_type);
     ASSERT_TRUE(context->getDAGContext()->getWarningCount() == 1);
     ASSERT_COLUMN_EQ(res, output_col);
 
     output_col = createColumn<Nullable<String>>({R"("你好")"});
     field_type.set_flen(-1);
     context->getDAGContext()->clearWarnings();
-    res = executeCastJsonAsStringFunction(*context, input_col, field_type);
+    res = executeCastJsonAsStringFunction(input_col, field_type);
     ASSERT_COLUMN_EQ(res, output_col);
     ASSERT_TRUE(context->getDAGContext()->getWarningCount() == 0);
 
     output_col = createColumn<Nullable<String>>({R"("你好")"});
     field_type.set_flen(4);
     context->getDAGContext()->clearWarnings();
-    res = executeCastJsonAsStringFunction(*context, input_col, field_type);
+    res = executeCastJsonAsStringFunction(input_col, field_type);
     ASSERT_COLUMN_EQ(res, output_col);
     ASSERT_TRUE(context->getDAGContext()->getWarningCount() == 0);
 
     output_col = createColumn<Nullable<String>>({R"("你好")"});
     field_type.set_flen(10);
     context->getDAGContext()->clearWarnings();
-    res = executeCastJsonAsStringFunction(*context, input_col, field_type);
+    res = executeCastJsonAsStringFunction(input_col, field_type);
     ASSERT_COLUMN_EQ(res, output_col);
     ASSERT_TRUE(context->getDAGContext()->getWarningCount() == 0);
 }
