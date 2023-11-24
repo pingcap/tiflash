@@ -562,7 +562,11 @@ void MPPTask::runImpl()
 #endif
 
         auto result = query_executor_holder->execute();
-        LOG_INFO(log, "mpp task finish execute, is_success: {}, status: {}", result.is_success, magic_enum::enum_name(status.load()));
+        LOG_INFO(
+            log,
+            "mpp task finish execute, is_success: {}, status: {}",
+            result.is_success,
+            magic_enum::enum_name(status.load()));
         auto cpu_ru = query_executor_holder->collectRequestUnit();
         auto read_ru = dag_context->getReadRU();
         LOG_INFO(log, "mpp finish with request unit: cpu={} read={}", cpu_ru, read_ru);
