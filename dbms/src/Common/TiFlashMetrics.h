@@ -405,7 +405,7 @@ namespace DB
       F(type_ingest_stage, {{"type", "ingest_stage"}}, ExpBuckets{0.05, 2, 60}),                                                    \
       F(type_total, {{"type", "total"}}, ExpBuckets{0.5, 2, 200}),                                                                  \
       F(type_queue_stage, {{"type", "queue_stage"}}, ExpBuckets{0.5, 2, 120}),                                                      \
-      F(type_stage1_total, {{"type", "stage1_total"}}, ExpBuckets{0.5, 2, 200}))                                                    \
+      F(type_phase1_total, {{"type", "phase1_total"}}, ExpBuckets{0.5, 2, 200}))                                                    \
     M(tiflash_raft_command_duration_seconds,                                                                                        \
       "Bucketed histogram of some raft command: apply snapshot and ingest SST",                                                     \
       Histogram, /* these command usually cost several seconds, increase the start bucket to 50ms */                                \

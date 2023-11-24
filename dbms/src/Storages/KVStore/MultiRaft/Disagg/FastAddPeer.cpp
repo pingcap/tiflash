@@ -399,7 +399,7 @@ FastAddPeerRes FastAddPeerImpl(
     }
 }
 
-void ApplyFapSnapshotImpl(TMTContext & tmt, TiFlashRaftProxyHelper * proxy_helper, uint64_t region_id, uint64_t peer_id)
+void ApplyFapSnapshotImpl(TMTContext & tmt, TiFlashRaftProxyHelper * proxy_helper, UInt64 region_id, UInt64 peer_id)
 {
     auto * log = &Poco::Logger::get("FastAddPeer");
     LOG_INFO(log, "Begin apply fap snapshot, region_id={}, peer_id={}", region_id, peer_id);
@@ -509,7 +509,7 @@ FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, u
                 region_id,
                 elapsed);
             GET_METRIC(tiflash_fap_task_result, type_total).Increment();
-            GET_METRIC(tiflash_fap_task_duration_seconds, type_stage1_total).Observe(elapsed / 1000.0);
+            GET_METRIC(tiflash_fap_task_duration_seconds, type_phase1_total).Observe(elapsed / 1000.0);
             return result;
         }
         else
