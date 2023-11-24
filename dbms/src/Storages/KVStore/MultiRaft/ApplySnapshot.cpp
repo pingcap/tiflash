@@ -124,6 +124,8 @@ void KVStore::checkAndApplyPreHandledSnapshot(const RegionPtrWrap & new_region, 
         // Everytime we meet a legacy snapshot, we try to clean obsolete fap ingest info.
         if constexpr (!std::is_same_v<RegionPtrWrap, RegionPtrWithCheckpointInfo>)
         {
+            // TOFO(fap) Better cancel fap process in first, however, there is no case currently where a legacy snapshot runs with fap phase1/phase2 in parallel.
+            // The only case is a fap failed after phase 1 and fallback and failed to clean its phase 1 result.
             fap_ctx->forceCleanCheckpointIngestInfo(tmt, new_region->id());
         }
         // Another FAP will not take place if this stage is not finished.
