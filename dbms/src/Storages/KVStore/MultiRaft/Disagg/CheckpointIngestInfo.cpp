@@ -62,10 +62,7 @@ DM::Segments CheckpointIngestInfo::getRestoredSegments() const
 
 UInt64 CheckpointIngestInfo::getRemoteStoreId() const
 {
-    if (unlikely(!in_memory))
-    {
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "CheckpointIngestInfo is not inited");
-    }
+    RUNTIME_CHECK_MSG(in_memory, "CheckpointIngestInfo is not inited");
     return remote_store_id;
 }
 
