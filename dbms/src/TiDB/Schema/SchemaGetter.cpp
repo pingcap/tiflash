@@ -275,12 +275,13 @@ TiDB::DBInfoPtr SchemaGetter::getDatabase(DatabaseID db_id)
     if (json.empty())
         return nullptr;
 
-    LOG_DEBUG(log, "Get DB Info from TiKV: {}", json);
+    LOG_DEBUG(log, "Get DB Info from TiKV, database_id={} {}", db_id, json);
     auto db_info = std::make_shared<TiDB::DBInfo>(json, keyspace_id);
     return db_info;
 }
 
-TiDB::TableInfoPtr SchemaGetter::getTableInfo(DatabaseID db_id, TableID table_id)
+template <bool mvcc_get>
+TiDB::TableInfoPtr SchemaGetter::getTableInfoImpl(DatabaseID db_id, TableID table_id)
 {
     String db_key = getDBKey(db_id);
     if (!checkDBExists(db_key))
@@ -292,6 +293,11 @@ TiDB::TableInfoPtr SchemaGetter::getTableInfo(DatabaseID db_id, TableID table_id
     String table_info_json = TxnStructure::hGet(snap, db_key, table_key);
     if (table_info_json.empty())
     {
+        if constexpr (!mvcc_get)
+        {
+            return nullptr;
+        }
+
         LOG_WARNING(log, "The table is dropped in TiKV, try to get the latest table_info, table_id={}", table_id);
         table_info_json = TxnStructure::mvccGet(snap, db_key, table_key);
         if (table_info_json.empty())
@@ -304,11 +310,11 @@ TiDB::TableInfoPtr SchemaGetter::getTableInfo(DatabaseID db_id, TableID table_id
             return nullptr;
         }
     }
-    LOG_DEBUG(log, "Get Table Info from TiKV: {}", table_info_json);
-    TiDB::TableInfoPtr table_info = std::make_shared<TiDB::TableInfo>(table_info_json, keyspace_id);
-
-    return table_info;
+    LOG_DEBUG(log, "Get Table Info from TiKV, table_id={} {}", table_id, table_info_json);
+    return std::make_shared<TiDB::TableInfo>(table_info_json, keyspace_id);
 }
+template TiDB::TableInfoPtr SchemaGetter::getTableInfoImpl<false>(DatabaseID db_id, TableID table_id);
+template TiDB::TableInfoPtr SchemaGetter::getTableInfoImpl<true>(DatabaseID db_id, TableID table_id);
 
 std::tuple<TiDB::DBInfoPtr, TiDB::TableInfoPtr> SchemaGetter::getDatabaseAndTableInfo(
     DatabaseID db_id,
@@ -339,7 +345,7 @@ std::tuple<TiDB::DBInfoPtr, TiDB::TableInfoPtr> SchemaGetter::getDatabaseAndTabl
             return std::make_tuple(db_info, nullptr);
         }
     }
-    LOG_DEBUG(log, "Get Table Info from TiKV: {}", table_info_json);
+    LOG_DEBUG(log, "Get Table Info from TiKV, table_id={} {}", table_id, table_info_json);
     TiDB::TableInfoPtr table_info = std::make_shared<TiDB::TableInfo>(table_info_json, keyspace_id);
 
     return std::make_tuple(db_info, table_info);

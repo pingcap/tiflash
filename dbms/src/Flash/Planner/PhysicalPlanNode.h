@@ -116,6 +116,7 @@ protected:
     void recordProfileStreams(DAGPipeline & pipeline, const Context & context);
 
     String executor_id;
+    String req_id;
     PlanType type;
     NamesAndTypes schema;
 
