@@ -67,12 +67,13 @@ TEST(WriteLimiterTest, Rate)
             thread.join();
         auto elapsed = watch.elapsedSeconds();
         auto actual_rate = write_limiter->getTotalBytesThrough() / elapsed;
-        // make sure that 0.8 * target <= actual_rate <= 1.25 * target
-        // hint: the range [0.8, 1.25] is copied from rocksdb,
-        // if tests fail, try to enlarge this range.
-        // enlarge the range to [0.75, 1.30]
-        EXPECT_GE(actual_rate / target, 0.75);
-        EXPECT_LE(actual_rate / target, 1.30);
+        // For environments with high loads, latency can be very large.
+        // In theory, the upper bound of `elapsed` cannot be guaranteed.
+        // So that we cannot guarantee the lower bound of `actual_rate`.
+        // EXPECT_GE(actual_rate / target, 0.75)
+        //     << fmt::format("actual_rate={} target={} elapsed={:.3f}s", actual_rate, target, elapsed);
+        EXPECT_LE(actual_rate / target, 1.30)
+            << fmt::format("actual_rate={} target={} elapsed={:.3f}s", actual_rate, target, elapsed);
     }
 }
 

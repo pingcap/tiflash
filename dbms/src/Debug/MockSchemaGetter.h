@@ -34,7 +34,7 @@ struct MockSchemaGetter
 
     static bool checkSchemaDiffExists(Int64 version) { return MockTiDB::instance().checkSchemaDiffExists(version); }
 
-    static TiDB::TableInfoPtr getTableInfo(DatabaseID, TableID table_id)
+    static TiDB::TableInfoPtr getTableInfo(DatabaseID, TableID table_id, [[maybe_unused]] bool try_mvcc = true)
     {
         return MockTiDB::instance().getTableInfoByID(table_id);
     }

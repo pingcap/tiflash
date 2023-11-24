@@ -63,7 +63,7 @@ HashJoinProbeExec::HashJoinProbeExec(
     , need_scan_hash_map_after_probe(need_scan_hash_map_after_probe_)
     , scan_hash_map_after_probe_stream(scan_hash_map_after_probe_stream_)
     , max_block_size(max_block_size_)
-    , probe_process_info(max_block_size_)
+    , probe_process_info(max_block_size_, join->getProbeCacheColumnThreshold())
 {}
 
 void HashJoinProbeExec::waitUntilAllBuildFinished()

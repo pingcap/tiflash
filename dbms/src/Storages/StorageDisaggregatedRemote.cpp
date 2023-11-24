@@ -74,6 +74,29 @@ extern const int DISAGG_ESTABLISH_RETRYABLE_ERROR;
 extern const int TIMEOUT_EXCEEDED;
 } // namespace ErrorCodes
 
+namespace
+{
+void initDisaggTaskMeta(
+    disaggregated::DisaggTaskMeta * meta,
+    const MPPTaskId & sender_target_mpp_task_id,
+    DAGContext * dag_context,
+    const KeyspaceID keyspace_id,
+    const TiDBTableScan & table_scan)
+{
+    meta->set_start_ts(sender_target_mpp_task_id.gather_id.query_id.start_ts);
+    meta->set_query_ts(sender_target_mpp_task_id.gather_id.query_id.query_ts);
+    meta->set_server_id(sender_target_mpp_task_id.gather_id.query_id.server_id);
+    meta->set_local_query_id(sender_target_mpp_task_id.gather_id.query_id.local_query_id);
+    meta->set_gather_id(sender_target_mpp_task_id.gather_id.gather_id);
+    meta->set_task_id(dag_context->getMPPTaskId().task_id);
+    meta->set_executor_id(table_scan.getTableScanExecutorID());
+    meta->set_keyspace_id(keyspace_id);
+    meta->set_api_version(keyspace_id == NullspaceID ? kvrpcpb::APIVersion::V1 : kvrpcpb::APIVersion::V2);
+    meta->set_connection_id(sender_target_mpp_task_id.gather_id.query_id.connection_id);
+    meta->set_connection_alias(sender_target_mpp_task_id.gather_id.query_id.connection_alias);
+}
+} // namespace
+
 BlockInputStreams StorageDisaggregated::readThroughS3(const Context & db_context, unsigned num_streams)
 {
     // Build InputStream according to the remote segment read tasks
@@ -126,8 +149,9 @@ DM::SegmentReadTasks StorageDisaggregated::buildReadTaskWithBackoff(const Contex
 {
     using namespace pingcap;
 
-    auto scan_context = std::make_shared<DM::ScanContext>();
-    context.getDAGContext()->scan_context_map[table_scan.getTableScanExecutorID()] = scan_context;
+    auto * dag_context = context.getDAGContext();
+    auto scan_context = std::make_shared<DM::ScanContext>(dag_context->getResourceGroupName());
+    dag_context->scan_context_map[table_scan.getTableScanExecutorID()] = scan_context;
 
     DM::SegmentReadTasks read_task;
 
@@ -406,20 +430,17 @@ std::shared_ptr<disaggregated::EstablishDisaggTaskRequest> StorageDisaggregated:
 {
     const auto & settings = db_context.getSettingsRef();
     auto establish_req = std::make_shared<disaggregated::EstablishDisaggTaskRequest>();
+
     {
-        disaggregated::DisaggTaskMeta * meta = establish_req->mutable_meta();
-        meta->set_start_ts(sender_target_mpp_task_id.gather_id.query_id.start_ts);
-        meta->set_query_ts(sender_target_mpp_task_id.gather_id.query_id.query_ts);
-        meta->set_server_id(sender_target_mpp_task_id.gather_id.query_id.server_id);
-        meta->set_local_query_id(sender_target_mpp_task_id.gather_id.query_id.local_query_id);
-        meta->set_gather_id(sender_target_mpp_task_id.gather_id.gather_id);
         auto * dag_context = db_context.getDAGContext();
-        meta->set_task_id(dag_context->getMPPTaskId().task_id);
-        meta->set_executor_id(table_scan.getTableScanExecutorID());
-        const auto keyspace_id = dag_context->getKeyspaceID();
-        meta->set_keyspace_id(keyspace_id);
-        meta->set_api_version(keyspace_id == NullspaceID ? kvrpcpb::APIVersion::V1 : kvrpcpb::APIVersion::V2);
+        initDisaggTaskMeta(
+            establish_req->mutable_meta(),
+            sender_target_mpp_task_id,
+            dag_context,
+            dag_context->getKeyspaceID(),
+            table_scan);
     }
+
     // how long the task is valid on the write node
     establish_req->set_timeout_s(DEFAULT_DISAGG_TASK_TIMEOUT_SEC);
     establish_req->set_address(batch_cop_task.store_addr);
@@ -536,7 +557,8 @@ std::variant<DM::Remote::RNWorkersPtr, DM::SegmentReadTaskPoolPtr> StorageDisagg
             /*after_segment_read*/ [](const DM::DMContextPtr &, const DM::SegmentPtr &) {},
             executor_id,
             /*enable_read_thread*/ true,
-            num_streams);
+            num_streams,
+            context.getDAGContext()->getResourceGroupName());
     }
     else
     {

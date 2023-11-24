@@ -84,6 +84,8 @@ grpc::Status BatchCoprocessorHandler::execute()
                 cop_context.db_context.getClientInfo().current_address.toString(),
                 DAGRequestKind::BatchCop,
                 resource_group_name,
+                cop_request->connection_id(),
+                cop_request->connection_alias(),
                 Logger::get(log->identifier()));
             cop_context.db_context.setDAGContext(&dag_context);
 

@@ -64,7 +64,7 @@ public:
         UInt64 start_time);
     void removeCheckpointIngestInfo(UInt64 region_id);
     std::optional<CheckpointIngestInfoPtr> tryGetCheckpointIngestInfo(UInt64 region_id);
-    void forceCleanCheckpointIngestInfo(TMTContext & tmt, UInt64 region_id);
+    static void forceCleanCheckpointIngestInfo(TMTContext & tmt, UInt64 region_id);
 
 public:
     std::shared_ptr<FAPAsyncTasks> tasks_trace;
