@@ -35,6 +35,7 @@ CheckpointIngestInfo::CheckpointIngestInfo(
     : tmt(tmt_)
     , region_id(region_id_)
     , peer_id(peer_id_)
+    , remote_store_id(0)
     , in_memory(false)
     , clean_when_destruct(false)
     , begin_time(0)
@@ -173,6 +174,7 @@ bool CheckpointIngestInfo::loadFromPS(const TiFlashRaftProxyHelper * proxy_helpe
                 auto segment_id = readBinary2<UInt64>(buf);
                 restored_segments.emplace_back(DM::Segment::restoreSegment(log, *dm_context, segment_id));
             }
+            remote_store_id = readBinary2<UInt64>(buf);
         }
         else
         {
@@ -228,6 +230,7 @@ void CheckpointIngestInfo::persistToPS()
         {
             data_size += writeBinary2(restored_segment->segmentId(), buffer);
         }
+        data_size += writeBinary2<UInt64>(remote_store_id, buffer);
         auto page_id = UniversalPageIdFormat::toLocalKVPrefix(
             UniversalPageIdFormat::LocalKVKeyType::FAPIngestSegments,
             region_id);
