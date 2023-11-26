@@ -2740,6 +2740,11 @@ BitmapFilterPtr Segment::buildBitmapFilterNormal(
     size_t expected_block_size)
 {
     Stopwatch sw_total;
+    if (const auto & res_group_name = dm_context.scan_context->resource_group_name; !res_group_name.empty())
+    {
+        auto bytes = segment_snap->estimatedBytesOfInternalColumns();
+        LocalAdmissionController::global_instance->consumeResource(res_group_name, bytesToRU(bytes), 0);
+    }
     ColumnDefines columns_to_read{
         getExtraHandleColumnDefine(is_common_handle),
     };
