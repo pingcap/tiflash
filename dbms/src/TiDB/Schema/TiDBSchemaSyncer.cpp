@@ -231,7 +231,6 @@ bool TiDBSchemaSyncer<mock_getter, mock_mapper>::syncTableSchema(Context & conte
     return false;
 }
 
-
 template <bool mock_getter, bool mock_mapper>
 void TiDBSchemaSyncer<mock_getter, mock_mapper>::dropAllSchema(Context & context)
 {

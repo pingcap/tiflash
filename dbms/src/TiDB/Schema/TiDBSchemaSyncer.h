@@ -49,7 +49,7 @@ private:
 
     Int64 cur_version;
 
-    // for syncSchemas
+    // Ensure `syncSchemas` will only executed by one thread.
     std::mutex mutex_for_sync_schema;
 
     LoggerPtr log;
