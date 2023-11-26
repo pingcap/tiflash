@@ -40,6 +40,7 @@ struct SchemaBuilder
 
     LoggerPtr log;
 
+public:
     SchemaBuilder(Getter & getter_, Context & context_, DatabaseInfoCache & dbs_, TableIDMap & table_id_map_)
         : getter(getter_)
         , context(context_)

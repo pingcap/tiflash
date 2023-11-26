@@ -19,7 +19,6 @@
 #include <Debug/MockSchemaGetter.h>
 #include <Debug/MockSchemaNameMapper.h>
 #include <TiDB/Schema/DatabaseInfoCache.h>
-#include <TiDB/Schema/SchemaBuilder.h>
 #include <TiDB/Schema/TableIDMap.h>
 #include <TiDB/Schema/TiDB.h>
 #include <pingcap/kv/Cluster.h>
@@ -113,12 +112,7 @@ private:
         return databases.getDBInfoByName(database_name);
     }
 
-    void dropAllSchema(Context & context) override
-    {
-        auto getter = createSchemaGetter(keyspace_id);
-        SchemaBuilder<Getter, NameMapper> builder(getter, context, databases, table_id_map);
-        builder.dropAllSchema();
-    }
+    void dropAllSchema(Context & context) override;
 
     // clear all states.
     // just for testing restart

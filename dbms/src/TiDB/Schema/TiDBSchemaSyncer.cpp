@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/TiFlashMetrics.h>
+#include <TiDB/Schema/SchemaBuilder.h>
 #include <TiDB/Schema/TiDBSchemaSyncer.h>
 #include <common/types.h>
 
@@ -228,6 +229,15 @@ bool TiDBSchemaSyncer<mock_getter, mock_mapper>::syncTableSchema(Context & conte
     // Still fail, maybe some unknown bugs?
     LOG_ERROR(log, message);
     return false;
+}
+
+
+template <bool mock_getter, bool mock_mapper>
+void TiDBSchemaSyncer<mock_getter, mock_mapper>::dropAllSchema(Context & context)
+{
+    auto getter = createSchemaGetter(keyspace_id);
+    SchemaBuilder<Getter, NameMapper> builder(getter, context, databases, table_id_map);
+    builder.dropAllSchema();
 }
 
 template class TiDBSchemaSyncer<false, false>;
