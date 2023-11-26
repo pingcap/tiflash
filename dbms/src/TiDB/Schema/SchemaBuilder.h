@@ -26,6 +26,7 @@ namespace DB
 template <typename Getter, typename NameMapper>
 struct SchemaBuilder
 {
+private:
     NameMapper name_mapper;
 
     Getter & getter;

@@ -365,7 +365,10 @@ void SchemaBuilder<Getter, NameMapper>::applySetTiFlashReplica(DatabaseID databa
         auto storage = tmt_context.getStorages().get(keyspace_id, table_info->id);
         if (unlikely(storage == nullptr))
         {
-            LOG_ERROR(log, "table is not exist in TiFlash, applySetTiFlashReplica is ignored, table_id={}", table_id);
+            LOG_ERROR(
+                log,
+                "Storage instance is not exist in TiFlash, applySetTiFlashReplica is ignored, table_id={}",
+                table_id);
             return;
         }
 
@@ -458,7 +461,10 @@ void SchemaBuilder<Getter, NameMapper>::applyPartitionDiff(DatabaseID database_i
     auto storage = tmt_context.getStorages().get(keyspace_id, table_info->id);
     if (storage == nullptr)
     {
-        LOG_ERROR(log, "table is not exist in TiFlash, table_id={}", table_id);
+        LOG_ERROR(
+            log,
+            "logical_table storage instance is not exist in TiFlash, applyPartitionDiff is ignored, table_id={}",
+            table_id);
         return;
     }
 
@@ -574,7 +580,10 @@ void SchemaBuilder<Getter, NameMapper>::applyRenameTable(DatabaseID database_id,
     auto storage = tmt_context.getStorages().get(keyspace_id, table_id);
     if (storage == nullptr)
     {
-        LOG_WARNING(log, "table is not exist in TiFlash, applyRenameTable is ignored, table_id={}", table_id);
+        LOG_WARNING(
+            log,
+            "Storage instance is not exist in TiFlash, applyRenameTable is ignored, table_id={}",
+            table_id);
         return;
     }
 
@@ -599,7 +608,8 @@ void SchemaBuilder<Getter, NameMapper>::applyRenameLogicalTable(
             {
                 LOG_ERROR(
                     log,
-                    "table is not exist in TiFlash, applyRenamePhysicalTable is ignored, physical_table_id={}",
+                    "Storage instance is not exist in TiFlash, applyRenamePhysicalTable is ignored, "
+                    "physical_table_id={}",
                     part_def.id);
                 return;
             }
