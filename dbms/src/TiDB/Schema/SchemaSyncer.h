@@ -52,8 +52,6 @@ public:
 
     virtual TiDB::DBInfoPtr getDBInfoByName(const String & database_name) = 0;
 
-    virtual TiDB::DBInfoPtr getDBInfoByMappedName(const String & mapped_database_name) = 0;
-
     virtual void removeTableID(TableID table_id) = 0;
 
     virtual void dropAllSchema(Context & context) = 0;
