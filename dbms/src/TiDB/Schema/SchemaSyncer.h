@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Interpreters/Context_fwd.h>
 #include <Storages/KVStore/Types.h>
 #include <common/logger_useful.h>
 
@@ -30,7 +31,6 @@ using TableInfoPtr = std::shared_ptr<TableInfo>;
 
 namespace DB
 {
-class Context;
 
 class SchemaSyncer
 {
