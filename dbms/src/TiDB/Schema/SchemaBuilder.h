@@ -65,13 +65,13 @@ public:
 
 private:
     void applyDropSchema(DatabaseID schema_id);
-
     /// Parameter db_name should be mapped.
     void applyDropSchema(const String & db_name);
 
     bool applyCreateSchema(DatabaseID schema_id);
-
     void applyCreateSchema(const TiDB::DBInfoPtr & db_info);
+
+    void applyRecoverDatabase(DatabaseID database_id);
 
     void applyCreateStorageInstance(
         const TiDB::DBInfoPtr & db_info,

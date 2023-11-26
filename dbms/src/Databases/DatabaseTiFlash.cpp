@@ -32,6 +32,7 @@
 #include <Storages/IManageableStorage.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/KVStore/TMTStorages.h>
+#include <TiDB/Schema/TiDB.h>
 #include <common/logger_useful.h>
 
 namespace DB
@@ -610,7 +611,7 @@ void DatabaseTiFlash::shutdown()
     tables.clear();
 }
 
-void DatabaseTiFlash::alterTombstone(const Context & context, Timestamp tombstone_)
+void DatabaseTiFlash::alterTombstone(const Context & context, Timestamp tombstone_, const TiDB::DBInfoPtr & new_db_info)
 {
     const auto database_metadata_path = getDatabaseMetadataPath(metadata_path);
     const auto database_metadata_tmp_path = database_metadata_path + ".tmp";
@@ -622,7 +623,18 @@ void DatabaseTiFlash::alterTombstone(const Context & context, Timestamp tombston
 
     {
         // Alter the attach statement in metadata.
-        auto dbinfo_literal = std::make_shared<ASTLiteral>(Field(db_info == nullptr ? "" : (db_info->serialize())));
+        std::shared_ptr<ASTLiteral> dbinfo_literal = [&]() {
+            String seri_info;
+            if (new_db_info != nullptr)
+            {
+                seri_info = new_db_info->serialize();
+            }
+            else if (db_info != nullptr)
+            {
+                seri_info = db_info->serialize();
+            }
+            return std::make_shared<ASTLiteral>(Field(seri_info));
+        }();
         Field format_version_field(static_cast<UInt64>(DatabaseTiFlash::CURRENT_VERSION));
         auto version_literal = std::make_shared<ASTLiteral>(format_version_field);
         auto tombstone_literal = std::make_shared<ASTLiteral>(Field(tombstone_));
@@ -651,6 +663,9 @@ void DatabaseTiFlash::alterTombstone(const Context & context, Timestamp tombston
         }
         else
         {
+            // update the seri dbinfo
+            args.children[0] = dbinfo_literal;
+            args.children[1] = version_literal;
             // udpate the tombstone mark
             args.children[2] = tombstone_literal;
         }
