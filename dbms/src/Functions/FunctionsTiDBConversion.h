@@ -2273,7 +2273,7 @@ private:
                     context_);
             };
 
-        // todo support convert to json type
+        // cast to json been implemented in FunctionsJson.h
         throw Exception{"tidb_cast to " + to_type->getName() + " is not supported", ErrorCodes::CANNOT_CONVERT_TYPE};
     }
 

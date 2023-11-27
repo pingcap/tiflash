@@ -64,15 +64,11 @@ struct MPPQueryId
     String toString() const
     {
         return fmt::format(
-            "<query_ts:{}, local_query_id:{}, server_id:{}, start_ts:{}, resource_group: {}, conn_id: {}, conn_alias: "
-            "{}>",
+            "<query_ts:{}, local_query_id:{}, server_id:{}, start_ts:{}>",
             query_ts,
             local_query_id,
             server_id,
-            start_ts,
-            resource_group_name,
-            connection_id,
-            connection_alias);
+            start_ts);
     }
 };
 
@@ -113,16 +109,12 @@ struct MPPGatherId
     String toString() const
     {
         return fmt::format(
-            "<gather_id:{}, query_ts:{}, local_query_id:{}, server_id:{}, start_ts:{}, resource_group: {}, conn_id: "
-            "{}, conn_alias: {}>",
+            "gather_id:{}, query_ts:{}, local_query_id:{}, server_id:{}, start_ts:{}",
             gather_id,
             query_id.query_ts,
             query_id.local_query_id,
             query_id.server_id,
-            query_id.start_ts,
-            query_id.resource_group_name,
-            query_id.connection_id,
-            query_id.connection_alias);
+            query_id.start_ts);
     }
     bool hasMeaningfulGatherId() const { return gather_id > 0; }
     bool operator==(const MPPGatherId & rid) const;

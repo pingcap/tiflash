@@ -301,7 +301,7 @@ void DAGQueryBlockInterpreter::handleJoin(
     const Settings & settings = context.getSettingsRef();
     SpillConfig build_spill_config(
         context.getTemporaryPath(),
-        fmt::format("{}_hash_join_0_build", log->identifier()),
+        fmt::format("{}_0_build", log->identifier()),
         settings.max_cached_data_bytes_in_spiller,
         settings.max_spilled_rows_per_file,
         settings.max_spilled_bytes_per_file,
@@ -310,7 +310,7 @@ void DAGQueryBlockInterpreter::handleJoin(
         settings.max_block_size);
     SpillConfig probe_spill_config(
         context.getTemporaryPath(),
-        fmt::format("{}_hash_join_0_probe", log->identifier()),
+        fmt::format("{}_0_probe", log->identifier()),
         settings.max_cached_data_bytes_in_spiller,
         settings.max_spilled_rows_per_file,
         settings.max_spilled_bytes_per_file,
@@ -332,12 +332,11 @@ void DAGQueryBlockInterpreter::handleJoin(
         build_key_names,
         tiflash_join.kind,
         log->identifier(),
-        enableFineGrainedShuffle(fine_grained_shuffle_count),
         fine_grained_shuffle_count,
         settings.max_bytes_before_external_join,
         build_spill_config,
         probe_spill_config,
-        settings.join_restore_concurrency,
+        RestoreConfig{settings.join_restore_concurrency, 0, 0},
         join_output_column_names,
         [&](const OperatorSpillContextPtr & operator_spill_context) {
             if (context.getDAGContext() != nullptr)
@@ -352,8 +351,7 @@ void DAGQueryBlockInterpreter::handleJoin(
         settings.shallow_copy_cross_probe_threshold,
         match_helper_name,
         flag_mapped_entry_helper_name,
-        0,
-        0,
+        settings.join_probe_cache_columns_threshold,
         context.isTest());
 
     recordJoinExecuteInfo(tiflash_join.build_side_index, join_ptr);
@@ -499,7 +497,7 @@ void DAGQueryBlockInterpreter::executeAggregation(
     AggregationInterpreterHelper::fillArgColumnNumbers(aggregate_descriptions, before_agg_header);
     SpillConfig spill_config(
         context.getTemporaryPath(),
-        fmt::format("{}_aggregation", log->identifier()),
+        log->identifier(),
         settings.max_cached_data_bytes_in_spiller,
         settings.max_spilled_rows_per_file,
         settings.max_spilled_bytes_per_file,

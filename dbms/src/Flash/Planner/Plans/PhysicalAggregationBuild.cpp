@@ -40,7 +40,7 @@ void PhysicalAggregationBuild::buildPipelineExecGroupImpl(
     AggregationInterpreterHelper::fillArgColumnNumbers(aggregate_descriptions, before_agg_header);
     SpillConfig spill_config(
         context.getTemporaryPath(),
-        fmt::format("{}_aggregation", log->identifier()),
+        log->identifier(),
         context.getSettingsRef().max_cached_data_bytes_in_spiller,
         context.getSettingsRef().max_spilled_rows_per_file,
         context.getSettingsRef().max_spilled_bytes_per_file,
