@@ -64,28 +64,28 @@ public:
     bool applyTable(DatabaseID database_id, TableID logical_table_id, TableID physical_table_id, bool force);
 
 private:
-    void applyDropSchema(DatabaseID schema_id);
+    void applyDropDatabase(DatabaseID database_id);
     /// Parameter db_name should be mapped.
-    void applyDropSchema(const String & db_name);
+    void applyDropDatabaseByName(const String & db_name);
 
-    bool applyCreateSchema(DatabaseID schema_id);
-    void applyCreateSchema(const TiDB::DBInfoPtr & db_info);
+    bool applyCreateDatabase(DatabaseID database_id);
+    void applyCreateDatabaseByInfo(const TiDB::DBInfoPtr & db_info);
 
     void applyRecoverDatabase(DatabaseID database_id);
 
+    void applyCreateTable(DatabaseID database_id, TableID table_id);
     void applyCreateStorageInstance(
         const TiDB::DBInfoPtr & db_info,
         const TiDB::TableInfoPtr & table_info,
         bool is_tombstone);
 
     void applyDropTable(DatabaseID database_id, TableID table_id);
+    /// Parameter schema_name should be mapped.
+    void applyDropPhysicalTable(const String & db_name, TableID table_id);
 
     void applyRecoverTable(DatabaseID database_id, TiDB::TableID table_id);
     void applyRecoverLogicalTable(const TiDB::DBInfoPtr & db_info, const TiDB::TableInfoPtr & table_info);
     bool tryRecoverPhysicalTable(const TiDB::DBInfoPtr & db_info, const TiDB::TableInfoPtr & table_info);
-
-    /// Parameter schema_name should be mapped.
-    void applyDropPhysicalTable(const String & db_name, TableID table_id);
 
     void applyPartitionDiff(DatabaseID database_id, TableID table_id);
     void applyPartitionDiffOnLogicalTable(
@@ -106,8 +106,6 @@ private:
         const ManageableStoragePtr & storage);
 
     void applySetTiFlashReplica(DatabaseID database_id, TableID table_id);
-
-    void applyCreateTable(DatabaseID database_id, TableID table_id);
 
     void applyExchangeTablePartition(const SchemaDiff & diff);
 };
