@@ -44,29 +44,22 @@ CheckpointIngestInfo::CheckpointIngestInfo(
     {
         throw Exception(
             ErrorCodes::LOGICAL_ERROR,
-            fmt::format(
                 "Failed to restore CheckpointIngestInfo, region_id={} peer_id={} store_id={}",
                 region_id,
                 peer_id,
-                tmt.getKVStore()->getStoreID(std::memory_order_relaxed)));
+                tmt.getKVStore()->getStoreID(std::memory_order_relaxed));
     }
 }
 
 DM::Segments CheckpointIngestInfo::getRestoredSegments() const
 {
-    if (unlikely(!in_memory))
-    {
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "CheckpointIngestInfo is not inited");
-    }
+    RUNTIME_CHECK_MSG(in_memory, "CheckpointIngestInfo is not inited");
     return restored_segments;
 }
 
 UInt64 CheckpointIngestInfo::getRemoteStoreId() const
 {
-    if (unlikely(!in_memory))
-    {
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "CheckpointIngestInfo is not inited");
-    }
+    RUNTIME_CHECK_MSG(in_memory, "CheckpointIngestInfo is not inited");
     return remote_store_id;
 }
 
@@ -77,10 +70,7 @@ void CheckpointIngestInfo::markDelete()
 
 RegionPtr CheckpointIngestInfo::getRegion() const
 {
-    if (unlikely(!in_memory))
-    {
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "CheckpointIngestInfo is not inited");
-    }
+    RUNTIME_CHECK_MSG(in_memory, "CheckpointIngestInfo is not inited");
     return region;
 }
 
