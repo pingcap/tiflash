@@ -944,6 +944,7 @@ try
 )",
     };
 
+    size_t case_no = 0;
     for (const auto & statement : statements)
     {
         {
@@ -973,6 +974,13 @@ try
         db->alterTombstone(*ctx, tso, nullptr);
         EXPECT_TRUE(db->isTombstone());
         EXPECT_EQ(db->getTombstone(), tso);
+        if (case_no != 0)
+        {
+            auto db_tiflash = std::dynamic_pointer_cast<DatabaseTiFlash>(db);
+            ASSERT_NE(db_tiflash, nullptr);
+            auto db_info = db_tiflash->getDatabaseInfo();
+            ASSERT_EQ(db_info.name, "test_db"); // not changed
+        }
 
         // Try restore from disk
         db = detachThenAttach(*ctx, db_name, std::move(db), log);
@@ -985,10 +993,26 @@ try
             NullspaceID);
         db->alterTombstone(*ctx, 0, new_db_info);
         EXPECT_FALSE(db->isTombstone());
+        if (case_no != 0)
+        {
+            auto db_tiflash = std::dynamic_pointer_cast<DatabaseTiFlash>(db);
+            ASSERT_NE(db_tiflash, nullptr);
+            auto db_info = db_tiflash->getDatabaseInfo();
+            ASSERT_EQ(db_info.name, "test_new_db"); // changed by the `new_db_info`
+        }
 
         // Try restore from disk
         db = detachThenAttach(*ctx, db_name, std::move(db), log);
         EXPECT_FALSE(db->isTombstone());
+        if (case_no != 0)
+        {
+            auto db_tiflash = std::dynamic_pointer_cast<DatabaseTiFlash>(db);
+            ASSERT_NE(db_tiflash, nullptr);
+            auto db_info = db_tiflash->getDatabaseInfo();
+            ASSERT_EQ(db_info.name, "test_new_db"); // changed by the `new_db_info`
+        }
+
+        case_no += 1;
     }
 }
 CATCH
