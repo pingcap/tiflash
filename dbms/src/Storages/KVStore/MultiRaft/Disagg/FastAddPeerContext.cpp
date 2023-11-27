@@ -155,16 +155,19 @@ void FastAddPeerContext::insertCheckpointIngestInfo(
     DM::Segments && segments,
     UInt64 start_time)
 {
-    std::unique_lock<std::mutex> lock(ingest_info_mu);
-    if (checkpoint_ingest_info_map.contains(region_id))
+    std::scoped_lock<std::mutex> lock(ingest_info_mu);
+    if unlikely(checkpoint_ingest_info_map.contains(region_id))
     {
-        // TODO(fap) should we throw here?
+        // 1. Two fap task of a same snapshot take place in parallel, not possible.
+        // 2. A previous fap task recovered from disk, while a new fap task is ongoing, not possible.
+        // 3. A previous fap task finished with result attached to `checkpoint_ingest_info_map`, however, the ingest stage failed to be triggered/handled due to some check in proxy's part. It could be possible.
         LOG_ERROR(
             DB::Logger::get(),
             "Repeated ingest for region_id={} peer_id={} old_peer_id={}",
             region_id,
             peer_id,
             checkpoint_ingest_info_map[region_id]->peerId());
+        GET_METRIC(tiflash_fap_task_result, type_failed_repeated).Increment();
     }
 
     checkpoint_ingest_info_map[region_id] = std::make_shared<CheckpointIngestInfo>(
