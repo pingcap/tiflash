@@ -103,7 +103,7 @@ try
     // json_array()
     {
         auto res = executeFunctionWithCast({}, inputs);
-        auto expect = gen_column_expect("[]");
+        auto expect = createConstColumn<Nullable<String>>(rows_count, "[]");
         ASSERT_COLUMN_EQ(expect, res);
     }
 

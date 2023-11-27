@@ -23,6 +23,7 @@
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionsGrouping.h>
+#include <Functions/FunctionsJson.h>
 #include <Functions/FunctionsTiDBConversion.h>
 #include <TiDB/Decode/TypeMapping.h>
 
@@ -280,6 +281,61 @@ String DAGExpressionAnalyzerHelper::buildCastFunction(
     return buildCastFunctionInternal(analyzer, {name, type_expr_name}, false, expr.field_type(), actions);
 }
 
+String DAGExpressionAnalyzerHelper::buildCastAsJsonWithInputTiDBField(
+    DAGExpressionAnalyzer * analyzer,
+    const tipb::Expr & expr,
+    const ExpressionActionsPtr & actions)
+{
+    if unlikely (expr.children_size() != 1)
+        throw TiFlashException("Cast function only support one argument", Errors::Coprocessor::BadRequest);
+    if unlikely (!exprHasValidFieldType(expr))
+        throw TiFlashException("CAST function without valid field type", Errors::Coprocessor::BadRequest);
+
+    const auto & input_expr = expr.children(0);
+    auto func_name = getFunctionName(expr);
+
+    String arg = analyzer->getActions(input_expr, actions);
+    const auto & collator = getCollatorFromExpr(expr);
+    String result_name = genFuncString(func_name, {arg}, {collator});
+    if (actions->getSampleBlock().has(result_name))
+        return result_name;
+
+    const FunctionBuilderPtr & function_builder = FunctionFactory::instance().get(func_name, analyzer->getContext());
+    auto * function_build_ptr = function_builder.get();
+    if (auto * function_builder = dynamic_cast<DefaultFunctionBuilder *>(function_build_ptr); function_builder)
+    {
+        auto * function_impl = function_builder->getFunctionImpl().get();
+        if (auto * function_cast_int_as_json = dynamic_cast<FunctionCastIntAsJson *>(function_impl);
+            function_cast_int_as_json)
+        {
+            function_cast_int_as_json->setInputTiDBFieldType(input_expr.field_type());
+        }
+        else if (auto * function_cast_string_as_json = dynamic_cast<FunctionCastStringAsJson *>(function_impl);
+                 function_cast_string_as_json)
+        {
+            function_cast_string_as_json->setInputTiDBFieldType(input_expr.field_type());
+            function_cast_string_as_json->setOutputTiDBFieldType(expr.field_type());
+        }
+        else if (auto * function_cast_time_as_json = dynamic_cast<FunctionCastTimeAsJson *>(function_impl);
+                 function_cast_time_as_json)
+        {
+            function_cast_time_as_json->setInputTiDBFieldType(input_expr.field_type());
+        }
+        else
+        {
+            throw Exception(fmt::format("Unexpected func {} in buildCastAsJsonWithInputTiDBField", func_name));
+        }
+    }
+    else
+    {
+        throw Exception(fmt::format("Unexpected func {} in buildCastAsJsonWithInputTiDBField", func_name));
+    }
+
+    const ExpressionAction & action = ExpressionAction::applyFunction(function_builder, {arg}, result_name, collator);
+    actions->add(action);
+    return result_name;
+}
+
 template <typename Impl>
 String DAGExpressionAnalyzerHelper::buildDateAddOrSubFunction(
     DAGExpressionAnalyzer * analyzer,
@@ -478,6 +534,9 @@ DAGExpressionAnalyzerHelper::FunctionBuilderMap DAGExpressionAnalyzerHelper::fun
      {"ifNull", DAGExpressionAnalyzerHelper::buildIfNullFunction},
      {"multiIf", DAGExpressionAnalyzerHelper::buildMultiIfFunction},
      {"tidb_cast", DAGExpressionAnalyzerHelper::buildCastFunction},
+     {"cast_int_as_json", DAGExpressionAnalyzerHelper::buildCastAsJsonWithInputTiDBField},
+     {"cast_string_as_json", DAGExpressionAnalyzerHelper::buildCastAsJsonWithInputTiDBField},
+     {"cast_time_as_json", DAGExpressionAnalyzerHelper::buildCastAsJsonWithInputTiDBField},
      {"and", DAGExpressionAnalyzerHelper::buildLogicalFunction},
      {"or", DAGExpressionAnalyzerHelper::buildLogicalFunction},
      {"xor", DAGExpressionAnalyzerHelper::buildLogicalFunction},
