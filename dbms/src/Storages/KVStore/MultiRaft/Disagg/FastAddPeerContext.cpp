@@ -156,7 +156,7 @@ void FastAddPeerContext::insertCheckpointIngestInfo(
     UInt64 start_time)
 {
     std::scoped_lock<std::mutex> lock(ingest_info_mu);
-    if unlikely(checkpoint_ingest_info_map.contains(region_id))
+    if unlikely (checkpoint_ingest_info_map.contains(region_id))
     {
         // 1. Two fap task of a same snapshot take place in parallel, not possible.
         // 2. A previous fap task recovered from disk, while a new fap task is ongoing, not possible.
