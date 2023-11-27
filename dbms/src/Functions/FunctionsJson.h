@@ -17,6 +17,7 @@
 #include <Columns/ColumnConst.h>
 #include <Columns/ColumnFixedString.h>
 #include <Columns/ColumnString.h>
+#include <Columns/ColumnsCommon.h>
 #include <Core/Types.h>
 #include <DataTypes/DataTypeMyDate.h>
 #include <DataTypes/DataTypeMyDateTime.h>
@@ -1072,11 +1073,9 @@ private:
                 size_t size_of_non_null_value = (1 + 1 + 1 + flen);
                 if constexpr (nullable_input_for_binary_str)
                 {
-                    for (const auto & is_null : null_map_from)
-                    {
-                        // for null value: char 0 of string end.
-                        reserve_size += (is_null ? 1 : size_of_non_null_value);
-                    }
+                    auto null_count = countBytesInFilter(null_map_from.data(), null_map_from.size());
+                    // for null value: char 0 of string end.
+                    reserve_size += (null_count + (size - null_count) * size_of_non_null_value);
                 }
                 else
                 {
