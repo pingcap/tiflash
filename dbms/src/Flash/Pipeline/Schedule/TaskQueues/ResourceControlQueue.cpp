@@ -114,6 +114,7 @@ bool ResourceControlQueue<NestedTaskQueueType>::take(TaskPtr & task)
         if unlikely (updateResourceGroupInfosWithoutLock())
             continue;
 
+        UInt64 wait_dura = LocalAdmissionController::DEFAULT_FETCH_GAC_INTERVAL_MS;
         if (!resource_group_infos.empty())
         {
             const ResourceGroupInfo & group_info = resource_group_infos.top();
@@ -136,13 +137,15 @@ bool ResourceControlQueue<NestedTaskQueueType>::take(TaskPtr & task)
                 mustTakeTask(group_info.task_queue, task);
                 return true;
             }
+            wait_dura = LocalAdmissionController::global_instance->estWaitDuraMS(group_info.name);
         }
 
         assert(!task);
         // Wakeup when:
         // 1. finish() is called.
         // 2. refill_token_callback is called by LAC.
-        cv.wait(lock);
+        // 3. token refilled in trickle mode.
+        cv.wait_for(lock, std::chrono::milliseconds(wait_dura));
     }
 }
 
@@ -156,7 +159,7 @@ void ResourceControlQueue<NestedTaskQueueType>::updateStatistics(
     auto ru = cpuTimeToRU(inc_value);
     const String & resource_group_name = task->getResourceGroupName();
     LOG_TRACE(logger, "resource group {} will consume {} RU(or {} cpu time in ns)", resource_group_name, ru, inc_value);
-    LocalAdmissionController::global_instance->consumeResource(resource_group_name, ru, inc_value);
+    LocalAdmissionController::global_instance->consumeCPUResource(resource_group_name, ru, inc_value);
 
     NestedTaskQueuePtr group_queue = nullptr;
     {
