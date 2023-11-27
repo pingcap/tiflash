@@ -573,9 +573,12 @@ private:
         ColumnString::Offsets & offsets_to,
         const std::vector<const NullMap *> & nullmaps)
     {
+        // rows * json_type.
         size_t reserve_size = rows;
+        // for only null: null literal.
+        // for non only null: size of data_from.
         for (const auto & source : sources)
-            reserve_size += source ? source->getSizeForReserve() : 0;
+            reserve_size += source ? source->getSizeForReserve() : rows;
         JsonBinary::JsonBinaryWriteBuffer write_buffer(data_to, reserve_size);
 
         std::vector<JsonBinary> jsons;
@@ -785,6 +788,7 @@ private:
         {
             const auto & field = (*column_from)[i].template safeGet<DecimalField<FromType>>();
             // same as https://github.com/pingcap/tidb/blob/90628349860718bb84c94fe7dc1e1f9bd9da4348/pkg/expression/builtin_cast.go#L854-L865
+            // https://github.com/pingcap/tidb/issues/48796
             // TODO `select json_type(cast(1111.11 as json))` should return `DECIMAL`, we return `DOUBLE` now.
             JsonBinary::appendNumber(write_buffer, static_cast<Float64>(field));
             writeChar(0, write_buffer);
