@@ -473,11 +473,10 @@ public:
                     }
 
                     size_t orig_length = element_write_buffer.count();
-                    size_t byte_length = tidb_tp->flen();
-                    byte_length = charLengthToByteLengthFromUTF8(
+                    auto byte_length = charLengthToByteLengthFromUTF8(
                         reinterpret_cast<char *>(container_per_element.data()),
                         orig_length,
-                        byte_length);
+                        tidb_tp->flen());
                     byte_length = std::min(byte_length, orig_length);
                     if (byte_length < element_write_buffer.count())
                         context.getDAGContext()->handleTruncateError("Data Too Long");
