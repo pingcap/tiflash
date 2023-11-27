@@ -115,9 +115,7 @@ public:
     static String hGet(KeyspaceSnapshot & snap, const String & key, const String & field)
     {
         String encode_key = encodeHashDataKey(key, field);
-        // LOG_INFO(Logger::get(), "hGet, encode_key={}", encode_key);
-        String value = snap.Get(encode_key);
-        return value;
+        return snap.Get(encode_key);
     }
 
     static String mvccGet(KeyspaceSnapshot & snap, const String & key, const String & field)
@@ -145,24 +143,6 @@ public:
         return target_value;
     }
 
-    static std::vector<std::pair<String, Int64>> mvccGetAll(
-        KeyspaceSnapshot & snap,
-        const String & key,
-        const String & field)
-    {
-        auto encode_key = encodeHashDataKey(key, field);
-        // LOG_INFO(Logger::get(), "mvccGetAll, encode_key={}", encode_key);
-        auto mvcc_info = snap.mvccGet(encode_key);
-        const auto & values = mvcc_info.values();
-
-        std::vector<std::pair<String, Int64>> res;
-        for (const auto & value_pair : values)
-        {
-            res.emplace_back(value_pair.value(), value_pair.start_ts());
-        }
-        return res;
-    }
-
     // For convinient, we only return values.
     static std::vector<std::pair<String, String>> hGetAll(KeyspaceSnapshot & snap, const String & key)
     {
@@ -177,19 +157,6 @@ public:
             auto field = pair.second;
             String value = scanner.value();
             res.push_back(std::make_pair(field, value));
-            scanner.next();
-        }
-        return res;
-    }
-
-    static std::vector<std::pair<String, String>> scan(KeyspaceSnapshot & snap, const String & key)
-    {
-        auto tikv_key_end = pingcap::kv::prefixNext(key);
-        auto scanner = snap.Scan(key, tikv_key_end);
-        std::vector<std::pair<String, String>> res;
-        while (scanner.valid)
-        {
-            res.push_back(std::make_pair(scanner.key(), scanner.value()));
             scanner.next();
         }
         return res;
@@ -285,7 +252,7 @@ std::optional<SchemaDiff> SchemaGetter::getSchemaDiff(Int64 ver)
         LOG_WARNING(log, "The schema diff is empty, schema_version={} key={}", ver, key);
         return std::nullopt;
     }
-    LOG_DEBUG(log, "Get SchemaDiff from TiKV, schema_version={} data={}", ver, data);
+    LOG_TRACE(log, "Get SchemaDiff from TiKV, schema_version={} data={}", ver, data);
     SchemaDiff diff;
     diff.deserialize(data);
     return diff;
