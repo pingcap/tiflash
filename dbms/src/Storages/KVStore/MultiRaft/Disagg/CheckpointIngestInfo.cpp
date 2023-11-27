@@ -44,10 +44,10 @@ CheckpointIngestInfo::CheckpointIngestInfo(
     {
         throw Exception(
             ErrorCodes::LOGICAL_ERROR,
-                "Failed to restore CheckpointIngestInfo, region_id={} peer_id={} store_id={}",
-                region_id,
-                peer_id,
-                tmt.getKVStore()->getStoreID(std::memory_order_relaxed));
+            "Failed to restore CheckpointIngestInfo, region_id={} peer_id={} store_id={}",
+            region_id,
+            peer_id,
+            tmt.getKVStore()->getStoreID(std::memory_order_relaxed));
     }
 }
 

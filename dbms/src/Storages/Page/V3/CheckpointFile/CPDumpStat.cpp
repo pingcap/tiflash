@@ -13,9 +13,9 @@
 // limitations under the License.
 
 #include <Common/TiFlashMetrics.h>
-#include <common/logger_useful.h>
 #include <Storages/Page/PageConstants.h>
 #include <Storages/Page/V3/CheckpointFile/CPDumpStat.h>
+#include <common/logger_useful.h>
 #include <fmt/core.h>
 
 namespace DB::PS::V3
