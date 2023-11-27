@@ -35,6 +35,7 @@ class UniversalPageStorage;
 using UniversalPageStoragePtr = std::shared_ptr<UniversalPageStorage>;
 struct CheckpointIngestInfo;
 using CheckpointIngestInfoPtr = std::shared_ptr<CheckpointIngestInfo>;
+struct TiFlashRaftProxyHelper;
 
 struct CheckpointIngestInfo
 {
@@ -82,7 +83,7 @@ struct CheckpointIngestInfo
     ~CheckpointIngestInfo();
 
 private:
-    bool loadFromLocal(const struct TiFlashRaftProxyHelper * proxy_helper);
+    bool loadFromLocal(const TiFlashRaftProxyHelper * proxy_helper);
     // Safety: raftstore ensures a region is handled in a single thread.
     // `persistToLocal` is called at a fixed place in this thread.
     void persistToLocal();
