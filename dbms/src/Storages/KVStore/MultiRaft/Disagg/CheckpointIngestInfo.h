@@ -73,7 +73,7 @@ struct CheckpointIngestInfo
     // Create from restore
     CheckpointIngestInfo(
         TMTContext & tmt_,
-        const struct TiFlashRaftProxyHelper * proxy_helper,
+        const TiFlashRaftProxyHelper * proxy_helper,
         UInt64 region_id_,
         UInt64 peer_id_);
 
