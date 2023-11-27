@@ -362,7 +362,7 @@ public:
             {
                 // TODO(hyb): use SIMDJson to check when SIMDJson is proved in practice
                 if (data_length >= 2 && data_from[current_offset] == '"' && data_from[next_offset - 2] == '"'
-                    && !checkJsonValid(reinterpret_cast<const char *>(&data_from[current_offset]), data_length))
+                    && unlikely(!checkJsonValid(reinterpret_cast<const char *>(&data_from[current_offset]), data_length)))
                 {
                     throw Exception(
                         "Invalid JSON text: The document root must not be followed by other values.",
