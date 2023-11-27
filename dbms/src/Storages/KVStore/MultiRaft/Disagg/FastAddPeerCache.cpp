@@ -162,9 +162,8 @@ ParsedCheckpointDataHolderPtr buildParsedCheckpointData(Context & context, const
                 {
                     throw Exception(
                         ErrorCodes::LOGICAL_ERROR,
-                        fmt::format(
                             "buildParsedCheckpointData: can't put remote page with empty data_location, page_id={}",
-                            record.page_id));
+                            record.page_id);
                 }
                 wb.putRemotePage(
                     record.page_id,
