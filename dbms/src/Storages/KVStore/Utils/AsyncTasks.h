@@ -53,7 +53,7 @@ struct AsyncTasks
         auto res = thread_pool->trySchedule([p]() { (*p)(); }, 0, 0);
         if (res)
         {
-            std::scoped_lock l(mtx);
+            std::unique_lock l(mtx);
             futures[k] = p->get_future();
             start_time[k] = getCurrentMillis();
         }
@@ -62,7 +62,7 @@ struct AsyncTasks
 
     bool isScheduled(Key key) const
     {
-        std::scoped_lock l(mtx);
+        std::unique_lock l(mtx);
         return futures.contains(key);
     }
 
@@ -90,7 +90,7 @@ struct AsyncTasks
 
     uint64_t queryElapsed(Key key)
     {
-        std::unique_lock<std::mutex> l(mtx);
+        std::scoped_lock<std::mutex> l(mtx);
         auto it2 = start_time.find(key);
         RUNTIME_CHECK_MSG(it2 != start_time.end(), "queryElapsed meets empty key");
         return getCurrentMillis() - it2->second;
@@ -98,7 +98,7 @@ struct AsyncTasks
 
     uint64_t queryStartTime(Key key)
     {
-        std::unique_lock<std::mutex> l(mtx);
+        std::scoped_lock<std::mutex> l(mtx);
         auto it2 = start_time.find(key);
         RUNTIME_CHECK_MSG(it2 != start_time.end(), "queryElapsed meets empty key");
         return it2->second;

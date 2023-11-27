@@ -1200,7 +1200,7 @@ void DeltaMergeStore::ingestSegmentsFromCheckpointInfo(
         wbs.writeRemoves();
     }
 
-    // TODO(fap) This could be executed in a dedicated thread if it's a problem.
+    // TODO(fap) This could be executed in a dedicated thread if it consumes too much time.
     for (auto & segment : updated_segments)
         checkSegmentUpdate(dm_context, segment, ThreadType::Write, InputType::NotRaft);
 }

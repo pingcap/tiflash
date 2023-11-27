@@ -24,6 +24,8 @@
 #include <Storages/S3/CheckpointManifestS3Set.h>
 #include <Storages/StorageDeltaMerge.h>
 
+#include <mutex>
+
 
 namespace DB
 {
@@ -43,7 +45,7 @@ FastAddPeerContext::FastAddPeerContext(uint64_t thread_count)
 
 ParsedCheckpointDataHolderPtr FastAddPeerContext::CheckpointCacheElement::getParsedCheckpointData(Context & context)
 {
-    std::unique_lock lock(mu);
+    std::scoped_lock<std::mutex> lock(mu);
     if (!parsed_checkpoint_data)
     {
         parsed_checkpoint_data = buildParsedCheckpointData(context, manifest_key, dir_seq);
@@ -59,7 +61,7 @@ std::pair<UInt64, ParsedCheckpointDataHolderPtr> FastAddPeerContext::getNewerChe
     CheckpointCacheElementPtr cache_element = nullptr;
     UInt64 cache_seq = 0;
     {
-        std::unique_lock lock{cache_mu};
+        std::scoped_lock<std::mutex> lock{cache_mu};
         auto iter = checkpoint_cache_map.find(store_id);
         if (iter != checkpoint_cache_map.end() && (iter->second.first > required_seq))
         {
@@ -86,7 +88,7 @@ std::pair<UInt64, ParsedCheckpointDataHolderPtr> FastAddPeerContext::getNewerChe
         }
         // check whether there is some other thread downloading the current or newer manifest
         {
-            std::unique_lock lock{cache_mu};
+            std::scoped_lock lock{cache_mu};
             auto iter = checkpoint_cache_map.find(store_id);
             if (iter != checkpoint_cache_map.end() && (iter->second.first >= latest_upload_seq))
             {
