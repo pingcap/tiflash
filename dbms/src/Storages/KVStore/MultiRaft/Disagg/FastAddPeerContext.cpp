@@ -22,6 +22,7 @@
 #include <Storages/Page/V3/Universal/UniversalWriteBatchImpl.h>
 #include <Storages/S3/CheckpointManifestS3Set.h>
 #include <Storages/StorageDeltaMerge.h>
+#include <Common/TiFlashMetrics.h>
 
 
 namespace DB
