@@ -41,8 +41,6 @@
 #include <string_view>
 #include <type_traits>
 
-#include "common/types.h"
-
 namespace DB
 {
 /** Json related functions:
@@ -702,7 +700,7 @@ private:
         const auto * column_from = checkAndGetColumn<ColumnVector<FromType>>(column_ptr_from.get());
         RUNTIME_CHECK(column_from);
         const auto & data_from = column_from->getData();
-        // json_type + string end char 0 + value
+        // json_type + char 0 of string end + value
         size_t reserve_size = data_from.size() * (1 + 1 + sizeof(Float64));
         JsonBinary::JsonBinaryWriteBuffer write_buffer(data_to, reserve_size);
         for (size_t i = 0; i < data_from.size(); ++i)
@@ -780,7 +778,7 @@ private:
     {
         const auto * column_from = checkAndGetColumn<ColumnDecimal<FromType>>(column_ptr_from.get());
         RUNTIME_CHECK(column_from);
-        // json_type + string end char 0 + value
+        // json_type + char 0 of string end + value
         size_t reserve_size = column_from->size() * (1 + 1 + sizeof(Float64));
         JsonBinary::JsonBinaryWriteBuffer write_buffer(data_to, reserve_size);
         for (size_t i = 0; i < column_from->size(); ++i)
@@ -881,7 +879,7 @@ private:
         RUNTIME_CHECK(column_from);
         const auto & data_from = column_from->getData();
 
-        // json_type + string end char 0 + value
+        // json_type + char 0 of string end + value
         size_t reserve_size = 0;
         if constexpr (std::is_same_v<bool, ToType>)
             reserve_size = data_from.size() * (1 + 1 + 1);
@@ -1046,7 +1044,7 @@ public:
     }
 
 private:
-    template <bool is_binary_str, bool check_null_for_binary_str>
+    template <bool is_binary_str, bool nullable_input_for_binary_str>
     static void doExecuteForBinary(
         ColumnString::Chars_t & data_to,
         ColumnString::Offsets & offsets_to,
@@ -1056,12 +1054,37 @@ private:
         Int32 flen,
         size_t size)
     {
-        // json_type + from_type_code + string end char 0
-        size_t reserve_size = size * (1 + 1 + 1);
+        size_t reserve_size = 0;
         if constexpr (is_binary_str)
-            reserve_size += reserve_size <= 0 ? data_from->getSizeForReserve() : size * flen;
+        {
+            if (flen <= 0)
+            {
+                // json_type + from_type_code + size of data_from.
+                reserve_size += (size * (1 + 1) + data_from->getSizeForReserve());
+            }
+            else
+            {
+                // for non-null value: char 0 of string end + json_type + from_type_code + flen.
+                size_t size_of_non_null_value = (1 + 1 + 1 + flen);
+                if constexpr (nullable_input_for_binary_str)
+                {
+                    for (const auto & is_null : null_map_from)
+                    {
+                        // for null value: char 0 of string end.
+                        reserve_size += (is_null ? 1 : size_of_non_null_value);
+                    }
+                }
+                else
+                {
+                    reserve_size += (size * size_of_non_null_value);
+                }
+            }
+        }
         else
-            reserve_size += data_from->getSizeForReserve();
+        {
+            // json_type + from_type_code + size of data_from.
+            reserve_size += (size * (1 + 1) + data_from->getSizeForReserve());
+        }
         JsonBinary::JsonBinaryWriteBuffer write_buffer(data_to, reserve_size);
         ColumnString::Chars_t tmp_buf;
         for (size_t i = 0; i < size; ++i)
@@ -1069,7 +1092,7 @@ private:
             const auto & slice = data_from->getWhole();
             if constexpr (is_binary_str)
             {
-                if constexpr (check_null_for_binary_str)
+                if constexpr (nullable_input_for_binary_str)
                 {
                     if (null_map_from[i])
                     {
@@ -1126,8 +1149,8 @@ private:
         const NullMap & null_map_from,
         size_t size)
     {
-        // json_type + string end char 0 + value
-        size_t reserve_size = (size * (1 + 1)) + data_from->getSizeForReserve();
+        // json_type + size of data_from.
+        size_t reserve_size = size + data_from->getSizeForReserve();
         JsonBinary::JsonBinaryWriteBuffer write_buffer(data_to, reserve_size);
         simdjson::dom::parser parser;
         for (size_t i = 0; i < size; ++i)
@@ -1168,8 +1191,8 @@ private:
         const std::unique_ptr<IStringSource> & data_from,
         size_t size)
     {
-        // json_type + from_type_code + string end char 0
-        size_t reserve_size = (size * (1 + 1)) + data_from->getSizeForReserve();
+        // json_type + size of data_from
+        size_t reserve_size = size + data_from->getSizeForReserve();
         JsonBinary::JsonBinaryWriteBuffer write_buffer(data_to, reserve_size);
         for (size_t i = 0; i < size; ++i)
         {
@@ -1248,7 +1271,7 @@ private:
             = checkAndGetColumn<ColumnVector<typename FromDataType::FieldType>>(column_ptr_from.get());
         RUNTIME_CHECK(column_from);
         const auto & data_from = column_from->getData();
-        // json_type + string end char 0 + value
+        // json_type + char 0 of string end + value
         size_t reserve_size = data_from.size() * (1 + 1 + sizeof(UInt64));
         JsonBinary::JsonBinaryWriteBuffer write_buffer(data_to, reserve_size);
         for (size_t i = 0; i < data_from.size(); ++i)
@@ -1311,7 +1334,7 @@ public:
         {
             const auto & col_from = checkAndGetColumn<ColumnVector<DataTypeMyDuration::FieldType>>(from.column.get());
             const auto & data_from = col_from->getData();
-            // json_type + string end char 0 + value
+            // json_type + char 0 of string end + value
             size_t reserve_size = data_from.size() * (1 + 1 + sizeof(UInt64) + sizeof(UInt32));
             JsonBinary::JsonBinaryWriteBuffer write_buffer(data_to, reserve_size);
             for (size_t i = 0; i < data_from.size(); ++i)
