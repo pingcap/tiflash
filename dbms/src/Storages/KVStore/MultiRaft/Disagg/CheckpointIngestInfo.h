@@ -33,7 +33,8 @@ using RegionPtr = std::shared_ptr<Region>;
 class TMTContext;
 class UniversalPageStorage;
 using UniversalPageStoragePtr = std::shared_ptr<UniversalPageStorage>;
-
+struct CheckpointIngestInfo;
+using CheckpointIngestInfoPtr = std::shared_ptr<CheckpointIngestInfo>;
 
 struct CheckpointIngestInfo
 {
@@ -63,11 +64,10 @@ struct CheckpointIngestInfo
         , remote_store_id(remote_store_id_)
         , region(region_)
         , restored_segments(std::move(restored_segments_))
-        , in_memory(true)
         , clean_when_destruct(false)
         , begin_time(begin_time_)
     {
-        persistToPS();
+        persistToLocal();
     }
 
     // Create from restore
@@ -82,11 +82,11 @@ struct CheckpointIngestInfo
     ~CheckpointIngestInfo();
 
 private:
-    bool loadFromPS(const struct TiFlashRaftProxyHelper * proxy_helper);
+    bool loadFromLocal(const struct TiFlashRaftProxyHelper * proxy_helper);
     // Safety: raftstore ensures a region is handled in a single thread.
-    // `persistToPS` is called at a fixed place in this thread.
-    void persistToPS();
-    void removeFromPS();
+    // `persistToLocal` is called at a fixed place in this thread.
+    void persistToLocal();
+    void removeFromLocal();
 
 private:
     TMTContext & tmt;
@@ -95,9 +95,7 @@ private:
     UInt64 remote_store_id;
     RegionPtr region;
     DM::Segments restored_segments;
-    bool in_memory;
     bool clean_when_destruct;
     UInt64 begin_time;
 };
-using CheckpointIngestInfoPtr = std::shared_ptr<CheckpointIngestInfo>;
 } // namespace DB

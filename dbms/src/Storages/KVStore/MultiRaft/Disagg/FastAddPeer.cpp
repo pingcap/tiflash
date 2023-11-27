@@ -444,7 +444,7 @@ void ApplyFapSnapshot(EngineStoreServerWrap * server, uint64_t region_id, uint64
     }
     catch (...)
     {
-        DB::tryLogCurrentException(
+        DB::tryLogCurrentFatalException(
             "FastAddPeerApply",
             fmt::format("Failed when try to apply fap snapshot region_id={} peer_id={}", region_id, peer_id));
         exit(-1);

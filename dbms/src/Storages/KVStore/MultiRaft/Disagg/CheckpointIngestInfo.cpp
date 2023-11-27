@@ -27,6 +27,7 @@
 
 namespace DB
 {
+
 CheckpointIngestInfo::CheckpointIngestInfo(
     TMTContext & tmt_,
     const struct TiFlashRaftProxyHelper * proxy_helper,
@@ -36,11 +37,10 @@ CheckpointIngestInfo::CheckpointIngestInfo(
     , region_id(region_id_)
     , peer_id(peer_id_)
     , remote_store_id(0)
-    , in_memory(false)
     , clean_when_destruct(false)
     , begin_time(0)
 {
-    if (!loadFromPS(proxy_helper))
+    if (!loadFromLocal(proxy_helper))
     {
         throw Exception(
             ErrorCodes::LOGICAL_ERROR,
@@ -53,13 +53,11 @@ CheckpointIngestInfo::CheckpointIngestInfo(
 
 DM::Segments CheckpointIngestInfo::getRestoredSegments() const
 {
-    RUNTIME_CHECK_MSG(in_memory, "CheckpointIngestInfo is not inited");
     return restored_segments;
 }
 
 UInt64 CheckpointIngestInfo::getRemoteStoreId() const
 {
-    RUNTIME_CHECK_MSG(in_memory, "CheckpointIngestInfo is not inited");
     return remote_store_id;
 }
 
@@ -70,7 +68,6 @@ void CheckpointIngestInfo::markDelete()
 
 RegionPtr CheckpointIngestInfo::getRegion() const
 {
-    RUNTIME_CHECK_MSG(in_memory, "CheckpointIngestInfo is not inited");
     return region;
 }
 
@@ -110,9 +107,8 @@ bool CheckpointIngestInfo::forciblyClean(TMTContext & tmt, UInt64 region_id)
     return has_data;
 }
 
-bool CheckpointIngestInfo::loadFromPS(const TiFlashRaftProxyHelper * proxy_helper)
+bool CheckpointIngestInfo::loadFromLocal(const TiFlashRaftProxyHelper * proxy_helper)
 {
-    RUNTIME_CHECK_MSG(!in_memory && restored_segments.empty(), "CheckpointIngestInfo is already inited");
     auto log = DB::Logger::get("CheckpointIngestInfo");
     auto uni_ps = tmt.getContext().getWriteNodePageStorage();
     auto snapshot = uni_ps->getSnapshot(fmt::format("read_l_{}", region_id));
@@ -179,11 +175,10 @@ bool CheckpointIngestInfo::loadFromPS(const TiFlashRaftProxyHelper * proxy_helpe
             region->getDebugString());
     }
 
-    in_memory = true;
     return true;
 }
 
-void CheckpointIngestInfo::persistToPS()
+void CheckpointIngestInfo::persistToLocal()
 {
     auto uni_ps = tmt.getContext().getWriteNodePageStorage();
     UniversalWriteBatch wb;
@@ -236,7 +231,7 @@ void CheckpointIngestInfo::persistToPS()
         region->getDebugString());
 }
 
-void CheckpointIngestInfo::removeFromPS()
+void CheckpointIngestInfo::removeFromLocal()
 {
     auto uni_ps = tmt.getContext().getWriteNodePageStorage();
     UniversalWriteBatch del_batch;
@@ -249,9 +244,17 @@ void CheckpointIngestInfo::removeFromPS()
 
 CheckpointIngestInfo::~CheckpointIngestInfo()
 {
-    if (clean_when_destruct)
+    try
     {
-        removeFromPS();
+        if (clean_when_destruct)
+        {
+            removeFromLocal();
+        }
+    }
+    catch (...)
+    {
+        tryLogCurrentFatalException(__PRETTY_FUNCTION__);
+        exit(-1);
     }
 }
 

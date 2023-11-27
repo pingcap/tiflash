@@ -130,7 +130,7 @@ CheckpointIngestInfoPtr FastAddPeerContext::getOrRestoreCheckpointIngestInfo(
 
 void FastAddPeerContext::removeCheckpointIngestInfo(UInt64 region_id)
 {
-    std::unique_lock<std::mutex> lock(ingest_info_mu);
+    std::scoped_lock<std::mutex> lock(ingest_info_mu);
     checkpoint_ingest_info_map.erase(region_id);
 }
 
@@ -141,10 +141,11 @@ void FastAddPeerContext::forceCleanCheckpointIngestInfo(TMTContext & tmt, UInt64
 
 std::optional<CheckpointIngestInfoPtr> FastAddPeerContext::tryGetCheckpointIngestInfo(UInt64 region_id)
 {
-    std::unique_lock<std::mutex> lock(ingest_info_mu);
-    if (checkpoint_ingest_info_map.contains(region_id))
-        return checkpoint_ingest_info_map.at(region_id);
-    return std::nullopt;
+    std::scoped_lock<std::mutex> lock(ingest_info_mu);
+    auto it = checkpoint_ingest_info_map.find(region_id);
+    if (it == checkpoint_ingest_info_map.end())
+        return std::nullopt;
+    return it->second;
 }
 
 void FastAddPeerContext::insertCheckpointIngestInfo(

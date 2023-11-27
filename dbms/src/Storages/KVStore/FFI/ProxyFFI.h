@@ -236,7 +236,7 @@ inline EngineStoreServerHelper GetEngineStoreServerHelper(EngineStoreServerWrap 
         .fn_set_store = SetStore,
         .fn_set_pb_msg_by_bytes = SetPBMsByBytes,
         .fn_handle_safe_ts_update = HandleSafeTSUpdate,
-        .fn_fast_add_peer = FastAddPeer
+        .fn_fast_add_peer = FastAddPeer,
     };
 }
 
