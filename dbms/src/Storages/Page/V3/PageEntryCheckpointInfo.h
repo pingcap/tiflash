@@ -58,7 +58,7 @@ struct CheckpointLocation
         {
             return fmt::format(
                 "{{data_file_id: {}, offset_in_file: {}, size_in_file: {}}}",
-                data_file_id ? *data_file_id : "nullptr",
+                data_file_id ? *data_file_id : "<nullptr>",
                 offset_in_file,
                 size_in_file);
         }
