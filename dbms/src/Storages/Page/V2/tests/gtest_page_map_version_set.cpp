@@ -27,7 +27,7 @@ class PageMapVersionSetTest : public ::testing::Test
 {
 public:
     PageMapVersionSetTest()
-        : log(&Poco::Logger::get("PageMapVersionSetTest"))
+        : log(Logger::get("PageMapVersionSetTest"))
     {}
 
     static void SetUpTestCase() {}
@@ -42,7 +42,7 @@ public:
 protected:
     DB::MVCC::VersionSetConfig config;
     std::shared_ptr<BackgroundProcessingPool> bkg_pool;
-    Poco::Logger * log;
+    LoggerPtr log;
 };
 
 TYPED_TEST_CASE_P(PageMapVersionSetTest);
