@@ -70,10 +70,7 @@ void CheckpointIngestInfo::markDelete()
 
 RegionPtr CheckpointIngestInfo::getRegion() const
 {
-    if (unlikely(!in_memory))
-    {
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "CheckpointIngestInfo is not inited");
-    }
+    RUNTIME_CHECK_MSG(in_memory, "CheckpointIngestInfo is not inited");
     return region;
 }
 
