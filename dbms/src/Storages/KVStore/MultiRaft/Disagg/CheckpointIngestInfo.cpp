@@ -76,7 +76,6 @@ RegionPtr CheckpointIngestInfo::getRegion() const
 
 bool CheckpointIngestInfo::forciblyClean(TMTContext & tmt, UInt64 region_id)
 {
-    auto log = DB::Logger::get("CheckpointIngestInfo");
     auto uni_ps = tmt.getContext().getWriteNodePageStorage();
     auto snapshot = uni_ps->getSnapshot(fmt::format("read_l_{}", region_id));
     UniversalWriteBatch del_batch;
@@ -186,7 +185,6 @@ bool CheckpointIngestInfo::loadFromPS(const TiFlashRaftProxyHelper * proxy_helpe
 
 void CheckpointIngestInfo::persistToPS()
 {
-    auto * log = &Poco::Logger::get("CheckpointIngestInfo");
     auto uni_ps = tmt.getContext().getWriteNodePageStorage();
     UniversalWriteBatch wb;
     // Write:
@@ -201,7 +199,7 @@ void CheckpointIngestInfo::persistToPS()
         if (region->isPendingRemove())
         {
             // A pending remove region should not be selected as candidate.
-            LOG_ERROR(log, "candidate region {} is pending remove", region->toString(false));
+            LOG_ERROR(DB::Logger::get(), "candidate region {} is pending remove", region->toString(false));
             return;
         }
         auto read_buf = buffer.tryGetReadBuffer();
@@ -230,7 +228,7 @@ void CheckpointIngestInfo::persistToPS()
     }
     uni_ps->write(std::move(wb), DB::PS::V3::PageType::Local, nullptr);
     LOG_INFO(
-        log,
+        DB::Logger::get(),
         "Successfully persist CheckpointIngestInfo, region_id={} peer_id={} remote_store_id={} region={}",
         region_id,
         peer_id,

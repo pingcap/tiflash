@@ -113,11 +113,18 @@ CheckpointIngestInfoPtr FastAddPeerContext::getOrRestoreCheckpointIngestInfo(
     UInt64 region_id,
     UInt64 peer_id)
 {
-    std::unique_lock<std::mutex> lock(ingest_info_mu);
-    if (!checkpoint_ingest_info_map.contains(region_id))
-        checkpoint_ingest_info_map[region_id]
-            = std::make_shared<CheckpointIngestInfo>(tmt, proxy_helper, region_id, peer_id);
-    return checkpoint_ingest_info_map.at(region_id);
+    std::scoped_lock<std::mutex> lock(ingest_info_mu);
+    auto iter = checkpoint_ingest_info_map.find(region_id);
+    if (iter != checkpoint_ingest_info_map.end())
+    {
+        return iter->second;
+    }
+    else
+    {
+        auto info = std::make_shared<CheckpointIngestInfo>(tmt, proxy_helper, region_id, peer_id);
+        checkpoint_ingest_info_map.emplace(region_id, info);
+        return info;
+    }
 }
 
 void FastAddPeerContext::removeCheckpointIngestInfo(UInt64 region_id)
@@ -148,13 +155,12 @@ void FastAddPeerContext::insertCheckpointIngestInfo(
     DM::Segments && segments,
     UInt64 start_time)
 {
-    auto * log = &Poco::Logger::get("FastAddPeerContext");
     std::unique_lock<std::mutex> lock(ingest_info_mu);
     if (checkpoint_ingest_info_map.contains(region_id))
     {
         // TODO(fap) should we throw here?
         LOG_ERROR(
-            log,
+            DB::Logger::get(),
             "Repeated ingest for region_id={} peer_id={} old_peer_id={}",
             region_id,
             peer_id,

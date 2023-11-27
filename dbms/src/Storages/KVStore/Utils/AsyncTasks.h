@@ -31,12 +31,14 @@ struct AsyncTasks
     bool discardTask(Key k)
     {
         std::scoped_lock l(mtx);
-        if (futures.contains(k))
+        auto it = futures.find(k);
+        if (it != futures.end())
         {
-            futures.erase(k);
-            if (start_time.contains(k))
+            futures.erase(it);
+            auto it2 = start_time.find(k);
+            if (it2 != start_time.end())
             {
-                start_time.erase(k);
+                start_time.erase(it2);
             }
             return true;
         }
@@ -61,16 +63,17 @@ struct AsyncTasks
     bool isScheduled(Key key) const
     {
         std::scoped_lock l(mtx);
-        return futures.count(key);
+        return futures.contains(key);
     }
 
     bool isReady(Key key) const
     {
         using namespace std::chrono_literals;
         std::scoped_lock l(mtx);
-        if (!futures.count(key))
+        auto it = futures.find(key);
+        if (it == futures.end())
             return false;
-        return futures.at(key).wait_for(0ms) == std::future_status::ready;
+        return it->second.wait_for(0ms) == std::future_status::ready;
     }
 
     R fetchResult(Key key)
@@ -126,8 +129,8 @@ struct AsyncTasks
     }
 
 protected:
-    std::map<Key, std::future<R>> futures;
-    std::map<Key, uint64_t> start_time;
+    std::unordered_map<Key, std::future<R>> futures;
+    std::unordered_map<Key, uint64_t> start_time;
     std::unique_ptr<ThreadPool> thread_pool;
     mutable std::mutex mtx;
 };
