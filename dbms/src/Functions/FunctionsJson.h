@@ -869,11 +869,12 @@ private:
         JsonBinary::JsonBinaryWriteBuffer write_buffer(data_to, reserve_size);
         for (size_t i = 0; i < column_from->size(); ++i)
         {
-            const auto & field = (*column_from)[i].template safeGet<DecimalField<FromType>>();
             // same as https://github.com/pingcap/tidb/blob/90628349860718bb84c94fe7dc1e1f9bd9da4348/pkg/expression/builtin_cast.go#L854-L865
             // https://github.com/pingcap/tidb/issues/48796
             // TODO `select json_type(cast(1111.11 as json))` should return `DECIMAL`, we return `DOUBLE` now.
-            JsonBinary::appendNumber(write_buffer, static_cast<Float64>(field));
+            JsonBinary::appendNumber(
+                write_buffer,
+                static_cast<Float64>((*column_from)[i].template safeGet<DecimalField<FromType>>()));
             writeChar(0, write_buffer);
             offsets_to[i] = write_buffer.count();
         }
