@@ -795,7 +795,7 @@ struct ExpBuckets
     }
 };
 
-/// Buckets with boundaries [start * base^0, start * base^1, ..., start * base^x, end]
+/// Buckets with boundaries [start * base^0, start * base^1, ..., start * base^x]
 /// such x that start * base^(x-1) < end, and start * base^x >= end.
 struct ExpBucketsWithRange
 {
