@@ -404,10 +404,7 @@ void ApplyFapSnapshotImpl(TMTContext & tmt, TiFlashRaftProxyHelper * proxy_helpe
     auto fap_ctx = tmt.getContext().getSharedContextDisagg()->fap_context;
     auto checkpoint_ingest_info = fap_ctx->getOrRestoreCheckpointIngestInfo(tmt, proxy_helper, region_id, peer_id);
     kvstore->handleIngestCheckpoint(checkpoint_ingest_info->getRegion(), checkpoint_ingest_info, tmt);
-    checkpoint_ingest_info->markDelete();
-    // TODO(fap) We can move checkpoint_ingest_info to a dedicated queue, and schedule a timed task to clean it, if this costs much.
-    // However, we have to make sure the clean task will not override if a new fap snapshot of the same region comes later.
-    fap_ctx->removeCheckpointIngestInfo(region_id);
+    fap_ctx->cleanCheckpointIngestInfo(tmt, region_id);
     GET_METRIC(tiflash_fap_task_duration_seconds, type_ingest_stage).Observe(watch_ingest.elapsedSeconds());
     auto begin = checkpoint_ingest_info->beginTime();
     auto current = FAPAsyncTasks::getCurrentMillis();

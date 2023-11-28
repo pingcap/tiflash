@@ -130,24 +130,26 @@ CheckpointIngestInfoPtr FastAddPeerContext::getOrRestoreCheckpointIngestInfo(
     }
 }
 
-void FastAddPeerContext::removeCheckpointIngestInfo(UInt64 region_id)
+void FastAddPeerContext::debugRemoveCheckpointIngestInfo(UInt64 region_id)
 {
     std::scoped_lock<std::mutex> lock(ingest_info_mu);
     checkpoint_ingest_info_map.erase(region_id);
 }
 
-void FastAddPeerContext::forceCleanCheckpointIngestInfo(TMTContext & tmt, UInt64 region_id)
+void FastAddPeerContext::cleanCheckpointIngestInfo(TMTContext & tmt, UInt64 region_id)
 {
+    // TODO(fap) We can move checkpoint_ingest_info to a dedicated queue, and schedule a timed task to clean it, if this costs much.
+    // However, we have to make sure the clean task will not override if a new fap snapshot of the same region comes later.
     {
-        // If there is some cancelled FAP tasks.
+        // If it's still managed by fap context.
         std::scoped_lock<std::mutex> lock(ingest_info_mu);
         auto iter = checkpoint_ingest_info_map.find(region_id);
         if (iter != checkpoint_ingest_info_map.end())
         {
             iter->second->markDelete();
             checkpoint_ingest_info_map.erase(region_id);
+            return;
         }
-        return;
     }
     CheckpointIngestInfo::forciblyClean(tmt, region_id);
 }

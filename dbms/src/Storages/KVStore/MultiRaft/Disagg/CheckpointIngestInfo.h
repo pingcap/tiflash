@@ -36,6 +36,7 @@ using UniversalPageStoragePtr = std::shared_ptr<UniversalPageStorage>;
 struct CheckpointIngestInfo;
 using CheckpointIngestInfoPtr = std::shared_ptr<CheckpointIngestInfo>;
 struct TiFlashRaftProxyHelper;
+class FastAddPeerContext;
 
 struct CheckpointIngestInfo
 {
@@ -44,8 +45,6 @@ struct CheckpointIngestInfo
     // Get segments from memory or restore from ps.
     DM::Segments getRestoredSegments() const;
     UInt64 getRemoteStoreId() const;
-    // Delete persisted data when destructing.
-    void markDelete();
     RegionPtr getRegion() const;
     UInt64 regionId() const { return region_id; }
     UInt64 peerId() const { return peer_id; }
@@ -85,6 +84,9 @@ struct CheckpointIngestInfo
     ~CheckpointIngestInfo();
 
 private:
+    friend class FastAddPeerContext;
+    // Set to delete persisted data when destructing.
+    void markDelete();
     // Create from restore
     CheckpointIngestInfo(TMTContext & tmt_, UInt64 region_id_, UInt64 peer_id_);
     bool loadFromLocal(const TiFlashRaftProxyHelper * proxy_helper);

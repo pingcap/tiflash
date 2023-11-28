@@ -255,6 +255,7 @@ void verifyRows(Context & ctx, DM::DeltaMergeStorePtr store, const DM::RowKeyRan
 CheckpointRegionInfoAndData RegionKVStoreTestFAP::prepareForRestart()
 {
     auto & global_context = TiFlashTestEnv::getGlobalContext();
+    global_context.getSharedContextDisagg()->disaggregated_mode = DisaggregatedMode::Storage;
     uint64_t region_id = 1;
     auto peer_id = 1;
     initStorages();
@@ -300,6 +301,7 @@ CheckpointRegionInfoAndData RegionKVStoreTestFAP::prepareForRestart()
     return mock_data;
 }
 
+// Test load from restart.
 TEST_F(RegionKVStoreTestFAP, RestoreFromRestart1)
 try
 {
@@ -311,7 +313,7 @@ try
     auto fap_context = global_context.getSharedContextDisagg()->fap_context;
     uint64_t region_id = 1;
     FastAddPeerImplWrite(global_context.getTMTContext(), region_id, 2333, std::move(mock_data), 0);
-    fap_context->removeCheckpointIngestInfo(region_id);
+    fap_context->debugRemoveCheckpointIngestInfo(region_id);
     ApplyFapSnapshotImpl(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333);
 
     {
@@ -329,6 +331,9 @@ try
     }
     // CheckpointIngestInfo is removed.
     ASSERT_TRUE(!fap_context->tryGetCheckpointIngestInfo(region_id).has_value());
+    EXPECT_THROW(
+        CheckpointIngestInfo::restore(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333),
+        Exception);
 }
 CATCH
 
@@ -344,10 +349,13 @@ try
     auto fap_context = global_context.getSharedContextDisagg()->fap_context;
     uint64_t region_id = 1;
     FastAddPeerImplWrite(global_context.getTMTContext(), region_id, 2333, std::move(mock_data), 0);
-    fap_context->removeCheckpointIngestInfo(region_id);
+    fap_context->debugRemoveCheckpointIngestInfo(region_id);
     kvstore->handleDestroy(region_id, global_context.getTMTContext());
     // CheckpointIngestInfo is removed.
     ASSERT_TRUE(!fap_context->tryGetCheckpointIngestInfo(region_id).has_value());
+    EXPECT_THROW(
+        CheckpointIngestInfo::restore(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333),
+        Exception);
 }
 CATCH
 
