@@ -31,7 +31,7 @@ enum class StorageType
     KVStore = 4,
     RaftEngine = 5,
     KVEngine = 6,
-    LocalKV = 7,
+    LocalKV = 7, // only stored on tiflash write node locally
 
     _MAX_STORAGE_TYPE_, // NOLINT(bugprone-reserved-identifier)
 };
