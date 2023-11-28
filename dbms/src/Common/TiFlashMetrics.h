@@ -101,15 +101,15 @@ namespace DB
     M(tiflash_coprocessor_request_duration_seconds,                                                                                 \
       "Bucketed histogram of request duration",                                                                                     \
       Histogram,                                                                                                                    \
-      F(type_cop, {{"type", "cop"}}, ExpBuckets{0.001, 2, 20}),                                                                     \
-      F(type_cop_stream, {{"type", "cop_stream"}}, ExpBuckets{0.001, 2, 20}),                                                       \
-      F(type_batch, {{"type", "batch"}}, ExpBuckets{0.001, 2, 20}),                                                                 \
-      F(type_dispatch_mpp_task, {{"type", "dispatch_mpp_task"}}, ExpBuckets{0.001, 2, 20}),                                         \
-      F(type_mpp_establish_conn, {{"type", "mpp_establish_conn"}}, ExpBuckets{0.001, 2, 20}),                                       \
-      F(type_cancel_mpp_task, {{"type", "cancel_mpp_task"}}, ExpBuckets{0.001, 2, 20}),                                             \
-      F(type_run_mpp_task, {{"type", "run_mpp_task"}}, ExpBuckets{0.001, 2, 20}),                                                   \
-      F(type_disagg_establish_task, {{"type", "disagg_establish_task"}}, ExpBuckets{0.001, 2, 20}),                                 \
-      F(type_disagg_fetch_pages, {{"type", "type_disagg_fetch_pages"}}, ExpBuckets{0.001, 2, 20}))                                  \
+      F(type_cop, {{"type", "cop"}}, ExpBuckets<20>{0.001, 2}),                                                                     \
+      F(type_cop_stream, {{"type", "cop_stream"}}, ExpBuckets<20>{0.001, 2}),                                                       \
+      F(type_batch, {{"type", "batch"}}, ExpBuckets<20>{0.001, 2}),                                                                 \
+      F(type_dispatch_mpp_task, {{"type", "dispatch_mpp_task"}}, ExpBuckets<20>{0.001, 2}),                                         \
+      F(type_mpp_establish_conn, {{"type", "mpp_establish_conn"}}, ExpBuckets<20>{0.001, 2}),                                       \
+      F(type_cancel_mpp_task, {{"type", "cancel_mpp_task"}}, ExpBuckets<20>{0.001, 2}),                                             \
+      F(type_run_mpp_task, {{"type", "run_mpp_task"}}, ExpBuckets<20>{0.001, 2}),                                                   \
+      F(type_disagg_establish_task, {{"type", "disagg_establish_task"}}, ExpBuckets<20>{0.001, 2}),                                 \
+      F(type_disagg_fetch_pages, {{"type", "type_disagg_fetch_pages"}}, ExpBuckets<20>{0.001, 2}))                                  \
     M(tiflash_coprocessor_request_memory_usage,                                                                                     \
       "Bucketed histogram of request memory usage",                                                                                 \
       Histogram,                                                                                                                    \
@@ -130,9 +130,9 @@ namespace DB
     M(tiflash_coprocessor_request_handle_seconds,                                                                                   \
       "Bucketed histogram of request handle duration",                                                                              \
       Histogram,                                                                                                                    \
-      F(type_cop, {{"type", "cop"}}, ExpBuckets{0.001, 2, 20}),                                                                     \
-      F(type_cop_stream, {{"type", "cop_stream"}}, ExpBuckets{0.001, 2, 20}),                                                       \
-      F(type_batch, {{"type", "batch"}}, ExpBuckets{0.001, 2, 20}))                                                                 \
+      F(type_cop, {{"type", "cop"}}, ExpBuckets<20>{0.001, 2}),                                                                     \
+      F(type_cop_stream, {{"type", "cop_stream"}}, ExpBuckets<20>{0.001, 2}),                                                       \
+      F(type_batch, {{"type", "batch"}}, ExpBuckets<20>{0.001, 2}))                                                                 \
     M(tiflash_coprocessor_response_bytes,                                                                                           \
       "Total bytes of response body",                                                                                               \
       Counter,                                                                                                                      \
@@ -184,22 +184,22 @@ namespace DB
     M(tiflash_schema_apply_duration_seconds,                                                                                        \
       "Bucketed histogram of ddl apply duration",                                                                                   \
       Histogram,                                                                                                                    \
-      F(type_sync_schema_apply_duration, {{"type", "sync_schema_duration"}}, ExpBuckets{0.001, 2, 20}),                             \
-      F(type_sync_table_schema_apply_duration, {{"type", "sync_table_schema_duration"}}, ExpBuckets{0.001, 2, 20}))                 \
+      F(type_sync_schema_apply_duration, {{"type", "sync_schema_duration"}}, ExpBuckets<20>{0.001, 2}),                             \
+      F(type_sync_table_schema_apply_duration, {{"type", "sync_table_schema_duration"}}, ExpBuckets<20>{0.001, 2}))                 \
     M(tiflash_raft_read_index_count, "Total number of raft read index", Counter)                                                    \
     M(tiflash_stale_read_count, "Total number of stale read", Counter)                                                              \
     M(tiflash_raft_read_index_duration_seconds,                                                                                     \
       "Bucketed histogram of raft read index duration",                                                                             \
       Histogram,                                                                                                                    \
-      F(type_raft_read_index_duration, {{"type", "tmt_raft_read_index_duration"}}, ExpBuckets{0.001, 2, 20}))                       \
+      F(type_raft_read_index_duration, {{"type", "tmt_raft_read_index_duration"}}, ExpBuckets<20>{0.001, 2}))                       \
     M(tiflash_raft_wait_index_duration_seconds,                                                                                     \
       "Bucketed histogram of raft wait index duration",                                                                             \
       Histogram,                                                                                                                    \
-      F(type_raft_wait_index_duration, {{"type", "tmt_raft_wait_index_duration"}}, ExpBuckets{0.001, 2, 20}))                       \
+      F(type_raft_wait_index_duration, {{"type", "tmt_raft_wait_index_duration"}}, ExpBuckets<20>{0.001, 2}))                       \
     M(tiflash_raft_eager_gc_duration_seconds,                                                                                       \
       "Bucketed histogram of RaftLog eager",                                                                                        \
       Histogram,                                                                                                                    \
-      F(type_run, {{"type", "run"}}, ExpBuckets{0.0005, 2, 20}))                                                                    \
+      F(type_run, {{"type", "run"}}, ExpBuckets<20>{0.0005, 2}))                                                                    \
     M(tiflash_raft_eager_gc_count,                                                                                                  \
       "Total number processed in RaftLog eager GC",                                                                                 \
       Counter,                                                                                                                      \
@@ -209,7 +209,7 @@ namespace DB
     M(tiflash_syncing_data_freshness,                                                                                               \
       "The freshness of tiflash data with tikv data",                                                                               \
       Histogram,                                                                                                                    \
-      F(type_syncing_data_freshness, {{"type", "data_freshness"}}, ExpBuckets{0.001, 2, 20}))                                       \
+      F(type_syncing_data_freshness, {{"type", "data_freshness"}}, ExpBuckets<20>{0.001, 2}))                                       \
     M(tiflash_storage_read_tasks_count, "Total number of storage engine read tasks", Counter)                                       \
     M(tiflash_storage_command_count,                                                                                                \
       "Total number of storage's command, such as delete range / shutdown /startup",                                                \
@@ -234,17 +234,17 @@ namespace DB
     M(tiflash_storage_subtask_duration_seconds,                                                                                     \
       "Bucketed histogram of storage's sub task duration",                                                                          \
       Histogram,                                                                                                                    \
-      F(type_delta_merge_bg, {{"type", "delta_merge_bg"}}, ExpBuckets{0.001, 2, 20}),                                               \
-      F(type_delta_merge_bg_gc, {{"type", "delta_merge_bg_gc"}}, ExpBuckets{0.001, 2, 20}),                                         \
-      F(type_delta_merge_fg, {{"type", "delta_merge_fg"}}, ExpBuckets{0.001, 2, 20}),                                               \
-      F(type_delta_merge_manual, {{"type", "delta_merge_manual"}}, ExpBuckets{0.001, 2, 20}),                                       \
-      F(type_delta_compact, {{"type", "delta_compact"}}, ExpBuckets{0.001, 2, 20}),                                                 \
-      F(type_delta_flush, {{"type", "delta_flush"}}, ExpBuckets{0.001, 2, 20}),                                                     \
-      F(type_seg_split_bg, {{"type", "seg_split_bg"}}, ExpBuckets{0.001, 2, 20}),                                                   \
-      F(type_seg_split_fg, {{"type", "seg_split_fg"}}, ExpBuckets{0.001, 2, 20}),                                                   \
-      F(type_seg_split_ingest, {{"type", "seg_split_ingest"}}, ExpBuckets{0.001, 2, 20}),                                           \
-      F(type_seg_merge_bg_gc, {{"type", "seg_merge_bg_gc"}}, ExpBuckets{0.001, 2, 20}),                                             \
-      F(type_place_index_update, {{"type", "place_index_update"}}, ExpBuckets{0.001, 2, 20}))                                       \
+      F(type_delta_merge_bg, {{"type", "delta_merge_bg"}}, ExpBuckets<20>{0.001, 2}),                                               \
+      F(type_delta_merge_bg_gc, {{"type", "delta_merge_bg_gc"}}, ExpBuckets<20>{0.001, 2}),                                         \
+      F(type_delta_merge_fg, {{"type", "delta_merge_fg"}}, ExpBuckets<20>{0.001, 2}),                                               \
+      F(type_delta_merge_manual, {{"type", "delta_merge_manual"}}, ExpBuckets<20>{0.001, 2}),                                       \
+      F(type_delta_compact, {{"type", "delta_compact"}}, ExpBuckets<20>{0.001, 2}),                                                 \
+      F(type_delta_flush, {{"type", "delta_flush"}}, ExpBuckets<20>{0.001, 2}),                                                     \
+      F(type_seg_split_bg, {{"type", "seg_split_bg"}}, ExpBuckets<20>{0.001, 2}),                                                   \
+      F(type_seg_split_fg, {{"type", "seg_split_fg"}}, ExpBuckets<20>{0.001, 2}),                                                   \
+      F(type_seg_split_ingest, {{"type", "seg_split_ingest"}}, ExpBuckets<20>{0.001, 2}),                                           \
+      F(type_seg_merge_bg_gc, {{"type", "seg_merge_bg_gc"}}, ExpBuckets<20>{0.001, 2}),                                             \
+      F(type_place_index_update, {{"type", "place_index_update"}}, ExpBuckets<20>{0.001, 2}))                                       \
     M(tiflash_storage_throughput_bytes,                                                                                             \
       "Calculate the throughput of tasks of storage in bytes",                                                                      \
       Gauge, /**/                                                                                                                   \
@@ -264,11 +264,11 @@ namespace DB
     M(tiflash_storage_write_stall_duration_seconds,                                                                                 \
       "The write stall duration of storage, in seconds",                                                                            \
       Histogram,                                                                                                                    \
-      F(type_write, {{"type", "write"}}, ExpBuckets{0.001, 2, 20}),                                                                 \
-      F(type_delta_merge_by_write, {{"type", "delta_merge_by_write"}}, ExpBuckets{0.001, 2, 20}),                                   \
-      F(type_delta_merge_by_delete_range, {{"type", "delta_merge_by_delete_range"}}, ExpBuckets{0.001, 2, 20}),                     \
-      F(type_flush, {{"type", "flush"}}, ExpBuckets{0.001, 2, 20}),                                                                 \
-      F(type_split, {{"type", "split"}}, ExpBuckets{0.001, 2, 20}))                                                                 \
+      F(type_write, {{"type", "write"}}, ExpBuckets<20>{0.001, 2}),                                                                 \
+      F(type_delta_merge_by_write, {{"type", "delta_merge_by_write"}}, ExpBuckets<20>{0.001, 2}),                                   \
+      F(type_delta_merge_by_delete_range, {{"type", "delta_merge_by_delete_range"}}, ExpBuckets<20>{0.001, 2}),                     \
+      F(type_flush, {{"type", "flush"}}, ExpBuckets<20>{0.001, 2}),                                                                 \
+      F(type_split, {{"type", "split"}}, ExpBuckets<20>{0.001, 2}))                                                                 \
     M(tiflash_storage_page_gc_count,                                                                                                \
       "Total number of page's gc execution.",                                                                                       \
       Counter,                                                                                                                      \
@@ -280,18 +280,18 @@ namespace DB
     M(tiflash_storage_page_gc_duration_seconds,                                                                                     \
       "Bucketed histogram of page's gc task duration",                                                                              \
       Histogram,                                                                                                                    \
-      F(type_v2, {{"type", "v2"}}, ExpBuckets{0.0005, 2, 20}),                                                                      \
-      F(type_v2_data_compact, {{"type", "v2_data_compact"}}, ExpBuckets{0.0005, 2, 20}),                                            \
+      F(type_v2, {{"type", "v2"}}, ExpBuckets<20>{0.0005, 2}),                                                                      \
+      F(type_v2_data_compact, {{"type", "v2_data_compact"}}, ExpBuckets<20>{0.0005, 2}),                                            \
       F(type_v2_ver_compact,                                                                                                        \
         {{"type", "v2_ver_compact"}},                                                                                               \
-        ExpBuckets{0.0005, 2, 20}), /* Below are metrics for PageStorage V3 */                                                      \
-      F(type_compact_wal, {{"type", "compact_wal"}}, ExpBuckets{0.0005, 2, 20}),                                                    \
-      F(type_compact_directory, {{"type", "compact_directory"}}, ExpBuckets{0.0005, 2, 20}),                                        \
-      F(type_compact_spacemap, {{"type", "compact_spacemap"}}, ExpBuckets{0.0005, 2, 20}),                                          \
-      F(type_fullgc_rewrite, {{"type", "fullgc_rewrite"}}, ExpBuckets{0.0005, 2, 20}),                                              \
-      F(type_fullgc_commit, {{"type", "fullgc_commit"}}, ExpBuckets{0.0005, 2, 20}),                                                \
-      F(type_clean_external, {{"type", "clean_external"}}, ExpBuckets{0.0005, 2, 20}),                                              \
-      F(type_v3, {{"type", "v3"}}, ExpBuckets{0.0005, 2, 20}))                                                                      \
+        ExpBuckets<20>{0.0005, 2}), /* Below are metrics for PageStorage V3 */                                                      \
+      F(type_compact_wal, {{"type", "compact_wal"}}, ExpBuckets<20>{0.0005, 2}),                                                    \
+      F(type_compact_directory, {{"type", "compact_directory"}}, ExpBuckets<20>{0.0005, 2}),                                        \
+      F(type_compact_spacemap, {{"type", "compact_spacemap"}}, ExpBuckets<20>{0.0005, 2}),                                          \
+      F(type_fullgc_rewrite, {{"type", "fullgc_rewrite"}}, ExpBuckets<20>{0.0005, 2}),                                              \
+      F(type_fullgc_commit, {{"type", "fullgc_commit"}}, ExpBuckets<20>{0.0005, 2}),                                                \
+      F(type_clean_external, {{"type", "clean_external"}}, ExpBuckets<20>{0.0005, 2}),                                              \
+      F(type_v3, {{"type", "v3"}}, ExpBuckets<20>{0.0005, 2}))                                                                      \
     M(tiflash_storage_page_command_count,                                                                                           \
       "Total number of PageStorage's command, such as write / read / scan / snapshot",                                              \
       Counter,                                                                                                                      \
@@ -310,14 +310,14 @@ namespace DB
       Histogram,                                                                                                                    \
       F(type_total,                                                                                                                 \
         {{"type", "total"}},                                                                                                        \
-        ExpBuckets{0.0001, 2, 20}), /* the bucket range for apply in memory is 50us ~ 120s */                                       \
-      F(type_choose_stat, {{"type", "choose_stat"}}, ExpBuckets{0.00005, 1.8, 26}),                                                 \
-      F(type_search_pos, {{"type", "search_pos"}}, ExpBuckets{0.00005, 1.8, 26}),                                                   \
-      F(type_blob_write, {{"type", "blob_write"}}, ExpBuckets{0.00005, 1.8, 26}),                                                   \
-      F(type_latch, {{"type", "latch"}}, ExpBuckets{0.00005, 1.8, 26}),                                                             \
-      F(type_wait_in_group, {{"type", "wait_in_group"}}, ExpBuckets{0.00005, 1.8, 26}),                                             \
-      F(type_wal, {{"type", "wal"}}, ExpBuckets{0.00005, 1.8, 26}),                                                                 \
-      F(type_commit, {{"type", "commit"}}, ExpBuckets{0.00005, 1.8, 26}))                                                           \
+        ExpBuckets<20>{0.0001, 2}), /* the bucket range for apply in memory is 50us ~ 120s */                                       \
+      F(type_choose_stat, {{"type", "choose_stat"}}, ExpBuckets<26>{0.00005, 1.8}),                                                 \
+      F(type_search_pos, {{"type", "search_pos"}}, ExpBuckets<26>{0.00005, 1.8}),                                                   \
+      F(type_blob_write, {{"type", "blob_write"}}, ExpBuckets<26>{0.00005, 1.8}),                                                   \
+      F(type_latch, {{"type", "latch"}}, ExpBuckets<26>{0.00005, 1.8}),                                                             \
+      F(type_wait_in_group, {{"type", "wait_in_group"}}, ExpBuckets<26>{0.00005, 1.8}),                                             \
+      F(type_wal, {{"type", "wal"}}, ExpBuckets<26>{0.00005, 1.8}),                                                                 \
+      F(type_commit, {{"type", "commit"}}, ExpBuckets<26>{0.00005, 1.8}))                                                           \
     M(tiflash_storage_logical_throughput_bytes,                                                                                     \
       "The logical throughput of read tasks of storage in bytes",                                                                   \
       Histogram,                                                                                                                    \
@@ -350,23 +350,23 @@ namespace DB
     M(tiflash_disaggregated_object_lock_request_duration_seconds,                                                                   \
       "Bucketed histogram of S3 object lock/delete request duration",                                                               \
       Histogram,                                                                                                                    \
-      F(type_lock, {{"type", "lock"}}, ExpBuckets{0.001, 2, 20}),                                                                   \
-      F(type_delete, {{"type", "delete"}}, ExpBuckets{0.001, 2, 20}))                                                               \
+      F(type_lock, {{"type", "lock"}}, ExpBuckets<20>{0.001, 2}),                                                                   \
+      F(type_delete, {{"type", "delete"}}, ExpBuckets<20>{0.001, 2}))                                                               \
     M(tiflash_disaggregated_read_tasks_count, "Total number of storage engine disaggregated read tasks", Counter)                   \
     M(tiflash_disaggregated_breakdown_duration_seconds,                                                                             \
       "",                                                                                                                           \
       Histogram,                                                                                                                    \
-      F(type_rpc_establish, {{"type", "rpc_establish"}}, ExpBuckets{0.01, 2, 20}),                                                  \
-      F(type_total_establish_backoff, {{"type", "total_establish_backoff"}}, ExpBuckets{0.01, 2, 20}),                              \
-      F(type_resolve_lock, {{"type", "resolve_lock"}}, ExpBuckets{0.01, 2, 20}),                                                    \
-      F(type_rpc_fetch_page, {{"type", "rpc_fetch_page"}}, ExpBuckets{0.01, 2, 20}),                                                \
-      F(type_write_page_cache, {{"type", "write_page_cache"}}, ExpBuckets{0.01, 2, 20}),                                            \
-      F(type_cache_occupy, {{"type", "cache_occupy"}}, ExpBuckets{0.01, 2, 20}),                                                    \
-      F(type_worker_fetch_page, {{"type", "worker_fetch_page"}}, ExpBuckets{0.01, 2, 20}),                                          \
-      F(type_worker_prepare_stream, {{"type", "worker_prepare_stream"}}, ExpBuckets{0.01, 2, 20}),                                  \
-      F(type_stream_wait_next_task, {{"type", "stream_wait_next_task"}}, ExpBuckets{0.01, 2, 20}),                                  \
-      F(type_stream_read, {{"type", "stream_read"}}, ExpBuckets{0.01, 2, 20}),                                                      \
-      F(type_deserialize_page, {{"type", "deserialize_page"}}, ExpBuckets{0.01, 2, 20}))                                            \
+      F(type_rpc_establish, {{"type", "rpc_establish"}}, ExpBuckets<20>{0.01, 2}),                                                  \
+      F(type_total_establish_backoff, {{"type", "total_establish_backoff"}}, ExpBuckets<20>{0.01, 2}),                              \
+      F(type_resolve_lock, {{"type", "resolve_lock"}}, ExpBuckets<20>{0.01, 2}),                                                    \
+      F(type_rpc_fetch_page, {{"type", "rpc_fetch_page"}}, ExpBuckets<20>{0.01, 2}),                                                \
+      F(type_write_page_cache, {{"type", "write_page_cache"}}, ExpBuckets<20>{0.01, 2}),                                            \
+      F(type_cache_occupy, {{"type", "cache_occupy"}}, ExpBuckets<20>{0.01, 2}),                                                    \
+      F(type_worker_fetch_page, {{"type", "worker_fetch_page"}}, ExpBuckets<20>{0.01, 2}),                                          \
+      F(type_worker_prepare_stream, {{"type", "worker_prepare_stream"}}, ExpBuckets<20>{0.01, 2}),                                  \
+      F(type_stream_wait_next_task, {{"type", "stream_wait_next_task"}}, ExpBuckets<20>{0.01, 2}),                                  \
+      F(type_stream_read, {{"type", "stream_read"}}, ExpBuckets<20>{0.01, 2}),                                                      \
+      F(type_deserialize_page, {{"type", "deserialize_page"}}, ExpBuckets<20>{0.01, 2}))                                            \
     M(tiflash_disaggregated_details,                                                                                                \
       "",                                                                                                                           \
       Counter,                                                                                                                      \
@@ -410,18 +410,18 @@ namespace DB
     M(tiflash_raft_command_duration_seconds,                                                                                        \
       "Bucketed histogram of some raft command: apply snapshot and ingest SST",                                                     \
       Histogram, /* these command usually cost several seconds, increase the start bucket to 50ms */                                \
-      F(type_remove_peer, {{"type", "remove_peer"}}, ExpBuckets{0.05, 2, 10}),                                                      \
-      F(type_ingest_sst, {{"type", "ingest_sst"}}, ExpBuckets{0.05, 2, 10}),                                                        \
-      F(type_ingest_sst_sst2dt, {{"type", "ingest_sst_sst2dt"}}, ExpBuckets{0.05, 2, 10}),                                          \
-      F(type_ingest_sst_upload, {{"type", "ingest_sst_upload"}}, ExpBuckets{0.05, 2, 10}),                                          \
-      F(type_apply_snapshot_predecode, {{"type", "snapshot_predecode"}}, ExpBuckets{0.05, 2, 15}),                                  \
-      F(type_apply_snapshot_total, {{"type", "snapshot_total"}}, ExpBuckets{0.2, 2, 60}),                                           \
-      F(type_apply_snapshot_predecode_sst2dt, {{"type", "snapshot_predecode_sst2dt"}}, ExpBuckets{0.05, 2, 15}),                    \
+      F(type_remove_peer, {{"type", "remove_peer"}}, ExpBuckets<10>{0.05, 2}),                                                      \
+      F(type_ingest_sst, {{"type", "ingest_sst"}}, ExpBuckets<10>{0.05, 2}),                                                        \
+      F(type_ingest_sst_sst2dt, {{"type", "ingest_sst_sst2dt"}}, ExpBuckets<10>{0.05, 2}),                                          \
+      F(type_ingest_sst_upload, {{"type", "ingest_sst_upload"}}, ExpBuckets<10>{0.05, 2}),                                          \
+      F(type_apply_snapshot_predecode, {{"type", "snapshot_predecode"}}, ExpBuckets<15>{0.05, 2}),                                  \
+      F(type_apply_snapshot_total, {{"type", "snapshot_total"}}, ExpBucketsWithRange{0.1, 2, 600}),                                 \
+      F(type_apply_snapshot_predecode_sst2dt, {{"type", "snapshot_predecode_sst2dt"}}, ExpBuckets<15>{0.05, 2}),                    \
       F(type_apply_snapshot_predecode_parallel_wait,                                                                                \
         {{"type", "snapshot_predecode_parallel_wait"}},                                                                             \
-        ExpBuckets{0.1, 2, 10}),                                                                                                    \
-      F(type_apply_snapshot_predecode_upload, {{"type", "snapshot_predecode_upload"}}, ExpBuckets{0.05, 2, 10}),                    \
-      F(type_apply_snapshot_flush, {{"type", "snapshot_flush"}}, ExpBuckets{0.05, 2, 10}))                                          \
+        ExpBuckets<10>{0.1, 2}),                                                                                                    \
+      F(type_apply_snapshot_predecode_upload, {{"type", "snapshot_predecode_upload"}}, ExpBuckets<10>{0.05, 2}),                    \
+      F(type_apply_snapshot_flush, {{"type", "snapshot_flush"}}, ExpBuckets<10>{0.05, 2}))                                          \
     M(tiflash_raft_process_keys,                                                                                                    \
       "Total number of keys processed in some types of Raft commands",                                                              \
       Counter,                                                                                                                      \
@@ -432,22 +432,22 @@ namespace DB
     M(tiflash_raft_apply_write_command_duration_seconds,                                                                            \
       "Bucketed histogram of applying write command Raft logs",                                                                     \
       Histogram,                                                                                                                    \
-      F(type_write, {{"type", "write"}}, ExpBuckets{0.0005, 2, 20}),                                                                \
-      F(type_admin, {{"type", "admin"}}, ExpBuckets{0.0005, 2, 20}),                                                                \
-      F(type_admin_batch_split, {{"type", "admin_batch_split"}}, ExpBuckets{0.0005, 2, 20}),                                        \
-      F(type_admin_prepare_merge, {{"type", "admin_prepare_merge"}}, ExpBuckets{0.0005, 2, 20}),                                    \
-      F(type_admin_commit_merge, {{"type", "admin_commit_merge"}}, ExpBuckets{0.0005, 2, 20}),                                      \
-      F(type_admin_change_peer, {{"type", "admin_change_peer"}}, ExpBuckets{0.0005, 2, 20}),                                        \
-      F(type_flush_region, {{"type", "flush_region"}}, ExpBuckets{0.0005, 2, 20}))                                                  \
+      F(type_write, {{"type", "write"}}, ExpBuckets<20>{0.0005, 2}),                                                                \
+      F(type_admin, {{"type", "admin"}}, ExpBuckets<20>{0.0005, 2}),                                                                \
+      F(type_admin_batch_split, {{"type", "admin_batch_split"}}, ExpBuckets<20>{0.0005, 2}),                                        \
+      F(type_admin_prepare_merge, {{"type", "admin_prepare_merge"}}, ExpBuckets<20>{0.0005, 2}),                                    \
+      F(type_admin_commit_merge, {{"type", "admin_commit_merge"}}, ExpBuckets<20>{0.0005, 2}),                                      \
+      F(type_admin_change_peer, {{"type", "admin_change_peer"}}, ExpBuckets<20>{0.0005, 2}),                                        \
+      F(type_flush_region, {{"type", "flush_region"}}, ExpBuckets<20>{0.0005, 2}))                                                  \
     M(tiflash_raft_upstream_latency,                                                                                                \
       "The latency that tikv sends raft log to tiflash.",                                                                           \
       Histogram,                                                                                                                    \
-      F(type_write, {{"type", "write"}}, ExpBuckets{0.001, 2, 30}))                                                                 \
+      F(type_write, {{"type", "write"}}, ExpBuckets<30>{0.001, 2}))                                                                 \
     M(tiflash_raft_write_data_to_storage_duration_seconds,                                                                          \
       "Bucketed histogram of writting region into storage layer",                                                                   \
       Histogram,                                                                                                                    \
-      F(type_decode, {{"type", "decode"}}, ExpBuckets{0.0005, 2, 20}),                                                              \
-      F(type_write, {{"type", "write"}}, ExpBuckets{0.0005, 2, 20}))                                                                \
+      F(type_decode, {{"type", "decode"}}, ExpBuckets<20>{0.0005, 2}),                                                              \
+      F(type_write, {{"type", "write"}}, ExpBuckets<20>{0.0005, 2}))                                                                \
     M(tiflash_raft_raft_log_gap_count,                                                                                              \
       "Bucketed histogram raft index gap between applied and truncated index",                                                      \
       Histogram,                                                                                                                    \
@@ -475,12 +475,12 @@ namespace DB
     M(tiflash_raft_region_flush_bytes,                                                                                              \
       "Bucketed histogram of region flushed bytes",                                                                                 \
       Histogram,                                                                                                                    \
-      F(type_flushed, {{"type", "flushed"}}, ExpBuckets{32, 2, 21}),                                                                \
-      F(type_unflushed, {{"type", "unflushed"}}, ExpBuckets{32, 2, 21}))                                                            \
+      F(type_flushed, {{"type", "flushed"}}, ExpBuckets<21>{32, 2}),                                                                \
+      F(type_unflushed, {{"type", "unflushed"}}, ExpBuckets<21>{32, 2}))                                                            \
     M(tiflash_raft_entry_size,                                                                                                      \
       "Bucketed histogram entry size",                                                                                              \
       Histogram,                                                                                                                    \
-      F(type_normal, {{"type", "normal"}}, ExpBuckets{1, 2, 13}))                                                                   \
+      F(type_normal, {{"type", "normal"}}, ExpBuckets<13>{1, 2}))                                                                   \
     M(tiflash_raft_ongoing_snapshot_total_bytes,                                                                                    \
       "Ongoing snapshot total size",                                                                                                \
       Gauge,                                                                                                                        \
@@ -490,7 +490,7 @@ namespace DB
     M(tiflash_raft_snapshot_total_bytes,                                                                                            \
       "Bucketed snapshot total size",                                                                                               \
       Histogram,                                                                                                                    \
-      F(type_approx_raft_snapshot, {{"type", "approx_raft_snapshot"}}, ExpBuckets{1024, 2, 24})) /* 16G */                          \
+      F(type_approx_raft_snapshot, {{"type", "approx_raft_snapshot"}}, ExpBuckets<24>{1024, 2})) /* 16G */                          \
     /* required by DBaaS */                                                                                                         \
     M(tiflash_server_info,                                                                                                          \
       "Indicate the tiflash server info, and the value is the start timestamp (s).",                                                \
@@ -536,7 +536,7 @@ namespace DB
     M(tiflash_task_scheduler_waiting_duration_seconds,                                                                              \
       "Bucketed histogram of task waiting for scheduling duration",                                                                 \
       Histogram,                                                                                                                    \
-      F(type_task_scheduler_waiting_duration, {{"type", "task_waiting_duration"}}, ExpBuckets{0.001, 2, 20}))                       \
+      F(type_task_scheduler_waiting_duration, {{"type", "task_waiting_duration"}}, ExpBuckets<20>{0.001, 2}))                       \
     M(tiflash_storage_read_thread_counter,                                                                                          \
       "The counter of storage read thread",                                                                                         \
       Counter,                                                                                                                      \
@@ -561,7 +561,7 @@ namespace DB
     M(tiflash_storage_read_thread_seconds,                                                                                          \
       "Bucketed histogram of read thread",                                                                                          \
       Histogram,                                                                                                                    \
-      F(type_merged_task, {{"type", "merged_task"}}, ExpBuckets{0.001, 2, 20}))                                                     \
+      F(type_merged_task, {{"type", "merged_task"}}, ExpBuckets<20>{0.001, 2}))                                                     \
     M(tiflash_mpp_task_manager,                                                                                                     \
       "The gauge of mpp task manager",                                                                                              \
       Gauge,                                                                                                                        \
@@ -610,10 +610,10 @@ namespace DB
     M(tiflash_storage_checkpoint_seconds,                                                                                           \
       "PageStorage checkpoint elapsed time",                                                                                        \
       Histogram, /* these command usually cost several seconds, increase the start bucket to 50ms */                                \
-      F(type_dump_checkpoint_snapshot, {{"type", "dump_checkpoint_snapshot"}}, ExpBuckets{0.05, 2, 20}),                            \
-      F(type_dump_checkpoint_data, {{"type", "dump_checkpoint_data"}}, ExpBuckets{0.05, 2, 20}),                                    \
-      F(type_upload_checkpoint, {{"type", "upload_checkpoint"}}, ExpBuckets{0.05, 2, 20}),                                          \
-      F(type_copy_checkpoint_info, {{"type", "copy_checkpoint_info"}}, ExpBuckets{0.05, 2, 20}))                                    \
+      F(type_dump_checkpoint_snapshot, {{"type", "dump_checkpoint_snapshot"}}, ExpBuckets<20>{0.05, 2}),                            \
+      F(type_dump_checkpoint_data, {{"type", "dump_checkpoint_data"}}, ExpBuckets<20>{0.05, 2}),                                    \
+      F(type_upload_checkpoint, {{"type", "upload_checkpoint"}}, ExpBuckets<20>{0.05, 2}),                                          \
+      F(type_copy_checkpoint_info, {{"type", "copy_checkpoint_info"}}, ExpBuckets<20>{0.05, 2}))                                    \
     M(tiflash_storage_checkpoint_flow,                                                                                              \
       "The bytes flow cause by remote checkpoint",                                                                                  \
       Counter,                                                                                                                      \
@@ -655,24 +655,24 @@ namespace DB
     M(tiflash_storage_s3_request_seconds,                                                                                           \
       "S3 request duration in seconds",                                                                                             \
       Histogram,                                                                                                                    \
-      F(type_put_object, {{"type", "put_object"}}, ExpBuckets{0.001, 2, 20}),                                                       \
-      F(type_put_dmfile, {{"type", "put_dmfile"}}, ExpBuckets{0.001, 2, 20}),                                                       \
-      F(type_copy_object, {{"type", "copy_object"}}, ExpBuckets{0.001, 2, 20}),                                                     \
-      F(type_get_object, {{"type", "get_object"}}, ExpBuckets{0.001, 2, 20}),                                                       \
-      F(type_create_multi_part_upload, {{"type", "create_multi_part_upload"}}, ExpBuckets{0.001, 2, 20}),                           \
-      F(type_upload_part, {{"type", "upload_part"}}, ExpBuckets{0.001, 2, 20}),                                                     \
-      F(type_complete_multi_part_upload, {{"type", "complete_multi_part_upload"}}, ExpBuckets{0.001, 2, 20}),                       \
-      F(type_list_objects, {{"type", "list_objects"}}, ExpBuckets{0.001, 2, 20}),                                                   \
-      F(type_delete_object, {{"type", "delete_object"}}, ExpBuckets{0.001, 2, 20}),                                                 \
-      F(type_head_object, {{"type", "head_object"}}, ExpBuckets{0.001, 2, 20}),                                                     \
-      F(type_read_stream, {{"type", "read_stream"}}, ExpBuckets{0.0001, 2, 20}))                                                    \
+      F(type_put_object, {{"type", "put_object"}}, ExpBuckets<20>{0.001, 2}),                                                       \
+      F(type_put_dmfile, {{"type", "put_dmfile"}}, ExpBuckets<20>{0.001, 2}),                                                       \
+      F(type_copy_object, {{"type", "copy_object"}}, ExpBuckets<20>{0.001, 2}),                                                     \
+      F(type_get_object, {{"type", "get_object"}}, ExpBuckets<20>{0.001, 2}),                                                       \
+      F(type_create_multi_part_upload, {{"type", "create_multi_part_upload"}}, ExpBuckets<20>{0.001, 2}),                           \
+      F(type_upload_part, {{"type", "upload_part"}}, ExpBuckets<20>{0.001, 2}),                                                     \
+      F(type_complete_multi_part_upload, {{"type", "complete_multi_part_upload"}}, ExpBuckets<20>{0.001, 2}),                       \
+      F(type_list_objects, {{"type", "list_objects"}}, ExpBuckets<20>{0.001, 2}),                                                   \
+      F(type_delete_object, {{"type", "delete_object"}}, ExpBuckets<20>{0.001, 2}),                                                 \
+      F(type_head_object, {{"type", "head_object"}}, ExpBuckets<20>{0.001, 2}),                                                     \
+      F(type_read_stream, {{"type", "read_stream"}}, ExpBuckets<20>{0.0001, 2}))                                                    \
     M(tiflash_storage_s3_http_request_seconds,                                                                                      \
       "S3 request duration breakdown in seconds",                                                                                   \
       Histogram,                                                                                                                    \
-      F(type_dns, {{"type", "dns"}}, ExpBuckets{0.001, 2, 20}),                                                                     \
-      F(type_connect, {{"type", "connect"}}, ExpBuckets{0.001, 2, 20}),                                                             \
-      F(type_request, {{"type", "request"}}, ExpBuckets{0.001, 2, 20}),                                                             \
-      F(type_response, {{"type", "response"}}, ExpBuckets{0.001, 2, 20}))                                                           \
+      F(type_dns, {{"type", "dns"}}, ExpBuckets<20>{0.001, 2}),                                                                     \
+      F(type_connect, {{"type", "connect"}}, ExpBuckets<20>{0.001, 2}),                                                             \
+      F(type_request, {{"type", "request"}}, ExpBuckets<20>{0.001, 2}),                                                             \
+      F(type_response, {{"type", "response"}}, ExpBuckets<20>{0.001, 2}))                                                           \
     M(tiflash_pipeline_scheduler,                                                                                                   \
       "pipeline scheduler",                                                                                                         \
       Gauge,                                                                                                                        \
@@ -686,16 +686,16 @@ namespace DB
     M(tiflash_pipeline_task_duration_seconds,                                                                                       \
       "Bucketed histogram of pipeline task duration in seconds",                                                                    \
       Histogram, /* these command usually cost several hundred milliseconds to several seconds, increase the start bucket to 5ms */ \
-      F(type_cpu_execute, {{"type", "cpu_execute"}}, ExpBuckets{0.005, 2, 20}),                                                     \
-      F(type_io_execute, {{"type", "io_execute"}}, ExpBuckets{0.005, 2, 20}),                                                       \
-      F(type_cpu_queue, {{"type", "cpu_queue"}}, ExpBuckets{0.005, 2, 20}),                                                         \
-      F(type_io_queue, {{"type", "io_queue"}}, ExpBuckets{0.005, 2, 20}),                                                           \
-      F(type_await, {{"type", "await"}}, ExpBuckets{0.005, 2, 20}))                                                                 \
+      F(type_cpu_execute, {{"type", "cpu_execute"}}, ExpBuckets<20>{0.005, 2}),                                                     \
+      F(type_io_execute, {{"type", "io_execute"}}, ExpBuckets<20>{0.005, 2}),                                                       \
+      F(type_cpu_queue, {{"type", "cpu_queue"}}, ExpBuckets<20>{0.005, 2}),                                                         \
+      F(type_io_queue, {{"type", "io_queue"}}, ExpBuckets<20>{0.005, 2}),                                                           \
+      F(type_await, {{"type", "await"}}, ExpBuckets<20>{0.005, 2}))                                                                 \
     M(tiflash_pipeline_task_execute_max_time_seconds_per_round,                                                                     \
       "Bucketed histogram of pipeline task execute max time per round in seconds",                                                  \
       Histogram, /* these command usually cost several hundred milliseconds to several seconds, increase the start bucket to 5ms */ \
-      F(type_cpu, {{"type", "cpu"}}, ExpBuckets{0.005, 2, 20}),                                                                     \
-      F(type_io, {{"type", "io"}}, ExpBuckets{0.005, 2, 20}))                                                                       \
+      F(type_cpu, {{"type", "cpu"}}, ExpBuckets<20>{0.005, 2}),                                                                     \
+      F(type_io, {{"type", "io"}}, ExpBuckets<20>{0.005, 2}))                                                                       \
     M(tiflash_pipeline_task_change_to_status,                                                                                       \
       "pipeline task change to status",                                                                                             \
       Counter,                                                                                                                      \
@@ -715,13 +715,13 @@ namespace DB
     M(tiflash_storage_s3_gc_seconds,                                                                                                \
       "S3 GC subprocess duration in seconds",                                                                                       \
       Histogram, /* these command usually cost several seconds, increase the start bucket to 500ms */                               \
-      F(type_total, {{"type", "total"}}, ExpBuckets{0.5, 2, 20}),                                                                   \
-      F(type_one_store, {{"type", "one_store"}}, ExpBuckets{0.5, 2, 20}),                                                           \
-      F(type_read_locks, {{"type", "read_locks"}}, ExpBuckets{0.5, 2, 20}),                                                         \
-      F(type_clean_locks, {{"type", "clean_locks"}}, ExpBuckets{0.5, 2, 20}),                                                       \
-      F(type_clean_manifests, {{"type", "clean_manifests"}}, ExpBuckets{0.5, 2, 20}),                                               \
-      F(type_scan_then_clean_data_files, {{"type", "scan_then_clean_data_files"}}, ExpBuckets{0.5, 2, 20}),                         \
-      F(type_clean_one_lock, {{"type", "clean_one_lock"}}, ExpBuckets{0.5, 2, 20}))                                                 \
+      F(type_total, {{"type", "total"}}, ExpBuckets<20>{0.5, 2}),                                                                   \
+      F(type_one_store, {{"type", "one_store"}}, ExpBuckets<20>{0.5, 2}),                                                           \
+      F(type_read_locks, {{"type", "read_locks"}}, ExpBuckets<20>{0.5, 2}),                                                         \
+      F(type_clean_locks, {{"type", "clean_locks"}}, ExpBuckets<20>{0.5, 2}),                                                       \
+      F(type_clean_manifests, {{"type", "clean_manifests"}}, ExpBuckets<20>{0.5, 2}),                                               \
+      F(type_scan_then_clean_data_files, {{"type", "scan_then_clean_data_files"}}, ExpBuckets<20>{0.5, 2}),                         \
+      F(type_clean_one_lock, {{"type", "clean_one_lock"}}, ExpBuckets<20>{0.5, 2}))                                                 \
     M(tiflash_storage_remote_cache,                                                                                                 \
       "Operations of remote cache",                                                                                                 \
       Counter,                                                                                                                      \
@@ -748,14 +748,14 @@ namespace DB
     M(tiflash_storage_io_limiter_pending_seconds,                                                                                   \
       "I/O limiter pending duration in seconds",                                                                                    \
       Histogram,                                                                                                                    \
-      F(type_fg_read, {{"type", "fg_read"}}, ExpBuckets{0.001, 2, 20}),                                                             \
-      F(type_bg_read, {{"type", "bg_read"}}, ExpBuckets{0.001, 2, 20}),                                                             \
-      F(type_fg_write, {{"type", "fg_write"}}, ExpBuckets{0.001, 2, 20}),                                                           \
-      F(type_bg_write, {{"type", "bg_write"}}, ExpBuckets{0.001, 2, 20}))                                                           \
+      F(type_fg_read, {{"type", "fg_read"}}, ExpBuckets<20>{0.001, 2}),                                                             \
+      F(type_bg_read, {{"type", "bg_read"}}, ExpBuckets<20>{0.001, 2}),                                                             \
+      F(type_fg_write, {{"type", "fg_write"}}, ExpBuckets<20>{0.001, 2}),                                                           \
+      F(type_bg_write, {{"type", "bg_write"}}, ExpBuckets<20>{0.001, 2}))                                                           \
     M(tiflash_system_seconds,                                                                                                       \
       "system calls duration in seconds",                                                                                           \
       Histogram,                                                                                                                    \
-      F(type_fsync, {{"type", "fsync"}}, ExpBuckets{0.0001, 2, 20}))                                                                \
+      F(type_fsync, {{"type", "fsync"}}, ExpBuckets<20>{0.0001, 2}))                                                                \
     M(tiflash_storage_delta_index_cache, "", Counter, F(type_hit, {"type", "hit"}), F(type_miss, {"type", "miss"}))                 \
     M(tiflash_resource_group,                                                                                                       \
       "meta info of resource group",                                                                                                \
@@ -775,11 +775,12 @@ namespace DB
 
 
 /// Buckets with boundaries [start * base^0, start * base^1, ..., start * base^(size-1)]
+template <size_t size>
 struct ExpBuckets
 {
     const double start;
     const double base;
-    const size_t size;
+    static_assert(size < 50, "too many buckets, reconsider step/unit");
 
     // NOLINTNEXTLINE(google-explicit-constructor)
     inline operator prometheus::Histogram::BucketBoundaries() const &&
