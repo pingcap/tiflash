@@ -290,9 +290,13 @@ String DAGExpressionAnalyzerHelper::buildSingleParamJsonRelatedFunctions(
     auto func_name = getFunctionName(expr);
 
     if unlikely (expr.children_size() != 1)
-        throw TiFlashException(fmt::format("{} function only support one argument", func_name), Errors::Coprocessor::BadRequest);
+        throw TiFlashException(
+            fmt::format("{} function only support one argument", func_name),
+            Errors::Coprocessor::BadRequest);
     if unlikely (!exprHasValidFieldType(expr))
-        throw TiFlashException(fmt::format("{} function without valid field type", func_name), Errors::Coprocessor::BadRequest);
+        throw TiFlashException(
+            fmt::format("{} function without valid field type", func_name),
+            Errors::Coprocessor::BadRequest);
 
     String arg = analyzer->getActions(input_expr, actions);
     const auto & collator = getCollatorFromExpr(expr);
@@ -321,9 +325,11 @@ String DAGExpressionAnalyzerHelper::buildSingleParamJsonRelatedFunctions(
         {
             function_cast_time_as_json->setInputTiDBFieldType(input_expr.field_type());
         }
-        else if (auto * function_json_unquote = dynamic_cast<FunctionJsonUnquote *>(function_impl); function_json_unquote)
+        else if (auto * function_json_unquote = dynamic_cast<FunctionJsonUnquote *>(function_impl);
+                 function_json_unquote)
         {
-            bool valid_check = !(isScalarFunctionExpr(input_expr) && input_expr.sig() == tipb::ScalarFuncSig::CastJsonAsString);
+            bool valid_check
+                = !(isScalarFunctionExpr(input_expr) && input_expr.sig() == tipb::ScalarFuncSig::CastJsonAsString);
             function_json_unquote->setNeedValidCheck(valid_check);
         }
         if (auto * function_cast_json_as_string = dynamic_cast<FunctionCastJsonAsString *>(function_impl);
