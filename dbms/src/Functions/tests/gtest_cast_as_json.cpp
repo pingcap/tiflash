@@ -197,28 +197,28 @@ try
     using DecimalField256 = DecimalField<Decimal256>;
 
     /// Decimal32
-    executeAndAssert<Decimal32>(func_name, DecimalField32(1011, 1), "101.1");
-    executeAndAssert<Decimal32>(func_name, DecimalField32(-1011, 1), "-101.1");
-    executeAndAssert<Decimal32>(func_name, DecimalField32(9999, 1), "999.9");
-    executeAndAssert<Decimal32>(func_name, DecimalField32(-9999, 1), "-999.9");
+    executeAndAssert(func_name, DecimalField32(1011, 1), "101.1");
+    executeAndAssert(func_name, DecimalField32(-1011, 1), "-101.1");
+    executeAndAssert(func_name, DecimalField32(9999, 1), "999.9");
+    executeAndAssert(func_name, DecimalField32(-9999, 1), "-999.9");
 
-    /// Decimal64
-    executeAndAssert<Decimal64>(func_name, DecimalField64(1011, 1), "101.1");
-    executeAndAssert<Decimal64>(func_name, DecimalField64(-1011, 1), "-101.1");
-    executeAndAssert<Decimal64>(func_name, DecimalField64(9999, 1), "999.9");
-    executeAndAssert<Decimal64>(func_name, DecimalField64(-9999, 1), "-999.9");
+    // Decimal64
+    executeAndAssert(func_name, DecimalField64(1011, 1), "101.1");
+    executeAndAssert(func_name, DecimalField64(-1011, 1), "-101.1");
+    executeAndAssert(func_name, DecimalField64(9999, 1), "999.9");
+    executeAndAssert(func_name, DecimalField64(-9999, 1), "-999.9");
 
     /// Decimal128
-    executeAndAssert<Decimal128>(func_name, DecimalField128(1011, 1), "101.1");
-    executeAndAssert<Decimal128>(func_name, DecimalField128(-1011, 1), "-101.1");
-    executeAndAssert<Decimal128>(func_name, DecimalField128(9999, 1), "999.9");
-    executeAndAssert<Decimal128>(func_name, DecimalField128(-9999, 1), "-999.9");
+    executeAndAssert(func_name, DecimalField128(1011, 1), "101.1");
+    executeAndAssert(func_name, DecimalField128(-1011, 1), "-101.1");
+    executeAndAssert(func_name, DecimalField128(9999, 1), "999.9");
+    executeAndAssert(func_name, DecimalField128(-9999, 1), "-999.9");
 
     /// Decimal256
-    executeAndAssert<Decimal256>(func_name, DecimalField256(static_cast<Int256>(1011), 1), "101.1");
-    executeAndAssert<Decimal256>(func_name, DecimalField256(static_cast<Int256>(-1011), 1), "-101.1");
-    executeAndAssert<Decimal256>(func_name, DecimalField256(static_cast<Int256>(9999), 1), "999.9");
-    executeAndAssert<Decimal256>(func_name, DecimalField256(static_cast<Int256>(-9999), 1), "-999.9");
+    executeAndAssert(func_name, DecimalField256(static_cast<Int256>(1011), 1), "101.1");
+    executeAndAssert(func_name, DecimalField256(static_cast<Int256>(-1011), 1), "-101.1");
+    executeAndAssert(func_name, DecimalField256(static_cast<Int256>(9999), 1), "999.9");
+    executeAndAssert(func_name, DecimalField256(static_cast<Int256>(-9999), 1), "-999.9");
 }
 CATCH
 
