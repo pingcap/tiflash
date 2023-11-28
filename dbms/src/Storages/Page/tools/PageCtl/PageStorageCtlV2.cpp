@@ -77,7 +77,7 @@ enum DebugMode
 void dump_all_entries(PageFileSet & page_files, int32_t mode = DebugMode::DUMP_ALL_ENTRIES);
 void list_all_capacity(const PageFileSet & page_files, PageStorage & storage, const DB::PageStorageConfig & config);
 
-DB::PageStorageConfig parse_storage_config(int argc, char ** argv, Poco::Logger * logger)
+DB::PageStorageConfig parse_storage_config(int argc, char ** argv, DB::LoggerPtr logger)
 {
     DB::PageStorageConfig config;
     if (argc > 4)
@@ -132,7 +132,7 @@ try
     DB::String mode_str = argv[2];
     int32_t mode = strtol(mode_str.c_str(), nullptr, 10);
 
-    Poco::Logger * logger = &Poco::Logger::get("root");
+    DB::LoggerPtr logger = DB::Logger::get("root");
 
     switch (mode)
     {

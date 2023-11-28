@@ -184,6 +184,7 @@ target_link_libraries (tiflash_common_io
     prometheus-cpp::pull
     cpptoml
     magic_enum
+    simdjson
     libsymbolization
     ${RE2_LIBRARY}
     ${RE2_ST_LIBRARY}
