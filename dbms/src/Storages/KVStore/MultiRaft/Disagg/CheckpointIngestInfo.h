@@ -44,6 +44,7 @@ struct CheckpointIngestInfo
     // Get segments from memory or restore from ps.
     DM::Segments getRestoredSegments() const;
     UInt64 getRemoteStoreId() const;
+    // Delete persisted data when destructing.
     void markDelete();
     RegionPtr getRegion() const;
     UInt64 regionId() const { return region_id; }

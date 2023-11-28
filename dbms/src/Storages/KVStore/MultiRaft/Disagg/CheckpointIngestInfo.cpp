@@ -86,15 +86,16 @@ bool CheckpointIngestInfo::forciblyClean(TMTContext & tmt, UInt64 region_id)
     {
         auto page_id
             = UniversalPageIdFormat::toLocalKVPrefix(UniversalPageIdFormat::LocalKVKeyType::FAPIngestInfo, region_id);
+        // For most cases, ingest infos are deleted in `removeFromLocal`.
         Page page = uni_ps->read(page_id, nullptr, snapshot, /*throw_on_not_exist*/ false);
-        if (page.isValid())
+        if unlikely (page.isValid())
         {
             del_batch.delPage(UniversalPageIdFormat::toLocalKVPrefix(
                 UniversalPageIdFormat::LocalKVKeyType::FAPIngestInfo,
                 region_id));
         }
     }
-    if (!del_batch.empty())
+    if unlikely (!del_batch.empty())
     {
         uni_ps->write(std::move(del_batch), DB::PS::V3::PageType::Local, nullptr);
         return true;
