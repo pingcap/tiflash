@@ -2568,6 +2568,13 @@ void Join::finalize(const Names & parent_require)
     required_names_set.clear();
     for (const auto & name : updated_require)
         required_names_set.insert(name);
+    if (non_equal_conditions.other_cond_expr != nullptr || non_equal_conditions.null_aware_eq_cond_expr != nullptr)
+    {
+        for (const auto & name : required_names_set)
+            output_columns_names_set_for_other_condition_after_finalize.insert(name);
+        if (!match_helper_name.empty())
+            output_columns_names_set_for_other_condition_after_finalize.insert(match_helper_name);
+    }
     /// add some internal used columns
     if (!non_equal_conditions.left_filter_column.empty())
         required_names_set.insert(non_equal_conditions.left_filter_column);
@@ -2579,14 +2586,6 @@ void Join::finalize(const Names & parent_require)
     for (const auto & name : key_names_left)
         required_names_set.insert(name);
 
-
-    if (non_equal_conditions.other_cond_expr != nullptr || non_equal_conditions.null_aware_eq_cond_expr != nullptr)
-    {
-        for (const auto & name : required_names_set)
-            output_columns_names_set_for_other_condition_after_finalize.insert(name);
-        if (!match_helper_name.empty())
-            output_columns_names_set_for_other_condition_after_finalize.insert(match_helper_name);
-    }
     for (const auto & name : required_names_set)
         required_columns.push_back(name);
     finalized = true;
