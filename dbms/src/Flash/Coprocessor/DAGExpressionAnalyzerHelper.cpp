@@ -332,7 +332,7 @@ String DAGExpressionAnalyzerHelper::buildSingleParamJsonRelatedFunctions(
                 = !(isScalarFunctionExpr(input_expr) && input_expr.sig() == tipb::ScalarFuncSig::CastJsonAsString);
             function_json_unquote->setNeedValidCheck(valid_check);
         }
-        if (auto * function_cast_json_as_string = dynamic_cast<FunctionCastJsonAsString *>(function_impl);
+        else if (auto * function_cast_json_as_string = dynamic_cast<FunctionCastJsonAsString *>(function_impl);
             function_cast_json_as_string)
         {
             function_cast_json_as_string->setOutputTiDBFieldType(expr.field_type());
