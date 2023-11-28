@@ -90,9 +90,7 @@ bool CheckpointIngestInfo::forciblyClean(TMTContext & tmt, UInt64 region_id)
         Page page = uni_ps->read(page_id, nullptr, snapshot, /*throw_on_not_exist*/ false);
         if unlikely (page.isValid())
         {
-            del_batch.delPage(UniversalPageIdFormat::toLocalKVPrefix(
-                UniversalPageIdFormat::LocalKVKeyType::FAPIngestInfo,
-                region_id));
+            del_batch.delPage(page_id);
         }
     }
     if unlikely (!del_batch.empty())
