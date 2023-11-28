@@ -80,7 +80,7 @@ constexpr static Int64 pow10[] = {1, 10, 100, 1000, 10000, 100000, 1000000, 1000
 ALWAYS_INLINE inline size_t charLengthToByteLengthFromUTF8(const char * data, size_t length, size_t char_length)
 {
     size_t ret = 0;
-    for (size_t char_index = 0; char_index < char_length && ret < length; char_index++)
+    for (size_t char_index = 0; char_index < char_length && ret < length; ++char_index)
     {
         uint8_t c = data[ret];
         if (c < 0x80)
@@ -91,6 +91,16 @@ ALWAYS_INLINE inline size_t charLengthToByteLengthFromUTF8(const char * data, si
             ret += 3;
         else
             ret += 4;
+    }
+    if unlikely (ret > length)
+    {
+        throw Exception(
+            fmt::format(
+                "Illegal utf8 byte sequence bytes: {} result_length: {} char_length: {}",
+                length,
+                ret,
+                char_length),
+            ErrorCodes::ILLEGAL_COLUMN);
     }
     return ret;
 }

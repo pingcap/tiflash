@@ -475,7 +475,6 @@ public:
                             reinterpret_cast<char *>(container_per_element.data()),
                             orig_length,
                             tidb_tp->flen());
-                        byte_length = std::min(byte_length, orig_length);
                         if (byte_length < element_write_buffer.count())
                             context.getDAGContext()->handleTruncateError("Data Too Long");
                         write_buffer.write(reinterpret_cast<char *>(container_per_element.data()), byte_length);
