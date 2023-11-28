@@ -202,7 +202,7 @@ try
     executeAndAssert(func_name, DecimalField32(9999, 1), "999.9");
     executeAndAssert(func_name, DecimalField32(-9999, 1), "-999.9");
 
-    // Decimal64
+    /// Decimal64
     executeAndAssert(func_name, DecimalField64(1011, 1), "101.1");
     executeAndAssert(func_name, DecimalField64(-1011, 1), "-101.1");
     executeAndAssert(func_name, DecimalField64(9999, 1), "999.9");
