@@ -35,11 +35,7 @@ struct AsyncTasks
         if (it != futures.end())
         {
             futures.erase(it);
-            auto it2 = start_time.find(k);
-            if (it2 != start_time.end())
-            {
-                start_time.erase(it2);
-            }
+            start_time.erase(k);
             return true;
         }
         return false;
