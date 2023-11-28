@@ -124,7 +124,7 @@ CheckpointIngestInfoPtr FastAddPeerContext::getOrRestoreCheckpointIngestInfo(
     }
     else
     {
-        auto info = std::make_shared<CheckpointIngestInfo>(tmt, proxy_helper, region_id, peer_id);
+        auto info = CheckpointIngestInfo::restore(tmt, proxy_helper, region_id, peer_id);
         checkpoint_ingest_info_map.emplace(region_id, info);
         return info;
     }

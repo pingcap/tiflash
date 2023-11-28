@@ -71,18 +71,19 @@ struct CheckpointIngestInfo
         persistToLocal();
     }
 
-    // Create from restore
-    CheckpointIngestInfo(
-        TMTContext & tmt_,
+    static CheckpointIngestInfoPtr restore(
+        TMTContext & tmt,
         const TiFlashRaftProxyHelper * proxy_helper,
-        UInt64 region_id_,
-        UInt64 peer_id_);
+        UInt64 region_id,
+        UInt64 peer_id);
 
     static bool forciblyClean(TMTContext & tmt, UInt64 region_id);
 
     ~CheckpointIngestInfo();
 
 private:
+    // Create from restore
+    CheckpointIngestInfo(TMTContext & tmt_, UInt64 region_id_, UInt64 peer_id_);
     bool loadFromLocal(const TiFlashRaftProxyHelper * proxy_helper);
     // Safety: raftstore ensures a region is handled in a single thread.
     // `persistToLocal` is called at a fixed place in this thread.

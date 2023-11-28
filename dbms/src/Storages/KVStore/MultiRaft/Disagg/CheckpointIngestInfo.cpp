@@ -28,19 +28,14 @@
 namespace DB
 {
 
-CheckpointIngestInfo::CheckpointIngestInfo(
-    TMTContext & tmt_,
+CheckpointIngestInfoPtr CheckpointIngestInfo::restore(
+    TMTContext & tmt,
     const TiFlashRaftProxyHelper * proxy_helper,
-    UInt64 region_id_,
-    UInt64 peer_id_)
-    : tmt(tmt_)
-    , region_id(region_id_)
-    , peer_id(peer_id_)
-    , remote_store_id(0)
-    , clean_when_destruct(false)
-    , begin_time(0)
+    UInt64 region_id,
+    UInt64 peer_id)
 {
-    if (!loadFromLocal(proxy_helper))
+    auto ptr = std::shared_ptr<CheckpointIngestInfo>(new CheckpointIngestInfo(tmt, region_id, peer_id));
+    if (!ptr->loadFromLocal(proxy_helper))
     {
         throw Exception(
             ErrorCodes::LOGICAL_ERROR,
@@ -49,7 +44,17 @@ CheckpointIngestInfo::CheckpointIngestInfo(
             peer_id,
             tmt.getKVStore()->getStoreID(std::memory_order_relaxed));
     }
+    return ptr;
 }
+
+CheckpointIngestInfo::CheckpointIngestInfo(TMTContext & tmt_, UInt64 region_id_, UInt64 peer_id_)
+    : tmt(tmt_)
+    , region_id(region_id_)
+    , peer_id(peer_id_)
+    , remote_store_id(0)
+    , clean_when_destruct(false)
+    , begin_time(0)
+{}
 
 DM::Segments CheckpointIngestInfo::getRestoredSegments() const
 {
