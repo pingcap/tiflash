@@ -29,7 +29,6 @@
 #include <Storages/DeltaMerge/Index/RSResult.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <TestUtils/TiFlashTestBasic.h>
-#include <TiDB/Schema/SchemaBuilder-internal.h>
 #include <TiDB/Schema/SchemaNameMapper.h>
 #include <common/logger_useful.h>
 

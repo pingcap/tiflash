@@ -90,18 +90,6 @@ public:
         return schema_syncer->getDBInfoByName(database_name);
     }
 
-    TiDB::DBInfoPtr getDBInfoByMappedName(KeyspaceID keyspace_id, const String & mapped_database_name)
-    {
-        std::shared_lock<std::shared_mutex> read_lock(schema_syncers_mutex);
-        auto schema_syncer = getSchemaSyncer(keyspace_id);
-        if (schema_syncer == nullptr)
-        {
-            LOG_ERROR(log, "SchemaSyncer not found, keyspace={}", keyspace_id);
-            return nullptr;
-        }
-        return schema_syncer->getDBInfoByMappedName(mapped_database_name);
-    }
-
     bool removeSchemaSyncer(KeyspaceID keyspace_id)
     {
         std::unique_lock<std::shared_mutex> lock(schema_syncers_mutex);

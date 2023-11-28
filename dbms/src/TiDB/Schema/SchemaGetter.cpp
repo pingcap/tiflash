@@ -13,8 +13,12 @@
 // limitations under the License.
 
 #include <Common/TiFlashException.h>
+#include <Storages/KVStore/TiKVHelpers/KeyspaceSnapshot.h>
 #include <TiDB/Decode/DatumCodec.h>
 #include <TiDB/Schema/SchemaGetter.h>
+#include <common/logger_useful.h>
+
+#include <utility>
 
 namespace DB
 {
@@ -49,7 +53,7 @@ struct TxnStructure
         stream.write(metaPrefix, 1);
 
         EncodeBytes(key, stream);
-        EncodeUInt<UInt64>(UInt64(StringData), stream);
+        EncodeUInt<UInt64>(static_cast<UInt64>(StringData), stream);
 
         return stream.releaseStr();
     }
@@ -61,7 +65,7 @@ struct TxnStructure
         stream.write(metaPrefix, 1);
 
         EncodeBytes(key, stream);
-        EncodeUInt<UInt64>(UInt64(HashData), stream);
+        EncodeUInt<UInt64>(static_cast<UInt64>(HashData), stream);
         EncodeBytes(field, stream);
 
         return stream.releaseStr();
@@ -74,7 +78,7 @@ struct TxnStructure
         stream.write(metaPrefix, 1);
 
         EncodeBytes(key, stream);
-        EncodeUInt<UInt64>(UInt64(HashData), stream);
+        EncodeUInt<UInt64>(static_cast<UInt64>(HashData), stream);
         return stream.releaseStr();
     }
 
@@ -91,11 +95,9 @@ struct TxnStructure
         String decode_key = DecodeBytes(idx, key);
 
         UInt64 tp = DecodeUInt<UInt64>(idx, key);
-        if (char(tp) != HashData)
+        if (static_cast<char>(tp) != HashData)
         {
-            throw TiFlashException(
-                "invalid encoded hash data key flag:" + std::to_string(tp),
-                Errors::Table::SyncError);
+            throw TiFlashException(Errors::Table::SyncError, "invalid encoded hash data key flag: {}", tp);
         }
 
         String field = DecodeBytes(idx, key);
