@@ -27,11 +27,14 @@
 #include <DataTypes/DataTypesNumber.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Functions/FunctionHelpers.h>
+#include <Functions/FunctionsTiDBConversion.h>
 #include <Functions/GatherUtils/Sources.h>
 #include <Functions/IFunction.h>
 #include <Functions/castTypeToEither.h>
+#include <Interpreters/Context.h>
 #include <TiDB/Decode/JsonBinary.h>
 #include <TiDB/Decode/JsonPathExprRef.h>
+#include <TiDB/Decode/JsonScanner.h>
 #include <TiDB/Schema/TiDB.h>
 #include <common/JSON.h>
 #include <simdjson.h>
@@ -301,6 +304,7 @@ public:
 
     size_t getNumberOfArguments() const override { return 1; }
 
+    void setNeedValidCheck(bool need_valid_check_) { need_valid_check = need_valid_check_; }
     bool useDefaultImplementationForConstants() const override { return true; }
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
@@ -327,16 +331,10 @@ public:
             offsets_to.resize(rows);
             ColumnUInt8::MutablePtr col_null_map = ColumnUInt8::create(rows, 0);
             JsonBinary::JsonBinaryWriteBuffer write_buffer(data_to);
-            size_t current_offset = 0;
-            for (size_t i = 0; i < block.rows(); ++i)
-            {
-                size_t next_offset = offsets_from[i];
-                size_t data_length = next_offset - current_offset - 1;
-                JsonBinary::unquoteStringInBuffer(StringRef(&data_from[current_offset], data_length), write_buffer);
-                writeChar(0, write_buffer);
-                offsets_to[i] = write_buffer.count();
-                current_offset = next_offset;
-            }
+            if (need_valid_check)
+                doUnquote<true>(block, data_from, offsets_from, offsets_to, write_buffer);
+            else
+                doUnquote<false>(block, data_from, offsets_from, offsets_to, write_buffer);
             data_to.resize(write_buffer.count());
             block.getByPosition(result).column = ColumnNullable::create(std::move(col_to), std::move(col_null_map));
         }
@@ -345,6 +343,41 @@ public:
                 fmt::format("Illegal column {} of argument of function {}", column->getName(), getName()),
                 ErrorCodes::ILLEGAL_COLUMN);
     }
+
+    template <bool validCheck>
+    void doUnquote(
+        const Block & block,
+        const ColumnString::Chars_t & data_from,
+        const IColumn::Offsets & offsets_from,
+        IColumn::Offsets & offsets_to,
+        JsonBinary::JsonBinaryWriteBuffer & write_buffer) const
+    {
+        size_t current_offset = 0;
+        for (size_t i = 0; i < block.rows(); ++i)
+        {
+            size_t next_offset = offsets_from[i];
+            size_t data_length = next_offset - current_offset - 1;
+            if constexpr (validCheck)
+            {
+                // TODO(hyb): use SIMDJson to check when SIMDJson is proved in practice
+                if (data_length >= 2 && data_from[current_offset] == '"' && data_from[next_offset - 2] == '"'
+                    && unlikely(
+                        !checkJsonValid(reinterpret_cast<const char *>(&data_from[current_offset]), data_length)))
+                {
+                    throw Exception(
+                        "Invalid JSON text: The document root must not be followed by other values.",
+                        ErrorCodes::ILLEGAL_COLUMN);
+                }
+            }
+            JsonBinary::unquoteStringInBuffer(StringRef(&data_from[current_offset], data_length), write_buffer);
+            writeChar(0, write_buffer);
+            offsets_to[i] = write_buffer.count();
+            current_offset = next_offset;
+        }
+    }
+
+private:
+    bool need_valid_check = false;
 };
 
 
@@ -352,13 +385,26 @@ class FunctionCastJsonAsString : public IFunction
 {
 public:
     static constexpr auto name = "cast_json_as_string";
-    static FunctionPtr create(const Context &) { return std::make_shared<FunctionCastJsonAsString>(); }
+    static FunctionPtr create(const Context & context)
+    {
+        if (!context.getDAGContext())
+        {
+            throw Exception("DAGContext should not be nullptr.", ErrorCodes::LOGICAL_ERROR);
+        }
+        return std::make_shared<FunctionCastJsonAsString>(context);
+    }
+
+    explicit FunctionCastJsonAsString(const Context & context)
+        : context(context)
+    {}
 
     String getName() const override { return name; }
 
     size_t getNumberOfArguments() const override { return 1; }
 
     bool useDefaultImplementationForConstants() const override { return true; }
+
+    void setOutputTiDBFieldType(const tipb::FieldType & tidb_tp_) { tidb_tp = &tidb_tp_; }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
@@ -386,25 +432,58 @@ public:
             ColumnUInt8::MutablePtr col_null_map = ColumnUInt8::create(rows, 0);
             ColumnUInt8::Container & vec_null_map = col_null_map->getData();
             JsonBinary::JsonBinaryWriteBuffer write_buffer(data_to);
-            size_t current_offset = 0;
-            for (size_t i = 0; i < block.rows(); ++i)
+            if likely (tidb_tp->flen() < 0)
             {
-                size_t next_offset = offsets_from[i];
-                size_t json_length = next_offset - current_offset - 1;
-                if unlikely (isNullJsonBinary(json_length))
+                size_t current_offset = 0;
+                for (size_t i = 0; i < block.rows(); ++i)
                 {
-                    vec_null_map[i] = 1;
+                    size_t next_offset = offsets_from[i];
+                    size_t json_length = next_offset - current_offset - 1;
+                    if unlikely (isNullJsonBinary(json_length))
+                        vec_null_map[i] = 1;
+                    else
+                    {
+                        JsonBinary json_binary(
+                            data_from[current_offset],
+                            StringRef(&data_from[current_offset + 1], json_length - 1));
+                        json_binary.toStringInBuffer(write_buffer);
+                    }
+                    writeChar(0, write_buffer);
+                    offsets_to[i] = write_buffer.count();
+                    current_offset = next_offset;
                 }
-                else
+            }
+            else
+            {
+                ColumnString::Chars_t container_per_element;
+                size_t current_offset = 0;
+                for (size_t i = 0; i < block.rows(); ++i)
                 {
-                    JsonBinary json_binary(
-                        data_from[current_offset],
-                        StringRef(&data_from[current_offset + 1], json_length - 1));
-                    json_binary.toStringInBuffer(write_buffer);
+                    size_t next_offset = offsets_from[i];
+                    size_t json_length = next_offset - current_offset - 1;
+                    if unlikely (isNullJsonBinary(json_length))
+                        vec_null_map[i] = 1;
+                    else
+                    {
+                        JsonBinary::JsonBinaryWriteBuffer element_write_buffer(container_per_element);
+                        JsonBinary json_binary(
+                            data_from[current_offset],
+                            StringRef(&data_from[current_offset + 1], json_length - 1));
+                        json_binary.toStringInBuffer(element_write_buffer);
+                        size_t orig_length = element_write_buffer.count();
+                        auto byte_length = charLengthToByteLengthFromUTF8(
+                            reinterpret_cast<char *>(container_per_element.data()),
+                            orig_length,
+                            tidb_tp->flen());
+                        if (byte_length < element_write_buffer.count())
+                            context.getDAGContext()->handleTruncateError("Data Too Long");
+                        write_buffer.write(reinterpret_cast<char *>(container_per_element.data()), byte_length);
+                    }
+
+                    writeChar(0, write_buffer);
+                    offsets_to[i] = write_buffer.count();
+                    current_offset = next_offset;
                 }
-                writeChar(0, write_buffer);
-                offsets_to[i] = write_buffer.count();
-                current_offset = next_offset;
             }
             data_to.resize(write_buffer.count());
             block.getByPosition(result).column = ColumnNullable::create(std::move(col_to), std::move(col_null_map));
@@ -414,8 +493,11 @@ public:
                 fmt::format("Illegal column {} of argument of function {}", column->getName(), getName()),
                 ErrorCodes::ILLEGAL_COLUMN);
     }
-};
 
+private:
+    const tipb::FieldType * tidb_tp;
+    const Context & context;
+};
 
 class FunctionJsonLength : public IFunction
 {
