@@ -58,7 +58,7 @@ struct AsyncTasks
 
     bool isScheduled(Key key) const
     {
-        std::unique_lock l(mtx);
+        std::scoped_lock l(mtx);
         return futures.contains(key);
     }
 
