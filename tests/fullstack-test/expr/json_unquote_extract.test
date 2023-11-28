@@ -32,3 +32,5 @@ mysql> set tidb_enforce_mpp=1; select b->>'\$.*' as col_a, c->>'\$[*]' as col_b,
 +-------------+----------------+-------------+
 | ["b", "bb"] | [1, 2, [3, 4]] | ["b"]       |
 +-------------+----------------+-------------+
+
+mysql> drop table if exists test.t

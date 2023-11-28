@@ -114,6 +114,10 @@ void columnsToTiPBExprForTiDBCast(
     auto * argument_expr = expr->add_children();
     columnToTiPBExpr(argument_expr, columns[argument_column_number[0]], 0);
     ColumnInfo ci = reverseGetColumnInfo({type_string, target_type}, 0, Field(), true);
+    if (ci.tp == TiDB::TypeString)
+    {
+        ci.flen = -1;
+    }
     *(expr->mutable_field_type()) = columnInfoToFieldType(ci);
     if (collator != nullptr)
         expr->mutable_field_type()->set_collate(-collator->getCollatorId());

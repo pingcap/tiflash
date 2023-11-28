@@ -1,0 +1,357 @@
+# Copyright 2023 PingCAP, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# prepare data
+mysql> drop table if exists test.test_int;
+mysql> CREATE TABLE test.test_int (bool_col boolean, `tiny_us` tinyint(20) unsigned,`tiny_s` tinyint(20),`small_us` smallint(20) unsigned,`small_s` smallint(20),`medium_us` mediumint(20) unsigned,`medium_s` mediumint(20),`int_us` int(20) unsigned,`int_s` int(20),`bigint_us` bigint(20) unsigned,`bigint_s` bigint(20));
+mysql> insert into test.test_int values(null, null, null, null, null, null, null, null, null, null, null);
+mysql> insert into test.test_int values(false, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+mysql> insert into test.test_int values(true, 1, -1, 1, -1, 1, -1, 1, -1, 1, -1);
+mysql> alter table test.test_int set tiflash replica 1;
+
+mysql> drop table if exists test.test_float;
+mysql> CREATE TABLE test.test_float (float_s float, `float_us` float unsigned, `double_s` double,`double_us` double unsigned);
+mysql> insert into test.test_float values(null, null, null, null);
+mysql> insert into test.test_float values(0, 0, 0, 0);
+mysql> insert into test.test_float values(-999.999, 999.999, -999.999, 999.999);
+mysql> alter table test.test_float set tiflash replica 1;
+
+mysql> drop table if exists test.test_str;
+mysql> CREATE TABLE test.test_str (flag tinyint,str_ch CHAR,str_vch VARCHAR(100),str_tb TINYBLOB,str_tt TINYTEXT,str_b BLOB,str_t TEXT,str_mb MEDIUMBLOB,str_mt MEDIUMTEXT,str_lb LONGBLOB,str_lt LONGTEXT);
+mysql> insert into test.test_str values(0, null, null, null, null, null, null, null, null, null, null);
+mysql> insert into test.test_str values(1, '', '', '', '', '', '', '', '', '', '');
+mysql> insert into test.test_str values(2, 'a', '[1, \"1\", {\"1\":\"1\"}]', 'helloword', '[1, \"1\", {\"1\":\"1\"}]', 'helloword', '[1, \"1\", {\"1\":\"1\"}]', 'helloword', '[1, \"1\", {\"1\":\"1\"}]', 'helloword', '[1, \"1\", {\"1\":\"1\"}]');  #NO_UNESCAPE
+mysql> insert into test.test_str values(3, null, '\"a\"', null, null, null, null, null, null, null, null);  #NO_UNESCAPE
+mysql> insert into test.test_str values(3, null, '1', null, null, null, null, null, null, null, null);  #NO_UNESCAPE
+mysql> insert into test.test_str values(3, null, '1.11', null, null, null, null, null, null, null, null);  #NO_UNESCAPE
+mysql> insert into test.test_str values(3, null, 'true', null, null, null, null, null, null, null, null);  #NO_UNESCAPE
+mysql> alter table test.test_str set tiflash replica 1;
+
+mysql> drop table if exists test.test_binary;
+mysql> CREATE TABLE test.test_binary (col_b binary(5), col_br varbinary(5));
+mysql> insert into test.test_binary values(null, null);
+mysql> insert into test.test_binary values('12345', '12345');
+mysql> insert into test.test_binary values('12', '12');
+mysql> insert into test.test_binary values('', '');
+mysql> alter table test.test_binary set tiflash replica 1;
+
+mysql> drop table if exists test.test_bin_str;
+mysql> create table test.test_bin_str(col varchar(5)) COLLATE=binary;
+mysql> insert into test.test_bin_str values(null);
+mysql> insert into test.test_bin_str values('12345');
+mysql> insert into test.test_bin_str values('12');
+mysql> insert into test.test_bin_str values('');
+mysql> alter table test.test_bin_str set tiflash replica 1;
+
+mysql> drop table if exists test.test_long_str;
+mysql> create table test.test_long_str(col varchar(500));
+mysql> insert into test.test_long_str values('[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]');
+mysql> alter table test.test_long_str set tiflash replica 1;
+
+mysql> drop table if exists test.test_time;
+mysql> CREATE TABLE test.test_time (col_d DATE, col_dt DATETIME, col_ts TIMESTAMP, col_y YEAR);
+mysql> insert into test.test_time values(null, null, null, null);
+mysql> insert into test.test_time values('2023-11-14', '2023-11-14 21:59:59', '2023-11-14 21:59:59', '2023');
+mysql> alter table test.test_time set tiflash replica 1;
+
+mysql> drop table if exists test.test_duration;
+mysql> CREATE TABLE test.test_duration (col1 time(1), col6 time(6));
+mysql> insert into test.test_duration values(null, null);
+mysql> insert into test.test_duration values('08:00:00', '08:00:00');
+mysql> alter table test.test_duration set tiflash replica 1;
+
+mysql> drop table if exists test.test_json;
+mysql> CREATE TABLE test.test_json (col json);
+mysql> insert into test.test_json values(null);
+mysql> insert into test.test_json values('[1, 2, null, [], {}, 1.11, \"a\", \"a\"]');  #NO_UNESCAPE
+mysql> insert into test.test_json values('{\"a\":1, \"b\":1.11, \"c\":[], \"d\":\"d\", \"e\":{}}');  #NO_UNESCAPE
+mysql> alter table test.test_json set tiflash replica 1;
+
+mysql> drop table if exists test.test_decimal;
+mysql> CREATE TABLE test.test_decimal (col32 decimal(9, 1), col64 decimal(18, 1), col128 decimal(38, 1), col256 decimal(65, 1));
+mysql> insert into test.test_decimal values(null, null, null, null);
+mysql> insert into test.test_decimal values(0.1, 0.1, 0.1, 0.1);
+mysql> alter table test.test_decimal set tiflash replica 1;
+
+func> wait_table test test_int
+func> wait_table test test_float
+func> wait_table test test_str
+func> wait_table test test_binary
+func> wait_table test test_bin_str
+func> wait_table test test_long_str
+func> wait_table test test_time
+func> wait_table test test_duration
+func> wait_table test test_json
+func> wait_table test test_decimal
+
+# test
+## cast int as json
+mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(bool_col as json), cast(bool_col > 0 as json) from test.test_int;
++------------------------+----------------------------+
+| cast(bool_col as json) | cast(bool_col > 0 as json) |
++------------------------+----------------------------+
+| NULL                   | NULL                       |
+| 0                      | false                      |
+| 1                      | true                       |
++------------------------+----------------------------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(tiny_us as json), cast(tiny_s as json) from test.test_int;
++-----------------------+----------------------+
+| cast(tiny_us as json) | cast(tiny_s as json) |
++-----------------------+----------------------+
+| NULL                  | NULL                 |
+| 0                     | 0                    |
+| 1                     | -1                   |
++-----------------------+----------------------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(small_us as json), cast(small_s as json) from test.test_int;
++------------------------+-----------------------+
+| cast(small_us as json) | cast(small_s as json) |
++------------------------+-----------------------+
+| NULL                   | NULL                  |
+| 0                      | 0                     |
+| 1                      | -1                    |
++------------------------+-----------------------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(medium_us as json), cast(medium_s as json) from test.test_int;
++-------------------------+------------------------+
+| cast(medium_us as json) | cast(medium_s as json) |
++-------------------------+------------------------+
+| NULL                    | NULL                   |
+| 0                       | 0                      |
+| 1                       | -1                     |
++-------------------------+------------------------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(int_us as json), cast(int_s as json) from test.test_int;
++----------------------+---------------------+
+| cast(int_us as json) | cast(int_s as json) |
++----------------------+---------------------+
+| NULL                 | NULL                |
+| 0                    | 0                   |
+| 1                    | -1                  |
++----------------------+---------------------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(bigint_us as json), cast(bigint_s as json) from test.test_int;
++-------------------------+------------------------+
+| cast(bigint_us as json) | cast(bigint_s as json) |
++-------------------------+------------------------+
+| NULL                    | NULL                   |
+| 0                       | 0                      |
+| 1                       | -1                     |
++-------------------------+------------------------+
+
+## cast real as json
+mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(float_s as json), cast(float_us as json) from test.test_float;
++-----------------------+------------------------+
+| cast(float_s as json) | cast(float_us as json) |
++-----------------------+------------------------+
+| NULL                  | NULL                   |
+| 0                     | 0                      |
+| -999.9990234375       | 999.9990234375         |
++-----------------------+------------------------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(double_s as json), cast(double_us as json) from test.test_float;
++------------------------+-------------------------+
+| cast(double_s as json) | cast(double_us as json) |
++------------------------+-------------------------+
+| NULL                   | NULL                    |
+| 0                      | 0                       |
+| -999.999               | 999.999                 |
++------------------------+-------------------------+
+
+## cast string as json
+mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(str_ch as json) from test.test_str where flag = 0;
++----------------------+
+| cast(str_ch as json) |
++----------------------+
+| NULL                 |
++----------------------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(str_ch as json) from test.test_str where flag = 1;
+{#REGEXP}.*Invalid.*
+mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(str_ch as json) from test.test_str where flag = 2;
+{#REGEXP}.*Invalid.*
+mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(str_vch as json) from test.test_str where flag = 0;
++-----------------------+
+| cast(str_vch as json) |
++-----------------------+
+| NULL                  |
++-----------------------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(str_vch as json) from test.test_str where flag = 1;
+{#REGEXP}.*Invalid.*
+mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(str_vch as json) from test.test_str where flag = 2;
++-----------------------+
+| cast(str_vch as json) |
++-----------------------+
+| [1, "1", {"1": "1"}]  |
++-----------------------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(str_vch as json) from test.test_str where flag = 3;
++-----------------------+
+| cast(str_vch as json) |
++-----------------------+
+| "a"                   |
+| 1                     |
+| 1.11                  |
+| true                  |
++-----------------------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(str_tb as json) from test.test_str where flag in (0, 1, 2);
++-------------------------------+
+| cast(str_tb as json)          |
++-------------------------------+
+| NULL                          |
+| "base64:type249:"             |
+| "base64:type249:aGVsbG93b3Jk" |
++-------------------------------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(str_tt as json) from test.test_str where flag = 0;
++----------------------+
+| cast(str_tt as json) |
++----------------------+
+| NULL                 |
++----------------------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(str_tt as json) from test.test_str where flag = 1;
+{#REGEXP}.*Invalid.*
+mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(str_tt as json) from test.test_str where flag = 2;
++----------------------+
+| cast(str_tt as json) |
++----------------------+
+| [1, "1", {"1": "1"}] |
++----------------------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(str_b as json) from test.test_str where flag in (0, 1, 2);
++-------------------------------+
+| cast(str_b as json)           |
++-------------------------------+
+| NULL                          |
+| "base64:type252:"             |
+| "base64:type252:aGVsbG93b3Jk" |
++-------------------------------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(str_t as json) from test.test_str where flag = 0;
++---------------------+
+| cast(str_t as json) |
++---------------------+
+| NULL                |
++---------------------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(str_t as json) from test.test_str where flag = 1;
+{#REGEXP}.*Invalid.*
+mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(str_t as json) from test.test_str where flag = 2;
++----------------------+
+| cast(str_t as json)  |
++----------------------+
+| [1, "1", {"1": "1"}] |
++----------------------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(str_mb as json) from test.test_str where flag in (0, 1, 2);
++-------------------------------+
+| cast(str_mb as json)          |
++-------------------------------+
+| NULL                          |
+| "base64:type250:"             |
+| "base64:type250:aGVsbG93b3Jk" |
++-------------------------------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(str_mt as json) from test.test_str where flag = 0;
++----------------------+
+| cast(str_mt as json) |
++----------------------+
+| NULL                 |
++----------------------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(str_mt as json) from test.test_str where flag = 1;
+{#REGEXP}.*Invalid.*
+mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(str_mt as json) from test.test_str where flag = 2;
++----------------------+
+| cast(str_mt as json) |
++----------------------+
+| [1, "1", {"1": "1"}] |
++----------------------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(str_lb as json) from test.test_str where flag in (0, 1, 2);
++-------------------------------+
+| cast(str_lb as json)          |
++-------------------------------+
+| NULL                          |
+| "base64:type251:"             |
+| "base64:type251:aGVsbG93b3Jk" |
++-------------------------------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(str_lt as json) from test.test_str where flag = 0;
++----------------------+
+| cast(str_lt as json) |
++----------------------+
+| NULL                 |
++----------------------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(str_lt as json) from test.test_str where flag = 1;
+{#REGEXP}.*Invalid.*
+mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(str_lt as json) from test.test_str where flag = 2;
++----------------------+
+| cast(str_lt as json) |
++----------------------+
+| [1, "1", {"1": "1"}] |
++----------------------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(col_b as json), cast(col_br as json) from test.test_binary;
++---------------------------+--------------------------+
+| cast(col_b as json)       | cast(col_br as json)     |
++---------------------------+--------------------------+
+| NULL                      | NULL                     |
+| "base64:type254:MTIzNDU=" | "base64:type15:MTIzNDU=" |
+| "base64:type254:MTIAAAA=" | "base64:type15:MTI="     |
+| "base64:type254:AAAAAAA=" | "base64:type15:"         |
++---------------------------+--------------------------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(col as json) from test.test_bin_str;
++--------------------------+
+| cast(col as json)        |
++--------------------------+
+| NULL                     |
+| "base64:type15:MTIzNDU=" |
+| "base64:type15:MTI="     |
+| "base64:type15:"         |
++--------------------------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(col as json) from test.test_long_str;
+{#REGEXP}.*Invalid.*
+
+## cast time as json
+mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(col_d as json),cast(col_dt as json),cast(col_ts as json),cast(col_y as json) from test.test_time;
++---------------------+------------------------------+------------------------------+---------------------+
+| cast(col_d as json) | cast(col_dt as json)         | cast(col_ts as json)         | cast(col_y as json) |
++---------------------+------------------------------+------------------------------+---------------------+
+| NULL                | NULL                         | NULL                         | NULL                |
+| "2023-11-14"        | "2023-11-14 21:59:59.000000" | "2023-11-14 21:59:59.000000" | 2023                |
++---------------------+------------------------------+------------------------------+---------------------+
+
+## cast duration as json
+mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(col1 as json), cast(col6 as json) from test.test_duration;
++--------------------+--------------------+
+| cast(col1 as json) | cast(col6 as json) |
++--------------------+--------------------+
+| NULL               | NULL               |
+| "08:00:00.000000"  | "08:00:00.000000"  |
++--------------------+--------------------+
+
+## cast json as json
+mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(col as json) from test.test_json;
++-------------------------------------------------+
+| cast(col as json)                               |
++-------------------------------------------------+
+| NULL                                            |
+| [1, 2, null, [], {}, 1.11, "a", "a"]            |
+| {"a": 1, "b": 1.11, "c": [], "d": "d", "e": {}} |
++-------------------------------------------------+
+
+# cast decimal as json
+mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select cast(col32 as json),cast(col64 as json),cast(col128 as json),cast(col256 as json) from test.test_decimal;
++---------------------+---------------------+----------------------+----------------------+
+| cast(col32 as json) | cast(col64 as json) | cast(col128 as json) | cast(col256 as json) |
++---------------------+---------------------+----------------------+----------------------+
+| NULL                | NULL                | NULL                 | NULL                 |
+| 0.1                 | 0.1                 | 0.1                  | 0.1                  |
++---------------------+---------------------+----------------------+----------------------+
+
+# Clean up.
+mysql> drop table if exists test.test_int;
+mysql> drop table if exists test.test_float;
+mysql> drop table if exists test.test_str;
+mysql> drop table if exists test.test_binary;
+mysql> drop table if exists test.test_bin_str;
+mysql> drop table if exists test.test_long_str;
+mysql> drop table if exists test.test_time;
+mysql> drop table if exists test.test_duration;
+mysql> drop table if exists test.test_json;
+mysql> drop table if exists test.test_decimal;
