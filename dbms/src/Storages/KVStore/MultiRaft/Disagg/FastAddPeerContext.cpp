@@ -145,8 +145,8 @@ void FastAddPeerContext::forceCleanCheckpointIngestInfo(TMTContext & tmt, UInt64
         if (iter != checkpoint_ingest_info_map.end())
         {
             iter->second->markDelete();
+            checkpoint_ingest_info_map.erase(region_id);
         }
-        checkpoint_ingest_info_map.erase(region_id);
         return;
     }
     CheckpointIngestInfo::forciblyClean(tmt, region_id);
