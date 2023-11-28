@@ -281,7 +281,7 @@ String DAGExpressionAnalyzerHelper::buildCastFunction(
     return buildCastFunctionInternal(analyzer, {name, type_expr_name}, false, expr.field_type(), actions);
 }
 
-static String buildSingleParamJsonRelatedFunctions(
+String buildSingleParamJsonRelatedFunctions(
     DAGExpressionAnalyzer * analyzer,
     const tipb::Expr & expr,
     const ExpressionActionsPtr & actions)
