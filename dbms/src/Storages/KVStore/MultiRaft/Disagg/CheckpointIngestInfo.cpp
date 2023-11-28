@@ -90,9 +90,7 @@ bool CheckpointIngestInfo::forciblyClean(TMTContext & tmt, UInt64 region_id)
         Page page = uni_ps->read(page_id, nullptr, snapshot, /*throw_on_not_exist*/ false);
         if unlikely (page.isValid())
         {
-            del_batch.delPage(UniversalPageIdFormat::toLocalKVPrefix(
-                UniversalPageIdFormat::LocalKVKeyType::FAPIngestInfo,
-                region_id));
+            del_batch.delPage(page_id);
         }
     }
     if unlikely (!del_batch.empty())
@@ -131,7 +129,6 @@ bool CheckpointIngestInfo::loadFromLocal(const TiFlashRaftProxyHelper * proxy_he
         }
         remote_store_id = readBinary2<UInt64>(buf);
     }
-
     region = Region::deserialize(buf, proxy_helper);
 
     auto & storages = tmt.getStorages();
@@ -180,8 +177,7 @@ void CheckpointIngestInfo::persistToLocal()
     data_size += writeBinary2(FAP_INGEST_INFO_PERSIST_FMT_VER, wb_buffer);
     {
         size_t segment_data_size = 0;
-        UInt64 count = restored_segments.size();
-        segment_data_size += writeBinary2(count, wb_buffer);
+        segment_data_size += writeBinary2(restored_segments.size(), wb_buffer);
         for (auto & restored_segment : restored_segments)
         {
             data_size += writeBinary2(restored_segment->segmentId(), wb_buffer);
@@ -190,19 +186,19 @@ void CheckpointIngestInfo::persistToLocal()
         data_size += segment_data_size;
         RUNTIME_CHECK_MSG(
             wb_buffer.count() == data_size,
-            "buffer {} != data_size {}, segment_data_size {}",
+            "buffer {} != data_size {}, segment_data_size={}",
             wb_buffer.count(),
             data_size,
             segment_data_size);
     }
     {
-        // The region should be persisted in local, although it's the first peer of this region in this store.
+        // Although the region is the first peer of this region in this store, we can't write it to formal KVStore for now.
         // Otherwise it could be uploaded and then overwritten.
         auto region_size = RegionPersister::computeRegionWriteBuffer(*region, wb_buffer);
         data_size += region_size;
         RUNTIME_CHECK_MSG(
             wb_buffer.count() == data_size,
-            "buffer {} != data_size {}, region_size {}",
+            "buffer {} != data_size {}, region_size={}",
             wb_buffer.count(),
             data_size,
             region_size);
@@ -223,6 +219,12 @@ void CheckpointIngestInfo::persistToLocal()
 
 void CheckpointIngestInfo::removeFromLocal()
 {
+    LOG_INFO(
+        log,
+        "Erase CheckpointIngestInfo from disk, region_id={} peer_id={} remote_store_id={}",
+        region_id,
+        peer_id,
+        remote_store_id);
     auto uni_ps = tmt.getContext().getWriteNodePageStorage();
     UniversalWriteBatch del_batch;
     del_batch.delPage(

@@ -79,6 +79,7 @@ struct CheckpointIngestInfo
         UInt64 region_id,
         UInt64 peer_id);
 
+    // Only call to clean dangling CheckpointIngestInfo.
     static bool forciblyClean(TMTContext & tmt, UInt64 region_id);
 
     ~CheckpointIngestInfo();
@@ -100,6 +101,7 @@ private:
     RegionPtr region;
     DM::Segments restored_segments;
     bool clean_when_destruct;
+    // If restarted, `beginTime` is no longer meaningful.
     UInt64 begin_time;
     DB::LoggerPtr log;
 };
