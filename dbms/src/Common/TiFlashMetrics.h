@@ -374,7 +374,7 @@ namespace DB
       F(type_cftiny_fetch, {{"type", "cftiny_fetch"}}))                                                                             \
     M(tiflash_fap_task_result,                                                                                                      \
       "",                                                                                                                           \
-      Gauge,                                                                                                                        \
+      Counter,                                                                                                                      \
       F(type_total, {{"type", "total"}}),                                                                                           \
       F(type_success_transform, {{"type", "success_transform"}}),                                                                   \
       F(type_failed_other, {{"type", "failed_other"}}),                                                                             \
