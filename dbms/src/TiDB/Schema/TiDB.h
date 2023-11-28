@@ -120,6 +120,8 @@ enum TP
     M(OnUpdateNow, (1 << 13))    \
     M(PartKey, (1 << 14))        \
     M(Num, (1 << 15))            \
+    M(ParseToJSON, (1 << 18))    \
+    M(IsBooleanFlag, (1 << 19))  \
     M(GeneratedColumn, (1 << 23))
 
 enum ColumnFlag

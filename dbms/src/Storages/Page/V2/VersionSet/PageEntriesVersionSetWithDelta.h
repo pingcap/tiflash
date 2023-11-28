@@ -54,7 +54,7 @@ public:
     using VersionPtr = std::shared_ptr<VersionType>;
 
 public:
-    explicit PageEntriesVersionSetWithDelta(String name_, const MVCC::VersionSetConfig & config_, Poco::Logger * log_)
+    explicit PageEntriesVersionSetWithDelta(String name_, const MVCC::VersionSetConfig & config_, LoggerPtr log_)
         : current(VersionType::createBase())
         , config(config_)
         , name(std::move(name_))
@@ -274,7 +274,7 @@ private:
     mutable std::list<SnapshotWeakPtr> snapshots;
     const MVCC::VersionSetConfig config;
     const String name;
-    Poco::Logger * log;
+    LoggerPtr log;
 };
 
 /// Read old entries state from `view_` and apply new edit to `view_->tail`
@@ -285,7 +285,7 @@ public:
         const PageEntriesView * view_, //
         const String & name_,
         bool ignore_invalid_ref_ = false,
-        Poco::Logger * log_ = nullptr);
+        LoggerPtr log_ = nullptr);
 
     ~DeltaVersionEditAcceptor();
 
@@ -295,7 +295,7 @@ public:
         const String & name,
         const PageEntriesVersionSetWithDelta::VersionPtr & current,
         const PageEntriesEdit & edit,
-        Poco::Logger * log);
+        LoggerPtr log);
 
     void gcApply(PageEntriesEdit & edit) { PageEntriesBuilder::gcApplyTemplate(view, edit, current_version); }
 
@@ -322,7 +322,7 @@ private:
     bool ignore_invalid_ref;
 
     const String & name;
-    Poco::Logger * log;
+    LoggerPtr log;
 };
 
 } // namespace DB::PS::V2

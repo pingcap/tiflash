@@ -28,7 +28,7 @@ TEST(PageFileTest, Compare)
     DB::tests::TiFlashTestEnv::tryRemovePath(path);
 
     const auto file_provider = DB::tests::TiFlashTestEnv::getDefaultFileProvider();
-    Poco::Logger * log = &Poco::Logger::get("PageFile");
+    auto log = Logger::get("PageFile");
 
     {
         // Create files for tests
@@ -178,7 +178,7 @@ TEST(PageEntry_test, GetFieldInfo)
 
 TEST(PageFileTest, PageFileLink)
 {
-    Poco::Logger * log = &Poco::Logger::get("PageFileLink");
+    auto log = Logger::get("PageFileLink");
     PageId page_id = 55;
     UInt64 tag = 0;
     const String path = DB::tests::TiFlashTestEnv::getTemporaryPath("PageFileLink/");
@@ -227,7 +227,7 @@ TEST(PageFileTest, PageFileLink)
 
 TEST(PageFileTest, EncryptedPageFileLink)
 {
-    Poco::Logger * log = &Poco::Logger::get("EncryptedPageFileLink");
+    auto log = Logger::get("EncryptedPageFileLink");
     PageId page_id = 55;
     UInt64 tag = 0;
     const String path = DB::tests::TiFlashTestEnv::getTemporaryPath("EncryptedPageFileLink/");

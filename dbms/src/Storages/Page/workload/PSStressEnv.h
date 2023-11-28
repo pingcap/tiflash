@@ -20,10 +20,6 @@
 
 #include <atomic>
 
-namespace Poco
-{
-class Logger;
-}
 
 namespace DB::PS::tests
 {
