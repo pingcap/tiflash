@@ -68,6 +68,7 @@ struct CheckpointIngestInfo
         , clean_when_destruct(false)
         , begin_time(begin_time_)
     {
+        log = DB::Logger::get("CheckpointIngestInfo");
         persistToLocal();
     }
 
@@ -99,5 +100,6 @@ private:
     DM::Segments restored_segments;
     bool clean_when_destruct;
     UInt64 begin_time;
+    DB::LoggerPtr log;
 };
 } // namespace DB
