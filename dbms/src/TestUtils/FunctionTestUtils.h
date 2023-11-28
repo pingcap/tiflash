@@ -839,6 +839,10 @@ public:
         const FuncMetaData & meta,
         const TiDB::TiDBCollatorPtr & collator = nullptr);
 
+    ColumnWithTypeAndName executeCastJsonAsStringFunction(
+        const ColumnWithTypeAndName & input_column,
+        const tipb::FieldType & field_type);
+
     DAGContext & getDAGContext()
     {
         RUNTIME_ASSERT(dag_context_ptr != nullptr);

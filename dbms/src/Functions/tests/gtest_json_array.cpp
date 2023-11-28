@@ -33,7 +33,10 @@ public:
         static auto json_array_return_type = std::make_shared<DataTypeString>();
         assert(json_array_return_type->equals(*json_column.type));
         // The `json_binary` should be cast as a string to improve readability.
-        return executeFunction("cast_json_as_string", {json_column});
+        tipb::FieldType field_type;
+        field_type.set_flen(-1);
+        field_type.set_tp(TiDB::TypeString);
+        return executeCastJsonAsStringFunction({json_column}, field_type);
     }
 };
 

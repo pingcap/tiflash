@@ -281,27 +281,30 @@ String DAGExpressionAnalyzerHelper::buildCastFunction(
     return buildCastFunctionInternal(analyzer, {name, type_expr_name}, false, expr.field_type(), actions);
 }
 
-String DAGExpressionAnalyzerHelper::buildCastAsJsonWithInputTiDBField(
+String DAGExpressionAnalyzerHelper::buildSingleParamJsonRelatedFunctions(
     DAGExpressionAnalyzer * analyzer,
     const tipb::Expr & expr,
     const ExpressionActionsPtr & actions)
 {
+    auto func_name = getFunctionName(expr);
     if unlikely (expr.children_size() != 1)
-        throw TiFlashException("Cast function only support one argument", Errors::Coprocessor::BadRequest);
+        throw TiFlashException(
+            fmt::format("{} function only support one argument", func_name),
+            Errors::Coprocessor::BadRequest);
     if unlikely (!exprHasValidFieldType(expr))
-        throw TiFlashException("CAST function without valid field type", Errors::Coprocessor::BadRequest);
+        throw TiFlashException(
+            fmt::format("{} function without valid field type", func_name),
+            Errors::Coprocessor::BadRequest);
 
     const auto & input_expr = expr.children(0);
-    auto func_name = getFunctionName(expr);
-
     String arg = analyzer->getActions(input_expr, actions);
     const auto & collator = getCollatorFromExpr(expr);
     String result_name = genFuncString(func_name, {arg}, {collator});
     if (actions->getSampleBlock().has(result_name))
         return result_name;
 
-    const FunctionBuilderPtr & function_builder = FunctionFactory::instance().get(func_name, analyzer->getContext());
-    auto * function_build_ptr = function_builder.get();
+    const FunctionBuilderPtr & ifunction_builder = FunctionFactory::instance().get(func_name, analyzer->getContext());
+    auto * function_build_ptr = ifunction_builder.get();
     if (auto * function_builder = dynamic_cast<DefaultFunctionBuilder *>(function_build_ptr); function_builder)
     {
         auto * function_impl = function_builder->getFunctionImpl().get();
@@ -321,17 +324,29 @@ String DAGExpressionAnalyzerHelper::buildCastAsJsonWithInputTiDBField(
         {
             function_cast_time_as_json->setInputTiDBFieldType(input_expr.field_type());
         }
+        else if (auto * function_json_unquote = dynamic_cast<FunctionJsonUnquote *>(function_impl);
+                 function_json_unquote)
+        {
+            bool valid_check
+                = !(isScalarFunctionExpr(input_expr) && input_expr.sig() == tipb::ScalarFuncSig::CastJsonAsString);
+            function_json_unquote->setNeedValidCheck(valid_check);
+        }
+        else if (auto * function_cast_json_as_string = dynamic_cast<FunctionCastJsonAsString *>(function_impl);
+                 function_cast_json_as_string)
+        {
+            function_cast_json_as_string->setOutputTiDBFieldType(expr.field_type());
+        }
         else
         {
-            throw Exception(fmt::format("Unexpected func {} in buildCastAsJsonWithInputTiDBField", func_name));
+            throw Exception(fmt::format("Unexpected func {} in buildSingleParamJsonRelatedFunctions", func_name));
         }
     }
     else
     {
-        throw Exception(fmt::format("Unexpected func {} in buildCastAsJsonWithInputTiDBField", func_name));
+        throw Exception(fmt::format("Unexpected func {} in buildSingleParamJsonRelatedFunctions", func_name));
     }
 
-    const ExpressionAction & action = ExpressionAction::applyFunction(function_builder, {arg}, result_name, collator);
+    const ExpressionAction & action = ExpressionAction::applyFunction(ifunction_builder, {arg}, result_name, collator);
     actions->add(action);
     return result_name;
 }
@@ -534,9 +549,11 @@ DAGExpressionAnalyzerHelper::FunctionBuilderMap DAGExpressionAnalyzerHelper::fun
      {"ifNull", DAGExpressionAnalyzerHelper::buildIfNullFunction},
      {"multiIf", DAGExpressionAnalyzerHelper::buildMultiIfFunction},
      {"tidb_cast", DAGExpressionAnalyzerHelper::buildCastFunction},
-     {"cast_int_as_json", DAGExpressionAnalyzerHelper::buildCastAsJsonWithInputTiDBField},
-     {"cast_string_as_json", DAGExpressionAnalyzerHelper::buildCastAsJsonWithInputTiDBField},
-     {"cast_time_as_json", DAGExpressionAnalyzerHelper::buildCastAsJsonWithInputTiDBField},
+     {"cast_int_as_json", DAGExpressionAnalyzerHelper::buildSingleParamJsonRelatedFunctions},
+     {"cast_string_as_json", DAGExpressionAnalyzerHelper::buildSingleParamJsonRelatedFunctions},
+     {"cast_time_as_json", DAGExpressionAnalyzerHelper::buildSingleParamJsonRelatedFunctions},
+     {"cast_json_as_string", DAGExpressionAnalyzerHelper::buildSingleParamJsonRelatedFunctions},
+     {"json_unquote", DAGExpressionAnalyzerHelper::buildSingleParamJsonRelatedFunctions},
      {"and", DAGExpressionAnalyzerHelper::buildLogicalFunction},
      {"or", DAGExpressionAnalyzerHelper::buildLogicalFunction},
      {"xor", DAGExpressionAnalyzerHelper::buildLogicalFunction},
