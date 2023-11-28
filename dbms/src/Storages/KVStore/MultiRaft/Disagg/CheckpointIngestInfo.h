@@ -93,7 +93,7 @@ private:
     // Safety: raftstore ensures a region is handled in a single thread.
     // `persistToLocal` is called at a fixed place in this thread.
     void persistToLocal();
-    void removeFromLocal();
+    static void removeFromLocal(TMTContext & tmt, UInt64 region_id, UInt64 peer_id, UInt64 remote_store_id);
 
 private:
     TMTContext & tmt;
