@@ -624,7 +624,7 @@ ColumnWithTypeAndName FunctionTest::executeCastJsonAsStringFunction(
         default_function_builder)
     {
         auto * function_impl = default_function_builder->getFunctionImpl().get();
-        if (auto * function_cast_json_as_string = dynamic_cast<FunctionsCastJsonAsString *>(function_impl);
+        if (auto * function_cast_json_as_string = dynamic_cast<FunctionCastJsonAsString *>(function_impl);
             function_cast_json_as_string)
         {
             function_cast_json_as_string->setOutputTiDBFieldType(field_type);

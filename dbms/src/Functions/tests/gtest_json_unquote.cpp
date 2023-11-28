@@ -51,7 +51,7 @@ public:
             default_function_builder)
         {
             auto * function_impl = default_function_builder->getFunctionImpl().get();
-            if (auto * function_json_unquote = dynamic_cast<FunctionsJsonUnquote *>(function_impl);
+            if (auto * function_json_unquote = dynamic_cast<FunctionJsonUnquote *>(function_impl);
                 function_json_unquote)
             {
                 function_json_unquote->setNeedValidCheck(valid_check);
