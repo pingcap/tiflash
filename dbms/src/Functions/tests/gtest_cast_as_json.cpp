@@ -322,20 +322,20 @@ try
     static auto const date_type_ptr = std::make_shared<DataTypeMyDate>();
 
     // DataTypeMyDateTime
+    // Only raw function test is tested, so input_tidb_tp is always nullptr and only the case of TiDB::TypeTimestamp is tested here.
     {
         auto data_col_ptr
             = createColumn<DataTypeMyDateTime::FieldType>(
                   {MyDateTime(2023, 1, 2, 3, 4, 5, 6).toPackedUInt(), MyDateTime(0, 0, 0, 0, 0, 0, 0).toPackedUInt()})
                   .column;
         ColumnWithTypeAndName input(data_col_ptr, datetime_type_ptr, "");
-        auto res = executeFunctionWithCast("cast_time_as_json", {input});
+        auto res = executeFunctionWithCast<true>("cast_time_as_json", {input});
         auto expect
             = createColumn<Nullable<String>>({"\"2023-01-02 03:04:05.000006\"", "\"0000-00-00 00:00:00.000000\""});
         ASSERT_COLUMN_EQ(expect, res);
     }
 
     // DataTypeMyDate
-    // Only raw function test is tested, so input_tidb_tp is always nullptr and only the case of TiDB::TypeTimestamp is tested here.
     {
         auto data_col_ptr = createColumn<DataTypeMyDate::FieldType>(
                                 {MyDate(2023, 12, 31).toPackedUInt(), MyDate(0, 0, 0).toPackedUInt()})
