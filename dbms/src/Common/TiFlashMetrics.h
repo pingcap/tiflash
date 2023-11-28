@@ -401,12 +401,12 @@ namespace DB
     M(tiflash_fap_task_duration_seconds,                                                                                            \
       "",                                                                                                                           \
       Histogram,                                                                                                                    \
-      F(type_select_stage, {{"type", "select_stage"}}, ExpBuckets{0.1, 2, 120}),                                                    \
-      F(type_write_stage, {{"type", "write_stage"}}, ExpBuckets{0.05, 2, 60}),                                                      \
-      F(type_ingest_stage, {{"type", "ingest_stage"}}, ExpBuckets{0.05, 2, 60}),                                                    \
-      F(type_total, {{"type", "total"}}, ExpBuckets{0.5, 2, 200}),                                                                  \
-      F(type_queue_stage, {{"type", "queue_stage"}}, ExpBuckets{0.5, 2, 120}),                                                      \
-      F(type_phase1_total, {{"type", "phase1_total"}}, ExpBuckets{0.5, 2, 200}))                                                    \
+      F(type_select_stage, {{"type", "select_stage"}}, ExpBucketsWithRange{0.1, 2, 60}),                                            \
+      F(type_write_stage, {{"type", "write_stage"}}, ExpBucketsWithRange{0.05, 2, 60}),                                             \
+      F(type_ingest_stage, {{"type", "ingest_stage"}}, ExpBucketsWithRange{0.05, 2, 30}),                                           \
+      F(type_total, {{"type", "total"}}, ExpBucketsWithRange{0.1, 2, 300}),                                                         \
+      F(type_queue_stage, {{"type", "queue_stage"}}, ExpBucketsWithRange{0.1, 2, 300}),                                             \
+      F(type_phase1_total, {{"type", "phase1_total"}}, ExpBucketsWithRange{0.2, 2, 80}))                                            \
     M(tiflash_raft_command_duration_seconds,                                                                                        \
       "Bucketed histogram of some raft command: apply snapshot and ingest SST",                                                     \
       Histogram, /* these command usually cost several seconds, increase the start bucket to 50ms */                                \
@@ -792,6 +792,39 @@ struct ExpBuckets
         });
         return buckets;
     }
+};
+
+/// Buckets with boundaries [start * base^0, start * base^1, ..., start * base^x, end]
+/// such x that start * base^(x-1) < end, and start * base^x >= end.
+struct ExpBucketsWithRange
+{
+    static size_t getSize(double l, double r, double b)
+    {
+        return static_cast<size_t>(::ceil(::log(r / l) / ::log(b))) + 1;
+    }
+
+    ExpBucketsWithRange(double start_, double base_, double end_)
+        : start(start_)
+        , base(base_)
+    {
+        size = ExpBucketsWithRange::getSize(start, end_, base);
+    }
+    // NOLINTNEXTLINE(google-explicit-constructor)
+    inline operator prometheus::Histogram::BucketBoundaries() const &&
+    {
+        prometheus::Histogram::BucketBoundaries buckets(size);
+        double current = start;
+        std::for_each(buckets.begin(), buckets.end(), [&](auto & e) {
+            e = current;
+            current *= base;
+        });
+        return buckets;
+    }
+
+private:
+    const double start;
+    const double base;
+    size_t size;
 };
 
 // Buckets with same width

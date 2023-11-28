@@ -138,6 +138,17 @@ void FastAddPeerContext::removeCheckpointIngestInfo(UInt64 region_id)
 
 void FastAddPeerContext::forceCleanCheckpointIngestInfo(TMTContext & tmt, UInt64 region_id)
 {
+    {
+        // If there is some cancelled FAP tasks.
+        std::scoped_lock<std::mutex> lock(ingest_info_mu);
+        auto iter = checkpoint_ingest_info_map.find(region_id);
+        if (iter != checkpoint_ingest_info_map.end())
+        {
+            iter->second->markDelete();
+        }
+        checkpoint_ingest_info_map.erase(region_id);
+        return;
+    }
     CheckpointIngestInfo::forciblyClean(tmt, region_id);
 }
 

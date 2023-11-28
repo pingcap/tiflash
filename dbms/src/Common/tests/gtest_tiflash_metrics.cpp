@@ -104,6 +104,19 @@ TEST(TiFlashMetrics, Histogram)
     ASSERT_NO_THROW(GET_METRIC(test_histogram_with_2_labels, m2).Observe(3));
 }
 
+TEST(TiFlashMetrics, ExpBucketsWithRange)
+{
+    ASSERT_EQ(2, ExpBucketsWithRange::getSize(1.0, 2.0, 2)); // 1 2
+    ASSERT_EQ(3, ExpBucketsWithRange::getSize(1.0, 3.0, 2)); // 1 2 4
+    ASSERT_EQ(2, ExpBucketsWithRange::getSize(2.0, 3.0, 2)); // 2 4
+    ASSERT_EQ(2, ExpBucketsWithRange::getSize(2.0, 4.0, 2)); // 2 4
+    ASSERT_EQ(3, ExpBucketsWithRange::getSize(2.0, 5.0, 2)); // 2 4 8
+    ASSERT_EQ(1, ExpBucketsWithRange::getSize(2.0, 2.0, 2)); // 2
+    ASSERT_EQ(3, ExpBucketsWithRange::getSize(2.0, 12.0, 3)); // 2 6 18
+    ASSERT_EQ(3, ExpBucketsWithRange::getSize(2.0, 18.0, 3)); // 2 6 18
+    ASSERT_EQ(4, ExpBucketsWithRange::getSize(2.0, 19.0, 3)); // 2 6 18 54
+}
+
 } // namespace tests
 
 } // namespace DB
