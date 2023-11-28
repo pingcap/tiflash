@@ -113,14 +113,13 @@ bool CheckpointIngestInfo::loadFromLocal(const TiFlashRaftProxyHelper * proxy_he
         = UniversalPageIdFormat::toLocalKVPrefix(UniversalPageIdFormat::LocalKVKeyType::FAPIngestInfo, region_id);
     Page page = uni_ps->read(page_id, nullptr, snapshot, /*throw_on_not_exist*/ false);
 
-    ReadBufferFromMemory buf(page.data.begin(), page.data.size());
-    RUNTIME_CHECK_MSG(readBinary2<UInt8>(buf) == FAP_INGEST_INFO_PERSIST_FMT_VER, "wrong fap ingest info format");
-
     if (!page.isValid())
     {
         LOG_ERROR(log, "Can't read from CheckpointIngestInfo, page_id={} region_id={}", page_id, region_id);
         return false;
     }
+    ReadBufferFromMemory buf(page.data.begin(), page.data.size());
+    RUNTIME_CHECK_MSG(readBinary2<UInt8>(buf) == FAP_INGEST_INFO_PERSIST_FMT_VER, "wrong fap ingest info format");
 
     std::vector<UInt64> restored_segments_id;
     {
@@ -139,11 +138,11 @@ bool CheckpointIngestInfo::loadFromLocal(const TiFlashRaftProxyHelper * proxy_he
     auto keyspace_id = region->getKeyspaceID();
     auto table_id = region->getMappedTableID();
     auto storage = storages.get(keyspace_id, table_id);
-    auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
-    auto dm_context = dm_storage->getStore()->newDMContext(tmt.getContext(), tmt.getContext().getSettingsRef());
 
     if (storage && storage->engineType() == TiDB::StorageEngine::DT)
     {
+        auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
+        auto dm_context = dm_storage->getStore()->newDMContext(tmt.getContext(), tmt.getContext().getSettingsRef());
         for (auto segment_id : restored_segments_id)
         {
             restored_segments.emplace_back(DM::Segment::restoreSegment(log, *dm_context, segment_id));

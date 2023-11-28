@@ -103,7 +103,7 @@ std::optional<CheckpointRegionInfoAndData> tryParseRegionInfoFromCheckpointData(
         else
         {
             GET_METRIC(tiflash_fap_nomatch_reason, type_no_meta).Increment();
-            LOG_DEBUG(log, "Failed to find region key [region_id={}]", region_id);
+            LOG_DEBUG(log, "Failed to find region key region_id={}", region_id);
             return std::nullopt;
         }
     }
@@ -121,7 +121,7 @@ std::optional<CheckpointRegionInfoAndData> tryParseRegionInfoFromCheckpointData(
         else
         {
             GET_METRIC(tiflash_fap_nomatch_reason, type_no_meta).Increment();
-            LOG_DEBUG(log, "Failed to find apply state key [region_id={}]", region_id);
+            LOG_DEBUG(log, "Failed to find apply state key, region_id={}", region_id);
             return std::nullopt;
         }
     }
@@ -138,7 +138,7 @@ std::optional<CheckpointRegionInfoAndData> tryParseRegionInfoFromCheckpointData(
         else
         {
             GET_METRIC(tiflash_fap_nomatch_reason, type_no_meta).Increment();
-            LOG_DEBUG(log, "Failed to find region local state key [region_id={}]", region_id);
+            LOG_DEBUG(log, "Failed to find region local state key region_id={}", region_id);
             return std::nullopt;
         }
     }
@@ -178,15 +178,7 @@ std::variant<CheckpointRegionInfoAndData, FastAddPeerRes> FastAddPeerImplSelect(
     uint64_t region_id,
     uint64_t new_peer_id)
 {
-    bool is_building_finish_recorded = false;
-    auto after_build = [&]() {
-        if (!is_building_finish_recorded)
-        {
-            GET_METRIC(tiflash_fap_task_state, type_selecting_stage).Decrement();
-            is_building_finish_recorded = true;
-        }
-    };
-    SCOPE_EXIT({ after_build(); });
+    SCOPE_EXIT({ GET_METRIC(tiflash_fap_task_state, type_selecting_stage).Decrement(); });
 
     auto * log = &Poco::Logger::get("FastAddPeer");
     Stopwatch watch;
@@ -227,8 +219,8 @@ std::variant<CheckpointRegionInfoAndData, FastAddPeerRes> FastAddPeerImplSelect(
                 {
                     LOG_INFO(
                         log,
-                        "Select checkpoint with seq {} from store {} takes {} seconds, candidate_store_id size {} "
-                        "[region_id={}]",
+                        "Select checkpoint with data_seq={}, remote_store_id={} elapsed={} size(candidate_store_id)={} "
+                        "region_id={}",
                         data_seq,
                         checkpoint_info->remote_store_id,
                         watch.elapsedSeconds(),
@@ -290,6 +282,7 @@ FastAddPeerRes FastAddPeerImplWrite(
     auto storage = storages.get(keyspace_id, table_id);
     if (!storage)
     {
+        // TODO(fap) add some ddl syncing to prevent fallback.
         throw Exception(
             ErrorCodes::LOGICAL_ERROR,
             "Can't get storage engine keyspace_id={} table_id={}",
@@ -486,12 +479,12 @@ FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, u
             {
                 GET_METRIC(tiflash_fap_task_state, type_ongoing).Increment();
                 GET_METRIC(tiflash_fap_task_state, type_selecting_stage).Increment();
-                LOG_INFO(log, "Add new task [new_peer_id={}] [region_id={}]", new_peer_id, region_id);
+                LOG_INFO(log, "Add new task new_peer_id={} region_id={}", new_peer_id, region_id);
             }
             else
             {
                 // If the queue is full, the task won't be registered, return OtherError for quick fallback.
-                LOG_ERROR(log, "Add new task fail(queue full) [new_peer_id={}] [region_id={}]", new_peer_id, region_id);
+                LOG_ERROR(log, "Add new task fail(queue full) new_peer_id={} region_id={}", new_peer_id, region_id);
                 GET_METRIC(tiflash_fap_task_result, type_failed_other).Increment();
                 return genFastAddPeerRes(FastAddPeerStatus::OtherError, "", "");
             }
