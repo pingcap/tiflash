@@ -51,7 +51,11 @@ public:
             json_column = executeFunction(func_name, columns);
         }
         // The `json_binary` should be cast as a string to improve readability.
-        return executeFunction("cast_json_as_string", {json_column});
+        tipb::FieldType field_type;
+        field_type.set_flen(-1);
+        field_type.set_collate(TiDB::ITiDBCollator::BINARY);
+        field_type.set_tp(TiDB::TypeString);
+        return executeCastJsonAsStringFunction(json_column, field_type);
     }
 
     template <typename Input, bool is_raw = false>
