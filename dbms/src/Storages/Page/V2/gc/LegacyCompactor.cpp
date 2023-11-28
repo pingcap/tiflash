@@ -340,7 +340,7 @@ size_t LegacyCompactor::writeToCheckpoint(
     const PageFileIdAndLevel & file_id,
     WriteBatch && wb,
     FileProviderPtr & file_provider,
-    Poco::Logger * log,
+    LoggerPtr log,
     const WriteLimiterPtr & write_limiter)
 {
     size_t bytes_written = 0;

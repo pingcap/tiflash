@@ -91,7 +91,7 @@ bool PageStorage::StatisticsInfo::equals(const StatisticsInfo & rhs) const
 PageFileSet PageStorage::listAllPageFiles(
     const FileProviderPtr & file_provider,
     PSDiskDelegatorPtr & delegator,
-    Poco::Logger * page_file_log,
+    LoggerPtr page_file_log,
     const ListPageFilesOption & option)
 {
     // collect all pages from `delegator` and recover to `PageFile` objects
@@ -167,8 +167,8 @@ PageStorage::PageStorage(
     bool no_more_insert_)
     : DB::PageStorage(name, delegator_, config_, file_provider_)
     , write_files(std::max(1UL, config_.num_write_slots.get()))
-    , page_file_log(&Poco::Logger::get("PageFile"))
-    , log(&Poco::Logger::get("PageStorage"))
+    , page_file_log(Logger::get("PageFile"))
+    , log(Logger::get("PageStorage"))
     , versioned_page_entries(storage_name, config.version_set_config, log)
     , ver_compact_pool(ver_compact_pool_)
     , no_more_insert(no_more_insert_)
@@ -230,8 +230,8 @@ void PageStorage::restore()
     MetaMergingQueue merging_queue;
     for (const auto & page_file : page_files)
     {
-        if (!(page_file.getType() == PageFile::Type::Formal || page_file.getType() == PageFile::Type::Legacy
-              || page_file.getType() == PageFile::Type::Checkpoint))
+        if (page_file.getType() != PageFile::Type::Formal && page_file.getType() != PageFile::Type::Legacy
+            && page_file.getType() != PageFile::Type::Checkpoint)
             throw Exception(
                 "Try to recover from " + page_file.toString() + ", illegal type.",
                 ErrorCodes::LOGICAL_ERROR);

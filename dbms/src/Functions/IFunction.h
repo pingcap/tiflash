@@ -426,6 +426,8 @@ public:
         function->getLambdaArgumentTypes(arguments);
     }
 
+    std::shared_ptr<IFunction> getFunctionImpl() const { return function; }
+
 private:
     std::shared_ptr<IFunction> function;
 };
