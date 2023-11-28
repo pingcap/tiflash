@@ -461,26 +461,26 @@ public:
                 {
                     size_t next_offset = offsets_from[i];
                     size_t json_length = next_offset - current_offset - 1;
-                    JsonBinary::JsonBinaryWriteBuffer element_write_buffer(container_per_element);
                     if unlikely (isNullJsonBinary(json_length))
                         vec_null_map[i] = 1;
                     else
                     {
+                        JsonBinary::JsonBinaryWriteBuffer element_write_buffer(container_per_element);
                         JsonBinary json_binary(
                             data_from[current_offset],
                             StringRef(&data_from[current_offset + 1], json_length - 1));
                         json_binary.toStringInBuffer(element_write_buffer);
+                        size_t orig_length = element_write_buffer.count();
+                        auto byte_length = charLengthToByteLengthFromUTF8(
+                            reinterpret_cast<char *>(container_per_element.data()),
+                            orig_length,
+                            tidb_tp->flen());
+                        byte_length = std::min(byte_length, orig_length);
+                        if (byte_length < element_write_buffer.count())
+                            context.getDAGContext()->handleTruncateError("Data Too Long");
+                        write_buffer.write(reinterpret_cast<char *>(container_per_element.data()), byte_length);
                     }
 
-                    size_t orig_length = element_write_buffer.count();
-                    auto byte_length = charLengthToByteLengthFromUTF8(
-                        reinterpret_cast<char *>(container_per_element.data()),
-                        orig_length,
-                        tidb_tp->flen());
-                    byte_length = std::min(byte_length, orig_length);
-                    if (byte_length < element_write_buffer.count())
-                        context.getDAGContext()->handleTruncateError("Data Too Long");
-                    write_buffer.write(reinterpret_cast<char *>(container_per_element.data()), byte_length);
                     writeChar(0, write_buffer);
                     offsets_to[i] = write_buffer.count();
                     current_offset = next_offset;

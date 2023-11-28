@@ -286,9 +286,7 @@ String DAGExpressionAnalyzerHelper::buildSingleParamJsonRelatedFunctions(
     const tipb::Expr & expr,
     const ExpressionActionsPtr & actions)
 {
-    const auto & input_expr = expr.children(0);
     auto func_name = getFunctionName(expr);
-
     if unlikely (expr.children_size() != 1)
         throw TiFlashException(
             fmt::format("{} function only support one argument", func_name),
@@ -298,6 +296,7 @@ String DAGExpressionAnalyzerHelper::buildSingleParamJsonRelatedFunctions(
             fmt::format("{} function without valid field type", func_name),
             Errors::Coprocessor::BadRequest);
 
+    const auto & input_expr = expr.children(0);
     String arg = analyzer->getActions(input_expr, actions);
     const auto & collator = getCollatorFromExpr(expr);
     String result_name = genFuncString(func_name, {arg}, {collator});
