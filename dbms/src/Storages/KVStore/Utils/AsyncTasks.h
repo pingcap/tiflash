@@ -49,7 +49,7 @@ struct AsyncTasks
         auto res = thread_pool->trySchedule([p]() { (*p)(); }, 0, 0);
         if (res)
         {
-            std::unique_lock l(mtx);
+            std::scoped_lock l(mtx);
             futures[k] = p->get_future();
             start_time[k] = getCurrentMillis();
         }

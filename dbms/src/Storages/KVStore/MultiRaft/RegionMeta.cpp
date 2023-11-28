@@ -91,7 +91,7 @@ raft_serverpb::RaftApplyState RegionMeta::clonedApplyState() const
 
 raft_serverpb::RegionLocalState RegionMeta::clonedRegionState() const
 {
-    std::lock_guard lock(mutex);
+    std::scoped_lock lock(mutex);
     return region_state.getBase();
 }
 

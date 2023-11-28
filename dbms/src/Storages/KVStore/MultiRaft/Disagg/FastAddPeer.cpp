@@ -178,6 +178,7 @@ std::variant<CheckpointRegionInfoAndData, FastAddPeerRes> FastAddPeerImplSelect(
     uint64_t region_id,
     uint64_t new_peer_id)
 {
+    GET_METRIC(tiflash_fap_task_state, type_selecting_stage).Increment();
     SCOPE_EXIT({ GET_METRIC(tiflash_fap_task_state, type_selecting_stage).Decrement(); });
 
     auto * log = &Poco::Logger::get("FastAddPeer");
@@ -477,7 +478,6 @@ FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, u
             if (res)
             {
                 GET_METRIC(tiflash_fap_task_state, type_ongoing).Increment();
-                GET_METRIC(tiflash_fap_task_state, type_selecting_stage).Increment();
                 LOG_INFO(log, "Add new task new_peer_id={} region_id={}", new_peer_id, region_id);
             }
             else

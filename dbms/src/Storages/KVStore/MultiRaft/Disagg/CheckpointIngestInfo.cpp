@@ -146,7 +146,8 @@ bool CheckpointIngestInfo::loadFromLocal(const TiFlashRaftProxyHelper * proxy_he
         }
         LOG_INFO(
             log,
-            "CheckpointIngestInfo restore success, region_id={} table_id={} keyspace_id={} region={}",
+            "CheckpointIngestInfo restore success with {} segments, region_id={} table_id={} keyspace_id={} region={}",
+            restored_segments.size(),
             region_id,
             table_id,
             keyspace_id,
@@ -174,6 +175,7 @@ void CheckpointIngestInfo::persistToLocal()
     // Write:
     // - The region, which is actually data and meta in KVStore.
     // - The segment ids point to segments which are already persisted but not ingested.
+    static_assert(sizeof(FAP_INGEST_INFO_PERSIST_FMT_VER) == 1);
     data_size += writeBinary2(FAP_INGEST_INFO_PERSIST_FMT_VER, wb_buffer);
     {
         size_t segment_data_size = 0;

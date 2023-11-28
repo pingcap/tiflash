@@ -113,11 +113,11 @@ namespace DB
     M(tiflash_coprocessor_request_memory_usage,                                                                                     \
       "Bucketed histogram of request memory usage",                                                                                 \
       Histogram,                                                                                                                    \
-      F(type_cop, {{"type", "cop"}}, ExpBuckets{1024 * 1024, 2, 16}),                                                               \
-      F(type_cop_stream, {{"type", "cop_stream"}}, ExpBuckets{1024 * 1024, 2, 16}),                                                 \
-      F(type_batch, {{"type", "batch"}}, ExpBuckets{1024 * 1024, 2, 20}),                                                           \
-      F(type_run_mpp_task, {{"type", "run_mpp_task"}}, ExpBuckets{1024 * 1024, 2, 20}),                                             \
-      F(type_run_mpp_query, {{"type", "run_mpp_query"}}, ExpBuckets{1024 * 1024, 2, 20}))                                           \
+      F(type_cop, {{"type", "cop"}}, ExpBuckets<16>{1024 * 1024, 2}),                                                               \
+      F(type_cop_stream, {{"type", "cop_stream"}}, ExpBuckets<16>{1024 * 1024, 2}),                                                 \
+      F(type_batch, {{"type", "batch"}}, ExpBuckets<20>{1024 * 1024, 2}),                                                           \
+      F(type_run_mpp_task, {{"type", "run_mpp_task"}}, ExpBuckets<20>{1024 * 1024, 2}),                                             \
+      F(type_run_mpp_query, {{"type", "run_mpp_query"}}, ExpBuckets<20>{1024 * 1024, 2}))                                           \
     M(tiflash_coprocessor_request_error,                                                                                            \
       "Total number of request error",                                                                                              \
       Counter,                                                                                                                      \
@@ -304,7 +304,7 @@ namespace DB
     M(tiflash_storage_page_write_batch_size,                                                                                        \
       "The size of each write batch in bytes",                                                                                      \
       Histogram,                                                                                                                    \
-      F(type_v3, {{"type", "v3"}}, ExpBuckets{4 * 1024, 4, 10}))                                                                    \
+      F(type_v3, {{"type", "v3"}}, ExpBuckets<10>{4 * 1024, 4}))                                                                    \
     M(tiflash_storage_page_write_duration_seconds,                                                                                  \
       "The duration of each write batch",                                                                                           \
       Histogram,                                                                                                                    \
