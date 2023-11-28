@@ -823,8 +823,8 @@ void mergeNullAndFilterResult(
  */
 void Join::handleOtherConditions(
     Block & block,
-    std::unique_ptr<IColumn::Filter> & anti_filter,
-    std::unique_ptr<IColumn::Offsets> & offsets_to_replicate,
+    IColumn::Filter * anti_filter,
+    IColumn::Offsets * offsets_to_replicate,
     const std::vector<size_t> & right_table_columns) const
 {
     non_equal_conditions.other_cond_expr->execute(block);
@@ -1294,7 +1294,7 @@ Block Join::doJoinBlockHash(ProbeProcessInfo & probe_process_info, const JoinBui
     if (has_other_condition)
     {
         assert(offsets_to_replicate != nullptr);
-        handleOtherConditions(block, probe_process_info.filter, offsets_to_replicate, right_table_column_indexes);
+        handleOtherConditions(block, nullptr, offsets_to_replicate.get(), right_table_column_indexes);
 
         if (useRowFlaggedHashMap(kind, has_other_condition))
         {
@@ -1397,8 +1397,8 @@ Block Join::doJoinBlockCross(ProbeProcessInfo & probe_process_info) const
             }
             handleOtherConditions(
                 block,
-                probe_process_info.filter,
-                probe_process_info.offsets_to_replicate,
+                probe_process_info.filter.get(),
+                probe_process_info.offsets_to_replicate.get(),
                 probe_process_info.right_column_index);
         }
         return block;
@@ -1436,8 +1436,8 @@ Block Join::doJoinBlockCross(ProbeProcessInfo & probe_process_info) const
             probe_process_info.cutFilterAndOffsetVector(0, block.rows());
             handleOtherConditions(
                 block,
-                probe_process_info.filter,
-                probe_process_info.offsets_to_replicate,
+                probe_process_info.filter.get(),
+                probe_process_info.offsets_to_replicate.get(),
                 probe_process_info.right_column_index);
         }
         return block;
@@ -1779,6 +1779,7 @@ void Join::joinBlockSemiImpl(
     {
         auto * left_semi_column = typeid_cast<ColumnNullable *>(added_columns[right_columns - 1].get());
         left_semi_column_data = &typeid_cast<ColumnVector<Int8> &>(left_semi_column->getNestedColumn()).getData();
+        left_semi_column_data->reserve(rows);
         left_semi_null_map = &left_semi_column->getNullMapColumn().getData();
         if constexpr (STRICTNESS == ASTTableJoin::Strictness::Any)
         {
@@ -1793,44 +1794,26 @@ void Join::joinBlockSemiImpl(
     size_t rows_for_semi_anti = 0;
     for (size_t i = 0; i < rows; ++i)
     {
-        if constexpr (STRICTNESS == ASTTableJoin::Strictness::Any)
+        auto result = res[i].getResult();
+        if constexpr (KIND == ASTTableJoin::Kind::Semi || KIND == ASTTableJoin::Kind::Anti)
         {
-            bool result = res[i].getResult();
-            if constexpr (KIND == ASTTableJoin::Kind::Semi || KIND == ASTTableJoin::Kind::Anti)
+            if (isTrueSemiJoinResult(result))
             {
-                if (result)
-                {
-                    // If the result is true, this row should be kept.
-                    (*filter)[i] = 1;
-                    ++rows_for_semi_anti;
-                }
-                else
-                {
-                    // If the result is false, this row should be filtered.
-                    (*filter)[i] = 0;
-                }
+                // If the result is true, this row should be kept.
+                (*filter)[i] = 1;
+                ++rows_for_semi_anti;
             }
             else
             {
-                left_semi_column_data->push_back(result);
+                // If the result is null or false, this row should be filtered.
+                (*filter)[i] = 0;
             }
         }
         else
         {
-            auto result = res[i].getResult();
-            if constexpr (KIND == ASTTableJoin::Kind::Semi || KIND == ASTTableJoin::Kind::Anti)
+            if constexpr (STRICTNESS == ASTTableJoin::Strictness::Any)
             {
-                if (result == SemiJoinResultType::TRUE_VALUE)
-                {
-                    // If the result is true, this row should be kept.
-                    (*filter)[i] = 1;
-                    ++rows_for_semi_anti;
-                }
-                else
-                {
-                    // If the result is null or false, this row should be filtered.
-                    (*filter)[i] = 0;
-                }
+                left_semi_column_data->push_back(result);
             }
             else
             {

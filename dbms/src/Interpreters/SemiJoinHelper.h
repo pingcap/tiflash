@@ -27,6 +27,16 @@ enum class SemiJoinResultType : UInt8
     NULL_VALUE,
 };
 
+bool isTrueSemiJoinResult(SemiJoinResultType result)
+{
+    return result == SemiJoinResultType::TRUE_VALUE;
+}
+
+bool isTrueSemiJoinResult(bool result)
+{
+    return result;
+}
+
 template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS>
 class SemiJoinResult;
 
