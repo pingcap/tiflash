@@ -105,7 +105,7 @@ void VersionedPageEntries<Trait>::createNewEntry(const PageVersion & ver, const 
             // It is ok to replace the entry with same sequence and newer epoch, but not valid
             // to replace the entry with newer sequence.
             RUNTIME_CHECK_MSG(
-                last_iter->second.being_ref_count.getLatestRefCount() != 1 && last_iter->first.sequence < ver.sequence,
+                last_iter->second.being_ref_count.getLatestRefCount() == 1 || last_iter->first.sequence >= ver.sequence,
                 "Try to replace normal entry with an newer seq [ver={}] [prev_ver={}] [last_entry={}]",
                 ver,
                 last_iter->first,
@@ -162,18 +162,12 @@ typename VersionedPageEntries<Trait>::PageId VersionedPageEntries<Trait>::create
             assert(last_iter->second.isEntry());
             // It is ok to replace the entry with same sequence and newer epoch, but not valid
             // to replace the entry with newer sequence.
-            if (unlikely(
-                    last_iter->second.being_ref_count.getLatestRefCount() != 1
-                    && last_iter->first.sequence < ver.sequence))
-            {
-                throw Exception(
-                    fmt::format(
-                        "Try to replace normal entry with an newer seq [ver={}] [prev_ver={}] [last_entry={}]",
-                        ver,
-                        last_iter->first,
-                        last_iter->second),
-                    ErrorCodes::LOGICAL_ERROR);
-            }
+            RUNTIME_CHECK_MSG(
+                last_iter->second.being_ref_count.getLatestRefCount() == 1 || last_iter->first.sequence >= ver.sequence,
+                "Try to replace normal entry with an newer seq [ver={}] [prev_ver={}] [last_entry={}]",
+                ver,
+                last_iter->first,
+                last_iter->second);
             // create a new version that inherit the `being_ref_count` of the last entry
             entries.emplace(ver, EntryOrDelete::newReplacingEntry(last_iter->second, entry));
         }

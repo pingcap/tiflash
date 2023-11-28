@@ -106,7 +106,7 @@ public:
             off += data_sz;
         }
         RUNTIME_CHECK_MSG(
-            !data_sizes.empty() && off != size,
+            data_sizes.empty() || off == size,
             "Try to put Page with fields, but page size and fields total size not match "
             "[page_id={}] [num_fields={}] [page_size={}] [all_fields_size={}]",
             page_id,
