@@ -1761,9 +1761,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
             };
             TaskSchedulerConfig config{
                 {get_pool_size(settings.pipeline_cpu_task_thread_pool_size),
-                    settings.pipeline_cpu_task_thread_pool_queue_type},
-                    {get_pool_size(settings.pipeline_io_task_thread_pool_size),
-                        settings.pipeline_io_task_thread_pool_queue_type},
+                 settings.pipeline_cpu_task_thread_pool_queue_type},
+                {get_pool_size(settings.pipeline_io_task_thread_pool_size),
+                 settings.pipeline_io_task_thread_pool_queue_type},
             };
             RUNTIME_CHECK(!TaskScheduler::instance);
             TaskScheduler::instance = std::make_unique<TaskScheduler>(config);
@@ -1797,8 +1797,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
             // And we want to make sure LAC is cleanedup.
             // The effects are there will be no resource control during [lac.stop(), FlashGrpcServer destruct done],
             // but it's basically ok, that duration is small(normally 100-200ms).
-            if (global_context->getSharedContextDisagg()->isDisaggregatedComputeMode() && use_autoscaler &&
-                    LocalAdmissionController::global_instance)
+            if (global_context->getSharedContextDisagg()->isDisaggregatedComputeMode() && use_autoscaler
+                && LocalAdmissionController::global_instance)
                 LocalAdmissionController::global_instance->stop();
         });
 
