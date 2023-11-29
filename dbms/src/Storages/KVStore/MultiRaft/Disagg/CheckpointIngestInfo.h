@@ -81,12 +81,8 @@ struct CheckpointIngestInfo
     // Only call to clean dangling CheckpointIngestInfo.
     static bool forciblyClean(TMTContext & tmt, UInt64 region_id);
 
-    ~CheckpointIngestInfo();
-
 private:
     friend class FastAddPeerContext;
-    // Set to delete persisted data when destructing.
-    void markDelete();
     // Create from restore
     CheckpointIngestInfo(TMTContext & tmt_, UInt64 region_id_, UInt64 peer_id_);
     bool loadFromLocal(const TiFlashRaftProxyHelper * proxy_helper);

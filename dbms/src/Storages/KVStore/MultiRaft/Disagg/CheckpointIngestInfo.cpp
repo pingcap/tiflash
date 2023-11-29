@@ -52,7 +52,6 @@ CheckpointIngestInfo::CheckpointIngestInfo(TMTContext & tmt_, UInt64 region_id_,
     , region_id(region_id_)
     , peer_id(peer_id_)
     , remote_store_id(0)
-    , clean_when_destruct(false)
     , begin_time(0)
 {
     log = DB::Logger::get("CheckpointIngestInfo");
@@ -66,11 +65,6 @@ DM::Segments CheckpointIngestInfo::getRestoredSegments() const
 UInt64 CheckpointIngestInfo::getRemoteStoreId() const
 {
     return remote_store_id;
-}
-
-void CheckpointIngestInfo::markDelete()
-{
-    clean_when_destruct = true;
 }
 
 RegionPtr CheckpointIngestInfo::getRegion() const
@@ -226,22 +220,6 @@ bool CheckpointIngestInfo::forciblyClean(TMTContext & tmt, UInt64 region_id)
         return true;
     }
     return false;
-}
-
-CheckpointIngestInfo::~CheckpointIngestInfo()
-{
-    try
-    {
-        if (clean_when_destruct)
-        {
-            removeFromLocal(tmt, region_id, peer_id, remote_store_id);
-        }
-    }
-    catch (...)
-    {
-        tryLogCurrentFatalException(__PRETTY_FUNCTION__);
-        exit(-1);
-    }
 }
 
 } // namespace DB
