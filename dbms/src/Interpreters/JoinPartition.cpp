@@ -1691,7 +1691,7 @@ void probeBlockImplType(
         right_indexes,                                                                       \
         collators,                                                                           \
         join_build_info,                                                                     \
-        probe_process_info);                                                                  \
+        probe_process_info);
 
     if (null_map)
     {
