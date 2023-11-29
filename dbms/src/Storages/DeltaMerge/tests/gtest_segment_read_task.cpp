@@ -373,4 +373,54 @@ try
 }
 CATCH
 
+TEST_F(DeltaMergeStoreTest, MemTableSetWithCFTiny)
+try
+{
+    auto table_column_defines = DMTestEnv::getDefaultColumns();
+    store = reload(table_column_defines);
+
+    {
+        auto block = DMTestEnv::prepareSimpleWriteBlock(
+            0,
+            db_context->getSettingsRef().dt_segment_delta_cache_limit_rows,
+            false);
+        store->write(*db_context, db_context->getSettingsRef(), block);
+    }
+
+    auto scan_context = std::make_shared<ScanContext>();
+    auto snap = store->writeNodeBuildRemoteReadSnapshot(
+        *db_context,
+        db_context->getSettingsRef(),
+        {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+        1,
+        "req_id",
+        {},
+        scan_context);
+
+    snap->column_defines = std::make_shared<ColumnDefines>(store->getTableColumns());
+
+    MemTrackerWrapper mem_tracker_wrapper(nullptr);
+    auto remote_table_pb = Remote::Serializer::serializePhysicalTable(snap, /*task_id*/ {}, mem_tracker_wrapper);
+    ASSERT_EQ(remote_table_pb.segments_size(), 1);
+
+    db_context->getSharedContextDisagg()->remote_data_store
+        = std::make_shared<DM::Remote::DataStoreMock>(db_context->getFileProvider());
+    const auto & remote_seg = remote_table_pb.segments(0);
+    auto seg_task = std::make_shared<SegmentReadTask>(
+        Logger::get(),
+        *db_context,
+        scan_context,
+        remote_seg,
+        DisaggTaskId{},
+        /*store_id*/ 1,
+        /*store_address*/ "127.0.0.1",
+        store->keyspace_id,
+        store->physical_table_id);
+    const auto & cfs = seg_task->read_snapshot->delta->getMemTableSetSnapshot()->getColumnFiles();
+    ASSERT_EQ(cfs.size(), 1);
+    const auto & cf = cfs.front();
+    ASSERT_NE(cf->tryToTinyFile(), nullptr);
+    ASSERT_EQ(seg_task->extra_remote_info->remote_page_ids.size(), 1);
+}
+CATCH
 } // namespace DB::DM::tests
