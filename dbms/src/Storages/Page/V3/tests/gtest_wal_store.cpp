@@ -676,7 +676,7 @@ try
         .tag = 0,
         .offset = 0x123,
         .checksum = 0x4567,
-        .checkpoint_info = {.data_location = location1, .is_valid = true}};
+        .checkpoint_info = OptionalCheckpointInfo(location1, true)};
     CheckpointLocation location2{
         .data_file_id = std::make_shared<String>("hhhhh"),
         .offset_in_file = 5000,
@@ -689,7 +689,7 @@ try
         .tag = 0,
         .offset = 0x123,
         .checksum = 0x4567,
-        .checkpoint_info = {.data_location = location2, .is_valid = true}};
+        .checkpoint_info = OptionalCheckpointInfo(location2, true)};
     PageVersion ver20(/*seq=*/20);
     {
         universal::PageEntriesEdit edit;
@@ -724,7 +724,7 @@ try
         .tag = 0,
         .offset = 0x123,
         .checksum = 0x4567,
-        .checkpoint_info = {.data_location = location6, .is_valid = true}};
+        .checkpoint_info = OptionalCheckpointInfo(location6, true)};
     CheckpointLocation location7{
         .data_file_id = std::make_shared<String>("hhhhh2"),
         .offset_in_file = 5000,
@@ -737,7 +737,7 @@ try
         .tag = 0,
         .offset = 0x123,
         .checksum = 0x4567,
-        .checkpoint_info = {.data_location = location7, .is_valid = true}};
+        .checkpoint_info = OptionalCheckpointInfo(location7, true)};
     PageVersion ver22(/*seq=*/22);
     {
         universal::PageEntriesEdit edit;

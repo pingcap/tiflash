@@ -81,6 +81,7 @@ public:
     UInt64 confVer() const;
 
     raft_serverpb::RaftApplyState clonedApplyState() const;
+    raft_serverpb::RegionLocalState clonedRegionState() const;
 
     void setApplied(UInt64 index, UInt64 term);
     void notifyAll() const;
