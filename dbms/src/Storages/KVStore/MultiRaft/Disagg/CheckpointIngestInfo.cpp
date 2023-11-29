@@ -165,15 +165,10 @@ void CheckpointIngestInfo::persistToLocal() const
         region->getDebugString());
 }
 
-void CheckpointIngestInfo::removeFromLocal(TMTContext & tmt, UInt64 region_id, UInt64 peer_id, UInt64 remote_store_id)
+void CheckpointIngestInfo::removeFromLocal(TMTContext & tmt, UInt64 region_id)
 {
     auto log = DB::Logger::get();
-    LOG_INFO(
-        log,
-        "Erase CheckpointIngestInfo from disk, region_id={} peer_id={} remote_store_id={}",
-        region_id,
-        peer_id,
-        remote_store_id);
+    LOG_INFO(log, "Erase CheckpointIngestInfo from disk, region_id={}", region_id);
     auto uni_ps = tmt.getContext().getWriteNodePageStorage();
     UniversalWriteBatch del_batch;
     del_batch.delPage(
@@ -182,17 +177,23 @@ void CheckpointIngestInfo::removeFromLocal(TMTContext & tmt, UInt64 region_id, U
 }
 
 // Like removeFromLocal, but is static and with check.
-bool CheckpointIngestInfo::forciblyClean(TMTContext & tmt, UInt64 region_id)
+bool CheckpointIngestInfo::forciblyClean(TMTContext & tmt, UInt64 region_id, bool pre_check)
 {
+    if (!pre_check)
+    {
+        CheckpointIngestInfo::removeFromLocal(tmt, region_id);
+        return true;
+    }
+
     auto uni_ps = tmt.getContext().getWriteNodePageStorage();
     auto snapshot = uni_ps->getSnapshot(fmt::format("read_fap_i_{}", region_id));
     auto page_id
         = UniversalPageIdFormat::toLocalKVPrefix(UniversalPageIdFormat::LocalKVKeyType::FAPIngestInfo, region_id);
     // For most cases, ingest infos are deleted in `removeFromLocal`.
     Page page = uni_ps->read(page_id, nullptr, snapshot, /*throw_on_not_exist*/ false);
-    if unlikely (page.isValid())
+    if (unlikely(page.isValid()))
     {
-        CheckpointIngestInfo::removeFromLocal(tmt, region_id, 0, 0);
+        CheckpointIngestInfo::removeFromLocal(tmt, region_id);
         return true;
     }
     return false;
