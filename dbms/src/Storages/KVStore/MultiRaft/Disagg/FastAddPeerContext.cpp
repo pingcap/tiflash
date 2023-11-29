@@ -153,7 +153,7 @@ void FastAddPeerContext::cleanCheckpointIngestInfo(TMTContext & tmt, UInt64 regi
         if (iter != checkpoint_ingest_info_map.end())
         {
             pre_check = false;
-            checkpoint_ingest_info_map.erase(region_id);
+            checkpoint_ingest_info_map.erase(iter);
         }
     }
     // clean without locking `ingest_info_mu`
