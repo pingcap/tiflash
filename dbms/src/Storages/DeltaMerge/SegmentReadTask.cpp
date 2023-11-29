@@ -115,14 +115,18 @@ SegmentReadTask::SegmentReadTask(
     std::vector<size_t> remote_page_sizes;
     remote_page_ids.reserve(cfs.size());
     remote_page_sizes.reserve(cfs.size());
-    for (const auto & cf : cfs)
-    {
-        if (auto * tiny = cf->tryToTinyFile(); tiny)
+    auto extract_remote_pages = [&remote_page_ids, &remote_page_sizes](const ColumnFiles & cfs) {
+        for (const auto & cf : cfs)
         {
-            remote_page_ids.emplace_back(tiny->getDataPageId());
-            remote_page_sizes.emplace_back(tiny->getDataPageSize());
+            if (auto * tiny = cf->tryToTinyFile(); tiny)
+            {
+                remote_page_ids.emplace_back(tiny->getDataPageId());
+                remote_page_sizes.emplace_back(tiny->getDataPageSize());
+            }
         }
-    }
+    };
+    extract_remote_pages(read_snapshot->delta->getMemTableSetSnapshot()->getColumnFiles());
+    extract_remote_pages(read_snapshot->delta->getPersistedFileSetSnapshot()->getColumnFiles());
 
     extra_remote_info.emplace(ExtraRemoteSegmentInfo{
         .store_address = store_address,
@@ -207,16 +211,21 @@ SegmentReadTasks SegmentReadTask::trySplitReadTasks(const SegmentReadTasks & tas
 
 void SegmentReadTask::initColumnFileDataProvider(const Remote::RNLocalPageCacheGuardPtr & pages_guard)
 {
-    auto & data_provider = read_snapshot->delta->getPersistedFileSetSnapshot()->data_provider;
-    RUNTIME_CHECK(std::dynamic_pointer_cast<ColumnFileDataProviderNop>(data_provider));
-
     RUNTIME_CHECK(extra_remote_info.has_value());
     auto page_cache = dm_context->global_context.getSharedContextDisagg()->rn_page_cache;
-    data_provider = std::make_shared<Remote::ColumnFileDataProviderRNLocalPageCache>(
+    auto page_data_provider = std::make_shared<Remote::ColumnFileDataProviderRNLocalPageCache>(
         page_cache,
         pages_guard,
         store_id,
         KeyspaceTableID{dm_context->keyspace_id, dm_context->physical_table_id});
+
+    auto & persisted_cf_set_data_provider = read_snapshot->delta->getPersistedFileSetSnapshot()->data_provider;
+    RUNTIME_CHECK(std::dynamic_pointer_cast<ColumnFileDataProviderNop>(persisted_cf_set_data_provider));
+    persisted_cf_set_data_provider = page_data_provider;
+
+    auto & memory_cf_set_data_provider = read_snapshot->delta->getMemTableSetSnapshot()->data_provider;
+    RUNTIME_CHECK(std::dynamic_pointer_cast<ColumnFileDataProviderNop>(memory_cf_set_data_provider));
+    memory_cf_set_data_provider = page_data_provider;
 }
 
 
