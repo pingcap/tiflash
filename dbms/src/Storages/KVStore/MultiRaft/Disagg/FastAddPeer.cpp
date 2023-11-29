@@ -181,7 +181,7 @@ std::variant<CheckpointRegionInfoAndData, FastAddPeerRes> FastAddPeerImplSelect(
     GET_METRIC(tiflash_fap_task_state, type_selecting_stage).Increment();
     SCOPE_EXIT({ GET_METRIC(tiflash_fap_task_state, type_selecting_stage).Decrement(); });
 
-    auto * log = &Poco::Logger::get("FastAddPeer");
+    auto log = Logger::get("FastAddPeer");
     Stopwatch watch;
     std::unordered_map<StoreID, UInt64> checked_seq_map;
     auto fap_ctx = tmt.getContext().getSharedContextDisagg()->fap_context;
@@ -445,7 +445,7 @@ FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, u
 {
     try
     {
-        auto * log = &Poco::Logger::get("FastAddPeer");
+        auto log = Logger::get("FastAddPeer");
         if (!server->tmt->getContext().getSharedContextDisagg()->isDisaggregatedStorageMode())
             return genFastAddPeerRes(FastAddPeerStatus::OtherError, "", "");
         auto fap_ctx = server->tmt->getContext().getSharedContextDisagg()->fap_context;

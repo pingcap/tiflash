@@ -179,7 +179,7 @@ void FastAddPeerContext::insertCheckpointIngestInfo(
         // 2. A previous fap task recovered from disk, while a new fap task is ongoing, not possible.
         // 3. A previous fap task finished with result attached to `checkpoint_ingest_info_map`, however, the ingest stage failed to be triggered/handled due to some check in proxy's part. It could be possible.
         LOG_ERROR(
-            DB::Logger::get(),
+            log,
             "Repeated ingest for region_id={} peer_id={} old_peer_id={}",
             region_id,
             peer_id,
