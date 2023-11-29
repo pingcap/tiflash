@@ -110,19 +110,31 @@ SegmentReadTask::SegmentReadTask(
         ranges.push_back(RowKeyRange::deserialize(rb));
     }
 
-    const auto & cfs = read_snapshot->delta->getPersistedFileSetSnapshot()->getColumnFiles();
     std::vector<UInt64> remote_page_ids;
     std::vector<size_t> remote_page_sizes;
-    remote_page_ids.reserve(cfs.size());
-    remote_page_sizes.reserve(cfs.size());
-    for (const auto & cf : cfs)
     {
-        if (auto * tiny = cf->tryToTinyFile(); tiny)
-        {
-            remote_page_ids.emplace_back(tiny->getDataPageId());
-            remote_page_sizes.emplace_back(tiny->getDataPageSize());
-        }
+        // The number of ColumnFileTiny of MemTableSet is unknown, but there is a very high probability that it is zero.
+        // So ignoring the number of ColumnFileTiny of MemTableSet is better than always adding all the number of ColumnFile of MemTableSet when reserving.
+        const auto & cfs = read_snapshot->delta->getPersistedFileSetSnapshot()->getColumnFiles();
+        remote_page_ids.reserve(cfs.size());
+        remote_page_sizes.reserve(cfs.size());
     }
+    auto extract_remote_pages = [&remote_page_ids, &remote_page_sizes](const ColumnFiles & cfs) {
+        UInt64 count = 0;
+        for (const auto & cf : cfs)
+        {
+            if (auto * tiny = cf->tryToTinyFile(); tiny)
+            {
+                remote_page_ids.emplace_back(tiny->getDataPageId());
+                remote_page_sizes.emplace_back(tiny->getDataPageSize());
+                ++count;
+            }
+        }
+        return count;
+    };
+    auto memory_page_count = extract_remote_pages(read_snapshot->delta->getMemTableSetSnapshot()->getColumnFiles());
+    auto persisted_page_count
+        = extract_remote_pages(read_snapshot->delta->getPersistedFileSetSnapshot()->getColumnFiles());
 
     extra_remote_info.emplace(ExtraRemoteSegmentInfo{
         .store_address = store_address,
@@ -133,9 +145,12 @@ SegmentReadTask::SegmentReadTask(
 
     LOG_DEBUG(
         read_snapshot->log,
-        "memtable_cfs_count={} persisted_cfs_count={} remote_page_ids={} delta_index={} store_address={}",
+        "memory_cfs_count={} memory_page_count={} persisted_cfs_count={} persisted_page_count={} remote_page_ids={} "
+        "delta_index={} store_address={}",
         read_snapshot->delta->getMemTableSetSnapshot()->getColumnFileCount(),
-        cfs.size(),
+        memory_page_count,
+        read_snapshot->delta->getPersistedFileSetSnapshot()->getColumnFileCount(),
+        persisted_page_count,
         extra_remote_info->remote_page_ids,
         read_snapshot->delta->getSharedDeltaIndex()->toString(),
         store_address);
@@ -207,16 +222,21 @@ SegmentReadTasks SegmentReadTask::trySplitReadTasks(const SegmentReadTasks & tas
 
 void SegmentReadTask::initColumnFileDataProvider(const Remote::RNLocalPageCacheGuardPtr & pages_guard)
 {
-    auto & data_provider = read_snapshot->delta->getPersistedFileSetSnapshot()->data_provider;
-    RUNTIME_CHECK(std::dynamic_pointer_cast<ColumnFileDataProviderNop>(data_provider));
-
     RUNTIME_CHECK(extra_remote_info.has_value());
     auto page_cache = dm_context->global_context.getSharedContextDisagg()->rn_page_cache;
-    data_provider = std::make_shared<Remote::ColumnFileDataProviderRNLocalPageCache>(
+    auto page_data_provider = std::make_shared<Remote::ColumnFileDataProviderRNLocalPageCache>(
         page_cache,
         pages_guard,
         store_id,
         KeyspaceTableID{dm_context->keyspace_id, dm_context->physical_table_id});
+
+    auto & persisted_cf_set_data_provider = read_snapshot->delta->getPersistedFileSetSnapshot()->data_provider;
+    RUNTIME_CHECK(std::dynamic_pointer_cast<ColumnFileDataProviderNop>(persisted_cf_set_data_provider));
+    persisted_cf_set_data_provider = page_data_provider;
+
+    auto & memory_cf_set_data_provider = read_snapshot->delta->getMemTableSetSnapshot()->data_provider;
+    RUNTIME_CHECK(std::dynamic_pointer_cast<ColumnFileDataProviderNop>(memory_cf_set_data_provider));
+    memory_cf_set_data_provider = page_data_provider;
 }
 
 

@@ -24,7 +24,10 @@ namespace DB::PS::V3
 enum class PageType : UInt8
 {
     Normal = 0,
+    // Raft logs are frequently added or deleted.
     RaftData = 1,
+    // Local will not be upload to S3.
+    Local = 2,
 
     // Support at most 10 types
     TypeCountLimit = 10,
@@ -49,6 +52,8 @@ struct PageTypeUtils
             return PageType::Normal;
         case static_cast<T>(PageType::RaftData):
             return PageType::RaftData;
+        case static_cast<T>(PageType::Local):
+            return PageType::Local;
         default:
             return treat_unknown_as_normal ? PageType::Normal : PageType::TypeCountLimit;
         }
