@@ -84,11 +84,6 @@ public:
         const mpp::IsAliveRequest * request,
         mpp::IsAliveResponse * response) override;
 
-    grpc::Status CleanupBeforeScaleIn(
-            grpc::ServerContext * context,
-            const mpp::CleanupBeforeScaleInRequest * request,
-            mpp::CleanupBeforeScaleInResponse * response) override;
-
     grpc::Status EstablishMPPConnection(
         grpc::ServerContext * grpc_context,
         const mpp::EstablishMPPConnectionRequest * request,
