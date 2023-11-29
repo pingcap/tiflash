@@ -85,7 +85,7 @@ void SetMetrics(const CPDataDumpStats & stats)
             break;
         }
         default:
-            LOG_FATAL(&Poco::Logger::get("SetMetrics"), "unsupported storage type {}", magic_enum::enum_name(type));
+            LOG_FATAL(Logger::get("SetMetrics"), "unsupported storage type {}", magic_enum::enum_name(type));
             __builtin_unreachable();
         }
     }
