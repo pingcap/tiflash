@@ -91,8 +91,8 @@ void SchemaBuilder<Getter, NameMapper>::applyCreateTable(DatabaseID database_id,
     }
 
     // If table is partition table, we will create the logical table here.
-    auto new_db_info = getter.getDatabase(database_id);
-    if (new_db_info == nullptr)
+    auto db_info = getter.getDatabase(database_id);
+    if (unlikely(db_info == nullptr))
     {
         // the database has been dropped
         LOG_INFO(
@@ -103,7 +103,7 @@ void SchemaBuilder<Getter, NameMapper>::applyCreateTable(DatabaseID database_id,
             table_id);
         return;
     }
-    applyCreateStorageInstance(new_db_info, table_info, get_by_mvcc);
+    applyCreateStorageInstance(db_info, table_info, get_by_mvcc);
 
     // Register the partition_id -> logical_table_id mapping
     for (const auto & part_def : table_info->partition.definitions)
@@ -191,7 +191,7 @@ void SchemaBuilder<Getter, NameMapper>::applyExchangeTablePartition(const Schema
 
             auto [new_db_info, new_table_info]
                 = getter.getDatabaseAndTableInfo(partition_database_id, partition_logical_table_id);
-            if (new_table_info == nullptr)
+            if (unlikely(new_db_info == nullptr || new_table_info == nullptr))
             {
                 LOG_INFO(
                     log,
@@ -223,7 +223,7 @@ void SchemaBuilder<Getter, NameMapper>::applyExchangeTablePartition(const Schema
 
             auto [new_db_info, new_table_info]
                 = getter.getDatabaseAndTableInfo(non_partition_database_id, partition_physical_table_id);
-            if (new_table_info == nullptr)
+            if (unlikely(new_db_info == nullptr || new_table_info == nullptr))
             {
                 LOG_INFO(
                     log,
@@ -370,7 +370,7 @@ template <typename Getter, typename NameMapper>
 void SchemaBuilder<Getter, NameMapper>::applySetTiFlashReplica(DatabaseID database_id, TableID table_id)
 {
     auto [db_info, table_info] = getter.getDatabaseAndTableInfo(database_id, table_id);
-    if (unlikely(table_info == nullptr))
+    if (unlikely(db_info == nullptr || table_info == nullptr))
     {
         LOG_WARNING(log, "table is not exist in TiKV, applySetTiFlashReplica is ignored, table_id={}", table_id);
         return;
@@ -491,7 +491,7 @@ template <typename Getter, typename NameMapper>
 void SchemaBuilder<Getter, NameMapper>::applyPartitionDiff(DatabaseID database_id, TableID table_id)
 {
     auto [db_info, table_info] = getter.getDatabaseAndTableInfo(database_id, table_id);
-    if (table_info == nullptr)
+    if (unlikely(db_info == nullptr || table_info == nullptr))
     {
         LOG_ERROR(log, "table is not exist in TiKV, applyPartitionDiff is ignored, table_id={}", table_id);
         return;
@@ -617,7 +617,7 @@ template <typename Getter, typename NameMapper>
 void SchemaBuilder<Getter, NameMapper>::applyRenameTable(DatabaseID database_id, TableID table_id)
 {
     auto [new_db_info, new_table_info] = getter.getDatabaseAndTableInfo(database_id, table_id);
-    if (new_table_info == nullptr)
+    if (unlikely(new_db_info == nullptr || new_table_info == nullptr))
     {
         LOG_ERROR(log, "table is not exist in TiKV, applyRenameTable is ignored, table_id={}", table_id);
         return;
@@ -729,7 +729,7 @@ template <typename Getter, typename NameMapper>
 void SchemaBuilder<Getter, NameMapper>::applyRecoverTable(DatabaseID database_id, TiDB::TableID table_id)
 {
     auto [db_info, table_info] = getter.getDatabaseAndTableInfo(database_id, table_id);
-    if (table_info == nullptr)
+    if (unlikely(db_info == nullptr || table_info == nullptr))
     {
         // this table is dropped.
         LOG_INFO(
@@ -868,12 +868,12 @@ String createDatabaseStmt(Context & context, const DBInfo & db_info, const Schem
 template <typename Getter, typename NameMapper>
 bool SchemaBuilder<Getter, NameMapper>::applyCreateSchema(DatabaseID schema_id)
 {
-    auto db = getter.getDatabase(schema_id);
-    if (db == nullptr)
+    auto db_info = getter.getDatabase(schema_id);
+    if (unlikely(db_info == nullptr))
     {
         return false;
     }
-    applyCreateSchema(db);
+    applyCreateSchema(db_info);
     return true;
 }
 
