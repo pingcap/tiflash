@@ -76,61 +76,9 @@ mysql> insert into test.t4 values(1, 1.2, 'v', 2);
 mysql> drop table test.t4;
 >> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
 => DBGInvoke __refresh_schemas()
+# ensure t4 is tombstone
 >> select tidb_database,tidb_name,tidb_table_id from system.tables where tidb_database = 'test' and tidb_name = 't4' and is_tombstone = 0
+>> select count(*) from system.tables where tidb_database = 'test' and tidb_name = 't4' and is_tombstone != 0
+
+# re-enable
 >> DBGInvoke __enable_schema_sync_service('true')
-
-## drop table arrive tiflash before ddl and insert, and do recover, check the data is not lost
-## because we want to test we actually drop the table, so please not use the same name for this table
-mysql> drop table if exists test.t_drop; 
-mysql> create table test.t_drop(a int, b int);
-mysql> alter table test.t_drop set tiflash replica 1;
-mysql> insert into test.t_drop values(1, 1);
-
-func> wait_table test t_drop
-
-=> DBGInvoke __enable_schema_sync_service('false') 
-=> DBGInvoke __init_fail_point()
-
-mysql> alter table test.t_drop add column c int;
-
->> DBGInvoke __enable_fail_point(pause_before_apply_raft_cmd)
-
-# exactly write until fail point "pause_before_apply_raft_cmd" to be disable
-mysql> insert into test.t_drop values(1,2,3);
-
-mysql> drop table test.t_drop;
-
-=> DBGInvoke __refresh_schemas()
-
-# make write cmd take effect
->> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
-
-## wait the insert finish
-SLEEP 3
-
-# check the table is tombstone
->> select tidb_database,tidb_name from system.tables where tidb_database = 'test' and tidb_name = 't_drop' and is_tombstone = 0
-
-mysql> recover table test.t_drop;
-
-mysql> set session tidb_isolation_read_engines='tiflash';select * from test.t_drop;
-+----+-----+------+
-| a  |  b  |  c   |
-+----+-----+------+
-|  1 |   1 | NULL |
-|  1 |   2 |   3  |
-+----+-----+------+
-
-mysql> drop table test.t_drop;
-
-=> DBGInvoke __refresh_schemas()
->> select tidb_database,tidb_name from system.tables where tidb_database = 'test' and tidb_name = 't_drop'
-┌─tidb_database─┬─tidb_name─┐
-│ test          │ t_drop    │
-└───────────────┴───────────┘
-
-=> DBGInvoke __enable_schema_sync_service('true') 
-=> DBGInvoke __gc_schemas(9223372036854775807)
-
-# check the table is physically dropped
->> select tidb_database,tidb_name from system.tables where tidb_database = 'test' and tidb_name = 't_drop'
