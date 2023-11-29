@@ -286,29 +286,23 @@ FastAddPeerRes FastAddPeerImplWrite(
             keyspace_id,
             table_id);
     }
-    if (storage->engineType() == TiDB::StorageEngine::DT)
-    {
-        auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
-        auto new_key_range = DM::RowKeyRange::fromRegionRange(
-            region->getRange(),
-            table_id,
-            storage->isCommonHandle(),
-            storage->getRowKeyColumnSize());
+    RUNTIME_CHECK_MSG(storage->engineType() == TiDB::StorageEngine::DT, "ingest into unsupported storage engine");
+    auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
+    auto new_key_range = DM::RowKeyRange::fromRegionRange(
+        region->getRange(),
+        table_id,
+        storage->isCommonHandle(),
+        storage->getRowKeyColumnSize());
 
-        auto segments = dm_storage->buildSegmentsFromCheckpointInfo(new_key_range, checkpoint_info, settings);
-        fap_ctx->insertCheckpointIngestInfo(
-            tmt,
-            region_id,
-            new_peer_id,
-            checkpoint_info->remote_store_id,
-            region,
-            std::move(segments),
-            start_time);
-    }
-    else
-    {
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "ingest into unsupported storage engine");
-    }
+    auto segments = dm_storage->buildSegmentsFromCheckpointInfo(new_key_range, checkpoint_info, settings);
+    fap_ctx->insertCheckpointIngestInfo(
+        tmt,
+        region_id,
+        new_peer_id,
+        checkpoint_info->remote_store_id,
+        region,
+        std::move(segments),
+        start_time);
 
     // Write raft log to uni ps, we do this here because we store raft log seperately.
     // Currently, FAP only handle when the peer is newly created in this store.

@@ -149,9 +149,8 @@ ParsedCheckpointDataHolderPtr buildParsedCheckpointData(Context & context, const
         for (auto & record : records)
         {
             {
-                auto id_storage_type = UniversalPageIdFormat::getUniversalPageIdType(record.page_id);
                 // Filter remote peer's local page storage pages.
-                if (id_storage_type == StorageType::LocalKV)
+                if (UniversalPageIdFormat::getUniversalPageIdType(record.page_id) == StorageType::LocalKV)
                 {
                     continue;
                 }

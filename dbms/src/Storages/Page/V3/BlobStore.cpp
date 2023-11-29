@@ -414,10 +414,9 @@ typename BlobStore<Trait>::PageEntriesEdit BlobStore<Trait>::write(
                 {
                     throw Exception(
                         ErrorCodes::LOGICAL_ERROR,
-                        fmt::format(
-                            "BlobStore::write remote empty data_location, page_id={}, size={}",
-                            write.page_id,
-                            write.size));
+                        "BlobStore::write remote empty data_location, page_id={}, size={}",
+                        write.page_id,
+                        write.size);
                 }
                 entry.checkpoint_info = OptionalCheckpointInfo(*write.data_location, true, true);
                 if (!write.offsets.empty())
@@ -578,10 +577,9 @@ typename BlobStore<Trait>::PageEntriesEdit BlobStore<Trait>::write(
             {
                 throw Exception(
                     ErrorCodes::LOGICAL_ERROR,
-                    fmt::format(
-                        "BlobStore::write remote empty data_location, page_id={}, size={}",
-                        write.page_id,
-                        write.size));
+                    "BlobStore::write remote empty data_location, page_id={}, size={}",
+                    write.page_id,
+                    write.size);
             }
             entry.checkpoint_info = OptionalCheckpointInfo(*write.data_location, true, true);
             if (!write.offsets.empty())

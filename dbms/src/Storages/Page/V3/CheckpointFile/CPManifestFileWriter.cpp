@@ -67,8 +67,7 @@ void CPManifestFileWriter::writeEditsPart(const universal::PageEntriesEdit & edi
     part.set_has_more(true);
     for (UInt64 i = 0; i < limit; ++i)
     {
-        auto id_storage_type = UniversalPageIdFormat::getUniversalPageIdType(records[start + i].page_id);
-        if (id_storage_type == StorageType::LocalKV)
+        if (UniversalPageIdFormat::getUniversalPageIdType(records[start + i].page_id) == StorageType::LocalKV)
         {
             continue;
         }
