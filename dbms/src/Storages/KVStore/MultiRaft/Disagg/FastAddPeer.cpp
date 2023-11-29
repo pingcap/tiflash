@@ -271,11 +271,7 @@ FastAddPeerRes FastAddPeerImplWrite(
     GET_METRIC(tiflash_fap_task_state, type_writing_stage).Increment();
     SCOPE_EXIT({ GET_METRIC(tiflash_fap_task_state, type_writing_stage).Decrement(); });
 
-    CheckpointInfoPtr checkpoint_info;
-    RegionPtr region;
-    RaftApplyState apply_state;
-    RegionLocalState region_state;
-    std::tie(checkpoint_info, region, apply_state, region_state) = checkpoint;
+    auto [checkpoint_info, region, apply_state, region_state] = checkpoint;
 
     auto & storages = tmt.getStorages();
     auto keyspace_id = region->getKeyspaceID();
