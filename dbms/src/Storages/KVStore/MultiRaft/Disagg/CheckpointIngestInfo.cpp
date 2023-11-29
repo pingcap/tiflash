@@ -99,7 +99,7 @@ bool CheckpointIngestInfo::loadFromLocal(const TiFlashRaftProxyHelper * proxy_he
     std::vector<UInt64> restored_segments_id;
     {
         auto count = readBinary2<UInt64>(buf);
-        for (size_t i = 0; i < count; i++)
+        for (size_t i = 0; i < count; ++i)
         {
             auto segment_id = readBinary2<UInt64>(buf);
             restored_segments_id.push_back(segment_id);
