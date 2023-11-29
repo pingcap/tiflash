@@ -65,7 +65,6 @@ struct CheckpointIngestInfo
         , remote_store_id(remote_store_id_)
         , region(region_)
         , restored_segments(std::move(restored_segments_))
-        , clean_when_destruct(false)
         , begin_time(begin_time_)
     {
         log = DB::Logger::get("CheckpointIngestInfo");
@@ -98,7 +97,6 @@ private:
     UInt64 remote_store_id;
     RegionPtr region;
     DM::Segments restored_segments;
-    bool clean_when_destruct;
     // If restarted, `beginTime` is no longer meaningful.
     UInt64 begin_time;
     DB::LoggerPtr log;
