@@ -17,7 +17,7 @@
 #    if we drop the table without tiflash storage, it works well 
 #    if we drop the table with tiflash storage, it works well, and check the tombstone in TiFlash
 
-# Clean the env
+# Clean the tombstone table in the testing env
 >> DBGInvoke __enable_schema_sync_service('true')
 >> DBGInvoke __gc_schemas(18446744073709551615)
 
@@ -79,6 +79,9 @@ mysql> drop table test.t4;
 # ensure t4 is tombstone
 >> select tidb_database,tidb_name,tidb_table_id from system.tables where tidb_database = 'test' and tidb_name = 't4' and is_tombstone = 0
 >> select count(*) from system.tables where tidb_database = 'test' and tidb_name = 't4' and is_tombstone != 0
+┌─count()─┐
+│       1 │
+└─────────┘
 
 # re-enable
 >> DBGInvoke __enable_schema_sync_service('true')

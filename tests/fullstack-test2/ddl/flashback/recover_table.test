@@ -12,10 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-mysql> drop table if exists test.t;
+# Clean the tombstone table in the testing env
+>> DBGInvoke __enable_schema_sync_service('true')
+>> DBGInvoke __gc_schemas(18446744073709551615)
 
 ### Case 1
 ## Test case for applying raft cmd for tombstoned table
+mysql> drop table if exists test.t;
 mysql> create table test.t(id int);
 mysql> alter table test.t set tiflash replica 1;
 
@@ -137,6 +140,7 @@ SLEEP 3
 
 mysql> recover table test.t_drop;
 
+# we should be able to read the data on column `c`
 mysql> set session tidb_isolation_read_engines='tiflash';select * from test.t_drop;
 +----+-----+------+
 | a  |  b  |  c   |
