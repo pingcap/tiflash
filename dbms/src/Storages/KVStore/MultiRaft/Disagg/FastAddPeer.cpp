@@ -181,7 +181,7 @@ std::variant<CheckpointRegionInfoAndData, FastAddPeerRes> FastAddPeerImplSelect(
     GET_METRIC(tiflash_fap_task_state, type_selecting_stage).Increment();
     SCOPE_EXIT({ GET_METRIC(tiflash_fap_task_state, type_selecting_stage).Decrement(); });
 
-    auto * log = &Poco::Logger::get("FastAddPeer");
+    auto log = Logger::get("FastAddPeer");
     Stopwatch watch;
     std::unordered_map<StoreID, UInt64> checked_seq_map;
     auto fap_ctx = tmt.getContext().getSharedContextDisagg()->fap_context;
