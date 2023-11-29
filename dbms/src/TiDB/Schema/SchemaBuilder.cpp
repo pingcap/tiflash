@@ -90,7 +90,10 @@ void SchemaBuilder<Getter, NameMapper>::applyCreateTable(DatabaseID database_id,
         return;
     }
 
-    // If table is partition table, we will create the logical table here.
+    // If table is partition table, we will create the Storage instance for the logical table
+    // here (and store the table info to local).
+    // Because `applyPartitionDiffOnLogicalTable` need the logical table for comparing
+    // the latest partitioning and the local partitioning in table info to apply the changes.
     auto db_info = getter.getDatabase(database_id);
     if (unlikely(db_info == nullptr))
     {
@@ -518,11 +521,11 @@ void SchemaBuilder<Getter, NameMapper>::applyPartitionDiff(DatabaseID database_i
         return;
     }
 
-    applyPartitionDiff(db_info, table_info, storage);
+    applyPartitionDiffOnLogicalTable(db_info, table_info, storage);
 }
 
 template <typename Getter, typename NameMapper>
-void SchemaBuilder<Getter, NameMapper>::applyPartitionDiff(
+void SchemaBuilder<Getter, NameMapper>::applyPartitionDiffOnLogicalTable(
     const TiDB::DBInfoPtr & db_info,
     const TableInfoPtr & table_info,
     const ManageableStoragePtr & storage)

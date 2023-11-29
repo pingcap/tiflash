@@ -84,7 +84,7 @@ private:
     void applyDropPhysicalTable(const String & db_name, TableID table_id);
 
     void applyPartitionDiff(DatabaseID database_id, TableID table_id);
-    void applyPartitionDiff(
+    void applyPartitionDiffOnLogicalTable(
         const TiDB::DBInfoPtr & db_info,
         const TiDB::TableInfoPtr & table_info,
         const ManageableStoragePtr & storage);
