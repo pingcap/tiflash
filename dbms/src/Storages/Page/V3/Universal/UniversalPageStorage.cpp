@@ -51,6 +51,7 @@ UniversalPageStoragePtr UniversalPageStorage::create(
     PageTypeAndConfig page_type_and_config{
         {PageType::Normal, PageTypeConfig{.heavy_gc_valid_rate = config.blob_heavy_gc_valid_rate}},
         {PageType::RaftData, PageTypeConfig{.heavy_gc_valid_rate = config.blob_heavy_gc_valid_rate_raft_data}},
+        {PageType::Local, PageTypeConfig{.heavy_gc_valid_rate = config.blob_heavy_gc_valid_rate}},
     };
     UniversalPageStoragePtr storage = std::make_shared<UniversalPageStorage>(name, delegator, config, file_provider);
     storage->blob_store = std::make_unique<PS::V3::universal::BlobStoreType>(

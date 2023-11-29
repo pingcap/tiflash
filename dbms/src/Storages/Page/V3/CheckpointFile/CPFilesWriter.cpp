@@ -98,6 +98,7 @@ CPDataDumpStats CPFilesWriter::writeEditsAndApplyCheckpointInfo(
     for (auto & rec_edit : records)
     {
         StorageType id_storage_type = StorageType::Unknown;
+
         {
             id_storage_type = UniversalPageIdFormat::getUniversalPageIdType(rec_edit.page_id);
             // all keys are included in the manifest
@@ -105,6 +106,12 @@ CPDataDumpStats CPFilesWriter::writeEditsAndApplyCheckpointInfo(
             // this is the page data size of all latest version keys, including some uploaded in the
             // previous checkpoint
             write_down_stats.num_existing_bytes[static_cast<size_t>(id_storage_type)] += rec_edit.entry.size;
+
+            if (id_storage_type == StorageType::LocalKV)
+            {
+                // These pages only contains local data which will not be dumped into checkpoint.
+                continue;
+            }
         }
 
         if (rec_edit.type == EditRecordType::VAR_EXTERNAL)
@@ -185,11 +192,7 @@ CPDataDumpStats CPFilesWriter::writeEditsAndApplyCheckpointInfo(
             RUNTIME_CHECK(page.data.size() == rec_edit.entry.size, page.data.size(), rec_edit.entry.size);
             bool is_local_data_reclaimed
                 = rec_edit.entry.checkpoint_info.has_value() && rec_edit.entry.checkpoint_info.is_local_data_reclaimed;
-            rec_edit.entry.checkpoint_info = OptionalCheckpointInfo{
-                .data_location = data_location,
-                .is_valid = true,
-                .is_local_data_reclaimed = is_local_data_reclaimed,
-            };
+            rec_edit.entry.checkpoint_info = OptionalCheckpointInfo(data_location, true, is_local_data_reclaimed);
             locked_files.emplace(*data_location.data_file_id);
             if (is_compaction)
             {
