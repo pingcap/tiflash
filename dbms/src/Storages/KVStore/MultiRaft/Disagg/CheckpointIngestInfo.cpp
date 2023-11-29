@@ -198,7 +198,7 @@ void CheckpointIngestInfo::persistToLocal()
 void CheckpointIngestInfo::removeFromLocal(TMTContext & tmt, UInt64 region_id, UInt64 peer_id, UInt64 remote_store_id)
 {
     LOG_INFO(
-        DB::Logger::get("CheckpointIngestInfo"),
+        log,
         "Erase CheckpointIngestInfo from disk, region_id={} peer_id={} remote_store_id={}",
         region_id,
         peer_id,
