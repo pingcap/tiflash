@@ -2113,7 +2113,6 @@ void Context::setMockMPPServerInfo(MockMPPServerInfo & info)
 
 SessionCleaner::~SessionCleaner()
 {
-    auto log = Poco::get();
     try
     {
         {

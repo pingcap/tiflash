@@ -35,8 +35,6 @@
 #include <Storages/Page/V3/Universal/UniversalPageStorageService.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <common/config_common.h>
-#include <common/logger_useful.h>
-#include <Common/Logger.h>
 
 #include <chrono>
 
@@ -52,7 +50,6 @@ namespace DB
 {
 AsynchronousMetrics::~AsynchronousMetrics()
 {
-    auto log = Logger::get();
     try
     {
         {
