@@ -51,13 +51,13 @@ DeltaValueSpace::DeltaValueSpace(ColumnFilePersistedSetPtr && persisted_file_set
     , log(Logger::get())
 {}
 
-void DeltaValueSpace::abandon(DMContext & context)
+void DeltaValueSpace::abandon(DMContext & dm_context)
 {
     bool v = false;
     if (!abandoned.compare_exchange_strong(v, true))
         throw Exception("Try to abandon a already abandoned DeltaValueSpace", ErrorCodes::LOGICAL_ERROR);
 
-    if (auto manager = context.db_context.getDeltaIndexManager(); manager)
+    if (auto manager = dm_context.global_context.getDeltaIndexManager(); manager)
         manager->deleteRef(delta_index);
 }
 
@@ -88,7 +88,7 @@ template <class ColumnFileT>
 struct CloneColumnFilesHelper
 {
     static std::vector<ColumnFileT> clone(
-        DMContext & context,
+        DMContext & dm_context,
         const std::vector<ColumnFileT> & src,
         const RowKeyRange & target_range,
         WriteBatches & wbs);
@@ -96,7 +96,7 @@ struct CloneColumnFilesHelper
 
 template <class ColumnFilePtrT>
 std::vector<ColumnFilePtrT> CloneColumnFilesHelper<ColumnFilePtrT>::clone(
-    DMContext & context,
+    DMContext & dm_context,
     const std::vector<ColumnFilePtrT> & src,
     const RowKeyRange & target_range,
     WriteBatches & wbs)
@@ -132,15 +132,15 @@ std::vector<ColumnFilePtrT> CloneColumnFilesHelper<ColumnFilePtrT>::clone(
         else if (auto * t = column_file->tryToTinyFile(); t)
         {
             // Use a newly created page_id to reference the data page_id of current column file.
-            PageIdU64 new_data_page_id = context.storage_pool->newLogPageId();
+            PageIdU64 new_data_page_id = dm_context.storage_pool->newLogPageId();
             wbs.log.putRefPage(new_data_page_id, t->getDataPageId());
             auto new_column_file = t->cloneWith(new_data_page_id);
             cloned.push_back(new_column_file);
         }
         else if (auto * f = column_file->tryToBigFile(); f)
         {
-            auto delegator = context.path_pool->getStableDiskDelegator();
-            auto new_page_id = context.storage_pool->newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
+            auto delegator = dm_context.path_pool->getStableDiskDelegator();
+            auto new_page_id = dm_context.storage_pool->newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
             // Note that the file id may has already been mark as deleted. We must
             // create a reference to the page id itself instead of create a reference
             // to the file id.
@@ -148,18 +148,18 @@ std::vector<ColumnFilePtrT> CloneColumnFilesHelper<ColumnFilePtrT>::clone(
             auto file_id = f->getFile()->fileId();
             auto old_dmfile = f->getFile();
             auto file_parent_path = old_dmfile->parentPath();
-            if (!context.db_context.getSharedContextDisagg()->remote_data_store)
+            if (!dm_context.global_context.getSharedContextDisagg()->remote_data_store)
             {
                 RUNTIME_CHECK(file_parent_path == delegator.getDTFilePath(file_id));
             }
             auto new_file = DMFile::restore(
-                context.db_context.getFileProvider(),
+                dm_context.global_context.getFileProvider(),
                 file_id,
                 /* page_id= */ new_page_id,
                 file_parent_path,
                 DMFile::ReadMetaMode::all());
 
-            auto new_column_file = f->cloneWith(context, new_file, target_range);
+            auto new_column_file = f->cloneWith(dm_context, new_file, target_range);
             cloned.push_back(new_column_file);
         }
         else

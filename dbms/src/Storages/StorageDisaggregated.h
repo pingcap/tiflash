@@ -23,6 +23,7 @@
 #include <Storages/DeltaMerge/Remote/DisaggTaskId.h>
 #include <Storages/DeltaMerge/Remote/RNWorkers_fwd.h>
 #include <Storages/DeltaMerge/SegmentReadTask.h>
+#include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 #include <Storages/IStorage.h>
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
@@ -107,11 +108,12 @@ private:
         const Context & db_context,
         const pingcap::coprocessor::BatchCopTask & batch_cop_task);
     DM::RSOperatorPtr buildRSOperator(const Context & db_context, const DM::ColumnDefinesPtr & columns_to_read);
-    DM::Remote::RNWorkersPtr buildRNWorkers(
+    std::variant<DM::Remote::RNWorkersPtr, DM::SegmentReadTaskPoolPtr> packSegmentReadTasks(
         const Context & db_context,
         DM::SegmentReadTasks && read_tasks,
         const DM::ColumnDefinesPtr & column_defines,
-        size_t num_streams);
+        size_t num_streams,
+        int extra_table_id_index);
     void buildRemoteSegmentInputStreams(
         const Context & db_context,
         DM::SegmentReadTasks && read_tasks,

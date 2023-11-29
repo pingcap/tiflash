@@ -45,6 +45,20 @@ struct ProbePartition
     size_t bytes{0};
 };
 
+struct JoinArenaPool
+{
+    Arena arena;
+    std::vector<CachedColumnInfo *> cached_column_infos;
+    size_t size() const { return cached_column_infos.capacity() * sizeof(CachedColumnInfo *) + arena.size(); }
+    ~JoinArenaPool()
+    {
+        for (auto * cci : cached_column_infos)
+            cci->~CachedColumnInfo();
+        cached_column_infos.clear();
+    }
+};
+using JoinArenaPoolPtr = std::shared_ptr<JoinArenaPool>;
+
 class Join;
 struct alignas(ABSL_CACHELINE_SIZE) RowsNotInsertToMap
 {
@@ -65,7 +79,7 @@ struct alignas(ABSL_CACHELINE_SIZE) RowsNotInsertToMap
     /// Insert row to this structure.
     /// If need_materialize is true, row will be inserted into materialized_columns_vec.
     /// Else it will be inserted into row list.
-    void insertRow(Block * stored_block, size_t index, bool need_materialize, Arena & pool);
+    void insertRow(Block * stored_block, size_t index, bool need_materialize, JoinArenaPool & pool);
 };
 
 class JoinPartition;
@@ -83,10 +97,10 @@ public:
         const LoggerPtr & log_,
         bool has_other_condition_)
         : partition_index(partition_index_)
+        , pool(std::make_shared<JoinArenaPool>())
         , kind(kind_)
         , strictness(strictness_)
         , join_map_method(join_map_type_)
-        , pool(std::make_shared<Arena>())
         , hash_join_spill_context(hash_join_spill_context_)
         , has_other_condition(has_other_condition_)
         , log(log_)
@@ -138,7 +152,7 @@ public:
     JoinMapMethod getJoinMapMethod() const { return join_map_method; }
     ASTTableJoin::Kind getJoinKind() const { return kind; }
     Block * getLastBuildBlock() { return &build_partition.blocks.back(); }
-    ArenaPtr & getPartitionPool()
+    JoinArenaPoolPtr & getPartitionPool()
     {
         assert(pool != nullptr);
         return pool;
@@ -166,7 +180,8 @@ public:
         size_t stream_index,
         size_t insert_concurrency,
         bool enable_fine_grained_shuffle,
-        bool enable_join_spill);
+        bool enable_join_spill,
+        size_t probe_cache_column_threshold);
 
     /// probe the block using hash maps in `JoinPartitions`
     static void probeBlock(
@@ -181,8 +196,7 @@ public:
         const std::vector<size_t> & right_indexes,
         const TiDB::TiDBCollators & collators,
         const JoinBuildInfo & join_build_info,
-        ProbeProcessInfo & probe_process_info,
-        MutableColumnPtr & record_mapped_entry_column);
+        ProbeProcessInfo & probe_process_info);
 
     template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps, bool row_flagged_map>
     static void probeBlockImpl(
@@ -197,8 +211,7 @@ public:
         const std::vector<size_t> & right_indexes,
         const TiDB::TiDBCollators & collators,
         const JoinBuildInfo & join_build_info,
-        ProbeProcessInfo & probe_process_info,
-        MutableColumnPtr & record_mapped_entry_column);
+        ProbeProcessInfo & probe_process_info);
 
     template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
     static std::pair<PaddedPODArray<NASemiJoinResult<KIND, STRICTNESS>>, std::list<NASemiJoinResult<KIND, STRICTNESS> *>> probeBlockNullAwareSemi(
@@ -232,6 +245,7 @@ private:
     BuildPartition build_partition;
     ProbePartition probe_partition;
 
+    JoinArenaPoolPtr pool;
     ASTTableJoin::Kind kind;
     ASTTableJoin::Strictness strictness;
     JoinMapMethod join_map_method;
@@ -246,7 +260,6 @@ private:
     /// 2. Rows that are filtered by right join conditions
     /// For null-aware semi join family, including rows with NULL join keys.
     std::unique_ptr<RowsNotInsertToMap> rows_not_inserted_to_map;
-    ArenaPtr pool;
     HashJoinSpillContextPtr hash_join_spill_context;
     bool has_other_condition;
     /// only update this field when spill is enabled. todo support this field in non-spill mode

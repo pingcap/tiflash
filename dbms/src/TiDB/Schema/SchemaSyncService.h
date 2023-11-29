@@ -25,7 +25,6 @@
 
 namespace DB
 {
-class BackgroundProcessingPool;
 class Logger;
 using LoggerPtr = std::shared_ptr<Logger>;
 
@@ -45,13 +44,15 @@ public:
 
     bool gc(Timestamp gc_safepoint, KeyspaceID keyspace_id);
 
+    void shutdown();
+
 private:
     bool syncSchemas(KeyspaceID keyspace_id);
 
     void addKeyspaceGCTasks();
     void removeKeyspaceGCTasks();
 
-    Timestamp lastGcSafePoint(KeyspaceID keyspace_id) const;
+    std::optional<Timestamp> lastGcSafePoint(KeyspaceID keyspace_id) const;
     void updateLastGcSafepoint(KeyspaceID keyspace_id, Timestamp gc_safepoint);
 
 private:

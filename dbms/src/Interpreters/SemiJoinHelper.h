@@ -27,12 +27,12 @@ enum class SemiJoinResultType : UInt8
     NULL_VALUE,
 };
 
-bool isTrueSemiJoinResult(SemiJoinResultType result)
+inline bool isTrueSemiJoinResult(SemiJoinResultType result)
 {
     return result == SemiJoinResultType::TRUE_VALUE;
 }
 
-bool isTrueSemiJoinResult(bool result)
+inline bool isTrueSemiJoinResult(bool result)
 {
     return result;
 }

@@ -131,9 +131,9 @@ DMFilePtr writeIntoNewDMFile(
         file_id,
         parent_path,
         dm_context.createChecksumConfig(),
-        dm_context.db_context.getSettingsRef().dt_small_file_size_threshold,
-        dm_context.db_context.getSettingsRef().dt_merged_file_max_size);
-    auto output_stream = std::make_shared<DMFileBlockOutputStream>(dm_context.db_context, dmfile, *schema_snap);
+        dm_context.global_context.getSettingsRef().dt_small_file_size_threshold,
+        dm_context.global_context.getSettingsRef().dt_merged_file_max_size);
+    auto output_stream = std::make_shared<DMFileBlockOutputStream>(dm_context.global_context, dmfile, *schema_snap);
     const auto * mvcc_stream
         = typeid_cast<const DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT> *>(input_stream.get());
 
@@ -186,36 +186,36 @@ DMFilePtr writeIntoNewDMFile(
 }
 
 StableValueSpacePtr createNewStable( //
-    DMContext & context,
+    DMContext & dm_context,
     const ColumnDefinesPtr & schema_snap,
     const BlockInputStreamPtr & input_stream,
     PageIdU64 stable_id,
     WriteBatches & wbs)
 {
-    auto delegator = context.path_pool->getStableDiskDelegator();
+    auto delegator = dm_context.path_pool->getStableDiskDelegator();
     auto store_path = delegator.choosePath();
 
-    PageIdU64 dtfile_id = context.storage_pool->newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
+    PageIdU64 dtfile_id = dm_context.storage_pool->newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
     DMFilePtr dtfile;
     try
     {
-        dtfile = writeIntoNewDMFile(context, schema_snap, input_stream, dtfile_id, store_path);
+        dtfile = writeIntoNewDMFile(dm_context, schema_snap, input_stream, dtfile_id, store_path);
 
         auto stable = std::make_shared<StableValueSpace>(stable_id);
-        stable->setFiles({dtfile}, RowKeyRange::newAll(context.is_common_handle, context.rowkey_column_size));
+        stable->setFiles({dtfile}, RowKeyRange::newAll(dm_context.is_common_handle, dm_context.rowkey_column_size));
         stable->saveMeta(wbs.meta);
-        if (auto data_store = context.db_context.getSharedContextDisagg()->remote_data_store; !data_store)
+        if (auto data_store = dm_context.global_context.getSharedContextDisagg()->remote_data_store; !data_store)
         {
             wbs.data.putExternal(dtfile_id, 0);
             delegator.addDTFile(dtfile_id, dtfile->getBytesOnDisk(), store_path);
         }
         else
         {
-            auto store_id = context.db_context.getTMTContext().getKVStore()->getStoreID();
+            auto store_id = dm_context.global_context.getTMTContext().getKVStore()->getStoreID();
             Remote::DMFileOID oid{
                 .store_id = store_id,
-                .keyspace_id = context.keyspace_id,
-                .table_id = context.physical_table_id,
+                .keyspace_id = dm_context.keyspace_id,
+                .table_id = dm_context.physical_table_id,
                 .file_id = dtfile_id,
             };
             data_store->putDMFile(dtfile, oid, /*switch_to_remote*/ true);
@@ -233,7 +233,7 @@ StableValueSpacePtr createNewStable( //
     {
         if (dtfile)
         {
-            dtfile->remove(context.db_context.getFileProvider());
+            dtfile->remove(dm_context.global_context.getFileProvider());
         }
         throw;
     }
@@ -394,7 +394,7 @@ Segment::SegmentMetaInfos Segment::readAllSegmentsMetaInfoInRange( //
     const RowKeyRange & target_range,
     const CheckpointInfoPtr & checkpoint_info)
 {
-    auto fap_context = context.db_context.getSharedContextDisagg()->fap_context;
+    auto fap_context = context.global_context.getSharedContextDisagg()->fap_context;
 
     // If cache is empty, we read from DELTA_MERGE_FIRST_SEGMENT_ID to the end and build the cache.
     // Otherwise, we just read the segment that cover the range.
@@ -405,6 +405,7 @@ Segment::SegmentMetaInfos Segment::readAllSegmentsMetaInfoInRange( //
     bool is_cache_ready = end_to_segment_id_cache->isReady(lock);
     if (is_cache_ready)
     {
+        // TODO bisect for end
         current_segment_id
             = end_to_segment_id_cache->getSegmentIdContainingKey(lock, target_range.getStart().toRowKeyValue());
     }
@@ -604,7 +605,7 @@ bool Segment::isDefinitelyEmpty(DMContext & dm_context, const SegmentSnapshotPtr
         SkippableBlockInputStreams streams;
         for (const auto & file : segment_snap->stable->getDMFiles())
         {
-            DMFileBlockInputStreamBuilder builder(dm_context.db_context);
+            DMFileBlockInputStreamBuilder builder(dm_context.global_context);
             auto stream = builder
                               .setRowsThreshold(
                                   std::numeric_limits<UInt64>::max()) // TODO: May be we could have some better settings
@@ -764,8 +765,11 @@ BlockInputStreamPtr Segment::getInputStream(
     UInt64 max_version,
     size_t expected_block_size)
 {
-    auto clipped_block_rows
-        = clipBlockRows(dm_context.db_context, expected_block_size, columns_to_read, segment_snap->stable->stable);
+    auto clipped_block_rows = clipBlockRows( //
+        dm_context.global_context,
+        expected_block_size,
+        columns_to_read,
+        segment_snap->stable->stable);
     switch (read_mode)
     {
     case ReadMode::Normal:
@@ -786,7 +790,12 @@ BlockInputStreamPtr Segment::getInputStream(
             filter ? filter->rs_operator : EMPTY_RS_OPERATOR,
             clipped_block_rows);
     case ReadMode::Raw:
-        return getInputStreamModeRaw(dm_context, columns_to_read, segment_snap, read_ranges, clipped_block_rows);
+        return getInputStreamModeRaw( //
+            dm_context,
+            columns_to_read,
+            segment_snap,
+            read_ranges,
+            clipped_block_rows);
     case ReadMode::Bitmap:
         return getBitmapFilterInputStream(
             dm_context,
@@ -1289,7 +1298,7 @@ SegmentPtr Segment::dangerouslyReplaceDataFromCheckpoint(
     // Always create a ref to the file to allow `data_file` being shared.
     auto new_page_id = storage_pool->newDataPageIdForDTFile(delegate, __PRETTY_FUNCTION__);
     auto ref_file = DMFile::restore(
-        dm_context.db_context.getFileProvider(),
+        dm_context.global_context.getFileProvider(),
         data_file->fileId(),
         new_page_id,
         data_file->parentPath(),
@@ -1319,7 +1328,7 @@ SegmentPtr Segment::dangerouslyReplaceDataFromCheckpoint(
             auto new_data_page_id = storage_pool->newDataPageIdForDTFile(delegate, __PRETTY_FUNCTION__);
             auto old_data_page_id = b->getDataPageId();
             wbs.data.putRefPage(new_data_page_id, old_data_page_id);
-            auto wn_ps = dm_context.db_context.getWriteNodePageStorage();
+            auto wn_ps = dm_context.global_context.getWriteNodePageStorage();
             auto full_page_id = UniversalPageIdFormat::toFullPageId(
                 UniversalPageIdFormat::toFullPrefix(
                     dm_context.keyspace_id,
@@ -1330,7 +1339,7 @@ SegmentPtr Segment::dangerouslyReplaceDataFromCheckpoint(
             auto data_key_view = S3::S3FilenameView::fromKey(*(remote_data_location->data_file_id)).asDataFile();
             auto file_oid = data_key_view.getDMFileOID();
             RUNTIME_CHECK(file_oid.file_id == b->getFile()->fileId(), file_oid.file_id, b->getFile()->fileId());
-            auto remote_data_store = dm_context.db_context.getSharedContextDisagg()->remote_data_store;
+            auto remote_data_store = dm_context.global_context.getSharedContextDisagg()->remote_data_store;
             RUNTIME_CHECK(remote_data_store != nullptr);
             auto prepared = remote_data_store->prepareDMFile(file_oid, new_data_page_id);
             auto dmfile = prepared->restore(DMFile::ReadMetaMode::all());
@@ -1445,7 +1454,7 @@ std::optional<RowKeyValue> Segment::getSplitPointFast(DMContext & dm_context, co
     if (unlikely(!read_file))
         throw Exception("Logical error: failed to find split point");
 
-    DMFileBlockInputStreamBuilder builder(dm_context.db_context);
+    DMFileBlockInputStreamBuilder builder(dm_context.global_context);
     auto stream = builder.setColumnCache(stable_snap->getColumnCaches()[file_index])
                       .setReadPacks(read_pack)
                       .setTracingID(fmt::format("{}-getSplitPointFast", dm_context.tracing_id))
@@ -1710,7 +1719,7 @@ Segment::prepareSplitLogical( //
         auto ori_page_id = dmfile->pageId();
         auto file_id = dmfile->fileId();
         auto file_parent_path = dmfile->parentPath();
-        if (!dm_context.db_context.getSharedContextDisagg()->remote_data_store)
+        if (!dm_context.global_context.getSharedContextDisagg()->remote_data_store)
         {
             RUNTIME_CHECK(file_parent_path == delegate.getDTFilePath(file_id));
         }
@@ -1726,13 +1735,13 @@ Segment::prepareSplitLogical( //
         wbs.removed_data.delPage(ori_page_id);
 
         auto my_dmfile = DMFile::restore(
-            dm_context.db_context.getFileProvider(),
+            dm_context.global_context.getFileProvider(),
             file_id,
             /* page_id= */ my_dmfile_page_id,
             file_parent_path,
             DMFile::ReadMetaMode::all());
         auto other_dmfile = DMFile::restore(
-            dm_context.db_context.getFileProvider(),
+            dm_context.global_context.getFileProvider(),
             file_id,
             /* page_id= */ other_dmfile_page_id,
             file_parent_path,
@@ -2344,13 +2353,13 @@ Segment::ReadInfo Segment::getReadInfo(
         {
             LOG_DEBUG(segment_snap->log, "Segment updated delta index");
             // Update cache size.
-            if (auto cache = dm_context.db_context.getSharedContextDisagg()->rn_delta_index_cache; cache)
+            if (auto cache = dm_context.global_context.getSharedContextDisagg()->rn_delta_index_cache; cache)
                 cache->setDeltaIndex(segment_snap->delta->getSharedDeltaIndex());
         }
     }
 
     // Refresh the reference in DeltaIndexManager, so that the index can be properly managed.
-    if (auto manager = dm_context.db_context.getDeltaIndexManager(); manager)
+    if (auto manager = dm_context.global_context.getDeltaIndexManager(); manager)
         manager->refreshRef(segment_snap->delta->getSharedDeltaIndex());
 
     return ReadInfo(
@@ -2796,13 +2805,13 @@ std::pair<std::vector<Range>, std::vector<IdSetPtr>> parseDMFilePackInfo(
     {
         DMFilePackFilter pack_filter = DMFilePackFilter::loadFrom(
             dmfile,
-            dm_context.db_context.getMinMaxIndexCache(),
+            dm_context.global_context.getMinMaxIndexCache(),
             /*set_cache_if_miss*/ true,
             read_ranges,
             filter,
             /*read_pack*/ {},
-            dm_context.db_context.getFileProvider(),
-            dm_context.db_context.getReadLimiter(),
+            dm_context.global_context.getFileProvider(),
+            dm_context.global_context.getReadLimiter(),
             dm_context.scan_context,
             dm_context.tracing_id);
         const auto & use_packs = pack_filter.getUsePacksConst();
@@ -3111,7 +3120,7 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(
         dm_context.tracing_id);
 }
 
-RowKeyRanges Segment::shrinkRowKeyRanges(const RowKeyRanges & read_ranges)
+RowKeyRanges Segment::shrinkRowKeyRanges(const RowKeyRanges & read_ranges) const
 {
     RowKeyRanges real_ranges;
     for (const auto & read_range : read_ranges)

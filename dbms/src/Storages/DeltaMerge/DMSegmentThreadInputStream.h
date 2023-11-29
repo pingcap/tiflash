@@ -16,7 +16,7 @@
 
 #include <Common/FailPoint.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
-#include <Interpreters/Context_fwd.h>
+#include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
@@ -91,7 +91,7 @@ protected:
 
                 auto block_size = std::max(
                     expected_block_size,
-                    static_cast<size_t>(dm_context->db_context.getSettingsRef().dt_segment_stable_pack_rows));
+                    static_cast<size_t>(dm_context->global_context.getSettingsRef().dt_segment_stable_pack_rows));
                 cur_stream = task->segment->getInputStream(
                     read_mode,
                     *dm_context,

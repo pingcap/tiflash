@@ -34,7 +34,11 @@ class MemTableSet
     : public std::enable_shared_from_this<MemTableSet>
     , private boost::noncopyable
 {
+#ifndef DBMS_PUBLIC_GTEST
 private:
+#else
+public:
+#endif
     // Note that we must update `column_files_count` for outer thread-safe after `column_files` changed
     ColumnFiles column_files;
     // TODO: check the proper memory_order when use this atomic variable

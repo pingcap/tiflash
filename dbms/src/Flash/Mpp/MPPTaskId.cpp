@@ -101,13 +101,13 @@ size_t MPPGatherIdHash::operator()(MPPGatherId const & mpp_gather_id) const noex
 String MPPTaskId::toString() const
 {
     return isUnknown() ? "MPP<gather_id:N/A,task_id:N/A>"
-                       : fmt::format("MPP<gather_id:{},task_id:{}>", gather_id.toString(), task_id);
+                       : fmt::format("MPP<{},task_id:{}>", gather_id.toString(), task_id);
 }
 
 const MPPTaskId MPPTaskId::unknown_mpp_task_id = MPPTaskId{};
 
 constexpr UInt64 MAX_UINT64 = std::numeric_limits<UInt64>::max();
-const MPPQueryId MPPTaskId::Max_Query_Id = MPPQueryId(MAX_UINT64, MAX_UINT64, MAX_UINT64, MAX_UINT64, "");
+const MPPQueryId MPPTaskId::Max_Query_Id = MPPQueryId(MAX_UINT64, MAX_UINT64, MAX_UINT64, MAX_UINT64, "", 0, "");
 
 bool operator==(const MPPTaskId & lid, const MPPTaskId & rid)
 {

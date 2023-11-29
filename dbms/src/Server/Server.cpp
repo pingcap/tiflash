@@ -367,7 +367,7 @@ pingcap::ClusterConfig getClusterConfig(
         ca_path,
         cert_path,
         key_path,
-        config.api_version);
+        fmt::underlying(config.api_version));
     return config;
 }
 
@@ -1277,7 +1277,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /// It internally depends on UserConfig::parseSettings.
     // TODO: Parse the settings from config file at the program beginning
     global_context->setDefaultProfiles(config());
-    LOG_INFO(log, "Loaded global settings from default_profile and system_profile.");
+    LOG_INFO(
+        log,
+        "Loaded global settings from default_profile and system_profile, changed configs: {{{}}}",
+        global_context->getSettingsRef().toString());
 
     ///
     /// The config value in global settings can only be used from here because we just loaded it from config file.
@@ -1560,11 +1563,12 @@ int Server::main(const std::vector<std::string> & /*args*/)
     });
 
     auto & tmt_context = global_context->getTMTContext();
-    const bool is_disagg_storage = global_context->getSharedContextDisagg()->isDisaggregatedStorageMode();
-    const bool is_prod = !global_context->isTest();
 
+    // For test mode, TaskScheduler and LAC is controlled by test case.
     // TODO: resource control is not supported for WN. So disable pipeline model and LAC.
-    if (!is_disagg_storage)
+    const bool init_pipeline_and_lac
+        = !global_context->isTest() && !global_context->getSharedContextDisagg()->isDisaggregatedStorageMode();
+    if (init_pipeline_and_lac)
     {
 #ifdef DBMS_PUBLIC_GTEST
         LocalAdmissionController::global_instance = std::make_unique<MockLocalAdmissionController>();
@@ -1573,33 +1577,27 @@ int Server::main(const std::vector<std::string> & /*args*/)
             = std::make_unique<LocalAdmissionController>(tmt_context.getKVCluster(), tmt_context.getEtcdClient());
 #endif
 
-        // For test mode, TaskScheduler is controlled by test case.
-        if (is_prod)
-        {
-            auto get_pool_size = [](const auto & setting) {
-                return setting == 0 ? getNumberOfLogicalCPUCores() : static_cast<size_t>(setting);
-            };
-            TaskSchedulerConfig config{
-                {get_pool_size(settings.pipeline_cpu_task_thread_pool_size),
-                 settings.pipeline_cpu_task_thread_pool_queue_type},
-                {get_pool_size(settings.pipeline_io_task_thread_pool_size),
-                 settings.pipeline_io_task_thread_pool_queue_type},
-            };
-            RUNTIME_CHECK(!TaskScheduler::instance);
-            TaskScheduler::instance = std::make_unique<TaskScheduler>(config);
-            LOG_INFO(log, "init pipeline task scheduler");
-        }
+        auto get_pool_size = [](const auto & setting) {
+            return setting == 0 ? getNumberOfLogicalCPUCores() : static_cast<size_t>(setting);
+        };
+        TaskSchedulerConfig config{
+            {get_pool_size(settings.pipeline_cpu_task_thread_pool_size),
+             settings.pipeline_cpu_task_thread_pool_queue_type},
+            {get_pool_size(settings.pipeline_io_task_thread_pool_size),
+             settings.pipeline_io_task_thread_pool_queue_type},
+        };
+        RUNTIME_CHECK(!TaskScheduler::instance);
+        TaskScheduler::instance = std::make_unique<TaskScheduler>(config);
+        LOG_INFO(log, "init pipeline task scheduler with {}", config.toString());
     }
 
     SCOPE_EXIT({
-        if (!is_disagg_storage)
-            LocalAdmissionController::global_instance.reset();
-    });
-    SCOPE_EXIT({
-        if (!is_disagg_storage && is_prod)
+        if (init_pipeline_and_lac)
         {
             assert(TaskScheduler::instance);
             TaskScheduler::instance.reset();
+            assert(LocalAdmissionController::global_instance);
+            LocalAdmissionController::global_instance.reset();
         }
     });
 

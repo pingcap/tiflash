@@ -365,12 +365,40 @@ namespace DB
       F(type_worker_fetch_page, {{"type", "worker_fetch_page"}}, ExpBuckets{0.01, 2, 20}),                                          \
       F(type_worker_prepare_stream, {{"type", "worker_prepare_stream"}}, ExpBuckets{0.01, 2, 20}),                                  \
       F(type_stream_wait_next_task, {{"type", "stream_wait_next_task"}}, ExpBuckets{0.01, 2, 20}),                                  \
-      F(type_stream_read, {{"type", "stream_read"}}, ExpBuckets{0.01, 2, 20}))                                                      \
+      F(type_stream_read, {{"type", "stream_read"}}, ExpBuckets{0.01, 2, 20}),                                                      \
+      F(type_deserialize_page, {{"type", "deserialize_page"}}, ExpBuckets{0.01, 2, 20}))                                            \
     M(tiflash_disaggregated_details,                                                                                                \
       "",                                                                                                                           \
       Counter,                                                                                                                      \
       F(type_cftiny_read, {{"type", "cftiny_read"}}),                                                                               \
       F(type_cftiny_fetch, {{"type", "cftiny_fetch"}}))                                                                             \
+    M(tiflash_fap_task_result,                                                                                                      \
+      "",                                                                                                                           \
+      Counter,                                                                                                                      \
+      F(type_total, {{"type", "total"}}),                                                                                           \
+      F(type_failed_other, {{"type", "failed_other"}}),                                                                             \
+      F(type_failed_cancel, {{"type", "failed_cancel"}}),                                                                           \
+      F(type_failed_timeout, {{"type", "failed_timeout"}}),                                                                         \
+      F(type_succeed, {{"type", "succeed"}}))                                                                                       \
+    M(tiflash_fap_task_state,                                                                                                       \
+      "",                                                                                                                           \
+      Gauge,                                                                                                                        \
+      F(type_ongoing, {{"type", "ongoing"}}),                                                                                       \
+      F(type_ingesting_stage, {{"type", "ingesting_stage"}}),                                                                       \
+      F(type_building_stage, {{"type", "building_stage"}}))                                                                         \
+    M(tiflash_fap_nomatch_reason,                                                                                                   \
+      "",                                                                                                                           \
+      Counter,                                                                                                                      \
+      F(type_conf, {{"type", "conf"}}),                                                                                             \
+      F(type_region_state, {{"type", "region_state"}}),                                                                             \
+      F(type_no_meta, {{"type", "no_meta"}}))                                                                                       \
+    M(tiflash_fap_task_duration_seconds,                                                                                            \
+      "",                                                                                                                           \
+      Histogram,                                                                                                                    \
+      F(type_build_stage, {{"type", "build_stage"}}, ExpBuckets{0.05, 2, 60}),                                                      \
+      F(type_success, {{"type", "success"}}, ExpBuckets{0.05, 2, 60}),                                                              \
+      F(type_ingest_stage, {{"type", "ingest_stage"}}, ExpBuckets{0.05, 2, 60}),                                                    \
+      F(type_total, {{"type", "total"}}, ExpBuckets{0.05, 2, 60}))                                                                  \
     M(tiflash_raft_command_duration_seconds,                                                                                        \
       "Bucketed histogram of some raft command: apply snapshot and ingest SST",                                                     \
       Histogram, /* these command usually cost several seconds, increase the start bucket to 50ms */                                \
@@ -379,6 +407,7 @@ namespace DB
       F(type_ingest_sst_sst2dt, {{"type", "ingest_sst_sst2dt"}}, ExpBuckets{0.05, 2, 10}),                                          \
       F(type_ingest_sst_upload, {{"type", "ingest_sst_upload"}}, ExpBuckets{0.05, 2, 10}),                                          \
       F(type_apply_snapshot_predecode, {{"type", "snapshot_predecode"}}, ExpBuckets{0.05, 2, 15}),                                  \
+      F(type_apply_snapshot_total, {{"type", "snapshot_total"}}, ExpBuckets{0.2, 2, 60}),                                           \
       F(type_apply_snapshot_predecode_sst2dt, {{"type", "snapshot_predecode_sst2dt"}}, ExpBuckets{0.05, 2, 15}),                    \
       F(type_apply_snapshot_predecode_parallel_wait,                                                                                \
         {{"type", "snapshot_predecode_parallel_wait"}},                                                                             \
@@ -505,9 +534,12 @@ namespace DB
       Counter,                                                                                                                      \
       F(type_sche_no_pool, {"type", "sche_no_pool"}),                                                                               \
       F(type_sche_no_slot, {"type", "sche_no_slot"}),                                                                               \
+      F(type_sche_no_ru, {"type", "sche_no_ru"}),                                                                                   \
       F(type_sche_no_segment, {"type", "sche_no_segment"}),                                                                         \
+      F(type_sche_active_segment_limit, {"type", "sche_active_segment_limit"}),                                                     \
       F(type_sche_from_cache, {"type", "sche_from_cache"}),                                                                         \
       F(type_sche_new_task, {"type", "sche_new_task"}),                                                                             \
+      F(type_ru_exhausted, {"type", "ru_exhausted"}),                                                                               \
       F(type_add_cache_succ, {"type", "add_cache_succ"}),                                                                           \
       F(type_add_cache_stale, {"type", "add_cache_stale"}),                                                                         \
       F(type_get_cache_miss, {"type", "get_cache_miss"}),                                                                           \
@@ -722,7 +754,13 @@ namespace DB
       F(type_total_consumption, {"type", "total_consumption"}),                                                                     \
       F(type_bucket_fill_rate, {"type", "bucket_fill_rate"}),                                                                       \
       F(type_bucket_capacity, {"type", "bucket_capacity"}),                                                                         \
-      F(type_fetch_tokens_from_gac_count, {"type", "fetch_tokens_from_gac_count"}))
+      F(type_compute_ru_consumption, {"type", "compute_ru_consumption"}),                                                           \
+      F(type_storage_ru_consumption, {"type", "storage_ru_consumption"}),                                                           \
+      F(type_compute_ru_exhausted, {"type", "compute_ru_exhausted"}),                                                               \
+      F(type_gac_req_acquire_tokens, {"type", "gac_req_acquire_tokens"}),                                                           \
+      F(type_gac_req_ru_consumption_delta, {"type", "gac_req_ru_consumption_delta"}),                                               \
+      F(type_gac_resp_tokens, {"type", "gac_resp_tokens"}),                                                                         \
+      F(type_gac_resp_capacity, {"type", "gac_resp_capacity"}))
 
 
 /// Buckets with boundaries [start * base^0, start * base^1, ..., start * base^(size-1)]

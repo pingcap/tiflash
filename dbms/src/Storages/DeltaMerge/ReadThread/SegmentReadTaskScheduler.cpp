@@ -46,13 +46,13 @@ void SegmentReadTaskScheduler::add(const SegmentReadTaskPoolPtr & pool)
     auto block_slots = pool->getFreeBlockSlots();
     LOG_DEBUG(
         log,
-        "Added, pool_id={} block_slots={} segment_count={} pool_count={} cost={}ns do_add_cost={}ns", //
+        "Added, pool_id={} block_slots={} segment_count={} pool_count={} cost={:.3f}us do_add_cost={:.3f}us", //
         pool->pool_id,
         block_slots,
         tasks.size(),
         read_pools.size(),
-        sw_add.elapsed(),
-        sw_do_add.elapsed());
+        sw_add.elapsed() / 1000.0,
+        sw_do_add.elapsed() / 1000.0);
 }
 
 std::pair<MergedTaskPtr, bool> SegmentReadTaskScheduler::scheduleMergedTask()
@@ -121,9 +121,39 @@ SegmentReadTaskPools SegmentReadTaskScheduler::getPoolsUnlock(const std::vector<
 
 bool SegmentReadTaskScheduler::needScheduleToRead(const SegmentReadTaskPoolPtr & pool)
 {
-    return pool->getFreeBlockSlots() > 0 && // Block queue is not full and
-        (merged_task_pool.has(pool->pool_id) || // can schedule a segment from MergedTaskPool or
-         pool->getFreeActiveSegments() > 0); // schedule a new segment.
+    if (pool->getFreeBlockSlots() <= 0)
+    {
+        GET_METRIC(tiflash_storage_read_thread_counter, type_sche_no_slot).Increment();
+        return false;
+    }
+
+    if (pool->isRUExhausted())
+    {
+        GET_METRIC(tiflash_storage_read_thread_counter, type_sche_no_ru).Increment();
+        return false;
+    }
+
+    // Check if there are segments that can be scheduled:
+    // 1. There are already activated segments.
+    if (merged_task_pool.has(pool->pool_id))
+    {
+        return true;
+    }
+    // 2. Not reach limitation, we can activate a segment.
+    if (pool->getFreeActiveSegments() > 0 && pool->getPendingSegmentCount() > 0)
+    {
+        return true;
+    }
+
+    if (pool->getFreeActiveSegments() <= 0)
+    {
+        GET_METRIC(tiflash_storage_read_thread_counter, type_sche_active_segment_limit).Increment();
+    }
+    else
+    {
+        GET_METRIC(tiflash_storage_read_thread_counter, type_sche_no_segment).Increment();
+    }
+    return false;
 }
 
 SegmentReadTaskPoolPtr SegmentReadTaskScheduler::scheduleSegmentReadTaskPoolUnlock()
@@ -142,10 +172,6 @@ SegmentReadTaskPoolPtr SegmentReadTaskScheduler::scheduleSegmentReadTaskPoolUnlo
     if (pool_count == 0)
     {
         GET_METRIC(tiflash_storage_read_thread_counter, type_sche_no_pool).Increment();
-    }
-    else
-    {
-        GET_METRIC(tiflash_storage_read_thread_counter, type_sche_no_slot).Increment();
     }
     return nullptr;
 }

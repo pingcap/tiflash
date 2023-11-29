@@ -69,6 +69,13 @@ struct SegmentSnapshot : private boost::noncopyable
     UInt64 getRows() const { return delta->getRows() + stable->getRows(); }
 
     bool isForUpdate() const { return delta->isForUpdate(); }
+
+    UInt64 estimatedBytesOfInternalColumns() const
+    {
+        // TODO: how about cluster index?
+        // handle + version + flag
+        return (sizeof(Int64) + sizeof(UInt64) + sizeof(UInt8)) * getRows();
+    }
 };
 
 /// A segment contains many rows of a table. A table is split into segments by consecutive ranges.
@@ -154,13 +161,13 @@ public:
 
     struct SegmentMetaInfo
     {
-        SegmentFormat::Version version;
-        UInt64 epoch;
+        SegmentFormat::Version version{};
+        UInt64 epoch{};
         RowKeyRange range;
-        PageIdU64 segment_id;
-        PageIdU64 next_segment_id;
-        PageIdU64 delta_id;
-        PageIdU64 stable_id;
+        PageIdU64 segment_id{};
+        PageIdU64 next_segment_id{};
+        PageIdU64 delta_id{};
+        PageIdU64 stable_id{};
     };
 
     using SegmentMetaInfos = std::vector<SegmentMetaInfo>;
@@ -650,7 +657,7 @@ public:
         bool relevant_place) const;
 
     static bool useCleanRead(const SegmentSnapshotPtr & segment_snap, const ColumnDefines & columns_to_read);
-    RowKeyRanges shrinkRowKeyRanges(const RowKeyRanges & read_ranges);
+    RowKeyRanges shrinkRowKeyRanges(const RowKeyRanges & read_ranges) const;
     BitmapFilterPtr buildBitmapFilter(
         const DMContext & dm_context,
         const SegmentSnapshotPtr & segment_snap,

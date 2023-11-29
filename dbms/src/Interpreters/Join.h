@@ -97,6 +97,13 @@ struct PartitionBlock
 };
 using PartitionBlocks = std::list<PartitionBlock>;
 
+struct RestoreConfig
+{
+    Int64 join_restore_concurrency;
+    size_t restore_round;
+    size_t restore_partition_id;
+};
+
 /** Data structure for implementation of JOIN.
   * It is just a hash table: keys -> rows of joined ("right") table.
   * Additionally, CROSS JOIN is supported: instead of hash table, it use just set of blocks without keys.
@@ -159,27 +166,25 @@ public:
         const Names & key_names_right_,
         ASTTableJoin::Kind kind_,
         const String & req_id,
-        bool enable_fine_grained_shuffle_,
         size_t fine_grained_shuffle_count_,
         size_t max_bytes_before_external_join_,
         const SpillConfig & build_spill_config_,
         const SpillConfig & probe_spill_config_,
-        Int64 join_restore_concurrency_,
+        const RestoreConfig & restore_config_,
         const Names & tidb_output_column_names_,
         const RegisterOperatorSpillContext & register_operator_spill_context_,
         AutoSpillTrigger * auto_spill_trigger_,
-        const TiDB::TiDBCollators & collators_ = TiDB::dummy_collators,
-        const JoinNonEqualConditions & non_equal_conditions_ = {},
-        size_t max_block_size = 0,
-        size_t shallow_copy_cross_probe_threshold_ = 0,
-        const String & match_helper_name_ = "",
-        const String & flag_mapped_entry_helper_name_ = "",
-        size_t restore_round = 0,
-        size_t restore_partition_id = 0,
-        bool is_test = true,
+        const TiDB::TiDBCollators & collators_,
+        const JoinNonEqualConditions & non_equal_conditions_,
+        size_t max_block_size,
+        size_t shallow_copy_cross_probe_threshold_,
+        const String & match_helper_name_,
+        const String & flag_mapped_entry_helper_name_,
+        size_t probe_cache_column_threshold_,
+        bool is_test,
         const std::vector<RuntimeFilterPtr> & runtime_filter_list_ = dummy_runtime_filter_list);
 
-    size_t restore_round;
+    RestoreConfig restore_config;
 
     /** Call `setBuildConcurrencyAndInitJoinPartition` and `setSampleBlock`.
       * You must call this method before subsequent calls to insertFromBlock.
@@ -304,6 +309,7 @@ public:
     const MarkedSpillData & getProbeSideMarkedSpillData(size_t stream_index) const;
     bool hasProbeSideMarkedSpillData(size_t stream_index) const;
     void flushProbeSideMarkedSpillData(size_t stream_index);
+    size_t getProbeCacheColumnThreshold() const { return probe_cache_column_threshold; }
 
     static const String match_helper_prefix;
     static const DataTypePtr match_helper_type;
@@ -369,8 +375,6 @@ private:
 
     std::list<size_t> remaining_partition_indexes_to_restore;
 
-    Int64 join_restore_concurrency;
-
     std::atomic<size_t> peak_build_bytes_usage{0};
 
     std::vector<RestoreInfo> restore_infos;
@@ -396,6 +400,7 @@ private:
     CrossProbeMode cross_probe_mode = CrossProbeMode::DEEP_COPY_RIGHT_BLOCK;
     size_t right_rows_to_be_added_when_matched_for_cross_join = 0;
     size_t shallow_copy_cross_probe_threshold;
+    size_t probe_cache_column_threshold;
 
     JoinMapMethod join_map_method = JoinMapMethod::EMPTY;
 

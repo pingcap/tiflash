@@ -222,7 +222,7 @@ SegmentPair DeltaMergeStore::segmentSplit(
     }
 
     if constexpr (DM_RUN_CHECK)
-        check(dm_context.db_context);
+        check(dm_context.global_context);
 
     return {new_left, new_right};
 }
@@ -362,7 +362,7 @@ SegmentPtr DeltaMergeStore::segmentMerge(
     GET_METRIC(tiflash_storage_throughput_rows, type_merge).Increment(delta_rows);
 
     if constexpr (DM_RUN_CHECK)
-        check(dm_context.db_context);
+        check(dm_context.global_context);
 
     return merged;
 }
@@ -520,7 +520,7 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(
     GET_METRIC(tiflash_storage_throughput_rows, type_delta_merge).Increment(delta_rows);
 
     if constexpr (DM_RUN_CHECK)
-        check(dm_context.db_context);
+        check(dm_context.global_context);
 
     return new_segment;
 }
@@ -630,7 +630,7 @@ SegmentPtr DeltaMergeStore::segmentIngestData(
     }
 
     if constexpr (DM_RUN_CHECK)
-        check(dm_context.db_context);
+        check(dm_context.global_context);
 
     return new_segment;
 }
@@ -690,7 +690,7 @@ SegmentPtr DeltaMergeStore::segmentDangerouslyReplaceDataFromCheckpoint(
     wbs.writeRemoves();
 
     if constexpr (DM_RUN_CHECK)
-        check(dm_context.db_context);
+        check(dm_context.global_context);
 
     return new_segment;
 }

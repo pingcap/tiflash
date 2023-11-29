@@ -163,12 +163,12 @@ public:
     static PageFileSet listAllPageFiles(
         const FileProviderPtr & file_provider,
         PSDiskDelegatorPtr & delegator,
-        Poco::Logger * page_file_log,
+        LoggerPtr page_file_log,
         const ListPageFilesOption & option = ListPageFilesOption());
 
     static PageFormat::Version getMaxDataVersion(const FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator)
     {
-        Poco::Logger * log = &Poco::Logger::get("PageStorage::getMaxDataVersion");
+        LoggerPtr log = Logger::get("PageStorage::getMaxDataVersion");
         ListPageFilesOption option;
         option.ignore_checkpoint = true;
         option.ignore_legacy = true;
@@ -294,8 +294,8 @@ private:
     OpenReadFiles open_read_files;
     std::mutex open_read_files_mutex; // A mutex only used to protect open_read_files.
 
-    Poco::Logger * page_file_log;
-    Poco::Logger * log;
+    LoggerPtr page_file_log;
+    LoggerPtr log;
 
     VersionedPageEntries versioned_page_entries;
 

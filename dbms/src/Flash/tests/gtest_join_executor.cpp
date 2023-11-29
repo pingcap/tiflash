@@ -154,6 +154,7 @@ try
          toNullableVec<Int8>({0, 0, 0, 1, 1})},
     };
 
+    std::vector<UInt64> probe_cache_column_threshold{2, 1000};
     for (size_t i = 0; i < join_type_num; ++i)
     {
         for (size_t j = 0; j < simple_test_num; ++j)
@@ -163,7 +164,13 @@ try
                                .join(context.scan("simple_test", r), join_types[i], {col(k)})
                                .build(context);
 
-            executeAndAssertColumnsEqual(request, expected_cols[i * simple_test_num + j]);
+            for (auto threshold : probe_cache_column_threshold)
+            {
+                context.context->setSetting(
+                    "join_probe_cache_columns_threshold",
+                    Field(static_cast<UInt64>(threshold)));
+                executeAndAssertColumnsEqual(request, expected_cols[i * simple_test_num + j]);
+            }
         }
     }
 }
@@ -2120,6 +2127,7 @@ try
     context.context->setSetting("max_block_size", Field(static_cast<UInt64>(max_block_size)));
     /// use right_table left join left_table as the reference
     auto ref_columns = executeStreams(request, original_max_streams);
+    std::vector<UInt64> probe_cache_column_threshold{2, 1000};
 
     /// case 1.1 table scan join table scan
     for (auto & left_table_name : left_table_names)
@@ -2133,8 +2141,14 @@ try
                               {col("a")})
                           .build(context);
             WRAP_FOR_JOIN_TEST_BEGIN
-            ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams))
-                << "left_table_name = " << left_table_name << ", right_table_name = " << right_table_name;
+            for (auto threshold : probe_cache_column_threshold)
+            {
+                context.context->setSetting(
+                    "join_probe_cache_columns_threshold",
+                    Field(static_cast<UInt64>(threshold)));
+                ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams))
+                    << "left_table_name = " << left_table_name << ", right_table_name = " << right_table_name;
+            }
             WRAP_FOR_JOIN_TEST_END
         }
     }
@@ -2157,13 +2171,19 @@ try
                               exchange_concurrency)
                           .build(context);
             WRAP_FOR_JOIN_TEST_BEGIN
-            ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams))
-                << "left_table_name = " << left_table_name
-                << ", right_exchange_receiver_concurrency = " << exchange_concurrency;
-            if (original_max_streams_small < exchange_concurrency)
-                ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams_small))
+            for (auto threshold : probe_cache_column_threshold)
+            {
+                context.context->setSetting(
+                    "join_probe_cache_columns_threshold",
+                    Field(static_cast<UInt64>(threshold)));
+                ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams))
                     << "left_table_name = " << left_table_name
                     << ", right_exchange_receiver_concurrency = " << exchange_concurrency;
+                if (original_max_streams_small < exchange_concurrency)
+                    ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams_small))
+                        << "left_table_name = " << left_table_name
+                        << ", right_exchange_receiver_concurrency = " << exchange_concurrency;
+            }
             WRAP_FOR_JOIN_TEST_END
         }
     }
@@ -2204,8 +2224,14 @@ try
                               0)
                           .build(context);
             WRAP_FOR_JOIN_TEST_BEGIN
-            ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams))
-                << "left_table_name = " << left_table_name << ", right_table_name = " << right_table_name;
+            for (auto threshold : probe_cache_column_threshold)
+            {
+                context.context->setSetting(
+                    "join_probe_cache_columns_threshold",
+                    Field(static_cast<UInt64>(threshold)));
+                ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams))
+                    << "left_table_name = " << left_table_name << ", right_table_name = " << right_table_name;
+            }
             WRAP_FOR_JOIN_TEST_END
         }
     }
@@ -2229,13 +2255,21 @@ try
                               exchange_concurrency)
                           .build(context);
             WRAP_FOR_JOIN_TEST_BEGIN
-            ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams))
-                << "left_table_name = " << left_table_name
-                << ", right_exchange_receiver_concurrency = " << exchange_concurrency;
-            if (original_max_streams_small < exchange_concurrency)
-                ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams_small))
+            for (auto threshold : probe_cache_column_threshold)
+            {
+                context.context->setSetting(
+                    "join_probe_cache_columns_threshold",
+                    Field(static_cast<UInt64>(threshold)));
+                ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams))
                     << "left_table_name = " << left_table_name
-                    << ", right_exchange_receiver_concurrency = " << exchange_concurrency;
+                    << ", right_exchange_receiver_concurrency = " << exchange_concurrency
+                    << ", join_probe_cache_columns_threshold = " << threshold;
+                if (original_max_streams_small < exchange_concurrency)
+                    ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams_small))
+                        << "left_table_name = " << left_table_name
+                        << ", right_exchange_receiver_concurrency = " << exchange_concurrency
+                        << ", join_probe_cache_columns_threshold = " << threshold;
+            }
             WRAP_FOR_JOIN_TEST_END
         }
     }
@@ -2307,7 +2341,7 @@ ColumnsWithTypeAndName genSemiJoinResult(
             r.column = r.column->filter(filter, -1);
     }
     else
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "Semi join Type {} is not supported", type);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Semi join Type {} is not supported", magic_enum::enum_name(type));
     return res;
 }
 } // namespace
@@ -3100,6 +3134,64 @@ try
                                .join(context.scan("semi", "s"), type, {col("a"), col("b")}, {})
                                .build(context);
             executeAndAssertColumnsEqual(request, reference);
+        }
+    }
+}
+CATCH
+
+TEST_F(JoinExecutorTestRunner, ProbeCacheColumnsForRightSemiJoin)
+try
+{
+    UInt64 max_block_size = 800;
+    size_t max_streams = 2;
+    std::vector<String> left_table_names = {"left_table_1_concurrency", "left_table_3_concurrency"};
+    std::vector<String> right_table_names = {"right_table_1_concurrency", "right_table_3_concurrency"};
+    context.context->setSetting("max_block_size", Field(static_cast<UInt64>(max_block_size)));
+
+    for (const auto type : {tipb::JoinType::TypeSemiJoin, tipb::JoinType::TypeAntiSemiJoin})
+    {
+        auto request = context.scan("outer_join_test", left_table_names[0])
+                           .join(
+                               context.scan("outer_join_test", right_table_names[0]),
+                               type,
+                               {col("a")},
+                               {},
+                               {},
+                               {lt(col(left_table_names[0] + ".a"), col(right_table_names[0] + ".b"))},
+                               {},
+                               0,
+                               false,
+                               0)
+                           .build(context);
+        auto reference = executeStreams(request, max_streams);
+        std::vector<UInt64> probe_cache_column_threshold{2, 1000};
+        for (auto & left_table_name : left_table_names)
+        {
+            for (auto & right_table_name : right_table_names)
+            {
+                request = context.scan("outer_join_test", left_table_name)
+                              .join(
+                                  context.scan("outer_join_test", right_table_name),
+                                  type,
+                                  {col("a")},
+                                  {},
+                                  {},
+                                  {lt(col(left_table_name + ".a"), col(right_table_name + ".b"))},
+                                  {},
+                                  0,
+                                  false,
+                                  0)
+                              .build(context);
+                for (auto threshold : probe_cache_column_threshold)
+                {
+                    context.context->setSetting(
+                        "join_probe_cache_columns_threshold",
+                        Field(static_cast<UInt64>(threshold)));
+                    ASSERT_COLUMNS_EQ_UR(reference, executeStreams(request, max_streams))
+                        << "left_table_name = " << left_table_name << ", right_table_name = " << right_table_name
+                        << ", join_probe_cache_columns_threshold = " << threshold;
+                }
+            }
         }
     }
 }

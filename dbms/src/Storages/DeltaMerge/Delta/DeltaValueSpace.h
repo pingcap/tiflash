@@ -35,10 +35,13 @@
 #include <Storages/Page/PageDefinesBase.h>
 
 
-namespace DB
+namespace DB::DM
 {
-namespace DM
+namespace tests
 {
+class SegmentReadTaskTest;
+}
+
 using GenPageId = std::function<PageIdU64()>;
 class DeltaValueSpace;
 class DeltaValueSnapshot;
@@ -136,9 +139,10 @@ public:
         persisted_file_set->resetLogger(segment_log);
     }
 
-    /// The following two methods are just for test purposes
+    /// The following 3 methods are just for test purposes
     MemTableSetPtr getMemTableSet() const { return mem_table_set; }
     ColumnFilePersistedSetPtr getPersistedFileSet() const { return persisted_file_set; }
+    UInt64 getDeltaIndexEpoch() const { return delta_index_epoch; }
 
     String simpleInfo() const { return "<delta_id=" + DB::toString(persisted_file_set->getId()) + ">"; }
     String info() const { return fmt::format("{}. {}", mem_table_set->info(), persisted_file_set->info()); }
@@ -395,7 +399,7 @@ public:
 
     RowKeyRange getSquashDeleteRange() const;
 
-    const auto & getSharedDeltaIndex() { return shared_delta_index; }
+    const auto & getSharedDeltaIndex() const { return shared_delta_index; }
     size_t getDeltaIndexEpoch() const { return delta_index_epoch; }
 
     bool isForUpdate() const { return is_update; }
@@ -548,5 +552,4 @@ public:
     }
 };
 
-} // namespace DM
-} // namespace DB
+} // namespace DB::DM

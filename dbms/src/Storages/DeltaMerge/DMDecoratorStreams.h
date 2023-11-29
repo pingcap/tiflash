@@ -16,7 +16,6 @@
 
 #include <Columns/ColumnsCommon.h>
 #include <DataStreams/IBlockInputStream.h>
-#include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <common/logger_useful.h>
 
@@ -43,7 +42,7 @@ public:
         children.emplace_back(input);
         delete_col_pos = input->getHeader().getPositionByName(TAG_COLUMN_NAME);
     }
-    ~DMDeleteFilterBlockInputStream()
+    ~DMDeleteFilterBlockInputStream() override
     {
         LOG_TRACE(
             log,

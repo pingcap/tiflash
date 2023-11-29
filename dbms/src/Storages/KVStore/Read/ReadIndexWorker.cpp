@@ -65,7 +65,7 @@ AsyncNotifier::Status AsyncWaker::Notifier::blockedWaitUtil(const SteadyClock::t
     return res;
 }
 
-void AsyncWaker::Notifier::wake()
+void AsyncWaker::Notifier::wake() NO_THREAD_SAFETY_ANALYSIS
 {
     // if flag from false -> true, then wake up.
     // if flag from true -> true, do nothing.
@@ -275,17 +275,17 @@ struct ReadIndexNotifyCtrl : MutexLockWrap
 {
     using Data = std::deque<std::pair<RegionID, Timestamp>>;
 
-    bool empty() const
+    bool empty() const NO_THREAD_SAFETY_ANALYSIS
     {
         auto _ = genLockGuard();
         return data.empty();
     }
-    void add(RegionID id, Timestamp ts)
+    void add(RegionID id, Timestamp ts) NO_THREAD_SAFETY_ANALYSIS
     {
         auto _ = genLockGuard();
         data.emplace_back(id, ts);
     }
-    Data popAll()
+    Data popAll() NO_THREAD_SAFETY_ANALYSIS
     {
         auto _ = genLockGuard();
         return std::move(data);
@@ -327,7 +327,7 @@ std::atomic<std::chrono::milliseconds> ReadIndexWorker::max_read_index_task_time
     = std::chrono::milliseconds{8 * 1000};
 //std::atomic<size_t> ReadIndexWorker::max_read_index_history{8};
 
-void ReadIndexFuture::update(kvrpcpb::ReadIndexResponse resp)
+void ReadIndexFuture::update(kvrpcpb::ReadIndexResponse resp) NO_THREAD_SAFETY_ANALYSIS
 {
     auto _ = genLockGuard();
     if (finished)
@@ -346,6 +346,7 @@ void ReadIndexFuture::update(kvrpcpb::ReadIndexResponse resp)
 }
 
 std::optional<kvrpcpb::ReadIndexResponse> ReadIndexFuture::poll(const std::shared_ptr<AsyncNotifier> & notifier_) const
+    NO_THREAD_SAFETY_ANALYSIS
 {
     auto _ = genLockGuard();
     if (!finished)
@@ -485,7 +486,7 @@ void ReadIndexDataNode::doConsume(const TiFlashRaftProxyHelper & helper, Running
     }
 }
 
-void ReadIndexDataNode::consume(const TiFlashRaftProxyHelper & helper, Timestamp ts)
+void ReadIndexDataNode::consume(const TiFlashRaftProxyHelper & helper, Timestamp ts) NO_THREAD_SAFETY_ANALYSIS
 {
     auto _ = genLockGuard();
 
@@ -515,6 +516,7 @@ std::optional<ReadIndexTask> makeReadIndexTask(const TiFlashRaftProxyHelper & he
 }
 
 void ReadIndexDataNode::runOneRound(const TiFlashRaftProxyHelper & helper, const ReadIndexNotifyCtrlPtr & notify)
+    NO_THREAD_SAFETY_ANALYSIS
 {
     auto opt_waiting_tasks = this->waiting_tasks.popAll();
     if (!opt_waiting_tasks)
@@ -593,7 +595,7 @@ void ReadIndexDataNode::runOneRound(const TiFlashRaftProxyHelper & helper, const
     }
 }
 
-ReadIndexDataNode::~ReadIndexDataNode()
+ReadIndexDataNode::~ReadIndexDataNode() NO_THREAD_SAFETY_ANALYSIS
 {
     auto _ = genLockGuard();
 

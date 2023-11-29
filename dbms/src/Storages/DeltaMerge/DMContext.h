@@ -16,9 +16,10 @@
 
 #include <Common/Logger.h>
 #include <Core/Types.h>
-#include <Interpreters/Context_fwd.h>
+#include <Interpreters/Context.h>
 #include <Interpreters/Settings.h>
 #include <Storages/DeltaMerge/DMChecksumConfig.h>
+#include <Storages/DeltaMerge/DMContext_fwd.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 
@@ -35,15 +36,13 @@ namespace DM
 class StoragePool;
 using StoragePoolPtr = std::shared_ptr<StoragePool>;
 using NotCompress = std::unordered_set<ColId>;
-struct DMContext;
-using DMContextPtr = std::shared_ptr<DMContext>;
 
 /**
  * This context object carries table infos. And those infos are only meaningful to current context.
  */
 struct DMContext : private boost::noncopyable
 {
-    const Context & db_context;
+    const Context & global_context;
 
     // leaving these pointers possible to be nullptr is dangerous for only reading from/writing to local storage. Find a better way to handle it later
     StoragePathPoolPtr path_pool;
@@ -93,8 +92,66 @@ struct DMContext : private boost::noncopyable
     const ScanContextPtr scan_context;
 
 public:
+    static DMContextPtr create(
+        const Context & session_context_,
+        const StoragePathPoolPtr & path_pool_,
+        const StoragePoolPtr & storage_pool_,
+        DB::Timestamp min_version_,
+        KeyspaceID keyspace_id_,
+        TableID physical_table_id_,
+        bool is_common_handle_,
+        size_t rowkey_column_size_,
+        const DB::Settings & settings,
+        const ScanContextPtr & scan_context_,
+        const String & tracing_id_)
+    {
+        return std::shared_ptr<DMContext>(new DMContext(
+            session_context_,
+            path_pool_,
+            storage_pool_,
+            min_version_,
+            keyspace_id_,
+            physical_table_id_,
+            is_common_handle_,
+            rowkey_column_size_,
+            settings,
+            scan_context_,
+            tracing_id_));
+    }
+
+    static std::unique_ptr<DMContext> createUnique(
+        const Context & session_context_,
+        const StoragePathPoolPtr & path_pool_,
+        const StoragePoolPtr & storage_pool_,
+        DB::Timestamp min_version_,
+        KeyspaceID keyspace_id_,
+        TableID physical_table_id_,
+        bool is_common_handle_,
+        size_t rowkey_column_size_,
+        const DB::Settings & settings)
+    {
+        return std::unique_ptr<DMContext>(new DMContext(
+            session_context_,
+            path_pool_,
+            storage_pool_,
+            min_version_,
+            keyspace_id_,
+            physical_table_id_,
+            is_common_handle_,
+            rowkey_column_size_,
+            settings,
+            nullptr,
+            ""));
+    }
+
+    WriteLimiterPtr getWriteLimiter() const;
+    ReadLimiterPtr getReadLimiter() const;
+
+    DM::DMConfigurationOpt createChecksumConfig() const { return DMChecksumConfig::fromDBContext(global_context); }
+
+private:
     DMContext(
-        const Context & db_context_,
+        const Context & session_context_,
         const StoragePathPoolPtr & path_pool_,
         const StoragePoolPtr & storage_pool_,
         const DB::Timestamp min_version_,
@@ -103,9 +160,9 @@ public:
         bool is_common_handle_,
         size_t rowkey_column_size_,
         const DB::Settings & settings,
-        const ScanContextPtr scan_context_ = nullptr,
+        const ScanContextPtr & scan_context_ = nullptr,
         const String & tracing_id_ = "")
-        : db_context(db_context_)
+        : global_context(session_context_.getGlobalContext()) // always save the global context
         , path_pool(path_pool_)
         , storage_pool(storage_pool_)
         , min_version(min_version_)
@@ -131,11 +188,6 @@ public:
         , tracing_id(tracing_id_)
         , scan_context(scan_context_ ? scan_context_ : std::make_shared<ScanContext>())
     {}
-
-    WriteLimiterPtr getWriteLimiter() const;
-    ReadLimiterPtr getReadLimiter() const;
-
-    DM::DMConfigurationOpt createChecksumConfig() const { return DMChecksumConfig::fromDBContext(db_context); }
 };
 
 } // namespace DM

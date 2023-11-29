@@ -25,6 +25,7 @@
 #include <TiDB/Decode/Datum.h>
 
 #include <unordered_map>
+
 namespace DB
 {
 const Int8 VAR_SIZE = 0;
@@ -78,7 +79,7 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::CastIntAsDecimal, "tidb_cast"},
     {tipb::ScalarFuncSig::CastIntAsTime, "tidb_cast"},
     //{tipb::ScalarFuncSig::CastIntAsDuration, "cast"},
-    //{tipb::ScalarFuncSig::CastIntAsJson, "cast"},
+    {tipb::ScalarFuncSig::CastIntAsJson, "cast_int_as_json"},
 
     {tipb::ScalarFuncSig::CastRealAsInt, "tidb_cast"},
     {tipb::ScalarFuncSig::CastRealAsReal, "tidb_cast"},
@@ -86,7 +87,7 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::CastRealAsDecimal, "tidb_cast"},
     {tipb::ScalarFuncSig::CastRealAsTime, "tidb_cast"},
     //{tipb::ScalarFuncSig::CastRealAsDuration, "cast"},
-    //{tipb::ScalarFuncSig::CastRealAsJson, "cast"},
+    {tipb::ScalarFuncSig::CastRealAsJson, "cast_real_as_json"},
 
     {tipb::ScalarFuncSig::CastDecimalAsInt, "tidb_cast"},
     {tipb::ScalarFuncSig::CastDecimalAsReal, "tidb_cast"},
@@ -94,7 +95,7 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::CastDecimalAsDecimal, "tidb_cast"},
     {tipb::ScalarFuncSig::CastDecimalAsTime, "tidb_cast"},
     //{tipb::ScalarFuncSig::CastDecimalAsDuration, "cast"},
-    //{tipb::ScalarFuncSig::CastDecimalAsJson, "cast"},
+    {tipb::ScalarFuncSig::CastDecimalAsJson, "cast_decimal_as_json"},
 
     {tipb::ScalarFuncSig::CastStringAsInt, "tidb_cast"},
     {tipb::ScalarFuncSig::CastStringAsReal, "tidb_cast"},
@@ -102,7 +103,7 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::CastStringAsDecimal, "tidb_cast"},
     {tipb::ScalarFuncSig::CastStringAsTime, "tidb_cast"},
     //{tipb::ScalarFuncSig::CastStringAsDuration, "cast"},
-    //{tipb::ScalarFuncSig::CastStringAsJson, "cast"},
+    {tipb::ScalarFuncSig::CastStringAsJson, "cast_string_as_json"},
 
     {tipb::ScalarFuncSig::CastTimeAsInt, "tidb_cast"},
     {tipb::ScalarFuncSig::CastTimeAsReal, "tidb_cast"},
@@ -110,7 +111,7 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::CastTimeAsDecimal, "tidb_cast"},
     {tipb::ScalarFuncSig::CastTimeAsTime, "tidb_cast"},
     {tipb::ScalarFuncSig::CastTimeAsDuration, "tidb_cast"},
-    //{tipb::ScalarFuncSig::CastTimeAsJson, "cast"},
+    {tipb::ScalarFuncSig::CastTimeAsJson, "cast_time_as_json"},
 
     //{tipb::ScalarFuncSig::CastDurationAsInt, "cast"},
     //{tipb::ScalarFuncSig::CastDurationAsReal, "cast"},
@@ -118,7 +119,7 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::CastDurationAsDecimal, "cast"},
     //{tipb::ScalarFuncSig::CastDurationAsTime, "cast"},
     {tipb::ScalarFuncSig::CastDurationAsDuration, "tidb_cast"},
-    //{tipb::ScalarFuncSig::CastDurationAsJson, "cast"},
+    {tipb::ScalarFuncSig::CastDurationAsJson, "cast_duration_as_json"},
 
     //{tipb::ScalarFuncSig::CastJsonAsInt, "cast"},
     //{tipb::ScalarFuncSig::CastJsonAsReal, "cast"},
@@ -126,7 +127,7 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::CastJsonAsDecimal, "cast"},
     //{tipb::ScalarFuncSig::CastJsonAsTime, "cast"},
     //{tipb::ScalarFuncSig::CastJsonAsDuration, "cast"},
-    //{tipb::ScalarFuncSig::CastJsonAsJson, "cast"},
+    {tipb::ScalarFuncSig::CastJsonAsJson, "cast_json_as_json"},
 
     {tipb::ScalarFuncSig::CoalesceInt, "coalesce"},
     {tipb::ScalarFuncSig::CoalesceReal, "coalesce"},
@@ -448,7 +449,7 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::JsonRemoveSig, "cast"},
     //{tipb::ScalarFuncSig::JsonMergeSig, "cast"},
     //{tipb::ScalarFuncSig::JsonObjectSig, "cast"},
-    //{tipb::ScalarFuncSig::JsonArraySig, "cast"},
+    {tipb::ScalarFuncSig::JsonArraySig, "json_array"},
     //{tipb::ScalarFuncSig::JsonValidJsonSig, "cast"},
     //{tipb::ScalarFuncSig::JsonContainsSig, "cast"},
     //{tipb::ScalarFuncSig::JsonArrayAppendSig, "cast"},
@@ -753,11 +754,11 @@ const String & getAggFunctionName(const tipb::Expr & expr)
             return it->second;
     }
 
-    const auto errmsg = fmt::format(
+    throw TiFlashException(
+        Errors::Coprocessor::Unimplemented,
         "{}(distinct={}) is not supported.",
         tipb::ExprType_Name(expr.tp()),
-        expr.has_distinct() ? "true" : "false");
-    throw TiFlashException(errmsg, Errors::Coprocessor::Unimplemented);
+        expr.has_distinct());
 }
 
 const String & getWindowFunctionName(const tipb::Expr & expr)
@@ -766,8 +767,7 @@ const String & getWindowFunctionName(const tipb::Expr & expr)
     if (it != window_func_map.end())
         return it->second;
 
-    const auto errmsg = fmt::format("{} is not supported.", tipb::ExprType_Name(expr.tp()));
-    throw TiFlashException(errmsg, Errors::Coprocessor::Unimplemented);
+    throw TiFlashException(Errors::Coprocessor::Unimplemented, "{} is not supported.", tipb::ExprType_Name(expr.tp()));
 }
 
 
@@ -786,8 +786,9 @@ const String & getFunctionName(const tipb::Expr & expr)
         auto it = scalar_func_map.find(expr.sig());
         if (it == scalar_func_map.end())
             throw TiFlashException(
-                tipb::ScalarFuncSig_Name(expr.sig()) + " is not supported.",
-                Errors::Coprocessor::Unimplemented);
+                Errors::Coprocessor::Unimplemented,
+                "{} is not supported.",
+                tipb::ScalarFuncSig_Name(expr.sig()));
         return it->second;
     }
 }
@@ -803,7 +804,7 @@ String getExchangeTypeName(const tipb::ExchangeType & tp)
     case tipb::ExchangeType::Hash:
         return "Hash";
     default:
-        throw TiFlashException(fmt::format("Not supported Exchange type: {}", tp), Errors::Coprocessor::Internal);
+        throw TiFlashException(Errors::Coprocessor::Internal, "Not supported Exchange type: {}", fmt::underlying(tp));
     }
 }
 
@@ -826,7 +827,7 @@ String getJoinTypeName(const tipb::JoinType & tp)
     case tipb::JoinType::TypeSemiJoin:
         return "SemiJoin";
     default:
-        throw TiFlashException(fmt::format("Not supported Join type: {}", tp), Errors::Coprocessor::Internal);
+        throw TiFlashException(Errors::Coprocessor::Internal, "Not supported Join type: {}", fmt::underlying(tp));
     }
 }
 
@@ -838,8 +839,9 @@ String getJoinExecTypeName(const tipb::JoinExecType & tp)
         return "HashJoin";
     default:
         throw TiFlashException(
-            fmt::format("Not supported Join exectution type: {}", tp),
-            Errors::Coprocessor::Internal);
+            Errors::Coprocessor::Internal,
+            "Not supported Join exectution type: {}",
+            fmt::underlying(tp));
     }
 }
 
@@ -882,7 +884,7 @@ String getFieldTypeName(Int32 tp)
     case TiDB::TypeString:
         return "String";
     default:
-        throw TiFlashException(fmt::format("Not supported field type: {}", tp), Errors::Coprocessor::Internal);
+        throw TiFlashException(Errors::Coprocessor::Internal, "Not supported field type: {}", tp);
     }
 }
 
@@ -1428,6 +1430,16 @@ TiDB::TiDBCollatorPtr getCollatorFromFieldType(const tipb::FieldType & field_typ
 bool hasUnsignedFlag(const tipb::FieldType & tp)
 {
     return tp.flag() & TiDB::ColumnFlagUnsigned;
+}
+
+bool hasIsBooleanFlag(const tipb::FieldType & tp)
+{
+    return tp.flag() & TiDB::ColumnFlagIsBooleanFlag;
+}
+
+bool hasParseToJSONFlag(const tipb::FieldType & tp)
+{
+    return tp.flag() & TiDB::ColumnFlagParseToJSON;
 }
 
 void assertBlockSchema(const DataTypes & expected_types, const Block & block, const String & context_description)

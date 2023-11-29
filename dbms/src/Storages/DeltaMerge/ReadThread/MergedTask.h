@@ -153,7 +153,7 @@ public:
 
 private:
     std::mutex mtx;
-    std::list<MergedTaskPtr> merged_task_pool;
+    std::list<MergedTaskPtr> merged_task_pool GUARDED_BY(mtx);
     LoggerPtr log;
 };
 } // namespace DB::DM

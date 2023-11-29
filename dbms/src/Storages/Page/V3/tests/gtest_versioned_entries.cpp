@@ -67,7 +67,7 @@ class VersionedEntriesTest : public ::testing::Test
 {
 public:
     using DerefCounter = std::map<PageIdV3Internal, std::pair<PageVersion, Int64>>;
-    std::tuple<bool, PageEntriesV3, DerefCounter> runClean(UInt64 seq)
+    std::tuple<bool, PageEntriesV3, DerefCounter> runClean(UInt64 seq) NO_THREAD_SAFETY_ANALYSIS
     {
         DerefCounter deref_counter;
         PageEntriesV3 removed_entries;
