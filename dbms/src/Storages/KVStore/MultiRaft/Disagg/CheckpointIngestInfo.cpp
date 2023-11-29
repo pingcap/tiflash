@@ -93,7 +93,7 @@ bool CheckpointIngestInfo::loadFromLocal(const TiFlashRaftProxyHelper * proxy_he
     std::vector<UInt64> restored_segments_id;
     {
         auto count = readBinary2<UInt64>(buf);
-        for (size_t i = 0; i < count; i++)
+        for (size_t i = 0; i < count; ++i)
         {
             auto segment_id = readBinary2<UInt64>(buf);
             restored_segments_id.push_back(segment_id);
@@ -133,21 +133,20 @@ bool CheckpointIngestInfo::loadFromLocal(const TiFlashRaftProxyHelper * proxy_he
 
 void CheckpointIngestInfo::persistToLocal()
 {
-    auto uni_ps = tmt.getContext().getWriteNodePageStorage();
-    UniversalWriteBatch wb;
-    MemoryWriteBuffer wb_buffer;
-    size_t data_size = 0;
     if (region->isPendingRemove())
     {
         // A pending remove region should not be selected as candidate.
         LOG_ERROR(log, "candidate region {} is pending remove", region->toString(false));
         return;
     }
+    auto uni_ps = tmt.getContext().getWriteNodePageStorage();
+    UniversalWriteBatch wb;
+    MemoryWriteBuffer wb_buffer;
     // Write:
     // - The region, which is actually data and meta in KVStore.
     // - The segment ids point to segments which are already persisted but not ingested.
     static_assert(sizeof(FAP_INGEST_INFO_PERSIST_FMT_VER) == 1);
-    data_size += writeBinary2(FAP_INGEST_INFO_PERSIST_FMT_VER, wb_buffer);
+    auto data_size = writeBinary2(FAP_INGEST_INFO_PERSIST_FMT_VER, wb_buffer);
     {
         size_t segment_data_size = 0;
         segment_data_size += writeBinary2(restored_segments.size(), wb_buffer);
@@ -193,7 +192,7 @@ void CheckpointIngestInfo::persistToLocal()
 void CheckpointIngestInfo::removeFromLocal(TMTContext & tmt, UInt64 region_id, UInt64 peer_id, UInt64 remote_store_id)
 {
     LOG_INFO(
-        DB::Logger::get("CheckpointIngestInfo"),
+        log,
         "Erase CheckpointIngestInfo from disk, region_id={} peer_id={} remote_store_id={}",
         region_id,
         peer_id,
