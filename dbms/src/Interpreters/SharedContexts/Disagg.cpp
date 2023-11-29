@@ -99,9 +99,9 @@ void SharedContextDisagg::initRemoteDataStore(const FileProviderPtr & file_provi
     remote_data_store = std::make_shared<DM::Remote::DataStoreS3>(file_provider);
 }
 
-void SharedContextDisagg::initFastAddPeerContext()
+void SharedContextDisagg::initFastAddPeerContext(UInt64 fap_concur)
 {
-    fap_context = std::make_shared<FastAddPeerContext>();
+    fap_context = std::make_shared<FastAddPeerContext>(fap_concur);
 }
 
 } // namespace DB

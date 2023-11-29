@@ -89,7 +89,7 @@ struct SharedContextDisagg : private boost::noncopyable
 
     void initRemoteDataStore(const FileProviderPtr & file_provider, bool s3_enabled);
 
-    void initFastAddPeerContext();
+    void initFastAddPeerContext(UInt64 fap_concur);
 
     bool isDisaggregatedComputeMode() const { return disaggregated_mode == DisaggregatedMode::Compute; }
 
