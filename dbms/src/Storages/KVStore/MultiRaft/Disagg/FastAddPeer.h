@@ -97,6 +97,7 @@ private:
 
     // Checkpoint that is persisted, but yet to be ingested into DeltaTree.
     std::mutex ingest_info_mu;
+    // RegionID->CheckpointIngestInfoPtr
     std::unordered_map<UInt64, CheckpointIngestInfoPtr> checkpoint_ingest_info_map;
 
     LoggerPtr log;
