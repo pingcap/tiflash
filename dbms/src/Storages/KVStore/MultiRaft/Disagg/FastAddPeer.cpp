@@ -391,7 +391,7 @@ FastAddPeerRes FastAddPeerImpl(
 
 void ApplyFapSnapshotImpl(TMTContext & tmt, TiFlashRaftProxyHelper * proxy_helper, UInt64 region_id, UInt64 peer_id)
 {
-    auto * log = &Poco::Logger::get("FastAddPeer");
+    auto log = Logger::get("FastAddPeer");
     LOG_INFO(log, "Begin apply fap snapshot, region_id={}, peer_id={}", region_id, peer_id);
     GET_METRIC(tiflash_fap_task_state, type_ingesting_stage).Increment();
     SCOPE_EXIT({ GET_METRIC(tiflash_fap_task_state, type_ingesting_stage).Decrement(); });
