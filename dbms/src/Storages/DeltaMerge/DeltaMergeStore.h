@@ -32,6 +32,7 @@
 #include <Storages/DeltaMerge/ScanContext_fwd.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 #include <Storages/KVStore/Decode/DecodingStorageSchemaSnapshot.h>
+#include <Storages/KVStore/MultiRaft/Disagg/CheckpointIngestInfo.h>
 #include <Storages/Page/PageStorage_fwd.h>
 #include <TiDB/Schema/TiDB.h>
 
@@ -49,6 +50,8 @@ class StoragePathPool;
 
 class PipelineExecutorContext;
 class PipelineExecGroupBuilder;
+
+struct CheckpointIngestInfo;
 
 namespace DM
 {
@@ -177,6 +180,7 @@ class DeltaMergeStore : private boost::noncopyable
 {
 public:
     friend class ::DB::DM::tests::DeltaMergeStoreTest;
+    friend struct DB::CheckpointIngestInfo;
     struct Settings
     {
         NotCompress not_compress_columns{};
@@ -339,16 +343,31 @@ public:
         const RowKeyRange & ingest_range,
         const SegmentPtr & segment_to_ingest);
 
-    void ingestSegmentsFromCheckpointInfo(
+    Segments buildSegmentsFromCheckpointInfo(
         const DMContextPtr & dm_context,
         const DM::RowKeyRange & range,
         CheckpointInfoPtr checkpoint_info);
+
+    Segments buildSegmentsFromCheckpointInfo(
+        const Context & db_context,
+        const DB::Settings & db_settings,
+        const DM::RowKeyRange & range,
+        CheckpointInfoPtr checkpoint_info)
+    {
+        auto dm_context = newDMContext(db_context, db_settings);
+        return buildSegmentsFromCheckpointInfo(dm_context, range, checkpoint_info);
+    }
+
+    void ingestSegmentsFromCheckpointInfo(
+        const DMContextPtr & dm_context,
+        const DM::RowKeyRange & range,
+        CheckpointIngestInfoPtr checkpoint_info);
 
     void ingestSegmentsFromCheckpointInfo(
         const Context & db_context,
         const DB::Settings & db_settings,
         const DM::RowKeyRange & range,
-        CheckpointInfoPtr checkpoint_info)
+        CheckpointIngestInfoPtr checkpoint_info)
     {
         auto dm_context = newDMContext(db_context, db_settings);
         return ingestSegmentsFromCheckpointInfo(dm_context, range, checkpoint_info);
