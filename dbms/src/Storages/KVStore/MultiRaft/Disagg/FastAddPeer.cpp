@@ -262,7 +262,7 @@ FastAddPeerRes FastAddPeerImplWrite(
     CheckpointRegionInfoAndData && checkpoint,
     UInt64 start_time)
 {
-    auto * log = &Poco::Logger::get("FastAddPeer");
+    auto log = Logger::get("FastAddPeer");
     auto fap_ctx = tmt.getContext().getSharedContextDisagg()->fap_context;
     const auto & settings = tmt.getContext().getSettingsRef();
 
