@@ -445,7 +445,7 @@ FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, u
 {
     try
     {
-        auto * log = &Poco::Logger::get("FastAddPeer");
+        auto log = Logger::get("FastAddPeer");
         if (!server->tmt->getContext().getSharedContextDisagg()->isDisaggregatedStorageMode())
             return genFastAddPeerRes(FastAddPeerStatus::OtherError, "", "");
         auto fap_ctx = server->tmt->getContext().getSharedContextDisagg()->fap_context;
