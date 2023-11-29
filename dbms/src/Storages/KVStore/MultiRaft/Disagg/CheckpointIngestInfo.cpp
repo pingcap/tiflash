@@ -152,7 +152,7 @@ void CheckpointIngestInfo::persistToLocal()
     // - The region, which is actually data and meta in KVStore.
     // - The segment ids point to segments which are already persisted but not ingested.
     static_assert(sizeof(FAP_INGEST_INFO_PERSIST_FMT_VER) == 1);
-    data_size += writeBinary2(FAP_INGEST_INFO_PERSIST_FMT_VER, wb_buffer);
+    auto data_size = writeBinary2(FAP_INGEST_INFO_PERSIST_FMT_VER, wb_buffer);
     {
         size_t segment_data_size = 0;
         segment_data_size += writeBinary2(restored_segments.size(), wb_buffer);
