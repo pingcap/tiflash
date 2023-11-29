@@ -262,7 +262,7 @@ FastAddPeerRes FastAddPeerImplWrite(
     CheckpointRegionInfoAndData && checkpoint,
     UInt64 start_time)
 {
-    auto * log = &Poco::Logger::get("FastAddPeer");
+    auto log = Logger::get("FastAddPeer");
     auto fap_ctx = tmt.getContext().getSharedContextDisagg()->fap_context;
     const auto & settings = tmt.getContext().getSettingsRef();
 
@@ -271,11 +271,7 @@ FastAddPeerRes FastAddPeerImplWrite(
     GET_METRIC(tiflash_fap_task_state, type_writing_stage).Increment();
     SCOPE_EXIT({ GET_METRIC(tiflash_fap_task_state, type_writing_stage).Decrement(); });
 
-    CheckpointInfoPtr checkpoint_info;
-    RegionPtr region;
-    RaftApplyState apply_state;
-    RegionLocalState region_state;
-    std::tie(checkpoint_info, region, apply_state, region_state) = checkpoint;
+    auto [checkpoint_info, region, apply_state, region_state] = checkpoint;
 
     auto & storages = tmt.getStorages();
     auto keyspace_id = region->getKeyspaceID();
@@ -395,7 +391,7 @@ FastAddPeerRes FastAddPeerImpl(
 
 void ApplyFapSnapshotImpl(TMTContext & tmt, TiFlashRaftProxyHelper * proxy_helper, UInt64 region_id, UInt64 peer_id)
 {
-    auto * log = &Poco::Logger::get("FastAddPeer");
+    auto log = Logger::get("FastAddPeer");
     LOG_INFO(log, "Begin apply fap snapshot, region_id={}, peer_id={}", region_id, peer_id);
     GET_METRIC(tiflash_fap_task_state, type_ingesting_stage).Increment();
     SCOPE_EXIT({ GET_METRIC(tiflash_fap_task_state, type_ingesting_stage).Decrement(); });

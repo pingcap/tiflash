@@ -41,11 +41,11 @@ namespace tests
     M(test_histogram_with_1_label,                                                                         \
       "Test histogram metric with 1 label",                                                                \
       Histogram,                                                                                           \
-      F(m1, {{"label1", "value1"}}, ExpBuckets<49>{1.0, 2}))                                               \
+      F(m1, {{"label1", "value1"}}, ExpBuckets{1.0, 2, 24}))                                               \
     M(test_histogram_with_2_labels,                                                                        \
       "Test histogram metric with 2 labels",                                                               \
       Histogram,                                                                                           \
-      F(m1, {{"label1", "value1"}}, ExpBuckets<49>{1.0, 2}),                                               \
+      F(m1, {{"label1", "value1"}}, ExpBuckets{1.0, 2, 24}),                                               \
       F(m2, {{"label21", "value21"}, {"label22", "value22"}}, {1, 2, 3, 4}))
 
 class TestMetrics : public ext::Singleton<TestMetrics>
@@ -115,6 +115,9 @@ TEST(TiFlashMetrics, ExpBucketsWithRange)
     ASSERT_EQ(3, ExpBucketsWithRange::getSize(2.0, 12.0, 3)); // 2 6 18
     ASSERT_EQ(3, ExpBucketsWithRange::getSize(2.0, 18.0, 3)); // 2 6 18
     ASSERT_EQ(4, ExpBucketsWithRange::getSize(2.0, 19.0, 3)); // 2 6 18 54
+
+    ASSERT_ANY_THROW({ ExpBucketsWithRange(2.0, 1.0, 3); });
+    ASSERT_ANY_THROW({ ExpBucketsWithRange(2.0, 2.0, 2.0); });
 }
 
 } // namespace tests
