@@ -568,14 +568,16 @@ grpc::Status FlashService::IsAlive(
 
 grpc::Status FlashService::CleanupBeforeScaleIn(
         grpc::ServerContext *,
-        const mpp::CleanupBeforeScaleInRequest * request,
+        const mpp::CleanupBeforeScaleInRequest *,
         mpp::CleanupBeforeScaleInResponse * response)
 {
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
     if (LocalAdmissionController::global_instance)
     {
         LocalAdmissionController::global_instance->stop();
+        response->set_cleanup_succ(true);
     }
+    return grpc::Status::OK;
 }
 
 static grpc::Status CheckMppVersionForEstablishMPPConnection(const mpp::EstablishMPPConnectionRequest * request)
