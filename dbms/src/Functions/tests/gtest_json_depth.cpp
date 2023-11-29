@@ -44,9 +44,7 @@ public:
 
     void executeAndAssert(const String & input, const UInt64 & expect)
     {
-        ASSERT_COLUMN_EQ(
-            createColumn<UInt64>({expect}),
-            executeFunctionWithCast({createColumn<String>({input})}));
+        ASSERT_COLUMN_EQ(createColumn<UInt64>({expect}), executeFunctionWithCast({createColumn<String>({input})}));
     }
 };
 
