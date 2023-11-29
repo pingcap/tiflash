@@ -139,16 +139,15 @@ bool CheckpointIngestInfo::loadFromLocal(const TiFlashRaftProxyHelper * proxy_he
 
 void CheckpointIngestInfo::persistToLocal()
 {
-    auto uni_ps = tmt.getContext().getWriteNodePageStorage();
-    UniversalWriteBatch wb;
-    MemoryWriteBuffer wb_buffer;
-    size_t data_size = 0;
     if (region->isPendingRemove())
     {
         // A pending remove region should not be selected as candidate.
         LOG_ERROR(log, "candidate region {} is pending remove", region->toString(false));
         return;
     }
+    auto uni_ps = tmt.getContext().getWriteNodePageStorage();
+    UniversalWriteBatch wb;
+    MemoryWriteBuffer wb_buffer;
     // Write:
     // - The region, which is actually data and meta in KVStore.
     // - The segment ids point to segments which are already persisted but not ingested.
