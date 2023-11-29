@@ -307,13 +307,13 @@ try
             .entry = {
                 .size = 10,
                 .offset = 5,
-                .checkpoint_info = OptionalCheckpointInfo{
-                    .data_location = CheckpointLocation{
+                .checkpoint_info = OptionalCheckpointInfo(
+                    CheckpointLocation{
                         .data_file_id = std::make_shared<String>("my_file_id"),
                     },
-                    .is_valid = true,
-                    .is_local_data_reclaimed = false,
-                },
+                    true,
+                    false
+                ),
             },
         });
         edits.appendRecord({.type = EditRecordType::VAR_REF, .page_id = "foo", .ori_page_id = "abc"});
@@ -612,13 +612,13 @@ try
             .page_id = "abc",
             .entry = {
                 .offset = 5,
-                .checkpoint_info = OptionalCheckpointInfo{
-                    .data_location = CheckpointLocation{
+                .checkpoint_info = OptionalCheckpointInfo(
+                    CheckpointLocation{
                         .data_file_id = std::make_shared<String>("my_file_id"),
                     },
-                    .is_valid = true,
-                    .is_local_data_reclaimed = false,
-                },
+                    true,
+                    false
+                ),
             },
         });
         edits.appendRecord(
