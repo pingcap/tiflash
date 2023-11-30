@@ -154,6 +154,8 @@ public:
         std::vector<JsonPathExprRefContainerPtr> & path_expr_container_vec,
         JsonBinaryWriteBuffer & write_buffer);
 
+    UInt64 getDepth() const;
+
     static String unquoteString(const StringRef & ref);
     static void unquoteStringInBuffer(const StringRef & ref, JsonBinaryWriteBuffer & write_buffer);
     static String unquoteJsonString(const StringRef & ref);
