@@ -4,7 +4,21 @@
 import os
 import sys
 import time
+<<<<<<< HEAD
 import urllib2
+=======
+import datetime
+
+if sys.version_info.major == 2:
+    # print('running with py2: {}.{}.{}'.format(sys.version_info.major, sys.version_info.minor, sys.version_info.micro))
+    from urllib2 import HTTPError
+    from urllib2 import Request as UrlRequest
+    from urllib2 import urlopen
+else:
+    from urllib.request import Request as UrlRequest
+    from urllib.error import HTTPError
+    from urllib.request import urlopen
+>>>>>>> fbf4a35f38 (ddl: Fix unstable `DROP TABLE`/`FLASHBACK TABLE`/`RECOVER TABLE` (#8422))
 
 CMD_PREFIX = '>> '
 CMD_PREFIX_ALTER = '=> '
@@ -216,7 +230,15 @@ class Matcher:
         if line.startswith(SLEEP_PREFIX):
             time.sleep(float(line[len(SLEEP_PREFIX):]))
         elif line.startswith(CMD_PREFIX_TIDB):
+<<<<<<< HEAD
             if verbose: print 'running', line
+=======
+            unescape_flag = True
+            if line.endswith(NO_UNESCAPE_SUFFIX):
+                unescape_flag = False
+                line = line[:-len(NO_UNESCAPE_SUFFIX)]
+            if verbose: print('{} running {}'.format(datetime.datetime.now().strftime('%H:%M:%S.%f'), line))
+>>>>>>> fbf4a35f38 (ddl: Fix unstable `DROP TABLE`/`FLASHBACK TABLE`/`RECOVER TABLE` (#8422))
             if self.outputs != None and ((not self.is_mysql and not matched(self.outputs, self.matches, self.fuzz)) or (
                 self.is_mysql and not MySQLCompare.matched(self.outputs, self.matches))):
                 return False
@@ -228,8 +250,12 @@ class Matcher:
             self.outputs = filter(lambda x: len(x) != 0, self.outputs)
             self.matches = []
         elif line.startswith(CURL_TIDB_STATUS_PREFIX):
+<<<<<<< HEAD
             if verbose:
                 print 'running', line
+=======
+            if verbose: print('{} running {}'.format(datetime.datetime.now().strftime('%H:%M:%S.%f'), line))
+>>>>>>> fbf4a35f38 (ddl: Fix unstable `DROP TABLE`/`FLASHBACK TABLE`/`RECOVER TABLE` (#8422))
             if self.outputs != None and ((not self.is_mysql and not matched(self.outputs, self.matches, self.fuzz)) or (
                 self.is_mysql and not MySQLCompare.matched(self.outputs, self.matches))):
                 return False
@@ -239,7 +265,11 @@ class Matcher:
             self.outputs = self.executor_curl_tidb.exe(self.query)
             self.matches = []
         elif line.startswith(CMD_PREFIX) or line.startswith(CMD_PREFIX_ALTER):
+<<<<<<< HEAD
             if verbose: print 'running', line
+=======
+            if verbose: print('{} running {}'.format(datetime.datetime.now().strftime('%H:%M:%S.%f'), line))
+>>>>>>> fbf4a35f38 (ddl: Fix unstable `DROP TABLE`/`FLASHBACK TABLE`/`RECOVER TABLE` (#8422))
             if self.outputs != None and ((not self.is_mysql and not matched(self.outputs, self.matches, self.fuzz)) or (
                 self.is_mysql and not MySQLCompare.matched(self.outputs, self.matches))):
                 return False
@@ -251,7 +281,11 @@ class Matcher:
             self.outputs = filter(lambda x: len(x) != 0, self.outputs)
             self.matches = []
         elif line.startswith(CMD_PREFIX_FUNC):
+<<<<<<< HEAD
             if verbose: print 'running', line
+=======
+            if verbose: print('{} running {}'.format(datetime.datetime.now().strftime('%H:%M:%S.%f'), line))
+>>>>>>> fbf4a35f38 (ddl: Fix unstable `DROP TABLE`/`FLASHBACK TABLE`/`RECOVER TABLE` (#8422))
             if self.outputs != None and ((not self.is_mysql and not matched(self.outputs, self.matches, self.fuzz)) or (
                 self.is_mysql and not MySQLCompare.matched(self.outputs, self.matches))):
                 return False
