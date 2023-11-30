@@ -164,13 +164,13 @@ Join::Join(
     , fine_grained_shuffle_count(fine_grained_shuffle_count_)
 {
     has_other_condition = non_equal_conditions.other_cond_expr != nullptr;
-    bool isSemi = isSemiFamily(kind) || isLeftOuterSemiFamily(kind) || isNullAwareSemiFamily(kind);
-    if (isSemi && !has_other_condition)
+    bool is_semi = isSemiFamily(kind) || isLeftOuterSemiFamily(kind) || isNullAwareSemiFamily(kind);
+    if (is_semi && !has_other_condition)
         strictness = ASTTableJoin::Strictness::Any;
     else
         strictness = ASTTableJoin::Strictness::All;
 
-    if (isSemi)
+    if (is_semi)
         probe_cache_column_threshold = 0;
 
     if unlikely (kind == ASTTableJoin::Kind::Cross_RightOuter)
