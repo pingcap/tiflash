@@ -1,0 +1,144 @@
+# Copyright 2023 PingCAP, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+## case 1
+# basic add / drop / truncate partitions
+mysql> drop table if exists test.t1;
+mysql> create table test.t1(id INT NOT NULL,name VARCHAR(30)) PARTITION BY RANGE (id) ( PARTITION p0 VALUES LESS THAN (50),PARTITION p1 VALUES LESS THAN (100));
+mysql> alter table test.t1 set tiflash replica 1;
+
+mysql> insert into test.t1 values (1, 'abc'),(60, 'cba');
+
+func> wait_table test t1
+
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t1;
++----+------+
+| id | name |
++----+------+
+| 60 | cba  |
+| 1  | abc  |
++----+------+
+
+>> DBGInvoke get_partition_tables_tiflash_replica_count("test", "t1")
+┌─get_partition_tables_tiflash_replica_count(test, t)─┐
+│ 1/1/                                                │
+└─────────────────────────────────────────────────────┘
+
+mysql> alter table test.t1 add partition (partition p2 values less than (200));
+
+# In raftstore v1, this new empty partition will not be created in TiFlash. On the contrary in raftstore v2.
+
+mysql> insert into test.t1 values (150, 'aaa');
+
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t1;
++----+------+
+| id | name |
++----+------+
+| 60 | cba  |
+| 1  | abc  |
+| 150| aaa  |
++----+------+
+
+>> DBGInvoke get_partition_tables_tiflash_replica_count("test", "t1")
+┌─get_partition_tables_tiflash_replica_count(test, t)─┐
+│ 1/1/1/                                              │
+└─────────────────────────────────────────────────────┘
+
+
+mysql> alter table test.t1 drop partition p0;
+
+=> DBGInvoke __refresh_schemas()
+
+>> DBGInvoke get_partition_tables_tiflash_replica_count("test", "t1")
+┌─get_partition_tables_tiflash_replica_count(test, t)─┐
+│ 1/1/                                                │
+└─────────────────────────────────────────────────────┘
+
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t1;
++----+------+
+| id | name |
++----+------+
+| 60 | cba  |
+| 150| aaa  |
++----+------+
+
+mysql> alter table test.t1 truncate partition p1;
+
+=> DBGInvoke __refresh_schemas()
+
+# In raftstore v1, this new partition will not be created in TiFlash. On the contrary in raftstore v2.
+func> wait_table test t1
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t1;
++----+------+
+| id | name |
++----+------+
+| 150| aaa  |
++----+------+
+
+mysql> drop table test.t1;
+
+## case 2
+## test before drop / truncate partition, we make alter column and insert data
+
+mysql> drop table if exists test.t2;
+mysql> create table test.t2(id INT NOT NULL,name VARCHAR(30)) PARTITION BY RANGE (id) ( PARTITION p0 VALUES LESS THAN (50),PARTITION p1 VALUES LESS THAN (100));
+mysql> alter table test.t2 set tiflash replica 1;
+
+mysql> insert into test.t2 values (1, 'abc'),(60, 'cba');
+
+func> wait_table test t2
+
+=> DBGInvoke __enable_schema_sync_service('false') 
+=> DBGInvoke __init_fail_point()
+
+mysql> alter table test.t2 add column c int;
+
+>> DBGInvoke __enable_fail_point(pause_before_apply_raft_cmd)
+
+# exactly write until fail point "pause_before_apply_raft_cmd" to be disable
+mysql> insert into test.t2 values(80, 'aaa', 2);
+
+mysql> alter table test.t2 drop partition p0;
+
+=> DBGInvoke __refresh_schemas()
+
+# make write cmd take effect
+>> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
+
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t2;
++----+------+----+
+| id | name |  c |
++----+------+----+
+| 60 | cba  |NULL|
+| 80 | aaa  |  2 |
++----+------+----+
+
+mysql> alter table test.t2 add column d int;
+
+>> DBGInvoke __enable_fail_point(pause_before_apply_raft_cmd)
+
+# exactly write until fail point "pause_before_apply_raft_cmd" to be disable
+mysql> insert into test.t2 values(70, 'a', 3, 8);
+
+mysql> alter table test.t2 truncate partition p1;
+
+=> DBGInvoke __refresh_schemas()
+
+# make write cmd take effect, the row is written to the old partition without crash
+>> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
+
+func> wait_table test t2
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t2;
+
+mysql> drop table test.t2;
