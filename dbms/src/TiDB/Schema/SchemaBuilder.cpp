@@ -1185,9 +1185,7 @@ void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
     LOG_INFO(log, "Sync all schemas begin");
 
     /// Create all databases.
-    std::vector<DBInfoPtr> all_schemas = getter.listDBs();
-
-    std::unordered_set<String> created_db_set;
+    std::vector<DBInfoPtr> all_db_info = getter.listDBs();
 
     //We can't use too large default_num_threads, otherwise, the lock grabbing time will be too much.
     size_t default_num_threads = std::max(4UL, std::thread::hardware_concurrency());
@@ -1196,69 +1194,70 @@ void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
     auto sync_all_schema_wait_group = sync_all_schema_thread_pool.waitGroup();
 
     std::mutex created_db_set_mutex;
-    for (const auto & db : all_schemas)
+    std::unordered_set<String> created_db_set;
+    for (const auto & db_info : all_db_info)
     {
-        auto task = [this, db, &created_db_set, &created_db_set_mutex] {
+        auto task = [this, db_info, &created_db_set, &created_db_set_mutex] {
             do
             {
-                if (databases.exists(db->id))
+                if (databases.exists(db_info->id))
                 {
                     break;
                 }
-                applyCreateSchema(db);
+                applyCreateSchema(db_info);
                 {
                     std::unique_lock<std::mutex> created_db_set_lock(created_db_set_mutex);
-                    created_db_set.emplace(name_mapper.mapDatabaseName(*db));
+                    created_db_set.emplace(name_mapper.mapDatabaseName(*db_info));
                 }
 
                 LOG_INFO(
                     log,
                     "Database {} created during sync all schemas, database_id={}",
-                    name_mapper.debugDatabaseName(*db),
-                    db->id);
+                    name_mapper.debugDatabaseName(*db_info),
+                    db_info->id);
             } while (false); // Ensure database existing
 
-            std::vector<TableInfoPtr> tables = getter.listTables(db->id);
-            for (auto & table : tables)
+            std::vector<TableInfoPtr> tables = getter.listTables(db_info->id);
+            for (auto & table_info : tables)
             {
                 LOG_INFO(
                     log,
                     "Table {} syncing during sync all schemas, database_id={} table_id={}",
-                    name_mapper.debugCanonicalName(*db, *table),
-                    db->id,
-                    table->id);
+                    name_mapper.debugCanonicalName(*db_info, *table_info),
+                    db_info->id,
+                    table_info->id);
 
                 /// Ignore view and sequence.
-                if (table->is_view || table->is_sequence)
+                if (table_info->is_view || table_info->is_sequence)
                 {
                     LOG_INFO(
                         log,
                         "Table {} is a view or sequence, ignoring. database_id={} table_id={}",
-                        name_mapper.debugCanonicalName(*db, *table),
-                        db->id,
-                        table->id);
+                        name_mapper.debugCanonicalName(*db_info, *table_info),
+                        db_info->id,
+                        table_info->id);
                     continue;
                 }
 
-                table_id_map.emplaceTableID(table->id, db->id);
-                LOG_DEBUG(log, "register table to table_id_map, database_id={} table_id={}", db->id, table->id);
+                table_id_map.emplaceTableID(table_info->id, db_info->id);
+                LOG_DEBUG(log, "register table to table_id_map, database_id={} table_id={}", db_info->id, table_info->id);
 
                 // `SchemaGetter::listTables` only return non-tombstone tables.
                 // So `syncAllSchema` will not create tombstone tables. But if there are new rows/new snapshot
                 // sent to TiFlash, TiFlash can create the instance by `applyTable` with force==true in the
                 // related process.
-                applyCreateStorageInstance(db, table, false);
-                if (table->isLogicalPartitionTable())
+                applyCreateStorageInstance(db_info, table_info, false);
+                if (table_info->isLogicalPartitionTable())
                 {
-                    for (const auto & part_def : table->partition.definitions)
+                    for (const auto & part_def : table_info->partition.definitions)
                     {
                         LOG_DEBUG(
                             log,
                             "register table to table_id_map for partition table, logical_table_id={} "
                             "physical_table_id={}",
-                            table->id,
+                            table_info->id,
                             part_def.id);
-                        table_id_map.emplacePartitionTableID(part_def.id, table->id);
+                        table_id_map.emplacePartitionTableID(part_def.id, table_info->id);
                     }
                 }
             }
@@ -1288,7 +1287,7 @@ void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
         }
     }
 
-    /// Drop all unmapped dbs.
+    /// Drop all unmapped databases
     const auto & dbs = context.getDatabases();
     for (auto it = dbs.begin(); it != dbs.end(); it++)
     {

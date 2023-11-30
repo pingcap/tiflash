@@ -55,6 +55,10 @@ public:
 
     void syncAllSchema();
 
+    /**
+      * Drop all schema of a given keyspace.
+      * When a keyspace is removed, drop all its databases and tables.
+      */
     void dropAllSchema();
 
     bool applyTable(DatabaseID database_id, TableID logical_table_id, TableID physical_table_id, bool force);
