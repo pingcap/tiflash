@@ -54,7 +54,15 @@ public:
 
     virtual TiDB::DBInfoPtr getDBInfoByMappedName(const String & mapped_database_name) = 0;
 
+<<<<<<< HEAD:dbms/src/Storages/Transaction/SchemaSyncer.h
     virtual std::vector<TiDB::DBInfoPtr> fetchAllDBs() = 0;
+=======
+    /**
+      * Drop all schema of a given keyspace.
+      * When a keyspace is removed, drop all its databases and tables.
+      */
+    virtual void dropAllSchema(Context & context) = 0;
+>>>>>>> fbf4a35f38 (ddl: Fix unstable `DROP TABLE`/`FLASHBACK TABLE`/`RECOVER TABLE` (#8422)):dbms/src/TiDB/Schema/SchemaSyncer.h
 };
 
 using SchemaSyncerPtr = std::shared_ptr<SchemaSyncer>;

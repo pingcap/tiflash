@@ -31,7 +31,21 @@ struct MockSchemaGetter
 
     TiDB::TableInfoPtr getTableInfo(DatabaseID, TableID table_id) { return MockTiDB::instance().getTableInfoByID(table_id); }
 
+<<<<<<< HEAD
     std::vector<TiDB::DBInfoPtr> listDBs()
+=======
+    static std::pair<TiDB::TableInfoPtr, bool> getTableInfoAndCheckMvcc(DatabaseID db_id, TableID table_id)
+    {
+        return {getTableInfo(db_id, table_id), false};
+    }
+
+    static std::tuple<TiDB::DBInfoPtr, TiDB::TableInfoPtr> getDatabaseAndTableInfo(DatabaseID db_id, TableID table_id)
+    {
+        return std::make_tuple(getDatabase(db_id), getTableInfo(db_id, table_id));
+    }
+
+    static std::vector<TiDB::DBInfoPtr> listDBs()
+>>>>>>> fbf4a35f38 (ddl: Fix unstable `DROP TABLE`/`FLASHBACK TABLE`/`RECOVER TABLE` (#8422))
     {
         std::vector<TiDB::DBInfoPtr> res;
         const auto & databases = MockTiDB::instance().getDatabases();

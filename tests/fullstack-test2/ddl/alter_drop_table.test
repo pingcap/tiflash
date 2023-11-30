@@ -1,0 +1,87 @@
+# Copyright 2023 PingCAP, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+
+# related to drop table.
+#    if we drop the table without tiflash storage, it works well 
+#    if we drop the table with tiflash storage, it works well, and check the tombstone in TiFlash
+
+# Clean the tombstone table in the testing env
+>> DBGInvoke __enable_schema_sync_service('true')
+>> DBGInvoke __gc_schemas(18446744073709551615)
+
+## create table and drop without tiflash replica
+mysql> drop table if exists test.t1;
+mysql> create table test.t1(a int primary key, b decimal(5,2) not NULL, c varchar(10), d int default 0);
+mysql> insert into test.t1 values(1, 1.1, 'a', 1);
+mysql> drop table test.t1;
+
+## create empty table -> add tiflash replica -> wait tiflash sync the table schema -> drop table
+mysql> drop table if exists test.t2;
+mysql> create table test.t2(a int primary key, b decimal(5,2) not NULL, c varchar(10), d int default 0);
+mysql> alter table test.t2 set tiflash replica 1; 
+func> wait_table test t2
+mysql> set session tidb_isolation_read_engines='tiflash';select * from test.t2;
+>> select tidb_database,tidb_name from system.tables where tidb_database = 'test' and tidb_name = 't2' and is_tombstone = 0
+┌─tidb_database─┬─tidb_name─┐
+│ test          │ t2        │
+└───────────────┴───────────┘
+mysql> drop table test.t2;
+=> DBGInvoke __refresh_schemas()
+>> select tidb_database,tidb_name,tidb_table_id from system.tables where tidb_database = 'test' and tidb_name = 't2' and is_tombstone = 0
+
+## create table -> add tiflash replica -> drop table
+mysql> drop table if exists test.t3;
+mysql> create table test.t3(a int primary key, b decimal(5,2) not NULL, c varchar(10), d int default 0);
+mysql> alter table test.t3 set tiflash replica 1; 
+mysql> insert into test.t3 values(1, 1.1, 'a', 1);
+func> wait_table test t3
+
+mysql> set session tidb_isolation_read_engines='tiflash';select * from test.t3;
++----+-----+------+------+
+| a  |  b  |  c   |   d  |
++----+-----+------+------+
+|  1 |1.10 |   a  |  1   |
++----+-----+------+------+
+
+>> select tidb_database,tidb_name from system.tables where tidb_database = 'test' and tidb_name = 't3' and is_tombstone = 0
+┌─tidb_database─┬─tidb_name─┐
+│ test          │ t3        │
+└───────────────┴───────────┘
+mysql> drop table test.t3;
+=> DBGInvoke __refresh_schemas()
+>> select tidb_database,tidb_name from system.tables where tidb_database = 'test' and tidb_name = 't3' and is_tombstone = 0
+
+# create table -> add tiflash replica -> drop table -> raft command is send to tiflash
+>> DBGInvoke __enable_schema_sync_service('false')
+mysql> drop table if exists test.t4;
+mysql> create table test.t4(a int primary key, b decimal(5,2) not NULL, c varchar(10), d int default 0);
+mysql> alter table test.t4 set tiflash replica 1; 
+func> wait_table test t4
+
+>> DBGInvoke __enable_fail_point(pause_before_apply_raft_cmd)
+mysql> insert into test.t4 values(1, 1.2, 'v', 2);
+=> DBGInvoke __refresh_schemas()
+mysql> drop table test.t4;
+>> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
+=> DBGInvoke __refresh_schemas()
+# ensure t4 is tombstone
+>> select tidb_database,tidb_name,tidb_table_id from system.tables where tidb_database = 'test' and tidb_name = 't4' and is_tombstone = 0
+>> select count(*) from system.tables where tidb_database = 'test' and tidb_name = 't4' and is_tombstone != 0
+┌─count()─┐
+│       1 │
+└─────────┘
+
+# re-enable
+>> DBGInvoke __enable_schema_sync_service('true')

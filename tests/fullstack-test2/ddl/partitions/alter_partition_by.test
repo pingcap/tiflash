@@ -1,0 +1,231 @@
+# Copyright 2023 PingCAP, Ltd.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+
+## partition_table --> partition_table
+
+mysql> drop table if exists test.t, test.t2;
+mysql> create table test.t (a int primary key, b varchar(255), c int, key (b), key (c,b)) partition by range (a) (partition p0 values less than (1000000), partition p1M values less than (2000000));
+mysql> analyze table test.t;
+mysql> alter table test.t set tiflash replica 1;
+
+mysql> insert into test.t values (1,"1",-1);
+mysql> insert into test.t select a+1,a+1,-(a+1) from test.t;
+mysql> insert into test.t select a+2,a+2,-(a+2) from test.t;
+mysql> insert into test.t select a+500000,a+500000,-(a+500000) from test.t;
+mysql> insert into test.t select a+1000000,a+1000000,-(a+1000000) from test.t;
+
+func> wait_table test t
+
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t order by a;
++---------+---------+----------+
+| a       | b       | c        |
++---------+---------+----------+
+|       1 | 1       |       -1 |
+|       2 | 2       |       -2 |
+|       3 | 3       |       -3 |
+|       4 | 4       |       -4 |
+|  500001 | 500001  |  -500001 |
+|  500002 | 500002  |  -500002 |
+|  500003 | 500003  |  -500003 |
+|  500004 | 500004  |  -500004 |
+| 1000001 | 1000001 | -1000001 |
+| 1000002 | 1000002 | -1000002 |
+| 1000003 | 1000003 | -1000003 |
+| 1000004 | 1000004 | -1000004 |
+| 1500001 | 1500001 | -1500001 |
+| 1500002 | 1500002 | -1500002 |
+| 1500003 | 1500003 | -1500003 |
+| 1500004 | 1500004 | -1500004 |
++---------+---------+----------+
+
+# check table info in tiflash
+>> select tidb_database,tidb_name from system.tables where tidb_database = 'test' and tidb_name = 't' and is_tombstone = 0
+┌─tidb_database─┬─tidb_name─┐
+│ test          │ t         │
+└───────────────┴───────────┘
+
+mysql> set session tidb_isolation_read_engines='tikv'; select count(*) from test.t partition (p0);
++----------+
+| count(*) |
++----------+
+|        8 |
++----------+
+
+mysql> show warnings;
+mysql> set session tidb_isolation_read_engines='tiflash'; select count(*) from test.t partition (p0);
++----------+
+| count(*) |
++----------+
+|        8 |
++----------+
+
+mysql> show warnings;
+mysql> set session tidb_isolation_read_engines='tikv'; select count(*) from test.t partition (p1M);
++----------+
+| count(*) |
++----------+
+|        8 |
++----------+
+
+mysql> set session tidb_isolation_read_engines='tiflash'; select count(*) from test.t partition (p1M);
++----------+
+| count(*) |
++----------+
+|        8 |
++----------+
+
+mysql> show warnings;
+
+mysql> alter table test.t partition by range (a) (partition p0 values less than (500000), partition p500k values less than (1000000), partition p1M values less than (2000000));
+
+mysql> set session tidb_isolation_read_engines='tiflash'; select count(*) from test.t partition (p0);
++----------+
+| count(*) |
++----------+
+|        4 |
++----------+
+
+mysql> show warnings;
+
+mysql> set session tidb_isolation_read_engines='tiflash'; select count(*) from test.t partition (p500k);
++----------+
+| count(*) |
++----------+
+|        4 |
++----------+
+
+mysql> show warnings;
+
+mysql> set session tidb_isolation_read_engines='tikv'; select count(*) from test.t partition (p0);
++----------+
+| count(*) |
++----------+
+|        4 |
++----------+
+
+mysql> set session tidb_isolation_read_engines='tikv'; select count(*) from test.t partition (p500k);
++----------+
+| count(*) |
++----------+
+|        4 |
++----------+
+
+mysql> show warnings;
+
+mysql> set session tidb_isolation_read_engines='tikv'; select count(*) from test.t partition (p1M);
++----------+
+| count(*) |
++----------+
+|        8 |
++----------+
+
+mysql> set session tidb_isolation_read_engines='tiflash'; select count(*) from test.t partition (p1M);
++----------+
+| count(*) |
++----------+
+|        8 |
++----------+
+
+## non-partitioned table --> partitioned table
+mysql> create table test.t2 (a int primary key, b varchar(255), c int, key (b), key (c,b));
+mysql> alter table test.t2 set tiflash replica 1;
+mysql> insert into test.t2 select * from test.t;
+func> wait_table test t2
+mysql> drop table test.t;
+
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t2 order by a;
++---------+---------+----------+
+| a       | b       | c        |
++---------+---------+----------+
+|       1 | 1       |       -1 |
+|       2 | 2       |       -2 |
+|       3 | 3       |       -3 |
+|       4 | 4       |       -4 |
+|  500001 | 500001  |  -500001 |
+|  500002 | 500002  |  -500002 |
+|  500003 | 500003  |  -500003 |
+|  500004 | 500004  |  -500004 |
+| 1000001 | 1000001 | -1000001 |
+| 1000002 | 1000002 | -1000002 |
+| 1000003 | 1000003 | -1000003 |
+| 1000004 | 1000004 | -1000004 |
+| 1500001 | 1500001 | -1500001 |
+| 1500002 | 1500002 | -1500002 |
+| 1500003 | 1500003 | -1500003 |
+| 1500004 | 1500004 | -1500004 |
++---------+---------+----------+
+
+# check the t2 is created in TiFlash
+>> select tidb_database,tidb_name from system.tables where tidb_database = 'test' and tidb_name = 't2' and is_tombstone = 0
+┌─tidb_database─┬─tidb_name─┐
+│ test          │ t2        │
+└───────────────┴───────────┘
+
+mysql> alter table test.t2 partition by hash (a) partitions 3;
+mysql> analyze table test.t2;
+
+mysql> set session tidb_isolation_read_engines='tiflash'; select count(*) from test.t2 partition (p0);
++----------+
+| count(*) |
++----------+
+|        5 |
++----------+
+
+mysql> show warnings;
+
+mysql> set session tidb_isolation_read_engines='tiflash'; select count(*) from test.t2 partition (p1);
++----------+
+| count(*) |
++----------+
+|        6 |
++----------+
+
+mysql> show warnings;
+
+mysql> set session tidb_isolation_read_engines='tikv'; select count(*) from test.t2 partition (p0);
++----------+
+| count(*) |
++----------+
+|        5 |
++----------+
+
+mysql> set session tidb_isolation_read_engines='tikv'; select count(*) from test.t2 partition (p1);
++----------+
+| count(*) |
++----------+
+|        6 |
++----------+
+
+mysql> show warnings;
+
+
+mysql> set session tidb_isolation_read_engines='tikv'; select count(*) from test.t2 partition (p2);
++----------+
+| count(*) |
++----------+
+|        5 |
++----------+
+
+mysql> set session tidb_isolation_read_engines='tiflash'; select count(*) from test.t2 partition (p2);
++----------+
+| count(*) |
++----------+
+|        5 |
++----------+
+
+mysql> show warnings;
+
+mysql> drop table test.t2;
+

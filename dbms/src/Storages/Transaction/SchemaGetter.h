@@ -149,11 +149,36 @@ struct SchemaGetter
 
     TiDB::DBInfoPtr getDatabase(DatabaseID db_id);
 
+<<<<<<< HEAD:dbms/src/Storages/Transaction/SchemaGetter.h
     TiDB::TableInfoPtr getTableInfo(DatabaseID db_id, TableID table_id);
+=======
+    TiDB::TableInfoPtr getTableInfo(DatabaseID db_id, TableID table_id, bool try_mvcc = true)
+    {
+        if (try_mvcc)
+            return getTableInfoImpl</*mvcc_get*/ true>(db_id, table_id).first;
+        return getTableInfoImpl</*mvcc_get*/ false>(db_id, table_id).first;
+    }
+
+    std::pair<TiDB::TableInfoPtr, bool> getTableInfoAndCheckMvcc(DatabaseID db_id, TableID table_id)
+    {
+        return getTableInfoImpl</*mvcc_get*/ true>(db_id, table_id);
+    }
+
+    std::tuple<TiDB::DBInfoPtr, TiDB::TableInfoPtr> getDatabaseAndTableInfo(DatabaseID db_id, TableID table_id);
+>>>>>>> fbf4a35f38 (ddl: Fix unstable `DROP TABLE`/`FLASHBACK TABLE`/`RECOVER TABLE` (#8422)):dbms/src/TiDB/Schema/SchemaGetter.h
 
     std::vector<TiDB::DBInfoPtr> listDBs();
 
     std::vector<TiDB::TableInfoPtr> listTables(DatabaseID db_id);
+<<<<<<< HEAD:dbms/src/Storages/Transaction/SchemaGetter.h
+=======
+
+    KeyspaceID getKeyspaceID() const { return keyspace_id; }
+
+private:
+    template <bool mvcc_get>
+    std::pair<TiDB::TableInfoPtr, bool> getTableInfoImpl(DatabaseID db_id, TableID table_id);
+>>>>>>> fbf4a35f38 (ddl: Fix unstable `DROP TABLE`/`FLASHBACK TABLE`/`RECOVER TABLE` (#8422)):dbms/src/TiDB/Schema/SchemaGetter.h
 };
 
 } // namespace DB
