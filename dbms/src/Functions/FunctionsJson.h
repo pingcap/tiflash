@@ -1501,8 +1501,10 @@ public:
         else
         {
             throw Exception(
-                fmt::format("Illegal type {} of argument of function {}", from.type->getName(), getName()),
-                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
+                "Illegal type {} of argument of function {}",
+                from.type->getName(),
+                getName());
         }
     }
 };
