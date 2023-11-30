@@ -55,9 +55,13 @@ public:
 
     void syncAllSchema();
 
+    /**
+      * Drop all schema of a given keyspace.
+      * When a keyspace is removed, drop all its databases and tables.
+      */
     void dropAllSchema();
 
-    bool applyTable(DatabaseID database_id, TableID logical_table_id, TableID physical_table_id);
+    bool applyTable(DatabaseID database_id, TableID logical_table_id, TableID physical_table_id, bool force);
 
 private:
     void applyDropSchema(DatabaseID schema_id);
@@ -69,19 +73,22 @@ private:
 
     void applyCreateSchema(const TiDB::DBInfoPtr & db_info);
 
-    void applyCreateStorageInstance(const TiDB::DBInfoPtr & db_info, const TiDB::TableInfoPtr & table_info);
+    void applyCreateStorageInstance(
+        const TiDB::DBInfoPtr & db_info,
+        const TiDB::TableInfoPtr & table_info,
+        bool is_tombstone);
 
     void applyDropTable(DatabaseID database_id, TableID table_id);
 
     void applyRecoverTable(DatabaseID database_id, TiDB::TableID table_id);
-
-    void applyRecoverPhysicalTable(const TiDB::DBInfoPtr & db_info, const TiDB::TableInfoPtr & table_info);
+    void applyRecoverLogicalTable(const TiDB::DBInfoPtr & db_info, const TiDB::TableInfoPtr & table_info);
+    bool tryRecoverPhysicalTable(const TiDB::DBInfoPtr & db_info, const TiDB::TableInfoPtr & table_info);
 
     /// Parameter schema_name should be mapped.
     void applyDropPhysicalTable(const String & db_name, TableID table_id);
 
     void applyPartitionDiff(DatabaseID database_id, TableID table_id);
-    void applyPartitionDiff(
+    void applyPartitionDiffOnLogicalTable(
         const TiDB::DBInfoPtr & db_info,
         const TiDB::TableInfoPtr & table_info,
         const ManageableStoragePtr & storage);
