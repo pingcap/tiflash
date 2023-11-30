@@ -39,11 +39,9 @@ using CheckpointIngestInfoPtr = std::shared_ptr<CheckpointIngestInfo>;
 struct TiFlashRaftProxyHelper;
 class FastAddPeerContext;
 
+// Safety: The class is immutable once created.
 struct CheckpointIngestInfo
 {
-    // Safety: The class is immutable once created.
-
-    // Get segments from memory or restore from ps.
     DM::Segments getRestoredSegments() const { return restored_segments; }
     UInt64 getRemoteStoreId() const { return remote_store_id; }
     RegionPtr getRegion() const { return region; }
@@ -51,7 +49,6 @@ struct CheckpointIngestInfo
     UInt64 peerId() const { return peer_id; }
     UInt64 beginTime() const { return begin_time; }
 
-    // Create from build
     CheckpointIngestInfo(
         TMTContext & tmt_,
         UInt64 region_id_,

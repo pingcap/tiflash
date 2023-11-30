@@ -125,9 +125,8 @@ CheckpointIngestInfoPtr FastAddPeerContext::getOrRestoreCheckpointIngestInfo(
         }
     }
     {
-        // TODO: can the caller ensure there is no concurrency operation on the
-        //       same region_id so that we can call restore without locking
-        //       `ingest_info_mu`?
+        // The caller ensure there is no concurrency operation on the same region_id so
+        // that we can call restore without locking `ingest_info_mu`
         auto info = CheckpointIngestInfo::restore(tmt, proxy_helper, region_id, peer_id);
         std::scoped_lock<std::mutex> lock(ingest_info_mu);
         checkpoint_ingest_info_map.emplace(region_id, info);
@@ -152,6 +151,7 @@ void FastAddPeerContext::cleanCheckpointIngestInfo(TMTContext & tmt, UInt64 regi
         auto iter = checkpoint_ingest_info_map.find(region_id);
         if (iter != checkpoint_ingest_info_map.end())
         {
+            // the ingest info exist, do not need to check again later
             pre_check = false;
             checkpoint_ingest_info_map.erase(iter);
         }
@@ -160,7 +160,7 @@ void FastAddPeerContext::cleanCheckpointIngestInfo(TMTContext & tmt, UInt64 regi
     CheckpointIngestInfo::forciblyClean(tmt, region_id, pre_check);
 }
 
-std::optional<CheckpointIngestInfoPtr> FastAddPeerContext::tryGetCheckpointIngestInfo(UInt64 region_id)
+std::optional<CheckpointIngestInfoPtr> FastAddPeerContext::tryGetCheckpointIngestInfo(UInt64 region_id) const
 {
     std::scoped_lock<std::mutex> lock(ingest_info_mu);
     auto it = checkpoint_ingest_info_map.find(region_id);
