@@ -1442,4 +1442,70 @@ public:
         block.getByPosition(result).column = std::move(col_to);
     }
 };
+
+class FunctionJsonDepth : public IFunction
+{
+public:
+    static constexpr auto name = "json_depth";
+    static FunctionPtr create(const Context &) { return std::make_shared<FunctionJsonDepth>(); }
+
+    String getName() const override { return name; }
+
+    size_t getNumberOfArguments() const override { return 1; }
+
+    bool useDefaultImplementationForNulls() const override { return true; }
+    bool useDefaultImplementationForConstants() const override { return true; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        if unlikely (!arguments[0]->isString())
+            throw Exception(
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
+                "Illegal type {} of argument of function {}",
+                arguments[0]->getName(),
+                getName());
+        return std::make_shared<DataTypeUInt64>();
+    }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
+    {
+        const auto & from = block.getByPosition(arguments[0]);
+        if (const auto * col_from = checkAndGetColumn<ColumnString>(from.column.get()))
+        {
+            const auto & data = col_from->getChars();
+            const auto & offsets = col_from->getOffsets();
+            const size_t size = offsets.size();
+
+            auto col_res = ColumnUInt64::create();
+            auto & vec_col_res = col_res->getData();
+            vec_col_res.resize(size);
+
+            ColumnString::Offset prev_offset = 0;
+            for (size_t i = 0; i < size; ++i)
+            {
+                size_t data_length = offsets[i] - prev_offset - 1;
+                if (isNullJsonBinary(data_length))
+                {
+                    vec_col_res[i] = 0;
+                }
+                else
+                {
+                    JsonBinary json_binary(data[prev_offset], StringRef(&data[prev_offset + 1], data_length - 1));
+                    vec_col_res[i] = json_binary.getDepth();
+                }
+                prev_offset = offsets[i];
+            }
+
+            block.getByPosition(result).column = std::move(col_res);
+        }
+        else
+        {
+            throw Exception(
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
+                "Illegal type {} of argument of function {}",
+                from.type->getName(),
+                getName());
+        }
+    }
+};
 } // namespace DB
