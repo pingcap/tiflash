@@ -219,11 +219,14 @@ void MergingSortedBlockInputStream::merge(MutableColumns & merged_columns, std::
 
                 if (limit && total_merged_rows + merged_rows > limit)
                 {
-                    merged_rows = limit - total_merged_rows;
-                    for (size_t i = 0; i < num_columns; ++i)
+                    if likely (limit > total_merged_rows)
                     {
-                        auto & column = merged_columns[i];
-                        column = (*column->cut(0, merged_rows)).mutate();
+                        merged_rows = limit - total_merged_rows;
+                        for (size_t i = 0; i < num_columns; ++i)
+                        {
+                            auto & column = merged_columns[i];
+                            column = (*column->cut(0, merged_rows)).mutate();
+                        }
                     }
 
                     cancel(false);
