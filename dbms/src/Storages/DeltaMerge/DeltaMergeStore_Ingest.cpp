@@ -1123,28 +1123,15 @@ bool DeltaMergeStore::ingestSegmentDataIntoSegmentUsingSplit(
     }
 }
 
-void DeltaMergeStore::ingestSegmentsFromCheckpointInfo(
+Segments DeltaMergeStore::buildSegmentsFromCheckpointInfo(
     const DMContextPtr & dm_context,
     const DM::RowKeyRange & range,
     CheckpointInfoPtr checkpoint_info)
 {
-    if (unlikely(shutdown_called.load(std::memory_order_relaxed)))
-    {
-        const auto msg = fmt::format("Try to ingest files into a shutdown table, store_id={}", log->identifier());
-        LOG_WARNING(log, "{}", msg);
-        throw Exception(msg);
-    }
-
     if (unlikely(range.none()))
     {
-        LOG_INFO(
-            log,
-            "Ingest checkpoint from remote meet empty range, ignore, store_id={} region_id={}",
-            checkpoint_info->remote_store_id,
-            checkpoint_info->region_id);
-        return;
+        return {};
     }
-
     LOG_INFO(
         log,
         "Ingest checkpoint from remote, store_id={} region_id={}",
@@ -1165,18 +1152,45 @@ void DeltaMergeStore::ingestSegmentsFromCheckpointInfo(
     if (restored_segments.empty())
     {
         LOG_DEBUG(log, "No segments to ingest.");
-        return;
+        return {};
     }
     wbs.writeLogAndData();
+    return restored_segments;
+}
 
+void DeltaMergeStore::ingestSegmentsFromCheckpointInfo(
+    const DMContextPtr & dm_context,
+    const DM::RowKeyRange & range,
+    CheckpointIngestInfoPtr checkpoint_info)
+{
+    if (unlikely(shutdown_called.load(std::memory_order_relaxed)))
+    {
+        const auto msg = fmt::format("Try to ingest files into a shutdown table, store_id={}", log->identifier());
+        LOG_WARNING(log, "{}", msg);
+        throw Exception(msg);
+    }
+
+    if (unlikely(range.none()))
+    {
+        LOG_INFO(
+            log,
+            "Ingest checkpoint from remote meet empty range, ignore, store_id={} region_id={}",
+            checkpoint_info->getRemoteStoreId(),
+            checkpoint_info->regionId());
+        return;
+    }
+
+    auto restored_segments = checkpoint_info->getRestoredSegments();
     auto updated_segments = ingestSegmentsUsingSplit(dm_context, range, restored_segments);
     LOG_INFO(
         log,
         "Ingest checkpoint from remote done, store_id={} region_id={} n_segments={}",
-        checkpoint_info->remote_store_id,
-        checkpoint_info->region_id,
+        checkpoint_info->getRemoteStoreId(),
+        checkpoint_info->regionId(),
         restored_segments.size());
 
+
+    WriteBatches wbs{*dm_context->storage_pool};
     for (auto & segment : restored_segments)
     {
         auto delta = segment->getDelta();
@@ -1186,6 +1200,7 @@ void DeltaMergeStore::ingestSegmentsFromCheckpointInfo(
         wbs.writeRemoves();
     }
 
+    // TODO(fap) This could be executed in a dedicated thread if it consumes too much time.
     for (auto & segment : updated_segments)
         checkSegmentUpdate(dm_context, segment, ThreadType::Write, InputType::NotRaft);
 }
