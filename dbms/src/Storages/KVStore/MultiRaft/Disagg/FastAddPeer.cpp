@@ -398,7 +398,7 @@ void ApplyFapSnapshotImpl(TMTContext & tmt, TiFlashRaftProxyHelper * proxy_helpe
     GET_METRIC(tiflash_fap_task_duration_seconds, type_ingest_stage).Observe(watch_ingest.elapsedSeconds());
     auto begin = checkpoint_ingest_info->beginTime();
     auto current = FAPAsyncTasks::getCurrentMillis();
-    if (begin)
+    if (begin != 0)
     {
         GET_METRIC(tiflash_fap_task_duration_seconds, type_total).Observe((current - begin) / 1000.0);
     }
