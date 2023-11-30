@@ -1240,7 +1240,11 @@ void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
                 }
 
                 table_id_map.emplaceTableID(table_info->id, db_info->id);
-                LOG_DEBUG(log, "register table to table_id_map, database_id={} table_id={}", db_info->id, table_info->id);
+                LOG_DEBUG(
+                    log,
+                    "register table to table_id_map, database_id={} table_id={}",
+                    db_info->id,
+                    table_info->id);
 
                 // `SchemaGetter::listTables` only return non-tombstone tables.
                 // So `syncAllSchema` will not create tombstone tables. But if there are new rows/new snapshot
