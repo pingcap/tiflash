@@ -116,7 +116,16 @@ private:
         cpu_time_in_ns += cpu_time_in_ns_;
         ru_consumption_delta += ru;
         if (!burstable)
+        {
             bucket->consume(ru);
+            GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_remaining_tokens, name).Set(bucket->peek());
+        }
+    }
+
+    uint64_t estWaitDuraMS(uint64_t max_wait_dura_ms) const
+    {
+        std::lock_guard lock(mu);
+        return bucket->estWaitDuraMS(max_wait_dura_ms);
     }
 
     // Priority greater than zero: Less number means higher priority.
@@ -127,7 +136,10 @@ private:
 
         const auto remaining_token = bucket->peek();
         if (!burstable && remaining_token <= 0.0)
+        {
+            GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_compute_ru_exhausted, name).Increment();
             return std::numeric_limits<uint64_t>::max();
+        }
 
         // This should not happens because tidb will check except for unittest(test static token bucket).
         if unlikely (user_ru_per_sec == 0)
@@ -143,7 +155,8 @@ private:
 
         LOG_TRACE(
             log,
-            "getPriority detailed info: resource group name: {}, weight: {}, virtual_time: {}, user_priority: {}, "
+            "getPriority detailed info: resource group name: {}, weight: {}, virtual_time: {}, "
+            "user_priority: {}, "
             "priority: {}, remaining_token: {}",
             name,
             weight,
@@ -236,6 +249,8 @@ private:
             name,
             ori_bucket_info,
             bucket->toString());
+
+        updateBucketMetrics(config);
     }
 
     void updateTrickleMode(double add_tokens, double new_capacity, int64_t trickle_ms)
@@ -263,7 +278,8 @@ private:
             trickle_sec);
 
         std::string ori_bucket_info = bucket->toString();
-        bucket->reConfig(TokenBucket::TokenBucketConfig(bucket->peek(), new_fill_rate, new_capacity));
+        const auto ori_tokens = bucket->peek();
+        bucket->reConfig(TokenBucket::TokenBucketConfig(ori_tokens, new_fill_rate, new_capacity));
         stop_trickle_timepoint = SteadyClock::now() + std::chrono::milliseconds(trickle_ms);
         LOG_DEBUG(
             log,
@@ -271,6 +287,8 @@ private:
             name,
             ori_bucket_info,
             bucket->toString());
+
+        updateBucketMetrics(bucket->getConfig());
     }
 
     // If we have network problem with GAC, enter degrade mode.
@@ -292,6 +310,8 @@ private:
             name,
             ori_bucket_info,
             bucket->toString());
+
+        updateBucketMetrics(config);
     }
 
     struct ConsumptionUpdateInfo
@@ -345,7 +365,7 @@ private:
         return info;
     }
 
-    bool needFetchTokenPeridically(const SteadyClock::time_point & now, const std::chrono::seconds & dura) const
+    bool needFetchToken(const SteadyClock::time_point & now, const std::chrono::seconds & dura) const
     {
         std::lock_guard lock(mu);
         return std::chrono::duration_cast<std::chrono::seconds>(now - last_fetch_tokens_from_gac_timepoint) > dura;
@@ -371,20 +391,11 @@ private:
         return bucket_mode == trickle_mode && tp >= stop_trickle_timepoint;
     }
 
-    void collectMetrics() const
+    void updateBucketMetrics(const TokenBucket::TokenBucketConfig & config) const
     {
-        TokenBucket::TokenBucketConfig local_config;
-        uint64_t local_fetch_count = 0;
-        {
-            std::lock_guard lock(mu);
-            local_config = bucket->getConfig();
-            local_fetch_count = fetch_tokens_from_gac_count;
-        }
-        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_remaining_tokens, name).Set(local_config.tokens);
-        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_bucket_fill_rate, name).Set(local_config.fill_rate);
-        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_bucket_capacity, name).Set(local_config.capacity);
-        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_fetch_tokens_from_gac_count, name)
-            .Set(local_fetch_count);
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_bucket_fill_rate, name).Set(config.fill_rate);
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_bucket_capacity, name).Set(config.capacity);
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_remaining_tokens, name).Set(config.tokens);
     }
 
     const std::string name;
@@ -442,30 +453,30 @@ public:
 
     ~LocalAdmissionController() { stop(); }
 
-    void consumeResource(const std::string & name, double ru, uint64_t cpu_time_in_ns)
+    void consumeCPUResource(const std::string & name, double ru, uint64_t cpu_time_in_ns)
     {
-        assert(!stopped);
+        consumeResource(name, ru, cpu_time_in_ns);
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_compute_ru_consumption, name).Set(ru);
+    }
 
-        // When tidb_enable_resource_control is disabled, resource group name is empty.
+    void consumeBytesResource(const std::string & name, double ru)
+    {
+        consumeResource(name, ru, 0);
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_storage_ru_consumption, name).Set(ru);
+    }
+
+    uint64_t estWaitDuraMS(const std::string & name) const
+    {
         if (name.empty())
-            return;
+            return 0;
 
         ResourceGroupPtr group = findResourceGroup(name);
         if unlikely (!group)
         {
-            LOG_INFO(log, "cannot consume ru for {}, maybe it has been deleted", name);
-            return;
+            LOG_INFO(log, "cannot get priority for {}, maybe it has been deleted", name);
+            return 0;
         }
-
-        group->consumeResource(ru, cpu_time_in_ns);
-        if (group->lowToken() || group->trickleModeLeaseExpire(SteadyClock::now()))
-        {
-            {
-                std::lock_guard lock(mu);
-                low_token_resource_groups.insert(name);
-            }
-            cv.notify_one();
-        }
+        return group->estWaitDuraMS(DEFAULT_FETCH_GAC_INTERVAL_MS);
     }
 
     std::optional<uint64_t> getPriority(const std::string & name)
@@ -501,6 +512,7 @@ public:
         RUNTIME_CHECK_MSG(refill_token_callback == nullptr, "callback cannot be registered multiple times");
         refill_token_callback = cb;
     }
+
     void unregisterRefillTokenCallback()
     {
         assert(!stopped);
@@ -515,7 +527,37 @@ public:
     static std::unique_ptr<LocalAdmissionController> global_instance;
 #endif
 
+    // Interval of fetch from GAC periodically.
+    static constexpr auto DEFAULT_FETCH_GAC_INTERVAL = std::chrono::seconds(5);
+    static constexpr auto DEFAULT_FETCH_GAC_INTERVAL_MS = 5000;
+
 private:
+    void consumeResource(const std::string & name, double ru, uint64_t cpu_time_in_ns)
+    {
+        assert(!stopped);
+
+        // When tidb_enable_resource_control is disabled, resource group name is empty.
+        if (name.empty())
+            return;
+
+        ResourceGroupPtr group = findResourceGroup(name);
+        if unlikely (!group)
+        {
+            LOG_INFO(log, "cannot consume ru for {}, maybe it has been deleted", name);
+            return;
+        }
+
+        group->consumeResource(ru, cpu_time_in_ns);
+        if (group->lowToken() || group->trickleModeLeaseExpire(SteadyClock::now()))
+        {
+            {
+                std::lock_guard lock(mu);
+                low_token_resource_groups.insert(name);
+            }
+            cv.notify_one();
+        }
+    }
+
     void stop()
     {
         if (stopped)
@@ -546,15 +588,13 @@ private:
                 SteadyClock::time_point::max(),
                 std::chrono::seconds(0));
             assert(consumption_update_info.updated);
-            if (consumption_update_info.delta == 0.0)
-                continue;
             acquire_infos.push_back(
                 {.resource_group_name = resource_group.first,
                  .acquire_tokens = 0,
                  .ru_consumption_delta = consumption_update_info.delta});
         }
         LOG_DEBUG(log, "final report done(report size: {})", acquire_infos.size());
-        fetchTokensFromGAC(acquire_infos, "before stop");
+        fetchTokensFromGAC(acquire_infos, "before stop", true);
 
         if (need_reset_unique_client_id.load())
         {
@@ -574,12 +614,9 @@ private:
         }
     }
 
-    // Interval of fetch from GAC periodically.
-    static constexpr auto DEFAULT_FETCH_GAC_INTERVAL = std::chrono::seconds(5);
     // If we cannot get GAC resp for DEGRADE_MODE_DURATION seconds, enter degrade mode.
     static constexpr auto DEGRADE_MODE_DURATION = std::chrono::seconds(120);
     static constexpr auto TARGET_REQUEST_PERIOD_MS = std::chrono::milliseconds(5000);
-    static constexpr auto COLLECT_METRIC_INTERVAL = std::chrono::seconds(5);
     static constexpr double ACQUIRE_RU_AMPLIFICATION = 1.5;
 
     static const std::string GAC_RESOURCE_GROUP_ETCD_PATH;
@@ -588,7 +625,7 @@ private:
     // findResourceGroup() should be private,
     // this is to avoid user call member function of ResourceGroup directly.
     // So we can avoid dead lock.
-    ResourceGroupPtr findResourceGroup(const std::string & name)
+    ResourceGroupPtr findResourceGroup(const std::string & name) const
     {
         std::lock_guard lock(mu);
         auto iter = resource_groups.find(name);
@@ -609,6 +646,9 @@ private:
         LOG_INFO(log, "add new resource group, info: {}", new_group_pb.DebugString());
         auto new_group = std::make_shared<ResourceGroup>(new_group_pb);
         resource_groups.insert({new_group_pb.name(), new_group});
+
+        if (refill_token_callback)
+            refill_token_callback();
     }
 
     std::vector<std::string> handleTokenBucketsResp(const resource_manager::TokenBucketsResponse & resp);
@@ -639,14 +679,17 @@ private:
     // 3. Check if resource group need to goto degrade mode.
     // 4. Watch GAC event to delete resource group.
     void startBackgroudJob();
-    void fetchTokensFromGAC(const std::vector<AcquireTokenInfo> & acquire_infos, const std::string & desc_str);
+    void fetchTokensFromGAC(
+        const std::vector<AcquireTokenInfo> & acquire_infos,
+        const std::string & desc_str,
+        bool is_final_report = false);
     void checkDegradeMode();
     void watchGAC();
 
     // Utilities for fetch token from GAC.
     void fetchTokensForLowTokenResourceGroups();
     void fetchTokensForAllResourceGroups();
-    std::optional<AcquireTokenInfo> buildAcquireInfo(
+    static std::optional<AcquireTokenInfo> buildAcquireInfo(
         const ResourceGroupPtr & resource_group,
         bool is_periodically_fetch);
 
@@ -660,7 +703,7 @@ private:
         std::string & parsed_rg_name,
         std::string & err_msg);
 
-    std::mutex mu;
+    mutable std::mutex mu;
     std::condition_variable cv;
 
     std::atomic<bool> stopped = false;
@@ -716,7 +759,9 @@ private:
     {
         assert(delta_bytes != 0);
         if (!resource_group_name.empty())
-            LocalAdmissionController::global_instance->consumeResource(resource_group_name, bytesToRU(delta_bytes), 0);
+            LocalAdmissionController::global_instance->consumeBytesResource(
+                resource_group_name,
+                bytesToRU(delta_bytes));
     }
 
     const std::string resource_group_name;
