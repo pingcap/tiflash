@@ -283,25 +283,24 @@ TiDB::DBInfoPtr SchemaGetter::getDatabase(DatabaseID db_id)
 }
 
 template <bool mvcc_get>
-TiDB::TableInfoPtr SchemaGetter::getTableInfoImpl(DatabaseID db_id, TableID table_id)
+std::pair<TiDB::TableInfoPtr, bool> SchemaGetter::getTableInfoImpl(DatabaseID db_id, TableID table_id)
 {
     String db_key = getDBKey(db_id);
-    if (!checkDBExists(db_key))
-    {
-        LOG_ERROR(log, "The database does not exist, database_id={}", db_id);
-        return nullptr;
-    }
+    // Note: Do not check the existence of `db_key` here, otherwise we can not
+    //       get the table info after database is dropped.
     String table_key = getTableKey(table_id);
     String table_info_json = TxnStructure::hGet(snap, db_key, table_key);
+    bool get_by_mvcc = false;
     if (table_info_json.empty())
     {
         if constexpr (!mvcc_get)
         {
-            return nullptr;
+            return {nullptr, false};
         }
 
         LOG_WARNING(log, "The table is dropped in TiKV, try to get the latest table_info, table_id={}", table_id);
         table_info_json = TxnStructure::mvccGet(snap, db_key, table_key);
+        get_by_mvcc = true;
         if (table_info_json.empty())
         {
             LOG_ERROR(
@@ -309,14 +308,14 @@ TiDB::TableInfoPtr SchemaGetter::getTableInfoImpl(DatabaseID db_id, TableID tabl
                 "The table is dropped in TiKV, and the latest table_info is still empty, it should be GCed, "
                 "table_id={}",
                 table_id);
-            return nullptr;
+            return {nullptr, get_by_mvcc};
         }
     }
     LOG_DEBUG(log, "Get Table Info from TiKV, table_id={} {}", table_id, table_info_json);
-    return std::make_shared<TiDB::TableInfo>(table_info_json, keyspace_id);
+    return {std::make_shared<TiDB::TableInfo>(table_info_json, keyspace_id), get_by_mvcc};
 }
-template TiDB::TableInfoPtr SchemaGetter::getTableInfoImpl<false>(DatabaseID db_id, TableID table_id);
-template TiDB::TableInfoPtr SchemaGetter::getTableInfoImpl<true>(DatabaseID db_id, TableID table_id);
+template std::pair<TiDB::TableInfoPtr, bool> SchemaGetter::getTableInfoImpl<false>(DatabaseID db_id, TableID table_id);
+template std::pair<TiDB::TableInfoPtr, bool> SchemaGetter::getTableInfoImpl<true>(DatabaseID db_id, TableID table_id);
 
 std::tuple<TiDB::DBInfoPtr, TiDB::TableInfoPtr> SchemaGetter::getDatabaseAndTableInfo(
     DatabaseID db_id,
