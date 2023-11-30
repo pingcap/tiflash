@@ -213,6 +213,10 @@ void MergingSortedBlockInputStream::merge(MutableColumns & merged_columns, std::
                             column = (*column->cut(0, merged_rows)).mutate();
                         }
                     }
+                    else
+                    {
+                        merged_rows = 0;
+                    }
 
                     cancel(false);
                     finished = true;
