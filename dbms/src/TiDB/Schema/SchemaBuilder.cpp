@@ -361,7 +361,7 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
         {
             // >= SchemaActionType::MaxRecognizedType
             // log down the Int8 value directly
-            LOG_ERROR(log, "Unsupported change type: {}, diff_version={}", fmt::underlying(diff.type), diff.version);
+            LOG_ERROR(log, "Unsupported change type: {}, diff_version={}", static_cast<Int8>(diff.type), diff.version);
         }
 
         break;
@@ -1023,7 +1023,7 @@ String createTableStmt(
         throw TiFlashException(
             Errors::DDL::Internal,
             "Unknown engine type : {}",
-            fmt::underlying(table_info.engine_type));
+            static_cast<int32_t>(table_info.engine_type));
     }
 
     return stmt;
