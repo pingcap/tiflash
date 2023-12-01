@@ -210,7 +210,7 @@ void MergingSortedBlockInputStream::merge(MutableColumns & merged_columns, std::
                     merged_columns[i] = (*std::move(source_blocks[source_num]->getByPosition(i).column)).mutate();
 
                 size_t merged_rows = merged_columns.at(0)->size();
-                if (limit && total_merged_rows + merged_rows >= limit)
+                if (limit && total_merged_rows + merged_rows > limit)
                 {
                     RUNTIME_CHECK_MSG(
                         limit >= total_merged_rows,
