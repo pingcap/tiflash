@@ -415,7 +415,7 @@ void SchemaBuilder<Getter, NameMapper>::applySetTiFlashReplica(DatabaseID databa
         return;
     }
 
-    // Recover the table if tombstoned
+    // Recover the table if tombstone
     if (storage->isTombstone())
     {
         applyRecoverLogicalTable(db_info, table_info);
@@ -574,7 +574,7 @@ void SchemaBuilder<Getter, NameMapper>::applyPartitionDiffOnLogicalTable(
     {
         LOG_INFO(
             log,
-            "No partition changes, paritions_size={} {} with database_id={}, table_id={}",
+            "No partition changes, partitions_size={} {} with database_id={}, table_id={}",
             new_part_id_set.size(),
             name_mapper.debugCanonicalName(*db_info, *table_info),
             db_info->id,
@@ -582,7 +582,7 @@ void SchemaBuilder<Getter, NameMapper>::applyPartitionDiffOnLogicalTable(
         return;
     }
 
-    // Copy the local table info and update fileds on the copy
+    // Copy the local table info and update fields on the copy
     auto updated_table_info = local_table_info;
     updated_table_info.is_partition_table = true;
     updated_table_info.belonging_table_id = table_info->belonging_table_id;
