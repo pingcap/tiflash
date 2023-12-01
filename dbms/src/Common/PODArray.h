@@ -17,6 +17,7 @@
 #include <Common/Allocator.h>
 #include <Common/BitHelpers.h>
 #include <Common/Exception.h>
+#include <Common/MemoryTrackerSetter.h>
 #include <Common/memcpySmall.h>
 #include <common/likely.h>
 #include <common/strong_typedef.h>
@@ -104,6 +105,14 @@ protected:
     char * c_end = null;
     char * c_end_of_storage = null; /// Does not include pad_right.
 
+    bool is_shared_memory;
+
+    [[nodiscard]] __attribute__((always_inline)) std::optional<MemoryTrackerSetter> swicthMemoryTracker()
+    {
+        return is_shared_memory ? std::make_optional<MemoryTrackerSetter>(true, shared_column_data_mem_tracker.get())
+                                : std::nullopt;
+    }
+
     /// The amount of memory occupied by the num_elements of the elements.
     static size_t byte_size(size_t num_elements) { return num_elements * ELEMENT_SIZE; }
 
@@ -129,7 +138,10 @@ protected:
     template <typename... TAllocatorParams>
     void alloc(size_t bytes, TAllocatorParams &&... allocator_params)
     {
-        c_start = c_end = reinterpret_cast<char *>(TAllocator::alloc(bytes, std::forward<TAllocatorParams>(allocator_params)...)) + pad_left;
+        auto guard = swicthMemoryTracker();
+        c_start = c_end
+            = reinterpret_cast<char *>(TAllocator::alloc(bytes, std::forward<TAllocatorParams>(allocator_params)...))
+            + pad_left;
         c_end_of_storage = c_start + bytes - pad_right - pad_left;
 
         if (pad_left)
@@ -143,6 +155,7 @@ protected:
 
         unprotect();
 
+        auto guard = swicthMemoryTracker();
         TAllocator::free(c_start - pad_left, allocated_bytes());
     }
 
@@ -157,6 +170,7 @@ protected:
 
         unprotect();
 
+        auto guard = swicthMemoryTracker();
         ptrdiff_t end_diff = c_end - c_start;
 
         c_start = reinterpret_cast<char *>(
@@ -281,10 +295,11 @@ public:
 #endif
     }
 
-    ~PODArrayBase()
-    {
-        dealloc();
-    }
+    ~PODArrayBase() { dealloc(); }
+
+    PODArrayBase()
+        : is_shared_memory(current_memory_tracker == nullptr)
+    {}
 };
 
 template <typename T, size_t INITIAL_SIZE = 4096, typename TAllocator = Allocator<false>, size_t pad_right_ = 0, size_t pad_left_ = 0>

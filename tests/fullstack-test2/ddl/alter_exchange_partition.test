@@ -267,6 +267,104 @@ mysql> set session tidb_isolation_read_engines='tiflash'; select * from test_new
 mysql> alter table test.e drop column c1;
 >> DBGInvoke __refresh_schemas()
 
+# cleanup
+mysql> drop table if exists test.e;
+mysql> drop table if exists test.e2;
+mysql> drop table if exists test_new.e2;
+mysql> drop database if exists test_new;
+
+# case 11, create non-partition table and execute exchagne partition immediately
+mysql> create table test.e(id INT NOT NULL,fname VARCHAR(30),lname VARCHAR(30)) PARTITION BY RANGE (id) ( PARTITION p0 VALUES LESS THAN (50),PARTITION p1 VALUES LESS THAN (100),PARTITION p2 VALUES LESS THAN (150), PARTITION p3 VALUES LESS THAN (MAXVALUE));
+mysql> insert into test.e values (1, 'a', 'b'),(108, 'a', 'b');
+# sync the partition table to tiflash
+>> DBGInvoke __refresh_schemas()
+
+mysql> create table test.e2(id int not null,fname varchar(30),lname varchar(30));
+mysql> insert into test.e2 values (2, 'a', 'b');
+mysql> set @@tidb_enable_exchange_partition=1; alter table test.e exchange partition p0 with table test.e2
+
+mysql> alter table test.e set tiflash replica 1;
+mysql> alter table test.e2 set tiflash replica 1;
+func> wait_table test e e2
+>> DBGInvoke __refresh_schemas()
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.e order by id;
++-----+-------+-------+
+| id  | fname | lname |
++-----+-------+-------+
+|   2 | a     | b     |
+| 108 | a     | b     |
++-----+-------+-------+
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.e2 order by id;
++-----+-------+-------+
+| id  | fname | lname |
++-----+-------+-------+
+|   1 | a     | b     |
++-----+-------+-------+
+
+# ensure the swap out table is not mark as tombstone
+>> DBGInvoke __enable_schema_sync_service('true')
+>> DBGInvoke __gc_schemas(18446744073709551615)
+>> DBGInvoke __enable_schema_sync_service('false')
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.e order by id;
++-----+-------+-------+
+| id  | fname | lname |
++-----+-------+-------+
+|   2 | a     | b     |
+| 108 | a     | b     |
++-----+-------+-------+
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.e2 order by id;
++-----+-------+-------+
+| id  | fname | lname |
++-----+-------+-------+
+|   1 | a     | b     |
++-----+-------+-------+
+
+# case 12, create partition table, non-partition table and execute exchagne partition immediately
+mysql> drop table if exists test.e
+mysql> drop table if exists test.e2
+mysql> create table test.e(id INT NOT NULL,fname VARCHAR(30),lname VARCHAR(30)) PARTITION BY RANGE (id) ( PARTITION p0 VALUES LESS THAN (50),PARTITION p1 VALUES LESS THAN (100),PARTITION p2 VALUES LESS THAN (150), PARTITION p3 VALUES LESS THAN (MAXVALUE));
+mysql> insert into test.e values (1, 'a', 'b'),(108, 'a', 'b');
+mysql> create table test.e2(id int not null,fname varchar(30),lname varchar(30));
+mysql> insert into test.e2 values (2, 'a', 'b');
+mysql> set @@tidb_enable_exchange_partition=1; alter table test.e exchange partition p0 with table test.e2
+
+mysql> alter table test.e set tiflash replica 1;
+mysql> alter table test.e2 set tiflash replica 1;
+func> wait_table test e e2
+# tiflash the final result
+>> DBGInvoke __refresh_schemas()
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.e order by id;
++-----+-------+-------+
+| id  | fname | lname |
++-----+-------+-------+
+|   2 | a     | b     |
+| 108 | a     | b     |
++-----+-------+-------+
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.e2 order by id;
++-----+-------+-------+
+| id  | fname | lname |
++-----+-------+-------+
+|   1 | a     | b     |
++-----+-------+-------+
+# ensure the swap out table is not mark as tombstone
+>> DBGInvoke __enable_schema_sync_service('true')
+>> DBGInvoke __gc_schemas(18446744073709551615)
+>> DBGInvoke __enable_schema_sync_service('false')
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.e order by id;
++-----+-------+-------+
+| id  | fname | lname |
++-----+-------+-------+
+|   2 | a     | b     |
+| 108 | a     | b     |
++-----+-------+-------+
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.e2 order by id;
++-----+-------+-------+
+| id  | fname | lname |
++-----+-------+-------+
+|   1 | a     | b     |
++-----+-------+-------+
+
+# cleanup
 mysql> drop table if exists test.e;
 mysql> drop table if exists test.e2;
 mysql> drop table if exists test_new.e2;

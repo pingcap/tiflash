@@ -62,7 +62,11 @@ public:
 
     size_t byteSize() const
     {
-        return sizeof(UInt8) * has_null_marks->size() + sizeof(UInt8) * has_value_marks->size() + minmaxes->byteSize();
+        // we add 3 * sizeof(PaddedPODArray<UInt8>)
+        // because has_null_marks/ has_value_marks / minmaxes are all use PaddedPODArray
+        // Thus we need to add the structual memory cost of PaddedPODArray for each of them
+        return sizeof(UInt8) * has_null_marks->size() + sizeof(UInt8) * has_value_marks->size() + minmaxes->byteSize()
+            + 3 * sizeof(PaddedPODArray<UInt8>);
     }
 
     void addPack(const IColumn & column, const ColumnVector<UInt8> * del_mark);
@@ -91,7 +95,24 @@ public:
 
 struct MinMaxIndexWeightFunction
 {
-    size_t operator()(const MinMaxIndex & index) const { return index.byteSize(); }
+    size_t operator()(const String & key, const MinMaxIndex & index) const
+    {
+        auto index_memory_usage = index.byteSize(); // index
+        auto cells_memory_usage = 32; // Cells struct memory cost
+
+        // 2. the memory cost of key part
+        auto str_len = key.size(); // key_len
+        auto key_memory_usage = sizeof(String); // String struct memory cost
+
+        // 3. the memory cost of hash table
+        auto unordered_map_memory_usage = 28; // hash table struct approximate memory cost
+
+        // 4. the memory cost of LRUQueue
+        auto list_memory_usage = sizeof(std::list<String>); // list struct memory cost
+
+        return index_memory_usage + cells_memory_usage + str_len * 2 + key_memory_usage * 2 + unordered_map_memory_usage
+            + list_memory_usage;
+    }
 };
 
 
