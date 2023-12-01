@@ -648,6 +648,11 @@ void DatabaseTiFlash::alterTombstone(const Context & context, Timestamp tombston
 
     // After all done, set the tombstone
     tombstone = tombstone_;
+    // Overwrite db_info if not null
+    if (new_db_info)
+    {
+        db_info = new_db_info;
+    }
 }
 
 void DatabaseTiFlash::drop(const Context & context)
