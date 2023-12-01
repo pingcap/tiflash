@@ -218,6 +218,13 @@ try
             region_state.ParseFromArray(page.data.begin(), page.data.size());
         }
 
+        {
+            auto region_key = UniversalPageIdFormat::toKVStoreKey(region_id);
+            auto page = checkpoint_data_holder->getUniversalPageStorage()
+                            ->read(region_key, /*read_limiter*/ nullptr, {}, /*throw_on_not_exist*/ false);
+            RUNTIME_CHECK(page.isValid());
+        }
+
         ASSERT_TRUE(apply_state == region->getApply());
         ASSERT_TRUE(region_state == region->getState());
     }
@@ -291,6 +298,12 @@ CheckpointRegionInfoAndData RegionKVStoreTestFAP::prepareForRestart()
     checkpoint_info->remote_store_id = kvs.getStoreID();
     checkpoint_info->region_id = 1000;
     checkpoint_info->checkpoint_data_holder = buildParsedCheckpointData(global_context, manifest_key, /*dir_seq*/ 100);
+    {
+        auto region_key = UniversalPageIdFormat::toKVStoreKey(region_id);
+        auto page = checkpoint_info->checkpoint_data_holder->getUniversalPageStorage()
+                        ->read(region_key, /*read_limiter*/ nullptr, {}, /*throw_on_not_exist*/ false);
+        RUNTIME_CHECK(page.isValid());
+    }
     checkpoint_info->temp_ps = checkpoint_info->checkpoint_data_holder->getUniversalPageStorage();
     RegionPtr kv_region = kvs.getRegion(1);
     CheckpointRegionInfoAndData mock_data = std::make_tuple(
