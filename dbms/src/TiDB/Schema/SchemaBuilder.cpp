@@ -49,6 +49,7 @@
 #include <magic_enum.hpp>
 #include <mutex>
 #include <tuple>
+#include "common/defines.h"
 
 namespace DB
 {
@@ -877,7 +878,7 @@ template <typename Getter, typename NameMapper>
 bool SchemaBuilder<Getter, NameMapper>::applyCreateDatabase(DatabaseID database_id)
 {
     auto db_info = getter.getDatabase(database_id);
-    if (db_info == nullptr)
+    if (unlikely(db_info == nullptr))
     {
         return false;
     }
@@ -909,7 +910,7 @@ template <typename Getter, typename NameMapper>
 void SchemaBuilder<Getter, NameMapper>::applyRecoverDatabase(DatabaseID database_id)
 {
     auto db_info = getter.getDatabase(database_id);
-    if (db_info == nullptr)
+    if (unlikely(db_info == nullptr))
     {
         LOG_INFO(
             log,
@@ -921,7 +922,7 @@ void SchemaBuilder<Getter, NameMapper>::applyRecoverDatabase(DatabaseID database
     LOG_INFO(log, "Recover database begin, database_id={}", database_id);
     auto db_name = name_mapper.mapDatabaseName(database_id, keyspace_id);
     auto db = context.tryGetDatabase(db_name);
-    if (!db)
+    if (unlikely(!db))
     {
         LOG_INFO(
             log,
