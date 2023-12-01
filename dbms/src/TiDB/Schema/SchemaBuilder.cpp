@@ -979,7 +979,7 @@ void SchemaBuilder<Getter, NameMapper>::applyDropSchema(const String & db_name)
     // In such way our database (and its belonging tables) will be GC-ed later than TiDB, which is safe and correct.
     auto & tmt_context = context.getTMTContext();
     auto tombstone = tmt_context.getPDClient()->getTS();
-    db->alterTombstone(context, tombstone);
+    db->alterTombstone(context, tombstone, nullptr);
 
     LOG_INFO(log, "Tombstoned database {}", db_name);
 }
