@@ -634,9 +634,17 @@ KVStore::StoreMeta::Base KVStore::StoreMeta::getMeta() const
     return base;
 }
 
-metapb::Store KVStore::getStoreMeta() const
+metapb::Store KVStore::clonedStoreMeta() const
 {
     return getStore().getMeta();
+}
+
+const metapb::Store & KVStore::getStoreMeta() const {
+    return this->store.base;
+}
+
+metapb::Store & KVStore::debugMutStoreMeta() {
+    return this->store.base;
 }
 
 KVStore::StoreMeta & KVStore::getStore()

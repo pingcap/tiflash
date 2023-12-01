@@ -716,7 +716,6 @@ TEST_F(RegionKVStoreTest, AsyncTasks)
         auto to_be_canceled = total - 1;
         if (count == total - 1) {
             if (async_tasks->isScheduled(to_be_canceled)) {
-                LOG_INFO(log, "!!!! try cancel");
                 auto cancel_handle = async_tasks->getCancelHandle(to_be_canceled);
                 cancel_handle->doCancel();
             }
@@ -726,22 +725,17 @@ TEST_F(RegionKVStoreTest, AsyncTasks)
         // Add tasks
         for (int i = 0; i < total; ++i)
         {
-            auto ii = i;
-            if (!async_tasks->isScheduled(ii) && !f[ii])
+            if (!async_tasks->isScheduled(i) && !f[i])
             {
-                LOG_INFO(log, "insert task {}", ii);
-                auto res = async_tasks->addTask(ii, [ii, this, &async_tasks, to_be_canceled]() {
-                    if(ii == to_be_canceled) {
-                        auto cancel_handle = async_tasks->getCancelHandle(ii);
+                auto res = async_tasks->addTask(i, [i, &async_tasks, to_be_canceled]() {
+                    if(i == to_be_canceled) {
+                        auto cancel_handle = async_tasks->getCancelHandle(i);
                         while(true) {
-                            LOG_INFO(log, "!!!!! check {}", ii);
                             if(cancel_handle->blockedWaitFor(200ms)) {
                                 break;
                             }
                         }
-                        LOG_INFO(log, "!!!!! check finish {}", ii);
                     } else {
-                        LOG_INFO(log, "!!!!! sleep {}", ii);
                         std::this_thread::sleep_for(200ms);
                     }
                     return 1;
@@ -758,7 +752,6 @@ TEST_F(RegionKVStoreTest, AsyncTasks)
             {
                 if (async_tasks->isReady(i))
                 {
-                    LOG_INFO(log, "!!!!! try fetch {}", i);
                     auto r = async_tasks->fetchResult(i);
                     UNUSED(r);
                     f[i] = true;

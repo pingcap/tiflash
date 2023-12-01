@@ -39,33 +39,14 @@ struct AsyncTasks
 
         void doCancel() {
             // Use lock here to prevent losing signal.
-            try {
-                std::unique_lock<std::mutex> lock(mut);
-                LOG_INFO(&Poco::Logger::get("!!!!!! a"), "!!! doCancel 1");
-                inner->store(true);
-                cv.notify_all();
-                LOG_INFO(&Poco::Logger::get("!!!!!! a"), "!!! doCancel 2");
-            }
-            catch (...)
-            {
-                tryLogCurrentException(DB::Logger::get(), "doCancel fail");
-                exit(-1);
-            }
-
+            std::unique_lock<std::mutex> lock(mut);
+            inner->store(true);
+            cv.notify_all();
         }
         bool blockedWaitFor(std::chrono::duration<double, std::milli> timeout) {
-            try {
-                LOG_INFO(&Poco::Logger::get("!!!!!! a"), "!!! blockedWaitFor 1");
-                std::unique_lock<std::mutex> lock(mut);
-                cv.wait_for(lock, timeout, [&](){ return canceled(); } );
-                LOG_INFO(&Poco::Logger::get("!!!!!! a"), "!!! blockedWaitFor 2");
-                return canceled();
-            }
-            catch (...)
-            {
-                tryLogCurrentException(DB::Logger::get(), "blockedWaitFor fail");
-                exit(-1);
-            }
+            std::unique_lock<std::mutex> lock(mut);
+            cv.wait_for(lock, timeout, [&](){ return canceled(); } );
+            return canceled();
         }
     private:
         std::shared_ptr<std::atomic_bool> inner = std::make_shared<std::atomic_bool>(false);
@@ -133,7 +114,6 @@ struct AsyncTasks
         auto it = tasks.find(key);
         if (it == tasks.end())
             return false;
-        LOG_INFO(log, "!!!!! XXX {}", magic_enum::enum_name(it->second.fut.wait_for(0ms)));
         return it->second.fut.wait_for(0ms) == std::future_status::ready;
     }
 
@@ -143,22 +123,10 @@ struct AsyncTasks
         auto it = tasks.find(key);
         RUNTIME_CHECK_MSG(it != tasks.end(), "fetchResult meets empty key");
         std::future<R> fut = std::move(it->second.fut);
-        LOG_INFO(&Poco::Logger::get("!!!!!! a"), "!!! fetchResult 1 {}", key);
         tasks.erase(key);
         l.unlock();
         RUNTIME_CHECK_MSG(fut.valid(), "no valid future");
-        LOG_INFO(&Poco::Logger::get("!!!!!! a"), "!!! fetchResult 2 {}", key);
         return fut.get();
-        // try {
-        //     return fut.get();
-        // } catch (std::exception & e)
-        // {
-        //     LOG_INFO(&Poco::Logger::get("!!!!!! a"), "!!! a {}", e.what());
-        //     exit(0);
-        // } catch (Exception & e) {
-        //     LOG_INFO(&Poco::Logger::get("!!!!!! a"), "!!! b {} {}", e.what(), e.message());
-        //     exit(0);
-        // }
     }
 
     uint64_t queryElapsed(Key key)

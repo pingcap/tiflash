@@ -1698,6 +1698,7 @@ std::unordered_set<String> PageDirectory<Trait>::apply(PageEntriesEdit && edit, 
                     break;
                 }
                 case EditRecordType::PUT:
+                    LOG_INFO(DB::Logger::get("!!!! aaa"), "!!!! PUT {}", r.page_id);
                     version_list->createNewEntry(r.version, r.entry);
                     break;
                 case EditRecordType::DEL:

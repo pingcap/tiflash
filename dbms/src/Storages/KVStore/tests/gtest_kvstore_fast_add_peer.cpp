@@ -39,6 +39,11 @@ using raft_serverpb::RegionLocalState;
 
 namespace DB
 {
+namespace FailPoints
+{
+extern const char force_set_fap_candidate_store_id[];
+} // namespace FailPoints
+
 FastAddPeerRes genFastAddPeerRes(FastAddPeerStatus status, std::string && apply_str, std::string && region_str);
 FastAddPeerRes FastAddPeerImplWrite(
     TMTContext & tmt,
@@ -312,6 +317,7 @@ try
     auto & global_context = TiFlashTestEnv::getGlobalContext();
     auto fap_context = global_context.getSharedContextDisagg()->fap_context;
     uint64_t region_id = 1;
+    fap_context->tasks_trace->addTask(region_id, [](){ return genFastAddPeerRes(FastAddPeerStatus::NoSuitable, "", ""); });
     FastAddPeerImplWrite(global_context.getTMTContext(), region_id, 2333, std::move(mock_data), 0);
     fap_context->debugRemoveCheckpointIngestInfo(region_id);
     ApplyFapSnapshotImpl(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333);
@@ -348,6 +354,7 @@ try
     auto & global_context = TiFlashTestEnv::getGlobalContext();
     auto fap_context = global_context.getSharedContextDisagg()->fap_context;
     uint64_t region_id = 1;
+    fap_context->tasks_trace->addTask(region_id, [](){ return genFastAddPeerRes(FastAddPeerStatus::NoSuitable, "", ""); });
     FastAddPeerImplWrite(global_context.getTMTContext(), region_id, 2333, std::move(mock_data), 0);
     fap_context->debugRemoveCheckpointIngestInfo(region_id);
     kvstore->handleDestroy(region_id, global_context.getTMTContext());
@@ -370,6 +377,7 @@ try
     auto & global_context = TiFlashTestEnv::getGlobalContext();
     auto fap_context = global_context.getSharedContextDisagg()->fap_context;
     uint64_t region_id = 1;
+    fap_context->tasks_trace->addTask(region_id, [](){ return genFastAddPeerRes(FastAddPeerStatus::NoSuitable, "", ""); });
     FastAddPeerImplWrite(global_context.getTMTContext(), region_id, 2333, std::move(mock_data), 0);
     dumpCheckpoint();
     FastAddPeerImplWrite(global_context.getTMTContext(), region_id, 2333, std::move(mock_data), 0);
@@ -381,6 +389,45 @@ try
     auto latest_upload_seq = latest_manifest_key_view.getUploadSequence();
 
     buildParsedCheckpointData(global_context, latest_manifest_key, latest_upload_seq);
+}
+CATCH
+
+TEST_F(RegionKVStoreTestFAP, CancelAfterRestart1)
+try
+{
+    CheckpointRegionInfoAndData mock_data = prepareForRestart();
+    KVStore & kvs = getKVS();
+    RegionPtr kv_region = kvs.getRegion(1);
+
+    auto & global_context = TiFlashTestEnv::getGlobalContext();
+    auto fap_context = global_context.getSharedContextDisagg()->fap_context;
+    uint64_t region_id = 1;
+
+    EngineStoreServerWrap server = {
+        .tmt = &global_context.getTMTContext(),
+        .proxy_helper = proxy_helper.get(),
+    };
+
+    kvstore->getStore().store_id.store(1, std::memory_order_release);
+    kvstore->debugMutStoreMeta().set_id(1);
+    ASSERT_EQ(1, kvstore->getStoreID());
+    ASSERT_EQ(1, kvstore->clonedStoreMeta().id());
+    FailPointHelper::enableFailPoint(FailPoints::force_set_fap_candidate_store_id);
+    auto sp = SyncPointCtl::enableInScope("in_FastAddPeerImplSelect::before_sleep");
+    auto t = std::thread([&]() {
+        FastAddPeer(&server, region_id, 2333);
+    });
+    sp.waitAndPause();
+    fap_context->tasks_trace->getCancelHandle(region_id)->doCancel();
+    sp.next();
+    sp.disable();
+    t.join();
+    ASSERT_TRUE(!fap_context->tryGetCheckpointIngestInfo(region_id).has_value());
+    EXPECT_THROW(
+        CheckpointIngestInfo::restore(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333),
+        Exception);
+    
+    FailPointHelper::disableFailPoint(FailPoints::force_set_fap_candidate_store_id);
 }
 CATCH
 

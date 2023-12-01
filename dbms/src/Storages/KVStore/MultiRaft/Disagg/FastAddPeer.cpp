@@ -41,12 +41,19 @@
 #include <Storages/S3/S3GCManager.h>
 #include <Storages/S3/S3RandomAccessFile.h>
 #include <Storages/StorageDeltaMerge.h>
+#include <Common/SyncPoint/SyncPoint.h>
 #include <fmt/core.h>
 
 #include <memory>
 
 namespace DB
 {
+
+namespace FailPoints
+{
+extern const char force_set_fap_candidate_store_id[];
+} // namespace FailPoints
+
 FastAddPeerRes genFastAddPeerRes(FastAddPeerStatus status, std::string && apply_str, std::string && region_str)
 {
     auto * apply = RawCppString::New(apply_str);
@@ -187,8 +194,12 @@ std::variant<CheckpointRegionInfoAndData, FastAddPeerRes> FastAddPeerImplSelect(
     auto fap_ctx = tmt.getContext().getSharedContextDisagg()->fap_context;
     auto cancel_handle = fap_ctx->tasks_trace->getCancelHandle(region_id);
     const auto & settings = tmt.getContext().getSettingsRef();
-    auto current_store_id = tmt.getKVStore()->getStoreMeta().id();
-    auto candidate_store_ids = getCandidateStoreIDsForRegion(tmt, region_id, current_store_id);
+    auto current_store_id = tmt.getKVStore()->clonedStoreMeta().id();
+    std::vector <StoreID> candidate_store_ids;
+    fiu_do_on(FailPoints::force_set_fap_candidate_store_id, { candidate_store_ids = { 1234 }; });
+    if (candidate_store_ids.empty())
+        getCandidateStoreIDsForRegion(tmt, region_id, current_store_id);
+    
     if (candidate_store_ids.empty())
     {
         LOG_DEBUG(log, "No suitable candidate peer for region_id={}", region_id);
@@ -202,7 +213,7 @@ std::variant<CheckpointRegionInfoAndData, FastAddPeerRes> FastAddPeerImplSelect(
         // Check all candidate stores in this loop.
         for (const auto store_id : candidate_store_ids)
         {
-            RUNTIME_CHECK(store_id != current_store_id);
+            RUNTIME_CHECK_MSG(store_id != current_store_id, "store_id {} != current_store_id {}", store_id, current_store_id);
             auto iter = checked_seq_map.find(store_id);
             auto checked_seq = (iter == checked_seq_map.end()) ? 0 : iter->second;
             auto [data_seq, checkpoint_data] = fap_ctx->getNewerCheckpointData(tmt.getContext(), store_id, checked_seq);
@@ -251,7 +262,7 @@ std::variant<CheckpointRegionInfoAndData, FastAddPeerRes> FastAddPeerImplSelect(
                 GET_METRIC(tiflash_fap_task_result, type_failed_timeout).Increment();
                 return genFastAddPeerRes(FastAddPeerStatus::NoSuitable, "", "");
             }
-            std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+            SYNC_FOR("in_FastAddPeerImplSelect::before_sleep");
             if (cancel_handle->blockedWaitFor(std::chrono::milliseconds(1000))) {
                 LOG_INFO(log, "Cancel FAP during peer selecting, region_id={}", region_id);
                 fap_ctx->cleanCheckpointIngestInfo(tmt, region_id);
@@ -317,6 +328,7 @@ FastAddPeerRes FastAddPeerImplWrite(
         std::move(segments),
         start_time);
     
+    SYNC_FOR("in_FastAddPeerImplWrite::after_write_segments");
     if(cancel_handle->canceled()) {
         LOG_INFO(log, "Cancel FAP after write segments, region_id={}", region_id);
         fap_ctx->cleanCheckpointIngestInfo(tmt, region_id);
@@ -340,6 +352,7 @@ FastAddPeerRes FastAddPeerImplWrite(
         });
     auto wn_ps = tmt.getContext().getWriteNodePageStorage();
     wn_ps->write(std::move(wb));
+    SYNC_FOR("in_FastAddPeerImplWrite::after_write_raft_log");
     if(cancel_handle->canceled()) {
         LOG_INFO(log, "Cancel FAP after write raft log, region_id={}", region_id);
         fap_ctx->cleanCheckpointIngestInfo(tmt, region_id);
