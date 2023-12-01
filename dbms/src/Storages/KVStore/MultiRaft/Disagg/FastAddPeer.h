@@ -63,7 +63,7 @@ public:
         DM::Segments && segments,
         UInt64 start_time);
     void debugRemoveCheckpointIngestInfo(UInt64 region_id);
-    std::optional<CheckpointIngestInfoPtr> tryGetCheckpointIngestInfo(UInt64 region_id);
+    std::optional<CheckpointIngestInfoPtr> tryGetCheckpointIngestInfo(UInt64 region_id) const;
     void cleanCheckpointIngestInfo(TMTContext & tmt, UInt64 region_id);
 
 public:
@@ -96,7 +96,7 @@ private:
     std::unordered_map<UInt64, std::pair<UInt64, CheckpointCacheElementPtr>> checkpoint_cache_map;
 
     // Checkpoint that is persisted, but yet to be ingested into DeltaTree.
-    std::mutex ingest_info_mu;
+    mutable std::mutex ingest_info_mu;
     // RegionID->CheckpointIngestInfoPtr
     std::unordered_map<UInt64, CheckpointIngestInfoPtr> checkpoint_ingest_info_map;
 
