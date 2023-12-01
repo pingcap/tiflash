@@ -53,6 +53,7 @@ struct PreHandlingTrace : MutexLockWrap
         std::atomic<PrehandleTransformStatus> abort_error;
     };
 
+    // Prehandle use thread pool from Proxy's side, so it can't benefit from AsyncTasks.
     std::unordered_map<uint64_t, std::shared_ptr<Item>> tasks;
     std::atomic<uint64_t> ongoing_prehandle_subtask_count{0};
     std::mutex cpu_resource_mut;
@@ -65,14 +66,14 @@ struct PreHandlingTrace : MutexLockWrap
     std::shared_ptr<Item> registerTask(uint64_t region_id) NO_THREAD_SAFETY_ANALYSIS
     {
         // Automaticlly override the old one.
-        auto _ = genLockGuard();
+        auto _guard = genLockGuard();
         auto b = std::make_shared<Item>();
         tasks[region_id] = b;
         return b;
     }
     std::shared_ptr<Item> deregisterTask(uint64_t region_id) NO_THREAD_SAFETY_ANALYSIS
     {
-        auto _ = genLockGuard();
+        auto _guard = genLockGuard();
         auto it = tasks.find(region_id);
         if (it != tasks.end())
         {
@@ -80,14 +81,11 @@ struct PreHandlingTrace : MutexLockWrap
             tasks.erase(it);
             return b;
         }
-        else
-        {
-            return nullptr;
-        }
+        return nullptr;
     }
     bool hasTask(uint64_t region_id) NO_THREAD_SAFETY_ANALYSIS
     {
-        auto _ = genLockGuard();
+        auto _guard = genLockGuard();
         return tasks.find(region_id) != tasks.end();
     }
     void waitForSubtaskResources(uint64_t region_id, size_t parallel, size_t parallel_subtask_limit);

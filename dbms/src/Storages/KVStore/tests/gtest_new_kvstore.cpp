@@ -695,10 +695,13 @@ TEST_F(RegionKVStoreTest, AsyncTasks)
     auto async_tasks = std::make_unique<TestAsyncTasks>(1, 1, 2);
 
     int total = 5;
+    int max_steps = 10;
+    int current_step = 0;
     std::vector<bool> f(total, false);
     bool initial_loop = true;
     while (true)
     {
+        ASSERT(current_step < max_steps);
         SCOPE_EXIT({ initial_loop = false; });
         auto count = std::accumulate(f.begin(), f.end(), 0, [&](int a, bool b) -> int { return a + int(b); });
         if (count >= total)
@@ -709,12 +712,38 @@ TEST_F(RegionKVStoreTest, AsyncTasks)
         {
             LOG_DEBUG(log, "finished {}/{}", count, total);
         }
+
+        auto to_be_canceled = total - 1;
+        if (count == total - 1) {
+            if (async_tasks->isScheduled(to_be_canceled)) {
+                LOG_INFO(log, "!!!! try cancel");
+                auto cancel_handle = async_tasks->getCancelHandle(to_be_canceled);
+                cancel_handle->doCancel();
+            }
+            // Otherwise, the task is not added.
+        }
+
+        // Add tasks
         for (int i = 0; i < total; ++i)
         {
-            if (!async_tasks->isScheduled(i))
+            auto ii = i;
+            if (!async_tasks->isScheduled(ii) && !f[ii])
             {
-                auto res = async_tasks->addTask(i, []() {
-                    std::this_thread::sleep_for(200ms);
+                LOG_INFO(log, "insert task {}", ii);
+                auto res = async_tasks->addTask(ii, [ii, this, &async_tasks, to_be_canceled]() {
+                    if(ii == to_be_canceled) {
+                        auto cancel_handle = async_tasks->getCancelHandle(ii);
+                        while(true) {
+                            LOG_INFO(log, "!!!!! check {}", ii);
+                            if(cancel_handle->blockedWaitFor(200ms)) {
+                                break;
+                            }
+                        }
+                        LOG_INFO(log, "!!!!! check finish {}", ii);
+                    } else {
+                        LOG_INFO(log, "!!!!! sleep {}", ii);
+                        std::this_thread::sleep_for(200ms);
+                    }
                     return 1;
                 });
                 if (initial_loop)
@@ -722,12 +751,14 @@ TEST_F(RegionKVStoreTest, AsyncTasks)
             }
         }
 
+        // Fetch result
         for (int i = 0; i < total; ++i)
         {
             if (!f[i])
             {
                 if (async_tasks->isReady(i))
                 {
+                    LOG_INFO(log, "!!!!! try fetch {}", i);
                     auto r = async_tasks->fetchResult(i);
                     UNUSED(r);
                     f[i] = true;

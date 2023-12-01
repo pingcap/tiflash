@@ -185,6 +185,7 @@ std::variant<CheckpointRegionInfoAndData, FastAddPeerRes> FastAddPeerImplSelect(
     Stopwatch watch;
     std::unordered_map<StoreID, UInt64> checked_seq_map;
     auto fap_ctx = tmt.getContext().getSharedContextDisagg()->fap_context;
+    auto cancel_handle = fap_ctx->tasks_trace->getCancelHandle(region_id);
     const auto & settings = tmt.getContext().getSettingsRef();
     auto current_store_id = tmt.getKVStore()->getStoreMeta().id();
     auto candidate_store_ids = getCandidateStoreIDsForRegion(tmt, region_id, current_store_id);
@@ -251,6 +252,11 @@ std::variant<CheckpointRegionInfoAndData, FastAddPeerRes> FastAddPeerImplSelect(
                 return genFastAddPeerRes(FastAddPeerStatus::NoSuitable, "", "");
             }
             std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+            if (cancel_handle->blockedWaitFor(std::chrono::milliseconds(1000))) {
+                LOG_INFO(log, "Cancel FAP during peer selecting, region_id={}", region_id);
+                fap_ctx->cleanCheckpointIngestInfo(tmt, region_id);
+                return genFastAddPeerRes(FastAddPeerStatus::Canceled, "", "");
+            }
         }
     }
 }
@@ -264,6 +270,7 @@ FastAddPeerRes FastAddPeerImplWrite(
 {
     auto log = Logger::get("FastAddPeer");
     auto fap_ctx = tmt.getContext().getSharedContextDisagg()->fap_context;
+    auto cancel_handle = fap_ctx->tasks_trace->getCancelHandle(region_id);
     const auto & settings = tmt.getContext().getSettingsRef();
 
     Stopwatch watch;
@@ -294,7 +301,13 @@ FastAddPeerRes FastAddPeerImplWrite(
         storage->isCommonHandle(),
         storage->getRowKeyColumnSize());
 
+    if(cancel_handle->canceled()) {
+        LOG_INFO(log, "Cancel FAP before write, region_id={}", region_id);
+        fap_ctx->cleanCheckpointIngestInfo(tmt, region_id);
+        return genFastAddPeerRes(FastAddPeerStatus::Canceled, "", "");
+    }
     auto segments = dm_storage->buildSegmentsFromCheckpointInfo(new_key_range, checkpoint_info, settings);
+
     fap_ctx->insertCheckpointIngestInfo(
         tmt,
         region_id,
@@ -303,7 +316,12 @@ FastAddPeerRes FastAddPeerImplWrite(
         region,
         std::move(segments),
         start_time);
-
+    
+    if(cancel_handle->canceled()) {
+        LOG_INFO(log, "Cancel FAP after write segments, region_id={}", region_id);
+        fap_ctx->cleanCheckpointIngestInfo(tmt, region_id);
+        return genFastAddPeerRes(FastAddPeerStatus::Canceled, "", "");
+    }
     // Write raft log to uni ps, we do this here because we store raft log seperately.
     // Currently, FAP only handle when the peer is newly created in this store.
     // TODO(fap) However, Move this to `ApplyFapSnapshot` and clean stale data, if FAP can later handle all snapshots.
@@ -322,6 +340,11 @@ FastAddPeerRes FastAddPeerImplWrite(
         });
     auto wn_ps = tmt.getContext().getWriteNodePageStorage();
     wn_ps->write(std::move(wb));
+    if(cancel_handle->canceled()) {
+        LOG_INFO(log, "Cancel FAP after write raft log, region_id={}", region_id);
+        fap_ctx->cleanCheckpointIngestInfo(tmt, region_id);
+        return genFastAddPeerRes(FastAddPeerStatus::Canceled, "", "");
+    }
 
     return genFastAddPeerRes(
         FastAddPeerStatus::Ok,
