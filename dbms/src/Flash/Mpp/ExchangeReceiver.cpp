@@ -917,7 +917,7 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::toDecodeResult(
             /// If mocking TiFlash as TiDB, we should decode chunks from select_resp.
             if (unlikely(!result.resp->chunks().empty()))
             {
-                assert(recv_msg->getChunks(stream_id).empty() && recv_msg->getBlocks(stream_id).empty());
+                assert(!recv_msg->hasData(stream_id));
                 // Fine grained shuffle should only be enabled when sending data to TiFlash node.
                 // So all data should be encoded into MPPDataPacket.chunks.
                 RUNTIME_CHECK_MSG(
@@ -925,7 +925,7 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::toDecodeResult(
                     "Data should not be encoded into tipb::SelectResponse.chunks when fine grained shuffle is enabled");
                 result.decode_detail = CoprocessorReader::decodeChunks(select_resp, block_queue, header, schema);
             }
-            else if (!recv_msg->getChunks(stream_id).empty() || !recv_msg->getBlocks(stream_id).empty())
+            else if (recv_msg->hasData(stream_id))
             {
                 result.decode_detail = decodeChunks(stream_id, recv_msg, block_queue, decoder_ptr);
             }

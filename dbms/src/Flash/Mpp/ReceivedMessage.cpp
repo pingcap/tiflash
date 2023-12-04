@@ -16,6 +16,14 @@
 
 namespace DB
 {
+bool ReceivedMessage::hasData(size_t stream_id) const
+{
+    if (remaining_consumers != nullptr)
+        return !fine_grained_chunks[stream_id].empty() || !fine_grained_blocks[stream_id].empty();
+    else
+        return !chunks.empty() || !blocks.empty();
+}
+
 const std::vector<const String *> & ReceivedMessage::getChunks(size_t stream_id) const
 {
     if (remaining_consumers != nullptr)
