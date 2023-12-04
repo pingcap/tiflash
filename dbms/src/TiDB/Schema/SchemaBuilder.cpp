@@ -924,7 +924,7 @@ void SchemaBuilder<Getter, NameMapper>::applyRecoverDatabase(DatabaseID database
     auto db = context.tryGetDatabase(db_name);
     if (unlikely(!db))
     {
-        LOG_INFO(
+        LOG_ERROR(
             log,
             "Recover database is ignored because instance is not exists, may have been physically dropped, "
             "database_id={}",
