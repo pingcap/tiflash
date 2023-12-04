@@ -60,12 +60,30 @@ class RegionKVStoreTestFAP : public KVStoreTestBase
 public:
     void SetUp() override
     {
-        KVStoreTestBase::SetUp();
+        auto & global_context = TiFlashTestEnv::getGlobalContext();
+
+        initStorages();
+
+        // Must be called before `initializeWriteNodePageStorageIfNeed` to have S3 lock services registered.
         DB::tests::TiFlashTestEnv::enableS3Config();
         auto s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
         ASSERT_TRUE(::DB::tests::TiFlashTestEnv::createBucketIfNotExist(*s3_client));
 
-        auto & global_context = TiFlashTestEnv::getGlobalContext();
+        global_context.getSharedContextDisagg()->disaggregated_mode = DisaggregatedMode::Storage;
+        if (global_context.getWriteNodePageStorage() == nullptr)
+        {
+            already_initialize_write_ps = false;
+            orig_mode = global_context.getPageStorageRunMode();
+            global_context.setPageStorageRunMode(PageStorageRunMode::UNI_PS);
+            global_context.tryReleaseWriteNodePageStorageForTest();
+            global_context.initializeWriteNodePageStorageIfNeed(global_context.getPathPool());
+        }
+        else
+        {
+            // It will currently happen in `initStorages` when we call `getContext`.
+            already_initialize_write_ps = true;
+        }
+
         if (global_context.getSharedContextDisagg()->remote_data_store == nullptr)
         {
             already_initialize_data_store = false;
@@ -78,22 +96,23 @@ public:
         {
             already_initialize_data_store = true;
         }
-        if (global_context.getWriteNodePageStorage() == nullptr)
-        {
-            already_initialize_write_ps = false;
-            orig_mode = global_context.getPageStorageRunMode();
-            global_context.setPageStorageRunMode(PageStorageRunMode::UNI_PS);
-            global_context.tryReleaseWriteNodePageStorageForTest();
-            global_context.initializeWriteNodePageStorageIfNeed(global_context.getPathPool());
-        }
-        else
-        {
-            already_initialize_write_ps = true;
-        }
+
         orig_mode = global_context.getPageStorageRunMode();
         global_context.setPageStorageRunMode(PageStorageRunMode::UNI_PS);
         global_context.getSharedContextDisagg()->initFastAddPeerContext(25);
-        KVStoreTestBase::SetUp();
+
+        // clean data and create path pool instance
+        path_pool = TiFlashTestEnv::createCleanPathPool(test_path);
+        proxy_instance = std::make_unique<MockRaftStoreProxy>();
+        proxy_helper = proxy_instance->generateProxyHelper();
+        KVStoreTestBase::reloadKVSFromDisk(false);
+        {
+            auto store = metapb::Store{};
+            store.set_id(1234);
+            kvstore->setStore(store);
+            ASSERT_EQ(kvstore->getStoreID(), store.id());
+        }
+        LOG_INFO(log, "Finished setup");
     }
 
     void TearDown() override
@@ -227,7 +246,7 @@ try
             auto region_key = UniversalPageIdFormat::toKVStoreKey(region_id);
             auto page = checkpoint_data_holder->getUniversalPageStorage()
                             ->read(region_key, /*read_limiter*/ nullptr, {}, /*throw_on_not_exist*/ false);
-            ASSERT_TRUE(page.isValid());
+            RUNTIME_CHECK(page.isValid());
         }
 
         ASSERT_TRUE(apply_state == region->getApply());
@@ -266,13 +285,12 @@ void verifyRows(Context & ctx, DM::DeltaMergeStorePtr store, const DM::RowKeyRan
 CheckpointRegionInfoAndData RegionKVStoreTestFAP::prepareForRestart()
 {
     auto & global_context = TiFlashTestEnv::getGlobalContext();
-    global_context.getSharedContextDisagg()->disaggregated_mode = DisaggregatedMode::Storage;
     uint64_t region_id = 1;
     auto peer_id = 1;
-    initStorages();
     KVStore & kvs = getKVS();
     global_context.getTMTContext().debugSetKVStore(kvstore);
     auto page_storage = global_context.getWriteNodePageStorage();
+
     TableID table_id = proxy_instance->bootstrapTable(global_context, kvs, global_context.getTMTContext());
     auto fap_context = global_context.getSharedContextDisagg()->fap_context;
     proxy_instance->bootstrapWithRegion(kvs, global_context.getTMTContext(), region_id, std::nullopt);
@@ -303,8 +321,12 @@ CheckpointRegionInfoAndData RegionKVStoreTestFAP::prepareForRestart()
     checkpoint_info->remote_store_id = kvs.getStoreID();
     checkpoint_info->region_id = 1000;
     checkpoint_info->checkpoint_data_holder = buildParsedCheckpointData(global_context, manifest_key, /*dir_seq*/ 100);
-
-    // TODO(fap) check why UniversalPageIdFormat::toKVStoreKey(region_id) page not exist.
+    {
+        auto region_key = UniversalPageIdFormat::toKVStoreKey(region_id);
+        auto page = checkpoint_info->checkpoint_data_holder->getUniversalPageStorage()
+                        ->read(region_key, /*read_limiter*/ nullptr, {}, /*throw_on_not_exist*/ false);
+        RUNTIME_CHECK(page.isValid());
+    }
     checkpoint_info->temp_ps = checkpoint_info->checkpoint_data_holder->getUniversalPageStorage();
     RegionPtr kv_region = kvs.getRegion(1);
     CheckpointRegionInfoAndData mock_data = std::make_tuple(
