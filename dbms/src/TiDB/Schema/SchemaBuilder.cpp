@@ -996,7 +996,7 @@ void SchemaBuilder<Getter, NameMapper>::applyDropDatabaseByName(const String & d
     auto tombstone = tmt_context.getPDClient()->getTS();
     db->alterTombstone(context, tombstone, /*new_db_info*/ nullptr); // keep the old db_info
 
-    LOG_INFO(log, "Tombstone database end, db_name={}", db_name);
+    LOG_INFO(log, "Tombstone database end, db_name={} tombstone={}", db_name, tombstone);
 }
 
 std::tuple<NamesAndTypes, Strings> parseColumnsFromTableInfo(const TiDB::TableInfo & table_info)
@@ -1164,6 +1164,7 @@ void SchemaBuilder<Getter, NameMapper>::applyDropPhysicalTable(const String & db
         name_mapper.debugTableName(storage->getTableInfo()),
         table_id);
 
+    const UInt64 tombstone_ts = tmt_context.getPDClient()->getTS();
     // TODO:try to optimize alterCommands
     AlterCommands commands;
     {
@@ -1174,17 +1175,18 @@ void SchemaBuilder<Getter, NameMapper>::applyDropPhysicalTable(const String & db
         // 1. Use current timestamp, which is after TiDB's drop time, to be the tombstone of this table;
         // 2. Use the same GC safe point as TiDB.
         // In such way our table will be GC-ed later than TiDB, which is safe and correct.
-        command.tombstone = tmt_context.getPDClient()->getTS();
+        command.tombstone = tombstone_ts;
         commands.emplace_back(std::move(command));
     }
     auto alter_lock = storage->lockForAlter(getThreadNameAndID());
     storage->updateTombstone(alter_lock, commands, db_name, storage->getTableInfo(), name_mapper, context);
     LOG_INFO(
         log,
-        "Tombstone table {}.{} end, table_id={}",
+        "Tombstone table {}.{} end, table_id={} tombstone={}",
         db_name,
         name_mapper.debugTableName(storage->getTableInfo()),
-        table_id);
+        table_id,
+        tombstone_ts);
 }
 
 template <typename Getter, typename NameMapper>
