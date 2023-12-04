@@ -125,13 +125,25 @@ TrackedMppDataPacketPtr ToFineGrainedLocalPacket(
         for (size_t col_id = 0; col_id < num_columns; ++col_id)
             columns.emplace_back(std::move(scattered[col_id][bucket_idx + stream_idx]));
         auto block = header.cloneWithColumns(std::move(columns));
+        columns = block.mutateColumns();
         if (block && block.rows() > 0)
-            blocks.push_back(std::move(block));
-
-        for (size_t col_id = 0; col_id < num_columns; ++col_id)
         {
-            columns[col_id]->popBack(columns[col_id]->size()); // clear column
-            scattered[col_id][bucket_idx + stream_idx] = std::move(columns[col_id]);
+            // set a empty column back to scattered.
+            for (size_t col_id = 0; col_id < num_columns; ++col_id)
+            {
+                auto empty_column = columns[col_id]->cloneEmpty();
+                empty_column->reserve(1024);
+                scattered[col_id][bucket_idx + stream_idx] = std::move(empty_column);
+            }
+            blocks.push_back(std::move(block));
+        }
+        else
+        {
+            for (size_t col_id = 0; col_id < num_columns; ++col_id)
+            {
+                columns[col_id]->popBack(columns[col_id]->size()); // clear column
+                scattered[col_id][bucket_idx + stream_idx] = std::move(columns[col_id]);
+            }
         }
     }
 
