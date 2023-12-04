@@ -240,19 +240,22 @@ std::tuple<ASTPtr, BlockIO> executeQueryImpl(
         {
             if (auto * stream = dynamic_cast<IProfilingBlockInputStream *>(res.in.get()))
             {
-                stream->setProgressCallback(context.getProgressCallback());
-                stream->setProcessListElement(context.getProcessListElement());
-
-                /// Limits on the result, the quota on the result, and also callback for progress.
-                /// Limits apply only to the final result.
-                if (stage == QueryProcessingStage::Complete)
+                if (auto * dag_src = dynamic_cast<DAGQuerySource *>(&query_src); dag_src == nullptr)
                 {
-                    IProfilingBlockInputStream::LocalLimits limits;
-                    limits.mode = IProfilingBlockInputStream::LIMITS_CURRENT;
-                    limits.size_limits = SizeLimits(settings.max_result_rows, settings.max_result_bytes, settings.result_overflow_mode);
+                    stream->setProgressCallback(context.getProgressCallback());
+                    stream->setProcessListElement(context.getProcessListElement());
 
-                    stream->setLimits(limits);
-                    stream->setQuota(quota);
+                    /// Limits on the result, the quota on the result, and also callback for progress.
+                    /// Limits apply only to the final result.
+                    if (stage == QueryProcessingStage::Complete)
+                    {
+                        IProfilingBlockInputStream::LocalLimits limits;
+                        limits.mode = IProfilingBlockInputStream::LIMITS_CURRENT;
+                        limits.size_limits = SizeLimits(settings.max_result_rows, settings.max_result_bytes, settings.result_overflow_mode);
+
+                        stream->setLimits(limits);
+                        stream->setQuota(quota);
+                    }
                 }
             }
         }
