@@ -74,6 +74,7 @@ std::pair<UInt64, ParsedCheckpointDataHolderPtr> FastAddPeerContext::getNewerChe
     {
         auto s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
         const auto manifests = S3::CheckpointManifestS3Set::getFromS3(*s3_client, store_id);
+        LOG_INFO(log, "!!!!!! manifests.empty() {}", manifests.empty());
         if (manifests.empty())
         {
             LOG_DEBUG(log, "no manifest on this store, skip store_id={}", store_id);
@@ -82,6 +83,7 @@ std::pair<UInt64, ParsedCheckpointDataHolderPtr> FastAddPeerContext::getNewerChe
         const auto & latest_manifest_key = manifests.latestManifestKey();
         auto latest_manifest_key_view = S3::S3FilenameView::fromKey(latest_manifest_key);
         auto latest_upload_seq = latest_manifest_key_view.getUploadSequence();
+        LOG_INFO(log, "!!!!!! latest_upload_seq {} required_seq {}", latest_upload_seq, required_seq);
         if (latest_upload_seq <= required_seq)
         {
             return std::make_pair(required_seq, nullptr);

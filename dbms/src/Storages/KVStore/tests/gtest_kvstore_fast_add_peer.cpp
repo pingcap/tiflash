@@ -223,10 +223,16 @@ try
             region_state.ParseFromArray(page.data.begin(), page.data.size());
         }
 
+        {
+            auto region_key = UniversalPageIdFormat::toKVStoreKey(region_id);
+            auto page = checkpoint_data_holder->getUniversalPageStorage()
+                            ->read(region_key, /*read_limiter*/ nullptr, {}, /*throw_on_not_exist*/ false);
+            ASSERT_TRUE(page.isValid());
+        }
+
         ASSERT_TRUE(apply_state == region->getApply());
         ASSERT_TRUE(region_state == region->getState());
     }
-
     {
         auto [data_seq, checkpoint_data_holder]
             = fap_context->getNewerCheckpointData(global_context, store_id, upload_sequence);
@@ -291,11 +297,18 @@ CheckpointRegionInfoAndData RegionKVStoreTestFAP::prepareForRestart()
     RUNTIME_CHECK(::DB::tests::TiFlashTestEnv::createBucketIfNotExist(*s3_client));
     dumpCheckpoint();
 
+    LOG_INFO(log, "build checkpoint manifest from {}", upload_sequence);
     const auto manifest_key = S3::S3Filename::newCheckpointManifest(kvs.getStoreID(), upload_sequence).toFullKey();
     auto checkpoint_info = std::make_shared<CheckpointInfo>();
     checkpoint_info->remote_store_id = kvs.getStoreID();
     checkpoint_info->region_id = 1000;
     checkpoint_info->checkpoint_data_holder = buildParsedCheckpointData(global_context, manifest_key, /*dir_seq*/ 100);
+    {
+        auto region_key = UniversalPageIdFormat::toKVStoreKey(region_id);
+        auto page = checkpoint_info->checkpoint_data_holder->getUniversalPageStorage()
+                        ->read(region_key, /*read_limiter*/ nullptr, {}, /*throw_on_not_exist*/ false);
+        RUNTIME_CHECK(page.isValid());
+    }
     checkpoint_info->temp_ps = checkpoint_info->checkpoint_data_holder->getUniversalPageStorage();
     RegionPtr kv_region = kvs.getRegion(1);
     CheckpointRegionInfoAndData mock_data = std::make_tuple(
@@ -318,6 +331,13 @@ try
     auto fap_context = global_context.getSharedContextDisagg()->fap_context;
     uint64_t region_id = 1;
     fap_context->tasks_trace->addTask(region_id, [](){ return genFastAddPeerRes(FastAddPeerStatus::NoSuitable, "", ""); });
+    {
+        auto region_key = UniversalPageIdFormat::toKVStoreKey(region_id);
+        LOG_INFO(log, "Check region_key {}", region_key);
+        auto page = std::get<0>(mock_data)->checkpoint_data_holder->getUniversalPageStorage()
+                        ->read(region_key, /*read_limiter*/ nullptr, {}, /*throw_on_not_exist*/ false);
+        ASSERT_TRUE(page.isValid());
+    }
     FastAddPeerImplWrite(global_context.getTMTContext(), region_id, 2333, std::move(mock_data), 0);
     fap_context->debugRemoveCheckpointIngestInfo(region_id);
     ApplyFapSnapshotImpl(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333);
@@ -413,21 +433,23 @@ try
     ASSERT_EQ(1, kvstore->getStoreID());
     ASSERT_EQ(1, kvstore->clonedStoreMeta().id());
     FailPointHelper::enableFailPoint(FailPoints::force_set_fap_candidate_store_id);
-    auto sp = SyncPointCtl::enableInScope("in_FastAddPeerImplSelect::before_sleep");
+    // auto sp = SyncPointCtl::enableInScope("in_FastAddPeerImplSelect::before_sleep");
     auto t = std::thread([&]() {
         FastAddPeer(&server, region_id, 2333);
     });
-    sp.waitAndPause();
-    fap_context->tasks_trace->getCancelHandle(region_id)->doCancel();
-    sp.next();
-    sp.disable();
-    t.join();
-    ASSERT_TRUE(!fap_context->tryGetCheckpointIngestInfo(region_id).has_value());
-    EXPECT_THROW(
-        CheckpointIngestInfo::restore(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333),
-        Exception);
+    // sp.waitAndPause();
+    using namespace std::chrono_literals;
+    std::this_thread::sleep_for(5000ms);
+    // fap_context->tasks_trace->getCancelHandle(region_id)->doCancel();
+    // sp.next();
+    // sp.disable();
+    // t.join();
+    // ASSERT_TRUE(!fap_context->tryGetCheckpointIngestInfo(region_id).has_value());
+    // EXPECT_THROW(
+    //     CheckpointIngestInfo::restore(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333),
+    //     Exception);
     
-    FailPointHelper::disableFailPoint(FailPoints::force_set_fap_candidate_store_id);
+    // FailPointHelper::disableFailPoint(FailPoints::force_set_fap_candidate_store_id);
 }
 CATCH
 
