@@ -155,6 +155,7 @@ inline EditRecordType typeFromProto(CheckpointProto::EditType t)
     }
 }
 
+/// PageEntriesEdit records the change of pages for a WriteBatch.
 /// Page entries change to apply to PageDirectory
 template <typename PageIdType>
 class PageEntriesEdit
@@ -272,6 +273,7 @@ public:
 
     size_t size() const { return records.size(); }
 
+    /// EditRecord records the change of a page for a Write.
     struct EditRecord
     {
         EditRecordType type{EditRecordType::DEL};

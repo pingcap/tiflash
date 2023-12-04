@@ -447,34 +447,41 @@ private:
             size_t count = 0;
             for (const auto & [version, entry_or_del] : versioned_entries->entries)
             {
-                const auto & entry = entry_or_del.entry;
-                page_str.fmtAppend(
-                    "      entry {}\n"
-                    "       sequence: {}\n"
-                    "       epoch: {}\n"
-                    "       is del: {}\n"
-                    "       blob id: {}\n"
-                    "       offset: {}\n"
-                    "       size: {}\n"
-                    "       crc: 0x{:X}\n", //
-                    count++, //
-                    version.sequence, //
-                    version.epoch, //
-                    entry_or_del.isDelete(), //
-                    entry.file_id, //
-                    entry.offset, //
-                    entry.size, //
-                    entry.checksum, //
-                    entry.field_offsets.size() //
-                );
-                if (!entry.field_offsets.empty())
+                if (entry_or_del.isEntry())
                 {
-                    page_str.append("          field offset:\n");
-                    for (const auto & [offset, crc] : entry.field_offsets)
+                    const auto & entry = entry_or_del.entry.value();
+                    page_str.fmtAppend(
+                        "      entry {}\n"
+                        "       sequence: {}\n"
+                        "       epoch: {}\n"
+                        "       is del: false\n"
+                        "       blob id: {}\n"
+                        "       offset: {}\n"
+                        "       size: {}\n"
+                        "       crc: 0x{:X}\n", //
+                        count++, //
+                        version.sequence, //
+                        version.epoch, //
+                        entry.file_id, //
+                        entry.offset, //
+                        entry.size, //
+                        entry.checksum, //
+                        entry.field_offsets.size() //
+                    );
+                    if (!entry.field_offsets.empty())
                     {
-                        page_str.fmtAppend("            offset: {} crc: 0x{:X}\n", offset, crc);
+                        page_str.append("          field offset:\n");
+                        for (const auto & [offset, crc] : entry.field_offsets)
+                        {
+                            page_str.fmtAppend("            offset: {} crc: 0x{:X}\n", offset, crc);
+                        }
+                        page_str.append("\n");
                     }
-                    page_str.append("\n");
+                }
+                else
+                {
+                    page_str.append("      entry is null\n"
+                                    "       is del: true\n");
                 }
             }
             return page_str.toString();
@@ -678,7 +685,7 @@ private:
             {
                 if (entry_or_del.isEntry() && it->second->type == EditRecordType::VAR_ENTRY)
                 {
-                    const PageEntryV3 & entry = entry_or_del.entry;
+                    const PageEntryV3 & entry = entry_or_del.entry.value();
                     if (entry.checkpoint_info.has_value() && entry.checkpoint_info.is_local_data_reclaimed)
                     {
                         error_msg.fmtAppend("  page {} version {} local data is reclaimed\n", full_page_id, version);
@@ -770,7 +777,7 @@ private:
                     try
                     {
                         PageIdAndEntry to_read_entry;
-                        const PageEntryV3 & entry = entry_or_del.entry;
+                        const PageEntryV3 & entry = entry_or_del.entry.value();
                         PageIdAndEntries to_read;
                         to_read_entry.first = internal_id;
                         to_read_entry.second = entry;
