@@ -158,18 +158,6 @@ void onExceptionBeforeStart(const String & query, Context & context, time_t curr
     }
 }
 
-void prepareForInputStream(
-    Context & context,
-    const BlockInputStreamPtr & in)
-{
-    assert(in);
-    if (auto * stream = dynamic_cast<IProfilingBlockInputStream *>(in.get()))
-    {
-        stream->setProgressCallback(context.getProgressCallback());
-        stream->setProcessListElement(context.getProcessListElement());
-    }
-}
-
 std::tuple<ASTPtr, BlockIO> executeQueryImpl(
     IQuerySource & query_src,
     Context & context,
@@ -419,57 +407,6 @@ std::tuple<ASTPtr, BlockIO> executeQueryImpl(
     return std::make_tuple(ast, res);
 }
 } // namespace
-
-<<<<<<< HEAD
-=======
-/// Log query into text log (not into system table).
-void logQuery(const String & query, const Context & context, const LoggerPtr & logger)
-{
-    const auto & current_query_id = context.getClientInfo().current_query_id;
-    const auto & initial_query_id = context.getClientInfo().initial_query_id;
-    const auto & current_user = context.getClientInfo().current_user;
-
-    LOG_DEBUG(
-        logger,
-        "(from {}{}, query_id: {}{}) {}",
-        context.getClientInfo().current_address.toString(),
-        (current_user != "default" ? ", user: " + current_user : ""),
-        current_query_id,
-        (!initial_query_id.empty() && current_query_id != initial_query_id ? ", initial_query_id: " + initial_query_id : ""),
-        joinLines(query));
-}
-
-std::shared_ptr<ProcessListEntry> setProcessListElement(
-    Context & context,
-    const String & query,
-    const IAST * ast,
-    bool is_dag_task)
-{
-    assert(ast);
-    auto total_memory = context.getServerInfo().has_value() ? context.getServerInfo()->memory_info.capacity : 0;
-    auto process_list_entry = context.getProcessList().insert(
-        query,
-        ast,
-        context.getClientInfo(),
-        context.getSettingsRef(),
-        total_memory,
-        is_dag_task);
-    context.setProcessListElement(&process_list_entry->get());
-    return process_list_entry;
-}
-
-void logQueryPipeline(const LoggerPtr & logger, const BlockInputStreamPtr & in)
-{
-    assert(in);
-    auto pipeline_log_str = [&in]() {
-        FmtBuffer log_buffer;
-        log_buffer.append("Query pipeline:\n");
-        in->dumpTree(log_buffer);
-        return log_buffer.toString();
-    };
-    LOG_INFO(logger, pipeline_log_str());
-}
->>>>>>> 80f8e9dc65 (fix issue #7810 (#7854))
 
 BlockIO executeQuery(
     const String & query,
