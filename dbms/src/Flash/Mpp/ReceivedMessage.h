@@ -49,7 +49,7 @@ public:
     const String * getRespPtr(size_t stream_id) const { return stream_id == 0 ? resp_ptr : nullptr; }
     std::shared_ptr<std::atomic<size_t>> & getRemainingConsumers() { return remaining_consumers; }
     const std::vector<const String *> & getChunks(size_t stream_id) const;
-    const Blocks & getBlocks(size_t stream_id) const;
+    Blocks moveBlocks(size_t stream_id);
     const mpp::MPPDataPacket & getPacket() const { return packet->packet; }
     size_t byteSizeLong() const;
     bool containUsefulMessage() const;

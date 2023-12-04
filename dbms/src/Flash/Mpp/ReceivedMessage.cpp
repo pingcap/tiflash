@@ -24,12 +24,12 @@ const std::vector<const String *> & ReceivedMessage::getChunks(size_t stream_id)
         return chunks;
 }
 
-const Blocks & ReceivedMessage::getBlocks(size_t stream_id) const
+Blocks ReceivedMessage::moveBlocks(size_t stream_id)
 {
     if (remaining_consumers != nullptr)
-        return fine_grained_blocks[stream_id];
+        return std::move(fine_grained_blocks[stream_id]);
     else
-        return blocks;
+        return std::move(blocks);
 }
 
 // Constructor that move chunks.

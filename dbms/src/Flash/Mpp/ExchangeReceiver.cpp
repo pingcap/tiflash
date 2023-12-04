@@ -726,10 +726,16 @@ DecodeDetail ExchangeReceiverBase<RPCContext>::decodeChunks(
     if (recv_msg->isLocal())
     {
         detail.packet_bytes = recv_msg->byteSizeLong();
-        for (auto && block : recv_msg->getBlocks(stream_id))
+        auto blocks = recv_msg->moveBlocks(stream_id);
+        for (auto && block : blocks)
         {
             if (!block || block.rows() == 0)
                 continue;
+            for (size_t i = 0; i < block.columns(); ++i)
+            {
+                auto & column = block.getByPosition(i);
+                column.name = schema[i].first;
+            }
             detail.rows += block.rows();
             block_queue.push(std::move(block));
         }
