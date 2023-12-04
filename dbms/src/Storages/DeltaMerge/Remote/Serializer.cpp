@@ -218,7 +218,7 @@ RemotePb::ColumnFileRemote Serializer::serializeCF(
     }
     else
     {
-        RUNTIME_CHECK_MSG(false, "Unknown ColumnFile, type={}", magic_enum::enum_name(cf->getType()));
+        RUNTIME_CHECK_MSG(false, "Unknown ColumnFile, type={}", static_cast<UInt32>(cf->getType()));
     }
 }
 
