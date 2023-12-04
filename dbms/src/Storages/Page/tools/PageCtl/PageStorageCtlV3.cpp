@@ -481,7 +481,7 @@ private:
                 else
                 {
                     page_str.append("      entry is null\n"
-                                    "       is del: false\n");
+                                    "       is del: true\n");
                 }
             }
             return page_str.toString();
