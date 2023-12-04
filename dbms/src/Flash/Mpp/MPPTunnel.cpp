@@ -171,7 +171,7 @@ void MPPTunnel::write(TrackedMppDataPacketPtr && data)
 
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_tunnel_write_failpoint);
 
-    auto pushed_data_size = data->getPacket().ByteSizeLong();
+    auto pushed_data_size = data->byteSizeLong();
     if (tunnel_sender->push(std::move(data)))
     {
         updateMetric(data_size_in_queue, pushed_data_size, mode);
@@ -190,7 +190,7 @@ void MPPTunnel::forceWrite(TrackedMppDataPacketPtr && data)
 
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_tunnel_write_failpoint);
 
-    auto pushed_data_size = data->getPacket().ByteSizeLong();
+    auto pushed_data_size = data->byteSizeLong();
     if (tunnel_sender->forcePush(std::move(data)))
     {
         updateMetric(data_size_in_queue, pushed_data_size, mode);
@@ -444,7 +444,7 @@ void SyncTunnelSender::sendJob(PacketWriter * writer)
         TrackedMppDataPacketPtr res;
         while (send_queue.pop(res) == MPMCQueueResult::OK)
         {
-            MPPTunnelMetric::subDataSizeMetric(*data_size_in_queue, res->getPacket().ByteSizeLong());
+            MPPTunnelMetric::subDataSizeMetric(*data_size_in_queue, res->byteSizeLong());
             if (!writer->write(res->packet))
             {
                 err_msg = "grpc writes failed.";
@@ -508,7 +508,7 @@ std::shared_ptr<DB::TrackedMppDataPacket> LocalTunnelSenderV1::readForLocal()
     auto result = send_queue.pop(res);
     if (result == MPMCQueueResult::OK)
     {
-        MPPTunnelMetric::subDataSizeMetric(*data_size_in_queue, res->getPacket().ByteSizeLong());
+        MPPTunnelMetric::subDataSizeMetric(*data_size_in_queue, res->byteSizeLong());
         return res;
     }
     else if (result == MPMCQueueResult::CANCELLED)

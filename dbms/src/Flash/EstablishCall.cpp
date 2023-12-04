@@ -296,7 +296,7 @@ void EstablishCallData::trySendOneMsg()
     switch (res)
     {
     case MPMCQueueResult::OK:
-        async_tunnel_sender->subDataSizeMetric(packet->getPacket().ByteSizeLong());
+        async_tunnel_sender->subDataSizeMetric(packet->byteSizeLong());
         /// Note: has to switch the memory tracker before `write`
         /// because after `write`, `async_tunnel_sender` can be destroyed at any time
         /// so there is a risk that `res` is destructed after `aysnc_tunnel_sender`

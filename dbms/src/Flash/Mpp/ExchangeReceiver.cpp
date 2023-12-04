@@ -723,48 +723,62 @@ DecodeDetail ExchangeReceiverBase<RPCContext>::decodeChunks(
     assert(recv_msg != nullptr);
     DecodeDetail detail;
 
-    const auto & chunks = recv_msg->getChunks(stream_id);
-    if (chunks.empty())
-        return detail;
-    const auto & packet = recv_msg->getPacket();
-
-    // Record total packet size even if fine grained shuffle is enabled.
-    detail.packet_bytes = packet.ByteSizeLong();
-
-    switch (auto version = packet.version(); version)
+    if (recv_msg->isLocal())
     {
-    case DB::MPPDataPacketV0:
-    {
-        for (const auto * chunk : chunks)
+        detail.packet_bytes = recv_msg->byteSizeLong();
+        for (auto && block : recv_msg->getBlocks(stream_id))
         {
-            auto result = decoder_ptr->decodeAndSquash(*chunk);
-            if (!result)
+            if (!block || block.rows() == 0)
                 continue;
-            detail.rows += result->rows();
-            if likely (result->rows() > 0)
+            detail.rows += block.rows();
+            block_queue.push(std::move(block));
+        }
+    }
+    else
+    {
+        const auto & chunks = recv_msg->getChunks(stream_id);
+        if (chunks.empty())
+            return detail;
+        const auto & packet = recv_msg->getPacket();
+    
+        // Record total packet size even if fine grained shuffle is enabled.
+        detail.packet_bytes = packet.ByteSizeLong();
+    
+        switch (auto version = packet.version(); version)
+        {
+        case DB::MPPDataPacketV0:
+        {
+            for (const auto * chunk : chunks)
             {
-                block_queue.push(std::move(result.value()));
+                auto result = decoder_ptr->decodeAndSquash(*chunk);
+                if (!result)
+                    continue;
+                detail.rows += result->rows();
+                if likely (result->rows() > 0)
+                {
+                    block_queue.push(std::move(result.value()));
+                }
             }
+            return detail;
         }
-        return detail;
-    }
-    case DB::MPPDataPacketV1:
-    {
-        for (const auto * chunk : chunks)
+        case DB::MPPDataPacketV1:
         {
-            auto && result = decoder_ptr->decodeAndSquashV1(*chunk);
-            if (!result || !result->rows())
-                continue;
-            detail.rows += result->rows();
-            block_queue.push(std::move(*result));
+            for (const auto * chunk : chunks)
+            {
+                auto && result = decoder_ptr->decodeAndSquashV1(*chunk);
+                if (!result || !result->rows())
+                    continue;
+                detail.rows += result->rows();
+                block_queue.push(std::move(*result));
+            }
+            return detail;
         }
-        return detail;
-    }
-    default:
-    {
-        RUNTIME_CHECK_MSG(false, "Unknown mpp packet version {}, please update TiFlash instance", version);
-        break;
-    }
+        default:
+        {
+            RUNTIME_CHECK_MSG(false, "Unknown mpp packet version {}, please update TiFlash instance", version);
+            break;
+        }
+        }
     }
     return detail;
 }
@@ -897,7 +911,7 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::toDecodeResult(
             /// If mocking TiFlash as TiDB, we should decode chunks from select_resp.
             if (unlikely(!result.resp->chunks().empty()))
             {
-                assert(recv_msg->getChunks(stream_id).empty());
+                assert(recv_msg->getChunks(stream_id).empty() && recv_msg->getBlocks(stream_id).empty());
                 // Fine grained shuffle should only be enabled when sending data to TiFlash node.
                 // So all data should be encoded into MPPDataPacket.chunks.
                 RUNTIME_CHECK_MSG(
@@ -905,7 +919,7 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::toDecodeResult(
                     "Data should not be encoded into tipb::SelectResponse.chunks when fine grained shuffle is enabled");
                 result.decode_detail = CoprocessorReader::decodeChunks(select_resp, block_queue, header, schema);
             }
-            else if (!recv_msg->getChunks(stream_id).empty())
+            else if (!recv_msg->getChunks(stream_id).empty() || !recv_msg->getBlocks(stream_id).empty())
             {
                 result.decode_detail = decodeChunks(stream_id, recv_msg, block_queue, decoder_ptr);
             }

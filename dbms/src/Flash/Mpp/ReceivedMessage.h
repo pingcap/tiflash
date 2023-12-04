@@ -24,19 +24,8 @@ namespace DB
 {
 class ReceivedMessage
 {
-    size_t source_index;
-    String req_info;
-    // shared_ptr<const MPPDataPacket> is copied to make sure error_ptr, resp_ptr and chunks are valid.
-    const std::shared_ptr<DB::TrackedMppDataPacket> packet;
-    const mpp::Error * error_ptr;
-    const String * resp_ptr;
-    std::vector<const String *> chunks;
-    /// used for fine grained shuffle, remaining_consumers will be nullptr for non fine grained shuffle
-    std::vector<std::vector<const String *>> fine_grained_chunks;
-    std::shared_ptr<std::atomic<size_t>> remaining_consumers;
-
 public:
-    // Constructor that move chunks.
+    // remote packet
     ReceivedMessage(
         size_t source_index_,
         const String & req_info_,
@@ -46,13 +35,39 @@ public:
         std::vector<const String *> && chunks_,
         size_t fine_grained_consumer_size);
 
+    // local packet
+    ReceivedMessage(
+        size_t source_index_,
+        const String & req_info_,
+        const std::shared_ptr<DB::TrackedMppDataPacket> & packet_,
+        Blocks && blocks_,
+        size_t fine_grained_consumer_size);
+
     size_t getSourceIndex() const { return source_index; }
     const String & getReqInfo() const { return req_info; }
     const mpp::Error * getErrorPtr() const { return error_ptr; }
     const String * getRespPtr(size_t stream_id) const { return stream_id == 0 ? resp_ptr : nullptr; }
     std::shared_ptr<std::atomic<size_t>> & getRemainingConsumers() { return remaining_consumers; }
     const std::vector<const String *> & getChunks(size_t stream_id) const;
+    const Blocks & getBlocks(size_t stream_id) const;
     const mpp::MPPDataPacket & getPacket() const { return packet->packet; }
+    size_t byteSizeLong() const;
     bool containUsefulMessage() const;
+    bool isLocal() const { return is_local; }
+
+private:
+    size_t source_index;
+    String req_info;
+    // shared_ptr<const MPPDataPacket> is copied to make sure error_ptr, resp_ptr and chunks are valid.
+    const std::shared_ptr<DB::TrackedMppDataPacket> packet;
+    const mpp::Error * error_ptr;
+    const String * resp_ptr;
+    std::vector<const String *> chunks;
+    Blocks blocks;
+    const bool is_local = false;
+    /// used for fine grained shuffle, remaining_consumers will be nullptr for non fine grained shuffle
+    std::vector<std::vector<const String *>> fine_grained_chunks;
+    std::vector<Blocks> fine_grained_blocks;
+    std::shared_ptr<std::atomic<size_t>> remaining_consumers;
 };
 } // namespace DB

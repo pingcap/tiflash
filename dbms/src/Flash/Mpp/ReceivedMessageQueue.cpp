@@ -66,20 +66,33 @@ ReceivedMessagePtr toReceivedMessage(
     const TrackedMppDataPacketPtr & tracked_packet,
     size_t fine_grained_consumer_size)
 {
-    const auto & packet = tracked_packet->packet;
-    const mpp::Error * error_ptr = getErrorPtr(packet);
-    const String * resp_ptr = getRespPtr(packet);
-    std::vector<const String *> chunks(packet.chunks_size());
-    for (int i = 0; i < packet.chunks_size(); ++i)
-        chunks[i] = &packet.chunks(i);
-    return std::make_shared<ReceivedMessage>(
-        source_index,
-        req_info,
-        tracked_packet,
-        error_ptr,
-        resp_ptr,
-        std::move(chunks),
-        fine_grained_consumer_size);
+    if (tracked_packet->is_local)
+    {
+        auto blocks_from_local_tunnel = tracked_packet->blocks_for_local_tunnel;
+        return std::make_shared<ReceivedMessage>(
+            source_index,
+            req_info,
+            tracked_packet,
+            std::move(blocks_from_local_tunnel),
+            fine_grained_consumer_size);
+    }
+    else
+    {
+        const auto & packet = tracked_packet->packet;
+        const mpp::Error * error_ptr = getErrorPtr(packet);
+        const String * resp_ptr = getRespPtr(packet);
+        std::vector<const String *> chunks(packet.chunks_size());
+        for (int i = 0; i < packet.chunks_size(); ++i)
+            chunks[i] = &packet.chunks(i);
+        return std::make_shared<ReceivedMessage>(
+            source_index,
+            req_info,
+            tracked_packet,
+            error_ptr,
+            resp_ptr,
+            std::move(chunks),
+            fine_grained_consumer_size);
+    }
 }
 } // namespace
 
@@ -95,7 +108,7 @@ ReceivedMessageQueue::ReceivedMessageQueue(
     , grpc_recv_queue(
           log_,
           queue_limits,
-          [](const ReceivedMessagePtr & message) { return message->getPacket().ByteSizeLong(); },
+          [](const ReceivedMessagePtr & message) { return message->byteSizeLong(); },
           /// use pushcallback to make sure that the order of messages in msg_channels_for_fine_grained_shuffle is exactly the same as it in msg_channel,
           /// because pop from msg_channel rely on this assumption. An alternative is to make msg_channel a set/map of messages for fine grained shuffle, but
           /// it need many more changes
@@ -164,7 +177,7 @@ MPMCQueueResult ReceivedMessageQueue::pop(size_t stream_id, ReceivedMessagePtr &
 
     if (res == MPMCQueueResult::OK)
     {
-        ExchangeReceiverMetric::subDataSizeMetric(*data_size_in_queue, recv_msg->getPacket().ByteSizeLong());
+        ExchangeReceiverMetric::subDataSizeMetric(*data_size_in_queue, recv_msg->byteSizeLong());
     }
 
     return res;
@@ -188,7 +201,7 @@ bool ReceivedMessageQueue::pushPacket(
         success = grpc_recv_queue.push(std::move(received_message)) == MPMCQueueResult::OK;
 
     if (success)
-        ExchangeReceiverMetric::addDataSizeMetric(*data_size_in_queue, tracked_packet->getPacket().ByteSizeLong());
+        ExchangeReceiverMetric::addDataSizeMetric(*data_size_in_queue, tracked_packet->byteSizeLong());
 
     injectFailPointReceiverPushFail(success, mode);
     return success;
@@ -208,7 +221,7 @@ MPMCQueueResult ReceivedMessageQueue::pushAsyncGRPCPacket(
 
     auto res = grpc_recv_queue.pushWithTag(std::move(received_message), new_tag);
     if likely (res == MPMCQueueResult::OK || res == MPMCQueueResult::FULL)
-        ExchangeReceiverMetric::addDataSizeMetric(*data_size_in_queue, tracked_packet->getPacket().ByteSizeLong());
+        ExchangeReceiverMetric::addDataSizeMetric(*data_size_in_queue, tracked_packet->byteSizeLong());
 
     return res;
 }

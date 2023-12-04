@@ -212,7 +212,7 @@ public:
         std::atomic<Int64> * data_size_in_queue)
         : TunnelSender(memory_tracker, log_, tunnel_id_, data_size_in_queue)
         , queue(log_, queue_limits, [](const TrackedMppDataPacketPtr & element) {
-            return element->getPacket().ByteSizeLong();
+            return element->byteSizeLong();
         })
     {}
 
@@ -226,7 +226,7 @@ public:
         GRPCKickFunc && func)
         : TunnelSender(memoryTracker, log_, tunnel_id_, data_size_in_queue)
         , queue(log_, queue_limits, [](const TrackedMppDataPacketPtr & element) {
-            return element->getPacket().ByteSizeLong();
+            return element->byteSizeLong();
         })
     {
         queue.setKickFuncForTest(std::move(func));

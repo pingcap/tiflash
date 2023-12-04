@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Core/Block.h>
 #include <Common/Exception.h>
 #include <Common/Logger.h>
 #include <common/logger_useful.h>
@@ -109,6 +110,13 @@ struct TrackedMppDataPacket
         packet = data;
     }
 
+    explicit TrackedMppDataPacket(Blocks && data)
+        : mem_tracker_wrapper(current_memory_tracker)
+        , is_local(true)
+    {
+        blocks_for_local_tunnel = std::move(data);
+    }
+
     explicit TrackedMppDataPacket(int64_t version)
         : mem_tracker_wrapper(current_memory_tracker)
     {
@@ -128,12 +136,14 @@ struct TrackedMppDataPacket
 
     void addChunk(std::string && value)
     {
+        assert(!is_local);
         mem_tracker_wrapper.alloc(value.size());
         packet.add_chunks(std::move(value));
     }
 
     void serializeByResponse(const tipb::SelectResponse & response)
     {
+        assert(!is_local);
         mem_tracker_wrapper.alloc(response.ByteSizeLong());
         if (!response.SerializeToString(packet.mutable_data()))
         {
@@ -144,6 +154,7 @@ struct TrackedMppDataPacket
 
     void read(const std::unique_ptr<::grpc::ClientAsyncReader<::mpp::MPPDataPacket>> & reader, void * callback)
     {
+        assert(!is_local);
         reader->Read(&packet, callback);
         need_recompute = true;
         //we shouldn't update tracker now, since it's an async reader!!
@@ -152,6 +163,7 @@ struct TrackedMppDataPacket
     // we need recompute in some cases we can't update memory counter timely, such as async read
     void recomputeTrackedMem()
     {
+        assert(!is_local);
         if (need_recompute)
         {
             try
@@ -169,6 +181,7 @@ struct TrackedMppDataPacket
 
     bool read(const std::unique_ptr<::grpc::ClientReader<::mpp::MPPDataPacket>> & reader)
     {
+        assert(!is_local);
         bool ret = reader->Read(&packet);
         mem_tracker_wrapper.freeAll();
         mem_tracker_wrapper.alloc(estimateAllocatedSize(packet));
@@ -177,6 +190,7 @@ struct TrackedMppDataPacket
 
     void switchMemTracker(MemoryTracker * new_memory_tracker)
     {
+        assert(!is_local);
         mem_tracker_wrapper.switchMemTracker(new_memory_tracker);
     }
 
@@ -188,14 +202,39 @@ struct TrackedMppDataPacket
 
     std::shared_ptr<DB::TrackedMppDataPacket> copy() const
     {
-        return std::make_shared<TrackedMppDataPacket>(
-            packet,
-            mem_tracker_wrapper.size,
-            mem_tracker_wrapper.memory_tracker);
+        if (is_local)
+        {
+            Blocks tmp = blocks_for_local_tunnel;
+            return std::make_shared<TrackedMppDataPacket>(std::move(tmp));
+        }
+        else
+        {
+            return std::make_shared<TrackedMppDataPacket>(
+                packet,
+                mem_tracker_wrapper.size,
+                mem_tracker_wrapper.memory_tracker);
+        }
+    }
+
+    size_t byteSizeLong() const
+    {
+        if (is_local)
+        {
+            size_t val = 0;
+            for (const auto & block : blocks_for_local_tunnel)
+                val += block.bytes();
+            return val;
+        }
+        else
+        {
+            return packet.ByteSizeLong();
+        }
     }
 
     MemTrackerWrapper mem_tracker_wrapper;
     mpp::MPPDataPacket packet;
+    Blocks blocks_for_local_tunnel;
+    bool is_local = false;
     bool need_recompute = false;
     String error_message;
 };

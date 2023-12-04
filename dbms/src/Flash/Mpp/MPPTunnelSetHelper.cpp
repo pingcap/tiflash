@@ -18,7 +18,6 @@
 
 namespace DB::MPPTunnelSetHelper
 {
-
 TrackedMppDataPacketPtr ToPacket(
     const Block & header,
     std::vector<MutableColumns> && part_columns,
@@ -39,6 +38,23 @@ TrackedMppDataPacketPtr ToPacket(
     auto tracked_packet = std::make_shared<TrackedMppDataPacket>(version);
     tracked_packet->addChunk(std::move(res));
     original_size += codec.original_size;
+    return tracked_packet;
+}
+
+TrackedMppDataPacketPtr ToLocalPacket(
+    const Block & header,
+    std::vector<MutableColumns> && part_columns,
+    size_t & original_size)
+{
+    Blocks blocks;
+    for (auto && columns : part_columns)
+    {
+        auto block = header.cloneWithColumns(std::move(columns));
+        if (block && block.rows() > 0)
+            blocks.push_back(std::move(block));
+    }
+    auto tracked_packet = std::make_shared<TrackedMppDataPacket>(std::move(blocks));
+    original_size += tracked_packet->byteSizeLong();
     return tracked_packet;
 }
 
@@ -64,6 +80,18 @@ TrackedMppDataPacketPtr ToPacket(
     return tracked_packet;
 }
 
+TrackedMppDataPacketPtr ToLocalPacket(
+    Blocks && blocks,
+    size_t & original_size)
+{
+    if (blocks.empty())
+        return nullptr;
+
+    auto tracked_packet = std::make_shared<TrackedMppDataPacket>(std::move(blocks));
+    original_size += tracked_packet->byteSizeLong();
+    return tracked_packet;
+}
+
 TrackedMppDataPacketPtr ToPacketV0(Blocks & blocks, const std::vector<tipb::FieldType> & field_types)
 {
     if (blocks.empty())
@@ -79,6 +107,38 @@ TrackedMppDataPacketPtr ToPacketV0(Blocks & blocks, const std::vector<tipb::Fiel
         tracked_packet->addChunk(codec_stream->getString());
         codec_stream->clear();
     }
+    return tracked_packet;
+}
+
+TrackedMppDataPacketPtr ToFineGrainedLocalPacket(
+    const Block & header,
+    std::vector<IColumn::ScatterColumns> & scattered,
+    size_t bucket_idx,
+    UInt64 fine_grained_shuffle_stream_count,
+    size_t num_columns,
+    size_t & original_size)
+{
+    Blocks blocks;
+    for (uint64_t stream_idx = 0; stream_idx < fine_grained_shuffle_stream_count; ++stream_idx)
+    {
+        // assemble scatter columns into a block
+        MutableColumns columns;
+        columns.reserve(num_columns);
+        for (size_t col_id = 0; col_id < num_columns; ++col_id)
+            columns.emplace_back(std::move(scattered[col_id][bucket_idx + stream_idx]));
+        auto block = header.cloneWithColumns(std::move(columns));
+        if (block && block.rows() > 0)
+            blocks.push_back(std::move(block));
+
+        for (size_t col_id = 0; col_id < num_columns; ++col_id)
+        {
+            columns[col_id]->popBack(columns[col_id]->size()); // clear column
+            scattered[col_id][bucket_idx + stream_idx] = std::move(columns[col_id]);
+        }
+    }
+
+    auto tracked_packet = std::make_shared<TrackedMppDataPacket>(std::move(blocks));
+    original_size += tracked_packet->byteSizeLong();
     return tracked_packet;
 }
 

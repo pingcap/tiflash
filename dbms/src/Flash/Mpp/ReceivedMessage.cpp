@@ -23,6 +23,15 @@ const std::vector<const String *> & ReceivedMessage::getChunks(size_t stream_id)
     else
         return chunks;
 }
+
+const Blocks & ReceivedMessage::getBlocks(size_t stream_id) const
+{
+    if (remaining_consumers != nullptr)
+        return fine_grained_blocks[stream_id];
+    else
+        return blocks;
+}
+
 // Constructor that move chunks.
 ReceivedMessage::ReceivedMessage(
     size_t source_index_,
@@ -68,8 +77,69 @@ ReceivedMessage::ReceivedMessage(
         }
     }
 }
+
+size_t ReceivedMessage::byteSizeLong() const
+{
+    if (is_local)
+    {
+        size_t val = 0;
+        for (const auto & block : blocks)
+            val += block.bytes();
+        return val;
+    }
+    else
+    {
+        return getPacket().ByteSizeLong();
+    }
+}
+
+// Constructor that move chunks.
+ReceivedMessage::ReceivedMessage(
+    size_t source_index_,
+    const String & req_info_,
+    const std::shared_ptr<DB::TrackedMppDataPacket> & packet_,
+    Blocks && blocks_,
+    size_t fine_grained_consumer_size)
+    : source_index(source_index_)
+    , req_info(req_info_)
+    , packet(packet_)
+    , error_ptr(nullptr)
+    , resp_ptr(nullptr)
+    , blocks(blocks_)
+    , is_local(true)
+{
+    if (fine_grained_consumer_size > 0)
+    {
+        remaining_consumers = std::make_shared<std::atomic<size_t>>(fine_grained_consumer_size);
+        fine_grained_chunks.resize(fine_grained_consumer_size);
+        if (!blocks.empty())
+        {
+            RUNTIME_CHECK_MSG(
+                !packet->packet.stream_ids().empty(),
+                "MPPDataPacket.stream_ids empty, it means ExchangeSender is old version of binary "
+                "(source_index: {}) while fine grained shuffle of ExchangeReceiver is enabled. "
+                "Cannot handle this.",
+                source_index);
+
+            // packet.stream_ids[i] is corresponding to packet.blocks_from_local_tunnel[i],
+            // indicating which stream_id this block belongs to.
+            RUNTIME_CHECK_MSG(
+                blocks.size() == static_cast<size_t>(packet->packet.stream_ids_size()),
+                "Packet's blocks_for_local_tunnel size({}) not equal to its size of streams({})",
+                blocks.size(),
+                packet->packet.stream_ids_size());
+
+            for (int i = 0; i < packet->packet.stream_ids_size(); ++i)
+            {
+                UInt64 stream_id = packet->packet.stream_ids(i) % fine_grained_consumer_size;
+                fine_grained_blocks[stream_id].push_back(blocks[i]);
+            }
+        }
+    }
+}
+
 bool ReceivedMessage::containUsefulMessage() const
 {
-    return error_ptr != nullptr || resp_ptr != nullptr || !chunks.empty();
+    return error_ptr != nullptr || resp_ptr != nullptr || !chunks.empty() || !blocks.empty();
 }
 } // namespace DB
