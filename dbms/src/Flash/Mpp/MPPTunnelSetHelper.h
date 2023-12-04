@@ -38,9 +38,7 @@ TrackedMppDataPacketPtr ToPacket(
     CompressionMethod method,
     size_t & original_size);
 
-TrackedMppDataPacketPtr ToLocalPacket(
-    Blocks && blocks,
-    size_t & original_size);
+TrackedMppDataPacketPtr ToLocalPacket(Blocks && blocks, size_t & original_size);
 
 TrackedMppDataPacketPtr ToPacket(
     const Block & header,

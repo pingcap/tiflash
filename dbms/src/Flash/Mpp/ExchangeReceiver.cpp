@@ -740,10 +740,10 @@ DecodeDetail ExchangeReceiverBase<RPCContext>::decodeChunks(
         if (chunks.empty())
             return detail;
         const auto & packet = recv_msg->getPacket();
-    
+
         // Record total packet size even if fine grained shuffle is enabled.
         detail.packet_bytes = packet.ByteSizeLong();
-    
+
         switch (auto version = packet.version(); version)
         {
         case DB::MPPDataPacketV0:

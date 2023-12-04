@@ -80,9 +80,7 @@ TrackedMppDataPacketPtr ToPacket(
     return tracked_packet;
 }
 
-TrackedMppDataPacketPtr ToLocalPacket(
-    Blocks && blocks,
-    size_t & original_size)
+TrackedMppDataPacketPtr ToLocalPacket(Blocks && blocks, size_t & original_size)
 {
     if (blocks.empty())
         return nullptr;

@@ -297,7 +297,8 @@ static void broadcastOrPassThroughWrite(
     {
         auto tmp_block = blocks;
         local_tunnel_tracked_packet = MPPTunnelSetHelper::ToLocalPacket(std::move(tmp_block), original_size);
-        remote_tunnel_tracked_packet = MPPTunnelSetHelper::ToPacket(std::move(blocks), version, compression_method, original_size);
+        remote_tunnel_tracked_packet
+            = MPPTunnelSetHelper::ToPacket(std::move(blocks), version, compression_method, original_size);
         if (local_tunnel_tracked_packet)
             tracked_packet_bytes = local_tunnel_tracked_packet->byteSizeLong();
         else if (remote_tunnel_tracked_packet)
@@ -315,7 +316,8 @@ static void broadcastOrPassThroughWrite(
     }
     else if (local_tunnel_cnt != tunnel_cnt)
     {
-        remote_tunnel_tracked_packet = MPPTunnelSetHelper::ToPacket(std::move(blocks), version, compression_method, original_size);
+        remote_tunnel_tracked_packet
+            = MPPTunnelSetHelper::ToPacket(std::move(blocks), version, compression_method, original_size);
         if (remote_tunnel_tracked_packet)
             tracked_packet_bytes = remote_tunnel_tracked_packet->byteSizeLong();
         else
@@ -426,23 +428,22 @@ void MPPTunnelSetWriterBase::fineGrainedShuffleWrite(
 
     bool is_local = mpp_tunnel_set->isLocal(partition_id);
     size_t original_size = 0;
-    auto tracked_packet = is_local 
-        ? MPPTunnelSetHelper::ToFineGrainedLocalPacket(
-            header,
-            scattered,
-            bucket_idx,
-            fine_grained_shuffle_stream_count,
-            num_columns,
-            original_size) 
-        : MPPTunnelSetHelper::ToFineGrainedPacket(
-            header,
-            scattered,
-            bucket_idx,
-            fine_grained_shuffle_stream_count,
-            num_columns,
-            version,
-            compression_method,
-            original_size);
+    auto tracked_packet = is_local ? MPPTunnelSetHelper::ToFineGrainedLocalPacket(
+                              header,
+                              scattered,
+                              bucket_idx,
+                              fine_grained_shuffle_stream_count,
+                              num_columns,
+                              original_size)
+                                   : MPPTunnelSetHelper::ToFineGrainedPacket(
+                                       header,
+                                       scattered,
+                                       bucket_idx,
+                                       fine_grained_shuffle_stream_count,
+                                       num_columns,
+                                       version,
+                                       compression_method,
+                                       original_size);
 
     if unlikely (tracked_packet->getPacket().chunks_size() <= 0)
         return;
