@@ -32,6 +32,8 @@ struct AsyncTasks
         log = DB::Logger::get("AsyncTasks");
     }
 
+    struct CancelHandle;
+    using CancelHandlePtr = std::shared_ptr<CancelHandle>;
     struct CancelHandle
     {
         CancelHandle() = default;
@@ -39,13 +41,6 @@ struct AsyncTasks
 
         bool canceled() const { return inner->load(); }
 
-        void doCancel()
-        {
-            // Use lock here to prevent losing signal.
-            std::unique_lock<std::mutex> lock(mut);
-            inner->store(true);
-            cv.notify_all();
-        }
         bool blockedWaitFor(std::chrono::duration<double, std::milli> timeout)
         {
             std::unique_lock<std::mutex> lock(mut);
@@ -53,7 +48,27 @@ struct AsyncTasks
             return canceled();
         }
 
+        static CancelHandlePtr genAlreadyCanceled() {
+            CancelHandlePtr h = std::make_shared<CancelHandle>();
+            h->doSetCancel();
+            return h;
+        }
+
     private:
+        void doSetCancel()
+        {
+            inner->store(true);
+        }
+        
+        void doCancel()
+        {
+            // Use lock here to prevent losing signal.
+            std::unique_lock<std::mutex> lock(mut);
+            inner->store(true);
+            cv.notify_all();
+        }
+
+        friend struct AsyncTasks;
         std::shared_ptr<std::atomic_bool> inner = std::make_shared<std::atomic_bool>(false);
         std::mutex mut;
         std::condition_variable cv;
@@ -61,9 +76,10 @@ struct AsyncTasks
 
     struct Elem
     {
-        Elem(std::future<R> && fut_, uint64_t start_ts_)
+        Elem(std::future<R> && fut_, uint64_t start_ts_, std::shared_ptr<std::atomic_bool> && triggered_)
             : fut(std::move(fut_))
             , start_ts(start_ts_)
+            , triggered(triggered_)
         {
             cancel = std::make_shared<CancelHandle>();
         }
@@ -73,17 +89,38 @@ struct AsyncTasks
         std::future<R> fut;
         uint64_t start_ts;
         std::shared_ptr<CancelHandle> cancel;
+        std::shared_ptr<std::atomic_bool> triggered;
     };
 
-    std::shared_ptr<CancelHandle> getCancelHandle(Key k) const
+    // It's guarunteed a task is no longer accessible once canceled or has its result fetched.
+    enum class TaskState {
+        NotScheduled,
+        InQueue,
+        Running,
+        Finished,
+    };
+
+    enum class BlockCancelResult {
+        Ok,
+        NotRunning,
+    };
+
+    /// Although not mandatory, we suggest hold the handle at the beginning of the body of async task.
+    std::shared_ptr<CancelHandle> getCancelHandleFromExecutor(Key k) const
     {
         std::unique_lock<std::mutex> l(mtx);
         auto it = tasks.find(k);
-        RUNTIME_CHECK_MSG(it != tasks.end(), "fetchResult meets empty key");
+        if unlikely(it == tasks.end()) {
+            // When the invokable is running by some executor in the thread pool,
+            // it must have been registered into `tasks`.
+            // So the only case that an access for a non-existing task is that the task is already cancelled asyncly.
+            return CancelHandle::genAlreadyCanceled();
+        }
         return it->second.cancel;
     }
 
-    bool discardTask(Key k)
+    // Only unregister, no clean.
+    bool leakingDiscardTask(Key k)
     {
         std::scoped_lock l(mtx);
         auto it = tasks.find(k);
@@ -95,34 +132,99 @@ struct AsyncTasks
         return false;
     }
 
+    template<typename ResultDropper>
+    void asyncCancelTask(Key k, ResultDropper result_dropper, bool panic_if_noexist)
+    {
+        auto state = queryState(k);
+        if (panic_if_noexist && state == TaskState::NotScheduled)
+            return;
+        if (state == TaskState::Finished) {
+            result_dropper();
+        } else {
+            auto cancel_handle = getCancelHandleFromCaller(k);
+            cancel_handle->doCancel();
+            // Cancel logic should do clean itself
+        }
+        {
+            std::scoped_lock l(mtx);
+            auto it = tasks.find(k);
+            if (it != tasks.end())
+                tasks.erase(it);
+        }
+    }
+
+    void asyncCancelTask(Key k)
+    {
+        asyncCancelTask(k, [](){}, true);
+    }
+
+    // Consider a one producer thread one consumer thread scene, the first task is running, 
+    // and the second task is in queue. If we block cancel the second task here, deadlock will happen.
+    // So we only allow block canceling running tasks, and users have to guaruantee all infinite loop having cancel checking.
+    [[nodiscard]] BlockCancelResult blockedCancelRunningTask(Key k)
+    {
+        auto cancel_handle = getCancelHandleFromCaller(k);
+        auto state = queryState(k);
+        RUNTIME_CHECK_MSG(state != TaskState::NotScheduled, "Can't block wait a non-scheduled task");
+        if (state == TaskState::InQueue) {
+            return BlockCancelResult::NotRunning;
+        }
+        RUNTIME_CHECK_MSG(!cancel_handle->canceled(), "Try block cancel running task twice");
+        cancel_handle->doCancel();
+        fetchResult(k);
+        return BlockCancelResult::Ok;
+    }
+
     bool addTask(Key k, Func f)
     {
         std::scoped_lock l(mtx);
         using P = std::packaged_task<R()>;
         std::shared_ptr<P> p = std::make_shared<P>(P(f));
+        std::shared_ptr<std::atomic_bool> triggered = std::make_shared<std::atomic_bool>(false);
 
-        auto res = thread_pool->trySchedule([p]() { (*p)(); }, 0, 0);
+        // The executor thread may outlive `AsyncTasks` in most cases, so we don't capture `this`.
+        auto res = thread_pool->trySchedule([p, triggered]() {
+            triggered->store(true);
+            // We can hold the cancel handle here to prevent it from destructing, but it is not necessary.
+            (*p)();
+            // We don't erase from `tasks` here, since we won't capture `this`
+        }, 0, 0);
         if (res)
         {
-            tasks.insert({k, Elem(p->get_future(), getCurrentMillis())});
+            tasks.insert({k, Elem(p->get_future(), getCurrentMillis(), std::move(triggered))});
         }
         return res;
     }
 
-    bool isScheduled(Key key) const
-    {
-        std::scoped_lock l(mtx);
-        return tasks.contains(key);
-    }
-
-    bool isReady(Key key) const
-    {
+    TaskState queryState(Key key) const {
         using namespace std::chrono_literals;
         std::scoped_lock l(mtx);
         auto it = tasks.find(key);
         if (it == tasks.end())
-            return false;
-        return it->second.fut.wait_for(0ms) == std::future_status::ready;
+            return TaskState::NotScheduled;
+        if (!it->second.triggered->load())
+            return TaskState::InQueue;
+        if (it->second.fut.wait_for(0ms) == std::future_status::ready)
+            return TaskState::Finished;
+        return TaskState::Running;
+    }
+
+    bool isScheduled(Key key) const
+    {
+        return queryState(key) != TaskState::NotScheduled;
+    }
+
+    bool isInQueue(Key key) const {
+        return queryState(key) == TaskState::InQueue;
+    }
+
+    bool isRunning(Key key) const {
+        return queryState(key) == TaskState::Running;
+    }
+
+    bool isReady(Key key) const
+    {
+        return queryState(key) == TaskState::Finished;
     }
 
     R fetchResult(Key key)
@@ -168,12 +270,24 @@ struct AsyncTasks
 
     std::unique_ptr<ThreadPool> & inner() { return thread_pool; }
 
+    size_t count() const { return tasks.size(); }
+
     static uint64_t getCurrentMillis()
     {
         return std::chrono::duration_cast<std::chrono::milliseconds>(
                    std::chrono::system_clock::now().time_since_epoch())
             .count();
     }
+
+protected:
+    std::shared_ptr<CancelHandle> getCancelHandleFromCaller(Key k) const
+    {
+        std::unique_lock<std::mutex> l(mtx);
+        auto it = tasks.find(k);
+        RUNTIME_CHECK_MSG(it != tasks.end(), "getCancelHandleFromCaller meets empty key");
+        return it->second.cancel;
+    }
+
 
 protected:
     std::unordered_map<Key, Elem> tasks;

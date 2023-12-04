@@ -191,7 +191,7 @@ std::variant<CheckpointRegionInfoAndData, FastAddPeerRes> FastAddPeerImplSelect(
     Stopwatch watch;
     std::unordered_map<StoreID, UInt64> checked_seq_map;
     auto fap_ctx = tmt.getContext().getSharedContextDisagg()->fap_context;
-    auto cancel_handle = fap_ctx->tasks_trace->getCancelHandle(region_id);
+    auto cancel_handle = fap_ctx->tasks_trace->getCancelHandleFromExecutor(region_id);
     const auto & settings = tmt.getContext().getSettingsRef();
     auto current_store_id = tmt.getKVStore()->clonedStoreMeta().id();
     std::vector<StoreID> candidate_store_ids;
@@ -264,7 +264,7 @@ std::variant<CheckpointRegionInfoAndData, FastAddPeerRes> FastAddPeerImplSelect(
                 LOG_INFO(log, "FastAddPeer timeout region_id={} new_peer_id={}", region_id, new_peer_id);
                 GET_METRIC(tiflash_fap_task_result, type_failed_timeout).Increment();
                 // We don't wait here.
-                cancel_handle->doCancel();
+                fap_ctx->tasks_trace->asyncCancelTask(region_id);
                 return genFastAddPeerRes(FastAddPeerStatus::NoSuitable, "", "");
             }
             SYNC_FOR("in_FastAddPeerImplSelect::before_sleep");
@@ -287,7 +287,7 @@ FastAddPeerRes FastAddPeerImplWrite(
 {
     auto log = Logger::get("FastAddPeer");
     auto fap_ctx = tmt.getContext().getSharedContextDisagg()->fap_context;
-    auto cancel_handle = fap_ctx->tasks_trace->getCancelHandle(region_id);
+    auto cancel_handle = fap_ctx->tasks_trace->getCancelHandleFromExecutor(region_id);
     const auto & settings = tmt.getContext().getSettingsRef();
 
     Stopwatch watch;

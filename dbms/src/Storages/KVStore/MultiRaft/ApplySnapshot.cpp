@@ -23,6 +23,7 @@
 #include <Storages/KVStore/MultiRaft/Disagg/FastAddPeer.h>
 #include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/TMTContext.h>
+#include <Storages/KVStore/MultiRaft/Disagg/CheckpointIngestInfo.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/StorageDeltaMergeHelpers.h>
 
@@ -121,18 +122,17 @@ void KVStore::checkAndApplyPreHandledSnapshot(const RegionPtrWrap & new_region, 
     if (tmt.getContext().getSharedContextDisagg()->isDisaggregatedStorageMode())
     {
         auto fap_ctx = tmt.getContext().getSharedContextDisagg()->fap_context;
+        auto region_id = new_region->id();
         // Everytime we meet a legacy snapshot, we try to clean obsolete fap ingest info.
         if constexpr (!std::is_same_v<RegionPtrWrap, RegionPtrWithCheckpointInfo>)
         {
-            // TODO(fap): Better cancel fap process in first, however, there is no case currently where a legacy snapshot runs with fap phase1/phase2 in parallel.
-            // The only case is a fap failed after phase 1 and fallback and failed to clean its phase 1 result.
-            fap_ctx->cleanCheckpointIngestInfo(tmt, new_region->id());
-        }
-        // Another FAP will not take place if this stage is not finished.
-        if (fap_ctx->tasks_trace->discardTask(new_region->id()))
-        {
-            LOG_ERROR(log, "FastAddPeer: find old fap task, region_id={}", new_region->id());
-        }
+            // Legacy snapshot and FAP(both phase 1 and 2) for a region is exclusive for now.
+            // We are handling the case where FAP failed after phase 1 and left stuffs in `AsyncTasks`.
+            fap_ctx->tasks_trace->asyncCancelTask(region_id, [&](){
+                LOG_ERROR(log, "FastAddPeer: find old fap task, region_id={}", new_region->id());
+                CheckpointIngestInfo::forciblyClean(tmt, region_id, false);
+            }, false);
+}
     }
 }
 

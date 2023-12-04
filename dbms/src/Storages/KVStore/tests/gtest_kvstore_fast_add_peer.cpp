@@ -477,7 +477,7 @@ try
     sp.waitAndPause();
     sp.next();
     sp.waitAndPause();
-    fap_context->tasks_trace->getCancelHandle(region_id)->doCancel();
+    fap_context->tasks_trace->asyncCancelTask(region_id);
     sp.next();
     sp.disable();
     t.join();
@@ -519,7 +519,7 @@ try
     // The FAP will fail because it doesn't contain the new peer in region meta.
     auto t = std::thread([&]() { FastAddPeer(&server, region_id, 2333); });
     sp.waitAndPause();
-    fap_context->tasks_trace->getCancelHandle(region_id)->doCancel();
+    fap_context->tasks_trace->asyncCancelTask(region_id);
     sp.next();
     sp.disable();
     t.join();

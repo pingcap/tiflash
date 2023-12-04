@@ -693,6 +693,47 @@ TEST_F(RegionKVStoreTest, AsyncTasksCancel)
     using namespace std::chrono_literals;
     using TestAsyncTasks = AsyncTasks<uint64_t, std::function<void()>, void>;
 
+    // Block cancel
+    {
+        auto async_tasks = std::make_unique<TestAsyncTasks>(2, 2, 10);
+        int total = 9;
+        int finished = 0;
+        std::vector<bool> f(total, false);
+        for (int i = 0; i < total; i++)
+        {
+            auto res = async_tasks->addTask(i, [i, &async_tasks, &finished]() {
+                auto cancel_handle = async_tasks->getCancelHandleFromExecutor(i);
+                while (true)
+                {
+                    std::this_thread::sleep_for(100ms);
+                    if (cancel_handle->canceled())
+                    {
+                        break;
+                    }
+                }
+                finished += 1;
+            });
+            // Ensure thread 1 is the first
+            if (i == 0)
+                std::this_thread::sleep_for(10ms);
+            ASSERT_TRUE(res);
+        }
+        
+        while(finished < total) {
+            std::this_thread::sleep_for(100ms);
+            for (int i = 0; i < total; i++)
+            {
+                if (f[i]) continue;
+                if(async_tasks->blockedCancelRunningTask(i) == TestAsyncTasks::BlockCancelResult::Ok) {
+                    f[i] = true;
+                    break;
+                }
+            }
+        }
+
+        ASSERT_EQ(async_tasks->count(), 0);
+    }
+
     // Cancel tasks in queue
     {
         auto async_tasks = std::make_unique<TestAsyncTasks>(1, 1, 100);
@@ -702,7 +743,7 @@ TEST_F(RegionKVStoreTest, AsyncTasksCancel)
         for (int i = 0; i < total; i++)
         {
             auto res = async_tasks->addTask(i, [i, &async_tasks, &finished]() {
-                auto cancel_handle = async_tasks->getCancelHandle(i);
+                auto cancel_handle = async_tasks->getCancelHandleFromExecutor(i);
                 while (true)
                 {
                     // Busy loop to take over cpu
@@ -721,9 +762,8 @@ TEST_F(RegionKVStoreTest, AsyncTasksCancel)
 
         for (int i = 0; i < total; i++)
         {
-            auto cancel_handle = async_tasks->getCancelHandle(i);
             std::this_thread::sleep_for(100ms);
-            cancel_handle->doCancel();
+            async_tasks->asyncCancelTask(i);
         }
 
         int elapsed = 0;
@@ -737,6 +777,7 @@ TEST_F(RegionKVStoreTest, AsyncTasksCancel)
             std::this_thread::sleep_for(1000ms);
         }
         ASSERT_TRUE(elapsed < 500);
+        ASSERT_EQ(async_tasks->count(), 0);
     }
 }
 
@@ -771,8 +812,7 @@ TEST_F(RegionKVStoreTest, AsyncTasksCommon)
         {
             if (async_tasks->isScheduled(to_be_canceled))
             {
-                auto cancel_handle = async_tasks->getCancelHandle(to_be_canceled);
-                cancel_handle->doCancel();
+                async_tasks->asyncCancelTask(to_be_canceled);
             }
             // Otherwise, the task is not added.
         }
@@ -785,7 +825,7 @@ TEST_F(RegionKVStoreTest, AsyncTasksCommon)
                 auto res = async_tasks->addTask(i, [i, &async_tasks, to_be_canceled]() {
                     if (i == to_be_canceled)
                     {
-                        auto cancel_handle = async_tasks->getCancelHandle(i);
+                        auto cancel_handle = async_tasks->getCancelHandleFromExecutor(i);
                         while (true)
                         {
                             if (cancel_handle->blockedWaitFor(200ms))
@@ -820,6 +860,8 @@ TEST_F(RegionKVStoreTest, AsyncTasksCommon)
         }
         std::this_thread::sleep_for(200ms);
     }
+
+    ASSERT_EQ(async_tasks->count(), 0);
 }
 
 } // namespace tests
