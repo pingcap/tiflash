@@ -20,10 +20,10 @@
 #include <Storages/KVStore/Decode/RegionTable.h>
 #include <Storages/KVStore/FFI/ProxyFFI.h>
 #include <Storages/KVStore/KVStore.h>
+#include <Storages/KVStore/MultiRaft/Disagg/CheckpointIngestInfo.h>
 #include <Storages/KVStore/MultiRaft/Disagg/FastAddPeer.h>
 #include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/TMTContext.h>
-#include <Storages/KVStore/MultiRaft/Disagg/CheckpointIngestInfo.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/StorageDeltaMergeHelpers.h>
 
@@ -128,11 +128,14 @@ void KVStore::checkAndApplyPreHandledSnapshot(const RegionPtrWrap & new_region, 
         {
             // Legacy snapshot and FAP(both phase 1 and 2) for a region is exclusive for now.
             // We are handling the case where FAP failed after phase 1 and left stuffs in `AsyncTasks`.
-            fap_ctx->tasks_trace->asyncCancelTask(region_id, [&](){
-                LOG_ERROR(log, "FastAddPeer: find old fap task, region_id={}", new_region->id());
-                CheckpointIngestInfo::forciblyClean(tmt, region_id, false);
-            }, false);
-}
+            fap_ctx->tasks_trace->asyncCancelTask(
+                region_id,
+                [&]() {
+                    LOG_ERROR(log, "FastAddPeer: find old fap task, region_id={}", new_region->id());
+                    CheckpointIngestInfo::forciblyClean(tmt, region_id, false);
+                },
+                false);
+        }
     }
 }
 

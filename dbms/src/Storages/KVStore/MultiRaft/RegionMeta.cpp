@@ -522,7 +522,8 @@ const RegionState & RegionMeta::getRegionState() const
     return region_state;
 }
 
-RegionState & RegionMeta::debugMutRegionState() {
+RegionState & RegionMeta::debugMutRegionState()
+{
     std::lock_guard lock(mutex);
     return region_state;
 }

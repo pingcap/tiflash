@@ -56,7 +56,8 @@ void ApplyFapSnapshotImpl(TMTContext & tmt, TiFlashRaftProxyHelper * proxy_helpe
 namespace tests
 {
 
-struct FAPTestOpt {
+struct FAPTestOpt
+{
     bool mock_add_new_peer = false;
 };
 
@@ -314,7 +315,8 @@ CheckpointRegionInfoAndData RegionKVStoreTestFAP::prepareForRestart(FAPTestOpt o
         {WriteCmdType::Put, WriteCmdType::Put},
         {ColumnFamilyType::Default, ColumnFamilyType::Write});
     kvs.setRegionCompactLogConfig(0, 0, 0, 0);
-    if (opt.mock_add_new_peer) {
+    if (opt.mock_add_new_peer)
+    {
         *kvs.getRegion(region_id)->mutMeta().debugMutRegionState().getMutRegion().add_peers() = createPeer(2333, true);
         proxy_instance->getRegion(region_id)->addPeer(store_id, 2333, metapb::PeerRole::Learner);
     }
@@ -526,11 +528,14 @@ try
     ASSERT_TRUE(!fap_context->tryGetCheckpointIngestInfo(region_id).has_value());
     // Cancel async tasks, and make sure the data is cleaned after limited time.
     bool thrown = false;
-    for (int i = 0; i < 5; i++) {
-        try {
+    for (int i = 0; i < 5; i++)
+    {
+        try
+        {
             CheckpointIngestInfo::restore(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333);
         }
-        catch (...) {
+        catch (...)
+        {
             thrown = true;
             break;
         }

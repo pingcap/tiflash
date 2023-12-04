@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/FmtUtils.h>
 #include <Common/Logger.h>
 #include <Common/UniThreadPool.h>
 
@@ -48,18 +49,16 @@ struct AsyncTasks
             return canceled();
         }
 
-        static CancelHandlePtr genAlreadyCanceled() {
+        static CancelHandlePtr genAlreadyCanceled()
+        {
             CancelHandlePtr h = std::make_shared<CancelHandle>();
             h->doSetCancel();
             return h;
         }
 
     private:
-        void doSetCancel()
-        {
-            inner->store(true);
-        }
-        
+        void doSetCancel() { inner->store(true); }
+
         void doCancel()
         {
             // Use lock here to prevent losing signal.
@@ -93,14 +92,16 @@ struct AsyncTasks
     };
 
     // It's guarunteed a task is no longer accessible once canceled or has its result fetched.
-    enum class TaskState {
+    enum class TaskState
+    {
         NotScheduled,
         InQueue,
         Running,
         Finished,
     };
 
-    enum class BlockCancelResult {
+    enum class BlockCancelResult
+    {
         Ok,
         NotRunning,
     };
@@ -110,7 +111,8 @@ struct AsyncTasks
     {
         std::unique_lock<std::mutex> l(mtx);
         auto it = tasks.find(k);
-        if unlikely(it == tasks.end()) {
+        if unlikely (it == tasks.end())
+        {
             // When the invokable is running by some executor in the thread pool,
             // it must have been registered into `tasks`.
             // So the only case that an access for a non-existing task is that the task is already cancelled asyncly.
@@ -132,15 +134,18 @@ struct AsyncTasks
         return false;
     }
 
-    template<typename ResultDropper>
-    void asyncCancelTask(Key k, ResultDropper result_dropper, bool panic_if_noexist)
+    template <typename ResultDropper>
+    void asyncCancelTask(Key k, ResultDropper result_dropper, bool throw_if_noexist)
     {
         auto state = queryState(k);
-        if (panic_if_noexist && state == TaskState::NotScheduled)
+        if (!throw_if_noexist && state == TaskState::NotScheduled)
             return;
-        if (state == TaskState::Finished) {
+        if (state == TaskState::Finished)
+        {
             result_dropper();
-        } else {
+        }
+        else
+        {
             auto cancel_handle = getCancelHandleFromCaller(k);
             cancel_handle->doCancel();
             // Cancel logic should do clean itself
@@ -149,16 +154,21 @@ struct AsyncTasks
             std::scoped_lock l(mtx);
             auto it = tasks.find(k);
             if (it != tasks.end())
+            {
                 tasks.erase(it);
+            }
         }
     }
 
     void asyncCancelTask(Key k)
     {
-        asyncCancelTask(k, [](){}, true);
+        asyncCancelTask(
+            k,
+            []() {},
+            true);
     }
 
-    // Consider a one producer thread one consumer thread scene, the first task is running, 
+    // Consider a one producer thread one consumer thread scene, the first task is running,
     // and the second task is in queue. If we block cancel the second task here, deadlock will happen.
     // So we only allow block canceling running tasks, and users have to guaruantee all infinite loop having cancel checking.
     [[nodiscard]] BlockCancelResult blockedCancelRunningTask(Key k)
@@ -166,7 +176,8 @@ struct AsyncTasks
         auto cancel_handle = getCancelHandleFromCaller(k);
         auto state = queryState(k);
         RUNTIME_CHECK_MSG(state != TaskState::NotScheduled, "Can't block wait a non-scheduled task");
-        if (state == TaskState::InQueue) {
+        if (state == TaskState::InQueue)
+        {
             return BlockCancelResult::NotRunning;
         }
         RUNTIME_CHECK_MSG(!cancel_handle->canceled(), "Try block cancel running task twice");
@@ -178,17 +189,21 @@ struct AsyncTasks
     bool addTask(Key k, Func f)
     {
         std::scoped_lock l(mtx);
+        RUNTIME_CHECK(!tasks.contains(k));
         using P = std::packaged_task<R()>;
         std::shared_ptr<P> p = std::make_shared<P>(P(f));
         std::shared_ptr<std::atomic_bool> triggered = std::make_shared<std::atomic_bool>(false);
 
         // The executor thread may outlive `AsyncTasks` in most cases, so we don't capture `this`.
-        auto res = thread_pool->trySchedule([p, triggered]() {
-            triggered->store(true);
-            // We can hold the cancel handle here to prevent it from destructing, but it is not necessary.
-            (*p)();
-            // We don't erase from `tasks` here, since we won't capture `this`
-        }, 0, 0);
+        auto res = thread_pool->trySchedule(
+            [p, triggered]() {
+                triggered->store(true);
+                // We can hold the cancel handle here to prevent it from destructing, but it is not necessary.
+                (*p)();
+                // We don't erase from `tasks` here, since we won't capture `this`
+            },
+            0,
+            0);
         if (res)
         {
             tasks.insert({k, Elem(p->get_future(), getCurrentMillis(), std::move(triggered))});
@@ -196,7 +211,8 @@ struct AsyncTasks
         return res;
     }
 
-    TaskState queryState(Key key) const {
+    TaskState queryState(Key key) const
+    {
         using namespace std::chrono_literals;
         std::scoped_lock l(mtx);
         auto it = tasks.find(key);
@@ -209,23 +225,13 @@ struct AsyncTasks
         return TaskState::Running;
     }
 
-    bool isScheduled(Key key) const
-    {
-        return queryState(key) != TaskState::NotScheduled;
-    }
+    bool isScheduled(Key key) const { return queryState(key) != TaskState::NotScheduled; }
 
-    bool isInQueue(Key key) const {
-        return queryState(key) == TaskState::InQueue;
-    }
+    bool isInQueue(Key key) const { return queryState(key) == TaskState::InQueue; }
 
-    bool isRunning(Key key) const {
-        return queryState(key) == TaskState::Running;
-    }
+    bool isRunning(Key key) const { return queryState(key) == TaskState::Running; }
 
-    bool isReady(Key key) const
-    {
-        return queryState(key) == TaskState::Finished;
-    }
+    bool isReady(Key key) const { return queryState(key) == TaskState::Finished; }
 
     R fetchResult(Key key)
     {
