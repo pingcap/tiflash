@@ -1016,7 +1016,7 @@ void SchemaBuilder<Getter, NameMapper>::applyDropSchema(const String & db_name)
     auto tombstone = tmt_context.getPDClient()->getTS();
     db->alterTombstone(context, tombstone, nullptr);
 
-    LOG_INFO(log, "Tombstoned database {}", db_name);
+    LOG_INFO(log, "Tombstoned database {}, tombstone={}", db_name, tombstone);
 }
 
 template <typename Getter, typename NameMapper>
@@ -1037,7 +1037,7 @@ void SchemaBuilder<Getter, NameMapper>::applyRecoverSchema(DatabaseID database_i
     auto db = context.tryGetDatabase(db_name);
     if (!db)
     {
-        LOG_INFO(
+        LOG_ERROR(
             log,
             "Recover database is ignored because instance is not exists, may have been physically dropped, "
             "database_id={}",
@@ -1249,6 +1249,7 @@ void SchemaBuilder<Getter, NameMapper>::applyDropPhysicalTable(const String & db
     }
     GET_METRIC(tiflash_schema_internal_ddl_count, type_drop_table).Increment();
     LOG_INFO(log, "Tombstoning table {}.{}", db_name, name_mapper.debugTableName(storage->getTableInfo()));
+    const UInt64 tombstone_ts = tmt_context.getPDClient()->getTS();
     AlterCommands commands;
     {
         AlterCommand command;
@@ -1258,12 +1259,12 @@ void SchemaBuilder<Getter, NameMapper>::applyDropPhysicalTable(const String & db
         // 1. Use current timestamp, which is after TiDB's drop time, to be the tombstone of this table;
         // 2. Use the same GC safe point as TiDB.
         // In such way our table will be GC-ed later than TiDB, which is safe and correct.
-        command.tombstone = tmt_context.getPDClient()->getTS();
+        command.tombstone = tombstone_ts;
         commands.emplace_back(std::move(command));
     }
     auto alter_lock = storage->lockForAlter(getThreadNameAndID());
     storage->alterFromTiDB(alter_lock, commands, db_name, storage->getTableInfo(), name_mapper, context);
-    LOG_INFO(log, "Tombstoned table {}.{}", db_name, name_mapper.debugTableName(storage->getTableInfo()));
+    LOG_INFO(log, "Tombstoned table {}.{}, tombstone={}", db_name, name_mapper.debugTableName(storage->getTableInfo()), tombstone_ts);
 }
 
 template <typename Getter, typename NameMapper>
