@@ -28,14 +28,24 @@
 namespace DB
 {
 
+static constexpr uint8_t FAP_INGEST_INFO_PERSIST_FMT_VER = 1;
+
 CheckpointIngestInfoPtr CheckpointIngestInfo::restore(
     TMTContext & tmt,
     const TiFlashRaftProxyHelper * proxy_helper,
     UInt64 region_id,
     UInt64 peer_id)
 {
-    auto ptr = std::shared_ptr<CheckpointIngestInfo>(new CheckpointIngestInfo(tmt, region_id, peer_id));
-    if (!ptr->loadFromLocal(proxy_helper))
+    StoreID remote_store_id;
+    RegionPtr region;
+    DM::Segments restored_segments;
+
+    auto uni_ps = tmt.getContext().getWriteNodePageStorage();
+    auto snapshot = uni_ps->getSnapshot(fmt::format("read_fap_i_{}", region_id));
+    auto page_id
+        = UniversalPageIdFormat::toLocalKVPrefix(UniversalPageIdFormat::LocalKVKeyType::FAPIngestInfo, region_id);
+    Page page = uni_ps->read(page_id, nullptr, snapshot, /*throw_on_not_exist*/ false);
+    if (!page.isValid())
     {
         throw Exception(
             ErrorCodes::LOGICAL_ERROR,
@@ -43,49 +53,6 @@ CheckpointIngestInfoPtr CheckpointIngestInfo::restore(
             region_id,
             peer_id,
             tmt.getKVStore()->getStoreID(std::memory_order_relaxed));
-    }
-    return ptr;
-}
-
-CheckpointIngestInfo::CheckpointIngestInfo(TMTContext & tmt_, UInt64 region_id_, UInt64 peer_id_)
-    : tmt(tmt_)
-    , region_id(region_id_)
-    , peer_id(peer_id_)
-    , remote_store_id(0)
-    , begin_time(0)
-{
-    log = DB::Logger::get("CheckpointIngestInfo");
-}
-
-DM::Segments CheckpointIngestInfo::getRestoredSegments() const
-{
-    return restored_segments;
-}
-
-UInt64 CheckpointIngestInfo::getRemoteStoreId() const
-{
-    return remote_store_id;
-}
-
-RegionPtr CheckpointIngestInfo::getRegion() const
-{
-    return region;
-}
-
-static constexpr uint8_t FAP_INGEST_INFO_PERSIST_FMT_VER = 1;
-
-bool CheckpointIngestInfo::loadFromLocal(const TiFlashRaftProxyHelper * proxy_helper)
-{
-    auto uni_ps = tmt.getContext().getWriteNodePageStorage();
-    auto snapshot = uni_ps->getSnapshot(fmt::format("read_fap_i_{}", region_id));
-    auto page_id
-        = UniversalPageIdFormat::toLocalKVPrefix(UniversalPageIdFormat::LocalKVKeyType::FAPIngestInfo, region_id);
-    Page page = uni_ps->read(page_id, nullptr, snapshot, /*throw_on_not_exist*/ false);
-
-    if (!page.isValid())
-    {
-        LOG_ERROR(log, "Can't read from CheckpointIngestInfo, page_id={} region_id={}", page_id, region_id);
-        return false;
     }
     ReadBufferFromMemory buf(page.data.begin(), page.data.size());
     RUNTIME_CHECK_MSG(readBinary2<UInt8>(buf) == FAP_INGEST_INFO_PERSIST_FMT_VER, "wrong fap ingest info format");
@@ -107,6 +74,7 @@ bool CheckpointIngestInfo::loadFromLocal(const TiFlashRaftProxyHelper * proxy_he
     auto table_id = region->getMappedTableID();
     auto storage = storages.get(keyspace_id, table_id);
 
+    auto log = DB::Logger::get("CheckpointIngestInfo");
     if (storage && storage->engineType() == TiDB::StorageEngine::DT)
     {
         auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
@@ -128,10 +96,18 @@ bool CheckpointIngestInfo::loadFromLocal(const TiFlashRaftProxyHelper * proxy_he
     {
         throw Exception(ErrorCodes::LOGICAL_ERROR, "unsupported storage engine");
     }
-    return true;
+
+    return std::make_shared<CheckpointIngestInfo>(
+        tmt,
+        region_id,
+        peer_id,
+        remote_store_id,
+        region,
+        std::move(restored_segments),
+        /*begin_time_*/ 0);
 }
 
-void CheckpointIngestInfo::persistToLocal()
+void CheckpointIngestInfo::persistToLocal() const
 {
     if (region->isPendingRemove())
     {
@@ -150,7 +126,7 @@ void CheckpointIngestInfo::persistToLocal()
     {
         size_t segment_data_size = 0;
         segment_data_size += writeBinary2(restored_segments.size(), wb_buffer);
-        for (auto & restored_segment : restored_segments)
+        for (const auto & restored_segment : restored_segments)
         {
             data_size += writeBinary2(restored_segment->segmentId(), wb_buffer);
         }
@@ -189,15 +165,10 @@ void CheckpointIngestInfo::persistToLocal()
         region->getDebugString());
 }
 
-void CheckpointIngestInfo::removeFromLocal(TMTContext & tmt, UInt64 region_id, UInt64 peer_id, UInt64 remote_store_id)
+void CheckpointIngestInfo::removeFromLocal(TMTContext & tmt, UInt64 region_id)
 {
     auto log = DB::Logger::get();
-    LOG_INFO(
-        log,
-        "Erase CheckpointIngestInfo from disk, region_id={} peer_id={} remote_store_id={}",
-        region_id,
-        peer_id,
-        remote_store_id);
+    LOG_INFO(log, "Erase CheckpointIngestInfo from disk, region_id={}", region_id);
     auto uni_ps = tmt.getContext().getWriteNodePageStorage();
     UniversalWriteBatch del_batch;
     del_batch.delPage(
@@ -206,17 +177,23 @@ void CheckpointIngestInfo::removeFromLocal(TMTContext & tmt, UInt64 region_id, U
 }
 
 // Like removeFromLocal, but is static and with check.
-bool CheckpointIngestInfo::forciblyClean(TMTContext & tmt, UInt64 region_id)
+bool CheckpointIngestInfo::forciblyClean(TMTContext & tmt, UInt64 region_id, bool pre_check)
 {
+    if (!pre_check)
+    {
+        CheckpointIngestInfo::removeFromLocal(tmt, region_id);
+        return true;
+    }
+
     auto uni_ps = tmt.getContext().getWriteNodePageStorage();
     auto snapshot = uni_ps->getSnapshot(fmt::format("read_fap_i_{}", region_id));
     auto page_id
         = UniversalPageIdFormat::toLocalKVPrefix(UniversalPageIdFormat::LocalKVKeyType::FAPIngestInfo, region_id);
     // For most cases, ingest infos are deleted in `removeFromLocal`.
     Page page = uni_ps->read(page_id, nullptr, snapshot, /*throw_on_not_exist*/ false);
-    if unlikely (page.isValid())
+    if (unlikely(page.isValid()))
     {
-        CheckpointIngestInfo::removeFromLocal(tmt, region_id, 0, 0);
+        CheckpointIngestInfo::removeFromLocal(tmt, region_id);
         return true;
     }
     return false;
