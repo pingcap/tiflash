@@ -30,6 +30,7 @@ kvrpcpb::ReadIndexRequest make_read_index_reqs(uint64_t region_id, uint64_t star
 struct MockProxyRegion : MutexLockWrap
 {
     raft_serverpb::RegionLocalState getState();
+    raft_serverpb::RegionLocalState & mutState();
     raft_serverpb::RaftApplyState getApply();
     void persistAppliedIndex();
     void persistAppliedIndex(const std::lock_guard<Mutex> & lock);

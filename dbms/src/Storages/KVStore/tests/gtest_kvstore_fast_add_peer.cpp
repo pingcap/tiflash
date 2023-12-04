@@ -55,6 +55,11 @@ void ApplyFapSnapshotImpl(TMTContext & tmt, TiFlashRaftProxyHelper * proxy_helpe
 
 namespace tests
 {
+
+struct FAPTestOpt {
+    bool mock_add_new_peer = false;
+};
+
 class RegionKVStoreTestFAP : public KVStoreTestBase
 {
 public:
@@ -132,7 +137,7 @@ public:
         DB::tests::TiFlashTestEnv::disableS3Config();
     }
 
-    CheckpointRegionInfoAndData prepareForRestart();
+    CheckpointRegionInfoAndData prepareForRestart(FAPTestOpt);
 
 protected:
     void dumpCheckpoint()
@@ -282,7 +287,7 @@ void verifyRows(Context & ctx, DM::DeltaMergeStorePtr store, const DM::RowKeyRan
     ASSERT_INPUTSTREAM_NROWS(in, rows);
 }
 
-CheckpointRegionInfoAndData RegionKVStoreTestFAP::prepareForRestart()
+CheckpointRegionInfoAndData RegionKVStoreTestFAP::prepareForRestart(FAPTestOpt opt)
 {
     auto & global_context = TiFlashTestEnv::getGlobalContext();
     uint64_t region_id = 1;
@@ -309,6 +314,10 @@ CheckpointRegionInfoAndData RegionKVStoreTestFAP::prepareForRestart()
         {WriteCmdType::Put, WriteCmdType::Put},
         {ColumnFamilyType::Default, ColumnFamilyType::Write});
     kvs.setRegionCompactLogConfig(0, 0, 0, 0);
+    if (opt.mock_add_new_peer) {
+        *kvs.getRegion(region_id)->mutMeta().debugMutRegionState().getMutRegion().add_peers() = createPeer(2333, true);
+        proxy_instance->getRegion(region_id)->addPeer(store_id, 2333, metapb::PeerRole::Learner);
+    }
     persistAfterWrite(global_context, kvs, proxy_instance, page_storage, region_id, index);
 
     auto s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
@@ -341,7 +350,7 @@ CheckpointRegionInfoAndData RegionKVStoreTestFAP::prepareForRestart()
 TEST_F(RegionKVStoreTestFAP, RestoreFromRestart1)
 try
 {
-    CheckpointRegionInfoAndData mock_data = prepareForRestart();
+    CheckpointRegionInfoAndData mock_data = prepareForRestart(FAPTestOpt{});
     KVStore & kvs = getKVS();
     RegionPtr kv_region = kvs.getRegion(1);
 
@@ -390,7 +399,7 @@ CATCH
 TEST_F(RegionKVStoreTestFAP, RestoreFromRestart2)
 try
 {
-    CheckpointRegionInfoAndData mock_data = prepareForRestart();
+    CheckpointRegionInfoAndData mock_data = prepareForRestart(FAPTestOpt{});
     KVStore & kvs = getKVS();
     RegionPtr kv_region = kvs.getRegion(1);
 
@@ -415,7 +424,7 @@ CATCH
 TEST_F(RegionKVStoreTestFAP, RestoreFromRestart3)
 try
 {
-    CheckpointRegionInfoAndData mock_data = prepareForRestart();
+    CheckpointRegionInfoAndData mock_data = prepareForRestart(FAPTestOpt{});
     KVStore & kvs = getKVS();
     RegionPtr kv_region = kvs.getRegion(1);
 
@@ -439,10 +448,11 @@ try
 }
 CATCH
 
-TEST_F(RegionKVStoreTestFAP, CancelAfterRestart1)
+// Test cancel from peer select
+TEST_F(RegionKVStoreTestFAP, Cancel1)
 try
 {
-    CheckpointRegionInfoAndData mock_data = prepareForRestart();
+    CheckpointRegionInfoAndData mock_data = prepareForRestart(FAPTestOpt{});
     KVStore & kvs = getKVS();
     RegionPtr kv_region = kvs.getRegion(1);
 
@@ -461,10 +471,12 @@ try
     ASSERT_EQ(1, kvstore->clonedStoreMeta().id());
     FailPointHelper::enableFailPoint(FailPoints::force_set_fap_candidate_store_id);
     auto sp = SyncPointCtl::enableInScope("in_FastAddPeerImplSelect::before_sleep");
+    // The FAP will fail because it doesn't contain the new peer in region meta.
     auto t = std::thread([&]() { FastAddPeer(&server, region_id, 2333); });
+    // Retry for some times, then cancel.
     sp.waitAndPause();
-    using namespace std::chrono_literals;
-    std::this_thread::sleep_for(5000ms);
+    sp.next();
+    sp.waitAndPause();
     fap_context->tasks_trace->getCancelHandle(region_id)->doCancel();
     sp.next();
     sp.disable();
@@ -474,6 +486,57 @@ try
         CheckpointIngestInfo::restore(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333),
         Exception);
 
+    FailPointHelper::disableFailPoint(FailPoints::force_set_fap_candidate_store_id);
+}
+CATCH
+
+// Test cancel from write
+TEST_F(RegionKVStoreTestFAP, Cancel2)
+try
+{
+    using namespace std::chrono_literals;
+    CheckpointRegionInfoAndData mock_data = prepareForRestart(FAPTestOpt{
+        .mock_add_new_peer = true,
+    });
+    KVStore & kvs = getKVS();
+    RegionPtr kv_region = kvs.getRegion(1);
+
+    auto & global_context = TiFlashTestEnv::getGlobalContext();
+    auto fap_context = global_context.getSharedContextDisagg()->fap_context;
+    uint64_t region_id = 1;
+
+    EngineStoreServerWrap server = {
+        .tmt = &global_context.getTMTContext(),
+        .proxy_helper = proxy_helper.get(),
+    };
+
+    kvstore->getStore().store_id.store(1, std::memory_order_release);
+    kvstore->debugMutStoreMeta().set_id(1);
+    ASSERT_EQ(1, kvstore->getStoreID());
+    ASSERT_EQ(1, kvstore->clonedStoreMeta().id());
+    FailPointHelper::enableFailPoint(FailPoints::force_set_fap_candidate_store_id);
+    auto sp = SyncPointCtl::enableInScope("in_FastAddPeerImplWrite::after_write_segments");
+    // The FAP will fail because it doesn't contain the new peer in region meta.
+    auto t = std::thread([&]() { FastAddPeer(&server, region_id, 2333); });
+    sp.waitAndPause();
+    fap_context->tasks_trace->getCancelHandle(region_id)->doCancel();
+    sp.next();
+    sp.disable();
+    t.join();
+    ASSERT_TRUE(!fap_context->tryGetCheckpointIngestInfo(region_id).has_value());
+    // Cancel async tasks, and make sure the data is cleaned after limited time.
+    bool thrown = false;
+    for (int i = 0; i < 5; i++) {
+        try {
+            CheckpointIngestInfo::restore(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333);
+        }
+        catch (...) {
+            thrown = true;
+            break;
+        }
+        std::this_thread::sleep_for(500ms);
+    }
+    ASSERT_TRUE(thrown);
     FailPointHelper::disableFailPoint(FailPoints::force_set_fap_candidate_store_id);
 }
 CATCH

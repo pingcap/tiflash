@@ -151,12 +151,12 @@ void FastAddPeerContext::cleanCheckpointIngestInfo(TMTContext & tmt, UInt64 regi
         auto iter = checkpoint_ingest_info_map.find(region_id);
         if (iter != checkpoint_ingest_info_map.end())
         {
-            // the ingest info exist, do not need to check again later
+            // The ingest info exists, do not need to check again later
             pre_check = false;
             checkpoint_ingest_info_map.erase(iter);
         }
     }
-    // clean without locking `ingest_info_mu`
+    // Clean without locking `ingest_info_mu`
     CheckpointIngestInfo::forciblyClean(tmt, region_id, pre_check);
 }
 
