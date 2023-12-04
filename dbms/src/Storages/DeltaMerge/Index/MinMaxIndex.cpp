@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -207,10 +207,13 @@ RSResult MinMaxIndex::checkEqual(size_t pack_index, const Field & value, const D
         size_t pos = pack_index * 2;
         size_t prev_offset = pos == 0 ? 0 : offsets[pos - 1];
         // todo use StringRef instead of String
-        auto min = String(chars[prev_offset], offsets[pos] - prev_offset - 1);
+        // When using String, we should use reinterpret_cast<const char *>(&chars[prev_offset]) instead of chars[prev_offset]
+        // so that it will call constructor `constexpr basic_string( const CharT* s, const Allocator& alloc = Allocator())`
+        // rather than `constexpr basic_string( size_type count, CharT ch, const Allocator& alloc = Allocator() );`
+        auto min = String(reinterpret_cast<const char *>(&chars[prev_offset]), offsets[pos] - prev_offset - 1);
         pos = pack_index * 2 + 1;
         prev_offset = offsets[pos - 1];
-        auto max = String(chars[prev_offset], offsets[pos] - prev_offset - 1);
+        auto max = String(reinterpret_cast<const char *>(&chars[prev_offset]), offsets[pos] - prev_offset - 1);
         return RoughCheck::checkEqual<String>(value, type, min, max);
     }
     return RSResult::Some;
@@ -264,10 +267,13 @@ RSResult MinMaxIndex::checkGreater(size_t pack_index, const Field & value, const
         size_t pos = pack_index * 2;
         size_t prev_offset = pos == 0 ? 0 : offsets[pos - 1];
         // todo use StringRef instead of String
-        auto min = String(chars[prev_offset], offsets[pos] - prev_offset - 1);
+        // When using String, we should use reinterpret_cast<const char *>(&chars[prev_offset]) instead of chars[prev_offset]
+        // so that it will call constructor `constexpr basic_string( const CharT* s, const Allocator& alloc = Allocator())`
+        // rather than `constexpr basic_string( size_type count, CharT ch, const Allocator& alloc = Allocator() );`
+        auto min = String(reinterpret_cast<const char *>(&chars[prev_offset]), offsets[pos] - prev_offset - 1);
         pos = pack_index * 2 + 1;
         prev_offset = offsets[pos - 1];
-        auto max = String(chars[prev_offset], offsets[pos] - prev_offset - 1);
+        auto max = String(reinterpret_cast<const char *>(&chars[prev_offset]), offsets[pos] - prev_offset - 1);
         return RoughCheck::checkGreater<String>(value, type, min, max);
     }
     return RSResult::Some;
@@ -321,6 +327,9 @@ RSResult MinMaxIndex::checkGreaterEqual(size_t pack_index, const Field & value, 
         size_t pos = pack_index * 2;
         size_t prev_offset = pos == 0 ? 0 : offsets[pos - 1];
         // todo use StringRef instead of String
+        // When using String, we should use reinterpret_cast<const char *>(&chars[prev_offset]) instead of chars[prev_offset]
+        // so that it will call constructor `constexpr basic_string( const CharT* s, const Allocator& alloc = Allocator())`
+        // rather than `constexpr basic_string( size_type count, CharT ch, const Allocator& alloc = Allocator() );`
         auto min = String(reinterpret_cast<const char *>(&chars[prev_offset]), offsets[pos] - prev_offset - 1);
         pos = pack_index * 2 + 1;
         prev_offset = offsets[pos - 1];
