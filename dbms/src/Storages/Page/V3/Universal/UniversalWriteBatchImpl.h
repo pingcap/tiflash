@@ -114,8 +114,6 @@ public:
             off += data_sz;
         }
 
-        LOG_INFO(&Poco::Logger::get("!!!!! e"), "!!!!! putPage {}", page_id);
-
         RUNTIME_CHECK_MSG(
             data_sizes.empty() || off == size,
             "Try to put Page with fields, but page size and fields total size not match "

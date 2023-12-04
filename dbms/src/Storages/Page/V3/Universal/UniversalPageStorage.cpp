@@ -117,7 +117,6 @@ void UniversalPageStorage::write(
         // Note that if `remote_locks_local_mgr`'s store_id is not inited, it will blocks until inited
         remote_locks_local_mgr->createS3LockForWriteBatch(write_batch);
     }
-    LOG_INFO(&Poco::Logger::get("!!!! a"), "!!!! fff {}", write_batch.toString());
     auto edit = blob_store->write(std::move(write_batch), page_type, write_limiter);
     auto applied_lock_ids = page_directory->apply(std::move(edit), write_limiter);
     if (has_writes_from_remote)
@@ -489,7 +488,6 @@ PS::V3::CPDataDumpStats UniversalPageStorage::dumpIncrementalCheckpoint(
     // Let's keep this snapshot until all finished, so that blob data will not be GCed.
     auto snap = page_directory->createSnapshot(/*tracing_id*/ "dumpIncrementalCheckpoint");
 
-    LOG_INFO(log, "!!!!! snap->sequence {} last_checkpoint_sequence {} ", snap->sequence, last_checkpoint_sequence);
     if (snap->sequence == last_checkpoint_sequence && !options.full_compact)
         return {.has_new_data = false};
 
@@ -502,7 +500,6 @@ PS::V3::CPDataDumpStats UniversalPageStorage::dumpIncrementalCheckpoint(
     if (options.override_sequence)
         sequence = options.override_sequence.value();
 
-    LOG_INFO(log, "!!!!! sequence {} ", sequence);
 
     // The output of `PageDirectory::dumpSnapshotToEdit` may contain page ids which are logically deleted but have not been gced yet.
     // These page ids may be GC-ed when dumping snapshot, so we cannot read data of these page ids.

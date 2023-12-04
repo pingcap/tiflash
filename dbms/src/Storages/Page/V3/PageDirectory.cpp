@@ -1013,7 +1013,6 @@ template <typename Trait>
 PageDirectorySnapshotPtr PageDirectory<Trait>::createSnapshot(const String & tracing_id) const
 {
     GET_METRIC(tiflash_storage_page_command_count, type_snapshot).Increment();
-    LOG_INFO(&Poco::Logger::get("!!!!!!! e"), "!!!!! fffff {}", sequence.load());
     auto snap = std::make_shared<PageDirectorySnapshot>(sequence.load(), tracing_id);
     {
         std::lock_guard snapshots_lock(snapshots_mutex);
@@ -1699,7 +1698,6 @@ std::unordered_set<String> PageDirectory<Trait>::apply(PageEntriesEdit && edit, 
                     break;
                 }
                 case EditRecordType::PUT:
-                    LOG_INFO(DB::Logger::get("!!!! aaa"), "!!!! PUT {} t {} D {}", r.page_id, magic_enum::enum_name(r.type), version_list->toDebugString());
                     version_list->createNewEntry(r.version, r.entry);
                     break;
                 case EditRecordType::DEL:
@@ -1743,7 +1741,6 @@ std::unordered_set<String> PageDirectory<Trait>::apply(PageEntriesEdit && edit, 
     }
 
     success = true;
-    LOG_INFO(DB::Logger::get("!!!! aaa"), "!!!! FINISH write D {}", applied_data_files.size());
     return applied_data_files;
 }
 

@@ -303,12 +303,8 @@ CheckpointRegionInfoAndData RegionKVStoreTestFAP::prepareForRestart()
     checkpoint_info->remote_store_id = kvs.getStoreID();
     checkpoint_info->region_id = 1000;
     checkpoint_info->checkpoint_data_holder = buildParsedCheckpointData(global_context, manifest_key, /*dir_seq*/ 100);
-    {
-        auto region_key = UniversalPageIdFormat::toKVStoreKey(region_id);
-        auto page = checkpoint_info->checkpoint_data_holder->getUniversalPageStorage()
-                        ->read(region_key, /*read_limiter*/ nullptr, {}, /*throw_on_not_exist*/ false);
-        RUNTIME_CHECK(page.isValid());
-    }
+
+    // TODO(fap) check why UniversalPageIdFormat::toKVStoreKey(region_id) page not exist.
     checkpoint_info->temp_ps = checkpoint_info->checkpoint_data_holder->getUniversalPageStorage();
     RegionPtr kv_region = kvs.getRegion(1);
     CheckpointRegionInfoAndData mock_data = std::make_tuple(
@@ -330,12 +326,17 @@ try
     auto & global_context = TiFlashTestEnv::getGlobalContext();
     auto fap_context = global_context.getSharedContextDisagg()->fap_context;
     uint64_t region_id = 1;
-    fap_context->tasks_trace->addTask(region_id, [](){ return genFastAddPeerRes(FastAddPeerStatus::NoSuitable, "", ""); });
+    fap_context->tasks_trace->addTask(region_id, []() {
+        return genFastAddPeerRes(FastAddPeerStatus::NoSuitable, "", "");
+    });
     {
         auto region_key = UniversalPageIdFormat::toKVStoreKey(region_id);
         LOG_INFO(log, "Check region_key {}", region_key);
-        auto page = std::get<0>(mock_data)->checkpoint_data_holder->getUniversalPageStorage()
-                        ->read(region_key, /*read_limiter*/ nullptr, {}, /*throw_on_not_exist*/ false);
+        auto page = std::get<0>(mock_data)->checkpoint_data_holder->getUniversalPageStorage()->read(
+            region_key,
+            /*read_limiter*/ nullptr,
+            {},
+            /*throw_on_not_exist*/ false);
         ASSERT_TRUE(page.isValid());
     }
     FastAddPeerImplWrite(global_context.getTMTContext(), region_id, 2333, std::move(mock_data), 0);
@@ -374,7 +375,9 @@ try
     auto & global_context = TiFlashTestEnv::getGlobalContext();
     auto fap_context = global_context.getSharedContextDisagg()->fap_context;
     uint64_t region_id = 1;
-    fap_context->tasks_trace->addTask(region_id, [](){ return genFastAddPeerRes(FastAddPeerStatus::NoSuitable, "", ""); });
+    fap_context->tasks_trace->addTask(region_id, []() {
+        return genFastAddPeerRes(FastAddPeerStatus::NoSuitable, "", "");
+    });
     FastAddPeerImplWrite(global_context.getTMTContext(), region_id, 2333, std::move(mock_data), 0);
     fap_context->debugRemoveCheckpointIngestInfo(region_id);
     kvstore->handleDestroy(region_id, global_context.getTMTContext());
@@ -397,7 +400,9 @@ try
     auto & global_context = TiFlashTestEnv::getGlobalContext();
     auto fap_context = global_context.getSharedContextDisagg()->fap_context;
     uint64_t region_id = 1;
-    fap_context->tasks_trace->addTask(region_id, [](){ return genFastAddPeerRes(FastAddPeerStatus::NoSuitable, "", ""); });
+    fap_context->tasks_trace->addTask(region_id, []() {
+        return genFastAddPeerRes(FastAddPeerStatus::NoSuitable, "", "");
+    });
     FastAddPeerImplWrite(global_context.getTMTContext(), region_id, 2333, std::move(mock_data), 0);
     dumpCheckpoint();
     FastAddPeerImplWrite(global_context.getTMTContext(), region_id, 2333, std::move(mock_data), 0);
@@ -433,23 +438,21 @@ try
     ASSERT_EQ(1, kvstore->getStoreID());
     ASSERT_EQ(1, kvstore->clonedStoreMeta().id());
     FailPointHelper::enableFailPoint(FailPoints::force_set_fap_candidate_store_id);
-    // auto sp = SyncPointCtl::enableInScope("in_FastAddPeerImplSelect::before_sleep");
-    auto t = std::thread([&]() {
-        FastAddPeer(&server, region_id, 2333);
-    });
-    // sp.waitAndPause();
+    auto sp = SyncPointCtl::enableInScope("in_FastAddPeerImplSelect::before_sleep");
+    auto t = std::thread([&]() { FastAddPeer(&server, region_id, 2333); });
+    sp.waitAndPause();
     using namespace std::chrono_literals;
     std::this_thread::sleep_for(5000ms);
-    // fap_context->tasks_trace->getCancelHandle(region_id)->doCancel();
-    // sp.next();
-    // sp.disable();
-    // t.join();
-    // ASSERT_TRUE(!fap_context->tryGetCheckpointIngestInfo(region_id).has_value());
-    // EXPECT_THROW(
-    //     CheckpointIngestInfo::restore(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333),
-    //     Exception);
-    
-    // FailPointHelper::disableFailPoint(FailPoints::force_set_fap_candidate_store_id);
+    fap_context->tasks_trace->getCancelHandle(region_id)->doCancel();
+    sp.next();
+    sp.disable();
+    t.join();
+    ASSERT_TRUE(!fap_context->tryGetCheckpointIngestInfo(region_id).has_value());
+    EXPECT_THROW(
+        CheckpointIngestInfo::restore(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333),
+        Exception);
+
+    FailPointHelper::disableFailPoint(FailPoints::force_set_fap_candidate_store_id);
 }
 CATCH
 

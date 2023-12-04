@@ -148,7 +148,6 @@ ParsedCheckpointDataHolderPtr buildParsedCheckpointData(Context & context, const
         // Note the `data_file_id` in temp ps is all lock key, we need transform them to data key before write to local ps.
         for (auto & record : records)
         {
-            LOG_INFO(log, "!!!!! see {}", record.page_id);
             {
                 // Filter remote peer's local page storage pages.
                 if (UniversalPageIdFormat::getUniversalPageIdType(record.page_id) == StorageType::LocalKV)

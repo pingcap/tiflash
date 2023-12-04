@@ -14,10 +14,11 @@
 
 #pragma once
 
-#include <Common/UniThreadPool.h>
-#include <magic_enum.hpp>
 #include <Common/Logger.h>
+#include <Common/UniThreadPool.h>
+
 #include <future>
+#include <magic_enum.hpp>
 
 namespace DB
 {
@@ -31,32 +32,38 @@ struct AsyncTasks
         log = DB::Logger::get("AsyncTasks");
     }
 
-    struct CancelHandle {
+    struct CancelHandle
+    {
         CancelHandle() = default;
         CancelHandle(const CancelHandle &) = delete;
 
         bool canceled() const { return inner->load(); }
 
-        void doCancel() {
+        void doCancel()
+        {
             // Use lock here to prevent losing signal.
             std::unique_lock<std::mutex> lock(mut);
             inner->store(true);
             cv.notify_all();
         }
-        bool blockedWaitFor(std::chrono::duration<double, std::milli> timeout) {
+        bool blockedWaitFor(std::chrono::duration<double, std::milli> timeout)
+        {
             std::unique_lock<std::mutex> lock(mut);
-            cv.wait_for(lock, timeout, [&](){ return canceled(); } );
+            cv.wait_for(lock, timeout, [&]() { return canceled(); });
             return canceled();
         }
+
     private:
         std::shared_ptr<std::atomic_bool> inner = std::make_shared<std::atomic_bool>(false);
         std::mutex mut;
         std::condition_variable cv;
     };
 
-    struct Elem {
-        Elem(std::future<R> && fut_, uint64_t start_ts_) 
-            : fut(std::move(fut_)), start_ts(start_ts_)
+    struct Elem
+    {
+        Elem(std::future<R> && fut_, uint64_t start_ts_)
+            : fut(std::move(fut_))
+            , start_ts(start_ts_)
         {
             cancel = std::make_shared<CancelHandle>();
         }
@@ -68,7 +75,8 @@ struct AsyncTasks
         std::shared_ptr<CancelHandle> cancel;
     };
 
-    std::shared_ptr<CancelHandle> getCancelHandle(Key k) const {
+    std::shared_ptr<CancelHandle> getCancelHandle(Key k) const
+    {
         std::unique_lock<std::mutex> l(mtx);
         auto it = tasks.find(k);
         RUNTIME_CHECK_MSG(it != tasks.end(), "fetchResult meets empty key");
@@ -96,7 +104,7 @@ struct AsyncTasks
         auto res = thread_pool->trySchedule([p]() { (*p)(); }, 0, 0);
         if (res)
         {
-            tasks.insert({k, Elem (p->get_future(), getCurrentMillis())});
+            tasks.insert({k, Elem(p->get_future(), getCurrentMillis())});
         }
         return res;
     }

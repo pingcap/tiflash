@@ -67,7 +67,6 @@ void CPManifestFileWriter::writeEditsPart(const universal::PageEntriesEdit & edi
     part.set_has_more(true);
     for (UInt64 i = 0; i < limit; ++i)
     {
-        LOG_INFO(DB::Logger::get("!!!! a"), "!!!!! has pageid {}", records[start + i].page_id);
         if (UniversalPageIdFormat::getUniversalPageIdType(records[start + i].page_id) == StorageType::LocalKV)
         {
             continue;

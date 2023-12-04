@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/FailPoint.h>
+#include <Common/SyncPoint/SyncPoint.h>
 #include <Common/TiFlashMetrics.h>
 #include <Common/setThreadName.h>
 #include <Encryption/PosixRandomAccessFile.h>
@@ -41,7 +42,6 @@
 #include <Storages/S3/S3GCManager.h>
 #include <Storages/S3/S3RandomAccessFile.h>
 #include <Storages/StorageDeltaMerge.h>
-#include <Common/SyncPoint/SyncPoint.h>
 #include <fmt/core.h>
 
 #include <memory>
@@ -105,13 +105,11 @@ std::optional<CheckpointRegionInfoAndData> tryParseRegionInfoFromCheckpointData(
         if (page.isValid())
         {
             ReadBufferFromMemory buf(page.data.begin(), page.data.size());
-            LOG_DEBUG(log, "!!!!! Find region key region_id={} with key {}", region_id, region_key);
             region = Region::deserialize(buf, proxy_helper);
         }
         else
         {
             GET_METRIC(tiflash_fap_nomatch_reason, type_no_meta).Increment();
-            LOG_DEBUG(log, "Failed to find region key region_id={} with key {}", region_id, region_key);
             return std::nullopt;
         }
     }
@@ -196,11 +194,11 @@ std::variant<CheckpointRegionInfoAndData, FastAddPeerRes> FastAddPeerImplSelect(
     auto cancel_handle = fap_ctx->tasks_trace->getCancelHandle(region_id);
     const auto & settings = tmt.getContext().getSettingsRef();
     auto current_store_id = tmt.getKVStore()->clonedStoreMeta().id();
-    std::vector <StoreID> candidate_store_ids;
-    fiu_do_on(FailPoints::force_set_fap_candidate_store_id, { candidate_store_ids = { 1234 }; });
+    std::vector<StoreID> candidate_store_ids;
+    fiu_do_on(FailPoints::force_set_fap_candidate_store_id, { candidate_store_ids = {1234}; });
     if (candidate_store_ids.empty())
         getCandidateStoreIDsForRegion(tmt, region_id, current_store_id);
-    
+
     if (candidate_store_ids.empty())
     {
         LOG_DEBUG(log, "No suitable candidate peer for region_id={}", region_id);
@@ -211,26 +209,21 @@ std::variant<CheckpointRegionInfoAndData, FastAddPeerRes> FastAddPeerImplSelect(
     // It will return with FastAddPeerRes or failed with timeout result wrapped in FastAddPeerRes.
     while (true)
     {
-        LOG_DEBUG(log, "!!!!! YYYY region_id={}", region_id);
         // Check all candidate stores in this loop.
         for (const auto store_id : candidate_store_ids)
         {
-            RUNTIME_CHECK_MSG(store_id != current_store_id, "store_id {} != current_store_id {}", store_id, current_store_id);
+            RUNTIME_CHECK_MSG(
+                store_id != current_store_id,
+                "store_id {} != current_store_id {}",
+                store_id,
+                current_store_id);
             auto iter = checked_seq_map.find(store_id);
             auto checked_seq = (iter == checked_seq_map.end()) ? 0 : iter->second;
-            LOG_DEBUG(log, "!!!!! XXXXXX region_id={} {}", region_id, checked_seq);
             auto [data_seq, checkpoint_data] = fap_ctx->getNewerCheckpointData(tmt.getContext(), store_id, checked_seq);
-            {
-                auto region_key = UniversalPageIdFormat::toKVStoreKey(1);
-                auto page = checkpoint_data->getUniversalPageStorage()
-                                ->read(region_key, /*read_limiter*/ nullptr, {}, /*throw_on_not_exist*/ false);
-                RUNTIME_CHECK(page.isValid());
-            }
-            
+
             checked_seq_map[store_id] = data_seq;
             if (data_seq > checked_seq)
             {
-                LOG_DEBUG(log, "!!!!! data_seq={} region_id={}", data_seq, region_id);
                 RUNTIME_CHECK(checkpoint_data != nullptr);
                 auto maybe_region_info
                     = tryParseRegionInfoFromCheckpointData(checkpoint_data, store_id, region_id, proxy_helper);
@@ -267,14 +260,16 @@ std::variant<CheckpointRegionInfoAndData, FastAddPeerRes> FastAddPeerImplSelect(
         {
             if (watch.elapsedSeconds() >= settings.fap_wait_checkpoint_timeout_seconds)
             {
-                // TODO(fap) Cancel and remove from AsyncTasks
                 // This could happen if there are too many pending tasks in queue,
                 LOG_INFO(log, "FastAddPeer timeout region_id={} new_peer_id={}", region_id, new_peer_id);
                 GET_METRIC(tiflash_fap_task_result, type_failed_timeout).Increment();
+                // We don't wait here.
+                cancel_handle->doCancel();
                 return genFastAddPeerRes(FastAddPeerStatus::NoSuitable, "", "");
             }
             SYNC_FOR("in_FastAddPeerImplSelect::before_sleep");
-            if (cancel_handle->blockedWaitFor(std::chrono::milliseconds(1000))) {
+            if (cancel_handle->blockedWaitFor(std::chrono::milliseconds(1000)))
+            {
                 LOG_INFO(log, "Cancel FAP during peer selecting, region_id={}", region_id);
                 fap_ctx->cleanCheckpointIngestInfo(tmt, region_id);
                 return genFastAddPeerRes(FastAddPeerStatus::Canceled, "", "");
@@ -323,7 +318,8 @@ FastAddPeerRes FastAddPeerImplWrite(
         storage->isCommonHandle(),
         storage->getRowKeyColumnSize());
 
-    if(cancel_handle->canceled()) {
+    if (cancel_handle->canceled())
+    {
         LOG_INFO(log, "Cancel FAP before write, region_id={}", region_id);
         fap_ctx->cleanCheckpointIngestInfo(tmt, region_id);
         return genFastAddPeerRes(FastAddPeerStatus::Canceled, "", "");
@@ -338,9 +334,10 @@ FastAddPeerRes FastAddPeerImplWrite(
         region,
         std::move(segments),
         start_time);
-    
+
     SYNC_FOR("in_FastAddPeerImplWrite::after_write_segments");
-    if(cancel_handle->canceled()) {
+    if (cancel_handle->canceled())
+    {
         LOG_INFO(log, "Cancel FAP after write segments, region_id={}", region_id);
         fap_ctx->cleanCheckpointIngestInfo(tmt, region_id);
         return genFastAddPeerRes(FastAddPeerStatus::Canceled, "", "");
@@ -364,7 +361,8 @@ FastAddPeerRes FastAddPeerImplWrite(
     auto wn_ps = tmt.getContext().getWriteNodePageStorage();
     wn_ps->write(std::move(wb));
     SYNC_FOR("in_FastAddPeerImplWrite::after_write_raft_log");
-    if(cancel_handle->canceled()) {
+    if (cancel_handle->canceled())
+    {
         LOG_INFO(log, "Cancel FAP after write raft log, region_id={}", region_id);
         fap_ctx->cleanCheckpointIngestInfo(tmt, region_id);
         return genFastAddPeerRes(FastAddPeerStatus::Canceled, "", "");
