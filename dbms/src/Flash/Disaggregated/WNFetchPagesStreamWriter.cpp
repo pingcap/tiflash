@@ -83,6 +83,7 @@ std::tuple<UInt64, UInt64, UInt64> WNFetchPagesStreamWriter::sendMemTableSet()
     {
         ++packet_count;
         sync_write(packet);
+        mem_tracker_wrapper.free(pending_chunks_size);
     }
     return std::make_tuple(cfs.size(), total_chunks_size, packet_count);
 }
@@ -113,6 +114,7 @@ std::tuple<UInt64, UInt64, UInt64> WNFetchPagesStreamWriter::sendPages()
     {
         ++packet_count;
         sync_write(packet);
+        mem_tracker_wrapper.free(pending_pages_size);
     }
     return std::make_tuple(read_page_ids.size(), total_pages_size, packet_count);
 }
