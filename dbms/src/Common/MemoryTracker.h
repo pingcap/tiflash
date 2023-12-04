@@ -18,6 +18,7 @@
 #include <common/types.h>
 
 #include <atomic>
+#include <boost/noncopyable.hpp>
 
 extern std::atomic<Int64> real_rss, proc_num_threads, baseline_of_query_mem_tracker;
 extern std::atomic<UInt64> proc_virt_size;
@@ -46,6 +47,7 @@ class MemoryTracker : public std::enable_shared_from_this<MemoryTracker>
     double fault_probability = 0;
 
     bool is_global_root = false;
+    bool log_peak_memory_usage_in_destructor = true;
 
     /// To test the accuracy of memory track, it throws an exception when the part exceeding the tracked amount is greater than accuracy_diff_for_test.
     std::atomic<Int64> accuracy_diff_for_test{0};
@@ -65,7 +67,6 @@ class MemoryTracker : public std::enable_shared_from_this<MemoryTracker>
     std::atomic<const char *> description = nullptr;
 
     /// Make constructors private to ensure all objects of this class is created by `MemoryTracker::create`.
-    MemoryTracker() = default;
     explicit MemoryTracker(Int64 limit_)
         : limit(limit_)
     {}
@@ -79,16 +80,15 @@ class MemoryTracker : public std::enable_shared_from_this<MemoryTracker>
 
 public:
     /// Using `std::shared_ptr` and `new` instread of `std::make_shared` is because `std::make_shared` cannot call private constructors.
-    static MemoryTrackerPtr create(Int64 limit = 0)
+    static MemoryTrackerPtr create(
+        Int64 limit = 0,
+        MemoryTracker * parent = nullptr,
+        bool log_peak_memory_usage_in_destructor = true)
     {
-        if (limit == 0)
-        {
-            return std::shared_ptr<MemoryTracker>(new MemoryTracker);
-        }
-        else
-        {
-            return std::shared_ptr<MemoryTracker>(new MemoryTracker(limit));
-        }
+        auto p = std::shared_ptr<MemoryTracker>(new MemoryTracker(limit));
+        p->setParent(parent);
+        p->log_peak_memory_usage_in_destructor = log_peak_memory_usage_in_destructor;
+        return p;
     }
 
     static MemoryTrackerPtr createGlobalRoot() { return std::shared_ptr<MemoryTracker>(new MemoryTracker(0, true)); }
@@ -128,7 +128,7 @@ public:
     void setAccuracyDiffForTest(Int64 value) { accuracy_diff_for_test.store(value, std::memory_order_relaxed); }
 
     /// next should be changed only once: from nullptr to some value.
-    void setNext(MemoryTracker * elem)
+    void setParent(MemoryTracker * elem)
     {
         MemoryTracker * old_val = nullptr;
         if (!next.compare_exchange_strong(old_val, elem, std::memory_order_seq_cst, std::memory_order_relaxed))
@@ -186,8 +186,6 @@ void realloc(Int64 old_size, Int64 new_size);
 void free(Int64 size);
 } // namespace CurrentMemoryTracker
 
-
-#include <boost/noncopyable.hpp>
 
 struct TemporarilyDisableMemoryTracker : private boost::noncopyable
 {
