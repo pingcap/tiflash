@@ -165,6 +165,7 @@ private:
         size_t stream_id,
         const ReceivedMessagePtr & recv_msg,
         std::queue<Block> & block_queue,
+        const Block & header,
         std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr);
 
     void connectionDone(bool meet_error, const String & local_err_msg, const LoggerPtr & log);

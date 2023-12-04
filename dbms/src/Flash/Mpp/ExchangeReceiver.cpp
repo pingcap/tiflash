@@ -718,6 +718,7 @@ DecodeDetail ExchangeReceiverBase<RPCContext>::decodeChunks(
     size_t stream_id,
     const ReceivedMessagePtr & recv_msg,
     std::queue<Block> & block_queue,
+    const Block & header,
     std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr)
 {
     assert(recv_msg != nullptr);
@@ -731,13 +732,9 @@ DecodeDetail ExchangeReceiverBase<RPCContext>::decodeChunks(
         {
             if (!block || block.rows() == 0)
                 continue;
-            for (size_t i = 0; i < block.columns(); ++i)
-            {
-                auto & column = block.getByPosition(i);
-                column.name = schema[i].first;
-            }
-            detail.rows += block.rows();
-            block_queue.push(std::move(block));
+            auto new_block = header.cloneWithColumns(block.mutateColumns());
+            detail.rows += new_block.rows();
+            block_queue.push(std::move(new_block));
         }
     }
     else
@@ -927,7 +924,7 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::toDecodeResult(
             }
             else if (recv_msg->hasData(stream_id))
             {
-                result.decode_detail = decodeChunks(stream_id, recv_msg, block_queue, decoder_ptr);
+                result.decode_detail = decodeChunks(stream_id, recv_msg, block_queue, header, decoder_ptr);
             }
             return result;
         }
@@ -935,7 +932,7 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::toDecodeResult(
     else /// the non-last packets
     {
         auto result = ExchangeReceiverResult::newOk(nullptr, recv_msg->getSourceIndex(), recv_msg->getReqInfo());
-        result.decode_detail = decodeChunks(stream_id, recv_msg, block_queue, decoder_ptr);
+        result.decode_detail = decodeChunks(stream_id, recv_msg, block_queue, header, decoder_ptr);
         return result;
     }
 }
