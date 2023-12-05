@@ -28,7 +28,7 @@ SemiJoinResult<KIND, All>::SemiJoinResult(size_t row_num_, const void * map_it_)
     , is_done(false)
     , has_null_eq_from_in(false)
     , result(SemiJoinResultType::NULL_VALUE)
-    , pace(1)
+    , pace(2)
     , map_it(map_it_)
 {
     static_assert(KIND == Semi || KIND == Anti || KIND == LeftOuterAnti || KIND == LeftOuterSemi);

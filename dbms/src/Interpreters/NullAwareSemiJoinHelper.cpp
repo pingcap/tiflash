@@ -28,7 +28,7 @@ NASemiJoinResult<KIND, STRICTNESS>::NASemiJoinResult(size_t row_num_, NASemiJoin
     , step(step_)
     , step_end(false)
     , result(SemiJoinResultType::NULL_VALUE)
-    , pace(1)
+    , pace(2)
     , pos_in_null_rows(0)
     , pos_in_columns_vector(0)
     , pos_in_columns(0)
@@ -45,7 +45,7 @@ void NASemiJoinResult<KIND, STRICTNESS>::fillRightColumns(
     size_t right_columns,
     const std::vector<RowsNotInsertToMap *> & null_rows,
     size_t & current_offset,
-    size_t min_pace)
+    size_t max_pace)
 {
     static_assert(
         STEP == NASemiJoinStep::NOT_NULL_KEY_CHECK_MATCHED_ROWS || STEP == NASemiJoinStep::NOT_NULL_KEY_CHECK_NULL_ROWS
@@ -58,14 +58,23 @@ void NASemiJoinResult<KIND, STRICTNESS>::fillRightColumns(
         static_cast<std::underlying_type<NASemiJoinStep>::type>(STEP));
 
     static constexpr size_t MAX_PACE = 8192;
-    pace = std::min(MAX_PACE, std::max(pace, min_pace));
+    size_t current_pace;
+    if (pace > max_pace)
+    {
+        current_pace = max_pace;
+    }
+    else
+    {
+        current_pace = pace;
+        pace = std::min(MAX_PACE, pace * 2);
+    }
 
     if constexpr (STEP == NASemiJoinStep::NOT_NULL_KEY_CHECK_MATCHED_ROWS)
     {
         static_assert(STRICTNESS == All);
 
         const auto * iter = static_cast<const Mapped *>(map_it);
-        for (size_t i = 0; i < pace && iter != nullptr; ++i)
+        for (size_t i = 0; i < current_pace && iter != nullptr; ++i)
         {
             for (size_t j = 0; j < right_columns; ++j)
                 added_columns[j + left_columns]->insertFrom(*iter->block->getByPosition(j).column.get(), iter->row_num);
@@ -80,7 +89,7 @@ void NASemiJoinResult<KIND, STRICTNESS>::fillRightColumns(
     else if constexpr (
         STEP == NASemiJoinStep::NOT_NULL_KEY_CHECK_NULL_ROWS || STEP == NASemiJoinStep::NULL_KEY_CHECK_NULL_ROWS)
     {
-        size_t count = pace;
+        size_t count = current_pace;
         while (pos_in_null_rows < null_rows.size() && count > 0)
         {
             const auto & rows = *null_rows[pos_in_null_rows];
@@ -112,10 +121,8 @@ void NASemiJoinResult<KIND, STRICTNESS>::fillRightColumns(
             }
         }
         step_end = pos_in_null_rows >= null_rows.size();
-        current_offset += pace - count;
+        current_offset += current_pace - count;
     }
-
-    pace = std::min(MAX_PACE, pace * 2);
 }
 
 template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS>
@@ -320,7 +327,6 @@ void NASemiJoinHelper<KIND, STRICTNESS, Mapped>::runStep(
             columns[i]->popBack(columns[i]->size());
         }
 
-        size_t min_pace = std::max(1, max_block_size / res_list.size());
         size_t current_offset = 0;
         offsets.clear();
 
@@ -333,7 +339,7 @@ void NASemiJoinHelper<KIND, STRICTNESS, Mapped>::runStep(
                 right_columns,
                 null_rows,
                 current_offset,
-                min_pace);
+                max_block_size - current_offset);
 
             /// Note that current_offset - prev_offset may be zero.
             if (current_offset > prev_offset)
