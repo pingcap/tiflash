@@ -530,19 +530,19 @@ EncryptionMethod TiFlashRaftProxyHelper::getEncryptionMethod() const
 }
 FileEncryptionInfo TiFlashRaftProxyHelper::getFile(const std::string & view) const
 {
-    return fn_handle_get_file(proxy_ptr, strIntoView(&view));
+    return FileEncryptionInfo(fn_handle_get_file(proxy_ptr, strIntoView(&view)));
 }
 FileEncryptionInfo TiFlashRaftProxyHelper::newFile(const std::string & view) const
 {
-    return fn_handle_new_file(proxy_ptr, strIntoView(&view));
+    return FileEncryptionInfo(fn_handle_new_file(proxy_ptr, strIntoView(&view)));
 }
 FileEncryptionInfo TiFlashRaftProxyHelper::deleteFile(const std::string & view) const
 {
-    return fn_handle_delete_file(proxy_ptr, strIntoView(&view));
+    return FileEncryptionInfo(fn_handle_delete_file(proxy_ptr, strIntoView(&view)));
 }
 FileEncryptionInfo TiFlashRaftProxyHelper::linkFile(const std::string & src, const std::string & dst) const
 {
-    return fn_handle_link_file(proxy_ptr, strIntoView(&src), strIntoView(&dst));
+    return FileEncryptionInfo(fn_handle_link_file(proxy_ptr, strIntoView(&src), strIntoView(&dst)));
 }
 
 struct CppStrVec
@@ -833,19 +833,6 @@ void GcSpecialRawCppPtr(void * ptr, uint64_t hint_size, SpecialCppPtrType type)
             exit(-1);
         }
     }
-}
-
-const char * IntoEncryptionMethodName(EncryptionMethod method)
-{
-    static const char * encryption_method_name[] = {
-        "Unknown",
-        "Plaintext",
-        "Aes128Ctr",
-        "Aes192Ctr",
-        "Aes256Ctr",
-        "SM4Ctr",
-    };
-    return encryption_method_name[static_cast<uint8_t>(method)];
 }
 
 RawCppPtr GenRawCppPtr(RawVoidPtr ptr_, RawCppPtrTypeImpl type_)

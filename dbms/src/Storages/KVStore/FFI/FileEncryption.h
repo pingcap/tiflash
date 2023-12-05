@@ -21,7 +21,6 @@
 namespace DB
 {
 
-const char * IntoEncryptionMethodName(EncryptionMethod);
 struct EngineStoreServerWrap;
 
 #pragma GCC diagnostic push
@@ -50,7 +49,7 @@ struct FileEncryptionInfo : FileEncryptionInfoRaw
         }
     }
 
-    FileEncryptionInfo(const FileEncryptionInfoRaw & src)
+    explicit FileEncryptionInfo(const FileEncryptionInfoRaw & src)
         : FileEncryptionInfoRaw(src)
     {}
     FileEncryptionInfo(

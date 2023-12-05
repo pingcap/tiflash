@@ -1032,32 +1032,13 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
 
     RaftStoreProxyRunner proxy_runner(RaftStoreProxyRunner::RunRaftStoreProxyParms{&helper, proxy_conf}, log);
-    auto shutdown_proxy = [&]() -> void {
-        LOG_INFO(log, "Let tiflash proxy shutdown");
-        tiflash_instance_wrap.status = EngineStoreServerStatus::Terminated;
-        tiflash_instance_wrap.tmt = nullptr;
-        LOG_INFO(log, "Wait for tiflash proxy thread to join");
-        proxy_runner.join();
-        LOG_INFO(log, "tiflash proxy thread is joined");
-    };
 
     if (proxy_conf.is_proxy_runnable)
     {
         proxy_runner.run();
-        // wait for proxy initializing, timeout is 60s
-        static const UInt64 PROXY_START_TIMEOUT_SECONDS = 60;
         LOG_INFO(log, "wait for tiflash proxy initializing");
-        Stopwatch watch;
         while (!tiflash_instance_wrap.proxy_helper)
-        {
-            if (watch.elapsedSeconds() > PROXY_START_TIMEOUT_SECONDS)
-            {
-                shutdown_proxy();
-                LOG_ERROR(log, "wait for tiflash proxy initializing timeout");
-                throw Exception("wait for tiflash proxy initializing timeout");
-            }
             std::this_thread::sleep_for(std::chrono::milliseconds(200));
-        }
         LOG_INFO(log, "tiflash proxy is initialized");
     }
     else
@@ -1068,7 +1049,12 @@ int Server::main(const std::vector<std::string> & /*args*/)
     SCOPE_EXIT({
         if (!proxy_conf.is_proxy_runnable)
             return;
-        shutdown_proxy();
+        LOG_INFO(log, "Let tiflash proxy shutdown");
+        tiflash_instance_wrap.status = EngineStoreServerStatus::Terminated;
+        tiflash_instance_wrap.tmt = nullptr;
+        LOG_INFO(log, "Wait for tiflash proxy thread to join");
+        proxy_runner.join();
+        LOG_INFO(log, "tiflash proxy thread is joined");
     });
 
     /// get CPU/memory/disk info of this server
@@ -1105,9 +1091,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
         }
         else if (enable_encryption)
         {
-            auto method = tiflash_instance_wrap.proxy_helper->getEncryptionMethod();
+            const auto method = tiflash_instance_wrap.proxy_helper->getEncryptionMethod();
             enable_encryption = (method != EncryptionMethod::Plaintext);
-            LOG_INFO(log, "encryption is enabled, method is {}", IntoEncryptionMethodName(method));
+            LOG_INFO(log, "encryption is enabled, method is {}", magic_enum::enum_name(method));
         }
         else
         {
