@@ -49,6 +49,17 @@ void KVStore::checkAndApplyPreHandledSnapshot(const RegionPtrWrap & new_region, 
     auto old_region = getRegion(region_id);
     UInt64 old_applied_index = 0;
 
+    if (tmt.getContext().getSharedContextDisagg()->isDisaggregatedStorageMode())
+    {
+        auto fap_ctx = tmt.getContext().getSharedContextDisagg()->fap_context;
+        auto region_id = new_region->id();
+        // Everytime we meet a legacy snapshot, we try to clean obsolete fap ingest info.
+        if constexpr (!std::is_same_v<RegionPtrWrap, RegionPtrWithCheckpointInfo>)
+        {
+            fap_ctx->handleBeforeLegacySnapshot(tmt, region_id);
+        }
+    }
+
     /**
      * When applying snapshot of a region, its range must not be overlapped with any other(different id) region's.
      */
@@ -118,38 +129,6 @@ void KVStore::checkAndApplyPreHandledSnapshot(const RegionPtrWrap & new_region, 
     }
 
     onSnapshot(new_region, old_region, old_applied_index, tmt);
-
-    if (tmt.getContext().getSharedContextDisagg()->isDisaggregatedStorageMode())
-    {
-        auto fap_ctx = tmt.getContext().getSharedContextDisagg()->fap_context;
-        auto region_id = new_region->id();
-        // Everytime we meet a legacy snapshot, we try to clean obsolete fap ingest info.
-        if constexpr (!std::is_same_v<RegionPtrWrap, RegionPtrWithCheckpointInfo>)
-        {
-            // Legacy snapshot and FAP(both phase 1 and 2) for a region is exclusive for now.
-            // We are handling the case where FAP failed after phase 1 and left stuffs in `AsyncTasks`.
-            auto prev_state = fap_ctx->tasks_trace->asyncCancelTask(
-                region_id,
-                [&]() {},
-                false);
-            if (prev_state == FAPAsyncTasks::TaskState::Finished)
-            {
-                LOG_INFO(log, "FastAddPeer: find old finished fap task, region_id={}", new_region->id());
-                fap_ctx->forciblyCleanTask(tmt, new_region->id());
-            }
-            else if likely (prev_state == FAPAsyncTasks::TaskState::NotScheduled)
-            {
-                // There could some non-ingested data on disk.
-                fap_ctx->forciblyCleanTask(tmt, new_region->id());
-            }
-            else
-            {
-                // Currently, proxy will not actively cancel FAP.
-                // So it will not fallback if FAP phase 1 is still running.
-                LOG_ERROR(log, "FastAddPeer: find old scheduled fap task, region_id={}", new_region->id());
-            }
-        }
-    }
 }
 
 // This function get tiflash replica count from local schema.

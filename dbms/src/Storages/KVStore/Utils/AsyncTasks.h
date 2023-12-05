@@ -166,6 +166,7 @@ struct AsyncTasks
                 tasks.erase(it);
             }
         }
+
         return state;
     }
 
@@ -248,6 +249,29 @@ struct AsyncTasks
 
     bool isReady(Key key) const { return queryState(key) == TaskState::Finished; }
 
+    uint64_t queryElapsed(Key key)
+    {
+        std::scoped_lock<std::mutex> l(mtx);
+        auto it = tasks.find(key);
+        RUNTIME_CHECK_MSG(it != tasks.end(), "queryElapsed meets empty key");
+        return getCurrentMillis() - it->second.start_ts;
+    }
+
+    uint64_t queryStartTime(Key key, bool throw_if_not_found = true)
+    {
+        std::scoped_lock<std::mutex> l(mtx);
+        auto it = tasks.find(key);
+        if unlikely (it == tasks.end())
+        {
+            if (throw_if_not_found)
+                throw Exception(ErrorCodes::LOGICAL_ERROR, "queryElapsed meets empty key");
+            else
+                return 0;
+        }
+        return it->second.start_ts;
+    }
+
+    // If a task is canceled, `fetchResult` may throw.
     R fetchResult(Key key)
     {
         std::unique_lock<std::mutex> l(mtx);
@@ -258,22 +282,6 @@ struct AsyncTasks
         l.unlock();
         RUNTIME_CHECK_MSG(fut.valid(), "no valid future");
         return fut.get();
-    }
-
-    uint64_t queryElapsed(Key key)
-    {
-        std::scoped_lock<std::mutex> l(mtx);
-        auto it = tasks.find(key);
-        RUNTIME_CHECK_MSG(it != tasks.end(), "queryElapsed meets empty key");
-        return getCurrentMillis() - it->second.start_ts;
-    }
-
-    uint64_t queryStartTime(Key key)
-    {
-        std::scoped_lock<std::mutex> l(mtx);
-        auto it = tasks.find(key);
-        RUNTIME_CHECK_MSG(it != tasks.end(), "queryElapsed meets empty key");
-        return it->second.start_ts;
     }
 
     std::pair<R, uint64_t> fetchResultAndElapsed(Key key)

@@ -192,13 +192,20 @@ std::variant<CheckpointRegionInfoAndData, FastAddPeerRes> FastAddPeerImplSelect(
     std::unordered_map<StoreID, UInt64> checked_seq_map;
     auto fap_ctx = tmt.getContext().getSharedContextDisagg()->fap_context;
     auto cancel_handle = fap_ctx->tasks_trace->getCancelHandleFromExecutor(region_id);
+
+    if (cancel_handle->canceled())
+    {
+        // It is already canceled in queue.
+        return genFastAddPeerRes(FastAddPeerStatus::Canceled, "", "");
+    }
+
+    // Get candidate stores.
     const auto & settings = tmt.getContext().getSettingsRef();
     auto current_store_id = tmt.getKVStore()->clonedStoreMeta().id();
     std::vector<StoreID> candidate_store_ids;
     fiu_do_on(FailPoints::force_set_fap_candidate_store_id, { candidate_store_ids = {1234}; });
     if (candidate_store_ids.empty())
         getCandidateStoreIDsForRegion(tmt, region_id, current_store_id);
-
     if (candidate_store_ids.empty())
     {
         LOG_DEBUG(log, "No suitable candidate peer for region_id={}", region_id);
@@ -206,6 +213,7 @@ std::variant<CheckpointRegionInfoAndData, FastAddPeerRes> FastAddPeerImplSelect(
         return genFastAddPeerRes(FastAddPeerStatus::NoSuitable, "", "");
     }
     LOG_DEBUG(log, "Begin to select checkpoint for region_id={}", region_id);
+
     // It will return with FastAddPeerRes or failed with timeout result wrapped in FastAddPeerRes.
     while (true)
     {
@@ -263,15 +271,14 @@ std::variant<CheckpointRegionInfoAndData, FastAddPeerRes> FastAddPeerImplSelect(
                 // This could happen if there are too many pending tasks in queue,
                 LOG_INFO(log, "FastAddPeer timeout region_id={} new_peer_id={}", region_id, new_peer_id);
                 GET_METRIC(tiflash_fap_task_result, type_failed_timeout).Increment();
-                // We don't wait here.
-                fap_ctx->tasks_trace->asyncCancelTask(region_id);
                 return genFastAddPeerRes(FastAddPeerStatus::NoSuitable, "", "");
             }
             SYNC_FOR("in_FastAddPeerImplSelect::before_sleep");
             if (cancel_handle->blockedWaitFor(std::chrono::milliseconds(1000)))
             {
                 LOG_INFO(log, "Cancel FAP during peer selecting, region_id={}", region_id);
-                fap_ctx->forciblyCleanTask(tmt, region_id);
+                // Just remove the task from AsyncTasks, it will not write anything in disk during this stage.
+                fap_ctx->tasks_trace->leakingDiscardTask(region_id);
                 return genFastAddPeerRes(FastAddPeerStatus::Canceled, "", "");
             }
         }

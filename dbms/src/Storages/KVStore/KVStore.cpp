@@ -333,6 +333,12 @@ void KVStore::handleDestroy(UInt64 region_id, TMTContext & tmt)
 void KVStore::handleDestroy(UInt64 region_id, TMTContext & tmt, const KVStoreTaskLock & task_lock)
 {
     const auto region = getRegion(region_id);
+    if (tmt.getContext().getSharedContextDisagg()->isDisaggregatedStorageMode())
+    {
+        // Everytime we remove region, we try to clean obsolete fap ingest info.
+        auto fap_ctx = tmt.getContext().getSharedContextDisagg()->fap_context;
+        fap_ctx->handleBeforeLegacySnapshot(tmt, region_id);
+    }
     if (region == nullptr)
     {
         LOG_INFO(log, "region_id={} not found, might be removed already", region_id);
@@ -346,13 +352,6 @@ void KVStore::handleDestroy(UInt64 region_id, TMTContext & tmt, const KVStoreTas
         tmt.getRegionTable(),
         task_lock,
         region_manager.genRegionTaskLock(region_id));
-
-    if (tmt.getContext().getSharedContextDisagg()->isDisaggregatedStorageMode())
-    {
-        // Everytime we remove region, we try to clean obsolete fap ingest info.
-        auto fap_ctx = tmt.getContext().getSharedContextDisagg()->fap_context;
-        fap_ctx->forciblyCleanTask(tmt, region_id);
-    }
 }
 
 void KVStore::setRegionCompactLogConfig(UInt64 rows, UInt64 bytes, UInt64 gap, UInt64 eager_gc_gap)

@@ -209,4 +209,37 @@ void FastAddPeerContext::insertCheckpointIngestInfo(
     info->persistToLocal();
 }
 
+void FastAddPeerContext::handleBeforeLegacySnapshot(TMTContext & tmt, UInt64 region_id)
+{
+    auto prev_state = tasks_trace->asyncCancelTask(
+        region_id,
+        [&]() {},
+        false);
+    // Legacy snapshot and FAP(both phase 1 and 2) for a region is exclusive for now.
+    if (prev_state == FAPAsyncTasks::TaskState::Finished)
+    {
+        // FAP failed after phase 1 and left stuffs in `AsyncTasks`.
+        LOG_INFO(log, "FastAddPeer: find old finished fap task, region_id={}", region_id);
+        forciblyCleanTask(tmt, region_id);
+    }
+    else if likely (prev_state == FAPAsyncTasks::TaskState::NotScheduled)
+    {
+        // 1. There leaves some non-ingested data on disk after restart.
+        // 2. There has been no fap at all.
+        // 3. FAP is enabled before, but disabled for now.
+        LOG_DEBUG(log, "FastAddPeer: no find ongoing fap task, region_id={}", region_id);
+        forciblyCleanTask(tmt, region_id);
+    }
+    else
+    {
+        // Currently, proxy will not actively cancel FAP. So it will not fallback if FAP phase 1 is still running.
+        // If we cancel the task asyncly, this will happen in some very corner cases where a legacy snapshot meets a cleaning FAP task.
+        throw Exception(
+            ErrorCodes::LOGICAL_ERROR,
+            "FastAddPeer: find running scheduled fap task, region_id={} fap_state={}",
+            region_id,
+            magic_enum::enum_name(prev_state));
+    }
+}
+
 } // namespace DB

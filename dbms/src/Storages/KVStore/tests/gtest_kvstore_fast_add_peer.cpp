@@ -553,6 +553,61 @@ try
 }
 CATCH
 
+// Test cancel from legacy snapshot
+TEST_F(RegionKVStoreTestFAP, Cancel3)
+try
+{
+    using namespace std::chrono_literals;
+    CheckpointRegionInfoAndData mock_data = prepareForRestart(FAPTestOpt{
+        .mock_add_new_peer = true,
+    });
+    KVStore & kvs = getKVS();
+    RegionPtr kv_region = kvs.getRegion(1);
+
+    auto & global_context = TiFlashTestEnv::getGlobalContext();
+    auto fap_context = global_context.getSharedContextDisagg()->fap_context;
+    uint64_t region_id = 1;
+
+    EngineStoreServerWrap server = {
+        .tmt = &global_context.getTMTContext(),
+        .proxy_helper = proxy_helper.get(),
+    };
+
+    kvstore->getStore().store_id.store(1, std::memory_order_release);
+    kvstore->debugMutStoreMeta().set_id(1);
+    ASSERT_EQ(1, kvstore->getStoreID());
+    ASSERT_EQ(1, kvstore->clonedStoreMeta().id());
+    FailPointHelper::enableFailPoint(FailPoints::force_set_fap_candidate_store_id);
+    auto sp = SyncPointCtl::enableInScope("in_FastAddPeerImplWrite::after_write_segments");
+    // The FAP will fail because it doesn't contain the new peer in region meta.
+    auto t = std::thread([&]() { FastAddPeer(&server, region_id, 2333); });
+    sp.waitAndPause();
+    EXPECT_THROW(kvstore->handleDestroy(region_id, global_context.getTMTContext()), Exception);
+    sp.next();
+    sp.disable();
+    t.join();
+    // Cancel async tasks, and make sure the data is cleaned after limited time.
+    bool thrown = false;
+    for (int i = 0; i < 5; i++)
+    {
+        try
+        {
+            CheckpointIngestInfo::restore(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333);
+        }
+        catch (...)
+        {
+            thrown = true;
+            break;
+        }
+        std::this_thread::sleep_for(500ms);
+    }
+    // Wait async cancel in `FastAddPeerImplWrite`.
+    ASSERT_FALSE(fap_context->tryGetCheckpointIngestInfo(region_id).has_value());
+    ASSERT_TRUE(thrown);
+    FailPointHelper::disableFailPoint(FailPoints::force_set_fap_candidate_store_id);
+}
+CATCH
+
 TEST_F(RegionKVStoreTestFAP, EmptySegment)
 try
 {
