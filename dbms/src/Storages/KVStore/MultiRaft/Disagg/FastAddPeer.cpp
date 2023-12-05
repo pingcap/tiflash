@@ -271,7 +271,7 @@ std::variant<CheckpointRegionInfoAndData, FastAddPeerRes> FastAddPeerImplSelect(
             if (cancel_handle->blockedWaitFor(std::chrono::milliseconds(1000)))
             {
                 LOG_INFO(log, "Cancel FAP during peer selecting, region_id={}", region_id);
-                fap_ctx->cleanCheckpointIngestInfo(tmt, region_id);
+                fap_ctx->forciblyCleanTask(tmt, region_id);
                 return genFastAddPeerRes(FastAddPeerStatus::Canceled, "", "");
             }
         }
@@ -321,7 +321,7 @@ FastAddPeerRes FastAddPeerImplWrite(
     if (cancel_handle->canceled())
     {
         LOG_INFO(log, "Cancel FAP before write, region_id={}", region_id);
-        fap_ctx->cleanCheckpointIngestInfo(tmt, region_id);
+        fap_ctx->forciblyCleanTask(tmt, region_id);
         return genFastAddPeerRes(FastAddPeerStatus::Canceled, "", "");
     }
     auto segments = dm_storage->buildSegmentsFromCheckpointInfo(new_key_range, checkpoint_info, settings);
@@ -339,7 +339,7 @@ FastAddPeerRes FastAddPeerImplWrite(
     if (cancel_handle->canceled())
     {
         LOG_INFO(log, "Cancel FAP after write segments, region_id={}", region_id);
-        fap_ctx->cleanCheckpointIngestInfo(tmt, region_id);
+        fap_ctx->forciblyCleanTask(tmt, region_id);
         return genFastAddPeerRes(FastAddPeerStatus::Canceled, "", "");
     }
     // Write raft log to uni ps, we do this here because we store raft log seperately.
@@ -364,7 +364,7 @@ FastAddPeerRes FastAddPeerImplWrite(
     if (cancel_handle->canceled())
     {
         LOG_INFO(log, "Cancel FAP after write raft log, region_id={}", region_id);
-        fap_ctx->cleanCheckpointIngestInfo(tmt, region_id);
+        fap_ctx->forciblyCleanTask(tmt, region_id);
         return genFastAddPeerRes(FastAddPeerStatus::Canceled, "", "");
     }
 
@@ -439,7 +439,7 @@ void ApplyFapSnapshotImpl(TMTContext & tmt, TiFlashRaftProxyHelper * proxy_helpe
     auto fap_ctx = tmt.getContext().getSharedContextDisagg()->fap_context;
     auto checkpoint_ingest_info = fap_ctx->getOrRestoreCheckpointIngestInfo(tmt, proxy_helper, region_id, peer_id);
     kvstore->handleIngestCheckpoint(checkpoint_ingest_info->getRegion(), checkpoint_ingest_info, tmt);
-    fap_ctx->cleanCheckpointIngestInfo(tmt, region_id);
+    fap_ctx->forciblyCleanTask(tmt, region_id);
     GET_METRIC(tiflash_fap_task_duration_seconds, type_ingest_stage).Observe(watch_ingest.elapsedSeconds());
     auto begin = checkpoint_ingest_info->beginTime();
     auto current = FAPAsyncTasks::getCurrentMillis();

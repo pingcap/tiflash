@@ -140,7 +140,7 @@ void FastAddPeerContext::debugRemoveCheckpointIngestInfo(UInt64 region_id)
     checkpoint_ingest_info_map.erase(region_id);
 }
 
-void FastAddPeerContext::cleanCheckpointIngestInfo(TMTContext & tmt, UInt64 region_id)
+void FastAddPeerContext::forciblyCleanTask(TMTContext & tmt, UInt64 region_id)
 {
     // TODO(fap) We can move checkpoint_ingest_info to a dedicated queue, and schedule a timed task to clean it, if this costs much.
     // However, we have to make sure the clean task will not override if a new fap snapshot of the same region comes later.

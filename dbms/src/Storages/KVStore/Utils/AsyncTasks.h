@@ -20,6 +20,7 @@
 
 #include <future>
 #include <magic_enum.hpp>
+#include <unordered_map>
 
 namespace DB
 {
@@ -49,7 +50,7 @@ struct AsyncTasks
             return canceled();
         }
 
-        static CancelHandlePtr genAlreadyCanceled()
+        static CancelHandlePtr genAlreadyCanceled() noexcept
         {
             CancelHandlePtr h = std::make_shared<CancelHandle>();
             h->doSetCancel();
@@ -92,6 +93,10 @@ struct AsyncTasks
     };
 
     // It's guarunteed a task is no longer accessible once canceled or has its result fetched.
+    // NotScheduled -> InQueue, Running, NotScheduled
+    // InQueue -> Running
+    // Running -> Finished, NotScheduled(canceled)
+    // Finished -> NotScheduled(fetched)
     enum class TaskState
     {
         NotScheduled,
@@ -106,7 +111,7 @@ struct AsyncTasks
         NotRunning,
     };
 
-    /// Although not mandatory, we suggest hold the handle at the beginning of the body of async task.
+    /// Although not mandatory, we publicize the method to allow holding the handle at the beginning of the body of async task.
     std::shared_ptr<CancelHandle> getCancelHandleFromExecutor(Key k) const
     {
         std::unique_lock<std::mutex> l(mtx);
@@ -134,12 +139,15 @@ struct AsyncTasks
         return false;
     }
 
+    // Safety: Throws if
+    // 1. The task not exist and `throw_if_noexist`.
+    // 2. Throw in `result_dropper`.
     template <typename ResultDropper>
-    void asyncCancelTask(Key k, ResultDropper result_dropper, bool throw_if_noexist)
+    TaskState asyncCancelTask(Key k, ResultDropper result_dropper, bool throw_if_noexist)
     {
         auto state = queryState(k);
         if (!throw_if_noexist && state == TaskState::NotScheduled)
-            return;
+            return state;
         if (state == TaskState::Finished)
         {
             result_dropper();
@@ -158,17 +166,21 @@ struct AsyncTasks
                 tasks.erase(it);
             }
         }
+        return state;
     }
 
-    void asyncCancelTask(Key k)
+    TaskState asyncCancelTask(Key k)
     {
-        asyncCancelTask(
+        return asyncCancelTask(
             k,
             []() {},
             true);
     }
 
-    // Consider a one producer thread one consumer thread scene, the first task is running,
+    // Safety: Throws if
+    // 1. The task is not found.
+    // 2. The cancel_handle is already set.
+    // NOTE: Consider a one producer thread one consumer thread scene, the first task is running,
     // and the second task is in queue. If we block cancel the second task here, deadlock will happen.
     // So we only allow block canceling running tasks, and users have to guaruantee all infinite loop having cancel checking.
     [[nodiscard]] BlockCancelResult blockedCancelRunningTask(Key k)
@@ -180,12 +192,15 @@ struct AsyncTasks
         {
             return BlockCancelResult::NotRunning;
         }
+        // Only one thread can block cancel and wait.
         RUNTIME_CHECK_MSG(!cancel_handle->canceled(), "Try block cancel running task twice");
         cancel_handle->doCancel();
         fetchResult(k);
         return BlockCancelResult::Ok;
     }
 
+    // Safety: Throws if
+    // 1. There is already a task registered with the same name and not canceled or fetched.
     bool addTask(Key k, Func f)
     {
         std::scoped_lock l(mtx);
@@ -297,6 +312,7 @@ protected:
 
 protected:
     std::unordered_map<Key, Elem> tasks;
+    // TODO(fap) Use threadpool which supports purging from queue.
     std::unique_ptr<ThreadPool> thread_pool;
     mutable std::mutex mtx;
     LoggerPtr log;

@@ -76,7 +76,7 @@ namespace tests
 class DeltaMergeStoreTest;
 }
 
-inline static const PageIdU64 DELTA_MERGE_FIRST_SEGMENT_ID = 1;
+constexpr PageIdU64 DELTA_MERGE_FIRST_SEGMENT_ID = 1;
 
 struct SegmentStats
 {

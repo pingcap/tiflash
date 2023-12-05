@@ -176,7 +176,6 @@ void CheckpointIngestInfo::removeFromLocal(TMTContext & tmt, UInt64 region_id)
     uni_ps->write(std::move(del_batch), PageType::Local);
 }
 
-// Like removeFromLocal, but is static and with check.
 bool CheckpointIngestInfo::forciblyClean(TMTContext & tmt, UInt64 region_id, bool pre_check)
 {
     if (!pre_check)

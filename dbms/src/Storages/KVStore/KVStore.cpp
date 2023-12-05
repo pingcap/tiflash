@@ -351,7 +351,7 @@ void KVStore::handleDestroy(UInt64 region_id, TMTContext & tmt, const KVStoreTas
     {
         // Everytime we remove region, we try to clean obsolete fap ingest info.
         auto fap_ctx = tmt.getContext().getSharedContextDisagg()->fap_context;
-        fap_ctx->cleanCheckpointIngestInfo(tmt, region_id);
+        fap_ctx->forciblyCleanTask(tmt, region_id);
     }
 }
 

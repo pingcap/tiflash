@@ -85,9 +85,9 @@ TEST(AsyncTasksTest, AsyncTasksCancel)
         for (int i = 0; i < total; i++)
         {
             auto res = async_tasks->addTask(i, [i, &async_tasks, &finished]() {
-                auto cancel_handle = async_tasks->getCancelHandleFromExecutor(i);
                 while (true)
                 {
+                    auto cancel_handle = async_tasks->getCancelHandleFromExecutor(i);
                     // Busy loop to take over cpu
                     if (cancel_handle->canceled())
                     {

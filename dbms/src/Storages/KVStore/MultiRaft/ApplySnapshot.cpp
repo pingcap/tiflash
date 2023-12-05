@@ -128,13 +128,26 @@ void KVStore::checkAndApplyPreHandledSnapshot(const RegionPtrWrap & new_region, 
         {
             // Legacy snapshot and FAP(both phase 1 and 2) for a region is exclusive for now.
             // We are handling the case where FAP failed after phase 1 and left stuffs in `AsyncTasks`.
-            fap_ctx->tasks_trace->asyncCancelTask(
+            auto prev_state = fap_ctx->tasks_trace->asyncCancelTask(
                 region_id,
-                [&]() {
-                    LOG_ERROR(log, "FastAddPeer: find old fap task, region_id={}", new_region->id());
-                    CheckpointIngestInfo::forciblyClean(tmt, region_id, false);
-                },
+                [&]() {},
                 false);
+            if (prev_state == FAPAsyncTasks::TaskState::Finished)
+            {
+                LOG_INFO(log, "FastAddPeer: find old finished fap task, region_id={}", new_region->id());
+                fap_ctx->forciblyCleanTask(tmt, new_region->id());
+            }
+            else if likely (prev_state == FAPAsyncTasks::TaskState::NotScheduled)
+            {
+                // There could some non-ingested data on disk.
+                fap_ctx->forciblyCleanTask(tmt, new_region->id());
+            }
+            else
+            {
+                // Currently, proxy will not actively cancel FAP.
+                // So it will not fallback if FAP phase 1 is still running.
+                LOG_ERROR(log, "FastAddPeer: find old scheduled fap task, region_id={}", new_region->id());
+            }
         }
     }
 }

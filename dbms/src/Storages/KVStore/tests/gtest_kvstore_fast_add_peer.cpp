@@ -59,6 +59,7 @@ namespace tests
 struct FAPTestOpt
 {
     bool mock_add_new_peer = false;
+    bool persist_empty_segment = false;
 };
 
 class RegionKVStoreTestFAP : public KVStoreTestBase
@@ -306,14 +307,20 @@ CheckpointRegionInfoAndData RegionKVStoreTestFAP::prepareForRestart(FAPTestOpt o
     region->addPeer(store_id, peer_id, metapb::PeerRole::Learner);
 
     // Write some data, and persist meta.
-    auto k1 = RecordKVFormat::genKey(table_id, 1, 111);
-    auto && [value_write1, value_default1] = proxy_instance->generateTiKVKeyValue(111, 999);
-    auto [index, term] = proxy_instance->rawWrite(
-        region_id,
-        {k1, k1},
-        {value_default1, value_write1},
-        {WriteCmdType::Put, WriteCmdType::Put},
-        {ColumnFamilyType::Default, ColumnFamilyType::Write});
+    UInt64 index = 0;
+    if (!opt.persist_empty_segment)
+    {
+        auto k1 = RecordKVFormat::genKey(table_id, 1, 111);
+        auto && [value_write1, value_default1] = proxy_instance->generateTiKVKeyValue(111, 999);
+        UInt64 term = 0;
+        std::tie(index, term) = proxy_instance->rawWrite(
+            region_id,
+            {k1, k1},
+            {value_default1, value_write1},
+            {WriteCmdType::Put, WriteCmdType::Put},
+            {ColumnFamilyType::Default, ColumnFamilyType::Write});
+    }
+
     kvs.setRegionCompactLogConfig(0, 0, 0, 0);
     if (opt.mock_add_new_peer)
     {
@@ -543,6 +550,29 @@ try
     }
     ASSERT_TRUE(thrown);
     FailPointHelper::disableFailPoint(FailPoints::force_set_fap_candidate_store_id);
+}
+CATCH
+
+TEST_F(RegionKVStoreTestFAP, EmptySegment)
+try
+{
+    CheckpointRegionInfoAndData mock_data = prepareForRestart(FAPTestOpt{.persist_empty_segment = true});
+    KVStore & kvs = getKVS();
+    RegionPtr kv_region = kvs.getRegion(1);
+
+    auto & global_context = TiFlashTestEnv::getGlobalContext();
+    auto fap_context = global_context.getSharedContextDisagg()->fap_context;
+    uint64_t region_id = 1;
+    fap_context->tasks_trace->addTask(region_id, []() {
+        return genFastAddPeerRes(FastAddPeerStatus::NoSuitable, "", "");
+    });
+    FastAddPeerImplWrite(global_context.getTMTContext(), region_id, 2333, std::move(mock_data), 0);
+    ApplyFapSnapshotImpl(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333);
+    // CheckpointIngestInfo is removed.
+    ASSERT_TRUE(!fap_context->tryGetCheckpointIngestInfo(region_id).has_value());
+    EXPECT_THROW(
+        CheckpointIngestInfo::restore(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333),
+        Exception);
 }
 CATCH
 

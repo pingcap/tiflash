@@ -340,7 +340,7 @@ RegionMap RegionPersister::restore(
         }
         case PageStorageRunMode::UNI_PS:
         {
-            UniversalPageStoragePtr uni_ps = global_context.getWriteNodePageStorage();
+            auto uni_ps = global_context.getWriteNodePageStorage();
             page_writer = std::make_shared<PageWriter>(
                 run_mode,
                 StorageType::KVStore,
