@@ -1067,10 +1067,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     SCOPE_EXIT({
         if (!proxy_conf.is_proxy_runnable)
-        {
-            proxy_runner.join();
             return;
-        }
         shutdown_proxy();
     });
 
