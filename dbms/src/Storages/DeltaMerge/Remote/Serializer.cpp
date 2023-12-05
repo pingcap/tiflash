@@ -40,6 +40,10 @@ namespace CurrentMetrics
 extern const Metric DT_SnapshotOfDisaggReadNodeRead;
 }
 
+namespace DB::ErrorCodes
+{
+extern const int LOGICAL_ERROR;
+} // namespace DB::ErrorCodes
 
 namespace DB::DM::Remote
 {
@@ -216,10 +220,7 @@ RemotePb::ColumnFileRemote Serializer::serializeCF(
     {
         return serializeCFBig(*cf_big);
     }
-    else
-    {
-        RUNTIME_CHECK_MSG(false, "Unknown ColumnFile, type={}", static_cast<UInt32>(cf->getType()));
-    }
+    throw Exception(ErrorCodes::LOGICAL_ERROR, "Unknown ColumnFile, type={}", static_cast<UInt32>(cf->getType()));
 }
 
 ColumnFileSetSnapshotPtr Serializer::deserializeColumnFileSet(
