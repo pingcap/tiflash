@@ -1036,18 +1036,21 @@ int Server::main(const std::vector<std::string> & /*args*/)
     if (proxy_conf.is_proxy_runnable)
     {
         proxy_runner.run();
-
+        // wait for proxy initializing, timeout is 60s
+        static const UInt64 PROXY_START_TIMEOUT_SECONDS = 60;
         LOG_INFO(log, "wait for tiflash proxy initializing");
+        Stopwatch watch;
         while (!tiflash_instance_wrap.proxy_helper)
-            std::this_thread::sleep_for(std::chrono::milliseconds(200));
-        LOG_INFO(log, "tiflash proxy is initialized");
-        if (tiflash_instance_wrap.proxy_helper->checkEncryptionEnabled())
         {
-            auto method = tiflash_instance_wrap.proxy_helper->getEncryptionMethod();
-            LOG_INFO(log, "encryption is enabled, method is {}", IntoEncryptionMethodName(method));
+            if (watch.elapsedSeconds() > PROXY_START_TIMEOUT_SECONDS)
+            {
+                proxy_runner.join();
+                LOG_ERROR(log, "wait for tiflash proxy initializing timeout");
+                throw Exception("wait for tiflash proxy initializing timeout");
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(200));
         }
-        else
-            LOG_INFO(log, "encryption is disabled");
+        LOG_INFO(log, "tiflash proxy is initialized");
     }
     else
     {
@@ -1092,14 +1095,23 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->getSharedContextDisagg()->use_autoscaler = use_autoscaler;
 
     /// Init File Provider
-    bool enable_encryption = false;
     if (proxy_conf.is_proxy_runnable)
     {
-        enable_encryption = tiflash_instance_wrap.proxy_helper->checkEncryptionEnabled();
-        if (enable_encryption)
+        bool enable_encryption = tiflash_instance_wrap.proxy_helper->checkEncryptionEnabled();
+        if (enable_encryption && storage_config.s3_config.isS3Enabled())
+        {
+            LOG_ERROR(log, "Cannot support S3 when encryption enabled.");
+            throw Exception("Cannot support S3 when encryption enabled.");
+        }
+        else if (enable_encryption)
         {
             auto method = tiflash_instance_wrap.proxy_helper->getEncryptionMethod();
             enable_encryption = (method != EncryptionMethod::Plaintext);
+            LOG_INFO(log, "encryption is enabled, method is {}", IntoEncryptionMethodName(method));
+        }
+        else
+        {
+            LOG_INFO(log, "encryption is disabled");
         }
         KeyManagerPtr key_manager = std::make_shared<DataKeyManager>(&tiflash_instance_wrap);
         global_context->initializeFileProvider(key_manager, enable_encryption);
@@ -1124,14 +1136,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         storage_config.s3_config.isS3Enabled());
 
     if (storage_config.s3_config.isS3Enabled())
-    {
-        if (enable_encryption)
-        {
-            LOG_ERROR(log, "Cannot support S3 when encryption enabled.");
-            throw Exception("Cannot support S3 when encryption enabled.");
-        }
         S3::ClientFactory::instance().init(storage_config.s3_config);
-    }
 
     global_context->getSharedContextDisagg()->initRemoteDataStore(
         global_context->getFileProvider(),
@@ -1208,8 +1213,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         {
             rlim_t old = rlim.rlim_cur;
             rlim.rlim_cur = config().getUInt("max_open_files", rlim.rlim_max);
-            int rc = setrlimit(RLIMIT_NOFILE, &rlim);
-            if (rc != 0)
+            if (setrlimit(RLIMIT_NOFILE, &rlim) != 0)
                 LOG_WARNING(
                     log,
                     "Cannot set max number of file descriptors to {}"
