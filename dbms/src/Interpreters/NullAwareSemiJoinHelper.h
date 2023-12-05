@@ -118,7 +118,7 @@ public:
         size_t right_columns,
         const std::vector<RowsNotInsertToMap *> & null_rows,
         size_t & current_offset,
-        size_t min_pace);
+        size_t max_pace);
 
     template <NASemiJoinStep STEP>
     void checkExprResult(ConstNullMapPtr eq_null_map, size_t offset_begin, size_t offset_end);
