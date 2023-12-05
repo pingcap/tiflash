@@ -1032,6 +1032,14 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
 
     RaftStoreProxyRunner proxy_runner(RaftStoreProxyRunner::RunRaftStoreProxyParms{&helper, proxy_conf}, log);
+    auto shutdown_proxy = [&]() -> void {
+        LOG_INFO(log, "Let tiflash proxy shutdown");
+        tiflash_instance_wrap.status = EngineStoreServerStatus::Terminated;
+        tiflash_instance_wrap.tmt = nullptr;
+        LOG_INFO(log, "Wait for tiflash proxy thread to join");
+        proxy_runner.join();
+        LOG_INFO(log, "tiflash proxy thread is joined");
+    };
 
     if (proxy_conf.is_proxy_runnable)
     {
@@ -1044,7 +1052,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         {
             if (watch.elapsedSeconds() > PROXY_START_TIMEOUT_SECONDS)
             {
-                proxy_runner.join();
+                shutdown_proxy();
                 LOG_ERROR(log, "wait for tiflash proxy initializing timeout");
                 throw Exception("wait for tiflash proxy initializing timeout");
             }
@@ -1063,12 +1071,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             proxy_runner.join();
             return;
         }
-        LOG_INFO(log, "Let tiflash proxy shutdown");
-        tiflash_instance_wrap.status = EngineStoreServerStatus::Terminated;
-        tiflash_instance_wrap.tmt = nullptr;
-        LOG_INFO(log, "Wait for tiflash proxy thread to join");
-        proxy_runner.join();
-        LOG_INFO(log, "tiflash proxy thread is joined");
+        shutdown_proxy();
     });
 
     /// get CPU/memory/disk info of this server
