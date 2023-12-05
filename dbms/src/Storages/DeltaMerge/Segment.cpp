@@ -31,7 +31,6 @@
 #include <Storages/DeltaMerge/DeltaMerge.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
-#include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/DeltaPlace.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
@@ -399,7 +398,7 @@ Segment::SegmentMetaInfos Segment::readAllSegmentsMetaInfoInRange( //
 
     // If cache is empty, we read from DELTA_MERGE_FIRST_SEGMENT_ID to the end and build the cache.
     // Otherwise, we just read the segment that cover the range.
-    PageIdU64 current_segment_id = DB::DM::DELTA_MERGE_FIRST_SEGMENT_ID;
+    PageIdU64 current_segment_id = 1;
     auto end_to_segment_id_cache = checkpoint_info->checkpoint_data_holder->getEndToSegmentIdCache(
         KeyspaceTableID{context.keyspace_id, context.physical_table_id});
     auto lock = end_to_segment_id_cache->lock();

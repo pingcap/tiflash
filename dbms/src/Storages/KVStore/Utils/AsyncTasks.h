@@ -127,6 +127,7 @@ struct AsyncTasks
     }
 
     // Only unregister, no clean.
+    // Use `asyncCancelTask` if there is something to clean.
     bool leakingDiscardTask(Key k)
     {
         std::scoped_lock l(mtx);
