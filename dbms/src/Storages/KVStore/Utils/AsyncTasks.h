@@ -63,7 +63,7 @@ struct AsyncTasks
         void doCancel()
         {
             // Use lock here to prevent losing signal.
-            std::unique_lock<std::mutex> lock(mut);
+            std::scoped_lock<std::mutex> lock(mut);
             inner->store(true);
             cv.notify_all();
         }
@@ -114,7 +114,7 @@ struct AsyncTasks
     /// Although not mandatory, we publicize the method to allow holding the handle at the beginning of the body of async task.
     std::shared_ptr<CancelHandle> getCancelHandleFromExecutor(Key k) const
     {
-        std::unique_lock<std::mutex> l(mtx);
+        std::scoped_lock<std::mutex> l(mtx);
         auto it = tasks.find(k);
         if unlikely (it == tasks.end())
         {
@@ -312,7 +312,7 @@ struct AsyncTasks
 protected:
     std::shared_ptr<CancelHandle> getCancelHandleFromCaller(Key k) const
     {
-        std::unique_lock<std::mutex> l(mtx);
+        std::scoped_lock<std::mutex> l(mtx);
         auto it = tasks.find(k);
         RUNTIME_CHECK_MSG(it != tasks.end(), "getCancelHandleFromCaller meets empty key");
         return it->second.cancel;

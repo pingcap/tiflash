@@ -117,9 +117,9 @@ TEST(AsyncTasksTest, AsyncTasksCancel)
                 break;
             }
             ++elapsed;
-            std::this_thread::sleep_for(1000ms);
+            std::this_thread::sleep_for(100ms);
         }
-        ASSERT_TRUE(elapsed < 500);
+        ASSERT_TRUE(elapsed < 50);
         ASSERT_EQ(async_tasks->count(), 0);
     }
 }
@@ -171,7 +171,7 @@ TEST(AsyncTasksTest, AsyncTasksCommon)
                         auto cancel_handle = async_tasks->getCancelHandleFromExecutor(i);
                         while (true)
                         {
-                            if (cancel_handle->blockedWaitFor(200ms))
+                            if (cancel_handle->blockedWaitFor(100ms))
                             {
                                 f[to_be_canceled] = true;
                                 break;
@@ -180,7 +180,7 @@ TEST(AsyncTasksTest, AsyncTasksCommon)
                     }
                     else
                     {
-                        std::this_thread::sleep_for(200ms);
+                        std::this_thread::sleep_for(100ms);
                     }
                     return 1;
                 });
@@ -207,7 +207,7 @@ TEST(AsyncTasksTest, AsyncTasksCommon)
                 }
             }
         }
-        std::this_thread::sleep_for(200ms);
+        std::this_thread::sleep_for(100ms);
     }
 
     ASSERT_EQ(async_tasks->count(), 0);
