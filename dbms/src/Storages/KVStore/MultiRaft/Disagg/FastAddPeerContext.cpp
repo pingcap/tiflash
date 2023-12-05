@@ -218,9 +218,13 @@ void FastAddPeerContext::handleBeforeLegacySnapshot(TMTContext & tmt, UInt64 reg
     // Legacy snapshot and FAP(both phase 1 and 2) for a region is exclusive for now.
     if (prev_state == FAPAsyncTasks::TaskState::Finished)
     {
-        // FAP failed after phase 1 and left stuffs in `AsyncTasks`.
-        LOG_INFO(log, "FastAddPeer: find old finished fap task, region_id={}", region_id);
-        forciblyCleanTask(tmt, region_id);
+        // Proxy will actively polling FAP result by calling `fn_fast_add_peer`,
+        // so the result will be eventually fetched by Proxy, and then trigger phase2.
+        throw Exception(
+            ErrorCodes::LOGICAL_ERROR,
+            "FastAddPeer: find unfetched finished fap task, make sure proxy has longer timeout threshold, "
+            "region_id={}",
+            region_id);
     }
     else if likely (prev_state == FAPAsyncTasks::TaskState::NotScheduled)
     {
