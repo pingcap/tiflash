@@ -45,6 +45,9 @@ struct AsyncTasks
 
         bool blockedWaitFor(std::chrono::duration<double, std::milli> timeout)
         {
+            // The task could be canceled before running.
+            if (canceled())
+                return true;
             std::unique_lock<std::mutex> lock(mut);
             cv.wait_for(lock, timeout, [&]() { return canceled(); });
             return canceled();
