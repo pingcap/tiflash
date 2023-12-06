@@ -114,7 +114,7 @@ struct TrackedMppDataPacket
         : mem_tracker_wrapper(current_memory_tracker)
         , is_local(true)
     {
-        blocks_for_local_tunnel = std::move(data);
+        blocks = std::move(data);
     }
 
     explicit TrackedMppDataPacket(int64_t version)
@@ -122,6 +122,11 @@ struct TrackedMppDataPacket
     {
         packet.set_version(version);
     }
+
+    explicit TrackedMppDataPacket(bool is_local = false)
+        : mem_tracker_wrapper(current_memory_tracker)
+        , is_local(is_local)
+    {}
 
     explicit TrackedMppDataPacket(MemoryTracker * memory_tracker, int64_t version)
         : mem_tracker_wrapper(memory_tracker)
@@ -139,6 +144,12 @@ struct TrackedMppDataPacket
         assert(!is_local);
         mem_tracker_wrapper.alloc(value.size());
         packet.add_chunks(std::move(value));
+    }
+
+    void addBlock(Block && value)
+    {
+        assert(is_local);
+        blocks.push_back(std::move(value));
     }
 
     void serializeByResponse(const tipb::SelectResponse & response)
@@ -200,11 +211,13 @@ struct TrackedMppDataPacket
 
     mpp::MPPDataPacket & getPacket() { return packet; }
 
+    bool hasData() const { return is_local ? !blocks.empty() : packet.chunks_size() > 0; }
+
     std::shared_ptr<DB::TrackedMppDataPacket> copy() const
     {
         if (is_local)
         {
-            Blocks tmp = blocks_for_local_tunnel;
+            Blocks tmp = blocks;
             return std::make_shared<TrackedMppDataPacket>(std::move(tmp));
         }
         else
@@ -221,7 +234,7 @@ struct TrackedMppDataPacket
         if (is_local)
         {
             size_t val = 0;
-            for (const auto & block : blocks_for_local_tunnel)
+            for (const auto & block : blocks)
                 val += block.bytes();
             return val;
         }
@@ -233,7 +246,7 @@ struct TrackedMppDataPacket
 
     MemTrackerWrapper mem_tracker_wrapper;
     mpp::MPPDataPacket packet;
-    Blocks blocks_for_local_tunnel;
+    Blocks blocks;
     bool is_local = false;
     bool need_recompute = false;
     String error_message;

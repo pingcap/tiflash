@@ -68,12 +68,11 @@ ReceivedMessagePtr toReceivedMessage(
 {
     if (tracked_packet->is_local)
     {
-        auto blocks_from_local_tunnel = tracked_packet->blocks_for_local_tunnel;
         return std::make_shared<ReceivedMessage>(
             source_index,
             req_info,
             tracked_packet,
-            std::move(blocks_from_local_tunnel),
+            std::move(tracked_packet->blocks),
             fine_grained_consumer_size);
     }
     else

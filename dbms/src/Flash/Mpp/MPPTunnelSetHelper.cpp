@@ -108,7 +108,7 @@ TrackedMppDataPacketPtr ToPacketV0(Blocks & blocks, const std::vector<tipb::Fiel
     return tracked_packet;
 }
 
-TrackedMppDataPacketPtr ToFineGrainedLocalPacket(
+TrackedMppDataPacketPtr ToLocalFineGrainedPacket(
     const Block & header,
     std::vector<IColumn::ScatterColumns> & scattered,
     size_t bucket_idx,
@@ -116,7 +116,7 @@ TrackedMppDataPacketPtr ToFineGrainedLocalPacket(
     size_t num_columns,
     size_t & original_size)
 {
-    Blocks blocks;
+    auto tracked_packet = std::make_shared<TrackedMppDataPacket>(/*is_local=*/true);
     for (uint64_t stream_idx = 0; stream_idx < fine_grained_shuffle_stream_count; ++stream_idx)
     {
         // assemble scatter columns into a block
@@ -125,6 +125,7 @@ TrackedMppDataPacketPtr ToFineGrainedLocalPacket(
         for (size_t col_id = 0; col_id < num_columns; ++col_id)
             columns.emplace_back(std::move(scattered[col_id][bucket_idx + stream_idx]));
         auto block = header.cloneWithColumns(std::move(columns));
+
         columns = block.mutateColumns();
         if (block && block.rows() > 0)
         {
@@ -135,7 +136,8 @@ TrackedMppDataPacketPtr ToFineGrainedLocalPacket(
                 empty_column->reserve(1024);
                 scattered[col_id][bucket_idx + stream_idx] = std::move(empty_column);
             }
-            blocks.push_back(std::move(block));
+            tracked_packet->addBlock(std::move(block));
+            tracked_packet->getPacket().add_stream_ids(stream_idx);
         }
         else
         {
@@ -147,7 +149,6 @@ TrackedMppDataPacketPtr ToFineGrainedLocalPacket(
         }
     }
 
-    auto tracked_packet = std::make_shared<TrackedMppDataPacket>(std::move(blocks));
     original_size += tracked_packet->byteSizeLong();
     return tracked_packet;
 }

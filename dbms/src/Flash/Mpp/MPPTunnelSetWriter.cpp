@@ -323,6 +323,10 @@ static void broadcastOrPassThroughWrite(
         else
             return;
     }
+    else
+    {
+        return;
+    }
 
     return broadcastOrPassThroughWriteImpl<is_broadcast>(
         tunnel_cnt,
@@ -372,7 +376,7 @@ void MPPTunnelSetWriterBase::passThroughWrite(
 void MPPTunnelSetWriterBase::partitionWrite(Blocks & blocks, int16_t partition_id)
 {
     auto && tracked_packet = MPPTunnelSetHelper::ToPacketV0(blocks, result_field_types);
-    if (!tracked_packet)
+    if unlikely (!tracked_packet || !tracked_packet->hasData())
         return;
     auto packet_bytes = tracked_packet->byteSizeLong();
     checkPacketSize(packet_bytes);
@@ -398,7 +402,7 @@ void MPPTunnelSetWriterBase::partitionWrite(
     auto tracked_packet = is_local
         ? MPPTunnelSetHelper::ToLocalPacket(header, std::move(part_columns), original_size)
         : MPPTunnelSetHelper::ToPacket(header, std::move(part_columns), version, compression_method, original_size);
-    if (!tracked_packet)
+    if unlikely (!tracked_packet || !tracked_packet->hasData())
         return;
 
     auto packet_bytes = tracked_packet->byteSizeLong();
@@ -428,7 +432,7 @@ void MPPTunnelSetWriterBase::fineGrainedShuffleWrite(
 
     bool is_local = mpp_tunnel_set->isLocal(partition_id);
     size_t original_size = 0;
-    auto tracked_packet = is_local ? MPPTunnelSetHelper::ToFineGrainedLocalPacket(
+    auto tracked_packet = is_local ? MPPTunnelSetHelper::ToLocalFineGrainedPacket(
                               header,
                               scattered,
                               bucket_idx,
@@ -444,8 +448,7 @@ void MPPTunnelSetWriterBase::fineGrainedShuffleWrite(
                                        version,
                                        compression_method,
                                        original_size);
-
-    if unlikely (tracked_packet->getPacket().chunks_size() <= 0)
+    if unlikely (!tracked_packet || !tracked_packet->hasData())
         return;
 
     auto packet_bytes = tracked_packet->byteSizeLong();
@@ -470,7 +473,7 @@ void MPPTunnelSetWriterBase::fineGrainedShuffleWrite(
         num_columns,
         result_field_types);
 
-    if unlikely (tracked_packet->getPacket().chunks_size() <= 0)
+    if unlikely (!tracked_packet || !tracked_packet->hasData())
         return;
 
     auto packet_bytes = tracked_packet->byteSizeLong();

@@ -70,7 +70,7 @@ TrackedMppDataPacketPtr ToFineGrainedPacket(
     CompressionMethod compression_method,
     size_t & original_size);
 
-TrackedMppDataPacketPtr ToFineGrainedLocalPacket(
+TrackedMppDataPacketPtr ToLocalFineGrainedPacket(
     const Block & header,
     std::vector<IColumn::ScatterColumns> & scattered,
     size_t bucket_idx,
