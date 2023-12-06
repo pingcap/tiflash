@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <common/types.h>
 
 #include <memory>
@@ -38,19 +39,16 @@ using CheckpointIngestInfoPtr = std::shared_ptr<CheckpointIngestInfo>;
 struct TiFlashRaftProxyHelper;
 class FastAddPeerContext;
 
+// Safety: The class is immutable once created.
 struct CheckpointIngestInfo
 {
-    // Safety: The class is immutable once created.
-
-    // Get segments from memory or restore from ps.
-    DM::Segments getRestoredSegments() const;
-    UInt64 getRemoteStoreId() const;
-    RegionPtr getRegion() const;
+    DM::Segments getRestoredSegments() const { return restored_segments; }
+    UInt64 getRemoteStoreId() const { return remote_store_id; }
+    RegionPtr getRegion() const { return region; }
     UInt64 regionId() const { return region_id; }
     UInt64 peerId() const { return peer_id; }
     UInt64 beginTime() const { return begin_time; }
 
-    // Create from build
     CheckpointIngestInfo(
         TMTContext & tmt_,
         UInt64 region_id_,
@@ -66,10 +64,8 @@ struct CheckpointIngestInfo
         , region(region_)
         , restored_segments(std::move(restored_segments_))
         , begin_time(begin_time_)
-    {
-        log = DB::Logger::get("CheckpointIngestInfo");
-        persistToLocal();
-    }
+        , log(DB::Logger::get("CheckpointIngestInfo"))
+    {}
 
     static CheckpointIngestInfoPtr restore(
         TMTContext & tmt,
@@ -78,27 +74,24 @@ struct CheckpointIngestInfo
         UInt64 peer_id);
 
     // Only call to clean dangling CheckpointIngestInfo.
-    static bool forciblyClean(TMTContext & tmt, UInt64 region_id);
+    static bool forciblyClean(TMTContext & tmt, UInt64 region_id, bool pre_check = true);
 
 private:
     friend class FastAddPeerContext;
-    // Create from restore
-    CheckpointIngestInfo(TMTContext & tmt_, UInt64 region_id_, UInt64 peer_id_);
-    bool loadFromLocal(const TiFlashRaftProxyHelper * proxy_helper);
     // Safety: raftstore ensures a region is handled in a single thread.
     // `persistToLocal` is called at a fixed place in this thread.
-    void persistToLocal();
-    static void removeFromLocal(TMTContext & tmt, UInt64 region_id, UInt64 peer_id, UInt64 remote_store_id);
+    void persistToLocal() const;
+    static void removeFromLocal(TMTContext & tmt, UInt64 region_id);
 
 private:
     TMTContext & tmt;
-    UInt64 region_id = 0;
-    UInt64 peer_id = 0;
-    UInt64 remote_store_id;
-    RegionPtr region;
-    DM::Segments restored_segments;
-    // If restarted, `beginTime` is no longer meaningful.
-    UInt64 begin_time;
+    const UInt64 region_id = 0;
+    const UInt64 peer_id = 0;
+    const UInt64 remote_store_id;
+    const RegionPtr region;
+    const DM::Segments restored_segments;
+    // If restored, `beginTime` is no longer meaningful.
+    const UInt64 begin_time;
     DB::LoggerPtr log;
 };
 } // namespace DB

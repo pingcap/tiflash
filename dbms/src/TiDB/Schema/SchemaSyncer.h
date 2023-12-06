@@ -54,6 +54,10 @@ public:
 
     virtual void removeTableID(TableID table_id) = 0;
 
+    /**
+      * Drop all schema of a given keyspace.
+      * When a keyspace is removed, drop all its databases and tables.
+      */
     virtual void dropAllSchema(Context & context) = 0;
 };
 

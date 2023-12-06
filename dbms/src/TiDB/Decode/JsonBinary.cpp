@@ -835,6 +835,38 @@ bool JsonBinary::extract(
     return found;
 }
 
+// same as https://github.com/pingcap/tidb/blob/4114da88a57be6ff7f985944a247811e8b3138c5/pkg/types/json_binary_functions.go#L1147-L1157
+UInt64 JsonBinary::getDepth() const
+{
+    switch (type)
+    {
+    case TYPE_CODE_OBJECT:
+    {
+        auto elem_count = getElementCount();
+        UInt64 max_depth = 0;
+        for (size_t i = 0; i < elem_count; ++i)
+        {
+            const auto & obj = getObjectValue(i);
+            max_depth = std::max(max_depth, obj.getDepth());
+        }
+        return max_depth + 1;
+    }
+    case TYPE_CODE_ARRAY:
+    {
+        auto elem_count = getElementCount();
+        UInt64 max_depth = 0;
+        for (size_t i = 0; i < elem_count; ++i)
+        {
+            const auto & obj = getArrayElement(i);
+            max_depth = std::max(max_depth, obj.getDepth());
+        }
+        return max_depth + 1;
+    }
+    default:
+        return 1;
+    }
+}
+
 std::optional<JsonBinary> JsonBinary::searchObjectKey(JsonPathObjectKey & key) const
 {
     auto element_count = getElementCount();

@@ -311,7 +311,7 @@ MetricsPrometheus::MetricsPrometheus(Context & context, const AsynchronousMetric
 
 MetricsPrometheus::~MetricsPrometheus()
 {
-    timer.cancel(true);
+    timer.cancel(false);
 }
 
 void MetricsPrometheus::run()

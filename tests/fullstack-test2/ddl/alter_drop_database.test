@@ -45,5 +45,7 @@ mysql> drop database d1;
 # make write cmd take effect
 >> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
 
+# the `t1` is still mark as tombstone
 >> select tidb_database,tidb_name from system.tables where is_tombstone = 0 and tidb_database = 'd1' and tidb_name='t1';
+#TODO: check the row is written to the storage or not
 

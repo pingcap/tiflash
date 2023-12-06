@@ -168,8 +168,13 @@ struct SchemaGetter
     TiDB::TableInfoPtr getTableInfo(DatabaseID db_id, TableID table_id, bool try_mvcc = true)
     {
         if (try_mvcc)
-            return getTableInfoImpl</*mvcc_get*/ true>(db_id, table_id);
-        return getTableInfoImpl</*mvcc_get*/ false>(db_id, table_id);
+            return getTableInfoImpl</*mvcc_get*/ true>(db_id, table_id).first;
+        return getTableInfoImpl</*mvcc_get*/ false>(db_id, table_id).first;
+    }
+
+    std::pair<TiDB::TableInfoPtr, bool> getTableInfoAndCheckMvcc(DatabaseID db_id, TableID table_id)
+    {
+        return getTableInfoImpl</*mvcc_get*/ true>(db_id, table_id);
     }
 
     std::tuple<TiDB::DBInfoPtr, TiDB::TableInfoPtr> getDatabaseAndTableInfo(DatabaseID db_id, TableID table_id);
@@ -182,7 +187,7 @@ struct SchemaGetter
 
 private:
     template <bool mvcc_get>
-    TiDB::TableInfoPtr getTableInfoImpl(DatabaseID db_id, TableID table_id);
+    std::pair<TiDB::TableInfoPtr, bool> getTableInfoImpl(DatabaseID db_id, TableID table_id);
 };
 
 } // namespace DB

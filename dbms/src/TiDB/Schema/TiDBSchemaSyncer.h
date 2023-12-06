@@ -105,6 +105,7 @@ private:
         Context & context,
         TableID physical_table_id,
         Getter & getter,
+        bool force,
         const char * next_action);
 
     TiDB::DBInfoPtr getDBInfoByName(const String & database_name) override
@@ -112,6 +113,10 @@ private:
         return databases.getDBInfoByName(database_name);
     }
 
+    /**
+      * Drop all schema of a given keyspace.
+      * When a keyspace is removed, drop all its databases and tables.
+      */
     void dropAllSchema(Context & context) override;
 
     // clear all states.

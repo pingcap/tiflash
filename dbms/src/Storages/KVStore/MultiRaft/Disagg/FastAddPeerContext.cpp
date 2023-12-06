@@ -116,15 +116,19 @@ CheckpointIngestInfoPtr FastAddPeerContext::getOrRestoreCheckpointIngestInfo(
     UInt64 region_id,
     UInt64 peer_id)
 {
-    std::scoped_lock<std::mutex> lock(ingest_info_mu);
-    auto iter = checkpoint_ingest_info_map.find(region_id);
-    if (iter != checkpoint_ingest_info_map.end())
     {
-        return iter->second;
+        std::scoped_lock<std::mutex> lock(ingest_info_mu);
+        if (auto iter = checkpoint_ingest_info_map.find(region_id); //
+            iter != checkpoint_ingest_info_map.end())
+        {
+            return iter->second;
+        }
     }
-    else
     {
+        // The caller ensure there is no concurrency operation on the same region_id so
+        // that we can call restore without locking `ingest_info_mu`
         auto info = CheckpointIngestInfo::restore(tmt, proxy_helper, region_id, peer_id);
+        std::scoped_lock<std::mutex> lock(ingest_info_mu);
         checkpoint_ingest_info_map.emplace(region_id, info);
         return info;
     }
@@ -140,26 +144,23 @@ void FastAddPeerContext::cleanCheckpointIngestInfo(TMTContext & tmt, UInt64 regi
 {
     // TODO(fap) We can move checkpoint_ingest_info to a dedicated queue, and schedule a timed task to clean it, if this costs much.
     // However, we have to make sure the clean task will not override if a new fap snapshot of the same region comes later.
+    bool pre_check = true;
     {
         // If it's still managed by fap context.
         std::scoped_lock<std::mutex> lock(ingest_info_mu);
         auto iter = checkpoint_ingest_info_map.find(region_id);
         if (iter != checkpoint_ingest_info_map.end())
         {
-            CheckpointIngestInfo::removeFromLocal(
-                tmt,
-                region_id,
-                iter->second->peerId(),
-                iter->second->getRemoteStoreId());
-            iter->second->forciblyClean(tmt, region_id);
-            checkpoint_ingest_info_map.erase(region_id);
-            return;
+            // the ingest info exist, do not need to check again later
+            pre_check = false;
+            checkpoint_ingest_info_map.erase(iter);
         }
     }
-    CheckpointIngestInfo::forciblyClean(tmt, region_id);
+    // clean without locking `ingest_info_mu`
+    CheckpointIngestInfo::forciblyClean(tmt, region_id, pre_check);
 }
 
-std::optional<CheckpointIngestInfoPtr> FastAddPeerContext::tryGetCheckpointIngestInfo(UInt64 region_id)
+std::optional<CheckpointIngestInfoPtr> FastAddPeerContext::tryGetCheckpointIngestInfo(UInt64 region_id) const
 {
     std::scoped_lock<std::mutex> lock(ingest_info_mu);
     auto it = checkpoint_ingest_info_map.find(region_id);
@@ -177,29 +178,35 @@ void FastAddPeerContext::insertCheckpointIngestInfo(
     DM::Segments && segments,
     UInt64 start_time)
 {
-    std::scoped_lock<std::mutex> lock(ingest_info_mu);
-    if unlikely (checkpoint_ingest_info_map.contains(region_id))
+    std::shared_ptr<CheckpointIngestInfo> info;
     {
-        // 1. Two fap task of a same snapshot take place in parallel, not possible.
-        // 2. A previous fap task recovered from disk, while a new fap task is ongoing, not possible.
-        // 3. A previous fap task finished with result attached to `checkpoint_ingest_info_map`, however, the ingest stage failed to be triggered/handled due to some check in proxy's part. It could be possible.
-        LOG_ERROR(
-            log,
-            "Repeated ingest for region_id={} peer_id={} old_peer_id={}",
+        std::scoped_lock<std::mutex> lock(ingest_info_mu);
+        if (auto iter = checkpoint_ingest_info_map.find(region_id); unlikely(iter != checkpoint_ingest_info_map.end()))
+        {
+            // 1. Two fap task of a same snapshot take place in parallel, not possible.
+            // 2. A previous fap task recovered from disk, while a new fap task is ongoing, not possible.
+            // 3. A previous fap task finished with result attached to `checkpoint_ingest_info_map`, however, the ingest stage failed to be triggered/handled due to some check in proxy's part. It could be possible.
+            LOG_ERROR(
+                log,
+                "Repeated ingest for region_id={} peer_id={} old_peer_id={}",
+                region_id,
+                peer_id,
+                iter->second->peerId());
+            GET_METRIC(tiflash_fap_task_result, type_failed_repeated).Increment();
+        }
+
+        info = std::make_shared<CheckpointIngestInfo>(
+            tmt,
             region_id,
             peer_id,
-            checkpoint_ingest_info_map[region_id]->peerId());
-        GET_METRIC(tiflash_fap_task_result, type_failed_repeated).Increment();
+            remote_store_id,
+            region,
+            std::move(segments),
+            start_time);
+        checkpoint_ingest_info_map[region_id] = info;
     }
-
-    checkpoint_ingest_info_map[region_id] = std::make_shared<CheckpointIngestInfo>(
-        tmt,
-        region_id,
-        peer_id,
-        remote_store_id,
-        region,
-        std::move(segments),
-        start_time);
+    // persist without locking on `ingest_info_mu`
+    info->persistToLocal();
 }
 
 } // namespace DB
