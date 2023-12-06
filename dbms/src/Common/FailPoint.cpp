@@ -106,7 +106,8 @@ namespace DB
     M(cop_send_failure)                                      \
     M(force_set_parallel_prehandle_threshold)                \
     M(force_raise_prehandle_exception)                       \
-    M(force_agg_on_partial_block)
+    M(force_agg_on_partial_block)                            \
+    M(delta_tree_create_node_fail)
 
 #define APPLY_FOR_PAUSEABLE_FAILPOINTS_ONCE(M) \
     M(pause_with_alter_locks_acquired)         \
