@@ -1389,7 +1389,6 @@ Block Join::joinBlockHash(ProbeProcessInfo & probe_process_info) const
 
 Block Join::doJoinBlockCross(ProbeProcessInfo & probe_process_info) const
 {
-    /// Add new columns to the block.
     assert(probe_process_info.prepare_for_probe_done);
     if (cross_probe_mode == CrossProbeMode::DEEP_COPY_RIGHT_BLOCK)
     {
@@ -1570,15 +1569,14 @@ void Join::joinBlockNullAwareSemiImpl(
         left_side_info,
         right_side_info);
 
-    RUNTIME_ASSERT(res.size() == rows, "NASemiJoinResult size {} must be equal to block size {}", res.size(), rows);
+    RUNTIME_ASSERT(res.size() == rows, "SemiJoinResult size {} must be equal to block size {}", res.size(), rows);
 
     size_t left_columns = block.columns();
     size_t right_columns = sample_block_with_columns_to_add.columns();
 
     /// Add new columns to the block.
-    for (size_t i = 0; i < right_columns; ++i)
+    for (const auto & src_column : sample_block_with_columns_to_add.getColumnsWithTypeAndName())
     {
-        const ColumnWithTypeAndName & src_column = sample_block_with_columns_to_add.getByPosition(i);
         RUNTIME_CHECK_MSG(
             !block.has(src_column.name),
             "block from probe side has a column with the same name: {} as a column in sample_block_with_columns_to_add",
@@ -1746,9 +1744,8 @@ void Join::joinBlockSemiImpl(
     size_t right_columns = sample_block_with_columns_to_add.columns();
 
     /// Add new columns to the block.
-    for (size_t i = 0; i < right_columns; ++i)
+    for (const auto & src_column : sample_block_with_columns_to_add.getColumnsWithTypeAndName())
     {
-        const ColumnWithTypeAndName & src_column = sample_block_with_columns_to_add.getByPosition(i);
         RUNTIME_CHECK_MSG(
             !block.has(src_column.name),
             "block from probe side has a column with the same name: {} as a column in sample_block_with_columns_to_add",
