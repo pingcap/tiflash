@@ -101,7 +101,18 @@ namespace DB
     M(force_set_mocked_s3_object_mtime)                      \
     M(force_stop_background_checkpoint_upload)               \
     M(skip_seek_before_read_dmfile)                          \
+<<<<<<< HEAD
     M(exception_after_large_write_exceed)
+=======
+    M(exception_after_large_write_exceed)                    \
+    M(proactive_flush_force_set_type)                        \
+    M(exception_when_fetch_disagg_pages)                     \
+    M(cop_send_failure)                                      \
+    M(force_set_parallel_prehandle_threshold)                \
+    M(force_raise_prehandle_exception)                       \
+    M(force_agg_on_partial_block)                            \
+    M(delta_tree_create_node_fail)
+>>>>>>> f080235fd6 (Storages: Fix memory leak when copying DeltaTree failed. (#8460))
 
 #define APPLY_FOR_PAUSEABLE_FAILPOINTS_ONCE(M) \
     M(pause_with_alter_locks_acquired)         \
