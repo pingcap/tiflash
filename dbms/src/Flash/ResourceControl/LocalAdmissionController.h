@@ -450,11 +450,7 @@ public:
         }
         catch (...)
         {
-            LOG_ERROR(
-                log,
-                "stop server id({}) failed: {}",
-                unique_client_id,
-                getCurrentExceptionMessage(false));
+            LOG_ERROR(log, "stop server id({}) failed: {}", unique_client_id, getCurrentExceptionMessage(false));
         }
     }
 
