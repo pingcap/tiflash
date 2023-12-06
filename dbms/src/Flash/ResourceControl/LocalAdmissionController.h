@@ -442,7 +442,21 @@ public:
         background_threads.emplace_back([this] { this->watchGAC(); });
     }
 
-    ~LocalAdmissionController() { stop(); }
+    ~LocalAdmissionController()
+    {
+        try
+        {
+            stop();
+        }
+        catch (...)
+        {
+            LOG_ERROR(
+                log,
+                "stop server id({}) failed: {}",
+                unique_client_id,
+                getCurrentExceptionMessage(false));
+        }
+    }
 
     void consumeCPUResource(const std::string & name, double ru, uint64_t cpu_time_in_ns)
     {
@@ -565,7 +579,7 @@ public:
         {
             try
             {
-                etcd_client->deleteServerIDFromGAC(unique_client_id);
+                etcd_client->deleteServerIDFromGAC(c);
                 LOG_DEBUG(log, "delete server id({}) from GAC succeed", unique_client_id);
             }
             catch (...)
