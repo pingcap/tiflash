@@ -127,23 +127,20 @@ static void broadcastOrPassThroughWriteImpl(
         checkPacketSize(remote_tracked_packet_bytes);
     }
 
+    // TODO avoid copy packet for broadcast.
     for (size_t i = 0, local_cnt = 0, remote_cnt = 0; i < tunnel_cnt; ++i)
     {
         if (isLocalTunnel(i))
         {
-            local_cnt++;
+            ++local_cnt;
             if (local_cnt == local_tunnel_cnt)
                 writeToTunnel(std::move(local_tracked_packet), i);
             else
-            {
-                auto tmp = local_tracked_packet;
-                writeToTunnel(std::move(tmp), i); // NOLINT
-            }
+                writeToTunnel(local_tracked_packet->copy(), i); // NOLINT
         }
         else
         {
-            // TODO avoid copy packet for broadcast.
-            remote_cnt++;
+            ++remote_cnt;
             if (remote_cnt == remote_tunnel_cnt)
                 writeToTunnel(std::move(remote_tracked_packet), i);
             else
