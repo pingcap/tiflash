@@ -34,11 +34,20 @@ struct RegionMergeResult;
 class Region;
 class MetaRaftCommandDelegate;
 class RegionRaftCommandDelegate;
-enum class WaitIndexResult
+
+enum class WaitIndexStatus
 {
     Finished,
     Terminated,
     Timeout,
+};
+struct WaitIndexResult
+{
+    WaitIndexStatus status{WaitIndexStatus::Finished};
+    // the applied index before wait index
+    UInt64 prev_index = 0;
+    // the applied index when wait index finish
+    UInt64 current_index = 0;
 };
 
 struct RegionMetaSnapshot
@@ -101,7 +110,7 @@ public:
     // If `timeout_ms` == 0, it waits infinite except `check_running` return false.
     //    `timeout_ms` != 0 and not reaching `index` after waiting for `timeout_ms`, Return WaitIndexResult::Timeout.
     // If `check_running` return false, returns WaitIndexResult::Terminated
-    WaitIndexResult waitIndex(UInt64 index, const UInt64 timeout_ms, std::function<bool(void)> && check_running) const;
+    WaitIndexResult waitIndex(UInt64 index, UInt64 timeout_ms, std::function<bool(void)> && check_running) const;
     bool checkIndex(UInt64 index) const;
 
     RegionMetaSnapshot dumpRegionMetaSnapshot() const;

@@ -163,8 +163,17 @@ public:
 
     bool checkIndex(UInt64 index) const;
 
+<<<<<<< HEAD:dbms/src/Storages/Transaction/Region.h
     // Return <WaitIndexResult, time cost(seconds)> for wait-index.
     std::tuple<WaitIndexResult, double> waitIndex(UInt64 index, const UInt64 timeout_ms, std::function<bool(void)> && check_running);
+=======
+    // Return <WaitIndexStatus, time cost(seconds)> for wait-index.
+    std::tuple<WaitIndexStatus, double> waitIndex(
+        UInt64 index,
+        UInt64 timeout_ms,
+        std::function<bool(void)> && check_running,
+        const LoggerPtr & log);
+>>>>>>> 713bca0a4f (Raft: Add identifier to logger when wait index happens (#8446)):dbms/src/Storages/KVStore/Region.h
 
     UInt64 appliedIndex() const;
 

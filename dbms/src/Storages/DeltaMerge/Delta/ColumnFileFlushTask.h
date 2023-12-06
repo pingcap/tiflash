@@ -62,6 +62,7 @@ private:
     size_t flush_version;
 
     size_t flush_rows = 0;
+    size_t flush_bytes = 0;
     size_t flush_deletes = 0;
 
 public:
@@ -70,6 +71,7 @@ public:
     inline Task & addColumnFile(ColumnFilePtr column_file)
     {
         flush_rows += column_file->getRows();
+        flush_bytes += column_file->getBytes();
         flush_deletes += column_file->getDeletes();
         return tasks.emplace_back(column_file);
     }
@@ -78,6 +80,7 @@ public:
 
     size_t getTaskNum() const { return tasks.size(); }
     size_t getFlushRows() const { return flush_rows; }
+    size_t getFlushBytes() const { return flush_bytes; }
     size_t getFlushDeletes() const { return flush_deletes; }
 
     // Persist data in ColumnFileInMemory

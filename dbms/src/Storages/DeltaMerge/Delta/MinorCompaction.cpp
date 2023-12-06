@@ -55,12 +55,18 @@ void MinorCompaction::prepare(DMContext & context, WriteBatches & wbs, const Pag
         }
         Block compact_block = schema.cloneWithColumns(std::move(compact_columns));
         auto compact_rows = compact_block.rows();
+<<<<<<< HEAD
         auto compact_column_file = ColumnFileTiny::writeColumnFile(context, compact_block, 0, compact_rows, wbs, task.to_compact.front()->tryToTinyFile()->getSchema());
+=======
+        auto compact_bytes = compact_block.bytes();
+        auto compact_column_file = ColumnFileTiny::writeColumnFile(context, compact_block, 0, compact_rows, wbs);
+>>>>>>> 713bca0a4f (Raft: Add identifier to logger when wait index happens (#8446))
         wbs.writeLogAndData();
         task.result = compact_column_file;
 
         total_compact_files += task.to_compact.size();
         total_compact_rows += compact_rows;
+        total_compact_bytes += compact_bytes;
         result_compact_files += 1;
     }
 }
@@ -72,7 +78,16 @@ bool MinorCompaction::commit(ColumnFilePersistedSetPtr & persisted_file_set, Wri
 
 String MinorCompaction::info() const
 {
+<<<<<<< HEAD
     return fmt::format("Compacted {} column files into {} column files, total {} rows.", total_compact_files, result_compact_files, total_compact_rows);
+=======
+    return fmt::format(
+        "Compact end, total_compact_files={} result_compact_files={} total_compact_rows={} total_compact_bytes={}",
+        total_compact_files,
+        result_compact_files,
+        total_compact_rows,
+        total_compact_bytes);
+>>>>>>> 713bca0a4f (Raft: Add identifier to logger when wait index happens (#8446))
 }
 } // namespace DM
 } // namespace DB
