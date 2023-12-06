@@ -233,6 +233,7 @@ void FastAddPeerContext::resolveFapSnapshotState(TMTContext & tmt, UInt64 region
         else
         {
             LOG_INFO(log, "FastAddPeer: FAP canceled because region destroyed, region_id={}", region_id);
+            forciblyCleanTask(tmt, region_id);
         }
     }
     else if likely (prev_state == FAPAsyncTasks::TaskState::NotScheduled)
@@ -241,6 +242,7 @@ void FastAddPeerContext::resolveFapSnapshotState(TMTContext & tmt, UInt64 region
         // 2. There has been no fap at all.
         // 3. FAP is enabled before, but disabled for now.
         LOG_DEBUG(log, "FastAddPeer: no find ongoing fap task, region_id={}", region_id);
+        // Still need to clean because there could be data left.
         forciblyCleanTask(tmt, region_id);
     }
     else

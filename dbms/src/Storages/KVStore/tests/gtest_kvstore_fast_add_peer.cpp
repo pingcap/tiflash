@@ -204,6 +204,40 @@ void persistAfterWrite(
     ASSERT_EQ(kvs.tryFlushRegionData(region_id, false, false, ctx.getTMTContext(), 0, 0, 0, 0), true);
 }
 
+template <typename F>
+void eventuallyThrow(F f)
+{
+    using namespace std::chrono_literals;
+    bool thrown = false;
+    for (int i = 0; i < 5; i++)
+    {
+        try
+        {
+            f();
+        }
+        catch (...)
+        {
+            thrown = true;
+            break;
+        }
+        std::this_thread::sleep_for(500ms);
+    }
+    ASSERT_TRUE(thrown);
+}
+
+template <typename F>
+void eventuallyPredicate(F f)
+{
+    using namespace std::chrono_literals;
+    for (int i = 0; i < 5; i++)
+    {
+        if (f())
+            return;
+        std::this_thread::sleep_for(500ms);
+    }
+    ASSERT_TRUE(false);
+}
+
 TEST_F(RegionKVStoreTestFAP, RestoreRaftState)
 try
 {
@@ -397,10 +431,11 @@ try
             1);
     }
     // CheckpointIngestInfo is removed.
-    ASSERT_TRUE(!fap_context->tryGetCheckpointIngestInfo(region_id).has_value());
-    EXPECT_THROW(
-        CheckpointIngestInfo::restore(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333),
-        Exception);
+    eventuallyPredicate([&]() {
+        return !CheckpointIngestInfo::restore(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333)
+                    .has_value();
+    });
+    ASSERT_FALSE(fap_context->tryGetCheckpointIngestInfo(region_id).has_value());
 }
 CATCH
 
@@ -422,10 +457,11 @@ try
     fap_context->debugRemoveCheckpointIngestInfo(region_id);
     kvstore->handleDestroy(region_id, global_context.getTMTContext());
     // CheckpointIngestInfo is removed.
-    ASSERT_TRUE(!fap_context->tryGetCheckpointIngestInfo(region_id).has_value());
-    EXPECT_THROW(
-        CheckpointIngestInfo::restore(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333),
-        Exception);
+    eventuallyPredicate([&]() {
+        return !CheckpointIngestInfo::restore(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333)
+                    .has_value();
+    });
+    ASSERT_FALSE(fap_context->tryGetCheckpointIngestInfo(region_id).has_value());
 }
 CATCH
 
@@ -456,27 +492,6 @@ try
     buildParsedCheckpointData(global_context, latest_manifest_key, latest_upload_seq);
 }
 CATCH
-
-template <typename F>
-void assertThrow(F f)
-{
-    using namespace std::chrono_literals;
-    bool thrown = false;
-    for (int i = 0; i < 5; i++)
-    {
-        try
-        {
-            f();
-        }
-        catch (...)
-        {
-            thrown = true;
-            break;
-        }
-        std::this_thread::sleep_for(500ms);
-    }
-    ASSERT_TRUE(thrown);
-}
 
 // Test cancel from peer select
 TEST_F(RegionKVStoreTestFAP, Cancel1)
@@ -511,11 +526,11 @@ try
     sp.next();
     sp.disable();
     t.join();
+    eventuallyPredicate([&]() {
+        return !CheckpointIngestInfo::restore(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333)
+                    .has_value();
+    });
     ASSERT_TRUE(!fap_context->tryGetCheckpointIngestInfo(region_id).has_value());
-    EXPECT_THROW(
-        CheckpointIngestInfo::restore(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333),
-        Exception);
-
     FailPointHelper::disableFailPoint(FailPoints::force_set_fap_candidate_store_id);
 }
 CATCH
@@ -553,10 +568,12 @@ try
     sp.next();
     sp.disable();
     t.join();
-    ASSERT_TRUE(!fap_context->tryGetCheckpointIngestInfo(region_id).has_value());
     // Cancel async tasks, and make sure the data is cleaned after limited time.
-    assertThrow(
-        [&]() { CheckpointIngestInfo::restore(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333); });
+    eventuallyPredicate([&]() {
+        return !CheckpointIngestInfo::restore(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333)
+                    .has_value();
+    });
+    ASSERT_TRUE(!fap_context->tryGetCheckpointIngestInfo(region_id).has_value());
     FailPointHelper::disableFailPoint(FailPoints::force_set_fap_candidate_store_id);
 }
 CATCH
@@ -595,8 +612,10 @@ try
     sp.disable();
     t.join();
     // Cancel async tasks, and make sure the data is cleaned after limited time.
-    assertThrow(
-        [&]() { CheckpointIngestInfo::restore(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333); });
+    eventuallyPredicate([&]() {
+        return !CheckpointIngestInfo::restore(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333)
+                    .has_value();
+    });
     // Wait async cancel in `FastAddPeerImplWrite`.
     ASSERT_FALSE(fap_context->tryGetCheckpointIngestInfo(region_id).has_value());
     FailPointHelper::disableFailPoint(FailPoints::force_set_fap_candidate_store_id);
@@ -619,10 +638,11 @@ try
     FastAddPeerImplWrite(global_context.getTMTContext(), region_id, 2333, std::move(mock_data), 0);
     ApplyFapSnapshotImpl(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333);
     // CheckpointIngestInfo is removed.
+    eventuallyPredicate([&]() {
+        return !CheckpointIngestInfo::restore(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333)
+                    .has_value();
+    });
     ASSERT_TRUE(!fap_context->tryGetCheckpointIngestInfo(region_id).has_value());
-    EXPECT_THROW(
-        CheckpointIngestInfo::restore(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333),
-        Exception);
 }
 CATCH
 
