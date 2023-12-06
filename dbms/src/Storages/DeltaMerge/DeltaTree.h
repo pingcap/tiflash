@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/FailPoint.h>
 #include <Common/TargetSpecific.h>
 #include <Core/Types.h>
 #include <IO/WriteHelpers.h>
@@ -21,12 +22,21 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <ext/scope_guard.h>
 #include <memory>
 #include <queue>
 
-namespace DB
+namespace DB::FailPoints
 {
-namespace DM
+extern const char delta_tree_create_node_fail[];
+}
+
+namespace DB::ErrorCodes
+{
+extern const int FAIL_POINT_ERROR;
+};
+
+namespace DB::DM
 {
 struct DTMutation;
 template <size_t M, size_t F, size_t S>
@@ -817,7 +827,7 @@ private:
     size_t num_deletes = 0;
     size_t num_entries = 0;
 
-    Allocator * allocator = nullptr;
+    std::unique_ptr<Allocator> allocator;
     size_t bytes = 0;
 
 public:
@@ -901,6 +911,11 @@ private:
     template <typename T>
     T * createNode()
     {
+        fiu_do_on(FailPoints::delta_tree_create_node_fail, {
+            static int num_call = 0;
+            if (num_call++ % 100 == 90)
+                throw Exception("Failpoint delta_tree_create_node_fail is triggered", ErrorCodes::FAIL_POINT_ERROR);
+        });
         T * n = reinterpret_cast<T *>(allocator->alloc(sizeof(T)));
         new (n) T();
 
@@ -915,7 +930,7 @@ private:
         constexpr bool is_leaf = std::is_same<Leaf, T>::value;
         if constexpr (!is_leaf)
         {
-            InternPtr intern = static_cast<InternPtr>(node);
+            auto intern = static_cast<InternPtr>(node);
             if (intern->count)
             {
                 if (isLeaf(intern->children[0]))
@@ -931,7 +946,7 @@ private:
 
     void init(const ValueSpacePtr & insert_value_space_)
     {
-        allocator = new Allocator();
+        allocator = std::make_unique<Allocator>();
 
         insert_value_space = insert_value_space_;
 
@@ -983,8 +998,6 @@ public:
             else
                 freeTree<Intern>(static_cast<InternPtr>(root));
         }
-
-        delete allocator;
     }
 
     void checkAll() const
@@ -1043,8 +1056,25 @@ DT_CLASS::DeltaTree(const DT_CLASS::Self & o)
     , num_inserts(o.num_inserts)
     , num_deletes(o.num_deletes)
     , num_entries(o.num_entries)
-    , allocator(new Allocator())
+    , allocator(std::make_unique<Allocator>())
 {
+    // If exception is thrown before clear copying_nodes, all nodes will be destroyed.
+    std::vector<NodePtr> copying_nodes;
+    auto destroy_copying_nodes = [&]() {
+        for (auto * node : copying_nodes)
+        {
+            if (isLeaf(node))
+            {
+                freeNode<Leaf>(static_cast<LeafPtr>(node));
+            }
+            else
+            {
+                freeNode<Intern>(static_cast<InternPtr>(node));
+            }
+        }
+    };
+    SCOPE_EXIT({ destroy_copying_nodes(); });
+
     NodePtr my_root;
     if (isLeaf(o.root))
         my_root = new (createNode<Leaf>()) Leaf(*as(Leaf, o.root));
@@ -1053,6 +1083,7 @@ DT_CLASS::DeltaTree(const DT_CLASS::Self & o)
 
     std::queue<NodePtr> nodes;
     nodes.push(my_root);
+    copying_nodes.push_back(my_root);
 
     LeafPtr first_leaf = nullptr;
     LeafPtr last_leaf = nullptr;
@@ -1084,6 +1115,7 @@ DT_CLASS::DeltaTree(const DT_CLASS::Self & o)
                 {
                     auto child = new (createNode<Leaf>()) Leaf(*as(Leaf, intern->children[i]));
                     nodes.push(child);
+                    copying_nodes.push_back(child);
                     intern->children[i] = child;
 
                     child->parent = intern;
@@ -1095,6 +1127,7 @@ DT_CLASS::DeltaTree(const DT_CLASS::Self & o)
                 {
                     auto child = new (createNode<Intern>()) Intern(*as(Intern, intern->children[i]));
                     nodes.push(child);
+                    copying_nodes.push_back(child);
                     intern->children[i] = child;
 
                     child->parent = intern;
@@ -1103,6 +1136,7 @@ DT_CLASS::DeltaTree(const DT_CLASS::Self & o)
         }
     }
 
+    copying_nodes.clear();
     this->root = my_root;
     this->left_leaf = first_leaf;
     this->right_leaf = last_leaf;
@@ -1495,5 +1529,4 @@ typename DT_CLASS::InternPtr DT_CLASS::afterNodeUpdated(T * node)
 #undef DT_TEMPLATE
 #undef DT_CLASS
 
-} // namespace DM
-} // namespace DB
+} // namespace DB::DM
