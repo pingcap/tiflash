@@ -46,6 +46,7 @@ using PageFieldOffset = UInt64;
 using PageFieldOffsets = std::vector<PageFieldOffset>;
 using PageFieldSizes = std::vector<UInt64>;
 
+// {<offset, checksum>}
 using PageFieldOffsetChecksums = std::vector<std::pair<PageFieldOffset, UInt64>>;
 
 using PageFileId = UInt64;

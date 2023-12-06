@@ -24,6 +24,10 @@
 
 namespace DB::PS::V3
 {
+
+/**
+ * BlobFile is a file that stores the data of multiple pages.
+ */
 class BlobFile
 {
 public:

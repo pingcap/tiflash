@@ -89,10 +89,8 @@ void ProbeProcessInfo::prepareForHashProbe(
                 convertColumnToNullable(block.getByPosition(i));
         }
     }
-    if ((kind == ASTTableJoin::Kind::Semi && strictness == ASTTableJoin::Strictness::Any)
-        || kind == ASTTableJoin::Kind::Anti)
-        filter = std::make_unique<IColumn::Filter>(block.rows());
-    if (strictness == ASTTableJoin::Strictness::All)
+
+    if (!isSemiFamily(kind) && !isLeftOuterSemiFamily(kind) && strictness == ASTTableJoin::Strictness::All)
         offsets_to_replicate = std::make_unique<IColumn::Offsets>(block.rows());
 
     hash_data = std::make_unique<WeakHash32>(0);
