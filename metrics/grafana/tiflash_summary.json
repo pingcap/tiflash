@@ -4794,7 +4794,7 @@
             },
             {
               "exemplar": true,
-              "expr": "histogram_quantile(1.00, max(round(1000000000*rate(tiflash_task_scheduler_waiting_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m]))) by (instance,le) / 1000000000)",
+              "expr": "histogram_quantile(1.00, max(rate(tiflash_task_scheduler_waiting_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (instance,le))",
               "hide": false,
               "interval": "",
               "legendFormat": "{{instance}}-100",
