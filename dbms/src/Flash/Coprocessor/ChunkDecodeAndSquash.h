@@ -24,7 +24,7 @@ namespace DB
 class CHBlockChunkDecodeAndSquash
 {
 public:
-    CHBlockChunkDecodeAndSquash(const Block & header, size_t rows_limit_);
+    CHBlockChunkDecodeAndSquash(const Block & header_, size_t rows_limit_);
     ~CHBlockChunkDecodeAndSquash() = default;
     std::optional<Block> decodeAndSquash(const String &);
     std::optional<Block> decodeAndSquash(Block &&);
@@ -35,6 +35,7 @@ private:
     std::optional<Block> decodeAndSquashV1Impl(ReadBuffer & istr);
 
 private:
+    Block header;
     CHBlockChunkCodec codec;
     std::optional<Block> accumulated_block;
     size_t rows_limit;

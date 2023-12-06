@@ -18,8 +18,9 @@
 
 namespace DB
 {
-CHBlockChunkDecodeAndSquash::CHBlockChunkDecodeAndSquash(const Block & header, size_t rows_limit_)
-    : codec(header)
+CHBlockChunkDecodeAndSquash::CHBlockChunkDecodeAndSquash(const Block & header_, size_t rows_limit_)
+    : header(header_)
+    , codec(header_)
     , rows_limit(rows_limit_)
 {}
 
@@ -52,7 +53,7 @@ std::optional<Block> CHBlockChunkDecodeAndSquash::decodeAndSquashV1Impl(ReadBuff
     if (!accumulated_block)
     {
         size_t rows{};
-        Block block = DecodeHeader(istr, codec.header, rows);
+        Block block = DecodeHeader(istr, header, rows);
         if (rows)
         {
             DecodeColumns(istr, block, rows, static_cast<size_t>(rows_limit * 1.5));
@@ -62,7 +63,7 @@ std::optional<Block> CHBlockChunkDecodeAndSquash::decodeAndSquashV1Impl(ReadBuff
     else
     {
         size_t rows{};
-        DecodeHeader(istr, codec.header, rows);
+        DecodeHeader(istr, header, rows);
         DecodeColumns(istr, *accumulated_block, rows, 0);
     }
 
@@ -132,45 +133,36 @@ std::optional<Block> CHBlockChunkDecodeAndSquash::decodeAndSquash(Block && block
             res.swap(accumulated_block);
         return res;
     }
-    if unlikely (block.rows() == 0)
-        return {};
 
-    if (block.rows() >= rows_limit)
+    if (block.rows() > 0)
     {
         if (!accumulated_block)
-            return {std::move(block)};
-
-        /// Return accumulated data (may be it has small size) and place new block to accumulated data.
-        std::optional<Block> res{std::move(block)};
-        res.swap(accumulated_block);
-        return res;
-    }
-
-    if (!accumulated_block)
-    {
-        accumulated_block = std::move(block);
-        return {};
-    }
-    else
-    {
-        size_t columns = block.columns();
-        size_t rows = block.rows();
-        for (size_t i = 0; i < columns; ++i)
         {
-            MutableColumnPtr mutable_column = (*std::move(accumulated_block->getByPosition(i).column)).mutate();
-            mutable_column->insertRangeFrom(*block.getByPosition(i).column, 0, rows);
-            accumulated_block->getByPosition(i).column = std::move(mutable_column);
-        }
-        if (accumulated_block->rows() >= rows_limit)
-        {
-            std::optional<Block> res;
-            res.swap(accumulated_block);
-            return res;
+            accumulated_block.emplace(header.cloneWithColumns(block.mutateColumns()));
         }
         else
         {
-            return {};
+            size_t columns = block.columns();
+            size_t rows = block.rows();
+            for (size_t i = 0; i < columns; ++i)
+            {
+                MutableColumnPtr mutable_column = (*std::move(accumulated_block->getByPosition(i).column)).mutate();
+                mutable_column->insertRangeFrom(*block.getByPosition(i).column, 0, rows);
+                accumulated_block->getByPosition(i).column = std::move(mutable_column);
+            }
         }
+    }
+
+    if (accumulated_block && accumulated_block->rows() >= rows_limit)
+    {
+        /// Return accumulated data and reset accumulated_block
+        std::optional<Block> res;
+        res.swap(accumulated_block);
+        return res;
+    }
+    else
+    {
+        return {};
     }
 }
 
