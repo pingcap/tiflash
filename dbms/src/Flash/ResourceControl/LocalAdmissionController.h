@@ -575,7 +575,7 @@ public:
         {
             try
             {
-                etcd_client->deleteServerIDFromGAC(c);
+                etcd_client->deleteServerIDFromGAC(unique_client_id);
                 LOG_DEBUG(log, "delete server id({}) from GAC succeed", unique_client_id);
             }
             catch (...)
