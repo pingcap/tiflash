@@ -191,13 +191,13 @@ public:
         const std::vector<size_t> & key_sizes,
         MutableColumns & added_columns,
         ConstNullMapPtr null_map,
-        std::unique_ptr<IColumn::Filter> & filter,
         IColumn::Offset & current_offset,
         std::unique_ptr<IColumn::Offsets> & offsets_to_replicate,
         const std::vector<size_t> & right_indexes,
         const TiDB::TiDBCollators & collators,
         const JoinBuildInfo & join_build_info,
         ProbeProcessInfo & probe_process_info);
+
     template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps, bool row_flagged_map>
     static void probeBlockImpl(
         const JoinPartitions & join_partitions,
@@ -206,7 +206,6 @@ public:
         const std::vector<size_t> & key_sizes,
         MutableColumns & added_columns,
         ConstNullMapPtr null_map,
-        std::unique_ptr<IColumn::Filter> & filter,
         IColumn::Offset & current_offset,
         std::unique_ptr<IColumn::Offsets> & offsets_to_replicate,
         const std::vector<size_t> & right_indexes,
@@ -215,14 +214,23 @@ public:
         ProbeProcessInfo & probe_process_info);
 
     template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
-    static std::pair<PaddedPODArray<NASemiJoinResult<KIND, STRICTNESS>>, std::list<NASemiJoinResult<KIND, STRICTNESS> *>> probeBlockNullAware(
+    static std::pair<PaddedPODArray<NASemiJoinResult<KIND, STRICTNESS>>, std::list<NASemiJoinResult<KIND, STRICTNESS> *>> probeBlockNullAwareSemi(
         const JoinPartitions & join_partitions,
-        Block & block,
+        size_t rows,
         const ColumnRawPtrs & key_columns,
         const Sizes & key_sizes,
         const TiDB::TiDBCollators & collators,
         const NALeftSideInfo & left_side_info,
         const NARightSideInfo & right_side_info);
+
+    template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
+    static std::pair<PaddedPODArray<SemiJoinResult<KIND, STRICTNESS>>, std::list<SemiJoinResult<KIND, STRICTNESS> *>> probeBlockSemi(
+        const JoinPartitions & join_partitions,
+        size_t rows,
+        const Sizes & key_sizes,
+        const TiDB::TiDBCollators & collators,
+        const JoinBuildInfo & join_build_info,
+        const ProbeProcessInfo & probe_process_info);
 
     void releasePartition();
 
