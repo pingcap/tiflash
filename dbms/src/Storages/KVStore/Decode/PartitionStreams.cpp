@@ -388,9 +388,14 @@ DM::WriteResult RegionTable::writeBlockByRegion(
 
     reportUpstreamLatency(*data_list_read);
     auto write_result = writeRegionDataToStorage(context, region, *data_list_read, log);
-
+    auto prev_region_size = region->dataSize();
     RemoveRegionCommitCache(region, *data_list_read, lock_region);
-
+    auto new_region_size = region->dataSize();
+    if likely (new_region_size <= prev_region_size)
+    {
+        GET_METRIC(tiflash_raft_handled_bytes, type_write_committed).Increment(prev_region_size - new_region_size);
+        GET_METRIC(tiflash_raft_raft_frequent_events_count, type_write_commit).Increment(1);
+    }
     /// Save removed data to outer.
     data_list_to_remove = std::move(*data_list_read);
     return write_result;

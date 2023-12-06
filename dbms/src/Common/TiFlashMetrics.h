@@ -470,11 +470,13 @@ namespace DB
     M(tiflash_raft_raft_frequent_events_count,                                                                                      \
       "Raft frequent event counter",                                                                                                \
       Counter,                                                                                                                      \
+      F(type_write_commit, {{"type", "write_commit"}}),                                                                             \
       F(type_write, {{"type", "write"}}))                                                                                           \
     M(tiflash_raft_region_flush_bytes,                                                                                              \
       "Bucketed histogram of region flushed bytes",                                                                                 \
       Histogram,                                                                                                                    \
       F(type_flushed, {{"type", "flushed"}}, ExpBuckets{32, 2, 21}),                                                                \
+      F(type_after_write, {{"type", "after_write"}}, ExpBuckets{32, 2, 21}),                                                        \
       F(type_unflushed, {{"type", "unflushed"}}, ExpBuckets{32, 2, 21}))                                                            \
     M(tiflash_raft_entry_size,                                                                                                      \
       "Bucketed histogram entry size",                                                                                              \
@@ -486,6 +488,10 @@ namespace DB
       F(type_raft_snapshot, {{"type", "raft_snapshot"}}),                                                                           \
       F(type_dt_on_disk, {{"type", "dt_on_disk"}}),                                                                                 \
       F(type_dt_total, {{"type", "dt_total"}}))                                                                                     \
+    M(tiflash_raft_handled_bytes,                                                                                                   \
+      "Raft handled bytes",                                                                                                         \
+      Counter,                                                                                                                      \
+      F(type_write_committed, {{"type", "write_committed"}}))                                                                       \
     M(tiflash_raft_snapshot_total_bytes,                                                                                            \
       "Bucketed snapshot total size",                                                                                               \
       Histogram,                                                                                                                    \
