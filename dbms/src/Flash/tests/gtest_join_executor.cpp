@@ -3127,7 +3127,10 @@ try
             .addMockTable("semi", "s", {{"a", TiDB::TP::TypeString, false}, {"b", TiDB::TP::TypeString, false}}, right);
 
         for (const auto type :
-             {JoinType::TypeLeftOuterSemiJoin, JoinType::TypeAntiLeftOuterSemiJoin, JoinType::TypeSemiJoin, JoinType::TypeAntiSemiJoin})
+             {JoinType::TypeLeftOuterSemiJoin,
+              JoinType::TypeAntiLeftOuterSemiJoin,
+              JoinType::TypeSemiJoin,
+              JoinType::TypeAntiSemiJoin})
         {
             auto reference = genSemiJoinResult(type, left, res);
             auto request = context.scan("semi", "t")
