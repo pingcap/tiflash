@@ -27,18 +27,13 @@ namespace DB::MPPTunnelSetHelper
 {
 TrackedMppDataPacketPtr ToPacketV0(Blocks & blocks, const std::vector<tipb::FieldType> & field_types);
 
-TrackedMppDataPacketPtr ToCompressedPacket(
-    const TrackedMppDataPacketPtr & uncompressed_source,
-    MPPDataPacketVersion version,
-    CompressionMethod method);
-
 TrackedMppDataPacketPtr ToPacket(
     Blocks && blocks,
     MPPDataPacketVersion version,
     CompressionMethod method,
     size_t & original_size);
 
-TrackedMppDataPacketPtr ToLocalPacket(Blocks && blocks, size_t & original_size);
+TrackedMppDataPacketPtr ToLocalPacket(Blocks && blocks);
 
 TrackedMppDataPacketPtr ToPacket(
     const Block & header,
@@ -47,10 +42,7 @@ TrackedMppDataPacketPtr ToPacket(
     CompressionMethod compression_method,
     size_t & original_size);
 
-TrackedMppDataPacketPtr ToLocalPacket(
-    const Block & header,
-    std::vector<MutableColumns> && part_columns,
-    size_t & original_size);
+TrackedMppDataPacketPtr ToLocalPacket(const Block & header, std::vector<MutableColumns> && part_columns);
 
 TrackedMppDataPacketPtr ToFineGrainedPacketV0(
     const Block & header,
@@ -75,7 +67,6 @@ TrackedMppDataPacketPtr ToLocalFineGrainedPacket(
     std::vector<IColumn::ScatterColumns> & scattered,
     size_t bucket_idx,
     UInt64 fine_grained_shuffle_stream_count,
-    size_t num_columns,
-    size_t & original_size);
+    size_t num_columns);
 
 } // namespace DB::MPPTunnelSetHelper

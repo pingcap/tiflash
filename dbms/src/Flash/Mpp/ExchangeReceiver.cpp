@@ -723,14 +723,15 @@ DecodeDetail ExchangeReceiverBase<RPCContext>::decodeChunks(
 {
     assert(recv_msg != nullptr);
     DecodeDetail detail;
+    // Record total packet size even if fine grained shuffle is enabled.
+    detail.packet_bytes = recv_msg->byteSizeLong();
 
     if (recv_msg->isLocal())
     {
-        detail.packet_bytes = recv_msg->byteSizeLong();
         auto blocks = recv_msg->moveBlocks(stream_id);
         for (auto && block : blocks)
         {
-            if (!block || block.rows() == 0)
+            if unlikely (!block || block.rows() == 0)
                 continue;
             auto new_block = header.cloneWithColumns(block.mutateColumns());
             detail.rows += new_block.rows();
@@ -742,25 +743,20 @@ DecodeDetail ExchangeReceiverBase<RPCContext>::decodeChunks(
         const auto & chunks = recv_msg->getChunks(stream_id);
         if (chunks.empty())
             return detail;
-        const auto & packet = recv_msg->getPacket();
 
-        // Record total packet size even if fine grained shuffle is enabled.
-        detail.packet_bytes = packet.ByteSizeLong();
-
-        switch (auto version = packet.version(); version)
+        auto version = recv_msg->getPacket().version();
+        RUNTIME_CHECK(CheckMppVersion(version), GenMppVersionErrorMessage(version));
+        switch (version)
         {
         case DB::MPPDataPacketV0:
         {
             for (const auto * chunk : chunks)
             {
                 auto result = decoder_ptr->decodeAndSquash(*chunk);
-                if (!result)
+                if unlikely (!result || !result->rows())
                     continue;
                 detail.rows += result->rows();
-                if likely (result->rows() > 0)
-                {
-                    block_queue.push(std::move(result.value()));
-                }
+                block_queue.push(std::move(*result));
             }
             return detail;
         }
@@ -769,7 +765,7 @@ DecodeDetail ExchangeReceiverBase<RPCContext>::decodeChunks(
             for (const auto * chunk : chunks)
             {
                 auto && result = decoder_ptr->decodeAndSquashV1(*chunk);
-                if (!result || !result->rows())
+                if unlikely (!result || !result->rows())
                     continue;
                 detail.rows += result->rows();
                 block_queue.push(std::move(*result));
@@ -777,11 +773,10 @@ DecodeDetail ExchangeReceiverBase<RPCContext>::decodeChunks(
             return detail;
         }
         default:
-        {
-            RUNTIME_CHECK_MSG(false, "Unknown mpp packet version {}, please update TiFlash instance", version);
+            RUNTIME_CHECK_MSG(false, "Unknown mpp packet version {}", version);
             break;
         }
-        }
+        return detail;
     }
     return detail;
 }

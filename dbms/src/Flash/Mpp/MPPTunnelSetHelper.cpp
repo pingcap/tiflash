@@ -41,10 +41,7 @@ TrackedMppDataPacketPtr ToPacket(
     return tracked_packet;
 }
 
-TrackedMppDataPacketPtr ToLocalPacket(
-    const Block & header,
-    std::vector<MutableColumns> && part_columns,
-    size_t & original_size)
+TrackedMppDataPacketPtr ToLocalPacket(const Block & header, std::vector<MutableColumns> && part_columns)
 {
     Blocks blocks;
     for (auto && columns : part_columns)
@@ -54,7 +51,6 @@ TrackedMppDataPacketPtr ToLocalPacket(
             blocks.push_back(std::move(block));
     }
     auto tracked_packet = std::make_shared<TrackedMppDataPacket>(std::move(blocks));
-    original_size += tracked_packet->byteSizeLong();
     return tracked_packet;
 }
 
@@ -80,13 +76,12 @@ TrackedMppDataPacketPtr ToPacket(
     return tracked_packet;
 }
 
-TrackedMppDataPacketPtr ToLocalPacket(Blocks && blocks, size_t & original_size)
+TrackedMppDataPacketPtr ToLocalPacket(Blocks && blocks)
 {
     if (blocks.empty())
         return nullptr;
 
     auto tracked_packet = std::make_shared<TrackedMppDataPacket>(std::move(blocks));
-    original_size += tracked_packet->byteSizeLong();
     return tracked_packet;
 }
 
@@ -113,8 +108,7 @@ TrackedMppDataPacketPtr ToLocalFineGrainedPacket(
     std::vector<IColumn::ScatterColumns> & scattered,
     size_t bucket_idx,
     UInt64 fine_grained_shuffle_stream_count,
-    size_t num_columns,
-    size_t & original_size)
+    size_t num_columns)
 {
     auto tracked_packet = std::make_shared<TrackedMppDataPacket>(/*is_local=*/true);
     for (uint64_t stream_idx = 0; stream_idx < fine_grained_shuffle_stream_count; ++stream_idx)
@@ -149,7 +143,6 @@ TrackedMppDataPacketPtr ToLocalFineGrainedPacket(
         }
     }
 
-    original_size += tracked_packet->byteSizeLong();
     return tracked_packet;
 }
 
@@ -234,30 +227,4 @@ TrackedMppDataPacketPtr ToFineGrainedPacketV0(
     }
     return tracked_packet;
 }
-
-TrackedMppDataPacketPtr ToCompressedPacket(
-    const TrackedMppDataPacketPtr & uncompressed_source,
-    MPPDataPacketVersion version,
-    CompressionMethod method)
-{
-    assert(uncompressed_source);
-    for ([[maybe_unused]] const auto & chunk : uncompressed_source->getPacket().chunks())
-    {
-        assert(!chunk.empty());
-        assert(static_cast<CompressionMethodByte>(chunk[0]) == CompressionMethodByte::NONE);
-    }
-
-    // re-encode by specified compression method
-    auto compressed_tracked_packet = std::make_shared<TrackedMppDataPacket>(version);
-    for (const auto & chunk : uncompressed_source->getPacket().chunks())
-    {
-        auto && compressed_buffer = CHBlockChunkCodecV1::encode({&chunk[1], chunk.size() - 1}, method);
-        assert(!compressed_buffer.empty());
-
-        compressed_tracked_packet->addChunk(std::move(compressed_buffer));
-    }
-    return compressed_tracked_packet;
-}
-
-
 } // namespace DB::MPPTunnelSetHelper
