@@ -98,7 +98,7 @@ template <bool is_broadcast, typename FuncIsLocalTunnel, typename FuncWriteToTun
 static void broadcastOrPassThroughWriteImpl(
     const size_t tunnel_cnt,
     const size_t local_tunnel_cnt, // can be 0 for PassThrough writer
-    const size_t ori_packet_bytes, // original data packet size
+    const size_t ori_packet_bytes, // original remote data packet size
     TrackedMppDataPacketPtr && local_tracked_packet, // can be NULL if there is no local tunnel
     TrackedMppDataPacketPtr && remote_tracked_packet, // can be NULL if all tunnels are local mode
     const CompressionMethod compression_method,
@@ -106,7 +106,6 @@ static void broadcastOrPassThroughWriteImpl(
     FuncWriteToTunnel && writeToTunnel)
 {
     assert(tunnel_cnt > 0);
-    assert(ori_packet_bytes > 0);
 
     const size_t remote_tunnel_cnt = tunnel_cnt - local_tunnel_cnt;
     auto remote_tracked_packet_bytes = remote_tracked_packet ? remote_tracked_packet->byteSizeLong() : 0;
@@ -128,7 +127,6 @@ static void broadcastOrPassThroughWriteImpl(
         checkPacketSize(remote_tracked_packet_bytes);
     }
 
-    // TODO avoid copy packet for broadcast.
     for (size_t i = 0, local_cnt = 0, remote_cnt = 0; i < tunnel_cnt; ++i)
     {
         if (isLocalTunnel(i))
@@ -137,10 +135,14 @@ static void broadcastOrPassThroughWriteImpl(
             if (local_cnt == local_tunnel_cnt)
                 writeToTunnel(std::move(local_tracked_packet), i);
             else
-                writeToTunnel(local_tracked_packet->copy(), i); // NOLINT
+            {
+                auto tmp = local_tracked_packet;
+                writeToTunnel(std::move(tmp), i); // NOLINT
+            }
         }
         else
         {
+            // TODO avoid copy packet for broadcast.
             remote_cnt++;
             if (remote_cnt == remote_tunnel_cnt)
                 writeToTunnel(std::move(remote_tracked_packet), i);

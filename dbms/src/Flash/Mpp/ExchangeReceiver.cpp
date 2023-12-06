@@ -729,6 +729,8 @@ DecodeDetail ExchangeReceiverBase<RPCContext>::decodeChunks(
     if (recv_msg->isLocal())
     {
         auto blocks = recv_msg->moveBlocks(stream_id);
+        if unlikely (blocks.empty())
+            return detail;
         for (auto && block : blocks)
         {
             if unlikely (!block || block.rows() == 0)
@@ -741,7 +743,7 @@ DecodeDetail ExchangeReceiverBase<RPCContext>::decodeChunks(
     else
     {
         const auto & chunks = recv_msg->getChunks(stream_id);
-        if (chunks.empty())
+        if unlikely (chunks.empty())
             return detail;
 
         auto version = recv_msg->getPacket().version();
