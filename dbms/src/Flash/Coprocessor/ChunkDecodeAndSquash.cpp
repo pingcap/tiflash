@@ -123,6 +123,57 @@ std::optional<Block> CHBlockChunkDecodeAndSquash::decodeAndSquash(const String &
     return res;
 }
 
+std::optional<Block> CHBlockChunkDecodeAndSquash::decodeAndSquash(Block && block)
+{
+    if unlikely (!block)
+    {
+        std::optional<Block> res;
+        if (accumulated_block)
+            res.swap(accumulated_block);
+        return res;
+    }
+    if unlikely (block.rows() == 0)
+        return {};
+
+    if (block.rows() >= rows_limit)
+    {
+        if (!accumulated_block)
+            return {std::move(block)};
+
+        /// Return accumulated data (may be it has small size) and place new block to accumulated data.
+        std::optional<Block> res{std::move(block)};
+        res.swap(accumulated_block);
+        return res;
+    }
+
+    if (!accumulated_block)
+    {
+        accumulated_block = std::move(block);
+        return {};
+    }
+    else
+    {
+        size_t columns = block.columns();
+        size_t rows = block.rows();
+        for (size_t i = 0; i < columns; ++i)
+        {
+            MutableColumnPtr mutable_column = (*std::move(accumulated_block->getByPosition(i).column)).mutate();
+            mutable_column->insertRangeFrom(*block.getByPosition(i).column, 0, rows);
+            accumulated_block->getByPosition(i).column = std::move(mutable_column);
+        }
+        if (accumulated_block->rows() >= rows_limit)
+        {
+            std::optional<Block> res;
+            res.swap(accumulated_block);
+            return res;
+        }
+        else
+        {
+            return {};
+        }
+    }
+}
+
 std::optional<Block> CHBlockChunkDecodeAndSquash::flush()
 {
     if (!accumulated_block)

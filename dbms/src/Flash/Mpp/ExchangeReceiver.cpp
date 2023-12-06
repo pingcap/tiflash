@@ -733,11 +733,11 @@ DecodeDetail ExchangeReceiverBase<RPCContext>::decodeChunks(
             return detail;
         for (auto && block : blocks)
         {
-            if unlikely (!block || block.rows() == 0)
+            auto result = decoder_ptr->decodeAndSquash(header.cloneWithColumns(block.mutateColumns()));
+            if unlikely (!result || !result->rows())
                 continue;
-            auto new_block = header.cloneWithColumns(block.mutateColumns());
-            detail.rows += new_block.rows();
-            block_queue.push(std::move(new_block));
+            detail.rows += result->rows();
+            block_queue.push(std::move(*result));
         }
     }
     else
