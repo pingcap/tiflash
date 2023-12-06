@@ -110,7 +110,7 @@ std::pair<UInt64, ParsedCheckpointDataHolderPtr> FastAddPeerContext::getNewerChe
     return std::make_pair(cache_seq, checkpoint_data);
 }
 
-CheckpointIngestInfoPtr FastAddPeerContext::getOrRestoreCheckpointIngestInfo(
+std::optional<CheckpointIngestInfoPtr> FastAddPeerContext::getOrRestoreCheckpointIngestInfo(
     TMTContext & tmt,
     const struct TiFlashRaftProxyHelper * proxy_helper,
     UInt64 region_id,
@@ -128,8 +128,10 @@ CheckpointIngestInfoPtr FastAddPeerContext::getOrRestoreCheckpointIngestInfo(
         // The caller ensure there is no concurrency operation on the same region_id so
         // that we can call restore without locking `ingest_info_mu`
         auto info = CheckpointIngestInfo::restore(tmt, proxy_helper, region_id, peer_id);
+        if (!info.has_value())
+            return std::nullopt;
         std::scoped_lock<std::mutex> lock(ingest_info_mu);
-        checkpoint_ingest_info_map.emplace(region_id, info);
+        checkpoint_ingest_info_map.emplace(region_id, info.value());
         return info;
     }
 }
@@ -209,7 +211,7 @@ void FastAddPeerContext::insertCheckpointIngestInfo(
     info->persistToLocal();
 }
 
-void FastAddPeerContext::handleBeforeLegacySnapshot(TMTContext & tmt, UInt64 region_id)
+void FastAddPeerContext::resolveFapSnapshotState(TMTContext & tmt, UInt64 region_id, bool is_legacy_snapshot)
 {
     auto prev_state = tasks_trace->asyncCancelTask(
         region_id,
@@ -218,13 +220,20 @@ void FastAddPeerContext::handleBeforeLegacySnapshot(TMTContext & tmt, UInt64 reg
     // Legacy snapshot and FAP(both phase 1 and 2) for a region is exclusive for now.
     if (prev_state == FAPAsyncTasks::TaskState::Finished)
     {
-        // Proxy will actively polling FAP result by calling `fn_fast_add_peer`,
-        // so the result will be eventually fetched by Proxy, and then trigger phase2.
-        throw Exception(
-            ErrorCodes::LOGICAL_ERROR,
-            "FastAddPeer: find unfetched finished fap task, make sure proxy has longer timeout threshold, "
-            "region_id={}",
-            region_id);
+        if (is_legacy_snapshot)
+        {
+            // Proxy will actively polling FAP result by calling `fn_fast_add_peer`,
+            // so the result will be eventually fetched by Proxy, and then trigger phase2.
+            throw Exception(
+                ErrorCodes::LOGICAL_ERROR,
+                "FastAddPeer: find unfetched finished fap task, make sure proxy has longer timeout threshold, "
+                "region_id={}",
+                region_id);
+        }
+        else
+        {
+            LOG_INFO(log, "FastAddPeer: FAP canceled because region destroyed, region_id={}", region_id);
+        }
     }
     else if likely (prev_state == FAPAsyncTasks::TaskState::NotScheduled)
     {

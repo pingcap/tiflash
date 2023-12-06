@@ -67,7 +67,7 @@ struct CheckpointIngestInfo
         , log(DB::Logger::get("CheckpointIngestInfo"))
     {}
 
-    static CheckpointIngestInfoPtr restore(
+    static std::optional<CheckpointIngestInfoPtr> restore(
         TMTContext & tmt,
         const TiFlashRaftProxyHelper * proxy_helper,
         UInt64 region_id,

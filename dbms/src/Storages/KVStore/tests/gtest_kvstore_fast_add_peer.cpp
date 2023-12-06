@@ -51,7 +51,7 @@ FastAddPeerRes FastAddPeerImplWrite(
     UInt64 new_peer_id,
     CheckpointRegionInfoAndData && checkpoint,
     UInt64 start_time);
-void ApplyFapSnapshotImpl(TMTContext & tmt, TiFlashRaftProxyHelper * proxy_helper, UInt64 region_id, UInt64 peer_id);
+uint8_t ApplyFapSnapshotImpl(TMTContext & tmt, TiFlashRaftProxyHelper * proxy_helper, UInt64 region_id, UInt64 peer_id);
 
 namespace tests
 {
@@ -457,6 +457,27 @@ try
 }
 CATCH
 
+template <typename F>
+void assertThrow(F f)
+{
+    using namespace std::chrono_literals;
+    bool thrown = false;
+    for (int i = 0; i < 5; i++)
+    {
+        try
+        {
+            f();
+        }
+        catch (...)
+        {
+            thrown = true;
+            break;
+        }
+        std::this_thread::sleep_for(500ms);
+    }
+    ASSERT_TRUE(thrown);
+}
+
 // Test cancel from peer select
 TEST_F(RegionKVStoreTestFAP, Cancel1)
 try
@@ -534,21 +555,8 @@ try
     t.join();
     ASSERT_TRUE(!fap_context->tryGetCheckpointIngestInfo(region_id).has_value());
     // Cancel async tasks, and make sure the data is cleaned after limited time.
-    bool thrown = false;
-    for (int i = 0; i < 5; i++)
-    {
-        try
-        {
-            CheckpointIngestInfo::restore(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333);
-        }
-        catch (...)
-        {
-            thrown = true;
-            break;
-        }
-        std::this_thread::sleep_for(500ms);
-    }
-    ASSERT_TRUE(thrown);
+    assertThrow(
+        [&]() { CheckpointIngestInfo::restore(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333); });
     FailPointHelper::disableFailPoint(FailPoints::force_set_fap_candidate_store_id);
 }
 CATCH
@@ -587,23 +595,10 @@ try
     sp.disable();
     t.join();
     // Cancel async tasks, and make sure the data is cleaned after limited time.
-    bool thrown = false;
-    for (int i = 0; i < 5; i++)
-    {
-        try
-        {
-            CheckpointIngestInfo::restore(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333);
-        }
-        catch (...)
-        {
-            thrown = true;
-            break;
-        }
-        std::this_thread::sleep_for(500ms);
-    }
+    assertThrow(
+        [&]() { CheckpointIngestInfo::restore(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333); });
     // Wait async cancel in `FastAddPeerImplWrite`.
     ASSERT_FALSE(fap_context->tryGetCheckpointIngestInfo(region_id).has_value());
-    ASSERT_TRUE(thrown);
     FailPointHelper::disableFailPoint(FailPoints::force_set_fap_candidate_store_id);
 }
 CATCH

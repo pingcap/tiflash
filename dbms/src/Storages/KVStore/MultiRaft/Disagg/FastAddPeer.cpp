@@ -205,7 +205,7 @@ std::variant<CheckpointRegionInfoAndData, FastAddPeerRes> FastAddPeerImplSelect(
     std::vector<StoreID> candidate_store_ids;
     fiu_do_on(FailPoints::force_set_fap_candidate_store_id, { candidate_store_ids = {1234}; });
     if (candidate_store_ids.empty())
-        getCandidateStoreIDsForRegion(tmt, region_id, current_store_id);
+        candidate_store_ids = getCandidateStoreIDsForRegion(tmt, region_id, current_store_id);
     if (candidate_store_ids.empty())
     {
         LOG_DEBUG(log, "No suitable candidate peer for region_id={}", region_id);
@@ -278,6 +278,7 @@ std::variant<CheckpointRegionInfoAndData, FastAddPeerRes> FastAddPeerImplSelect(
             {
                 LOG_INFO(log, "Cancel FAP during peer selecting, region_id={}", region_id);
                 // Just remove the task from AsyncTasks, it will not write anything in disk during this stage.
+                // NOTE once canceled, Proxy should no longer polling `FastAddPeer`, since it will result in `OtherError`.
                 fap_ctx->tasks_trace->leakingDiscardTask(region_id);
                 return genFastAddPeerRes(FastAddPeerStatus::Canceled, "", "");
             }
@@ -435,44 +436,56 @@ FastAddPeerRes FastAddPeerImpl(
     }
 }
 
-void ApplyFapSnapshotImpl(TMTContext & tmt, TiFlashRaftProxyHelper * proxy_helper, UInt64 region_id, UInt64 peer_id)
+uint8_t ApplyFapSnapshotImpl(TMTContext & tmt, TiFlashRaftProxyHelper * proxy_helper, UInt64 region_id, UInt64 peer_id)
 {
     auto log = Logger::get("FastAddPeer");
     LOG_INFO(log, "Begin apply fap snapshot, region_id={}, peer_id={}", region_id, peer_id);
-    GET_METRIC(tiflash_fap_task_state, type_ingesting_stage).Increment();
-    SCOPE_EXIT({ GET_METRIC(tiflash_fap_task_state, type_ingesting_stage).Decrement(); });
     Stopwatch watch_ingest;
     auto kvstore = tmt.getKVStore();
     auto fap_ctx = tmt.getContext().getSharedContextDisagg()->fap_context;
-    auto checkpoint_ingest_info = fap_ctx->getOrRestoreCheckpointIngestInfo(tmt, proxy_helper, region_id, peer_id);
-    kvstore->handleIngestCheckpoint(checkpoint_ingest_info->getRegion(), checkpoint_ingest_info, tmt);
-    fap_ctx->forciblyCleanTask(tmt, region_id);
-    GET_METRIC(tiflash_fap_task_duration_seconds, type_ingest_stage).Observe(watch_ingest.elapsedSeconds());
-    auto begin = checkpoint_ingest_info->beginTime();
-    auto current = FAPAsyncTasks::getCurrentMillis();
-    if (begin != 0)
+    auto maybe_checkpoint_ingest_info
+        = fap_ctx->getOrRestoreCheckpointIngestInfo(tmt, proxy_helper, region_id, peer_id);
+    if (!maybe_checkpoint_ingest_info.has_value())
     {
-        GET_METRIC(tiflash_fap_task_duration_seconds, type_total).Observe((current - begin) / 1000.0);
+        return false;
     }
-    LOG_INFO(
-        log,
-        "Finish apply fap snapshot, region_id={} peer_id={} begin_time={} current_time={}",
-        region_id,
-        peer_id,
-        begin,
-        current);
-    GET_METRIC(tiflash_fap_task_result, type_succeed).Increment();
+    // If there is `checkpoint_ingest_info`, it is exactly the data we want to ingest. Consider two scene:
+    // 1. If there was a failed FAP which failed to clean, its data will be overwritten by current FAP which has finished phase 1.
+    // 2. It is not possible that a restart happens at FAP phase 2, and a legacy snapshot is sent, because snapshots can only be accepted once the previous snapshot it handled.
+    {
+        auto checkpoint_ingest_info = maybe_checkpoint_ingest_info.value();
+        GET_METRIC(tiflash_fap_task_state, type_ingesting_stage).Increment();
+        SCOPE_EXIT({ GET_METRIC(tiflash_fap_task_state, type_ingesting_stage).Decrement(); });
+        kvstore->handleIngestCheckpoint(checkpoint_ingest_info->getRegion(), checkpoint_ingest_info, tmt);
+        fap_ctx->forciblyCleanTask(tmt, region_id);
+        GET_METRIC(tiflash_fap_task_duration_seconds, type_ingest_stage).Observe(watch_ingest.elapsedSeconds());
+        auto begin = checkpoint_ingest_info->beginTime();
+        auto current = FAPAsyncTasks::getCurrentMillis();
+        if (begin != 0)
+        {
+            GET_METRIC(tiflash_fap_task_duration_seconds, type_total).Observe((current - begin) / 1000.0);
+        }
+        LOG_INFO(
+            log,
+            "Finish apply fap snapshot, region_id={} peer_id={} begin_time={} current_time={}",
+            region_id,
+            peer_id,
+            begin,
+            current);
+        GET_METRIC(tiflash_fap_task_result, type_succeed).Increment();
+        return true;
+    }
 }
 
-void ApplyFapSnapshot(EngineStoreServerWrap * server, uint64_t region_id, uint64_t peer_id)
+uint8_t ApplyFapSnapshot(EngineStoreServerWrap * server, uint64_t region_id, uint64_t peer_id)
 {
     try
     {
         RUNTIME_CHECK_MSG(server->tmt, "TMTContext is null");
         RUNTIME_CHECK_MSG(server->proxy_helper, "proxy_helper is null");
         if (!server->tmt->getContext().getSharedContextDisagg()->isDisaggregatedStorageMode())
-            return;
-        ApplyFapSnapshotImpl(*server->tmt, server->proxy_helper, region_id, peer_id);
+            return false;
+        return ApplyFapSnapshotImpl(*server->tmt, server->proxy_helper, region_id, peer_id);
     }
     catch (...)
     {
@@ -517,17 +530,23 @@ FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, u
             if (res)
             {
                 GET_METRIC(tiflash_fap_task_state, type_ongoing).Increment();
-                LOG_INFO(log, "Add new task new_peer_id={} region_id={}", new_peer_id, region_id);
+                LOG_INFO(log, "Add new task success, new_peer_id={} region_id={}", new_peer_id, region_id);
             }
             else
             {
                 // If the queue is full, the task won't be registered, return OtherError for quick fallback.
-                LOG_ERROR(log, "Add new task fail(queue full) new_peer_id={} region_id={}", new_peer_id, region_id);
+                // If proxy still mistakenly polls canceled task, it will also fails here.
+                LOG_ERROR(
+                    log,
+                    "Add new task fail(queue full) or poll canceled, new_peer_id={} region_id={}",
+                    new_peer_id,
+                    region_id);
                 GET_METRIC(tiflash_fap_task_result, type_failed_other).Increment();
                 return genFastAddPeerRes(FastAddPeerStatus::OtherError, "", "");
             }
         }
 
+        // If the task is canceled, the task will not be `isScheduled`.
         if (fap_ctx->tasks_trace->isReady(region_id))
         {
             GET_METRIC(tiflash_fap_task_state, type_ongoing).Decrement();

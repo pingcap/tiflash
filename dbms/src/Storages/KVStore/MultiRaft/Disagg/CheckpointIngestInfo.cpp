@@ -30,7 +30,7 @@ namespace DB
 
 static constexpr uint8_t FAP_INGEST_INFO_PERSIST_FMT_VER = 1;
 
-CheckpointIngestInfoPtr CheckpointIngestInfo::restore(
+std::optional<CheckpointIngestInfoPtr> CheckpointIngestInfo::restore(
     TMTContext & tmt,
     const TiFlashRaftProxyHelper * proxy_helper,
     UInt64 region_id,
@@ -47,12 +47,7 @@ CheckpointIngestInfoPtr CheckpointIngestInfo::restore(
     Page page = uni_ps->read(page_id, nullptr, snapshot, /*throw_on_not_exist*/ false);
     if (!page.isValid())
     {
-        throw Exception(
-            ErrorCodes::LOGICAL_ERROR,
-            "Failed to restore CheckpointIngestInfo, region_id={} peer_id={} store_id={}",
-            region_id,
-            peer_id,
-            tmt.getKVStore()->getStoreID(std::memory_order_relaxed));
+        return std::nullopt;
     }
     ReadBufferFromMemory buf(page.data.begin(), page.data.size());
     RUNTIME_CHECK_MSG(readBinary2<UInt8>(buf) == FAP_INGEST_INFO_PERSIST_FMT_VER, "wrong fap ingest info format");
