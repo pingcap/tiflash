@@ -106,13 +106,15 @@ ReceivedMessage::ReceivedMessage(
     size_t source_index_,
     const String & req_info_,
     const std::shared_ptr<DB::TrackedMppDataPacket> & packet_,
+    const mpp::Error * error_ptr_,
+    const String * resp_ptr_,
     Blocks && blocks_,
     size_t fine_grained_consumer_size)
     : source_index(source_index_)
     , req_info(req_info_)
     , packet(packet_)
-    , error_ptr(nullptr)
-    , resp_ptr(nullptr)
+    , error_ptr(error_ptr_)
+    , resp_ptr(resp_ptr_)
     , blocks(blocks_)
     , is_local(true)
 {

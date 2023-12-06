@@ -40,6 +40,8 @@ public:
         size_t source_index_,
         const String & req_info_,
         const std::shared_ptr<DB::TrackedMppDataPacket> & packet_,
+        const mpp::Error * error_ptr_,
+        const String * resp_ptr_,
         Blocks && blocks_,
         size_t fine_grained_consumer_size);
 

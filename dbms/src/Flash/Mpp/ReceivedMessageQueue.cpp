@@ -66,20 +66,22 @@ ReceivedMessagePtr toReceivedMessage(
     const TrackedMppDataPacketPtr & tracked_packet,
     size_t fine_grained_consumer_size)
 {
+    const auto & packet = tracked_packet->packet;
+    const mpp::Error * error_ptr = getErrorPtr(packet);
+    const String * resp_ptr = getRespPtr(packet);
     if (tracked_packet->is_local)
     {
         return std::make_shared<ReceivedMessage>(
             source_index,
             req_info,
             tracked_packet,
+            error_ptr,
+            resp_ptr,
             std::move(tracked_packet->blocks),
             fine_grained_consumer_size);
     }
     else
     {
-        const auto & packet = tracked_packet->packet;
-        const mpp::Error * error_ptr = getErrorPtr(packet);
-        const String * resp_ptr = getRespPtr(packet);
         std::vector<const String *> chunks(packet.chunks_size());
         for (int i = 0; i < packet.chunks_size(); ++i)
             chunks[i] = &packet.chunks(i);
