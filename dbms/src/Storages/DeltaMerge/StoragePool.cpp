@@ -799,7 +799,7 @@ PageStorageRunMode StoragePool::restore()
         logger,
         "Finished StoragePool restore. [current_run_mode={}] [ns_id={}]"
         " [max_log_page_id={}] [max_data_page_id={}] [max_meta_page_id={}]",
-        static_cast<UInt8>(run_mode),
+        magic_enum::enum_name(run_mode),
         ns_id,
         max_log_page_id,
         max_data_page_id,

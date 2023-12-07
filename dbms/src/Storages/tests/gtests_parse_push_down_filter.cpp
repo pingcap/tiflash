@@ -25,7 +25,6 @@
 #include <Storages/StorageDeltaMerge.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
-#include <TiDB/Schema/SchemaBuilder-internal.h>
 #include <common/logger_useful.h>
 
 #include <regex>
