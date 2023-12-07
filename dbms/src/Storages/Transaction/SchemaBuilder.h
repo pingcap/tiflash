@@ -70,7 +70,7 @@ private:
 
     void applyPartitionDiff(TiDB::DBInfoPtr db_info, TableID table_id);
 
-    void applyPartitionDiff(TiDB::DBInfoPtr db_info, TiDB::TableInfoPtr table_info, ManageableStoragePtr storage);
+    void applyPartitionDiff(TiDB::DBInfoPtr db_info, TiDB::TableInfoPtr table_info, ManageableStoragePtr storage, bool drop_part_if_not_exist);
 
     void applyAlterTable(TiDB::DBInfoPtr db_info, TableID table_id);
 
