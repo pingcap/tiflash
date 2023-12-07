@@ -115,8 +115,7 @@ public:
     static String hGet(KeyspaceSnapshot & snap, const String & key, const String & field)
     {
         String encode_key = encodeHashDataKey(key, field);
-        String value = snap.Get(encode_key);
-        return value;
+        return snap.Get(encode_key);
     }
 
     static String mvccGet(KeyspaceSnapshot & snap, const String & key, const String & field)
@@ -273,7 +272,6 @@ TiDB::DBInfoPtr SchemaGetter::getDatabase(DatabaseID db_id)
 {
     String key = getDBKey(db_id);
     String json = TxnStructure::hGet(snap, DBs, key);
-
     if (json.empty())
         return nullptr;
 

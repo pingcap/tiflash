@@ -89,7 +89,7 @@ public:
 
     bool isTombstone() const override { return tombstone != 0; }
     Timestamp getTombstone() const override { return tombstone; }
-    void alterTombstone(const Context & context, Timestamp tombstone_) override;
+    void alterTombstone(const Context & context, Timestamp tombstone_, const TiDB::DBInfoPtr & new_db_info) override;
 
     void drop(const Context & context) override;
 
