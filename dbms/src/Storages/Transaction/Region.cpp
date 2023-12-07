@@ -526,10 +526,18 @@ bool Region::checkIndex(UInt64 index) const
     return meta.checkIndex(index);
 }
 
-std::tuple<WaitIndexResult, double> Region::waitIndex(UInt64 index, const UInt64 timeout_ms, std::function<bool(void)> && check_running)
+std::tuple<WaitIndexStatus, double> Region::waitIndex(
+    UInt64 index,
+    const UInt64 timeout_ms,
+    std::function<bool(void)> && check_running,
+    const LoggerPtr & log)
 {
-    if (proxy_helper != nullptr)
+    if (proxy_helper == nullptr) // just for debug
+        return {WaitIndexStatus::Finished, 0};
+
+    if (meta.checkIndex(index))
     {
+<<<<<<< HEAD
         if (!meta.checkIndex(index))
         {
             Stopwatch wait_index_watch;
@@ -561,8 +569,54 @@ std::tuple<WaitIndexResult, double> Region::waitIndex(UInt64 index, const UInt64
             }
             }
         }
+=======
+        // already satisfied
+        return {WaitIndexStatus::Finished, 0};
     }
-    return {WaitIndexResult::Finished, 0};
+
+    Stopwatch wait_index_watch;
+    const auto wait_idx_res = meta.waitIndex(index, timeout_ms, std::move(check_running));
+    const auto elapsed_secs = wait_index_watch.elapsedSeconds();
+    const auto & status = wait_idx_res.status;
+    switch (status)
+    {
+    case WaitIndexStatus::Finished:
+    {
+        const auto log_lvl = elapsed_secs < 1.0 ? Poco::Message::PRIO_DEBUG : Poco::Message::PRIO_INFORMATION;
+        LOG_IMPL(
+            log,
+            log_lvl,
+            "{} wait learner index done, prev_index={} curr_index={} to_wait={} elapsed_s={:.3f} timeout_s={:.3f}",
+            toString(false),
+            wait_idx_res.prev_index,
+            wait_idx_res.current_index,
+            index,
+            elapsed_secs,
+            timeout_ms / 1000.0);
+        return {status, elapsed_secs};
+    }
+    case WaitIndexStatus::Terminated:
+    {
+        return {status, elapsed_secs};
+    }
+    case WaitIndexStatus::Timeout:
+    {
+        ProfileEvents::increment(ProfileEvents::RaftWaitIndexTimeout);
+        LOG_WARNING(
+            log,
+            "{} wait learner index timeout, prev_index={} curr_index={} to_wait={} state={}"
+            " elapsed_s={:.3f} timeout_s={:.3f}",
+            toString(false),
+            wait_idx_res.prev_index,
+            wait_idx_res.current_index,
+            index,
+            static_cast<Int32>(peerState()),
+            elapsed_secs,
+            timeout_ms / 1000.0);
+        return {status, elapsed_secs};
+    }
+>>>>>>> bb529e6836 (Raft: Add identifier to logger when wait index happens(release-7.1) (#8473))
+    }
 }
 
 UInt64 Region::version() const
