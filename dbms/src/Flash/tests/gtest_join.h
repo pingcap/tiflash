@@ -121,7 +121,7 @@ public:
                 common_rows / 2);
         }
 
-        ColumnWithTypeAndName shuffle_column = ColumnGenerator::instance().generate({table_rows, "UInt64", RANDOM});
+        ColumnWithTypeAndName shuffle_column = ColumnGenerator::instance().generate({table_rows, "UInt64", RANDOM, ""});
         IColumn::Permutation perm;
         shuffle_column.column->getPermutation(false, 0, -1, perm);
         for (auto & column : left_column_data)
