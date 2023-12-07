@@ -28,6 +28,11 @@ extern const int CHECKSUM_DOESNT_MATCH;
 } // namespace ErrorCodes
 namespace PS::V3
 {
+
+/** 
+ * PageEntryV3 records the information of a page in BlobFile,
+ * including the file_id, size, offset, checksum, etc.
+ */
 struct PageEntryV3
 {
 public:

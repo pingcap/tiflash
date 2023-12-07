@@ -66,7 +66,7 @@ public:
     }
 
 #ifdef DBMS_PUBLIC_GTEST
-    WriteBatchWrapper(WriteBatch && wb_)
+    WriteBatchWrapper(WriteBatch && wb_) // NOLINT(google-explicit-constructor), for gtest
         : wb(std::make_unique<WriteBatch>(std::move(wb_)))
         , uwb(nullptr)
     {}
