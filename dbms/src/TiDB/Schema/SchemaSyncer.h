@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Interpreters/Context_fwd.h>
 #include <Storages/KVStore/Types.h>
 #include <common/logger_useful.h>
 
@@ -30,7 +31,6 @@ using TableInfoPtr = std::shared_ptr<TableInfo>;
 
 namespace DB
 {
-class Context;
 
 class SchemaSyncer
 {
@@ -52,10 +52,12 @@ public:
 
     virtual TiDB::DBInfoPtr getDBInfoByName(const String & database_name) = 0;
 
-    virtual TiDB::DBInfoPtr getDBInfoByMappedName(const String & mapped_database_name) = 0;
-
     virtual void removeTableID(TableID table_id) = 0;
 
+    /**
+      * Drop all schema of a given keyspace.
+      * When a keyspace is removed, drop all its databases and tables.
+      */
     virtual void dropAllSchema(Context & context) = 0;
 };
 

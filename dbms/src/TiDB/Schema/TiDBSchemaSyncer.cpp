@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/TiFlashMetrics.h>
+#include <TiDB/Schema/SchemaBuilder.h>
 #include <TiDB/Schema/TiDBSchemaSyncer.h>
 #include <common/types.h>
 
@@ -133,7 +134,7 @@ Int64 TiDBSchemaSyncer<mock_getter, mock_mapper>::syncSchemaDiffs(
             return -1;
         }
 
-        SchemaBuilder<Getter, NameMapper> builder(getter, context, databases, table_id_map, shared_mutex_for_databases);
+        SchemaBuilder<Getter, NameMapper> builder(getter, context, databases, table_id_map);
         builder.applyDiff(*diff);
     }
     return used_version;
@@ -146,33 +147,10 @@ Int64 TiDBSchemaSyncer<mock_getter, mock_mapper>::syncAllSchemas(Context & conte
     {
         --version;
     }
-    SchemaBuilder<Getter, NameMapper> builder(getter, context, databases, table_id_map, shared_mutex_for_databases);
+    SchemaBuilder<Getter, NameMapper> builder(getter, context, databases, table_id_map);
     builder.syncAllSchema();
 
     return version;
-}
-
-template <bool mock_getter, bool mock_mapper>
-std::tuple<bool, DatabaseID, TableID> TiDBSchemaSyncer<mock_getter, mock_mapper>::findDatabaseIDAndTableID(
-    TableID physical_table_id)
-{
-    auto database_id = table_id_map.findTableIDInDatabaseMap(physical_table_id);
-    TableID logical_table_id = physical_table_id;
-    if (database_id == -1)
-    {
-        /// if we can't find physical_table_id in table_id_to_database_id,
-        /// we should first try to find it in partition_id_to_logical_id because it could be the pysical_table_id of partition tables
-        logical_table_id = table_id_map.findTableIDInPartitionMap(physical_table_id);
-        if (logical_table_id != -1)
-            database_id = table_id_map.findTableIDInDatabaseMap(logical_table_id);
-    }
-
-    if (database_id != -1 && logical_table_id != -1)
-    {
-        return std::make_tuple(true, database_id, logical_table_id);
-    }
-
-    return std::make_tuple(false, 0, 0);
 }
 
 template <bool mock_getter, bool mock_mapper>
@@ -180,11 +158,12 @@ std::tuple<bool, String> TiDBSchemaSyncer<mock_getter, mock_mapper>::trySyncTabl
     Context & context,
     TableID physical_table_id,
     Getter & getter,
+    bool force,
     const char * next_action)
 {
     // Get logical_table_id and database_id by physical_table_id.
     // If the table is a partition table, logical_table_id != physical_table_id, otherwise, logical_table_id == physical_table_id;
-    auto [found, database_id, logical_table_id] = findDatabaseIDAndTableID(physical_table_id);
+    auto [found, database_id, logical_table_id] = table_id_map.findDatabaseIDAndLogicalTableID(physical_table_id);
     if (!found)
     {
         String message = fmt::format(
@@ -198,8 +177,8 @@ std::tuple<bool, String> TiDBSchemaSyncer<mock_getter, mock_mapper>::trySyncTabl
     // Try to fetch the latest table info from TiKV.
     // If the table schema apply is failed, then we need to update the table-id-mapping
     // and retry.
-    SchemaBuilder<Getter, NameMapper> builder(getter, context, databases, table_id_map, shared_mutex_for_databases);
-    if (!builder.applyTable(database_id, logical_table_id, physical_table_id))
+    SchemaBuilder<Getter, NameMapper> builder(getter, context, databases, table_id_map);
+    if (!builder.applyTable(database_id, logical_table_id, physical_table_id, force))
     {
         String message = fmt::format(
             "Can not apply table schema because the table_id_map is not up-to-date, {}."
@@ -229,7 +208,7 @@ bool TiDBSchemaSyncer<mock_getter, mock_mapper>::syncTableSchema(Context & conte
     /// Note that we don't need a lock at the beginning of syncTableSchema.
     /// The AlterLock for storage will be acquired in `SchemaBuilder::applyTable`.
     auto [need_update_id_mapping, message]
-        = trySyncTableSchema(context, physical_table_id, getter, "try to syncSchemas");
+        = trySyncTableSchema(context, physical_table_id, getter, false, "try to syncSchemas");
     if (!need_update_id_mapping)
     {
         LOG_INFO(log, "Sync table schema end, table_id={}", physical_table_id);
@@ -240,8 +219,11 @@ bool TiDBSchemaSyncer<mock_getter, mock_mapper>::syncTableSchema(Context & conte
     GET_METRIC(tiflash_schema_trigger_count, type_sync_table_schema).Increment();
     // Notice: must use the same getter
     syncSchemasByGetter(context, getter);
+    // Try to sync the table schema with `force==true`. Even the table is tombstone (but not physically
+    // dropped in TiKV), it will sync the table schema to handle snapshot or raft commands that come after
+    // table is dropped.
     std::tie(need_update_id_mapping, message)
-        = trySyncTableSchema(context, physical_table_id, getter, "sync table schema fail");
+        = trySyncTableSchema(context, physical_table_id, getter, true, "sync table schema fail");
     if (likely(!need_update_id_mapping))
     {
         LOG_INFO(log, "Sync table schema end after syncSchemas, table_id={}", physical_table_id);
@@ -251,6 +233,14 @@ bool TiDBSchemaSyncer<mock_getter, mock_mapper>::syncTableSchema(Context & conte
     // Still fail, maybe some unknown bugs?
     LOG_ERROR(log, message);
     return false;
+}
+
+template <bool mock_getter, bool mock_mapper>
+void TiDBSchemaSyncer<mock_getter, mock_mapper>::dropAllSchema(Context & context)
+{
+    auto getter = createSchemaGetter(keyspace_id);
+    SchemaBuilder<Getter, NameMapper> builder(getter, context, databases, table_id_map);
+    builder.dropAllSchema();
 }
 
 template class TiDBSchemaSyncer<false, false>;
