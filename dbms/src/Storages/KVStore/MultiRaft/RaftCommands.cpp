@@ -314,6 +314,9 @@ std::pair<EngineStoreApplyRes, DM::WriteResult> Region::handleWriteRaftCmd(
 
     size_t put_key_count = 0;
     size_t del_key_count = 0;
+    // How many bytes has been written to KVStore(and maybe then been moved to underlying DeltaTree).
+    // We don't count DEL because it is only used to delete LOCK, which is small and not count in doInsert.
+    size_t write_size = 0;
     auto prev_size = dataSize();
 
     SCOPE_EXIT({
@@ -326,6 +329,7 @@ std::pair<EngineStoreApplyRes, DM::WriteResult> Region::handleWriteRaftCmd(
         auto after_size = dataSize();
         if (after_size > prev_size)
             GET_METRIC(tiflash_raft_write_flow_bytes, type_net_write).Observe(after_size - prev_size);
+        GET_METRIC(tiflash_raft_throughput_bytes, type_write).Increment(write_size);
     });
 
     if (cmds.len)
@@ -353,11 +357,11 @@ std::pair<EngineStoreApplyRes, DM::WriteResult> Region::handleWriteRaftCmd(
                 if (is_v2)
                 {
                     // There may be orphan default key in a snapshot.
-                    doInsert(cf, std::move(tikv_key), std::move(tikv_value), DupCheck::AllowSame);
+                    write_size += doInsert(cf, std::move(tikv_key), std::move(tikv_value), DupCheck::AllowSame);
                 }
                 else
                 {
-                    doInsert(cf, std::move(tikv_key), std::move(tikv_value), DupCheck::Deny);
+                    write_size += doInsert(cf, std::move(tikv_key), std::move(tikv_value), DupCheck::Deny);
                 }
             }
             catch (Exception & e)

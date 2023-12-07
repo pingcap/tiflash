@@ -501,13 +501,15 @@ namespace DB
       F(type_raft_snapshot, {{"type", "raft_snapshot"}}),                                                                           \
       F(type_dt_on_disk, {{"type", "dt_on_disk"}}),                                                                                 \
       F(type_dt_total, {{"type", "dt_total"}}))                                                                                     \
-    M(tiflash_raft_handled_bytes,                                                                                                   \
+    M(tiflash_raft_throughput_bytes,                                                                                                \
       "Raft handled bytes in global",                                                                                               \
       Counter,                                                                                                                      \
+      F(type_write, {{"type", "write"}}),                                                                                           \
       F(type_write_committed, {{"type", "write_committed"}}))                                                                       \
     M(tiflash_raft_write_flow_bytes,                                                                                                \
       "Bucketed histogram of bytes for each write",                                                                                 \
       Histogram,                                                                                                                    \
+      F(type_ingest_uncommitted, {{"type", "ingest_uncommitted"}}, ExpBucketsWithRange{16, 4, 64 * 1024}),                          \
       F(type_write_committed, {{"type", "write_committed"}}, ExpBucketsWithRange{16, 2, 64 * 1024}),                                \
       F(type_net_write, {{"type", "net_write"}}, ExpBucketsWithRange{16, 2, 64 * 1024}))                                            \
     M(tiflash_raft_snapshot_total_bytes,                                                                                            \

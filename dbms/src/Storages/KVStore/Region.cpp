@@ -76,16 +76,16 @@ DecodedLockCFValuePtr Region::getLockInfo(const RegionLockReadQuery & query) con
 
 void Region::insert(const std::string & cf, TiKVKey && key, TiKVValue && value, DupCheck mode)
 {
-    return insert(NameToCF(cf), std::move(key), std::move(value), mode);
+    insert(NameToCF(cf), std::move(key), std::move(value), mode);
 }
 
 void Region::insert(ColumnFamilyType type, TiKVKey && key, TiKVValue && value, DupCheck mode)
 {
     std::unique_lock<std::shared_mutex> lock(mutex);
-    return doInsert(type, std::move(key), std::move(value), mode);
+    doInsert(type, std::move(key), std::move(value), mode);
 }
 
-void Region::doInsert(ColumnFamilyType type, TiKVKey && key, TiKVValue && value, DupCheck mode)
+size_t Region::doInsert(ColumnFamilyType type, TiKVKey && key, TiKVValue && value, DupCheck mode)
 {
     if (getClusterRaftstoreVer() == RaftstoreVer::V2)
     {
@@ -95,11 +95,11 @@ void Region::doInsert(ColumnFamilyType type, TiKVKey && key, TiKVValue && value,
             {
                 // We can't assert the key exists in write_cf here,
                 // since it may be already written into DeltaTree.
-                return;
+                return 0;
             }
         }
     }
-    data.insert(type, std::move(key), std::move(value), mode);
+    return data.insert(type, std::move(key), std::move(value), mode);
 }
 
 void Region::remove(const std::string & cf, const TiKVKey & key)

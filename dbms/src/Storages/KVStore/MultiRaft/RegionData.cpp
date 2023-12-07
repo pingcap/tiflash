@@ -32,24 +32,26 @@ HandleID RawTiDBPK::getHandleID() const
     return RecordKVFormat::decodeInt64(RecordKVFormat::read<UInt64>(pk->data()));
 }
 
-void RegionData::insert(ColumnFamilyType cf, TiKVKey && key, TiKVValue && value, DupCheck mode)
+size_t RegionData::insert(ColumnFamilyType cf, TiKVKey && key, TiKVValue && value, DupCheck mode)
 {
     switch (cf)
     {
     case ColumnFamilyType::Write:
     {
-        cf_data_size += write_cf.insert(std::move(key), std::move(value), mode);
-        return;
+        auto delta = write_cf.insert(std::move(key), std::move(value), mode);
+        cf_data_size += delta;
+        return delta;
     }
     case ColumnFamilyType::Default:
     {
-        cf_data_size += default_cf.insert(std::move(key), std::move(value), mode);
-        return;
+        auto delta = default_cf.insert(std::move(key), std::move(value), mode);
+        cf_data_size += delta;
+        return delta;
     }
     case ColumnFamilyType::Lock:
     {
         lock_cf.insert(std::move(key), std::move(value), mode);
-        return;
+        return 0;
     }
     }
 }
