@@ -220,9 +220,8 @@ std::variant<CheckpointRegionInfoAndData, FastAddPeerRes> FastAddPeerImplSelect(
         // Check all candidate stores in this loop.
         for (const auto store_id : candidate_store_ids)
         {
-            RUNTIME_CHECK_MSG(
+            RUNTIME_CHECK(
                 store_id != current_store_id,
-                "store_id {} != current_store_id {}",
                 store_id,
                 current_store_id);
             auto iter = checked_seq_map.find(store_id);
