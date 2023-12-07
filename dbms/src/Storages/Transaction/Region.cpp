@@ -537,39 +537,6 @@ std::tuple<WaitIndexStatus, double> Region::waitIndex(
 
     if (meta.checkIndex(index))
     {
-<<<<<<< HEAD
-        if (!meta.checkIndex(index))
-        {
-            Stopwatch wait_index_watch;
-            LOG_DEBUG(log,
-                      "{} need to wait learner index {}",
-                      toString(),
-                      index);
-            auto wait_idx_res = meta.waitIndex(index, timeout_ms, std::move(check_running));
-            auto elapsed_secs = wait_index_watch.elapsedSeconds();
-            switch (wait_idx_res)
-            {
-            case WaitIndexResult::Finished:
-            {
-                LOG_DEBUG(log,
-                          "{} wait learner index {} done",
-                          toString(false),
-                          index);
-                return {wait_idx_res, elapsed_secs};
-            }
-            case WaitIndexResult::Terminated:
-            {
-                return {wait_idx_res, elapsed_secs};
-            }
-            case WaitIndexResult::Timeout:
-            {
-                ProfileEvents::increment(ProfileEvents::RaftWaitIndexTimeout);
-                LOG_WARNING(log, "{} wait learner index {} timeout", toString(false), index);
-                return {wait_idx_res, elapsed_secs};
-            }
-            }
-        }
-=======
         // already satisfied
         return {WaitIndexStatus::Finished, 0};
     }
@@ -615,7 +582,6 @@ std::tuple<WaitIndexStatus, double> Region::waitIndex(
             timeout_ms / 1000.0);
         return {status, elapsed_secs};
     }
->>>>>>> bb529e6836 (Raft: Add identifier to logger when wait index happens(release-7.1) (#8473))
     }
 }
 

@@ -381,7 +381,6 @@ void RegionKVStoreTest::testRaftSplit(KVStore & kvs, TMTContext & tmt)
 
         ASSERT_EQ(region->dataInfo(), "[write 2 lock 2 default 2 ]");
     }
-<<<<<<< HEAD
     raft_cmdpb::AdminRequest request;
     raft_cmdpb::AdminResponse response;
     {
@@ -420,17 +419,6 @@ void RegionKVStoreTest::testRaftSplit(KVStore & kvs, TMTContext & tmt)
             }
         }
     }
-=======
-    // Split region
-    RegionID region_id = 1;
-    RegionID region_id2 = 7;
-    auto source_region = kvs.getRegion(region_id);
-    auto old_epoch = source_region->mutMeta().getMetaRegion().region_epoch();
-    const auto & ori_source_range = source_region->getRange()->comparableKeys();
-    RegionRangeKeys::RegionRange new_source_range = RegionRangeKeys::makeComparableKeys(RecordKVFormat::genKey(1, 5), RecordKVFormat::genKey(1, 10));
-    RegionRangeKeys::RegionRange new_target_range = RegionRangeKeys::makeComparableKeys(RecordKVFormat::genKey(1, 0), RecordKVFormat::genKey(1, 5));
-    auto && [request, response] = MockRaftStoreProxy::composeBatchSplit({region_id, region_id2}, regionRangeToEncodeKeys(new_source_range, new_target_range), old_epoch);
->>>>>>> bb529e6836 (Raft: Add identifier to logger when wait index happens(release-7.1) (#8473))
     kvs.handleAdminRaftCmd(raft_cmdpb::AdminRequest(request), raft_cmdpb::AdminResponse(response), 1, 20, 5, tmt);
     {
         auto mmp = kvs.getRegionsByRangeOverlap(RegionRangeKeys::makeComparableKeys(RecordKVFormat::genKey(1, 0), RecordKVFormat::genKey(1, 5)));
