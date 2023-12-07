@@ -395,17 +395,14 @@ bool DeltaValueSpace::flush(DMContext & context)
             delta_index_epoch = std::chrono::steady_clock::now().time_since_epoch().count();
         }
 
-<<<<<<< HEAD
         LOG_DEBUG(
             log,
-            "Flush end, flush_tasks={} flush_rows={} flush_deletes={} delta={}",
+            "Flush end, flush_tasks={} flush_rows={} flush_bytes={} flush_deletes={} delta={}",
             flush_task->getTaskNum(),
             flush_task->getFlushRows(),
+            flush_task->getFlushBytes(),
             flush_task->getFlushDeletes(),
             info());
-=======
-        LOG_DEBUG(log, "Flush end, flush_tasks={} flush_rows={} flush_bytes={} flush_deletes={} delta={}", flush_task->getTaskNum(), flush_task->getFlushRows(), flush_task->getFlushBytes(), flush_task->getFlushDeletes(), info());
->>>>>>> bb529e6836 (Raft: Add identifier to logger when wait index happens(release-7.1) (#8473))
     }
     return true;
 }
@@ -448,8 +445,10 @@ bool DeltaValueSpace::compact(DMContext & context)
         log_storage_snap.reset(); // release the snapshot ASAP
     }
 
-    GET_METRIC(tiflash_storage_subtask_throughput_bytes, type_delta_compact).Increment(compaction_task->getTotalCompactBytes());
-    GET_METRIC(tiflash_storage_subtask_throughput_rows, type_delta_compact).Increment(compaction_task->getTotalCompactRows());
+    GET_METRIC(tiflash_storage_subtask_throughput_bytes, type_delta_compact)
+        .Increment(compaction_task->getTotalCompactBytes());
+    GET_METRIC(tiflash_storage_subtask_throughput_rows, type_delta_compact)
+        .Increment(compaction_task->getTotalCompactRows());
 
     {
         std::scoped_lock lock(mutex);

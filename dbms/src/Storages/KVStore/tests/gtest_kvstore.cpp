@@ -333,7 +333,6 @@ static void testRaftSplit(KVStore & kvs, TMTContext & tmt, std::unique_ptr<MockR
     auto source_region = kvs.getRegion(region_id);
     auto old_epoch = source_region->mutMeta().getMetaRegion().region_epoch();
     const auto & ori_source_range = source_region->getRange()->comparableKeys();
-<<<<<<< HEAD:dbms/src/Storages/KVStore/tests/gtest_kvstore.cpp
     RegionRangeKeys::RegionRange new_source_range
         = RegionRangeKeys::makeComparableKeys(RecordKVFormat::genKey(1, 5), RecordKVFormat::genKey(1, 10));
     RegionRangeKeys::RegionRange new_target_range
@@ -342,11 +341,6 @@ static void testRaftSplit(KVStore & kvs, TMTContext & tmt, std::unique_ptr<MockR
         {region_id, region_id2},
         regionRangeToEncodeKeys(new_source_range, new_target_range),
         old_epoch);
-=======
-    RegionRangeKeys::RegionRange new_source_range = RegionRangeKeys::makeComparableKeys(RecordKVFormat::genKey(1, 5), RecordKVFormat::genKey(1, 10));
-    RegionRangeKeys::RegionRange new_target_range = RegionRangeKeys::makeComparableKeys(RecordKVFormat::genKey(1, 0), RecordKVFormat::genKey(1, 5));
-    auto && [request, response] = MockRaftStoreProxy::composeBatchSplit({region_id, region_id2}, regionRangeToEncodeKeys(new_source_range, new_target_range), old_epoch);
->>>>>>> bb529e6836 (Raft: Add identifier to logger when wait index happens(release-7.1) (#8473)):dbms/src/Storages/Transaction/tests/gtest_kvstore.cpp
     kvs.handleAdminRaftCmd(raft_cmdpb::AdminRequest(request), raft_cmdpb::AdminResponse(response), 1, 20, 5, tmt);
     {
         auto mmp = kvs.getRegionsByRangeOverlap(new_target_range);

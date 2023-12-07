@@ -74,15 +74,12 @@ bool MinorCompaction::commit(ColumnFilePersistedSetPtr & persisted_file_set, Wri
 
 String MinorCompaction::info() const
 {
-<<<<<<< HEAD
     return fmt::format(
-        "Compact end, total_compact_files={} result_compact_files={} total_compact_rows={}",
+        "Compact end, total_compact_files={} result_compact_files={} total_compact_rows={} total_compact_bytes={}",
         total_compact_files,
         result_compact_files,
-        total_compact_rows);
-=======
-    return fmt::format("Compact end, total_compact_files={} result_compact_files={} total_compact_rows={} total_compact_bytes={}", total_compact_files, result_compact_files, total_compact_rows, total_compact_bytes);
->>>>>>> bb529e6836 (Raft: Add identifier to logger when wait index happens(release-7.1) (#8473))
+        total_compact_rows,
+        total_compact_bytes);
 }
 } // namespace DM
 } // namespace DB
