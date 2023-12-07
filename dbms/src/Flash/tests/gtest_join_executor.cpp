@@ -2803,20 +2803,11 @@ try
                       .join(context.scan("null_aware_semi", "s"), type, {col("a")}, {}, {}, {}, {}, 0, is_null_aware)
                       .build(context);
             executeAndAssertColumnsEqual(request, reference);
-            auto request_column_prune = context.scan("null_aware_semi", "t")
-                                            .join(
-                                                context.scan("null_aware_semi", "s"),
-                                                type,
-                                                {col("a")},
-                                                {},
-                                                {},
-                                                {},
-                                                {},
-                                                0,
-                                                true,
-                                                is_null_aware)
-                                            .aggregation({Count(lit(static_cast<UInt64>(1)))}, {})
-                                            .build(context);
+            auto request_column_prune
+                = context.scan("null_aware_semi", "t")
+                      .join(context.scan("null_aware_semi", "s"), type, {col("a")}, {}, {}, {}, {}, 0, is_null_aware)
+                      .aggregation({Count(lit(static_cast<UInt64>(1)))}, {})
+                      .build(context);
             ASSERT_COLUMNS_EQ_UR(genScalarCountResults(reference), executeStreams(request_column_prune, 2));
             /// nullaware cross join
             for (const auto shallow_copy_threshold : cross_join_shallow_copy_thresholds)
@@ -2925,7 +2916,7 @@ try
                                                 {lt(col("t.c"), col("s.c"))},
                                                 {},
                                                 0,
-                                                true)
+                                                is_null_aware)
                                             .aggregation({Count(lit(static_cast<UInt64>(1)))}, {})
                                             .build(context);
             ASSERT_COLUMNS_EQ_UR(genScalarCountResults(reference), executeStreams(request_column_prune, 2));
@@ -3027,11 +3018,19 @@ try
                                    is_null_aware)
                                .build(context);
             executeAndAssertColumnsEqual(request, reference);
-            auto request_column_prune
-                = context.scan("null_aware_semi", "t")
-                      .join(context.scan("null_aware_semi", "s"), type, {col("a"), col("b")}, {}, {}, {}, {}, 0, true)
-                      .aggregation({Count(lit(static_cast<UInt64>(1)))}, {})
-                      .build(context);
+            auto request_column_prune = context.scan("null_aware_semi", "t")
+                                            .join(
+                                                context.scan("null_aware_semi", "s"),
+                                                type,
+                                                {col("a"), col("b")},
+                                                {},
+                                                {},
+                                                {},
+                                                {},
+                                                0,
+                                                is_null_aware)
+                                            .aggregation({Count(lit(static_cast<UInt64>(1)))}, {})
+                                            .build(context);
             ASSERT_COLUMNS_EQ_UR(genScalarCountResults(reference), executeStreams(request_column_prune, 2));
             for (const auto shallow_copy_threshold : cross_join_shallow_copy_thresholds)
             {
@@ -3197,7 +3196,7 @@ try
                                                 {lt(col("t.c"), col("s.c"))},
                                                 {},
                                                 0,
-                                                true)
+                                                is_null_aware)
                                             .aggregation({Count(lit(static_cast<UInt64>(1)))}, {})
                                             .build(context);
             ASSERT_COLUMNS_EQ_UR(genScalarCountResults(reference), executeStreams(request_column_prune, 2));
@@ -3307,7 +3306,7 @@ try
                                                 {Or(lt(col("c"), col("d")), eq(col("t.a"), col("s.a")))},
                                                 {},
                                                 0,
-                                                true)
+                                                is_null_aware)
                                             .aggregation({Count(lit(static_cast<UInt64>(1)))}, {})
                                             .build(context);
             ASSERT_COLUMNS_EQ_UR(genScalarCountResults(reference), executeStreams(request_column_prune, 2));
@@ -3398,11 +3397,19 @@ try
                                    is_null_aware)
                                .build(context);
             executeAndAssertColumnsEqual(request, reference);
-            auto request_column_prune
-                = context.scan("null_aware_semi", "t")
-                      .join(context.scan("null_aware_semi", "s"), type, {col("a"), col("b")}, {}, {}, {}, {}, 0, true)
-                      .aggregation({Count(lit(static_cast<UInt64>(1)))}, {})
-                      .build(context);
+            auto request_column_prune = context.scan("null_aware_semi", "t")
+                                            .join(
+                                                context.scan("null_aware_semi", "s"),
+                                                type,
+                                                {col("a"), col("b")},
+                                                {},
+                                                {},
+                                                {},
+                                                {},
+                                                0,
+                                                is_null_aware)
+                                            .aggregation({Count(lit(static_cast<UInt64>(1)))}, {})
+                                            .build(context);
             ASSERT_COLUMNS_EQ_UR(genScalarCountResults(reference), executeStreams(request_column_prune, 2));
             for (const auto shallow_copy_threshold : cross_join_shallow_copy_thresholds)
             {

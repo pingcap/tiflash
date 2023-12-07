@@ -1768,7 +1768,7 @@ Block Join::joinBlockNullAwareSemiImpl(
         {
             auto & column = block.getByPosition(i);
             if (output_column_names_set_after_finalize.contains(column.name))
-                block.getByPosition(i).column = block.getByPosition(i).column->filter(*filter, rows_for_anti);
+                column.column = column.column->filter(*filter, rows_for_anti);
         }
     }
     return block;
@@ -1842,11 +1842,14 @@ Block Join::joinBlockSemiImpl(const JoinBuildInfo & join_build_info, const Probe
 
     RUNTIME_ASSERT(res.size() == rows, "SemiJoinResult size {} must be equal to block size {}", res.size(), rows);
 
+    const NameSet & probe_output_name_set = has_other_condition
+        ? output_columns_names_set_for_other_condition_after_finalize
+        : output_column_names_set_after_finalize;
     Block block{};
     for (size_t i = 0; i < probe_process_info.block.columns(); ++i)
     {
         const auto & column = probe_process_info.block.getByPosition(i);
-        if (output_columns_names_set_for_other_condition_after_finalize.contains(column.name))
+        if (probe_output_name_set.contains(column.name))
             block.insert(column);
     }
 
@@ -1857,7 +1860,7 @@ Block Join::joinBlockSemiImpl(const JoinBuildInfo & join_build_info, const Probe
     for (size_t i = 0; i < sample_block_without_keys.columns(); ++i)
     {
         const auto & column = sample_block_without_keys.getByPosition(i);
-        if (output_columns_names_set_for_other_condition_after_finalize.contains(column.name))
+        if (probe_output_name_set.contains(column.name))
         {
             RUNTIME_CHECK_MSG(
                 !block.has(column.name),
@@ -1961,7 +1964,11 @@ Block Join::joinBlockSemiImpl(const JoinBuildInfo & join_build_info, const Probe
     if constexpr (KIND == ASTTableJoin::Kind::Semi || KIND == ASTTableJoin::Kind::Anti)
     {
         for (size_t i = 0; i < left_columns; ++i)
-            block.getByPosition(i).column = block.getByPosition(i).column->filter(*filter, rows_for_semi_anti);
+        {
+            auto & column = block.getByPosition(i);
+            if (output_column_names_set_after_finalize.contains(column.name))
+                column.column = column.column->filter(*filter, rows_for_semi_anti);
+        }
     }
     return block;
 }
