@@ -74,7 +74,7 @@ protected:
     void TearDown() override { DB::FailPointHelper::disableFailPoint(DB::FailPoints::delta_tree_create_node_fail); }
 
     std::unique_ptr<FakeDeltaTree> fake_tree;
-    MemoryTrackerPtr memory_tracker;
+    std::shared_ptr<MemoryTracker> memory_tracker;
     std::optional<MemoryTrackerSetter> memory_tracker_setter;
 };
 
