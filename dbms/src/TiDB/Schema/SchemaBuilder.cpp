@@ -38,8 +38,10 @@
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/TypeMapping.h>
+#include <Storages/Transaction/Types.h>
 #include <TiDB/Schema/SchemaBuilder-internal.h>
 #include <TiDB/Schema/SchemaBuilder.h>
+#include <TiDB/Schema/SchemaGetter.h>
 #include <TiDB/Schema/SchemaNameMapper.h>
 #include <common/logger_useful.h>
 
@@ -455,6 +457,12 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
     if (diff.type == SchemaActionType::DropSchema)
     {
         applyDropSchema(diff.schema_id);
+        return;
+    }
+
+    if (diff.type == SchemaActionType::ActionRecoverSchema)
+    {
+        applyRecoverSchema(diff.schema_id);
         return;
     }
 
@@ -999,9 +1007,58 @@ void SchemaBuilder<Getter, NameMapper>::applyDropSchema(const String & db_name)
     // In such way our database (and its belonging tables) will be GC-ed later than TiDB, which is safe and correct.
     auto & tmt_context = context.getTMTContext();
     auto tombstone = tmt_context.getPDClient()->getTS();
-    db->alterTombstone(context, tombstone);
+    db->alterTombstone(context, tombstone, nullptr);
 
-    LOG_INFO(log, "Tombstoned database {}", db_name);
+    LOG_INFO(log, "Tombstoned database {}, tombstone={}", db_name, tombstone);
+}
+
+template <typename Getter, typename NameMapper>
+void SchemaBuilder<Getter, NameMapper>::applyRecoverSchema(DatabaseID database_id)
+{
+    auto db_info = getter.getDatabase(database_id);
+    if (db_info == nullptr)
+    {
+        LOG_INFO(
+            log,
+            "Recover database is ignored because database is not exist in TiKV,"
+            " database_id={}",
+            database_id);
+        return;
+    }
+    LOG_INFO(log, "Recover database begin, database_id={}", database_id);
+    auto db_name = name_mapper.mapDatabaseName(*db_info);
+    auto db = context.tryGetDatabase(db_name);
+    if (!db)
+    {
+        LOG_ERROR(
+            log,
+            "Recover database is ignored because instance is not exists, may have been physically dropped, "
+            "database_id={}",
+            db_name,
+            database_id);
+        return;
+    }
+
+    {
+        for (auto table_iter = db->getIterator(context); table_iter->isValid(); table_iter->next())
+        {
+            auto & storage = table_iter->table();
+            auto managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage);
+            if (!managed_storage)
+            {
+                LOG_WARNING(log, "Recover database ignore non-manageable storage, name={} engine={}", storage->getTableName(), storage->getName());
+                continue;
+            }
+            LOG_WARNING(log, "Recover database on storage begin, name={}", storage->getTableName());
+            auto table_id = managed_storage->getTableInfo().id;
+            applyCreateTable(db_info, table_id);
+        }
+    }
+
+    // Usually `FLASHBACK DATABASE ... TO ...` will rename the database
+    db->alterTombstone(context, 0, db_info);
+    databases.emplace(KeyspaceDatabaseID{keyspace_id, db_info->id}, db_info);
+    LOG_INFO(log, "Recover database end, database_id={}", database_id);
 }
 
 std::tuple<NamesAndTypes, Strings>
@@ -1185,6 +1242,7 @@ void SchemaBuilder<Getter, NameMapper>::applyDropPhysicalTable(const String & db
     }
     GET_METRIC(tiflash_schema_internal_ddl_count, type_drop_table).Increment();
     LOG_INFO(log, "Tombstoning table {}.{}", db_name, name_mapper.debugTableName(storage->getTableInfo()));
+    const UInt64 tombstone_ts = tmt_context.getPDClient()->getTS();
     AlterCommands commands;
     {
         AlterCommand command;
@@ -1194,12 +1252,12 @@ void SchemaBuilder<Getter, NameMapper>::applyDropPhysicalTable(const String & db
         // 1. Use current timestamp, which is after TiDB's drop time, to be the tombstone of this table;
         // 2. Use the same GC safe point as TiDB.
         // In such way our table will be GC-ed later than TiDB, which is safe and correct.
-        command.tombstone = tmt_context.getPDClient()->getTS();
+        command.tombstone = tombstone_ts;
         commands.emplace_back(std::move(command));
     }
     auto alter_lock = storage->lockForAlter(getThreadName());
     storage->alterFromTiDB(alter_lock, commands, db_name, storage->getTableInfo(), name_mapper, context);
-    LOG_INFO(log, "Tombstoned table {}.{}", db_name, name_mapper.debugTableName(storage->getTableInfo()));
+    LOG_INFO(log, "Tombstoned table {}.{}, tombstone={}", db_name, name_mapper.debugTableName(storage->getTableInfo()), tombstone_ts);
 }
 
 template <typename Getter, typename NameMapper>
