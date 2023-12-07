@@ -342,8 +342,12 @@ LearnerReadSnapshot doLearnerRead(
             {
                 // Wait index timeout is disabled; or timeout is enabled but not happen yet, wait index for
                 // a specify Region.
-                auto [wait_res, time_cost] = region->waitIndex(index_to_wait, tmt.waitIndexTimeout(), [&tmt]() { return tmt.checkRunning(); });
-                if (wait_res != WaitIndexResult::Finished)
+                auto [wait_res, time_cost] = region->waitIndex(
+                    index_to_wait,
+                    tmt.waitIndexTimeout(),
+                    [&tmt]() { return tmt.checkRunning(); },
+                    log);
+                if (wait_res != WaitIndexStatus::Finished)
                 {
                     handle_wait_timeout_region(region_to_query.region_id, index_to_wait);
                     continue;
