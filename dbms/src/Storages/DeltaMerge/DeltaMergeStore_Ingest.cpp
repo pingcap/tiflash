@@ -1202,7 +1202,7 @@ void DeltaMergeStore::ingestSegmentsFromCheckpointInfo(
 
     // TODO(fap) This could be executed in a dedicated thread if it consumes too much time.
     for (auto & segment : updated_segments)
-        checkSegmentUpdate(dm_context, segment, ThreadType::Write, InputType::NotRaft);
+        checkSegmentUpdate(dm_context, segment, ThreadType::Write, InputType::RaftSSTAndSnap);
 }
 
 } // namespace DM
