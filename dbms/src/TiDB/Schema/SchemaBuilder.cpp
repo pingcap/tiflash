@@ -1057,7 +1057,7 @@ void SchemaBuilder<Getter, NameMapper>::applyRecoverSchema(DatabaseID database_i
 
     // Usually `FLASHBACK DATABASE ... TO ...` will rename the database
     db->alterTombstone(context, 0, db_info);
-    databases.emplace(KeyspaceDatabaseID{keyspace_id, db_info->id}, db_info);
+    databases[db_info->id] = db_info;
     LOG_INFO(log, "Recover database end, database_id={}", database_id);
 }
 
