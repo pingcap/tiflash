@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/MemoryTracker.h>
+#include <Common/MemoryTrackerSetter.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaTree.h>
 #include <Storages/DeltaMerge/Tuple.h>
