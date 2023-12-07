@@ -55,12 +55,14 @@ void MinorCompaction::prepare(DMContext & context, WriteBatches & wbs, const Pag
         }
         Block compact_block = schema.cloneWithColumns(std::move(compact_columns));
         auto compact_rows = compact_block.rows();
+        auto compact_bytes = compact_block.bytes();
         auto compact_column_file = ColumnFileTiny::writeColumnFile(context, compact_block, 0, compact_rows, wbs);
         wbs.writeLogAndData();
         task.result = compact_column_file;
 
         total_compact_files += task.to_compact.size();
         total_compact_rows += compact_rows;
+        total_compact_bytes += compact_bytes;
         result_compact_files += 1;
     }
 }
@@ -72,11 +74,15 @@ bool MinorCompaction::commit(ColumnFilePersistedSetPtr & persisted_file_set, Wri
 
 String MinorCompaction::info() const
 {
+<<<<<<< HEAD
     return fmt::format(
         "Compact end, total_compact_files={} result_compact_files={} total_compact_rows={}",
         total_compact_files,
         result_compact_files,
         total_compact_rows);
+=======
+    return fmt::format("Compact end, total_compact_files={} result_compact_files={} total_compact_rows={} total_compact_bytes={}", total_compact_files, result_compact_files, total_compact_rows, total_compact_bytes);
+>>>>>>> bb529e6836 (Raft: Add identifier to logger when wait index happens(release-7.1) (#8473))
 }
 } // namespace DM
 } // namespace DB
