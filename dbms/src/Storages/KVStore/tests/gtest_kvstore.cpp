@@ -70,6 +70,7 @@ TEST_F(RegionKVStoreOldTest, ReadIndex)
 {
     createDefaultRegions();
     auto ctx = TiFlashTestEnv::getGlobalContext();
+    auto log = Logger::get();
 
     // Start mock proxy in other thread
     std::atomic_bool over{false};
@@ -183,12 +184,20 @@ TEST_F(RegionKVStoreOldTest, ReadIndex)
             auto resp = kvs.batchReadIndex({req}, 100);
             ASSERT_EQ(resp[0].first.read_index(), 5);
             {
-                auto r = region->waitIndex(5, 0, []() { return true; });
-                ASSERT_EQ(std::get<0>(r), WaitIndexResult::Finished);
+                auto r = region->waitIndex(
+                    5,
+                    0,
+                    []() { return true; },
+                    log);
+                ASSERT_EQ(std::get<0>(r), WaitIndexStatus::Finished);
             }
             {
-                auto r = region->waitIndex(8, 1, []() { return false; });
-                ASSERT_EQ(std::get<0>(r), WaitIndexResult::Terminated);
+                auto r = region->waitIndex(
+                    8,
+                    1,
+                    []() { return false; },
+                    log);
+                ASSERT_EQ(std::get<0>(r), WaitIndexStatus::Terminated);
             }
         }
         for (auto & r : proxy_instance->regions)
@@ -214,16 +223,24 @@ TEST_F(RegionKVStoreOldTest, ReadIndex)
             auto resp = proxy_helper->batchReadIndex({req}, 100); // v2
             ASSERT_EQ(resp[0].first.read_index(), 667); // got latest
             {
-                auto r = region->waitIndex(667 + 1, 2, []() { return true; });
-                ASSERT_EQ(std::get<0>(r), WaitIndexResult::Timeout);
+                auto r = region->waitIndex(
+                    667 + 1,
+                    2,
+                    []() { return true; },
+                    log);
+                ASSERT_EQ(std::get<0>(r), WaitIndexStatus::Timeout);
             }
             {
                 // Wait for a new index 667 + 1 to be applied
                 AsyncWaker::Notifier notifier;
                 std::thread t([&]() {
                     notifier.wake();
-                    auto r = region->waitIndex(667 + 1, 100000, []() { return true; });
-                    ASSERT_EQ(std::get<0>(r), WaitIndexResult::Finished);
+                    auto r = region->waitIndex(
+                        667 + 1,
+                        100000,
+                        []() { return true; },
+                        log);
+                    ASSERT_EQ(std::get<0>(r), WaitIndexStatus::Finished);
                 });
                 SCOPE_EXIT({ t.join(); });
                 ASSERT_EQ(
