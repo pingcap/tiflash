@@ -17,6 +17,8 @@
 #include <Common/TiFlashMetrics.h>
 #include <common/types.h>
 
+#include <ctime>
+
 std::atomic<UInt64> last_max_thds_metric_reset_ts{0};
 const UInt64 max_thds_metric_reset_interval = 60; //60s
 
@@ -24,7 +26,7 @@ namespace DB
 {
 bool tryToResetMaxThreadsMetrics()
 {
-    UInt64 now_ts = StopWatchDetail::seconds(CLOCK_MONOTONIC);
+    UInt64 now_ts = clock_gettime_ns(CLOCK_MONOTONIC) / 1000000000ULL;
     if (now_ts > last_max_thds_metric_reset_ts + max_thds_metric_reset_interval)
     {
         last_max_thds_metric_reset_ts = now_ts;
