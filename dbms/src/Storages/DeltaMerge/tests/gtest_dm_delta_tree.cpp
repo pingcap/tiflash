@@ -12,17 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/MemoryTracker.h>
+#include <Common/MemoryTrackerSetter.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaTree.h>
 #include <Storages/DeltaMerge/Tuple.h>
-#include <gtest/gtest.h>
+#include <TestUtils/TiFlashTestBasic.h>
 
-namespace DB
+namespace DB::DM::tests
 {
-namespace DM
-{
-namespace tests
-{
+
 #define print(M) std::cout << "" #M ": " << M << std::endl
 
 class FakeValueSpace;
@@ -62,7 +61,23 @@ using FakeValueSpacePtr = std::shared_ptr<FakeValueSpace>;
 class DeltaTree_test : public ::testing::Test
 {
 protected:
-    FakeDeltaTree tree;
+    void SetUp() override
+    {
+        CurrentMemoryTracker::disableThreshold();
+        memory_tracker = std::make_shared<MemoryTracker>();
+        memory_tracker_setter.emplace(true, memory_tracker.get());
+        ASSERT_EQ(current_memory_tracker->get(), 0);
+
+        fake_tree = std::make_unique<FakeDeltaTree>();
+        ASSERT_EQ(fake_tree->getBytes(), sizeof(FakeDeltaTree::Leaf));
+        ASSERT_EQ(current_memory_tracker->get(), sizeof(FakeDeltaTree::Leaf));
+    }
+
+    void TearDown() override { DB::FailPointHelper::disableFailPoint(DB::FailPoints::delta_tree_create_node_fail); }
+
+    std::unique_ptr<FakeDeltaTree> fake_tree;
+    std::shared_ptr<MemoryTracker> memory_tracker;
+    std::optional<MemoryTrackerSetter> memory_tracker_setter;
 };
 
 void printTree(const FakeDeltaTree & tree)
@@ -78,7 +93,7 @@ void printTree(const FakeDeltaTree & tree)
 
 std::string treeToString(const FakeDeltaTree & tree)
 {
-    std::string result = "";
+    std::string result;
     std::string temp;
     for (auto it = tree.begin(), end = tree.end(); it != end; ++it)
     {
@@ -116,6 +131,7 @@ TEST_F(DeltaTree_test, PrintSize)
 
 TEST_F(DeltaTree_test, Insert)
 {
+    auto & tree = *fake_tree;
     // insert 100 items
     for (int i = 0; i < 100; ++i)
     {
@@ -198,6 +214,7 @@ TEST_F(DeltaTree_test, Insert)
 
 TEST_F(DeltaTree_test, DeleteAfterInsert)
 {
+    auto & tree = *fake_tree;
     int batch_num = 100;
 
     std::string expectedResult;
@@ -260,6 +277,7 @@ TEST_F(DeltaTree_test, DeleteAfterInsert)
 
 TEST_F(DeltaTree_test, Delete1)
 {
+    auto & tree = *fake_tree;
     int batch_num = 100;
 
     // delete stable from begin to end with merge
@@ -275,6 +293,7 @@ TEST_F(DeltaTree_test, Delete1)
 
 TEST_F(DeltaTree_test, Delete2)
 {
+    auto & tree = *fake_tree;
     int batch_num = 100;
 
     std::string expectedResult;
@@ -297,6 +316,7 @@ TEST_F(DeltaTree_test, Delete2)
 
 TEST_F(DeltaTree_test, InsertSkipDelete)
 {
+    auto & tree = *fake_tree;
     int batch_num = 100;
     tree.addDelete(0);
     std::string expectedResult = "(0|0|DEL|1|0),";
@@ -316,6 +336,36 @@ TEST_F(DeltaTree_test, InsertSkipDelete)
     checkCopy(tree);
 }
 
-} // namespace tests
-} // namespace DM
-} // namespace DB
+
+TEST_F(DeltaTree_test, CreateNodeFailInCopyCtor)
+try
+{
+    auto & tree = *fake_tree;
+    // Create a tree for copy
+    for (int i = 0; i < 1000; ++i)
+    {
+        tree.addInsert(i, i);
+    }
+    auto mem_usage_old = current_memory_tracker->get();
+    ASSERT_EQ(mem_usage_old, tree.getBytes());
+
+    DB::FailPointHelper::enableFailPoint(DB::FailPoints::delta_tree_create_node_fail);
+    try
+    {
+        // Must throw DB::Exception
+        FakeDeltaTree copy(tree);
+    }
+    catch (const Exception & e)
+    {
+        // Catch, check and return directly
+        ASSERT_EQ(e.code(), ErrorCodes::FAIL_POINT_ERROR);
+        ASSERT_EQ(e.message(), String("Failpoint delta_tree_create_node_fail is triggered"));
+        auto mem_usage_current = current_memory_tracker->get();
+        ASSERT_EQ(mem_usage_current, mem_usage_old);
+        return;
+    }
+    FAIL() << "Should not come here";
+}
+CATCH
+
+} // namespace DB::DM::tests
