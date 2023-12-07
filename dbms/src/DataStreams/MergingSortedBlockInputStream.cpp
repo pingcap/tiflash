@@ -213,7 +213,7 @@ void MergingSortedBlockInputStream::merge(MutableColumns & merged_columns, std::
                 if (limit && total_merged_rows + merged_rows >= limit)
                 {
                     if (total_merged_rows > limit)
-                       throw Exception("Logical error in MergingSortedBlockInputStream", ErrorCodes::LOGICAL_ERROR);
+                        throw Exception("Logical error in MergingSortedBlockInputStream", ErrorCodes::LOGICAL_ERROR);
                     merged_rows = limit - total_merged_rows;
                     if likely (total_merged_rows + merged_rows > limit)
                     {
