@@ -959,13 +959,8 @@ public:
             else
                 freeTree<Intern>(static_cast<InternPtr>(root));
         }
-<<<<<<< HEAD
-
-        delete allocator;
 
         LOG_TRACE(log, "free");
-=======
->>>>>>> f080235fd6 (Storages: Fix memory leak when copying DeltaTree failed. (#8460))
     }
 
     void checkAll() const
@@ -1021,12 +1016,8 @@ DT_CLASS::DeltaTree(const DT_CLASS::Self & o)
     , num_inserts(o.num_inserts)
     , num_deletes(o.num_deletes)
     , num_entries(o.num_entries)
-<<<<<<< HEAD
-    , allocator(new Allocator())
-    , log(&Poco::Logger::get("DeltaTree"))
-=======
     , allocator(std::make_unique<Allocator>())
->>>>>>> f080235fd6 (Storages: Fix memory leak when copying DeltaTree failed. (#8460))
+    , log(&Poco::Logger::get("DeltaTree"))
 {
     // If exception is thrown before clear copying_nodes, all nodes will be destroyed.
     std::vector<NodePtr> copying_nodes;
@@ -1495,9 +1486,4 @@ typename DT_CLASS::InternPtr DT_CLASS::afterNodeUpdated(T * node)
 #undef DT_TEMPLATE
 #undef DT_CLASS
 
-<<<<<<< HEAD
-} // namespace DM
-} // namespace DB
-=======
 } // namespace DB::DM
->>>>>>> f080235fd6 (Storages: Fix memory leak when copying DeltaTree failed. (#8460))
