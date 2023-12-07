@@ -24,6 +24,11 @@
 #include <functional>
 #include <memory>
 
+namespace TiDB
+{
+struct DBInfo;
+using DBInfoPtr = std::shared_ptr<DBInfo>;
+} // namespace TiDB
 
 namespace DB
 {
@@ -144,7 +149,11 @@ public:
 
     virtual bool isTombstone() const { return false; }
     virtual Timestamp getTombstone() const { return 0; }
-    virtual void alterTombstone(const Context & /*context*/, Timestamp /*tombstone_*/) {}
+    virtual void alterTombstone(
+        const Context & /*context*/,
+        Timestamp /*tombstone_*/,
+        const TiDB::DBInfoPtr & /*new_db_info*/)
+    {}
 
     /// Delete metadata, the deletion of which differs from the recursive deletion of the directory, if any.
     virtual void drop(const Context & context) = 0;
