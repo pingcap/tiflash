@@ -60,7 +60,14 @@ private:
 
 void RegionKVStoreTest::testReadIndex()
 {
+<<<<<<< HEAD
     std::string path = TiFlashTestEnv::getTemporaryPath("/region_kvs_tmp") + "/basic";
+=======
+    auto log = Logger::get();
+
+    createDefaultRegions();
+    auto ctx = TiFlashTestEnv::getGlobalContext();
+>>>>>>> bb529e6836 (Raft: Add identifier to logger when wait index happens(release-7.1) (#8473))
 
     Poco::File file(path);
     if (file.exists())
@@ -205,12 +212,20 @@ void RegionKVStoreTest::testReadIndex()
             auto resp = kvs.batchReadIndex({req}, 100);
             ASSERT_EQ(resp[0].first.read_index(), 5);
             {
-                auto r = region->waitIndex(5, 0, []() { return true; });
-                ASSERT_EQ(std::get<0>(r), WaitIndexResult::Finished);
+                auto r = region->waitIndex(
+                    5,
+                    0,
+                    []() { return true; },
+                    log);
+                ASSERT_EQ(std::get<0>(r), WaitIndexStatus::Finished);
             }
             {
-                auto r = region->waitIndex(8, 1, []() { return false; });
-                ASSERT_EQ(std::get<0>(r), WaitIndexResult::Terminated);
+                auto r = region->waitIndex(
+                    8,
+                    1,
+                    []() { return false; },
+                    log);
+                ASSERT_EQ(std::get<0>(r), WaitIndexStatus::Terminated);
             }
         }
         for (auto & r : proxy_instance.regions)
@@ -235,15 +250,23 @@ void RegionKVStoreTest::testReadIndex()
             auto resp = proxy_helper.batchReadIndex({req}, 100); // v2
             ASSERT_EQ(resp[0].first.read_index(), 667); // got latest
             {
-                auto r = region->waitIndex(667 + 1, 2, []() { return true; });
-                ASSERT_EQ(std::get<0>(r), WaitIndexResult::Timeout);
+                auto r = region->waitIndex(
+                    667 + 1,
+                    2,
+                    []() { return true; },
+                    log);
+                ASSERT_EQ(std::get<0>(r), WaitIndexStatus::Timeout);
             }
             {
                 AsyncWaker::Notifier notifier;
                 std::thread t([&]() {
                     notifier.wake();
-                    auto r = region->waitIndex(667 + 1, 100000, []() { return true; });
-                    ASSERT_EQ(std::get<0>(r), WaitIndexResult::Finished);
+                    auto r = region->waitIndex(
+                        667 + 1,
+                        100000,
+                        []() { return true; },
+                        log);
+                    ASSERT_EQ(std::get<0>(r), WaitIndexStatus::Finished);
                 });
                 SCOPE_EXIT({
                     t.join();
@@ -378,6 +401,7 @@ void RegionKVStoreTest::testRaftSplit(KVStore & kvs, TMTContext & tmt)
 
         ASSERT_EQ(region->dataInfo(), "[write 2 lock 2 default 2 ]");
     }
+<<<<<<< HEAD
     raft_cmdpb::AdminRequest request;
     raft_cmdpb::AdminResponse response;
     {
@@ -416,6 +440,17 @@ void RegionKVStoreTest::testRaftSplit(KVStore & kvs, TMTContext & tmt)
             }
         }
     }
+=======
+    // Split region
+    RegionID region_id = 1;
+    RegionID region_id2 = 7;
+    auto source_region = kvs.getRegion(region_id);
+    auto old_epoch = source_region->mutMeta().getMetaRegion().region_epoch();
+    const auto & ori_source_range = source_region->getRange()->comparableKeys();
+    RegionRangeKeys::RegionRange new_source_range = RegionRangeKeys::makeComparableKeys(RecordKVFormat::genKey(1, 5), RecordKVFormat::genKey(1, 10));
+    RegionRangeKeys::RegionRange new_target_range = RegionRangeKeys::makeComparableKeys(RecordKVFormat::genKey(1, 0), RecordKVFormat::genKey(1, 5));
+    auto && [request, response] = MockRaftStoreProxy::composeBatchSplit({region_id, region_id2}, regionRangeToEncodeKeys(new_source_range, new_target_range), old_epoch);
+>>>>>>> bb529e6836 (Raft: Add identifier to logger when wait index happens(release-7.1) (#8473))
     kvs.handleAdminRaftCmd(raft_cmdpb::AdminRequest(request), raft_cmdpb::AdminResponse(response), 1, 20, 5, tmt);
     {
         auto mmp = kvs.getRegionsByRangeOverlap(RegionRangeKeys::makeComparableKeys(RecordKVFormat::genKey(1, 0), RecordKVFormat::genKey(1, 5)));
