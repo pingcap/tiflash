@@ -21,19 +21,16 @@ mysql> create table t(id int, value int);
 mysql> create table t1(id int, value int);
 mysql> insert into t values(10,5),(9,5),(8,5),(7,5),(6,5),(5,5),(4,5),(3,5),(2,5),(1,5);
 mysql> insert into t1 values(2,5);
-mysql> insert into t select * from t;
-mysql> insert into t select * from t;
-mysql> insert into t select * from t;
-mysql> insert into t select * from t;
-mysql> insert into t select * from t;
-mysql> insert into t select * from t;
-mysql> insert into t select * from t;
-mysql> insert into t select * from t;
-mysql> insert into t select * from t;
-mysql> insert into t select * from t;
-mysql> insert into t select * from t;
+# insert more than 8192 rows to make sure late materialization is enabled.
+mysql> insert into t select * from t; insert into t select * from t; insert into t select * from t; insert into t select * from t;
+mysql> insert into t select * from t; insert into t select * from t; insert into t select * from t; insert into t select * from t;
+mysql> insert into t select * from t; insert into t select * from t; insert into t select * from t;
 mysql> alter table t set tiflash replica 1;
 mysql> alter table t1 set tiflash replica 1;
+mysql> analyze table t;
+
+func> wait_table test t t
+func> wait_table test t t1
 
 # Test.
 mysql> set @@tidb_allow_mpp=1; set @@tidb_opt_enable_late_materialization=1; select (select t.value from t where t.id = t1.id order by t.value limit 1) xx from t1 order by t1.value limit 5;
@@ -60,3 +57,7 @@ mysql> set @@tidb_allow_mpp=0; set @@tidb_opt_enable_late_materialization=0; sel
 +------+
 |    5 |
 +------+
+
+# Clean up.
+mysql> drop table if exists t;
+mysql> drop table if exists t1;
