@@ -42,6 +42,7 @@
 #include <TiDB/Schema/SchemaBuilder.h>
 #include <TiDB/Schema/SchemaNameMapper.h>
 #include <TiDB/Schema/TiDB.h>
+#include <common/defines.h>
 #include <common/logger_useful.h>
 #include <fmt/format.h>
 
@@ -259,12 +260,17 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
     {
     case SchemaActionType::CreateSchema:
     {
-        applyCreateSchema(diff.schema_id);
+        applyCreateDatabase(diff.schema_id);
         break;
     }
     case SchemaActionType::DropSchema:
     {
-        applyDropSchema(diff.schema_id);
+        applyDropDatabase(diff.schema_id);
+        break;
+    }
+    case SchemaActionType::ActionRecoverSchema:
+    {
+        applyRecoverDatabase(diff.schema_id);
         break;
     }
     case SchemaActionType::CreateTables:
@@ -872,19 +878,19 @@ String createDatabaseStmt(Context & context, const DBInfo & db_info, const Schem
 }
 
 template <typename Getter, typename NameMapper>
-bool SchemaBuilder<Getter, NameMapper>::applyCreateSchema(DatabaseID schema_id)
+bool SchemaBuilder<Getter, NameMapper>::applyCreateDatabase(DatabaseID database_id)
 {
-    auto db_info = getter.getDatabase(schema_id);
+    auto db_info = getter.getDatabase(database_id);
     if (unlikely(db_info == nullptr))
     {
         return false;
     }
-    applyCreateSchema(db_info);
+    applyCreateDatabaseByInfo(db_info);
     return true;
 }
 
 template <typename Getter, typename NameMapper>
-void SchemaBuilder<Getter, NameMapper>::applyCreateSchema(const TiDB::DBInfoPtr & db_info)
+void SchemaBuilder<Getter, NameMapper>::applyCreateDatabaseByInfo(const TiDB::DBInfoPtr & db_info)
 {
     GET_METRIC(tiflash_schema_internal_ddl_count, type_create_db).Increment();
     LOG_INFO(log, "Create database {} begin, database_id={}", name_mapper.debugDatabaseName(*db_info), db_info->id);
@@ -904,29 +910,72 @@ void SchemaBuilder<Getter, NameMapper>::applyCreateSchema(const TiDB::DBInfoPtr 
 }
 
 template <typename Getter, typename NameMapper>
-void SchemaBuilder<Getter, NameMapper>::applyDropSchema(DatabaseID schema_id)
+void SchemaBuilder<Getter, NameMapper>::applyRecoverDatabase(DatabaseID database_id)
 {
-    TiDB::DBInfoPtr db_info = databases.getDBInfo(schema_id);
+    auto db_info = getter.getDatabase(database_id);
     if (unlikely(db_info == nullptr))
     {
-        LOG_INFO(log, "Try to drop database but not found, may has been dropped, database_id={}", schema_id);
+        LOG_INFO(
+            log,
+            "Recover database is ignored because database is not exist in TiKV,"
+            " database_id={}",
+            database_id);
+        return;
+    }
+    LOG_INFO(log, "Recover database begin, database_id={}", database_id);
+    auto db_name = name_mapper.mapDatabaseName(database_id, keyspace_id);
+    auto db = context.tryGetDatabase(db_name);
+    if (unlikely(!db))
+    {
+        LOG_ERROR(
+            log,
+            "Recover database is ignored because instance is not exists, may have been physically dropped, "
+            "database_id={}",
+            db_name,
+            database_id);
         return;
     }
 
     {
         //TODO: it seems may need a lot time, maybe we can do it in a background thread
-        auto table_ids = table_id_map.findTablesByDatabaseID(schema_id);
+        auto table_ids = table_id_map.findTablesByDatabaseID(database_id);
         for (auto table_id : table_ids)
-            applyDropTable(schema_id, table_id);
+        {
+            auto table_info = getter.getTableInfo(database_id, table_id);
+            applyRecoverLogicalTable(db_info, table_info);
+        }
     }
 
-    applyDropSchema(name_mapper.mapDatabaseName(*db_info));
-
-    databases.eraseDBInfo(schema_id);
+    // Usually `FLASHBACK DATABASE ... TO ...` will rename the database
+    db->alterTombstone(context, 0, db_info);
+    databases.addDatabaseInfo(db_info); // add back database info cache
+    LOG_INFO(log, "Recover database end, database_id={}", database_id);
 }
 
 template <typename Getter, typename NameMapper>
-void SchemaBuilder<Getter, NameMapper>::applyDropSchema(const String & db_name)
+void SchemaBuilder<Getter, NameMapper>::applyDropDatabase(DatabaseID database_id)
+{
+    TiDB::DBInfoPtr db_info = databases.getDBInfo(database_id);
+    if (unlikely(db_info == nullptr))
+    {
+        LOG_INFO(log, "Try to drop database but not found, may has been dropped, database_id={}", database_id);
+        return;
+    }
+
+    {
+        //TODO: it seems may need a lot time, maybe we can do it in a background thread
+        auto table_ids = table_id_map.findTablesByDatabaseID(database_id);
+        for (auto table_id : table_ids)
+            applyDropTable(database_id, table_id);
+    }
+
+    applyDropDatabaseByName(name_mapper.mapDatabaseName(database_id, keyspace_id));
+
+    databases.eraseDBInfo(database_id);
+}
+
+template <typename Getter, typename NameMapper>
+void SchemaBuilder<Getter, NameMapper>::applyDropDatabaseByName(const String & db_name)
 {
     GET_METRIC(tiflash_schema_internal_ddl_count, type_drop_db).Increment();
     LOG_INFO(log, "Tombstone database begin, db_name={}", db_name);
@@ -948,7 +997,7 @@ void SchemaBuilder<Getter, NameMapper>::applyDropSchema(const String & db_name)
     // In such way our database (and its belonging tables) will be GC-ed later than TiDB, which is safe and correct.
     auto & tmt_context = context.getTMTContext();
     auto tombstone = tmt_context.getPDClient()->getTS();
-    db->alterTombstone(context, tombstone);
+    db->alterTombstone(context, tombstone, /*new_db_info*/ nullptr); // keep the old db_info
 
     LOG_INFO(log, "Tombstone database end, db_name={} tombstone={}", db_name, tombstone);
 }
@@ -1209,7 +1258,7 @@ void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
                 {
                     break;
                 }
-                applyCreateSchema(db_info);
+                applyCreateDatabaseByInfo(db_info);
                 {
                     std::unique_lock<std::mutex> created_db_set_lock(created_db_set_mutex);
                     created_db_set.emplace(name_mapper.mapDatabaseName(*db_info));
@@ -1307,7 +1356,7 @@ void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
         }
         if (created_db_set.count(it->first) == 0 && !isReservedDatabase(context, it->first))
         {
-            applyDropSchema(it->first);
+            applyDropDatabaseByName(it->first);
             LOG_INFO(log, "Database {} dropped during sync all schemas", it->first);
         }
     }
@@ -1479,7 +1528,7 @@ void SchemaBuilder<Getter, NameMapper>::dropAllSchema()
         {
             continue;
         }
-        applyDropSchema(db.first);
+        applyDropDatabaseByName(db.first);
         LOG_INFO(log, "Database {} dropped during drop all schemas", db.first);
     }
 

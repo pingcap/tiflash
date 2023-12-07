@@ -185,4 +185,4 @@ mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t1 
 | 80 | aaa  |    2 |
 +----+------+------+
 
-#mysql> drop table test.t1;
+mysql> drop table test.t1;
