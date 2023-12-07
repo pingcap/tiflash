@@ -393,7 +393,9 @@ DM::WriteResult RegionTable::writeBlockByRegion(
     auto new_region_size = region->dataSize();
     if likely (new_region_size <= prev_region_size)
     {
-        GET_METRIC(tiflash_raft_handled_bytes, type_write_committed).Increment(prev_region_size - new_region_size);
+        auto net_write = prev_region_size - new_region_size;
+        GET_METRIC(tiflash_raft_write_flow_bytes, type_write_committed).Observe(net_write);
+        GET_METRIC(tiflash_raft_handled_bytes, type_write_committed).Increment(net_write);
         GET_METRIC(tiflash_raft_raft_frequent_events_count, type_write_commit).Increment(1);
     }
     /// Save removed data to outer.

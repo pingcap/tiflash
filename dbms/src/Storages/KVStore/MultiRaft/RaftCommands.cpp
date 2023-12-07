@@ -314,6 +314,7 @@ std::pair<EngineStoreApplyRes, DM::WriteResult> Region::handleWriteRaftCmd(
 
     size_t put_key_count = 0;
     size_t del_key_count = 0;
+    auto prev_size = dataSize();
 
     SCOPE_EXIT({
         GET_METRIC(tiflash_raft_apply_write_command_duration_seconds, type_write).Observe(watch.elapsedSeconds());
@@ -322,10 +323,9 @@ std::pair<EngineStoreApplyRes, DM::WriteResult> Region::handleWriteRaftCmd(
         GET_METRIC(tiflash_raft_raft_frequent_events_count, type_write).Increment(1);
         GET_METRIC(tiflash_raft_process_keys, type_write_put).Increment(put_key_count);
         GET_METRIC(tiflash_raft_process_keys, type_write_del).Increment(del_key_count);
-        if (put_key_count + del_key_count > 0)
-        {
-            GET_METRIC(tiflash_raft_region_flush_bytes, type_after_write).Observe(dataSize());
-        }
+        auto after_size = dataSize();
+        if (after_size > prev_size)
+            GET_METRIC(tiflash_raft_write_flow_bytes, type_net_write).Observe(after_size - prev_size);
     });
 
     if (cmds.len)
