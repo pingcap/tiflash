@@ -26,7 +26,7 @@ namespace tests
 {
 IDGenerator<Int64> pk{0};
 
-IDGenerator<UInt64> tso{StopWatchDetail::nanoseconds(CLOCK_MONOTONIC)};
+IDGenerator<UInt64> tso{clock_gettime_ns(CLOCK_MONOTONIC)};
 
 template <typename T>
 void insertColumn(Block & block, const DataTypePtr & type, const String & name, Int64 col_id, const std::vector<T> & values)
