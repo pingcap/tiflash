@@ -25,7 +25,6 @@
 
 namespace DB
 {
-class BackgroundProcessingPool;
 class Logger;
 using LoggerPtr = std::shared_ptr<Logger>;
 
