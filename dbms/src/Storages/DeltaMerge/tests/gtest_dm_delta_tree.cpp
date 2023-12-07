@@ -64,7 +64,7 @@ protected:
     void SetUp() override
     {
         CurrentMemoryTracker::disableThreshold();
-        memory_tracker = MemoryTracker::create();
+        memory_tracker = std::make_shared<MemoryTracker>();
         memory_tracker_setter.emplace(true, memory_tracker.get());
         ASSERT_EQ(current_memory_tracker->get(), 0);
 
