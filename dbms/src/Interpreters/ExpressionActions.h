@@ -187,6 +187,8 @@ public:
     /// - If output_columns is empty, leaves one arbitrary column (so that the number of rows in the block is not lost).
     void finalize(const Names & output_columns);
 
+    void pruneInputColumns(const Names & output_columns);
+
     const Actions & getActions() const { return actions; }
 
     /// Get a list of input columns.
@@ -208,7 +210,8 @@ public:
 
     std::string dumpActions() const;
 
-    static std::string getSmallestColumn(const NamesAndTypesList & columns);
+    template <class NameAndTypeContainer>
+    static std::string getSmallestColumn(const NameAndTypeContainer & columns);
 
 private:
     NamesAndTypesList input_columns;

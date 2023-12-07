@@ -539,7 +539,8 @@ void ExpressionActions::execute(Block & block) const
         action.execute(block);
 }
 
-std::string ExpressionActions::getSmallestColumn(const NamesAndTypesList & columns)
+template <class NameAndTypeContainer>
+std::string ExpressionActions::getSmallestColumn(const NameAndTypeContainer & columns)
 {
     std::optional<size_t> min_size;
     String res;
@@ -560,6 +561,74 @@ std::string ExpressionActions::getSmallestColumn(const NamesAndTypesList & colum
         throw Exception("No available columns", ErrorCodes::LOGICAL_ERROR);
 
     return res;
+}
+
+void ExpressionActions::pruneInputColumns(const Names & output_columns)
+{
+    NameSet final_columns;
+    for (const auto & name : output_columns)
+    {
+        if (!sample_block.has(name))
+            throw Exception(
+                "Unknown column: " + name + ", there are only columns " + sample_block.dumpNames(),
+                ErrorCodes::UNKNOWN_IDENTIFIER);
+        final_columns.insert(name);
+    }
+
+    /// Which columns are needed to perform actions from the current to the last.
+    NameSet needed_columns = final_columns;
+    /// Which columns nobody will touch from the current action to the last.
+    NameSet unmodified_columns;
+
+    {
+        NamesAndTypesList sample_columns = sample_block.getNamesAndTypesList();
+        for (auto & sample_column : sample_columns)
+            unmodified_columns.insert(sample_column.name);
+    }
+
+    /// Let's go from the end and maintain set of required columns at this stage.
+    /// We will throw out unnecessary actions, although usually they are absent by construction.
+    for (int i = static_cast<int>(actions.size()) - 1; i >= 0; --i)
+    {
+        ExpressionAction & action = actions[i];
+        Names in = action.getNeededColumns();
+
+        if (action.type == ExpressionAction::PROJECT)
+        {
+            needed_columns = NameSet(in.begin(), in.end());
+            unmodified_columns.clear();
+        }
+        else
+        {
+            std::string out = action.result_name;
+            if (!out.empty())
+            {
+                unmodified_columns.erase(out);
+                needed_columns.erase(out);
+            }
+            needed_columns.insert(in.begin(), in.end());
+        }
+    }
+
+    /// We will not throw out all the input columns, so as not to lose the number of rows in the block.
+    if (needed_columns.empty() && !input_columns.empty())
+        needed_columns.insert(getSmallestColumn(input_columns));
+
+    /// We will not leave the block empty so as not to lose the number of rows in it.
+    if (final_columns.empty() && !input_columns.empty())
+        final_columns.insert(getSmallestColumn(input_columns));
+
+    for (auto it = input_columns.begin(); it != input_columns.end();)
+    {
+        auto it0 = it;
+        ++it;
+        if (!needed_columns.count(it0->name))
+        {
+            if (unmodified_columns.count(it0->name))
+                sample_block.erase(it0->name);
+            input_columns.erase(it0);
+        }
+    }
 }
 
 void ExpressionActions::finalize(const Names & output_columns)
@@ -696,21 +765,22 @@ void ExpressionActions::finalize(const Names & output_columns)
     {
         new_actions.push_back(action);
 
-        auto process = [&](const String & name) {
+        auto process = [&](const String & name, const ExpressionAction::Type & type) {
             auto refcount = --columns_refcount[name];
             if (refcount <= 0)
             {
-                new_actions.push_back(ExpressionAction::removeColumn(name));
+                if (type != ExpressionAction::REMOVE_COLUMN)
+                    new_actions.push_back(ExpressionAction::removeColumn(name));
                 if (sample_block.has(name))
                     sample_block.erase(name);
             }
         };
 
         if (!action.source_name.empty())
-            process(action.source_name);
+            process(action.source_name, action.type);
 
         for (const auto & name : action.argument_names)
-            process(name);
+            process(name, action.type);
 
         /// For `projection`, there is no reduction in `refcount`, because the `project` action replaces the names of the columns, in effect, already deleting them under the old names.
     }
@@ -790,5 +860,8 @@ std::string ExpressionActionsChain::dumpChain()
 
     return ss.str();
 }
+
+template std::string ExpressionActions::getSmallestColumn(const NamesAndTypesList & columns);
+template std::string ExpressionActions::getSmallestColumn(const NamesAndTypes & columns);
 
 } // namespace DB

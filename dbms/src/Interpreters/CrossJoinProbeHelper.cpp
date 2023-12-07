@@ -31,6 +31,7 @@ struct CrossJoinAdder<ASTTableJoin::Kind::Cross, STRICTNESS>
         size_t num_existing_columns,
         ColumnRawPtrs & src_left_columns,
         size_t num_columns_to_add,
+        const std::vector<size_t> & right_column_index_in_right_block,
         size_t i,
         const Blocks & blocks,
         IColumn::Filter *,
@@ -57,7 +58,8 @@ struct CrossJoinAdder<ASTTableJoin::Kind::Cross, STRICTNESS>
 
             for (size_t col_num = 0; col_num < num_columns_to_add; ++col_num)
             {
-                const IColumn * column_right = block_right.getByPosition(col_num).column.get();
+                const IColumn * column_right
+                    = block_right.getByPosition(right_column_index_in_right_block[col_num]).column.get();
                 dst_columns[num_existing_columns + col_num]->insertRangeFrom(*column_right, 0, rows_right);
             }
             expanded_row_size += rows_right;
@@ -97,6 +99,7 @@ struct CrossJoinAdder<ASTTableJoin::Kind::Cross_LeftOuter, STRICTNESS>
         size_t num_existing_columns,
         ColumnRawPtrs & src_left_columns,
         size_t num_columns_to_add,
+        const std::vector<size_t> & right_column_index_in_right_block,
         size_t i,
         const Blocks & blocks,
         IColumn::Filter * is_row_matched,
@@ -110,6 +113,7 @@ struct CrossJoinAdder<ASTTableJoin::Kind::Cross_LeftOuter, STRICTNESS>
             num_existing_columns,
             src_left_columns,
             num_columns_to_add,
+            right_column_index_in_right_block,
             i,
             blocks,
             is_row_matched,
@@ -151,6 +155,7 @@ struct CrossJoinAdder<ASTTableJoin::Kind::Cross_Anti, ASTTableJoin::Strictness::
         size_t /* num_existing_columns */,
         ColumnRawPtrs & /* src_left_columns */,
         size_t /* num_columns_to_add */,
+        std::vector<size_t> & /* right_column_index_in_right_block */,
         size_t /* i */,
         const Blocks & /* blocks */,
         IColumn::Filter * /* is_row_matched */,
@@ -192,6 +197,7 @@ struct CrossJoinAdder<ASTTableJoin::Kind::Cross_Anti, ASTTableJoin::Strictness::
         size_t num_existing_columns,
         ColumnRawPtrs & src_left_columns,
         size_t num_columns_to_add,
+        const std::vector<size_t> & right_column_index_in_right_block,
         size_t i,
         const Blocks & blocks,
         IColumn::Filter * is_row_matched,
@@ -205,6 +211,7 @@ struct CrossJoinAdder<ASTTableJoin::Kind::Cross_Anti, ASTTableJoin::Strictness::
             num_existing_columns,
             src_left_columns,
             num_columns_to_add,
+            right_column_index_in_right_block,
             i,
             blocks,
             is_row_matched,
@@ -250,6 +257,7 @@ struct CrossJoinAdder<ASTTableJoin::Kind::Cross_Semi, ASTTableJoin::Strictness::
         size_t num_existing_columns,
         ColumnRawPtrs & src_left_columns,
         size_t num_columns_to_add,
+        const std::vector<size_t> & right_column_index_in_right_block,
         size_t i,
         const Blocks & blocks,
         IColumn::Filter * is_row_matched,
@@ -263,6 +271,7 @@ struct CrossJoinAdder<ASTTableJoin::Kind::Cross_Semi, ASTTableJoin::Strictness::
             num_existing_columns,
             src_left_columns,
             num_columns_to_add,
+            right_column_index_in_right_block,
             i,
             blocks,
             is_row_matched,
@@ -294,6 +303,7 @@ struct CrossJoinAdder<ASTTableJoin::Kind::Cross_Semi, ASTTableJoin::Strictness::
         size_t num_existing_columns,
         ColumnRawPtrs & src_left_columns,
         size_t num_columns_to_add,
+        const std::vector<size_t> & right_column_index_in_right_block,
         size_t i,
         const Blocks & blocks,
         IColumn::Filter * is_row_matched,
@@ -307,6 +317,7 @@ struct CrossJoinAdder<ASTTableJoin::Kind::Cross_Semi, ASTTableJoin::Strictness::
             num_existing_columns,
             src_left_columns,
             num_columns_to_add,
+            right_column_index_in_right_block,
             i,
             blocks,
             is_row_matched,
@@ -346,6 +357,7 @@ struct CrossJoinAdder<ASTTableJoin::Kind::Cross_LeftOuterSemi, STRICTNESS>
         size_t num_existing_columns,
         ColumnRawPtrs & src_left_columns,
         size_t num_columns_to_add,
+        const std::vector<size_t> & right_column_index_in_right_block,
         size_t i,
         const Blocks & blocks,
         IColumn::Filter * is_row_matched,
@@ -359,6 +371,7 @@ struct CrossJoinAdder<ASTTableJoin::Kind::Cross_LeftOuterSemi, STRICTNESS>
             num_existing_columns,
             src_left_columns,
             num_columns_to_add - 1,
+            right_column_index_in_right_block,
             i,
             blocks,
             is_row_matched,
@@ -400,18 +413,16 @@ struct CrossJoinAdder<ASTTableJoin::Kind::Cross_LeftOuterSemi, STRICTNESS>
 template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, bool has_null_map>
 Block crossProbeBlockDeepCopyRightBlockImpl(ProbeProcessInfo & probe_process_info, const Blocks & right_blocks)
 {
-    size_t num_existing_columns = probe_process_info.block.columns();
-    size_t num_columns_to_add = probe_process_info.result_block_schema.columns() - num_existing_columns;
+    size_t num_existing_columns = probe_process_info.left_column_index_in_left_block.size();
+    size_t num_columns_to_add = probe_process_info.right_column_index_in_right_block.size();
 
     ColumnRawPtrs src_left_columns(num_existing_columns);
     for (size_t i = 0; i < num_existing_columns; ++i)
     {
-        src_left_columns[i] = probe_process_info.block.getByPosition(i).column.get();
+        src_left_columns[i]
+            = probe_process_info.block.getByPosition(probe_process_info.left_column_index_in_left_block[i])
+                  .column.get();
     }
-
-    std::vector<size_t> right_column_index;
-    for (size_t i = 0; i < num_columns_to_add; ++i)
-        right_column_index.push_back(num_existing_columns + i);
 
     size_t current_row = probe_process_info.start_row;
     size_t block_rows = probe_process_info.block.rows();
@@ -460,6 +471,7 @@ Block crossProbeBlockDeepCopyRightBlockImpl(ProbeProcessInfo & probe_process_inf
                 num_existing_columns,
                 src_left_columns,
                 num_columns_to_add,
+                probe_process_info.right_column_index_in_right_block,
                 current_row,
                 right_blocks,
                 filter_ptr,
@@ -492,7 +504,7 @@ Block crossProbeBlockDeepCopyRightBlockImpl(ProbeProcessInfo & probe_process_inf
 template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, bool has_null_map>
 std::pair<Block, bool> crossProbeBlockShallowCopyRightBlockAddNotMatchedRows(ProbeProcessInfo & probe_process_info)
 {
-    size_t num_existing_columns = probe_process_info.block.columns();
+    size_t num_existing_columns = probe_process_info.left_column_index_in_left_block.size();
     MutableColumns dst_columns = probe_process_info.result_block_schema.cloneEmptyColumns();
     if (probe_process_info.row_num_filtered_by_left_condition > 0)
     {
@@ -502,11 +514,13 @@ std::pair<Block, bool> crossProbeBlockShallowCopyRightBlockAddNotMatchedRows(Pro
     auto * filter_ptr = probe_process_info.filter.get();
     auto * offset_ptr = probe_process_info.offsets_to_replicate.get();
     IColumn::Offset current_offset = 0;
-    size_t num_columns_to_add = probe_process_info.result_block_schema.columns() - probe_process_info.block.columns();
+    size_t num_columns_to_add = probe_process_info.right_column_index_in_right_block.size();
     ColumnRawPtrs src_left_columns(num_existing_columns);
     for (size_t i = 0; i < num_existing_columns; ++i)
     {
-        src_left_columns[i] = probe_process_info.block.getByPosition(i).column.get();
+        src_left_columns[i]
+            = probe_process_info.block.getByPosition(probe_process_info.left_column_index_in_left_block[i])
+                  .column.get();
     }
     IColumn::Filter::value_type filter_column_value{};
     if constexpr (has_null_map)
@@ -559,7 +573,7 @@ std::pair<Block, bool> crossProbeBlockShallowCopyRightBlockImpl(
     static_assert(KIND != ASTTableJoin::Kind::Cross_LeftOuterAnti);
     assert(probe_process_info.offsets_to_replicate != nullptr);
 
-    size_t num_existing_columns = probe_process_info.block.columns();
+    size_t num_existing_columns = probe_process_info.left_column_index_in_left_block.size();
     if constexpr (has_null_map)
     {
         /// skip filtered rows, the filtered rows will be handled at the end of this block
@@ -586,15 +600,22 @@ std::pair<Block, bool> crossProbeBlockShallowCopyRightBlockImpl(
     for (size_t i = 0; i < num_existing_columns; ++i)
     {
         /// left columns
-        assert(block.getByPosition(i).column != nullptr);
+        auto left_column_index = probe_process_info.left_column_index_in_left_block[i];
+        assert(probe_process_info.block.getByPosition(left_column_index).column != nullptr);
         Field value;
-        probe_process_info.block.getByPosition(i).column->get(probe_process_info.start_row, value);
+        probe_process_info.block.getByPosition(left_column_index).column->get(probe_process_info.start_row, value);
         block.getByPosition(i).column = block.getByPosition(i).type->createColumnConst(right_row, value);
     }
-    for (size_t i = 0; i < right_block.columns(); i++)
+    auto right_column_num = probe_process_info.right_column_index_in_right_block.size();
+    if constexpr (KIND == ASTTableJoin::Kind::Cross_LeftOuterSemi)
+    {
+        --right_column_num;
+    }
+    for (size_t i = 0; i < right_column_num; ++i)
     {
         /// right columns
-        block.getByPosition(i + num_existing_columns).column = right_block.getByPosition(i).column;
+        block.getByPosition(i + num_existing_columns).column
+            = right_block.getByPosition(probe_process_info.right_column_index_in_right_block[i]).column;
     }
     if constexpr (KIND == ASTTableJoin::Kind::Cross_LeftOuterSemi)
     {

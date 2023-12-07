@@ -1746,6 +1746,7 @@ probeBlockNullAwareSemiInternal(
         {
             if ((*left_side_info.null_map)[i])
             {
+                /// some key is null
                 if constexpr (STRICTNESS == ASTTableJoin::Strictness::Any)
                 {
                     if (key_columns.size() == 1 || right_side_info.has_all_key_null_row

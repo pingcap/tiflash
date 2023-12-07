@@ -40,7 +40,9 @@ void ProbeProcessInfo::resetBlock(Block && block_, size_t partition_index_)
     materialized_columns.clear();
     hash_data = nullptr;
     result_block_schema.clear();
-    right_column_index.clear();
+    right_column_index_in_right_block.clear();
+    right_column_index_in_result_block.clear();
+    left_column_index_in_left_block.clear();
     right_rows_to_be_added_when_matched = 0;
     cross_probe_mode = CrossProbeMode::DEEP_COPY_RIGHT_BLOCK;
     right_block_size = 0;
@@ -107,7 +109,8 @@ void ProbeProcessInfo::prepareForCrossProbe(
     const String & filter_column,
     ASTTableJoin::Kind kind,
     ASTTableJoin::Strictness strictness,
-    const Block & sample_block_with_columns_to_add,
+    const Block & sample_block_without_keys,
+    const NameSet & output_column_names_set,
     size_t right_rows_to_be_added_when_matched_,
     CrossProbeMode cross_probe_mode_,
     size_t right_block_size_)
@@ -128,20 +131,32 @@ void ProbeProcessInfo::prepareForCrossProbe(
 
     /// Should convert all the columns in block to nullable if it is cross right join, here we don't need
     /// to do so because cross_right join is converted to cross left join during compile
-    result_block_schema = block.cloneEmpty();
-    for (size_t i = 0; i < sample_block_with_columns_to_add.columns(); ++i)
+    result_block_schema = Block{};
+    for (size_t i = 0; i < block.columns(); ++i)
     {
-        const ColumnWithTypeAndName & src_column = sample_block_with_columns_to_add.getByPosition(i);
-        RUNTIME_CHECK_MSG(
-            !result_block_schema.has(src_column.name),
-            "block from probe side has a column with the same name: {} as a column in sample_block_with_columns_to_add",
-            src_column.name);
-        result_block_schema.insert(src_column);
+        auto & column = block.getByPosition(i);
+        if (output_column_names_set.contains(column.name))
+        {
+            result_block_schema.insert(column.cloneEmpty());
+            left_column_index_in_left_block.push_back(i);
+        }
     }
-    size_t num_existing_columns = block.columns();
-    size_t num_columns_to_add = sample_block_with_columns_to_add.columns();
-    for (size_t i = 0; i < num_columns_to_add; ++i)
-        right_column_index.push_back(num_existing_columns + i);
+    for (size_t i = 0; i < sample_block_without_keys.columns(); ++i)
+    {
+        const ColumnWithTypeAndName & src_column = sample_block_without_keys.getByPosition(i);
+        if (output_column_names_set.contains(src_column.name))
+        {
+            RUNTIME_CHECK_MSG(
+                !result_block_schema.has(src_column.name),
+                "block from probe side has a column with the same name: {} as a column in sample_block_without_keys",
+                src_column.name);
+            result_block_schema.insert(src_column);
+            right_column_index_in_right_block.push_back(i);
+        }
+    }
+    auto offset = left_column_index_in_left_block.size();
+    for (size_t i = 0; i < right_column_index_in_right_block.size(); ++i)
+        right_column_index_in_result_block.push_back(offset + i);
 
     if (cross_probe_mode == CrossProbeMode::SHALLOW_COPY_RIGHT_BLOCK && null_map != nullptr)
         row_num_filtered_by_left_condition = countBytesInFilter(*null_map);

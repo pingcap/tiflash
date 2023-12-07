@@ -420,6 +420,7 @@ std::tuple<ExpressionActionsPtr, Names, Names, String> prepareJoin(
 std::vector<RuntimeFilterPtr> TiFlashJoin::genRuntimeFilterList(
     const Context & context,
     const Block & input_header,
+    const std::unordered_map<String, String> & key_names_map,
     const LoggerPtr & log)
 {
     std::vector<RuntimeFilterPtr> result;
@@ -442,6 +443,12 @@ std::vector<RuntimeFilterPtr> TiFlashJoin::genRuntimeFilterList(
         {
             runtime_filter->build();
             dag_analyzer.appendRuntimeFilterProperties(runtime_filter);
+            /// update the source column name to use the join key as source column
+            const auto & updated_key_name_it = key_names_map.find(runtime_filter->getSourceColumnName());
+            RUNTIME_CHECK_MSG(
+                updated_key_name_it != key_names_map.end(),
+                "rf source column is not join key, which is not expected");
+            runtime_filter->setSourceColumnName(updated_key_name_it->second);
         }
         catch (TiFlashException & e)
         {

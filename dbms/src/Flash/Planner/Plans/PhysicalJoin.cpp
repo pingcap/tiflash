@@ -68,11 +68,8 @@ PhysicalPlanNodePtr PhysicalJoin::build(
     RUNTIME_CHECK(left);
     RUNTIME_CHECK(right);
 
-    left->finalize();
-    right->finalize();
-
-    const Block & left_input_header = left->getSampleBlock();
-    const Block & right_input_header = right->getSampleBlock();
+    const Block & left_input_header = Block(left->getSchema());
+    const Block & right_input_header = Block(right->getSchema());
 
     JoinInterpreterHelper::TiFlashJoin tiflash_join(join, context.isTest());
 
@@ -157,11 +154,14 @@ PhysicalPlanNodePtr PhysicalJoin::build(
         left_input_header,
         right_input_header,
         join_non_equal_conditions.other_cond_expr != nullptr);
-    Names join_output_column_names;
-    for (const auto & col : join_output_schema)
-        join_output_column_names.emplace_back(col.name);
 
-    auto runtime_filter_list = tiflash_join.genRuntimeFilterList(context, build_side_header, log);
+    assert(build_key_names.size() == original_build_key_names.size());
+    std::unordered_map<String, String> build_key_names_map;
+    for (size_t i = 0; i < original_build_key_names.size(); ++i)
+    {
+        build_key_names_map[original_build_key_names[i]] = build_key_names[i];
+    }
+    auto runtime_filter_list = tiflash_join.genRuntimeFilterList(context, build_side_header, build_key_names_map, log);
     LOG_DEBUG(log, "before register runtime filter list, list size:{}", runtime_filter_list.size());
     context.getDAGContext()->runtime_filter_mgr.registerRuntimeFilterList(runtime_filter_list);
 
@@ -175,7 +175,7 @@ PhysicalPlanNodePtr PhysicalJoin::build(
         build_spill_config,
         probe_spill_config,
         RestoreConfig{settings.join_restore_concurrency, 0, 0},
-        join_output_column_names,
+        join_output_schema,
         [&](const OperatorSpillContextPtr & operator_spill_context) {
             if (context.getDAGContext() != nullptr)
             {
@@ -204,8 +204,7 @@ PhysicalPlanNodePtr PhysicalJoin::build(
         build_plan,
         join_ptr,
         probe_side_prepare_actions,
-        build_side_prepare_actions,
-        Block(join_output_schema));
+        build_side_prepare_actions);
     return physical_join;
 }
 
@@ -326,12 +325,66 @@ void PhysicalJoin::buildPipeline(PipelineBuilder & builder, Context & context, P
 
 void PhysicalJoin::finalize(const Names & parent_require)
 {
-    // schema.size() >= parent_require.size()
     FinalizeHelper::checkSchemaContainsParentRequire(schema, parent_require);
+    join_ptr->finalize(parent_require);
+    NamesAndTypes updated_schema;
+    NameSet name_set;
+    for (const auto & name : parent_require)
+        name_set.insert(name);
+    for (const auto & name_and_type : schema)
+    {
+        if (name_set.find(name_and_type.name) != name_set.end())
+            updated_schema.push_back(name_and_type);
+    }
+    std::swap(schema, updated_schema);
+    auto required_input_columns = join_ptr->getRequiredColumns();
+    std::unordered_set<String> build_schema_sets;
+    for (const auto & name : build_side_prepare_actions->getSampleBlock().getNames())
+    {
+        build_schema_sets.insert(name);
+    }
+    std::unordered_set<String> probe_schema_sets;
+    for (const auto & name : probe_side_prepare_actions->getSampleBlock().getNames())
+    {
+        probe_schema_sets.insert(name);
+    }
+    Names build_required;
+    Names probe_required;
+    bool has_missed_column = false;
+    String missed_column_name;
+    for (const auto & name : required_input_columns)
+    {
+        if (build_schema_sets.find(name) != build_schema_sets.end())
+            build_required.push_back(name);
+        else if (probe_schema_sets.find(name) != probe_schema_sets.end())
+            probe_required.push_back(name);
+        else
+        {
+            has_missed_column = true;
+            missed_column_name = name;
+            break;
+        }
+    }
+    if (has_missed_column)
+        throw Exception("Meet unknown column: {}", missed_column_name);
+    build_side_prepare_actions->finalize(build_required);
+    auto child_required_columns = build_side_prepare_actions->getRequiredColumns();
+    if unlikely (child_required_columns.empty())
+    {
+        child_required_columns.push_back(ExpressionActions::getSmallestColumn(build()->getSchema()));
+    }
+    build()->finalize(child_required_columns);
+    probe_side_prepare_actions->finalize(probe_required);
+    child_required_columns = probe_side_prepare_actions->getRequiredColumns();
+    if unlikely (child_required_columns.empty())
+    {
+        child_required_columns.push_back(ExpressionActions::getSmallestColumn(probe()->getSchema()));
+    }
+    probe()->finalize(child_required_columns);
 }
 
 const Block & PhysicalJoin::getSampleBlock() const
 {
-    return sample_block;
+    return join_ptr->getOutputBlock();
 }
 } // namespace DB
