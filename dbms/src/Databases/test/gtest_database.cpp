@@ -944,6 +944,7 @@ try
 )",
     };
 
+    size_t case_no = 0;
     for (const auto & statement : statements)
     {
         {
@@ -970,22 +971,48 @@ try
         LOG_DEBUG(log, "After create [meta={}]", meta);
 
         DB::Timestamp tso = 1000;
-        db->alterTombstone(*ctx, tso);
+        db->alterTombstone(*ctx, tso, nullptr);
         EXPECT_TRUE(db->isTombstone());
         EXPECT_EQ(db->getTombstone(), tso);
+        if (case_no != 0)
+        {
+            auto db_tiflash = std::dynamic_pointer_cast<DatabaseTiFlash>(db);
+            ASSERT_NE(db_tiflash, nullptr);
+            auto db_info = db_tiflash->getDatabaseInfo();
+            ASSERT_EQ(db_info.name, "test_db"); // not changed
+        }
 
         // Try restore from disk
         db = detachThenAttach(*ctx, db_name, std::move(db), log);
         EXPECT_TRUE(db->isTombstone());
         EXPECT_EQ(db->getTombstone(), tso);
 
-        // Recover
-        db->alterTombstone(*ctx, 0);
+        // Recover, usually recover with a new database name
+        auto new_db_info = std::make_shared<TiDB::DBInfo>(
+            R"json({"charset":"utf8mb4","collate":"utf8mb4_bin","db_name":{"L":"test_new_db","O":"test_db"},"id":1010,"state":5})json",
+            NullspaceID);
+        db->alterTombstone(*ctx, 0, new_db_info);
         EXPECT_FALSE(db->isTombstone());
+        if (case_no != 0)
+        {
+            auto db_tiflash = std::dynamic_pointer_cast<DatabaseTiFlash>(db);
+            ASSERT_NE(db_tiflash, nullptr);
+            auto db_info = db_tiflash->getDatabaseInfo();
+            ASSERT_EQ(db_info.name, "test_new_db"); // changed by the `new_db_info`
+        }
 
         // Try restore from disk
         db = detachThenAttach(*ctx, db_name, std::move(db), log);
         EXPECT_FALSE(db->isTombstone());
+        if (case_no != 0)
+        {
+            auto db_tiflash = std::dynamic_pointer_cast<DatabaseTiFlash>(db);
+            ASSERT_NE(db_tiflash, nullptr);
+            auto db_info = db_tiflash->getDatabaseInfo();
+            ASSERT_EQ(db_info.name, "test_new_db"); // changed by the `new_db_info`
+        }
+
+        case_no += 1;
     }
 }
 CATCH
