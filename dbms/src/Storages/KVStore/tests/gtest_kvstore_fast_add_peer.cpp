@@ -535,6 +535,25 @@ try
 }
 CATCH
 
+void assertNoSegment(TMTContext & tmt, RegionPtr region, std::vector<UInt64> segments)
+{
+    auto & storages = tmt.getStorages();
+    auto keyspace_id = region->getKeyspaceID();
+    auto table_id = region->getMappedTableID();
+    auto storage = storages.get(keyspace_id, table_id);
+
+    auto log = DB::Logger::get("Test");
+    if (storage && storage->engineType() == TiDB::StorageEngine::DT)
+    {
+        auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
+        auto dm_context = dm_storage->getStore()->newDMContext(tmt.getContext(), tmt.getContext().getSettingsRef());
+        for (auto segment_id : segments)
+        {
+            EXPECT_THROW(DM::Segment::restoreSegment(log, *dm_context, segment_id), Exception);
+        }
+    }
+}
+
 // Test cancel from write
 TEST_F(RegionKVStoreTestFAP, Cancel2)
 try
@@ -564,6 +583,19 @@ try
     // The FAP will fail because it doesn't contain the new peer in region meta.
     auto t = std::thread([&]() { FastAddPeer(&server, region_id, 2333); });
     sp.waitAndPause();
+    // Make sure the data is written.
+    auto maybe_info = fap_context->getOrRestoreCheckpointIngestInfo(
+        global_context.getTMTContext(),
+        proxy_helper.get(),
+        region_id,
+        2333);
+    ASSERT_TRUE(maybe_info.has_value());
+    std::vector<UInt64> segments;
+    for (auto s : maybe_info.value()->getRestoredSegments())
+    {
+        segments.push_back(s->segmentId());
+    }
+    RegionPtr region = maybe_info.value()->getRegion();
     fap_context->tasks_trace->asyncCancelTask(region_id);
     sp.next();
     sp.disable();
@@ -575,10 +607,11 @@ try
     });
     ASSERT_TRUE(!fap_context->tryGetCheckpointIngestInfo(region_id).has_value());
     FailPointHelper::disableFailPoint(FailPoints::force_set_fap_candidate_store_id);
+    assertNoSegment(global_context.getTMTContext(), region, segments);
 }
 CATCH
 
-// Test cancel from legacy snapshot
+// Test cancel from destroy
 TEST_F(RegionKVStoreTestFAP, Cancel3)
 try
 {
