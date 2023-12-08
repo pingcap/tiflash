@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/ClickHouseRevision.h>
+#include <Common/TiFlashBuildInfo.h>
 #include <Common/getFQDNOrHostName.h>
 #include <Core/Defines.h>
 #include <IO/ReadBuffer.h>
@@ -38,7 +38,7 @@ void ClientInfo::write(WriteBuffer & out, const UInt64 server_protocol_revision)
             "Logical error: method ClientInfo::write is called for unsupported server revision",
             ErrorCodes::LOGICAL_ERROR);
 
-    writeBinary(UInt8(query_kind), out);
+    writeBinary(static_cast<UInt8>(query_kind), out);
     if (empty())
         return;
 
@@ -46,7 +46,7 @@ void ClientInfo::write(WriteBuffer & out, const UInt64 server_protocol_revision)
     writeBinary(initial_query_id, out);
     writeBinary(initial_address.toString(), out);
 
-    writeBinary(UInt8(interface), out);
+    writeBinary(static_cast<UInt8>(interface), out);
 
     if (interface == Interface::TCP)
     {
@@ -72,7 +72,7 @@ void ClientInfo::read(ReadBuffer & in, const UInt64 client_protocol_revision)
 
     UInt8 read_query_kind = 0;
     readBinary(read_query_kind, in);
-    query_kind = QueryKind(read_query_kind);
+    query_kind = static_cast<QueryKind>(read_query_kind);
     if (empty())
         return;
 
@@ -85,7 +85,7 @@ void ClientInfo::read(ReadBuffer & in, const UInt64 client_protocol_revision)
 
     UInt8 read_interface = 0;
     readBinary(read_interface, in);
-    interface = Interface(read_interface);
+    interface = static_cast<Interface>(read_interface);
 
     if (interface == Interface::TCP)
     {
@@ -112,9 +112,9 @@ void ClientInfo::fillOSUserHostNameAndVersionInfo()
 
     client_hostname = getFQDNOrHostName();
 
-    client_version_major = DBMS_VERSION_MAJOR;
-    client_version_minor = DBMS_VERSION_MINOR;
-    client_revision = ClickHouseRevision::get();
+    client_version_major = TiFlashBuildInfo::getMajorVersion();
+    client_version_minor = TiFlashBuildInfo::getMinorVersion();
+    client_revision = TiFlashBuildInfo::getRevision();
 }
 
 

@@ -18,7 +18,6 @@
 #include <Columns/ColumnSet.h>
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnTuple.h>
-#include <Common/ClickHouseRevision.h>
 #include <Common/FieldVisitors.h>
 #include <Common/TiFlashBuildInfo.h>
 #include <Common/UTF8Helpers.h>

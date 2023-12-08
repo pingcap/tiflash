@@ -14,7 +14,6 @@
 
 #include "TCPHandler.h"
 
-#include <Common/ClickHouseRevision.h>
 #include <Common/ExternalTable.h>
 #include <Common/FmtUtils.h>
 #include <Common/NetException.h>
@@ -554,10 +553,8 @@ void TCPHandler::receiveHello()
 void TCPHandler::sendHello()
 {
     writeVarUInt(Protocol::Server::Hello, *out);
-    writeStringBinary(DBMS_NAME, *out);
-    writeVarUInt(DBMS_VERSION_MAJOR, *out);
-    writeVarUInt(DBMS_VERSION_MINOR, *out);
-    writeVarUInt(ClickHouseRevision::get(), *out);
+    writeStringBinary(fmt::format("{} {}", TiFlashBuildInfo::getName(), client_name), *out);
+    writeStringBinary(TiFlashBuildInfo::getReleaseVersion(), *out);
     if (client_revision >= DBMS_MIN_REVISION_WITH_SERVER_TIMEZONE)
     {
         writeStringBinary(DateLUT::instance().getTimeZone(), *out);
@@ -673,7 +670,7 @@ void TCPHandler::receiveQuery()
     state.timeout_setter = std::make_unique<TimeoutSetter>(socket(), settings.receive_timeout, settings.send_timeout);
 
     readVarUInt(stage, *in);
-    state.stage = QueryProcessingStage::Enum(stage);
+    state.stage = static_cast<QueryProcessingStage::Enum>(stage);
 
     readVarUInt(compression, *in);
     state.compression = static_cast<Protocol::Compression>(compression);

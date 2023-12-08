@@ -42,7 +42,6 @@
 // ucontext is not available without _XOPEN_SOURCE
 #define _XOPEN_SOURCE
 #endif
-#include <Common/ClickHouseRevision.h>
 #include <Common/Exception.h>
 #include <Common/TiFlashBuildInfo.h>
 #include <Common/UnifiedLogFormatter.h>
@@ -622,8 +621,7 @@ static void terminate_handler()
             log << "what(): " << e.what() << std::endl;
         }
         catch (...)
-        {
-        }
+        {}
 
         log << "Stack trace:\n\n" << StackTrace().toString() << std::endl;
     }
@@ -1177,7 +1175,7 @@ void BaseDaemon::logRevision() const
 {
     auto * log = &Logger::root();
     LOG_INFO(log, "Welcome to TiFlash");
-    LOG_INFO(log, "Starting daemon with revision " + Poco::NumberFormatter::format(ClickHouseRevision::get()));
+    LOG_INFO(log, "Starting daemon with revision " + Poco::NumberFormatter::format(TiFlashBuildInfo::getRevision()));
     std::stringstream ss;
     TiFlashBuildInfo::outputDetail(ss);
     LOG_INFO(log, "TiFlash build info: {}", ss.str());

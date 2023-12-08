@@ -14,7 +14,6 @@
 
 #include <AggregateFunctions/registerAggregateFunctions.h>
 #include <Client/Connection.h>
-#include <Common/ClickHouseRevision.h>
 #include <Common/Config/ConfigProcessor.h>
 #include <Common/Exception.h>
 #include <Common/ExternalTable.h>
@@ -23,6 +22,7 @@
 #include <Common/Stopwatch.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/Throttler.h>
+#include <Common/TiFlashBuildInfo.h>
 #include <Common/UnicodeBar.h>
 #include <Common/formatReadable.h>
 #include <Common/typeid_cast.h>
@@ -1304,8 +1304,7 @@ private:
 
     static void showClientVersion()
     {
-        std::cout << "ClickHouse client version " << DBMS_VERSION_MAJOR << "." << DBMS_VERSION_MINOR << "."
-                  << ClickHouseRevision::get() << "." << std::endl;
+        std::cout << "TiFlash client version " << TiFlashBuildInfo::getReleaseVersion() << "." << std::endl;
     }
 
 public:

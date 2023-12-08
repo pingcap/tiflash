@@ -14,11 +14,11 @@
 
 #include <Client/Connection.h>
 #include <Client/TimeoutSetter.h>
-#include <Common/ClickHouseRevision.h>
 #include <Common/CurrentMetrics.h>
 #include <Common/Exception.h>
 #include <Common/FmtUtils.h>
 #include <Common/NetException.h>
+#include <Common/TiFlashBuildInfo.h>
 #include <Common/config.h>
 #include <Core/Defines.h>
 #include <DataStreams/NativeBlockInputStream.h>
@@ -131,10 +131,8 @@ void Connection::disconnect()
 void Connection::sendHello()
 {
     writeVarUInt(Protocol::Client::Hello, *out);
-    writeStringBinary((DBMS_NAME " ") + client_name, *out);
-    writeVarUInt(DBMS_VERSION_MAJOR, *out);
-    writeVarUInt(DBMS_VERSION_MINOR, *out);
-    writeVarUInt(ClickHouseRevision::get(), *out);
+    writeStringBinary(fmt::format("{} {}", TiFlashBuildInfo::getName(), client_name), *out);
+    writeStringBinary(TiFlashBuildInfo::getReleaseVersion(), *out);
     writeStringBinary(default_database, *out);
     writeStringBinary(user, *out);
     writeStringBinary(password, *out);
@@ -329,7 +327,7 @@ void Connection::sendQuery(
             /// No client info passed - means this query initiated by me.
             client_info_to_send.query_kind = ClientInfo::QueryKind::INITIAL_QUERY;
             client_info_to_send.fillOSUserHostNameAndVersionInfo();
-            client_info_to_send.client_name = (DBMS_NAME " ") + client_name;
+            client_info_to_send.client_name = fmt::format("{} {}", TiFlashBuildInfo::getName(), client_name);
         }
         else
         {

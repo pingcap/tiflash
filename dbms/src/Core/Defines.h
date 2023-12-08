@@ -17,10 +17,6 @@
 #include <common/defines.h>
 #include <common/types.h>
 
-#define DBMS_NAME "TiFlash"
-#define DBMS_VERSION_MAJOR 1
-#define DBMS_VERSION_MINOR 1
-
 #define DBMS_DEFAULT_HOST "localhost"
 #define DBMS_DEFAULT_PORT 9000
 #define DBMS_DEFAULT_SECURE_PORT 9440
