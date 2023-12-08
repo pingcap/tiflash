@@ -69,6 +69,8 @@ public:
     void SetUp() override
     {
         auto & global_context = TiFlashTestEnv::getGlobalContext();
+        // clean data and create path pool instance
+        path_pool = TiFlashTestEnv::createCleanPathPool(test_path);
 
         initStorages();
 
@@ -84,7 +86,7 @@ public:
             orig_mode = global_context.getPageStorageRunMode();
             global_context.setPageStorageRunMode(PageStorageRunMode::UNI_PS);
             global_context.tryReleaseWriteNodePageStorageForTest();
-            global_context.initializeWriteNodePageStorageIfNeed(global_context.getPathPool());
+            global_context.initializeWriteNodePageStorageIfNeed(*path_pool);
         }
         else
         {
@@ -105,12 +107,7 @@ public:
             already_initialize_data_store = true;
         }
 
-        orig_mode = global_context.getPageStorageRunMode();
-        global_context.setPageStorageRunMode(PageStorageRunMode::UNI_PS);
         global_context.getSharedContextDisagg()->initFastAddPeerContext(25);
-
-        // clean data and create path pool instance
-        path_pool = TiFlashTestEnv::createCleanPathPool(test_path);
         proxy_instance = std::make_unique<MockRaftStoreProxy>();
         proxy_helper = proxy_instance->generateProxyHelper();
         KVStoreTestBase::reloadKVSFromDisk(false);
