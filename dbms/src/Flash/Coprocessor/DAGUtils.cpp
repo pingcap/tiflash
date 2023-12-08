@@ -1426,7 +1426,7 @@ String genFuncString(
         field_types.end(),
         [](const auto & field_type, FmtBuffer & buffer) {
             if likely (field_type)
-                buffer.append(field_type->flag());
+                buffer.fmtAppend("{}|{}", field_type->flag(), field_type->flen());
         },
         ", ");
     return buf.toString();
