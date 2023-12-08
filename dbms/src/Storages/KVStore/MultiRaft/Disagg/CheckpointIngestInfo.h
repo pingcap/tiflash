@@ -74,14 +74,14 @@ struct CheckpointIngestInfo
         UInt64 peer_id);
 
     // Only call to clean dangling CheckpointIngestInfo.
-    static bool forciblyClean(TMTContext & tmt, UInt64 region_id, bool pre_check = true);
+    static bool forciblyClean(TMTContext & tmt, const TiFlashRaftProxyHelper * proxy_helper, UInt64 region_id);
+    static bool cleanOnSuccess(TMTContext & tmt, UInt64 region_id, bool pre_check = true);
 
 private:
     friend class FastAddPeerContext;
     // Safety: raftstore ensures a region is handled in a single thread.
     // `persistToLocal` is called at a fixed place in this thread.
     void persistToLocal() const;
-    static void removeFromLocal(TMTContext & tmt, UInt64 region_id);
 
 private:
     TMTContext & tmt;

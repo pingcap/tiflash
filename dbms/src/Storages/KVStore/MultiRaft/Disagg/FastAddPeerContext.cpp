@@ -142,7 +142,11 @@ void FastAddPeerContext::debugRemoveCheckpointIngestInfo(UInt64 region_id)
     checkpoint_ingest_info_map.erase(region_id);
 }
 
-void FastAddPeerContext::forciblyCleanTask(TMTContext & tmt, UInt64 region_id)
+void FastAddPeerContext::cleanTask(
+    TMTContext & tmt,
+    const TiFlashRaftProxyHelper * proxy_helper,
+    UInt64 region_id,
+    bool is_succeed)
 {
     // TODO(fap) We can move checkpoint_ingest_info to a dedicated queue, and schedule a timed task to clean it, if this costs much.
     // However, we have to make sure the clean task will not override if a new fap snapshot of the same region comes later.
@@ -159,7 +163,13 @@ void FastAddPeerContext::forciblyCleanTask(TMTContext & tmt, UInt64 region_id)
         }
     }
     // Clean without locking `ingest_info_mu`
-    CheckpointIngestInfo::forciblyClean(tmt, region_id, pre_check);
+    if (is_succeed)
+        CheckpointIngestInfo::cleanOnSuccess(tmt, region_id, pre_check);
+    else
+    {
+        RUNTIME_CHECK(proxy_helper != nullptr);
+        CheckpointIngestInfo::forciblyClean(tmt, proxy_helper, region_id);
+    }
 }
 
 std::optional<CheckpointIngestInfoPtr> FastAddPeerContext::tryGetCheckpointIngestInfo(UInt64 region_id) const
@@ -211,7 +221,11 @@ void FastAddPeerContext::insertCheckpointIngestInfo(
     info->persistToLocal();
 }
 
-void FastAddPeerContext::resolveFapSnapshotState(TMTContext & tmt, UInt64 region_id, bool is_legacy_snapshot)
+void FastAddPeerContext::resolveFapSnapshotState(
+    TMTContext & tmt,
+    const TiFlashRaftProxyHelper * proxy_helper,
+    UInt64 region_id,
+    bool is_legacy_snapshot)
 {
     auto prev_state = tasks_trace->asyncCancelTask(
         region_id,
@@ -233,7 +247,7 @@ void FastAddPeerContext::resolveFapSnapshotState(TMTContext & tmt, UInt64 region
         else
         {
             LOG_INFO(log, "FastAddPeer: FAP canceled because region destroyed, region_id={}", region_id);
-            forciblyCleanTask(tmt, region_id);
+            cleanTask(tmt, proxy_helper, region_id, false);
         }
     }
     else if likely (prev_state == FAPAsyncTasks::TaskState::NotScheduled)
@@ -243,7 +257,7 @@ void FastAddPeerContext::resolveFapSnapshotState(TMTContext & tmt, UInt64 region
         // 3. FAP is enabled before, but disabled for now.
         LOG_DEBUG(log, "FastAddPeer: no find ongoing fap task, region_id={}", region_id);
         // Still need to clean because there could be data left.
-        forciblyCleanTask(tmt, region_id);
+        cleanTask(tmt, proxy_helper, region_id, false);
     }
     else
     {

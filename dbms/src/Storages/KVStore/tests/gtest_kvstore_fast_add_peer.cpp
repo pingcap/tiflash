@@ -47,6 +47,7 @@ extern const char force_set_fap_candidate_store_id[];
 FastAddPeerRes genFastAddPeerRes(FastAddPeerStatus status, std::string && apply_str, std::string && region_str);
 FastAddPeerRes FastAddPeerImplWrite(
     TMTContext & tmt,
+    const TiFlashRaftProxyHelper * proxy_helper,
     UInt64 region_id,
     UInt64 new_peer_id,
     CheckpointRegionInfoAndData && checkpoint,
@@ -238,6 +239,25 @@ void eventuallyPredicate(F f)
     ASSERT_TRUE(false);
 }
 
+void assertNoSegment(TMTContext & tmt, RegionPtr region, std::vector<UInt64> segments)
+{
+    auto & storages = tmt.getStorages();
+    auto keyspace_id = region->getKeyspaceID();
+    auto table_id = region->getMappedTableID();
+    auto storage = storages.get(keyspace_id, table_id);
+
+    auto log = DB::Logger::get("Test");
+    if (storage && storage->engineType() == TiDB::StorageEngine::DT)
+    {
+        auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
+        auto dm_context = dm_storage->getStore()->newDMContext(tmt.getContext(), tmt.getContext().getSettingsRef());
+        for (auto segment_id : segments)
+        {
+            EXPECT_THROW(DM::Segment::restoreSegment(log, *dm_context, segment_id), Exception);
+        }
+    }
+}
+
 TEST_F(RegionKVStoreTestFAP, RestoreRaftState)
 try
 {
@@ -413,8 +433,10 @@ try
             /*throw_on_not_exist*/ false);
         ASSERT_TRUE(page.isValid());
     }
-    FastAddPeerImplWrite(global_context.getTMTContext(), region_id, 2333, std::move(mock_data), 0);
+    FastAddPeerImplWrite(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333, std::move(mock_data), 0);
+    // After restart, there is no struct in memory.
     fap_context->debugRemoveCheckpointIngestInfo(region_id);
+
     ApplyFapSnapshotImpl(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333);
 
     {
@@ -453,7 +475,7 @@ try
     fap_context->tasks_trace->addTask(region_id, []() {
         return genFastAddPeerRes(FastAddPeerStatus::NoSuitable, "", "");
     });
-    FastAddPeerImplWrite(global_context.getTMTContext(), region_id, 2333, std::move(mock_data), 0);
+    FastAddPeerImplWrite(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333, std::move(mock_data), 0);
     fap_context->debugRemoveCheckpointIngestInfo(region_id);
     kvstore->handleDestroy(region_id, global_context.getTMTContext());
     // CheckpointIngestInfo is removed.
@@ -479,9 +501,9 @@ try
     fap_context->tasks_trace->addTask(region_id, []() {
         return genFastAddPeerRes(FastAddPeerStatus::NoSuitable, "", "");
     });
-    FastAddPeerImplWrite(global_context.getTMTContext(), region_id, 2333, std::move(mock_data), 0);
+    FastAddPeerImplWrite(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333, std::move(mock_data), 0);
     dumpCheckpoint();
-    FastAddPeerImplWrite(global_context.getTMTContext(), region_id, 2333, std::move(mock_data), 0);
+    FastAddPeerImplWrite(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333, std::move(mock_data), 0);
 
     auto s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
     const auto manifests = S3::CheckpointManifestS3Set::getFromS3(*s3_client, kvs.getStoreID());
@@ -534,25 +556,6 @@ try
     FailPointHelper::disableFailPoint(FailPoints::force_set_fap_candidate_store_id);
 }
 CATCH
-
-void assertNoSegment(TMTContext & tmt, RegionPtr region, std::vector<UInt64> segments)
-{
-    auto & storages = tmt.getStorages();
-    auto keyspace_id = region->getKeyspaceID();
-    auto table_id = region->getMappedTableID();
-    auto storage = storages.get(keyspace_id, table_id);
-
-    auto log = DB::Logger::get("Test");
-    if (storage && storage->engineType() == TiDB::StorageEngine::DT)
-    {
-        auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
-        auto dm_context = dm_storage->getStore()->newDMContext(tmt.getContext(), tmt.getContext().getSettingsRef());
-        for (auto segment_id : segments)
-        {
-            EXPECT_THROW(DM::Segment::restoreSegment(log, *dm_context, segment_id), Exception);
-        }
-    }
-}
 
 // Test cancel from write
 TEST_F(RegionKVStoreTestFAP, Cancel2)
@@ -668,7 +671,7 @@ try
     fap_context->tasks_trace->addTask(region_id, []() {
         return genFastAddPeerRes(FastAddPeerStatus::NoSuitable, "", "");
     });
-    FastAddPeerImplWrite(global_context.getTMTContext(), region_id, 2333, std::move(mock_data), 0);
+    FastAddPeerImplWrite(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333, std::move(mock_data), 0);
     ApplyFapSnapshotImpl(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333);
     // CheckpointIngestInfo is removed.
     eventuallyPredicate([&]() {

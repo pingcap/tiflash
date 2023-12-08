@@ -94,7 +94,7 @@ std::optional<CheckpointRegionInfoAndData> tryParseRegionInfoFromCheckpointData(
     ParsedCheckpointDataHolderPtr checkpoint_data_holder,
     UInt64 remote_store_id,
     UInt64 region_id,
-    TiFlashRaftProxyHelper * proxy_helper)
+    const TiFlashRaftProxyHelper * proxy_helper)
 {
     auto * log = &Poco::Logger::get("FastAddPeer");
     RegionPtr region;
@@ -180,7 +180,7 @@ bool tryResetPeerIdInRegion(RegionPtr region, const RegionLocalState & region_st
 
 std::variant<CheckpointRegionInfoAndData, FastAddPeerRes> FastAddPeerImplSelect(
     TMTContext & tmt,
-    TiFlashRaftProxyHelper * proxy_helper,
+    const TiFlashRaftProxyHelper * proxy_helper,
     uint64_t region_id,
     uint64_t new_peer_id)
 {
@@ -284,6 +284,7 @@ std::variant<CheckpointRegionInfoAndData, FastAddPeerRes> FastAddPeerImplSelect(
 
 FastAddPeerRes FastAddPeerImplWrite(
     TMTContext & tmt,
+    const TiFlashRaftProxyHelper * proxy_helper,
     UInt64 region_id,
     UInt64 new_peer_id,
     CheckpointRegionInfoAndData && checkpoint,
@@ -325,7 +326,7 @@ FastAddPeerRes FastAddPeerImplWrite(
     if (cancel_handle->canceled())
     {
         LOG_INFO(log, "Cancel FAP before write, region_id={}", region_id);
-        fap_ctx->forciblyCleanTask(tmt, region_id);
+        fap_ctx->cleanTask(tmt, proxy_helper, region_id, false);
         return genFastAddPeerRes(FastAddPeerStatus::Canceled, "", "");
     }
     auto segments = dm_storage->buildSegmentsFromCheckpointInfo(new_key_range, checkpoint_info, settings);
@@ -343,7 +344,7 @@ FastAddPeerRes FastAddPeerImplWrite(
     if (cancel_handle->canceled())
     {
         LOG_INFO(log, "Cancel FAP after write segments, region_id={}", region_id);
-        fap_ctx->forciblyCleanTask(tmt, region_id);
+        fap_ctx->cleanTask(tmt, proxy_helper, region_id, false);
         return genFastAddPeerRes(FastAddPeerStatus::Canceled, "", "");
     }
     // Write raft log to uni ps, we do this here because we store raft log seperately.
@@ -368,7 +369,7 @@ FastAddPeerRes FastAddPeerImplWrite(
     if (cancel_handle->canceled())
     {
         LOG_INFO(log, "Cancel FAP after write raft log, region_id={}", region_id);
-        fap_ctx->forciblyCleanTask(tmt, region_id);
+        fap_ctx->cleanTask(tmt, proxy_helper, region_id, false);
         return genFastAddPeerRes(FastAddPeerStatus::Canceled, "", "");
     }
 
@@ -381,7 +382,7 @@ FastAddPeerRes FastAddPeerImplWrite(
 FastAddPeerRes FastAddPeerImpl(
     FastAddPeerContextPtr fap_ctx,
     TMTContext & tmt,
-    TiFlashRaftProxyHelper * proxy_helper,
+    const TiFlashRaftProxyHelper * proxy_helper,
     UInt64 region_id,
     UInt64 new_peer_id,
     UInt64 start_time)
@@ -396,6 +397,7 @@ FastAddPeerRes FastAddPeerImpl(
         {
             auto final_res = FastAddPeerImplWrite(
                 tmt,
+                proxy_helper,
                 region_id,
                 new_peer_id,
                 std::move(std::get<CheckpointRegionInfoAndData>(res)),
@@ -453,7 +455,7 @@ uint8_t ApplyFapSnapshotImpl(TMTContext & tmt, TiFlashRaftProxyHelper * proxy_he
         GET_METRIC(tiflash_fap_task_state, type_ingesting_stage).Increment();
         SCOPE_EXIT({ GET_METRIC(tiflash_fap_task_state, type_ingesting_stage).Decrement(); });
         kvstore->handleIngestCheckpoint(checkpoint_ingest_info->getRegion(), checkpoint_ingest_info, tmt);
-        fap_ctx->forciblyCleanTask(tmt, region_id);
+        fap_ctx->cleanTask(tmt, proxy_helper, region_id, true);
         GET_METRIC(tiflash_fap_task_duration_seconds, type_ingest_stage).Observe(watch_ingest.elapsedSeconds());
         auto begin = checkpoint_ingest_info->beginTime();
         auto current = FAPAsyncTasks::getCurrentMillis();

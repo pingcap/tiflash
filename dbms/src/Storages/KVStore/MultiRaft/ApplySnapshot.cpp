@@ -56,7 +56,7 @@ void KVStore::checkAndApplyPreHandledSnapshot(const RegionPtrWrap & new_region, 
         // Everytime we meet a legacy snapshot, we try to clean obsolete fap ingest info.
         if constexpr (!std::is_same_v<RegionPtrWrap, RegionPtrWithCheckpointInfo>)
         {
-            fap_ctx->resolveFapSnapshotState(tmt, region_id, true);
+            fap_ctx->resolveFapSnapshotState(tmt, proxy_helper, region_id, true);
         }
     }
 

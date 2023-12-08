@@ -64,8 +64,16 @@ public:
         UInt64 start_time);
     void debugRemoveCheckpointIngestInfo(UInt64 region_id);
     std::optional<CheckpointIngestInfoPtr> tryGetCheckpointIngestInfo(UInt64 region_id) const;
-    void forciblyCleanTask(TMTContext & tmt, UInt64 region_id);
-    void resolveFapSnapshotState(TMTContext & tmt, UInt64 region_id, bool is_legacy_snapshot);
+    void cleanTask(
+        TMTContext & tmt,
+        const struct TiFlashRaftProxyHelper * proxy_helper,
+        UInt64 region_id,
+        bool is_succeed);
+    void resolveFapSnapshotState(
+        TMTContext & tmt,
+        const struct TiFlashRaftProxyHelper * proxy_helper,
+        UInt64 region_id,
+        bool is_legacy_snapshot);
 
 public:
     std::shared_ptr<FAPAsyncTasks> tasks_trace;
