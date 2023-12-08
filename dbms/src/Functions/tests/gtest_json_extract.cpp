@@ -137,7 +137,7 @@ try
     expect_null_vec = {1, 1, 1};
     checkResult(res.column, expect_null_vec, expect_string_vec);
 
-    /// only null
+    /// JsonBinary only null
     auto const_null_only_col = createOnlyNullColumnConst(3);
     res = executeFunction(func_name, {const_null_only_col, path_col});
     ASSERT_TRUE(res.column->size() == 3);
@@ -156,6 +156,13 @@ try
     ASSERT_TRUE(res.column->size() == 3);
     expect_string_vec = {"3", "3", "[2, 3]"};
     expect_null_vec = {0, 0, 0};
+    checkResult(res.column, expect_null_vec, expect_string_vec);
+
+    /// One of Paths is only null
+    res = executeFunction(func_name, {non_null_input_col, non_null_path_col, const_null_only_col});
+    ASSERT_TRUE(res.column->size() == 3);
+    expect_string_vec = {"", "", ""};
+    expect_null_vec = {1, 1, 1};
     checkResult(res.column, expect_null_vec, expect_string_vec);
 
     /// ColumnConst(non-null)
