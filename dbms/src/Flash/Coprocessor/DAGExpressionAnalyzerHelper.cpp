@@ -27,8 +27,6 @@
 #include <Functions/FunctionsTiDBConversion.h>
 #include <TiDB/Decode/TypeMapping.h>
 
-#include "tipb/expression.pb.h"
-
 namespace DB
 {
 namespace
