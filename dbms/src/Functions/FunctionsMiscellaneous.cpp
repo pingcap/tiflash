@@ -1257,8 +1257,8 @@ public:
             free(ptr); // NOLINT(cppcoreguidelines-no-malloc)
         };
         std::unique_ptr<char, decltype(deleter)> place{
-            reinterpret_cast<char *>(malloc(agg_func.sizeOfData())),
-            deleter}; // NOLINT(cppcoreguidelines-no-malloc)
+            reinterpret_cast<char *>(malloc(agg_func.sizeOfData())), // NOLINT(cppcoreguidelines-no-malloc)
+            deleter};
 
         agg_func.create(
             place.get()); /// Not much exception-safe. If an exception is thrown out, destroy will be called in vain.
