@@ -206,7 +206,7 @@ bool ProbeProcessInfo::isCurrentProbeRowFinished() const
     return cross_join_data->next_right_block_index == cross_join_data->right_block_size;
 }
 
-void ProbeProcessInfo::finishCurrentProbeRow()
+void ProbeProcessInfo::finishCurrentProbeRow() const
 {
     /// only used in cross join of shallow copy cross probe mode
     cross_join_data->next_right_block_index = cross_join_data->right_block_size;

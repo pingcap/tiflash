@@ -191,6 +191,6 @@ struct ProbeProcessInfo
 
     void cutFilterAndOffsetVector(size_t start, size_t end) const;
     bool isCurrentProbeRowFinished() const;
-    void finishCurrentProbeRow();
+    void finishCurrentProbeRow() const;
 };
 } // namespace DB

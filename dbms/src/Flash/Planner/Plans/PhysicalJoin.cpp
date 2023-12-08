@@ -327,16 +327,6 @@ void PhysicalJoin::finalize(const Names & parent_require)
 {
     FinalizeHelper::checkSchemaContainsParentRequire(schema, parent_require);
     join_ptr->finalize(parent_require);
-    NamesAndTypes updated_schema;
-    NameSet name_set;
-    for (const auto & name : parent_require)
-        name_set.insert(name);
-    for (const auto & name_and_type : schema)
-    {
-        if (name_set.find(name_and_type.name) != name_set.end())
-            updated_schema.push_back(name_and_type);
-    }
-    std::swap(schema, updated_schema);
     auto required_input_columns = join_ptr->getRequiredColumns();
     std::unordered_set<String> build_schema_sets;
     for (const auto & name : build_side_prepare_actions->getSampleBlock().getNames())
