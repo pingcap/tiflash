@@ -1421,11 +1421,14 @@ String genFuncString(
             buf.append("_0");
     }
     buf.append(" ");
-    for (const auto * field_type : field_types)
-    {
-        if (field_type)
-            buf.append(field_type->DebugString());
-    }
+    buf.joinStr(
+        field_types.begin(),
+        field_types.end(),
+        [](const auto & field_type, FmtBuffer & buffer) {
+            if likely (field_type)
+                buffer.append(field_type->flag());
+        },
+        ", ");
     return buf.toString();
 }
 
