@@ -137,6 +137,14 @@ try
     expect_null_vec = {1, 1, 1};
     checkResult(res.column, expect_null_vec, expect_string_vec);
 
+    /// only null
+    auto const_null_only_col = createOnlyNullColumnConst(3);
+    res = executeFunction(func_name, {const_null_only_col, path_col});
+    ASSERT_TRUE(res.column->size() == 3);
+    expect_string_vec = {"", "", ""};
+    expect_null_vec = {1, 1, 1};
+    checkResult(res.column, expect_null_vec, expect_string_vec);
+
     /// ColumnVector(non-null)
     auto non_null_str_col = ColumnString::create();
     non_null_str_col->insertData(reinterpret_cast<const char *>(bj2), sizeof(bj2) / sizeof(UInt8));
