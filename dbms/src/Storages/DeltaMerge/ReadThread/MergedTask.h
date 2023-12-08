@@ -25,6 +25,26 @@ struct MergedUnit
         , task(task_)
     {}
 
+    ~MergedUnit()
+    {
+        // Calling `setFinish()` for updating memory statistics of `MemoryTracker`.
+        setFinish();
+    }
+
+    bool isFinished() const { return pool == nullptr && task == nullptr && stream == nullptr; }
+
+    void setFinish()
+    {
+        if (!isFinished())
+        {
+            // For updating memory statistics of `MemoryTracker`.
+            MemoryTrackerSetter setter(true, pool->mem_tracker.get());
+            task = nullptr;
+            stream = nullptr;
+            pool = nullptr;
+        }
+    }
+
     SegmentReadTaskPoolPtr pool; // The information of a read request.
     SegmentReadTaskPtr task; // The information of a segment that want to read.
     BlockInputStreamPtr stream; // BlockInputStream of a segment, will be created by read threads.
@@ -43,8 +63,6 @@ public:
         , units(std::move(units_))
         , inited(false)
         , cur_idx(-1)
-        , finished_count(0)
-        , log(Logger::get())
     {
         passive_merged_segments.fetch_add(units.size() - 1, std::memory_order_relaxed);
         GET_METRIC(tiflash_storage_read_thread_gauge, type_merged_task).Increment();
@@ -54,46 +72,38 @@ public:
         passive_merged_segments.fetch_sub(units.size() - 1, std::memory_order_relaxed);
         GET_METRIC(tiflash_storage_read_thread_gauge, type_merged_task).Decrement();
         GET_METRIC(tiflash_storage_read_thread_seconds, type_merged_task).Observe(sw.elapsedSeconds());
-        // `setAllStreamFinished` must be called to explicitly releasing all streams for updating memory statistics of `MemoryTracker`.
-        setAllStreamsFinished();
     }
 
     int readBlock();
 
-    bool allStreamsFinished() const { return finished_count >= units.size(); }
+    bool allStreamsFinished() const
+    {
+        return std::all_of(units.begin(), units.end(), [](const auto & u) { return u.isFinished(); });
+    }
 
     const GlobalSegmentID & getSegmentId() const { return seg_id; }
 
-    size_t getPoolCount() const { return units.size(); }
-
-    std::vector<uint64_t> getPoolIds() const
-    {
-        std::vector<uint64_t> ids;
-        ids.reserve(units.size());
-        for (const auto & unit : units)
-        {
-            if (unit.pool != nullptr)
-            {
-                ids.push_back(unit.pool->pool_id);
-            }
-        }
-        return ids;
-    }
-
     bool containPool(uint64_t pool_id) const
     {
-        for (const auto & unit : units)
-        {
-            if (unit.pool != nullptr && unit.pool->pool_id == pool_id)
-            {
-                return true;
-            }
-        }
-        return false;
+        return std::any_of(units.begin(), units.end(), [pool_id](const auto & u) {
+            return u.pool != nullptr && u.pool->pool_id == pool_id;
+        });
     }
+
     void setException(const DB::Exception & e);
 
-    const LoggerPtr getCurrentLogger() const
+    String toString() const
+    {
+        std::vector<UInt64> ids;
+        ids.reserve(units.size());
+        std::for_each(units.begin(), units.end(), [&ids](const auto & u) {
+            if (u.pool != nullptr)
+                ids.push_back(u.pool->pool_id);
+        });
+        return fmt::format("seg_id:{} pool_id:{}", seg_id, ids);
+    }
+
+    LoggerPtr getCurrentLogger() const
     {
         // `std::cmp_*` is safety to compare negative signed integers and unsigned integers.
         if (likely(
@@ -116,40 +126,10 @@ private:
     void initOnce();
     int readOneBlock();
 
-    bool isStreamFinished(size_t i) const
-    {
-        return units[i].pool == nullptr && units[i].task == nullptr && units[i].stream == nullptr;
-    }
-
-    void setStreamFinished(size_t i)
-    {
-        if (!isStreamFinished(i))
-        {
-            // `MergedUnit.stream` must be released explicitly for updating memory statistics of `MemoryTracker`.
-            auto & [pool, task, stream] = units[i];
-            {
-                MemoryTrackerSetter setter(true, pool->mem_tracker.get());
-                task = nullptr;
-                stream = nullptr;
-            }
-            pool = nullptr;
-            finished_count++;
-        }
-    }
-
-    void setAllStreamsFinished()
-    {
-        for (size_t i = 0; i < units.size(); ++i)
-        {
-            setStreamFinished(i);
-        }
-    }
     GlobalSegmentID seg_id;
     std::vector<MergedUnit> units;
     bool inited;
     int cur_idx;
-    size_t finished_count;
-    LoggerPtr log;
     Stopwatch sw;
     inline static std::atomic<int64_t> passive_merged_segments{0};
 };
@@ -162,10 +142,6 @@ using MergedTaskPtr = std::shared_ptr<MergedTask>;
 class MergedTaskPool
 {
 public:
-    MergedTaskPool()
-        : log(Logger::get())
-    {}
-
     MergedTaskPtr pop(uint64_t pool_id);
     void push(const MergedTaskPtr & t);
     bool has(UInt64 pool_id);
@@ -173,6 +149,5 @@ public:
 private:
     std::mutex mtx;
     std::list<MergedTaskPtr> merged_task_pool GUARDED_BY(mtx);
-    LoggerPtr log;
 };
 } // namespace DB::DM
