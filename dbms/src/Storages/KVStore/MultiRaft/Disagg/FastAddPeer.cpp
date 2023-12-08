@@ -265,7 +265,11 @@ std::variant<CheckpointRegionInfoAndData, FastAddPeerRes> FastAddPeerImplSelect(
             if (watch.elapsedSeconds() >= settings.fap_wait_checkpoint_timeout_seconds)
             {
                 // This could happen if there are too many pending tasks in queue,
-                LOG_INFO(log, "FastAddPeer timeout region_id={} new_peer_id={}", region_id, new_peer_id);
+                LOG_INFO(
+                    log,
+                    "FastAddPeer timeout when select checkpoints region_id={} new_peer_id={}",
+                    region_id,
+                    new_peer_id);
                 GET_METRIC(tiflash_fap_task_result, type_failed_timeout).Increment();
                 return genFastAddPeerRes(FastAddPeerStatus::NoSuitable, "", "");
             }
@@ -562,6 +566,21 @@ FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, u
         }
         else
         {
+            const auto & settings = server->tmt->getContext().getSettingsRef();
+            auto elapsed = fap_ctx->tasks_trace->queryElapsed(region_id);
+            if (elapsed >= 1000 * settings.fap_task_timeout_seconds)
+            {
+                // For most cases, prev_state is `InQueue`.
+                auto prev_state = fap_ctx->tasks_trace->asyncCancelTask(region_id);
+                LOG_INFO(
+                    log,
+                    "FastAddPeer timeout region_id={} new_peer_id={} prev_task={}",
+                    region_id,
+                    new_peer_id,
+                    magic_enum::enum_name(prev_state));
+                // Return Canceled because it is cancel from outside FAP worker.
+                return genFastAddPeerRes(FastAddPeerStatus::Canceled, "", "");
+            }
             LOG_DEBUG(log, "Task is still pending new_peer_id={} region_id={}", new_peer_id, region_id);
             return genFastAddPeerRes(FastAddPeerStatus::WaitForData, "", "");
         }

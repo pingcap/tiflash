@@ -82,6 +82,7 @@ private:
     // Safety: raftstore ensures a region is handled in a single thread.
     // `persistToLocal` is called at a fixed place in this thread.
     void persistToLocal() const;
+    static void deleteWrittenData(TMTContext & tmt, RegionPtr region, const DM::Segments & segment_ids);
 
 private:
     TMTContext & tmt;

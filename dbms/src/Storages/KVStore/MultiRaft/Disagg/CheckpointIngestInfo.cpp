@@ -172,7 +172,7 @@ static void removeFromLocal(TMTContext & tmt, UInt64 region_id)
     uni_ps->write(std::move(del_batch), PageType::Local);
 }
 
-static void deleteWrittenData(TMTContext & tmt, RegionPtr region, const DM::Segments & segment_ids)
+void CheckpointIngestInfo::deleteWrittenData(TMTContext & tmt, RegionPtr region, const DM::Segments & segment_ids)
 {
     auto & storages = tmt.getStorages();
     auto keyspace_id = region->getKeyspaceID();
@@ -230,7 +230,10 @@ bool CheckpointIngestInfo::forciblyClean(
     if (maybe_checkpoint_info.has_value())
     {
         auto & checkpoint_info = maybe_checkpoint_info.value();
-        deleteWrittenData(tmt, checkpoint_info->getRegion(), checkpoint_info->getRestoredSegments());
+        CheckpointIngestInfo::deleteWrittenData(
+            tmt,
+            checkpoint_info->getRegion(),
+            checkpoint_info->getRestoredSegments());
         removeFromLocal(tmt, region_id);
         return true;
     }

@@ -250,6 +250,7 @@ struct Settings
     M(SettingDouble, disagg_read_concurrency_scale, 20.0, "Scale * logical cpu cores = disaggregated read IO concurrency.")                                                                                                             \
     \
     M(SettingInt64, fap_wait_checkpoint_timeout_seconds, 80, "The max time wait for a usable checkpoint for FAP")                                                                                                                       \
+    M(SettingUInt64, fap_task_timeout_seconds, 120, "The max time FAP can take before fallback")                                                                                                                       \
     M(SettingUInt64, fap_handle_concurrency, 25, "The number of threads for handling FAP tasks")                                                                                                                                        \
     \
     M(SettingUInt64, max_rows_in_set, 0, "Maximum size of the set (in number of elements) resulting from the execution of the IN section.")                                                                                             \

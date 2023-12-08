@@ -246,7 +246,7 @@ void FastAddPeerContext::resolveFapSnapshotState(
         }
         else
         {
-            LOG_INFO(log, "FastAddPeer: FAP canceled because region destroyed, region_id={}", region_id);
+            LOG_INFO(log, "FastAddPeer: Cancel finished FAP because region destroyed, region_id={}", region_id);
             cleanTask(tmt, proxy_helper, region_id, false);
         }
     }
@@ -261,13 +261,22 @@ void FastAddPeerContext::resolveFapSnapshotState(
     }
     else
     {
-        // Currently, proxy will not actively cancel FAP. So it will not fallback if FAP phase 1 is still running.
-        // If we cancel the task asyncly, this will happen in some very corner cases where a legacy snapshot meets a cleaning FAP task.
-        throw Exception(
-            ErrorCodes::LOGICAL_ERROR,
-            "FastAddPeer: find running scheduled fap task, region_id={} fap_state={}",
-            region_id,
-            magic_enum::enum_name(prev_state));
+        if (is_legacy_snapshot)
+        {
+            // Currently, proxy will not actively cancel FAP. So it will not fallback if FAP phase 1 is still running.
+            // If we cancel the task asyncly, this will happen in some very corner cases where a legacy snapshot meets a cleaning FAP task.
+            throw Exception(
+                ErrorCodes::LOGICAL_ERROR,
+                "FastAddPeer: find running scheduled fap task, region_id={} fap_state={}",
+                region_id,
+                magic_enum::enum_name(prev_state));
+        }
+        else
+        {
+            // If the region is sent to this store later, it will be with another peer_id.
+            LOG_INFO(log, "FastAddPeer: Cancel running/queueing FAP because region destroyed, region_id={}", region_id);
+            cleanTask(tmt, proxy_helper, region_id, false);
+        }
     }
 }
 
