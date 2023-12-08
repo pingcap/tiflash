@@ -492,12 +492,7 @@ private:
     Block doJoinBlockCross(ProbeProcessInfo & probe_process_info) const;
 
     template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
-    Block joinBlockNullAwareSemiImpl(
-        const ColumnRawPtrs & key_columns,
-        const ConstNullMapPtr & null_map,
-        const ConstNullMapPtr & filter_map,
-        const ConstNullMapPtr & all_key_null_map,
-        const ProbeProcessInfo & probe_process_info) const;
+    Block joinBlockNullAwareSemiImpl(const ProbeProcessInfo & probe_process_info) const;
 
     template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
     Block joinBlockSemiImpl(const JoinBuildInfo & join_build_info, const ProbeProcessInfo & probe_process_info) const;

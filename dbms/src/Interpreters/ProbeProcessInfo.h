@@ -29,6 +29,69 @@ enum class CrossProbeMode
     SHALLOW_COPY_RIGHT_BLOCK,
 };
 
+struct HashJoinProbeProcessData
+{
+    Columns materialized_columns;
+    ColumnRawPtrs key_columns;
+    /// TODO: consider adding a virtual column in Sender side to avoid computing cost and potential inconsistency by heterogeneous envs(AMD64, ARM64)
+    /// Note: 1. Not sure, if inconsistency will do happen in heterogeneous envs
+    ///       2. Virtual column would take up a little more network bandwidth, might lead to poor performance if network was bottleneck
+    /// Currently, the computation cost is tolerable, since it's a very simple crc32 hash algorithm, and heterogeneous envs support is not considered
+    std::unique_ptr<WeakHash32> hash_data; /// to reproduce hash values according to build stage
+    void reset()
+    {
+        key_columns.clear();
+        materialized_columns.clear();
+        hash_data = nullptr;
+    }
+};
+struct CrossJoinProbeProcessData
+{
+    Block result_block_schema;
+    std::vector<size_t> right_column_index_in_result_block;
+    std::vector<size_t> right_column_index_in_right_block;
+    std::vector<size_t> left_column_index_in_left_block;
+    size_t right_rows_to_be_added_when_matched = 0;
+    CrossProbeMode cross_probe_mode = CrossProbeMode::DEEP_COPY_RIGHT_BLOCK;
+    /// the following fields are used for NO_COPY_RIGHT_BLOCK probe
+    size_t right_block_size = 0;
+    /// the rows that is filtered by left condition
+    size_t row_num_filtered_by_left_condition = 0;
+    size_t next_right_block_index = 0;
+    /// used for outer/semi/anti/left outer semi/left outer anti join
+    bool has_row_matched = false;
+    /// used for left outer semi/left outer anti join
+    bool has_row_null = false;
+    void reset()
+    {
+        right_rows_to_be_added_when_matched = 0;
+        cross_probe_mode = CrossProbeMode::DEEP_COPY_RIGHT_BLOCK;
+        right_block_size = 0;
+        next_right_block_index = 0;
+        row_num_filtered_by_left_condition = 0;
+        has_row_matched = false;
+        has_row_null = false;
+    }
+};
+struct NullAwareJoinProbeProcessData
+{
+    Columns materialized_columns;
+    ColumnRawPtrs key_columns;
+    ColumnPtr filter_map_holder = nullptr;
+    ConstNullMapPtr filter_map = nullptr;
+    ColumnPtr all_key_null_map_holder = nullptr;
+    ConstNullMapPtr all_key_null_map = nullptr;
+    void reset()
+    {
+        key_columns.clear();
+        materialized_columns.clear();
+        filter_map_holder = nullptr;
+        filter_map = nullptr;
+        all_key_null_map_holder = nullptr;
+        all_key_null_map = nullptr;
+    }
+};
+
 struct ProbeProcessInfo
 {
     Block block;
@@ -50,30 +113,13 @@ struct ProbeProcessInfo
     std::unique_ptr<IColumn::Offsets> offsets_to_replicate = nullptr;
 
     /// for hash probe
-    Columns materialized_columns;
-    ColumnRawPtrs key_columns;
-    /// TODO: consider adding a virtual column in Sender side to avoid computing cost and potential inconsistency by heterogeneous envs(AMD64, ARM64)
-    /// Note: 1. Not sure, if inconsistency will do happen in heterogeneous envs
-    ///       2. Virtual column would take up a little more network bandwidth, might lead to poor performance if network was bottleneck
-    /// Currently, the computation cost is tolerable, since it's a very simple crc32 hash algorithm, and heterogeneous envs support is not considered
-    std::unique_ptr<WeakHash32> hash_data; /// to reproduce hash values according to build stage
+    std::unique_ptr<HashJoinProbeProcessData> hash_join_data;
 
     /// for cross probe
-    Block result_block_schema;
-    std::vector<size_t> right_column_index_in_result_block;
-    std::vector<size_t> right_column_index_in_right_block;
-    std::vector<size_t> left_column_index_in_left_block;
-    size_t right_rows_to_be_added_when_matched = 0;
-    CrossProbeMode cross_probe_mode = CrossProbeMode::DEEP_COPY_RIGHT_BLOCK;
-    /// the following fields are used for NO_COPY_RIGHT_BLOCK probe
-    size_t right_block_size = 0;
-    /// the rows that is filtered by left condition
-    size_t row_num_filtered_by_left_condition = 0;
-    size_t next_right_block_index = 0;
-    /// used for outer/semi/anti/left outer semi/left outer anti join
-    bool has_row_matched = false;
-    /// used for left outer semi/left outer anti join
-    bool has_row_null = false;
+    std::unique_ptr<CrossJoinProbeProcessData> cross_join_data;
+
+    /// for null-aware join
+    std::unique_ptr<NullAwareJoinProbeProcessData> null_aware_join_data;
 
     ProbeProcessInfo(UInt64 max_block_size_, UInt64 cache_columns_threshold_)
         : partition_index(0)
@@ -90,11 +136,11 @@ struct ProbeProcessInfo
     {
         if constexpr (is_shallow_cross_probe_mode)
         {
-            if (next_right_block_index < right_block_size)
+            if (cross_join_data->next_right_block_index < cross_join_data->right_block_size)
                 return;
-            next_right_block_index = 0;
-            has_row_matched = false;
-            has_row_null = false;
+            cross_join_data->next_right_block_index = 0;
+            cross_join_data->has_row_matched = false;
+            cross_join_data->has_row_null = false;
         }
         assert(start_row <= end_row);
         start_row = end_row;
@@ -110,12 +156,13 @@ struct ProbeProcessInfo
         end_row = next_row_to_probe;
         if constexpr (is_shallow_cross_probe_mode)
         {
-            if (next_right_block_index < right_block_size)
+            if (cross_join_data->next_right_block_index < cross_join_data->right_block_size)
             {
                 /// current probe is not finished, just return
                 return;
             }
-            all_rows_joined_finish = row_num_filtered_by_left_condition == 0 && end_row == block.rows();
+            all_rows_joined_finish
+                = cross_join_data->row_num_filtered_by_left_condition == 0 && end_row == block.rows();
         }
         else
         {
@@ -140,6 +187,7 @@ struct ProbeProcessInfo
         size_t right_rows_to_be_added_when_matched,
         CrossProbeMode cross_probe_mode,
         size_t right_block_size);
+    void prepareForNullAware(const Names & key_names, const String & filter_column);
 
     void cutFilterAndOffsetVector(size_t start, size_t end) const;
     bool isCurrentProbeRowFinished() const;

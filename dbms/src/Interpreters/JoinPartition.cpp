@@ -1502,10 +1502,10 @@ void NO_INLINE probeBlockImplTypeCase(
     if (need_virtual_dispatch_for_probe_block)
     {
         RUNTIME_ASSERT(!(join_build_info.restore_round > 0 && join_build_info.enable_fine_grained_shuffle));
-        RUNTIME_ASSERT(probe_process_info.hash_data->getData().size() == rows);
+        RUNTIME_ASSERT(probe_process_info.hash_join_data->hash_data->getData().size() == rows);
     }
 
-    const auto & build_hash_data = probe_process_info.hash_data->getData();
+    const auto & build_hash_data = probe_process_info.hash_join_data->hash_data->getData();
     size_t i;
     bool block_full = false;
     for (i = probe_process_info.start_row; i < rows; ++i)
@@ -1923,22 +1923,22 @@ probeBlockSemiInternal(
         }
     }
 
-    KeyGetter key_getter(probe_process_info.key_columns, key_sizes, collators);
+    KeyGetter key_getter(probe_process_info.hash_join_data->key_columns, key_sizes, collators);
     std::vector<std::string> sort_key_containers;
-    sort_key_containers.resize(probe_process_info.key_columns.size());
+    sort_key_containers.resize(probe_process_info.hash_join_data->key_columns.size());
     Arena pool;
     bool need_virtual_dispatch_for_probe_block = join_build_info.needVirtualDispatchForProbeBlock();
     if (need_virtual_dispatch_for_probe_block)
     {
         RUNTIME_ASSERT(!(join_build_info.restore_round > 0 && join_build_info.enable_fine_grained_shuffle));
-        RUNTIME_ASSERT(probe_process_info.hash_data->getData().size() == rows);
+        RUNTIME_ASSERT(probe_process_info.hash_join_data->hash_data->getData().size() == rows);
     }
 
     PaddedPODArray<SemiJoinResult<KIND, STRICTNESS>> res;
     res.reserve(rows);
     std::list<SemiJoinResult<KIND, STRICTNESS> *> res_list;
 
-    const auto & build_hash_data = probe_process_info.hash_data->getData();
+    const auto & build_hash_data = probe_process_info.hash_join_data->hash_data->getData();
     for (size_t i = 0; i < rows; ++i)
     {
         if constexpr (has_null_map)
