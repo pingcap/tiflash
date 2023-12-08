@@ -1405,7 +1405,11 @@ SortDescription getSortDescription(
     return order_descr;
 }
 
-String genFuncString(const String & func_name, const Names & argument_names, const TiDB::TiDBCollators & collators, const std::vector<const tipb::FieldType*> & field_types)
+String genFuncString(
+    const String & func_name,
+    const Names & argument_names,
+    const TiDB::TiDBCollators & collators,
+    const std::vector<const tipb::FieldType *> & field_types)
 {
     FmtBuffer buf;
     buf.fmtAppend("{}({})_collator", func_name, fmt::join(argument_names.begin(), argument_names.end(), ", "));
