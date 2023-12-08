@@ -95,8 +95,8 @@ namespace DB
     M(unblock_query_init_after_write)                        \
     M(exception_in_merged_task_init)                         \
     M(force_fail_in_flush_region_data)                       \
-    M(exception_after_large_write_exceed)
-
+    M(exception_after_large_write_exceed)                    \
+    M(delta_tree_create_node_fail)
 
 #define APPLY_FOR_PAUSEABLE_FAILPOINTS_ONCE(M) \
     M(pause_with_alter_locks_acquired)         \
