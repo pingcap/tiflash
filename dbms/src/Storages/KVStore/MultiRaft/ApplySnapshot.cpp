@@ -49,17 +49,6 @@ void KVStore::checkAndApplyPreHandledSnapshot(const RegionPtrWrap & new_region, 
     auto old_region = getRegion(region_id);
     UInt64 old_applied_index = 0;
 
-    if (tmt.getContext().getSharedContextDisagg()->isDisaggregatedStorageMode())
-    {
-        auto fap_ctx = tmt.getContext().getSharedContextDisagg()->fap_context;
-        auto region_id = new_region->id();
-        // Everytime we meet a legacy snapshot, we try to clean obsolete fap ingest info.
-        if constexpr (!std::is_same_v<RegionPtrWrap, RegionPtrWithCheckpointInfo>)
-        {
-            fap_ctx->resolveFapSnapshotState(tmt, proxy_helper, region_id, true);
-        }
-    }
-
     /**
      * When applying snapshot of a region, its range must not be overlapped with any other(different id) region's.
      */
@@ -308,19 +297,28 @@ void KVStore::onSnapshot(
 template <typename RegionPtrWrap>
 void KVStore::applyPreHandledSnapshot(const RegionPtrWrap & new_region, TMTContext & tmt)
 {
-    LOG_INFO(log, "Begin apply snapshot, new_region={}", new_region->toString(true));
+    try
+    {
+        LOG_INFO(log, "Begin apply snapshot, new_region={}", new_region->toString(true));
 
-    Stopwatch watch;
-    SCOPE_EXIT({
-        GET_METRIC(tiflash_raft_command_duration_seconds, type_apply_snapshot_flush).Observe(watch.elapsedSeconds());
-    });
+        Stopwatch watch;
+        SCOPE_EXIT({
+            GET_METRIC(tiflash_raft_command_duration_seconds, type_apply_snapshot_flush)
+                .Observe(watch.elapsedSeconds());
+        });
 
-    checkAndApplyPreHandledSnapshot(new_region, tmt);
+        checkAndApplyPreHandledSnapshot(new_region, tmt);
 
-    FAIL_POINT_PAUSE(FailPoints::pause_until_apply_raft_snapshot);
+        FAIL_POINT_PAUSE(FailPoints::pause_until_apply_raft_snapshot);
 
-    // `new_region` may change in the previous function, just log the region_id down
-    LOG_INFO(log, "Finish apply snapshot, cost={:.3f}s region_id={}", watch.elapsedSeconds(), new_region->id());
+        // `new_region` may change in the previous function, just log the region_id down
+        LOG_INFO(log, "Finish apply snapshot, cost={:.3f}s region_id={}", watch.elapsedSeconds(), new_region->id());
+    }
+    catch (Exception & e)
+    {
+        e.addMessage(fmt::format("(while applyPreHandledSnapshot region_id={})", new_region->id()));
+        e.rethrow();
+    }
 }
 
 template void KVStore::applyPreHandledSnapshot<RegionPtrWithSnapshotFiles>(

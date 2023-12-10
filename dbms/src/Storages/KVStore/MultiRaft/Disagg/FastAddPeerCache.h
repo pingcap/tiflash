@@ -69,6 +69,7 @@ public:
     {
         for (const auto & path : paths)
         {
+            LOG_DEBUG(DB::Logger::get(), "ParsedCheckpointDataHolder destroyed path={}", path);
             Poco::File(path).remove(true);
         }
     }

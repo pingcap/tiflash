@@ -127,7 +127,7 @@ std::optional<CheckpointIngestInfoPtr> FastAddPeerContext::getOrRestoreCheckpoin
     {
         // The caller ensure there is no concurrency operation on the same region_id so
         // that we can call restore without locking `ingest_info_mu`
-        auto info = CheckpointIngestInfo::restore(tmt, proxy_helper, region_id, peer_id);
+        auto info = CheckpointIngestInfo::restore(tmt, proxy_helper, region_id, peer_id, false);
         if (!info.has_value())
             return std::nullopt;
         std::scoped_lock<std::mutex> lock(ingest_info_mu);

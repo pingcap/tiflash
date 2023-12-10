@@ -193,12 +193,6 @@ std::variant<CheckpointRegionInfoAndData, FastAddPeerRes> FastAddPeerImplSelect(
     auto fap_ctx = tmt.getContext().getSharedContextDisagg()->fap_context;
     auto cancel_handle = fap_ctx->tasks_trace->getCancelHandleFromExecutor(region_id);
 
-    if (cancel_handle->canceled())
-    {
-        // It is already canceled in queue.
-        return genFastAddPeerRes(FastAddPeerStatus::Canceled, "", "");
-    }
-
     // Get candidate stores.
     const auto & settings = tmt.getContext().getSettingsRef();
     auto current_store_id = tmt.getKVStore()->clonedStoreMeta().id();
@@ -280,6 +274,8 @@ std::variant<CheckpointRegionInfoAndData, FastAddPeerRes> FastAddPeerImplSelect(
                 // Just remove the task from AsyncTasks, it will not write anything in disk during this stage.
                 // NOTE once canceled, Proxy should no longer polling `FastAddPeer`, since it will result in `OtherError`.
                 fap_ctx->tasks_trace->leakingDiscardTask(region_id);
+                // We immediately increase this metrics when cancel, since a canceled task may not be fetched.
+                GET_METRIC(tiflash_fap_task_result, type_failed_cancel).Increment();
                 return genFastAddPeerRes(FastAddPeerStatus::Canceled, "", "");
             }
         }
@@ -331,6 +327,7 @@ FastAddPeerRes FastAddPeerImplWrite(
     {
         LOG_INFO(log, "Cancel FAP before write, region_id={}", region_id);
         fap_ctx->cleanTask(tmt, proxy_helper, region_id, false);
+        GET_METRIC(tiflash_fap_task_result, type_failed_cancel).Increment();
         return genFastAddPeerRes(FastAddPeerStatus::Canceled, "", "");
     }
     auto segments = dm_storage->buildSegmentsFromCheckpointInfo(new_key_range, checkpoint_info, settings);
@@ -349,6 +346,7 @@ FastAddPeerRes FastAddPeerImplWrite(
     {
         LOG_INFO(log, "Cancel FAP after write segments, region_id={}", region_id);
         fap_ctx->cleanTask(tmt, proxy_helper, region_id, false);
+        GET_METRIC(tiflash_fap_task_result, type_failed_cancel).Increment();
         return genFastAddPeerRes(FastAddPeerStatus::Canceled, "", "");
     }
     // Write raft log to uni ps, we do this here because we store raft log seperately.
@@ -374,6 +372,7 @@ FastAddPeerRes FastAddPeerImplWrite(
     {
         LOG_INFO(log, "Cancel FAP after write raft log, region_id={}", region_id);
         fap_ctx->cleanTask(tmt, proxy_helper, region_id, false);
+        GET_METRIC(tiflash_fap_task_result, type_failed_cancel).Increment();
         return genFastAddPeerRes(FastAddPeerStatus::Canceled, "", "");
     }
 
@@ -391,8 +390,17 @@ FastAddPeerRes FastAddPeerImpl(
     UInt64 new_peer_id,
     UInt64 start_time)
 {
+    auto log = Logger::get("FastAddPeer");
     try
     {
+        auto cancel_handle = fap_ctx->tasks_trace->getCancelHandleFromExecutor(region_id);
+        if (cancel_handle->canceled())
+        {
+            LOG_INFO(log, "Cancel FAP in queue due to timeout region_id={} new_peer_id={}", region_id, new_peer_id);
+            // It is already canceled in queue.
+            GET_METRIC(tiflash_fap_task_result, type_failed_cancel).Increment();
+            return genFastAddPeerRes(FastAddPeerStatus::Canceled, "", "");
+        }
         auto elapsed = fap_ctx->tasks_trace->queryElapsed(region_id);
         GET_METRIC(tiflash_fap_task_duration_seconds, type_queue_stage).Observe(elapsed / 1000.0);
         GET_METRIC(tiflash_fap_task_state, type_queueing_stage).Decrement();
@@ -572,12 +580,18 @@ FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, u
             {
                 // For most cases, prev_state is `InQueue`.
                 auto prev_state = fap_ctx->tasks_trace->asyncCancelTask(region_id);
-                LOG_INFO(
-                    log,
-                    "FastAddPeer timeout region_id={} new_peer_id={} prev_task={}",
-                    region_id,
-                    new_peer_id,
-                    magic_enum::enum_name(prev_state));
+                if (prev_state == FAPAsyncTasks::TaskState::InQueue)
+                {
+                    LOG_INFO(log, "Cancel FAP due to timeout region_id={} new_peer_id={}", region_id, new_peer_id);
+                }
+                else
+                {
+                    // If the task is running, we have to wait it return on cancel and clean,
+                    // otherwise a later legacy may race with this clean.
+                    GET_METRIC(tiflash_fap_task_state, type_blocking_cancel_stage).Increment();
+                    [[maybe_unused]] auto result = fap_ctx->tasks_trace->fetchResult(region_id);
+                    GET_METRIC(tiflash_fap_task_state, type_blocking_cancel_stage).Decrement();
+                }
                 // Return Canceled because it is cancel from outside FAP worker.
                 return genFastAddPeerRes(FastAddPeerStatus::Canceled, "", "");
             }
@@ -585,7 +599,7 @@ FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, u
             return genFastAddPeerRes(FastAddPeerStatus::WaitForData, "", "");
         }
     }
-    catch (...)
+    catch (const Exception & e)
     {
         DB::tryLogCurrentException(
             "FastAddPeer",
@@ -593,7 +607,17 @@ FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, u
                 "Failed when try to restore from checkpoint region_id={} new_peer_id={} {}",
                 region_id,
                 new_peer_id,
-                StackTrace().toString()));
+                e.message()));
+        return genFastAddPeerRes(FastAddPeerStatus::OtherError, "", "");
+    }
+    catch (...)
+    {
+        DB::tryLogCurrentException(
+            "FastAddPeer",
+            fmt::format(
+                "Failed when try to restore from checkpoint region_id={} new_peer_id={}",
+                region_id,
+                new_peer_id));
         return genFastAddPeerRes(FastAddPeerStatus::OtherError, "", "");
     }
 }

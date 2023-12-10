@@ -390,6 +390,7 @@ namespace DB
       F(type_ingesting_stage, {{"type", "ingesting_stage"}}),                                                                       \
       F(type_writing_stage, {{"type", "writing_stage"}}),                                                                           \
       F(type_queueing_stage, {{"type", "queueing_stage"}}),                                                                         \
+      F(type_blocking_cancel_stage, {{"type", "blocking_cancel_stage"}}),                                                           \
       F(type_selecting_stage, {{"type", "selecting_stage"}}))                                                                       \
     M(tiflash_fap_nomatch_reason,                                                                                                   \
       "",                                                                                                                           \

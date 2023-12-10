@@ -101,6 +101,7 @@ void SharedContextDisagg::initRemoteDataStore(const FileProviderPtr & file_provi
 
 void SharedContextDisagg::initFastAddPeerContext(UInt64 fap_concur)
 {
+    LOG_INFO(Logger::get(), "Init FAP Context, concurrency={}", fap_concur);
     fap_context = std::make_shared<FastAddPeerContext>(fap_concur);
 }
 

@@ -71,7 +71,8 @@ struct CheckpointIngestInfo
         TMTContext & tmt,
         const TiFlashRaftProxyHelper * proxy_helper,
         UInt64 region_id,
-        UInt64 peer_id);
+        UInt64 peer_id,
+        bool allow_segment_noexist);
 
     // Only call to clean dangling CheckpointIngestInfo.
     static bool forciblyClean(TMTContext & tmt, const TiFlashRaftProxyHelper * proxy_helper, UInt64 region_id);
@@ -82,7 +83,7 @@ private:
     // Safety: raftstore ensures a region is handled in a single thread.
     // `persistToLocal` is called at a fixed place in this thread.
     void persistToLocal() const;
-    static void deleteWrittenData(TMTContext & tmt, RegionPtr region, const DM::Segments & segment_ids);
+    static void deleteWrittenData(TMTContext & tmt, RegionPtr region, const DM::Segments & segments);
 
 private:
     TMTContext & tmt;

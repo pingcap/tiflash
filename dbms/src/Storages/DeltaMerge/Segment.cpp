@@ -412,7 +412,6 @@ Segment::SegmentMetaInfos Segment::readAllSegmentsMetaInfoInRange( //
     std::vector<std::pair<DM::RowKeyValue, UInt64>> end_key_and_segment_ids;
     SegmentMetaInfos segment_infos;
     bool first_of_the_range = true;
-    // TODO(fap) After #7642 there could be no segment, so it could panic later.
     while (current_segment_id != 0)
     {
         Segment::SegmentMetaInfo segment_info;
@@ -424,6 +423,7 @@ Segment::SegmentMetaInfos Segment::readAllSegmentsMetaInfoInRange( //
         {
             if (first_of_the_range)
             {
+                // After #7642 there could be no segment, so it could panic later.
                 LOG_INFO(
                     Logger::get(),
                     "Meets totally empty key range, keyspace={} table_id={} current_segment_id={} range={}",
