@@ -1606,9 +1606,8 @@ public:
             const auto & data_from = col_from->getChars();
             const auto & offsets_from = col_from->getOffsets();
 
-            auto col_to = ColumnVector<UInt8>::create();
+            auto col_to = ColumnVector<UInt8>::create(rows, 0);
             auto & data_to = col_to->getData();
-            data_to.resize(rows);
 
             size_t current_offset = 0;
             for (size_t i = 0; i < rows; ++i)
@@ -1617,6 +1616,7 @@ public:
                 size_t data_length = next_offset - current_offset - 1;
                 bool is_valid = checkJsonValid(reinterpret_cast<const char *>(&data_from[current_offset]), data_length);
                 data_to[i] = is_valid ? 1 : 0;
+                current_offset = next_offset;
             }
 
             block.getByPosition(result).column = std::move(col_to);
