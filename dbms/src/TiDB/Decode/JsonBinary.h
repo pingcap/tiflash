@@ -201,8 +201,7 @@ private:
     StringRef getSubRef(size_t offset, size_t length) const;
 
     JsonBinary getArrayElement(size_t index) const;
-    std::string_view getObjectKey(
-        size_t index) const; /// Expect object key not be too long, use String instead of StringRef as return type
+    std::string_view getObjectKey(size_t index) const;
     JsonBinary getObjectValue(size_t index) const;
     JsonBinary getValueEntry(size_t value_entry_offset) const;
 

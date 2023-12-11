@@ -61,7 +61,9 @@ TEST_F(TestJsonValid, TestJsonValidString)
 try
 {
     auto execute_and_assert = [&](const String & input, bool expect) {
-        ASSERT_COLUMN_EQ(createColumn<UInt8>({expect}), executeFunction("json_valid_string", {createColumn<String>({input})}));
+        ASSERT_COLUMN_EQ(
+            createColumn<UInt8>({expect}),
+            executeFunction("json_valid_string", {createColumn<String>({input})}));
     };
 
     execute_and_assert("", false);
