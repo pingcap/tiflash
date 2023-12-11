@@ -1701,6 +1701,7 @@ public:
                             JsonBinary::buildBinaryJsonArrayInBuffer(key_binaries, write_buffer);
                         }
                     }
+                    prev_offset = offsets_from[i];
                     writeChar(0, write_buffer);
                     offsets_to[i] = write_buffer.count();
                 }
