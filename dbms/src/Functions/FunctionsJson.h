@@ -1508,4 +1508,124 @@ public:
         }
     }
 };
+
+class FunctionJsonValidOthers : public IFunction
+{
+public:
+    static constexpr auto name = "json_valid_others";
+    static FunctionPtr create(const Context &) { return std::make_shared<FunctionJsonValidOthers>(); }
+
+    String getName() const override { return name; }
+
+    size_t getNumberOfArguments() const override { return 1; }
+
+    bool useDefaultImplementationForNulls() const override { return false; }
+    bool useDefaultImplementationForConstants() const override { return false; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & /*arguments*/) const override
+    {
+        return std::make_shared<DataTypeUInt8>();
+    }
+
+    void executeImpl(Block & block, const ColumnNumbers & /*arguments*/, size_t result) const override
+    {
+        auto bool_vec = ColumnVector<UInt8>::create();
+        auto & containor = bool_vec->getData();
+        containor.resize(1);
+        containor[0] = 0;
+        block.getByPosition(result).column = ColumnConst::create(std::move(bool_vec), block.rows());
+    }
+};
+
+class FunctionJsonValidJson : public IFunction
+{
+public:
+    static constexpr auto name = "json_valid_json";
+    static FunctionPtr create(const Context &) { return std::make_shared<FunctionJsonValidJson>(); }
+
+    String getName() const override { return name; }
+
+    size_t getNumberOfArguments() const override { return 1; }
+
+    bool useDefaultImplementationForNulls() const override { return true; }
+    bool useDefaultImplementationForConstants() const override { return false; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        if unlikely (!arguments[0]->isStringOrFixedString())
+            throw Exception(
+                fmt::format("Illegal type {} of argument of function {}", arguments[0]->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        return std::make_shared<DataTypeUInt8>();
+    }
+
+    void executeImpl(Block & block, const ColumnNumbers & /*arguments*/, size_t result) const override
+    {
+        auto bool_vec = ColumnVector<UInt8>::create();
+        auto & containor = bool_vec->getData();
+        containor.resize(1);
+        containor[0] = 1;
+        block.getByPosition(result).column = ColumnConst::create(std::move(bool_vec), block.rows());
+    }
+};
+
+class FunctionJsonValidString : public IFunction
+{
+public:
+    static constexpr auto name = "json_valid_string";
+    static FunctionPtr create(const Context &) { return std::make_shared<FunctionJsonValidString>(); }
+
+    String getName() const override { return name; }
+
+    size_t getNumberOfArguments() const override { return 1; }
+
+    bool useDefaultImplementationForNulls() const override { return true; }
+    bool useDefaultImplementationForConstants() const override { return true; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        if unlikely (!arguments[0]->isStringOrFixedString())
+            throw Exception(
+                fmt::format("Illegal type {} of argument of function {}", arguments[0]->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        return std::make_shared<DataTypeUInt8>();
+    }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
+    {
+        const ColumnPtr column = block.getByPosition(arguments[0]).column;
+        size_t rows = block.rows();
+        if (const auto * col_from = checkAndGetColumn<ColumnString>(column.get()))
+        {
+            const auto & data_from = col_from->getChars();
+            const auto & offsets_from = col_from->getOffsets();
+
+            auto col_to = ColumnVector<UInt8>::create();
+            auto & data_to = col_to->getData();
+            data_to.resize(rows);
+
+            size_t current_offset = 0;
+            for (size_t i = 0; i < rows; ++i)
+            {
+                size_t next_offset = offsets_from[i];
+                size_t data_length = next_offset - current_offset - 1;
+                if (isNullJsonBinary(data_length))
+                {
+                    data_to[i] = 0;
+                }
+                else
+                {
+                    bool is_valid = checkJsonValid(reinterpret_cast<const char *>(&data_from[current_offset]), data_length);
+                    data_to[i] = is_valid ? 1 : 0;
+                }
+            }
+
+            block.getByPosition(result).column = std::move(col_to);
+        }
+        else
+            throw Exception(
+                fmt::format("Illegal column {} of argument of function {}", column->getName(), getName()),
+                ErrorCodes::ILLEGAL_COLUMN);
+    }
+};
 } // namespace DB

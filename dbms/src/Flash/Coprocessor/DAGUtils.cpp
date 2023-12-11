@@ -450,7 +450,8 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::JsonMergeSig, "cast"},
     //{tipb::ScalarFuncSig::JsonObjectSig, "cast"},
     {tipb::ScalarFuncSig::JsonArraySig, "json_array"},
-    //{tipb::ScalarFuncSig::JsonValidJsonSig, "cast"},
+    {tipb::ScalarFuncSig::JsonValidJsonSig, "json_valid_json"},
+    {tipb::ScalarFuncSig::JsonValidOthersSig, "json_valid_others"},
     //{tipb::ScalarFuncSig::JsonContainsSig, "cast"},
     //{tipb::ScalarFuncSig::JsonArrayAppendSig, "cast"},
     //{tipb::ScalarFuncSig::JsonArrayInsertSig, "cast"},
@@ -465,7 +466,7 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::JsonKeysSig, "cast"},
     {tipb::ScalarFuncSig::JsonLengthSig, "jsonLength"},
     //{tipb::ScalarFuncSig::JsonKeys2ArgsSig, "cast"},
-    //{tipb::ScalarFuncSig::JsonValidStringSig, "cast"},
+    {tipb::ScalarFuncSig::JsonValidStringSig, "json_valid_string"},
 
     {tipb::ScalarFuncSig::DateFormatSig, "dateFormat"},
     //{tipb::ScalarFuncSig::DateLiteral, "cast"},
