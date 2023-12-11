@@ -82,6 +82,8 @@ try
     execute_and_assert("-991gdfgf.111", false);
     execute_and_assert("gsdfgsdf", false);
     execute_and_assert("\"gsdfgsdf\"", true);
+    execute_and_assert(R"({"a":[]})", true);
+    execute_and_assert(R"({"a":[], "b" :1, "c" :{}, "d":"d"})", true);
 }
 CATCH
 
