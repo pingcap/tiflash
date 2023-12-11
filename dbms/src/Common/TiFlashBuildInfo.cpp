@@ -65,10 +65,6 @@ UInt32 getPatchVersion()
 {
     return TIFLASH_VERSION_PATCH;
 }
-UInt32 getRevision()
-{
-    return VERSION_REVISION;
-}
 // clang-format off
 String getEnabledFeatures()
 {

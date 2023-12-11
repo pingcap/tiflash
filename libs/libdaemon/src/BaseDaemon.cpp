@@ -96,11 +96,9 @@ extern "C" int __llvm_profile_write_file(void);
 
 using Poco::AutoPtr;
 using Poco::ConsoleChannel;
-using Poco::FileChannel;
 using Poco::FormattingChannel;
 using Poco::Logger;
 using Poco::Message;
-using Poco::Path;
 using Poco::Util::AbstractConfiguration;
 
 constexpr char BaseDaemon::DEFAULT_GRAPHITE_CONFIG_NAME[];
@@ -1160,7 +1158,7 @@ void BaseDaemon::initialize(Application & self)
     static KillingErrorHandler killing_error_handler;
     Poco::ErrorHandler::set(&killing_error_handler);
 
-    logRevision();
+    logVersion();
 
     signal_listener = std::make_unique<SignalListener>(*this);
     signal_listener_thread.start(*signal_listener);
@@ -1171,11 +1169,10 @@ void BaseDaemon::initialize(Application & self)
     }
 }
 
-void BaseDaemon::logRevision() const
+void BaseDaemon::logVersion() const
 {
     auto * log = &Logger::root();
     LOG_INFO(log, "Welcome to TiFlash");
-    LOG_INFO(log, "Starting daemon with revision " + Poco::NumberFormatter::format(TiFlashBuildInfo::getRevision()));
     std::stringstream ss;
     TiFlashBuildInfo::outputDetail(ss);
     LOG_INFO(log, "TiFlash build info: {}", ss.str());

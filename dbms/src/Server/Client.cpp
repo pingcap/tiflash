@@ -500,7 +500,7 @@ private:
         String server_name;
         UInt64 server_version_major = 0;
         UInt64 server_version_minor = 0;
-        UInt64 server_revision = 0;
+        UInt64 server_version_patch = 0;
 
         if (max_client_network_bandwidth)
         {
@@ -508,10 +508,8 @@ private:
             connection->setThrottler(throttler);
         }
 
-        connection->getServerVersion(server_name, server_version_major, server_version_minor, server_revision);
-
-        server_version
-            = toString(server_version_major) + "." + toString(server_version_minor) + "." + toString(server_revision);
+        connection->getServerVersion(server_name, server_version_major, server_version_minor, server_version_patch);
+        server_version = fmt::format("{}.{}.{}", server_version_major, server_version_minor, server_version_patch);
 
         if (server_display_name = connection->getServerDisplayName(); server_display_name.length() == 0)
         {

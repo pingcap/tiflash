@@ -33,7 +33,6 @@ String getProfile();
 UInt32 getMajorVersion();
 UInt32 getMinorVersion();
 UInt32 getPatchVersion();
-UInt32 getRevision();
 
 void outputDetail(std::ostream & os);
 } // namespace TiFlashBuildInfo

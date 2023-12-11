@@ -31,13 +31,8 @@ extern const int LOGICAL_ERROR;
 }
 
 
-void ClientInfo::write(WriteBuffer & out, const UInt64 server_protocol_revision) const
+void ClientInfo::write(WriteBuffer & out) const
 {
-    if (server_protocol_revision < DBMS_MIN_REVISION_WITH_CLIENT_INFO)
-        throw Exception(
-            "Logical error: method ClientInfo::write is called for unsupported server revision",
-            ErrorCodes::LOGICAL_ERROR);
-
     writeBinary(static_cast<UInt8>(query_kind), out);
     if (empty())
         return;
@@ -55,21 +50,15 @@ void ClientInfo::write(WriteBuffer & out, const UInt64 server_protocol_revision)
         writeBinary(client_name, out);
         writeVarUInt(client_version_major, out);
         writeVarUInt(client_version_minor, out);
-        writeVarUInt(client_revision, out);
+        writeVarUInt(client_version_patch, out);
     }
 
-    if (server_protocol_revision >= DBMS_MIN_REVISION_WITH_QUOTA_KEY_IN_CLIENT_INFO)
-        writeBinary(quota_key, out);
+    writeBinary(quota_key, out);
 }
 
 
-void ClientInfo::read(ReadBuffer & in, const UInt64 client_protocol_revision)
+void ClientInfo::read(ReadBuffer & in)
 {
-    if (client_protocol_revision < DBMS_MIN_REVISION_WITH_CLIENT_INFO)
-        throw Exception(
-            "Logical error: method ClientInfo::read is called for unsupported client revision",
-            ErrorCodes::LOGICAL_ERROR);
-
     UInt8 read_query_kind = 0;
     readBinary(read_query_kind, in);
     query_kind = static_cast<QueryKind>(read_query_kind);
@@ -94,11 +83,10 @@ void ClientInfo::read(ReadBuffer & in, const UInt64 client_protocol_revision)
         readBinary(client_name, in);
         readVarUInt(client_version_major, in);
         readVarUInt(client_version_minor, in);
-        readVarUInt(client_revision, in);
+        readVarUInt(client_version_patch, in);
     }
 
-    if (client_protocol_revision >= DBMS_MIN_REVISION_WITH_QUOTA_KEY_IN_CLIENT_INFO)
-        readBinary(quota_key, in);
+    readBinary(quota_key, in);
 }
 
 
@@ -114,7 +102,7 @@ void ClientInfo::fillOSUserHostNameAndVersionInfo()
 
     client_version_major = TiFlashBuildInfo::getMajorVersion();
     client_version_minor = TiFlashBuildInfo::getMinorVersion();
-    client_revision = TiFlashBuildInfo::getRevision();
+    client_version_patch = TiFlashBuildInfo::getPatchVersion();
 }
 
 

@@ -235,10 +235,10 @@ public:
     {
         if (const auto * type = checkAndGetDataType<DataTypeEnum8>(block.getByPosition(arguments[0]).type.get()))
             block.getByPosition(result).column
-                = DataTypeUInt8().createColumnConst(block.rows(), UInt64(type->getValues().size()));
+                = DataTypeUInt8().createColumnConst(block.rows(), static_cast<UInt64>(type->getValues().size()));
         else if (const auto * type = checkAndGetDataType<DataTypeEnum16>(block.getByPosition(arguments[0]).type.get()))
             block.getByPosition(result).column
-                = DataTypeUInt16().createColumnConst(block.rows(), UInt64(type->getValues().size()));
+                = DataTypeUInt16().createColumnConst(block.rows(), static_cast<UInt64>(type->getValues().size()));
         else
             throw Exception(
                 "The argument for function " + getName() + " must be Enum",
@@ -526,8 +526,9 @@ public:
         }
 
         /// convertToFullColumn needed, because otherwise (constant expression case) function will not get called on each block.
-        block.getByPosition(result).column
-            = block.getByPosition(result).type->createColumnConst(size, UInt64(0))->convertToFullColumnIfConst();
+        block.getByPosition(result).column = block.getByPosition(result)
+                                                 .type->createColumnConst(size, static_cast<UInt64>(0))
+                                                 ->convertToFullColumnIfConst();
     }
 };
 
@@ -760,7 +761,7 @@ public:
 
     void executeImpl(Block & block, const ColumnNumbers & /*arguments*/, size_t result) const override
     {
-        block.getByPosition(result).column = DataTypeUInt8().createColumnConst(block.rows(), UInt64(0));
+        block.getByPosition(result).column = DataTypeUInt8().createColumnConst(block.rows(), 0UL);
     }
 };
 
@@ -796,7 +797,7 @@ public:
 
     void executeImpl(Block & block, const ColumnNumbers & /*arguments*/, size_t result) const override
     {
-        block.getByPosition(result).column = DataTypeUInt8().createColumnConst(block.rows(), UInt64(1));
+        block.getByPosition(result).column = DataTypeUInt8().createColumnConst(block.rows(), 1UL);
     }
 };
 
@@ -1530,7 +1531,7 @@ void FunctionHasColumnInTable::executeImpl(Block & block, const ColumnNumbers & 
         has_column = table->hasColumn(column_name);
     }
 
-    block.getByPosition(result).column = DataTypeUInt8().createColumnConst(block.rows(), UInt64(has_column));
+    block.getByPosition(result).column = DataTypeUInt8().createColumnConst(block.rows(), static_cast<UInt64>(has_column));
 }
 
 

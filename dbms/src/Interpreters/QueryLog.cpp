@@ -70,14 +70,11 @@ Block QueryLogElement::createBlock()
         {ColumnString::create(), std::make_shared<DataTypeString>(), "os_user"},
         {ColumnString::create(), std::make_shared<DataTypeString>(), "client_hostname"},
         {ColumnString::create(), std::make_shared<DataTypeString>(), "client_name"},
-        {ColumnUInt32::create(), std::make_shared<DataTypeUInt32>(), "client_revision"},
 
         {ColumnUInt8::create(), std::make_shared<DataTypeUInt8>(), "http_method"},
         {ColumnString::create(), std::make_shared<DataTypeString>(), "http_user_agent"},
 
         {ColumnString::create(), std::make_shared<DataTypeString>(), "quota_key"},
-
-        {ColumnUInt32::create(), std::make_shared<DataTypeUInt32>(), "revision"},
     };
 }
 
@@ -149,12 +146,8 @@ void QueryLogElement::appendToBlock(Block & block) const
     columns[i++]->insert(client_info.os_user);
     columns[i++]->insert(client_info.client_hostname);
     columns[i++]->insert(client_info.client_name);
-    columns[i++]->insert(static_cast<UInt64>(client_info.client_revision));
 
     columns[i++]->insert(client_info.quota_key);
-
-    columns[i++]->insert(static_cast<UInt64>(TiFlashBuildInfo::getRevision()));
-
     block.setColumns(std::move(columns));
 }
 

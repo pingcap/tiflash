@@ -443,7 +443,7 @@ void TCPHandler::processOrdinaryQuery()
 void TCPHandler::processTablesStatusRequest()
 {
     TablesStatusRequest request;
-    request.read(*in, client_revision);
+    request.read(*in);
 
     TablesStatusResponse response;
     for (const QualifiedTableName & table_name : request.tables)
@@ -459,7 +459,7 @@ void TCPHandler::processTablesStatusRequest()
     }
 
     writeVarUInt(Protocol::Server::TablesStatusResponse, *out);
-    response.write(*out, client_revision);
+    response.write(*out);
 }
 
 
@@ -527,7 +527,7 @@ void TCPHandler::receiveHello()
     readStringBinary(client_name, *in);
     readVarUInt(client_version_major, *in);
     readVarUInt(client_version_minor, *in);
-    readVarUInt(client_revision, *in);
+    readVarUInt(client_version_patch, *in);
     readStringBinary(default_database, *in);
     readStringBinary(user, *in);
     readStringBinary(password, *in);
@@ -538,7 +538,7 @@ void TCPHandler::receiveHello()
         client_name,
         client_version_major,
         client_version_minor,
-        client_revision);
+        client_version_patch);
     if (!default_database.empty())
         fmt_buf.fmtAppend(", database: {}", default_database);
     if (!user.empty())
@@ -555,14 +555,8 @@ void TCPHandler::sendHello()
     writeVarUInt(Protocol::Server::Hello, *out);
     writeStringBinary(fmt::format("{} {}", TiFlashBuildInfo::getName(), client_name), *out);
     writeStringBinary(TiFlashBuildInfo::getReleaseVersion(), *out);
-    if (client_revision >= DBMS_MIN_REVISION_WITH_SERVER_TIMEZONE)
-    {
-        writeStringBinary(DateLUT::instance().getTimeZone(), *out);
-    }
-    if (client_revision >= DBMS_MIN_REVISION_WITH_SERVER_DISPLAY_NAME)
-    {
-        writeStringBinary(server_display_name, *out);
-    }
+    writeStringBinary(DateLUT::instance().getTimeZone(), *out);
+    writeStringBinary(server_display_name, *out);
     out->next();
 }
 
@@ -634,8 +628,7 @@ void TCPHandler::receiveQuery()
     /// Client info
     {
         ClientInfo & client_info = query_context.getClientInfo();
-        if (client_revision >= DBMS_MIN_REVISION_WITH_CLIENT_INFO)
-            client_info.read(*in, client_revision);
+        client_info.read(*in);
 
         /// For better support of old clients, that does not send ClientInfo.
         if (client_info.query_kind == ClientInfo::QueryKind::NO_QUERY)
@@ -644,7 +637,7 @@ void TCPHandler::receiveQuery()
             client_info.client_name = client_name;
             client_info.client_version_major = client_version_major;
             client_info.client_version_minor = client_version_minor;
-            client_info.client_revision = client_revision;
+            client_info.client_version_patch = client_version_patch;
         }
 
         /// Set fields, that are known apriori.
@@ -728,7 +721,7 @@ void TCPHandler::initBlockInput()
         else
             state.maybe_compressed_in = in;
 
-        state.block_in = std::make_shared<NativeBlockInputStream>(*state.maybe_compressed_in, client_revision);
+        state.block_in = std::make_shared<NativeBlockInputStream>(*state.maybe_compressed_in, 1);
     }
 }
 
@@ -743,10 +736,7 @@ void TCPHandler::initBlockOutput(const Block & block)
         else
             state.maybe_compressed_out = out;
 
-        state.block_out = std::make_shared<NativeBlockOutputStream>(
-            *state.maybe_compressed_out,
-            client_revision,
-            block.cloneEmpty());
+        state.block_out = std::make_shared<NativeBlockOutputStream>(*state.maybe_compressed_out, 1, block.cloneEmpty());
     }
 }
 
@@ -848,7 +838,7 @@ void TCPHandler::sendProgress()
 {
     writeVarUInt(Protocol::Server::Progress, *out);
     auto increment = state.progress.fetchAndResetPiecewiseAtomically();
-    increment.write(*out, client_revision);
+    increment.write(*out);
     out->next();
 }
 
