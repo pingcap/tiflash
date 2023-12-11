@@ -1602,16 +1602,8 @@ public:
             {
                 size_t next_offset = offsets_from[i];
                 size_t data_length = next_offset - current_offset - 1;
-                if (isNullJsonBinary(data_length))
-                {
-                    data_to[i] = 0;
-                }
-                else
-                {
-                    bool is_valid
-                        = checkJsonValid(reinterpret_cast<const char *>(&data_from[current_offset]), data_length);
-                    data_to[i] = is_valid ? 1 : 0;
-                }
+                bool is_valid = checkJsonValid(reinterpret_cast<const char *>(&data_from[current_offset]), data_length);
+                data_to[i] = is_valid ? 1 : 0;
             }
 
             block.getByPosition(result).column = std::move(col_to);
