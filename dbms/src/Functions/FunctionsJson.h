@@ -1872,7 +1872,7 @@ private:
             {
                 throw Exception(
                     fmt::format(
-                        "Illegal json path expression contain wildcard characters or range selection of function {}",
+                        "In this situation, path expressions may not contain the * and ** tokens or range selection.",
                         getName()),
                     ErrorCodes::ILLEGAL_COLUMN);
             }
