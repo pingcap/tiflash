@@ -1531,7 +1531,8 @@ void FunctionHasColumnInTable::executeImpl(Block & block, const ColumnNumbers & 
         has_column = table->hasColumn(column_name);
     }
 
-    block.getByPosition(result).column = DataTypeUInt8().createColumnConst(block.rows(), static_cast<UInt64>(has_column));
+    block.getByPosition(result).column
+        = DataTypeUInt8().createColumnConst(block.rows(), static_cast<UInt64>(has_column));
 }
 
 
