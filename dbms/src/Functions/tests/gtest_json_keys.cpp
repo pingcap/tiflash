@@ -54,6 +54,8 @@ try
     execute_and_assert("{}", "[]");
     execute_and_assert(R"({"1":[]})", R"(["1"])");
     // in tidb will be  `["", "1", "2", "3"]`.
+    // https://dev.mysql.com/doc/refman/8.0/en/json-search-functions.html#function_json-keys
+    // But mysql does not require the order of the elements in the array
     execute_and_assert(R"({"1":[], "2":{}, "3":"fsdfsd", "":1233})", R"(["1", "2", "3", ""])");
 }
 CATCH
@@ -96,6 +98,8 @@ try
     execute_and_assert("{}", "$", "[]");
     execute_and_assert(R"({"1":[]})", "$", R"(["1"])");
     // in tidb will be  `["", "1", "2", "3"]`.
+    // https://dev.mysql.com/doc/refman/8.0/en/json-search-functions.html#function_json-keys
+    // But mysql does not require the order of the elements in the array
     execute_and_assert(R"({"1":[], "2":{}, "3":"fsdfsd", "":1233})", "$", R"(["1", "2", "3", ""])");
 
     // In this situation, path expressions may not contain the * and ** tokens or range selection.
