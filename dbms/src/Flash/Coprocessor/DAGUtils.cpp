@@ -1325,7 +1325,12 @@ SortDescription getSortDescription(const std::vector<NameAndTypePair> & order_co
 String genFuncString(
     const String & func_name,
     const Names & argument_names,
+<<<<<<< HEAD
     const TiDB::TiDBCollators & collators)
+=======
+    const TiDB::TiDBCollators & collators,
+    const std::vector<const tipb::FieldType *> & field_types)
+>>>>>>> 3a72d53dcb (Fix the issue that functions that rely on `tipb::FieldType` may produce incorrect results (#8483))
 {
     FmtBuffer buf;
     buf.fmtAppend("{}({})_collator", func_name, fmt::join(argument_names.begin(), argument_names.end(), ", "));
@@ -1337,6 +1342,14 @@ String genFuncString(
             buf.append("_0");
     }
     buf.append(" ");
+    buf.joinStr(
+        field_types.begin(),
+        field_types.end(),
+        [](const auto & field_type, FmtBuffer & buffer) {
+            if likely (field_type)
+                buffer.fmtAppend("{}|{}", field_type->flag(), field_type->flen());
+        },
+        ", ");
     return buf.toString();
 }
 
