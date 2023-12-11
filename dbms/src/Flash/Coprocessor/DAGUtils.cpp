@@ -1403,7 +1403,11 @@ SortDescription getSortDescription(
     return order_descr;
 }
 
-String genFuncString(const String & func_name, const Names & argument_names, const TiDB::TiDBCollators & collators)
+String genFuncString(
+    const String & func_name,
+    const Names & argument_names,
+    const TiDB::TiDBCollators & collators,
+    const std::vector<const tipb::FieldType *> & field_types)
 {
     FmtBuffer buf;
     buf.fmtAppend("{}({})_collator", func_name, fmt::join(argument_names.begin(), argument_names.end(), ", "));
@@ -1415,6 +1419,14 @@ String genFuncString(const String & func_name, const Names & argument_names, con
             buf.append("_0");
     }
     buf.append(" ");
+    buf.joinStr(
+        field_types.begin(),
+        field_types.end(),
+        [](const auto & field_type, FmtBuffer & buffer) {
+            if likely (field_type)
+                buffer.fmtAppend("{}|{}", field_type->flag(), field_type->flen());
+        },
+        ", ");
     return buf.toString();
 }
 
