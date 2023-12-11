@@ -63,6 +63,7 @@ private:
 
     size_t total_compact_files = 0;
     size_t total_compact_rows = 0;
+    size_t total_compact_bytes = 0;
     size_t result_compact_files = 0;
 
 public:
@@ -100,6 +101,10 @@ public:
     size_t getFirsCompactIndex() const { return first_compact_index; }
 
     size_t getCompactionVersion() const { return current_compaction_version; }
+
+    // The stats about compaction. Only effective after `prepare` is called.
+    size_t getTotalCompactRows() const { return total_compact_rows; }
+    size_t getTotalCompactBytes() const { return total_compact_bytes; }
 
     /// Create new column file by combining several small `ColumnFileTiny`s
     void prepare(DMContext & context, WriteBatches & wbs, const PageReader & reader);
