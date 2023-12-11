@@ -55,7 +55,7 @@ struct AsyncTasks
 
         static CancelHandlePtr genAlreadyCanceled() noexcept
         {
-            CancelHandlePtr h = std::make_shared<CancelHandle>();
+            auto h = std::make_shared<CancelHandle>();
             h->doSetCancel();
             return h;
         }
