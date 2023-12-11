@@ -1535,11 +1535,7 @@ public:
 
     void executeImpl(Block & block, const ColumnNumbers & /*arguments*/, size_t result) const override
     {
-        auto bool_vec = ColumnVector<UInt8>::create();
-        auto & containor = bool_vec->getData();
-        containor.resize(1);
-        containor[0] = 0;
-        block.getByPosition(result).column = ColumnConst::create(std::move(bool_vec), block.rows());
+        block.getByPosition(result).column = ColumnConst::create(ColumnVector<UInt8>::create(1, 0), block.rows());
     }
 };
 
@@ -1567,11 +1563,7 @@ public:
 
     void executeImpl(Block & block, const ColumnNumbers & /*arguments*/, size_t result) const override
     {
-        auto bool_vec = ColumnVector<UInt8>::create();
-        auto & containor = bool_vec->getData();
-        containor.resize(1);
-        containor[0] = 1;
-        block.getByPosition(result).column = ColumnConst::create(std::move(bool_vec), block.rows());
+        block.getByPosition(result).column = ColumnConst::create(ColumnVector<UInt8>::create(1, 1), block.rows());
     }
 };
 
