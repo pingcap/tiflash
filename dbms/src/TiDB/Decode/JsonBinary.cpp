@@ -17,6 +17,7 @@
 #include <TiDB/Decode/DatumCodec.h>
 #include <TiDB/Decode/JsonBinary.h>
 #include <TiDB/Decode/JsonPathExprRef.h>
+#include <string_view>
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
@@ -389,12 +390,12 @@ JsonBinary JsonBinary::getArrayElement(size_t index) const
     return getValueEntry(HEADER_SIZE + index * VALUE_ENTRY_SIZE);
 }
 
-String JsonBinary::getObjectKey(size_t index) const
+std::string_view JsonBinary::getObjectKey(size_t index) const
 {
     size_t cursor = HEADER_SIZE + index * KEY_ENTRY_SIZE;
     auto key_offset = decodeNumeric<UInt32>(cursor, data);
     auto key_length = decodeNumeric<UInt16>(cursor, data);
-    return String(data.data + key_offset, key_length);
+    return std::string_view(data.data + key_offset, key_length);
 }
 
 JsonBinary JsonBinary::getObjectValue(size_t index) const
@@ -867,6 +868,16 @@ UInt64 JsonBinary::getDepth() const
     }
 }
 
+std::vector<std::string_view> JsonBinary::getKeys() const
+{
+    RUNTIME_CHECK(type == TYPE_CODE_OBJECT);
+    std::vector<std::string_view> res;
+    auto elem_count = getElementCount();
+    for (size_t i = 0; i < elem_count; ++i)
+        res.push_back(getObjectKey(i));
+    return res;
+}
+
 std::optional<JsonBinary> JsonBinary::searchObjectKey(JsonPathObjectKey & key) const
 {
     auto element_count = getElementCount();
@@ -911,7 +922,7 @@ UInt32 JsonBinary::binarySearchKey(const JsonPathObjectKey & key, UInt32 element
     while (distance > 0)
     {
         Int32 step = distance >> 2;
-        const String & current_key = getObjectKey(first + step);
+        const auto & current_key = getObjectKey(first + step);
         if (current_key < key.key)
         {
             first += step;

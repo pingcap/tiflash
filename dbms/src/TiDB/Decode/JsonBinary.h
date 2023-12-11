@@ -156,6 +156,10 @@ public:
 
     UInt64 getDepth() const;
 
+    JsonType getType() const { return type; }
+
+    std::vector<std::string_view> getKeys() const;
+
     static String unquoteString(const StringRef & ref);
     static void unquoteStringInBuffer(const StringRef & ref, JsonBinaryWriteBuffer & write_buffer);
     static String unquoteJsonString(const StringRef & ref);
@@ -196,7 +200,7 @@ private:
     StringRef getSubRef(size_t offset, size_t length) const;
 
     JsonBinary getArrayElement(size_t index) const;
-    String getObjectKey(
+    std::string_view getObjectKey(
         size_t index) const; /// Expect object key not be too long, use String instead of StringRef as return type
     JsonBinary getObjectValue(size_t index) const;
     JsonBinary getValueEntry(size_t value_entry_offset) const;

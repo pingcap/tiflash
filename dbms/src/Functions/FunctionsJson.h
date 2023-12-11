@@ -1628,4 +1628,87 @@ public:
                 ErrorCodes::ILLEGAL_COLUMN);
     }
 };
+
+class FunctionJsonKeys : public IFunction
+{
+public:
+    static constexpr auto name = "json_keys";
+    static FunctionPtr create(const Context &) { return std::make_shared<FunctionJsonKeys>(); }
+
+    String getName() const override { return name; }
+
+    size_t getNumberOfArguments() const override { return 1; }
+
+    bool useDefaultImplementationForNulls() const override { return true; }
+    bool useDefaultImplementationForConstants() const override { return true; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        if unlikely (!arguments[0]->isString())
+            throw Exception(
+                fmt::format("Illegal type {} of argument of function {}", arguments[0]->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        return makeNullable(std::make_shared<DataTypeUInt8>());
+    }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
+    {
+        const ColumnPtr column = block.getByPosition(arguments[0]).column;
+        size_t rows = block.rows();
+        if (const auto * col_from = checkAndGetColumn<ColumnString>(column.get()))
+        {
+            const auto & data_from = col_from->getChars();
+            const auto & offsets_from = col_from->getOffsets();
+
+            auto col_to = ColumnString::create();
+            auto & data_to = col_to->getChars();
+            auto & offsets_to = col_to->getOffsets();
+            offsets_to.resize(rows);
+            ColumnUInt8::MutablePtr col_null_map = ColumnUInt8::create(rows, 0);
+            ColumnUInt8::Container & vec_null_map = col_null_map->getData();
+
+            {
+                JsonBinary::JsonBinaryWriteBuffer write_buffer(data_to, data_from.size());
+                ColumnString::Offset prev_offset = 0;
+                ColumnString::Chars_t tmp;
+                JsonBinary::JsonBinaryWriteBuffer tmp_buffer(tmp);
+                for (size_t i = 0; i < rows; ++i)
+                {
+                    size_t data_length = offsets_from[i] - prev_offset - 1;
+                    if (!isNullJsonBinary(data_length))
+                    {
+                        JsonBinary json_binary(data_from[prev_offset], StringRef(&data_from[prev_offset + 1], data_length - 1));
+                        if (json_binary.getType() != JsonBinary::TYPE_CODE_OBJECT)
+                        {
+                            vec_null_map[i] = 1;
+                        }
+                        else
+                        {
+                            auto keys = json_binary.getKeys();
+                            tmp_buffer.setOffset(0);
+                            std::vector<JsonBinary> key_binaries;
+                            key_binaries.resize(keys.size());
+                            for (const auto & key : keys)
+                            {
+                                auto cur_offset = tmp_buffer.offset();
+                                JsonBinary::appendStringRef(tmp_buffer, key);
+                                auto after_offset = tmp_buffer.offset();
+                                key_binaries.emplace_back(tmp[cur_offset], StringRef(&tmp[cur_offset + 1], after_offset - cur_offset - 1));
+                            }
+                            JsonBinary::buildBinaryJsonArrayInBuffer(key_binaries, write_buffer);
+                        }
+                    }
+                    writeChar(0, write_buffer);
+                    offsets_to[i] = write_buffer.count();
+                }
+            }
+
+            block.getByPosition(result).column = ColumnNullable::create(std::move(col_to), std::move(col_null_map));
+        }
+        else
+            throw Exception(
+                fmt::format("Illegal column {} of argument of function {}", column->getName(), getName()),
+                ErrorCodes::ILLEGAL_COLUMN);
+    }
+};
 } // namespace DB
