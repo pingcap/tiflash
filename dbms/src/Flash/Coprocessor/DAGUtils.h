@@ -61,7 +61,12 @@ SortDescription getSortDescription(
 String genFuncString(
     const String & func_name,
     const Names & argument_names,
+<<<<<<< HEAD
     const TiDB::TiDBCollators & collators);
+=======
+    const TiDB::TiDBCollators & collators,
+    const std::vector<const tipb::FieldType *> & field_types = {});
+>>>>>>> 3a72d53dcb (Fix the issue that functions that rely on `tipb::FieldType` may produce incorrect results (#8483))
 
 extern const Int8 VAR_SIZE;
 
