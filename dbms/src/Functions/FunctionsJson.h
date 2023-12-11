@@ -1733,7 +1733,7 @@ public:
         if (arguments[0]->onlyNull() || arguments[1]->onlyNull())
             return makeNullable(std::make_shared<DataTypeNothing>());
 
-        if unlikely (!removeNullable(arguments[0])->isStringOrFixedString())
+        if unlikely (!removeNullable(arguments[0])->isString())
             throw Exception(
                 fmt::format("Illegal type {} of argument of function {}", arguments[0]->getName(), getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
