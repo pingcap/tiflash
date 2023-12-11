@@ -1737,7 +1737,7 @@ public:
             throw Exception(
                 fmt::format("Illegal type {} of argument of function {}", arguments[0]->getName(), getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-        if unlikely (!removeNullable(arguments[1])->isStringOrFixedString())
+        if unlikely (!removeNullable(arguments[1])->isString())
             throw Exception(
                 fmt::format("Illegal type {} of argument of function {}", arguments[0]->getName(), getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
