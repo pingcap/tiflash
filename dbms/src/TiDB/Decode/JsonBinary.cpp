@@ -17,6 +17,7 @@
 #include <TiDB/Decode/DatumCodec.h>
 #include <TiDB/Decode/JsonBinary.h>
 #include <TiDB/Decode/JsonPathExprRef.h>
+
 #include <string_view>
 
 #pragma GCC diagnostic push
@@ -796,9 +797,7 @@ String JsonBinary::unquoteString(const StringRef & ref)
     return ref.toString();
 }
 
-bool JsonBinary::extract(
-    std::vector<JsonPathExprRefContainerPtr> & path_expr_container_vec,
-    JsonBinaryWriteBuffer & write_buffer)
+std::vector<JsonBinary> JsonBinary::extract(std::vector<JsonPathExprRefContainerPtr> & path_expr_container_vec)
 {
     std::vector<JsonBinary> extracted_json_binary_vec;
     for (auto & path_expr_container : path_expr_container_vec)
@@ -807,7 +806,14 @@ bool JsonBinary::extract(
         const auto * first_path_ref = path_expr_container->firstRef();
         extractTo(extracted_json_binary_vec, first_path_ref, dup_check_set, false);
     }
+    return extracted_json_binary_vec;
+}
 
+bool JsonBinary::extract(
+    std::vector<JsonPathExprRefContainerPtr> & path_expr_container_vec,
+    JsonBinaryWriteBuffer & write_buffer)
+{
+    auto extracted_json_binary_vec = extract(path_expr_container_vec);
     bool found;
     if (extracted_json_binary_vec.empty())
     {

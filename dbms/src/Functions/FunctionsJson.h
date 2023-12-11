@@ -90,14 +90,7 @@ public:
     {
         for (const auto & arg : arguments)
         {
-            if (const auto * nested_type = checkAndGetDataType<DataTypeNullable>(arg.get()))
-            {
-                if unlikely (!nested_type->getNestedType()->isStringOrFixedString())
-                    throw Exception(
-                        "Illegal type " + arg->getName() + " of argument of function " + getName(),
-                        ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-            }
-            else if unlikely (!arg->isStringOrFixedString())
+            if (!removeNullable(arg)->isStringOrFixedString())
             {
                 throw Exception(
                     "Illegal type " + arg->getName() + " of argument of function " + getName(),
@@ -202,7 +195,7 @@ public:
                     ErrorCodes::ILLEGAL_COLUMN);
 
             auto path_expr = JsonPathExpr::parseJsonPathExpr(path_str);
-            /// If any path_expr failed to parse, return null
+            /// If any path_expr failed to parse, throw exception
             if (!path_expr)
                 throw Exception(
                     fmt::format(
@@ -495,7 +488,7 @@ public:
     }
 
 private:
-    const tipb::FieldType * tidb_tp;
+    const tipb::FieldType * tidb_tp = nullptr;
     const Context & context;
 };
 
@@ -1615,7 +1608,8 @@ public:
                 }
                 else
                 {
-                    bool is_valid = checkJsonValid(reinterpret_cast<const char *>(&data_from[current_offset]), data_length);
+                    bool is_valid
+                        = checkJsonValid(reinterpret_cast<const char *>(&data_from[current_offset]), data_length);
                     data_to[i] = is_valid ? 1 : 0;
                 }
             }
@@ -1677,7 +1671,9 @@ public:
                     size_t data_length = offsets_from[i] - prev_offset - 1;
                     if (!isNullJsonBinary(data_length))
                     {
-                        JsonBinary json_binary(data_from[prev_offset], StringRef(&data_from[prev_offset + 1], data_length - 1));
+                        JsonBinary json_binary(
+                            data_from[prev_offset],
+                            StringRef(&data_from[prev_offset + 1], data_length - 1));
                         if (json_binary.getType() != JsonBinary::TYPE_CODE_OBJECT)
                         {
                             vec_null_map[i] = 1;
@@ -1687,13 +1683,15 @@ public:
                             auto keys = json_binary.getKeys();
                             tmp_buffer.setOffset(0);
                             std::vector<JsonBinary> key_binaries;
-                            key_binaries.resize(keys.size());
+                            key_binaries.reserve(keys.size());
                             for (const auto & key : keys)
                             {
                                 auto cur_offset = tmp_buffer.offset();
                                 JsonBinary::appendStringRef(tmp_buffer, key);
                                 auto after_offset = tmp_buffer.offset();
-                                key_binaries.emplace_back(tmp[cur_offset], StringRef(&tmp[cur_offset + 1], after_offset - cur_offset - 1));
+                                key_binaries.emplace_back(
+                                    tmp[cur_offset],
+                                    StringRef(&tmp[cur_offset + 1], after_offset - cur_offset - 1));
                             }
                             JsonBinary::buildBinaryJsonArrayInBuffer(key_binaries, write_buffer);
                         }
@@ -1722,16 +1720,19 @@ public:
 
     size_t getNumberOfArguments() const override { return 2; }
 
-    bool useDefaultImplementationForNulls() const override { return true; }
+    bool useDefaultImplementationForNulls() const override { return false; }
     bool useDefaultImplementationForConstants() const override { return true; }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
-        if unlikely (!arguments[0]->isString())
+        if (arguments[0]->onlyNull() || arguments[1]->onlyNull())
+            return makeNullable(std::make_shared<DataTypeNothing>());
+
+        if unlikely (!removeNullable(arguments[0])->isStringOrFixedString())
             throw Exception(
                 fmt::format("Illegal type {} of argument of function {}", arguments[0]->getName(), getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-        if unlikely (!arguments[1]->isString())
+        if unlikely (!removeNullable(arguments[1])->isStringOrFixedString())
             throw Exception(
                 fmt::format("Illegal type {} of argument of function {}", arguments[0]->getName(), getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
@@ -1740,66 +1741,173 @@ public:
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
-        const ColumnPtr & json_column = block.getByPosition(arguments[0]).column;
-        const ColumnPtr & path_column = block.getByPosition(arguments[1]).column;
-        size_t rows = block.rows();
-        const auto * json_col_from = checkAndGetColumn<ColumnString>(json_column.get());
-        const auto * path_col_from = checkAndGetColumn<ColumnString>(path_column.get());
-
-        if likely (json_col_from && path_col_from)
+        const auto & json_col = block.getByPosition(arguments[0]).column;
+        const auto & path_col = block.getByPosition(arguments[1]).column;
+        if (json_col->onlyNull() || path_col->onlyNull())
         {
-            const auto & data_from = col_from->getChars();
-            const auto & offsets_from = col_from->getOffsets();
+            block.getByPosition(result).column
+                = block.getByPosition(result).type->createColumnConst(block.rows(), Null());
+            return;
+        }
 
-            auto col_to = ColumnString::create();
-            auto & data_to = col_to->getChars();
-            auto & offsets_to = col_to->getOffsets();
-            offsets_to.resize(rows);
-            ColumnUInt8::MutablePtr col_null_map = ColumnUInt8::create(rows, 0);
-            ColumnUInt8::Container & vec_null_map = col_null_map->getData();
+        auto nested_block = createBlockWithNestedColumns(block, arguments);
+        auto json_source = createDynamicStringSource(*nested_block.getByPosition(arguments[0]).column);
+        auto path_source = createDynamicStringSource(*nested_block.getByPosition(arguments[1]).column);
 
+        auto col_to = ColumnString::create();
+        auto & data_to = col_to->getChars();
+        auto & offsets_to = col_to->getOffsets();
+        size_t rows = block.rows();
+        offsets_to.resize(rows);
+        auto col_null_map = ColumnUInt8::create(rows, 0);
+        auto & vec_null_map = col_null_map->getData();
+
+        if (json_col->isColumnNullable())
+        {
+            const auto & json_column_nullable = static_cast<const ColumnNullable &>(*json_col);
+            if (path_col->isColumnNullable())
             {
-                JsonBinary::JsonBinaryWriteBuffer write_buffer(data_to, data_from.size());
-                ColumnString::Offset prev_offset = 0;
-                ColumnString::Chars_t tmp;
-                JsonBinary::JsonBinaryWriteBuffer tmp_buffer(tmp);
-                for (size_t i = 0; i < rows; ++i)
+                const auto & path_column_nullable = static_cast<const ColumnNullable &>(*path_col);
+                doExecute<true, true>(
+                    json_source,
+                    json_column_nullable.getNullMapData(),
+                    path_source,
+                    path_column_nullable.getNullMapData(),
+                    rows,
+                    data_to,
+                    offsets_to,
+                    vec_null_map);
+            }
+            else
+            {
+                doExecute<true, false>(
+                    json_source,
+                    json_column_nullable.getNullMapData(),
+                    path_source,
+                    {},
+                    rows,
+                    data_to,
+                    offsets_to,
+                    vec_null_map);
+            }
+        }
+        else
+        {
+            if (path_col->isColumnNullable())
+            {
+                const auto & path_column_nullable = static_cast<const ColumnNullable &>(*path_col);
+                doExecute<false, true>(
+                    json_source,
+                    {},
+                    path_source,
+                    path_column_nullable.getNullMapData(),
+                    rows,
+                    data_to,
+                    offsets_to,
+                    vec_null_map);
+            }
+            else
+            {
+                doExecute<false, false>(json_source, {}, path_source, {}, rows, data_to, offsets_to, vec_null_map);
+            }
+        }
+
+        block.getByPosition(result).column = ColumnNullable::create(std::move(col_to), std::move(col_null_map));
+    }
+
+private:
+    template <bool is_json_nullable, bool is_path_nullable>
+    void doExecute(
+        const std::unique_ptr<IStringSource> & json_source,
+        const NullMap & null_map_json,
+        const std::unique_ptr<IStringSource> & path_source,
+        const NullMap & null_map_path,
+        size_t rows,
+        ColumnString::Chars_t & data_to,
+        ColumnString::Offsets & offsets_to,
+        NullMap & null_map_to) const
+    {
+#define SET_NULL_AND_CONTINUE             \
+    null_map_to[i] = 1;                   \
+    writeChar(0, write_buffer);           \
+    offsets_to[i] = write_buffer.count(); \
+    json_source->next();                  \
+    path_source->next();                  \
+    continue;
+
+        ColumnString::Chars_t tmp;
+        JsonBinary::JsonBinaryWriteBuffer tmp_buffer(tmp);
+        JsonBinary::JsonBinaryWriteBuffer write_buffer(data_to, json_source->getSizeForReserve());
+        for (size_t i = 0; i < rows; ++i)
+        {
+            if constexpr (is_json_nullable)
+            {
+                if (null_map_json[i])
                 {
-                    size_t data_length = offsets_from[i] - prev_offset - 1;
-                    if (!isNullJsonBinary(data_length))
-                    {
-                        JsonBinary json_binary(data_from[prev_offset], StringRef(&data_from[prev_offset + 1], data_length - 1));
-                        if (json_binary.getType() != JsonBinary::TYPE_CODE_OBJECT)
-                        {
-                            vec_null_map[i] = 1;
-                        }
-                        else
-                        {
-                            auto keys = json_binary.getKeys();
-                            tmp_buffer.setOffset(0);
-                            std::vector<JsonBinary> key_binaries;
-                            key_binaries.resize(keys.size());
-                            for (const auto & key : keys)
-                            {
-                                auto cur_offset = tmp_buffer.offset();
-                                JsonBinary::appendStringRef(tmp_buffer, key);
-                                auto after_offset = tmp_buffer.offset();
-                                key_binaries.emplace_back(tmp[cur_offset], StringRef(&tmp[cur_offset + 1], after_offset - cur_offset - 1));
-                            }
-                            JsonBinary::buildBinaryJsonArrayInBuffer(key_binaries, write_buffer);
-                        }
-                    }
-                    writeChar(0, write_buffer);
-                    offsets_to[i] = write_buffer.count();
+                    SET_NULL_AND_CONTINUE
+                }
+            }
+            if constexpr (is_path_nullable)
+            {
+                if (null_map_path[i])
+                {
+                    SET_NULL_AND_CONTINUE
                 }
             }
 
-            block.getByPosition(result).column = ColumnNullable::create(std::move(col_to), std::move(col_null_map));
+            const auto & path_val = path_source->getWhole();
+            auto path_expr = JsonPathExpr::parseJsonPathExpr(StringRef{path_val.data, path_val.size});
+            /// If any path_expr failed to parse, throw exception
+            if (!path_expr)
+                throw Exception(
+                    fmt::format("Illegal json path expression of function {}", getName()),
+                    ErrorCodes::ILLEGAL_COLUMN);
+            auto path_expr_containor = std::make_unique<JsonPathExprRefContainer>(path_expr);
+            if (path_expr_containor->firstRef() && path_expr_containor->firstRef()->couldMatchMultipleValues())
+            {
+                throw Exception(
+                    fmt::format(
+                        "Illegal json path expression contain wildcard characters or range selection of function {}",
+                        getName()),
+                    ErrorCodes::ILLEGAL_COLUMN);
+            }
+            std::vector<JsonPathExprRefContainerPtr> path_expr_containor_vec;
+            path_expr_containor_vec.push_back(std::move(path_expr_containor));
+
+            const auto & json_val = json_source->getWhole();
+            JsonBinary json_binary{json_val.data[0], StringRef{&json_val.data[1], json_val.size - 1}};
+            if (json_binary.getType() != JsonBinary::TYPE_CODE_OBJECT)
+            {
+                SET_NULL_AND_CONTINUE
+            }
+
+            auto extract_json_binaries = json_binary.extract(path_expr_containor_vec);
+            if (extract_json_binaries.empty() || extract_json_binaries[0].getType() != JsonBinary::TYPE_CODE_OBJECT)
+            {
+                SET_NULL_AND_CONTINUE
+            }
+
+            auto keys = extract_json_binaries[0].getKeys();
+            tmp_buffer.setOffset(0);
+            std::vector<JsonBinary> key_binaries;
+            key_binaries.reserve(keys.size());
+            for (const auto & key : keys)
+            {
+                auto cur_offset = tmp_buffer.offset();
+                JsonBinary::appendStringRef(tmp_buffer, key);
+                auto after_offset = tmp_buffer.offset();
+                key_binaries.emplace_back(
+                    tmp[cur_offset],
+                    StringRef(&tmp[cur_offset + 1], after_offset - cur_offset - 1));
+            }
+            JsonBinary::buildBinaryJsonArrayInBuffer(key_binaries, write_buffer);
+            writeChar(0, write_buffer);
+            offsets_to[i] = write_buffer.count();
+            json_source->next();
+            path_source->next();
         }
-        else
-            throw Exception(
-                fmt::format("Illegal column of argument of function {}", getName()),
-                ErrorCodes::ILLEGAL_COLUMN);
+
+#undef SET_NULL_AND_CONTINUE
     }
 };
 } // namespace DB
