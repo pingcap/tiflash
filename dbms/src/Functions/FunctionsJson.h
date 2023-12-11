@@ -1862,7 +1862,7 @@ private:
 
             const auto & path_val = path_source->getWhole();
             auto path_expr = JsonPathExpr::parseJsonPathExpr(StringRef{path_val.data, path_val.size});
-            /// If any path_expr failed to parse, throw exception
+            /// If path_expr failed to parse, throw exception
             if (!path_expr)
                 throw Exception(
                     fmt::format("Illegal json path expression of function {}", getName()),
