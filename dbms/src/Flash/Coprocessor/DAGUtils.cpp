@@ -465,7 +465,7 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::JsonDepthSig, "json_depth"},
     {tipb::ScalarFuncSig::JsonKeysSig, "json_keys"},
     {tipb::ScalarFuncSig::JsonLengthSig, "jsonLength"},
-    //{tipb::ScalarFuncSig::JsonKeys2ArgsSig, "cast"},
+    {tipb::ScalarFuncSig::JsonKeys2ArgsSig, "json_keys_2_args"},
     {tipb::ScalarFuncSig::JsonValidStringSig, "json_valid_string"},
 
     {tipb::ScalarFuncSig::DateFormatSig, "dateFormat"},

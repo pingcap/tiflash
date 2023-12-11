@@ -36,5 +36,6 @@ void registerFunctionsJson(FunctionFactory & factory)
     factory.registerFunction<FunctionJsonValidJson>();
     factory.registerFunction<FunctionJsonValidString>();
     factory.registerFunction<FunctionJsonKeys>();
+    factory.registerFunction<FunctionJsonKeys2Args>();
 }
 } // namespace DB
