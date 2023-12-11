@@ -42,6 +42,12 @@ try
         auto input = createColumn<UInt8>({1, 1, 0, 0, 1, 0});
         ASSERT_COLUMN_EQ(createConstColumn<UInt8>(input.column->size(), false), executeFunction(func_name, input));
     }
+    {
+        // Although it is stated in https://dev.mysql.com/doc/refman/5.7/en/json-attribute-functions.html#function_json-valid that returns NULL if the argument is NULL,
+        // both MySQL and TiDB will directly return false instead of NULL.
+        auto input = createOnlyNullColumn(10);
+        ASSERT_COLUMN_EQ(createConstColumn<UInt8>(input.column->size(), false), executeFunction(func_name, input));
+    }
 }
 CATCH
 
