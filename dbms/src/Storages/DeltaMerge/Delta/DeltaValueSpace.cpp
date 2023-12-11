@@ -80,6 +80,11 @@ DeltaValueSpacePtr DeltaValueSpace::createFromCheckpoint( //
     return std::make_shared<DeltaValueSpace>(std::move(persisted_file_set));
 }
 
+void DeltaValueSpace::saveMeta(WriteBuffer & buf) const
+{
+    persisted_file_set->saveMeta(buf);
+}
+
 void DeltaValueSpace::saveMeta(WriteBatches & wbs) const
 {
     persisted_file_set->saveMeta(wbs);

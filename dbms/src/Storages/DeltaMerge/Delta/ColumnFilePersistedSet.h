@@ -107,6 +107,7 @@ public:
 
     const ColumnFilePersisteds & getFiles() const { return persisted_files; }
 
+    void saveMeta(WriteBuffer & buf) const;
     void saveMeta(WriteBatches & wbs) const;
 
     void recordRemoveColumnFilesPages(WriteBatches & wbs) const;

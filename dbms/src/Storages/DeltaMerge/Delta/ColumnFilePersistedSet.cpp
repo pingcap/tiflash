@@ -29,14 +29,19 @@ namespace DB
 {
 namespace DM
 {
+inline UInt64 serializeColumnFilePersisteds(WriteBuffer & buf, const ColumnFilePersisteds & persisted_files)
+{
+    serializeSavedColumnFiles(buf, persisted_files);
+    return buf.count();
+}
+
 inline void serializeColumnFilePersisteds(
     WriteBatches & wbs,
     PageIdU64 id,
     const ColumnFilePersisteds & persisted_files)
 {
     MemoryWriteBuffer buf(0, COLUMN_FILE_SERIALIZE_BUFFER_SIZE);
-    serializeSavedColumnFiles(buf, persisted_files);
-    auto data_size = buf.count();
+    auto data_size = serializeColumnFilePersisteds(buf, persisted_files);
     wbs.meta.putPage(id, 0, buf.tryGetReadBuffer(), data_size);
 }
 
@@ -122,6 +127,11 @@ ColumnFilePersistedSetPtr ColumnFilePersistedSet::createFromCheckpoint( //
 void ColumnFilePersistedSet::saveMeta(WriteBatches & wbs) const
 {
     serializeColumnFilePersisteds(wbs, metadata_id, persisted_files);
+}
+
+void ColumnFilePersistedSet::saveMeta(WriteBuffer & buf) const
+{
+    serializeColumnFilePersisteds(buf, persisted_files);
 }
 
 void ColumnFilePersistedSet::recordRemoveColumnFilesPages(WriteBatches & wbs) const

@@ -20,6 +20,7 @@
 #include <Storages/KVStore/MultiRaft/RegionPersister.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/Page/PageStorage.h>
+#include <Storages/Page/V3/CheckpointFile/Proto/manifest_file.pb.h>
 #include <Storages/Page/V3/Universal/UniversalPageIdFormatImpl.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
 #include <Storages/Page/V3/Universal/UniversalWriteBatchImpl.h>
@@ -27,8 +28,6 @@
 
 namespace DB
 {
-
-static constexpr uint8_t FAP_INGEST_INFO_PERSIST_FMT_VER = 1;
 
 CheckpointIngestInfoPtr CheckpointIngestInfo::restore(
     TMTContext & tmt,
@@ -54,43 +53,47 @@ CheckpointIngestInfoPtr CheckpointIngestInfo::restore(
             peer_id,
             tmt.getKVStore()->getStoreID(std::memory_order_relaxed));
     }
-    ReadBufferFromMemory buf(page.data.begin(), page.data.size());
-    RUNTIME_CHECK_MSG(readBinary2<UInt8>(buf) == FAP_INGEST_INFO_PERSIST_FMT_VER, "wrong fap ingest info format");
 
-    std::vector<UInt64> restored_segments_id;
+    PS::V3::CheckpointProto::CheckpointIngestInfoPersisted ingest_info_persisted;
+    if (!ingest_info_persisted.ParseFromArray(page.data.data(), page.data.size()))
     {
-        auto count = readBinary2<UInt64>(buf);
-        for (size_t i = 0; i < count; ++i)
-        {
-            auto segment_id = readBinary2<UInt64>(buf);
-            restored_segments_id.push_back(segment_id);
-        }
-        remote_store_id = readBinary2<UInt64>(buf);
+        LOG_ERROR(DB::Logger::get(), "Can't parse CheckpointIngestInfoPersisted");
     }
-    region = Region::deserialize(buf, proxy_helper);
+
+    {
+        ReadBufferFromMemory buf(
+            ingest_info_persisted.region_info().data(),
+            ingest_info_persisted.region_info().size());
+        region = Region::deserialize(buf, proxy_helper);
+    }
 
     auto & storages = tmt.getStorages();
     auto keyspace_id = region->getKeyspaceID();
     auto table_id = region->getMappedTableID();
     auto storage = storages.get(keyspace_id, table_id);
-
     auto log = DB::Logger::get("CheckpointIngestInfo");
     if (storage && storage->engineType() == TiDB::StorageEngine::DT)
     {
         auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
         auto dm_context = dm_storage->getStore()->newDMContext(tmt.getContext(), tmt.getContext().getSettingsRef());
-        for (auto segment_id : restored_segments_id)
+        for (auto i = 0; i < ingest_info_persisted.segments_size(); i++)
         {
-            restored_segments.emplace_back(DM::Segment::restoreSegment(log, *dm_context, segment_id));
+            auto & segment_pd = ingest_info_persisted.segments()[i];
+            ReadBufferFromString buf(segment_pd.segment_meta());
+            DM::Segment::SegmentMetaInfo segment_info;
+            readSegmentMetaInfo(buf, segment_info);
+
+            auto delta = DM::DeltaValueSpace::restore(*dm_context, segment_info.range, segment_info.delta_id);
+            auto stable = DM::StableValueSpace::restore(*dm_context, segment_info.stable_id);
+            restored_segments.push_back(std::make_shared<DM::Segment>(
+                log,
+                segment_info.epoch,
+                segment_info.range,
+                segment_info.segment_id,
+                segment_info.next_segment_id,
+                delta,
+                stable));
         }
-        LOG_INFO(
-            log,
-            "CheckpointIngestInfo restore success with {} segments, region_id={} table_id={} keyspace_id={} region={}",
-            restored_segments.size(),
-            region_id,
-            table_id,
-            keyspace_id,
-            region->getDebugString());
     }
     else
     {
@@ -117,40 +120,33 @@ void CheckpointIngestInfo::persistToLocal() const
     }
     auto uni_ps = tmt.getContext().getWriteNodePageStorage();
     UniversalWriteBatch wb;
-    MemoryWriteBuffer wb_buffer;
+
     // Write:
     // - The region, which is actually data and meta in KVStore.
     // - The segment ids point to segments which are already persisted but not ingested.
-    static_assert(sizeof(FAP_INGEST_INFO_PERSIST_FMT_VER) == 1);
-    auto data_size = writeBinary2(FAP_INGEST_INFO_PERSIST_FMT_VER, wb_buffer);
+
+    PS::V3::CheckpointProto::CheckpointIngestInfoPersisted ingest_info_persisted;
+
     {
-        size_t segment_data_size = 0;
-        segment_data_size += writeBinary2(restored_segments.size(), wb_buffer);
         for (const auto & restored_segment : restored_segments)
         {
-            data_size += writeBinary2(restored_segment->segmentId(), wb_buffer);
+            auto * segment_info = ingest_info_persisted.add_segments();
+            restored_segment->serializeToFAPTempSegment(segment_info);
         }
-        segment_data_size += writeBinary2<UInt64>(remote_store_id, wb_buffer);
-        data_size += segment_data_size;
-        RUNTIME_CHECK_MSG(
-            wb_buffer.count() == data_size,
-            "buffer {} != data_size {}, segment_data_size={}",
-            wb_buffer.count(),
-            data_size,
-            segment_data_size);
     }
     {
         // Although the region is the first peer of this region in this store, we can't write it to formal KVStore for now.
         // Otherwise it could be uploaded and then overwritten.
-        auto region_size = RegionPersister::computeRegionWriteBuffer(*region, wb_buffer);
-        data_size += region_size;
-        RUNTIME_CHECK_MSG(
-            wb_buffer.count() == data_size,
-            "buffer {} != data_size {}, region_size={}",
-            wb_buffer.count(),
-            data_size,
-            region_size);
+        WriteBufferFromOwnString wb;
+        RegionPersister::computeRegionWriteBuffer(*region, wb);
+        ingest_info_persisted.set_region_info(wb.releaseStr());
     }
+
+    MemoryWriteBuffer wb_buffer;
+    auto s = ingest_info_persisted.SerializeAsString();
+    wb_buffer.write(s.data(), s.size());
+    auto data_size = wb_buffer.count();
+    RUNTIME_CHECK(s.size() == data_size);
     auto page_id
         = UniversalPageIdFormat::toLocalKVPrefix(UniversalPageIdFormat::LocalKVKeyType::FAPIngestInfo, region_id);
     auto read_buf = wb_buffer.tryGetReadBuffer();

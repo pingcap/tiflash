@@ -28,6 +28,7 @@
 #include <Storages/DeltaMerge/StableValueSpace.h>
 #include <Storages/KVStore/MultiRaft/Disagg/CheckpointInfo.h>
 #include <Storages/Page/PageDefinesBase.h>
+#include <Storages/Page/V3/CheckpointFile/Proto/manifest_file.pb.h>
 
 namespace DB::DM
 {
@@ -187,6 +188,8 @@ public:
         UniversalPageStoragePtr temp_ps,
         WriteBatches & wbs);
 
+    void serializeToFAPTempSegment(PS::V3::CheckpointProto::FAPTempSegmentInfo * segment_info);
+    UInt64 storeSegmentMetaInfo(WriteBuffer & buf) const;
     void serialize(WriteBatchWrapper & wb);
 
     /// Attach a new ColumnFile into the Segment. The ColumnFile will be added to MemFileSet and flushed to disk later.
@@ -752,4 +755,5 @@ public:
     const LoggerPtr log;
 };
 
+void readSegmentMetaInfo(ReadBuffer & buf, Segment::SegmentMetaInfo & segment_info);
 } // namespace DB::DM

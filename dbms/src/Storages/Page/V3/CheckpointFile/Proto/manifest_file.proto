@@ -87,3 +87,13 @@ message LockFile {
     bytes name = 1;
 }
 
+message FAPTempSegmentInfo {
+    bytes segment_meta = 1;
+    bytes delta_meta = 2;
+    bytes stable_meta = 3;
+}
+
+message CheckpointIngestInfoPersisted {
+    bytes region_info = 1;
+    repeated FAPTempSegmentInfo segments = 2;
+}

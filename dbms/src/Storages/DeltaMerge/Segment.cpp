@@ -317,7 +317,7 @@ SegmentPtr Segment::newSegment( //
         context.storage_pool->newMetaPageId());
 }
 
-inline void readSegmentMetaInfo(ReadBuffer & buf, Segment::SegmentMetaInfo & segment_info)
+void readSegmentMetaInfo(ReadBuffer & buf, Segment::SegmentMetaInfo & segment_info)
 {
     readIntBinary(segment_info.version, buf);
     readIntBinary(segment_info.epoch, buf);
@@ -496,17 +496,41 @@ Segments Segment::createTargetSegmentsFromCheckpoint( //
     return segments;
 }
 
-void Segment::serialize(WriteBatchWrapper & wb)
+void Segment::serializeToFAPTempSegment(PS::V3::CheckpointProto::FAPTempSegmentInfo * segment_info)
 {
-    MemoryWriteBuffer buf(0, SEGMENT_BUFFER_SIZE);
+    {
+        WriteBufferFromOwnString wb;
+        storeSegmentMetaInfo(wb);
+        segment_info->set_segment_meta(wb.releaseStr());
+    }
+    {
+        WriteBufferFromOwnString wb;
+        delta->saveMeta(wb);
+        segment_info->set_delta_meta(wb.releaseStr());
+    }
+    {
+        WriteBufferFromOwnString wb;
+        stable->saveMeta(wb);
+        segment_info->set_stable_meta(wb.releaseStr());
+    }
+}
+
+UInt64 Segment::storeSegmentMetaInfo(WriteBuffer & buf) const
+{
     writeIntBinary(STORAGE_FORMAT_CURRENT.segment, buf);
     writeIntBinary(epoch, buf);
     rowkey_range.serialize(buf);
     writeIntBinary(next_segment_id, buf);
     writeIntBinary(delta->getId(), buf);
     writeIntBinary(stable->getId(), buf);
+    return buf.count();
+}
 
-    auto data_size = buf.count(); // Must be called before tryGetReadBuffer.
+void Segment::serialize(WriteBatchWrapper & wb)
+{
+    MemoryWriteBuffer buf(0, SEGMENT_BUFFER_SIZE);
+    // Must be called before tryGetReadBuffer.
+    auto data_size = storeSegmentMetaInfo(buf);
     wb.putPage(segment_id, 0, buf.tryGetReadBuffer(), data_size);
 }
 

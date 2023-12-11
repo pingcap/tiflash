@@ -160,6 +160,7 @@ public:
 
     bool hasAbandoned() const { return abandoned.load(std::memory_order_relaxed); }
 
+    void saveMeta(WriteBuffer & buf) const;
     void saveMeta(WriteBatches & wbs) const;
 
     void recordRemoveColumnFilesPages(WriteBatches & wbs) const;

@@ -81,6 +81,13 @@ void StableValueSpace::setFiles(const DMFiles & files_, const RowKeyRange & rang
 void StableValueSpace::saveMeta(WriteBatchWrapper & meta_wb)
 {
     MemoryWriteBuffer buf(0, 8192);
+    // Must be called before tryGetReadBuffer.
+    auto data_size = saveMeta(buf);
+    meta_wb.putPage(id, 0, buf.tryGetReadBuffer(), data_size);
+}
+
+UInt64 StableValueSpace::saveMeta(WriteBuffer & buf)
+{
     writeIntBinary(STORAGE_FORMAT_CURRENT.stable, buf);
     writeIntBinary(valid_rows, buf);
     writeIntBinary(valid_bytes, buf);
@@ -88,8 +95,7 @@ void StableValueSpace::saveMeta(WriteBatchWrapper & meta_wb)
     for (auto & f : files)
         writeIntBinary(f->pageId(), buf);
 
-    auto data_size = buf.count(); // Must be called before tryGetReadBuffer.
-    meta_wb.putPage(id, 0, buf.tryGetReadBuffer(), data_size);
+    return buf.count();
 }
 
 StableValueSpacePtr StableValueSpace::restore(DMContext & dm_context, PageIdU64 id)
