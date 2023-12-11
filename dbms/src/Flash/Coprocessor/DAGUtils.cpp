@@ -1160,6 +1160,36 @@ SortDescription getSortDescription(const std::vector<NameAndTypePair> & order_co
     return order_descr;
 }
 
+<<<<<<< HEAD
+=======
+String genFuncString(
+    const String & func_name,
+    const Names & argument_names,
+    const TiDB::TiDBCollators & collators,
+    const std::vector<const tipb::FieldType *> & field_types)
+{
+    FmtBuffer buf;
+    buf.fmtAppend("{}({})_collator", func_name, fmt::join(argument_names.begin(), argument_names.end(), ", "));
+    for (const auto & collator : collators)
+    {
+        if (collator)
+            buf.fmtAppend("_{}", collator->getCollatorId());
+        else
+            buf.append("_0");
+    }
+    buf.append(" ");
+    buf.joinStr(
+        field_types.begin(),
+        field_types.end(),
+        [](const auto & field_type, FmtBuffer & buffer) {
+            if likely (field_type)
+                buffer.fmtAppend("{}|{}", field_type->flag(), field_type->flen());
+        },
+        ", ");
+    return buf.toString();
+}
+
+>>>>>>> 3a72d53dcb (Fix the issue that functions that rely on `tipb::FieldType` may produce incorrect results (#8483))
 TiDB::TiDBCollatorPtr getCollatorFromFieldType(const tipb::FieldType & field_type)
 {
     if (field_type.collate() < 0)
