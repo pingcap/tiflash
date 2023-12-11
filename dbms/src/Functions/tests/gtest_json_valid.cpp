@@ -68,8 +68,8 @@ try
 {
     auto execute_and_assert = [&](const String & input, bool expect) {
         ASSERT_COLUMN_EQ(
-            createColumn<UInt8>({expect}),
-            executeFunction("json_valid_string", {createColumn<String>({input})}));
+            createColumn<UInt8>({expect, expect}),
+            executeFunction("json_valid_string", {createColumn<String>({input, input})}));
     };
 
     execute_and_assert("", false);

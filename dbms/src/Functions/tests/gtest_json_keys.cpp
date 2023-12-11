@@ -40,8 +40,8 @@ try
     static constexpr auto func_name = "json_keys";
     auto execute_and_assert = [&](const String & input, const std::optional<String> & expect) {
         ASSERT_COLUMN_EQ(
-            castStringToJson(createColumn<Nullable<String>>({expect})),
-            executeFunction(func_name, {castStringToJson(createColumn<String>({input}))}));
+            castStringToJson(createColumn<Nullable<String>>({expect, expect})),
+            executeFunction(func_name, {castStringToJson(createColumn<String>({input, input}))}));
     };
 
     execute_and_assert("1", {});
@@ -66,21 +66,24 @@ try
     static constexpr auto func_name = "json_keys_2_args";
 
     // only null
-    ColumnWithTypeAndName only_null_const = createOnlyNullColumnConst(1);
+    ColumnWithTypeAndName only_null_const = createOnlyNullColumnConst(2);
     ASSERT_COLUMN_EQ(only_null_const, executeFunction(func_name, {only_null_const, only_null_const}));
-    ASSERT_COLUMN_EQ(only_null_const, executeFunction(func_name, {createColumn<String>({"{}"}), only_null_const}));
-    ASSERT_COLUMN_EQ(only_null_const, executeFunction(func_name, {only_null_const, createColumn<String>({"$"})}));
+    ASSERT_COLUMN_EQ(
+        only_null_const,
+        executeFunction(func_name, {createColumn<String>({"{}", "{}"}), only_null_const}));
+    ASSERT_COLUMN_EQ(only_null_const, executeFunction(func_name, {only_null_const, createColumn<String>({"$", "$"})}));
 
     // not only null inputs
     auto execute_func = [&](const std::optional<String> & json, const std::optional<String> & path) {
         return executeFunction(
             func_name,
-            {castStringToJson(createColumn<Nullable<String>>({json})), createColumn<Nullable<String>>({path})});
+            {castStringToJson(createColumn<Nullable<String>>({json, json})),
+             createColumn<Nullable<String>>({path, path})});
     };
     auto execute_and_assert = [&](const std::optional<String> & json,
                                   const std::optional<String> & path,
                                   const std::optional<String> & expect) {
-        ASSERT_COLUMN_EQ(castStringToJson(createColumn<Nullable<String>>({expect})), execute_func(json, path));
+        ASSERT_COLUMN_EQ(castStringToJson(createColumn<Nullable<String>>({expect, expect})), execute_func(json, path));
     };
 
     execute_and_assert({}, "$", {});
