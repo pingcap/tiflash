@@ -21,7 +21,8 @@ String randomString(UInt64 length)
 {
     static const std::string charset{
         "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz!@#$%^&*()|[]{}:;',<.>`~"};
-    std::mt19937_64 rand_gen;
+    std::random_device rand_dev;
+    std::mt19937_64 rand_gen(rand_dev());
     String str(length, 0);
     std::generate_n(str.begin(), str.size(), [&]() { return charset[rand_gen() % charset.size()]; });
     return str;
@@ -29,14 +30,16 @@ String randomString(UInt64 length)
 
 int randomTimeOffset()
 {
-    std::mt19937_64 rand_gen;
+    std::random_device rand_dev;
+    std::mt19937_64 rand_gen(rand_dev());
     static constexpr int max_offset = 24 * 3600 * 10000; // 10000 days for test
     return (rand_gen() % max_offset) * (rand_gen() % 2 == 0 ? 1 : -1);
 }
 
 time_t randomUTCTimestamp()
 {
-    return time(nullptr) + randomTimeOffset();
+    using namespace std::chrono;
+    return duration_cast<seconds>(system_clock::now().time_since_epoch()).count() + randomTimeOffset();
 }
 
 struct tm randomLocalTime()
@@ -79,7 +82,8 @@ String randomDuration()
 
 String randomDecimal(uint64_t prec, uint64_t scale)
 {
-    std::mt19937_64 rand_gen;
+    std::random_device rand_dev;
+    std::mt19937_64 rand_gen(rand_dev());
     auto s = std::to_string(rand_gen());
     if (s.size() < prec)
         s += String(prec - s.size(), '0');
