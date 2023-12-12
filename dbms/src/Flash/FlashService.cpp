@@ -1113,7 +1113,7 @@ grpc::Status FlashService::FetchDisaggPages(
             [sync_writer](const disaggregated::PagesPacket & packet) { sync_writer->Write(packet); },
             task.seg_task,
             read_ids,
-            *context);
+            context->getSettingsRef());
         stream_writer->syncWrite();
 
         LOG_INFO(logger, "FetchDisaggPages respond finished, task_id={}", task_id);

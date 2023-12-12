@@ -734,7 +734,7 @@ bool DeltaMergeStore::flushCache(const Context & context, const RowKeyRange & ra
 
 bool DeltaMergeStore::flushCache(const DMContextPtr & dm_context, const RowKeyRange & range, bool try_until_succeed)
 {
-    fiu_do_on(FailPoints::disable_flush_cache, { return true; });
+    fiu_do_on(FailPoints::disable_flush_cache, { return false; });
     size_t sleep_ms = 5;
 
     RowKeyRange cur_range = range;

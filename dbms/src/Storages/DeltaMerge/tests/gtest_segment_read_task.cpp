@@ -167,7 +167,7 @@ public:
         return ext::make_scope_guard([&]() { db_context->getSharedContextDisagg()->remote_data_store = nullptr; });
     }
 
-    [[nodiscard]] auto disableFlushCache()
+    [[nodiscard]] static auto disableFlushCache()
     {
         DB::FailPointHelper::enableFailPoint(DB::FailPoints::skip_check_segment_update);
         DB::FailPointHelper::enableFailPoint(DB::FailPoints::disable_flush_cache);
@@ -232,7 +232,7 @@ public:
             [&q](const disaggregated::PagesPacket & packet) { q.push(packet, nullptr); },
             local_seg,
             remote_seg->extra_remote_info->remote_page_ids,
-            *db_context);
+            db_context->getSettingsRef());
         writer.syncWrite();
         q.finish();
 
