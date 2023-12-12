@@ -335,7 +335,7 @@ public:
     std::vector<SegmentPtr> ingestSegmentsUsingSplit(
         const DMContextPtr & dm_context,
         const RowKeyRange & ingest_range,
-        const std::vector<SegmentPtr> & target_segments);
+        const std::vector<SegmentPtr> & segments_to_ingest);
 
     bool ingestSegmentDataIntoSegmentUsingSplit(
         DMContext & dm_context,
@@ -346,7 +346,7 @@ public:
     Segments buildSegmentsFromCheckpointInfo(
         const DMContextPtr & dm_context,
         const DM::RowKeyRange & range,
-        CheckpointInfoPtr checkpoint_info);
+        CheckpointInfoPtr checkpoint_info) const;
 
     Segments buildSegmentsFromCheckpointInfo(
         const Context & db_context,
