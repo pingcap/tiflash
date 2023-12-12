@@ -140,9 +140,10 @@ ColumnFilePersisteds deserializeSavedColumnFiles(
         break;
     default:
         throw Exception(
-            "Unexpected delta value version: " + DB::toString(version)
-                + ", latest version: " + DB::toString(DeltaFormat::V3),
-            ErrorCodes::LOGICAL_ERROR);
+            ErrorCodes::LOGICAL_ERROR,
+            "Unexpected delta value version: {}, latest version: {}",
+            version,
+            DeltaFormat::V3);
     }
     return column_files;
 }
@@ -166,9 +167,10 @@ ColumnFilePersisteds createColumnFilesFromCheckpoint( //
         break;
     default:
         throw Exception(
-            "Unexpected delta value version: " + DB::toString(version)
-                + ", latest version: " + DB::toString(DeltaFormat::V3),
-            ErrorCodes::LOGICAL_ERROR);
+            ErrorCodes::LOGICAL_ERROR,
+            "Unexpected delta value version: {}, latest version: {}",
+            version,
+            DeltaFormat::V3);
     }
     return column_files;
 }

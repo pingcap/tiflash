@@ -829,7 +829,7 @@ UInt64 DeltaMergeStore::ingestFiles(
 std::vector<SegmentPtr> DeltaMergeStore::ingestSegmentsUsingSplit(
     const DMContextPtr & dm_context,
     const RowKeyRange & ingest_range,
-    const std::vector<SegmentPtr> & target_segments)
+    const std::vector<SegmentPtr> & segments_to_ingest)
 {
     std::set<SegmentPtr> updated_segments;
 
@@ -914,19 +914,19 @@ std::vector<SegmentPtr> DeltaMergeStore::ingestSegmentsUsingSplit(
         log,
         "Table ingest checkpoint using split - split ingest phase - begin, ingest_range={}, files_n={}",
         ingest_range.toDebugString(),
-        target_segments.size());
+        segments_to_ingest.size());
 
-    for (size_t segment_idx = 0; segment_idx < target_segments.size(); segment_idx++)
+    for (size_t remote_segment_idx = 0; remote_segment_idx < segments_to_ingest.size(); remote_segment_idx++)
     {
         // We may meet empty segment, just ignore it
-        if (target_segments[segment_idx]->getEstimatedRows() == 0)
+        if (segments_to_ingest[remote_segment_idx]->getEstimatedRows() == 0)
         {
             LOG_INFO(
                 log,
                 "Table ingest checkpoint using split - split ingest phase - Meet empty Segment, skipped. "
                 "ingest_range={} segment_idx={}",
                 ingest_range.toDebugString(),
-                segment_idx);
+                remote_segment_idx);
             continue;
         }
 
@@ -938,7 +938,7 @@ std::vector<SegmentPtr> DeltaMergeStore::ingestSegmentsUsingSplit(
          *  │            │-- Seg --│------- Segment -----│                                │
          * We will try to ingest it into all overlapped segments.
          */
-        auto file_ingest_range = target_segments[segment_idx]->getRowKeyRange();
+        auto file_ingest_range = segments_to_ingest[remote_segment_idx]->getRowKeyRange();
         while (!file_ingest_range.none()) // This DMFile has remaining data to ingest
         {
             auto [segment, is_empty] = getSegmentByStartKey(
@@ -962,9 +962,9 @@ std::vector<SegmentPtr> DeltaMergeStore::ingestSegmentsUsingSplit(
             LOG_INFO(
                 log,
                 "Table ingest checkpoint using split - split ingest phase - Try to ingest file into segment, "
-                "segment_idx={} segment_id={} segment_ingest_range={} segment={} segment_ingest_range={}",
-                segment_idx,
-                target_segments[segment_idx]->segmentId(),
+                "remote_segment_idx={} remote_segment_id={} remote_ingest_range={} segment={} segment_ingest_range={}",
+                remote_segment_idx,
+                segments_to_ingest[remote_segment_idx]->segmentId(),
                 file_ingest_range.toDebugString(),
                 segment->simpleInfo(),
                 segment_ingest_range.toDebugString());
@@ -973,7 +973,7 @@ std::vector<SegmentPtr> DeltaMergeStore::ingestSegmentsUsingSplit(
                 *dm_context,
                 segment,
                 segment_ingest_range,
-                target_segments[segment_idx]);
+                segments_to_ingest[remote_segment_idx]);
             if (succeeded)
             {
                 updated_segments.insert(segment);
@@ -1126,7 +1126,7 @@ bool DeltaMergeStore::ingestSegmentDataIntoSegmentUsingSplit(
 Segments DeltaMergeStore::buildSegmentsFromCheckpointInfo(
     const DMContextPtr & dm_context,
     const DM::RowKeyRange & range,
-    CheckpointInfoPtr checkpoint_info)
+    CheckpointInfoPtr checkpoint_info) const
 {
     if (unlikely(range.none()))
     {

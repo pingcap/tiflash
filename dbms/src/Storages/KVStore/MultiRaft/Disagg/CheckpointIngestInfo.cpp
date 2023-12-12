@@ -83,8 +83,10 @@ CheckpointIngestInfoPtr CheckpointIngestInfo::restore(
             DM::Segment::SegmentMetaInfo segment_info;
             readSegmentMetaInfo(buf, segment_info);
 
+            // FIXME(FAP) correct this
             auto delta = DM::DeltaValueSpace::restore(*dm_context, segment_info.range, segment_info.delta_id);
             auto stable = DM::StableValueSpace::restore(*dm_context, segment_info.stable_id);
+            // END FIXME(FAP)
             restored_segments.push_back(std::make_shared<DM::Segment>(
                 log,
                 segment_info.epoch,
