@@ -48,6 +48,11 @@ FastAddPeerRes FastAddPeerImplWrite(
     UInt64 start_time);
 void ApplyFapSnapshotImpl(TMTContext & tmt, TiFlashRaftProxyHelper * proxy_helper, UInt64 region_id, UInt64 peer_id);
 
+namespace FailPoints
+{
+extern const char force_not_clean_fap_on_destroy[];
+} // namespace FailPoints
+
 namespace tests
 {
 class RegionKVStoreTestFAP : public KVStoreTestBase
@@ -314,6 +319,9 @@ try
     uint64_t region_id = 1;
     FastAddPeerImplWrite(global_context.getTMTContext(), region_id, 2333, std::move(mock_data), 0);
     fap_context->debugRemoveCheckpointIngestInfo(region_id);
+    FailPointHelper::enableFailPoint("force_not_clean_fap_on_destroy");
+    SCOPE_EXIT({ FailPointHelper::disableFailPoint("force_not_clean_fap_on_destroy"); });
+    kvstore->handleDestroy(region_id, global_context.getTMTContext());
     ApplyFapSnapshotImpl(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333);
 
     {
@@ -370,9 +378,20 @@ try
     auto & global_context = TiFlashTestEnv::getGlobalContext();
     auto fap_context = global_context.getSharedContextDisagg()->fap_context;
     uint64_t region_id = 1;
+
+    // Will generate and persist some information in local ps, which will not be uploaded.
     FastAddPeerImplWrite(global_context.getTMTContext(), region_id, 2333, std::move(mock_data), 0);
     dumpCheckpoint();
     FastAddPeerImplWrite(global_context.getTMTContext(), region_id, 2333, std::move(mock_data), 0);
+    auto in_mem_ingest_info = fap_context->getOrRestoreCheckpointIngestInfo(
+        global_context.getTMTContext(),
+        proxy_helper.get(),
+        region_id,
+        2333);
+    auto in_disk_ingest_info
+        = CheckpointIngestInfo::restore(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333);
+    ASSERT_EQ(in_mem_ingest_info->getRegion()->getDebugString(), in_disk_ingest_info->getRegion()->getDebugString());
+    ASSERT_EQ(in_mem_ingest_info->getRestoredSegments().size(), in_disk_ingest_info->getRestoredSegments().size());
 
     auto s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
     const auto manifests = S3::CheckpointManifestS3Set::getFromS3(*s3_client, kvs.getStoreID());

@@ -107,6 +107,7 @@ namespace DB
     M(force_set_parallel_prehandle_threshold)                \
     M(force_raise_prehandle_exception)                       \
     M(force_agg_on_partial_block)                            \
+    M(force_not_clean_fap_on_destroy)                        \
     M(delta_tree_create_node_fail)
 
 #define APPLY_FOR_PAUSEABLE_FAILPOINTS_ONCE(M) \

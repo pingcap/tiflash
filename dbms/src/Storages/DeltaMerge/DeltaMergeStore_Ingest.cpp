@@ -1134,7 +1134,7 @@ Segments DeltaMergeStore::buildSegmentsFromCheckpointInfo(
     }
     LOG_INFO(
         log,
-        "Ingest checkpoint from remote, store_id={} region_id={}",
+        "Build checkpoint from remote, store_id={} region_id={}",
         checkpoint_info->remote_store_id,
         checkpoint_info->region_id);
     auto segment_meta_infos = Segment::readAllSegmentsMetaInfoInRange(*dm_context, range, checkpoint_info);
@@ -1155,6 +1155,7 @@ Segments DeltaMergeStore::buildSegmentsFromCheckpointInfo(
         return {};
     }
     wbs.writeLogAndData();
+    LOG_INFO(log, "Finish write fap checkpoint, region_id={}", checkpoint_info->region_id);
     return restored_segments;
 }
 
