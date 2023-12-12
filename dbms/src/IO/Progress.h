@@ -33,8 +33,8 @@ struct ProgressValues
     size_t bytes;
     size_t total_rows;
 
-    void read(ReadBuffer & in, UInt64 server_revision);
-    void write(WriteBuffer & out, UInt64 client_revision) const;
+    void read(ReadBuffer & in);
+    void write(WriteBuffer & out) const;
 };
 
 
@@ -60,8 +60,8 @@ struct Progress
         , total_rows(total_rows_)
     {}
 
-    void read(ReadBuffer & in, UInt64 server_revision);
-    void write(WriteBuffer & out, UInt64 client_revision) const;
+    void read(ReadBuffer & in);
+    void write(WriteBuffer & out) const;
 
     /// Each value separately is changed atomically (but not whole object).
     void incrementPiecewiseAtomically(const Progress & rhs)

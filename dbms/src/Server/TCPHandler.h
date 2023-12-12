@@ -30,10 +30,6 @@
 
 #include "IServer.h"
 
-namespace Poco
-{
-class Logger;
-}
 
 namespace DB
 {
@@ -77,7 +73,7 @@ struct QueryState
 
     void reset() { *this = QueryState(); }
 
-    bool empty() { return is_empty; }
+    bool empty() const { return is_empty; }
 };
 
 
@@ -87,23 +83,23 @@ public:
     TCPHandler(IServer & server_, const Poco::Net::StreamSocket & socket_)
         : Poco::Net::TCPServerConnection(socket_)
         , server(server_)
-        , log(&Poco::Logger::get("TCPHandler"))
+        , log(Logger::get("TCPHandler"))
         , connection_context(server.context())
         , query_context(server.context())
     {
         server_display_name = server.config().getString("display_name", "TiFlash");
     }
 
-    void run();
+    void run() override;
 
 private:
     IServer & server;
-    Poco::Logger * log;
+    LoggerPtr log;
 
     String client_name;
     UInt64 client_version_major = 0;
     UInt64 client_version_minor = 0;
-    UInt64 client_revision = 0;
+    UInt64 client_version_patch = 0;
 
     Context connection_context;
     Context query_context;
