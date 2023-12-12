@@ -245,7 +245,7 @@ String DAGExpressionAnalyzerHelper::buildCastFunctionInternal(
 {
     static const String tidb_cast_name = "tidb_cast";
 
-    String result_name = genFuncString(tidb_cast_name, argument_names, {nullptr});
+    String result_name = genFuncString(tidb_cast_name, argument_names, {nullptr}, {&field_type});
     if (actions->getSampleBlock().has(result_name))
         return result_name;
 
@@ -299,7 +299,7 @@ String DAGExpressionAnalyzerHelper::buildSingleParamJsonRelatedFunctions(
     const auto & input_expr = expr.children(0);
     String arg = analyzer->getActions(input_expr, actions);
     const auto & collator = getCollatorFromExpr(expr);
-    String result_name = genFuncString(func_name, {arg}, {collator});
+    String result_name = genFuncString(func_name, {arg}, {collator}, {&input_expr.field_type(), &expr.field_type()});
     if (actions->getSampleBlock().has(result_name))
         return result_name;
 
