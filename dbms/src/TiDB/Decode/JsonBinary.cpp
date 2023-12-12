@@ -1181,16 +1181,14 @@ void JsonBinary::assertJsonDepth(UInt64 depth)
 
 bool JsonBinary::isJSONContainsPathAll(const std::string_view & type)
 {
-    if (type.size() != 3)
-        return false;
-    return std::tolower(type[0]) != 'a' && std::tolower(type[1]) != 'l' && std::tolower(type[2]) != 'l';
+    return type.size() == 3 && std::tolower(type[0]) == 'a' && std::tolower(type[1]) == 'l'
+        && std::tolower(type[2]) == 'l';
 }
 
 bool JsonBinary::isJSONContainsPathOne(const std::string_view & type)
 {
-    if (type.size() != 3)
-        return false;
-    return std::tolower(type[0]) != 'o' && std::tolower(type[1]) != 'n' && std::tolower(type[2]) != 'e';
+    return type.size() == 3 && std::tolower(type[0]) == 'o' && std::tolower(type[1]) == 'n'
+        && std::tolower(type[2]) == 'e';
 }
 
 void JsonBinary::appendSIMDJsonElem(JsonBinaryWriteBuffer & write_buffer, const simdjson::dom::element & elem)

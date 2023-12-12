@@ -1517,6 +1517,8 @@ public:
 
     String getName() const override { return name; }
 
+    bool isVariadic() const override { return true; }
+
     size_t getNumberOfArguments() const override { return 0; }
 
     bool useDefaultImplementationForNulls() const override { return false; }
@@ -1524,7 +1526,7 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
-        if unlikely (arguments.size() < 2)
+        if unlikely (arguments.size() < 3)
         {
             throw Exception(
                 fmt::format("Illegal arguments count {} of function {}", arguments.size(), getName()),
@@ -1542,7 +1544,15 @@ public:
         if (arguments[0]->onlyNull() || arguments[1]->onlyNull())
             return makeNullable(std::make_shared<DataTypeNothing>());
         else
-            return makeNullable(std::make_shared<DataTypeUInt8>());
+        {
+            auto return_type = std::make_shared<DataTypeUInt8>();
+            for (const auto & arg : arguments)
+            {
+                if (arg->onlyNull() || arg->isNullable())
+                    return makeNullable(return_type);
+            }
+            return return_type;
+        }
     }
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
@@ -1654,7 +1664,11 @@ public:
             }
         }
 
-        block.getByPosition(result).column = ColumnNullable::create(std::move(col_to), std::move(col_null_map));
+        auto & result_col = block.getByPosition(result);
+        if (result_col.type->onlyNull() || result_col.type->isNullable())
+            block.getByPosition(result).column = ColumnNullable::create(std::move(col_to), std::move(col_null_map));
+        else
+            block.getByPosition(result).column = std::move(col_to);
     }
 
 private:
@@ -1707,7 +1721,7 @@ private:
             std::string_view type{reinterpret_cast<const char *>(type_val.data), type_val.size};
             if unlikely (!JsonBinary::isJSONContainsPathAll(type) && !JsonBinary::isJSONContainsPathOne(type))
                 throw Exception(
-                    fmt::format("Illegal json contains path type {} of function {}", type, getName()),
+                    fmt::format("The second argument can only be either 'one' or 'all' of function {}.", getName()),
                     ErrorCodes::ILLEGAL_COLUMN);
 
             auto & res = data_to[row]; // default 1.
@@ -1720,6 +1734,7 @@ private:
                 }
                 else
                 {
+                    assert(path_sources[i]);
                     const auto & path_val = path_sources[i]->getWhole();
                     auto path_expr = JsonPathExpr::parseJsonPathExpr(StringRef{path_val.data, path_val.size});
                     /// If path_expr failed to parse, throw exception
