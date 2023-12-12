@@ -148,6 +148,7 @@ public:
     String toString() const; /// For test usage, not efficient at all
     void toStringInBuffer(JsonBinaryWriteBuffer & write_buffer) const;
 
+    std::vector<JsonBinary> extract(std::vector<JsonPathExprRefContainerPtr> & path_expr_container_vec);
     /// Extract receives several path expressions as arguments, matches them in bj, and returns true if any match:
     ///	Serialize final results in 'write_buffer'
     bool extract(
@@ -185,6 +186,9 @@ public:
     static void appendSIMDJsonElem(JsonBinaryWriteBuffer & write_buffer, const simdjson::dom::element & elem);
 
     static void assertJsonDepth(UInt64 depth);
+
+    static bool isJSONContainsPathAll(const std::string_view & type);
+    static bool isJSONContainsPathOne(const std::string_view & type);
 
 private:
     Int64 getInt64() const;

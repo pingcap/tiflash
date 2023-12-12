@@ -795,9 +795,7 @@ String JsonBinary::unquoteString(const StringRef & ref)
     return ref.toString();
 }
 
-bool JsonBinary::extract(
-    std::vector<JsonPathExprRefContainerPtr> & path_expr_container_vec,
-    JsonBinaryWriteBuffer & write_buffer)
+std::vector<JsonBinary> JsonBinary::extract(std::vector<JsonPathExprRefContainerPtr> & path_expr_container_vec)
 {
     std::vector<JsonBinary> extracted_json_binary_vec;
     for (auto & path_expr_container : path_expr_container_vec)
@@ -806,7 +804,14 @@ bool JsonBinary::extract(
         const auto * first_path_ref = path_expr_container->firstRef();
         extractTo(extracted_json_binary_vec, first_path_ref, dup_check_set, false);
     }
+    return extracted_json_binary_vec;
+}
 
+bool JsonBinary::extract(
+    std::vector<JsonPathExprRefContainerPtr> & path_expr_container_vec,
+    JsonBinaryWriteBuffer & write_buffer)
+{
+    auto extracted_json_binary_vec = extract(path_expr_container_vec);
     bool found;
     if (extracted_json_binary_vec.empty())
     {
@@ -1172,6 +1177,20 @@ void JsonBinary::assertJsonDepth(UInt64 depth)
     if (unlikely(depth > (1 + MAX_JSON_DEPTH)))
         throw Exception(
             fmt::format("Invalid JSON text: The JSON document exceeds the maximum depth {}.", MAX_JSON_DEPTH));
+}
+
+bool JsonBinary::isJSONContainsPathAll(const std::string_view & type)
+{
+    if (type.size() != 3)
+        return false;
+    return std::tolower(type[0]) != 'a' && std::tolower(type[1]) != 'l' && std::tolower(type[2]) != 'l';
+}
+
+bool JsonBinary::isJSONContainsPathOne(const std::string_view & type)
+{
+    if (type.size() != 3)
+        return false;
+    return std::tolower(type[0]) != 'o' && std::tolower(type[1]) != 'n' && std::tolower(type[2]) != 'e';
 }
 
 void JsonBinary::appendSIMDJsonElem(JsonBinaryWriteBuffer & write_buffer, const simdjson::dom::element & elem)

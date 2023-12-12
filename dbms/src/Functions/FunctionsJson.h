@@ -1561,10 +1561,36 @@ public:
         auto type_source = createDynamicStringSource(*nested_block.getByPosition(arguments[1]).column);
 
         size_t rows = block.rows();
+        auto awalys_true_null_map = ColumnUInt8::create(rows, 1);
+        auto awalys_false_null_map = ColumnUInt8::create(rows, 0);
+
         auto col_to = ColumnUInt8::create(rows, 1);
         auto & data_to = col_to->getData();
         auto col_null_map = ColumnUInt8::create(rows, 0);
         auto & vec_null_map = col_null_map->getData();
+
+        StringSources path_sources;
+        std::vector<const NullMap *> path_null_maps;
+        for (size_t i = 2; i < arguments.size(); ++i)
+        {
+            const auto & path_col = block.getByPosition(arguments[i]).column;
+            if (path_col->onlyNull())
+            {
+                path_sources.push_back(nullptr);
+                path_null_maps.push_back(&awalys_true_null_map->getData());
+            }
+            else if (path_col->isColumnNullable())
+            {
+                const auto & path_column_nullable = static_cast<const ColumnNullable &>(*path_col);
+                path_sources.push_back(createDynamicStringSource(*nested_block.getByPosition(arguments[i]).column));
+                path_null_maps.push_back(&path_column_nullable.getNullMapData());
+            }
+            else
+            {
+                path_sources.push_back(createDynamicStringSource(*nested_block.getByPosition(arguments[i]).column));
+                path_null_maps.push_back(&awalys_false_null_map->getData());
+            }
+        }
 
         if (json_col->isColumnNullable())
         {
@@ -1577,6 +1603,8 @@ public:
                     json_column_nullable.getNullMapData(),
                     type_source,
                     type_column_nullable.getNullMapData(),
+                    path_sources,
+                    path_null_maps,
                     rows,
                     data_to,
                     vec_null_map);
@@ -1588,6 +1616,8 @@ public:
                     json_column_nullable.getNullMapData(),
                     type_source,
                     {},
+                    path_sources,
+                    path_null_maps,
                     rows,
                     data_to,
                     vec_null_map);
@@ -1603,13 +1633,24 @@ public:
                     {},
                     type_source,
                     type_column_nullable.getNullMapData(),
+                    path_sources,
+                    path_null_maps,
                     rows,
                     data_to,
                     vec_null_map);
             }
             else
             {
-                doExecute<false, false>(json_source, {}, type_source, {}, rows, data_to, vec_null_map);
+                doExecute<false, false>(
+                    json_source,
+                    {},
+                    type_source,
+                    {},
+                    path_sources,
+                    path_null_maps,
+                    rows,
+                    data_to,
+                    vec_null_map);
             }
         }
 
@@ -1617,45 +1658,97 @@ public:
     }
 
 private:
-private:
     template <bool is_json_nullable, bool is_type_nullable>
     void doExecute(
         const std::unique_ptr<IStringSource> & json_source,
         const NullMap & null_map_json,
         const std::unique_ptr<IStringSource> & type_source,
         const NullMap & null_map_type,
+        const StringSources & path_sources,
+        const std::vector<const NullMap *> & path_null_maps,
         size_t rows,
-        ColumnUInt8::Container  & data_to,
+        ColumnUInt8::Container & data_to,
         NullMap & null_map_to) const
     {
-#define SET_NULL_AND_CONTINUE             \
-    null_map_to[i] = 1;                   \
-    json_source->next();                  \
-    type_source->next();                  \
-    continue;
+#define FINISH_PER_ROW                            \
+    for (const auto & path_source : path_sources) \
+    {                                             \
+        if (path_source)                          \
+            path_source->next();                  \
+    }                                             \
+    json_source->next();                          \
+    type_source->next();
 
-        ColumnString::Chars_t tmp;
-        JsonBinary::JsonBinaryWriteBuffer tmp_buffer(tmp);
-        JsonBinary::JsonBinaryWriteBuffer write_buffer(data_to, json_source->getSizeForReserve());
-        for (size_t i = 0; i < rows; ++i)
+        for (size_t row = 0; row < rows; ++row)
         {
             if constexpr (is_json_nullable)
             {
-                if (null_map_json[i])
+                if (null_map_json[row])
                 {
-                    SET_NULL_AND_CONTINUE
+                    FINISH_PER_ROW
+                    null_map_to[row] = 1;
+                    continue;
                 }
             }
             if constexpr (is_type_nullable)
             {
-                if (null_map_type[i])
+                if (null_map_type[row])
                 {
-                    SET_NULL_AND_CONTINUE
+                    FINISH_PER_ROW
+                    null_map_to[row] = 1;
+                    continue;
                 }
             }
 
-            json_source->next();
-            type_source->next();
+            const auto & json_val = json_source->getWhole();
+            JsonBinary json_binary{json_val.data[0], StringRef{&json_val.data[1], json_val.size - 1}};
+
+            const auto & type_val = type_source->getWhole();
+            std::string_view type{reinterpret_cast<const char *>(type_val.data), type_val.size};
+            if unlikely (!JsonBinary::isJSONContainsPathAll(type) && !JsonBinary::isJSONContainsPathOne(type))
+                throw Exception(
+                    fmt::format("Illegal json contains path type {} of function {}", type, getName()),
+                    ErrorCodes::ILLEGAL_COLUMN);
+
+            auto & res = data_to[row]; // default 1.
+            for (size_t i = 0; i < path_sources.size(); ++i)
+            {
+                if ((*path_null_maps[i])[row])
+                {
+                    null_map_to[row] = 1;
+                    break;
+                }
+                else
+                {
+                    const auto & path_val = path_sources[i]->getWhole();
+                    auto path_expr = JsonPathExpr::parseJsonPathExpr(StringRef{path_val.data, path_val.size});
+                    /// If path_expr failed to parse, throw exception
+                    if unlikely (!path_expr)
+                        throw Exception(
+                            fmt::format("Illegal json path expression of function {}", getName()),
+                            ErrorCodes::ILLEGAL_COLUMN);
+                    auto path_expr_containor = std::make_unique<JsonPathExprRefContainer>(path_expr);
+                    std::vector<JsonPathExprRefContainerPtr> path_expr_containor_vec;
+                    path_expr_containor_vec.push_back(std::move(path_expr_containor));
+                    bool exists = !json_binary.extract(path_expr_containor_vec).empty();
+                    if (exists && JsonBinary::isJSONContainsPathOne(type))
+                    {
+                        res = 1;
+                        break;
+                    }
+                    else if (!exists && JsonBinary::isJSONContainsPathOne(type))
+                    {
+                        res = 0;
+                    }
+                    else if (!exists && JsonBinary::isJSONContainsPathAll(type))
+                    {
+                        res = 0;
+                        break;
+                    }
+                }
+            }
+
+            FINISH_PER_ROW
         }
 
 #undef SET_NULL_AND_CONTINUE
