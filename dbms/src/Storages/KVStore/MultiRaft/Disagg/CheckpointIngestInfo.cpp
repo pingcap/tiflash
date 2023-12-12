@@ -35,6 +35,7 @@ CheckpointIngestInfoPtr CheckpointIngestInfo::restore(
     UInt64 region_id,
     UInt64 peer_id)
 {
+    GET_METRIC(tiflash_fap_task_result, type_need_to_restore).Increment();
     StoreID remote_store_id;
     RegionPtr region;
     DM::Segments restored_segments;
@@ -83,8 +84,17 @@ CheckpointIngestInfoPtr CheckpointIngestInfo::restore(
             DM::Segment::SegmentMetaInfo segment_info;
             readSegmentMetaInfo(buf, segment_info);
 
-            auto delta = DM::DeltaValueSpace::restore(*dm_context, segment_info.range, segment_info.delta_id);
-            auto stable = DM::StableValueSpace::restore(*dm_context, segment_info.stable_id);
+            ReadBufferFromString buf_delta(segment_pd.delta_meta());
+            auto delta
+                = DM::DeltaValueSpace::restore(*dm_context, segment_info.range, buf_delta, segment_info.delta_id);
+            ReadBufferFromString buf_stable(segment_pd.stable_meta());
+            auto stable = DM::StableValueSpace::restore(*dm_context, buf_stable, segment_info.stable_id);
+
+            LOG_DEBUG(
+                log,
+                "Restore segments for checkpoint, remote_segment_id={} range={}",
+                segment_info.segment_id,
+                segment_info.range.toDebugString());
             restored_segments.push_back(std::make_shared<DM::Segment>(
                 log,
                 segment_info.epoch,

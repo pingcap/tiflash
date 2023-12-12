@@ -1154,6 +1154,7 @@ BlockInputStreams DeltaMergeStore::read(
     size_t extra_table_id_index,
     ScanContextPtr scan_context)
 {
+    LOG_INFO(log, "!!!!!! DeltaMergeStore::read {}", StackTrace().toString());
     // Use the id from MPP/Coprocessor level as tracing_id
     auto dm_context = newDMContext(db_context, db_settings, tracing_id, scan_context);
 

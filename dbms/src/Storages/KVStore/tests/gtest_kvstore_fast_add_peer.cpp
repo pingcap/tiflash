@@ -15,6 +15,7 @@
 #include <Debug/MockKVStore/MockRaftStoreProxy.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Storages/DeltaMerge/Filter/PushDownFilter.h>
+#include <Storages/DeltaMerge/ReadThread/SegmentReadTaskScheduler.h>
 #include <Storages/KVStore/FFI/ProxyFFI.h>
 #include <Storages/KVStore/MultiRaft/Disagg/FastAddPeer.h>
 #include <Storages/KVStore/MultiRaft/Disagg/FastAddPeerCache.h>
@@ -332,6 +333,7 @@ try
         ASSERT_TRUE(storage && storage->engineType() == TiDB::StorageEngine::DT);
         auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
         auto store = dm_storage->getStore();
+        ASSERT_EQ(store->getRowKeyColumnSize(), 1);
         verifyRows(
             global_context,
             store,

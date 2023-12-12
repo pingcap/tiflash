@@ -100,10 +100,15 @@ UInt64 StableValueSpace::saveMeta(WriteBuffer & buf)
 
 StableValueSpacePtr StableValueSpace::restore(DMContext & dm_context, PageIdU64 id)
 {
-    auto stable = std::make_shared<StableValueSpace>(id);
-
     Page page = dm_context.storage_pool->metaReader()->read(id); // not limit restore
     ReadBufferFromMemory buf(page.data.begin(), page.data.size());
+    return StableValueSpace::restore(dm_context, buf, id);
+}
+
+StableValueSpacePtr StableValueSpace::restore(DMContext & dm_context, ReadBuffer & buf, PageIdU64 id)
+{
+    auto stable = std::make_shared<StableValueSpace>(id);
+
     UInt64 version, valid_rows, valid_bytes, size;
     readIntBinary(version, buf);
     if (version != StableFormat::V1)

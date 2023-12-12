@@ -103,6 +103,15 @@ ColumnFilePersistedSetPtr ColumnFilePersistedSet::restore( //
 {
     Page page = context.storage_pool->metaReader()->read(id);
     ReadBufferFromMemory buf(page.data.begin(), page.data.size());
+    return ColumnFilePersistedSet::restore(context, segment_range, buf, id);
+}
+
+ColumnFilePersistedSetPtr ColumnFilePersistedSet::restore( //
+    DMContext & context,
+    const RowKeyRange & segment_range,
+    ReadBuffer & buf,
+    PageIdU64 id)
+{
     auto column_files = deserializeSavedColumnFiles(context, segment_range, buf);
     return std::make_shared<ColumnFilePersistedSet>(id, column_files);
 }

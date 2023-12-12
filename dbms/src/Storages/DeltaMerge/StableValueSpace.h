@@ -45,6 +45,7 @@ public:
     {}
 
     static StableValueSpacePtr restore(DMContext & context, PageIdU64 id);
+    static StableValueSpacePtr restore(DMContext & context, ReadBuffer & buf, PageIdU64 id);
 
     static StableValueSpacePtr createFromCheckpoint( //
         DMContext & context,

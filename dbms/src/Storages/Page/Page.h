@@ -89,7 +89,7 @@ public:
         PageFieldOffset end = (iter == field_offsets.end() ? data.size() : iter->offset);
         assert(beg <= data.size());
         assert(end <= data.size());
-        assert(end >= beg);
+        RUNTIME_CHECK_MSG(end >= beg, "end={} beg={} page_id={}", end, beg, page_id);
         return std::string_view(data.begin() + beg, end - beg);
     }
 
