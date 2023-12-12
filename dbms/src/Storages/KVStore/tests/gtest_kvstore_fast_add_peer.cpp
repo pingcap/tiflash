@@ -319,6 +319,7 @@ try
     uint64_t region_id = 1;
     FastAddPeerImplWrite(global_context.getTMTContext(), region_id, 2333, std::move(mock_data), 0);
     fap_context->debugRemoveCheckpointIngestInfo(region_id);
+    // Remove the region so that the snapshot will be accepted.
     FailPointHelper::enableFailPoint("force_not_clean_fap_on_destroy");
     SCOPE_EXIT({ FailPointHelper::disableFailPoint("force_not_clean_fap_on_destroy"); });
     kvstore->handleDestroy(region_id, global_context.getTMTContext());

@@ -139,6 +139,7 @@ std::vector<ColumnFilePtrT> CloneColumnFilesHelper<ColumnFilePtrT>::clone(
         {
             // Use a newly created page_id to reference the data page_id of current column file.
             PageIdU64 new_data_page_id = dm_context.storage_pool->newLogPageId();
+            LOG_INFO(DB::Logger::get(), "!!!!! Tiny {} ref {}", new_data_page_id, t->getDataPageId());
             wbs.log.putRefPage(new_data_page_id, t->getDataPageId());
             auto new_column_file = t->cloneWith(new_data_page_id);
             cloned.push_back(new_column_file);
@@ -147,6 +148,7 @@ std::vector<ColumnFilePtrT> CloneColumnFilesHelper<ColumnFilePtrT>::clone(
         {
             auto delegator = dm_context.path_pool->getStableDiskDelegator();
             auto new_page_id = dm_context.storage_pool->newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
+            LOG_INFO(DB::Logger::get(), "!!!!! A2 {}", new_page_id);
             // Note that the file id may has already been mark as deleted. We must
             // create a reference to the page id itself instead of create a reference
             // to the file id.
