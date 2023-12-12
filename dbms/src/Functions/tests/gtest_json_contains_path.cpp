@@ -59,13 +59,23 @@ try
     ColumnWithTypeAndName path_column2 = createColumn<Nullable<String>>({"$.a", "$.a"});
     ColumnWithTypeAndName only_null_const = createOnlyNullColumnConst(rows_count);
 
-    ASSERT_COLUMN_EQ(createColumn<Nullable<UInt8>>({true, true}), executeFunction(func_name, json_column, type_column, path_column));
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<UInt8>>({true, true}),
+        executeFunction(func_name, json_column, type_column, path_column));
     ASSERT_COLUMN_EQ(only_null_const, executeFunction(func_name, only_null_const, type_column, path_column));
     ASSERT_COLUMN_EQ(only_null_const, executeFunction(func_name, json_column, only_null_const, path_column));
-    ASSERT_COLUMN_EQ(createColumn<Nullable<UInt8>>({{}, {}}), executeFunction(func_name, json_column, type_column, only_null_const));
-    ASSERT_COLUMN_EQ(createColumn<Nullable<UInt8>>({true, true}), executeFunction(func_name, json_column, type_column, path_column, only_null_const));
-    ASSERT_COLUMN_EQ(createColumn<Nullable<UInt8>>({{}, {}}), executeFunction(func_name, json_column, type_column, path_column2, only_null_const));
-    ASSERT_COLUMN_EQ(createColumn<Nullable<UInt8>>({{}, {}}), executeFunction(func_name, json_column, type_column, only_null_const, path_column));
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<UInt8>>({{}, {}}),
+        executeFunction(func_name, json_column, type_column, only_null_const));
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<UInt8>>({true, true}),
+        executeFunction(func_name, json_column, type_column, path_column, only_null_const));
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<UInt8>>({{}, {}}),
+        executeFunction(func_name, json_column, type_column, path_column2, only_null_const));
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<UInt8>>({{}, {}}),
+        executeFunction(func_name, json_column, type_column, only_null_const, path_column));
 }
 CATCH
 
@@ -93,7 +103,9 @@ try
     auto type_column = createColumn<Nullable<String>>({"one", {}, "one", "one"});
     ColumnWithTypeAndName path_column = createColumn<Nullable<String>>({"$", "$", {}, "$"});
 
-    ASSERT_COLUMN_EQ(createColumn<Nullable<UInt8>>({{}, {}, {}, true}), executeFunction(func_name, json_column, type_column, path_column));
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<UInt8>>({{}, {}, {}, true}),
+        executeFunction(func_name, json_column, type_column, path_column));
 }
 CATCH
 
@@ -106,80 +118,81 @@ try
             executeFunction(
                 func_name,
                 {castStringToJson(createColumn<String>({json, json})),
-                createColumn<String>({type, type}),
-                createColumn<String>({path, path})}));
+                 createColumn<String>({type, type}),
+                 createColumn<String>({path, path})}));
         ASSERT_COLUMN_EQ(
             createColumn<UInt8>({expect, expect}),
             executeFunction(
                 func_name,
                 {castStringToJson(createConstColumn<String>(2, json)),
-                createColumn<String>({type, type}),
-                createColumn<String>({path, path})}));
+                 createColumn<String>({type, type}),
+                 createColumn<String>({path, path})}));
         ASSERT_COLUMN_EQ(
             createColumn<UInt8>({expect, expect}),
             executeFunction(
                 func_name,
                 {castStringToJson(createColumn<String>({json, json})),
-                createConstColumn<String>(2, type),
-                createColumn<String>({path, path})}));
+                 createConstColumn<String>(2, type),
+                 createColumn<String>({path, path})}));
         ASSERT_COLUMN_EQ(
             createColumn<UInt8>({expect, expect}),
             executeFunction(
                 func_name,
                 {castStringToJson(createColumn<String>({json, json})),
-                createColumn<String>({type, type}),
-                createConstColumn<String>(2, path)}));
+                 createColumn<String>({type, type}),
+                 createConstColumn<String>(2, path)}));
     };
-    auto exec_assert2 = [&](const String & json, const String & type, const String & path1, const String & path2, bool expect) {
-        ASSERT_COLUMN_EQ(
-            createColumn<UInt8>({expect, expect}),
-            executeFunction(
-                func_name,
-                {castStringToJson(createColumn<String>({json, json})),
-                createColumn<String>({type, type}),
-                createColumn<String>({path1, path1}),
-                createColumn<String>({path2, path2})}));
-        ASSERT_COLUMN_EQ(
-            createColumn<UInt8>({expect, expect}),
-            executeFunction(
-                func_name,
-                {castStringToJson(createColumn<String>({json, json})),
-                createColumn<String>({type, type}),
-                createColumn<String>({path1, path1}),
-                createColumn<String>({path2, path2})}));
-        ASSERT_COLUMN_EQ(
-            createColumn<UInt8>({expect, expect}),
-            executeFunction(
-                func_name,
-                {castStringToJson(createConstColumn<String>(2, json)),
-                createColumn<String>({type, type}),
-                createColumn<String>({path1, path1}),
-                createColumn<String>({path2, path2})}));
-        ASSERT_COLUMN_EQ(
-            createColumn<UInt8>({expect, expect}),
-            executeFunction(
-                func_name,
-                {castStringToJson(createColumn<String>({json, json})),
-                createConstColumn<String>(2, type),
-                createColumn<String>({path1, path1}),
-                createColumn<String>({path2, path2})}));
-        ASSERT_COLUMN_EQ(
-            createColumn<UInt8>({expect, expect}),
-            executeFunction(
-                func_name,
-                {castStringToJson(createColumn<String>({json, json})),
-                createColumn<String>({type, type}),
-                createConstColumn<String>(2, path1),
-                createColumn<String>({path2, path2})}));
-        ASSERT_COLUMN_EQ(
-            createColumn<UInt8>({expect, expect}),
-            executeFunction(
-                func_name,
-                {castStringToJson(createColumn<String>({json, json})),
-                createColumn<String>({type, type}),
-                createColumn<String>({path1, path1}),
-                createConstColumn<String>(2, path2)}));
-    };
+    auto exec_assert2
+        = [&](const String & json, const String & type, const String & path1, const String & path2, bool expect) {
+              ASSERT_COLUMN_EQ(
+                  createColumn<UInt8>({expect, expect}),
+                  executeFunction(
+                      func_name,
+                      {castStringToJson(createColumn<String>({json, json})),
+                       createColumn<String>({type, type}),
+                       createColumn<String>({path1, path1}),
+                       createColumn<String>({path2, path2})}));
+              ASSERT_COLUMN_EQ(
+                  createColumn<UInt8>({expect, expect}),
+                  executeFunction(
+                      func_name,
+                      {castStringToJson(createColumn<String>({json, json})),
+                       createColumn<String>({type, type}),
+                       createColumn<String>({path1, path1}),
+                       createColumn<String>({path2, path2})}));
+              ASSERT_COLUMN_EQ(
+                  createColumn<UInt8>({expect, expect}),
+                  executeFunction(
+                      func_name,
+                      {castStringToJson(createConstColumn<String>(2, json)),
+                       createColumn<String>({type, type}),
+                       createColumn<String>({path1, path1}),
+                       createColumn<String>({path2, path2})}));
+              ASSERT_COLUMN_EQ(
+                  createColumn<UInt8>({expect, expect}),
+                  executeFunction(
+                      func_name,
+                      {castStringToJson(createColumn<String>({json, json})),
+                       createConstColumn<String>(2, type),
+                       createColumn<String>({path1, path1}),
+                       createColumn<String>({path2, path2})}));
+              ASSERT_COLUMN_EQ(
+                  createColumn<UInt8>({expect, expect}),
+                  executeFunction(
+                      func_name,
+                      {castStringToJson(createColumn<String>({json, json})),
+                       createColumn<String>({type, type}),
+                       createConstColumn<String>(2, path1),
+                       createColumn<String>({path2, path2})}));
+              ASSERT_COLUMN_EQ(
+                  createColumn<UInt8>({expect, expect}),
+                  executeFunction(
+                      func_name,
+                      {castStringToJson(createColumn<String>({json, json})),
+                       createColumn<String>({type, type}),
+                       createColumn<String>({path1, path1}),
+                       createConstColumn<String>(2, path2)}));
+          };
 
     exec_assert1("{}", "one", "$", true);
     exec_assert1("{}", "one", "$.a", false);
