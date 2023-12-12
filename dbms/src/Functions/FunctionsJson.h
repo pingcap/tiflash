@@ -1508,4 +1508,157 @@ public:
         }
     }
 };
+
+class FunctionJsonContainsPath : public IFunction
+{
+public:
+    static constexpr auto name = "json_contains_path";
+    static FunctionPtr create(const Context &) { return std::make_shared<FunctionJsonContainsPath>(); }
+
+    String getName() const override { return name; }
+
+    size_t getNumberOfArguments() const override { return 0; }
+
+    bool useDefaultImplementationForNulls() const override { return false; }
+    bool useDefaultImplementationForConstants() const override { return true; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        if unlikely (arguments.size() < 2)
+        {
+            throw Exception(
+                fmt::format("Illegal arguments count {} of function {}", arguments.size(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        }
+        for (const auto & arg : arguments)
+        {
+            if unlikely (!arg->onlyNull() && !removeNullable(arg)->isString())
+            {
+                throw Exception(
+                    fmt::format("Illegal type {} of argument of function {}", arg->getName(), getName()),
+                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            }
+        }
+        if (arguments[0]->onlyNull() || arguments[1]->onlyNull())
+            return makeNullable(std::make_shared<DataTypeNothing>());
+        else
+            return makeNullable(std::make_shared<DataTypeUInt8>());
+    }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
+    {
+        const auto & json_col = block.getByPosition(arguments[0]).column;
+        const auto & type_col = block.getByPosition(arguments[1]).column;
+        if (json_col->onlyNull() || type_col->onlyNull())
+        {
+            block.getByPosition(result).column
+                = block.getByPosition(result).type->createColumnConst(block.rows(), Null());
+            return;
+        }
+
+        auto nested_block = createBlockWithNestedColumns(block, arguments);
+        auto json_source = createDynamicStringSource(*nested_block.getByPosition(arguments[0]).column);
+        auto type_source = createDynamicStringSource(*nested_block.getByPosition(arguments[1]).column);
+
+        size_t rows = block.rows();
+        auto col_to = ColumnUInt8::create(rows, 1);
+        auto & data_to = col_to->getData();
+        auto col_null_map = ColumnUInt8::create(rows, 0);
+        auto & vec_null_map = col_null_map->getData();
+
+        if (json_col->isColumnNullable())
+        {
+            const auto & json_column_nullable = static_cast<const ColumnNullable &>(*json_col);
+            if (type_col->isColumnNullable())
+            {
+                const auto & type_column_nullable = static_cast<const ColumnNullable &>(*type_col);
+                doExecute<true, true>(
+                    json_source,
+                    json_column_nullable.getNullMapData(),
+                    type_source,
+                    type_column_nullable.getNullMapData(),
+                    rows,
+                    data_to,
+                    vec_null_map);
+            }
+            else
+            {
+                doExecute<true, false>(
+                    json_source,
+                    json_column_nullable.getNullMapData(),
+                    type_source,
+                    {},
+                    rows,
+                    data_to,
+                    vec_null_map);
+            }
+        }
+        else
+        {
+            if (type_col->isColumnNullable())
+            {
+                const auto & type_column_nullable = static_cast<const ColumnNullable &>(*type_col);
+                doExecute<false, true>(
+                    json_source,
+                    {},
+                    type_source,
+                    type_column_nullable.getNullMapData(),
+                    rows,
+                    data_to,
+                    vec_null_map);
+            }
+            else
+            {
+                doExecute<false, false>(json_source, {}, type_source, {}, rows, data_to, vec_null_map);
+            }
+        }
+
+        block.getByPosition(result).column = ColumnNullable::create(std::move(col_to), std::move(col_null_map));
+    }
+
+private:
+private:
+    template <bool is_json_nullable, bool is_type_nullable>
+    void doExecute(
+        const std::unique_ptr<IStringSource> & json_source,
+        const NullMap & null_map_json,
+        const std::unique_ptr<IStringSource> & type_source,
+        const NullMap & null_map_type,
+        size_t rows,
+        ColumnUInt8::Container  & data_to,
+        NullMap & null_map_to) const
+    {
+#define SET_NULL_AND_CONTINUE             \
+    null_map_to[i] = 1;                   \
+    json_source->next();                  \
+    type_source->next();                  \
+    continue;
+
+        ColumnString::Chars_t tmp;
+        JsonBinary::JsonBinaryWriteBuffer tmp_buffer(tmp);
+        JsonBinary::JsonBinaryWriteBuffer write_buffer(data_to, json_source->getSizeForReserve());
+        for (size_t i = 0; i < rows; ++i)
+        {
+            if constexpr (is_json_nullable)
+            {
+                if (null_map_json[i])
+                {
+                    SET_NULL_AND_CONTINUE
+                }
+            }
+            if constexpr (is_type_nullable)
+            {
+                if (null_map_type[i])
+                {
+                    SET_NULL_AND_CONTINUE
+                }
+            }
+
+            json_source->next();
+            type_source->next();
+        }
+
+#undef SET_NULL_AND_CONTINUE
+    }
+};
 } // namespace DB
