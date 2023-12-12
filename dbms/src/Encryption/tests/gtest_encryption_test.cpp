@@ -66,7 +66,7 @@ public:
 
     void generateCiphertext(const unsigned char * iv)
     {
-        std::string random_string = randomString(MAX_SIZE);
+        std::string random_string = DB::random::randomString(MAX_SIZE);
         memcpy(plaintext, random_string.data(), MAX_SIZE);
 
         EVP_CIPHER_CTX * ctx;

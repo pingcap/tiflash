@@ -16,6 +16,9 @@
 
 #include <common/types.h>
 
+namespace DB::random
+{
+
 String randomString(UInt64 length);
 time_t randomUTCTimestamp();
 struct tm randomLocalTime();
@@ -23,3 +26,5 @@ String randomDate();
 String randomDateTime();
 String randomDuration();
 String randomDecimal(uint64_t prec, uint64_t scale);
+
+} // namespace DB::random

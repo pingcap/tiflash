@@ -200,25 +200,25 @@ void ColumnGenerator::genFloat(MutableColumnPtr & col)
 
 void ColumnGenerator::genString(MutableColumnPtr & col, UInt64 max_size)
 {
-    Field f = randomString(max_size);
+    Field f = DB::random::randomString(max_size);
     col->insert(f);
 }
 
 void ColumnGenerator::genDate(MutableColumnPtr & col)
 {
-    Field f = parseMyDateTime(randomDate());
+    Field f = parseMyDateTime(DB::random::randomDate());
     col->insert(f);
 }
 
 void ColumnGenerator::genDateTime(MutableColumnPtr & col)
 {
-    Field f = parseMyDateTime(randomDateTime());
+    Field f = parseMyDateTime(DB::random::randomDateTime());
     col->insert(f);
 }
 
 void ColumnGenerator::genDuration(MutableColumnPtr & col)
 {
-    Field f = parseMyDuration(randomDuration());
+    Field f = parseMyDuration(DB::random::randomDuration());
     col->insert(f);
 }
 
@@ -226,7 +226,7 @@ void ColumnGenerator::genDecimal(MutableColumnPtr & col, DataTypePtr & data_type
 {
     auto prec = getDecimalPrecision(*data_type, 0);
     auto scale = getDecimalScale(*data_type, 0);
-    auto s = randomDecimal(prec, scale);
+    auto s = DB::random::randomDecimal(prec, scale);
     bool negative = rand_gen() % 2 == 0;
     Field f;
     if (parseDecimal(s.data(), s.size(), negative, f))

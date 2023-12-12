@@ -147,7 +147,7 @@ private:
         }
         else if (family_name == "String")
         {
-            Field f = randomString(128);
+            Field f = DB::random::randomString(128);
             mut_col->insert(f);
         }
         else if (family_name == "Enum8")
@@ -166,19 +166,19 @@ private:
         }
         else if (family_name == "MyDateTime")
         {
-            Field f = parseMyDateTime(randomDateTime());
+            Field f = parseMyDateTime(DB::random::randomDateTime());
             mut_col->insert(f);
         }
         else if (family_name == "MyDate")
         {
-            Field f = parseMyDateTime(randomDate());
+            Field f = parseMyDateTime(DB::random::randomDate());
             mut_col->insert(f);
         }
         else if (family_name == "Decimal")
         {
             auto prec = getDecimalPrecision(*data_type, 0);
             auto scale = getDecimalScale(*data_type, 0);
-            auto s = randomDecimal(prec, scale);
+            auto s = DB::random::randomDecimal(prec, scale);
             bool negative = rand_gen() % 2 == 0;
             Field f;
             if (parseDecimal(s.data(), s.size(), negative, f))

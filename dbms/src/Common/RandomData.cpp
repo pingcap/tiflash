@@ -17,6 +17,9 @@
 
 #include <random>
 
+namespace DB::random
+{
+
 String randomString(UInt64 length)
 {
     static const std::string charset{
@@ -91,3 +94,5 @@ String randomDecimal(uint64_t prec, uint64_t scale)
         s = s.substr(0, prec);
     return s.substr(0, prec - scale) + "." + s.substr(prec - scale);
 }
+
+} // namespace DB::random

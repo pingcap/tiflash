@@ -177,7 +177,7 @@ DB::Block createBlock(
         IColumn::MutablePtr m_col = str_col.type->createColumn();
         for (size_t j = 0; j < row_number; j++)
         {
-            Field field = randomString(limit);
+            Field field = DB::random::randomString(limit);
             m_col->insert(field);
         }
         str_col.column = std::move(m_col);
