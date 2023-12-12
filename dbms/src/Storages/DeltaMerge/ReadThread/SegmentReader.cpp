@@ -116,7 +116,11 @@ private:
         }
         catch (DB::Exception & e)
         {
-            LOG_ERROR(log, "ErrMsg: {} StackTrace {}", e.message(), e.getStackTrace().toString());
+            LOG_ERROR(
+                merged_task != nullptr ? merged_task->getCurrentLogger() : log,
+                "ErrMsg: {} StackTrace {}",
+                e.message(),
+                e.getStackTrace().toString());
             if (merged_task != nullptr)
             {
                 merged_task->setException(e);

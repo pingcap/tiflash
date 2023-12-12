@@ -27,6 +27,7 @@
 #include <Storages/Page/V3/Universal/UniversalWriteBatchImpl.h>
 
 using namespace std::chrono_literals;
+using namespace DB::DM::Remote;
 
 namespace CurrentMetrics
 {
@@ -100,8 +101,7 @@ SegmentReadTask::SegmentReadTask(
         nullptr,
         nullptr);
 
-    read_snapshot
-        = Remote::Serializer::deserializeSegment(*dm_context, store_id, keyspace_id, physical_table_id, proto);
+    read_snapshot = Serializer::deserializeSegment(*dm_context, store_id, keyspace_id, physical_table_id, proto);
 
     ranges.reserve(proto.read_key_ranges_size());
     for (const auto & read_key_range : proto.read_key_ranges())
@@ -324,8 +324,14 @@ void SegmentReadTask::doInitInputStream(
 
 void SegmentReadTask::fetchPages()
 {
-    if (!extra_remote_info.has_value() || extra_remote_info->remote_page_ids.empty())
+    // Not remote segment.
+    if (!extra_remote_info.has_value())
     {
+        return;
+    }
+    if (extra_remote_info->remote_page_ids.empty() && !needFetchMemTableSet())
+    {
+        LOG_DEBUG(read_snapshot->log, "Neither ColumnFileTiny or ColumnFileInMemory need to be fetched from WN.");
         return;
     }
 
@@ -362,7 +368,6 @@ void SegmentReadTask::fetchPages()
         {
             doFetchPages(req);
             initColumnFileDataProvider(occupy_result.pages_guard);
-
             // We finished fetch all pages for this seg task, just return it for downstream
             // workers. If we have met any errors, page guard will not be persisted.
             return;
@@ -375,7 +380,7 @@ void SegmentReadTask::fetchPages()
                 "Meet RPC client exception when fetching pages: {}, will be retried. seg_task={}",
                 e.displayText(),
                 *this);
-            std::this_thread::sleep_for(1s);
+            std::this_thread::sleep_for(1s); // FIXME: yield instead of sleep.
         }
         catch (...)
         {
@@ -452,7 +457,9 @@ struct WritePageTask
 {
     explicit WritePageTask(Remote::RNLocalPageCache * page_cache_)
         : page_cache(page_cache_)
-    {}
+    {
+        RUNTIME_CHECK(page_cache != nullptr);
+    }
     Remote::RNLocalPageCache * page_cache;
     UniversalWriteBatch wb;
     std::forward_list<DM::RemotePb::RemotePage> remote_pages; // Hold the data of wb.
@@ -460,36 +467,103 @@ struct WritePageTask
 };
 using WritePageTaskPtr = std::unique_ptr<WritePageTask>;
 
+void SegmentReadTask::checkMemTableSet(const ColumnFileSetSnapshotPtr & mem_table_snap) const
+{
+    const auto & old_mem_table_snap = read_snapshot->delta->getMemTableSetSnapshot();
+
+    RUNTIME_CHECK_MSG(
+        mem_table_snap->getColumnFileCount() == old_mem_table_snap->getColumnFileCount(),
+        "log_id={}, new_cf_count={}, old_cf_count={}",
+        read_snapshot->log->identifier(),
+        mem_table_snap->getColumnFileCount(),
+        old_mem_table_snap->getColumnFileCount());
+
+    const auto & column_files = mem_table_snap->getColumnFiles();
+    const auto & old_column_files = old_mem_table_snap->getColumnFiles();
+    auto check_rows = [](UInt64 rows, UInt64 old_rows, bool last_cf) {
+        // Only the last ColumnFileInMemory is appendable.
+        return last_cf ? rows >= old_rows : rows == old_rows;
+    };
+    for (size_t i = 0; i < column_files.size(); ++i)
+    {
+        const auto & cf = column_files[i];
+        const auto & old_cf = old_column_files[i];
+        RUNTIME_CHECK_MSG(
+            cf->getType() == old_cf->getType()
+                && check_rows(cf->getRows(), old_cf->getRows(), i == column_files.size() - 1),
+            "log_id={}, new_type={}, old_type={}, new_rows={}, old_rows={}, cf_count={}, cf_index={}",
+            read_snapshot->log->identifier(),
+            magic_enum::enum_name(cf->getType()),
+            magic_enum::enum_name(old_cf->getType()),
+            cf->getRows(),
+            old_cf->getRows(),
+            column_files.size(),
+            i);
+    }
+}
+
+bool SegmentReadTask::needFetchMemTableSet() const
+{
+    // Check if any object of ColumnFileInMemory does not contain data.
+    for (const auto & cf : read_snapshot->delta->getMemTableSetSnapshot()->getColumnFiles())
+    {
+        if (auto * cf_in_mem = cf->tryToInMemoryFile(); cf_in_mem)
+        {
+            if (cf_in_mem->getCache() == nullptr)
+            {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+static void checkPageID(
+    UInt64 page_id,
+    std::vector<UInt64> & received_page_ids,
+    std::unordered_set<UInt64> & remaining_pages_to_fetch)
+{
+    RUNTIME_CHECK(remaining_pages_to_fetch.contains(page_id), remaining_pages_to_fetch, page_id);
+
+    received_page_ids.emplace_back(page_id);
+    remaining_pages_to_fetch.erase(page_id);
+}
+
 void SegmentReadTask::doFetchPages(const disaggregated::FetchDisaggPagesRequest & request)
 {
-    // No page need to be fetched.
-    if (request.page_ids_size() == 0)
+    // No page and memtable need to be fetched.
+    if (request.page_ids_size() == 0 && !needFetchMemTableSet())
         return;
 
-    UInt64 read_page_ns = 0;
-    UInt64 deserialize_page_ns = 0;
-    UInt64 wait_write_page_ns = 0;
-
-    Stopwatch sw_total;
     const auto * cluster = dm_context->global_context.getTMTContext().getKVCluster();
     pingcap::kv::RpcCall<pingcap::kv::RPC_NAME(FetchDisaggPages)> rpc(
         cluster->rpc_client,
         extra_remote_info->store_address);
     grpc::ClientContext client_context;
-    Stopwatch sw_rpc_call;
     auto stream_resp = rpc.call(&client_context, request);
-    read_page_ns += sw_rpc_call.elapsed();
+    RUNTIME_CHECK(stream_resp != nullptr);
     SCOPE_EXIT({
         // TODO: Not sure whether we really need this. Maybe RAII is already there?
         stream_resp->Finish();
     });
 
-    // Used to verify all pages are fetched.
-    std::unordered_set<UInt64> remaining_pages_to_fetch(request.page_ids().begin(), request.page_ids().end());
+    doFetchPagesImpl(
+        [&stream_resp](disaggregated::PagesPacket & packet) { return stream_resp->Read(&packet); },
+        std::unordered_set<UInt64>(request.page_ids().begin(), request.page_ids().end()));
+}
 
+void SegmentReadTask::doFetchPagesImpl(
+    std::function<bool(disaggregated::PagesPacket &)> && read_packet,
+    std::unordered_set<UInt64> remaining_pages_to_fetch)
+{
+    UInt64 read_page_ns = 0;
+    UInt64 deserialize_page_ns = 0;
+    UInt64 wait_write_page_ns = 0;
+
+    Stopwatch sw_total;
     UInt64 packet_count = 0;
     UInt64 write_page_task_count = 0;
-    const UInt64 page_count = request.page_ids_size();
+    const UInt64 page_count = remaining_pages_to_fetch.size();
 
     auto schedule_write_page_task = [&write_page_task_count, &wait_write_page_ns](WritePageTaskPtr && write_page_task) {
         write_page_task_count += 1;
@@ -505,23 +579,32 @@ void SegmentReadTask::doFetchPages(const disaggregated::FetchDisaggPagesRequest 
     WritePageTaskPtr write_page_task;
     std::vector<std::future<void>> write_page_results;
 
+    google::protobuf::RepeatedPtrField<RemotePb::ColumnFileRemote> memtableset_cfs;
+
     // Keep reading packets.
     while (true)
     {
         Stopwatch sw_read_packet;
-        auto packet = std::make_shared<disaggregated::PagesPacket>();
-        if (!stream_resp->Read(packet.get()))
+        disaggregated::PagesPacket packet;
+        if (!read_packet(packet))
             break;
-        if (packet->has_error())
-            throw Exception(ErrorCodes::FETCH_PAGES_ERROR, "{} (from {})", packet->error().msg(), *this);
+        if (packet.has_error())
+            throw Exception(ErrorCodes::FETCH_PAGES_ERROR, "{} (from {})", packet.error().msg(), *this);
 
         read_page_ns = sw_read_packet.elapsed();
         packet_count += 1;
-        MemTrackerWrapper packet_mem_tracker_wrapper(packet->SpaceUsedLong(), fetch_pages_mem_tracker.get());
+        MemTrackerWrapper packet_mem_tracker_wrapper(packet.SpaceUsedLong(), fetch_pages_mem_tracker.get());
 
+        // Handle `chunks`.
+        for (const auto & s : packet.chunks())
+        {
+            RUNTIME_CHECK(memtableset_cfs.Add()->ParseFromString(s), read_snapshot->log->identifier());
+        }
+
+        // Handle `pages`.
         std::vector<UInt64> received_page_ids;
-        received_page_ids.reserve(packet->pages_size());
-        for (const auto & page : packet->pages())
+        received_page_ids.reserve(packet.pages_size());
+        for (const auto & page : packet.pages())
         {
             Stopwatch sw;
             if (write_page_task == nullptr)
@@ -536,13 +619,7 @@ void SegmentReadTask::doFetchPages(const disaggregated::FetchDisaggPagesRequest 
                 remote_page.SpaceUsedLong(),
                 fetch_pages_mem_tracker.get());
 
-            RUNTIME_CHECK(
-                remaining_pages_to_fetch.contains(remote_page.page_id()),
-                remaining_pages_to_fetch,
-                remote_page.page_id());
-
-            received_page_ids.emplace_back(remote_page.page_id());
-            remaining_pages_to_fetch.erase(remote_page.page_id());
+            checkPageID(remote_page.page_id(), received_page_ids, remaining_pages_to_fetch);
 
             // Write page into LocalPageCache. Note that the page must be occupied.
             auto oid = Remote::PageOID{
@@ -575,6 +652,15 @@ void SegmentReadTask::doFetchPages(const disaggregated::FetchDisaggPagesRequest 
     if (write_page_task != nullptr && write_page_task->wb.getTotalDataSize() > 0)
     {
         write_page_results.push_back(schedule_write_page_task(std::move(write_page_task)));
+    }
+
+    if (!memtableset_cfs.empty())
+    {
+        const auto & data_store = dm_context->global_context.getSharedContextDisagg()->remote_data_store;
+        auto mem_table_snap
+            = Serializer::deserializeColumnFileSet(memtableset_cfs, data_store, segment->getRowKeyRange());
+        checkMemTableSet(mem_table_snap);
+        read_snapshot->delta->setMemTableSetSnapshot(mem_table_snap);
     }
 
     Stopwatch sw_wait_write_page_finished;
