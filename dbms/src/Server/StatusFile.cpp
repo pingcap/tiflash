@@ -84,7 +84,7 @@ StatusFile::StatusFile(const std::string & path_)
             WriteBufferFromFileDescriptor out(fd, 1024);
             out << "PID: " << getpid() << "\n"
                 << "Started at: " << LocalDateTime(time(nullptr)) << "\n"
-                << "Version: " << TiFlashBuildInfo::getVersion() << "\n";
+                << "Version: " << TiFlashBuildInfo::getReleaseVersion() << "\n";
         }
     }
     catch (...)

@@ -1597,7 +1597,7 @@ public:
 std::string FunctionVersion::getVersion()
 {
     std::ostringstream os;
-    os << TiFlashBuildInfo::getVersion();
+    os << TiFlashBuildInfo::getReleaseVersion();
     return os.str();
 }
 
