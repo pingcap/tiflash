@@ -66,7 +66,10 @@ String PhysicalPlanNode::toSimpleString()
 void PhysicalPlanNode::finalize(const Names & parent_require)
 {
     if (finalized)
+    {
         LOG_WARNING(log, "Should not reach here, {}-{} already finalized", type.toString(), executor_id);
+        return;
+    }
     auto block_to_schema_string = [&](const Block & block) {
         FmtBuffer buffer;
         buffer.joinStr(
@@ -78,6 +81,7 @@ void PhysicalPlanNode::finalize(const Names & parent_require)
     };
     auto block_before_finalize = getSampleBlock();
     finalizeImpl(parent_require);
+    finalized = true;
     auto block_after_finalize = getSampleBlock();
     if (block_before_finalize.columns() != block_after_finalize.columns())
     {
