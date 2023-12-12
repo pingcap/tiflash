@@ -15,7 +15,7 @@
 #include <Columns/ColumnFixedString.h>
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnsNumber.h>
-#include <Common/ClickHouseRevision.h>
+#include <Common/TiFlashBuildInfo.h>
 #include <DataTypes/DataTypeDate.h>
 #include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeFixedString.h>
@@ -70,14 +70,11 @@ Block QueryLogElement::createBlock()
         {ColumnString::create(), std::make_shared<DataTypeString>(), "os_user"},
         {ColumnString::create(), std::make_shared<DataTypeString>(), "client_hostname"},
         {ColumnString::create(), std::make_shared<DataTypeString>(), "client_name"},
-        {ColumnUInt32::create(), std::make_shared<DataTypeUInt32>(), "client_revision"},
 
         {ColumnUInt8::create(), std::make_shared<DataTypeUInt8>(), "http_method"},
         {ColumnString::create(), std::make_shared<DataTypeString>(), "http_user_agent"},
 
         {ColumnString::create(), std::make_shared<DataTypeString>(), "quota_key"},
-
-        {ColumnUInt32::create(), std::make_shared<DataTypeUInt32>(), "revision"},
     };
 }
 
@@ -111,50 +108,46 @@ void QueryLogElement::appendToBlock(Block & block) const
 
     size_t i = 0;
 
-    columns[i++]->insert(UInt64(type));
-    columns[i++]->insert(UInt64(DateLUT::instance().toDayNum(event_time)));
-    columns[i++]->insert(UInt64(event_time));
-    columns[i++]->insert(UInt64(query_start_time));
-    columns[i++]->insert(UInt64(query_duration_ms));
+    columns[i++]->insert(static_cast<UInt64>(type));
+    columns[i++]->insert(static_cast<UInt64>(DateLUT::instance().toDayNum(event_time)));
+    columns[i++]->insert(static_cast<UInt64>(event_time));
+    columns[i++]->insert(static_cast<UInt64>(query_start_time));
+    columns[i++]->insert((query_duration_ms));
 
-    columns[i++]->insert(UInt64(read_rows));
-    columns[i++]->insert(UInt64(read_bytes));
+    columns[i++]->insert((read_rows));
+    columns[i++]->insert((read_bytes));
 
-    columns[i++]->insert(UInt64(written_rows));
-    columns[i++]->insert(UInt64(written_bytes));
+    columns[i++]->insert((written_rows));
+    columns[i++]->insert((written_bytes));
 
-    columns[i++]->insert(UInt64(result_rows));
-    columns[i++]->insert(UInt64(result_bytes));
+    columns[i++]->insert((result_rows));
+    columns[i++]->insert((result_bytes));
 
-    columns[i++]->insert(UInt64(memory_usage));
+    columns[i++]->insert((memory_usage));
 
     columns[i++]->insertData(query.data(), query.size());
     columns[i++]->insertData(exception.data(), exception.size());
     columns[i++]->insertData(stack_trace.data(), stack_trace.size());
 
-    columns[i++]->insert(UInt64(client_info.query_kind == ClientInfo::QueryKind::INITIAL_QUERY));
+    columns[i++]->insert(static_cast<UInt64>(client_info.query_kind == ClientInfo::QueryKind::INITIAL_QUERY));
 
     columns[i++]->insert(client_info.current_user);
     columns[i++]->insert(client_info.current_query_id);
     columns[i++]->insertData(IPv6ToBinary(client_info.current_address.host()).data(), 16);
-    columns[i++]->insert(UInt64(client_info.current_address.port()));
+    columns[i++]->insert(static_cast<UInt64>(client_info.current_address.port()));
 
     columns[i++]->insert(client_info.initial_user);
     columns[i++]->insert(client_info.initial_query_id);
     columns[i++]->insertData(IPv6ToBinary(client_info.initial_address.host()).data(), 16);
-    columns[i++]->insert(UInt64(client_info.initial_address.port()));
+    columns[i++]->insert(static_cast<UInt64>(client_info.initial_address.port()));
 
-    columns[i++]->insert(UInt64(client_info.interface));
+    columns[i++]->insert(static_cast<UInt64>(client_info.interface));
 
     columns[i++]->insert(client_info.os_user);
     columns[i++]->insert(client_info.client_hostname);
     columns[i++]->insert(client_info.client_name);
-    columns[i++]->insert(UInt64(client_info.client_revision));
 
     columns[i++]->insert(client_info.quota_key);
-
-    columns[i++]->insert(UInt64(ClickHouseRevision::get()));
-
     block.setColumns(std::move(columns));
 }
 

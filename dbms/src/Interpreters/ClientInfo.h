@@ -71,7 +71,7 @@ public:
     String client_name;
     UInt64 client_version_major = 0;
     UInt64 client_version_minor = 0;
-    unsigned client_revision = 0;
+    UInt64 client_version_patch = 0;
 
     /// Common
     String quota_key;
@@ -80,10 +80,9 @@ public:
 
     /** Serialization and deserialization.
       * Only values that are not calculated automatically or passed separately are serialized.
-      * Revisions are passed to use format that server will understand or client was used.
       */
-    void write(WriteBuffer & out, UInt64 server_protocol_revision) const;
-    void read(ReadBuffer & in, UInt64 client_protocol_revision);
+    void write(WriteBuffer & out) const;
+    void read(ReadBuffer & in);
 
     void fillOSUserHostNameAndVersionInfo();
 };
