@@ -554,7 +554,9 @@ void TCPHandler::sendHello()
 {
     writeVarUInt(Protocol::Server::Hello, *out);
     writeStringBinary(fmt::format("{} {}", TiFlashBuildInfo::getName(), client_name), *out);
-    writeStringBinary(TiFlashBuildInfo::getReleaseVersion(), *out);
+    writeVarUInt(TiFlashBuildInfo::getMajorVersion(), *out);
+    writeVarUInt(TiFlashBuildInfo::getMinorVersion(), *out);
+    writeVarUInt(TiFlashBuildInfo::getPatchVersion(), *out);
     writeStringBinary(DateLUT::instance().getTimeZone(), *out);
     writeStringBinary(server_display_name, *out);
     out->next();

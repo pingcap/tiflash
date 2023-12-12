@@ -131,7 +131,9 @@ void Connection::sendHello()
 {
     writeVarUInt(Protocol::Client::Hello, *out);
     writeStringBinary(fmt::format("{} {}", TiFlashBuildInfo::getName(), client_name), *out);
-    writeStringBinary(TiFlashBuildInfo::getReleaseVersion(), *out);
+    writeVarUInt(TiFlashBuildInfo::getMajorVersion(), *out);
+    writeVarUInt(TiFlashBuildInfo::getMinorVersion(), *out);
+    writeVarUInt(TiFlashBuildInfo::getPatchVersion(), *out);
     writeStringBinary(default_database, *out);
     writeStringBinary(user, *out);
     writeStringBinary(password, *out);

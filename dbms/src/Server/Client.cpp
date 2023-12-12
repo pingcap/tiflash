@@ -501,7 +501,6 @@ private:
         UInt64 server_version_major = 0;
         UInt64 server_version_minor = 0;
         UInt64 server_version_patch = 0;
-
         if (max_client_network_bandwidth)
         {
             ThrottlerPtr throttler = std::make_shared<Throttler>(max_client_network_bandwidth, 0, "");
