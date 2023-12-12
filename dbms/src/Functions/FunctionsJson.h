@@ -90,18 +90,13 @@ public:
     {
         for (const auto & arg : arguments)
         {
-            if (const auto * nested_type = checkAndGetDataType<DataTypeNullable>(arg.get()))
+            if (!arg->onlyNull())
             {
-                if unlikely (!nested_type->getNestedType()->isStringOrFixedString())
+                const auto * nested_arg_type = removeNullable(arg).get();
+                if unlikely (!nested_arg_type->isStringOrFixedString())
                     throw Exception(
                         "Illegal type " + arg->getName() + " of argument of function " + getName(),
                         ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-            }
-            else if unlikely (!arg->isStringOrFixedString())
-            {
-                throw Exception(
-                    "Illegal type " + arg->getName() + " of argument of function " + getName(),
-                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
             }
         }
         return makeNullable(std::make_shared<DataTypeString>());
@@ -116,7 +111,12 @@ public:
         bool const_json = false;
         const ColumnString * source_data_column_ptr;
         const ColumnNullable * source_nullable_column_ptr = nullptr;
-        if (const auto * const_nullable_col = checkAndGetColumnConst<ColumnNullable>(json_column))
+        if unlikely (json_column->onlyNull())
+        {
+            block.getByPosition(result).column = block.getByPosition(result).type->createColumnConst(rows, Null());
+            return;
+        }
+        else if (const auto * const_nullable_col = checkAndGetColumnConst<ColumnNullable>(json_column))
         {
             const_json = true;
             json_column = const_nullable_col->getDataColumnPtr().get();
@@ -175,6 +175,12 @@ public:
         for (size_t i = 1; i < arguments_size; ++i)
         {
             const ColumnPtr column = block.getByPosition(arguments[i]).column;
+            if (column->onlyNull())
+            {
+                block.getByPosition(result).column = block.getByPosition(result).type->createColumnConst(rows, Null());
+                return;
+            }
+
             const auto * nested_column = static_cast<const ColumnConst *>(column.get())->getDataColumnPtr().get();
             StringRef path_str;
             if (const auto * nullable_string_path_col = checkAndGetColumn<ColumnNullable>(nested_column))
