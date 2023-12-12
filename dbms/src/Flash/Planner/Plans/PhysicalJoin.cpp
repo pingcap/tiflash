@@ -323,7 +323,7 @@ void PhysicalJoin::buildPipeline(PipelineBuilder & builder, Context & context, P
     builder.addPlanNode(join_probe);
 }
 
-void PhysicalJoin::finalize(const Names & parent_require)
+void PhysicalJoin::finalizeImpl(const Names & parent_require)
 {
     FinalizeHelper::checkSchemaContainsParentRequire(schema, parent_require);
     join_ptr->finalize(parent_require);
