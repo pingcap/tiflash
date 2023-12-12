@@ -202,6 +202,7 @@ static void removeFromLocal(TMTContext & tmt, UInt64 region_id)
 
 void CheckpointIngestInfo::deleteWrittenData(TMTContext & tmt, RegionPtr region, const DM::Segments & segments)
 {
+    UNUSED(tmt, region, segments);
     // auto & storages = tmt.getStorages();
     // auto keyspace_id = region->getKeyspaceID();
     // auto table_id = region->getMappedTableID();
@@ -252,6 +253,7 @@ bool CheckpointIngestInfo::forciblyClean(
     const TiFlashRaftProxyHelper * proxy_helper,
     UInt64 region_id)
 {
+    UNUSED(proxy_helper);
     CheckpointIngestInfo::cleanOnSuccess(tmt, region_id, true);
     return false;
 }

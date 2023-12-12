@@ -30,9 +30,8 @@ struct AsyncTasks
     // We use a big queue to cache, to reduce add task failures.
     explicit AsyncTasks(uint64_t pool_size, uint64_t free_pool_size, uint64_t queue_size)
         : thread_pool(std::make_unique<ThreadPool>(pool_size, free_pool_size, queue_size))
-    {
-        log = DB::Logger::get("AsyncTasks");
-    }
+        , log(DB::Logger::get("AsyncTasks"))
+    {}
 
     struct CancelHandle;
     using CancelHandlePtr = std::shared_ptr<CancelHandle>;
@@ -41,7 +40,7 @@ struct AsyncTasks
         CancelHandle() = default;
         CancelHandle(const CancelHandle &) = delete;
 
-        bool canceled() const { return inner->load(); }
+        bool canceled() const { return inner.load(); }
 
         bool blockedWaitFor(std::chrono::duration<double, std::milli> timeout)
         {
@@ -61,18 +60,18 @@ struct AsyncTasks
         }
 
     private:
-        void doSetCancel() { inner->store(true); }
+        void doSetCancel() { inner.store(true); }
 
         void doCancel()
         {
             // Use lock here to prevent losing signal.
             std::scoped_lock<std::mutex> lock(mut);
-            inner->store(true);
+            inner.store(true);
             cv.notify_all();
         }
 
         friend struct AsyncTasks;
-        std::shared_ptr<std::atomic_bool> inner = std::make_shared<std::atomic_bool>(false);
+        std::atomic_bool inner = false;
         std::mutex mut;
         std::condition_variable cv;
     };
