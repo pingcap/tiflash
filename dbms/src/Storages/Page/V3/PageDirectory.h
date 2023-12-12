@@ -273,7 +273,7 @@ public:
 
     bool isExternalPage() const { return type == EditRecordType::VAR_EXTERNAL; }
 
-    [[nodiscard]] PageLock acquireLock() const { return std::lock_guard(m); } // NOLINT
+    [[nodiscard]] PageLock acquireLock() const NO_THREAD_SAFETY_ANALYSIS { return std::lock_guard(m); }
 
     void createNewEntry(const PageVersion & ver, const PageEntryV3 & entry);
 
