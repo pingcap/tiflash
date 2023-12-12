@@ -88,6 +88,8 @@ function install_openssl() {
 function install_go() {
     wget "https://dl.google.com/go/go${GO_VERSION}.linux-${GO_ARCH}.tar.gz"
     tar -C "${SYSROOT}" -xzvf go${GO_VERSION}.linux-${GO_ARCH}.tar.gz
+    mv "${SYSROOT}/go" "${SYSROOT}/go${GO_VERSION}" && \
+        pushd "${SYSROOT}" && ln -sv "go${GO_VERSION}" "go" && popd
     rm -rf go${GO_VERSION}.linux-${GO_ARCH}.tar.gz
 }
 
