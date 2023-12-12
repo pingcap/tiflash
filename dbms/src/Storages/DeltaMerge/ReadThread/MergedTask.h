@@ -95,6 +95,7 @@ public:
 
     const LoggerPtr getCurrentLogger() const
     {
+        // `std::cmp_*` is safety to compare negative signed integers and unsigned integers.
         if (likely(
                 std::cmp_less_equal(0, cur_idx) && std::cmp_less(cur_idx, units.size())
                 && units[cur_idx].task != nullptr))
