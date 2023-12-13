@@ -14,7 +14,9 @@
 
 #include <Common/Logger.h>
 #include <Core/BlockUtils.h>
+#include <Flash/Disaggregated/WNFetchPagesStreamWriter.h>
 #include <Interpreters/SharedContexts/Disagg.h>
+#include <Storages/DeltaMerge/ReadThread/WorkQueue.h>
 #include <Storages/DeltaMerge/Remote/DataStore/DataStoreMock.h>
 #include <Storages/DeltaMerge/Remote/DisaggSnapshot.h>
 #include <Storages/DeltaMerge/Remote/Serializer.h>
@@ -25,6 +27,7 @@
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/InputStreamTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
+
 using namespace DB::tests;
 
 namespace DB::ErrorCodes
@@ -32,6 +35,12 @@ namespace DB::ErrorCodes
 extern const int DT_DELTA_INDEX_ERROR;
 extern const int FETCH_PAGES_ERROR;
 } // namespace DB::ErrorCodes
+
+namespace DB::FailPoints
+{
+extern const char skip_check_segment_update[];
+extern const char disable_flush_cache[];
+} // namespace DB::FailPoints
 
 namespace DB::DM::tests
 {
@@ -127,8 +136,142 @@ try
 }
 CATCH
 
+class DMStoreForSegmentReadTaskTest : public DeltaMergeStoreTest
+{
+public:
+    void SetUp() override
+    {
+        DeltaMergeStoreTest::SetUp();
+        initReadNodePageCacheIfUninitialized();
+    }
 
-TEST_F(DeltaMergeStoreTest, DisaggReadSnapshot)
+    auto getWNReadSnapshot()
+    {
+        auto scan_context = std::make_shared<ScanContext>();
+        auto snap = store->writeNodeBuildRemoteReadSnapshot(
+            *db_context,
+            db_context->getSettingsRef(),
+            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+            1,
+            "req_id",
+            {},
+            scan_context);
+        snap->column_defines = std::make_shared<ColumnDefines>(store->getTableColumns());
+        return snap;
+    }
+
+    [[nodiscard]] auto setMockRemoteDataStore()
+    {
+        db_context->getSharedContextDisagg()->remote_data_store
+            = std::make_shared<DM::Remote::DataStoreMock>(db_context->getFileProvider());
+        return ext::make_scope_guard([&]() { db_context->getSharedContextDisagg()->remote_data_store = nullptr; });
+    }
+
+    [[nodiscard]] static auto disableFlushCache()
+    {
+        DB::FailPointHelper::enableFailPoint(DB::FailPoints::skip_check_segment_update);
+        DB::FailPointHelper::enableFailPoint(DB::FailPoints::disable_flush_cache);
+        return ext::make_scope_guard([]() {
+            DB::FailPointHelper::disableFailPoint(DB::FailPoints::skip_check_segment_update);
+            DB::FailPointHelper::disableFailPoint(DB::FailPoints::disable_flush_cache);
+        });
+    }
+
+    auto getRemoteSegment(const Remote::DisaggPhysicalTableReadSnapshotPtr & snap, bool need_mem_data, int idx)
+    {
+        MemTrackerWrapper mem_tracker_wrapper(nullptr);
+        auto remote_table_pb = Remote::Serializer::serializePhysicalTable(
+            snap,
+            /*task_id*/ {},
+            mem_tracker_wrapper,
+            need_mem_data);
+        RUNTIME_CHECK(remote_table_pb.segments_size() > idx, remote_table_pb.segments_size(), idx);
+        auto remote_seg = remote_table_pb.segments(idx);
+        auto guard = setMockRemoteDataStore();
+        auto scan_context = std::make_shared<ScanContext>();
+        return std::make_shared<SegmentReadTask>(
+            Logger::get(),
+            *db_context,
+            scan_context,
+            remote_seg,
+            DisaggTaskId{},
+            /*store_id*/ 1,
+            /*store_address*/ "127.0.0.1",
+            store->keyspace_id,
+            store->physical_table_id);
+    };
+
+    void initReadNodePageCacheIfUninitialized()
+    {
+        if (db_context->getSharedContextDisagg()->rn_page_cache == nullptr)
+        {
+            db_context->getSharedContextDisagg()->initReadNodePageCache(
+                db_context->getPathPool(),
+                getTemporaryPath(),
+                1 * 1024 * 1024 * 1024);
+        }
+    }
+
+    std::tuple<SegmentReadTaskPtr, SegmentReadTaskPtr> getRemoteAndLocalSegmentReadTasks(bool need_mem_data, int idx)
+    {
+        auto snap = getWNReadSnapshot();
+        auto remote_seg = getRemoteSegment(snap, need_mem_data, idx);
+        auto local_seg = snap->popTask(remote_seg->segment->segmentId());
+        RUNTIME_CHECK(remote_seg->extra_remote_info.has_value());
+        RUNTIME_CHECK(!local_seg->extra_remote_info.has_value());
+        return std::make_tuple(remote_seg, local_seg);
+    }
+
+    void fetchPages(const SegmentReadTaskPtr & remote_seg, const SegmentReadTaskPtr & local_seg)
+    {
+        auto table_column_defines = DMTestEnv::getDefaultColumns();
+        WorkQueue<disaggregated::PagesPacket> q;
+
+        // Send pages.
+        WNFetchPagesStreamWriter writer(
+            [&q](const disaggregated::PagesPacket & packet) { q.push(packet, nullptr); },
+            local_seg,
+            remote_seg->extra_remote_info->remote_page_ids,
+            db_context->getSettingsRef());
+        writer.syncWrite();
+        q.finish();
+
+        // Receive pages.
+        auto ds_guard = setMockRemoteDataStore();
+        auto occupied_result = remote_seg->blockingOccupySpaceForTask();
+        remote_seg->doFetchPagesImpl(
+            [&q](disaggregated::PagesPacket & packet) { return q.pop(packet); },
+            std::unordered_set<UInt64>(
+                remote_seg->extra_remote_info->remote_page_ids.begin(),
+                remote_seg->extra_remote_info->remote_page_ids.end()));
+        ASSERT_EQ(q.size(), 0);
+
+        remote_seg->initColumnFileDataProvider(occupied_result.pages_guard);
+        remote_seg->initInputStream(*table_column_defines, 0, nullptr, ReadMode::Bitmap, DEFAULT_BLOCK_SIZE, false);
+        auto remote_stream = remote_seg->getInputStream();
+
+        Blocks remote_blks;
+        while (true)
+        {
+            auto b = remote_stream->read();
+            if (b)
+            {
+                remote_blks.push_back(std::move(b));
+            }
+            else
+            {
+                break;
+            }
+        }
+
+        local_seg->initInputStream(*table_column_defines, 0, nullptr, ReadMode::Bitmap, DEFAULT_BLOCK_SIZE, false);
+        auto local_stream = local_seg->getInputStream();
+
+        ASSERT_INPUTSTREAM_BLOCKS(local_stream, remote_blks);
+    }
+};
+
+TEST_F(DMStoreForSegmentReadTaskTest, DisaggReadSnapshot)
 try
 {
     auto table_column_defines = DMTestEnv::getDefaultColumns();
@@ -186,13 +329,12 @@ try
     snap->column_defines = std::make_shared<ColumnDefines>(store->getTableColumns());
 
     MemTrackerWrapper mem_tracker_wrapper(nullptr);
-    auto remote_table_pb = Remote::Serializer::serializePhysicalTable(snap, /*task_id*/ {}, mem_tracker_wrapper);
+    auto remote_table_pb
+        = Remote::Serializer::serializePhysicalTable(snap, /*task_id*/ {}, mem_tracker_wrapper, /*need_mem_data*/ true);
 
     ASSERT_GT(remote_table_pb.segments_size(), 0);
 
-    db_context->getSharedContextDisagg()->remote_data_store
-        = std::make_shared<DM::Remote::DataStoreMock>(db_context->getFileProvider());
-
+    auto guard = setMockRemoteDataStore();
     for (const auto & remote_seg : remote_table_pb.segments())
     {
         auto seg_task = std::make_shared<SegmentReadTask>(
@@ -373,7 +515,7 @@ try
 }
 CATCH
 
-TEST_F(DeltaMergeStoreTest, MemTableSetWithCFTiny)
+TEST_F(DMStoreForSegmentReadTaskTest, MemTableSetWithCFTiny)
 try
 {
     auto table_column_defines = DMTestEnv::getDefaultColumns();
@@ -400,11 +542,11 @@ try
     snap->column_defines = std::make_shared<ColumnDefines>(store->getTableColumns());
 
     MemTrackerWrapper mem_tracker_wrapper(nullptr);
-    auto remote_table_pb = Remote::Serializer::serializePhysicalTable(snap, /*task_id*/ {}, mem_tracker_wrapper);
+    auto remote_table_pb
+        = Remote::Serializer::serializePhysicalTable(snap, /*task_id*/ {}, mem_tracker_wrapper, /*need_mem_data*/ true);
     ASSERT_EQ(remote_table_pb.segments_size(), 1);
 
-    db_context->getSharedContextDisagg()->remote_data_store
-        = std::make_shared<DM::Remote::DataStoreMock>(db_context->getFileProvider());
+    auto guard = setMockRemoteDataStore();
     const auto & remote_seg = remote_table_pb.segments(0);
     auto seg_task = std::make_shared<SegmentReadTask>(
         Logger::get(),
@@ -421,6 +563,297 @@ try
     const auto & cf = cfs.front();
     ASSERT_NE(cf->tryToTinyFile(), nullptr);
     ASSERT_EQ(seg_task->extra_remote_info->remote_page_ids.size(), 1);
+}
+CATCH
+
+TEST_F(DMStoreForSegmentReadTaskTest, BasicMemTableSet)
+try
+{
+    auto fp_guard = disableFlushCache();
+
+    auto table_column_defines = DMTestEnv::getDefaultColumns();
+    store = reload(table_column_defines);
+
+    auto get_remote_segment = [&](bool need_mem_data) {
+        auto snap = getWNReadSnapshot();
+        return getRemoteSegment(snap, need_mem_data, 0);
+    };
+
+    // cf delete range
+    {
+        HandleRange range(0, 128);
+        store->deleteRange(*db_context, db_context->getSettingsRef(), RowKeyRange::fromHandleRange(range));
+        auto check = [&](bool need_mem_data) {
+            auto seg_task = get_remote_segment(need_mem_data);
+            ASSERT_NE(seg_task, nullptr);
+            ASSERT_FALSE(seg_task->needFetchMemTableSet());
+            auto mem_snap = seg_task->read_snapshot->delta->getMemTableSetSnapshot();
+            ASSERT_EQ(mem_snap->getColumnFileCount(), 1);
+            ASSERT_EQ(mem_snap->getColumnFiles()[0]->getType(), ColumnFile::Type::DELETE_RANGE);
+        };
+        check(true);
+        check(false);
+    }
+
+    // cf tiny in memtableset
+    {
+        auto block = DMTestEnv::prepareSimpleWriteBlock(
+            0,
+            db_context->getSettingsRef().dt_segment_delta_cache_limit_rows,
+            false);
+        store->write(*db_context, db_context->getSettingsRef(), block);
+        auto check = [&](bool need_mem_data) {
+            auto seg_task = get_remote_segment(need_mem_data);
+            ASSERT_NE(seg_task, nullptr);
+            ASSERT_FALSE(seg_task->needFetchMemTableSet());
+            auto mem_snap = seg_task->read_snapshot->delta->getMemTableSetSnapshot();
+            ASSERT_EQ(mem_snap->getColumnFileCount(), 2);
+            ASSERT_EQ(mem_snap->getColumnFiles()[0]->getType(), ColumnFile::Type::DELETE_RANGE);
+            ASSERT_EQ(mem_snap->getColumnFiles()[1]->getType(), ColumnFile::Type::TINY_FILE);
+        };
+        check(true);
+        check(false);
+    }
+
+    // cf mem
+    {
+        auto block = DMTestEnv::prepareSimpleWriteBlock(0, 128, false);
+        store->write(*db_context, db_context->getSettingsRef(), block);
+        auto check = [&](bool need_mem_data) {
+            auto seg_task = get_remote_segment(need_mem_data);
+            ASSERT_NE(seg_task, nullptr);
+            ASSERT_NE(seg_task->needFetchMemTableSet(), need_mem_data);
+            auto mem_snap = seg_task->read_snapshot->delta->getMemTableSetSnapshot();
+            ASSERT_EQ(mem_snap->getColumnFileCount(), 3);
+            ASSERT_EQ(mem_snap->getColumnFiles()[0]->getType(), ColumnFile::Type::DELETE_RANGE);
+            ASSERT_EQ(mem_snap->getColumnFiles()[1]->getType(), ColumnFile::Type::TINY_FILE);
+            ASSERT_EQ(mem_snap->getColumnFiles()[2]->getType(), ColumnFile::Type::INMEMORY_FILE);
+        };
+        check(true);
+        check(false);
+    }
+
+    // cf big
+    {
+        auto block = DMTestEnv::prepareSimpleWriteBlock(0, 128, false);
+        auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
+        auto [range, file_ids] = genDMFile(*dm_context, block);
+        store->ingestFiles(dm_context, range, file_ids, false);
+        auto check = [&](bool need_mem_data) {
+            auto seg_task = get_remote_segment(need_mem_data);
+            ASSERT_NE(seg_task, nullptr);
+            ASSERT_NE(seg_task->needFetchMemTableSet(), need_mem_data);
+            auto mem_snap = seg_task->read_snapshot->delta->getMemTableSetSnapshot();
+            ASSERT_EQ(mem_snap->getColumnFileCount(), 4);
+            ASSERT_EQ(mem_snap->getColumnFiles()[0]->getType(), ColumnFile::Type::DELETE_RANGE);
+            ASSERT_EQ(mem_snap->getColumnFiles()[1]->getType(), ColumnFile::Type::TINY_FILE);
+            ASSERT_EQ(mem_snap->getColumnFiles()[2]->getType(), ColumnFile::Type::INMEMORY_FILE);
+            ASSERT_EQ(mem_snap->getColumnFiles()[3]->getType(), ColumnFile::Type::BIG_FILE);
+        };
+        check(true);
+        check(false);
+    }
+}
+CATCH
+
+TEST_F(DMStoreForSegmentReadTaskTest, FetchPages_NoTiny_NoInMem)
+try
+{
+    auto fp_guard = disableFlushCache();
+    auto table_column_defines = DMTestEnv::getDefaultColumns();
+    store = reload(table_column_defines);
+
+    // stable
+    {
+        auto block = DMTestEnv::prepareSimpleWriteBlock(0, 4096, false);
+        store->write(*db_context, db_context->getSettingsRef(), block);
+        store->mergeDeltaAll(*db_context);
+    }
+
+    // cf delete range
+    {
+        HandleRange range(0, 128);
+        store->deleteRange(*db_context, db_context->getSettingsRef(), RowKeyRange::fromHandleRange(range));
+    }
+
+    // cf big
+    {
+        auto block = DMTestEnv::prepareSimpleWriteBlock(0, 128, false);
+        auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
+        auto [range, file_ids] = genDMFile(*dm_context, block);
+        store->ingestFiles(dm_context, range, file_ids, false);
+    }
+
+    // cf tiny
+    {
+        auto block = DMTestEnv::prepareSimpleWriteBlock(
+            0,
+            db_context->getSettingsRef().dt_segment_delta_cache_limit_rows,
+            false);
+        store->write(*db_context, db_context->getSettingsRef(), block);
+    }
+
+    auto check = [&](bool need_mem_data) {
+        auto [remote_seg, local_seg] = getRemoteAndLocalSegmentReadTasks(need_mem_data, 0);
+        ASSERT_FALSE(remote_seg->extra_remote_info->remote_page_ids.empty());
+        ASSERT_FALSE(remote_seg->needFetchMemTableSet());
+    };
+    check(true);
+    check(false);
+}
+CATCH
+
+TEST_F(DMStoreForSegmentReadTaskTest, FetchPages_Tiny_NoInMem)
+try
+{
+    auto fp_guard = disableFlushCache();
+    auto table_column_defines = DMTestEnv::getDefaultColumns();
+    store = reload(table_column_defines);
+
+    // stable
+    {
+        auto block = DMTestEnv::prepareSimpleWriteBlock(0, 4096, false);
+        store->write(*db_context, db_context->getSettingsRef(), block);
+        store->mergeDeltaAll(*db_context);
+    }
+
+    // cf delete range
+    {
+        HandleRange range(0, 128);
+        store->deleteRange(*db_context, db_context->getSettingsRef(), RowKeyRange::fromHandleRange(range));
+    }
+
+    // cf big
+    {
+        auto block = DMTestEnv::prepareSimpleWriteBlock(0, 128, false);
+        auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
+        auto [range, file_ids] = genDMFile(*dm_context, block);
+        store->ingestFiles(dm_context, range, file_ids, false);
+    }
+
+    // cf tiny
+    {
+        auto block = DMTestEnv::prepareSimpleWriteBlock(
+            0,
+            db_context->getSettingsRef().dt_segment_delta_cache_limit_rows,
+            false);
+        store->write(*db_context, db_context->getSettingsRef(), block);
+    }
+
+    auto [remote_seg, local_seg] = getRemoteAndLocalSegmentReadTasks(true, 0);
+    ASSERT_FALSE(remote_seg->needFetchMemTableSet());
+    fetchPages(remote_seg, local_seg);
+}
+CATCH
+
+TEST_F(DMStoreForSegmentReadTaskTest, FetchPages_NoTiny_InMem)
+try
+{
+    auto fp_guard = disableFlushCache();
+    auto table_column_defines = DMTestEnv::getDefaultColumns();
+    store = reload(table_column_defines);
+
+    // stable
+    {
+        auto block = DMTestEnv::prepareSimpleWriteBlock(0, 4096, false);
+        store->write(*db_context, db_context->getSettingsRef(), block);
+        store->mergeDeltaAll(*db_context);
+    }
+
+    // cf delete range
+    {
+        HandleRange range(0, 128);
+        store->deleteRange(*db_context, db_context->getSettingsRef(), RowKeyRange::fromHandleRange(range));
+    }
+
+    // cf big
+    {
+        auto block = DMTestEnv::prepareSimpleWriteBlock(0, 128, false);
+        auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
+        auto [range, file_ids] = genDMFile(*dm_context, block);
+        store->ingestFiles(dm_context, range, file_ids, false);
+    }
+
+    // cf in mem
+    {
+        auto block = DMTestEnv::prepareSimpleWriteBlock(
+            0,
+            db_context->getSettingsRef().dt_segment_delta_cache_limit_rows / 5,
+            false);
+        store->write(*db_context, db_context->getSettingsRef(), block);
+    }
+
+    {
+        auto [remote_seg, local_seg] = getRemoteAndLocalSegmentReadTasks(true, 0);
+        ASSERT_FALSE(remote_seg->needFetchMemTableSet());
+        fetchPages(remote_seg, local_seg);
+    }
+
+    {
+        auto [remote_seg, local_seg] = getRemoteAndLocalSegmentReadTasks(false, 0);
+        ASSERT_TRUE(remote_seg->needFetchMemTableSet());
+        fetchPages(remote_seg, local_seg);
+    }
+}
+CATCH
+
+TEST_F(DMStoreForSegmentReadTaskTest, FetchPages_Tiny_InMem)
+try
+{
+    auto fp_guard = disableFlushCache();
+    auto table_column_defines = DMTestEnv::getDefaultColumns();
+    store = reload(table_column_defines);
+
+    // stable
+    {
+        auto block = DMTestEnv::prepareSimpleWriteBlock(0, 4096, false);
+        store->write(*db_context, db_context->getSettingsRef(), block);
+        store->mergeDeltaAll(*db_context);
+    }
+
+    // cf delete range
+    {
+        HandleRange range(0, 128);
+        store->deleteRange(*db_context, db_context->getSettingsRef(), RowKeyRange::fromHandleRange(range));
+    }
+
+    // cf big
+    {
+        auto block = DMTestEnv::prepareSimpleWriteBlock(0, 128, false);
+        auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
+        auto [range, file_ids] = genDMFile(*dm_context, block);
+        store->ingestFiles(dm_context, range, file_ids, false);
+    }
+
+    // cf tiny
+    {
+        auto block = DMTestEnv::prepareSimpleWriteBlock(
+            0,
+            db_context->getSettingsRef().dt_segment_delta_cache_limit_rows,
+            false);
+        store->write(*db_context, db_context->getSettingsRef(), block);
+    }
+
+    // cf in mem
+    {
+        auto block = DMTestEnv::prepareSimpleWriteBlock(
+            0,
+            db_context->getSettingsRef().dt_segment_delta_cache_limit_rows / 5,
+            false);
+        store->write(*db_context, db_context->getSettingsRef(), block);
+    }
+
+    {
+        auto [remote_seg, local_seg] = getRemoteAndLocalSegmentReadTasks(true, 0);
+        ASSERT_FALSE(remote_seg->needFetchMemTableSet());
+        fetchPages(remote_seg, local_seg);
+    }
+
+    {
+        auto [remote_seg, local_seg] = getRemoteAndLocalSegmentReadTasks(false, 0);
+        ASSERT_TRUE(remote_seg->needFetchMemTableSet());
+        fetchPages(remote_seg, local_seg);
+    }
 }
 CATCH
 } // namespace DB::DM::tests
