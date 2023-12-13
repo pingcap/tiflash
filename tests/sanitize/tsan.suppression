@@ -1,5 +1,6 @@
 race:dbms/src/Common/TiFlashMetrics.h
 race:DB::Context::setCancelTest
 race:DB::getCurrentExceptionMessage
+race:google::protobuf::internal::AssignDescriptors
 race:fiu_fail
 race:dbms/src/DataStreams/BlockStreamProfileInfo.h
