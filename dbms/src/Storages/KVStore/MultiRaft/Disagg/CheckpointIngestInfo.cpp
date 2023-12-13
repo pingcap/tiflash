@@ -73,7 +73,7 @@ CheckpointIngestInfoPtr CheckpointIngestInfo::restore(
         region = Region::deserialize(buf, proxy_helper);
     }
 
-    remote_store_id = ingest_info_persisted.remote_store_id();
+    StoreID remote_store_id = ingest_info_persisted.remote_store_id();
 
     auto & storages = tmt.getStorages();
     auto keyspace_id = region->getKeyspaceID();
