@@ -20,8 +20,8 @@
 TIFLASH_PATH="dbms/src/Server/tiflash"
 
 if [ -z ${storage_bin+x} ]; then
-	if [ -f "../cmake-debug/${TIFLASH_PATH}" ]; then
-		build_dir="../cmake-debug"
+	if [ -f "../cmake-build-debug/${TIFLASH_PATH}" ]; then
+		build_dir="../cmake-build-debug"
 	else
 		echo 'Error: Cannot find TiFlash binary. Specify via: export storage_bin=xxx' >&2
 		exit 1
