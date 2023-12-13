@@ -39,21 +39,7 @@ TEST_F(TestJsonContainsPath, TestOnlyNull)
 try
 {
     size_t rows_count = 2;
-    ColumnWithTypeAndName json_column;
-    {
-        auto val = ColumnString::create();
-        // clang-format off
-        const UInt8 empty_array[] = {
-            JsonBinary::TYPE_CODE_ARRAY, // array_type
-            0x0, 0x0, 0x0, 0x0, // element_count
-            0x8, 0x0, 0x0, 0x0}; // total_size
-        // clang-format on
-        val->insertData(reinterpret_cast<const char *>(empty_array), sizeof(empty_array) / sizeof(UInt8));
-        val->insertData(reinterpret_cast<const char *>(empty_array), sizeof(empty_array) / sizeof(UInt8));
-        ColumnUInt8::MutablePtr col_null_map = ColumnUInt8::create(rows_count, 0);
-        auto json_col = ColumnNullable::create(std::move(val), std::move(col_null_map));
-        json_column = ColumnWithTypeAndName(std::move(json_col), makeNullable(std::make_shared<DataTypeString>()));
-    }
+    ColumnWithTypeAndName json_column = castStringToJson(createColumn<Nullable<String>>({"[]", "[]"}));
     auto type_column = createColumn<Nullable<String>>({"one", "one"});
     ColumnWithTypeAndName path_column = createColumn<Nullable<String>>({"$", "$"});
     ColumnWithTypeAndName path_column2 = createColumn<Nullable<String>>({"$.a", "$.a"});
@@ -88,30 +74,47 @@ try
     ASSERT_COLUMN_EQ(
         null_bool_const,
         executeFunction(func_name, json_column, type_column, null_string_const, path_column));
+
+    // type and path const.
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<UInt8>>({true, true}),
+        executeFunction(
+            func_name,
+            json_column,
+            createConstColumn<String>(2, "one"),
+            createConstColumn<String>(2, "$"),
+            null_string_const));
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<UInt8>>({true, true}),
+        executeFunction(
+            func_name,
+            json_column,
+            createConstColumn<String>(2, "one"),
+            createConstColumn<String>(2, "$"),
+            only_null_const));
+    ASSERT_COLUMN_EQ(
+        null_bool_const,
+        executeFunction(
+            func_name,
+            json_column,
+            createConstColumn<String>(2, "one"),
+            null_string_const,
+            createConstColumn<String>(2, "$")));
+    ASSERT_COLUMN_EQ(
+        only_null_const,
+        executeFunction(
+            func_name,
+            json_column,
+            createConstColumn<String>(2, "one"),
+            only_null_const,
+            createConstColumn<String>(2, "$")));
 }
 CATCH
 
 TEST_F(TestJsonContainsPath, TestNullable)
 try
 {
-    ColumnWithTypeAndName json_column;
-    {
-        auto val = ColumnString::create();
-        // clang-format off
-        const UInt8 empty_array[] = {
-            JsonBinary::TYPE_CODE_ARRAY, // array_type
-            0x0, 0x0, 0x0, 0x0, // element_count
-            0x8, 0x0, 0x0, 0x0}; // total_size
-        // clang-format on
-        val->insertData(reinterpret_cast<const char *>(empty_array), sizeof(empty_array) / sizeof(UInt8));
-        val->insertData(reinterpret_cast<const char *>(empty_array), sizeof(empty_array) / sizeof(UInt8));
-        val->insertData(reinterpret_cast<const char *>(empty_array), sizeof(empty_array) / sizeof(UInt8));
-        val->insertData(reinterpret_cast<const char *>(empty_array), sizeof(empty_array) / sizeof(UInt8));
-        ColumnUInt8::MutablePtr col_null_map = ColumnUInt8::create(4, 0);
-        col_null_map->getData()[0] = 1;
-        auto json_col = ColumnNullable::create(std::move(val), std::move(col_null_map));
-        json_column = ColumnWithTypeAndName(std::move(json_col), makeNullable(std::make_shared<DataTypeString>()));
-    }
+    ColumnWithTypeAndName json_column = castStringToJson(createColumn<Nullable<String>>({{}, "[]", "[]", "[]"}));
     auto type_column = createColumn<Nullable<String>>({"one", {}, "one", "one"});
     ColumnWithTypeAndName path_column = createColumn<Nullable<String>>({"$", "$", {}, "$"});
 
@@ -152,6 +155,13 @@ try
                 func_name,
                 {castStringToJson(createColumn<String>({json, json})),
                  createColumn<String>({type, type}),
+                 createConstColumn<String>(2, path)}));
+        ASSERT_COLUMN_EQ(
+            createColumn<UInt8>({expect, expect}),
+            executeFunction(
+                func_name,
+                {castStringToJson(createColumn<String>({json, json})),
+                 createConstColumn<String>(2, type),
                  createConstColumn<String>(2, path)}));
     };
     auto exec_assert2
@@ -203,6 +213,14 @@ try
                       {castStringToJson(createColumn<String>({json, json})),
                        createColumn<String>({type, type}),
                        createColumn<String>({path1, path1}),
+                       createConstColumn<String>(2, path2)}));
+              ASSERT_COLUMN_EQ(
+                  createColumn<UInt8>({expect, expect}),
+                  executeFunction(
+                      func_name,
+                      {castStringToJson(createColumn<String>({json, json})),
+                       createConstColumn<String>(2, type),
+                       createConstColumn<String>(2, path1),
                        createConstColumn<String>(2, path2)}));
           };
 

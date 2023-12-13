@@ -1578,22 +1578,20 @@ public:
 
         StringSources path_sources;
         path_sources.reserve(arguments.size() - 2);
-        bool paths_nullable = false;
         std::vector<const NullMap *> path_null_maps;
         path_null_maps.reserve(arguments.size() - 2);
+        bool is_all_path_const = true;
         for (size_t i = 2; i < arguments.size(); ++i)
         {
             const auto & path_col = block.getByPosition(arguments[i]).column;
             if (path_col->onlyNull())
             {
                 path_sources.push_back(nullptr);
-                paths_nullable = true;
                 path_null_maps.push_back(nullptr);
             }
             else if (path_col->isColumnNullable())
             {
                 path_sources.push_back(createDynamicStringSource(*nested_block.getByPosition(arguments[i]).column));
-                paths_nullable = true;
                 const auto & path_column_nullable = static_cast<const ColumnNullable &>(*path_col);
                 path_null_maps.push_back(&path_column_nullable.getNullMapData());
             }
@@ -1602,6 +1600,7 @@ public:
                 path_sources.push_back(createDynamicStringSource(*nested_block.getByPosition(arguments[i]).column));
                 path_null_maps.push_back(nullptr);
             }
+            is_all_path_const = is_all_path_const && path_col->isColumnConst();
         }
 
         if (json_col->isColumnNullable())
@@ -1610,53 +1609,40 @@ public:
             if (type_col->isColumnNullable())
             {
                 const auto & type_column_nullable = static_cast<const ColumnNullable &>(*type_col);
-                if (paths_nullable)
-                    doExecute<true, true, true>(
-                        json_source,
-                        json_column_nullable.getNullMapData(),
-                        type_source,
-                        type_column_nullable.getNullMapData(),
-                        path_sources,
-                        path_null_maps,
-                        rows,
-                        data_to,
-                        vec_null_map);
-                else
-                    doExecute<true, true, false>(
-                        json_source,
-                        json_column_nullable.getNullMapData(),
-                        type_source,
-                        type_column_nullable.getNullMapData(),
-                        path_sources,
-                        path_null_maps,
-                        rows,
-                        data_to,
-                        vec_null_map);
+                doExecuteCommon<true, true>(
+                    json_source,
+                    json_column_nullable.getNullMapData(),
+                    type_source,
+                    type_column_nullable.getNullMapData(),
+                    path_sources,
+                    path_null_maps,
+                    rows,
+                    data_to,
+                    vec_null_map);
+            }
+            else if (type_col->isColumnConst() && is_all_path_const)
+            {
+                doExecuteForTypeAndPathConst<true>(
+                    json_source,
+                    json_column_nullable.getNullMapData(),
+                    type_source,
+                    path_sources,
+                    rows,
+                    data_to,
+                    vec_null_map);
             }
             else
             {
-                if (paths_nullable)
-                    doExecute<true, false, true>(
-                        json_source,
-                        json_column_nullable.getNullMapData(),
-                        type_source,
-                        {},
-                        path_sources,
-                        path_null_maps,
-                        rows,
-                        data_to,
-                        vec_null_map);
-                else
-                    doExecute<true, false, false>(
-                        json_source,
-                        json_column_nullable.getNullMapData(),
-                        type_source,
-                        {},
-                        path_sources,
-                        path_null_maps,
-                        rows,
-                        data_to,
-                        vec_null_map);
+                doExecuteCommon<true, false>(
+                    json_source,
+                    json_column_nullable.getNullMapData(),
+                    type_source,
+                    {},
+                    path_sources,
+                    path_null_maps,
+                    rows,
+                    data_to,
+                    vec_null_map);
             }
         }
         else
@@ -1664,53 +1650,40 @@ public:
             if (type_col->isColumnNullable())
             {
                 const auto & type_column_nullable = static_cast<const ColumnNullable &>(*type_col);
-                if (paths_nullable)
-                    doExecute<false, true, true>(
-                        json_source,
-                        {},
-                        type_source,
-                        type_column_nullable.getNullMapData(),
-                        path_sources,
-                        path_null_maps,
-                        rows,
-                        data_to,
-                        vec_null_map);
-                else
-                    doExecute<false, true, false>(
-                        json_source,
-                        {},
-                        type_source,
-                        type_column_nullable.getNullMapData(),
-                        path_sources,
-                        path_null_maps,
-                        rows,
-                        data_to,
-                        vec_null_map);
+                doExecuteCommon<false, true>(
+                    json_source,
+                    {},
+                    type_source,
+                    type_column_nullable.getNullMapData(),
+                    path_sources,
+                    path_null_maps,
+                    rows,
+                    data_to,
+                    vec_null_map);
+            }
+            else if (type_col->isColumnConst() && is_all_path_const)
+            {
+                doExecuteForTypeAndPathConst<false>(
+                    json_source,
+                    {},
+                    type_source,
+                    path_sources,
+                    rows,
+                    data_to,
+                    vec_null_map);
             }
             else
             {
-                if (paths_nullable)
-                    doExecute<false, false, true>(
-                        json_source,
-                        {},
-                        type_source,
-                        {},
-                        path_sources,
-                        path_null_maps,
-                        rows,
-                        data_to,
-                        vec_null_map);
-                else
-                    doExecute<false, false, false>(
-                        json_source,
-                        {},
-                        type_source,
-                        {},
-                        path_sources,
-                        path_null_maps,
-                        rows,
-                        data_to,
-                        vec_null_map);
+                doExecuteCommon<false, false>(
+                    json_source,
+                    {},
+                    type_source,
+                    {},
+                    path_sources,
+                    path_null_maps,
+                    rows,
+                    data_to,
+                    vec_null_map);
             }
         }
 
@@ -1722,8 +1695,8 @@ public:
     }
 
 private:
-    template <bool is_json_nullable, bool is_type_nullable, bool paths_nullable>
-    void doExecute(
+    template <bool is_json_nullable, bool is_type_nullable>
+    void doExecuteCommon(
         const std::unique_ptr<IStringSource> & json_source,
         const NullMap & null_map_json,
         const std::unique_ptr<IStringSource> & type_source,
@@ -1777,13 +1750,10 @@ private:
             auto & res = data_to[row]; // default 1.
             for (size_t i = 0; i < path_sources.size(); ++i)
             {
-                if constexpr (paths_nullable)
+                if (!path_sources[i] || (path_null_maps[i] && (*path_null_maps[i])[row]))
                 {
-                    if (!path_sources[i] || (path_null_maps[i] && (*path_null_maps[i])[row]))
-                    {
-                        null_map_to[row] = 1;
-                        break;
-                    }
+                    null_map_to[row] = 1;
+                    break;
                 }
 
                 assert(path_sources[i]);
@@ -1815,6 +1785,99 @@ private:
             }
 
             FINISH_PER_ROW
+        }
+
+#undef SET_NULL_AND_CONTINUE
+    }
+
+    template <bool is_json_nullable>
+    void doExecuteForTypeAndPathConst(
+        const std::unique_ptr<IStringSource> & json_source,
+        const NullMap & null_map_json,
+        const std::unique_ptr<IStringSource> & type_source,
+        const StringSources & path_sources,
+        size_t rows,
+        ColumnUInt8::Container & data_to,
+        NullMap & null_map_to) const
+    {
+        // build contains_type for type const col first.
+        const auto & type_val = type_source->getWhole();
+        std::string_view type{reinterpret_cast<const char *>(type_val.data), type_val.size};
+        bool is_contains_path_one = JsonBinary::isJSONContainsPathOne(type);
+        bool is_contains_path_all = JsonBinary::isJSONContainsPathAll(type);
+        if unlikely (!is_contains_path_one && !is_contains_path_all)
+            throw Exception(
+                fmt::format("The second argument can only be either 'one' or 'all' of function {}.", getName()),
+                ErrorCodes::ILLEGAL_COLUMN);
+
+        // build path exprs for path const cols next.
+        std::vector<std::vector<JsonPathExprRefContainerPtr>> path_expr_containor_vecs;
+        path_expr_containor_vecs.reserve(path_sources.size());
+        for (const auto & path_source : path_sources)
+        {
+            if (!path_source) // only null const
+            {
+                path_expr_containor_vecs.push_back({});
+            }
+            else
+            {
+                const auto & path_val = path_source->getWhole();
+                auto path_expr = JsonPathExpr::parseJsonPathExpr(StringRef{path_val.data, path_val.size});
+                /// If path_expr failed to parse, throw exception
+                if unlikely (!path_expr)
+                    throw Exception(
+                        fmt::format("Illegal json path expression of function {}", getName()),
+                        ErrorCodes::ILLEGAL_COLUMN);
+                auto path_expr_containor = std::make_unique<JsonPathExprRefContainer>(path_expr);
+                path_expr_containor_vecs.emplace_back();
+                path_expr_containor_vecs.back().resize(1);
+                path_expr_containor_vecs.back()[0] = std::move(path_expr_containor);
+            }
+        }
+        assert(path_sources.size() == path_expr_containor_vecs.size());
+
+        for (size_t row = 0; row < rows; ++row)
+        {
+            if constexpr (is_json_nullable)
+            {
+                if (null_map_json[row])
+                {
+                    json_source->next();
+                    null_map_to[row] = 1;
+                    continue;
+                }
+            }
+
+            const auto & json_val = json_source->getWhole();
+            JsonBinary json_binary{json_val.data[0], StringRef{&json_val.data[1], json_val.size - 1}};
+
+            auto & res = data_to[row]; // default 1.
+            for (const auto & path_expr_containor_vec : path_expr_containor_vecs)
+            {
+                if (path_expr_containor_vec.empty())
+                {
+                    null_map_to[row] = 1;
+                    break;
+                }
+
+                bool exists = !json_binary.extract(path_expr_containor_vec).empty();
+                if (exists && is_contains_path_one)
+                {
+                    res = 1;
+                    break;
+                }
+                else if (!exists && is_contains_path_one)
+                {
+                    res = 0;
+                }
+                else if (!exists && is_contains_path_all)
+                {
+                    res = 0;
+                    break;
+                }
+            }
+
+            json_source->next();
         }
 
 #undef SET_NULL_AND_CONTINUE
