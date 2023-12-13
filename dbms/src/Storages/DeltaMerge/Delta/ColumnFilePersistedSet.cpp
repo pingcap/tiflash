@@ -117,6 +117,7 @@ ColumnFilePersistedSetPtr ColumnFilePersistedSet::restore( //
 }
 
 ColumnFilePersistedSetPtr ColumnFilePersistedSet::createFromCheckpoint( //
+    LoggerPtr parent_log,
     DMContext & context,
     UniversalPageStoragePtr temp_ps,
     const RowKeyRange & segment_range,
@@ -128,7 +129,7 @@ ColumnFilePersistedSetPtr ColumnFilePersistedSet::createFromCheckpoint( //
         delta_id);
     auto meta_page = temp_ps->read(delta_page_id);
     ReadBufferFromMemory meta_buf(meta_page.data.begin(), meta_page.data.size());
-    auto column_files = createColumnFilesFromCheckpoint(context, segment_range, meta_buf, temp_ps, wbs);
+    auto column_files = createColumnFilesFromCheckpoint(parent_log, context, segment_range, meta_buf, temp_ps, wbs);
     auto new_persisted_set = std::make_shared<ColumnFilePersistedSet>(delta_id, column_files);
     return new_persisted_set;
 }

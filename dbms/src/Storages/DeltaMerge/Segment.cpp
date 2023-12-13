@@ -472,9 +472,14 @@ Segments Segment::createTargetSegmentsFromCheckpoint( //
             segment_info.range.toDebugString(),
             segment_info.epoch,
             segment_info.next_segment_id);
-        auto stable = StableValueSpace::createFromCheckpoint(context, temp_ps, segment_info.stable_id, wbs);
-        auto delta
-            = DeltaValueSpace::createFromCheckpoint(context, temp_ps, segment_info.range, segment_info.delta_id, wbs);
+        auto stable = StableValueSpace::createFromCheckpoint(parent_log, context, temp_ps, segment_info.stable_id, wbs);
+        auto delta = DeltaValueSpace::createFromCheckpoint(
+            parent_log,
+            context,
+            temp_ps,
+            segment_info.range,
+            segment_info.delta_id,
+            wbs);
         auto segment = std::make_shared<Segment>(
             Logger::get("Checkpoint"),
             segment_info.epoch,

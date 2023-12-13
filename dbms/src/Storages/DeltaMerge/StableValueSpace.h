@@ -48,6 +48,7 @@ public:
     static StableValueSpacePtr restore(DMContext & context, ReadBuffer & buf, PageIdU64 id);
 
     static StableValueSpacePtr createFromCheckpoint( //
+        LoggerPtr parent_log,
         DMContext & context,
         UniversalPageStoragePtr temp_ps,
         PageIdU64 stable_id,

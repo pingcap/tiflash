@@ -149,6 +149,7 @@ ColumnFilePersisteds deserializeSavedColumnFiles(
 }
 
 ColumnFilePersisteds createColumnFilesFromCheckpoint( //
+    LoggerPtr parent_log,
     DMContext & context,
     const RowKeyRange & segment_range,
     ReadBuffer & buf,
@@ -163,7 +164,7 @@ ColumnFilePersisteds createColumnFilesFromCheckpoint( //
     switch (version)
     {
     case DeltaFormat::V3:
-        column_files = createColumnFilesInV3FormatFromCheckpoint(context, segment_range, buf, temp_ps, wbs);
+        column_files = createColumnFilesInV3FormatFromCheckpoint(parent_log, context, segment_range, buf, temp_ps, wbs);
         break;
     default:
         throw Exception(

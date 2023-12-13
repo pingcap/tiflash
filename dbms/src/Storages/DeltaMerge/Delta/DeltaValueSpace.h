@@ -129,6 +129,7 @@ public:
 
 
     static DeltaValueSpacePtr createFromCheckpoint( //
+        LoggerPtr parent_log,
         DMContext & context,
         UniversalPageStoragePtr temp_ps,
         const RowKeyRange & segment_range,

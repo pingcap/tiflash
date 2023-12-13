@@ -79,6 +79,7 @@ DeltaValueSpacePtr DeltaValueSpace::restore(
 }
 
 DeltaValueSpacePtr DeltaValueSpace::createFromCheckpoint( //
+    LoggerPtr parent_log,
     DMContext & context,
     UniversalPageStoragePtr temp_ps,
     const RowKeyRange & segment_range,
@@ -86,7 +87,7 @@ DeltaValueSpacePtr DeltaValueSpace::createFromCheckpoint( //
     WriteBatches & wbs)
 {
     auto persisted_file_set
-        = ColumnFilePersistedSet::createFromCheckpoint(context, temp_ps, segment_range, delta_id, wbs);
+        = ColumnFilePersistedSet::createFromCheckpoint(parent_log, context, temp_ps, segment_range, delta_id, wbs);
     return std::make_shared<DeltaValueSpace>(std::move(persisted_file_set));
 }
 

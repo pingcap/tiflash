@@ -132,6 +132,7 @@ ColumnFilePersistedPtr ColumnFileBig::deserializeMetadata(
 }
 
 ColumnFilePersistedPtr ColumnFileBig::createFromCheckpoint(
+    [[maybe_unused]] LoggerPtr parent_log,
     DMContext & dm_context, //
     const RowKeyRange & target_range,
     ReadBuffer & buf,

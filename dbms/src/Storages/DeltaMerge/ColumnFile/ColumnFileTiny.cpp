@@ -183,6 +183,7 @@ ColumnFilePersistedPtr ColumnFileTiny::deserializeMetadata(
 }
 
 std::tuple<ColumnFilePersistedPtr, BlockPtr> ColumnFileTiny::createFromCheckpoint(
+    LoggerPtr parent_log,
     const DMContext & context,
     ReadBuffer & buf,
     UniversalPageStoragePtr temp_ps,
@@ -219,7 +220,7 @@ std::tuple<ColumnFilePersistedPtr, BlockPtr> ColumnFileTiny::createFromCheckpoin
     // TODO: merge the `getEntry` and `getCheckpointLocation`
     auto entry = temp_ps->getEntry(remote_page_id);
     LOG_DEBUG(
-        Logger::get(), // TODO: pass the logger from upper level to trace the FAP operator
+        parent_log,
         "Write remote page to local, page_id={} remote_location={} remote_page_id={}",
         new_cf_id,
         new_remote_data_location.toDebugString(),
