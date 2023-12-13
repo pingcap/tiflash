@@ -47,7 +47,7 @@ public:
         if (added_streams.empty())
             return nullptr;
 
-        auto ret = added_streams.front();
+        auto ret = std::move(added_streams.front());
         added_streams.pop_front();
         return ret;
     }
