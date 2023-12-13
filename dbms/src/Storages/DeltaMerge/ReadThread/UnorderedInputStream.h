@@ -68,7 +68,7 @@ protected:
     void decreaseRefCount()
     {
         bool ori = false;
-        if (is_stoped.compare_exchange_strong(ori, true))
+        if (is_stopped.compare_exchange_strong(ori, true))
         {
             task_pool->decreaseUnorderedInputStreamRefCount();
             LOG_DEBUG(log, "Destroy, pool_id={} ref_no={}", task_pool->pool_id, ref_no);
