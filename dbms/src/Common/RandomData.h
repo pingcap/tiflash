@@ -12,12 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/config_version.h>
+#pragma once
 
-namespace ClickHouseRevision
+#include <common/types.h>
+
+namespace DB::random
 {
-unsigned get()
-{
-    return VERSION_REVISION;
-}
-} // namespace ClickHouseRevision
+
+String randomString(UInt64 length);
+time_t randomUTCTimestamp();
+struct tm randomLocalTime();
+String randomDate();
+String randomDateTime();
+String randomDuration();
+String randomDecimal(uint64_t prec, uint64_t scale);
+
+} // namespace DB::random
