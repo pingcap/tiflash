@@ -33,6 +33,8 @@ func> wait_table test t t
 func> wait_table test t t1
 
 # Test.
+
+# MPP
 mysql> set @@tidb_allow_mpp=1; set @@tidb_opt_enable_late_materialization=1; select (select t.value from t where t.id = t1.id order by t.value limit 1) xx from t1 order by t1.value limit 5;
 +------+
 | xx   |
@@ -45,13 +47,29 @@ mysql> set @@tidb_allow_mpp=1; set @@tidb_opt_enable_late_materialization=0; sel
 +------+
 |    5 |
 +------+
-mysql> set @@tidb_allow_mpp=0; set @@tidb_opt_enable_late_materialization=1; select (select t.value from t where t.id = t1.id order by t.value limit 1) xx from t1 order by t1.value limit 5;
+
+# BatchCop
+mysql> set @@tidb_allow_mpp=0; set @@tidb_allow_tiflash_cop = 1; set @@tidb_allow_batch_cop = 1; set @@tidb_opt_enable_late_materialization=1; select (select t.value from t where t.id = t1.id order by t.value limit 1) xx from t1 order by t1.value limit 5;
 +------+
 | xx   |
 +------+
 |    5 |
 +------+
-mysql> set @@tidb_allow_mpp=0; set @@tidb_opt_enable_late_materialization=0; select (select t.value from t where t.id = t1.id order by t.value limit 1) xx from t1 order by t1.value limit 5;
+mysql> set @@tidb_allow_mpp=0; set @@tidb_allow_tiflash_cop = 1; set @@tidb_allow_batch_cop = 1; set @@tidb_opt_enable_late_materialization=0; select (select t.value from t where t.id = t1.id order by t.value limit 1) xx from t1 order by t1.value limit 5;
++------+
+| xx   |
++------+
+|    5 |
++------+
+
+# Cop
+mysql> set @@tidb_allow_mpp=0; set @@tidb_allow_tiflash_cop = 1; set @@tidb_allow_batch_cop = 0; set @@tidb_opt_enable_late_materialization=1; select (select t.value from t where t.id = t1.id order by t.value limit 1) xx from t1 order by t1.value limit 5;
++------+
+| xx   |
++------+
+|    5 |
++------+
+mysql> set @@tidb_allow_mpp=0; set @@tidb_allow_tiflash_cop = 1; set @@tidb_allow_batch_cop = 0; set @@tidb_opt_enable_late_materialization=0; select (select t.value from t where t.id = t1.id order by t.value limit 1) xx from t1 order by t1.value limit 5;
 +------+
 | xx   |
 +------+
