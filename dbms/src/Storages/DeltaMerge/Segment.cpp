@@ -526,7 +526,7 @@ UInt64 Segment::storeSegmentMetaInfo(WriteBuffer & buf) const
     return buf.count();
 }
 
-void Segment::serialize(WriteBatchWrapper & wb)
+void Segment::serialize(WriteBatchWrapper & wb) const
 {
     MemoryWriteBuffer buf(0, SEGMENT_BUFFER_SIZE);
     // Must be called before tryGetReadBuffer.

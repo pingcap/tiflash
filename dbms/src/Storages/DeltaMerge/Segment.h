@@ -190,7 +190,7 @@ public:
 
     void serializeToFAPTempSegment(PS::V3::CheckpointProto::FAPTempSegmentInfo * segment_info);
     UInt64 storeSegmentMetaInfo(WriteBuffer & buf) const;
-    void serialize(WriteBatchWrapper & wb);
+    void serialize(WriteBatchWrapper & wb) const;
 
     /// Attach a new ColumnFile into the Segment. The ColumnFile will be added to MemFileSet and flushed to disk later.
     /// The block data of the passed in ColumnFile should be placed on disk before calling this function.

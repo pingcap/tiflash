@@ -79,7 +79,7 @@ CheckpointIngestInfoPtr CheckpointIngestInfo::restore(
         auto dm_context = dm_storage->getStore()->newDMContext(tmt.getContext(), tmt.getContext().getSettingsRef());
         for (auto i = 0; i < ingest_info_persisted.segments_size(); i++)
         {
-            auto & segment_pd = ingest_info_persisted.segments()[i];
+            const auto & segment_pd = ingest_info_persisted.segments()[i];
             ReadBufferFromString buf(segment_pd.segment_meta());
             DM::Segment::SegmentMetaInfo segment_info;
             readSegmentMetaInfo(buf, segment_info);
