@@ -71,7 +71,6 @@ Columns ColumnFileTiny::readFromDisk(
 
     std::vector<size_t> fields;
     const auto & colid_to_offset = schema->getColIdToOffset();
-    LOG_INFO(DB::Logger::get(), "!!!! col_start {} col_end {}", col_start, col_end);
     for (size_t index = col_start; index < col_end; ++index)
     {
         const auto & cd = column_defines[index];
@@ -96,7 +95,6 @@ Columns ColumnFileTiny::readFromDisk(
     Page page = data_provider->readTinyData(data_page_id, fields);
     for (size_t index = col_start; index < col_end; ++index)
     {
-        LOG_INFO(DB::Logger::get(), "!!!! read page {} {} data_page_id {}", page.page_id, index, data_page_id);
         const size_t index_in_read_columns = index - col_start;
         if (columns[index_in_read_columns] != nullptr)
         {
@@ -114,8 +112,6 @@ Columns ColumnFileTiny::readFromDisk(
         deserializeColumn(*col_data, type, data_buf, rows);
 
         columns[index_in_read_columns] = convertColumnByColumnDefineIfNeed(type, std::move(col_data), cd);
-
-        LOG_INFO(DB::Logger::get(), "!!!! read finish page {} {} {}", page.page_id, index, col_index);
     }
 
     return columns;

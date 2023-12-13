@@ -67,6 +67,7 @@ public:
 
     // Remove the checkpoint ingest info from memory. Only for testing.
     void debugRemoveCheckpointIngestInfo(UInt64 region_id);
+
 public:
     std::shared_ptr<FAPAsyncTasks> tasks_trace;
 
