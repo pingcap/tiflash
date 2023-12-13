@@ -761,7 +761,7 @@ public:
 
     void executeImpl(Block & block, const ColumnNumbers & /*arguments*/, size_t result) const override
     {
-        block.getByPosition(result).column = DataTypeUInt8().createColumnConst(block.rows(), 0UL);
+        block.getByPosition(result).column = DataTypeUInt8().createColumnConst(block.rows(), static_cast<UInt64>(0));
     }
 };
 
@@ -797,7 +797,7 @@ public:
 
     void executeImpl(Block & block, const ColumnNumbers & /*arguments*/, size_t result) const override
     {
-        block.getByPosition(result).column = DataTypeUInt8().createColumnConst(block.rows(), 1UL);
+        block.getByPosition(result).column = DataTypeUInt8().createColumnConst(block.rows(), static_cast<UInt64>(1));
     }
 };
 
