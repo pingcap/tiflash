@@ -96,4 +96,5 @@ message FAPTempSegmentInfo {
 message CheckpointIngestInfoPersisted {
     bytes region_info = 1;
     repeated FAPTempSegmentInfo segments = 2;
+    uint64 remote_store_id = 3;
 }

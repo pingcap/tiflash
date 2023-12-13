@@ -36,7 +36,7 @@ CheckpointIngestInfoPtr CheckpointIngestInfo::restore(
     UInt64 peer_id)
 {
     GET_METRIC(tiflash_fap_task_result, type_need_to_restore).Increment();
-    StoreID remote_store_id;
+    StoreID remote_store_id = 0;
     RegionPtr region;
     DM::Segments restored_segments;
 
@@ -74,6 +74,8 @@ CheckpointIngestInfoPtr CheckpointIngestInfo::restore(
         region = Region::deserialize(buf, proxy_helper);
     }
 
+    remote_store_id = ingest_info_persisted.remote_store_id();
+
     auto & storages = tmt.getStorages();
     auto keyspace_id = region->getKeyspaceID();
     auto table_id = region->getMappedTableID();
@@ -96,9 +98,10 @@ CheckpointIngestInfoPtr CheckpointIngestInfo::restore(
 
             LOG_DEBUG(
                 log,
-                "Restore segments for checkpoint, remote_segment_id={} range={}",
+                "Restore segments for checkpoint, remote_segment_id={} range={} remote_store_id={}",
                 segment_info.segment_id,
-                segment_info.range.toDebugString());
+                segment_info.range.toDebugString(),
+                remote_store_id);
             restored_segments.push_back(std::make_shared<DM::Segment>(
                 log,
                 segment_info.epoch,
@@ -155,6 +158,7 @@ void CheckpointIngestInfo::persistToLocal() const
         RegionPersister::computeRegionWriteBuffer(*region, wb);
         ingest_info_persisted.set_region_info(wb.releaseStr());
     }
+    ingest_info_persisted.set_remote_store_id(remote_store_id);
 
     auto s = ingest_info_persisted.SerializeAsString();
     auto data_size = s.size();
