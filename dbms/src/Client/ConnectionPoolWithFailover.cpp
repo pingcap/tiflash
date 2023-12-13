@@ -61,7 +61,7 @@ IConnectionPool::Entry ConnectionPoolWithFailover::getImpl(
     };
 
     GetPriorityFunc get_priority;
-    switch (settings ? LoadBalancing(settings->load_balancing) : default_load_balancing)
+    switch (settings ? static_cast<LoadBalancing>(settings->load_balancing) : default_load_balancing)
     {
     case LoadBalancing::NEAREST_HOSTNAME:
         get_priority = [&](size_t i) {
@@ -126,7 +126,7 @@ std::vector<ConnectionPoolWithFailover::TryResult> ConnectionPoolWithFailover::g
         throw DB::Exception("Unknown pool allocation mode", DB::ErrorCodes::LOGICAL_ERROR);
 
     GetPriorityFunc get_priority;
-    switch (settings ? LoadBalancing(settings->load_balancing) : default_load_balancing)
+    switch (settings ? static_cast<LoadBalancing>(settings->load_balancing) : default_load_balancing)
     {
     case LoadBalancing::NEAREST_HOSTNAME:
         get_priority = [&](size_t i) {
@@ -162,11 +162,12 @@ ConnectionPoolWithFailover::TryResult ConnectionPoolWithFailover::tryGetEntry(
         String server_name;
         UInt64 server_version_major;
         UInt64 server_version_minor;
-        UInt64 server_revision;
+        UInt64 server_version_patch;
         if (table_to_check)
-            result.entry->getServerVersion(server_name, server_version_major, server_version_minor, server_revision);
+            result.entry
+                ->getServerVersion(server_name, server_version_major, server_version_minor, server_version_patch);
 
-        if (!table_to_check || server_revision < DBMS_MIN_REVISION_WITH_TABLES_STATUS)
+        if (!table_to_check)
         {
             result.entry->forceConnected();
             result.is_usable = true;
@@ -183,8 +184,11 @@ ConnectionPoolWithFailover::TryResult ConnectionPoolWithFailover::tryGetEntry(
         auto table_status_it = status_response.table_states_by_id.find(*table_to_check);
         if (table_status_it == status_response.table_states_by_id.end())
         {
-            fail_message = "There is no table " + table_to_check->database + "." + table_to_check->table
-                + " on server: " + result.entry->getDescription();
+            fail_message = fmt::format(
+                "There is no table {}.{} on server: {}",
+                table_to_check->database,
+                table_to_check->table,
+                result.entry->getDescription());
             LOG_WARNING(log, fail_message);
 
             return result;
