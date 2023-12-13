@@ -501,7 +501,7 @@ Segments Segment::createTargetSegmentsFromCheckpoint( //
     return segments;
 }
 
-void Segment::serializeToFAPTempSegment(PS::V3::CheckpointProto::FAPTempSegmentInfo * segment_info)
+void Segment::serializeToFAPTempSegment(FastAddPeerProto::FAPTempSegmentInfo * segment_info)
 {
     {
         WriteBufferFromOwnString wb;

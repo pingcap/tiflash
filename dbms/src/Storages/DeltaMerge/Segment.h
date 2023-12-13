@@ -27,8 +27,8 @@
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
 #include <Storages/DeltaMerge/StableValueSpace.h>
 #include <Storages/KVStore/MultiRaft/Disagg/CheckpointInfo.h>
+#include <Storages/KVStore/MultiRaft/Disagg/fast_add_peer.pb.h>
 #include <Storages/Page/PageDefinesBase.h>
-#include <Storages/Page/V3/CheckpointFile/Proto/manifest_file.pb.h>
 
 namespace DB::DM
 {
@@ -188,7 +188,7 @@ public:
         UniversalPageStoragePtr temp_ps,
         WriteBatches & wbs);
 
-    void serializeToFAPTempSegment(PS::V3::CheckpointProto::FAPTempSegmentInfo * segment_info);
+    void serializeToFAPTempSegment(DB::FastAddPeerProto::FAPTempSegmentInfo * segment_info);
     UInt64 storeSegmentMetaInfo(WriteBuffer & buf) const;
     void serialize(WriteBatchWrapper & wb) const;
 

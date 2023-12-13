@@ -17,10 +17,10 @@
 #include <Storages/IManageableStorage.h>
 #include <Storages/KVStore/KVStore.h>
 #include <Storages/KVStore/MultiRaft/Disagg/CheckpointIngestInfo.h>
+#include <Storages/KVStore/MultiRaft/Disagg/fast_add_peer.pb.h>
 #include <Storages/KVStore/MultiRaft/RegionPersister.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/Page/PageStorage.h>
-#include <Storages/Page/V3/CheckpointFile/Proto/manifest_file.pb.h>
 #include <Storages/Page/V3/Universal/UniversalPageIdFormatImpl.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
 #include <Storages/Page/V3/Universal/UniversalWriteBatchImpl.h>
@@ -56,7 +56,7 @@ CheckpointIngestInfoPtr CheckpointIngestInfo::restore(
             tmt.getKVStore()->getStoreID(std::memory_order_relaxed));
     }
 
-    PS::V3::CheckpointProto::CheckpointIngestInfoPersisted ingest_info_persisted;
+    FastAddPeerProto::CheckpointIngestInfoPersisted ingest_info_persisted;
     if (!ingest_info_persisted.ParseFromArray(page.data.data(), page.data.size()))
     {
         throw Exception(
@@ -142,7 +142,7 @@ void CheckpointIngestInfo::persistToLocal() const
     // - The region, which is actually data and meta in KVStore.
     // - The segment ids point to segments which are already persisted but not ingested.
 
-    PS::V3::CheckpointProto::CheckpointIngestInfoPersisted ingest_info_persisted;
+    FastAddPeerProto::CheckpointIngestInfoPersisted ingest_info_persisted;
 
     {
         for (const auto & restored_segment : restored_segments)
