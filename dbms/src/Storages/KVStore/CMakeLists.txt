@@ -22,6 +22,7 @@ add_headers_and_sources(kvstore ./Decode)
 add_headers_and_sources(kvstore ./Read)
 
 add_library(kvstore ${kvstore_headers} ${kvstore_sources})
+target_include_directories(kvstore PRIVATE ${TiFlash_SOURCE_DIR}/contrib/GmSSL/include)
 target_link_libraries(kvstore PRIVATE dbms page)
 
 if (ENABLE_TESTS)

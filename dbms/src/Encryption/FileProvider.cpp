@@ -48,11 +48,9 @@ RandomAccessFilePtr FileProvider::newRandomAccessFile(
         file = std::make_shared<PosixRandomAccessFile>(file_path_, flags, read_limiter);
     }
     auto encryption_info = key_manager->getFile(encryption_path_.full_path);
-    if (encryption_info.res != FileEncryptionRes::Disabled && encryption_info.method != EncryptionMethod::Plaintext)
+    if (auto stream = encryption_info.createCipherStream(encryption_path_); stream)
     {
-        file = std::make_shared<EncryptedRandomAccessFile>(
-            file,
-            AESCTRCipherStream::createCipherStream(encryption_info, encryption_path_));
+        file = std::make_shared<EncryptedRandomAccessFile>(file, stream);
     }
     return file;
 }
@@ -80,19 +78,17 @@ WritableFilePtr FileProvider::newWritableFile(
     if (encryption_enabled && create_new_encryption_info_)
     {
         auto encryption_info = key_manager->newFile(encryption_path_.full_path);
-        file = std::make_shared<EncryptedWritableFile>(
-            file,
-            AESCTRCipherStream::createCipherStream(encryption_info, encryption_path_));
+        if (auto stream = encryption_info.createCipherStream(encryption_path_); stream)
+        {
+            file = std::make_shared<EncryptedWritableFile>(file, stream);
+        }
     }
     else if (!create_new_encryption_info_)
     {
         auto encryption_info = key_manager->getFile(encryption_path_.full_path);
-        if (encryption_info.method != EncryptionMethod::Unknown
-            && encryption_info.method != EncryptionMethod::Plaintext)
+        if (auto stream = encryption_info.createCipherStream(encryption_path_); stream)
         {
-            file = std::make_shared<EncryptedWritableFile>(
-                file,
-                AESCTRCipherStream::createCipherStream(encryption_info, encryption_path_));
+            file = std::make_shared<EncryptedWritableFile>(file, stream);
         }
     }
     return file;
@@ -118,19 +114,17 @@ WriteReadableFilePtr FileProvider::newWriteReadableFile(
     if (encryption_enabled && create_new_encryption_info_)
     {
         auto encryption_info = key_manager->newFile(encryption_path_.full_path);
-        file = std::make_shared<EncryptedWriteReadableFile>(
-            file,
-            AESCTRCipherStream::createCipherStream(encryption_info, encryption_path_));
+        if (auto stream = encryption_info.createCipherStream(encryption_path_); stream)
+        {
+            file = std::make_shared<EncryptedWriteReadableFile>(file, stream);
+        }
     }
     else if (!create_new_encryption_info_)
     {
         auto encryption_info = key_manager->getFile(encryption_path_.full_path);
-        if (encryption_info.method != EncryptionMethod::Unknown
-            && encryption_info.method != EncryptionMethod::Plaintext)
+        if (auto stream = encryption_info.createCipherStream(encryption_path_); stream)
         {
-            file = std::make_shared<EncryptedWriteReadableFile>(
-                file,
-                AESCTRCipherStream::createCipherStream(encryption_info, encryption_path_));
+            file = std::make_shared<EncryptedWriteReadableFile>(file, stream);
         }
     }
     return file;
@@ -221,9 +215,7 @@ void FileProvider::linkEncryptionInfo(
 bool FileProvider::isFileEncrypted(const EncryptionPath & encryption_path_) const
 {
     auto encryption_info = key_manager->getFile(encryption_path_.full_path);
-    // FileEncryptionRes::Disabled means encryption feature has never been enabled, so no file will be encrypted
-    return (encryption_info.res != FileEncryptionRes::Disabled)
-        && (encryption_info.method != EncryptionMethod::Plaintext);
+    return encryption_info.isEncrypted();
 }
 
 bool FileProvider::isEncryptionEnabled() const

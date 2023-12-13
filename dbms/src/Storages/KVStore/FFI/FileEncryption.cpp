@@ -1,0 +1,55 @@
+// Copyright 2023 PingCAP, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+#include <Encryption/AESCTRCipherStream.h>
+#include <Storages/KVStore/FFI/FileEncryption.h>
+#include <openssl/md5.h>
+
+
+namespace DB
+{
+
+BlockAccessCipherStreamPtr FileEncryptionInfo::createCipherStream(const EncryptionPath & encryption_path) const
+{
+    if (res == FileEncryptionRes::Disabled || method == EncryptionMethod::Plaintext
+        || method == EncryptionMethod::Unknown)
+        return nullptr;
+
+    const std::string encryption_key = *key;
+    RUNTIME_CHECK_MSG(encryption_key.size() == DB::Encryption::keySize(method), "Encryption key size mismatch.");
+    RUNTIME_CHECK_MSG(iv->size() == DB::Encryption::blockSize(method), "Encryption iv size mismatch.");
+    auto iv_high = readBigEndian<uint64_t>(reinterpret_cast<const char *>(iv->data()));
+    auto iv_low = readBigEndian<uint64_t>(reinterpret_cast<const char *>(iv->data() + sizeof(uint64_t)));
+    // Currently all encryption info are stored in one file called file.dict.
+    // Every update of file.dict will sync the whole file.
+    // So when the file is too large, the update cost increases.
+    // To keep the file size as small as possible, we reuse the encryption info among a group of related files.(e.g. the files of a DMFile)
+    // For security reason, the same `iv` is not allowed to encrypt two different files,
+    // so we combine the `iv` fetched from file.dict with the hash value of the file name to calculate the real `iv` for every file.
+    if (!encryption_path.file_name.empty())
+    {
+        unsigned char md5_value[MD5_DIGEST_LENGTH];
+        static_assert(MD5_DIGEST_LENGTH == sizeof(uint64_t) * 2);
+        MD5(reinterpret_cast<const unsigned char *>(encryption_path.file_name.c_str()),
+            encryption_path.file_name.size(),
+            md5_value);
+        auto md5_high = readBigEndian<uint64_t>(reinterpret_cast<const char *>(md5_value));
+        auto md5_low = readBigEndian<uint64_t>(reinterpret_cast<const char *>(md5_value + sizeof(uint64_t)));
+        iv_high ^= md5_high;
+        iv_low ^= md5_low;
+    }
+    return std::make_shared<AESCTRCipherStream>(method, encryption_key, iv_high, iv_low);
+}
+
+} // namespace DB
