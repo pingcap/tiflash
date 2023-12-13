@@ -79,7 +79,7 @@ ColumnFilePersisteds deserializeSavedColumnFilesInV3Format(
     ReadBuffer & buf);
 
 ColumnFilePersisteds createColumnFilesInV3FormatFromCheckpoint( //
-    LoggerPtr parent_log,
+    const LoggerPtr & parent_log,
     DMContext & context,
     const RowKeyRange & segment_range,
     ReadBuffer & buf,
