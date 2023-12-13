@@ -26,7 +26,7 @@ String randomString(UInt64 length)
         "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz!@#$%^&*()|[]{}:;',<.>`~"};
     std::random_device rand_dev;
     std::mt19937_64 rand_gen(rand_dev());
-    String str(length, 0);
+    String str(length, '\x00');
     std::generate_n(str.begin(), str.size(), [&]() { return charset[rand_gen() % charset.size()]; });
     return str;
 }
