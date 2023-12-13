@@ -55,17 +55,33 @@ public:
         LOG_DEBUG(log, "Created, pool_id={} ref_no={}", task_pool->poolId(), ref_no);
     }
 
+<<<<<<< HEAD
     ~UnorderedInputStream()
     {
         task_pool->decreaseUnorderedInputStreamRefCount();
         LOG_DEBUG(log, "Destroy, pool_id={} ref_no={}", task_pool->poolId(), ref_no);
     }
+=======
+    void cancel(bool /*kill*/) override { decreaseRefCount(); }
+
+    ~UnorderedInputStream() override { decreaseRefCount(); }
+>>>>>>> adf8569627 (Refine cancel for read thread stream (#8511))
 
     String getName() const override { return NAME; }
 
     Block getHeader() const override { return header; }
 
 protected:
+    void decreaseRefCount()
+    {
+        bool ori = false;
+        if (is_stopped.compare_exchange_strong(ori, true))
+        {
+            task_pool->decreaseUnorderedInputStreamRefCount();
+            LOG_DEBUG(log, "Destroy, pool_id={} ref_no={}", task_pool->pool_id, ref_no);
+        }
+    }
+
     Block readImpl() override
     {
         FilterPtr filter_ignored;
@@ -139,6 +155,15 @@ private:
     LoggerPtr log;
     int64_t ref_no;
     size_t total_rows = 0;
+<<<<<<< HEAD
     bool task_pool_added;
+=======
+
+    // runtime filter
+    std::vector<RuntimeFilterPtr> runtime_filter_list;
+    int max_wait_time_ms;
+
+    std::atomic_bool is_stopped = false;
+>>>>>>> adf8569627 (Refine cancel for read thread stream (#8511))
 };
 } // namespace DB::DM
