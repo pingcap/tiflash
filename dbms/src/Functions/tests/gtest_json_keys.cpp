@@ -83,7 +83,18 @@ try
     auto execute_and_assert = [&](const std::optional<String> & json,
                                   const std::optional<String> & path,
                                   const std::optional<String> & expect) {
+        // column, column
         ASSERT_COLUMN_EQ(castStringToJson(createColumn<Nullable<String>>({expect, expect})), execute_func(json, path));
+        // column, const
+        auto column_const_ret = executeFunction(
+            func_name,
+            {castStringToJson(createColumn<Nullable<String>>({json, json})),
+             createConstColumn<Nullable<String>>(2, path)});
+        ColumnWithTypeAndName column_const_expect;
+        if (path)
+            ASSERT_COLUMN_EQ(castStringToJson(createColumn<Nullable<String>>({expect, expect})), column_const_ret);
+        else
+            ASSERT_COLUMN_EQ(castStringToJson(createConstColumn<Nullable<String>>(2, expect)), column_const_ret);
     };
 
     execute_and_assert({}, "$", {});

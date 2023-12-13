@@ -25,6 +25,7 @@
 #include <common/memcpy.h>
 #include <simdjson.h>
 
+#include <string_view>
 #include <unordered_set>
 
 namespace DB
@@ -172,6 +173,7 @@ public:
     static void buildBinaryJsonArrayInBuffer(
         const std::vector<JsonBinary> & json_binary_vec,
         JsonBinaryWriteBuffer & write_buffer);
+    static void buildKeyArrayInBuffer(const std::vector<std::string_view> & keys, JsonBinaryWriteBuffer & write_buffer);
 
     static UInt64 getJsonLength(const std::string_view & raw_value);
 

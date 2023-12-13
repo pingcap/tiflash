@@ -1096,6 +1096,43 @@ void JsonBinary::buildBinaryJsonArrayInBuffer(
     buildBinaryJsonElementsInBuffer(json_binary_vec, write_buffer);
 }
 
+void JsonBinary::buildKeyArrayInBuffer(const std::vector<std::string_view> & keys, JsonBinaryWriteBuffer & write_buffer)
+{
+    write_buffer.write(TYPE_CODE_ARRAY);
+
+    UInt32 buffer_start_pos = write_buffer.offset();
+
+    // 1. write elem count
+    UInt32 element_count = keys.size();
+    encodeNumeric(write_buffer, element_count);
+
+    // 2. advance for total size
+    auto total_size_pos = write_buffer.offset();
+    write_buffer.advance(4);
+
+    // 3. write value entry with value offset and value data.
+    UInt32 data_offset = HEADER_SIZE + keys.size() * VALUE_ENTRY_SIZE;
+    for (const auto & key : keys)
+    {
+        write_buffer.write(TYPE_CODE_STRING);
+        encodeNumeric(write_buffer, data_offset);
+        auto tmp_entry_pos = write_buffer.offset();
+
+        write_buffer.setOffset(data_offset + buffer_start_pos);
+        writeVarUInt(static_cast<UInt64>(key.size()), write_buffer);
+        write_buffer.write(key.data(), key.size());
+        data_offset = write_buffer.offset() - buffer_start_pos;
+
+        write_buffer.setOffset(tmp_entry_pos);
+    }
+
+    // 4. write total size in total_size_offset.
+    UInt32 total_size = data_offset;
+    write_buffer.setOffset(total_size_pos);
+    encodeNumeric(write_buffer, total_size);
+    write_buffer.setOffset(buffer_start_pos + data_offset);
+}
+
 UInt64 JsonBinary::getJsonLength(const std::string_view & raw_value)
 {
     if (raw_value.empty())
