@@ -1126,7 +1126,7 @@ bool DeltaMergeStore::ingestSegmentDataIntoSegmentUsingSplit(
 Segments DeltaMergeStore::buildSegmentsFromCheckpointInfo(
     const DMContextPtr & dm_context,
     const DM::RowKeyRange & range,
-    CheckpointInfoPtr checkpoint_info) const
+    const CheckpointInfoPtr & checkpoint_info) const
 {
     if (unlikely(range.none()))
     {

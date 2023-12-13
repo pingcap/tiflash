@@ -36,7 +36,6 @@ CheckpointIngestInfoPtr CheckpointIngestInfo::restore(
     UInt64 peer_id)
 {
     GET_METRIC(tiflash_fap_task_result, type_need_to_restore).Increment();
-    StoreID remote_store_id = 0;
     RegionPtr region;
     DM::Segments restored_segments;
 
@@ -74,7 +73,7 @@ CheckpointIngestInfoPtr CheckpointIngestInfo::restore(
         region = Region::deserialize(buf, proxy_helper);
     }
 
-    remote_store_id = ingest_info_persisted.remote_store_id();
+    StoreID remote_store_id = ingest_info_persisted.remote_store_id();
 
     auto & storages = tmt.getStorages();
     auto keyspace_id = region->getKeyspaceID();
