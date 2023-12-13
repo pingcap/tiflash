@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Storages/KVStore/Utils.h>
+#include <Common/NotNullPtr.h>
 
 #include <atomic>
 #include <memory>
@@ -62,13 +63,13 @@ struct PreHandlingTrace : MutexLockWrap
     PreHandlingTrace()
         : log(Logger::get("PreHandlingTrace"))
     {}
-    std::shared_ptr<Item> registerTask(uint64_t region_id) NO_THREAD_SAFETY_ANALYSIS
+    gsl::not_null<std::shared_ptr<Item>> registerTask(uint64_t region_id) NO_THREAD_SAFETY_ANALYSIS
     {
         // Automaticlly override the old one.
         auto _ = genLockGuard();
         auto b = std::make_shared<Item>();
         tasks[region_id] = b;
-        return b;
+        return gsl::make_strict_not_null(std::move(b));
     }
     std::shared_ptr<Item> deregisterTask(uint64_t region_id) NO_THREAD_SAFETY_ANALYSIS
     {
