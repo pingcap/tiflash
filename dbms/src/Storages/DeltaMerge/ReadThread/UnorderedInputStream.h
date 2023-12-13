@@ -155,6 +155,6 @@ private:
     std::vector<RuntimeFilterPtr> runtime_filter_list;
     int max_wait_time_ms;
 
-    std::atomic_bool is_stoped = false;
+    std::atomic_bool is_stopped = false;
 };
 } // namespace DB::DM
