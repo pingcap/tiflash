@@ -68,7 +68,7 @@ protected:
     void decreaseRefCount()
     {
         bool ori = false;
-        if (is_done.compare_exchange_strong(ori, true))
+        if (is_stoped.compare_exchange_strong(ori, true))
         {
             task_pool->decreaseUnorderedInputStreamRefCount();
             LOG_DEBUG(log, "Destroy, pool_id={} ref_no={}", task_pool->pool_id, ref_no);
@@ -155,6 +155,6 @@ private:
     std::vector<RuntimeFilterPtr> runtime_filter_list;
     int max_wait_time_ms;
 
-    std::atomic_bool is_done = false;
+    std::atomic_bool is_stoped = false;
 };
 } // namespace DB::DM
