@@ -425,7 +425,7 @@ Segment::SegmentMetaInfos Segment::readAllSegmentsMetaInfoInRange( //
             {
                 // After #7642 there could be no segment, so it could panic later.
                 LOG_INFO(
-                    log,
+                    DB::Logger::get(),
                     "Meets totally empty key range, keyspace={} table_id={} current_segment_id={} range={}",
                     context.keyspace_id,
                     context.physical_table_id,

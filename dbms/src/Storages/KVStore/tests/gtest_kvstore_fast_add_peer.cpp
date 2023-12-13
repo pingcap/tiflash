@@ -451,8 +451,12 @@ try
     }
     // CheckpointIngestInfo is removed.
     eventuallyPredicate([&]() {
-        return !CheckpointIngestInfo::restore(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333, true)
-                    .has_value();
+        return !CheckpointIngestInfo::restore(
+            global_context.getTMTContext(),
+            proxy_helper.get(),
+            region_id,
+            2333,
+            true);
     });
     ASSERT_FALSE(fap_context->tryGetCheckpointIngestInfo(region_id).has_value());
 }
@@ -477,8 +481,12 @@ try
     kvstore->handleDestroy(region_id, global_context.getTMTContext());
     // CheckpointIngestInfo is removed.
     eventuallyPredicate([&]() {
-        return !CheckpointIngestInfo::restore(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333, true)
-                    .has_value();
+        return !CheckpointIngestInfo::restore(
+            global_context.getTMTContext(),
+            proxy_helper.get(),
+            region_id,
+            2333,
+            true);
     });
     ASSERT_FALSE(fap_context->tryGetCheckpointIngestInfo(region_id).has_value());
 }
@@ -546,8 +554,12 @@ try
     sp.disable();
     t.join();
     eventuallyPredicate([&]() {
-        return !CheckpointIngestInfo::restore(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333, true)
-                    .has_value();
+        return !CheckpointIngestInfo::restore(
+            global_context.getTMTContext(),
+            proxy_helper.get(),
+            region_id,
+            2333,
+            true);
     });
     ASSERT_TRUE(!fap_context->tryGetCheckpointIngestInfo(region_id).has_value());
     FailPointHelper::disableFailPoint(FailPoints::force_set_fap_candidate_store_id);
@@ -589,23 +601,27 @@ try
         proxy_helper.get(),
         region_id,
         2333);
-    ASSERT_TRUE(maybe_info.has_value());
+    ASSERT_NE(maybe_info, nullptr);
     std::vector<UInt64> segments;
-    for (auto s : maybe_info.value()->getRestoredSegments())
+    for (auto s : maybe_info->getRestoredSegments())
     {
         segments.push_back(s->segmentId());
     }
-    RegionPtr region = maybe_info.value()->getRegion();
+    RegionPtr region = maybe_info->getRegion();
     fap_context->tasks_trace->asyncCancelTask(region_id);
     sp.next();
     sp.disable();
     t.join();
     // Cancel async tasks, and make sure the data is cleaned after limited time.
     eventuallyPredicate([&]() {
-        return !CheckpointIngestInfo::restore(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333, true)
-                    .has_value();
+        return !CheckpointIngestInfo::restore(
+            global_context.getTMTContext(),
+            proxy_helper.get(),
+            region_id,
+            2333,
+            true);
     });
-    ASSERT_TRUE(!fap_context->tryGetCheckpointIngestInfo(region_id).has_value());
+    ASSERT_TRUE(!fap_context->tryGetCheckpointIngestInfo(region_id));
     FailPointHelper::disableFailPoint(FailPoints::force_set_fap_candidate_store_id);
     assertNoSegment(global_context.getTMTContext(), region, segments);
 }
@@ -646,8 +662,12 @@ try
     t.join();
     // Cancel async tasks, and make sure the data is cleaned after limited time.
     eventuallyPredicate([&]() {
-        return !CheckpointIngestInfo::restore(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333, true)
-                    .has_value();
+        return !CheckpointIngestInfo::restore(
+            global_context.getTMTContext(),
+            proxy_helper.get(),
+            region_id,
+            2333,
+            true);
     });
     // Wait async cancel in `FastAddPeerImplWrite`.
     ASSERT_FALSE(fap_context->tryGetCheckpointIngestInfo(region_id).has_value());
@@ -672,8 +692,12 @@ try
     ApplyFapSnapshotImpl(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333);
     // CheckpointIngestInfo is removed.
     eventuallyPredicate([&]() {
-        return !CheckpointIngestInfo::restore(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333, true)
-                    .has_value();
+        return !CheckpointIngestInfo::restore(
+            global_context.getTMTContext(),
+            proxy_helper.get(),
+            region_id,
+            2333,
+            true);
     });
     ASSERT_TRUE(!fap_context->tryGetCheckpointIngestInfo(region_id).has_value());
 }

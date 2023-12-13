@@ -49,7 +49,7 @@ public:
         UInt64 required_seq);
 
     // Checkpoint ingest management
-    std::optional<CheckpointIngestInfoPtr> getOrRestoreCheckpointIngestInfo(
+    CheckpointIngestInfoPtr getOrRestoreCheckpointIngestInfo(
         TMTContext & tmt,
         const struct TiFlashRaftProxyHelper * proxy_helper,
         UInt64 region_id,

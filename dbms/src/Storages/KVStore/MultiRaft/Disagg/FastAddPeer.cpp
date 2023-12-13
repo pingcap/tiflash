@@ -453,9 +453,8 @@ uint8_t ApplyFapSnapshotImpl(TMTContext & tmt, TiFlashRaftProxyHelper * proxy_he
     Stopwatch watch_ingest;
     auto kvstore = tmt.getKVStore();
     auto fap_ctx = tmt.getContext().getSharedContextDisagg()->fap_context;
-    auto maybe_checkpoint_ingest_info
-        = fap_ctx->getOrRestoreCheckpointIngestInfo(tmt, proxy_helper, region_id, peer_id);
-    if (!maybe_checkpoint_ingest_info.has_value())
+    auto checkpoint_ingest_info = fap_ctx->getOrRestoreCheckpointIngestInfo(tmt, proxy_helper, region_id, peer_id);
+    if (!checkpoint_ingest_info)
     {
         return false;
     }
@@ -463,7 +462,6 @@ uint8_t ApplyFapSnapshotImpl(TMTContext & tmt, TiFlashRaftProxyHelper * proxy_he
     // 1. If there was a failed FAP which failed to clean, its data will be overwritten by current FAP which has finished phase 1.
     // 2. It is not possible that a restart happens at FAP phase 2, and a legacy snapshot is sent, because snapshots can only be accepted once the previous snapshot it handled.
     {
-        auto checkpoint_ingest_info = maybe_checkpoint_ingest_info.value();
         GET_METRIC(tiflash_fap_task_state, type_ingesting_stage).Increment();
         SCOPE_EXIT({ GET_METRIC(tiflash_fap_task_state, type_ingesting_stage).Decrement(); });
         kvstore->handleIngestCheckpoint(checkpoint_ingest_info->getRegion(), checkpoint_ingest_info, tmt);

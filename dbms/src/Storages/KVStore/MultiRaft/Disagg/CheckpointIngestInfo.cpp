@@ -31,7 +31,7 @@ namespace DB
 
 static constexpr uint8_t FAP_INGEST_INFO_PERSIST_FMT_VER = 1;
 
-std::optional<CheckpointIngestInfoPtr> CheckpointIngestInfo::restore(
+CheckpointIngestInfoPtr CheckpointIngestInfo::restore(
     TMTContext & tmt,
     const TiFlashRaftProxyHelper * proxy_helper,
     UInt64 region_id,
@@ -49,7 +49,7 @@ std::optional<CheckpointIngestInfoPtr> CheckpointIngestInfo::restore(
     Page page = uni_ps->read(page_id, nullptr, snapshot, /*throw_on_not_exist*/ false);
     if (!page.isValid())
     {
-        return std::nullopt;
+        return nullptr;
     }
     ReadBufferFromMemory buf(page.data.begin(), page.data.size());
     RUNTIME_CHECK_MSG(readBinary2<UInt8>(buf) == FAP_INGEST_INFO_PERSIST_FMT_VER, "wrong fap ingest info format");
