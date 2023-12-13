@@ -13,18 +13,42 @@
 // limitations under the License.
 
 #include <Storages/KVStore/Utils/AsyncTasks.h>
+#include <Storages/KVStore/tests/region_kvstore_test.h>
 #include <common/logger_useful.h>
-
-#include "region_kvstore_test.h"
 
 namespace DB
 {
 namespace tests
 {
-TEST(AsyncTasksTest, AsyncTasksCancel)
+TEST(AsyncTasksTest, AsyncTasksNormal)
 {
     using namespace std::chrono_literals;
     using TestAsyncTasks = AsyncTasks<uint64_t, std::function<void()>, void>;
+
+    // Lifetime
+    {
+        auto async_tasks = std::make_unique<TestAsyncTasks>(1, 1, 1);
+        auto sp_after_sched = SyncPointCtl::enableInScope("after_AsyncTasks::addTask_scheduled");
+        auto sp_before_quit = SyncPointCtl::enableInScope("before_AsyncTasks::addTask_quit");
+        std::thread t1([&]() {
+            sp_after_sched.waitAndPause();
+            ASSERT_EQ(async_tasks->unsafeQueryState(1), TestAsyncTasks::TaskState::NotScheduled);
+            sp_after_sched.next();
+            sp_after_sched.disable();
+        });
+        std::thread t2([&]() {
+            sp_before_quit.waitAndPause();
+            ASSERT_EQ(async_tasks->unsafeQueryState(1), TestAsyncTasks::TaskState::InQueue);
+            sp_before_quit.next();
+            sp_before_quit.disable();
+            std::this_thread::sleep_for(50ms);
+            ASSERT_TRUE(async_tasks->isReady(1));
+        });
+        auto res = async_tasks->addTask(1, []() {});
+        ASSERT_TRUE(res);
+        t1.join();
+        t2.join();
+    }
 
     // Block cancel
     {

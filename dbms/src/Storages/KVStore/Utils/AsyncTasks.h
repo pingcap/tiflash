@@ -16,6 +16,7 @@
 
 #include <Common/FmtUtils.h>
 #include <Common/Logger.h>
+#include <Common/SyncPoint/SyncPoint.h>
 #include <Common/UniThreadPool.h>
 
 #include <future>
@@ -24,6 +25,7 @@
 
 namespace DB
 {
+
 template <typename Key, typename Func, typename R>
 struct AsyncTasks
 {
@@ -213,9 +215,13 @@ struct AsyncTasks
         std::shared_ptr<P> p = std::make_shared<P>(P(f));
         std::shared_ptr<std::atomic_bool> triggered = std::make_shared<std::atomic_bool>(false);
 
+        auto running_mut = std::make_shared<std::mutex>();
+        // Task could not run unless registered in `tasks`.
+        std::scoped_lock caller_running_lock(*running_mut);
         // The executor thread may outlive `AsyncTasks` in most cases, so we don't capture `this`.
         auto res = thread_pool->trySchedule(
-            [p, triggered]() {
+            [p, triggered, running_mut]() {
+                std::scoped_lock worker_running_lock(*running_mut);
                 triggered->store(true);
                 // We can hold the cancel handle here to prevent it from destructing, but it is not necessary.
                 (*p)();
@@ -223,17 +229,18 @@ struct AsyncTasks
             },
             0,
             0);
+        SYNC_FOR("after_AsyncTasks::addTask_scheduled");
         if (res)
         {
             tasks.insert({k, Elem(p->get_future(), getCurrentMillis(), std::move(triggered))});
         }
+        SYNC_FOR("before_AsyncTasks::addTask_quit");
         return res;
     }
 
-    TaskState queryState(Key key) const
+    TaskState unsafeQueryState(Key key) const
     {
         using namespace std::chrono_literals;
-        std::scoped_lock l(mtx);
         auto it = tasks.find(key);
         if (it == tasks.end())
             return TaskState::NotScheduled;
@@ -244,6 +251,12 @@ struct AsyncTasks
         return TaskState::Running;
     }
 
+    TaskState queryState(Key key) const
+    {
+        std::scoped_lock l(mtx);
+        return unsafeQueryState(key);
+    }
+
     bool isScheduled(Key key) const { return queryState(key) != TaskState::NotScheduled; }
 
     bool isInQueue(Key key) const { return queryState(key) == TaskState::InQueue; }
@@ -252,31 +265,19 @@ struct AsyncTasks
 
     bool isReady(Key key) const { return queryState(key) == TaskState::Finished; }
 
-    uint64_t queryElapsed(Key key, bool throw_if_not_found = false)
+    uint64_t queryElapsed(Key key)
     {
         std::scoped_lock<std::mutex> l(mtx);
         auto it = tasks.find(key);
-        if unlikely (it == tasks.end())
-        {
-            if (throw_if_not_found)
-                throw Exception(ErrorCodes::LOGICAL_ERROR, "queryElapsed meets empty key");
-            else
-                return 0;
-        }
+        RUNTIME_CHECK(it != tasks.end());
         return getCurrentMillis() - it->second.start_ts;
     }
 
-    uint64_t queryStartTime(Key key, bool throw_if_not_found = false)
+    uint64_t queryStartTime(Key key)
     {
         std::scoped_lock<std::mutex> l(mtx);
         auto it = tasks.find(key);
-        if unlikely (it == tasks.end())
-        {
-            if (throw_if_not_found)
-                throw Exception(ErrorCodes::LOGICAL_ERROR, "queryStartTime meets empty key");
-            else
-                return 0;
-        }
+        RUNTIME_CHECK(it != tasks.end());
         return it->second.start_ts;
     }
 
@@ -325,7 +326,6 @@ protected:
         RUNTIME_CHECK_MSG(it != tasks.end(), "getCancelHandleFromCaller meets empty key");
         return it->second.cancel;
     }
-
 
 protected:
     std::unordered_map<Key, Elem> tasks;

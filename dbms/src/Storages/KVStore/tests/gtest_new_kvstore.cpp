@@ -15,9 +15,8 @@
 #include <Debug/MockKVStore/MockSSTGenerator.h>
 #include <Storages/KVStore/Read/LearnerRead.h>
 #include <Storages/KVStore/Utils/AsyncTasks.h>
+#include <Storages/KVStore/tests/region_kvstore_test.h>
 #include <Storages/RegionQueryInfo.h>
-
-#include "region_kvstore_test.h"
 
 namespace DB
 {
