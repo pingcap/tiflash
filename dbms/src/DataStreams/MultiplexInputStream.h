@@ -35,10 +35,11 @@ public:
 
     void cancel(bool kill)
     {
-        bool old_val = false;
-        if (!is_cancelled.compare_exchange_strong(old_val, true, std::memory_order_seq_cst, std::memory_order_relaxed))
+        std::unique_lock lk(mu);
+        if (is_cancelled)
             return;
 
+        is_cancelled = true;
         for (auto & stream : added_streams)
             if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(stream.get()))
             {
@@ -80,8 +81,8 @@ public:
 
 private:
     std::deque<BlockInputStreamPtr> added_streams;
+    bool is_cancelled;
     std::mutex mu;
-    std::atomic_bool is_cancelled{false};
 };
 
 class MultiplexInputStream final : public IProfilingBlockInputStream
