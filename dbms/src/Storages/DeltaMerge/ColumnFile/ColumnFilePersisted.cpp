@@ -149,7 +149,7 @@ ColumnFilePersisteds deserializeSavedColumnFiles(
 }
 
 ColumnFilePersisteds createColumnFilesFromCheckpoint( //
-    LoggerPtr parent_log,
+    const LoggerPtr & parent_log,
     DMContext & context,
     const RowKeyRange & segment_range,
     ReadBuffer & buf,

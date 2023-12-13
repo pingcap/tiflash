@@ -169,7 +169,7 @@ StableValueSpacePtr StableValueSpace::restore(DMContext & dm_context, ReadBuffer
 }
 
 StableValueSpacePtr StableValueSpace::createFromCheckpoint( //
-    [[maybe_unused]] LoggerPtr parent_log,
+    [[maybe_unused]] const LoggerPtr & parent_log,
     DMContext & dm_context,
     UniversalPageStoragePtr temp_ps,
     PageIdU64 stable_id,

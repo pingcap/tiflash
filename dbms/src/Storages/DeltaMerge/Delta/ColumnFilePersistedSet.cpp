@@ -117,7 +117,7 @@ ColumnFilePersistedSetPtr ColumnFilePersistedSet::restore( //
 }
 
 ColumnFilePersistedSetPtr ColumnFilePersistedSet::createFromCheckpoint( //
-    LoggerPtr parent_log,
+    const LoggerPtr & parent_log,
     DMContext & context,
     UniversalPageStoragePtr temp_ps,
     const RowKeyRange & segment_range,

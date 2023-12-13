@@ -346,13 +346,13 @@ public:
     Segments buildSegmentsFromCheckpointInfo(
         const DMContextPtr & dm_context,
         const DM::RowKeyRange & range,
-        CheckpointInfoPtr checkpoint_info) const;
+        const CheckpointInfoPtr & checkpoint_info) const;
 
     Segments buildSegmentsFromCheckpointInfo(
         const Context & db_context,
         const DB::Settings & db_settings,
         const DM::RowKeyRange & range,
-        CheckpointInfoPtr checkpoint_info)
+        const CheckpointInfoPtr & checkpoint_info)
     {
         auto dm_context = newDMContext(db_context, db_settings);
         return buildSegmentsFromCheckpointInfo(dm_context, range, checkpoint_info);
@@ -361,13 +361,13 @@ public:
     void ingestSegmentsFromCheckpointInfo(
         const DMContextPtr & dm_context,
         const DM::RowKeyRange & range,
-        CheckpointIngestInfoPtr checkpoint_info);
+        const CheckpointIngestInfoPtr & checkpoint_info);
 
     void ingestSegmentsFromCheckpointInfo(
         const Context & db_context,
         const DB::Settings & db_settings,
         const DM::RowKeyRange & range,
-        CheckpointIngestInfoPtr checkpoint_info)
+        const CheckpointIngestInfoPtr & checkpoint_info)
     {
         auto dm_context = newDMContext(db_context, db_settings);
         return ingestSegmentsFromCheckpointInfo(dm_context, range, checkpoint_info);

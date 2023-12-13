@@ -1162,7 +1162,7 @@ Segments DeltaMergeStore::buildSegmentsFromCheckpointInfo(
 void DeltaMergeStore::ingestSegmentsFromCheckpointInfo(
     const DMContextPtr & dm_context,
     const DM::RowKeyRange & range,
-    CheckpointIngestInfoPtr checkpoint_info)
+    const CheckpointIngestInfoPtr & checkpoint_info)
 {
     if (unlikely(shutdown_called.load(std::memory_order_relaxed)))
     {

@@ -183,7 +183,7 @@ ColumnFilePersistedPtr ColumnFileTiny::deserializeMetadata(
 }
 
 std::tuple<ColumnFilePersistedPtr, BlockPtr> ColumnFileTiny::createFromCheckpoint(
-    LoggerPtr parent_log,
+    const LoggerPtr & parent_log,
     const DMContext & context,
     ReadBuffer & buf,
     UniversalPageStoragePtr temp_ps,
