@@ -108,6 +108,9 @@ private:
 
     LoggerPtr log;
 
+private:
+    void saveMeta(WriteBuffer & buf) const;
+
 public:
     explicit DeltaValueSpace(
         PageIdU64 id_,
@@ -169,8 +172,8 @@ public:
 
     bool hasAbandoned() const { return abandoned.load(std::memory_order_relaxed); }
 
-    void saveMeta(WriteBuffer & buf) const;
     void saveMeta(WriteBatches & wbs) const;
+    std::string serializeMeta() const;
 
     void recordRemoveColumnFilesPages(WriteBatches & wbs) const;
 

@@ -508,16 +508,8 @@ void Segment::serializeToFAPTempSegment(FastAddPeerProto::FAPTempSegmentInfo * s
         storeSegmentMetaInfo(wb);
         segment_info->set_segment_meta(wb.releaseStr());
     }
-    {
-        WriteBufferFromOwnString wb;
-        delta->saveMeta(wb);
-        segment_info->set_delta_meta(wb.releaseStr());
-    }
-    {
-        WriteBufferFromOwnString wb;
-        stable->saveMeta(wb);
-        segment_info->set_stable_meta(wb.releaseStr());
-    }
+    segment_info->set_delta_meta(delta->serializeMeta());
+    segment_info->set_stable_meta(stable->serializeMeta());
 }
 
 UInt64 Segment::storeSegmentMetaInfo(WriteBuffer & buf) const

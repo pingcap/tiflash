@@ -86,7 +86,7 @@ void StableValueSpace::saveMeta(WriteBatchWrapper & meta_wb)
     meta_wb.putPage(id, 0, buf.tryGetReadBuffer(), data_size);
 }
 
-UInt64 StableValueSpace::saveMeta(WriteBuffer & buf)
+UInt64 StableValueSpace::saveMeta(WriteBuffer & buf) const
 {
     writeIntBinary(STORAGE_FORMAT_CURRENT.stable, buf);
     writeIntBinary(valid_rows, buf);
@@ -96,6 +96,13 @@ UInt64 StableValueSpace::saveMeta(WriteBuffer & buf)
         writeIntBinary(f->pageId(), buf);
 
     return buf.count();
+}
+
+std::string StableValueSpace::serializeMeta() const
+{
+    WriteBufferFromOwnString wb;
+    saveMeta(wb);
+    return wb.releaseStr();
 }
 
 StableValueSpacePtr StableValueSpace::restore(DMContext & dm_context, PageIdU64 id)

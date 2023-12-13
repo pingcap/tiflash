@@ -101,6 +101,13 @@ void DeltaValueSpace::saveMeta(WriteBatches & wbs) const
     persisted_file_set->saveMeta(wbs);
 }
 
+std::string DeltaValueSpace::serializeMeta() const
+{
+    WriteBufferFromOwnString wb;
+    saveMeta(wb);
+    return wb.releaseStr();
+}
+
 template <class ColumnFileT>
 struct CloneColumnFilesHelper
 {

@@ -67,8 +67,8 @@ public:
     void setFiles(const DMFiles & files_, const RowKeyRange & range, const DMContext * dm_context = nullptr);
 
     PageIdU64 getId() const { return id; }
-    UInt64 saveMeta(WriteBuffer & buf);
     void saveMeta(WriteBatchWrapper & meta_wb);
+    std::string serializeMeta() const;
 
     size_t getRows() const;
     size_t getBytes() const;
@@ -260,6 +260,9 @@ public:
     void drop(const FileProviderPtr & file_provider);
 
     size_t avgRowBytes(const ColumnDefines & read_columns);
+
+private:
+    UInt64 saveMeta(WriteBuffer & buf) const;
 
 private:
     const PageIdU64 id;
