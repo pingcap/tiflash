@@ -33,6 +33,19 @@ class MultiPartitionStreamPool
 public:
     MultiPartitionStreamPool() = default;
 
+    void cancel(bool kill)
+    {
+        bool old_val = false;
+        if (!is_cancelled.compare_exchange_strong(old_val, true, std::memory_order_seq_cst, std::memory_order_relaxed))
+            return;
+
+        for (auto & stream : added_streams)
+            if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(stream.get()))
+            {
+                p_stream->cancel(kill);
+            }
+    }
+
     void addPartitionStreams(const BlockInputStreams & cur_streams)
     {
         if (cur_streams.empty())
@@ -68,6 +81,7 @@ public:
 private:
     std::deque<BlockInputStreamPtr> added_streams;
     std::mutex mu;
+    std::atomic_bool is_cancelled{false};
 };
 
 class MultiplexInputStream final : public IProfilingBlockInputStream
@@ -124,6 +138,8 @@ public:
                 child->cancel(kill);
             }
         }
+
+        shared_pool->cancel(kill);
     }
 
     Block getHeader() const override { return children.at(0)->getHeader(); }
