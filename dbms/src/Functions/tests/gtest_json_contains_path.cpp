@@ -57,25 +57,37 @@ try
     auto type_column = createColumn<Nullable<String>>({"one", "one"});
     ColumnWithTypeAndName path_column = createColumn<Nullable<String>>({"$", "$"});
     ColumnWithTypeAndName path_column2 = createColumn<Nullable<String>>({"$.a", "$.a"});
+    ColumnWithTypeAndName null_string_const = createConstColumn<Nullable<String>>(rows_count, {});
+    ColumnWithTypeAndName null_bool_const = createConstColumn<Nullable<UInt8>>(rows_count, {});
     ColumnWithTypeAndName only_null_const = createOnlyNullColumnConst(rows_count);
 
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<UInt8>>({true, true}),
         executeFunction(func_name, json_column, type_column, path_column));
     ASSERT_COLUMN_EQ(only_null_const, executeFunction(func_name, only_null_const, type_column, path_column));
+    ASSERT_COLUMN_EQ(null_bool_const, executeFunction(func_name, null_string_const, type_column, path_column));
     ASSERT_COLUMN_EQ(only_null_const, executeFunction(func_name, json_column, only_null_const, path_column));
-    ASSERT_COLUMN_EQ(
-        createColumn<Nullable<UInt8>>({{}, {}}),
-        executeFunction(func_name, json_column, type_column, only_null_const));
+    ASSERT_COLUMN_EQ(null_bool_const, executeFunction(func_name, json_column, null_string_const, path_column));
+    ASSERT_COLUMN_EQ(only_null_const, executeFunction(func_name, json_column, type_column, only_null_const));
+    ASSERT_COLUMN_EQ(null_bool_const, executeFunction(func_name, json_column, type_column, null_string_const));
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<UInt8>>({true, true}),
         executeFunction(func_name, json_column, type_column, path_column, only_null_const));
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<UInt8>>({true, true}),
+        executeFunction(func_name, json_column, type_column, path_column, null_string_const));
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<UInt8>>({{}, {}}),
         executeFunction(func_name, json_column, type_column, path_column2, only_null_const));
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<UInt8>>({{}, {}}),
+        executeFunction(func_name, json_column, type_column, path_column2, null_string_const));
+    ASSERT_COLUMN_EQ(
+        only_null_const,
         executeFunction(func_name, json_column, type_column, only_null_const, path_column));
+    ASSERT_COLUMN_EQ(
+        null_bool_const,
+        executeFunction(func_name, json_column, type_column, null_string_const, path_column));
 }
 CATCH
 
