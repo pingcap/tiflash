@@ -40,6 +40,7 @@ CheckpointIngestInfoPtr CheckpointIngestInfo::restore(
     RegionPtr region;
     DM::Segments restored_segments;
 
+    auto log = DB::Logger::get("CheckpointIngestInfo");
     auto uni_ps = tmt.getContext().getWriteNodePageStorage();
     auto snapshot = uni_ps->getSnapshot(fmt::format("read_fap_i_{}", region_id));
     auto page_id
@@ -58,7 +59,12 @@ CheckpointIngestInfoPtr CheckpointIngestInfo::restore(
     PS::V3::CheckpointProto::CheckpointIngestInfoPersisted ingest_info_persisted;
     if (!ingest_info_persisted.ParseFromArray(page.data.data(), page.data.size()))
     {
-        LOG_ERROR(DB::Logger::get(), "Can't parse CheckpointIngestInfoPersisted");
+        throw Exception(
+            ErrorCodes::LOGICAL_ERROR,
+            "Can't parse CheckpointIngestInfo, region_id={} peer_id={} store_id={}",
+            region_id,
+            peer_id,
+            tmt.getKVStore()->getStoreID(std::memory_order_relaxed));
     }
 
     {
@@ -72,14 +78,12 @@ CheckpointIngestInfoPtr CheckpointIngestInfo::restore(
     auto keyspace_id = region->getKeyspaceID();
     auto table_id = region->getMappedTableID();
     auto storage = storages.get(keyspace_id, table_id);
-    auto log = DB::Logger::get("CheckpointIngestInfo");
     if (storage && storage->engineType() == TiDB::StorageEngine::DT)
     {
         auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
         auto dm_context = dm_storage->getStore()->newDMContext(tmt.getContext(), tmt.getContext().getSettingsRef());
-        for (auto i = 0; i < ingest_info_persisted.segments_size(); i++)
+        for (const auto & segment_pd : ingest_info_persisted.segments())
         {
-            const auto & segment_pd = ingest_info_persisted.segments()[i];
             ReadBufferFromString buf(segment_pd.segment_meta());
             DM::Segment::SegmentMetaInfo segment_info;
             readSegmentMetaInfo(buf, segment_info);
@@ -152,14 +156,11 @@ void CheckpointIngestInfo::persistToLocal() const
         ingest_info_persisted.set_region_info(wb.releaseStr());
     }
 
-    MemoryWriteBuffer wb_buffer;
     auto s = ingest_info_persisted.SerializeAsString();
-    wb_buffer.write(s.data(), s.size());
-    auto data_size = wb_buffer.count();
-    RUNTIME_CHECK(s.size() == data_size);
+    auto data_size = s.size();
+    auto read_buf = std::make_shared<ReadBufferFromOwnString>(s);
     auto page_id
         = UniversalPageIdFormat::toLocalKVPrefix(UniversalPageIdFormat::LocalKVKeyType::FAPIngestInfo, region_id);
-    auto read_buf = wb_buffer.tryGetReadBuffer();
     wb.putPage(UniversalPageId(page_id.data(), page_id.size()), 0, read_buf, data_size);
     uni_ps->write(std::move(wb), DB::PS::V3::PageType::Local, nullptr);
     LOG_INFO(
