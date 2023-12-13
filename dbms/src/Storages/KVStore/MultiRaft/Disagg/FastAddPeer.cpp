@@ -573,7 +573,7 @@ FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, u
         else
         {
             const auto & settings = server->tmt->getContext().getSettingsRef();
-            auto elapsed = fap_ctx->tasks_trace->queryElapsed(region_id);
+            auto elapsed = fap_ctx->tasks_trace->queryElapsed(region_id, true);
             if (elapsed >= 1000 * settings.fap_task_timeout_seconds)
             {
                 // For most cases, prev_state is `InQueue`.
