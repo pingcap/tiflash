@@ -93,6 +93,25 @@ public:
     }
     void setException(const DB::Exception & e);
 
+    const LoggerPtr getCurrentLogger() const
+    {
+        // `std::cmp_*` is safety to compare negative signed integers and unsigned integers.
+        if (likely(
+                std::cmp_less_equal(0, cur_idx) && std::cmp_less(cur_idx, units.size())
+                && units[cur_idx].task != nullptr))
+        {
+            return units[cur_idx].task->read_snapshot->log;
+        }
+        else if (!units.empty() && units.front().task != nullptr)
+        {
+            return units.front().task->read_snapshot->log;
+        }
+        else
+        {
+            return Logger::get();
+        }
+    }
+
 private:
     void initOnce();
     int readOneBlock();

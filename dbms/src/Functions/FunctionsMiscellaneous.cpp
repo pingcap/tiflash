@@ -18,7 +18,6 @@
 #include <Columns/ColumnSet.h>
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnTuple.h>
-#include <Common/ClickHouseRevision.h>
 #include <Common/FieldVisitors.h>
 #include <Common/TiFlashBuildInfo.h>
 #include <Common/UTF8Helpers.h>
@@ -236,10 +235,10 @@ public:
     {
         if (const auto * type = checkAndGetDataType<DataTypeEnum8>(block.getByPosition(arguments[0]).type.get()))
             block.getByPosition(result).column
-                = DataTypeUInt8().createColumnConst(block.rows(), UInt64(type->getValues().size()));
+                = DataTypeUInt8().createColumnConst(block.rows(), static_cast<UInt64>(type->getValues().size()));
         else if (const auto * type = checkAndGetDataType<DataTypeEnum16>(block.getByPosition(arguments[0]).type.get()))
             block.getByPosition(result).column
-                = DataTypeUInt16().createColumnConst(block.rows(), UInt64(type->getValues().size()));
+                = DataTypeUInt16().createColumnConst(block.rows(), static_cast<UInt64>(type->getValues().size()));
         else
             throw Exception(
                 "The argument for function " + getName() + " must be Enum",
@@ -527,8 +526,9 @@ public:
         }
 
         /// convertToFullColumn needed, because otherwise (constant expression case) function will not get called on each block.
-        block.getByPosition(result).column
-            = block.getByPosition(result).type->createColumnConst(size, UInt64(0))->convertToFullColumnIfConst();
+        block.getByPosition(result).column = block.getByPosition(result)
+                                                 .type->createColumnConst(size, static_cast<UInt64>(0))
+                                                 ->convertToFullColumnIfConst();
     }
 };
 
@@ -761,7 +761,7 @@ public:
 
     void executeImpl(Block & block, const ColumnNumbers & /*arguments*/, size_t result) const override
     {
-        block.getByPosition(result).column = DataTypeUInt8().createColumnConst(block.rows(), UInt64(0));
+        block.getByPosition(result).column = DataTypeUInt8().createColumnConst(block.rows(), static_cast<UInt64>(0));
     }
 };
 
@@ -797,7 +797,7 @@ public:
 
     void executeImpl(Block & block, const ColumnNumbers & /*arguments*/, size_t result) const override
     {
-        block.getByPosition(result).column = DataTypeUInt8().createColumnConst(block.rows(), UInt64(1));
+        block.getByPosition(result).column = DataTypeUInt8().createColumnConst(block.rows(), static_cast<UInt64>(1));
     }
 };
 
@@ -1258,8 +1258,8 @@ public:
             free(ptr); // NOLINT(cppcoreguidelines-no-malloc)
         };
         std::unique_ptr<char, decltype(deleter)> place{
-            reinterpret_cast<char *>(malloc(agg_func.sizeOfData())),
-            deleter}; // NOLINT(cppcoreguidelines-no-malloc)
+            reinterpret_cast<char *>(malloc(agg_func.sizeOfData())), // NOLINT(cppcoreguidelines-no-malloc)
+            deleter};
 
         agg_func.create(
             place.get()); /// Not much exception-safe. If an exception is thrown out, destroy will be called in vain.
@@ -1531,7 +1531,8 @@ void FunctionHasColumnInTable::executeImpl(Block & block, const ColumnNumbers & 
         has_column = table->hasColumn(column_name);
     }
 
-    block.getByPosition(result).column = DataTypeUInt8().createColumnConst(block.rows(), UInt64(has_column));
+    block.getByPosition(result).column
+        = DataTypeUInt8().createColumnConst(block.rows(), static_cast<UInt64>(has_column));
 }
 
 
@@ -1596,7 +1597,7 @@ public:
 std::string FunctionVersion::getVersion()
 {
     std::ostringstream os;
-    os << TiFlashBuildInfo::getVersion();
+    os << TiFlashBuildInfo::getReleaseVersion();
     return os.str();
 }
 

@@ -39,13 +39,8 @@ void TableStatus::read(ReadBuffer & in)
     }
 }
 
-void TablesStatusRequest::write(WriteBuffer & out, UInt64 server_protocol_revision) const
+void TablesStatusRequest::write(WriteBuffer & out) const
 {
-    if (server_protocol_revision < DBMS_MIN_REVISION_WITH_TABLES_STATUS)
-        throw Exception(
-            "Logical error: method TablesStatusRequest::write is called for unsupported server revision",
-            ErrorCodes::LOGICAL_ERROR);
-
     writeVarUInt(tables.size(), out);
     for (const auto & table_name : tables)
     {
@@ -54,13 +49,8 @@ void TablesStatusRequest::write(WriteBuffer & out, UInt64 server_protocol_revisi
     }
 }
 
-void TablesStatusRequest::read(ReadBuffer & in, UInt64 client_protocol_revision)
+void TablesStatusRequest::read(ReadBuffer & in)
 {
-    if (client_protocol_revision < DBMS_MIN_REVISION_WITH_TABLES_STATUS)
-        throw Exception(
-            "method TablesStatusRequest::read is called for unsupported client revision",
-            ErrorCodes::LOGICAL_ERROR);
-
     size_t size = 0;
     readVarUInt(size, in);
 
@@ -76,13 +66,8 @@ void TablesStatusRequest::read(ReadBuffer & in, UInt64 client_protocol_revision)
     }
 }
 
-void TablesStatusResponse::write(WriteBuffer & out, UInt64 client_protocol_revision) const
+void TablesStatusResponse::write(WriteBuffer & out) const
 {
-    if (client_protocol_revision < DBMS_MIN_REVISION_WITH_TABLES_STATUS)
-        throw Exception(
-            "method TablesStatusResponse::write is called for unsupported client revision",
-            ErrorCodes::LOGICAL_ERROR);
-
     writeVarUInt(table_states_by_id.size(), out);
     for (const auto & kv : table_states_by_id)
     {
@@ -95,13 +80,8 @@ void TablesStatusResponse::write(WriteBuffer & out, UInt64 client_protocol_revis
     }
 }
 
-void TablesStatusResponse::read(ReadBuffer & in, UInt64 server_protocol_revision)
+void TablesStatusResponse::read(ReadBuffer & in)
 {
-    if (server_protocol_revision < DBMS_MIN_REVISION_WITH_TABLES_STATUS)
-        throw Exception(
-            "method TablesStatusResponse::read is called for unsupported server revision",
-            ErrorCodes::LOGICAL_ERROR);
-
     size_t size = 0;
     readVarUInt(size, in);
 

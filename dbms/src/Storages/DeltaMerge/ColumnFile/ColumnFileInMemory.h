@@ -57,6 +57,11 @@ public:
         bytes = cache->block.bytes();
     }
 
+    // For deserializing a ColumnFileInMemory object without schema and data in deserializeCFInMemory.
+    explicit ColumnFileInMemory(UInt64 rows_)
+        : rows(rows_)
+    {}
+
     Type getType() const override { return Type::INMEMORY_FILE; }
 
     size_t getRows() const override { return rows; }
