@@ -35,7 +35,7 @@ CheckpointIngestInfoPtr CheckpointIngestInfo::restore(
     UInt64 region_id,
     UInt64 peer_id)
 {
-    GET_METRIC(tiflash_fap_task_result, type_need_to_restore).Increment();
+    GET_METRIC(tiflash_fap_task_result, type_restore).Increment();
     RegionPtr region;
     DM::Segments restored_segments;
 
