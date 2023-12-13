@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/RandomData.h>
 #include <Common/TiFlashMetrics.h>
 #include <Encryption/MockKeyManager.h>
 #include <IO/ChecksumBuffer.h>
@@ -90,21 +91,6 @@ ColumnDefinesPtr createColumnDefines(size_t column_number)
             DB::DataTypeFactory::instance().get("String")});
     }
     return primitive;
-}
-
-String createRandomString(std::size_t limit, std::mt19937_64 & eng, size_t & acc)
-{
-    // libc++-15 forbids instantiate `std::uniform_int_distribution<char>`.
-    // see https://github.com/llvm/llvm-project/blob/bfcd536a8ef6b1d6e9dd211925be3b078d06fe77/libcxx/include/__random/is_valid.h#L28
-    // and https://github.com/llvm/llvm-project/blob/bfcd536a8ef6b1d6e9dd211925be3b078d06fe77/libcxx/include/__random/uniform_int_distribution.h#L162
-    std::uniform_int_distribution<uint8_t> dist('a', 'z');
-    std::string buffer((eng() % limit) + 1, 0);
-    for (auto & i : buffer)
-    {
-        i = dist(eng);
-    }
-    acc += buffer.size();
-    return buffer;
 }
 
 DB::Block createBlock(
@@ -191,7 +177,7 @@ DB::Block createBlock(
         IColumn::MutablePtr m_col = str_col.type->createColumn();
         for (size_t j = 0; j < row_number; j++)
         {
-            Field field = createRandomString(limit, eng, acc);
+            Field field = DB::random::randomString(limit);
             m_col->insert(field);
         }
         str_col.column = std::move(m_col);
