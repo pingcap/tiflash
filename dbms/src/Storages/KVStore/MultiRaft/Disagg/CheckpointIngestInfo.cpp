@@ -226,7 +226,7 @@ void CheckpointIngestInfo::deleteWrittenData(TMTContext & tmt, RegionPtr region,
 }
 
 bool CheckpointIngestInfo::cleanOnSuccess(TMTContext & tmt, UInt64 region_id)
-{   
+{
     auto log = DB::Logger::get();
     LOG_INFO(log, "Erase CheckpointIngestInfo from disk on success, region_id={}", region_id);
     removeFromLocal(tmt, region_id);
@@ -241,7 +241,8 @@ bool CheckpointIngestInfo::forciblyClean(
 {
     auto log = DB::Logger::get();
     UNUSED(proxy_helper);
-    if (in_memory) {
+    if (in_memory)
+    {
         removeFromLocal(tmt, region_id);
         return true;
     }

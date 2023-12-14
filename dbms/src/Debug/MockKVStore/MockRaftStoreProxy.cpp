@@ -623,7 +623,8 @@ std::tuple<RegionPtr, PrehandleResult> MockRaftStoreProxy::snapshot(
         }
     }
     SSTViewVec snaps{ssts.data(), ssts.size()};
-    try {
+    try
+    {
         auto prehandle_result = kvs.preHandleSnapshotToFiles(new_kv_region, snaps, index, term, deadline_index, tmt);
         auto rg = RegionPtrWithSnapshotFiles{new_kv_region, std::vector(prehandle_result.ingest_ids)};
         if (cancel_after_prehandle)

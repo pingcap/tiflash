@@ -714,7 +714,9 @@ try
     default_cf.freeze();
     kvs.mutProxyHelperUnsafe()->sst_reader_interfaces = make_mock_sst_reader_interface();
     // Exception: find running scheduled fap task
-    EXPECT_THROW(proxy_instance->snapshot(kvs, global_context.getTMTContext(), region_id, {default_cf}, 10, 10, std::nullopt), Exception);
+    EXPECT_THROW(
+        proxy_instance->snapshot(kvs, global_context.getTMTContext(), region_id, {default_cf}, 10, 10, std::nullopt),
+        Exception);
     sp.next();
     sp.disable();
     t.join();
@@ -751,7 +753,15 @@ try
     fap_context->tasks_trace->addTask(region_id, []() {
         return genFastAddPeerRes(FastAddPeerStatus::NoSuitable, "", "");
     });
-    EXPECT_THROW(FastAddPeerImplWrite(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333, std::move(mock_data), 0), Exception);
+    EXPECT_THROW(
+        FastAddPeerImplWrite(
+            global_context.getTMTContext(),
+            proxy_helper.get(),
+            region_id,
+            2333,
+            std::move(mock_data),
+            0),
+        Exception);
 }
 CATCH
 

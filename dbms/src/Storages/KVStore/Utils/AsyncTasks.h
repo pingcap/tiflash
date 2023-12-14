@@ -35,9 +35,7 @@ struct AsyncTasks
         , log(DB::Logger::get("AsyncTasks"))
     {}
 
-    ~AsyncTasks() {
-        LOG_INFO(log, "Pending {} tasks when destructing", count());
-    }
+    ~AsyncTasks() { LOG_INFO(log, "Pending {} tasks when destructing", count()); }
 
     struct CancelHandle;
     using CancelHandlePtr = std::shared_ptr<CancelHandle>;
@@ -159,7 +157,8 @@ struct AsyncTasks
     TaskState asyncCancelTask(Key k, ResultDropper result_dropper, bool throw_if_noexist)
     {
         auto cancel_handle = getCancelHandleFromCaller(k, throw_if_noexist);
-        if (cancel_handle) {
+        if (cancel_handle)
+        {
             cancel_handle->doCancel();
             // Cancel logic should do clean itself
         }
@@ -206,14 +205,18 @@ struct AsyncTasks
     {
         auto cancel_handle = getCancelHandleFromCaller(k);
         auto state = queryState(k);
-        if (state == TaskState::NotScheduled) {
-            if (throw_on_no_exist) {
+        if (state == TaskState::NotScheduled)
+        {
+            if (throw_on_no_exist)
+            {
                 throw Exception(ErrorCodes::LOGICAL_ERROR, "Can't block wait a non-scheduled task");
-            } else {
+            }
+            else
+            {
                 return state;
             }
         }
-        
+
         if (state == TaskState::InQueue)
         {
             leakingDiscardTask(k);
@@ -248,7 +251,8 @@ struct AsyncTasks
         // The executor thread may outlive `AsyncTasks` in most cases, so we don't capture `this`.
         auto res = thread_pool->trySchedule(
             [p, triggered, running_mut, cancel_handle, cf]() {
-                if (cancel_handle->canceled()) {
+                if (cancel_handle->canceled())
+                {
                     cf();
                     return;
                 }
@@ -271,7 +275,7 @@ struct AsyncTasks
 
     bool addTask(Key k, Func f)
     {
-        return addTaskWithCancel(k, f, [](){});
+        return addTaskWithCancel(k, f, []() {});
     }
 
     TaskState unsafeQueryState(Key key) const
@@ -359,10 +363,14 @@ protected:
     {
         std::scoped_lock<std::mutex> l(mtx);
         auto it = tasks.find(k);
-        if(it == tasks.end()) {
-            if (throw_if_noexist) {
+        if (it == tasks.end())
+        {
+            if (throw_if_noexist)
+            {
                 throw Exception(ErrorCodes::LOGICAL_ERROR, "getCancelHandleFromCaller can't find key");
-            } else {
+            }
+            else
+            {
                 return nullptr;
             }
         }

@@ -64,16 +64,15 @@ TEST(AsyncTasksTest, AsyncTasksNormal)
         });
         ASSERT_TRUE(res1);
 
-        auto res2 = async_tasks->addTaskWithCancel(2, [&]() {
-            finished = true;
-        }, [&]() {
-            canceled = true;
-        });
+        auto res2 = async_tasks->addTaskWithCancel(
+            2,
+            [&]() { finished = true; },
+            [&]() { canceled = true; });
         ASSERT_TRUE(res2);
 
         async_tasks->asyncCancelTask(2);
         cl.unlock();
-    
+
         int elapsed = 0;
         while (true)
         {
@@ -138,20 +137,21 @@ TEST(AsyncTasksTest, AsyncTasksNormal)
         std::atomic_int finished = 0;
         for (int i = 0; i < total; i++)
         {
-            auto res = async_tasks->addTaskWithCancel(i, [i, &async_tasks, &finished]() {
-                while (true)
-                {
-                    auto cancel_handle = async_tasks->getCancelHandleFromExecutor(i);
-                    // Busy loop to take over cpu
-                    if (cancel_handle->canceled())
+            auto res = async_tasks->addTaskWithCancel(
+                i,
+                [i, &async_tasks, &finished]() {
+                    while (true)
                     {
-                        break;
+                        auto cancel_handle = async_tasks->getCancelHandleFromExecutor(i);
+                        // Busy loop to take over cpu
+                        if (cancel_handle->canceled())
+                        {
+                            break;
+                        }
                     }
-                }
-                finished.fetch_add(1);
-            }, [&](){
-                finished.fetch_add(1);
-            });
+                    finished.fetch_add(1);
+                },
+                [&]() { finished.fetch_add(1); });
             // Ensure task 1 is the first to handle
             if (i == 0)
                 std::this_thread::sleep_for(10ms);
