@@ -171,7 +171,7 @@ void ResourceControlQueue<NestedTaskQueueType>::updateStatistics(
             return;
     }
     assert(group_queue);
-    group_queue->consumeCPUResource(task, exec_task_status, inc_value);
+    group_queue->updateStatistics(task, exec_task_status, inc_value);
 }
 
 template <typename NestedTaskQueueType>
