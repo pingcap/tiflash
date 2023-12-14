@@ -34,9 +34,9 @@ inline void AESCTRCipherStream::initIV(uint64_t block_index, unsigned char * iv)
 {
     // In CTR mode, OpenSSL EVP API treat the IV as a 128-bit big-endian, and
     // increase it by 1 for each block.
-    uint64_t iv_high = initial_iv_high_;
-    uint64_t iv_low = initial_iv_low_ + block_index;
-    if (std::numeric_limits<uint64_t>::max() - block_index < initial_iv_low_)
+    uint64_t iv_high = initial_iv_high;
+    uint64_t iv_low = initial_iv_low + block_index;
+    if (std::numeric_limits<uint64_t>::max() - block_index < initial_iv_low)
     {
         iv_high++;
     }
@@ -52,7 +52,7 @@ void AESCTRCipherStream::encrypt(uint64_t file_offset, char * data, size_t data_
     uint64_t block_index = file_offset / block_size;
     unsigned char iv[block_size];
     initIV(block_index, iv);
-    DB::Encryption::Cipher(file_offset, data, data_size, key_, method, iv, /*is_encrypt=*/true);
+    DB::Encryption::Cipher(file_offset, data, data_size, key, method, iv, /*is_encrypt=*/true);
 }
 
 void AESCTRCipherStream::decrypt(uint64_t file_offset, char * data, size_t data_size)
@@ -61,7 +61,7 @@ void AESCTRCipherStream::decrypt(uint64_t file_offset, char * data, size_t data_
     uint64_t block_index = file_offset / block_size;
     unsigned char iv[block_size];
     initIV(block_index, iv);
-    DB::Encryption::Cipher(file_offset, data, data_size, key_, method, iv, /*is_encrypt=*/false);
+    DB::Encryption::Cipher(file_offset, data, data_size, key, method, iv, /*is_encrypt=*/false);
 }
 
 BlockAccessCipherStreamPtr AESCTRCipherStream::createCipherStream(

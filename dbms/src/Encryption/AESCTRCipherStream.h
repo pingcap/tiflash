@@ -29,11 +29,11 @@ struct FileEncryptionInfo;
 class AESCTRCipherStream : public BlockAccessCipherStream
 {
 public:
-    AESCTRCipherStream(const EncryptionMethod method_, std::string key, uint64_t iv_high, uint64_t iv_low)
+    AESCTRCipherStream(const EncryptionMethod method_, std::string key_, uint64_t iv_high, uint64_t iv_low)
         : method(method_)
-        , key_(std::move(key))
-        , initial_iv_high_(iv_high)
-        , initial_iv_low_(iv_low)
+        , key(std::move(key_))
+        , initial_iv_high(iv_high)
+        , initial_iv_low(iv_low)
     {}
 
     ~AESCTRCipherStream() override = default;
@@ -49,8 +49,8 @@ private:
     inline void initIV(uint64_t block_index, unsigned char * iv) const;
 
     const EncryptionMethod method;
-    const std::string key_; // NOLINT
-    const uint64_t initial_iv_high_; // NOLINT
-    const uint64_t initial_iv_low_; // NOLINT
+    const std::string key;
+    const uint64_t initial_iv_high;
+    const uint64_t initial_iv_low;
 };
 } // namespace DB
