@@ -89,8 +89,7 @@ const EVP_CIPHER * getCipher(EncryptionMethod method)
             static_cast<int>(method));
 #else
         // Openssl support SM4 after 1.1.1 release version.
-        cipher = EVP_sm4_ctr();
-        break;
+        return EVP_sm4_ctr();
 #endif
     default:
         throw DB::TiFlashException(
