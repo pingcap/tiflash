@@ -509,7 +509,7 @@ void SegmentReadTask::checkMemTableSetReady() const
     {
         if (auto * in_mem_cf = cf->tryToInMemoryFile(); in_mem_cf)
         {
-            RUNTIME_CHECK(in_mem_cf->getCache() != nullptr);
+            RUNTIME_CHECK_MSG(in_mem_cf->getCache() != nullptr, "Fail to fetch MemTableSet from {}", *this);
         }
     }
 }
