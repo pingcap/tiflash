@@ -18,6 +18,7 @@
 #include <Storages/IManageableStorage.h>
 #include <Storages/KVStore/KVStore.h>
 #include <Storages/KVStore/MultiRaft/Disagg/CheckpointIngestInfo.h>
+#include <Storages/KVStore/MultiRaft/Disagg/fast_add_peer.pb.h>
 #include <Storages/KVStore/MultiRaft/RegionPersister.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/Page/PageStorage.h>
@@ -29,8 +30,6 @@
 namespace DB
 {
 
-static constexpr uint8_t FAP_INGEST_INFO_PERSIST_FMT_VER = 1;
-
 CheckpointIngestInfoPtr CheckpointIngestInfo::restore(
     TMTContext & tmt,
     const TiFlashRaftProxyHelper * proxy_helper,
@@ -38,10 +37,11 @@ CheckpointIngestInfoPtr CheckpointIngestInfo::restore(
     UInt64 peer_id,
     bool allow_segment_noexist)
 {
-    StoreID remote_store_id;
+    GET_METRIC(tiflash_fap_task_result, type_restore).Increment();
     RegionPtr region;
     DM::Segments restored_segments;
 
+    auto log = DB::Logger::get("CheckpointIngestInfo");
     auto uni_ps = tmt.getContext().getWriteNodePageStorage();
     auto snapshot = uni_ps->getSnapshot(fmt::format("read_fap_i_{}", region_id));
     auto page_id
@@ -52,64 +52,62 @@ CheckpointIngestInfoPtr CheckpointIngestInfo::restore(
         // The restore failed, we can safely return null here to make FAP fallback.
         return nullptr;
     }
-    ReadBufferFromMemory buf(page.data.begin(), page.data.size());
-    RUNTIME_CHECK_MSG(readBinary2<UInt8>(buf) == FAP_INGEST_INFO_PERSIST_FMT_VER, "wrong fap ingest info format");
 
-    std::vector<UInt64> restored_segments_id;
+    FastAddPeerProto::CheckpointIngestInfoPersisted ingest_info_persisted;
+    if (!ingest_info_persisted.ParseFromArray(page.data.data(), page.data.size()))
     {
-        auto count = readBinary2<UInt64>(buf);
-        for (size_t i = 0; i < count; ++i)
-        {
-            auto segment_id = readBinary2<UInt64>(buf);
-            restored_segments_id.push_back(segment_id);
-        }
-        remote_store_id = readBinary2<UInt64>(buf);
+        throw Exception(
+            ErrorCodes::LOGICAL_ERROR,
+            "Can't parse CheckpointIngestInfo, region_id={} peer_id={} store_id={}",
+            region_id,
+            peer_id,
+            tmt.getKVStore()->getStoreID(std::memory_order_relaxed));
     }
-    region = Region::deserialize(buf, proxy_helper);
+
+    {
+        ReadBufferFromMemory buf(
+            ingest_info_persisted.region_info().data(),
+            ingest_info_persisted.region_info().size());
+        region = Region::deserialize(buf, proxy_helper);
+    }
+
+    StoreID remote_store_id = ingest_info_persisted.remote_store_id();
 
     auto & storages = tmt.getStorages();
     auto keyspace_id = region->getKeyspaceID();
     auto table_id = region->getMappedTableID();
     auto storage = storages.get(keyspace_id, table_id);
-
-    auto log = DB::Logger::get("CheckpointIngestInfo");
     if (storage && storage->engineType() == TiDB::StorageEngine::DT)
     {
         auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
         auto dm_context = dm_storage->getStore()->newDMContext(tmt.getContext(), tmt.getContext().getSettingsRef());
-
-        for (auto segment_id : restored_segments_id)
+        for (const auto & seg_persisted : ingest_info_persisted.segments())
         {
-            try
-            {
-                restored_segments.emplace_back(DM::Segment::restoreSegment(log, *dm_context, segment_id));
-            }
-            catch (const Exception & e)
-            {
-                if (!allow_segment_noexist)
-                {
-                    e.rethrow();
-                }
-                else
-                {
-                    LOG_INFO(
-                        log,
-                        "Can't restore segment when clean FAP data, segment_id={} region_id={}",
-                        segment_id,
-                        region_id);
-                    continue;
-                }
-            }
-        }
+            ReadBufferFromString buf(seg_persisted.segment_meta());
+            DM::Segment::SegmentMetaInfo segment_info;
+            readSegmentMetaInfo(buf, segment_info);
 
-        LOG_INFO(
-            log,
-            "CheckpointIngestInfo restore success with {} segments, region_id={} table_id={} keyspace_id={} region={}",
-            restored_segments.size(),
-            region_id,
-            table_id,
-            keyspace_id,
-            region->getDebugString());
+            ReadBufferFromString buf_delta(seg_persisted.delta_meta());
+            auto delta
+                = DM::DeltaValueSpace::restore(*dm_context, segment_info.range, buf_delta, segment_info.delta_id);
+            ReadBufferFromString buf_stable(seg_persisted.stable_meta());
+            auto stable = DM::StableValueSpace::restore(*dm_context, buf_stable, segment_info.stable_id);
+
+            LOG_DEBUG(
+                log,
+                "Restore segments for checkpoint, remote_segment_id={} range={} remote_store_id={}",
+                segment_info.segment_id,
+                segment_info.range.toDebugString(),
+                remote_store_id);
+            restored_segments.push_back(std::make_shared<DM::Segment>(
+                log,
+                segment_info.epoch,
+                segment_info.range,
+                segment_info.segment_id,
+                segment_info.next_segment_id,
+                delta,
+                stable));
+        }
     }
     else
     {
@@ -136,48 +134,34 @@ void CheckpointIngestInfo::persistToLocal() const
     }
     auto uni_ps = tmt.getContext().getWriteNodePageStorage();
     UniversalWriteBatch wb;
-    MemoryWriteBuffer wb_buffer;
+
     // Write:
     // - The region, which is actually data and meta in KVStore.
     // - The segment ids point to segments which are already persisted but not ingested.
-    static_assert(sizeof(FAP_INGEST_INFO_PERSIST_FMT_VER) == 1);
-    auto data_size = writeBinary2(FAP_INGEST_INFO_PERSIST_FMT_VER, wb_buffer);
+
+    FastAddPeerProto::CheckpointIngestInfoPersisted ingest_info_persisted;
+
     {
-        size_t segment_data_size = 0;
-        segment_data_size += writeBinary2(restored_segments.size(), wb_buffer);
         for (const auto & restored_segment : restored_segments)
         {
-            LOG_DEBUG(
-                log,
-                "Persist segment to local, segment_id={} region_id={}",
-                restored_segment->segmentId(),
-                region_id);
-            data_size += writeBinary2(restored_segment->segmentId(), wb_buffer);
+            auto * segment_info = ingest_info_persisted.add_segments();
+            restored_segment->serializeToFAPTempSegment(segment_info);
         }
-        segment_data_size += writeBinary2<UInt64>(remote_store_id, wb_buffer);
-        data_size += segment_data_size;
-        RUNTIME_CHECK_MSG(
-            wb_buffer.count() == data_size,
-            "buffer {} != data_size {}, segment_data_size={}",
-            wb_buffer.count(),
-            data_size,
-            segment_data_size);
     }
     {
         // Although the region is the first peer of this region in this store, we can't write it to formal KVStore for now.
         // Otherwise it could be uploaded and then overwritten.
-        auto region_size = RegionPersister::computeRegionWriteBuffer(*region, wb_buffer);
-        data_size += region_size;
-        RUNTIME_CHECK_MSG(
-            wb_buffer.count() == data_size,
-            "buffer {} != data_size {}, region_size={}",
-            wb_buffer.count(),
-            data_size,
-            region_size);
+        WriteBufferFromOwnString wb;
+        RegionPersister::computeRegionWriteBuffer(*region, wb);
+        ingest_info_persisted.set_region_info(wb.releaseStr());
     }
+    ingest_info_persisted.set_remote_store_id(remote_store_id);
+
+    auto s = ingest_info_persisted.SerializeAsString();
+    auto data_size = s.size();
+    auto read_buf = std::make_shared<ReadBufferFromOwnString>(s);
     auto page_id
         = UniversalPageIdFormat::toLocalKVPrefix(UniversalPageIdFormat::LocalKVKeyType::FAPIngestInfo, region_id);
-    auto read_buf = wb_buffer.tryGetReadBuffer();
     wb.putPage(UniversalPageId(page_id.data(), page_id.size()), 0, read_buf, data_size);
     uni_ps->write(std::move(wb), DB::PS::V3::PageType::Local, nullptr);
     LOG_INFO(

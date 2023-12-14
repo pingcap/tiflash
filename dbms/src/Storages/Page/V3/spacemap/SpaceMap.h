@@ -130,10 +130,10 @@ public:
         }
     }
 
+    virtual ~SpaceMap() = default;
+
 protected:
     SpaceMap(UInt64 start_, UInt64 end_, SpaceMapType type_);
-
-    virtual ~SpaceMap() = default;
 
     // Return true if space [offset, offset+size) are all free
     virtual bool isMarkUnused(UInt64 offset, size_t size) = 0;

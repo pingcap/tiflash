@@ -1190,7 +1190,7 @@ DM::Segments StorageDeltaMerge::buildSegmentsFromCheckpointInfo(
 
 void StorageDeltaMerge::ingestSegmentsFromCheckpointInfo(
     const DM::RowKeyRange & range,
-    CheckpointIngestInfoPtr checkpoint_info,
+    const CheckpointIngestInfoPtr & checkpoint_info,
     const Settings & settings)
 {
     GET_METRIC(tiflash_storage_command_count, type_ingest_checkpoint).Increment();

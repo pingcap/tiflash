@@ -15,6 +15,7 @@
 #include <Debug/MockKVStore/MockRaftStoreProxy.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Storages/DeltaMerge/Filter/PushDownFilter.h>
+#include <Storages/DeltaMerge/ReadThread/SegmentReadTaskScheduler.h>
 #include <Storages/KVStore/FFI/ProxyFFI.h>
 #include <Storages/KVStore/MultiRaft/Disagg/FastAddPeer.h>
 #include <Storages/KVStore/MultiRaft/Disagg/FastAddPeerCache.h>
@@ -53,6 +54,11 @@ FastAddPeerRes FastAddPeerImplWrite(
     CheckpointRegionInfoAndData && checkpoint,
     UInt64 start_time);
 uint8_t ApplyFapSnapshotImpl(TMTContext & tmt, TiFlashRaftProxyHelper * proxy_helper, UInt64 region_id, UInt64 peer_id);
+
+namespace FailPoints
+{
+extern const char force_not_clean_fap_on_destroy[];
+} // namespace FailPoints
 
 namespace tests
 {
@@ -417,23 +423,17 @@ try
     auto & global_context = TiFlashTestEnv::getGlobalContext();
     auto fap_context = global_context.getSharedContextDisagg()->fap_context;
     uint64_t region_id = 1;
-    fap_context->tasks_trace->addTask(region_id, []() {
-        return genFastAddPeerRes(FastAddPeerStatus::NoSuitable, "", "");
-    });
-    {
-        auto region_key = UniversalPageIdFormat::toKVStoreKey(region_id);
-        LOG_INFO(log, "Check region_key {}", region_key);
-        auto page = std::get<0>(mock_data)->checkpoint_data_holder->getUniversalPageStorage()->read(
-            region_key,
-            /*read_limiter*/ nullptr,
-            {},
-            /*throw_on_not_exist*/ false);
-        ASSERT_TRUE(page.isValid());
-    }
-    FastAddPeerImplWrite(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333, std::move(mock_data), 0);
-    // After restart, there is no struct in memory.
-    fap_context->debugRemoveCheckpointIngestInfo(region_id);
+    FastAddPeerImplWrite(global_context.getTMTContext(), region_id, 2333, std::move(mock_data), 0);
 
+    // Remove the checkpoint ingest info and region from memory.
+    // Testing whether FAP can be handled properly after restart.
+    fap_context->debugRemoveCheckpointIngestInfo(region_id);
+    // Remove the region so that the snapshot will be accepted.
+    FailPointHelper::enableFailPoint("force_not_clean_fap_on_destroy");
+    SCOPE_EXIT({ FailPointHelper::disableFailPoint("force_not_clean_fap_on_destroy"); });
+    kvstore->handleDestroy(region_id, global_context.getTMTContext());
+
+    // After restart, continue the FAP from persisted checkpoint ingest info.
     ApplyFapSnapshotImpl(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333);
 
     {
@@ -443,6 +443,7 @@ try
         ASSERT_TRUE(storage && storage->engineType() == TiDB::StorageEngine::DT);
         auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
         auto store = dm_storage->getStore();
+        ASSERT_EQ(store->getRowKeyColumnSize(), 1);
         verifyRows(
             global_context,
             store,
@@ -503,12 +504,21 @@ try
     auto & global_context = TiFlashTestEnv::getGlobalContext();
     auto fap_context = global_context.getSharedContextDisagg()->fap_context;
     uint64_t region_id = 1;
-    fap_context->tasks_trace->addTask(region_id, []() {
-        return genFastAddPeerRes(FastAddPeerStatus::NoSuitable, "", "");
-    });
-    FastAddPeerImplWrite(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333, std::move(mock_data), 0);
+
+    // Will generate and persist some information in local ps, which will not be uploaded.
+    FastAddPeerImplWrite(global_context.getTMTContext(), region_id, 2333, std::move(mock_data), 0);
     dumpCheckpoint();
-    FastAddPeerImplWrite(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333, std::move(mock_data), 0);
+    FastAddPeerImplWrite(global_context.getTMTContext(), region_id, 2333, std::move(mock_data), 0);
+    auto in_mem_ingest_info = fap_context->getOrRestoreCheckpointIngestInfo(
+        global_context.getTMTContext(),
+        proxy_helper.get(),
+        region_id,
+        2333);
+    auto in_disk_ingest_info
+        = CheckpointIngestInfo::restore(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333);
+    ASSERT_EQ(in_mem_ingest_info->getRegion()->getDebugString(), in_disk_ingest_info->getRegion()->getDebugString());
+    ASSERT_EQ(in_mem_ingest_info->getRestoredSegments().size(), in_disk_ingest_info->getRestoredSegments().size());
+    ASSERT_EQ(in_mem_ingest_info->getRemoteStoreId(), in_disk_ingest_info->getRemoteStoreId());
 
     auto s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
     const auto manifests = S3::CheckpointManifestS3Set::getFromS3(*s3_client, kvs.getStoreID());

@@ -62,7 +62,6 @@ public:
         RegionPtr region,
         DM::Segments && segments,
         UInt64 start_time);
-    void debugRemoveCheckpointIngestInfo(UInt64 region_id);
     std::optional<CheckpointIngestInfoPtr> tryGetCheckpointIngestInfo(UInt64 region_id) const;
     void cleanTask(
         TMTContext & tmt,
@@ -74,6 +73,9 @@ public:
         const struct TiFlashRaftProxyHelper * proxy_helper,
         UInt64 region_id,
         bool is_legacy_snapshot);
+
+    // Remove the checkpoint ingest info from memory. Only for testing.
+    void debugRemoveCheckpointIngestInfo(UInt64 region_id);
 
 public:
     std::shared_ptr<FAPAsyncTasks> tasks_trace;

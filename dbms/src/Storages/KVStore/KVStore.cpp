@@ -50,6 +50,7 @@ namespace FailPoints
 {
 extern const char force_fail_in_flush_region_data[];
 extern const char pause_passive_flush_before_persist_region[];
+extern const char force_not_clean_fap_on_destroy[];
 } // namespace FailPoints
 
 KVStore::KVStore(Context & context)

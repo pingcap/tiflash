@@ -102,7 +102,7 @@ void BlobStats::restore()
     }
 }
 
-std::lock_guard<std::mutex> BlobStats::lock() const
+std::lock_guard<std::mutex> BlobStats::lock() const NO_THREAD_SAFETY_ANALYSIS
 {
     return std::lock_guard(lock_stats);
 }
