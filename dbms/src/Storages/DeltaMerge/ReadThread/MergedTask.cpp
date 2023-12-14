@@ -44,7 +44,7 @@ void MergedTask::initOnce()
         auto & [pool, task, stream] = units[cur_idx];
         if (!pool->valid())
         {
-            units[cur_idx].setFinish();
+            setUnitFinish(cur_idx);
             continue;
         }
         if (pool->isRUExhausted())
@@ -74,7 +74,7 @@ int MergedTask::readOneBlock()
 
         if (!pool->valid())
         {
-            units[cur_idx].setFinish();
+            setUnitFinish(cur_idx);
             continue;
         }
 
@@ -94,7 +94,7 @@ int MergedTask::readOneBlock()
         }
         else
         {
-            units[cur_idx].setFinish();
+            setUnitFinish(cur_idx);
         }
     }
     return read_block_count;

@@ -28,12 +28,13 @@ struct MergedUnit
     ~MergedUnit()
     {
         // Calling `setFinish()` for updating memory statistics of `MemoryTracker`.
-        setFinish();
+        [[maybe_unused]] auto res = setFinish();
     }
 
-    bool isFinished() const { return pool == nullptr && task == nullptr && stream == nullptr; }
+    [[nodiscard]] bool isFinished() const { return pool == nullptr && task == nullptr && stream == nullptr; }
 
-    void setFinish()
+    // If setted return true else return false.
+    [[nodiscard]] bool setFinish()
     {
         if (!isFinished())
         {
@@ -42,7 +43,9 @@ struct MergedUnit
             task = nullptr;
             stream = nullptr;
             pool = nullptr;
+            return true;
         }
+        return false;
     }
 
     SegmentReadTaskPoolPtr pool; // The information of a read request.
@@ -63,6 +66,7 @@ public:
         , units(std::move(units_))
         , inited(false)
         , cur_idx(-1)
+        , finished_count(0)
     {
         passive_merged_segments.fetch_add(units.size() - 1, std::memory_order_relaxed);
         GET_METRIC(tiflash_storage_read_thread_gauge, type_merged_task).Increment();
@@ -76,10 +80,7 @@ public:
 
     int readBlock();
 
-    bool allStreamsFinished() const
-    {
-        return std::all_of(units.begin(), units.end(), [](const auto & u) { return u.isFinished(); });
-    }
+    bool allStreamsFinished() const { return finished_count >= units.size(); }
 
     const GlobalSegmentID & getSegmentId() const { return seg_id; }
 
@@ -125,11 +126,13 @@ public:
 private:
     void initOnce();
     int readOneBlock();
+    void setUnitFinish(int i) { finished_count += units[i].setFinish(); }
 
     GlobalSegmentID seg_id;
     std::vector<MergedUnit> units;
     bool inited;
     int cur_idx;
+    size_t finished_count;
     Stopwatch sw;
     inline static std::atomic<int64_t> passive_merged_segments{0};
 };
