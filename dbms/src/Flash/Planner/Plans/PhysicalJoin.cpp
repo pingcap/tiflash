@@ -346,20 +346,10 @@ void PhysicalJoin::finalizeImpl(const Names & parent_require)
     }
 
     build_side_prepare_actions->finalize(build_required);
-    auto child_required_columns = build_side_prepare_actions->getRequiredColumns();
-    if unlikely (child_required_columns.empty())
-    {
-        child_required_columns.push_back(ExpressionActions::getSmallestColumn(build()->getSchema()));
-    }
-    build()->finalize(child_required_columns);
+    build()->finalize(build_side_prepare_actions->getRequiredColumns());
 
     probe_side_prepare_actions->finalize(probe_required);
-    child_required_columns = probe_side_prepare_actions->getRequiredColumns();
-    if unlikely (child_required_columns.empty())
-    {
-        child_required_columns.push_back(ExpressionActions::getSmallestColumn(probe()->getSchema()));
-    }
-    probe()->finalize(child_required_columns);
+    probe()->finalize(probe_side_prepare_actions->getRequiredColumns());
 }
 
 const Block & PhysicalJoin::getSampleBlock() const
