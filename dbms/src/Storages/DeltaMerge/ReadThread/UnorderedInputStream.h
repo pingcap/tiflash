@@ -56,22 +56,22 @@ public:
         LOG_DEBUG(log, "Created, pool_id={} ref_no={}", task_pool->poolId(), ref_no);
     }
 
-    void cancel(bool /*kill*/) override { decreaseRefCount(); }
+    void cancel(bool /*kill*/) override { decreaseRefCount(true); }
 
-    ~UnorderedInputStream() override { decreaseRefCount(); }
+    ~UnorderedInputStream() override { decreaseRefCount(false); }
 
     String getName() const override { return NAME; }
 
     Block getHeader() const override { return header; }
 
 protected:
-    void decreaseRefCount()
+    void decreaseRefCount(bool is_cancel)
     {
         bool ori = false;
         if (is_stopped.compare_exchange_strong(ori, true))
         {
             task_pool->decreaseUnorderedInputStreamRefCount();
-            LOG_DEBUG(log, "Destroy, pool_id={} ref_no={}", task_pool->poolId(), ref_no);
+            LOG_DEBUG(log, "{}, pool_id={} ref_no={}", is_cancel ? "Cancel" : "Destroy", task_pool->poolId(), ref_no);
         }
     }
 
