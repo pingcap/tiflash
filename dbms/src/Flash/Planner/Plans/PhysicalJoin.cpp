@@ -68,20 +68,23 @@ PhysicalPlanNodePtr PhysicalJoin::build(
     RUNTIME_CHECK(left);
     RUNTIME_CHECK(right);
 
-    const Block & left_input_header = Block(left->getSchema());
-    const Block & right_input_header = Block(right->getSchema());
+    const Block & left_input_header = left->getSampleBlock();
+    const Block & right_input_header = right->getSampleBlock();
 
     JoinInterpreterHelper::TiFlashJoin tiflash_join(join, context.isTest());
 
     const auto & probe_plan = tiflash_join.build_side_index == 0 ? right : left;
     const auto & build_plan = tiflash_join.build_side_index == 0 ? left : right;
-
-    const Block & probe_side_header = probe_plan->getSampleBlock();
-    const Block & build_side_header = build_plan->getSampleBlock();
+    const auto probe_source_columns = tiflash_join.build_side_index == 0
+        ? JoinInterpreterHelper::genExpressionAnalyzerSourceColumns(right_input_header, right->getSchema())
+        : JoinInterpreterHelper::genExpressionAnalyzerSourceColumns(left_input_header, left->getSchema());
+    const auto & build_source_columns = tiflash_join.build_side_index == 0
+        ? JoinInterpreterHelper::genExpressionAnalyzerSourceColumns(left_input_header, left->getSchema())
+        : JoinInterpreterHelper::genExpressionAnalyzerSourceColumns(right_input_header, right->getSchema());
 
     String match_helper_name = tiflash_join.genMatchHelperName(left_input_header, right_input_header);
     NamesAndTypes join_output_schema
-        = tiflash_join.genJoinOutputColumns(left_input_header, right_input_header, match_helper_name);
+        = tiflash_join.genJoinOutputColumns(left->getSchema(), right->getSchema(), match_helper_name);
     auto & dag_context = *context.getDAGContext();
 
     /// add necessary transformation if the join key is an expression
@@ -93,7 +96,7 @@ PhysicalPlanNodePtr PhysicalJoin::build(
     auto [probe_side_prepare_actions, probe_key_names, original_probe_key_names, probe_filter_column_name]
         = JoinInterpreterHelper::prepareJoin(
             context,
-            probe_side_header,
+            probe_source_columns,
             tiflash_join.getProbeJoinKeys(),
             tiflash_join.join_key_types,
             /*left=*/true,
@@ -107,7 +110,7 @@ PhysicalPlanNodePtr PhysicalJoin::build(
     auto [build_side_prepare_actions, build_key_names, original_build_key_names, build_filter_column_name]
         = JoinInterpreterHelper::prepareJoin(
             context,
-            build_side_header,
+            build_source_columns,
             tiflash_join.getBuildJoinKeys(),
             tiflash_join.join_key_types,
             /*left=*/false,
@@ -119,8 +122,8 @@ PhysicalPlanNodePtr PhysicalJoin::build(
 
     tiflash_join.fillJoinOtherConditionsAction(
         context,
-        left_input_header,
-        right_input_header,
+        left->getSchema(),
+        right->getSchema(),
         probe_side_prepare_actions,
         original_probe_key_names,
         original_build_key_names,
@@ -161,7 +164,7 @@ PhysicalPlanNodePtr PhysicalJoin::build(
     {
         build_key_names_map[original_build_key_names[i]] = build_key_names[i];
     }
-    auto runtime_filter_list = tiflash_join.genRuntimeFilterList(context, build_side_header, build_key_names_map, log);
+    auto runtime_filter_list = tiflash_join.genRuntimeFilterList(context, build_source_columns, build_key_names_map, log);
     LOG_DEBUG(log, "before register runtime filter list, list size:{}", runtime_filter_list.size());
     context.getDAGContext()->runtime_filter_mgr.registerRuntimeFilterList(runtime_filter_list);
 

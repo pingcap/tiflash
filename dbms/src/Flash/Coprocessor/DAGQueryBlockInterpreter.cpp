@@ -248,16 +248,21 @@ void DAGQueryBlockInterpreter::handleJoin(
     DAGPipeline build_pipeline;
     probe_pipeline.streams = input_streams_vec[1 - tiflash_join.build_side_index];
     build_pipeline.streams = input_streams_vec[tiflash_join.build_side_index];
+    /// for DAGQueryBlockInterpreter, the schema is already aligned to TiDB's schema after appendFinalProjectForNonRootQueryBlock
+    const auto probe_source_columns = JoinInterpreterHelper::genExpressionAnalyzerSourceColumns(probe_pipeline.firstStream()->getHeader(), {});
+    const auto build_source_columns = JoinInterpreterHelper::genExpressionAnalyzerSourceColumns(build_pipeline.firstStream()->getHeader(), {});
 
     RUNTIME_ASSERT(!input_streams_vec[0].empty(), log, "left input streams cannot be empty");
     const Block & left_input_header = input_streams_vec[0].back()->getHeader();
+    const auto left_source_columns = JoinInterpreterHelper::genExpressionAnalyzerSourceColumns(left_input_header, {});
 
     RUNTIME_ASSERT(!input_streams_vec[1].empty(), log, "right input streams cannot be empty");
     const Block & right_input_header = input_streams_vec[1].back()->getHeader();
+    const auto right_source_columns = JoinInterpreterHelper::genExpressionAnalyzerSourceColumns(right_input_header, {});
 
     String match_helper_name = tiflash_join.genMatchHelperName(left_input_header, right_input_header);
     NamesAndTypes join_output_columns
-        = tiflash_join.genJoinOutputColumns(left_input_header, right_input_header, match_helper_name);
+        = tiflash_join.genJoinOutputColumns(left_source_columns, right_source_columns, match_helper_name);
     /// add necessary transformation if the join key is an expression
 
     bool is_tiflash_right_join = isRightOuterJoin(tiflash_join.kind);
@@ -267,7 +272,7 @@ void DAGQueryBlockInterpreter::handleJoin(
     auto [probe_side_prepare_actions, probe_key_names, original_probe_key_names, probe_filter_column_name]
         = JoinInterpreterHelper::prepareJoin(
             context,
-            probe_pipeline.firstStream()->getHeader(),
+            probe_source_columns,
             tiflash_join.getProbeJoinKeys(),
             tiflash_join.join_key_types,
             true,
@@ -280,7 +285,7 @@ void DAGQueryBlockInterpreter::handleJoin(
     auto [build_side_prepare_actions, build_key_names, original_build_key_names, build_filter_column_name]
         = JoinInterpreterHelper::prepareJoin(
             context,
-            build_pipeline.firstStream()->getHeader(),
+            build_source_columns,
             tiflash_join.getBuildJoinKeys(),
             tiflash_join.join_key_types,
             false,
@@ -291,8 +296,8 @@ void DAGQueryBlockInterpreter::handleJoin(
 
     tiflash_join.fillJoinOtherConditionsAction(
         context,
-        left_input_header,
-        right_input_header,
+        left_source_columns,
+        right_source_columns,
         probe_side_prepare_actions,
         original_probe_key_names,
         original_build_key_names,
