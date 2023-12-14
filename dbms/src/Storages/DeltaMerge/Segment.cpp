@@ -411,7 +411,6 @@ Segment::SegmentMetaInfos Segment::readAllSegmentsMetaInfoInRange( //
     LOG_DEBUG(Logger::get(), "Read segment meta info from segment {}", current_segment_id);
     std::vector<std::pair<DM::RowKeyValue, UInt64>> end_key_and_segment_ids;
     SegmentMetaInfos segment_infos;
-    bool first_of_the_range = true;
     while (current_segment_id != 0)
     {
         Segment::SegmentMetaInfo segment_info;
@@ -421,29 +420,16 @@ Segment::SegmentMetaInfos Segment::readAllSegmentsMetaInfoInRange( //
         auto page = checkpoint_info->temp_ps->read(target_id, nullptr, {}, false);
         if unlikely (!page.isValid())
         {
-            if (first_of_the_range)
-            {
-                // After #7642 there could be no segment, so it could panic later.
-                LOG_INFO(
-                    DB::Logger::get(),
-                    "Meets totally empty key range, keyspace={} table_id={} current_segment_id={} range={}",
-                    context.keyspace_id,
-                    context.physical_table_id,
-                    current_segment_id,
-                    target_range.toDebugString());
-                break;
-            }
-            else
-            {
-                throw Exception(
-                    ErrorCodes::LOGICAL_ERROR,
-                    "Can't find page id {}, keyspace={} table_id={} current_segment_id={} range={}",
-                    target_id,
-                    context.keyspace_id,
-                    context.physical_table_id,
-                    current_segment_id,
-                    target_range.toDebugString());
-            }
+            // After #7642, DELTA_MERGE_FIRST_SEGMENT_ID may not exist, however, such checkpoint won't be selected.
+            // If it were to be selected, the FAP task could fallback to legacy.
+            throw Exception(
+                ErrorCodes::LOGICAL_ERROR,
+                "Can't find page id {}, keyspace={} table_id={} current_segment_id={} range={}",
+                target_id,
+                context.keyspace_id,
+                context.physical_table_id,
+                current_segment_id,
+                target_range.toDebugString());
         }
         segment_info.segment_id = current_segment_id;
         ReadBufferFromMemory buf(page.data.begin(), page.data.size());
@@ -462,7 +448,6 @@ Segment::SegmentMetaInfos Segment::readAllSegmentsMetaInfoInRange( //
         {
             break;
         }
-        first_of_the_range = false;
     }
     if (!is_cache_ready)
     {

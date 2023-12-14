@@ -688,18 +688,7 @@ try
     fap_context->tasks_trace->addTask(region_id, []() {
         return genFastAddPeerRes(FastAddPeerStatus::NoSuitable, "", "");
     });
-    FastAddPeerImplWrite(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333, std::move(mock_data), 0);
-    ApplyFapSnapshotImpl(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333);
-    // CheckpointIngestInfo is removed.
-    eventuallyPredicate([&]() {
-        return !CheckpointIngestInfo::restore(
-            global_context.getTMTContext(),
-            proxy_helper.get(),
-            region_id,
-            2333,
-            true);
-    });
-    ASSERT_TRUE(!fap_context->tryGetCheckpointIngestInfo(region_id).has_value());
+    EXPECT_THROW(FastAddPeerImplWrite(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333, std::move(mock_data), 0), Exception);
 }
 CATCH
 
