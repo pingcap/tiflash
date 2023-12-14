@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include <Common/RandomData.h>
-#include <Encryption/AESCTRCipher.h>
 #include <Encryption/AESCTRCipherStream.h>
 #include <Encryption/EncryptedRandomAccessFile.h>
 #include <Encryption/EncryptedWritableFile.h>
@@ -27,10 +26,6 @@
 #include <Storages/KVStore/FFI/FileEncryption.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <gtest/gtest.h>
-#include <openssl/evp.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <unistd.h>
 
 
 #ifdef NDEBUG
