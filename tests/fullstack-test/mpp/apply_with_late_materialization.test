@@ -29,7 +29,6 @@ mysql> alter table test.t set tiflash replica 1;
 mysql> alter table test.t1 set tiflash replica 1;
 mysql> analyze table test.t;
 
-func> wait_table test t t
 func> wait_table test t t1
 
 # Test.
