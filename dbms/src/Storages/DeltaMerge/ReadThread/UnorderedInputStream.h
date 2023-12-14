@@ -131,7 +131,7 @@ protected:
         }
         std::call_once(task_pool->addToSchedulerFlag(), [&]() {
             prepareRuntimeFilter();
-            SegmentReadTaskScheduler::instance().add(task_pool);
+            SegmentReadTaskScheduler::instance().add(task_pool, log);
         });
         task_pool_added = true;
     }
