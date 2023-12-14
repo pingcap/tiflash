@@ -92,7 +92,7 @@ UInt64 StableValueSpace::saveMeta(WriteBuffer & buf) const
     writeIntBinary(valid_rows, buf);
     writeIntBinary(valid_bytes, buf);
     writeIntBinary(static_cast<UInt64>(files.size()), buf);
-    for (auto & f : files)
+    for (const auto & f : files)
         writeIntBinary(f->pageId(), buf);
 
     return buf.count();
