@@ -57,13 +57,6 @@ public:
         if (cur_streams.empty())
             return;
         std::unique_lock lk(mu);
-<<<<<<< HEAD
-        streams_queue_by_partition.push_back(
-            std::make_shared<std::queue<std::shared_ptr<IBlockInputStream>>>());
-        for (const auto & stream : cur_streams)
-            streams_queue_by_partition.back()->push(stream);
-=======
->>>>>>> d344d9a872 (Process streams of partition tables one by one in MultiplexInputStream (#8507))
         added_streams.insert(added_streams.end(), cur_streams.begin(), cur_streams.end());
     }
 
@@ -92,47 +85,8 @@ public:
     }
 
 private:
-<<<<<<< HEAD
-    int removeQueue(int queue_id)
-    {
-        streams_queue_by_partition[queue_id] = nullptr;
-        if (queue_id != static_cast<int>(streams_queue_by_partition.size()) - 1)
-        {
-            swap(streams_queue_by_partition[queue_id], streams_queue_by_partition.back());
-            streams_queue_by_partition.pop_back();
-            return queue_id;
-        }
-        else
-        {
-            streams_queue_by_partition.pop_back();
-            return 0;
-        }
-    }
-
-    int nextQueueId(int queue_id) const
-    {
-        if (queue_id + 1 < static_cast<int>(streams_queue_by_partition.size()))
-            return queue_id + 1;
-        else
-            return 0;
-    }
-
-    static void swap(std::shared_ptr<std::queue<std::shared_ptr<IBlockInputStream>>> & a,
-                     std::shared_ptr<std::queue<std::shared_ptr<IBlockInputStream>>> & b)
-    {
-        a.swap(b);
-    }
-
-    std::vector<
-        std::shared_ptr<std::queue<
-            std::shared_ptr<IBlockInputStream>>>>
-        streams_queue_by_partition;
-    std::vector<std::shared_ptr<IBlockInputStream>> added_streams;
-    int streams_queue_id = 0;
-=======
     std::deque<BlockInputStreamPtr> added_streams;
     bool is_cancelled;
->>>>>>> d344d9a872 (Process streams of partition tables one by one in MultiplexInputStream (#8507))
     std::mutex mu;
 };
 
