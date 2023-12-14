@@ -75,8 +75,8 @@ struct CheckpointIngestInfo
         bool allow_segment_noexist);
 
     // Only call to clean dangling CheckpointIngestInfo.
-    static bool forciblyClean(TMTContext & tmt, const TiFlashRaftProxyHelper * proxy_helper, UInt64 region_id);
-    static bool cleanOnSuccess(TMTContext & tmt, UInt64 region_id, bool pre_check = true);
+    static bool forciblyClean(TMTContext & tmt, const TiFlashRaftProxyHelper * proxy_helper, UInt64 region_id, bool in_memory);
+    static bool cleanOnSuccess(TMTContext & tmt, UInt64 region_id);
 
 private:
     friend class FastAddPeerContext;

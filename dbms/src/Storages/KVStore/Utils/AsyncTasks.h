@@ -154,6 +154,7 @@ struct AsyncTasks
     ///     The task will directly return when it's eventually run by a thread.
     /// 4. If the tasks is in `NotScheduled` state
     ///     `throw_if_noexist` controls whether to throw.
+    /// NOTE: The task element will be removed after calling this function.
     template <typename ResultDropper>
     TaskState asyncCancelTask(Key k, ResultDropper result_dropper, bool throw_if_noexist)
     {
@@ -200,7 +201,7 @@ struct AsyncTasks
     /// 1. `NotScheduled` or `InQueue`
     /// 2. `R`
     /// 3. Exception
-
+    /// NOTE: The task element will be removed after calling this function.
     [[nodiscard]] TaskState blockedCancelRunningTask(Key k, bool throw_on_no_exist = true)
     {
         auto cancel_handle = getCancelHandleFromCaller(k);
@@ -221,10 +222,10 @@ struct AsyncTasks
         // Only one thread can block cancel and wait.
         RUNTIME_CHECK_MSG(!cancel_handle->canceled(), "Try block cancel running task twice");
         cancel_handle->doCancel();
-        fetchResult(k);
         // Consider a one producer thread one consumer thread scene, the first task is running,
         // and the second task is in queue. If we block cancel the second task here, deadlock will happen.
-        // So we only allow block fetching running tasks, and users have to guaruantee all infinite loop having cancel checking.
+        // So we only block on fetching running tasks, and users have to guaruantee cancel checking.
+        fetchResult(k);
         return state;
     }
 

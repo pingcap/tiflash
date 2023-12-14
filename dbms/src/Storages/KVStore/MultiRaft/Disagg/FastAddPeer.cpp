@@ -574,19 +574,20 @@ FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, u
             auto elapsed = fap_ctx->tasks_trace->queryElapsed(region_id);
             if (elapsed >= 1000 * settings.fap_task_timeout_seconds)
             {
-                // For most cases, prev_state is `InQueue`.
-                auto prev_state = fap_ctx->tasks_trace->asyncCancelTask(region_id);
-                if (prev_state == FAPAsyncTasks::TaskState::InQueue)
+                /// NOTE: Make sure FastAddPeer is the only place to cancel FAP phase 1.
+                // If the task is running, we have to wait it return on cancel and clean,
+                // otherwise a later legacy may race with this clean.
+                auto prev_state = fap_ctx->tasks_trace->queryState(region_id);
+                LOG_INFO(log, "Cancel FAP due to timeout region_id={} new_peer_id={} prev_state={}", region_id, new_peer_id, magic_enum::enum_name(prev_state));
+                if (prev_state == FAPAsyncTasks::TaskState::Running)
                 {
-                    LOG_INFO(log, "Cancel FAP due to timeout region_id={} new_peer_id={}", region_id, new_peer_id);
+                    GET_METRIC(tiflash_fap_task_state, type_blocking_cancel_stage).Increment();
+                    [[maybe_unused]] auto result = fap_ctx->tasks_trace->blockedCancelRunningTask(region_id);
+                    GET_METRIC(tiflash_fap_task_state, type_blocking_cancel_stage).Decrement();
                 }
                 else
                 {
-                    // If the task is running, we have to wait it return on cancel and clean,
-                    // otherwise a later legacy may race with this clean.
-                    GET_METRIC(tiflash_fap_task_state, type_blocking_cancel_stage).Increment();
-                    [[maybe_unused]] auto result = fap_ctx->tasks_trace->fetchResult(region_id);
-                    GET_METRIC(tiflash_fap_task_state, type_blocking_cancel_stage).Decrement();
+                    [[maybe_unused]] auto s = fap_ctx->tasks_trace->blockedCancelRunningTask(region_id);
                 }
                 // Return Canceled because it is cancel from outside FAP worker.
                 return genFastAddPeerRes(FastAddPeerStatus::Canceled, "", "");

@@ -627,7 +627,7 @@ try
 }
 CATCH
 
-// Test cancel from destroy
+// Test cancel and destroy
 TEST_F(RegionKVStoreTestFAP, Cancel3)
 try
 {
@@ -653,14 +653,77 @@ try
     ASSERT_EQ(1, kvstore->clonedStoreMeta().id());
     FailPointHelper::enableFailPoint(FailPoints::force_set_fap_candidate_store_id);
     auto sp = SyncPointCtl::enableInScope("in_FastAddPeerImplWrite::after_write_segments");
-    // The FAP will fail because it doesn't contain the new peer in region meta.
     auto t = std::thread([&]() { FastAddPeer(&server, region_id, 2333); });
     sp.waitAndPause();
     EXPECT_THROW(kvstore->handleDestroy(region_id, global_context.getTMTContext()), Exception);
     sp.next();
     sp.disable();
     t.join();
-    // Cancel async tasks, and make sure the data is cleaned after limited time.
+    server.tmt->getContext().getSettingsRef().fap_task_timeout_seconds = 0;
+    // Use another call to cancel
+    FastAddPeer(&server, region_id, 2333);
+    LOG_INFO(log, "Try another destroy");
+    kvstore->handleDestroy(region_id, global_context.getTMTContext());
+    eventuallyPredicate([&]() {
+        return !CheckpointIngestInfo::restore(
+            global_context.getTMTContext(),
+            proxy_helper.get(),
+            region_id,
+            2333,
+            true);
+    });
+    // Wait async cancel in `FastAddPeerImplWrite`.
+    ASSERT_FALSE(fap_context->tryGetCheckpointIngestInfo(region_id).has_value());
+    FailPointHelper::disableFailPoint(FailPoints::force_set_fap_candidate_store_id);
+}
+CATCH
+
+// Test cancel and legacy snapshot
+TEST_F(RegionKVStoreTestFAP, Cancel4)
+try
+{
+    using namespace std::chrono_literals;
+    CheckpointRegionInfoAndData mock_data = prepareForRestart(FAPTestOpt{
+        .mock_add_new_peer = true,
+    });
+    KVStore & kvs = getKVS();
+    RegionPtr kv_region = kvs.getRegion(1);
+
+    auto & global_context = TiFlashTestEnv::getGlobalContext();
+    auto fap_context = global_context.getSharedContextDisagg()->fap_context;
+    uint64_t region_id = 1;
+
+    EngineStoreServerWrap server = {
+        .tmt = &global_context.getTMTContext(),
+        .proxy_helper = proxy_helper.get(),
+    };
+
+    kvstore->getStore().store_id.store(1, std::memory_order_release);
+    kvstore->debugMutStoreMeta().set_id(1);
+    ASSERT_EQ(1, kvstore->getStoreID());
+    ASSERT_EQ(1, kvstore->clonedStoreMeta().id());
+    FailPointHelper::enableFailPoint(FailPoints::force_set_fap_candidate_store_id);
+    auto sp = SyncPointCtl::enableInScope("in_FastAddPeerImplWrite::after_write_segments");
+    auto t = std::thread([&]() { FastAddPeer(&server, region_id, 2333); });
+    sp.waitAndPause();
+
+    // Test of ingesting multiple files with MultiSSTReader.
+    MockSSTReader::getMockSSTData().clear();
+    MockSSTGenerator default_cf{region_id, 1, ColumnFamilyType::Default};
+    default_cf.finish_file();
+    default_cf.freeze();
+    kvs.mutProxyHelperUnsafe()->sst_reader_interfaces = make_mock_sst_reader_interface();
+    // Exception: find running scheduled fap task
+    EXPECT_THROW(proxy_instance->snapshot(kvs, global_context.getTMTContext(), region_id, {default_cf}, 10, 10, std::nullopt), Exception);
+    sp.next();
+    sp.disable();
+    t.join();
+
+    server.tmt->getContext().getSettingsRef().fap_task_timeout_seconds = 0;
+    // Use another call to cancel
+    FastAddPeer(&server, region_id, 2333);
+    LOG_INFO(log, "Try another snapshot");
+    proxy_instance->snapshot(kvs, global_context.getTMTContext(), region_id, {default_cf}, 11, 11, std::nullopt);
     eventuallyPredicate([&]() {
         return !CheckpointIngestInfo::restore(
             global_context.getTMTContext(),

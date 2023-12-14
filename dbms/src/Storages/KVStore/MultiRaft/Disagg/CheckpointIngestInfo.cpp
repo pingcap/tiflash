@@ -192,8 +192,6 @@ void CheckpointIngestInfo::persistToLocal() const
 
 static void removeFromLocal(TMTContext & tmt, UInt64 region_id)
 {
-    auto log = DB::Logger::get();
-    LOG_INFO(log, "Erase CheckpointIngestInfo from disk, region_id={}", region_id);
     auto uni_ps = tmt.getContext().getWriteNodePageStorage();
     UniversalWriteBatch del_batch;
     del_batch.delPage(
@@ -227,35 +225,38 @@ void CheckpointIngestInfo::deleteWrittenData(TMTContext & tmt, RegionPtr region,
     // }
 }
 
-bool CheckpointIngestInfo::cleanOnSuccess(TMTContext & tmt, UInt64 region_id, bool pre_check)
+bool CheckpointIngestInfo::cleanOnSuccess(TMTContext & tmt, UInt64 region_id)
+{   
+    auto log = DB::Logger::get();
+    LOG_INFO(log, "Erase CheckpointIngestInfo from disk on success, region_id={}", region_id);
+    removeFromLocal(tmt, region_id);
+    return true;
+}
+
+bool CheckpointIngestInfo::forciblyClean(
+    TMTContext & tmt,
+    const TiFlashRaftProxyHelper * proxy_helper,
+    UInt64 region_id,
+    bool in_memory)
 {
-    if (!pre_check)
-    {
+    auto log = DB::Logger::get();
+    UNUSED(proxy_helper);
+    if (in_memory) {
         removeFromLocal(tmt, region_id);
         return true;
     }
-
     auto uni_ps = tmt.getContext().getWriteNodePageStorage();
     auto snapshot = uni_ps->getSnapshot(fmt::format("read_fap_i_{}", region_id));
     auto page_id
         = UniversalPageIdFormat::toLocalKVPrefix(UniversalPageIdFormat::LocalKVKeyType::FAPIngestInfo, region_id);
     // For most cases, ingest infos are deleted in `removeFromLocal`.
     Page page = uni_ps->read(page_id, nullptr, snapshot, /*throw_on_not_exist*/ false);
+    LOG_INFO(log, "Erase CheckpointIngestInfo from disk by force, region_id={} exist={}", region_id, page.isValid());
     if (unlikely(page.isValid()))
     {
         removeFromLocal(tmt, region_id);
         return true;
     }
-    return false;
-}
-
-bool CheckpointIngestInfo::forciblyClean(
-    TMTContext & tmt,
-    const TiFlashRaftProxyHelper * proxy_helper,
-    UInt64 region_id)
-{
-    UNUSED(proxy_helper);
-    CheckpointIngestInfo::cleanOnSuccess(tmt, region_id, true);
     return false;
 }
 

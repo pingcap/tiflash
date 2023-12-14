@@ -149,27 +149,24 @@ void FastAddPeerContext::cleanTask(
     UInt64 region_id,
     bool is_succeed)
 {
-    // TODO(fap) We can move checkpoint_ingest_info to a dedicated queue, and schedule a timed task to clean it, if this costs much.
+    bool in_memory = false;
+    // TODO(fap) We use a dedicated queue and thread to clean, if this costs much.
     // However, we have to make sure the clean task will not override if a new fap snapshot of the same region comes later.
-    bool pre_check = true;
     {
-        // If it's still managed by fap context.
         std::scoped_lock<std::mutex> lock(ingest_info_mu);
         auto iter = checkpoint_ingest_info_map.find(region_id);
         if (iter != checkpoint_ingest_info_map.end())
         {
-            // The ingest info exists, do not need to check again later
-            pre_check = false;
+            in_memory = true;
             checkpoint_ingest_info_map.erase(iter);
         }
     }
-    // Clean without locking `ingest_info_mu`
     if (is_succeed)
-        CheckpointIngestInfo::cleanOnSuccess(tmt, region_id, pre_check);
+        CheckpointIngestInfo::cleanOnSuccess(tmt, region_id);
     else
     {
         RUNTIME_CHECK(proxy_helper != nullptr);
-        CheckpointIngestInfo::forciblyClean(tmt, proxy_helper, region_id);
+        CheckpointIngestInfo::forciblyClean(tmt, proxy_helper, region_id, in_memory);
     }
 }
 
@@ -228,58 +225,29 @@ void FastAddPeerContext::resolveFapSnapshotState(
     UInt64 region_id,
     bool is_legacy_snapshot)
 {
-    if (is_legacy_snapshot) {
-        // Legacy snapshot is not concurrent with FAP snapshot in both phase 1 and phase 2.
-        auto prev_state = tasks_trace->asyncCancelTask(
-            region_id,
-            [&]() {
-                // Proxy will actively polling FAP result by calling `fn_fast_add_peer`,
-                // so the result will be eventually fetched by Proxy, and then trigger phase2.
-                // So, it the FAP result is not fetched, a legacy snapshot shouldn't come.
-                throw Exception(
-                    ErrorCodes::LOGICAL_ERROR,
-                    "FastAddPeer: find unfetched finished fap task, make sure proxy has longer timeout threshold, "
-                    "region_id={}",
-                    region_id);
-            },
-            false);
-        if likely (prev_state == FAPAsyncTasks::TaskState::NotScheduled)
-        {
-            // 1. There leaves some non-ingested data on disk after restart.
-            // 2. There has been no fap at all.
-            // 3. FAP is enabled before, but disabled for now.
-            LOG_DEBUG(log, "FastAddPeer: no find ongoing fap task, region_id={}", region_id);
-            // Still need to clean because there could be data left.
-            cleanTask(tmt, proxy_helper, region_id, false);
-        }
-        else if (prev_state == FAPAsyncTasks::TaskState::Running)
-        {
-            // Currently, proxy will not actively cancel FAP. So it will not fallback if FAP phase 1 is still running.
-            // If we cancel the task asyncly, this will happen in some very corner cases where a legacy snapshot meets a cleaning FAP task.
-            throw Exception(
-                ErrorCodes::LOGICAL_ERROR,
-                "FastAddPeer: find running scheduled fap task, region_id={} fap_state={}",
-                region_id,
-                magic_enum::enum_name(prev_state));
-        }
-        // Finished is handled by result_dropper. InQueue is silently dropped.
-    } else {
-        // If the region is destroyed now and sent to this store later, it must be with another peer_id.
-        // So before handling the destroy, the FAP should be canceled, and its result should be cleaned then.
-        // We wait the FAP to cancel first, although FAP phase 1 and `handleDestroy` doesn't ract for now.
-        auto result = tasks_trace->blockedCancelRunningTask(region_id, false);
-        if likely (result == FAPAsyncTasks::TaskState::NotScheduled) {
-            // Ditto
-            LOG_DEBUG(log, "FastAddPeer: no find ongoing fap task, region_id={}", region_id);
-            cleanTask(tmt, proxy_helper, region_id, false);
-        } else if (result == FAPAsyncTasks::TaskState::Running) {
-            LOG_INFO(log, "FastAddPeer: Cancel running/finished FAP because region destroyed, region_id={}", region_id);
-            // If the region is destroyed when FAP phase is running, the cleanTask is redundant because it has been cleaned in `FastAddPeerImpl`.
-        } else if (result == FAPAsyncTasks::TaskState::Finished) {
-            LOG_INFO(log, "FastAddPeer: Cancel running/finished FAP because region destroyed, region_id={}", region_id);
-            cleanTask(tmt, proxy_helper, region_id, false);
-        }
-    }
+    auto prev_state = tasks_trace->queryState(region_id);
+    /// --- The legacy snapshot case ---
+    /// Legacy snapshot is not concurrent with FAP snapshot in both phase 1 and phase 2:
+    /// Can't be InQueue/Running because:
+    /// - Proxy will not actively cancel FAP, so it will not fallback if FAP phase 1 is still running.
+    /// Cancel in `FastAddPeer` is blocking, so a legacy snapshot won't meet a canceling snapshot. 
+    /// Can't be Finished because:
+    /// - A finished task must be fetched by proxy on the next `FastAddPeer`.
+    /// -- The destroy region case ---
+    /// When FAP goes on, it blocks all MsgAppend messages to this region peer, so the destroy won't happen.
+    /// If the region is destroyed now and sent to this store later, it must be with another peer_id.
+    RUNTIME_CHECK_MSG(prev_state == FAPAsyncTasks::TaskState::NotScheduled, 
+        "FastAddPeer: find scheduled fap task, region_id={} fap_state={} is_legacy_snapshot={}",
+        region_id,
+        magic_enum::enum_name(prev_state),
+        is_legacy_snapshot
+    );
+    // 1. There leaves some non-ingested data on disk after restart.
+    // 2. There has been no fap at all.
+    // 3. FAP is enabled before, but disabled for now.
+    LOG_DEBUG(log, "FastAddPeer: no find ongoing fap task, region_id={} is_legacy_snapshot={}", region_id, is_legacy_snapshot);
+    // Still need to clean because there could be data left.
+    cleanTask(tmt, proxy_helper, region_id, false);
 }
 
 } // namespace DB

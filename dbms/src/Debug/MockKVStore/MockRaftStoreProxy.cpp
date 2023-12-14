@@ -597,6 +597,8 @@ std::tuple<RegionPtr, PrehandleResult> MockRaftStoreProxy::snapshot(
 {
     auto region = getRegion(region_id);
     auto old_kv_region = kvs.getRegion(region_id);
+    RUNTIME_CHECK(region != nullptr);
+    RUNTIME_CHECK(old_kv_region != nullptr);
     // We have catch up to index by snapshot.
     // So we assume there are new data updated, so we inc index by 1.
     if (index == 0)
@@ -621,20 +623,26 @@ std::tuple<RegionPtr, PrehandleResult> MockRaftStoreProxy::snapshot(
         }
     }
     SSTViewVec snaps{ssts.data(), ssts.size()};
-    auto prehandle_result = kvs.preHandleSnapshotToFiles(new_kv_region, snaps, index, term, deadline_index, tmt);
-
-    auto rg = RegionPtrWithSnapshotFiles{new_kv_region, std::vector(prehandle_result.ingest_ids)};
-    if (cancel_after_prehandle)
-    {
-        kvs.releasePreHandledSnapshot(rg, tmt);
+    try {
+        auto prehandle_result = kvs.preHandleSnapshotToFiles(new_kv_region, snaps, index, term, deadline_index, tmt);
+        auto rg = RegionPtrWithSnapshotFiles{new_kv_region, std::vector(prehandle_result.ingest_ids)};
+        if (cancel_after_prehandle)
+        {
+            kvs.releasePreHandledSnapshot(rg, tmt);
+            return std::make_tuple(kvs.getRegion(region_id), prehandle_result);
+        }
+        kvs.checkAndApplyPreHandledSnapshot<RegionPtrWithSnapshotFiles>(rg, tmt);
+        // Though it is persisted earlier in real proxy, but the state is changed to Normal here.
+        region->updateAppliedIndex(index, true);
+        // Region changes during applying snapshot, must re-get.
         return std::make_tuple(kvs.getRegion(region_id), prehandle_result);
     }
-    kvs.checkAndApplyPreHandledSnapshot<RegionPtrWithSnapshotFiles>(rg, tmt);
-    // Though it is persisted earlier in real proxy, but the state is changed to Normal here.
-    region->updateAppliedIndex(index, true);
-
-    // Region changes during applying snapshot, must re-get.
-    return std::make_tuple(kvs.getRegion(region_id), prehandle_result);
+    catch (const Exception & e)
+    {
+        LOG_ERROR(log, e.message());
+        e.rethrow();
+    }
+    exit(0);
 }
 
 TableID MockRaftStoreProxy::bootstrapTable(Context & ctx, KVStore & kvs, TMTContext & tmt, bool drop_at_first)
