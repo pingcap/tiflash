@@ -30,10 +30,12 @@ SegmentReadTaskScheduler::~SegmentReadTaskScheduler()
     sched_thread.join();
 }
 
-void SegmentReadTaskScheduler::add(const SegmentReadTaskPoolPtr & pool)
+void SegmentReadTaskScheduler::add(const SegmentReadTaskPoolPtr & pool, const LoggerPtr & req_log)
 {
     Stopwatch sw_add;
+    // `add_lock` is only used in this function to make all threads calling `add` to execute serially.
     std::lock_guard add_lock(add_mtx);
+    // `lock` is used to protect data.
     std::lock_guard lock(mtx);
     Stopwatch sw_do_add;
     read_pools.add(pool);
@@ -43,12 +45,11 @@ void SegmentReadTaskScheduler::add(const SegmentReadTaskPoolPtr & pool)
     {
         merging_segments[seg_id].push_back(pool->pool_id);
     }
-    auto block_slots = pool->getFreeBlockSlots();
     LOG_DEBUG(
-        log,
+        req_log,
         "Added, pool_id={} block_slots={} segment_count={} pool_count={} cost={:.3f}us do_add_cost={:.3f}us", //
         pool->pool_id,
-        block_slots,
+        pool->getFreeBlockSlots(),
         tasks.size(),
         read_pools.size(),
         sw_add.elapsed() / 1000.0,
@@ -235,9 +236,8 @@ bool SegmentReadTaskScheduler::schedule()
             {
                 LOG_DEBUG(
                     log,
-                    "scheduleMergedTask segment_id={} pool_ids={} cost={}ms pool_count={}",
-                    merged_task->getSegmentId(),
-                    merged_task->getPoolIds(),
+                    "scheduleMergedTask merged_task=<{}> cost={}ms pool_count={}",
+                    merged_task->toString(),
                     elapsed_ms,
                     pool_count);
             }
