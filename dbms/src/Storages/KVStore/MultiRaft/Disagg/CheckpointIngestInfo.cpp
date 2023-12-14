@@ -85,14 +85,14 @@ CheckpointIngestInfoPtr CheckpointIngestInfo::restore(
         auto dm_context = dm_storage->getStore()->newDMContext(tmt.getContext(), tmt.getContext().getSettingsRef());
         for (const auto & segment_pd : ingest_info_persisted.segments())
         {
-            ReadBufferFromString buf(segment_pd.segment_meta());
+            ReadBufferFromString buf(seg_persisted.segment_meta());
             DM::Segment::SegmentMetaInfo segment_info;
             readSegmentMetaInfo(buf, segment_info);
 
-            ReadBufferFromString buf_delta(segment_pd.delta_meta());
+            ReadBufferFromString buf_delta(seg_persisted.delta_meta());
             auto delta
                 = DM::DeltaValueSpace::restore(*dm_context, segment_info.range, buf_delta, segment_info.delta_id);
-            ReadBufferFromString buf_stable(segment_pd.stable_meta());
+            ReadBufferFromString buf_stable(seg_persisted.stable_meta());
             auto stable = DM::StableValueSpace::restore(*dm_context, buf_stable, segment_info.stable_id);
 
             LOG_DEBUG(
