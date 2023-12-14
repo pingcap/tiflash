@@ -70,11 +70,7 @@ protected:
         if (is_stopped.compare_exchange_strong(ori, true))
         {
             task_pool->decreaseUnorderedInputStreamRefCount();
-<<<<<<< HEAD
             LOG_DEBUG(log, "{}, pool_id={} ref_no={}", is_cancel ? "Cancel" : "Destroy", task_pool->poolId(), ref_no);
-=======
-            LOG_DEBUG(log, "{}, pool_id={} ref_no={}", is_cancel ? "Cancel" : "Destroy", task_pool->pool_id, ref_no);
->>>>>>> d344d9a872 (Process streams of partition tables one by one in MultiplexInputStream (#8507))
         }
     }
 
