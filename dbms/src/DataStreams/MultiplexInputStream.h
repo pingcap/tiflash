@@ -35,12 +35,17 @@ public:
 
     void cancel(bool kill)
     {
-        std::unique_lock lk(mu);
-        if (is_cancelled)
-            return;
+        std::deque<BlockInputStreamPtr> tmp_streams;
+        {
+            std::unique_lock lk(mu);
+            if (is_cancelled)
+                return;
 
-        is_cancelled = true;
-        for (auto & stream : added_streams)
+            is_cancelled = true;
+            tmp_streams.swap(added_streams);
+        }
+
+        for (auto & stream : tmp_streams)
             if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(stream.get()))
             {
                 p_stream->cancel(kill);
