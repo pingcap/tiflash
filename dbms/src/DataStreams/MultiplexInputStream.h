@@ -33,44 +33,56 @@ class MultiPartitionStreamPool
 public:
     MultiPartitionStreamPool() = default;
 
+    void cancel(bool kill)
+    {
+        std::deque<BlockInputStreamPtr> tmp_streams;
+        {
+            std::unique_lock lk(mu);
+            if (is_cancelled)
+                return;
+
+            is_cancelled = true;
+            tmp_streams.swap(added_streams);
+        }
+
+        for (auto & stream : tmp_streams)
+            if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(stream.get()))
+            {
+                p_stream->cancel(kill);
+            }
+    }
+
     void addPartitionStreams(const BlockInputStreams & cur_streams)
     {
         if (cur_streams.empty())
             return;
         std::unique_lock lk(mu);
+<<<<<<< HEAD
         streams_queue_by_partition.push_back(
             std::make_shared<std::queue<std::shared_ptr<IBlockInputStream>>>());
         for (const auto & stream : cur_streams)
             streams_queue_by_partition.back()->push(stream);
+=======
+>>>>>>> d344d9a872 (Process streams of partition tables one by one in MultiplexInputStream (#8507))
         added_streams.insert(added_streams.end(), cur_streams.begin(), cur_streams.end());
     }
 
-    std::shared_ptr<IBlockInputStream> pickOne()
+    BlockInputStreamPtr pickOne()
     {
         std::unique_lock lk(mu);
-        if (streams_queue_by_partition.empty())
+        if (added_streams.empty())
             return nullptr;
-        if (streams_queue_id >= static_cast<int>(streams_queue_by_partition.size()))
-            streams_queue_id = 0;
 
-        auto & q = *streams_queue_by_partition[streams_queue_id];
-        std::shared_ptr<IBlockInputStream> ret = nullptr;
-        assert(!q.empty());
-        ret = q.front();
-        q.pop();
-        if (q.empty())
-            streams_queue_id = removeQueue(streams_queue_id);
-        else
-            streams_queue_id = nextQueueId(streams_queue_id);
+        auto ret = std::move(added_streams.front());
+        added_streams.pop_front();
         return ret;
     }
 
-    int exportAddedStreams(BlockInputStreams & ret_streams)
+    void exportAddedStreams(BlockInputStreams & ret_streams)
     {
         std::unique_lock lk(mu);
         for (auto & stream : added_streams)
             ret_streams.push_back(stream);
-        return added_streams.size();
     }
 
     int addedStreamsCnt()
@@ -80,6 +92,7 @@ public:
     }
 
 private:
+<<<<<<< HEAD
     int removeQueue(int queue_id)
     {
         streams_queue_by_partition[queue_id] = nullptr;
@@ -116,6 +129,10 @@ private:
         streams_queue_by_partition;
     std::vector<std::shared_ptr<IBlockInputStream>> added_streams;
     int streams_queue_id = 0;
+=======
+    std::deque<BlockInputStreamPtr> added_streams;
+    bool is_cancelled;
+>>>>>>> d344d9a872 (Process streams of partition tables one by one in MultiplexInputStream (#8507))
     std::mutex mu;
 };
 
@@ -182,6 +199,8 @@ public:
                 child->cancel(kill);
             }
         }
+
+        shared_pool->cancel(kill);
     }
 
     Block getHeader() const override { return children.at(0)->getHeader(); }
