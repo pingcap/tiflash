@@ -382,6 +382,7 @@ FastAddPeerRes FastAddPeerImplWrite(
         region_state.region().SerializeAsString());
 }
 
+// This function executes FAP phase 1 from a thread in a dedicated pool.
 FastAddPeerRes FastAddPeerImpl(
     FastAddPeerContextPtr fap_ctx,
     TMTContext & tmt,
@@ -393,14 +394,6 @@ FastAddPeerRes FastAddPeerImpl(
     auto log = Logger::get("FastAddPeer");
     try
     {
-        auto cancel_handle = fap_ctx->tasks_trace->getCancelHandleFromExecutor(region_id);
-        if (cancel_handle->canceled())
-        {
-            LOG_INFO(log, "Cancel FAP in queue due to timeout region_id={} new_peer_id={}", region_id, new_peer_id);
-            // It is already canceled in queue.
-            GET_METRIC(tiflash_fap_task_result, type_failed_cancel).Increment();
-            return genFastAddPeerRes(FastAddPeerStatus::Canceled, "", "");
-        }
         auto elapsed = fap_ctx->tasks_trace->queryElapsed(region_id);
         GET_METRIC(tiflash_fap_task_duration_seconds, type_queue_stage).Observe(elapsed / 1000.0);
         GET_METRIC(tiflash_fap_task_state, type_queueing_stage).Decrement();
@@ -523,7 +516,7 @@ FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, u
             auto current_time = FAPAsyncTasks::getCurrentMillis();
             GET_METRIC(tiflash_fap_task_state, type_queueing_stage).Increment();
             auto res
-                = fap_ctx->tasks_trace->addTask(region_id, [server, region_id, new_peer_id, fap_ctx, current_time]() {
+                = fap_ctx->tasks_trace->addTaskWithCancel(region_id, [server, region_id, new_peer_id, fap_ctx, current_time]() {
                       std::string origin_name = getThreadName();
                       SCOPE_EXIT({ setThreadName(origin_name.c_str()); });
                       setThreadName("fap-builder");
@@ -534,6 +527,11 @@ FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, u
                           region_id,
                           new_peer_id,
                           current_time);
+                  }, [&](){
+                    LOG_INFO(log, "Cancel FAP in queue due to timeout region_id={} new_peer_id={}", region_id, new_peer_id);
+                    // It is already canceled in queue.
+                    GET_METRIC(tiflash_fap_task_result, type_failed_cancel).Increment();
+                    return genFastAddPeerRes(FastAddPeerStatus::Canceled, "", "");
                   });
             if (res)
             {

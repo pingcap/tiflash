@@ -35,6 +35,10 @@ struct AsyncTasks
         , log(DB::Logger::get("AsyncTasks"))
     {}
 
+    ~AsyncTasks() {
+        LOG_INFO(log, "Pending {} tasks when destructing", count());
+    }
+
     struct CancelHandle;
     using CancelHandlePtr = std::shared_ptr<CancelHandle>;
     struct CancelHandle
@@ -109,12 +113,6 @@ struct AsyncTasks
         Finished,
     };
 
-    enum class BlockCancelResult
-    {
-        Ok,
-        NotRunning,
-    };
-
     /// Although not mandatory, we publicize the method to allow holding the handle at the beginning of the body of async task.
     std::shared_ptr<CancelHandle> getCancelHandleFromExecutor(Key k) const
     {
@@ -147,9 +145,24 @@ struct AsyncTasks
     // Safety: Throws if
     // 1. The task not exist and `throw_if_noexist`.
     // 2. Throw in `result_dropper`.
+    /// Usage:
+    /// 1. If the task is in `Finished` state
+    ///     It's result will be cleaned with `result_dropper`.
+    /// 2. If the task is in `Running` state
+    ///     Make sure the executor will do the clean.
+    /// 3. If the tasks is in `InQueue` state
+    ///     The task will directly return when it's eventually run by a thread.
+    /// 4. If the tasks is in `NotScheduled` state
+    ///     `throw_if_noexist` controls whether to throw.
     template <typename ResultDropper>
     TaskState asyncCancelTask(Key k, ResultDropper result_dropper, bool throw_if_noexist)
     {
+        auto cancel_handle = getCancelHandleFromCaller(k, throw_if_noexist);
+        if (cancel_handle) {
+            cancel_handle->doCancel();
+            // Cancel logic should do clean itself
+        }
+
         auto state = queryState(k);
         if (!throw_if_noexist && state == TaskState::NotScheduled)
             return state;
@@ -157,20 +170,9 @@ struct AsyncTasks
         {
             result_dropper();
         }
-        else
-        {
-            auto cancel_handle = getCancelHandleFromCaller(k);
-            cancel_handle->doCancel();
-            // Cancel logic should do clean itself
-        }
-        {
-            std::scoped_lock l(mtx);
-            auto it = tasks.find(k);
-            if (it != tasks.end())
-            {
-                tasks.erase(it);
-            }
-        }
+
+        // `result_dropper` may remove the task by `fetchResult`.
+        leakingDiscardTask(k);
 
         return state;
     }
@@ -184,43 +186,71 @@ struct AsyncTasks
     }
 
     // Safety: Throws if
-    // 1. The task is not found.
+    // 1. The task is not found, and throw_on_no_exist.
     // 2. The cancel_handle is already set.
-    // NOTE: Consider a one producer thread one consumer thread scene, the first task is running,
-    // and the second task is in queue. If we block cancel the second task here, deadlock will happen.
-    // So we only allow block canceling running tasks, and users have to guaruantee all infinite loop having cancel checking.
-    [[nodiscard]] BlockCancelResult blockedCancelRunningTask(Key k)
+    // 3. Throw in `result_dropper`.
+    /// Usage:
+    /// 1. If the task is in `Finished`/`Running` state
+    ///     It's result is returned. The Caller may do the rest cleaning.
+    /// 3. If the tasks is in `InQueue` state
+    ///     The task will directly return when it's eventually run by a thread.
+    /// 4. If the tasks is in `NotScheduled` state
+    ///     It will throw.
+    /// Returns:
+    /// 1. `NotScheduled` or `InQueue`
+    /// 2. `R`
+    /// 3. Exception
+
+    [[nodiscard]] TaskState blockedCancelRunningTask(Key k, bool throw_on_no_exist = true)
     {
         auto cancel_handle = getCancelHandleFromCaller(k);
         auto state = queryState(k);
-        RUNTIME_CHECK_MSG(state != TaskState::NotScheduled, "Can't block wait a non-scheduled task");
+        if (state == TaskState::NotScheduled) {
+            if (throw_on_no_exist) {
+                throw Exception(ErrorCodes::LOGICAL_ERROR, "Can't block wait a non-scheduled task");
+            } else {
+                return state;
+            }
+        }
+        
         if (state == TaskState::InQueue)
         {
-            return BlockCancelResult::NotRunning;
+            leakingDiscardTask(k);
+            return state;
         }
         // Only one thread can block cancel and wait.
         RUNTIME_CHECK_MSG(!cancel_handle->canceled(), "Try block cancel running task twice");
         cancel_handle->doCancel();
         fetchResult(k);
-        return BlockCancelResult::Ok;
+        // Consider a one producer thread one consumer thread scene, the first task is running,
+        // and the second task is in queue. If we block cancel the second task here, deadlock will happen.
+        // So we only allow block fetching running tasks, and users have to guaruantee all infinite loop having cancel checking.
+        return state;
     }
 
     // Safety: Throws if
     // 1. There is already a task registered with the same name and not canceled or fetched.
-    bool addTask(Key k, Func f)
+    template <typename CancelFunc>
+    bool addTaskWithCancel(Key k, Func f, CancelFunc cf)
     {
         std::scoped_lock l(mtx);
         RUNTIME_CHECK(!tasks.contains(k));
         using P = std::packaged_task<R()>;
         std::shared_ptr<P> p = std::make_shared<P>(P(f));
         std::shared_ptr<std::atomic_bool> triggered = std::make_shared<std::atomic_bool>(false);
+        auto elem = Elem(p->get_future(), getCurrentMillis(), std::move(triggered));
+        auto cancel_handle = elem.cancel;
 
         auto running_mut = std::make_shared<std::mutex>();
         // Task could not run unless registered in `tasks`.
         std::scoped_lock caller_running_lock(*running_mut);
         // The executor thread may outlive `AsyncTasks` in most cases, so we don't capture `this`.
         auto res = thread_pool->trySchedule(
-            [p, triggered, running_mut]() {
+            [p, triggered, running_mut, cancel_handle, cf]() {
+                if (cancel_handle->canceled()) {
+                    cf();
+                    return;
+                }
                 std::scoped_lock worker_running_lock(*running_mut);
                 triggered->store(true);
                 // We can hold the cancel handle here to prevent it from destructing, but it is not necessary.
@@ -232,10 +262,15 @@ struct AsyncTasks
         SYNC_FOR("after_AsyncTasks::addTask_scheduled");
         if (res)
         {
-            tasks.insert({k, Elem(p->get_future(), getCurrentMillis(), std::move(triggered))});
+            tasks.insert({k, std::move(elem)});
         }
         SYNC_FOR("before_AsyncTasks::addTask_quit");
         return res;
+    }
+
+    bool addTask(Key k, Func f)
+    {
+        return addTaskWithCancel(k, f, [](){});
     }
 
     TaskState unsafeQueryState(Key key) const
@@ -286,7 +321,7 @@ struct AsyncTasks
     {
         std::unique_lock<std::mutex> l(mtx);
         auto it = tasks.find(key);
-        RUNTIME_CHECK_MSG(it != tasks.end(), "fetchResult meets empty key");
+        RUNTIME_CHECK(it != tasks.end());
         std::future<R> fut = std::move(it->second.fut);
         tasks.erase(key);
         l.unlock();
@@ -298,7 +333,7 @@ struct AsyncTasks
     {
         std::unique_lock<std::mutex> l(mtx);
         auto it = tasks.find(key);
-        RUNTIME_CHECK_MSG(it != tasks.end(), "fetchResultAndElapsed meets empty key");
+        RUNTIME_CHECK(it != tasks.end());
         auto fut = std::move(it->second.fut);
         auto start = it->second.start_ts;
         tasks.erase(it);
@@ -319,11 +354,17 @@ struct AsyncTasks
     }
 
 protected:
-    std::shared_ptr<CancelHandle> getCancelHandleFromCaller(Key k) const
+    std::shared_ptr<CancelHandle> getCancelHandleFromCaller(Key k, bool throw_if_noexist = true) const
     {
         std::scoped_lock<std::mutex> l(mtx);
         auto it = tasks.find(k);
-        RUNTIME_CHECK_MSG(it != tasks.end(), "getCancelHandleFromCaller meets empty key");
+        if(it == tasks.end()) {
+            if (throw_if_noexist) {
+                throw Exception(ErrorCodes::LOGICAL_ERROR, "getCancelHandleFromCaller can't find key");
+            } else {
+                return nullptr;
+            }
+        }
         return it->second.cancel;
     }
 

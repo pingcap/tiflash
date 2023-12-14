@@ -228,41 +228,31 @@ void FastAddPeerContext::resolveFapSnapshotState(
     UInt64 region_id,
     bool is_legacy_snapshot)
 {
-    auto prev_state = tasks_trace->asyncCancelTask(
-        region_id,
-        [&]() {},
-        false);
-    // Legacy snapshot and FAP(both phase 1 and 2) for a region is exclusive for now.
-    if (prev_state == FAPAsyncTasks::TaskState::Finished)
-    {
-        if (is_legacy_snapshot)
+    if (is_legacy_snapshot) {
+        // Legacy snapshot is not concurrent with FAP snapshot in both phase 1 and phase 2.
+        auto prev_state = tasks_trace->asyncCancelTask(
+            region_id,
+            [&]() {
+                // Proxy will actively polling FAP result by calling `fn_fast_add_peer`,
+                // so the result will be eventually fetched by Proxy, and then trigger phase2.
+                // So, it the FAP result is not fetched, a legacy snapshot shouldn't come.
+                throw Exception(
+                    ErrorCodes::LOGICAL_ERROR,
+                    "FastAddPeer: find unfetched finished fap task, make sure proxy has longer timeout threshold, "
+                    "region_id={}",
+                    region_id);
+            },
+            false);
+        if likely (prev_state == FAPAsyncTasks::TaskState::NotScheduled)
         {
-            // Proxy will actively polling FAP result by calling `fn_fast_add_peer`,
-            // so the result will be eventually fetched by Proxy, and then trigger phase2.
-            throw Exception(
-                ErrorCodes::LOGICAL_ERROR,
-                "FastAddPeer: find unfetched finished fap task, make sure proxy has longer timeout threshold, "
-                "region_id={}",
-                region_id);
-        }
-        else
-        {
-            LOG_INFO(log, "FastAddPeer: Cancel finished FAP because region destroyed, region_id={}", region_id);
+            // 1. There leaves some non-ingested data on disk after restart.
+            // 2. There has been no fap at all.
+            // 3. FAP is enabled before, but disabled for now.
+            LOG_DEBUG(log, "FastAddPeer: no find ongoing fap task, region_id={}", region_id);
+            // Still need to clean because there could be data left.
             cleanTask(tmt, proxy_helper, region_id, false);
         }
-    }
-    else if likely (prev_state == FAPAsyncTasks::TaskState::NotScheduled)
-    {
-        // 1. There leaves some non-ingested data on disk after restart.
-        // 2. There has been no fap at all.
-        // 3. FAP is enabled before, but disabled for now.
-        LOG_DEBUG(log, "FastAddPeer: no find ongoing fap task, region_id={}", region_id);
-        // Still need to clean because there could be data left.
-        cleanTask(tmt, proxy_helper, region_id, false);
-    }
-    else
-    {
-        if (is_legacy_snapshot)
+        else if (prev_state == FAPAsyncTasks::TaskState::Running)
         {
             // Currently, proxy will not actively cancel FAP. So it will not fallback if FAP phase 1 is still running.
             // If we cancel the task asyncly, this will happen in some very corner cases where a legacy snapshot meets a cleaning FAP task.
@@ -272,10 +262,21 @@ void FastAddPeerContext::resolveFapSnapshotState(
                 region_id,
                 magic_enum::enum_name(prev_state));
         }
-        else
-        {
-            // If the region is sent to this store later, it will be with another peer_id.
-            LOG_INFO(log, "FastAddPeer: Cancel running/queueing FAP because region destroyed, region_id={}", region_id);
+        // Finished is handled by result_dropper. InQueue is silently dropped.
+    } else {
+        // If the region is destroyed now and sent to this store later, it must be with another peer_id.
+        // So before handling the destroy, the FAP should be canceled, and its result should be cleaned then.
+        // We wait the FAP to cancel first, although FAP phase 1 and `handleDestroy` doesn't ract for now.
+        auto result = tasks_trace->blockedCancelRunningTask(region_id, false);
+        if likely (result == FAPAsyncTasks::TaskState::NotScheduled) {
+            // Ditto
+            LOG_DEBUG(log, "FastAddPeer: no find ongoing fap task, region_id={}", region_id);
+            cleanTask(tmt, proxy_helper, region_id, false);
+        } else if (result == FAPAsyncTasks::TaskState::Running) {
+            LOG_INFO(log, "FastAddPeer: Cancel running/finished FAP because region destroyed, region_id={}", region_id);
+            // If the region is destroyed when FAP phase is running, the cleanTask is redundant because it has been cleaned in `FastAddPeerImpl`.
+        } else if (result == FAPAsyncTasks::TaskState::Finished) {
+            LOG_INFO(log, "FastAddPeer: Cancel running/finished FAP because region destroyed, region_id={}", region_id);
             cleanTask(tmt, proxy_helper, region_id, false);
         }
     }

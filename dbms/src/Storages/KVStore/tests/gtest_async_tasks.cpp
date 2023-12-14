@@ -25,7 +25,7 @@ TEST(AsyncTasksTest, AsyncTasksNormal)
     using namespace std::chrono_literals;
     using TestAsyncTasks = AsyncTasks<uint64_t, std::function<void()>, void>;
 
-    // Lifetime
+    // Lifetime of tasks
     {
         auto async_tasks = std::make_unique<TestAsyncTasks>(1, 1, 1);
         auto sp_after_sched = SyncPointCtl::enableInScope("after_AsyncTasks::addTask_scheduled");
@@ -48,6 +48,44 @@ TEST(AsyncTasksTest, AsyncTasksNormal)
         ASSERT_TRUE(res);
         t1.join();
         t2.join();
+    }
+
+    // Cancel in queue
+    {
+        auto async_tasks = std::make_unique<TestAsyncTasks>(1, 1, 2);
+        bool finished = false;
+        bool canceled = false;
+        std::mutex mtx;
+        std::unique_lock<std::mutex> cl(mtx);
+
+        auto res1 = async_tasks->addTask(1, [&]() {
+            std::scoped_lock rl(mtx);
+            UNUSED(rl);
+        });
+        ASSERT_TRUE(res1);
+
+        auto res2 = async_tasks->addTaskWithCancel(2, [&]() {
+            finished = true;
+        }, [&]() {
+            canceled = true;
+        });
+        ASSERT_TRUE(res2);
+
+        async_tasks->asyncCancelTask(2);
+        cl.unlock();
+    
+        int elapsed = 0;
+        while (true)
+        {
+            if (canceled)
+            {
+                break;
+            }
+            ++elapsed;
+            std::this_thread::sleep_for(50ms);
+        }
+        ASSERT_TRUE(elapsed < 10);
+        ASSERT_FALSE(finished);
     }
 
     // Block cancel
@@ -83,17 +121,9 @@ TEST(AsyncTasksTest, AsyncTasksNormal)
             {
                 if (f[i])
                     continue;
-                if (async_tasks->blockedCancelRunningTask(i) == TestAsyncTasks::BlockCancelResult::Ok)
-                {
-                    f[i] = true;
-                    EXPECT_THROW(
-                        [&]() {
-                            [[maybe_unused]] auto a = async_tasks->blockedCancelRunningTask(i);
-                            return a;
-                        }(),
-                        Exception);
-                    break;
-                }
+                f[i] = true;
+                [[maybe_unused]] auto a = async_tasks->blockedCancelRunningTask(i);
+                break;
             }
         }
 
@@ -105,10 +135,10 @@ TEST(AsyncTasksTest, AsyncTasksNormal)
         auto async_tasks = std::make_unique<TestAsyncTasks>(1, 1, 100);
 
         int total = 7;
-        int finished = 0;
+        std::atomic_int finished = 0;
         for (int i = 0; i < total; i++)
         {
-            auto res = async_tasks->addTask(i, [i, &async_tasks, &finished]() {
+            auto res = async_tasks->addTaskWithCancel(i, [i, &async_tasks, &finished]() {
                 while (true)
                 {
                     auto cancel_handle = async_tasks->getCancelHandleFromExecutor(i);
@@ -118,9 +148,11 @@ TEST(AsyncTasksTest, AsyncTasksNormal)
                         break;
                     }
                 }
-                finished += 1;
+                finished.fetch_add(1);
+            }, [&](){
+                finished.fetch_add(1);
             });
-            // Ensure thread 1 is the first
+            // Ensure task 1 is the first to handle
             if (i == 0)
                 std::this_thread::sleep_for(10ms);
             ASSERT_TRUE(res);
@@ -130,6 +162,7 @@ TEST(AsyncTasksTest, AsyncTasksNormal)
         {
             std::this_thread::sleep_for(100ms);
             async_tasks->asyncCancelTask(i);
+            // Throw on double cancel
             EXPECT_THROW(async_tasks->asyncCancelTask(i), Exception);
         }
 
