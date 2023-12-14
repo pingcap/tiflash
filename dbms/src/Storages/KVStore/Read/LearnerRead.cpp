@@ -79,10 +79,7 @@ struct UnavailableRegions
             throw RegionException(std::move(ids), status);
     }
 
-    void addRegionWaitIndexTimeout(
-        const RegionID region_id,
-        UInt64 index_to_wait,
-        UInt64 current_applied_index)
+    void addRegionWaitIndexTimeout(const RegionID region_id, UInt64 index_to_wait, UInt64 current_applied_index)
     {
         if (!batch_cop)
         {
@@ -454,9 +451,12 @@ LearnerReadSnapshot doLearnerRead(
             {
                 // Wait index timeout is disabled; or timeout is enabled but not happen yet, wait index for
                 // a specify Region.
-                auto [wait_res, time_cost]
-                    = region->waitIndex(index_to_wait, tmt.waitIndexTimeout(), [&tmt]() { return tmt.checkRunning(); });
-                if (wait_res != WaitIndexResult::Finished)
+                auto [wait_res, time_cost] = region->waitIndex(
+                    index_to_wait,
+                    tmt.waitIndexTimeout(),
+                    [&tmt]() { return tmt.checkRunning(); },
+                    log);
+                if (wait_res != WaitIndexStatus::Finished)
                 {
                     auto current = region->appliedIndex();
                     unavailable_regions.addRegionWaitIndexTimeout(region_to_query.region_id, index_to_wait, current);
