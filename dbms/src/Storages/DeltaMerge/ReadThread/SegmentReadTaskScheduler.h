@@ -17,7 +17,6 @@
 #include <Storages/DeltaMerge/ReadThread/MergedTask.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 
-#include <memory>
 namespace DB::DM
 {
 using SegmentReadTaskPoolList = CircularScanList<SegmentReadTaskPool>;
@@ -43,7 +42,7 @@ public:
     DISALLOW_COPY_AND_MOVE(SegmentReadTaskScheduler);
 
     // Add SegmentReadTaskPool to `read_pools` and index segments into merging_segments.
-    void add(const SegmentReadTaskPoolPtr & pool) LOCKS_EXCLUDED(add_mtx, mtx);
+    void add(const SegmentReadTaskPoolPtr & pool, const LoggerPtr & req_log) LOCKS_EXCLUDED(add_mtx, mtx);
 
     void pushMergedTask(const MergedTaskPtr & p) { merged_task_pool.push(p); }
 
