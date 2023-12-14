@@ -249,8 +249,10 @@ void DAGQueryBlockInterpreter::handleJoin(
     probe_pipeline.streams = input_streams_vec[1 - tiflash_join.build_side_index];
     build_pipeline.streams = input_streams_vec[tiflash_join.build_side_index];
     /// for DAGQueryBlockInterpreter, the schema is already aligned to TiDB's schema after appendFinalProjectForNonRootQueryBlock
-    const auto probe_source_columns = JoinInterpreterHelper::genExpressionAnalyzerSourceColumns(probe_pipeline.firstStream()->getHeader(), {});
-    const auto build_source_columns = JoinInterpreterHelper::genExpressionAnalyzerSourceColumns(build_pipeline.firstStream()->getHeader(), {});
+    const auto probe_source_columns
+        = JoinInterpreterHelper::genExpressionAnalyzerSourceColumns(probe_pipeline.firstStream()->getHeader(), {});
+    const auto build_source_columns
+        = JoinInterpreterHelper::genExpressionAnalyzerSourceColumns(build_pipeline.firstStream()->getHeader(), {});
 
     RUNTIME_ASSERT(!input_streams_vec[0].empty(), log, "left input streams cannot be empty");
     const Block & left_input_header = input_streams_vec[0].back()->getHeader();

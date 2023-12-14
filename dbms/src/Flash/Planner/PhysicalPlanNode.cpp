@@ -65,7 +65,7 @@ String PhysicalPlanNode::toSimpleString()
 
 void PhysicalPlanNode::finalize(const Names & parent_require)
 {
-    if (finalized)
+    if unlikely (finalized)
     {
         LOG_WARNING(log, "Should not reach here, {}-{} already finalized", type.toString(), executor_id);
         return;

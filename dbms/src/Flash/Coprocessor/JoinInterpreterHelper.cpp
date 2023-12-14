@@ -264,9 +264,7 @@ NamesAndTypes TiFlashJoin::genColumnsForOtherJoinFilter(
         }
         return true;
     };
-    if (unlikely(!is_prepare_actions_valid(
-            build_side_index == 1 ? left_cols : right_cols,
-            probe_prepare_join_actions)))
+    if (unlikely(!is_prepare_actions_valid(build_side_index == 1 ? left_cols : right_cols, probe_prepare_join_actions)))
     {
         throw TiFlashException("probe_prepare_join_actions isn't valid", Errors::Coprocessor::Internal);
     }
@@ -289,14 +287,14 @@ NamesAndTypes TiFlashJoin::genColumnsForOtherJoinFilter(
     NamesAndTypes columns_for_other_join_filter;
     std::unordered_set<String> column_set_for_origin_columns;
 
-    auto append_origin_columns
-        = [&columns_for_other_join_filter, &column_set_for_origin_columns](const NamesAndTypes & cols, bool make_nullable) {
-              for (const auto & p : cols)
-              {
-                  columns_for_other_join_filter.emplace_back(p.name, make_nullable ? makeNullable(p.type) : p.type);
-                  column_set_for_origin_columns.emplace(p.name);
-              }
-          };
+    auto append_origin_columns = [&columns_for_other_join_filter,
+                                  &column_set_for_origin_columns](const NamesAndTypes & cols, bool make_nullable) {
+        for (const auto & p : cols)
+        {
+            columns_for_other_join_filter.emplace_back(p.name, make_nullable ? makeNullable(p.type) : p.type);
+            column_set_for_origin_columns.emplace(p.name);
+        }
+    };
     append_origin_columns(left_cols, join.join_type() == tipb::JoinType::TypeRightOuterJoin);
     append_origin_columns(right_cols, join.join_type() == tipb::JoinType::TypeLeftOuterJoin);
 
@@ -356,8 +354,7 @@ void TiFlashJoin::fillJoinOtherConditionsAction(
     const Names & build_key_names,
     JoinNonEqualConditions & join_non_equal_conditions) const
 {
-    auto columns_for_other_join_filter
-        = genColumnsForOtherJoinFilter(left_cols, right_cols, probe_side_prepare_join);
+    auto columns_for_other_join_filter = genColumnsForOtherJoinFilter(left_cols, right_cols, probe_side_prepare_join);
 
     if (join.other_conditions_size() == 0 && join.other_eq_conditions_from_in_size() == 0
         && !join.is_null_aware_semi_join())

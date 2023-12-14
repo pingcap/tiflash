@@ -164,7 +164,8 @@ PhysicalPlanNodePtr PhysicalJoin::build(
     {
         build_key_names_map[original_build_key_names[i]] = build_key_names[i];
     }
-    auto runtime_filter_list = tiflash_join.genRuntimeFilterList(context, build_source_columns, build_key_names_map, log);
+    auto runtime_filter_list
+        = tiflash_join.genRuntimeFilterList(context, build_source_columns, build_key_names_map, log);
     LOG_DEBUG(log, "before register runtime filter list, list size:{}", runtime_filter_list.size());
     context.getDAGContext()->runtime_filter_mgr.registerRuntimeFilterList(runtime_filter_list);
 
@@ -331,35 +332,19 @@ void PhysicalJoin::finalizeImpl(const Names & parent_require)
     FinalizeHelper::checkSchemaContainsParentRequire(schema, parent_require);
     join_ptr->finalize(parent_require);
     auto required_input_columns = join_ptr->getRequiredColumns();
-    std::unordered_set<String> build_schema_sets;
-    for (const auto & name : build_side_prepare_actions->getSampleBlock().getNames())
-    {
-        build_schema_sets.insert(name);
-    }
-    std::unordered_set<String> probe_schema_sets;
-    for (const auto & name : probe_side_prepare_actions->getSampleBlock().getNames())
-    {
-        probe_schema_sets.insert(name);
-    }
+
     Names build_required;
     Names probe_required;
-    bool has_missed_column = false;
-    String missed_column_name;
+    const auto & build_sample_block = build_side_prepare_actions->getSampleBlock();
     for (const auto & name : required_input_columns)
     {
-        if (build_schema_sets.find(name) != build_schema_sets.end())
+        if (build_sample_block.has(name))
             build_required.push_back(name);
-        else if (probe_schema_sets.find(name) != probe_schema_sets.end())
-            probe_required.push_back(name);
         else
-        {
-            has_missed_column = true;
-            missed_column_name = name;
-            break;
-        }
+            /// if name not exists in probe side, it will throw error when call `probe_size_prepare_actions->finalize(probe_required)`
+            probe_required.push_back(name);
     }
-    if (has_missed_column)
-        throw Exception("Meet unknown column: {}", missed_column_name);
+
     build_side_prepare_actions->finalize(build_required);
     auto child_required_columns = build_side_prepare_actions->getRequiredColumns();
     if unlikely (child_required_columns.empty())
@@ -367,6 +352,7 @@ void PhysicalJoin::finalizeImpl(const Names & parent_require)
         child_required_columns.push_back(ExpressionActions::getSmallestColumn(build()->getSchema()));
     }
     build()->finalize(child_required_columns);
+
     probe_side_prepare_actions->finalize(probe_required);
     child_required_columns = probe_side_prepare_actions->getRequiredColumns();
     if unlikely (child_required_columns.empty())
