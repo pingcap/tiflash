@@ -502,6 +502,18 @@ void SegmentReadTask::checkMemTableSet(const ColumnFileSetSnapshotPtr & mem_tabl
     }
 }
 
+void SegmentReadTask::checkMemTableSetReady() const
+{
+    const auto & mem_table_snap = read_snapshot->delta->getMemTableSetSnapshot();
+    for (auto & cf : mem_table_snap->getColumnFiles())
+    {
+        if (auto * in_mem_cf = cf->tryToInMemoryFile(); in_mem_cf)
+        {
+            RUNTIME_CHECK(in_mem_cf->getCache() != nullptr);
+        }
+    }
+}
+
 bool SegmentReadTask::needFetchMemTableSet() const
 {
     // Check if any object of ColumnFileInMemory does not contain data.
@@ -543,12 +555,32 @@ void SegmentReadTask::doFetchPages(const disaggregated::FetchDisaggPagesRequest 
     auto stream_resp = rpc.call(&client_context, request);
     RUNTIME_CHECK(stream_resp != nullptr);
     SCOPE_EXIT({
-        // TODO: Not sure whether we really need this. Maybe RAII is already there?
-        stream_resp->Finish();
+        // Most of the time, it will call `Finish()` and check the status of grpc when `Read()` return false.
+        // `Finish()` will be called here when exceptions thrown.
+        if (unlikely(stream_resp != nullptr))
+        {
+            stream_resp->Finish();
+        }
     });
 
     doFetchPagesImpl(
-        [&stream_resp](disaggregated::PagesPacket & packet) { return stream_resp->Read(&packet); },
+        [&stream_resp](disaggregated::PagesPacket & packet) {
+            if (stream_resp->Read(&packet))
+            {
+                return true;
+            }
+            else
+            {
+                auto status = stream_resp->Finish();
+                stream_resp.reset(); // Reset to avoid calling `Finish()` repeatedly.
+                RUNTIME_CHECK_MSG(
+                    status.ok(),
+                    "status={} message={}",
+                    static_cast<int>(status.error_code()),
+                    status.error_message());
+                return false;
+            }
+        },
         std::unordered_set<UInt64>(request.page_ids().begin(), request.page_ids().end()));
 }
 
@@ -671,6 +703,7 @@ void SegmentReadTask::doFetchPagesImpl(
     wait_write_page_ns += sw_wait_write_page_finished.elapsed();
 
     // Verify all pending pages are now received.
+    checkMemTableSetReady();
     RUNTIME_CHECK_MSG(
         remaining_pages_to_fetch.empty(),
         "Failed to fetch all pages (from {}), remaining_pages_to_fetch={}",
