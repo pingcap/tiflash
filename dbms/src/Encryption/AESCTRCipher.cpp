@@ -24,32 +24,6 @@
 namespace DB::Encryption
 {
 
-#if OPENSSL_VERSION_NUMBER < 0x01010000f
-
-#define InitCipherContext(ctx) \
-    EVP_CIPHER_CTX ctx##_var;  \
-    ctx = &ctx##_var;          \
-    EVP_CIPHER_CTX_init(ctx);
-
-// do nothing
-#define FreeCipherContext(ctx)
-
-#else
-
-#define InitCipherContext(ctx)              \
-    ctx = EVP_CIPHER_CTX_new();             \
-    if ((ctx) != nullptr)                   \
-    {                                       \
-        if (EVP_CIPHER_CTX_reset(ctx) != 1) \
-        {                                   \
-            (ctx) = nullptr;                \
-        }                                   \
-    }
-
-#define FreeCipherContext(ctx) EVP_CIPHER_CTX_free(ctx);
-
-#endif
-
 size_t keySize(EncryptionMethod method)
 {
     switch (method)
@@ -76,14 +50,16 @@ size_t blockSize(EncryptionMethod method)
     case EncryptionMethod::Aes256Ctr:
         return AES_BLOCK_SIZE;
     case EncryptionMethod::SM4Ctr:
-#if defined(SM4_BLOCK_SIZE)
-        static_assert(SM4_BLOCK_SIZE == AES_BLOCK_SIZE);
-        return SM4_BLOCK_SIZE;
-#else
+#if USE_GM_SSL
+        return 16;
+#elif OPENSSL_VERSION_NUMBER < 0x1010100fL || defined(OPENSSL_NO_SM4)
         throw DB::TiFlashException(
             Errors::Encryption::Internal,
             "Unsupported encryption method: {}",
             static_cast<int>(method));
+#else
+        // Openssl support SM4 after 1.1.1 release version.
+        return SM4_BLOCK_SIZE;
 #endif
     default:
         return 0;
@@ -102,7 +78,7 @@ const EVP_CIPHER * getCipher(EncryptionMethod method)
         return EVP_aes_256_ctr();
     case EncryptionMethod::SM4Ctr:
 #if USE_GM_SSL
-        // Use sm4 in GmSSL, don't need to do anything here
+        // Use sm4 in GmSSL, return nullptr
         return nullptr;
 #elif OPENSSL_VERSION_NUMBER < 0x1010100fL || defined(OPENSSL_NO_SM4)
         throw DB::TiFlashException(
@@ -128,7 +104,7 @@ void Cipher(
     size_t data_size,
     String key,
     EncryptionMethod method,
-    const unsigned char * iv,
+    unsigned char * iv,
     bool is_encrypt)
 {
 #if OPENSSL_VERSION_NUMBER < 0x01000200f
@@ -142,13 +118,14 @@ void Cipher(
     throw Exception("OpenSSL version < 1.0.2", ErrorCodes::NOT_IMPLEMENTED);
 #else
     const EVP_CIPHER * cipher = getCipher(method);
-#if USE_GM_SSL
+#if !USE_GM_SSL
+    RUNTIME_CHECK_MSG(cipher != nullptr, "Cipher is not valid.");
+#else
     SM4_KEY sm4_key;
+    // cipher is nullptr means use sm4 in GmSSL
+    // set key for sm4
     if (cipher == nullptr)
-    {
-        // use sm4 in GmSSL
         sm4_set_encrypt_key(&sm4_key, reinterpret_cast<const uint8_t *>(key.c_str()));
-    }
 #endif
     const size_t block_size = blockSize(method);
     uint64_t block_offset = file_offset % block_size;
@@ -163,11 +140,6 @@ void Cipher(
     InitCipherContext(ctx);
     RUNTIME_CHECK_MSG(ctx != nullptr, "Failed to create cipher context.");
     SCOPE_EXIT({ FreeCipherContext(ctx); });
-
-
-#if !USE_GM_SSL
-    RUNTIME_CHECK_MSG(cipher != nullptr, "Cipher is not valid.");
-#endif
 
     if (cipher != nullptr)
     {

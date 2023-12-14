@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/RandomData.h>
+#include <Encryption/AESCTRCipher.h>
 #include <Encryption/AESCTRCipherStream.h>
 #include <Encryption/EncryptedRandomAccessFile.h>
 #include <Encryption/EncryptedWritableFile.h>
@@ -26,11 +27,11 @@
 #include <Storages/KVStore/FFI/FileEncryption.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <gtest/gtest.h>
+#include <openssl/evp.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
 
-#include <random>
 
 #ifdef NDEBUG
 #define DBMS_ASSERT(X)    \
@@ -73,39 +74,8 @@ public:
         InitCipherContext(ctx);
         DBMS_ASSERT(ctx != nullptr);
 
-        const EVP_CIPHER * cipher = nullptr;
-        EncryptionMethod method = std::get<1>(GetParam());
-        switch (method)
-        {
-        case EncryptionMethod::Aes128Ctr:
-            cipher = EVP_aes_128_ctr();
-            break;
-        case EncryptionMethod::Aes192Ctr:
-            cipher = EVP_aes_192_ctr();
-            break;
-        case EncryptionMethod::Aes256Ctr:
-            cipher = EVP_aes_256_ctr();
-            break;
-        case EncryptionMethod::SM4Ctr:
-#if USE_GM_SSL
-            // Use sm4 in GmSSL, don't need to do anything here
-            break;
-#elif OPENSSL_VERSION_NUMBER < 0x1010100fL || defined(OPENSSL_NO_SM4)
-            throw DB::TiFlashException(
-                "Unsupported encryption method: " + std::to_string(static_cast<int>(method)),
-                Errors::Encryption::Internal);
-#else
-            // Openssl support SM4 after 1.1.1 release version.
-            cipher = EVP_sm4_ctr();
-            break;
-#endif
-        default:
-            DBMS_ASSERT(false);
-        }
-#if !USE_GM_SSL
-        DBMS_ASSERT(cipher != nullptr);
-#endif
-
+        const auto method = std::get<1>(GetParam());
+        const EVP_CIPHER * cipher = DB::Encryption::getCipher(method);
 #if USE_GM_SSL
         if (method == EncryptionMethod::SM4Ctr)
         {
@@ -133,10 +103,9 @@ public:
     {
         DBMS_ASSERT(start < end && end <= MAX_SIZE);
         generateCiphertext(iv);
-
         EncryptionMethod method = std::get<1>(GetParam());
-        std::string key_str(reinterpret_cast<const char *>(test::KEY), keySize(method));
-        std::string iv_str(reinterpret_cast<const char *>(iv), 16);
+        std::string key_str(reinterpret_cast<const char *>(test::KEY), DB::Encryption::keySize(method));
+        std::string iv_str(reinterpret_cast<const char *>(iv), DB::Encryption::blockSize(method));
         KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(method, key_str, iv_str);
         auto encryption_info = key_manager->newFile("encryption");
         BlockAccessCipherStreamPtr cipher_stream
@@ -226,6 +195,37 @@ INSTANTIATE_TEST_CASE_P(
 #endif
             )));
 
+
+TEST(CipherTest, CipherTest)
+try
+{
+    const EncryptionMethod methods[] = {
+        EncryptionMethod::Aes128Ctr,
+        EncryptionMethod::Aes192Ctr,
+        EncryptionMethod::Aes256Ctr,
+        EncryptionMethod::SM4Ctr,
+    };
+    for (size_t i = 0; i < 10; ++i)
+    {
+        String plaintext = DB::random::randomString(MAX_SIZE);
+        for (const auto method : methods)
+        {
+            String text = plaintext;
+            String key_str = DB::random::randomString(DB::Encryption::keySize(method));
+            size_t block_size = DB::Encryption::blockSize(method);
+            String iv_str = DB::random::randomString(block_size);
+            unsigned char iv[block_size];
+            memcpy(iv, iv_str.data(), block_size);
+            DB::Encryption::Cipher(0, text.data(), text.size(), key_str, method, iv, true);
+            ASSERT_EQ(plaintext.size(), text.size());
+            ASSERT_NE(0, memcmp(plaintext.data(), text.data(), plaintext.size()));
+            memcpy(iv, iv_str.data(), block_size);
+            DB::Encryption::Cipher(0, text.data(), text.size(), key_str, method, iv, false);
+            ASSERT_EQ(plaintext, text);
+        }
+    }
+}
+CATCH
 
 TEST(PosixWritableFileTest, test)
 try
@@ -319,7 +319,9 @@ try
 
     String file_path = tests::TiFlashTestEnv::getTemporaryPath("enc_posix_wr_file");
 
-    std::string key_str(reinterpret_cast<const char *>(test::KEY), keySize(EncryptionMethod::Aes128Ctr));
+    std::string key_str(
+        reinterpret_cast<const char *>(test::KEY),
+        DB::Encryption::keySize(EncryptionMethod::Aes128Ctr));
     std::string iv_str(reinterpret_cast<const char *>(test::IV_RANDOM), 16);
     KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(EncryptionMethod::Aes128Ctr, key_str, iv_str);
     auto file_provider = std::make_shared<FileProvider>(key_manager, true);
@@ -345,7 +347,9 @@ try
     String file_path = tests::TiFlashTestEnv::getTemporaryPath("enc_posix_wr_file");
     WriteReadableFilePtr file = std::make_shared<PosixWriteReadableFile>(file_path, true, -1, 0600, nullptr, nullptr);
 
-    std::string key_str(reinterpret_cast<const char *>(test::KEY), keySize(EncryptionMethod::Aes128Ctr));
+    std::string key_str(
+        reinterpret_cast<const char *>(test::KEY),
+        DB::Encryption::keySize(EncryptionMethod::Aes128Ctr));
     std::string iv_str(reinterpret_cast<const char *>(test::IV_RANDOM), 16);
     KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(EncryptionMethod::Aes128Ctr, key_str, iv_str);
     auto encryption_info = key_manager->newFile("encryption");
@@ -388,7 +392,9 @@ public:
         String file_path = tests::TiFlashTestEnv::getTemporaryPath(file_name);
         B file = std::make_shared<T>(file_path, true, -1, 0600);
 
-        std::string key_str(reinterpret_cast<const char *>(test::KEY), keySize(EncryptionMethod::Aes128Ctr));
+        std::string key_str(
+            reinterpret_cast<const char *>(test::KEY),
+            DB::Encryption::keySize(EncryptionMethod::Aes128Ctr));
         std::string iv_str(reinterpret_cast<const char *>(test::IV_RANDOM), 16);
         KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(EncryptionMethod::Aes128Ctr, key_str, iv_str);
         auto encryption_info = key_manager->newFile("encryption");
@@ -502,7 +508,9 @@ try
     String file_path = tests::TiFlashTestEnv::getTemporaryPath("enc_posix_file");
     WritableFilePtr file = std::make_shared<PosixWritableFile>(file_path, true, -1, 0600, nullptr);
 
-    std::string key_str(reinterpret_cast<const char *>(test::KEY), keySize(EncryptionMethod::Aes128Ctr));
+    std::string key_str(
+        reinterpret_cast<const char *>(test::KEY),
+        DB::Encryption::keySize(EncryptionMethod::Aes128Ctr));
     std::string iv_str(reinterpret_cast<const char *>(test::IV_RANDOM), 16);
     KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(EncryptionMethod::Aes128Ctr, key_str, iv_str);
     auto encryption_info = key_manager->newFile("encryption");
