@@ -83,7 +83,7 @@ CheckpointIngestInfoPtr CheckpointIngestInfo::restore(
     {
         auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
         auto dm_context = dm_storage->getStore()->newDMContext(tmt.getContext(), tmt.getContext().getSettingsRef());
-        for (const auto & segment_pd : ingest_info_persisted.segments())
+        for (const auto & seg_persisted : ingest_info_persisted.segments())
         {
             ReadBufferFromString buf(seg_persisted.segment_meta());
             DM::Segment::SegmentMetaInfo segment_info;
