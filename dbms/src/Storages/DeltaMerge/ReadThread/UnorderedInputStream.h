@@ -55,17 +55,25 @@ public:
         LOG_DEBUG(log, "Created, pool_id={} ref_no={}", task_pool->poolId(), ref_no);
     }
 
-    ~UnorderedInputStream()
-    {
-        task_pool->decreaseUnorderedInputStreamRefCount();
-        LOG_DEBUG(log, "Destroy, pool_id={} ref_no={}", task_pool->poolId(), ref_no);
-    }
+    void cancel(bool /*kill*/) override { decreaseRefCount(true); }
+
+    ~UnorderedInputStream() override { decreaseRefCount(false); }
 
     String getName() const override { return NAME; }
 
     Block getHeader() const override { return header; }
 
 protected:
+    void decreaseRefCount(bool is_cancel)
+    {
+        bool ori = false;
+        if (is_stopped.compare_exchange_strong(ori, true))
+        {
+            task_pool->decreaseUnorderedInputStreamRefCount();
+            LOG_DEBUG(log, "{}, pool_id={} ref_no={}", is_cancel ? "Cancel" : "Destroy", task_pool->poolId(), ref_no);
+        }
+    }
+
     Block readImpl() override
     {
         FilterPtr filter_ignored;
@@ -140,5 +148,7 @@ private:
     int64_t ref_no;
     size_t total_rows = 0;
     bool task_pool_added;
+
+    std::atomic_bool is_stopped = false;
 };
 } // namespace DB::DM
