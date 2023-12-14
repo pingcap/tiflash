@@ -564,7 +564,7 @@ void SegmentReadTask::doFetchPages(const disaggregated::FetchDisaggPagesRequest 
     });
 
     doFetchPagesImpl(
-        [&stream_resp](disaggregated::PagesPacket & packet) {
+        [&stream_resp, this](disaggregated::PagesPacket & packet) {
             if (stream_resp->Read(&packet))
             {
                 return true;
@@ -575,7 +575,8 @@ void SegmentReadTask::doFetchPages(const disaggregated::FetchDisaggPagesRequest 
                 stream_resp.reset(); // Reset to avoid calling `Finish()` repeatedly.
                 RUNTIME_CHECK_MSG(
                     status.ok(),
-                    "status={} message={}",
+                    "Failed to fetch all pages from {}, status={}, message={}",
+                    *this,
                     static_cast<int>(status.error_code()),
                     status.error_message());
                 return false;
