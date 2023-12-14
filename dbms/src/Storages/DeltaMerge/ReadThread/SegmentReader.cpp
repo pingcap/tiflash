@@ -99,12 +99,7 @@ private:
             }
             if (read_count <= 0)
             {
-                LOG_DEBUG(
-                    log,
-                    "All finished, pool_ids={} segment_id={} read_count={}",
-                    merged_task->getPoolIds(),
-                    merged_task->getSegmentId(),
-                    read_count);
+                LOG_DEBUG(log, "All finished, merged_task=<{}> read_count={}", merged_task->toString(), read_count);
             }
             // If `merged_task` is pushed back to `MergedTaskPool`, it can be accessed by another read thread if it is scheduled.
             // So do not push back to `MergedTaskPool` when exception happened since current read thread can still access to this `merged_task` object and set exception message to it.
