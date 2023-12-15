@@ -95,19 +95,7 @@ void SchemaBuilder<Getter, NameMapper>::applyCreateTable(DatabaseID database_id,
     // here (and store the table info to local).
     // Because `applyPartitionDiffOnLogicalTable` need the logical table for comparing
     // the latest partitioning and the local partitioning in table info to apply the changes.
-    auto db_info = getter.getDatabase(database_id);
-    if (unlikely(db_info == nullptr))
-    {
-        // the database has been dropped
-        LOG_INFO(
-            log,
-            "database is not exist in TiKV, may have been dropped, applyCreateTable is ignored, database_id={} "
-            "table_id={}",
-            database_id,
-            table_id);
-        return;
-    }
-    applyCreateStorageInstance(db_info, table_info, get_by_mvcc);
+    applyCreateStorageInstance(database_id, table_info, get_by_mvcc);
 
     // Register the partition_id -> logical_table_id mapping
     for (const auto & part_def : table_info->partition.definitions)
@@ -763,21 +751,20 @@ void SchemaBuilder<Getter, NameMapper>::applyRecoverLogicalTable(
         for (const auto & part_def : table_info->partition.definitions)
         {
             auto part_table_info = table_info->producePartitionTableInfo(part_def.id, name_mapper);
-            tryRecoverPhysicalTable(db_info, part_table_info);
+            tryRecoverPhysicalTable(db_info->id, part_table_info);
         }
     }
 
-    tryRecoverPhysicalTable(db_info, table_info);
+    tryRecoverPhysicalTable(db_info->id, table_info);
 }
 
 // Return true - the Storage instance exists and is recovered (or not tombstone)
 //        false - the Storage instance does not exist
 template <typename Getter, typename NameMapper>
 bool SchemaBuilder<Getter, NameMapper>::tryRecoverPhysicalTable(
-    const TiDB::DBInfoPtr & db_info,
+    const DatabaseID database_id,
     const TiDB::TableInfoPtr & table_info)
 {
-    assert(db_info != nullptr);
     assert(table_info != nullptr);
     auto & tmt_context = context.getTMTContext();
     auto storage = tmt_context.getStorages().get(keyspace_id, table_info->id);
@@ -795,8 +782,8 @@ bool SchemaBuilder<Getter, NameMapper>::tryRecoverPhysicalTable(
         LOG_INFO(
             log,
             "Trying to recover table {} but it is not marked as tombstone, skip, database_id={} table_id={}",
-            name_mapper.debugCanonicalName(*db_info, *table_info),
-            db_info->id,
+            name_mapper.debugCanonicalName(*table_info, database_id, keyspace_id),
+            database_id,
             table_info->id);
         return true;
     }
@@ -804,8 +791,8 @@ bool SchemaBuilder<Getter, NameMapper>::tryRecoverPhysicalTable(
     LOG_INFO(
         log,
         "Create table {} by recover begin, database_id={} table_id={}",
-        name_mapper.debugCanonicalName(*db_info, *table_info),
-        db_info->id,
+        name_mapper.debugCanonicalName(*table_info, database_id, keyspace_id),
+        database_id,
         table_info->id);
     AlterCommands commands;
     {
@@ -817,15 +804,15 @@ bool SchemaBuilder<Getter, NameMapper>::tryRecoverPhysicalTable(
     storage->updateTombstone(
         alter_lock,
         commands,
-        name_mapper.mapDatabaseName(*db_info),
+        name_mapper.mapDatabaseName(database_id, keyspace_id),
         *table_info,
         name_mapper,
         context);
     LOG_INFO(
         log,
         "Create table {} by recover end, database_id={} table_id={}",
-        name_mapper.debugCanonicalName(*db_info, *table_info),
-        db_info->id,
+        name_mapper.debugCanonicalName(*table_info, database_id, keyspace_id),
+        database_id,
         table_info->id);
     return true;
 }
@@ -880,6 +867,11 @@ bool SchemaBuilder<Getter, NameMapper>::applyCreateDatabase(DatabaseID database_
     auto db_info = getter.getDatabase(database_id);
     if (unlikely(db_info == nullptr))
     {
+        LOG_INFO(
+            log,
+            "Create database is ignored because database is not exist in TiKV,"
+            " database_id={}",
+            database_id);
         return false;
     }
     applyCreateDatabaseByInfo(db_info);
@@ -952,13 +944,9 @@ void SchemaBuilder<Getter, NameMapper>::applyRecoverDatabase(DatabaseID database
 template <typename Getter, typename NameMapper>
 void SchemaBuilder<Getter, NameMapper>::applyDropDatabase(DatabaseID database_id)
 {
-    TiDB::DBInfoPtr db_info = databases.getDBInfo(database_id);
-    if (unlikely(db_info == nullptr))
-    {
-        LOG_INFO(log, "Try to drop database but not found, may has been dropped, database_id={}", database_id);
-        return;
-    }
-
+    // The DDL in TiFlash comes after user executed `DROP DATABASE ...`. So the meta key could
+    // have already been deleted. In order to handle this situation, we should not fetch the
+    // `DatabaseInfo` from TiKV.
     {
         //TODO: it seems may need a lot time, maybe we can do it in a background thread
         auto table_ids = table_id_map.findTablesByDatabaseID(database_id);
@@ -1028,7 +1016,8 @@ std::tuple<NamesAndTypes, Strings> parseColumnsFromTableInfo(const TiDB::TableIn
 }
 
 String createTableStmt(
-    const DBInfo & db_info,
+    const KeyspaceID keyspace_id,
+    const DatabaseID database_id,
     const TableInfo & table_info,
     const SchemaNameMapper & name_mapper,
     const UInt64 tombstone,
@@ -1040,7 +1029,7 @@ String createTableStmt(
     String stmt;
     WriteBufferFromString stmt_buf(stmt);
     writeString("CREATE TABLE ", stmt_buf);
-    writeBackQuotedString(name_mapper.mapDatabaseName(db_info), stmt_buf);
+    writeBackQuotedString(name_mapper.mapDatabaseName(database_id, keyspace_id), stmt_buf);
     writeString(".", stmt_buf);
     writeBackQuotedString(name_mapper.mapTableName(table_info), stmt_buf);
     writeString("(", stmt_buf);
@@ -1080,23 +1069,22 @@ String createTableStmt(
 
 template <typename Getter, typename NameMapper>
 void SchemaBuilder<Getter, NameMapper>::applyCreateStorageInstance(
-    const TiDB::DBInfoPtr & db_info,
+    const DatabaseID database_id,
     const TableInfoPtr & table_info,
     bool is_tombstone)
 {
-    assert(db_info != nullptr);
     assert(table_info != nullptr);
 
     GET_METRIC(tiflash_schema_internal_ddl_count, type_create_table).Increment();
     LOG_INFO(
         log,
         "Create table {} begin, database_id={}, table_id={}",
-        name_mapper.debugCanonicalName(*db_info, *table_info),
-        db_info->id,
+        name_mapper.debugCanonicalName(*table_info, database_id, keyspace_id),
+        database_id,
         table_info->id);
 
     /// Try to recover the existing storage instance
-    if (tryRecoverPhysicalTable(db_info, table_info))
+    if (tryRecoverPhysicalTable(database_id, table_info))
     {
         return;
     }
@@ -1114,13 +1102,13 @@ void SchemaBuilder<Getter, NameMapper>::applyCreateStorageInstance(
         tombstone_ts = context.getTMTContext().getPDClient()->getTS();
     }
 
-    String stmt = createTableStmt(*db_info, *table_info, name_mapper, tombstone_ts, log);
+    String stmt = createTableStmt(keyspace_id, database_id, *table_info, name_mapper, tombstone_ts, log);
 
     LOG_INFO(
         log,
         "Create table {} (database_id={} table_id={}) with statement: {}",
-        name_mapper.debugCanonicalName(*db_info, *table_info),
-        db_info->id,
+        name_mapper.debugCanonicalName(*table_info, database_id, keyspace_id),
+        database_id,
         table_info->id,
         stmt);
 
@@ -1130,7 +1118,7 @@ void SchemaBuilder<Getter, NameMapper>::applyCreateStorageInstance(
     auto * ast_create_query = typeid_cast<ASTCreateQuery *>(ast.get());
     ast_create_query->attach = true;
     ast_create_query->if_not_exists = true;
-    ast_create_query->database = name_mapper.mapDatabaseName(*db_info);
+    ast_create_query->database = name_mapper.mapDatabaseName(database_id, keyspace_id);
 
     InterpreterCreateQuery interpreter(ast, context);
     interpreter.setInternal(true);
@@ -1139,8 +1127,8 @@ void SchemaBuilder<Getter, NameMapper>::applyCreateStorageInstance(
     LOG_INFO(
         log,
         "Creat table {} end, database_id={} table_id={}",
-        name_mapper.debugCanonicalName(*db_info, *table_info),
-        db_info->id,
+        name_mapper.debugCanonicalName(*table_info, database_id, keyspace_id),
+        database_id,
         table_info->id);
 }
 
@@ -1301,7 +1289,7 @@ void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
                 // So `syncAllSchema` will not create tombstone tables. But if there are new rows/new snapshot
                 // sent to TiFlash, TiFlash can create the instance by `applyTable` with force==true in the
                 // related process.
-                applyCreateStorageInstance(db_info, table_info, false);
+                applyCreateStorageInstance(db_info->id, table_info, false);
                 if (table_info->isLogicalPartitionTable())
                 {
                     for (const auto & part_def : table_info->partition.definitions)
@@ -1453,16 +1441,12 @@ bool SchemaBuilder<Getter, NameMapper>::applyTable(
     auto storage = tmt_context.getStorages().get(keyspace_id, physical_table_id);
     if (storage == nullptr)
     {
-        auto db_info = getter.getDatabase(database_id);
-        if (db_info == nullptr)
-        {
-            LOG_ERROR(log, "database is not exist in TiKV, applyTable need retry, database_id={}", database_id);
-            return false;
-        }
+        // The Raft log or snapshot could comes after user executed `DROP DATABASE ...`. In order to
+        // handle this situation, we should not fetch the `DatabaseInfo` from TiKV.
 
         // Create the instance with the latest table info
         // If the table info is get by mvcc, it means the table is actually in "dropped" status
-        applyCreateStorageInstance(db_info, table_info, get_by_mvcc);
+        applyCreateStorageInstance(database_id, table_info, get_by_mvcc);
         return true;
     }
 

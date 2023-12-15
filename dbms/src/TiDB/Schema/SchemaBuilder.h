@@ -74,10 +74,7 @@ private:
     void applyRecoverDatabase(DatabaseID database_id);
 
     void applyCreateTable(DatabaseID database_id, TableID table_id);
-    void applyCreateStorageInstance(
-        const TiDB::DBInfoPtr & db_info,
-        const TiDB::TableInfoPtr & table_info,
-        bool is_tombstone);
+    void applyCreateStorageInstance(DatabaseID database_id, const TiDB::TableInfoPtr & table_info, bool is_tombstone);
 
     void applyDropTable(DatabaseID database_id, TableID table_id);
     /// Parameter schema_name should be mapped.
@@ -85,7 +82,7 @@ private:
 
     void applyRecoverTable(DatabaseID database_id, TiDB::TableID table_id);
     void applyRecoverLogicalTable(const TiDB::DBInfoPtr & db_info, const TiDB::TableInfoPtr & table_info);
-    bool tryRecoverPhysicalTable(const TiDB::DBInfoPtr & db_info, const TiDB::TableInfoPtr & table_info);
+    bool tryRecoverPhysicalTable(DatabaseID database_id, const TiDB::TableInfoPtr & table_info);
 
     void applyPartitionDiff(DatabaseID database_id, TableID table_id);
     void applyPartitionDiffOnLogicalTable(
