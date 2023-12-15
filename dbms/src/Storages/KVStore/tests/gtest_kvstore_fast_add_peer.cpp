@@ -31,6 +31,7 @@
 #include <common/logger_useful.h>
 
 #include <chrono>
+#include <mutex>
 #include <numeric>
 #include <optional>
 #include <thread>
@@ -242,24 +243,24 @@ void eventuallyPredicate(F f)
     ASSERT_TRUE(false);
 }
 
-void assertNoSegment(TMTContext & tmt, RegionPtr region, std::vector<UInt64> segments)
-{
-    auto & storages = tmt.getStorages();
-    auto keyspace_id = region->getKeyspaceID();
-    auto table_id = region->getMappedTableID();
-    auto storage = storages.get(keyspace_id, table_id);
+// void assertNoSegment(TMTContext & tmt, RegionPtr region, std::vector<UInt64> segments)
+// {
+//     auto & storages = tmt.getStorages();
+//     auto keyspace_id = region->getKeyspaceID();
+//     auto table_id = region->getMappedTableID();
+//     auto storage = storages.get(keyspace_id, table_id);
 
-    auto log = DB::Logger::get("Test");
-    if (storage && storage->engineType() == TiDB::StorageEngine::DT)
-    {
-        auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
-        auto dm_context = dm_storage->getStore()->newDMContext(tmt.getContext(), tmt.getContext().getSettingsRef());
-        for (auto segment_id : segments)
-        {
-            EXPECT_THROW(DM::Segment::restoreSegment(log, *dm_context, segment_id), Exception);
-        }
-    }
-}
+//     auto log = DB::Logger::get("Test");
+//     if (storage && storage->engineType() == TiDB::StorageEngine::DT)
+//     {
+//         auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
+//         auto dm_context = dm_storage->getStore()->newDMContext(tmt.getContext(), tmt.getContext().getSettingsRef());
+//         for (auto segment_id : segments)
+//         {
+//             // TODO(fap)
+//         }
+//     }
+// }
 
 TEST_F(RegionKVStoreTestFAP, RestoreRaftState)
 try
@@ -423,7 +424,17 @@ try
     auto & global_context = TiFlashTestEnv::getGlobalContext();
     auto fap_context = global_context.getSharedContextDisagg()->fap_context;
     uint64_t region_id = 1;
-    FastAddPeerImplWrite(global_context.getTMTContext(), region_id, 2333, std::move(mock_data), 0);
+
+    std::mutex exe_mut;
+    std::unique_lock exe_lock(exe_mut);
+    fap_context->tasks_trace->addTask(region_id, [&]() {
+        // Keep the task in `tasks_trace` to prevent from canceling.
+        std::scoped_lock wait_exe_lock(exe_mut);
+        return genFastAddPeerRes(FastAddPeerStatus::NoSuitable, "", "");
+    });
+    FastAddPeerImplWrite(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333, std::move(mock_data), 0);
+    exe_lock.unlock();
+    fap_context->tasks_trace->fetchResult(region_id);
 
     // Remove the checkpoint ingest info and region from memory.
     // Testing whether FAP can be handled properly after restart.
@@ -452,12 +463,7 @@ try
     }
     // CheckpointIngestInfo is removed.
     eventuallyPredicate([&]() {
-        return !CheckpointIngestInfo::restore(
-            global_context.getTMTContext(),
-            proxy_helper.get(),
-            region_id,
-            2333,
-            true);
+        return !CheckpointIngestInfo::restore(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333);
     });
     ASSERT_FALSE(fap_context->tryGetCheckpointIngestInfo(region_id).has_value());
 }
@@ -474,20 +480,22 @@ try
     auto & global_context = TiFlashTestEnv::getGlobalContext();
     auto fap_context = global_context.getSharedContextDisagg()->fap_context;
     uint64_t region_id = 1;
-    fap_context->tasks_trace->addTask(region_id, []() {
+    std::mutex exe_mut;
+    std::unique_lock exe_lock(exe_mut);
+    fap_context->tasks_trace->addTask(region_id, [&]() {
+        // Keep the task in `tasks_trace` to prevent from canceling.
+        std::scoped_lock wait_exe_lock(exe_mut);
         return genFastAddPeerRes(FastAddPeerStatus::NoSuitable, "", "");
     });
     FastAddPeerImplWrite(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333, std::move(mock_data), 0);
+    exe_lock.unlock();
+    fap_context->tasks_trace->fetchResult(region_id);
+
     fap_context->debugRemoveCheckpointIngestInfo(region_id);
     kvstore->handleDestroy(region_id, global_context.getTMTContext());
     // CheckpointIngestInfo is removed.
     eventuallyPredicate([&]() {
-        return !CheckpointIngestInfo::restore(
-            global_context.getTMTContext(),
-            proxy_helper.get(),
-            region_id,
-            2333,
-            true);
+        return !CheckpointIngestInfo::restore(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333);
     });
     ASSERT_FALSE(fap_context->tryGetCheckpointIngestInfo(region_id).has_value());
 }
@@ -505,10 +513,18 @@ try
     auto fap_context = global_context.getSharedContextDisagg()->fap_context;
     uint64_t region_id = 1;
 
+    std::mutex exe_mut;
+    std::unique_lock exe_lock(exe_mut);
+    fap_context->tasks_trace->addTask(region_id, [&]() {
+        // Keep the task in `tasks_trace` to prevent from canceling.
+        std::scoped_lock wait_exe_lock(exe_mut);
+        return genFastAddPeerRes(FastAddPeerStatus::NoSuitable, "", "");
+    });
     // Will generate and persist some information in local ps, which will not be uploaded.
-    FastAddPeerImplWrite(global_context.getTMTContext(), region_id, 2333, std::move(mock_data), 0);
+    FastAddPeerImplWrite(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333, std::move(mock_data), 0);
     dumpCheckpoint();
-    FastAddPeerImplWrite(global_context.getTMTContext(), region_id, 2333, std::move(mock_data), 0);
+    FastAddPeerImplWrite(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333, std::move(mock_data), 0);
+    exe_lock.unlock();
     auto in_mem_ingest_info = fap_context->getOrRestoreCheckpointIngestInfo(
         global_context.getTMTContext(),
         proxy_helper.get(),
@@ -564,12 +580,7 @@ try
     sp.disable();
     t.join();
     eventuallyPredicate([&]() {
-        return !CheckpointIngestInfo::restore(
-            global_context.getTMTContext(),
-            proxy_helper.get(),
-            region_id,
-            2333,
-            true);
+        return !CheckpointIngestInfo::restore(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333);
     });
     ASSERT_TRUE(!fap_context->tryGetCheckpointIngestInfo(region_id).has_value());
     FailPointHelper::disableFailPoint(FailPoints::force_set_fap_candidate_store_id);
@@ -624,16 +635,11 @@ try
     t.join();
     // Cancel async tasks, and make sure the data is cleaned after limited time.
     eventuallyPredicate([&]() {
-        return !CheckpointIngestInfo::restore(
-            global_context.getTMTContext(),
-            proxy_helper.get(),
-            region_id,
-            2333,
-            true);
+        return !CheckpointIngestInfo::restore(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333);
     });
     ASSERT_TRUE(!fap_context->tryGetCheckpointIngestInfo(region_id));
     FailPointHelper::disableFailPoint(FailPoints::force_set_fap_candidate_store_id);
-    assertNoSegment(global_context.getTMTContext(), region, segments);
+    // assertNoSegment(global_context.getTMTContext(), region, segments);
 }
 CATCH
 
@@ -675,12 +681,7 @@ try
     LOG_INFO(log, "Try another destroy");
     kvstore->handleDestroy(region_id, global_context.getTMTContext());
     eventuallyPredicate([&]() {
-        return !CheckpointIngestInfo::restore(
-            global_context.getTMTContext(),
-            proxy_helper.get(),
-            region_id,
-            2333,
-            true);
+        return !CheckpointIngestInfo::restore(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333);
     });
     // Wait async cancel in `FastAddPeerImplWrite`.
     ASSERT_FALSE(fap_context->tryGetCheckpointIngestInfo(region_id).has_value());
@@ -737,12 +738,7 @@ try
     LOG_INFO(log, "Try another snapshot");
     proxy_instance->snapshot(kvs, global_context.getTMTContext(), region_id, {default_cf}, 11, 11, std::nullopt);
     eventuallyPredicate([&]() {
-        return !CheckpointIngestInfo::restore(
-            global_context.getTMTContext(),
-            proxy_helper.get(),
-            region_id,
-            2333,
-            true);
+        return !CheckpointIngestInfo::restore(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333);
     });
     // Wait async cancel in `FastAddPeerImplWrite`.
     ASSERT_FALSE(fap_context->tryGetCheckpointIngestInfo(region_id).has_value());

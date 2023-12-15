@@ -71,8 +71,7 @@ struct CheckpointIngestInfo
         TMTContext & tmt,
         const TiFlashRaftProxyHelper * proxy_helper,
         UInt64 region_id,
-        UInt64 peer_id,
-        bool allow_segment_noexist);
+        UInt64 peer_id);
 
     // Only call to clean dangling CheckpointIngestInfo.
     static bool forciblyClean(

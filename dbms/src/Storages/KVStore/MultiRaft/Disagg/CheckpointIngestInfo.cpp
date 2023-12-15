@@ -34,8 +34,7 @@ CheckpointIngestInfoPtr CheckpointIngestInfo::restore(
     TMTContext & tmt,
     const TiFlashRaftProxyHelper * proxy_helper,
     UInt64 region_id,
-    UInt64 peer_id,
-    bool allow_segment_noexist)
+    UInt64 peer_id)
 {
     GET_METRIC(tiflash_fap_task_result, type_restore).Increment();
     RegionPtr region;
