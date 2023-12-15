@@ -84,25 +84,38 @@ RNReadSegmentTaskPtr RNReadSegmentTask::buildFromEstablishResp(
     std::vector<UInt64> delta_tinycf_ids;
     std::vector<size_t> delta_tinycf_sizes;
     {
+        // The number of ColumnFileTiny of MemTableSet is unknown, but there is a very high probability that it is zero.
+        // So ignoring the number of ColumnFileTiny of MemTableSet is better than always adding all the number of ColumnFile of MemTableSet when reserving.
         auto persisted_cfs = segment_snap->delta->getPersistedFileSetSnapshot();
         delta_tinycf_ids.reserve(persisted_cfs->getColumnFileCount());
         delta_tinycf_sizes.reserve(persisted_cfs->getColumnFileCount());
-        for (const auto & cfs : persisted_cfs->getColumnFiles())
+    }
+    auto extract_remote_pages = [&delta_tinycf_ids, &delta_tinycf_sizes](const ColumnFiles & cfs) {
+        UInt64 count = 0;
+        for (const auto & cf : cfs)
         {
-            if (auto * tiny = cfs->tryToTinyFile(); tiny)
+            if (auto * tiny = cf->tryToTinyFile(); tiny)
             {
                 delta_tinycf_ids.emplace_back(tiny->getDataPageId());
                 delta_tinycf_sizes.emplace_back(tiny->getDataPageSize());
+                ++count;
             }
         }
-    }
+        return count;
+    };
+    auto memory_page_count = extract_remote_pages(segment_snap->delta->getMemTableSetSnapshot()->getColumnFiles());
+    auto persisted_page_count
+        = extract_remote_pages(segment_snap->delta->getPersistedFileSetSnapshot()->getColumnFiles());
 
     LOG_DEBUG(
         segment_snap->log,
-        "Build RNReadSegmentTask: memtable_cfs={} persisted_cfs={} delta_index={}",
+        "Build RNReadSegmentTask: memtable_cfs={} persisted_cfs={} delta_index={} memory_page_count={} "
+        "persisted_page_count={}",
         segment_snap->delta->getMemTableSetSnapshot()->getColumnFileCount(),
         segment_snap->delta->getPersistedFileSetSnapshot()->getColumnFileCount(),
-        segment_snap->delta->getSharedDeltaIndex()->toString());
+        segment_snap->delta->getSharedDeltaIndex()->toString(),
+        memory_page_count,
+        persisted_page_count);
 
     return std::shared_ptr<RNReadSegmentTask>(new RNReadSegmentTask(RNReadSegmentMeta{
         .keyspace_id = keyspace_id,
@@ -124,15 +137,20 @@ RNReadSegmentTaskPtr RNReadSegmentTask::buildFromEstablishResp(
 
 void RNReadSegmentTask::initColumnFileDataProvider(const RNLocalPageCacheGuardPtr & pages_guard)
 {
-    auto & data_provider = meta.segment_snap->delta->getPersistedFileSetSnapshot()->data_provider;
-    RUNTIME_CHECK(std::dynamic_pointer_cast<ColumnFileDataProviderNop>(data_provider));
-
     auto page_cache = meta.dm_context->db_context.getSharedContextDisagg()->rn_page_cache;
-    data_provider = std::make_shared<ColumnFileDataProviderRNLocalPageCache>(
+    auto data_provider = std::make_shared<ColumnFileDataProviderRNLocalPageCache>(
         page_cache,
         pages_guard,
         meta.store_id,
         KeyspaceTableID{meta.keyspace_id, meta.physical_table_id});
+
+    auto & persisted_cf_set_data_provider = meta.segment_snap->delta->getPersistedFileSetSnapshot()->data_provider;
+    RUNTIME_CHECK(std::dynamic_pointer_cast<ColumnFileDataProviderNop>(persisted_cf_set_data_provider));
+    persisted_cf_set_data_provider = data_provider;
+
+    auto & memory_cf_set_data_provider = meta.segment_snap->delta->getMemTableSetSnapshot()->data_provider;
+    RUNTIME_CHECK(std::dynamic_pointer_cast<ColumnFileDataProviderNop>(memory_cf_set_data_provider));
+    memory_cf_set_data_provider = data_provider;
 }
 
 void RNReadSegmentTask::initInputStream(
