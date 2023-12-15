@@ -48,13 +48,13 @@ mysql> set @@tidb_allow_mpp=1; set @@tidb_opt_enable_late_materialization=0; sel
 +------+
 
 # BatchCop
-mysql> set @@tidb_allow_mpp=0; set @@tidb_allow_tiflash_cop = 1; set @@tidb_allow_batch_cop = 2; set @@tidb_opt_enable_late_materialization=1; select (select t.value from test.t where t.id = t1.id order by t.value limit 1) xx from test.t1 order by t1.value limit 5;
+mysql> set @@tidb_allow_mpp=0; set @@tidb_allow_batch_cop = 2; set @@tidb_opt_enable_late_materialization=1; select (select t.value from test.t where t.id = t1.id order by t.value limit 1) xx from test.t1 order by t1.value limit 5;
 +------+
 | xx   |
 +------+
 |    5 |
 +------+
-mysql> set @@tidb_allow_mpp=0; set @@tidb_allow_tiflash_cop = 1; set @@tidb_allow_batch_cop = 2; set @@tidb_opt_enable_late_materialization=0; select (select t.value from test.t where t.id = t1.id order by t.value limit 1) xx from test.t1 order by t1.value limit 5;
+mysql> set @@tidb_allow_mpp=0; set @@tidb_allow_batch_cop = 2; set @@tidb_opt_enable_late_materialization=0; select (select t.value from test.t where t.id = t1.id order by t.value limit 1) xx from test.t1 order by t1.value limit 5;
 +------+
 | xx   |
 +------+
@@ -62,13 +62,13 @@ mysql> set @@tidb_allow_mpp=0; set @@tidb_allow_tiflash_cop = 1; set @@tidb_allo
 +------+
 
 # Cop
-mysql> set @@tidb_allow_mpp=0; set @@tidb_allow_tiflash_cop = 1; set @@tidb_allow_batch_cop = 0; set @@tidb_opt_enable_late_materialization=1; select (select t.value from test.t where t.id = t1.id order by t.value limit 1) xx from test.t1 order by t1.value limit 5;
+mysql> set @@tidb_allow_mpp=0; set @@tidb_allow_batch_cop = 0; set @@tidb_opt_enable_late_materialization=1; select (select t.value from test.t where t.id = t1.id order by t.value limit 1) xx from test.t1 order by t1.value limit 5;
 +------+
 | xx   |
 +------+
 |    5 |
 +------+
-mysql> set @@tidb_allow_mpp=0; set @@tidb_allow_tiflash_cop = 1; set @@tidb_allow_batch_cop = 0; set @@tidb_opt_enable_late_materialization=0; select (select t.value from test.t where t.id = t1.id order by t.value limit 1) xx from test.t1 order by t1.value limit 5;
+mysql> set @@tidb_allow_mpp=0; set @@tidb_allow_batch_cop = 0; set @@tidb_opt_enable_late_materialization=0; select (select t.value from test.t where t.id = t1.id order by t.value limit 1) xx from test.t1 order by t1.value limit 5;
 +------+
 | xx   |
 +------+
