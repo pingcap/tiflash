@@ -22,6 +22,7 @@
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzerHelper.h>
 #include <Functions/FunctionFactory.h>
+#include <Functions/FunctionsJson.h>
 #include <Interpreters/Context.h>
 #include <TestUtils/ColumnsToTiPBExpr.h>
 #include <TestUtils/FunctionTestUtils.h>
@@ -92,7 +93,7 @@ template <typename ExpectedT, typename ActualT, typename ExpectedDisplayT, typen
 ::testing::AssertionResult columnEqual(
     const ColumnPtr & expected,
     const ColumnPtr & actual,
-    const ICollator * collator,
+    const TiDB::ITiDBCollator * collator,
     bool is_floating_point)
 {
     ASSERT_EQUAL(expected->getName(), actual->getName(), "Column name mismatch");
@@ -158,7 +159,7 @@ template <typename ExpectedT, typename ActualT, typename ExpectedDisplayT, typen
 ::testing::AssertionResult columnEqual(
     const ColumnWithTypeAndName & expected,
     const ColumnWithTypeAndName & actual,
-    const ICollator * collator)
+    const TiDB::ITiDBCollator * collator)
 {
     if (auto ret = dataTypeEqual(expected.type, actual.type); !ret)
         return ret;
@@ -342,10 +343,13 @@ ColumnWithTypeAndName executeFunction(
     for (size_t i = 0; i < columns.size(); ++i)
         argument_column_numbers.push_back(i);
 
+    /// Replace `std::random_device` with `std::chrono::system_clock` here to avoid
+    /// exceptions like 'random_device failed to open /dev/urandom: Operation not permitted'.
+    /// The reason of exceptions is unknown, but the probability of its occurrence in unittests
+    /// TestDateTimeDayMonthYear.dayMonthYearTest is not low.
+    /// Since this function is just used for testing, using current timestamp as a random seed is not a problem.
+    std::mt19937 g(std::chrono::system_clock::to_time_t(std::chrono::system_clock::now()));
     /// shuffle input columns to assure function correctly use physical offsets instead of logical offsets
-    std::random_device rd;
-    std::mt19937 g(rd());
-
     std::shuffle(argument_column_numbers.begin(), argument_column_numbers.end(), g);
     const auto columns_reordered = toColumnsReordered(columns, argument_column_numbers);
 
@@ -594,6 +598,48 @@ ColumnWithTypeAndName FunctionTest::executeFunctionWithMetaData(
     const TiDB::TiDBCollatorPtr & collator)
 {
     return DB::tests::executeFunction(*context, func_name, argument_column_numbers, columns, collator, meta.val, false);
+}
+
+ColumnWithTypeAndName FunctionTest::executeCastJsonAsStringFunction(
+    const ColumnWithTypeAndName & input_column,
+    const tipb::FieldType & field_type)
+{
+    auto & factory = FunctionFactory::instance();
+    ColumnsWithTypeAndName columns({input_column});
+    ColumnNumbers argument_column_numbers;
+    for (size_t i = 0; i < columns.size(); ++i)
+        argument_column_numbers.push_back(i);
+
+    ColumnsWithTypeAndName arguments;
+    for (const auto argument_column_number : argument_column_numbers)
+        arguments.push_back(columns.at(argument_column_number));
+
+    const String func_name = "cast_json_as_string";
+    auto builder = factory.tryGet(func_name, *context);
+    if (!builder)
+        throw TiFlashTestException(fmt::format("Function {} not found!", func_name));
+    auto func = builder->build(arguments, nullptr);
+    auto * function_build_ptr = builder.get();
+    if (auto * default_function_builder = dynamic_cast<DefaultFunctionBuilder *>(function_build_ptr);
+        default_function_builder)
+    {
+        auto * function_impl = default_function_builder->getFunctionImpl().get();
+        if (auto * function_cast_json_as_string = dynamic_cast<FunctionCastJsonAsString *>(function_impl);
+            function_cast_json_as_string)
+        {
+            function_cast_json_as_string->setOutputTiDBFieldType(field_type);
+        }
+        else
+        {
+            throw TiFlashTestException(fmt::format("Function {} not found!", func_name));
+        }
+    }
+
+    Block block(columns);
+    block.insert({nullptr, func->getReturnType(), "res"});
+    func->execute(block, argument_column_numbers, columns.size());
+
+    return block.getByPosition(columns.size());
 }
 
 } // namespace tests

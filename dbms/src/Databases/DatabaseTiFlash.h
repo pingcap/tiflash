@@ -45,8 +45,7 @@ public:
 
     void loadTables(Context & context, ThreadPool * thread_pool, bool has_force_restore_data_flag) override;
 
-    void createTable(const Context & context, const String & table_name, const StoragePtr & table, const ASTPtr & query)
-        override;
+    void createTable(const Context & context, const String & table_name, const ASTPtr & query) override;
 
     void removeTable(const Context & context, const String & table_name) override;
 
@@ -90,7 +89,7 @@ public:
 
     bool isTombstone() const override { return tombstone != 0; }
     Timestamp getTombstone() const override { return tombstone; }
-    void alterTombstone(const Context & context, Timestamp tombstone_) override;
+    void alterTombstone(const Context & context, Timestamp tombstone_, const TiDB::DBInfoPtr & new_db_info) override;
 
     void drop(const Context & context) override;
 

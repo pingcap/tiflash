@@ -585,14 +585,14 @@ ColumnsWithTypeAndName createColumns(const ColumnsWithTypeAndName & cols);
 ::testing::AssertionResult columnEqual(
     const ColumnPtr & expected,
     const ColumnPtr & actual,
-    const ICollator * collator = nullptr,
+    const TiDB::ITiDBCollator * collator = nullptr,
     bool is_floating_point = false);
 
 // ignore name
 ::testing::AssertionResult columnEqual(
     const ColumnWithTypeAndName & expected,
     const ColumnWithTypeAndName & actual,
-    const ICollator * collator = nullptr);
+    const TiDB::ITiDBCollator * collator = nullptr);
 
 ::testing::AssertionResult blockEqual(const Block & expected, const Block & actual);
 
@@ -838,6 +838,10 @@ public:
         const ColumnsWithTypeAndName & columns,
         const FuncMetaData & meta,
         const TiDB::TiDBCollatorPtr & collator = nullptr);
+
+    ColumnWithTypeAndName executeCastJsonAsStringFunction(
+        const ColumnWithTypeAndName & input_column,
+        const tipb::FieldType & field_type);
 
     DAGContext & getDAGContext()
     {

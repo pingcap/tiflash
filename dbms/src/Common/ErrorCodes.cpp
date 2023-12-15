@@ -216,7 +216,7 @@ extern const int WRONG_PASSWORD = 193;
 extern const int REQUIRED_PASSWORD = 194;
 extern const int IP_ADDRESS_NOT_ALLOWED = 195;
 extern const int UNKNOWN_ADDRESS_PATTERN_TYPE = 196;
-extern const int SERVER_REVISION_IS_TOO_OLD = 197;
+// extern const int SERVER_REVISION_IS_TOO_OLD = 197; // Not Used anymore
 extern const int DNS_ERROR = 198;
 extern const int UNKNOWN_QUOTA = 199;
 extern const int QUOTA_DOESNT_ALLOW_KEYS = 200;
@@ -445,6 +445,7 @@ extern const int S3_ERROR = 11000;
 extern const int CANNOT_SCHEDULE_TASK = 11001;
 extern const int S3_LOCK_CONFLICT = 11002;
 extern const int DT_DELTA_INDEX_ERROR = 11003;
+extern const int FETCH_PAGES_ERROR = 11004;
 } // namespace ErrorCodes
 
 } // namespace DB

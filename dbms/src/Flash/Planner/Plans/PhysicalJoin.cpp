@@ -89,7 +89,7 @@ PhysicalPlanNodePtr PhysicalJoin::build(
 
     /// add necessary transformation if the join key is an expression
 
-    bool is_tiflash_right_join = tiflash_join.isTiFlashRightOuterJoin();
+    bool is_tiflash_right_join = isRightOuterJoin(tiflash_join.kind);
 
     JoinNonEqualConditions join_non_equal_conditions;
     // prepare probe side
@@ -169,14 +169,12 @@ PhysicalPlanNodePtr PhysicalJoin::build(
         probe_key_names,
         build_key_names,
         tiflash_join.kind,
-        tiflash_join.strictness,
         join_req_id,
-        fine_grained_shuffle.enable(),
         fine_grained_shuffle.stream_count,
         max_bytes_before_external_join,
         build_spill_config,
         probe_spill_config,
-        settings.join_restore_concurrency,
+        RestoreConfig{settings.join_restore_concurrency, 0, 0},
         join_output_column_names,
         [&](const OperatorSpillContextPtr & operator_spill_context) {
             if (context.getDAGContext() != nullptr)
@@ -191,8 +189,7 @@ PhysicalPlanNodePtr PhysicalJoin::build(
         settings.shallow_copy_cross_probe_threshold,
         match_helper_name,
         flag_mapped_entry_helper_name,
-        0,
-        0,
+        settings.join_probe_cache_columns_threshold,
         context.isTest(),
         runtime_filter_list);
 
@@ -306,7 +303,7 @@ void PhysicalJoin::buildPipeline(PipelineBuilder & builder, Context & context, P
         executor_id,
         build()->getSchema(),
         fine_grained_shuffle,
-        log->identifier(),
+        req_id,
         build(),
         join_ptr,
         build_side_prepare_actions);
@@ -320,7 +317,7 @@ void PhysicalJoin::buildPipeline(PipelineBuilder & builder, Context & context, P
     auto join_probe = std::make_shared<PhysicalJoinProbe>(
         executor_id,
         schema,
-        log->identifier(),
+        req_id,
         probe(),
         join_ptr,
         probe_side_prepare_actions);

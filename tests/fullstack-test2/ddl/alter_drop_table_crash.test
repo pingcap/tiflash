@@ -1,0 +1,96 @@
+# Copyright 2023 PingCAP, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+
+mysql> drop table if exists test.t
+mysql> create table test.t(a int not null, b int not null)
+mysql> alter table test.t set tiflash replica 1 location labels 'rack', 'host', 'abc'
+
+func> wait_table test t
+
+mysql> insert into test.t values (1, 1)
+mysql> insert into test.t values (1, 2)
+
+# ensure table is sync to tiflash
+mysql> select table_schema,table_name,replica_count,location_labels,available from information_schema.tiflash_replica where table_schema='test' and table_name='t';
++--------------+------------+---------------+-----------------+-----------+
+| table_schema | table_name | replica_count | location_labels | available |
++--------------+------------+---------------+-----------------+-----------+
+| test         | t          |             1 | rack,host,abc   |         1 |
++--------------+------------+---------------+-----------------+-----------+
+>> DBGInvoke __init_fail_point()
+
+# Process crash when drop table metadata is done but not for its data dir.
+>> DBGInvoke __enable_fail_point(exception_between_drop_meta_and_data)
+
+mysql> truncate table test.t;
+
+func> wait_table test t
+
+# After restart, test.t is truncated, it is empty
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;
+
+
+
+mysql> insert into test.t values (1, 1), (1, 2);
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;
++---+---+
+| a | b |
++---+---+
+| 1 | 1 |
+| 1 | 2 |
++---+---+
+
+>> DBGInvoke __enable_fail_point(exception_drop_table_during_remove_meta)
+mysql> truncate table test.t ;
+
+func> wait_table test t
+
+# After restart, test.t is truncated, it is empty
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;
+
+mysql> insert into test.t values (1, 1), (1, 2);
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;
+
++---+---+
+| a | b |
++---+---+
+| 1 | 1 |
+| 1 | 2 |
++---+---+
+
+mysql> drop table if exists test.t
+
+## Drop database will actually drop table data physically.
+mysql> drop table if exists test_new.t2;
+mysql> drop database if exists test_new;
+
+mysql> create database if not exists test_new;
+mysql> create table test_new.t2(a int, b int)
+mysql> alter table test_new.t2 set tiflash replica 1
+func> wait_table test_new t2
+mysql> insert into test_new.t2 values (1, 1),(1, 2);
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test_new.t2;
++------+------+
+| a    | b    |
++------+------+
+|    1 |    1 |
+|    1 |    2 |
++------+------+
+
+mysql> drop table if exists test_new.t2;
+mysql> drop database if exists test_new;
+
+>> DBGInvoke __disable_fail_point(exception_between_drop_meta_and_data)
+>> DBGInvoke __disable_fail_point(exception_drop_table_during_remove_meta)

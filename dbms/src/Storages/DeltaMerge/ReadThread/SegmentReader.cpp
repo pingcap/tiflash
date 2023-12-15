@@ -99,12 +99,7 @@ private:
             }
             if (read_count <= 0)
             {
-                LOG_DEBUG(
-                    log,
-                    "All finished, pool_ids={} segment_id={} read_count={}",
-                    merged_task->getPoolIds(),
-                    merged_task->getSegmentId(),
-                    read_count);
+                LOG_DEBUG(log, "All finished, merged_task=<{}> read_count={}", merged_task->toString(), read_count);
             }
             // If `merged_task` is pushed back to `MergedTaskPool`, it can be accessed by another read thread if it is scheduled.
             // So do not push back to `MergedTaskPool` when exception happened since current read thread can still access to this `merged_task` object and set exception message to it.
@@ -116,7 +111,11 @@ private:
         }
         catch (DB::Exception & e)
         {
-            LOG_ERROR(log, "ErrMsg: {} StackTrace {}", e.message(), e.getStackTrace().toString());
+            LOG_ERROR(
+                merged_task != nullptr ? merged_task->getCurrentLogger() : log,
+                "ErrMsg: {} StackTrace {}",
+                e.message(),
+                e.getStackTrace().toString());
             if (merged_task != nullptr)
             {
                 merged_task->setException(e);
@@ -222,8 +221,7 @@ void SegmentReaderPoolManager::init(UInt32 logical_cpu_cores, double read_thread
 
 void SegmentReaderPoolManager::addTask(MergedTaskPtr && task)
 {
-    static std::hash<uint64_t> hash_func;
-    auto idx = hash_func(task->getSegmentId()) % reader_pools.size();
+    auto idx = std::hash<GlobalSegmentID>{}(task->getSegmentId()) % reader_pools.size();
     reader_pools[idx]->addTask(std::move(task));
 }
 

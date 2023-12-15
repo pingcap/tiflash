@@ -75,8 +75,16 @@ public:
     /// Restore the metadata of this instance.
     /// Only called after reboot.
     static ColumnFilePersistedSetPtr restore(DMContext & context, const RowKeyRange & segment_range, PageIdU64 id);
+    /// Restore from a checkpoint from other peer.
+    /// Only used in FAP.
+    static ColumnFilePersistedSetPtr restore( //
+        DMContext & context,
+        const RowKeyRange & segment_range,
+        ReadBuffer & buf,
+        PageIdU64 id);
 
     static ColumnFilePersistedSetPtr createFromCheckpoint( //
+        const LoggerPtr & parent_log,
         DMContext & context,
         UniversalPageStoragePtr temp_ps,
         const RowKeyRange & segment_range,
@@ -105,6 +113,9 @@ public:
     /// Thread safe part end
     String detailInfo() const { return columnFilesToString(persisted_files); }
 
+    const ColumnFilePersisteds & getFiles() const { return persisted_files; }
+
+    void saveMeta(WriteBuffer & buf) const;
     void saveMeta(WriteBatches & wbs) const;
 
     void recordRemoveColumnFilesPages(WriteBatches & wbs) const;

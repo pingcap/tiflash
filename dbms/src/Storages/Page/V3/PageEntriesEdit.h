@@ -149,10 +149,13 @@ inline EditRecordType typeFromProto(CheckpointProto::EditType t)
     case CheckpointProto::EDIT_TYPE_DELETE:
         return EditRecordType::VAR_DELETE;
     default:
-        RUNTIME_CHECK_MSG(false, "Unsupported Proto Edit Type {}", magic_enum::enum_name(t));
+        throw Exception(
+            ErrorCodes::LOGICAL_ERROR,
+            fmt::format("Unsupported Proto Edit Type {}", magic_enum::enum_name(t)));
     }
 }
 
+/// PageEntriesEdit records the change of pages for a WriteBatch.
 /// Page entries change to apply to PageDirectory
 template <typename PageIdType>
 class PageEntriesEdit
@@ -270,6 +273,7 @@ public:
 
     size_t size() const { return records.size(); }
 
+    /// EditRecord records the change of a page for a Write.
     struct EditRecord
     {
         EditRecordType type{EditRecordType::DEL};
@@ -341,7 +345,7 @@ struct fmt::formatter<DB::PS::V3::PageVersion>
     template <typename FormatContext>
     auto format(const DB::PS::V3::PageVersion & ver, FormatContext & ctx) const
     {
-        return format_to(ctx.out(), "{}.{}", ver.sequence, ver.epoch);
+        return fmt::format_to(ctx.out(), "{}.{}", ver.sequence, ver.epoch);
     }
 };
 
@@ -353,7 +357,7 @@ struct fmt::formatter<DB::PS::V3::PageEntriesEdit<DB::PageIdV3Internal>::EditRec
     template <typename FormatContext>
     auto format(const DB::PS::V3::PageEntriesEdit<DB::PageIdV3Internal>::EditRecord & rec, FormatContext & ctx) const
     {
-        return format_to(
+        return fmt::format_to(
             ctx.out(),
             "{{type:{}, page_id:{}, ori_id:{}, version:{}, entry:{}, being_ref_count:{}}}",
             DB::PS::V3::typeToString(rec.type),
@@ -373,7 +377,7 @@ struct fmt::formatter<DB::PS::V3::PageEntriesEdit<DB::UniversalPageId>::EditReco
     template <typename FormatContext>
     auto format(const DB::PS::V3::PageEntriesEdit<DB::UniversalPageId>::EditRecord & rec, FormatContext & ctx) const
     {
-        return format_to(
+        return fmt::format_to(
             ctx.out(),
             "{{type:{}, page_id:{}, ori_id:{}, version:{}, entry:{}, being_ref_count:{}}}",
             DB::PS::V3::typeToString(rec.type),

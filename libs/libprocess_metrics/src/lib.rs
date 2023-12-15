@@ -59,7 +59,6 @@ pub extern "C" fn get_process_metrics() -> ProcessMetricsInfo {
 #[cfg(target_os = "linux")]
 #[no_mangle]
 pub extern "C" fn get_process_metrics() -> ProcessMetricsInfo {
-    use procfs;
     let p = match procfs::process::Process::myself() {
         Ok(p) => p,
         Err(..) => {

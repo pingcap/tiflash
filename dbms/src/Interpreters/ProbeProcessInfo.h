@@ -38,6 +38,7 @@ struct ProbeProcessInfo
     size_t start_row;
     size_t end_row;
     bool all_rows_joined_finish;
+    UInt64 cache_columns_threshold;
 
     /// these should be inited before probe each block
     bool prepare_for_probe_done = false;
@@ -51,6 +52,11 @@ struct ProbeProcessInfo
     /// for hash probe
     Columns materialized_columns;
     ColumnRawPtrs key_columns;
+    /// TODO: consider adding a virtual column in Sender side to avoid computing cost and potential inconsistency by heterogeneous envs(AMD64, ARM64)
+    /// Note: 1. Not sure, if inconsistency will do happen in heterogeneous envs
+    ///       2. Virtual column would take up a little more network bandwidth, might lead to poor performance if network was bottleneck
+    /// Currently, the computation cost is tolerable, since it's a very simple crc32 hash algorithm, and heterogeneous envs support is not considered
+    std::unique_ptr<WeakHash32> hash_data; /// to reproduce hash values according to build stage
 
     /// for cross probe
     Block result_block_schema;
@@ -67,13 +73,14 @@ struct ProbeProcessInfo
     /// used for left outer semi/left outer anti join
     bool has_row_null = false;
 
-    explicit ProbeProcessInfo(UInt64 max_block_size_)
+    ProbeProcessInfo(UInt64 max_block_size_, UInt64 cache_columns_threshold_)
         : partition_index(0)
         , max_block_size(max_block_size_)
         , min_result_block_size((max_block_size + 1) / 2)
         , start_row(0)
         , end_row(0)
-        , all_rows_joined_finish(true){};
+        , all_rows_joined_finish(true)
+        , cache_columns_threshold(cache_columns_threshold_){};
 
     void resetBlock(Block && block_, size_t partition_index_ = 0);
     template <bool is_shallow_cross_probe_mode>
@@ -118,7 +125,10 @@ struct ProbeProcessInfo
         const Names & key_names,
         const String & filter_column,
         ASTTableJoin::Kind kind,
-        ASTTableJoin::Strictness strictness);
+        ASTTableJoin::Strictness strictness,
+        bool need_compute_hash,
+        const TiDB::TiDBCollators & collators,
+        size_t restore_round);
     void prepareForCrossProbe(
         const String & filter_column,
         ASTTableJoin::Kind kind,

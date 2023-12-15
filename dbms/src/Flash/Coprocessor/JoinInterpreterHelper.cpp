@@ -73,7 +73,7 @@ std::pair<ASTTableJoin::Kind, size_t> getJoinKindAndBuildSideIndex(
             {{tipb::JoinType::TypeRightOuterJoin, 0}, {ASTTableJoin::Kind::LeftOuter, 0}},
             {{tipb::JoinType::TypeRightOuterJoin, 1}, {ASTTableJoin::Kind::RightOuter, 1}},
             {{tipb::JoinType::TypeSemiJoin, 0}, {ASTTableJoin::Kind::RightSemi, 0}},
-            {{tipb::JoinType::TypeSemiJoin, 1}, {ASTTableJoin::Kind::Inner, 1}},
+            {{tipb::JoinType::TypeSemiJoin, 1}, {ASTTableJoin::Kind::Semi, 1}},
             {{tipb::JoinType::TypeAntiSemiJoin, 0}, {ASTTableJoin::Kind::RightAnti, 0}},
             {{tipb::JoinType::TypeAntiSemiJoin, 1}, {ASTTableJoin::Kind::Anti, 1}},
             {{tipb::JoinType::TypeLeftOuterSemiJoin, 1}, {ASTTableJoin::Kind::LeftOuterSemi, 1}},
@@ -89,7 +89,7 @@ std::pair<ASTTableJoin::Kind, size_t> getJoinKindAndBuildSideIndex(
             {{tipb::JoinType::TypeLeftOuterJoin, 1}, {ASTTableJoin::Kind::Cross_LeftOuter, 1}},
             {{tipb::JoinType::TypeRightOuterJoin, 0}, {ASTTableJoin::Kind::Cross_LeftOuter, 0}},
             {{tipb::JoinType::TypeRightOuterJoin, 1}, {ASTTableJoin::Kind::Cross_LeftOuter, 0}},
-            {{tipb::JoinType::TypeSemiJoin, 1}, {ASTTableJoin::Kind::Cross, 1}},
+            {{tipb::JoinType::TypeSemiJoin, 1}, {ASTTableJoin::Kind::Cross_Semi, 1}},
             {{tipb::JoinType::TypeAntiSemiJoin, 1}, {ASTTableJoin::Kind::Cross_Anti, 1}},
             {{tipb::JoinType::TypeLeftOuterSemiJoin, 1}, {ASTTableJoin::Kind::Cross_LeftOuterSemi, 1}},
             {{tipb::JoinType::TypeAntiLeftOuterSemiJoin, 1}, {ASTTableJoin::Kind::Cross_LeftOuterAnti, 1}}};
@@ -119,8 +119,10 @@ std::pair<ASTTableJoin::Kind, size_t> getJoinKindAndBuildSideIndex(
     auto join_type_it = join_type_map.find(std::make_pair(tipb_join_type, inner_index));
     if (unlikely(join_type_it == join_type_map.end()))
         throw TiFlashException(
-            fmt::format("Unknown join type in dag request {} {}", tipb_join_type, inner_index),
-            Errors::Coprocessor::BadRequest);
+            Errors::Coprocessor::BadRequest,
+            "Unknown join type in dag request {} {}",
+            fmt::underlying(tipb_join_type),
+            inner_index);
     return join_type_it->second;
 }
 
@@ -212,8 +214,6 @@ TiFlashJoin::TiFlashJoin(const tipb::Join & join_, bool is_test) // NOLINT(cppco
     , join_key_collators(getJoinKeyCollators(join_, join_key_types, is_test))
 {
     std::tie(kind, build_side_index) = getJoinKindAndBuildSideIndex(join);
-    strictness
-        = (isSemiJoin() && !isRightSemiFamily(kind)) ? ASTTableJoin::Strictness::Any : ASTTableJoin::Strictness::All;
 }
 
 String TiFlashJoin::genMatchHelperName(const Block & header1, const Block & header2) const
@@ -333,9 +333,9 @@ NamesAndTypes TiFlashJoin::genJoinOutputColumns(
     };
 
     append_output_columns(left_input_header, join.join_type() == tipb::JoinType::TypeRightOuterJoin);
-    if (!isSemiJoin())
+    if (!isSemiFamily() && !isLeftOuterSemiFamily())
     {
-        /// for semi join, the columns from right table will be ignored
+        /// for (left outer) semi join, the columns from right table will be ignored
         append_output_columns(right_input_header, join.join_type() == tipb::JoinType::TypeLeftOuterJoin);
     }
 

@@ -20,10 +20,6 @@
 
 #include <atomic>
 
-namespace Poco
-{
-class Logger;
-}
 
 namespace DB::PS::tests
 {
@@ -66,8 +62,6 @@ public:
 
 struct StressEnv
 {
-    static Poco::Logger * logger;
-
     size_t num_writers = 1;
     size_t num_readers = 4;
     bool init_pages = false;
@@ -115,10 +109,13 @@ struct StressEnv
         );
     }
 
-    static void initGlobalLogger();
+    LoggerPtr logger;
+
 
     static StressEnv parse(int argc, char ** argv);
 
     void setup();
+
+    static LoggerPtr buildLogger(bool enable_color);
 };
 } // namespace DB::PS::tests

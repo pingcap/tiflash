@@ -136,14 +136,14 @@ private:
             size_t id_,
             size_t runner_cnt_,
             ReadIndexWorkers & workers_,
-            Poco::Logger * logger_,
+            LoggerPtr logger_,
             FnGetTickTime fn_min_dur_handle_region_,
             AsyncWaker::NotifierPtr global_notifier_);
 
         const size_t id;
         const size_t runner_cnt;
         ReadIndexWorkers & workers;
-        Poco::Logger * logger;
+        LoggerPtr logger;
         const FnGetTickTime fn_min_dur_handle_region;
         /// The workers belonged to runner share same notifier.
         AsyncWaker::NotifierPtr global_notifier;
@@ -157,7 +157,7 @@ private:
     std::vector<std::unique_ptr<ReadIndexRunner>> runners;
     /// Each worker controls read-index process of region(region_id % worker_cnt == worker_id).
     ReadIndexWorkers workers;
-    Poco::Logger * logger;
+    LoggerPtr logger;
 };
 
 struct ReadIndexNotifyCtrl;
@@ -167,17 +167,17 @@ struct RegionNotifyMap : MutexLockWrap
 {
     using Data = std::unordered_set<RegionID>;
 
-    bool empty() const
+    bool empty() const NO_THREAD_SAFETY_ANALYSIS
     {
         auto _ = genLockGuard();
         return data.empty();
     }
-    void add(RegionID id)
+    void add(RegionID id) NO_THREAD_SAFETY_ANALYSIS
     {
         auto _ = genLockGuard();
         data.emplace(id);
     }
-    Data popAll()
+    Data popAll() NO_THREAD_SAFETY_ANALYSIS
     {
         auto _ = genLockGuard();
         return std::move(data);
@@ -229,13 +229,13 @@ struct ReadIndexDataNode : MutexLockWrap
     {
         using Data = std::deque<std::pair<Timestamp, ReadIndexFuturePtr>>;
 
-        void add(Timestamp ts, ReadIndexFuturePtr f)
+        void add(Timestamp ts, ReadIndexFuturePtr f) NO_THREAD_SAFETY_ANALYSIS
         {
             auto _ = genLockGuard();
             waiting_tasks.emplace_back(ts, std::move(f));
         }
 
-        std::optional<Data> popAll()
+        std::optional<Data> popAll() NO_THREAD_SAFETY_ANALYSIS
         {
             auto _ = genLockGuard();
             if (waiting_tasks.empty())
@@ -243,7 +243,7 @@ struct ReadIndexDataNode : MutexLockWrap
             return std::move(waiting_tasks);
         }
 
-        size_t size() const
+        size_t size() const NO_THREAD_SAFETY_ANALYSIS
         {
             auto _ = genLockGuard();
             return waiting_tasks.size();

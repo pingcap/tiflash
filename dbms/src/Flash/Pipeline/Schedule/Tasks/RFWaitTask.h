@@ -64,14 +64,15 @@ public:
 
     static void submitReadyRfsAndSegmentTaskPool(
         const RuntimeFilteList & ready_rf_list,
-        const DM::SegmentReadTaskPoolPtr & task_pool)
+        const DM::SegmentReadTaskPoolPtr & task_pool,
+        const LoggerPtr & log)
     {
         for (const RuntimeFilterPtr & rf : ready_rf_list)
         {
             auto rs_operator = rf->parseToRSOperator(task_pool->getColumnToRead());
             task_pool->appendRSOperator(rs_operator);
         }
-        DM::SegmentReadTaskScheduler::instance().add(task_pool);
+        DM::SegmentReadTaskScheduler::instance().add(task_pool, log);
     }
 
 private:
@@ -82,7 +83,7 @@ private:
         filterAndMoveReadyRfs(waiting_rf_list, ready_rf_list);
         if (waiting_rf_list.empty() || stopwatch.elapsed() >= max_wait_time_ns)
         {
-            submitReadyRfsAndSegmentTaskPool(ready_rf_list, task_pool);
+            submitReadyRfsAndSegmentTaskPool(ready_rf_list, task_pool, log);
             return ExecTaskStatus::FINISHED;
         }
         return ExecTaskStatus::WAITING;

@@ -17,11 +17,9 @@
 #include <Storages/DeltaMerge/ReadThread/MergedTask.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 
-#include <memory>
 namespace DB::DM
 {
 using SegmentReadTaskPoolList = CircularScanList<SegmentReadTaskPool>;
-
 // SegmentReadTaskScheduler is a global singleton.
 // All SegmentReadTaskPool will be added to it and be scheduled by it.
 
@@ -44,34 +42,34 @@ public:
     DISALLOW_COPY_AND_MOVE(SegmentReadTaskScheduler);
 
     // Add SegmentReadTaskPool to `read_pools` and index segments into merging_segments.
-    void add(const SegmentReadTaskPoolPtr & pool);
+    void add(const SegmentReadTaskPoolPtr & pool, const LoggerPtr & req_log) LOCKS_EXCLUDED(add_mtx, mtx);
 
     void pushMergedTask(const MergedTaskPtr & p) { merged_task_pool.push(p); }
 
 private:
     SegmentReadTaskScheduler();
 
-    // Choose segment to read.
-    // Returns <MergedTaskPtr, run_next_schedule_immediately>
-    std::pair<MergedTaskPtr, bool> scheduleMergedTask();
-
     void setStop();
     bool isStop() const;
-    bool schedule();
-    void schedLoop();
     bool needScheduleToRead(const SegmentReadTaskPoolPtr & pool);
-    SegmentReadTaskPools getPoolsUnlock(const std::vector<uint64_t> & pool_ids);
-    // <seg_id, pool_ids>
-    std::optional<std::pair<uint64_t, std::vector<uint64_t>>> scheduleSegmentUnlock(
-        const SegmentReadTaskPoolPtr & pool);
-    SegmentReadTaskPoolPtr scheduleSegmentReadTaskPoolUnlock();
+
+    bool schedule() LOCKS_EXCLUDED(mtx);
+    void schedLoop() LOCKS_EXCLUDED(mtx);
+    // Choose segment to read, returns <MergedTaskPtr, run_next_schedule_immediately>.
+    std::pair<MergedTaskPtr, bool> scheduleMergedTask() EXCLUSIVE_LOCKS_REQUIRED(mtx);
+    SegmentReadTaskPoolPtr scheduleSegmentReadTaskPoolUnlock() EXCLUSIVE_LOCKS_REQUIRED(mtx);
+    // Returns <seg_id, pool_ids>.
+    std::optional<std::pair<GlobalSegmentID, std::vector<UInt64>>> scheduleSegmentUnlock(
+        const SegmentReadTaskPoolPtr & pool) EXCLUSIVE_LOCKS_REQUIRED(mtx);
+    SegmentReadTaskPools getPoolsUnlock(const std::vector<uint64_t> & pool_ids) EXCLUSIVE_LOCKS_REQUIRED(mtx);
 
     // To restrict the instantaneous concurrency of `add` and avoid `schedule` from always failing to acquire the lock.
-    std::mutex add_mtx;
+    std::mutex add_mtx ACQUIRED_BEFORE(mtx);
+
     std::mutex mtx;
-    SegmentReadTaskPoolList read_pools;
-    // table_id -> {seg_id -> pool_ids, seg_id -> pool_ids, ...}
-    std::unordered_map<int64_t, std::unordered_map<uint64_t, std::vector<uint64_t>>> merging_segments;
+    SegmentReadTaskPoolList read_pools GUARDED_BY(mtx);
+    // GlobalSegmentID -> pool_ids
+    MergingSegments merging_segments GUARDED_BY(mtx);
 
     MergedTaskPool merged_task_pool;
 

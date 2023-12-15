@@ -33,8 +33,9 @@ namespace DB
 {
 namespace tests
 {
-class RegionKVStoreTest;
-}
+class KVStoreTestBase;
+class RegionKVStoreOldTest;
+} // namespace tests
 
 class Region;
 using RegionPtr = std::shared_ptr<Region>;
@@ -169,11 +170,12 @@ public:
     // Check if we can read by this index.
     bool checkIndex(UInt64 index) const;
 
-    // Return <WaitIndexResult, time cost(seconds)> for wait-index.
-    std::tuple<WaitIndexResult, double> waitIndex(
+    // Return <WaitIndexStatus, time cost(seconds)> for wait-index.
+    std::tuple<WaitIndexStatus, double> waitIndex(
         UInt64 index,
         UInt64 timeout_ms,
-        std::function<bool(void)> && check_running);
+        std::function<bool(void)> && check_running,
+        const LoggerPtr & log);
 
     // Requires RegionMeta's lock
     UInt64 appliedIndex() const;
@@ -236,7 +238,8 @@ public:
 private:
     friend class RegionRaftCommandDelegate;
     friend class RegionMockTest;
-    friend class tests::RegionKVStoreTest;
+    friend class tests::KVStoreTestBase;
+    friend class tests::RegionKVStoreOldTest;
 
     // Private methods no need to lock mutex, normally
 
@@ -301,7 +304,7 @@ public:
     RegionRaftCommandDelegate() = delete;
 
 private:
-    friend class tests::RegionKVStoreTest;
+    friend class tests::KVStoreTestBase;
 
     Regions execBatchSplit(
         const raft_cmdpb::AdminRequest & request,

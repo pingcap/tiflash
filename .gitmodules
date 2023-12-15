@@ -94,13 +94,16 @@
 	url = https://github.com/guanzhi/GmSSL.git
 [submodule "contrib/aws"]
 	path = contrib/aws
-	url = https://github.com/JaySon-Huang/aws-sdk-cpp.git
+	url = https://github.com/aws/aws-sdk-cpp.git
+	# ignore dirty status since we apply patches to
+	# fix bug when using Poco client
+	ignore = dirty
 [submodule "contrib/aws-c-auth"]
 	path = contrib/aws-c-auth
 	url = https://github.com/awslabs/aws-c-auth.git
 [submodule "contrib/aws-c-cal"]
 	path = contrib/aws-c-cal
-	url = https://github.com/ClickHouse/aws-c-cal.git
+	url = https://github.com/awslabs/aws-c-cal.git
 [submodule "contrib/aws-c-common"]
 	path = contrib/aws-c-common
 	url = https://github.com/awslabs/aws-c-common.git
@@ -137,3 +140,6 @@
 [submodule "contrib/qpl"]
 	path = contrib/qpl
 	url = https://github.com/intel/qpl.git
+[submodule "contrib/simdjson"]
+	path = contrib/simdjson
+	url = https://github.com/simdjson/simdjson

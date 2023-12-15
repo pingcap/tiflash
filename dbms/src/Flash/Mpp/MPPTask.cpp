@@ -487,9 +487,6 @@ void MPPTask::preprocess()
             throw Exception("task not in running state, may be cancelled");
         for (auto & r : dag_context->getCoprocessorReaders())
             receiver_set->addCoprocessorReader(r);
-        const auto & receiver_opt = dag_context->getDisaggregatedComputeExchangeReceiver();
-        if (receiver_opt.has_value())
-            receiver_set->addExchangeReceiver(receiver_opt->first, receiver_opt->second);
         new_thread_count_of_mpp_receiver += receiver_set->getExternalThreadCnt();
     }
     auto end_time = Clock::now();
@@ -565,22 +562,11 @@ void MPPTask::runImpl()
 #endif
 
         auto result = query_executor_holder->execute();
-        LOG_INFO(log, "mpp task finish execute, success: {}", result.is_success);
-        if (likely(result.is_success))
-        {
-            /// Need to finish writing before closing the receiver.
-            /// For example, for the query with limit, calling `finishWrite` first to ensure that the limit executor on the TiDB side can end normally,
-            /// otherwise the upstream MPPTasks will fail because of the closed receiver and then passing the error to TiDB.
-            ///
-            ///               ┌──tiflash(limit)◄─┬─tiflash(no limit)
-            /// tidb(limit)◄──┼──tiflash(limit)◄─┼─tiflash(no limit)
-            ///               └──tiflash(limit)◄─┴─tiflash(no limit)
-
-            // finish MPPTunnel
-            finishWrite();
-            // finish receiver
-            receiver_set->close();
-        }
+        LOG_INFO(
+            log,
+            "mpp task finish execute, is_success: {}, status: {}",
+            result.is_success,
+            magic_enum::enum_name(status.load()));
         auto cpu_ru = query_executor_holder->collectRequestUnit();
         auto read_ru = dag_context->getReadRU();
         LOG_INFO(log, "mpp finish with request unit: cpu={} read={}", cpu_ru, read_ru);
@@ -597,7 +583,21 @@ void MPPTask::runImpl()
             runtime_statistics.rows,
             runtime_statistics.blocks,
             runtime_statistics.bytes);
+        if (likely(result.is_success))
+        {
+            /// Need to finish writing before closing the receiver.
+            /// For example, for the query with limit, calling `finishWrite` first to ensure that the limit executor on the TiDB side can end normally,
+            /// otherwise the upstream MPPTasks will fail because of the closed receiver and then passing the error to TiDB.
+            ///
+            ///               ┌──tiflash(limit)◄─┬─tiflash(no limit)
+            /// tidb(limit)◄──┼──tiflash(limit)◄─┼─tiflash(no limit)
+            ///               └──tiflash(limit)◄─┴─tiflash(no limit)
 
+            // finish MPPTunnel
+            finishWrite();
+            // finish receiver
+            receiver_set->close();
+        }
         result.verify();
     }
     catch (...)

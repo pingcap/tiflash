@@ -23,6 +23,7 @@
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionsGrouping.h>
+#include <Functions/FunctionsJson.h>
 #include <Functions/FunctionsTiDBConversion.h>
 #include <TiDB/Decode/TypeMapping.h>
 
@@ -244,7 +245,7 @@ String DAGExpressionAnalyzerHelper::buildCastFunctionInternal(
 {
     static const String tidb_cast_name = "tidb_cast";
 
-    String result_name = genFuncString(tidb_cast_name, argument_names, {nullptr});
+    String result_name = genFuncString(tidb_cast_name, argument_names, {nullptr}, {&field_type});
     if (actions->getSampleBlock().has(result_name))
         return result_name;
 
@@ -278,6 +279,76 @@ String DAGExpressionAnalyzerHelper::buildCastFunction(
 
     // todo extract in_union from tipb::Expr
     return buildCastFunctionInternal(analyzer, {name, type_expr_name}, false, expr.field_type(), actions);
+}
+
+String DAGExpressionAnalyzerHelper::buildSingleParamJsonRelatedFunctions(
+    DAGExpressionAnalyzer * analyzer,
+    const tipb::Expr & expr,
+    const ExpressionActionsPtr & actions)
+{
+    auto func_name = getFunctionName(expr);
+    if unlikely (expr.children_size() != 1)
+        throw TiFlashException(
+            fmt::format("{} function only support one argument", func_name),
+            Errors::Coprocessor::BadRequest);
+    if unlikely (!exprHasValidFieldType(expr))
+        throw TiFlashException(
+            fmt::format("{} function without valid field type", func_name),
+            Errors::Coprocessor::BadRequest);
+
+    const auto & input_expr = expr.children(0);
+    String arg = analyzer->getActions(input_expr, actions);
+    const auto & collator = getCollatorFromExpr(expr);
+    String result_name = genFuncString(func_name, {arg}, {collator}, {&input_expr.field_type(), &expr.field_type()});
+    if (actions->getSampleBlock().has(result_name))
+        return result_name;
+
+    const FunctionBuilderPtr & ifunction_builder = FunctionFactory::instance().get(func_name, analyzer->getContext());
+    auto * function_build_ptr = ifunction_builder.get();
+    if (auto * function_builder = dynamic_cast<DefaultFunctionBuilder *>(function_build_ptr); function_builder)
+    {
+        auto * function_impl = function_builder->getFunctionImpl().get();
+        if (auto * function_cast_int_as_json = dynamic_cast<FunctionCastIntAsJson *>(function_impl);
+            function_cast_int_as_json)
+        {
+            function_cast_int_as_json->setInputTiDBFieldType(input_expr.field_type());
+        }
+        else if (auto * function_cast_string_as_json = dynamic_cast<FunctionCastStringAsJson *>(function_impl);
+                 function_cast_string_as_json)
+        {
+            function_cast_string_as_json->setInputTiDBFieldType(input_expr.field_type());
+            function_cast_string_as_json->setOutputTiDBFieldType(expr.field_type());
+        }
+        else if (auto * function_cast_time_as_json = dynamic_cast<FunctionCastTimeAsJson *>(function_impl);
+                 function_cast_time_as_json)
+        {
+            function_cast_time_as_json->setInputTiDBFieldType(input_expr.field_type());
+        }
+        else if (auto * function_json_unquote = dynamic_cast<FunctionJsonUnquote *>(function_impl);
+                 function_json_unquote)
+        {
+            bool valid_check
+                = !(isScalarFunctionExpr(input_expr) && input_expr.sig() == tipb::ScalarFuncSig::CastJsonAsString);
+            function_json_unquote->setNeedValidCheck(valid_check);
+        }
+        else if (auto * function_cast_json_as_string = dynamic_cast<FunctionCastJsonAsString *>(function_impl);
+                 function_cast_json_as_string)
+        {
+            function_cast_json_as_string->setOutputTiDBFieldType(expr.field_type());
+        }
+        else
+        {
+            throw Exception(fmt::format("Unexpected func {} in buildSingleParamJsonRelatedFunctions", func_name));
+        }
+    }
+    else
+    {
+        throw Exception(fmt::format("Unexpected func {} in buildSingleParamJsonRelatedFunctions", func_name));
+    }
+
+    const ExpressionAction & action = ExpressionAction::applyFunction(ifunction_builder, {arg}, result_name, collator);
+    actions->add(action);
+    return result_name;
 }
 
 template <typename Impl>
@@ -478,6 +549,11 @@ DAGExpressionAnalyzerHelper::FunctionBuilderMap DAGExpressionAnalyzerHelper::fun
      {"ifNull", DAGExpressionAnalyzerHelper::buildIfNullFunction},
      {"multiIf", DAGExpressionAnalyzerHelper::buildMultiIfFunction},
      {"tidb_cast", DAGExpressionAnalyzerHelper::buildCastFunction},
+     {"cast_int_as_json", DAGExpressionAnalyzerHelper::buildSingleParamJsonRelatedFunctions},
+     {"cast_string_as_json", DAGExpressionAnalyzerHelper::buildSingleParamJsonRelatedFunctions},
+     {"cast_time_as_json", DAGExpressionAnalyzerHelper::buildSingleParamJsonRelatedFunctions},
+     {"cast_json_as_string", DAGExpressionAnalyzerHelper::buildSingleParamJsonRelatedFunctions},
+     {"json_unquote", DAGExpressionAnalyzerHelper::buildSingleParamJsonRelatedFunctions},
      {"and", DAGExpressionAnalyzerHelper::buildLogicalFunction},
      {"or", DAGExpressionAnalyzerHelper::buildLogicalFunction},
      {"xor", DAGExpressionAnalyzerHelper::buildLogicalFunction},

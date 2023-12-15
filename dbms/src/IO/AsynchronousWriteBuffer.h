@@ -57,7 +57,7 @@ private:
     }
 
 public:
-    AsynchronousWriteBuffer(WriteBuffer & out_)
+    explicit AsynchronousWriteBuffer(WriteBuffer & out_)
         : WriteBuffer(nullptr, 0)
         , out(out_)
         , memory(out.buffer().size())

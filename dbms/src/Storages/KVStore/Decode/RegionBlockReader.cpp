@@ -90,7 +90,7 @@ bool RegionBlockReader::read(Block & block, const RegionDataReadInfoList & data_
             "schema_snapshot->column_defines is {}, "
             "decoding_snapshot_epoch is {}, "
             "block schema is {} ",
-            schema_snapshot->pk_type,
+            magic_enum::enum_name(schema_snapshot->pk_type),
             print_map(schema_snapshot->sorted_column_id_with_pos),
             print_column_defines(schema_snapshot->column_defines),
             schema_snapshot->decoding_schema_epoch,

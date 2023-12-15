@@ -59,7 +59,7 @@ public:
             = std::make_shared<StoragePathPool>(db_context->getPathPool().withTable("test", "DMFile_Test", false));
         storage_pool = std::make_shared<StoragePool>(*db_context, NullspaceID, /*ns_id*/ 100, *path_pool, "test.t1");
         column_cache = std::make_shared<ColumnCache>();
-        dm_context = std::make_unique<DMContext>( //
+        dm_context = DMContext::createUnique(
             *db_context,
             path_pool,
             storage_pool,

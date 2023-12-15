@@ -22,6 +22,12 @@
 
 namespace DB
 {
+namespace tests
+{
+class KVStoreTestBase;
+class RegionKVStoreOldTest;
+} // namespace tests
+
 class Region;
 using RegionPtr = std::shared_ptr<Region>;
 using RegionMap = std::unordered_map<RegionID, RegionPtr>;
@@ -60,11 +66,14 @@ public:
 
     void clear();
 
-    // TODO Used by RegionKVStoreTest, using a friend decl here.
-    RootMap::iterator split(const TiKVRangeKey & new_start);
     void tryMergeEmpty();
 
+    // TODO this friend class decl is not working.
+    RootMap::iterator split(const TiKVRangeKey & new_start);
+
 private:
+    friend class ::DB::tests::KVStoreTestBase;
+    friend class ::DB::tests::RegionKVStoreOldTest;
     void tryMergeEmpty(RootMap::iterator remove_it);
 
 private:

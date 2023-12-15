@@ -29,6 +29,7 @@
 #include <TiDB/Schema/TiDB.h>
 #include <common/logger_useful.h>
 
+#include <algorithm>
 #include <cmath>
 
 namespace DB
@@ -540,6 +541,10 @@ try
         part_id_set.emplace(definition.id);
     }
 
+    /// Treat `adding_definitions` and `dropping_definitions` as the normal `definitions`
+    /// in TiFlash. Because TiFlash need to create the physical IStorage instance
+    /// to handle the data on those partitions during DDL.
+
     auto add_defs_json = json->getArray("adding_definitions");
     if (!add_defs_json.isNull())
     {
@@ -851,8 +856,6 @@ TableInfo::TableInfo(const String & table_info_json, KeyspaceID keyspace_id_)
 String TableInfo::serialize() const
 try
 {
-    std::stringstream buf;
-
     Poco::JSON::Object::Ptr json = new Poco::JSON::Object();
     json->set("id", id);
     json->set("keyspace_id", keyspace_id);
@@ -867,8 +870,8 @@ try
         auto col_obj = col_info.getJSONObject();
         cols_arr->add(col_obj);
     }
-
     json->set("cols", cols_arr);
+
     Poco::JSON::Array::Ptr index_arr = new Poco::JSON::Array();
     for (const auto & index_info : index_infos)
     {
@@ -904,8 +907,8 @@ try
 
     json->set("tiflash_replica", replica_info.getJSONObject());
 
+    std::stringstream buf;
     json->stringify(buf);
-
     return buf.str();
 }
 catch (const Poco::Exception & e)
@@ -1155,9 +1158,10 @@ TableInfoPtr TableInfo::producePartitionTableInfo(TableID table_or_partition_id,
     // Some sanity checks for partition table.
     if (unlikely(!(is_partition_table && partition.enable)))
         throw Exception(
-            "Table ID " + std::to_string(id) + " seeing partition ID " + std::to_string(table_or_partition_id)
-                + " but it's not a partition table",
-            DB::ErrorCodes::LOGICAL_ERROR);
+            DB::ErrorCodes::LOGICAL_ERROR,
+            "Try to produce partition table on a non-partition table, table_id={} partition_table_id={}",
+            id,
+            table_or_partition_id);
 
     if (unlikely(
             std::find_if(
@@ -1165,10 +1169,20 @@ TableInfoPtr TableInfo::producePartitionTableInfo(TableID table_or_partition_id,
                 partition.definitions.end(),
                 [table_or_partition_id](const auto & d) { return d.id == table_or_partition_id; })
             == partition.definitions.end()))
+    {
+        std::vector<TableID> part_ids;
+        std::for_each(
+            partition.definitions.begin(),
+            partition.definitions.end(),
+            [&part_ids](const PartitionDefinition & part) { part_ids.emplace_back(part.id); });
         throw Exception(
-            "Couldn't find partition with ID " + std::to_string(table_or_partition_id) + " in table ID "
-                + std::to_string(id),
-            DB::ErrorCodes::LOGICAL_ERROR);
+            DB::ErrorCodes::LOGICAL_ERROR,
+            "Can not find partition id in partition table, partition_table_id={} logical_table_id={} "
+            "available_ids={}",
+            table_or_partition_id,
+            id,
+            part_ids);
+    }
 
     // This is a TiDB partition table, adjust the table ID by making it to physical table ID (partition ID).
     auto new_table = std::make_shared<TableInfo>();

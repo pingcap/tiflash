@@ -17,6 +17,7 @@
 #include <Common/Logger.h>
 #include <common/logger_useful.h>
 
+#include <cassert>
 #include <chrono>
 #include <memory>
 
@@ -43,9 +44,6 @@ public:
         , tokens(init_tokens_)
         , capacity(capacity_)
         , last_compact_timepoint(std::chrono::steady_clock::now())
-        , last_get_avg_speed_timepoint(std::chrono::steady_clock::now())
-        , last_get_avg_speed_tokens(init_tokens_)
-        , avg_speed_per_sec(0.0)
         , low_token_threshold(LOW_TOKEN_THRESHOLD_RATE * capacity_)
         , log(Logger::get(log_id))
     {}
@@ -54,6 +52,12 @@ public:
 
     struct TokenBucketConfig
     {
+        TokenBucketConfig()
+            : tokens(0.0)
+            , fill_rate(0.0)
+            , capacity(0.0)
+        {}
+
         TokenBucketConfig(double tokens_, double fill_rate_, double capacity_)
             : tokens(tokens_)
             , fill_rate(fill_rate_)
@@ -83,22 +87,25 @@ public:
         return {tokens, fill_rate, capacity};
     }
 
-    double getAvgSpeedPerSec();
-
     bool lowToken() const { return peek() <= low_token_threshold; }
 
     bool isStatic() const { return fill_rate == 0.0; }
 
     std::string toString() const
     {
-        FmtBuffer fmt_buf;
-        fmt_buf.fmtAppend(
-            "tokens: {}, fill_rate: {}, capacity: {}, avg_speed_per_sec: {}",
-            tokens,
-            fill_rate,
-            capacity,
-            avg_speed_per_sec);
-        return fmt_buf.toString();
+        return fmt::format("tokens: {}, fill_rate: {}, capacity: {}", tokens, fill_rate, capacity);
+    }
+
+    uint64_t estWaitDuraMS(uint64_t max_wait_dura_ms) const
+    {
+        const auto tokens = peek();
+        static const uint64_t min_wait_dura_ms = 100;
+        assert(max_wait_dura_ms > min_wait_dura_ms);
+
+        if (tokens >= 0 || fill_rate_ms == 0.0)
+            return min_wait_dura_ms;
+        const auto est_dura_ms = static_cast<uint64_t>(std::ceil(-tokens / fill_rate_ms)) + min_wait_dura_ms;
+        return std::min(est_dura_ms, max_wait_dura_ms);
     }
 
 private:
@@ -115,10 +122,6 @@ private:
     double capacity;
 
     TimePoint last_compact_timepoint;
-
-    TimePoint last_get_avg_speed_timepoint;
-    double last_get_avg_speed_tokens;
-    double avg_speed_per_sec;
 
     double low_token_threshold;
 

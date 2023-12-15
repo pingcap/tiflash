@@ -527,13 +527,13 @@ try
     stream->writePrefix();
     auto t = std::thread([&]() { stream->write(); });
     sp.waitAndPause();
-    prehandle_task->abort_flag.store(true, std::memory_order_seq_cst);
+    prehandle_task->abortFor(PrehandleTransformStatus::Aborted);
     sp.next();
     sp.disable();
     t.join();
     stream->writeSuffix();
     auto files = stream->outputFiles();
-    ASSERT_EQ(true, prehandle_task->abort_flag.load(std::memory_order_seq_cst));
+    ASSERT_EQ(true, prehandle_task->isAbort());
     ASSERT_EQ(1, files.size());
     auto delegator = storage->getAndMaybeInitStore()->path_pool->getStableDiskDelegator();
     std::vector<std::string> fps;

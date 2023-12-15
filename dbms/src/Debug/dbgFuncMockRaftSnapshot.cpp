@@ -16,7 +16,7 @@
 #include <Common/FmtUtils.h>
 #include <Common/setThreadName.h>
 #include <Common/typeid_cast.h>
-#include <Debug/MockSSTReader.h>
+#include <Debug/MockKVStore/MockSSTReader.h>
 #include <Debug/MockTiDB.h>
 #include <Debug/MockTiKV.h>
 #include <Debug/dbgFuncMockRaftCommand.h>

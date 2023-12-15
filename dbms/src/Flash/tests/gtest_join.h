@@ -74,7 +74,7 @@ public:
         for (const auto & column_info : mockColumnInfosToTiDBColumnInfos(left_column_infos))
         {
             ColumnGeneratorOpts opts{
-                common_rows,
+                common_rows / 2,
                 getDataTypeByColumnInfoForComputingLayer(column_info)->getName(),
                 RANDOM,
                 column_info.name};
@@ -103,11 +103,22 @@ public:
 
         for (size_t i = 0; i < common_column_data.size(); ++i)
         {
-            left_column_data[i].column->assumeMutable()->insertRangeFrom(*common_column_data[i].column, 0, common_rows);
+            left_column_data[i].column->assumeMutable()->insertRangeFrom(
+                *common_column_data[i].column,
+                0,
+                common_rows / 2);
+            left_column_data[i].column->assumeMutable()->insertRangeFrom(
+                *common_column_data[i].column,
+                0,
+                common_rows / 2);
             right_column_data[i].column->assumeMutable()->insertRangeFrom(
                 *common_column_data[i].column,
                 0,
-                common_rows);
+                common_rows / 2);
+            right_column_data[i].column->assumeMutable()->insertRangeFrom(
+                *common_column_data[i].column,
+                0,
+                common_rows / 2);
         }
 
         ColumnWithTypeAndName shuffle_column = ColumnGenerator::instance().generate({table_rows, "UInt64", RANDOM});

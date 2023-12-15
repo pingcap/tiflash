@@ -63,47 +63,64 @@ bool Region::checkIndex(UInt64 index) const
     return meta.checkIndex(index);
 }
 
-std::tuple<WaitIndexResult, double> Region::waitIndex(
+std::tuple<WaitIndexStatus, double> Region::waitIndex(
     UInt64 index,
     const UInt64 timeout_ms,
-    std::function<bool(void)> && check_running)
+    std::function<bool(void)> && check_running,
+    const LoggerPtr & log)
 {
-    fiu_return_on(FailPoints::force_wait_index_timeout, std::make_tuple(WaitIndexResult::Timeout, 1.0));
+    fiu_return_on(FailPoints::force_wait_index_timeout, std::make_tuple(WaitIndexStatus::Timeout, 1.0));
     if (proxy_helper == nullptr) // just for debug
-        return {WaitIndexResult::Finished, 0};
+        return {WaitIndexStatus::Finished, 0};
 
-    if (!meta.checkIndex(index))
+    if (meta.checkIndex(index))
     {
-        Stopwatch wait_index_watch;
-        LOG_DEBUG(log, "{} need to wait learner index {} timeout {}", toString(), index, timeout_ms);
-        auto wait_idx_res = meta.waitIndex(index, timeout_ms, std::move(check_running));
-        auto elapsed_secs = wait_index_watch.elapsedSeconds();
-        switch (wait_idx_res)
-        {
-        case WaitIndexResult::Finished:
-        {
-            LOG_DEBUG(log, "{} wait learner index {} done", toString(false), index);
-            return {wait_idx_res, elapsed_secs};
-        }
-        case WaitIndexResult::Terminated:
-        {
-            return {wait_idx_res, elapsed_secs};
-        }
-        case WaitIndexResult::Timeout:
-        {
-            ProfileEvents::increment(ProfileEvents::RaftWaitIndexTimeout);
-            LOG_WARNING(
-                log,
-                "{} wait learner index {} timeout current {} state {}",
-                toString(false),
-                index,
-                appliedIndex(),
-                peerState());
-            return {wait_idx_res, elapsed_secs};
-        }
-        }
+        // already satisfied
+        return {WaitIndexStatus::Finished, 0};
     }
-    return {WaitIndexResult::Finished, 0};
+
+    Stopwatch wait_index_watch;
+    const auto wait_idx_res = meta.waitIndex(index, timeout_ms, std::move(check_running));
+    const auto elapsed_secs = wait_index_watch.elapsedSeconds();
+    const auto & status = wait_idx_res.status;
+    switch (status)
+    {
+    case WaitIndexStatus::Finished:
+    {
+        const auto log_lvl = elapsed_secs < 1.0 ? Poco::Message::PRIO_DEBUG : Poco::Message::PRIO_INFORMATION;
+        LOG_IMPL(
+            log,
+            log_lvl,
+            "{} wait learner index done, prev_index={} curr_index={} to_wait={} elapsed_s={:.3f} timeout_s={:.3f}",
+            toString(false),
+            wait_idx_res.prev_index,
+            wait_idx_res.current_index,
+            index,
+            elapsed_secs,
+            timeout_ms / 1000.0);
+        return {status, elapsed_secs};
+    }
+    case WaitIndexStatus::Terminated:
+    {
+        return {status, elapsed_secs};
+    }
+    case WaitIndexStatus::Timeout:
+    {
+        ProfileEvents::increment(ProfileEvents::RaftWaitIndexTimeout);
+        LOG_WARNING(
+            log,
+            "{} wait learner index timeout, prev_index={} curr_index={} to_wait={} state={}"
+            " elapsed_s={:.3f} timeout_s={:.3f}",
+            toString(false),
+            wait_idx_res.prev_index,
+            wait_idx_res.current_index,
+            index,
+            fmt::underlying(peerState()),
+            elapsed_secs,
+            timeout_ms / 1000.0);
+        return {status, elapsed_secs};
+    }
+    }
 }
 
 void WaitCheckRegionReady(

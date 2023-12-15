@@ -53,35 +53,6 @@ void TokenBucket::reConfig(const TokenBucketConfig & config)
     capacity = config.capacity;
 
     compact(now);
-    // Update because token number may increase, which may cause token_changed be negative.
-    last_get_avg_speed_tokens = tokens;
-    last_get_avg_speed_timepoint = std::chrono::steady_clock::now();
-}
-
-double TokenBucket::getAvgSpeedPerSec()
-{
-    auto now = std::chrono::steady_clock::now();
-    RUNTIME_CHECK(now >= last_get_avg_speed_timepoint);
-    auto dura = std::chrono::duration_cast<std::chrono::seconds>(now - last_get_avg_speed_timepoint);
-
-    compact(now);
-    double token_changed = last_get_avg_speed_tokens - tokens;
-
-    // If dura less than 1 sec, return last sec avg speed.
-    if (dura.count() >= 1)
-    {
-        avg_speed_per_sec = token_changed / dura.count();
-        last_get_avg_speed_tokens = tokens;
-        last_get_avg_speed_timepoint = now;
-    }
-    LOG_TRACE(
-        log,
-        "getAvgSpeedPerSec dura: {}, last_get_avg_speed_tokens: {}, cur tokens: {}, avg_speed_per_sec: {}",
-        dura.count(),
-        last_get_avg_speed_tokens,
-        tokens,
-        avg_speed_per_sec);
-    return avg_speed_per_sec;
 }
 
 void TokenBucket::compact(const TokenBucket::TimePoint & timepoint)

@@ -207,7 +207,7 @@ void orderStreams(
                 getAverageThreshold(settings.max_bytes_before_external_sort, pipeline.streams.size()),
                 SpillConfig(
                     context.getTemporaryPath(),
-                    fmt::format("{}_sort", log->identifier()),
+                    log->identifier(),
                     settings.max_cached_data_bytes_in_spiller,
                     settings.max_spilled_rows_per_file,
                     settings.max_spilled_bytes_per_file,
@@ -239,7 +239,7 @@ void orderStreams(
             // todo use identifier_executor_id as the spill id
             SpillConfig(
                 context.getTemporaryPath(),
-                fmt::format("{}_sort", log->identifier()),
+                log->identifier(),
                 settings.max_cached_data_bytes_in_spiller,
                 settings.max_spilled_rows_per_file,
                 settings.max_spilled_bytes_per_file,
@@ -295,7 +295,7 @@ void executeLocalSort(
             fine_grained_spill_context = std::make_shared<FineGrainedOperatorSpillContext>("sort", log);
         SpillConfig spill_config{
             context.getTemporaryPath(),
-            fmt::format("{}_sort", log->identifier()),
+            log->identifier(),
             settings.max_cached_data_bytes_in_spiller,
             settings.max_spilled_rows_per_file,
             settings.max_spilled_bytes_per_file,
@@ -353,7 +353,7 @@ void executeFinalSort(
 
         SpillConfig spill_config{
             context.getTemporaryPath(),
-            fmt::format("{}_sort", log->identifier()),
+            log->identifier(),
             settings.max_cached_data_bytes_in_spiller,
             settings.max_spilled_rows_per_file,
             settings.max_spilled_bytes_per_file,

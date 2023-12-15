@@ -70,6 +70,15 @@ if (ENABLE_TIME_TRACES)
     set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CLANG_TIME_TRACES_FLAGS}")
 endif ()
 
+option(ENABLE_TSA "Enable clang feature thread safety analysis " ON)
+if (ENABLE_TSA)
+    set (CLANG_TSA_FLAGS "-Wthread-safety")
+    add_definitions(-D_LIBCPP_ENABLE_THREAD_SAFETY_ANNOTATIONS)
+    message (STATUS "Enable clang thread safety analysis flag: -Wthread-safety -D_LIBCPP_ENABLE_THREAD_SAFETY_ANNOTATIONS.")
+    set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${CLANG_TSA_FLAGS}")
+    set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CLANG_TSA_FLAGS}")
+endif ()
+
 # https://clang.llvm.org/docs/ThinLTO.html
 # Applies to clang only.
 option(ENABLE_THINLTO "Clang-specific link time optimization" OFF)
@@ -270,7 +279,6 @@ if (NOT OPENSSL_FOUND)
 endif ()
 
 include (cmake/lib_name.cmake)
-include (cmake/find_icu4c.cmake)
 include (cmake/find_boost.cmake)
 
 option (ENABLE_CPPUNIT "Enable CppUnit" OFF)

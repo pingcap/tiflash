@@ -16,8 +16,8 @@
 
 #include <DataStreams/AddExtraTableIDColumnTransformAction.h>
 #include <Operators/Operator.h>
-#include <Storages/DeltaMerge/Remote/RNReadTask_fwd.h>
 #include <Storages/DeltaMerge/Remote/RNWorkers_fwd.h>
+#include <Storages/DeltaMerge/SegmentReadTask.h>
 
 namespace DB::DM::Remote
 {
@@ -71,7 +71,7 @@ private:
     // Temporarily store the block read from current_seg_task->stream and pass it to downstream operators in readImpl.
     std::optional<Block> t_block = std::nullopt;
 
-    RNReadSegmentTaskPtr current_seg_task = nullptr;
+    SegmentReadTaskPtr current_seg_task = nullptr;
     bool done = false;
 
     // Count the number of segment tasks obtained.

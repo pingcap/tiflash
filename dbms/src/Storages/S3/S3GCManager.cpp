@@ -765,4 +765,12 @@ void S3GCManagerService::shutdown()
     }
 }
 
+void S3GCManagerService::wake() const
+{
+    if (timer)
+    {
+        timer->wake();
+    }
+}
+
 } // namespace DB::S3

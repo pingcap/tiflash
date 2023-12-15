@@ -14,7 +14,6 @@
 
 #pragma once
 
-#include <Columns/Collator.h>
 #include <Common/COWPtr.h>
 #include <Common/Exception.h>
 #include <Common/PODArray.h>
@@ -279,7 +278,7 @@ public:
       */
     virtual int compareAt(size_t n, size_t m, const IColumn & rhs, int nan_direction_hint) const = 0;
 
-    virtual int compareAt(size_t, size_t, const IColumn &, int, const ICollator &) const
+    virtual int compareAt(size_t, size_t, const IColumn &, int, const TiDB::ITiDBCollator &) const
     {
         throw Exception(
             fmt::format("Method compareAt with collation is not supported for {}", getName()),
@@ -294,7 +293,7 @@ public:
       */
     virtual void getPermutation(bool reverse, size_t limit, int nan_direction_hint, Permutation & res) const = 0;
 
-    virtual void getPermutation(const ICollator &, bool, size_t, int, Permutation &) const
+    virtual void getPermutation(const TiDB::ITiDBCollator &, bool, size_t, int, Permutation &) const
     {
         throw Exception(
             fmt::format("Method getPermutation with collation is not supported for {}", getName()),
@@ -391,6 +390,12 @@ public:
         return res;
     }
 
+    MutablePtr cloneFullColumn() const
+    {
+        MutablePtr res = clone();
+        res->forEachSubcolumn([](Ptr & subcolumn) { subcolumn = subcolumn->clone(); });
+        return res;
+    }
 
     /** Some columns can contain another columns inside.
       * So, we have a tree of columns. But not all combinations are possible.

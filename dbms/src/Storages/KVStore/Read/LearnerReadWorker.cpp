@@ -38,7 +38,7 @@ void UnavailableRegions::tryThrowRegionException()
         throw LockException(std::move(region_locks));
 
     if (!ids.empty())
-        throw RegionException(std::move(ids), status);
+        throw RegionException(std::move(ids), status, extra_msg.c_str());
 }
 
 void UnavailableRegions::addRegionWaitIndexTimeout(
@@ -49,7 +49,7 @@ void UnavailableRegions::addRegionWaitIndexTimeout(
     if (!batch_cop)
     {
         // If server is being terminated / time-out, add the region_id into `unavailable_regions` to other store.
-        add(region_id, RegionException::RegionReadStatus::NOT_FOUND);
+        addStatus(region_id, RegionException::RegionReadStatus::NOT_FOUND, "");
         return;
     }
 
@@ -93,7 +93,7 @@ LearnerReadSnapshot LearnerReadWorker::buildRegionsSnapshot()
         if (region == nullptr)
         {
             LOG_WARNING(log, "region not found in KVStore, region_id={}", info.region_id);
-            throw RegionException({info.region_id}, RegionException::RegionReadStatus::NOT_FOUND);
+            throw RegionException({info.region_id}, RegionException::RegionReadStatus::NOT_FOUND, nullptr);
         }
         regions_snapshot.emplace(info.region_id, std::move(region));
     }
@@ -190,17 +190,35 @@ void LearnerReadWorker::doBatchReadIndex(
     }
 }
 
-void LearnerReadWorker::recordReadIndexError(RegionsReadIndexResult & read_index_result)
+void LearnerReadWorker::recordReadIndexError(
+    const LearnerReadSnapshot & regions_snapshot,
+    RegionsReadIndexResult & read_index_result)
 {
     // if size of batch_read_index_result is not equal with batch_read_index_req, there must be region_error/lock, find and return directly.
     for (auto & [region_id, resp] : read_index_result)
     {
+        std::string extra_msg;
         if (resp.has_region_error())
         {
             const auto & region_error = resp.region_error();
             auto region_status = RegionException::RegionReadStatus::OTHER;
             if (region_error.has_epoch_not_match())
+            {
+                auto snapshot_region_iter = regions_snapshot.find(region_id);
+                if (snapshot_region_iter != regions_snapshot.end())
+                {
+                    extra_msg = fmt::format(
+                        "read_index_resp error, region_id={} version={} conf_version={}",
+                        region_id,
+                        snapshot_region_iter->second.create_time_version,
+                        snapshot_region_iter->second.create_time_conf_ver);
+                }
+                else
+                {
+                    extra_msg = fmt::format("read_index_resp error, region_id={} not found in snapshot", region_id);
+                }
                 region_status = RegionException::RegionReadStatus::EPOCH_NOT_MATCH;
+            }
             else if (region_error.has_not_leader())
                 region_status = RegionException::RegionReadStatus::NOT_LEADER;
             else if (region_error.has_region_not_found())
@@ -248,7 +266,7 @@ void LearnerReadWorker::recordReadIndexError(RegionsReadIndexResult & read_index
                     resp.region_error().DebugString(),
                     region_id);
             }
-            unavailable_regions.add(region_id, region_status);
+            unavailable_regions.addStatus(region_id, region_status, std::move(extra_msg));
         }
         else if (resp.has_locked())
         {
@@ -282,18 +300,22 @@ RegionsReadIndexResult LearnerReadWorker::readIndex(
 
     stats.read_index_elapsed_ms = watch.elapsedMilliseconds();
     GET_METRIC(tiflash_raft_read_index_duration_seconds).Observe(stats.read_index_elapsed_ms / 1000.0);
+    recordReadIndexError(regions_snapshot, batch_read_index_result);
 
-    LOG_DEBUG(
+    const auto log_lvl = unavailable_regions.empty() ? Poco::Message::PRIO_DEBUG : Poco::Message::PRIO_INFORMATION;
+    LOG_IMPL(
         log,
+        log_lvl,
         "[Learner Read] Batch read index, num_regions={} num_requests={} num_stale_read={} num_cached_index={} "
+        "num_unavailable={} "
         "cost={}ms",
         stats.num_regions,
         stats.num_read_index_request,
         stats.num_stale_read,
         stats.num_cached_read_index,
+        unavailable_regions.size(),
         stats.read_index_elapsed_ms);
 
-    recordReadIndexError(batch_read_index_result);
     return batch_read_index_result;
 }
 
@@ -328,9 +350,12 @@ void LearnerReadWorker::waitIndex(
 
         // Wait index timeout is disabled; or timeout is enabled but not happen yet, wait index for
         // a specify Region.
-        const auto [wait_res, time_cost]
-            = region->waitIndex(index_to_wait, timeout_ms, [this]() { return tmt.checkRunning(); });
-        if (wait_res != WaitIndexResult::Finished)
+        const auto [wait_res, time_cost] = region->waitIndex(
+            index_to_wait,
+            timeout_ms,
+            [this]() { return tmt.checkRunning(); },
+            log);
+        if (wait_res != WaitIndexStatus::Finished)
         {
             auto current = region->appliedIndex();
             unavailable_regions.addRegionWaitIndexTimeout(region_to_query.region_id, index_to_wait, current);
@@ -373,7 +398,7 @@ void LearnerReadWorker::waitIndex(
                             region_to_query.version,
                             RecordKVFormat::DecodedTiKVKeyRangeToDebugString(region_to_query.range_in_table),
                             magic_enum::enum_name(status));
-                        unavailable_regions.add(region->id(), status);
+                        unavailable_regions.addStatus(region->id(), status, "resolveLock");
                     }
                 },
             },
@@ -408,6 +433,7 @@ LearnerReadWorker::waitUntilDataAvailable(
     const auto time_elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
     GET_METRIC(tiflash_syncing_data_freshness).Observe(time_elapsed_ms / 1000.0); // For DBaaS SLI
 
+    // TODO should we try throw immediately after readIndex?
     // Throw Region exception if there are any unavailable regions, the exception will be handled in the
     // following methods
     // - `CoprocessorHandler::execute`

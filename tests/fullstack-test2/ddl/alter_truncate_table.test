@@ -36,8 +36,7 @@ mysql> truncate table test.t;
 
 mysql> select * from test.t;
 
->> select tidb_database,tidb_name from system.tables where tidb_database = 'test' and tidb_name='t' and is_tombstone = 0
-
+# In raftstore v1, this new table_id will not be created in TiFlash. On the contrary in raftstore v2.
 
 mysql> insert into test.t values (2, 2);
 

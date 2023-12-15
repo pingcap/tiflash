@@ -30,14 +30,15 @@
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Coprocessor/RequestUtils.h>
 #include <Interpreters/Context.h>
+#include <Operators/UnorderedSourceOp.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/Filter/PushDownFilter.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/FilterParser/FilterParser.h>
+#include <Storages/DeltaMerge/ReadThread/UnorderedInputStream.h>
 #include <Storages/DeltaMerge/Remote/DisaggTaskId.h>
 #include <Storages/DeltaMerge/Remote/Proto/remote.pb.h>
-#include <Storages/DeltaMerge/Remote/RNReadTask.h>
 #include <Storages/DeltaMerge/Remote/RNSegmentInputStream.h>
 #include <Storages/DeltaMerge/Remote/RNSegmentSourceOp.h>
 #include <Storages/DeltaMerge/Remote/RNWorkers.h>
@@ -63,6 +64,7 @@
 #include <magic_enum.hpp>
 #include <numeric>
 #include <unordered_set>
+#include <variant>
 
 namespace DB
 {
@@ -72,12 +74,34 @@ extern const int DISAGG_ESTABLISH_RETRYABLE_ERROR;
 extern const int TIMEOUT_EXCEEDED;
 } // namespace ErrorCodes
 
+namespace
+{
+void initDisaggTaskMeta(
+    disaggregated::DisaggTaskMeta * meta,
+    const MPPTaskId & sender_target_mpp_task_id,
+    DAGContext * dag_context,
+    const KeyspaceID keyspace_id,
+    const TiDBTableScan & table_scan)
+{
+    meta->set_start_ts(sender_target_mpp_task_id.gather_id.query_id.start_ts);
+    meta->set_query_ts(sender_target_mpp_task_id.gather_id.query_id.query_ts);
+    meta->set_server_id(sender_target_mpp_task_id.gather_id.query_id.server_id);
+    meta->set_local_query_id(sender_target_mpp_task_id.gather_id.query_id.local_query_id);
+    meta->set_gather_id(sender_target_mpp_task_id.gather_id.gather_id);
+    meta->set_task_id(dag_context->getMPPTaskId().task_id);
+    meta->set_executor_id(table_scan.getTableScanExecutorID());
+    meta->set_keyspace_id(keyspace_id);
+    meta->set_api_version(keyspace_id == NullspaceID ? kvrpcpb::APIVersion::V1 : kvrpcpb::APIVersion::V2);
+    meta->set_connection_id(sender_target_mpp_task_id.gather_id.query_id.connection_id);
+    meta->set_connection_alias(sender_target_mpp_task_id.gather_id.query_id.connection_alias);
+}
+} // namespace
+
 BlockInputStreams StorageDisaggregated::readThroughS3(const Context & db_context, unsigned num_streams)
 {
-    auto read_task = buildReadTaskWithBackoff(db_context);
     // Build InputStream according to the remote segment read tasks
     DAGPipeline pipeline;
-    buildRemoteSegmentInputStreams(db_context, read_task, num_streams, pipeline);
+    buildRemoteSegmentInputStreams(db_context, buildReadTaskWithBackoff(db_context), num_streams, pipeline);
 
     NamesAndTypes source_columns;
     source_columns.reserve(table_scan.getColumnSize());
@@ -101,9 +125,12 @@ void StorageDisaggregated::readThroughS3(
     const Context & db_context,
     unsigned num_streams)
 {
-    auto read_task = buildReadTaskWithBackoff(db_context);
-
-    buildRemoteSegmentSourceOps(exec_context, group_builder, db_context, read_task, num_streams);
+    buildRemoteSegmentSourceOps(
+        exec_context,
+        group_builder,
+        db_context,
+        buildReadTaskWithBackoff(db_context),
+        num_streams);
 
     NamesAndTypes source_columns;
     auto header = group_builder.getCurrentHeader();
@@ -118,14 +145,15 @@ void StorageDisaggregated::readThroughS3(
     filterConditions(exec_context, group_builder, *analyzer);
 }
 
-DM::Remote::RNReadTaskPtr StorageDisaggregated::buildReadTaskWithBackoff(const Context & db_context)
+DM::SegmentReadTasks StorageDisaggregated::buildReadTaskWithBackoff(const Context & db_context)
 {
     using namespace pingcap;
 
-    auto scan_context = std::make_shared<DM::ScanContext>();
-    context.getDAGContext()->scan_context_map[table_scan.getTableScanExecutorID()] = scan_context;
+    auto * dag_context = context.getDAGContext();
+    auto scan_context = std::make_shared<DM::ScanContext>(dag_context->getResourceGroupName());
+    dag_context->scan_context_map[table_scan.getTableScanExecutorID()] = scan_context;
 
-    DM::Remote::RNReadTaskPtr read_task;
+    DM::SegmentReadTasks read_task;
 
     double total_backoff_seconds = 0.0;
     SCOPE_EXIT({
@@ -161,7 +189,7 @@ DM::Remote::RNReadTaskPtr StorageDisaggregated::buildReadTaskWithBackoff(const C
     return read_task;
 }
 
-DM::Remote::RNReadTaskPtr StorageDisaggregated::buildReadTask(
+DM::SegmentReadTasks StorageDisaggregated::buildReadTask(
     const Context & db_context,
     const DM::ScanContextPtr & scan_context)
 {
@@ -178,7 +206,7 @@ DM::Remote::RNReadTaskPtr StorageDisaggregated::buildReadTask(
     }
 
     std::mutex output_lock;
-    std::vector<DM::Remote::RNReadSegmentTaskPtr> output_seg_tasks;
+    DM::SegmentReadTasks output_seg_tasks;
 
     // Then, for each BatchCopTask, let's build read tasks concurrently.
     auto thread_manager = newThreadManager();
@@ -199,7 +227,7 @@ DM::Remote::RNReadTaskPtr StorageDisaggregated::buildReadTask(
         // TODO
     }
 
-    return DM::Remote::RNReadTask::create(output_seg_tasks);
+    return output_seg_tasks;
 }
 
 void StorageDisaggregated::buildReadTaskForWriteNode(
@@ -207,7 +235,7 @@ void StorageDisaggregated::buildReadTaskForWriteNode(
     const DM::ScanContextPtr & scan_context,
     const pingcap::coprocessor::BatchCopTask & batch_cop_task,
     std::mutex & output_lock,
-    std::vector<DM::Remote::RNReadSegmentTaskPtr> & output_seg_tasks)
+    DM::SegmentReadTasks & output_seg_tasks)
 {
     Stopwatch watch;
 
@@ -353,7 +381,7 @@ void StorageDisaggregated::buildReadTaskForWriteNodeTable(
     const String & store_address,
     const String & serialized_physical_table,
     std::mutex & output_lock,
-    std::vector<DM::Remote::RNReadSegmentTaskPtr> & output_seg_tasks)
+    DM::SegmentReadTasks & output_seg_tasks)
 {
     DB::DM::RemotePb::RemotePhysicalTable table;
     auto parse_ok = table.ParseFromString(serialized_physical_table);
@@ -369,7 +397,7 @@ void StorageDisaggregated::buildReadTaskForWriteNodeTable(
         const auto & remote_seg = table.segments(idx);
 
         thread_manager->schedule(true, "buildRNReadSegmentTask", [&] {
-            auto seg_read_task = DM::Remote::RNReadSegmentTask::buildFromEstablishResp(
+            auto seg_read_task = std::make_shared<DM::SegmentReadTask>(
                 table_tracing_logger,
                 db_context,
                 scan_context,
@@ -402,20 +430,17 @@ std::shared_ptr<disaggregated::EstablishDisaggTaskRequest> StorageDisaggregated:
 {
     const auto & settings = db_context.getSettingsRef();
     auto establish_req = std::make_shared<disaggregated::EstablishDisaggTaskRequest>();
+
     {
-        disaggregated::DisaggTaskMeta * meta = establish_req->mutable_meta();
-        meta->set_start_ts(sender_target_mpp_task_id.gather_id.query_id.start_ts);
-        meta->set_query_ts(sender_target_mpp_task_id.gather_id.query_id.query_ts);
-        meta->set_server_id(sender_target_mpp_task_id.gather_id.query_id.server_id);
-        meta->set_local_query_id(sender_target_mpp_task_id.gather_id.query_id.local_query_id);
-        meta->set_gather_id(sender_target_mpp_task_id.gather_id.gather_id);
         auto * dag_context = db_context.getDAGContext();
-        meta->set_task_id(dag_context->getMPPTaskId().task_id);
-        meta->set_executor_id(table_scan.getTableScanExecutorID());
-        const auto keyspace_id = dag_context->getKeyspaceID();
-        meta->set_keyspace_id(keyspace_id);
-        meta->set_api_version(keyspace_id == NullspaceID ? kvrpcpb::APIVersion::V1 : kvrpcpb::APIVersion::V2);
+        initDisaggTaskMeta(
+            establish_req->mutable_meta(),
+            sender_target_mpp_task_id,
+            dag_context,
+            dag_context->getKeyspaceID(),
+            table_scan);
     }
+
     // how long the task is valid on the write node
     establish_req->set_timeout_s(DEFAULT_DISAGG_TASK_TIMEOUT_SEC);
     establish_req->set_address(batch_cop_task.store_addr);
@@ -483,11 +508,12 @@ DM::RSOperatorPtr StorageDisaggregated::buildRSOperator(
     return rs_operator;
 }
 
-DM::Remote::RNWorkersPtr StorageDisaggregated::buildRNWorkers(
+std::variant<DM::Remote::RNWorkersPtr, DM::SegmentReadTaskPoolPtr> StorageDisaggregated::packSegmentReadTasks(
     const Context & db_context,
-    const DM::Remote::RNReadTaskPtr & read_task,
+    DM::SegmentReadTasks && read_tasks,
     const DM::ColumnDefinesPtr & column_defines,
-    size_t num_streams)
+    size_t num_streams,
+    int extra_table_id_index)
 {
     const auto & executor_id = table_scan.getTableScanExecutorID();
 
@@ -505,59 +531,102 @@ DM::Remote::RNWorkersPtr StorageDisaggregated::buildRNWorkers(
         table_scan.keepOrder(),
         push_down_filter);
     const UInt64 read_tso = sender_target_mpp_task_id.gather_id.query_id.start_ts;
+    const auto enable_read_thread = db_context.getSettingsRef().dt_enable_read_thread;
     LOG_INFO(
         log,
-        "Building segment input streams, read_mode={} is_fast_scan={} keep_order={} segments={} num_streams={} "
-        "column_defines={}",
+        "packSegmentReadTasks: enable_read_thread={} read_mode={} is_fast_scan={} keep_order={} task_count={} "
+        "num_streams={} column_defines={}",
+        enable_read_thread,
         magic_enum::enum_name(read_mode),
         table_scan.isFastScan(),
         table_scan.keepOrder(),
-        read_task->segment_read_tasks.size(),
+        read_tasks.size(),
         num_streams,
         *column_defines);
 
-    return DM::Remote::RNWorkers::create(
-        db_context,
-        {
-            .log = log->getChild(executor_id),
-            .read_task = read_task,
-            .columns_to_read = column_defines,
-            .read_tso = read_tso,
-            .push_down_filter = push_down_filter,
-            .read_mode = read_mode,
-            .cluster = db_context.getTMTContext().getKVCluster(),
-        },
-        num_streams);
+    if (enable_read_thread)
+    {
+        return std::make_shared<DM::SegmentReadTaskPool>(
+            extra_table_id_index,
+            *column_defines,
+            push_down_filter,
+            read_tso,
+            db_context.getSettingsRef().max_block_size,
+            read_mode,
+            std::move(read_tasks),
+            /*after_segment_read*/ [](const DM::DMContextPtr &, const DM::SegmentPtr &) {},
+            executor_id,
+            /*enable_read_thread*/ true,
+            num_streams,
+            context.getDAGContext()->getResourceGroupName());
+    }
+    else
+    {
+        return DM::Remote::RNWorkers::create(
+            db_context,
+            std::move(read_tasks),
+            {
+                .log = log->getChild(executor_id),
+                .columns_to_read = column_defines,
+                .read_tso = read_tso,
+                .push_down_filter = push_down_filter,
+                .read_mode = read_mode,
+            },
+            num_streams);
+    }
 }
+
+struct InputStreamBuilder
+{
+    const String & tracing_id;
+    const DM::ColumnDefinesPtr & columns_to_read;
+    int extra_table_id_index;
+
+    BlockInputStreamPtr operator()(DM::Remote::RNWorkersPtr & workers) const
+    {
+        return DM::Remote::RNSegmentInputStream::create(DM::Remote::RNSegmentInputStream::Options{
+            .debug_tag = tracing_id,
+            .workers = workers,
+            .columns_to_read = *columns_to_read,
+            .extra_table_id_index = extra_table_id_index,
+        });
+    }
+
+    BlockInputStreamPtr operator()(DM::SegmentReadTaskPoolPtr & read_tasks) const
+    {
+        return std::make_shared<DM::UnorderedInputStream>(
+            read_tasks,
+            *columns_to_read,
+            extra_table_id_index,
+            tracing_id);
+    }
+};
+
 
 void StorageDisaggregated::buildRemoteSegmentInputStreams(
     const Context & db_context,
-    const DM::Remote::RNReadTaskPtr & read_task,
+    DM::SegmentReadTasks && read_tasks,
     size_t num_streams,
     DAGPipeline & pipeline)
 {
-    const auto & executor_id = table_scan.getTableScanExecutorID();
-
     // Build the input streams to read blocks from remote segments
     auto [column_defines, extra_table_id_index] = genColumnDefinesForDisaggregatedRead(table_scan);
-    auto workers = buildRNWorkers(db_context, read_task, column_defines, num_streams);
-
+    auto packed_read_tasks
+        = packSegmentReadTasks(db_context, std::move(read_tasks), column_defines, num_streams, extra_table_id_index);
     RUNTIME_CHECK(num_streams > 0, num_streams);
     pipeline.streams.reserve(num_streams);
+
+    InputStreamBuilder builder{
+        .tracing_id = log->identifier(),
+        .columns_to_read = column_defines,
+        .extra_table_id_index = extra_table_id_index,
+    };
     for (size_t stream_idx = 0; stream_idx < num_streams; ++stream_idx)
     {
-        auto stream = DM::Remote::RNSegmentInputStream::create({
-            .debug_tag = log->identifier(),
-            // Note: We intentionally pass the whole worker, instead of worker->getReadyChannel()
-            // because we want to extend the lifetime of the WorkerPtr until read is finished.
-            // Also, we want to start the Worker after the read.
-            .workers = workers,
-            .columns_to_read = *column_defines,
-            .extra_table_id_index = extra_table_id_index,
-        });
-        pipeline.streams.emplace_back(stream);
+        pipeline.streams.emplace_back(std::visit(builder, packed_read_tasks));
     }
 
+    const auto & executor_id = table_scan.getTableScanExecutorID();
     auto * dag_context = db_context.getDAGContext();
     auto & table_scan_io_input_streams = dag_context->getInBoundIOInputStreamsMap()[executor_id];
     auto & profile_streams = dag_context->getProfileStreamsMap()[executor_id];
@@ -567,30 +636,57 @@ void StorageDisaggregated::buildRemoteSegmentInputStreams(
     });
 }
 
+struct SrouceOpBuilder
+{
+    const String & tracing_id;
+    const DM::ColumnDefinesPtr & column_defines;
+    int extra_table_id_index;
+    PipelineExecutorContext & exec_context;
+
+    SourceOpPtr operator()(DM::Remote::RNWorkersPtr & workers) const
+    {
+        return DM::Remote::RNSegmentSourceOp::create({
+            .debug_tag = tracing_id,
+            .exec_context = exec_context,
+            .workers = workers,
+            .columns_to_read = *column_defines,
+            .extra_table_id_index = extra_table_id_index,
+        });
+    }
+
+    SourceOpPtr operator()(DM::SegmentReadTaskPoolPtr & read_tasks) const
+    {
+        return std::make_unique<UnorderedSourceOp>(
+            exec_context,
+            read_tasks,
+            *column_defines,
+            extra_table_id_index,
+            tracing_id);
+    }
+};
+
 void StorageDisaggregated::buildRemoteSegmentSourceOps(
     PipelineExecutorContext & exec_context,
     PipelineExecGroupBuilder & group_builder,
     const Context & db_context,
-    const DM::Remote::RNReadTaskPtr & read_task,
+    DM::SegmentReadTasks && read_tasks,
     size_t num_streams)
 {
     // Build the input streams to read blocks from remote segments
     auto [column_defines, extra_table_id_index] = genColumnDefinesForDisaggregatedRead(table_scan);
-    auto workers = buildRNWorkers(db_context, read_task, column_defines, num_streams);
+    auto packed_read_tasks
+        = packSegmentReadTasks(db_context, std::move(read_tasks), column_defines, num_streams, extra_table_id_index);
 
     RUNTIME_CHECK(num_streams > 0, num_streams);
+    SrouceOpBuilder builder{
+        .tracing_id = log->identifier(),
+        .column_defines = column_defines,
+        .extra_table_id_index = extra_table_id_index,
+        .exec_context = exec_context,
+    };
     for (size_t i = 0; i < num_streams; ++i)
     {
-        group_builder.addConcurrency(DM::Remote::RNSegmentSourceOp::create({
-            .debug_tag = log->identifier(),
-            .exec_context = exec_context,
-            // Note: We intentionally pass the whole worker, instead of worker->getReadyChannel()
-            // because we want to extend the lifetime of the WorkerPtr until read is finished.
-            // Also, we want to start the Worker after the read.
-            .workers = workers,
-            .columns_to_read = *column_defines,
-            .extra_table_id_index = extra_table_id_index,
-        }));
+        group_builder.addConcurrency(std::visit(builder, packed_read_tasks));
     }
     db_context.getDAGContext()->addInboundIOProfileInfos(
         table_scan.getTableScanExecutorID(),

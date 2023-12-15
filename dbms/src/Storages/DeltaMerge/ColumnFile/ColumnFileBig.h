@@ -89,6 +89,7 @@ public:
         ReadBuffer & buf);
 
     static ColumnFilePersistedPtr createFromCheckpoint(
+        const LoggerPtr & parent_log,
         DMContext & context, //
         const RowKeyRange & target_range,
         ReadBuffer & buf,
@@ -114,7 +115,7 @@ public:
 class ColumnFileBigReader : public ColumnFileReader
 {
 private:
-    const DMContext & context;
+    const DMContext & dm_context;
     const ColumnFileBig & column_file;
     const ColumnDefinesPtr col_defs;
 
@@ -155,7 +156,7 @@ public:
         const DMContext & context_,
         const ColumnFileBig & column_file_,
         const ColumnDefinesPtr & col_defs_)
-        : context(context_)
+        : dm_context(context_)
         , column_file(column_file_)
         , col_defs(col_defs_)
     {

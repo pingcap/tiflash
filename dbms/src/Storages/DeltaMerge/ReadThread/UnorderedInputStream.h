@@ -46,11 +46,9 @@ public:
         LOG_DEBUG(log, "Created, pool_id={} ref_no={}", task_pool->pool_id, ref_no);
     }
 
-    ~UnorderedInputStream() override
-    {
-        task_pool->decreaseUnorderedInputStreamRefCount();
-        LOG_DEBUG(log, "Destroy, pool_id={} ref_no={}", task_pool->pool_id, ref_no);
-    }
+    void cancel(bool /*kill*/) override { decreaseRefCount(true); }
+
+    ~UnorderedInputStream() override { decreaseRefCount(false); }
 
     String getName() const override { return NAME; }
 
@@ -67,6 +65,16 @@ public:
     }
 
 protected:
+    void decreaseRefCount(bool is_cancel)
+    {
+        bool ori = false;
+        if (is_stopped.compare_exchange_strong(ori, true))
+        {
+            task_pool->decreaseUnorderedInputStreamRefCount();
+            LOG_DEBUG(log, "{}, pool_id={} ref_no={}", is_cancel ? "Cancel" : "Destroy", task_pool->pool_id, ref_no);
+        }
+    }
+
     Block readImpl() override
     {
         FilterPtr filter_ignored;
@@ -123,7 +131,7 @@ protected:
         }
         std::call_once(task_pool->addToSchedulerFlag(), [&]() {
             prepareRuntimeFilter();
-            SegmentReadTaskScheduler::instance().add(task_pool);
+            SegmentReadTaskScheduler::instance().add(task_pool, log);
         });
         task_pool_added = true;
     }
@@ -146,5 +154,7 @@ private:
     // runtime filter
     std::vector<RuntimeFilterPtr> runtime_filter_list;
     int max_wait_time_ms;
+
+    std::atomic_bool is_stopped = false;
 };
 } // namespace DB::DM

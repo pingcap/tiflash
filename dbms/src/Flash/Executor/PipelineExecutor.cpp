@@ -108,7 +108,7 @@ ExecutionResult PipelineExecutor::execute(ResultHandler && result_handler)
         scheduleEvents();
         wait();
     }
-    LOG_TRACE(log, "query finish with {}", exec_context.getQueryProfileInfo().toJson());
+    LOG_DEBUG(log, "query finish with {}", exec_context.getQueryProfileInfo().toJson());
     return exec_context.toExecutionResult();
 }
 

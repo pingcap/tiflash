@@ -250,7 +250,7 @@ void injectFailPointForLocalRead([[maybe_unused]] const SelectQueryInfo & query_
             "failpoint inject region_exception_after_read_from_storage_some_error, throw RegionException with "
             "region_ids={}",
             region_ids);
-        throw RegionException(std::move(region_ids), RegionException::RegionReadStatus::NOT_FOUND);
+        throw RegionException(std::move(region_ids), RegionException::RegionReadStatus::NOT_FOUND, nullptr);
     });
     fiu_do_on(FailPoints::region_exception_after_read_from_storage_all_error, {
         const auto & regions_info = query_info.mvcc_query_info->regions_query_info;
@@ -262,7 +262,7 @@ void injectFailPointForLocalRead([[maybe_unused]] const SelectQueryInfo & query_
             "failpoint inject region_exception_after_read_from_storage_all_error, throw RegionException with "
             "region_ids={}",
             region_ids);
-        throw RegionException(std::move(region_ids), RegionException::RegionReadStatus::NOT_FOUND);
+        throw RegionException(std::move(region_ids), RegionException::RegionReadStatus::NOT_FOUND, nullptr);
     });
 }
 
@@ -389,7 +389,7 @@ void DAGStorageInterpreter::executeImpl(
         for (const auto & info : context.getDAGContext()->retry_regions)
             region_ids.insert(info.region_id);
 
-        throw RegionException(std::move(region_ids), RegionException::RegionReadStatus::EPOCH_NOT_MATCH);
+        throw RegionException(std::move(region_ids), RegionException::RegionReadStatus::EPOCH_NOT_MATCH, "executeImpl");
     }
 
     // A failpoint to test pause before alter lock released
@@ -501,7 +501,7 @@ void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
         for (const auto & info : context.getDAGContext()->retry_regions)
             region_ids.insert(info.region_id);
 
-        throw RegionException(std::move(region_ids), RegionException::RegionReadStatus::EPOCH_NOT_MATCH);
+        throw RegionException(std::move(region_ids), RegionException::RegionReadStatus::EPOCH_NOT_MATCH, "executeImpl");
     }
 
     // A failpoint to test pause before alter lock released
@@ -625,8 +625,7 @@ void DAGStorageInterpreter::prepare()
 
     // Do learner read
     DAGContext & dag_context = *context.getDAGContext();
-    auto scan_context
-        = std::make_shared<DM::ScanContext>(dag_context.getResourceGroupName(), dag_context.isResourceControlEnabled());
+    auto scan_context = std::make_shared<DM::ScanContext>(dag_context.getResourceGroupName());
     dag_context.scan_context_map[table_scan.getTableScanExecutorID()] = scan_context;
     mvcc_query_info->scan_context = scan_context;
 
@@ -722,6 +721,8 @@ std::vector<pingcap::coprocessor::CopTask> DAGStorageInterpreter::buildCopTasks(
             req,
             store_type,
             dagContext().getKeyspaceID(),
+            remote_request.connection_id,
+            remote_request.connection_alias,
             &Poco::Logger::get("pingcap/coprocessor"),
             std::move(meta_data),
             [&] { GET_METRIC(tiflash_coprocessor_request_count, type_remote_read_sent).Increment(); });
@@ -832,7 +833,7 @@ LearnerReadSnapshot DAGStorageInterpreter::doCopLearnerRead()
     auto [info_retry, status] = MakeRegionQueryInfos(regions_for_local_read, {}, tmt, *mvcc_query_info, false);
 
     if (info_retry)
-        throw RegionException({info_retry->begin()->get().region_id}, status);
+        throw RegionException({info_retry->begin()->get().region_id}, status, "doCopLearnerRead");
 
     return doLearnerRead(logical_table_id, *mvcc_query_info, /*for_batch_cop=*/false, context, log);
 }
@@ -1343,7 +1344,11 @@ std::unordered_map<TableID, DAGStorageInterpreter::StorageWithStructureLock> DAG
         if (!table_store)
         {
             if (schema_synced)
-                throw TiFlashException(fmt::format("Table {} doesn't exist.", table_id), Errors::Table::NotExists);
+                throw TiFlashException(
+                    Errors::Table::NotExists,
+                    "Table doesn't exist, keyspace={} table_id={}",
+                    keyspace_id,
+                    table_id);
             else
                 return {{}, {}};
         }
@@ -1552,6 +1557,8 @@ std::vector<RemoteRequest> DAGStorageInterpreter::buildRemoteRequests(const DM::
         retry_regions_map[region_id_to_table_id_map[r.get().region_id]].emplace_back(r);
     }
 
+    UInt64 connection_id = dagContext().getConnectionID();
+    const String & connection_alias = dagContext().getConnectionAlias();
     for (const auto physical_table_id : table_scan.getPhysicalTableIDs())
     {
         const auto & retry_regions = retry_regions_map[physical_table_id];
@@ -1569,6 +1576,8 @@ std::vector<RemoteRequest> DAGStorageInterpreter::buildRemoteRequests(const DM::
             table_scan,
             storages_with_structure_lock[physical_table_id].storage->getTableInfo(),
             filter_conditions,
+            connection_id,
+            connection_alias,
             log));
     }
     LOG_DEBUG(log, "remote request size: {}", remote_requests.size());

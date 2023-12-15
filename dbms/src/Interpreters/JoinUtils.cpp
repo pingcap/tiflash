@@ -15,6 +15,7 @@
 #include <Columns/ColumnUtils.h>
 #include <Columns/ColumnsCommon.h>
 #include <Flash/Mpp/HashBaseWriterHelper.h>
+#include <Functions/FunctionHelpers.h>
 #include <Interpreters/JoinUtils.h>
 #include <Interpreters/NullableUtils.h>
 
@@ -132,19 +133,28 @@ void computeDispatchHash(
     }
 }
 
-bool mayProbeSideExpandedAfterJoin(ASTTableJoin::Kind kind, ASTTableJoin::Strictness strictness)
+bool mayProbeSideExpandedAfterJoin(ASTTableJoin::Kind kind)
 {
-    /// null aware semi/left outer semi/anti join never expand the probe side
-    if (isNullAwareSemiFamily(kind))
-        return false;
-    if (isLeftOuterSemiFamily(kind))
-        return false;
-    if (isAntiJoin(kind))
-        return false;
-    /// strictness == Any means semi join, it never expand the probe side
-    if (strictness == ASTTableJoin::Strictness::Any)
-        return false;
-    /// for all the other cases, return true by default
-    return true;
+    /// null aware semi/left outer semi/semi/anti/right semi join never expand the probe side
+    return !isNullAwareSemiFamily(kind) && !isLeftOuterSemiFamily(kind) && !isSemiFamily(kind)
+        && !isRightSemiFamily(kind);
 }
+
+std::pair<const PaddedPODArray<UInt8> *, ConstNullMapPtr> getDataAndNullMapVectorFromFilterColumn(
+    ColumnPtr & filter_column)
+{
+    if (filter_column->isColumnConst())
+        filter_column = filter_column->convertToFullColumnIfConst();
+    if (filter_column->isColumnNullable())
+    {
+        const auto * nullable_column = checkAndGetColumn<ColumnNullable>(filter_column.get());
+        const auto & data_column = nullable_column->getNestedColumnPtr();
+        return {&checkAndGetColumn<ColumnUInt8>(data_column.get())->getData(), &nullable_column->getNullMapData()};
+    }
+    else
+    {
+        return {&checkAndGetColumn<ColumnUInt8>(filter_column.get())->getData(), nullptr};
+    }
+}
+
 } // namespace DB

@@ -91,7 +91,7 @@ BlobStore<Trait>::BlobStore(
 {}
 
 template <typename Trait>
-void BlobStore<Trait>::registerPaths()
+void BlobStore<Trait>::registerPaths() NO_THREAD_SAFETY_ANALYSIS
 {
     for (const auto & path : delegator->listPaths())
     {
@@ -150,10 +150,11 @@ void BlobStore<Trait>::reloadConfig(const BlobConfig & rhs)
     reload_page_type_config(
         PageType::RaftData,
         PageTypeConfig{.heavy_gc_valid_rate = config.heavy_gc_valid_rate_raft_data});
+    reload_page_type_config(PageType::Local, PageTypeConfig{.heavy_gc_valid_rate = config.heavy_gc_valid_rate});
 }
 
 template <typename Trait>
-FileUsageStatistics BlobStore<Trait>::getFileUsageStatistics() const
+FileUsageStatistics BlobStore<Trait>::getFileUsageStatistics() const NO_THREAD_SAFETY_ANALYSIS
 {
     FileUsageStatistics usage;
 
@@ -327,7 +328,7 @@ typename BlobStore<Trait>::PageEntriesEdit BlobStore<Trait>::handleLargeWrite(
                 .tag = write.tag,
                 .offset = offset_in_file,
                 .checksum = digest.checksum(),
-                .checkpoint_info = OptionalCheckpointInfo{},
+                .checkpoint_info = OptionalCheckpointInfo(),
                 .field_offsets = std::move(field_offset_and_checksum),
             };
             if (write.type == WriteBatchWriteType::PUT)
@@ -347,11 +348,7 @@ typename BlobStore<Trait>::PageEntriesEdit BlobStore<Trait>::handleLargeWrite(
             entry.file_id = INVALID_BLOBFILE_ID;
             entry.size = write.size;
             entry.tag = write.tag;
-            entry.checkpoint_info = OptionalCheckpointInfo{
-                .data_location = *write.data_location,
-                .is_valid = true,
-                .is_local_data_reclaimed = true,
-            };
+            entry.checkpoint_info = OptionalCheckpointInfo(*write.data_location, true, true);
             if (!write.offsets.empty())
             {
                 entry.field_offsets.swap(write.offsets);
@@ -374,11 +371,7 @@ typename BlobStore<Trait>::PageEntriesEdit BlobStore<Trait>::handleLargeWrite(
             PageEntryV3 entry;
             if (write.data_location.has_value())
             {
-                entry.checkpoint_info = OptionalCheckpointInfo{
-                    .data_location = *write.data_location,
-                    .is_valid = true,
-                    .is_local_data_reclaimed = true,
-                };
+                entry.checkpoint_info = OptionalCheckpointInfo(*write.data_location, true, true);
             }
             edit.putExternal(wb.getFullPageId(write.page_id), entry);
             break;
@@ -417,11 +410,15 @@ typename BlobStore<Trait>::PageEntriesEdit BlobStore<Trait>::write(
                 entry.file_id = INVALID_BLOBFILE_ID;
                 entry.size = write.size;
                 entry.tag = write.tag;
-                entry.checkpoint_info = OptionalCheckpointInfo{
-                    .data_location = *write.data_location,
-                    .is_valid = true,
-                    .is_local_data_reclaimed = true,
-                };
+                if (!write.data_location)
+                {
+                    throw Exception(
+                        ErrorCodes::LOGICAL_ERROR,
+                        "BlobStore::write remote empty data_location, page_id={}, size={}",
+                        write.page_id,
+                        write.size);
+                }
+                entry.checkpoint_info = OptionalCheckpointInfo(*write.data_location, true, true);
                 if (!write.offsets.empty())
                 {
                     entry.field_offsets.swap(write.offsets);
@@ -444,11 +441,7 @@ typename BlobStore<Trait>::PageEntriesEdit BlobStore<Trait>::write(
                 PageEntryV3 entry;
                 if (write.data_location.has_value())
                 {
-                    entry.checkpoint_info = OptionalCheckpointInfo{
-                        .data_location = *write.data_location,
-                        .is_valid = true,
-                        .is_local_data_reclaimed = true,
-                    };
+                    entry.checkpoint_info = OptionalCheckpointInfo(*write.data_location, true, true);
                 }
                 edit.putExternal(wb.getFullPageId(write.page_id), entry);
                 break;
@@ -528,7 +521,6 @@ typename BlobStore<Trait>::PageEntriesEdit BlobStore<Trait>::write(
         {
             ChecksumClass digest;
             PageEntryV3 entry;
-
             write.read_buffer->readStrict(buffer_pos, write.size);
 
             entry.file_id = blob_id;
@@ -581,11 +573,15 @@ typename BlobStore<Trait>::PageEntriesEdit BlobStore<Trait>::write(
             entry.file_id = INVALID_BLOBFILE_ID;
             entry.size = write.size;
             entry.tag = write.tag;
-            entry.checkpoint_info = OptionalCheckpointInfo{
-                .data_location = *write.data_location,
-                .is_valid = true,
-                .is_local_data_reclaimed = true,
-            };
+            if (!write.data_location)
+            {
+                throw Exception(
+                    ErrorCodes::LOGICAL_ERROR,
+                    "BlobStore::write remote empty data_location, page_id={}, size={}",
+                    write.page_id,
+                    write.size);
+            }
+            entry.checkpoint_info = OptionalCheckpointInfo(*write.data_location, true, true);
             if (!write.offsets.empty())
             {
                 entry.field_offsets.swap(write.offsets);
@@ -608,11 +604,7 @@ typename BlobStore<Trait>::PageEntriesEdit BlobStore<Trait>::write(
             PageEntryV3 entry;
             if (write.data_location.has_value())
             {
-                entry.checkpoint_info = OptionalCheckpointInfo{
-                    .data_location = *write.data_location,
-                    .is_valid = true,
-                    .is_local_data_reclaimed = true,
-                };
+                entry.checkpoint_info = OptionalCheckpointInfo(*write.data_location, true, true);
             }
             edit.putExternal(wb.getFullPageId(write.page_id), entry);
             break;
@@ -667,7 +659,7 @@ void BlobStore<Trait>::freezeBlobFiles()
 }
 
 template <typename Trait>
-void BlobStore<Trait>::remove(const PageEntries & del_entries)
+void BlobStore<Trait>::remove(const PageEntries & del_entries) NO_THREAD_SAFETY_ANALYSIS
 {
     std::set<BlobFileId> blob_updated;
     for (const auto & entry : del_entries)
@@ -725,11 +717,12 @@ void BlobStore<Trait>::remove(const PageEntries & del_entries)
 
 template <typename Trait>
 std::pair<BlobFileId, BlobFileOffset> BlobStore<Trait>::getPosFromStats(size_t size, PageType page_type)
+    NO_THREAD_SAFETY_ANALYSIS
 {
     Stopwatch watch;
     BlobStatPtr stat;
 
-    auto lock_stat = [size, this, &stat, &page_type]() {
+    auto lock_stat = [size, this, &stat, &page_type]() NO_THREAD_SAFETY_ANALYSIS {
         auto lock_stats = blob_stats.lock();
         BlobFileId blob_file_id = INVALID_BLOBFILE_ID;
         std::tie(stat, blob_file_id) = blob_stats.chooseStat(size, page_type, lock_stats);
@@ -782,6 +775,7 @@ std::pair<BlobFileId, BlobFileOffset> BlobStore<Trait>::getPosFromStats(size_t s
 
 template <typename Trait>
 void BlobStore<Trait>::removePosFromStats(BlobFileId blob_id, BlobFileOffset offset, size_t size)
+    NO_THREAD_SAFETY_ANALYSIS
 {
     const auto & stat = blob_stats.blobIdToStat(blob_id);
     {
@@ -1165,7 +1159,7 @@ BlobFilePtr BlobStore<Trait>::read(
 
 
 template <typename Trait>
-typename BlobStore<Trait>::PageTypeAndBlobIds BlobStore<Trait>::getGCStats()
+typename BlobStore<Trait>::PageTypeAndBlobIds BlobStore<Trait>::getGCStats() NO_THREAD_SAFETY_ANALYSIS
 {
     // Get a copy of stats map to avoid the big lock on stats map
     const auto stats_list = blob_stats.getStats();

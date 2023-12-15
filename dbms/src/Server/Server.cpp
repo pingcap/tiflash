@@ -14,7 +14,6 @@
 
 #include <AggregateFunctions/registerAggregateFunctions.h>
 #include <Common/CPUAffinityManager.h>
-#include <Common/ClickHouseRevision.h>
 #include <Common/ComputeLabelHolder.h>
 #include <Common/Config/ConfigReloader.h>
 #include <Common/CurrentMetrics.h>
@@ -367,7 +366,7 @@ pingcap::ClusterConfig getClusterConfig(
         ca_path,
         cert_path,
         key_path,
-        config.api_version);
+        fmt::underlying(config.api_version));
     return config;
 }
 
@@ -679,8 +678,10 @@ public:
                     LOG_INFO(log, "tcp_port_secure is closed because tls config is set");
                 }
 
+                // No TCP server is normal now because we only enable the TCP server
+                // under testing deployment
                 if (servers.empty())
-                    LOG_WARNING(log, "No TCP and HTTP servers are created");
+                    LOG_INFO(log, "No TCP server is created");
             }
             catch (const Poco::Net::NetException & e)
             {
@@ -705,12 +706,13 @@ public:
             server->start();
     }
 
+    // terminate all TCP servers when receive exit signal
     void onExit()
     {
         auto & config = server.config();
 
-        LOG_DEBUG(log, "Received termination signal.");
-        LOG_DEBUG(log, "Waiting for current connections to close.");
+        LOG_INFO(log, "Received termination signal, stopping server...");
+        LOG_INFO(log, "Waiting for current connections to close.");
 
         int current_connections = 0;
         for (auto & server : servers)
@@ -718,15 +720,11 @@ public:
             server->stop();
             current_connections += server->currentConnections();
         }
+
         String debug_msg = "Closed all listening sockets.";
-
-        if (current_connections)
-            LOG_DEBUG(log, "{} Waiting for {} outstanding connections.", debug_msg, current_connections);
-        else
-            LOG_DEBUG(log, debug_msg);
-
         if (current_connections)
         {
+            LOG_INFO(log, "{} Waiting for {} outstanding connections.", debug_msg, current_connections);
             const int sleep_max_ms = 1000 * config.getInt("shutdown_wait_unfinished", 5);
             const int sleep_one_ms = 100;
             int sleep_current_ms = 0;
@@ -741,18 +739,21 @@ public:
                 std::this_thread::sleep_for(std::chrono::milliseconds(sleep_one_ms));
             }
         }
+        else
+        {
+            LOG_INFO(log, debug_msg);
+        }
 
         debug_msg = "Closed connections.";
-
         if (current_connections)
-            LOG_DEBUG(
+            LOG_INFO(
                 log,
                 "{} But {} remains."
                 " Tip: To increase wait time add to config: <shutdown_wait_unfinished>60</shutdown_wait_unfinished>",
                 debug_msg,
                 current_connections);
         else
-            LOG_DEBUG(log, debug_msg);
+            LOG_INFO(log, debug_msg);
     }
 
 private:
@@ -951,7 +952,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     const auto disaggregated_mode = getDisaggregatedMode(config());
     const auto use_autoscaler = useAutoScaler(config());
-    const bool use_autoscaler_without_s3 = useAutoScalerWithoutS3(config());
 
     // Some Storage's config is necessary for Proxy
     TiFlashStorageConfig storage_config;
@@ -966,12 +966,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
     else if (disaggregated_mode == DisaggregatedMode::Compute && use_autoscaler)
     {
-        if (!use_autoscaler_without_s3)
-        {
-            // compute node with auto scaler, the requirements will be initted later.
-            storage_config.s3_config.enable(/*check_requirements*/ false, log);
-        }
-        // else keep the behavior running disagg without S3 when auto scaler is enable.
+        // compute node with auto scaler, the requirements will be initted later.
+        storage_config.s3_config.enable(/*check_requirements*/ false, log);
     }
 
     if (storage_config.format_version != 0)
@@ -1280,7 +1276,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /// It internally depends on UserConfig::parseSettings.
     // TODO: Parse the settings from config file at the program beginning
     global_context->setDefaultProfiles(config());
-    LOG_INFO(log, "Loaded global settings from default_profile and system_profile.");
+    LOG_INFO(
+        log,
+        "Loaded global settings from default_profile and system_profile, changed configs: {{{}}}",
+        global_context->getSettingsRef().toString());
 
     ///
     /// The config value in global settings can only be used from here because we just loaded it from config file.
@@ -1333,7 +1332,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     if (global_context->getSharedContextDisagg()->isDisaggregatedStorageMode())
     {
         global_context->getSharedContextDisagg()->initWriteNodeSnapManager();
-        global_context->getSharedContextDisagg()->initFastAddPeerContext();
+        global_context->getSharedContextDisagg()->initFastAddPeerContext(settings.fap_handle_concurrency);
     }
 
     if (global_context->getSharedContextDisagg()->isDisaggregatedComputeMode())
@@ -1562,58 +1561,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
         }
     });
 
-    auto & tmt_context = global_context->getTMTContext();
-    const bool is_disagg_storage = global_context->getSharedContextDisagg()->isDisaggregatedStorageMode();
-    const bool is_prod = !global_context->isTest();
-
-    // TODO: resource control is not supported for WN. So disable pipeline model and LAC.
-    if (!is_disagg_storage)
-    {
-#ifdef DBMS_PUBLIC_GTEST
-        LocalAdmissionController::global_instance = std::make_unique<MockLocalAdmissionController>();
-#else
-        LocalAdmissionController::global_instance
-            = std::make_unique<LocalAdmissionController>(tmt_context.getKVCluster(), tmt_context.getEtcdClient());
-#endif
-
-        // For test mode, TaskScheduler is controlled by test case.
-        if (is_prod)
-        {
-            auto get_pool_size = [](const auto & setting) {
-                return setting == 0 ? getNumberOfLogicalCPUCores() : static_cast<size_t>(setting);
-            };
-            TaskSchedulerConfig config{
-                {get_pool_size(settings.pipeline_cpu_task_thread_pool_size),
-                 settings.pipeline_cpu_task_thread_pool_queue_type},
-                {get_pool_size(settings.pipeline_io_task_thread_pool_size),
-                 settings.pipeline_io_task_thread_pool_queue_type},
-            };
-            RUNTIME_CHECK(!TaskScheduler::instance);
-            TaskScheduler::instance = std::make_unique<TaskScheduler>(config);
-            LOG_INFO(log, "init pipeline task scheduler");
-        }
-    }
-
-    SCOPE_EXIT({
-        if (!is_disagg_storage)
-            LocalAdmissionController::global_instance.reset();
-    });
-    SCOPE_EXIT({
-        if (!is_disagg_storage && is_prod)
-        {
-            assert(TaskScheduler::instance);
-            TaskScheduler::instance.reset();
-        }
-    });
-
-    if (settings.enable_async_grpc_client)
-    {
-        auto size = settings.grpc_completion_queue_pool_size;
-        if (size == 0)
-            size = std::thread::hardware_concurrency();
-        GRPCCompletionQueuePool::global_instance = std::make_unique<GRPCCompletionQueuePool>(size);
-    }
-
     // FIXME: (bootstrap) we should bootstrap the tiflash node more early!
     if (global_context->getSharedContextDisagg()->notDisaggregatedMode()
         || /*has_been_bootstrap*/ store_ident.has_value())
@@ -1633,9 +1580,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
         auto wn_ps = global_context->getWriteNodePageStorage();
         wn_ps->waitUntilInitedFromRemoteStore();
     }
-
-    /// Then, startup grpc server to serve raft and/or flash services.
-    FlashGrpcServerHolder flash_grpc_server_holder(this->context(), this->config(), raft_config, log);
 
     {
         TcpHttpServersHolder tcpHttpServersHolder(*this, settings, log);
@@ -1683,6 +1627,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         auto metrics_prometheus = std::make_unique<MetricsPrometheus>(*global_context, async_metrics);
 
         SessionCleaner session_cleaner(*global_context);
+        auto & tmt_context = global_context->getTMTContext();
 
         if (proxy_conf.is_proxy_runnable)
         {
@@ -1796,6 +1741,65 @@ int Server::main(const std::vector<std::string> & /*args*/)
             Poco::Timestamp ts;
             GET_METRIC(tiflash_server_info, start_time).Set(ts.epochTime());
         }
+
+        // For test mode, TaskScheduler and LAC is controlled by test case.
+        // TODO: resource control is not supported for WN. So disable pipeline model and LAC.
+        const bool init_pipeline_and_lac
+            = !global_context->isTest() && !global_context->getSharedContextDisagg()->isDisaggregatedStorageMode();
+        if (init_pipeline_and_lac)
+        {
+#ifdef DBMS_PUBLIC_GTEST
+            LocalAdmissionController::global_instance = std::make_unique<MockLocalAdmissionController>();
+#else
+            LocalAdmissionController::global_instance
+                = std::make_unique<LocalAdmissionController>(tmt_context.getKVCluster(), tmt_context.getEtcdClient());
+#endif
+
+            auto get_pool_size = [](const auto & setting) {
+                return setting == 0 ? getNumberOfLogicalCPUCores() : static_cast<size_t>(setting);
+            };
+            TaskSchedulerConfig config{
+                {get_pool_size(settings.pipeline_cpu_task_thread_pool_size),
+                 settings.pipeline_cpu_task_thread_pool_queue_type},
+                {get_pool_size(settings.pipeline_io_task_thread_pool_size),
+                 settings.pipeline_io_task_thread_pool_queue_type},
+            };
+            RUNTIME_CHECK(!TaskScheduler::instance);
+            TaskScheduler::instance = std::make_unique<TaskScheduler>(config);
+            LOG_INFO(log, "init pipeline task scheduler with {}", config.toString());
+        }
+
+        SCOPE_EXIT({
+            if (init_pipeline_and_lac)
+            {
+                assert(TaskScheduler::instance);
+                TaskScheduler::instance.reset();
+                assert(LocalAdmissionController::global_instance);
+                LocalAdmissionController::global_instance.reset();
+            }
+        });
+
+        if (settings.enable_async_grpc_client)
+        {
+            auto size = settings.grpc_completion_queue_pool_size;
+            if (size == 0)
+                size = std::thread::hardware_concurrency();
+            GRPCCompletionQueuePool::global_instance = std::make_unique<GRPCCompletionQueuePool>(size);
+        }
+
+        /// startup grpc server to serve raft and/or flash services.
+        FlashGrpcServerHolder flash_grpc_server_holder(this->context(), this->config(), raft_config, log);
+
+        SCOPE_EXIT({
+            // Stop LAC for AutoScaler managed CN before FlashGrpcServerHolder is destructed.
+            // Because AutoScaler it will kill tiflash process when port of flash_server_addr is down.
+            // And we want to make sure LAC is cleanedup.
+            // The effects are there will be no resource control during [lac.stop(), FlashGrpcServer destruct done],
+            // but it's basically ok, that duration is small(normally 100-200ms).
+            if (global_context->getSharedContextDisagg()->isDisaggregatedComputeMode() && use_autoscaler
+                && LocalAdmissionController::global_instance)
+                LocalAdmissionController::global_instance->stop();
+        });
 
         tmt_context.setStatusRunning();
 

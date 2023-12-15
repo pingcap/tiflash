@@ -28,18 +28,24 @@ struct MPPQueryId
     UInt64 server_id;
     UInt64 start_ts;
     String resource_group_name;
+    UInt64 connection_id;
+    String connection_alias;
 
     MPPQueryId(
         UInt64 query_ts,
         UInt64 local_query_id,
         UInt64 server_id,
         UInt64 start_ts,
-        const String & resource_group_name_)
+        const String & resource_group_name_,
+        UInt64 connection_id_,
+        const String & connection_alias_)
         : query_ts(query_ts)
         , local_query_id(local_query_id)
         , server_id(server_id)
         , start_ts(start_ts)
         , resource_group_name(resource_group_name_)
+        , connection_id(connection_id_)
+        , connection_alias(connection_alias_)
     {}
     explicit MPPQueryId(const mpp::TaskMeta & task_meta)
         : query_ts(task_meta.query_ts())
@@ -47,6 +53,8 @@ struct MPPQueryId
         , server_id(task_meta.server_id())
         , start_ts(task_meta.start_ts())
         , resource_group_name(task_meta.resource_group_name())
+        , connection_id(task_meta.connection_id())
+        , connection_alias(task_meta.connection_alias())
     {}
     bool operator<(const MPPQueryId & mpp_query_id) const;
     bool operator==(const MPPQueryId & rid) const;
@@ -56,12 +64,11 @@ struct MPPQueryId
     String toString() const
     {
         return fmt::format(
-            "<query_ts:{}, local_query_id:{}, server_id:{}, start_ts:{}, resource_group: {}>",
+            "<query_ts:{}, local_query_id:{}, server_id:{}, start_ts:{}>",
             query_ts,
             local_query_id,
             server_id,
-            start_ts,
-            resource_group_name);
+            start_ts);
     }
 };
 
@@ -89,9 +96,11 @@ struct MPPGatherId
         UInt64 local_query_id,
         UInt64 server_id,
         UInt64 start_ts,
-        const String & resource_group_name)
+        const String & resource_group_name,
+        UInt64 connection_id,
+        const String & connection_alias)
         : gather_id(gather_id_)
-        , query_id(query_ts, local_query_id, server_id, start_ts, resource_group_name)
+        , query_id(query_ts, local_query_id, server_id, start_ts, resource_group_name, connection_id, connection_alias)
     {}
     explicit MPPGatherId(const mpp::TaskMeta & task_meta)
         : gather_id(task_meta.gather_id())
@@ -100,13 +109,12 @@ struct MPPGatherId
     String toString() const
     {
         return fmt::format(
-            "<gather_id:{}, query_ts:{}, local_query_id:{}, server_id:{}, start_ts:{}, resource_group: {}>",
+            "gather_id:{}, query_ts:{}, local_query_id:{}, server_id:{}, start_ts:{}",
             gather_id,
             query_id.query_ts,
             query_id.local_query_id,
             query_id.server_id,
-            query_id.start_ts,
-            query_id.resource_group_name);
+            query_id.start_ts);
     }
     bool hasMeaningfulGatherId() const { return gather_id > 0; }
     bool operator==(const MPPGatherId & rid) const;
@@ -122,7 +130,7 @@ struct MPPTaskId
 {
     MPPTaskId()
         : task_id(unknown_task_id)
-        , gather_id(0, 0, 0, 0, 0, ""){};
+        , gather_id(0, 0, 0, 0, 0, "", 0, ""){};
 
     MPPTaskId(
         UInt64 start_ts,
@@ -131,9 +139,19 @@ struct MPPTaskId
         Int64 gather_id,
         UInt64 query_ts,
         UInt64 local_query_id,
-        const String resource_group_name)
+        const String resource_group_name,
+        UInt64 connection_id,
+        const String & connection_alias)
         : task_id(task_id_)
-        , gather_id(gather_id, query_ts, local_query_id, server_id, start_ts, resource_group_name)
+        , gather_id(
+              gather_id,
+              query_ts,
+              local_query_id,
+              server_id,
+              start_ts,
+              resource_group_name,
+              connection_id,
+              connection_alias)
     {}
 
     explicit MPPTaskId(const mpp::TaskMeta & task_meta)

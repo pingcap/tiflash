@@ -28,11 +28,6 @@ inline bool getFullness(ASTTableJoin::Kind kind)
     return kind == ASTTableJoin::Kind::RightOuter || kind == ASTTableJoin::Kind::Cross_RightOuter
         || kind == ASTTableJoin::Kind::Full;
 }
-/// For semi and anti join: A semi/anti join B, that uses A as build table
-inline bool isRightSemiFamily(ASTTableJoin::Kind kind)
-{
-    return kind == ASTTableJoin::Kind::RightSemi || kind == ASTTableJoin::Kind::RightAnti;
-}
 inline bool isLeftOuterJoin(ASTTableJoin::Kind kind)
 {
     return kind == ASTTableJoin::Kind::LeftOuter || kind == ASTTableJoin::Kind::Cross_LeftOuter;
@@ -45,6 +40,10 @@ inline bool isInnerJoin(ASTTableJoin::Kind kind)
 {
     return kind == ASTTableJoin::Kind::Inner || kind == ASTTableJoin::Kind::Cross;
 }
+inline bool isSemiJoin(ASTTableJoin::Kind kind)
+{
+    return kind == ASTTableJoin::Kind::Semi || kind == ASTTableJoin::Kind::Cross_Semi;
+}
 inline bool isAntiJoin(ASTTableJoin::Kind kind)
 {
     return kind == ASTTableJoin::Kind::Anti || kind == ASTTableJoin::Kind::Cross_Anti;
@@ -52,8 +51,19 @@ inline bool isAntiJoin(ASTTableJoin::Kind kind)
 inline bool isCrossJoin(ASTTableJoin::Kind kind)
 {
     return kind == ASTTableJoin::Kind::Cross || kind == ASTTableJoin::Kind::Cross_LeftOuter
-        || kind == ASTTableJoin::Kind::Cross_RightOuter || kind == ASTTableJoin::Kind::Cross_Anti
-        || kind == ASTTableJoin::Kind::Cross_LeftOuterSemi || kind == ASTTableJoin::Kind::Cross_LeftOuterAnti;
+        || kind == ASTTableJoin::Kind::Cross_RightOuter || kind == ASTTableJoin::Kind::Cross_Semi
+        || kind == ASTTableJoin::Kind::Cross_Anti || kind == ASTTableJoin::Kind::Cross_LeftOuterSemi
+        || kind == ASTTableJoin::Kind::Cross_LeftOuterAnti;
+}
+/// (anti) semi join.
+inline bool isSemiFamily(ASTTableJoin::Kind kind)
+{
+    return isSemiJoin(kind) || isAntiJoin(kind);
+}
+/// For semi and anti join: A semi/anti join B, that uses A as build table
+inline bool isRightSemiFamily(ASTTableJoin::Kind kind)
+{
+    return kind == ASTTableJoin::Kind::RightSemi || kind == ASTTableJoin::Kind::RightAnti;
 }
 /// (cartesian/null-aware) (anti) left outer semi join.
 inline bool isLeftOuterSemiFamily(ASTTableJoin::Kind kind)
@@ -86,7 +96,7 @@ inline bool useRowFlaggedHashMap(ASTTableJoin::Kind kind, bool has_other_conditi
     return has_other_condition && isNecessaryKindToUseRowFlaggedHashMap(kind);
 }
 
-bool mayProbeSideExpandedAfterJoin(ASTTableJoin::Kind kind, ASTTableJoin::Strictness strictness);
+bool mayProbeSideExpandedAfterJoin(ASTTableJoin::Kind kind);
 
 struct JoinBuildInfo
 {
@@ -137,4 +147,7 @@ void recordFilteredRows(
     const String & filter_column,
     ColumnPtr & null_map_holder,
     ConstNullMapPtr & null_map);
+
+std::pair<const ColumnUInt8::Container *, ConstNullMapPtr> getDataAndNullMapVectorFromFilterColumn(
+    ColumnPtr & filter_column);
 } // namespace DB

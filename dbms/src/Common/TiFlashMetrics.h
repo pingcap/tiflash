@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/ComputeLabelHolder.h>
+#include <Common/Exception.h>
 #include <Common/ProcessCollector.h>
 #include <Common/TiFlashBuildInfo.h>
 #include <Common/nocopyable.h>
@@ -26,11 +27,10 @@
 #include <prometheus/histogram.h>
 #include <prometheus/registry.h>
 
+#include <cassert>
 #include <ext/scope_guard.h>
 #include <mutex>
-
-// to make GCC 11 happy
-#include <cassert>
+#include <shared_mutex>
 
 namespace DB
 {
@@ -244,6 +244,20 @@ namespace DB
       F(type_seg_split_ingest, {{"type", "seg_split_ingest"}}, ExpBuckets{0.001, 2, 20}),                                           \
       F(type_seg_merge_bg_gc, {{"type", "seg_merge_bg_gc"}}, ExpBuckets{0.001, 2, 20}),                                             \
       F(type_place_index_update, {{"type", "place_index_update"}}, ExpBuckets{0.001, 2, 20}))                                       \
+    M(tiflash_storage_subtask_throughput_bytes,                                                                                     \
+      "Calculate the throughput of (maybe foreground) tasks of storage in bytes",                                                   \
+      Counter, /**/                                                                                                                 \
+      F(type_delta_flush, {"type", "delta_flush"}), /**/                                                                            \
+      F(type_delta_compact, {"type", "delta_compact"}), /**/                                                                        \
+      F(type_write_to_cache, {"type", "write_to_cache"}), /**/                                                                      \
+      F(type_write_to_disk, {"type", "write_to_disk"})) /**/                                                                        \
+    M(tiflash_storage_subtask_throughput_rows,                                                                                      \
+      "Calculate the throughput of (maybe foreground) tasks of storage in rows",                                                    \
+      Counter, /**/                                                                                                                 \
+      F(type_delta_flush, {"type", "delta_flush"}), /**/                                                                            \
+      F(type_delta_compact, {"type", "delta_compact"}), /**/                                                                        \
+      F(type_write_to_cache, {"type", "write_to_cache"}), /**/                                                                      \
+      F(type_write_to_disk, {"type", "write_to_disk"})) /**/                                                                        \
     M(tiflash_storage_throughput_bytes,                                                                                             \
       "Calculate the throughput of tasks of storage in bytes",                                                                      \
       Gauge, /**/                                                                                                                   \
@@ -364,12 +378,49 @@ namespace DB
       F(type_worker_fetch_page, {{"type", "worker_fetch_page"}}, ExpBuckets{0.01, 2, 20}),                                          \
       F(type_worker_prepare_stream, {{"type", "worker_prepare_stream"}}, ExpBuckets{0.01, 2, 20}),                                  \
       F(type_stream_wait_next_task, {{"type", "stream_wait_next_task"}}, ExpBuckets{0.01, 2, 20}),                                  \
-      F(type_stream_read, {{"type", "stream_read"}}, ExpBuckets{0.01, 2, 20}))                                                      \
+      F(type_stream_read, {{"type", "stream_read"}}, ExpBuckets{0.01, 2, 20}),                                                      \
+      F(type_deserialize_page, {{"type", "deserialize_page"}}, ExpBuckets{0.01, 2, 20}))                                            \
     M(tiflash_disaggregated_details,                                                                                                \
       "",                                                                                                                           \
       Counter,                                                                                                                      \
       F(type_cftiny_read, {{"type", "cftiny_read"}}),                                                                               \
       F(type_cftiny_fetch, {{"type", "cftiny_fetch"}}))                                                                             \
+    M(tiflash_fap_task_result,                                                                                                      \
+      "",                                                                                                                           \
+      Counter,                                                                                                                      \
+      F(type_total, {{"type", "total"}}),                                                                                           \
+      F(type_success_transform, {{"type", "success_transform"}}),                                                                   \
+      F(type_failed_other, {{"type", "failed_other"}}),                                                                             \
+      F(type_failed_cancel, {{"type", "failed_cancel"}}),                                                                           \
+      F(type_failed_no_suitable, {{"type", "failed_no_suitable"}}),                                                                 \
+      F(type_failed_timeout, {{"type", "failed_timeout"}}),                                                                         \
+      F(type_failed_baddata, {{"type", "failed_baddata"}}),                                                                         \
+      F(type_failed_repeated, {{"type", "failed_repeated"}}),                                                                       \
+      F(type_restore, {{"type", "restore"}}),                                                                                       \
+      F(type_succeed, {{"type", "succeed"}}))                                                                                       \
+    M(tiflash_fap_task_state,                                                                                                       \
+      "",                                                                                                                           \
+      Gauge,                                                                                                                        \
+      F(type_ongoing, {{"type", "ongoing"}}),                                                                                       \
+      F(type_ingesting_stage, {{"type", "ingesting_stage"}}),                                                                       \
+      F(type_writing_stage, {{"type", "writing_stage"}}),                                                                           \
+      F(type_queueing_stage, {{"type", "queueing_stage"}}),                                                                         \
+      F(type_selecting_stage, {{"type", "selecting_stage"}}))                                                                       \
+    M(tiflash_fap_nomatch_reason,                                                                                                   \
+      "",                                                                                                                           \
+      Counter,                                                                                                                      \
+      F(type_conf, {{"type", "conf"}}),                                                                                             \
+      F(type_region_state, {{"type", "region_state"}}),                                                                             \
+      F(type_no_meta, {{"type", "no_meta"}}))                                                                                       \
+    M(tiflash_fap_task_duration_seconds,                                                                                            \
+      "",                                                                                                                           \
+      Histogram,                                                                                                                    \
+      F(type_select_stage, {{"type", "select_stage"}}, ExpBucketsWithRange{0.1, 2, 60}),                                            \
+      F(type_write_stage, {{"type", "write_stage"}}, ExpBucketsWithRange{0.05, 2, 60}),                                             \
+      F(type_ingest_stage, {{"type", "ingest_stage"}}, ExpBucketsWithRange{0.05, 2, 30}),                                           \
+      F(type_total, {{"type", "total"}}, ExpBucketsWithRange{0.1, 2, 300}),                                                         \
+      F(type_queue_stage, {{"type", "queue_stage"}}, ExpBucketsWithRange{0.1, 2, 300}),                                             \
+      F(type_phase1_total, {{"type", "phase1_total"}}, ExpBucketsWithRange{0.2, 2, 80}))                                            \
     M(tiflash_raft_command_duration_seconds,                                                                                        \
       "Bucketed histogram of some raft command: apply snapshot and ingest SST",                                                     \
       Histogram, /* these command usually cost several seconds, increase the start bucket to 50ms */                                \
@@ -378,6 +429,7 @@ namespace DB
       F(type_ingest_sst_sst2dt, {{"type", "ingest_sst_sst2dt"}}, ExpBuckets{0.05, 2, 10}),                                          \
       F(type_ingest_sst_upload, {{"type", "ingest_sst_upload"}}, ExpBuckets{0.05, 2, 10}),                                          \
       F(type_apply_snapshot_predecode, {{"type", "snapshot_predecode"}}, ExpBuckets{0.05, 2, 15}),                                  \
+      F(type_apply_snapshot_total, {{"type", "snapshot_total"}}, ExpBucketsWithRange{0.1, 2, 600}),                                 \
       F(type_apply_snapshot_predecode_sst2dt, {{"type", "snapshot_predecode_sst2dt"}}, ExpBuckets{0.05, 2, 15}),                    \
       F(type_apply_snapshot_predecode_parallel_wait,                                                                                \
         {{"type", "snapshot_predecode_parallel_wait"}},                                                                             \
@@ -504,9 +556,12 @@ namespace DB
       Counter,                                                                                                                      \
       F(type_sche_no_pool, {"type", "sche_no_pool"}),                                                                               \
       F(type_sche_no_slot, {"type", "sche_no_slot"}),                                                                               \
+      F(type_sche_no_ru, {"type", "sche_no_ru"}),                                                                                   \
       F(type_sche_no_segment, {"type", "sche_no_segment"}),                                                                         \
+      F(type_sche_active_segment_limit, {"type", "sche_active_segment_limit"}),                                                     \
       F(type_sche_from_cache, {"type", "sche_from_cache"}),                                                                         \
       F(type_sche_new_task, {"type", "sche_new_task"}),                                                                             \
+      F(type_ru_exhausted, {"type", "ru_exhausted"}),                                                                               \
       F(type_add_cache_succ, {"type", "add_cache_succ"}),                                                                           \
       F(type_add_cache_stale, {"type", "add_cache_stale"}),                                                                         \
       F(type_get_cache_miss, {"type", "get_cache_miss"}),                                                                           \
@@ -587,6 +642,7 @@ namespace DB
       F(type_data, {"type", "data"}),                                                                                               \
       F(type_log, {"type", "log"}),                                                                                                 \
       F(type_meta, {"type", "kvstore"}),                                                                                            \
+      F(type_localkv, {"type", "localkv"}),                                                                                         \
       F(type_unknown, {"type", "unknown"}))                                                                                         \
     M(tiflash_storage_checkpoint_flow_by_types,                                                                                     \
       "The bytes flow cause by remote checkpoint",                                                                                  \
@@ -597,6 +653,7 @@ namespace DB
       F(type_data, {"type", "data"}),                                                                                               \
       F(type_log, {"type", "log"}),                                                                                                 \
       F(type_meta, {"type", "kvstore"}),                                                                                            \
+      F(type_localkv, {"type", "localkv"}),                                                                                         \
       F(type_unknown, {"type", "unknown"}))                                                                                         \
     M(tiflash_storage_page_data_by_types,                                                                                           \
       "The existing bytes stored in UniPageStorage",                                                                                \
@@ -607,6 +664,7 @@ namespace DB
       F(type_data, {"type", "data"}),                                                                                               \
       F(type_log, {"type", "log"}),                                                                                                 \
       F(type_meta, {"type", "kvstore"}),                                                                                            \
+      F(type_localkv, {"type", "localkv"}),                                                                                         \
       F(type_unknown, {"type", "unknown"}))                                                                                         \
     M(tiflash_storage_s3_request_seconds,                                                                                           \
       "S3 request duration in seconds",                                                                                             \
@@ -721,7 +779,13 @@ namespace DB
       F(type_total_consumption, {"type", "total_consumption"}),                                                                     \
       F(type_bucket_fill_rate, {"type", "bucket_fill_rate"}),                                                                       \
       F(type_bucket_capacity, {"type", "bucket_capacity"}),                                                                         \
-      F(type_fetch_tokens_from_gac_count, {"type", "fetch_tokens_from_gac_count"}))
+      F(type_compute_ru_consumption, {"type", "compute_ru_consumption"}),                                                           \
+      F(type_storage_ru_consumption, {"type", "storage_ru_consumption"}),                                                           \
+      F(type_compute_ru_exhausted, {"type", "compute_ru_exhausted"}),                                                               \
+      F(type_gac_req_acquire_tokens, {"type", "gac_req_acquire_tokens"}),                                                           \
+      F(type_gac_req_ru_consumption_delta, {"type", "gac_req_ru_consumption_delta"}),                                               \
+      F(type_gac_resp_tokens, {"type", "gac_resp_tokens"}),                                                                         \
+      F(type_gac_resp_capacity, {"type", "gac_resp_capacity"}))
 
 
 /// Buckets with boundaries [start * base^0, start * base^1, ..., start * base^(size-1)]
@@ -730,6 +794,25 @@ struct ExpBuckets
     const double start;
     const double base;
     const size_t size;
+
+    constexpr ExpBuckets(const double start_, const double base_, const size_t size_)
+        : start(start_)
+        , base(base_)
+        , size(size_)
+    {
+#ifndef NDEBUG
+        // Checks under debug mode
+        // Check the base
+        RUNTIME_CHECK_MSG(base > 1.0, "incorrect base for ExpBuckets, start={} base={} size={}", start, base, size);
+        // Too many buckets will bring more network flow by transferring metrics
+        RUNTIME_CHECK_MSG(
+            size <= 50,
+            "too many metrics buckets, reconsider step/unit, start={} base={} size={}",
+            start,
+            base,
+            size);
+#endif
+    }
 
     // NOLINTNEXTLINE(google-explicit-constructor)
     inline operator prometheus::Histogram::BucketBoundaries() const &&
@@ -742,6 +825,54 @@ struct ExpBuckets
         });
         return buckets;
     }
+};
+
+/// Buckets with boundaries [start * base^0, start * base^1, ..., start * base^x]
+/// such x that start * base^(x-1) < end, and start * base^x >= end.
+struct ExpBucketsWithRange
+{
+    static size_t getSize(double l, double r, double b)
+    {
+        return static_cast<size_t>(::ceil(::log(r / l) / ::log(b))) + 1;
+    }
+
+    ExpBucketsWithRange(double start_, double base_, double end_)
+        : start(start_)
+        , base(base_)
+        , size(ExpBucketsWithRange::getSize(start_, end_, base_))
+    {
+#ifndef NDEBUG
+        // Check the base
+        RUNTIME_CHECK_MSG(
+            base > 1.0,
+            "incorrect base for ExpBucketsWithRange, start={} base={} end={}",
+            start,
+            base,
+            end_);
+        RUNTIME_CHECK_MSG(
+            start_ < end_,
+            "incorrect start/end for ExpBucketsWithRange, start={} base={} end={}",
+            start,
+            base,
+            end_);
+#endif
+    }
+    // NOLINTNEXTLINE(google-explicit-constructor)
+    inline operator prometheus::Histogram::BucketBoundaries() const &&
+    {
+        prometheus::Histogram::BucketBoundaries buckets(size);
+        double current = start;
+        std::for_each(buckets.begin(), buckets.end(), [&](auto & e) {
+            e = current;
+            current *= base;
+        });
+        return buckets;
+    }
+
+private:
+    const double start;
+    const double base;
+    const size_t size;
 };
 
 // Buckets with same width
@@ -863,11 +994,17 @@ struct MetricFamily
     T & get(size_t idx = 0) { return *(metrics[idx]); }
     T & get(size_t idx, const String & resource_group_name)
     {
-        if (metrics_map.find(resource_group_name) == metrics_map.end())
         {
-            addMetricsForResourceGroup(resource_group_name);
+            std::shared_lock lock(resource_group_metrics_mu);
+            if (resource_group_metrics_map.find(resource_group_name) != resource_group_metrics_map.end())
+                return *(resource_group_metrics_map[resource_group_name][idx]);
         }
-        return *(metrics_map[resource_group_name][idx]);
+
+        std::lock_guard lock(resource_group_metrics_mu);
+        if (resource_group_metrics_map.find(resource_group_name) == resource_group_metrics_map.end())
+            addMetricsForResourceGroup(resource_group_name);
+
+        return *(resource_group_metrics_map[resource_group_name][idx]);
     }
 
 private:
@@ -886,14 +1023,15 @@ private:
             auto & metric = MetricTrait::add(*store_family, resource_group_name, MetricArgType{});
             metrics_temp.emplace_back(&metric);
         }
-        metrics_map[resource_group_name] = metrics_temp;
+        resource_group_metrics_map[resource_group_name] = metrics_temp;
     }
 
     std::vector<T *> metrics;
     prometheus::Family<T> * store_family;
     std::vector<MetricArgType> store_args;
     // <resource_group_name, metrics>
-    std::unordered_map<String, std::vector<T *>> metrics_map;
+    std::shared_mutex resource_group_metrics_mu;
+    std::unordered_map<String, std::vector<T *>> resource_group_metrics_map;
 };
 
 /// Centralized registry of TiFlash metrics.
