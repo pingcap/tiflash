@@ -105,7 +105,7 @@ struct AsyncTasks
     // Finished -> NotScheduled(fetched)
     enum class TaskState
     {
-        NotScheduled,
+        NotScheduled = 0,
         InQueue,
         Running,
         Finished,
@@ -217,14 +217,14 @@ struct AsyncTasks
             }
         }
 
+        // Only one thread can block cancel and wait.
+        RUNTIME_CHECK_MSG(!cancel_handle->canceled(), "Try block cancel running task twice");
+        cancel_handle->doCancel();
         if (state == TaskState::InQueue)
         {
             leakingDiscardTask(k);
             return state;
         }
-        // Only one thread can block cancel and wait.
-        RUNTIME_CHECK_MSG(!cancel_handle->canceled(), "Try block cancel running task twice");
-        cancel_handle->doCancel();
         // Consider a one producer thread one consumer thread scene, the first task is running,
         // and the second task is in queue. If we block cancel the second task here, deadlock will happen.
         // So we only block on fetching running tasks, and users have to guaruantee cancel checking.

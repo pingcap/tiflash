@@ -2352,6 +2352,14 @@ void Segment::drop(const FileProviderPtr & file_provider, WriteBatches & wbs)
     stable->drop(file_provider);
 }
 
+void Segment::dropAsFAPTemp(const FileProviderPtr & file_provider, WriteBatches & wbs)
+{
+    delta->recordRemoveColumnFilesPages(wbs);
+    stable->recordRemovePacksPages(wbs);
+    wbs.writeAll();
+    stable->drop(file_provider);
+}
+
 Segment::ReadInfo Segment::getReadInfo(
     const DMContext & dm_context,
     const ColumnDefines & read_columns,

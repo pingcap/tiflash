@@ -21,6 +21,7 @@
 #include <Storages/KVStore/MultiRaft/RegionPersister.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/Page/PageStorage.h>
+#include <Storages/Page/V3/Universal/RaftDataReader.h>
 #include <Storages/Page/V3/Universal/UniversalPageIdFormatImpl.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
 #include <Storages/Page/V3/Universal/UniversalWriteBatchImpl.h>
@@ -92,10 +93,11 @@ CheckpointIngestInfoPtr CheckpointIngestInfo::restore(
 
             LOG_DEBUG(
                 log,
-                "Restore segments for checkpoint, remote_segment_id={} range={} remote_store_id={}",
+                "Restore segments for checkpoint, remote_segment_id={} range={} remote_store_id={} region_id={}",
                 segment_info.segment_id,
                 segment_info.range.toDebugString(),
-                remote_store_id);
+                remote_store_id,
+                region_id);
             restored_segments.push_back(std::make_shared<DM::Segment>(
                 log,
                 segment_info.epoch,
@@ -185,6 +187,7 @@ static void removeFromLocal(TMTContext & tmt, UInt64 region_id)
 
 void CheckpointIngestInfo::deleteWrittenData(TMTContext & tmt, RegionPtr region, const DM::Segments & segments)
 {
+    auto region_id = region->id();
     auto & storages = tmt.getStorages();
     auto keyspace_id = region->getKeyspaceID();
     auto table_id = region->getMappedTableID();
@@ -207,10 +210,41 @@ void CheckpointIngestInfo::deleteWrittenData(TMTContext & tmt, RegionPtr region,
                     UniversalPageIdFormat::toFullPrefix(keyspace_id, StorageType::Meta, table_id),
                     segment_to_drop->segmentId()),
                 region->id());
-            segment_to_drop->abandon(*dm_context);
-            segment_to_drop->drop(tmt.getContext().getFileProvider(), wbs);
+            segment_to_drop->dropAsFAPTemp(tmt.getContext().getFileProvider(), wbs);
         }
     }
+    else
+    {
+        LOG_INFO(
+            log,
+            "No found storage in clean stale FAP data region_id={} keyspace_id={} table_id={}",
+            region_id,
+            keyspace_id,
+            table_id);
+    }
+
+    UniversalWriteBatch wb;
+    auto wn_ps = tmt.getContext().getWriteNodePageStorage();
+    RaftDataReader raft_data_reader(*wn_ps);
+    raft_data_reader.traverseRemoteRaftLogForRegion(
+        region_id,
+        [&](const UniversalPageId & page_id, PageSize size, const PS::V3::CheckpointLocation &) {
+            LOG_DEBUG(
+                log,
+                "Delete raft log size {}, region_id={} index={}",
+                size,
+                region_id,
+                UniversalPageIdFormat::getU64ID(page_id));
+            wb.delPage(page_id);
+        });
+    wn_ps->write(std::move(wb));
+
+    LOG_INFO(
+        log,
+        "Finish clean stale FAP data region_id={} keyspace_id={} table_id={}",
+        region_id,
+        keyspace_id,
+        table_id);
 }
 
 bool CheckpointIngestInfo::cleanOnSuccess(TMTContext & tmt, UInt64 region_id)
