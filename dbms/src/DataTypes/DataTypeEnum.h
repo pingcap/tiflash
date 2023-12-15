@@ -105,11 +105,6 @@ public:
 
     FieldType getValue(StringRef name) const
     {
-        if (!name.data)
-        {
-            return 0;
-        }
-
         const auto it = name_to_value_map.find(name);
         if (it == std::end(name_to_value_map))
             throw Exception{
