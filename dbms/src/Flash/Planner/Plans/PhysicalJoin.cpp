@@ -76,11 +76,11 @@ PhysicalPlanNodePtr PhysicalJoin::build(
     const auto & probe_plan = tiflash_join.build_side_index == 0 ? right : left;
     const auto & build_plan = tiflash_join.build_side_index == 0 ? left : right;
     const auto probe_source_columns = tiflash_join.build_side_index == 0
-        ? JoinInterpreterHelper::genExpressionAnalyzerSourceColumns(right_input_header, right->getSchema())
-        : JoinInterpreterHelper::genExpressionAnalyzerSourceColumns(left_input_header, left->getSchema());
+        ? JoinInterpreterHelper::genDAGExpressionAnalyzerSourceColumns(right_input_header, right->getSchema())
+        : JoinInterpreterHelper::genDAGExpressionAnalyzerSourceColumns(left_input_header, left->getSchema());
     const auto & build_source_columns = tiflash_join.build_side_index == 0
-        ? JoinInterpreterHelper::genExpressionAnalyzerSourceColumns(left_input_header, left->getSchema())
-        : JoinInterpreterHelper::genExpressionAnalyzerSourceColumns(right_input_header, right->getSchema());
+        ? JoinInterpreterHelper::genDAGExpressionAnalyzerSourceColumns(left_input_header, left->getSchema())
+        : JoinInterpreterHelper::genDAGExpressionAnalyzerSourceColumns(right_input_header, right->getSchema());
 
     String match_helper_name = tiflash_join.genMatchHelperName(left_input_header, right_input_header);
     NamesAndTypes join_output_schema

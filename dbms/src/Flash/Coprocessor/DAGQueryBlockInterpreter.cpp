@@ -250,17 +250,19 @@ void DAGQueryBlockInterpreter::handleJoin(
     build_pipeline.streams = input_streams_vec[tiflash_join.build_side_index];
     /// for DAGQueryBlockInterpreter, the schema is already aligned to TiDB's schema after appendFinalProjectForNonRootQueryBlock
     const auto probe_source_columns
-        = JoinInterpreterHelper::genExpressionAnalyzerSourceColumns(probe_pipeline.firstStream()->getHeader(), {});
+        = JoinInterpreterHelper::genDAGExpressionAnalyzerSourceColumns(probe_pipeline.firstStream()->getHeader(), {});
     const auto build_source_columns
-        = JoinInterpreterHelper::genExpressionAnalyzerSourceColumns(build_pipeline.firstStream()->getHeader(), {});
+        = JoinInterpreterHelper::genDAGExpressionAnalyzerSourceColumns(build_pipeline.firstStream()->getHeader(), {});
 
     RUNTIME_ASSERT(!input_streams_vec[0].empty(), log, "left input streams cannot be empty");
     const Block & left_input_header = input_streams_vec[0].back()->getHeader();
-    const auto left_source_columns = JoinInterpreterHelper::genExpressionAnalyzerSourceColumns(left_input_header, {});
+    const auto left_source_columns
+        = JoinInterpreterHelper::genDAGExpressionAnalyzerSourceColumns(left_input_header, {});
 
     RUNTIME_ASSERT(!input_streams_vec[1].empty(), log, "right input streams cannot be empty");
     const Block & right_input_header = input_streams_vec[1].back()->getHeader();
-    const auto right_source_columns = JoinInterpreterHelper::genExpressionAnalyzerSourceColumns(right_input_header, {});
+    const auto right_source_columns
+        = JoinInterpreterHelper::genDAGExpressionAnalyzerSourceColumns(right_input_header, {});
 
     String match_helper_name = tiflash_join.genMatchHelperName(left_input_header, right_input_header);
     NamesAndTypes join_output_columns

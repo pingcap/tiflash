@@ -451,7 +451,7 @@ std::vector<RuntimeFilterPtr> TiFlashJoin::genRuntimeFilterList(
     return result;
 }
 
-NamesAndTypes genExpressionAnalyzerSourceColumns(Block block, const NamesAndTypes & tidb_schema)
+NamesAndTypes genDAGExpressionAnalyzerSourceColumns(Block block, const NamesAndTypes & tidb_schema)
 {
     NamesAndTypes source_columns = tidb_schema;
     for (const auto & name_and_type : tidb_schema)
@@ -459,9 +459,9 @@ NamesAndTypes genExpressionAnalyzerSourceColumns(Block block, const NamesAndType
         if (block.has(name_and_type.name))
             block.erase(name_and_type.name);
     }
-    for (auto begin = block.cbegin(); begin != block.cend(); begin++)
+    for (const auto & col : block)
     {
-        source_columns.emplace_back(begin->name, begin->type);
+        source_columns.emplace_back(col.name, col.type);
     }
     return source_columns;
 }

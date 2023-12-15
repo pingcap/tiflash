@@ -175,8 +175,8 @@ struct TiFlashJoin
     /// The columns output by join will be:
     /// {columns of left_input, columns of right_input, match_helper_name}
     NamesAndTypes genJoinOutputColumns(
-        const NamesAndTypes & left_input_header,
-        const NamesAndTypes & right_input_header,
+        const NamesAndTypes & left_cols,
+        const NamesAndTypes & right_cols,
         const String & match_helper_name) const;
 
     void fillJoinOtherConditionsAction(
@@ -224,6 +224,6 @@ std::tuple<ExpressionActionsPtr, Names, Names, String> prepareJoin(
 
 /// generate source_columns that is used to compile tipb::Expr, the rule is columns in `tidb_schema`
 /// must be the first part of the source_columns
-NamesAndTypes genExpressionAnalyzerSourceColumns(Block block, const NamesAndTypes & tidb_schema);
+NamesAndTypes genDAGExpressionAnalyzerSourceColumns(Block block, const NamesAndTypes & tidb_schema);
 } // namespace JoinInterpreterHelper
 } // namespace DB
