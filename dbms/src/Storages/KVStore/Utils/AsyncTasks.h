@@ -26,6 +26,23 @@
 namespace DB
 {
 
+namespace AsyncTaskHelper
+{
+// It's guarunteed a task is no longer accessible once canceled or has its result fetched.
+// NotScheduled -> InQueue, Running, NotScheduled
+// InQueue -> Running
+// Running -> Finished, NotScheduled(canceled)
+// Finished -> NotScheduled(fetched)
+// NOTE: magic_enum can't work properly with enums in template classes due to compiler opts.
+enum class TaskState
+{
+    NotScheduled,
+    InQueue,
+    Running,
+    Finished,
+};
+} // namespace AsyncTaskHelper
+
 template <typename Key, typename Func, typename R>
 struct AsyncTasks
 {
@@ -36,6 +53,8 @@ struct AsyncTasks
     {}
 
     ~AsyncTasks() { LOG_INFO(log, "Pending {} tasks when destructing", count()); }
+
+    using TaskState = AsyncTaskHelper::TaskState;
 
     struct CancelHandle;
     using CancelHandlePtr = std::shared_ptr<CancelHandle>;
@@ -96,19 +115,6 @@ struct AsyncTasks
         uint64_t start_ts;
         std::shared_ptr<CancelHandle> cancel;
         std::shared_ptr<std::atomic_bool> triggered;
-    };
-
-    // It's guarunteed a task is no longer accessible once canceled or has its result fetched.
-    // NotScheduled -> InQueue, Running, NotScheduled
-    // InQueue -> Running
-    // Running -> Finished, NotScheduled(canceled)
-    // Finished -> NotScheduled(fetched)
-    enum class TaskState
-    {
-        NotScheduled = 0,
-        InQueue,
-        Running,
-        Finished,
     };
 
     /// Although not mandatory, we publicize the method to allow holding the handle at the beginning of the body of async task.
@@ -242,28 +248,31 @@ struct AsyncTasks
         using P = std::packaged_task<R()>;
         std::shared_ptr<P> p = std::make_shared<P>(P(f));
         std::shared_ptr<std::atomic_bool> triggered = std::make_shared<std::atomic_bool>(false);
-        auto elem = Elem(p->get_future(), getCurrentMillis(), std::move(triggered));
+        auto trigger_cloned = triggered;
+        auto elem = Elem(p->get_future(), getCurrentMillis(), std::move(trigger_cloned));
         auto cancel_handle = elem.cancel;
 
         auto running_mut = std::make_shared<std::mutex>();
         // Task could not run unless registered in `tasks`.
         std::scoped_lock caller_running_lock(*running_mut);
         // The executor thread may outlive `AsyncTasks` in most cases, so we don't capture `this`.
-        auto res = thread_pool->trySchedule(
-            [p, triggered, running_mut, cancel_handle, cf]() {
-                if (cancel_handle->canceled())
-                {
-                    cf();
-                    return;
-                }
-                std::scoped_lock worker_running_lock(*running_mut);
-                triggered->store(true);
-                // We can hold the cancel handle here to prevent it from destructing, but it is not necessary.
-                (*p)();
-                // We don't erase from `tasks` here, since we won't capture `this`
-            },
-            0,
-            0);
+        auto job = [p, triggered, running_mut, cancel_handle, cf]() {
+            RUNTIME_CHECK(triggered != nullptr);
+            RUNTIME_CHECK(running_mut != nullptr);
+            RUNTIME_CHECK(cancel_handle != nullptr);
+            RUNTIME_CHECK(p != nullptr);
+            if (cancel_handle->canceled())
+            {
+                cf();
+                return;
+            }
+            std::scoped_lock worker_running_lock(*running_mut);
+            triggered->store(true);
+            // We can hold the cancel handle here to prevent it from destructing, but it is not necessary.
+            (*p)();
+            // We don't erase from `tasks` here, since we won't capture `this`
+        };
+        auto res = thread_pool->trySchedule(job, 0, 0);
         SYNC_FOR("after_AsyncTasks::addTask_scheduled");
         if (res)
         {
