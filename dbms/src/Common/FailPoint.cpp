@@ -65,6 +65,7 @@ namespace DB
     M(force_ps_wal_compact)                                       \
     M(pause_before_full_gc_prepare)                               \
     M(force_owner_mgr_state)                                      \
+    M(force_owner_mgr_campaign_failed)                            \
     M(exception_during_spill)                                     \
     M(force_fail_to_create_etcd_session)                          \
     M(force_remote_read_for_batch_cop_once)                       \
