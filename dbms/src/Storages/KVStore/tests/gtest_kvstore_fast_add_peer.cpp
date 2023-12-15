@@ -243,24 +243,29 @@ void eventuallyPredicate(F f)
     ASSERT_TRUE(false);
 }
 
-// void assertNoSegment(TMTContext & tmt, RegionPtr region, std::vector<UInt64> segments)
-// {
-//     auto & storages = tmt.getStorages();
-//     auto keyspace_id = region->getKeyspaceID();
-//     auto table_id = region->getMappedTableID();
-//     auto storage = storages.get(keyspace_id, table_id);
+void assertNoSegment(
+    TMTContext & tmt,
+    const RegionPtr & region,
+    const FastAddPeerProto::CheckpointIngestInfoPersisted & ingest_info_persisted)
+{
+    auto & storages = tmt.getStorages();
+    auto keyspace_id = region->getKeyspaceID();
+    auto table_id = region->getMappedTableID();
+    auto storage = storages.get(keyspace_id, table_id);
+    RUNTIME_CHECK(storage && storage->engineType() == TiDB::StorageEngine::DT);
+    auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
+    auto dm_context = dm_storage->getStore()->newDMContext(tmt.getContext(), tmt.getContext().getSettingsRef());
+    for (const auto & seg_persisted : ingest_info_persisted.segments())
+    {
+        ReadBufferFromString buf(seg_persisted.segment_meta());
+        DM::Segment::SegmentMetaInfo segment_info;
+        readSegmentMetaInfo(buf, segment_info);
 
-//     auto log = DB::Logger::get("Test");
-//     if (storage && storage->engineType() == TiDB::StorageEngine::DT)
-//     {
-//         auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
-//         auto dm_context = dm_storage->getStore()->newDMContext(tmt.getContext(), tmt.getContext().getSettingsRef());
-//         for (auto segment_id : segments)
-//         {
-//             // TODO(fap)
-//         }
-//     }
-// }
+        // Delta layer is persisted with `CheckpointIngestInfoPersisted`.
+        ReadBufferFromString buf_stable(seg_persisted.stable_meta());
+        EXPECT_THROW(DM::StableValueSpace::restore(*dm_context, buf_stable, segment_info.stable_id), Exception);
+    }
+}
 
 TEST_F(RegionKVStoreTestFAP, RestoreRaftState)
 try
@@ -623,12 +628,8 @@ try
         region_id,
         2333);
     ASSERT_NE(maybe_info, nullptr);
-    std::vector<UInt64> segments;
-    for (auto s : maybe_info->getRestoredSegments())
-    {
-        segments.push_back(s->segmentId());
-    }
-    RegionPtr region = maybe_info->getRegion();
+    auto ingest_info_persisted = maybe_info->serializeMeta();
+    auto region = maybe_info->getRegion();
     fap_context->tasks_trace->asyncCancelTask(region_id);
     sp.next();
     sp.disable();
@@ -639,7 +640,7 @@ try
     });
     ASSERT_TRUE(!fap_context->tryGetCheckpointIngestInfo(region_id));
     FailPointHelper::disableFailPoint(FailPoints::force_set_fap_candidate_store_id);
-    // assertNoSegment(global_context.getTMTContext(), region, segments);
+    assertNoSegment(global_context.getTMTContext(), region, ingest_info_persisted);
 }
 CATCH
 

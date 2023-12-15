@@ -18,7 +18,6 @@
 #include <Storages/IManageableStorage.h>
 #include <Storages/KVStore/KVStore.h>
 #include <Storages/KVStore/MultiRaft/Disagg/CheckpointIngestInfo.h>
-#include <Storages/KVStore/MultiRaft/Disagg/fast_add_peer.pb.h>
 #include <Storages/KVStore/MultiRaft/RegionPersister.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/Page/PageStorage.h>
@@ -29,7 +28,6 @@
 
 namespace DB
 {
-
 CheckpointIngestInfoPtr CheckpointIngestInfo::restore(
     TMTContext & tmt,
     const TiFlashRaftProxyHelper * proxy_helper,
@@ -123,23 +121,12 @@ CheckpointIngestInfoPtr CheckpointIngestInfo::restore(
         /*begin_time_*/ 0);
 }
 
-void CheckpointIngestInfo::persistToLocal() const
+FastAddPeerProto::CheckpointIngestInfoPersisted CheckpointIngestInfo::serializeMeta() const
 {
-    if (region->isPendingRemove())
-    {
-        // A pending remove region should not be selected as candidate.
-        LOG_ERROR(log, "candidate region {} is pending remove", region->toString(false));
-        return;
-    }
-    auto uni_ps = tmt.getContext().getWriteNodePageStorage();
-    UniversalWriteBatch wb;
-
     // Write:
     // - The region, which is actually data and meta in KVStore.
     // - The segment ids point to segments which are already persisted but not ingested.
-
     FastAddPeerProto::CheckpointIngestInfoPersisted ingest_info_persisted;
-
     {
         for (const auto & restored_segment : restored_segments)
         {
@@ -155,7 +142,21 @@ void CheckpointIngestInfo::persistToLocal() const
         ingest_info_persisted.set_region_info(wb.releaseStr());
     }
     ingest_info_persisted.set_remote_store_id(remote_store_id);
+    return ingest_info_persisted;
+}
 
+void CheckpointIngestInfo::persistToLocal() const
+{
+    if (region->isPendingRemove())
+    {
+        // A pending remove region should not be selected as candidate.
+        LOG_ERROR(log, "candidate region {} is pending remove", region->toString(false));
+        return;
+    }
+    auto uni_ps = tmt.getContext().getWriteNodePageStorage();
+    UniversalWriteBatch wb;
+
+    auto ingest_info_persisted = serializeMeta();
     auto s = ingest_info_persisted.SerializeAsString();
     auto data_size = s.size();
     auto read_buf = std::make_shared<ReadBufferFromOwnString>(s);
@@ -184,28 +185,32 @@ static void removeFromLocal(TMTContext & tmt, UInt64 region_id)
 
 void CheckpointIngestInfo::deleteWrittenData(TMTContext & tmt, RegionPtr region, const DM::Segments & segments)
 {
-    UNUSED(tmt, region, segments);
-    // auto & storages = tmt.getStorages();
-    // auto keyspace_id = region->getKeyspaceID();
-    // auto table_id = region->getMappedTableID();
-    // auto storage = storages.get(keyspace_id, table_id);
+    auto & storages = tmt.getStorages();
+    auto keyspace_id = region->getKeyspaceID();
+    auto table_id = region->getMappedTableID();
+    auto storage = storages.get(keyspace_id, table_id);
 
-    // auto log = DB::Logger::get("CheckpointIngestInfo");
-    // if (storage && storage->engineType() == TiDB::StorageEngine::DT)
-    // {
-    //     auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
-    //     auto dm_context = dm_storage->getStore()->newDMContext(tmt.getContext(), tmt.getContext().getSettingsRef());
-    //     for (auto segment_to_drop : segments)
-    //     {
-    //         DM::WriteBatches wbs(*dm_context->storage_pool, dm_context->getWriteLimiter());
-    //         // No need to call `abandon`, since the segment is not ingested or in use.
-    //         LOG_DEBUG(log, "Delete segment from local, segment_id={}, page_id={}, region_id={}",
-    //             segment_to_drop->segmentId(),
-    //             UniversalPageIdFormat::toFullPageId(UniversalPageIdFormat::toFullPrefix(keyspace_id, StorageType::Meta, table_id), segment_to_drop->segmentId()),
-    //             region->id());
-    //         segment_to_drop->drop(tmt.getContext().getFileProvider(), wbs);
-    //     }
-    // }
+    auto log = DB::Logger::get("CheckpointIngestInfo");
+    if (storage && storage->engineType() == TiDB::StorageEngine::DT)
+    {
+        auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
+        auto dm_context = dm_storage->getStore()->newDMContext(tmt.getContext(), tmt.getContext().getSettingsRef());
+        for (auto segment_to_drop : segments)
+        {
+            DM::WriteBatches wbs(*dm_context->storage_pool, dm_context->getWriteLimiter());
+            // No need to call `abandon`, since the segment is not ingested or in use.
+            LOG_DEBUG(
+                log,
+                "Delete segment from local, segment_id={}, page_id={}, region_id={}",
+                segment_to_drop->segmentId(),
+                UniversalPageIdFormat::toFullPageId(
+                    UniversalPageIdFormat::toFullPrefix(keyspace_id, StorageType::Meta, table_id),
+                    segment_to_drop->segmentId()),
+                region->id());
+            segment_to_drop->abandon(*dm_context);
+            segment_to_drop->drop(tmt.getContext().getFileProvider(), wbs);
+        }
+    }
 }
 
 bool CheckpointIngestInfo::cleanOnSuccess(TMTContext & tmt, UInt64 region_id)
@@ -223,21 +228,20 @@ bool CheckpointIngestInfo::forciblyClean(
     bool in_memory)
 {
     auto log = DB::Logger::get();
-    UNUSED(proxy_helper);
-    if (in_memory)
-    {
-        removeFromLocal(tmt, region_id);
-        return true;
-    }
-    auto uni_ps = tmt.getContext().getWriteNodePageStorage();
-    auto snapshot = uni_ps->getSnapshot(fmt::format("read_fap_i_{}", region_id));
-    auto page_id
-        = UniversalPageIdFormat::toLocalKVPrefix(UniversalPageIdFormat::LocalKVKeyType::FAPIngestInfo, region_id);
     // For most cases, ingest infos are deleted in `removeFromLocal`.
-    Page page = uni_ps->read(page_id, nullptr, snapshot, /*throw_on_not_exist*/ false);
-    LOG_INFO(log, "Erase CheckpointIngestInfo from disk by force, region_id={} exist={}", region_id, page.isValid());
-    if (unlikely(page.isValid()))
+    auto checkpoint_ptr = CheckpointIngestInfo::restore(tmt, proxy_helper, region_id, 0);
+    LOG_INFO(
+        log,
+        "Erase CheckpointIngestInfo from disk by force, region_id={} exist={} in_memory={}",
+        region_id,
+        checkpoint_ptr != nullptr,
+        in_memory);
+    if (unlikely(checkpoint_ptr))
     {
+        CheckpointIngestInfo::deleteWrittenData(
+            tmt,
+            checkpoint_ptr->getRegion(),
+            checkpoint_ptr->getRestoredSegments());
         removeFromLocal(tmt, region_id);
         return true;
     }

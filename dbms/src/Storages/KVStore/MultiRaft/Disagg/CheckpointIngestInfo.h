@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/Logger.h>
+#include <Storages/KVStore/MultiRaft/Disagg/fast_add_peer.pb.h>
 #include <common/types.h>
 
 #include <memory>
@@ -80,6 +81,8 @@ struct CheckpointIngestInfo
         UInt64 region_id,
         bool in_memory);
     static bool cleanOnSuccess(TMTContext & tmt, UInt64 region_id);
+
+    FastAddPeerProto::CheckpointIngestInfoPersisted serializeMeta() const;
 
 private:
     friend class FastAddPeerContext;
