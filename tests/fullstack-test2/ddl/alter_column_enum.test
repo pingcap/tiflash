@@ -41,7 +41,7 @@ mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.a1 
 |  4 | D    |
 +----+------+
 
-mysql> SET SESSION SQL_MODE = 'NO_ENGINE_SUBSTITUTION';
+mysql> SET SESSION SQL_MODE = '';
 
 mysql> insert into test.a1 values (5,'');
 
