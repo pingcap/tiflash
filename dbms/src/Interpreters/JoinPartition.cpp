@@ -290,16 +290,17 @@ void JoinPartition::initMap()
         else
             initImpl(maps_all_full, join_map_method);
     }
-    else if (!getFullness(kind))
+    else if (getFullness(kind))
+    {
+        assert(strictness == ASTTableJoin::Strictness::All);
+        initImpl(maps_all_full, join_map_method);
+    }
+    else
     {
         if (strictness == ASTTableJoin::Strictness::Any)
             initImpl(maps_any, join_map_method);
         else
             initImpl(maps_all, join_map_method);
-    }
-    else
-    {
-        initImpl(maps_all_full, join_map_method);
     }
 }
 
