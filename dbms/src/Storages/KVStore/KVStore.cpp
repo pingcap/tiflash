@@ -24,6 +24,7 @@
 #include <Storages/KVStore/Decode/RegionTable.h>
 #include <Storages/KVStore/FFI/ProxyFFI.h>
 #include <Storages/KVStore/KVStore.h>
+#include <Storages/KVStore/MultiRaft/Disagg/FastAddPeer.h>
 #include <Storages/KVStore/MultiRaft/RegionExecutionResult.h>
 #include <Storages/KVStore/MultiRaft/RegionPersister.h>
 #include <Storages/KVStore/Read/ReadIndexWorker.h>
@@ -49,6 +50,7 @@ namespace FailPoints
 {
 extern const char force_fail_in_flush_region_data[];
 extern const char pause_passive_flush_before_persist_region[];
+extern const char force_not_clean_fap_on_destroy[];
 } // namespace FailPoints
 
 KVStore::KVStore(Context & context)
@@ -345,6 +347,14 @@ void KVStore::handleDestroy(UInt64 region_id, TMTContext & tmt, const KVStoreTas
         tmt.getRegionTable(),
         task_lock,
         region_manager.genRegionTaskLock(region_id));
+
+    if (tmt.getContext().getSharedContextDisagg()->isDisaggregatedStorageMode())
+    {
+        fiu_do_on(FailPoints::force_not_clean_fap_on_destroy, { return; });
+        // Everytime we remove region, we try to clean obsolete fap ingest info.
+        auto fap_ctx = tmt.getContext().getSharedContextDisagg()->fap_context;
+        fap_ctx->cleanCheckpointIngestInfo(tmt, region_id);
+    }
 }
 
 void KVStore::setRegionCompactLogConfig(UInt64 rows, UInt64 bytes, UInt64 gap, UInt64 eager_gc_gap)

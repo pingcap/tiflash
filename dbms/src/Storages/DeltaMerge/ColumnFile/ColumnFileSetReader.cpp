@@ -131,6 +131,14 @@ Block ColumnFileSetReader::readPKVersion(size_t offset, size_t limit)
     return block;
 }
 
+static Int64 columnsSize(MutableColumns & columns)
+{
+    Int64 bytes = 0;
+    for (const auto & col : columns)
+        bytes += col->byteSize();
+    return bytes;
+}
+
 size_t ColumnFileSetReader::readRows(
     MutableColumns & output_columns,
     size_t offset,
@@ -156,6 +164,7 @@ size_t ColumnFileSetReader::readRows(
     if (end == start)
         return 0;
 
+    auto bytes_before_read = columnsSize(output_columns);
     auto [start_file_index, rows_start_in_start_file] = locatePosByAccumulation(column_file_rows_end, start);
     auto [end_file_index, rows_end_in_end_file] = locatePosByAccumulation(column_file_rows_end, end);
 
@@ -187,13 +196,13 @@ size_t ColumnFileSetReader::readRows(
         }
     }
 
-    UInt64 delta_bytes = 0;
-    for (const auto & col : output_columns)
-        delta_bytes += col->byteSize();
-
-    lac_bytes_collector.collect(delta_bytes);
-    if (likely(context.scan_context))
-        context.scan_context->total_user_read_bytes += delta_bytes;
+    if (auto delta_bytes = columnsSize(output_columns) - bytes_before_read; delta_bytes > 0)
+    {
+        if (row_ids == nullptr)
+            lac_bytes_collector.collect(delta_bytes);
+        if (likely(context.scan_context))
+            context.scan_context->total_user_read_bytes += delta_bytes;
+    }
 
     return actual_read;
 }

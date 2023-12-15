@@ -15,6 +15,7 @@
 #include <Columns/ColumnUtils.h>
 #include <Columns/ColumnsCommon.h>
 #include <Flash/Mpp/HashBaseWriterHelper.h>
+#include <Functions/FunctionHelpers.h>
 #include <Interpreters/JoinUtils.h>
 #include <Interpreters/NullableUtils.h>
 
@@ -138,4 +139,22 @@ bool mayProbeSideExpandedAfterJoin(ASTTableJoin::Kind kind)
     return !isNullAwareSemiFamily(kind) && !isLeftOuterSemiFamily(kind) && !isSemiFamily(kind)
         && !isRightSemiFamily(kind);
 }
+
+std::pair<const PaddedPODArray<UInt8> *, ConstNullMapPtr> getDataAndNullMapVectorFromFilterColumn(
+    ColumnPtr & filter_column)
+{
+    if (filter_column->isColumnConst())
+        filter_column = filter_column->convertToFullColumnIfConst();
+    if (filter_column->isColumnNullable())
+    {
+        const auto * nullable_column = checkAndGetColumn<ColumnNullable>(filter_column.get());
+        const auto & data_column = nullable_column->getNestedColumnPtr();
+        return {&checkAndGetColumn<ColumnUInt8>(data_column.get())->getData(), &nullable_column->getNullMapData()};
+    }
+    else
+    {
+        return {&checkAndGetColumn<ColumnUInt8>(filter_column.get())->getData(), nullptr};
+    }
+}
+
 } // namespace DB

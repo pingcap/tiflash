@@ -15,12 +15,15 @@
 #pragma once
 
 #include <Columns/ColumnString.h>
+#include <Common/MyTime.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/UTF8Helpers.h>
+#include <Common/VectorWriter.h>
 #include <Core/Types.h>
 #include <IO/WriteBufferFromVector.h>
 #include <common/StringRef.h>
 #include <common/memcpy.h>
+#include <simdjson.h>
 
 #include <unordered_set>
 
@@ -101,7 +104,7 @@ class JsonBinary
 public:
     using JsonType = UInt8;
     using DupCheckSet = std::unique_ptr<std::unordered_set<const char *>>;
-    using JsonBinaryWriteBuffer = WriteBufferFromVector<ColumnString::Chars_t>;
+    using JsonBinaryWriteBuffer = VectorWriter<ColumnString::Chars_t>;
     static constexpr JsonType TYPE_CODE_OBJECT = 0x01; // TypeCodeObject indicates the JSON is an object.
     static constexpr JsonType TYPE_CODE_ARRAY = 0x03; // TypeCodeArray indicates the JSON is an array.
     static constexpr JsonType TYPE_CODE_LITERAL = 0x04; // TypeCodeLiteral indicates the JSON is a literal.
@@ -118,6 +121,8 @@ public:
     static constexpr UInt8 LITERAL_NIL = 0x00; // LiteralNil represents JSON null.
     static constexpr UInt8 LITERAL_TRUE = 0x01; // LiteralTrue represents JSON true.
     static constexpr UInt8 LITERAL_FALSE = 0x02; // LiteralFalse represents JSON false.
+
+    static constexpr UInt64 MAX_JSON_DEPTH = 100;
 
     /// Opaque represents a raw database binary type
     struct Opaque
@@ -149,6 +154,8 @@ public:
         std::vector<JsonPathExprRefContainerPtr> & path_expr_container_vec,
         JsonBinaryWriteBuffer & write_buffer);
 
+    UInt64 getDepth() const;
+
     static String unquoteString(const StringRef & ref);
     static void unquoteStringInBuffer(const StringRef & ref, JsonBinaryWriteBuffer & write_buffer);
     static String unquoteJsonString(const StringRef & ref);
@@ -162,6 +169,22 @@ public:
         JsonBinaryWriteBuffer & write_buffer);
 
     static UInt64 getJsonLength(const std::string_view & raw_value);
+
+    static void appendNumber(JsonBinaryWriteBuffer & write_buffer, bool value);
+    static void appendNumber(JsonBinaryWriteBuffer & write_buffer, UInt64 value);
+    static void appendNumber(JsonBinaryWriteBuffer & write_buffer, Int64 value);
+    static void appendNumber(JsonBinaryWriteBuffer & write_buffer, Float64 value);
+    static void appendStringRef(JsonBinaryWriteBuffer & write_buffer, const StringRef & value);
+    static void appendOpaque(JsonBinaryWriteBuffer & write_buffer, const Opaque & value);
+    static void appendDate(JsonBinaryWriteBuffer & write_buffer, const MyDate & value);
+    static void appendTimestamp(JsonBinaryWriteBuffer & write_buffer, const MyDateTime & value);
+    static void appendDatetime(JsonBinaryWriteBuffer & write_buffer, const MyDateTime & value);
+    static void appendDuration(JsonBinaryWriteBuffer & write_buffer, Int64 duration, UInt64 fsp);
+    static void appendNull(JsonBinaryWriteBuffer & write_buffer);
+
+    static void appendSIMDJsonElem(JsonBinaryWriteBuffer & write_buffer, const simdjson::dom::element & elem);
+
+    static void assertJsonDepth(UInt64 depth);
 
 private:
     Int64 getInt64() const;
@@ -204,6 +227,7 @@ private:
     static void marshalOpaqueTo(JsonBinaryWriteBuffer & write_buffer, const Opaque & o);
     static void marshalDurationTo(JsonBinaryWriteBuffer & write_buffer, Int64 duration, UInt32 fsp);
 
+private:
     JsonType type;
     /// 'data' doesn't contain type byte.
     /// In this way, when we construct new JsonBinary object for child field, new object's 'data' field can directly reference original object's data memory as a slice

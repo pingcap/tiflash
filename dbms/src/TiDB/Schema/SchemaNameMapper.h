@@ -24,14 +24,14 @@ struct SchemaNameMapper
 {
     virtual ~SchemaNameMapper() = default;
 
-    static constexpr auto DATABASE_PREFIX = "db_";
-    static constexpr auto TABLE_PREFIX = "t_";
+    static constexpr std::string_view DATABASE_PREFIX = "db_";
+    static constexpr std::string_view TABLE_PREFIX = "t_";
     static constexpr std::string_view KEYSPACE_PREFIX = "ks_";
 
 
     static KeyspaceID getMappedNameKeyspaceID(const String & name)
     {
-        auto keyspace_prefix_len = KEYSPACE_PREFIX.length();
+        static constexpr auto keyspace_prefix_len = KEYSPACE_PREFIX.length();
         auto pos = name.find(KEYSPACE_PREFIX);
         if (pos == String::npos)
             return NullspaceID;
@@ -41,20 +41,39 @@ struct SchemaNameMapper
         return std::stoull(name.substr(keyspace_prefix_len, pos - keyspace_prefix_len));
     }
 
+    static std::optional<DatabaseID> tryGetDatabaseID(const String & name)
+    {
+        auto pos = name.find(DATABASE_PREFIX);
+        if (pos == String::npos || name.length() <= pos + DATABASE_PREFIX.length())
+            return std::nullopt;
+        try
+        {
+            return std::stoull(name.substr(pos + DATABASE_PREFIX.length()));
+        }
+        catch (std::invalid_argument & e)
+        {
+            return std::nullopt;
+        }
+        catch (std::out_of_range & e)
+        {
+            return std::nullopt;
+        }
+    }
+
     static String map2Keyspace(KeyspaceID keyspace_id, const String & name)
     {
-        return keyspace_id == NullspaceID ? name : KEYSPACE_PREFIX.data() + std::to_string(keyspace_id) + "_" + name;
+        return keyspace_id == NullspaceID ? name : fmt::format("{}{}_{}", KEYSPACE_PREFIX, keyspace_id, name);
     }
 
     virtual String mapDatabaseName(DatabaseID db_id, KeyspaceID keyspace_id) const
     {
-        auto db_name = DATABASE_PREFIX + std::to_string(db_id);
+        auto db_name = fmt::format("{}{}", DATABASE_PREFIX, db_id);
         return map2Keyspace(keyspace_id, db_name);
     }
 
     virtual String mapDatabaseName(const TiDB::DBInfo & db_info) const
     {
-        auto db_name = DATABASE_PREFIX + std::to_string(db_info.id);
+        auto db_name = fmt::format("{}{}", DATABASE_PREFIX, db_info.id);
         return map2Keyspace(db_info.keyspace_id, db_name);
     }
 
@@ -64,7 +83,7 @@ struct SchemaNameMapper
     }
     virtual String mapTableName(const TiDB::TableInfo & table_info) const
     {
-        auto table_name = TABLE_PREFIX + std::to_string(table_info.id);
+        auto table_name = fmt::format("{}{}", TABLE_PREFIX, table_info.id);
         return map2Keyspace(table_info.keyspace_id, table_name);
     }
     virtual String displayTableName(const TiDB::TableInfo & table_info) const
@@ -90,7 +109,7 @@ struct SchemaNameMapper
     virtual String debugCanonicalName(const TiDB::TableInfo & table_info, DatabaseID db_id, KeyspaceID keyspace_id)
         const
     {
-        auto db_name = DATABASE_PREFIX + std::to_string(db_id);
+        auto db_name = fmt::format("{}{}", DATABASE_PREFIX, db_id);
         return map2Keyspace(keyspace_id, db_name) + "." + debugTableName(table_info);
     }
 };

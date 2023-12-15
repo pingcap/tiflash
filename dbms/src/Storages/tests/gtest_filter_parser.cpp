@@ -29,7 +29,6 @@
 #include <Storages/DeltaMerge/Index/RSResult.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <TestUtils/TiFlashTestBasic.h>
-#include <TiDB/Schema/SchemaBuilder-internal.h>
 #include <TiDB/Schema/SchemaNameMapper.h>
 #include <common/logger_useful.h>
 
@@ -85,7 +84,7 @@ DM::RSOperatorPtr FilterParserTest::generateRsOperator(
         [&](const String &, const String &) { return table_info; },
         getDAGProperties(""));
     auto & dag_request = *query_tasks[0].dag_request;
-    DAGContext dag_context(dag_request, {}, NullspaceID, "", DAGRequestKind::Cop, "", log);
+    DAGContext dag_context(dag_request, {}, NullspaceID, "", DAGRequestKind::Cop, "", 0, "", log);
     ctx->setDAGContext(&dag_context);
     // Don't care about regions information in this test
     DAGQuerySource dag(*ctx);

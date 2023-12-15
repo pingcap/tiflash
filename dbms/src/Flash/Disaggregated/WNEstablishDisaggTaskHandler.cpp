@@ -100,8 +100,10 @@ void WNEstablishDisaggTaskHandler::execute(disaggregated::EstablishDisaggTaskRes
     }
 
     using DM::Remote::Serializer;
+    bool need_mem_data = !context->getSettingsRef().dt_enable_fetch_memtableset;
     snap->iterateTableSnapshots([&](const DM::Remote::DisaggPhysicalTableReadSnapshotPtr & snap) {
-        response->add_tables(Serializer::serializeTo(snap, task_id, mem_tracker_wrapper).SerializeAsString());
+        response->add_tables(
+            Serializer::serializePhysicalTable(snap, task_id, mem_tracker_wrapper, need_mem_data).SerializeAsString());
     });
 }
 

@@ -101,6 +101,7 @@ extern const char force_slow_page_storage_snapshot_release[];
 extern const char exception_before_drop_segment[];
 extern const char exception_after_drop_segment[];
 extern const char proactive_flush_force_set_type[];
+extern const char disable_flush_cache[];
 } // namespace FailPoints
 
 namespace DM
@@ -609,6 +610,8 @@ DM::WriteResult DeltaMergeStore::write(const Context & db_context, const DB::Set
             {
                 if (segment->writeToCache(*dm_context, block, offset, limit))
                 {
+                    GET_METRIC(tiflash_storage_subtask_throughput_bytes, type_write_to_cache).Increment(alloc_bytes);
+                    GET_METRIC(tiflash_storage_subtask_throughput_rows, type_write_to_cache).Increment(limit);
                     updated_segments.push_back(segment);
                     break;
                 }
@@ -632,6 +635,8 @@ DM::WriteResult DeltaMergeStore::write(const Context & db_context, const DB::Set
                 // Write could fail, because other threads could already updated the instance. Like split/merge, merge delta.
                 if (segment->writeToDisk(*dm_context, write_column_file))
                 {
+                    GET_METRIC(tiflash_storage_subtask_throughput_bytes, type_write_to_disk).Increment(alloc_bytes);
+                    GET_METRIC(tiflash_storage_subtask_throughput_rows, type_write_to_disk).Increment(limit);
                     updated_segments.push_back(segment);
                     break;
                 }
@@ -729,6 +734,7 @@ bool DeltaMergeStore::flushCache(const Context & context, const RowKeyRange & ra
 
 bool DeltaMergeStore::flushCache(const DMContextPtr & dm_context, const RowKeyRange & range, bool try_until_succeed)
 {
+    fiu_do_on(FailPoints::disable_flush_cache, { return false; });
     size_t sleep_ms = 5;
 
     RowKeyRange cur_range = range;
@@ -958,7 +964,8 @@ BlockInputStreams DeltaMergeStore::readRaw(
         after_segment_read,
         req_info,
         enable_read_thread,
-        final_num_stream);
+        final_num_stream,
+        dm_context->scan_context->resource_group_name);
 
     BlockInputStreams res;
     for (size_t i = 0; i < final_num_stream; ++i)
@@ -1061,7 +1068,8 @@ void DeltaMergeStore::readRaw(
         after_segment_read,
         req_info,
         enable_read_thread,
-        final_num_stream);
+        final_num_stream,
+        dm_context->scan_context->resource_group_name);
 
     if (enable_read_thread)
     {
@@ -1193,7 +1201,8 @@ BlockInputStreams DeltaMergeStore::read(
         after_segment_read,
         log_tracing_id,
         enable_read_thread,
-        final_num_stream);
+        final_num_stream,
+        dm_context->scan_context->resource_group_name);
 
     BlockInputStreams res;
     for (size_t i = 0; i < final_num_stream; ++i)
@@ -1297,7 +1306,8 @@ void DeltaMergeStore::read(
         after_segment_read,
         log_tracing_id,
         enable_read_thread,
-        final_num_stream);
+        final_num_stream,
+        dm_context->scan_context->resource_group_name);
     const auto & columns_after_cast = filter && filter->extra_cast ? *filter->columns_after_cast : columns_to_read;
 
     if (enable_read_thread)

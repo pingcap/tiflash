@@ -12,12 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/config_version.h>
+syntax = "proto3";
 
-namespace ClickHouseRevision
-{
-unsigned get()
-{
-    return VERSION_REVISION;
+package DB.FastAddPeerProto;
+
+message FAPTempSegmentInfo {
+    bytes segment_meta = 1;
+    bytes delta_meta = 2;
+    bytes stable_meta = 3;
 }
-} // namespace ClickHouseRevision
+
+message CheckpointIngestInfoPersisted {
+    bytes region_info = 1;
+    repeated FAPTempSegmentInfo segments = 2;
+    uint64 remote_store_id = 3;
+}

@@ -23,6 +23,7 @@
 namespace DB
 {
 // The enum results are completely the same as the DDL Action listed in the "parser/model/ddl.go" of TiDB codebase, which must be keeping in sync.
+// https://github.com/pingcap/tidb/blob/9dfbccb01b76e6a5f2fc6f6562b8645dd5a151b1/pkg/parser/model/ddl.go#L29-L30
 enum class SchemaActionType : Int8
 {
     None = 0,
@@ -164,7 +165,17 @@ struct SchemaGetter
 
     TiDB::DBInfoPtr getDatabase(DatabaseID db_id);
 
-    TiDB::TableInfoPtr getTableInfo(DatabaseID db_id, TableID table_id);
+    TiDB::TableInfoPtr getTableInfo(DatabaseID db_id, TableID table_id, bool try_mvcc = true)
+    {
+        if (try_mvcc)
+            return getTableInfoImpl</*mvcc_get*/ true>(db_id, table_id).first;
+        return getTableInfoImpl</*mvcc_get*/ false>(db_id, table_id).first;
+    }
+
+    std::pair<TiDB::TableInfoPtr, bool> getTableInfoAndCheckMvcc(DatabaseID db_id, TableID table_id)
+    {
+        return getTableInfoImpl</*mvcc_get*/ true>(db_id, table_id);
+    }
 
     std::tuple<TiDB::DBInfoPtr, TiDB::TableInfoPtr> getDatabaseAndTableInfo(DatabaseID db_id, TableID table_id);
 
@@ -173,6 +184,10 @@ struct SchemaGetter
     std::vector<TiDB::TableInfoPtr> listTables(DatabaseID db_id);
 
     KeyspaceID getKeyspaceID() const { return keyspace_id; }
+
+private:
+    template <bool mvcc_get>
+    std::pair<TiDB::TableInfoPtr, bool> getTableInfoImpl(DatabaseID db_id, TableID table_id);
 };
 
 } // namespace DB

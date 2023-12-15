@@ -37,7 +37,7 @@ TEST(LegacyCompactorTest, WriteMultipleBatchRead)
 try
 {
     PageStorageConfig config;
-    Poco::Logger * log = &Poco::Logger::get("LegacyCompactor_test");
+    auto log = Logger::get("LegacyCompactor_test");
 
     PageEntriesVersionSetWithDelta original_version("test", config.version_set_config, log);
 

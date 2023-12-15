@@ -18,7 +18,8 @@
 #include <Common/Stopwatch.h>
 #include <Debug/MockSchemaGetter.h>
 #include <Debug/MockSchemaNameMapper.h>
-#include <TiDB/Schema/SchemaBuilder.h>
+#include <TiDB/Schema/DatabaseInfoCache.h>
+#include <TiDB/Schema/TableIDMap.h>
 #include <TiDB/Schema/TiDB.h>
 #include <pingcap/kv/Cluster.h>
 #include <pingcap/kv/Snapshot.h>
@@ -48,32 +49,26 @@ private:
 
     Int64 cur_version;
 
-    // for syncSchemas
+    // Ensure `syncSchemas` will only executed by one thread.
     std::mutex mutex_for_sync_schema;
-
-    // mutex for databases
-    std::shared_mutex shared_mutex_for_databases;
-
-    std::unordered_map<DB::DatabaseID, TiDB::DBInfoPtr> databases;
 
     LoggerPtr log;
 
+    DatabaseInfoCache databases;
     TableIDMap table_id_map;
 
     Getter createSchemaGetter(KeyspaceID keyspace_id)
     {
-        [[maybe_unused]] auto tso = cluster->pd_client->getTS();
         if constexpr (mock_getter)
         {
             return Getter();
         }
         else
         {
+            auto tso = cluster->pd_client->getTS();
             return Getter(cluster.get(), tso, keyspace_id);
         }
     }
-
-    std::tuple<bool, DatabaseID, TableID> findDatabaseIDAndTableID(TableID physical_table_id);
 
 public:
     TiDBSchemaSyncer(KVClusterPtr cluster_, KeyspaceID keyspace_id_)
@@ -105,46 +100,30 @@ private:
     Int64 syncSchemaDiffs(Context & context, Getter & getter, Int64 latest_version);
     Int64 syncAllSchemas(Context & context, Getter & getter, Int64 version);
 
+    bool syncSchemasByGetter(Context & context, Getter & getter);
+    std::tuple<bool, String> trySyncTableSchema(
+        Context & context,
+        TableID physical_table_id,
+        Getter & getter,
+        bool force,
+        const char * next_action);
+
     TiDB::DBInfoPtr getDBInfoByName(const String & database_name) override
     {
-        std::shared_lock<std::shared_mutex> lock(shared_mutex_for_databases);
-
-        auto it = std::find_if(databases.begin(), databases.end(), [&](const auto & pair) {
-            return pair.second->name == database_name;
-        });
-        if (it == databases.end())
-            return nullptr;
-        return it->second;
+        return databases.getDBInfoByName(database_name);
     }
 
-    TiDB::DBInfoPtr getDBInfoByMappedName(const String & mapped_database_name) override
-    {
-        std::shared_lock<std::shared_mutex> lock(shared_mutex_for_databases);
-
-        auto it = std::find_if(databases.begin(), databases.end(), [&](const auto & pair) {
-            return NameMapper().mapDatabaseName(*pair.second) == mapped_database_name;
-        });
-        if (it == databases.end())
-            return nullptr;
-        return it->second;
-    }
-
-    void dropAllSchema(Context & context) override
-    {
-        auto getter = createSchemaGetter(keyspace_id);
-        SchemaBuilder<Getter, NameMapper> builder(getter, context, databases, table_id_map, shared_mutex_for_databases);
-        builder.dropAllSchema();
-    }
+    /**
+      * Drop all schema of a given keyspace.
+      * When a keyspace is removed, drop all its databases and tables.
+      */
+    void dropAllSchema(Context & context) override;
 
     // clear all states.
     // just for testing restart
     void reset() override
     {
-        {
-            std::unique_lock<std::shared_mutex> lock(shared_mutex_for_databases);
-            databases.clear();
-        }
-
+        databases.clear();
         table_id_map.clear();
         cur_version = 0;
     }

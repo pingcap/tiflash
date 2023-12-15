@@ -1179,7 +1179,7 @@ PageFile::PageFile(
     const FileProviderPtr & file_provider_,
     PageFile::Type type_,
     bool is_create,
-    Poco::Logger * log_)
+    LoggerPtr log_)
     : file_id(file_id_)
     , level(level_)
     , type(type_)
@@ -1205,7 +1205,7 @@ std::pair<PageFile, PageFile::Type> PageFile::recover(
     const String & parent_path,
     const FileProviderPtr & file_provider_,
     const String & page_file_name,
-    Poco::Logger * log)
+    LoggerPtr log)
 {
     if (!startsWith(page_file_name, folder_prefix_formal) && !startsWith(page_file_name, folder_prefix_temp)
         && !startsWith(page_file_name, folder_prefix_legacy) && !startsWith(page_file_name, folder_prefix_checkpoint))
@@ -1281,7 +1281,7 @@ PageFile PageFile::newPageFile(
     const std::string & parent_path,
     const FileProviderPtr & file_provider_,
     PageFile::Type type,
-    Poco::Logger * log)
+    LoggerPtr log)
 {
 #ifndef NDEBUG
     // PageStorage may create a "Formal" PageFile for writing,
@@ -1298,7 +1298,7 @@ PageFile PageFile::openPageFileForRead(
     const std::string & parent_path,
     const FileProviderPtr & file_provider_,
     PageFile::Type type,
-    Poco::Logger * log)
+    LoggerPtr log)
 {
     return PageFile(file_id, level, parent_path, file_provider_, type, false, log);
 }
@@ -1308,7 +1308,7 @@ bool PageFile::isPageFileExist(
     const String & parent_path,
     const FileProviderPtr & file_provider_,
     Type type,
-    Poco::Logger * log)
+    LoggerPtr log)
 {
     PageFile pf = openPageFileForRead(file_id.first, file_id.second, parent_path, file_provider_, type, log);
     return pf.isExist();

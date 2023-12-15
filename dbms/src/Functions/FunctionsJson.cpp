@@ -19,10 +19,18 @@ namespace DB
 {
 void registerFunctionsJson(FunctionFactory & factory)
 {
-    factory.registerFunction<FunctionsJsonExtract>();
-    factory.registerFunction<FunctionsJsonUnquote>();
-    factory.registerFunction<FunctionsCastJsonAsString>();
+    factory.registerFunction<FunctionJsonExtract>();
+    factory.registerFunction<FunctionJsonUnquote>();
+    factory.registerFunction<FunctionCastJsonAsString>();
     factory.registerFunction<FunctionJsonLength>();
-    factory.registerFunction<FunctionsJsonArray>();
+    factory.registerFunction<FunctionJsonArray>();
+    factory.registerFunction<FunctionCastJsonAsJson>();
+    factory.registerFunction<FunctionCastRealAsJson>();
+    factory.registerFunction<FunctionCastDecimalAsJson>();
+    factory.registerFunction<FunctionCastIntAsJson>();
+    factory.registerFunction<FunctionCastStringAsJson>();
+    factory.registerFunction<FunctionCastTimeAsJson>();
+    factory.registerFunction<FunctionCastDurationAsJson>();
+    factory.registerFunction<FunctionJsonDepth>();
 }
 } // namespace DB
