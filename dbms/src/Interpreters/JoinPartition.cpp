@@ -231,7 +231,6 @@ size_t JoinPartition::getRowCount()
     size_t ret = 0;
     ret += getRowCountImpl(maps_any, join_map_method);
     ret += getRowCountImpl(maps_all, join_map_method);
-    ret += getRowCountImpl(maps_any_full, join_map_method);
     ret += getRowCountImpl(maps_all_full, join_map_method);
     ret += getRowCountImpl(maps_all_full_with_row_flag, join_map_method);
     return ret;
@@ -247,7 +246,6 @@ size_t JoinPartition::getHashMapAndPoolByteCount()
     size_t ret = 0;
     ret += getByteCountImpl(maps_any, join_map_method);
     ret += getByteCountImpl(maps_all, join_map_method);
-    ret += getByteCountImpl(maps_any_full, join_map_method);
     ret += getByteCountImpl(maps_all_full, join_map_method);
     ret += getByteCountImpl(maps_all_full_with_row_flag, join_map_method);
     ret += pool->size();
@@ -275,7 +273,6 @@ void JoinPartition::setResizeCallbackIfNeeded()
         pool->arena.setResizeCallback(resize_callback);
         setResizeCallbackImpl(maps_any, join_map_method, resize_callback);
         setResizeCallbackImpl(maps_all, join_map_method, resize_callback);
-        setResizeCallbackImpl(maps_any_full, join_map_method, resize_callback);
         setResizeCallbackImpl(maps_all_full, join_map_method, resize_callback);
         setResizeCallbackImpl(maps_all_full_with_row_flag, join_map_method, resize_callback);
     }
@@ -302,10 +299,7 @@ void JoinPartition::initMap()
     }
     else
     {
-        if (strictness == ASTTableJoin::Strictness::Any)
-            initImpl(maps_any_full, join_map_method);
-        else
-            initImpl(maps_all_full, join_map_method);
+        initImpl(maps_all_full, join_map_method);
     }
 }
 
@@ -357,7 +351,6 @@ void JoinPartition::releasePartitionPoolAndHashMap(std::unique_lock<std::mutex> 
 {
     clearMaps(maps_any, join_map_method);
     clearMaps(maps_all, join_map_method);
-    clearMaps(maps_any_full, join_map_method);
     clearMaps(maps_all_full, join_map_method);
     clearMaps(maps_all_full_with_row_flag, join_map_method);
     pool.reset();
@@ -987,10 +980,8 @@ Map & JoinPartition::getHashMap()
     }
     else if (getFullness(kind))
     {
-        if (strictness == ASTTableJoin::Strictness::Any)
-            return getMapImpl<Map>(maps_any_full, join_map_method);
-        else
-            return getMapImpl<Map>(maps_all_full, join_map_method);
+        assert(strictness == ASTTableJoin::Strictness::All);
+        return getMapImpl<Map>(maps_all_full, join_map_method);
     }
     else
     {
@@ -1082,34 +1073,20 @@ void JoinPartition::insertBlockIntoMaps(
     }
     else if (getFullness(current_kind))
     {
-        if (current_join_partition->strictness == ASTTableJoin::Strictness::Any)
-            insertBlockIntoMapsImpl<ASTTableJoin::Strictness::Any, MapsAnyFull>(
-                join_partitions,
-                rows,
-                key_columns,
-                key_sizes,
-                collators,
-                stored_block,
-                null_map,
-                stream_index,
-                insert_concurrency,
-                enable_fine_grained_shuffle,
-                enable_join_spill,
-                probe_cache_column_threshold);
-        else
-            insertBlockIntoMapsImpl<ASTTableJoin::Strictness::All, MapsAllFull>(
-                join_partitions,
-                rows,
-                key_columns,
-                key_sizes,
-                collators,
-                stored_block,
-                null_map,
-                stream_index,
-                insert_concurrency,
-                enable_fine_grained_shuffle,
-                enable_join_spill,
-                probe_cache_column_threshold);
+        assert(current_join_partition->strictness == ASTTableJoin::Strictness::All);
+        insertBlockIntoMapsImpl<ASTTableJoin::Strictness::All, MapsAllFull>(
+            join_partitions,
+            rows,
+            key_columns,
+            key_sizes,
+            collators,
+            stored_block,
+            null_map,
+            stream_index,
+            insert_concurrency,
+            enable_fine_grained_shuffle,
+            enable_join_spill,
+            probe_cache_column_threshold);
     }
     else
     {

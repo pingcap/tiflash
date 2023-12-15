@@ -246,14 +246,11 @@ struct MapsAny
     // TODO: add more cases like Aggregator
 };
 
-using ConcurrentMapsAny = ConcurrentMapsTemplate<WithUsedFlag<false, RowRef>>;
 using ConcurrentMapsAll = ConcurrentMapsTemplate<WithUsedFlag<false, RowRefList>>;
-using ConcurrentMapsAnyFull = ConcurrentMapsTemplate<WithUsedFlag<true, RowRef>>;
 using ConcurrentMapsAllFull = ConcurrentMapsTemplate<WithUsedFlag<true, RowRefList>>;
 using ConcurrentMapsAllFullWithRowFlag = ConcurrentMapsTemplate<RowRefListWithUsedFlag>;
 
 using MapsAll = MapsTemplate<WithUsedFlag<false, RowRefList>>;
-using MapsAnyFull = MapsTemplate<WithUsedFlag<true, RowRef>>;
 using MapsAllFull = MapsTemplate<WithUsedFlag<true, RowRefList>>;
 using MapsAllFullWithRowFlag = MapsTemplate<RowRefListWithUsedFlag>; // With flag for every row ref
 
