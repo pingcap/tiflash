@@ -133,7 +133,7 @@ public:
 
     void ingestSegmentsFromCheckpointInfo(
         const DM::RowKeyRange & range,
-        CheckpointIngestInfoPtr checkpoint_info,
+        const CheckpointIngestInfoPtr & checkpoint_info,
         const Settings & settings);
 
     UInt64 onSyncGc(Int64, const DM::GCOptions &) override;
