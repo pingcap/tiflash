@@ -21,6 +21,7 @@ import os
 import re
 import sys
 import time
+import datetime
 
 if sys.version_info.major == 2:
     # print('running with py2: {}.{}.{}'.format(sys.version_info.major, sys.version_info.minor, sys.version_info.micro))
@@ -282,7 +283,7 @@ class Matcher:
             if line.endswith(NO_UNESCAPE_SUFFIX):
                 unescape_flag = False
                 line = line[:-len(NO_UNESCAPE_SUFFIX)]
-            if verbose: print('running', line)
+            if verbose: print('{} running {}'.format(datetime.datetime.now().strftime('%H:%M:%S.%f'), line))
             if self.outputs != None and ((not self.is_mysql and not matched(self.outputs, self.matches, self.fuzz)) or (
                 self.is_mysql and not MySQLCompare.matched(self.outputs, self.matches))):
                 return False
@@ -294,7 +295,7 @@ class Matcher:
             self.outputs = [x.strip() for x in self.outputs if len(x.strip()) != 0]
             self.matches = []
         elif line.startswith(CURL_TIDB_STATUS_PREFIX):
-            if verbose: print('running', line)
+            if verbose: print('{} running {}'.format(datetime.datetime.now().strftime('%H:%M:%S.%f'), line))
             if self.outputs != None and ((not self.is_mysql and not matched(self.outputs, self.matches, self.fuzz)) or (
                 self.is_mysql and not MySQLCompare.matched(self.outputs, self.matches))):
                 return False
@@ -306,7 +307,7 @@ class Matcher:
                 return False
             self.matches = []
         elif line.startswith(CMD_PREFIX) or line.startswith(CMD_PREFIX_ALTER):
-            if verbose: print('running', line)
+            if verbose: print('{} running {}'.format(datetime.datetime.now().strftime('%H:%M:%S.%f'), line))
             if self.outputs != None and ((not self.is_mysql and not matched(self.outputs, self.matches, self.fuzz)) or (
                 self.is_mysql and not MySQLCompare.matched(self.outputs, self.matches))):
                 return False
@@ -320,7 +321,7 @@ class Matcher:
                 self.outputs = [x for x in self.outputs if x.find(ignored_output) < 0]
             self.matches = []
         elif line.startswith(CMD_PREFIX_FUNC):
-            if verbose: print('running', line)
+            if verbose: print('{} running {}'.format(datetime.datetime.now().strftime('%H:%M:%S.%f'), line))
             if self.outputs != None and ((not self.is_mysql and not matched(self.outputs, self.matches, self.fuzz)) or (
                 self.is_mysql and not MySQLCompare.matched(self.outputs, self.matches))):
                 return False

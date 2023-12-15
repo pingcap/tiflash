@@ -245,6 +245,20 @@ namespace DB
       F(type_seg_split_ingest, {{"type", "seg_split_ingest"}}, ExpBuckets{0.001, 2, 20}),                                           \
       F(type_seg_merge_bg_gc, {{"type", "seg_merge_bg_gc"}}, ExpBuckets{0.001, 2, 20}),                                             \
       F(type_place_index_update, {{"type", "place_index_update"}}, ExpBuckets{0.001, 2, 20}))                                       \
+    M(tiflash_storage_subtask_throughput_bytes,                                                                                     \
+      "Calculate the throughput of (maybe foreground) tasks of storage in bytes",                                                   \
+      Counter, /**/                                                                                                                 \
+      F(type_delta_flush, {"type", "delta_flush"}), /**/                                                                            \
+      F(type_delta_compact, {"type", "delta_compact"}), /**/                                                                        \
+      F(type_write_to_cache, {"type", "write_to_cache"}), /**/                                                                      \
+      F(type_write_to_disk, {"type", "write_to_disk"})) /**/                                                                        \
+    M(tiflash_storage_subtask_throughput_rows,                                                                                      \
+      "Calculate the throughput of (maybe foreground) tasks of storage in rows",                                                    \
+      Counter, /**/                                                                                                                 \
+      F(type_delta_flush, {"type", "delta_flush"}), /**/                                                                            \
+      F(type_delta_compact, {"type", "delta_compact"}), /**/                                                                        \
+      F(type_write_to_cache, {"type", "write_to_cache"}), /**/                                                                      \
+      F(type_write_to_disk, {"type", "write_to_disk"})) /**/                                                                        \
     M(tiflash_storage_throughput_bytes,                                                                                             \
       "Calculate the throughput of tasks of storage in bytes",                                                                      \
       Gauge, /**/                                                                                                                   \
@@ -722,7 +736,13 @@ namespace DB
       F(type_total_consumption, {"type", "total_consumption"}),                                                                     \
       F(type_bucket_fill_rate, {"type", "bucket_fill_rate"}),                                                                       \
       F(type_bucket_capacity, {"type", "bucket_capacity"}),                                                                         \
-      F(type_fetch_tokens_from_gac_count, {"type", "fetch_tokens_from_gac_count"}))
+      F(type_compute_ru_consumption, {"type", "compute_ru_consumption"}),                                                           \
+      F(type_storage_ru_consumption, {"type", "storage_ru_consumption"}),                                                           \
+      F(type_compute_ru_exhausted, {"type", "compute_ru_exhausted"}),                                                               \
+      F(type_gac_req_acquire_tokens, {"type", "gac_req_acquire_tokens"}),                                                           \
+      F(type_gac_req_ru_consumption_delta, {"type", "gac_req_ru_consumption_delta"}),                                               \
+      F(type_gac_resp_tokens, {"type", "gac_resp_tokens"}),                                                                         \
+      F(type_gac_resp_capacity, {"type", "gac_resp_capacity"}))
 
 
 /// Buckets with boundaries [start * base^0, start * base^1, ..., start * base^(size-1)]
