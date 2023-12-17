@@ -57,8 +57,7 @@ size_t blockSize(EncryptionMethod method)
 #elif OPENSSL_VERSION_NUMBER < 0x1010100fL || defined(OPENSSL_NO_SM4)
         throw DB::TiFlashException(
             Errors::Encryption::Internal,
-            "Unsupported encryption method: {}",
-            static_cast<int>(method));
+            "Do not support encryption method SM4Ctr when using OpenSSL and the version is less than 1.1.1");
 #else
         // Openssl support SM4 after 1.1.1 release version.
         return SM4_BLOCK_SIZE;
@@ -85,8 +84,7 @@ const EVP_CIPHER * getCipher(EncryptionMethod method)
 #elif OPENSSL_VERSION_NUMBER < 0x1010100fL || defined(OPENSSL_NO_SM4)
         throw DB::TiFlashException(
             Errors::Encryption::Internal,
-            "Unsupported encryption method: {}",
-            static_cast<int>(method));
+            "Do not support encryption method SM4Ctr when using OpenSSL and the version is less than 1.1.1");
 #else
         // Openssl support SM4 after 1.1.1 release version.
         return EVP_sm4_ctr();
