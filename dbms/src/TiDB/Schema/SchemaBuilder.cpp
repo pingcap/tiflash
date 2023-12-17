@@ -175,8 +175,8 @@ void SchemaBuilder<Getter, NameMapper>::applyExchangeTablePartition(const Schema
             {
                 LOG_INFO(
                     log,
-                    "ExchangeTablePartition: non_partition_table instance is not created in TiFlash, rename is"
-                    " ignored, table_id={}",
+                    "ExchangeTablePartition: non_partition_table instance is not created in TiFlash"
+                    ", rename is ignored, table_id={}",
                     non_partition_table_id);
                 break;
             }

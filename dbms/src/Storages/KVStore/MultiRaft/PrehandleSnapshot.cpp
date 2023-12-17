@@ -263,6 +263,7 @@ PrehandleResult KVStore::preHandleSnapshotToFiles(
             DM::FileConvertJobType::ApplySnapshot,
             tmt);
         result.stats.start_time = start_time;
+        return result;
     }
     catch (DB::Exception & e)
     {
