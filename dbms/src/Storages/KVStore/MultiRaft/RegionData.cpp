@@ -26,10 +26,26 @@ extern const int LOGICAL_ERROR;
 extern const int ILLFORMAT_RAFT_ROW;
 } // namespace ErrorCodes
 
-HandleID RawTiDBPK::getHandleID() const
+void RegionData::reportAlloc(size_t delta) const
 {
-    const auto & pk = *this;
-    return RecordKVFormat::decodeInt64(RecordKVFormat::read<UInt64>(pk->data()));
+    root_of_kvstore_mem_trackers->alloc(delta);
+}
+
+void RegionData::reportDealloc(size_t delta) const
+{
+    root_of_kvstore_mem_trackers->free(delta);
+}
+
+void RegionData::reportDelta(size_t prev, size_t current) const
+{
+    if (current >= prev)
+    {
+        root_of_kvstore_mem_trackers->alloc(current - prev);
+    }
+    else
+    {
+        root_of_kvstore_mem_trackers->free(prev - current);
+    }
 }
 
 size_t RegionData::insert(ColumnFamilyType cf, TiKVKey && key, TiKVValue && value, DupCheck mode)
@@ -40,12 +56,14 @@ size_t RegionData::insert(ColumnFamilyType cf, TiKVKey && key, TiKVValue && valu
     {
         auto delta = write_cf.insert(std::move(key), std::move(value), mode);
         cf_data_size += delta;
+        reportAlloc(delta);
         return delta;
     }
     case ColumnFamilyType::Default:
     {
         auto delta = default_cf.insert(std::move(key), std::move(value), mode);
         cf_data_size += delta;
+        reportAlloc(delta);
         return delta;
     }
     case ColumnFamilyType::Lock:
@@ -66,7 +84,9 @@ void RegionData::remove(ColumnFamilyType cf, const TiKVKey & key)
         auto pk = RecordKVFormat::getRawTiDBPK(raw_key);
         Timestamp ts = RecordKVFormat::getTs(key);
         // removed by gc, may not exist.
-        cf_data_size -= write_cf.remove(RegionWriteCFData::Key{pk, ts}, true);
+        auto delta = write_cf.remove(RegionWriteCFData::Key{pk, ts}, true);
+        cf_data_size -= delta;
+        reportDealloc(delta);
         return;
     }
     case ColumnFamilyType::Default:
@@ -75,7 +95,9 @@ void RegionData::remove(ColumnFamilyType cf, const TiKVKey & key)
         auto pk = RecordKVFormat::getRawTiDBPK(raw_key);
         Timestamp ts = RecordKVFormat::getTs(key);
         // removed by gc, may not exist.
-        cf_data_size -= default_cf.remove(RegionDefaultCFData::Key{pk, ts}, true);
+        auto delta = default_cf.remove(RegionDefaultCFData::Key{pk, ts}, true);
+        cf_data_size -= delta;
+        reportDealloc(delta);
         return;
     }
     case ColumnFamilyType::Lock:
@@ -101,12 +123,16 @@ RegionData::WriteCFIter RegionData::removeDataByWriteIt(const WriteCFIter & writ
 
         if (auto data_it = map.find({pk, decoded_val.prewrite_ts}); data_it != map.end())
         {
-            cf_data_size -= RegionDefaultCFData::calcTiKVKeyValueSize(data_it->second);
+            auto delta = RegionDefaultCFData::calcTiKVKeyValueSize(data_it->second);
+            cf_data_size -= delta;
             map.erase(data_it);
+            reportDealloc(delta);
         }
     }
 
-    cf_data_size -= RegionWriteCFData::calcTiKVKeyValueSize(write_it->second);
+    auto delta = RegionWriteCFData::calcTiKVKeyValueSize(write_it->second);
+    cf_data_size -= delta;
+    reportDealloc(delta);
 
     return write_cf.getDataMut().erase(write_it);
 }
@@ -242,7 +268,9 @@ void RegionData::splitInto(const RegionRange & range, RegionData & new_region_da
     size_changed += write_cf.splitInto(range, new_region_data.write_cf);
     size_changed += lock_cf.splitInto(range, new_region_data.lock_cf);
     cf_data_size -= size_changed;
+    reportDealloc(size_changed);
     new_region_data.cf_data_size += size_changed;
+    new_region_data.reportAlloc(size_changed);
 }
 
 void RegionData::mergeFrom(const RegionData & ori_region_data)
@@ -252,6 +280,8 @@ void RegionData::mergeFrom(const RegionData & ori_region_data)
     size_changed += write_cf.mergeFrom(ori_region_data.write_cf);
     size_changed += lock_cf.mergeFrom(ori_region_data.lock_cf);
     cf_data_size += size_changed;
+    reportAlloc(size_changed);
+    ori_region_data.reportDealloc(size_changed);
 }
 
 size_t RegionData::dataSize() const
@@ -330,6 +360,7 @@ RegionData & RegionData::operator=(RegionData && rhs)
     write_cf = std::move(rhs.write_cf);
     default_cf = std::move(rhs.default_cf);
     lock_cf = std::move(rhs.lock_cf);
+    reportDelta(cf_data_size, rhs.cf_data_size.load());
     cf_data_size = rhs.cf_data_size.load();
     return *this;
 }
@@ -361,7 +392,6 @@ uint64_t RegionData::OrphanKeysInfo::remainedKeyCount() const
 {
     return remained_keys.size();
 }
-
 
 void RegionData::OrphanKeysInfo::mergeFrom(const RegionData::OrphanKeysInfo & other)
 {

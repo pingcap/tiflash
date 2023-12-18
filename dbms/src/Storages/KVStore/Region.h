@@ -169,7 +169,6 @@ public:
 
     // Check if we can read by this index.
     bool checkIndex(UInt64 index) const;
-
     // Return <WaitIndexStatus, time cost(seconds)> for wait-index.
     std::tuple<WaitIndexStatus, double> waitIndex(
         UInt64 index,
@@ -181,7 +180,6 @@ public:
     UInt64 appliedIndex() const;
     // Requires RegionMeta's lock
     UInt64 appliedIndexTerm() const;
-
     void notifyApplied() { meta.notifyAll(); }
     // Export for tests.
     void setApplied(UInt64 index, UInt64 term);
