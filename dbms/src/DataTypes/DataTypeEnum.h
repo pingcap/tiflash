@@ -85,18 +85,11 @@ public:
     {
         const auto it = value_to_name_map.find(value);
         if (it == std::end(value_to_name_map))
-<<<<<<< HEAD
-            throw Exception{"Unexpected value " + toString(value) + " for type " + getName(), ErrorCodes::LOGICAL_ERROR};
-=======
         {
             if (!value)
                 return {};
-
-            throw Exception{
-                "Unexpected value " + toString(value) + " for type " + getName(),
-                ErrorCodes::LOGICAL_ERROR};
+            throw Exception{"Unexpected value " + toString(value) + " for type " + getName(), ErrorCodes::LOGICAL_ERROR};
         }
->>>>>>> 6212eb1e53 (Support enum with index 0 (#8533))
 
         return it->second;
     }
