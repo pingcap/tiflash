@@ -1746,12 +1746,7 @@ private:
             const auto & json_val = json_source->getWhole();
             JsonBinary json_binary{json_val.data[0], StringRef{&json_val.data[1], json_val.size - 1}};
 
-            const auto & type_val = type_source->getWhole();
-            std::string_view type{reinterpret_cast<const char *>(type_val.data), type_val.size};
-            if unlikely (!JsonBinary::isJSONContainsPathAll(type) && !JsonBinary::isJSONContainsPathOne(type))
-                throw Exception(
-                    fmt::format("The second argument can only be either 'one' or 'all' of function {}.", getName()),
-                    ErrorCodes::ILLEGAL_COLUMN);
+            auto [is_contains_path_one, is_contains_path_all] = getTypeVal(type_source->getWhole());
 
             auto & res = data_to[row]; // default 1.
             for (size_t i = 0; i < path_sources.size(); ++i)
@@ -1763,27 +1758,18 @@ private:
                 }
 
                 assert(path_sources[i]);
-                const auto & path_val = path_sources[i]->getWhole();
-                auto path_expr = JsonPathExpr::parseJsonPathExpr(StringRef{path_val.data, path_val.size});
-                /// If path_expr failed to parse, throw exception
-                if unlikely (!path_expr)
-                    throw Exception(
-                        fmt::format("Illegal json path expression of function {}", getName()),
-                        ErrorCodes::ILLEGAL_COLUMN);
-                auto path_expr_containor = std::make_unique<JsonPathExprRefContainer>(path_expr);
-                std::vector<JsonPathExprRefContainerPtr> path_expr_containor_vec;
-                path_expr_containor_vec.push_back(std::move(path_expr_containor));
-                bool exists = !json_binary.extract(path_expr_containor_vec).empty();
-                if (exists && JsonBinary::isJSONContainsPathOne(type))
+                auto path_expr_container_vec = buildJsonPathExprContainer(path_sources[i]->getWhole());
+                bool exists = !json_binary.extract(path_expr_container_vec).empty();
+                if (exists && is_contains_path_one)
                 {
                     res = 1;
                     break;
                 }
-                else if (!exists && JsonBinary::isJSONContainsPathOne(type))
+                else if (!exists && is_contains_path_one)
                 {
                     res = 0;
                 }
-                else if (!exists && JsonBinary::isJSONContainsPathAll(type))
+                else if (!exists && is_contains_path_all)
                 {
                     res = 0;
                     break;
@@ -1793,7 +1779,7 @@ private:
             FINISH_PER_ROW
         }
 
-#undef SET_NULL_AND_CONTINUE
+#undef FINISH_PER_ROW
     }
 
     template <bool is_json_nullable>
@@ -1807,40 +1793,23 @@ private:
         NullMap & null_map_to) const
     {
         // build contains_type for type const col first.
-        const auto & type_val = type_source->getWhole();
-        std::string_view type{reinterpret_cast<const char *>(type_val.data), type_val.size};
-        bool is_contains_path_one = JsonBinary::isJSONContainsPathOne(type);
-        bool is_contains_path_all = JsonBinary::isJSONContainsPathAll(type);
-        if unlikely (!is_contains_path_one && !is_contains_path_all)
-            throw Exception(
-                fmt::format("The second argument can only be either 'one' or 'all' of function {}.", getName()),
-                ErrorCodes::ILLEGAL_COLUMN);
+        auto [is_contains_path_one, is_contains_path_all] = getTypeVal(type_source->getWhole());
 
         // build path exprs for path const cols next.
-        std::vector<std::vector<JsonPathExprRefContainerPtr>> path_expr_containor_vecs;
-        path_expr_containor_vecs.reserve(path_sources.size());
+        std::vector<std::vector<JsonPathExprRefContainerPtr>> path_expr_container_vecs;
+        path_expr_container_vecs.reserve(path_sources.size());
         for (const auto & path_source : path_sources)
         {
             if (!path_source) // only null const
             {
-                path_expr_containor_vecs.push_back({});
+                path_expr_container_vecs.push_back({});
             }
             else
             {
-                const auto & path_val = path_source->getWhole();
-                auto path_expr = JsonPathExpr::parseJsonPathExpr(StringRef{path_val.data, path_val.size});
-                /// If path_expr failed to parse, throw exception
-                if unlikely (!path_expr)
-                    throw Exception(
-                        fmt::format("Illegal json path expression of function {}", getName()),
-                        ErrorCodes::ILLEGAL_COLUMN);
-                auto path_expr_containor = std::make_unique<JsonPathExprRefContainer>(path_expr);
-                path_expr_containor_vecs.emplace_back();
-                path_expr_containor_vecs.back().resize(1);
-                path_expr_containor_vecs.back()[0] = std::move(path_expr_containor);
+                path_expr_container_vecs.push_back(buildJsonPathExprContainer(path_source->getWhole()));
             }
         }
-        assert(path_sources.size() == path_expr_containor_vecs.size());
+        assert(path_sources.size() == path_expr_container_vecs.size());
 
         for (size_t row = 0; row < rows; ++row)
         {
@@ -1858,15 +1827,15 @@ private:
             JsonBinary json_binary{json_val.data[0], StringRef{&json_val.data[1], json_val.size - 1}};
 
             auto & res = data_to[row]; // default 1.
-            for (const auto & path_expr_containor_vec : path_expr_containor_vecs)
+            for (const auto & path_expr_container_vec : path_expr_container_vecs)
             {
-                if (path_expr_containor_vec.empty())
+                if (path_expr_container_vec.empty())
                 {
                     null_map_to[row] = 1;
                     break;
                 }
 
-                bool exists = !json_binary.extract(path_expr_containor_vec).empty();
+                bool exists = !json_binary.extract(path_expr_container_vec).empty();
                 if (exists && is_contains_path_one)
                 {
                     res = 1;
@@ -1887,6 +1856,31 @@ private:
         }
 
 #undef SET_NULL_AND_CONTINUE
+    }
+
+    std::pair<bool, bool> getTypeVal(const IStringSource::Slice & type_val) const
+    {
+        std::string_view type{reinterpret_cast<const char *>(type_val.data), type_val.size};
+        bool is_contains_path_one = JsonBinary::isJSONContainsPathOne(type);
+        bool is_contains_path_all = JsonBinary::isJSONContainsPathAll(type);
+        if unlikely (!is_contains_path_one && !is_contains_path_all)
+            throw Exception(
+                fmt::format("The second argument can only be either 'one' or 'all' of function {}.", getName()),
+                ErrorCodes::ILLEGAL_COLUMN);
+        return {is_contains_path_one, is_contains_path_all};
+    }
+
+    std::vector<JsonPathExprRefContainerPtr> buildJsonPathExprContainer(const IStringSource::Slice & path_val) const
+    {
+        auto path_expr = JsonPathExpr::parseJsonPathExpr(StringRef{path_val.data, path_val.size});
+        /// If path_expr failed to parse, throw exception
+        if unlikely (!path_expr)
+            throw Exception(
+                fmt::format("Illegal json path expression of function {}", getName()),
+                ErrorCodes::ILLEGAL_COLUMN);
+        std::vector<JsonPathExprRefContainerPtr> path_expr_container_vec;
+        path_expr_container_vec.push_back(std::make_unique<JsonPathExprRefContainer>(path_expr));
+        return path_expr_container_vec;
     }
 };
 } // namespace DB
