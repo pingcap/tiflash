@@ -74,40 +74,41 @@ private:
     void applyRecoverDatabase(DatabaseID database_id);
 
     void applyCreateTable(DatabaseID database_id, TableID table_id);
-    void applyCreateStorageInstance(
-        const TiDB::DBInfoPtr & db_info,
-        const TiDB::TableInfoPtr & table_info,
-        bool is_tombstone);
+    void applyCreateStorageInstance(DatabaseID database_id, const TiDB::TableInfoPtr & table_info, bool is_tombstone);
 
     void applyDropTable(DatabaseID database_id, TableID table_id);
     /// Parameter schema_name should be mapped.
     void applyDropPhysicalTable(const String & db_name, TableID table_id);
 
     void applyRecoverTable(DatabaseID database_id, TiDB::TableID table_id);
-    void applyRecoverLogicalTable(const TiDB::DBInfoPtr & db_info, const TiDB::TableInfoPtr & table_info);
-    bool tryRecoverPhysicalTable(const TiDB::DBInfoPtr & db_info, const TiDB::TableInfoPtr & table_info);
+    void applyRecoverLogicalTable(DatabaseID database_id, const TiDB::TableInfoPtr & table_info);
+    bool tryRecoverPhysicalTable(DatabaseID database_id, const TiDB::TableInfoPtr & table_info);
 
     void applyPartitionDiff(DatabaseID database_id, TableID table_id);
     void applyPartitionDiffOnLogicalTable(
-        const TiDB::DBInfoPtr & db_info,
+        DatabaseID database_id,
         const TiDB::TableInfoPtr & table_info,
         const ManageableStoragePtr & storage);
 
     void applyRenameTable(DatabaseID database_id, TiDB::TableID table_id);
 
     void applyRenameLogicalTable(
-        const TiDB::DBInfoPtr & new_db_info,
+        DatabaseID new_database_id,
+        const String & new_database_display_name,
         const TiDB::TableInfoPtr & new_table_info,
         const ManageableStoragePtr & storage);
 
     void applyRenamePhysicalTable(
-        const TiDB::DBInfoPtr & new_db_info,
+        DatabaseID new_database_id,
+        const String & new_database_display_name,
         const TiDB::TableInfo & new_table_info,
         const ManageableStoragePtr & storage);
 
     void applySetTiFlashReplica(DatabaseID database_id, TableID table_id);
 
     void applyExchangeTablePartition(const SchemaDiff & diff);
+
+    String tryGetDatabaseDisplayNameFromLocal(DatabaseID database_id);
 };
 
 } // namespace DB

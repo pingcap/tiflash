@@ -33,10 +33,11 @@ namespace DB
 {
 
 String createTableStmt(
-    const DBInfo & db_info,
+    KeyspaceID keyspace_id,
+    DatabaseID database_id,
     const TableInfo & table_info,
     const SchemaNameMapper & name_mapper,
-    const UInt64 tombstone,
+    UInt64 tombstone,
     const LoggerPtr & log);
 
 namespace tests
@@ -151,7 +152,13 @@ struct StmtCase
         // generate create statement with db_info and table_info
         auto verify_stmt = [&](TiDB::StorageEngine engine_type) {
             table_info.engine_type = engine_type;
-            String stmt = createTableStmt(db_info, table_info, MockSchemaNameMapper(), tombstone, Logger::get());
+            String stmt = createTableStmt(
+                db_info.keyspace_id,
+                db_info.id,
+                table_info,
+                MockSchemaNameMapper(),
+                tombstone,
+                Logger::get());
             EXPECT_EQ(stmt, create_stmt_dm) << "Table info create statement mismatch:\n" + stmt + "\n" + create_stmt_dm;
 
             json1 = extractTableInfoFromCreateStatement(stmt, table_info.name);

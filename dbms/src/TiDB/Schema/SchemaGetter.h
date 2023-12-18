@@ -177,8 +177,6 @@ struct SchemaGetter
         return getTableInfoImpl</*mvcc_get*/ true>(db_id, table_id);
     }
 
-    std::tuple<TiDB::DBInfoPtr, TiDB::TableInfoPtr> getDatabaseAndTableInfo(DatabaseID db_id, TableID table_id);
-
     std::vector<TiDB::DBInfoPtr> listDBs();
 
     std::vector<TiDB::TableInfoPtr> listTables(DatabaseID db_id);
