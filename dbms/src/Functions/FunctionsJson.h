@@ -1873,8 +1873,8 @@ private:
                 throw Exception(
                     fmt::format("Illegal json path expression of function {}", getName()),
                     ErrorCodes::ILLEGAL_COLUMN);
-            auto path_expr_containor = std::make_unique<JsonPathExprRefContainer>(path_expr);
-            if unlikely (path_expr_containor->firstRef() && path_expr_containor->firstRef()->couldMatchMultipleValues())
+            auto path_expr_container = std::make_unique<JsonPathExprRefContainer>(path_expr);
+            if unlikely (path_expr_container->firstRef() && path_expr_container->firstRef()->couldMatchMultipleValues())
             {
                 throw Exception(
                     fmt::format(
@@ -1882,8 +1882,8 @@ private:
                         getName()),
                     ErrorCodes::ILLEGAL_COLUMN);
             }
-            std::vector<JsonPathExprRefContainerPtr> path_expr_containor_vec(1);
-            path_expr_containor_vec[0] = std::move(path_expr_containor);
+            std::vector<JsonPathExprRefContainerPtr> path_expr_container_vec(1);
+            path_expr_container_vec[0] = std::move(path_expr_container);
 
             const auto & json_val = json_source->getWhole();
             assert(json_val.size > 0);
@@ -1893,7 +1893,7 @@ private:
                 SET_NULL_AND_CONTINUE
             }
 
-            auto extract_json_binaries = json_binary.extract(path_expr_containor_vec);
+            auto extract_json_binaries = json_binary.extract(path_expr_container_vec);
             if (extract_json_binaries.empty() || extract_json_binaries[0].getType() != JsonBinary::TYPE_CODE_OBJECT)
             {
                 SET_NULL_AND_CONTINUE
@@ -1929,8 +1929,8 @@ private:
             throw Exception(
                 fmt::format("Illegal json path expression of function {}", getName()),
                 ErrorCodes::ILLEGAL_COLUMN);
-        auto path_expr_containor = std::make_unique<JsonPathExprRefContainer>(path_expr);
-        if unlikely (path_expr_containor->firstRef() && path_expr_containor->firstRef()->couldMatchMultipleValues())
+        auto path_expr_container = std::make_unique<JsonPathExprRefContainer>(path_expr);
+        if unlikely (path_expr_container->firstRef() && path_expr_container->firstRef()->couldMatchMultipleValues())
         {
             throw Exception(
                 fmt::format(
@@ -1938,8 +1938,8 @@ private:
                     getName()),
                 ErrorCodes::ILLEGAL_COLUMN);
         }
-        std::vector<JsonPathExprRefContainerPtr> path_expr_containor_vec(1);
-        path_expr_containor_vec[0] = std::move(path_expr_containor);
+        std::vector<JsonPathExprRefContainerPtr> path_expr_container_vec(1);
+        path_expr_container_vec[0] = std::move(path_expr_container);
 
 #define SET_NULL_AND_CONTINUE             \
     null_map_to[i] = 1;                   \
@@ -1969,7 +1969,7 @@ private:
                 SET_NULL_AND_CONTINUE
             }
 
-            auto extract_json_binaries = json_binary.extract(path_expr_containor_vec);
+            auto extract_json_binaries = json_binary.extract(path_expr_container_vec);
             if (extract_json_binaries.empty() || extract_json_binaries[0].getType() != JsonBinary::TYPE_CODE_OBJECT)
             {
                 SET_NULL_AND_CONTINUE
