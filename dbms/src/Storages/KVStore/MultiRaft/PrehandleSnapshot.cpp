@@ -43,6 +43,7 @@ namespace FailPoints
 extern const char force_set_sst_to_dtfile_block_size[];
 extern const char force_set_parallel_prehandle_threshold[];
 extern const char force_raise_prehandle_exception[];
+extern const char pause_before_prehandle_snapshot[];
 } // namespace FailPoints
 
 namespace ErrorCodes
@@ -191,20 +192,23 @@ PrehandleResult KVStore::preHandleSnapshotToFiles(
 {
     new_region->beforePrehandleSnapshot(new_region->id(), deadline_index);
     ongoing_prehandle_task_count.fetch_add(1);
-    PrehandleResult result;
+
+    FAIL_POINT_PAUSE(FailPoints::pause_before_prehandle_snapshot);
+
     try
     {
         SCOPE_EXIT({
             auto ongoing = ongoing_prehandle_task_count.fetch_sub(1) - 1;
             new_region->afterPrehandleSnapshot(ongoing);
         });
-        result = preHandleSSTsToDTFiles( //
+        PrehandleResult result = preHandleSSTsToDTFiles( //
             new_region,
             snaps,
             index,
             term,
             DM::FileConvertJobType::ApplySnapshot,
             tmt);
+        return result;
     }
     catch (DB::Exception & e)
     {
@@ -212,7 +216,8 @@ PrehandleResult KVStore::preHandleSnapshotToFiles(
             fmt::format("(while preHandleSnapshot region_id={}, index={}, term={})", new_region->id(), index, term));
         e.rethrow();
     }
-    return result;
+
+    return PrehandleResult{};
 }
 
 // If size is 0, do not parallel prehandle for this snapshot, which is legacy.
