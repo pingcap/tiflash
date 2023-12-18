@@ -95,6 +95,15 @@ try
             ASSERT_COLUMN_EQ(castStringToJson(createColumn<Nullable<String>>({expect, expect})), column_const_ret);
         else
             ASSERT_COLUMN_EQ(castStringToJson(createConstColumn<Nullable<String>>(2, expect)), column_const_ret);
+        // const, column
+        auto const_column_ret = executeFunction(
+            func_name,
+            {castStringToJson(createConstColumn<Nullable<String>>(2, json)),
+             createColumn<Nullable<String>>({path, path})});
+        if (json)
+            ASSERT_COLUMN_EQ(castStringToJson(createColumn<Nullable<String>>({expect, expect})), const_column_ret);
+        else
+            ASSERT_COLUMN_EQ(castStringToJson(createConstColumn<Nullable<String>>(2, expect)), const_column_ret);
     };
 
     execute_and_assert({}, "$", {});
