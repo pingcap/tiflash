@@ -34,19 +34,19 @@ function bake_llvm_base_aarch64() {
 
     # LLVM
     source $SCRIPTPATH/bootstrap_llvm.sh
-    bootstrap_llvm "17.0.1"
+    bootstrap_llvm "17.0.6"
     export CC=clang
     export CXX=clang++
     export LD=ld.lld
 
     # OpenSSL
     source $SCRIPTPATH/install_openssl.sh
-    install_openssl "1_1_1t"
+    install_openssl "1_1_1w"
     export OPENSSL_ROOT_DIR="/usr/local/opt/openssl"
 
     # Git
     source $SCRIPTPATH/install_git.sh
-    install_git "2.40.1"
+    install_git "2.43.0"
 
     # Go
     source $SCRIPTPATH/install_go.sh
