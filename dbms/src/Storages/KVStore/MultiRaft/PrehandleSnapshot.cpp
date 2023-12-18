@@ -43,6 +43,11 @@ namespace FailPoints
 extern const char force_set_sst_to_dtfile_block_size[];
 extern const char force_set_parallel_prehandle_threshold[];
 extern const char force_raise_prehandle_exception[];
+<<<<<<< HEAD
+=======
+extern const char pause_before_prehandle_snapshot[];
+extern const char pause_before_prehandle_subtask[];
+>>>>>>> 1a67f3794d (ddl: Fix corner case of `FLASHBACK DATABASE` (#8536))
 } // namespace FailPoints
 
 namespace ErrorCodes
@@ -191,20 +196,34 @@ PrehandleResult KVStore::preHandleSnapshotToFiles(
 {
     new_region->beforePrehandleSnapshot(new_region->id(), deadline_index);
     ongoing_prehandle_task_count.fetch_add(1);
+<<<<<<< HEAD
     PrehandleResult result;
+=======
+
+    FAIL_POINT_PAUSE(FailPoints::pause_before_prehandle_snapshot);
+
+    uint64_t start_time
+        = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch())
+              .count();
+>>>>>>> 1a67f3794d (ddl: Fix corner case of `FLASHBACK DATABASE` (#8536))
     try
     {
         SCOPE_EXIT({
             auto ongoing = ongoing_prehandle_task_count.fetch_sub(1) - 1;
             new_region->afterPrehandleSnapshot(ongoing);
         });
-        result = preHandleSSTsToDTFiles( //
+        PrehandleResult result = preHandleSSTsToDTFiles( //
             new_region,
             snaps,
             index,
             term,
             DM::FileConvertJobType::ApplySnapshot,
             tmt);
+<<<<<<< HEAD
+=======
+        result.stats.start_time = start_time;
+        return result;
+>>>>>>> 1a67f3794d (ddl: Fix corner case of `FLASHBACK DATABASE` (#8536))
     }
     catch (DB::Exception & e)
     {
@@ -212,7 +231,8 @@ PrehandleResult KVStore::preHandleSnapshotToFiles(
             fmt::format("(while preHandleSnapshot region_id={}, index={}, term={})", new_region->id(), index, term));
         e.rethrow();
     }
-    return result;
+
+    return PrehandleResult{};
 }
 
 // If size is 0, do not parallel prehandle for this snapshot, which is legacy.
