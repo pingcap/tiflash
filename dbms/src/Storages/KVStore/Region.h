@@ -120,6 +120,7 @@ public:
 public:
     explicit Region(RegionMeta && meta_);
     explicit Region(RegionMeta && meta_, const TiFlashRaftProxyHelper *);
+    ~Region();
 
     void insert(const std::string & cf, TiKVKey && key, TiKVValue && value, DupCheck mode = DupCheck::Deny);
     void insert(ColumnFamilyType type, TiKVKey && key, TiKVValue && value, DupCheck mode = DupCheck::Deny);

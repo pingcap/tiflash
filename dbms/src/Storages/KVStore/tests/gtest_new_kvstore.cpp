@@ -64,6 +64,7 @@ try
         region->remove("default", TiKVKey::copyFrom(str_key));
         ASSERT_EQ(root_of_kvstore_mem_trackers->get(), 0);
     }
+    ASSERT_EQ(root_of_kvstore_mem_trackers->get(), 0);
     {
         root_of_kvstore_mem_trackers->reset();
         RegionPtr region = tests::makeRegion(800, start, end, proxy_helper.get());
@@ -76,6 +77,7 @@ try
         RemoveRegionCommitCache(region, *data_list_read);
         ASSERT_EQ(root_of_kvstore_mem_trackers->get(), 0);
     }
+    ASSERT_EQ(root_of_kvstore_mem_trackers->get(), 0);
     {
         root_of_kvstore_mem_trackers->reset();
         RegionPtr region = tests::makeRegion(900, start, end, proxy_helper.get());
@@ -93,6 +95,7 @@ try
         region->mergeDataFrom(*new_region);
         ASSERT_EQ(root_of_kvstore_mem_trackers->get(), expected);
     }
+    ASSERT_EQ(root_of_kvstore_mem_trackers->get(), 0);
 }
 CATCH
 

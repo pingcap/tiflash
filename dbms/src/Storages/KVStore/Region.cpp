@@ -219,6 +219,7 @@ RegionPtr Region::deserialize(ReadBuffer & buf, const TiFlashRaftProxyHelper * p
 
     // deserialize data
     RegionData::deserialize(buf, region->data);
+    region->data.reportAlloc(region->data.cf_data_size);
 
     // restore other var according to meta
     region->last_restart_log_applied = region->appliedIndex();
@@ -441,6 +442,10 @@ Region::Region(DB::RegionMeta && meta_, const TiFlashRaftProxyHelper * proxy_hel
     , mapped_table_id(meta.getRange()->getMappedTableID())
     , proxy_helper(proxy_helper_)
 {}
+
+Region::~Region() {
+    data.reportDealloc(data.cf_data_size);
+}
 
 TableID Region::getMappedTableID() const
 {
