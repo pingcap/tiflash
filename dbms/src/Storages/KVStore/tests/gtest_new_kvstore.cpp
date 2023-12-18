@@ -15,6 +15,7 @@
 #include <Common/MemoryTracker.h>
 #include <Debug/MockKVStore/MockSSTGenerator.h>
 #include <Storages/KVStore/Read/LearnerRead.h>
+#include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/Utils/AsyncTasks.h>
 #include <Storages/RegionQueryInfo.h>
 
@@ -57,11 +58,40 @@ try
 
     {
         root_of_kvstore_mem_trackers->reset();
-        RegionPtr region = tests::makeRegion(999, start, end, proxy_helper.get());
+        RegionPtr region = tests::makeRegion(700, start, end, proxy_helper.get());
         region->insert("default", TiKVKey::copyFrom(str_key), TiKVValue::copyFrom(str_val_default));
         ASSERT_EQ(root_of_kvstore_mem_trackers->get(), str_key.dataSize() + str_val_default.size());
         region->remove("default", TiKVKey::copyFrom(str_key));
         ASSERT_EQ(root_of_kvstore_mem_trackers->get(), 0);
+    }
+    {
+        root_of_kvstore_mem_trackers->reset();
+        RegionPtr region = tests::makeRegion(800, start, end, proxy_helper.get());
+        region->insert("default", TiKVKey::copyFrom(str_key), TiKVValue::copyFrom(str_val_default));
+        ASSERT_EQ(root_of_kvstore_mem_trackers->get(), str_key.dataSize() + str_val_default.size());
+        region->insert("write", TiKVKey::copyFrom(str_key), TiKVValue::copyFrom(str_val_write));
+        std::optional<RegionDataReadInfoList> data_list_read = ReadRegionCommitCache(region, true);
+        ASSERT_TRUE(data_list_read);
+        ASSERT_EQ(1, data_list_read->size());
+        RemoveRegionCommitCache(region, *data_list_read);
+        ASSERT_EQ(root_of_kvstore_mem_trackers->get(), 0);
+    }
+    {
+        root_of_kvstore_mem_trackers->reset();
+        RegionPtr region = tests::makeRegion(900, start, end, proxy_helper.get());
+        region->insert("default", TiKVKey::copyFrom(str_key), TiKVValue::copyFrom(str_val_default));
+        auto str_key2 = RecordKVFormat::genKey(table_id, 20, 111);
+        auto [str_val_write2, str_val_default2] = proxy_instance->generateTiKVKeyValue(111, 999);
+        region->insert("default", TiKVKey::copyFrom(str_key2), TiKVValue::copyFrom(str_val_default2));
+        auto expected = str_key.dataSize() + str_val_default.size() + str_key2.dataSize() + str_val_default2.size();
+        ASSERT_EQ(root_of_kvstore_mem_trackers->get(), expected);
+        auto new_region = region->splitInto(RegionMeta(
+            createPeer(901, true),
+            createRegionInfo(902, RecordKVFormat::genKey(table_id, 50), end),
+            initialApplyState()));
+        ASSERT_EQ(root_of_kvstore_mem_trackers->get(), expected);
+        region->mergeDataFrom(*new_region);
+        ASSERT_EQ(root_of_kvstore_mem_trackers->get(), expected);
     }
 }
 CATCH

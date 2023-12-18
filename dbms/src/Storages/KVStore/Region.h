@@ -35,6 +35,7 @@ namespace tests
 {
 class KVStoreTestBase;
 class RegionKVStoreOldTest;
+class RegionKVStoreTest;
 } // namespace tests
 
 class Region;
@@ -233,11 +234,16 @@ public:
 
     Region() = delete;
 
+#ifdef DBMS_PUBLIC_GTEST
+public:
+#else
 private:
+#endif
     friend class RegionRaftCommandDelegate;
     friend class RegionMockTest;
     friend class tests::KVStoreTestBase;
     friend class tests::RegionKVStoreOldTest;
+    friend class tests::RegionKVStoreTest;
 
     // Private methods no need to lock mutex, normally
 
