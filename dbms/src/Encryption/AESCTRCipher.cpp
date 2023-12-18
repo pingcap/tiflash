@@ -19,7 +19,42 @@
 #include <openssl/evp.h>
 
 #include <ext/scope_guard.h>
+#include <magic_enum.hpp>
 
+#if OPENSSL_VERSION_NUMBER < 0x01010000f
+
+#define InitCipherContext(ctx) \
+    EVP_CIPHER_CTX ctx##_var;  \
+    ctx = &ctx##_var;          \
+    EVP_CIPHER_CTX_init(ctx);
+
+// do nothing
+#define FreeCipherContext(ctx)
+
+#else
+
+#define InitCipherContext(ctx)              \
+    ctx = EVP_CIPHER_CTX_new();             \
+    if ((ctx) != nullptr)                   \
+    {                                       \
+        if (EVP_CIPHER_CTX_reset(ctx) != 1) \
+        {                                   \
+            (ctx) = nullptr;                \
+        }                                   \
+    }
+
+#define FreeCipherContext(ctx) EVP_CIPHER_CTX_free(ctx);
+
+#endif
+
+#if (USE_GM_SSL == 0) && !defined(OPENSSL_NO_SM4)
+// TODO: OpenSSL Lib does not export SM4_BLOCK_SIZE by now.
+// Need to remove SM4_BLOCK_SIZE once Openssl lib support the definition.
+// SM4 uses 128-bit block size as AES.
+// Ref:
+// https://github.com/openssl/openssl/blob/OpenSSL_1_1_1-stable/include/crypto/sm4.h#L24
+#define SM4_BLOCK_SIZE 16
+#endif
 
 namespace DB::Encryption
 {
@@ -117,7 +152,7 @@ void OpenSSLCipher(
     throw Exception("OpenSSL version < 1.0.2", ErrorCodes::NOT_IMPLEMENTED);
 #else
     const EVP_CIPHER * cipher = getCipher(method);
-    RUNTIME_CHECK_MSG(cipher != nullptr, "Cipher is not valid.");
+    RUNTIME_CHECK_MSG(cipher != nullptr, "Cipher is not valid, method={}", magic_enum::enum_name(method));
 
     const size_t block_size = blockSize(method);
     uint64_t block_offset = file_offset % block_size;
