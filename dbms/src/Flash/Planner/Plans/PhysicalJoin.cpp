@@ -347,9 +347,11 @@ void PhysicalJoin::finalizeImpl(const Names & parent_require)
 
     build_side_prepare_actions->finalize(build_required);
     build()->finalize(build_side_prepare_actions->getRequiredColumns());
+    FinalizeHelper::prependProjectInputIfNeed(build_side_prepare_actions, build()->getSampleBlock().columns());
 
     probe_side_prepare_actions->finalize(probe_required);
     probe()->finalize(probe_side_prepare_actions->getRequiredColumns());
+    FinalizeHelper::prependProjectInputIfNeed(probe_side_prepare_actions, probe()->getSampleBlock().columns());
 }
 
 const Block & PhysicalJoin::getSampleBlock() const
