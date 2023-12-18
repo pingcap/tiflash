@@ -18,8 +18,6 @@
 #include <TiDB/Decode/JsonBinary.h>
 #include <TiDB/Decode/JsonPathExprRef.h>
 
-#include <string_view>
-
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #include <Poco/Base64Decoder.h>
@@ -391,12 +389,12 @@ JsonBinary JsonBinary::getArrayElement(size_t index) const
     return getValueEntry(HEADER_SIZE + index * VALUE_ENTRY_SIZE);
 }
 
-std::string_view JsonBinary::getObjectKey(size_t index) const
+StringRef JsonBinary::getObjectKey(size_t index) const
 {
     size_t cursor = HEADER_SIZE + index * KEY_ENTRY_SIZE;
     auto key_offset = decodeNumeric<UInt32>(cursor, data);
     auto key_length = decodeNumeric<UInt16>(cursor, data);
-    return std::string_view(data.data + key_offset, key_length);
+    return {data.data + key_offset, key_length};
 }
 
 JsonBinary JsonBinary::getObjectValue(size_t index) const
@@ -874,10 +872,10 @@ UInt64 JsonBinary::getDepth() const
     }
 }
 
-std::vector<std::string_view> JsonBinary::getKeys() const
+std::vector<StringRef> JsonBinary::getKeys() const
 {
     RUNTIME_CHECK(type == TYPE_CODE_OBJECT);
-    std::vector<std::string_view> res;
+    std::vector<StringRef> res;
     auto elem_count = getElementCount();
     for (size_t i = 0; i < elem_count; ++i)
         res.push_back(getObjectKey(i));
@@ -1096,7 +1094,7 @@ void JsonBinary::buildBinaryJsonArrayInBuffer(
     buildBinaryJsonElementsInBuffer(json_binary_vec, write_buffer);
 }
 
-void JsonBinary::buildKeyArrayInBuffer(const std::vector<std::string_view> & keys, JsonBinaryWriteBuffer & write_buffer)
+void JsonBinary::buildKeyArrayInBuffer(const std::vector<StringRef> & keys, JsonBinaryWriteBuffer & write_buffer)
 {
     write_buffer.write(TYPE_CODE_ARRAY);
 
@@ -1119,8 +1117,8 @@ void JsonBinary::buildKeyArrayInBuffer(const std::vector<std::string_view> & key
         auto tmp_entry_pos = write_buffer.offset();
 
         write_buffer.setOffset(data_offset + buffer_start_pos);
-        writeVarUInt(static_cast<UInt64>(key.size()), write_buffer);
-        write_buffer.write(key.data(), key.size());
+        writeVarUInt(static_cast<UInt64>(key.size), write_buffer);
+        write_buffer.write(key.data, key.size);
         data_offset = write_buffer.offset() - buffer_start_pos;
 
         write_buffer.setOffset(tmp_entry_pos);
