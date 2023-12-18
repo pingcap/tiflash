@@ -1866,24 +1866,7 @@ private:
                 }
             }
 
-            const auto & path_val = path_source->getWhole();
-            auto path_expr = JsonPathExpr::parseJsonPathExpr(StringRef{path_val.data, path_val.size});
-            /// If path_expr failed to parse, throw exception
-            if unlikely (!path_expr)
-                throw Exception(
-                    fmt::format("Illegal json path expression of function {}", getName()),
-                    ErrorCodes::ILLEGAL_COLUMN);
-            auto path_expr_container = std::make_unique<JsonPathExprRefContainer>(path_expr);
-            if unlikely (path_expr_container->firstRef() && path_expr_container->firstRef()->couldMatchMultipleValues())
-            {
-                throw Exception(
-                    fmt::format(
-                        "In this situation, path expressions may not contain the * and ** tokens or range selection.",
-                        getName()),
-                    ErrorCodes::ILLEGAL_COLUMN);
-            }
-            std::vector<JsonPathExprRefContainerPtr> path_expr_container_vec(1);
-            path_expr_container_vec[0] = std::move(path_expr_container);
+            auto path_expr_container_vec = buildPathExprContainer(path_source->getWhole());
 
             const auto & json_val = json_source->getWhole();
             assert(json_val.size > 0);
@@ -1922,24 +1905,7 @@ private:
         NullMap & null_map_to) const
     {
         // build path expr for const path col first.
-        const auto & path_val = path_source->getWhole();
-        auto path_expr = JsonPathExpr::parseJsonPathExpr(StringRef{path_val.data, path_val.size});
-        /// If path_expr failed to parse, throw exception
-        if unlikely (!path_expr)
-            throw Exception(
-                fmt::format("Illegal json path expression of function {}", getName()),
-                ErrorCodes::ILLEGAL_COLUMN);
-        auto path_expr_container = std::make_unique<JsonPathExprRefContainer>(path_expr);
-        if unlikely (path_expr_container->firstRef() && path_expr_container->firstRef()->couldMatchMultipleValues())
-        {
-            throw Exception(
-                fmt::format(
-                    "In this situation, path expressions may not contain the * and ** tokens or range selection.",
-                    getName()),
-                ErrorCodes::ILLEGAL_COLUMN);
-        }
-        std::vector<JsonPathExprRefContainerPtr> path_expr_container_vec(1);
-        path_expr_container_vec[0] = std::move(path_expr_container);
+        auto path_expr_container_vec = buildPathExprContainer(path_source->getWhole());
 
 #define SET_NULL_AND_CONTINUE             \
     null_map_to[i] = 1;                   \
@@ -1984,6 +1950,28 @@ private:
         }
 
 #undef SET_NULL_AND_CONTINUE
+    }
+
+    std::vector<JsonPathExprRefContainerPtr> buildPathExprContainer(const IStringSource::Slice & path_val) const
+    {
+        auto path_expr = JsonPathExpr::parseJsonPathExpr(StringRef{path_val.data, path_val.size});
+        /// If path_expr failed to parse, throw exception
+        if unlikely (!path_expr)
+            throw Exception(
+                fmt::format("Illegal json path expression of function {}", getName()),
+                ErrorCodes::ILLEGAL_COLUMN);
+        auto path_expr_container = std::make_unique<JsonPathExprRefContainer>(path_expr);
+        if unlikely (path_expr_container->firstRef() && path_expr_container->firstRef()->couldMatchMultipleValues())
+        {
+            throw Exception(
+                fmt::format(
+                    "In this situation, path expressions may not contain the * and ** tokens or range selection.",
+                    getName()),
+                ErrorCodes::ILLEGAL_COLUMN);
+        }
+        std::vector<JsonPathExprRefContainerPtr> path_expr_container_vec(1);
+        path_expr_container_vec[0] = std::move(path_expr_container);
+        return path_expr_container_vec;
     }
 };
 } // namespace DB
