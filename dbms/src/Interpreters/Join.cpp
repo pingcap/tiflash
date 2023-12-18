@@ -2633,6 +2633,8 @@ void Join::finalize(const Names & parent_require)
         updated_require.push_back(non_equal_conditions.other_eq_cond_from_in_name);
     if (!non_equal_conditions.other_cond_name.empty())
         updated_require.push_back(non_equal_conditions.other_cond_name);
+    /// nullaware join will reuse the columns and assume there is not REMOVE_COLUMN and project
+    /// in the expression actions, so have to use `pruneInputColumns` instead of `finalize` here
     if (non_equal_conditions.null_aware_eq_cond_expr != nullptr)
     {
         non_equal_conditions.null_aware_eq_cond_expr->pruneInputColumns(updated_require);

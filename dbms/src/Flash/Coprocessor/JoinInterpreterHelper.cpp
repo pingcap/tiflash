@@ -453,12 +453,17 @@ std::vector<RuntimeFilterPtr> TiFlashJoin::genRuntimeFilterList(
 
 NamesAndTypes genDAGExpressionAnalyzerSourceColumns(Block block, const NamesAndTypes & tidb_schema)
 {
+    /// generate source_columns that is used to compile tipb::Expr, the rule is columns in `tidb_schema`
+    /// must be the first part of the source_columns, and the column order must be exactly the same as
+    /// in `tidb_schema`
     NamesAndTypes source_columns = tidb_schema;
+    /// remove columns that already in tidb_schema
     for (const auto & name_and_type : tidb_schema)
     {
         if (block.has(name_and_type.name))
             block.erase(name_and_type.name);
     }
+    /// insert the remaining columns, this is to avoid duplicate column error
     for (const auto & col : block)
     {
         source_columns.emplace_back(col.name, col.type);
