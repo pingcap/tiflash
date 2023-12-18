@@ -28,7 +28,7 @@ namespace DB
 
 namespace AsyncTaskHelper
 {
-// It's guarunteed a task is no longer accessible once canceled or has its result fetched.
+// It's guaranteed a task is no longer accessible once canceled or has its result fetched.
 // NotScheduled -> InQueue, Running, NotScheduled
 // InQueue -> Running
 // Running -> Finished, NotScheduled(canceled)
@@ -314,19 +314,23 @@ struct AsyncTasks
 
     bool isReady(Key key) const { return queryState(key) == TaskState::Finished; }
 
-    uint64_t queryElapsed(Key key)
+    std::optional<uint64_t> queryElapsed(Key key)
     {
         std::scoped_lock<std::mutex> l(mtx);
         auto it = tasks.find(key);
-        RUNTIME_CHECK(it != tasks.end());
+        if unlikely(it == tasks.end()) {
+            return std::nullopt;
+        }
         return getCurrentMillis() - it->second.start_ts;
     }
 
-    uint64_t queryStartTime(Key key)
+    std::optional<uint64_t> queryStartTime(Key key)
     {
         std::scoped_lock<std::mutex> l(mtx);
         auto it = tasks.find(key);
-        RUNTIME_CHECK(it != tasks.end());
+        if unlikely(it == tasks.end()) {
+            return std::nullopt;
+        }
         return it->second.start_ts;
     }
 

@@ -270,7 +270,7 @@ std::variant<CheckpointRegionInfoAndData, FastAddPeerRes> FastAddPeerImplSelect(
             SYNC_FOR("in_FastAddPeerImplSelect::before_sleep");
             if (cancel_handle->blockedWaitFor(std::chrono::milliseconds(1000)))
             {
-                LOG_INFO(log, "Cancel FAP during peer selecting, region_id={}", region_id);
+                LOG_INFO(log, "FAP is canceled during peer selecting, region_id={}", region_id);
                 // Just remove the task from AsyncTasks, it will not write anything in disk during this stage.
                 // NOTE once canceled, Proxy should no longer polling `FastAddPeer`, since it will result in `OtherError`.
                 fap_ctx->tasks_trace->leakingDiscardTask(region_id);
@@ -325,7 +325,7 @@ FastAddPeerRes FastAddPeerImplWrite(
 
     if (cancel_handle->canceled())
     {
-        LOG_INFO(log, "Cancel FAP before write, region_id={}", region_id);
+        LOG_INFO(log, "FAP is canceled before write, region_id={}", region_id);
         fap_ctx->cleanTask(tmt, proxy_helper, region_id, false);
         GET_METRIC(tiflash_fap_task_result, type_failed_cancel).Increment();
         return genFastAddPeerRes(FastAddPeerStatus::Canceled, "", "");
@@ -344,7 +344,7 @@ FastAddPeerRes FastAddPeerImplWrite(
     SYNC_FOR("in_FastAddPeerImplWrite::after_write_segments");
     if (cancel_handle->canceled())
     {
-        LOG_INFO(log, "Cancel FAP after write segments, region_id={}", region_id);
+        LOG_INFO(log, "FAP is canceled after write segments, region_id={}", region_id);
         fap_ctx->cleanTask(tmt, proxy_helper, region_id, false);
         GET_METRIC(tiflash_fap_task_result, type_failed_cancel).Increment();
         return genFastAddPeerRes(FastAddPeerStatus::Canceled, "", "");
@@ -370,7 +370,7 @@ FastAddPeerRes FastAddPeerImplWrite(
     SYNC_FOR("in_FastAddPeerImplWrite::after_write_raft_log");
     if (cancel_handle->canceled())
     {
-        LOG_INFO(log, "Cancel FAP after write raft log, region_id={}", region_id);
+        LOG_INFO(log, "FAP is canceled after write raft log, region_id={}", region_id);
         fap_ctx->cleanTask(tmt, proxy_helper, region_id, false);
         GET_METRIC(tiflash_fap_task_result, type_failed_cancel).Increment();
         return genFastAddPeerRes(FastAddPeerStatus::Canceled, "", "");
@@ -395,7 +395,16 @@ FastAddPeerRes FastAddPeerImpl(
     auto log = Logger::get("FastAddPeer");
     try
     {
-        auto elapsed = fap_ctx->tasks_trace->queryElapsed(region_id);
+        auto maybe_elapsed = fap_ctx->tasks_trace->queryElapsed(region_id);
+        if unlikely(!maybe_elapsed.has_value()) {
+            GET_METRIC(tiflash_fap_task_result, type_failed_cancel).Increment();
+            LOG_INFO(
+                log,
+                "FAP is canceled at beginning region_id={} new_peer_id={}",
+                region_id,
+                new_peer_id);
+        }
+        auto elapsed = maybe_elapsed.value();
         GET_METRIC(tiflash_fap_task_duration_seconds, type_queue_stage).Observe(elapsed / 1000.0);
         GET_METRIC(tiflash_fap_task_state, type_queueing_stage).Decrement();
         auto res = FastAddPeerImplSelect(tmt, proxy_helper, region_id, new_peer_id);
@@ -533,7 +542,7 @@ FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, u
                 [&]() {
                     LOG_INFO(
                         log,
-                        "Cancel FAP in queue due to timeout region_id={} new_peer_id={}",
+                        "FAP is canceled in queue due to timeout region_id={} new_peer_id={}",
                         region_id,
                         new_peer_id);
                     // It is already canceled in queue.
@@ -578,7 +587,9 @@ FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, u
         else
         {
             const auto & settings = server->tmt->getContext().getSettingsRef();
-            auto elapsed = fap_ctx->tasks_trace->queryElapsed(region_id);
+            auto maybe_elapsed = fap_ctx->tasks_trace->queryElapsed(region_id);
+            RUNTIME_CHECK_MSG(maybe_elapsed.has_value(), "Task nout found, region_id={} new_peer_id={}", region_id, new_peer_id);
+            auto elapsed = maybe_elapsed.value();
             if (elapsed >= 1000 * settings.fap_task_timeout_seconds)
             {
                 /// NOTE: Make sure FastAddPeer is the only place to cancel FAP phase 1.
