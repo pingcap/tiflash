@@ -46,7 +46,7 @@ function bake_llvm_base_aarch64() {
 
     # Git
     source $SCRIPTPATH/install_git.sh
-    install_git "2.43.0"
+    install_git "2.40.1"
 
     # Go
     source $SCRIPTPATH/install_go.sh
