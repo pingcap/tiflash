@@ -97,6 +97,7 @@ func> wait_table d1 t1
 mysql> alter table d1.t1 add column b int;
 
 >> DBGInvoke __enable_fail_point(pause_before_apply_raft_cmd)
+>> DBGInvoke __enable_fail_point(pause_before_prehandle_snapshot)
 
 # exactly write until fail point "pause_before_apply_raft_cmd" to be disable
 mysql> insert into d1.t1 values(2,2);
@@ -107,6 +108,7 @@ mysql> drop database d1;
 
 # make write cmd take effect
 >> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
+>> DBGInvoke __disable_fail_point(pause_before_prehandle_snapshot)
 
 # the `t1` is still mark as tombstone
 >> select tidb_database,tidb_name,is_tombstone,tidb_table_id from system.tables where is_tombstone = 0 and tidb_database = 'd1' and tidb_name='t1';
@@ -145,6 +147,7 @@ mysql> create table d1.t2(id INT NOT NULL,name VARCHAR(30)) PARTITION BY RANGE (
 mysql> insert into d1.t2 values(1, 'abc'),(2, 'cde'),(53, 'efg');
 
 >> DBGInvoke __enable_fail_point(pause_before_apply_raft_cmd)
+>> DBGInvoke __enable_fail_point(pause_before_prehandle_snapshot)
 mysql> alter table d1.t2 set tiflash replica 1;
 mysql> alter table d1.t2 add column b int;
 
@@ -154,6 +157,7 @@ mysql> drop database d1;
 
 # make write cmd take effect
 >> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
+>> DBGInvoke __disable_fail_point(pause_before_prehandle_snapshot)
 
 # check the row is written to the storage or not
 mysql> flashback database d1 to d1_new
