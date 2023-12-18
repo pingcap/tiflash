@@ -22,7 +22,7 @@
 
 namespace DB
 {
-void ProgressValues::read(ReadBuffer & in, UInt64 /*server_revision*/)
+void ProgressValues::read(ReadBuffer & in)
 {
     size_t new_rows = 0;
     size_t new_bytes = 0;
@@ -38,7 +38,7 @@ void ProgressValues::read(ReadBuffer & in, UInt64 /*server_revision*/)
 }
 
 
-void ProgressValues::write(WriteBuffer & out, UInt64 /*client_revision*/) const
+void ProgressValues::write(WriteBuffer & out) const
 {
     writeVarUInt(rows, out);
     writeVarUInt(bytes, out);
@@ -46,10 +46,10 @@ void ProgressValues::write(WriteBuffer & out, UInt64 /*client_revision*/) const
 }
 
 
-void Progress::read(ReadBuffer & in, UInt64 server_revision)
+void Progress::read(ReadBuffer & in)
 {
     ProgressValues values{};
-    values.read(in, server_revision);
+    values.read(in);
 
     rows.store(values.rows, std::memory_order_relaxed);
     bytes.store(values.bytes, std::memory_order_relaxed);
@@ -57,9 +57,9 @@ void Progress::read(ReadBuffer & in, UInt64 server_revision)
 }
 
 
-void Progress::write(WriteBuffer & out, UInt64 client_revision) const
+void Progress::write(WriteBuffer & out) const
 {
-    getValues().write(out, client_revision);
+    getValues().write(out);
 }
 
 } // namespace DB

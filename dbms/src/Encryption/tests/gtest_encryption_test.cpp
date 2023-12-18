@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/RandomData.h>
 #include <Encryption/AESCTRCipherStream.h>
 #include <Encryption/EncryptedRandomAccessFile.h>
 #include <Encryption/EncryptedWritableFile.h>
@@ -50,19 +51,6 @@ const unsigned char KEY[33] = "\xe4\x3e\x8e\xca\x2a\x83\xe1\x88\xfb\xd8\x02\xdc\
 const unsigned char IV_RANDOM[17] = "\x77\x9b\x82\x72\x26\xb5\x76\x50\xf7\x05\xd2\xd6\xb8\xaa\xa9\x2c";
 const unsigned char IV_OVERFLOW_LOW[17] = "\x77\x9b\x82\x72\x26\xb5\x76\x50\xff\xff\xff\xff\xff\xff\xff\xff";
 const unsigned char IV_OVERFLOW_FULL[17] = "\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff";
-
-std::string random_string(size_t length)
-{
-    std::string str("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz");
-    while (str.length() < length)
-    {
-        str += str;
-    }
-    std::random_device rd;
-    std::mt19937 generator(rd());
-    std::shuffle(str.begin(), str.end(), generator);
-    return str.substr(0, length);
-}
 } // namespace test
 
 constexpr size_t MAX_SIZE = 16 * 10;
@@ -72,13 +60,13 @@ constexpr size_t MAX_SIZE = 16 * 10;
 class EncryptionTest : public testing::TestWithParam<std::tuple<bool, EncryptionMethod>>
 {
 public:
-    unsigned char plaintext[MAX_SIZE];
+    unsigned char plaintext[MAX_SIZE]{};
     // Reserve a bit more room to make sure OpenSSL have enough buffer.
-    unsigned char ciphertext[MAX_SIZE + 16 * 2];
+    unsigned char ciphertext[MAX_SIZE + 16 * 2]{};
 
     void generateCiphertext(const unsigned char * iv)
     {
-        std::string random_string = test::random_string(MAX_SIZE);
+        std::string random_string = DB::random::randomString(MAX_SIZE);
         memcpy(plaintext, random_string.data(), MAX_SIZE);
 
         EVP_CIPHER_CTX * ctx;

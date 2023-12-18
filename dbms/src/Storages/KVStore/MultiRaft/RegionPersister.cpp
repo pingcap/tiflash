@@ -67,7 +67,7 @@ void RegionPersister::computeRegionWriteBuffer(const Region & region, RegionCach
     }
 }
 
-size_t RegionPersister::computeRegionWriteBuffer(const Region & region, MemoryWriteBuffer & buffer)
+size_t RegionPersister::computeRegionWriteBuffer(const Region & region, WriteBuffer & buffer)
 {
     auto region_size = 0;
     std::tie(region_size, std::ignore) = region.serialize(buffer);
