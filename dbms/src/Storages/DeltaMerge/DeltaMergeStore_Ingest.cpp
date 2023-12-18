@@ -120,7 +120,8 @@ void DeltaMergeStore::cleanPreIngestFiles(
                 f.id,
                 f.id,
                 file_parent_path,
-                DM::DMFile::ReadMetaMode::memoryAndDiskSize());
+                DM::DMFile::ReadMetaMode::memoryAndDiskSize(),
+                keyspace_id);
             removePreIngestFile(f.id, false);
             file->remove(file_provider);
         }
@@ -181,8 +182,13 @@ Segments DeltaMergeStore::ingestDTFilesUsingColumnFile(
                 const auto & file_parent_path = file->parentPath();
                 auto page_id = storage_pool->newDataPageIdForDTFile(delegate, __PRETTY_FUNCTION__);
 
-                auto ref_file
-                    = DMFile::restore(file_provider, file_id, page_id, file_parent_path, DMFile::ReadMetaMode::all());
+                auto ref_file = DMFile::restore(
+                    file_provider,
+                    file_id,
+                    page_id,
+                    file_parent_path,
+                    DMFile::ReadMetaMode::all(),
+                    keyspace_id);
                 data_files.emplace_back(std::move(ref_file));
                 wbs.data.putRefPage(page_id, file->pageId());
             }
@@ -464,7 +470,8 @@ bool DeltaMergeStore::ingestDTFileIntoSegmentUsingSplit(
             file->fileId(),
             new_page_id,
             file->parentPath(),
-            DMFile::ReadMetaMode::all());
+            DMFile::ReadMetaMode::all(),
+            keyspace_id);
         wbs.data.putRefPage(new_page_id, file->pageId());
 
         // We have to commit those file_ids to PageStorage before applying the ingest, because after the write
@@ -653,7 +660,8 @@ UInt64 DeltaMergeStore::ingestFiles(
                 external_file.id,
                 external_file.id,
                 file_parent_path,
-                DMFile::ReadMetaMode::memoryAndDiskSize());
+                DMFile::ReadMetaMode::memoryAndDiskSize(),
+                keyspace_id);
         }
         else
         {
