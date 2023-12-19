@@ -185,9 +185,7 @@ public:
     /// - Does not reorder the columns.
     /// - Does not remove "unexpected" columns (for example, added by functions).
     /// - If output_columns is empty, leaves one arbitrary column (so that the number of rows in the block is not lost).
-    void finalize(const Names & output_columns);
-
-    void pruneInputColumns(const Names & output_columns);
+    void finalize(const Names & output_columns, bool keep_used_input_columns = false);
 
     const Actions & getActions() const { return actions; }
 

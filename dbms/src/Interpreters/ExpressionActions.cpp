@@ -563,75 +563,7 @@ std::string ExpressionActions::getSmallestColumn(const NameAndTypeContainer & co
     return res;
 }
 
-void ExpressionActions::pruneInputColumns(const Names & output_columns)
-{
-    NameSet final_columns;
-    for (const auto & name : output_columns)
-    {
-        if (!sample_block.has(name))
-            throw Exception(
-                "Unknown column: " + name + ", there are only columns " + sample_block.dumpNames(),
-                ErrorCodes::UNKNOWN_IDENTIFIER);
-        final_columns.insert(name);
-    }
-
-    /// Which columns are needed to perform actions from the current to the last.
-    NameSet needed_columns = final_columns;
-    /// Which columns nobody will touch from the current action to the last.
-    NameSet unmodified_columns;
-
-    {
-        NamesAndTypesList sample_columns = sample_block.getNamesAndTypesList();
-        for (auto & sample_column : sample_columns)
-            unmodified_columns.insert(sample_column.name);
-    }
-
-    /// Let's go from the end and maintain set of required columns at this stage.
-    /// We will throw out unnecessary actions, although usually they are absent by construction.
-    for (int i = static_cast<int>(actions.size()) - 1; i >= 0; --i)
-    {
-        ExpressionAction & action = actions[i];
-        Names in = action.getNeededColumns();
-
-        if (action.type == ExpressionAction::PROJECT)
-        {
-            needed_columns = NameSet(in.begin(), in.end());
-            unmodified_columns.clear();
-        }
-        else
-        {
-            std::string out = action.result_name;
-            if (!out.empty())
-            {
-                unmodified_columns.erase(out);
-                needed_columns.erase(out);
-            }
-            needed_columns.insert(in.begin(), in.end());
-        }
-    }
-
-    /// We will not throw out all the input columns, so as not to lose the number of rows in the block.
-    if (needed_columns.empty() && !input_columns.empty())
-        needed_columns.insert(getSmallestColumn(input_columns));
-
-    /// We will not leave the block empty so as not to lose the number of rows in it.
-    if (final_columns.empty() && !input_columns.empty())
-        final_columns.insert(getSmallestColumn(input_columns));
-
-    for (auto it = input_columns.begin(); it != input_columns.end();)
-    {
-        auto it0 = it;
-        ++it;
-        if (!needed_columns.count(it0->name))
-        {
-            if (unmodified_columns.count(it0->name))
-                sample_block.erase(it0->name);
-            input_columns.erase(it0);
-        }
-    }
-}
-
-void ExpressionActions::finalize(const Names & output_columns)
+void ExpressionActions::finalize(const Names & output_columns, bool keep_used_input_columns)
 {
     NameSet final_columns;
     for (const auto & name : output_columns)
@@ -743,6 +675,15 @@ void ExpressionActions::finalize(const Names & output_columns)
     /// If the column after performing the function `refcount = 0`, it can be deleted.
     std::map<String, int> columns_refcount;
 
+    NameSet columns_should_not_be_removed;
+    if (keep_used_input_columns)
+    {
+        /// if keep_used_input_columns is true, then don't remove the input_columns
+        /// this is used in nullaware/semi join which intends to reuse the input column
+        for (const auto & column : input_columns)
+            columns_should_not_be_removed.insert(column.name);
+    }
+
     for (const auto & name : final_columns)
         ++columns_refcount[name];
 
@@ -767,7 +708,7 @@ void ExpressionActions::finalize(const Names & output_columns)
 
         auto process = [&](const String & name, const ExpressionAction::Type & type) {
             auto refcount = --columns_refcount[name];
-            if (refcount <= 0)
+            if (refcount <= 0 && columns_should_not_be_removed.count(name) == 0)
             {
                 if (type != ExpressionAction::REMOVE_COLUMN)
                     new_actions.push_back(ExpressionAction::removeColumn(name));
