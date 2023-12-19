@@ -33,6 +33,7 @@ mysql> alter table d1.t3 add column b int;
 mysql> insert into d1.t3 values(2,2);
 mysql> alter table d1.t4 add column b int;
 
+=> DBGInvoke __refresh_schemas()
 mysql> drop database d1;
 
 mysql> flashback database d1 to d1_new

@@ -55,7 +55,7 @@ public:
         LOG_DEBUG(log, "Created, pool_id={} ref_no={}", task_pool->poolId(), ref_no);
     }
 
-    ~UnorderedInputStream()
+    ~UnorderedInputStream() override
     {
         task_pool->decreaseUnorderedInputStreamRefCount();
         LOG_DEBUG(log, "Destroy, pool_id={} ref_no={}", task_pool->poolId(), ref_no);
