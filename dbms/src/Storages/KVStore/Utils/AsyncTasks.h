@@ -238,9 +238,9 @@ struct AsyncTasks
         return state;
     }
 
+    using CancelFunc = std::function<void()>;
     // Safety: Throws if
     // 1. There is already a task registered with the same name and not canceled or fetched.
-    template <typename CancelFunc>
     bool addTaskWithCancel(Key k, Func f, CancelFunc cf)
     {
         std::scoped_lock l(mtx);

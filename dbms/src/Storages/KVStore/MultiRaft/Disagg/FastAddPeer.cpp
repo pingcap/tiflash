@@ -525,21 +525,22 @@ FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, u
             // We need to schedule the task.
             auto current_time = FAPAsyncTasks::getCurrentMillis();
             GET_METRIC(tiflash_fap_task_state, type_queueing_stage).Increment();
+            auto job_func = [server, region_id, new_peer_id, fap_ctx, current_time]() {
+                std::string origin_name = getThreadName();
+                SCOPE_EXIT({ setThreadName(origin_name.c_str()); });
+                setThreadName("fap-builder");
+                return FastAddPeerImpl(
+                    fap_ctx,
+                    *(server->tmt),
+                    server->proxy_helper,
+                    region_id,
+                    new_peer_id,
+                    current_time);
+            };
             auto res = fap_ctx->tasks_trace->addTaskWithCancel(
                 region_id,
-                [server, region_id, new_peer_id, fap_ctx, current_time]() {
-                    std::string origin_name = getThreadName();
-                    SCOPE_EXIT({ setThreadName(origin_name.c_str()); });
-                    setThreadName("fap-builder");
-                    return FastAddPeerImpl(
-                        fap_ctx,
-                        *(server->tmt),
-                        server->proxy_helper,
-                        region_id,
-                        new_peer_id,
-                        current_time);
-                },
-                [&]() {
+                job_func,
+                [log, region_id, new_peer_id]() {
                     LOG_INFO(
                         log,
                         "FAP is canceled in queue due to timeout region_id={} new_peer_id={}",
