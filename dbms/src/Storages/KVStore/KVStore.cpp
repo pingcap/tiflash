@@ -658,6 +658,7 @@ void KVStore::StoreMeta::update(Base && base_)
 
 KVStore::~KVStore()
 {
+    LOG_INFO(log, "Destroy KVStore");
     releaseReadIndexWorkers();
 }
 

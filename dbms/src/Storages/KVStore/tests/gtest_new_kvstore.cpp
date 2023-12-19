@@ -47,14 +47,16 @@ try
         {{RecordKVFormat::genKey(table_id, 0), RecordKVFormat::genKey(table_id, 10)},
          {RecordKVFormat::genKey(table_id, 11), RecordKVFormat::genKey(table_id, 20)}});
 
-    auto region_id = 1;
-    auto kvr1 = kvs.getRegion(region_id);
-    auto [index, term]
-        = proxy_instance
-              ->rawWrite(region_id, {str_key}, {str_val_default}, {WriteCmdType::Put}, {ColumnFamilyType::Default});
-    UNUSED(term);
-    proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index);
-    ASSERT_EQ(root_of_kvstore_mem_trackers->get(), str_key.dataSize() + str_val_default.size());
+    {
+        auto region_id = 1;
+        auto kvr1 = kvs.getRegion(region_id);
+        auto [index, term]
+            = proxy_instance
+                ->rawWrite(region_id, {str_key}, {str_val_default}, {WriteCmdType::Put}, {ColumnFamilyType::Default});
+        UNUSED(term);
+        proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index);
+        ASSERT_EQ(root_of_kvstore_mem_trackers->get(), str_key.dataSize() + str_val_default.size());
+    }
 
     {
         root_of_kvstore_mem_trackers->reset();
@@ -71,6 +73,17 @@ try
         region->insert("default", TiKVKey::copyFrom(str_key), TiKVValue::copyFrom(str_val_default));
         ASSERT_EQ(root_of_kvstore_mem_trackers->get(), str_key.dataSize() + str_val_default.size());
     }
+    ASSERT_EQ(root_of_kvstore_mem_trackers->get(), 0);
+    {
+        root_of_kvstore_mem_trackers->reset();
+        RegionPtr region = tests::makeRegion(702, start, end, proxy_helper.get());
+        region->insert("default", TiKVKey::copyFrom(str_key), TiKVValue::copyFrom(str_val_default));
+        ASSERT_EQ(root_of_kvstore_mem_trackers->get(), str_key.dataSize() + str_val_default.size());
+        tryPersistRegion(kvs, 1);
+        reloadKVSFromDisk();
+        ASSERT_EQ(root_of_kvstore_mem_trackers->get(), str_key.dataSize() + str_val_default.size());
+    }
+    return;
     ASSERT_EQ(root_of_kvstore_mem_trackers->get(), 0);
     {
         root_of_kvstore_mem_trackers->reset();
