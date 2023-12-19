@@ -67,6 +67,13 @@ try
     ASSERT_EQ(root_of_kvstore_mem_trackers->get(), 0);
     {
         root_of_kvstore_mem_trackers->reset();
+        RegionPtr region = tests::makeRegion(701, start, end, proxy_helper.get());
+        region->insert("default", TiKVKey::copyFrom(str_key), TiKVValue::copyFrom(str_val_default));
+        ASSERT_EQ(root_of_kvstore_mem_trackers->get(), str_key.dataSize() + str_val_default.size());
+    }
+    ASSERT_EQ(root_of_kvstore_mem_trackers->get(), 0);
+    {
+        root_of_kvstore_mem_trackers->reset();
         RegionPtr region = tests::makeRegion(800, start, end, proxy_helper.get());
         region->insert("default", TiKVKey::copyFrom(str_key), TiKVValue::copyFrom(str_val_default));
         ASSERT_EQ(root_of_kvstore_mem_trackers->get(), str_key.dataSize() + str_val_default.size());
