@@ -266,6 +266,7 @@ void RegionData::splitInto(const RegionRange & range, RegionData & new_region_da
     size_t size_changed = 0;
     size_changed += default_cf.splitInto(range, new_region_data.default_cf);
     size_changed += write_cf.splitInto(range, new_region_data.write_cf);
+    // Put them before computing lock cf size change.
     reportDealloc(size_changed);
     new_region_data.reportAlloc(size_changed);
     size_changed += lock_cf.splitInto(range, new_region_data.lock_cf);
@@ -278,6 +279,7 @@ void RegionData::mergeFrom(const RegionData & ori_region_data)
     size_t size_changed = 0;
     size_changed += default_cf.mergeFrom(ori_region_data.default_cf);
     size_changed += write_cf.mergeFrom(ori_region_data.write_cf);
+    // Put them before computing lock cf size change.
     reportAlloc(size_changed);
     ori_region_data.reportDealloc(size_changed);
     size_changed += lock_cf.mergeFrom(ori_region_data.lock_cf);
