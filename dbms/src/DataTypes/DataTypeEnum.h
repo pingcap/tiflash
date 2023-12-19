@@ -81,11 +81,15 @@ public:
     std::string getName() const override { return name; }
     const char * getFamilyName() const override;
 
-    const StringRef & getNameForValue(const FieldType & value) const
+    StringRef getNameForValue(const FieldType & value) const
     {
         const auto it = value_to_name_map.find(value);
         if (it == std::end(value_to_name_map))
+        {
+            if (!value)
+                return {};
             throw Exception{"Unexpected value " + toString(value) + " for type " + getName(), ErrorCodes::LOGICAL_ERROR};
+        }
 
         return it->second;
     }
