@@ -317,7 +317,7 @@ SegmentPtr Segment::newSegment( //
         context.storage_pool->newMetaPageId());
 }
 
-inline void readSegmentMetaInfo(ReadBuffer & buf, Segment::SegmentMetaInfo & segment_info)
+void readSegmentMetaInfo(ReadBuffer & buf, Segment::SegmentMetaInfo & segment_info)
 {
     readIntBinary(segment_info.version, buf);
     readIntBinary(segment_info.epoch, buf);
@@ -472,9 +472,14 @@ Segments Segment::createTargetSegmentsFromCheckpoint( //
             segment_info.range.toDebugString(),
             segment_info.epoch,
             segment_info.next_segment_id);
-        auto stable = StableValueSpace::createFromCheckpoint(context, temp_ps, segment_info.stable_id, wbs);
-        auto delta
-            = DeltaValueSpace::createFromCheckpoint(context, temp_ps, segment_info.range, segment_info.delta_id, wbs);
+        auto stable = StableValueSpace::createFromCheckpoint(parent_log, context, temp_ps, segment_info.stable_id, wbs);
+        auto delta = DeltaValueSpace::createFromCheckpoint(
+            parent_log,
+            context,
+            temp_ps,
+            segment_info.range,
+            segment_info.delta_id,
+            wbs);
         auto segment = std::make_shared<Segment>(
             Logger::get("Checkpoint"),
             segment_info.epoch,
@@ -496,17 +501,33 @@ Segments Segment::createTargetSegmentsFromCheckpoint( //
     return segments;
 }
 
-void Segment::serialize(WriteBatchWrapper & wb)
+void Segment::serializeToFAPTempSegment(FastAddPeerProto::FAPTempSegmentInfo * segment_info)
 {
-    MemoryWriteBuffer buf(0, SEGMENT_BUFFER_SIZE);
+    {
+        WriteBufferFromOwnString wb;
+        storeSegmentMetaInfo(wb);
+        segment_info->set_segment_meta(wb.releaseStr());
+    }
+    segment_info->set_delta_meta(delta->serializeMeta());
+    segment_info->set_stable_meta(stable->serializeMeta());
+}
+
+UInt64 Segment::storeSegmentMetaInfo(WriteBuffer & buf) const
+{
     writeIntBinary(STORAGE_FORMAT_CURRENT.segment, buf);
     writeIntBinary(epoch, buf);
     rowkey_range.serialize(buf);
     writeIntBinary(next_segment_id, buf);
     writeIntBinary(delta->getId(), buf);
     writeIntBinary(stable->getId(), buf);
+    return buf.count();
+}
 
-    auto data_size = buf.count(); // Must be called before tryGetReadBuffer.
+void Segment::serialize(WriteBatchWrapper & wb) const
+{
+    MemoryWriteBuffer buf(0, SEGMENT_BUFFER_SIZE);
+    // Must be called before tryGetReadBuffer.
+    auto data_size = storeSegmentMetaInfo(buf);
     wb.putPage(segment_id, 0, buf.tryGetReadBuffer(), data_size);
 }
 
