@@ -52,7 +52,7 @@ try
         auto kvr1 = kvs.getRegion(region_id);
         auto [index, term]
             = proxy_instance
-                ->rawWrite(region_id, {str_key}, {str_val_default}, {WriteCmdType::Put}, {ColumnFamilyType::Default});
+                  ->rawWrite(region_id, {str_key}, {str_val_default}, {WriteCmdType::Put}, {ColumnFamilyType::Default});
         UNUSED(term);
         proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index);
         ASSERT_EQ(root_of_kvstore_mem_trackers->get(), str_key.dataSize() + str_val_default.size());
