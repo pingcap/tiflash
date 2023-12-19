@@ -330,7 +330,7 @@ void initStorageMemoryTracker(Int64 limit, Int64 larger_than_limit)
         = MemoryTracker::create(0, sub_root_of_query_storage_task_mem_trackers.get(), log_in_destructor);
     shared_column_data_mem_tracker->setAmountMetric(CurrentMetrics::MemoryTrackingSharedColumnData);
 
-    root_of_kvstore_mem_trackers->setMetric(CurrentMetrics::MemoryTrackingKVStore);
+    root_of_kvstore_mem_trackers->setAmountMetric(CurrentMetrics::MemoryTrackingKVStore);
 }
 
 namespace CurrentMemoryTracker

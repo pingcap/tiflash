@@ -37,9 +37,9 @@ public:
     using WriteCFIter = RegionWriteCFData::Map::iterator;
     using ConstWriteCFIter = RegionWriteCFData::Map::const_iterator;
 
-    void reportAlloc(size_t delta) const;
-    void reportDealloc(size_t delta) const;
-    void reportDelta(size_t prev, size_t current) const;
+    static void reportAlloc(size_t delta);
+    static void reportDealloc(size_t delta);
+    static void reportDelta(size_t prev, size_t current);
 
     size_t insert(ColumnFamilyType cf, TiKVKey && key, TiKVValue && value, DupCheck mode = DupCheck::Deny);
     void remove(ColumnFamilyType cf, const TiKVKey & key);

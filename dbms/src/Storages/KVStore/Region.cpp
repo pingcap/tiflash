@@ -99,7 +99,8 @@ size_t Region::doInsert(ColumnFamilyType type, TiKVKey && key, TiKVValue && valu
             }
         }
     }
-    return data.insert(type, std::move(key), std::move(value), mode);
+    auto ans = data.insert(type, std::move(key), std::move(value), mode);
+    return ans;
 }
 
 void Region::remove(const std::string & cf, const TiKVKey & key)
@@ -443,7 +444,8 @@ Region::Region(DB::RegionMeta && meta_, const TiFlashRaftProxyHelper * proxy_hel
     , proxy_helper(proxy_helper_)
 {}
 
-Region::~Region() {
+Region::~Region()
+{
     data.reportDealloc(data.cf_data_size);
 }
 

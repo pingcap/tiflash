@@ -94,6 +94,7 @@ RegionDataRes RegionCFDataBase<Trait>::insert(std::pair<Key, Value> && kv_pair, 
                         + " new_val: " + prev_value.toDebugString(),
                     ErrorCodes::LOGICAL_ERROR);
             }
+            return 0;
         }
         else
         {
@@ -122,7 +123,9 @@ size_t RegionCFDataBase<Trait>::calcTiKVKeyValueSize(const TiKVKey & key, const 
         return 0;
     }
     else
+    {
         return key.dataSize() + value.dataSize();
+    }
 }
 
 

@@ -26,21 +26,21 @@ extern const int LOGICAL_ERROR;
 extern const int ILLFORMAT_RAFT_ROW;
 } // namespace ErrorCodes
 
-void RegionData::reportAlloc(size_t delta) const
+void RegionData::reportAlloc(size_t delta)
 {
-    root_of_kvstore_mem_trackers->alloc(delta);
+    root_of_kvstore_mem_trackers->alloc(delta, false);
 }
 
-void RegionData::reportDealloc(size_t delta) const
+void RegionData::reportDealloc(size_t delta)
 {
     root_of_kvstore_mem_trackers->free(delta);
 }
 
-void RegionData::reportDelta(size_t prev, size_t current) const
+void RegionData::reportDelta(size_t prev, size_t current)
 {
     if (current >= prev)
     {
-        root_of_kvstore_mem_trackers->alloc(current - prev);
+        root_of_kvstore_mem_trackers->alloc(current - prev, false);
     }
     else
     {
@@ -266,11 +266,11 @@ void RegionData::splitInto(const RegionRange & range, RegionData & new_region_da
     size_t size_changed = 0;
     size_changed += default_cf.splitInto(range, new_region_data.default_cf);
     size_changed += write_cf.splitInto(range, new_region_data.write_cf);
+    reportDealloc(size_changed);
+    new_region_data.reportAlloc(size_changed);
     size_changed += lock_cf.splitInto(range, new_region_data.lock_cf);
     cf_data_size -= size_changed;
-    reportDealloc(size_changed);
     new_region_data.cf_data_size += size_changed;
-    new_region_data.reportAlloc(size_changed);
 }
 
 void RegionData::mergeFrom(const RegionData & ori_region_data)
@@ -278,10 +278,10 @@ void RegionData::mergeFrom(const RegionData & ori_region_data)
     size_t size_changed = 0;
     size_changed += default_cf.mergeFrom(ori_region_data.default_cf);
     size_changed += write_cf.mergeFrom(ori_region_data.write_cf);
-    size_changed += lock_cf.mergeFrom(ori_region_data.lock_cf);
-    cf_data_size += size_changed;
     reportAlloc(size_changed);
     ori_region_data.reportDealloc(size_changed);
+    size_changed += lock_cf.mergeFrom(ori_region_data.lock_cf);
+    cf_data_size += size_changed;
 }
 
 size_t RegionData::dataSize() const
