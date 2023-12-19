@@ -28,6 +28,15 @@ namespace DB::tests
 class TestJsonExtract : public DB::tests::FunctionTest
 {
 public:
+    static constexpr auto func_name = "json_extract";
+
+    ColumnWithTypeAndName castStringToJson(const ColumnWithTypeAndName & column)
+    {
+        assert(removeNullable(column.type)->isString());
+        ColumnsWithTypeAndName origin_inputs{column};
+        return executeFunction("cast_string_as_json", origin_inputs, nullptr, true);
+    }
+
     static void checkResult(ColumnPtr column, std::vector<UInt8> & null_vec, std::vector<String> & data)
     {
         bool is_const_res = false;
@@ -59,11 +68,10 @@ public:
     }
 };
 
-TEST_F(TestJsonExtract, TestAll)
+TEST_F(TestJsonExtract, TestAllPathConst)
 try
 {
     /// Normal case: ColumnVector(nullable)
-    const String func_name = "json_extract";
     static auto const nullable_string_type_ptr = makeNullable(std::make_shared<DataTypeString>());
     static auto const string_type_ptr = std::make_shared<DataTypeString>();
     auto str_col = ColumnString::create();
@@ -92,7 +100,7 @@ try
     str_col->insertData(reinterpret_cast<const char *>(bj9), sizeof(bj9) / sizeof(UInt8));
     ColumnUInt8::MutablePtr col_null_map = ColumnUInt8::create(3, 0);
     ColumnUInt8::Container & vec_null_map = col_null_map->getData();
-    vec_null_map[1] = 0;
+    vec_null_map[1] = 1;
     auto json_col = ColumnNullable::create(std::move(str_col), std::move(col_null_map));
     auto input_col = ColumnWithTypeAndName(std::move(json_col), nullable_string_type_ptr, "input0");
 
@@ -188,6 +196,75 @@ try
     expect_string_vec = {"[2, 3]", "[2, 3]", "[2, 3]"};
     expect_null_vec = {0, 0, 0};
     checkResult(res.column, expect_null_vec, expect_string_vec);
+}
+CATCH
+
+TEST_F(TestJsonExtract, TestOnlyNull)
+try
+{
+    size_t rows_count = 2;
+    ColumnWithTypeAndName json_column = castStringToJson(createColumn<Nullable<String>>({"[]", "[]"}));
+    ColumnWithTypeAndName path_column = createColumn<Nullable<String>>({"$", "$"});
+    ColumnWithTypeAndName path_column2 = createColumn<Nullable<String>>({"$.a", "$.a"});
+    ColumnWithTypeAndName null_string_const = createConstColumn<Nullable<String>>(rows_count, {});
+    ColumnWithTypeAndName only_null_const = createOnlyNullColumnConst(rows_count);
+
+    ASSERT_COLUMN_EQ(json_column, executeFunction(func_name, json_column, path_column));
+    ASSERT_COLUMN_EQ(null_string_const, executeFunction(func_name, only_null_const, path_column));
+    ASSERT_COLUMN_EQ(null_string_const, executeFunction(func_name, null_string_const, path_column));
+    ASSERT_COLUMN_EQ(null_string_const, executeFunction(func_name, json_column, only_null_const, path_column));
+    ASSERT_COLUMN_EQ(null_string_const, executeFunction(func_name, json_column, null_string_const, path_column));
+    ASSERT_COLUMN_EQ(null_string_const, executeFunction(func_name, json_column, only_null_const));
+    ASSERT_COLUMN_EQ(null_string_const, executeFunction(func_name, json_column, null_string_const));
+    ASSERT_COLUMN_EQ(null_string_const, executeFunction(func_name, json_column, path_column, only_null_const));
+    ASSERT_COLUMN_EQ(null_string_const, executeFunction(func_name, json_column, path_column, null_string_const));
+    ASSERT_COLUMN_EQ(null_string_const, executeFunction(func_name, json_column, path_column2, only_null_const));
+    ASSERT_COLUMN_EQ(null_string_const, executeFunction(func_name, json_column, path_column2, null_string_const));
+    ASSERT_COLUMN_EQ(null_string_const, executeFunction(func_name, json_column, only_null_const, path_column));
+    ASSERT_COLUMN_EQ(null_string_const, executeFunction(func_name, json_column, null_string_const, path_column));
+
+    // path const.
+    ASSERT_COLUMN_EQ(
+        null_string_const,
+        executeFunction(func_name, json_column, createConstColumn<String>(2, "$"), null_string_const));
+    ASSERT_COLUMN_EQ(
+        null_string_const,
+        executeFunction(func_name, json_column, createConstColumn<String>(2, "$"), only_null_const));
+    ASSERT_COLUMN_EQ(
+        null_string_const,
+        executeFunction(func_name, json_column, null_string_const, createConstColumn<String>(2, "$")));
+    ASSERT_COLUMN_EQ(
+        null_string_const,
+        executeFunction(func_name, json_column, only_null_const, createConstColumn<String>(2, "$")));
+}
+CATCH
+
+TEST_F(TestJsonExtract, TestHasColumnPath)
+try
+{
+    auto exec_assert = [&](const std::optional<String> & json,
+                           const std::optional<String> & path,
+                           const std::optional<String> & expect) {
+        auto expect_col = json ? castStringToJson(createColumn<Nullable<String>>({expect, expect}))
+                               : createConstColumn<Nullable<String>>(2, expect);
+        ASSERT_COLUMN_EQ(
+            expect_col,
+            executeFunction(
+                func_name,
+                {castStringToJson(createColumn<Nullable<String>>({json, json})),
+                 createColumn<Nullable<String>>({path, path})}));
+        ASSERT_COLUMN_EQ(
+            expect_col,
+            executeFunction(
+                func_name,
+                {castStringToJson(createConstColumn<Nullable<String>>(2, json)),
+                 createColumn<Nullable<String>>({path, path})}));
+    };
+
+    exec_assert("{}", "$", "{}");
+    exec_assert("{}", "$.a", {});
+    exec_assert("{}", {}, {});
+    exec_assert({}, "$", {});
 }
 CATCH
 
