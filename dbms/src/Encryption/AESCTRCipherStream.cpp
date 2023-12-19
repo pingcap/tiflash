@@ -52,7 +52,7 @@ void AESCTRCipherStream::encrypt(uint64_t file_offset, char * data, size_t data_
     uint64_t block_index = file_offset / block_size;
     unsigned char iv[block_size];
     initIV(block_index, iv);
-    DB::Encryption::Cipher(file_offset, data, data_size, key, method, iv, /*is_encrypt=*/true);
+    DB::Encryption::Cipher(cipher, file_offset, data, data_size, key, block_size, method, iv, /*is_encrypt=*/true);
 }
 
 void AESCTRCipherStream::decrypt(uint64_t file_offset, char * data, size_t data_size)
@@ -61,7 +61,7 @@ void AESCTRCipherStream::decrypt(uint64_t file_offset, char * data, size_t data_
     uint64_t block_index = file_offset / block_size;
     unsigned char iv[block_size];
     initIV(block_index, iv);
-    DB::Encryption::Cipher(file_offset, data, data_size, key, method, iv, /*is_encrypt=*/false);
+    DB::Encryption::Cipher(cipher, file_offset, data, data_size, key, block_size, method, iv, /*is_encrypt=*/false);
 }
 
 BlockAccessCipherStreamPtr AESCTRCipherStream::createCipherStream(

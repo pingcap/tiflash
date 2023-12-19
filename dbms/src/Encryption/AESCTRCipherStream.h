@@ -34,6 +34,7 @@ public:
         , key(std::move(key_))
         , initial_iv_high(iv_high)
         , initial_iv_low(iv_low)
+        , cipher(Encryption::getCipher(method))
     {}
 
     ~AESCTRCipherStream() override = default;
@@ -52,5 +53,6 @@ private:
     const std::string key;
     const uint64_t initial_iv_high;
     const uint64_t initial_iv_low;
+    const EVP_CIPHER * cipher;
 };
 } // namespace DB

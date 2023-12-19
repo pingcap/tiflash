@@ -42,10 +42,12 @@ const EVP_CIPHER * getCipher(EncryptionMethod method);
 // Note: the IV will be modified in place when method is SM4.
 // Please ensure the IV is the same when encrypt and decrypt.
 void Cipher(
+    const EVP_CIPHER * cipher,
     uint64_t file_offset,
     char * data,
     size_t data_size,
     String key,
+    size_t block_size,
     EncryptionMethod method,
     unsigned char * iv,
     bool is_encrypt);
