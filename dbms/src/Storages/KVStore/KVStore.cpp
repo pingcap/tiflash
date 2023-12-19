@@ -50,6 +50,7 @@ namespace FailPoints
 {
 extern const char force_fail_in_flush_region_data[];
 extern const char pause_passive_flush_before_persist_region[];
+extern const char force_not_clean_fap_on_destroy[];
 } // namespace FailPoints
 
 KVStore::KVStore(Context & context)
@@ -349,6 +350,7 @@ void KVStore::handleDestroy(UInt64 region_id, TMTContext & tmt, const KVStoreTas
 
     if (tmt.getContext().getSharedContextDisagg()->isDisaggregatedStorageMode())
     {
+        fiu_do_on(FailPoints::force_not_clean_fap_on_destroy, { return; });
         // Everytime we remove region, we try to clean obsolete fap ingest info.
         auto fap_ctx = tmt.getContext().getSharedContextDisagg()->fap_context;
         fap_ctx->cleanCheckpointIngestInfo(tmt, region_id);

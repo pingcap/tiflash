@@ -14,7 +14,6 @@
 
 #include <AggregateFunctions/registerAggregateFunctions.h>
 #include <Common/CPUAffinityManager.h>
-#include <Common/ClickHouseRevision.h>
 #include <Common/ComputeLabelHolder.h>
 #include <Common/Config/ConfigReloader.h>
 #include <Common/CurrentMetrics.h>

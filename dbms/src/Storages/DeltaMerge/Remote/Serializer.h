@@ -40,6 +40,8 @@ struct SegmentSnapshot;
 using SegmentSnapshotPtr = std::shared_ptr<SegmentSnapshot>;
 class ColumnFileSetSnapshot;
 using ColumnFileSetSnapshotPtr = std::shared_ptr<ColumnFileSetSnapshot>;
+class ColumnFile;
+using ColumnFilePtr = std::shared_ptr<ColumnFile>;
 class ColumnFileTiny;
 using ColumnFileTinyPtr = std::shared_ptr<ColumnFileTiny>;
 class ColumnFileInMemory;
@@ -60,7 +62,8 @@ public:
     static RemotePb::RemotePhysicalTable serializePhysicalTable(
         const DisaggPhysicalTableReadSnapshotPtr & snap,
         const DisaggTaskId & task_id,
-        MemTrackerWrapper & mem_tracker_wrapper);
+        MemTrackerWrapper & mem_tracker_wrapper,
+        bool need_mem_data);
 
     static SegmentSnapshotPtr deserializeSegment(
         const DMContext & dm_context,
@@ -69,18 +72,6 @@ public:
         TableID table_id,
         const RemotePb::RemoteSegment & proto);
 
-private:
-    static RemotePb::RemoteSegment serializeSegment(
-        const SegmentSnapshotPtr & snap,
-        PageIdU64 segment_id,
-        UInt64 segment_epoch,
-        const RowKeyRange & segment_range,
-        const RowKeyRanges & read_ranges,
-        MemTrackerWrapper & mem_tracker_wrapper);
-
-    static google::protobuf::RepeatedPtrField<RemotePb::ColumnFileRemote> serializeColumnFileSet(
-        const ColumnFileSetSnapshotPtr & snap,
-        MemTrackerWrapper & mem_tracker_wrapper);
     /// Note: This function always build a snapshot over nop data provider. In order to read from this snapshot,
     /// you must explicitly assign a proper data provider.
     static ColumnFileSetSnapshotPtr deserializeColumnFileSet(
@@ -88,7 +79,27 @@ private:
         const Remote::IDataStorePtr & data_store,
         const RowKeyRange & segment_range);
 
-    static RemotePb::ColumnFileRemote serializeCFInMemory(const ColumnFileInMemory & cf_in_mem);
+    static RemotePb::ColumnFileRemote serializeCF(
+        const ColumnFilePtr & cf,
+        const IColumnFileDataProviderPtr & data_provider,
+        bool need_mem_data);
+
+private:
+    static RemotePb::RemoteSegment serializeSegment(
+        const SegmentSnapshotPtr & snap,
+        PageIdU64 segment_id,
+        UInt64 segment_epoch,
+        const RowKeyRange & segment_range,
+        const RowKeyRanges & read_ranges,
+        MemTrackerWrapper & mem_tracker_wrapper,
+        bool need_mem_data);
+
+    static google::protobuf::RepeatedPtrField<RemotePb::ColumnFileRemote> serializeColumnFileSet(
+        const ColumnFileSetSnapshotPtr & snap,
+        MemTrackerWrapper & mem_tracker_wrapper,
+        bool need_mem_data);
+
+    static RemotePb::ColumnFileRemote serializeCFInMemory(const ColumnFileInMemory & cf_in_mem, bool need_mem_data);
     static ColumnFileInMemoryPtr deserializeCFInMemory(const RemotePb::ColumnFileInMemory & proto);
 
     static RemotePb::ColumnFileRemote serializeCFTiny(

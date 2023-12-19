@@ -450,7 +450,8 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::JsonMergeSig, "cast"},
     //{tipb::ScalarFuncSig::JsonObjectSig, "cast"},
     {tipb::ScalarFuncSig::JsonArraySig, "json_array"},
-    //{tipb::ScalarFuncSig::JsonValidJsonSig, "cast"},
+    {tipb::ScalarFuncSig::JsonValidJsonSig, "json_valid_json"},
+    {tipb::ScalarFuncSig::JsonValidOthersSig, "json_valid_others"},
     //{tipb::ScalarFuncSig::JsonContainsSig, "cast"},
     //{tipb::ScalarFuncSig::JsonArrayAppendSig, "cast"},
     //{tipb::ScalarFuncSig::JsonArrayInsertSig, "cast"},
@@ -462,10 +463,10 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::JsonSearchSig, "cast"},
     //{tipb::ScalarFuncSig::JsonStorageSizeSig, "cast"},
     {tipb::ScalarFuncSig::JsonDepthSig, "json_depth"},
-    //{tipb::ScalarFuncSig::JsonKeysSig, "cast"},
+    {tipb::ScalarFuncSig::JsonKeysSig, "json_keys"},
     {tipb::ScalarFuncSig::JsonLengthSig, "jsonLength"},
-    //{tipb::ScalarFuncSig::JsonKeys2ArgsSig, "cast"},
-    //{tipb::ScalarFuncSig::JsonValidStringSig, "cast"},
+    {tipb::ScalarFuncSig::JsonKeys2ArgsSig, "json_keys_2_args"},
+    {tipb::ScalarFuncSig::JsonValidStringSig, "json_valid_string"},
 
     {tipb::ScalarFuncSig::DateFormatSig, "dateFormat"},
     //{tipb::ScalarFuncSig::DateLiteral, "cast"},
@@ -1405,7 +1406,11 @@ SortDescription getSortDescription(
     return order_descr;
 }
 
-String genFuncString(const String & func_name, const Names & argument_names, const TiDB::TiDBCollators & collators)
+String genFuncString(
+    const String & func_name,
+    const Names & argument_names,
+    const TiDB::TiDBCollators & collators,
+    const std::vector<const tipb::FieldType *> & field_types)
 {
     FmtBuffer buf;
     buf.fmtAppend("{}({})_collator", func_name, fmt::join(argument_names.begin(), argument_names.end(), ", "));
@@ -1417,6 +1422,14 @@ String genFuncString(const String & func_name, const Names & argument_names, con
             buf.append("_0");
     }
     buf.append(" ");
+    buf.joinStr(
+        field_types.begin(),
+        field_types.end(),
+        [](const auto & field_type, FmtBuffer & buffer) {
+            if likely (field_type)
+                buffer.fmtAppend("{}|{}", field_type->flag(), field_type->flen());
+        },
+        ", ");
     return buf.toString();
 }
 

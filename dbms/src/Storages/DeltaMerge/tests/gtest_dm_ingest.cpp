@@ -220,7 +220,7 @@ try
     auto pool = std::make_shared<ThreadPool>(4);
     for (const auto & op : ops)
     {
-        pool->scheduleOrThrowOnError([=, &log] {
+        pool->scheduleOrThrowOnError([=, this, &log] {
             try
             {
                 LOG_INFO(log, "{} to [{}, {})", op.use_write ? "write" : "ingest", op.start_key, op.end_key);

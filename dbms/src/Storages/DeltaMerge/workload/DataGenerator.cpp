@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/RandomData.h>
 #include <DataTypes/DataTypeEnum.h>
 #include <Storages/DeltaMerge/workload/DataGenerator.h>
 #include <Storages/DeltaMerge/workload/KeyGenerator.h>
@@ -146,7 +147,7 @@ private:
         }
         else if (family_name == "String")
         {
-            Field f = randomString();
+            Field f = DB::random::randomString(128);
             mut_col->insert(f);
         }
         else if (family_name == "Enum8")
@@ -165,19 +166,19 @@ private:
         }
         else if (family_name == "MyDateTime")
         {
-            Field f = parseMyDateTime(randomDateTime());
+            Field f = parseMyDateTime(DB::random::randomDateTime());
             mut_col->insert(f);
         }
         else if (family_name == "MyDate")
         {
-            Field f = parseMyDateTime(randomDate());
+            Field f = parseMyDateTime(DB::random::randomDate());
             mut_col->insert(f);
         }
         else if (family_name == "Decimal")
         {
             auto prec = getDecimalPrecision(*data_type, 0);
             auto scale = getDecimalScale(*data_type, 0);
-            auto s = randomDecimal(prec, scale);
+            auto s = DB::random::randomDecimal(prec, scale);
             bool negative = rand_gen() % 2 == 0;
             Field f;
             if (parseDecimal(s.data(), s.size(), negative, f))
@@ -196,68 +197,6 @@ private:
         }
         col.column = std::move(mut_col);
         return col;
-    }
-
-    std::string randomDecimal(uint64_t prec, uint64_t scale)
-    {
-        auto s = std::to_string(rand_gen());
-        if (s.size() < prec)
-        {
-            s += std::string(prec - s.size(), '0');
-        }
-        else if (s.size() > prec)
-        {
-            s = s.substr(0, prec);
-        }
-        return s.substr(0, prec - scale) + "." + s.substr(prec - scale);
-    }
-
-    std::string randomDate()
-    {
-        auto res = randomLocalTime();
-        return fmt::format("{}-{}-{}", res.tm_year + 1900, res.tm_mon + 1, res.tm_mday);
-    }
-
-    std::string randomDateTime()
-    {
-        auto res = randomLocalTime();
-        return fmt::format(
-            "{}-{}-{} {}:{}:{}",
-            res.tm_year + 1900,
-            res.tm_mon + 1,
-            res.tm_mday,
-            res.tm_hour,
-            res.tm_min,
-            res.tm_sec);
-    }
-
-    time_t randomUTCTimestamp() { return ::time(nullptr) + randomTimeOffset(); }
-
-    int randomTimeOffset()
-    {
-        static constexpr int max_offset = 24 * 3600 * 10000; // 10000 days for test
-        return (rand_gen() % max_offset) * (rand_gen() % 2 == 0 ? 1 : -1);
-    }
-
-    struct tm randomLocalTime()
-    {
-        time_t t = randomUTCTimestamp();
-        struct tm res
-        {
-        };
-        if (localtime_r(&t, &res) == nullptr)
-        {
-            throw std::invalid_argument(fmt::format("localtime_r({}) ret {}", t, strerror(errno)));
-        }
-        return res;
-    }
-
-    std::string randomString()
-    {
-        constexpr int size = 128;
-        std::string str(size, 0);
-        std::generate_n(str.begin(), str.size(), [this]() { return charset[rand_gen() % charset.size()]; });
-        return str;
     }
 
     const TableInfo & table_info;

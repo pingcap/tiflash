@@ -16,24 +16,24 @@
 
 set -ueox pipefail
 
-CMAKE_VERSION=3.22.1
+CMAKE_VERSION="3.22.1"
 GO_VERSION="1.20"
 ARCH=$(uname -m)
-GO_ARCH=$([[ "$ARCH" == "aarch64" ]] && echo "arm64" || echo "amd64")
+GO_ARCH=$([[ "${ARCH}" == "aarch64" ]] && echo "arm64" || echo "amd64")
 LLVM_VERSION="13.0.0"
 CCACHE_VERSION="4.5.1"
 SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
-SYSROOT="$SCRIPTPATH/sysroot"
+SYSROOT="${SCRIPTPATH}/sysroot"
 OPENSSL_VERSION="1_1_1l"
 
 function install_cmake() {
-    wget https://github.com/Kitware/CMake/releases/download/v$CMAKE_VERSION/cmake-$CMAKE_VERSION-linux-$ARCH.sh
-    sh cmake-$CMAKE_VERSION-linux-$ARCH.sh --prefix="$SYSROOT" --skip-license --exclude-subdir
-    rm -rf cmake-$CMAKE_VERSION-linux-$ARCH.sh
+    wget "https://github.com/Kitware/CMake/releases/download/v${CMAKE_VERSION}/cmake-${CMAKE_VERSION}-linux-${ARCH}.sh"
+    sh cmake-${CMAKE_VERSION}-linux-${ARCH}.sh --prefix="${SYSROOT}" --skip-license --exclude-subdir
+    rm -rf cmake-${CMAKE_VERSION}-linux-${ARCH}.sh
 }
 
 function install_llvm() {
-    git clone https://github.com/llvm/llvm-project --depth=1 -b llvmorg-$LLVM_VERSION
+    git clone https://github.com/llvm/llvm-project --depth=1 -b "llvmorg-${LLVM_VERSION}"
 
     mkdir -p llvm-project/build
     cd llvm-project/build
@@ -53,7 +53,7 @@ function install_llvm() {
         -DLLVM_ENABLE_LIBCXX=ON \
         -DLLVM_ENABLE_LLD=ON \
         -DLIBOMP_LIBFLAGS="-lm" \
-        -DCMAKE_INSTALL_PREFIX="$SYSROOT" \
+        -DCMAKE_INSTALL_PREFIX="${SYSROOT}" \
         -DCMAKE_INSTALL_RPATH="\$ORIGIN/../lib/;\$ORIGIN/../lib/$(uname -m)-unknown-linux-gnu/" \
         ../llvm
 
@@ -64,7 +64,7 @@ function install_llvm() {
 }
 
 function install_openssl() {
-    wget https://github.com/openssl/openssl/archive/refs/tags/OpenSSL_${OPENSSL_VERSION}.tar.gz
+    wget "https://github.com/openssl/openssl/archive/refs/tags/OpenSSL_${OPENSSL_VERSION}.tar.gz"
     tar xvf OpenSSL_${OPENSSL_VERSION}.tar.gz
     cd openssl-OpenSSL_${OPENSSL_VERSION}
 
@@ -72,8 +72,8 @@ function install_openssl() {
         -fPIC                               \
         no-shared                           \
         no-afalgeng                         \
-        --prefix="$SYSROOT"                 \
-        --openssldir="$SYSROOT"             \
+        --prefix="${SYSROOT}"                 \
+        --openssldir="${SYSROOT}"             \
         -static
 
      NPROC=${NPROC:-$(nproc || grep -c ^processor /proc/cpuinfo)}
@@ -86,8 +86,10 @@ function install_openssl() {
 }
 
 function install_go() {
-    wget https://dl.google.com/go/go${GO_VERSION}.linux-${GO_ARCH}.tar.gz 
-    tar -C "$SYSROOT" -xzvf go${GO_VERSION}.linux-${GO_ARCH}.tar.gz
+    wget "https://dl.google.com/go/go${GO_VERSION}.linux-${GO_ARCH}.tar.gz"
+    tar -C "${SYSROOT}" -xzvf go${GO_VERSION}.linux-${GO_ARCH}.tar.gz
+    mv "${SYSROOT}/go" "${SYSROOT}/go${GO_VERSION}" && \
+        pushd "${SYSROOT}" && ln -sv "go${GO_VERSION}" "go" && popd
     rm -rf go${GO_VERSION}.linux-${GO_ARCH}.tar.gz
 }
 
@@ -101,14 +103,14 @@ function install_ccache() {
       -DHIREDIS_FROM_INTERNET=ON \
       -DENABLE_TESTING=OFF \
       -DCMAKE_INSTALL_RPATH="\$ORIGIN/../lib/;\$ORIGIN/../lib/$(uname -m)-unknown-linux-gnu/" \
-      -DCMAKE_INSTALL_PREFIX="$SYSROOT" \
+      -DCMAKE_INSTALL_PREFIX="${SYSROOT}" \
       -GNinja
     ninja && ninja install
     cd ../..
     rm -rf "ccache-$CCACHE_VERSION"
 }
 
-mkdir -p $SYSROOT
+mkdir -p ${SYSROOT}
 
 install_cmake 
 install_llvm
@@ -118,5 +120,5 @@ install_ccache
 
 # some extra steps
 if [[ -e /usr/lib64/libtinfo.so.5 ]]; then
-    cp /usr/lib64/libtinfo.so.5 "$SYSROOT/lib"
+    cp /usr/lib64/libtinfo.so.5 "${SYSROOT}/lib"
 fi

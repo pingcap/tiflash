@@ -399,6 +399,7 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_failed_timeout, {{"type", "failed_timeout"}}),                                                                         \
       F(type_failed_baddata, {{"type", "failed_baddata"}}),                                                                         \
       F(type_failed_repeated, {{"type", "failed_repeated"}}),                                                                       \
+      F(type_restore, {{"type", "restore"}}),                                                                                       \
       F(type_succeed, {{"type", "succeed"}}))                                                                                       \
     M(tiflash_fap_task_state,                                                                                                       \
       "",                                                                                                                           \

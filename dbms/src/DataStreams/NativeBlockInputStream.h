@@ -51,7 +51,7 @@ struct IndexForNativeFormat
     using Blocks = std::vector<IndexOfBlockForNativeFormat>;
     Blocks blocks;
 
-    IndexForNativeFormat() {}
+    IndexForNativeFormat() = default;
 
     IndexForNativeFormat(ReadBuffer & istr, const NameSet & required_columns) { read(istr, required_columns); }
 
