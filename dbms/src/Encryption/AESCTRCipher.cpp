@@ -133,12 +133,10 @@ const EVP_CIPHER * getCipher(EncryptionMethod method)
 }
 
 void OpenSSLCipher(
-    const EVP_CIPHER * cipher,
     uint64_t file_offset,
     char * data,
     size_t data_size,
     String key,
-    size_t block_size,
     EncryptionMethod method,
     const unsigned char * iv,
     bool is_encrypt)
@@ -153,7 +151,10 @@ void OpenSSLCipher(
     (void)is_encrypt;
     throw Exception("OpenSSL version < 1.0.2", ErrorCodes::NOT_IMPLEMENTED);
 #else
+    const EVP_CIPHER * cipher = getCipher(method);
     RUNTIME_CHECK_MSG(cipher != nullptr, "Cipher is not valid, method={}", magic_enum::enum_name(method));
+
+    const size_t block_size = blockSize(method);
     uint64_t block_offset = file_offset % block_size;
 
     uint64_t data_offset = 0;
@@ -295,12 +296,10 @@ void GMSSLSM4Cipher(
 }
 
 void Cipher(
-    const EVP_CIPHER * cipher,
     uint64_t file_offset,
     char * data,
     size_t data_size,
     String key,
-    size_t block_size,
     EncryptionMethod method,
     unsigned char * iv,
     bool is_encrypt)
@@ -310,7 +309,7 @@ void Cipher(
     if (method == EncryptionMethod::SM4Ctr)
         return GMSSLSM4Cipher(file_offset, data, data_size, key, iv, is_encrypt);
 #endif
-    OpenSSLCipher(cipher, file_offset, data, data_size, key, block_size, method, iv, is_encrypt);
+    OpenSSLCipher(file_offset, data, data_size, key, method, iv, is_encrypt);
 }
 
 } // namespace DB::Encryption
