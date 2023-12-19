@@ -396,13 +396,10 @@ FastAddPeerRes FastAddPeerImpl(
     try
     {
         auto maybe_elapsed = fap_ctx->tasks_trace->queryElapsed(region_id);
-        if unlikely(!maybe_elapsed.has_value()) {
+        if unlikely (!maybe_elapsed.has_value())
+        {
             GET_METRIC(tiflash_fap_task_result, type_failed_cancel).Increment();
-            LOG_INFO(
-                log,
-                "FAP is canceled at beginning region_id={} new_peer_id={}",
-                region_id,
-                new_peer_id);
+            LOG_INFO(log, "FAP is canceled at beginning region_id={} new_peer_id={}", region_id, new_peer_id);
         }
         auto elapsed = maybe_elapsed.value();
         GET_METRIC(tiflash_fap_task_duration_seconds, type_queue_stage).Observe(elapsed / 1000.0);
@@ -452,15 +449,21 @@ FastAddPeerRes FastAddPeerImpl(
 uint8_t ApplyFapSnapshotImpl(TMTContext & tmt, TiFlashRaftProxyHelper * proxy_helper, UInt64 region_id, UInt64 peer_id)
 {
     auto log = Logger::get("FastAddPeer");
-    LOG_INFO(log, "Begin apply fap snapshot, region_id={}, peer_id={}", region_id, peer_id);
     Stopwatch watch_ingest;
     auto kvstore = tmt.getKVStore();
     auto fap_ctx = tmt.getContext().getSharedContextDisagg()->fap_context;
     auto checkpoint_ingest_info = fap_ctx->getOrRestoreCheckpointIngestInfo(tmt, proxy_helper, region_id, peer_id);
     if (!checkpoint_ingest_info)
     {
+        // If fap is enabled, then proxy will check if we have a fap snapshot first.
+        LOG_DEBUG(
+            log,
+            "Failed to get fap snapshot, it's normal snapshot, region_id={}, peer_id={}",
+            region_id,
+            peer_id);
         return false;
     }
+    LOG_INFO(log, "Begin apply fap snapshot, region_id={}, peer_id={}", region_id, peer_id);
     // If there is `checkpoint_ingest_info`, it is exactly the data we want to ingest. Consider two scene:
     // 1. If there was a failed FAP which failed to clean, its data will be overwritten by current FAP which has finished phase 1.
     // 2. It is not possible that a restart happens at FAP phase 2, and a legacy snapshot is sent, because snapshots can only be accepted once the previous snapshot it handled.
@@ -537,19 +540,16 @@ FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, u
                     new_peer_id,
                     current_time);
             };
-            auto res = fap_ctx->tasks_trace->addTaskWithCancel(
-                region_id,
-                job_func,
-                [log, region_id, new_peer_id]() {
-                    LOG_INFO(
-                        log,
-                        "FAP is canceled in queue due to timeout region_id={} new_peer_id={}",
-                        region_id,
-                        new_peer_id);
-                    // It is already canceled in queue.
-                    GET_METRIC(tiflash_fap_task_result, type_failed_cancel).Increment();
-                    return genFastAddPeerRes(FastAddPeerStatus::Canceled, "", "");
-                });
+            auto res = fap_ctx->tasks_trace->addTaskWithCancel(region_id, job_func, [log, region_id, new_peer_id]() {
+                LOG_INFO(
+                    log,
+                    "FAP is canceled in queue due to timeout region_id={} new_peer_id={}",
+                    region_id,
+                    new_peer_id);
+                // It is already canceled in queue.
+                GET_METRIC(tiflash_fap_task_result, type_failed_cancel).Increment();
+                return genFastAddPeerRes(FastAddPeerStatus::Canceled, "", "");
+            });
             if (res)
             {
                 GET_METRIC(tiflash_fap_task_state, type_ongoing).Increment();
@@ -589,7 +589,11 @@ FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, u
         {
             const auto & settings = server->tmt->getContext().getSettingsRef();
             auto maybe_elapsed = fap_ctx->tasks_trace->queryElapsed(region_id);
-            RUNTIME_CHECK_MSG(maybe_elapsed.has_value(), "Task nout found, region_id={} new_peer_id={}", region_id, new_peer_id);
+            RUNTIME_CHECK_MSG(
+                maybe_elapsed.has_value(),
+                "Task nout found, region_id={} new_peer_id={}",
+                region_id,
+                new_peer_id);
             auto elapsed = maybe_elapsed.value();
             if (elapsed >= 1000 * settings.fap_task_timeout_seconds)
             {

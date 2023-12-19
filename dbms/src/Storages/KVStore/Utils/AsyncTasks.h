@@ -318,7 +318,8 @@ struct AsyncTasks
     {
         std::scoped_lock<std::mutex> l(mtx);
         auto it = tasks.find(key);
-        if unlikely(it == tasks.end()) {
+        if unlikely (it == tasks.end())
+        {
             return std::nullopt;
         }
         return getCurrentMillis() - it->second.start_ts;
@@ -328,7 +329,8 @@ struct AsyncTasks
     {
         std::scoped_lock<std::mutex> l(mtx);
         auto it = tasks.find(key);
-        if unlikely(it == tasks.end()) {
+        if unlikely (it == tasks.end())
+        {
             return std::nullopt;
         }
         return it->second.start_ts;
