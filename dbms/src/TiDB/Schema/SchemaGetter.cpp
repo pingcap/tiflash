@@ -315,41 +315,6 @@ std::pair<TiDB::TableInfoPtr, bool> SchemaGetter::getTableInfoImpl(DatabaseID db
 template std::pair<TiDB::TableInfoPtr, bool> SchemaGetter::getTableInfoImpl<false>(DatabaseID db_id, TableID table_id);
 template std::pair<TiDB::TableInfoPtr, bool> SchemaGetter::getTableInfoImpl<true>(DatabaseID db_id, TableID table_id);
 
-std::tuple<TiDB::DBInfoPtr, TiDB::TableInfoPtr> SchemaGetter::getDatabaseAndTableInfo(
-    DatabaseID db_id,
-    TableID table_id)
-{
-    String db_key = getDBKey(db_id);
-    String db_json = TxnStructure::hGet(snap, DBs, db_key);
-
-    if (db_json.empty())
-        return std::make_tuple(nullptr, nullptr);
-
-    LOG_DEBUG(log, "Get DB Info from TiKV: {}", db_json);
-    auto db_info = std::make_shared<TiDB::DBInfo>(db_json, keyspace_id);
-
-    String table_key = getTableKey(table_id);
-    String table_info_json = TxnStructure::hGet(snap, db_key, table_key);
-    if (table_info_json.empty())
-    {
-        LOG_WARNING(log, "The table is dropped in TiKV, try to get the latest table_info, table_id={}", table_id);
-        table_info_json = TxnStructure::mvccGet(snap, db_key, table_key);
-        if (table_info_json.empty())
-        {
-            LOG_ERROR(
-                log,
-                "The table is dropped in TiKV, and the latest table_info is still empty, it should be GCed, "
-                "table_id={}",
-                table_id);
-            return std::make_tuple(db_info, nullptr);
-        }
-    }
-    LOG_DEBUG(log, "Get Table Info from TiKV, table_id={} {}", table_id, table_info_json);
-    TiDB::TableInfoPtr table_info = std::make_shared<TiDB::TableInfo>(table_info_json, keyspace_id);
-
-    return std::make_tuple(db_info, table_info);
-}
-
 std::vector<TiDB::DBInfoPtr> SchemaGetter::listDBs()
 {
     std::vector<TiDB::DBInfoPtr> res;

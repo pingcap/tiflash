@@ -38,10 +38,14 @@ struct MergedUnit
     {
         if (!isFinished())
         {
-            // For updating memory statistics of `MemoryTracker`.
-            MemoryTrackerSetter setter(true, pool->mem_tracker.get());
-            task = nullptr;
-            stream = nullptr;
+            {
+                // For updating memory statistics of `MemoryTracker`.
+                MemoryTrackerSetter setter(true, pool->mem_tracker.get());
+                task = nullptr;
+                stream = nullptr;
+            }
+            // `SegmentReadTaskScheduler` will release `pool` if there is no other component/thread hold it.
+            // So `pool` should release after `setter` destructed because it holds a raw pointer of `mem_tracker`.
             pool = nullptr;
             return true;
         }
