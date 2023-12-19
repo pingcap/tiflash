@@ -147,16 +147,11 @@ public:
             BlockInputStreamPtr stream;
             try
             {
-                QueryTasks tasks;
-                {
-                    std::unique_lock lock(mu);
-                    auto tmp_tasks = prepareMPPTasks(
-                        context.scan("test_db", "l_table")
-                            .aggregation({Max(col("l_table.s"))}, {col("l_table.s")})
-                            .project({col("max(l_table.s)"), col("l_table.s")}),
-                        properties);
-                    tasks = std::move(tmp_tasks);
-                }
+                auto tasks = prepareMPPTasks(
+                    context.scan("test_db", "l_table")
+                        .aggregation({Max(col("l_table.s"))}, {col("l_table.s")})
+                        .project({col("max(l_table.s)"), col("l_table.s")}),
+                    properties);
                 executeProblematicMPPTasks(tasks, properties, stream);
             }
             catch (...)
