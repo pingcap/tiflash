@@ -34,6 +34,9 @@
 
 namespace DB
 {
+constexpr size_t RAFT_REGION_BIG_WRITE_THRES = 2 * 1024;
+constexpr size_t RAFT_REGION_BIG_WRITE_MAX = 4 * 1024 * 1024; // raft-entry-max-size = 8MiB
+static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Invalid RAFT_REGION_BIG_WRITE_THRES");
 /// Central place to define metrics across all subsystems.
 /// Refer to gtest_tiflash_metrics.cpp for more sample defines.
 /// Usage:
@@ -510,8 +513,10 @@ namespace DB
       "Bucketed histogram of bytes for each write",                                                                                 \
       Histogram,                                                                                                                    \
       F(type_ingest_uncommitted, {{"type", "ingest_uncommitted"}}, ExpBucketsWithRange{16, 4, 64 * 1024}),                          \
-      F(type_write_committed, {{"type", "write_committed"}}, ExpBucketsWithRange{16, 2, 64 * 1024}),                                \
-      F(type_net_write, {{"type", "net_write"}}, ExpBucketsWithRange{16, 2, 64 * 1024}))                                            \
+      F(type_write_committed, {{"type", "write_committed"}}, ExpBucketsWithRange{16, 2, 1024 * 1024}),                              \
+      F(type_big_write_to_region,                                                                                                   \
+        {{"type", "big_write_to_region"}},                                                                                          \
+        ExpBucketsWithRange{RAFT_REGION_BIG_WRITE_THRES, 4, RAFT_REGION_BIG_WRITE_MAX}))                                            \
     M(tiflash_raft_snapshot_total_bytes,                                                                                            \
       "Bucketed snapshot total size",                                                                                               \
       Histogram,                                                                                                                    \
