@@ -52,7 +52,7 @@
   "gnetId": null,
   "graphTooltip": 1,
   "id": null,
-  "iteration": 1701876187859,
+  "iteration": 1703081897510,
   "links": [],
   "panels": [
     {
@@ -8591,7 +8591,7 @@
             "h": 8,
             "w": 24,
             "x": 0,
-            "y": 7
+            "y": 103
           },
           "hiddenSeries": false,
           "id": 62,
@@ -8710,7 +8710,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 15
+            "y": 111
           },
           "height": "",
           "hiddenSeries": false,
@@ -8829,7 +8829,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 15
+            "y": 111
           },
           "height": "",
           "hiddenSeries": false,
@@ -8946,7 +8946,7 @@
             "h": 9,
             "w": 24,
             "x": 0,
-            "y": 23
+            "y": 119
           },
           "height": "",
           "hiddenSeries": false,
@@ -9068,7 +9068,7 @@
             "h": 9,
             "w": 24,
             "x": 0,
-            "y": 32
+            "y": 128
           },
           "hiddenSeries": false,
           "id": 90,
@@ -9200,7 +9200,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 8
+            "y": 104
           },
           "hiddenSeries": false,
           "id": 128,
@@ -9343,7 +9343,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 8
+            "y": 104
           },
           "hiddenSeries": false,
           "id": 129,
@@ -9460,7 +9460,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 16
+            "y": 112
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -9522,7 +9522,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 16
+            "y": 112
           },
           "hiddenSeries": false,
           "id": 158,
@@ -9658,7 +9658,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 24
+            "y": 120
           },
           "hiddenSeries": false,
           "id": 163,
@@ -9763,7 +9763,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 24
+            "y": 120
           },
           "hiddenSeries": false,
           "id": 162,
@@ -9883,7 +9883,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 32
+            "y": 128
           },
           "hiddenSeries": false,
           "id": 164,
@@ -9992,7 +9992,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 32
+            "y": 128
           },
           "hiddenSeries": false,
           "id": 123,
@@ -10123,7 +10123,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 40
+            "y": 136
           },
           "height": "",
           "hiddenSeries": false,
@@ -10232,7 +10232,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 40
+            "y": 136
           },
           "hiddenSeries": false,
           "id": 231,
@@ -10338,7 +10338,7 @@
             "h": 9,
             "w": 24,
             "x": 0,
-            "y": 48
+            "y": 144
           },
           "hiddenSeries": false,
           "id": 232,
@@ -11849,7 +11849,7 @@
           ],
           "timeFrom": null,
           "timeShift": null,
-          "title": "Region Size Heatmap",
+          "title": "Region Size (by event) Heatmap",
           "tooltip": {
             "show": true,
             "showHistogram": true
@@ -11973,6 +11973,152 @@
           }
         },
         {
+          "cards": {
+            "cardPadding": null,
+            "cardRound": null
+          },
+          "color": {
+            "cardColor": "#b4ff00",
+            "colorScale": "sqrt",
+            "colorScheme": "interpolateSpectral",
+            "exponent": 0.5,
+            "min": 0,
+            "mode": "spectrum"
+          },
+          "dataFormat": "tsbuckets",
+          "datasource": "${DS_TEST-CLUSTER}",
+          "description": "",
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 12,
+            "x": 0,
+            "y": 72
+          },
+          "heatmap": {},
+          "hideZeroBuckets": true,
+          "highlightCards": true,
+          "id": 261,
+          "legend": {
+            "show": true
+          },
+          "links": [],
+          "reverseYBuckets": false,
+          "targets": [
+            {
+              "exemplar": true,
+              "expr": "sum(delta(tiflash_raft_write_flow_bytes_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=~\"write_committed\"}[1m])) by (le, type)",
+              "format": "heatmap",
+              "hide": false,
+              "interval": "",
+              "intervalFactor": 2,
+              "legendFormat": "{{le}}",
+              "refId": "B"
+            }
+          ],
+          "timeFrom": null,
+          "timeShift": null,
+          "title": "Write Command Size Heatmap",
+          "tooltip": {
+            "show": true,
+            "showHistogram": true
+          },
+          "type": "heatmap",
+          "xAxis": {
+            "show": true
+          },
+          "xBucketNumber": null,
+          "xBucketSize": null,
+          "yAxis": {
+            "decimals": 0,
+            "format": "bytes",
+            "logBase": 1,
+            "max": null,
+            "min": null,
+            "show": true,
+            "splitFactor": null
+          },
+          "yBucketBound": "upper",
+          "yBucketNumber": null,
+          "yBucketSize": null
+        },
+        {
+          "cards": {
+            "cardPadding": null,
+            "cardRound": null
+          },
+          "color": {
+            "cardColor": "#b4ff00",
+            "colorScale": "sqrt",
+            "colorScheme": "interpolateSpectral",
+            "exponent": 0.5,
+            "min": 0,
+            "mode": "spectrum"
+          },
+          "dataFormat": "tsbuckets",
+          "datasource": "${DS_TEST-CLUSTER}",
+          "description": "",
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 12,
+            "x": 12,
+            "y": 72
+          },
+          "heatmap": {},
+          "hideZeroBuckets": true,
+          "highlightCards": true,
+          "id": 262,
+          "legend": {
+            "show": true
+          },
+          "links": [],
+          "reverseYBuckets": false,
+          "targets": [
+            {
+              "exemplar": true,
+              "expr": "sum(delta(tiflash_raft_write_flow_bytes_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=~\"snapshot_uncommitted\"}[1m])) by (le, type)",
+              "format": "heatmap",
+              "hide": false,
+              "interval": "",
+              "intervalFactor": 2,
+              "legendFormat": "{{le}}",
+              "refId": "B"
+            }
+          ],
+          "timeFrom": null,
+          "timeShift": null,
+          "title": "Snapshot Uncommitted Size Heatmap",
+          "tooltip": {
+            "show": true,
+            "showHistogram": true
+          },
+          "type": "heatmap",
+          "xAxis": {
+            "show": true
+          },
+          "xBucketNumber": null,
+          "xBucketSize": null,
+          "yAxis": {
+            "decimals": 0,
+            "format": "bytes",
+            "logBase": 1,
+            "max": null,
+            "min": null,
+            "show": true,
+            "splitFactor": null
+          },
+          "yBucketBound": "upper",
+          "yBucketNumber": null,
+          "yBucketSize": null
+        },
+        {
           "aliasColors": {},
           "bars": false,
           "dashLength": 10,
@@ -11988,7 +12134,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 72
+            "y": 79
           },
           "hiddenSeries": false,
           "id": 240,
@@ -12092,7 +12238,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 72
+            "y": 79
           },
           "hiddenSeries": false,
           "id": 239,
@@ -12229,7 +12375,7 @@
             "h": 7,
             "w": 24,
             "x": 0,
-            "y": 79
+            "y": 86
           },
           "hiddenSeries": false,
           "id": 75,
@@ -12353,7 +12499,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 86
+            "y": 93
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -12423,7 +12569,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 86
+            "y": 93
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -12470,6 +12616,106 @@
           "yBucketSize": null
         },
         {
+          "aliasColors": {},
+          "bars": false,
+          "dashLength": 10,
+          "dashes": false,
+          "datasource": "${DS_TEST-CLUSTER}",
+          "description": "",
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
+          "fill": 1,
+          "fillGradient": 0,
+          "gridPos": {
+            "h": 7,
+            "w": 12,
+            "x": 0,
+            "y": 100
+          },
+          "hiddenSeries": false,
+          "id": 263,
+          "legend": {
+            "avg": false,
+            "current": false,
+            "max": false,
+            "min": false,
+            "show": true,
+            "total": false,
+            "values": false
+          },
+          "lines": true,
+          "linewidth": 1,
+          "links": [],
+          "nullPointMode": "null",
+          "options": {
+            "alertThreshold": true
+          },
+          "percentage": false,
+          "pluginVersion": "7.5.11",
+          "pointradius": 2,
+          "points": false,
+          "renderer": "flot",
+          "seriesOverrides": [],
+          "spaceLength": 10,
+          "stack": false,
+          "steppedLine": false,
+          "targets": [
+            {
+              "exemplar": true,
+              "expr": "sum(tiflash_system_current_metric_MemoryTrackingKVStore{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}) by (instance)",
+              "format": "time_series",
+              "interval": "",
+              "intervalFactor": 2,
+              "legendFormat": "{{instance}}",
+              "refId": "B"
+            }
+          ],
+          "thresholds": [],
+          "timeFrom": null,
+          "timeRegions": [],
+          "timeShift": null,
+          "title": "KVStore memory",
+          "tooltip": {
+            "shared": true,
+            "sort": 0,
+            "value_type": "individual"
+          },
+          "type": "graph",
+          "xaxis": {
+            "buckets": null,
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": []
+          },
+          "yaxes": [
+            {
+              "$$hashKey": "object:1524",
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": true
+            },
+            {
+              "$$hashKey": "object:1525",
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": true
+            }
+          ],
+          "yaxis": {
+            "align": false,
+            "alignLevel": null
+          }
+        },
+        {
           "cards": {
             "cardPadding": null,
             "cardRound": null
@@ -12493,7 +12739,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 93
+            "y": 100
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -12559,7 +12805,7 @@
             "h": 7,
             "w": 24,
             "x": 0,
-            "y": 100
+            "y": 107
           },
           "height": "",
           "hiddenSeries": false,
@@ -12650,6 +12896,118 @@
           }
         },
         {
+          "aliasColors": {},
+          "bars": false,
+          "dashLength": 10,
+          "dashes": false,
+          "datasource": "${DS_TEST-CLUSTER}",
+          "decimals": 1,
+          "description": "",
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
+          "fill": 1,
+          "fillGradient": 0,
+          "gridPos": {
+            "h": 7,
+            "w": 24,
+            "x": 0,
+            "y": 114
+          },
+          "height": "",
+          "hiddenSeries": false,
+          "id": 260,
+          "legend": {
+            "alignAsTable": true,
+            "avg": false,
+            "current": true,
+            "hideEmpty": false,
+            "hideZero": false,
+            "max": true,
+            "min": false,
+            "rightSide": true,
+            "show": true,
+            "sideWidth": null,
+            "sort": "current",
+            "sortDesc": true,
+            "total": false,
+            "values": true
+          },
+          "lines": true,
+          "linewidth": 1,
+          "links": [],
+          "nullPointMode": "null",
+          "options": {
+            "alertThreshold": true
+          },
+          "percentage": false,
+          "pluginVersion": "7.5.11",
+          "pointradius": 5,
+          "points": false,
+          "renderer": "flot",
+          "repeatedByRow": true,
+          "seriesOverrides": [],
+          "spaceLength": 10,
+          "stack": false,
+          "steppedLine": false,
+          "targets": [
+            {
+              "exemplar": true,
+              "expr": "sum(rate(tiflash_raft_throughput_bytes{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (type)",
+              "format": "time_series",
+              "hide": false,
+              "interval": "",
+              "intervalFactor": 2,
+              "legendFormat": "{{type}}",
+              "refId": "A",
+              "step": 10
+            }
+          ],
+          "thresholds": [],
+          "timeFrom": null,
+          "timeRegions": [],
+          "timeShift": null,
+          "title": "Raft throughput",
+          "tooltip": {
+            "shared": true,
+            "sort": 0,
+            "value_type": "individual"
+          },
+          "type": "graph",
+          "xaxis": {
+            "buckets": null,
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": []
+          },
+          "yaxes": [
+            {
+              "$$hashKey": "object:164",
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": "0",
+              "show": true
+            },
+            {
+              "$$hashKey": "object:165",
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": "0",
+              "show": true
+            }
+          ],
+          "yaxis": {
+            "align": false,
+            "alignLevel": null
+          }
+        },
+        {
           "cards": {
             "cardPadding": null,
             "cardRound": null
@@ -12673,7 +13031,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 107
+            "y": 121
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -12742,7 +13100,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 107
+            "y": 121
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -12812,7 +13170,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 114
+            "y": 128
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -12878,7 +13236,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 114
+            "y": 128
           },
           "hiddenSeries": false,
           "id": 91,
@@ -14710,6 +15068,7 @@
           },
           "yaxes": [
             {
+              "$$hashKey": "object:1167",
               "decimals": null,
               "format": "bytes",
               "label": null,
@@ -14719,6 +15078,7 @@
               "show": true
             },
             {
+              "$$hashKey": "object:1168",
               "format": "percentunit",
               "label": null,
               "logBase": 1,
@@ -17253,7 +17613,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 14
+            "y": 78
           },
           "hiddenSeries": false,
           "id": 246,

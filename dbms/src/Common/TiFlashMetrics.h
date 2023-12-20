@@ -514,6 +514,7 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       "Bucketed histogram of bytes for each write",                                                                                 \
       Histogram,                                                                                                                    \
       F(type_ingest_uncommitted, {{"type", "ingest_uncommitted"}}, ExpBucketsWithRange{16, 4, 64 * 1024}),                          \
+      F(type_snapshot_uncommitted, {{"type", "snapshot_uncommitted"}}, ExpBucketsWithRange{16, 4, 1024 * 1024}),                    \
       F(type_write_committed, {{"type", "write_committed"}}, ExpBucketsWithRange{16, 2, 1024 * 1024}),                              \
       F(type_big_write_to_region,                                                                                                   \
         {{"type", "big_write_to_region"}},                                                                                          \
