@@ -853,13 +853,17 @@ void Join::handleOtherConditions(
     IColumn::Offsets * offsets_to_replicate,
     const std::vector<size_t> & right_table_columns) const
 {
+    /// save block_rows because block.rows() returns the first column's size, after other_cond_expr->execute(block),
+    /// some column maybe removed, and the first column maybe the match_helper_column which does not have the same size
+    /// as the other columns
+    auto block_rows = block.rows();
     non_equal_conditions.other_cond_expr->execute(block);
 
     auto filter_column = ColumnUInt8::create();
     auto & filter = filter_column->getData();
     mergeNullAndFilterResult(block, filter, non_equal_conditions.other_cond_name, false);
 
-    ColumnUInt8::Container row_filter(block.rows(), 0);
+    ColumnUInt8::Container row_filter(block_rows, 0);
 
     auto erase_useless_column = [&](Block & input_block) {
         for (size_t i = 0; i < input_block.columns();)
@@ -876,10 +880,10 @@ void Join::handleOtherConditions(
 
     if (isLeftOuterSemiFamily(kind))
     {
-        if (filter.size() != block.rows())
+        if (filter.size() != block_rows)
         {
             assert(filter.empty());
-            filter.assign(block.rows(), static_cast<UInt8>(1));
+            filter.assign(block_rows, static_cast<UInt8>(1));
         }
         auto helper_pos = block.getPositionByName(match_helper_name);
 
@@ -969,7 +973,7 @@ void Join::handleOtherConditions(
     /// otherwise, it will check other_eq_filter_from_in_column, if other_eq_filter_from_in_column return false, this row should
     /// be returned, if other_eq_filter_from_in_column return true or null this row should not be returned.
     mergeNullAndFilterResult(block, filter, non_equal_conditions.other_eq_cond_from_in_name, isAntiJoin(kind));
-    assert(block.rows() == filter.size());
+    assert(block_rows == filter.size());
 
     if (isInnerJoin(kind) || isNecessaryKindToUseRowFlaggedHashMap(kind))
     {
@@ -1056,13 +1060,17 @@ void Join::handleOtherConditions(
 void Join::handleOtherConditionsForOneProbeRow(Block & block, ProbeProcessInfo & probe_process_info) const
 {
     assert(kind != ASTTableJoin::Kind::Cross_RightOuter);
+    /// save block_rows because block.rows() returns the first column's size, after other_cond_expr->execute(block),
+    /// some column maybe removed, and the first column maybe the match_helper_column which does not have the same size
+    /// as the other columns
+    auto block_rows = block.rows();
     /// inside this function, we can ensure that
     /// 1. probe_process_info.offsets_to_replicate.size() == 1
-    /// 2. probe_process_info.offsets_to_replicate[0] == block.rows()
+    /// 2. probe_process_info.offsets_to_replicate[0] == block_rows
     /// 3. for anti semi join: probe_process_info.filter[0] == 1
     /// 4. for left outer semi join: match_helper_column[0] == 1
     assert(probe_process_info.offsets_to_replicate->size() == 1);
-    assert((*probe_process_info.offsets_to_replicate)[0] == block.rows());
+    assert((*probe_process_info.offsets_to_replicate)[0] == block_rows);
 
     auto erase_useless_column = [&](Block & input_block) {
         for (size_t i = 0; i < input_block.columns();)
@@ -1084,15 +1092,15 @@ void Join::handleOtherConditionsForOneProbeRow(Block & block, ProbeProcessInfo &
     UInt64 matched_row_count_in_current_block = 0;
     if (isLeftOuterSemiFamily(kind) && !non_equal_conditions.other_eq_cond_from_in_name.empty())
     {
-        if (filter.size() != block.rows())
+        if (filter.size() != block_rows)
         {
             assert(filter.empty());
-            filter.assign(block.rows(), static_cast<UInt8>(1));
+            filter.assign(block_rows, static_cast<UInt8>(1));
         }
         assert(probe_process_info.cross_join_data->has_row_matched == false);
         ColumnPtr eq_in_column = block.getByName(non_equal_conditions.other_eq_cond_from_in_name).column;
         auto [eq_in_vec, eq_in_nullmap] = getDataAndNullMapVectorFromFilterColumn(eq_in_column);
-        for (size_t i = 0; i < block.rows(); ++i)
+        for (size_t i = 0; i < block_rows; ++i)
         {
             if (!filter[i])
                 continue;
@@ -1108,7 +1116,7 @@ void Join::handleOtherConditionsForOneProbeRow(Block & block, ProbeProcessInfo &
     else
     {
         mergeNullAndFilterResult(block, filter, non_equal_conditions.other_eq_cond_from_in_name, isAntiJoin(kind));
-        assert(filter.size() == block.rows());
+        assert(filter.size() == block_rows);
         matched_row_count_in_current_block = countBytesInFilter(filter);
         probe_process_info.cross_join_data->has_row_matched |= matched_row_count_in_current_block != 0;
     }

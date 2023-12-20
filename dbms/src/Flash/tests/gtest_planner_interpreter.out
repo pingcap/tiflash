@@ -618,8 +618,9 @@ CreatingSets
     SharedQuery: <restore concurrency>
      ParallelAggregating, max_threads: 10, final: true
       HashJoinProbe x 10: <join probe, join_executor_id = Join_2, scan_hash_map_after_probe = false>
-       Expression: <final projection>
-        MockTableScan
+       Expression: <append join key and join filters for probe side>
+        Expression: <final projection>
+         MockTableScan
 @
 ~test_suite_name: JoinThenAgg
 ~result_index: 1
