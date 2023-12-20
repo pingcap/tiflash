@@ -22,8 +22,7 @@ namespace DB
 
 BlockAccessCipherStreamPtr FileEncryptionInfo::createCipherStream(const EncryptionPath & encryption_path) const
 {
-    if (res == FileEncryptionRes::Disabled || method == EncryptionMethod::Plaintext
-        || method == EncryptionMethod::Unknown)
+    if (res != FileEncryptionRes::Ok && (method == EncryptionMethod::Plaintext || method == EncryptionMethod::Unknown))
         return nullptr;
 
     const std::string encryption_key = *key;
