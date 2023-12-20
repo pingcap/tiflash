@@ -138,6 +138,16 @@ namespace DB
         F(type_seg_split_ingest, {{"type", "seg_split_ingest"}}, ExpBuckets{0.001, 2, 20}),                                               \
         F(type_seg_merge_bg_gc, {{"type", "seg_merge_bg_gc"}}, ExpBuckets{0.001, 2, 20}),                                                 \
         F(type_place_index_update, {{"type", "place_index_update"}}, ExpBuckets{0.001, 2, 20}))                                           \
+    M(tiflash_storage_subtask_throughput_bytes, "Calculate the throughput of (maybe foreground) tasks of storage in bytes", Counter, /**/ \
+        F(type_delta_flush, {"type", "delta_flush"}),                                                                                /**/ \
+        F(type_delta_compact, {"type", "delta_compact"}),                                                                            /**/ \
+        F(type_write_to_cache, {"type", "write_to_cache"}),                                                                          /**/ \
+        F(type_write_to_disk, {"type", "write_to_disk"}))                                                                            /**/ \
+    M(tiflash_storage_subtask_throughput_rows, "Calculate the throughput of (maybe foreground) tasks of storage in rows", Counter,   /**/ \
+        F(type_delta_flush, {"type", "delta_flush"}),                                                                                /**/ \
+        F(type_delta_compact, {"type", "delta_compact"}),                                                                            /**/ \
+        F(type_write_to_cache, {"type", "write_to_cache"}),                                                                          /**/ \
+        F(type_write_to_disk, {"type", "write_to_disk"}))                                                                            /**/ \
     M(tiflash_storage_throughput_bytes, "Calculate the throughput of tasks of storage in bytes", Gauge,           /**/                    \
         F(type_write, {"type", "write"}),                                                                         /**/                    \
         F(type_ingest, {"type", "ingest"}),                                                                       /**/                    \

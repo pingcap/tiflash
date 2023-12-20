@@ -52,7 +52,7 @@
   "gnetId": null,
   "graphTooltip": 1,
   "id": null,
-  "iteration": 1667534599787,
+  "iteration": 1702027511210,
   "links": [],
   "panels": [
     {
@@ -1860,7 +1860,7 @@
             "y": 16
           },
           "hiddenSeries": false,
-          "id": 153,
+          "id": 23763571995,
           "legend": {
             "alignAsTable": true,
             "avg": false,
@@ -1892,6 +1892,7 @@
               "alias": "Limit",
               "color": "#F2495C",
               "hideTooltip": true,
+              "legend": false,
               "linewidth": 2,
               "nullPointMode": "connected"
             }
@@ -1902,7 +1903,7 @@
           "targets": [
             {
               "exemplar": true,
-              "expr": "sum by (instance) (rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"snap_sender.*\"}[1m]))",
+              "expr": "sum by (instance) (rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"apply_.*\"}[1m]))",
               "format": "time_series",
               "hide": false,
               "instant": false,
@@ -1914,7 +1915,7 @@
             },
             {
               "exemplar": true,
-              "expr": "count by (instance) (tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"snap_sender.*\"})",
+              "expr": "count by (instance) (tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"apply_.*\"})",
               "hide": false,
               "interval": "",
               "intervalFactor": 2,
@@ -1926,7 +1927,7 @@
           "timeFrom": null,
           "timeRegions": [],
           "timeShift": null,
-          "title": "Snapshot Sender",
+          "title": "Apply Worker",
           "tooltip": {
             "msResolution": false,
             "shared": true,
@@ -2572,6 +2573,135 @@
           "timeRegions": [],
           "timeShift": null,
           "title": "GRPC Async Client",
+          "tooltip": {
+            "msResolution": false,
+            "shared": true,
+            "sort": 0,
+            "value_type": "individual"
+          },
+          "type": "graph",
+          "xaxis": {
+            "buckets": null,
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": []
+          },
+          "yaxes": [
+            {
+              "decimals": 1,
+              "format": "percentunit",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": "0",
+              "show": true
+            },
+            {
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": false
+            }
+          ],
+          "yaxis": {
+            "align": false,
+            "alignLevel": null
+          }
+        },
+        {
+          "aliasColors": {},
+          "bars": false,
+          "dashLength": 10,
+          "dashes": false,
+          "datasource": "${DS_TEST-CLUSTER}",
+          "decimals": null,
+          "description": "",
+          "editable": true,
+          "error": false,
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
+          "fill": 0,
+          "fillGradient": 0,
+          "grid": {},
+          "gridPos": {
+            "h": 7,
+            "w": 12,
+            "x": 12,
+            "y": 37
+          },
+          "hiddenSeries": false,
+          "id": 153,
+          "legend": {
+            "alignAsTable": true,
+            "avg": false,
+            "current": true,
+            "max": true,
+            "min": false,
+            "rightSide": true,
+            "show": true,
+            "sideWidth": 250,
+            "sort": "max",
+            "sortDesc": true,
+            "total": false,
+            "values": true
+          },
+          "lines": true,
+          "linewidth": 1,
+          "links": [],
+          "nullPointMode": "null",
+          "options": {
+            "alertThreshold": true
+          },
+          "percentage": false,
+          "pluginVersion": "7.5.11",
+          "pointradius": 5,
+          "points": false,
+          "renderer": "flot",
+          "seriesOverrides": [
+            {
+              "alias": "Limit",
+              "color": "#F2495C",
+              "hideTooltip": true,
+              "linewidth": 2,
+              "nullPointMode": "connected"
+            }
+          ],
+          "spaceLength": 10,
+          "stack": false,
+          "steppedLine": false,
+          "targets": [
+            {
+              "exemplar": true,
+              "expr": "sum by (instance) (rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"snap_sender.*\"}[1m]))",
+              "format": "time_series",
+              "hide": false,
+              "instant": false,
+              "interval": "",
+              "intervalFactor": 2,
+              "legendFormat": "{{name}} {{instance}}",
+              "refId": "A",
+              "step": 40
+            },
+            {
+              "exemplar": true,
+              "expr": "count by (instance) (tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"snap_sender.*\"})",
+              "hide": false,
+              "interval": "",
+              "intervalFactor": 2,
+              "legendFormat": "Limit",
+              "refId": "B"
+            }
+          ],
+          "thresholds": [],
+          "timeFrom": null,
+          "timeRegions": [],
+          "timeShift": null,
+          "title": "Snapshot Sender",
           "tooltip": {
             "msResolution": false,
             "shared": true,
@@ -4592,7 +4722,7 @@
             },
             {
               "exemplar": true,
-              "expr": "histogram_quantile(1, max(rate(tiflash_task_scheduler_waiting_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (instance,le))",
+              "expr": "histogram_quantile(1.00, max(rate(tiflash_task_scheduler_waiting_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (instance,le))",
               "hide": false,
               "interval": "",
               "legendFormat": "{{instance}}-100",
@@ -5508,6 +5638,236 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
+          "decimals": 1,
+          "description": "The throughput of (maybe foreground) tasks of storage in bytes",
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
+          "fill": 0,
+          "fillGradient": 0,
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 22
+          },
+          "height": "",
+          "hiddenSeries": false,
+          "id": 23763571997,
+          "legend": {
+            "alignAsTable": true,
+            "avg": false,
+            "current": true,
+            "hideEmpty": false,
+            "hideZero": false,
+            "max": true,
+            "min": false,
+            "rightSide": true,
+            "show": true,
+            "sideWidth": 250,
+            "sort": "max",
+            "sortDesc": true,
+            "total": false,
+            "values": true
+          },
+          "lines": true,
+          "linewidth": 1,
+          "links": [],
+          "nullPointMode": "null",
+          "options": {
+            "alertThreshold": true
+          },
+          "percentage": false,
+          "pluginVersion": "7.5.11",
+          "pointradius": 5,
+          "points": false,
+          "renderer": "flot",
+          "repeatedByRow": true,
+          "seriesOverrides": [
+            {
+              "alias": "/total/",
+              "yaxis": 2
+            }
+          ],
+          "spaceLength": 10,
+          "stack": false,
+          "steppedLine": false,
+          "targets": [
+            {
+              "exemplar": true,
+              "expr": "sum(rate(tiflash_storage_subtask_throughput_bytes{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (type)",
+              "format": "time_series",
+              "hide": false,
+              "interval": "",
+              "intervalFactor": 1,
+              "legendFormat": "{{type}}",
+              "refId": "A",
+              "step": 10
+            }
+          ],
+          "thresholds": [],
+          "timeFrom": null,
+          "timeRegions": [],
+          "timeShift": null,
+          "title": "SubTasks Write Throughput (bytes)",
+          "tooltip": {
+            "shared": true,
+            "sort": 2,
+            "value_type": "individual"
+          },
+          "type": "graph",
+          "xaxis": {
+            "buckets": null,
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": []
+          },
+          "yaxes": [
+            {
+              "format": "binBps",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": "0",
+              "show": true
+            },
+            {
+              "format": "bytes",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": false
+            }
+          ],
+          "yaxis": {
+            "align": false,
+            "alignLevel": null
+          }
+        },
+        {
+          "aliasColors": {},
+          "bars": false,
+          "dashLength": 10,
+          "dashes": false,
+          "datasource": "${DS_TEST-CLUSTER}",
+          "decimals": 1,
+          "description": "The throughput of (maybe foreground) tasks of storage in rows",
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
+          "fill": 0,
+          "fillGradient": 0,
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 22
+          },
+          "height": "",
+          "hiddenSeries": false,
+          "id": 23763571999,
+          "legend": {
+            "alignAsTable": true,
+            "avg": false,
+            "current": true,
+            "hideEmpty": false,
+            "hideZero": false,
+            "max": true,
+            "min": false,
+            "rightSide": true,
+            "show": true,
+            "sideWidth": 250,
+            "sort": "max",
+            "sortDesc": true,
+            "total": false,
+            "values": true
+          },
+          "lines": true,
+          "linewidth": 1,
+          "links": [],
+          "nullPointMode": "null",
+          "options": {
+            "alertThreshold": true
+          },
+          "percentage": false,
+          "pluginVersion": "7.5.11",
+          "pointradius": 5,
+          "points": false,
+          "renderer": "flot",
+          "repeatedByRow": true,
+          "seriesOverrides": [
+            {
+              "alias": "/total/",
+              "yaxis": 2
+            }
+          ],
+          "spaceLength": 10,
+          "stack": false,
+          "steppedLine": false,
+          "targets": [
+            {
+              "exemplar": true,
+              "expr": "sum(rate(tiflash_storage_subtask_throughput_rows{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (type)",
+              "format": "time_series",
+              "hide": false,
+              "interval": "",
+              "intervalFactor": 1,
+              "legendFormat": "{{type}}",
+              "refId": "A",
+              "step": 10
+            }
+          ],
+          "thresholds": [],
+          "timeFrom": null,
+          "timeRegions": [],
+          "timeShift": null,
+          "title": "SubTasks Write Throughput (rows)",
+          "tooltip": {
+            "shared": true,
+            "sort": 2,
+            "value_type": "individual"
+          },
+          "type": "graph",
+          "xaxis": {
+            "buckets": null,
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": []
+          },
+          "yaxes": [
+            {
+              "format": "binBps",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": "0",
+              "show": true
+            },
+            {
+              "format": "bytes",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": false
+            }
+          ],
+          "yaxis": {
+            "align": false,
+            "alignLevel": null
+          }
+        },
+        {
+          "aliasColors": {},
+          "bars": false,
+          "dashLength": 10,
+          "dashes": false,
+          "datasource": "${DS_TEST-CLUSTER}",
           "description": "Total number of storage's internal sub tasks",
           "fieldConfig": {
             "defaults": {},
@@ -5519,7 +5879,7 @@
             "h": 5,
             "w": 12,
             "x": 0,
-            "y": 22
+            "y": 30
           },
           "hiddenSeries": false,
           "id": 39,
@@ -5622,7 +5982,7 @@
             "h": 5,
             "w": 12,
             "x": 12,
-            "y": 22
+            "y": 30
           },
           "hiddenSeries": false,
           "id": 42,
@@ -5658,7 +6018,7 @@
           "targets": [
             {
               "exemplar": false,
-              "expr": "histogram_quantile(1, sum(rate(tiflash_storage_subtask_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type!~\"(delta_merge|seg_merge|seg_split).*\"}[$__rate_interval])) by (le,type))",
+              "expr": "histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_storage_subtask_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type!~\"(delta_merge|seg_merge|seg_split).*\"}[$__rate_interval]))) by (le,type) / 1000000000)",
               "format": "time_series",
               "hide": false,
               "interval": "",
@@ -5726,7 +6086,7 @@
             "h": 5,
             "w": 12,
             "x": 0,
-            "y": 27
+            "y": 35
           },
           "hiddenSeries": false,
           "id": 130,
@@ -5829,7 +6189,7 @@
             "h": 5,
             "w": 12,
             "x": 12,
-            "y": 27
+            "y": 35
           },
           "hiddenSeries": false,
           "id": 131,
@@ -5865,7 +6225,7 @@
           "targets": [
             {
               "exemplar": true,
-              "expr": "histogram_quantile(1, sum(rate(tiflash_storage_subtask_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=~\"(delta_merge|seg_merge|seg_split).*\"}[$__rate_interval])) by (le,type))",
+              "expr": "histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_storage_subtask_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=~\"(delta_merge|seg_merge|seg_split).*\"}[$__rate_interval]))) by (le,type) / 1000000000)",
               "format": "time_series",
               "hide": false,
               "interval": "",
@@ -5933,7 +6293,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 32
+            "y": 40
           },
           "hiddenSeries": false,
           "id": 46,
@@ -6056,7 +6416,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 32
+            "y": 40
           },
           "hiddenSeries": false,
           "id": 47,
@@ -6180,7 +6540,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 40
+            "y": 48
           },
           "height": "",
           "hiddenSeries": false,
@@ -6310,7 +6670,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 40
+            "y": 48
           },
           "height": "",
           "hiddenSeries": false,
@@ -6438,7 +6798,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 48
+            "y": 56
           },
           "hiddenSeries": false,
           "id": 88,
@@ -6638,7 +6998,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 48
+            "y": 56
           },
           "hiddenSeries": false,
           "id": 67,
@@ -6752,7 +7112,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 56
+            "y": 64
           },
           "hiddenSeries": false,
           "id": 84,
@@ -6852,7 +7212,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 56
+            "y": 64
           },
           "hiddenSeries": false,
           "id": 86,
@@ -6984,7 +7344,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 64
+            "y": 72
           },
           "hiddenSeries": false,
           "id": 132,
@@ -7100,111 +7460,113 @@
           }
         },
         {
-          "type": "graph",
-          "title": "Mark Cache and Minmax Index Cache Memory Usage",
-          "gridPos": {
-            "x": 12,
-            "y": 64,
-            "w": 12,
-            "h": 8
-          },
-          "id": 23763571993,
-          "targets": [
-            {
-              "expr": "tiflash_system_asynchronous_metric_MarkCacheBytes{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}",
-              "legendFormat": "mark_cache_{{instance}}",
-              "interval": "",
-              "exemplar": true,
-              "refId": "A",
-              "queryType": "randomWalk",
-              "hide": false
-            },
-            {
-              "expr": "tiflash_system_asynchronous_metric_MinMaxIndexCacheBytes{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}﻿",
-              "legendFormat": "minmax_index_cache_{{instance}}",
-              "interval": "",
-              "exemplar": true,
-              "refId": "B",
-              "hide": true
-            },
-            {
-              "refId": "C",
-              "hide": false
-            }
-          ],
-          "options": {
-            "alertThreshold": true
-          },
+          "aliasColors": {},
+          "bars": false,
+          "dashLength": 10,
+          "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
+          "description": "The memory usage of mark cache and minmax index cache",
           "fieldConfig": {
             "defaults": {},
             "overrides": []
           },
+          "fill": 1,
+          "fillGradient": 0,
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 72
+          },
+          "hiddenSeries": false,
+          "id": 23763571993,
+          "legend": {
+            "avg": false,
+            "current": false,
+            "max": false,
+            "min": false,
+            "show": true,
+            "total": false,
+            "values": false
+          },
+          "lines": true,
+          "linewidth": 1,
+          "nullPointMode": "null",
+          "options": {
+            "alertThreshold": true
+          },
+          "percentage": false,
           "pluginVersion": "7.5.11",
+          "pointradius": 2,
+          "points": false,
           "renderer": "flot",
-          "yaxes": [
+          "seriesOverrides": [],
+          "spaceLength": 10,
+          "stack": false,
+          "steppedLine": false,
+          "targets": [
             {
-              "label": null,
-              "show": true,
-              "logBase": 1,
-              "min": null,
-              "max": null,
-              "format": "short"
+              "exemplar": true,
+              "expr": "tiflash_system_asynchronous_metric_MarkCacheBytes{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}",
+              "hide": false,
+              "interval": "",
+              "legendFormat": "mark_cache_{{instance}}",
+              "queryType": "randomWalk",
+              "refId": "A"
             },
             {
-              "label": null,
-              "show": true,
-              "logBase": 1,
-              "min": null,
-              "max": null,
-              "format": "short"
+              "exemplar": true,
+              "expr": "tiflash_system_asynchronous_metric_MinMaxIndexCacheBytes{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}﻿",
+              "hide": true,
+              "interval": "",
+              "legendFormat": "minmax_index_cache_{{instance}}",
+              "refId": "B"
+            },
+            {
+              "hide": false,
+              "refId": "C"
             }
           ],
+          "thresholds": [],
+          "timeFrom": null,
+          "timeRegions": [],
+          "timeShift": null,
+          "title": "Mark Cache and Minmax Index Cache Memory Usage",
+          "tooltip": {
+            "shared": true,
+            "sort": 0,
+            "value_type": "individual"
+          },
+          "type": "graph",
           "xaxis": {
-            "show": true,
+            "buckets": null,
             "mode": "time",
             "name": null,
-            "values": [],
-            "buckets": null
+            "show": true,
+            "values": []
           },
+          "yaxes": [
+            {
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": true
+            },
+            {
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": true
+            }
+          ],
           "yaxis": {
             "align": false,
             "alignLevel": null
-          },
-          "lines": true,
-          "fill": 1,
-          "linewidth": 1,
-          "dashLength": 10,
-          "spaceLength": 10,
-          "pointradius": 2,
-          "legend": {
-            "show": true,
-            "values": false,
-            "min": false,
-            "max": false,
-            "current": false,
-            "total": false,
-            "avg": false
-          },
-          "nullPointMode": "null",
-          "tooltip": {
-            "value_type": "individual",
-            "shared": true,
-            "sort": 0
-          },
-          "aliasColors": {},
-          "seriesOverrides": [],
-          "thresholds": [],
-          "timeRegions": [],
-          "fillGradient": 0,
-          "dashes": false,
-          "hiddenSeries": false,
-          "points": false,
-          "bars": false,
-          "stack": false,
-          "percentage": false,
-          "steppedLine": false,
-          "description": "The memory usage of mark cache and minmax index cache"
+          }
         }
       ],
       "repeat": null,
@@ -7291,7 +7653,7 @@
             },
             {
               "exemplar": true,
-              "expr": "histogram_quantile(1, sum(rate(tiflash_storage_write_stall_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le, type, instance))",
+              "expr": "histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_storage_write_stall_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m]))) by (le, type, instance) / 1000000000)",
               "format": "time_series",
               "interval": "",
               "intervalFactor": 1,
@@ -8206,7 +8568,7 @@
           "targets": [
             {
               "exemplar": true,
-              "expr": "histogram_quantile(1.00, sum(rate(tiflash_storage_page_write_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le, type))",
+              "expr": "histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_storage_page_write_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m]))) by (le, type) / 1000000000)",
               "format": "time_series",
               "hide": true,
               "interval": "",
@@ -8449,7 +8811,7 @@
           "targets": [
             {
               "exemplar": true,
-              "expr": "histogram_quantile(1.00, sum(rate(tiflash_storage_page_gc_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le, type))",
+              "expr": "histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_storage_page_gc_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m]))) by (le, type) / 1000000000)",
               "format": "time_series",
               "hide": false,
               "instant": false,
@@ -8987,7 +9349,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 107
+            "y": 9
           },
           "hiddenSeries": false,
           "id": 35,
@@ -9085,7 +9447,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 107
+            "y": 9
           },
           "hiddenSeries": false,
           "id": 36,
@@ -9118,7 +9480,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "histogram_quantile(1.00, sum(rate(tiflash_raft_read_index_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_raft_read_index_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m]))) by (le) / 1000000000)",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "max",
@@ -9203,7 +9565,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 114
+            "y": 16
           },
           "hiddenSeries": false,
           "id": 37,
@@ -9243,7 +9605,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "histogram_quantile(1.00, sum(rate(tiflash_raft_wait_index_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_raft_wait_index_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m]))) by (le) / 1000000000)",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "max",
@@ -9337,7 +9699,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 114
+            "y": 16
           },
           "hiddenSeries": false,
           "id": 75,
@@ -9441,7 +9803,7 @@
             "h": 7,
             "w": 24,
             "x": 0,
-            "y": 121
+            "y": 23
           },
           "hiddenSeries": false,
           "id": 82,
@@ -9477,6 +9839,16 @@
           "targets": [
             {
               "exemplar": true,
+              "expr": "histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_raft_apply_write_command_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m]))) by (le, type) / 1000000000)",
+              "format": "time_series",
+              "interval": "",
+              "intervalFactor": 2,
+              "legendFormat": " 100%-{{type}}",
+              "refId": "D",
+              "step": 4
+            },
+            {
+              "exemplar": true,
               "expr": "histogram_quantile(0.99, sum(rate(tiflash_raft_apply_write_command_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le, type))",
               "format": "time_series",
               "interval": "",
@@ -9484,16 +9856,6 @@
               "legendFormat": " 99%-{{type}}",
               "metric": "",
               "refId": "A",
-              "step": 4
-            },
-            {
-              "exemplar": true,
-              "expr": "histogram_quantile(0.95, sum(rate(tiflash_raft_apply_write_command_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le, type))",
-              "format": "time_series",
-              "interval": "",
-              "intervalFactor": 2,
-              "legendFormat": "95%-{{type}}",
-              "refId": "B",
               "step": 4
             },
             {
@@ -9508,16 +9870,6 @@
             },
             {
               "exemplar": true,
-              "expr": "histogram_quantile(1.00, sum(rate(tiflash_raft_apply_write_command_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le, type))",
-              "format": "time_series",
-              "interval": "",
-              "intervalFactor": 2,
-              "legendFormat": " 100%-{{type}}",
-              "refId": "D",
-              "step": 4
-            },
-            {
-              "exemplar": true,
               "expr": "sum(rate(tiflash_raft_apply_write_command_duration_seconds_sum{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"admin\"}[1m])) / sum(rate(tiflash_raft_apply_write_command_duration_seconds_count{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"admin\"}[1m])) ",
               "format": "time_series",
               "hide": false,
@@ -9526,6 +9878,22 @@
               "legendFormat": "avg-admin",
               "refId": "E",
               "step": 4
+            },
+            {
+              "exemplar": true,
+              "expr": "sum(rate(tiflash_raft_apply_write_command_duration_seconds_sum{k8s_cluster=\"$k8s_cluster\", cluster_id=~\".*$tidb_cluster\", instance=~\"$instance\", type=\"flush_region\"}[1m])) / sum(rate(tiflash_raft_apply_write_command_duration_seconds_count{k8s_cluster=\"$k8s_cluster\", cluster_id=~\".*$tidb_cluster\", instance=~\"$instance\", type=\"flush_region\"}[1m]))",
+              "hide": false,
+              "interval": "",
+              "legendFormat": "avg-flush_region",
+              "refId": "B"
+            },
+            {
+              "exemplar": true,
+              "expr": "sum(rate(tiflash_raft_write_data_to_storage_duration_seconds_sum{k8s_cluster=\"$k8s_cluster\", cluster_id=~\".*$tidb_cluster\", instance=~\"$instance\", type=\"decode\"}[1m])) / sum(rate(tiflash_raft_write_data_to_storage_duration_seconds_count{k8s_cluster=\"$k8s_cluster\", cluster_id=~\".*$tidb_cluster\", instance=~\"$instance\", type=\"decode\"}[1m]) ) ",
+              "hide": false,
+              "interval": "",
+              "legendFormat": "avg-decode",
+              "refId": "F"
             }
           ],
           "thresholds": [],
@@ -9594,7 +9962,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 128
+            "y": 30
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -9664,7 +10032,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 128
+            "y": 30
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -9734,7 +10102,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 135
+            "y": 37
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -9804,7 +10172,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 135
+            "y": 37
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -9868,7 +10236,7 @@
             "h": 7,
             "w": 24,
             "x": 0,
-            "y": 142
+            "y": 44
           },
           "height": "",
           "hiddenSeries": false,
@@ -9982,7 +10350,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 149
+            "y": 51
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -10051,7 +10419,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 149
+            "y": 51
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -10121,7 +10489,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 156
+            "y": 58
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -10191,7 +10559,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 156
+            "y": 58
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -10261,7 +10629,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 163
+            "y": 65
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -10327,7 +10695,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 163
+            "y": 65
           },
           "hiddenSeries": false,
           "id": 91,
@@ -10362,7 +10730,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "histogram_quantile(1.00, sum(rate(tiflash_raft_upstream_latency_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_raft_upstream_latency_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m]))) by (le) / 1000000000)",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": " 100%",
