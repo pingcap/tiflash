@@ -16,7 +16,6 @@
 
 #include <Encryption/EncryptionPath.h>
 
-#include <string>
 
 namespace DB
 {
