@@ -43,6 +43,7 @@ extern String getPrefix(String key);
 namespace FailPoints
 {
 extern const char force_owner_mgr_state[];
+extern const char force_owner_mgr_campaign_failed[];
 extern const char force_fail_to_create_etcd_session[];
 } // namespace FailPoints
 } // namespace DB
@@ -366,6 +367,81 @@ try
     }
     auto lease_1 = getLeaderLease(owner0.get());
     EXPECT_EQ(lease_0, lease_1) << "should use same etcd lease for elec";
+
+    LOG_INFO(log, "test wait for n*ttl passed");
+}
+CATCH
+
+TEST_F(OwnerManagerTest, KeyDeletedWithSessionInvalid)
+try
+{
+    auto etcd_endpoint = Poco::Environment::get("ETCD_ENDPOINT", "");
+    if (etcd_endpoint.empty())
+    {
+        const auto * t = ::testing::UnitTest::GetInstance()->current_test_info();
+        LOG_INFO(
+            log,
+            "{}.{} is skipped because env ETCD_ENDPOINT not set. "
+            "Run it with an etcd cluster using `ETCD_ENDPOINT=127.0.0.1:2379 ./dbms/gtests_dbms ...`",
+            t->test_case_name(),
+            t->name());
+        return;
+    }
+
+    using namespace std::chrono_literals;
+
+    auto ctx = TiFlashTestEnv::getContext();
+    pingcap::ClusterConfig config;
+    pingcap::pd::ClientPtr pd_client = std::make_shared<pingcap::pd::Client>(Strings{etcd_endpoint}, config);
+    auto etcd_client = DB::Etcd::Client::create(pd_client, config);
+    const String id = "owner_0";
+    auto owner0
+        = std::static_pointer_cast<EtcdOwnerManager>(OwnerManager::createS3GCOwner(*ctx, id, etcd_client, test_ttl));
+    auto owner_info = owner0->getOwnerID();
+    EXPECT_EQ(owner_info.status, OwnerType::NoLeader) << magic_enum::enum_name(owner_info.status);
+
+    std::mutex mtx;
+    std::condition_variable cv;
+    bool become_owner = false;
+
+    owner0->setBeOwnerHook([&] {
+        {
+            std::unique_lock lk(mtx);
+            become_owner = true;
+        }
+        cv.notify_one();
+    });
+
+    owner0->campaignOwner();
+    {
+        std::unique_lock lk(mtx);
+        cv.wait(lk, [&] { return become_owner; });
+    }
+
+    ASSERT_TRUE(owner0->isOwner());
+    {
+        auto owner_id = owner0->getOwnerID();
+        EXPECT_EQ(owner_id.status, OwnerType::IsOwner);
+        EXPECT_EQ(owner_id.owner_id, id);
+    }
+    auto lease_0 = getLeaderLease(owner0.get());
+
+    LOG_INFO(log, "test wait for n*ttl");
+    FailPointHelper::enableFailPoint(FailPoints::force_owner_mgr_state, EtcdOwnerManager::State::CancelByKeyDeleted);
+    FailPointHelper::enableFailPoint(FailPoints::force_owner_mgr_campaign_failed);
+    SCOPE_EXIT({ FailPointHelper::disableFailPoint(FailPoints::force_owner_mgr_state); });
+    SCOPE_EXIT({ FailPointHelper::disableFailPoint(FailPoints::force_owner_mgr_campaign_failed); });
+    changeState(owner0.get(), EtcdOwnerManager::State::CancelByKeyDeleted);
+
+    std::this_thread::sleep_for(std::chrono::seconds(test_pause));
+    ASSERT_TRUE(owner0->isOwner());
+    {
+        auto owner_id = owner0->getOwnerID();
+        EXPECT_EQ(owner_id.status, OwnerType::IsOwner);
+        EXPECT_EQ(owner_id.owner_id, id);
+    }
+    auto lease_1 = getLeaderLease(owner0.get()); // should be a new lease
+    EXPECT_NE(lease_0, lease_1) << "should use a new etcd lease for elec";
 
     LOG_INFO(log, "test wait for n*ttl passed");
 }

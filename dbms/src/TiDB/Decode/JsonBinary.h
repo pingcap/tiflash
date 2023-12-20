@@ -25,6 +25,7 @@
 #include <common/memcpy.h>
 #include <simdjson.h>
 
+#include <string_view>
 #include <unordered_set>
 
 namespace DB
@@ -157,6 +158,10 @@ public:
 
     UInt64 getDepth() const;
 
+    JsonType getType() const { return type; }
+
+    std::vector<StringRef> getKeys() const;
+
     static String unquoteString(const StringRef & ref);
     static void unquoteStringInBuffer(const StringRef & ref, JsonBinaryWriteBuffer & write_buffer);
     static String unquoteJsonString(const StringRef & ref);
@@ -168,6 +173,7 @@ public:
     static void buildBinaryJsonArrayInBuffer(
         const std::vector<JsonBinary> & json_binary_vec,
         JsonBinaryWriteBuffer & write_buffer);
+    static void buildKeyArrayInBuffer(const std::vector<StringRef> & keys, JsonBinaryWriteBuffer & write_buffer);
 
     static UInt64 getJsonLength(const std::string_view & raw_value);
 
@@ -200,8 +206,7 @@ private:
     StringRef getSubRef(size_t offset, size_t length) const;
 
     JsonBinary getArrayElement(size_t index) const;
-    String getObjectKey(
-        size_t index) const; /// Expect object key not be too long, use String instead of StringRef as return type
+    StringRef getObjectKey(size_t index) const;
     JsonBinary getObjectValue(size_t index) const;
     JsonBinary getValueEntry(size_t value_entry_offset) const;
 

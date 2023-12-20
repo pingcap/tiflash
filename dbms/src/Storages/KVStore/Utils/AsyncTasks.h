@@ -46,6 +46,7 @@ struct AsyncTasks
         using P = std::packaged_task<R()>;
         std::shared_ptr<P> p = std::make_shared<P>(P(f));
 
+        // TODO(fap) `start_time` may not be set immediately when calling `p`, will be fixed in another PR.
         auto res = thread_pool->trySchedule([p]() { (*p)(); }, 0, 0);
         if (res)
         {
@@ -96,7 +97,7 @@ struct AsyncTasks
     {
         std::scoped_lock<std::mutex> l(mtx);
         auto it2 = start_time.find(key);
-        RUNTIME_CHECK_MSG(it2 != start_time.end(), "queryElapsed meets empty key");
+        RUNTIME_CHECK_MSG(it2 != start_time.end(), "queryStartTime meets empty key");
         return it2->second;
     }
 
