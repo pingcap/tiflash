@@ -83,7 +83,6 @@ try
         reloadKVSFromDisk();
         ASSERT_EQ(root_of_kvstore_mem_trackers->get(), str_key.dataSize() + str_val_default.size());
     }
-    return;
     ASSERT_EQ(root_of_kvstore_mem_trackers->get(), 0);
     {
         root_of_kvstore_mem_trackers->reset();
