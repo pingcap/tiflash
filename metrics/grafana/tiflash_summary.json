@@ -52,7 +52,7 @@
   "gnetId": null,
   "graphTooltip": 1,
   "id": null,
-  "iteration": 1703085129902,
+  "iteration": 1703085129908,
   "links": [],
   "panels": [
     {
@@ -12021,7 +12021,7 @@
           ],
           "timeFrom": null,
           "timeShift": null,
-          "title": "Write Command Size Heatmap",
+          "title": "Write Committed Size Heatmap",
           "tooltip": {
             "show": true,
             "showHistogram": true
@@ -12119,6 +12119,152 @@
           "yBucketSize": null
         },
         {
+          "cards": {
+            "cardPadding": null,
+            "cardRound": null
+          },
+          "color": {
+            "cardColor": "#b4ff00",
+            "colorScale": "sqrt",
+            "colorScheme": "interpolateSpectral",
+            "exponent": 0.5,
+            "min": 0,
+            "mode": "spectrum"
+          },
+          "dataFormat": "tsbuckets",
+          "datasource": "${DS_TEST-CLUSTER}",
+          "description": "",
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 12,
+            "x": 0,
+            "y": 79
+          },
+          "heatmap": {},
+          "hideZeroBuckets": true,
+          "highlightCards": true,
+          "id": 265,
+          "legend": {
+            "show": true
+          },
+          "links": [],
+          "reverseYBuckets": false,
+          "targets": [
+            {
+              "exemplar": true,
+              "expr": "sum(delta(tiflash_raft_write_flow_bytes_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=~\"ingest_uncommitted\"}[1m])) by (le, type)",
+              "format": "heatmap",
+              "hide": false,
+              "interval": "",
+              "intervalFactor": 2,
+              "legendFormat": "{{le}}",
+              "refId": "B"
+            }
+          ],
+          "timeFrom": null,
+          "timeShift": null,
+          "title": "Ingest Uncommitted Size Heatmap",
+          "tooltip": {
+            "show": true,
+            "showHistogram": true
+          },
+          "type": "heatmap",
+          "xAxis": {
+            "show": true
+          },
+          "xBucketNumber": null,
+          "xBucketSize": null,
+          "yAxis": {
+            "decimals": 0,
+            "format": "bytes",
+            "logBase": 1,
+            "max": null,
+            "min": null,
+            "show": true,
+            "splitFactor": null
+          },
+          "yBucketBound": "upper",
+          "yBucketNumber": null,
+          "yBucketSize": null
+        },
+        {
+          "cards": {
+            "cardPadding": null,
+            "cardRound": null
+          },
+          "color": {
+            "cardColor": "#b4ff00",
+            "colorScale": "sqrt",
+            "colorScheme": "interpolateSpectral",
+            "exponent": 0.5,
+            "min": 0,
+            "mode": "spectrum"
+          },
+          "dataFormat": "tsbuckets",
+          "datasource": "${DS_TEST-CLUSTER}",
+          "description": "",
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 12,
+            "x": 12,
+            "y": 79
+          },
+          "heatmap": {},
+          "hideZeroBuckets": true,
+          "highlightCards": true,
+          "id": 264,
+          "legend": {
+            "show": true
+          },
+          "links": [],
+          "reverseYBuckets": false,
+          "targets": [
+            {
+              "exemplar": true,
+              "expr": "sum(delta(tiflash_raft_write_flow_bytes_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=~\"big_write_to_region\"}[1m])) by (le, type)",
+              "format": "heatmap",
+              "hide": false,
+              "interval": "",
+              "intervalFactor": 2,
+              "legendFormat": "{{le}}",
+              "refId": "B"
+            }
+          ],
+          "timeFrom": null,
+          "timeShift": null,
+          "title": "Big Write To Region Size Heatmap",
+          "tooltip": {
+            "show": true,
+            "showHistogram": true
+          },
+          "type": "heatmap",
+          "xAxis": {
+            "show": true
+          },
+          "xBucketNumber": null,
+          "xBucketSize": null,
+          "yAxis": {
+            "decimals": 0,
+            "format": "bytes",
+            "logBase": 1,
+            "max": null,
+            "min": null,
+            "show": true,
+            "splitFactor": null
+          },
+          "yBucketBound": "upper",
+          "yBucketNumber": null,
+          "yBucketSize": null
+        },
+        {
           "aliasColors": {},
           "bars": false,
           "dashLength": 10,
@@ -12134,7 +12280,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 79
+            "y": 86
           },
           "hiddenSeries": false,
           "id": 240,
@@ -12238,7 +12384,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 79
+            "y": 86
           },
           "hiddenSeries": false,
           "id": 239,
@@ -12375,7 +12521,7 @@
             "h": 7,
             "w": 24,
             "x": 0,
-            "y": 86
+            "y": 93
           },
           "hiddenSeries": false,
           "id": 75,
@@ -12499,7 +12645,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 93
+            "y": 100
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -12569,7 +12715,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 93
+            "y": 100
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -12632,7 +12778,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 100
+            "y": 107
           },
           "hiddenSeries": false,
           "id": 263,
@@ -12739,7 +12885,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 100
+            "y": 107
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -12805,7 +12951,7 @@
             "h": 7,
             "w": 24,
             "x": 0,
-            "y": 107
+            "y": 114
           },
           "height": "",
           "hiddenSeries": false,
@@ -12913,7 +13059,7 @@
             "h": 7,
             "w": 24,
             "x": 0,
-            "y": 114
+            "y": 121
           },
           "height": "",
           "hiddenSeries": false,
@@ -13031,7 +13177,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 121
+            "y": 128
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -13100,7 +13246,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 121
+            "y": 128
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -13170,7 +13316,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 128
+            "y": 135
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -13236,7 +13382,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 128
+            "y": 135
           },
           "hiddenSeries": false,
           "id": 91,
