@@ -31,9 +31,11 @@ public:
         log = DB::Logger::get("RegionKVStoreTest");
         test_path = TiFlashTestEnv::getTemporaryPath("/region_kvs_test");
     }
+
+    static RegionPtr splitRegion(const RegionPtr & region, RegionMeta && meta) { return region->splitInto(std::move(meta)); }
 };
 
-static inline void validateSSTGeneration(
+inline void validateSSTGeneration(
     KVStore & kvs,
     std::unique_ptr<MockRaftStoreProxy> & proxy_instance,
     UInt64 region_id,

@@ -235,11 +235,7 @@ public:
 
     Region() = delete;
 
-#ifdef DBMS_PUBLIC_GTEST
-public:
-#else
 private:
-#endif
     friend class RegionRaftCommandDelegate;
     friend class RegionMockTest;
     friend class tests::KVStoreTestBase;

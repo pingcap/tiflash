@@ -107,10 +107,12 @@ try
         region->insert("default", TiKVKey::copyFrom(str_key2), TiKVValue::copyFrom(str_val_default2));
         auto expected = str_key.dataSize() + str_val_default.size() + str_key2.dataSize() + str_val_default2.size();
         ASSERT_EQ(root_of_kvstore_mem_trackers->get(), expected);
-        auto new_region = region->splitInto(RegionMeta(
-            createPeer(901, true),
-            createRegionInfo(902, RecordKVFormat::genKey(table_id, 50), end),
-            initialApplyState()));
+        auto new_region = splitRegion(
+            region,
+            RegionMeta(
+                createPeer(901, true),
+                createRegionInfo(902, RecordKVFormat::genKey(table_id, 50), end),
+                initialApplyState()));
         ASSERT_EQ(root_of_kvstore_mem_trackers->get(), expected);
         region->mergeDataFrom(*new_region);
         ASSERT_EQ(root_of_kvstore_mem_trackers->get(), expected);
