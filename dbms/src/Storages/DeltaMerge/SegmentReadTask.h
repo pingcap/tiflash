@@ -133,6 +133,7 @@ public:
         std::unordered_set<UInt64> remaining_pages_to_fetch);
     void checkMemTableSet(const ColumnFileSetSnapshotPtr & mem_table_snap) const;
     bool needFetchMemTableSet() const;
+    void checkMemTableSetReady() const;
 
     void initColumnFileDataProvider(const Remote::RNLocalPageCacheGuardPtr & pages_guard);
 

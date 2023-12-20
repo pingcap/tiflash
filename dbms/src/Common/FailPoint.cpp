@@ -65,6 +65,7 @@ namespace DB
     M(force_ps_wal_compact)                                       \
     M(pause_before_full_gc_prepare)                               \
     M(force_owner_mgr_state)                                      \
+    M(force_owner_mgr_campaign_failed)                            \
     M(exception_during_spill)                                     \
     M(force_fail_to_create_etcd_session)                          \
     M(force_remote_read_for_batch_cop_once)                       \
@@ -107,6 +108,7 @@ namespace DB
     M(force_set_parallel_prehandle_threshold)                \
     M(force_raise_prehandle_exception)                       \
     M(force_agg_on_partial_block)                            \
+    M(force_not_clean_fap_on_destroy)                        \
     M(delta_tree_create_node_fail)                           \
     M(disable_flush_cache)
 
@@ -129,6 +131,7 @@ namespace DB
     M(pause_when_altering_dt_store)       \
     M(pause_after_copr_streams_acquired)  \
     M(pause_query_init)                   \
+    M(pause_before_prehandle_snapshot)    \
     M(pause_before_prehandle_subtask)     \
     M(pause_before_wn_establish_task)     \
     M(pause_passive_flush_before_persist_region)

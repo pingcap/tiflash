@@ -62,9 +62,11 @@ public:
         RegionPtr region,
         DM::Segments && segments,
         UInt64 start_time);
-    void debugRemoveCheckpointIngestInfo(UInt64 region_id);
     std::optional<CheckpointIngestInfoPtr> tryGetCheckpointIngestInfo(UInt64 region_id) const;
     void cleanCheckpointIngestInfo(TMTContext & tmt, UInt64 region_id);
+
+    // Remove the checkpoint ingest info from memory. Only for testing.
+    void debugRemoveCheckpointIngestInfo(UInt64 region_id);
 
 public:
     std::shared_ptr<FAPAsyncTasks> tasks_trace;

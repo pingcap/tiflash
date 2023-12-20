@@ -68,7 +68,18 @@ DeltaValueSpacePtr DeltaValueSpace::restore(DMContext & context, const RowKeyRan
     return std::make_shared<DeltaValueSpace>(std::move(persisted_file_set));
 }
 
+DeltaValueSpacePtr DeltaValueSpace::restore(
+    DMContext & context,
+    const RowKeyRange & segment_range,
+    ReadBuffer & buf,
+    PageIdU64 id)
+{
+    auto persisted_file_set = ColumnFilePersistedSet::restore(context, segment_range, buf, id);
+    return std::make_shared<DeltaValueSpace>(std::move(persisted_file_set));
+}
+
 DeltaValueSpacePtr DeltaValueSpace::createFromCheckpoint( //
+    const LoggerPtr & parent_log,
     DMContext & context,
     UniversalPageStoragePtr temp_ps,
     const RowKeyRange & segment_range,
@@ -76,13 +87,25 @@ DeltaValueSpacePtr DeltaValueSpace::createFromCheckpoint( //
     WriteBatches & wbs)
 {
     auto persisted_file_set
-        = ColumnFilePersistedSet::createFromCheckpoint(context, temp_ps, segment_range, delta_id, wbs);
+        = ColumnFilePersistedSet::createFromCheckpoint(parent_log, context, temp_ps, segment_range, delta_id, wbs);
     return std::make_shared<DeltaValueSpace>(std::move(persisted_file_set));
+}
+
+void DeltaValueSpace::saveMeta(WriteBuffer & buf) const
+{
+    persisted_file_set->saveMeta(buf);
 }
 
 void DeltaValueSpace::saveMeta(WriteBatches & wbs) const
 {
     persisted_file_set->saveMeta(wbs);
+}
+
+std::string DeltaValueSpace::serializeMeta() const
+{
+    WriteBufferFromOwnString wb;
+    saveMeta(wb);
+    return wb.releaseStr();
 }
 
 template <class ColumnFileT>

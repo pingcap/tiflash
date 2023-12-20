@@ -104,6 +104,7 @@ protected:
     static LoggerPtr log_ptr;
     static size_t server_num;
     static MPPTestMeta test_meta;
+    std::mutex mu;
 };
 
 #define ASSERT_MPPTASK_EQUAL(tasks, properties, expected_cols)                      \
