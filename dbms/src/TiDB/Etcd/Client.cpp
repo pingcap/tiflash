@@ -393,7 +393,7 @@ bool Session::keepAliveOne()
             log,
             "keep alive fail, ttl={}, code={} msg={}",
             resp.ttl(),
-            magic_enum::enum_name(status.error_code()),
+            status.error_code(),
             status.error_message());
         finished = true;
         return false;
