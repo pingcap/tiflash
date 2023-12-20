@@ -149,7 +149,7 @@ void FileProvider::deleteDirectory(const String & dir_path_, bool dir_path_as_en
                 }
                 else
                 {
-                    throw DB::TiFlashException("Unknown file type: " + file.path(), Errors::Encryption::Internal);
+                    throw DB::TiFlashException(Errors::Encryption::Internal, "Unknown file type: {}", file.path());
                 }
             }
             dir_file.remove(recursive);
