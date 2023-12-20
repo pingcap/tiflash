@@ -22,10 +22,11 @@ namespace DB
 
 BlockAccessCipherStreamPtr FileEncryptionInfo::createCipherStream(const EncryptionPath & encryption_path) const
 {
+    RUNTIME_CHECK_MSG(res != FileEncryptionRes::Error, "Encryption info is not available.");
     if (res != FileEncryptionRes::Ok && (method == EncryptionMethod::Plaintext || method == EncryptionMethod::Unknown))
         return nullptr;
 
-    const std::string encryption_key = *key;
+    const String & encryption_key = *key;
     RUNTIME_CHECK_MSG(encryption_key.size() == DB::Encryption::keySize(method), "Encryption key size mismatch.");
     RUNTIME_CHECK_MSG(iv->size() == DB::Encryption::blockSize(method), "Encryption iv size mismatch.");
     auto iv_high = readBigEndian<uint64_t>(reinterpret_cast<const char *>(iv->data()));
