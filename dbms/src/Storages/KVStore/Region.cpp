@@ -200,8 +200,8 @@ RegionPtr Region::deserialize(ReadBuffer & buf, const TiFlashRaftProxyHelper * p
         throw Exception(
             ErrorCodes::UNKNOWN_FORMAT_VERSION,
             "{}: unexpected version: {}, expected: {}",
-            binary_version,
             __PRETTY_FUNCTION__,
+            binary_version,
             CURRENT_VERSION);
     }
 

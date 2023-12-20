@@ -44,7 +44,6 @@ RegionDataRes RegionCFDataBase<Trait>::insert(TiKVKey && key, TiKVValue && value
 {
     const auto & raw_key = RecordKVFormat::decodeTiKVKey(key);
     auto kv_pair = Trait::genKVPair(std::move(key), raw_key, std::move(value));
-
     if (!kv_pair)
         return 0;
 
@@ -58,6 +57,7 @@ RegionDataRes RegionCFDataBase<RegionLockCFDataTrait>::insert(TiKVKey && key, Ti
     Pair kv_pair = RegionLockCFDataTrait::genKVPair(std::move(key), std::move(value));
     // according to the process of pessimistic lock, just overwrite.
     data.insert_or_assign(std::move(kv_pair.first), std::move(kv_pair.second));
+    // lock cf is not count into the size of RegionData, always return 0
     return 0;
 }
 
@@ -94,6 +94,7 @@ RegionDataRes RegionCFDataBase<Trait>::insert(std::pair<Key, Value> && kv_pair, 
                         + " new_val: " + prev_value.toDebugString(),
                     ErrorCodes::LOGICAL_ERROR);
             }
+            // duplicated key is ignored
             return 0;
         }
         else
