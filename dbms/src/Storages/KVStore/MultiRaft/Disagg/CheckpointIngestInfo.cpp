@@ -198,7 +198,7 @@ void CheckpointIngestInfo::deleteWrittenData(TMTContext & tmt, RegionPtr region,
     {
         auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
         auto dm_context = dm_storage->getStore()->newDMContext(tmt.getContext(), tmt.getContext().getSettingsRef());
-        for (auto segment_to_drop : segments)
+        for (const auto & segment_to_drop : segments)
         {
             DM::WriteBatches wbs(*dm_context->storage_pool, dm_context->getWriteLimiter());
             // No need to call `abandon`, since the segment is not ingested or in use.
