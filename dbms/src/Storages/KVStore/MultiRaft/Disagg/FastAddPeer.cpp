@@ -591,7 +591,7 @@ FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, u
             auto maybe_elapsed = fap_ctx->tasks_trace->queryElapsed(region_id);
             RUNTIME_CHECK_MSG(
                 maybe_elapsed.has_value(),
-                "Task nout found, region_id={} new_peer_id={}",
+                "Task not found, region_id={} new_peer_id={}",
                 region_id,
                 new_peer_id);
             auto elapsed = maybe_elapsed.value();
