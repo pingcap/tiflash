@@ -68,6 +68,7 @@ size_t RegionData::insert(ColumnFamilyType cf, TiKVKey && key, TiKVValue && valu
     }
     case ColumnFamilyType::Lock:
     {
+        // lock cf is not count into the size of RegionData
         lock_cf.insert(std::move(key), std::move(value), mode);
         return 0;
     }
