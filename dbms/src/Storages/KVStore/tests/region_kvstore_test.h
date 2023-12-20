@@ -32,7 +32,10 @@ public:
         test_path = TiFlashTestEnv::getTemporaryPath("/region_kvs_test");
     }
 
-    static RegionPtr splitRegion(const RegionPtr & region, RegionMeta && meta) { return region->splitInto(std::move(meta)); }
+    static RegionPtr splitRegion(const RegionPtr & region, RegionMeta && meta)
+    {
+        return region->splitInto(std::move(meta));
+    }
 };
 
 inline void validateSSTGeneration(
