@@ -1226,18 +1226,6 @@ void JsonBinary::assertJsonDepth(UInt64 depth)
             fmt::format("Invalid JSON text: The JSON document exceeds the maximum depth {}.", MAX_JSON_DEPTH));
 }
 
-bool JsonBinary::isJSONContainsPathAll(const std::string_view & type)
-{
-    return type.size() == 3 && std::tolower(type[0]) == 'a' && std::tolower(type[1]) == 'l'
-        && std::tolower(type[2]) == 'l';
-}
-
-bool JsonBinary::isJSONContainsPathOne(const std::string_view & type)
-{
-    return type.size() == 3 && std::tolower(type[0]) == 'o' && std::tolower(type[1]) == 'n'
-        && std::tolower(type[2]) == 'e';
-}
-
 void JsonBinary::appendSIMDJsonElem(JsonBinaryWriteBuffer & write_buffer, const simdjson::dom::element & elem)
 {
     write_buffer.write(getJsonType(elem));

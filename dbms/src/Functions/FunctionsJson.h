@@ -1517,6 +1517,13 @@ public:
 
 class FunctionJsonContainsPath : public IFunction
 {
+private:
+    enum class ContainsType
+    {
+        ALL,
+        ONE,
+    };
+
 public:
     static constexpr auto name = "json_contains_path";
     static FunctionPtr create(const Context &) { return std::make_shared<FunctionJsonContainsPath>(); }
@@ -1746,7 +1753,7 @@ private:
             const auto & json_val = json_source->getWhole();
             JsonBinary json_binary{json_val.data[0], StringRef{&json_val.data[1], json_val.size - 1}};
 
-            auto [is_contains_path_one, is_contains_path_all] = getTypeVal(type_source->getWhole());
+            auto contains_type = getTypeVal(type_source->getWhole());
 
             auto & res = data_to[row]; // default 1.
             for (size_t i = 0; i < path_sources.size(); ++i)
@@ -1760,19 +1767,25 @@ private:
                 assert(path_sources[i]);
                 auto path_expr_container_vec = buildJsonPathExprContainer(path_sources[i]->getWhole());
                 bool exists = !json_binary.extract(path_expr_container_vec).empty();
-                if (exists && is_contains_path_one)
+                if (contains_type == ContainsType::ONE)
                 {
-                    res = 1;
-                    break;
+                    if (exists)
+                    {
+                        res = 1;
+                        break;
+                    }
+                    else
+                    {
+                        res = 0;
+                    }
                 }
-                else if (!exists && is_contains_path_one)
+                else // contains_type == ContainsType::ALL
                 {
-                    res = 0;
-                }
-                else if (!exists && is_contains_path_all)
-                {
-                    res = 0;
-                    break;
+                    if (!exists)
+                    {
+                        res = 0;
+                        break;
+                    }
                 }
             }
 
@@ -1793,15 +1806,17 @@ private:
         NullMap & null_map_to) const
     {
         // build contains_type for type const col first.
-        auto [is_contains_path_one, is_contains_path_all] = getTypeVal(type_source->getWhole());
+        auto contains_type = getTypeVal(type_source->getWhole());
 
         // build path exprs for path const cols next.
         std::vector<std::vector<JsonPathExprRefContainerPtr>> path_expr_container_vecs;
         path_expr_container_vecs.reserve(path_sources.size());
+        bool has_null_path = false;
         for (const auto & path_source : path_sources)
         {
             if (!path_source) // only null const
             {
+                has_null_path = true;
                 path_expr_container_vecs.push_back({});
             }
             else
@@ -1811,6 +1826,55 @@ private:
         }
         assert(path_sources.size() == path_expr_container_vecs.size());
 
+        if (contains_type == ContainsType::ONE)
+        {
+            if (has_null_path)
+                doExecuteForTypeAndPathConstImpl<is_json_nullable, true, true>(
+                    json_source,
+                    null_map_json,
+                    path_expr_container_vecs,
+                    rows,
+                    data_to,
+                    null_map_to);
+            else
+                doExecuteForTypeAndPathConstImpl<is_json_nullable, false, true>(
+                    json_source,
+                    null_map_json,
+                    path_expr_container_vecs,
+                    rows,
+                    data_to,
+                    null_map_to);
+        }
+        else
+        {
+            if (has_null_path)
+                doExecuteForTypeAndPathConstImpl<is_json_nullable, true, false>(
+                    json_source,
+                    null_map_json,
+                    path_expr_container_vecs,
+                    rows,
+                    data_to,
+                    null_map_to);
+            else
+                doExecuteForTypeAndPathConstImpl<is_json_nullable, false, false>(
+                    json_source,
+                    null_map_json,
+                    path_expr_container_vecs,
+                    rows,
+                    data_to,
+                    null_map_to);
+        }
+    }
+
+    template <bool is_json_nullable, bool has_null_path, bool is_contains_one>
+    void doExecuteForTypeAndPathConstImpl(
+        const std::unique_ptr<IStringSource> & json_source,
+        const NullMap & null_map_json,
+        const std::vector<std::vector<JsonPathExprRefContainerPtr>> & path_expr_container_vecs,
+        size_t rows,
+        ColumnUInt8::Container & data_to,
+        NullMap & null_map_to) const
+    {
         for (size_t row = 0; row < rows; ++row)
         {
             if constexpr (is_json_nullable)
@@ -1829,45 +1893,64 @@ private:
             auto & res = data_to[row]; // default 1.
             for (const auto & path_expr_container_vec : path_expr_container_vecs)
             {
-                if (path_expr_container_vec.empty())
+                if constexpr (has_null_path)
                 {
-                    null_map_to[row] = 1;
-                    break;
+                    if (path_expr_container_vec.empty())
+                    {
+                        null_map_to[row] = 1;
+                        break;
+                    }
                 }
 
+                assert(!path_expr_container_vec.empty());
                 bool exists = !json_binary.extract(path_expr_container_vec).empty();
-                if (exists && is_contains_path_one)
+                if constexpr (is_contains_one)
                 {
-                    res = 1;
-                    break;
+                    if (exists)
+                    {
+                        res = 1;
+                        break;
+                    }
+                    else
+                    {
+                        res = 0;
+                    }
                 }
-                else if (!exists && is_contains_path_one)
+                else // is_contains_all
                 {
-                    res = 0;
-                }
-                else if (!exists && is_contains_path_all)
-                {
-                    res = 0;
-                    break;
+                    if (!exists)
+                    {
+                        res = 0;
+                        break;
+                    }
                 }
             }
 
             json_source->next();
         }
-
-#undef SET_NULL_AND_CONTINUE
     }
 
-    std::pair<bool, bool> getTypeVal(const IStringSource::Slice & type_val) const
+    ContainsType getTypeVal(const IStringSource::Slice & type_val) const
     {
         std::string_view type{reinterpret_cast<const char *>(type_val.data), type_val.size};
-        bool is_contains_path_one = JsonBinary::isJSONContainsPathOne(type);
-        bool is_contains_path_all = JsonBinary::isJSONContainsPathAll(type);
-        if unlikely (!is_contains_path_one && !is_contains_path_all)
+        if unlikely (type.size() != 3)
             throw Exception(
                 fmt::format("The second argument can only be either 'one' or 'all' of function {}.", getName()),
                 ErrorCodes::ILLEGAL_COLUMN);
-        return {is_contains_path_one, is_contains_path_all};
+        auto first_char = std::tolower(type[0]);
+        if (first_char == 'a')
+        {
+            if likely (std::tolower(type[1]) == 'l' && std::tolower(type[2]) == 'l')
+                return ContainsType::ALL;
+        }
+        else if (first_char == 'o')
+        {
+            if likely (std::tolower(type[1]) == 'n' && std::tolower(type[2]) == 'e')
+                return ContainsType::ONE;
+        }
+        throw Exception(
+            fmt::format("The second argument can only be either 'one' or 'all' of function {}.", getName()),
+            ErrorCodes::ILLEGAL_COLUMN);
     }
 
     std::vector<JsonPathExprRefContainerPtr> buildJsonPathExprContainer(const IStringSource::Slice & path_val) const

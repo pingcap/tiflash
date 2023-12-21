@@ -193,9 +193,6 @@ public:
 
     static void assertJsonDepth(UInt64 depth);
 
-    static bool isJSONContainsPathAll(const std::string_view & type);
-    static bool isJSONContainsPathOne(const std::string_view & type);
-
 private:
     Int64 getInt64() const;
     UInt64 getUInt64() const;
