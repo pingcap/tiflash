@@ -38,4 +38,3 @@ docker-compose -f cluster.yaml -f tiflash-dt-sync-grpc.yaml exec -T tiflash0 bas
 
 docker-compose -f cluster.yaml -f tiflash-dt-sync-grpc.yaml down
 clean_data_log
-
