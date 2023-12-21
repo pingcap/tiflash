@@ -232,6 +232,7 @@ void OpenSSLCipher(
 #endif
 }
 
+#if USE_GM_SSL
 void GMSSLSM4Cipher(
     uint64_t file_offset,
     char * data,
@@ -294,6 +295,7 @@ void GMSSLSM4Cipher(
         memcpy(data + data_offset, partial_block, remaining_data_size);
     }
 }
+#endif
 
 void Cipher(
     uint64_t file_offset,
