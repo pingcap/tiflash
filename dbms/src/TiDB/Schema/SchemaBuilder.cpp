@@ -360,7 +360,7 @@ void SchemaBuilder<Getter, NameMapper>::applyAlterPhysicalTable(const DBInfoPtr 
         }
         return fmt_buf.toString();
     };
-    LOG_DEBUG(log, log_str());
+    LOG_INFO(log, log_str());
 
     /// Update metadata, through calling alterFromTiDB.
     // Using original table info with updated columns instead of using new_table_info directly,
@@ -1159,7 +1159,7 @@ void SchemaBuilder<Getter, NameMapper>::applyCreatePhysicalTable(const DBInfoPtr
                 return;
             }
 
-            LOG_DEBUG(log, "Recovering table {}", name_mapper.debugCanonicalName(*db_info, *table_info));
+            LOG_INFO(log, "Recovering table {}", name_mapper.debugCanonicalName(*db_info, *table_info));
             AlterCommands commands;
             {
                 AlterCommand command;
@@ -1206,7 +1206,7 @@ void SchemaBuilder<Getter, NameMapper>::applyCreateTable(const TiDB::DBInfoPtr &
     if (table_info == nullptr)
     {
         // this table is dropped.
-        LOG_DEBUG(log, "Table {} not found, may have been dropped.", table_id);
+        LOG_INFO(log, "Table {} not found, may have been dropped.", table_id);
         return;
     }
 
@@ -1367,7 +1367,7 @@ void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
         if (databases.find(db->id) == databases.end())
         {
             applyCreateSchema(db);
-            LOG_DEBUG(log, "Database {} created during sync all schemas", name_mapper.debugDatabaseName(*db));
+            LOG_INFO(log, "Database {} created during sync all schemas", name_mapper.debugDatabaseName(*db));
         }
     }
 
@@ -1378,7 +1378,7 @@ void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
         std::vector<TableInfoPtr> tables = getter.listTables(db->id);
         for (auto & table : tables)
         {
-            LOG_DEBUG(log, "Table {} syncing during sync all schemas", name_mapper.debugCanonicalName(*db, *table));
+            LOG_INFO(log, "Table {} syncing during sync all schemas", name_mapper.debugCanonicalName(*db, *table));
 
             /// Ignore view and sequence.
             if (table->is_view || table->is_sequence)
@@ -1422,9 +1422,9 @@ void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
             applySetTiFlashReplicaOnLogicalTable(db, table, storage);
             /// Alter if needed.
             applyAlterLogicalTable(db, table, storage);
-            LOG_DEBUG(log, "Table {} synced during sync all schemas", name_mapper.debugCanonicalName(*db, *table));
+            LOG_INFO(log, "Table {} synced during sync all schemas", name_mapper.debugCanonicalName(*db, *table));
         }
-        LOG_DEBUG(log, "Database {} synced during sync all schemas", name_mapper.debugDatabaseName(*db));
+        LOG_INFO(log, "Database {} synced during sync all schemas", name_mapper.debugDatabaseName(*db));
     }
 
     /// Drop all unmapped tables.
@@ -1434,7 +1434,7 @@ void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
         if (table_set.count(it->first) == 0)
         {
             applyDropPhysicalTable(it->second->getDatabaseName(), it->first);
-            LOG_DEBUG(log, "Table {}.{} dropped during sync all schemas", it->second->getDatabaseName(), name_mapper.debugTableName(it->second->getTableInfo()));
+            LOG_INFO(log, "Table {}.{} dropped during sync all schemas", it->second->getDatabaseName(), name_mapper.debugTableName(it->second->getTableInfo()));
         }
     }
 
@@ -1445,7 +1445,7 @@ void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
         if (db_set.count(it->first) == 0 && !isReservedDatabase(context, it->first))
         {
             applyDropSchema(it->first);
-            LOG_DEBUG(log, "DB {} dropped during sync all schemas", it->first);
+            LOG_INFO(log, "DB {} dropped during sync all schemas", it->first);
         }
     }
 
