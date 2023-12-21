@@ -1583,10 +1583,13 @@ public:
         auto json_source = createDynamicStringSource(*nested_block.getByPosition(arguments[0]).column);
         auto type_source = createDynamicStringSource(*nested_block.getByPosition(arguments[1]).column);
 
+        auto & result_col = block.getByPosition(result);
+        assert(!result_col.type->onlyNull());
+
         size_t rows = block.rows();
         auto col_to = ColumnUInt8::create(rows, 1);
         auto & data_to = col_to->getData();
-        auto col_null_map = ColumnUInt8::create(rows, 0);
+        auto col_null_map = result_col.type->isNullable() ? ColumnUInt8::create(rows, 0) : ColumnUInt8::create(0, 0);
         auto & vec_null_map = col_null_map->getData();
 
         StringSources path_sources;
@@ -1700,11 +1703,10 @@ public:
             }
         }
 
-        auto & result_col = block.getByPosition(result);
-        if (result_col.type->onlyNull() || result_col.type->isNullable())
-            block.getByPosition(result).column = ColumnNullable::create(std::move(col_to), std::move(col_null_map));
+        if (result_col.type->isNullable())
+            result_col.column = ColumnNullable::create(std::move(col_to), std::move(col_null_map));
         else
-            block.getByPosition(result).column = std::move(col_to);
+            result_col.column = std::move(col_to);
     }
 
 private:
