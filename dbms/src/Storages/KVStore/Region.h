@@ -118,6 +118,7 @@ public:
 public:
     explicit Region(RegionMeta && meta_);
     explicit Region(RegionMeta && meta_, const TiFlashRaftProxyHelper *);
+    ~Region();
 
     void insert(const std::string & cf, TiKVKey && key, TiKVValue && value, DupCheck mode = DupCheck::Deny);
     void insert(ColumnFamilyType type, TiKVKey && key, TiKVValue && value, DupCheck mode = DupCheck::Deny);
@@ -168,7 +169,6 @@ public:
 
     // Check if we can read by this index.
     bool checkIndex(UInt64 index) const;
-
     // Return <WaitIndexStatus, time cost(seconds)> for wait-index.
     std::tuple<WaitIndexStatus, double> waitIndex(
         UInt64 index,
@@ -180,7 +180,6 @@ public:
     UInt64 appliedIndex() const;
     // Requires RegionMeta's lock
     UInt64 appliedIndexTerm() const;
-
     void notifyApplied() { meta.notifyAll(); }
     // Export for tests.
     void setApplied(UInt64 index, UInt64 term);
@@ -241,7 +240,7 @@ private:
 
     // Private methods no need to lock mutex, normally
 
-    void doInsert(ColumnFamilyType type, TiKVKey && key, TiKVValue && value, DupCheck mode);
+    size_t doInsert(ColumnFamilyType type, TiKVKey && key, TiKVValue && value, DupCheck mode);
     void doCheckTable(const DecodedTiKVKey & key) const;
     void doRemove(ColumnFamilyType type, const TiKVKey & key);
 

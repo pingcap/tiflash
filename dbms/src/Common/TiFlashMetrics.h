@@ -19,6 +19,7 @@
 #include <Common/TiFlashBuildInfo.h>
 #include <Common/nocopyable.h>
 #include <common/types.h>
+#include <Common/Exception.h>
 #include <prometheus/counter.h>
 #include <prometheus/exposer.h>
 #include <prometheus/gateway.h>
@@ -35,6 +36,9 @@
 
 namespace DB
 {
+constexpr size_t RAFT_REGION_BIG_WRITE_THRES = 2 * 1024;
+constexpr size_t RAFT_REGION_BIG_WRITE_MAX = 4 * 1024 * 1024; // raft-entry-max-size = 8MiB
+static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Invalid RAFT_REGION_BIG_WRITE_THRES");
 /// Central place to define metrics across all subsystems.
 /// Refer to gtest_tiflash_metrics.cpp for more sample defines.
 /// Usage:
@@ -445,12 +449,13 @@ namespace DB
     M(tiflash_raft_raft_frequent_events_count,                                                                                      \
       "Raft frequent event counter",                                                                                                \
       Counter,                                                                                                                      \
+      F(type_write_commit, {{"type", "write_commit"}}),                                                                             \
       F(type_write, {{"type", "write"}}))                                                                                           \
     M(tiflash_raft_region_flush_bytes,                                                                                              \
       "Bucketed histogram of region flushed bytes",                                                                                 \
       Histogram,                                                                                                                    \
-      F(type_flushed, {{"type", "flushed"}}, ExpBuckets{32, 2, 21}),                                                                \
-      F(type_unflushed, {{"type", "unflushed"}}, ExpBuckets{32, 2, 21}))                                                            \
+      F(type_flushed, {{"type", "flushed"}}, ExpBucketsWithRange{32, 4, 32 * 1024 * 1024}),                                         \
+      F(type_unflushed, {{"type", "unflushed"}}, ExpBucketsWithRange{32, 4, 32 * 1024 * 1024}))                                     \
     M(tiflash_raft_entry_size,                                                                                                      \
       "Bucketed histogram entry size",                                                                                              \
       Histogram,                                                                                                                    \
@@ -461,6 +466,20 @@ namespace DB
       F(type_raft_snapshot, {{"type", "raft_snapshot"}}),                                                                           \
       F(type_dt_on_disk, {{"type", "dt_on_disk"}}),                                                                                 \
       F(type_dt_total, {{"type", "dt_total"}}))                                                                                     \
+    M(tiflash_raft_throughput_bytes,                                                                                                \
+      "Raft handled bytes in global",                                                                                               \
+      Counter,                                                                                                                      \
+      F(type_write, {{"type", "write"}}),                                                                                           \
+      F(type_write_committed, {{"type", "write_committed"}}))                                                                       \
+    M(tiflash_raft_write_flow_bytes,                                                                                                \
+      "Bucketed histogram of bytes for each write",                                                                                 \
+      Histogram,                                                                                                                    \
+      F(type_ingest_uncommitted, {{"type", "ingest_uncommitted"}}, ExpBucketsWithRange{16, 4, 64 * 1024}),                          \
+      F(type_snapshot_uncommitted, {{"type", "snapshot_uncommitted"}}, ExpBucketsWithRange{16, 4, 1024 * 1024}),                    \
+      F(type_write_committed, {{"type", "write_committed"}}, ExpBucketsWithRange{16, 2, 1024 * 1024}),                              \
+      F(type_big_write_to_region,                                                                                                   \
+        {{"type", "big_write_to_region"}},                                                                                          \
+        ExpBucketsWithRange{RAFT_REGION_BIG_WRITE_THRES, 4, RAFT_REGION_BIG_WRITE_MAX}))                                            \
     M(tiflash_raft_snapshot_total_bytes,                                                                                            \
       "Bucketed snapshot total size",                                                                                               \
       Histogram,                                                                                                                    \
@@ -752,6 +771,25 @@ struct ExpBuckets
     const double base;
     const size_t size;
 
+    constexpr ExpBuckets(const double start_, const double base_, const size_t size_)
+        : start(start_)
+        , base(base_)
+        , size(size_)
+    {
+#ifndef NDEBUG
+        // Checks under debug mode
+        // Check the base
+        RUNTIME_CHECK_MSG(base > 1.0, "incorrect base for ExpBuckets, start={} base={} size={}", start, base, size);
+        // Too many buckets will bring more network flow by transferring metrics
+        RUNTIME_CHECK_MSG(
+            size <= 50,
+            "too many metrics buckets, reconsider step/unit, start={} base={} size={}",
+            start,
+            base,
+            size);
+#endif
+    }
+
     // NOLINTNEXTLINE(google-explicit-constructor)
     inline operator prometheus::Histogram::BucketBoundaries() const &&
     {
@@ -763,6 +801,54 @@ struct ExpBuckets
         });
         return buckets;
     }
+};
+
+/// Buckets with boundaries [start * base^0, start * base^1, ..., start * base^x]
+/// such x that start * base^(x-1) < end, and start * base^x >= end.
+struct ExpBucketsWithRange
+{
+    static size_t getSize(double l, double r, double b)
+    {
+        return static_cast<size_t>(::ceil(::log(r / l) / ::log(b))) + 1;
+    }
+
+    ExpBucketsWithRange(double start_, double base_, double end_)
+        : start(start_)
+        , base(base_)
+        , size(ExpBucketsWithRange::getSize(start_, end_, base_))
+    {
+#ifndef NDEBUG
+        // Check the base
+        RUNTIME_CHECK_MSG(
+            base > 1.0,
+            "incorrect base for ExpBucketsWithRange, start={} base={} end={}",
+            start,
+            base,
+            end_);
+        RUNTIME_CHECK_MSG(
+            start_ < end_,
+            "incorrect start/end for ExpBucketsWithRange, start={} base={} end={}",
+            start,
+            base,
+            end_);
+#endif
+    }
+    // NOLINTNEXTLINE(google-explicit-constructor)
+    inline operator prometheus::Histogram::BucketBoundaries() const &&
+    {
+        prometheus::Histogram::BucketBoundaries buckets(size);
+        double current = start;
+        std::for_each(buckets.begin(), buckets.end(), [&](auto & e) {
+            e = current;
+            current *= base;
+        });
+        return buckets;
+    }
+
+private:
+    const double start;
+    const double base;
+    const size_t size;
 };
 
 // Buckets with same width

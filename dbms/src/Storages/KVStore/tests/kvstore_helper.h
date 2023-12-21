@@ -102,7 +102,11 @@ public:
     }
 
     void TearDown() override { proxy_instance->clear(); }
-
+    
+    static RegionPtr splitRegion(const RegionPtr & region, RegionMeta && meta)
+    {
+        return region->splitInto(std::move(meta));
+    }
 protected:
     KVStore & getKVS() { return *kvstore; }
     KVStore & reloadKVSFromDisk()
