@@ -20,10 +20,16 @@
 namespace DB
 {
 
-BlockAccessCipherStreamPtr FileEncryptionInfo::createCipherStream(const EncryptionPath & encryption_path) const
+BlockAccessCipherStreamPtr FileEncryptionInfo::createCipherStream(
+    const EncryptionPath & encryption_path,
+    bool is_new_created_info) const
 {
-    RUNTIME_CHECK_MSG(res != FileEncryptionRes::Error, "Encryption info is not available.");
-    if (res != FileEncryptionRes::Ok && (method == EncryptionMethod::Plaintext || method == EncryptionMethod::Unknown))
+    // If the encryption info is newly created, we should check the res to make sure the encryption is enabled.
+    if (is_new_created_info && res == FileEncryptionRes::Disabled)
+        return nullptr;
+
+    RUNTIME_CHECK_MSG(res != FileEncryptionRes::Error, "Failed to get encryption info.");
+    if (method == EncryptionMethod::Plaintext || method == EncryptionMethod::Unknown)
         return nullptr;
 
     const String & encryption_key = *key;

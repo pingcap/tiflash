@@ -71,7 +71,7 @@ WritableFilePtr FileProvider::newWritableFile(
     if (encryption_enabled && create_new_encryption_info_)
     {
         auto encryption_info = key_manager->newFile(encryption_path_.full_path);
-        if (auto stream = encryption_info.createCipherStream(encryption_path_); stream)
+        if (auto stream = encryption_info.createCipherStream(encryption_path_, true); stream)
         {
             file = std::make_shared<EncryptedWritableFile>(file, stream);
         }
@@ -107,7 +107,7 @@ WriteReadableFilePtr FileProvider::newWriteReadableFile(
     if (encryption_enabled && create_new_encryption_info_)
     {
         auto encryption_info = key_manager->newFile(encryption_path_.full_path);
-        if (auto stream = encryption_info.createCipherStream(encryption_path_); stream)
+        if (auto stream = encryption_info.createCipherStream(encryption_path_, true); stream)
         {
             file = std::make_shared<EncryptedWriteReadableFile>(file, stream);
         }

@@ -85,7 +85,9 @@ struct FileEncryptionInfo : private FileEncryptionInfoRaw
         return *this;
     }
 
-    BlockAccessCipherStreamPtr createCipherStream(const EncryptionPath & encryption_path) const;
+    BlockAccessCipherStreamPtr createCipherStream(
+        const EncryptionPath & encryption_path,
+        bool is_new_created_info = false) const;
 
     bool isValid() const { return (res == FileEncryptionRes::Ok || res == FileEncryptionRes::Disabled); }
     // FileEncryptionRes::Disabled means encryption feature has never been enabled, so no file will be encrypted.
