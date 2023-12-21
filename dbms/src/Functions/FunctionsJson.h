@@ -1029,10 +1029,10 @@ public:
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         const auto & from = block.getByPosition(arguments[0]);
-        if (from.type->onlyNull())
+        if (from.column->onlyNull())
         {
-            auto only_null_column = from.column;
-            block.getByPosition(result).column = std::move(only_null_column);
+            block.getByPosition(result).column
+                = block.getByPosition(result).type->createColumnConst(block.rows(), Null());
             return;
         }
 
@@ -1048,14 +1048,13 @@ public:
         // In raw function test, input_tidb_tp/output_tidb_tp is nullptr.
         if (collator && collator->isBinary())
         {
-            auto tmp_null_map = ColumnUInt8::create(0, 0);
             if (unlikely(input_tidb_tp == nullptr))
             {
                 doExecuteForBinary<false, false>(
                     data_to,
                     offsets_to,
                     input_source,
-                    tmp_null_map->getData(),
+                    {},
                     TiDB::TypeVarchar,
                     -1,
                     block.rows());
@@ -1080,7 +1079,7 @@ public:
                         data_to,
                         offsets_to,
                         input_source,
-                        tmp_null_map->getData(),
+                        {},
                         input_tidb_tp->tp(),
                         input_tidb_tp->flen(),
                         block.rows());
@@ -1092,7 +1091,7 @@ public:
                     data_to,
                     offsets_to,
                     input_source,
-                    tmp_null_map->getData(),
+                    {},
                     input_tidb_tp->tp(),
                     input_tidb_tp->flen(),
                     block.rows());
@@ -1112,13 +1111,7 @@ public:
             }
             else
             {
-                auto tmp_null_map = ColumnUInt8::create(0, 0);
-                doExecuteForParsingJson<false>(
-                    data_to,
-                    offsets_to,
-                    input_source,
-                    tmp_null_map->getData(),
-                    block.rows());
+                doExecuteForParsingJson<false>(data_to, offsets_to, input_source, {}, block.rows());
             }
         }
         else
