@@ -1121,6 +1121,9 @@ void SchemaBuilder<Getter, NameMapper>::applyCreateStorageInstance(
         table_info->id,
         stmt);
 
+    // If "CREATE DATABASE" is executed in TiFlash after user has executed "DROP DATABASE"
+    // in TiDB, then TiFlash may not create the IDatabase instance. Make sure we can access
+    // to the IDatabase when creating IStorage.
     const auto database_mapped_name = name_mapper.mapDatabaseName(database_id, keyspace_id);
     if (!context.isDatabaseExist(database_mapped_name))
     {
