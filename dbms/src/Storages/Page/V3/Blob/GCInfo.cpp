@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@
 template <>
 struct fmt::formatter<DB::PS::V3::BlobFileGCInfo>
 {
-    static constexpr auto parse(format_parse_context & ctx) -> decltype(ctx.begin())
+    static constexpr auto parse(format_parse_context & ctx)
     {
         const auto * it = ctx.begin();
         const auto * end = ctx.end();
@@ -31,15 +31,15 @@ struct fmt::formatter<DB::PS::V3::BlobFileGCInfo>
     }
 
     template <typename FormatContext>
-    auto format(const DB::PS::V3::BlobFileGCInfo & i, FormatContext & ctx) const -> decltype(ctx.out())
+    auto format(const DB::PS::V3::BlobFileGCInfo & i, FormatContext & ctx) const
     {
-        return format_to(ctx.out(), "<id:{} rate:{:.2f}>", i.blob_id, i.valid_rate);
+        return fmt::format_to(ctx.out(), "<id:{} rate:{:.2f}>", i.blob_id, i.valid_rate);
     }
 };
 template <>
 struct fmt::formatter<DB::PS::V3::BlobFileTruncateInfo>
 {
-    static constexpr auto parse(format_parse_context & ctx) -> decltype(ctx.begin())
+    static constexpr auto parse(format_parse_context & ctx)
     {
         const auto * it = ctx.begin();
         const auto * end = ctx.end();
@@ -49,9 +49,9 @@ struct fmt::formatter<DB::PS::V3::BlobFileTruncateInfo>
     }
 
     template <typename FormatContext>
-    auto format(const DB::PS::V3::BlobFileTruncateInfo & i, FormatContext & ctx) const -> decltype(ctx.out())
+    auto format(const DB::PS::V3::BlobFileTruncateInfo & i, FormatContext & ctx) const
     {
-        return format_to(ctx.out(), "<id:{} origin:{} truncate:{} rate:{:.2f}>", i.blob_id, i.origin_size, i.truncated_size, i.valid_rate);
+        return fmt::format_to(ctx.out(), "<id:{} origin:{} truncate:{} rate:{:.2f}>", i.blob_id, i.origin_size, i.truncated_size, i.valid_rate);
     }
 };
 
@@ -89,7 +89,7 @@ String BlobStoreGCInfo::toTypeString(const Type type_index) const
                 fb.fmtAppend("{}", i);
             },
             ", ")
-        .append("]}}");
+        .append("]}");
     return fmt_buf.toString();
 }
 
@@ -99,7 +99,7 @@ String BlobStoreGCInfo::toTypeTruncateString(const Type type_index) const
         return fmt::format("{{{}: [null]}}", magic_enum::enum_name(type_index));
 
     FmtBuffer fmt_buf;
-    fmt_buf.fmtAppend("{{{}: [", type_index)
+    fmt_buf.fmtAppend("{{{}: [", magic_enum::enum_name(type_index))
         .joinStr(
             blob_gc_truncate_info.begin(),
             blob_gc_truncate_info.end(),
@@ -107,7 +107,7 @@ String BlobStoreGCInfo::toTypeTruncateString(const Type type_index) const
                 fb.fmtAppend("{}", i);
             },
             ", ")
-        .append("]}}");
+        .append("]}");
     return fmt_buf.toString();
 }
 } // namespace DB::PS::V3

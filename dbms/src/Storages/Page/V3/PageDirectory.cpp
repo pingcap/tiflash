@@ -1569,7 +1569,7 @@ bool PageDirectory::tryDumpSnapshot(const ReadLimiterPtr & read_limiter, const W
     auto edit_from_disk = collapsed_dir->dumpSnapshotToEdit();
     files_snap.num_records = edit_from_disk.size();
     files_snap.read_elapsed_ms = watch.elapsedMilliseconds();
-    bool done_any_io = wal->saveSnapshot(std::move(files_snap), Trait::Serializer::serializeTo(edit_from_disk), write_limiter);
+    bool done_any_io = wal->saveSnapshot(std::move(files_snap), ser::serializeTo(edit_from_disk), write_limiter);
     return done_any_io;
 }
 
