@@ -286,6 +286,7 @@ void KVStore::onSnapshot(
             manage_lock.index.add(new_region);
         }
 
+        GET_METRIC(tiflash_raft_write_flow_bytes, type_snapshot_uncommitted).Observe(new_region->dataSize());
         persistRegion(*new_region, &region_lock, PersistRegionReason::ApplySnapshotCurRegion, "");
 
         tmt.getRegionTable().shrinkRegionRange(*new_region);
