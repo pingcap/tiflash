@@ -1583,7 +1583,7 @@ SegmentReadTasks DeltaMergeStore::getReadTasksByRanges(
     }
 
     auto tracing_logger = log->getChild(getLogTracingId(dm_context));
-    LOG_DEBUG(
+    LOG_INFO(
         tracing_logger,
         "Segment read tasks build done, cost={}ms sorted_ranges={} n_tasks_before_split={} n_tasks_final={} n_ranges_final={}",
         watch.elapsedMilliseconds(),
