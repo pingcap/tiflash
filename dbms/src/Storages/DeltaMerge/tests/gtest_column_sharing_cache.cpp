@@ -50,7 +50,7 @@ TEST(ColumnSharingCacheTest, AddAndGet)
     ColumnSharingCache cache;
 
     auto col = createColumn(8);
-    cache.add(1, 8, col);
+    cache.add(1, 8, col, std::numeric_limits<UInt64>::max());
 
     ColumnPtr col1;
     auto st = cache.get(1, 8, 8 * TEST_PACK_ROWS, col1, TEST_DATA_TYPE);
@@ -75,7 +75,7 @@ TEST(ColumnSharingCacheTest, AddAndGet)
     ASSERT_EQ(col4, nullptr);
 
     auto col5 = createColumn(7);
-    cache.add(1, 7, col5);
+    cache.add(1, 7, col5, std::numeric_limits<UInt64>::max());
     ColumnPtr col6;
     st = cache.get(1, 8, 8 * TEST_PACK_ROWS, col6, TEST_DATA_TYPE);
     ASSERT_EQ(st, ColumnCacheStatus::GET_HIT);
@@ -83,7 +83,7 @@ TEST(ColumnSharingCacheTest, AddAndGet)
     compareColumn(col6, col, col6->size());
 
     auto col7 = createColumn(9);
-    cache.add(1, 9, col7);
+    cache.add(1, 9, col7, std::numeric_limits<UInt64>::max());
     ColumnPtr col8;
     st = cache.get(1, 8, 8 * TEST_PACK_ROWS, col8, TEST_DATA_TYPE);
     ASSERT_EQ(st, ColumnCacheStatus::GET_COPY);
@@ -96,13 +96,13 @@ TEST(ColumnSharingCacheTest, Del)
     ColumnSharingCache cache;
 
     auto col1 = createColumn(8);
-    cache.add(1, 8, col1);
+    cache.add(1, 8, col1, std::numeric_limits<UInt64>::max());
 
     auto col2 = createColumn(8);
-    cache.add(9, 8, col2);
+    cache.add(9, 8, col2, std::numeric_limits<UInt64>::max());
 
     auto col3 = createColumn(8);
-    cache.add(17, 8, col3);
+    cache.add(17, 8, col3, std::numeric_limits<UInt64>::max());
 
     cache.del(10);
 
