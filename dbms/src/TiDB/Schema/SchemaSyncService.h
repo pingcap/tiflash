@@ -46,10 +46,10 @@ private:
 
     struct GCContext
     {
-        Timestamp last_gc_safe_point = 0;
+        Timestamp last_gc_safepoint = 0;
     } gc_context;
 
-    bool gc(Timestamp gc_safe_point);
+    bool gc(Timestamp gc_safepoint);
 
 private:
     Context & context;
