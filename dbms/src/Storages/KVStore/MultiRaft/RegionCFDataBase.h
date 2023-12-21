@@ -60,7 +60,7 @@ struct RegionCFDataBase
 
     size_t getSize() const;
 
-    RegionCFDataBase() {}
+    RegionCFDataBase() = default;
     RegionCFDataBase(RegionCFDataBase && region);
     RegionCFDataBase & operator=(RegionCFDataBase && region);
 
