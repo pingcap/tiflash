@@ -992,7 +992,7 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
     SegmentReadTasks tasks = getReadTasksByRanges(*dm_context, sorted_ranges, num_streams, read_segments, /*try_split_task =*/!enable_read_thread);
     auto log_tracing_id = getLogTracingId(*dm_context);
     auto tracing_logger = log->getChild(log_tracing_id);
-    LOG_DEBUG(tracing_logger,
+    LOG_INFO(tracing_logger,
               "Read create segment snapshot done, keep_order={} dt_enable_read_thread={} enable_read_thread={}",
               keep_order,
               db_context.getSettingsRef().dt_enable_read_thread,
