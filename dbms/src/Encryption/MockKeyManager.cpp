@@ -19,7 +19,6 @@
 #include <common/logger_useful.h>
 #include <fmt/core.h>
 
-#include <iostream>
 
 namespace DB
 {
@@ -86,7 +85,6 @@ void MockKeyManager::deleteFile(const String & fname, bool throw_on_error)
 
 void MockKeyManager::linkFile(const String & src_fname, const String & dst_fname)
 {
-    std::ignore = dst_fname;
     if (encryption_enabled)
     {
         if (!fileExist(src_fname))
@@ -120,7 +118,6 @@ bool MockKeyManager::fileExist(const String & fname) const
 
 FileEncryptionInfo MockKeyManager::getFile(const String & fname)
 {
-    std::ignore = fname;
     if (encryption_enabled)
     {
         auto * file_key = RawCppString::New(key);

@@ -21,7 +21,7 @@
 #if USE_GM_SSL
 #include <gmssl/sm4.h>
 #endif
-#include <Storages/KVStore/FFI/FileEncryption.h>
+#include <RaftStoreProxyFFI/EncryptionFFI.h>
 
 
 namespace DB::Encryption
