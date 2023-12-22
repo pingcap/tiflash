@@ -44,7 +44,7 @@ MinTSOScheduler::MinTSOScheduler(UInt64 soft_limit, UInt64 hard_limit, UInt64 ac
     }
     if (isDisabled())
     {
-        LOG_INFO(log, "MinTSOScheduler is disabled!");
+        LOG_WARNING(log, "MinTSOScheduler is disabled!");
     }
     else
     {
@@ -52,7 +52,7 @@ MinTSOScheduler::MinTSOScheduler(UInt64 soft_limit, UInt64 hard_limit, UInt64 ac
         {
             thread_hard_limit = 10000;
             thread_soft_limit = 5000;
-            LOG_INFO(log, "hard limit {} should > soft limit {} and under maximum {}, so MinTSOScheduler set them as {}, {} by default, and active_set_soft_limit is {}.", hard_limit, soft_limit, OS_THREAD_SOFT_LIMIT, thread_hard_limit, thread_soft_limit, active_set_soft_limit);
+            LOG_WARNING(log, "hard limit {} should > soft limit {} and under maximum {}, so MinTSOScheduler set them as {}, {} by default, and active_set_soft_limit is {}.", hard_limit, soft_limit, OS_THREAD_SOFT_LIMIT, thread_hard_limit, thread_soft_limit, active_set_soft_limit);
         }
         else
         {
@@ -203,7 +203,7 @@ bool MinTSOScheduler::scheduleImp(const UInt64 tso, const MPPQueryTaskSetPtr & q
         }
         GET_METRIC(tiflash_task_scheduler, type_active_queries_count).Set(active_set.size());
         GET_METRIC(tiflash_task_scheduler, type_estimated_thread_usage).Set(estimated_thread_usage);
-        LOG_INFO(log, "{} is scheduled (active set size = {}) due to available threads {}, after applied for {} threads, used {} of the thread {} limit {}.", schedule_entry.getMPPTaskId().toString(), active_set.size(), isWaiting ? "from the waiting set" : "directly", needed_threads, estimated_thread_usage, min_tso == tso ? "hard" : "soft", min_tso == tso ? thread_hard_limit : thread_soft_limit);
+        LOG_DEBUG(log, "{} is scheduled (active set size = {}) due to available threads {}, after applied for {} threads, used {} of the thread {} limit {}.", schedule_entry.getMPPTaskId().toString(), active_set.size(), isWaiting ? "from the waiting set" : "directly", needed_threads, estimated_thread_usage, min_tso == tso ? "hard" : "soft", min_tso == tso ? thread_hard_limit : thread_soft_limit);
         return true;
     }
     else
@@ -235,7 +235,14 @@ bool MinTSOScheduler::scheduleImp(const UInt64 tso, const MPPQueryTaskSetPtr & q
             GET_METRIC(tiflash_task_scheduler, type_waiting_queries_count).Set(waiting_set.size());
             GET_METRIC(tiflash_task_scheduler, type_waiting_tasks_count).Increment();
         }
-        LOG_INFO(log, "threads are unavailable for the query {} or active set is full (size =  {}), need {}, but used {} of the thread soft limit {},{} waiting set size = {}", tso, active_set.size(), needed_threads, estimated_thread_usage, thread_soft_limit, isWaiting ? "" : " put into", waiting_set.size());
+        LOG_INFO(log, "Resource temporary not available for start_ts {}(is first schedule: {}), available threads count are {}, available active set size = {}, "
+                      "required threads count are {}, waiting set size = {}",
+                 tso,
+                 !isWaiting,
+                 thread_soft_limit - estimated_thread_usage,
+                 active_set_soft_limit - active_set.size(),
+                 needed_threads,
+                 waiting_set.size());
         return false;
     }
 }

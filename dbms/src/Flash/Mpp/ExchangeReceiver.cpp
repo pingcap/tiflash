@@ -550,7 +550,7 @@ void ExchangeReceiverBase<RPCContext>::reactor(const std::vector<Request> & asyn
             if (handler->finished())
             {
                 --alive_async_connections;
-                connectionDone(handler->meetError(), handler->getErrMsg(), handler->getLog());
+                connectionDone(handler->meetError(), handler->getErrMsg());
             }
         }
         else
@@ -650,7 +650,7 @@ void ExchangeReceiverBase<RPCContext>::readLoop(const Request & req)
         meet_error = true;
         local_err_msg = getCurrentExceptionMessage(false);
     }
-    connectionDone(meet_error, local_err_msg, log);
+    connectionDone(meet_error, local_err_msg);
 }
 
 template <typename RPCContext>
@@ -804,8 +804,7 @@ String ExchangeReceiverBase<RPCContext>::getStatusString()
 template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::connectionDone(
     bool meet_error,
-    const String & local_err_msg,
-    const LoggerPtr & log)
+    const String & local_err_msg)
 {
     Int32 copy_live_conn = -1;
     {
@@ -819,22 +818,16 @@ void ExchangeReceiverBase<RPCContext>::connectionDone(
         }
         copy_live_conn = --live_connections;
     }
-    LOG_DEBUG(
-        log,
-        "connection end. meet error: {}, err msg: {}, current alive connections: {}",
-        meet_error,
-        local_err_msg,
-        copy_live_conn);
 
-    if (copy_live_conn == 0)
-    {
-        LOG_DEBUG(log, "All threads end in ExchangeReceiver");
-    }
-    else if (copy_live_conn < 0)
+    if (copy_live_conn < 0)
         throw Exception("live_connections should not be less than 0!");
 
     if (meet_error || copy_live_conn == 0)
+    {
+        auto log_level = meet_error ? Poco::Message::PRIO_WARNING : Poco::Message::PRIO_INFORMATION;
+        LOG_IMPL(exc_log, log_level, "Finish receiver channels, meet error: {}, error message: {}", meet_error, local_err_msg);
         finishAllMsgChannels();
+    }
 }
 
 template <typename RPCContext>
