@@ -147,11 +147,16 @@ public:
             BlockInputStreamPtr stream;
             try
             {
-                auto tasks = prepareMPPTasks(
-                    context.scan("test_db", "l_table")
-                        .aggregation({Max(col("l_table.s"))}, {col("l_table.s")})
-                        .project({col("max(l_table.s)"), col("l_table.s")}),
-                    properties);
+                QueryTasks tasks;
+                {
+                    std::lock_guard lock(mu);
+                    auto builder = context.scan("test_db", "l_table")
+                                       .aggregation({Max(col("l_table.s"))}, {col("l_table.s")})
+                                       .project({col("max(l_table.s)"), col("l_table.s")});
+                    tasks = builder.buildMPPTasks(context, properties);
+                    for (int i = test_meta.context_idx; i < TiFlashTestEnv::globalContextSize(); ++i)
+                        TiFlashTestEnv::getGlobalContext(i).setCancelTest();
+                }
                 executeProblematicMPPTasks(tasks, properties, stream);
             }
             catch (...)
