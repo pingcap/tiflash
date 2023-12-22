@@ -74,7 +74,7 @@ DMFileBlockInputStreamPtr DMFileBlockInputStreamBuilder::build(
         shared_column_data_mem_tracker != nullptr
         && std::cmp_greater_equal(shared_column_data_mem_tracker->get(), max_sharing_column_bytes_for_all))
     {
-        // Memory limitation.
+        // The memory used reaches the limitation by running queries, disable the data sharing for this DMFile
         max_sharing_column_count = 0;
         GET_METRIC(tiflash_storage_read_thread_counter, type_add_cache_total_bytes_limit).Increment();
     }
