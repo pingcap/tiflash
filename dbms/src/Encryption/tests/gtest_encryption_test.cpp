@@ -80,8 +80,7 @@ public:
         std::string iv_str(reinterpret_cast<const char *>(iv), DB::Encryption::blockSize(method));
         KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(method, key_str, iv_str);
         auto encryption_info = key_manager->newFile("encryption");
-        BlockAccessCipherStreamPtr cipher_stream
-            = AESCTRCipherStream::createCipherStream(encryption_info, EncryptionPath("encryption", ""));
+        BlockAccessCipherStreamPtr cipher_stream = encryption_info.createCipherStream(EncryptionPath("encryption", ""));
 
         size_t data_size = end - start;
         // Allocate exact size. AESCTRCipherStream should make sure there will be
@@ -325,8 +324,7 @@ try
     std::string iv_str(reinterpret_cast<const char *>(test::IV_RANDOM), 16);
     KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(EncryptionMethod::Aes128Ctr, key_str, iv_str);
     auto encryption_info = key_manager->newFile("encryption");
-    BlockAccessCipherStreamPtr cipher_stream
-        = AESCTRCipherStream::createCipherStream(encryption_info, EncryptionPath("encryption", ""));
+    BlockAccessCipherStreamPtr cipher_stream = encryption_info.createCipherStream(EncryptionPath("encryption", ""));
 
     WriteReadableFilePtr enc_file = std::make_shared<EncryptedWriteReadableFile>(file, cipher_stream);
 
@@ -370,8 +368,7 @@ public:
         std::string iv_str(reinterpret_cast<const char *>(test::IV_RANDOM), 16);
         KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(EncryptionMethod::Aes128Ctr, key_str, iv_str);
         auto encryption_info = key_manager->newFile("encryption");
-        BlockAccessCipherStreamPtr cipher_stream
-            = AESCTRCipherStream::createCipherStream(encryption_info, EncryptionPath("encryption", ""));
+        BlockAccessCipherStreamPtr cipher_stream = encryption_info.createCipherStream(EncryptionPath("encryption", ""));
 
         auto enc_file = std::make_shared<E>(file, cipher_stream);
 
@@ -486,8 +483,7 @@ try
     std::string iv_str(reinterpret_cast<const char *>(test::IV_RANDOM), 16);
     KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(EncryptionMethod::Aes128Ctr, key_str, iv_str);
     auto encryption_info = key_manager->newFile("encryption");
-    BlockAccessCipherStreamPtr cipher_stream
-        = AESCTRCipherStream::createCipherStream(encryption_info, EncryptionPath("encryption", ""));
+    BlockAccessCipherStreamPtr cipher_stream = encryption_info.createCipherStream(EncryptionPath("encryption", ""));
 
     EncryptedWritableFile enc_file(file, cipher_stream);
 
