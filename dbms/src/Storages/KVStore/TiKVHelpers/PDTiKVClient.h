@@ -26,6 +26,7 @@
 #include <pingcap/pd/IClient.h>
 #pragma GCC diagnostic pop
 
+#include <Common/Exception.h>
 #include <Core/Types.h>
 #include <Storages/KVStore/Types.h>
 #include <common/logger_useful.h>
@@ -64,7 +65,35 @@ struct PDClientHelper
 {
     static constexpr int get_safepoint_maxtime = 120000; // 120s. waiting pd recover.
 
+    // 5s timeout for getting TSO
+    static constexpr int get_tso_maxtime = 5'000;
+
     static bool enable_safepoint_v2;
+
+    static UInt64 getTSO(const pingcap::pd::ClientPtr & pd_client, size_t timeout_ms)
+    {
+        pingcap::kv::Backoffer bo(timeout_ms);
+        while (true)
+        {
+            try
+            {
+                return pd_client->getTS();
+            }
+            catch (pingcap::Exception & e)
+            {
+                try
+                {
+                    bo.backoff(pingcap::kv::boPDRPC, e);
+                }
+                catch (pingcap::Exception & e)
+                {
+                    // The backoff meets deadline exceeded
+                    // Wrap the exception by DB::Exception to get the stacktrack
+                    throw DB::Exception(e);
+                }
+            }
+        }
+    }
 
     static Timestamp getGCSafePointWithRetry(
         const pingcap::pd::ClientPtr & pd_client,
@@ -121,7 +150,7 @@ struct PDClientHelper
             // In case we cost too much to update safe point from PD.
             auto now = std::chrono::steady_clock::now();
 
-            auto ks_gc_info = get_ks_gc_sp(keyspace_id);
+            auto ks_gc_info = getKeyspaceGCSafepoint(keyspace_id);
             const auto duration
                 = std::chrono::duration_cast<std::chrono::seconds>(now - ks_gc_info.ks_gc_sp_update_time.load());
             const auto min_interval
@@ -138,7 +167,7 @@ struct PDClientHelper
             try
             {
                 auto ks_gc_sp = pd_client->getGCSafePointV2(keyspace_id);
-                update_ks_gc_sp_map(keyspace_id, ks_gc_sp);
+                updateKeyspaceGCSafepointMap(keyspace_id, ks_gc_sp);
                 return ks_gc_sp;
             }
             catch (pingcap::Exception & e)
@@ -148,22 +177,22 @@ struct PDClientHelper
         }
     }
 
-    static void update_ks_gc_sp_map(KeyspaceID keyspace_id, Timestamp ks_gc_sp)
+    static void updateKeyspaceGCSafepointMap(KeyspaceID keyspace_id, Timestamp ks_gc_sp)
     {
         std::unique_lock<std::shared_mutex> lock(ks_gc_sp_mutex);
-        KeyspaceGCInfo newKeyspaceGCInfo;
-        newKeyspaceGCInfo.ks_gc_sp = ks_gc_sp;
-        newKeyspaceGCInfo.ks_gc_sp_update_time = std::chrono::steady_clock::now();
-        ks_gc_sp_map[keyspace_id] = newKeyspaceGCInfo;
+        KeyspaceGCInfo new_keyspace_gc_info;
+        new_keyspace_gc_info.ks_gc_sp = ks_gc_sp;
+        new_keyspace_gc_info.ks_gc_sp_update_time = std::chrono::steady_clock::now();
+        ks_gc_sp_map[keyspace_id] = new_keyspace_gc_info;
     }
 
-    static KeyspaceGCInfo get_ks_gc_sp(KeyspaceID keyspace_id)
+    static KeyspaceGCInfo getKeyspaceGCSafepoint(KeyspaceID keyspace_id)
     {
         std::shared_lock<std::shared_mutex> lock(ks_gc_sp_mutex);
         return ks_gc_sp_map[keyspace_id];
     }
 
-    static void remove_ks_gc_sp(KeyspaceID keyspace_id)
+    static void removeKeyspaceGCSafepoint(KeyspaceID keyspace_id)
     {
         std::unique_lock<std::shared_mutex> lock(ks_gc_sp_mutex);
         ks_gc_sp_map.erase(keyspace_id);
