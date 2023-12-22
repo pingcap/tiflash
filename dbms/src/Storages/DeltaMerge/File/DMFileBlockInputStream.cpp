@@ -63,7 +63,7 @@ DMFileBlockInputStreamPtr DMFileBlockInputStreamBuilder::build(const DMFilePtr &
     }
     else if (
         shared_column_data_mem_tracker != nullptr
-        && std::cmp_greater_equal(shared_column_data_mem_tracker->get(), max_sharing_column_bytes_for_all))
+        && shared_column_data_mem_tracker->get() >= static_cast<Int64>(max_sharing_column_bytes_for_all))
     {
         // The memory used reaches the limitation by running queries, disable the data sharing for this DMFile
         max_sharing_column_count = 0;
