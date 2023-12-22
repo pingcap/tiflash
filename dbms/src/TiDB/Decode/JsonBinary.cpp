@@ -795,10 +795,10 @@ String JsonBinary::unquoteString(const StringRef & ref)
     return ref.toString();
 }
 
-std::vector<JsonBinary> JsonBinary::extract(std::vector<JsonPathExprRefContainerPtr> & path_expr_container_vec)
+std::vector<JsonBinary> JsonBinary::extract(const std::vector<JsonPathExprRefContainerPtr> & path_expr_container_vec)
 {
     std::vector<JsonBinary> extracted_json_binary_vec;
-    for (auto & path_expr_container : path_expr_container_vec)
+    for (const auto & path_expr_container : path_expr_container_vec)
     {
         DupCheckSet dup_check_set = std::make_unique<std::unordered_set<const char *>>();
         const auto * first_path_ref = path_expr_container->firstRef();
@@ -808,7 +808,7 @@ std::vector<JsonBinary> JsonBinary::extract(std::vector<JsonPathExprRefContainer
 }
 
 bool JsonBinary::extract(
-    std::vector<JsonPathExprRefContainerPtr> & path_expr_container_vec,
+    const std::vector<JsonPathExprRefContainerPtr> & path_expr_container_vec,
     JsonBinaryWriteBuffer & write_buffer)
 {
     auto extracted_json_binary_vec = extract(path_expr_container_vec);

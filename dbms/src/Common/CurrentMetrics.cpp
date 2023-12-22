@@ -22,6 +22,7 @@
     M(OpenFileForReadWrite)                     \
     M(MemoryTracking)                           \
     M(MemoryTrackingInBackgroundProcessingPool) \
+    M(MemoryTrackingKVStore)                    \
     M(LogicalCPUCores)                          \
     M(MemoryCapacity)                           \
     M(PSMVCCNumSnapshots)                       \
