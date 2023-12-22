@@ -16,14 +16,11 @@
 
 #include <Encryption/EncryptionPath.h>
 
-#include <string>
 
 namespace DB
 {
 enum class EncryptionMethod : uint8_t;
 struct FileEncryptionInfo;
-
-size_t keySize(EncryptionMethod method);
 
 class KeyManager
 {

@@ -147,11 +147,12 @@ public:
             BlockInputStreamPtr stream;
             try
             {
-                auto tasks = prepareMPPTasks(
-                    context.scan("test_db", "l_table")
+                std::function<DAGRequestBuilder()> gen_builder = [&]() {
+                    return context.scan("test_db", "l_table")
                         .aggregation({Max(col("l_table.s"))}, {col("l_table.s")})
-                        .project({col("max(l_table.s)"), col("l_table.s")}),
-                    properties);
+                        .project({col("max(l_table.s)"), col("l_table.s")});
+                };
+                QueryTasks tasks = prepareMPPTasks(gen_builder, properties);
                 executeProblematicMPPTasks(tasks, properties, stream);
             }
             catch (...)
@@ -985,7 +986,7 @@ try
             addOneQuery(i + 10, running_queries, gather_ids);
         }
         using namespace std::literals::chrono_literals;
-        std::this_thread::sleep_for(2s);
+        std::this_thread::sleep_for(4s);
         ASSERT_TRUE(
             TiFlashMetrics::instance()
                 .tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_active_queries_count, "")
@@ -997,7 +998,7 @@ try
                 .Value()
             == 0);
         addOneQuery(1, running_queries, gather_ids);
-        std::this_thread::sleep_for(2s);
+        std::this_thread::sleep_for(4s);
         ASSERT_TRUE(
             TiFlashMetrics::instance()
                 .tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_active_queries_count, "")
@@ -1020,7 +1021,7 @@ try
             addOneQuery((i + 1) * 20, running_queries, gather_ids);
         }
         using namespace std::literals::chrono_literals;
-        std::this_thread::sleep_for(2s);
+        std::this_thread::sleep_for(4s);
         ASSERT_TRUE(
             TiFlashMetrics::instance()
                 .tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_active_queries_count, "")
@@ -1032,7 +1033,7 @@ try
                 .Value()
             == 0);
         addOneQuery(30, running_queries, gather_ids);
-        std::this_thread::sleep_for(2s);
+        std::this_thread::sleep_for(4s);
         ASSERT_TRUE(
             TiFlashMetrics::instance()
                 .tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_active_queries_count, "")
@@ -1046,7 +1047,7 @@ try
         /// cancel 1 running query
         MockComputeServerManager::instance().cancelGather(gather_ids[0]);
         running_queries[0].join();
-        std::this_thread::sleep_for(2s);
+        std::this_thread::sleep_for(4s);
         ASSERT_TRUE(
             TiFlashMetrics::instance()
                 .tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_active_queries_count, "")
@@ -1103,7 +1104,7 @@ try
         single_gather_properties.gather_id = 1;
         addOneGather(running_queries, gather_ids, single_gather_properties);
         using namespace std::literals::chrono_literals;
-        std::this_thread::sleep_for(2s);
+        std::this_thread::sleep_for(4s);
         /// 6 gathers, but two query
         ASSERT_TRUE(
             TiFlashMetrics::instance()

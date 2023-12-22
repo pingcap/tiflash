@@ -389,12 +389,12 @@ JsonBinary JsonBinary::getArrayElement(size_t index) const
     return getValueEntry(HEADER_SIZE + index * VALUE_ENTRY_SIZE);
 }
 
-String JsonBinary::getObjectKey(size_t index) const
+StringRef JsonBinary::getObjectKey(size_t index) const
 {
     size_t cursor = HEADER_SIZE + index * KEY_ENTRY_SIZE;
     auto key_offset = decodeNumeric<UInt32>(cursor, data);
     auto key_length = decodeNumeric<UInt16>(cursor, data);
-    return String(data.data + key_offset, key_length);
+    return {data.data + key_offset, key_length};
 }
 
 JsonBinary JsonBinary::getObjectValue(size_t index) const
@@ -795,18 +795,23 @@ String JsonBinary::unquoteString(const StringRef & ref)
     return ref.toString();
 }
 
-bool JsonBinary::extract(
-    std::vector<JsonPathExprRefContainerPtr> & path_expr_container_vec,
-    JsonBinaryWriteBuffer & write_buffer)
+std::vector<JsonBinary> JsonBinary::extract(const std::vector<JsonPathExprRefContainerPtr> & path_expr_container_vec)
 {
     std::vector<JsonBinary> extracted_json_binary_vec;
-    for (auto & path_expr_container : path_expr_container_vec)
+    for (const auto & path_expr_container : path_expr_container_vec)
     {
         DupCheckSet dup_check_set = std::make_unique<std::unordered_set<const char *>>();
         const auto * first_path_ref = path_expr_container->firstRef();
         extractTo(extracted_json_binary_vec, first_path_ref, dup_check_set, false);
     }
+    return extracted_json_binary_vec;
+}
 
+bool JsonBinary::extract(
+    const std::vector<JsonPathExprRefContainerPtr> & path_expr_container_vec,
+    JsonBinaryWriteBuffer & write_buffer)
+{
+    auto extracted_json_binary_vec = extract(path_expr_container_vec);
     bool found;
     if (extracted_json_binary_vec.empty())
     {
@@ -867,6 +872,16 @@ UInt64 JsonBinary::getDepth() const
     }
 }
 
+std::vector<StringRef> JsonBinary::getKeys() const
+{
+    RUNTIME_CHECK(type == TYPE_CODE_OBJECT);
+    std::vector<StringRef> res;
+    auto elem_count = getElementCount();
+    for (size_t i = 0; i < elem_count; ++i)
+        res.push_back(getObjectKey(i));
+    return res;
+}
+
 std::optional<JsonBinary> JsonBinary::searchObjectKey(JsonPathObjectKey & key) const
 {
     auto element_count = getElementCount();
@@ -911,7 +926,7 @@ UInt32 JsonBinary::binarySearchKey(const JsonPathObjectKey & key, UInt32 element
     while (distance > 0)
     {
         Int32 step = distance >> 2;
-        const String & current_key = getObjectKey(first + step);
+        const auto & current_key = getObjectKey(first + step);
         if (current_key < key.key)
         {
             first += step;
@@ -1077,6 +1092,43 @@ void JsonBinary::buildBinaryJsonArrayInBuffer(
 
     encodeNumeric(write_buffer, total_size);
     buildBinaryJsonElementsInBuffer(json_binary_vec, write_buffer);
+}
+
+void JsonBinary::buildKeyArrayInBuffer(const std::vector<StringRef> & keys, JsonBinaryWriteBuffer & write_buffer)
+{
+    write_buffer.write(TYPE_CODE_ARRAY);
+
+    UInt32 buffer_start_pos = write_buffer.offset();
+
+    // 1. write elem count
+    UInt32 element_count = keys.size();
+    encodeNumeric(write_buffer, element_count);
+
+    // 2. advance for total size
+    auto total_size_pos = write_buffer.offset();
+    write_buffer.advance(4);
+
+    // 3. write value entry with value offset and value data.
+    UInt32 data_offset = HEADER_SIZE + keys.size() * VALUE_ENTRY_SIZE;
+    for (const auto & key : keys)
+    {
+        write_buffer.write(TYPE_CODE_STRING);
+        encodeNumeric(write_buffer, data_offset);
+        auto tmp_entry_pos = write_buffer.offset();
+
+        write_buffer.setOffset(data_offset + buffer_start_pos);
+        writeVarUInt(static_cast<UInt64>(key.size), write_buffer);
+        write_buffer.write(key.data, key.size);
+        data_offset = write_buffer.offset() - buffer_start_pos;
+
+        write_buffer.setOffset(tmp_entry_pos);
+    }
+
+    // 4. write total size in total_size_offset.
+    UInt32 total_size = data_offset;
+    write_buffer.setOffset(total_size_pos);
+    encodeNumeric(write_buffer, total_size);
+    write_buffer.setOffset(buffer_start_pos + data_offset);
 }
 
 UInt64 JsonBinary::getJsonLength(const std::string_view & raw_value)
