@@ -109,6 +109,7 @@ BlockInputStreamPtr MPPTaskTestUtils::prepareMPPStreams(DAGRequestBuilder builde
 
 std::vector<QueryTask> MPPTaskTestUtils::prepareMPPTasks(DAGRequestBuilder builder, const DAGProperties & properties)
 {
+    std::lock_guard lock(mu);
     auto tasks = builder.buildMPPTasks(context, properties);
     for (int i = test_meta.context_idx; i < TiFlashTestEnv::globalContextSize(); ++i)
         TiFlashTestEnv::getGlobalContext(i).setCancelTest();
