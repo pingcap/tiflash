@@ -397,7 +397,7 @@ void ScanHashMapAfterProbeBlockInputStream::fillColumnsUsingCurrentPartition(
             throw Exception("Unknown JOIN keys variant.", ErrorCodes::UNKNOWN_SET_DATA_VARIANT);
         }
     }
-    if (parent.strictness == ASTTableJoin::Strictness::All)
+    else if (parent.strictness == ASTTableJoin::Strictness::All)
     {
         switch (parent.join_map_method)
         {
