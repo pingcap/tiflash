@@ -29,10 +29,15 @@ String TableScanDetail::toJson() const
 
 void TableScanStatistics::appendExtraJson(FmtBuffer & fmt_buffer) const
 {
+    DM::ScanContextPtr scan_context;
+    if (auto it = dag_context.scan_context_map.find(executor_id); it != dag_context.scan_context_map.end())
+        scan_context = it->second;
     fmt_buffer.fmtAppend(
-        R"("connection_details":[{},{}])",
+        R"("connection_details":[{},{}],"scan_details":{})",
         local_table_scan_detail.toJson(),
-        cop_table_scan_detail.toJson());
+        cop_table_scan_detail.toJson(),
+        scan_context ? scan_context->toJson() : "{}" // empty json object for nullptr
+    );
 }
 
 void TableScanStatistics::collectExtraRuntimeDetail()

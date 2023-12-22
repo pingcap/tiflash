@@ -44,6 +44,21 @@ public:
     std::atomic<uint64_t> total_dmfile_rough_set_index_load_time_ms{0};
     std::atomic<uint64_t> total_dmfile_read_time_ms{0};
     std::atomic<uint64_t> total_create_snapshot_time_ms{0};
+    std::atomic<uint64_t> total_create_inputstream_time_ms{0};
+
+    // num segments, num tasks
+    std::atomic<uint64_t> num_segments{0};
+    std::atomic<uint64_t> num_read_tasks{0};
+
+    // delta rows, bytes
+    std::atomic<uint64_t> delta_rows{0};
+    std::atomic<uint64_t> delta_bytes{0};
+
+    // mvcc input rows, output rows
+    std::atomic<uint64_t> mvcc_input_rows{0};
+    std::atomic<uint64_t> mvcc_output_rows{0};
+
+    // TODO: mode, filter
 
     ScanContext() = default;
 
@@ -80,7 +95,19 @@ public:
         total_dmfile_rough_set_index_load_time_ms += other.total_dmfile_rough_set_index_load_time_ms;
         total_dmfile_read_time_ms += other.total_dmfile_read_time_ms;
         total_create_snapshot_time_ms += other.total_create_snapshot_time_ms;
+        total_create_inputstream_time_ms += other.total_create_inputstream_time_ms;
+
+        num_segments += other.num_segments;
+        num_read_tasks += other.num_read_tasks;
+
+        delta_rows += other.delta_rows;
+        delta_bytes += other.delta_bytes;
+
+        mvcc_input_rows += other.mvcc_input_rows;
+        mvcc_output_rows += other.mvcc_output_rows;
     }
+
+    String toJson() const;
 };
 
 using ScanContextPtr = std::shared_ptr<ScanContext>;

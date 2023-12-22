@@ -989,7 +989,7 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
     // SegmentReadTaskScheduler and SegmentReadTaskPool use table_id + segment id as unique ID when read thread is enabled.
     // 'try_split_task' can result in several read tasks with the same id that can cause some trouble.
     // Also, too many read tasks of a segment with different small ranges is not good for data sharing cache.
-    SegmentReadTasks tasks = getReadTasksByRanges(*dm_context, sorted_ranges, num_streams, read_segments, /*try_split_task =*/!enable_read_thread);
+    SegmentReadTasks tasks = getReadTasksByRanges(*dm_context, sorted_ranges, num_streams, read_segments, /*try_split_task =*/!enable_read_thread, scan_context);
     auto log_tracing_id = getLogTracingId(*dm_context);
     auto tracing_logger = log->getChild(log_tracing_id);
     LOG_INFO(tracing_logger,
@@ -1517,7 +1517,8 @@ SegmentReadTasks DeltaMergeStore::getReadTasksByRanges(
     const RowKeyRanges & sorted_ranges,
     size_t expected_tasks_count,
     const SegmentIdSet & read_segments,
-    bool try_split_task)
+    bool try_split_task,
+    const ScanContextPtr & scan_context)
 {
     SegmentReadTasks tasks;
     Stopwatch watch;
@@ -1567,6 +1568,8 @@ SegmentReadTasks DeltaMergeStore::getReadTasksByRanges(
                 ++seg_it;
         }
     }
+
+    // how many segments involved for the given key ranges
     const auto tasks_before_split = tasks.size();
     if (try_split_task)
     {
@@ -1580,6 +1583,12 @@ SegmentReadTasks DeltaMergeStore::getReadTasksByRanges(
         /// Merge continuously ranges.
         task->mergeRanges();
         total_ranges += task->ranges.size();
+    }
+
+    if (scan_context)
+    {
+        scan_context->num_segments += tasks_before_split;
+        scan_context->num_read_tasks += tasks.size();
     }
 
     auto tracing_logger = log->getChild(getLogTracingId(dm_context));
