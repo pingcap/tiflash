@@ -17,6 +17,7 @@
 #include <Common/nocopyable.h>
 #include <Core/Block.h>
 #include <Core/Names.h>
+#include <Interpreters/Context_fwd.h>
 #include <Storages/DeltaMerge/ExternalDTFileInfo.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/KVStore/Decode/RegionDataRead.h>
@@ -41,7 +42,6 @@ struct TableInfo;
 namespace DB
 {
 struct ColumnsDescription;
-class Context;
 class IStorage;
 using StoragePtr = std::shared_ptr<IStorage>;
 class TMTContext;

@@ -81,7 +81,7 @@ void KVStore::checkAndApplyPreHandledSnapshot(const RegionPtrWrap & new_region, 
             old_region->setStateApplying();
             tmt.getRegionTable().tryWriteBlockByRegion(old_region);
             tryFlushRegionCacheInStorage(tmt, *old_region, log);
-            persistRegion(*old_region, &region_lock, PersistRegionReason::ApplySnapshotPrevRegion, "");
+            persistRegion(*old_region, region_lock, PersistRegionReason::ApplySnapshotPrevRegion, "");
         }
     }
 
@@ -303,7 +303,7 @@ void KVStore::onSnapshot(
         }
 
         GET_METRIC(tiflash_raft_write_flow_bytes, type_snapshot_uncommitted).Observe(new_region->dataSize());
-        persistRegion(*new_region, &region_lock, PersistRegionReason::ApplySnapshotCurRegion, "");
+        persistRegion(*new_region, region_lock, PersistRegionReason::ApplySnapshotCurRegion, "");
 
         tmt.getRegionTable().shrinkRegionRange(*new_region);
     }

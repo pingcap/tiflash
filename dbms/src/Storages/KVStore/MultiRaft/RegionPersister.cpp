@@ -24,6 +24,7 @@
 #include <Storages/Page/FileUsage.h>
 #include <Storages/Page/V2/PageStorage.h>
 #include <Storages/Page/V3/PageStorageImpl.h>
+#include <Storages/Page/WriteBatchImpl.h>
 #include <Storages/Page/WriteBatchWrapperImpl.h>
 #include <Storages/PathPool.h>
 #include <common/logger_useful.h>
@@ -76,24 +77,11 @@ size_t RegionPersister::computeRegionWriteBuffer(const Region & region, WriteBuf
 
 void RegionPersister::persist(const Region & region, const RegionTaskLock & lock)
 {
-    doPersist(region, &lock);
-}
-
-void RegionPersister::persist(const Region & region)
-{
-    doPersist(region, nullptr);
-}
-
-void RegionPersister::doPersist(const Region & region, const RegionTaskLock * lock)
-{
     // Support only one thread persist.
     RegionCacheWriteElement region_buffer;
     computeRegionWriteBuffer(region, region_buffer);
 
-    if (lock)
-        doPersist(region_buffer, *lock, region);
-    else
-        doPersist(region_buffer, region_manager.genRegionTaskLock(region.id()), region);
+    doPersist(region_buffer, lock, region);
 }
 
 void RegionPersister::doPersist(
@@ -122,10 +110,9 @@ void RegionPersister::doPersist(
     region.updateLastCompactLogApplied(region_task_lock);
 }
 
-RegionPersister::RegionPersister(Context & global_context_, const RegionManager & region_manager_)
+RegionPersister::RegionPersister(Context & global_context_)
     : global_context(global_context_)
     , run_mode(global_context.getPageStorageRunMode())
-    , region_manager(region_manager_)
     , log(Logger::get())
 {}
 

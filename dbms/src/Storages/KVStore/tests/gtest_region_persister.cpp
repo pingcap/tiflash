@@ -314,12 +314,14 @@ try
     config.file_roll_size = 128 * MB;
     {
         UInt64 diff = 0;
-        RegionPersister persister(ctx, region_manager);
+        RegionPersister persister(ctx);
         persister.restore(*mocked_path_pool, nullptr, config);
 
         // Persist region by region
         for (size_t i = 0; i < region_num; ++i)
         {
+            auto region_task_lock = region_manager.genRegionTaskLock(i);
+
             auto region = std::make_shared<Region>(createRegionMeta(i, table_id));
             TiKVKey key = RecordKVFormat::genKey(table_id, i, diff++);
             region->insert(ColumnFamilyType::Default, TiKVKey::copyFrom(key), TiKVValue("value1"));
@@ -329,7 +331,7 @@ try
                 TiKVKey::copyFrom(key),
                 RecordKVFormat::encodeLockCfValue('P', "", 0, 0));
 
-            persister.persist(*region);
+            persister.persist(*region, region_task_lock);
 
             regions.emplace(region->id(), region);
         }
@@ -359,7 +361,7 @@ try
 
     RegionMap new_regions;
     {
-        RegionPersister persister(ctx, region_manager);
+        RegionPersister persister(ctx);
         new_regions = persister.restore(*mocked_path_pool, nullptr, config);
 
         // check that only the last region (which write is not completed) is thrown away
@@ -400,7 +402,7 @@ try
     RegionMap regions;
     {
         UInt64 tso = 0;
-        RegionPersister persister(ctx, region_manager);
+        RegionPersister persister(ctx);
         persister.restore(*mocked_path_pool, nullptr, config);
 
         // Persist region
@@ -432,9 +434,11 @@ try
         std::vector<double> test_scales{0.5, 1.0, 1.5, 2.5};
         for (size_t idx = 0; idx < test_scales.size(); ++idx)
         {
+            auto region_task_lock = region_manager.genRegionTaskLock(region_id_base + idx);
+
             auto scale = test_scales[idx];
             auto region = gen_region_data(region_id_base + idx, config.blob_file_limit_size * scale);
-            persister.persist(*region);
+            persister.persist(*region, region_task_lock);
             regions.emplace(region->id(), region);
         }
         ASSERT_EQ(regions.size(), test_scales.size());
@@ -442,7 +446,7 @@ try
 
     RegionMap restored_regions;
     {
-        RegionPersister persister(ctx, region_manager);
+        RegionPersister persister(ctx);
         restored_regions = persister.restore(*mocked_path_pool, nullptr, config);
     }
     ASSERT_EQ(restored_regions.size(), regions.size());
