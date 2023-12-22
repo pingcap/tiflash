@@ -1562,6 +1562,12 @@ FileProviderPtr Context::getFileProvider() const
     return shared->file_provider;
 }
 
+void Context::setFileProvider(FileProviderPtr file_provider)
+{
+    auto lock = getLock();
+    shared->file_provider = file_provider;
+}
+
 void Context::initializeRateLimiter(
     Poco::Util::AbstractConfiguration & config,
     BackgroundProcessingPool & bg_pool,

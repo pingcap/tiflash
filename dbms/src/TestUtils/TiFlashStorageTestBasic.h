@@ -81,7 +81,7 @@ public:
          * TiFlashTestEnv::findTestDataPath. We may need to check the files on "./tmp/xxx" if some storage test failed.
          * So instead of dropping data after cases run, we drop data before running each test case.
          */
-        return DB::tests::TiFlashTestEnv::getTemporaryPath(getCurrentFullTestName().c_str());
+        return DB::tests::TiFlashTestEnv::getTemporaryPath(getCurrentFullTestName());
     }
 
 protected:

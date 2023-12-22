@@ -34,7 +34,6 @@
 #include <memory>
 #include <mutex>
 #include <thread>
-#include <unordered_set>
 
 namespace pingcap
 {
@@ -434,6 +433,8 @@ public:
 
     void initializeFileProvider(KeyManagerPtr key_manager, bool enable_encryption);
     FileProviderPtr getFileProvider() const;
+    // For test only
+    void setFileProvider(FileProviderPtr file_provider);
 
     void initializeRateLimiter(
         Poco::Util::AbstractConfiguration & config,

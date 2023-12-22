@@ -92,6 +92,7 @@ WriteReadableFilePtr FileProvider::newWriteReadableFile(
     const EncryptionPath & encryption_path_,
     bool truncate_if_exists_,
     bool create_new_encryption_info_,
+    bool skip_encryption_,
     const WriteLimiterPtr & write_limiter_,
     const ReadLimiterPtr & read_limiter,
     int flags,
@@ -104,6 +105,9 @@ WriteReadableFilePtr FileProvider::newWriteReadableFile(
         mode,
         write_limiter_,
         read_limiter);
+    if (skip_encryption_)
+        return file;
+
     if (encryption_enabled && create_new_encryption_info_)
     {
         auto encryption_info = key_manager->newFile(encryption_path_.full_path);
@@ -196,6 +200,26 @@ void FileProvider::deleteEncryptionInfo(const EncryptionPath & encryption_path_,
     key_manager->deleteFile(encryption_path_.full_path, throw_on_error);
 }
 
+void FileProvider::encryptPage(
+    const EncryptionPath & encryption_path_,
+    char * data,
+    size_t data_size,
+    PageIdU64 page_id)
+{
+    const auto info = key_manager->getFile(encryption_path_.full_path);
+    info.cipherPage<true>(data, data_size, page_id);
+}
+
+void FileProvider::decryptPage(
+    const EncryptionPath & encryption_path_,
+    char * data,
+    size_t data_size,
+    PageIdU64 page_id)
+{
+    const auto info = key_manager->getFile(encryption_path_.full_path);
+    info.cipherPage<false>(data, data_size, page_id);
+}
+
 void FileProvider::linkEncryptionInfo(
     const EncryptionPath & src_encryption_path_,
     const EncryptionPath & link_encryption_name_) const
@@ -215,6 +239,11 @@ bool FileProvider::isFileEncrypted(const EncryptionPath & encryption_path_) cons
 bool FileProvider::isEncryptionEnabled() const
 {
     return encryption_enabled;
+}
+
+bool FileProvider::isKeyspaceEncryptionEnabled() const
+{
+    return encryption_enabled && keyspace_encryption_enabled;
 }
 
 void FileProvider::renameFile(

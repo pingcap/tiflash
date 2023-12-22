@@ -691,7 +691,7 @@ void SegmentReadTask::doFetchPagesImpl(
     {
         const auto & data_store = dm_context->global_context.getSharedContextDisagg()->remote_data_store;
         auto mem_table_snap
-            = Serializer::deserializeColumnFileSet(memtableset_cfs, data_store, segment->getRowKeyRange());
+            = Serializer::deserializeColumnFileSet(*dm_context, memtableset_cfs, data_store, segment->getRowKeyRange());
         checkMemTableSet(mem_table_snap);
         read_snapshot->delta->setMemTableSetSnapshot(mem_table_snap);
     }

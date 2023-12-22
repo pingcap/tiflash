@@ -14,6 +14,7 @@
 
 #include <Common/Exception.h>
 #include <Core/ColumnsWithTypeAndName.h>
+#include <Encryption/MockKeyManager.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileBig.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileDataProvider.h>
@@ -37,12 +38,9 @@
 #include <ext/scope_guard.h>
 #include <vector>
 
-namespace DB
+namespace DB::DM::tests
 {
-namespace DM
-{
-namespace tests
-{
+
 class ColumnFileTest : public DB::base::TiFlashStorageTestBasic
 {
 public:
@@ -54,17 +52,23 @@ public:
     {
         TiFlashStorageTestBasic::SetUp();
 
+        KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(true);
+        auto file_provider = std::make_shared<FileProvider>(key_manager, true);
+        db_context->setFileProvider(file_provider);
+        db_context->getFileProvider()->keyspace_encryption_enabled = true;
+        KeyspaceID keyspace_id = 0x12345678;
+
         parent_path = TiFlashStorageTestBasic::getTemporaryPath();
         path_pool
             = std::make_shared<StoragePathPool>(db_context->getPathPool().withTable("test", "DMFile_Test", false));
-        storage_pool = std::make_shared<StoragePool>(*db_context, NullspaceID, /*ns_id*/ 100, *path_pool, "test.t1");
+        storage_pool = std::make_shared<StoragePool>(*db_context, keyspace_id, /*ns_id*/ 100, *path_pool, "test.t1");
         column_cache = std::make_shared<ColumnCache>();
         dm_context = DMContext::createUnique(
             *db_context,
             path_pool,
             storage_pool,
             /*min_version_*/ 0,
-            NullspaceID,
+            keyspace_id,
             /*physical_table_id*/ 100,
             false,
             1,
@@ -258,6 +262,4 @@ try
 }
 CATCH
 
-} // namespace tests
-} // namespace DM
-} // namespace DB
+} // namespace DB::DM::tests

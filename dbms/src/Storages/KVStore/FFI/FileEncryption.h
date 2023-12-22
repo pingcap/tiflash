@@ -23,6 +23,7 @@
 
 namespace DB
 {
+using PageIdU64 = uint64_t;
 
 const char * IntoEncryptionMethodName(EncryptionMethod);
 struct EngineStoreServerWrap;
@@ -87,6 +88,11 @@ struct FileEncryptionInfo : private FileEncryptionInfoRaw
     BlockAccessCipherStreamPtr createCipherStream(
         const EncryptionPath & encryption_path,
         bool is_new_created_info = false) const;
+
+    // Encrypt/decrypt the page data in place.
+    // The page_id is used to calculate the real iv for every page.
+    template <bool is_encrypt>
+    void cipherPage(char * data, size_t data_size, PageIdU64 page_id) const;
 
     bool isValid() const { return (res == FileEncryptionRes::Ok || res == FileEncryptionRes::Disabled); }
     // FileEncryptionRes::Disabled means encryption feature has never been enabled, so no file will be encrypted.
