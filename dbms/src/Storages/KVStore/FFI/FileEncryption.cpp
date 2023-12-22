@@ -12,7 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/TiFlashException.h>
 #include <Encryption/AESCTRCipherStream.h>
+#include <IO/Endian.h>
 #include <Storages/KVStore/FFI/FileEncryption.h>
 #include <openssl/md5.h>
 

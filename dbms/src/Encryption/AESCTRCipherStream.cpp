@@ -13,6 +13,8 @@
 // limitations under the License.
 
 #include <Encryption/AESCTRCipherStream.h>
+#include <IO/Endian.h>
+
 
 namespace DB
 {
@@ -21,35 +23,35 @@ namespace ErrorCodes
 extern const int NOT_IMPLEMENTED;
 } // namespace ErrorCodes
 
-inline void AESCTRCipherStream::initIV(uint64_t block_index, unsigned char * iv) const
+inline void AESCTRCipherStream::initIV(UInt64 block_index, unsigned char * iv) const
 {
     // In CTR mode, OpenSSL EVP API treat the IV as a 128-bit big-endian, and
     // increase it by 1 for each block.
-    uint64_t iv_high = initial_iv_high;
-    uint64_t iv_low = initial_iv_low + block_index;
-    if (std::numeric_limits<uint64_t>::max() - block_index < initial_iv_low)
+    UInt64 iv_high = initial_iv_high;
+    UInt64 iv_low = initial_iv_low + block_index;
+    if (std::numeric_limits<UInt64>::max() - block_index < initial_iv_low)
     {
         iv_high++;
     }
     iv_high = toBigEndian(iv_high);
     iv_low = toBigEndian(iv_low);
-    memcpy(iv, &iv_high, sizeof(uint64_t));
-    memcpy(iv + sizeof(uint64_t), &iv_low, sizeof(uint64_t));
+    memcpy(iv, &iv_high, sizeof(UInt64));
+    memcpy(iv + sizeof(UInt64), &iv_low, sizeof(UInt64));
 }
 
-void AESCTRCipherStream::encrypt(uint64_t file_offset, char * data, size_t data_size)
+void AESCTRCipherStream::encrypt(UInt64 file_offset, char * data, size_t data_size)
 {
     const size_t block_size = DB::Encryption::blockSize(method);
-    uint64_t block_index = file_offset / block_size;
+    UInt64 block_index = file_offset / block_size;
     unsigned char iv[block_size];
     initIV(block_index, iv);
     DB::Encryption::Cipher(file_offset, data, data_size, key, method, iv, /*is_encrypt=*/true);
 }
 
-void AESCTRCipherStream::decrypt(uint64_t file_offset, char * data, size_t data_size)
+void AESCTRCipherStream::decrypt(UInt64 file_offset, char * data, size_t data_size)
 {
     const size_t block_size = DB::Encryption::blockSize(method);
-    uint64_t block_index = file_offset / block_size;
+    UInt64 block_index = file_offset / block_size;
     unsigned char iv[block_size];
     initIV(block_index, iv);
     DB::Encryption::Cipher(file_offset, data, data_size, key, method, iv, /*is_encrypt=*/false);

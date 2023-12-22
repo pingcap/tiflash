@@ -14,10 +14,8 @@
 
 #pragma once
 
-#include <Common/config.h>
 #include <Encryption/AESCTRCipher.h>
 #include <Encryption/BlockAccessCipherStream.h>
-#include <IO/Endian.h>
 #include <common/types.h>
 
 namespace DB
@@ -27,7 +25,7 @@ struct EncryptionPath;
 class AESCTRCipherStream : public BlockAccessCipherStream
 {
 public:
-    AESCTRCipherStream(const EncryptionMethod method_, std::string key_, uint64_t iv_high, uint64_t iv_low)
+    AESCTRCipherStream(const EncryptionMethod method_, std::string key_, UInt64 iv_high, UInt64 iv_low)
         : method(method_)
         , key(std::move(key_))
         , initial_iv_high(iv_high)
@@ -36,15 +34,15 @@ public:
 
     ~AESCTRCipherStream() override = default;
 
-    void encrypt(uint64_t file_offset, char * data, size_t data_size) override;
-    void decrypt(uint64_t file_offset, char * data, size_t data_size) override;
+    void encrypt(UInt64 file_offset, char * data, size_t data_size) override;
+    void decrypt(UInt64 file_offset, char * data, size_t data_size) override;
 
 private:
-    inline void initIV(uint64_t block_index, unsigned char * iv) const;
+    inline void initIV(UInt64 block_index, unsigned char * iv) const;
 
     const EncryptionMethod method;
-    const std::string key;
-    const uint64_t initial_iv_high;
-    const uint64_t initial_iv_low;
+    const String key;
+    const UInt64 initial_iv_high;
+    const UInt64 initial_iv_low;
 };
 } // namespace DB

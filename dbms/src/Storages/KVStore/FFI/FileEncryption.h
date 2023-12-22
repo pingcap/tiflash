@@ -14,7 +14,6 @@
 
 #pragma once
 
-#include <Common/TiFlashException.h>
 #include <Common/nocopyable.h>
 #include <Encryption/BlockAccessCipherStream.h>
 #include <Encryption/EncryptionPath.h>
