@@ -83,6 +83,7 @@ void MPPTaskTestUtils::startServers(size_t server_num_)
     }
 
     MockComputeServerManager::instance().startServers(log_ptr, test_meta.context_idx);
+    MockComputeServerManager::instance().setMockStorage(context.mockStorage());
     MockServerAddrGenerator::instance().reset();
 }
 
@@ -112,7 +113,17 @@ std::vector<QueryTask> MPPTaskTestUtils::prepareMPPTasks(DAGRequestBuilder build
     auto tasks = builder.buildMPPTasks(context, properties);
     for (int i = test_meta.context_idx; i < TiFlashTestEnv::globalContextSize(); ++i)
         TiFlashTestEnv::getGlobalContext(i).setCancelTest();
-    MockComputeServerManager::instance().setMockStorage(context.mockStorage());
+    return tasks;
+}
+
+std::vector<QueryTask> MPPTaskTestUtils::prepareMPPTasks(
+    std::function<DAGRequestBuilder()> & gen_builder,
+    const DAGProperties & properties)
+{
+    std::lock_guard lock(mu);
+    auto tasks = gen_builder().buildMPPTasks(context, properties);
+    for (int i = test_meta.context_idx; i < TiFlashTestEnv::globalContextSize(); ++i)
+        TiFlashTestEnv::getGlobalContext(i).setCancelTest();
     return tasks;
 }
 
