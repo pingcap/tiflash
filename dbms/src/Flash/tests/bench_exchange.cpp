@@ -72,7 +72,7 @@ Block makeBlock(int row_num, bool skew)
         std::mt19937 mt(rd());
         std::uniform_int_distribution<Int64> int64_dist;
         std::uniform_int_distribution<int> len_dist(10, 20);
-        std::uniform_int_distribution<char> char_dist;
+        std::uniform_int_distribution<std::int8_t> char_dist;
 
         for (int i = 0; i < row_num; ++i)
         {
