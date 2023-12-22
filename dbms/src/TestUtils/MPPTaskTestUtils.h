@@ -81,6 +81,11 @@ public:
     // prepareMPPTasks is not thread safe, the builder's executor_index(which is ref to context's index) is updated during this process
     std::vector<QueryTask> prepareMPPTasks(DAGRequestBuilder builder, const DAGProperties & properties);
 
+    // prepareMPPTasks is thread safe
+    std::vector<QueryTask> prepareMPPTasks(
+        std::function<DAGRequestBuilder()> & gen_builder,
+        const DAGProperties & properties);
+
     static void setCancelTest();
 
     /// Keep stream not deconstructed until cancelGather invoked outside, so that the deconstruction progress won't block

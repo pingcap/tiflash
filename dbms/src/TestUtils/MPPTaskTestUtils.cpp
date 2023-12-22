@@ -116,6 +116,17 @@ std::vector<QueryTask> MPPTaskTestUtils::prepareMPPTasks(DAGRequestBuilder build
     return tasks;
 }
 
+std::vector<QueryTask> MPPTaskTestUtils::prepareMPPTasks(
+    std::function<DAGRequestBuilder()> & gen_builder,
+    const DAGProperties & properties)
+{
+    std::lock_guard lock(mu);
+    auto tasks = gen_builder().buildMPPTasks(context, properties);
+    for (int i = test_meta.context_idx; i < TiFlashTestEnv::globalContextSize(); ++i)
+        TiFlashTestEnv::getGlobalContext(i).setCancelTest();
+    return tasks;
+}
+
 ColumnsWithTypeAndName MPPTaskTestUtils::executeProblematicMPPTasks(
     QueryTasks & tasks,
     const DAGProperties & properties,

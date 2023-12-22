@@ -147,16 +147,12 @@ public:
             BlockInputStreamPtr stream;
             try
             {
-                QueryTasks tasks;
-                {
-                    std::lock_guard lock(mu);
-                    auto builder = context.scan("test_db", "l_table")
-                                       .aggregation({Max(col("l_table.s"))}, {col("l_table.s")})
-                                       .project({col("max(l_table.s)"), col("l_table.s")});
-                    tasks = builder.buildMPPTasks(context, properties);
-                    for (int i = test_meta.context_idx; i < TiFlashTestEnv::globalContextSize(); ++i)
-                        TiFlashTestEnv::getGlobalContext(i).setCancelTest();
-                }
+                std::function<DAGRequestBuilder()> gen_builder = [&]() {
+                    return context.scan("test_db", "l_table")
+                        .aggregation({Max(col("l_table.s"))}, {col("l_table.s")})
+                        .project({col("max(l_table.s)"), col("l_table.s")});
+                };
+                QueryTasks tasks = prepareMPPTasks(gen_builder, properties);
                 executeProblematicMPPTasks(tasks, properties, stream);
             }
             catch (...)
