@@ -51,7 +51,7 @@ public:
         std::lock_guard lock(mtx);
         if (packs.size() >= max_sharing_column_count)
         {
-            GET_METRIC(tiflash_storage_read_thread_counter, type_add_cache_count_limit).Increment();
+            GET_METRIC(tiflash_storage_read_thread_counter, type_add_cache_reach_count_limit).Increment();
             return;
         }
         GET_METRIC(tiflash_storage_read_thread_counter, type_add_cache_succ).Increment();

@@ -524,7 +524,7 @@ namespace DB
       F(type_ru_exhausted, {"type", "ru_exhausted"}),                                                                               \
       F(type_add_cache_succ, {"type", "add_cache_succ"}),                                                                           \
       F(type_add_cache_stale, {"type", "add_cache_stale"}),                                                                         \
-      F(type_add_cache_count_limit, {"type", "add_cache_count_limit"}),                                                             \
+      F(type_add_cache_reach_count_limit, {"type", "type_add_cache_reach_count_limit"}),                                            \
       F(type_add_cache_total_bytes_limit, {"type", "add_cache_total_bytes_limit"}),                                                 \
       F(type_get_cache_miss, {"type", "get_cache_miss"}),                                                                           \
       F(type_get_cache_part, {"type", "get_cache_part"}),                                                                           \
