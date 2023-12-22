@@ -642,6 +642,7 @@ void DAGStorageInterpreter::prepare()
     storage_for_logical_table = storages_with_structure_lock[logical_table_id].storage;
 
     std::tie(required_columns, may_need_add_cast_column) = getColumnsForTableScan();
+    scan_context->num_columns = required_columns.size();
 }
 
 void DAGStorageInterpreter::executeCastAfterTableScan(

@@ -21,6 +21,7 @@
 #include <DataStreams/SelectionByColumnIdTransformAction.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
+#include <Storages/DeltaMerge/ScanContext.h>
 #include <common/logger_useful.h>
 
 namespace DB
@@ -49,11 +50,13 @@ public:
         const ColumnDefines & read_columns,
         UInt64 version_limit_,
         bool is_common_handle_,
-        const String & tracing_id = "")
+        const String & tracing_id = "",
+        const ScanContextPtr & scan_context_ = nullptr)
         : version_limit(version_limit_)
         , is_common_handle(is_common_handle_)
         , header(toEmptyBlock(read_columns))
         , select_by_colid_action(input->getHeader(), header)
+        , scan_context(scan_context_)
         , log(Logger::get((MODE == DM_VERSION_FILTER_MODE_MVCC ? MVCC_FILTER_NAME : COMPACT_FILTER_NAME), tracing_id))
     {
         children.push_back(input);
@@ -269,6 +272,8 @@ private:
     size_t deleted_rows = 0;
 
     SelectionByColumnIdTransformAction select_by_colid_action;
+
+    const ScanContextPtr scan_context;
 
     const LoggerPtr log;
 };

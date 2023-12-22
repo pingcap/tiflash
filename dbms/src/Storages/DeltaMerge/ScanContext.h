@@ -45,6 +45,7 @@ public:
     std::atomic<uint64_t> total_dmfile_rough_set_index_check_time_ns{0};
     std::atomic<uint64_t> total_dmfile_read_time_ns{0};
     std::atomic<uint64_t> total_create_snapshot_time_ns{0};
+    std::atomic<uint64_t> total_create_inputstream_time_ns{0};
 
     std::atomic<uint64_t> total_remote_region_num{0};
     std::atomic<uint64_t> total_local_region_num{0};
@@ -54,6 +55,21 @@ public:
     std::atomic<uint64_t> total_disagg_read_cache_hit_size{0};
     std::atomic<uint64_t> total_disagg_read_cache_miss_size{0};
 
+    // num segments, num tasks
+    std::atomic<uint64_t> num_segments{0};
+    std::atomic<uint64_t> num_read_tasks{0};
+    std::atomic<uint64_t> num_columns{0};
+
+    // delta rows, bytes
+    std::atomic<uint64_t> delta_rows{0};
+    std::atomic<uint64_t> delta_bytes{0};
+
+    // mvcc input rows, output rows
+    std::atomic<uint64_t> mvcc_input_rows{0};
+    std::atomic<uint64_t> mvcc_input_bytes{0};
+    std::atomic<uint64_t> mvcc_output_rows{0};
+
+    // TODO: mode, filter
 
     explicit ScanContext(const String & name = "")
         : resource_group_name(name)
@@ -107,12 +123,25 @@ public:
         total_dmfile_rough_set_index_check_time_ns += other.total_dmfile_rough_set_index_check_time_ns;
         total_dmfile_read_time_ns += other.total_dmfile_read_time_ns;
         total_create_snapshot_time_ns += other.total_create_snapshot_time_ns;
+        total_create_inputstream_time_ns += other.total_create_inputstream_time_ns;
+
         total_local_region_num += other.total_local_region_num;
         total_remote_region_num += other.total_remote_region_num;
         total_user_read_bytes += other.total_user_read_bytes;
         total_learner_read_ns += other.total_learner_read_ns;
         total_disagg_read_cache_hit_size += other.total_disagg_read_cache_hit_size;
         total_disagg_read_cache_miss_size += other.total_disagg_read_cache_miss_size;
+
+        num_segments += other.num_segments;
+        num_read_tasks += other.num_read_tasks;
+        // num_columns should not sum
+
+        delta_rows += other.delta_rows;
+        delta_bytes += other.delta_bytes;
+
+        mvcc_input_rows += other.mvcc_input_rows;
+        mvcc_input_bytes += other.mvcc_input_bytes;
+        mvcc_output_rows += other.mvcc_output_rows;
     }
 
     void merge(const tipb::TiFlashScanContext & other)
@@ -131,6 +160,8 @@ public:
         total_disagg_read_cache_hit_size += other.total_disagg_read_cache_hit_size();
         total_disagg_read_cache_miss_size += other.total_disagg_read_cache_miss_size();
     }
+
+    String toJson() const;
 
     const String resource_group_name;
 };

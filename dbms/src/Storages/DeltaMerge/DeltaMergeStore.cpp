@@ -1169,7 +1169,8 @@ BlockInputStreams DeltaMergeStore::read(
         sorted_ranges,
         num_streams,
         read_segments,
-        /*try_split_task =*/!enable_read_thread);
+        /*try_split_task =*/!enable_read_thread,
+        scan_context);
     auto log_tracing_id = getLogTracingId(*dm_context);
     auto tracing_logger = log->getChild(log_tracing_id);
     LOG_INFO(
@@ -1980,7 +1981,8 @@ SegmentReadTasks DeltaMergeStore::getReadTasksByRanges(
     const RowKeyRanges & sorted_ranges,
     size_t expected_tasks_count,
     const SegmentIdSet & read_segments,
-    bool try_split_task)
+    bool try_split_task,
+    const ScanContextPtr & scan_context)
 {
     SegmentReadTasks tasks;
     Stopwatch watch;
@@ -2039,6 +2041,8 @@ SegmentReadTasks DeltaMergeStore::getReadTasksByRanges(
                 ++seg_it;
         }
     }
+
+    // how many segments involved for the given key ranges
     const auto tasks_before_split = tasks.size();
     if (try_split_task)
     {
@@ -2052,6 +2056,12 @@ SegmentReadTasks DeltaMergeStore::getReadTasksByRanges(
         /// Merge continuously ranges.
         task->mergeRanges();
         total_ranges += task->ranges.size();
+    }
+
+    if (scan_context)
+    {
+        scan_context->num_segments += tasks_before_split;
+        scan_context->num_read_tasks += tasks.size();
     }
 
     auto tracing_logger = log->getChild(getLogTracingId(*dm_context));

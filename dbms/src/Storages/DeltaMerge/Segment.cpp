@@ -60,6 +60,8 @@
 
 #include <ext/scope_guard.h>
 
+#include "Common/Stopwatch.h"
+
 namespace ProfileEvents
 {
 extern const Event DMWriteBlock;
@@ -772,6 +774,9 @@ SegmentSnapshotPtr Segment::createSnapshot(const DMContext & dm_context, bool fo
     auto stable_snap = stable->createSnapshot();
     if (!delta_snap || !stable_snap)
         return {};
+
+    dm_context.scan_context->delta_rows += delta_snap->getRows();
+    dm_context.scan_context->delta_bytes += delta_snap->getBytes();
     return std::make_shared<SegmentSnapshot>(
         std::move(delta_snap),
         std::move(stable_snap),
@@ -788,6 +793,9 @@ BlockInputStreamPtr Segment::getInputStream(
     UInt64 max_version,
     size_t expected_block_size)
 {
+    Stopwatch watch;
+    SCOPE_EXIT({ dm_context.scan_context->total_create_inputstream_time_ns += watch.elapsed(); });
+
     auto clipped_block_rows = clipBlockRows( //
         dm_context.global_context,
         expected_block_size,
@@ -917,7 +925,8 @@ BlockInputStreamPtr Segment::getInputStreamModeNormal(
         columns_to_read,
         max_version,
         is_common_handle,
-        dm_context.tracing_id);
+        dm_context.tracing_id,
+        dm_context.scan_context);
 
     LOG_TRACE(
         segment_snap->log,
