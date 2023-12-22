@@ -297,6 +297,7 @@ try
             std::move(configuration),
             128 * 1024,
             16 * 1024 * 1024,
+            NullspaceID,
             DMFileFormat::V3);
         auto stream = std::make_shared<DMFileBlockOutputStream>(dbContext(), dmfile, *cols);
         stream->writePrefix();
@@ -427,6 +428,7 @@ try
             std::move(configuration),
             128 * 1024,
             16 * 1024 * 1024,
+            NullspaceID,
             DMFileFormat::V3);
         auto stream = std::make_shared<DMFileBlockOutputStream>(dbContext(), dmfile, *cols);
         stream->writePrefix();
@@ -643,8 +645,7 @@ try
                 3);
         }
         catch (...)
-        {
-        }
+        {}
         ASSERT_EQ(retry, 2);
     }
 
