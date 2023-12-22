@@ -149,11 +149,11 @@ public:
     String toString() const; /// For test usage, not efficient at all
     void toStringInBuffer(JsonBinaryWriteBuffer & write_buffer) const;
 
-    std::vector<JsonBinary> extract(std::vector<JsonPathExprRefContainerPtr> & path_expr_container_vec);
+    std::vector<JsonBinary> extract(const std::vector<JsonPathExprRefContainerPtr> & path_expr_container_vec);
     /// Extract receives several path expressions as arguments, matches them in bj, and returns true if any match:
     ///	Serialize final results in 'write_buffer'
     bool extract(
-        std::vector<JsonPathExprRefContainerPtr> & path_expr_container_vec,
+        const std::vector<JsonPathExprRefContainerPtr> & path_expr_container_vec,
         JsonBinaryWriteBuffer & write_buffer);
 
     UInt64 getDepth() const;
