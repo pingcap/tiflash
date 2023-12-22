@@ -119,4 +119,52 @@ TEST(ColumnSharingCacheTest, Del)
     compareColumn(col5, col2, col5->size());
 }
 
+TEST(ColumnSharingCacheTest, AddAndGetWithLimitation)
+{
+    ColumnSharingCache cache;
+
+    auto col = createColumn(8);
+    // Limit to 0, add should fail.
+    cache.add(1, 8, col, 0);
+    ColumnPtr col1;
+    auto st = cache.get(1, 8, 8 * TEST_PACK_ROWS, col1, TEST_DATA_TYPE);
+    ASSERT_EQ(st, ColumnCacheStatus::GET_MISS);
+    ASSERT_EQ(col1, nullptr);
+
+    // Limit to 1, add should succ.
+    cache.add(1, 8, col, 1);
+    st = cache.get(1, 8, 8 * TEST_PACK_ROWS, col1, TEST_DATA_TYPE);
+    ASSERT_EQ(st, ColumnCacheStatus::GET_HIT);
+    ASSERT_EQ(col1->size(), 8 * TEST_PACK_ROWS);
+    compareColumn(col1, col, col1->size());
+    ColumnPtr col2;
+    st = cache.get(1, 7, 7 * TEST_PACK_ROWS, col2, TEST_DATA_TYPE);
+    ASSERT_EQ(st, ColumnCacheStatus::GET_COPY);
+    ASSERT_EQ(col2->size(), 7 * TEST_PACK_ROWS);
+    compareColumn(col2, col, col2->size());
+    ColumnPtr col3;
+    st = cache.get(1, 9, 9 * TEST_PACK_ROWS, col3, TEST_DATA_TYPE);
+    ASSERT_EQ(st, ColumnCacheStatus::GET_PART);
+    ASSERT_EQ(col3, nullptr);
+    ColumnPtr col4;
+    st = cache.get(2, 8, 8 * TEST_PACK_ROWS, col4, TEST_DATA_TYPE);
+    ASSERT_EQ(st, ColumnCacheStatus::GET_MISS);
+    ASSERT_EQ(col4, nullptr);
+
+    auto col7 = createColumn(9);
+    // Limit to 1, add should fail.
+    cache.add(1, 9, col7, 1);
+    ColumnPtr col8;
+    st = cache.get(1, 9, 9 * TEST_PACK_ROWS, col8, TEST_DATA_TYPE);
+    ASSERT_EQ(st, ColumnCacheStatus::GET_PART);
+    ASSERT_EQ(col8, nullptr);
+
+    // Limit to 2, add should succ.
+    cache.add(1, 9, col7, 2);
+    st = cache.get(1, 8, 8 * TEST_PACK_ROWS, col8, TEST_DATA_TYPE);
+    ASSERT_EQ(st, ColumnCacheStatus::GET_COPY);
+    ASSERT_EQ(col8->size(), 8 * TEST_PACK_ROWS);
+    compareColumn(col8, col7, col8->size());
+}
+
 } // namespace DB::DM::tests
