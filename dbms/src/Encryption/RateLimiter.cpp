@@ -704,7 +704,7 @@ IOLimitTuner::IOLimitTuner(
     , bg_read_stat(std::move(bg_read_stat_))
     , fg_read_stat(std::move(fg_read_stat_))
     , io_config(io_config_)
-    , log(Logger::get())
+    , log(Logger::get("IOLimitTuner"))
 {}
 
 IOLimitTuner::TuneResult IOLimitTuner::tune() const

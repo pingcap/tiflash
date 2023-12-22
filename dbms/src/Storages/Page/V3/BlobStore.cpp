@@ -970,10 +970,10 @@ std::vector<BlobFileId> BlobStore::getGCStats()
             }
 
             auto lock = stat->lock();
-            auto right_boundary = stat->smap->getUsedBoundary();
+            auto right_margin = stat->smap->getUsedBoundary();
 
             // Avoid divide by zero
-            if (right_boundary == 0)
+            if (right_margin == 0)
             {
                 // Note `stat->sm_total_size` isn't strictly the same as the actual size of underlying BlobFile after restart tiflash,
                 // because some entry may be deleted but the actual disk space is not reclaimed in previous run.
@@ -984,13 +984,13 @@ std::vector<BlobFileId> BlobStore::getGCStats()
                 // So we need truncate current blob, and let it be reused.
                 auto blobfile = getBlobFile(stat->id);
                 LOG_INFO(log, "Current blob file is empty, truncated to zero [blob_id={}] [total_size={}] [valid_rate={}]", stat->id, stat->sm_total_size, stat->sm_valid_rate);
-                blobfile->truncate(right_boundary);
-                blobstore_gc_info.appendToTruncatedBlob(stat->id, stat->sm_total_size, right_boundary, stat->sm_valid_rate);
-                stat->sm_total_size = right_boundary;
+                blobfile->truncate(right_margin);
+                blobstore_gc_info.appendToTruncatedBlob(stat->id, stat->sm_total_size, right_margin, stat->sm_valid_rate);
+                stat->sm_total_size = right_margin;
                 continue;
             }
 
-            stat->sm_valid_rate = stat->sm_valid_size * 1.0 / right_boundary;
+            stat->sm_valid_rate = stat->sm_valid_size * 1.0 / right_margin;
 
             if (stat->sm_valid_rate > 1.0)
             {
@@ -1000,7 +1000,7 @@ std::vector<BlobFileId> BlobStore::getGCStats()
                     stat->sm_valid_rate,
                     stat->sm_total_size,
                     stat->sm_valid_size,
-                    right_boundary,
+                    right_margin,
                     stat->id);
                 assert(false);
                 continue;
@@ -1022,14 +1022,14 @@ std::vector<BlobFileId> BlobStore::getGCStats()
                 LOG_TRACE(log, "Current [blob_id={}] valid rate is {:.2f}, unchange", stat->id, stat->sm_valid_rate);
             }
 
-            if (right_boundary != stat->sm_total_size)
+            if (right_margin != stat->sm_total_size)
             {
                 auto blobfile = getBlobFile(stat->id);
-                LOG_TRACE(log, "Truncate blob file [blob_id={}] [origin size={}] [truncated size={}]", stat->id, stat->sm_total_size, right_boundary);
-                blobfile->truncate(right_boundary);
-                blobstore_gc_info.appendToTruncatedBlob(stat->id, stat->sm_total_size, right_boundary, stat->sm_valid_rate);
+                LOG_TRACE(log, "Truncate blob file [blob_id={}] [origin size={}] [truncated size={}]", stat->id, stat->sm_total_size, right_margin);
+                blobfile->truncate(right_margin);
+                blobstore_gc_info.appendToTruncatedBlob(stat->id, stat->sm_total_size, right_margin, stat->sm_valid_rate);
 
-                stat->sm_total_size = right_boundary;
+                stat->sm_total_size = right_margin;
                 stat->sm_valid_rate = stat->sm_valid_size * 1.0 / stat->sm_total_size;
             }
         }

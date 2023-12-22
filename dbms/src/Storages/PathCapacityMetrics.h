@@ -14,6 +14,7 @@
 
 #pragma once
 #include <Core/Types.h>
+#include <Poco/Logger.h>
 #include <common/logger_useful.h>
 #include <sys/statvfs.h>
 
@@ -37,13 +38,13 @@ struct DiskCapacity
 class PathCapacityMetrics : private boost::noncopyable
 {
 public:
-    PathCapacityMetrics(size_t capacity_quota_, // will be ignored if `main_capacity_quota` is not empty
+    PathCapacityMetrics(const size_t capacity_quota_, // will be ignored if `main_capacity_quota` is not empty
                         const Strings & main_paths_,
-                        const std::vector<size_t> & main_capacity_quota_, //
+                        const std::vector<size_t> main_capacity_quota_, //
                         const Strings & latest_paths_,
-                        const std::vector<size_t> & latest_capacity_quota_);
+                        const std::vector<size_t> latest_capacity_quota_);
 
-    virtual ~PathCapacityMetrics() = default;
+    virtual ~PathCapacityMetrics(){};
 
     void addUsedSize(std::string_view file_path, size_t used_bytes);
 
@@ -75,7 +76,7 @@ private:
         // Used bytes for this path
         std::atomic<uint64_t> used_bytes = 0;
 
-        std::tuple<FsStats, struct statvfs> getStats(const LoggerPtr & log) const;
+        std::tuple<FsStats, struct statvfs> getStats(Poco::Logger * log) const;
 
         CapacityInfo() = default;
         CapacityInfo(String p, uint64_t c)
@@ -93,7 +94,7 @@ private:
     // 0 means no quota, use the whole disk.
     size_t capacity_quota;
     std::vector<CapacityInfo> path_infos;
-    LoggerPtr log;
+    Poco::Logger * log;
 };
 
 } // namespace DB

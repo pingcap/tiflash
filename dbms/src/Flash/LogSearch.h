@@ -14,7 +14,6 @@
 
 #pragma once
 
-#include <Common/Logger.h>
 #include <Poco/File.h>
 #include <Poco/Logger.h>
 #include <common/logger_useful.h>
@@ -39,7 +38,6 @@
 
 namespace DB
 {
-
 class LogIterator : private boost::noncopyable
 {
 public:
@@ -54,7 +52,7 @@ public:
         , levels(_levels)
         , patterns(_patterns)
         , log_input_stream(_log_input_stream)
-        , log(Logger::get())
+        , log(&Poco::Logger::get("LogIterator"))
         , cur_lineno(0)
     {
         init();
@@ -131,7 +129,7 @@ private:
     std::istream & log_input_stream;
     std::string line;
 
-    LoggerPtr log;
+    Poco::Logger * log;
 
     uint32_t cur_lineno;
     std::optional<std::pair<uint32_t, Error::Type>> err_info; // <lineno, Error::Type>

@@ -38,6 +38,8 @@
 #include <type_traits>
 #include <utility>
 
+#include "Poco/Message.h"
+
 
 #ifdef FIU_ENABLE
 #include <Common/randomSeed.h>
@@ -1687,23 +1689,23 @@ PageEntriesV3 PageDirectory::gcInMemEntries(bool return_removed_entries)
         }
     }
 
-    LOG_DEBUG(log,
-              "After MVCC gc in memory [lowest_seq={}] "
-              "clean [invalid_snapshot_nums={}] [invalid_page_nums={}] "
-              "[total_deref_counter={}] [all_del_entries={}]. "
-              "Still exist [snapshot_nums={}], [page_nums={}]. "
-              "Longest alive snapshot: [longest_alive_snapshot_time={}] "
-              "[longest_alive_snapshot_seq={}] [stale_snapshot_nums={}]",
-              lowest_seq,
-              invalid_snapshot_nums,
-              invalid_page_nums,
-              total_deref_counter,
-              all_del_entries.size(),
-              valid_snapshot_nums,
-              valid_page_nums,
-              longest_alive_snapshot_time,
-              longest_alive_snapshot_seq,
-              stale_snapshot_nums);
+    LOG_IMPL(log, (stale_snapshot_nums > 0 ? Poco::Message::PRIO_INFORMATION : Poco::Message::PRIO_DEBUG), //
+             "After MVCC gc in memory [lowest_seq={}] "
+             "clean [invalid_snapshot_nums={}] [invalid_page_nums={}] "
+             "[total_deref_counter={}] [all_del_entries={}]. "
+             "Still exist [snapshot_nums={}], [page_nums={}]. "
+             "Longest alive snapshot: [longest_alive_snapshot_time={}] "
+             "[longest_alive_snapshot_seq={}] [stale_snapshot_nums={}]",
+             lowest_seq,
+             invalid_snapshot_nums,
+             invalid_page_nums,
+             total_deref_counter,
+             all_del_entries.size(),
+             valid_snapshot_nums,
+             valid_page_nums,
+             longest_alive_snapshot_time,
+             longest_alive_snapshot_seq,
+             stale_snapshot_nums);
 
     return all_del_entries;
 }
