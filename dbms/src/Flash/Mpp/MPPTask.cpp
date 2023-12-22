@@ -371,7 +371,7 @@ void MPPTask::runImpl()
         scheduleOrWait();
 
         auto time_cost_in_schedule_ms = stopwatch.elapsedMilliseconds() - time_cost_in_preprocess_ms;
-        LOG_INFO(log, "task starts running, time cost in schedule: {} ms, time cost in preprocess", time_cost_in_schedule_ms, time_cost_in_preprocess_ms);
+        LOG_INFO(log, "task starts running, time cost in schedule: {} ms, time cost in preprocess {} ms", time_cost_in_schedule_ms, time_cost_in_preprocess_ms);
         if (status.load() != RUNNING)
         {
             /// when task is in running state, canceling the task will call sendCancelToQuery to do the cancellation, however
