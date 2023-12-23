@@ -562,8 +562,12 @@ void MPPTask::runImpl()
 #endif
 
         auto result = query_executor_holder->execute();
-        LOG_INFO(
+        auto log_level = Poco::Message::PRIO_DEBUG;
+        if (!result.is_success || status != RUNNING)
+            log_level = Poco::Message::PRIO_INFORMATION;
+        LOG_IMPL(
             log,
+            log_level,
             "mpp task finish execute, is_success: {}, status: {}",
             result.is_success,
             magic_enum::enum_name(status.load()));
