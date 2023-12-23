@@ -246,7 +246,7 @@ void EstablishCallData::writeDone(String msg, const grpc::Status & status)
         LOG_IMPL(
             async_tunnel_sender->getLogger(),
             /// if time cost is less than 1s and there is no error, use debug log level
-            msg.empty() && time <= 1000 ? Poco::Message::PRIO_DEBUG : Poco::Message::PRIO_INFORMATION,
+            msg.empty() && time < 1000 ? Poco::Message::PRIO_DEBUG : Poco::Message::PRIO_INFORMATION,
             "async connection for {} cost {} ms, including {} ms to wait task.",
             async_tunnel_sender->getTunnelId(),
             time,
