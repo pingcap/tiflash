@@ -291,7 +291,7 @@ DMFileReader::DMFileReader(
     size_t rows_threshold_per_read_,
     bool read_one_pack_every_time_,
     const String & tracing_id_,
-    bool enable_col_sharing_cache,
+    size_t max_sharing_column_count,
     const ScanContextPtr & scan_context_)
     : dmfile(dmfile_)
     , read_columns(read_columns_)
@@ -333,9 +333,9 @@ DMFileReader::DMFileReader(
         const auto data_type = dmfile->getColumnStat(cd.id).type;
         data_type->enumerateStreams(callback, {});
     }
-    if (enable_col_sharing_cache)
+    if (max_sharing_column_count > 0)
     {
-        col_data_cache = std::make_unique<ColumnSharingCacheMap>(path(), read_columns, log);
+        col_data_cache = std::make_unique<ColumnSharingCacheMap>(path(), read_columns, max_sharing_column_count, log);
         for (const auto & cd : read_columns)
         {
             last_read_from_cache[cd.id] = false;
