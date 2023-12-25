@@ -96,7 +96,7 @@ struct DTToolTest : public DB::base::TiFlashStorageTestBasic
             db_context->getSettingsRef());
         // Write
         {
-            dmfile = DB::DM::DMFile::create(1, getTemporaryPath(), std::nullopt, 0, 0, DMFileFormat::V0);
+            dmfile = DB::DM::DMFile::create(1, getTemporaryPath(), std::nullopt, 0, 0, NullspaceID, DMFileFormat::V0);
             {
                 auto stream = DB::DM::DMFileBlockOutputStream(*db_context, dmfile, *defines);
                 stream.writePrefix();
@@ -116,6 +116,7 @@ struct DTToolTest : public DB::base::TiFlashStorageTestBasic
                 std::make_optional<DMChecksumConfig>(),
                 128 * 1024,
                 16 * 1024 * 1024,
+                NullspaceID,
                 DMFileFormat::V3);
             {
                 auto stream = DB::DM::DMFileBlockOutputStream(*db_context, dmfileV3, *defines);
