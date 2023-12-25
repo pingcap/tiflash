@@ -14,6 +14,7 @@
 
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
+#include <Common/SyncPoint/SyncPoint.h>
 #include <IO/MemoryReadWriteBuffer.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/StoragePool.h>
@@ -28,6 +29,7 @@
 #include <Storages/Page/WriteBatchWrapperImpl.h>
 #include <Storages/PathPool.h>
 #include <common/logger_useful.h>
+#include <fiu.h>
 
 #include <magic_enum.hpp>
 #include <memory>
@@ -43,6 +45,10 @@ namespace ErrorCodes
 {
 extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
+namespace FailPoints
+{
+extern const char pause_when_persist_region[];
+} // namespace FailPoints
 
 void RegionPersister::drop(RegionID region_id, const RegionTaskLock &)
 {
@@ -106,6 +112,25 @@ void RegionPersister::doPersist(
     DB::WriteBatchWrapper wb{run_mode, getWriteBatchPrefix()};
     wb.putPage(region_id, applied_index, read_buf, region_size);
     page_writer->write(std::move(wb), global_context.getWriteLimiter());
+
+#ifdef FIU_ENABLE
+    fiu_do_on(FailPoints::pause_when_persist_region, {
+        if (auto v = FailPointHelper::getFailPointVal(FailPoints::pause_when_persist_region); v)
+        {
+            // Only pause for the given region_id
+            auto pause_region_id = std::any_cast<RegionID>(v.value());
+            if (region_id == pause_region_id)
+            {
+                SYNC_FOR("before_RegionPersister::persist_write_done");
+            }
+        }
+        else
+        {
+            // Pause for all persisting requests
+            SYNC_FOR("before_RegionPersister::persist_write_done");
+        }
+    });
+#endif
 
     region.updateLastCompactLogApplied(region_task_lock);
 }

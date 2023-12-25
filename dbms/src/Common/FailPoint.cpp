@@ -133,6 +133,7 @@ namespace DB
     M(pause_query_init)                   \
     M(pause_before_prehandle_snapshot)    \
     M(pause_before_prehandle_subtask)     \
+    M(pause_when_persist_region)          \
     M(pause_before_wn_establish_task)     \
     M(pause_passive_flush_before_persist_region)
 

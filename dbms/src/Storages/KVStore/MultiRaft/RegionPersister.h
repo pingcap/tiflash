@@ -77,7 +77,7 @@ private:
     PageWriterPtr page_writer;
     PageReaderPtr page_reader;
 
-    NamespaceID ns_id = KVSTORE_NAMESPACE_ID;
+    const NamespaceID ns_id = KVSTORE_NAMESPACE_ID;
     LoggerPtr log;
 };
 } // namespace DB
