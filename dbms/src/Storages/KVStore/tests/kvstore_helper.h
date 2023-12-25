@@ -104,14 +104,20 @@ public:
 
 protected:
     KVStore & getKVS() { return *kvstore; }
-    KVStore & reloadKVSFromDisk()
+    void resetKVStoreStorage()
     {
-        kvstore.reset();
         auto & global_ctx = TiFlashTestEnv::getGlobalContext();
         global_ctx.tryReleaseWriteNodePageStorageForTest();
         global_ctx.initializeWriteNodePageStorageIfNeed(*path_pool);
+    }
+    KVStore & reloadKVSFromDisk(bool with_reset = true)
+    {
+        auto & global_ctx = TiFlashTestEnv::getGlobalContext();
+        kvstore.reset();
+        if (with_reset)
+            resetKVStoreStorage();
         kvstore = std::make_shared<KVStore>(global_ctx);
-        // only recreate kvstore and restore data from disk, don't recreate proxy instance
+        // Only recreate kvstore and restore data from disk, don't recreate proxy instance
         kvstore->restore(*path_pool, proxy_helper.get());
         proxy_instance->reload();
         global_ctx.getTMTContext().getRegionTable().clear();

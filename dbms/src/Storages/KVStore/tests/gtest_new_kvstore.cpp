@@ -17,9 +17,8 @@
 #include <Storages/KVStore/Read/LearnerRead.h>
 #include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/Utils/AsyncTasks.h>
+#include <Storages/KVStore/tests/region_kvstore_test.h>
 #include <Storages/RegionQueryInfo.h>
-
-#include "region_kvstore_test.h"
 
 extern std::shared_ptr<MemoryTracker> root_of_kvstore_mem_trackers;
 
