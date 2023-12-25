@@ -97,7 +97,7 @@ public:
             ASSERT_EQ(kvstore->getStoreID(), store.id());
         }
 
-        LOG_INFO(Logger::get("Test"), "Finished setup");
+        LOG_INFO(log, "Finished setup");
     }
 
     void TearDown() override { proxy_instance->clear(); }
