@@ -1017,6 +1017,7 @@ ColumnID TableInfo::getColumnID(const String & name) const
         return DB::DelMarkColumnID;
 
     DB::Strings available_columns;
+    available_columns.reserve(columns.size());
     for (const auto & c : columns)
     {
         available_columns.emplace_back(c.name);
