@@ -44,14 +44,14 @@ void SegmentReadTaskScheduler::add(const SegmentReadTaskPoolPtr & pool)
         merging_segments[pool->tableId()][seg_id].push_back(pool->poolId());
     }
     auto block_slots = pool->getFreeBlockSlots();
-    LOG_DEBUG(log, "Added, pool_id={} table_id={} block_slots={} segment_count={} pool_count={} cost={}ns do_add_cost={}ns", //
-              pool->poolId(),
-              pool->tableId(),
-              block_slots,
-              tasks.size(),
-              read_pools.size(),
-              sw_add.elapsed(),
-              sw_do_add.elapsed());
+    LOG_INFO(log, "Added, pool_id={} table_id={} block_slots={} segment_count={} pool_count={} cost={}ns do_add_cost={}ns", //
+             pool->poolId(),
+             pool->tableId(),
+             block_slots,
+             tasks.size(),
+             read_pools.size(),
+             sw_add.elapsed(),
+             sw_do_add.elapsed());
 }
 
 std::pair<MergedTaskPtr, bool> SegmentReadTaskScheduler::scheduleMergedTask()
