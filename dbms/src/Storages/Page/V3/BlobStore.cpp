@@ -972,13 +972,18 @@ std::vector<BlobFileId> BlobStore::getGCStats()
             auto lock = stat->lock();
             auto right_margin = stat->smap->getUsedBoundary();
 
-            // Avoid divide by zero
+            // Truncate the file by its right margin. If the file has no context, just skip
             if (right_margin == 0)
             {
                 // Note `stat->sm_total_size` isn't strictly the same as the actual size of underlying BlobFile after restart tiflash,
                 // because some entry may be deleted but the actual disk space is not reclaimed in previous run.
                 // TODO: avoid always truncate on empty BlobFile
                 RUNTIME_CHECK_MSG(stat->sm_valid_size == 0, "Current blob is empty, but valid size is not 0. [blob_id={}] [valid_size={}] [valid_rate={}]", stat->id, stat->sm_valid_size, stat->sm_valid_rate);
+
+                if (stat->sm_total_size == 0)
+                {
+                    continue;
+                }
 
                 // If current blob empty, the size of in disk blob may not empty
                 // So we need truncate current blob, and let it be reused.
@@ -990,6 +995,7 @@ std::vector<BlobFileId> BlobStore::getGCStats()
                 continue;
             }
 
+            assert(right_margin > 0); // Avoid divide by zero
             stat->sm_valid_rate = stat->sm_valid_size * 1.0 / right_margin;
 
             if (stat->sm_valid_rate > 1.0)
