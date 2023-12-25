@@ -129,7 +129,7 @@ public:
     // for non-mpp(cop/batchCop)
     explicit DAGContext(const tipb::DAGRequest & dag_request_)
         : dag_request(&dag_request_)
-        , dummy_query_string(dag_request->DebugString())
+        , dummy_query_string(dag_request->ShortDebugString())
         , dummy_ast(makeDummyQuery())
         , collect_execution_summaries(dag_request->has_collect_execution_summaries() && dag_request->collect_execution_summaries())
         , is_mpp_task(false)
@@ -149,7 +149,7 @@ public:
     // for mpp
     DAGContext(const tipb::DAGRequest & dag_request_, const mpp::TaskMeta & meta_, bool is_root_mpp_task_)
         : dag_request(&dag_request_)
-        , dummy_query_string(dag_request->DebugString())
+        , dummy_query_string(dag_request->ShortDebugString())
         , dummy_ast(makeDummyQuery())
         , collect_execution_summaries(dag_request->has_collect_execution_summaries() && dag_request->collect_execution_summaries())
         , return_executor_id(true)
@@ -187,7 +187,7 @@ public:
     // for tests need to run query tasks.
     explicit DAGContext(const tipb::DAGRequest & dag_request_, String log_identifier, size_t concurrency)
         : dag_request(&dag_request_)
-        , dummy_query_string(dag_request->DebugString())
+        , dummy_query_string(dag_request->ShortDebugString())
         , dummy_ast(makeDummyQuery())
         , initialize_concurrency(concurrency)
         , is_mpp_task(true)

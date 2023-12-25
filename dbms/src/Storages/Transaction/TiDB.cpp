@@ -1016,9 +1016,19 @@ ColumnID TableInfo::getColumnID(const String & name) const
     else if (name == DB::MutableSupport::delmark_column_name)
         return DB::DelMarkColumnID;
 
+    DB::Strings available_columns;
+    available_columns.reserve(columns.size());
+    for (const auto & c : columns)
+    {
+        available_columns.emplace_back(c.name);
+    }
+
     throw DB::Exception(
-        std::string(__PRETTY_FUNCTION__) + ": Unknown column name " + name,
-        DB::ErrorCodes::LOGICAL_ERROR);
+        DB::ErrorCodes::LOGICAL_ERROR,
+        "Fail to get column id from TableInfo, table_id={} name={} available_columns={}",
+        id,
+        name,
+        available_columns);
 }
 
 String TableInfo::getColumnName(const ColumnID id) const

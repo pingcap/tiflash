@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
+#include <Common/Stopwatch.h>
 #include <Common/SyncPoint/SyncPoint.h>
 #include <Common/TiFlashMetrics.h>
 #include <DataStreams/ConcatBlockInputStream.h>
@@ -568,6 +569,8 @@ SegmentSnapshotPtr Segment::createSnapshot(const DMContext & dm_context, bool fo
     auto stable_snap = stable->createSnapshot();
     if (!delta_snap || !stable_snap)
         return {};
+    dm_context.scan_context->delta_rows += delta_snap->getRows();
+    dm_context.scan_context->delta_bytes += delta_snap->getBytes();
     return std::make_shared<SegmentSnapshot>(std::move(delta_snap), std::move(stable_snap));
 }
 
@@ -580,6 +583,11 @@ BlockInputStreamPtr Segment::getInputStream(const ReadMode & read_mode,
                                             UInt64 max_version,
                                             size_t expected_block_size)
 {
+    Stopwatch watch;
+    SCOPE_EXIT({
+        dm_context.scan_context->total_create_inputstream_time_ms += watch.elapsedMillisecondsFromLastTime();
+    });
+
     switch (read_mode)
     {
     case ReadMode::Normal:
@@ -667,7 +675,8 @@ BlockInputStreamPtr Segment::getInputStreamModeNormal(const DMContext & dm_conte
         columns_to_read,
         max_version,
         is_common_handle,
-        dm_context.tracing_id);
+        dm_context.tracing_id,
+        dm_context.scan_context);
 
     LOG_TRACE(
         log->getChild(dm_context.tracing_id),

@@ -16,6 +16,7 @@
 
 #include <Common/Logger.h>
 #include <Common/Stopwatch.h>
+#include <Poco/Message.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/PageStorage.h>
 #include <Storages/Page/Snapshot.h>
@@ -110,6 +111,10 @@ private:
     {
         GCStageType stage = GCStageType::Unknown;
         bool executeNextImmediately() const { return stage == GCStageType::FullGC; };
+
+        bool compact_wal_happen = false;
+
+        Poco::Message::Priority getLoggingLevel() const;
 
         UInt64 total_cost_ms = 0;
 

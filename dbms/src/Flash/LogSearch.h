@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Poco/File.h>
+#include <Poco/Logger.h>
 #include <common/logger_useful.h>
 #include <re2/re2.h>
 

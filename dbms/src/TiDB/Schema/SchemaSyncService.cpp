@@ -35,7 +35,7 @@ extern const int DEADLOCK_AVOIDED;
 SchemaSyncService::SchemaSyncService(DB::Context & context_)
     : context(context_)
     , background_pool(context_.getBackgroundPool())
-    , log(&Poco::Logger::get("SchemaSyncService"))
+    , log(Logger::get())
 {
     handle = background_pool.addTask(
         [&, this] {
@@ -47,14 +47,14 @@ SchemaSyncService::SchemaSyncService(DB::Context & context_)
                 /// They must be performed synchronously,
                 /// otherwise table may get mis-GC-ed if RECOVER was not properly synced caused by schema sync pause but GC runs too aggressively.
                 // GC safe point must be obtained ahead of syncing schema.
-                auto gc_safe_point = PDClientHelper::getGCSafePointWithRetry(context.getTMTContext().getPDClient());
+                auto gc_safepoint = PDClientHelper::getGCSafePointWithRetry(context.getTMTContext().getPDClient());
                 stage = "Sync schemas";
                 done_anything = syncSchemas();
                 if (done_anything)
                     GET_METRIC(tiflash_schema_trigger_count, type_timer).Increment();
 
                 stage = "GC";
-                done_anything = gc(gc_safe_point);
+                done_anything = gc(gc_safepoint);
 
                 return done_anything;
             }
@@ -78,6 +78,7 @@ SchemaSyncService::SchemaSyncService(DB::Context & context_)
 SchemaSyncService::~SchemaSyncService()
 {
     background_pool.removeTask(handle);
+    LOG_INFO(log, "SchemaSyncService stopped");
 }
 
 bool SchemaSyncService::syncSchemas()
@@ -86,18 +87,25 @@ bool SchemaSyncService::syncSchemas()
 }
 
 template <typename DatabaseOrTablePtr>
-inline bool isSafeForGC(const DatabaseOrTablePtr & ptr, Timestamp gc_safe_point)
+inline std::tuple<bool, Timestamp> isSafeForGC(const DatabaseOrTablePtr & ptr, Timestamp gc_safepoint)
 {
-    return ptr->isTombstone() && ptr->getTombstone() < gc_safe_point;
+    const auto tombstone_ts = ptr->getTombstone();
+    return {tombstone_ts != 0 && tombstone_ts < gc_safepoint, tombstone_ts};
 }
 
-bool SchemaSyncService::gc(Timestamp gc_safe_point)
+bool SchemaSyncService::gc(Timestamp gc_safepoint)
 {
     auto & tmt_context = context.getTMTContext();
-    if (gc_safe_point == gc_context.last_gc_safe_point)
+    // for new deploy cluster, there is an interval that gc_safepoint return 0, skip it
+    if (gc_safepoint == 0)
+        return false;
+    if (gc_safepoint == gc_context.last_gc_safepoint)
         return false;
 
-    LOG_INFO(log, "Performing GC using safe point {}", gc_safe_point);
+    LOG_INFO(log, "Schema GC begin, last_safepoint={} safepoint={}", gc_context.last_gc_safepoint, gc_safepoint);
+
+    size_t num_tables_removed = 0;
+    size_t num_databases_removed = 0;
 
     // The storages that are ready for gc
     std::vector<std::weak_ptr<IManageableStorage>> storages_to_gc;
@@ -113,11 +121,22 @@ bool SchemaSyncService::gc(Timestamp gc_safe_point)
             if (!managed_storage)
                 continue;
 
-            if (isSafeForGC(db, gc_safe_point) || isSafeForGC(managed_storage, gc_safe_point))
+            const auto & [database_is_stale, db_tombstone] = isSafeForGC(db, gc_safepoint);
+            const auto & [table_is_stale, table_tombstone] = isSafeForGC(managed_storage, gc_safepoint);
+            if (database_is_stale || table_is_stale)
             {
                 // Only keep a weak_ptr on storage so that the memory can be free as soon as
                 // it is dropped.
                 storages_to_gc.emplace_back(std::weak_ptr<IManageableStorage>(managed_storage));
+                LOG_INFO(
+                    log,
+                    "Detect stale table, database_name={} table_name={} database_tombstone={} table_tombstone={} "
+                    "safepoint={}",
+                    managed_storage->getDatabaseName(),
+                    managed_storage->getTableName(),
+                    db_tombstone,
+                    table_tombstone,
+                    gc_safepoint);
             }
         }
     }
@@ -140,7 +159,12 @@ bool SchemaSyncService::gc(Timestamp gc_safe_point)
             return db_info ? SchemaNameMapper().debugCanonicalName(*db_info, table_info)
                            : "(" + database_name + ")." + SchemaNameMapper().debugTableName(table_info);
         }();
-        LOG_INFO(log, "Physically dropping table {}", canonical_name);
+        LOG_INFO(
+            log,
+            "Physically drop table begin, table_tombstone={} safepoint={} {}",
+            storage->getTombstone(),
+            gc_safepoint,
+            canonical_name);
         auto drop_query = std::make_shared<ASTDropQuery>();
         drop_query->database = std::move(database_name);
         drop_query->table = std::move(table_name);
@@ -151,7 +175,7 @@ bool SchemaSyncService::gc(Timestamp gc_safe_point)
         {
             InterpreterDropQuery drop_interpreter(ast_drop_query, context);
             drop_interpreter.execute();
-            LOG_INFO(log, "Physically dropped table {}", canonical_name);
+            LOG_INFO(log, "Physically drop table {} end", canonical_name);
         }
         catch (DB::Exception & e)
         {
@@ -171,7 +195,8 @@ bool SchemaSyncService::gc(Timestamp gc_safe_point)
     for (const auto & iter : dbs)
     {
         const auto & db = iter.second;
-        if (!isSafeForGC(db, gc_safe_point))
+        const auto & [db_is_stale, db_tombstone] = isSafeForGC(db, gc_safepoint);
+        if (!db_is_stale)
             continue;
 
         const auto & db_name = iter.first;
@@ -182,11 +207,15 @@ bool SchemaSyncService::gc(Timestamp gc_safe_point)
         {
             // There should be something wrong, maybe a read lock of a table is held for a long time.
             // Just ignore and try to collect this database next time.
-            LOG_INFO(log, "Physically drop database {} is skipped, reason: {} tables left", db_name, num_tables);
+            LOG_INFO(
+                log,
+                "Physically drop database {} is skipped, reason: {} tables left",
+                db_name,
+                num_tables);
             continue;
         }
 
-        LOG_INFO(log, "Physically dropping database {}", db_name);
+        LOG_INFO(log, "Physically drop database begin, database_tombstone={} {}", db->getTombstone(), db_name);
         auto drop_query = std::make_shared<ASTDropQuery>();
         drop_query->database = db_name;
         drop_query->if_exists = true;
@@ -196,7 +225,7 @@ bool SchemaSyncService::gc(Timestamp gc_safe_point)
         {
             InterpreterDropQuery drop_interpreter(ast_drop_query, context);
             drop_interpreter.execute();
-            LOG_INFO(log, "Physically dropped database {}", db_name);
+            LOG_INFO(log, "Physically drop database {} end, safepoint={}", db_name, gc_safepoint);
         }
         catch (DB::Exception & e)
         {
@@ -212,13 +241,22 @@ bool SchemaSyncService::gc(Timestamp gc_safe_point)
 
     if (succeeded)
     {
-        gc_context.last_gc_safe_point = gc_safe_point;
-        LOG_INFO(log, "Performed GC using safe point {}", gc_safe_point);
+        gc_context.last_gc_safepoint = gc_safepoint;
+        LOG_INFO(
+            log,
+            "Schema GC done, tables_removed={} databases_removed={} safepoint={}",
+            num_tables_removed,
+            num_databases_removed,
+            gc_safepoint);
     }
     else
     {
-        // Don't update last_gc_safe_point and retry later
-        LOG_INFO(log, "Performed GC using safe point {} meet error, will try again later", gc_safe_point);
+        // Don't update last_gc_safepoint and retry later
+        LOG_INFO(
+            log,
+            "Schema GC meet error, will try again later, last_safepoint={} safepoint={}",
+            gc_context.last_gc_safepoint,
+            gc_safepoint);
     }
 
     return true;

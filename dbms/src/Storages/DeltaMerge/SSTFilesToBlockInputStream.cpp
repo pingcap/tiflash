@@ -87,17 +87,19 @@ void SSTFilesToBlockInputStream::readPrefix()
             break;
         }
     }
+
+    // Pass the log to SSTReader inorder to filter logs by table_id suffix
     if (!ssts_default.empty())
     {
-        default_cf_reader = std::make_unique<MultiSSTReader<MonoSSTReader, SSTView>>(proxy_helper, ColumnFamilyType::Default, make_inner_func, ssts_default);
+        default_cf_reader = std::make_unique<MultiSSTReader<MonoSSTReader, SSTView>>(proxy_helper, ColumnFamilyType::Default, make_inner_func, ssts_default, log);
     }
     if (!ssts_write.empty())
     {
-        write_cf_reader = std::make_unique<MultiSSTReader<MonoSSTReader, SSTView>>(proxy_helper, ColumnFamilyType::Write, make_inner_func, ssts_write);
+        write_cf_reader = std::make_unique<MultiSSTReader<MonoSSTReader, SSTView>>(proxy_helper, ColumnFamilyType::Write, make_inner_func, ssts_write, log);
     }
     if (!ssts_lock.empty())
     {
-        lock_cf_reader = std::make_unique<MultiSSTReader<MonoSSTReader, SSTView>>(proxy_helper, ColumnFamilyType::Lock, make_inner_func, ssts_lock);
+        lock_cf_reader = std::make_unique<MultiSSTReader<MonoSSTReader, SSTView>>(proxy_helper, ColumnFamilyType::Lock, make_inner_func, ssts_lock, log);
     }
     LOG_INFO(log, "Finish Construct MultiSSTReader, write {} lock {} default {} region {}", ssts_write.size(), ssts_lock.size(), ssts_default.size(), this->region->id());
 

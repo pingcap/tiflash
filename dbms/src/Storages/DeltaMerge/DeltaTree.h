@@ -19,7 +19,6 @@
 #include <Core/Types.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/DeltaMerge/Tuple.h>
-#include <common/logger_useful.h>
 
 #include <algorithm>
 #include <cstddef>
@@ -783,8 +782,6 @@ private:
     std::unique_ptr<Allocator> allocator;
     size_t bytes = 0;
 
-    Poco::Logger * log = nullptr;
-
 public:
     // For test cases only.
     ValueSpacePtr insert_value_space;
@@ -903,14 +900,10 @@ private:
     {
         allocator = std::make_unique<Allocator>();
 
-        log = &Poco::Logger::get("DeltaTree");
-
         insert_value_space = insert_value_space_;
 
         root = createNode<Leaf>();
         left_leaf = right_leaf = as(Leaf, root);
-
-        LOG_TRACE(log, "create");
     }
 
 public:
@@ -943,8 +936,6 @@ public:
         std::swap(num_deletes, other.num_deletes);
         std::swap(num_entries, other.num_entries);
 
-        std::swap(log, other.log);
-
         std::swap(allocator, allocator);
 
         insert_value_space.swap(other.insert_value_space);
@@ -959,8 +950,6 @@ public:
             else
                 freeTree<Intern>(static_cast<InternPtr>(root));
         }
-
-        LOG_TRACE(log, "free");
     }
 
     void checkAll() const
@@ -1017,7 +1006,6 @@ DT_CLASS::DeltaTree(const DT_CLASS::Self & o)
     , num_deletes(o.num_deletes)
     , num_entries(o.num_entries)
     , allocator(std::make_unique<Allocator>())
-    , log(&Poco::Logger::get("DeltaTree"))
 {
     // If exception is thrown before clear copying_nodes, all nodes will be destroyed.
     std::vector<NodePtr> copying_nodes;
