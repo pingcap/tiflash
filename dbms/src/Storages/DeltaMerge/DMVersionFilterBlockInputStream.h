@@ -20,6 +20,7 @@
 #include <DataStreams/IBlockInputStream.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
+#include <Storages/DeltaMerge/ScanContext.h>
 #include <common/logger_useful.h>
 
 namespace DB
@@ -47,10 +48,12 @@ public:
                                     const ColumnDefines & read_columns,
                                     UInt64 version_limit_,
                                     bool is_common_handle_,
-                                    const String & tracing_id = "")
+                                    const String & tracing_id = "",
+                                    const ScanContextPtr & scan_context_ = nullptr)
         : version_limit(version_limit_)
         , is_common_handle(is_common_handle_)
         , header(toEmptyBlock(read_columns))
+        , scan_context(scan_context_)
         , log(Logger::get((MODE == DM_VERSION_FILTER_MODE_MVCC ? MVCC_FILTER_NAME : COMPACT_FILTER_NAME),
                           tracing_id))
     {
@@ -69,7 +72,7 @@ public:
                   "Total rows: {}, pass: {:.2f}%"
                   ", complete pass: {:.2f}%, complete not pass: {:.2f}%"
                   ", not clean: {:.2f}%, is deleted: {:.2f}%, effective: {:.2f}%"
-                  ", read tso: {}",
+                  ", start_ts: {}",
                   total_rows,
                   passed_rows * 100.0 / total_rows,
                   complete_passed * 100.0 / total_blocks,
@@ -242,6 +245,8 @@ private:
     size_t not_clean_rows = 0;
     size_t effective_num_rows = 0;
     size_t deleted_rows = 0;
+
+    const ScanContextPtr scan_context;
 
     const LoggerPtr log;
 };

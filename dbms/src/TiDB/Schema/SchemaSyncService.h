@@ -20,15 +20,12 @@
 #include <boost/noncopyable.hpp>
 #include <memory>
 
-namespace Poco
-{
-class Logger;
-}
-
 namespace DB
 {
 class Context;
 class BackgroundProcessingPool;
+class Logger;
+using LoggerPtr = std::shared_ptr<Logger>;
 
 class IAST;
 using ASTPtr = std::shared_ptr<IAST>;
@@ -49,10 +46,10 @@ private:
 
     struct GCContext
     {
-        Timestamp last_gc_safe_point = 0;
+        Timestamp last_gc_safepoint = 0;
     } gc_context;
 
-    bool gc(Timestamp gc_safe_point);
+    bool gc(Timestamp gc_safepoint);
 
 private:
     Context & context;
@@ -62,7 +59,7 @@ private:
     BackgroundProcessingPool & background_pool;
     BackgroundProcessingPool::TaskHandle handle;
 
-    Poco::Logger * log;
+    LoggerPtr log;
 };
 
 using SchemaSyncServicePtr = std::shared_ptr<SchemaSyncService>;

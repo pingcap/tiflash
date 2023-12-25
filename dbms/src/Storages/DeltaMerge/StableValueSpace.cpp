@@ -348,7 +348,7 @@ StableValueSpace::Snapshot::getInputStream(
     bool is_fast_scan,
     bool enable_del_clean_read)
 {
-    LOG_DEBUG(log, "max_data_version: {}, enable_handle_clean_read: {}, is_fast_mode: {}, enable_del_clean_read: {}", max_data_version, enable_handle_clean_read, is_fast_scan, enable_del_clean_read);
+    LOG_DEBUG(log, "start_ts: {}, enable_handle_clean_read: {}, is_fast_mode: {}, enable_del_clean_read: {}", max_data_version, enable_handle_clean_read, is_fast_scan, enable_del_clean_read);
     SkippableBlockInputStreams streams;
 
     for (size_t i = 0; i < stable->files.size(); i++)

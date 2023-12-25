@@ -57,7 +57,7 @@ bool SpaceMap::checkSpace(UInt64 offset, size_t size) const
 
 void SpaceMap::logDebugString()
 {
-    LOG_DEBUG(log, toDebugString());
+    LOG_DEBUG(Logger::get(), toDebugString());
 }
 
 bool SpaceMap::markFree(UInt64 offset, size_t length)
@@ -97,7 +97,6 @@ SpaceMap::SpaceMap(UInt64 start_, UInt64 end_, SpaceMapType type_)
     : type(type_)
     , start(start_)
     , end(end_)
-    , log(&Poco::Logger::get("SpaceMap"))
 {
 }
 

@@ -64,6 +64,11 @@ Block DMVersionFilterBlockInputStream<MODE>::read(FilterPtr & res_filter, bool r
 
             total_rows += rows;
             passed_rows += rows;
+            if (scan_context)
+            {
+                scan_context->mvcc_input_rows += rows;
+                scan_context->mvcc_output_rows += rows;
+            }
 
             initNextBlock();
 
@@ -382,6 +387,11 @@ Block DMVersionFilterBlockInputStream<MODE>::read(FilterPtr & res_filter, bool r
         ++total_blocks;
         total_rows += rows;
         passed_rows += passed_count;
+        if (scan_context)
+        {
+            scan_context->mvcc_input_rows += rows;
+            scan_context->mvcc_output_rows += passed_rows;
+        }
 
         // This block is empty after filter, continue to process next block
         if (passed_count == 0)

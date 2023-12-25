@@ -59,7 +59,7 @@ struct MemUtilsTest : ::testing::TestWithParam<std::pair<bool, bool>>
 };
 TEST_P(MemUtilsTest, CompareTrivial)
 {
-    TempOption _option(GetParam().first, GetParam().second);
+    TempOption option(GetParam().first, GetParam().second);
     for (auto & [a, b] : std::vector<std::pair<std::string, std::string>>{
              {"123", "123"},
              {"abc", "abc"},
@@ -87,7 +87,7 @@ TEST_P(MemUtilsTest, CompareLongEq)
     std::random_device device{};
     auto seed = device();
     std::default_random_engine eng{seed};
-    std::uniform_int_distribution<char> dist(1, 'z');
+    std::uniform_int_distribution<std::int8_t> dist(1, 'z');
     std::string data(1024 * 1024 * 64, ' ');
 
     auto aligned1_ = AlignedCharArray(1024 * 1024 * 64 + 1, std::align_val_t{128});
@@ -114,7 +114,7 @@ TEST_P(MemUtilsTest, CompareLongNe)
     std::random_device device{};
     auto seed = device();
     std::default_random_engine eng{seed};
-    std::uniform_int_distribution<char> dist(1, 'z');
+    std::uniform_int_distribution<std::int8_t> dist(1, 'z');
     std::string data(1024 * 1024 * 64, ' ');
 
     auto aligned1_ = AlignedCharArray(1024 * 1024 * 64 + 1, std::align_val_t{128});
@@ -294,7 +294,7 @@ TEST_P(MemUtilsTest, CompareLongEq)
     std::random_device device{};
     auto seed = device();
     std::default_random_engine eng{seed};
-    std::uniform_int_distribution<char> dist(1, 'z');
+    std::uniform_int_distribution<std::int8_t> dist(1, 'z');
     std::string data(1024 * 1024 * 64, ' ');
 
     auto aligned1_ = AlignedCharArray(1024 * 1024 * 64 + 1, std::align_val_t{128});
@@ -322,7 +322,7 @@ TEST_P(MemUtilsTest, CompareLongNe)
     std::random_device device{};
     auto seed = device();
     std::default_random_engine eng{seed};
-    std::uniform_int_distribution<char> dist(1, 'z');
+    std::uniform_int_distribution<int8_t> dist(1, 'z');
     std::string data(1024 * 1024 * 64, ' ');
 
     auto aligned1_ = AlignedCharArray(1024 * 1024 * 64 + 1, std::align_val_t{128});

@@ -16,7 +16,6 @@
 
 /// Macros for convenient usage of Poco logger.
 
-#include <Poco/Logger.h>
 #include <common/MacroUtils.h>
 #include <fmt/compile.h>
 #include <fmt/format.h>
@@ -25,6 +24,12 @@
 #ifndef QUERY_PREVIEW_LENGTH
 #define QUERY_PREVIEW_LENGTH 160
 #endif
+
+namespace DB
+{
+class Logger;
+using LoggerPtr = std::shared_ptr<Logger>;
+} // namespace DB
 
 namespace LogFmtDetails
 {

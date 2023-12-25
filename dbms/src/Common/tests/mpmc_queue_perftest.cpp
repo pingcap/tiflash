@@ -42,7 +42,7 @@ struct LongString
 String generateString(int min_len, int max_len)
 {
     std::uniform_int_distribution<int> len_dist(min_len, max_len);
-    std::uniform_int_distribution<char> char_dist;
+    std::uniform_int_distribution<std::int8_t> char_dist;
     String str;
     int len = len_dist(mt);
     for (int i = 0; i < len; ++i)
