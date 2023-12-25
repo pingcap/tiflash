@@ -37,6 +37,7 @@
 #include <Common/getNumberOfCPUCores.h>
 #include <Common/setThreadName.h>
 #include <Core/TiFlashDisaggregatedMode.h>
+#include <Encryption/CSEDataKeyManager.h>
 #include <Encryption/DataKeyManager.h>
 #include <Encryption/FileProvider.h>
 #include <Encryption/MockKeyManager.h>
@@ -102,7 +103,6 @@
 
 #include <boost/algorithm/string/classification.hpp>
 #include <ext/scope_guard.h>
-#include <limits>
 #include <magic_enum.hpp>
 #include <memory>
 #include <thread>
@@ -1040,13 +1040,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
         while (!tiflash_instance_wrap.proxy_helper)
             std::this_thread::sleep_for(std::chrono::milliseconds(200));
         LOG_INFO(log, "tiflash proxy is initialized");
-        if (tiflash_instance_wrap.proxy_helper->checkEncryptionEnabled())
-        {
-            auto method = tiflash_instance_wrap.proxy_helper->getEncryptionMethod();
-            LOG_INFO(log, "encryption is enabled, method is {}", IntoEncryptionMethodName(method));
-        }
-        else
-            LOG_INFO(log, "encryption is disabled");
     }
     else
     {
@@ -1055,10 +1048,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     SCOPE_EXIT({
         if (!proxy_conf.is_proxy_runnable)
-        {
-            proxy_runner.join();
             return;
-        }
+
         LOG_INFO(log, "Let tiflash proxy shutdown");
         tiflash_instance_wrap.status = EngineStoreServerStatus::Terminated;
         tiflash_instance_wrap.tmt = nullptr;
@@ -1091,17 +1082,31 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->getSharedContextDisagg()->use_autoscaler = use_autoscaler;
 
     /// Init File Provider
-    bool enable_encryption = false;
+    // ps_write is a weak_ptr, now it is nullptr, pass it by reference to init CSEDataKeyManager.
+    // After UniversalPageStorage is init, ps_write will point to the UniversalPageStorage.
+    std::weak_ptr<UniversalPageStorage> ps_write;
     if (proxy_conf.is_proxy_runnable)
     {
-        enable_encryption = tiflash_instance_wrap.proxy_helper->checkEncryptionEnabled();
-        if (enable_encryption)
+        const bool enable_encryption = tiflash_instance_wrap.proxy_helper->checkEncryptionEnabled();
+        if (enable_encryption && storage_config.s3_config.isS3Enabled())
         {
-            auto method = tiflash_instance_wrap.proxy_helper->getEncryptionMethod();
-            enable_encryption = (method != EncryptionMethod::Plaintext);
+            LOG_INFO(log, "encryption can be enabled, method is Aes256Ctr");
+            KeyManagerPtr key_manager = std::make_shared<CSEDataKeyManager>(&tiflash_instance_wrap, ps_write);
+            global_context->initializeFileProvider(key_manager, true);
         }
-        KeyManagerPtr key_manager = std::make_shared<DataKeyManager>(&tiflash_instance_wrap);
-        global_context->initializeFileProvider(key_manager, enable_encryption);
+        else if (enable_encryption)
+        {
+            const auto method = tiflash_instance_wrap.proxy_helper->getEncryptionMethod();
+            LOG_INFO(log, "encryption is enabled, method is {}", magic_enum::enum_name(method));
+            KeyManagerPtr key_manager = std::make_shared<DataKeyManager>(&tiflash_instance_wrap);
+            global_context->initializeFileProvider(key_manager, method != EncryptionMethod::Plaintext);
+        }
+        else
+        {
+            LOG_INFO(log, "encryption is disabled");
+            KeyManagerPtr key_manager = std::make_shared<DataKeyManager>(&tiflash_instance_wrap);
+            global_context->initializeFileProvider(key_manager, false);
+        }
     }
     else
     {
@@ -1123,14 +1128,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         storage_config.s3_config.isS3Enabled());
 
     if (storage_config.s3_config.isS3Enabled())
-    {
-        if (enable_encryption)
-        {
-            LOG_ERROR(log, "Cannot support S3 when encryption enabled.");
-            throw Exception("Cannot support S3 when encryption enabled.");
-        }
         S3::ClientFactory::instance().init(storage_config.s3_config);
-    }
 
     global_context->getSharedContextDisagg()->initRemoteDataStore(
         global_context->getFileProvider(),
@@ -1317,6 +1315,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         global_context->initializeWriteNodePageStorageIfNeed(global_context->getPathPool());
         if (auto wn_ps = global_context->tryGetWriteNodePageStorage(); wn_ps != nullptr)
         {
+            ps_write = wn_ps; // now ps_write point to the UniversalPageStorage
             store_ident = tryGetStoreIdent(wn_ps);
             if (!store_ident)
             {
@@ -1583,7 +1582,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
 
     {
-        TcpHttpServersHolder tcpHttpServersHolder(*this, settings, log);
+        TcpHttpServersHolder tcp_http_servers_holder(*this, settings, log);
 
         main_config_reloader->addConfigObject(global_context->getSecurityConfig());
         main_config_reloader->start();
@@ -1607,7 +1606,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         SCOPE_EXIT({
             is_cancelled = true;
 
-            tcpHttpServersHolder.onExit();
+            tcp_http_servers_holder.onExit();
 
             main_config_reloader.reset();
             users_config_reloader.reset();

@@ -1547,6 +1547,9 @@ void SchemaBuilder<Getter, NameMapper>::dropAllSchema()
         LOG_INFO(log, "Database {} dropped during drop all schemas", db.first);
     }
 
+    /// Drop keyspace encryption key
+    context.getFileProvider()->dropEncryptionInfo(keyspace_id);
+
     LOG_INFO(log, "Drop all schemas end");
 }
 

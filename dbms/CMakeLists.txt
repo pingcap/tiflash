@@ -184,6 +184,7 @@ target_link_libraries (tiflash_common_io
     prometheus-cpp::pull
     cpptoml
     magic_enum
+    kv_client
     simdjson
     libsymbolization
     ${RE2_LIBRARY}
@@ -204,7 +205,6 @@ target_link_libraries (dbms
     tiflash_common_io
     flash_service
     kvproto
-    kv_client
     tipb
     dtpb
     RemoteTaskProto

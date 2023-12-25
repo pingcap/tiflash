@@ -22,7 +22,6 @@
 
 #include <atomic>
 #include <ext/singleton.h>
-#include <memory>
 #include <optional>
 #include <vector>
 
@@ -107,6 +106,8 @@ struct TiFlashRaftProxyHelper : RaftStoreProxyFFIHelper
     FileEncryptionInfo newFile(const std::string &) const;
     FileEncryptionInfo deleteFile(const std::string &) const;
     FileEncryptionInfo linkFile(const std::string &, const std::string &) const;
+    std::string getMasterKey() const;
+    bool getKeyspaceEncryption(uint32_t keyspace_id) const;
     BatchReadIndexRes batchReadIndex_v1(const std::vector<kvrpcpb::ReadIndexRequest> &, uint64_t) const;
     BatchReadIndexRes batchReadIndex(const std::vector<kvrpcpb::ReadIndexRequest> &, uint64_t) const;
     BatchReadIndexRes batchReadIndex_v2(const std::vector<kvrpcpb::ReadIndexRequest> &, uint64_t) const;

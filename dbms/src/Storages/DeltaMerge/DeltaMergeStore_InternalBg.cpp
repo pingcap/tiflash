@@ -82,7 +82,8 @@ public:
         for (auto & root_path : delegate.listPaths())
         {
             std::set<PageIdU64> ids_under_path;
-            auto file_ids_in_current_path = DMFile::listAllInPath(file_provider, root_path, options);
+            auto file_ids_in_current_path
+                = DMFile::listAllInPath(file_provider, root_path, options, path_pool->getKeyspaceID());
             path_and_ids_vec.emplace_back(root_path, std::move(file_ids_in_current_path));
         }
         return path_and_ids_vec;

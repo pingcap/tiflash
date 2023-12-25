@@ -544,6 +544,14 @@ FileEncryptionInfo TiFlashRaftProxyHelper::linkFile(const std::string & src, con
 {
     return FileEncryptionInfo(fn_handle_link_file(proxy_ptr, strIntoView(&src), strIntoView(&dst)));
 }
+std::string TiFlashRaftProxyHelper::getMasterKey() const
+{
+    return String(*fn_get_master_key(proxy_ptr));
+}
+bool TiFlashRaftProxyHelper::getKeyspaceEncryption(uint32_t keyspace_id) const
+{
+    return fn_get_keyspace_encryption(proxy_ptr, keyspace_id);
+}
 
 struct CppStrVec
 {

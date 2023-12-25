@@ -27,13 +27,13 @@ class KeyManager
 public:
     virtual ~KeyManager() = default;
 
-    virtual FileEncryptionInfo getFile(const String & fname) = 0;
+    virtual FileEncryptionInfo getInfo(const EncryptionPath & ep) = 0;
 
-    virtual FileEncryptionInfo newFile(const String & fname) = 0;
+    virtual FileEncryptionInfo newInfo(const EncryptionPath & ep) = 0;
 
-    virtual void deleteFile(const String & fname, bool throw_on_error) = 0;
+    virtual void deleteInfo(const EncryptionPath & ep, bool throw_on_error) = 0;
 
-    virtual void linkFile(const String & src_fname, const String & dst_fname) = 0;
+    virtual void linkInfo(const EncryptionPath & src_ep, const EncryptionPath & dst_ep) = 0;
 };
 
 using KeyManagerPtr = std::shared_ptr<KeyManager>;

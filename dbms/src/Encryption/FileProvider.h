@@ -80,6 +80,12 @@ public:
 
     void deleteEncryptionInfo(const EncryptionPath & encryption_path_, bool throw_on_error = true) const;
 
+    // Drop encryption info of keyspace_id.
+    // !!!Warn!!: after calling this method, the keyspace encryption key can not be found anymore.
+    // Be catious and make sure there is no data in this keyspace before calling this method.
+    // Only for CSEDataKeyManager now.
+    void dropEncryptionInfo(KeyspaceID keyspace_id) const;
+
     // Encrypt/Decrypt page data in place, using encryption_path_ to find the encryption info
     void encryptPage(const EncryptionPath & encryption_path_, char * data, size_t data_size, PageIdU64 page_id);
     void decryptPage(const EncryptionPath & encryption_path_, char * data, size_t data_size, PageIdU64 page_id);

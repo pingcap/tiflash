@@ -267,47 +267,47 @@ String DMFile::encryptionBasePath() const
 
 EncryptionPath DMFile::encryptionDataPath(const FileNameBase & file_name_base) const
 {
-    return EncryptionPath(encryptionBasePath(), file_name_base + details::DATA_FILE_SUFFIX);
+    return EncryptionPath(encryptionBasePath(), file_name_base + details::DATA_FILE_SUFFIX, keyspace_id);
 }
 
 EncryptionPath DMFile::encryptionIndexPath(const FileNameBase & file_name_base) const
 {
-    return EncryptionPath(encryptionBasePath(), file_name_base + details::INDEX_FILE_SUFFIX);
+    return EncryptionPath(encryptionBasePath(), file_name_base + details::INDEX_FILE_SUFFIX, keyspace_id);
 }
 
 EncryptionPath DMFile::encryptionMarkPath(const FileNameBase & file_name_base) const
 {
-    return EncryptionPath(encryptionBasePath(), file_name_base + details::MARK_FILE_SUFFIX);
+    return EncryptionPath(encryptionBasePath(), file_name_base + details::MARK_FILE_SUFFIX, keyspace_id);
 }
 
 EncryptionPath DMFile::encryptionMetaPath() const
 {
-    return EncryptionPath(encryptionBasePath(), metaFileName());
+    return EncryptionPath(encryptionBasePath(), metaFileName(), keyspace_id);
 }
 
 EncryptionPath DMFile::encryptionPackStatPath() const
 {
-    return EncryptionPath(encryptionBasePath(), packStatFileName());
+    return EncryptionPath(encryptionBasePath(), packStatFileName(), keyspace_id);
 }
 
 EncryptionPath DMFile::encryptionPackPropertyPath() const
 {
-    return EncryptionPath(encryptionBasePath(), packPropertyFileName());
+    return EncryptionPath(encryptionBasePath(), packPropertyFileName(), keyspace_id);
 }
 
 EncryptionPath DMFile::encryptionConfigurationPath() const
 {
-    return EncryptionPath(encryptionBasePath(), configurationFileName());
+    return EncryptionPath(encryptionBasePath(), configurationFileName(), keyspace_id);
 }
 
 EncryptionPath DMFile::encryptionMetav2Path() const
 {
-    return EncryptionPath(encryptionBasePath(), metav2FileName());
+    return EncryptionPath(encryptionBasePath(), metav2FileName(), keyspace_id);
 }
 
 EncryptionPath DMFile::encryptionMergedPath(UInt32 number) const
 {
-    return EncryptionPath(encryptionBasePath(), mergedFilename(number));
+    return EncryptionPath(encryptionBasePath(), mergedFilename(number), keyspace_id);
 }
 
 String DMFile::colDataFileName(const FileNameBase & file_name_base)
@@ -702,7 +702,8 @@ std::vector<String> DMFile::listS3(const String & parent_path)
 std::set<UInt64> DMFile::listAllInPath(
     const FileProviderPtr & file_provider,
     const String & parent_path,
-    const DMFile::ListOptions & options)
+    const DMFile::ListOptions & options,
+    KeyspaceID keyspace_id)
 {
     auto s3_fname_view = S3::S3FilenameView::fromKeyWithPrefix(parent_path);
     auto file_names = s3_fname_view.isValid() ? listS3(s3_fname_view.toFullKey()) : listLocal(parent_path);
@@ -739,7 +740,9 @@ std::set<UInt64> DMFile::listAllInPath(
                 }
                 UInt64 file_id = *res;
                 const String readable_path = getPathByStatus(parent_path, file_id, DMFile::Status::READABLE);
-                file_provider->deleteEncryptionInfo(EncryptionPath(readable_path, ""), /* throw_on_error= */ false);
+                file_provider->deleteEncryptionInfo(
+                    EncryptionPath(readable_path, "", keyspace_id),
+                    /* throw_on_error= */ false);
                 const auto full_path = parent_path + "/" + name;
                 if (Poco::File file(full_path); file.exists())
                     file.remove(true);
@@ -804,7 +807,7 @@ void DMFile::remove(const FileProviderPtr & file_provider)
         // Rename the directory first (note that we should do it before deleting encryption info)
         dir_file.renameTo(deleted_path);
         FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_dmfile_remove_encryption);
-        file_provider->deleteEncryptionInfo(EncryptionPath(encryptionBasePath(), ""));
+        file_provider->deleteEncryptionInfo(EncryptionPath(encryptionBasePath(), "", keyspace_id));
         FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_dmfile_remove_from_disk);
         // Then clean the files on disk
         dir_file.remove(true);
@@ -1148,8 +1151,11 @@ void DMFile::finalizeSmallFiles(
     auto copy_file_to_cur = [&](const String & fname, UInt64 fsize) {
         checkMergedFile(writer, file_provider, write_limiter);
 
-        auto read_file
-            = openForRead(file_provider, subFilePath(fname), EncryptionPath(encryptionBasePath(), fname), fsize);
+        auto read_file = openForRead(
+            file_provider,
+            subFilePath(fname),
+            EncryptionPath(encryptionBasePath(), fname, keyspace_id),
+            fsize);
         std::vector<char> read_buf(fsize);
         auto read_size = read_file.readBig(read_buf.data(), read_buf.size());
         RUNTIME_CHECK(read_size == fsize, fname, read_size, fsize);
