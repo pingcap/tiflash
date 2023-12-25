@@ -26,6 +26,29 @@ TEST(AsyncTasksTest, AsyncTasksNormal)
     using TestAsyncTasks = AsyncTasks<uint64_t, std::function<void()>, void>;
 
     auto log = DB::Logger::get();
+    // Cancel and addTask
+    {
+        auto async_tasks = std::make_unique<TestAsyncTasks>(1, 1, 1);
+        auto m = std::make_shared<std::mutex>();
+        int flag = 0;
+        std::unique_lock cl(*m);
+        async_tasks->addTask(1, [m, &flag, &async_tasks]() {
+            auto cancel_handle = async_tasks->getCancelHandleFromExecutor(1);
+            std::scoped_lock rl(*m);
+            if (cancel_handle->canceled())
+            {
+                return;
+            }
+            flag = 1;
+        });
+        async_tasks->asyncCancelTask(1);
+        async_tasks->addTask(1, [&flag]() {
+            flag = 2;
+        });
+        cl.unlock();
+        async_tasks->fetchResult(1);
+        ASSERT_EQ(flag, 2);
+    }
     // Lifetime of tasks
     {
         auto async_tasks = std::make_unique<TestAsyncTasks>(1, 1, 1);
@@ -51,7 +74,6 @@ TEST(AsyncTasksTest, AsyncTasksNormal)
         t2.join();
     }
 
-    LOG_INFO(log, "Cancel in queue");
     // Cancel in queue
     {
         auto async_tasks = std::make_unique<TestAsyncTasks>(1, 1, 2);
@@ -89,7 +111,6 @@ TEST(AsyncTasksTest, AsyncTasksNormal)
         ASSERT_FALSE(finished);
     }
 
-    LOG_INFO(log, "Block cancel");
     // Block cancel
     {
         auto async_tasks = std::make_unique<TestAsyncTasks>(2, 2, 10);
@@ -125,6 +146,7 @@ TEST(AsyncTasksTest, AsyncTasksNormal)
                     continue;
                 if (async_tasks->blockedCancelRunningTask(i) == AsyncTaskHelper::TaskState::InQueue)
                 {
+                    // Cancel in queue, should manually add `finished`.
                     finished += 1;
                 }
                 f[i] = true;
@@ -139,7 +161,6 @@ TEST(AsyncTasksTest, AsyncTasksNormal)
         ASSERT_EQ(async_tasks->count(), 0);
     }
 
-    LOG_INFO(log, "Cancel tasks in queue");
     // Cancel tasks in queue
     {
         auto async_tasks = std::make_unique<TestAsyncTasks>(1, 1, 100);
