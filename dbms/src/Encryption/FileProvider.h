@@ -36,9 +36,10 @@ using ReadLimiterPtr = std::shared_ptr<ReadLimiter>;
 class FileProvider
 {
 public:
-    FileProvider(KeyManagerPtr key_manager_, bool encryption_enabled_)
+    FileProvider(KeyManagerPtr key_manager_, bool encryption_enabled_, bool keyspace_encryption_enabled_ = false)
         : key_manager{std::move(key_manager_)}
         , encryption_enabled{encryption_enabled_}
+        , keyspace_encryption_enabled{keyspace_encryption_enabled_}
     {}
 
     RandomAccessFilePtr newRandomAccessFile(
@@ -115,14 +116,8 @@ public:
 private:
     KeyManagerPtr key_manager;
     const bool encryption_enabled;
-#ifndef DBMS_PUBLIC_GTEST
     // always false, only allow set to true when keyspace feature is GA in On-Promise.
     const bool keyspace_encryption_enabled = false;
-#else
-public:
-    // allow set to true in UT
-    bool keyspace_encryption_enabled = false;
-#endif
 };
 
 } // namespace DB

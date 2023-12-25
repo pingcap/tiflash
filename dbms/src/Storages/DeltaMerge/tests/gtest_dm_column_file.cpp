@@ -41,7 +41,9 @@
 namespace DB::DM::tests
 {
 
-class ColumnFileTest : public DB::base::TiFlashStorageTestBasic
+class ColumnFileTest
+    : public DB::base::TiFlashStorageTestBasic
+    , public testing::WithParamInterface<std::tuple<bool, bool>>
 {
 public:
     ColumnFileTest() = default;
@@ -51,11 +53,11 @@ public:
     void SetUp() override
     {
         TiFlashStorageTestBasic::SetUp();
-
-        KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(true);
-        auto file_provider = std::make_shared<FileProvider>(key_manager, true);
+        bool is_encrypted = std::get<0>(GetParam());
+        bool is_keyspace_encrypted = std::get<1>(GetParam());
+        KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(is_encrypted);
+        auto file_provider = std::make_shared<FileProvider>(key_manager, is_encrypted, is_keyspace_encrypted);
         db_context->setFileProvider(file_provider);
-        db_context->getFileProvider()->keyspace_encryption_enabled = true;
         KeyspaceID keyspace_id = 0x12345678;
 
         parent_path = TiFlashStorageTestBasic::getTemporaryPath();
@@ -91,7 +93,7 @@ protected:
     ColumnCachePtr column_cache;
 };
 
-TEST_F(ColumnFileTest, ColumnFileBigRead)
+TEST_P(ColumnFileTest, ColumnFileBigRead)
 try
 {
     auto table_columns = DMTestEnv::getDefaultColumns();
@@ -181,7 +183,7 @@ try
 }
 CATCH
 
-TEST_F(ColumnFileTest, SerializeColumnFilePersisted)
+TEST_P(ColumnFileTest, SerializeColumnFilePersisted)
 try
 {
     WriteBatches wbs(*dmContext().storage_pool, dmContext().getWriteLimiter());
@@ -213,7 +215,7 @@ try
 }
 CATCH
 
-TEST_F(ColumnFileTest, SerializeEmptyBlock)
+TEST_P(ColumnFileTest, SerializeEmptyBlock)
 try
 {
     size_t num_rows_write = 0;
@@ -223,7 +225,7 @@ try
 }
 CATCH
 
-TEST_F(ColumnFileTest, ReadColumns)
+TEST_P(ColumnFileTest, ReadColumns)
 try
 {
     size_t num_rows_write = 10;
@@ -261,5 +263,10 @@ try
     }
 }
 CATCH
+
+INSTANTIATE_TEST_CASE_P(
+    ColumnFile,
+    ColumnFileTest,
+    testing::Values(std::make_tuple(false, false), std::make_tuple(true, false), std::make_tuple(true, true)));
 
 } // namespace DB::DM::tests
