@@ -19,6 +19,7 @@
 #include <Common/SyncPoint/SyncPoint.h>
 #include <Common/TiFlashMetrics.h>
 #include <Common/assert_cast.h>
+#include <Poco/Message.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/V3/MapUtils.h>
 #include <Storages/Page/V3/PageDirectory.h>
@@ -37,8 +38,6 @@
 #include <shared_mutex>
 #include <type_traits>
 #include <utility>
-
-#include "Poco/Message.h"
 
 
 #ifdef FIU_ENABLE
