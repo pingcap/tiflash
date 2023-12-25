@@ -247,6 +247,7 @@ DMFilePtr S3PreparedDMFileToken::restore(DMFile::ReadMetaMode read_mode)
         oid.file_id,
         page_id,
         S3::S3Filename::fromTableID(oid.store_id, oid.keyspace_id, oid.table_id).toFullKeyWithPrefix(),
-        read_mode);
+        read_mode,
+        oid.keyspace_id);
 }
 } // namespace DB::DM::Remote

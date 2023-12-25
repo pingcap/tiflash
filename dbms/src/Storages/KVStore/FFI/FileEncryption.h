@@ -15,8 +15,11 @@
 #pragma once
 
 #include <Common/nocopyable.h>
+#include <Encryption/BlockAccessCipherStream.h>
+#include <Encryption/EncryptionPath.h>
 #include <RaftStoreProxyFFI/EncryptionFFI.h>
 #include <Storages/KVStore/FFI/ProxyFFICommon.h>
+
 
 namespace DB
 {
@@ -29,7 +32,10 @@ struct EngineStoreServerWrap;
 #ifndef __clang__
 #pragma GCC diagnostic ignored "-Wclass-memaccess"
 #endif
-struct FileEncryptionInfo : FileEncryptionInfoRaw
+
+/// FileEncryptionInfo hold the encryption info of a file, the key is plain text.
+/// Warning: Never expose the key.
+struct FileEncryptionInfo : private FileEncryptionInfoRaw
 {
     ~FileEncryptionInfo()
     {
@@ -50,7 +56,7 @@ struct FileEncryptionInfo : FileEncryptionInfoRaw
         }
     }
 
-    FileEncryptionInfo(const FileEncryptionInfoRaw & src)
+    explicit FileEncryptionInfo(const FileEncryptionInfoRaw & src)
         : FileEncryptionInfoRaw(src)
     {}
     FileEncryptionInfo(
@@ -63,19 +69,30 @@ struct FileEncryptionInfo : FileEncryptionInfoRaw
     {}
     DISALLOW_COPY(FileEncryptionInfo);
     FileEncryptionInfo(FileEncryptionInfo && src)
+        : FileEncryptionInfoRaw()
     {
-        std::memcpy(this, &src, sizeof(src));
-        std::memset(&src, 0, sizeof(src));
+        std::memcpy(this, &src, sizeof(src)); // NOLINT
+        std::memset(&src, 0, sizeof(src)); // NOLINT
     }
     FileEncryptionInfo & operator=(FileEncryptionInfo && src)
     {
         if (this == &src)
             return *this;
         this->~FileEncryptionInfo();
-        std::memcpy(this, &src, sizeof(src));
-        std::memset(&src, 0, sizeof(src));
+        std::memcpy(this, &src, sizeof(src)); // NOLINT
+        std::memset(&src, 0, sizeof(src)); // NOLINT
         return *this;
     }
+
+    BlockAccessCipherStreamPtr createCipherStream(
+        const EncryptionPath & encryption_path,
+        bool is_new_created_info = false) const;
+
+    bool isValid() const { return (res == FileEncryptionRes::Ok || res == FileEncryptionRes::Disabled); }
+    // FileEncryptionRes::Disabled means encryption feature has never been enabled, so no file will be encrypted.
+    bool isEncrypted() const { return (res != FileEncryptionRes::Disabled && method != EncryptionMethod::Plaintext); }
+
+    std::string getErrorMsg() const { return error_msg ? std::string(*error_msg) : ""; }
 };
 #pragma GCC diagnostic pop
 

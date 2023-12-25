@@ -251,7 +251,6 @@ private:
     JoinMapMethod join_map_method;
     MapsAny maps_any; /// For ANY LEFT|INNER JOIN
     MapsAll maps_all; /// For ALL LEFT|INNER JOIN
-    MapsAnyFull maps_any_full; /// For ANY RIGHT|FULL JOIN
     MapsAllFull maps_all_full; /// For ALL RIGHT|FULL JOIN
     MapsAllFullWithRowFlag
         maps_all_full_with_row_flag; /// For RIGHT_SEMI | RIGHT_ANTI_SEMI | RIGHT_OUTER with other conditions
