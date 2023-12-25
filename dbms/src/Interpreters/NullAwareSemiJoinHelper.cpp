@@ -520,7 +520,7 @@ void NASemiJoinHelper<KIND, STRICTNESS, Mapped>::runAndCheckExprResult(
 APPLY_FOR_NULL_AWARE_SEMI_JOIN(M)
 #undef M
 
-#define M(KIND, STRICTNESS, MAPTYPE) template class NASemiJoinHelper<KIND, STRICTNESS, MAPTYPE::MappedType::Base_t>;
+#define M(KIND, STRICTNESS, MAPTYPE) template class NASemiJoinHelper<KIND, STRICTNESS, MAPTYPE::MappedType>;
 APPLY_FOR_NULL_AWARE_SEMI_JOIN(M)
 #undef M
 } // namespace DB
