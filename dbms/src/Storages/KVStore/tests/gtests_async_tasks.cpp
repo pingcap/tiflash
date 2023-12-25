@@ -25,6 +25,7 @@ TEST(AsyncTasksTest, AsyncTasksNormal)
     using namespace std::chrono_literals;
     using TestAsyncTasks = AsyncTasks<uint64_t, std::function<void()>, void>;
 
+    auto log = DB::Logger::get();
     // Lifetime of tasks
     {
         auto async_tasks = std::make_unique<TestAsyncTasks>(1, 1, 1);
@@ -50,6 +51,7 @@ TEST(AsyncTasksTest, AsyncTasksNormal)
         t2.join();
     }
 
+    LOG_INFO(log, "Cancel in queue");
     // Cancel in queue
     {
         auto async_tasks = std::make_unique<TestAsyncTasks>(1, 1, 2);
@@ -87,6 +89,7 @@ TEST(AsyncTasksTest, AsyncTasksNormal)
         ASSERT_FALSE(finished);
     }
 
+    LOG_INFO(log, "Block cancel");
     // Block cancel
     {
         auto async_tasks = std::make_unique<TestAsyncTasks>(2, 2, 10);
@@ -95,7 +98,7 @@ TEST(AsyncTasksTest, AsyncTasksNormal)
         std::vector<bool> f(total, false);
         for (int i = 0; i < total; i++)
         {
-            auto res = async_tasks->addTask(i, [i, &async_tasks, &finished]() {
+            auto res = async_tasks->addTask(i, [i, &async_tasks, &finished, log]() {
                 auto cancel_handle = async_tasks->getCancelHandleFromExecutor(i);
                 while (true)
                 {
@@ -120,15 +123,23 @@ TEST(AsyncTasksTest, AsyncTasksNormal)
             {
                 if (f[i])
                     continue;
+                if (async_tasks->blockedCancelRunningTask(i) == AsyncTaskHelper::TaskState::InQueue)
+                {
+                    finished += 1;
+                }
                 f[i] = true;
-                [[maybe_unused]] auto a = async_tasks->blockedCancelRunningTask(i);
                 break;
             }
         }
 
+        for (int i = 0; i < total; i++)
+        {
+            ASSERT_TRUE(f[i]);
+        }
         ASSERT_EQ(async_tasks->count(), 0);
     }
 
+    LOG_INFO(log, "Cancel tasks in queue");
     // Cancel tasks in queue
     {
         auto async_tasks = std::make_unique<TestAsyncTasks>(1, 1, 100);
