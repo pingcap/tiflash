@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/HashTable/HashMap.h>
+#include <Common/HashTable/HashSet.h>
 #include <Core/Block.h>
 
 namespace DB
@@ -189,7 +190,7 @@ struct ConcurrentMapsTemplate
 template <typename Mapped>
 struct MapsTemplate
 {
-    using MappedType = Mapped;
+    using MappedType = typename Mapped::Base_t;
     using key8Type = HashMap<UInt8, Mapped, TrivialHash, HashTableFixedGrower<8>>;
     using key16Type = HashMap<UInt16, Mapped, TrivialHash, HashTableFixedGrower<16>>;
     using key32Type = HashMap<UInt32, Mapped, HashCRC32<UInt32>>;
@@ -216,15 +217,40 @@ struct MapsTemplate
     // TODO: add more cases like Aggregator
 };
 
-using ConcurrentMapsAny = ConcurrentMapsTemplate<WithUsedFlag<false, RowRef>>;
+struct MapsAny
+{
+    using MappedType = VoidMapped;
+    using key8Type = HashSet<UInt8, TrivialHash, HashTableFixedGrower<8>>;
+    using key16Type = HashSet<UInt16, TrivialHash, HashTableFixedGrower<16>>;
+    using key32Type = HashSet<UInt32, HashCRC32<UInt32>>;
+    using key64Type = HashSet<UInt64, HashCRC32<UInt64>>;
+    using key_stringType = HashSetWithSavedHash<StringRef>;
+    using key_strbinpaddingType = HashSetWithSavedHash<StringRef>;
+    using key_strbinType = HashSetWithSavedHash<StringRef>;
+    using key_fixed_stringType = HashSetWithSavedHash<StringRef>;
+    using keys128Type = HashSet<UInt128, HashCRC32<UInt128>>;
+    using keys256Type = HashSet<UInt256, HashCRC32<UInt256>>;
+    using serializedType = HashSetWithSavedHash<StringRef>;
+
+    std::unique_ptr<key8Type> key8;
+    std::unique_ptr<key16Type> key16;
+    std::unique_ptr<key32Type> key32;
+    std::unique_ptr<key64Type> key64;
+    std::unique_ptr<key_stringType> key_string;
+    std::unique_ptr<key_strbinpaddingType> key_strbinpadding;
+    std::unique_ptr<key_strbinType> key_strbin;
+    std::unique_ptr<key_fixed_stringType> key_fixed_string;
+    std::unique_ptr<keys128Type> keys128;
+    std::unique_ptr<keys256Type> keys256;
+    std::unique_ptr<serializedType> serialized;
+    // TODO: add more cases like Aggregator
+};
+
 using ConcurrentMapsAll = ConcurrentMapsTemplate<WithUsedFlag<false, RowRefList>>;
-using ConcurrentMapsAnyFull = ConcurrentMapsTemplate<WithUsedFlag<true, RowRef>>;
 using ConcurrentMapsAllFull = ConcurrentMapsTemplate<WithUsedFlag<true, RowRefList>>;
 using ConcurrentMapsAllFullWithRowFlag = ConcurrentMapsTemplate<RowRefListWithUsedFlag>;
 
-using MapsAny = MapsTemplate<WithUsedFlag<false, RowRef>>;
 using MapsAll = MapsTemplate<WithUsedFlag<false, RowRefList>>;
-using MapsAnyFull = MapsTemplate<WithUsedFlag<true, RowRef>>;
 using MapsAllFull = MapsTemplate<WithUsedFlag<true, RowRefList>>;
 using MapsAllFullWithRowFlag = MapsTemplate<RowRefListWithUsedFlag>; // With flag for every row ref
 

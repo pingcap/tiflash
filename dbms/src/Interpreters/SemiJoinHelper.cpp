@@ -325,9 +325,9 @@ void SemiJoinHelper<KIND, Mapped>::checkAllExprResult(
 APPLY_FOR_SEMI_JOIN(M)
 #undef M
 
-template class SemiJoinHelper<Semi, MapsAll::MappedType::Base_t>;
-template class SemiJoinHelper<Anti, MapsAll::MappedType::Base_t>;
-template class SemiJoinHelper<LeftOuterSemi, MapsAll::MappedType::Base_t>;
-template class SemiJoinHelper<LeftOuterAnti, MapsAll::MappedType::Base_t>;
+template class SemiJoinHelper<Semi, MapsAll::MappedType>;
+template class SemiJoinHelper<Anti, MapsAll::MappedType>;
+template class SemiJoinHelper<LeftOuterSemi, MapsAll::MappedType>;
+template class SemiJoinHelper<LeftOuterAnti, MapsAll::MappedType>;
 
 } // namespace DB
