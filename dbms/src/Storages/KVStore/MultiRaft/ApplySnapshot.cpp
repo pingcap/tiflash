@@ -129,7 +129,7 @@ void KVStore::checkAndApplyPreHandledSnapshot(const RegionPtrWrap & new_region, 
             fap_ctx->cleanCheckpointIngestInfo(tmt, new_region->id());
         }
         // Another FAP will not take place if this stage is not finished.
-        if (fap_ctx->tasks_trace->discardTask(new_region->id()))
+        if (fap_ctx->tasks_trace->leakingDiscardTask(new_region->id()))
         {
             LOG_ERROR(log, "FastAddPeer: find old fap task, region_id={}", new_region->id());
         }

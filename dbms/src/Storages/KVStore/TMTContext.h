@@ -79,7 +79,7 @@ public:
 public:
     const KVStorePtr & getKVStore() const;
     KVStorePtr & getKVStore();
-    void debugSetKVStore(const KVStorePtr & new_kvstore) { kvstore = new_kvstore; }
+    void debugSetKVStore(const KVStorePtr &);
 
     const ManagedStorages & getStorages() const;
     ManagedStorages & getStorages();
