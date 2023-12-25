@@ -103,8 +103,6 @@ void RegionPersister::doPersist(
 {
     auto & [region_id, buffer, region_size, applied_index] = region_write_buffer;
 
-    std::lock_guard lock(mutex);
-
     auto entry = page_reader->getPageEntry(region_id);
     if (entry.isValid() && entry.tag > applied_index)
         return;
