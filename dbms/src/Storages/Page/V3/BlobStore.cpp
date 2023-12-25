@@ -972,7 +972,7 @@ std::vector<BlobFileId> BlobStore::getGCStats()
             auto lock = stat->lock();
             auto right_margin = stat->smap->getUsedBoundary();
 
-            // Truncate the file by its right margin. If the file has no context, just skip
+            // Truncate the file by its right margin. If the file has no data, just skip
             if (right_margin == 0)
             {
                 // Note `stat->sm_total_size` isn't strictly the same as the actual size of underlying BlobFile after restart tiflash,
