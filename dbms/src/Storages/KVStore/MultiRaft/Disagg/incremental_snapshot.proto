@@ -25,5 +25,5 @@ message DeltaSummary {
 }
 
 message DeltaSummariesPersisted {
-    repeated DeltaSummary summaries = 1;
+    DeltaSummary summary = 1;
 }

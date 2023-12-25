@@ -20,19 +20,29 @@
 #include <map>
 #include <memory>
 
-namespace DB {
+namespace DB
+{
 
 class Region;
 using RegionPtr = std::shared_ptr<Region>;
 
-struct IncrementalSnapshotManager {
+struct ReuseSummary
+{
+    std::vector<UInt64> ids;
+};
+
+struct IncrementalSnapshotManager
+{
     void observeDeltaSummary(UInt64 persisted_applied_index, RegionPtr region, UInt64 * l0_ids, UInt64 l0_ids_size);
-    std::optional<IncrementalSnapshotProto::DeltaSummary> tryReuseDeltaSummary(UInt64 applied_index, RegionPtr region);
+    std::optional<ReuseSummary> tryReuseDeltaSummary(
+        UInt64 applied_index,
+        RegionPtr region,
+        UInt64 * new_l0_ids,
+        UInt64 new_l0_id_size);
     String serializeToString() const;
     void deserializeFromString(const String &);
-    bool truncateByPersistAdvance(UInt64 persisted_applied_index);
 
-    std::map<UInt64, IncrementalSnapshotProto::DeltaSummary> summaries;
+    IncrementalSnapshotProto::DeltaSummary summary;
 };
 
 } // namespace DB

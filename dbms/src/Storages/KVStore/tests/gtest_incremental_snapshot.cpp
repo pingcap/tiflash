@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/MultiRaft/Disagg/IncrementalSnapshot.h>
+#include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/tests/region_kvstore_test.h>
 
 namespace DB
@@ -27,7 +27,6 @@ TEST_F(RegionKVStoreTest, IncrementalSnapshotManager)
     auto & ctx = TiFlashTestEnv::getGlobalContext();
     KVStore & kvs = getKVS();
     auto region_id = 1;
-    MockRaftStoreProxy::FailCond cond;
     proxy_instance->debugAddRegions(
         kvs,
         ctx.getTMTContext(),
@@ -35,12 +34,16 @@ TEST_F(RegionKVStoreTest, IncrementalSnapshotManager)
         {{{RecordKVFormat::genKey(1, 0), RecordKVFormat::genKey(1, 10)}}});
     auto kvr1 = kvs.getRegion(region_id);
 
-    std::vector<UInt64> at_20_10 = { 1, 2 };
-    std::vector<UInt64> at_20_20 = { 1, 2, 3, 4  };
+    std::vector<UInt64> at_10 = {1, 2};
+    std::vector<UInt64> at_20 = {1, 2, 3, 4};
+    std::vector<UInt64> at_30 = {2, 3, 4, 5};
 
-    mgr.observeDeltaSummary(10, kvr1, at_20_10.data(), at_20_10.size());
-    mgr.observeDeltaSummary(20, kvr1, at_20_10.data(), at_20_10.size());
-    mgr.tryReuseDeltaSummary(15, )
+    mgr.observeDeltaSummary(10, kvr1, at_10.data(), at_10.size());
+    auto v = mgr.tryReuseDeltaSummary(20, kvr1, at_20.data(), at_20.size());
+    ASSERT_NE(v, std::nullopt);
+    ASSERT_EQ(v.value().ids.size(), 2);
+    v = mgr.tryReuseDeltaSummary(30, kvr1, at_30.data(), at_30.size());
+    ASSERT_EQ(v, std::nullopt);
 }
 
 } // namespace tests
