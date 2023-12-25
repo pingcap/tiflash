@@ -1003,9 +1003,11 @@ std::unordered_map<TableID, DAGStorageInterpreter::StorageWithStructureLock> DAG
     else
     /// If first try failed, sync schema and try again.
     {
-        LOG_DEBUG(log, "not OK, syncing schemas.");
+        LOG_INFO(log, "not OK, syncing schemas.");
 
         sync_schema();
+
+        LOG_INFO(log, "syncing schemas done.");
 
         std::tie(storages, locks, storage_schema_versions, ok) = get_and_lock_storages(true);
         if (ok)

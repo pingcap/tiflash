@@ -115,7 +115,7 @@ grpc::Status FlashService::Coprocessor(
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
     bool is_remote_read = getClientMetaVarWithDefault(grpc_context, "is_remote_read", "") == "true";
     auto log_level = is_remote_read ? Poco::Message::PRIO_INFORMATION : Poco::Message::PRIO_DEBUG;
-    LOG_IMPL(log, log_level, "Handling coprocessor request, is_remote_read: {}, start ts: {}, region info: {}, region epoch: {}", is_remote_read, request->start_ts(), request->context().region_id(), request->context().region_epoch().DebugString());
+    LOG_IMPL(log, log_level, "Handling coprocessor request, is_remote_read: {}, start ts: {}, region id: {}, region epoch: {}", is_remote_read, request->start_ts(), request->context().region_id(), request->context().region_epoch().DebugString());
 
     auto check_result = checkGrpcContext(grpc_context);
     if (!check_result.ok())
@@ -165,10 +165,10 @@ grpc::Status FlashService::Coprocessor(
                 return grpc::Status::OK;
             }
         }
-        
+
         if (wait_ms > 1000)
             log_level = Poco::Message::PRIO_INFORMATION;
-        LOG_IMPL(log, log_level, "Begin process cop request after wait {} ms, start ts: {}, region info: {}, region epoch: {}", wait_ms, request->start_ts(), request->context().region_id(), request->context().region_epoch().DebugString());
+        LOG_IMPL(log, log_level, "Begin process cop request after wait {} ms, start ts: {}, region id: {}, region epoch: {}", wait_ms, request->start_ts(), request->context().region_id(), request->context().region_epoch().DebugString());
 
         auto [db_context, status] = createDBContext(grpc_context);
         if (!status.ok())
