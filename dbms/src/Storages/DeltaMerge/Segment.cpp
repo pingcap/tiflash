@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
+#include <Common/Stopwatch.h>
 #include <Common/SyncPoint/SyncPoint.h>
 #include <Common/TiFlashMetrics.h>
 #include <DataStreams/ConcatBlockInputStream.h>
@@ -44,8 +45,6 @@
 #include <ext/scope_guard.h>
 #include <memory>
 #include <numeric>
-
-#include "Common/Stopwatch.h"
 
 namespace ProfileEvents
 {
