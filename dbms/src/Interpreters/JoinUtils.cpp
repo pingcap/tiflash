@@ -50,6 +50,23 @@ void recordFilteredRows(
     auto column = block.getByName(filter_column).column;
     if (column->isColumnConst())
         column = column->convertToFullColumnIfConst();
+    if unlikely (column->onlyNull())
+    {
+        if (!null_map_holder)
+        {
+            null_map_holder = ColumnVector<UInt8>::create(column->size(), 1);
+        }
+        else
+        {
+            MutableColumnPtr mutable_null_map_holder = (*std::move(null_map_holder)).mutate();
+            PaddedPODArray<UInt8> & mutable_null_map = static_cast<ColumnUInt8 &>(*mutable_null_map_holder).getData();
+            mutable_null_map.resize_fill(0);
+            mutable_null_map.resize_fill(column->size(), 1);
+        }
+        null_map = &static_cast<const ColumnUInt8 &>(*null_map_holder).getData();
+        return;
+    }
+
     const PaddedPODArray<UInt8> * column_data;
     if (column->isColumnNullable())
     {
