@@ -100,7 +100,7 @@ TEST(AsyncTasksTest, AsyncTasksNormal)
                 while (true)
                 {
                     std::this_thread::sleep_for(100ms);
-                    if (cancel_handle->canceled())
+                    if (cancel_handle->isCanceled())
                     {
                         break;
                     }
@@ -144,7 +144,7 @@ TEST(AsyncTasksTest, AsyncTasksNormal)
                     {
                         auto cancel_handle = async_tasks->getCancelHandleFromExecutor(i);
                         // Busy loop to take over cpu
-                        if (cancel_handle->canceled())
+                        if (cancel_handle->isCanceled())
                         {
                             break;
                         }

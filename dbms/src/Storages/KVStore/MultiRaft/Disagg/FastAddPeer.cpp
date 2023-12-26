@@ -323,7 +323,7 @@ FastAddPeerRes FastAddPeerImplWrite(
         storage->isCommonHandle(),
         storage->getRowKeyColumnSize());
 
-    if (cancel_handle->canceled())
+    if (cancel_handle->isCanceled())
     {
         LOG_INFO(log, "FAP is canceled before write, region_id={}", region_id);
         fap_ctx->cleanTask(tmt, proxy_helper, region_id, false);
@@ -342,7 +342,7 @@ FastAddPeerRes FastAddPeerImplWrite(
         start_time);
 
     SYNC_FOR("in_FastAddPeerImplWrite::after_write_segments");
-    if (cancel_handle->canceled())
+    if (cancel_handle->isCanceled())
     {
         LOG_INFO(log, "FAP is canceled after write segments, region_id={}", region_id);
         fap_ctx->cleanTask(tmt, proxy_helper, region_id, false);
@@ -368,7 +368,7 @@ FastAddPeerRes FastAddPeerImplWrite(
     auto wn_ps = tmt.getContext().getWriteNodePageStorage();
     wn_ps->write(std::move(wb));
     SYNC_FOR("in_FastAddPeerImplWrite::after_write_raft_log");
-    if (cancel_handle->canceled())
+    if (cancel_handle->isCanceled())
     {
         LOG_INFO(log, "FAP is canceled after write raft log, region_id={}", region_id);
         fap_ctx->cleanTask(tmt, proxy_helper, region_id, false);
