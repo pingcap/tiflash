@@ -42,9 +42,7 @@ TEST(AsyncTasksTest, AsyncTasksNormal)
             flag = 1;
         });
         async_tasks->asyncCancelTask(1);
-        async_tasks->addTask(1, [&flag]() {
-            flag = 2;
-        });
+        async_tasks->addTask(1, [&flag]() { flag = 2; });
         cl.unlock();
         async_tasks->fetchResult(1);
         ASSERT_EQ(flag, 2);
