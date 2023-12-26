@@ -49,7 +49,7 @@ struct AsyncTasks
     // We use a big queue to cache, to reduce add task failures.
     explicit AsyncTasks(uint64_t pool_size, uint64_t free_pool_size, uint64_t queue_size)
         : thread_pool(std::make_unique<ThreadPool>(pool_size, free_pool_size, queue_size))
-        , log(DB::Logger::get("AsyncTasks"))
+        , log(DB::Logger::get())
     {}
 
     ~AsyncTasks() { LOG_INFO(log, "Pending {} tasks when destructing", count()); }
