@@ -43,6 +43,7 @@ enum class TaskState
 };
 } // namespace AsyncTaskHelper
 
+// Key should support `fmt::formatter`.
 template <typename Key, typename Func, typename R>
 struct AsyncTasks
 {
@@ -338,7 +339,7 @@ struct AsyncTasks
     {
         std::unique_lock<std::mutex> l(mtx);
         auto it = tasks.find(key);
-        RUNTIME_CHECK(it != tasks.end());
+        RUNTIME_CHECK(it != tasks.end(), key);
         std::future<R> fut = std::move(it->second.fut);
         tasks.erase(key);
         l.unlock();
@@ -350,7 +351,7 @@ struct AsyncTasks
     {
         std::unique_lock<std::mutex> l(mtx);
         auto it = tasks.find(key);
-        RUNTIME_CHECK(it != tasks.end());
+        RUNTIME_CHECK(it != tasks.end(), key);
         auto fut = std::move(it->second.fut);
         auto start = it->second.start_ts;
         tasks.erase(it);
