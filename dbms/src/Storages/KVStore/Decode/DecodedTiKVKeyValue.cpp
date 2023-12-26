@@ -14,6 +14,7 @@
 
 #include <Storages/KVStore/Decode/DecodedTiKVKeyValue.h>
 #include <Storages/KVStore/TiKVHelpers/TiKVKeyspaceIDImpl.h>
+#include <Storages/KVStore/TiKVHelpers/TiKVRecordFormat.h>
 
 namespace DB
 {
@@ -36,5 +37,11 @@ std::string DecodedTiKVKey::toDebugString() const
 std::string DecodedTiKVKey::makeKeyspacePrefix(KeyspaceID keyspace_id)
 {
     return TiKVKeyspaceID::makeKeyspacePrefix(keyspace_id);
+}
+
+HandleID RawTiDBPK::getHandleID() const
+{
+    const auto & pk = *this;
+    return RecordKVFormat::decodeInt64(RecordKVFormat::read<UInt64>(pk->data()));
 }
 } // namespace DB

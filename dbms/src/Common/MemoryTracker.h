@@ -163,6 +163,7 @@ extern thread_local MemoryTracker * current_memory_tracker;
 
 extern std::shared_ptr<MemoryTracker> root_of_non_query_mem_trackers;
 extern std::shared_ptr<MemoryTracker> root_of_query_mem_trackers;
+extern std::shared_ptr<MemoryTracker> root_of_kvstore_mem_trackers;
 
 // Initialize in `initStorageMemoryTracker`.
 // If a memory tracker of storage tasks is driven by query, it should inherit `sub_root_of_query_storage_task_mem_trackers`.

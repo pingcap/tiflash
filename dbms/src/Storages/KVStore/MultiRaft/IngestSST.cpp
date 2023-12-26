@@ -180,6 +180,8 @@ void Region::finishIngestSSTByDTFile(RegionPtr && temp_region, UInt64 index, UIn
     {
         std::unique_lock<std::shared_mutex> lock(mutex);
 
+        auto uncommitted_ingest = temp_region->dataSize();
+        GET_METRIC(tiflash_raft_write_flow_bytes, type_ingest_uncommitted).Observe(uncommitted_ingest);
         if (temp_region)
         {
             // Merge the uncommitted data from `temp_region`.

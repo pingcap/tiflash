@@ -76,16 +76,16 @@ DecodedLockCFValuePtr Region::getLockInfo(const RegionLockReadQuery & query) con
 
 void Region::insert(const std::string & cf, TiKVKey && key, TiKVValue && value, DupCheck mode)
 {
-    return insert(NameToCF(cf), std::move(key), std::move(value), mode);
+    insert(NameToCF(cf), std::move(key), std::move(value), mode);
 }
 
 void Region::insert(ColumnFamilyType type, TiKVKey && key, TiKVValue && value, DupCheck mode)
 {
     std::unique_lock<std::shared_mutex> lock(mutex);
-    return doInsert(type, std::move(key), std::move(value), mode);
+    doInsert(type, std::move(key), std::move(value), mode);
 }
 
-void Region::doInsert(ColumnFamilyType type, TiKVKey && key, TiKVValue && value, DupCheck mode)
+size_t Region::doInsert(ColumnFamilyType type, TiKVKey && key, TiKVValue && value, DupCheck mode)
 {
     if (getClusterRaftstoreVer() == RaftstoreVer::V2)
     {
@@ -95,11 +95,12 @@ void Region::doInsert(ColumnFamilyType type, TiKVKey && key, TiKVValue && value,
             {
                 // We can't assert the key exists in write_cf here,
                 // since it may be already written into DeltaTree.
-                return;
+                return 0;
             }
         }
     }
-    data.insert(type, std::move(key), std::move(value), mode);
+    auto ans = data.insert(type, std::move(key), std::move(value), mode);
+    return ans;
 }
 
 void Region::remove(const std::string & cf, const TiKVKey & key)
@@ -219,6 +220,7 @@ RegionPtr Region::deserialize(ReadBuffer & buf, const TiFlashRaftProxyHelper * p
 
     // deserialize data
     RegionData::deserialize(buf, region->data);
+    region->data.reportAlloc(region->data.cf_data_size);
 
     // restore other var according to meta
     region->last_restart_log_applied = region->appliedIndex();
@@ -441,6 +443,11 @@ Region::Region(DB::RegionMeta && meta_, const TiFlashRaftProxyHelper * proxy_hel
     , mapped_table_id(meta.getRange()->getMappedTableID())
     , proxy_helper(proxy_helper_)
 {}
+
+Region::~Region()
+{
+    data.reportDealloc(data.cf_data_size);
+}
 
 TableID Region::getMappedTableID() const
 {
