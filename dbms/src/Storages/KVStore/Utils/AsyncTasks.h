@@ -63,16 +63,16 @@ struct AsyncTasks
         CancelHandle() = default;
         CancelHandle(const CancelHandle &) = delete;
 
-        bool canceled() const { return inner.load(); }
+        bool isCanceled() const { return inner.load(); }
 
         bool blockedWaitFor(std::chrono::duration<double, std::milli> timeout)
         {
             // The task could be canceled before running.
-            if (canceled())
+            if (isCanceled())
                 return true;
             std::unique_lock<std::mutex> lock(mut);
-            cv.wait_for(lock, timeout, [&]() { return canceled(); });
-            return canceled();
+            cv.wait_for(lock, timeout, [&]() { return isCanceled(); });
+            return isCanceled();
         }
 
         static CancelHandlePtr genAlreadyCanceled() noexcept
@@ -83,6 +83,7 @@ struct AsyncTasks
         }
 
     private:
+        // Make this private to forbid called by multiple consumers.
         void doCancel()
         {
             // Use lock here to prevent losing signal.
@@ -220,7 +221,7 @@ struct AsyncTasks
         }
 
         // Only one thread can block cancel and wait.
-        RUNTIME_CHECK_MSG(!cancel_handle->canceled(), "Try block cancel running task twice");
+        RUNTIME_CHECK_MSG(!cancel_handle->isCanceled(), "Try block cancel running task twice");
         cancel_handle->doCancel();
         if (state == TaskState::InQueue)
         {
@@ -257,7 +258,7 @@ struct AsyncTasks
             RUNTIME_CHECK(running_mut != nullptr);
             RUNTIME_CHECK(cancel_handle != nullptr);
             RUNTIME_CHECK(p != nullptr);
-            if (cancel_handle->canceled())
+            if (cancel_handle->isCanceled())
             {
                 cf();
                 return;
