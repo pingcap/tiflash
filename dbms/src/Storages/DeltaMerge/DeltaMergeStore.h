@@ -408,7 +408,7 @@ public:
         UInt64 max_version,
         const PushDownFilterPtr & filter,
         const RuntimeFilteList & runtime_filter_list,
-        const int rf_max_wait_time_ms,
+        int rf_max_wait_time_ms,
         const String & tracing_id,
         bool keep_order,
         bool is_fast_scan = false,
@@ -433,7 +433,7 @@ public:
         UInt64 max_version,
         const PushDownFilterPtr & filter,
         const RuntimeFilteList & runtime_filter_list,
-        const int rf_max_wait_time_ms,
+        int rf_max_wait_time_ms,
         const String & tracing_id,
         bool keep_order,
         bool is_fast_scan = false,
@@ -516,6 +516,7 @@ public:
     const Settings & getSettings() const { return settings; }
     DataTypePtr getPKDataType() const { return original_table_handle_define.type; }
     SortDescription getPrimarySortDescription() const;
+    KeyspaceID getKeyspaceID() const { return keyspace_id; }
 
     void check(const Context & db_context);
 

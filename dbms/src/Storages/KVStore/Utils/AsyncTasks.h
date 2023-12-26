@@ -43,13 +43,14 @@ enum class TaskState
 };
 } // namespace AsyncTaskHelper
 
+// Key should support `fmt::formatter`.
 template <typename Key, typename Func, typename R>
 struct AsyncTasks
 {
     // We use a big queue to cache, to reduce add task failures.
     explicit AsyncTasks(uint64_t pool_size, uint64_t free_pool_size, uint64_t queue_size)
         : thread_pool(std::make_unique<ThreadPool>(pool_size, free_pool_size, queue_size))
-        , log(DB::Logger::get("AsyncTasks"))
+        , log(DB::Logger::get())
     {}
 
     ~AsyncTasks() { LOG_INFO(log, "Pending {} tasks when destructing", count()); }
@@ -83,10 +84,11 @@ struct AsyncTasks
         }
 
     private:
+        // Make this private to forbid called by multiple consumers.
         void doCancel()
         {
             // Use lock here to prevent losing signal.
-            std::scoped_lock<std::mutex> lock(mut);
+            std::scoped_lock lock(mut);
             inner.store(true);
             cv.notify_all();
         }
@@ -192,18 +194,16 @@ struct AsyncTasks
     // Safety: Throws if
     // 1. The task is not found, and throw_on_no_exist.
     // 2. The cancel_handle is already set.
-    // 3. Throw in `result_dropper`.
     /// Usage:
     /// 1. If the task is in `Finished`/`Running` state
     ///     It's result is returned. The Caller may do the rest cleaning.
-    /// 3. If the tasks is in `InQueue` state
+    /// 2. If the tasks is in `InQueue` state
     ///     The task will directly return when it's eventually run by a thread.
-    /// 4. If the tasks is in `NotScheduled` state
-    ///     It will throw.
+    /// 3. If the tasks is in `NotScheduled` state
+    ///     It will throw on `throw_on_no_exist`.
     /// Returns:
-    /// 1. `NotScheduled` or `InQueue`
-    /// 2. `R`
-    /// 3. Exception
+    /// 1. The TaskState before the task is canceled
+    /// 2. Exception
     /// NOTE: The task element will be removed after calling this function.
     [[nodiscard]] TaskState blockedCancelRunningTask(Key k, bool throw_on_no_exist = true)
     {
@@ -312,7 +312,7 @@ struct AsyncTasks
 
     bool isReady(Key key) const { return queryState(key) == TaskState::Finished; }
 
-    std::optional<uint64_t> queryElapsed(Key key)
+    std::optional<uint64_t> queryElapsed(Key key) const
     {
         std::scoped_lock<std::mutex> l(mtx);
         auto it = tasks.find(key);
@@ -323,7 +323,7 @@ struct AsyncTasks
         return getCurrentMillis() - it->second.start_ts;
     }
 
-    std::optional<uint64_t> queryStartTime(Key key)
+    std::optional<uint64_t> queryStartTime(Key key) const
     {
         std::scoped_lock<std::mutex> l(mtx);
         auto it = tasks.find(key);
@@ -339,7 +339,7 @@ struct AsyncTasks
     {
         std::unique_lock<std::mutex> l(mtx);
         auto it = tasks.find(key);
-        RUNTIME_CHECK(it != tasks.end());
+        RUNTIME_CHECK(it != tasks.end(), key);
         std::future<R> fut = std::move(it->second.fut);
         tasks.erase(key);
         l.unlock();
@@ -351,7 +351,7 @@ struct AsyncTasks
     {
         std::unique_lock<std::mutex> l(mtx);
         auto it = tasks.find(key);
-        RUNTIME_CHECK(it != tasks.end());
+        RUNTIME_CHECK(it != tasks.end(), key);
         auto fut = std::move(it->second.fut);
         auto start = it->second.start_ts;
         tasks.erase(it);

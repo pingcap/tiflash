@@ -132,7 +132,8 @@ DMFilePtr writeIntoNewDMFile(
         parent_path,
         dm_context.createChecksumConfig(),
         dm_context.global_context.getSettingsRef().dt_small_file_size_threshold,
-        dm_context.global_context.getSettingsRef().dt_merged_file_max_size);
+        dm_context.global_context.getSettingsRef().dt_merged_file_max_size,
+        dm_context.keyspace_id);
     auto output_stream = std::make_shared<DMFileBlockOutputStream>(dm_context.global_context, dmfile, *schema_snap);
     const auto * mvcc_stream
         = typeid_cast<const DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT> *>(input_stream.get());
@@ -1335,7 +1336,8 @@ SegmentPtr Segment::dangerouslyReplaceDataFromCheckpoint(
         data_file->fileId(),
         new_page_id,
         data_file->parentPath(),
-        DMFile::ReadMetaMode::all());
+        DMFile::ReadMetaMode::all(),
+        dm_context.keyspace_id);
     wbs.data.putRefPage(new_page_id, data_file->pageId());
 
     auto new_stable = std::make_shared<StableValueSpace>(stable->getId());
@@ -1772,13 +1774,15 @@ Segment::prepareSplitLogical( //
             file_id,
             /* page_id= */ my_dmfile_page_id,
             file_parent_path,
-            DMFile::ReadMetaMode::all());
+            DMFile::ReadMetaMode::all(),
+            dm_context.keyspace_id);
         auto other_dmfile = DMFile::restore(
             dm_context.global_context.getFileProvider(),
             file_id,
             /* page_id= */ other_dmfile_page_id,
             file_parent_path,
-            DMFile::ReadMetaMode::all());
+            DMFile::ReadMetaMode::all(),
+            dm_context.keyspace_id);
         my_stable_files.push_back(my_dmfile);
         other_stable_files.push_back(other_dmfile);
     }

@@ -397,28 +397,6 @@ void ScanHashMapAfterProbeBlockInputStream::fillColumnsUsingCurrentPartition(
             throw Exception("Unknown JOIN keys variant.", ErrorCodes::UNKNOWN_SET_DATA_VARIANT);
         }
     }
-    else if (parent.strictness == ASTTableJoin::Strictness::Any)
-    {
-        assert(!output_joined_rows);
-        switch (parent.join_map_method)
-        {
-#define M(METHOD)                                                 \
-    case JoinMapMethod::METHOD:                                   \
-        fillColumns<ASTTableJoin::Strictness::Any, false, false>( \
-            *partition->maps_any_full.METHOD,                     \
-            num_columns_left,                                     \
-            mutable_columns_left,                                 \
-            num_columns_right,                                    \
-            mutable_columns_right,                                \
-            row_counter_column);                                  \
-        break;
-            APPLY_FOR_JOIN_VARIANTS(M)
-#undef M
-
-        default:
-            throw Exception("Unknown JOIN keys variant.", ErrorCodes::UNKNOWN_SET_DATA_VARIANT);
-        }
-    }
     else if (parent.strictness == ASTTableJoin::Strictness::All)
     {
         switch (parent.join_map_method)
@@ -441,7 +419,7 @@ void ScanHashMapAfterProbeBlockInputStream::fillColumnsUsingCurrentPartition(
         }
     }
     else
-        throw Exception("Logical error: unknown JOIN strictness (must be ANY or ALL)", ErrorCodes::LOGICAL_ERROR);
+        throw Exception("Logical error: unknown JOIN strictness (must be ALL)", ErrorCodes::LOGICAL_ERROR);
 }
 
 struct RowCountInfo
