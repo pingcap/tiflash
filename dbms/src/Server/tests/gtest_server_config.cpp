@@ -205,9 +205,20 @@ dt_open_file_max_idle_seconds = 20
 dt_page_gc_low_write_prob = 0.2
         )"};
     auto & global_ctx = TiFlashTestEnv::getGlobalContext();
+<<<<<<< HEAD
     RegionManager region_manager;
     RegionPersister persister(global_ctx, region_manager);
     persister.restore(nullptr, PageStorage::Config{});
+=======
+    if (global_ctx.getPageStorageRunMode() == PageStorageRunMode::UNI_PS)
+    {
+        // don't support reload uni ps config through region persister
+        return;
+    }
+    auto & global_path_pool = global_ctx.getPathPool();
+    RegionPersister persister(global_ctx);
+    persister.restore(global_path_pool, nullptr, PageStorageConfig{});
+>>>>>>> 0329ed40a4 (KVStore: Reduce lock contention in `RegionPersister::doPersist` (#8584))
 
     auto verifyPersisterReloadConfig = [&global_ctx](RegionPersister & persister) {
         DB::Settings & settings = global_ctx.getSettingsRef();

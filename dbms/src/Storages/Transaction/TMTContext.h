@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Interpreters/Context_fwd.h>
 #include <Poco/Util/AbstractConfiguration.h>
 #include <Storages/GCManager.h>
 #include <Storages/Transaction/PDTiKVClient.h>
@@ -9,7 +10,11 @@
 
 namespace DB
 {
+<<<<<<< HEAD:dbms/src/Storages/Transaction/TMTContext.h
 class Context;
+=======
+class PathPool;
+>>>>>>> 0329ed40a4 (KVStore: Reduce lock contention in `RegionPersister::doPersist` (#8584)):dbms/src/Storages/KVStore/TMTContext.h
 
 class KVStore;
 using KVStorePtr = std::shared_ptr<KVStore>;
