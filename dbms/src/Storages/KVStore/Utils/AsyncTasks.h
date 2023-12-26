@@ -200,9 +200,8 @@ struct AsyncTasks
     /// 4. If the tasks is in `NotScheduled` state
     ///     It will throw.
     /// Returns:
-    /// 1. `NotScheduled` or `InQueue`
-    /// 2. `R`
-    /// 3. Exception
+    /// 1. The TaskState before the task is canceled
+    /// 2. Exception
     /// NOTE: The task element will be removed after calling this function.
     [[nodiscard]] TaskState blockedCancelRunningTask(Key k, bool throw_on_no_exist = true)
     {
