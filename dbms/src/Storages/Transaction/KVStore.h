@@ -14,9 +14,24 @@
 
 #pragma once
 
+<<<<<<< HEAD:dbms/src/Storages/Transaction/KVStore.h
 #include <Storages/Transaction/RegionDataRead.h>
 #include <Storages/Transaction/RegionManager.h>
 #include <Storages/Transaction/StorageEngineType.h>
+=======
+#include <Interpreters/Context_fwd.h>
+#include <Storages/DeltaMerge/DeltaMergeInterfaces.h>
+#include <Storages/DeltaMerge/RowKeyRange.h>
+#include <Storages/KVStore/Decode/RegionDataRead.h>
+#include <Storages/KVStore/MultiRaft/Disagg/RaftLogManager.h>
+#include <Storages/KVStore/MultiRaft/PreHandlingTrace.h>
+#include <Storages/KVStore/MultiRaft/RegionManager.h>
+#include <Storages/KVStore/MultiRaft/RegionRangeKeys.h>
+#include <Storages/KVStore/StorageEngineType.h>
+
+#include <condition_variable>
+#include <magic_enum.hpp>
+>>>>>>> 0329ed40a4 (KVStore: Reduce lock contention in `RegionPersister::doPersist` (#8584)):dbms/src/Storages/KVStore/KVStore.h
 
 namespace TiDB
 {
@@ -24,7 +39,6 @@ struct TableInfo;
 }
 namespace DB
 {
-class Context;
 namespace RegionBench
 {
 extern void concurrentBatchInsert(const TiDB::TableInfo &, Int64, Int64, Int64, UInt64, UInt64, Context &);
@@ -235,8 +249,37 @@ private:
     /// Notice that if flush_if_possible is set to false, we only check if a flush is allowed by rowsize/size/interval.
     /// It will not check if a flush will eventually succeed.
     /// In other words, `canFlushRegionDataImpl(flush_if_possible=true)` can return false.
+<<<<<<< HEAD:dbms/src/Storages/Transaction/KVStore.h
     bool canFlushRegionDataImpl(const RegionPtr & curr_region_ptr, UInt8 flush_if_possible, bool try_until_succeed, TMTContext & tmt, const RegionTaskLock & region_task_lock, UInt64 index, UInt64 term);
     bool forceFlushRegionDataImpl(Region & curr_region, bool try_until_succeed, TMTContext & tmt, const RegionTaskLock & region_task_lock, UInt64 index, UInt64 term);
+=======
+    bool canFlushRegionDataImpl(
+        const RegionPtr & curr_region_ptr,
+        UInt8 flush_if_possible,
+        bool try_until_succeed,
+        TMTContext & tmt,
+        const RegionTaskLock & region_task_lock,
+        UInt64 index,
+        UInt64 term,
+        UInt64 truncated_index,
+        UInt64 truncated_term);
+
+    bool forceFlushRegionDataImpl(
+        Region & curr_region,
+        bool try_until_succeed,
+        TMTContext & tmt,
+        const RegionTaskLock & region_task_lock,
+        UInt64 index,
+        UInt64 term) const;
+
+    void persistRegion(
+        const Region & region,
+        const RegionTaskLock & region_task_lock,
+        PersistRegionReason reason,
+        const char * extra_msg) const;
+
+    bool tryRegisterEagerRaftLogGCTask(const RegionPtr & region, RegionTaskLock &);
+>>>>>>> 0329ed40a4 (KVStore: Reduce lock contention in `RegionPersister::doPersist` (#8584)):dbms/src/Storages/KVStore/KVStore.h
 
     void persistRegion(const Region & region, const RegionTaskLock & region_task_lock, const char * caller);
     void releaseReadIndexWorkers();

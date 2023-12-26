@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Interpreters/Context_fwd.h>
 #include <Poco/Util/AbstractConfiguration.h>
 #include <Storages/GCManager.h>
 #include <Storages/Transaction/PDTiKVClient.h>
@@ -23,8 +24,6 @@
 
 namespace DB
 {
-class Context;
-
 class PathPool;
 
 class KVStore;

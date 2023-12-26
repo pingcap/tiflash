@@ -115,6 +115,7 @@ namespace DB
     M(pause_when_ingesting_to_dt_store)   \
     M(pause_when_altering_dt_store)       \
     M(pause_after_copr_streams_acquired)  \
+<<<<<<< HEAD
     M(pause_query_init)
 
 
@@ -132,6 +133,48 @@ namespace DB
     M(random_interpreter_failpoint)                     \
     M(random_task_manager_find_task_failure_failpoint)  \
     M(random_min_tso_scheduler_failpoint)
+=======
+    M(pause_query_init)                   \
+    M(pause_before_prehandle_snapshot)    \
+    M(pause_before_prehandle_subtask)     \
+    M(pause_when_persist_region)          \
+    M(pause_before_wn_establish_task)     \
+    M(pause_passive_flush_before_persist_region)
+
+#define APPLY_FOR_RANDOM_FAILPOINTS(M)                       \
+    M(random_tunnel_wait_timeout_failpoint)                  \
+    M(random_tunnel_write_failpoint)                         \
+    M(random_tunnel_init_rpc_failure_failpoint)              \
+    M(random_receiver_local_msg_push_failure_failpoint)      \
+    M(random_receiver_sync_msg_push_failure_failpoint)       \
+    M(random_receiver_async_msg_push_failure_failpoint)      \
+    M(random_limit_check_failpoint)                          \
+    M(random_join_build_failpoint)                           \
+    M(random_join_prob_failpoint)                            \
+    M(random_aggregate_create_state_failpoint)               \
+    M(random_aggregate_merge_failpoint)                      \
+    M(random_sharedquery_failpoint)                          \
+    M(random_interpreter_failpoint)                          \
+    M(random_task_manager_find_task_failure_failpoint)       \
+    M(random_min_tso_scheduler_failpoint)                    \
+    M(random_pipeline_model_task_run_failpoint)              \
+    M(random_pipeline_model_task_construct_failpoint)        \
+    M(random_pipeline_model_event_schedule_failpoint)        \
+    M(random_pipeline_model_event_finish_failpoint)          \
+    M(random_pipeline_model_operator_run_failpoint)          \
+    M(random_pipeline_model_cancel_failpoint)                \
+    M(random_pipeline_model_execute_prefix_failpoint)        \
+    M(random_pipeline_model_execute_suffix_failpoint)        \
+    M(random_spill_to_disk_failpoint)                        \
+    M(random_region_persister_latency_failpoint)             \
+    M(random_restore_from_disk_failpoint)                    \
+    M(random_exception_when_connect_local_tunnel)            \
+    M(random_exception_when_construct_async_request_handler) \
+    M(random_fail_in_resize_callback)                        \
+    M(random_marked_for_auto_spill)                          \
+    M(random_trigger_remote_read)                            \
+    M(random_cop_send_failure_failpoint)
+>>>>>>> 0329ed40a4 (KVStore: Reduce lock contention in `RegionPersister::doPersist` (#8584))
 
 namespace FailPoints
 {
