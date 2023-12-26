@@ -166,7 +166,8 @@ protected:
     {
         if (auto region = kvs.getRegion(region_id); region)
         {
-            kvs.persistRegion(*region, std::nullopt, PersistRegionReason::Debug, "");
+            auto region_task_lock = kvs.region_manager.genRegionTaskLock(region_id);
+            kvs.persistRegion(*region, region_task_lock, PersistRegionReason::Debug, "");
         }
     }
 
