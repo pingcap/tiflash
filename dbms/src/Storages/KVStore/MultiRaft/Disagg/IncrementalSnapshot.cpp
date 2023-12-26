@@ -19,7 +19,6 @@
 
 namespace DB
 {
-
 void IncrementalSnapshotManager::observeDeltaSummary(
     UInt64 persisted_applied_index,
     RegionPtr region,

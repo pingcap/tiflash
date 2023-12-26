@@ -19,6 +19,7 @@
 #include <Storages/KVStore/Decode/DecodedTiKVKeyValue.h>
 #include <Storages/KVStore/MultiRaft/RegionData.h>
 #include <Storages/KVStore/MultiRaft/RegionMeta.h>
+#include <Storages/KVStore/MultiRaft/Disagg/IncrementalSnapshot.h>
 #include <common/logger_useful.h>
 
 #include <shared_mutex>
@@ -233,6 +234,8 @@ public:
 
     void mergeDataFrom(const Region & other);
 
+    UniqueIncrementalSnapshotManagerPtr & getOrCreateIncrSnapMgr();
+
     Region() = delete;
 
 private:
@@ -267,14 +270,15 @@ private:
     // Eager truncated index that is used for eager RaftLog GC Task
     UInt64 eager_truncated_index;
 
+private:
     LoggerPtr log;
-
     // As the placement-rules created for TiFlash, the Region peers
     // in TiFlash must and only response to one <keyspace, table_id>
     // The keyspace_id, table_id this region is belong to
     const KeyspaceID keyspace_id;
     const TableID mapped_table_id;
 
+    UniqueIncrementalSnapshotManagerPtr incr_snap_mgr;
     std::atomic<UInt64> snapshot_event_flag{1};
     const TiFlashRaftProxyHelper * proxy_helper{nullptr};
     // Applied index since last persistence. Including all admin cmd.

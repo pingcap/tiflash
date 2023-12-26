@@ -43,6 +43,10 @@ struct IncrementalSnapshotManager
     void deserializeFromString(const String &);
 
     IncrementalSnapshotProto::DeltaSummary summary;
+    UInt64 region_id;
 };
+
+using IncrementalSnapshotManagerPtr = std::shared_ptr<IncrementalSnapshotManager>;
+using UniqueIncrementalSnapshotManagerPtr = std::unique_ptr<IncrementalSnapshotManager>;
 
 } // namespace DB

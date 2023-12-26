@@ -149,6 +149,7 @@ RegionPtr Region::splitInto(RegionMeta && meta)
 namespace RegionPersistFormat
 {
 static constexpr UInt32 HAS_EAGER_TRUNCATE_INDEX = 0x01;
+static constexpr UInt32 HAS_EAGER_TRUNCATE_INDEX = 0x01;
 }
 
 std::tuple<size_t, UInt64> Region::serialize(WriteBuffer & buf) const
@@ -500,4 +501,11 @@ void Region::mergeDataFrom(const Region & other)
     this->data.mergeFrom(other.data);
     this->data.orphan_keys_info.mergeFrom(other.data.orphan_keys_info);
 }
+
+UniqueIncrementalSnapshotManagerPtr & Region::getOrCreateIncrSnapMgr() {
+    if (!incr_snap_mgr)
+        incr_snap_mgr = std::make_unique<IncrementalSnapshotManager>();
+    return incr_snap_mgr;
+}
+
 } // namespace DB
