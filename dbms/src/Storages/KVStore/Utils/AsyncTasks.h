@@ -192,7 +192,6 @@ struct AsyncTasks
     // Safety: Throws if
     // 1. The task is not found, and throw_on_no_exist.
     // 2. The cancel_handle is already set.
-    // 3. Throw in `result_dropper`.
     /// Usage:
     /// 1. If the task is in `Finished`/`Running` state
     ///     It's result is returned. The Caller may do the rest cleaning.
