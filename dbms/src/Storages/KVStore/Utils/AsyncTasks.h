@@ -195,10 +195,10 @@ struct AsyncTasks
     /// Usage:
     /// 1. If the task is in `Finished`/`Running` state
     ///     It's result is returned. The Caller may do the rest cleaning.
-    /// 3. If the tasks is in `InQueue` state
+    /// 2. If the tasks is in `InQueue` state
     ///     The task will directly return when it's eventually run by a thread.
-    /// 4. If the tasks is in `NotScheduled` state
-    ///     It will throw.
+    /// 3. If the tasks is in `NotScheduled` state
+    ///     It will throw on `throw_on_no_exist`.
     /// Returns:
     /// 1. The TaskState before the task is canceled
     /// 2. Exception
