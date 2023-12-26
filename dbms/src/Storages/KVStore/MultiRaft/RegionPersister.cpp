@@ -31,8 +31,10 @@
 #include <common/logger_useful.h>
 #include <fiu.h>
 
+#include <chrono>
 #include <magic_enum.hpp>
 #include <memory>
+#include <thread>
 
 namespace CurrentMetrics
 {
@@ -48,6 +50,7 @@ extern const int LOGICAL_ERROR;
 namespace FailPoints
 {
 extern const char pause_when_persist_region[];
+extern const char random_region_persister_latency_failpoint[];
 } // namespace FailPoints
 
 void RegionPersister::drop(RegionID region_id, const RegionTaskLock &)
@@ -129,6 +132,10 @@ void RegionPersister::doPersist(
             // Pause for all persisting requests
             SYNC_FOR("before_RegionPersister::persist_write_done");
         }
+    });
+    fiu_do_on(FailPoints::random_region_persister_latency_failpoint, {
+        using namespace std::chrono_literals;
+        std::this_thread::sleep_for(1ms);
     });
 #endif
 
