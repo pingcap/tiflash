@@ -17,7 +17,6 @@ mysql> drop table if exists test.t1;
 mysql> CREATE TABLE test.t1 (   `a` int(11) NOT NULL,   `b` int(11) DEFAULT NULL,   PRIMARY KEY (`a`) /*T![clustered_index] CLUSTERED */ ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 mysql> drop table if exists test.t2;
 mysql> CREATE TABLE test.t2 (   `a` int(11) NOT NULL,   `b` int(11) DEFAULT NULL,   PRIMARY KEY (`a`) /*T![clustered_index] CLUSTERED */ ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
-mysql> drop table if exists test.t2;
 mysql> insert into test.t1 values(30, 50);
 mysql> insert into test.t1 values(300, 500);
 mysql> insert into test.t2 values(30, 50);
