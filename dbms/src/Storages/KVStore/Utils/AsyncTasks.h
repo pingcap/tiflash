@@ -311,7 +311,7 @@ struct AsyncTasks
 
     bool isReady(Key key) const { return queryState(key) == TaskState::Finished; }
 
-    std::optional<uint64_t> queryElapsed(Key key)
+    std::optional<uint64_t> queryElapsed(Key key) const
     {
         std::scoped_lock<std::mutex> l(mtx);
         auto it = tasks.find(key);
@@ -322,7 +322,7 @@ struct AsyncTasks
         return getCurrentMillis() - it->second.start_ts;
     }
 
-    std::optional<uint64_t> queryStartTime(Key key)
+    std::optional<uint64_t> queryStartTime(Key key) const
     {
         std::scoped_lock<std::mutex> l(mtx);
         auto it = tasks.find(key);
