@@ -573,7 +573,7 @@ void MPPTask::runImpl()
             magic_enum::enum_name(status.load()));
         auto cpu_ru = query_executor_holder->collectRequestUnit();
         auto read_ru = dag_context->getReadRU();
-        LOG_INFO(log, "mpp finish with request unit: cpu={} read={}", cpu_ru, read_ru);
+        LOG_DEBUG(log, "mpp finish with request unit: cpu={} read={}", cpu_ru, read_ru);
         GET_METRIC(tiflash_compute_request_unit, type_mpp).Increment(cpu_ru + read_ru);
         mpp_task_statistics.setRU(cpu_ru, read_ru);
 
