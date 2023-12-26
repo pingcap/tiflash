@@ -761,6 +761,8 @@ std::pair<bool, DatabaseID> MockTiDB::getDBIDByName(const String & database_name
 
 std::optional<SchemaDiff> MockTiDB::getSchemaDiff(Int64 version_)
 {
+    if (!version_diff.contains(version_))
+        return std::nullopt;
     return version_diff[version_];
 }
 
