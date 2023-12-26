@@ -25,7 +25,35 @@ TEST(AsyncTasksTest, AsyncTasksNormal)
     using namespace std::chrono_literals;
     using TestAsyncTasks = AsyncTasks<uint64_t, std::function<void()>, void>;
 
+    auto log = DB::Logger::get();
+    LOG_INFO(log, "Cancel and addTask");
+    // Cancel and addTask
+    {
+        auto async_tasks = std::make_unique<TestAsyncTasks>(1, 1, 2);
+        auto m = std::make_shared<std::mutex>();
+        auto m2 = std::make_shared<std::mutex>();
+        int flag = 0;
+        std::unique_lock cl(*m);
+        async_tasks->addTask(1, [m, &flag, &async_tasks, &m2]() {
+            auto cancel_handle = async_tasks->getCancelHandleFromExecutor(1);
+            std::scoped_lock rl2(*m2);
+            std::scoped_lock rl(*m);
+            if (cancel_handle->isCanceled())
+            {
+                return;
+            }
+            flag = 1;
+        });
+        async_tasks->asyncCancelTask(1);
+        ASSERT_FALSE(async_tasks->isScheduled(1));
+        async_tasks->addTask(1, [&flag]() { flag = 2; });
+        cl.unlock();
+        std::scoped_lock rl2(*m2);
+        ASSERT_NO_THROW(async_tasks->fetchResult(1));
+        ASSERT_EQ(flag, 2);
+    }
     // Lifetime of tasks
+    LOG_INFO(log, "Lifetime of tasks");
     {
         auto async_tasks = std::make_unique<TestAsyncTasks>(1, 1, 1);
         auto sp_after_sched = SyncPointCtl::enableInScope("after_AsyncTasks::addTask_scheduled");
@@ -51,6 +79,7 @@ TEST(AsyncTasksTest, AsyncTasksNormal)
     }
 
     // Cancel in queue
+    LOG_INFO(log, "Cancel in queue");
     {
         auto async_tasks = std::make_unique<TestAsyncTasks>(1, 1, 2);
         bool finished = false;
@@ -88,6 +117,7 @@ TEST(AsyncTasksTest, AsyncTasksNormal)
     }
 
     // Block cancel
+    LOG_INFO(log, "Block cancel");
     {
         auto async_tasks = std::make_unique<TestAsyncTasks>(2, 2, 10);
         int total = 9;
@@ -95,7 +125,7 @@ TEST(AsyncTasksTest, AsyncTasksNormal)
         std::vector<bool> f(total, false);
         for (int i = 0; i < total; i++)
         {
-            auto res = async_tasks->addTask(i, [i, &async_tasks, &finished]() {
+            auto res = async_tasks->addTask(i, [i, &async_tasks, &finished, log]() {
                 auto cancel_handle = async_tasks->getCancelHandleFromExecutor(i);
                 while (true)
                 {
@@ -120,16 +150,25 @@ TEST(AsyncTasksTest, AsyncTasksNormal)
             {
                 if (f[i])
                     continue;
+                if (async_tasks->blockedCancelRunningTask(i) == AsyncTaskHelper::TaskState::InQueue)
+                {
+                    // Cancel in queue, should manually add `finished`.
+                    finished += 1;
+                }
                 f[i] = true;
-                [[maybe_unused]] auto a = async_tasks->blockedCancelRunningTask(i);
                 break;
             }
         }
 
+        for (int i = 0; i < total; i++)
+        {
+            ASSERT_TRUE(f[i]);
+        }
         ASSERT_EQ(async_tasks->count(), 0);
     }
 
     // Cancel tasks in queue
+    LOG_INFO(log, "Cancel tasks in queue");
     {
         auto async_tasks = std::make_unique<TestAsyncTasks>(1, 1, 100);
 
