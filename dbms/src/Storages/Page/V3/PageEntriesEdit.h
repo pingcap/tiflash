@@ -149,10 +149,13 @@ inline EditRecordType typeFromProto(CheckpointProto::EditType t)
     case CheckpointProto::EDIT_TYPE_DELETE:
         return EditRecordType::VAR_DELETE;
     default:
-        RUNTIME_CHECK_MSG(false, "Unsupported Proto Edit Type {}", magic_enum::enum_name(t));
+        throw Exception(
+            ErrorCodes::LOGICAL_ERROR,
+            fmt::format("Unsupported Proto Edit Type {}", magic_enum::enum_name(t)));
     }
 }
 
+/// PageEntriesEdit records the change of pages for a WriteBatch.
 /// Page entries change to apply to PageDirectory
 template <typename PageIdType>
 class PageEntriesEdit
@@ -270,6 +273,7 @@ public:
 
     size_t size() const { return records.size(); }
 
+    /// EditRecord records the change of a page for a Write.
     struct EditRecord
     {
         EditRecordType type{EditRecordType::DEL};

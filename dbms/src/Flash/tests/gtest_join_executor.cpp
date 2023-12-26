@@ -154,6 +154,7 @@ try
          toNullableVec<Int8>({0, 0, 0, 1, 1})},
     };
 
+    std::vector<UInt64> probe_cache_column_threshold{2, 1000};
     for (size_t i = 0; i < join_type_num; ++i)
     {
         for (size_t j = 0; j < simple_test_num; ++j)
@@ -163,7 +164,13 @@ try
                                .join(context.scan("simple_test", r), join_types[i], {col(k)})
                                .build(context);
 
-            executeAndAssertColumnsEqual(request, expected_cols[i * simple_test_num + j]);
+            for (auto threshold : probe_cache_column_threshold)
+            {
+                context.context->setSetting(
+                    "join_probe_cache_columns_threshold",
+                    Field(static_cast<UInt64>(threshold)));
+                executeAndAssertColumnsEqual(request, expected_cols[i * simple_test_num + j]);
+            }
         }
     }
 }
@@ -2120,6 +2127,7 @@ try
     context.context->setSetting("max_block_size", Field(static_cast<UInt64>(max_block_size)));
     /// use right_table left join left_table as the reference
     auto ref_columns = executeStreams(request, original_max_streams);
+    std::vector<UInt64> probe_cache_column_threshold{2, 1000};
 
     /// case 1.1 table scan join table scan
     for (auto & left_table_name : left_table_names)
@@ -2133,8 +2141,14 @@ try
                               {col("a")})
                           .build(context);
             WRAP_FOR_JOIN_TEST_BEGIN
-            ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams))
-                << "left_table_name = " << left_table_name << ", right_table_name = " << right_table_name;
+            for (auto threshold : probe_cache_column_threshold)
+            {
+                context.context->setSetting(
+                    "join_probe_cache_columns_threshold",
+                    Field(static_cast<UInt64>(threshold)));
+                ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams))
+                    << "left_table_name = " << left_table_name << ", right_table_name = " << right_table_name;
+            }
             WRAP_FOR_JOIN_TEST_END
         }
     }
@@ -2157,13 +2171,19 @@ try
                               exchange_concurrency)
                           .build(context);
             WRAP_FOR_JOIN_TEST_BEGIN
-            ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams))
-                << "left_table_name = " << left_table_name
-                << ", right_exchange_receiver_concurrency = " << exchange_concurrency;
-            if (original_max_streams_small < exchange_concurrency)
-                ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams_small))
+            for (auto threshold : probe_cache_column_threshold)
+            {
+                context.context->setSetting(
+                    "join_probe_cache_columns_threshold",
+                    Field(static_cast<UInt64>(threshold)));
+                ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams))
                     << "left_table_name = " << left_table_name
                     << ", right_exchange_receiver_concurrency = " << exchange_concurrency;
+                if (original_max_streams_small < exchange_concurrency)
+                    ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams_small))
+                        << "left_table_name = " << left_table_name
+                        << ", right_exchange_receiver_concurrency = " << exchange_concurrency;
+            }
             WRAP_FOR_JOIN_TEST_END
         }
     }
@@ -2204,8 +2224,14 @@ try
                               0)
                           .build(context);
             WRAP_FOR_JOIN_TEST_BEGIN
-            ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams))
-                << "left_table_name = " << left_table_name << ", right_table_name = " << right_table_name;
+            for (auto threshold : probe_cache_column_threshold)
+            {
+                context.context->setSetting(
+                    "join_probe_cache_columns_threshold",
+                    Field(static_cast<UInt64>(threshold)));
+                ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams))
+                    << "left_table_name = " << left_table_name << ", right_table_name = " << right_table_name;
+            }
             WRAP_FOR_JOIN_TEST_END
         }
     }
@@ -2229,13 +2255,21 @@ try
                               exchange_concurrency)
                           .build(context);
             WRAP_FOR_JOIN_TEST_BEGIN
-            ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams))
-                << "left_table_name = " << left_table_name
-                << ", right_exchange_receiver_concurrency = " << exchange_concurrency;
-            if (original_max_streams_small < exchange_concurrency)
-                ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams_small))
+            for (auto threshold : probe_cache_column_threshold)
+            {
+                context.context->setSetting(
+                    "join_probe_cache_columns_threshold",
+                    Field(static_cast<UInt64>(threshold)));
+                ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams))
                     << "left_table_name = " << left_table_name
-                    << ", right_exchange_receiver_concurrency = " << exchange_concurrency;
+                    << ", right_exchange_receiver_concurrency = " << exchange_concurrency
+                    << ", join_probe_cache_columns_threshold = " << threshold;
+                if (original_max_streams_small < exchange_concurrency)
+                    ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams_small))
+                        << "left_table_name = " << left_table_name
+                        << ", right_exchange_receiver_concurrency = " << exchange_concurrency
+                        << ", join_probe_cache_columns_threshold = " << threshold;
+            }
             WRAP_FOR_JOIN_TEST_END
         }
     }
@@ -2273,6 +2307,22 @@ ColumnsWithTypeAndName genSemiJoinResult(
         anti_left_semi_ans.column = std::move(new_column);
 
         res.emplace_back(anti_left_semi_ans);
+    }
+    else if (type == tipb::JoinType::TypeSemiJoin)
+    {
+        IColumn::Filter filter(left_semi_res.column->size());
+        const auto * nullable_column = checkAndGetColumn<ColumnNullable>(left_semi_res.column.get());
+        const auto & nested_column_data
+            = static_cast<const ColumnVector<UInt8> *>(nullable_column->getNestedColumnPtr().get())->getData();
+        for (size_t i = 0; i < nullable_column->size(); ++i)
+        {
+            if (nullable_column->isNullAt(i) || !nested_column_data[i])
+                filter[i] = 0;
+            else
+                filter[i] = 1;
+        }
+        for (auto & r : res)
+            r.column = r.column->filter(filter, -1);
     }
     else if (type == tipb::JoinType::TypeAntiSemiJoin)
     {
@@ -2341,15 +2391,18 @@ try
         context.addMockTable("null_aware_semi", "s", {{"a", TiDB::TP::TypeLong}}, right);
 
         for (const auto type :
-             {JoinType::TypeLeftOuterSemiJoin, JoinType::TypeAntiLeftOuterSemiJoin, JoinType::TypeAntiSemiJoin})
+             {JoinType::TypeLeftOuterSemiJoin,
+              JoinType::TypeAntiLeftOuterSemiJoin,
+              JoinType::TypeSemiJoin,
+              JoinType::TypeAntiSemiJoin})
         {
             auto reference = genSemiJoinResult(type, left, res);
-            /// nullaware hash join
-            auto request = context.scan("null_aware_semi", "t")
-                               .join(context.scan("null_aware_semi", "s"), type, {col("a")}, {}, {}, {}, {}, 0, true)
-                               .build(context);
+            bool is_null_aware = type != JoinType::TypeSemiJoin;
+            auto request
+                = context.scan("null_aware_semi", "t")
+                      .join(context.scan("null_aware_semi", "s"), type, {col("a")}, {}, {}, {}, {}, 0, is_null_aware)
+                      .build(context);
             executeAndAssertColumnsEqual(request, reference);
-            /// nullaware cross join
             for (const auto shallow_copy_threshold : cross_join_shallow_copy_thresholds)
             {
                 context.context->setSetting(
@@ -2412,9 +2465,13 @@ try
         context.addMockTable("null_aware_semi", "s", {{"a", TiDB::TP::TypeLong}, {"c", TiDB::TP::TypeLong}}, right);
 
         for (const auto type :
-             {JoinType::TypeLeftOuterSemiJoin, JoinType::TypeAntiLeftOuterSemiJoin, JoinType::TypeAntiSemiJoin})
+             {JoinType::TypeLeftOuterSemiJoin,
+              JoinType::TypeAntiLeftOuterSemiJoin,
+              JoinType::TypeSemiJoin,
+              JoinType::TypeAntiSemiJoin})
         {
             auto reference = genSemiJoinResult(type, left, res);
+            bool is_null_aware = type != JoinType::TypeSemiJoin;
             auto request = context.scan("null_aware_semi", "t")
                                .join(
                                    context.scan("null_aware_semi", "s"),
@@ -2425,7 +2482,7 @@ try
                                    {lt(col("t.c"), col("s.c"))},
                                    {},
                                    0,
-                                   true)
+                                   is_null_aware)
                                .build(context);
             executeAndAssertColumnsEqual(request, reference);
             for (const auto shallow_copy_threshold : cross_join_shallow_copy_thresholds)
@@ -2492,13 +2549,25 @@ try
         context.addMockTable("null_aware_semi", "s", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}}, right);
 
         for (const auto type :
-             {JoinType::TypeLeftOuterSemiJoin, JoinType::TypeAntiLeftOuterSemiJoin, JoinType::TypeAntiSemiJoin})
+             {JoinType::TypeLeftOuterSemiJoin,
+              JoinType::TypeAntiLeftOuterSemiJoin,
+              JoinType::TypeSemiJoin,
+              JoinType::TypeAntiSemiJoin})
         {
             auto reference = genSemiJoinResult(type, left, res);
-            auto request
-                = context.scan("null_aware_semi", "t")
-                      .join(context.scan("null_aware_semi", "s"), type, {col("a"), col("b")}, {}, {}, {}, {}, 0, true)
-                      .build(context);
+            bool is_null_aware = type != JoinType::TypeSemiJoin;
+            auto request = context.scan("null_aware_semi", "t")
+                               .join(
+                                   context.scan("null_aware_semi", "s"),
+                                   type,
+                                   {col("a"), col("b")},
+                                   {},
+                                   {},
+                                   {},
+                                   {},
+                                   0,
+                                   is_null_aware)
+                               .build(context);
             executeAndAssertColumnsEqual(request, reference);
             for (const auto shallow_copy_threshold : cross_join_shallow_copy_thresholds)
             {
@@ -2620,9 +2689,13 @@ try
             right);
 
         for (const auto type :
-             {JoinType::TypeLeftOuterSemiJoin, JoinType::TypeAntiLeftOuterSemiJoin, JoinType::TypeAntiSemiJoin})
+             {JoinType::TypeLeftOuterSemiJoin,
+              JoinType::TypeAntiLeftOuterSemiJoin,
+              JoinType::TypeSemiJoin,
+              JoinType::TypeAntiSemiJoin})
         {
             auto reference = genSemiJoinResult(type, left, res);
+            bool is_null_aware = type != JoinType::TypeSemiJoin;
             auto request = context.scan("null_aware_semi", "t")
                                .join(
                                    context.scan("null_aware_semi", "s"),
@@ -2633,7 +2706,7 @@ try
                                    {lt(col("t.c"), col("s.c"))},
                                    {},
                                    0,
-                                   true)
+                                   is_null_aware)
                                .build(context);
             executeAndAssertColumnsEqual(request, reference);
             for (const auto shallow_copy_threshold : cross_join_shallow_copy_thresholds)
@@ -2698,9 +2771,13 @@ try
             right);
 
         for (const auto type :
-             {JoinType::TypeLeftOuterSemiJoin, JoinType::TypeAntiLeftOuterSemiJoin, JoinType::TypeAntiSemiJoin})
+             {JoinType::TypeLeftOuterSemiJoin,
+              JoinType::TypeAntiLeftOuterSemiJoin,
+              JoinType::TypeSemiJoin,
+              JoinType::TypeAntiSemiJoin})
         {
             auto reference = genSemiJoinResult(type, left, res);
+            bool is_null_aware = type != JoinType::TypeSemiJoin;
             auto request = context.scan("null_aware_semi", "t")
                                .join(
                                    context.scan("null_aware_semi", "s"),
@@ -2711,7 +2788,7 @@ try
                                    {Or(lt(col("c"), col("d")), eq(col("t.a"), col("s.a")))},
                                    {},
                                    0,
-                                   true)
+                                   is_null_aware)
                                .build(context);
             executeAndAssertColumnsEqual(request, reference);
             for (const auto shallow_copy_threshold : cross_join_shallow_copy_thresholds)
@@ -2767,13 +2844,25 @@ try
         context.addMockTable("null_aware_semi", "s", {{"a", TiDB::TP::TypeString}, {"b", TiDB::TP::TypeString}}, right);
 
         for (const auto type :
-             {JoinType::TypeLeftOuterSemiJoin, JoinType::TypeAntiLeftOuterSemiJoin, JoinType::TypeAntiSemiJoin})
+             {JoinType::TypeLeftOuterSemiJoin,
+              JoinType::TypeAntiLeftOuterSemiJoin,
+              JoinType::TypeSemiJoin,
+              JoinType::TypeAntiSemiJoin})
         {
             auto reference = genSemiJoinResult(type, left, res);
-            auto request
-                = context.scan("null_aware_semi", "t")
-                      .join(context.scan("null_aware_semi", "s"), type, {col("a"), col("b")}, {}, {}, {}, {}, 0, true)
-                      .build(context);
+            bool is_null_aware = type != JoinType::TypeSemiJoin;
+            auto request = context.scan("null_aware_semi", "t")
+                               .join(
+                                   context.scan("null_aware_semi", "s"),
+                                   type,
+                                   {col("a"), col("b")},
+                                   {},
+                                   {},
+                                   {},
+                                   {},
+                                   0,
+                                   is_null_aware)
+                               .build(context);
             executeAndAssertColumnsEqual(request, reference);
             for (const auto shallow_copy_threshold : cross_join_shallow_copy_thresholds)
             {
@@ -2793,6 +2882,318 @@ try
                                   false)
                               .build(context);
                 executeAndAssertColumnsEqual(request, reference);
+            }
+        }
+    }
+}
+CATCH
+
+TEST_F(JoinExecutorTestRunner, SemiJoin)
+try
+{
+    using tipb::JoinType;
+    /// One join key(t.a = s.a) + no other condition.
+    /// left table(t) + right table(s) + result column.
+    const std::vector<std::tuple<ColumnsWithTypeAndName, ColumnsWithTypeAndName, ColumnWithTypeAndName>> t1
+        = {{
+               {toVec<Int32>("a", {1, 2, 3, 4, 5})},
+               {toVec<Int32>("a", {1, 2, 3, 4, 5})},
+               toNullableVec<Int8>({1, 1, 1, 1, 1}),
+           },
+           {
+               {toVec<Int32>("a", {1, 2, 3, 4, 5})},
+               {toVec<Int32>("a", {6, 7, 8, 9, 10})},
+               toNullableVec<Int8>({0, 0, 0, 0, 0}),
+           },
+           {
+               {toVec<Int32>("a", {1, 2, 3, 4, 5})},
+               {toVec<Int32>("a", {})},
+               toNullableVec<Int8>({0, 0, 0, 0, 0}),
+           },
+           {
+               {toVec<Int32>("a", {1, 2, 3, 4, 5})},
+               {toVec<Int32>("a", {1, 2, 3})},
+               toNullableVec<Int8>({1, 1, 1, 0, 0}),
+           },
+           {
+               {toVec<Int32>("a", {1, 2, 3, 4, 5})},
+               {toVec<Int32>("a", {1, 1, 2, 2, 5, 5})},
+               toNullableVec<Int8>({1, 1, 0, 0, 1}),
+           }};
+
+    for (const auto & [left, right, res] : t1)
+    {
+        context.addMockTable("semi", "t", {{"a", TiDB::TP::TypeLong, false}}, left);
+        context.addMockTable("semi", "s", {{"a", TiDB::TP::TypeLong, false}}, right);
+
+        for (const auto type :
+             {JoinType::TypeLeftOuterSemiJoin,
+              JoinType::TypeAntiLeftOuterSemiJoin,
+              JoinType::TypeSemiJoin,
+              JoinType::TypeAntiSemiJoin})
+        {
+            auto reference = genSemiJoinResult(type, left, res);
+            auto request = context.scan("semi", "t").join(context.scan("semi", "s"), type, {col("a")}).build(context);
+            executeAndAssertColumnsEqual(request, reference);
+        }
+    }
+
+    /// One join key(t.a = s.a) + other condition(t.c < s.c).
+    /// left table(t) + right table(s) + result column.
+    const std::vector<std::tuple<ColumnsWithTypeAndName, ColumnsWithTypeAndName, ColumnWithTypeAndName>> t2
+        = {{
+               {toVec<Int32>("a", {1, 2, 3, 4, 5}), toNullableVec<Int32>("c", {1, 1, 1, 1, 1})},
+               {toVec<Int32>("a", {1, 2, 3, 4, 5}), toNullableVec<Int32>("c", {2, 2, 2, 2, 2})},
+               toNullableVec<Int8>({1, 1, 1, 1, 1}),
+           },
+           {
+               {toVec<Int32>("a", {1, 2, 3, 4, 5}), toNullableVec<Int32>("c", {1, 1, 1, 1, 1})},
+               {toVec<Int32>("a", {6, 7, 8, 9, 10}), toNullableVec<Int32>("c", {2, 2, 2, 2, 2})},
+               toNullableVec<Int8>({0, 0, 0, 0, 0}),
+           },
+           {
+               {toVec<Int32>("a", {1, 2, 3, 4, 5}), toNullableVec<Int32>("c", {1, 1, 1, 1, 1})},
+               {toVec<Int32>("a", {}), toNullableVec<Int32>("c", {})},
+               toNullableVec<Int8>({0, 0, 0, 0, 0}),
+           },
+           {
+               {toVec<Int32>("a", {1, 1, 2, 2}), toNullableVec<Int32>("c", {1, {}, 2, {}})},
+               {toVec<Int32>("a", {1, 1, 1, 2, 2, 2}), toNullableVec<Int32>("c", {{}, 1, 2, 2, {}, 3})},
+               toNullableVec<Int8>({1, 0, 1, 0}),
+           }};
+
+    for (const auto & [left, right, res] : t2)
+    {
+        context.addMockTable("semi", "t", {{"a", TiDB::TP::TypeLong, false}, {"c", TiDB::TP::TypeLong}}, left);
+        context.addMockTable("semi", "s", {{"a", TiDB::TP::TypeLong, false}, {"c", TiDB::TP::TypeLong}}, right);
+
+        for (const auto type :
+             {JoinType::TypeLeftOuterSemiJoin,
+              JoinType::TypeAntiLeftOuterSemiJoin,
+              JoinType::TypeSemiJoin,
+              JoinType::TypeAntiSemiJoin})
+        {
+            auto reference = genSemiJoinResult(type, left, res);
+            auto request
+                = context.scan("semi", "t")
+                      .join(context.scan("semi", "s"), type, {col("a")}, {}, {}, {lt(col("t.c"), col("s.c"))}, {})
+                      .build(context);
+            executeAndAssertColumnsEqual(request, reference);
+        }
+    }
+
+    /// Two join keys(t.a = s.a and t.b = s.b) + no other condition.
+    /// left table(t) + right table(s) + result column.
+    const std::vector<std::tuple<ColumnsWithTypeAndName, ColumnsWithTypeAndName, ColumnWithTypeAndName>> t3 = {
+        {
+            {toVec<Int32>("a", {1, 2, 3, 4, 5}), toVec<Int32>("b", {1, 2, 3, 4, 5})},
+            {toVec<Int32>("a", {1, 2, 3, 4, 5}), toVec<Int32>("b", {1, 2, 3, 4, 5})},
+            toNullableVec<Int8>({1, 1, 1, 1, 1}),
+        },
+        {
+            {toVec<Int32>("a", {1, 2, 3, 4, 5}), toVec<Int32>("b", {1, 2, 3, 4, 5})},
+            {toVec<Int32>("a", {}), toVec<Int32>("b", {})},
+            toNullableVec<Int8>({0, 0, 0, 0, 0}),
+        },
+        {
+            {toVec<Int32>("a", {1, 2, 3, 4, 5}), toVec<Int32>("b", {1, 2, 3, 4, 5})},
+            {toVec<Int32>("a", {1, 2, 3, 4, 5}), toVec<Int32>("b", {6, 7, 8, 9, 10})},
+            toNullableVec<Int8>({0, 0, 0, 0, 0}),
+        },
+        {
+            {toVec<Int32>("a", {1, 2, 3, 1, 2}), toVec<Int32>("b", {1, 2, 3, 0, 3})},
+            {toVec<Int32>("a", {1, 1, 2, 2, 3, 3}), toVec<Int32>("b", {0, 2, 1, 2, 3, 3})},
+            toNullableVec<Int8>({0, 1, 1, 1, 0}),
+        },
+    };
+
+    for (const auto & [left, right, res] : t3)
+    {
+        context.addMockTable("semi", "t", {{"a", TiDB::TP::TypeLong, false}, {"b", TiDB::TP::TypeLong, false}}, left);
+        context.addMockTable("semi", "s", {{"a", TiDB::TP::TypeLong, false}, {"b", TiDB::TP::TypeLong, false}}, right);
+
+        for (const auto type :
+             {JoinType::TypeLeftOuterSemiJoin,
+              JoinType::TypeAntiLeftOuterSemiJoin,
+              JoinType::TypeSemiJoin,
+              JoinType::TypeAntiSemiJoin})
+        {
+            auto reference = genSemiJoinResult(type, left, res);
+            auto request = context.scan("semi", "t")
+                               .join(context.scan("semi", "s"), type, {col("a"), col("b")}, {})
+                               .build(context);
+            executeAndAssertColumnsEqual(request, reference);
+        }
+    }
+
+    /// Two join keys(t.a = s.a and t.b = s.b) + other condition(t.c < s.c).
+    /// left table(t) + right table(s) + result column.
+    const std::vector<std::tuple<ColumnsWithTypeAndName, ColumnsWithTypeAndName, ColumnWithTypeAndName>> t4 = {
+        {
+            {toVec<Int32>("a", {1, 2, 3, 4, 5}),
+             toVec<Int32>("b", {1, 2, 3, 4, 5}),
+             toNullableVec<Int32>("c", {1, 1, 1, 1, 1})},
+            {toVec<Int32>("a", {1, 2, 3, 4, 5}),
+             toVec<Int32>("b", {1, 2, 3, 4, 5}),
+             toNullableVec<Int32>("c", {2, 2, 2, 2, 2})},
+            toNullableVec<Int8>({1, 1, 1, 1, 1}),
+        },
+        {
+            {toVec<Int32>("a", {1, 2, 3, 4, 5}),
+             toVec<Int32>("b", {1, 2, 3, 4, 5}),
+             toNullableVec<Int32>("c", {1, 1, 1, 1, 1})},
+            {toVec<Int32>("a", {}), toVec<Int32>("b", {}), toNullableVec<Int32>("c", {})},
+            toNullableVec<Int8>({0, 0, 0, 0, 0}),
+        },
+        {
+            {toVec<Int32>("a", {1, 2, 3, 4, 5}),
+             toVec<Int32>("b", {1, 2, 3, 4, 5}),
+             toNullableVec<Int32>("c", {1, 1, 1, 1, 1})},
+            {toVec<Int32>("a", {1, 2, 3, 4, 5}),
+             toVec<Int32>("b", {6, 7, 8, 9, 10}),
+             toNullableVec<Int32>("c", {2, 2, 2, 2, 2})},
+            toNullableVec<Int8>({0, 0, 0, 0, 0}),
+        },
+        {
+            {toVec<Int32>("a", {1, 2, 3, 4, 5}),
+             toVec<Int32>("b", {1, 2, 3, 4, 5}),
+             toNullableVec<Int32>("c", {2, 2, 2, 2, 2})},
+            {toVec<Int32>("a", {1, 2, 3, 4, 5}),
+             toVec<Int32>("b", {1, 2, 3, 4, 5}),
+             toNullableVec<Int32>("c", {1, 1, 1, 1, 1})},
+            toNullableVec<Int8>({0, 0, 0, 0, 0}),
+        },
+        {
+            {toVec<Int32>("a", {1, 2, 3, 4, 5}),
+             toVec<Int32>("b", {1, 2, 3, 4, 5}),
+             toNullableVec<Int32>("c", {2, 2, 2, 2, 2})},
+            {toVec<Int32>("a", {1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 5}),
+             toVec<Int32>("b", {1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 5, 4}),
+             toNullableVec<Int32>("c", {1, 2, 3, 1, 2, 2, 1, 2, 3, 1, 3, 3})},
+            toNullableVec<Int8>({1, 0, 1, 0, 0}),
+        },
+    };
+
+    for (const auto & [left, right, res] : t4)
+    {
+        context.addMockTable(
+            "semi",
+            "t",
+            {{"a", TiDB::TP::TypeLong, false}, {"b", TiDB::TP::TypeLong, false}, {"c", TiDB::TP::TypeLong}},
+            left);
+        context.addMockTable(
+            "semi",
+            "s",
+            {{"a", TiDB::TP::TypeLong, false}, {"b", TiDB::TP::TypeLong, false}, {"c", TiDB::TP::TypeLong}},
+            right);
+
+        for (const auto type :
+             {JoinType::TypeLeftOuterSemiJoin,
+              JoinType::TypeAntiLeftOuterSemiJoin,
+              JoinType::TypeSemiJoin,
+              JoinType::TypeAntiSemiJoin})
+        {
+            auto reference = genSemiJoinResult(type, left, res);
+            auto request = context.scan("semi", "t")
+                               .join(
+                                   context.scan("semi", "s"),
+                                   type,
+                                   {col("a"), col("b")},
+                                   {},
+                                   {},
+                                   {lt(col("t.c"), col("s.c"))},
+                                   {})
+                               .build(context);
+            executeAndAssertColumnsEqual(request, reference);
+        }
+    }
+
+    /// Two join keys(t.a = s.a and t.b = s.b) + no other condition + collation(UTF8MB4_UNICODE_CI).
+    /// left table(t) + right table(s) + result column.
+    context.setCollation(TiDB::ITiDBCollator::UTF8MB4_UNICODE_CI);
+    const std::vector<std::tuple<ColumnsWithTypeAndName, ColumnsWithTypeAndName, ColumnWithTypeAndName>> t6 = {
+        {
+            {toVec<String>("a", {"a", "b", "c", "d", "e"}), toVec<String>("b", {"A", "b", "c", "dd", "e"})},
+            {toVec<String>("a", {"a", "b", "c", "D", "E"}), toVec<String>("b", {"a", "bb", "c", "DD", "d"})},
+            toNullableVec<Int8>({1, 0, 1, 1, 0}),
+        },
+    };
+
+    for (const auto & [left, right, res] : t6)
+    {
+        context
+            .addMockTable("semi", "t", {{"a", TiDB::TP::TypeString, false}, {"b", TiDB::TP::TypeString, false}}, left);
+        context
+            .addMockTable("semi", "s", {{"a", TiDB::TP::TypeString, false}, {"b", TiDB::TP::TypeString, false}}, right);
+
+        for (const auto type :
+             {JoinType::TypeLeftOuterSemiJoin,
+              JoinType::TypeAntiLeftOuterSemiJoin,
+              JoinType::TypeSemiJoin,
+              JoinType::TypeAntiSemiJoin})
+        {
+            auto reference = genSemiJoinResult(type, left, res);
+            auto request = context.scan("semi", "t")
+                               .join(context.scan("semi", "s"), type, {col("a"), col("b")}, {})
+                               .build(context);
+            executeAndAssertColumnsEqual(request, reference);
+        }
+    }
+}
+CATCH
+
+TEST_F(JoinExecutorTestRunner, ProbeCacheColumnsForRightSemiJoin)
+try
+{
+    UInt64 max_block_size = 800;
+    size_t max_streams = 2;
+    std::vector<String> left_table_names = {"left_table_1_concurrency", "left_table_3_concurrency"};
+    std::vector<String> right_table_names = {"right_table_1_concurrency", "right_table_3_concurrency"};
+    context.context->setSetting("max_block_size", Field(static_cast<UInt64>(max_block_size)));
+
+    for (const auto type : {tipb::JoinType::TypeSemiJoin, tipb::JoinType::TypeAntiSemiJoin})
+    {
+        auto request = context.scan("outer_join_test", left_table_names[0])
+                           .join(
+                               context.scan("outer_join_test", right_table_names[0]),
+                               type,
+                               {col("a")},
+                               {},
+                               {},
+                               {lt(col(left_table_names[0] + ".a"), col(right_table_names[0] + ".b"))},
+                               {},
+                               0,
+                               false,
+                               0)
+                           .build(context);
+        auto reference = executeStreams(request, max_streams);
+        std::vector<UInt64> probe_cache_column_threshold{2, 1000};
+        for (auto & left_table_name : left_table_names)
+        {
+            for (auto & right_table_name : right_table_names)
+            {
+                request = context.scan("outer_join_test", left_table_name)
+                              .join(
+                                  context.scan("outer_join_test", right_table_name),
+                                  type,
+                                  {col("a")},
+                                  {},
+                                  {},
+                                  {lt(col(left_table_name + ".a"), col(right_table_name + ".b"))},
+                                  {},
+                                  0,
+                                  false,
+                                  0)
+                              .build(context);
+                for (auto threshold : probe_cache_column_threshold)
+                {
+                    context.context->setSetting(
+                        "join_probe_cache_columns_threshold",
+                        Field(static_cast<UInt64>(threshold)));
+                    ASSERT_COLUMNS_EQ_UR(reference, executeStreams(request, max_streams))
+                        << "left_table_name = " << left_table_name << ", right_table_name = " << right_table_name
+                        << ", join_probe_cache_columns_threshold = " << threshold;
+                }
             }
         }
     }

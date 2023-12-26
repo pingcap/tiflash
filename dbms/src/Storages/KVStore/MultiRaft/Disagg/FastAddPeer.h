@@ -21,6 +21,21 @@
 namespace DB
 {
 using FAPAsyncTasks = AsyncTasks<uint64_t, std::function<FastAddPeerRes()>, FastAddPeerRes>;
+struct CheckpointInfo;
+using CheckpointInfoPtr = std::shared_ptr<CheckpointInfo>;
+class Region;
+using RegionPtr = std::shared_ptr<Region>;
+using CheckpointRegionInfoAndData
+    = std::tuple<CheckpointInfoPtr, RegionPtr, raft_serverpb::RaftApplyState, raft_serverpb::RegionLocalState>;
+struct CheckpointIngestInfo;
+using CheckpointIngestInfoPtr = std::shared_ptr<CheckpointIngestInfo>;
+
+namespace DM
+{
+class Segment;
+using SegmentPtr = std::shared_ptr<Segment>;
+using Segments = std::vector<SegmentPtr>;
+} // namespace DM
 
 class FastAddPeerContext
 {
@@ -32,6 +47,26 @@ public:
         Context & context,
         UInt64 store_id,
         UInt64 required_seq);
+
+    // Checkpoint ingest management
+    CheckpointIngestInfoPtr getOrRestoreCheckpointIngestInfo(
+        TMTContext & tmt,
+        const struct TiFlashRaftProxyHelper * proxy_helper,
+        UInt64 region_id,
+        UInt64 peer_id);
+    void insertCheckpointIngestInfo(
+        TMTContext & tmt,
+        UInt64 region_id,
+        UInt64 peer_id,
+        UInt64 remote_store_id,
+        RegionPtr region,
+        DM::Segments && segments,
+        UInt64 start_time);
+    std::optional<CheckpointIngestInfoPtr> tryGetCheckpointIngestInfo(UInt64 region_id) const;
+    void cleanCheckpointIngestInfo(TMTContext & tmt, UInt64 region_id);
+
+    // Remove the checkpoint ingest info from memory. Only for testing.
+    void debugRemoveCheckpointIngestInfo(UInt64 region_id);
 
 public:
     std::shared_ptr<FAPAsyncTasks> tasks_trace;
@@ -61,6 +96,11 @@ private:
     // Store the latest manifest data for every store
     // StoreId -> std::pair<UploadSeq, CheckpointCacheElementPtr>
     std::unordered_map<UInt64, std::pair<UInt64, CheckpointCacheElementPtr>> checkpoint_cache_map;
+
+    // Checkpoint that is persisted, but yet to be ingested into DeltaTree.
+    mutable std::mutex ingest_info_mu;
+    // RegionID->CheckpointIngestInfoPtr
+    std::unordered_map<UInt64, CheckpointIngestInfoPtr> checkpoint_ingest_info_map;
 
     LoggerPtr log;
 };

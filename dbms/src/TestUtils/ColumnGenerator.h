@@ -33,7 +33,7 @@ struct ColumnGeneratorOpts
     size_t size;
     String type_name;
     DataDistribution distribution;
-    String name = "";
+    String name = ""; // NOLINT
     size_t string_max_size = 128;
 };
 
@@ -45,19 +45,7 @@ public:
 private:
     ColumnWithTypeAndName generateNullMapColumn(const ColumnGeneratorOpts & opts);
     std::mt19937_64 rand_gen;
-    std::uniform_int_distribution<Int64> int_rand_gen = std::uniform_int_distribution<Int64>(0, 128);
     std::uniform_real_distribution<double> real_rand_gen;
-    /// todo support multibyte characters
-    const std::string charset{"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz!@#$%^&*()|[]{}:;',<.>`~"};
-
-    String randomString();
-    int randomTimeOffset();
-    time_t randomUTCTimestamp();
-    struct tm randomLocalTime();
-    String randomDate();
-    String randomDateTime();
-    String randomDuration();
-    String randomDecimal(uint64_t prec, uint64_t scale);
 
     DataTypePtr createDecimalType();
 
@@ -67,10 +55,10 @@ private:
     template <typename IntegerType>
     void genUInt(MutableColumnPtr & col);
     void genFloat(MutableColumnPtr & col);
-    void genString(MutableColumnPtr & col);
-    void genDate(MutableColumnPtr & col);
-    void genDateTime(MutableColumnPtr & col);
-    void genDuration(MutableColumnPtr & col);
+    static void genString(MutableColumnPtr & col, UInt64 max_size);
+    static void genDate(MutableColumnPtr & col);
+    static void genDateTime(MutableColumnPtr & col);
+    static void genDuration(MutableColumnPtr & col);
     void genDecimal(MutableColumnPtr & col, DataTypePtr & data_type);
     void genEnumValue(MutableColumnPtr & col, DataTypePtr & enum_type);
 };

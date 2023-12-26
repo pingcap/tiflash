@@ -656,7 +656,7 @@ try
             auto col_to = ColumnString::create();
             ColumnString::Chars_t & data_to = col_to->getChars();
             ColumnString::Offsets & offsets_to = col_to->getOffsets();
-            WriteBufferFromVector<ColumnString::Chars_t> write_buffer(data_to);
+            JsonBinary::JsonBinaryWriteBuffer write_buffer(data_to);
             bool found = i.bj.extract(path_expr_container_vec, write_buffer);
             ASSERT_TRUE(found == i.found);
             if (found)
@@ -693,7 +693,7 @@ try
 
     auto col_to = ColumnString::create();
     ColumnString::Chars_t & data_to = col_to->getChars();
-    WriteBufferFromVector<ColumnString::Chars_t> write_buffer(data_to);
+    JsonBinary::JsonBinaryWriteBuffer write_buffer(data_to);
     {
         /// Simple cache success check
         std::vector<JsonPathExprRefContainerPtr> path_expr_container_vec;

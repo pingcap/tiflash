@@ -16,9 +16,11 @@
 #include <Common/TiFlashMetrics.h>
 #include <Common/setThreadName.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/SharedContexts/Disagg.h>
 #include <Storages/KVStore/Decode/RegionTable.h>
 #include <Storages/KVStore/FFI/ProxyFFI.h>
 #include <Storages/KVStore/KVStore.h>
+#include <Storages/KVStore/MultiRaft/Disagg/FastAddPeer.h>
 #include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/StorageDeltaMerge.h>
@@ -115,6 +117,23 @@ void KVStore::checkAndApplyPreHandledSnapshot(const RegionPtrWrap & new_region, 
     }
 
     onSnapshot(new_region, old_region, old_applied_index, tmt);
+
+    if (tmt.getContext().getSharedContextDisagg()->isDisaggregatedStorageMode())
+    {
+        auto fap_ctx = tmt.getContext().getSharedContextDisagg()->fap_context;
+        // Everytime we meet a legacy snapshot, we try to clean obsolete fap ingest info.
+        if constexpr (!std::is_same_v<RegionPtrWrap, RegionPtrWithCheckpointInfo>)
+        {
+            // TODO(fap): Better cancel fap process in first, however, there is no case currently where a legacy snapshot runs with fap phase1/phase2 in parallel.
+            // The only case is a fap failed after phase 1 and fallback and failed to clean its phase 1 result.
+            fap_ctx->cleanCheckpointIngestInfo(tmt, new_region->id());
+        }
+        // Another FAP will not take place if this stage is not finished.
+        if (fap_ctx->tasks_trace->discardTask(new_region->id()))
+        {
+            LOG_ERROR(log, "FastAddPeer: find old fap task, region_id={}", new_region->id());
+        }
+    }
 }
 
 // This function get tiflash replica count from local schema.
@@ -283,6 +302,7 @@ void KVStore::onSnapshot(
             manage_lock.index.add(new_region);
         }
 
+        GET_METRIC(tiflash_raft_write_flow_bytes, type_snapshot_uncommitted).Observe(new_region->dataSize());
         persistRegion(*new_region, &region_lock, PersistRegionReason::ApplySnapshotCurRegion, "");
 
         tmt.getRegionTable().shrinkRegionRange(*new_region);
@@ -324,7 +344,7 @@ template void KVStore::onSnapshot<RegionPtrWithSnapshotFiles>(
     UInt64,
     TMTContext &);
 
-void KVStore::handleIngestCheckpoint(RegionPtr region, CheckpointInfoPtr checkpoint_info, TMTContext & tmt)
+void KVStore::handleIngestCheckpoint(RegionPtr region, CheckpointIngestInfoPtr checkpoint_info, TMTContext & tmt)
 {
     applyPreHandledSnapshot(RegionPtrWithCheckpointInfo{region, checkpoint_info}, tmt);
 }

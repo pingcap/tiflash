@@ -13,8 +13,12 @@
 // limitations under the License.
 
 #include <Common/TiFlashException.h>
+#include <Storages/KVStore/TiKVHelpers/KeyspaceSnapshot.h>
 #include <TiDB/Decode/DatumCodec.h>
 #include <TiDB/Schema/SchemaGetter.h>
+#include <common/logger_useful.h>
+
+#include <utility>
 
 namespace DB
 {
@@ -49,7 +53,7 @@ struct TxnStructure
         stream.write(metaPrefix, 1);
 
         EncodeBytes(key, stream);
-        EncodeUInt<UInt64>(UInt64(StringData), stream);
+        EncodeUInt<UInt64>(static_cast<UInt64>(StringData), stream);
 
         return stream.releaseStr();
     }
@@ -61,7 +65,7 @@ struct TxnStructure
         stream.write(metaPrefix, 1);
 
         EncodeBytes(key, stream);
-        EncodeUInt<UInt64>(UInt64(HashData), stream);
+        EncodeUInt<UInt64>(static_cast<UInt64>(HashData), stream);
         EncodeBytes(field, stream);
 
         return stream.releaseStr();
@@ -74,7 +78,7 @@ struct TxnStructure
         stream.write(metaPrefix, 1);
 
         EncodeBytes(key, stream);
-        EncodeUInt<UInt64>(UInt64(HashData), stream);
+        EncodeUInt<UInt64>(static_cast<UInt64>(HashData), stream);
         return stream.releaseStr();
     }
 
@@ -91,11 +95,9 @@ struct TxnStructure
         String decode_key = DecodeBytes(idx, key);
 
         UInt64 tp = DecodeUInt<UInt64>(idx, key);
-        if (char(tp) != HashData)
+        if (static_cast<char>(tp) != HashData)
         {
-            throw TiFlashException(
-                "invalid encoded hash data key flag:" + std::to_string(tp),
-                Errors::Table::SyncError);
+            throw TiFlashException(Errors::Table::SyncError, "invalid encoded hash data key flag: {}", tp);
         }
 
         String field = DecodeBytes(idx, key);
@@ -113,8 +115,7 @@ public:
     static String hGet(KeyspaceSnapshot & snap, const String & key, const String & field)
     {
         String encode_key = encodeHashDataKey(key, field);
-        String value = snap.Get(encode_key);
-        return value;
+        return snap.Get(encode_key);
     }
 
     static String mvccGet(KeyspaceSnapshot & snap, const String & key, const String & field)
@@ -181,6 +182,7 @@ void AffectedOption::deserialize(Poco::JSON::Object::Ptr json)
 
 void SchemaDiff::deserialize(const String & data)
 {
+    assert(!data.empty()); // should be skipped by upper level logic
     Poco::JSON::Parser parser;
     try
     {
@@ -217,7 +219,7 @@ void SchemaDiff::deserialize(const String & data)
     }
     catch (...)
     {
-        LOG_INFO(Logger::get(), "failed to deserialize {}", data);
+        LOG_WARNING(Logger::get(), "failed to deserialize {}", data);
         throw;
     }
 }
@@ -271,29 +273,33 @@ TiDB::DBInfoPtr SchemaGetter::getDatabase(DatabaseID db_id)
 {
     String key = getDBKey(db_id);
     String json = TxnStructure::hGet(snap, DBs, key);
-
     if (json.empty())
         return nullptr;
 
-    LOG_DEBUG(log, "Get DB Info from TiKV: {}", json);
+    LOG_DEBUG(log, "Get DB Info from TiKV, database_id={} {}", db_id, json);
     auto db_info = std::make_shared<TiDB::DBInfo>(json, keyspace_id);
     return db_info;
 }
 
-TiDB::TableInfoPtr SchemaGetter::getTableInfo(DatabaseID db_id, TableID table_id)
+template <bool mvcc_get>
+std::pair<TiDB::TableInfoPtr, bool> SchemaGetter::getTableInfoImpl(DatabaseID db_id, TableID table_id)
 {
     String db_key = getDBKey(db_id);
-    if (!checkDBExists(db_key))
-    {
-        LOG_ERROR(log, "The database does not exist, database_id={}", db_id);
-        return nullptr;
-    }
+    // Note: Do not check the existence of `db_key` here, otherwise we can not
+    //       get the table info after database is dropped.
     String table_key = getTableKey(table_id);
     String table_info_json = TxnStructure::hGet(snap, db_key, table_key);
+    bool get_by_mvcc = false;
     if (table_info_json.empty())
     {
+        if constexpr (!mvcc_get)
+        {
+            return {nullptr, false};
+        }
+
         LOG_WARNING(log, "The table is dropped in TiKV, try to get the latest table_info, table_id={}", table_id);
         table_info_json = TxnStructure::mvccGet(snap, db_key, table_key);
+        get_by_mvcc = true;
         if (table_info_json.empty())
         {
             LOG_ERROR(
@@ -301,49 +307,14 @@ TiDB::TableInfoPtr SchemaGetter::getTableInfo(DatabaseID db_id, TableID table_id
                 "The table is dropped in TiKV, and the latest table_info is still empty, it should be GCed, "
                 "table_id={}",
                 table_id);
-            return nullptr;
+            return {nullptr, get_by_mvcc};
         }
     }
-    LOG_DEBUG(log, "Get Table Info from TiKV: {}", table_info_json);
-    TiDB::TableInfoPtr table_info = std::make_shared<TiDB::TableInfo>(table_info_json, keyspace_id);
-
-    return table_info;
+    LOG_DEBUG(log, "Get Table Info from TiKV, table_id={} {}", table_id, table_info_json);
+    return {std::make_shared<TiDB::TableInfo>(table_info_json, keyspace_id), get_by_mvcc};
 }
-
-std::tuple<TiDB::DBInfoPtr, TiDB::TableInfoPtr> SchemaGetter::getDatabaseAndTableInfo(
-    DatabaseID db_id,
-    TableID table_id)
-{
-    String db_key = getDBKey(db_id);
-    String db_json = TxnStructure::hGet(snap, DBs, db_key);
-
-    if (db_json.empty())
-        return std::make_tuple(nullptr, nullptr);
-
-    LOG_DEBUG(log, "Get DB Info from TiKV: {}", db_json);
-    auto db_info = std::make_shared<TiDB::DBInfo>(db_json, keyspace_id);
-
-    String table_key = getTableKey(table_id);
-    String table_info_json = TxnStructure::hGet(snap, db_key, table_key);
-    if (table_info_json.empty())
-    {
-        LOG_WARNING(log, "The table is dropped in TiKV, try to get the latest table_info, table_id={}", table_id);
-        table_info_json = TxnStructure::mvccGet(snap, db_key, table_key);
-        if (table_info_json.empty())
-        {
-            LOG_ERROR(
-                log,
-                "The table is dropped in TiKV, and the latest table_info is still empty, it should be GCed, "
-                "table_id={}",
-                table_id);
-            return std::make_tuple(db_info, nullptr);
-        }
-    }
-    LOG_DEBUG(log, "Get Table Info from TiKV: {}", table_info_json);
-    TiDB::TableInfoPtr table_info = std::make_shared<TiDB::TableInfo>(table_info_json, keyspace_id);
-
-    return std::make_tuple(db_info, table_info);
-}
+template std::pair<TiDB::TableInfoPtr, bool> SchemaGetter::getTableInfoImpl<false>(DatabaseID db_id, TableID table_id);
+template std::pair<TiDB::TableInfoPtr, bool> SchemaGetter::getTableInfoImpl<true>(DatabaseID db_id, TableID table_id);
 
 std::vector<TiDB::DBInfoPtr> SchemaGetter::listDBs()
 {

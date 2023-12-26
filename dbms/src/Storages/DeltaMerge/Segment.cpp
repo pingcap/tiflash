@@ -132,7 +132,8 @@ DMFilePtr writeIntoNewDMFile(
         parent_path,
         dm_context.createChecksumConfig(),
         dm_context.global_context.getSettingsRef().dt_small_file_size_threshold,
-        dm_context.global_context.getSettingsRef().dt_merged_file_max_size);
+        dm_context.global_context.getSettingsRef().dt_merged_file_max_size,
+        dm_context.keyspace_id);
     auto output_stream = std::make_shared<DMFileBlockOutputStream>(dm_context.global_context, dmfile, *schema_snap);
     const auto * mvcc_stream
         = typeid_cast<const DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT> *>(input_stream.get());
@@ -317,7 +318,7 @@ SegmentPtr Segment::newSegment( //
         context.storage_pool->newMetaPageId());
 }
 
-inline void readSegmentMetaInfo(ReadBuffer & buf, Segment::SegmentMetaInfo & segment_info)
+void readSegmentMetaInfo(ReadBuffer & buf, Segment::SegmentMetaInfo & segment_info)
 {
     readIntBinary(segment_info.version, buf);
     readIntBinary(segment_info.epoch, buf);
@@ -412,6 +413,7 @@ Segment::SegmentMetaInfos Segment::readAllSegmentsMetaInfoInRange( //
     LOG_DEBUG(Logger::get(), "Read segment meta info from segment {}", current_segment_id);
     std::vector<std::pair<DM::RowKeyValue, UInt64>> end_key_and_segment_ids;
     SegmentMetaInfos segment_infos;
+    // TODO(fap) After #7642 there could be no segment, so it could panic later.
     while (current_segment_id != 0)
     {
         Segment::SegmentMetaInfo segment_info;
@@ -471,9 +473,14 @@ Segments Segment::createTargetSegmentsFromCheckpoint( //
             segment_info.range.toDebugString(),
             segment_info.epoch,
             segment_info.next_segment_id);
-        auto stable = StableValueSpace::createFromCheckpoint(context, temp_ps, segment_info.stable_id, wbs);
-        auto delta
-            = DeltaValueSpace::createFromCheckpoint(context, temp_ps, segment_info.range, segment_info.delta_id, wbs);
+        auto stable = StableValueSpace::createFromCheckpoint(parent_log, context, temp_ps, segment_info.stable_id, wbs);
+        auto delta = DeltaValueSpace::createFromCheckpoint(
+            parent_log,
+            context,
+            temp_ps,
+            segment_info.range,
+            segment_info.delta_id,
+            wbs);
         auto segment = std::make_shared<Segment>(
             Logger::get("Checkpoint"),
             segment_info.epoch,
@@ -495,17 +502,33 @@ Segments Segment::createTargetSegmentsFromCheckpoint( //
     return segments;
 }
 
-void Segment::serialize(WriteBatchWrapper & wb)
+void Segment::serializeToFAPTempSegment(FastAddPeerProto::FAPTempSegmentInfo * segment_info)
 {
-    MemoryWriteBuffer buf(0, SEGMENT_BUFFER_SIZE);
+    {
+        WriteBufferFromOwnString wb;
+        storeSegmentMetaInfo(wb);
+        segment_info->set_segment_meta(wb.releaseStr());
+    }
+    segment_info->set_delta_meta(delta->serializeMeta());
+    segment_info->set_stable_meta(stable->serializeMeta());
+}
+
+UInt64 Segment::storeSegmentMetaInfo(WriteBuffer & buf) const
+{
     writeIntBinary(STORAGE_FORMAT_CURRENT.segment, buf);
     writeIntBinary(epoch, buf);
     rowkey_range.serialize(buf);
     writeIntBinary(next_segment_id, buf);
     writeIntBinary(delta->getId(), buf);
     writeIntBinary(stable->getId(), buf);
+    return buf.count();
+}
 
-    auto data_size = buf.count(); // Must be called before tryGetReadBuffer.
+void Segment::serialize(WriteBatchWrapper & wb) const
+{
+    MemoryWriteBuffer buf(0, SEGMENT_BUFFER_SIZE);
+    // Must be called before tryGetReadBuffer.
+    auto data_size = storeSegmentMetaInfo(buf);
     wb.putPage(segment_id, 0, buf.tryGetReadBuffer(), data_size);
 }
 
@@ -1302,7 +1325,8 @@ SegmentPtr Segment::dangerouslyReplaceDataFromCheckpoint(
         data_file->fileId(),
         new_page_id,
         data_file->parentPath(),
-        DMFile::ReadMetaMode::all());
+        DMFile::ReadMetaMode::all(),
+        dm_context.keyspace_id);
     wbs.data.putRefPage(new_page_id, data_file->pageId());
 
     auto new_stable = std::make_shared<StableValueSpace>(stable->getId());
@@ -1739,13 +1763,15 @@ Segment::prepareSplitLogical( //
             file_id,
             /* page_id= */ my_dmfile_page_id,
             file_parent_path,
-            DMFile::ReadMetaMode::all());
+            DMFile::ReadMetaMode::all(),
+            dm_context.keyspace_id);
         auto other_dmfile = DMFile::restore(
             dm_context.global_context.getFileProvider(),
             file_id,
             /* page_id= */ other_dmfile_page_id,
             file_parent_path,
-            DMFile::ReadMetaMode::all());
+            DMFile::ReadMetaMode::all(),
+            dm_context.keyspace_id);
         my_stable_files.push_back(my_dmfile);
         other_stable_files.push_back(other_dmfile);
     }

@@ -25,6 +25,7 @@
 #include <TiDB/Decode/Datum.h>
 
 #include <unordered_map>
+
 namespace DB
 {
 const Int8 VAR_SIZE = 0;
@@ -78,7 +79,7 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::CastIntAsDecimal, "tidb_cast"},
     {tipb::ScalarFuncSig::CastIntAsTime, "tidb_cast"},
     //{tipb::ScalarFuncSig::CastIntAsDuration, "cast"},
-    //{tipb::ScalarFuncSig::CastIntAsJson, "cast"},
+    {tipb::ScalarFuncSig::CastIntAsJson, "cast_int_as_json"},
 
     {tipb::ScalarFuncSig::CastRealAsInt, "tidb_cast"},
     {tipb::ScalarFuncSig::CastRealAsReal, "tidb_cast"},
@@ -86,7 +87,7 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::CastRealAsDecimal, "tidb_cast"},
     {tipb::ScalarFuncSig::CastRealAsTime, "tidb_cast"},
     //{tipb::ScalarFuncSig::CastRealAsDuration, "cast"},
-    //{tipb::ScalarFuncSig::CastRealAsJson, "cast"},
+    {tipb::ScalarFuncSig::CastRealAsJson, "cast_real_as_json"},
 
     {tipb::ScalarFuncSig::CastDecimalAsInt, "tidb_cast"},
     {tipb::ScalarFuncSig::CastDecimalAsReal, "tidb_cast"},
@@ -94,7 +95,7 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::CastDecimalAsDecimal, "tidb_cast"},
     {tipb::ScalarFuncSig::CastDecimalAsTime, "tidb_cast"},
     //{tipb::ScalarFuncSig::CastDecimalAsDuration, "cast"},
-    //{tipb::ScalarFuncSig::CastDecimalAsJson, "cast"},
+    {tipb::ScalarFuncSig::CastDecimalAsJson, "cast_decimal_as_json"},
 
     {tipb::ScalarFuncSig::CastStringAsInt, "tidb_cast"},
     {tipb::ScalarFuncSig::CastStringAsReal, "tidb_cast"},
@@ -102,7 +103,7 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::CastStringAsDecimal, "tidb_cast"},
     {tipb::ScalarFuncSig::CastStringAsTime, "tidb_cast"},
     //{tipb::ScalarFuncSig::CastStringAsDuration, "cast"},
-    //{tipb::ScalarFuncSig::CastStringAsJson, "cast"},
+    {tipb::ScalarFuncSig::CastStringAsJson, "cast_string_as_json"},
 
     {tipb::ScalarFuncSig::CastTimeAsInt, "tidb_cast"},
     {tipb::ScalarFuncSig::CastTimeAsReal, "tidb_cast"},
@@ -110,7 +111,7 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::CastTimeAsDecimal, "tidb_cast"},
     {tipb::ScalarFuncSig::CastTimeAsTime, "tidb_cast"},
     {tipb::ScalarFuncSig::CastTimeAsDuration, "tidb_cast"},
-    //{tipb::ScalarFuncSig::CastTimeAsJson, "cast"},
+    {tipb::ScalarFuncSig::CastTimeAsJson, "cast_time_as_json"},
 
     //{tipb::ScalarFuncSig::CastDurationAsInt, "cast"},
     //{tipb::ScalarFuncSig::CastDurationAsReal, "cast"},
@@ -118,7 +119,7 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::CastDurationAsDecimal, "cast"},
     //{tipb::ScalarFuncSig::CastDurationAsTime, "cast"},
     {tipb::ScalarFuncSig::CastDurationAsDuration, "tidb_cast"},
-    //{tipb::ScalarFuncSig::CastDurationAsJson, "cast"},
+    {tipb::ScalarFuncSig::CastDurationAsJson, "cast_duration_as_json"},
 
     //{tipb::ScalarFuncSig::CastJsonAsInt, "cast"},
     //{tipb::ScalarFuncSig::CastJsonAsReal, "cast"},
@@ -126,7 +127,7 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::CastJsonAsDecimal, "cast"},
     //{tipb::ScalarFuncSig::CastJsonAsTime, "cast"},
     //{tipb::ScalarFuncSig::CastJsonAsDuration, "cast"},
-    //{tipb::ScalarFuncSig::CastJsonAsJson, "cast"},
+    {tipb::ScalarFuncSig::CastJsonAsJson, "cast_json_as_json"},
 
     {tipb::ScalarFuncSig::CoalesceInt, "coalesce"},
     {tipb::ScalarFuncSig::CoalesceReal, "coalesce"},
@@ -449,22 +450,23 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::JsonMergeSig, "cast"},
     //{tipb::ScalarFuncSig::JsonObjectSig, "cast"},
     {tipb::ScalarFuncSig::JsonArraySig, "json_array"},
-    //{tipb::ScalarFuncSig::JsonValidJsonSig, "cast"},
+    {tipb::ScalarFuncSig::JsonValidJsonSig, "json_valid_json"},
+    {tipb::ScalarFuncSig::JsonValidOthersSig, "json_valid_others"},
     //{tipb::ScalarFuncSig::JsonContainsSig, "cast"},
     //{tipb::ScalarFuncSig::JsonArrayAppendSig, "cast"},
     //{tipb::ScalarFuncSig::JsonArrayInsertSig, "cast"},
     //{tipb::ScalarFuncSig::JsonMergePatchSig, "cast"},
     //{tipb::ScalarFuncSig::JsonMergePreserveSig, "cast"},
-    //{tipb::ScalarFuncSig::JsonContainsPathSig, "cast"},
+    {tipb::ScalarFuncSig::JsonContainsPathSig, "json_contains_path"},
     //{tipb::ScalarFuncSig::JsonPrettySig, "cast"},
     //{tipb::ScalarFuncSig::JsonQuoteSig, "cast"},
     //{tipb::ScalarFuncSig::JsonSearchSig, "cast"},
     //{tipb::ScalarFuncSig::JsonStorageSizeSig, "cast"},
-    //{tipb::ScalarFuncSig::JsonDepthSig, "cast"},
-    //{tipb::ScalarFuncSig::JsonKeysSig, "cast"},
+    {tipb::ScalarFuncSig::JsonDepthSig, "json_depth"},
+    {tipb::ScalarFuncSig::JsonKeysSig, "json_keys"},
     {tipb::ScalarFuncSig::JsonLengthSig, "jsonLength"},
-    //{tipb::ScalarFuncSig::JsonKeys2ArgsSig, "cast"},
-    //{tipb::ScalarFuncSig::JsonValidStringSig, "cast"},
+    {tipb::ScalarFuncSig::JsonKeys2ArgsSig, "json_keys_2_args"},
+    {tipb::ScalarFuncSig::JsonValidStringSig, "json_valid_string"},
 
     {tipb::ScalarFuncSig::DateFormatSig, "dateFormat"},
     //{tipb::ScalarFuncSig::DateLiteral, "cast"},
@@ -1404,7 +1406,11 @@ SortDescription getSortDescription(
     return order_descr;
 }
 
-String genFuncString(const String & func_name, const Names & argument_names, const TiDB::TiDBCollators & collators)
+String genFuncString(
+    const String & func_name,
+    const Names & argument_names,
+    const TiDB::TiDBCollators & collators,
+    const std::vector<const tipb::FieldType *> & field_types)
 {
     FmtBuffer buf;
     buf.fmtAppend("{}({})_collator", func_name, fmt::join(argument_names.begin(), argument_names.end(), ", "));
@@ -1416,6 +1422,14 @@ String genFuncString(const String & func_name, const Names & argument_names, con
             buf.append("_0");
     }
     buf.append(" ");
+    buf.joinStr(
+        field_types.begin(),
+        field_types.end(),
+        [](const auto & field_type, FmtBuffer & buffer) {
+            if likely (field_type)
+                buffer.fmtAppend("{}|{}", field_type->flag(), field_type->flen());
+        },
+        ", ");
     return buf.toString();
 }
 
@@ -1429,6 +1443,16 @@ TiDB::TiDBCollatorPtr getCollatorFromFieldType(const tipb::FieldType & field_typ
 bool hasUnsignedFlag(const tipb::FieldType & tp)
 {
     return tp.flag() & TiDB::ColumnFlagUnsigned;
+}
+
+bool hasIsBooleanFlag(const tipb::FieldType & tp)
+{
+    return tp.flag() & TiDB::ColumnFlagIsBooleanFlag;
+}
+
+bool hasParseToJSONFlag(const tipb::FieldType & tp)
+{
+    return tp.flag() & TiDB::ColumnFlagParseToJSON;
 }
 
 void assertBlockSchema(const DataTypes & expected_types, const Block & block, const String & context_description)

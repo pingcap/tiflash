@@ -489,6 +489,8 @@ public:
 
     bool isShutdown() const { return shutdown_called.load(); }
 
+    KeyspaceID getKeyspaceID() const { return keyspace_id; }
+
     DISALLOW_COPY(StoragePathPool);
 
     StoragePathPool(StoragePathPool && rhs) noexcept;

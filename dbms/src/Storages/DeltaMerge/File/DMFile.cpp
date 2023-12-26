@@ -36,7 +36,6 @@
 #include <common/logger_useful.h>
 #include <fmt/format.h>
 
-#include <atomic>
 #include <boost/algorithm/string/classification.hpp>
 #include <filesystem>
 #include <utility>
@@ -121,6 +120,7 @@ DMFilePtr DMFile::create(
     DMConfigurationOpt configuration,
     UInt64 small_file_size_threshold,
     UInt64 merged_file_max_size,
+    KeyspaceID keyspace_id,
     DMFileFormat::Version version)
 {
     // if small_file_size_threshold == 0 we should use DMFileFormat::V2
@@ -132,7 +132,6 @@ DMFilePtr DMFile::create(
     fiu_do_on(FailPoints::force_use_dmfile_format_v3, {
         // some unit test we need mock upload DMFile to S3, which only support DMFileFormat::V3
         version = DMFileFormat::V3;
-        LOG_WARNING(Logger::get(), "!!!force use DMFileFormat::V3!!!");
     });
     // On create, ref_id is the same as file_id.
     DMFilePtr new_dmfile(new DMFile(
@@ -143,7 +142,8 @@ DMFilePtr DMFile::create(
         small_file_size_threshold,
         merged_file_max_size,
         std::move(configuration),
-        version));
+        version,
+        keyspace_id));
 
     auto path = new_dmfile->path();
     Poco::File file(path);
@@ -168,7 +168,8 @@ DMFilePtr DMFile::restore(
     UInt64 file_id,
     UInt64 page_id,
     const String & parent_path,
-    const ReadMetaMode & read_meta_mode)
+    const ReadMetaMode & read_meta_mode,
+    KeyspaceID keyspace_id)
 {
     auto is_s3_file = S3::S3FilenameView::fromKeyWithPrefix(parent_path).isDataFile();
     if (!is_s3_file)
@@ -182,7 +183,7 @@ DMFilePtr DMFile::restore(
             return nullptr;
     }
 
-    DMFilePtr dmfile(new DMFile(file_id, page_id, parent_path, Status::READABLE));
+    DMFilePtr dmfile(new DMFile(file_id, page_id, parent_path, Status::READABLE, keyspace_id));
     if (is_s3_file || Poco::File(dmfile->metav2Path()).exists())
     {
         auto s = dmfile->readMetaV2(file_provider);
@@ -322,7 +323,7 @@ String DMFile::colMarkFileName(const FileNameBase & file_name_base)
     return file_name_base + details::MARK_FILE_SUFFIX;
 }
 
-DMFile::OffsetAndSize DMFile::writeMetaToBuffer(WriteBuffer & buffer)
+DMFile::OffsetAndSize DMFile::writeMetaToBuffer(WriteBuffer & buffer) const
 {
     size_t meta_offset = buffer.count();
     writeString("DTFile format: ", buffer);
@@ -647,7 +648,7 @@ void DMFile::finalizeForFolderMode(const FileProviderPtr & file_provider, const 
     }
     writeMetadata(file_provider, write_limiter);
     if (unlikely(status != Status::WRITING))
-        throw Exception("Expected WRITING status, now " + statusString(status));
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Expected WRITING status, now {}", magic_enum::enum_name(status));
     Poco::File old_file(path());
     setStatus(Status::READABLE);
 
@@ -850,7 +851,7 @@ DMFile::MetaBlockHandle DMFile::writeSLPackStatToBuffer(WriteBuffer & buffer)
     return MetaBlockHandle{MetaBlockType::PackStat, offset, buffer.count() - offset};
 }
 
-DMFile::MetaBlockHandle DMFile::writeSLPackPropertyToBuffer(WriteBuffer & buffer)
+DMFile::MetaBlockHandle DMFile::writeSLPackPropertyToBuffer(WriteBuffer & buffer) const
 {
     auto offset = buffer.count();
     for (const auto & pb : pack_properties.property())
@@ -924,7 +925,7 @@ void DMFile::finalizeMetaV2(WriteBuffer & buffer)
     writePODBinary(footer, buffer);
 }
 
-std::vector<char> DMFile::readMetaV2(const FileProviderPtr & file_provider)
+std::vector<char> DMFile::readMetaV2(const FileProviderPtr & file_provider) const
 {
     auto rbuf = openForRead(file_provider, metav2Path(), encryptionMetav2Path(), meta_buffer_size);
     std::vector<char> buf(meta_buffer_size);
@@ -1066,7 +1067,7 @@ void DMFile::finalizeDirName()
         status == Status::WRITING,
         "FileId={} Expected WRITING status, but {}",
         file_id,
-        statusString(status));
+        magic_enum::enum_name(status));
     Poco::File old_file(path());
     setStatus(Status::READABLE);
     auto new_path = path();
@@ -1084,7 +1085,7 @@ void DMFile::finalizeDirName()
     old_file.renameTo(new_path);
 }
 
-std::vector<String> DMFile::listFilesForUpload()
+std::vector<String> DMFile::listFilesForUpload() const
 {
     RUNTIME_CHECK(useMetaV2());
     std::vector<String> fnames;

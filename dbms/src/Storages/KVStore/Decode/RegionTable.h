@@ -58,6 +58,8 @@ class RegionScanFilter;
 using RegionScanFilterPtr = std::shared_ptr<RegionScanFilter>;
 struct CheckpointInfo;
 using CheckpointInfoPtr = std::shared_ptr<CheckpointInfo>;
+struct CheckpointIngestInfo;
+using CheckpointIngestInfoPtr = std::shared_ptr<CheckpointIngestInfo>;
 
 using SafeTS = UInt64;
 enum : SafeTS
@@ -274,7 +276,7 @@ struct RegionPtrWithCheckpointInfo
 {
     using Base = RegionPtr;
 
-    RegionPtrWithCheckpointInfo(const Base & base_, CheckpointInfoPtr checkpoint_info_);
+    RegionPtrWithCheckpointInfo(const Base & base_, CheckpointIngestInfoPtr checkpoint_info_);
 
     /// to be compatible with usage as RegionPtr.
     Base::element_type * operator->() const { return base.operator->(); }
@@ -284,7 +286,7 @@ struct RegionPtrWithCheckpointInfo
     operator const Base &() const { return base; }
 
     const Base & base;
-    CheckpointInfoPtr checkpoint_info;
+    CheckpointIngestInfoPtr checkpoint_info;
 };
 
 } // namespace DB

@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/HashTable/HashMap.h>
+#include <Common/HashTable/HashSet.h>
 #include <Core/Block.h>
 
 namespace DB
@@ -24,7 +25,7 @@ using Sizes = std::vector<size_t>;
 struct RowRef
 {
     const Block * block;
-    size_t row_num;
+    UInt32 row_num;
 
     RowRef() = default;
     RowRef(const Block * block_, size_t row_num_)
@@ -33,23 +34,55 @@ struct RowRef
     {}
 };
 
+enum class CachedColumnState
+{
+    NOT_CACHED,
+    CONSTRUCT_CACHE,
+    CACHED,
+};
+struct CachedColumnInfo
+{
+    std::mutex mu;
+    Columns columns;
+    CachedColumnState state = CachedColumnState::NOT_CACHED;
+    void * next;
+    explicit CachedColumnInfo(void * next_)
+        : next(next_)
+    {}
+};
+
 /// Single linked list of references to rows. Used for ALL JOINs (non-unique JOINs)
 struct RowRefList : RowRef
 {
-    RowRefList * next = nullptr;
+    UInt32 list_length = 0;
+    union
+    {
+        RowRefList * next = nullptr;
+        CachedColumnInfo * cached_column_info;
+    };
 
     RowRefList() = default;
     RowRefList(const Block * block_, size_t row_num_)
         : RowRef(block_, row_num_)
+    {}
+    /// for head node
+    RowRefList(const Block * block_, size_t row_num_, bool sentinel_head)
+        : RowRef(block_, row_num_)
+        , list_length(sentinel_head ? 0 : 1)
     {}
 };
 
 /// Single linked list of references to rows with used flag for each row
 struct RowRefListWithUsedFlag : RowRef
 {
+    UInt32 list_length = 0;
     using Base_t = RowRefListWithUsedFlag;
     mutable std::atomic<bool> used{};
-    RowRefListWithUsedFlag * next = nullptr;
+    union
+    {
+        RowRefListWithUsedFlag * next = nullptr;
+        CachedColumnInfo * cached_column_info;
+    };
 
     void setUsed() const
     {
@@ -60,6 +93,11 @@ struct RowRefListWithUsedFlag : RowRef
     RowRefListWithUsedFlag() = default;
     RowRefListWithUsedFlag(const Block * block_, size_t row_num_)
         : RowRef(block_, row_num_)
+    {}
+    /// for head node
+    RowRefListWithUsedFlag(const Block * block_, size_t row_num_, bool sentinel_head)
+        : RowRef(block_, row_num_)
+        , list_length(sentinel_head ? 0 : 1)
     {}
 };
 
@@ -152,7 +190,7 @@ struct ConcurrentMapsTemplate
 template <typename Mapped>
 struct MapsTemplate
 {
-    using MappedType = Mapped;
+    using MappedType = typename Mapped::Base_t;
     using key8Type = HashMap<UInt8, Mapped, TrivialHash, HashTableFixedGrower<8>>;
     using key16Type = HashMap<UInt16, Mapped, TrivialHash, HashTableFixedGrower<16>>;
     using key32Type = HashMap<UInt32, Mapped, HashCRC32<UInt32>>;
@@ -179,15 +217,40 @@ struct MapsTemplate
     // TODO: add more cases like Aggregator
 };
 
-using ConcurrentMapsAny = ConcurrentMapsTemplate<WithUsedFlag<false, RowRef>>;
+struct MapsAny
+{
+    using MappedType = VoidMapped;
+    using key8Type = HashSet<UInt8, TrivialHash, HashTableFixedGrower<8>>;
+    using key16Type = HashSet<UInt16, TrivialHash, HashTableFixedGrower<16>>;
+    using key32Type = HashSet<UInt32, HashCRC32<UInt32>>;
+    using key64Type = HashSet<UInt64, HashCRC32<UInt64>>;
+    using key_stringType = HashSetWithSavedHash<StringRef>;
+    using key_strbinpaddingType = HashSetWithSavedHash<StringRef>;
+    using key_strbinType = HashSetWithSavedHash<StringRef>;
+    using key_fixed_stringType = HashSetWithSavedHash<StringRef>;
+    using keys128Type = HashSet<UInt128, HashCRC32<UInt128>>;
+    using keys256Type = HashSet<UInt256, HashCRC32<UInt256>>;
+    using serializedType = HashSetWithSavedHash<StringRef>;
+
+    std::unique_ptr<key8Type> key8;
+    std::unique_ptr<key16Type> key16;
+    std::unique_ptr<key32Type> key32;
+    std::unique_ptr<key64Type> key64;
+    std::unique_ptr<key_stringType> key_string;
+    std::unique_ptr<key_strbinpaddingType> key_strbinpadding;
+    std::unique_ptr<key_strbinType> key_strbin;
+    std::unique_ptr<key_fixed_stringType> key_fixed_string;
+    std::unique_ptr<keys128Type> keys128;
+    std::unique_ptr<keys256Type> keys256;
+    std::unique_ptr<serializedType> serialized;
+    // TODO: add more cases like Aggregator
+};
+
 using ConcurrentMapsAll = ConcurrentMapsTemplate<WithUsedFlag<false, RowRefList>>;
-using ConcurrentMapsAnyFull = ConcurrentMapsTemplate<WithUsedFlag<true, RowRef>>;
 using ConcurrentMapsAllFull = ConcurrentMapsTemplate<WithUsedFlag<true, RowRefList>>;
 using ConcurrentMapsAllFullWithRowFlag = ConcurrentMapsTemplate<RowRefListWithUsedFlag>;
 
-using MapsAny = MapsTemplate<WithUsedFlag<false, RowRef>>;
 using MapsAll = MapsTemplate<WithUsedFlag<false, RowRefList>>;
-using MapsAnyFull = MapsTemplate<WithUsedFlag<true, RowRef>>;
 using MapsAllFull = MapsTemplate<WithUsedFlag<true, RowRefList>>;
 using MapsAllFullWithRowFlag = MapsTemplate<RowRefListWithUsedFlag>; // With flag for every row ref
 

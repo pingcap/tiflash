@@ -128,6 +128,12 @@ public:
         const std::vector<Remote::PageOID> & pages_not_in_cache) const;
 
     void doFetchPages(const disaggregated::FetchDisaggPagesRequest & request);
+    void doFetchPagesImpl(
+        std::function<bool(disaggregated::PagesPacket &)> && read_packet,
+        std::unordered_set<UInt64> remaining_pages_to_fetch);
+    void checkMemTableSet(const ColumnFileSetSnapshotPtr & mem_table_snap) const;
+    bool needFetchMemTableSet() const;
+    void checkMemTableSetReady() const;
 
     void initColumnFileDataProvider(const Remote::RNLocalPageCacheGuardPtr & pages_guard);
 

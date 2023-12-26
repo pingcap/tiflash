@@ -12,17 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# TiKV config template
-#  Human-readable big numbers:
-#   File size(based on byte): KB, MB, GB, TB, PB
-#    e.g.: 1_048_576 = "1MB"
-#   Time(based on ms): ms, s, m, h
-#    e.g.: 78_000 = "1.3m"
+file(GLOB PROTO_FILES CONFIGURE_DEPENDS *.proto)
+protobuf_generate_cpp(PROTO_SRCS PB_HEADERS ${PROTO_FILES})
 
-[storage]
-# No space is reserved at all
-reserve-space = "0"
-engine = "raft-kv2"
-
-[raftstore]
-capacity = "100GB"
+add_library(KVStoreFastAddPeerProto
+        ${PROTO_SRCS})
+target_include_directories(KVStoreFastAddPeerProto
+        PUBLIC ${Protobuf_INCLUDE_DIR})
+target_compile_options(KVStoreFastAddPeerProto
+        PRIVATE -Wno-unused-parameter)

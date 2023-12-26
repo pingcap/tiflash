@@ -52,16 +52,16 @@ struct TablesStatusRequest
 {
     std::unordered_set<QualifiedTableName> tables;
 
-    void write(WriteBuffer & out, UInt64 server_protocol_revision) const;
-    void read(ReadBuffer & in, UInt64 client_protocol_revision);
+    void write(WriteBuffer & out) const;
+    void read(ReadBuffer & in);
 };
 
 struct TablesStatusResponse
 {
     std::unordered_map<QualifiedTableName, TableStatus> table_states_by_id;
 
-    void write(WriteBuffer & out, UInt64 client_protocol_revision) const;
-    void read(ReadBuffer & in, UInt64 server_protocol_revision);
+    void write(WriteBuffer & out) const;
+    void read(ReadBuffer & in);
 };
 
 } // namespace DB

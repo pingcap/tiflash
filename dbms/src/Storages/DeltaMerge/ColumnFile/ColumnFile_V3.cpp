@@ -103,6 +103,7 @@ ColumnFilePersisteds deserializeSavedColumnFilesInV3Format(
 }
 
 ColumnFilePersisteds createColumnFilesInV3FormatFromCheckpoint( //
+    const LoggerPtr & parent_log,
     DMContext & context,
     const RowKeyRange & segment_range,
     ReadBuffer & buf,
@@ -127,12 +128,12 @@ ColumnFilePersisteds createColumnFilesInV3FormatFromCheckpoint( //
         case ColumnFile::Type::TINY_FILE:
         {
             std::tie(column_file, last_schema)
-                = ColumnFileTiny::createFromCheckpoint(context, buf, temp_ps, last_schema, wbs);
+                = ColumnFileTiny::createFromCheckpoint(parent_log, context, buf, temp_ps, last_schema, wbs);
             break;
         }
         case ColumnFile::Type::BIG_FILE:
         {
-            column_file = ColumnFileBig::createFromCheckpoint(context, segment_range, buf, temp_ps, wbs);
+            column_file = ColumnFileBig::createFromCheckpoint(parent_log, context, segment_range, buf, temp_ps, wbs);
             break;
         }
         default:

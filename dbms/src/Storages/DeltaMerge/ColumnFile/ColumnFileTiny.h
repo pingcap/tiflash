@@ -144,6 +144,7 @@ public:
         ColumnFileSchemaPtr & last_schema);
 
     static std::tuple<ColumnFilePersistedPtr, BlockPtr> createFromCheckpoint(
+        const LoggerPtr & parent_log,
         const DMContext & context,
         ReadBuffer & buf,
         UniversalPageStoragePtr temp_ps,

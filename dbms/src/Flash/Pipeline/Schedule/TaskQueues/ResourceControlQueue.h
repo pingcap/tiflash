@@ -45,7 +45,7 @@ public:
 
     bool take(TaskPtr & task) override;
 
-    void updateStatistics(const TaskPtr & task, ExecTaskStatus, UInt64 inc_value) override;
+    void updateStatistics(const TaskPtr & task, ExecTaskStatus exec_task_status, UInt64 inc_value) override;
 
     bool empty() const override;
 
