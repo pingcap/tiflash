@@ -65,7 +65,7 @@ void recordFilteredRows(
         null_map = &static_cast<const ColumnUInt8 &>(*null_map_holder).getData();
         return;
     }
-    
+
     if (column->isColumnConst())
         column = column->convertToFullColumnIfConst();
 
