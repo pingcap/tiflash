@@ -78,13 +78,11 @@ struct AsyncTasks
         static CancelHandlePtr genAlreadyCanceled() noexcept
         {
             auto h = std::make_shared<CancelHandle>();
-            h->doSetCancel();
+            h->inner.store(true);
             return h;
         }
 
     private:
-        void doSetCancel() { inner.store(true); }
-
         void doCancel()
         {
             // Use lock here to prevent losing signal.
