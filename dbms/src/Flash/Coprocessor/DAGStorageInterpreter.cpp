@@ -1462,12 +1462,15 @@ std::unordered_map<TableID, DAGStorageInterpreter::StorageWithStructureLock> DAG
     {
         LOG_INFO(log, "not OK, syncing schemas.");
 
+        auto start_time = Clock::now();
         for (auto & table_id : need_sync_table_ids)
         {
             sync_schema(table_id);
         }
+        auto schema_sync_cost
+            = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time).count();
 
-        LOG_INFO(log, "syncing schemas done.");
+        LOG_INFO(log, "syncing schemas done, time cost = {} ms.", schema_sync_cost);
 
 
         std::tie(storages, locks, need_sync_table_ids) = get_and_lock_storages(true);
