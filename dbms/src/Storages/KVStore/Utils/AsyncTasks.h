@@ -87,7 +87,7 @@ struct AsyncTasks
         void doCancel()
         {
             // Use lock here to prevent losing signal.
-            std::scoped_lock<std::mutex> lock(mut);
+            std::scoped_lock lock(mut);
             inner.store(true);
             cv.notify_all();
         }
