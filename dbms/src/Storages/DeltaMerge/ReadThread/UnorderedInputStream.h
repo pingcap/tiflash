@@ -52,13 +52,14 @@ public:
             header.insert(extra_table_id_index, col);
         }
         ref_no = task_pool->increaseUnorderedInputStreamRefCount();
-        LOG_INFO(log, "Created, pool_id={} ref_no={}", task_pool->poolId(), ref_no);
     }
 
     ~UnorderedInputStream() override
     {
-        task_pool->decreaseUnorderedInputStreamRefCount();
-        LOG_INFO(log, "Destroy, pool_id={} ref_no={}", task_pool->poolId(), ref_no);
+        if (const auto rc_before_decr = task_pool->decreaseUnorderedInputStreamRefCount(); rc_before_decr == 1)
+        {
+            LOG_INFO(log, "All unordered input streams are finished, pool_id={} last_stream_ref_no={}", task_pool->poolId(), ref_no);
+        }
     }
 
     String getName() const override { return NAME; }

@@ -1049,7 +1049,7 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
         }
         res.push_back(stream);
     }
-    LOG_DEBUG(tracing_logger, "Read create stream done");
+    LOG_INFO(tracing_logger, "Read create stream done, pool_id={} num_streams={}", read_task_pool->poolId(), final_num_stream);
 
     return res;
 }
