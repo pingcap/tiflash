@@ -48,8 +48,6 @@ void recordFilteredRows(
     if (filter_column.empty())
         return;
     auto column = block.getByName(filter_column).column;
-    if (column->isColumnConst())
-        column = column->convertToFullColumnIfConst();
     if unlikely (column->onlyNull())
     {
         if (!null_map_holder)
@@ -67,6 +65,9 @@ void recordFilteredRows(
         null_map = &static_cast<const ColumnUInt8 &>(*null_map_holder).getData();
         return;
     }
+    
+    if (column->isColumnConst())
+        column = column->convertToFullColumnIfConst();
 
     const PaddedPODArray<UInt8> * column_data;
     if (column->isColumnNullable())
