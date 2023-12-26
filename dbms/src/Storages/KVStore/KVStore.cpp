@@ -367,39 +367,16 @@ void KVStore::persistRegion(
         region_persister,
         "try access to region_persister without initialization, stack={}",
         StackTrace().toString());
-<<<<<<< HEAD
-    if (region_task_lock.has_value())
-    {
-        auto reason_id = magic_enum::enum_underlying(reason);
-        std::string caller = fmt::format("{} {}", PersistRegionReasonMap[reason_id], extra_msg);
-        LOG_INFO(
-            log,
-            "Start to persist {}, cache size: {} bytes for `{}`",
-            region.toString(true),
-            region.dataSize(),
-            caller);
-        region_persister->persist(region, *region_task_lock.value());
-        LOG_DEBUG(log, "Persist {} done", region.toString(false));
-    }
-    else
-    {
-        LOG_INFO(log, "Try to persist {}", region.toString(false));
-        region_persister->persist(region);
-        LOG_INFO(log, "After persisted {}, cache {} bytes", region.toString(false), region.dataSize());
-    }
-=======
-
     auto reason_id = magic_enum::enum_underlying(reason);
     std::string caller = fmt::format("{} {}", PersistRegionReasonMap[reason_id], extra_msg);
     LOG_INFO(
         log,
         "Start to persist {}, cache size: {} bytes for `{}`",
-        region.getDebugString(),
+        region.toString(true),
         region.dataSize(),
         caller);
     region_persister->persist(region, region_task_lock);
     LOG_DEBUG(log, "Persist {} done, cache size: {} bytes", region.toString(false), region.dataSize());
->>>>>>> 0329ed40a4 (KVStore: Reduce lock contention in `RegionPersister::doPersist` (#8584))
 
     switch (reason)
     {

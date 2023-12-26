@@ -130,11 +130,7 @@ namespace DB
     M(pause_after_copr_streams_acquired)  \
     M(pause_query_init)                   \
     M(pause_before_prehandle_snapshot)    \
-<<<<<<< HEAD
-=======
-    M(pause_before_prehandle_subtask)     \
     M(pause_when_persist_region)          \
->>>>>>> 0329ed40a4 (KVStore: Reduce lock contention in `RegionPersister::doPersist` (#8584))
     M(pause_before_wn_establish_task)     \
     M(pause_passive_flush_before_persist_region)
 
