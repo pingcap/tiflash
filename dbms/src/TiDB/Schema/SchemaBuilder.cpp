@@ -1103,6 +1103,11 @@ void SchemaBuilder<Getter, NameMapper>::applyCreateStorageInstance(
         table_info->engine_type = tmt_context.getEngineType();
     }
 
+    // We need to create a Storage instance to handle its raft log and snapshot when it
+    // is "dropped" but not physically removed in TiDB. To handle it porperly, we get a
+    // tso from PD to create the table. The tso must be newer than what "DROP TABLE" DDL
+    // is executed. So when the gc-safepoint is larger than tombstone_ts, the table can
+    // be safe to physically drop on TiFlash.
     UInt64 tombstone_ts = 0;
     if (is_tombstone)
     {
@@ -1119,13 +1124,38 @@ void SchemaBuilder<Getter, NameMapper>::applyCreateStorageInstance(
         table_info->id,
         stmt);
 
+    // If "CREATE DATABASE" is executed in TiFlash after user has executed "DROP DATABASE"
+    // in TiDB, then TiFlash may not create the IDatabase instance. Make sure we can access
+    // to the IDatabase when creating IStorage.
+    const auto database_mapped_name = name_mapper.mapDatabaseName(database_id, keyspace_id);
+    if (!context.isDatabaseExist(database_mapped_name))
+    {
+        LOG_WARNING(
+            log,
+            "database instance is not exist (applyCreateStorageInstance), may has been dropped, create a database with "
+            "fake DatabaseInfo for it, database_id={} database_name={}",
+            database_id,
+            database_mapped_name);
+        // The database is dropped in TiKV and we can not fetch it. Generate a fake
+        // DatabaseInfo for it. It is OK because the DatabaseInfo will be updated
+        // when the database is `FLASHBACK`.
+        TiDB::DBInfoPtr database_info = std::make_shared<TiDB::DBInfo>();
+        database_info->id = database_id;
+        database_info->keyspace_id = keyspace_id;
+        database_info->name = database_mapped_name; // use the mapped name because we done known the actual name
+        database_info->charset = "utf8mb4"; // default value
+        database_info->collate = "utf8mb4_bin"; // default value
+        database_info->state = TiDB::StateNone; // special state
+        applyCreateDatabaseByInfo(database_info);
+    }
+
     ParserCreateQuery parser;
     ASTPtr ast = parseQuery(parser, stmt.data(), stmt.data() + stmt.size(), "from syncSchema " + table_info->name, 0);
 
     auto * ast_create_query = typeid_cast<ASTCreateQuery *>(ast.get());
     ast_create_query->attach = true;
     ast_create_query->if_not_exists = true;
-    ast_create_query->database = name_mapper.mapDatabaseName(database_id, keyspace_id);
+    ast_create_query->database = database_mapped_name;
 
     InterpreterCreateQuery interpreter(ast, context);
     interpreter.setInternal(true);
