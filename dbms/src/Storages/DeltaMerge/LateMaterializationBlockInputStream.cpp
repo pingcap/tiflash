@@ -28,12 +28,14 @@ LateMaterializationBlockInputStream::LateMaterializationBlockInputStream(
     BlockInputStreamPtr filter_column_stream_,
     SkippableBlockInputStreamPtr rest_column_stream_,
     const BitmapFilterPtr & bitmap_filter_,
-    const String & req_id_)
+    const String & req_id_,
+    const ScanContextPtr & scan_context_)
     : header(toEmptyBlock(columns_to_read))
     , filter_column_name(filter_column_name_)
     , filter_column_stream(std::move(filter_column_stream_))
     , rest_column_stream(std::move(rest_column_stream_))
     , bitmap_filter(bitmap_filter_)
+    , scan_context(scan_context_)
     , log(Logger::get(NAME, req_id_))
 {}
 
@@ -75,6 +77,7 @@ Block LateMaterializationBlockInputStream::readImpl()
                     col.column = col.column->filter(col_filter, passed_count);
                 }
             }
+            // No need to change scan_context->late_materialize_skip_rows
             return hstackBlocks({std::move(filter_column_block), std::move(rest_column_block)}, header);
         }
 
@@ -98,11 +101,13 @@ Block LateMaterializationBlockInputStream::readImpl()
                     filter_column_block.startOffset(),
                     filter_column_block.rows());
             }
+            scan_context->late_materialize_skip_rows += rows;
         }
         else
         {
             Block rest_column_block;
             auto filter_out_count = rows - passed_count;
+            scan_context->late_materialize_skip_rows += filter_out_count;
             if (filter_out_count >= DEFAULT_MERGE_BLOCK_SIZE * 2)
             {
                 // When DEFAULT_MERGE_BLOCK_SIZE < row_left < DEFAULT_MERGE_BLOCK_SIZE * 2,

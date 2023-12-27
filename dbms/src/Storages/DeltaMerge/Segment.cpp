@@ -3168,7 +3168,8 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(
         filter_column_stream,
         rest_column_stream,
         bitmap_filter,
-        dm_context.tracing_id);
+        dm_context.tracing_id,
+        dm_context.scan_context);
 }
 
 RowKeyRanges Segment::shrinkRowKeyRanges(const RowKeyRanges & read_ranges) const
