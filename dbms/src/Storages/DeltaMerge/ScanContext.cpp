@@ -36,6 +36,7 @@ String ScanContext::toJson() const
     json->set("delta_bytes", delta_bytes.load());
 
     json->set("mvcc_input_rows", mvcc_input_rows.load());
+    json->set("mvcc_input_bytes", mvcc_input_bytes.load());
     json->set("mvcc_output_rows", mvcc_output_rows.load());
 
     std::stringstream buf;

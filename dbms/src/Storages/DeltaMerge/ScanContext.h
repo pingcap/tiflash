@@ -56,6 +56,7 @@ public:
 
     // mvcc input rows, output rows
     std::atomic<uint64_t> mvcc_input_rows{0};
+    std::atomic<uint64_t> mvcc_input_bytes{0};
     std::atomic<uint64_t> mvcc_output_rows{0};
 
     // TODO: mode, filter
@@ -104,6 +105,7 @@ public:
         delta_bytes += other.delta_bytes;
 
         mvcc_input_rows += other.mvcc_input_rows;
+        mvcc_input_bytes += other.mvcc_input_bytes;
         mvcc_output_rows += other.mvcc_output_rows;
     }
 
