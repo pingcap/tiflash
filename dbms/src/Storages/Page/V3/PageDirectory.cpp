@@ -1586,6 +1586,7 @@ PageEntriesV3 PageDirectory::gcInMemEntries(bool return_removed_entries)
     {
         // Cleanup released snapshots
         std::lock_guard lock(snapshots_mutex);
+        std::unordered_set<String> tracing_id_set;
         for (auto iter = snapshots.begin(); iter != snapshots.end(); /* empty */)
         {
             if (auto snap = iter->lock(); snap == nullptr)
@@ -1602,7 +1603,11 @@ PageEntriesV3 PageDirectory::gcInMemEntries(bool return_removed_entries)
 
                 if (alive_time_seconds > 10 * 60) // TODO: Make `10 * 60` as a configuration
                 {
-                    LOG_WARNING(log, "Meet a stale snapshot [thread id={}] [tracing id={}] [seq={}] [alive time(s)={}]", snap->create_thread, snap->tracing_id, snap->sequence, alive_time_seconds);
+                    if (tracing_id_set.count(snap->tracing_id) <= 0)
+                    {
+                        LOG_WARNING(log, "Meet a stale snapshot [thread id={}] [tracing id={}] [seq={}] [alive time(s)={}]", snap->create_thread, snap->tracing_id, snap->sequence, alive_time_seconds);
+                        tracing_id_set.emplace(snap->tracing_id);
+                    }
                     stale_snapshot_nums++;
                 }
 
@@ -1688,7 +1693,8 @@ PageEntriesV3 PageDirectory::gcInMemEntries(bool return_removed_entries)
         }
     }
 
-    LOG_IMPL(log, (stale_snapshot_nums > 0 ? Poco::Message::PRIO_INFORMATION : Poco::Message::PRIO_DEBUG), //
+    auto log_level = stale_snapshot_nums > 0 ? Poco::Message::PRIO_INFORMATION : Poco::Message::PRIO_DEBUG;
+    LOG_IMPL(log, log_level, //
              "After MVCC gc in memory [lowest_seq={}] "
              "clean [invalid_snapshot_nums={}] [invalid_page_nums={}] "
              "[total_deref_counter={}] [all_del_entries={}]. "
