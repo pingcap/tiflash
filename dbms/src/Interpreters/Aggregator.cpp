@@ -266,6 +266,25 @@ Aggregator::Aggregator(const Params & params_, const String & req_id)
     RUNTIME_CHECK_MSG(method_chosen != AggregatedDataVariants::Type::EMPTY, "Invalid aggregation method");
     if (AggregatedDataVariants::isConvertibleToTwoLevel(method_chosen))
     {
+<<<<<<< HEAD
+=======
+        bool is_convertible_to_two_level = AggregatedDataVariants::isConvertibleToTwoLevel(method_chosen);
+        if (!is_convertible_to_two_level)
+        {
+            params.setMaxBytesBeforeExternalGroupBy(0);
+            agg_spill_context->disableSpill();
+            if (method_chosen != AggregatedDataVariants::Type::without_key)
+                LOG_WARNING(
+                    log,
+                    "Aggregation does not support spill because aggregator hash table does not support two level");
+        }
+    }
+    if (register_operator_spill_context != nullptr)
+        register_operator_spill_context(agg_spill_context);
+    if (agg_spill_context->isSpillEnabled())
+    {
+        /// init spiller if needed
+>>>>>>> cea7c80823 (refine log (#8579))
         /// for aggregation, the input block is sorted by bucket number
         /// so it can work with MergingAggregatedMemoryEfficientBlockInputStream
         spiller = std::make_unique<Spiller>(params.spill_config, true, 1, getHeader(false), log);

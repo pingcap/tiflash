@@ -967,29 +967,63 @@ std::unordered_map<TableID, DAGStorageInterpreter::StorageWithStructureLock> DAG
 
     auto sync_schema = [&] {
         auto start_time = Clock::now();
+<<<<<<< HEAD
         GET_METRIC(tiflash_schema_trigger_count, type_cop_read).Increment();
         tmt.getSchemaSyncer()->syncSchemas(context, dagContext().getKeyspaceID());
         auto schema_sync_cost = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time).count();
         LOG_DEBUG(log, "Table {} schema sync cost {}ms.", logical_table_id, schema_sync_cost);
+=======
+        tmt.getSchemaSyncerManager()->syncTableSchema(context, keyspace_id, table_id);
+        auto schema_sync_cost
+            = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time).count();
+        LOG_DEBUG(
+            log,
+            "Table schema sync done, keyspace={} table_id={} cost={} ms",
+            keyspace_id,
+            logical_table_id,
+            schema_sync_cost);
+>>>>>>> cea7c80823 (refine log (#8579))
     };
 
     /// Try get storage and lock once.
     auto [storages, locks, storage_schema_versions, ok] = get_and_lock_storages(false);
     if (ok)
     {
+<<<<<<< HEAD
         LOG_DEBUG(log, "{}", log_schema_version("OK, no syncing required.", storage_schema_versions));
+=======
+        LOG_DEBUG(log, "OK, no syncing required.");
+>>>>>>> cea7c80823 (refine log (#8579))
     }
     else
     /// If first try failed, sync schema and try again.
     {
         LOG_DEBUG(log, "not OK, syncing schemas.");
 
+<<<<<<< HEAD
         sync_schema();
 
         std::tie(storages, locks, storage_schema_versions, ok) = get_and_lock_storages(true);
         if (ok)
         {
             LOG_DEBUG(log, "{}", log_schema_version("OK after syncing.", storage_schema_versions));
+=======
+        auto start_time = Clock::now();
+        for (auto & table_id : need_sync_table_ids)
+        {
+            sync_schema(table_id);
+        }
+        auto schema_sync_cost
+            = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time).count();
+
+        LOG_INFO(log, "syncing schemas done, time cost = {} ms.", schema_sync_cost);
+
+
+        std::tie(storages, locks, need_sync_table_ids) = get_and_lock_storages(true);
+        if (need_sync_table_ids.empty())
+        {
+            LOG_DEBUG(log, "OK after syncing.");
+>>>>>>> cea7c80823 (refine log (#8579))
         }
         else
             throw TiFlashException("Shouldn't reach here", Errors::Coprocessor::Internal);
