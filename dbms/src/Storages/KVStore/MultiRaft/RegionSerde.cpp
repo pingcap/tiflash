@@ -12,9 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/FailPoint.h>
 #include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/Utils/SerializationHelper.h>
-#include <Common/FailPoint.h>
+
+#include <memory>
 #include <utility>
 
 namespace DB
@@ -46,34 +48,43 @@ enum class RegionPersistFormat : UInt32
     TEST = 4,
 };
 
+constexpr UInt32 UNUSED_EXTENSION_NUMBER_FOR_TEST = 99999;
+static_assert(!magic_enum::enum_contains<RegionPersistFormat>(UNUSED_EXTENSION_NUMBER_FOR_TEST));
 static_assert(std::is_same_v<decltype(magic_enum::enum_underlying(RegionPersistFormat::EagerTruncate)), UInt32>);
 
 const UInt32 Region::CURRENT_VERSION = static_cast<UInt64>(RegionPersistVersion::V3);
 
-std::pair<RegionPersistFormat, UInt32> getPersistExtensionTypeAndLength(ReadBuffer & buf) {
+std::pair<RegionPersistFormat, UInt32> getPersistExtensionTypeAndLength(ReadBuffer & buf)
+{
     auto flag_encoded = readBinary2<UInt32>(buf);
     auto maybe_flag = magic_enum::enum_cast<RegionPersistFormat>(flag_encoded);
 
-    if (maybe_flag.has_value() && maybe_flag.value() == RegionPersistFormat::EagerTruncate) {
+    if (maybe_flag.has_value() && maybe_flag.value() == RegionPersistFormat::EagerTruncate)
+    {
         // Compat
         return std::make_pair(RegionPersistFormat::EagerTruncate, sizeof(UInt64));
     }
 
-    if (!maybe_flag.has_value()) {
+    if (!maybe_flag.has_value())
+    {
         auto size = readBinary2<UInt32>(buf);
         return std::make_pair(RegionPersistFormat::Unrecognizable, size);
     }
     auto flag = maybe_flag.value();
     UInt32 size = 0;
-    if (flag == RegionPersistFormat::Finished) {
+    if (flag == RegionPersistFormat::Finished)
+    {
         // size = 0
-    } else {
+    }
+    else
+    {
         size = readBinary2<UInt32>(buf);
     }
     return std::make_pair(flag, size);
 }
 
-size_t writePersistExtension(WriteBuffer & wb, UInt32 flag_encoded, const char * data, UInt32 size) {
+size_t writePersistExtension(WriteBuffer & wb, UInt32 flag_encoded, const char * data, UInt32 size)
+{
     auto total_size = writeBinary2(flag_encoded, wb);
     total_size += writeBinary2(size, wb);
     wb.write(data, size);
@@ -81,21 +92,26 @@ size_t writePersistExtension(WriteBuffer & wb, UInt32 flag_encoded, const char *
     return total_size;
 }
 
-size_t writePersistExtension(WriteBuffer & wb, RegionPersistFormat flag, const char * data, UInt32 size) {
+size_t writePersistExtension(WriteBuffer & wb, RegionPersistFormat flag, const char * data, UInt32 size)
+{
     RUNTIME_CHECK(flag != RegionPersistFormat::Finished);
     auto flag_encoded = magic_enum::enum_underlying(flag);
-    if (flag == RegionPersistFormat::EagerTruncate) {
+    if (flag == RegionPersistFormat::EagerTruncate)
+    {
         // Compat
         auto total_size = writeBinary2(flag_encoded, wb);
         wb.write(data, size);
         total_size += size;
         return total_size;
-    } else {
+    }
+    else
+    {
         return writePersistExtension(wb, flag_encoded, data, size);
     }
 }
 
-size_t writePersistExtensionSuffix(WriteBuffer & wb) {
+size_t writePersistExtensionSuffix(WriteBuffer & wb)
+{
     return writeBinary2(magic_enum::enum_underlying(RegionPersistFormat::Finished), wb);
 }
 
@@ -138,18 +154,26 @@ std::tuple<size_t, UInt64> Region::serialize(WriteBuffer & buf) const
             if (auto v = FailPointHelper::getFailPointVal(FailPoints::force_region_persist_extension_field); v)
             {
                 auto value = std::any_cast<int>(v.value());
-                if (value == 1) {
+                if (value & 1)
+                {
                     std::string s = "abcd";
                     total_size += writePersistExtension(buf, RegionPersistFormat::TEST, s.data(), s.size());
-                } else if (value == 2) {
-                    // TODO(region-format) use something that can't be parsed by RegionPersistFormat
+                }
+                if (value & 2)
+                {
                     std::string s = "kkk";
-                    total_size += writePersistExtension(buf, 99999, s.data(), s.size());
+                    total_size += writePersistExtension(buf, UNUSED_EXTENSION_NUMBER_FOR_TEST, s.data(), s.size());
+                }
+                if (value & 4)
+                {
+                    std::string s = "zzz";
+                    total_size += writePersistExtension(buf, UNUSED_EXTENSION_NUMBER_FOR_TEST, s.data(), s.size());
                 }
             }
         });
 
-        if (binary_version >= 3) {
+        if (binary_version >= 3)
+        {
             total_size += writePersistExtensionSuffix(buf);
         }
         // serialize data
@@ -165,9 +189,12 @@ RegionPtr Region::deserialize(ReadBuffer & buf, const TiFlashRaftProxyHelper * p
     const auto binary_version_decoded = magic_enum::enum_cast<RegionPersistVersion>(binary_version);
     if (!binary_version_decoded.has_value())
     {
-        if (CURRENT_VERSION == 1) {
+        if (CURRENT_VERSION == 1)
+        {
             throw Exception(ErrorCodes::LOGICAL_ERROR, "Don't support downgrading from {} to 1", binary_version);
-        } else {
+        }
+        else
+        {
             LOG_DEBUG(DB::Logger::get(), "Maybe downgrade from {} to {}", binary_version, CURRENT_VERSION);
         }
     }
@@ -184,10 +211,14 @@ RegionPtr Region::deserialize(ReadBuffer & buf, const TiFlashRaftProxyHelper * p
         {
             region->eager_truncated_index = readBinary2<UInt64>(buf);
         }
-    } else if (binary_version > 2) {
-        while (true) {
+    }
+    else if (binary_version > 2)
+    {
+        while (true)
+        {
             auto [flag, length] = getPersistExtensionTypeAndLength(buf);
-            if (flag == RegionPersistFormat::Finished) {
+            if (flag == RegionPersistFormat::Finished)
+            {
                 break;
             }
             if (flag == RegionPersistFormat::EagerTruncate)
@@ -195,37 +226,42 @@ RegionPtr Region::deserialize(ReadBuffer & buf, const TiFlashRaftProxyHelper * p
                 region->eager_truncated_index = readBinary2<UInt64>(buf);
                 continue;
             }
-            
-            // Before Unrecognizable
+
+            // Hook in test before Unrecognizable
             bool debug_continue = false;
+            using bundle_type = std::pair<int, std::shared_ptr<int>>;
             fiu_do_on(FailPoints::force_region_read_extension_field, {
                 if (auto v = FailPointHelper::getFailPointVal(FailPoints::force_region_read_extension_field); v)
                 {
-                    LOG_INFO(DB::Logger::get(), "XXXXXX");
-                    auto value = std::any_cast<int>(v.value());
-                    if (value == 1) {
-                        if (flag == RegionPersistFormat::TEST) {
-                            LOG_INFO(DB::Logger::get(), "YYYYY");
+                    auto bundle = std::any_cast<bundle_type>(v.value());
+                    if (bundle.first & 1)
+                    {
+                        if (flag == RegionPersistFormat::TEST)
+                        {
                             RUNTIME_CHECK(length == 4);
                             RUNTIME_CHECK(readStringWithLength(buf, 4) == "abcd");
                             debug_continue = true;
-                            LOG_INFO(DB::Logger::get(), "YYYYY c {}", debug_continue);
+                            *(bundle.second) += 1;
                         }
+                    }
+                    if (bundle.first & 2)
+                    {
+                        RUNTIME_CHECK(length == 3);
                     }
                 }
             });
 
-            LOG_INFO(DB::Logger::get(), "YYYYY a {}", debug_continue);
-            if (debug_continue) {
+            if (debug_continue)
+            {
                 continue;
             }
 
-            if (flag == RegionPersistFormat::Unrecognizable) {
+            if (flag == RegionPersistFormat::Unrecognizable)
+            {
                 buf.ignore(length);
                 continue;
             }
 
-            LOG_INFO(DB::Logger::get(), "ZZZZZ");
             RUNTIME_CHECK_MSG(false, "Unhandled extension {} length={}", magic_enum::enum_name(flag), length);
         }
     }

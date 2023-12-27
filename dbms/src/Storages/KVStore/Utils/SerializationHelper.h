@@ -74,7 +74,8 @@ inline std::string readBinary2<std::string>(ReadBuffer & buf)
     return s;
 }
 
-inline std::string readStringWithLength(ReadBuffer & buf, size_t length) {
+inline std::string readStringWithLength(ReadBuffer & buf, size_t length)
+{
     std::string s;
     s.resize(length);
     buf.readStrict(&s[0], length);
