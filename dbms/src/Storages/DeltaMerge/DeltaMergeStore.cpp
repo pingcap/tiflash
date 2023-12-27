@@ -1204,6 +1204,7 @@ BlockInputStreams DeltaMergeStore::read(
         enable_read_thread,
         final_num_stream,
         dm_context->scan_context->resource_group_name);
+    scan_context->read_mode = read_mode;
 
     BlockInputStreams res;
     for (size_t i = 0; i < final_num_stream; ++i)
@@ -1313,8 +1314,9 @@ void DeltaMergeStore::read(
         enable_read_thread,
         final_num_stream,
         dm_context->scan_context->resource_group_name);
-    const auto & columns_after_cast = filter && filter->extra_cast ? *filter->columns_after_cast : columns_to_read;
+    scan_context->read_mode = read_mode;
 
+    const auto & columns_after_cast = filter && filter->extra_cast ? *filter->columns_after_cast : columns_to_read;
     if (enable_read_thread)
     {
         for (size_t i = 0; i < final_num_stream; ++i)

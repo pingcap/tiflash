@@ -14,6 +14,8 @@
 
 #pragma once
 
+#include <Storages/DeltaMerge/ReadMode.h>
+#include <Storages/DeltaMerge/ScanContext_fwd.h>
 #include <common/types.h>
 #include <fmt/format.h>
 #include <sys/types.h>
@@ -69,7 +71,9 @@ public:
     std::atomic<uint64_t> mvcc_input_bytes{0};
     std::atomic<uint64_t> mvcc_output_rows{0};
 
-    // TODO: mode, filter
+    // TODO: filter
+    ReadMode read_mode = ReadMode::Normal;
+    // TODO: Building bitmap cost
 
     explicit ScanContext(const String & name = "")
         : resource_group_name(name)
@@ -165,7 +169,5 @@ public:
 
     const String resource_group_name;
 };
-
-using ScanContextPtr = std::shared_ptr<ScanContext>;
 
 } // namespace DB::DM

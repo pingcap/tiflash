@@ -2777,6 +2777,7 @@ BitmapFilterPtr Segment::buildBitmapFilterNormal(
     ColumnDefines columns_to_read{
         getExtraHandleColumnDefine(is_common_handle),
     };
+    // Generate the bitmap according to the MVCC filter result
     auto stream = getInputStreamModeNormal(
         dm_context,
         columns_to_read,
@@ -2786,11 +2787,12 @@ BitmapFilterPtr Segment::buildBitmapFilterNormal(
         max_version,
         expected_block_size,
         /*need_row_id*/ true);
+    // `total_rows` is the rows read for building bitmap
     auto total_rows = segment_snap->delta->getRows() + segment_snap->stable->getDMFilesRows();
     auto bitmap_filter = std::make_shared<BitmapFilter>(total_rows, /*default_value*/ false);
     bitmap_filter->set(stream);
     bitmap_filter->runOptimize();
-    LOG_DEBUG(
+    LOG_INFO(
         segment_snap->log,
         "buildBitmapFilterNormal total_rows={} cost={}ms",
         total_rows,
