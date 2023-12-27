@@ -991,7 +991,7 @@ std::unordered_map<TableID, DAGStorageInterpreter::StorageWithStructureLock> DAG
         GET_METRIC(tiflash_schema_trigger_count, type_cop_read).Increment();
         tmt.getSchemaSyncer()->syncSchemas(context);
         auto schema_sync_cost = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time).count();
-        LOG_DEBUG(log, "Table {} schema sync cost {}ms.", logical_table_id, schema_sync_cost);
+        LOG_INFO(log, "Table {} schema sync cost {}ms.", logical_table_id, schema_sync_cost);
     };
 
     /// Try get storage and lock once.
@@ -1006,8 +1006,6 @@ std::unordered_map<TableID, DAGStorageInterpreter::StorageWithStructureLock> DAG
         LOG_INFO(log, "not OK, syncing schemas.");
 
         sync_schema();
-
-        LOG_INFO(log, "syncing schemas done.");
 
         std::tie(storages, locks, storage_schema_versions, ok) = get_and_lock_storages(true);
         if (ok)
