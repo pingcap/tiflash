@@ -455,6 +455,11 @@ uint64_t TMTContext::readIndexWorkerTick() const
     return read_index_worker_tick_ms.load(std::memory_order_relaxed);
 }
 
+void TMTContext::debugSetKVStore(const KVStorePtr & new_kvstore)
+{
+    kvstore = new_kvstore;
+}
+
 const std::string & IntoStoreStatusName(TMTContext::StoreStatus status)
 {
     static const std::string StoreStatusName[] = {
