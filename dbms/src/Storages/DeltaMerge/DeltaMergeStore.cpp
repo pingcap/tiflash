@@ -1236,7 +1236,11 @@ BlockInputStreams DeltaMergeStore::read(
         }
         res.push_back(stream);
     }
-    LOG_DEBUG(tracing_logger, "Read create stream done");
+    LOG_INFO(
+        tracing_logger,
+        "Read create stream done, pool_id={} num_streams={}",
+        read_task_pool->pool_id,
+        final_num_stream);
 
     return res;
 }
@@ -1351,7 +1355,11 @@ void DeltaMergeStore::read(
         });
     }
 
-    LOG_DEBUG(tracing_logger, "Read create PipelineExec done");
+    LOG_INFO(
+        tracing_logger,
+        "Read create PipelineExec done, pool_id={} num_streams={}",
+        read_task_pool->pool_id,
+        final_num_stream);
 }
 
 Remote::DisaggPhysicalTableReadSnapshotPtr DeltaMergeStore::writeNodeBuildRemoteReadSnapshot(

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
+#include <Common/Stopwatch.h>
 #include <Common/SyncPoint/SyncPoint.h>
 #include <Common/TiFlashMetrics.h>
 #include <DataStreams/ConcatBlockInputStream.h>
@@ -59,8 +60,6 @@
 #include <fmt/core.h>
 
 #include <ext/scope_guard.h>
-
-#include "Common/Stopwatch.h"
 
 namespace ProfileEvents
 {
@@ -3041,7 +3040,7 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(
     constexpr auto is_fast_scan = true;
     auto enable_del_clean_read = !hasColumn(columns_to_read, TAG_COLUMN_ID);
 
-    // construct filter column stream
+    // construct (stable and delta) streams by the filter column
     const auto & filter_columns = filter->filter_columns;
     SkippableBlockInputStreamPtr filter_column_stable_stream = segment_snap->stable->getInputStream(
         dm_context,
@@ -3060,7 +3059,9 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(
     {
         LOG_ERROR(
             segment_snap->log,
-            "Late materialization filter columns size equal to read columns size, which is not expected.");
+            "Late materialization filter columns size equal to read columns size, which is not expected, "
+            "filter_columns_size={}",
+            filter_columns->size());
         BlockInputStreamPtr stream = std::make_shared<BitmapFilterBlockInputStream>(
             *filter_columns,
             filter_column_stable_stream,
@@ -3122,7 +3123,7 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(
             rest_columns_to_read->end());
     }
 
-    // construct rest column stream
+    // construct stream for the rest columns
     SkippableBlockInputStreamPtr rest_column_stable_stream = segment_snap->stable->getInputStream(
         dm_context,
         *rest_columns_to_read,

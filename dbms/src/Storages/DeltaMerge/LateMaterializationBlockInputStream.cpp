@@ -31,8 +31,8 @@ LateMaterializationBlockInputStream::LateMaterializationBlockInputStream(
     const String & req_id_)
     : header(toEmptyBlock(columns_to_read))
     , filter_column_name(filter_column_name_)
-    , filter_column_stream(filter_column_stream_)
-    , rest_column_stream(rest_column_stream_)
+    , filter_column_stream(std::move(filter_column_stream_))
+    , rest_column_stream(std::move(rest_column_stream_))
     , bitmap_filter(bitmap_filter_)
     , log(Logger::get(NAME, req_id_))
 {}
