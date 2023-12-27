@@ -38,6 +38,8 @@ namespace DB
 namespace FailPoints
 {
 extern const char force_region_persist_version[];
+extern const char force_region_persist_extension_field[];
+extern const char force_region_read_extension_field[];
 } // namespace FailPoints
 
 namespace tests
@@ -239,6 +241,113 @@ try
     ReadBufferFromFile read_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_RDONLY);
     auto new_region = Region::deserialize(read_buf);
     ASSERT_EQ(*new_region, *region);
+}
+CATCH
+
+// TEST_F(RegionSeriTest, FlexibleUpgrade)
+// try
+// {
+// }
+// CATCH
+
+// TEST_F(RegionSeriTest, FlexibleDowngrade)
+// try
+// {
+
+// }
+// CATCH
+
+// TEST_F(RegionSeriTest, FlexibleDowngradeToFixed)
+// try
+// {
+
+// }
+// CATCH
+
+TEST_F(RegionSeriTest, FlexibleUpgradeFromFixed)
+try
+{
+    auto region = std::make_shared<Region>(createRegionMeta(1001, 1));
+    region->updateRaftLogEagerIndex(5678);
+    FailPointHelper::enableFailPoint(
+        FailPoints::force_region_persist_version,
+        static_cast<UInt64>(2));
+    const auto path = dir_path + "/region.test";
+    WriteBufferFromFile write_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_CREAT);
+    size_t region_ser_size = std::get<0>(region->serialize(write_buf));
+    write_buf.next();
+    write_buf.sync();
+    ASSERT_EQ(region_ser_size, (size_t)Poco::File(path).getSize());
+
+    ReadBufferFromFile read_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_RDONLY);
+    FailPointHelper::enableFailPoint(
+        FailPoints::force_region_persist_version,
+        static_cast<UInt64>(3));
+    auto new_region = Region::deserialize(read_buf);
+    ASSERT_EQ(new_region->getRaftLogEagerGCRange().first, 5678);
+    ASSERT_REGION_EQ(*new_region, *region);
+}
+CATCH
+
+TEST_F(RegionSeriTest, FlexibleRestore)
+try
+{
+    {
+        // V3 store, V3 load, no unrecognized fields
+        auto region = std::make_shared<Region>(createRegionMeta(1001, 1));
+        region->updateRaftLogEagerIndex(5678);
+        FailPointHelper::enableFailPoint(
+            FailPoints::force_region_persist_version,
+            static_cast<UInt64>(3));
+        FailPointHelper::enableFailPoint(
+            FailPoints::force_region_persist_extension_field,
+            static_cast<int>(1));
+        const auto path = dir_path + "/region.test";
+        WriteBufferFromFile write_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_CREAT);
+        size_t region_ser_size = std::get<0>(region->serialize(write_buf));
+        write_buf.next();
+        write_buf.sync();
+        ASSERT_EQ(region_ser_size, (size_t)Poco::File(path).getSize());
+
+        FailPointHelper::enableFailPoint(
+            FailPoints::force_region_read_extension_field,
+            static_cast<int>(1));
+        ReadBufferFromFile read_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_RDONLY);
+        auto new_region = Region::deserialize(read_buf);
+        ASSERT_EQ(new_region->getRaftLogEagerGCRange().first, 5678);
+        ASSERT_REGION_EQ(*new_region, *region);
+
+        FailPointHelper::disableFailPoint(FailPoints::force_region_persist_extension_field);
+        FailPointHelper::disableFailPoint(FailPoints::force_region_read_extension_field);
+    }
+    {
+        // V4(whatever) store, V3 load, TEST unrecognized
+        auto region = std::make_shared<Region>(createRegionMeta(1001, 1));
+        region->updateRaftLogEagerIndex(5678);
+        FailPointHelper::enableFailPoint(
+            FailPoints::force_region_persist_version,
+            static_cast<UInt64>(4));
+        FailPointHelper::enableFailPoint(
+            FailPoints::force_region_persist_extension_field,
+            static_cast<int>(2));
+        const auto path = dir_path + "/region2.test";
+        WriteBufferFromFile write_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_CREAT);
+        size_t region_ser_size = std::get<0>(region->serialize(write_buf));
+        write_buf.next();
+        write_buf.sync();
+        ASSERT_EQ(region_ser_size, (size_t)Poco::File(path).getSize());
+
+        FailPointHelper::enableFailPoint(
+            FailPoints::force_region_persist_version,
+            static_cast<UInt64>(3));
+        ReadBufferFromFile read_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_RDONLY);
+        auto new_region = Region::deserialize(read_buf);
+        ASSERT_EQ(new_region->getRaftLogEagerGCRange().first, 5678);
+        ASSERT_REGION_EQ(*new_region, *region);
+
+        FailPointHelper::disableFailPoint(FailPoints::force_region_persist_extension_field);
+        FailPointHelper::disableFailPoint(FailPoints::force_region_read_extension_field);
+    }
 }
 CATCH
 
