@@ -182,6 +182,7 @@ void AffectedOption::deserialize(Poco::JSON::Object::Ptr json)
 
 void SchemaDiff::deserialize(const String & data)
 {
+    assert(!data.empty()); // should be skipped by upper level logic
     Poco::JSON::Parser parser;
     try
     {
@@ -218,7 +219,7 @@ void SchemaDiff::deserialize(const String & data)
     }
     catch (...)
     {
-        LOG_INFO(Logger::get(), "failed to deserialize {}", data);
+        LOG_WARNING(Logger::get(), "failed to deserialize {}", data);
         throw;
     }
 }
