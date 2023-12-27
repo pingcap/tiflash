@@ -322,7 +322,9 @@ void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
 {
     if (!mvcc_query_info->regions_query_info.empty())
     {
-        dagContext().scan_context_map[table_scan.getTableScanExecutorID()] = std::make_shared<DM::ScanContext>();
+        auto scan_context = std::make_shared<DM::ScanContext>();
+        scan_context->num_columns = required_columns.size();
+        dagContext().scan_context_map[table_scan.getTableScanExecutorID()] = scan_context;
         buildLocalStreams(pipeline, settings.max_block_size);
     }
 
