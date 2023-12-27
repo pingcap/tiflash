@@ -49,6 +49,7 @@ public:
     // num segments, num tasks
     std::atomic<uint64_t> num_segments{0};
     std::atomic<uint64_t> num_read_tasks{0};
+    std::atomic<uint64_t> num_columns{0};
 
     // delta rows, bytes
     std::atomic<uint64_t> delta_rows{0};
@@ -56,6 +57,7 @@ public:
 
     // mvcc input rows, output rows
     std::atomic<uint64_t> mvcc_input_rows{0};
+    std::atomic<uint64_t> mvcc_input_bytes{0};
     std::atomic<uint64_t> mvcc_output_rows{0};
 
     // TODO: mode, filter
@@ -99,11 +101,13 @@ public:
 
         num_segments += other.num_segments;
         num_read_tasks += other.num_read_tasks;
+        // num_columns should not sum
 
         delta_rows += other.delta_rows;
         delta_bytes += other.delta_bytes;
 
         mvcc_input_rows += other.mvcc_input_rows;
+        mvcc_input_bytes += other.mvcc_input_bytes;
         mvcc_output_rows += other.mvcc_output_rows;
     }
 

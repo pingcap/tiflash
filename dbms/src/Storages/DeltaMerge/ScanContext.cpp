@@ -31,11 +31,13 @@ String ScanContext::toJson() const
 
     json->set("num_segments", num_segments.load());
     json->set("num_read_tasks", num_read_tasks.load());
+    json->set("num_columns", num_columns.load());
 
     json->set("delta_rows", delta_rows.load());
     json->set("delta_bytes", delta_bytes.load());
 
     json->set("mvcc_input_rows", mvcc_input_rows.load());
+    json->set("mvcc_input_bytes", mvcc_input_bytes.load());
     json->set("mvcc_output_rows", mvcc_output_rows.load());
 
     std::stringstream buf;
