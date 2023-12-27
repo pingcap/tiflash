@@ -565,6 +565,7 @@ void MPPTask::runImpl()
 #endif
 
         auto result = query_executor_holder->execute();
+<<<<<<< HEAD
         LOG_INFO(log, "mpp task finish execute, success: {}", result.is_success);
         if (likely(result.is_success))
         {
@@ -581,9 +582,20 @@ void MPPTask::runImpl()
             // finish receiver
             receiver_set->close();
         }
+=======
+        auto log_level = Poco::Message::PRIO_DEBUG;
+        if (!result.is_success || status != RUNNING)
+            log_level = Poco::Message::PRIO_INFORMATION;
+        LOG_IMPL(
+            log,
+            log_level,
+            "mpp task finish execute, is_success: {}, status: {}",
+            result.is_success,
+            magic_enum::enum_name(status.load()));
+>>>>>>> cea7c80823 (refine log (#8579))
         auto cpu_ru = query_executor_holder->collectRequestUnit();
         auto read_ru = dag_context->getReadRU();
-        LOG_INFO(log, "mpp finish with request unit: cpu={} read={}", cpu_ru, read_ru);
+        LOG_DEBUG(log, "mpp finish with request unit: cpu={} read={}", cpu_ru, read_ru);
         GET_METRIC(tiflash_compute_request_unit, type_mpp).Increment(cpu_ru + read_ru);
         mpp_task_statistics.setRU(cpu_ru, read_ru);
 
