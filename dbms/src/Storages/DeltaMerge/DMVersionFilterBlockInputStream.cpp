@@ -392,7 +392,7 @@ Block DMVersionFilterBlockInputStream<MODE>::read(FilterPtr & res_filter, bool r
         {
             scan_context->mvcc_input_rows += rows;
             scan_context->mvcc_input_bytes += cur_raw_block.bytes();
-            scan_context->mvcc_output_rows += passed_rows;
+            scan_context->mvcc_output_rows += passed_count;
             // When `return_filter != nullptr`, the output bytes is not accurate
         }
 
