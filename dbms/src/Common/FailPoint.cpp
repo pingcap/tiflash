@@ -107,7 +107,8 @@ namespace DB
     M(pause_before_apply_raft_snapshot)        \
     M(pause_until_apply_raft_snapshot)         \
     M(pause_after_copr_streams_acquired_once)  \
-    M(pause_before_register_non_root_mpp_task)
+    M(pause_before_register_non_root_mpp_task) \
+    M(pause_when_persist_region)
 
 #define APPLY_FOR_PAUSEABLE_FAILPOINTS(M) \
     M(pause_when_reading_from_dt_stream)  \
@@ -131,7 +132,8 @@ namespace DB
     M(random_sharedquery_failpoint)                     \
     M(random_interpreter_failpoint)                     \
     M(random_task_manager_find_task_failure_failpoint)  \
-    M(random_min_tso_scheduler_failpoint)
+    M(random_min_tso_scheduler_failpoint)               \
+    M(random_region_persister_latency_failpoint)
 
 namespace FailPoints
 {
