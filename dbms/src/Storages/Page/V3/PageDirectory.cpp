@@ -2047,6 +2047,7 @@ typename PageDirectory<Trait>::PageEntries PageDirectory<Trait>::gcInMemEntries(
     {
         // Cleanup released snapshots
         std::lock_guard lock(snapshots_mutex);
+        std::unordered_set<String> tracing_id_set;
         for (auto iter = snapshots.begin(); iter != snapshots.end(); /* empty */)
         {
             if (auto snap = iter->lock(); snap == nullptr)
@@ -2063,13 +2064,17 @@ typename PageDirectory<Trait>::PageEntries PageDirectory<Trait>::gcInMemEntries(
 
                 if (alive_time_seconds > 10 * 60) // TODO: Make `10 * 60` as a configuration
                 {
-                    LOG_WARNING(
-                        log,
-                        "Meet a stale snapshot [thread id={}] [tracing id={}] [seq={}] [alive time(s)={}]",
-                        snap->create_thread,
-                        snap->tracing_id,
-                        snap->sequence,
-                        alive_time_seconds);
+                    if (!tracing_id_set.contains(snap->tracing_id))
+                    {
+                        LOG_WARNING(
+                            log,
+                            "Meet a stale snapshot [thread id={}] [tracing id={}] [seq={}] [alive time(s)={}]",
+                            snap->create_thread,
+                            snap->tracing_id,
+                            snap->sequence,
+                            alive_time_seconds);
+                        tracing_id_set.emplace(snap->tracing_id);
+                    }
                     stale_snapshot_nums++;
                 }
 
