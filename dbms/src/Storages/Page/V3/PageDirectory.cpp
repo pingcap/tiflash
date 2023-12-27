@@ -1603,7 +1603,7 @@ PageEntriesV3 PageDirectory::gcInMemEntries(bool return_removed_entries)
 
                 if (alive_time_seconds > 10 * 60) // TODO: Make `10 * 60` as a configuration
                 {
-                    if (!tracing_id_set.contains(snap->tracing_id))
+                    if (tracing_id_set.count(snap->tracing_id) <= 0)
                     {
                         LOG_WARNING(log, "Meet a stale snapshot [thread id={}] [tracing id={}] [seq={}] [alive time(s)={}]", snap->create_thread, snap->tracing_id, snap->sequence, alive_time_seconds);
                         tracing_id_set.emplace(snap->tracing_id);
