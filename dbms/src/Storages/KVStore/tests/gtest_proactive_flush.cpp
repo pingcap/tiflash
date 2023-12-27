@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "region_kvstore_test.h"
+#include <Storages/KVStore/tests/region_kvstore_test.h>
 
 namespace DB
 {
