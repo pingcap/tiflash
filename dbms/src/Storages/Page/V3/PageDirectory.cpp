@@ -2163,8 +2163,10 @@ typename PageDirectory<Trait>::PageEntries PageDirectory<Trait>::gcInMemEntries(
         }
     }
 
-    LOG_DEBUG(
+    auto log_level = stale_snapshot_nums > 0 ? Poco::Message::PRIO_INFORMATION : Poco::Message::PRIO_DEBUG;
+    LOG_IMPL(
         log,
+        log_level,
         "After MVCC gc in memory [lowest_seq={}] "
         "clean [invalid_snapshot_nums={}] [invalid_page_nums={}] "
         "[total_deref_counter={}] [all_del_entries={}]. "
