@@ -998,7 +998,7 @@ std::unordered_map<TableID, DAGStorageInterpreter::StorageWithStructureLock> DAG
     auto [storages, locks, storage_schema_versions, ok] = get_and_lock_storages(false);
     if (ok)
     {
-        LOG_INFO(log, "{}", log_schema_version("OK, no syncing required.", storage_schema_versions));
+        LOG_DEBUG(log, "{}", log_schema_version("OK, no syncing required.", storage_schema_versions));
     }
     else
     /// If first try failed, sync schema and try again.
@@ -1010,7 +1010,7 @@ std::unordered_map<TableID, DAGStorageInterpreter::StorageWithStructureLock> DAG
         std::tie(storages, locks, storage_schema_versions, ok) = get_and_lock_storages(true);
         if (ok)
         {
-            LOG_INFO(log, "{}", log_schema_version("OK after syncing.", storage_schema_versions));
+            LOG_DEBUG(log, "{}", log_schema_version("OK after syncing.", storage_schema_versions));
         }
         else
             throw TiFlashException("Shouldn't reach here", Errors::Coprocessor::Internal);

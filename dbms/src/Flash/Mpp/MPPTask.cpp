@@ -71,7 +71,7 @@ MPPTask::~MPPTask()
     if (process_list_entry != nullptr && current_memory_tracker != process_list_entry->get().getMemoryTrackerPtr().get())
         current_memory_tracker = process_list_entry->get().getMemoryTrackerPtr().get();
     abortTunnels("", true);
-    LOG_DEBUG(log, "finish MPPTask: {}", id.toString());
+    LOG_INFO(log, "finish MPPTask: {}", id.toString());
 }
 
 void MPPTask::abortTunnels(const String & message, bool wait_sender_finish)
@@ -361,14 +361,17 @@ void MPPTask::runImpl()
     String err_msg;
     try
     {
-        LOG_INFO(log, "task starts preprocessing");
+        LOG_DEBUG(log, "task starts preprocessing");
         preprocess();
+        auto time_cost_in_preprocess_ms = stopwatch.elapsedMilliseconds();
+        LOG_DEBUG(log, "task preprocess done");
         schedule_entry.setNeededThreads(estimateCountOfNewThreads());
         LOG_DEBUG(log, "Estimate new thread count of query: {} including tunnel_threads: {}, receiver_threads: {}", schedule_entry.getNeededThreads(), dag_context->tunnel_set->getExternalThreadCnt(), new_thread_count_of_mpp_receiver);
 
         scheduleOrWait();
 
-        LOG_INFO(log, "task starts running");
+        auto time_cost_in_schedule_ms = stopwatch.elapsedMilliseconds() - time_cost_in_preprocess_ms;
+        LOG_INFO(log, "task starts running, time cost in schedule: {} ms, time cost in preprocess {} ms", time_cost_in_schedule_ms, time_cost_in_preprocess_ms);
         if (status.load() != RUNNING)
         {
             /// when task is in running state, canceling the task will call sendCancelToQuery to do the cancellation, however
@@ -379,6 +382,10 @@ void MPPTask::runImpl()
         mpp_task_statistics.start();
 
         auto result = query_executor_holder->execute();
+        auto log_level = Poco::Message::PRIO_DEBUG;
+        if (!result.is_success || status != RUNNING)
+            log_level = Poco::Message::PRIO_INFORMATION;
+        LOG_IMPL(log, log_level, "mpp task finish execute, success: {}, status: {}", result.is_success, magic_enum::enum_name(status.load()));
         if (likely(result.is_success))
         {
             // finish receiver
@@ -408,7 +415,7 @@ void MPPTask::runImpl()
     if (err_msg.empty())
     {
         if (switchStatus(RUNNING, FINISHED))
-            LOG_INFO(log, "finish task");
+            LOG_DEBUG(log, "finish task");
         else
             LOG_WARNING(log, "finish task which is in {} state", magic_enum::enum_name(status.load()));
         if (status == FINISHED)
@@ -442,7 +449,7 @@ void MPPTask::runImpl()
     mpp_task_statistics.end(status.load(), err_string);
     mpp_task_statistics.logTracingJson();
 
-    LOG_INFO(log, "task ends, time cost is {} ms.", stopwatch.elapsedMilliseconds());
+    LOG_DEBUG(log, "task ends, time cost is {} ms.", stopwatch.elapsedMilliseconds());
     unregisterTask();
 }
 

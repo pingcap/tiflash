@@ -176,8 +176,7 @@ private:
 
     void connectionDone(
         bool meet_error,
-        const String & local_err_msg,
-        const LoggerPtr & log);
+        const String & local_err_msg);
 
     void finishAllMsgChannels();
     void cancelAllMsgChannels();
