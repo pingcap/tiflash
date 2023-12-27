@@ -18,6 +18,7 @@
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/TiFlashMetrics.h>
 #include <Encryption/RandomAccessFile.h>
+#include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/S3/FileCache.h>
 #include <Storages/S3/MemoryRandomAccessFile.h>
 #include <Storages/S3/S3Common.h>

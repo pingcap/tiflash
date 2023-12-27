@@ -2792,11 +2792,14 @@ BitmapFilterPtr Segment::buildBitmapFilterNormal(
     auto bitmap_filter = std::make_shared<BitmapFilter>(total_rows, /*default_value*/ false);
     bitmap_filter->set(stream);
     bitmap_filter->runOptimize();
-    LOG_INFO(
+
+    const auto elapse_ns = sw_total.elapsed();
+    dm_context.scan_context->build_bitmap_time_ns += elapse_ns;
+    LOG_DEBUG(
         segment_snap->log,
-        "buildBitmapFilterNormal total_rows={} cost={}ms",
+        "buildBitmapFilterNormal total_rows={} cost={:.3f}ms",
         total_rows,
-        sw_total.elapsedMilliseconds());
+        elapse_ns / 1'000'000.0);
     return bitmap_filter;
 }
 
@@ -2909,16 +2912,23 @@ BitmapFilterPtr Segment::buildBitmapFilterStableOnly(
     const auto & dmfiles = segment_snap->stable->getDMFiles();
     RUNTIME_CHECK(!dmfiles.empty());
 
+    auto commit_elapse = [&sw, &dm_context]() -> double {
+        const auto elapse_ns = sw.elapsed();
+        dm_context.scan_context->build_bitmap_time_ns += elapse_ns;
+        return elapse_ns / 1'000'000.0;
+    };
+
     auto [skipped_ranges, some_packs_sets] = parseDMFilePackInfo(dmfiles, dm_context, read_ranges, filter, max_version);
 
     if (skipped_ranges.size() == 1 && skipped_ranges[0].offset == 0
         && skipped_ranges[0].rows == segment_snap->stable->getDMFilesRows())
     {
+        auto elapse_ms = commit_elapse();
         LOG_DEBUG(
             segment_snap->log,
-            "buildBitmapFilterStableOnly all match, total_rows={}, cost={}ms",
+            "buildBitmapFilterStableOnly all match, total_rows={}, cost={:.3f}ms",
             segment_snap->stable->getDMFilesRows(),
-            sw.elapsedMilliseconds());
+            elapse_ms);
         return std::make_shared<BitmapFilter>(segment_snap->stable->getDMFilesRows(), /*default_value*/ true);
     }
 
@@ -2940,11 +2950,12 @@ BitmapFilterPtr Segment::buildBitmapFilterStableOnly(
     }
     if (!has_some_packs)
     {
+        auto elapse_ms = commit_elapse();
         LOG_DEBUG(
             segment_snap->log,
-            "buildBitmapFilterStableOnly not have some packs, total_rows={}, cost={}ms",
+            "buildBitmapFilterStableOnly not have some packs, total_rows={}, cost={:.3f}ms",
             segment_snap->stable->getDMFilesRows(),
-            sw.elapsedMilliseconds());
+            elapse_ms);
         return bitmap_filter;
     }
 
@@ -2976,12 +2987,14 @@ BitmapFilterPtr Segment::buildBitmapFilterStableOnly(
         is_common_handle,
         dm_context.tracing_id);
     bitmap_filter->set(stream);
+
+    auto elapse_ms = commit_elapse();
     LOG_DEBUG(
         segment_snap->log,
-        "buildBitmapFilterStableOnly read_packs={} total_rows={} cost={}ms",
+        "buildBitmapFilterStableOnly read_packs={} total_rows={} cost={:.3f}ms",
         some_packs_sets.size(),
         segment_snap->stable->getDMFilesRows(),
-        sw.elapsedMilliseconds());
+        elapse_ms);
     return bitmap_filter;
 }
 

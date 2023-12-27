@@ -74,6 +74,7 @@ public:
     // TODO: filter
     ReadMode read_mode = ReadMode::Normal;
     // TODO: Building bitmap cost
+    std::atomic<uint64_t> build_bitmap_time_ns{0};
 
     explicit ScanContext(const String & name = "")
         : resource_group_name(name)

@@ -20,6 +20,7 @@
 #include <Flash/ResourceControl/LocalAdmissionController.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
+#include <Storages/DeltaMerge/ScanContext.h>
 
 namespace DB
 {
