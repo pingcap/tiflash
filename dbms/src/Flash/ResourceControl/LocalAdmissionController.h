@@ -602,48 +602,6 @@ private:
                     getCurrentExceptionMessage(false));
             }
         }
-<<<<<<< HEAD
-=======
-        LOG_INFO(log, "LAC stopped done: final report size: {}", acquire_infos.size());
-    }
-
-#ifdef DBMS_PUBLIC_GTEST
-    static std::unique_ptr<MockLocalAdmissionController> global_instance;
-#else
-    static std::unique_ptr<LocalAdmissionController> global_instance;
-#endif
-
-    // Interval of fetch from GAC periodically.
-    static constexpr auto DEFAULT_FETCH_GAC_INTERVAL = std::chrono::seconds(5);
-    static constexpr auto DEFAULT_FETCH_GAC_INTERVAL_MS = 5000;
-
-private:
-    void consumeResource(const std::string & name, double ru, uint64_t cpu_time_in_ns)
-    {
-        if (unlikely(stopped))
-            return;
-
-        // When tidb_enable_resource_control is disabled, resource group name is empty.
-        if (name.empty())
-            return;
-
-        ResourceGroupPtr group = findResourceGroup(name);
-        if unlikely (!group)
-        {
-            LOG_DEBUG(log, "cannot consume ru for {}, maybe it has been deleted", name);
-            return;
-        }
-
-        group->consumeResource(ru, cpu_time_in_ns);
-        if (group->lowToken() || group->trickleModeLeaseExpire(SteadyClock::now()))
-        {
-            {
-                std::lock_guard lock(mu);
-                low_token_resource_groups.insert(name);
-            }
-            cv.notify_one();
-        }
->>>>>>> cea7c80823 (refine log (#8579))
     }
 
     // If we cannot get GAC resp for DEGRADE_MODE_DURATION seconds, enter degrade mode.
