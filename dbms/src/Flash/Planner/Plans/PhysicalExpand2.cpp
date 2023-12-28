@@ -213,7 +213,7 @@ void PhysicalExpand2::buildBlockInputStreamImpl(DAGPipeline & pipeline, Context 
     expandTransform(pipeline);
 }
 
-void PhysicalExpand2::finalize(const Names & parent_require)
+void PhysicalExpand2::finalizeImpl(const Names & parent_require)
 {
     FinalizeHelper::checkSchemaContainsParentRequire(schema, parent_require);
     child->finalize(shared_expand->getBeforeExpandActions()->getRequiredColumns());

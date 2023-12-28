@@ -78,7 +78,7 @@ void PhysicalLimit::buildPipelineExecGroupImpl(
     });
 }
 
-void PhysicalLimit::finalize(const Names & parent_require)
+void PhysicalLimit::finalizeImpl(const Names & parent_require)
 {
     child->finalize(parent_require);
 }

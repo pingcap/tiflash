@@ -37,7 +37,7 @@ public:
         : PhysicalUnary(executor_id_, PlanType::MockExchangeSender, schema_, fine_grained_shuffle_, req_id, child_)
     {}
 
-    void finalize(const Names & parent_require) override;
+    void finalizeImpl(const Names & parent_require) override;
 
     const Block & getSampleBlock() const override;
 

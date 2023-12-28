@@ -63,9 +63,34 @@ String PhysicalPlanNode::toSimpleString()
     return fmt::format("{}|{}", type.toString(), isTiDBOperator() ? executor_id : "NonTiDBOperator");
 }
 
-void PhysicalPlanNode::finalize()
+void PhysicalPlanNode::finalize(const Names & parent_require)
 {
-    finalize(DB::toNames(schema));
+    if unlikely (finalized)
+    {
+        LOG_WARNING(log, "Should not reach here, {}-{} already finalized", type.toString(), executor_id);
+        return;
+    }
+    auto block_to_schema_string = [&](const Block & block) {
+        FmtBuffer buffer;
+        buffer.joinStr(
+            block.cbegin(),
+            block.cend(),
+            [](const auto & item, FmtBuffer & buf) { buf.fmtAppend("<{}, {}>", item.name, item.type->getName()); },
+            ", ");
+        return buffer.toString();
+    };
+    auto block_before_finalize = getSampleBlock();
+    finalizeImpl(parent_require);
+    finalized = true;
+    auto block_after_finalize = getSampleBlock();
+    if (block_before_finalize.columns() != block_after_finalize.columns())
+    {
+        LOG_DEBUG(
+            log,
+            "Finalize pruned some columns: before finalize: {}, after finalize: {}",
+            block_to_schema_string(block_before_finalize),
+            block_to_schema_string(block_after_finalize));
+    }
 }
 
 void PhysicalPlanNode::recordProfileStreams(DAGPipeline & pipeline, const Context & context)
