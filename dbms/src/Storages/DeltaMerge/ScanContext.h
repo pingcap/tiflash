@@ -64,13 +64,20 @@ public:
     std::atomic<uint64_t> delta_rows{0};
     std::atomic<uint64_t> delta_bytes{0};
 
+    ReadMode read_mode = ReadMode::Normal;
+
+    // - read_mode == Normal, apply mvcc to all read blocks
+    // - read_mode == Bitmap, it will apply mvcc to get the bitmap
+    //   then skip rows according to the mvcc bitmap and push down filter
+    //   for other columns
+    // - read_mode == Fast, bypass the mvcc
     // mvcc input rows, output rows
     std::atomic<uint64_t> mvcc_input_rows{0};
     std::atomic<uint64_t> mvcc_input_bytes{0};
     std::atomic<uint64_t> mvcc_output_rows{0};
+    std::atomic<uint64_t> late_materialization_skip_rows{0};
 
     // TODO: filter
-    ReadMode read_mode = ReadMode::Normal;
     // Learner read
     std::atomic<uint64_t> learner_read_ns{0};
     // Create snapshot from PageStorage
@@ -80,7 +87,6 @@ public:
     std::atomic<uint64_t> create_inputstream_time_ns{0};
     // Building bitmap
     std::atomic<uint64_t> build_bitmap_time_ns{0};
-    std::atomic<uint64_t> late_materialization_skip_rows{0};
 
     const String resource_group_name;
 
