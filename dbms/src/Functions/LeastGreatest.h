@@ -159,7 +159,7 @@ struct LeastGreatestStringImpl
         {
             if (res < 0)
             {
-                memcpy(&c_data[pre_offset], &a_data[0], a_size);
+                memcpy(&c_data[pre_offset], a_data, a_size);
                 c_offsets[i] = pre_offset + a_size + 1;
             }
             else if (res == 0)

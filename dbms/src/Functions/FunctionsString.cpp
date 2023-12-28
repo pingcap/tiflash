@@ -437,25 +437,38 @@ template <
     char flip_case_mask,
     int to_case(int)>
 __attribute__((always_inline)) inline void toCaseImplTiDB(
-    ConstPtr<UInt8> & src,
-    const ConstPtr<UInt8> src_end,
-    Ptr<UInt8> & dst)
+    const ColumnString::Chars_t & src_data,
+    size_t & src_pos,
+    ColumnString::Chars_t & dst_data,
+    size_t & dst_pos,
+    std::vector<std::pair<size_t, int>> & pos_diff_len)
 {
-    if (src[0] <= ascii_upper_bound)
+    if (src_data[src_pos] <= ascii_upper_bound)
     {
-        if (*src >= not_case_lower_bound && *src <= not_case_upper_bound)
-            *dst++ = *src++ ^ flip_case_mask;
+        dst_data.resize(dst_pos + 1);
+        if (src_data[src_pos] >= not_case_lower_bound && src_data[src_pos] <= not_case_upper_bound)
+            dst_data[dst_pos] = src_data[src_pos] ^ flip_case_mask;
         else
-            *dst++ = *src++;
+            dst_data[dst_pos] = src_data[src_pos];
+        ++src_pos;
+        ++dst_pos;
     }
     else
     {
         static const Poco::UTF8Encoding utf8;
 
-        if (const auto chars = utf8.convert(to_case(utf8.convert(src)), dst, src_end - src))
-            src += chars, dst += chars;
-        else
-            ++src, ++dst;
+        int src_sequence_length = utf8.sequenceLength(&src_data[src_pos], 1);
+
+        int dst_ch = to_case(utf8.convert(&src_data[src_pos]));
+        int dst_sequence_length = utf8.convert(dst_ch, nullptr, 0);
+        dst_data.resize(dst_pos + dst_sequence_length);
+        utf8.convert(dst_ch, &dst_data[dst_pos], dst_sequence_length);
+
+        if (dst_sequence_length != src_sequence_length)
+            pos_diff_len.emplace_back(src_pos, dst_sequence_length - src_sequence_length);
+
+        src_pos += src_sequence_length;
+        dst_pos += dst_sequence_length;
     }
 }
 
@@ -548,13 +561,16 @@ TIFLASH_DECLARE_MULTITARGET_FUNCTION_TP(
     (not_case_lower_bound, not_case_upper_bound, ascii_upper_bound, flip_case_mask, to_case),
     void,
     lowerUpperUTF8ArrayImplTiDB,
-    (src, src_end, dst),
-    (ConstPtr<UInt8> & src, const ConstPtr<UInt8> src_end, Ptr<UInt8> & dst),
+    (src_data, src_offsets, dst_data, dst_offsets),
+    (const ColumnString::Chars_t & src_data, const IColumn::Offsets & src_offsets, ColumnString::Chars_t & dst_data, IColumn::Offsets & dst_offsets),
     {
+        dst_data.reserve(src_data.size());
         static const auto flip_mask = SimdWord::template fromSingle<int8_t>(flip_case_mask);
-        while (src + WORD_SIZE < src_end)
+        size_t src_pos = 0, src_size = src_data.size(), dst_pos = 0;
+        std::vector<std::pair<size_t, int>> pos_diff_len;
+        while (src_pos + WORD_SIZE < src_size)
         {
-            auto word = SimdWord::fromUnaligned(src);
+            auto word = SimdWord::fromUnaligned(&src_data[src_pos]);
             auto ascii_check = SimdWord{};
             ascii_check.as_int8 = word.as_int8 >= 0;
             if (ascii_check.isByteAllMarked())
@@ -566,29 +582,55 @@ TIFLASH_DECLARE_MULTITARGET_FUNCTION_TP(
                 range_check.as_int8 = (word.as_int8 >= lower_bounds.as_int8) & (word.as_int8 <= upper_bounds.as_int8);
                 selected.as_int8 = range_check.as_int8 & flip_mask.as_int8;
                 word.as_int8 ^= selected.as_int8;
-                word.toUnaligned(dst);
-                src += WORD_SIZE;
-                dst += WORD_SIZE;
+                dst_data.resize(dst_pos + WORD_SIZE);
+                word.toUnaligned(&dst_data[dst_pos]);
+                src_pos += WORD_SIZE;
+                dst_pos += WORD_SIZE;
+                printf("haha111111!\n");
             }
             else
             {
-                auto expected_end = src + WORD_SIZE;
-                while (src < expected_end)
+                auto expected_end = src_pos + WORD_SIZE;
+                while (src_pos < expected_end)
                 {
                     toCaseImplTiDB<
                         not_case_lower_bound,
                         not_case_upper_bound,
                         ascii_upper_bound,
                         flip_case_mask,
-                        to_case>(src, src_end, dst);
+                        to_case>(src_data, src_pos, dst_data, dst_pos, pos_diff_len);
                 }
+                printf("haha222222!\n");
             }
         }
-        while (src < src_end)
+        while (src_pos < src_size)
             toCaseImplTiDB<not_case_lower_bound, not_case_upper_bound, ascii_upper_bound, flip_case_mask, to_case>(
-                src,
-                src_end,
-                dst);
+                src_data, src_pos,
+                dst_data, dst_pos, pos_diff_len);
+
+        if likely (pos_diff_len.empty())
+        {
+            printf("haha333333!\n");
+            dst_offsets.assign(src_offsets);
+        }
+        else
+        {
+            printf("haha444444!\n");
+            dst_offsets.resize(src_offsets.size());
+            Int64 diff = 0;
+            auto pos_diff_len_iter = pos_diff_len.begin();
+            for (size_t i = 0; i < src_offsets.size(); ++i)
+            {
+                while (pos_diff_len_iter != pos_diff_len.end())
+                {
+                    if (pos_diff_len_iter->first > src_offsets[i])
+                        break;
+                    diff += pos_diff_len_iter->second;
+                    ++pos_diff_len_iter;
+                }
+                dst_offsets[i] = src_offsets[i] + diff;
+            }
+        }
     })
 } // namespace
 
@@ -617,56 +659,51 @@ void TiDBLowerUpperUTF8Impl<not_case_lower_bound, not_case_upper_bound, to_case>
     const IColumn::Offsets & offsets,
     ColumnString::Chars_t & res_data,
     IColumn::Offsets & res_offsets)
-{
-    res_data.resize(data.size());
-    res_offsets.assign(offsets);
-    array(data.data(), data.data() + data.size(), res_data.data());
+{lowerUpperUTF8ArrayImplTiDB<not_case_lower_bound, not_case_upper_bound, ascii_upper_bound, flip_case_mask, to_case>(
+        data,
+        offsets,
+        res_data,
+        res_offsets);
+    /*res_data.reserve(data.size());
+    size_t src_pos = 0, src_size = data.size(), dst_pos = 0;
+    std::vector<std::pair<size_t, int>> pos_diff_len;
+    while (src_pos < src_size)
+        toCaseImplTiDB<not_case_lower_bound, not_case_upper_bound, ascii_upper_bound, flip_case_mask, to_case>(
+            data, src_pos,
+            res_data, dst_pos, pos_diff_len);
+
+    if likely (pos_diff_len.empty())
+    {
+        printf("hoho!\n");
+        res_offsets.assign(offsets);
+    }
+    else
+    {
+        printf("haha!\n");
+        res_offsets.resize(offsets.size());
+        Int64 diff = 0;
+        auto pos_diff_len_iter = pos_diff_len.begin();
+        for (size_t i = 0; i < offsets.size(); ++i)
+        {
+            while (pos_diff_len_iter != pos_diff_len.end())
+            {
+                if (pos_diff_len_iter->first + 1 > offsets[i])
+                    break;
+                diff += pos_diff_len_iter->second;
+                ++pos_diff_len_iter;
+            }
+            res_offsets[i] = offsets[i] + diff;
+        }
+    }*/
 }
 
 template <char not_case_lower_bound, char not_case_upper_bound, int to_case(int)>
 void TiDBLowerUpperUTF8Impl<not_case_lower_bound, not_case_upper_bound, to_case>::vectorFixed(
-    const ColumnString::Chars_t & data,
+    const ColumnString::Chars_t & /*data*/,
     size_t /*n*/,
-    ColumnString::Chars_t & res_data)
+    ColumnString::Chars_t & /*res_data*/)
 {
-    res_data.resize(data.size());
-    array(data.data(), data.data() + data.size(), res_data.data());
-}
-
-template <char not_case_lower_bound, char not_case_upper_bound, int to_case(int)>
-void TiDBLowerUpperUTF8Impl<not_case_lower_bound, not_case_upper_bound, to_case>::constant(
-    const std::string & data,
-    std::string & res_data)
-{
-    res_data.resize(data.size());
-    array(
-        reinterpret_cast<const UInt8 *>(data.data()),
-        reinterpret_cast<const UInt8 *>(data.data() + data.size()),
-        reinterpret_cast<UInt8 *>(&res_data[0]));
-}
-
-template <char not_case_lower_bound, char not_case_upper_bound, int to_case(int)>
-void TiDBLowerUpperUTF8Impl<not_case_lower_bound, not_case_upper_bound, to_case>::toCase(
-    const UInt8 *& src,
-    const UInt8 * src_end,
-    UInt8 *& dst)
-{
-    toCaseImplTiDB<not_case_lower_bound, not_case_upper_bound, ascii_upper_bound, flip_case_mask, to_case>(
-        src,
-        src_end,
-        dst);
-}
-
-template <char not_case_lower_bound, char not_case_upper_bound, int to_case(int)>
-void TiDBLowerUpperUTF8Impl<not_case_lower_bound, not_case_upper_bound, to_case>::array(
-    const UInt8 * src,
-    const UInt8 * src_end,
-    UInt8 * dst)
-{
-    lowerUpperUTF8ArrayImplTiDB<not_case_lower_bound, not_case_upper_bound, ascii_upper_bound, flip_case_mask, to_case>(
-        src,
-        src_end,
-        dst);
+    throw Exception("Cannot apply function TiDBLowerUpperUTF8 to fixed string.", ErrorCodes::ILLEGAL_COLUMN);
 }
 
 /** If the string is encoded in UTF-8, then it selects a substring of code points in it.
