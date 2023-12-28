@@ -732,8 +732,9 @@ try
 
     // start 10 queries
     {
+        size_t query_num = 10;
         std::vector<std::tuple<MPPGatherId, BlockInputStreamPtr>> queries;
-        for (size_t i = 0; i < 10; ++i)
+        for (size_t i = 0; i < query_num; ++i)
         {
             auto properties = DB::tests::getDAGPropertiesForTest(serverNum());
             MPPGatherId gather_id(
@@ -752,13 +753,13 @@ try
                         .join(context.scan("test_db", "r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")}),
                     properties)));
         }
-        for (size_t i = 0; i < 10; ++i)
+        for (size_t i = 0; i < query_num; ++i)
         {
             auto gather_id = std::get<0>(queries[i]);
             EXPECT_TRUE(assertQueryActive(gather_id.query_id));
         }
 
-        for (size_t i = 0; i < 10; ++i)
+        for (size_t i = 0; i < query_num; ++i)
         {
             auto gather_id = std::get<0>(queries[i]);
             MockComputeServerManager::instance().cancelGather(gather_id);
