@@ -18,6 +18,8 @@
 #include <Storages/KVStore/FFI/FileEncryption.h>
 #include <openssl/md5.h>
 
+#include <magic_enum.hpp>
+
 
 namespace DB
 {
@@ -30,13 +32,23 @@ BlockAccessCipherStreamPtr FileEncryptionInfo::createCipherStream(
     if (is_new_created_info && res == FileEncryptionRes::Disabled)
         return nullptr;
 
-    RUNTIME_CHECK_MSG(res != FileEncryptionRes::Error, "Failed to get encryption info.");
+    RUNTIME_CHECK_MSG(res != FileEncryptionRes::Error, "Failed to get encryption info, error message: {}", *error_msg);
     if (method == EncryptionMethod::Plaintext || method == EncryptionMethod::Unknown)
         return nullptr;
 
     const String & encryption_key = *key;
-    RUNTIME_CHECK_MSG(encryption_key.size() == DB::Encryption::keySize(method), "Encryption key size mismatch.");
-    RUNTIME_CHECK_MSG(iv->size() == DB::Encryption::blockSize(method), "Encryption iv size mismatch.");
+    RUNTIME_CHECK_MSG(
+        encryption_key.size() == DB::Encryption::keySize(method),
+        "Encryption key size mismatch, method: {}, key size: {}, expected size: {}.",
+        magic_enum::enum_name(method),
+        encryption_key.size(),
+        DB::Encryption::keySize(method));
+    RUNTIME_CHECK_MSG(
+        iv->size() == DB::Encryption::blockSize(method),
+        "Encryption iv size mismatch, method: {}, iv size: {}, expected size: {}.",
+        magic_enum::enum_name(method),
+        iv->size(),
+        DB::Encryption::blockSize(method));
     auto iv_high = readBigEndian<uint64_t>(reinterpret_cast<const char *>(iv->data()));
     auto iv_low = readBigEndian<uint64_t>(reinterpret_cast<const char *>(iv->data() + sizeof(uint64_t)));
     // Currently all encryption info are stored in one file called file.dict.
@@ -66,12 +78,26 @@ void FileEncryptionInfo::cipherPage(char * data, size_t data_size, PageIdU64 pag
     if (res == FileEncryptionRes::Disabled || method == EncryptionMethod::Plaintext
         || method == EncryptionMethod::Unknown)
         return;
-    RUNTIME_CHECK_MSG(res != FileEncryptionRes::Error, "Failed to get encryption info.");
+    RUNTIME_CHECK_MSG(
+        res != FileEncryptionRes::Error,
+        "Failed to get encryption info, error message: {}, page_id: {}",
+        *error_msg,
+        page_id);
 
     const String & encryption_key = *key;
     size_t block_size = DB::Encryption::blockSize(method);
-    RUNTIME_CHECK_MSG(encryption_key.size() == DB::Encryption::keySize(method), "Encryption key size mismatch.");
-    RUNTIME_CHECK_MSG(iv->size() == block_size, "Encryption iv size mismatch.");
+    RUNTIME_CHECK_MSG(
+        encryption_key.size() == DB::Encryption::keySize(method),
+        "Encryption key size mismatch, method: {}, key size: {}, expected size: {}.",
+        magic_enum::enum_name(method),
+        encryption_key.size(),
+        DB::Encryption::keySize(method));
+    RUNTIME_CHECK_MSG(
+        iv->size() == DB::Encryption::blockSize(method),
+        "Encryption iv size mismatch, method: {}, iv size: {}, expected size: {}.",
+        magic_enum::enum_name(method),
+        iv->size(),
+        DB::Encryption::blockSize(method));
     auto iv_high = readBigEndian<uint64_t>(reinterpret_cast<const char *>(iv->data()));
     iv_high ^= page_id;
     unsigned char new_iv[block_size];

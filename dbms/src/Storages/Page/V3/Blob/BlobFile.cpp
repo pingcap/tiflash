@@ -42,7 +42,9 @@ BlobFile::BlobFile(
         getEncryptionPath(),
         false,
         /*create_new_encryption_info_*/ !file_in_disk.exists(),
-        /*skip_encryption*/ file_provider->isKeyspaceEncryptionEnabled());
+        /*skip_encryption*/ file_provider->isKeyspaceEncryptionEnabled()
+        // When keyspace encryption is enabled, we encrypt the page data instead of the whole BlobFile
+    );
 
     file_size = file_in_disk.getSize();
     {
