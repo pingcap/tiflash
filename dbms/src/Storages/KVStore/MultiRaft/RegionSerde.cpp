@@ -38,7 +38,6 @@ enum class RegionPersistVersion
 {
     V1 = 1,
     V2, // For eager gc
-    V3, // For flexible format
 };
 
 namespace RegionPersistFormat
@@ -59,7 +58,7 @@ constexpr MaybeRegionPersistExtension UNUSED_EXTENSION_NUMBER_FOR_TEST = 99999;
 static_assert(!magic_enum::enum_contains<RegionPersistExtension>(UNUSED_EXTENSION_NUMBER_FOR_TEST));
 static_assert(std::is_same_v<MaybeRegionPersistExtension, UInt32>);
 
-const UInt32 Region::CURRENT_VERSION = static_cast<UInt64>(RegionPersistVersion::V3);
+const UInt32 Region::CURRENT_VERSION = static_cast<UInt64>(RegionPersistVersion::V2);
 
 std::pair<MaybeRegionPersistExtension, UInt32> getPersistExtensionTypeAndLength(ReadBuffer & buf)
 {
