@@ -91,6 +91,7 @@ public:
 
     LoggerPtr log;
 
+    // To count how many threads are waitting to add tasks.
     std::atomic<Int64> add_waittings{0};
 };
 } // namespace DB::DM
