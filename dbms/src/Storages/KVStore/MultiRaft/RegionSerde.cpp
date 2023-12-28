@@ -84,7 +84,8 @@ std::pair<RegionPersistFormat, UInt32> getPersistExtensionTypeAndLength(ReadBuff
     return std::make_pair(flag, size);
 }
 
-size_t writePersistExtension(WriteBuffer & wb, UInt32 flag_encoded, const char * data, UInt32 size)
+// Don't call directly. Also used to write a flag which can't be parsed by RegionPersistFormat.
+size_t writePersistExtensionImpl(WriteBuffer & wb, UInt32 flag_encoded, const char * data, UInt32 size)
 {
     auto total_size = writeBinary2(flag_encoded, wb);
     total_size += writeBinary2(size, wb);
@@ -107,7 +108,7 @@ size_t writePersistExtension(WriteBuffer & wb, RegionPersistFormat flag, const c
     }
     else
     {
-        return writePersistExtension(wb, flag_encoded, data, size);
+        return writePersistExtensionImpl(wb, flag_encoded, data, size);
     }
 }
 
@@ -163,12 +164,12 @@ std::tuple<size_t, UInt64> Region::serialize(WriteBuffer & buf) const
                 if (value & 2)
                 {
                     std::string s = "kkk";
-                    total_size += writePersistExtension(buf, UNUSED_EXTENSION_NUMBER_FOR_TEST, s.data(), s.size());
+                    total_size += writePersistExtensionImpl(buf, UNUSED_EXTENSION_NUMBER_FOR_TEST, s.data(), s.size());
                 }
                 if (value & 4)
                 {
                     std::string s = "zzz";
-                    total_size += writePersistExtension(buf, UNUSED_EXTENSION_NUMBER_FOR_TEST, s.data(), s.size());
+                    total_size += writePersistExtensionImpl(buf, UNUSED_EXTENSION_NUMBER_FOR_TEST, s.data(), s.size());
                 }
             }
         });
@@ -201,7 +202,8 @@ RegionPtr Region::deserialize(ReadBuffer & buf, const TiFlashRaftProxyHelper * p
 
     if (current_version <= 1 && binary_version > current_version) {
         // Conform to https://github.com/pingcap/tiflash/blob/43f809fffde22d0af4c519be4546a5bf4dde30a2/dbms/src/Storages/KVStore/Region.cpp#L197
-        // Includes only x(where x > 1) -> 1
+        // When downgrade from x(where x > 1) -> 1, the old version will throw with "unexpected version".
+        // So we will also throw here.
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Don't support downgrading from {} to {}", binary_version, current_version);
     }
     const auto binary_version_decoded = magic_enum::enum_cast<RegionPersistVersion>(binary_version);
