@@ -42,18 +42,16 @@ public:
         const PhysicalPlanNodePtr & build_,
         const JoinPtr & join_ptr_,
         const ExpressionActionsPtr & probe_side_prepare_actions_,
-        const ExpressionActionsPtr & build_side_prepare_actions_,
-        const Block & sample_block_)
+        const ExpressionActionsPtr & build_side_prepare_actions_)
         : PhysicalBinary(executor_id_, PlanType::Join, schema_, fine_grained_shuffle_, req_id, probe_, build_)
         , join_ptr(join_ptr_)
         , probe_side_prepare_actions(probe_side_prepare_actions_)
         , build_side_prepare_actions(build_side_prepare_actions_)
-        , sample_block(sample_block_)
     {}
 
     void buildPipeline(PipelineBuilder & builder, Context & context, PipelineExecutorContext & exec_context) override;
 
-    void finalize(const Names & parent_require) override;
+    void finalizeImpl(const Names & parent_require) override;
 
     const Block & getSampleBlock() const override;
 
@@ -73,7 +71,5 @@ private:
 
     ExpressionActionsPtr probe_side_prepare_actions;
     ExpressionActionsPtr build_side_prepare_actions;
-
-    Block sample_block;
 };
 } // namespace DB

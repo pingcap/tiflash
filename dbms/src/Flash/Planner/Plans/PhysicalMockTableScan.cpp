@@ -176,7 +176,7 @@ void PhysicalMockTableScan::buildPipelineExecGroupImpl(
     }
 }
 
-void PhysicalMockTableScan::finalize(const Names & parent_require)
+void PhysicalMockTableScan::finalizeImpl(const Names & parent_require)
 {
     FinalizeHelper::checkSchemaContainsParentRequire(schema, parent_require);
 }

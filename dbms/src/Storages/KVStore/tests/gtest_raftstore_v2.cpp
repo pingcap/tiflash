@@ -13,8 +13,7 @@
 // limitations under the License.
 
 #include <Storages/KVStore/Read/LearnerRead.h>
-
-#include "region_kvstore_test.h"
+#include <Storages/KVStore/tests/region_kvstore_test.h>
 
 namespace DB
 {

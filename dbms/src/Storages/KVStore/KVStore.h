@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Interpreters/Context_fwd.h>
 #include <Storages/DeltaMerge/DeltaMergeInterfaces.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/KVStore/Decode/RegionDataRead.h>
@@ -32,7 +33,6 @@ struct TableInfo;
 }
 namespace DB
 {
-class Context;
 namespace RegionBench
 {
 extern void concurrentBatchInsert(const TiDB::TableInfo &, Int64, Int64, Int64, UInt64, UInt64, Context &);
@@ -357,7 +357,7 @@ private:
 
     void persistRegion(
         const Region & region,
-        std::optional<const RegionTaskLock *> region_task_lock,
+        const RegionTaskLock & region_task_lock,
         PersistRegionReason reason,
         const char * extra_msg) const;
 
