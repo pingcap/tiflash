@@ -41,85 +41,53 @@ enum class RegionPersistVersion
     V3, // For flexible format
 };
 
-enum class RegionPersistFormat : UInt32
+namespace RegionPersistFormat
 {
-    EagerTruncate = 1, // Compat origin `HAS_EAGER_TRUNCATE_INDEX`
-    Finished = 2, // Finished mark
-    Unrecognizable = 3, // Can't recognize, maybe from recent versions
-    TEST = 4,
+static constexpr UInt32 HAS_EAGER_TRUNCATE_INDEX = 0x01;
+// The upper bits are used to store length of extensions. DO NOT USE!
+} // namespace RegionPersistFormat
+
+using MaybeRegionPersistExtension = UInt32;
+enum class RegionPersistExtension : MaybeRegionPersistExtension
+{
+    TEST = 2,
+    // It should always be equal to the maximum supported type + 1
+    MaxKnownFlag = 3,
 };
 
-constexpr UInt32 UNUSED_EXTENSION_NUMBER_FOR_TEST = 99999;
-static_assert(!magic_enum::enum_contains<RegionPersistFormat>(UNUSED_EXTENSION_NUMBER_FOR_TEST));
-static_assert(std::is_same_v<decltype(magic_enum::enum_underlying(RegionPersistFormat::EagerTruncate)), UInt32>);
+constexpr MaybeRegionPersistExtension UNUSED_EXTENSION_NUMBER_FOR_TEST = 99999;
+static_assert(!magic_enum::enum_contains<RegionPersistExtension>(UNUSED_EXTENSION_NUMBER_FOR_TEST));
+static_assert(std::is_same_v<MaybeRegionPersistExtension, UInt32>);
 
 const UInt32 Region::CURRENT_VERSION = static_cast<UInt64>(RegionPersistVersion::V3);
 
-std::pair<RegionPersistFormat, UInt32> getPersistExtensionTypeAndLength(ReadBuffer & buf)
+std::pair<MaybeRegionPersistExtension, UInt32> getPersistExtensionTypeAndLength(ReadBuffer & buf)
 {
-    auto flag_encoded = readBinary2<UInt32>(buf);
-    auto maybe_flag = magic_enum::enum_cast<RegionPersistFormat>(flag_encoded);
-
-    if (maybe_flag.has_value() && maybe_flag.value() == RegionPersistFormat::EagerTruncate)
-    {
-        // Compat
-        return std::make_pair(RegionPersistFormat::EagerTruncate, sizeof(UInt64));
-    }
-
-    if (!maybe_flag.has_value())
-    {
-        auto size = readBinary2<UInt32>(buf);
-        return std::make_pair(RegionPersistFormat::Unrecognizable, size);
-    }
-    auto flag = maybe_flag.value();
-    UInt32 size = 0;
-    if (flag == RegionPersistFormat::Finished)
-    {
-        // size = 0
-    }
-    else
-    {
-        size = readBinary2<UInt32>(buf);
-    }
-    return std::make_pair(flag, size);
+    auto ext_type = readBinary2<MaybeRegionPersistExtension>(buf);
+    auto size = readBinary2<UInt32>(buf);
+    // Note `ext_type` may not valid in RegionPersistExtension
+    return std::make_pair(ext_type, size);
 }
 
-// Don't call directly. Also used to write a flag which can't be parsed by RegionPersistFormat.
-size_t writePersistExtensionImpl(WriteBuffer & wb, UInt32 flag_encoded, const char * data, UInt32 size)
+size_t writePersistExtension(
+    UInt32 & cnt,
+    WriteBuffer & wb,
+    MaybeRegionPersistExtension ext_type,
+    const char * data,
+    UInt32 size)
 {
-    auto total_size = writeBinary2(flag_encoded, wb);
+    auto total_size = writeBinary2(ext_type, wb);
     total_size += writeBinary2(size, wb);
     wb.write(data, size);
     total_size += size;
+    cnt++;
     return total_size;
-}
-
-size_t writePersistExtension(WriteBuffer & wb, RegionPersistFormat flag, const char * data, UInt32 size)
-{
-    RUNTIME_CHECK(flag != RegionPersistFormat::Finished);
-    auto flag_encoded = magic_enum::enum_underlying(flag);
-    if (flag == RegionPersistFormat::EagerTruncate)
-    {
-        // Compat
-        auto total_size = writeBinary2(flag_encoded, wb);
-        wb.write(data, size);
-        total_size += size;
-        return total_size;
-    }
-    else
-    {
-        return writePersistExtensionImpl(wb, flag_encoded, data, size);
-    }
-}
-
-size_t writePersistExtensionSuffix(WriteBuffer & wb)
-{
-    return writeBinary2(magic_enum::enum_underlying(RegionPersistFormat::Finished), wb);
 }
 
 std::tuple<size_t, UInt64> Region::serialize(WriteBuffer & buf) const
 {
     auto binary_version = Region::CURRENT_VERSION;
+    UInt32 expected_extension_count = 0;
     fiu_do_on(FailPoints::force_region_persist_version, {
         if (auto v = FailPointHelper::getFailPointVal(FailPoints::force_region_persist_version); v)
         {
@@ -145,13 +113,13 @@ std::tuple<size_t, UInt64> Region::serialize(WriteBuffer & buf) const
         if (binary_version >= 2)
         {
             static_assert(sizeof(eager_truncated_index) == sizeof(UInt64));
-            WriteBufferFromOwnString sub_buf;
-            auto sub_size = writeBinary2(eager_truncated_index, sub_buf);
-            RUNTIME_CHECK(sub_size, sizeof(UInt64));
-            auto s = sub_buf.releaseStr();
-            total_size += writePersistExtension(buf, RegionPersistFormat::EagerTruncate, s.data(), s.size());
+            UInt32 flags = RegionPersistFormat::HAS_EAGER_TRUNCATE_INDEX;
+            flags |= (expected_extension_count << 1);
+            total_size += writeBinary2(flags, buf);
+            total_size += writeBinary2(eager_truncated_index, buf);
         }
 
+        UInt32 actual_extension_count = 0;
         fiu_do_on(FailPoints::force_region_persist_extension_field, {
             if (auto v = FailPointHelper::getFailPointVal(FailPoints::force_region_persist_extension_field); v)
             {
@@ -159,25 +127,40 @@ std::tuple<size_t, UInt64> Region::serialize(WriteBuffer & buf) const
                 if (value & 1)
                 {
                     std::string s = "abcd";
-                    total_size += writePersistExtension(buf, RegionPersistFormat::TEST, s.data(), s.size());
+                    total_size += writePersistExtension(
+                        actual_extension_count,
+                        buf,
+                        magic_enum::enum_underlying(RegionPersistExtension::TEST),
+                        s.data(),
+                        s.size());
                 }
                 if (value & 2)
                 {
                     std::string s = "kkk";
-                    total_size += writePersistExtensionImpl(buf, UNUSED_EXTENSION_NUMBER_FOR_TEST, s.data(), s.size());
+                    total_size += writePersistExtension(
+                        actual_extension_count,
+                        buf,
+                        UNUSED_EXTENSION_NUMBER_FOR_TEST,
+                        s.data(),
+                        s.size());
                 }
                 if (value & 4)
                 {
                     std::string s = "zzz";
-                    total_size += writePersistExtensionImpl(buf, UNUSED_EXTENSION_NUMBER_FOR_TEST, s.data(), s.size());
+                    total_size += writePersistExtension(
+                        actual_extension_count,
+                        buf,
+                        UNUSED_EXTENSION_NUMBER_FOR_TEST,
+                        s.data(),
+                        s.size());
                 }
             }
         });
+        RUNTIME_CHECK(
+            expected_extension_count == actual_extension_count,
+            expected_extension_count,
+            actual_extension_count);
 
-        if (binary_version >= 3)
-        {
-            total_size += writePersistExtensionSuffix(buf);
-        }
         // serialize data
         total_size += data.serialize(buf);
     }
@@ -204,14 +187,18 @@ RegionPtr Region::deserialize(ReadBuffer & buf, const TiFlashRaftProxyHelper * p
         }
     });
 
-    if (current_version <= 1 && binary_version > current_version) {
+    if (current_version <= 1 && binary_version > current_version)
+    {
         // Conform to https://github.com/pingcap/tiflash/blob/43f809fffde22d0af4c519be4546a5bf4dde30a2/dbms/src/Storages/KVStore/Region.cpp#L197
         // When downgrade from x(where x > 1) -> 1, the old version will throw with "unexpected version".
         // So we will also throw here.
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "Don't support downgrading from {} to {}", binary_version, current_version);
+        throw Exception(
+            ErrorCodes::LOGICAL_ERROR,
+            "Don't support downgrading from {} to {}",
+            binary_version,
+            current_version);
     }
     const auto binary_version_decoded = magic_enum::enum_cast<RegionPersistVersion>(binary_version);
-    // Before, it checks if the version is V1 or V2.
     if (!binary_version_decoded.has_value())
     {
         LOG_DEBUG(DB::Logger::get(), "Maybe downgrade from {} to {}", binary_version, current_version);
@@ -221,31 +208,17 @@ RegionPtr Region::deserialize(ReadBuffer & buf, const TiFlashRaftProxyHelper * p
     RegionPtr region = std::make_shared<Region>(RegionMeta::deserialize(buf), proxy_helper);
 
     // Try deserialize flag
-    if (binary_version == 2)
+    if (binary_version >= 2)
     {
-        // No Finished mark in version 2.
-        auto flag = readBinary2<UInt32>(buf);
-        if (magic_enum::enum_cast<RegionPersistFormat>(flag) == RegionPersistFormat::EagerTruncate)
+        auto flags = readBinary2<UInt32>(buf);
+        if ((flags & RegionPersistFormat::HAS_EAGER_TRUNCATE_INDEX) != 0)
         {
             region->eager_truncated_index = readBinary2<UInt64>(buf);
         }
-    }
-    else if (binary_version > 2)
-    {
-        while (true)
+        UInt32 extension_cnt = flags >> 1;
+        for (UInt32 i = 0; i < extension_cnt; i++)
         {
-            auto [flag, length] = getPersistExtensionTypeAndLength(buf);
-            if (flag == RegionPersistFormat::Finished)
-            {
-                break;
-            }
-            if (flag == RegionPersistFormat::EagerTruncate)
-            {
-                region->eager_truncated_index = readBinary2<UInt64>(buf);
-                continue;
-            }
-
-            // Hook in test before Unrecognizable
+            auto [extension_type, length] = getPersistExtensionTypeAndLength(buf);
             bool debug_continue = false;
             using bundle_type = std::pair<int, std::shared_ptr<int>>;
             fiu_do_on(FailPoints::force_region_read_extension_field, {
@@ -254,7 +227,7 @@ RegionPtr Region::deserialize(ReadBuffer & buf, const TiFlashRaftProxyHelper * p
                     auto bundle = std::any_cast<bundle_type>(v.value());
                     if (bundle.first & 1)
                     {
-                        if (flag == RegionPersistFormat::TEST)
+                        if (extension_type == magic_enum::enum_underlying(RegionPersistExtension::TEST))
                         {
                             RUNTIME_CHECK(length == 4);
                             RUNTIME_CHECK(readStringWithLength(buf, 4) == "abcd");
@@ -274,13 +247,13 @@ RegionPtr Region::deserialize(ReadBuffer & buf, const TiFlashRaftProxyHelper * p
                 continue;
             }
 
-            if (flag == RegionPersistFormat::Unrecognizable)
+            if (extension_type >= magic_enum::enum_underlying(RegionPersistExtension::MaxKnownFlag))
             {
                 buf.ignore(length);
                 continue;
             }
 
-            RUNTIME_CHECK_MSG(false, "Unhandled extension {} length={}", magic_enum::enum_name(flag), length);
+            RUNTIME_CHECK_MSG(false, "Unhandled extension {} length={}", extension_type, length);
         }
     }
 
