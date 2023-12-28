@@ -623,7 +623,7 @@ TIFLASH_DECLARE_MULTITARGET_FUNCTION_TP(
             {
                 while (pos_diff_len_iter != pos_diff_len.end())
                 {
-                    if (pos_diff_len_iter->first > src_offsets[i])
+                    if (pos_diff_len_iter->first + 1 > src_offsets[i])
                         break;
                     diff += pos_diff_len_iter->second;
                     ++pos_diff_len_iter;
@@ -659,7 +659,8 @@ void TiDBLowerUpperUTF8Impl<not_case_lower_bound, not_case_upper_bound, to_case>
     const IColumn::Offsets & offsets,
     ColumnString::Chars_t & res_data,
     IColumn::Offsets & res_offsets)
-{lowerUpperUTF8ArrayImplTiDB<not_case_lower_bound, not_case_upper_bound, ascii_upper_bound, flip_case_mask, to_case>(
+{
+    lowerUpperUTF8ArrayImplTiDB<not_case_lower_bound, not_case_upper_bound, ascii_upper_bound, flip_case_mask, to_case>(
         data,
         offsets,
         res_data,
