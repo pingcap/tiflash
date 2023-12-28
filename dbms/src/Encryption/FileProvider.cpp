@@ -207,7 +207,7 @@ void FileProvider::encryptPage(
     PageIdU64 page_id)
 {
     const auto info = key_manager->getFile(encryption_path_.full_path);
-    info.cipherPage<true>(data, data_size, page_id);
+    info.cipherPage</*is_encrypt*/ true>(data, data_size, page_id);
 }
 
 void FileProvider::decryptPage(
@@ -217,7 +217,7 @@ void FileProvider::decryptPage(
     PageIdU64 page_id)
 {
     const auto info = key_manager->getFile(encryption_path_.full_path);
-    info.cipherPage<false>(data, data_size, page_id);
+    info.cipherPage</*is_encrypt*/ false>(data, data_size, page_id);
 }
 
 void FileProvider::linkEncryptionInfo(
