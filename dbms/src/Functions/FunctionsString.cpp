@@ -458,17 +458,28 @@ __attribute__((always_inline)) inline void toCaseImplTiDB(
         static const Poco::UTF8Encoding utf8;
 
         int src_sequence_length = utf8.sequenceLength(src, 1);
+        assert(src_sequence_length > 0);
         if unlikely (src + src_sequence_length > src_end)
         {
-            /// If this row has invalid utf-8 character, just copy it to dst string and do not influence others
+            /// If this row has invalid utf-8 characters, just copy it to dst string and do not influence others
             size_t dst_size = dst_data.size();
             dst_data.resize(src_end - src + dst_size);
-            while (src < src_end)
-                dst_data[dst_size++] = *src++;
+            memcpy(&dst_data[dst_size], src, src_end - src);
+            src = src_end;
             return;
         }
 
-        int dst_ch = to_case(utf8.convert(src));
+        int src_ch = utf8.convert(src);
+        if unlikely (src_ch == -1)
+        {
+            /// If this row invalid utf-8 characters, just copy it to dst string and do not influence others
+            size_t dst_size = dst_data.size();
+            dst_data.resize(dst_size + src_sequence_length);
+            memcpy(&dst_data[dst_size], src, src_sequence_length);
+            src += src_sequence_length;
+            return;
+        }
+        int dst_ch = to_case(src_ch);
         int dst_sequence_length = utf8.convert(dst_ch, nullptr, 0);
         size_t dst_size = dst_data.size();
         dst_data.resize(dst_size + dst_sequence_length);
@@ -575,12 +586,15 @@ TIFLASH_DECLARE_MULTITARGET_FUNCTION_TP(
     void,
     lowerUpperUTF8ArrayImplTiDB,
     (src_data, src_offsets, dst_data, dst_offsets),
-    (const ColumnString::Chars_t & src_data, const IColumn::Offsets & src_offsets, ColumnString::Chars_t & dst_data, IColumn::Offsets & dst_offsets),
+    (const ColumnString::Chars_t & src_data,
+     const IColumn::Offsets & src_offsets,
+     ColumnString::Chars_t & dst_data,
+     IColumn::Offsets & dst_offsets),
     {
         dst_data.reserve(src_data.size());
         dst_offsets.assign(src_offsets);
         static const auto flip_mask = SimdWord::template fromSingle<int8_t>(flip_case_mask);
-        const UInt8 * src = src_data.data(), * src_end = src_data.data() + src_data.size();
+        const UInt8 *src = src_data.data(), *src_end = src_data.data() + src_data.size();
         auto * begin = src;
         bool is_diff_offsets = false;
         size_t offsets_pos = 0;
@@ -602,7 +616,6 @@ TIFLASH_DECLARE_MULTITARGET_FUNCTION_TP(
                 dst_data.resize(dst_size + WORD_SIZE);
                 word.toUnaligned(&dst_data[dst_size]);
                 src += WORD_SIZE;
-                LOG_INFO(&Poco::Logger::get("root"), "haha111111!");
             }
             else
             {
@@ -628,7 +641,6 @@ TIFLASH_DECLARE_MULTITARGET_FUNCTION_TP(
                         break;
                     ++offsets_pos;
                 }
-                LOG_INFO(&Poco::Logger::get("root"), "haha222222! {}", WORD_SIZE);
             }
         }
 
@@ -657,17 +669,12 @@ TIFLASH_DECLARE_MULTITARGET_FUNCTION_TP(
 
         if unlikely (is_diff_offsets)
         {
-            LOG_INFO(&Poco::Logger::get("root"), "haha444444!");
             Int64 diff = 0;
             for (size_t i = 0; i < dst_offsets.size(); ++i)
             {
                 diff += (Int64)dst_offsets[i] - (Int64)src_offsets[i];
                 dst_offsets[i] = src_offsets[i] + diff;
             }
-        }
-        else
-        {
-            LOG_INFO(&Poco::Logger::get("root"), "haha333333!");
         }
     })
 } // namespace
@@ -703,37 +710,6 @@ void TiDBLowerUpperUTF8Impl<not_case_lower_bound, not_case_upper_bound, to_case>
         offsets,
         res_data,
         res_offsets);
-    /*res_data.reserve(data.size());
-    size_t src_pos = 0, src_size = data.size(), dst_pos = 0;
-    std::vector<std::pair<size_t, int>> pos_diff_len;
-    while (src_pos < src_size)
-        toCaseImplTiDB<not_case_lower_bound, not_case_upper_bound, ascii_upper_bound, flip_case_mask, to_case>(
-            data, src_pos,
-            res_data, dst_pos, pos_diff_len);
-
-    if likely (pos_diff_len.empty())
-    {
-        printf("hoho!\n");
-        res_offsets.assign(offsets);
-    }
-    else
-    {
-        printf("haha!\n");
-        res_offsets.resize(offsets.size());
-        Int64 diff = 0;
-        auto pos_diff_len_iter = pos_diff_len.begin();
-        for (size_t i = 0; i < offsets.size(); ++i)
-        {
-            while (pos_diff_len_iter != pos_diff_len.end())
-            {
-                if (pos_diff_len_iter->first + 1 > offsets[i])
-                    break;
-                diff += pos_diff_len_iter->second;
-                ++pos_diff_len_iter;
-            }
-            res_offsets[i] = offsets[i] + diff;
-        }
-    }*/
 }
 
 template <char not_case_lower_bound, char not_case_upper_bound, int to_case(int)>

@@ -68,9 +68,12 @@ TEST_F(StringLower, lowerAll)
            "İaSdİİİİdDS",
            "ΑΒΓΔΕΖΗΘικΛΜΝΞΟΠΡΣτΥΦΧΨωΣ",
            "ȺDȺİȺaȺȾOİȺ",
+           "TEST_WRONG_UTF8_1\x80\xe0\x21",
            "▲Α▼Βγ➨ΔΕ☎ΖΗ✂ΘΙ€ΚΛ♫ΜΝ✓ΞΟ✚ΠΡ℉ΣΤ♥ΥΦ♖ΧΨ♘Ω★Σ✕",
            "ⱮⱭȺΩABCDEFGHIJKLMNOPꞍaȾ",
+           "TEST_WRONG_UTF8_2\xf1\x22",
            "թՓՁՋՐՉՃԺԾՔՈԵՌՏԸՒԻՕՊԱՍԴՖԳՀՅԿԼԽԶՂՑՎԲՆմՇ"};
+
     std::vector<std::optional<String>> lower_case_strings
         = {"one week's time test",
            "abc测试def",
@@ -80,8 +83,10 @@ TEST_F(StringLower, lowerAll)
            "iasdiiiidds",
            "αβγδεζηθικλμνξοπρστυφχψωσ",
            "ⱥdⱥiⱥaⱥⱦoiⱥ",
+           "test_wrong_utf8_1\x80\xe0\x21",
            "▲α▼βγ➨δε☎ζη✂θι€κλ♫μν✓ξο✚πρ℉στ♥υφ♖χψ♘ω★σ✕",
            "ɱɑⱥωabcdefghijklmnopɥaⱦ",
+           "test_wrong_utf8_2\xf1\x22",
            "թփձջրչճժծքոեռտըւիօպասդֆգհյկլխզղցվբնմշ"};
 
 
