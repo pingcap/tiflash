@@ -185,6 +185,10 @@ std::tuple<size_t, UInt64> Region::serialize(WriteBuffer & buf) const
     return {total_size, applied_index};
 }
 
+/// Currently supports:
+/// 1. Vx -> Vy where x >= 2, y >= 3
+/// 2. Vx -> V2 where x >= 2, in 7.5.0
+/// 3. Vx -> V2 where x >= 2, in later 7.5
 RegionPtr Region::deserialize(ReadBuffer & buf, const TiFlashRaftProxyHelper * proxy_helper)
 {
     const auto binary_version = readBinary2<UInt32>(buf);
