@@ -524,4 +524,10 @@ const RegionState & RegionMeta::getRegionState() const
     std::lock_guard lock(mutex);
     return region_state;
 }
+
+RegionState & RegionMeta::debugMutRegionState()
+{
+    std::lock_guard lock(mutex);
+    return region_state;
+}
 } // namespace DB

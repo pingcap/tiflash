@@ -15,6 +15,7 @@
 #include <Common/FailPoint.h>
 #include <Common/Logger.h>
 #include <Common/Stopwatch.h>
+#include <Common/SyncPoint/Ctl.h>
 #include <IO/ReadBufferFromFile.h>
 #include <IO/WriteBufferFromFile.h>
 #include <Interpreters/Context.h>
@@ -32,6 +33,7 @@
 #include <common/types.h>
 
 #include <ext/scope_guard.h>
+#include <future>
 
 namespace DB
 {
@@ -40,6 +42,7 @@ namespace FailPoints
 extern const char force_region_persist_version[];
 extern const char force_region_persist_extension_field[];
 extern const char force_region_read_extension_field[];
+extern const char pause_when_persist_region[];
 } // namespace FailPoints
 
 namespace tests
@@ -456,6 +459,75 @@ protected:
     LoggerPtr log;
 };
 
+TEST_P(RegionPersisterTest, Concurrency)
+try
+{
+    RegionManager region_manager;
+
+    auto ctx = TiFlashTestEnv::getGlobalContext();
+
+    RegionMap regions;
+    const TableID table_id = 100;
+
+    PageStorageConfig config;
+    config.file_roll_size = 128 * MB;
+
+    UInt64 diff = 0;
+    RegionPersister persister(ctx);
+    persister.restore(*mocked_path_pool, nullptr, config);
+
+    // Persist region by region
+    const RegionID region_100 = 100;
+    FailPointHelper::enableFailPoint(FailPoints::pause_when_persist_region, region_100);
+    SCOPE_EXIT({ FailPointHelper::disableFailPoint(FailPoints::pause_when_persist_region); });
+
+    auto sp_persist_region_100 = SyncPointCtl::enableInScope("before_RegionPersister::persist_write_done");
+    auto th_persist_region_100 = std::async([&]() {
+        auto region_task_lock = region_manager.genRegionTaskLock(region_100);
+
+        auto region = std::make_shared<Region>(createRegionMeta(region_100, table_id));
+        TiKVKey key = RecordKVFormat::genKey(table_id, region_100, diff++);
+        region->insert(ColumnFamilyType::Default, TiKVKey::copyFrom(key), TiKVValue("value1"));
+        region->insert(ColumnFamilyType::Write, TiKVKey::copyFrom(key), RecordKVFormat::encodeWriteCfValue('P', 0));
+        region->insert(
+            ColumnFamilyType::Lock,
+            TiKVKey::copyFrom(key),
+            RecordKVFormat::encodeLockCfValue('P', "", 0, 0));
+
+        persister.persist(*region, region_task_lock);
+
+        regions.emplace(region->id(), region);
+    });
+    LOG_INFO(log, "paused before persisting region 100");
+    sp_persist_region_100.waitAndPause();
+
+    LOG_INFO(log, "before persisting region 101");
+    const RegionID region_101 = 101;
+    {
+        auto region_task_lock = region_manager.genRegionTaskLock(region_101);
+
+        auto region = std::make_shared<Region>(createRegionMeta(region_101, table_id));
+        TiKVKey key = RecordKVFormat::genKey(table_id, region_101, diff++);
+        region->insert(ColumnFamilyType::Default, TiKVKey::copyFrom(key), TiKVValue("value1"));
+        region->insert(ColumnFamilyType::Write, TiKVKey::copyFrom(key), RecordKVFormat::encodeWriteCfValue('P', 0));
+        region->insert(
+            ColumnFamilyType::Lock,
+            TiKVKey::copyFrom(key),
+            RecordKVFormat::encodeLockCfValue('P', "", 0, 0));
+
+        persister.persist(*region, region_task_lock);
+
+        regions.emplace(region->id(), region);
+    }
+    LOG_INFO(log, "after persisting region 101");
+
+    sp_persist_region_100.next();
+    th_persist_region_100.get();
+
+    LOG_INFO(log, "finished");
+}
+CATCH
+
 TEST_P(RegionPersisterTest, persister)
 try
 {
@@ -471,12 +543,14 @@ try
     config.file_roll_size = 128 * MB;
     {
         UInt64 diff = 0;
-        RegionPersister persister(ctx, region_manager);
+        RegionPersister persister(ctx);
         persister.restore(*mocked_path_pool, nullptr, config);
 
         // Persist region by region
         for (size_t i = 0; i < region_num; ++i)
         {
+            auto region_task_lock = region_manager.genRegionTaskLock(i);
+
             auto region = std::make_shared<Region>(createRegionMeta(i, table_id));
             TiKVKey key = RecordKVFormat::genKey(table_id, i, diff++);
             region->insert(ColumnFamilyType::Default, TiKVKey::copyFrom(key), TiKVValue("value1"));
@@ -486,7 +560,7 @@ try
                 TiKVKey::copyFrom(key),
                 RecordKVFormat::encodeLockCfValue('P', "", 0, 0));
 
-            persister.persist(*region);
+            persister.persist(*region, region_task_lock);
 
             regions.emplace(region->id(), region);
         }
@@ -516,7 +590,7 @@ try
 
     RegionMap new_regions;
     {
-        RegionPersister persister(ctx, region_manager);
+        RegionPersister persister(ctx);
         new_regions = persister.restore(*mocked_path_pool, nullptr, config);
 
         // check that only the last region (which write is not completed) is thrown away
@@ -557,7 +631,7 @@ try
     RegionMap regions;
     {
         UInt64 tso = 0;
-        RegionPersister persister(ctx, region_manager);
+        RegionPersister persister(ctx);
         persister.restore(*mocked_path_pool, nullptr, config);
 
         // Persist region
@@ -589,9 +663,11 @@ try
         std::vector<double> test_scales{0.5, 1.0, 1.5, 2.5};
         for (size_t idx = 0; idx < test_scales.size(); ++idx)
         {
+            auto region_task_lock = region_manager.genRegionTaskLock(region_id_base + idx);
+
             auto scale = test_scales[idx];
             auto region = gen_region_data(region_id_base + idx, config.blob_file_limit_size * scale);
-            persister.persist(*region);
+            persister.persist(*region, region_task_lock);
             regions.emplace(region->id(), region);
         }
         ASSERT_EQ(regions.size(), test_scales.size());
@@ -599,7 +675,7 @@ try
 
     RegionMap restored_regions;
     {
-        RegionPersister persister(ctx, region_manager);
+        RegionPersister persister(ctx);
         restored_regions = persister.restore(*mocked_path_pool, nullptr, config);
     }
     ASSERT_EQ(restored_regions.size(), regions.size());
