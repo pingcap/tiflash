@@ -160,7 +160,7 @@ try
 
     FailPointHelper::enableFailPoint(
         FailPoints::force_region_persist_version,
-        /*version*/ static_cast<UInt64>(1)); // format version = 1
+        std::make_pair(1, 0)); // format version = 1
     size_t region_ser_size = std::get<0>(region->serialize(write_buf));
     write_buf.next();
     write_buf.sync();
@@ -252,12 +252,16 @@ CATCH
 TEST_F(RegionSeriTest, FlexibleRestore)
 try
 {
+    auto ext_cnt_1 = 0;
+    auto ext_cnt_2 = 0;
+    auto ext_cnt_3 = 1;
+    auto ext_cnt_4 = 2;
     {
         auto counter = std::make_shared<int>(0);
         // V3 store, V3 load, no unrecognized fields
         auto region = std::make_shared<Region>(createRegionMeta(1001, 1));
         region->updateRaftLogEagerIndex(5678);
-        FailPointHelper::enableFailPoint(FailPoints::force_region_persist_version, static_cast<UInt64>(3));
+        FailPointHelper::enableFailPoint(FailPoints::force_region_persist_version, std::make_pair(3, ext_cnt_3));
         FailPointHelper::enableFailPoint(FailPoints::force_region_persist_extension_field, static_cast<int>(1));
         const auto path = dir_path + "/region.test";
         WriteBufferFromFile write_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_CREAT);
@@ -284,7 +288,7 @@ try
         // Downgrade. V4(whatever) store, V3 load, UNUSED_EXTENSION_NUMBER_FOR_TEST unrecognized.
         auto region = std::make_shared<Region>(createRegionMeta(1001, 1));
         region->updateRaftLogEagerIndex(5678);
-        FailPointHelper::enableFailPoint(FailPoints::force_region_persist_version, static_cast<UInt64>(4));
+        FailPointHelper::enableFailPoint(FailPoints::force_region_persist_version, std::make_pair(4, ext_cnt_4));
         // In V2, will also write UNUSED_EXTENSION_NUMBER_FOR_TEST.
         FailPointHelper::enableFailPoint(FailPoints::force_region_persist_extension_field, static_cast<int>(1 | 2));
         const auto path = dir_path + "/region2.test";
@@ -312,8 +316,8 @@ try
         // Downgrade. V4(whatever) store. V2 load. UNUSED_EXTENSION_NUMBER_FOR_TEST unrecognized.
         auto region = std::make_shared<Region>(createRegionMeta(1001, 1));
         region->updateRaftLogEagerIndex(5678);
-        FailPointHelper::enableFailPoint(FailPoints::force_region_persist_version, static_cast<UInt64>(4));
-        FailPointHelper::enableFailPoint(FailPoints::force_region_persist_extension_field, static_cast<int>(2));
+        FailPointHelper::enableFailPoint(FailPoints::force_region_persist_version, std::make_pair(4, ext_cnt_4));
+        FailPointHelper::enableFailPoint(FailPoints::force_region_persist_extension_field, static_cast<int>(1 | 2));
         const auto path = dir_path + "/region3.test";
         WriteBufferFromFile write_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_CREAT);
         size_t region_ser_size = std::get<0>(region->serialize(write_buf));
@@ -327,7 +331,7 @@ try
         auto new_region = Region::deserialize(read_buf);
         ASSERT_EQ(new_region->getRaftLogEagerGCRange().first, 5678);
         ASSERT_REGION_EQ(*new_region, *region);
-        ASSERT_EQ(*counter, 0);
+        ASSERT_EQ(*counter, 1); // For test
 
         FailPointHelper::disableFailPoint(FailPoints::force_region_persist_version);
         FailPointHelper::disableFailPoint(FailPoints::force_region_read_version);
@@ -339,7 +343,7 @@ try
         // Upgrade. V2 to V3. Added TEST
         auto region = std::make_shared<Region>(createRegionMeta(1001, 1));
         region->updateRaftLogEagerIndex(5678);
-        FailPointHelper::enableFailPoint(FailPoints::force_region_persist_version, static_cast<UInt64>(2));
+        FailPointHelper::enableFailPoint(FailPoints::force_region_persist_version, std::make_pair(2, ext_cnt_2));
         const auto path = dir_path + "/region4.test";
         WriteBufferFromFile write_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_CREAT);
         size_t region_ser_size = std::get<0>(region->serialize(write_buf));
@@ -364,7 +368,7 @@ try
         // Upgrade -> Upgrade -> Downgrade -> Downgrade
         auto region = std::make_shared<Region>(createRegionMeta(1001, 1));
         region->updateRaftLogEagerIndex(5678);
-        FailPointHelper::enableFailPoint(FailPoints::force_region_persist_version, static_cast<UInt64>(2));
+        FailPointHelper::enableFailPoint(FailPoints::force_region_persist_version, std::make_pair(2, ext_cnt_2));
         const auto path = dir_path + "/region5.test";
         WriteBufferFromFile write_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_CREAT);
         size_t region_ser_size = std::get<0>(region->serialize(write_buf));
@@ -373,7 +377,7 @@ try
         ASSERT_EQ(region_ser_size, (size_t)Poco::File(path).getSize());
 
         {
-            FailPointHelper::enableFailPoint(FailPoints::force_region_persist_version, static_cast<UInt64>(3));
+            FailPointHelper::enableFailPoint(FailPoints::force_region_persist_version, std::make_pair(3, ext_cnt_3));
             FailPointHelper::enableFailPoint(FailPoints::force_region_persist_extension_field, static_cast<int>(1));
             ReadBufferFromFile read_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_RDONLY);
             auto new_region = Region::deserialize(read_buf);
@@ -382,7 +386,7 @@ try
         }
 
         {
-            FailPointHelper::enableFailPoint(FailPoints::force_region_persist_version, static_cast<UInt64>(4));
+            FailPointHelper::enableFailPoint(FailPoints::force_region_persist_version, std::make_pair(4, ext_cnt_4));
             FailPointHelper::enableFailPoint(FailPoints::force_region_persist_extension_field, static_cast<int>(3));
             ReadBufferFromFile read_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_RDONLY);
             auto new_region = Region::deserialize(read_buf);
@@ -391,7 +395,7 @@ try
         }
 
         {
-            FailPointHelper::enableFailPoint(FailPoints::force_region_persist_version, static_cast<UInt64>(3));
+            FailPointHelper::enableFailPoint(FailPoints::force_region_persist_version, std::make_pair(3, ext_cnt_3));
             FailPointHelper::enableFailPoint(FailPoints::force_region_persist_extension_field, static_cast<int>(1));
             ReadBufferFromFile read_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_RDONLY);
             auto new_region = Region::deserialize(read_buf);
@@ -400,7 +404,7 @@ try
         }
 
         {
-            FailPointHelper::enableFailPoint(FailPoints::force_region_persist_version, static_cast<UInt64>(1));
+            FailPointHelper::enableFailPoint(FailPoints::force_region_persist_version, std::make_pair(1, ext_cnt_1));
             ReadBufferFromFile read_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_RDONLY);
             auto new_region = Region::deserialize(read_buf);
             ASSERT_EQ(new_region->getRaftLogEagerGCRange().first, 5678);
@@ -416,7 +420,7 @@ try
         // Downgrade. V2 store. V1 load.
         auto region = std::make_shared<Region>(createRegionMeta(1001, 1));
         region->updateRaftLogEagerIndex(5678);
-        FailPointHelper::enableFailPoint(FailPoints::force_region_persist_version, static_cast<UInt64>(2));
+        FailPointHelper::enableFailPoint(FailPoints::force_region_persist_version, std::make_pair(2, ext_cnt_2));
         const auto path = dir_path + "/region6.test";
         WriteBufferFromFile write_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_CREAT);
         size_t region_ser_size = std::get<0>(region->serialize(write_buf));
@@ -437,7 +441,7 @@ try
         // Downgrade. V3 store. V1 load.
         auto region = std::make_shared<Region>(createRegionMeta(1001, 1));
         region->updateRaftLogEagerIndex(5678);
-        FailPointHelper::enableFailPoint(FailPoints::force_region_persist_version, static_cast<UInt64>(3));
+        FailPointHelper::enableFailPoint(FailPoints::force_region_persist_version, std::make_pair(3, ext_cnt_3));
         FailPointHelper::enableFailPoint(FailPoints::force_region_persist_extension_field, static_cast<int>(1));
         const auto path = dir_path + "/region7.test";
         WriteBufferFromFile write_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_CREAT);

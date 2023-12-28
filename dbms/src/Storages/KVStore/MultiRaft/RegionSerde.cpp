@@ -88,14 +88,17 @@ std::tuple<size_t, UInt64> Region::serialize(WriteBuffer & buf) const
 {
     auto binary_version = Region::CURRENT_VERSION;
     UInt32 expected_extension_count = 0;
+    using bundle_type = std::pair<int, int>;
     fiu_do_on(FailPoints::force_region_persist_version, {
         if (auto v = FailPointHelper::getFailPointVal(FailPoints::force_region_persist_version); v)
         {
-            binary_version = std::any_cast<UInt64>(v.value());
+            std::tie(binary_version, expected_extension_count) = std::any_cast<bundle_type>(v.value());
             LOG_WARNING(
                 Logger::get(),
-                "Failpoint force_region_persist_version set region binary version, value={}",
-                binary_version);
+                "Failpoint force_region_persist_version set region binary version, value={}, "
+                "expected_extension_count={}",
+                binary_version,
+                expected_extension_count);
         }
     });
     size_t total_size = writeBinary2(binary_version, buf);
