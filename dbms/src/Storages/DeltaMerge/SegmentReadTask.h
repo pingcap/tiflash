@@ -168,6 +168,17 @@ struct fmt::formatter<DB::DM::SegmentReadTask>
     template <typename FormatContext>
     auto format(const DB::DM::SegmentReadTask & t, FormatContext & ctx) const
     {
+        if (t.dm_context->keyspace_id == DB::NullspaceID)
+        {
+            return fmt::format_to(
+                ctx.out(),
+                "s{}_t{}_{}_{}_{}",
+                t.store_id,
+                t.dm_context->physical_table_id,
+                t.segment->segmentId(),
+                t.segment->segmentEpoch(),
+                t.read_snapshot->delta->getDeltaIndexEpoch());
+        }
         return fmt::format_to(
             ctx.out(),
             "s{}_ks{}_t{}_{}_{}_{}",
