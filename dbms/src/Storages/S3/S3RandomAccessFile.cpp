@@ -236,11 +236,11 @@ inline static RandomAccessFilePtr createFromNormalFile(
     if (file != nullptr)
     {
         if (scan_context.has_value())
-            scan_context.value()->total_disagg_read_cache_hit_size += filesize.value();
+            scan_context.value()->disagg_read_cache_hit_size += filesize.value();
         return file;
     }
     if (scan_context.has_value())
-        scan_context.value()->total_disagg_read_cache_miss_size += filesize.value();
+        scan_context.value()->disagg_read_cache_miss_size += filesize.value();
     auto & ins = S3::ClientFactory::instance();
     return std::make_shared<S3RandomAccessFile>(ins.sharedTiFlashClient(), remote_fname);
 }

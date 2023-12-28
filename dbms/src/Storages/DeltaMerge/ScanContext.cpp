@@ -18,6 +18,8 @@
 #pragma GCC diagnostic pop
 #include <Storages/DeltaMerge/ScanContext.h>
 
+#include <magic_enum.hpp>
+
 namespace DB::DM
 {
 String ScanContext::toJson() const
@@ -27,17 +29,17 @@ String ScanContext::toJson() const
     json->set("dmfile_scan_rows", total_dmfile_scanned_rows.load());
     json->set("dmfile_skip_rows", total_dmfile_skipped_rows.load());
     json->set("dmfile_read_time", fmt::format("{:.3f}ms", total_dmfile_read_time_ns.load() / NS_TO_MS_SCALE));
-    json->set("create_snapshot_time", fmt::format("{:.3f}ms", total_create_snapshot_time_ns.load() / NS_TO_MS_SCALE));
-    json->set("create_stream_time", fmt::format("{:.3f}ms", total_create_inputstream_time_ns.load() / NS_TO_MS_SCALE));
+    json->set("create_snapshot_time", fmt::format("{:.3f}ms", create_snapshot_time_ns.load() / NS_TO_MS_SCALE));
+    json->set("create_stream_time", fmt::format("{:.3f}ms", create_inputstream_time_ns.load() / NS_TO_MS_SCALE));
 
     json->set("remote_region_num", total_remote_region_num.load());
     json->set("local_region_num", total_remote_region_num.load());
 
-    json->set("outbound_bytes", total_user_read_bytes.load()); // FIXME: is it duplicated?
-    json->set("learner_read_time", fmt::format("{:.3f}ms", total_learner_read_ns.load() / NS_TO_MS_SCALE));
+    json->set("read_bytes", user_read_bytes.load());
+    json->set("learner_read_time", fmt::format("{:.3f}ms", learner_read_ns.load() / NS_TO_MS_SCALE));
 
-    json->set("disagg_cache_hit_size", total_disagg_read_cache_hit_size.load());
-    json->set("disagg_cache_miss_size", total_disagg_read_cache_miss_size.load());
+    json->set("disagg_cache_hit_size", disagg_read_cache_hit_size.load());
+    json->set("disagg_cache_miss_size", disagg_read_cache_miss_size.load());
 
     json->set("num_segments", num_segments.load());
     json->set("num_read_tasks", num_read_tasks.load());
@@ -48,7 +50,13 @@ String ScanContext::toJson() const
 
     json->set("mvcc_input_rows", mvcc_input_rows.load());
     json->set("mvcc_input_bytes", mvcc_input_bytes.load());
-    json->set("mvcc_output_rows", mvcc_output_rows.load());
+    json->set("mvcc_skip_rows", mvcc_input_rows.load() - mvcc_output_rows.load());
+
+    // Note we must wrap the result of `magic_enum::enum_name` with `String`,
+    // or Poco can not turn it into JSON correctly and crash
+    json->set("read_mode", String(magic_enum::enum_name(read_mode)));
+    json->set("build_bitmap_time", fmt::format("{:.3f}ms", build_bitmap_time_ns.load() / NS_TO_MS_SCALE));
+    json->set("late_materialize_skip_rows", late_materialize_skip_rows.load());
 
     std::stringstream buf;
     json->stringify(buf);

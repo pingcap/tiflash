@@ -46,16 +46,14 @@ public:
 
     std::atomic<uint64_t> total_dmfile_rough_set_index_check_time_ns{0};
     std::atomic<uint64_t> total_dmfile_read_time_ns{0};
-    std::atomic<uint64_t> total_create_snapshot_time_ns{0};
-    std::atomic<uint64_t> total_create_inputstream_time_ns{0};
 
     std::atomic<uint64_t> total_remote_region_num{0};
     std::atomic<uint64_t> total_local_region_num{0};
 
-    std::atomic<uint64_t> total_user_read_bytes{0};
-    std::atomic<uint64_t> total_learner_read_ns{0};
-    std::atomic<uint64_t> total_disagg_read_cache_hit_size{0};
-    std::atomic<uint64_t> total_disagg_read_cache_miss_size{0};
+    // the read bytes from delta layer and stable layer (in-mem, decompressed)
+    std::atomic<uint64_t> user_read_bytes{0};
+    std::atomic<uint64_t> disagg_read_cache_hit_size{0};
+    std::atomic<uint64_t> disagg_read_cache_miss_size{0};
 
     // num segments, num tasks
     std::atomic<uint64_t> num_segments{0};
@@ -73,9 +71,18 @@ public:
 
     // TODO: filter
     ReadMode read_mode = ReadMode::Normal;
-    // TODO: Building bitmap cost
+    // Learner read
+    std::atomic<uint64_t> learner_read_ns{0};
+    // Create snapshot from PageStorage
+    std::atomic<uint64_t> create_snapshot_time_ns{0};
+    // Create inputstream and updating DeltaIndex
+    // When read_mode == Bitmap, it include the time of building bitmap
+    std::atomic<uint64_t> create_inputstream_time_ns{0};
+    // Building bitmap
     std::atomic<uint64_t> build_bitmap_time_ns{0};
     std::atomic<uint64_t> late_materialize_skip_rows{0};
+
+    const String resource_group_name;
 
     explicit ScanContext(const String & name = "")
         : resource_group_name(name)
@@ -90,13 +97,13 @@ public:
         total_dmfile_rough_set_index_check_time_ns
             = tiflash_scan_context_pb.total_dmfile_rough_set_index_check_time_ms() * 1000000;
         total_dmfile_read_time_ns = tiflash_scan_context_pb.total_dmfile_read_time_ms() * 1000000;
-        total_create_snapshot_time_ns = tiflash_scan_context_pb.total_create_snapshot_time_ms() * 1000000;
+        create_snapshot_time_ns = tiflash_scan_context_pb.total_create_snapshot_time_ms() * 1000000;
         total_remote_region_num = tiflash_scan_context_pb.total_remote_region_num();
         total_local_region_num = tiflash_scan_context_pb.total_local_region_num();
-        total_user_read_bytes = tiflash_scan_context_pb.total_user_read_bytes();
-        total_learner_read_ns = tiflash_scan_context_pb.total_learner_read_ms() * 1000000;
-        total_disagg_read_cache_hit_size = tiflash_scan_context_pb.total_disagg_read_cache_hit_size();
-        total_disagg_read_cache_miss_size = tiflash_scan_context_pb.total_disagg_read_cache_miss_size();
+        user_read_bytes = tiflash_scan_context_pb.total_user_read_bytes();
+        learner_read_ns = tiflash_scan_context_pb.total_learner_read_ms() * 1000000;
+        disagg_read_cache_hit_size = tiflash_scan_context_pb.total_disagg_read_cache_hit_size();
+        disagg_read_cache_miss_size = tiflash_scan_context_pb.total_disagg_read_cache_miss_size();
     }
 
     tipb::TiFlashScanContext serialize()
@@ -109,13 +116,13 @@ public:
         tiflash_scan_context_pb.set_total_dmfile_rough_set_index_check_time_ms(
             total_dmfile_rough_set_index_check_time_ns / 1000000);
         tiflash_scan_context_pb.set_total_dmfile_read_time_ms(total_dmfile_read_time_ns / 1000000);
-        tiflash_scan_context_pb.set_total_create_snapshot_time_ms(total_create_snapshot_time_ns / 1000000);
+        tiflash_scan_context_pb.set_total_create_snapshot_time_ms(create_snapshot_time_ns / 1000000);
         tiflash_scan_context_pb.set_total_remote_region_num(total_remote_region_num);
         tiflash_scan_context_pb.set_total_local_region_num(total_local_region_num);
-        tiflash_scan_context_pb.set_total_user_read_bytes(total_user_read_bytes);
-        tiflash_scan_context_pb.set_total_learner_read_ms(total_learner_read_ns / 1000000);
-        tiflash_scan_context_pb.set_total_disagg_read_cache_hit_size(total_disagg_read_cache_hit_size);
-        tiflash_scan_context_pb.set_total_disagg_read_cache_miss_size(total_disagg_read_cache_miss_size);
+        tiflash_scan_context_pb.set_total_user_read_bytes(user_read_bytes);
+        tiflash_scan_context_pb.set_total_learner_read_ms(learner_read_ns / 1000000);
+        tiflash_scan_context_pb.set_total_disagg_read_cache_hit_size(disagg_read_cache_hit_size);
+        tiflash_scan_context_pb.set_total_disagg_read_cache_miss_size(disagg_read_cache_miss_size);
 
         return tiflash_scan_context_pb;
     }
@@ -128,15 +135,15 @@ public:
         total_dmfile_skipped_rows += other.total_dmfile_skipped_rows;
         total_dmfile_rough_set_index_check_time_ns += other.total_dmfile_rough_set_index_check_time_ns;
         total_dmfile_read_time_ns += other.total_dmfile_read_time_ns;
-        total_create_snapshot_time_ns += other.total_create_snapshot_time_ns;
-        total_create_inputstream_time_ns += other.total_create_inputstream_time_ns;
+        create_snapshot_time_ns += other.create_snapshot_time_ns;
+        create_inputstream_time_ns += other.create_inputstream_time_ns;
 
         total_local_region_num += other.total_local_region_num;
         total_remote_region_num += other.total_remote_region_num;
-        total_user_read_bytes += other.total_user_read_bytes;
-        total_learner_read_ns += other.total_learner_read_ns;
-        total_disagg_read_cache_hit_size += other.total_disagg_read_cache_hit_size;
-        total_disagg_read_cache_miss_size += other.total_disagg_read_cache_miss_size;
+        user_read_bytes += other.user_read_bytes;
+        learner_read_ns += other.learner_read_ns;
+        disagg_read_cache_hit_size += other.disagg_read_cache_hit_size;
+        disagg_read_cache_miss_size += other.disagg_read_cache_miss_size;
 
         num_segments += other.num_segments;
         num_read_tasks += other.num_read_tasks;
@@ -158,18 +165,16 @@ public:
         total_dmfile_skipped_rows += other.total_dmfile_skipped_rows();
         total_dmfile_rough_set_index_check_time_ns += other.total_dmfile_rough_set_index_check_time_ms() * 1000000;
         total_dmfile_read_time_ns += other.total_dmfile_read_time_ms() * 1000000;
-        total_create_snapshot_time_ns += other.total_create_snapshot_time_ms() * 1000000;
+        create_snapshot_time_ns += other.total_create_snapshot_time_ms() * 1000000;
         total_local_region_num += other.total_local_region_num();
         total_remote_region_num += other.total_remote_region_num();
-        total_user_read_bytes += other.total_user_read_bytes();
-        total_learner_read_ns += other.total_learner_read_ms() * 1000000;
-        total_disagg_read_cache_hit_size += other.total_disagg_read_cache_hit_size();
-        total_disagg_read_cache_miss_size += other.total_disagg_read_cache_miss_size();
+        user_read_bytes += other.total_user_read_bytes();
+        learner_read_ns += other.total_learner_read_ms() * 1000000;
+        disagg_read_cache_hit_size += other.total_disagg_read_cache_hit_size();
+        disagg_read_cache_miss_size += other.total_disagg_read_cache_miss_size();
     }
 
     String toJson() const;
-
-    const String resource_group_name;
 };
 
 } // namespace DB::DM

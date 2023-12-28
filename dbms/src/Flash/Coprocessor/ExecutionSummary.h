@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include <Storages/DeltaMerge/ScanContext.h>
+#include <Storages/DeltaMerge/ScanContext_fwd.h>
 #include <common/types.h>
 #include <tipb/select.pb.h>
 

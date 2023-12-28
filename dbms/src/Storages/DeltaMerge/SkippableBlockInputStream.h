@@ -221,7 +221,7 @@ private:
     {
         if (likely(scan_context != nullptr))
         {
-            scan_context->total_user_read_bytes += bytes;
+            scan_context->user_read_bytes += bytes;
             if constexpr (!need_row_id)
             {
                 lac_bytes_collector.collect(bytes);

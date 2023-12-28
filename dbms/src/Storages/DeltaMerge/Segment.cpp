@@ -768,7 +768,7 @@ SegmentSnapshotPtr Segment::createSnapshot(const DMContext & dm_context, bool fo
     const
 {
     Stopwatch watch;
-    SCOPE_EXIT({ dm_context.scan_context->total_create_snapshot_time_ns += watch.elapsed(); });
+    SCOPE_EXIT({ dm_context.scan_context->create_snapshot_time_ns += watch.elapsed(); });
     auto delta_snap = delta->createSnapshot(dm_context, for_update, metric);
     auto stable_snap = stable->createSnapshot();
     if (!delta_snap || !stable_snap)
@@ -793,7 +793,7 @@ BlockInputStreamPtr Segment::getInputStream(
     size_t expected_block_size)
 {
     Stopwatch watch;
-    SCOPE_EXIT({ dm_context.scan_context->total_create_inputstream_time_ns += watch.elapsed(); });
+    SCOPE_EXIT({ dm_context.scan_context->create_inputstream_time_ns += watch.elapsed(); });
 
     auto clipped_block_rows = clipBlockRows( //
         dm_context.global_context,

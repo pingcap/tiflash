@@ -757,8 +757,7 @@ private:
         const RowKeyRanges & sorted_ranges,
         size_t expected_tasks_count = 1,
         const SegmentIdSet & read_segments = {},
-        bool try_split_task = true,
-        const ScanContextPtr & scan_context = nullptr);
+        bool try_split_task = true);
 
 private:
     /**
