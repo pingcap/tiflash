@@ -39,8 +39,7 @@ public:
         BlockInputStreamPtr filter_column_stream_,
         SkippableBlockInputStreamPtr rest_column_stream_,
         const BitmapFilterPtr & bitmap_filter_,
-        const String & req_id_,
-        const ScanContextPtr & scan_context_);
+        const String & req_id_);
 
     String getName() const override { return NAME; }
 
@@ -60,8 +59,6 @@ private:
     SkippableBlockInputStreamPtr rest_column_stream;
     // The MVCC-bitmap.
     BitmapFilterPtr bitmap_filter;
-
-    ScanContextPtr scan_context;
 
     const LoggerPtr log;
 };

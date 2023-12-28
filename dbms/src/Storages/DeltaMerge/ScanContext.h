@@ -80,7 +80,7 @@ public:
     std::atomic<uint64_t> create_inputstream_time_ns{0};
     // Building bitmap
     std::atomic<uint64_t> build_bitmap_time_ns{0};
-    std::atomic<uint64_t> late_materialize_skip_rows{0};
+    std::atomic<uint64_t> late_materialization_skip_rows{0};
 
     const String resource_group_name;
 

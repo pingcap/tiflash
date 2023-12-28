@@ -56,7 +56,7 @@ String ScanContext::toJson() const
     // or Poco can not turn it into JSON correctly and crash
     json->set("read_mode", String(magic_enum::enum_name(read_mode)));
     json->set("build_bitmap_time", fmt::format("{:.3f}ms", build_bitmap_time_ns.load() / NS_TO_MS_SCALE));
-    json->set("late_materialize_skip_rows", late_materialize_skip_rows.load());
+    json->set("late_materialization_skip_rows", late_materialization_skip_rows.load());
 
     std::stringstream buf;
     json->stringify(buf);
