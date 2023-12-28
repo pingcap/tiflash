@@ -437,38 +437,51 @@ template <
     char flip_case_mask,
     int to_case(int)>
 __attribute__((always_inline)) inline void toCaseImplTiDB(
-    const ColumnString::Chars_t & src_data,
-    size_t & src_pos,
+    const UInt8 *& src,
+    const UInt8 * src_end,
+    size_t offsets_pos,
     ColumnString::Chars_t & dst_data,
-    size_t & dst_pos,
-    std::vector<std::pair<size_t, int>> & pos_diff_len)
+    IColumn::Offsets & dst_offsets,
+    bool & is_diff_offsets)
 {
-    if (src_data[src_pos] <= ascii_upper_bound)
+    if (*src <= ascii_upper_bound)
     {
-        dst_data.resize(dst_pos + 1);
-        if (src_data[src_pos] >= not_case_lower_bound && src_data[src_pos] <= not_case_upper_bound)
-            dst_data[dst_pos] = src_data[src_pos] ^ flip_case_mask;
+        size_t dst_size = dst_data.size();
+        dst_data.resize(dst_size + 1);
+        if (*src >= not_case_lower_bound && *src <= not_case_upper_bound)
+            dst_data[dst_size] = *src++ ^ flip_case_mask;
         else
-            dst_data[dst_pos] = src_data[src_pos];
-        ++src_pos;
-        ++dst_pos;
+            dst_data[dst_size] = *src++;
     }
     else
     {
         static const Poco::UTF8Encoding utf8;
 
-        int src_sequence_length = utf8.sequenceLength(&src_data[src_pos], 1);
+        int src_sequence_length = utf8.sequenceLength(src, 1);
+        if unlikely (src + src_sequence_length > src_end)
+        {
+            /// If this row has invalid utf-8 character, just copy it to dst string and do not influence others
+            size_t dst_size = dst_data.size();
+            dst_data.resize(src_end - src + dst_size);
+            while (src < src_end)
+                dst_data[dst_size++] = *src++;
+            return;
+        }
 
-        int dst_ch = to_case(utf8.convert(&src_data[src_pos]));
+        int dst_ch = to_case(utf8.convert(src));
         int dst_sequence_length = utf8.convert(dst_ch, nullptr, 0);
-        dst_data.resize(dst_pos + dst_sequence_length);
-        utf8.convert(dst_ch, &dst_data[dst_pos], dst_sequence_length);
+        size_t dst_size = dst_data.size();
+        dst_data.resize(dst_size + dst_sequence_length);
+        utf8.convert(dst_ch, &dst_data[dst_size], dst_sequence_length);
 
         if (dst_sequence_length != src_sequence_length)
-            pos_diff_len.emplace_back(src_pos, dst_sequence_length - src_sequence_length);
+        {
+            assert((Int64)dst_offsets[offsets_pos] + dst_sequence_length - src_sequence_length >= 0);
+            dst_offsets[offsets_pos] += dst_sequence_length - src_sequence_length;
+            is_diff_offsets = true;
+        }
 
-        src_pos += src_sequence_length;
-        dst_pos += dst_sequence_length;
+        src += src_sequence_length;
     }
 }
 
@@ -565,12 +578,15 @@ TIFLASH_DECLARE_MULTITARGET_FUNCTION_TP(
     (const ColumnString::Chars_t & src_data, const IColumn::Offsets & src_offsets, ColumnString::Chars_t & dst_data, IColumn::Offsets & dst_offsets),
     {
         dst_data.reserve(src_data.size());
+        dst_offsets.assign(src_offsets);
         static const auto flip_mask = SimdWord::template fromSingle<int8_t>(flip_case_mask);
-        size_t src_pos = 0, src_size = src_data.size(), dst_pos = 0;
-        std::vector<std::pair<size_t, int>> pos_diff_len;
-        while (src_pos + WORD_SIZE < src_size)
+        const UInt8 * src = src_data.data(), * src_end = src_data.data() + src_data.size();
+        auto * begin = src;
+        bool is_diff_offsets = false;
+        size_t offsets_pos = 0;
+        while (src + WORD_SIZE < src_end)
         {
-            auto word = SimdWord::fromUnaligned(&src_data[src_pos]);
+            auto word = SimdWord::fromUnaligned(src);
             auto ascii_check = SimdWord{};
             ascii_check.as_int8 = word.as_int8 >= 0;
             if (ascii_check.isByteAllMarked())
@@ -582,54 +598,76 @@ TIFLASH_DECLARE_MULTITARGET_FUNCTION_TP(
                 range_check.as_int8 = (word.as_int8 >= lower_bounds.as_int8) & (word.as_int8 <= upper_bounds.as_int8);
                 selected.as_int8 = range_check.as_int8 & flip_mask.as_int8;
                 word.as_int8 ^= selected.as_int8;
-                dst_data.resize(dst_pos + WORD_SIZE);
-                word.toUnaligned(&dst_data[dst_pos]);
-                src_pos += WORD_SIZE;
-                dst_pos += WORD_SIZE;
-                printf("haha111111!\n");
+                size_t dst_size = dst_data.size();
+                dst_data.resize(dst_size + WORD_SIZE);
+                word.toUnaligned(&dst_data[dst_size]);
+                src += WORD_SIZE;
+                LOG_INFO(&Poco::Logger::get("root"), "haha111111!");
             }
             else
             {
-                auto expected_end = src_pos + WORD_SIZE;
-                while (src_pos < expected_end)
+                size_t offset_from_begin = src - begin;
+                while (offset_from_begin >= src_offsets[offsets_pos])
+                    ++offsets_pos;
+                auto expected_end = src + WORD_SIZE;
+                while (true)
+                {
+                    const UInt8 * row_end = begin + src_offsets[offsets_pos];
+                    assert(row_end >= src);
+                    auto end = std::min(expected_end, row_end);
+                    while (src < end)
+                    {
+                        toCaseImplTiDB<
+                            not_case_lower_bound,
+                            not_case_upper_bound,
+                            ascii_upper_bound,
+                            flip_case_mask,
+                            to_case>(src, row_end, offsets_pos, dst_data, dst_offsets, is_diff_offsets);
+                    }
+                    if (src >= expected_end)
+                        break;
+                    ++offsets_pos;
+                }
+                LOG_INFO(&Poco::Logger::get("root"), "haha222222! {}", WORD_SIZE);
+            }
+        }
+
+        if (src < src_end)
+        {
+            size_t offset_from_begin = src - begin;
+            while (offset_from_begin >= src_offsets[offsets_pos])
+                ++offsets_pos;
+
+            while (src < src_end)
+            {
+                const UInt8 * row_end = begin + src_offsets[offsets_pos];
+                assert(row_end >= src);
+                while (src < row_end)
                 {
                     toCaseImplTiDB<
                         not_case_lower_bound,
                         not_case_upper_bound,
                         ascii_upper_bound,
                         flip_case_mask,
-                        to_case>(src_data, src_pos, dst_data, dst_pos, pos_diff_len);
+                        to_case>(src, row_end, offsets_pos, dst_data, dst_offsets, is_diff_offsets);
                 }
-                printf("haha222222!\n");
+                ++offsets_pos;
             }
         }
-        while (src_pos < src_size)
-            toCaseImplTiDB<not_case_lower_bound, not_case_upper_bound, ascii_upper_bound, flip_case_mask, to_case>(
-                src_data, src_pos,
-                dst_data, dst_pos, pos_diff_len);
 
-        if likely (pos_diff_len.empty())
+        if unlikely (is_diff_offsets)
         {
-            printf("haha333333!\n");
-            dst_offsets.assign(src_offsets);
+            LOG_INFO(&Poco::Logger::get("root"), "haha444444!");
+            Int64 diff = 0;
+            for (size_t i = 0; i < dst_offsets.size(); ++i)
+            {
+                diff += (Int64)dst_offsets[i] - (Int64)src_offsets[i];
+                dst_offsets[i] = src_offsets[i] + diff;
+            }
         }
         else
         {
-            printf("haha444444!\n");
-            dst_offsets.resize(src_offsets.size());
-            Int64 diff = 0;
-            auto pos_diff_len_iter = pos_diff_len.begin();
-            for (size_t i = 0; i < src_offsets.size(); ++i)
-            {
-                while (pos_diff_len_iter != pos_diff_len.end())
-                {
-                    if (pos_diff_len_iter->first + 1 > src_offsets[i])
-                        break;
-                    diff += pos_diff_len_iter->second;
-                    ++pos_diff_len_iter;
-                }
-                dst_offsets[i] = src_offsets[i] + diff;
-            }
+            LOG_INFO(&Poco::Logger::get("root"), "haha333333!");
         }
     })
 } // namespace

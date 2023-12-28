@@ -60,7 +60,7 @@ protected:
 TEST_F(StringLower, lowerAll)
 {
     std::vector<std::optional<String>> candidate_strings
-        = {"one WEEK’S time TEST",
+        = {"one WEEK'S time TEST",
            "abc测试def",
            "ABCテストabc",
            "ЀЁЂѓЄЅІїЈЉЊЋЌѝЎЏ",
@@ -69,10 +69,10 @@ TEST_F(StringLower, lowerAll)
            "ΑΒΓΔΕΖΗΘικΛΜΝΞΟΠΡΣτΥΦΧΨωΣ",
            "ȺDȺİȺaȺȾOİȺ",
            "▲Α▼Βγ➨ΔΕ☎ΖΗ✂ΘΙ€ΚΛ♫ΜΝ✓ΞΟ✚ΠΡ℉ΣΤ♥ΥΦ♖ΧΨ♘Ω★Σ✕",
-           "ⱮⱭȺΩꞍaȾ",
+           "ⱮⱭȺΩABCDEFGHIJKLMNOPꞍaȾ",
            "թՓՁՋՐՉՃԺԾՔՈԵՌՏԸՒԻՕՊԱՍԴՖԳՀՅԿԼԽԶՂՑՎԲՆմՇ"};
     std::vector<std::optional<String>> lower_case_strings
-        = {"one week’s time test",
+        = {"one week's time test",
            "abc测试def",
            "abcテストabc",
            "ѐёђѓєѕіїјљњћќѝўџ",
@@ -81,7 +81,7 @@ TEST_F(StringLower, lowerAll)
            "αβγδεζηθικλμνξοπρστυφχψωσ",
            "ⱥdⱥiⱥaⱥⱦoiⱥ",
            "▲α▼βγ➨δε☎ζη✂θι€κλ♫μν✓ξο✚πρ℉στ♥υφ♖χψ♘ω★σ✕",
-           "ɱɑⱥωɥaⱦ",
+           "ɱɑⱥωabcdefghijklmnopɥaⱦ",
            "թփձջրչճժծքոեռտըւիօպասդֆգհյկլխզղցվբնմշ"};
 
 
