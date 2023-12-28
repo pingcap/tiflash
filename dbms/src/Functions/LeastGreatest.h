@@ -154,24 +154,24 @@ struct LeastGreatestStringImpl
         {
             if (res < 0)
             {
-                append_data(&a_data[0], a_size);
+                append_data(a_data, a_size);
             }
             else
             {
                 assert(res > 0 || a_size == b_size);
-                append_data(&b_data[0], b_size);
+                append_data(b_data, b_size);
             }
         }
         else
         {
             if (res < 0)
             {
-                append_data(&b_data[0], b_size);
+                append_data(b_data, b_size);
             }
             else
             {
                 assert(res > 0 || a_size == b_size);
-                append_data(&a_data[0], a_size);
+                append_data(a_data, a_size);
             }
         }
     }
