@@ -215,9 +215,6 @@ void EstablishCallData::writeDone(String msg, const grpc::Status & status)
 
     if (async_tunnel_sender)
     {
-<<<<<<< HEAD
-        LOG_INFO(async_tunnel_sender->getLogger(), "connection for {} cost {}ms, including {}ms to waiting task.", async_tunnel_sender->getTunnelId(), stopwatch->elapsedMilliseconds(), waiting_task_time_ms);
-=======
         auto time = stopwatch->elapsedMilliseconds();
         LOG_IMPL(
             async_tunnel_sender->getLogger(),
@@ -227,7 +224,6 @@ void EstablishCallData::writeDone(String msg, const grpc::Status & status)
             async_tunnel_sender->getTunnelId(),
             time,
             waiting_task_time_ms);
->>>>>>> cea7c80823 (refine log (#8579))
 
         RUNTIME_ASSERT(!async_tunnel_sender->isConsumerFinished(), async_tunnel_sender->getLogger(), "tunnel {} consumer finished in advance", async_tunnel_sender->getTunnelId());
 
