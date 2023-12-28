@@ -756,6 +756,11 @@ try
         {
             auto gather_id = std::get<0>(queries[i]);
             EXPECT_TRUE(assertQueryActive(gather_id.query_id));
+        }
+
+        for (size_t i = 0; i < 10; ++i)
+        {
+            auto gather_id = std::get<0>(queries[i]);
             MockComputeServerManager::instance().cancelGather(gather_id);
             EXPECT_TRUE(assertQueryCancelled(gather_id.query_id));
         }
