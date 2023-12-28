@@ -57,8 +57,16 @@ public:
     bool needScheduleToRead(const SegmentReadTaskPoolPtr & pool);
     bool needSchedule(const SegmentReadTaskPoolPtr & pool);
 
+    // `scheduleOneRound()` traverses all pools in `read_pools`, try to schedule `SegmentReadTask` of each pool.
+    // It returns summary information for a round of scheduling: <erased_pool_count, sched_null_count, sched_succ_count>
+    // `erased_pool_count` - how many stale pools have beed erased.
+    // `sched_null_count` - how many pools do not require scheduling.
+    // `sched_succ_count` - how many pools is scheduled.
     std::tuple<UInt64, UInt64, UInt64> scheduleOneRound() EXCLUSIVE_LOCKS_REQUIRED(mtx);
+    // `schedule()` calls `scheduleOneRound()` in a loop
+    // until there are no tasks to schedule or need to release lock to other tasks.
     bool schedule() LOCKS_EXCLUDED(mtx);
+    // `schedLoop()` calls `schedule()` in infinite loop.
     void schedLoop() LOCKS_EXCLUDED(mtx);
 
     MergedTaskPtr scheduleMergedTask(SegmentReadTaskPoolPtr & pool) EXCLUSIVE_LOCKS_REQUIRED(mtx);
@@ -71,6 +79,7 @@ public:
     std::mutex add_mtx ACQUIRED_BEFORE(mtx);
 
     std::mutex mtx;
+    // pool_id -> pool
     std::unordered_map<UInt64, SegmentReadTaskPoolPtr> read_pools GUARDED_BY(mtx);
     // GlobalSegmentID -> pool_ids
     MergingSegments merging_segments GUARDED_BY(mtx);
