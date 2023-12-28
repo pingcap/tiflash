@@ -29,6 +29,7 @@ extern const int UNKNOWN_FORMAT_VERSION;
 namespace FailPoints
 {
 extern const char force_region_persist_version[];
+extern const char force_region_read_version[];
 extern const char force_region_persist_extension_field[];
 extern const char force_region_read_extension_field[];
 } // namespace FailPoints
@@ -186,17 +187,28 @@ std::tuple<size_t, UInt64> Region::serialize(WriteBuffer & buf) const
 RegionPtr Region::deserialize(ReadBuffer & buf, const TiFlashRaftProxyHelper * proxy_helper)
 {
     const auto binary_version = readBinary2<UInt32>(buf);
+    auto current_version = Region::CURRENT_VERSION;
+    fiu_do_on(FailPoints::force_region_read_version, {
+        if (auto v = FailPointHelper::getFailPointVal(FailPoints::force_region_read_version); v)
+        {
+            current_version = std::any_cast<UInt64>(v.value());
+            LOG_WARNING(
+                Logger::get(),
+                "Failpoint force_region_read_version set region binary version, value={}",
+                current_version);
+        }
+    });
+
+    if (current_version <= 1 && binary_version > current_version) {
+        // Conform to https://github.com/pingcap/tiflash/blob/43f809fffde22d0af4c519be4546a5bf4dde30a2/dbms/src/Storages/KVStore/Region.cpp#L197
+        // Includes only x(where x > 1) -> 1
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Don't support downgrading from {} to {}", binary_version, current_version);
+    }
     const auto binary_version_decoded = magic_enum::enum_cast<RegionPersistVersion>(binary_version);
+    // Before, it checks if the version is V1 or V2.
     if (!binary_version_decoded.has_value())
     {
-        if (CURRENT_VERSION == 1)
-        {
-            throw Exception(ErrorCodes::LOGICAL_ERROR, "Don't support downgrading from {} to 1", binary_version);
-        }
-        else
-        {
-            LOG_DEBUG(DB::Logger::get(), "Maybe downgrade from {} to {}", binary_version, CURRENT_VERSION);
-        }
+        LOG_DEBUG(DB::Logger::get(), "Maybe downgrade from {} to {}", binary_version, current_version);
     }
 
     // Deserialize meta

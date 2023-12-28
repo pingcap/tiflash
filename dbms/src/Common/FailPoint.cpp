@@ -71,6 +71,7 @@ namespace DB
     M(force_remote_read_for_batch_cop_once)                       \
     M(exception_new_dynamic_thread)                               \
     M(force_region_persist_version)                               \
+    M(force_region_read_version)                               \
     M(force_region_persist_extension_field)                       \
     M(force_region_read_extension_field)                          \
     M(force_wait_index_timeout)
