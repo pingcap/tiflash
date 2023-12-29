@@ -14,7 +14,6 @@
 
 #pragma once
 
-#include <Common/Logger.h>
 #include <Core/Types.h>
 
 #include <tuple>
@@ -27,6 +26,9 @@ class LayeredConfiguration;
 
 namespace DB
 {
+class Logger;
+using LoggerPtr = std::shared_ptr<Logger>;
+
 struct StorageIORateLimitConfig
 {
 public:
@@ -68,7 +70,7 @@ public:
         , high_pct(85)
         , medium_pct(60)
         , tune_base(2)
-        , min_bytes_per_sec(2 * 1024 * 1024)
+        , min_bytes_per_sec(8 * 1024 * 1024)
         , auto_tune_sec(5)
     {}
 
