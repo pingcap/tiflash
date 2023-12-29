@@ -15,6 +15,11 @@
 #pragma once
 
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileSetSnapshot.h>
+<<<<<<< HEAD
+=======
+#include <Storages/DeltaMerge/DMContext.h>
+#include <Storages/DeltaMerge/ScanContext.h>
+>>>>>>> ce42814e49 (*: Add table scan details logging; change default logging level to "info" (#8616))
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
 
 namespace DB
