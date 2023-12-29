@@ -252,13 +252,14 @@ RegionPtr Region::deserialize(ReadBuffer & buf, const TiFlashRaftProxyHelper * p
                 continue;
             }
 
+            //Throw away unknown extension data
             if (extension_type >= magic_enum::enum_underlying(RegionPersistExtension::MaxKnownFlag))
             {
                 buf.ignore(length);
                 continue;
             }
 
-            RUNTIME_CHECK_MSG(false, "Unhandled extension {} length={}", extension_type, length);
+            RUNTIME_CHECK_MSG(false, "Unhandled extension, type={} length={}", extension_type, length);
         }
     }
 
