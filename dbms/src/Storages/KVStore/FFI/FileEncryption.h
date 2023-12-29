@@ -92,6 +92,11 @@ struct FileEncryptionInfo : private FileEncryptionInfoRaw
     // FileEncryptionRes::Disabled means encryption feature has never been enabled, so no file will be encrypted.
     bool isEncrypted() const { return (res != FileEncryptionRes::Disabled && method != EncryptionMethod::Plaintext); }
 
+    bool operator==(const FileEncryptionInfo & rhs) const
+    {
+        return res == rhs.res && method == rhs.method && *key == *rhs.key && *iv == *rhs.iv;
+    }
+
     std::string getErrorMsg() const { return error_msg ? std::string(*error_msg) : ""; }
 };
 #pragma GCC diagnostic pop

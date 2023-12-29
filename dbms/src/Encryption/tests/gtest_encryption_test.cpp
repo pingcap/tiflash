@@ -18,6 +18,7 @@
 #include <Encryption/EncryptedWritableFile.h>
 #include <Encryption/EncryptedWriteReadableFile.h>
 #include <Encryption/FileProvider.h>
+#include <Encryption/MasterKey.h>
 #include <Encryption/MockKeyManager.h>
 #include <Encryption/PosixRandomAccessFile.h>
 #include <Encryption/PosixWritableFile.h>
@@ -194,6 +195,32 @@ try
             DB::Encryption::Cipher(0, text.data(), text.size(), key_str, method, iv, false);
             ASSERT_EQ(plaintext, text);
         }
+    }
+}
+CATCH
+
+TEST(EncryptionKeyTest, EncryptionKeyTest)
+try
+{
+    const auto master_key = std::make_unique<MasterKey>(String(reinterpret_cast<const char *>(test::KEY), 32));
+    for (int i = 0; i < 10; ++i) // test 10 times
+    {
+        auto encryption_key = master_key->generateEncryptionKey();
+        auto exported = encryption_key.exportString();
+        auto new_encryption_key = master_key->decryptEncryptionKey(exported);
+        ASSERT_EQ(exported, new_encryption_key.exportString());
+
+        auto info = encryption_key.generateEncryptionInfo(String(reinterpret_cast<const char *>(test::IV_RANDOM), 16));
+        ASSERT_TRUE(
+            info
+            == new_encryption_key.generateEncryptionInfo(String(reinterpret_cast<const char *>(test::IV_RANDOM), 16)));
+        auto stream = info.createCipherStream(EncryptionPath("encryption", ""));
+        auto data = DB::random::randomString(MAX_SIZE);
+        auto plain_data = data;
+        stream->encrypt(0, data.data(), data.size());
+        ASSERT_NE(0, memcmp(data.data(), plain_data.data(), data.size()));
+        stream->decrypt(0, data.data(), data.size());
+        ASSERT_EQ(data, plain_data);
     }
 }
 CATCH
