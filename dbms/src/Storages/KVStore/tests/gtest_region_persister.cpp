@@ -262,8 +262,7 @@ try
         auto region = std::make_shared<Region>(createRegionMeta(1001, 1));
         region->updateRaftLogEagerIndex(5678);
         FailPointHelper::enableFailPoint(FailPoints::force_region_persist_version, std::make_pair(2, ext_cnt_2));
-        FailPointHelper::enableFailPoint(FailPoints::force_region_persist_extension_field, static_cast<int>(1));
-        const auto path = dir_path + "/region.test";
+        const auto path = dir_path + "/region0.test";
         WriteBufferFromFile write_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_CREAT);
         size_t region_ser_size = std::get<0>(region->serialize(write_buf));
         write_buf.next();

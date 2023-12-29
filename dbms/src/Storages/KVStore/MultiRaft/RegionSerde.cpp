@@ -103,6 +103,29 @@ size_t writePersistExtension(
     return total_size;
 }
 
+inline size_t mockInjectExtension(std::optional<std::any> v, UInt32 & actual_extension_count, WriteBuffer & buf)
+{
+    auto value = std::any_cast<int>(v.value());
+    auto total_size = 0;
+    if (value & 1)
+    {
+        std::string s = "abcd";
+        total_size += writePersistExtension(
+            actual_extension_count,
+            buf,
+            magic_enum::enum_underlying(RegionPersistExtension::ReservedForTest),
+            s.data(),
+            s.size());
+    }
+    if (value & 2)
+    {
+        std::string s = "kkk";
+        total_size
+            += writePersistExtension(actual_extension_count, buf, UNUSED_EXTENSION_NUMBER_FOR_TEST, s.data(), s.size());
+    }
+    return total_size;
+}
+
 std::tuple<size_t, UInt64> Region::serialize(WriteBuffer & buf) const
 {
     auto binary_version = Region::CURRENT_VERSION;
@@ -147,27 +170,7 @@ std::tuple<size_t, UInt64> Region::serialize(WriteBuffer & buf) const
         fiu_do_on(FailPoints::force_region_persist_extension_field, {
             if (auto v = FailPointHelper::getFailPointVal(FailPoints::force_region_persist_extension_field); v)
             {
-                auto value = std::any_cast<int>(v.value());
-                if (value & 1)
-                {
-                    std::string s = "abcd";
-                    total_size += writePersistExtension(
-                        actual_extension_count,
-                        buf,
-                        magic_enum::enum_underlying(RegionPersistExtension::ReservedForTest),
-                        s.data(),
-                        s.size());
-                }
-                if (value & 2)
-                {
-                    std::string s = "kkk";
-                    total_size += writePersistExtension(
-                        actual_extension_count,
-                        buf,
-                        UNUSED_EXTENSION_NUMBER_FOR_TEST,
-                        s.data(),
-                        s.size());
-                }
+                total_size += mockInjectExtension(v, actual_extension_count, buf);
             }
         });
         RUNTIME_CHECK(
@@ -180,6 +183,26 @@ std::tuple<size_t, UInt64> Region::serialize(WriteBuffer & buf) const
     }
 
     return {total_size, applied_index};
+}
+
+bool mockDeserExtersion(std::optional<std::any> v, UInt32 extension_type, ReadBuffer & buf, UInt32 length)
+{
+    auto bundle = std::any_cast<std::pair<int, std::shared_ptr<int>>>(v.value());
+    if (bundle.first & 1)
+    {
+        if (extension_type == magic_enum::enum_underlying(RegionPersistExtension::ReservedForTest))
+        {
+            RUNTIME_CHECK(length == 4);
+            RUNTIME_CHECK(readStringWithLength(buf, 4) == "abcd");
+            *(bundle.second) += 1;
+            return true;
+        }
+    }
+    if (bundle.first & 2)
+    {
+        RUNTIME_CHECK(length == 3);
+    }
+    return false;
 }
 
 /// Currently supports:
@@ -234,25 +257,10 @@ RegionPtr Region::deserialize(ReadBuffer & buf, const TiFlashRaftProxyHelper * p
         {
             auto [extension_type, length] = getPersistExtensionTypeAndLength(buf);
             bool debug_continue = false;
-            using bundle_type = std::pair<int, std::shared_ptr<int>>;
             fiu_do_on(FailPoints::force_region_read_extension_field, {
                 if (auto v = FailPointHelper::getFailPointVal(FailPoints::force_region_read_extension_field); v)
                 {
-                    auto bundle = std::any_cast<bundle_type>(v.value());
-                    if (bundle.first & 1)
-                    {
-                        if (extension_type == magic_enum::enum_underlying(RegionPersistExtension::ReservedForTest))
-                        {
-                            RUNTIME_CHECK(length == 4);
-                            RUNTIME_CHECK(readStringWithLength(buf, 4) == "abcd");
-                            debug_continue = true;
-                            *(bundle.second) += 1;
-                        }
-                    }
-                    if (bundle.first & 2)
-                    {
-                        RUNTIME_CHECK(length == 3);
-                    }
+                    debug_continue = mockDeserExtersion(v, extension_type, buf, length);
                 }
             });
 
