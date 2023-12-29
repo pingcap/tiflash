@@ -1203,7 +1203,7 @@ BlockInputStreams DeltaMergeStore::read(
         enable_read_thread,
         final_num_stream,
         dm_context->scan_context->resource_group_name);
-    scan_context->read_mode = read_mode;
+    dm_context->scan_context->read_mode = read_mode;
 
     BlockInputStreams res;
     for (size_t i = 0; i < final_num_stream; ++i)
@@ -1313,7 +1313,7 @@ void DeltaMergeStore::read(
         enable_read_thread,
         final_num_stream,
         dm_context->scan_context->resource_group_name);
-    scan_context->read_mode = read_mode;
+    dm_context->scan_context->read_mode = read_mode;
 
     const auto & columns_after_cast = filter && filter->extra_cast ? *filter->columns_after_cast : columns_to_read;
     if (enable_read_thread)
@@ -1387,7 +1387,7 @@ Remote::DisaggPhysicalTableReadSnapshotPtr DeltaMergeStore::writeNodeBuildRemote
         read_segments,
         /* try_split_task */ false);
     GET_METRIC(tiflash_disaggregated_read_tasks_count).Increment(tasks.size());
-    LOG_DEBUG(tracing_logger, "Read create segment snapshot done");
+    LOG_INFO(tracing_logger, "Read create segment snapshot done");
 
     return std::make_unique<Remote::DisaggPhysicalTableReadSnapshot>(
         KeyspaceTableID{keyspace_id, physical_table_id},
