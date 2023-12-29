@@ -47,9 +47,17 @@ public:
 
     EncryptionKey decryptEncryptionKey(const String & exported)
     {
-        RUNTIME_CHECK_MSG(exported.size() == EncryptionKey::EXPORT_KEY_LENGTH, "Invalid exported key length");
+        RUNTIME_CHECK_MSG(
+            exported.size() == EncryptionKey::EXPORT_KEY_LENGTH,
+            "Invalid exported key length: {}, expected: {}",
+            exported.size(),
+            EncryptionKey::EXPORT_KEY_LENGTH);
         char method = exported[0];
-        RUNTIME_CHECK_MSG(method == static_cast<char>(EncryptionMethod::Aes256Ctr), "Invalid encryption method");
+        RUNTIME_CHECK_MSG(
+            method == static_cast<char>(EncryptionMethod::Aes256Ctr),
+            "Invalid encryption method: {}, expected: {}",
+            static_cast<int>(method),
+            static_cast<int>(EncryptionMethod::Aes256Ctr));
         auto current_ver = readBigEndian<UInt32>(exported.data() + 1);
         String cipher_text = exported.substr(1 + 4, EncryptionKey::KEY_LENGTH);
         String plain_text = cipher_text;
