@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include <Storages/DeltaMerge/ScanContext.h>
+#include <Storages/DeltaMerge/ScanContext_fwd.h>
 #include <common/types.h>
 #include <tipb/select.pb.h>
 
@@ -32,9 +32,9 @@ struct ExecutionSummary
     UInt64 num_iterations = 0;
     UInt64 concurrency = 0;
 
-    DM::ScanContextPtr scan_context = std::make_shared<DB::DM::ScanContext>();
+    DM::ScanContextPtr scan_context;
 
-    ExecutionSummary() = default;
+    ExecutionSummary();
 
     void merge(const ExecutionSummary & other);
     void merge(const tipb::ExecutorExecutionSummary & other);
