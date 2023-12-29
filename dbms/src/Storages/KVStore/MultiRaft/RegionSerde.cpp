@@ -63,7 +63,7 @@ static_assert(
     magic_enum::enum_count<RegionPersistExtension>()
     == magic_enum::enum_underlying(RegionPersistExtension::MaxKnownFlag));
 
-constexpr UInt32 Region::CURRENT_VERSION = static_cast<UInt64>(RegionPersistVersion::V2);
+constexpr UInt32 Region::CURRENT_VERSION = static_cast<UInt32>(RegionPersistVersion::V2);
 
 std::pair<MaybeRegionPersistExtension, UInt32> getPersistExtensionTypeAndLength(ReadBuffer & buf)
 {
