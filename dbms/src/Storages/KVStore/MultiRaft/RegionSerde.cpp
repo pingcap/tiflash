@@ -64,7 +64,7 @@ static_assert(
     == magic_enum::enum_underlying(RegionPersistExtension::MaxKnownFlag));
 static_assert(RegionPersistFormat::HAS_EAGER_TRUNCATE_INDEX == 0x01);
 
-constexpr UInt32 Region::CURRENT_VERSION = static_cast<UInt64>(RegionPersistVersion::V2);
+constexpr UInt32 Region::CURRENT_VERSION = static_cast<UInt32>(RegionPersistVersion::V2);
 
 std::pair<MaybeRegionPersistExtension, UInt32> getPersistExtensionTypeAndLength(ReadBuffer & buf)
 {
