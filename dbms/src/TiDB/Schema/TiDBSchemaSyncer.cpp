@@ -12,13 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
 #include <TiDB/Schema/SchemaBuilder.h>
 #include <TiDB/Schema/TiDBSchemaSyncer.h>
+#include <common/logger_useful.h>
 #include <common/types.h>
 
 #include <mutex>
-#include <shared_mutex>
 
 namespace DB
 {
@@ -99,7 +100,7 @@ bool TiDBSchemaSyncer<mock_getter, mock_mapper>::syncSchemasByGetter(Context & c
             // Since TiDB can not make sure the schema diff of the latest schema version X is not empty, under this situation we should set the `cur_version`
             // to X-1 and try to fetch the schema diff X next time.
             Int64 version_after_load_diff = syncSchemaDiffs(context, getter, version);
-            if (version_after_load_diff != -1)
+            if (version_after_load_diff != SchemaGetter::SchemaVersionNotExist)
             {
                 cur_version = version_after_load_diff;
             }
@@ -125,33 +126,58 @@ Int64 TiDBSchemaSyncer<mock_getter, mock_mapper>::syncSchemaDiffs(
     Getter & getter,
     Int64 latest_version)
 {
-    Int64 version_of_diff = cur_version;
-    // TODO:try to use parallel to speed up
-    while (version_of_diff < latest_version)
-    {
-        version_of_diff++;
-        std::optional<SchemaDiff> diff = getter.getSchemaDiff(version_of_diff);
+    Int64 cur_apply_version = cur_version;
 
-        if (version_of_diff == latest_version && !diff)
+    // If `schema diff` got empty `schema diff`, we should handle it these ways:
+    //
+    // example:
+    //  - `cur_version` is 1, `latest_version` is 10
+    //  - The schema diff of schema version [2,4,6] is empty, Then we just skip it.
+    //  - The schema diff of schema version 10 is empty, Then we should just apply version to 9
+    while (cur_apply_version < latest_version)
+    {
+        cur_apply_version++;
+        std::optional<SchemaDiff> diff = getter.getSchemaDiff(cur_apply_version);
+        if (!diff)
         {
-            --version_of_diff;
+            if (cur_apply_version != latest_version)
+            {
+                // The DDL may meets conflict and the SchemaDiff of `cur_apply_version` is
+                // not used. Skip it.
+                LOG_WARNING(
+                    log,
+                    "Skip an empty schema diff, schema_version={} cur_version={} latest_version={}",
+                    cur_apply_version,
+                    cur_version,
+                    latest_version);
+                continue;
+            }
+
+            assert(cur_apply_version == latest_version);
+            // The latest version is empty, the SchemaDiff may not been committed to TiKV,
+            // skip succeeding the apply version
+            LOG_INFO(
+                log,
+                "Meets an empty schema diff in the latest_version, will not succeed, cur_version={} "
+                "schema_version={}",
+                cur_version,
+                latest_version);
+            --cur_apply_version;
             break;
         }
 
         if (diff->regenerate_schema_map)
         {
-            // If `schema_diff.regenerate_schema_map` == true, return `-1` directly, let TiFlash reload schema info from TiKV.
-            LOG_INFO(
-                log,
-                "Meets a schema diff with regenerate_schema_map flag, sync all schema, version_of_diff={}",
-                version_of_diff);
-            return -1;
+            // `FLASHBACK CLUSTER` is executed, return `SchemaGetter::SchemaVersionNotExist`.
+            // The caller should let TiFlash reload schema info from TiKV.
+            LOG_INFO(log, "Meets a schema diff with regenerate_schema_map flag, schema_version={}", cur_apply_version);
+            return SchemaGetter::SchemaVersionNotExist;
         }
 
         SchemaBuilder<Getter, NameMapper> builder(getter, context, databases, table_id_map);
         builder.applyDiff(*diff);
     }
-    return version_of_diff;
+    return cur_apply_version;
 }
 
 template <bool mock_getter, bool mock_mapper>
