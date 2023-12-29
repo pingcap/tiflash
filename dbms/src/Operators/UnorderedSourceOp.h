@@ -39,6 +39,7 @@ public:
         , task_pool(task_pool_)
         , action(header, extra_table_id_index, physical_table_id)
     {
+<<<<<<< HEAD
         setHeader(toEmptyBlock(columns_to_read_));
         if (extra_table_id_index != InvalidColumnID)
         {
@@ -49,11 +50,40 @@ public:
         auto ref_no = task_pool->increaseUnorderedInputStreamRefCount();
         LOG_DEBUG(log, "Created, pool_id={} ref_no={}", task_pool->poolId(), ref_no);
         addReadTaskPoolToScheduler();
+=======
+        setHeader(AddExtraTableIDColumnTransformAction::buildHeader(columns_to_read_, extra_table_id_index_));
+        ref_no = task_pool->increaseUnorderedInputStreamRefCount();
+>>>>>>> ce42814e49 (*: Add table scan details logging; change default logging level to "info" (#8616))
     }
 
     String getName() const override
     {
+<<<<<<< HEAD
         return "UnorderedSourceOp";
+=======
+        if (const auto rc_before_decr = task_pool->decreaseUnorderedInputStreamRefCount(); rc_before_decr == 1)
+        {
+            LOG_INFO(
+                log,
+                "All unordered input streams are finished, pool_id={} last_stream_ref_no={}",
+                task_pool->pool_id,
+                ref_no);
+        }
+    }
+
+    String getName() const override { return "UnorderedSourceOp"; }
+
+    IOProfileInfoPtr getIOProfileInfo() const override { return IOProfileInfo::createForLocal(profile_info_ptr); }
+
+    // only for unit test
+    // The logic order of unit test is error, it will build source_op firstly and register rf secondly.
+    // It causes source_op could not get RF list in constructor.
+    // So, for unit test, it should call this function separated.
+    void setRuntimeFilterInfo(const RuntimeFilteList & runtime_filter_list_, int max_wait_time_ms_)
+    {
+        waiting_rf_list = runtime_filter_list_;
+        max_wait_time_ms = max_wait_time_ms_;
+>>>>>>> ce42814e49 (*: Add table scan details logging; change default logging level to "info" (#8616))
     }
 
 protected:

@@ -21,6 +21,7 @@
 #include <DataStreams/SelectionByColumnIdTransformAction.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
+#include <Storages/DeltaMerge/ScanContext.h>
 #include <common/logger_useful.h>
 
 namespace DB
@@ -44,17 +45,32 @@ class DMVersionFilterBlockInputStream : public IBlockInputStream
     constexpr static const char * COMPACT_FILTER_NAME = "mode=COMPACT";
 
 public:
+<<<<<<< HEAD
     DMVersionFilterBlockInputStream(const BlockInputStreamPtr & input,
                                     const ColumnDefines & read_columns,
                                     UInt64 version_limit_,
                                     bool is_common_handle_,
                                     const String & tracing_id = "")
+=======
+    DMVersionFilterBlockInputStream(
+        const BlockInputStreamPtr & input,
+        const ColumnDefines & read_columns,
+        UInt64 version_limit_,
+        bool is_common_handle_,
+        const String & tracing_id = "",
+        const ScanContextPtr & scan_context_ = nullptr)
+>>>>>>> ce42814e49 (*: Add table scan details logging; change default logging level to "info" (#8616))
         : version_limit(version_limit_)
         , is_common_handle(is_common_handle_)
         , header(toEmptyBlock(read_columns))
         , select_by_colid_action(input->getHeader(), header)
+<<<<<<< HEAD
         , log(Logger::get((MODE == DM_VERSION_FILTER_MODE_MVCC ? MVCC_FILTER_NAME : COMPACT_FILTER_NAME),
                           tracing_id))
+=======
+        , scan_context(scan_context_)
+        , log(Logger::get((MODE == DM_VERSION_FILTER_MODE_MVCC ? MVCC_FILTER_NAME : COMPACT_FILTER_NAME), tracing_id))
+>>>>>>> ce42814e49 (*: Add table scan details logging; change default logging level to "info" (#8616))
     {
         children.push_back(input);
 
@@ -263,6 +279,8 @@ private:
     size_t deleted_rows = 0;
 
     SelectionByColumnIdTransformAction select_by_colid_action;
+
+    const ScanContextPtr scan_context;
 
     const LoggerPtr log;
 };

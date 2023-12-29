@@ -1086,7 +1086,13 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
         after_segment_read,
         log_tracing_id,
         enable_read_thread,
+<<<<<<< HEAD
         final_num_stream);
+=======
+        final_num_stream,
+        dm_context->scan_context->resource_group_name);
+    dm_context->scan_context->read_mode = read_mode;
+>>>>>>> ce42814e49 (*: Add table scan details logging; change default logging level to "info" (#8616))
 
     BlockInputStreams res;
     for (size_t i = 0; i < final_num_stream; ++i)
@@ -1118,7 +1124,11 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
         }
         res.push_back(stream);
     }
-    LOG_DEBUG(tracing_logger, "Read create stream done");
+    LOG_INFO(
+        tracing_logger,
+        "Read create stream done, pool_id={} num_streams={}",
+        read_task_pool->pool_id,
+        final_num_stream);
 
     return res;
 }
@@ -1176,11 +1186,20 @@ SourceOps DeltaMergeStore::readSourceOps(
         after_segment_read,
         log_tracing_id,
         enable_read_thread,
+<<<<<<< HEAD
         final_num_stream);
 
     SourceOps res;
     RUNTIME_CHECK(enable_read_thread); // TODO: support keep order
     for (size_t i = 0; i < final_num_stream; ++i)
+=======
+        final_num_stream,
+        dm_context->scan_context->resource_group_name);
+    dm_context->scan_context->read_mode = read_mode;
+
+    const auto & columns_after_cast = filter && filter->extra_cast ? *filter->columns_after_cast : columns_to_read;
+    if (enable_read_thread)
+>>>>>>> ce42814e49 (*: Add table scan details logging; change default logging level to "info" (#8616))
     {
         res.push_back(
             std::make_unique<UnorderedSourceOp>(
@@ -1193,7 +1212,15 @@ SourceOps DeltaMergeStore::readSourceOps(
     }
     LOG_DEBUG(tracing_logger, "Read create SourceOp done");
 
+<<<<<<< HEAD
     return res;
+=======
+    LOG_INFO(
+        tracing_logger,
+        "Read create PipelineExec done, pool_id={} num_streams={}",
+        read_task_pool->pool_id,
+        final_num_stream);
+>>>>>>> ce42814e49 (*: Add table scan details logging; change default logging level to "info" (#8616))
 }
 
 Remote::DisaggPhysicalTableReadSnapshotPtr
@@ -1214,9 +1241,18 @@ DeltaMergeStore::writeNodeBuildRemoteReadSnapshot(
     // could fetch the data segment by segment with these snapshots later.
     // `try_split_task` is false because we need to ensure only one segment task
     // for one segment.
+<<<<<<< HEAD
     SegmentReadTasks tasks = getReadTasksByRanges(*dm_context, sorted_ranges, num_streams, read_segments, /* try_split_task */ false);
+=======
+    SegmentReadTasks tasks = getReadTasksByRanges(
+        dm_context,
+        sorted_ranges,
+        num_streams,
+        read_segments,
+        /* try_split_task */ false);
+>>>>>>> ce42814e49 (*: Add table scan details logging; change default logging level to "info" (#8616))
     GET_METRIC(tiflash_disaggregated_read_tasks_count).Increment(tasks.size());
-    LOG_DEBUG(tracing_logger, "Read create segment snapshot done");
+    LOG_INFO(tracing_logger, "Read create segment snapshot done");
 
     return std::make_unique<Remote::DisaggPhysicalTableReadSnapshot>(KeyspaceTableID{keyspace_id, physical_table_id}, std::move(tasks));
 }
@@ -1744,6 +1780,8 @@ SegmentReadTasks DeltaMergeStore::getReadTasksByRanges(
                 ++seg_it;
         }
     }
+
+    // how many segments involved for the given key ranges
     const auto tasks_before_split = tasks.size();
     if (try_split_task)
     {
@@ -1759,8 +1797,19 @@ SegmentReadTasks DeltaMergeStore::getReadTasksByRanges(
         total_ranges += task->ranges.size();
     }
 
+<<<<<<< HEAD
     auto tracing_logger = log->getChild(getLogTracingId(dm_context));
     LOG_DEBUG(
+=======
+    if (dm_context->scan_context)
+    {
+        dm_context->scan_context->num_segments += tasks_before_split;
+        dm_context->scan_context->num_read_tasks += tasks.size();
+    }
+
+    auto tracing_logger = log->getChild(getLogTracingId(*dm_context));
+    LOG_INFO(
+>>>>>>> ce42814e49 (*: Add table scan details logging; change default logging level to "info" (#8616))
         tracing_logger,
         "Segment read tasks build done, cost={}ms sorted_ranges={} n_tasks_before_split={} n_tasks_final={} n_ranges_final={}",
         watch.elapsedMilliseconds(),

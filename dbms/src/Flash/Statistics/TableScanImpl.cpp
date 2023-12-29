@@ -15,6 +15,7 @@
 #include <DataStreams/TiRemoteBlockInputStream.h>
 #include <Flash/Statistics/TableScanImpl.h>
 #include <Interpreters/Join.h>
+#include <Storages/DeltaMerge/ScanContext.h>
 
 namespace DB
 {
@@ -29,10 +30,14 @@ String TableScanDetail::toJson() const
 
 void TableScanStatistics::appendExtraJson(FmtBuffer & fmt_buffer) const
 {
+    auto scan_ctx_it = dag_context.scan_context_map.find(executor_id);
     fmt_buffer.fmtAppend(
-        R"("connection_details":[{},{}])",
+        R"("connection_details":[{},{}],"scan_details":{})",
         local_table_scan_detail.toJson(),
-        remote_table_scan_detail.toJson());
+        remote_table_scan_detail.toJson(),
+        scan_ctx_it != dag_context.scan_context_map.end() ? scan_ctx_it->second->toJson()
+                                                          : "{}" // empty json object for nullptr
+    );
 }
 
 void TableScanStatistics::collectExtraRuntimeDetail()

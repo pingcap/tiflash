@@ -18,6 +18,10 @@
 #include <Common/Logger.h>
 #include <Encryption/RandomAccessFile.h>
 #include <Storages/DeltaMerge/File/MergedFile.h>
+<<<<<<< HEAD
+=======
+#include <Storages/DeltaMerge/ScanContext_fwd.h>
+>>>>>>> ce42814e49 (*: Add table scan details logging; change default logging level to "info" (#8616))
 #include <aws/s3/model/GetObjectResult.h>
 #include <common/types.h>
 

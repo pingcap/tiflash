@@ -171,6 +171,18 @@ size_t ColumnFileSetReader::readRows(MutableColumns & output_columns, size_t off
             }
         }
     }
+<<<<<<< HEAD
+=======
+
+    if (auto delta_bytes = columnsSize(output_columns) - bytes_before_read; delta_bytes > 0)
+    {
+        if (row_ids == nullptr)
+            lac_bytes_collector.collect(delta_bytes);
+        if (likely(context.scan_context))
+            context.scan_context->user_read_bytes += delta_bytes;
+    }
+
+>>>>>>> ce42814e49 (*: Add table scan details logging; change default logging level to "info" (#8616))
     return actual_read;
 }
 

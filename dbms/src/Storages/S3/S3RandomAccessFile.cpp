@@ -18,6 +18,7 @@
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/TiFlashMetrics.h>
 #include <Encryption/RandomAccessFile.h>
+#include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/S3/FileCache.h>
 #include <Storages/S3/MemoryRandomAccessFile.h>
 #include <Storages/S3/S3Common.h>
@@ -239,8 +240,17 @@ inline static RandomAccessFilePtr createFromNormalFile(const String & remote_fna
     auto file = tryOpenCachedFile(remote_fname, filesize);
     if (file != nullptr)
     {
+<<<<<<< HEAD
         return file;
     }
+=======
+        if (scan_context.has_value())
+            scan_context.value()->disagg_read_cache_hit_size += filesize.value();
+        return file;
+    }
+    if (scan_context.has_value())
+        scan_context.value()->disagg_read_cache_miss_size += filesize.value();
+>>>>>>> ce42814e49 (*: Add table scan details logging; change default logging level to "info" (#8616))
     auto & ins = S3::ClientFactory::instance();
     return std::make_shared<S3RandomAccessFile>(ins.sharedTiFlashClient(), remote_fname);
 }

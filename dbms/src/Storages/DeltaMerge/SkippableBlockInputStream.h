@@ -19,6 +19,7 @@
 #include <DataStreams/IBlockInputStream.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
+#include <Storages/DeltaMerge/ScanContext.h>
 
 namespace DB
 {
@@ -206,6 +207,20 @@ private:
         }
         return seg_row_id_col;
     }
+<<<<<<< HEAD
+=======
+    void addReadBytes(UInt64 bytes)
+    {
+        if (likely(scan_context != nullptr))
+        {
+            scan_context->user_read_bytes += bytes;
+            if constexpr (!need_row_id)
+            {
+                lac_bytes_collector.collect(bytes);
+            }
+        }
+    }
+>>>>>>> ce42814e49 (*: Add table scan details logging; change default logging level to "info" (#8616))
     BlockInputStreams::iterator current_stream;
     std::vector<size_t> rows;
     size_t precede_stream_rows;

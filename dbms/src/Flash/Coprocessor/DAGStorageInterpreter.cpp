@@ -396,13 +396,22 @@ void DAGStorageInterpreter::prepare()
         learner_read_snapshot = doBatchCopLearnerRead();
     else
         learner_read_snapshot = doCopLearnerRead();
+<<<<<<< HEAD
+=======
+    scan_context->learner_read_ns += watch.elapsed();
+>>>>>>> ce42814e49 (*: Add table scan details logging; change default logging level to "info" (#8616))
 
     // Acquire read lock on `alter lock` and build the requested inputstreams
     storages_with_structure_lock = getAndLockStorages(context.getSettingsRef().schema_version);
     assert(storages_with_structure_lock.find(logical_table_id) != storages_with_structure_lock.end());
     storage_for_logical_table = storages_with_structure_lock[logical_table_id].storage;
 
+<<<<<<< HEAD
     std::tie(required_columns, is_need_add_cast_column) = getColumnsForTableScan();
+=======
+    std::tie(required_columns, may_need_add_cast_column) = getColumnsForTableScan();
+    scan_context->num_columns = required_columns.size();
+>>>>>>> ce42814e49 (*: Add table scan details logging; change default logging level to "info" (#8616))
 }
 
 void DAGStorageInterpreter::executeCastAfterTableScan(
