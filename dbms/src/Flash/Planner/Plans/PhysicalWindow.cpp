@@ -125,7 +125,7 @@ void PhysicalWindow::buildPipelineExecGroupImpl(
     executeExpression(exec_context, group_builder, window_description.after_window, log);
 }
 
-void PhysicalWindow::finalize(const Names & parent_require)
+void PhysicalWindow::finalizeImpl(const Names & parent_require)
 {
     FinalizeHelper::checkSchemaContainsParentRequire(schema, parent_require);
 

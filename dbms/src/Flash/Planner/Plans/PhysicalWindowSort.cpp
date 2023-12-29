@@ -70,7 +70,7 @@ void PhysicalWindowSort::buildPipelineExecGroupImpl(
         executeFinalSort(exec_context, group_builder, order_descr, {}, context, log);
 }
 
-void PhysicalWindowSort::finalize(const Names & parent_require)
+void PhysicalWindowSort::finalizeImpl(const Names & parent_require)
 {
     Names required_output = parent_require;
     required_output.reserve(required_output.size() + order_descr.size());
