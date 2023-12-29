@@ -82,9 +82,6 @@ public:
     std::atomic<uint64_t> learner_read_ns{0};
     // Create snapshot from PageStorage
     std::atomic<uint64_t> create_snapshot_time_ns{0};
-    // Create inputstream and updating DeltaIndex
-    // When read_mode == Bitmap, it include the time of building bitmap
-    std::atomic<uint64_t> create_inputstream_time_ns{0};
     // Building bitmap
     std::atomic<uint64_t> build_bitmap_time_ns{0};
 
@@ -142,7 +139,6 @@ public:
         total_dmfile_rough_set_index_check_time_ns += other.total_dmfile_rough_set_index_check_time_ns;
         total_dmfile_read_time_ns += other.total_dmfile_read_time_ns;
         create_snapshot_time_ns += other.create_snapshot_time_ns;
-        create_inputstream_time_ns += other.create_inputstream_time_ns;
 
         total_local_region_num += other.total_local_region_num;
         total_remote_region_num += other.total_remote_region_num;
