@@ -60,7 +60,6 @@ public:
         , current_ver(current_ver_)
     {}
 
-    // disallow copy and move, only use as shared_ptr in EncryptionKey
     DISALLOW_COPY_AND_MOVE(EncryptionKeyCore);
 
     FileEncryptionInfo generateEncryptionInfo(String && iv) const
