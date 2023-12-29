@@ -1159,6 +1159,7 @@ Segments DeltaMergeStore::buildSegmentsFromCheckpointInfo(
     if (restored_segments.empty())
     {
         LOG_DEBUG(log, "No segments to ingest.");
+        wbs.writeLogAndData();
         return {};
     }
     wbs.writeLogAndData();

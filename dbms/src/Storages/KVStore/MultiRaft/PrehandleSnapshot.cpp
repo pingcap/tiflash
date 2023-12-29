@@ -249,7 +249,7 @@ PrehandleResult KVStore::preHandleSnapshotToFiles(
     {
         auto fap_ctx = tmt.getContext().getSharedContextDisagg()->fap_context;
         auto region_id = new_region->id();
-        // Everytime we meet a legacy snapshot, we try to clean obsolete fap ingest info.
+        // Everytime we meet a regular snapshot, we try to clean obsolete fap ingest info.
         fap_ctx->resolveFapSnapshotState(tmt, proxy_helper, region_id, true);
     }
 
@@ -302,7 +302,7 @@ size_t KVStore::getMaxParallelPrehandleSize() const
     return total_concurrency;
 }
 
-// If size is 0, do not parallel prehandle for this snapshot, which is legacy.
+// If size is 0, do not parallel prehandle for this snapshot, which is regular.
 // If size is non-zero, use extra this many threads to prehandle.
 static inline std::pair<std::vector<std::string>, size_t> getSplitKey(
     LoggerPtr log,

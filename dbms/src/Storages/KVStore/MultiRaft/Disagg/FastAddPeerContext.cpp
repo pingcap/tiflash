@@ -223,14 +223,14 @@ void FastAddPeerContext::resolveFapSnapshotState(
     TMTContext & tmt,
     const TiFlashRaftProxyHelper * proxy_helper,
     UInt64 region_id,
-    bool is_legacy_snapshot)
+    bool is_regular_snapshot)
 {
     auto prev_state = tasks_trace->queryState(region_id);
-    /// --- The legacy snapshot case ---
+    /// --- The regular snapshot case ---
     /// Legacy snapshot is not concurrent with FAP snapshot in both phase 1 and phase 2:
     /// Can't be InQueue/Running because:
     /// - Proxy will not actively cancel FAP, so it will not fallback if FAP phase 1 is still running.
-    /// Cancel in `FastAddPeer` is blocking, so a legacy snapshot won't meet a canceling snapshot.
+    /// Cancel in `FastAddPeer` is blocking, so a regular snapshot won't meet a canceling snapshot.
     /// Can't be Finished because:
     /// - A finished task must be fetched by proxy on the next `FastAddPeer`.
     /// -- The destroy region case ---
@@ -238,18 +238,18 @@ void FastAddPeerContext::resolveFapSnapshotState(
     /// If the region is destroyed now and sent to this store later, it must be with another peer_id.
     RUNTIME_CHECK_MSG(
         prev_state == FAPAsyncTasks::TaskState::NotScheduled,
-        "FastAddPeer: find scheduled fap task, region_id={} fap_state={} is_legacy_snapshot={}",
+        "FastAddPeer: find scheduled fap task, region_id={} fap_state={} is_regular_snapshot={}",
         region_id,
         magic_enum::enum_name(prev_state),
-        is_legacy_snapshot);
+        is_regular_snapshot);
     // 1. There leaves some non-ingested data on disk after restart.
     // 2. There has been no fap at all.
     // 3. FAP is enabled before, but disabled for now.
     LOG_DEBUG(
         log,
-        "FastAddPeer: no find ongoing fap task, region_id={} is_legacy_snapshot={}",
+        "FastAddPeer: no find ongoing fap task, region_id={} is_regular_snapshot={}",
         region_id,
-        is_legacy_snapshot);
+        is_regular_snapshot);
     // Still need to clean because there could be data left.
     cleanTask(tmt, proxy_helper, region_id, false);
 }

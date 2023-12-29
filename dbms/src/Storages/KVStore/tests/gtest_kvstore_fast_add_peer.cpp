@@ -690,7 +690,7 @@ try
 }
 CATCH
 
-// Test cancel and legacy snapshot
+// Test cancel and regular snapshot
 TEST_F(RegionKVStoreTestFAP, Cancel4)
 try
 {

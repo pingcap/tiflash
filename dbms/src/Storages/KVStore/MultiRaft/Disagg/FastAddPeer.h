@@ -72,7 +72,7 @@ public:
         TMTContext & tmt,
         const struct TiFlashRaftProxyHelper * proxy_helper,
         UInt64 region_id,
-        bool is_legacy_snapshot);
+        bool is_regular_snapshot);
 
     // Remove the checkpoint ingest info from memory. Only for testing.
     void debugRemoveCheckpointIngestInfo(UInt64 region_id);

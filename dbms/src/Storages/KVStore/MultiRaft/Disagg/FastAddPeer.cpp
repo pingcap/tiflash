@@ -467,7 +467,7 @@ uint8_t ApplyFapSnapshotImpl(TMTContext & tmt, TiFlashRaftProxyHelper * proxy_he
     GET_METRIC(tiflash_fap_task_result, type_restore).Increment();
     // If there is `checkpoint_ingest_info`, it is exactly the data we want to ingest. Consider two scene:
     // 1. If there was a failed FAP which failed to clean, its data will be overwritten by current FAP which has finished phase 1.
-    // 2. It is not possible that a restart happens at FAP phase 2, and a legacy snapshot is sent, because snapshots can only be accepted once the previous snapshot it handled.
+    // 2. It is not possible that a restart happens at FAP phase 2, and a regular snapshot is sent, because snapshots can only be accepted once the previous snapshot it handled.
     {
         GET_METRIC(tiflash_fap_task_state, type_ingesting_stage).Increment();
         SCOPE_EXIT({ GET_METRIC(tiflash_fap_task_state, type_ingesting_stage).Decrement(); });
@@ -600,7 +600,7 @@ FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, u
             {
                 /// NOTE: Make sure FastAddPeer is the only place to cancel FAP phase 1.
                 // If the task is running, we have to wait it return on cancel and clean,
-                // otherwise a later legacy may race with this clean.
+                // otherwise a later regular may race with this clean.
                 auto prev_state = fap_ctx->tasks_trace->queryState(region_id);
                 LOG_INFO(
                     log,
