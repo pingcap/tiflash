@@ -44,23 +44,17 @@ void SegmentReadTaskScheduler::add(const SegmentReadTaskPoolPtr & pool)
         auto seg_id = pa.first;
         merging_segments[pool->physical_table_id][seg_id].push_back(pool->pool_id);
     }
-<<<<<<< HEAD
-    auto block_slots = pool->getFreeBlockSlots();
-    LOG_DEBUG(
-        log,
-        "Added, pool_id={} table_id={} block_slots={} segment_count={} pool_count={} cost={}ns do_add_cost={}ns", //
-=======
     LOG_INFO(
-        req_log,
-        "Added, pool_id={} block_slots={} segment_count={} pool_count={} cost={:.3f}us do_add_cost={:.3f}us", //
->>>>>>> ce42814e49 (*: Add table scan details logging; change default logging level to "info" (#8616))
+        log,
+        "Added, pool_id={} table_id={} block_slots={} segment_count={} pool_count={} "
+        "cost={:.3f}us do_add_cost={:.3f}us", //
         pool->pool_id,
         pool->physical_table_id,
-        block_slots,
+        pool->getFreeBlockSlots(),
         tasks.size(),
         read_pools.size(),
-        sw_add.elapsed(),
-        sw_do_add.elapsed());
+        sw_add.elapsed() / 1000.0,
+        sw_do_add.elapsed() / 1000.0);
 }
 
 std::pair<MergedTaskPtr, bool> SegmentReadTaskScheduler::scheduleMergedTask()

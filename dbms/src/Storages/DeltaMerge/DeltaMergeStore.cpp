@@ -1313,12 +1313,8 @@ void DeltaMergeStore::read(
         enable_read_thread,
         final_num_stream,
         dm_context->scan_context->resource_group_name);
-<<<<<<< HEAD
-=======
     dm_context->scan_context->read_mode = read_mode;
->>>>>>> ce42814e49 (*: Add table scan details logging; change default logging level to "info" (#8616))
 
-    const auto & columns_after_cast = filter && filter->extra_cast ? *filter->columns_after_cast : columns_to_read;
     if (enable_read_thread)
     {
         for (size_t i = 0; i < final_num_stream; ++i)
@@ -1383,17 +1379,8 @@ Remote::DisaggPhysicalTableReadSnapshotPtr DeltaMergeStore::writeNodeBuildRemote
     // could fetch the data segment by segment with these snapshots later.
     // `try_split_task` is false because we need to ensure only one segment task
     // for one segment.
-<<<<<<< HEAD
     SegmentReadTasks tasks
         = getReadTasksByRanges(*dm_context, sorted_ranges, num_streams, read_segments, /* try_split_task */ false);
-=======
-    SegmentReadTasks tasks = getReadTasksByRanges(
-        dm_context,
-        sorted_ranges,
-        num_streams,
-        read_segments,
-        /* try_split_task */ false);
->>>>>>> ce42814e49 (*: Add table scan details logging; change default logging level to "info" (#8616))
     GET_METRIC(tiflash_disaggregated_read_tasks_count).Increment(tasks.size());
     LOG_INFO(tracing_logger, "Read create segment snapshot done");
 
@@ -2078,17 +2065,13 @@ SegmentReadTasks DeltaMergeStore::getReadTasksByRanges(
         total_ranges += task->ranges.size();
     }
 
-<<<<<<< HEAD
-    auto tracing_logger = log->getChild(getLogTracingId(dm_context));
-=======
-    if (dm_context->scan_context)
+    if (dm_context.scan_context)
     {
-        dm_context->scan_context->num_segments += tasks_before_split;
-        dm_context->scan_context->num_read_tasks += tasks.size();
+        dm_context.scan_context->num_segments += tasks_before_split;
+        dm_context.scan_context->num_read_tasks += tasks.size();
     }
 
-    auto tracing_logger = log->getChild(getLogTracingId(*dm_context));
->>>>>>> ce42814e49 (*: Add table scan details logging; change default logging level to "info" (#8616))
+    auto tracing_logger = log->getChild(getLogTracingId(dm_context));
     LOG_INFO(
         tracing_logger,
         "Segment read tasks build done, cost={}ms sorted_ranges={} n_tasks_before_split={} n_tasks_final={} "
