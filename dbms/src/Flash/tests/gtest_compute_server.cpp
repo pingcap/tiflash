@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/DynamicThreadPool.h>
 #include <Flash/Coprocessor/JoinInterpreterHelper.h>
 #include <Flash/Mpp/MPPTaskId.h>
 #include <Interpreters/Context.h>
@@ -767,7 +766,7 @@ try
                     EXPECT_TRUE(assertQueryCancelled(gather_id.query_id));
                 });
             }
-            // Destruction of DynamicThreadPoll will automatically wait for the finish of tasks.
+            thread_mgr->wait();
         }
     }
     WRAP_FOR_SERVER_TEST_END
