@@ -49,14 +49,16 @@ static constexpr UInt32 HAS_EAGER_TRUNCATE_INDEX = 0x01;
 using MaybeRegionPersistExtension = UInt32;
 enum class RegionPersistExtension : MaybeRegionPersistExtension
 {
-    TEST = 2,
+    Reserved1 = 1,
+    ReservedForTest = 2,
     // It should always be equal to the maximum supported type + 1
     MaxKnownFlag = 3,
 };
 
-constexpr MaybeRegionPersistExtension UNUSED_EXTENSION_NUMBER_FOR_TEST = 99999;
+constexpr MaybeRegionPersistExtension UNUSED_EXTENSION_NUMBER_FOR_TEST = UINT32_MAX / 2;
 static_assert(!magic_enum::enum_contains<RegionPersistExtension>(UNUSED_EXTENSION_NUMBER_FOR_TEST));
 static_assert(std::is_same_v<MaybeRegionPersistExtension, UInt32>);
+static_assert(magic_enum::enum_underlying(RegionPersistExtension::MaxKnownFlag) <= UINT32_MAX / 2);
 
 const UInt32 Region::CURRENT_VERSION = static_cast<UInt64>(RegionPersistVersion::V2);
 
@@ -132,7 +134,7 @@ std::tuple<size_t, UInt64> Region::serialize(WriteBuffer & buf) const
                     total_size += writePersistExtension(
                         actual_extension_count,
                         buf,
-                        magic_enum::enum_underlying(RegionPersistExtension::TEST),
+                        magic_enum::enum_underlying(RegionPersistExtension::ReservedForTest),
                         s.data(),
                         s.size());
                 }
@@ -229,7 +231,7 @@ RegionPtr Region::deserialize(ReadBuffer & buf, const TiFlashRaftProxyHelper * p
                     auto bundle = std::any_cast<bundle_type>(v.value());
                     if (bundle.first & 1)
                     {
-                        if (extension_type == magic_enum::enum_underlying(RegionPersistExtension::TEST))
+                        if (extension_type == magic_enum::enum_underlying(RegionPersistExtension::ReservedForTest))
                         {
                             RUNTIME_CHECK(length == 4);
                             RUNTIME_CHECK(readStringWithLength(buf, 4) == "abcd");
