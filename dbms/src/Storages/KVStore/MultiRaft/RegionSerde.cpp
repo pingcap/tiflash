@@ -47,6 +47,10 @@ static constexpr UInt32 HAS_EAGER_TRUNCATE_INDEX = 0x01;
 } // namespace RegionPersistFormat
 
 using MaybeRegionPersistExtension = UInt32;
+// The RegionPersistExtension has nothing to do with `version`.
+// No matter upgrading or downgrading, we parse a `MaybeRegionPersistExtension` if we KNOW this field.
+// We KNOW this field if it is LESS THAN `MaxKnownFlag`, so there should be NO hole before `MaxKnownFlag`.
+// Once a extension is registered, what it's stand for shouldn't be changed. E.g. if Ext1 is assigned to 10, then in any older or newer version, we can't assign another Ext2 to 10.
 enum class RegionPersistExtension : MaybeRegionPersistExtension
 {
     Reserved1 = 1,
