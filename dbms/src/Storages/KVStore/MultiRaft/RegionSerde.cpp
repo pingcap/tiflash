@@ -249,6 +249,7 @@ RegionPtr Region::deserialize(ReadBuffer & buf, const TiFlashRaftProxyHelper * p
                 continue;
             }
 
+            //Throw away unknown extension data
             if (extension_type >= magic_enum::enum_underlying(RegionPersistExtension::MaxKnownFlag))
             {
                 buf.ignore(length);
