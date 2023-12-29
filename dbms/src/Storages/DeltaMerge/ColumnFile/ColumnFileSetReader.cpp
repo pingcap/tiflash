@@ -74,11 +74,12 @@ std::pair<size_t, size_t> findColumnFile(const ColumnFiles & column_files, size_
 }
 
 ColumnFileSetReader::ColumnFileSetReader(
-    const DMContext & context,
+    const DMContext & context_,
     const ColumnFileSetSnapshotPtr & snapshot_,
     const ColumnDefinesPtr & col_defs_,
     const RowKeyRange & segment_range_)
-    : snapshot(snapshot_)
+    : context(context_)
+    , snapshot(snapshot_)
     , col_defs(col_defs_)
     , segment_range(segment_range_)
 {
@@ -94,7 +95,7 @@ ColumnFileSetReader::ColumnFileSetReader(
 
 ColumnFileSetReaderPtr ColumnFileSetReader::createNewReader(const ColumnDefinesPtr & new_col_defs)
 {
-    auto * new_reader = new ColumnFileSetReader();
+    auto * new_reader = new ColumnFileSetReader(context);
     new_reader->snapshot = snapshot;
     new_reader->col_defs = new_col_defs;
     new_reader->segment_range = segment_range;
@@ -122,6 +123,14 @@ Block ColumnFileSetReader::readPKVersion(size_t offset, size_t limit)
     return block;
 }
 
+static Int64 columnsSize(MutableColumns & columns)
+{
+    Int64 bytes = 0;
+    for (const auto & col : columns)
+        bytes += col->byteSize();
+    return bytes;
+}
+
 size_t ColumnFileSetReader::readRows(MutableColumns & output_columns, size_t offset, size_t limit, const RowKeyRange * range, std::vector<UInt32> * row_ids)
 {
     // Note that DeltaMergeBlockInputStream could ask for rows with larger index than total_delta_rows,
@@ -142,6 +151,7 @@ size_t ColumnFileSetReader::readRows(MutableColumns & output_columns, size_t off
     if (end == start)
         return 0;
 
+    auto bytes_before_read = columnsSize(output_columns);
     auto [start_file_index, rows_start_in_start_file] = locatePosByAccumulation(column_file_rows_end, start);
     auto [end_file_index, rows_end_in_end_file] = locatePosByAccumulation(column_file_rows_end, end);
 
@@ -171,18 +181,13 @@ size_t ColumnFileSetReader::readRows(MutableColumns & output_columns, size_t off
             }
         }
     }
-<<<<<<< HEAD
-=======
 
     if (auto delta_bytes = columnsSize(output_columns) - bytes_before_read; delta_bytes > 0)
     {
-        if (row_ids == nullptr)
-            lac_bytes_collector.collect(delta_bytes);
         if (likely(context.scan_context))
             context.scan_context->user_read_bytes += delta_bytes;
     }
 
->>>>>>> ce42814e49 (*: Add table scan details logging; change default logging level to "info" (#8616))
     return actual_read;
 }
 

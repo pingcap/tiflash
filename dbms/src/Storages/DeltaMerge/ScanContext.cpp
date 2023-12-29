@@ -35,9 +35,6 @@ String ScanContext::toJson() const
 
     json->set("read_bytes", user_read_bytes.load());
 
-    json->set("disagg_cache_hit_size", disagg_read_cache_hit_size.load());
-    json->set("disagg_cache_miss_size", disagg_read_cache_miss_size.load());
-
     json->set("num_segments", num_segments.load());
     json->set("num_read_tasks", num_read_tasks.load());
     json->set("num_columns", num_columns.load());

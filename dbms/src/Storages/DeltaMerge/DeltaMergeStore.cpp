@@ -35,6 +35,7 @@
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/Filter/PushDownFilter.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
+#include <Storages/DeltaMerge/ReadMode.h>
 #include <Storages/DeltaMerge/ReadThread/SegmentReadTaskScheduler.h>
 #include <Storages/DeltaMerge/ReadThread/UnorderedInputStream.h>
 #include <Storages/DeltaMerge/Remote/DisaggSnapshot.h>
@@ -1182,7 +1183,7 @@ SourceOps DeltaMergeStore::readSourceOps(
         log_tracing_id,
         enable_read_thread,
         final_num_stream);
-    dm_context->scan_context->read_mode = read_mode;
+    dm_context->scan_context->read_mode = ReadMode::Normal;
 
     SourceOps res;
     RUNTIME_CHECK(enable_read_thread); // TODO: support keep order

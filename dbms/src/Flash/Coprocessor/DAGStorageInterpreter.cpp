@@ -15,6 +15,7 @@
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
 #include <Common/FmtUtils.h>
+#include <Common/Stopwatch.h>
 #include <Common/TiFlashException.h>
 #include <Common/TiFlashMetrics.h>
 #include <DataStreams/ExpressionBlockInputStream.h>
@@ -277,11 +278,6 @@ void DAGStorageInterpreter::execute(DAGPipeline & pipeline)
 void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
 {
     auto & dag_context = dagContext();
-
-    auto scan_context = std::make_shared<DM::ScanContext>();
-    dag_context.scan_context_map[table_scan.getTableScanExecutorID()] = scan_context;
-    mvcc_query_info->scan_context = scan_context;
-
     if (!mvcc_query_info->regions_query_info.empty())
     {
         buildLocalStreams(pipeline, context.getSettingsRef().max_block_size);
@@ -293,7 +289,7 @@ void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
     // Note that `buildRemoteRequests` must be called after `buildLocalStreams` because
     // `buildLocalStreams` will setup `region_retry_from_local_region` and we must
     // retry those regions or there will be data lost.
-    auto remote_requests = buildRemoteRequests(scan_context);
+    auto remote_requests = buildRemoteRequests(dag_context.scan_context_map[table_scan.getTableScanExecutorID()]);
     if (dag_context.is_disaggregated_task && !remote_requests.empty())
     {
         // This means RN is sending requests with stale region info, we simply reject the request
@@ -391,7 +387,12 @@ void DAGStorageInterpreter::prepare()
     // and `TiDB::TableInfo`) we may get this process more simplified. (tiflash/issues/1853)
 
     // Do learner read
-    const DAGContext & dag_context = *context.getDAGContext();
+    DAGContext & dag_context = *context.getDAGContext();
+    auto scan_context = std::make_shared<DM::ScanContext>();
+    dag_context.scan_context_map[table_scan.getTableScanExecutorID()] = scan_context;
+    mvcc_query_info->scan_context = scan_context;
+
+    Stopwatch watch;
     if (dag_context.isBatchCop() || dag_context.isMPPTask() || dag_context.is_disaggregated_task)
         learner_read_snapshot = doBatchCopLearnerRead();
     else
