@@ -75,6 +75,7 @@ public:
     /// Note: This function always build a snapshot over nop data provider. In order to read from this snapshot,
     /// you must explicitly assign a proper data provider.
     static ColumnFileSetSnapshotPtr deserializeColumnFileSet(
+        const DMContext & dm_context,
         const google::protobuf::RepeatedPtrField<RemotePb::ColumnFileRemote> & proto,
         const Remote::IDataStorePtr & data_store,
         const RowKeyRange & segment_range);
@@ -105,7 +106,7 @@ private:
     static RemotePb::ColumnFileRemote serializeCFTiny(
         const ColumnFileTiny & cf_tiny,
         IColumnFileDataProviderPtr data_provider);
-    static ColumnFileTinyPtr deserializeCFTiny(const RemotePb::ColumnFileTiny & proto);
+    static ColumnFileTinyPtr deserializeCFTiny(const DMContext & dm_context, const RemotePb::ColumnFileTiny & proto);
 
     static RemotePb::ColumnFileRemote serializeCFDeleteRange(const ColumnFileDeleteRange & cf_delete_range);
     static ColumnFileDeleteRangePtr deserializeCFDeleteRange(const RemotePb::ColumnFileDeleteRange & proto);
