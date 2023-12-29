@@ -18,11 +18,6 @@
 #include <Interpreters/Context_fwd.h>
 #include <Storages/DeltaMerge/Remote/ObjectId.h>
 #include <Storages/DeltaMerge/Remote/RNLocalPageCache_fwd.h>
-<<<<<<< HEAD
-=======
-#include <Storages/DeltaMerge/ScanContext_fwd.h>
-#include <Storages/KVStore/Types.h>
->>>>>>> ce42814e49 (*: Add table scan details logging; change default logging level to "info" (#8616))
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageStorage_fwd.h>
 #include <Storages/Page/V3/Universal/UniversalPageId.h>

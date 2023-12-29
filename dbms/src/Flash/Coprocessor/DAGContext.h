@@ -33,14 +33,9 @@
 #include <Interpreters/SubqueryForSet.h>
 #include <Parsers/makeDummyQuery.h>
 #include <Storages/DeltaMerge/Remote/DisaggTaskId.h>
-<<<<<<< HEAD
-#include <Storages/DeltaMerge/ScanContext.h>
+#include <Storages/DeltaMerge/ScanContext_fwd.h>
 #include <Storages/Transaction/TiDB.h>
 
-=======
-#include <Storages/DeltaMerge/ScanContext_fwd.h>
-#include <TiDB/Schema/TiDB.h>
->>>>>>> ce42814e49 (*: Add table scan details logging; change default logging level to "info" (#8616))
 namespace DB
 {
 class Context;

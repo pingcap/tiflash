@@ -680,28 +680,14 @@ SegmentPtr Segment::ingestDataForTest(DMContext & dm_context,
 SegmentSnapshotPtr Segment::createSnapshot(const DMContext & dm_context, bool for_update, CurrentMetrics::Metric metric) const
 {
     Stopwatch watch;
-<<<<<<< HEAD
-    SCOPE_EXIT({
-        dm_context.scan_context->total_create_snapshot_time_ns += watch.elapsed();
-    });
-=======
     SCOPE_EXIT({ dm_context.scan_context->create_snapshot_time_ns += watch.elapsed(); });
->>>>>>> ce42814e49 (*: Add table scan details logging; change default logging level to "info" (#8616))
     auto delta_snap = delta->createSnapshot(dm_context, for_update, metric);
     auto stable_snap = stable->createSnapshot();
     if (!delta_snap || !stable_snap)
         return {};
-<<<<<<< HEAD
-    return std::make_shared<SegmentSnapshot>(std::move(delta_snap), std::move(stable_snap));
-=======
-
     dm_context.scan_context->delta_rows += delta_snap->getRows();
     dm_context.scan_context->delta_bytes += delta_snap->getBytes();
-    return std::make_shared<SegmentSnapshot>(
-        std::move(delta_snap),
-        std::move(stable_snap),
-        Logger::get(dm_context.tracing_id));
->>>>>>> ce42814e49 (*: Add table scan details logging; change default logging level to "info" (#8616))
+    return std::make_shared<SegmentSnapshot>(std::move(delta_snap), std::move(stable_snap));
 }
 
 BlockInputStreamPtr Segment::getInputStream(const ReadMode & read_mode,
@@ -2524,9 +2510,6 @@ BitmapFilterPtr Segment::buildBitmapFilterNormal(const DMContext & dm_context,
     auto bitmap_filter = std::make_shared<BitmapFilter>(total_rows, /*default_value*/ false);
     bitmap_filter->set(stream);
     bitmap_filter->runOptimize();
-<<<<<<< HEAD
-    LOG_DEBUG(log, "buildBitmapFilterNormal total_rows={} cost={}ms", total_rows, sw_total.elapsedMilliseconds());
-=======
 
     const auto elapse_ns = sw_total.elapsed();
     dm_context.scan_context->build_bitmap_time_ns += elapse_ns;
@@ -2535,7 +2518,6 @@ BitmapFilterPtr Segment::buildBitmapFilterNormal(const DMContext & dm_context,
         "buildBitmapFilterNormal total_rows={} cost={:.3f}ms",
         total_rows,
         elapse_ns / 1'000'000.0);
->>>>>>> ce42814e49 (*: Add table scan details logging; change default logging level to "info" (#8616))
     return bitmap_filter;
 }
 
@@ -2657,16 +2639,12 @@ BitmapFilterPtr Segment::buildBitmapFilterStableOnly(const DMContext & dm_contex
 
     if (skipped_ranges.size() == 1 && skipped_ranges[0].offset == 0 && skipped_ranges[0].rows == segment_snap->stable->getDMFilesRows())
     {
-<<<<<<< HEAD
-        LOG_DEBUG(log, "buildBitmapFilterStableOnly all match, total_rows={}, cost={}ms", segment_snap->stable->getDMFilesRows(), sw.elapsedMilliseconds());
-=======
         auto elapse_ms = commit_elapse();
         LOG_DEBUG(
-            segment_snap->log,
+            log,
             "buildBitmapFilterStableOnly all match, total_rows={}, cost={:.3f}ms",
             segment_snap->stable->getDMFilesRows(),
             elapse_ms);
->>>>>>> ce42814e49 (*: Add table scan details logging; change default logging level to "info" (#8616))
         return std::make_shared<BitmapFilter>(segment_snap->stable->getDMFilesRows(), /*default_value*/ true);
     }
 
@@ -2687,16 +2665,12 @@ BitmapFilterPtr Segment::buildBitmapFilterStableOnly(const DMContext & dm_contex
     }
     if (!has_some_packs)
     {
-<<<<<<< HEAD
-        LOG_DEBUG(log, "buildBitmapFilterStableOnly not have some packs, total_rows={}, cost={}ms", segment_snap->stable->getDMFilesRows(), sw.elapsedMilliseconds());
-=======
         auto elapse_ms = commit_elapse();
         LOG_DEBUG(
-            segment_snap->log,
+            log,
             "buildBitmapFilterStableOnly not have some packs, total_rows={}, cost={:.3f}ms",
             segment_snap->stable->getDMFilesRows(),
             elapse_ms);
->>>>>>> ce42814e49 (*: Add table scan details logging; change default logging level to "info" (#8616))
         return bitmap_filter;
     }
 
@@ -2727,18 +2701,13 @@ BitmapFilterPtr Segment::buildBitmapFilterStableOnly(const DMContext & dm_contex
         is_common_handle,
         dm_context.tracing_id);
     bitmap_filter->set(stream);
-<<<<<<< HEAD
-    LOG_DEBUG(log, "buildBitmapFilterStableOnly total_rows={}, cost={}ms", segment_snap->stable->getDMFilesRows(), sw.elapsedMilliseconds());
-=======
-
     auto elapse_ms = commit_elapse();
     LOG_DEBUG(
-        segment_snap->log,
-        "buildBitmapFilterStableOnly read_packs={} total_rows={} cost={:.3f}ms",
+        log,
+        "buildBitmapFilterStableOnly read_packs={} total_rows={}, cost={:.3f}ms",
         some_packs_sets.size(),
         segment_snap->stable->getDMFilesRows(),
         elapse_ms);
->>>>>>> ce42814e49 (*: Add table scan details logging; change default logging level to "info" (#8616))
     return bitmap_filter;
 }
 
@@ -2810,45 +2779,12 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(BitmapFilterPtr && bit
         is_fast_scan,
         enable_del_clean_read);
 
-<<<<<<< HEAD
     auto filter_columns_to_read_ptr = std::make_shared<ColumnDefines>(filter_columns);
     SkippableBlockInputStreamPtr filter_column_delta_stream = std::make_shared<DeltaValueInputStream>(
         dm_context,
         segment_snap->delta,
         filter_columns_to_read_ptr,
         this->rowkey_range);
-=======
-    if (unlikely(filter_columns->size() == columns_to_read.size()))
-    {
-        LOG_ERROR(
-            segment_snap->log,
-            "Late materialization filter columns size equal to read columns size, which is not expected, "
-            "filter_columns_size={}",
-            filter_columns->size());
-        BlockInputStreamPtr stream = std::make_shared<BitmapFilterBlockInputStream>(
-            *filter_columns,
-            filter_column_stable_stream,
-            filter_column_delta_stream,
-            segment_snap->stable->getDMFilesRows(),
-            bitmap_filter,
-            dm_context.tracing_id);
-        if (filter->extra_cast)
-        {
-            stream = std::make_shared<ExpressionBlockInputStream>(stream, filter->extra_cast, dm_context.tracing_id);
-            stream->setExtraInfo("cast after tableScan");
-        }
-        stream = std::make_shared<FilterBlockInputStream>(
-            stream,
-            filter->before_where,
-            filter->filter_column_name,
-            dm_context.tracing_id);
-        stream->setExtraInfo("push down filter");
-        stream
-            = std::make_shared<ExpressionBlockInputStream>(stream, filter->project_after_where, dm_context.tracing_id);
-        stream->setExtraInfo("project after where");
-        return stream;
-    }
->>>>>>> ce42814e49 (*: Add table scan details logging; change default logging level to "info" (#8616))
 
     BlockInputStreamPtr filter_column_stream = std::make_shared<RowKeyOrderedBlockInputStream>(
         filter_columns,

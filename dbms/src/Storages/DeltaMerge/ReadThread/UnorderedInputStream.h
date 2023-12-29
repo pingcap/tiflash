@@ -53,27 +53,18 @@ public:
             header.insert(extra_table_id_index, col);
         }
         ref_no = task_pool->increaseUnorderedInputStreamRefCount();
-<<<<<<< HEAD
-        LOG_DEBUG(log, "Created, pool_id={} ref_no={}", task_pool->poolId(), ref_no);
-=======
->>>>>>> ce42814e49 (*: Add table scan details logging; change default logging level to "info" (#8616))
     }
 
     ~UnorderedInputStream() override
     {
-<<<<<<< HEAD
-        task_pool->decreaseUnorderedInputStreamRefCount();
-        LOG_DEBUG(log, "Destroy, pool_id={} ref_no={}", task_pool->poolId(), ref_no);
-=======
         if (const auto rc_before_decr = task_pool->decreaseUnorderedInputStreamRefCount(); rc_before_decr == 1)
         {
             LOG_INFO(
                 log,
                 "All unordered input streams are finished, pool_id={} last_stream_ref_no={}",
-                task_pool->pool_id,
+                task_pool->poolId(),
                 ref_no);
         }
->>>>>>> ce42814e49 (*: Add table scan details logging; change default logging level to "info" (#8616))
     }
 
     String getName() const override { return NAME; }

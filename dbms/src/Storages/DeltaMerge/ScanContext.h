@@ -49,10 +49,6 @@ public:
     std::atomic<uint64_t> total_remote_region_num{0};
     std::atomic<uint64_t> total_local_region_num{0};
 
-<<<<<<< HEAD
-
-    ScanContext() = default;
-=======
     // the read bytes from delta layer and stable layer (in-mem, decompressed)
     std::atomic<uint64_t> user_read_bytes{0};
     std::atomic<uint64_t> disagg_read_cache_hit_size{0};
@@ -88,12 +84,7 @@ public:
     // Building bitmap
     std::atomic<uint64_t> build_bitmap_time_ns{0};
 
-    const String resource_group_name;
-
-    explicit ScanContext(const String & name = "")
-        : resource_group_name(name)
-    {}
->>>>>>> ce42814e49 (*: Add table scan details logging; change default logging level to "info" (#8616))
+    ScanContext() = default;
 
     void deserialize(const tipb::TiFlashScanContext & tiflash_scan_context_pb)
     {
@@ -106,13 +97,10 @@ public:
         create_snapshot_time_ns = tiflash_scan_context_pb.total_create_snapshot_time_ms() * 1000000;
         total_remote_region_num = tiflash_scan_context_pb.total_remote_region_num();
         total_local_region_num = tiflash_scan_context_pb.total_local_region_num();
-<<<<<<< HEAD
-=======
         user_read_bytes = tiflash_scan_context_pb.total_user_read_bytes();
         learner_read_ns = tiflash_scan_context_pb.total_learner_read_ms() * 1000000;
         disagg_read_cache_hit_size = tiflash_scan_context_pb.total_disagg_read_cache_hit_size();
         disagg_read_cache_miss_size = tiflash_scan_context_pb.total_disagg_read_cache_miss_size();
->>>>>>> ce42814e49 (*: Add table scan details logging; change default logging level to "info" (#8616))
     }
 
     tipb::TiFlashScanContext serialize()
@@ -127,14 +115,11 @@ public:
         tiflash_scan_context_pb.set_total_create_snapshot_time_ms(create_snapshot_time_ns / 1000000);
         tiflash_scan_context_pb.set_total_remote_region_num(total_remote_region_num);
         tiflash_scan_context_pb.set_total_local_region_num(total_local_region_num);
-<<<<<<< HEAD
-=======
         tiflash_scan_context_pb.set_total_user_read_bytes(user_read_bytes);
         tiflash_scan_context_pb.set_total_learner_read_ms(learner_read_ns / 1000000);
         tiflash_scan_context_pb.set_total_disagg_read_cache_hit_size(disagg_read_cache_hit_size);
         tiflash_scan_context_pb.set_total_disagg_read_cache_miss_size(disagg_read_cache_miss_size);
 
->>>>>>> ce42814e49 (*: Add table scan details logging; change default logging level to "info" (#8616))
         return tiflash_scan_context_pb;
     }
 
@@ -150,8 +135,6 @@ public:
 
         total_local_region_num += other.total_local_region_num;
         total_remote_region_num += other.total_remote_region_num;
-<<<<<<< HEAD
-=======
         user_read_bytes += other.user_read_bytes;
         learner_read_ns += other.learner_read_ns;
         disagg_read_cache_hit_size += other.disagg_read_cache_hit_size;
@@ -167,7 +150,6 @@ public:
         mvcc_input_rows += other.mvcc_input_rows;
         mvcc_input_bytes += other.mvcc_input_bytes;
         mvcc_output_rows += other.mvcc_output_rows;
->>>>>>> ce42814e49 (*: Add table scan details logging; change default logging level to "info" (#8616))
     }
 
     void merge(const tipb::TiFlashScanContext & other)
@@ -181,14 +163,6 @@ public:
         create_snapshot_time_ns += other.total_create_snapshot_time_ms() * 1000000;
         total_local_region_num += other.total_local_region_num();
         total_remote_region_num += other.total_remote_region_num();
-<<<<<<< HEAD
-    }
-};
-
-using ScanContextPtr = std::shared_ptr<ScanContext>;
-
-} // namespace DB::DM
-=======
         user_read_bytes += other.total_user_read_bytes();
         learner_read_ns += other.total_learner_read_ms() * 1000000;
         disagg_read_cache_hit_size += other.total_disagg_read_cache_hit_size();
@@ -199,4 +173,3 @@ using ScanContextPtr = std::shared_ptr<ScanContext>;
 };
 
 } // namespace DB::DM
->>>>>>> ce42814e49 (*: Add table scan details logging; change default logging level to "info" (#8616))

@@ -19,12 +19,8 @@
 #include <Flash/Coprocessor/collectOutputFieldTypes.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <Flash/Statistics/traverseExecutors.h>
-<<<<<<< HEAD
-#include <Storages/Transaction/TMTContext.h>
-=======
 #include <Storages/DeltaMerge/ScanContext.h>
-#include <Storages/KVStore/TMTContext.h>
->>>>>>> ce42814e49 (*: Add table scan details logging; change default logging level to "info" (#8616))
+#include <Storages/Transaction/TMTContext.h>
 #include <kvproto/disaggregated.pb.h>
 #include <tipb/executor.pb.h>
 
@@ -344,19 +340,4 @@ const SingleTableRegions & DAGContext::getTableRegionsInfoByTableID(Int64 table_
 {
     return tables_regions_info.getTableRegionInfoByTableID(table_id);
 }
-<<<<<<< HEAD
-=======
-
-RU DAGContext::getReadRU() const
-{
-    UInt64 read_bytes = 0;
-    for (const auto & [id, sc] : scan_context_map)
-    {
-        (void)id; // Disable unused variable warnning.
-        read_bytes += sc->user_read_bytes;
-    }
-    return bytesToRU(read_bytes);
-}
-
->>>>>>> ce42814e49 (*: Add table scan details logging; change default logging level to "info" (#8616))
 } // namespace DB

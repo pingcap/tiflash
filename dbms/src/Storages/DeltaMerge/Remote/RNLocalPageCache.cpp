@@ -350,17 +350,8 @@ RNLocalPageCache::OccupySpaceResult RNLocalPageCache::occupySpace(const std::vec
         // Pages may be occupied but not written yet, so we always return missing pages according
         // to the storage.
         if (const auto & page_entry = storage->getEntry(keys[i], snapshot); page_entry.isValid())
-<<<<<<< HEAD
-=======
-        {
-            scan_context->disagg_read_cache_hit_size += page_sizes[i];
->>>>>>> ce42814e49 (*: Add table scan details logging; change default logging level to "info" (#8616))
             continue;
         missing_ids.push_back(pages[i]);
-<<<<<<< HEAD
-=======
-        scan_context->disagg_read_cache_miss_size += page_sizes[i];
->>>>>>> ce42814e49 (*: Add table scan details logging; change default logging level to "info" (#8616))
     }
     GET_METRIC(tiflash_storage_remote_cache, type_page_miss).Increment(missing_ids.size());
     GET_METRIC(tiflash_storage_remote_cache, type_page_hit).Increment(pages.size() - missing_ids.size());
