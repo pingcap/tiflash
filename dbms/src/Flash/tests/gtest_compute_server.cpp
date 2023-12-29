@@ -756,18 +756,16 @@ try
                     properties)));
         }
 
-        auto test_cancel = [&](int idx) {
-            auto gather_id = std::get<0>(queries[idx]);
-            EXPECT_TRUE(assertQueryActive(gather_id.query_id));
-            MockComputeServerManager::instance().cancelGather(gather_id);
-            EXPECT_TRUE(assertQueryCancelled(gather_id.query_id));
-        };
-
         {
-            DynamicThreadPool thread_pool(10, std::chrono::seconds(1));
+            auto thread_mgr = newThreadManager();
             for (size_t i = 0; i < query_num; ++i)
             {
-                thread_pool.schedule(false, test_cancel, i);
+                auto gather_id = std::get<0>(queries[i]);
+                thread_mgr->schedule(false, "test_cancel", [=]() {
+                    EXPECT_TRUE(assertQueryActive(gather_id.query_id));
+                    MockComputeServerManager::instance().cancelGather(gather_id);
+                    EXPECT_TRUE(assertQueryCancelled(gather_id.query_id));
+                });
             }
             // Destruction of DynamicThreadPoll will automatically wait for the finish of tasks.
         }
