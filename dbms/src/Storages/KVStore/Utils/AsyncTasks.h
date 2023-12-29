@@ -264,8 +264,11 @@ struct AsyncTasks
                 cf();
                 return;
             }
-            std::scoped_lock worker_running_lock(*running_mut);
-            triggered->store(true);
+            {
+                // (*p)() will not be reordered before this lock.
+                std::scoped_lock worker_running_lock(*running_mut);
+                triggered->store(true);
+            }
             // We can hold the cancel handle here to prevent it from destructing, but it is not necessary.
             (*p)();
             // We don't erase from `tasks` here, since we won't capture `this`

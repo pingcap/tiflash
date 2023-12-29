@@ -122,7 +122,7 @@ TEST(AsyncTasksTest, AsyncTasksNormal)
         auto async_tasks = std::make_unique<TestAsyncTasks>(2, 2, 10);
         int total = 9;
         int finished = 0;
-        std::vector<bool> f(total, false);
+        std::vector<char> f(total, false);
         for (int i = 0; i < total; i++)
         {
             auto res = async_tasks->addTask(i, [i, &async_tasks, &finished, log]() {
@@ -230,8 +230,8 @@ TEST(AsyncTasksTest, AsyncTasksCommon)
     int total = 5;
     int max_steps = 10;
     int current_step = 0;
-    std::vector<bool> f(total, false);
-    std::vector<bool> s(total, false);
+    std::vector<char> f(total, false);
+    std::vector<char> s(total, false);
     bool initial_loop = true;
     while (true)
     {
