@@ -60,7 +60,7 @@ static_assert(!magic_enum::enum_contains<RegionPersistExtension>(UNUSED_EXTENSIO
 static_assert(std::is_same_v<MaybeRegionPersistExtension, UInt32>);
 static_assert(magic_enum::enum_underlying(RegionPersistExtension::MaxKnownFlag) <= UINT32_MAX / 2);
 static_assert(
-    magic_enum::enum_count(RegionPersistExtension)
+    magic_enum::enum_count<RegionPersistExtension>()
     == magic_enum::enum_underlying(RegionPersistExtension::MaxKnownFlag));
 
 constexpr UInt32 Region::CURRENT_VERSION = static_cast<UInt64>(RegionPersistVersion::V2);
