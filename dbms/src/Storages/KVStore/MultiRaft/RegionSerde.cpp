@@ -168,16 +168,6 @@ std::tuple<size_t, UInt64> Region::serialize(WriteBuffer & buf) const
                         s.data(),
                         s.size());
                 }
-                if (value & 4)
-                {
-                    std::string s = "zzz";
-                    total_size += writePersistExtension(
-                        actual_extension_count,
-                        buf,
-                        UNUSED_EXTENSION_NUMBER_FOR_TEST,
-                        s.data(),
-                        s.size());
-                }
             }
         });
         RUNTIME_CHECK(
