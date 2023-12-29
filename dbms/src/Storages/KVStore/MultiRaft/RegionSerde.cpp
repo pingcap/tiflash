@@ -88,6 +88,7 @@ size_t writePersistExtension(
 std::tuple<size_t, UInt64> Region::serialize(WriteBuffer & buf) const
 {
     auto binary_version = Region::CURRENT_VERSION;
+    // Increase this when persist with a new extension type.
     UInt32 expected_extension_count = 0;
     using bundle_type = std::pair<int, int>;
     fiu_do_on(FailPoints::force_region_persist_version, {
