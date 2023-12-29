@@ -211,9 +211,11 @@ try
         ASSERT_EQ(exported, new_encryption_key.exportString());
 
         auto info = encryption_key.generateEncryptionInfo(String(reinterpret_cast<const char *>(test::IV_RANDOM), 16));
-        ASSERT_TRUE(
-            info
-            == new_encryption_key.generateEncryptionInfo(String(reinterpret_cast<const char *>(test::IV_RANDOM), 16)));
+        {
+            auto new_info = new_encryption_key.generateEncryptionInfo(
+                String(reinterpret_cast<const char *>(test::IV_RANDOM), 16));
+            ASSERT_TRUE(info.equals(new_info));
+        }
         auto stream = info.createCipherStream(EncryptionPath("encryption", ""));
         auto data = DB::random::randomString(MAX_SIZE);
         auto plain_data = data;
