@@ -55,6 +55,20 @@ enum class RegionPersistExtension : MaybeRegionPersistExtension
     MaxKnownFlag = 3,
 };
 
+/// The flexible pattern
+/// The `payload 1` is of length defined by `length 1`
+/// |--------- 32 bits ----------|
+/// |- 31b exts -|- 1b eager gc -|
+/// |--------- eager gc ---------|
+/// |--------- eager gc ---------|
+/// |-------- ext type 1 --------|
+/// |--------- length 1 ---------|
+/// |--------- payload 1 --------|
+/// |--------- ......... --------|
+/// |-------- ext type n --------|
+/// |--------- length n ---------|
+/// |--------- payload n --------|
+
 constexpr MaybeRegionPersistExtension UNUSED_EXTENSION_NUMBER_FOR_TEST = UINT32_MAX / 2;
 static_assert(!magic_enum::enum_contains<RegionPersistExtension>(UNUSED_EXTENSION_NUMBER_FOR_TEST));
 static_assert(std::is_same_v<MaybeRegionPersistExtension, UInt32>);
