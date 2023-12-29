@@ -62,6 +62,7 @@ static_assert(magic_enum::enum_underlying(RegionPersistExtension::MaxKnownFlag) 
 static_assert(
     magic_enum::enum_count<RegionPersistExtension>()
     == magic_enum::enum_underlying(RegionPersistExtension::MaxKnownFlag));
+static_assert(RegionPersistFormat::HAS_EAGER_TRUNCATE_INDEX == 0x01);
 
 constexpr UInt32 Region::CURRENT_VERSION = static_cast<UInt64>(RegionPersistVersion::V2);
 
@@ -97,6 +98,7 @@ std::tuple<size_t, UInt64> Region::serialize(WriteBuffer & buf) const
     fiu_do_on(FailPoints::force_region_persist_version, {
         if (auto v = FailPointHelper::getFailPointVal(FailPoints::force_region_persist_version); v)
         {
+            // You can change binary_version and expected_extension_count by this fp.
             std::tie(binary_version, expected_extension_count) = std::any_cast<bundle_type>(v.value());
             LOG_WARNING(
                 Logger::get(),
@@ -121,8 +123,8 @@ std::tuple<size_t, UInt64> Region::serialize(WriteBuffer & buf) const
         if (binary_version >= 2)
         {
             static_assert(sizeof(eager_truncated_index) == sizeof(UInt64));
-            UInt32 flags = RegionPersistFormat::HAS_EAGER_TRUNCATE_INDEX;
-            flags |= (expected_extension_count << 1);
+            // The upper 31 bits are used to store the length of extensions, and the lowest bit is flag of eager gc.
+            UInt32 flags = (expected_extension_count << 1) | RegionPersistFormat::HAS_EAGER_TRUNCATE_INDEX;
             total_size += writeBinary2(flags, buf);
             total_size += writeBinary2(eager_truncated_index, buf);
         }
