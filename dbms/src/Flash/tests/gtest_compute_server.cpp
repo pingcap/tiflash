@@ -12,7 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/DynamicThreadPool.h>
 #include <Flash/Coprocessor/JoinInterpreterHelper.h>
+#include <Flash/Mpp/MPPTaskId.h>
 #include <Interpreters/Context.h>
 #include <TestUtils/FailPointUtils.h>
 #include <TestUtils/MPPTaskTestUtils.h>
@@ -753,17 +755,21 @@ try
                         .join(context.scan("test_db", "r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")}),
                     properties)));
         }
-        for (size_t i = 0; i < query_num; ++i)
-        {
-            auto gather_id = std::get<0>(queries[i]);
-            EXPECT_TRUE(assertQueryActive(gather_id.query_id));
-        }
 
-        for (size_t i = 0; i < query_num; ++i)
-        {
-            auto gather_id = std::get<0>(queries[i]);
+        auto test_cancel = [&](int idx) {
+            auto gather_id = std::get<0>(queries[idx]);
+            EXPECT_TRUE(assertQueryActive(gather_id.query_id));
             MockComputeServerManager::instance().cancelGather(gather_id);
             EXPECT_TRUE(assertQueryCancelled(gather_id.query_id));
+        };
+
+        {
+            DynamicThreadPool thread_pool(10, std::chrono::seconds(1));
+            for (size_t i = 0; i < query_num; ++i)
+            {
+                thread_pool.schedule(false, test_cancel, i);
+            }
+            // Destruction of DynamicThreadPoll will automatically wait for the finish of tasks.
         }
     }
     WRAP_FOR_SERVER_TEST_END
