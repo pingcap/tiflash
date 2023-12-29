@@ -255,7 +255,7 @@ RegionPtr Region::deserialize(ReadBuffer & buf, const TiFlashRaftProxyHelper * p
                 continue;
             }
 
-            RUNTIME_CHECK_MSG(false, "Unhandled extension {} length={}", extension_type, length);
+            RUNTIME_CHECK_MSG(false, "Unhandled extension, type={} length={}", extension_type, length);
         }
     }
 
