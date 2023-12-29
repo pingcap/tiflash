@@ -21,6 +21,10 @@ namespace DB::details
 String UniversalPageIdFormatHelper::format(const DB::UniversalPageId & value)
 {
     auto prefix = DB::UniversalPageIdFormat::getFullPrefix(value);
+    if (value.hasPrefix({UniversalPageIdFormat::KV_PREFIX}) || value.hasPrefix({UniversalPageIdFormat::RAFT_PREFIX}))
+    {
+        return fmt::format("0x{}", Redact::keyToHexString(value.data(), value.size()));
+    }
     return fmt::format(
         "0x{}.{}",
         Redact::keyToHexString(prefix.data(), prefix.size()),

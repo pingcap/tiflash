@@ -52,6 +52,7 @@ public:
     UniversalPageId substr(size_t pos, size_t npos) const { return id.substr(pos, npos); }
     bool operator<(const UniversalPageId & rhs) const { return id < rhs.id; }
     bool hasPrefix(const String & str) const { return startsWith(id, str); }
+    bool hasPrefix(const char * str) const { return startsWith(id, str); }
 
     String toStr() const { return id; }
     const String & asStr() const { return id; }

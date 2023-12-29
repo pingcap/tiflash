@@ -335,7 +335,6 @@ void SegmentReadTask::fetchPages()
         return;
     }
 
-    MemoryTrackerSetter setter(true, fetch_pages_mem_tracker.get());
     Stopwatch watch_work{CLOCK_MONOTONIC_COARSE};
     SCOPE_EXIT({
         // This metric is per-segment.

@@ -288,7 +288,7 @@ void PhysicalAggregation::buildPipeline(
     }
 }
 
-void PhysicalAggregation::finalize(const Names & parent_require)
+void PhysicalAggregation::finalizeImpl(const Names & parent_require)
 {
     // schema.size() >= parent_require.size()
     FinalizeHelper::checkSchemaContainsParentRequire(schema, parent_require);

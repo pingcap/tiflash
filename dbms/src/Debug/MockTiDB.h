@@ -138,6 +138,10 @@ public:
 
     void truncateTable(const String & database_name, const String & table_name);
 
+    // Mock that concurrent DDL meets conflict, it will retry with a new schema version
+    // Return the schema_version with empty SchemaDiff
+    Int64 skipSchemaVersion() { return ++version; }
+
     TablePtr getTableByName(const String & database_name, const String & table_name);
 
     TiDB::TableInfoPtr getTableInfoByID(TableID table_id);
