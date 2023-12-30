@@ -74,7 +74,7 @@ public:
                   "Total rows: {}, pass: {:.2f}%"
                   ", complete pass: {:.2f}%, complete not pass: {:.2f}%"
                   ", not clean: {:.2f}%, is deleted: {:.2f}%, effective: {:.2f}%"
-                  ", read tso: {}",
+                  ", start_ts: {}",
                   total_rows,
                   passed_rows * 100.0 / total_rows,
                   complete_passed * 100.0 / total_blocks,
