@@ -130,6 +130,7 @@ namespace DB
     M(pause_after_copr_streams_acquired)  \
     M(pause_query_init)                   \
     M(pause_before_prehandle_snapshot)    \
+    M(pause_when_persist_region)          \
     M(pause_before_wn_establish_task)     \
     M(pause_passive_flush_before_persist_region)
 
@@ -158,6 +159,7 @@ namespace DB
     M(random_pipeline_model_execute_prefix_failpoint)        \
     M(random_pipeline_model_execute_suffix_failpoint)        \
     M(random_spill_to_disk_failpoint)                        \
+    M(random_region_persister_latency_failpoint)             \
     M(random_restore_from_disk_failpoint)                    \
     M(random_exception_when_connect_local_tunnel)            \
     M(random_exception_when_construct_async_request_handler) \
