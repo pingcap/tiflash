@@ -15,24 +15,18 @@
 #pragma once
 
 #include <Common/Logger.h>
-#include <Common/Stopwatch.h>
 #include <Debug/MockSchemaGetter.h>
 #include <Debug/MockSchemaNameMapper.h>
 #include <TiDB/Schema/DatabaseInfoCache.h>
 #include <TiDB/Schema/TableIDMap.h>
 #include <TiDB/Schema/TiDB.h>
 #include <pingcap/kv/Cluster.h>
-#include <pingcap/kv/Snapshot.h>
 
 #include <ext/scope_guard.h>
 
 namespace DB
 {
 using KVClusterPtr = std::shared_ptr<pingcap::kv::Cluster>;
-namespace ErrorCodes
-{
-extern const int FAIL_POINT_ERROR;
-};
 
 /// The schema syncer for given keyspace
 template <bool mock_getter, bool mock_mapper>

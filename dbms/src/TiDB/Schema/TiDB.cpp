@@ -1096,7 +1096,8 @@ ColumnID TableInfo::getColumnID(const String & name) const
 
     throw DB::Exception(
         DB::ErrorCodes::LOGICAL_ERROR,
-        "Fail to get column id from TableInfo, name={} available_columns={}",
+        "Fail to get column id from TableInfo, table_id={} name={} available_columns={}",
+        id,
         name,
         available_columns);
 }

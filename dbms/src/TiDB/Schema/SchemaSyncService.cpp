@@ -246,7 +246,7 @@ bool SchemaSyncService::gc(Timestamp gc_safepoint, KeyspaceID keyspace_id)
                 // it is dropped.
                 storages_to_gc.emplace_back(std::weak_ptr<IManageableStorage>(managed_storage));
                 LOG_INFO(
-                    log,
+                    keyspace_log,
                     "Detect stale table, database_name={} table_name={} database_tombstone={} table_tombstone={} "
                     "safepoint={}",
                     managed_storage->getDatabaseName(),
