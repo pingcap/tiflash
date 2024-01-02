@@ -49,7 +49,7 @@ void PhysicalMockExchangeSender::buildBlockInputStreamImpl(
         [&](auto & stream) { stream = std::make_shared<MockExchangeSenderInputStream>(stream, log->identifier()); });
 }
 
-void PhysicalMockExchangeSender::finalize(const Names & parent_require)
+void PhysicalMockExchangeSender::finalizeImpl(const Names & parent_require)
 {
     child->finalize(parent_require);
 }

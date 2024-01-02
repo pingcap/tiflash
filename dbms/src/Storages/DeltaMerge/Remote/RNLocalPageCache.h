@@ -18,7 +18,7 @@
 #include <Interpreters/Context_fwd.h>
 #include <Storages/DeltaMerge/Remote/ObjectId.h>
 #include <Storages/DeltaMerge/Remote/RNLocalPageCache_fwd.h>
-#include <Storages/DeltaMerge/ScanContext.h>
+#include <Storages/DeltaMerge/ScanContext_fwd.h>
 #include <Storages/KVStore/Types.h>
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageStorage_fwd.h>

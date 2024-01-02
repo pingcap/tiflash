@@ -38,7 +38,7 @@ public:
         const Block & sample_block_,
         const std::shared_ptr<ExchangeReceiver> & mpp_exchange_receiver_);
 
-    void finalize(const Names & parent_require) override;
+    void finalizeImpl(const Names & parent_require) override;
 
     const Block & getSampleBlock() const override;
 
