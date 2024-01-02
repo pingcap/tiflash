@@ -337,9 +337,16 @@ FastAddPeerRes FastAddPeerImpl(
     UInt64 new_peer_id,
     UInt64 start_time)
 {
+    auto log = Logger::get("FastAddPeer");
     try
     {
-        auto elapsed = fap_ctx->tasks_trace->queryElapsed(region_id);
+        auto maybe_elapsed = fap_ctx->tasks_trace->queryElapsed(region_id);
+        if unlikely (!maybe_elapsed.has_value())
+        {
+            GET_METRIC(tiflash_fap_task_result, type_failed_cancel).Increment();
+            LOG_INFO(log, "FAP is canceled at beginning region_id={} new_peer_id={}", region_id, new_peer_id);
+        }
+        auto elapsed = maybe_elapsed.value();
         GET_METRIC(tiflash_fap_task_duration_seconds, type_queue_stage).Observe(elapsed / 1000.0);
         GET_METRIC(tiflash_fap_task_state, type_queueing_stage).Decrement();
         auto res = FastAddPeerImplSelect(tmt, proxy_helper, region_id, new_peer_id);

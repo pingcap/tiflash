@@ -113,7 +113,7 @@ void PhysicalExchangeReceiver::buildPipelineExecGroupImpl(
     context.getDAGContext()->addInboundIOProfileInfos(executor_id, group_builder.getCurIOProfileInfos());
 }
 
-void PhysicalExchangeReceiver::finalize(const Names & parent_require)
+void PhysicalExchangeReceiver::finalizeImpl(const Names & parent_require)
 {
     FinalizeHelper::checkSchemaContainsParentRequire(schema, parent_require);
 }

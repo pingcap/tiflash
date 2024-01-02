@@ -116,6 +116,7 @@ public:
         MutableColumns & added_columns,
         size_t left_columns,
         size_t right_columns,
+        const std::vector<size_t> & right_column_indices_to_add,
         const std::vector<RowsNotInsertToMap *> & null_rows,
         size_t & current_offset,
         size_t max_pace);
@@ -162,7 +163,7 @@ public:
     NASemiJoinHelper(
         Block & block,
         size_t left_columns,
-        size_t right_columns,
+        const std::vector<size_t> & right_column_indices_to_add,
         const BlocksList & right_blocks,
         const std::vector<RowsNotInsertToMap *> & null_rows,
         size_t max_block_size,
@@ -187,6 +188,7 @@ private:
     Block & block;
     size_t left_columns;
     size_t right_columns;
+    const std::vector<size_t> & right_column_indices_to_add;
     const BlocksList & right_blocks;
     const std::vector<RowsNotInsertToMap *> & null_rows;
     size_t max_block_size;

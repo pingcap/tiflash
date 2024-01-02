@@ -94,7 +94,8 @@ Model::GetObjectOutcome MockS3Client::GetObject(const Model::GetObjectRequest & 
     }
     auto size = right - left + 1;
     Model::GetObjectResult result;
-    auto * ss = new std::stringstream(itr_obj->second.substr(left, size));
+    auto * ss = Aws::New<Aws::StringStream>("MockS3Client");
+    *ss << itr_obj->second.substr(left, size);
     result.ReplaceBody(ss);
     result.SetContentLength(size);
     return result;

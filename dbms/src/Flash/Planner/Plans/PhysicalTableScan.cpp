@@ -178,7 +178,7 @@ void PhysicalTableScan::buildProjection(
     executeExpression(exec_context, group_builder, schema_actions, log);
 }
 
-void PhysicalTableScan::finalize(const Names & parent_require)
+void PhysicalTableScan::finalizeImpl(const Names & parent_require)
 {
     FinalizeHelper::checkSchemaContainsParentRequire(schema, parent_require);
 }

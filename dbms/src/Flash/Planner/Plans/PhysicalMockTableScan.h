@@ -46,7 +46,7 @@ public:
         bool keep_order_,
         const std::vector<Int32> & runtime_filter_ids_);
 
-    void finalize(const Names & parent_require) override;
+    void finalizeImpl(const Names & parent_require) override;
 
     const Block & getSampleBlock() const override;
 

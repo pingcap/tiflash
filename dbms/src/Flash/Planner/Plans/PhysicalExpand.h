@@ -44,7 +44,7 @@ public:
         , expand_actions(expand_actions)
     {}
 
-    void finalize(const Names & parent_require) override;
+    void finalizeImpl(const Names & parent_require) override;
 
     void expandTransform(DAGPipeline & child_pipeline);
 

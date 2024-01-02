@@ -92,7 +92,7 @@ EngineStoreApplyRes KVStore::handleIngestSST(
     {
         // We always try to flush dm cache and region if possible for every IngestSST,
         // in order to have the raft log truncated and sst deleted.
-        persistRegion(*region, &region_task_lock, PersistRegionReason::IngestSst, "");
+        persistRegion(*region, region_task_lock, PersistRegionReason::IngestSst, "");
         return EngineStoreApplyRes::Persist;
     }
 }

@@ -146,6 +146,7 @@ void SchemaSyncService::removeKeyspaceGCTasks()
         context.getTMTContext().getSchemaSyncerManager()->removeSchemaSyncer(keyspace);
         PDClientHelper::remove_ks_gc_sp(keyspace);
         keyspace_gc_context.erase(keyspace); // clear the last gc safepoint
+        num_remove_tasks += 1;
     }
 
     auto log_level = num_remove_tasks > 0 ? Poco::Message::PRIO_INFORMATION : Poco::Message::PRIO_DEBUG;

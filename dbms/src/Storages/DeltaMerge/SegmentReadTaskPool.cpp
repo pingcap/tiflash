@@ -84,10 +84,9 @@ bool SegmentReadTasksWrapper::empty() const
 
 BlockInputStreamPtr SegmentReadTaskPool::buildInputStream(SegmentReadTaskPtr & t)
 {
-    // Call fetchPages before MemoryTrackerSetter, because its memory usage is tracked by `fetch_pages_mem_tracker`.
-    t->fetchPages();
-
     MemoryTrackerSetter setter(true, mem_tracker.get());
+
+    t->fetchPages();
 
     if (likely(read_mode == ReadMode::Bitmap && !res_group_name.empty()))
     {
