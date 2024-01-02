@@ -1029,16 +1029,19 @@ void Join::handleOtherConditions(
         for (size_t right_table_column : right_table_columns)
         {
             auto & column = block.getByPosition(right_table_column);
-            auto full_column
-                = column.column->isColumnConst() ? column.column->convertToFullColumnIfConst() : column.column;
-            if (!full_column->isColumnNullable())
+            if (output_column_names_set_after_finalize.contains(column.name))
             {
-                throw Exception("Should not reach here, the right table column for left join must be nullable");
+                auto full_column
+                    = column.column->isColumnConst() ? column.column->convertToFullColumnIfConst() : column.column;
+                if (!full_column->isColumnNullable())
+                {
+                    throw Exception("Should not reach here, the right table column for left join must be nullable");
+                }
+                auto current_column = full_column;
+                auto result_column = (*std::move(current_column)).mutate();
+                static_cast<ColumnNullable &>(*result_column).applyNegatedNullMap(*filter_column);
+                column.column = std::move(result_column);
             }
-            auto current_column = full_column;
-            auto result_column = (*std::move(current_column)).mutate();
-            static_cast<ColumnNullable &>(*result_column).applyNegatedNullMap(*filter_column);
-            column.column = std::move(result_column);
         }
         erase_useless_column(block);
         for (size_t i = 0; i < block.columns(); ++i)
@@ -1155,16 +1158,19 @@ void Join::handleOtherConditionsForOneProbeRow(Block & block, ProbeProcessInfo &
             for (size_t right_table_column : probe_process_info.cross_join_data->right_column_index_in_result_block)
             {
                 auto & column = block.getByPosition(right_table_column);
-                auto full_column
-                    = column.column->isColumnConst() ? column.column->convertToFullColumnIfConst() : column.column;
-                if (!full_column->isColumnNullable())
+                if (output_column_names_set_after_finalize.contains(column.name))
                 {
-                    throw Exception("Should not reach here, the right table column for left join must be nullable");
+                    auto full_column
+                        = column.column->isColumnConst() ? column.column->convertToFullColumnIfConst() : column.column;
+                    if (!full_column->isColumnNullable())
+                    {
+                        throw Exception("Should not reach here, the right table column for left join must be nullable");
+                    }
+                    auto current_column = full_column;
+                    auto result_column = (*std::move(current_column)).mutate();
+                    static_cast<ColumnNullable &>(*result_column).applyNegatedNullMap(*filter_column);
+                    column.column = std::move(result_column);
                 }
-                auto current_column = full_column;
-                auto result_column = (*std::move(current_column)).mutate();
-                static_cast<ColumnNullable &>(*result_column).applyNegatedNullMap(*filter_column);
-                column.column = std::move(result_column);
             }
             erase_useless_column(block);
         }
@@ -2641,17 +2647,16 @@ void Join::finalize(const Names & parent_require)
         updated_require.push_back(non_equal_conditions.other_eq_cond_from_in_name);
     if (!non_equal_conditions.other_cond_name.empty())
         updated_require.push_back(non_equal_conditions.other_cond_name);
-    auto keep_used_input_columns
-        = !isCrossJoin(kind) && (isNullAwareSemiFamily(kind) || isSemiFamily(kind) || isLeftOuterSemiFamily(kind));
     /// nullaware/semi join will reuse the input columns so need to let finalize keep the input columns
     if (non_equal_conditions.null_aware_eq_cond_expr != nullptr)
     {
-        non_equal_conditions.null_aware_eq_cond_expr->finalize(updated_require, keep_used_input_columns);
+        /// todo don't keep input columns for non-semi/non-nullaware join
+        non_equal_conditions.null_aware_eq_cond_expr->finalize(updated_require, true);
         updated_require = non_equal_conditions.null_aware_eq_cond_expr->getRequiredColumns();
     }
     if (non_equal_conditions.other_cond_expr != nullptr)
     {
-        non_equal_conditions.other_cond_expr->finalize(updated_require, keep_used_input_columns);
+        non_equal_conditions.other_cond_expr->finalize(updated_require, true);
         updated_require = non_equal_conditions.other_cond_expr->getRequiredColumns();
     }
     /// remove duplicated column
