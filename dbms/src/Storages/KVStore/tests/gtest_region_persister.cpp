@@ -115,7 +115,8 @@ static std::function<bool(UInt32, ReadBuffer &, UInt32)> mockDeserFactory(int va
         if (value & 2)
         {
             // Can't parse UNUSED_EXTENSION_NUMBER_FOR_TEST.
-            if (extension_type == UNUSED_EXTENSION_NUMBER_FOR_TEST) {
+            if (extension_type == UNUSED_EXTENSION_NUMBER_FOR_TEST)
+            {
                 RUNTIME_CHECK(length == 3);
                 *counter |= 2;
             }
@@ -381,7 +382,7 @@ try
             auto new_region = Region::deserializeImpl(4, mockDeserFactory(1 | 2, counter), read_buf);
             ASSERT_EQ(new_region->getRaftLogEagerGCRange().first, 5678);
             ASSERT_REGION_EQ(*new_region, *region);
-            ASSERT_EQ(*counter, 2);
+            ASSERT_EQ(*counter, 1 | 2);
         }
     }
     {
@@ -413,17 +414,19 @@ try
         write_buf.sync();
         ASSERT_EQ(region_ser_size, (size_t)Poco::File(path).getSize());
         {
+            // 2 -> 3
             auto counter = std::make_shared<int>(0);
             ReadBufferFromFile read_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_RDONLY);
             auto new_region = Region::deserializeImpl(3, mockDeserFactory(1, counter), read_buf);
             ASSERT_EQ(new_region->getRaftLogEagerGCRange().first, 5678);
             ASSERT_REGION_EQ(*new_region, *region);
             WriteBufferFromFile write_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_CREAT);
-            region->serializeImpl(2, ext_cnt_2, mockSerFactory(0), write_buf);
+            region->serializeImpl(3, ext_cnt_3, mockSerFactory(1), write_buf);
             ASSERT_EQ(*counter, 0);
         }
 
         {
+            // 3 -> 4
             auto counter = std::make_shared<int>(0);
             ReadBufferFromFile read_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_RDONLY);
             auto new_region = Region::deserializeImpl(4, mockDeserFactory(1 | 2, counter), read_buf);
@@ -435,6 +438,7 @@ try
         }
 
         {
+            // 4 -> 2
             auto counter = std::make_shared<int>(0);
             ReadBufferFromFile read_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_RDONLY);
             region->serializeImpl(2, ext_cnt_2, mockSerFactory(0), write_buf);
