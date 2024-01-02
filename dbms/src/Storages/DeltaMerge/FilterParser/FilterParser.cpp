@@ -207,6 +207,14 @@ inline RSOperatorPtr parseTiCompareExpr( //
             }
             values.push_back(value);
         }
+        else
+        {
+            // Any other type of child is not supported, like: ScalarFunc.
+            // case like `cast(a as signed) > 1`, `a in (0, cast(a as signed))` is not supported.
+            return createUnsupported(
+                expr.ShortDebugString(),
+                fmt::format("Unknown child type: {}", tipb::ExprType_Name(child.tp())));
+        }
     }
 
     bool normal_cmp = (left == OperandType::Column && right == OperandType::Literal);
@@ -214,9 +222,16 @@ inline RSOperatorPtr parseTiCompareExpr( //
     if (!(normal_cmp || inverse_cmp))
         return createUnsupported(
             expr.ShortDebugString(),
+<<<<<<< HEAD
             tipb::ScalarFuncSig_Name(expr.sig()) + " is not supported [left=" + DB::toString(static_cast<int>(left))
                 + "] [right=" + DB::toString(static_cast<int>(right)) + "]",
             false);
+=======
+            fmt::format("Multiple Literal in compare expression is not supported, size: {}", values.size()));
+    // For In type, the first child must be ColumnRef
+    if (column_expr_child_idx != 0 && filter_type == FilterParser::RSFilterType::In)
+        return createUnsupported(expr.ShortDebugString(), "the first child of In expression must be ColumnRef");
+>>>>>>> 6cae6e97d3 (fix In ScalarFunc in RoughSetFilter (#8634))
 
     // Correct the filter type by the direction of operands
     auto filter_type_with_direction = filter_type;

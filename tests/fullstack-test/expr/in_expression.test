@@ -210,3 +210,35 @@ mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t w
 |   40 |   50 |
 +------+------+
 mysql> drop table test.t;
+<<<<<<< HEAD
+=======
+
+mysql> create table test.t (a int unsigned);
+mysql> insert into test.t values (300), (null), (981);
+mysql> alter table test.t set tiflash replica 1;
+func> wait_table test t
+mysql> alter table test.t compact tiflash replica;
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t where not cast(a as signed) not in (a, 88);
++------+
+| a    |
++------+
+|  300 |
+|  981 |
++------+
+mysql> drop table test.t;
+
+mysql> create table test.t (a int, b int);
+mysql> insert into test.t values (10,30), (50, 60);
+mysql> alter table test.t set tiflash replica 1;
+func> wait_table test t
+
+mysql> alter table test.t compact tiflash replica;
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t where not a not in (0, cast(+ a as signed));
++------+------+
+| a    | b    |
++------+------+
+|   10 |   30 |
+|   50 |   60 |
++------+------+
+mysql> drop table test.t;
+>>>>>>> 6cae6e97d3 (fix In ScalarFunc in RoughSetFilter (#8634))
