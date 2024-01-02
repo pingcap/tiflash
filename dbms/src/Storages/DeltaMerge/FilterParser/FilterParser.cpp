@@ -178,6 +178,12 @@ inline RSOperatorPtr parseTiCompareExpr( //
             }
             values.push_back(value);
         }
+        else
+        {
+            return createUnsupported(
+                expr.ShortDebugString(),
+                fmt::format("Unknown child type: {}", tipb::ExprType_Name(child.tp())));
+        }
     }
 
     // At least one ColumnRef and one Literal
