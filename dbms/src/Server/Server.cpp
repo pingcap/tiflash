@@ -1775,8 +1775,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
                 assert(TaskScheduler::instance);
                 TaskScheduler::instance.reset();
                 // Stop LAC instead of reset, because storage layer still needs it.
-                // LAC::getPriority will return highest priority when it's stopped,
-                // so workload will not be throttled.
+                // Workload will not be throttled when LAC is stopped.
+                // It's ok because flash service has already been destructed, so throllting is meaningless.
                 assert(LocalAdmissionController::global_instance);
                 LocalAdmissionController::global_instance->stop();
             }
