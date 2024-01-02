@@ -67,9 +67,8 @@ std::tuple<size_t, UInt64> Region::serializeImpl(
     std::shared_lock<std::shared_mutex> lock(mutex);
 
     // Serialize meta
-    const auto [meta_size, index] = meta.serialize(buf);
+    const auto [meta_size, applied_index] = meta.serialize(buf);
     total_size += meta_size;
-    UInt64 applied_index = index;
 
     // Try serialize extra flags
     if (binary_version >= 2)
