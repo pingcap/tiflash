@@ -213,7 +213,8 @@ inline RSOperatorPtr parseTiCompareExpr( //
             // case like `cast(a as signed) > 1`, `a in (0, cast(a as signed))` is not supported.
             return createUnsupported(
                 expr.ShortDebugString(),
-                fmt::format("Unknown child type: {}", tipb::ExprType_Name(child.tp())));
+                fmt::format("Unknown child type: {}", tipb::ExprType_Name(child.tp())),
+                false);
         }
     }
 
