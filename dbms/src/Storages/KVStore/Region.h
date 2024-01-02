@@ -164,6 +164,12 @@ public: // Stats
 
     std::tuple<size_t, UInt64> serialize(WriteBuffer & buf) const;
     static RegionPtr deserialize(ReadBuffer & buf, const TiFlashRaftProxyHelper * proxy_helper = nullptr);
+    std::tuple<size_t, UInt64> serializeImpl(UInt32 binary_version, UInt32 expected_extension_count, WriteBuffer & buf)
+        const;
+    static RegionPtr deserializeImpl(
+        UInt32 current_version,
+        ReadBuffer & buf,
+        const TiFlashRaftProxyHelper * proxy_helper = nullptr);
 
     friend bool operator==(const Region & region1, const Region & region2)
     {

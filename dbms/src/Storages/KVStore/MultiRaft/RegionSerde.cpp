@@ -21,11 +21,6 @@
 
 namespace DB
 {
-namespace ErrorCodes
-{
-extern const int UNKNOWN_FORMAT_VERSION;
-} // namespace ErrorCodes
-
 namespace FailPoints
 {
 extern const char force_region_persist_version[];
@@ -132,23 +127,14 @@ inline size_t mockInjectExtension(std::optional<std::any> v, UInt32 & actual_ext
 
 std::tuple<size_t, UInt64> Region::serialize(WriteBuffer & buf) const
 {
-    auto binary_version = Region::CURRENT_VERSION;
-    // Increase this when persist with a new extension type.
-    UInt32 expected_extension_count = 0;
-    using bundle_type = std::pair<int, int>;
-    fiu_do_on(FailPoints::force_region_persist_version, {
-        if (auto v = FailPointHelper::getFailPointVal(FailPoints::force_region_persist_version); v)
-        {
-            // You can change binary_version and expected_extension_count by this fp.
-            std::tie(binary_version, expected_extension_count) = std::any_cast<bundle_type>(v.value());
-            LOG_WARNING(
-                Logger::get(),
-                "Failpoint force_region_persist_version set region binary version, value={}, "
-                "expected_extension_count={}",
-                binary_version,
-                expected_extension_count);
-        }
-    });
+    return serializeImpl(Region::CURRENT_VERSION, 0, buf);
+}
+
+std::tuple<size_t, UInt64> Region::serializeImpl(
+    UInt32 binary_version,
+    UInt32 expected_extension_count,
+    WriteBuffer & buf) const
+{
     size_t total_size = writeBinary2(binary_version, buf);
     UInt64 applied_index = -1;
 
@@ -209,25 +195,18 @@ bool mockDeserExtersion(std::optional<std::any> v, UInt32 extension_type, ReadBu
     return false;
 }
 
+RegionPtr Region::deserialize(ReadBuffer & buf, const TiFlashRaftProxyHelper * proxy_helper)
+{
+    return Region::deserializeImpl(Region::CURRENT_VERSION, buf, proxy_helper);
+}
+
 /// Currently supports:
 /// 1. Vx -> Vy where x >= 2, y >= 3
 /// 2. Vx -> V2 where x >= 2, in 7.5.0
 /// 3. Vx -> V2 where x >= 2, in later 7.5
-RegionPtr Region::deserialize(ReadBuffer & buf, const TiFlashRaftProxyHelper * proxy_helper)
+RegionPtr Region::deserializeImpl(UInt32 current_version, ReadBuffer & buf, const TiFlashRaftProxyHelper * proxy_helper)
 {
     const auto binary_version = readBinary2<UInt32>(buf);
-    auto current_version = Region::CURRENT_VERSION;
-    fiu_do_on(FailPoints::force_region_read_version, {
-        if (auto v = FailPointHelper::getFailPointVal(FailPoints::force_region_read_version); v)
-        {
-            current_version = std::any_cast<UInt64>(v.value());
-            LOG_WARNING(
-                Logger::get(),
-                "Failpoint force_region_read_version set region binary version, value={}",
-                current_version);
-        }
-    });
-
     if (current_version <= 1 && binary_version > current_version)
     {
         // Conform to https://github.com/pingcap/tiflash/blob/43f809fffde22d0af4c519be4546a5bf4dde30a2/dbms/src/Storages/KVStore/Region.cpp#L197
