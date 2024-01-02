@@ -35,10 +35,9 @@ static constexpr UInt32 HAS_EAGER_TRUNCATE_INDEX = 0x01;
 // Once a extension is registered, what it's stand for shouldn't be changed. E.g. if Ext1 is assigned to 10, then in any older or newer version, we can't assign another Ext2 to 10.
 enum class RegionPersistExtension : MaybeRegionPersistExtension
 {
-    Reserved1 = 1,
-    ReservedForTest = 2,
+    ReservedForTest = 1,
     // It should always be equal to the maximum supported type + 1
-    MaxKnownFlag = 3,
+    MaxKnownFlag = 2,
 };
 
 /// The flexible pattern
