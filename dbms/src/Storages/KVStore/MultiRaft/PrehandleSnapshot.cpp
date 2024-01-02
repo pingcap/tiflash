@@ -666,7 +666,7 @@ PrehandleResult KVStore::preHandleSSTsToDTFiles(
             if (unlikely(storage == nullptr))
             {
                 // The storage must be physically dropped, throw exception and do cleanup.
-                throw Exception("", ErrorCodes::TABLE_IS_DROPPED);
+                throw Exception("Can't get table", ErrorCodes::TABLE_IS_DROPPED);
             }
 
             // Get a gc safe point for compacting
@@ -750,7 +750,7 @@ PrehandleResult KVStore::preHandleSSTsToDTFiles(
                 if (force_decode)
                 {
                     // Can not decode data with `force_decode == true`, must be something wrong
-                    throw Exception(result.extra_msg, ErrorCodes::REGION_DATA_SCHEMA_UPDATED);
+                    throw Exception(fmt::format("Force decode failed {}", result.extra_msg), ErrorCodes::REGION_DATA_SCHEMA_UPDATED);
                 }
 
                 // Update schema and try to decode again
