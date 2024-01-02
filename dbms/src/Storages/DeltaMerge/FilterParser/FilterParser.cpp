@@ -178,6 +178,14 @@ inline RSOperatorPtr parseTiCompareExpr( //
             }
             values.push_back(value);
         }
+        else
+        {
+            // Any other type of child is not supported, like: ScalarFunc.
+            // case like `cast(a as signed) > 1`, `a in (0, cast(a as signed))` is not supported.
+            return createUnsupported(
+                expr.ShortDebugString(),
+                fmt::format("Unknown child type: {}", tipb::ExprType_Name(child.tp())));
+        }
     }
 
     // At least one ColumnRef and one Literal
@@ -190,7 +198,7 @@ inline RSOperatorPtr parseTiCompareExpr( //
         return createUnsupported(
             expr.ShortDebugString(),
             fmt::format("Multiple Literal in compare expression is not supported, size: {}", values.size()));
-    // For In type, the first child must be ColumnRef, nested column like `cast(a as signed)` is not supported.
+    // For In type, the first child must be ColumnRef
     if (column_expr_child_idx != 0 && filter_type == FilterParser::RSFilterType::In)
         return createUnsupported(expr.ShortDebugString(), "the first child of In expression must be ColumnRef");
 
