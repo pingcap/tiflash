@@ -63,36 +63,30 @@ std::tuple<size_t, UInt64> Region::serializeImpl(
     WriteBuffer & buf) const
 {
     size_t total_size = writeBinary2(binary_version, buf);
-    UInt64 applied_index = -1;
 
+    std::shared_lock<std::shared_mutex> lock(mutex);
+
+    // Serialize meta
+    const auto [meta_size, index] = meta.serialize(buf);
+    total_size += meta_size;
+    UInt64 applied_index = applied_index = index;
+
+    // Try serialize extra flags
+    if (binary_version >= 2)
     {
-        std::shared_lock<std::shared_mutex> lock(mutex);
-
-        // Serialize meta
-        const auto [meta_size, index] = meta.serialize(buf);
-        total_size += meta_size;
-        applied_index = index;
-
-        // Try serialize extra flags
-        if (binary_version >= 2)
-        {
-            static_assert(sizeof(eager_truncated_index) == sizeof(UInt64));
-            // The upper 31 bits are used to store the length of extensions, and the lowest bit is flag of eager gc.
-            UInt32 flags = (expected_extension_count << 1) | RegionPersistFormat::HAS_EAGER_TRUNCATE_INDEX;
-            total_size += writeBinary2(flags, buf);
-            total_size += writeBinary2(eager_truncated_index, buf);
-        }
-
-        UInt32 actual_extension_count = 0;
-        total_size += extra_handler(actual_extension_count, buf);
-        RUNTIME_CHECK(
-            expected_extension_count == actual_extension_count,
-            expected_extension_count,
-            actual_extension_count);
-
-        // serialize data
-        total_size += data.serialize(buf);
+        static_assert(sizeof(eager_truncated_index) == sizeof(UInt64));
+        // The upper 31 bits are used to store the length of extensions, and the lowest bit is flag of eager gc.
+        UInt32 flags = (expected_extension_count << 1) | RegionPersistFormat::HAS_EAGER_TRUNCATE_INDEX;
+        total_size += writeBinary2(flags, buf);
+        total_size += writeBinary2(eager_truncated_index, buf);
     }
+
+    UInt32 actual_extension_count = 0;
+    total_size += extra_handler(actual_extension_count, buf);
+    RUNTIME_CHECK(expected_extension_count == actual_extension_count, expected_extension_count, actual_extension_count);
+
+    // serialize data
+    total_size += data.serialize(buf);
 
     return {total_size, applied_index};
 }
