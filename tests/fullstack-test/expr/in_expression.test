@@ -210,8 +210,6 @@ mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t w
 |   40 |   50 |
 +------+------+
 mysql> drop table test.t;
-<<<<<<< HEAD
-=======
 
 mysql> create table test.t (a int unsigned);
 mysql> insert into test.t values (300), (null), (981);
@@ -241,4 +239,3 @@ mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t w
 |   50 |   60 |
 +------+------+
 mysql> drop table test.t;
->>>>>>> 6cae6e97d3 (fix In ScalarFunc in RoughSetFilter (#8634))
