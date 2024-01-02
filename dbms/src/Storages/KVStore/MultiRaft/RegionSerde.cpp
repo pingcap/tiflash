@@ -252,7 +252,7 @@ RegionPtr Region::deserializeImpl(UInt32 current_version, ReadBuffer & buf, cons
                 continue;
             }
 
-            //Throw away unknown extension data
+            // Throw away unknown extension data
             if (extension_type >= magic_enum::enum_underlying(RegionPersistExtension::MaxKnownFlag))
             {
                 buf.ignore(length);
