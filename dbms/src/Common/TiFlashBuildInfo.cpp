@@ -148,7 +148,7 @@ String getProfile()
     return TIFLASH_PROFILE;
 }
 
-constexpr String getCompilerVersion()
+String getCompilerVersion()
 {
     return fmt::format(
         "{} {}",
