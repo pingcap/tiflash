@@ -69,7 +69,7 @@ std::tuple<size_t, UInt64> Region::serializeImpl(
     // Serialize meta
     const auto [meta_size, index] = meta.serialize(buf);
     total_size += meta_size;
-    UInt64 applied_index = applied_index = index;
+    UInt64 applied_index = index;
 
     // Try serialize extra flags
     if (binary_version >= 2)
