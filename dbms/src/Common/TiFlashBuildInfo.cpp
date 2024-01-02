@@ -16,6 +16,7 @@
 #include <Common/config.h>
 #include <Common/config_version.h>
 #include <common/config_common.h>
+#include <common/logger_useful.h>
 #include <fmt/core.h>
 #include <fmt/format.h>
 #include <openssl/opensslconf.h>
@@ -147,6 +148,16 @@ String getProfile()
     return TIFLASH_PROFILE;
 }
 
+constexpr String getCompilerVersion()
+{
+    return fmt::format(
+        "{} {}",
+        // TIFLASH_CXX_COMPILER is some strings like "/tiflash-env-17/sysroot/bin/clang++",
+        // use `LogFmtDetails::getFileNameOffset` to get the compiler name
+        &TIFLASH_CXX_COMPILER[LogFmtDetails::getFileNameOffset(TIFLASH_CXX_COMPILER)],
+        TIFLASH_CXX_COMPILER_VERSION);
+}
+
 void outputDetail(std::ostream & os)
 {
     os << getName() << std::endl
@@ -156,6 +167,7 @@ void outputDetail(std::ostream & os)
        << "Git Branch:      " << getGitBranch() << std::endl
        << "UTC Build Time:  " << getUTCBuildTime() << std::endl
        << "Enable Features: " << getEnabledFeatures() << std::endl
-       << "Profile:         " << getProfile() << std::endl;
+       << "Profile:         " << getProfile() << std::endl
+       << "Compiler:        " << getCompilerVersion() << std::endl;
 }
 } // namespace TiFlashBuildInfo
