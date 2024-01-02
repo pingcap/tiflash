@@ -13,21 +13,19 @@
 // limitations under the License.
 #pragma once
 
-#include <Storages/DeltaMerge/ReadThread/CircularScanList.h>
 #include <Storages/DeltaMerge/ReadThread/MergedTask.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 
 namespace DB::DM
 {
-using SegmentReadTaskPoolList = CircularScanList<SegmentReadTaskPool>;
-// SegmentReadTaskScheduler is a global singleton.
-// All SegmentReadTaskPool will be added to it and be scheduled by it.
 
-// 1. DeltaMergeStore::read/readRaw will call SegmentReadTaskScheduler::add to add a SegmentReadTaskPool object to the `read_pools` list and
-// index segments information into `merging_segments`.
+// `SegmentReadTaskScheduler` is a global singleton. All `SegmentReadTaskPool` will be added to it and be scheduled by it.
+// 1. `UnorderedInputStream`/`UnorderedSourceOps` will call `SegmentReadTaskScheduler::add` to add a `SegmentReadTaskPool`
+// object to the `read_pools` list and index segments information into `merging_segments`.
 // 2. A schedule-thread will scheduling read tasks:
-//   a. It scans the read_pools list and choosing a SegmentReadTaskPool.
-//   b. Chooses a segment of the SegmentReadTaskPool and build a MergedTask.
+//   a. It scans the `read_pools` list and check if `SegmentReadTaskPool` need be scheduled.
+//   b. Chooses a `SegmentReadTask` of the `SegmentReadTaskPool`, if other `SegmentReadTaskPool` will read the same
+//      `SegmentReadTask`, pop them, and build a `MergedTask`.
 //   c. Sends the MergedTask to read threads(SegmentReader).
 class SegmentReadTaskScheduler
 {
@@ -42,22 +40,28 @@ public:
     DISALLOW_COPY_AND_MOVE(SegmentReadTaskScheduler);
 
     // Add SegmentReadTaskPool to `read_pools` and index segments into merging_segments.
-    void add(const SegmentReadTaskPoolPtr & pool, const LoggerPtr & req_log) LOCKS_EXCLUDED(add_mtx, mtx);
+    void add(const SegmentReadTaskPoolPtr & pool) LOCKS_EXCLUDED(add_mtx, mtx);
 
     void pushMergedTask(const MergedTaskPtr & p) { merged_task_pool.push(p); }
 
+#ifndef DBMS_PUBLIC_GTEST
 private:
-    SegmentReadTaskScheduler();
+#else
+public:
+#endif
+    // `run_sched_thread` is used for test.
+    explicit SegmentReadTaskScheduler(bool run_sched_thread = true);
 
     void setStop();
     bool isStop() const;
     bool needScheduleToRead(const SegmentReadTaskPoolPtr & pool);
+    bool needSchedule(const SegmentReadTaskPoolPtr & pool);
 
+    std::tuple<UInt64, UInt64, UInt64> scheduleOneRound() EXCLUSIVE_LOCKS_REQUIRED(mtx);
     bool schedule() LOCKS_EXCLUDED(mtx);
     void schedLoop() LOCKS_EXCLUDED(mtx);
-    // Choose segment to read, returns <MergedTaskPtr, run_next_schedule_immediately>.
-    std::pair<MergedTaskPtr, bool> scheduleMergedTask() EXCLUSIVE_LOCKS_REQUIRED(mtx);
-    SegmentReadTaskPoolPtr scheduleSegmentReadTaskPoolUnlock() EXCLUSIVE_LOCKS_REQUIRED(mtx);
+
+    MergedTaskPtr scheduleMergedTask(SegmentReadTaskPoolPtr & pool) EXCLUSIVE_LOCKS_REQUIRED(mtx);
     // Returns <seg_id, pool_ids>.
     std::optional<std::pair<GlobalSegmentID, std::vector<UInt64>>> scheduleSegmentUnlock(
         const SegmentReadTaskPoolPtr & pool) EXCLUSIVE_LOCKS_REQUIRED(mtx);
@@ -67,7 +71,7 @@ private:
     std::mutex add_mtx ACQUIRED_BEFORE(mtx);
 
     std::mutex mtx;
-    SegmentReadTaskPoolList read_pools GUARDED_BY(mtx);
+    std::unordered_map<UInt64, SegmentReadTaskPoolPtr> read_pools GUARDED_BY(mtx);
     // GlobalSegmentID -> pool_ids
     MergingSegments merging_segments GUARDED_BY(mtx);
 
@@ -77,5 +81,7 @@ private:
     std::thread sched_thread;
 
     LoggerPtr log;
+
+    std::atomic<Int64> add_waittings{0};
 };
 } // namespace DB::DM
