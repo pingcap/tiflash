@@ -2650,12 +2650,12 @@ void Join::finalize(const Names & parent_require)
     /// nullaware/semi join will reuse the input columns so need to let finalize keep the input columns
     if (non_equal_conditions.null_aware_eq_cond_expr != nullptr)
     {
-        /// todo don't keep input columns for non-semi/non-nullaware join
         non_equal_conditions.null_aware_eq_cond_expr->finalize(updated_require, true);
         updated_require = non_equal_conditions.null_aware_eq_cond_expr->getRequiredColumns();
     }
     if (non_equal_conditions.other_cond_expr != nullptr)
     {
+        /// todo don't keep input columns for non-semi/non-nullaware join
         non_equal_conditions.other_cond_expr->finalize(updated_require, true);
         updated_require = non_equal_conditions.other_cond_expr->getRequiredColumns();
     }
