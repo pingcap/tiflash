@@ -45,7 +45,7 @@ void SegmentReadTaskScheduler::add(const SegmentReadTaskPoolPtr & pool, const Lo
     {
         merging_segments[seg_id].push_back(pool->pool_id);
     }
-    LOG_DEBUG(
+    LOG_INFO(
         req_log,
         "Added, pool_id={} block_slots={} segment_count={} pool_count={} cost={:.3f}us do_add_cost={:.3f}us", //
         pool->pool_id,

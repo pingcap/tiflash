@@ -98,7 +98,7 @@ void PhysicalExpand::buildBlockInputStreamImpl(DAGPipeline & pipeline, Context &
     expandTransform(pipeline);
 }
 
-void PhysicalExpand::finalize(const Names & parent_require)
+void PhysicalExpand::finalizeImpl(const Names & parent_require)
 {
     FinalizeHelper::checkSchemaContainsParentRequire(schema, parent_require);
     Names required_output = parent_require;

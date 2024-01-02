@@ -1231,6 +1231,7 @@ typename BlobStore<Trait>::PageTypeAndBlobIds BlobStore<Trait>::getGCStats() NO_
                 continue;
             }
 
+            assert(right_boundary > 0); // Avoid divide by zero
             stat->sm_valid_rate = stat->sm_valid_size * 1.0 / right_boundary;
 
             if (stat->sm_valid_rate > 1.0)
