@@ -22,10 +22,10 @@
 #include <RaftStoreProxyFFI/ColumnFamily.h>
 #include <Storages/KVStore/MultiRaft/RegionManager.h>
 #include <Storages/KVStore/MultiRaft/RegionPersister.h>
+#include <Storages/KVStore/MultiRaft/RegionSerde.h>
 #include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/TiKVHelpers/TiKVRecordFormat.h>
 #include <Storages/KVStore/tests/region_helper.h>
-#include <Storages/KVStore/MultiRaft/RegionSerde.h>
 #include <Storages/Page/PageStorage.h>
 #include <Storages/PathPool.h>
 #include <TestUtils/TiFlashTestBasic.h>
@@ -71,7 +71,8 @@ static ::testing::AssertionResult RegionCompare(
 #define ASSERT_REGION_EQ(val1, val2) ASSERT_PRED_FORMAT2(::DB::tests::RegionCompare, val1, val2)
 
 
-static std::function<size_t(UInt32 &, WriteBuffer &)> mockSerFactory(int value) {
+static std::function<size_t(UInt32 &, WriteBuffer &)> mockSerFactory(int value)
+{
     return [value](UInt32 & actual_extension_count, WriteBuffer & buf) -> size_t {
         auto total_size = 0;
         if (value & 1)
@@ -87,14 +88,19 @@ static std::function<size_t(UInt32 &, WriteBuffer &)> mockSerFactory(int value) 
         if (value & 2)
         {
             std::string s = "kkk";
-            total_size
-                += Region::writePersistExtension(actual_extension_count, buf, UNUSED_EXTENSION_NUMBER_FOR_TEST, s.data(), s.size());
+            total_size += Region::writePersistExtension(
+                actual_extension_count,
+                buf,
+                UNUSED_EXTENSION_NUMBER_FOR_TEST,
+                s.data(),
+                s.size());
         }
         return total_size;
     };
 }
 
-static std::function<bool(UInt32, ReadBuffer &, UInt32)> mockDeserFactory(int value, std::shared_ptr<int> counter) {
+static std::function<bool(UInt32, ReadBuffer &, UInt32)> mockDeserFactory(int value, std::shared_ptr<int> counter)
+{
     return [value, counter](UInt32 extension_type, ReadBuffer & buf, UInt32 length) -> bool {
         if (value & 1)
         {

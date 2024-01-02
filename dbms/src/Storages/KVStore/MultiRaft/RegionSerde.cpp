@@ -49,13 +49,17 @@ size_t Region::writePersistExtension(
 
 std::tuple<size_t, UInt64> Region::serialize(WriteBuffer & buf) const
 {
-    return serializeImpl(Region::CURRENT_VERSION, 0, [](UInt32 &, WriteBuffer &){ return 0; }, buf);
+    return serializeImpl(
+        Region::CURRENT_VERSION,
+        0,
+        [](UInt32 &, WriteBuffer &) { return 0; },
+        buf);
 }
 
 std::tuple<size_t, UInt64> Region::serializeImpl(
     UInt32 binary_version,
     UInt32 expected_extension_count,
-    std::function<size_t(UInt32 &, WriteBuffer &)> extra_handler, 
+    std::function<size_t(UInt32 &, WriteBuffer &)> extra_handler,
     WriteBuffer & buf) const
 {
     size_t total_size = writeBinary2(binary_version, buf);
@@ -95,14 +99,22 @@ std::tuple<size_t, UInt64> Region::serializeImpl(
 
 RegionPtr Region::deserialize(ReadBuffer & buf, const TiFlashRaftProxyHelper * proxy_helper)
 {
-    return Region::deserializeImpl(Region::CURRENT_VERSION, [](UInt32, ReadBuffer &, UInt32){ return false; }, buf, proxy_helper);
+    return Region::deserializeImpl(
+        Region::CURRENT_VERSION,
+        [](UInt32, ReadBuffer &, UInt32) { return false; },
+        buf,
+        proxy_helper);
 }
 
 /// Currently supports:
 /// 1. Vx -> Vy where x >= 2, y >= 3
 /// 2. Vx -> V2 where x >= 2, in 7.5.0
 /// 3. Vx -> V2 where x >= 2, in later 7.5
-RegionPtr Region::deserializeImpl(UInt32 current_version, std::function<bool(UInt32, ReadBuffer &, UInt32)> extra_handler, ReadBuffer & buf, const TiFlashRaftProxyHelper * proxy_helper)
+RegionPtr Region::deserializeImpl(
+    UInt32 current_version,
+    std::function<bool(UInt32, ReadBuffer &, UInt32)> extra_handler,
+    ReadBuffer & buf,
+    const TiFlashRaftProxyHelper * proxy_helper)
 {
     const auto binary_version = readBinary2<UInt32>(buf);
     if (current_version <= 1 && binary_version > current_version)
@@ -138,7 +150,8 @@ RegionPtr Region::deserializeImpl(UInt32 current_version, std::function<bool(UIn
         {
             auto [extension_type, length] = getPersistExtensionTypeAndLength(buf);
             // Used in tests.
-            if(extra_handler(extension_type, buf, length)) continue;
+            if (extra_handler(extension_type, buf, length))
+                continue;
             // Throw away unknown extension data
             if (extension_type >= magic_enum::enum_underlying(RegionPersistExtension::MaxKnownFlag))
             {

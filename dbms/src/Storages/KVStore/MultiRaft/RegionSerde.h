@@ -14,7 +14,8 @@
 
 #pragma once
 
-namespace DB {
+namespace DB
+{
 using MaybeRegionPersistExtension = UInt32;
 enum class RegionPersistVersion
 {
@@ -63,4 +64,4 @@ static_assert(
     == magic_enum::enum_underlying(RegionPersistExtension::MaxKnownFlag));
 static_assert(RegionPersistFormat::HAS_EAGER_TRUNCATE_INDEX == 0x01);
 
-} // namespace
+} // namespace DB
