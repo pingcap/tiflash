@@ -108,8 +108,8 @@ RegionPtr Region::deserialize(ReadBuffer & buf, const TiFlashRaftProxyHelper * p
 
 /// Currently supports:
 /// 1. Vx -> Vy where x >= 2, y >= 3
-/// 2. Vx -> V2 where x >= 2, in 7.5.0
-/// 3. Vx -> V2 where x >= 2, in later 7.5
+/// 2. Vx -> V2 where x >= 2, in later 7.5
+/// 3. V2(7.5.x) -> V2(7.5.0), if no extensions. V2 may inherit some extensions from upper version, and failed to clean it before downgrade to 7.5.0.
 RegionPtr Region::deserializeImpl(
     UInt32 current_version,
     std::function<bool(UInt32, ReadBuffer &, UInt32)> extra_handler,
