@@ -670,7 +670,7 @@ PrehandleResult KVStore::preHandleSSTsToDTFiles(
             if (unlikely(storage == nullptr))
             {
                 // The storage must be physically dropped, throw exception and do cleanup.
-                throw Exception("Can't get table", ErrorCodes::TABLE_IS_DROPPED);
+                throw Exception(ErrorCodes::TABLE_IS_DROPPED, "Can't get table");
             }
 
             // Get a gc safe point for compacting
