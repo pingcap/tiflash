@@ -206,7 +206,7 @@ void FastAddPeerContext::insertCheckpointIngestInfo(
         checkpoint_ingest_info_map[region_id] = info;
     }
     // persist without locking on `ingest_info_mu`
-    info->persistToLocal();
+    info->persistToLocal(tmt);
 }
 
 } // namespace DB

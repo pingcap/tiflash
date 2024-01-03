@@ -28,6 +28,8 @@
 #include <Storages/Page/WriteBatchImpl.h>
 #include <Storages/Page/WriteBatchWrapperImpl.h>
 #include <Storages/PathPool.h>
+#include <Interpreters/Context.h>
+#include <Interpreters/SharedContexts/Disagg.h>
 #include <common/logger_useful.h>
 #include <fiu.h>
 
@@ -60,12 +62,12 @@ void RegionPersister::drop(RegionID region_id, const RegionTaskLock &)
     page_writer->write(std::move(wb), global_context.getWriteLimiter());
 }
 
-void RegionPersister::computeRegionWriteBuffer(const Region & region, RegionCacheWriteElement & region_write_buffer)
+void RegionPersister::computeRegionWriteBuffer(const Region & region, RegionCacheWriteElement & region_write_buffer, const RegionSerdeOpt & opt)
 {
     auto & [region_id, buffer, region_size, applied_index] = region_write_buffer;
 
     region_id = region.id();
-    std::tie(region_size, applied_index) = region.serialize(buffer);
+    std::tie(region_size, applied_index) = region.serialize(buffer, opt);
     if (unlikely(region_size > static_cast<size_t>(std::numeric_limits<UInt32>::max())))
     {
         LOG_WARNING(
@@ -77,18 +79,30 @@ void RegionPersister::computeRegionWriteBuffer(const Region & region, RegionCach
     }
 }
 
-size_t RegionPersister::computeRegionWriteBuffer(const Region & region, WriteBuffer & buffer)
+size_t RegionPersister::computeRegionWriteBuffer(const Region & region, WriteBuffer & buffer, const RegionSerdeOpt & opt)
 {
     auto region_size = 0;
-    std::tie(region_size, std::ignore) = region.serialize(buffer);
+    std::tie(region_size, std::ignore) = region.serialize(buffer, opt);
     return region_size;
+}
+
+RegionSerdeOpt RegionPersister::computeRegionSerdeOpt(const Context & context) {
+    RegionSerdeOpt opt;
+    if (context.getSharedContextDisagg()->isDisaggregatedComputeMode()) {
+        if (context.getSettingsRef().disagg_incremental_snapshot) {
+            opt.has_cloud_increment_snapshot = true;
+        }
+    }
+    return opt;
 }
 
 void RegionPersister::persist(const Region & region, const RegionTaskLock & lock)
 {
     // Support only one thread persist.
     RegionCacheWriteElement region_buffer;
-    computeRegionWriteBuffer(region, region_buffer);
+
+    RegionSerdeOpt opt = RegionPersister::computeRegionSerdeOpt(global_context);
+    computeRegionWriteBuffer(region, region_buffer, opt);
 
     doPersist(region_buffer, lock, region);
 }

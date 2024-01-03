@@ -126,7 +126,7 @@ CheckpointIngestInfoPtr CheckpointIngestInfo::restore(
         /*begin_time_*/ 0);
 }
 
-void CheckpointIngestInfo::persistToLocal() const
+void CheckpointIngestInfo::persistToLocal(TMTContext & tmt) const
 {
     if (region->isPendingRemove())
     {
@@ -154,7 +154,8 @@ void CheckpointIngestInfo::persistToLocal() const
         // Although the region is the first peer of this region in this store, we can't write it to formal KVStore for now.
         // Otherwise it could be uploaded and then overwritten.
         WriteBufferFromOwnString wb;
-        RegionPersister::computeRegionWriteBuffer(*region, wb);
+        RegionSerdeOpt opt = RegionPersister::computeRegionSerdeOpt(tmt.getContext());
+        RegionPersister::computeRegionWriteBuffer(*region, wb, opt);
         ingest_info_persisted.set_region_info(wb.releaseStr());
     }
     ingest_info_persisted.set_remote_store_id(remote_store_id);

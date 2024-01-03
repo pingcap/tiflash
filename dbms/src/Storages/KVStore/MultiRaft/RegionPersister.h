@@ -21,9 +21,11 @@
 #include <Storages/Page/FileUsage.h>
 #include <Storages/Page/PageStorage.h>
 #include <Storages/Page/V3/Universal/UniversalPageIdFormatImpl.h>
+#include <Storages/KVStore/MultiRaft/RegionSerde.h>
 
 namespace DB
 {
+class Context;
 class PathPool;
 class Region;
 using RegionPtr = std::shared_ptr<Region>;
@@ -48,8 +50,9 @@ public:
     bool gc();
 
     using RegionCacheWriteElement = std::tuple<RegionID, MemoryWriteBuffer, size_t, UInt64>;
-    static void computeRegionWriteBuffer(const Region & region, RegionCacheWriteElement & region_write_buffer);
-    static size_t computeRegionWriteBuffer(const Region & region, WriteBuffer & buffer);
+    static void computeRegionWriteBuffer(const Region & region, RegionCacheWriteElement & region_write_buffer, const RegionSerdeOpt & opt);
+    static size_t computeRegionWriteBuffer(const Region & region, WriteBuffer & buffer, const RegionSerdeOpt & opt);
+    static RegionSerdeOpt computeRegionSerdeOpt(const Context &);
 
     PageStorageConfig getPageStorageSettings() const;
 

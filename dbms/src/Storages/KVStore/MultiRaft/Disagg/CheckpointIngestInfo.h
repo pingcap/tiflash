@@ -80,7 +80,7 @@ private:
     friend class FastAddPeerContext;
     // Safety: raftstore ensures a region is handled in a single thread.
     // `persistToLocal` is called at a fixed place in this thread.
-    void persistToLocal() const;
+    void persistToLocal(TMTContext & tmt) const;
     static void removeFromLocal(TMTContext & tmt, UInt64 region_id);
 
 private:

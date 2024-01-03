@@ -170,8 +170,14 @@ public: // Stats
         MaybeRegionPersistExtension ext_type,
         const char * data,
         UInt32 size);
-    std::tuple<size_t, UInt64> serialize(WriteBuffer & buf) const;
+    std::tuple<size_t, UInt64> serialize(WriteBuffer & buf, const RegionSerdeOpt & opt) const;
     static RegionPtr deserialize(ReadBuffer & buf, const TiFlashRaftProxyHelper * proxy_helper = nullptr);
+    std::tuple<size_t, UInt64> serializeImpl(
+        UInt32 binary_version,
+        UInt32 expected_extension_count,
+        const RegionSerdeOpt & opt,
+        std::function<size_t(UInt32 &, WriteBuffer &)> extra_handler,
+        WriteBuffer & buf) const;
     std::tuple<size_t, UInt64> serializeImpl(
         UInt32 binary_version,
         UInt32 expected_extension_count,

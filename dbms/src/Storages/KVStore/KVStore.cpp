@@ -391,6 +391,7 @@ void KVStore::persistRegion(
         region.getDebugString(),
         region.dataSize(),
         caller);
+    
     region_persister->persist(region, region_task_lock);
     LOG_DEBUG(log, "Persist {} done, cache size: {} bytes", region.toString(false), region.dataSize());
 
