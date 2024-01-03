@@ -61,7 +61,6 @@ class RegionKVStoreTestFAP : public KVStoreTestBase
 public:
     void SetUp() override
     {
-        KVStoreTestBase::SetUp();
         DB::tests::TiFlashTestEnv::enableS3Config();
         auto s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
         ASSERT_TRUE(::DB::tests::TiFlashTestEnv::createBucketIfNotExist(*s3_client));
@@ -91,8 +90,8 @@ public:
         {
             already_initialize_write_ps = true;
         }
+        global_context.getSharedContextDisagg()->disaggregated_mode = DisaggregatedMode::Storage;
         orig_mode = global_context.getPageStorageRunMode();
-        global_context.setPageStorageRunMode(PageStorageRunMode::UNI_PS);
         global_context.getSharedContextDisagg()->initFastAddPeerContext(25);
         KVStoreTestBase::SetUp();
     }
@@ -261,12 +260,13 @@ void verifyRows(Context & ctx, DM::DeltaMergeStorePtr store, const DM::RowKeyRan
 CheckpointRegionInfoAndData RegionKVStoreTestFAP::prepareForRestart()
 {
     auto & global_context = TiFlashTestEnv::getGlobalContext();
-    global_context.getSharedContextDisagg()->disaggregated_mode = DisaggregatedMode::Storage;
     uint64_t region_id = 1;
     auto peer_id = 1;
     initStorages();
+    global_context.getSharedContextDisagg()->disaggregated_mode = DisaggregatedMode::Storage;
     KVStore & kvs = getKVS();
     global_context.getTMTContext().debugSetKVStore(kvstore);
+
     auto page_storage = global_context.getWriteNodePageStorage();
     TableID table_id = proxy_instance->bootstrapTable(global_context, kvs, global_context.getTMTContext());
     auto fap_context = global_context.getSharedContextDisagg()->fap_context;
@@ -366,6 +366,7 @@ try
     CheckpointRegionInfoAndData mock_data = prepareForRestart();
     KVStore & kvs = getKVS();
     RegionPtr kv_region = kvs.getRegion(1);
+    ASSERT_TRUE(kvs.getCurrentRegionOpt().is_disagg_storage_mode);
     ASSERT_TRUE(kv_region->getRegionOpt().is_disagg_storage_mode);
 
     auto & global_context = TiFlashTestEnv::getGlobalContext();

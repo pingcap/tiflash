@@ -68,7 +68,11 @@ KVStore::KVStore(Context & context)
     , eager_raft_log_gc_enabled(context.getPageStorageRunMode() == PageStorageRunMode::UNI_PS)
 {
     // default config about compact-log: rows 40k, bytes 32MB, gap 200.
-    LOG_INFO(log, "KVStore inited, eager_raft_log_gc_enabled={}", eager_raft_log_gc_enabled);
+    LOG_INFO(
+        log,
+        "KVStore inited, eager_raft_log_gc_enabled={}, is_storage_mode={}",
+        eager_raft_log_gc_enabled,
+        current_context.getSharedContextDisagg()->isDisaggregatedStorageMode());
 }
 
 void KVStore::restore(PathPool & path_pool, const TiFlashRaftProxyHelper * proxy_helper)
@@ -709,7 +713,7 @@ RegionPtr KVStore::genRegionPtr(metapb::Region && region, UInt64 peer_id, UInt64
 
 RegionOpt KVStore::getCurrentRegionOpt() const
 {
-    return RegionOpt{.is_disagg_storage_mode = current_context.getSharedContextDisagg()->isDisaggregatedComputeMode()};
+    return RegionOpt{.is_disagg_storage_mode = current_context.getSharedContextDisagg()->isDisaggregatedStorageMode()};
 }
 
 } // namespace DB

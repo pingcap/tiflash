@@ -81,7 +81,8 @@ inline RegionPtr makeRegion(
     UInt64 id,
     const std::string start_key,
     const std::string end_key,
-    const TiFlashRaftProxyHelper * proxy_helper = nullptr)
+    const TiFlashRaftProxyHelper * proxy_helper,
+    RegionOpt && region_opt)
 {
     return std::make_shared<Region>(
         RegionMeta(
@@ -89,7 +90,16 @@ inline RegionPtr makeRegion(
             createRegionInfo(id, std::move(start_key), std::move(end_key)),
             initialApplyState()),
         proxy_helper,
-        RegionOpt{});
+        std::move(region_opt));
+}
+
+inline RegionPtr makeRegion(
+    UInt64 id,
+    const std::string start_key,
+    const std::string end_key,
+    const TiFlashRaftProxyHelper * proxy_helper = nullptr)
+{
+    return makeRegion(id, start_key, end_key, proxy_helper, RegionOpt{});
 }
 
 inline RegionPtr makeRegion(RegionMeta && meta)
