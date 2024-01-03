@@ -45,7 +45,7 @@ inline ColumnFilePersisteds transform_V2_to_V3(const DMContext & context, const 
         else
         {
             auto schema = getSharedBlockSchemas(context)->getOrCreate(*(f->schema));
-            f_v3 = std::make_shared<ColumnFileTiny>(schema, f->rows, f->bytes, f->data_page_id);
+            f_v3 = std::make_shared<ColumnFileTiny>(schema, f->rows, f->bytes, f->data_page_id, context);
         }
 
         column_files_v3.push_back(f_v3);

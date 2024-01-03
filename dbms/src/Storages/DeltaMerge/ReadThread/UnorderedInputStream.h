@@ -43,13 +43,18 @@ public:
         , max_wait_time_ms(max_wait_time_ms_)
     {
         ref_no = task_pool->increaseUnorderedInputStreamRefCount();
-        LOG_DEBUG(log, "Created, pool_id={} ref_no={}", task_pool->pool_id, ref_no);
     }
 
     ~UnorderedInputStream() override
     {
-        task_pool->decreaseUnorderedInputStreamRefCount();
-        LOG_DEBUG(log, "Destroy, pool_id={} ref_no={}", task_pool->pool_id, ref_no);
+        if (const auto rc_before_decr = task_pool->decreaseUnorderedInputStreamRefCount(); rc_before_decr == 1)
+        {
+            LOG_INFO(
+                log,
+                "All unordered input streams are finished, pool_id={} last_stream_ref_no={}",
+                task_pool->pool_id,
+                ref_no);
+        }
     }
 
     String getName() const override { return NAME; }
@@ -123,7 +128,7 @@ protected:
         }
         std::call_once(task_pool->addToSchedulerFlag(), [&]() {
             prepareRuntimeFilter();
-            SegmentReadTaskScheduler::instance().add(task_pool, log);
+            SegmentReadTaskScheduler::instance().add(task_pool);
         });
         task_pool_added = true;
     }

@@ -167,11 +167,13 @@ static inline std::tuple<ReadFromStreamResult, PrehandleResult> executeTransform
                 auto flag = std::any_cast<std::shared_ptr<std::atomic_uint64_t>>(v.value());
                 if (flag->load() == 1)
                 {
+                    LOG_INFO(log, "Throw fake exception once");
                     flag->store(0);
                     throw Exception("fake exception once", ErrorCodes::REGION_DATA_SCHEMA_UPDATED);
                 }
                 else if (flag->load() == 2)
                 {
+                    LOG_INFO(log, "Throw fake exception always");
                     throw Exception("fake exception", ErrorCodes::REGION_DATA_SCHEMA_UPDATED);
                 }
             }
@@ -439,7 +441,7 @@ static void runInParallel(
             tmt);
         LOG_INFO(
             log,
-            "Finished extra parallel prehandle task limit {} write cf {} lock cf {} default cf {} dmfiles {} error {}, "
+            "Finished extra parallel prehandle task limit {} write_cf={} lock_cf={} default_cf={} dmfiles={} error={}, "
             "split_id={} region_id={}",
             limit_tag,
             part_prehandle_result.stats.write_cf_keys,
@@ -552,8 +554,8 @@ void executeParallelTransform(
         = executeTransform(log, new_region, trace, prehandle_task, job_type, storage, sst_stream, opt, tmt);
     LOG_INFO(
         log,
-        "Finished extra parallel prehandle task limit {} write cf {} lock cf {} default cf {} dmfiles {} "
-        "error {}, split_id={}, "
+        "Finished extra parallel prehandle task limit={} write_cf {} lock_cf={} default_cf={} dmfiles={} "
+        "error={}, split_id={}, "
         "region_id={}",
         sst_stream->getSoftLimit()->toDebugString(),
         head_prehandle_result.stats.write_cf_keys,
@@ -596,6 +598,7 @@ void executeParallelTransform(
             {
                 // Once a prehandle has non-ok result, we quit further loop
                 result = ctx->gather_res[extra_id];
+                result.extra_msg = fmt::format(", from {}", extra_id);
                 break;
             }
         }
@@ -614,6 +617,7 @@ void executeParallelTransform(
     {
         // Otherwise, fallback to error handling or exception handling.
         result = head_result;
+        result.extra_msg = fmt::format(", from {}", DM::SSTScanSoftLimit::HEAD_OR_ONLY_SPLIT);
     }
 }
 
@@ -666,7 +670,7 @@ PrehandleResult KVStore::preHandleSSTsToDTFiles(
             if (unlikely(storage == nullptr))
             {
                 // The storage must be physically dropped, throw exception and do cleanup.
-                throw Exception("", ErrorCodes::TABLE_IS_DROPPED);
+                throw Exception(ErrorCodes::TABLE_IS_DROPPED, "Can't get table");
             }
 
             // Get a gc safe point for compacting
@@ -750,7 +754,9 @@ PrehandleResult KVStore::preHandleSSTsToDTFiles(
                 if (force_decode)
                 {
                     // Can not decode data with `force_decode == true`, must be something wrong
-                    throw Exception(result.extra_msg, ErrorCodes::REGION_DATA_SCHEMA_UPDATED);
+                    throw Exception(
+                        ErrorCodes::REGION_DATA_SCHEMA_UPDATED,
+                        fmt::format("Force decode failed {}", result.extra_msg));
                 }
 
                 // Update schema and try to decode again
@@ -763,6 +769,8 @@ PrehandleResult KVStore::preHandleSSTsToDTFiles(
                 tmt.getSchemaSyncerManager()->syncTableSchema(context, keyspace_id, physical_table_id);
                 // Next time should force_decode
                 force_decode = true;
+                prehandle_result = PrehandleResult{};
+                prehandle_task->reset();
 
                 continue;
             }
