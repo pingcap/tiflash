@@ -48,6 +48,7 @@ struct PreHandlingTrace : MutexLockWrap
             return res;
         }
         void abortFor(PrehandleTransformStatus reason) { abort_error.store(reason); }
+        void reset() { abort_error.store(PrehandleTransformStatus::Ok); }
 
     protected:
         std::atomic<PrehandleTransformStatus> abort_error;
