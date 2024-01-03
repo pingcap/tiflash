@@ -472,7 +472,7 @@ __attribute__((always_inline)) inline void toCaseImplTiDB(
         int src_ch = utf8.convert(src);
         if unlikely (src_ch == -1)
         {
-            /// If this row invalid utf-8 characters, just copy it to dst string and do not influence others
+            /// If this row has invalid utf-8 characters, just copy it to dst string and do not influence others
             size_t dst_size = dst_data.size();
             dst_data.resize(dst_size + src_sequence_length);
             memcpy(&dst_data[dst_size], src, src_sequence_length);
