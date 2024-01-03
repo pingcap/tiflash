@@ -21,9 +21,9 @@
 #include <Storages/Page/V3/PageStorageImpl.h>
 #include <Storages/Page/workload/PSRunnable.h>
 #include <Storages/Page/workload/PSWorkload.h>
+#include <Storages/Page/workload/TiFlashMetricsHelper.h>
 #include <TestUtils/MockDiskDelegator.h>
 #include <fmt/core.h>
-#include <prometheus/metric_type.h>
 
 #include <cmath>
 #include <ext/scope_guard.h>
@@ -38,31 +38,6 @@
 
 namespace DB::PS::tests
 {
-double histogramQuantile(double q, const prometheus::ClientMetric::Histogram & hist)
-{
-    assert(q >= 0.0);
-    assert(q <= 1.0);
-
-    if (hist.sample_count == 0)
-        return -1.0;
-
-    double rank = q * hist.sample_count;
-    double lower_bound = 0.0;
-    UInt64 prev_cumulative_count = 0.0;
-    for (const auto & bucket : hist.bucket)
-    {
-        if (bucket.cumulative_count >= rank)
-        {
-            auto count = bucket.cumulative_count - prev_cumulative_count;
-            auto rank_in_bucket = rank - prev_cumulative_count;
-            // linear
-            return lower_bound + (bucket.upper_bound - lower_bound) * (rank_in_bucket / count);
-        }
-        prev_cumulative_count = bucket.cumulative_count;
-        lower_bound = bucket.upper_bound;
-    }
-    return -1.0;
-}
 
 void StressWorkload::onDumpResult()
 {
@@ -70,44 +45,19 @@ void StressWorkload::onDumpResult()
     LOG_INFO(options.logger, "workload result dumped after {}ms", time_interval);
     double seconds_run = 1.0 * time_interval / 1000;
 
-    std::unordered_map<String, prometheus::ClientMetric::Histogram> histograms;
+    auto histograms = DB::tests::TiFlashMetricsHelper::collectHistorgrams( //
+        {"tiflash_storage_page_write_duration_seconds"});
 
-    auto & tiflash_metrics = TiFlashMetrics::instance();
-    auto collectable = tiflash_metrics.registry;
-    auto families = collectable->Collect();
-    for (const auto & fam : families)
+    for (const auto & [name, hist] : histograms)
     {
-        if (fam.name != "tiflash_storage_page_write_duration_seconds")
-            continue;
-        for (const auto & m : fam.metric)
-        {
-            FmtBuffer fmt_buf;
-            fmt_buf.joinStr(
-                m.label.begin(),
-                m.label.end(),
-                [](const prometheus::ClientMetric::Label & lbl, FmtBuffer & fmt_buf) {
-                    fmt_buf.fmtAppend("<{},{}>", lbl.name, lbl.value);
-                },
-                ",");
-            auto str_labels = fmt_buf.toString();
-
-            RUNTIME_CHECK_MSG(
-                fam.type == prometheus::MetricType::Histogram && m.label.size() == 1,
-                "type={} labels={}",
-                magic_enum::enum_name(fam.type),
-                str_labels);
-            histograms[fmt::format("{}-{}", fam.name, m.label[0].value)] = m.histogram;
-            double p99 = histogramQuantile(0.99, m.histogram);
-            double p999 = histogramQuantile(0.999, m.histogram);
-            LOG_INFO(
-                options.logger,
-                "name={} type={} labels={} p99={:.3f}ms p999={:.3f}ms",
-                fam.name,
-                magic_enum::enum_name(fam.type),
-                str_labels,
-                p99 * 1000,
-                p999 * 1000);
-        }
+        auto stats = DB::tests::TiFlashMetricsHelper::histogramStats(hist);
+        LOG_INFO(
+            options.logger,
+            "name={} avg={:.3f}ms p99={:.3f}ms p999={:.3f}ms",
+            name,
+            stats.avgms,
+            stats.p99ms,
+            stats.p999ms);
     }
 
     Poco::JSON::Object::Ptr details = new Poco::JSON::Object();

@@ -32,7 +32,7 @@ void PSMetricsDumper::addJSONSummaryTo(Poco::JSON::Object::Ptr & root) const
         Poco::JSON::Object::Ptr metrics_obj = new Poco::JSON::Object();
         metrics_obj->set("latest", m.second.latest);
         double avg = m.second.loop_times == 0 ? 0.0 : (1.0 * m.second.summary / m.second.loop_times);
-        metrics_obj->set("avg", avg);
+        metrics_obj->set("avg", fmt::format("{:.3f}", avg));
         metrics_obj->set("top", m.second.biggest);
 
         root->set(m.second.name, metrics_obj);
