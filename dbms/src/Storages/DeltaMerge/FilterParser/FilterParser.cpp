@@ -207,6 +207,15 @@ inline RSOperatorPtr parseTiCompareExpr( //
             }
             values.push_back(value);
         }
+        else
+        {
+            // Any other type of child is not supported, like: ScalarFunc.
+            // case like `cast(a as signed) > 1`, `a in (0, cast(a as signed))` is not supported.
+            return createUnsupported(
+                expr.ShortDebugString(),
+                fmt::format("Unknown child type: {}", tipb::ExprType_Name(child.tp())),
+                false);
+        }
     }
 
     bool normal_cmp = (left == OperandType::Column && right == OperandType::Literal);
