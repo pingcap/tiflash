@@ -1644,15 +1644,17 @@ std::unordered_set<String> PageDirectory<Trait>::apply(PageEntriesEdit && edit, 
 
     Stopwatch watch;
     std::unique_lock apply_lock(apply_mutex);
-
     GET_METRIC(tiflash_storage_page_write_duration_seconds, type_latch).Observe(watch.elapsedSeconds());
     watch.restart();
 
-    writers.push_back(&w);
+    writers.push_back(&w); // push to write pipeline queue
     SYNC_FOR("after_PageDirectory::enter_write_group");
-    w.cv.wait(apply_lock, [&] { return w.done || &w == writers.front(); });
+    // wait until becoming the write group owner or finished by the write group owner
+    w.cv.wait(apply_lock, [&] { return w.done || &w == writers.front(); }); 
     GET_METRIC(tiflash_storage_page_write_duration_seconds, type_wait_in_group).Observe(watch.elapsedSeconds());
     watch.restart();
+
+    // finished by the write group owner
     if (w.done)
     {
         if (unlikely(!w.success))
@@ -1670,8 +1672,11 @@ std::unordered_set<String> PageDirectory<Trait>::apply(PageEntriesEdit && edit, 
         // group owner, others just return an empty set.
         return {};
     }
+
+    /// This thread now is the write group owner, build the group. It will merge the 
+    /// edits from `writers`  to the owner's edit.
     auto * last_writer = buildWriteGroup(&w, apply_lock);
-    apply_lock.unlock();
+    apply_lock.unlock(); // release the lock so that coming write could enter the pipeline queue
     SYNC_FOR("before_PageDirectory::leader_apply");
 
     // `true` means the write process has completed without exception
@@ -1680,6 +1685,7 @@ std::unordered_set<String> PageDirectory<Trait>::apply(PageEntriesEdit && edit, 
 
     SCOPE_EXIT({
         apply_lock.lock();
+        // The write group owner exits, pop all finished `write` in the `writers`
         while (true)
         {
             auto * ready = writers.front();
@@ -1697,16 +1703,17 @@ std::unordered_set<String> PageDirectory<Trait>::apply(PageEntriesEdit && edit, 
             if (ready == last_writer)
                 break;
         }
+        // Try to wakeup next write as the owner
         if (!writers.empty())
         {
             writers.front()->cv.notify_one();
         }
     });
 
+    /// Persist the write group owner's changes to WAL
     UInt64 max_sequence = sequence.load();
     const auto edit_size = edit.size();
 
-    // stage 1, persisted the changes to WAL.
     // In order to handle {put X, ref Y->X, del X} inside one WriteBatch (and
     // in later batch pipeline), we increase the sequence for each record.
     for (auto & r : edit.getMutRecords())
@@ -1718,6 +1725,8 @@ std::unordered_set<String> PageDirectory<Trait>::apply(PageEntriesEdit && edit, 
     wal->apply(Trait::Serializer::serializeTo(edit), write_limiter);
     GET_METRIC(tiflash_storage_page_write_duration_seconds, type_wal).Observe(watch.elapsedSeconds());
     watch.restart();
+
+    /// Commit the changes in memory's MVCC table
     SCOPE_EXIT({ //
         GET_METRIC(tiflash_storage_page_write_duration_seconds, type_commit).Observe(watch.elapsedSeconds());
     });
@@ -1727,7 +1736,7 @@ std::unordered_set<String> PageDirectory<Trait>::apply(PageEntriesEdit && edit, 
     {
         std::unique_lock table_lock(table_rw_mutex);
 
-        // stage 2, create entry version list for page_id.
+        // create entry version list for page_id.
         for (const auto & r : edit.getRecords())
         {
             // Protected in write_lock
