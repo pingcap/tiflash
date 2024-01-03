@@ -720,18 +720,26 @@ void BlobStore<Trait>::removePosFromStats(BlobFileId blob_id, BlobFileOffset off
         auto lock_stats = blob_stats.lock();
         blob_stats.eraseStat(std::move(stat), lock_stats);
     }
+
+    BlobFilePtr blob_file_to_removed;
     {
-        // Remove the blob file from disk and memory
+        // Remove the blob file from memory
+        // If the blob_id does not exist, the blob_file is never
+        // opened for read/write. It is safe to ignore it.
         std::lock_guard files_gurad(mtx_blob_files);
         if (auto iter = blob_files.find(blob_id);
             iter != blob_files.end())
         {
-            auto blob_file = iter->second;
-            blob_file->remove();
+            blob_file_to_removed = iter->second;
             blob_files.erase(iter);
         }
-        // If the blob_id does not exist, the blob_file is never
-        // opened for read/write. It is safe to ignore it.
+    }
+
+    // Removing the BlobFile from disk could cost several tens of ms,
+    // do it without locking
+    if (blob_file_to_removed)
+    {
+        blob_file_to_removed->remove();
     }
 }
 
