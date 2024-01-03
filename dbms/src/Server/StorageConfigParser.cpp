@@ -14,7 +14,6 @@
 
 /// Suppress gcc warning: ‘*((void*)&<anonymous> +4)’ may be used uninitialized in this function
 #include <cmath>
-#include <compare>
 #include <cstdlib>
 #include <filesystem>
 #include <string_view>
