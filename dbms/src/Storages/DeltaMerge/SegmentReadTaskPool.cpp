@@ -279,6 +279,7 @@ void SegmentReadTaskPool::pushBlock(Block && block)
     blk_stat.push(block);
     global_blk_stat.push(block);
     read_bytes_after_last_check += block.bytes();
+    GET_METRIC(tiflash_storage_read_thread_counter, type_push_block).Increment();
     q.push(std::move(block), nullptr);
 }
 
