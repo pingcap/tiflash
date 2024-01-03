@@ -189,7 +189,13 @@ public:
 
     bool isRUExhausted();
 
+    const LoggerPtr & getLogger() const { return log; }
+
+#ifndef DBMS_PUBLIC_GTEST
 private:
+#else
+public:
+#endif
     Int64 getFreeActiveSegmentsUnlock() const;
     bool exceptionHappened() const;
     void finishSegment(const SegmentReadTaskPtr & seg);
