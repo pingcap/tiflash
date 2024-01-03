@@ -348,7 +348,12 @@ try
     // CheckpointIngestInfo is removed.
     ASSERT_TRUE(!fap_context->tryGetCheckpointIngestInfo(region_id).has_value());
     EXPECT_THROW(
-        CheckpointIngestInfo::restore(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333),
+        CheckpointIngestInfo::restore(
+            global_context.getTMTContext(),
+            proxy_helper.get(),
+            kvs.getCurrentRegionOpt(),
+            region_id,
+            2333),
         Exception);
 }
 CATCH
@@ -370,7 +375,7 @@ try
     // CheckpointIngestInfo is removed.
     ASSERT_TRUE(!fap_context->tryGetCheckpointIngestInfo(region_id).has_value());
     EXPECT_THROW(
-        CheckpointIngestInfo::restore(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333),
+        CheckpointIngestInfo::restore(global_context.getTMTContext(), proxy_helper.get(), RegionOpt{}, region_id, 2333),
         Exception);
 }
 CATCH
@@ -394,10 +399,15 @@ try
     auto in_mem_ingest_info = fap_context->getOrRestoreCheckpointIngestInfo(
         global_context.getTMTContext(),
         proxy_helper.get(),
+        kvs.getCurrentRegionOpt(),
         region_id,
         2333);
-    auto in_disk_ingest_info
-        = CheckpointIngestInfo::restore(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333);
+    auto in_disk_ingest_info = CheckpointIngestInfo::restore(
+        global_context.getTMTContext(),
+        proxy_helper.get(),
+        kvs.getCurrentRegionOpt(),
+        region_id,
+        2333);
     ASSERT_EQ(in_mem_ingest_info->getRegion()->getDebugString(), in_disk_ingest_info->getRegion()->getDebugString());
     ASSERT_EQ(in_mem_ingest_info->getRestoredSegments().size(), in_disk_ingest_info->getRestoredSegments().size());
     ASSERT_EQ(in_mem_ingest_info->getRemoteStoreId(), in_disk_ingest_info->getRemoteStoreId());

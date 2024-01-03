@@ -66,7 +66,7 @@ RegionPtr createRegion(
     if (index_)
         index = *index_;
     region_meta.setApplied(index, RAFT_INIT_LOG_TERM);
-    return std::make_shared<Region>(std::move(region_meta));
+    return std::make_shared<Region>(std::move(region_meta), nullptr, RegionOpt{});
 }
 
 Regions createRegions(
@@ -104,7 +104,7 @@ RegionPtr createRegion(
 
     RegionMeta region_meta(std::move(peer), std::move(region), initialApplyState());
     region_meta.setApplied(MockTiKV::instance().getRaftIndex(region_id), RAFT_INIT_LOG_TERM);
-    return std::make_shared<Region>(std::move(region_meta));
+    return std::make_shared<Region>(std::move(region_meta), nullptr, RegionOpt{});
 }
 
 void setupPutRequest(raft_cmdpb::Request * req, const std::string & cf, const TiKVKey & key, const TiKVValue & value)

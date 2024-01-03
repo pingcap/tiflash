@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/Logger.h>
+#include <Storages/KVStore/MultiRaft/RegionOpt.h>
 #include <common/types.h>
 
 #include <memory>
@@ -70,6 +71,7 @@ struct CheckpointIngestInfo
     static CheckpointIngestInfoPtr restore(
         TMTContext & tmt,
         const TiFlashRaftProxyHelper * proxy_helper,
+        RegionOpt && region_opt,
         UInt64 region_id,
         UInt64 peer_id);
 
@@ -80,7 +82,7 @@ private:
     friend class FastAddPeerContext;
     // Safety: raftstore ensures a region is handled in a single thread.
     // `persistToLocal` is called at a fixed place in this thread.
-    void persistToLocal(TMTContext & tmt) const;
+    void persistToLocal() const;
     static void removeFromLocal(TMTContext & tmt, UInt64 region_id);
 
 private:

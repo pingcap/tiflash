@@ -121,7 +121,7 @@ void Region::setApplied(UInt64 index, UInt64 term)
 
 RegionPtr Region::splitInto(RegionMeta && meta)
 {
-    RegionPtr new_region = std::make_shared<Region>(std::move(meta), proxy_helper);
+    RegionPtr new_region = std::make_shared<Region>(std::move(meta), proxy_helper, RegionOpt(region_opt));
 
     const auto range = new_region->getRange();
     data.splitInto(range->comparableKeys(), new_region->data);
@@ -332,16 +332,13 @@ RegionMetaSnapshot Region::dumpRegionMetaSnapshot() const
     return meta.dumpRegionMetaSnapshot();
 }
 
-Region::Region(RegionMeta && meta_)
-    : Region(std::move(meta_), nullptr)
-{}
-
-Region::Region(DB::RegionMeta && meta_, const TiFlashRaftProxyHelper * proxy_helper_)
+Region::Region(DB::RegionMeta && meta_, const TiFlashRaftProxyHelper * proxy_helper_, RegionOpt && region_opt_)
     : meta(std::move(meta_))
     , eager_truncated_index(meta.truncateIndex())
     , log(Logger::get())
     , keyspace_id(meta.getRange()->getKeyspaceID())
     , mapped_table_id(meta.getRange()->getMappedTableID())
+    , region_opt(region_opt_)
     , proxy_helper(proxy_helper_)
 {}
 
@@ -409,22 +406,15 @@ IncrementalSnapshotMgrUPtr & Region::getOrCreateIncrSnapMgr()
     return incr_snap_mgr;
 }
 
-RegionSerdeOpt Region::computeRegionSerdeOpt(const Context & context)
+const RegionOpt & Region::getRegionOpt() const
 {
-    RegionSerdeOpt opt;
-    if (context.getSharedContextDisagg()->isDisaggregatedComputeMode())
-    {
-        if (context.getSettingsRef().disagg_incremental_snapshot)
-        {
-            opt.has_cloud_increment_snapshot = true;
-        }
-    }
-    return opt;
+    return region_opt;
 }
 
-const RegionSerdeOpt & Region::getRegionSerdeOpt() const
+
+RegionOpt Region::clonedRegionOpt() const
 {
-    return region_serde_opt;
+    return region_opt;
 }
 
 } // namespace DB

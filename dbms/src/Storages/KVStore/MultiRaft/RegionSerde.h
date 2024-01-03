@@ -65,9 +65,4 @@ static_assert(
     == magic_enum::enum_underlying(RegionPersistExtension::MaxKnownFlag));
 static_assert(RegionPersistFormat::HAS_EAGER_TRUNCATE_INDEX == 0x01);
 
-struct RegionSerdeOpt
-{
-    bool has_cloud_increment_snapshot = false;
-};
-
 } // namespace DB

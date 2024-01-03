@@ -17,7 +17,6 @@
 #include <Common/SyncPoint/SyncPoint.h>
 #include <IO/MemoryReadWriteBuffer.h>
 #include <Interpreters/Context.h>
-#include <Interpreters/SharedContexts/Disagg.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/KVStore/MultiRaft/RegionManager.h>
 #include <Storages/KVStore/MultiRaft/RegionPersister.h>
@@ -197,6 +196,7 @@ void RegionPersister::forceTransformKVStoreV2toV3()
 RegionMap RegionPersister::restore(
     PathPool & path_pool,
     const TiFlashRaftProxyHelper * proxy_helper,
+    RegionOpt && region_opt,
     PageStorageConfig config)
 {
     {
@@ -392,7 +392,7 @@ RegionMap RegionPersister::restore(
         }
 
         ReadBufferFromMemory buf(page.data.begin(), page.data.size());
-        auto region = Region::deserialize(buf, proxy_helper);
+        auto region = Region::deserialize(buf, std::move(region_opt), proxy_helper);
         RUNTIME_CHECK_MSG(
             page.page_id == region->id(),
             "region_id and page_id not match! region_id={} page_id={}",

@@ -20,6 +20,7 @@
 #include <Storages/KVStore/MultiRaft/Disagg/IncrementalSnapshot.h>
 #include <Storages/KVStore/MultiRaft/RegionData.h>
 #include <Storages/KVStore/MultiRaft/RegionMeta.h>
+#include <Storages/KVStore/MultiRaft/RegionOpt.h>
 #include <Storages/KVStore/MultiRaft/RegionSerde.h>
 #include <common/logger_useful.h>
 
@@ -40,7 +41,6 @@ class RegionKVStoreOldTest;
 class RegionKVStoreTest;
 } // namespace tests
 
-class Context;
 class Region;
 using RegionPtr = std::shared_ptr<Region>;
 using Regions = std::vector<RegionPtr>;
@@ -121,8 +121,7 @@ public:
     };
 
 public: // Simple Read and Write
-    explicit Region(RegionMeta && meta_);
-    explicit Region(RegionMeta && meta_, const TiFlashRaftProxyHelper *);
+    explicit Region(RegionMeta && meta_, const TiFlashRaftProxyHelper *, RegionOpt &&);
     ~Region();
 
     void insert(const std::string & cf, TiKVKey && key, TiKVValue && value, DupCheck mode = DupCheck::Deny);
@@ -172,12 +171,21 @@ public: // Stats
         const char * data,
         UInt32 size);
     std::tuple<size_t, UInt64> serialize(WriteBuffer & buf) const;
-    static RegionPtr deserialize(ReadBuffer & buf, const TiFlashRaftProxyHelper * proxy_helper = nullptr);
+    static RegionPtr deserialize(
+        ReadBuffer & buf,
+        RegionOpt && opt,
+        const TiFlashRaftProxyHelper * proxy_helper = nullptr);
     std::tuple<size_t, UInt64> serializeImpl(
         UInt32 binary_version,
         UInt32 expected_extension_count,
         std::function<size_t(UInt32 &, WriteBuffer &)> extra_handler,
         WriteBuffer & buf) const;
+    static RegionPtr deserializeImpl(
+        UInt32 current_version,
+        std::function<bool(UInt32, ReadBuffer &, UInt32)> extra_handler,
+        ReadBuffer & buf,
+        RegionOpt && opt,
+        const TiFlashRaftProxyHelper * proxy_helper = nullptr);
     static RegionPtr deserializeImpl(
         UInt32 current_version,
         std::function<bool(UInt32, ReadBuffer &, UInt32)> extra_handler,
@@ -216,7 +224,9 @@ public: // Stats
     RegionData::OrphanKeysInfo & orphanKeysInfo() { return data.orphan_keys_info; }
     const RegionData::OrphanKeysInfo & orphanKeysInfo() const { return data.orphan_keys_info; }
 
-    const RegionSerdeOpt & getRegionSerdeOpt() const;
+    const RegionOpt & getRegionOpt() const;
+    RegionOpt clonedRegionOpt() const;
+
 
 public: // Raft Read and Write
     CommittedScanner createCommittedScanner(bool use_lock, bool need_value);
@@ -258,7 +268,6 @@ public: // Raft Read and Write
     void afterPrehandleSnapshot(int64_t ongoing);
 
     IncrementalSnapshotMgrUPtr & getOrCreateIncrSnapMgr();
-    RegionSerdeOpt computeRegionSerdeOpt(const Context & context);
 
     Region() = delete;
 
@@ -303,7 +312,7 @@ private:
     const TableID mapped_table_id;
 
     IncrementalSnapshotMgrUPtr incr_snap_mgr;
-    RegionSerdeOpt region_serde_opt;
+    RegionOpt region_opt;
     std::atomic<UInt64> snapshot_event_flag{1};
     const TiFlashRaftProxyHelper * proxy_helper{nullptr};
     // Applied index since last persistence. Including all admin cmd.
