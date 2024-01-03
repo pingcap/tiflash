@@ -1061,6 +1061,11 @@ private:
     std::unordered_map<String, std::vector<T *>> resource_group_metrics_map;
 };
 
+namespace PS::tests
+{
+class StressWorkload;
+}
+
 /// Centralized registry of TiFlash metrics.
 /// Cope with MetricsPrometheus by registering
 /// profile events, current metrics and customized metrics (as individual member for caller to access) into registry ahead of being updated.
@@ -1114,6 +1119,7 @@ public:
     DISALLOW_COPY_AND_MOVE(TiFlashMetrics);
 
     friend class MetricsPrometheus;
+    friend class DB::PS::tests::StressWorkload;
 };
 
 #define MAKE_METRIC_ENUM_M(family_name, help, type, ...) \
