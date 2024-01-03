@@ -399,13 +399,6 @@ void Region::mergeDataFrom(const Region & other)
     this->data.orphan_keys_info.mergeFrom(other.data.orphan_keys_info);
 }
 
-IncrementalSnapshotMgrUPtr & Region::getOrCreateIncrSnapMgr()
-{
-    if (!incr_snap_mgr)
-        incr_snap_mgr = std::make_unique<IncrementalSnapshotMgr>();
-    return incr_snap_mgr;
-}
-
 const RegionOpt & Region::getRegionOpt() const
 {
     return region_opt;

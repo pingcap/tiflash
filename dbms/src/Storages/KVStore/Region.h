@@ -17,7 +17,6 @@
 #include <RaftStoreProxyFFI/ProxyFFI.h>
 #include <Storages/DeltaMerge/DeltaMergeInterfaces.h>
 #include <Storages/KVStore/Decode/DecodedTiKVKeyValue.h>
-#include <Storages/KVStore/MultiRaft/Disagg/IncrementalSnapshot.h>
 #include <Storages/KVStore/MultiRaft/RegionData.h>
 #include <Storages/KVStore/MultiRaft/RegionMeta.h>
 #include <Storages/KVStore/MultiRaft/RegionOpt.h>
@@ -267,8 +266,6 @@ public: // Raft Read and Write
     void beforePrehandleSnapshot(uint64_t region_id, std::optional<uint64_t> deadline_index);
     void afterPrehandleSnapshot(int64_t ongoing);
 
-    IncrementalSnapshotMgrUPtr & getOrCreateIncrSnapMgr();
-
     Region() = delete;
 
 private:
@@ -311,7 +308,6 @@ private:
     const KeyspaceID keyspace_id;
     const TableID mapped_table_id;
 
-    IncrementalSnapshotMgrUPtr incr_snap_mgr;
     RegionOpt region_opt;
     std::atomic<UInt64> snapshot_event_flag{1};
     const TiFlashRaftProxyHelper * proxy_helper{nullptr};
