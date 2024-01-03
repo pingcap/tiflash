@@ -13,6 +13,8 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
+#include <Common/FmtUtils.h>
+#include <Common/TiFlashMetrics.h>
 #include <Storages/Page/workload/TiFlashMetricsHelper.h>
 
 #include <magic_enum.hpp>

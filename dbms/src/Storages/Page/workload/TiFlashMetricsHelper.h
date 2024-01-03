@@ -12,12 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/FmtUtils.h>
-#include <Common/TiFlashMetrics.h>
 #include <common/types.h>
+#include <prometheus/client_metric.h>
 #include <prometheus/metric_type.h>
 
-#include <magic_enum.hpp>
 #include <unordered_set>
 
 namespace DB::tests

@@ -12,9 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/FmtUtils.h>
 #include <Common/MemoryTracker.h>
-#include <Common/TiFlashMetrics.h>
 #include <Encryption/MockKeyManager.h>
 #include <Poco/Logger.h>
 #include <Storages/Page/V2/PageStorage.h>
@@ -25,10 +23,7 @@
 #include <TestUtils/MockDiskDelegator.h>
 #include <fmt/core.h>
 
-#include <cmath>
 #include <ext/scope_guard.h>
-#include <magic_enum.hpp>
-#include <unordered_map>
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
