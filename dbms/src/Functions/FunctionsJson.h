@@ -2478,9 +2478,13 @@ private:
         for (size_t i = 0; i < rows; ++i)
         {
             const auto & target_val = target_source->getWhole();
+            if (isNullJsonBinary(target_val.size))
+                continue;
             JsonBinary target_json_binary(target_val.data[0], StringRef(&target_val.data[1], target_val.size - 1));
 
             const auto & obj_val = obj_source->getWhole();
+            if (isNullJsonBinary(obj_val.size))
+                continue;
             JsonBinary obj_json_binary(obj_val.data[0], StringRef(&obj_val.data[1], obj_val.size - 1));
 
             if (obj_json_binary.getType() != JsonBinary::TYPE_CODE_ARRAY)
@@ -2513,11 +2517,15 @@ private:
         ColumnUInt8::Container & data_to)
     {
         const auto & target_val = target_source->getWhole();
+        if unlikely (isNullJsonBinary(target_val.size))
+            return;
         JsonBinary target_json_binary(target_val.data[0], StringRef(&target_val.data[1], target_val.size - 1));
 
         for (size_t i = 0; i < rows; ++i)
         {
             const auto & obj_val = obj_source->getWhole();
+            if (isNullJsonBinary(obj_val.size))
+                continue;
             JsonBinary obj_json_binary(obj_val.data[0], StringRef(&obj_val.data[1], obj_val.size - 1));
 
             if (obj_json_binary.getType() != JsonBinary::TYPE_CODE_ARRAY)
