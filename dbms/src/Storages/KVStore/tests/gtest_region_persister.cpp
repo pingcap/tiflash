@@ -219,7 +219,7 @@ try
     ASSERT_EQ(region_ser_size, (size_t)Poco::File(path).getSize());
 
     ReadBufferFromFile read_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_RDONLY);
-    auto new_region = Region::deserialize(read_buf, RegionOpt{});
+    auto new_region = Region::deserialize(read_buf, region->clonedRegionOpt());
     ASSERT_REGION_EQ(*new_region, *region);
     {
         // For the region restored with binary_version == 1, the eager_truncated_index is equals to
@@ -251,7 +251,7 @@ try
     ASSERT_EQ(region_ser_size, (size_t)Poco::File(path).getSize());
 
     ReadBufferFromFile read_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_RDONLY);
-    auto new_region = Region::deserialize(read_buf, RegionOpt{});
+    auto new_region = Region::deserialize(read_buf, region->clonedRegionOpt());
     ASSERT_REGION_EQ(*new_region, *region);
     {
         const auto & [eager_truncated_index, applied_index] = new_region->getRaftLogEagerGCRange();
@@ -295,7 +295,7 @@ try
 
     ASSERT_EQ(region_ser_size, (size_t)Poco::File(path).getSize());
     ReadBufferFromFile read_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_RDONLY);
-    auto new_region = Region::deserialize(read_buf, RegionOpt{});
+    auto new_region = Region::deserialize(read_buf, region->clonedRegionOpt());
     ASSERT_EQ(*new_region, *region);
 }
 CATCH

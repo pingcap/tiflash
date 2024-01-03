@@ -314,6 +314,7 @@ try
     CheckpointRegionInfoAndData mock_data = prepareForRestart();
     KVStore & kvs = getKVS();
     RegionPtr kv_region = kvs.getRegion(1);
+    ASSERT_TRUE(kv_region->getRegionOpt().is_disagg_storage_mode);
 
     auto & global_context = TiFlashTestEnv::getGlobalContext();
     auto fap_context = global_context.getSharedContextDisagg()->fap_context;
@@ -365,6 +366,7 @@ try
     CheckpointRegionInfoAndData mock_data = prepareForRestart();
     KVStore & kvs = getKVS();
     RegionPtr kv_region = kvs.getRegion(1);
+    ASSERT_TRUE(kv_region->getRegionOpt().is_disagg_storage_mode);
 
     auto & global_context = TiFlashTestEnv::getGlobalContext();
     auto fap_context = global_context.getSharedContextDisagg()->fap_context;
@@ -375,7 +377,12 @@ try
     // CheckpointIngestInfo is removed.
     ASSERT_TRUE(!fap_context->tryGetCheckpointIngestInfo(region_id).has_value());
     EXPECT_THROW(
-        CheckpointIngestInfo::restore(global_context.getTMTContext(), proxy_helper.get(), RegionOpt{}, region_id, 2333),
+        CheckpointIngestInfo::restore(
+            global_context.getTMTContext(),
+            proxy_helper.get(),
+            kvs.getCurrentRegionOpt(),
+            region_id,
+            2333),
         Exception);
 }
 CATCH
@@ -387,6 +394,7 @@ try
     CheckpointRegionInfoAndData mock_data = prepareForRestart();
     KVStore & kvs = getKVS();
     RegionPtr kv_region = kvs.getRegion(1);
+    ASSERT_TRUE(kv_region->getRegionOpt().is_disagg_storage_mode);
 
     auto & global_context = TiFlashTestEnv::getGlobalContext();
     auto fap_context = global_context.getSharedContextDisagg()->fap_context;
