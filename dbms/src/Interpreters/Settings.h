@@ -252,7 +252,6 @@ struct Settings
     M(SettingInt64, remote_gc_small_size, 128 * 1024, "The files with total size less than this threshold will be compacted")                                                                                                           \
     M(SettingDouble, disagg_read_concurrency_scale, 20.0, "Scale * logical cpu cores = disaggregated read IO concurrency.")                                                                                                             \
     \
-    M(SettingBool, disagg_incremental_snapshot, true, "Using incremental snapshot in disagg mode")                                                                                                                                        \
     M(SettingUInt64, fap_wait_checkpoint_timeout_seconds, 80, "The max time wait for a usable checkpoint for FAP")                                                                                                                       \
     M(SettingUInt64, fap_handle_concurrency, 25, "The number of threads for handling FAP tasks")                                                                                                                                        \
     \

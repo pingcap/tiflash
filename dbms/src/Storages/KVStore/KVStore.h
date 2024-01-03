@@ -67,7 +67,6 @@ struct MockTiDBTable;
 struct TiKVRangeKey;
 
 class TMTContext;
-class Context;
 
 struct SSTViewVec;
 struct WriteCmdsView;
