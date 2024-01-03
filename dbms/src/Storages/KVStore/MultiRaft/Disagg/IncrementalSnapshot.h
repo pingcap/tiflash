@@ -31,7 +31,7 @@ struct ReuseSummary
     std::vector<UInt64> ids;
 };
 
-struct IncrementalSnapshotManager
+struct IncrementalSnapshotMgr
 {
     void observeDeltaSummary(UInt64 persisted_applied_index, RegionPtr region, UInt64 * l0_ids, UInt64 l0_ids_size);
     std::optional<ReuseSummary> tryReuseDeltaSummary(
@@ -46,7 +46,7 @@ struct IncrementalSnapshotManager
     UInt64 region_id;
 };
 
-using IncrementalSnapshotManagerPtr = std::shared_ptr<IncrementalSnapshotManager>;
-using UniqueIncrementalSnapshotManagerPtr = std::unique_ptr<IncrementalSnapshotManager>;
+using DisaggIncrementalSnapshotMgrPtr = std::shared_ptr<IncrementalSnapshotMgr>;
+using IncrementalSnapshotMgrUPtr = std::unique_ptr<IncrementalSnapshotMgr>;
 
 } // namespace DB

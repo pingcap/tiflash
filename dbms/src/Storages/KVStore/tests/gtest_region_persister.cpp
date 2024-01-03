@@ -230,7 +230,6 @@ CATCH
 TEST_F(RegionSeriTest, Region)
 try
 {
-    RegionSerdeOpt opt;
     TableID table_id = 100;
     auto region = std::make_shared<Region>(createRegionMeta(1001, table_id));
     TiKVKey key = RecordKVFormat::genKey(table_id, 323, 9983);
@@ -242,7 +241,7 @@ try
 
     const auto path = dir_path + "/region.test";
     WriteBufferFromFile write_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_CREAT);
-    size_t region_ser_size = std::get<0>(region->serialize(write_buf, opt));
+    size_t region_ser_size = std::get<0>(region->serialize(write_buf));
     write_buf.next();
     write_buf.sync();
     ASSERT_EQ(region_ser_size, (size_t)Poco::File(path).getSize());
@@ -260,7 +259,6 @@ CATCH
 TEST_F(RegionSeriTest, RegionStat)
 try
 {
-    RegionSerdeOpt opt;
     RegionPtr region = nullptr;
     TableID table_id = 100;
     {
@@ -288,7 +286,7 @@ try
 
     const auto path = dir_path + "/region_state.test";
     WriteBufferFromFile write_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_CREAT);
-    size_t region_ser_size = std::get<0>(region->serialize(write_buf, opt));
+    size_t region_ser_size = std::get<0>(region->serialize(write_buf));
     write_buf.next();
 
     ASSERT_EQ(region_ser_size, (size_t)Poco::File(path).getSize());

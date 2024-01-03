@@ -16,6 +16,8 @@
 #include <Common/ProfileEvents.h>
 #include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
+#include <Interpreters/Context.h>
+#include <Interpreters/SharedContexts/Disagg.h>
 #include <Storages/DeltaMerge/DeltaMergeInterfaces.h>
 #include <Storages/KVStore/Decode/TiKVRange.h>
 #include <Storages/KVStore/FFI/ProxyFFI.h>
@@ -400,10 +402,29 @@ void Region::mergeDataFrom(const Region & other)
     this->data.orphan_keys_info.mergeFrom(other.data.orphan_keys_info);
 }
 
-UniqueIncrementalSnapshotManagerPtr & Region::getOrCreateIncrSnapMgr() {
+IncrementalSnapshotMgrUPtr & Region::getOrCreateIncrSnapMgr()
+{
     if (!incr_snap_mgr)
-        incr_snap_mgr = std::make_unique<IncrementalSnapshotManager>();
+        incr_snap_mgr = std::make_unique<IncrementalSnapshotMgr>();
     return incr_snap_mgr;
+}
+
+RegionSerdeOpt Region::computeRegionSerdeOpt(const Context & context)
+{
+    RegionSerdeOpt opt;
+    if (context.getSharedContextDisagg()->isDisaggregatedComputeMode())
+    {
+        if (context.getSettingsRef().disagg_incremental_snapshot)
+        {
+            opt.has_cloud_increment_snapshot = true;
+        }
+    }
+    return opt;
+}
+
+const RegionSerdeOpt & Region::getRegionSerdeOpt() const
+{
+    return region_serde_opt;
 }
 
 } // namespace DB

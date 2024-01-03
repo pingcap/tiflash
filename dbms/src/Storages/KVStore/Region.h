@@ -17,9 +17,9 @@
 #include <RaftStoreProxyFFI/ProxyFFI.h>
 #include <Storages/DeltaMerge/DeltaMergeInterfaces.h>
 #include <Storages/KVStore/Decode/DecodedTiKVKeyValue.h>
+#include <Storages/KVStore/MultiRaft/Disagg/IncrementalSnapshot.h>
 #include <Storages/KVStore/MultiRaft/RegionData.h>
 #include <Storages/KVStore/MultiRaft/RegionMeta.h>
-#include <Storages/KVStore/MultiRaft/Disagg/IncrementalSnapshot.h>
 #include <Storages/KVStore/MultiRaft/RegionSerde.h>
 #include <common/logger_useful.h>
 
@@ -40,6 +40,7 @@ class RegionKVStoreOldTest;
 class RegionKVStoreTest;
 } // namespace tests
 
+class Context;
 class Region;
 using RegionPtr = std::shared_ptr<Region>;
 using Regions = std::vector<RegionPtr>;
@@ -170,14 +171,8 @@ public: // Stats
         MaybeRegionPersistExtension ext_type,
         const char * data,
         UInt32 size);
-    std::tuple<size_t, UInt64> serialize(WriteBuffer & buf, const RegionSerdeOpt & opt) const;
+    std::tuple<size_t, UInt64> serialize(WriteBuffer & buf) const;
     static RegionPtr deserialize(ReadBuffer & buf, const TiFlashRaftProxyHelper * proxy_helper = nullptr);
-    std::tuple<size_t, UInt64> serializeImpl(
-        UInt32 binary_version,
-        UInt32 expected_extension_count,
-        const RegionSerdeOpt & opt,
-        std::function<size_t(UInt32 &, WriteBuffer &)> extra_handler,
-        WriteBuffer & buf) const;
     std::tuple<size_t, UInt64> serializeImpl(
         UInt32 binary_version,
         UInt32 expected_extension_count,
@@ -221,6 +216,8 @@ public: // Stats
     RegionData::OrphanKeysInfo & orphanKeysInfo() { return data.orphan_keys_info; }
     const RegionData::OrphanKeysInfo & orphanKeysInfo() const { return data.orphan_keys_info; }
 
+    const RegionSerdeOpt & getRegionSerdeOpt() const;
+
 public: // Raft Read and Write
     CommittedScanner createCommittedScanner(bool use_lock, bool need_value);
     CommittedRemover createCommittedRemover(bool use_lock = true);
@@ -260,7 +257,8 @@ public: // Raft Read and Write
     void beforePrehandleSnapshot(uint64_t region_id, std::optional<uint64_t> deadline_index);
     void afterPrehandleSnapshot(int64_t ongoing);
 
-    UniqueIncrementalSnapshotManagerPtr & getOrCreateIncrSnapMgr();
+    IncrementalSnapshotMgrUPtr & getOrCreateIncrSnapMgr();
+    RegionSerdeOpt computeRegionSerdeOpt(const Context & context);
 
     Region() = delete;
 
@@ -304,7 +302,8 @@ private:
     const KeyspaceID keyspace_id;
     const TableID mapped_table_id;
 
-    UniqueIncrementalSnapshotManagerPtr incr_snap_mgr;
+    IncrementalSnapshotMgrUPtr incr_snap_mgr;
+    RegionSerdeOpt region_serde_opt;
     std::atomic<UInt64> snapshot_event_flag{1};
     const TiFlashRaftProxyHelper * proxy_helper{nullptr};
     // Applied index since last persistence. Including all admin cmd.

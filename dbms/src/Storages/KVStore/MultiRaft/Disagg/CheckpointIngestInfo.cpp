@@ -154,8 +154,7 @@ void CheckpointIngestInfo::persistToLocal(TMTContext & tmt) const
         // Although the region is the first peer of this region in this store, we can't write it to formal KVStore for now.
         // Otherwise it could be uploaded and then overwritten.
         WriteBufferFromOwnString wb;
-        RegionSerdeOpt opt = RegionPersister::computeRegionSerdeOpt(tmt.getContext());
-        RegionPersister::computeRegionWriteBuffer(*region, wb, opt);
+        RegionPersister::computeRegionWriteBuffer(*region, wb);
         ingest_info_persisted.set_region_info(wb.releaseStr());
     }
     ingest_info_persisted.set_remote_store_id(remote_store_id);

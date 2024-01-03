@@ -19,7 +19,7 @@
 
 namespace DB
 {
-void IncrementalSnapshotManager::observeDeltaSummary(
+void IncrementalSnapshotMgr::observeDeltaSummary(
     UInt64 persisted_applied_index,
     RegionPtr region,
     UInt64 * l0_ids,
@@ -38,7 +38,7 @@ void IncrementalSnapshotManager::observeDeltaSummary(
     summary.set_end(region->getRange()->rawKeys().second->toString());
 }
 
-std::optional<ReuseSummary> IncrementalSnapshotManager::tryReuseDeltaSummary(
+std::optional<ReuseSummary> IncrementalSnapshotMgr::tryReuseDeltaSummary(
     UInt64 applied_index,
     RegionPtr region,
     UInt64 * new_l0_ids,
@@ -80,14 +80,14 @@ std::optional<ReuseSummary> IncrementalSnapshotManager::tryReuseDeltaSummary(
     return reuse;
 }
 
-String IncrementalSnapshotManager::serializeToString() const
+String IncrementalSnapshotMgr::serializeToString() const
 {
     IncrementalSnapshotProto::DeltaSummariesPersisted persisted;
     *persisted.mutable_summary() = summary;
     return persisted.SerializeAsString();
 }
 
-void IncrementalSnapshotManager::deserializeFromString(const String & s)
+void IncrementalSnapshotMgr::deserializeFromString(const String & s)
 {
     IncrementalSnapshotProto::DeltaSummariesPersisted persisted;
     if (!persisted.ParseFromArray(s.data(), s.size()))

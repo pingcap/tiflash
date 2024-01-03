@@ -21,9 +21,9 @@ namespace DB
 namespace tests
 {
 
-TEST_F(RegionKVStoreTest, IncrementalSnapshotManager)
+TEST_F(RegionKVStoreTest, IncrementalSnapshotMgr)
 {
-    IncrementalSnapshotManager mgr;
+    IncrementalSnapshotMgr mgr;
     auto & ctx = TiFlashTestEnv::getGlobalContext();
     KVStore & kvs = getKVS();
     auto region_id = 1;

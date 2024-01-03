@@ -47,12 +47,11 @@ size_t Region::writePersistExtension(
     return total_size;
 }
 
-std::tuple<size_t, UInt64> Region::serialize(WriteBuffer & buf, const RegionSerdeOpt & opt) const
+std::tuple<size_t, UInt64> Region::serialize(WriteBuffer & buf) const
 {
     return serializeImpl(
         Region::CURRENT_VERSION,
         0,
-        opt,
         [](UInt32 &, WriteBuffer &) { return 0; },
         buf);
 }
@@ -60,17 +59,6 @@ std::tuple<size_t, UInt64> Region::serialize(WriteBuffer & buf, const RegionSerd
 std::tuple<size_t, UInt64> Region::serializeImpl(
     UInt32 binary_version,
     UInt32 expected_extension_count,
-    std::function<size_t(UInt32 &, WriteBuffer &)> extra_handler,
-    WriteBuffer & buf) const
-{
-    RegionSerdeOpt opt;
-    return serializeImpl(binary_version, expected_extension_count, opt, extra_handler, buf);
-}
-
-std::tuple<size_t, UInt64> Region::serializeImpl(
-    UInt32 binary_version,
-    UInt32 expected_extension_count,
-    const RegionSerdeOpt & opt,
     std::function<size_t(UInt32 &, WriteBuffer &)> extra_handler,
     WriteBuffer & buf) const
 {
@@ -95,7 +83,8 @@ std::tuple<size_t, UInt64> Region::serializeImpl(
     UInt32 actual_extension_count = 0;
     if (binary_version >= 3)
     {
-        if (opt.has_cloud_increment_snapshot && incr_snap_mgr) {
+        if (region_serde_opt.has_cloud_increment_snapshot && incr_snap_mgr)
+        {
             auto s = incr_snap_mgr->serializeToString();
             total_size += Region::writePersistExtension(
                 actual_extension_count,
