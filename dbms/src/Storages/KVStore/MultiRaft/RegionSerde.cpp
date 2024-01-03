@@ -158,7 +158,6 @@ RegionPtr Region::deserializeImpl(
 
     // deserialize data
     RegionData::deserialize(buf, region->data);
-    region->data.reportAlloc(region->data.cf_data_size);
 
     // restore other var according to meta
     region->last_restart_log_applied = region->appliedIndex();

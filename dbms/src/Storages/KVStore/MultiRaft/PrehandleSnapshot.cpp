@@ -680,7 +680,7 @@ PrehandleResult KVStore::preHandleSSTsToDTFiles(
                 // Next time should force_decode
                 force_decode = true;
                 prehandle_result = PrehandleResult{};
-                prehandle_task->reset();
+                prehandle_task->abort_flag.store(false);
 
                 continue;
             }

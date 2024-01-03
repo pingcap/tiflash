@@ -130,9 +130,6 @@ public:
     CommittedScanner createCommittedScanner(bool use_lock, bool need_value);
     CommittedRemover createCommittedRemover(bool use_lock = true);
 
-    std::tuple<size_t, UInt64> serialize(WriteBuffer & buf) const;
-    static RegionPtr deserialize(ReadBuffer & buf, const TiFlashRaftProxyHelper * proxy_helper = nullptr);
-
     RegionID id() const;
     ImutRegionRangePtr getRange() const;
 
