@@ -1145,31 +1145,43 @@ Segments DeltaMergeStore::buildSegmentsFromCheckpointInfo(
         "Build checkpoint from remote, store_id={} region_id={}",
         checkpoint_info->remote_store_id,
         checkpoint_info->region_id);
-    auto segment_meta_infos = Segment::readAllSegmentsMetaInfoInRange(*dm_context, range, checkpoint_info);
     WriteBatches wbs{*dm_context->storage_pool};
-    auto restored_segments = Segment::createTargetSegmentsFromCheckpoint( //
-        log,
-        *dm_context,
-        checkpoint_info->remote_store_id,
-        segment_meta_infos,
-        range,
-        checkpoint_info->temp_ps,
-        wbs);
-
-    if (restored_segments.empty())
+    try
     {
-        LOG_DEBUG(log, "No segments to ingest.");
+        auto segment_meta_infos = Segment::readAllSegmentsMetaInfoInRange(*dm_context, range, checkpoint_info);
+        auto restored_segments = Segment::createTargetSegmentsFromCheckpoint( //
+            log,
+            *dm_context,
+            checkpoint_info->remote_store_id,
+            segment_meta_infos,
+            range,
+            checkpoint_info->temp_ps,
+            wbs);
+        if (restored_segments.empty())
+        {
+            return {};
+        }
         wbs.writeLogAndData();
-        return {};
+        // wbs.writeRemoves();
+        LOG_INFO(
+            log,
+            "Finish write fap checkpoint, region_id={} segments_num={}",
+            checkpoint_info->region_id,
+            segment_meta_infos.size());
+        return restored_segments;
     }
-    wbs.writeLogAndData();
-    wbs.writeRemoves();
-    LOG_INFO(
-        log,
-        "Finish write fap checkpoint, region_id={} segments_num={}",
-        checkpoint_info->region_id,
-        segment_meta_infos.size());
-    return restored_segments;
+    catch (const Exception & e)
+    {
+        LOG_INFO(
+            log,
+            "Build checkpoint from remote failed for {}, region_id={} remote_store_id={}",
+            e.message(),
+            checkpoint_info->region_id,
+            checkpoint_info->remote_store_id);
+        wbs.setRollback();
+        e.rethrow();
+    }
+    return {};
 }
 
 void DeltaMergeStore::ingestSegmentsFromCheckpointInfo(

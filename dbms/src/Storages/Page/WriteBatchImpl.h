@@ -217,6 +217,8 @@ public:
         total_data_size = 0;
     }
 
+    size_t size() const { return writes.size(); }
+
     SequenceID getSequence() const { return sequence; }
 
     size_t getTotalDataSize() const { return total_data_size; }

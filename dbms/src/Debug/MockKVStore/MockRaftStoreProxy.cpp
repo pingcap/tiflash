@@ -467,7 +467,9 @@ void MockRaftStoreProxy::doApply(
             }
         }
     }
-    else if (cmd.has_admin_request()) {}
+    else if (cmd.has_admin_request())
+    {
+    }
 
     region->updateAppliedIndex(index, false);
 
