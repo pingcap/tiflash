@@ -1802,6 +1802,25 @@ try
 }
 CATCH
 
+TEST_F(JoinExecutorTestRunner, LeftJoinAggWithOtherCondition)
+try
+{
+    auto request_column
+        = context.scan("test_db", "l_table")
+              .join(
+                  context.scan("test_db", "r_table"),
+                  tipb::JoinType::TypeLeftOuterJoin,
+                  {col("join_c")},
+                  {},
+                  {},
+                  {And(lt(col("l_table.s"), col("r_table.s")), eq(col("l_table.join_c"), col("r_table.join_c")))},
+                  {})
+              .aggregation({Count(lit(static_cast<UInt64>(1)))}, {})
+              .build(context);
+    ASSERT_COLUMNS_EQ_UR(genScalarCountResults(2), executeStreams(request_column, 2));
+}
+CATCH
+
 TEST_F(JoinExecutorTestRunner, JoinWithExchangeReceiver)
 try
 {

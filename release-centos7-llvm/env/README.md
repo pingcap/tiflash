@@ -14,3 +14,7 @@ tar xvf tiflash-env-x86_64.tar.xz
 source ~/.tiflash_env_rc
 
 ```
+
+## Upgrading toolchain
+
+Update the script `prepare-sysroot.sh`
