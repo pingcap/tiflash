@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
 #include <Storages/Page/workload/TiFlashMetricsHelper.h>
 
 #include <magic_enum.hpp>
@@ -19,10 +20,9 @@
 
 namespace DB::tests
 {
-std::unordered_map<String, prometheus::ClientMetric::Histogram> //
-TiFlashMetricsHelper::collectHistorgrams(const std::unordered_set<String> & names)
+TiFlashMetricsHelper::HistogramMap TiFlashMetricsHelper::collectHistorgrams(const std::unordered_set<String> & names)
 {
-    std::unordered_map<String, prometheus::ClientMetric::Histogram> histograms;
+    HistogramMap histograms;
 
     auto & tiflash_metrics = TiFlashMetrics::instance();
     auto collectable = tiflash_metrics.registry;
@@ -49,7 +49,7 @@ TiFlashMetricsHelper::collectHistorgrams(const std::unordered_set<String> & name
                 fam.name,
                 magic_enum::enum_name(fam.type),
                 str_labels);
-            histograms[fmt::format("{}-{}", fam.name, m.label[0].value)] = m.histogram;
+            histograms[HistogramId{.name = fam.name, .type = m.label[0].value}] = m.histogram;
         }
     }
 
@@ -67,6 +67,7 @@ TiFlashMetricsHelper::HistStats TiFlashMetricsHelper::histogramStats(const prome
 
 double TiFlashMetricsHelper::histogramQuantile(const prometheus::ClientMetric::Histogram & hist, double q)
 {
+    // Base on https://github.com/prometheus/prometheus/blob/756202aa4fc09c4fdc756a8c5b1976d709cd3939/promql/quantile.go#L154-L177
     assert(q >= 0.0);
     assert(q <= 1.0);
 
@@ -78,17 +79,19 @@ double TiFlashMetricsHelper::histogramQuantile(const prometheus::ClientMetric::H
     UInt64 prev_cumulative_count = 0.0;
     for (const auto & bucket : hist.bucket)
     {
+        RUNTIME_CHECK(bucket.upper_bound > 0.0, bucket.upper_bound);
         if (bucket.cumulative_count >= rank)
         {
             auto count = bucket.cumulative_count - prev_cumulative_count;
             auto rank_in_bucket = rank - prev_cumulative_count;
-            // linear
+            // linear interpolation
             return lower_bound + (bucket.upper_bound - lower_bound) * (rank_in_bucket / count);
         }
         prev_cumulative_count = bucket.cumulative_count;
         lower_bound = bucket.upper_bound;
     }
-    return -1.0;
+    // rank >= all count, return the last bucket's upper_bound
+    return lower_bound;
 }
 
 double TiFlashMetricsHelper::histogramAvg(const prometheus::ClientMetric::Histogram & hist)
@@ -97,18 +100,28 @@ double TiFlashMetricsHelper::histogramAvg(const prometheus::ClientMetric::Histog
         return 0.0;
 
     double sum = 0.0;
-    double lower_bound = 0.0;
+    std::optional<double> lower_bound_value;
+    double bucket_lower_bound = 0.0;
     UInt64 prev_cumulative_count = 0.0;
     for (const auto & bucket : hist.bucket)
     {
         auto bucket_count = bucket.cumulative_count - prev_cumulative_count;
         if (bucket_count > 0)
-            sum += (lower_bound + bucket.upper_bound) / 2 * bucket_count;
+        {
+            if (!lower_bound_value.has_value())
+                lower_bound_value = bucket.upper_bound;
+            sum += (bucket_lower_bound + bucket.upper_bound) / 2 * bucket_count;
+        }
 
         prev_cumulative_count = bucket.cumulative_count;
-        lower_bound = bucket.upper_bound;
+        bucket_lower_bound = bucket.upper_bound;
     }
-    return sum / hist.sample_count;
+
+    // no values among all buckets
+    if (!lower_bound_value.has_value())
+        return 0.0;
+    // lower limited by the value we observed at least once
+    return std::max(sum / hist.sample_count, *lower_bound_value);
 }
 
 } // namespace DB::tests

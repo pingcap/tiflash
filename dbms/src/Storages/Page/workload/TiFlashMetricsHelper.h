@@ -26,8 +26,28 @@ struct TiFlashMetricsHelper
 {
 public:
     // "name-label" -> histogram
-    static std::unordered_map<String, prometheus::ClientMetric::Histogram> //
-    collectHistorgrams(const std::unordered_set<String> & names);
+    struct HistogramId
+    {
+        String name;
+        String type;
+    };
+    struct HistogramIdHash
+    {
+        size_t operator()(const HistogramId & id) const noexcept
+        {
+            return std::hash<String>()(id.name) ^ std::hash<String>()(id.type);
+        }
+    };
+    struct HistogramIdEqual
+    {
+        size_t operator()(const HistogramId & lhs, const HistogramId & rhs) const noexcept
+        {
+            return lhs.name == rhs.name && lhs.type == rhs.type;
+        }
+    };
+    using HistogramMap
+        = std::unordered_map<HistogramId, prometheus::ClientMetric::Histogram, HistogramIdHash, HistogramIdEqual>;
+    static HistogramMap collectHistorgrams(const std::unordered_set<String> & names);
 
     struct HistStats
     {
