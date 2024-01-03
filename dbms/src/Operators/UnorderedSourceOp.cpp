@@ -64,7 +64,7 @@ void UnorderedSourceOp::operatePrefixImpl()
     std::call_once(task_pool->addToSchedulerFlag(), [&]() {
         if (waiting_rf_list.empty())
         {
-            DM::SegmentReadTaskScheduler::instance().add(task_pool, log);
+            DM::SegmentReadTaskScheduler::instance().add(task_pool);
         }
         else
         {
@@ -74,7 +74,7 @@ void UnorderedSourceOp::operatePrefixImpl()
 
             if (max_wait_time_ms <= 0 || waiting_rf_list.empty())
             {
-                RFWaitTask::submitReadyRfsAndSegmentTaskPool(ready_rf_list, task_pool, log);
+                RFWaitTask::submitReadyRfsAndSegmentTaskPool(ready_rf_list, task_pool);
             }
             else
             {
