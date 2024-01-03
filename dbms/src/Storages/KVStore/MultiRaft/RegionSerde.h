@@ -21,7 +21,6 @@ enum class RegionPersistVersion
 {
     V1 = 1,
     V2, // For eager gc
-    V3, // For cloud incremental snapshot
 };
 
 namespace RegionPersistFormat
@@ -37,9 +36,8 @@ static constexpr UInt32 HAS_EAGER_TRUNCATE_INDEX = 0x01;
 enum class RegionPersistExtension : MaybeRegionPersistExtension
 {
     ReservedForTest = 1,
-    DisaggIncrementalSnapshot = 2,
     // It should always be equal to the maximum supported type + 1
-    MaxKnownFlag = 3,
+    MaxKnownFlag = 2,
 };
 
 /// The flexible pattern

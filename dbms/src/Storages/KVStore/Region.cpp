@@ -16,8 +16,6 @@
 #include <Common/ProfileEvents.h>
 #include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
-#include <Interpreters/Context.h>
-#include <Interpreters/SharedContexts/Disagg.h>
 #include <Storages/DeltaMerge/DeltaMergeInterfaces.h>
 #include <Storages/KVStore/Decode/TiKVRange.h>
 #include <Storages/KVStore/FFI/ProxyFFI.h>
