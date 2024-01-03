@@ -137,6 +137,8 @@ try
                 {{{RecordKVFormat::genKey(1, 0), RecordKVFormat::genKey(1, 10)}}});
             auto kvr1 = kvs.getRegion(region_id);
             auto r1 = proxy_instance->getRegion(region_id);
+            ASSERT_FALSE(kvs.getCurrentRegionOpt().is_disagg_storage_mode);
+            ASSERT_FALSE(kvr1->getRegionOpt().is_disagg_storage_mode);
             ASSERT_NE(r1, nullptr);
             ASSERT_NE(kvr1, nullptr);
             applied_index = r1->getLatestAppliedIndex();
@@ -347,6 +349,7 @@ try
     auto & ctx = TiFlashTestEnv::getGlobalContext();
     {
         KVStore & kvs = getKVS();
+        ASSERT_FALSE(kvs.getCurrentRegionOpt().is_disagg_storage_mode);
         UInt64 region_id = 2;
         proxy_instance->debugAddRegions(
             kvs,
