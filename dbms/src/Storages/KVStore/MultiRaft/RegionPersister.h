@@ -18,7 +18,6 @@
 #include <IO/MemoryReadWriteBuffer.h>
 #include <Interpreters/Context_fwd.h>
 #include <Storages/KVStore/MultiRaft/RegionOpt.h>
-#include <Storages/KVStore/MultiRaft/RegionSerde.h>
 #include <Storages/KVStore/Types.h>
 #include <Storages/Page/FileUsage.h>
 #include <Storages/Page/PageStorage.h>
