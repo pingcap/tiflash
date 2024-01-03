@@ -366,6 +366,43 @@ inline UInt64 appendValueOfSIMDJsonElem(
 }
 } // namespace
 
+bool JsonBinary::operator==(const JsonBinary & other) const
+{
+    if (type != other.type)
+        return false;
+    switch (type)
+    {
+    case TYPE_CODE_ARRAY:
+    {
+        auto elem_cnt1 = getElementCount();
+        auto elem_cnt2 = other.getElementCount();
+        if (elem_cnt1 != elem_cnt2)
+            return false;
+        for (size_t i = 0; i < elem_cnt1; ++i)
+        {
+            if (getArrayElement(i) != other.getArrayElement(i))
+                return false;
+        }
+        return true;
+    }
+    case TYPE_CODE_OBJECT:
+    {
+        auto elem_cnt1 = getElementCount();
+        auto elem_cnt2 = other.getElementCount();
+        if (elem_cnt1 != elem_cnt2)
+            return false;
+        for (size_t i = 0; i < elem_cnt1; ++i)
+        {
+            if (getObjectKey(i) != other.getObjectKey(i) || getObjectValue(i) != other.getObjectValue(i))
+                return false;
+        }
+        return true;
+    }
+    default:
+        return data == other.data;
+    }
+}
+
 char JsonBinary::getChar(size_t offset) const
 {
     RUNTIME_CHECK(offset < data.size);

@@ -146,6 +146,8 @@ public:
 
     /// getElementCount gets the count of Object or Array only.
     UInt32 getElementCount() const;
+    JsonBinary getArrayElement(size_t index) const;
+
     String toString() const; /// For test usage, not efficient at all
     void toStringInBuffer(JsonBinaryWriteBuffer & write_buffer) const;
 
@@ -161,6 +163,8 @@ public:
     JsonType getType() const { return type; }
 
     std::vector<StringRef> getKeys() const;
+
+    bool operator==(const JsonBinary & other) const;
 
     static String unquoteString(const StringRef & ref);
     static void unquoteStringInBuffer(const StringRef & ref, JsonBinaryWriteBuffer & write_buffer);
@@ -202,7 +206,6 @@ private:
     char getChar(size_t offset) const;
     StringRef getSubRef(size_t offset, size_t length) const;
 
-    JsonBinary getArrayElement(size_t index) const;
     StringRef getObjectKey(size_t index) const;
     JsonBinary getObjectValue(size_t index) const;
     JsonBinary getValueEntry(size_t value_entry_offset) const;

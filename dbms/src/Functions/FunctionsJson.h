@@ -2169,7 +2169,7 @@ public:
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         if unlikely (!removeNullable(arguments[1])->isString())
             throw Exception(
-                fmt::format("Illegal type {} of argument of function {}", arguments[0]->getName(), getName()),
+                fmt::format("Illegal type {} of argument of function {}", arguments[1]->getName(), getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         return makeNullable(std::make_shared<DataTypeString>());
     }
@@ -2419,6 +2419,127 @@ private:
         std::vector<JsonPathExprRefContainerPtr> path_expr_container_vec(1);
         path_expr_container_vec[0] = std::move(path_expr_container);
         return path_expr_container_vec;
+    }
+};
+
+class FunctionJsonMemberOf : public IFunction
+{
+public:
+    static constexpr auto name = "json_member_of";
+    static FunctionPtr create(const Context &) { return std::make_shared<FunctionJsonMemberOf>(); }
+
+    String getName() const override { return name; }
+
+    size_t getNumberOfArguments() const override { return 2; }
+
+    bool useDefaultImplementationForNulls() const override { return true; }
+    bool useDefaultImplementationForConstants() const override { return true; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        if unlikely (!arguments[0]->isString())
+            throw Exception(
+                fmt::format("Illegal type {} of argument of function {}", arguments[0]->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        if unlikely (!arguments[1]->isString())
+            throw Exception(
+                fmt::format("Illegal type {} of argument of function {}", arguments[1]->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        return std::make_shared<DataTypeString>();
+    }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
+    {
+        const auto & target_col = block.getByPosition(arguments[0]).column;
+        auto target_source = createDynamicStringSource(*target_col);
+
+        const auto & obj_col = block.getByPosition(arguments[1]).column;
+        auto obj_source = createDynamicStringSource(*obj_col);
+
+        size_t rows = block.rows();
+        auto col_to = ColumnUInt8::create(rows, 0);
+        auto & data_to = col_to->getData();
+
+        if (target_col->isColumnConst())
+            executeForConstTarget(target_source, obj_source, rows, data_to);
+        else
+            executeForCommon(target_source, obj_source, rows, data_to);
+
+        block.getByPosition(result).column = std::move(col_to);
+    }
+
+private:
+    static void executeForCommon(
+        const std::unique_ptr<IStringSource> & target_source,
+        const std::unique_ptr<IStringSource> & obj_source,
+        size_t rows,
+        ColumnUInt8::Container & data_to)
+    {
+        for (size_t i = 0; i < rows; ++i)
+        {
+            const auto & target_val = target_source->getWhole();
+            JsonBinary target_json_binary(target_val.data[0], StringRef(&target_val.data[1], target_val.size - 1));
+
+            const auto & obj_val = obj_source->getWhole();
+            JsonBinary obj_json_binary(obj_val.data[0], StringRef(&obj_val.data[1], obj_val.size - 1));
+
+            if (obj_json_binary.getType() != JsonBinary::TYPE_CODE_ARRAY)
+            {
+                data_to[i] = (target_json_binary == obj_json_binary);
+            }
+            else
+            {
+                Int8 res = 0;
+                auto elem_cnt = obj_json_binary.getElementCount();
+                for (size_t i = 0; i < elem_cnt; ++i)
+                {
+                    if (target_json_binary == obj_json_binary.getArrayElement(i))
+                    {
+                        res = 1;
+                        break;
+                    }
+                }
+                data_to[i] = res;
+            }
+            target_source->next();
+            obj_source->next();
+        }
+    }
+
+    static void executeForConstTarget(
+        const std::unique_ptr<IStringSource> & target_source,
+        const std::unique_ptr<IStringSource> & obj_source,
+        size_t rows,
+        ColumnUInt8::Container & data_to)
+    {
+        const auto & target_val = target_source->getWhole();
+        JsonBinary target_json_binary(target_val.data[0], StringRef(&target_val.data[1], target_val.size - 1));
+
+        for (size_t i = 0; i < rows; ++i)
+        {
+            const auto & obj_val = obj_source->getWhole();
+            JsonBinary obj_json_binary(obj_val.data[0], StringRef(&obj_val.data[1], obj_val.size - 1));
+
+            if (obj_json_binary.getType() != JsonBinary::TYPE_CODE_ARRAY)
+            {
+                data_to[i] = (target_json_binary == obj_json_binary);
+            }
+            else
+            {
+                Int8 res = 0;
+                auto elem_cnt = obj_json_binary.getElementCount();
+                for (size_t i = 0; i < elem_cnt; ++i)
+                {
+                    if (target_json_binary == obj_json_binary.getArrayElement(i))
+                    {
+                        res = 1;
+                        break;
+                    }
+                }
+                data_to[i] = res;
+            }
+            obj_source->next();
+        }
     }
 };
 } // namespace DB
