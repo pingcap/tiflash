@@ -48,7 +48,6 @@ struct HashJoinProbeProcessData
 struct CrossJoinProbeProcessData
 {
     Block result_block_schema;
-    std::vector<size_t> right_column_index_in_result_block;
     std::vector<size_t> right_column_index_in_right_block;
     std::vector<size_t> left_column_index_in_left_block;
     size_t right_rows_to_be_added_when_matched = 0;
