@@ -2445,7 +2445,7 @@ public:
             throw Exception(
                 fmt::format("Illegal type {} of argument of function {}", arguments[1]->getName(), getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-        return std::make_shared<DataTypeString>();
+        return std::make_shared<DataTypeUInt8>();
     }
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override

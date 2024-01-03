@@ -37,22 +37,40 @@ struct TestJsonMemberOf : public DB::tests::FunctionTest
     {
         ASSERT_COLUMN_EQ(
             createColumn<UInt8>({expect, expect}),
-            executeFunction(func_name, {createColumn<String>({target, target}), createColumn<String>({obj, obj})}));
+            executeFunction(func_name, {castStringToJson(createColumn<String>({target, target})), castStringToJson(createColumn<String>({obj, obj}))}));
         ASSERT_COLUMN_EQ(
             createColumn<UInt8>({expect, expect}),
-            executeFunction(func_name, {createConstColumn<String>(2, target), createColumn<String>({obj, obj})}));
+            executeFunction(func_name, {castStringToJson(createConstColumn<String>(2, target)), castStringToJson(createColumn<String>({obj, obj}))}));
     }
 };
 
 TEST_F(TestJsonMemberOf, TestAll)
 try
 {
+    ASSERT_COLUMN_EQ(
+            createColumn<Nullable<UInt8>>({{}, {}}),
+            executeFunction(func_name, {castStringToJson(createColumn<Nullable<String>>({{}, "{}"})), castStringToJson(createColumn<Nullable<String>>({"{}", {}}))}));
+
     executeAndAssert("1", "1", true);
     executeAndAssert("1", "999", false);
     executeAndAssert("1.11", "1.11", true);
     executeAndAssert("1.11", "1.22", false);
     executeAndAssert("[]", "[]", false);
     executeAndAssert("{}", "{}", true);
+    executeAndAssert(R"({"a":123, "b":234})", R"({"a":123, "b":234})", true);
+    executeAndAssert(R"({"a":123, "b":23})", R"({"a":123, "b":234})", false);
+    executeAndAssert("123", "[]", false);
+    executeAndAssert("123", "[123]", true);
+    executeAndAssert(R"({"a":123, "b":234})", R"([{"a":123, "b":234}])", true);
+    executeAndAssert(R"({"a":123, "b":23})", R"([{"a":123, "b":234}])", false);
+    executeAndAssert("1", "[1, 2, 3, 4, 5, 6]", true);
+    executeAndAssert("2", "[1, 2, 3, 4, 5, 6]", true);
+    executeAndAssert("3", "[1, 2, 3, 4, 5, 6]", true);
+    executeAndAssert("4", "[1, 2, 3, 4, 5, 6]", true);
+    executeAndAssert("5", "[1, 2, 3, 4, 5, 6]", true);
+    executeAndAssert("6", "[1, 2, 3, 4, 5, 6]", true);
+    executeAndAssert("0", "[1, 2, 3, 4, 5, 6]", false);
+    executeAndAssert("7", "[1, 2, 3, 4, 5, 6]", false);
 }
 CATCH
 
