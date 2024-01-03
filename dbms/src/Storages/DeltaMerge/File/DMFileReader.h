@@ -23,7 +23,7 @@
 #include <Storages/DeltaMerge/File/DMFilePackFilter.h>
 #include <Storages/DeltaMerge/ReadThread/ColumnSharingCache.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
-#include <Storages/DeltaMerge/ScanContext.h>
+#include <Storages/DeltaMerge/ScanContext_fwd.h>
 #include <Storages/MarkCache.h>
 
 namespace DB
@@ -97,6 +97,8 @@ public:
     /// Skipped rows before next call of #read().
     /// Return false if it is the end of stream.
     bool getSkippedRows(size_t & skip_rows);
+
+    /// NOTE: skipNextBlock and readWithFilter are only used by late materialization.
 
     /// Skip the packs to read next
     /// Return the number of rows skipped.

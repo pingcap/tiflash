@@ -94,7 +94,7 @@ void PhysicalTopN::buildPipelineExecGroupImpl(
     }
 }
 
-void PhysicalTopN::finalize(const Names & parent_require)
+void PhysicalTopN::finalizeImpl(const Names & parent_require)
 {
     Names required_output = parent_require;
     required_output.reserve(required_output.size() + order_descr.size());

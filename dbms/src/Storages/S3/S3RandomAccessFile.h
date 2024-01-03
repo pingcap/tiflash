@@ -18,7 +18,7 @@
 #include <Common/Logger.h>
 #include <Encryption/RandomAccessFile.h>
 #include <Storages/DeltaMerge/File/MergedFile.h>
-#include <Storages/DeltaMerge/ScanContext.h>
+#include <Storages/DeltaMerge/ScanContext_fwd.h>
 #include <aws/s3/model/GetObjectResult.h>
 #include <common/types.h>
 

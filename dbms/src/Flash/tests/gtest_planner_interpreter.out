@@ -617,8 +617,8 @@ CreatingSets
    Expression: <expr after aggregation>
     SharedQuery: <restore concurrency>
      ParallelAggregating, max_threads: 10, final: true
-      Expression x 10: <before aggregation>
-       HashJoinProbe: <join probe, join_executor_id = Join_2, scan_hash_map_after_probe = false>
+      HashJoinProbe x 10: <join probe, join_executor_id = Join_2, scan_hash_map_after_probe = false>
+       Expression: <append join key and join filters for probe side>
         Expression: <final projection>
          MockTableScan
 @
@@ -636,11 +636,10 @@ CreatingSets
    Expression: <expr after aggregation>
     SharedQuery: <restore concurrency>
      ParallelAggregating, max_threads: 10, final: true
-      Expression x 10: <before aggregation>
-       HashJoinProbe: <join probe, join_executor_id = Join_2, scan_hash_map_after_probe = true>
-        Expression: <append join key and join filters for probe side>
-         Expression: <final projection>
-          MockTableScan
+      HashJoinProbe x 10: <join probe, join_executor_id = Join_2, scan_hash_map_after_probe = true>
+       Expression: <append join key and join filters for probe side>
+        Expression: <final projection>
+         MockTableScan
 @
 ~test_suite_name: JoinThenAgg
 ~result_index: 2
@@ -661,11 +660,10 @@ CreatingSets
         Expression: <expr after aggregation>
          SharedQuery: <restore concurrency>
           ParallelAggregating, max_threads: 20, final: true
-           Expression x 20: <before aggregation>
-            HashJoinProbe: <join probe, join_executor_id = Join_2, scan_hash_map_after_probe = true>
-             Expression: <append join key and join filters for probe side>
-              Expression: <final projection>
-               MockExchangeReceiver
+           HashJoinProbe x 20: <join probe, join_executor_id = Join_2, scan_hash_map_after_probe = true>
+            Expression: <append join key and join filters for probe side>
+             Expression: <final projection>
+              MockExchangeReceiver
 @
 ~test_suite_name: ListBase
 ~result_index: 0

@@ -80,8 +80,8 @@ public:
 
     EventPtr sinkComplete(PipelineExecutorContext & exec_context);
 
-    virtual void finalize(const Names & parent_require) = 0;
-    void finalize();
+    virtual void finalizeImpl(const Names & parent_require) = 0;
+    void finalize(const Names & parent_require);
 
     /// Obtain a sample block that contains the names and types of result columns.
     virtual const Block & getSampleBlock() const = 0;
@@ -127,6 +127,7 @@ protected:
 
     bool is_tidb_operator = true;
     bool is_restore_concurrency = true;
+    bool finalized = false;
 
     LoggerPtr log;
 };
