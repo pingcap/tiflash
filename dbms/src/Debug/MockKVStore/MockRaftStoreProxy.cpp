@@ -643,7 +643,11 @@ std::tuple<RegionPtr, PrehandleResult> MockRaftStoreProxy::snapshot(
         LOG_ERROR(log, e.message());
         e.rethrow();
     }
-    exit(0);
+    catch (...)
+    {
+        tryLogCurrentFatalException(...);
+        exit(1);
+    }
 }
 
 TableID MockRaftStoreProxy::bootstrapTable(Context & ctx, KVStore & kvs, TMTContext & tmt, bool drop_at_first)
