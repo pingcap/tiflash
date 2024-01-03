@@ -92,7 +92,7 @@ EngineStoreApplyRes KVStore::handleIngestSST(
     {
         // We always try to flush dm cache and region if possible for every IngestSST,
         // in order to have the raft log truncated and sst deleted.
-        persistRegion(*region, &region_task_lock, PersistRegionReason::IngestSst, "");
+        persistRegion(*region, region_task_lock, PersistRegionReason::IngestSst, "");
         return EngineStoreApplyRes::Persist;
     }
 }
@@ -180,6 +180,8 @@ void Region::finishIngestSSTByDTFile(RegionPtr && temp_region, UInt64 index, UIn
     {
         std::unique_lock<std::shared_mutex> lock(mutex);
 
+        auto uncommitted_ingest = temp_region->dataSize();
+        GET_METRIC(tiflash_raft_write_flow_bytes, type_ingest_uncommitted).Observe(uncommitted_ingest);
         if (temp_region)
         {
             // Merge the uncommitted data from `temp_region`.

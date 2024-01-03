@@ -56,4 +56,10 @@ void dbgFuncResetSchemas(Context & context, const ASTs & args, DBGInvoker::Print
 // Usage:
 //   ./storage-client.sh "DBGInvoke is_tombstone(db_name, table_name)"
 void dbgFuncIsTombstone(Context & context, const ASTs & args, DBGInvoker::Printer output);
+
+// Mock that concurrent DDL meets conflict, it will retry the DDL with a new schema version.
+// So the schema_version will contains empty SchemaDiff
+// Usage:
+//   ./storage-client.sh "DBGInvoke skip_schema_version()"
+void dbgFuncSkipSchemaVersion(Context & context, const ASTs & args, DBGInvoker::Printer output);
 } // namespace DB

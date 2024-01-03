@@ -122,6 +122,7 @@ public:
     const raft_serverpb::MergeState & getMergeState() const;
     raft_serverpb::MergeState cloneMergeState() const;
     const RegionState & getRegionState() const;
+    RegionState & debugMutRegionState();
     RegionMeta clone() const
     {
         std::lock_guard lock(mutex);

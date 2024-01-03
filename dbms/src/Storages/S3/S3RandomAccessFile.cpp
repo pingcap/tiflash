@@ -18,6 +18,7 @@
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/TiFlashMetrics.h>
 #include <Encryption/RandomAccessFile.h>
+#include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/S3/FileCache.h>
 #include <Storages/S3/MemoryRandomAccessFile.h>
 #include <Storages/S3/S3Common.h>
@@ -44,6 +45,7 @@ S3RandomAccessFile::S3RandomAccessFile(std::shared_ptr<TiFlashS3Client> client_p
     , cur_offset(0)
     , log(Logger::get(remote_fname))
 {
+    RUNTIME_CHECK(client_ptr != nullptr);
     RUNTIME_CHECK(initialize(), remote_fname);
 }
 
@@ -234,11 +236,11 @@ inline static RandomAccessFilePtr createFromNormalFile(
     if (file != nullptr)
     {
         if (scan_context.has_value())
-            scan_context.value()->total_disagg_read_cache_hit_size += filesize.value();
+            scan_context.value()->disagg_read_cache_hit_size += filesize.value();
         return file;
     }
     if (scan_context.has_value())
-        scan_context.value()->total_disagg_read_cache_miss_size += filesize.value();
+        scan_context.value()->disagg_read_cache_miss_size += filesize.value();
     auto & ins = S3::ClientFactory::instance();
     return std::make_shared<S3RandomAccessFile>(ins.sharedTiFlashClient(), remote_fname);
 }

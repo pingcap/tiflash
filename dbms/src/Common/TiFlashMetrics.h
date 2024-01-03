@@ -34,6 +34,9 @@
 
 namespace DB
 {
+constexpr size_t RAFT_REGION_BIG_WRITE_THRES = 2 * 1024;
+constexpr size_t RAFT_REGION_BIG_WRITE_MAX = 4 * 1024 * 1024; // raft-entry-max-size = 8MiB
+static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Invalid RAFT_REGION_BIG_WRITE_THRES");
 /// Central place to define metrics across all subsystems.
 /// Refer to gtest_tiflash_metrics.cpp for more sample defines.
 /// Usage:
@@ -485,12 +488,13 @@ namespace DB
     M(tiflash_raft_raft_frequent_events_count,                                                                                      \
       "Raft frequent event counter",                                                                                                \
       Counter,                                                                                                                      \
+      F(type_write_commit, {{"type", "write_commit"}}),                                                                             \
       F(type_write, {{"type", "write"}}))                                                                                           \
     M(tiflash_raft_region_flush_bytes,                                                                                              \
       "Bucketed histogram of region flushed bytes",                                                                                 \
       Histogram,                                                                                                                    \
-      F(type_flushed, {{"type", "flushed"}}, ExpBuckets{32, 2, 21}),                                                                \
-      F(type_unflushed, {{"type", "unflushed"}}, ExpBuckets{32, 2, 21}))                                                            \
+      F(type_flushed, {{"type", "flushed"}}, ExpBucketsWithRange{32, 4, 32 * 1024 * 1024}),                                         \
+      F(type_unflushed, {{"type", "unflushed"}}, ExpBucketsWithRange{32, 4, 32 * 1024 * 1024}))                                     \
     M(tiflash_raft_entry_size,                                                                                                      \
       "Bucketed histogram entry size",                                                                                              \
       Histogram,                                                                                                                    \
@@ -501,6 +505,20 @@ namespace DB
       F(type_raft_snapshot, {{"type", "raft_snapshot"}}),                                                                           \
       F(type_dt_on_disk, {{"type", "dt_on_disk"}}),                                                                                 \
       F(type_dt_total, {{"type", "dt_total"}}))                                                                                     \
+    M(tiflash_raft_throughput_bytes,                                                                                                \
+      "Raft handled bytes in global",                                                                                               \
+      Counter,                                                                                                                      \
+      F(type_write, {{"type", "write"}}),                                                                                           \
+      F(type_write_committed, {{"type", "write_committed"}}))                                                                       \
+    M(tiflash_raft_write_flow_bytes,                                                                                                \
+      "Bucketed histogram of bytes for each write",                                                                                 \
+      Histogram,                                                                                                                    \
+      F(type_ingest_uncommitted, {{"type", "ingest_uncommitted"}}, ExpBucketsWithRange{16, 4, 64 * 1024}),                          \
+      F(type_snapshot_uncommitted, {{"type", "snapshot_uncommitted"}}, ExpBucketsWithRange{16, 4, 1024 * 1024}),                    \
+      F(type_write_committed, {{"type", "write_committed"}}, ExpBucketsWithRange{16, 2, 1024 * 1024}),                              \
+      F(type_big_write_to_region,                                                                                                   \
+        {{"type", "big_write_to_region"}},                                                                                          \
+        ExpBucketsWithRange{RAFT_REGION_BIG_WRITE_THRES, 4, RAFT_REGION_BIG_WRITE_MAX}))                                            \
     M(tiflash_raft_snapshot_total_bytes,                                                                                            \
       "Bucketed snapshot total size",                                                                                               \
       Histogram,                                                                                                                    \
@@ -564,6 +582,8 @@ namespace DB
       F(type_ru_exhausted, {"type", "ru_exhausted"}),                                                                               \
       F(type_add_cache_succ, {"type", "add_cache_succ"}),                                                                           \
       F(type_add_cache_stale, {"type", "add_cache_stale"}),                                                                         \
+      F(type_add_cache_reach_count_limit, {"type", "type_add_cache_reach_count_limit"}),                                            \
+      F(type_add_cache_total_bytes_limit, {"type", "add_cache_total_bytes_limit"}),                                                 \
       F(type_get_cache_miss, {"type", "get_cache_miss"}),                                                                           \
       F(type_get_cache_part, {"type", "get_cache_part"}),                                                                           \
       F(type_get_cache_hit, {"type", "get_cache_hit"}),                                                                             \

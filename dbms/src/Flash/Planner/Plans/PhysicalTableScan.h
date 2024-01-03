@@ -38,7 +38,7 @@ public:
         const TiDBTableScan & tidb_table_scan_,
         const Block & sample_block_);
 
-    void finalize(const Names & parent_require) override;
+    void finalizeImpl(const Names & parent_require) override;
 
     const Block & getSampleBlock() const override;
 

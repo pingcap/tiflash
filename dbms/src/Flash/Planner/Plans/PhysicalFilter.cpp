@@ -78,7 +78,7 @@ void PhysicalFilter::buildPipelineExecGroupImpl(
     });
 }
 
-void PhysicalFilter::finalize(const Names & parent_require)
+void PhysicalFilter::finalizeImpl(const Names & parent_require)
 {
     Names required_output = parent_require;
     required_output.emplace_back(filter_column);

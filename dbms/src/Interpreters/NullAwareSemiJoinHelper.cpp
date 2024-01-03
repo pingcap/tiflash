@@ -43,6 +43,7 @@ void NASemiJoinResult<KIND, STRICTNESS>::fillRightColumns(
     MutableColumns & added_columns,
     size_t left_columns,
     size_t right_columns,
+    const std::vector<size_t> & right_column_indices_to_add,
     const std::vector<RowsNotInsertToMap *> & null_rows,
     size_t & current_offset,
     size_t max_pace)
@@ -77,7 +78,9 @@ void NASemiJoinResult<KIND, STRICTNESS>::fillRightColumns(
         for (size_t i = 0; i < current_pace && iter != nullptr; ++i)
         {
             for (size_t j = 0; j < right_columns; ++j)
-                added_columns[j + left_columns]->insertFrom(*iter->block->getByPosition(j).column.get(), iter->row_num);
+                added_columns[j + left_columns]->insertFrom(
+                    *iter->block->getByPosition(right_column_indices_to_add[j]).column.get(),
+                    iter->row_num);
             ++current_offset;
             iter = iter->next;
         }
@@ -96,12 +99,16 @@ void NASemiJoinResult<KIND, STRICTNESS>::fillRightColumns(
 
             while (pos_in_columns_vector < rows.materialized_columns_vec.size() && count > 0)
             {
+                /// todo only materialize used columns
                 const auto & columns = rows.materialized_columns_vec[pos_in_columns_vector];
                 const size_t columns_size = columns[0]->size();
 
                 size_t insert_cnt = std::min(count, columns_size - pos_in_columns);
                 for (size_t j = 0; j < right_columns; ++j)
-                    added_columns[j + left_columns]->insertRangeFrom(*columns[j].get(), pos_in_columns, insert_cnt);
+                    added_columns[j + left_columns]->insertRangeFrom(
+                        *columns[right_column_indices_to_add[j]].get(),
+                        pos_in_columns,
+                        insert_cnt);
 
                 pos_in_columns += insert_cnt;
                 count -= insert_cnt;
@@ -233,14 +240,14 @@ template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename
 NASemiJoinHelper<KIND, STRICTNESS, Mapped>::NASemiJoinHelper(
     Block & block_,
     size_t left_columns_,
-    size_t right_columns_,
+    const std::vector<size_t> & right_column_indices_to_add_,
     const BlocksList & right_blocks_,
     const std::vector<RowsNotInsertToMap *> & null_rows_,
     size_t max_block_size_,
     const JoinNonEqualConditions & non_equal_conditions_)
     : block(block_)
     , left_columns(left_columns_)
-    , right_columns(right_columns_)
+    , right_column_indices_to_add(right_column_indices_to_add_)
     , right_blocks(right_blocks_)
     , null_rows(null_rows_)
     , max_block_size(max_block_size_)
@@ -249,6 +256,7 @@ NASemiJoinHelper<KIND, STRICTNESS, Mapped>::NASemiJoinHelper(
     static_assert(KIND == NullAware_Anti || KIND == NullAware_LeftOuterAnti || KIND == NullAware_LeftOuterSemi);
     static_assert(STRICTNESS == Any || STRICTNESS == All);
 
+    right_columns = right_column_indices_to_add.size();
     RUNTIME_CHECK(block.columns() == left_columns + right_columns);
 
     if constexpr (KIND == NullAware_LeftOuterAnti || KIND == NullAware_LeftOuterSemi)
@@ -337,6 +345,7 @@ void NASemiJoinHelper<KIND, STRICTNESS, Mapped>::runStep(
                 columns,
                 left_columns,
                 right_columns,
+                right_column_indices_to_add,
                 null_rows,
                 current_offset,
                 max_block_size - current_offset);
@@ -392,7 +401,8 @@ void NASemiJoinHelper<KIND, STRICTNESS, Mapped>::runStepAllBlocks(std::list<NASe
                 exec_block.getByPosition(i).column = ColumnConst::create(std::move(column), num);
             }
             for (size_t i = 0; i < right_columns; ++i)
-                exec_block.getByPosition(i + left_columns).column = right_block.getByPosition(i).column;
+                exec_block.getByPosition(i + left_columns).column
+                    = right_block.getByPosition(right_column_indices_to_add[i]).column;
 
             runAndCheckExprResult<NASemiJoinStep::NULL_KEY_CHECK_ALL_BLOCKS>(
                 exec_block,
@@ -520,7 +530,7 @@ void NASemiJoinHelper<KIND, STRICTNESS, Mapped>::runAndCheckExprResult(
 APPLY_FOR_NULL_AWARE_SEMI_JOIN(M)
 #undef M
 
-#define M(KIND, STRICTNESS, MAPTYPE) template class NASemiJoinHelper<KIND, STRICTNESS, MAPTYPE::MappedType::Base_t>;
+#define M(KIND, STRICTNESS, MAPTYPE) template class NASemiJoinHelper<KIND, STRICTNESS, MAPTYPE::MappedType>;
 APPLY_FOR_NULL_AWARE_SEMI_JOIN(M)
 #undef M
 } // namespace DB

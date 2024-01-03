@@ -148,11 +148,12 @@ public:
             BlockInputStreamPtr stream;
             try
             {
-                auto tasks = prepareMPPTasks(
-                    context.scan("test_db", "l_table")
+                std::function<DAGRequestBuilder()> gen_builder = [&]() {
+                    return context.scan("test_db", "l_table")
                         .aggregation({Max(col("l_table.s"))}, {col("l_table.s")})
-                        .project({col("max(l_table.s)"), col("l_table.s")}),
-                    properties);
+                        .project({col("max(l_table.s)"), col("l_table.s")});
+                };
+                QueryTasks tasks = prepareMPPTasks(gen_builder, properties);
                 executeProblematicMPPTasks(tasks, properties, stream);
             }
             catch (...)

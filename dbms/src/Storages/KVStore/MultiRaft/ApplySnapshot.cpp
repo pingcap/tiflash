@@ -81,7 +81,7 @@ void KVStore::checkAndApplyPreHandledSnapshot(const RegionPtrWrap & new_region, 
             old_region->setStateApplying();
             tmt.getRegionTable().tryWriteBlockByRegion(old_region);
             tryFlushRegionCacheInStorage(tmt, *old_region, log);
-            persistRegion(*old_region, &region_lock, PersistRegionReason::ApplySnapshotPrevRegion, "");
+            persistRegion(*old_region, region_lock, PersistRegionReason::ApplySnapshotPrevRegion, "");
         }
     }
 
@@ -129,7 +129,7 @@ void KVStore::checkAndApplyPreHandledSnapshot(const RegionPtrWrap & new_region, 
             fap_ctx->cleanCheckpointIngestInfo(tmt, new_region->id());
         }
         // Another FAP will not take place if this stage is not finished.
-        if (fap_ctx->tasks_trace->discardTask(new_region->id()))
+        if (fap_ctx->tasks_trace->leakingDiscardTask(new_region->id()))
         {
             LOG_ERROR(log, "FastAddPeer: find old fap task, region_id={}", new_region->id());
         }
@@ -302,7 +302,8 @@ void KVStore::onSnapshot(
             manage_lock.index.add(new_region);
         }
 
-        persistRegion(*new_region, &region_lock, PersistRegionReason::ApplySnapshotCurRegion, "");
+        GET_METRIC(tiflash_raft_write_flow_bytes, type_snapshot_uncommitted).Observe(new_region->dataSize());
+        persistRegion(*new_region, region_lock, PersistRegionReason::ApplySnapshotCurRegion, "");
 
         tmt.getRegionTable().shrinkRegionRange(*new_region);
     }

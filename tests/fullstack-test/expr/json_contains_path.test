@@ -1,0 +1,115 @@
+# Copyright 2023 PingCAP, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+mysql> drop table if exists test.t_json;
+mysql> create table test.t_json(col_json json);
+mysql> alter table test.t_json set tiflash replica 1;
+mysql> insert into test.t_json values(null), ('[]'), ('{}'), ('{\"a\":{\"c\":{}, \"d\":{}}, \"b\":{\"e\":{}, \"f\":{}}}'); #NO_UNESCAPE
+
+mysql> drop table if exists test.t_type;
+mysql> create table test.t_type(col_type varchar(100));
+mysql> alter table test.t_type set tiflash replica 1;
+mysql> insert into test.t_type values(null), ('all'), ('one');
+
+mysql> drop table if exists test.t_path;
+mysql> create table test.t_path(col_path varchar(100));
+mysql> alter table test.t_path set tiflash replica 1;
+mysql> insert into test.t_path values(null), ('$'), ('\$[0]'), ('\$[1]'), ('\$.a'), ('\$.b'); #NO_UNESCAPE
+
+func> wait_table test t_json
+func> wait_table test t_type
+func> wait_table test t_path
+
+mysql> set tidb_allow_mpp=1;set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash'; select col_json, col_type, col_path, json_contains_path(col_json, col_type, col_path, NULL) as res from (select * from test.t_json join test.t_type join test.t_path) t order by col_json, col_type, col_path;
++----------------------------------------------------+----------+----------+------+
+| col_json                                           | col_type | col_path | res  |
++----------------------------------------------------+----------+----------+------+
+| NULL                                               | NULL     | NULL     | NULL |
+| NULL                                               | NULL     | $        | NULL |
+| NULL                                               | NULL     | $.a      | NULL |
+| NULL                                               | NULL     | $.b      | NULL |
+| NULL                                               | NULL     | $[0]     | NULL |
+| NULL                                               | NULL     | $[1]     | NULL |
+| NULL                                               | all      | NULL     | NULL |
+| NULL                                               | all      | $        | NULL |
+| NULL                                               | all      | $.a      | NULL |
+| NULL                                               | all      | $.b      | NULL |
+| NULL                                               | all      | $[0]     | NULL |
+| NULL                                               | all      | $[1]     | NULL |
+| NULL                                               | one      | NULL     | NULL |
+| NULL                                               | one      | $        | NULL |
+| NULL                                               | one      | $.a      | NULL |
+| NULL                                               | one      | $.b      | NULL |
+| NULL                                               | one      | $[0]     | NULL |
+| NULL                                               | one      | $[1]     | NULL |
+| {}                                                 | NULL     | NULL     | NULL |
+| {}                                                 | NULL     | $        | NULL |
+| {}                                                 | NULL     | $.a      | NULL |
+| {}                                                 | NULL     | $.b      | NULL |
+| {}                                                 | NULL     | $[0]     | NULL |
+| {}                                                 | NULL     | $[1]     | NULL |
+| {}                                                 | all      | NULL     | NULL |
+| {}                                                 | all      | $        | NULL |
+| {}                                                 | all      | $.a      |    0 |
+| {}                                                 | all      | $.b      |    0 |
+| {}                                                 | all      | $[0]     | NULL |
+| {}                                                 | all      | $[1]     |    0 |
+| {}                                                 | one      | NULL     | NULL |
+| {}                                                 | one      | $        |    1 |
+| {}                                                 | one      | $.a      | NULL |
+| {}                                                 | one      | $.b      | NULL |
+| {}                                                 | one      | $[0]     |    1 |
+| {}                                                 | one      | $[1]     | NULL |
+| {"a": {"c": {}, "d": {}}, "b": {"e": {}, "f": {}}} | NULL     | NULL     | NULL |
+| {"a": {"c": {}, "d": {}}, "b": {"e": {}, "f": {}}} | NULL     | $        | NULL |
+| {"a": {"c": {}, "d": {}}, "b": {"e": {}, "f": {}}} | NULL     | $.a      | NULL |
+| {"a": {"c": {}, "d": {}}, "b": {"e": {}, "f": {}}} | NULL     | $.b      | NULL |
+| {"a": {"c": {}, "d": {}}, "b": {"e": {}, "f": {}}} | NULL     | $[0]     | NULL |
+| {"a": {"c": {}, "d": {}}, "b": {"e": {}, "f": {}}} | NULL     | $[1]     | NULL |
+| {"a": {"c": {}, "d": {}}, "b": {"e": {}, "f": {}}} | all      | NULL     | NULL |
+| {"a": {"c": {}, "d": {}}, "b": {"e": {}, "f": {}}} | all      | $        | NULL |
+| {"a": {"c": {}, "d": {}}, "b": {"e": {}, "f": {}}} | all      | $.a      | NULL |
+| {"a": {"c": {}, "d": {}}, "b": {"e": {}, "f": {}}} | all      | $.b      | NULL |
+| {"a": {"c": {}, "d": {}}, "b": {"e": {}, "f": {}}} | all      | $[0]     | NULL |
+| {"a": {"c": {}, "d": {}}, "b": {"e": {}, "f": {}}} | all      | $[1]     |    0 |
+| {"a": {"c": {}, "d": {}}, "b": {"e": {}, "f": {}}} | one      | NULL     | NULL |
+| {"a": {"c": {}, "d": {}}, "b": {"e": {}, "f": {}}} | one      | $        |    1 |
+| {"a": {"c": {}, "d": {}}, "b": {"e": {}, "f": {}}} | one      | $.a      |    1 |
+| {"a": {"c": {}, "d": {}}, "b": {"e": {}, "f": {}}} | one      | $.b      |    1 |
+| {"a": {"c": {}, "d": {}}, "b": {"e": {}, "f": {}}} | one      | $[0]     |    1 |
+| {"a": {"c": {}, "d": {}}, "b": {"e": {}, "f": {}}} | one      | $[1]     | NULL |
+| []                                                 | NULL     | NULL     | NULL |
+| []                                                 | NULL     | $        | NULL |
+| []                                                 | NULL     | $.a      | NULL |
+| []                                                 | NULL     | $.b      | NULL |
+| []                                                 | NULL     | $[0]     | NULL |
+| []                                                 | NULL     | $[1]     | NULL |
+| []                                                 | all      | NULL     | NULL |
+| []                                                 | all      | $        | NULL |
+| []                                                 | all      | $.a      |    0 |
+| []                                                 | all      | $.b      |    0 |
+| []                                                 | all      | $[0]     |    0 |
+| []                                                 | all      | $[1]     |    0 |
+| []                                                 | one      | NULL     | NULL |
+| []                                                 | one      | $        |    1 |
+| []                                                 | one      | $.a      | NULL |
+| []                                                 | one      | $.b      | NULL |
+| []                                                 | one      | $[0]     | NULL |
+| []                                                 | one      | $[1]     | NULL |
++----------------------------------------------------+----------+----------+------+
+
+# Clean up.
+mysql> drop table if exists test.t_json;
+mysql> drop table if exists test.t_type;
+mysql> drop table if exists test.t_path;

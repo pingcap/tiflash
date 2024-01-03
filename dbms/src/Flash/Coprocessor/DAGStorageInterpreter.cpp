@@ -634,7 +634,7 @@ void DAGStorageInterpreter::prepare()
         learner_read_snapshot = doBatchCopLearnerRead();
     else
         learner_read_snapshot = doCopLearnerRead();
-    scan_context->total_learner_read_ns += watch.elapsed();
+    scan_context->learner_read_ns += watch.elapsed();
 
     // Acquire read lock on `alter lock` and build the requested inputstreams
     storages_with_structure_lock = getAndLockStorages(context.getSettingsRef().schema_version);
@@ -642,6 +642,7 @@ void DAGStorageInterpreter::prepare()
     storage_for_logical_table = storages_with_structure_lock[logical_table_id].storage;
 
     std::tie(required_columns, may_need_add_cast_column) = getColumnsForTableScan();
+    scan_context->num_columns = required_columns.size();
 }
 
 void DAGStorageInterpreter::executeCastAfterTableScan(
@@ -1443,7 +1444,7 @@ std::unordered_map<TableID, DAGStorageInterpreter::StorageWithStructureLock> DAG
         tmt.getSchemaSyncerManager()->syncTableSchema(context, keyspace_id, table_id);
         auto schema_sync_cost
             = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time).count();
-        LOG_INFO(
+        LOG_DEBUG(
             log,
             "Table schema sync done, keyspace={} table_id={} cost={} ms",
             keyspace_id,
@@ -1455,23 +1456,28 @@ std::unordered_map<TableID, DAGStorageInterpreter::StorageWithStructureLock> DAG
     auto [storages, locks, need_sync_table_ids] = get_and_lock_storages(false);
     if (need_sync_table_ids.empty())
     {
-        LOG_INFO(log, "OK, no syncing required.");
+        LOG_DEBUG(log, "OK, no syncing required.");
     }
     else
     /// If first try failed, sync schema and try again.
     {
         LOG_INFO(log, "not OK, syncing schemas.");
 
+        auto start_time = Clock::now();
         for (auto & table_id : need_sync_table_ids)
         {
             sync_schema(table_id);
         }
+        auto schema_sync_cost
+            = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time).count();
+
+        LOG_INFO(log, "syncing schemas done, time cost = {} ms.", schema_sync_cost);
 
 
         std::tie(storages, locks, need_sync_table_ids) = get_and_lock_storages(true);
         if (need_sync_table_ids.empty())
         {
-            LOG_INFO(log, "OK after syncing.");
+            LOG_DEBUG(log, "OK after syncing.");
         }
         else
             throw TiFlashException("Shouldn't reach here", Errors::Coprocessor::Internal);
