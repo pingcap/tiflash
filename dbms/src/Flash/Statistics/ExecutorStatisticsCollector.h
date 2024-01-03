@@ -16,7 +16,7 @@
 
 #include <Common/Exception.h>
 #include <Flash/Statistics/ExecutorStatisticsBase.h>
-#include <Storages/DeltaMerge/ScanContext.h>
+#include <Storages/DeltaMerge/ScanContext_fwd.h>
 #include <tipb/executor.pb.h>
 #include <tipb/select.pb.h>
 

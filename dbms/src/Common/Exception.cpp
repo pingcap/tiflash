@@ -67,28 +67,43 @@ void tryLogCurrentException(const char * log_name, const std::string & start_of_
     tryLogCurrentException(&Poco::Logger::get(log_name), start_of_message);
 }
 
-#define TRY_LOG_CURRENT_EXCEPTION(logger, start_of_message) \
-    try                                                     \
-    {                                                       \
-        LOG_ERROR(                                          \
-            (logger),                                       \
-            "{}{}{}",                                       \
-            (start_of_message),                             \
-            ((start_of_message).empty() ? "" : ": "),       \
-            getCurrentExceptionMessage(true));              \
-    }                                                       \
-    catch (...)                                             \
-    {                                                       \
-    }
+void tryLogCurrentFatalException(const char * log_name, const std::string & start_of_message)
+{
+    tryLogCurrentFatalException(&Poco::Logger::get(log_name), start_of_message);
+}
+
+#define TRY_LOG_CURRENT_EXCEPTION(logger, prio, start_of_message) \
+    try                                                           \
+    {                                                             \
+        LOG_IMPL(                                                 \
+            (logger),                                             \
+            prio,                                                 \
+            "{}{}{}",                                             \
+            (start_of_message),                                   \
+            ((start_of_message).empty() ? "" : ": "),             \
+            getCurrentExceptionMessage(true));                    \
+    }                                                             \
+    catch (...)                                                   \
+    {}
 
 void tryLogCurrentException(const LoggerPtr & logger, const std::string & start_of_message)
 {
-    TRY_LOG_CURRENT_EXCEPTION(logger, start_of_message);
+    TRY_LOG_CURRENT_EXCEPTION(logger, Poco::Message::PRIO_ERROR, start_of_message);
 }
 
 void tryLogCurrentException(Poco::Logger * logger, const std::string & start_of_message)
 {
-    TRY_LOG_CURRENT_EXCEPTION(logger, start_of_message);
+    TRY_LOG_CURRENT_EXCEPTION(logger, Poco::Message::PRIO_ERROR, start_of_message);
+}
+
+void tryLogCurrentFatalException(const LoggerPtr & logger, const std::string & start_of_message)
+{
+    TRY_LOG_CURRENT_EXCEPTION(logger, Poco::Message::PRIO_FATAL, start_of_message);
+}
+
+void tryLogCurrentFatalException(Poco::Logger * logger, const std::string & start_of_message)
+{
+    TRY_LOG_CURRENT_EXCEPTION(logger, Poco::Message::PRIO_FATAL, start_of_message);
 }
 
 #undef TRY_LOG_CURRENT_EXCEPTION
@@ -117,8 +132,7 @@ std::string getCurrentExceptionMessage(bool with_stacktrace, bool check_embedded
                 e.what());
         }
         catch (...)
-        {
-        }
+        {}
     }
     catch (const std::exception & e)
     {
@@ -137,8 +151,7 @@ std::string getCurrentExceptionMessage(bool with_stacktrace, bool check_embedded
                 e.what());
         }
         catch (...)
-        {
-        }
+        {}
     }
     catch (...)
     {
@@ -153,8 +166,7 @@ std::string getCurrentExceptionMessage(bool with_stacktrace, bool check_embedded
             buffer.fmtAppend("Unknown exception. Code: {}, type: {}", ErrorCodes::UNKNOWN_EXCEPTION, name);
         }
         catch (...)
-        {
-        }
+        {}
     }
 
     return buffer.toString();
@@ -217,8 +229,7 @@ std::string getExceptionMessage(const Exception & e, bool with_stacktrace, bool 
             buffer.append(", Stack trace:\n\n").append(e.getStackTrace().toString());
     }
     catch (...)
-    {
-    }
+    {}
 
     return buffer.toString();
 }

@@ -15,6 +15,8 @@
 #pragma once
 
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileSetSnapshot.h>
+#include <Storages/DeltaMerge/DMContext.h>
+#include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
 
 namespace DB
