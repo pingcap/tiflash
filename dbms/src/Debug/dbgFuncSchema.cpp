@@ -29,6 +29,7 @@
 #include <TiDB/Schema/SchemaSyncer.h>
 #include <TiDB/Schema/TiDB.h>
 #include <TiDB/Schema/TiDBSchemaManager.h>
+#include <common/logger_useful.h>
 #include <fmt/core.h>
 
 #include <ext/singleton.h>
@@ -230,5 +231,11 @@ void dbgFuncIsTombstone(Context & context, const ASTs & args, DBGInvoker::Printe
     output(fmt_buf.toString());
 }
 
+void dbgFuncSkipSchemaVersion(Context &, const ASTs &, DBGInvoker::Printer output)
+{
+    auto empty_schema_version = MockTiDB::instance().skipSchemaVersion();
+    LOG_WARNING(Logger::get(), "Generate an empty schema diff with schema_version={}", empty_schema_version);
+    output(fmt::format("Generate an empty schema diff with schema_version={}", empty_schema_version));
+}
 
 } // namespace DB
