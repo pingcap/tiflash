@@ -333,6 +333,7 @@ void KVStore::handleDestroy(UInt64 region_id, TMTContext & tmt)
 void KVStore::handleDestroy(UInt64 region_id, TMTContext & tmt, const KVStoreTaskLock & task_lock)
 {
     const auto region = getRegion(region_id);
+    // Always try to clean obsolete FAP snapshot
     if (tmt.getContext().getSharedContextDisagg()->isDisaggregatedStorageMode())
     {
         // Everytime we remove region, we try to clean obsolete fap ingest info.

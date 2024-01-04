@@ -31,6 +31,7 @@
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/ScanContext_fwd.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
+#include <Storages/DeltaMerge/Segment_fwd.h>
 #include <Storages/KVStore/Decode/DecodingStorageSchemaSnapshot.h>
 #include <Storages/KVStore/MultiRaft/Disagg/CheckpointIngestInfo.h>
 #include <Storages/Page/PageStorage_fwd.h>
@@ -75,8 +76,6 @@ namespace tests
 {
 class DeltaMergeStoreTest;
 }
-
-constexpr PageIdU64 DELTA_MERGE_FIRST_SEGMENT_ID = 1;
 
 struct SegmentStats
 {

@@ -67,6 +67,7 @@ FastAddPeerRes genFastAddPeerRes(FastAddPeerStatus status, std::string && apply_
 
 std::vector<StoreID> getCandidateStoreIDsForRegion(TMTContext & tmt_context, UInt64 region_id, UInt64 current_store_id)
 {
+    fiu_do_on(FailPoints::force_set_fap_candidate_store_id, { return {1234}; });
     auto pd_client = tmt_context.getPDClient();
     auto resp = pd_client->getRegionByID(region_id);
     const auto & region = resp.region();
@@ -196,10 +197,8 @@ std::variant<CheckpointRegionInfoAndData, FastAddPeerRes> FastAddPeerImplSelect(
     // Get candidate stores.
     const auto & settings = tmt.getContext().getSettingsRef();
     auto current_store_id = tmt.getKVStore()->clonedStoreMeta().id();
-    std::vector<StoreID> candidate_store_ids;
-    fiu_do_on(FailPoints::force_set_fap_candidate_store_id, { candidate_store_ids = {1234}; });
-    if (candidate_store_ids.empty())
-        candidate_store_ids = getCandidateStoreIDsForRegion(tmt, region_id, current_store_id);
+    std::vector<StoreID> candidate_store_ids = getCandidateStoreIDsForRegion(tmt, region_id, current_store_id);
+
     if (candidate_store_ids.empty())
     {
         LOG_DEBUG(log, "No suitable candidate peer for region_id={}", region_id);
@@ -487,17 +486,12 @@ uint8_t ApplyFapSnapshotImpl(TMTContext & tmt, TiFlashRaftProxyHelper * proxy_he
         fap_ctx->cleanTask(tmt, proxy_helper, region_id, true);
         GET_METRIC(tiflash_fap_task_duration_seconds, type_ingest_stage).Observe(watch_ingest.elapsedSeconds());
         auto current = FAPAsyncTasks::getCurrentMillis();
+        auto elapsed = (current - begin) / 1000.0;
         if (begin != 0)
         {
-            GET_METRIC(tiflash_fap_task_duration_seconds, type_total).Observe((current - begin) / 1000.0);
+            GET_METRIC(tiflash_fap_task_duration_seconds, type_total).Observe(elapsed);
         }
-        LOG_INFO(
-            log,
-            "Finish apply fap snapshot, region_id={} peer_id={} begin_time={} current_time={}",
-            region_id,
-            peer_id,
-            begin,
-            current);
+        LOG_INFO(log, "Finish apply fap snapshot, region_id={} peer_id={} elapsed={}", region_id, peer_id, elapsed);
         GET_METRIC(tiflash_fap_task_result, type_succeed).Increment();
         return true;
     }
