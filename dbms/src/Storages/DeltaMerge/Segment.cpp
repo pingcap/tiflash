@@ -2363,6 +2363,8 @@ void Segment::drop(const FileProviderPtr & file_provider, WriteBatches & wbs)
 
 void Segment::dropAsFAPTemp(const FileProviderPtr & file_provider, WriteBatches & wbs)
 {
+    // The segment_id, delta_id, stable_id are invalid, just cleanup the persisted page_id in
+    // delta layer and stable layer
     delta->recordRemoveColumnFilesPages(wbs);
     stable->recordRemovePacksPages(wbs);
     wbs.writeAll();
