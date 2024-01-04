@@ -35,7 +35,6 @@
 #include <gtest/gtest.h>
 
 #include <ctime>
-#include <future>
 #include <memory>
 
 namespace DB
@@ -69,6 +68,7 @@ public:
             already_initialize_data_store = false;
             global_context.getSharedContextDisagg()->initRemoteDataStore(
                 global_context.getFileProvider(),
+                global_context.getReadLimiter(),
                 /*s3_enabled*/ true);
             ASSERT_TRUE(global_context.getSharedContextDisagg()->remote_data_store != nullptr);
         }

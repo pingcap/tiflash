@@ -56,6 +56,7 @@ public:
         const WriteLimiterPtr & write_limiter_ = nullptr,
         int flags = -1,
         mode_t mode = 0666) const;
+    static WritableFilePtr newS3WritableFile(const String & file_key);
 
     WriteReadableFilePtr newWriteReadableFile(
         const String & file_path_,

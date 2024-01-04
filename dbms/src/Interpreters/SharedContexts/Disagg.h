@@ -16,6 +16,7 @@
 
 #include <Core/TiFlashDisaggregatedMode.h>
 #include <Encryption/FileProvider_fwd.h>
+#include <Encryption/RateLimiter.h>
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/SharedContexts/Disagg_fwd.h>
 #include <Storages/DeltaMerge/Remote/DataStore/DataStore_fwd.h>
@@ -87,7 +88,10 @@ struct SharedContextDisagg : private boost::noncopyable
 
     void initWriteNodeSnapManager();
 
-    void initRemoteDataStore(const FileProviderPtr & file_provider, bool s3_enabled);
+    void initRemoteDataStore(
+        const FileProviderPtr & file_provider,
+        const ReadLimiterPtr & read_limiter,
+        bool s3_enabled);
 
     void initFastAddPeerContext(UInt64 fap_concur);
 

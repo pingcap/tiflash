@@ -1015,7 +1015,7 @@ protected:
     UInt64 tag = 0;
     UInt64 store_id = 2;
 
-    bool old_remote_checkpoint_only_upload_manifest;
+    bool old_remote_checkpoint_only_upload_manifest{};
 
     LoggerPtr log;
 };

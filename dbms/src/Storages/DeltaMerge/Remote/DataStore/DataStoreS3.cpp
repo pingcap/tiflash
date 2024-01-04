@@ -56,7 +56,13 @@ void DataStoreS3::putDMFile(DMFilePtr local_dmfile, const S3::DMFileOID & oid, b
 
     auto s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
 
+    // EncryptionPath of all files under the same DMFile is the same,
+    // so we only need to check once.
+    RUNTIME_CHECK(local_dmfile->isReadable());
+    const auto encryption_path = EncryptionPath(local_dmfile->path(), "");
+    const bool is_enrypted = file_provider->isFileEncrypted(encryption_path);
     std::vector<std::future<void>> upload_results;
+    upload_results.reserve(local_files.size() - 1);
     for (const auto & fname : local_files)
     {
         if (fname == DMFile::metav2FileName())
@@ -67,8 +73,21 @@ void DataStoreS3::putDMFile(DMFilePtr local_dmfile, const S3::DMFileOID & oid, b
         auto local_fname = fmt::format("{}/{}", local_dir, fname);
         auto remote_fname = fmt::format("{}/{}", remote_dir, fname);
         auto task = std::make_shared<std::packaged_task<void()>>(
-            [&, local_fname = std::move(local_fname), remote_fname = std::move(remote_fname)]() {
-                S3::uploadFile(*s3_client, local_fname, remote_fname);
+            [&, local_fname = std::move(local_fname), remote_fname = std::move(remote_fname)]() -> void {
+                if (is_enrypted)
+                {
+                    S3::uploadEncryptedFile(
+                        *s3_client,
+                        EncryptionPath(local_dmfile->path(), fname),
+                        local_fname,
+                        remote_fname,
+                        file_provider,
+                        read_limiter);
+                }
+                else
+                {
+                    S3::uploadFile(*s3_client, local_fname, remote_fname);
+                }
             });
         upload_results.push_back(task->get_future());
         DataStoreS3Pool::get().scheduleOrThrowOnError([task]() { (*task)(); });
@@ -81,7 +100,20 @@ void DataStoreS3::putDMFile(DMFilePtr local_dmfile, const S3::DMFileOID & oid, b
     // Only when the meta upload is successful, the dmfile upload can be considered successful.
     auto local_meta_fname = fmt::format("{}/{}", local_dir, DMFile::metav2FileName());
     auto remote_meta_fname = fmt::format("{}/{}", remote_dir, DMFile::metav2FileName());
-    S3::uploadFile(*s3_client, local_meta_fname, remote_meta_fname);
+    if (is_enrypted)
+    {
+        S3::uploadEncryptedFile(
+            *s3_client,
+            EncryptionPath(local_dmfile->path(), DMFile::metav2FileName()),
+            local_meta_fname,
+            remote_meta_fname,
+            file_provider,
+            read_limiter);
+    }
+    else
+    {
+        S3::uploadFile(*s3_client, local_meta_fname, remote_meta_fname);
+    }
 
     if (remove_local)
     {
@@ -103,6 +135,7 @@ bool DataStoreS3::putCheckpointFiles(
 
     std::vector<std::future<void>> upload_results;
     // upload in parallel
+    // Note: Local checkpoint files are always not encrypted.
     for (size_t file_idx = 0; file_idx < local_files.data_files.size(); ++file_idx)
     {
         auto task = std::make_shared<std::packaged_task<void()>>([&, idx = file_idx] {

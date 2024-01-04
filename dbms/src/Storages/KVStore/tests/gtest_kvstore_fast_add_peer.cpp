@@ -30,10 +30,7 @@
 #include <aws/s3/model/CreateBucketRequest.h>
 #include <common/logger_useful.h>
 
-#include <chrono>
-#include <numeric>
 #include <optional>
-#include <thread>
 
 using raft_serverpb::RaftApplyState;
 using raft_serverpb::RegionLocalState;
@@ -72,6 +69,7 @@ public:
             already_initialize_data_store = false;
             global_context.getSharedContextDisagg()->initRemoteDataStore(
                 global_context.getFileProvider(),
+                global_context.getReadLimiter(),
                 /*s3_enabled*/ true);
             ASSERT_TRUE(global_context.getSharedContextDisagg()->remote_data_store != nullptr);
         }
@@ -158,7 +156,7 @@ private:
     ContextPtr context;
     bool already_initialize_data_store = false;
     bool already_initialize_write_ps = false;
-    DB::PageStorageRunMode orig_mode;
+    DB::PageStorageRunMode orig_mode{};
 };
 
 void persistAfterWrite(

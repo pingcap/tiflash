@@ -164,7 +164,10 @@ ContextPtr init(WorkloadOptions & opts)
         auto store_meta = kvstore->getStoreMeta();
         store_meta.set_id(test_store_id);
         kvstore->setStore(store_meta);
-        context->getSharedContextDisagg()->initRemoteDataStore(context->getFileProvider(), /*is_s3_enabled*/ true);
+        context->getSharedContextDisagg()->initRemoteDataStore(
+            context->getFileProvider(),
+            context->getReadLimiter(),
+            /*is_s3_enabled*/ true);
     }
     return context;
 }

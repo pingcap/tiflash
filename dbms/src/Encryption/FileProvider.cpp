@@ -87,6 +87,14 @@ WritableFilePtr FileProvider::newWritableFile(
     return file;
 }
 
+WritableFilePtr FileProvider::newS3WritableFile(const String & file_key)
+{
+    // S3 file always does not encrypt.
+    auto view = S3::S3FilenameView::fromKey(file_key);
+    RUNTIME_CHECK(view.isValid());
+    return S3::S3WritableFile::create(view.toFullKey());
+}
+
 WriteReadableFilePtr FileProvider::newWriteReadableFile(
     const String & file_path_,
     const EncryptionPath & encryption_path_,
