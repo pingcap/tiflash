@@ -645,8 +645,8 @@ std::tuple<RegionPtr, PrehandleResult> MockRaftStoreProxy::snapshot(
     }
     catch (...)
     {
-        tryLogCurrentFatalException(...);
-        exit(1);
+        tryLogCurrentFatalException(__PRETTY_FUNCTION__, "Should not happen");
+        exit(-1);
     }
 }
 
