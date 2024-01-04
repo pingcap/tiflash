@@ -672,6 +672,7 @@ TIFLASH_DECLARE_MULTITARGET_FUNCTION_TP(
             Int64 diff = 0;
             for (size_t i = 0; i < dst_offsets.size(); ++i)
             {
+                /// diff is the cumulative offset difference from 0 to the i position
                 diff += (Int64)dst_offsets[i] - (Int64)src_offsets[i];
                 dst_offsets[i] = src_offsets[i] + diff;
             }
