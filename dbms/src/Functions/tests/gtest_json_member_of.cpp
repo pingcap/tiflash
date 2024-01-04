@@ -80,6 +80,11 @@ try
     executeAndAssert("6", "[1, 2, 3, 4, 5, 6]", true);
     executeAndAssert("0", "[1, 2, 3, 4, 5, 6]", false);
     executeAndAssert("7", "[1, 2, 3, 4, 5, 6]", false);
+
+    // for number type
+    executeAndAssert("1", "[1]", true);
+    executeAndAssert("1", "[1.0]", true);
+    executeAndAssert("1.00", "[1]", true);
 }
 CATCH
 

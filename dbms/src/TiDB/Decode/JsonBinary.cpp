@@ -17,6 +17,8 @@
 #include <TiDB/Decode/DatumCodec.h>
 #include <TiDB/Decode/JsonBinary.h>
 #include <TiDB/Decode/JsonPathExprRef.h>
+#include "Common/MyTime.h"
+#include "common/types.h"
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
@@ -364,11 +366,33 @@ inline UInt64 appendValueOfSIMDJsonElem(
         throw Exception(ErrorCodes::UNKNOWN_TYPE, "unknown type: {}", magic_enum::enum_name(elem.type()));
     }
 }
+
+bool isNumberType(JsonBinary::JsonType type)
+{
+    return type == JsonBinary::TYPE_CODE_INT64 || type == JsonBinary::TYPE_CODE_UINT64 || type == JsonBinary::TYPE_CODE_FLOAT64;
+}
+
+bool isTimeType(JsonBinary::JsonType type)
+{
+    return type == JsonBinary::TYPE_CODE_DATETIME || type == JsonBinary::TYPE_CODE_TIMESTAMP;
+}
+
+bool isEqualType(JsonBinary::JsonType type1, JsonBinary::JsonType type2)
+{
+    return type1 == type2 || (isNumberType(type1) && isNumberType(type2)) || (isTimeType(type1) && isTimeType(type2));
+}
+
+constexpr auto float_epsilon = 1.e-8;
+// allowing precision loss.
+bool isFloat64EqualsPrecisionLoss(Float64 x, Float64 y)
+{
+    return x-y < float_epsilon && y-x < float_epsilon;
+}
 } // namespace
 
 bool JsonBinary::operator==(const JsonBinary & other) const
 {
-    if (type != other.type)
+    if (!isEqualType(type, other.type))
         return false;
     switch (type)
     {
@@ -397,6 +421,48 @@ bool JsonBinary::operator==(const JsonBinary & other) const
                 return false;
         }
         return true;
+    }
+    case TYPE_CODE_INT64:
+    {
+        switch (other.type)
+        {
+        case TYPE_CODE_INT64:
+            return data == other.data;
+        case TYPE_CODE_UINT64:
+        {
+            auto self = getInt64();
+            return self >= 0 && static_cast<UInt64>(self) == other.getUInt64();
+        }
+        case TYPE_CODE_FLOAT64:
+            return isFloat64EqualsPrecisionLoss(static_cast<Float64>(getInt64()), other.getFloat64());
+        }
+    }
+    case TYPE_CODE_UINT64:
+    {
+        switch (other.type)
+        {
+        case TYPE_CODE_INT64:
+        {
+            auto other_val = other.getInt64();
+            return other_val >= 0 && static_cast<UInt64>(other_val) == getUInt64();
+        }
+        case TYPE_CODE_UINT64:
+            return data == other.data;
+        case TYPE_CODE_FLOAT64:
+            return isFloat64EqualsPrecisionLoss(static_cast<Float64>(getUInt64()), other.getFloat64());
+        }
+    }
+    case TYPE_CODE_FLOAT64:
+    {
+        switch (other.type)
+        {
+        case TYPE_CODE_INT64:
+            return isFloat64EqualsPrecisionLoss(static_cast<Float64>(other.getInt64()), getFloat64());
+        case TYPE_CODE_UINT64:
+            return isFloat64EqualsPrecisionLoss(static_cast<Float64>(other.getUInt64()), getFloat64());
+        case TYPE_CODE_FLOAT64:
+            return data == other.data;
+        }
     }
     default:
         return data == other.data;
