@@ -375,7 +375,7 @@ FastAddPeerRes FastAddPeerImplWrite(
         return genFastAddPeerRes(FastAddPeerStatus::Canceled, "", "");
     }
 
-    LOG_DEBUG(log, "Finish write, region_id={}", region_id);
+    LOG_DEBUG(log, "Finish write FAP snapshot, region_id={}", region_id);
     return genFastAddPeerRes(
         FastAddPeerStatus::Ok,
         apply_state.SerializeAsString(),

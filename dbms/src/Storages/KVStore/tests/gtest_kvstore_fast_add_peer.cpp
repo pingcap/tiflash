@@ -784,24 +784,48 @@ CATCH
 TEST_F(RegionKVStoreTestFAP, OnExistingPeer)
 try
 {
-    CheckpointRegionInfoAndData mock_data = prepareForRestart(FAPTestOpt{.persist_empty_segment = true});
+    CheckpointRegionInfoAndData mock_data = prepareForRestart(FAPTestOpt{});
     RegionPtr kv_region = std::get<1>(mock_data);
 
     auto & global_context = TiFlashTestEnv::getGlobalContext();
     auto fap_context = global_context.getSharedContextDisagg()->fap_context;
     uint64_t region_id = 1;
-    fap_context->tasks_trace->addTask(region_id, []() {
+
+    KVStore & kvs = getKVS();
+    MockSSTReader::getMockSSTData().clear();
+    MockSSTGenerator default_cf{region_id, 1, ColumnFamilyType::Default};
+    default_cf.finish_file();
+    default_cf.freeze();
+    kvs.mutProxyHelperUnsafe()->sst_reader_interfaces = make_mock_sst_reader_interface();
+    proxy_instance->snapshot(
+        kvs,
+        global_context.getTMTContext(),
+        region_id,
+        {default_cf},
+        kv_region->cloneMetaRegion(),
+        2,
+        10,
+        10,
+        std::nullopt,
+        false);
+
+    std::mutex exe_mut;
+    std::unique_lock exe_lock(exe_mut);
+    fap_context->tasks_trace->addTask(region_id, [&]() {
+        // Keep the task in `tasks_trace` to prevent from canceling.
+        std::scoped_lock wait_exe_lock(exe_mut);
         return genFastAddPeerRes(FastAddPeerStatus::NoSuitable, "", "");
     });
-    EXPECT_THROW(
-        FastAddPeerImplWrite(
-            global_context.getTMTContext(),
-            proxy_helper.get(),
-            region_id,
-            2333,
-            std::move(mock_data),
-            0),
-        Exception);
+    FastAddPeerImplWrite(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333, std::move(mock_data), 0);
+    exe_lock.unlock();
+    fap_context->tasks_trace->fetchResult(region_id);
+
+    // Make sure prehandling will not clean fap snapshot.
+    std::vector<SSTView> ssts;
+    SSTViewVec snaps{ssts.data(), ssts.size()};
+    kvs.preHandleSnapshotToFiles(kv_region, snaps, 100, 100, std::nullopt, global_context.getTMTContext());
+
+    EXPECT_THROW(ApplyFapSnapshotImpl(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333), Exception);
 }
 CATCH
 

@@ -247,14 +247,6 @@ PrehandleResult KVStore::preHandleSnapshotToFiles(
 {
     new_region->beforePrehandleSnapshot(new_region->id(), deadline_index);
 
-    if (tmt.getContext().getSharedContextDisagg()->isDisaggregatedStorageMode())
-    {
-        auto fap_ctx = tmt.getContext().getSharedContextDisagg()->fap_context;
-        auto region_id = new_region->id();
-        // Everytime we meet a regular snapshot, we try to clean obsolete fap ingest info.
-        fap_ctx->resolveFapSnapshotState(tmt, proxy_helper, region_id, true);
-    }
-
     ongoing_prehandle_task_count.fetch_add(1);
 
     FAIL_POINT_PAUSE(FailPoints::pause_before_prehandle_snapshot);
