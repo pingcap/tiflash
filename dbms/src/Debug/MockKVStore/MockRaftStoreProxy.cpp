@@ -595,10 +595,35 @@ std::tuple<RegionPtr, PrehandleResult> MockRaftStoreProxy::snapshot(
     std::optional<uint64_t> deadline_index,
     bool cancel_after_prehandle)
 {
-    auto region = getRegion(region_id);
     auto old_kv_region = kvs.getRegion(region_id);
-    RUNTIME_CHECK(region != nullptr);
     RUNTIME_CHECK(old_kv_region != nullptr);
+    return snapshot(
+        kvs,
+        tmt,
+        region_id,
+        std::move(cfs),
+        old_kv_region->cloneMetaRegion(),
+        old_kv_region->mutMeta().peerId(),
+        index,
+        term,
+        deadline_index,
+        cancel_after_prehandle);
+}
+
+std::tuple<RegionPtr, PrehandleResult> MockRaftStoreProxy::snapshot(
+    KVStore & kvs,
+    TMTContext & tmt,
+    UInt64 region_id,
+    std::vector<MockSSTGenerator> && cfs,
+    metapb::Region && region_meta,
+    UInt64 peer_id,
+    uint64_t index,
+    uint64_t term,
+    std::optional<uint64_t> deadline_index,
+    bool cancel_after_prehandle)
+{
+    auto region = getRegion(region_id);
+    RUNTIME_CHECK(region != nullptr);
     // We have catch up to index by snapshot.
     // So we assume there are new data updated, so we inc index by 1.
     if (index == 0)
@@ -607,8 +632,7 @@ std::tuple<RegionPtr, PrehandleResult> MockRaftStoreProxy::snapshot(
         term = region->getLatestCommitTerm();
     }
 
-    auto new_kv_region
-        = kvs.genRegionPtr(old_kv_region->cloneMetaRegion(), old_kv_region->mutMeta().peerId(), index, term);
+    auto new_kv_region = kvs.genRegionPtr(std::move(region_meta), peer_id, index, term);
     // The new entry is committed on Proxy's side.
     region->updateCommitIndex(index);
     new_kv_region->setApplied(index, term);
@@ -643,11 +667,8 @@ std::tuple<RegionPtr, PrehandleResult> MockRaftStoreProxy::snapshot(
         LOG_ERROR(log, e.message());
         e.rethrow();
     }
-    catch (...)
-    {
-        tryLogCurrentFatalException(__PRETTY_FUNCTION__, "Should not happen");
-        exit(-1);
-    }
+    LOG_FATAL(DB::Logger::get(), "Should not happen");
+    exit(-1);
 }
 
 TableID MockRaftStoreProxy::bootstrapTable(Context & ctx, KVStore & kvs, TMTContext & tmt, bool drop_at_first)

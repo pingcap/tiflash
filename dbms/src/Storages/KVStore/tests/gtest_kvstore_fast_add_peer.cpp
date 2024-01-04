@@ -410,6 +410,11 @@ CheckpointRegionInfoAndData RegionKVStoreTestFAP::prepareForRestart(FAPTestOpt o
     }
     checkpoint_info->temp_ps = checkpoint_info->checkpoint_data_holder->getUniversalPageStorage();
     RegionPtr kv_region = kvs.getRegion(1);
+    {
+        auto task_lock = kvs.genTaskLock();
+        auto region_lock = kvs.region_manager.genRegionTaskLock(region_id);
+        kvs.removeRegion(region_id, false, global_context.getTMTContext().getRegionTable(), task_lock, region_lock);
+    }
     CheckpointRegionInfoAndData mock_data = std::make_tuple(
         checkpoint_info,
         kv_region,
@@ -423,8 +428,7 @@ TEST_F(RegionKVStoreTestFAP, RestoreFromRestart1)
 try
 {
     CheckpointRegionInfoAndData mock_data = prepareForRestart(FAPTestOpt{});
-    KVStore & kvs = getKVS();
-    RegionPtr kv_region = kvs.getRegion(1);
+    RegionPtr kv_region = std::get<1>(mock_data);
 
     auto & global_context = TiFlashTestEnv::getGlobalContext();
     auto fap_context = global_context.getSharedContextDisagg()->fap_context;
@@ -479,8 +483,7 @@ TEST_F(RegionKVStoreTestFAP, RestoreFromRestart2)
 try
 {
     CheckpointRegionInfoAndData mock_data = prepareForRestart(FAPTestOpt{});
-    KVStore & kvs = getKVS();
-    RegionPtr kv_region = kvs.getRegion(1);
+    RegionPtr kv_region = std::get<1>(mock_data);
 
     auto & global_context = TiFlashTestEnv::getGlobalContext();
     auto fap_context = global_context.getSharedContextDisagg()->fap_context;
@@ -512,7 +515,7 @@ try
 {
     CheckpointRegionInfoAndData mock_data = prepareForRestart(FAPTestOpt{});
     KVStore & kvs = getKVS();
-    RegionPtr kv_region = kvs.getRegion(1);
+    RegionPtr kv_region = std::get<1>(mock_data);
 
     auto & global_context = TiFlashTestEnv::getGlobalContext();
     auto fap_context = global_context.getSharedContextDisagg()->fap_context;
@@ -556,8 +559,7 @@ TEST_F(RegionKVStoreTestFAP, Cancel1)
 try
 {
     CheckpointRegionInfoAndData mock_data = prepareForRestart(FAPTestOpt{});
-    KVStore & kvs = getKVS();
-    RegionPtr kv_region = kvs.getRegion(1);
+    RegionPtr kv_region = std::get<1>(mock_data);
 
     auto & global_context = TiFlashTestEnv::getGlobalContext();
     auto fap_context = global_context.getSharedContextDisagg()->fap_context;
@@ -600,8 +602,7 @@ try
     CheckpointRegionInfoAndData mock_data = prepareForRestart(FAPTestOpt{
         .mock_add_new_peer = true,
     });
-    KVStore & kvs = getKVS();
-    RegionPtr kv_region = kvs.getRegion(1);
+    RegionPtr kv_region = std::get<1>(mock_data);
 
     auto & global_context = TiFlashTestEnv::getGlobalContext();
     auto fap_context = global_context.getSharedContextDisagg()->fap_context;
@@ -652,8 +653,7 @@ try
     CheckpointRegionInfoAndData mock_data = prepareForRestart(FAPTestOpt{
         .mock_add_new_peer = true,
     });
-    KVStore & kvs = getKVS();
-    RegionPtr kv_region = kvs.getRegion(1);
+    RegionPtr kv_region = std::get<1>(mock_data);
 
     auto & global_context = TiFlashTestEnv::getGlobalContext();
     auto fap_context = global_context.getSharedContextDisagg()->fap_context;
@@ -699,7 +699,7 @@ try
         .mock_add_new_peer = true,
     });
     KVStore & kvs = getKVS();
-    RegionPtr kv_region = kvs.getRegion(1);
+    RegionPtr kv_region = std::get<1>(mock_data);
 
     auto & global_context = TiFlashTestEnv::getGlobalContext();
     auto fap_context = global_context.getSharedContextDisagg()->fap_context;
@@ -737,7 +737,17 @@ try
     // Use another call to cancel
     FastAddPeer(&server, region_id, 2333);
     LOG_INFO(log, "Try another snapshot");
-    proxy_instance->snapshot(kvs, global_context.getTMTContext(), region_id, {default_cf}, 11, 11, std::nullopt);
+    proxy_instance->snapshot(
+        kvs,
+        global_context.getTMTContext(),
+        region_id,
+        {default_cf},
+        kv_region->cloneMetaRegion(),
+        2,
+        11,
+        11,
+        std::nullopt,
+        false);
     eventuallyPredicate([&]() {
         return !CheckpointIngestInfo::restore(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333);
     });
@@ -751,8 +761,31 @@ TEST_F(RegionKVStoreTestFAP, EmptySegment)
 try
 {
     CheckpointRegionInfoAndData mock_data = prepareForRestart(FAPTestOpt{.persist_empty_segment = true});
-    KVStore & kvs = getKVS();
-    RegionPtr kv_region = kvs.getRegion(1);
+    RegionPtr kv_region = std::get<1>(mock_data);
+
+    auto & global_context = TiFlashTestEnv::getGlobalContext();
+    auto fap_context = global_context.getSharedContextDisagg()->fap_context;
+    uint64_t region_id = 1;
+    fap_context->tasks_trace->addTask(region_id, []() {
+        return genFastAddPeerRes(FastAddPeerStatus::NoSuitable, "", "");
+    });
+    EXPECT_THROW(
+        FastAddPeerImplWrite(
+            global_context.getTMTContext(),
+            proxy_helper.get(),
+            region_id,
+            2333,
+            std::move(mock_data),
+            0),
+        Exception);
+}
+CATCH
+
+TEST_F(RegionKVStoreTestFAP, OnExistingPeer)
+try
+{
+    CheckpointRegionInfoAndData mock_data = prepareForRestart(FAPTestOpt{.persist_empty_segment = true});
+    RegionPtr kv_region = std::get<1>(mock_data);
 
     auto & global_context = TiFlashTestEnv::getGlobalContext();
     auto fap_context = global_context.getSharedContextDisagg()->fap_context;

@@ -465,7 +465,17 @@ uint8_t ApplyFapSnapshotImpl(TMTContext & tmt, TiFlashRaftProxyHelper * proxy_he
             peer_id);
         return false;
     }
-    LOG_INFO(log, "Begin apply fap snapshot, region_id={}, peer_id={}", region_id, peer_id);
+    auto begin = checkpoint_ingest_info->beginTime();
+    if (kvstore->getRegion(region_id))
+    {
+        throw Exception(
+            ErrorCodes::LOGICAL_ERROR,
+            "Don't support FAP for an existing region, region_id={} peer_id={} begin_time={}",
+            region_id,
+            peer_id,
+            begin);
+    }
+    LOG_INFO(log, "Begin apply fap snapshot, region_id={} peer_id={} begin_time={}", region_id, peer_id, begin);
     GET_METRIC(tiflash_fap_task_result, type_restore).Increment();
     // If there is `checkpoint_ingest_info`, it is exactly the data we want to ingest. Consider two scene:
     // 1. If there was a failed FAP which failed to clean, its data will be overwritten by current FAP which has finished phase 1.
@@ -476,7 +486,6 @@ uint8_t ApplyFapSnapshotImpl(TMTContext & tmt, TiFlashRaftProxyHelper * proxy_he
         kvstore->handleIngestCheckpoint(checkpoint_ingest_info->getRegion(), checkpoint_ingest_info, tmt);
         fap_ctx->cleanTask(tmt, proxy_helper, region_id, true);
         GET_METRIC(tiflash_fap_task_duration_seconds, type_ingest_stage).Observe(watch_ingest.elapsedSeconds());
-        auto begin = checkpoint_ingest_info->beginTime();
         auto current = FAPAsyncTasks::getCurrentMillis();
         if (begin != 0)
         {

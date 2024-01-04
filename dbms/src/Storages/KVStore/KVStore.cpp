@@ -714,4 +714,9 @@ RegionPtr KVStore::genRegionPtr(metapb::Region && region, UInt64 peer_id, UInt64
     return std::make_shared<Region>(std::move(meta), proxy_helper);
 }
 
+RegionTaskLock KVStore::genRegionTaskLock(UInt64 region_id) const
+{
+    return region_manager.genRegionTaskLock(region_id);
+}
+
 } // namespace DB

@@ -237,6 +237,17 @@ struct MockRaftStoreProxy : MutexLockWrap
         TMTContext & tmt,
         UInt64 region_id,
         std::vector<MockSSTGenerator> && cfs,
+        metapb::Region && region_meta,
+        UInt64 peer_id,
+        uint64_t index,
+        uint64_t term,
+        std::optional<uint64_t> deadline_index,
+        bool cancel_after_prehandle);
+    std::tuple<RegionPtr, PrehandleResult> snapshot(
+        KVStore & kvs,
+        TMTContext & tmt,
+        UInt64 region_id,
+        std::vector<MockSSTGenerator> && cfs,
         uint64_t index,
         uint64_t term,
         std::optional<uint64_t> deadline_index,
