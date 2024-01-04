@@ -1162,7 +1162,6 @@ Segments DeltaMergeStore::buildSegmentsFromCheckpointInfo(
             return {};
         }
         wbs.writeLogAndData();
-        // wbs.writeRemoves();
         LOG_INFO(
             log,
             "Finish write fap checkpoint, region_id={} segments_num={}",
