@@ -19,6 +19,7 @@
 #include <Storages/KVStore/Decode/DecodedTiKVKeyValue.h>
 #include <Storages/KVStore/MultiRaft/RegionData.h>
 #include <Storages/KVStore/MultiRaft/RegionMeta.h>
+#include <Storages/KVStore/MultiRaft/RegionSerde.h>
 #include <common/logger_useful.h>
 
 #include <shared_mutex>
@@ -129,9 +130,6 @@ public:
     CommittedScanner createCommittedScanner(bool use_lock, bool need_value);
     CommittedRemover createCommittedRemover(bool use_lock = true);
 
-    std::tuple<size_t, UInt64> serialize(WriteBuffer & buf) const;
-    static RegionPtr deserialize(ReadBuffer & buf, const TiFlashRaftProxyHelper * proxy_helper = nullptr);
-
     RegionID id() const;
     ImutRegionRangePtr getRange() const;
 
@@ -157,6 +155,25 @@ public:
     // Return <last_eager_truncated_index, applied_index> of this Region
     std::pair<UInt64, UInt64> getRaftLogEagerGCRange() const;
     void updateRaftLogEagerIndex(UInt64 new_truncate_index);
+
+    static size_t writePersistExtension(
+        UInt32 & cnt,
+        WriteBuffer & wb,
+        MaybeRegionPersistExtension ext_type,
+        const char * data,
+        UInt32 size);
+    std::tuple<size_t, UInt64> serialize(WriteBuffer & buf) const;
+    static RegionPtr deserialize(ReadBuffer & buf, const TiFlashRaftProxyHelper * proxy_helper = nullptr);
+    std::tuple<size_t, UInt64> serializeImpl(
+        UInt32 binary_version,
+        UInt32 expected_extension_count,
+        std::function<size_t(UInt32 &, WriteBuffer &)> extra_handler,
+        WriteBuffer & buf) const;
+    static RegionPtr deserializeImpl(
+        UInt32 current_version,
+        std::function<bool(UInt32, ReadBuffer &, UInt32)> extra_handler,
+        ReadBuffer & buf,
+        const TiFlashRaftProxyHelper * proxy_helper = nullptr);
 
     friend bool operator==(const Region & region1, const Region & region2)
     {

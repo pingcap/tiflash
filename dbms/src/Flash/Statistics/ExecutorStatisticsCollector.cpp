@@ -24,6 +24,7 @@
 #include <Flash/Statistics/JoinImpl.h>
 #include <Flash/Statistics/TableScanImpl.h>
 #include <Flash/Statistics/traverseExecutors.h>
+#include <Storages/DeltaMerge/ScanContext.h>
 
 namespace DB
 {

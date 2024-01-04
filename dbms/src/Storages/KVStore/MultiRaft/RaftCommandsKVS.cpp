@@ -73,7 +73,7 @@ EngineStoreApplyRes KVStore::handleWriteRaftCmdInner(
             /// We should execute eager RaftLog GC, persist the Region in both TiFlash and proxy
             // Persist RegionMeta on the storage engine
             tryFlushRegionCacheInStorage(tmt, *region, Logger::get());
-            persistRegion(*region, &region_persist_lock, PersistRegionReason::EagerRaftGc, "");
+            persistRegion(*region, region_persist_lock, PersistRegionReason::EagerRaftGc, "");
             // return "Persist" to proxy for persisting the RegionMeta
             apply_res = EngineStoreApplyRes::Persist;
         }
@@ -133,7 +133,7 @@ EngineStoreApplyRes KVStore::handleUselessAdminRaftCmd(
         tryFlushRegionCacheInStorage(tmt, curr_region, log);
         persistRegion(
             curr_region,
-            &region_task_lock,
+            region_task_lock,
             PersistRegionReason::UselessAdminCommand,
             fmt::format("{}", cmd_type).c_str());
         return EngineStoreApplyRes::Persist;
@@ -236,7 +236,7 @@ EngineStoreApplyRes KVStore::handleAdminRaftCmd(
 
         const auto persist_and_sync = [&](const Region & region) {
             tryFlushRegionCacheInStorage(tmt, region, log);
-            persistRegion(region, &region_task_lock, PersistRegionReason::AdminCommand, "");
+            persistRegion(region, region_task_lock, PersistRegionReason::AdminCommand, "");
         };
 
         const auto handle_batch_split = [&](Regions & split_regions) {
