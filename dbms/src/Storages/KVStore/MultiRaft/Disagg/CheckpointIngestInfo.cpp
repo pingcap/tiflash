@@ -46,7 +46,7 @@ CheckpointIngestInfoPtr CheckpointIngestInfo::restore(
     Page page = uni_ps->read(page_id, nullptr, snapshot, /*throw_on_not_exist*/ false);
     if (!page.isValid())
     {
-        // The restore failed, we can safely return null here to make FAP fallback.
+        // The restore failed, we can safely return null here to make FAP fallback in ApplyFapSnapshotImpl.
         return nullptr;
     }
 

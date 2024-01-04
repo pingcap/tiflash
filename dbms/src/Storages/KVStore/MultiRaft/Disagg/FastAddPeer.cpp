@@ -455,10 +455,12 @@ uint8_t ApplyFapSnapshotImpl(TMTContext & tmt, TiFlashRaftProxyHelper * proxy_he
     auto checkpoint_ingest_info = fap_ctx->getOrRestoreCheckpointIngestInfo(tmt, proxy_helper, region_id, peer_id);
     if (!checkpoint_ingest_info)
     {
-        // If fap is enabled, then proxy will check if we have a fap snapshot first.
+        // If fap is enabled, and this region is not currently exists on proxy's side,
+        // proxy will check if we have a fap snapshot first.
+        // If we don't, the snapshot should be a regular snapshot.
         LOG_DEBUG(
             log,
-            "Failed to get fap snapshot, it's normal snapshot, region_id={}, peer_id={}",
+            "Failed to get fap snapshot, it's regular snapshot, region_id={}, peer_id={}",
             region_id,
             peer_id);
         return false;
