@@ -16,8 +16,10 @@
 
 #include <Storages/Page/PageDefinesBase.h>
 
-namespace DB {
-namespace DM {
+namespace DB
+{
+namespace DM
+{
 
 constexpr PageIdU64 DELTA_MERGE_FIRST_SEGMENT_ID = 1;
 
