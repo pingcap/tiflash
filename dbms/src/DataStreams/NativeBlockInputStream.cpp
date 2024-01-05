@@ -153,9 +153,9 @@ Block NativeBlockInputStream::readImpl()
     }
 
     if (header)
-        CodecUtils::checkColumnSize(header.columns(), columns);
+        CodecUtils::checkColumnSize("NativeBlockInputStream", header.columns(), columns);
     else if (!output_names.empty())
-        CodecUtils::checkColumnSize(output_names.size(), columns);
+        CodecUtils::checkColumnSize("NativeBlockInputStream", output_names.size(), columns);
 
     for (size_t i = 0; i < columns; ++i)
     {
@@ -182,7 +182,7 @@ Block NativeBlockInputStream::readImpl()
         readBinary(type_name, istr);
         if (header)
         {
-            CodecUtils::checkDataTypeName(i, header_datatypes[i].name, type_name);
+            CodecUtils::checkDataTypeName("NativeBlockInputStream", i, header_datatypes[i].name, type_name);
             column.type = header_datatypes[i].type;
         }
         else
