@@ -116,7 +116,18 @@ void KVStore::checkAndApplyPreHandledSnapshot(const RegionPtrWrap & new_region, 
             }
         }
     }
-
+    // NOTE Do NOT move it to prehandle stage!
+    // Otherwise a fap snapshot may be cleaned when prehandling after restarted.
+    if (tmt.getContext().getSharedContextDisagg()->isDisaggregatedStorageMode())
+    {
+        if constexpr (!std::is_same_v<RegionPtrWrap, RegionPtrWithCheckpointInfo>)
+        {
+            auto fap_ctx = tmt.getContext().getSharedContextDisagg()->fap_context;
+            auto region_id = new_region->id();
+            // Everytime we meet a regular snapshot, we try to clean obsolete fap ingest info.
+            fap_ctx->resolveFapSnapshotState(tmt, proxy_helper, region_id, true);
+        }
+    }
     onSnapshot(new_region, old_region, old_applied_index, tmt);
 }
 
@@ -301,19 +312,6 @@ void KVStore::applyPreHandledSnapshot(const RegionPtrWrap & new_region, TMTConte
     try
     {
         LOG_INFO(log, "Begin apply snapshot, new_region={}", new_region->toString(true));
-
-        // NOTE Do NOT move it to prehandle stage!
-        // Otherwise a fap snapshot may be cleaned when prehandling after restarted.
-        if (tmt.getContext().getSharedContextDisagg()->isDisaggregatedStorageMode())
-        {
-            if constexpr (!std::is_same_v<RegionPtrWrap, RegionPtrWithCheckpointInfo>)
-            {
-                auto fap_ctx = tmt.getContext().getSharedContextDisagg()->fap_context;
-                auto region_id = new_region->id();
-                // Everytime we meet a regular snapshot, we try to clean obsolete fap ingest info.
-                fap_ctx->resolveFapSnapshotState(tmt, proxy_helper, region_id, true);
-            }
-        }
 
         Stopwatch watch;
         SCOPE_EXIT({
