@@ -1062,6 +1062,11 @@ private:
     std::unordered_map<String, std::vector<T *>> resource_group_metrics_map;
 };
 
+namespace tests
+{
+struct TiFlashMetricsHelper;
+}
+
 /// Centralized registry of TiFlash metrics.
 /// Cope with MetricsPrometheus by registering
 /// profile events, current metrics and customized metrics (as individual member for caller to access) into registry ahead of being updated.
@@ -1115,6 +1120,7 @@ public:
     DISALLOW_COPY_AND_MOVE(TiFlashMetrics);
 
     friend class MetricsPrometheus;
+    friend struct DB::tests::TiFlashMetricsHelper;
 };
 
 #define MAKE_METRIC_ENUM_M(family_name, help, type, ...) \
