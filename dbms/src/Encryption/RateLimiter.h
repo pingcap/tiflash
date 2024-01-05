@@ -23,9 +23,7 @@
 #include <chrono>
 #include <condition_variable>
 #include <magic_enum.hpp>
-#include <memory>
 #include <mutex>
-#include <queue>
 #include <thread>
 
 // TODO: separate IO utility(i.e. FileProvider, RateLimiter) from Encryption directory
@@ -153,7 +151,7 @@ protected:
 
     std::mutex request_mutex;
 
-    LimiterType type;
+    const LimiterType type;
 
     Stopwatch stat_stop_watch;
     UInt64 alloc_bytes;
