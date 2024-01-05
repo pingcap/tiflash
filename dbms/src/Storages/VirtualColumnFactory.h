@@ -31,4 +31,11 @@ public:
     static DataTypePtr tryGetType(const String & name);
 };
 
+<<<<<<< HEAD:dbms/src/Storages/VirtualColumnFactory.h
 }
+=======
+void checkColumnSize(const String & identifier, size_t expected, size_t actual);
+void checkDataTypeName(const String & identifier, size_t column_index, const String & expected, const String & actual);
+} // namespace CodecUtils
+} // namespace DB
+>>>>>>> 1aa8fcda4a (refine log for `CodecUtils` (#8670)):dbms/src/Flash/Coprocessor/CodecUtils.h
