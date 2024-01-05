@@ -17,11 +17,7 @@
 #include <Common/Stopwatch.h>
 #include <Common/nocopyable.h>
 #include <Server/StorageConfigParser.h>
-<<<<<<< HEAD
 #include <fmt/core.h>
-=======
-#include <fmt/std.h>
->>>>>>> 63eb295f06 (Storages: Add metrics in RateLimiter (#8636))
 
 #include <atomic>
 #include <chrono>
