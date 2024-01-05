@@ -76,7 +76,11 @@ Block DecodeHeader(ReadBuffer & istr, const Block & header, size_t & total_rows)
             readBinary(type_name, istr);
             if (header)
             {
-                CodecUtils::checkDataTypeName("CHBlockChunkCodecV1", i, header.getByPosition(i).type->getName(), type_name);
+                CodecUtils::checkDataTypeName(
+                    "CHBlockChunkCodecV1",
+                    i,
+                    header.getByPosition(i).type->getName(),
+                    type_name);
                 column.type = header.getByPosition(i).type;
             }
             else
@@ -463,7 +467,11 @@ static void checkSchema(const Block & header, const Block & block)
     for (size_t column_index = 0; column_index < header.columns(); ++column_index)
     {
         auto && type_name = block.getByPosition(column_index).type->getName();
-        CodecUtils::checkDataTypeName("CHBlockChunkCodecV1", column_index, header.getByPosition(column_index).type->getName(), type_name);
+        CodecUtils::checkDataTypeName(
+            "CHBlockChunkCodecV1",
+            column_index,
+            header.getByPosition(column_index).type->getName(),
+            type_name);
     }
 }
 
