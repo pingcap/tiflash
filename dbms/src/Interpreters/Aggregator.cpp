@@ -341,9 +341,10 @@ Aggregator::Aggregator(
         {
             params.setMaxBytesBeforeExternalGroupBy(0);
             agg_spill_context->disableSpill();
-            LOG_WARNING(
-                log,
-                "Aggregation does not support spill because aggregator hash table does not support two level");
+            if (method_chosen != AggregatedDataVariants::Type::without_key)
+                LOG_WARNING(
+                    log,
+                    "Aggregation does not support spill because aggregator hash table does not support two level");
         }
     }
     if (register_operator_spill_context != nullptr)

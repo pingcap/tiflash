@@ -477,7 +477,7 @@ public:
         ResourceGroupPtr group = findResourceGroup(name);
         if unlikely (!group)
         {
-            LOG_INFO(log, "cannot get priority for {}, maybe it has been deleted", name);
+            LOG_DEBUG(log, "cannot get priority for {}, maybe it has been deleted", name);
             return 0;
         }
         return group->estWaitDuraMS(DEFAULT_FETCH_GAC_INTERVAL_MS);
@@ -494,7 +494,7 @@ public:
         ResourceGroupPtr group = findResourceGroup(name);
         if unlikely (!group)
         {
-            LOG_INFO(log, "cannot get priority for {}, maybe it has been deleted", name);
+            LOG_DEBUG(log, "cannot get priority for {}, maybe it has been deleted", name);
             return std::nullopt;
         }
 
@@ -613,7 +613,7 @@ private:
         ResourceGroupPtr group = findResourceGroup(name);
         if unlikely (!group)
         {
-            LOG_INFO(log, "cannot consume ru for {}, maybe it has been deleted", name);
+            LOG_DEBUG(log, "cannot consume ru for {}, maybe it has been deleted", name);
             return;
         }
 

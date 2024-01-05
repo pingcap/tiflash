@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Flash/Coprocessor/JoinInterpreterHelper.h>
+#include <Flash/Mpp/MPPTaskId.h>
 #include <Interpreters/Context.h>
 #include <TestUtils/FailPointUtils.h>
 #include <TestUtils/MPPTaskTestUtils.h>
@@ -147,11 +148,12 @@ public:
             BlockInputStreamPtr stream;
             try
             {
-                auto tasks = prepareMPPTasks(
-                    context.scan("test_db", "l_table")
+                std::function<DAGRequestBuilder()> gen_builder = [&]() {
+                    return context.scan("test_db", "l_table")
                         .aggregation({Max(col("l_table.s"))}, {col("l_table.s")})
-                        .project({col("max(l_table.s)"), col("l_table.s")}),
-                    properties);
+                        .project({col("max(l_table.s)"), col("l_table.s")});
+                };
+                QueryTasks tasks = prepareMPPTasks(gen_builder, properties);
                 executeProblematicMPPTasks(tasks, properties, stream);
             }
             catch (...)
@@ -732,8 +734,9 @@ try
 
     // start 10 queries
     {
+        size_t query_num = 10;
         std::vector<std::tuple<MPPGatherId, BlockInputStreamPtr>> queries;
-        for (size_t i = 0; i < 10; ++i)
+        for (size_t i = 0; i < query_num; ++i)
         {
             auto properties = DB::tests::getDAGPropertiesForTest(serverNum());
             MPPGatherId gather_id(
@@ -752,12 +755,19 @@ try
                         .join(context.scan("test_db", "r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")}),
                     properties)));
         }
-        for (size_t i = 0; i < 10; ++i)
+
         {
-            auto gather_id = std::get<0>(queries[i]);
-            EXPECT_TRUE(assertQueryActive(gather_id.query_id));
-            MockComputeServerManager::instance().cancelGather(gather_id);
-            EXPECT_TRUE(assertQueryCancelled(gather_id.query_id));
+            auto thread_mgr = newThreadManager();
+            for (size_t i = 0; i < query_num; ++i)
+            {
+                auto gather_id = std::get<0>(queries[i]);
+                thread_mgr->schedule(false, "test_cancel", [=]() {
+                    EXPECT_TRUE(assertQueryActive(gather_id.query_id));
+                    MockComputeServerManager::instance().cancelGather(gather_id);
+                    EXPECT_TRUE(assertQueryCancelled(gather_id.query_id));
+                });
+            }
+            thread_mgr->wait();
         }
     }
     WRAP_FOR_SERVER_TEST_END

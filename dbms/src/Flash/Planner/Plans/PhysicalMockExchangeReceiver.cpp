@@ -84,7 +84,7 @@ void PhysicalMockExchangeReceiver::buildPipelineExecGroupImpl(
             std::make_unique<BlockInputStreamSourceOp>(exec_context, log->identifier(), mock_stream));
 }
 
-void PhysicalMockExchangeReceiver::finalize(const Names & parent_require)
+void PhysicalMockExchangeReceiver::finalizeImpl(const Names & parent_require)
 {
     FinalizeHelper::checkSchemaContainsParentRequire(schema, parent_require);
 }

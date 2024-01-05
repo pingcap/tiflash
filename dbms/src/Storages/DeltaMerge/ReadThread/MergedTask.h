@@ -127,7 +127,11 @@ public:
         }
     }
 
+#ifndef DBMS_PUBLIC_GTEST
 private:
+#else
+public:
+#endif
     void initOnce();
     int readOneBlock();
     void setUnitFinish(int i) { finished_count += units[i].setFinish(); }

@@ -133,7 +133,7 @@ void PhysicalExchangeSender::buildPipelineExecGroupImpl(
     });
 }
 
-void PhysicalExchangeSender::finalize(const Names & parent_require)
+void PhysicalExchangeSender::finalizeImpl(const Names & parent_require)
 {
     child->finalize(parent_require);
 }
