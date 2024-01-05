@@ -613,16 +613,12 @@ FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, u
                     region_id,
                     new_peer_id,
                     magic_enum::enum_name(prev_state));
+                GET_METRIC(tiflash_fap_task_state, type_blocking_cancel_stage).Increment();
                 if (prev_state == FAPAsyncTasks::TaskState::Running)
-                {
-                    GET_METRIC(tiflash_fap_task_state, type_blocking_cancel_stage).Increment();
-                    [[maybe_unused]] auto result = fap_ctx->tasks_trace->blockedCancelRunningTask(region_id);
-                    GET_METRIC(tiflash_fap_task_state, type_blocking_cancel_stage).Decrement();
-                }
-                else
                 {
                     [[maybe_unused]] auto s = fap_ctx->tasks_trace->blockedCancelRunningTask(region_id);
                 }
+                GET_METRIC(tiflash_fap_task_state, type_blocking_cancel_stage).Decrement();
                 // Return Canceled because it is cancel from outside FAP worker.
                 return genFastAddPeerRes(FastAddPeerStatus::Canceled, "", "");
             }
