@@ -190,9 +190,9 @@ void CHBlockChunkCodec::readBlockMeta(ReadBuffer & istr, size_t & columns, size_
     readVarUInt(rows, istr);
 
     if (header)
-        CodecUtils::checkColumnSize(header.columns(), columns);
+        CodecUtils::checkColumnSize("CHBlockChunkCodec", header.columns(), columns);
     else if (!output_names.empty())
-        CodecUtils::checkColumnSize(output_names.size(), columns);
+        CodecUtils::checkColumnSize("CHBlockChunkCodec", output_names.size(), columns);
 }
 
 void CHBlockChunkCodec::readColumnMeta(size_t i, ReadBuffer & istr, ColumnWithTypeAndName & column)
@@ -210,7 +210,7 @@ void CHBlockChunkCodec::readColumnMeta(size_t i, ReadBuffer & istr, ColumnWithTy
     const DataTypeFactory & data_type_factory = DataTypeFactory::instance();
     if (header)
     {
-        CodecUtils::checkDataTypeName(i, header_datatypes[i].name, type_name);
+        CodecUtils::checkDataTypeName("CHBlockChunkCodec", i, header_datatypes[i].name, type_name);
         column.type = header_datatypes[i].type;
     }
     else
