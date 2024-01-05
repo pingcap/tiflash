@@ -29,7 +29,7 @@ void checkColumnSize(const String & identifier, size_t expected, size_t actual)
 {
     if unlikely (expected != actual)
         throw Exception(
-            fmt::format("{} schema mismatch, expected {}, actual {}.", identifier, expected, actual),
+            fmt::format("{} schema size mismatch, expected {}, actual {}.", identifier, expected, actual),
             ErrorCodes::LOGICAL_ERROR);
 }
 
