@@ -19,6 +19,7 @@
 #include <Storages/Page/V3/PageStorageImpl.h>
 #include <Storages/Page/workload/PSRunnable.h>
 #include <Storages/Page/workload/PSWorkload.h>
+#include <Storages/Page/workload/TiFlashMetricsHelper.h>
 #include <TestUtils/MockDiskDelegator.h>
 #include <fmt/core.h>
 
@@ -32,11 +33,28 @@
 
 namespace DB::PS::tests
 {
+
 void StressWorkload::onDumpResult()
 {
     UInt64 time_interval = stop_watch.elapsedMilliseconds();
     LOG_INFO(options.logger, "workload result dumped after {}ms", time_interval);
     double seconds_run = 1.0 * time_interval / 1000;
+
+    auto histograms = DB::tests::TiFlashMetricsHelper::collectHistorgrams( //
+        {"tiflash_storage_page_write_duration_seconds"});
+
+    for (const auto & [hist_id, hist] : histograms)
+    {
+        auto stats = DB::tests::TiFlashMetricsHelper::histogramStats(hist);
+        LOG_INFO(
+            options.logger,
+            "name={} type={} avg={:.3f}ms p99={:.3f}ms p999={:.3f}ms",
+            hist_id.name,
+            hist_id.type,
+            stats.avgms,
+            stats.p99ms,
+            stats.p999ms);
+    }
 
     Poco::JSON::Object::Ptr details = new Poco::JSON::Object();
 
@@ -79,6 +97,7 @@ void StressWorkload::onDumpResult()
     }());
 
     {
+        // Output to stdout for performance test summary
         Poco::JSON::Object::Ptr summary = new Poco::JSON::Object();
         Poco::JSON::Object::Ptr writers_summary = new Poco::JSON::Object();
         writers_summary->set("pages", total_pages_written);
@@ -92,6 +111,18 @@ void StressWorkload::onDumpResult()
         summary->set("read", readers_summary);
         if (options.status_interval != 0)
             metrics_dumper->addJSONSummaryTo(summary);
+
+        Poco::JSON::Object::Ptr write_latency_summary = new Poco::JSON::Object();
+        for (const auto & [hist_id, hist] : histograms)
+        {
+            auto stats = DB::tests::TiFlashMetricsHelper::histogramStats(hist);
+            Poco::JSON::Object::Ptr write_latency_type = new Poco::JSON::Object();
+            write_latency_type->set("avg", fmt::format("{:.3f}", stats.avgms));
+            write_latency_type->set("p99", fmt::format("{:.3f}", stats.p99ms));
+            write_latency_type->set("p999", fmt::format("{:.3f}", stats.p999ms));
+            write_latency_summary->set(hist_id.type, write_latency_type);
+        }
+        summary->set("write_latency", write_latency_summary);
 
         fmt::print(stdout, "Workload summary: {}\n", [&]() {
             std::stringstream ss;
