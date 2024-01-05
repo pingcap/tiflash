@@ -24,8 +24,8 @@
 #include <Storages/KVStore/KVStore.h>
 #include <Storages/KVStore/MultiRaft/Disagg/CheckpointInfo.h>
 #include <Storages/KVStore/MultiRaft/Disagg/CheckpointIngestInfo.h>
-#include <Storages/KVStore/MultiRaft/Disagg/FastAddPeer.h>
 #include <Storages/KVStore/MultiRaft/Disagg/FastAddPeerCache.h>
+#include <Storages/KVStore/MultiRaft/Disagg/FastAddPeerContext.h>
 #include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/KVStore/Utils/AsyncTasks.h>
@@ -497,8 +497,36 @@ uint8_t ApplyFapSnapshotImpl(TMTContext & tmt, TiFlashRaftProxyHelper * proxy_he
     }
 }
 
-uint8_t ApplyFapSnapshot(EngineStoreServerWrap * server, uint64_t region_id, uint64_t peer_id)
+FapSnapshotState QueryFapSnapshotState(EngineStoreServerWrap * server, uint64_t region_id, uint64_t peer_id)
 {
+    try
+    {
+        RUNTIME_CHECK_MSG(server->tmt, "TMTContext is null");
+        RUNTIME_CHECK_MSG(server->proxy_helper, "proxy_helper is null");
+        if (!server->tmt->getContext().getSharedContextDisagg()->isDisaggregatedStorageMode())
+            return FapSnapshotState::Other;
+        auto fap_ctx = server->tmt->getContext().getSharedContextDisagg()->fap_context;
+        // We just restore it, since if there is, it will soon be used.
+        if (fap_ctx->getOrRestoreCheckpointIngestInfo(*(server->tmt), server->proxy_helper, region_id, peer_id)
+            != nullptr)
+        {
+            return FapSnapshotState::Persisted;
+        }
+        return FapSnapshotState::NotFound;
+    }
+    catch (...)
+    {
+        DB::tryLogCurrentFatalException(
+            "QueryFapSnapshotState",
+            fmt::format("Failed query fap snapshot state region_id={} peer_id={}", region_id, peer_id));
+        exit(-1);
+    }
+}
+
+uint8_t ApplyFapSnapshot(EngineStoreServerWrap * server, uint64_t region_id, uint64_t peer_id, uint8_t assert_exist)
+{
+    // TODO(fap) use assert_exist to check.
+    UNUSED(assert_exist);
     try
     {
         RUNTIME_CHECK_MSG(server->tmt, "TMTContext is null");
@@ -614,7 +642,6 @@ FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, u
                     new_peer_id,
                     magic_enum::enum_name(prev_state));
                 GET_METRIC(tiflash_fap_task_state, type_blocking_cancel_stage).Increment();
-                if (prev_state == FAPAsyncTasks::TaskState::Running)
                 {
                     [[maybe_unused]] auto s = fap_ctx->tasks_trace->blockedCancelRunningTask(region_id);
                 }

@@ -19,6 +19,7 @@
 #include <Storages/KVStore/FFI/ProxyFFI.h>
 #include <Storages/KVStore/MultiRaft/Disagg/FastAddPeer.h>
 #include <Storages/KVStore/MultiRaft/Disagg/FastAddPeerCache.h>
+#include <Storages/KVStore/MultiRaft/Disagg/FastAddPeerContext.h>
 #include <Storages/KVStore/Utils/AsyncTasks.h>
 #include <Storages/KVStore/tests/kvstore_helper.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
@@ -45,16 +46,6 @@ namespace FailPoints
 {
 extern const char force_set_fap_candidate_store_id[];
 } // namespace FailPoints
-
-FastAddPeerRes genFastAddPeerRes(FastAddPeerStatus status, std::string && apply_str, std::string && region_str);
-FastAddPeerRes FastAddPeerImplWrite(
-    TMTContext & tmt,
-    const TiFlashRaftProxyHelper * proxy_helper,
-    UInt64 region_id,
-    UInt64 new_peer_id,
-    CheckpointRegionInfoAndData && checkpoint,
-    UInt64 start_time);
-uint8_t ApplyFapSnapshotImpl(TMTContext & tmt, TiFlashRaftProxyHelper * proxy_helper, UInt64 region_id, UInt64 peer_id);
 
 namespace FailPoints
 {

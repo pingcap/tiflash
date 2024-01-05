@@ -25,7 +25,7 @@
 #include <Storages/DeltaMerge/WriteBatchesImpl.h>
 #include <Storages/KVStore/KVStore.h>
 #include <Storages/KVStore/MultiRaft/Disagg/CheckpointInfo.h>
-#include <Storages/KVStore/MultiRaft/Disagg/FastAddPeer.h>
+#include <Storages/KVStore/MultiRaft/Disagg/FastAddPeerContext.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/PathPool.h>
 
