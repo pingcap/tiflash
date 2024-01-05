@@ -70,7 +70,7 @@ RemoteRequest RemoteRequest::build(
             else
             {
                 // https://github.com/pingcap/tiflash/issues/8601
-                // If the precision of the duration data type is modified,
+                // If the precision of the `TIME`(which is MyDuration in TiFlash) type is modified,
                 // TiFlash storage layer may not trigger `sync_schema` and update table info.
                 // Therefore, the column info in the TiDB request will be used in this case.
                 schema.emplace_back(std::make_pair(table_info.getColumnInfo(col_id).name, col));
