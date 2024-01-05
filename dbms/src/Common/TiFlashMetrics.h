@@ -429,7 +429,17 @@ namespace DB
         F(type_dtfile_read_bytes, {"type", "dtfile_read_bytes"}),                                                                                   \
         F(type_page_evict_bytes, {"type", "page_evict_bytes"}),                                                                                     \
         F(type_page_download_bytes, {"type", "page_download_bytes"}),                                                                               \
-        F(type_page_read_bytes, {"type", "page_read_bytes"}))
+        F(type_page_read_bytes, {"type", "page_read_bytes"}))                                                                                       \
+    M(tiflash_storage_io_limiter_pending_seconds, "I/O limiter pending duration in seconds", Histogram,                                             \
+        F(type_fg_read, {{"type", "fg_read"}}, ExpBuckets{0.001, 2, 20}),                                                                           \
+        F(type_bg_read, {{"type", "bg_read"}}, ExpBuckets{0.001, 2, 20}),                                                                           \
+        F(type_fg_write, {{"type", "fg_write"}}, ExpBuckets{0.001, 2, 20}),                                                                         \
+        F(type_bg_write, {{"type", "bg_write"}}, ExpBuckets{0.001, 2, 20}))                                                                         \
+    M(tiflash_storage_io_limiter_pending_count, "I/O limiter pending count", Counter,                                                               \
+        F(type_fg_read, {"type", "fg_read"}),                                                                                                       \
+        F(type_bg_read, {"type", "bg_read"}),                                                                                                       \
+        F(type_fg_write, {"type", "fg_write"}),                                                                                                     \
+        F(type_bg_write, {"type", "bg_write"}))
 
 // clang-format on
 
