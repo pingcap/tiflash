@@ -67,8 +67,11 @@ RemoteRequest RemoteRequest::build(
             }
             else
             {
-                const auto & col_info = table_info.getColumnInfo(col_id);
-                schema.emplace_back(std::make_pair(col_info.name, col_info));
+                // https://github.com/pingcap/tiflash/issues/8601
+                // If the precision of the `TIME`(which is MyDuration in TiFlash) type is modified,
+                // TiFlash storage layer may not trigger `sync_schema` and update table info.
+                // Therefore, the column info in the TiDB request will be used in this case.
+                schema.emplace_back(std::make_pair(table_info.getColumnInfo(col_id).name, col));
             }
             dag_req.add_output_offsets(i);
         }
