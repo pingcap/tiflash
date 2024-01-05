@@ -189,13 +189,13 @@ public:
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         const ColumnPtr column = block.getByPosition(arguments[0]).column;
-        if (const ColumnString * col = checkAndGetColumn<ColumnString>(column.get()))
+        if (const auto * col = checkAndGetColumn<ColumnString>(column.get()))
         {
             auto col_res = ColumnString::create();
             Impl::vector(col->getChars(), col->getOffsets(), col_res->getChars(), col_res->getOffsets());
             block.getByPosition(result).column = std::move(col_res);
         }
-        else if (const ColumnFixedString * col = checkAndGetColumn<ColumnFixedString>(column.get()))
+        else if (const auto * col = checkAndGetColumn<ColumnFixedString>(column.get()))
         {
             auto col_res = ColumnFixedString::create(col->getN());
             Impl::vectorFixed(col->getChars(), col->getN(), col_res->getChars());
@@ -220,17 +220,9 @@ struct TiDBLowerUpperUTF8Impl
 
     static void vectorFixed(const ColumnString::Chars_t & data, size_t n, ColumnString::Chars_t & res_data);
 
-    static void constant(const std::string & data, std::string & res_data);
-
-    /** Converts a single code point starting at `src` to desired case, storing result starting at `dst`.
-     *    `src` and `dst` are incremented by corresponding sequence lengths. */
-    static void toCase(const UInt8 *& src, const UInt8 * src_end, UInt8 *& dst);
-
 private:
     static constexpr auto ascii_upper_bound = '\x7f';
     static constexpr auto flip_case_mask = 'A' ^ 'a';
-
-    static void array(const UInt8 * src, const UInt8 * src_end, UInt8 * dst);
 };
 
 struct TiDBLowerUpperBinaryImpl
