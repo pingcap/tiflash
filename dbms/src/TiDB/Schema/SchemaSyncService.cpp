@@ -146,6 +146,7 @@ void SchemaSyncService::removeKeyspaceGCTasks()
         context.getTMTContext().getSchemaSyncerManager()->removeSchemaSyncer(keyspace);
         PDClientHelper::remove_ks_gc_sp(keyspace);
         keyspace_gc_context.erase(keyspace); // clear the last gc safepoint
+        num_remove_tasks += 1;
     }
 
     auto log_level = num_remove_tasks > 0 ? Poco::Message::PRIO_INFORMATION : Poco::Message::PRIO_DEBUG;
@@ -243,7 +244,7 @@ bool SchemaSyncService::gc(Timestamp gc_safepoint, KeyspaceID keyspace_id)
                 // it is dropped.
                 storages_to_gc.emplace_back(std::weak_ptr<IManageableStorage>(managed_storage));
                 LOG_INFO(
-                    log,
+                    keyspace_log,
                     "Detect stale table, database_name={} table_name={} database_tombstone={} table_tombstone={} "
                     "safepoint={}",
                     managed_storage->getDatabaseName(),

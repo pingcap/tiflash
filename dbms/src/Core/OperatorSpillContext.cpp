@@ -47,7 +47,8 @@ void OperatorSpillContext::markSpilled()
 
 void OperatorSpillContext::finishSpillableStage()
 {
-    LOG_INFO(log, "Operator finish spill stage");
+    if (isSpillEnabled())
+        LOG_INFO(log, "Operator finish spill stage");
     in_spillable_stage = false;
 }
 

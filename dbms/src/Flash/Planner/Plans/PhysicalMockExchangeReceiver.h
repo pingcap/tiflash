@@ -44,7 +44,7 @@ public:
         const BlockInputStreams & mock_streams,
         size_t source_num_);
 
-    void finalize(const Names & parent_require) override;
+    void finalizeImpl(const Names & parent_require) override;
 
     const Block & getSampleBlock() const override;
 

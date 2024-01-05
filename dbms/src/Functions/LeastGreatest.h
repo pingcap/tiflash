@@ -143,7 +143,6 @@ struct LeastGreatestStringImpl
         size_t i)
     {
         int res = 0;
-        auto pre_offset = StringUtil::offsetAt(c_offsets, i);
         if constexpr (use_collator)
             res = collator->compare(
                 reinterpret_cast<const char *>(&a_data[0]),
@@ -155,50 +154,37 @@ struct LeastGreatestStringImpl
                 {reinterpret_cast<const char *>(&a_data[0]), a_size},
                 {reinterpret_cast<const char *>(&b_data[0]), b_size});
 
+        auto append_data = [&](const unsigned char * data, size_t size) {
+            auto pre_offset = StringUtil::offsetAt(c_offsets, i);
+            auto expected_reserved_size = pre_offset + size + 1;
+            c_data.resize(expected_reserved_size);
+            memcpy(&c_data[pre_offset], data, size);
+            c_data[pre_offset + size] = 0;
+            c_offsets[i] = pre_offset + size + 1;
+        };
+
         if constexpr (least)
         {
             if (res < 0)
             {
-                memcpy(&c_data[pre_offset], &a_data[0], a_size);
-                c_offsets[i] = pre_offset + a_size + 1;
-            }
-            else if (res == 0)
-            {
-                size_t size = std::min(a_size, b_size);
-                memcpy(&c_data[pre_offset], &b_data[0], size);
-                c_offsets[i] = pre_offset + size + 1;
+                append_data(a_data, a_size);
             }
             else
             {
-                memcpy(&c_data[pre_offset], &b_data[0], b_size);
-                c_offsets[i] = pre_offset + b_size + 1;
+                assert(res > 0 || a_size == b_size);
+                append_data(b_data, b_size);
             }
         }
         else
         {
             if (res < 0)
             {
-                memcpy(&c_data[pre_offset], &b_data[0], b_size);
-                c_offsets[i] = pre_offset + b_size + 1;
-            }
-            else if (res == 0)
-            {
-                size_t size = std::max(a_size, b_size);
-                if (a_size > b_size)
-                {
-                    memcpy(&c_data[pre_offset], &a_data[0], size);
-                    c_offsets[i] = pre_offset + size + 1;
-                }
-                else
-                {
-                    memcpy(&c_data[pre_offset], &b_data[0], size);
-                    c_offsets[i] = pre_offset + size + 1;
-                }
+                append_data(b_data, b_size);
             }
             else
             {
-                memcpy(&c_data[pre_offset], &a_data[0], a_size);
-                c_offsets[i] = pre_offset + a_size + 1;
+                assert(res > 0 || a_size == b_size);
+                append_data(a_data, a_size);
             }
         }
     }
@@ -406,8 +392,8 @@ struct StringOperationImpl
         size_t size = res_ref.size();
         size_t res_ref_size = 0;
         for (auto & ref : res_ref)
-            res_ref_size += ref.size;
-        c_data.resize(std::max(res_ref_size, b.size * size));
+            res_ref_size += ref.size + 1;
+        c_data.reserve(std::max(res_ref_size, (b.size + 1) * size));
         c_offsets.resize(size);
         for (size_t i = 0; i < size; ++i)
             LeastGreatestStringImpl<least, use_collator>::process(collator, res_ref, b, c_data, c_offsets, i);
@@ -422,7 +408,7 @@ struct StringOperationImpl
         ColumnString::Offsets & c_offsets)
     {
         size_t size = a_offsets.size();
-        c_data.resize(std::max(a_data.size(), b.size * size));
+        c_data.reserve(std::max(a_data.size(), (b.size + 1) * size));
         c_offsets.resize(size);
         for (size_t i = 0; i < size; ++i)
             LeastGreatestStringImpl<least, use_collator>::process(collator, a_data, a_offsets, b, c_data, c_offsets, i);

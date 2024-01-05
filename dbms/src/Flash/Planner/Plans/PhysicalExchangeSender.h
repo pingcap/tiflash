@@ -48,7 +48,7 @@ public:
         , compression_mode(compression_mode_)
     {}
 
-    void finalize(const Names & parent_require) override;
+    void finalizeImpl(const Names & parent_require) override;
 
     const Block & getSampleBlock() const override;
 

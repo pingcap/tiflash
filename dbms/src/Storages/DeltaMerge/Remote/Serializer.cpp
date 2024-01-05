@@ -138,9 +138,10 @@ SegmentSnapshotPtr Serializer::deserializeSegment(
 
     auto delta_snap = std::make_shared<DeltaValueSnapshot>(CurrentMetrics::DT_SnapshotOfDisaggReadNodeRead);
     delta_snap->is_update = false;
-    delta_snap->mem_table_snap = deserializeColumnFileSet(proto.column_files_memtable(), data_store, segment_range);
+    delta_snap->mem_table_snap
+        = deserializeColumnFileSet(dm_context, proto.column_files_memtable(), data_store, segment_range);
     delta_snap->persisted_files_snap
-        = deserializeColumnFileSet(proto.column_files_persisted(), data_store, segment_range);
+        = deserializeColumnFileSet(dm_context, proto.column_files_persisted(), data_store, segment_range);
 
     // Note: At this moment, we still cannot read from `delta_snap->mem_table_snap` and `delta_snap->persisted_files_snap`,
     // because they are constructed using ColumnFileDataProviderNop.
@@ -224,6 +225,7 @@ RemotePb::ColumnFileRemote Serializer::serializeCF(
 }
 
 ColumnFileSetSnapshotPtr Serializer::deserializeColumnFileSet(
+    const DMContext & dm_context,
     const RepeatedPtrField<RemotePb::ColumnFileRemote> & proto,
     const Remote::IDataStorePtr & data_store,
     const RowKeyRange & segment_range)
@@ -237,7 +239,7 @@ ColumnFileSetSnapshotPtr Serializer::deserializeColumnFileSet(
     {
         if (remote_column_file.has_tiny())
         {
-            ret->column_files.push_back(deserializeCFTiny(remote_column_file.tiny()));
+            ret->column_files.push_back(deserializeCFTiny(dm_context, remote_column_file.tiny()));
         }
         else if (remote_column_file.has_delete_range())
         {
@@ -361,7 +363,7 @@ RemotePb::ColumnFileRemote Serializer::serializeCFTiny(
     return ret;
 }
 
-ColumnFileTinyPtr Serializer::deserializeCFTiny(const RemotePb::ColumnFileTiny & proto)
+ColumnFileTinyPtr Serializer::deserializeCFTiny(const DMContext & dm_context, const RemotePb::ColumnFileTiny & proto)
 {
     BlockPtr block_schema;
     {
@@ -371,7 +373,7 @@ ColumnFileTinyPtr Serializer::deserializeCFTiny(const RemotePb::ColumnFileTiny &
 
     // We do not try to reuse the CFSchema from `SharedBlockSchemas`, because the ColumnFile will be freed immediately after the request.
     auto schema = std::make_shared<ColumnFileSchema>(*block_schema);
-    auto cf = std::make_shared<ColumnFileTiny>(schema, proto.rows(), proto.bytes(), proto.page_id());
+    auto cf = std::make_shared<ColumnFileTiny>(schema, proto.rows(), proto.bytes(), proto.page_id(), dm_context);
     cf->data_page_size = proto.page_size();
 
     return cf;

@@ -1147,7 +1147,7 @@ BlockInputStreams DeltaMergeStore::read(
     UInt64 max_version,
     const PushDownFilterPtr & filter,
     const RuntimeFilteList & runtime_filter_list,
-    const int rf_max_wait_time_ms,
+    int rf_max_wait_time_ms,
     const String & tracing_id,
     bool keep_order,
     bool is_fast_scan,
@@ -1203,6 +1203,7 @@ BlockInputStreams DeltaMergeStore::read(
         enable_read_thread,
         final_num_stream,
         dm_context->scan_context->resource_group_name);
+    dm_context->scan_context->read_mode = read_mode;
 
     BlockInputStreams res;
     for (size_t i = 0; i < final_num_stream; ++i)
@@ -1235,7 +1236,11 @@ BlockInputStreams DeltaMergeStore::read(
         }
         res.push_back(stream);
     }
-    LOG_DEBUG(tracing_logger, "Read create stream done");
+    LOG_INFO(
+        tracing_logger,
+        "Read create stream done, pool_id={} num_streams={}",
+        read_task_pool->pool_id,
+        final_num_stream);
 
     return res;
 }
@@ -1251,7 +1256,7 @@ void DeltaMergeStore::read(
     UInt64 max_version,
     const PushDownFilterPtr & filter,
     const RuntimeFilteList & runtime_filter_list,
-    const int rf_max_wait_time_ms,
+    int rf_max_wait_time_ms,
     const String & tracing_id,
     bool keep_order,
     bool is_fast_scan,
@@ -1308,8 +1313,9 @@ void DeltaMergeStore::read(
         enable_read_thread,
         final_num_stream,
         dm_context->scan_context->resource_group_name);
-    const auto & columns_after_cast = filter && filter->extra_cast ? *filter->columns_after_cast : columns_to_read;
+    dm_context->scan_context->read_mode = read_mode;
 
+    const auto & columns_after_cast = filter && filter->extra_cast ? *filter->columns_after_cast : columns_to_read;
     if (enable_read_thread)
     {
         for (size_t i = 0; i < final_num_stream; ++i)
@@ -1350,7 +1356,11 @@ void DeltaMergeStore::read(
         });
     }
 
-    LOG_DEBUG(tracing_logger, "Read create PipelineExec done");
+    LOG_INFO(
+        tracing_logger,
+        "Read create PipelineExec done, pool_id={} num_streams={}",
+        read_task_pool->pool_id,
+        final_num_stream);
 }
 
 Remote::DisaggPhysicalTableReadSnapshotPtr DeltaMergeStore::writeNodeBuildRemoteReadSnapshot(
@@ -1370,10 +1380,14 @@ Remote::DisaggPhysicalTableReadSnapshotPtr DeltaMergeStore::writeNodeBuildRemote
     // could fetch the data segment by segment with these snapshots later.
     // `try_split_task` is false because we need to ensure only one segment task
     // for one segment.
-    SegmentReadTasks tasks
-        = getReadTasksByRanges(dm_context, sorted_ranges, num_streams, read_segments, /* try_split_task */ false);
+    SegmentReadTasks tasks = getReadTasksByRanges(
+        dm_context,
+        sorted_ranges,
+        num_streams,
+        read_segments,
+        /* try_split_task */ false);
     GET_METRIC(tiflash_disaggregated_read_tasks_count).Increment(tasks.size());
-    LOG_DEBUG(tracing_logger, "Read create segment snapshot done");
+    LOG_INFO(tracing_logger, "Read create segment snapshot done");
 
     return std::make_unique<Remote::DisaggPhysicalTableReadSnapshot>(
         KeyspaceTableID{keyspace_id, physical_table_id},
@@ -2039,6 +2053,8 @@ SegmentReadTasks DeltaMergeStore::getReadTasksByRanges(
                 ++seg_it;
         }
     }
+
+    // how many segments involved for the given key ranges
     const auto tasks_before_split = tasks.size();
     if (try_split_task)
     {
@@ -2052,6 +2068,12 @@ SegmentReadTasks DeltaMergeStore::getReadTasksByRanges(
         /// Merge continuously ranges.
         task->mergeRanges();
         total_ranges += task->ranges.size();
+    }
+
+    if (dm_context->scan_context)
+    {
+        dm_context->scan_context->num_segments += tasks_before_split;
+        dm_context->scan_context->num_read_tasks += tasks.size();
     }
 
     auto tracing_logger = log->getChild(getLogTracingId(*dm_context));

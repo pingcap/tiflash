@@ -14,6 +14,7 @@
 
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Statistics/ExecutionSummaryHelper.h>
+#include <Storages/DeltaMerge/ScanContext.h>
 
 namespace DB
 {

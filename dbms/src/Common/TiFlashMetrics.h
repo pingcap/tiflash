@@ -580,8 +580,11 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_sche_from_cache, {"type", "sche_from_cache"}),                                                                         \
       F(type_sche_new_task, {"type", "sche_new_task"}),                                                                             \
       F(type_ru_exhausted, {"type", "ru_exhausted"}),                                                                               \
+      F(type_push_block_bytes, {"type", "push_block_bytes"}),                                                                       \
       F(type_add_cache_succ, {"type", "add_cache_succ"}),                                                                           \
       F(type_add_cache_stale, {"type", "add_cache_stale"}),                                                                         \
+      F(type_add_cache_reach_count_limit, {"type", "add_cache_reach_count_limit"}),                                                 \
+      F(type_add_cache_total_bytes_limit, {"type", "add_cache_total_bytes_limit"}),                                                 \
       F(type_get_cache_miss, {"type", "get_cache_miss"}),                                                                           \
       F(type_get_cache_part, {"type", "get_cache_part"}),                                                                           \
       F(type_get_cache_hit, {"type", "get_cache_hit"}),                                                                             \
@@ -803,7 +806,14 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_gac_req_acquire_tokens, {"type", "gac_req_acquire_tokens"}),                                                           \
       F(type_gac_req_ru_consumption_delta, {"type", "gac_req_ru_consumption_delta"}),                                               \
       F(type_gac_resp_tokens, {"type", "gac_resp_tokens"}),                                                                         \
-      F(type_gac_resp_capacity, {"type", "gac_resp_capacity"}))
+      F(type_gac_resp_capacity, {"type", "gac_resp_capacity"}))                                                                     \
+    M(tiflash_storage_io_limiter_pending_count,                                                                                     \
+      "I/O limiter pending count",                                                                                                  \
+      Counter,                                                                                                                      \
+      F(type_fg_read, {"type", "fg_read"}),                                                                                         \
+      F(type_bg_read, {"type", "bg_read"}),                                                                                         \
+      F(type_fg_write, {"type", "fg_write"}),                                                                                       \
+      F(type_bg_write, {"type", "bg_write"}))
 
 
 /// Buckets with boundaries [start * base^0, start * base^1, ..., start * base^(size-1)]
@@ -1052,6 +1062,11 @@ private:
     std::unordered_map<String, std::vector<T *>> resource_group_metrics_map;
 };
 
+namespace tests
+{
+struct TiFlashMetricsHelper;
+}
+
 /// Centralized registry of TiFlash metrics.
 /// Cope with MetricsPrometheus by registering
 /// profile events, current metrics and customized metrics (as individual member for caller to access) into registry ahead of being updated.
@@ -1105,6 +1120,7 @@ public:
     DISALLOW_COPY_AND_MOVE(TiFlashMetrics);
 
     friend class MetricsPrometheus;
+    friend struct DB::tests::TiFlashMetricsHelper;
 };
 
 #define MAKE_METRIC_ENUM_M(family_name, help, type, ...) \

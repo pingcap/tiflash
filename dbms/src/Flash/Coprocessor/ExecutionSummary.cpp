@@ -14,9 +14,14 @@
 
 #include <Flash/Coprocessor/ExecutionSummary.h>
 #include <Flash/Statistics/BaseRuntimeStatistics.h>
+#include <Storages/DeltaMerge/ScanContext.h>
 
 namespace DB
 {
+ExecutionSummary::ExecutionSummary()
+    : scan_context(std::make_shared<DM::ScanContext>())
+{}
+
 void ExecutionSummary::merge(const ExecutionSummary & other)
 {
     time_processed_ns = std::max(time_processed_ns, other.time_processed_ns);

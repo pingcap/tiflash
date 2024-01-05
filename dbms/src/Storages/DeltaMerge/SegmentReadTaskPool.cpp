@@ -84,10 +84,9 @@ bool SegmentReadTasksWrapper::empty() const
 
 BlockInputStreamPtr SegmentReadTaskPool::buildInputStream(SegmentReadTaskPtr & t)
 {
-    // Call fetchPages before MemoryTrackerSetter, because its memory usage is tracked by `fetch_pages_mem_tracker`.
-    t->fetchPages();
-
     MemoryTrackerSetter setter(true, mem_tracker.get());
+
+    t->fetchPages();
 
     if (likely(read_mode == ReadMode::Bitmap && !res_group_name.empty()))
     {
@@ -279,7 +278,9 @@ void SegmentReadTaskPool::pushBlock(Block && block)
 {
     blk_stat.push(block);
     global_blk_stat.push(block);
-    read_bytes_after_last_check += block.bytes();
+    auto bytes = block.bytes();
+    read_bytes_after_last_check += bytes;
+    GET_METRIC(tiflash_storage_read_thread_counter, type_push_block_bytes).Increment(bytes);
     q.push(std::move(block), nullptr);
 }
 

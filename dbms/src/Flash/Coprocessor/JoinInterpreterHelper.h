@@ -175,14 +175,14 @@ struct TiFlashJoin
     /// The columns output by join will be:
     /// {columns of left_input, columns of right_input, match_helper_name}
     NamesAndTypes genJoinOutputColumns(
-        const Block & left_input_header,
-        const Block & right_input_header,
+        const NamesAndTypes & left_cols,
+        const NamesAndTypes & right_cols,
         const String & match_helper_name) const;
 
     void fillJoinOtherConditionsAction(
         const Context & context,
-        const Block & left_input_header,
-        const Block & right_input_header,
+        const NamesAndTypes & left_cols,
+        const NamesAndTypes & right_cols,
         const ExpressionActionsPtr & probe_side_prepare_join,
         const Names & probe_key_names,
         const Names & build_key_names,
@@ -198,13 +198,14 @@ struct TiFlashJoin
     ///  -`other_columns_added_by_probe_join_actions` is added to avoid duplicated columns error
     ///  -`match_helper_col` is not handled explicitly because `other_condition` never use that column.
     NamesAndTypes genColumnsForOtherJoinFilter(
-        const Block & left_input_header,
-        const Block & right_input_header,
+        const NamesAndTypes & left_cols,
+        const NamesAndTypes & right_cols,
         const ExpressionActionsPtr & probe_prepare_join_actions) const;
 
     std::vector<RuntimeFilterPtr> genRuntimeFilterList(
         const Context & context,
-        const Block & input_header,
+        const NamesAndTypes & source_columns,
+        const std::unordered_map<String, String> & key_names_map,
         const LoggerPtr & log);
 };
 
@@ -214,11 +215,15 @@ struct TiFlashJoin
 /// @filter_column_name: column name of `and(filters)`
 std::tuple<ExpressionActionsPtr, Names, Names, String> prepareJoin(
     const Context & context,
-    const Block & input_header,
+    const NamesAndTypes & source_columns,
     const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
     const JoinKeyTypes & join_key_types,
     bool left,
     bool is_right_out_join,
     const google::protobuf::RepeatedPtrField<tipb::Expr> & filters);
+
+/// generate source_columns that is used to compile tipb::Expr, the rule is columns in `tidb_schema`
+/// must be the first part of the source_columns
+NamesAndTypes genDAGExpressionAnalyzerSourceColumns(Block block, const NamesAndTypes & tidb_schema);
 } // namespace JoinInterpreterHelper
 } // namespace DB

@@ -168,6 +168,19 @@ public:
             right_partition_column_infos);
     }
 
+    ColumnsWithTypeAndName genScalarCountResults(const ColumnsWithTypeAndName & ref)
+    {
+        ColumnsWithTypeAndName ret;
+        ret.push_back(toVec<UInt64>({ref.empty() ? 0 : ref[0].column == nullptr ? 0 : ref[0].column->size()}));
+        return ret;
+    }
+    ColumnsWithTypeAndName genScalarCountResults(UInt64 result)
+    {
+        ColumnsWithTypeAndName ret;
+        ret.push_back(toVec<UInt64>({result}));
+        return ret;
+    }
+
     static constexpr size_t join_type_num = 7;
 
     static constexpr tipb::JoinType join_types[join_type_num] = {

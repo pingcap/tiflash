@@ -530,19 +530,19 @@ EncryptionMethod TiFlashRaftProxyHelper::getEncryptionMethod() const
 }
 FileEncryptionInfo TiFlashRaftProxyHelper::getFile(const std::string & view) const
 {
-    return fn_handle_get_file(proxy_ptr, strIntoView(&view));
+    return FileEncryptionInfo(fn_handle_get_file(proxy_ptr, strIntoView(&view)));
 }
 FileEncryptionInfo TiFlashRaftProxyHelper::newFile(const std::string & view) const
 {
-    return fn_handle_new_file(proxy_ptr, strIntoView(&view));
+    return FileEncryptionInfo(fn_handle_new_file(proxy_ptr, strIntoView(&view)));
 }
 FileEncryptionInfo TiFlashRaftProxyHelper::deleteFile(const std::string & view) const
 {
-    return fn_handle_delete_file(proxy_ptr, strIntoView(&view));
+    return FileEncryptionInfo(fn_handle_delete_file(proxy_ptr, strIntoView(&view)));
 }
 FileEncryptionInfo TiFlashRaftProxyHelper::linkFile(const std::string & src, const std::string & dst) const
 {
-    return fn_handle_link_file(proxy_ptr, strIntoView(&src), strIntoView(&dst));
+    return FileEncryptionInfo(fn_handle_link_file(proxy_ptr, strIntoView(&src), strIntoView(&dst)));
 }
 
 struct CppStrVec

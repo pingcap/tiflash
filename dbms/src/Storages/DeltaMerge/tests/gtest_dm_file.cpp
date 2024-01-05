@@ -113,6 +113,7 @@ public:
             std::move(configuration),
             128 * 1024,
             16 * 1024 * 1024,
+            NullspaceID,
             modeToVersion(mode));
         table_columns = std::make_shared<ColumnDefines>();
         column_cache = std::make_shared<ColumnCache>();
@@ -621,8 +622,14 @@ try
         Block block2 = DMTestEnv::prepareSimpleWriteBlockWithNullable(num_rows_write / 2, num_rows_write);
         auto mode = DMFileMode::DirectoryChecksum;
         auto configuration = createConfiguration(mode);
-        dmfile1
-            = DMFile::create(1, parent_path, std::move(configuration), 128 * 1024, 16 * 1024 * 1024, DMFileFormat::V2);
+        dmfile1 = DMFile::create(
+            1,
+            parent_path,
+            std::move(configuration),
+            128 * 1024,
+            16 * 1024 * 1024,
+            NullspaceID,
+            DMFileFormat::V2);
         auto stream = std::make_shared<DMFileBlockOutputStream>(dbContext(), dmfile1, *cols);
         stream->writePrefix();
         stream->write(block1, block_property1);
@@ -634,8 +641,14 @@ try
         Block block2 = DMTestEnv::prepareSimpleWriteBlockWithNullable(num_rows_write / 2, num_rows_write);
         auto mode = DMFileMode::DirectoryMetaV2;
         auto configuration = createConfiguration(mode);
-        dmfile2
-            = DMFile::create(2, parent_path, std::move(configuration), 128 * 1024, 16 * 1024 * 1024, DMFileFormat::V3);
+        dmfile2 = DMFile::create(
+            2,
+            parent_path,
+            std::move(configuration),
+            128 * 1024,
+            16 * 1024 * 1024,
+            NullspaceID,
+            DMFileFormat::V3);
         auto stream = std::make_shared<DMFileBlockOutputStream>(dbContext(), dmfile2, *cols);
         stream->writePrefix();
         stream->write(block1, block_property1);
@@ -733,7 +746,14 @@ try
     Block block2 = DMTestEnv::prepareSimpleWriteBlockWithNullable(num_rows_write / 2, num_rows_write);
     auto mode = DMFileMode::DirectoryChecksum;
     auto configuration = createConfiguration(mode);
-    dmfile = DMFile::create(1, parent_path, std::move(configuration), 128 * 1024, 16 * 1024 * 1024, DMFileFormat::V3);
+    dmfile = DMFile::create(
+        1,
+        parent_path,
+        std::move(configuration),
+        128 * 1024,
+        16 * 1024 * 1024,
+        NullspaceID,
+        DMFileFormat::V3);
     auto stream = std::make_shared<DMFileBlockOutputStream>(dbContext(), dmfile, *cols);
     stream->writePrefix();
     stream->write(block1, block_property1);
@@ -777,8 +797,14 @@ try
     auto mode = GetParam();
     auto configuration = createConfiguration(mode);
 
-    dm_file
-        = DMFile::create(id, parent_path, std::move(configuration), 128 * 1024, 16 * 1024 * 1024, modeToVersion(mode));
+    dm_file = DMFile::create(
+        id,
+        parent_path,
+        std::move(configuration),
+        128 * 1024,
+        16 * 1024 * 1024,
+        NullspaceID,
+        modeToVersion(mode));
     // Right after created, the fil is not abled to GC and it is ignored by `listAllInPath`
     EXPECT_FALSE(dm_file->canGC());
     DMFile::ListOptions options;
@@ -1443,7 +1469,14 @@ public:
 
         path_pool = std::make_shared<StoragePathPool>(db_context->getPathPool().withTable("test", "t", false));
         storage_pool = std::make_shared<StoragePool>(*db_context, NullspaceID, table_id, *path_pool, "test.t1");
-        dm_file = DMFile::create(0, path, std::move(configuration), 128 * 1024, 16 * 1024 * 1024, modeToVersion(mode));
+        dm_file = DMFile::create(
+            0,
+            path,
+            std::move(configuration),
+            128 * 1024,
+            16 * 1024 * 1024,
+            NullspaceID,
+            modeToVersion(mode));
         table_columns = std::make_shared<ColumnDefines>();
         column_cache = std::make_shared<ColumnCache>();
 
