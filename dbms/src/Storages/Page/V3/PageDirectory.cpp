@@ -1930,6 +1930,7 @@ typename PageDirectory<Trait>::PageEntries PageDirectory<Trait>::gcInMemEntries(
     {
         // Cleanup released snapshots
         std::lock_guard lock(snapshots_mutex);
+        std::unordered_set<String> tracing_id_set;
         for (auto iter = snapshots.begin(); iter != snapshots.end(); /* empty */)
         {
             if (auto snap = iter->lock(); snap == nullptr)
@@ -1946,7 +1947,17 @@ typename PageDirectory<Trait>::PageEntries PageDirectory<Trait>::gcInMemEntries(
 
                 if (alive_time_seconds > 10 * 60) // TODO: Make `10 * 60` as a configuration
                 {
-                    LOG_WARNING(log, "Meet a stale snapshot [thread id={}] [tracing id={}] [seq={}] [alive time(s)={}]", snap->create_thread, snap->tracing_id, snap->sequence, alive_time_seconds);
+                    if (tracing_id_set.count(snap->tracing_id) <= 0)
+                    {
+                        LOG_WARNING(
+                            log,
+                            "Meet a stale snapshot [thread id={}] [tracing id={}] [seq={}] [alive time(s)={}]",
+                            snap->create_thread,
+                            snap->tracing_id,
+                            snap->sequence,
+                            alive_time_seconds);
+                        tracing_id_set.emplace(snap->tracing_id);
+                    }
                     stale_snapshot_nums++;
                 }
 
@@ -2033,23 +2044,26 @@ typename PageDirectory<Trait>::PageEntries PageDirectory<Trait>::gcInMemEntries(
         }
     }
 
-    LOG_DEBUG(log,
-              "After MVCC gc in memory [lowest_seq={}] "
-              "clean [invalid_snapshot_nums={}] [invalid_page_nums={}] "
-              "[total_deref_counter={}] [all_del_entries={}]. "
-              "Still exist [snapshot_nums={}], [page_nums={}]. "
-              "Longest alive snapshot: [longest_alive_snapshot_time={}] "
-              "[longest_alive_snapshot_seq={}] [stale_snapshot_nums={}]",
-              lowest_seq,
-              invalid_snapshot_nums,
-              invalid_page_nums,
-              total_deref_counter,
-              all_del_entries.size(),
-              valid_snapshot_nums,
-              valid_page_nums,
-              longest_alive_snapshot_time,
-              longest_alive_snapshot_seq,
-              stale_snapshot_nums);
+    auto log_level = stale_snapshot_nums > 0 ? Poco::Message::PRIO_INFORMATION : Poco::Message::PRIO_DEBUG;
+    LOG_IMPL(
+        log,
+        log_level, //
+        "After MVCC gc in memory [lowest_seq={}] "
+        "clean [invalid_snapshot_nums={}] [invalid_page_nums={}] "
+        "[total_deref_counter={}] [all_del_entries={}]. "
+        "Still exist [snapshot_nums={}], [page_nums={}]. "
+        "Longest alive snapshot: [longest_alive_snapshot_time={}] "
+        "[longest_alive_snapshot_seq={}] [stale_snapshot_nums={}]",
+        lowest_seq,
+        invalid_snapshot_nums,
+        invalid_page_nums,
+        total_deref_counter,
+        all_del_entries.size(),
+        valid_snapshot_nums,
+        valid_page_nums,
+        longest_alive_snapshot_time,
+        longest_alive_snapshot_seq,
+        stale_snapshot_nums);
 
     return all_del_entries;
 }

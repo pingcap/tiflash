@@ -308,6 +308,7 @@ size_t DMFileReader::skipNextBlock()
     if (likely(read_rows > 0))
         use_packs[next_pack_id - 1] = false;
 
+    scan_context->late_materialization_skip_rows += read_rows;
     return read_rows;
 }
 
@@ -342,6 +343,7 @@ Block DMFileReader::readWithFilter(const IColumn::Filter & filter)
             auto skip = std::distance(begin, it);
             while (next_pack_id_cp < use_packs.size() && skip >= pack_stats[next_pack_id_cp].rows)
             {
+                scan_context->late_materialization_skip_rows += pack_stats[next_pack_id_cp].rows;
                 use_packs[next_pack_id_cp] = false;
                 skip -= pack_stats[next_pack_id_cp].rows;
                 read_rows += pack_stats[next_pack_id_cp].rows;

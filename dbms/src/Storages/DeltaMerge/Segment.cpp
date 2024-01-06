@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
+#include <Common/Stopwatch.h>
 #include <Common/SyncPoint/SyncPoint.h>
 #include <Common/TiFlashMetrics.h>
 #include <DataStreams/ConcatBlockInputStream.h>
@@ -546,7 +547,7 @@ bool Segment::isDefinitelyEmpty(DMContext & dm_context, const SegmentSnapshotPtr
             streams.push_back(stream);
         }
 
-        BlockInputStreamPtr stable_stream = std::make_shared<ConcatSkippableBlockInputStream<>>(streams);
+        BlockInputStreamPtr stable_stream = std::make_shared<ConcatSkippableBlockInputStream<>>(streams, dm_context.scan_context);
         stable_stream = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(stable_stream, read_ranges, 0);
         stable_stream->readPrefix();
         while (true)
@@ -679,13 +680,13 @@ SegmentPtr Segment::ingestDataForTest(DMContext & dm_context,
 SegmentSnapshotPtr Segment::createSnapshot(const DMContext & dm_context, bool for_update, CurrentMetrics::Metric metric) const
 {
     Stopwatch watch;
-    SCOPE_EXIT({
-        dm_context.scan_context->total_create_snapshot_time_ns += watch.elapsed();
-    });
+    SCOPE_EXIT({ dm_context.scan_context->create_snapshot_time_ns += watch.elapsed(); });
     auto delta_snap = delta->createSnapshot(dm_context, for_update, metric);
     auto stable_snap = stable->createSnapshot();
     if (!delta_snap || !stable_snap)
         return {};
+    dm_context.scan_context->delta_rows += delta_snap->getRows();
+    dm_context.scan_context->delta_bytes += delta_snap->getBytes();
     return std::make_shared<SegmentSnapshot>(std::move(delta_snap), std::move(stable_snap));
 }
 
@@ -795,7 +796,8 @@ BlockInputStreamPtr Segment::getInputStreamModeNormal(const DMContext & dm_conte
         columns_to_read,
         max_version,
         is_common_handle,
-        dm_context.tracing_id);
+        dm_context.tracing_id,
+        dm_context.scan_context);
 
     LOG_TRACE(
         log->getChild(dm_context.tracing_id),
@@ -2493,6 +2495,7 @@ BitmapFilterPtr Segment::buildBitmapFilterNormal(const DMContext & dm_context,
     ColumnDefines columns_to_read{
         getExtraHandleColumnDefine(is_common_handle),
     };
+    // Generate the bitmap according to the MVCC filter result
     auto stream = getInputStreamModeNormal(
         dm_context,
         columns_to_read,
@@ -2502,11 +2505,19 @@ BitmapFilterPtr Segment::buildBitmapFilterNormal(const DMContext & dm_context,
         max_version,
         expected_block_size,
         /*need_row_id*/ true);
+    // `total_rows` is the rows read for building bitmap
     auto total_rows = segment_snap->delta->getRows() + segment_snap->stable->getDMFilesRows();
     auto bitmap_filter = std::make_shared<BitmapFilter>(total_rows, /*default_value*/ false);
     bitmap_filter->set(stream);
     bitmap_filter->runOptimize();
-    LOG_DEBUG(log, "buildBitmapFilterNormal total_rows={} cost={}ms", total_rows, sw_total.elapsedMilliseconds());
+
+    const auto elapse_ns = sw_total.elapsed();
+    dm_context.scan_context->build_bitmap_time_ns += elapse_ns;
+    LOG_DEBUG(
+        log,
+        "buildBitmapFilterNormal total_rows={} cost={:.3f}ms",
+        total_rows,
+        elapse_ns / 1'000'000.0);
     return bitmap_filter;
 }
 
@@ -2618,11 +2629,22 @@ BitmapFilterPtr Segment::buildBitmapFilterStableOnly(const DMContext & dm_contex
     const auto & dmfiles = segment_snap->stable->getDMFiles();
     RUNTIME_CHECK(!dmfiles.empty());
 
+    auto commit_elapse = [&sw, &dm_context]() -> double {
+        const auto elapse_ns = sw.elapsed();
+        dm_context.scan_context->build_bitmap_time_ns += elapse_ns;
+        return elapse_ns / 1'000'000.0;
+    };
+
     auto [skipped_ranges, some_packs_sets] = parseDMFilePackInfo(dmfiles, dm_context, read_ranges, filter, max_version);
 
     if (skipped_ranges.size() == 1 && skipped_ranges[0].offset == 0 && skipped_ranges[0].rows == segment_snap->stable->getDMFilesRows())
     {
-        LOG_DEBUG(log, "buildBitmapFilterStableOnly all match, total_rows={}, cost={}ms", segment_snap->stable->getDMFilesRows(), sw.elapsedMilliseconds());
+        auto elapse_ms = commit_elapse();
+        LOG_DEBUG(
+            log,
+            "buildBitmapFilterStableOnly all match, total_rows={}, cost={:.3f}ms",
+            segment_snap->stable->getDMFilesRows(),
+            elapse_ms);
         return std::make_shared<BitmapFilter>(segment_snap->stable->getDMFilesRows(), /*default_value*/ true);
     }
 
@@ -2643,7 +2665,12 @@ BitmapFilterPtr Segment::buildBitmapFilterStableOnly(const DMContext & dm_contex
     }
     if (!has_some_packs)
     {
-        LOG_DEBUG(log, "buildBitmapFilterStableOnly not have some packs, total_rows={}, cost={}ms", segment_snap->stable->getDMFilesRows(), sw.elapsedMilliseconds());
+        auto elapse_ms = commit_elapse();
+        LOG_DEBUG(
+            log,
+            "buildBitmapFilterStableOnly not have some packs, total_rows={}, cost={:.3f}ms",
+            segment_snap->stable->getDMFilesRows(),
+            elapse_ms);
         return bitmap_filter;
     }
 
@@ -2674,7 +2701,13 @@ BitmapFilterPtr Segment::buildBitmapFilterStableOnly(const DMContext & dm_contex
         is_common_handle,
         dm_context.tracing_id);
     bitmap_filter->set(stream);
-    LOG_DEBUG(log, "buildBitmapFilterStableOnly total_rows={}, cost={}ms", segment_snap->stable->getDMFilesRows(), sw.elapsedMilliseconds());
+    auto elapse_ms = commit_elapse();
+    LOG_DEBUG(
+        log,
+        "buildBitmapFilterStableOnly read_packs={} total_rows={}, cost={:.3f}ms",
+        some_packs_sets.size(),
+        segment_snap->stable->getDMFilesRows(),
+        elapse_ms);
     return bitmap_filter;
 }
 
@@ -2733,7 +2766,7 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(BitmapFilterPtr && bit
     constexpr auto is_fast_scan = true;
     auto enable_del_clean_read = !hasColumn(columns_to_read, TAG_COLUMN_ID);
 
-    // construct filter column stream
+    // construct (stable and delta) streams by the filter column
     const auto & filter_columns = filter->filter_columns;
     SkippableBlockInputStreamPtr filter_column_stable_stream = segment_snap->stable->getInputStream(
         dm_context,
@@ -2784,7 +2817,7 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(BitmapFilterPtr && bit
         rest_columns_to_read.erase(std::remove_if(rest_columns_to_read.begin(), rest_columns_to_read.end(), [&](const ColumnDefine & c) { return c.id == col.id; }), rest_columns_to_read.end());
     }
 
-    // construct rest column stream
+    // construct stream for the rest columns
     SkippableBlockInputStreamPtr rest_column_stable_stream = segment_snap->stable->getInputStream(
         dm_context,
         rest_columns_to_read,

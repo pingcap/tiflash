@@ -23,6 +23,7 @@
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTInsertQuery.h>
 #include <Parsers/ASTSelectQuery.h>
+#include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/RegionQueryInfo.h>
 #include <Storages/StorageDeltaMerge.h>
 
