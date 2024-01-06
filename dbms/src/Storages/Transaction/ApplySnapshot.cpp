@@ -422,16 +422,24 @@ std::vector<DM::ExternalDTFileInfo> KVStore::preHandleSSTsToDTFiles(
 template <typename RegionPtrWrap>
 void KVStore::applyPreHandledSnapshot(const RegionPtrWrap & new_region, TMTContext & tmt)
 {
-    LOG_INFO(log, "Begin apply snapshot, new_region={}", new_region->toString(true));
+    try
+    {
+        LOG_INFO(log, "Begin apply snapshot, new_region={}", new_region->toString(true));
 
-    Stopwatch watch;
-    SCOPE_EXIT({ GET_METRIC(tiflash_raft_command_duration_seconds, type_apply_snapshot_flush).Observe(watch.elapsedSeconds()); });
+        Stopwatch watch;
+        SCOPE_EXIT({ GET_METRIC(tiflash_raft_command_duration_seconds, type_apply_snapshot_flush).Observe(watch.elapsedSeconds()); });
 
-    checkAndApplyPreHandledSnapshot(new_region, tmt);
+        checkAndApplyPreHandledSnapshot(new_region, tmt);
 
-    FAIL_POINT_PAUSE(FailPoints::pause_until_apply_raft_snapshot);
+        FAIL_POINT_PAUSE(FailPoints::pause_until_apply_raft_snapshot);
 
-    LOG_INFO(log, "Finish apply snapshot, new_region={}", new_region->toString(false));
+        LOG_INFO(log, "Finish apply snapshot, new_region={}", new_region->toString(false));
+    }
+    catch (Exception & e)
+    {
+        e.addMessage(fmt::format("(while applyPreHandledSnapshot region_id={})", new_region->id()));
+        e.rethrow();
+    }
 }
 
 template void KVStore::applyPreHandledSnapshot<RegionPtrWithSnapshotFiles>(const RegionPtrWithSnapshotFiles &, TMTContext &);

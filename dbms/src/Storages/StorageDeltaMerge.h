@@ -22,7 +22,7 @@
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/Filter/PushDownFilter.h>
 #include <Storages/DeltaMerge/Remote/DisaggSnapshot_fwd.h>
-#include <Storages/DeltaMerge/ScanContext.h>
+#include <Storages/DeltaMerge/ScanContext_fwd.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/IStorage.h>
 #include <Storages/Transaction/DecodingStorageSchemaSnapshot.h>

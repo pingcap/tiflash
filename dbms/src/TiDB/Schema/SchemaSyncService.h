@@ -47,20 +47,22 @@ private:
     bool syncSchemas(KeyspaceID keyspace_id);
     void removeCurrentVersion(KeyspaceID keyspace_id);
 
-    struct GCContext
-    {
-        Timestamp last_gc_safe_point = 0;
-    } gc_context;
-
-    bool gc(Timestamp gc_safe_point, KeyspaceID keyspace_id);
+    bool gc(Timestamp gc_safepoint, KeyspaceID keyspace_id);
 
     void addKeyspaceGCTasks();
     void removeKeyspaceGCTasks();
+
+    std::optional<Timestamp> lastGcSafePoint(KeyspaceID keyspace_id) const;
+    void updateLastGcSafepoint(KeyspaceID keyspace_id, Timestamp gc_safepoint);
 
 private:
     Context & context;
 
     friend void dbgFuncGcSchemas(Context &, const ASTs &, DBGInvokerPrinter);
+    struct KeyspaceGCContext
+    {
+        Timestamp last_gc_safepoint = 0;
+    };
 
     BackgroundProcessingPool & background_pool;
     BackgroundProcessingPool::TaskHandle handle;
@@ -68,6 +70,7 @@ private:
     mutable std::shared_mutex ks_map_mutex;
     // Handles for each keyspace schema sync task.
     std::unordered_map<KeyspaceID, BackgroundProcessingPool::TaskHandle> ks_handle_map;
+    std::unordered_map<KeyspaceID, KeyspaceGCContext> keyspace_gc_context;
 
     LoggerPtr log;
 };

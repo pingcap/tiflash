@@ -35,6 +35,7 @@
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/Filter/PushDownFilter.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
+#include <Storages/DeltaMerge/ReadMode.h>
 #include <Storages/DeltaMerge/ReadThread/SegmentReadTaskScheduler.h>
 #include <Storages/DeltaMerge/ReadThread/UnorderedInputStream.h>
 #include <Storages/DeltaMerge/Remote/DisaggSnapshot.h>
@@ -1087,6 +1088,7 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
         log_tracing_id,
         enable_read_thread,
         final_num_stream);
+    dm_context->scan_context->read_mode = read_mode;
 
     BlockInputStreams res;
     for (size_t i = 0; i < final_num_stream; ++i)
@@ -1118,7 +1120,11 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
         }
         res.push_back(stream);
     }
-    LOG_DEBUG(tracing_logger, "Read create stream done");
+    LOG_INFO(
+        tracing_logger,
+        "Read create stream done, pool_id={} num_streams={}",
+        read_task_pool->poolId(),
+        final_num_stream);
 
     return res;
 }
@@ -1151,11 +1157,11 @@ SourceOps DeltaMergeStore::readSourceOps(
     SegmentReadTasks tasks = getReadTasksByRanges(*dm_context, sorted_ranges, num_streams, read_segments, /*try_split_task =*/!enable_read_thread);
     auto log_tracing_id = getLogTracingId(*dm_context);
     auto tracing_logger = log->getChild(log_tracing_id);
-    LOG_DEBUG(tracing_logger,
-              "Read create segment snapshot done, keep_order={} dt_enable_read_thread={} enable_read_thread={}",
-              keep_order,
-              db_context.getSettingsRef().dt_enable_read_thread,
-              enable_read_thread);
+    LOG_INFO(tracing_logger,
+             "Read create segment snapshot done, keep_order={} dt_enable_read_thread={} enable_read_thread={}",
+             keep_order,
+             db_context.getSettingsRef().dt_enable_read_thread,
+             enable_read_thread);
 
     auto after_segment_read = [&](const DMContextPtr & dm_context_, const SegmentPtr & segment_) {
         // TODO: Update the tracing_id before checkSegmentUpdate?
@@ -1177,6 +1183,7 @@ SourceOps DeltaMergeStore::readSourceOps(
         log_tracing_id,
         enable_read_thread,
         final_num_stream);
+    dm_context->scan_context->read_mode = ReadMode::Normal;
 
     SourceOps res;
     RUNTIME_CHECK(enable_read_thread); // TODO: support keep order
@@ -1191,7 +1198,7 @@ SourceOps DeltaMergeStore::readSourceOps(
                 physical_table_id,
                 log_tracing_id));
     }
-    LOG_DEBUG(tracing_logger, "Read create SourceOp done");
+    LOG_INFO(tracing_logger, "Read create SourceOp done, pool_id={} num_streams={}", read_task_pool->poolId(), final_num_stream);
 
     return res;
 }
@@ -1216,7 +1223,7 @@ DeltaMergeStore::writeNodeBuildRemoteReadSnapshot(
     // for one segment.
     SegmentReadTasks tasks = getReadTasksByRanges(*dm_context, sorted_ranges, num_streams, read_segments, /* try_split_task */ false);
     GET_METRIC(tiflash_disaggregated_read_tasks_count).Increment(tasks.size());
-    LOG_DEBUG(tracing_logger, "Read create segment snapshot done");
+    LOG_INFO(tracing_logger, "Read create segment snapshot done");
 
     return std::make_unique<Remote::DisaggPhysicalTableReadSnapshot>(KeyspaceTableID{keyspace_id, physical_table_id}, std::move(tasks));
 }
@@ -1744,6 +1751,8 @@ SegmentReadTasks DeltaMergeStore::getReadTasksByRanges(
                 ++seg_it;
         }
     }
+
+    // how many segments involved for the given key ranges
     const auto tasks_before_split = tasks.size();
     if (try_split_task)
     {
@@ -1759,8 +1768,14 @@ SegmentReadTasks DeltaMergeStore::getReadTasksByRanges(
         total_ranges += task->ranges.size();
     }
 
+    if (dm_context.scan_context)
+    {
+        dm_context.scan_context->num_segments += tasks_before_split;
+        dm_context.scan_context->num_read_tasks += tasks.size();
+    }
+
     auto tracing_logger = log->getChild(getLogTracingId(dm_context));
-    LOG_DEBUG(
+    LOG_INFO(
         tracing_logger,
         "Segment read tasks build done, cost={}ms sorted_ranges={} n_tasks_before_split={} n_tasks_final={} n_ranges_final={}",
         watch.elapsedMilliseconds(),

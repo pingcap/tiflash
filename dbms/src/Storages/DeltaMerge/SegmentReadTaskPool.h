@@ -16,6 +16,7 @@
 #include <Common/MemoryTrackerSetter.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/Filter/PushDownFilter.h>
+#include <Storages/DeltaMerge/ReadMode.h>
 #include <Storages/DeltaMerge/ReadThread/WorkQueue.h>
 #include <Storages/DeltaMerge/RowKeyRangeUtils.h>
 
@@ -109,28 +110,6 @@ private:
     std::atomic<int64_t> pending_bytes;
     std::atomic<int64_t> total_count;
     std::atomic<int64_t> total_bytes;
-};
-
-enum class ReadMode
-{
-    /**
-     * Read in normal mode. Data is ordered by PK, and only the most recent version is returned.
-     */
-    Normal,
-
-    /**
-     * Read in fast mode. Data is not sort merged, and all versions are returned. However, deleted records (del_mark=1)
-     * will be still filtered out.
-     */
-    Fast,
-
-    /**
-     * Read in raw mode, for example, for statements like `SELRAW *`. In raw mode, data is not sort merged and all versions
-     * are just returned.
-     */
-    Raw,
-
-    Bitmap,
 };
 
 // If `enable_read_thread_` is true, `SegmentReadTasksWrapper` use `std::unordered_map` to index `SegmentReadTask` by segment id,
