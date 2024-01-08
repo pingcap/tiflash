@@ -130,6 +130,7 @@ CheckpointIngestInfoPtr FastAddPeerContext::getOrRestoreCheckpointIngestInfo(
         auto info = CheckpointIngestInfo::restore(tmt, proxy_helper, region_id, peer_id);
         if (info)
         {
+            GET_METRIC(tiflash_fap_task_result, type_restore).Increment();
             std::scoped_lock<std::mutex> lock(ingest_info_mu);
             checkpoint_ingest_info_map.emplace(region_id, info);
         }

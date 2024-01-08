@@ -475,7 +475,6 @@ uint8_t ApplyFapSnapshotImpl(TMTContext & tmt, TiFlashRaftProxyHelper * proxy_he
             begin);
     }
     LOG_INFO(log, "Begin apply fap snapshot, region_id={} peer_id={} begin_time={}", region_id, peer_id, begin);
-    GET_METRIC(tiflash_fap_task_result, type_restore).Increment();
     // If there is `checkpoint_ingest_info`, it is exactly the data we want to ingest. Consider two scene:
     // 1. If there was a failed FAP which failed to clean, its data will be overwritten by current FAP which has finished phase 1.
     // 2. It is not possible that a restart happens at FAP phase 2, and a regular snapshot is sent, because snapshots can only be accepted once the previous snapshot it handled.
