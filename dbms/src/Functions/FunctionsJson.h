@@ -147,7 +147,7 @@ public:
             const auto & path_col = block.getByPosition(arguments[i]).column;
             if (path_col->onlyNull())
             {
-                block.getByPosition(result).column = block.getByPosition(result).type->createColumnConst(rows, Null());
+                res_col = block.getByPosition(result).type->createColumnConst(rows, Null());
                 return;
             }
 
