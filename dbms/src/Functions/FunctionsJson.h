@@ -120,9 +120,6 @@ public:
             res_col = block.getByPosition(result).type->createColumnConst(rows, Null());
             return;
         }
-                return;
-            }
-        }
 
         auto nested_block = createBlockWithNestedColumns(block, arguments);
         auto json_source = createDynamicStringSource(*nested_block.getByPosition(arguments[0]).column);
