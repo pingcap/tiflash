@@ -42,6 +42,7 @@
 #include <Storages/S3/S3GCManager.h>
 #include <Storages/S3/S3RandomAccessFile.h>
 #include <Storages/StorageDeltaMerge.h>
+#include <Storages/KVStore/Decode/PartitionStreams.h>
 #include <fmt/core.h>
 
 #include <memory>
@@ -301,19 +302,10 @@ FastAddPeerRes FastAddPeerImplWrite(
 
     auto [checkpoint_info, region, apply_state, region_state] = checkpoint;
 
-    auto & storages = tmt.getStorages();
     auto keyspace_id = region->getKeyspaceID();
     auto table_id = region->getMappedTableID();
-    auto storage = storages.get(keyspace_id, table_id);
-    if (!storage)
-    {
-        // TODO(fap) add some ddl syncing to prevent fallback.
-        throw Exception(
-            ErrorCodes::LOGICAL_ERROR,
-            "Can't get storage engine keyspace_id={} table_id={}",
-            keyspace_id,
-            table_id);
-    }
+    const auto [table_drop_lock, storage, schema_snap] = AtomicGetStorageSchema(region, tmt);
+    UNUSED(schema_snap);
     RUNTIME_CHECK_MSG(storage->engineType() == TiDB::StorageEngine::DT, "ingest into unsupported storage engine");
     auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
     auto new_key_range = DM::RowKeyRange::fromRegionRange(
@@ -324,7 +316,7 @@ FastAddPeerRes FastAddPeerImplWrite(
 
     if (cancel_handle->isCanceled())
     {
-        LOG_INFO(log, "FAP is canceled before write, region_id={}", region_id);
+        LOG_INFO(log, "FAP is canceled before write, region_id={} keyspace_id={} table_id={}", region_id, keyspace_id, table_id);
         fap_ctx->cleanTask(tmt, proxy_helper, region_id, false);
         GET_METRIC(tiflash_fap_task_result, type_failed_cancel).Increment();
         return genFastAddPeerRes(FastAddPeerStatus::Canceled, "", "");
@@ -343,7 +335,7 @@ FastAddPeerRes FastAddPeerImplWrite(
     SYNC_FOR("in_FastAddPeerImplWrite::after_write_segments");
     if (cancel_handle->isCanceled())
     {
-        LOG_INFO(log, "FAP is canceled after write segments, region_id={}", region_id);
+        LOG_INFO(log, "FAP is canceled after write segments, region_id={} keyspace_id={} table_id={}", region_id, keyspace_id, table_id);
         fap_ctx->cleanTask(tmt, proxy_helper, region_id, false);
         GET_METRIC(tiflash_fap_task_result, type_failed_cancel).Increment();
         return genFastAddPeerRes(FastAddPeerStatus::Canceled, "", "");
@@ -369,13 +361,12 @@ FastAddPeerRes FastAddPeerImplWrite(
     SYNC_FOR("in_FastAddPeerImplWrite::after_write_raft_log");
     if (cancel_handle->isCanceled())
     {
-        LOG_INFO(log, "FAP is canceled after write raft log, region_id={}", region_id);
+        LOG_INFO(log, "FAP is canceled after write raft log, region_id={} keyspace_id={} table_id={}", region_id, keyspace_id, table_id);
         fap_ctx->cleanTask(tmt, proxy_helper, region_id, false);
         GET_METRIC(tiflash_fap_task_result, type_failed_cancel).Increment();
         return genFastAddPeerRes(FastAddPeerStatus::Canceled, "", "");
     }
-
-    LOG_DEBUG(log, "Finish write FAP snapshot, region_id={}", region_id);
+    LOG_DEBUG(log, "Finish write FAP snapshot, region_id={} keyspace_id={} table_id={}", region_id, keyspace_id, table_id);
     return genFastAddPeerRes(
         FastAddPeerStatus::Ok,
         apply_state.SerializeAsString(),

@@ -676,7 +676,7 @@ PrehandleResult KVStore::preHandleSSTsToDTFiles(
                 throw Exception(ErrorCodes::TABLE_IS_DROPPED, "Can't get table");
             }
 
-            // Get a gc safe point for compacting
+            // Get a gc safe point for compact filter.
             Timestamp gc_safepoint = 0;
             if (auto pd_client = tmt.getPDClient(); !pd_client->isMock())
             {
