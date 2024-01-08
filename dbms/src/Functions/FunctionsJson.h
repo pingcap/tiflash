@@ -120,8 +120,6 @@ public:
             res_col = block.getByPosition(result).type->createColumnConst(rows, Null());
             return;
         }
-        if (json_column->isColumnNullable())
-        {
             const auto & column_nullable = static_cast<const ColumnNullable &>(*json_column);
             const auto & null_map = column_nullable.getNullMapData();
             auto null_count = countBytesInFilter(null_map.data(), null_map.size());
