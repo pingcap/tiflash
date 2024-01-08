@@ -844,10 +844,7 @@ void applyNullToNotMatchedRows(Block & block, const Block & right_columns, const
         {
             auto full_column
                 = column.column->isColumnConst() ? column.column->convertToFullColumnIfConst() : column.column;
-            if (!full_column->isColumnNullable())
-            {
-                throw Exception("Should not reach here, the right table column for left join must be nullable");
-            }
+            RUNTIME_CHECK_MSG(full_column->isColumnNullable(), "the right table column for left join must be nullable");
             auto current_column = full_column;
             auto result_column = (*std::move(current_column)).mutate();
             static_cast<ColumnNullable &>(*result_column).applyNegatedNullMap(filter_column);
