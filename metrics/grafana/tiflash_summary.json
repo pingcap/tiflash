@@ -2608,8 +2608,6 @@
             "align": false,
             "alignLevel": null
           }
-<<<<<<< HEAD
-=======
         },
         {
           "aliasColors": {},
@@ -2870,7 +2868,6 @@
             "align": false,
             "alignLevel": null
           }
->>>>>>> 904bec8a55 (Storages: Refine metrics of read threads and data sharing (#8653))
         }
       ],
       "title": "Threads CPU",
@@ -8021,11 +8018,7 @@
           "targets": [
             {
               "exemplar": true,
-<<<<<<< HEAD
-              "expr": "sum(rate(tiflash_storage_read_thread_counter{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type!~\"get_cache_miss|get_cache_hit|get_cache_part|get_cache_copy|sche_no_segment\"}[1m])) by (type)",
-=======
               "expr": "sum(rate(tiflash_storage_read_thread_counter{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=~\"add_cache_stale|add_cache_succ|add_cache_total_bytes_limit|add_cache_reach_count_limit\"}[1m])) by (type)",
->>>>>>> 904bec8a55 (Storages: Refine metrics of read threads and data sharing (#8653))
               "format": "time_series",
               "hide": false,
               "interval": "",
