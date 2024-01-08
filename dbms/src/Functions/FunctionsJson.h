@@ -280,7 +280,10 @@ private:
             for (const auto * path_null_map : path_null_maps)
             {
                 if (path_null_map && (*path_null_map)[row])
+                {
                     has_null_path = true;
+                    break;
+                }
             }
             if (has_null_path)
             {
