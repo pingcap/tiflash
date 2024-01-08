@@ -887,8 +887,7 @@ void Join::handleOtherConditions(Block & block, IColumn::Filter * anti_filter, I
         {
             auto & col_name = input_block.getByPosition(i).name;
             if ((!flag_mapped_entry_helper_name.empty() && col_name == flag_mapped_entry_helper_name)
-                || output_column_names_set_after_finalize.find(col_name)
-                    != output_column_names_set_after_finalize.end())
+                || output_column_names_set_after_finalize.contains(col_name))
                 ++i;
             else
                 input_block.erase(i);
@@ -902,10 +901,8 @@ void Join::handleOtherConditions(Block & block, IColumn::Filter * anti_filter, I
             assert(filter.empty());
             filter.assign(block_rows, static_cast<UInt8>(1));
         }
-        auto helper_pos = block.getPositionByName(match_helper_name);
-
         const auto * old_match_nullable
-            = checkAndGetColumn<ColumnNullable>(block.safeGetByPosition(helper_pos).column.get());
+            = checkAndGetColumn<ColumnNullable>(block.getByName(match_helper_name).column.get());
         const auto & old_match_vec
             = static_cast<const ColumnVector<Int8> *>(old_match_nullable->getNestedColumnPtr().get())->getData();
 
@@ -976,7 +973,7 @@ void Join::handleOtherConditions(Block & block, IColumn::Filter * anti_filter, I
         }
 
         erase_useless_column(block);
-        helper_pos = block.getPositionByName(match_helper_name);
+        auto helper_pos = block.getPositionByName(match_helper_name);
         for (size_t i = 0; i < block.columns(); ++i)
             if (i != helper_pos)
                 block.getByPosition(i).column = block.getByPosition(i).column->filter(row_filter, -1);
@@ -1080,8 +1077,7 @@ void Join::handleOtherConditionsForOneProbeRow(Block & block, ProbeProcessInfo &
         {
             auto & col_name = input_block.getByPosition(i).name;
             if ((!flag_mapped_entry_helper_name.empty() && col_name == flag_mapped_entry_helper_name)
-                || output_column_names_set_after_finalize.find(col_name)
-                    != output_column_names_set_after_finalize.end())
+                || output_column_names_set_after_finalize.contains(col_name))
                 ++i;
             else
                 input_block.erase(i);
