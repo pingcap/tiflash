@@ -277,7 +277,7 @@ struct DBInfo
     String name;
     String charset;
     String collate;
-    SchemaState state;
+    SchemaState state = StatePublic;
 
     DBInfo() = default;
     explicit DBInfo(const String & json, KeyspaceID keyspace_id_)
@@ -321,8 +321,8 @@ struct IndexColumnInfo
     void deserialize(Poco::JSON::Object::Ptr json);
 
     String name;
-    Int32 length;
-    Int32 offset;
+    Int32 length = 0;
+    Int32 offset = 0;
 };
 struct IndexInfo
 {
@@ -334,16 +334,16 @@ struct IndexInfo
 
     void deserialize(Poco::JSON::Object::Ptr json);
 
-    Int64 id;
+    Int64 id = -1;
     String idx_name;
     String tbl_name;
     std::vector<IndexColumnInfo> idx_cols;
-    SchemaState state;
-    Int32 index_type;
-    bool is_unique;
-    bool is_primary;
-    bool is_invisible;
-    bool is_global;
+    SchemaState state = StatePublic;
+    Int32 index_type = -1;
+    bool is_unique = false;
+    bool is_primary = false;
+    bool is_invisible = false;
+    bool is_global = false;
 };
 
 struct TableInfo

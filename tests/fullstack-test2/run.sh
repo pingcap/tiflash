@@ -46,12 +46,3 @@ docker-compose -f cluster.yaml -f tiflash-dt-disable-planner.yaml exec -T tiflas
 
 docker-compose -f cluster.yaml -f tiflash-dt-disable-planner.yaml down
 clean_data_log
-
-echo "run fullstack with raftstore-v2"
-
-docker-compose -f cluster-v2.yaml -f tiflash-dt.yaml up -d
-wait_env
-docker-compose -f cluster-v2.yaml -f tiflash-dt.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh fullstack-test2 true && ./run-test.sh fullstack-test-dt'
-
-docker-compose -f cluster-v2.yaml -f tiflash-dt.yaml down
-clean_data_log

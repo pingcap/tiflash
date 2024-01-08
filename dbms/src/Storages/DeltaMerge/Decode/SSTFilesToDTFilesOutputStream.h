@@ -22,7 +22,6 @@
 #include <Storages/Page/PageDefinesBase.h>
 
 #include <memory>
-#include <string_view>
 
 namespace DB
 {
@@ -168,7 +167,7 @@ public:
 
     static SSTFilesToBlockInputStream::ProcessKeys getProcessKeys() { return {}; }
 
-    size_t getSplitId() const { return DM::SSTScanSoftLimit::HEAD_OR_ONLY_SPLIT; }
+    static size_t getSplitId() { return DM::SSTScanSoftLimit::HEAD_OR_ONLY_SPLIT; }
 
 protected:
     BlockInputStreamPtr mock_data;

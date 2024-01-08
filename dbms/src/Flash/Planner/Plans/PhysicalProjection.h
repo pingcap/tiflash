@@ -63,7 +63,7 @@ public:
         , project_actions(project_actions_)
     {}
 
-    void finalize(const Names & parent_require) override;
+    void finalizeImpl(const Names & parent_require) override;
 
     const Block & getSampleBlock() const override;
 

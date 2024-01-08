@@ -154,7 +154,7 @@ void PhysicalProjection::buildPipelineExecGroupImpl(
     executeExpression(exec_context, group_builder, project_actions, log);
 }
 
-void PhysicalProjection::finalize(const Names & parent_require)
+void PhysicalProjection::finalizeImpl(const Names & parent_require)
 {
     FinalizeHelper::checkSampleBlockContainsParentRequire(getSampleBlock(), parent_require);
 
