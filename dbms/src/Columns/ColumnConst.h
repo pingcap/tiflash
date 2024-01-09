@@ -85,7 +85,7 @@ public:
         s += position_vec.size();
     }
 
-    void insertGatherFrom(PaddedPODArray<const IColumn *> & src, const PaddedPODArray<size_t> & position) override
+    void insertGatherFrom(PaddedPODArray<const IColumn *> & src [[maybe_unused]], const PaddedPODArray<size_t> & position) override
     {
         assert(src.size() == position.size());
         s += position.size();
