@@ -152,7 +152,10 @@ public:
     void popBlock(Block & block);
     bool tryPopBlock(Block & block);
 
-    MergingSegments::iterator scheduleSegment(MergingSegments & segments, uint64_t expected_merge_count);
+    MergingSegments::iterator scheduleSegment(
+        MergingSegments & segments,
+        UInt64 expected_merge_count,
+        bool enable_data_sharing);
 
     Int64 increaseUnorderedInputStreamRefCount();
     Int64 decreaseUnorderedInputStreamRefCount();

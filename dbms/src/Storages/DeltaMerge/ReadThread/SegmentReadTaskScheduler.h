@@ -44,6 +44,8 @@ public:
 
     void pushMergedTask(const MergedTaskPtr & p) { merged_task_pool.push(p); }
 
+    void updateConfig(const Settings & settings);
+
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #else
@@ -86,12 +88,14 @@ public:
 
     MergedTaskPool merged_task_pool;
 
-    std::atomic<bool> stop;
+    std::atomic<bool> stop{false};
     std::thread sched_thread;
 
     LoggerPtr log;
 
     // To count how many threads are waitting to add tasks.
     std::atomic<Int64> add_waittings{0};
+
+    bool enable_data_sharing{true};
 };
 } // namespace DB::DM
