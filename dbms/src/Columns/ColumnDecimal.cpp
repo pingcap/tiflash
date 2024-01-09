@@ -328,6 +328,27 @@ void ColumnDecimal<T>::insertDisjunctFrom(const IColumn & src, const std::vector
         data[i + old_size] = src_data[position_vec[i]];
 }
 
+template <typename T>
+void ColumnDecimal<T>::insertGatherFrom(PaddedPODArray<const IColumn *> & src, const PaddedPODArray<size_t> & position)
+{
+    assert(src.size() == position.size());
+    size_t old_size = data.size();
+    size_t to_add_size = src.size();
+    data.resize(old_size + to_add_size);
+    for (size_t i = 0; i < to_add_size; ++i)
+    {
+        if (src[i] == nullptr)
+        {
+            data[i + old_size] = T();
+        }
+        else
+        {
+            const auto & column_src = static_cast<const Self &>(*src[i]);
+            data[i + old_size] = column_src.data[position[i]];
+        }
+    }
+}
+
 #pragma GCC diagnostic pop
 
 template <typename T>

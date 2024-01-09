@@ -137,6 +137,11 @@ public:
             insertFrom(src_, position);
     }
 
+    void insertGatherFrom(PaddedPODArray<const IColumn *> & src_, const PaddedPODArray<size_t> & position) override
+    {
+        insertGatherFromImpl<ColumnAggregateFunction>(src_, position);
+    }
+
     void insertFrom(ConstAggregateDataPtr __restrict place);
 
     /// Merge state at last row with specified state in another column.

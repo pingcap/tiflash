@@ -127,6 +127,7 @@ public:
     void insertRangeFrom(const IColumn & src, size_t start, size_t length) override;
     void insertManyFrom(const IColumn & src_, size_t position, size_t length) override;
     void insertDisjunctFrom(const IColumn & src_, const std::vector<size_t> & position_vec) override;
+    void insertGatherFrom(PaddedPODArray<const IColumn *> & src, const PaddedPODArray<size_t> & position) override;
     void popBack(size_t n) override { data.resize_assume_reserved(data.size() - n); }
 
     StringRef getRawData() const override

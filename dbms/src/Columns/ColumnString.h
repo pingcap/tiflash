@@ -179,6 +179,13 @@ public:
 
     void insertData(const char * pos, size_t length) override { return insertDataImpl<true>(pos, length); }
 
+    void insertGatherFrom(PaddedPODArray<const IColumn *> & src, const PaddedPODArray<size_t> & position) override
+    {
+        assert(src.size() == position.size());
+        offsets.reserve(offsets.size() + src.size());
+        insertGatherFromImpl<ColumnString>(src, position);
+    }
+
     bool decodeTiDBRowV2Datum(size_t cursor, const String & raw_value, size_t length, bool /* force_decode */) override
     {
         insertData(raw_value.c_str() + cursor, length);

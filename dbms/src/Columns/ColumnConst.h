@@ -85,6 +85,12 @@ public:
         s += position_vec.size();
     }
 
+    void insertGatherFrom(PaddedPODArray<const IColumn *> & src, const PaddedPODArray<size_t> & position) override
+    {
+        assert(src.size() == position.size());
+        s += position.size();
+    }
+
     void insertDefault() override { ++s; }
 
     void insertManyDefaults(size_t length) override { s += length; }

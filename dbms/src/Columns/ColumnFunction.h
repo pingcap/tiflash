@@ -104,6 +104,11 @@ public:
         throw Exception("Cannot insert into " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
 
+    void insertGatherFrom(PaddedPODArray<const IColumn *> &, const PaddedPODArray<size_t> &) override
+    {
+        throw Exception("Cannot insert into " + getName(), ErrorCodes::NOT_IMPLEMENTED);
+    }
+
     StringRef serializeValueIntoArena(size_t, Arena &, char const *&, const TiDB::TiDBCollatorPtr &, String &)
         const override
     {

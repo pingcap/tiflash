@@ -121,6 +121,9 @@ struct ProbeProcessInfo
     /// for null-aware join
     std::unique_ptr<NullAwareJoinProbeProcessData> null_aware_join_data;
 
+    std::vector<PaddedPODArray<const IColumn *>> column_ptrs_buffer;
+    PaddedPODArray<size_t> positions_buffer;
+
     ProbeProcessInfo(UInt64 max_block_size_, UInt64 cache_columns_threshold_)
         : partition_index(0)
         , max_block_size(max_block_size_)
@@ -128,7 +131,8 @@ struct ProbeProcessInfo
         , start_row(0)
         , end_row(0)
         , all_rows_joined_finish(true)
-        , cache_columns_threshold(cache_columns_threshold_){};
+        , cache_columns_threshold(cache_columns_threshold_)
+    {}
 
     void resetBlock(Block && block_, size_t partition_index_ = 0);
     template <bool is_shallow_cross_probe_mode>

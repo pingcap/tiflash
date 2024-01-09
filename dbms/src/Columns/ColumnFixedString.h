@@ -92,6 +92,8 @@ public:
     void insertDefault() override { chars.resize_fill(chars.size() + n); }
     void insertManyDefaults(size_t length) override { chars.resize_fill(chars.size() + n * length); }
 
+    void insertGatherFrom(PaddedPODArray<const IColumn *> & src, const PaddedPODArray<size_t> & position) override;
+
     void popBack(size_t elems) override { chars.resize_assume_reserved(chars.size() - n * elems); }
 
     StringRef serializeValueIntoArena(

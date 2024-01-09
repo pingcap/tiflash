@@ -270,6 +270,30 @@ void ColumnNullable::insertDisjunctFrom(const IColumn & src, const std::vector<s
         map[i + old_size] = src_map[position_vec[i]];
 }
 
+void ColumnNullable::insertGatherFrom(PaddedPODArray<const IColumn *> & src, const PaddedPODArray<size_t> & position)
+{
+    assert(src.size() == position.size());
+    auto & map = getNullMapData();
+    size_t old_size = map.size();
+    size_t to_add_size = src.size();
+    map.resize(old_size + to_add_size);
+    for (size_t i = 0; i < to_add_size; ++i)
+    {
+        if (src[i] == nullptr)
+        {
+            map[i + old_size] = 1;
+        }
+        else
+        {
+            const auto & column_src = static_cast<const ColumnNullable &>(*src[i]);
+            map[i + old_size] = column_src.getNullMapData()[position[i]];
+            src[i] = &column_src.getNestedColumn();
+        }
+    }
+
+    getNestedColumn().insertGatherFrom(src, position);
+}
+
 void ColumnNullable::popBack(size_t n)
 {
     getNestedColumn().popBack(n);

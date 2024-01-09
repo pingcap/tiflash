@@ -111,6 +111,13 @@ void ColumnFixedString::insertData(const char * pos, size_t length)
     memset(chars.data() + old_size + length, 0, n - length);
 }
 
+void ColumnFixedString::insertGatherFrom(PaddedPODArray<const IColumn *> & src, const PaddedPODArray<size_t> & position)
+{
+    assert(src.size() == position.size());
+    chars.reserve(chars.size() + src.size() * n);
+    insertGatherFromImpl<ColumnFixedString>(src, position);
+}
+
 StringRef ColumnFixedString::serializeValueIntoArena(
     size_t index,
     Arena & arena,

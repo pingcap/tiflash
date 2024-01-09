@@ -78,6 +78,11 @@ public:
             insertFrom(src_, position);
     }
 
+    void insertGatherFrom(PaddedPODArray<const IColumn *> & src, const PaddedPODArray<size_t> & position) override
+    {
+        insertGatherFromImpl<ColumnTuple>(src, position);
+    }
+
     void insertDefault() override;
 
     void insertManyDefaults(size_t length) override
