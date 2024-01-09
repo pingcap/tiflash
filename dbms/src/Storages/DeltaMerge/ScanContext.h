@@ -49,6 +49,7 @@ public:
 
     std::atomic<uint64_t> total_remote_region_num{0};
     std::atomic<uint64_t> total_local_region_num{0};
+    std::atomic<uint64_t> num_stale_read{0};
 
     // the read bytes from delta layer and stable layer (in-mem, decompressed)
     std::atomic<uint64_t> user_read_bytes{0};

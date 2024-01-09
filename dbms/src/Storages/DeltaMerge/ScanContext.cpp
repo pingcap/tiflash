@@ -30,8 +30,9 @@ String ScanContext::toJson() const
     json->set("dmfile_skip_rows", total_dmfile_skipped_rows.load());
     json->set("dmfile_read_time", fmt::format("{:.3f}ms", total_dmfile_read_time_ns.load() / NS_TO_MS_SCALE));
 
-    json->set("remote_region_num", total_remote_region_num.load());
-    json->set("local_region_num", total_remote_region_num.load());
+    json->set("num_remote_region", total_remote_region_num.load());
+    json->set("num_local_region", total_remote_region_num.load());
+    json->set("num_stale_read", num_stale_read.load());
 
     json->set("read_bytes", user_read_bytes.load());
 
