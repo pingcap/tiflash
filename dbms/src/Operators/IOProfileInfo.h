@@ -46,7 +46,7 @@ struct IOProfileInfo
 
     OperatorProfileInfoPtr operator_info;
 
-    bool is_local;
+    const bool is_local;
     std::vector<ConnectionProfileInfo> connection_profile_infos{};
     RemoteExecutionSummary remote_execution_summary{};
 };
