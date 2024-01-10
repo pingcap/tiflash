@@ -17,6 +17,7 @@
 #include <Common/Logger.h>
 #include <IO/MemoryReadWriteBuffer.h>
 #include <Interpreters/Context_fwd.h>
+#include <Storages/KVStore/MultiRaft/RegionOpt.h>
 #include <Storages/KVStore/Types.h>
 #include <Storages/Page/FileUsage.h>
 #include <Storages/Page/PageStorage.h>
@@ -43,7 +44,8 @@ public:
     void persist(const Region & region, const RegionTaskLock & lock);
     RegionMap restore(
         PathPool & path_pool,
-        const TiFlashRaftProxyHelper * proxy_helper = nullptr,
+        const TiFlashRaftProxyHelper * proxy_helper,
+        RegionOpt && region_opt,
         PageStorageConfig config = PageStorageConfig{});
     bool gc();
 

@@ -32,6 +32,7 @@ namespace DB
 CheckpointIngestInfoPtr CheckpointIngestInfo::restore(
     TMTContext & tmt,
     const TiFlashRaftProxyHelper * proxy_helper,
+    RegionOpt && region_opt,
     UInt64 region_id,
     UInt64 peer_id)
 {
@@ -70,7 +71,7 @@ CheckpointIngestInfoPtr CheckpointIngestInfo::restore(
         ReadBufferFromMemory buf(
             ingest_info_persisted.region_info().data(),
             ingest_info_persisted.region_info().size());
-        region = Region::deserialize(buf, proxy_helper);
+        region = Region::deserialize(buf, std::move(region_opt), proxy_helper);
     }
 
     StoreID remote_store_id = ingest_info_persisted.remote_store_id();

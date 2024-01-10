@@ -89,7 +89,6 @@ void RegionPersister::persist(const Region & region, const RegionTaskLock & lock
     // Support only one thread persist.
     RegionCacheWriteElement region_buffer;
     computeRegionWriteBuffer(region, region_buffer);
-
     doPersist(region_buffer, lock, region);
 }
 
@@ -197,6 +196,7 @@ void RegionPersister::forceTransformKVStoreV2toV3()
 RegionMap RegionPersister::restore(
     PathPool & path_pool,
     const TiFlashRaftProxyHelper * proxy_helper,
+    RegionOpt && region_opt,
     PageStorageConfig config)
 {
     {
@@ -392,7 +392,7 @@ RegionMap RegionPersister::restore(
         }
 
         ReadBufferFromMemory buf(page.data.begin(), page.data.size());
-        auto region = Region::deserialize(buf, proxy_helper);
+        auto region = Region::deserialize(buf, std::move(region_opt), proxy_helper);
         RUNTIME_CHECK_MSG(
             page.page_id == region->id(),
             "region_id and page_id not match! region_id={} page_id={}",

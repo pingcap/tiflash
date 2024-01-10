@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Inc.
+// Copyright 2024 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,14 +13,13 @@
 // limitations under the License.
 
 #pragma once
-#include <Debug/MockKVStore/MockUtils.h>
 
-
-namespace DB::tests
+namespace DB
 {
-using DB::RegionBench::createPeer;
-using DB::RegionBench::createRegionInfo;
-using DB::RegionBench::createRegionMeta;
-using DB::RegionBench::makeRegion;
 
-} // namespace DB::tests
+struct RegionOpt
+{
+    bool is_disagg_storage_mode = false;
+};
+
+} // namespace DB
