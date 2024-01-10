@@ -209,9 +209,16 @@ public:
     void popBlock(Block & block);
     bool tryPopBlock(Block & block);
 
+<<<<<<< HEAD
     std::unordered_map<uint64_t, std::vector<uint64_t>>::const_iterator scheduleSegment(
         const std::unordered_map<uint64_t, std::vector<uint64_t>> & segments,
         uint64_t expected_merge_count);
+=======
+    MergingSegments::iterator scheduleSegment(
+        MergingSegments & segments,
+        UInt64 expected_merge_count,
+        bool enable_data_sharing);
+>>>>>>> 4e5e3e4cc5 (Storages: Don't merge SegmentReadTasks when data sharing is disabled (#8677))
 
     Int64 increaseUnorderedInputStreamRefCount();
     Int64 decreaseUnorderedInputStreamRefCount();

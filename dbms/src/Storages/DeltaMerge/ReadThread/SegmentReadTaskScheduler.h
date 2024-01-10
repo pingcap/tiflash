@@ -51,6 +51,12 @@ public:
         merged_task_pool.push(p);
     }
 
+<<<<<<< HEAD
+=======
+    void updateConfig(const Settings & settings);
+
+#ifndef DBMS_PUBLIC_GTEST
+>>>>>>> 4e5e3e4cc5 (Storages: Don't merge SegmentReadTasks when data sharing is disabled (#8677))
 private:
     SegmentReadTaskScheduler();
 
@@ -75,7 +81,8 @@ private:
 
     MergedTaskPool merged_task_pool;
 
-    std::atomic<bool> stop;
+    std::atomic<bool> stop{false};
+    bool enable_data_sharing{true};
     std::thread sched_thread;
 
     LoggerPtr log;
