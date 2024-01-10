@@ -89,13 +89,12 @@ public:
     MergedTaskPool merged_task_pool;
 
     std::atomic<bool> stop{false};
+    bool enable_data_sharing{true};
     std::thread sched_thread;
 
     LoggerPtr log;
 
     // To count how many threads are waitting to add tasks.
     std::atomic<Int64> add_waittings{0};
-
-    bool enable_data_sharing{true};
 };
 } // namespace DB::DM
