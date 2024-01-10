@@ -277,9 +277,16 @@ const std::unordered_map<UInt64, SegmentReadTaskPtr> & SegmentReadTaskPool::getT
 
 // Choose a segment to read.
 // Returns <segment_id, pool_ids>.
+<<<<<<< HEAD
 std::unordered_map<uint64_t, std::vector<uint64_t>>::const_iterator SegmentReadTaskPool::scheduleSegment(
     const std::unordered_map<uint64_t, std::vector<uint64_t>> & segments,
     uint64_t expected_merge_count)
+=======
+MergingSegments::iterator SegmentReadTaskPool::scheduleSegment(
+    MergingSegments & segments,
+    UInt64 expected_merge_count,
+    bool enable_data_sharing)
+>>>>>>> 4e5e3e4cc5 (Storages: Don't merge SegmentReadTasks when data sharing is disabled (#8677))
 {
     auto target = segments.end();
     std::lock_guard lock(mutex);
@@ -292,6 +299,7 @@ std::unordered_map<uint64_t, std::vector<uint64_t>>::const_iterator SegmentReadT
     const auto & tasks = tasks_wrapper.getTasks();
     for (const auto & task : tasks)
     {
+<<<<<<< HEAD
         auto itr = segments.find(task.first);
         if (itr == segments.end())
         {
@@ -302,11 +310,21 @@ std::unordered_map<uint64_t, std::vector<uint64_t>>::const_iterator SegmentReadT
             throw DB::Exception(
                 fmt::format("pool_id={} not found from merging segment {}=>{}", pool_id, itr->first, itr->second));
         }
+=======
+        auto itr = segments.find(seg_id);
+        RUNTIME_CHECK_MSG(itr != segments.end(), "segment_id {} not found from merging segments", task);
+        RUNTIME_CHECK_MSG(
+            std::find(itr->second.begin(), itr->second.end(), pool_id) != itr->second.end(),
+            "pool_id={} not found from merging segment {}=>{}",
+            pool_id,
+            task,
+            itr->second);
+>>>>>>> 4e5e3e4cc5 (Storages: Don't merge SegmentReadTasks when data sharing is disabled (#8677))
         if (target == segments.end() || itr->second.size() > target->second.size())
         {
             target = itr;
         }
-        if (target->second.size() >= expected_merge_count || ++iter_count >= max_iter_count)
+        if (target->second.size() >= expected_merge_count || ++iter_count >= max_iter_count || !enable_data_sharing)
         {
             break;
         }
