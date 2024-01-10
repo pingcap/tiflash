@@ -79,7 +79,12 @@ struct alignas(ABSL_CACHELINE_SIZE) RowsNotInsertToMap
     /// Insert row to this structure.
     /// If need_materialize is true, row will be inserted into materialized_columns_vec.
     /// Else it will be inserted into row list.
-    void insertRow(Block * stored_block, size_t index, bool need_materialize, JoinArenaPool & pool);
+    void insertRow(
+        Block * stored_block,
+        const ColumnWithTypeAndName * columns,
+        size_t index,
+        bool need_materialize,
+        JoinArenaPool & pool);
 };
 
 class JoinPartition;

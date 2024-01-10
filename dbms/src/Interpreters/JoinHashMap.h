@@ -24,12 +24,12 @@ using Sizes = std::vector<size_t>;
 /// Reference to the row in block.
 struct RowRef
 {
-    const Block * block;
+    const ColumnWithTypeAndName * columns;
     UInt32 row_num;
 
     RowRef() = default;
-    RowRef(const Block * block_, size_t row_num_)
-        : block(block_)
+    RowRef(const ColumnWithTypeAndName * columns_, size_t row_num_)
+        : columns(columns_)
         , row_num(row_num_)
     {}
 };
@@ -62,12 +62,12 @@ struct RowRefList : RowRef
     };
 
     RowRefList() = default;
-    RowRefList(const Block * block_, size_t row_num_)
-        : RowRef(block_, row_num_)
+    RowRefList(const ColumnWithTypeAndName * columns_, size_t row_num_)
+        : RowRef(columns_, row_num_)
     {}
     /// for head node
-    RowRefList(const Block * block_, size_t row_num_, bool sentinel_head)
-        : RowRef(block_, row_num_)
+    RowRefList(const ColumnWithTypeAndName * columns_, size_t row_num_, bool sentinel_head)
+        : RowRef(columns_, row_num_)
         , list_length(sentinel_head ? 0 : 1)
     {}
 };
@@ -91,12 +91,12 @@ struct RowRefListWithUsedFlag : RowRef
     bool getUsed() const { return used.load(std::memory_order_relaxed); }
 
     RowRefListWithUsedFlag() = default;
-    RowRefListWithUsedFlag(const Block * block_, size_t row_num_)
-        : RowRef(block_, row_num_)
+    RowRefListWithUsedFlag(const ColumnWithTypeAndName * columns_, size_t row_num_)
+        : RowRef(columns_, row_num_)
     {}
     /// for head node
-    RowRefListWithUsedFlag(const Block * block_, size_t row_num_, bool sentinel_head)
-        : RowRef(block_, row_num_)
+    RowRefListWithUsedFlag(const ColumnWithTypeAndName * columns_, size_t row_num_, bool sentinel_head)
+        : RowRef(columns_, row_num_)
         , list_length(sentinel_head ? 0 : 1)
     {}
 };

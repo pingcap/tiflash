@@ -212,4 +212,37 @@ void ProbeProcessInfo::finishCurrentProbeRow() const
     cross_join_data->next_right_block_index = cross_join_data->right_block_size;
 }
 
+void ProbeProcessInfo::resetColumnBuffer(size_t num_columns_to_add) {
+    if (column_ptrs_buffer.size() != num_columns_to_add || row_positions_buffer.size() > 8 * max_block_size)
+    {
+        PaddedPODArray<size_t> empty;
+        row_positions_buffer.swap(empty);
+        row_positions_buffer.reserve(max_block_size);
+        column_ptrs_buffer.resize(num_columns_to_add);
+        for (size_t i = 0; i < num_columns_to_add; ++i)
+        {
+            PaddedPODArray<const IColumn *> empty_ptr;
+            column_ptrs_buffer[i].swap(empty_ptr);
+            column_ptrs_buffer[i].reserve(max_block_size);
+        }
+        return;
+    }
+    row_positions_buffer.clear();
+    for (size_t i = 0; i < num_columns_to_add; ++i)
+        column_ptrs_buffer[i].clear();
+}
+
+void ProbeProcessInfo::fillBufferedColumns(MutableColumns & added_columns)
+{
+    if (column_ptrs_buffer.empty())
+        return;
+
+    size_t num_columns_to_add = column_ptrs_buffer.size();
+    assert(added_columns.size() >= num_columns_to_add);
+    for (size_t j = 0; j < num_columns_to_add; ++j)
+        added_columns[j]->insertGatherFrom(column_ptrs_buffer[j], row_positions_buffer);
+
+    resetColumnBuffer(num_columns_to_add);
+}
+
 } // namespace DB

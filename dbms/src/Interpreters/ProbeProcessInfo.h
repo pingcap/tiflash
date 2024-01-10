@@ -121,8 +121,9 @@ struct ProbeProcessInfo
     /// for null-aware join
     std::unique_ptr<NullAwareJoinProbeProcessData> null_aware_join_data;
 
+    /// Used for constructing columns during join probing
     std::vector<PaddedPODArray<const IColumn *>> column_ptrs_buffer;
-    PaddedPODArray<size_t> positions_buffer;
+    PaddedPODArray<size_t> row_positions_buffer;
 
     ProbeProcessInfo(UInt64 max_block_size_, UInt64 cache_columns_threshold_)
         : partition_index(0)
@@ -196,5 +197,8 @@ struct ProbeProcessInfo
     void cutFilterAndOffsetVector(size_t start, size_t end) const;
     bool isCurrentProbeRowFinished() const;
     void finishCurrentProbeRow() const;
+
+    void resetColumnBuffer(size_t num_columns_to_add);
+    void fillBufferedColumns(MutableColumns & added_columns);
 };
 } // namespace DB

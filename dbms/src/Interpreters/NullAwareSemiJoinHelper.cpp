@@ -79,7 +79,7 @@ void NASemiJoinResult<KIND, STRICTNESS>::fillRightColumns(
         {
             for (size_t j = 0; j < right_columns; ++j)
                 added_columns[j + left_columns]->insertFrom(
-                    *iter->block->getByPosition(right_column_indices_to_add[j]).column.get(),
+                    *iter->columns[right_column_indices_to_add[j]].column.get(),
                     iter->row_num);
             ++current_offset;
             iter = iter->next;
