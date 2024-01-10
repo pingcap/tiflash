@@ -195,7 +195,8 @@ const std::unordered_map<GlobalSegmentID, SegmentReadTaskPtr> & SegmentReadTaskP
 // Returns <segment_id, pool_ids>.
 MergingSegments::iterator SegmentReadTaskPool::scheduleSegment(
     MergingSegments & segments,
-    uint64_t expected_merge_count)
+    UInt64 expected_merge_count,
+    bool enable_data_sharing)
 {
     auto target = segments.end();
     std::lock_guard lock(mutex);
@@ -209,20 +210,18 @@ MergingSegments::iterator SegmentReadTaskPool::scheduleSegment(
     for (const auto & [seg_id, task] : tasks)
     {
         auto itr = segments.find(seg_id);
-        if (itr == segments.end())
-        {
-            throw DB::Exception(fmt::format("segment_id {} not found from merging segments", task));
-        }
-        if (std::find(itr->second.begin(), itr->second.end(), pool_id) == itr->second.end())
-        {
-            throw DB::Exception(
-                fmt::format("pool_id={} not found from merging segment {}=>{}", pool_id, task, itr->second));
-        }
+        RUNTIME_CHECK_MSG(itr != segments.end(), "segment_id {} not found from merging segments", task);
+        RUNTIME_CHECK_MSG(
+            std::find(itr->second.begin(), itr->second.end(), pool_id) != itr->second.end(),
+            "pool_id={} not found from merging segment {}=>{}",
+            pool_id,
+            task,
+            itr->second);
         if (target == segments.end() || itr->second.size() > target->second.size())
         {
             target = itr;
         }
-        if (target->second.size() >= expected_merge_count || ++iter_count >= max_iter_count)
+        if (target->second.size() >= expected_merge_count || ++iter_count >= max_iter_count || !enable_data_sharing)
         {
             break;
         }

@@ -44,6 +44,8 @@ public:
 
     void pushMergedTask(const MergedTaskPtr & p) { merged_task_pool.push(p); }
 
+    void updateConfig(const Settings & settings);
+
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #else
@@ -86,7 +88,8 @@ public:
 
     MergedTaskPool merged_task_pool;
 
-    std::atomic<bool> stop;
+    std::atomic<bool> stop{false};
+    bool enable_data_sharing{true};
     std::thread sched_thread;
 
     LoggerPtr log;
