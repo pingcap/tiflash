@@ -580,9 +580,10 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_sche_from_cache, {"type", "sche_from_cache"}),                                                                         \
       F(type_sche_new_task, {"type", "sche_new_task"}),                                                                             \
       F(type_ru_exhausted, {"type", "ru_exhausted"}),                                                                               \
+      F(type_push_block_bytes, {"type", "push_block_bytes"}),                                                                       \
       F(type_add_cache_succ, {"type", "add_cache_succ"}),                                                                           \
       F(type_add_cache_stale, {"type", "add_cache_stale"}),                                                                         \
-      F(type_add_cache_reach_count_limit, {"type", "type_add_cache_reach_count_limit"}),                                            \
+      F(type_add_cache_reach_count_limit, {"type", "add_cache_reach_count_limit"}),                                                 \
       F(type_add_cache_total_bytes_limit, {"type", "add_cache_total_bytes_limit"}),                                                 \
       F(type_get_cache_miss, {"type", "get_cache_miss"}),                                                                           \
       F(type_get_cache_part, {"type", "get_cache_part"}),                                                                           \
@@ -1061,6 +1062,11 @@ private:
     std::unordered_map<String, std::vector<T *>> resource_group_metrics_map;
 };
 
+namespace tests
+{
+struct TiFlashMetricsHelper;
+}
+
 /// Centralized registry of TiFlash metrics.
 /// Cope with MetricsPrometheus by registering
 /// profile events, current metrics and customized metrics (as individual member for caller to access) into registry ahead of being updated.
@@ -1114,6 +1120,7 @@ public:
     DISALLOW_COPY_AND_MOVE(TiFlashMetrics);
 
     friend class MetricsPrometheus;
+    friend struct DB::tests::TiFlashMetricsHelper;
 };
 
 #define MAKE_METRIC_ENUM_M(family_name, help, type, ...) \

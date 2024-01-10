@@ -25,20 +25,21 @@ extern const int LOGICAL_ERROR;
 
 namespace CodecUtils
 {
-void checkColumnSize(size_t expected, size_t actual)
+void checkColumnSize(const String & identifier, size_t expected, size_t actual)
 {
     if unlikely (expected != actual)
         throw Exception(
-            fmt::format("NativeBlockInputStream schema mismatch, expected {}, actual {}.", expected, actual),
+            fmt::format("{} schema size mismatch, expected {}, actual {}.", identifier, expected, actual),
             ErrorCodes::LOGICAL_ERROR);
 }
 
-void checkDataTypeName(size_t column_index, const String & expected, const String & actual)
+void checkDataTypeName(const String & identifier, size_t column_index, const String & expected, const String & actual)
 {
     if unlikely (expected != actual)
         throw Exception(
             fmt::format(
-                "NativeBlockInputStream schema mismatch at column {}, expected {}, actual {}",
+                "{} schema mismatch at column {}, expected {}, actual {}",
+                identifier,
                 column_index,
                 expected,
                 actual),
