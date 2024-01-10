@@ -1108,6 +1108,29 @@ int Server::main(const std::vector<std::string> & /*args*/)
             global_context->getTMTContext().reloadConfig(*config);
             global_context->getIORateLimiter().updateConfig(*config);
             global_context->reloadDeltaTreeConfig(*config);
+<<<<<<< HEAD
+=======
+            DM::SegmentReadTaskScheduler::instance().updateConfig(global_context->getSettingsRef());
+            if (FileCache::instance() != nullptr)
+            {
+                FileCache::instance()->updateConfig(global_context->getSettingsRef());
+            }
+            {
+                // update TiFlashSecurity and related config in client for ssl certificate reload.
+                bool updated
+                    = global_context->getSecurityConfig()->update(*config); // Whether the cert path or file is updated.
+                if (updated)
+                {
+                    auto raft_config = TiFlashRaftConfig::parseSettings(*config, log);
+                    auto cluster_config
+                        = getClusterConfig(global_context->getSecurityConfig(), storage_config.api_version, log);
+                    global_context->getTMTContext().updateSecurityConfig(
+                        std::move(raft_config),
+                        std::move(cluster_config));
+                    LOG_DEBUG(log, "TMTContext updated security config");
+                }
+            }
+>>>>>>> 4e5e3e4cc5 (Storages: Don't merge SegmentReadTasks when data sharing is disabled (#8677))
         },
         /* already_loaded = */ true);
 
@@ -1169,8 +1192,15 @@ int Server::main(const std::vector<std::string> & /*args*/)
     LOG_INFO(log, "dt_enable_read_thread {}", global_context->getSettingsRef().dt_enable_read_thread);
     // `DMFileReaderPool` should be constructed before and destructed after `SegmentReaderPoolManager`.
     DM::DMFileReaderPool::instance();
+<<<<<<< HEAD
     DM::SegmentReaderPoolManager::instance().init(server_info.cpu_info.logical_cores, settings.dt_read_thread_count_scale);
     DM::SegmentReadTaskScheduler::instance();
+=======
+    DM::SegmentReaderPoolManager::instance().init(
+        server_info.cpu_info.logical_cores,
+        settings.dt_read_thread_count_scale);
+    DM::SegmentReadTaskScheduler::instance().updateConfig(global_context->getSettingsRef());
+>>>>>>> 4e5e3e4cc5 (Storages: Don't merge SegmentReadTasks when data sharing is disabled (#8677))
 
     {
         // Note that this must do before initialize schema sync service.

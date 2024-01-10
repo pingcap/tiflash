@@ -17,9 +17,14 @@
 
 namespace DB::DM
 {
+<<<<<<< HEAD
 SegmentReadTaskScheduler::SegmentReadTaskScheduler()
     : stop(false)
     , log(&Poco::Logger::get("SegmentReadTaskScheduler"))
+=======
+SegmentReadTaskScheduler::SegmentReadTaskScheduler(bool run_sched_thread)
+    : log(Logger::get())
+>>>>>>> 4e5e3e4cc5 (Storages: Don't merge SegmentReadTasks when data sharing is disabled (#8677))
 {
     sched_thread = std::thread(&SegmentReadTaskScheduler::schedLoop, this);
 }
@@ -151,6 +156,7 @@ SegmentReadTaskPoolPtr SegmentReadTaskScheduler::scheduleSegmentReadTaskPoolUnlo
 std::optional<std::pair<uint64_t, std::vector<uint64_t>>> SegmentReadTaskScheduler::scheduleSegmentUnlock(const SegmentReadTaskPoolPtr & pool)
 {
     auto expected_merge_seg_count = std::min(read_pools.size(), 2); // Not accurate.
+<<<<<<< HEAD
     auto itr = merging_segments.find(pool->tableId());
     if (itr == merging_segments.end())
     {
@@ -161,8 +167,14 @@ std::optional<std::pair<uint64_t, std::vector<uint64_t>>> SegmentReadTaskSchedul
     auto & segments = itr->second;
     auto target = pool->scheduleSegment(segments, expected_merge_seg_count);
     if (target != segments.end())
+=======
+
+    std::optional<std::pair<GlobalSegmentID, std::vector<uint64_t>>> result;
+    auto target = pool->scheduleSegment(merging_segments, expected_merge_seg_count, enable_data_sharing);
+    if (target != merging_segments.end())
+>>>>>>> 4e5e3e4cc5 (Storages: Don't merge SegmentReadTasks when data sharing is disabled (#8677))
     {
-        if (MergedTask::getPassiveMergedSegments() < 100 || target->second.size() == 1)
+        if ((enable_data_sharing && MergedTask::getPassiveMergedSegments() < 100) || target->second.size() == 1)
         {
             result = *target;
             segments.erase(target);
@@ -173,11 +185,19 @@ std::optional<std::pair<uint64_t, std::vector<uint64_t>>> SegmentReadTaskSchedul
         }
         else
         {
+<<<<<<< HEAD
             result = std::pair{target->first, std::vector<uint64_t>(1, pool->poolId())};
             auto mutable_target = segments.find(target->first);
             auto itr = std::find(mutable_target->second.begin(), mutable_target->second.end(), pool->poolId());
             *itr = mutable_target->second.back(); // SegmentReadTaskPool::scheduleSegment ensures `pool->poolId` must exists in `target`.
             mutable_target->second.resize(mutable_target->second.size() - 1);
+=======
+            result = std::pair{target->first, std::vector<uint64_t>(1, pool->pool_id)};
+            auto itr = std::find(target->second.begin(), target->second.end(), pool->pool_id);
+            // SegmentReadTaskPool::scheduleSegment ensures `pool->poolId` must exists in `target`.
+            *itr = target->second.back();
+            target->second.resize(target->second.size() - 1);
+>>>>>>> 4e5e3e4cc5 (Storages: Don't merge SegmentReadTasks when data sharing is disabled (#8677))
         }
     }
     return result;
@@ -241,6 +261,11 @@ void SegmentReadTaskScheduler::schedLoop()
             std::this_thread::sleep_for(2ms);
         }
     }
+}
+
+void SegmentReadTaskScheduler::updateConfig(const Settings & settings)
+{
+    enable_data_sharing = settings.dt_max_sharing_column_bytes_for_all > 0;
 }
 
 } // namespace DB::DM
