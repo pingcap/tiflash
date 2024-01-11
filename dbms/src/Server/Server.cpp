@@ -1376,6 +1376,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             global_context->getTMTContext().reloadConfig(*config);
             global_context->getIORateLimiter().updateConfig(*config);
             global_context->reloadDeltaTreeConfig(*config);
+            DM::SegmentReadTaskScheduler::instance().updateConfig(global_context->getSettingsRef());
             if (FileCache::instance() != nullptr)
             {
                 FileCache::instance()->updateConfig(global_context->getSettingsRef());
@@ -1494,7 +1495,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     DM::SegmentReaderPoolManager::instance().init(
         server_info.cpu_info.logical_cores,
         settings.dt_read_thread_count_scale);
-    DM::SegmentReadTaskScheduler::instance();
+    DM::SegmentReadTaskScheduler::instance().updateConfig(global_context->getSettingsRef());
 
     auto schema_cache_size = config().getInt("schema_cache_size", 10000);
     global_context->initializeSharedBlockSchemas(schema_cache_size);
