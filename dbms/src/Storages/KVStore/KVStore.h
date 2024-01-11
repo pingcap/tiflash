@@ -21,6 +21,7 @@
 #include <Storages/KVStore/MultiRaft/Disagg/RaftLogManager.h>
 #include <Storages/KVStore/MultiRaft/PreHandlingTrace.h>
 #include <Storages/KVStore/MultiRaft/RegionManager.h>
+#include <Storages/KVStore/MultiRaft/RegionOpt.h>
 #include <Storages/KVStore/MultiRaft/RegionRangeKeys.h>
 #include <Storages/KVStore/StorageEngineType.h>
 
@@ -66,6 +67,7 @@ struct MockTiDBTable;
 struct TiKVRangeKey;
 
 class TMTContext;
+class Context;
 
 struct SSTViewVec;
 struct WriteCmdsView;
@@ -254,6 +256,8 @@ public:
     const ProxyConfigSummary & getProxyConfigSummay() const { return proxy_config_summary; }
     size_t getMaxParallelPrehandleSize() const;
 
+    RegionOpt getCurrentRegionOpt() const;
+
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif
@@ -370,6 +374,7 @@ private:
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif
+    Context & current_context;
     RegionManager region_manager;
 
     std::unique_ptr<RegionPersister> region_persister;

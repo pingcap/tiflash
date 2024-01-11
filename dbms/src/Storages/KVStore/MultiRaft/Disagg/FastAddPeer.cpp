@@ -87,6 +87,7 @@ std::optional<CheckpointRegionInfoAndData> tryParseRegionInfoFromCheckpointData(
     ParsedCheckpointDataHolderPtr checkpoint_data_holder,
     UInt64 remote_store_id,
     UInt64 region_id,
+    RegionOpt && region_opt,
     TiFlashRaftProxyHelper * proxy_helper)
 {
     auto * log = &Poco::Logger::get("FastAddPeer");
@@ -98,7 +99,7 @@ std::optional<CheckpointRegionInfoAndData> tryParseRegionInfoFromCheckpointData(
         if (page.isValid())
         {
             ReadBufferFromMemory buf(page.data.begin(), page.data.size());
-            region = Region::deserialize(buf, proxy_helper);
+            region = Region::deserialize(buf, std::move(region_opt), proxy_helper);
         }
         else
         {
@@ -183,6 +184,7 @@ std::variant<CheckpointRegionInfoAndData, FastAddPeerRes> FastAddPeerImplSelect(
 
     auto log = Logger::get("FastAddPeer");
     Stopwatch watch;
+    auto kvstore = tmt.getKVStore();
     std::unordered_map<StoreID, UInt64> checked_seq_map;
     auto fap_ctx = tmt.getContext().getSharedContextDisagg()->fap_context;
     const auto & settings = tmt.getContext().getSettingsRef();
@@ -209,8 +211,12 @@ std::variant<CheckpointRegionInfoAndData, FastAddPeerRes> FastAddPeerImplSelect(
             if (data_seq > checked_seq)
             {
                 RUNTIME_CHECK(checkpoint_data != nullptr);
-                auto maybe_region_info
-                    = tryParseRegionInfoFromCheckpointData(checkpoint_data, store_id, region_id, proxy_helper);
+                auto maybe_region_info = tryParseRegionInfoFromCheckpointData(
+                    checkpoint_data,
+                    store_id,
+                    region_id,
+                    kvstore->getCurrentRegionOpt(),
+                    proxy_helper);
                 if (!maybe_region_info.has_value())
                     continue;
                 const auto & checkpoint_info = std::get<0>(maybe_region_info.value());
@@ -399,7 +405,9 @@ void ApplyFapSnapshotImpl(TMTContext & tmt, TiFlashRaftProxyHelper * proxy_helpe
     Stopwatch watch_ingest;
     auto kvstore = tmt.getKVStore();
     auto fap_ctx = tmt.getContext().getSharedContextDisagg()->fap_context;
-    auto checkpoint_ingest_info = fap_ctx->getOrRestoreCheckpointIngestInfo(tmt, proxy_helper, region_id, peer_id);
+    auto checkpoint_ingest_info
+        = fap_ctx
+              ->getOrRestoreCheckpointIngestInfo(tmt, proxy_helper, kvstore->getCurrentRegionOpt(), region_id, peer_id);
     kvstore->handleIngestCheckpoint(checkpoint_ingest_info->getRegion(), checkpoint_ingest_info, tmt);
     fap_ctx->cleanCheckpointIngestInfo(tmt, region_id);
     GET_METRIC(tiflash_fap_task_duration_seconds, type_ingest_stage).Observe(watch_ingest.elapsedSeconds());

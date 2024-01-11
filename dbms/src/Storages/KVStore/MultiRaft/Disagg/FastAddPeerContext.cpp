@@ -113,6 +113,7 @@ std::pair<UInt64, ParsedCheckpointDataHolderPtr> FastAddPeerContext::getNewerChe
 CheckpointIngestInfoPtr FastAddPeerContext::getOrRestoreCheckpointIngestInfo(
     TMTContext & tmt,
     const struct TiFlashRaftProxyHelper * proxy_helper,
+    RegionOpt && region_opt,
     UInt64 region_id,
     UInt64 peer_id)
 {
@@ -127,7 +128,7 @@ CheckpointIngestInfoPtr FastAddPeerContext::getOrRestoreCheckpointIngestInfo(
     {
         // The caller ensure there is no concurrency operation on the same region_id so
         // that we can call restore without locking `ingest_info_mu`
-        auto info = CheckpointIngestInfo::restore(tmt, proxy_helper, region_id, peer_id);
+        auto info = CheckpointIngestInfo::restore(tmt, proxy_helper, std::move(region_opt), region_id, peer_id);
         std::scoped_lock<std::mutex> lock(ingest_info_mu);
         checkpoint_ingest_info_map.emplace(region_id, info);
         return info;

@@ -54,9 +54,10 @@ extern const char force_not_clean_fap_on_destroy[];
 } // namespace FailPoints
 
 KVStore::KVStore(Context & context)
-    : region_persister(
-        context.getSharedContextDisagg()->isDisaggregatedComputeMode() ? nullptr
-                                                                       : std::make_unique<RegionPersister>(context))
+    : current_context(context)
+    , region_persister(
+          context.getSharedContextDisagg()->isDisaggregatedComputeMode() ? nullptr
+                                                                         : std::make_unique<RegionPersister>(context))
     , raft_cmd_res(std::make_unique<RaftCommandResult>())
     , log(Logger::get())
     , region_compact_log_min_rows(40 * 1024)
@@ -67,7 +68,11 @@ KVStore::KVStore(Context & context)
     , eager_raft_log_gc_enabled(context.getPageStorageRunMode() == PageStorageRunMode::UNI_PS)
 {
     // default config about compact-log: rows 40k, bytes 32MB, gap 200.
-    LOG_INFO(log, "KVStore inited, eager_raft_log_gc_enabled={}", eager_raft_log_gc_enabled);
+    LOG_INFO(
+        log,
+        "KVStore inited, eager_raft_log_gc_enabled={}, is_storage_mode={}",
+        eager_raft_log_gc_enabled,
+        current_context.getSharedContextDisagg()->isDisaggregatedStorageMode());
 }
 
 void KVStore::restore(PathPool & path_pool, const TiFlashRaftProxyHelper * proxy_helper)
@@ -79,7 +84,7 @@ void KVStore::restore(PathPool & path_pool, const TiFlashRaftProxyHelper * proxy
     auto manage_lock = genRegionMgrWriteLock(task_lock);
 
     this->proxy_helper = proxy_helper;
-    manage_lock.regions = region_persister->restore(path_pool, proxy_helper);
+    manage_lock.regions = region_persister->restore(path_pool, proxy_helper, getCurrentRegionOpt());
 
     LOG_INFO(log, "Restored {} regions", manage_lock.regions.size());
 
@@ -391,6 +396,7 @@ void KVStore::persistRegion(
         region.getDebugString(),
         region.dataSize(),
         caller);
+
     region_persister->persist(region, region_task_lock);
     LOG_DEBUG(log, "Persist {} done, cache size: {} bytes", region.toString(false), region.dataSize());
 
@@ -702,7 +708,12 @@ RegionPtr KVStore::genRegionPtr(metapb::Region && region, UInt64 peer_id, UInt64
         RegionMeta(std::move(peer), std::move(region), std::move(apply_state));
     });
 
-    return std::make_shared<Region>(std::move(meta), proxy_helper);
+    return std::make_shared<Region>(std::move(meta), proxy_helper, getCurrentRegionOpt());
+}
+
+RegionOpt KVStore::getCurrentRegionOpt() const
+{
+    return RegionOpt{.is_disagg_storage_mode = current_context.getSharedContextDisagg()->isDisaggregatedStorageMode()};
 }
 
 } // namespace DB

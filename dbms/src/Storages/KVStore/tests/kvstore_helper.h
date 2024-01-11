@@ -20,6 +20,7 @@
 #include <Debug/MockKVStore/MockRaftStoreProxy.h>
 #include <Debug/MockKVStore/MockSSTReader.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/SharedContexts/Disagg.h>
 #include <Storages/DeltaMerge/ExternalDTFileInfo.h>
 #include <Storages/DeltaMerge/GCOptions.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>

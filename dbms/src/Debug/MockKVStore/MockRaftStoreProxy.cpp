@@ -173,7 +173,12 @@ void MockRaftStoreProxy::debugAddRegions(
     for (int i = 0; i < n; ++i)
     {
         regions.emplace(region_ids[i], std::make_shared<MockProxyRegion>(region_ids[i]));
-        auto region = tests::makeRegion(region_ids[i], ranges[i].first, ranges[i].second, kvs.getProxyHelper());
+        auto region = tests::makeRegion(
+            region_ids[i],
+            ranges[i].first,
+            ranges[i].second,
+            kvs.getProxyHelper(),
+            kvs.getCurrentRegionOpt());
         lock.regions.emplace(region_ids[i], region);
         lock.index.add(region);
         tmt.getRegionTable().updateRegion(*region);

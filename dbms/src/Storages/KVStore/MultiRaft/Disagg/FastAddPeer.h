@@ -16,6 +16,7 @@
 
 #include <Storages/KVStore/FFI/ProxyFFI.h>
 #include <Storages/KVStore/MultiRaft/Disagg/FastAddPeerCache.h>
+#include <Storages/KVStore/MultiRaft/RegionOpt.h>
 #include <Storages/KVStore/Utils/AsyncTasks.h>
 
 namespace DB
@@ -52,6 +53,7 @@ public:
     CheckpointIngestInfoPtr getOrRestoreCheckpointIngestInfo(
         TMTContext & tmt,
         const struct TiFlashRaftProxyHelper * proxy_helper,
+        RegionOpt && region_opt,
         UInt64 region_id,
         UInt64 peer_id);
     void insertCheckpointIngestInfo(
