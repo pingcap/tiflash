@@ -82,14 +82,14 @@ public:
         for (auto & d : disjuncts)
         {
             for (size_t i = 0; i < d.count_offset - prev_count; ++i)
-                cols[0]->insertFrom(*column_ptr, d.position + i);
+                cols[0]->insertFrom(*column_ptr, d.position);
             prev_count = d.count_offset;
         }
         prev_count = 0;
         for (auto & d : disjuncts)
         {
             for (size_t i = 0; i < d.count_offset - prev_count; ++i)
-                cols[0]->insertFrom(*column_ptr, d.position + i);
+                cols[0]->insertFrom(*column_ptr, d.position);
             prev_count = d.count_offset;
         }
         cols[1]->insertDisjunctManyFrom(*column_ptr, disjuncts);

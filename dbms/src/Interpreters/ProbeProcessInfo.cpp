@@ -235,7 +235,7 @@ void ProbeProcessInfo::resetColumnBuffer(size_t num_columns_to_add)
 
 void ProbeProcessInfo::fillBufferedColumns(MutableColumns & added_columns, size_t offset)
 {
-    if (column_ptrs_buffer.empty())
+    if (gather_ranges_buffer.empty())
         return;
 
     size_t num_columns_to_add = column_ptrs_buffer.size();

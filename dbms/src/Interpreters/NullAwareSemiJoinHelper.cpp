@@ -76,13 +76,13 @@ void NASemiJoinResult<KIND, STRICTNESS>::fillRightColumns(
         const auto * iter = static_cast<const Mapped *>(map_it);
         for (size_t i = 0; i < current_pace && iter != nullptr; ++i)
         {
-            probe_process_info.gather_ranges_buffer.emplace_back(
-                iter->row_num,
-                1 + probe_process_info.gather_ranges_buffer.back().length_offset);
+            ++current_offset;
+
+            probe_process_info.gather_ranges_buffer.emplace_back(iter->row_num, current_offset);
             for (size_t j = 0; j < right_columns; ++j)
                 probe_process_info.column_ptrs_buffer[j].emplace_back(
                     iter->columns[right_column_indices_to_add[j]].column.get());
-            ++current_offset;
+
             iter = iter->next;
         }
         map_it = static_cast<const void *>(iter);

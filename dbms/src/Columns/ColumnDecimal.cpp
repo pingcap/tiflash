@@ -328,8 +328,7 @@ void ColumnDecimal<T>::insertDisjunctManyFrom(const IColumn & src, const IColumn
     size_t prev_count = 0;
     for (const auto & d : disjuncts)
     {
-        for (size_t j = 0; j < d.count_offset - prev_count; ++j)
-            data[old_size++] = src_container[d.position + j];
+        std::fill(&data[old_size + prev_count], &data[old_size + d.count_offset], src_container[d.position]);
         prev_count = d.count_offset;
     }
 }
@@ -345,15 +344,17 @@ void ColumnDecimal<T>::insertGatherRangeFrom(ColumnRawPtrs & src, const IColumn:
     size_t sz = src.size(), prev_len = 0;
     for (size_t i = 0; i < sz; ++i)
     {
+        const auto & g = gather_ranges[i];
         if (src[i] == nullptr)
         {
-            data[old_size++] = T();
-            continue;
+            std::fill(&data[old_size + prev_len], &data[old_size + g.length_offset], T());
         }
-        const auto & column_src = static_cast<const Self &>(*src[i]);
-        const auto & g = gather_ranges[i];
-        for (size_t j = g.start_pos; j < g.start_pos + g.length_offset - prev_len; ++j)
-            data[old_size++] = column_src.data[j];
+        else
+        {
+            const auto & column_src = static_cast<const Self &>(*src[i]);
+            memcpy(&data[old_size + prev_len], &column_src.data[g.start_pos], (g.length_offset - prev_len) * sizeof(T));
+        }
+        prev_len = g.length_offset;
     }
 }
 
@@ -407,16 +408,13 @@ ColumnPtr ColumnDecimal<T>::replicateRange(size_t start_row, size_t end_row, con
         return res;
 
     typename Self::Container & res_data = res->getData();
-    res_data.reserve(offsets[end_row - 1]);
+    res_data.resize(offsets[end_row - 1]);
 
     IColumn::Offset prev_offset = 0;
     for (size_t i = start_row; i < end_row; ++i)
     {
-        size_t size_to_replicate = offsets[i] - prev_offset;
+        std::fill(&res_data[prev_offset], &res_data[offsets[i]], data[i]);
         prev_offset = offsets[i];
-
-        for (size_t j = 0; j < size_to_replicate; ++j)
-            res_data.push_back(data[i]);
     }
 
     return res;

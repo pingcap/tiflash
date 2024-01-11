@@ -229,8 +229,7 @@ public:
         size_t prev_count = 0;
         for (const auto & d : disjuncts)
         {
-            for (size_t j = 0; j < d.count_offset - prev_count; ++j)
-                data[old_size++] = src_container[d.position + j];
+            std::fill(&data[old_size + prev_count], &data[old_size + d.count_offset], src_container[d.position]);
             prev_count = d.count_offset;
         }
     }
@@ -247,15 +246,20 @@ public:
         size_t sz = src.size(), prev_len = 0;
         for (size_t i = 0; i < sz; ++i)
         {
+            const auto & g = gather_ranges[i];
             if (src[i] == nullptr)
             {
-                data[old_size++] = T();
-                continue;
+                std::fill(&data[old_size + prev_len], &data[old_size + g.length_offset], T());
             }
-            const auto & column_src = static_cast<const Self &>(*src[i]);
-            const auto & g = gather_ranges[i];
-            for (size_t j = g.start_pos; j < g.start_pos + g.length_offset - prev_len; ++j)
-                data[old_size++] = column_src.data[j];
+            else
+            {
+                const auto & column_src = static_cast<const Self &>(*src[i]);
+                memcpy(
+                    &data[old_size + prev_len],
+                    &column_src.data[g.start_pos],
+                    (g.length_offset - prev_len) * sizeof(T));
+            }
+            prev_len = g.length_offset;
         }
     }
 

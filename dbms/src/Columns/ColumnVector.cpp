@@ -320,25 +320,18 @@ ColumnPtr ColumnVector<T>::replicateRange(size_t start_row, size_t end_row, cons
     assert(start_row < end_row);
     assert(end_row <= size);
 
-    if (0 == size)
-        return this->create();
-
     auto res = this->create();
-    typename Self::Container & res_data = res->getData();
+    if (0 == size)
+        return res;
 
-    res_data.reserve(offsets[end_row - 1]);
+    typename Self::Container & res_data = res->getData();
+    res_data.resize(offsets[end_row - 1]);
 
     IColumn::Offset prev_offset = 0;
-
     for (size_t i = start_row; i < end_row; ++i)
     {
-        size_t size_to_replicate = offsets[i] - prev_offset;
+        std::fill(&res_data[prev_offset], &res_data[offsets[i]], data[i]);
         prev_offset = offsets[i];
-
-        for (size_t j = 0; j < size_to_replicate; ++j)
-        {
-            res_data.push_back(data[i]);
-        }
     }
 
     return res;

@@ -269,23 +269,30 @@ void ColumnNullable::insertGatherRangeFrom(ColumnRawPtrs & src, const IColumn::G
     if (gather_ranges.empty())
         return;
     assert(src.size() == gather_ranges.size());
-    auto & map = getNullMapData();
-    size_t old_size = map.size();
-    map.resize(old_size + gather_ranges.back().length_offset);
+    auto & data = getNullMapData();
+    size_t old_size = data.size();
+    data.resize(old_size + gather_ranges.back().length_offset);
     size_t sz = src.size(), prev_len = 0;
     for (size_t i = 0; i < sz; ++i)
     {
+        const auto & g = gather_ranges[i];
         if (src[i] == nullptr)
         {
-            map[old_size++] = 1;
+            std::fill(
+                &data[old_size + prev_len],
+                &data[old_size + g.length_offset],
+                static_cast<NullMap::value_type>(1));
+            prev_len = g.length_offset;
             continue;
         }
-
         const auto & src_column = static_cast<const ColumnNullable &>(*src[i]);
-        const auto & src_null_map = src_column.getNullMapData();
-        const auto & g = gather_ranges[i];
-        for (size_t j = g.start_pos; j < g.start_pos + g.length_offset - prev_len; ++j)
-            map[old_size++] = src_null_map[j];
+        const auto & src_data = src_column.getNullMapData();
+        memcpy(
+            &data[old_size + prev_len],
+            &src_data[g.start_pos],
+            (g.length_offset - prev_len) * sizeof(NullMap::value_type));
+        prev_len = g.length_offset;
+
         src[i] = &src_column.getNestedColumn();
     }
 

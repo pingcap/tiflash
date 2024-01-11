@@ -559,16 +559,12 @@ protected:
         size_t size = src.size(), prev_len = 0;
         for (size_t i = 0; i < size; ++i)
         {
+            const auto & g = gather_ranges[i];
             if (src[i] == nullptr)
-            {
-                static_cast<Derived *>(this)->insertDefault();
-            }
+                static_cast<Derived *>(this)->insertManyDefaults(g.length_offset - prev_len);
             else
-            {
-                const auto & g = gather_ranges[i];
-                static_cast<Derived *>(this)->insertManyFrom(*src[i], g.start_pos, g.length_offset - prev_len);
-                prev_len = g.length_offset;
-            }
+                static_cast<Derived *>(this)->insertRangeFrom(*src[i], g.start_pos, g.length_offset - prev_len);
+            prev_len = g.length_offset;
         }
     }
 };

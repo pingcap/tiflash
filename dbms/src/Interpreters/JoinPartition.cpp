@@ -1210,10 +1210,12 @@ struct Adder<KIND, ASTTableJoin::Strictness::All, Map>
 
         bool need_generate_cached_columns = false;
         auto * current = &mapped_value;
+        size_t buffer_offset = probe_process_info.gather_ranges_buffer.empty()
+            ? 0
+            : probe_process_info.gather_ranges_buffer.back().length_offset;
         auto add_one_row = [&]() {
-            probe_process_info.gather_ranges_buffer.emplace_back(
-                current->row_num,
-                1 + probe_process_info.gather_ranges_buffer.back().length_offset);
+            ++buffer_offset;
+            probe_process_info.gather_ranges_buffer.emplace_back(current->row_num, buffer_offset);
             for (size_t j = 0; j < num_columns_to_add; ++j)
                 probe_process_info.column_ptrs_buffer[j].emplace_back(current->columns[right_indexes[j]].column.get());
         };
@@ -1225,12 +1227,10 @@ struct Adder<KIND, ASTTableJoin::Strictness::All, Map>
             need_generate_cached_columns = check_result.second;
             if (check_result.first)
             {
-                probe_process_info.gather_ranges_buffer.emplace_back(
-                    0,
-                    rows_joined + probe_process_info.gather_ranges_buffer.back().length_offset);
+                probe_process_info.gather_ranges_buffer.emplace_back(0, buffer_offset + rows_joined);
                 for (size_t j = 0; j < num_columns_to_add; ++j)
                     probe_process_info.column_ptrs_buffer[j].emplace_back(
-                        mapped_value.cached_column_info->columns[right_indexes[j]].get());
+                        mapped_value.cached_column_info->columns[j].get());
 
                 current_offset += rows_joined;
                 (*offsets)[i] = current_offset;
@@ -1273,12 +1273,14 @@ struct Adder<KIND, ASTTableJoin::Strictness::All, Map>
             {
                 return true;
             }
+
             ++current_offset;
             (*offsets)[i] = current_offset;
 
-            probe_process_info.gather_ranges_buffer.emplace_back(
-                0,
-                1 + probe_process_info.gather_ranges_buffer.back().length_offset);
+            size_t buffer_offset = probe_process_info.gather_ranges_buffer.empty()
+                ? 0
+                : probe_process_info.gather_ranges_buffer.back().length_offset;
+            probe_process_info.gather_ranges_buffer.emplace_back(0, 1 + buffer_offset);
             for (size_t j = 0; j < num_columns_to_add; ++j)
                 probe_process_info.column_ptrs_buffer[j].emplace_back(nullptr);
         }
@@ -1315,10 +1317,12 @@ struct RowFlaggedHashMapAdder
         auto * current = &mapped_value;
         auto & actual_ptr_col = static_cast<PointerHelper::ColumnType &>(*added_columns[num_columns_to_add]);
         auto & container = static_cast<PointerHelper::ArrayType &>(actual_ptr_col.getData());
+        size_t buffer_offset = probe_process_info.gather_ranges_buffer.empty()
+            ? 0
+            : probe_process_info.gather_ranges_buffer.back().length_offset;
         auto add_one_row = [&]() {
-            probe_process_info.gather_ranges_buffer.emplace_back(
-                current->row_num,
-                1 + probe_process_info.gather_ranges_buffer.back().length_offset);
+            ++buffer_offset;
+            probe_process_info.gather_ranges_buffer.emplace_back(current->row_num, buffer_offset);
             for (size_t j = 0; j < num_columns_to_add; ++j)
                 probe_process_info.column_ptrs_buffer[j].emplace_back(current->columns[right_indexes[j]].column.get());
 
@@ -1332,16 +1336,14 @@ struct RowFlaggedHashMapAdder
             need_generate_cached_columns = check_result.second;
             if (check_result.first)
             {
-                probe_process_info.gather_ranges_buffer.emplace_back(
-                    0,
-                    rows_joined + probe_process_info.gather_ranges_buffer.back().length_offset);
+                probe_process_info.gather_ranges_buffer.emplace_back(0, buffer_offset + rows_joined);
                 for (size_t j = 0; j < num_columns_to_add; ++j)
                     probe_process_info.column_ptrs_buffer[j].emplace_back(
-                        mapped_value.cached_column_info->columns[right_indexes[j]].get());
+                        mapped_value.cached_column_info->columns[j].get());
 
                 const auto & cached_ptr_col = static_cast<const PointerHelper::ColumnType &>(
                     *mapped_value.cached_column_info->columns[num_columns_to_add].get());
-                actual_ptr_col.insertManyFrom(cached_ptr_col, 0, rows_joined);
+                actual_ptr_col.insertRangeFrom(cached_ptr_col, 0, rows_joined);
 
                 current_offset += rows_joined;
                 (*offsets)[i] = current_offset;
@@ -1358,6 +1360,7 @@ struct RowFlaggedHashMapAdder
 
         current_offset += rows_joined;
         (*offsets)[i] = current_offset;
+
         if unlikely (need_generate_cached_columns)
         {
             probe_process_info.fillBufferedColumns(added_columns);
