@@ -28,7 +28,7 @@ struct RowRef
     UInt32 row_num;
 
     RowRef() = default;
-    RowRef(const ColumnWithTypeAndName * columns_, size_t row_num_)
+    RowRef(const ColumnWithTypeAndName * columns_, UInt32 row_num_)
         : columns(columns_)
         , row_num(row_num_)
     {}
