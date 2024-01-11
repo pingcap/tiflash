@@ -16,6 +16,7 @@
 #include <Common/Exception.h>
 #include <Common/Logger.h>
 #include <Common/UniThreadPool.h>
+#include <Encryption/EncryptionPath.h>
 #include <IO/IOThreadPools.h>
 #include <IO/UseSSL.h>
 #include <Interpreters/Context.h>
@@ -42,6 +43,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cstddef>
 #include <filesystem>
 #include <fstream>
 #include <random>
@@ -483,7 +485,7 @@ void putRandomObject(const DB::DM::tests::WorkloadOptions & opts)
     genFile(local_fname, fsize, value);
     auto client = getS3Client(opts);
     Stopwatch sw;
-    S3::uploadFile(*client, local_fname, remote_fname);
+    S3::uploadFile(*client, local_fname, remote_fname, EncryptionPath("", ""), nullptr, nullptr);
     addRemoteFname(remote_fname, fsize);
     s3_stat.addPutStat(remote_fname, sw.elapsedSeconds());
     std::filesystem::remove(local_fname);

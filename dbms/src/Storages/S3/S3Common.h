@@ -168,15 +168,10 @@ void uploadFile(
     const TiFlashS3Client & client,
     const String & local_fname,
     const String & remote_fname,
-    int max_retry_times = 3);
-
-bool uploadEncryptedFile(
-    const TiFlashS3Client & client,
     const EncryptionPath & encryption_path,
-    const String & local_fname,
-    const String & remote_fname,
     const FileProviderPtr & file_provider,
-    const ReadLimiterPtr & read_limiter);
+    const ReadLimiterPtr & read_limiter,
+    int max_retry_times = 3);
 
 constexpr std::string_view TaggingObjectIsDeleted = "tiflash_deleted=true";
 bool ensureLifecycleRuleExist(const TiFlashS3Client & client, Int32 expire_days);

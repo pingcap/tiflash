@@ -20,7 +20,9 @@
 #include <Common/Stopwatch.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/TiFlashMetrics.h>
+#include <Encryption/PosixRandomAccessFile.h>
 #include <IO/ReadBufferFromRandomAccessFile.h>
+#include <IO/StdStreamFromReadBuffer.h>
 #include <IO/WriteBufferFromWritableFile.h>
 #include <Interpreters/Context_fwd.h>
 #include <Server/StorageConfigParser.h>
@@ -592,6 +594,9 @@ static bool doUploadFile(
     const TiFlashS3Client & client,
     const String & local_fname,
     const String & remote_fname,
+    const EncryptionPath & encryption_path,
+    const FileProviderPtr & file_provider,
+    const ReadLimiterPtr & read_limiter,
     Int32 max_retry_times,
     Int32 current_retry)
 {
@@ -600,10 +605,20 @@ static bool doUploadFile(
     Aws::S3::Model::PutObjectRequest req;
     client.setBucketAndKeyWithRoot(req, remote_fname);
     req.SetContentType("binary/octet-stream");
-    auto istr
-        = Aws::MakeShared<Aws::FStream>("PutObjectInputStream", local_fname, std::ios_base::in | std::ios_base::binary);
-    RUNTIME_CHECK_MSG(istr->is_open(), "Open {} fail: {}", local_fname, strerror(errno));
     auto write_bytes = std::filesystem::file_size(local_fname);
+    RandomAccessFilePtr local_file;
+    if (file_provider)
+    {
+        local_file = file_provider->newRandomAccessFile(local_fname, encryption_path, read_limiter);
+    }
+    else
+    {
+        local_file = std::make_shared<PosixRandomAccessFile>(local_fname, -1, read_limiter);
+    }
+    // Read at most 16MB each time.
+    auto read_buf = std::make_unique<ReadBufferFromRandomAccessFile>(local_file, 16 * 1024 * 1024);
+    auto istr = std::make_shared<StdStreamFromReadBuffer>(std::move(read_buf), write_bytes);
+    req.SetContentLength(write_bytes);
     req.SetBody(istr);
     ProfileEvents::increment(is_dmfile ? ProfileEvents::S3PutDMFile : ProfileEvents::S3PutObject);
     if (current_retry > 0)
@@ -658,53 +673,24 @@ static bool doUploadFile(
     return true;
 }
 
-bool uploadEncryptedFile(
-    const TiFlashS3Client & client,
-    const EncryptionPath & encryption_path,
-    const String & local_fname,
-    const String & remote_fname,
-    const FileProviderPtr & file_provider,
-    const ReadLimiterPtr & read_limiter)
-{
-    Stopwatch sw;
-    auto s3_file = file_provider->newS3WritableFile(remote_fname);
-    auto local_file = file_provider->newRandomAccessFile(local_fname, encryption_path, read_limiter);
-
-    constexpr size_t buffer_size = 16 * 1024 * 1024; // 16MB as a part
-    ReadBufferFromRandomAccessFile read_buf(local_file, buffer_size);
-    size_t total_size = 0;
-
-    while (read_buf.next())
-    {
-        size_t n = read_buf.buffer().size();
-        // s3_file is S3WritableFile, no need to seek.
-        size_t write_n = s3_file->write(read_buf.buffer().begin(), n);
-        RUNTIME_CHECK(write_n == n, write_n, n);
-        total_size += n;
-    }
-    s3_file->fsync();
-    s3_file->close();
-
-    auto is_dmfile = S3FilenameView::fromKey(remote_fname).isDMFile();
-    ProfileEvents::increment(is_dmfile ? ProfileEvents::S3WriteDMFileBytes : ProfileEvents::S3WriteBytes, total_size);
-    auto elapsed_seconds = sw.elapsedSeconds();
-    LOG_DEBUG(
-        client.log,
-        "uploadEncryptedFile local_fname={}, remote_fname={}, write_bytes={} cost={:.3f}s",
-        local_fname,
-        remote_fname,
-        total_size,
-        elapsed_seconds);
-    return true;
-}
-
 void uploadFile(
     const TiFlashS3Client & client,
     const String & local_fname,
     const String & remote_fname,
+    const EncryptionPath & encryption_path,
+    const FileProviderPtr & file_provider,
+    const ReadLimiterPtr & read_limiter,
     int max_retry_times)
 {
-    retryWrapper(doUploadFile, client, local_fname, remote_fname, max_retry_times);
+    retryWrapper(
+        doUploadFile,
+        client,
+        local_fname,
+        remote_fname,
+        encryption_path,
+        file_provider,
+        read_limiter,
+        max_retry_times);
 }
 
 void downloadFile(const TiFlashS3Client & client, const String & local_fname, const String & remote_fname)
