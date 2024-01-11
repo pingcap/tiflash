@@ -37,8 +37,7 @@ SemiJoinResult<KIND, All>::SemiJoinResult(size_t row_num_, const void * map_it_)
 template <ASTTableJoin::Kind KIND>
 template <typename Mapped>
 void SemiJoinResult<KIND, All>::fillRightColumns(
-    MutableColumns & added_columns,
-    size_t left_columns,
+    ProbeProcessInfo & probe_process_info,
     size_t right_columns,
     const std::vector<size_t> & right_column_indices_to_add,
     size_t & current_offset,
@@ -60,10 +59,12 @@ void SemiJoinResult<KIND, All>::fillRightColumns(
     const auto * iter = static_cast<const Mapped *>(map_it);
     for (size_t i = 0; i < current_pace && iter != nullptr; ++i)
     {
+        probe_process_info.gather_ranges_buffer.emplace_back(
+            iter->row_num,
+            1 + probe_process_info.gather_ranges_buffer.back().length_offset);
         for (size_t j = 0; j < right_columns; ++j)
-            added_columns[j + left_columns]->insertFrom(
-                *iter->columns[right_column_indices_to_add[j]].column.get(),
-                iter->row_num);
+            probe_process_info.column_ptrs_buffer[j].emplace_back(
+                iter->columns[right_column_indices_to_add[j]].column.get());
         ++current_offset;
         iter = iter->next;
     }
@@ -170,11 +171,14 @@ SemiJoinHelper<KIND, Mapped>::SemiJoinHelper(
 }
 
 template <ASTTableJoin::Kind KIND, typename Mapped>
-void SemiJoinHelper<KIND, Mapped>::joinResult(std::list<Result *> & res_list)
+void SemiJoinHelper<KIND, Mapped>::joinResult(std::list<Result *> & res_list, ProbeProcessInfo & probe_process_info)
 {
-    std::vector<size_t> offsets;
     size_t block_columns = block.columns();
     Block exec_block = block.cloneEmpty();
+
+    probe_process_info.resetColumnBuffer(right_columns);
+    probe_process_info.semi_offsets.reserve(max_block_size);
+    probe_process_info.semi_disjuncts.reserve(max_block_size);
 
     while (!res_list.empty())
     {
@@ -190,14 +194,14 @@ void SemiJoinHelper<KIND, Mapped>::joinResult(std::list<Result *> & res_list)
         }
 
         size_t current_offset = 0;
-        offsets.clear();
+        probe_process_info.semi_offsets.clear();
+        probe_process_info.semi_disjuncts.clear();
 
         for (auto & res : res_list)
         {
             size_t prev_offset = current_offset;
             res->template fillRightColumns<Mapped>(
-                columns,
-                left_columns,
+                probe_process_info,
                 right_columns,
                 right_column_indices_to_add,
                 current_offset,
@@ -205,18 +209,21 @@ void SemiJoinHelper<KIND, Mapped>::joinResult(std::list<Result *> & res_list)
 
             /// Note that current_offset - prev_offset may be zero.
             if (current_offset > prev_offset)
-            {
-                for (size_t i = 0; i < left_columns; ++i)
-                    columns[i]->insertManyFrom(
-                        *block.getByPosition(i).column.get(),
-                        res->getRowNum(),
-                        current_offset - prev_offset);
-            }
+                probe_process_info.semi_disjuncts.emplace_back(
+                    res->getRowNum(),
+                    current_offset - prev_offset + probe_process_info.semi_disjuncts.back().count_offset);
 
-            offsets.emplace_back(current_offset);
+            probe_process_info.semi_offsets.emplace_back(current_offset);
             if (current_offset >= max_block_size)
                 break;
         }
+
+        /// Fill left columns
+        for (size_t i = 0; i < left_columns; ++i)
+            columns[i]->insertDisjunctManyFrom(*block.getByPosition(i).column.get(), probe_process_info.semi_disjuncts);
+
+        /// Fill right columns
+        probe_process_info.fillBufferedColumns(columns, left_columns);
 
         /// Move the columns to exec_block.
         /// Note that this can remove the new columns that are added in the last loop
@@ -252,7 +259,7 @@ void SemiJoinHelper<KIND, Mapped>::joinResult(std::list<Result *> & res_list)
 
 #define CALL(has_other_eq_cond_from_in, has_other_cond, has_other_cond_null_map)            \
     checkAllExprResult<has_other_eq_cond_from_in, has_other_cond, has_other_cond_null_map>( \
-        offsets,                                                                            \
+        probe_process_info.semi_offsets,                                                    \
         res_list,                                                                           \
         other_eq_from_in_column_data,                                                       \
         other_eq_from_in_null_map,                                                          \

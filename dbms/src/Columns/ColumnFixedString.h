@@ -85,14 +85,14 @@ public:
 
     void insertManyFrom(const IColumn & src_, size_t position, size_t length) override;
 
-    void insertDisjunctFrom(const IColumn & src_, const std::vector<size_t> & position_vec) override;
+    void insertDisjunctManyFrom(const IColumn & src, const IColumn::Disjuncts & disjuncts) override;
 
     void insertData(const char * pos, size_t length) override;
 
     void insertDefault() override { chars.resize_fill(chars.size() + n); }
     void insertManyDefaults(size_t length) override { chars.resize_fill(chars.size() + n * length); }
 
-    void insertGatherFrom(PaddedPODArray<const IColumn *> & src, const PaddedPODArray<size_t> & position) override;
+    void insertGatherRangeFrom(ColumnRawPtrs & src, const IColumn::GatherRanges & gather_ranges) override;
 
     void popBack(size_t elems) override { chars.resize_assume_reserved(chars.size() - n * elems); }
 

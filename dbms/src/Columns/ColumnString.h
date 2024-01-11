@@ -155,12 +155,12 @@ public:
             insertFromImpl(src, position);
     }
 
-    void insertDisjunctFrom(const IColumn & src_, const std::vector<size_t> & position_vec) override
+    void insertDisjunctManyFrom(const IColumn & src, const IColumn::Disjuncts & disjuncts) override
     {
-        const auto & src = static_cast<const ColumnString &>(src_);
-        offsets.reserve(offsets.size() + position_vec.size());
-        for (auto position : position_vec)
-            insertFromImpl(src, position);
+        if (disjuncts.empty())
+            return;
+        offsets.reserve(offsets.size() + disjuncts.back().count_offset);
+        insertDisjunctManyFromImpl<ColumnString>(src, disjuncts);
     }
 
     template <bool add_terminating_zero>
@@ -179,11 +179,13 @@ public:
 
     void insertData(const char * pos, size_t length) override { return insertDataImpl<true>(pos, length); }
 
-    void insertGatherFrom(PaddedPODArray<const IColumn *> & src, const PaddedPODArray<size_t> & position) override
+    void insertGatherRangeFrom(ColumnRawPtrs & src, const IColumn::GatherRanges & gather_ranges) override
     {
-        assert(src.size() == position.size());
-        offsets.reserve(offsets.size() + src.size());
-        insertGatherFromImpl<ColumnString>(src, position);
+        if (gather_ranges.empty())
+            return;
+        assert(src.size() == gather_ranges.size());
+        offsets.reserve(offsets.size() + gather_ranges.back().length_offset);
+        insertGatherRangeFromImpl<ColumnString>(src, gather_ranges);
     }
 
     bool decodeTiDBRowV2Datum(size_t cursor, const String & raw_value, size_t length, bool /* force_decode */) override

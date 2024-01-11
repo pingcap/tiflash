@@ -66,7 +66,7 @@ void ColumnFixedString::insertFrom(const IColumn & src_, size_t index)
 {
     const auto & src = static_cast<const ColumnFixedString &>(src_);
 
-    if (n != src.getN())
+    if unlikely (n != src.getN())
         throw Exception("Size of FixedString doesn't match", ErrorCodes::SIZE_OF_FIXED_STRING_DOESNT_MATCH);
 
     size_t old_size = chars.size();
@@ -77,7 +77,7 @@ void ColumnFixedString::insertFrom(const IColumn & src_, size_t index)
 void ColumnFixedString::insertManyFrom(const IColumn & src_, size_t position, size_t length)
 {
     const auto & src = static_cast<const ColumnFixedString &>(src_);
-    if (n != src.getN())
+    if unlikely (n != src.getN())
         throw Exception("Size of FixedString doesn't match", ErrorCodes::SIZE_OF_FIXED_STRING_DOESNT_MATCH);
     size_t old_size = chars.size();
     size_t new_size = old_size + n * length;
@@ -87,22 +87,17 @@ void ColumnFixedString::insertManyFrom(const IColumn & src_, size_t position, si
         memcpySmallAllowReadWriteOverflow15(&chars[i], src_char_ptr, n);
 }
 
-void ColumnFixedString::insertDisjunctFrom(const IColumn & src_, const std::vector<size_t> & position_vec)
+void ColumnFixedString::insertDisjunctManyFrom(const IColumn & src_, const IColumn::Disjuncts & disjuncts)
 {
-    const auto & src = static_cast<const ColumnFixedString &>(src_);
-    if (n != src.getN())
-        throw Exception("Size of FixedString doesn't match", ErrorCodes::SIZE_OF_FIXED_STRING_DOESNT_MATCH);
-    size_t old_size = chars.size();
-    size_t new_size = old_size + position_vec.size() * n;
-    chars.resize(new_size);
-    const auto & src_chars = src.chars;
-    for (size_t i = old_size, j = 0; i < new_size; i += n, ++j)
-        memcpySmallAllowReadWriteOverflow15(&chars[i], &src_chars[position_vec[j] * n], n);
+    if (disjuncts.empty())
+        return;
+    chars.reserve(chars.size() + disjuncts.back().count_offset * n);
+    insertDisjunctManyFromImpl<ColumnFixedString>(src_, disjuncts);
 }
 
 void ColumnFixedString::insertData(const char * pos, size_t length)
 {
-    if (length > n)
+    if unlikely (length > n)
         throw Exception("Too large string for FixedString column", ErrorCodes::TOO_LARGE_STRING_SIZE);
 
     size_t old_size = chars.size();
@@ -111,11 +106,13 @@ void ColumnFixedString::insertData(const char * pos, size_t length)
     memset(chars.data() + old_size + length, 0, n - length);
 }
 
-void ColumnFixedString::insertGatherFrom(PaddedPODArray<const IColumn *> & src, const PaddedPODArray<size_t> & position)
+void ColumnFixedString::insertGatherRangeFrom(ColumnRawPtrs & src, const IColumn::GatherRanges & gather_ranges)
 {
-    assert(src.size() == position.size());
-    chars.reserve(chars.size() + src.size() * n);
-    insertGatherFromImpl<ColumnFixedString>(src, position);
+    if (gather_ranges.empty())
+        return;
+    assert(src.size() == gather_ranges.size());
+    chars.reserve(chars.size() + gather_ranges.back().length_offset * n);
+    insertGatherRangeFromImpl<ColumnFixedString>(src, gather_ranges);
 }
 
 StringRef ColumnFixedString::serializeValueIntoArena(

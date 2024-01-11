@@ -72,15 +72,14 @@ public:
             insertFrom(src_, n);
     }
 
-    void insertDisjunctFrom(const IColumn & src_, const std::vector<size_t> & position_vec) override
+    void insertDisjunctManyFrom(const IColumn & src, const IColumn::Disjuncts & disjuncts) override
     {
-        for (auto position : position_vec)
-            insertFrom(src_, position);
+        insertDisjunctManyFromImpl<ColumnTuple>(src, disjuncts);
     }
 
-    void insertGatherFrom(PaddedPODArray<const IColumn *> & src, const PaddedPODArray<size_t> & position) override
+    void insertGatherRangeFrom(ColumnRawPtrs & src, const IColumn::GatherRanges & gather_ranges) override
     {
-        insertGatherFromImpl<ColumnTuple>(src, position);
+        insertGatherRangeFromImpl<ColumnTuple>(src, gather_ranges);
     }
 
     void insertDefault() override;

@@ -1611,7 +1611,7 @@ Block Join::joinBlockNullAwareSemi(ProbeProcessInfo & probe_process_info) const
 }
 
 template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
-Block Join::joinBlockNullAwareSemiImpl(const ProbeProcessInfo & probe_process_info) const
+Block Join::joinBlockNullAwareSemiImpl(ProbeProcessInfo & probe_process_info) const
 {
     size_t rows = probe_process_info.block.rows();
     std::vector<RowsNotInsertToMap *> null_rows(partitions.size(), nullptr);
@@ -1676,7 +1676,7 @@ Block Join::joinBlockNullAwareSemiImpl(const ProbeProcessInfo & probe_process_in
             max_block_size,
             non_equal_conditions);
 
-        helper.joinResult(res_list);
+        helper.joinResult(res_list, probe_process_info);
 
         RUNTIME_CHECK_MSG(res_list.empty(), "NASemiJoinResult list must be empty after calculating join result");
     }
@@ -1812,7 +1812,7 @@ Block Join::joinBlockSemi(ProbeProcessInfo & probe_process_info) const
 }
 
 template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
-Block Join::joinBlockSemiImpl(const JoinBuildInfo & join_build_info, const ProbeProcessInfo & probe_process_info) const
+Block Join::joinBlockSemiImpl(const JoinBuildInfo & join_build_info, ProbeProcessInfo & probe_process_info) const
 {
     size_t rows = probe_process_info.block.rows();
 
@@ -1862,7 +1862,7 @@ Block Join::joinBlockSemiImpl(const JoinBuildInfo & join_build_info, const Probe
             SemiJoinHelper<KIND, typename Maps::MappedType>
                 helper(block, left_columns, right_column_indices_to_add, max_block_size, non_equal_conditions);
 
-            helper.joinResult(res_list);
+            helper.joinResult(res_list, probe_process_info);
 
             RUNTIME_CHECK_MSG(res_list.empty(), "SemiJoinResult list must be empty after calculating join result");
         }

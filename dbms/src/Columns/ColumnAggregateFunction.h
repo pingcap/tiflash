@@ -131,15 +131,14 @@ public:
             insertFrom(src_, n);
     }
 
-    void insertDisjunctFrom(const IColumn & src_, const std::vector<size_t> & position_vec) override
+    void insertDisjunctManyFrom(const IColumn & src_, const IColumn::Disjuncts & disjuncts) override
     {
-        for (auto position : position_vec)
-            insertFrom(src_, position);
+        insertDisjunctManyFromImpl<ColumnAggregateFunction>(src_, disjuncts);
     }
 
-    void insertGatherFrom(PaddedPODArray<const IColumn *> & src_, const PaddedPODArray<size_t> & position) override
+    void insertGatherRangeFrom(ColumnRawPtrs & src_, const IColumn::GatherRanges & gather_ranges) override
     {
-        insertGatherFromImpl<ColumnAggregateFunction>(src_, position);
+        insertGatherRangeFromImpl<ColumnAggregateFunction>(src_, gather_ranges);
     }
 
     void insertFrom(ConstAggregateDataPtr __restrict place);

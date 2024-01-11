@@ -94,7 +94,7 @@ public:
         throw Exception("Cannot insert into " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
 
-    void insertDisjunctFrom(const IColumn &, const std::vector<size_t> &) override
+    void insertDisjunctManyFrom(const IColumn &, const IColumn::Disjuncts &) override
     {
         throw Exception("Cannot insert into " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
@@ -104,7 +104,7 @@ public:
         throw Exception("Cannot insert into " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
 
-    void insertGatherFrom(PaddedPODArray<const IColumn *> &, const PaddedPODArray<size_t> &) override
+    void insertGatherRangeFrom(ColumnRawPtrs &, const IColumn::GatherRanges &) override
     {
         throw Exception("Cannot insert into " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }

@@ -40,8 +40,7 @@ NASemiJoinResult<KIND, STRICTNESS>::NASemiJoinResult(size_t row_num_, NASemiJoin
 template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS>
 template <typename Mapped, NASemiJoinStep STEP>
 void NASemiJoinResult<KIND, STRICTNESS>::fillRightColumns(
-    MutableColumns & added_columns,
-    size_t left_columns,
+    ProbeProcessInfo & probe_process_info,
     size_t right_columns,
     const std::vector<size_t> & right_column_indices_to_add,
     const std::vector<RowsNotInsertToMap *> & null_rows,
@@ -77,10 +76,12 @@ void NASemiJoinResult<KIND, STRICTNESS>::fillRightColumns(
         const auto * iter = static_cast<const Mapped *>(map_it);
         for (size_t i = 0; i < current_pace && iter != nullptr; ++i)
         {
+            probe_process_info.gather_ranges_buffer.emplace_back(
+                iter->row_num,
+                1 + probe_process_info.gather_ranges_buffer.back().length_offset);
             for (size_t j = 0; j < right_columns; ++j)
-                added_columns[j + left_columns]->insertFrom(
-                    *iter->columns[right_column_indices_to_add[j]].column.get(),
-                    iter->row_num);
+                probe_process_info.column_ptrs_buffer[j].emplace_back(
+                    iter->columns[right_column_indices_to_add[j]].column.get());
             ++current_offset;
             iter = iter->next;
         }
@@ -104,11 +105,12 @@ void NASemiJoinResult<KIND, STRICTNESS>::fillRightColumns(
                 const size_t columns_size = columns[0]->size();
 
                 size_t insert_cnt = std::min(count, columns_size - pos_in_columns);
+                probe_process_info.gather_ranges_buffer.emplace_back(
+                    pos_in_columns,
+                    insert_cnt + probe_process_info.gather_ranges_buffer.back().length_offset);
                 for (size_t j = 0; j < right_columns; ++j)
-                    added_columns[j + left_columns]->insertRangeFrom(
-                        *columns[right_column_indices_to_add[j]].get(),
-                        pos_in_columns,
-                        insert_cnt);
+                    probe_process_info.column_ptrs_buffer[j].emplace_back(
+                        columns[right_column_indices_to_add[j]].get());
 
                 pos_in_columns += insert_cnt;
                 count -= insert_cnt;
@@ -269,26 +271,32 @@ NASemiJoinHelper<KIND, STRICTNESS, Mapped>::NASemiJoinHelper(
 }
 
 template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Mapped>
-void NASemiJoinHelper<KIND, STRICTNESS, Mapped>::joinResult(std::list<NASemiJoinHelper::Result *> & res_list)
+void NASemiJoinHelper<KIND, STRICTNESS, Mapped>::joinResult(
+    std::list<NASemiJoinHelper::Result *> & res_list,
+    ProbeProcessInfo & probe_process_info)
 {
     std::list<NASemiJoinHelper::Result *> next_step_res_list;
+
+    probe_process_info.resetColumnBuffer(right_columns);
+    probe_process_info.semi_offsets.reserve(max_block_size);
+    probe_process_info.semi_disjuncts.reserve(max_block_size);
 
     if constexpr (STRICTNESS == All)
     {
         /// Step of NOT_NULL_KEY_CHECK_MATCHED_ROWS only exist when strictness is all.
-        runStep<NASemiJoinStep::NOT_NULL_KEY_CHECK_MATCHED_ROWS>(res_list, next_step_res_list);
+        runStep<NASemiJoinStep::NOT_NULL_KEY_CHECK_MATCHED_ROWS>(res_list, next_step_res_list, probe_process_info);
         res_list.swap(next_step_res_list);
     }
 
     if (res_list.empty())
         return;
 
-    runStep<NASemiJoinStep::NOT_NULL_KEY_CHECK_NULL_ROWS>(res_list, next_step_res_list);
+    runStep<NASemiJoinStep::NOT_NULL_KEY_CHECK_NULL_ROWS>(res_list, next_step_res_list, probe_process_info);
     res_list.swap(next_step_res_list);
     if (res_list.empty())
         return;
 
-    runStep<NASemiJoinStep::NULL_KEY_CHECK_NULL_ROWS>(res_list, next_step_res_list);
+    runStep<NASemiJoinStep::NULL_KEY_CHECK_NULL_ROWS>(res_list, next_step_res_list, probe_process_info);
     res_list.swap(next_step_res_list);
     if (res_list.empty())
         return;
@@ -300,7 +308,8 @@ template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename
 template <NASemiJoinStep STEP>
 void NASemiJoinHelper<KIND, STRICTNESS, Mapped>::runStep(
     std::list<NASemiJoinHelper::Result *> & res_list,
-    std::list<NASemiJoinHelper::Result *> & next_res_list)
+    std::list<NASemiJoinHelper::Result *> & next_res_list,
+    ProbeProcessInfo & probe_process_info)
 {
     static_assert(
         STEP == NASemiJoinStep::NOT_NULL_KEY_CHECK_MATCHED_ROWS || STEP == NASemiJoinStep::NOT_NULL_KEY_CHECK_NULL_ROWS
@@ -318,7 +327,6 @@ void NASemiJoinHelper<KIND, STRICTNESS, Mapped>::runStep(
         ++it;
     }
 
-    std::vector<size_t> offsets;
     size_t block_columns = block.columns();
     Block exec_block = block.cloneEmpty();
 
@@ -336,14 +344,14 @@ void NASemiJoinHelper<KIND, STRICTNESS, Mapped>::runStep(
         }
 
         size_t current_offset = 0;
-        offsets.clear();
+        probe_process_info.semi_offsets.clear();
+        probe_process_info.semi_disjuncts.clear();
 
         for (auto & res : res_list)
         {
             size_t prev_offset = current_offset;
             res->template fillRightColumns<Mapped, STEP>(
-                columns,
-                left_columns,
+                probe_process_info,
                 right_columns,
                 right_column_indices_to_add,
                 null_rows,
@@ -352,25 +360,28 @@ void NASemiJoinHelper<KIND, STRICTNESS, Mapped>::runStep(
 
             /// Note that current_offset - prev_offset may be zero.
             if (current_offset > prev_offset)
-            {
-                for (size_t i = 0; i < left_columns; ++i)
-                    columns[i]->insertManyFrom(
-                        *block.getByPosition(i).column.get(),
-                        res->getRowNum(),
-                        current_offset - prev_offset);
-            }
+                probe_process_info.semi_disjuncts.emplace_back(
+                    res->getRowNum(),
+                    current_offset - prev_offset + probe_process_info.semi_disjuncts.back().count_offset);
 
-            offsets.emplace_back(current_offset);
+            probe_process_info.semi_offsets.emplace_back(current_offset);
             if (current_offset >= max_block_size)
                 break;
         }
+
+        /// Fill left columns
+        for (size_t i = 0; i < left_columns; ++i)
+            columns[i]->insertDisjunctManyFrom(*block.getByPosition(i).column.get(), probe_process_info.semi_disjuncts);
+
+        /// Fill right columns
+        probe_process_info.fillBufferedColumns(columns, left_columns);
 
         /// Move the columns to exec_block.
         /// Note that this can remove the new columns that are added in the last loop
         /// from equal and other condition expressions.
         exec_block = block.cloneWithColumns(std::move(columns));
 
-        runAndCheckExprResult<STEP>(exec_block, offsets, res_list, next_res_list);
+        runAndCheckExprResult<STEP>(exec_block, probe_process_info.semi_offsets, res_list, next_res_list);
     }
 }
 

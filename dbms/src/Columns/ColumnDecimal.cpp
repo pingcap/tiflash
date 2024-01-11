@@ -318,34 +318,42 @@ void ColumnDecimal<T>::insertManyFrom(const IColumn & src, size_t position, size
 }
 
 template <typename T>
-void ColumnDecimal<T>::insertDisjunctFrom(const IColumn & src, const std::vector<size_t> & position_vec)
+void ColumnDecimal<T>::insertDisjunctManyFrom(const IColumn & src, const IColumn::Disjuncts & disjuncts)
 {
-    const auto & src_data = static_cast<const ColumnDecimal &>(src).data;
+    if (disjuncts.empty())
+        return;
+    const auto & src_container = static_cast<const Self &>(src).getData();
     size_t old_size = data.size();
-    size_t to_add_size = position_vec.size();
-    data.resize(old_size + to_add_size);
-    for (size_t i = 0; i < to_add_size; ++i)
-        data[i + old_size] = src_data[position_vec[i]];
+    data.resize(old_size + disjuncts.back().count_offset);
+    size_t prev_count = 0;
+    for (const auto & d : disjuncts)
+    {
+        for (size_t j = 0; j < d.count_offset - prev_count; ++j)
+            data[old_size++] = src_container[d.position + j];
+        prev_count = d.count_offset;
+    }
 }
 
 template <typename T>
-void ColumnDecimal<T>::insertGatherFrom(PaddedPODArray<const IColumn *> & src, const PaddedPODArray<size_t> & position)
+void ColumnDecimal<T>::insertGatherRangeFrom(ColumnRawPtrs & src, const IColumn::GatherRanges & gather_ranges)
 {
-    assert(src.size() == position.size());
+    if (gather_ranges.empty())
+        return;
+    assert(src.size() == gather_ranges.size());
     size_t old_size = data.size();
-    size_t to_add_size = src.size();
-    data.resize(old_size + to_add_size);
-    for (size_t i = 0; i < to_add_size; ++i)
+    data.resize(old_size + gather_ranges.back().length_offset);
+    size_t sz = src.size(), prev_len = 0;
+    for (size_t i = 0; i < sz; ++i)
     {
         if (src[i] == nullptr)
         {
-            data[i + old_size] = T();
+            data[old_size++] = T();
+            continue;
         }
-        else
-        {
-            const auto & column_src = static_cast<const Self &>(*src[i]);
-            data[i + old_size] = column_src.data[position[i]];
-        }
+        const auto & column_src = static_cast<const Self &>(*src[i]);
+        const auto & g = gather_ranges[i];
+        for (size_t j = g.start_pos; j < g.start_pos + g.length_offset - prev_len; ++j)
+            data[old_size++] = column_src.data[j];
     }
 }
 

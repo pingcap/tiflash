@@ -257,41 +257,39 @@ void ColumnNullable::insertManyFrom(const IColumn & src, size_t n, size_t length
     map.resize_fill(map.size() + length, src_concrete.getNullMapData()[n]);
 }
 
-void ColumnNullable::insertDisjunctFrom(const IColumn & src, const std::vector<size_t> & position_vec)
+void ColumnNullable::insertDisjunctManyFrom(const IColumn & src, const IColumn::Disjuncts & disjuncts)
 {
     const auto & src_concrete = static_cast<const ColumnNullable &>(src);
-    getNestedColumn().insertDisjunctFrom(src_concrete.getNestedColumn(), position_vec);
-    auto & map = getNullMapData();
-    const auto & src_map = src_concrete.getNullMapData();
-    size_t old_size = map.size();
-    size_t to_add_size = position_vec.size();
-    map.resize(old_size + to_add_size);
-    for (size_t i = 0; i < to_add_size; ++i)
-        map[i + old_size] = src_map[position_vec[i]];
+    getNestedColumn().insertDisjunctManyFrom(src_concrete.getNestedColumn(), disjuncts);
+    getNullMapColumn().insertDisjunctManyFrom(src_concrete.getNullMapColumn(), disjuncts);
 }
 
-void ColumnNullable::insertGatherFrom(PaddedPODArray<const IColumn *> & src, const PaddedPODArray<size_t> & position)
+void ColumnNullable::insertGatherRangeFrom(ColumnRawPtrs & src, const IColumn::GatherRanges & gather_ranges)
 {
-    assert(src.size() == position.size());
+    if (gather_ranges.empty())
+        return;
+    assert(src.size() == gather_ranges.size());
     auto & map = getNullMapData();
     size_t old_size = map.size();
-    size_t to_add_size = src.size();
-    map.resize(old_size + to_add_size);
-    for (size_t i = 0; i < to_add_size; ++i)
+    map.resize(old_size + gather_ranges.back().length_offset);
+    size_t sz = src.size(), prev_len = 0;
+    for (size_t i = 0; i < sz; ++i)
     {
         if (src[i] == nullptr)
         {
-            map[i + old_size] = 1;
+            map[old_size++] = 1;
+            continue;
         }
-        else
-        {
-            const auto & column_src = static_cast<const ColumnNullable &>(*src[i]);
-            map[i + old_size] = column_src.getNullMapData()[position[i]];
-            src[i] = &column_src.getNestedColumn();
-        }
+
+        const auto & src_column = static_cast<const ColumnNullable &>(*src[i]);
+        const auto & src_null_map = src_column.getNullMapData();
+        const auto & g = gather_ranges[i];
+        for (size_t j = g.start_pos; j < g.start_pos + g.length_offset - prev_len; ++j)
+            map[old_size++] = src_null_map[j];
+        src[i] = &src_column.getNestedColumn();
     }
 
-    getNestedColumn().insertGatherFrom(src, position);
+    getNestedColumn().insertGatherRangeFrom(src, gather_ranges);
 }
 
 void ColumnNullable::popBack(size_t n)

@@ -36,6 +36,9 @@ extern const int SIZES_OF_COLUMNS_DOESNT_MATCH;
 class Arena;
 class ColumnGathererStream;
 
+class IColumn;
+using ColumnRawPtrs = std::vector<const IColumn *>;
+
 /// Declares interface to store columns in memory.
 class IColumn : public COWPtr<IColumn>
 {
@@ -139,15 +142,43 @@ public:
     /// Appends one element from other column with the same type multiple times.
     virtual void insertManyFrom(const IColumn & src, size_t position, size_t length) = 0;
 
-    /// Appends disjunctive elements from other column with the same type.
-    virtual void insertDisjunctFrom(const IColumn & src, const std::vector<size_t> & position_vec) = 0;
+    /// Appends disjunctive elements from other column with the same type multiple times.
+    struct Disjunct
+    {
+        size_t position;
+        /// i-th element should be copied Disjuncts[i].count_offset - Disjuncts[i - 1].count_offset times.
+        size_t count_offset;
+        Disjunct(size_t position_, size_t count_offset_)
+            : position(position_)
+            , count_offset(count_offset_)
+        {}
+    };
+    using Disjuncts = PaddedPODArray<Disjunct>;
+    virtual void insertDisjunctManyFrom(const IColumn & src, const Disjuncts & disjuncts) = 0;
 
     /// Appends data located in specified memory chunk if it is possible (throws an exception if it cannot be implemented).
     /// Is used to optimize some computations (in aggregation, for example).
     /// Parameter length could be ignored if column values have fixed size.
     virtual void insertData(const char * pos, size_t length) = 0;
 
-    virtual void insertGatherFrom(PaddedPODArray<const IColumn *> & src, const PaddedPODArray<size_t> & position) = 0;
+    /// Appends range of elements from different columns with the same type.
+    /// If a IColumn pointer in src is nullptr, a default value will be inserted.
+    /// Note:
+    /// For performance, the column pointers in src may be changed after this call.
+    /// E.g. ColumnNullable will replace the column pointers with its nested column pointers
+    ///      then call insertGatherRangeFrom for its nested column.
+    struct GatherRange
+    {
+        size_t start_pos;
+        /// i-th range length should be GatherRanges[i].length_offset - GatherRanges[i - 1].length_offset.
+        size_t length_offset;
+        GatherRange(size_t start_pos_, size_t length_offset_)
+            : start_pos(start_pos_)
+            , length_offset(length_offset_)
+        {}
+    };
+    using GatherRanges = PaddedPODArray<GatherRange>;
+    virtual void insertGatherRangeFrom(ColumnRawPtrs & src, const GatherRanges & gather_ranges) = 0;
 
     /// decode row data synced from tikv
     /// only support v2 format row: https://github.com/pingcap/tidb/blob/master/docs/design/2018-07-19-row-format.md
@@ -509,20 +540,34 @@ protected:
     }
 
     template <typename Derived>
-    void insertGatherFromImpl(PaddedPODArray<const IColumn *> & src, const PaddedPODArray<size_t> & position)
+    void insertDisjunctManyFromImpl(const IColumn & src, const IColumn::Disjuncts & disjuncts)
     {
-        assert(src.size() == position.size());
-        size_t size = src.size();
+        size_t prev_count = 0;
+        for (const auto & d : disjuncts)
+        {
+            static_cast<Derived *>(this)->insertManyFrom(src, d.position, d.count_offset - prev_count);
+            prev_count = d.count_offset;
+        }
+    }
+
+    template <typename Derived>
+    void insertGatherRangeFromImpl(ColumnRawPtrs & src, const GatherRanges & gather_ranges)
+    {
+        if (gather_ranges.empty())
+            return;
+        assert(src.size() == gather_ranges.size());
+        size_t size = src.size(), prev_len = 0;
         for (size_t i = 0; i < size; ++i)
         {
             if (src[i] == nullptr)
             {
-                insertDefault();
+                static_cast<Derived *>(this)->insertDefault();
             }
             else
             {
-                const auto & column_src = static_cast<const Derived &>(*src[i]);
-                insertFrom(column_src, position[i]);
+                const auto & g = gather_ranges[i];
+                static_cast<Derived *>(this)->insertManyFrom(*src[i], g.start_pos, g.length_offset - prev_len);
+                prev_len = g.length_offset;
             }
         }
     }
@@ -533,7 +578,6 @@ using MutableColumnPtr = IColumn::MutablePtr;
 using Columns = std::vector<ColumnPtr>;
 using MutableColumns = std::vector<MutableColumnPtr>;
 
-using ColumnRawPtrs = std::vector<const IColumn *>;
 //using MutableColumnRawPtrs = std::vector<IColumn *>;
 
 template <typename... Args>

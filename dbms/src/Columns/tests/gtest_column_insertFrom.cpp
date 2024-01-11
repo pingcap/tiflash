@@ -69,21 +69,31 @@ public:
             compareColumn(ref, result);
         }
 
-        /// Test insertDisjunctFrom
+        /// Test insertDisjunctManyFrom
         for (size_t i = 0; i < 2; ++i)
         {
             cols[i] = column_ptr->cloneEmpty();
         }
-        std::vector<size_t> position_vec;
-        position_vec.push_back(0);
-        position_vec.push_back(2);
-        position_vec.push_back(4);
-        for (size_t position : position_vec)
-            cols[0]->insertFrom(*column_ptr, position);
-        for (size_t position : position_vec)
-            cols[0]->insertFrom(*column_ptr, position);
-        cols[1]->insertDisjunctFrom(*column_ptr, position_vec);
-        cols[1]->insertDisjunctFrom(*column_ptr, position_vec);
+        IColumn::Disjuncts disjuncts;
+        disjuncts.emplace_back(0, 3);
+        disjuncts.emplace_back(2, 5);
+        disjuncts.emplace_back(4, 6);
+        size_t prev_count = 0;
+        for (auto & d : disjuncts)
+        {
+            for (size_t i = 0; i < d.count_offset - prev_count; ++i)
+                cols[0]->insertFrom(*column_ptr, d.position + i);
+            prev_count = d.count_offset;
+        }
+        prev_count = 0;
+        for (auto & d : disjuncts)
+        {
+            for (size_t i = 0; i < d.count_offset - prev_count; ++i)
+                cols[0]->insertFrom(*column_ptr, d.position + i);
+            prev_count = d.count_offset;
+        }
+        cols[1]->insertDisjunctManyFrom(*column_ptr, disjuncts);
+        cols[1]->insertDisjunctManyFrom(*column_ptr, disjuncts);
         {
             ColumnWithTypeAndName ref(std::move(cols[0]), col_with_type_and_name.type, "");
             ColumnWithTypeAndName result(std::move(cols[1]), col_with_type_and_name.type, "");
