@@ -160,9 +160,6 @@ void ProbeProcessInfo::prepareForCrossProbe(
                 cross_join_data->right_column_index_in_right_block.push_back(i);
             }
         }
-        auto offset = cross_join_data->left_column_index_in_left_block.size();
-        for (size_t i = 0; i < cross_join_data->right_column_index_in_right_block.size(); ++i)
-            cross_join_data->right_column_index_in_result_block.push_back(offset + i);
     }
     if (cross_join_data->cross_probe_mode == CrossProbeMode::SHALLOW_COPY_RIGHT_BLOCK && null_map != nullptr)
         cross_join_data->row_num_filtered_by_left_condition = countBytesInFilter(*null_map);
