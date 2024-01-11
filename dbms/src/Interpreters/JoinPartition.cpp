@@ -1364,7 +1364,7 @@ struct RowFlaggedHashMapAdder
         if unlikely (need_generate_cached_columns)
         {
             probe_process_info.fillBufferedColumns(added_columns);
-            cacheColumns(mapped_value.cached_column_info, added_columns, rows_joined, num_columns_to_add);
+            cacheColumns(mapped_value.cached_column_info, added_columns, rows_joined, num_columns_to_add + 1);
         }
         return false;
     }
