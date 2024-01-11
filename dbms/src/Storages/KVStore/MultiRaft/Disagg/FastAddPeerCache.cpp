@@ -159,7 +159,7 @@ ParsedCheckpointDataHolderPtr buildParsedCheckpointData(Context & context, const
             {
                 if (!record.entry.checkpoint_info.data_location.isValid())
                 {
-                    // Eventually fallback to legacy snapshot
+                    // Eventually fallback to regular snapshot
                     throw Exception(
                         ErrorCodes::LOGICAL_ERROR,
                         "buildParsedCheckpointData: can't put remote page with empty data_location, page_id={}",
@@ -185,7 +185,7 @@ ParsedCheckpointDataHolderPtr buildParsedCheckpointData(Context & context, const
                 RUNTIME_CHECK(record.entry.checkpoint_info.has_value());
                 if (!record.entry.checkpoint_info.data_location.isValid())
                 {
-                    // Eventually fallback to legacy snapshot
+                    // Eventually fallback to regular snapshot
                     throw Exception(
                         ErrorCodes::LOGICAL_ERROR,
                         "buildParsedCheckpointData: can't put external page with empty data_location, page_id={}",

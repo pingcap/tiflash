@@ -214,7 +214,9 @@ public:
     // May return 0 if uninitialized
     StoreID getStoreID(std::memory_order = std::memory_order_relaxed) const;
 
-    metapb::Store getStoreMeta() const;
+    metapb::Store clonedStoreMeta() const;
+    const metapb::Store & getStoreMeta() const;
+    metapb::Store & debugMutStoreMeta();
 
     BatchReadIndexRes batchReadIndex(const std::vector<kvrpcpb::ReadIndexRequest> & req, uint64_t timeout_ms) const;
 
@@ -366,6 +368,7 @@ private:
     void releaseReadIndexWorkers();
     void handleDestroy(UInt64 region_id, TMTContext & tmt, const KVStoreTaskLock &);
     void fetchProxyConfig(const TiFlashRaftProxyHelper * proxy_helper);
+    RegionTaskLock genRegionTaskLock(UInt64 region_id) const;
 
 #ifndef DBMS_PUBLIC_GTEST
 private:
