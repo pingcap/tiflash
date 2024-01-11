@@ -731,24 +731,24 @@ try
     sp.disable();
     t.join();
 
-    // server.tmt->getContext().getSettingsRef().fap_task_timeout_seconds = 0;
-    // // Use another call to cancel
-    // FastAddPeer(&server, region_id, 2333);
-    // LOG_INFO(log, "Try another snapshot");
-    // proxy_instance->snapshot(
-    //     kvs,
-    //     global_context.getTMTContext(),
-    //     region_id,
-    //     {default_cf},
-    //     kv_region->cloneMetaRegion(),
-    //     2,
-    //     11,
-    //     11,
-    //     std::nullopt,
-    //     false);
-    // eventuallyPredicate([&]() {
-    //     return !CheckpointIngestInfo::restore(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333);
-    // });
+    server.tmt->getContext().getSettingsRef().fap_task_timeout_seconds = 0;
+    // Use another call to cancel
+    FastAddPeer(&server, region_id, 2333);
+    LOG_INFO(log, "Try another snapshot");
+    proxy_instance->snapshot(
+        kvs,
+        global_context.getTMTContext(),
+        region_id,
+        {default_cf},
+        kv_region->cloneMetaRegion(),
+        2,
+        11,
+        11,
+        std::nullopt,
+        false);
+    eventuallyPredicate([&]() {
+        return !CheckpointIngestInfo::restore(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333);
+    });
     // Wait async cancel in `FastAddPeerImplWrite`.
     ASSERT_FALSE(fap_context->tryGetCheckpointIngestInfo(region_id).has_value());
     FailPointHelper::disableFailPoint(FailPoints::force_set_fap_candidate_store_id);
