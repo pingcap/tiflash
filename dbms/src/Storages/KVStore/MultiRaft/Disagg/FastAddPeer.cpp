@@ -19,6 +19,7 @@
 #include <Encryption/PosixRandomAccessFile.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
+#include <Storages/KVStore/Decode/PartitionStreams.h>
 #include <Storages/KVStore/FFI/ProxyFFI.h>
 #include <Storages/KVStore/FFI/ProxyFFICommon.h>
 #include <Storages/KVStore/KVStore.h>
@@ -42,7 +43,6 @@
 #include <Storages/S3/S3GCManager.h>
 #include <Storages/S3/S3RandomAccessFile.h>
 #include <Storages/StorageDeltaMerge.h>
-#include <Storages/KVStore/Decode/PartitionStreams.h>
 #include <fmt/core.h>
 
 #include <memory>
@@ -316,7 +316,12 @@ FastAddPeerRes FastAddPeerImplWrite(
 
     if (cancel_handle->isCanceled())
     {
-        LOG_INFO(log, "FAP is canceled before write, region_id={} keyspace_id={} table_id={}", region_id, keyspace_id, table_id);
+        LOG_INFO(
+            log,
+            "FAP is canceled before write, region_id={} keyspace_id={} table_id={}",
+            region_id,
+            keyspace_id,
+            table_id);
         fap_ctx->cleanTask(tmt, proxy_helper, region_id, false);
         GET_METRIC(tiflash_fap_task_result, type_failed_cancel).Increment();
         return genFastAddPeerRes(FastAddPeerStatus::Canceled, "", "");
@@ -335,7 +340,12 @@ FastAddPeerRes FastAddPeerImplWrite(
     SYNC_FOR("in_FastAddPeerImplWrite::after_write_segments");
     if (cancel_handle->isCanceled())
     {
-        LOG_INFO(log, "FAP is canceled after write segments, region_id={} keyspace_id={} table_id={}", region_id, keyspace_id, table_id);
+        LOG_INFO(
+            log,
+            "FAP is canceled after write segments, region_id={} keyspace_id={} table_id={}",
+            region_id,
+            keyspace_id,
+            table_id);
         fap_ctx->cleanTask(tmt, proxy_helper, region_id, false);
         GET_METRIC(tiflash_fap_task_result, type_failed_cancel).Increment();
         return genFastAddPeerRes(FastAddPeerStatus::Canceled, "", "");
@@ -361,12 +371,22 @@ FastAddPeerRes FastAddPeerImplWrite(
     SYNC_FOR("in_FastAddPeerImplWrite::after_write_raft_log");
     if (cancel_handle->isCanceled())
     {
-        LOG_INFO(log, "FAP is canceled after write raft log, region_id={} keyspace_id={} table_id={}", region_id, keyspace_id, table_id);
+        LOG_INFO(
+            log,
+            "FAP is canceled after write raft log, region_id={} keyspace_id={} table_id={}",
+            region_id,
+            keyspace_id,
+            table_id);
         fap_ctx->cleanTask(tmt, proxy_helper, region_id, false);
         GET_METRIC(tiflash_fap_task_result, type_failed_cancel).Increment();
         return genFastAddPeerRes(FastAddPeerStatus::Canceled, "", "");
     }
-    LOG_DEBUG(log, "Finish write FAP snapshot, region_id={} keyspace_id={} table_id={}", region_id, keyspace_id, table_id);
+    LOG_DEBUG(
+        log,
+        "Finish write FAP snapshot, region_id={} keyspace_id={} table_id={}",
+        region_id,
+        keyspace_id,
+        table_id);
     return genFastAddPeerRes(
         FastAddPeerStatus::Ok,
         apply_state.SerializeAsString(),
@@ -394,6 +414,9 @@ FastAddPeerRes FastAddPeerImpl(
         auto elapsed = maybe_elapsed.value();
         GET_METRIC(tiflash_fap_task_duration_seconds, type_queue_stage).Observe(elapsed / 1000.0);
         GET_METRIC(tiflash_fap_task_state, type_queueing_stage).Decrement();
+        // Consider phase1 -> restart -> phase1 -> fallback -> regular snapshot,
+        // We may find stale fap snapshot.
+        CheckpointIngestInfo::forciblyClean(tmt, proxy_helper, region_id, false);
         auto res = FastAddPeerImplSelect(tmt, proxy_helper, region_id, new_peer_id);
         if (std::holds_alternative<CheckpointRegionInfoAndData>(res))
         {
@@ -663,6 +686,23 @@ FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, u
                 region_id,
                 new_peer_id));
         return genFastAddPeerRes(FastAddPeerStatus::OtherError, "", "");
+    }
+}
+
+void ClearFapSnapshot(EngineStoreServerWrap * server, uint64_t region_id)
+{
+    try
+    {
+        RUNTIME_CHECK_MSG(server->tmt, "TMTContext is null");
+        RUNTIME_CHECK_MSG(server->proxy_helper, "proxy_helper is null");
+        if (!server->tmt->getContext().getSharedContextDisagg()->isDisaggregatedStorageMode())
+            return;
+        CheckpointIngestInfo::forciblyClean(*(server->tmt), server->proxy_helper, region_id, false);
+    }
+    catch (...)
+    {
+        tryLogCurrentFatalException(__PRETTY_FUNCTION__);
+        exit(-1);
     }
 }
 } // namespace DB
