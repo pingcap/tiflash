@@ -126,6 +126,8 @@ try
     LOG_DEBUG(log, "Compile dag request cost {} ms", compile_time_ns / 1000000);
 
     BlockOutputStreamPtr dag_output_stream = nullptr;
+    RU cpu_ru = 0.0;
+    RU bytes_ru = 0.0;
     if constexpr (Kind == DAGRequestKind::Cop)
     {
         auto response_writer = std::make_unique<UnaryDAGResponseWriter>(
@@ -142,9 +144,14 @@ try
             .verify();
         response_writer->flush();
 
+        auto cpu_time_ns = query_executor->collectCPUTimeNs();
+        cpu_ru = cpuTimeToRU(cpu_time_ns);
+        auto read_bytes = dag_context.getReadBytes();
+        bytes_ru = bytesToRU(read_bytes);
         if (dag_context.collect_execution_summaries)
         {
             ExecutorStatisticsCollector statistics_collector(log->identifier());
+            statistics_collector.setLocalRUConsumption(cpu_ru, cpu_time_ns, bytes_ru, read_bytes);
             statistics_collector.initialize(&dag_context);
             statistics_collector.fillExecuteSummaries(*cop_response);
         }
@@ -170,9 +177,14 @@ try
 
         tipb::SelectResponse last_response;
         bool need_send = false;
+        auto cpu_time_ns = query_executor->collectCPUTimeNs();
+        cpu_ru = cpuTimeToRU(cpu_time_ns);
+        auto read_bytes = dag_context.getReadBytes();
+        bytes_ru = bytesToRU(read_bytes);
         if (dag_context.collect_execution_summaries)
         {
             ExecutorStatisticsCollector statistics_collector(log->identifier());
+            statistics_collector.setLocalRUConsumption(cpu_ru, cpu_time_ns, bytes_ru, read_bytes);
             statistics_collector.initialize(&dag_context);
             statistics_collector.fillExecuteSummaries(last_response);
             need_send = true;
@@ -219,9 +231,14 @@ try
 
         tipb::SelectResponse last_response;
         bool need_send = false;
+        auto cpu_time_ns = query_executor->collectCPUTimeNs();
+        cpu_ru = cpuTimeToRU(cpu_time_ns);
+        auto read_bytes = dag_context.getReadBytes();
+        bytes_ru = bytesToRU(read_bytes);
         if (dag_context.collect_execution_summaries)
         {
             ExecutorStatisticsCollector statistics_collector(log->identifier());
+            statistics_collector.setLocalRUConsumption(cpu_ru, cpu_time_ns, bytes_ru, read_bytes);
             statistics_collector.initialize(&dag_context);
             statistics_collector.fillExecuteSummaries(last_response);
             need_send = true;
@@ -235,22 +252,20 @@ try
             streaming_writer->write(last_response);
     }
 
-    auto cpu_ru = query_executor->collectRequestUnit();
-    auto read_ru = dag_context.getReadRU();
     if constexpr (Kind == DAGRequestKind::Cop)
     {
-        LOG_INFO(log, "cop finish with request unit: cpu={} read={}", cpu_ru, read_ru);
-        GET_METRIC(tiflash_compute_request_unit, type_cop).Increment(cpu_ru + read_ru);
+        LOG_INFO(log, "cop finish with request unit: cpu={} read={}", cpu_ru, bytes_ru);
+        GET_METRIC(tiflash_compute_request_unit, type_cop).Increment(cpu_ru + bytes_ru);
     }
     else if constexpr (Kind == DAGRequestKind::CopStream)
     {
-        LOG_INFO(log, "cop stream finish with request unit: cpu={} read={}", cpu_ru, read_ru);
-        GET_METRIC(tiflash_compute_request_unit, type_cop_stream).Increment(cpu_ru + read_ru);
+        LOG_INFO(log, "cop stream finish with request unit: cpu={} read={}", cpu_ru, bytes_ru);
+        GET_METRIC(tiflash_compute_request_unit, type_cop_stream).Increment(cpu_ru + bytes_ru);
     }
     else if constexpr (Kind == DAGRequestKind::BatchCop)
     {
-        LOG_INFO(log, "batch cop finish with request unit: cpu={} read={}", cpu_ru, read_ru);
-        GET_METRIC(tiflash_compute_request_unit, type_batch).Increment(cpu_ru + read_ru);
+        LOG_INFO(log, "batch cop finish with request unit: cpu={} read={}", cpu_ru, bytes_ru);
+        GET_METRIC(tiflash_compute_request_unit, type_batch).Increment(cpu_ru + bytes_ru);
     }
 
     if (auto throughput = dag_context.getTableScanThroughput(); throughput.first)

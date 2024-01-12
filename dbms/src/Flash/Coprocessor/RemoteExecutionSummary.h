@@ -29,5 +29,11 @@ struct RemoteExecutionSummary
 
     // <executor_id, ExecutionSummary>
     std::unordered_map<String, ExecutionSummary> execution_summaries;
+    // ru consumption of remote MPPTask.
+    resource_manager::Consumption ru_consumption;
 };
+
+resource_manager::Consumption mergeRUConsumption(
+    const resource_manager::Consumption & left,
+    const resource_manager::Consumption & right);
 } // namespace DB

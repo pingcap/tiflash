@@ -15,8 +15,10 @@
 #pragma once
 
 #include <Common/Exception.h>
+#include <Flash/Executor/toRU.h>
 #include <Flash/Statistics/ExecutorStatisticsBase.h>
 #include <Storages/DeltaMerge/ScanContext_fwd.h>
+#include <kvproto/resource_manager.pb.h>
 #include <tipb/executor.pb.h>
 #include <tipb/select.pb.h>
 
@@ -46,12 +48,14 @@ public:
 
     const std::map<String, ExecutorStatisticsPtr> & getProfiles() const { return profiles; }
 
+    void setLocalRUConsumption(RU cpu_ru, UInt64 cpu_time_ns, RU bytes_ru, UInt64 read_bytes);
+
 private:
     void collectRuntimeDetails();
 
     void fillLocalExecutionSummaries(tipb::SelectResponse & response);
 
-    void fillRemoteExecutionSummaries(tipb::SelectResponse & response);
+    void fillRemoteExecutionSummaries(tipb::SelectResponse & response, resource_manager::Consumption & remote_ru);
 
     void fillExecutionSummary(
         tipb::SelectResponse & response,
@@ -86,6 +90,7 @@ private:
     std::map<String, ExecutorStatisticsPtr> profiles;
     const LoggerPtr log;
     bool force_fill_executor_id; // for testing list based executors
+    std::unique_ptr<resource_manager::Consumption> local_ru;
 };
 using ExecutorStatisticsCollectorPtr = std::unique_ptr<ExecutorStatisticsCollector>;
 } // namespace DB
