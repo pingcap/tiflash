@@ -1181,10 +1181,12 @@ try
             ASSERT_EQ(
                 e.message(),
                 fmt::format(
-                    "try to apply with older index, region_id={} applied_index={} new_index={}",
+                    "try to apply with older index, region_id={} applied_index={} new_index={}: (while "
+                    "applyPreHandledSnapshot region_id={})",
                     region_id,
                     8,
-                    6));
+                    6,
+                    region_id));
         }
     }
 

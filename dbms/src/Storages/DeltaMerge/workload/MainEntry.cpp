@@ -163,7 +163,7 @@ ContextPtr init(WorkloadOptions & opts)
     if (!opts.s3_bucket.empty())
     {
         auto & kvstore = context->getTMTContext().getKVStore();
-        auto store_meta = kvstore->getStoreMeta();
+        auto store_meta = kvstore->clonedStoreMeta();
         store_meta.set_id(test_store_id);
         kvstore->setStore(store_meta);
         context->getSharedContextDisagg()->initRemoteDataStore(
