@@ -101,7 +101,7 @@ std::streampos StdStreamBufFromReadBuffer::seekpos(std::streampos pos, std::ios_
 
     read_buffer->position() = this->gptr();
     std::streamoff offset = pos - getCurrentPosition();
-    if (!offset)
+    if (offset == 0)
         return pos;
 
     if ((read_buffer->buffer().begin() <= read_buffer->position() + offset)
