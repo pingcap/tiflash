@@ -571,11 +571,13 @@ void MPPTask::runImpl()
             "mpp task finish execute, is_success: {}, status: {}",
             result.is_success,
             magic_enum::enum_name(status.load()));
-        auto cpu_ru = query_executor_holder->collectRequestUnit();
-        auto read_ru = dag_context->getReadRU();
-        LOG_DEBUG(log, "mpp finish with request unit: cpu={} read={}", cpu_ru, read_ru);
-        GET_METRIC(tiflash_compute_request_unit, type_mpp).Increment(cpu_ru + read_ru);
-        mpp_task_statistics.setRU(cpu_ru, read_ru);
+        auto cpu_time_ns = query_executor_holder->collectCPUTimeNs();
+        auto cpu_ru = cpuTimeToRU(cpu_time_ns);
+        auto read_bytes = dag_context->getReadBytes();
+        auto bytes_ru = bytesToRU(read_bytes);
+        LOG_DEBUG(log, "mpp finish with request unit: cpu={} read={}", cpu_ru, bytes_ru);
+        GET_METRIC(tiflash_compute_request_unit, type_mpp).Increment(cpu_ru + bytes_ru);
+        mpp_task_statistics.setRU(cpu_ru, cpu_time_ns, bytes_ru, read_bytes);
 
         mpp_task_statistics.collectRuntimeStatistics();
 

@@ -151,6 +151,14 @@ tipb::TiFlashExecutionInfo ExecutorStatisticsCollector::genTiFlashExecutionInfo(
     return execution_info;
 }
 
+void ExecutorStatisticsCollector::setLocalRUConsumption(RU cpu_ru, UInt64 cpu_time_ns, RU bytes_ru, UInt64 read_bytes)
+{
+    local_ru = std::make_unique<resource_manager::Consumption>();
+    local_ru->set_r_r_u(cpu_ru + bytes_ru);
+    local_ru->set_total_cpu_time_ms(toCPUTimeMillisecond(cpu_time_ns));
+    local_ru->set_read_bytes(read_bytes);
+}
+
 void ExecutorStatisticsCollector::fillExecutionSummary(
     tipb::SelectResponse & response,
     const String & executor_id,
@@ -184,7 +192,17 @@ void ExecutorStatisticsCollector::fillExecuteSummaries(tipb::SelectResponse & re
     fillLocalExecutionSummaries(response);
 
     // TODO: remove filling remote execution summaries
-    fillRemoteExecutionSummaries(response);
+    resource_manager::Consumption remote_ru;
+    fillRemoteExecutionSummaries(response, remote_ru);
+
+    // local_ru should already setup after MPPTask finish.
+    RUNTIME_CHECK(local_ru);
+    auto sum_ru = mergeRUConsumption(*local_ru, remote_ru);
+
+    assert(!response.execution_summaries().empty());
+    if unlikely (!sum_ru.SerializeToString(
+                     (*response.mutable_execution_summaries())[0].mutable_tiflash_ru_consumption()))
+        throw Exception("failed to serialize tiflash ru consumption into response");
 }
 
 void ExecutorStatisticsCollector::collectRuntimeDetails()
@@ -225,10 +243,13 @@ void ExecutorStatisticsCollector::fillLocalExecutionSummaries(tipb::SelectRespon
     }
 }
 
-void ExecutorStatisticsCollector::fillRemoteExecutionSummaries(tipb::SelectResponse & response)
+void ExecutorStatisticsCollector::fillRemoteExecutionSummaries(
+    tipb::SelectResponse & response,
+    resource_manager::Consumption & remote)
 {
     // TODO: support cop remote read and disaggregated mode.
     auto exchange_execution_summary = getRemoteExecutionSummariesFromExchange(*dag_context);
+    remote = exchange_execution_summary.ru_consumption;
 
     // fill execution_summaries from remote executor received by exchange.
     for (auto & p : exchange_execution_summary.execution_summaries)

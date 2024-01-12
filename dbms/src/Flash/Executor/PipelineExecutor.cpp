@@ -128,7 +128,7 @@ int PipelineExecutor::estimateNewThreadCount()
     return 0;
 }
 
-RU PipelineExecutor::collectRequestUnit()
+UInt64 PipelineExecutor::collectCPUTimeNs()
 {
     // TODO Get cputime more accurately.
     // Currently, it is assumed that
@@ -139,7 +139,7 @@ RU PipelineExecutor::collectRequestUnit()
     // It may be necessary to obtain CPU time using a more accurate method, such as using system call `clock_gettime`.
     const auto & query_profile_info = exec_context.getQueryProfileInfo();
     auto cpu_time_ns = query_profile_info.getCPUExecuteTimeNs();
-    return cpuTimeToRU(cpu_time_ns);
+    return cpu_time_ns;
 }
 
 Block PipelineExecutor::getSampleBlock() const

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
 #include <Flash/Coprocessor/RemoteExecutionSummary.h>
 #include <common/likely.h>
 
@@ -31,6 +32,8 @@ void RemoteExecutionSummary::merge(const RemoteExecutionSummary & other)
         {
             it->second.merge(p.second);
         }
+
+        ru_consumption = mergeRUConsumption(ru_consumption, other.ru_consumption);
     }
 }
 
@@ -53,7 +56,29 @@ void RemoteExecutionSummary::add(tipb::SelectResponse & resp)
             {
                 it->second.merge(execution_summary);
             }
+
+            if (execution_summary.has_tiflash_ru_consumption())
+            {
+                resource_manager::Consumption remote_ru_consumption;
+                if unlikely (!remote_ru_consumption.ParseFromString(execution_summary.tiflash_ru_consumption()))
+                    throw Exception("failed to parse ru consumption from remote execution summary");
+
+                ru_consumption = mergeRUConsumption(ru_consumption, remote_ru_consumption);
+            }
         }
     }
+}
+
+resource_manager::Consumption mergeRUConsumption(
+    const resource_manager::Consumption & left,
+    const resource_manager::Consumption & right)
+{
+    // TiFlash only support read related RU for now.
+    // So ignore merge other fields.
+    resource_manager::Consumption sum;
+    sum.set_r_r_u(left.r_r_u() + right.r_r_u());
+    sum.set_read_bytes(left.read_bytes() + right.read_bytes());
+    sum.set_total_cpu_time_ms(left.total_cpu_time_ms() + right.total_cpu_time_ms());
+    return sum;
 }
 } // namespace DB

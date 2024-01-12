@@ -143,10 +143,11 @@ void MPPTaskStatistics::setMemoryPeak(Int64 memory_peak_)
     memory_peak = memory_peak_;
 }
 
-void MPPTaskStatistics::setRU(RU cpu_ru_, RU read_ru_)
+void MPPTaskStatistics::setRU(RU cpu_ru_, UInt64 cpu_time_ns_, RU bytes_ru_, UInt64 read_bytes_)
 {
     cpu_ru = cpu_ru_;
-    read_ru = read_ru_;
+    read_ru = bytes_ru_;
+    executor_statistics_collector.setLocalRUConsumption(cpu_ru_, cpu_time_ns_, bytes_ru_, read_bytes_);
 }
 
 void MPPTaskStatistics::setCompileTimestamp(const Timestamp & start_timestamp, const Timestamp & end_timestamp)
