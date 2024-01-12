@@ -96,6 +96,9 @@ public:
     /// offset in bytes of the cursor from the beginning of the buffer
     inline size_t offset() const { return pos - working_buffer.begin(); }
 
+    /// How many bytes are available for read/write
+    inline size_t available() const { return static_cast<size_t>(working_buffer.end() - pos); }
+
     /** How many bytes have been read/written, counting those that are still in the buffer. */
     size_t count() const { return bytes + offset(); }
 
