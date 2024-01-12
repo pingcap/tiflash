@@ -88,8 +88,7 @@ public:
         db_context->setFileProvider(file_provider);
 
         s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
-        data_store
-            = std::make_shared<DM::Remote::DataStoreS3>(dbContext().getFileProvider(), dbContext().getReadLimiter());
+        data_store = std::make_shared<DM::Remote::DataStoreS3>(dbContext().getFileProvider());
         ASSERT_TRUE(::DB::tests::TiFlashTestEnv::createBucketIfNotExist(*s3_client));
         DB::tests::TiFlashTestEnv::enableS3Config();
     }

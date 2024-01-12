@@ -668,8 +668,7 @@ try
             manifest_file_path1,
             manifest_file_id1,
             EncryptionPath(manifest_file_path1, ""),
-            ::DB::tests::TiFlashTestEnv::getMockFileProvider(),
-            nullptr);
+            ::DB::tests::TiFlashTestEnv::getMockFileProvider());
     }
     { // prepare the second manifest on S3
         const String entry_data = "cherry_value";
@@ -711,8 +710,7 @@ try
             manifest_file_path2,
             manifest_file_id2,
             EncryptionPath(manifest_file_path2, ""),
-            ::DB::tests::TiFlashTestEnv::getMockFileProvider(),
-            nullptr);
+            ::DB::tests::TiFlashTestEnv::getMockFileProvider());
     }
 
     // read from S3 key

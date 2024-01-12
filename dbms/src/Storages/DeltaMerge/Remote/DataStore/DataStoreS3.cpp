@@ -74,8 +74,7 @@ void DataStoreS3::putDMFile(DMFilePtr local_dmfile, const S3::DMFileOID & oid, b
                     local_fname,
                     remote_fname,
                     EncryptionPath(local_dmfile->path(), fname),
-                    file_provider,
-                    read_limiter);
+                    file_provider);
             });
         upload_results.push_back(task->get_future());
         DataStoreS3Pool::get().scheduleOrThrowOnError([task]() { (*task)(); });
@@ -93,8 +92,7 @@ void DataStoreS3::putDMFile(DMFilePtr local_dmfile, const S3::DMFileOID & oid, b
         local_meta_fname,
         remote_meta_fname,
         EncryptionPath(local_dmfile->path(), DMFile::metav2FileName()),
-        file_provider,
-        read_limiter);
+        file_provider);
     if (remove_local)
     {
         local_dmfile->switchToRemote(oid);
@@ -127,8 +125,7 @@ bool DataStoreS3::putCheckpointFiles(
                 local_datafile,
                 s3key.toFullKey(),
                 EncryptionPath(local_datafile, ""),
-                file_provider,
-                read_limiter);
+                file_provider);
             S3::uploadEmptyFile(*s3_client, lock_key);
         });
         upload_results.push_back(task->get_future());
@@ -146,8 +143,7 @@ bool DataStoreS3::putCheckpointFiles(
         local_files.manifest_file,
         s3key.toFullKey(),
         EncryptionPath(local_files.manifest_file, ""),
-        file_provider,
-        read_limiter);
+        file_provider);
 
     return true; // upload success
 }

@@ -94,7 +94,6 @@ public:
             already_initialize_data_store = false;
             global_context.getSharedContextDisagg()->initRemoteDataStore(
                 global_context.getFileProvider(),
-                global_context.getReadLimiter(),
                 /*s3_enabled*/ true);
             ASSERT_TRUE(global_context.getSharedContextDisagg()->remote_data_store != nullptr);
         }
@@ -180,8 +179,8 @@ private:
     ContextPtr context;
     bool already_initialize_data_store = false;
     bool already_initialize_write_ps = false;
-    DB::PageStorageRunMode orig_mode{};
-    DisaggregatedMode orig_disagg_mode{};
+    DB::PageStorageRunMode orig_mode = PageStorageRunMode::UNI_PS;
+    DisaggregatedMode orig_disagg_mode = DisaggregatedMode::None;
 };
 
 void persistAfterWrite(

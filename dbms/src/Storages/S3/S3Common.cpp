@@ -596,7 +596,6 @@ static bool doUploadFile(
     const String & remote_fname,
     const EncryptionPath & encryption_path,
     const FileProviderPtr & file_provider,
-    const ReadLimiterPtr & read_limiter,
     Int32 max_retry_times,
     Int32 current_retry)
 {
@@ -609,11 +608,11 @@ static bool doUploadFile(
     RandomAccessFilePtr local_file;
     if (file_provider)
     {
-        local_file = file_provider->newRandomAccessFile(local_fname, encryption_path, read_limiter);
+        local_file = file_provider->newRandomAccessFile(local_fname, encryption_path, nullptr);
     }
     else
     {
-        local_file = std::make_shared<PosixRandomAccessFile>(local_fname, -1, read_limiter);
+        local_file = PosixRandomAccessFile::create(local_fname);
     }
     // Read at most 16MB each time.
     auto read_buf = std::make_unique<ReadBufferFromRandomAccessFile>(local_file, 16 * 1024 * 1024);
@@ -679,18 +678,9 @@ void uploadFile(
     const String & remote_fname,
     const EncryptionPath & encryption_path,
     const FileProviderPtr & file_provider,
-    const ReadLimiterPtr & read_limiter,
     int max_retry_times)
 {
-    retryWrapper(
-        doUploadFile,
-        client,
-        local_fname,
-        remote_fname,
-        encryption_path,
-        file_provider,
-        read_limiter,
-        max_retry_times);
+    retryWrapper(doUploadFile, client, local_fname, remote_fname, encryption_path, file_provider, max_retry_times);
 }
 
 void downloadFile(const TiFlashS3Client & client, const String & local_fname, const String & remote_fname)

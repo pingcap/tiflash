@@ -1134,7 +1134,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     global_context->getSharedContextDisagg()->initRemoteDataStore(
         global_context->getFileProvider(),
-        global_context->getReadLimiter(),
         storage_config.s3_config.isS3Enabled());
 
     const auto is_compute_mode = global_context->getSharedContextDisagg()->isDisaggregatedComputeMode();

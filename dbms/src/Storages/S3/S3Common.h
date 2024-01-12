@@ -170,7 +170,6 @@ void uploadFile(
     const String & remote_fname,
     const EncryptionPath & encryption_path,
     const FileProviderPtr & file_provider,
-    const ReadLimiterPtr & read_limiter,
     int max_retry_times = 3);
 
 constexpr std::string_view TaggingObjectIsDeleted = "tiflash_deleted=true";

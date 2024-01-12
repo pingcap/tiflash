@@ -23,9 +23,8 @@ namespace DB::DM::Remote
 class DataStoreS3 final : public IDataStore
 {
 public:
-    explicit DataStoreS3(const FileProviderPtr & file_provider_, const ReadLimiterPtr & read_limiter_ = nullptr)
+    explicit DataStoreS3(const FileProviderPtr & file_provider_)
         : file_provider(file_provider_)
-        , read_limiter(read_limiter_)
         , log(Logger::get("DataStoreS3"))
     {}
 
@@ -68,7 +67,6 @@ public:
         const String & local_dir);
 
     FileProviderPtr file_provider;
-    ReadLimiterPtr read_limiter;
     const LoggerPtr log;
 };
 

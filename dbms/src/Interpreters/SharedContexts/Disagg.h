@@ -88,10 +88,7 @@ struct SharedContextDisagg : private boost::noncopyable
 
     void initWriteNodeSnapManager();
 
-    void initRemoteDataStore(
-        const FileProviderPtr & file_provider,
-        const ReadLimiterPtr & read_limiter,
-        bool s3_enabled);
+    void initRemoteDataStore(const FileProviderPtr & file_provider, bool s3_enabled);
 
     void initFastAddPeerContext(UInt64 fap_concur);
 

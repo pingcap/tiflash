@@ -90,16 +90,13 @@ void SharedContextDisagg::initWriteNodeSnapManager()
     wn_snapshot_manager = std::make_shared<DM::Remote::WNDisaggSnapshotManager>(global_context.getBackgroundPool());
 }
 
-void SharedContextDisagg::initRemoteDataStore(
-    const FileProviderPtr & file_provider,
-    const ReadLimiterPtr & read_limiter,
-    bool s3_enabled)
+void SharedContextDisagg::initRemoteDataStore(const FileProviderPtr & file_provider, bool s3_enabled)
 {
     if (!s3_enabled)
         return;
 
     // Now only S3 data store is supported
-    remote_data_store = std::make_shared<DM::Remote::DataStoreS3>(file_provider, read_limiter);
+    remote_data_store = std::make_shared<DM::Remote::DataStoreS3>(file_provider);
 }
 
 void SharedContextDisagg::initFastAddPeerContext(UInt64 fap_concur)

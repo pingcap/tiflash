@@ -168,7 +168,6 @@ ContextPtr init(WorkloadOptions & opts)
         kvstore->setStore(store_meta);
         context->getSharedContextDisagg()->initRemoteDataStore(
             context->getFileProvider(),
-            context->getReadLimiter(),
             /*is_s3_enabled*/ true);
     }
     return context;
@@ -485,7 +484,7 @@ void putRandomObject(const DB::DM::tests::WorkloadOptions & opts)
     genFile(local_fname, fsize, value);
     auto client = getS3Client(opts);
     Stopwatch sw;
-    S3::uploadFile(*client, local_fname, remote_fname, EncryptionPath("", ""), nullptr, nullptr);
+    S3::uploadFile(*client, local_fname, remote_fname, EncryptionPath("", ""), nullptr);
     addRemoteFname(remote_fname, fsize);
     s3_stat.addPutStat(remote_fname, sw.elapsedSeconds());
     std::filesystem::remove(local_fname);
