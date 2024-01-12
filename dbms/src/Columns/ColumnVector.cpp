@@ -325,14 +325,10 @@ ColumnPtr ColumnVector<T>::replicateRange(size_t start_row, size_t end_row, cons
         return res;
 
     typename Self::Container & res_data = res->getData();
-    res_data.resize(offsets[end_row - 1]);
+    res_data.reserve(offsets[end_row - 1]);
 
-    IColumn::Offset prev_offset = 0;
     for (size_t i = start_row; i < end_row; ++i)
-    {
-        std::fill(&res_data[prev_offset], &res_data[offsets[i]], data[i]);
-        prev_offset = offsets[i];
-    }
+        res_data.resize_fill(offsets[i], data[i]);
 
     return res;
 }

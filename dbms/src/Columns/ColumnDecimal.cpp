@@ -324,13 +324,9 @@ void ColumnDecimal<T>::insertDisjunctManyFrom(const IColumn & src, const IColumn
         return;
     const auto & src_container = static_cast<const Self &>(src).getData();
     size_t old_size = data.size();
-    data.resize(old_size + disjuncts.back().count_offset);
-    size_t prev_count = 0;
+    data.reserve(old_size + disjuncts.back().count_offset);
     for (const auto & d : disjuncts)
-    {
-        std::fill(&data[old_size + prev_count], &data[old_size + d.count_offset], src_container[d.position]);
-        prev_count = d.count_offset;
-    }
+        data.resize_fill(old_size + d.count_offset, src_container[d.position]);
 }
 
 template <typename T>
@@ -340,19 +336,19 @@ void ColumnDecimal<T>::insertGatherRangeFrom(ColumnRawPtrs & src, const IColumn:
         return;
     assert(src.size() == gather_ranges.size());
     size_t old_size = data.size();
-    data.resize(old_size + gather_ranges.back().length_offset);
+    data.reserve(old_size + gather_ranges.back().length_offset);
     size_t sz = src.size(), prev_len = 0;
     for (size_t i = 0; i < sz; ++i)
     {
         const auto & g = gather_ranges[i];
         if (src[i] == nullptr)
         {
-            std::fill(&data[old_size + prev_len], &data[old_size + g.length_offset], T());
+            data.resize_fill(old_size + g.length_offset, T());
         }
         else
         {
             const auto & column_src = static_cast<const Self &>(*src[i]);
-            memcpy(&data[old_size + prev_len], &column_src.data[g.start_pos], (g.length_offset - prev_len) * sizeof(T));
+            data.insert(&column_src.data[g.start_pos], &column_src.data[g.start_pos + g.length_offset - prev_len]);
         }
         prev_len = g.length_offset;
     }
@@ -408,14 +404,10 @@ ColumnPtr ColumnDecimal<T>::replicateRange(size_t start_row, size_t end_row, con
         return res;
 
     typename Self::Container & res_data = res->getData();
-    res_data.resize(offsets[end_row - 1]);
+    res_data.reserve(offsets[end_row - 1]);
 
-    IColumn::Offset prev_offset = 0;
     for (size_t i = start_row; i < end_row; ++i)
-    {
-        std::fill(&res_data[prev_offset], &res_data[offsets[i]], data[i]);
-        prev_offset = offsets[i];
-    }
+        res_data.resize_fill(offsets[i], data[i]);
 
     return res;
 }

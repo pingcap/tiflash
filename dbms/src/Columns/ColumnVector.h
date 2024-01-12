@@ -225,13 +225,9 @@ public:
             return;
         const auto & src_container = static_cast<const Self &>(src).getData();
         size_t old_size = data.size();
-        data.resize(old_size + disjuncts.back().count_offset);
-        size_t prev_count = 0;
+        data.reserve(old_size + disjuncts.back().count_offset);
         for (const auto & d : disjuncts)
-        {
-            std::fill(&data[old_size + prev_count], &data[old_size + d.count_offset], src_container[d.position]);
-            prev_count = d.count_offset;
-        }
+            data.resize_fill(old_size + d.count_offset, src_container[d.position]);
     }
 
     void insertData(const char * pos, size_t /*length*/) override { data.push_back(*reinterpret_cast<const T *>(pos)); }
@@ -242,22 +238,19 @@ public:
             return;
         assert(src.size() == gather_ranges.size());
         size_t old_size = data.size();
-        data.resize(old_size + gather_ranges.back().length_offset);
+        data.reserve(old_size + gather_ranges.back().length_offset);
         size_t sz = src.size(), prev_len = 0;
         for (size_t i = 0; i < sz; ++i)
         {
             const auto & g = gather_ranges[i];
             if (src[i] == nullptr)
             {
-                std::fill(&data[old_size + prev_len], &data[old_size + g.length_offset], T());
+                data.resize_fill(old_size + g.length_offset, T());
             }
             else
             {
                 const auto & column_src = static_cast<const Self &>(*src[i]);
-                memcpy(
-                    &data[old_size + prev_len],
-                    &column_src.data[g.start_pos],
-                    (g.length_offset - prev_len) * sizeof(T));
+                data.insert(&column_src.data[g.start_pos], &column_src.data[g.start_pos + g.length_offset - prev_len]);
             }
             prev_len = g.length_offset;
         }
