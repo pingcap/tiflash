@@ -24,6 +24,7 @@
 
 namespace DB
 {
+
 struct EngineStoreServerWrap;
 
 /// CSEDataKeyManager is a KeyManager implementation that designed for Cloud Storage Engine.
@@ -60,4 +61,5 @@ private:
     std::unordered_map<KeyspaceID, EncryptionKey> keyspace_id_to_key;
     const MasterKeyPtr master_key;
 };
+
 } // namespace DB

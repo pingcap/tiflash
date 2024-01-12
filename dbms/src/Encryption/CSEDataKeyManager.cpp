@@ -23,6 +23,7 @@
 
 namespace DB
 {
+
 CSEDataKeyManager::CSEDataKeyManager(
     EngineStoreServerWrap * tiflash_instance_wrap_,
     std::weak_ptr<UniversalPageStorage> & ps_write_)
