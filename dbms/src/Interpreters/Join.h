@@ -481,11 +481,7 @@ private:
       *
       * @param block
       */
-    void handleOtherConditions(
-        Block & block,
-        IColumn::Filter * filter,
-        IColumn::Offsets * offsets_to_replicate,
-        const std::vector<size_t> & right_table_column) const;
+    void handleOtherConditions(Block & block, IColumn::Filter * filter, IColumn::Offsets * offsets_to_replicate) const;
 
     void handleOtherConditionsForOneProbeRow(Block & block, ProbeProcessInfo & probe_process_info) const;
 
