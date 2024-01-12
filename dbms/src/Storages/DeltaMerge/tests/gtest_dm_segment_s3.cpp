@@ -35,7 +35,6 @@
 #include <gtest/gtest.h>
 
 #include <ctime>
-#include <future>
 #include <memory>
 
 namespace DB
