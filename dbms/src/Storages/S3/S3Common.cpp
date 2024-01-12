@@ -614,9 +614,9 @@ static bool doUploadFile(
     {
         local_file = PosixRandomAccessFile::create(local_fname);
     }
-    // Read at most 8MB (the max pack size) each time.
+    // Read at most 1MB each time.
     auto read_buf
-        = std::make_unique<ReadBufferFromRandomAccessFile>(local_file, std::min(8 * 1024 * 1024, write_bytes));
+        = std::make_unique<ReadBufferFromRandomAccessFile>(local_file, std::min(1 * 1024 * 1024, write_bytes));
     auto istr = Aws::MakeShared<StdStreamFromReadBuffer>("PutObjectInputStream", std::move(read_buf), write_bytes);
     req.SetContentLength(write_bytes);
     req.SetBody(istr);
