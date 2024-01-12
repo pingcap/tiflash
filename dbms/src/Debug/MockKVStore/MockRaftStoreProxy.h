@@ -30,6 +30,7 @@ kvrpcpb::ReadIndexRequest make_read_index_reqs(uint64_t region_id, uint64_t star
 struct MockProxyRegion : MutexLockWrap
 {
     raft_serverpb::RegionLocalState getState();
+    raft_serverpb::RegionLocalState & mutState();
     raft_serverpb::RaftApplyState getApply();
     void persistAppliedIndex();
     void persistAppliedIndex(const std::lock_guard<Mutex> & lock);
@@ -231,6 +232,17 @@ struct MockRaftStoreProxy : MutexLockWrap
         std::vector<std::pair<std::string, std::string>> && ranges,
         metapb::RegionEpoch old_epoch);
 
+    std::tuple<RegionPtr, PrehandleResult> snapshot(
+        KVStore & kvs,
+        TMTContext & tmt,
+        UInt64 region_id,
+        std::vector<MockSSTGenerator> && cfs,
+        metapb::Region && region_meta,
+        UInt64 peer_id,
+        uint64_t index,
+        uint64_t term,
+        std::optional<uint64_t> deadline_index,
+        bool cancel_after_prehandle);
     std::tuple<RegionPtr, PrehandleResult> snapshot(
         KVStore & kvs,
         TMTContext & tmt,

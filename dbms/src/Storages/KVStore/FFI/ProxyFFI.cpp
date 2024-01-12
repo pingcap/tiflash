@@ -749,6 +749,20 @@ void ReleasePreHandledSnapshot(EngineStoreServerWrap * server, RawVoidPtr res, R
     }
 }
 
+bool KvstoreRegionExists(EngineStoreServerWrap * server, uint64_t region_id)
+{
+    try
+    {
+        auto & kvstore = server->tmt->getKVStore();
+        return kvstore->getRegion(region_id) != nullptr;
+    }
+    catch (...)
+    {
+        tryLogCurrentFatalException(__PRETTY_FUNCTION__);
+        exit(-1);
+    }
+}
+
 void GcRawCppPtr(RawVoidPtr ptr, RawCppPtrType type)
 {
     if (ptr)

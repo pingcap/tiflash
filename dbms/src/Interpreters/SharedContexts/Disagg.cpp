@@ -18,7 +18,7 @@
 #include <Storages/DeltaMerge/Remote/RNDeltaIndexCache.h>
 #include <Storages/DeltaMerge/Remote/RNLocalPageCache.h>
 #include <Storages/DeltaMerge/Remote/WNDisaggSnapshotManager.h>
-#include <Storages/KVStore/MultiRaft/Disagg/FastAddPeer.h>
+#include <Storages/KVStore/MultiRaft/Disagg/FastAddPeerContext.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorageService.h>
 #include <Storages/PathPool.h>
 
@@ -101,6 +101,7 @@ void SharedContextDisagg::initRemoteDataStore(const FileProviderPtr & file_provi
 
 void SharedContextDisagg::initFastAddPeerContext(UInt64 fap_concur)
 {
+    LOG_INFO(Logger::get(), "Init FAP Context, concurrency={}", fap_concur);
     fap_context = std::make_shared<FastAddPeerContext>(fap_concur);
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Inc.
+// Copyright 2024 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,24 +14,14 @@
 
 #pragma once
 
-#include <DataTypes/IDataType.h>
+#include <Storages/Page/PageDefinesBase.h>
 
 namespace DB
 {
-namespace CodecUtils
+namespace DM
 {
-struct DataTypeWithTypeName
-{
-    DataTypeWithTypeName(const DataTypePtr & t, const String & n)
-        : type(t)
-        , name(n)
-    {}
 
-    DataTypePtr type;
-    String name;
-};
+constexpr PageIdU64 DELTA_MERGE_FIRST_SEGMENT_ID = 1;
 
-void checkColumnSize(const String & identifier, size_t expected, size_t actual);
-void checkDataTypeName(const String & identifier, size_t column_index, const String & expected, const String & actual);
-} // namespace CodecUtils
+} // namespace DM
 } // namespace DB

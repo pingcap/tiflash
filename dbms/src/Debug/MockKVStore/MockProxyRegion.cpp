@@ -35,6 +35,12 @@ raft_serverpb::RegionLocalState MockProxyRegion::getState() NO_THREAD_SAFETY_ANA
     return state;
 }
 
+raft_serverpb::RegionLocalState & MockProxyRegion::mutState() NO_THREAD_SAFETY_ANALYSIS
+{
+    auto _ = genLockGuard();
+    return state;
+}
+
 raft_serverpb::RaftApplyState MockProxyRegion::getApply() NO_THREAD_SAFETY_ANALYSIS
 {
     auto _ = genLockGuard();
