@@ -38,6 +38,7 @@ struct ExchangeReceiverResult
     bool meet_error;
     String error_msg;
     bool eof;
+    const resource_manager::Consumption * ru_consumption;
     DecodeDetail decode_detail;
 
     ExchangeReceiverResult()
@@ -47,9 +48,10 @@ struct ExchangeReceiverResult
     static ExchangeReceiverResult newOk(
         std::shared_ptr<tipb::SelectResponse> resp_,
         size_t call_index_,
-        const String & req_info_)
+        const String & req_info_,
+        const resource_manager::Consumption * ru_consumption)
     {
-        return {resp_, call_index_, req_info_, /*meet_error*/ false, /*error_msg*/ "", /*eof*/ false};
+        return {resp_, call_index_, req_info_, /*meet_error*/ false, /*error_msg*/ "", /*eof*/ false, ru_consumption};
     }
 
     static ExchangeReceiverResult newEOF(const String & req_info_)
@@ -69,13 +71,15 @@ private:
         const String & req_info_ = "",
         bool meet_error_ = false,
         const String & error_msg_ = "",
-        bool eof_ = false)
+        bool eof_ = false,
+        const resource_manager::Consumption * ru_consumption_ = nullptr)
         : resp(resp_)
         , call_index(call_index_)
         , req_info(req_info_)
         , meet_error(meet_error_)
         , error_msg(error_msg_)
         , eof(eof_)
+        , ru_consumption(ru_consumption_)
     {}
 };
 

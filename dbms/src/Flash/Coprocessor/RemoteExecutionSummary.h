@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Flash/Coprocessor/ExecutionSummary.h>
+#include <kvproto/resource_manager.pb.h>
 #include <tipb/select.pb.h>
 
 #include <unordered_map>
@@ -29,5 +30,18 @@ struct RemoteExecutionSummary
 
     // <executor_id, ExecutionSummary>
     std::unordered_map<String, ExecutionSummary> execution_summaries;
+    resource_manager::Consumption ru_consumption;
 };
+
+resource_manager::Consumption mergeRUConsumption(
+    const resource_manager::Consumption & left,
+    const resource_manager::Consumption & right)
+{
+    // TiFlash only support read related RU for now.
+    resource_manager::Consumption sum;
+    sum.set_r_r_u(left.r_r_u() + right.r_r_u());
+    sum.set_read_bytes(left.read_bytes() + right.read_bytes());
+    sum.set_total_cpu_time_ms(left.total_cpu_time_ms() + right.total_cpu_time_ms());
+    return sum;
+}
 } // namespace DB

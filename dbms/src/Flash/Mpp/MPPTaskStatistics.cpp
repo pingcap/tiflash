@@ -19,6 +19,7 @@
 #include <Flash/Mpp/getMPPTaskTracingLog.h>
 #include <common/logger_useful.h>
 #include <fmt/format.h>
+#include <kvproto/resource_manager.pb.h>
 #include <tipb/executor.pb.h>
 
 #include <magic_enum.hpp>
@@ -93,14 +94,25 @@ void MPPTaskStatistics::collectRuntimeStatistics()
     recordInputBytes(*dag_context);
 }
 
-tipb::SelectResponse MPPTaskStatistics::genExecutionSummaryResponse()
+std::pair<tipb::SelectResponse, resource_manager::Consumption> MPPTaskStatistics::genExecutionSummaryResponse()
 {
-    return executor_statistics_collector.genExecutionSummaryResponse();
+    auto [resp, remote_ru_consumption] = executor_statistics_collector.genExecutionSummaryResponse();
+    return {resp, mergeRUConsumption(remote_ru_consumption, getLocalRUConsumption())};
 }
 
-tipb::TiFlashExecutionInfo MPPTaskStatistics::genTiFlashExecutionInfo()
+std::pair<tipb::TiFlashExecutionInfo, resource_manager::Consumption> MPPTaskStatistics::genTiFlashExecutionInfo()
 {
-    return executor_statistics_collector.genTiFlashExecutionInfo();
+    auto [resp, remote_ru_consumption] = executor_statistics_collector.genTiFlashExecutionInfo();
+    return {resp, mergeRUConsumption(remote_ru_consumption, getLocalRUConsumption())};
+}
+
+resource_manager::Consumption MPPTaskStatistics::getLocalRUConsumption() const
+{
+    resource_manager::Consumption local_ru_consumption;
+    local_ru_consumption.set_r_r_u(cpu_ru + read_ru);
+    local_ru_consumption.set_read_bytes(read_bytes);
+    local_ru_consumption.set_total_cpu_time_ms(toCPUTimeMillisecond(cpu_time_ns));
+    return local_ru_consumption;
 }
 
 void MPPTaskStatistics::logTracingJson()
@@ -143,10 +155,12 @@ void MPPTaskStatistics::setMemoryPeak(Int64 memory_peak_)
     memory_peak = memory_peak_;
 }
 
-void MPPTaskStatistics::setRU(RU cpu_ru_, RU read_ru_)
+void MPPTaskStatistics::setRU(RU cpu_ru_, UInt64 cpu_time_ns_, RU read_ru_, UInt64 read_bytes_)
 {
     cpu_ru = cpu_ru_;
+    cpu_time_ns = cpu_time_ns_;
     read_ru = read_ru_;
+    read_bytes = read_byters_;
 }
 
 void MPPTaskStatistics::setCompileTimestamp(const Timestamp & start_timestamp, const Timestamp & end_timestamp)

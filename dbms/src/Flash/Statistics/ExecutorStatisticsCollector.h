@@ -17,6 +17,7 @@
 #include <Common/Exception.h>
 #include <Flash/Statistics/ExecutorStatisticsBase.h>
 #include <Storages/DeltaMerge/ScanContext_fwd.h>
+#include <kvproto/resource_manager.pb.h>
 #include <tipb/executor.pb.h>
 #include <tipb/select.pb.h>
 
@@ -38,11 +39,11 @@ public:
 
     String profilesToJson() const;
 
-    void fillExecuteSummaries(tipb::SelectResponse & response);
+    void fillExecuteSummaries(tipb::SelectResponse & response, resource_manager::Consumption & remote_ru_consumption);
 
-    tipb::SelectResponse genExecutionSummaryResponse();
+    std::pair<tipb::SelectResponse, resource_manager::Consumption> genExecutionSummaryResponse();
 
-    tipb::TiFlashExecutionInfo genTiFlashExecutionInfo();
+    std::pair<tipb::TiFlashExecutionInfo, resource_manager::Consumption> genTiFlashExecutionInfo();
 
     const std::map<String, ExecutorStatisticsPtr> & getProfiles() const { return profiles; }
 
@@ -51,7 +52,9 @@ private:
 
     void fillLocalExecutionSummaries(tipb::SelectResponse & response);
 
-    void fillRemoteExecutionSummaries(tipb::SelectResponse & response);
+    void fillRemoteExecutionSummaries(
+        tipb::SelectResponse & response,
+        resource_manager::Consumption & remote_ru_consumption);
 
     void fillExecutionSummary(
         tipb::SelectResponse & response,

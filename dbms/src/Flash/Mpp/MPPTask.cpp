@@ -194,7 +194,7 @@ void MPPTask::finishWrite()
     RUNTIME_ASSERT(tunnel_set != nullptr, log, "mpp task without tunnel set");
     if (dag_context->collect_execution_summaries
         && !ReportExecutionSummaryToCoordinator(meta.mpp_version(), meta.report_execution_summary()))
-        tunnel_set->sendExecutionSummary(mpp_task_statistics.genExecutionSummaryResponse());
+        tunnel_set->writeFinalMPPPacket(mpp_task_statistics.genExecutionSummaryResponse());
     tunnel_set->finishWrite();
 }
 
@@ -571,11 +571,13 @@ void MPPTask::runImpl()
             "mpp task finish execute, is_success: {}, status: {}",
             result.is_success,
             magic_enum::enum_name(status.load()));
-        auto cpu_ru = query_executor_holder->collectRequestUnit();
-        auto read_ru = dag_context->getReadRU();
+        auto cpu_time_ns = query_executor_holder->collectCPUTime();
+        auto cpu_ru = cpuTimeToRU(cpu_time_ns);
+        auto read_bytes = dag_context->getReadBytes();
+        auto read_ru = bytesToRU(read_bytes);
         LOG_DEBUG(log, "mpp finish with request unit: cpu={} read={}", cpu_ru, read_ru);
         GET_METRIC(tiflash_compute_request_unit, type_mpp).Increment(cpu_ru + read_ru);
-        mpp_task_statistics.setRU(cpu_ru, read_ru);
+        mpp_task_statistics.setRU(cpu_ru, cpu_time_ns, read_ru, read_bytes);
 
         mpp_task_statistics.collectRuntimeStatistics();
 
@@ -675,11 +677,19 @@ void MPPTask::reportStatus(const String & err_msg)
 
         if (report_execution_summary)
         {
-            tipb::TiFlashExecutionInfo execution_info = mpp_task_statistics.genTiFlashExecutionInfo();
+            auto [execution_info, ru_consumption] = mpp_task_statistics.genTiFlashExecutionInfo();
             if unlikely (!execution_info.SerializeToString(req.mutable_data()))
             {
-                LOG_ERROR(log, "Failed to serialize TiFlash execution info");
+                LOG_ERROR(log, "Failed to serialize execution info TiFlash execution info");
                 return;
+            }
+            if likely (err_msg.empty())
+            {
+                if unlikely (!ru_consumption.SerializeToString(req.mutable_ru_consumption()))
+                {
+                    LOG_ERROR(log, "Failed to serialize ru consumption to TiFlash execution info");
+                    return;
+                }
             }
         }
 

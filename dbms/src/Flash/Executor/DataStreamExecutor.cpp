@@ -79,7 +79,7 @@ int DataStreamExecutor::estimateNewThreadCount()
 // TODO fix the data race on BlockStreamProfileInfo when the stream throws an error
 // and remove `race:dbms/src/DataStreams/BlockStreamProfileInfo.h` in tests/sanitize/tsan.suppression.
 // https://github.com/pingcap/tiflash/issues/7631
-RU DataStreamExecutor::collectRequestUnit()
+UInt64 DataStreamExecutor::collectCPUTime()
 {
     // The cputime returned by BlockInputSrream is a count of the execution time of each thread.
     // However, cputime here is imprecise and is affected by thread scheduling and condition_cv.wait.
@@ -91,7 +91,7 @@ RU DataStreamExecutor::collectRequestUnit()
     // When the number of threads is greater than the number of cpu cores,
     // BlockInputStream's estimated cpu time will be much greater than the actual value.
     if (execute_time_ns <= 0 || total_thread_cnt <= logical_cpu_cores)
-        return cpuTimeToRU(execute_time_ns);
+        return execute_time_ns;
 
     // Here we use `execute_time_ns / thread_cnt` to get the average execute time of each thread.
     // So we have `per_thread_execute_time_ns = execute_time_ns / estimate_thread_cnt`.
@@ -114,8 +114,8 @@ RU DataStreamExecutor::collectRequestUnit()
     // But there is still no way to eliminate the effect of `condition_cv.wait` here...
     // We can assume `condition.wait` takes half of datastream execute time.
     // TODO find a more reasonable ratio for `condition.wait`.
-    cpu_time_ns /= 2;
-    return cpuTimeToRU(static_cast<UInt64>(ceil(cpu_time_ns)));
+    auto cpu_time_ns_int = static_cast<UInt64>(ceil(cpu_time_ns / 2));
+    return cpu_time_ns_int;
 }
 
 Block DataStreamExecutor::getSampleBlock() const

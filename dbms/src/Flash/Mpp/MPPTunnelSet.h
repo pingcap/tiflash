@@ -46,7 +46,7 @@ public:
     /// so if return execution summary for all the tunnels, the
     /// information in TiDB will be amplified, which may make
     /// user confused.
-    void sendExecutionSummary(const tipb::SelectResponse & response);
+    void writeFinalMPPPacket(const std::pair<tipb::SelectResponse, resource_manager::Consumption> & info);
 
     void close(const String & reason, bool wait_sender_finish);
     void finishWrite();

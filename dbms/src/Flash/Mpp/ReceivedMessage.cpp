@@ -31,13 +31,15 @@ ReceivedMessage::ReceivedMessage(
     const mpp::Error * error_ptr_,
     const String * resp_ptr_,
     std::vector<const String *> && chunks_,
-    size_t fine_grained_consumer_size)
+    size_t fine_grained_consumer_size,
+    const resource_manager::Consumption * ru_consumption_)
     : source_index(source_index_)
     , req_info(req_info_)
     , packet(packet_)
     , error_ptr(error_ptr_)
     , resp_ptr(resp_ptr_)
     , chunks(chunks_)
+    , ru_consumption(ru_consumption_)
 {
     if (fine_grained_consumer_size > 0)
     {

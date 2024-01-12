@@ -892,8 +892,11 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::toDecodeResult(
         }
         else
         {
-            auto result
-                = ExchangeReceiverResult::newOk(select_resp, recv_msg->getSourceIndex(), recv_msg->getReqInfo());
+            auto result = ExchangeReceiverResult::newOk(
+                select_resp,
+                recv_msg->getSourceIndex(),
+                recv_msg->getReqInfo(),
+                recv_msg->getRUConsumption());
             /// If mocking TiFlash as TiDB, we should decode chunks from select_resp.
             if (unlikely(!result.resp->chunks().empty()))
             {

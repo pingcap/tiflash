@@ -34,6 +34,7 @@ class ReceivedMessage
     /// used for fine grained shuffle, remaining_consumers will be nullptr for non fine grained shuffle
     std::vector<std::vector<const String *>> fine_grained_chunks;
     std::shared_ptr<std::atomic<size_t>> remaining_consumers;
+    const resource_manager::Consumption * ru_consumption;
 
 public:
     // Constructor that move chunks.
@@ -44,7 +45,8 @@ public:
         const mpp::Error * error_ptr_,
         const String * resp_ptr_,
         std::vector<const String *> && chunks_,
-        size_t fine_grained_consumer_size);
+        size_t fine_grained_consumer_size,
+        const resource_manager::Consumption * ru_consumption_);
 
     size_t getSourceIndex() const { return source_index; }
     const String & getReqInfo() const { return req_info; }
@@ -54,5 +56,6 @@ public:
     const std::vector<const String *> & getChunks(size_t stream_id) const;
     const mpp::MPPDataPacket & getPacket() const { return packet->packet; }
     bool containUsefulMessage() const;
+    const resource_manager::Consumption * getRUConsumption() const { return ru_consumption; }
 };
 } // namespace DB

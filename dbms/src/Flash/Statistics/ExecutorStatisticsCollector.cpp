@@ -135,20 +135,23 @@ void ExecutorStatisticsCollector::fillChildren()
     }
 }
 
-tipb::SelectResponse ExecutorStatisticsCollector::genExecutionSummaryResponse()
+std::pair<tipb::SelectResponse, resource_manager::Consumption> ExecutorStatisticsCollector::
+    genExecutionSummaryResponse()
 {
     tipb::SelectResponse response;
-    fillExecuteSummaries(response);
-    return response;
+    resource_manager::Consumption remote_ru_consumption;
+    fillExecuteSummaries(response, remote_ru_consumption);
+    return {response, remote_ru_consumption};
 }
 
-tipb::TiFlashExecutionInfo ExecutorStatisticsCollector::genTiFlashExecutionInfo()
+std::pair<tipb::TiFlashExecutionInfo, resource_manager::Consumption> ExecutorStatisticsCollector::
+    genTiFlashExecutionInfo()
 {
-    tipb::SelectResponse response = genExecutionSummaryResponse();
+    auto [response, remote_ru_consumption] = genExecutionSummaryResponse();
     tipb::TiFlashExecutionInfo execution_info;
     auto * execution_summaries = execution_info.mutable_execution_summaries();
     execution_summaries->CopyFrom(response.execution_summaries());
-    return execution_info;
+    return {execution_info, remote_ru_consumption};
 }
 
 void ExecutorStatisticsCollector::fillExecutionSummary(
@@ -174,7 +177,9 @@ void ExecutorStatisticsCollector::fillExecutionSummary(
         force_fill_executor_id);
 }
 
-void ExecutorStatisticsCollector::fillExecuteSummaries(tipb::SelectResponse & response)
+void ExecutorStatisticsCollector::fillExecuteSummaries(
+    tipb::SelectResponse & response,
+    resource_manager::Consumption & remote_ru_consumption)
 {
     if (!dag_context->collect_execution_summaries)
         return;
@@ -184,7 +189,7 @@ void ExecutorStatisticsCollector::fillExecuteSummaries(tipb::SelectResponse & re
     fillLocalExecutionSummaries(response);
 
     // TODO: remove filling remote execution summaries
-    fillRemoteExecutionSummaries(response);
+    fillRemoteExecutionSummaries(response, remote_ru_consumption);
 }
 
 void ExecutorStatisticsCollector::collectRuntimeDetails()
@@ -225,10 +230,14 @@ void ExecutorStatisticsCollector::fillLocalExecutionSummaries(tipb::SelectRespon
     }
 }
 
-void ExecutorStatisticsCollector::fillRemoteExecutionSummaries(tipb::SelectResponse & response)
+void ExecutorStatisticsCollector::fillRemoteExecutionSummaries(
+    tipb::SelectResponse & response,
+    resource_manager::Consumption & remote_ru_consumption)
 {
     // TODO: support cop remote read and disaggregated mode.
     auto exchange_execution_summary = getRemoteExecutionSummariesFromExchange(*dag_context);
+
+    remote_ru_consumption = exchange_execution_summary.ru_consumption;
 
     // fill execution_summaries from remote executor received by exchange.
     for (auto & p : exchange_execution_summary.execution_summaries)
@@ -239,5 +248,4 @@ void ExecutorStatisticsCollector::fillRemoteExecutionSummaries(tipb::SelectRespo
             p.first,
             force_fill_executor_id);
 }
-
 } // namespace DB

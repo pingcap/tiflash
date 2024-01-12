@@ -32,6 +32,7 @@ void RemoteExecutionSummary::merge(const RemoteExecutionSummary & other)
             it->second.merge(p.second);
         }
     }
+    ru_consumption = mergeRUConsumption(ru_consumption, other.ru_consumption);
 }
 
 void RemoteExecutionSummary::add(tipb::SelectResponse & resp)

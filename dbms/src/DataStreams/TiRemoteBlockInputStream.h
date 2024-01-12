@@ -51,6 +51,7 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
     const LoggerPtr log;
 
     RemoteExecutionSummary remote_execution_summary;
+    resource_manager::Consumption remote_ru_consumption_sum;
 
     uint64_t total_rows;
 
@@ -87,6 +88,10 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
             /// only the last response contains execution summaries
             if (result.resp != nullptr)
                 remote_execution_summary.add(*result.resp);
+
+            if (result.ru_consumption != nullptr)
+                remote_execution_summary.ru_consumption
+                    = mergeRUConsumption(remote_execution_summary.ru_consumption, *result.ru_consumption);
 
             size_t index = 0;
             if constexpr (is_streaming_reader)

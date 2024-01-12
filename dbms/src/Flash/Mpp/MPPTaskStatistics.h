@@ -51,15 +51,17 @@ public:
 
     void setMemoryPeak(Int64 memory_peak_);
 
-    void setRU(RU cpu_ru_, RU read_ru_);
+    void setRU(RU cpu_ru_, UInt64 cpu_time_ns_, RU read_ru_, UInt64 read_bytes);
 
     void setCompileTimestamp(const Timestamp & start_timestamp, const Timestamp & end_timestamp);
 
-    tipb::SelectResponse genExecutionSummaryResponse();
+    std::pair<tipb::SelectResponse, resource_manager::Consumption> genExecutionSummaryResponse();
 
-    tipb::TiFlashExecutionInfo genTiFlashExecutionInfo();
+    std::pair<tipb::TiFlashExecutionInfo, resource_manager::Consumption> genTiFlashExecutionInfo();
 
 private:
+    resource_manager::Consumption getLocalRUConsumption() const;
+
     void recordInputBytes(DAGContext & dag_context);
 
     const LoggerPtr log;
@@ -91,7 +93,9 @@ private:
 
     // resource
     RU cpu_ru = 0;
+    UInt64 cpu_time_ns = 0;
     RU read_ru = 0;
+    UInt64 read_bytes = 0;
     Int64 memory_peak = 0;
 };
 } // namespace DB

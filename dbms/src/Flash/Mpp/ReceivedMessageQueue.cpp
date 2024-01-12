@@ -60,6 +60,15 @@ const String * getRespPtr(const mpp::MPPDataPacket & packet)
     return nullptr;
 }
 
+const resource_manager::Consumption * getRUConsumption(const mpp::MPPDataPacket & packet)
+{
+    if (packet.has_ru_consumption())
+    {
+        return &packet.ru_consumption();
+    }
+    return nullptr;
+}
+
 ReceivedMessagePtr toReceivedMessage(
     size_t source_index,
     const String & req_info,
@@ -69,6 +78,7 @@ ReceivedMessagePtr toReceivedMessage(
     const auto & packet = tracked_packet->packet;
     const mpp::Error * error_ptr = getErrorPtr(packet);
     const String * resp_ptr = getRespPtr(packet);
+    const resource_manager::Consumption * ru_consumption = getRUConsumption(packet);
     std::vector<const String *> chunks(packet.chunks_size());
     for (int i = 0; i < packet.chunks_size(); ++i)
         chunks[i] = &packet.chunks(i);
@@ -79,7 +89,8 @@ ReceivedMessagePtr toReceivedMessage(
         error_ptr,
         resp_ptr,
         std::move(chunks),
-        fine_grained_consumer_size);
+        fine_grained_consumer_size,
+        ru_consumption);
 }
 } // namespace
 
