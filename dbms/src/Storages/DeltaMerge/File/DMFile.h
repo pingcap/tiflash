@@ -317,7 +317,6 @@ public:
     static String metav2FileName() { return "meta"; }
     std::vector<String> listFilesForUpload() const;
     void switchToRemote(const S3::DMFileOID & oid);
-    bool isReadable() const { return status == READABLE; }
 
 #ifndef DBMS_PUBLIC_GTEST
 private:
