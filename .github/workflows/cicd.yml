@@ -3,15 +3,10 @@ name: CICD
 on:
   workflow_dispatch:
     inputs:
-      gcr_target:
-        description: "push to gcr for daily run (leave empty to skip)"
-        type: choice
-        required: false
-        default: ""
-        options:
-          - ""
-          - "tiflash"
-          - "tiflash-compute"
+      update_daily_run_image:
+        description: "update daily-run test image"
+        type: boolean
+        default: false
 
 jobs:
   build-arm64:
@@ -26,6 +21,12 @@ jobs:
           ref: ${{ github.event.inputs.branch }}
           token: ${{ secrets.GIT_ACTION_BOT }}
           fetch-depth: 0
+      - name: Login to Harbor
+        uses: docker/login-action@v3
+        with:
+          registry: hub.pingcap.net
+          username: ${{ secrets.HARBOR_USER }}
+          password: ${{ secrets.HARBOR_TOKEN }}
       - name: Build and Push Images
         uses: docker/build-push-action@v5
         with:
@@ -34,14 +35,6 @@ jobs:
           platforms: "linux/arm64"
           push: true
           tags: hub.pingcap.net/sunxiaoguang/serverless/tiflash:${{ github.sha }}-arm64
-      - name: Build and Push Images DockerHub
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: release-centos7-llvm/dockerfiles/Dockerfile-tiflash-cse-multiarch
-          platforms: "linux/arm64"
-          push: true
-          tags: xexplorersun/tiflash:cse-${{ github.sha }}-arm64
   build-amd64:
     name: Build AMD64 Image
     runs-on: amd64
@@ -56,6 +49,12 @@ jobs:
           ref: ${{ github.event.inputs.branch }}
           token: ${{ secrets.GIT_ACTION_BOT }}
           fetch-depth: 0
+      - name: Login to Harbor
+        uses: docker/login-action@v3
+        with:
+          registry: hub.pingcap.net
+          username: ${{ secrets.HARBOR_USER }}
+          password: ${{ secrets.HARBOR_TOKEN }}
       - name: Build and Push Images
         uses: docker/build-push-action@v5
         with:
@@ -64,27 +63,17 @@ jobs:
           platforms: "linux/amd64"
           push: true
           tags: hub.pingcap.net/sunxiaoguang/serverless/tiflash:${{ github.sha }}-amd64
-      - name: Build and Push Images DockerHub
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: release-centos7-llvm/dockerfiles/Dockerfile-tiflash-cse-multiarch
-          platforms: "linux/amd64"
-          push: true
-          tags: xexplorersun/tiflash:cse-${{ github.sha }}-amd64
   multi-arch:
     name: Create Multi-Architecture Image
     runs-on: amd64
     needs: ["build-arm64", "build-amd64"]
     steps:
-      - name: create-manifest
-        run: |
-          docker manifest create xexplorersun/tiflash:cse-${{ github.sha }} \
-          --amend xexplorersun/tiflash:cse-${{ github.sha }}-amd64 \
-          --amend xexplorersun/tiflash:cse-${{ github.sha }}-arm64
-      - name: push-manifest
-        run: |
-          docker manifest push xexplorersun/tiflash:cse-${{ github.sha }}
+      - name: Login to Harbor
+        uses: docker/login-action@v3
+        with:
+          registry: hub.pingcap.net
+          username: ${{ secrets.HARBOR_USER }}
+          password: ${{ secrets.HARBOR_TOKEN }}
       - name: create-manifest harbor
         run: |
           docker manifest create hub.pingcap.net/sunxiaoguang/serverless/tiflash:${{ github.sha }} \
@@ -93,39 +82,21 @@ jobs:
       - name: push-manifest harbor
         run: |
           docker manifest push hub.pingcap.net/sunxiaoguang/serverless/tiflash:${{ github.sha }}
-
-  sync-image-tiflash:
-    name: Sync image to GCR tiflash
-    runs-on: amd64
-    needs: ["multi-arch"]
-    if: ${{ inputs.gcr_target == 'tiflash' }}
-    steps:
-      - name: remove-old-manifest
+      - name: Login to Harbor (keyspace)
+        if: ${{ inputs.update_daily_run_image }}
+        uses: docker/login-action@v3
+        with:
+          registry: hub.pingcap.net
+          username: "robot$keyspace+cdbot"
+          password: ${{ secrets.HARBOR_KEYSPACE_TOKEN }}
+      - name: set-additional-tags
+        if: ${{ inputs.update_daily_run_image }}
         run: |
-          docker manifest rm xexplorersun/tiflash:v6.6.0
-      - name: create-new-manifest
-        run: |
-          docker manifest create xexplorersun/tiflash:v6.6.0 \
-          xexplorersun/tiflash:cse-${{ github.sha }}-amd64 \
-          xexplorersun/tiflash:cse-${{ github.sha }}-arm64
-      - name: push-new-manifest
-        run: |
-          docker manifest push xexplorersun/tiflash:v6.6.0
-
-  sync-image-tiflash-compute:
-    name: Sync image to GCR tiflash-compute
-    runs-on: amd64
-    needs: ["multi-arch"]
-    if: ${{ inputs.gcr_target == 'tiflash-compute' }}
-    steps:
-      - name: remove-old-manifest
-        run: |
-          docker manifest rm xexplorersun/tiflash-compute:v6.6.0
-      - name: create-new-manifest
-        run: |
-          docker manifest create xexplorersun/tiflash-compute:v6.6.0 \
-          xexplorersun/tiflash:cse-${{ github.sha }}-amd64 \
-          xexplorersun/tiflash:cse-${{ github.sha }}-arm64
-      - name: push-manifest
-        run: |
-          docker manifest push xexplorersun/tiflash-compute:v6.6.0
+          # Remove the local manifest entry if it exists
+          docker manifest rm hub.pingcap.net/keyspace/tiflash:v7.5.0 || true
+          
+          docker manifest create hub.pingcap.net/keyspace/tiflash:v7.5.0 \
+          --amend hub.pingcap.net/sunxiaoguang/serverless/tiflash:${{ github.sha }}-amd64 \
+          --amend hub.pingcap.net/sunxiaoguang/serverless/tiflash:${{ github.sha }}-arm64
+          
+          docker manifest push hub.pingcap.net/keyspace/tiflash:v7.5.0
