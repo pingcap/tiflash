@@ -211,7 +211,7 @@ void ExecutorStatisticsCollector::fillExecuteSummaries(tipb::SelectResponse & re
 
     assert(!response.execution_summaries().empty());
     if unlikely (!sum_ru.SerializeToString(
-                     (*response.mutable_execution_summaries())[0].mutable_tiflash_ru_consumption()))
+                     (*response.mutable_execution_summaries())[0].mutable_ru_consumption()))
         throw Exception("failed to serialize tiflash ru consumption into response");
 }
 
