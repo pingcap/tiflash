@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/Exception.h>
 #include <Flash/Coprocessor/RemoteExecutionSummary.h>
 #include <common/likely.h>
 
