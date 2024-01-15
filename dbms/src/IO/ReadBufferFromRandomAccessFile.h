@@ -27,7 +27,7 @@ protected:
     bool nextImpl() override;
 
 public:
-    ReadBufferFromRandomAccessFile(
+    explicit ReadBufferFromRandomAccessFile(
         RandomAccessFilePtr file_,
         size_t buf_size = DBMS_DEFAULT_BUFFER_SIZE,
         char * existing_memory = nullptr,
