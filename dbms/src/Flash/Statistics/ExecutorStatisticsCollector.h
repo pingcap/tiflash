@@ -62,7 +62,7 @@ private:
 
     void fillLocalExecutionSummaries(tipb::SelectResponse & response);
 
-    void fillRemoteExecutionSummaries(tipb::SelectResponse & response, resource_manager::Consumption & remote_ru);
+    void fillRemoteExecutionSummaries(tipb::SelectResponse & response);
 
     void fillExecutionSummary(
         tipb::SelectResponse & response,

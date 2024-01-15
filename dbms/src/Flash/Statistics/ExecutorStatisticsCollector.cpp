@@ -40,42 +40,21 @@ RemoteExecutionSummary getRemoteExecutionSummariesFromExchange(DAGContext & dag_
     case ExecutionMode::Stream:
         for (const auto & map_entry : dag_context.getInBoundIOInputStreamsMap())
         {
-            bool ru_added = false;
             for (const auto & stream_ptr : map_entry.second)
             {
                 if (auto * exchange_receiver_stream_ptr = dynamic_cast<ExchangeReceiverInputStream *>(stream_ptr.get());
                     exchange_receiver_stream_ptr)
-                {
-                    const auto remote_summary = exchange_receiver_stream_ptr->getRemoteExecutionSummary();
-                    exchange_execution_summary.merge(remote_summary);
-
-                    if (!ru_added)
-                    {
-                        exchange_execution_summary.mergeRUConsumption(remote_summary);
-                        ru_added = true;
-                    }
-                }
-
+                    exchange_execution_summary.merge(exchange_receiver_stream_ptr->getRemoteExecutionSummary());
             }
         }
         break;
     case ExecutionMode::Pipeline:
         for (const auto & map_entry : dag_context.getInboundIOProfileInfosMap())
         {
-            bool ru_added = false;
             for (const auto & profile_info : map_entry.second)
             {
                 if (!profile_info->is_local)
                     exchange_execution_summary.merge(profile_info->remote_execution_summary);
-
-                if (!ru_added)
-                {
-                    auto ori = exchange_execution_summary.ru_consumption;
-                    exchange_execution_summary.mergeRUConsumption(profile_info->remote_execution_summary);
-                    LOG_DEBUG(log, "gjt debug: {}+{}({})={}", ori.r_r_u(), profile_info->remote_execution_summary.ru_consumption.r_r_u(),
-                            map_entry.first, exchange_execution_summary.ru_consumption.r_r_u());
-                    ru_added = true;
-                }
             }
         }
         break;
@@ -211,19 +190,8 @@ void ExecutorStatisticsCollector::fillExecuteSummaries(tipb::SelectResponse & re
     collectRuntimeDetails();
 
     fillLocalExecutionSummaries(response);
-
     // TODO: remove filling remote execution summaries
-    resource_manager::Consumption remote_ru;
-    fillRemoteExecutionSummaries(response, remote_ru);
-    // local_ru should already setup before fill.
-    RUNTIME_CHECK_MSG(local_ru, "local ru consumption info not setup");
-    auto sum_ru = mergeRUConsumption(*local_ru, remote_ru);
-    LOG_INFO(log, "gjt debug local: {}, remote: {}, sum: {}", local_ru->r_r_u(), remote_ru.r_r_u(), sum_ru.r_r_u());
-
-    assert(!response.execution_summaries().empty());
-    if unlikely (!sum_ru.SerializeToString(
-                     (*response.mutable_execution_summaries())[0].mutable_ru_consumption()))
-        throw Exception("failed to serialize tiflash ru consumption into response");
+    fillRemoteExecutionSummaries(response);
 }
 
 void ExecutorStatisticsCollector::collectRuntimeDetails()
@@ -262,15 +230,18 @@ void ExecutorStatisticsCollector::fillLocalExecutionSummaries(tipb::SelectRespon
                 dag_context->scan_context_map);
         }
     }
+
+    // local_ru should already setup before fill.
+    RUNTIME_CHECK_MSG(local_ru, "local ru consumption info not setup");
+    assert(!response.execution_summaries().empty());
+    if unlikely (!local_ru->SerializeToString((*response.mutable_execution_summaries())[0].mutable_ru_consumption()))
+        throw Exception("failed to serialize tiflash ru consumption into response");
 }
 
-void ExecutorStatisticsCollector::fillRemoteExecutionSummaries(
-    tipb::SelectResponse & response,
-    resource_manager::Consumption & remote)
+void ExecutorStatisticsCollector::fillRemoteExecutionSummaries(tipb::SelectResponse & response)
 {
     // TODO: support cop remote read and disaggregated mode.
     auto exchange_execution_summary = getRemoteExecutionSummariesFromExchange(*dag_context, log);
-    remote = exchange_execution_summary.ru_consumption;
 
     // fill execution_summaries from remote executor received by exchange.
     for (auto & p : exchange_execution_summary.execution_summaries)

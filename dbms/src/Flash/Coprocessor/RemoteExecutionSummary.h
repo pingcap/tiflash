@@ -24,17 +24,11 @@ namespace DB
 struct RemoteExecutionSummary
 {
     void merge(const RemoteExecutionSummary & other);
-    void mergeRUConsumption(const RemoteExecutionSummary &);
 
     void add(tipb::SelectResponse & resp);
 
     // <executor_id, ExecutionSummary>
     std::unordered_map<String, ExecutionSummary> execution_summaries;
-    // ru consumption of remote MPPTask.
-    resource_manager::Consumption ru_consumption;
 };
 
-resource_manager::Consumption mergeRUConsumption(
-    const resource_manager::Consumption & left,
-    const resource_manager::Consumption & right);
 } // namespace DB
