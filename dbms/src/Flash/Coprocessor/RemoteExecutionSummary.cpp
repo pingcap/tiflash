@@ -60,6 +60,6 @@ void RemoteExecutionSummary::add(tipb::SelectResponse & resp)
             }
         }
     }
-    RUNTIME_CHECK_MSG(ru_consumption_cnt <= 1, "only one ru consumption expected in one select response");
+    RUNTIME_CHECK_MSG(ru_consumption_cnt <= 1, "each select response can have at most one RU consumption");
 }
 } // namespace DB
