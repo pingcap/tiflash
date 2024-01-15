@@ -31,11 +31,7 @@
 #include <aws/s3/model/CreateBucketRequest.h>
 #include <common/logger_useful.h>
 
-#include <chrono>
-#include <mutex>
-#include <numeric>
 #include <optional>
-#include <thread>
 
 using raft_serverpb::RaftApplyState;
 using raft_serverpb::RegionLocalState;
@@ -183,8 +179,8 @@ private:
     ContextPtr context;
     bool already_initialize_data_store = false;
     bool already_initialize_write_ps = false;
-    DB::PageStorageRunMode orig_mode;
-    DisaggregatedMode orig_disagg_mode;
+    DB::PageStorageRunMode orig_mode = PageStorageRunMode::UNI_PS;
+    DisaggregatedMode orig_disagg_mode = DisaggregatedMode::None;
 };
 
 void persistAfterWrite(
