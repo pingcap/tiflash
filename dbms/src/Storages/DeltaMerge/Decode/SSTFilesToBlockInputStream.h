@@ -19,15 +19,20 @@
 #include <Storages/DeltaMerge/DMVersionFilterBlockInputStream.h>
 #include <Storages/KVStore/Decode/PartitionStreams.h>
 #include <Storages/KVStore/MultiRaft/PreHandlingTrace.h>
-#include <Storages/KVStore/Region_fwd.h>
 
 #include <memory>
 #include <string_view>
 
+namespace Poco
+{
+class Logger;
+}
 
 namespace DB
 {
 class TMTContext;
+class Region;
+using RegionPtr = std::shared_ptr<Region>;
 
 struct SSTViewVec;
 struct TiFlashRaftProxyHelper;

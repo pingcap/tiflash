@@ -15,10 +15,9 @@
 #pragma once
 
 #include <Storages/KVStore/FFI/ProxyFFI.h>
-#include <Storages/KVStore/Types.h>
-#include <common/types.h>
-#include <kvproto/raft_cmdpb.pb.h>
+#include <Storages/KVStore/KVStore.h>
 #include <kvproto/raft_serverpb.pb.h>
+#include <raft_cmdpb.pb.h>
 
 namespace DB
 {

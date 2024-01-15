@@ -27,6 +27,8 @@ class KVStore;
 using KVStorePtr = std::shared_ptr<KVStore>;
 
 class RegionTable;
+class Region;
+using RegionPtr = std::shared_ptr<Region>;
 
 /// Some helper structure / functions for IngestSST
 

@@ -18,14 +18,13 @@
 #include <Core/Block.h>
 #include <Core/Names.h>
 #include <Interpreters/Context_fwd.h>
-#include <Storages/DeltaMerge/DeltaMergeInterfaces.h>
 #include <Storages/DeltaMerge/ExternalDTFileInfo.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/KVStore/Decode/RegionDataRead.h>
 #include <Storages/KVStore/Decode/TiKVHandle.h>
 #include <Storages/KVStore/Read/RegionException.h>
 #include <Storages/KVStore/Read/RegionLockInfo.h>
-#include <Storages/KVStore/Region_fwd.h>
+#include <Storages/KVStore/Region.h>
 #include <common/logger_useful.h>
 
 #include <condition_variable>

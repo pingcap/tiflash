@@ -21,7 +21,6 @@
 #include <Interpreters/Context.h>
 #include <Server/MockComputeClient.h>
 #include <Storages/KVStore/KVStore.h>
-#include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <TestUtils/TiFlashTestEnv.h>
 namespace DB

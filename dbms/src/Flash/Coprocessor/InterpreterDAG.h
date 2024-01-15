@@ -22,11 +22,13 @@
 
 #include <DataStreams/BlockIO.h>
 #include <Flash/Coprocessor/DAGQuerySource.h>
-#include <Interpreters/Context_fwd.h>
 #include <Interpreters/IInterpreter.h>
 
 namespace DB
 {
+class Context;
+class Region;
+using RegionPtr = std::shared_ptr<Region>;
 class DAGContext;
 
 /** build ch plan from dag request: dag executors -> ch plan
@@ -36,7 +38,7 @@ class InterpreterDAG : public IInterpreter
 public:
     InterpreterDAG(Context & context_, const DAGQuerySource & dag_);
 
-    ~InterpreterDAG() override = default;
+    ~InterpreterDAG() = default;
 
     BlockIO execute() override;
 

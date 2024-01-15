@@ -160,7 +160,11 @@ public:
     BlobStatPtr blobIdToStat(BlobFileId file_id, bool ignore_not_exist = false);
 
     using StatsMap = std::map<String, std::list<BlobStatPtr>>;
-    StatsMap getStats() const;
+    StatsMap getStats() const NO_THREAD_SAFETY_ANALYSIS
+    {
+        auto guard = lock();
+        return stats_map;
+    }
 
     static std::pair<BlobFileId, String> getBlobIdFromName(const String & blob_name);
 
