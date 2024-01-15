@@ -151,12 +151,12 @@ tipb::TiFlashExecutionInfo ExecutorStatisticsCollector::genTiFlashExecutionInfo(
     return execution_info;
 }
 
-void ExecutorStatisticsCollector::setLocalRUConsumption(RU cpu_ru, UInt64 cpu_time_ns, RU bytes_ru, UInt64 read_bytes)
+void ExecutorStatisticsCollector::setLocalRUConsumption(const RUConsumption & ru_info)
 {
     local_ru = std::make_unique<resource_manager::Consumption>();
-    local_ru->set_r_r_u(cpu_ru + bytes_ru);
-    local_ru->set_total_cpu_time_ms(toCPUTimeMillisecond(cpu_time_ns));
-    local_ru->set_read_bytes(read_bytes);
+    local_ru->set_r_r_u(ru_info.cpu_ru + ru_info.read_ru);
+    local_ru->set_total_cpu_time_ms(toCPUTimeMillisecond(ru_info.cpu_time_ns));
+    local_ru->set_read_bytes(ru_info.read_bytes);
 }
 
 void ExecutorStatisticsCollector::fillExecutionSummary(
@@ -194,9 +194,8 @@ void ExecutorStatisticsCollector::fillExecuteSummaries(tipb::SelectResponse & re
     // TODO: remove filling remote execution summaries
     resource_manager::Consumption remote_ru;
     fillRemoteExecutionSummaries(response, remote_ru);
-
-    // local_ru should already setup after MPPTask finish.
-    RUNTIME_CHECK(local_ru);
+    // local_ru should already setup before fill.
+    RUNTIME_CHECK_MSG(local_ru, "local ru consumption info not setup");
     auto sum_ru = mergeRUConsumption(*local_ru, remote_ru);
 
     assert(!response.execution_summaries().empty());

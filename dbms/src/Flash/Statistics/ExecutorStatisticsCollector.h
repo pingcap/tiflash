@@ -27,6 +27,13 @@
 namespace DB
 {
 class DAGContext;
+struct RUConsumption
+{
+    RU cpu_ru;
+    UInt64 cpu_time_ns;
+    RU read_ru;
+    UInt64 read_bytes;
+};
 
 class ExecutorStatisticsCollector
 {
@@ -48,7 +55,7 @@ public:
 
     const std::map<String, ExecutorStatisticsPtr> & getProfiles() const { return profiles; }
 
-    void setLocalRUConsumption(RU cpu_ru, UInt64 cpu_time_ns, RU bytes_ru, UInt64 read_bytes);
+    void setLocalRUConsumption(const RUConsumption & ru_info);
 
 private:
     void collectRuntimeDetails();
