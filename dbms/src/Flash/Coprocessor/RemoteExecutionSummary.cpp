@@ -40,14 +40,10 @@ void RemoteExecutionSummary::add(tipb::SelectResponse & resp)
     if (unlikely(resp.execution_summaries_size() == 0))
         return;
 
-    UInt64 ru_consumption_cnt = 0;
     for (const auto & execution_summary : resp.execution_summaries())
     {
         if (likely(execution_summary.has_executor_id()))
         {
-            if (execution_summary.has_ru_consumption())
-                ru_consumption_cnt++;
-
             const auto & executor_id = execution_summary.executor_id();
             auto it = execution_summaries.find(executor_id);
             if (unlikely(it == execution_summaries.end()))
@@ -60,6 +56,5 @@ void RemoteExecutionSummary::add(tipb::SelectResponse & resp)
             }
         }
     }
-    RUNTIME_CHECK_MSG(ru_consumption_cnt <= 1, "each select response can have at most one RU consumption");
 }
 } // namespace DB
