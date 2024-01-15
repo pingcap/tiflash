@@ -51,7 +51,7 @@ public:
 
     void setMemoryPeak(Int64 memory_peak_);
 
-    void setRU(RU cpu_ru_, UInt64 cpu_time_ns_, RU bytes_ru_, UInt64 read_bytes_);
+    void setRUInfo(const RUConsumption & ru_info_);
 
     void setCompileTimestamp(const Timestamp & start_timestamp, const Timestamp & end_timestamp);
 
@@ -90,8 +90,7 @@ private:
     String sender_executor_id;
 
     // resource
-    RU cpu_ru = 0;
-    RU read_ru = 0;
+    RUConsumption ru_info;
     Int64 memory_peak = 0;
 };
 } // namespace DB
