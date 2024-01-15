@@ -90,7 +90,7 @@ private:
     String sender_executor_id;
 
     // resource
-    RUConsumption ru_info;
+    RUConsumption ru_info{.cpu_ru = 0.0, .cpu_time_ns = 0, .read_ru = 0.0, .read_bytes = 0};
     Int64 memory_peak = 0;
 };
 } // namespace DB
