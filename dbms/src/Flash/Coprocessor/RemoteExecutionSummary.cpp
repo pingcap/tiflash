@@ -32,9 +32,12 @@ void RemoteExecutionSummary::merge(const RemoteExecutionSummary & other)
         {
             it->second.merge(p.second);
         }
-
-        ru_consumption = mergeRUConsumption(ru_consumption, other.ru_consumption);
     }
+}
+
+void RemoteExecutionSummary::mergeRUConsumption(const RemoteExecutionSummary & other)
+{
+    ru_consumption = DB::mergeRUConsumption(ru_consumption, other.ru_consumption);
 }
 
 void RemoteExecutionSummary::add(tipb::SelectResponse & resp)
@@ -54,7 +57,7 @@ void RemoteExecutionSummary::add(tipb::SelectResponse & resp)
                 if unlikely (!(remote_ru_consumption->ParseFromString(execution_summary.ru_consumption())))
                     throw Exception("failed to parse ru consumption from remote execution summary");
 
-                ru_consumption = mergeRUConsumption(ru_consumption, *remote_ru_consumption);
+                ru_consumption = DB::mergeRUConsumption(ru_consumption, *remote_ru_consumption);
             }
 
             const auto & executor_id = execution_summary.executor_id();

@@ -24,6 +24,7 @@ namespace DB
 struct RemoteExecutionSummary
 {
     void merge(const RemoteExecutionSummary & other);
+    void mergeRUConsumption(const RemoteExecutionSummary &);
 
     void add(tipb::SelectResponse & resp);
 

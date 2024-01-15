@@ -40,30 +40,41 @@ RemoteExecutionSummary getRemoteExecutionSummariesFromExchange(DAGContext & dag_
     case ExecutionMode::Stream:
         for (const auto & map_entry : dag_context.getInBoundIOInputStreamsMap())
         {
+            bool ru_added = false;
             for (const auto & stream_ptr : map_entry.second)
             {
                 if (auto * exchange_receiver_stream_ptr = dynamic_cast<ExchangeReceiverInputStream *>(stream_ptr.get());
                     exchange_receiver_stream_ptr)
                 {
-                    auto ori = exchange_execution_summary.ru_consumption;
-                    exchange_execution_summary.merge(exchange_receiver_stream_ptr->getRemoteExecutionSummary());
-                    LOG_INFO(log, "gjt debug merge: {}+{}({})={}", ori.r_r_u(), exchange_receiver_stream_ptr->getRemoteExecutionSummary().ru_consumption.r_r_u(),
-                            map_entry.first, exchange_execution_summary.ru_consumption.r_r_u());
+                    const auto remote_summary = exchange_receiver_stream_ptr->getRemoteExecutionSummary();
+                    exchange_execution_summary.merge(remote_summary);
+
+                    if (!ru_added)
+                    {
+                        exchange_execution_summary.mergeRUConsumption(remote_summary);
+                        ru_added = true;
+                    }
                 }
+
             }
         }
         break;
     case ExecutionMode::Pipeline:
         for (const auto & map_entry : dag_context.getInboundIOProfileInfosMap())
         {
+            bool ru_added = false;
             for (const auto & profile_info : map_entry.second)
             {
                 if (!profile_info->is_local)
+                    exchange_execution_summary.merge(profile_info->remote_execution_summary);
+
+                if (!ru_added)
                 {
                     auto ori = exchange_execution_summary.ru_consumption;
                     exchange_execution_summary.merge(profile_info->remote_execution_summary);
-                    LOG_INFO(log, "gjt debug merge: {}+{}({})={}", ori.r_r_u(), profile_info->remote_execution_summary.ru_consumption.r_r_u(),
-                            map_entry.first, exchange_execution_summary.ru_consumption.r_r_u());
+                    LOG_DEBUG(log, "gjt debug: {}+{}({})={}", ori.r_r_u(), profile_info->remote_execution_summary.ru_consumption.r_r_u(),
+                            exchange_execution_summary.ru_consumption.r_r_u());
+                    ru_added = true;
                 }
             }
         }
