@@ -50,14 +50,14 @@ class MutexLockWrap
 public:
     using Mutex = std::mutex;
 
-    std::lock_guard<Mutex> genLockGuard() const NO_THREAD_SAFETY_ANALYSIS { return std::lock_guard(*mutex); }
+    inline std::lock_guard<Mutex> genLockGuard() const { return std::lock_guard(*mutex); }
 
-    std::unique_lock<Mutex> tryToLock() const NO_THREAD_SAFETY_ANALYSIS
+    inline std::unique_lock<Mutex> tryToLock() const 
     {
         return std::unique_lock(*mutex, std::try_to_lock);
     }
 
-    std::unique_lock<Mutex> genUniqueLock() const NO_THREAD_SAFETY_ANALYSIS { return std::unique_lock(*mutex); }
+    inline std::unique_lock<Mutex> genUniqueLock() const { return std::unique_lock(*mutex); }
 
 private:
     mutable AlignedStruct<Mutex, CPU_CACHE_LINE_SIZE> mutex;

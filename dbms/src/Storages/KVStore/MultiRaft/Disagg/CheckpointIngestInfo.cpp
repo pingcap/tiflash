@@ -32,7 +32,7 @@ namespace DB
 CheckpointIngestInfoPtr CheckpointIngestInfo::restore(
     TMTContext & tmt,
     const TiFlashRaftProxyHelper * proxy_helper,
-    UInt64 region_id,
+    RegionID region_id,
     UInt64 peer_id)
 {
     RegionPtr region;
@@ -177,7 +177,7 @@ void CheckpointIngestInfo::persistToLocal() const
         restored_segments.size());
 }
 
-static void removeFromLocal(TMTContext & tmt, UInt64 region_id)
+static void removeFromLocal(TMTContext & tmt, RegionID region_id)
 {
     auto uni_ps = tmt.getContext().getWriteNodePageStorage();
     UniversalWriteBatch del_batch;
@@ -248,7 +248,7 @@ void CheckpointIngestInfo::deleteWrittenData(TMTContext & tmt, RegionPtr region,
         table_id);
 }
 
-bool CheckpointIngestInfo::cleanOnSuccess(TMTContext & tmt, UInt64 region_id)
+bool CheckpointIngestInfo::cleanOnSuccess(TMTContext & tmt, RegionID region_id)
 {
     auto log = DB::Logger::get();
     LOG_INFO(log, "Erase CheckpointIngestInfo from disk on success, region_id={}", region_id);

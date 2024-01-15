@@ -15,19 +15,22 @@
 #pragma once
 
 #include <Debug/MockKVStore/MockSSTGenerator.h>
-#include <Storages/KVStore/KVStore.h>
+#include <Storages/KVStore/Decode/RegionDataRead.h>
 #include <Storages/KVStore/Read/ReadIndexWorker.h>
+#include <Storages/KVStore/Region_fwd.h>
 #include <Storages/Page/V3/Universal/UniversalWriteBatchImpl.h>
+#include <kvproto/raft_cmdpb.pb.h>
+#include <Storages/KVStore/Utils.h>
 #include <kvproto/raft_serverpb.pb.h>
-#include <raft_cmdpb.pb.h>
 
 #include <ext/singleton.h>
 
 namespace DB
 {
+class KVStore;
 kvrpcpb::ReadIndexRequest make_read_index_reqs(uint64_t region_id, uint64_t start_ts);
 
-struct MockProxyRegion : MutexLockWrap
+struct MockProxyRegion : private MutexLockWrap
 {
     raft_serverpb::RegionLocalState getState();
     raft_serverpb::RegionLocalState & mutState();
@@ -120,7 +123,7 @@ struct MockReadIndexTask
 
 struct MockReadIndex
 {
-    MockReadIndex(LoggerPtr log_)
+    explicit MockReadIndex(LoggerPtr log_)
         : log(log_)
     {}
     void wakeNotifier();
@@ -264,11 +267,7 @@ struct MockRaftStoreProxy : MutexLockWrap
     void reload();
     void replay(KVStore & kvs, TMTContext & tmt, uint64_t region_id, uint64_t to);
 
-    void clear() NO_THREAD_SAFETY_ANALYSIS
-    {
-        auto _ = genLockGuard();
-        regions.clear();
-    }
+    void clear();
 
     std::pair<std::string, std::string> generateTiKVKeyValue(uint64_t tso, int64_t t) const;
 
@@ -347,7 +346,6 @@ struct RustStrWithViewVecInner
 inline BaseBuffView * createBaseBuffViewArray(size_t len)
 {
     void * raw_memory = operator new[](len * sizeof(BaseBuffView));
-    BaseBuffView * ptr = static_cast<BaseBuffView *>(raw_memory);
-    return ptr;
+    return static_cast<BaseBuffView *>(raw_memory);
 }
 } // namespace DB

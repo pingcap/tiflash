@@ -18,13 +18,12 @@
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/KVStore/Decode/DecodingStorageSchemaSnapshot.h>
 #include <Storages/KVStore/Decode/RegionDataRead.h>
+#include <Storages/KVStore/Region_fwd.h>
 #include <Storages/TableLockHolder.h>
 #include <TiDB/Schema/TiDB.h>
 
 namespace DB
 {
-class Region;
-using RegionPtr = std::shared_ptr<Region>;
 class StorageDeltaMerge;
 class TMTContext;
 

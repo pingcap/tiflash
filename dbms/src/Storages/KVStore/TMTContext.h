@@ -26,6 +26,7 @@ namespace DB
 {
 class PathPool;
 
+struct TiFlashRaftProxyHelper;
 class KVStore;
 using KVStorePtr = std::shared_ptr<KVStore>;
 

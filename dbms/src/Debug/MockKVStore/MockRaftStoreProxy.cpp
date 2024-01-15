@@ -693,6 +693,12 @@ TableID MockRaftStoreProxy::bootstrapTable(Context & ctx, KVStore & kvs, TMTCont
     return table_id;
 }
 
+void MockRaftStoreProxy::clear() NO_THREAD_SAFETY_ANALYSIS
+{
+    auto _ = genLockGuard();
+    regions.clear();
+}
+
 std::pair<std::string, std::string> MockRaftStoreProxy::generateTiKVKeyValue(uint64_t tso, int64_t t) const
 {
     WriteBufferFromOwnString buff;

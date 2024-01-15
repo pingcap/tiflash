@@ -19,6 +19,7 @@
 #include <Storages/DeltaMerge/Decode/SSTFilesToBlockInputStream.h>
 #include <Storages/DeltaMerge/ExternalDTFileInfo.h>
 #include <Storages/KVStore/MultiRaft/PreHandlingTrace.h>
+#include <Storages/KVStore/Region_fwd.h>
 #include <Storages/Page/PageDefinesBase.h>
 
 #include <memory>
@@ -26,8 +27,6 @@
 namespace DB
 {
 class TMTContext;
-class Region;
-using RegionPtr = std::shared_ptr<Region>;
 
 struct SSTViewVec;
 struct TiFlashRaftProxyHelper;

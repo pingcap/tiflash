@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Storages/KVStore/MultiRaft/RegionRangeKeys.h>
+#include <Storages/KVStore/Region_fwd.h>
 #include <Storages/KVStore/Types.h>
 
 #include <map>
@@ -27,10 +28,6 @@ namespace tests
 class KVStoreTestBase;
 class RegionKVStoreOldTest;
 } // namespace tests
-
-class Region;
-using RegionPtr = std::shared_ptr<Region>;
-using RegionMap = std::unordered_map<RegionID, RegionPtr>;
 
 struct TiKVRangeKey;
 using RegionRange = RegionRangeKeys::RegionRange;

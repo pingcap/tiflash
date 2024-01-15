@@ -22,6 +22,7 @@
 #include <Storages/KVStore/MultiRaft/PreHandlingTrace.h>
 #include <Storages/KVStore/MultiRaft/RegionManager.h>
 #include <Storages/KVStore/MultiRaft/RegionRangeKeys.h>
+#include <Storages/KVStore/Region_fwd.h>
 #include <Storages/KVStore/StorageEngineType.h>
 
 #include <condition_variable>
@@ -56,8 +57,6 @@ class KVStore;
 using KVStorePtr = std::shared_ptr<KVStore>;
 
 class RegionTable;
-class Region;
-using RegionPtr = std::shared_ptr<Region>;
 struct RaftCommandResult;
 class KVStoreTaskLock;
 

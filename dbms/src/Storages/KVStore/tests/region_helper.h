@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #pragma once
+#include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/MultiRaft/RegionMeta.h>
 #include <Storages/KVStore/MultiRaft/RegionPersister.h>
 #include <Storages/KVStore/TiKVHelpers/TiKVRecordFormat.h>

@@ -16,6 +16,7 @@
 
 #include <Common/Logger.h>
 #include <Storages/KVStore/MultiRaft/Disagg/fast_add_peer.pb.h>
+#include <Storages/KVStore/Region_fwd.h>
 #include <common/types.h>
 
 #include <memory>
@@ -30,8 +31,6 @@ using Segments = std::vector<SegmentPtr>;
 struct DMContext;
 using DMContextPtr = std::shared_ptr<DMContext>;
 } // namespace DM
-class Region;
-using RegionPtr = std::shared_ptr<Region>;
 class TMTContext;
 class UniversalPageStorage;
 using UniversalPageStoragePtr = std::shared_ptr<UniversalPageStorage>;
@@ -46,13 +45,13 @@ struct CheckpointIngestInfo
     DM::Segments getRestoredSegments() const { return restored_segments; }
     UInt64 getRemoteStoreId() const { return remote_store_id; }
     RegionPtr getRegion() const { return region; }
-    UInt64 regionId() const { return region_id; }
+    RegionID regionId() const { return region_id; }
     UInt64 peerId() const { return peer_id; }
     UInt64 beginTime() const { return begin_time; }
 
     CheckpointIngestInfo(
         TMTContext & tmt_,
-        UInt64 region_id_,
+        RegionID region_id_,
         UInt64 peer_id_,
         UInt64 remote_store_id_,
         RegionPtr region_,
@@ -71,7 +70,7 @@ struct CheckpointIngestInfo
     static CheckpointIngestInfoPtr restore(
         TMTContext & tmt,
         const TiFlashRaftProxyHelper * proxy_helper,
-        UInt64 region_id,
+        RegionID region_id,
         UInt64 peer_id);
 
     // Only call to clean dangling CheckpointIngestInfo.
@@ -80,7 +79,7 @@ struct CheckpointIngestInfo
         const TiFlashRaftProxyHelper * proxy_helper,
         UInt64 region_id,
         bool in_memory);
-    static bool cleanOnSuccess(TMTContext & tmt, UInt64 region_id);
+    static bool cleanOnSuccess(TMTContext & tmt, RegionID region_id);
 
     FastAddPeerProto::CheckpointIngestInfoPersisted serializeMeta() const;
 
@@ -93,9 +92,9 @@ private:
 
 private:
     TMTContext & tmt;
-    const UInt64 region_id = 0;
+    const RegionID region_id = 0;
     const UInt64 peer_id = 0;
-    const UInt64 remote_store_id;
+    const StoreID remote_store_id;
     const RegionPtr region;
     const DM::Segments restored_segments;
     // If restored, `beginTime` is no longer meaningful.

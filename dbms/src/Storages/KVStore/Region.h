@@ -20,6 +20,7 @@
 #include <Storages/KVStore/MultiRaft/RegionData.h>
 #include <Storages/KVStore/MultiRaft/RegionMeta.h>
 #include <Storages/KVStore/MultiRaft/RegionSerde.h>
+#include <Storages/KVStore/Region_fwd.h>
 #include <common/logger_useful.h>
 
 #include <shared_mutex>
@@ -38,10 +39,6 @@ class KVStoreTestBase;
 class RegionKVStoreOldTest;
 class RegionKVStoreTest;
 } // namespace tests
-
-class Region;
-using RegionPtr = std::shared_ptr<Region>;
-using Regions = std::vector<RegionPtr>;
 
 struct RaftCommandResult;
 class KVStore;

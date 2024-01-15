@@ -26,10 +26,6 @@
 namespace DB
 {
 class TMTContext;
-class Region;
-using RegionPtr = std::shared_ptr<Region>;
-using Regions = std::vector<RegionPtr>;
-using RegionMap = std::unordered_map<RegionID, RegionPtr>;
 class BackgroundProcessingPool;
 
 class BackgroundService : boost::noncopyable

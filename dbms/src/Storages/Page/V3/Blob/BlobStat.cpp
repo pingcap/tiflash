@@ -281,6 +281,12 @@ BlobStats::BlobStatPtr BlobStats::blobIdToStat(BlobFileId file_id, bool ignore_n
     return nullptr;
 }
 
+BlobStats::StatsMap BlobStats::getStats() const NO_THREAD_SAFETY_ANALYSIS
+{
+    auto guard = lock();
+    return stats_map;
+}
+
 /*********************
   * BlobStat methods *
   ********************/
