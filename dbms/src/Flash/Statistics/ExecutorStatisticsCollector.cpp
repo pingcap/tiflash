@@ -73,7 +73,7 @@ RemoteExecutionSummary getRemoteExecutionSummariesFromExchange(DAGContext & dag_
                     auto ori = exchange_execution_summary.ru_consumption;
                     exchange_execution_summary.merge(profile_info->remote_execution_summary);
                     LOG_DEBUG(log, "gjt debug: {}+{}({})={}", ori.r_r_u(), profile_info->remote_execution_summary.ru_consumption.r_r_u(),
-                            exchange_execution_summary.ru_consumption.r_r_u());
+                            map_entry.first, exchange_execution_summary.ru_consumption.r_r_u());
                     ru_added = true;
                 }
             }
