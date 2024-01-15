@@ -104,8 +104,9 @@ RawVoidPtr AsyncWaker::getRaw() const
     return inner.ptr;
 }
 
-struct BlockedReadIndexHelperTrait
+class BlockedReadIndexHelperTrait
 {
+public:
     explicit BlockedReadIndexHelperTrait(uint64_t timeout_ms_)
         : time_point(SteadyClock::now() + std::chrono::milliseconds{timeout_ms_})
     {}
@@ -123,7 +124,7 @@ protected:
     SteadyClock::time_point time_point;
 };
 
-struct BlockedReadIndexHelper final : BlockedReadIndexHelperTrait
+class BlockedReadIndexHelper final : public BlockedReadIndexHelperTrait
 {
 public:
     BlockedReadIndexHelper(uint64_t timeout_ms_, AsyncWaker & waker_)
@@ -144,7 +145,7 @@ private:
     AsyncWaker & waker;
 };
 
-struct BlockedReadIndexHelperV3 final : BlockedReadIndexHelperTrait
+class BlockedReadIndexHelperV3 final : public BlockedReadIndexHelperTrait
 {
     BlockedReadIndexHelperV3(uint64_t timeout_ms_, AsyncWaker::Notifier & notifier_)
         : BlockedReadIndexHelperTrait(timeout_ms_)
@@ -326,6 +327,41 @@ struct RegionReadIndexNotifier final : AsyncNotifier
 std::atomic<std::chrono::milliseconds> ReadIndexWorker::max_read_index_task_timeout
     = std::chrono::milliseconds{8 * 1000};
 //std::atomic<size_t> ReadIndexWorker::max_read_index_history{8};
+
+bool RegionNotifyMap::empty() const NO_THREAD_SAFETY_ANALYSIS
+{
+    auto _ = genLockGuard();
+    return data.empty();
+}
+void RegionNotifyMap::add(RegionID id) NO_THREAD_SAFETY_ANALYSIS
+{
+    auto _ = genLockGuard();
+    data.emplace(id);
+}
+Data RegionNotifyMap::popAll() NO_THREAD_SAFETY_ANALYSIS
+{
+    auto _ = genLockGuard();
+    return std::move(data);
+}
+void ReadIndexDataNode::WaitingTasks::add(Timestamp ts, ReadIndexFuturePtr f) NO_THREAD_SAFETY_ANALYSIS
+{
+    auto _ = genLockGuard();
+    waiting_tasks.emplace_back(ts, std::move(f));
+}
+
+std::optional<Data> ReadIndexDataNode::WaitingTasks::popAll() NO_THREAD_SAFETY_ANALYSIS
+{
+    auto _ = genLockGuard();
+    if (waiting_tasks.empty())
+        return {};
+    return std::move(waiting_tasks);
+}
+
+size_t ReadIndexDataNode::WaitingTasks::size() const NO_THREAD_SAFETY_ANALYSIS
+{
+    auto _ = genLockGuard();
+    return waiting_tasks.size();
+}
 
 void ReadIndexFuture::update(kvrpcpb::ReadIndexResponse resp) NO_THREAD_SAFETY_ANALYSIS
 {

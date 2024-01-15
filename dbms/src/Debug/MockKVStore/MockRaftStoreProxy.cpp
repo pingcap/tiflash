@@ -44,7 +44,7 @@ extern void setupPutRequest(raft_cmdpb::Request *, const std::string &, const Ti
 extern void setupDelRequest(raft_cmdpb::Request *, const std::string &, const TiKVKey &);
 } // namespace RegionBench
 
-TiFlashRaftProxyHelper MockRaftStoreProxy::SetRaftStoreProxyFFIHelper(RaftStoreProxyPtr proxy_ptr)
+TiFlashRaftProxyHelper MockRaftStoreProxy::setRaftStoreProxyFFIHelper(RaftStoreProxyPtr proxy_ptr)
 {
     TiFlashRaftProxyHelper res{};
     res.proxy_ptr = proxy_ptr;
@@ -111,7 +111,7 @@ void MockRaftStoreProxy::init(size_t region_num) NO_THREAD_SAFETY_ANALYSIS
 std::unique_ptr<TiFlashRaftProxyHelper> MockRaftStoreProxy::generateProxyHelper()
 {
     auto proxy_helper = std::make_unique<TiFlashRaftProxyHelper>(
-        MockRaftStoreProxy::SetRaftStoreProxyFFIHelper(RaftStoreProxyPtr{this}));
+        MockRaftStoreProxy::setRaftStoreProxyFFIHelper(RaftStoreProxyPtr{this}));
     // Bind ffi to MockSSTReader.
     proxy_helper->sst_reader_interfaces = make_mock_sst_reader_interface();
     return proxy_helper;
@@ -691,6 +691,12 @@ TableID MockRaftStoreProxy::bootstrapTable(Context & ctx, KVStore & kvs, TMTCont
     schema_syncer->syncSchemas(ctx, NullspaceID);
     this->table_id = table_id;
     return table_id;
+}
+
+void MockRaftStoreProxy::clear() NO_THREAD_SAFETY_ANALYSIS
+{
+    auto _ = genLockGuard();
+    regions.clear();
 }
 
 std::pair<std::string, std::string> MockRaftStoreProxy::generateTiKVKeyValue(uint64_t tso, int64_t t) const

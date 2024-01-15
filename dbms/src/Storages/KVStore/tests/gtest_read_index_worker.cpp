@@ -49,7 +49,7 @@ void ReadIndexTest::testError()
     MockRaftStoreProxy proxy_instance;
     TiFlashRaftProxyHelper proxy_helper;
     {
-        proxy_helper = MockRaftStoreProxy::SetRaftStoreProxyFFIHelper(RaftStoreProxyPtr{&proxy_instance});
+        proxy_helper = MockRaftStoreProxy::setRaftStoreProxyFFIHelper(RaftStoreProxyPtr{&proxy_instance});
         proxy_instance.init(10);
     }
     auto manager = ReadIndexWorkerManager::newReadIndexWorkerManager(proxy_helper, 5, [&]() {
@@ -189,18 +189,26 @@ void ReadIndexTest::testError()
     ASSERT(GCMonitor::instance().checkClean());
     ASSERT(!GCMonitor::instance().empty());
 }
-size_t ReadIndexTest::computeCntUseHistoryTasks(ReadIndexWorkerManager & manager) NO_THREAD_SAFETY_ANALYSIS
+
+struct Helper
+{
+    size_t & counter;
+    void operator()(std::unordered_map<RegionID, ReadIndexDataNodePtr> & d) NO_THREAD_SAFETY_ANALYSIS
+    {
+        for (auto & x : d)
+        {
+            auto _ = x.second->genLockGuard();
+            counter += x.second->cnt_use_history_tasks;
+        }
+    }
+};
+
+size_t ReadIndexTest::computeCntUseHistoryTasks(ReadIndexWorkerManager & manager)
 {
     size_t cnt_use_history_tasks = 0;
     for (auto & worker : manager.workers)
     {
-        worker->data_map.invoke([&](std::unordered_map<RegionID, ReadIndexDataNodePtr> & d) NO_THREAD_SAFETY_ANALYSIS {
-            for (auto & x : d)
-            {
-                auto _ = x.second->genLockGuard();
-                cnt_use_history_tasks += x.second->cnt_use_history_tasks;
-            }
-        });
+        worker->data_map.invoke(Helper{.counter = cnt_use_history_tasks});
     }
     return cnt_use_history_tasks;
 }
@@ -262,7 +270,7 @@ void ReadIndexTest::testNormal()
     MockRaftStoreProxy proxy_instance;
     TiFlashRaftProxyHelper proxy_helper;
     {
-        proxy_helper = MockRaftStoreProxy::SetRaftStoreProxyFFIHelper(RaftStoreProxyPtr{&proxy_instance});
+        proxy_helper = MockRaftStoreProxy::setRaftStoreProxyFFIHelper(RaftStoreProxyPtr{&proxy_instance});
         proxy_instance.init(10);
     }
     auto manager = ReadIndexWorkerManager::newReadIndexWorkerManager(
@@ -448,7 +456,7 @@ void ReadIndexTest::testBatch()
     MockRaftStoreProxy proxy_instance;
     TiFlashRaftProxyHelper proxy_helper;
     {
-        proxy_helper = MockRaftStoreProxy::SetRaftStoreProxyFFIHelper(RaftStoreProxyPtr{&proxy_instance});
+        proxy_helper = MockRaftStoreProxy::setRaftStoreProxyFFIHelper(RaftStoreProxyPtr{&proxy_instance});
         proxy_instance.init(10);
     }
     auto manager = ReadIndexWorkerManager::newReadIndexWorkerManager(proxy_helper, 5, [&]() {
