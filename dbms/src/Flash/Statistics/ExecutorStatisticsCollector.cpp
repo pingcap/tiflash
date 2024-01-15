@@ -197,6 +197,7 @@ void ExecutorStatisticsCollector::fillExecuteSummaries(tipb::SelectResponse & re
     // local_ru should already setup before fill.
     RUNTIME_CHECK_MSG(local_ru, "local ru consumption info not setup");
     auto sum_ru = mergeRUConsumption(*local_ru, remote_ru);
+    LOG_INFO(log, "gjt debug local: {}, remote: {}, sum: {}", local_ru->r_r_u(), remote_ru.r_r_u(), sum_ru.r_r_u());
 
     assert(!response.execution_summaries().empty());
     if unlikely (!sum_ru.SerializeToString(

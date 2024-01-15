@@ -42,10 +42,21 @@ void RemoteExecutionSummary::add(tipb::SelectResponse & resp)
     if (unlikely(resp.execution_summaries_size() == 0))
         return;
 
+    std::unique_ptr<resource_manager::Consumption> remote_ru_consumption;
     for (const auto & execution_summary : resp.execution_summaries())
     {
         if (likely(execution_summary.has_executor_id()))
         {
+            if (execution_summary.has_ru_consumption())
+            {
+                RUNTIME_CHECK_MSG(!remote_ru_consumption, "number ru consumption in MPPTask should be one");
+                remote_ru_consumption = std::make_unique<resource_manager::Consumption>();
+                if unlikely (!(remote_ru_consumption->ParseFromString(execution_summary.ru_consumption())))
+                    throw Exception("failed to parse ru consumption from remote execution summary");
+
+                ru_consumption = mergeRUConsumption(ru_consumption, *remote_ru_consumption);
+            }
+
             const auto & executor_id = execution_summary.executor_id();
             auto it = execution_summaries.find(executor_id);
             if (unlikely(it == execution_summaries.end()))
@@ -55,15 +66,6 @@ void RemoteExecutionSummary::add(tipb::SelectResponse & resp)
             else
             {
                 it->second.merge(execution_summary);
-            }
-
-            if (execution_summary.has_tiflash_ru_consumption())
-            {
-                resource_manager::Consumption remote_ru_consumption;
-                if unlikely (!remote_ru_consumption.ParseFromString(execution_summary.tiflash_ru_consumption()))
-                    throw Exception("failed to parse ru consumption from remote execution summary");
-
-                ru_consumption = mergeRUConsumption(ru_consumption, remote_ru_consumption);
             }
         }
     }
