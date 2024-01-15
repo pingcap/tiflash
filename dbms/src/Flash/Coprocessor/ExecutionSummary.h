@@ -32,6 +32,7 @@ struct ExecutionSummary
     UInt64 num_produced_rows = 0;
     UInt64 num_iterations = 0;
     UInt64 concurrency = 0;
+    resource_manager::Consumption ru_consumption{};
 
     DM::ScanContextPtr scan_context;
 
@@ -42,4 +43,9 @@ struct ExecutionSummary
     void fill(const BaseRuntimeStatistics & other);
     void init(const tipb::ExecutorExecutionSummary & other);
 };
+
+resource_manager::Consumption mergeRUConsumption(
+    const resource_manager::Consumption & left,
+    const resource_manager::Consumption & right);
+resource_manager::Consumption parseRUConsumption(const tipb::ExecutorExecutionSummary & pb);
 } // namespace DB
