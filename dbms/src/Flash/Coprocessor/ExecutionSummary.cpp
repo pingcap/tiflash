@@ -67,8 +67,9 @@ resource_manager::Consumption parseRUConsumption(const tipb::ExecutorExecutionSu
     resource_manager::Consumption ru_consumption;
     if (pb.has_ru_consumption())
     {
-        if unlikely (!ru_consumption.ParseFromString(pb.ru_consumption()))
-            throw DB::Exception("failed to parse ru consumption from remote execution summary");
+        RUNTIME_CHECK_MSG(
+            ru_consumption.ParseFromString(pb.ru_consumption()),
+            "failed to parse ru consumption from execution summary");
     }
     return ru_consumption;
 }

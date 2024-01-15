@@ -30,7 +30,7 @@ namespace DB
 {
 namespace
 {
-RemoteExecutionSummary getRemoteExecutionSummariesFromExchange(DAGContext & dag_context, const LoggerPtr & log)
+RemoteExecutionSummary getRemoteExecutionSummariesFromExchange(DAGContext & dag_context)
 {
     RemoteExecutionSummary exchange_execution_summary;
     switch (dag_context.getExecutionMode())
@@ -190,6 +190,7 @@ void ExecutorStatisticsCollector::fillExecuteSummaries(tipb::SelectResponse & re
     collectRuntimeDetails();
 
     fillLocalExecutionSummaries(response);
+
     // TODO: remove filling remote execution summaries
     fillRemoteExecutionSummaries(response);
 }
@@ -234,14 +235,15 @@ void ExecutorStatisticsCollector::fillLocalExecutionSummaries(tipb::SelectRespon
     // local_ru should already setup before fill.
     RUNTIME_CHECK_MSG(local_ru, "local ru consumption info not setup");
     assert(!response.execution_summaries().empty());
-    if unlikely (!local_ru->SerializeToString((*response.mutable_execution_summaries())[0].mutable_ru_consumption()))
-        throw Exception("failed to serialize tiflash ru consumption into response");
+    RUNTIME_CHECK_MSG(
+        local_ru->SerializeToString((*response.mutable_execution_summaries())[0].mutable_ru_consumption()),
+        "failed to serialize tiflash ru consumption into response");
 }
 
 void ExecutorStatisticsCollector::fillRemoteExecutionSummaries(tipb::SelectResponse & response)
 {
     // TODO: support cop remote read and disaggregated mode.
-    auto exchange_execution_summary = getRemoteExecutionSummariesFromExchange(*dag_context, log);
+    auto exchange_execution_summary = getRemoteExecutionSummariesFromExchange(*dag_context);
 
     // fill execution_summaries from remote executor received by exchange.
     for (auto & p : exchange_execution_summary.execution_summaries)
