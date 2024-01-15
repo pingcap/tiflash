@@ -30,7 +30,7 @@ namespace DB
 {
 namespace
 {
-RemoteExecutionSummary getRemoteExecutionSummariesFromExchange(DAGContext & dag_context)
+RemoteExecutionSummary getRemoteExecutionSummariesFromExchange(DAGContext & dag_context, const LoggerPtr & log)
 {
     RemoteExecutionSummary exchange_execution_summary;
     switch (dag_context.getExecutionMode())
@@ -44,7 +44,12 @@ RemoteExecutionSummary getRemoteExecutionSummariesFromExchange(DAGContext & dag_
             {
                 if (auto * exchange_receiver_stream_ptr = dynamic_cast<ExchangeReceiverInputStream *>(stream_ptr.get());
                     exchange_receiver_stream_ptr)
+                {
+                    auto ori = exchange_execution_summary.ru_consumption;
                     exchange_execution_summary.merge(exchange_receiver_stream_ptr->getRemoteExecutionSummary());
+                    LOG_INFO(log, "gjt debug merge: {}+{}({})={}", ori.r_r_u(), exchange_receiver_stream_ptr->getRemoteExecutionSummary().ru_consumption.r_r_u(),
+                            map_entry.first, exchange_execution_summary.ru_consumption.r_r_u());
+                }
             }
         }
         break;
@@ -54,7 +59,12 @@ RemoteExecutionSummary getRemoteExecutionSummariesFromExchange(DAGContext & dag_
             for (const auto & profile_info : map_entry.second)
             {
                 if (!profile_info->is_local)
+                {
+                    auto ori = exchange_execution_summary.ru_consumption;
                     exchange_execution_summary.merge(profile_info->remote_execution_summary);
+                    LOG_INFO(log, "gjt debug merge: {}+{}({})={}", ori.r_r_u(), profile_info->remote_execution_summary.ru_consumption.r_r_u(),
+                            map_entry.first, exchange_execution_summary.ru_consumption.r_r_u());
+                }
             }
         }
         break;
@@ -248,7 +258,7 @@ void ExecutorStatisticsCollector::fillRemoteExecutionSummaries(
     resource_manager::Consumption & remote)
 {
     // TODO: support cop remote read and disaggregated mode.
-    auto exchange_execution_summary = getRemoteExecutionSummariesFromExchange(*dag_context);
+    auto exchange_execution_summary = getRemoteExecutionSummariesFromExchange(*dag_context, log);
     remote = exchange_execution_summary.ru_consumption;
 
     // fill execution_summaries from remote executor received by exchange.
