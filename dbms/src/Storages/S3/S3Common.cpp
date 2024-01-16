@@ -20,6 +20,7 @@
 #include <Common/Stopwatch.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/TiFlashMetrics.h>
+#include <Encryption/FileProvider.h>
 #include <Encryption/PosixRandomAccessFile.h>
 #include <IO/ReadBufferFromRandomAccessFile.h>
 #include <IO/StdStreamFromReadBuffer.h>
@@ -73,7 +74,6 @@
 #include <any>
 #include <boost/algorithm/string/case_conv.hpp>
 #include <boost/algorithm/string/predicate.hpp>
-#include <cstddef>
 #include <filesystem>
 #include <ios>
 #include <magic_enum.hpp>

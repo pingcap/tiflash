@@ -40,6 +40,8 @@ public:
 
     void linkInfo(const EncryptionPath & src_ep, const EncryptionPath & dst_ep) override;
 
+    bool isEncryptionEnabled(KeyspaceID /*keyspace_id*/) override;
+
 private:
     bool fileExist(const String & fname) const;
 

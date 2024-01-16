@@ -14,6 +14,7 @@
 
 #include <Encryption/CSEDataKeyManager.h>
 #include <IO/MemoryReadWriteBuffer.h>
+#include <Poco/Path.h>
 #include <Storages/KVStore/FFI/FileEncryption.h>
 #include <Storages/KVStore/FFI/ProxyFFI.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
@@ -34,7 +35,9 @@ CSEDataKeyManager::CSEDataKeyManager(
 
 FileEncryptionInfo CSEDataKeyManager::getInfo(const EncryptionPath & ep)
 {
-    if (ep.keyspace_id == NullspaceID || !tiflash_instance_wrap->proxy_helper->getKeyspaceEncryption(ep.keyspace_id))
+    const auto keyspace_id = ep.keyspace_id;
+    // use likely to reduce performance impact on keyspaces without enable encryption
+    if likely (keyspace_id == NullspaceID || !tiflash_instance_wrap->proxy_helper->getKeyspaceEncryption(keyspace_id))
     {
         return FileEncryptionInfo{
             FileEncryptionRes::Disabled,
@@ -45,15 +48,12 @@ FileEncryptionInfo CSEDataKeyManager::getInfo(const EncryptionPath & ep)
         };
     }
 
-    auto it = keyspace_id_to_key.find(ep.keyspace_id);
+    auto it = keyspace_id_to_key.find(keyspace_id);
     if (it == keyspace_id_to_key.end())
     {
         // Read encrypted key from PageStorage
         const auto page_id = UniversalPageIdFormat::toFullPageId(
-            UniversalPageIdFormat::toFullPrefix(
-                ep.keyspace_id,
-                StorageType::Meta,
-                ENCRYPTION_KEY_RESERVED_NAMESPACE_ID),
+            UniversalPageIdFormat::toFullPrefix(keyspace_id, StorageType::Meta, ENCRYPTION_KEY_RESERVED_NAMESPACE_ID),
             ENCRYPTION_KEY_RESERVED_PAGEU64_ID);
         // getFile will be called after newFile, so page must exist
         Page page = ps_write.lock()->read(
@@ -62,7 +62,7 @@ FileEncryptionInfo CSEDataKeyManager::getInfo(const EncryptionPath & ep)
             {},
             /*throw_on_not_exist*/ true);
         auto data = page.getFieldData(0);
-        it = keyspace_id_to_key.emplace(ep.keyspace_id, master_key->decryptEncryptionKey(String(data))).first;
+        it = keyspace_id_to_key.emplace(keyspace_id, master_key->decryptEncryptionKey(String(data))).first;
     }
     // Use MD5 of file path as IV
     unsigned char md5_value[MD5_DIGEST_LENGTH];
@@ -74,7 +74,8 @@ FileEncryptionInfo CSEDataKeyManager::getInfo(const EncryptionPath & ep)
 
 FileEncryptionInfo CSEDataKeyManager::newInfo(const EncryptionPath & ep)
 {
-    if (ep.keyspace_id == NullspaceID || !tiflash_instance_wrap->proxy_helper->getKeyspaceEncryption(ep.keyspace_id))
+    const auto keyspace_id = ep.keyspace_id;
+    if likely (keyspace_id == NullspaceID || !tiflash_instance_wrap->proxy_helper->getKeyspaceEncryption(keyspace_id))
     {
         return FileEncryptionInfo{
             FileEncryptionRes::Disabled,
@@ -85,7 +86,7 @@ FileEncryptionInfo CSEDataKeyManager::newInfo(const EncryptionPath & ep)
         };
     }
 
-    auto it = keyspace_id_to_key.find(ep.keyspace_id);
+    auto it = keyspace_id_to_key.find(keyspace_id);
     if (it == keyspace_id_to_key.end())
     {
         // Generate new encryption key
@@ -93,17 +94,14 @@ FileEncryptionInfo CSEDataKeyManager::newInfo(const EncryptionPath & ep)
         // Write encrypted key to PageStorage
         UniversalWriteBatch wb;
         const auto page_id = UniversalPageIdFormat::toFullPageId(
-            UniversalPageIdFormat::toFullPrefix(
-                ep.keyspace_id,
-                StorageType::Meta,
-                ENCRYPTION_KEY_RESERVED_NAMESPACE_ID),
+            UniversalPageIdFormat::toFullPrefix(keyspace_id, StorageType::Meta, ENCRYPTION_KEY_RESERVED_NAMESPACE_ID),
             ENCRYPTION_KEY_RESERVED_PAGEU64_ID);
         MemoryWriteBuffer wb_buffer;
         writeBinary(encryption_key.exportString(), wb_buffer);
         auto read_buf = wb_buffer.tryGetReadBuffer();
         wb.putPage(page_id, 0, read_buf, wb_buffer.count());
         ps_write.lock()->write(std::move(wb));
-        it = keyspace_id_to_key.emplace(ep.keyspace_id, encryption_key).first;
+        it = keyspace_id_to_key.emplace(keyspace_id, encryption_key).first;
     }
     // Use MD5 of file path as IV
     unsigned char md5_value[MD5_DIGEST_LENGTH];
@@ -115,10 +113,11 @@ FileEncryptionInfo CSEDataKeyManager::newInfo(const EncryptionPath & ep)
 
 void CSEDataKeyManager::deleteInfo(const EncryptionPath & ep, bool /*throw_on_error*/)
 {
-    if (ep.keyspace_id == NullspaceID || !tiflash_instance_wrap->proxy_helper->getKeyspaceEncryption(ep.keyspace_id))
+    const auto keyspace_id = ep.keyspace_id;
+    if likely (keyspace_id == NullspaceID || !tiflash_instance_wrap->proxy_helper->getKeyspaceEncryption(keyspace_id))
         return;
     // just remove the key from cache
-    keyspace_id_to_key.erase(ep.keyspace_id);
+    keyspace_id_to_key.erase(keyspace_id);
 }
 
 void CSEDataKeyManager::linkInfo(const EncryptionPath & /*src_ep*/, const EncryptionPath & /*dst_ep*/)
@@ -128,7 +127,7 @@ void CSEDataKeyManager::linkInfo(const EncryptionPath & /*src_ep*/, const Encryp
 
 void CSEDataKeyManager::deleteKey(KeyspaceID keyspace_id)
 {
-    if (keyspace_id == NullspaceID || !tiflash_instance_wrap->proxy_helper->getKeyspaceEncryption(keyspace_id))
+    if likely (keyspace_id == NullspaceID || !tiflash_instance_wrap->proxy_helper->getKeyspaceEncryption(keyspace_id))
         return;
     const auto page_id = UniversalPageIdFormat::toFullPageId(
         UniversalPageIdFormat::toFullPrefix(keyspace_id, StorageType::Meta, ENCRYPTION_KEY_RESERVED_NAMESPACE_ID),
@@ -137,6 +136,11 @@ void CSEDataKeyManager::deleteKey(KeyspaceID keyspace_id)
     wb.delPage(page_id);
     ps_write.lock()->write(std::move(wb));
     keyspace_id_to_key.erase(keyspace_id);
+}
+
+bool CSEDataKeyManager::isEncryptionEnabled(KeyspaceID keyspace_id)
+{
+    return keyspace_id != NullspaceID && tiflash_instance_wrap->proxy_helper->getKeyspaceEncryption(keyspace_id);
 }
 
 } // namespace DB

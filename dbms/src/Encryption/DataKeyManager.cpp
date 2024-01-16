@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Encryption/DataKeyManager.h>
+#include <Poco/Path.h>
 #include <Storages/KVStore/FFI/FileEncryption.h>
 #include <Storages/KVStore/FFI/ProxyFFI.h>
 
@@ -77,6 +78,12 @@ void DataKeyManager::linkInfo(const EncryptionPath & src_ep, const EncryptionPat
             dst_ep.full_path,
             r.getErrorMsg());
     }
+}
+
+bool DataKeyManager::isEncryptionEnabled(KeyspaceID keyspace_id)
+{
+    return keyspace_id != pingcap::pd::NullspaceID
+        && tiflash_instance_wrap->proxy_helper->getKeyspaceEncryption(keyspace_id);
 }
 
 } // namespace DB

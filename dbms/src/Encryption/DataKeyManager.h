@@ -17,8 +17,6 @@
 #include <Common/Exception.h>
 #include <Common/TiFlashException.h>
 #include <Encryption/KeyManager.h>
-#include <Poco/Path.h>
-#include <common/likely.h>
 
 namespace DB
 {
@@ -37,6 +35,8 @@ public:
     void deleteInfo(const EncryptionPath & ep, bool throw_on_error) override;
 
     void linkInfo(const EncryptionPath & src_ep, const EncryptionPath & dst_ep) override;
+
+    bool isEncryptionEnabled(KeyspaceID keyspace_id) override;
 
 private:
     EngineStoreServerWrap * tiflash_instance_wrap;

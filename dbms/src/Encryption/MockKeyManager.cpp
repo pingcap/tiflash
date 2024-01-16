@@ -147,4 +147,11 @@ FileEncryptionInfo MockKeyManager::getInfo(const EncryptionPath & ep)
         };
     }
 }
+
+bool MockKeyManager::isEncryptionEnabled(KeyspaceID /*keyspace_id*/)
+{
+    // for simplicity, we just return encryption_enabled
+    return encryption_enabled;
+}
+
 } // namespace DB

@@ -94,13 +94,13 @@ Columns ColumnFileTiny::readFromDisk(
 
     // Read the columns from disk and apply DDL cast if need
     Page page = data_provider->readTinyData(data_page_id, fields);
-    if (file_provider->isKeyspaceEncryptionEnabled())
+    // use `unlikely` to reduce performance impact on keyspaces without enable encryption
+    if (unlikely(file_provider->isEncryptionEnabled(keyspace_id)))
     {
-        const auto ep = EncryptionPath(std::to_string(keyspace_id), "");
-        size_t data_size = page.data.size();
         // decrypt the page data in place
+        size_t data_size = page.data.size();
         char * data = page.mem_holder.get();
-        file_provider->decryptPage(ep, data, data_size, data_page_id);
+        file_provider->decryptPage(keyspace_id, data, data_size, data_page_id);
     }
 
     for (size_t index = col_start; index < col_end; ++index)
@@ -327,15 +327,15 @@ PageIdU64 ColumnFileTiny::writeColumnFileData(
 
     auto data_size = write_buf.count();
     if (const auto & file_provider = dm_context.global_context.getFileProvider();
-        file_provider->isKeyspaceEncryptionEnabled())
+        unlikely(file_provider->isEncryptionEnabled(dm_context.keyspace_id)))
     {
-        const auto ep = EncryptionPath(std::to_string(dm_context.keyspace_id), "");
-        if (unlikely(!file_provider->isFileEncrypted(ep)))
+        if (const auto ep = EncryptionPath("", "", dm_context.keyspace_id);
+            unlikely(!file_provider->isFileEncrypted(ep)))
         {
             file_provider->createEncryptionInfo(ep);
         }
-        auto * data = write_buf.internalBuffer().begin();
-        file_provider->encryptPage(ep, data, data_size, page_id);
+        auto * data = write_buf.buffer().begin();
+        file_provider->encryptPage(dm_context.keyspace_id, data, data_size, page_id);
     }
 
     auto buf = write_buf.tryGetReadBuffer();

@@ -18,9 +18,7 @@
 #include <Common/TiFlashException.h>
 #include <Encryption/KeyManager.h>
 #include <Encryption/MasterKey.h>
-#include <Poco/Path.h>
 #include <Storages/Page/PageStorage_fwd.h>
-#include <common/likely.h>
 
 namespace DB
 {
@@ -52,6 +50,8 @@ public:
 
     // delete the keyspace encryption key
     void deleteKey(KeyspaceID keyspace_id);
+
+    bool isEncryptionEnabled(KeyspaceID keyspace_id) override;
 
 private:
     EngineStoreServerWrap * tiflash_instance_wrap;

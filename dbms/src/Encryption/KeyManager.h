@@ -34,6 +34,8 @@ public:
     virtual void deleteInfo(const EncryptionPath & ep, bool throw_on_error) = 0;
 
     virtual void linkInfo(const EncryptionPath & src_ep, const EncryptionPath & dst_ep) = 0;
+
+    virtual bool isEncryptionEnabled(KeyspaceID keyspace_id) = 0;
 };
 
 using KeyManagerPtr = std::shared_ptr<KeyManager>;

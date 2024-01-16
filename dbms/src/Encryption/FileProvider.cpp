@@ -207,24 +207,17 @@ void FileProvider::dropEncryptionInfo(KeyspaceID keyspace_id) const
         cse_key_manager->deleteKey(keyspace_id);
 }
 
-void FileProvider::encryptPage(
-    const EncryptionPath & encryption_path_,
-    char * data,
-    size_t data_size,
-    PageIdU64 page_id)
+void FileProvider::encryptPage(KeyspaceID keyspace_id, char * data, size_t data_size, PageIdU64 page_id)
 {
-    const auto info = key_manager->getInfo(encryption_path_);
-    info.cipherPage</*is_encrypt*/ true>(data, data_size, page_id);
+    // pass page_id as file_path to genarate unique IV.
+    const auto info = key_manager->getInfo(EncryptionPath(std::to_string(page_id), "", keyspace_id));
+    info.cipherData</*is_encrypt*/ true>(data, data_size);
 }
 
-void FileProvider::decryptPage(
-    const EncryptionPath & encryption_path_,
-    char * data,
-    size_t data_size,
-    PageIdU64 page_id)
+void FileProvider::decryptPage(KeyspaceID keyspace_id, char * data, size_t data_size, PageIdU64 page_id)
 {
-    const auto info = key_manager->getInfo(encryption_path_);
-    info.cipherPage</*is_encrypt*/ false>(data, data_size, page_id);
+    const auto info = key_manager->getInfo(EncryptionPath(std::to_string(page_id), "", keyspace_id));
+    info.cipherData</*is_encrypt*/ false>(data, data_size);
 }
 
 void FileProvider::linkEncryptionInfo(
@@ -251,6 +244,11 @@ bool FileProvider::isEncryptionEnabled() const
 bool FileProvider::isKeyspaceEncryptionEnabled() const
 {
     return encryption_enabled && keyspace_encryption_enabled;
+}
+
+bool FileProvider::isEncryptionEnabled(KeyspaceID keyspace_id) const
+{
+    return encryption_enabled && keyspace_encryption_enabled && key_manager->isEncryptionEnabled(keyspace_id);
 }
 
 void FileProvider::renameFile(

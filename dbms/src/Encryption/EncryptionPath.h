@@ -31,7 +31,7 @@ using KeyspaceID = pingcap::pd::KeyspaceID;
 /// so we combine the `iv` fetched from file.dict with the hash value of the file name to calculate the real `iv` for every file.
 /// 2. In cloud, we use cse proxy, all encryption info are stored in page storage.
 /// Each keyspace has only a encryption info. We will use full_path and file_name to generate `iv`.
-/// Note: If no keyspace_id is specified, the EncryptionPath will generate a empty FileEncryptionInfo which will generate empty AESCTRCipherStream.
+/// Note: If keyspace_id = pingcap::pd::NullspaceID, the key manager will return a empty FileEncryptionInfo which will generate empty AESCTRCipherStream.
 struct EncryptionPath
 {
     EncryptionPath(const String & full_path_, const String & file_name_)

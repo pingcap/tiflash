@@ -183,7 +183,16 @@ DMFilePtr DMFile::restore(
             return nullptr;
     }
 
-    DMFilePtr dmfile(new DMFile(file_id, page_id, parent_path, Status::READABLE, keyspace_id));
+    DMFilePtr dmfile(new DMFile(
+        file_id,
+        page_id,
+        parent_path,
+        Status::READABLE,
+        /*small_file_size_threshold_*/ 128 * 1024,
+        /*merged_file_max_size_*/ 16 * 1024 * 1024,
+        /*configuration_*/ std::nullopt,
+        /*version_*/ STORAGE_FORMAT_CURRENT.dm_file,
+        /*keyspace_id_*/ keyspace_id));
     if (is_s3_file || Poco::File(dmfile->metav2Path()).exists())
     {
         auto s = dmfile->readMetaV2(file_provider);
