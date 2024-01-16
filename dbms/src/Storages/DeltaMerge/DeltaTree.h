@@ -18,7 +18,6 @@
 #include <Common/TargetSpecific.h>
 #include <Core/Types.h>
 #include <IO/WriteHelpers.h>
-#include <Storages/DeltaMerge/Tuple.h>
 
 #include <algorithm>
 #include <cstddef>
