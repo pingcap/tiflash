@@ -29,7 +29,6 @@
 #include <memory>
 #include <mutex>
 #include <optional>
-#include <type_traits>
 
 namespace TiDB
 {
@@ -59,7 +58,6 @@ class DTEntryIterator;
 template <size_t M, size_t F, size_t S, typename TAllocator = Allocator<false>>
 class DTEntriesCopy;
 
-struct RefTuple;
 
 struct EmptyValueSpace
 {
