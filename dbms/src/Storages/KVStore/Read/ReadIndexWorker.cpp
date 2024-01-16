@@ -19,6 +19,14 @@
 #include <Storages/KVStore/Read/ReadIndexWorker.h>
 #include <fmt/chrono.h>
 
+#pragma GCC diagnostic push
+#ifdef __clang__
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#endif
+// include to suppress warnings on NO_THREAD_SAFETY_ANALYSIS. clang can't work without this include, don't know why
+#include <grpcpp/security/credentials.h>
+#pragma GCC diagnostic pop
+
 #include <queue>
 
 namespace DB
@@ -147,6 +155,7 @@ private:
 
 class BlockedReadIndexHelperV3 final : public BlockedReadIndexHelperTrait
 {
+public:
     BlockedReadIndexHelperV3(uint64_t timeout_ms_, AsyncWaker::Notifier & notifier_)
         : BlockedReadIndexHelperTrait(timeout_ms_)
         , notifier(notifier_)
@@ -338,7 +347,7 @@ void RegionNotifyMap::add(RegionID id) NO_THREAD_SAFETY_ANALYSIS
     auto _ = genLockGuard();
     data.emplace(id);
 }
-Data RegionNotifyMap::popAll() NO_THREAD_SAFETY_ANALYSIS
+RegionNotifyMap::Data RegionNotifyMap::popAll() NO_THREAD_SAFETY_ANALYSIS
 {
     auto _ = genLockGuard();
     return std::move(data);
@@ -349,7 +358,7 @@ void ReadIndexDataNode::WaitingTasks::add(Timestamp ts, ReadIndexFuturePtr f) NO
     waiting_tasks.emplace_back(ts, std::move(f));
 }
 
-std::optional<Data> ReadIndexDataNode::WaitingTasks::popAll() NO_THREAD_SAFETY_ANALYSIS
+std::optional<ReadIndexDataNode::WaitingTasks::Data> ReadIndexDataNode::WaitingTasks::popAll() NO_THREAD_SAFETY_ANALYSIS
 {
     auto _ = genLockGuard();
     if (waiting_tasks.empty())

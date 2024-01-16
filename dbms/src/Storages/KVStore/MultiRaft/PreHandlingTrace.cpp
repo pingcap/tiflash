@@ -14,6 +14,14 @@
 
 #include <Storages/KVStore/MultiRaft/PreHandlingTrace.h>
 
+#pragma GCC diagnostic push
+#ifdef __clang__
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#endif
+// include to suppress warnings on NO_THREAD_SAFETY_ANALYSIS. clang can't work without this include, don't know why
+#include <grpcpp/security/credentials.h>
+#pragma GCC diagnostic pop
+
 namespace DB
 {
 
@@ -25,7 +33,8 @@ std::shared_ptr<PreHandlingTrace::Item> PreHandlingTrace::registerTask(uint64_t 
     tasks[region_id] = b;
     return b;
 }
-std::shared_ptr<Item> PreHandlingTrace::deregisterTask(uint64_t region_id) NO_THREAD_SAFETY_ANALYSIS
+
+std::shared_ptr<PreHandlingTrace::Item> PreHandlingTrace::deregisterTask(uint64_t region_id) NO_THREAD_SAFETY_ANALYSIS
 {
     auto _ = genLockGuard();
     auto it = tasks.find(region_id);

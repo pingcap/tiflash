@@ -14,6 +14,14 @@
 
 #include <Storages/KVStore/Utils.h>
 
+#pragma GCC diagnostic push
+#ifdef __clang__
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#endif
+// include to suppress warnings on NO_THREAD_SAFETY_ANALYSIS. clang can't work without this include, don't know why
+#include <grpcpp/security/credentials.h>
+#pragma GCC diagnostic pop
+
 namespace DB
 {
 
@@ -22,12 +30,12 @@ std::lock_guard<MutexLockWrap::Mutex> MutexLockWrap::genLockGuard() const NO_THR
     return std::lock_guard(*mutex);
 }
 
-std::unique_lock<Mutex> MutexLockWrap::tryToLock() const NO_THREAD_SAFETY_ANALYSIS
+std::unique_lock<MutexLockWrap::Mutex> MutexLockWrap::tryToLock() const NO_THREAD_SAFETY_ANALYSIS
 {
     return std::unique_lock(*mutex, std::try_to_lock);
 }
 
-std::unique_lock<Mutex> MutexLockWrap::genUniqueLock() const NO_THREAD_SAFETY_ANALYSIS
+std::unique_lock<MutexLockWrap::Mutex> MutexLockWrap::genUniqueLock() const NO_THREAD_SAFETY_ANALYSIS
 {
     return std::unique_lock(*mutex);
 }
