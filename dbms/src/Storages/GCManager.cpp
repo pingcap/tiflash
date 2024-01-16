@@ -56,7 +56,7 @@ bool GCManager::work()
         // For disagg enabled, we must wait before the store meta inited before doing compaction
         // on segments. Or it will upload new data with incorrect remote path.
         auto & kvstore = global_context.getTMTContext().getKVStore();
-        auto store_info = kvstore->getStoreMeta();
+        auto store_info = kvstore->clonedStoreMeta();
         if (store_info.id() == InvalidStoreID)
         {
             LOG_INFO(log, "Skip GC because store meta is not initialized");

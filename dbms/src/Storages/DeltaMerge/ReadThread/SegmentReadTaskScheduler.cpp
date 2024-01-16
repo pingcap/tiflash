@@ -19,8 +19,7 @@
 namespace DB::DM
 {
 SegmentReadTaskScheduler::SegmentReadTaskScheduler(bool run_sched_thread)
-    : stop(false)
-    , log(Logger::get())
+    : log(Logger::get())
 {
     if (likely(run_sched_thread))
     {
@@ -173,10 +172,10 @@ std::optional<std::pair<GlobalSegmentID, std::vector<UInt64>>> SegmentReadTaskSc
     auto expected_merge_seg_count = std::min(read_pools.size(), 2); // Not accurate.
 
     std::optional<std::pair<GlobalSegmentID, std::vector<uint64_t>>> result;
-    auto target = pool->scheduleSegment(merging_segments, expected_merge_seg_count);
+    auto target = pool->scheduleSegment(merging_segments, expected_merge_seg_count, enable_data_sharing);
     if (target != merging_segments.end())
     {
-        if (MergedTask::getPassiveMergedSegments() < 100 || target->second.size() == 1)
+        if ((enable_data_sharing && MergedTask::getPassiveMergedSegments() < 100) || target->second.size() == 1)
         {
             result = *target;
             merging_segments.erase(target);
@@ -185,8 +184,8 @@ std::optional<std::pair<GlobalSegmentID, std::vector<UInt64>>> SegmentReadTaskSc
         {
             result = std::pair{target->first, std::vector<uint64_t>(1, pool->pool_id)};
             auto itr = std::find(target->second.begin(), target->second.end(), pool->pool_id);
-            *itr = target->second
-                       .back(); // SegmentReadTaskPool::scheduleSegment ensures `pool->poolId` must exists in `target`.
+            // SegmentReadTaskPool::scheduleSegment ensures `pool->poolId` must exists in `target`.
+            *itr = target->second.back();
             target->second.resize(target->second.size() - 1);
         }
     }
@@ -300,6 +299,11 @@ void SegmentReadTaskScheduler::schedLoop()
             std::this_thread::sleep_for(2ms);
         }
     }
+}
+
+void SegmentReadTaskScheduler::updateConfig(const Settings & settings)
+{
+    enable_data_sharing = settings.dt_max_sharing_column_bytes_for_all > 0;
 }
 
 } // namespace DB::DM

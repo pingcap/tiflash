@@ -24,7 +24,7 @@
 #include <Storages/KVStore/Decode/RegionTable.h>
 #include <Storages/KVStore/FFI/ProxyFFI.h>
 #include <Storages/KVStore/KVStore.h>
-#include <Storages/KVStore/MultiRaft/Disagg/FastAddPeer.h>
+#include <Storages/KVStore/MultiRaft/Disagg/FastAddPeerContext.h>
 #include <Storages/KVStore/MultiRaft/RegionExecutionResult.h>
 #include <Storages/KVStore/MultiRaft/RegionPersister.h>
 #include <Storages/KVStore/Read/ReadIndexWorker.h>
@@ -333,6 +333,14 @@ void KVStore::handleDestroy(UInt64 region_id, TMTContext & tmt)
 void KVStore::handleDestroy(UInt64 region_id, TMTContext & tmt, const KVStoreTaskLock & task_lock)
 {
     const auto region = getRegion(region_id);
+    // Always try to clean obsolete FAP snapshot
+    if (tmt.getContext().getSharedContextDisagg()->isDisaggregatedStorageMode())
+    {
+        // Everytime we remove region, we try to clean obsolete fap ingest info.
+        auto fap_ctx = tmt.getContext().getSharedContextDisagg()->fap_context;
+        fiu_do_on(FailPoints::force_not_clean_fap_on_destroy, { return; });
+        fap_ctx->resolveFapSnapshotState(tmt, proxy_helper, region_id, false);
+    }
     if (region == nullptr)
     {
         LOG_INFO(log, "region_id={} not found, might be removed already", region_id);
@@ -346,14 +354,6 @@ void KVStore::handleDestroy(UInt64 region_id, TMTContext & tmt, const KVStoreTas
         tmt.getRegionTable(),
         task_lock,
         region_manager.genRegionTaskLock(region_id));
-
-    if (tmt.getContext().getSharedContextDisagg()->isDisaggregatedStorageMode())
-    {
-        fiu_do_on(FailPoints::force_not_clean_fap_on_destroy, { return; });
-        // Everytime we remove region, we try to clean obsolete fap ingest info.
-        auto fap_ctx = tmt.getContext().getSharedContextDisagg()->fap_context;
-        fap_ctx->cleanCheckpointIngestInfo(tmt, region_id);
-    }
 }
 
 void KVStore::setRegionCompactLogConfig(UInt64 rows, UInt64 bytes, UInt64 gap, UInt64 eager_gc_gap)
@@ -627,9 +627,19 @@ KVStore::StoreMeta::Base KVStore::StoreMeta::getMeta() const
     return base;
 }
 
-metapb::Store KVStore::getStoreMeta() const
+metapb::Store KVStore::clonedStoreMeta() const
 {
     return getStore().getMeta();
+}
+
+const metapb::Store & KVStore::getStoreMeta() const
+{
+    return this->store.base;
+}
+
+metapb::Store & KVStore::debugMutStoreMeta()
+{
+    return this->store.base;
 }
 
 KVStore::StoreMeta & KVStore::getStore()
@@ -703,6 +713,11 @@ RegionPtr KVStore::genRegionPtr(metapb::Region && region, UInt64 peer_id, UInt64
     });
 
     return std::make_shared<Region>(std::move(meta), proxy_helper);
+}
+
+RegionTaskLock KVStore::genRegionTaskLock(UInt64 region_id) const
+{
+    return region_manager.genRegionTaskLock(region_id);
 }
 
 } // namespace DB
