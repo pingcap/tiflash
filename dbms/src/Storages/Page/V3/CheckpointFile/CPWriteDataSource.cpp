@@ -33,8 +33,8 @@ Page CPWriteDataSourceBlobStore::read(const BlobStore<universal::BlobStoreTrait>
         const auto & ups_page_id = page_id_and_entry.first;
         auto page_id_u64 = UniversalPageIdFormat::getU64ID(ups_page_id);
         auto keyspace_id = UniversalPageIdFormat::getKeyspaceID(ups_page_id);
-        if (unlikely(file_provider->isEncryptionEnabled(keyspace_id))
-            && UniversalPageIdFormat::isType(ups_page_id, StorageType::Data))
+        if (unlikely(file_provider->isEncryptionEnabled(keyspace_id)) && !page.data.empty()
+            && UniversalPageIdFormat::isType(ups_page_id, StorageType::Log))
         {
             file_provider->decryptPage(keyspace_id, page.mem_holder.get(), page.data.size(), page_id_u64);
         }
