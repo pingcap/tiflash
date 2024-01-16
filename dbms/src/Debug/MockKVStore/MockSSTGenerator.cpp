@@ -14,6 +14,7 @@
 
 #include <Debug/MockKVStore/MockSSTGenerator.h>
 #include <Debug/MockKVStore/MockSSTReader.h>
+#include <Storages/KVStore/TiKVHelpers/TiKVRecordFormat.h>
 
 namespace DB
 {
