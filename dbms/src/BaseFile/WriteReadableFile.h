@@ -14,8 +14,8 @@
 
 #pragma once
 
-#include <Encryption/RandomAccessFile.h>
-#include <Encryption/WritableFile.h>
+#include <BaseFile/RandomAccessFile.h>
+#include <BaseFile/WritableFile.h>
 #include <common/types.h>
 
 #include <memory>

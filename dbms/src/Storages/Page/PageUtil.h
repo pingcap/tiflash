@@ -32,10 +32,10 @@
 #ifndef __APPLE__
 #include <fcntl.h>
 #endif
-#include <Encryption/RandomAccessFile.h>
-#include <Encryption/RateLimiter.h>
-#include <Encryption/WritableFile.h>
-#include <Encryption/WriteReadableFile.h>
+#include <BaseFile/RandomAccessFile.h>
+#include <BaseFile/RateLimiter.h>
+#include <BaseFile/WritableFile.h>
+#include <BaseFile/WriteReadableFile.h>
 #include <IO/WriteBufferFromFile.h>
 #include <Poco/File.h>
 

@@ -14,9 +14,9 @@
 
 #pragma once
 
+#include <BaseFile/RandomAccessFile.h>
 #include <Common/Logger.h>
 #include <Common/nocopyable.h>
-#include <Encryption/RandomAccessFile.h>
 #include <Interpreters/Settings_fwd.h>
 #include <Poco/Util/AbstractConfiguration.h>
 #include <Server/StorageConfigParser.h>

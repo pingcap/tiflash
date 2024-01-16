@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <BaseFile/RateLimiter.h>
 #include <Common/Config/ConfigProcessor.h>
 #include <Common/DNSCache.h>
 #include <Common/FailPoint.h>
@@ -30,7 +31,6 @@
 #include <Debug/MockStorage.h>
 #include <Encryption/DataKeyManager.h>
 #include <Encryption/FileProvider.h>
-#include <Encryption/RateLimiter.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <IO/ReadBufferFromFile.h>
 #include <IO/UncompressedCache.h>

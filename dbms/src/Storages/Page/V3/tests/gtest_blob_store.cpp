@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <BaseFile/RateLimiter.h>
 #include <Common/FailPoint.h>
 #include <Common/Logger.h>
-#include <Encryption/RateLimiter.h>
 #include <IO/ReadBufferFromMemory.h>
 #include <Poco/Logger.h>
 #include <Storages/Page/PageConstants.h>

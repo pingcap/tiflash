@@ -14,34 +14,48 @@
 
 #pragma once
 
+#include <BaseFile/RateLimiter.h>
+#include <BaseFile/WritableFile.h>
 #include <Common/CurrentMetrics.h>
-#include <Encryption/RateLimiter.h>
-#include <Encryption/WriteReadableFile.h>
-#include <common/types.h>
+
+#include <string>
 
 namespace CurrentMetrics
 {
-extern const Metric OpenFileForReadWrite;
-} // namespace CurrentMetrics
+extern const Metric OpenFileForWrite;
+}
+
+#ifndef O_DIRECT
+#define O_DIRECT 00040000
+#endif
 
 namespace DB
 {
-class PosixWriteReadableFile : public WriteReadableFile
+class PosixWritableFile : public WritableFile
 {
 public:
-    PosixWriteReadableFile(
-        const String & file_name_,
+    PosixWritableFile(
+        const std::string & file_name_,
         bool truncate_when_exists_,
         int flags,
         mode_t mode,
-        const WriteLimiterPtr & write_limiter_ = nullptr,
-        const ReadLimiterPtr & read_limiter_ = nullptr);
+        const WriteLimiterPtr & write_limiter_ = nullptr);
 
-    ~PosixWriteReadableFile() override;
+    ~PosixWritableFile() override;
+
+    ssize_t write(char * buf, size_t size) override;
 
     ssize_t pwrite(char * buf, size_t size, off_t offset) const override;
 
+    off_t seek(off_t offset, int whence) const override;
+
+    std::string getFileName() const override { return file_name; }
+
     int getFd() const override { return fd; }
+
+    void open() override;
+
+    void close() override;
 
     bool isClosed() const override { return fd == -1; }
 
@@ -49,18 +63,17 @@ public:
 
     int ftruncate(off_t length) override;
 
-    ssize_t pread(char * buf, size_t size, off_t offset) const override;
-
-    String getFileName() const override { return file_name; }
-
-    void close() override;
+    void hardLink(const std::string & existing_file) override;
 
 private:
-    CurrentMetrics::Increment metric_increment{CurrentMetrics::OpenFileForReadWrite, 0};
+    void doOpenFile(bool truncate_when_exists_, int flags, mode_t mode);
 
-    String file_name;
-    int fd;
+private:
+    // Only add metrics when file is actually added in `doOpenFile`.
+    CurrentMetrics::Increment metric_increment{CurrentMetrics::OpenFileForWrite, 0};
+    std::string file_name;
+    int fd = -1;
     WriteLimiterPtr write_limiter;
-    ReadLimiterPtr read_limiter;
 };
+
 } // namespace DB
