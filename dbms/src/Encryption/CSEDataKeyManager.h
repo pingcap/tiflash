@@ -20,6 +20,8 @@
 #include <Encryption/MasterKey.h>
 #include <Storages/Page/PageStorage_fwd.h>
 
+#include <unordered_map>
+
 namespace DB
 {
 
