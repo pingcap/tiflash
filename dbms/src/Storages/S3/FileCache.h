@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include <BaseFile/RandomAccessFile.h>
+#include <BaseFile/fwd.h>
 #include <Common/Logger.h>
 #include <Common/nocopyable.h>
 #include <Interpreters/Settings_fwd.h>
@@ -181,6 +181,7 @@ public:
     std::vector<FileSegmentPtr> getAllFiles() const
     {
         std::vector<FileSegmentPtr> files;
+        files.reserve(table.size());
         for (const auto & pa : table)
         {
             files.push_back(pa.second.first);

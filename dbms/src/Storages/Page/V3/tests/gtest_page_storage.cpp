@@ -39,6 +39,7 @@
 #include <TestUtils/TiFlashTestBasic.h>
 #include <common/types.h>
 
+#include <random>
 #include <ext/scope_guard.h>
 #include <future>
 

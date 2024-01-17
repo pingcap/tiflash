@@ -14,7 +14,6 @@
 
 #pragma once
 
-#include <BaseFile/WriteReadableFile.h>
 #include <Core/Types.h>
 #include <Encryption/FileProvider.h>
 #include <Poco/Logger.h>

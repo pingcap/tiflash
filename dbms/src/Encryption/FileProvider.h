@@ -14,9 +14,7 @@
 
 #pragma once
 
-#include <BaseFile/RandomAccessFile.h>
-#include <BaseFile/WritableFile.h>
-#include <BaseFile/WriteReadableFile.h>
+#include <BaseFile/fwd.h>
 #include <Core/Types.h>
 #include <Encryption/BlockAccessCipherStream.h>
 #include <Encryption/FileProvider_fwd.h>

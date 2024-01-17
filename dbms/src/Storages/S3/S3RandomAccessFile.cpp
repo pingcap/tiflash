@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <BaseFile/RandomAccessFile.h>
 #include <Common/Exception.h>
 #include <Common/ProfileEvents.h>
 #include <Common/Stopwatch.h>
@@ -25,10 +24,9 @@
 #include <Storages/S3/S3Filename.h>
 #include <Storages/S3/S3RandomAccessFile.h>
 #include <aws/s3/model/GetObjectRequest.h>
+#include <common/likely.h>
 
-#include <chrono>
 #include <optional>
-#include <thread>
 
 namespace ProfileEvents
 {

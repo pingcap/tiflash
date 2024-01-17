@@ -16,6 +16,7 @@
 
 #include <BaseFile/RandomAccessFile.h>
 #include <Common/Exception.h>
+#include <common/likely.h>
 #include <common/types.h>
 
 namespace DB
