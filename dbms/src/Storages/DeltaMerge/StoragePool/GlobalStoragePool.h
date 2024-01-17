@@ -17,7 +17,7 @@
 #include <Common/Logger.h>
 #include <Interpreters/Context_fwd.h>
 #include <Storages/BackgroundProcessingPool.h>
-#include <Storages/DeltaMerge/StoragePool_fwd.h>
+#include <Storages/DeltaMerge/StoragePool/StoragePool_fwd.h>
 #include <Storages/KVStore/Types.h>
 #include <Storages/Page/FileUsage.h>
 #include <Storages/Page/PageStorage_fwd.h>

@@ -13,8 +13,8 @@
 // limitations under the License.
 
 #include <Interpreters/Context.h>
-#include <Storages/DeltaMerge/GlobalStoragePool.h>
-#include <Storages/DeltaMerge/StoragePoolConfig.h>
+#include <Storages/DeltaMerge/StoragePool/GlobalStoragePool.h>
+#include <Storages/DeltaMerge/StoragePool/StoragePoolConfig.h>
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageStorage.h>
 #include <Storages/PathPool.h>

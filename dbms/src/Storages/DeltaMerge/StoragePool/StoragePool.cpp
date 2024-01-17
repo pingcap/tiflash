@@ -16,9 +16,9 @@
 #include <Common/FailPoint.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/Settings.h>
-#include <Storages/DeltaMerge/GlobalStoragePool.h>
-#include <Storages/DeltaMerge/StoragePool.h>
-#include <Storages/DeltaMerge/StoragePoolConfig.h>
+#include <Storages/DeltaMerge/StoragePool/GlobalStoragePool.h>
+#include <Storages/DeltaMerge/StoragePool/StoragePool.h>
+#include <Storages/DeltaMerge/StoragePool/StoragePoolConfig.h>
 #include <Storages/Page/ConfigSettings.h>
 #include <Storages/Page/FileUsage.h>
 #include <Storages/Page/Page.h>
