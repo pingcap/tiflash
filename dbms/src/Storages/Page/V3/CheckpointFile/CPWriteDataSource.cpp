@@ -28,7 +28,7 @@ Page CPWriteDataSourceBlobStore::read(const BlobStore<universal::BlobStoreTrait>
     }
     else
     {
-        // StorageType::Data type page in local storage may be encrypted.
+        // StorageType::Log type page in local storage may be encrypted.
         Page page = blob_store.read(page_id_and_entry);
         const auto & ups_page_id = page_id_and_entry.first;
         auto page_id_u64 = UniversalPageIdFormat::getU64ID(ups_page_id);

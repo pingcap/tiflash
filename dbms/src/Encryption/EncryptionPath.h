@@ -15,7 +15,7 @@
 #pragma once
 
 #include <common/types.h>
-#include <pingcap/pd/IClient.h>
+#include <pingcap/pd/Types.h>
 
 
 namespace DB
