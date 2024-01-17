@@ -28,6 +28,7 @@
 #include <Poco/Logger.h>
 #include <Server/StorageConfigParser.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
+#include <Storages/DeltaMerge/GlobalStoragePool.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/KVStore/MultiRaft/RegionManager.h>
 #include <Storages/KVStore/MultiRaft/RegionPersister.h>

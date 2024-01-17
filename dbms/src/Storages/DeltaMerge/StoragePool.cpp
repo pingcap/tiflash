@@ -16,7 +16,9 @@
 #include <Common/FailPoint.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/Settings.h>
+#include <Storages/DeltaMerge/GlobalStoragePool.h>
 #include <Storages/DeltaMerge/StoragePool.h>
+#include <Storages/DeltaMerge/StoragePoolConfig.h>
 #include <Storages/Page/ConfigSettings.h>
 #include <Storages/Page/FileUsage.h>
 #include <Storages/Page/Page.h>
@@ -52,129 +54,6 @@ extern const char force_set_dtfile_exist_when_acquire_id[];
 namespace DM
 {
 
-PageStorageConfig extractConfig(const Settings & settings, StorageType subtype)
-{
-#define SET_CONFIG(NAME)                                                            \
-    config.num_write_slots = settings.dt_storage_pool_##NAME##_write_slots;         \
-    config.gc_min_files = settings.dt_storage_pool_##NAME##_gc_min_file_num;        \
-    config.gc_min_bytes = settings.dt_storage_pool_##NAME##_gc_min_bytes;           \
-    config.gc_min_legacy_num = settings.dt_storage_pool_##NAME##_gc_min_legacy_num; \
-    config.gc_max_valid_rate = settings.dt_storage_pool_##NAME##_gc_max_valid_rate; \
-    config.blob_heavy_gc_valid_rate = settings.dt_page_gc_threshold;
-
-    PageStorageConfig config = getConfigFromSettings(settings);
-
-    switch (subtype)
-    {
-    case StorageType::Log:
-        SET_CONFIG(log);
-        break;
-    case StorageType::Data:
-        SET_CONFIG(data);
-        break;
-    case StorageType::Meta:
-        SET_CONFIG(meta);
-        break;
-    default:
-        throw Exception(
-            fmt::format("Unknown subtype in extractConfig: {} ", static_cast<Int32>(subtype)),
-            ErrorCodes::LOGICAL_ERROR);
-    }
-#undef SET_CONFIG
-
-    return config;
-}
-
-GlobalStoragePool::GlobalStoragePool(const PathPool & path_pool, Context & global_ctx, const Settings & settings)
-    : log_storage(PageStorage::create(
-        "__global__.log",
-        path_pool.getPSDiskDelegatorGlobalMulti(PathPool::log_path_prefix),
-        extractConfig(settings, StorageType::Log),
-        global_ctx.getFileProvider(),
-        global_ctx,
-        true))
-    , data_storage(PageStorage::create(
-          "__global__.data",
-          path_pool.getPSDiskDelegatorGlobalMulti(PathPool::data_path_prefix),
-          extractConfig(settings, StorageType::Data),
-          global_ctx.getFileProvider(),
-          global_ctx,
-          true))
-    , meta_storage(PageStorage::create(
-          "__global__.meta",
-          path_pool.getPSDiskDelegatorGlobalMulti(PathPool::meta_path_prefix),
-          extractConfig(settings, StorageType::Meta),
-          global_ctx.getFileProvider(),
-          global_ctx,
-          true))
-    , global_context(global_ctx)
-{}
-
-
-GlobalStoragePool::~GlobalStoragePool()
-{
-    shutdown();
-}
-
-void GlobalStoragePool::restore()
-{
-    log_storage->restore();
-    data_storage->restore();
-    meta_storage->restore();
-
-    gc_handle = global_context.getBackgroundPool().addTask(
-        [this] { return this->gc(global_context.getSettingsRef()); },
-        false);
-}
-
-void GlobalStoragePool::shutdown()
-{
-    if (gc_handle)
-    {
-        global_context.getBackgroundPool().removeTask(gc_handle);
-        gc_handle = {};
-    }
-}
-
-FileUsageStatistics GlobalStoragePool::getLogFileUsage() const
-{
-    return log_storage->getFileUsageStatistics();
-}
-
-bool GlobalStoragePool::gc()
-{
-    return gc(global_context.getSettingsRef(), /*immediately=*/true, DELTA_MERGE_GC_PERIOD);
-}
-
-bool GlobalStoragePool::gc(const Settings & settings, bool immediately, const Seconds & try_gc_period)
-{
-    Timepoint now = Clock::now();
-    if (!immediately)
-    {
-        // No need lock
-        if (now < (last_try_gc_time.load() + try_gc_period))
-            return false;
-    }
-
-    last_try_gc_time = now;
-
-    bool done_anything = false;
-    auto write_limiter = global_context.getWriteLimiter();
-    auto read_limiter = global_context.getReadLimiter();
-    auto config = extractConfig(settings, StorageType::Meta);
-    meta_storage->reloadSettings(config);
-    done_anything |= meta_storage->gc(/*not_skip*/ false, write_limiter, read_limiter);
-
-    config = extractConfig(settings, StorageType::Data);
-    data_storage->reloadSettings(config);
-    done_anything |= data_storage->gc(/*not_skip*/ false, write_limiter, read_limiter);
-
-    config = extractConfig(settings, StorageType::Log);
-    log_storage->reloadSettings(config);
-    done_anything |= log_storage->gc(/*not_skip*/ false, write_limiter, read_limiter);
-
-    return done_anything;
-}
 
 StoragePool::StoragePool(
     Context & global_ctx,
@@ -468,9 +347,7 @@ StoragePool::StoragePool(
         break;
     }
     default:
-        throw Exception(
-            fmt::format("Unknown PageStorageRunMode {}", static_cast<UInt8>(run_mode)),
-            ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Unknown PageStorageRunMode {}", static_cast<UInt8>(run_mode));
     }
 }
 
@@ -478,7 +355,10 @@ void StoragePool::forceTransformMetaV2toV3()
 {
     if (unlikely(run_mode != PageStorageRunMode::MIX_MODE))
         throw Exception(
-            fmt::format("Transform meta must run under mix mode [run_mode={}]", static_cast<Int32>(run_mode)));
+            ErrorCodes::LOGICAL_ERROR,
+            "Transform meta must run under mix mode [run_mode={}]",
+            static_cast<Int32>(run_mode));
+
     assert(meta_storage_v2 != nullptr);
     assert(meta_storage_v3 != nullptr);
     auto meta_transform_storage_writer = std::make_shared<PageWriter>(
@@ -515,11 +395,10 @@ void StoragePool::forceTransformMetaV2toV3()
         if (!page_transform_entry.field_offsets.empty())
         {
             throw Exception(
-                fmt::format(
-                    "Can't transform meta from V2 to V3, [page_id={}] {}", //
-                    page_transform.page_id,
-                    page_transform_entry.toDebugString()),
-                ErrorCodes::LOGICAL_ERROR);
+                ErrorCodes::LOGICAL_ERROR,
+                "Can't transform meta from V2 to V3, [page_id={}] {}", //
+                page_transform.page_id,
+                page_transform_entry.toDebugString());
         }
 
         write_batch_transform.putPage(
@@ -548,7 +427,9 @@ void StoragePool::forceTransformDataV2toV3()
 {
     if (unlikely(run_mode != PageStorageRunMode::MIX_MODE))
         throw Exception(
-            fmt::format("Transform meta must run under mix mode [run_mode={}]", static_cast<Int32>(run_mode)));
+            ErrorCodes::LOGICAL_ERROR,
+            "Transform meta must run under mix mode [run_mode={}]",
+            static_cast<Int32>(run_mode));
     assert(data_storage_v2 != nullptr);
     assert(data_storage_v3 != nullptr);
     auto data_transform_storage_writer = std::make_shared<PageWriter>(
@@ -1050,9 +931,7 @@ inline static PageReaderPtr newReader(
             snapshot_read ? uni_ps->getSnapshot(tracing_id) : nullptr,
             read_limiter);
     default:
-        throw Exception(
-            fmt::format("Unknown PageStorageRunMode {}", static_cast<UInt8>(run_mode)),
-            ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Unknown PageStorageRunMode {}", static_cast<UInt8>(run_mode));
     }
 }
 

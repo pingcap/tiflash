@@ -17,6 +17,7 @@
 #include <Debug/dbgFuncMisc.h>
 #include <Interpreters/Context.h>
 #include <Parsers/ASTLiteral.h>
+#include <Storages/DeltaMerge/GlobalStoragePool.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 
 #include <fstream>

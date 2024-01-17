@@ -28,4 +28,6 @@ using GlobalStoragePoolPtr = std::shared_ptr<GlobalStoragePool>;
 struct StorageSnapshot;
 using StorageSnapshotPtr = std::shared_ptr<StorageSnapshot>;
 
+static constexpr std::chrono::seconds DELTA_MERGE_GC_PERIOD(60);
+
 } // namespace DB::DM

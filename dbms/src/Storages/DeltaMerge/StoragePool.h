@@ -38,48 +38,10 @@ class StoragePathPool;
 class PathPool;
 class StableDiskDelegator;
 class AsynchronousMetrics;
+} // namespace DB
 
-namespace DM
+namespace DB::DM
 {
-static constexpr std::chrono::seconds DELTA_MERGE_GC_PERIOD(60);
-
-class GlobalStoragePool : private boost::noncopyable
-{
-public:
-    using Clock = std::chrono::system_clock;
-    using Timepoint = Clock::time_point;
-    using Seconds = std::chrono::seconds;
-
-    GlobalStoragePool(const PathPool & path_pool, Context & global_ctx, const Settings & settings);
-
-    ~GlobalStoragePool();
-
-    void restore();
-
-    void shutdown();
-
-    friend class StoragePool;
-    friend class ::DB::AsynchronousMetrics;
-
-    // GC immediately
-    // Only used on dbgFuncMisc
-    bool gc();
-
-    FileUsageStatistics getLogFileUsage() const;
-
-private:
-    bool gc(const Settings & settings, bool immediately = false, const Seconds & try_gc_period = DELTA_MERGE_GC_PERIOD);
-
-private:
-    PageStoragePtr log_storage;
-    PageStoragePtr data_storage;
-    PageStoragePtr meta_storage;
-
-    std::atomic<Timepoint> last_try_gc_time = Clock::now();
-
-    Context & global_context;
-    BackgroundProcessingPool::TaskHandle gc_handle;
-};
 
 class StoragePool : private boost::noncopyable
 {
@@ -244,5 +206,4 @@ struct StorageSnapshot : private boost::noncopyable
 };
 
 
-} // namespace DM
-} // namespace DB
+} // namespace DB::DM
