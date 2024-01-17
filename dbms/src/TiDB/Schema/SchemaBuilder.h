@@ -76,9 +76,9 @@ private:
     void applyCreateTable(DatabaseID database_id, TableID table_id);
     void applyCreateStorageInstance(DatabaseID database_id, const TiDB::TableInfoPtr & table_info, bool is_tombstone);
 
-    void applyDropTable(DatabaseID database_id, TableID table_id);
+    void applyDropTable(DatabaseID database_id, TableID table_id, std::string_view source);
     /// Parameter schema_name should be mapped.
-    void applyDropPhysicalTable(const String & db_name, TableID table_id);
+    void applyDropPhysicalTable(const String & db_name, TableID table_id, std::string_view source);
 
     void applyRecoverTable(DatabaseID database_id, TiDB::TableID table_id);
     void applyRecoverLogicalTable(DatabaseID database_id, const TiDB::TableInfoPtr & table_info);
