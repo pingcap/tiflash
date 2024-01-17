@@ -50,10 +50,10 @@ namespace FailPoints
 {
 extern const char force_set_dtfile_exist_when_acquire_id[];
 } // namespace FailPoints
+} // namespace DB
 
-namespace DM
+namespace DB::DM
 {
-
 
 StoragePool::StoragePool(
     Context & global_ctx,
@@ -979,20 +979,6 @@ PageReaderPtr StoragePool::newDataReader(ReadLimiterPtr read_limiter, bool snaps
         tracing_id);
 }
 
-PageReaderPtr StoragePool::newDataReader(ReadLimiterPtr read_limiter, PageStorage::SnapshotPtr & snapshot)
-{
-    return std::make_shared<PageReader>(
-        run_mode,
-        keyspace_id,
-        StorageType::Data,
-        ns_id,
-        data_storage_v2,
-        data_storage_v3,
-        uni_ps,
-        snapshot,
-        read_limiter);
-}
-
 PageReaderPtr StoragePool::newMetaReader(ReadLimiterPtr read_limiter, bool snapshot_read, const String & tracing_id)
 {
     return newReader(
@@ -1008,19 +994,4 @@ PageReaderPtr StoragePool::newMetaReader(ReadLimiterPtr read_limiter, bool snaps
         tracing_id);
 }
 
-PageReaderPtr StoragePool::newMetaReader(ReadLimiterPtr read_limiter, PageStorage::SnapshotPtr & snapshot)
-{
-    return std::make_shared<PageReader>(
-        run_mode,
-        keyspace_id,
-        StorageType::Meta,
-        ns_id,
-        meta_storage_v2,
-        meta_storage_v3,
-        uni_ps,
-        snapshot,
-        read_limiter);
-}
-
-} // namespace DM
-} // namespace DB
+} // namespace DB::DM

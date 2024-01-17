@@ -108,10 +108,8 @@ public:
     PageReaderPtr newLogReader(ReadLimiterPtr read_limiter, PageStorageSnapshotPtr & snapshot);
 
     PageReaderPtr newDataReader(ReadLimiterPtr read_limiter, bool snapshot_read, const String & tracing_id);
-    PageReaderPtr newDataReader(ReadLimiterPtr read_limiter, PageStorageSnapshotPtr & snapshot);
 
     PageReaderPtr newMetaReader(ReadLimiterPtr read_limiter, bool snapshot_read, const String & tracing_id);
-    PageReaderPtr newMetaReader(ReadLimiterPtr read_limiter, PageStorageSnapshotPtr & snapshot);
 
     // Register the clean up DMFiles callbacks to PageStorage.
     // The callbacks will be unregister when `shutdown` is called.
