@@ -14,6 +14,8 @@
 
 #pragma once
 
+#include <Common/Exception.h>
+#include <Common/Logger.h>
 #include <Storages/KVStore/Utils.h>
 
 #include <atomic>
@@ -30,7 +32,7 @@ enum class PrehandleTransformStatus
     ErrTableDropped,
 };
 
-struct PreHandlingTrace : MutexLockWrap
+struct PreHandlingTrace : private MutexLockWrap
 {
     struct Item
     {
@@ -64,31 +66,9 @@ struct PreHandlingTrace : MutexLockWrap
     PreHandlingTrace()
         : log(Logger::get("PreHandlingTrace"))
     {}
-    std::shared_ptr<Item> registerTask(uint64_t region_id) NO_THREAD_SAFETY_ANALYSIS
-    {
-        // Automaticlly override the old one.
-        auto _ = genLockGuard();
-        auto b = std::make_shared<Item>();
-        tasks[region_id] = b;
-        return b;
-    }
-    std::shared_ptr<Item> deregisterTask(uint64_t region_id) NO_THREAD_SAFETY_ANALYSIS
-    {
-        auto _ = genLockGuard();
-        auto it = tasks.find(region_id);
-        if (it != tasks.end())
-        {
-            auto b = it->second;
-            tasks.erase(it);
-            return b;
-        }
-        return nullptr;
-    }
-    bool hasTask(uint64_t region_id) NO_THREAD_SAFETY_ANALYSIS
-    {
-        auto _ = genLockGuard();
-        return tasks.find(region_id) != tasks.end();
-    }
+    std::shared_ptr<Item> registerTask(uint64_t region_id);
+    std::shared_ptr<Item> deregisterTask(uint64_t region_id);
+    bool hasTask(uint64_t region_id);
     void waitForSubtaskResources(uint64_t region_id, size_t parallel, size_t parallel_subtask_limit);
     void releaseSubtaskResources(uint64_t region_id, size_t split_id)
     {
