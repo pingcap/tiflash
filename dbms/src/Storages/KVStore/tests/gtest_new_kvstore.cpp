@@ -27,6 +27,37 @@ namespace DB
 namespace tests
 {
 
+TEST_F(RegionKVStoreTest, RegionStruct)
+try
+{
+    auto & ctx = TiFlashTestEnv::getGlobalContext();
+    initStorages();
+    MockRaftStoreProxy::FailCond cond;
+    KVStore & kvs = getKVS();
+    auto table_id = proxy_instance->bootstrapTable(ctx, kvs, ctx.getTMTContext());
+    auto start = RecordKVFormat::genKey(table_id, 0);
+    auto end = RecordKVFormat::genKey(table_id, 100);
+    auto str_key = RecordKVFormat::genKey(table_id, 1, 111);
+    auto [str_val_write, str_val_default] = proxy_instance->generateTiKVKeyValue(111, 999);
+    auto str_lock_value
+        = RecordKVFormat::encodeLockCfValue(RecordKVFormat::CFModifyFlag::PutFlag, "PK", 111, 999).toString();
+    proxy_instance->bootstrapWithRegion(kvs, ctx.getTMTContext(), 1, std::nullopt);
+    {
+        auto kvr1 = kvs.getRegion(1);
+        auto [index, term] = proxy_instance->rawWrite(
+            1,
+            {str_key, str_key},
+            {str_lock_value, str_val_default},
+            {WriteCmdType::Put, WriteCmdType::Put},
+            {ColumnFamilyType::Lock, ColumnFamilyType::Default});
+        UNUSED(term);
+        proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, 1, index);
+        ASSERT_EQ(kvr1->getLockByKey(str_key)->dataSize(), str_lock_value.size());
+    }
+}
+CATCH
+
+
 TEST_F(RegionKVStoreTest, MemoryTracker)
 try
 {
