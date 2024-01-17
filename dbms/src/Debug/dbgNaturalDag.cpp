@@ -26,6 +26,7 @@
 #include <Poco/JSON/Parser.h>
 #include <Poco/MemoryStream.h>
 #include <Poco/StreamCopier.h>
+#include <Storages/KVStore/KVStore.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <TiDB/Schema/TiDBSchemaManager.h>
 

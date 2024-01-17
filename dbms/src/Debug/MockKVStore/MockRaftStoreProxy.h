@@ -120,7 +120,7 @@ struct MockReadIndexTask
 
 struct MockReadIndex
 {
-    MockReadIndex(LoggerPtr log_)
+    explicit MockReadIndex(LoggerPtr log_)
         : log(log_)
     {}
     void wakeNotifier();
@@ -152,7 +152,7 @@ struct MockRaftStoreProxy : MutexLockWrap
     };
 
     std::unique_ptr<TiFlashRaftProxyHelper> generateProxyHelper();
-    static TiFlashRaftProxyHelper SetRaftStoreProxyFFIHelper(RaftStoreProxyPtr);
+    static TiFlashRaftProxyHelper setRaftStoreProxyFFIHelper(RaftStoreProxyPtr);
 
     MockProxyRegionPtr getRegion(uint64_t id);
     MockProxyRegionPtr doGetRegion(uint64_t id);
@@ -264,11 +264,7 @@ struct MockRaftStoreProxy : MutexLockWrap
     void reload();
     void replay(KVStore & kvs, TMTContext & tmt, uint64_t region_id, uint64_t to);
 
-    void clear() NO_THREAD_SAFETY_ANALYSIS
-    {
-        auto _ = genLockGuard();
-        regions.clear();
-    }
+    void clear();
 
     std::pair<std::string, std::string> generateTiKVKeyValue(uint64_t tso, int64_t t) const;
 
@@ -347,7 +343,7 @@ struct RustStrWithViewVecInner
 inline BaseBuffView * createBaseBuffViewArray(size_t len)
 {
     void * raw_memory = operator new[](len * sizeof(BaseBuffView));
-    BaseBuffView * ptr = static_cast<BaseBuffView *>(raw_memory);
+    auto * ptr = static_cast<BaseBuffView *>(raw_memory);
     return ptr;
 }
 } // namespace DB
