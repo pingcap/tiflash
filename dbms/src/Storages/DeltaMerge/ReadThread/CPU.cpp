@@ -120,4 +120,30 @@ std::vector<std::vector<int>> getNumaNodes(const LoggerPtr & log)
     std::vector<std::vector<int>> numa_nodes(1); // "One numa node"
     return numa_nodes;
 }
+
+void setCPUAffinity(const std::vector<int> & cpus, const LoggerPtr & log)
+{
+    if (cpus.empty())
+    {
+        return;
+    }
+#ifdef __linux__
+    cpu_set_t cpu_set;
+    CPU_ZERO(&cpu_set);
+    for (int i : cpus)
+    {
+        CPU_SET(i, &cpu_set);
+    }
+    int ret = sched_setaffinity(0, sizeof(cpu_set), &cpu_set);
+    if (ret != 0)
+    {
+        // It can be failed due to some CPU core cannot access, such as CPU offline.
+        LOG_INFO(log, "sched_setaffinity fail, cpus={} errno={}", cpus, std::strerror(errno));
+    }
+    else
+    {
+        LOG_DEBUG(log, "sched_setaffinity succ, cpus={}", cpus);
+    }
+#endif
+}
 } // namespace DB::DM
