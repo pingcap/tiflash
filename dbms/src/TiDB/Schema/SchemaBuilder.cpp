@@ -67,7 +67,10 @@ bool isReservedDatabase(Context & context, const String & database_name)
 }
 
 template <typename Getter, typename NameMapper>
-void SchemaBuilder<Getter, NameMapper>::applyCreateTable(DatabaseID database_id, TableID table_id)
+void SchemaBuilder<Getter, NameMapper>::applyCreateTable(
+    DatabaseID database_id,
+    TableID table_id,
+    std::string_view source)
 {
     TableInfoPtr table_info;
     bool get_by_mvcc = false;
@@ -77,14 +80,20 @@ void SchemaBuilder<Getter, NameMapper>::applyCreateTable(DatabaseID database_id,
         LOG_INFO(
             log,
             "table is not exist in TiKV, may have been dropped, applyCreateTable is ignored, database_id={} "
-            "table_id={}",
+            "table_id={} source={}",
             database_id,
-            table_id);
+            table_id,
+            source);
         return;
     }
 
     table_id_map.emplaceTableID(table_id, database_id);
-    LOG_DEBUG(log, "register table to table_id_map, database_id={} table_id={}", database_id, table_id);
+    LOG_DEBUG(
+        log,
+        "register table to table_id_map, database_id={} table_id={} source={}",
+        database_id,
+        table_id,
+        source);
 
     // non partition table, done
     if (!table_info->isLogicalPartitionTable())
@@ -96,7 +105,7 @@ void SchemaBuilder<Getter, NameMapper>::applyCreateTable(DatabaseID database_id,
     // here (and store the table info to local).
     // Because `applyPartitionDiffOnLogicalTable` need the logical table for comparing
     // the latest partitioning and the local partitioning in table info to apply the changes.
-    applyCreateStorageInstance(database_id, table_info, get_by_mvcc);
+    applyCreateStorageInstance(database_id, table_info, get_by_mvcc, source);
 
     // Register the partition_id -> logical_table_id mapping
     for (const auto & part_def : table_info->partition.definitions)
@@ -104,10 +113,11 @@ void SchemaBuilder<Getter, NameMapper>::applyCreateTable(DatabaseID database_id,
         LOG_DEBUG(
             log,
             "register table to table_id_map for partition table, database_id={} logical_table_id={} "
-            "physical_table_id={}",
+            "physical_table_id={} source={}",
             database_id,
             table_id,
-            part_def.id);
+            part_def.id,
+            source);
         table_id_map.emplacePartitionTableID(part_def.id, table_id);
     }
 }
@@ -268,7 +278,7 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
         /// so we have to update table_id_map when create table.
         /// and the table will not be created physically here.
         for (auto && opt : diff.affected_opts)
-            applyCreateTable(opt.schema_id, opt.table_id);
+            applyCreateTable(opt.schema_id, opt.table_id, magic_enum::enum_name(diff.type));
         break;
     }
     case SchemaActionType::RenameTables:
@@ -282,7 +292,7 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
         /// Because we can't ensure set tiflash replica is earlier than insert,
         /// so we have to update table_id_map when create table.
         /// the table will not be created physically here.
-        applyCreateTable(diff.schema_id, diff.table_id);
+        applyCreateTable(diff.schema_id, diff.table_id, magic_enum::enum_name(diff.type));
         break;
     }
     case SchemaActionType::RecoverTable:
@@ -298,7 +308,7 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
     }
     case SchemaActionType::TruncateTable:
     {
-        applyCreateTable(diff.schema_id, diff.table_id);
+        applyCreateTable(diff.schema_id, diff.table_id, magic_enum::enum_name(diff.type));
         applyDropTable(diff.schema_id, diff.old_table_id, magic_enum::enum_name(diff.type));
         break;
     }
@@ -328,7 +338,7 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
             // Create the new table.
             // If the new table is a partition table, this will also overwrite
             // the partition id mapping to the new logical table
-            applyCreateTable(diff.schema_id, diff.table_id);
+            applyCreateTable(diff.schema_id, diff.table_id, magic_enum::enum_name(diff.type));
             // Drop the old table. if the previous partitions of the old table are
             // not mapping to the old logical table now, they will not be removed.
             applyDropTable(diff.schema_id, diff.old_table_id, magic_enum::enum_name(diff.type));
@@ -388,7 +398,7 @@ void SchemaBuilder<Getter, NameMapper>::applySetTiFlashReplica(DatabaseID databa
             return;
         }
 
-        applyDropTable(database_id, table_id, "SetTiFlashReplicaToZero");
+        applyDropTable(database_id, table_id, "SetTiFlashReplica-0");
         return;
     }
 
@@ -399,7 +409,10 @@ void SchemaBuilder<Getter, NameMapper>::applySetTiFlashReplica(DatabaseID databa
     {
         if (!table_id_map.tableIDInDatabaseIdMap(table_id))
         {
-            applyCreateTable(database_id, table_id);
+            applyCreateTable(
+                database_id,
+                table_id,
+                fmt::format("SetTiFlashReplica-{}", table_info->replica_info.count));
         }
         return;
     }
@@ -1078,17 +1091,19 @@ template <typename Getter, typename NameMapper>
 void SchemaBuilder<Getter, NameMapper>::applyCreateStorageInstance(
     const DatabaseID database_id,
     const TableInfoPtr & table_info,
-    bool is_tombstone)
+    bool is_tombstone,
+    std::string_view source)
 {
     assert(table_info != nullptr);
 
     GET_METRIC(tiflash_schema_internal_ddl_count, type_create_table).Increment();
     LOG_INFO(
         log,
-        "Create table {} begin, database_id={}, table_id={}",
+        "Create table {} begin, database_id={}, table_id={} source={}",
         name_mapper.debugCanonicalName(*table_info, database_id, keyspace_id),
         database_id,
-        table_info->id);
+        table_info->id,
+        source);
 
     /// Try to recover the existing storage instance
     if (tryRecoverPhysicalTable(database_id, table_info))
@@ -1163,10 +1178,11 @@ void SchemaBuilder<Getter, NameMapper>::applyCreateStorageInstance(
     interpreter.execute();
     LOG_INFO(
         log,
-        "Creat table {} end, database_id={} table_id={}",
+        "Creat table {} end, database_id={} table_id={} source={}",
         name_mapper.debugCanonicalName(*table_info, database_id, keyspace_id),
         database_id,
-        table_info->id);
+        table_info->id,
+        source);
 }
 
 
@@ -1338,7 +1354,7 @@ void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
                 // So `syncAllSchema` will not create tombstone tables. But if there are new rows/new snapshot
                 // sent to TiFlash, TiFlash can create the instance by `applyTable` with force==true in the
                 // related process.
-                applyCreateStorageInstance(db_info->id, table_info, false);
+                applyCreateStorageInstance(db_info->id, table_info, false, "SyncAllSchema");
                 if (table_info->isLogicalPartitionTable())
                 {
                     for (const auto & part_def : table_info->partition.definitions)
@@ -1495,7 +1511,7 @@ bool SchemaBuilder<Getter, NameMapper>::applyTable(
 
         // Create the instance with the latest table info
         // If the table info is get by mvcc, it means the table is actually in "dropped" status
-        applyCreateStorageInstance(database_id, table_info, get_by_mvcc);
+        applyCreateStorageInstance(database_id, table_info, get_by_mvcc, "ApplyTable");
         return true;
     }
 
