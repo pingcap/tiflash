@@ -546,11 +546,11 @@ FileEncryptionInfo TiFlashRaftProxyHelper::linkFile(const std::string & src, con
 }
 std::string TiFlashRaftProxyHelper::getMasterKey() const
 {
-    return String(*fn_get_master_key(proxy_ptr));
+    return String(*cloud_storage_engine_interfaces.fn_get_master_key(proxy_ptr));
 }
 bool TiFlashRaftProxyHelper::getKeyspaceEncryption(uint32_t keyspace_id) const
 {
-    return fn_get_keyspace_encryption(proxy_ptr, keyspace_id);
+    return cloud_storage_engine_interfaces.fn_get_keyspace_encryption(proxy_ptr, keyspace_id);
 }
 
 struct CppStrVec
