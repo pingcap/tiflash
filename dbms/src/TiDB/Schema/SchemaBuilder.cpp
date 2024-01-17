@@ -49,6 +49,7 @@
 #include <boost/algorithm/string/join.hpp>
 #include <magic_enum.hpp>
 #include <mutex>
+#include <string_view>
 #include <tuple>
 
 namespace DB
@@ -292,13 +293,13 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
     case SchemaActionType::DropTable:
     case SchemaActionType::DropView:
     {
-        applyDropTable(diff.schema_id, diff.table_id);
+        applyDropTable(diff.schema_id, diff.table_id, magic_enum::enum_name(diff.type));
         break;
     }
     case SchemaActionType::TruncateTable:
     {
         applyCreateTable(diff.schema_id, diff.table_id);
-        applyDropTable(diff.schema_id, diff.old_table_id);
+        applyDropTable(diff.schema_id, diff.old_table_id, magic_enum::enum_name(diff.type));
         break;
     }
     case SchemaActionType::RenameTable:
@@ -330,7 +331,7 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
             applyCreateTable(diff.schema_id, diff.table_id);
             // Drop the old table. if the previous partitions of the old table are
             // not mapping to the old logical table now, they will not be removed.
-            applyDropTable(diff.schema_id, diff.old_table_id);
+            applyDropTable(diff.schema_id, diff.old_table_id, magic_enum::enum_name(diff.type));
         }
         break;
     }
@@ -376,7 +377,7 @@ void SchemaBuilder<Getter, NameMapper>::applySetTiFlashReplica(DatabaseID databa
     auto & tmt_context = context.getTMTContext();
     if (table_info->replica_info.count == 0)
     {
-        // if set 0, drop table in TiFlash
+        // Replicat number is to 0, mark the table as tombstone in TiFlash
         auto storage = tmt_context.getStorages().get(keyspace_id, table_info->id);
         if (unlikely(storage == nullptr))
         {
@@ -387,12 +388,12 @@ void SchemaBuilder<Getter, NameMapper>::applySetTiFlashReplica(DatabaseID databa
             return;
         }
 
-        applyDropTable(database_id, table_id);
+        applyDropTable(database_id, table_id, "SetTiFlashReplicaToZero");
         return;
     }
 
     assert(table_info->replica_info.count != 0);
-    // Replica info is set to non-zero, create the storage if not exists.
+    // Replica number is set to non-zero, create the storage if not exists.
     auto storage = tmt_context.getStorages().get(keyspace_id, table_info->id);
     if (storage == nullptr)
     {
@@ -580,11 +581,12 @@ void SchemaBuilder<Getter, NameMapper>::applyPartitionDiffOnLogicalTable(
     updated_table_info.partition = table_info->partition;
 
     /// Apply changes to physical tables.
+    auto reason = fmt::format("ApplyPartitionDiff-logical_table_id={}", local_table_info.id);
     for (const auto & local_def : local_defs)
     {
         if (!new_part_id_set.contains(local_def.id))
         {
-            applyDropPhysicalTable(name_mapper.mapDatabaseName(database_id, keyspace_id), local_def.id);
+            applyDropPhysicalTable(name_mapper.mapDatabaseName(database_id, keyspace_id), local_def.id, reason);
         }
     }
 
@@ -956,9 +958,10 @@ void SchemaBuilder<Getter, NameMapper>::applyDropDatabase(DatabaseID database_id
     // `DatabaseInfo` from TiKV.
     {
         //TODO: it seems may need a lot time, maybe we can do it in a background thread
+        auto reason = fmt::format("DropDatabase-database_id={}", database_id);
         auto table_ids = table_id_map.findTablesByDatabaseID(database_id);
         for (auto table_id : table_ids)
-            applyDropTable(database_id, table_id);
+            applyDropTable(database_id, table_id, reason);
     }
 
     applyDropDatabaseByName(name_mapper.mapDatabaseName(database_id, keyspace_id));
@@ -1171,23 +1174,31 @@ void SchemaBuilder<Getter, NameMapper>::applyCreateStorageInstance(
 
 
 template <typename Getter, typename NameMapper>
-void SchemaBuilder<Getter, NameMapper>::applyDropPhysicalTable(const String & db_name, TableID table_id)
+void SchemaBuilder<Getter, NameMapper>::applyDropPhysicalTable(
+    const String & db_name,
+    TableID table_id,
+    std::string_view source)
 {
     auto & tmt_context = context.getTMTContext();
     auto storage = tmt_context.getStorages().get(keyspace_id, table_id);
     if (storage == nullptr)
     {
-        LOG_INFO(log, "Storage instance does not exist, applyDropPhysicalTable is ignored, table_id={}", table_id);
+        LOG_INFO(
+            log,
+            "Storage instance does not exist, applyDropPhysicalTable is ignored, table_id={} source={}",
+            table_id,
+            source);
         return;
     }
 
     GET_METRIC(tiflash_schema_internal_ddl_count, type_drop_table).Increment();
     LOG_INFO(
         log,
-        "Tombstone table {}.{} begin, table_id={}",
+        "Tombstone table {}.{} begin, table_id={} source={}",
         db_name,
         name_mapper.debugTableName(storage->getTableInfo()),
-        table_id);
+        table_id,
+        source);
 
     const UInt64 tombstone_ts = tmt_context.getPDClient()->getTS();
     // TODO:try to optimize alterCommands
@@ -1207,15 +1218,19 @@ void SchemaBuilder<Getter, NameMapper>::applyDropPhysicalTable(const String & db
     storage->updateTombstone(alter_lock, commands, db_name, storage->getTableInfo(), name_mapper, context);
     LOG_INFO(
         log,
-        "Tombstone table {}.{} end, table_id={} tombstone={}",
+        "Tombstone table {}.{} end, table_id={} tombstone={} source={}",
         db_name,
         name_mapper.debugTableName(storage->getTableInfo()),
         table_id,
-        tombstone_ts);
+        tombstone_ts,
+        source);
 }
 
 template <typename Getter, typename NameMapper>
-void SchemaBuilder<Getter, NameMapper>::applyDropTable(DatabaseID database_id, TableID table_id)
+void SchemaBuilder<Getter, NameMapper>::applyDropTable(
+    DatabaseID database_id,
+    TableID table_id,
+    std::string_view source)
 {
     auto & tmt_context = context.getTMTContext();
     auto storage = tmt_context.getStorages().get(keyspace_id, table_id);
@@ -1244,13 +1259,13 @@ void SchemaBuilder<Getter, NameMapper>::applyDropTable(DatabaseID database_id, T
                 continue;
             }
 
-            applyDropPhysicalTable(name_mapper.mapDatabaseName(database_id, keyspace_id), part_def.id);
+            applyDropPhysicalTable(name_mapper.mapDatabaseName(database_id, keyspace_id), part_def.id, source);
         }
     }
 
     // Drop logical table at last, only logical table drop will be treated as "complete".
     // Intermediate failure will hide the logical table drop so that schema syncing when restart will re-drop all (despite some physical tables may have dropped).
-    applyDropPhysicalTable(name_mapper.mapDatabaseName(database_id, keyspace_id), table_info.id);
+    applyDropPhysicalTable(name_mapper.mapDatabaseName(database_id, keyspace_id), table_info.id, source);
 }
 
 /// syncAllSchema will be called when a new keyspace is created or we meet diff->regenerate_schema_map = true.
@@ -1357,7 +1372,7 @@ void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
 
         if (!table_id_map.tableIDInTwoMaps(table_info.id))
         {
-            applyDropPhysicalTable(it->second->getDatabaseName(), table_info.id);
+            applyDropPhysicalTable(it->second->getDatabaseName(), table_info.id, "SyncAllSchema");
             LOG_INFO(
                 log,
                 "Table {}.{} dropped during sync all schemas, table_id={}",
@@ -1528,7 +1543,7 @@ void SchemaBuilder<Getter, NameMapper>::dropAllSchema()
         {
             continue;
         }
-        applyDropPhysicalTable(storage.second->getDatabaseName(), table_info.id);
+        applyDropPhysicalTable(storage.second->getDatabaseName(), table_info.id, "DropAllSchema");
         LOG_INFO(
             log,
             "Table {}.{} dropped during drop all schemas, table_id={}",
