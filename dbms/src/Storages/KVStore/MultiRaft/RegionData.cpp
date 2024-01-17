@@ -277,7 +277,7 @@ std::shared_ptr<const TiKVValue> RegionData::getLockByKey(const TiKVKey & key) c
     // It is safe to ignore the missing lock key after restart, print a warning log and return nullptr
     LOG_WARNING(
         Logger::get(),
-        "Failed to get lock by key {} in region data, map size {}, count {}",
+        "Failed to get lock by key in region data, key={} map_size={} count={}",
         key.toDebugString(),
         map.size(),
         map.count(lock_key));
