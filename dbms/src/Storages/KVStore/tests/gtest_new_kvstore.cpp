@@ -53,6 +53,7 @@ try
         UNUSED(term);
         proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, 1, index);
         ASSERT_EQ(kvr1->getLockByKey(str_key)->dataSize(), str_lock_value.size());
+        ASSERT_EQ(kvr1->getLockByKey(RecordKVFormat::genKey(table_id, 1, 112)), nullptr);
     }
 }
 CATCH
