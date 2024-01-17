@@ -16,6 +16,7 @@
 #include <Common/FailPoint.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/Settings.h>
+#include <Storages/DeltaMerge/StoragePool/GlobalPageIdAllocator.h>
 #include <Storages/DeltaMerge/StoragePool/GlobalStoragePool.h>
 #include <Storages/DeltaMerge/StoragePool/StoragePool.h>
 #include <Storages/DeltaMerge/StoragePool/StoragePoolConfig.h>
@@ -68,8 +69,10 @@ StoragePool::StoragePool(
     , storage_path_pool(storage_path_pool_)
     , uni_ps(run_mode == PageStorageRunMode::UNI_PS ? global_ctx.getWriteNodePageStorage() : nullptr)
     , global_context(global_ctx)
+    , global_id_allocator(global_context.getGlobalPageIdAllocator())
     , storage_pool_metrics(CurrentMetrics::StoragePoolV3Only, 0)
 {
+    assert(global_id_allocator != nullptr);
     const auto & global_storage_pool = global_context.getGlobalStoragePool();
     switch (run_mode)
     {
@@ -509,18 +512,18 @@ PageStorageRunMode StoragePool::restore()
         data_storage_v2->restore();
         meta_storage_v2->restore();
 
-        max_log_page_id = log_storage_v2->getMaxId();
-        max_data_page_id = data_storage_v2->getMaxId();
-        max_meta_page_id = meta_storage_v2->getMaxId();
+        global_id_allocator->raiseLogPageIdLowerBound(log_storage_v2->getMaxId());
+        global_id_allocator->raiseDataPageIdLowerBound(data_storage_v2->getMaxId());
+        global_id_allocator->raiseMetaPageIdLowerBound(meta_storage_v2->getMaxId());
 
         storage_pool_metrics = CurrentMetrics::Increment{CurrentMetrics::StoragePoolV2Only};
         break;
     }
     case PageStorageRunMode::ONLY_V3:
     {
-        max_log_page_id = log_storage_v3->getMaxId();
-        max_data_page_id = data_storage_v3->getMaxId();
-        max_meta_page_id = meta_storage_v3->getMaxId();
+        global_id_allocator->raiseLogPageIdLowerBound(log_storage_v3->getMaxId());
+        global_id_allocator->raiseDataPageIdLowerBound(data_storage_v3->getMaxId());
+        global_id_allocator->raiseMetaPageIdLowerBound(meta_storage_v3->getMaxId());
 
         storage_pool_metrics = CurrentMetrics::Increment{CurrentMetrics::StoragePoolV3Only};
         break;
@@ -648,27 +651,31 @@ PageStorageRunMode StoragePool::restore()
                 meta_storage_v3,
                 /*uni_ps_*/ nullptr);
 
-            max_log_page_id = log_storage_v3->getMaxId();
-            max_data_page_id = data_storage_v3->getMaxId();
-            max_meta_page_id = meta_storage_v3->getMaxId();
+            global_id_allocator->raiseLogPageIdLowerBound(log_storage_v3->getMaxId());
+            global_id_allocator->raiseDataPageIdLowerBound(data_storage_v3->getMaxId());
+            global_id_allocator->raiseMetaPageIdLowerBound(meta_storage_v3->getMaxId());
 
             run_mode = PageStorageRunMode::ONLY_V3;
             storage_pool_metrics = CurrentMetrics::Increment{CurrentMetrics::StoragePoolV3Only};
         }
         else // Still running Mix Mode
         {
-            max_log_page_id = std::max(log_storage_v2->getMaxId(), log_storage_v3->getMaxId());
-            max_data_page_id = std::max(data_storage_v2->getMaxId(), data_storage_v3->getMaxId());
-            max_meta_page_id = std::max(meta_storage_v2->getMaxId(), meta_storage_v3->getMaxId());
+            auto max_log_page_id = std::max(log_storage_v2->getMaxId(), log_storage_v3->getMaxId());
+            auto max_data_page_id = std::max(data_storage_v2->getMaxId(), data_storage_v3->getMaxId());
+            auto max_meta_page_id = std::max(meta_storage_v2->getMaxId(), meta_storage_v3->getMaxId());
+            global_id_allocator->raiseLogPageIdLowerBound(max_log_page_id);
+            global_id_allocator->raiseDataPageIdLowerBound(max_data_page_id);
+            global_id_allocator->raiseMetaPageIdLowerBound(max_meta_page_id);
             storage_pool_metrics = CurrentMetrics::Increment{CurrentMetrics::StoragePoolMixMode};
         }
         break;
     }
     case PageStorageRunMode::UNI_PS:
     {
-        max_log_page_id = uni_ps->getMaxIdAfterRestart();
-        max_data_page_id = uni_ps->getMaxIdAfterRestart();
-        max_meta_page_id = uni_ps->getMaxIdAfterRestart();
+        auto max_page_id = uni_ps->getMaxIdAfterRestart();
+        global_id_allocator->raiseLogPageIdLowerBound(max_page_id);
+        global_id_allocator->raiseDataPageIdLowerBound(max_page_id);
+        global_id_allocator->raiseMetaPageIdLowerBound(max_page_id);
 
         storage_pool_metrics = CurrentMetrics::Increment{CurrentMetrics::StoragePoolUniPS};
         break;
@@ -676,6 +683,7 @@ PageStorageRunMode StoragePool::restore()
     default:
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Unknown PageStorageRunMode {}", static_cast<UInt8>(run_mode));
     }
+    auto [max_log_page_id, max_data_page_id, max_meta_page_id] = global_id_allocator->getCurrentIds();
     LOG_TRACE(
         logger,
         "Finished StoragePool restore. [current_run_mode={}] [ns_id={}]"
@@ -834,7 +842,7 @@ void StoragePool::drop()
     }
 }
 
-PageIdU64 StoragePool::newDataPageIdForDTFile(StableDiskDelegator & delegator, const char * who)
+PageIdU64 StoragePool::newDataPageIdForDTFile(StableDiskDelegator & delegator, const char * who) const
 {
     // In case that there is a DTFile created on disk but TiFlash crashes without persisting the ID.
     // After TiFlash process restored, the ID will be inserted into the stable delegator, but we may
@@ -842,7 +850,7 @@ PageIdU64 StoragePool::newDataPageIdForDTFile(StableDiskDelegator & delegator, c
     PageIdU64 dtfile_id;
     do
     {
-        dtfile_id = ++max_data_page_id;
+        dtfile_id = global_id_allocator->newDataPageIdForDTFile();
 
         auto existed_path = delegator.getDTFilePath(dtfile_id, /*throw_on_not_exist=*/false);
         fiu_do_on(FailPoints::force_set_dtfile_exist_when_acquire_id, {
@@ -866,6 +874,16 @@ PageIdU64 StoragePool::newDataPageIdForDTFile(StableDiskDelegator & delegator, c
             dtfile_id);
     } while (true);
     return dtfile_id;
+}
+
+PageIdU64 StoragePool::newLogPageId() const
+{
+    return global_id_allocator->newLogPageId();
+}
+
+PageIdU64 StoragePool::newMetaPageId() const
+{
+    return global_id_allocator->newMetaPageId();
 }
 
 template <typename T>

@@ -155,6 +155,7 @@ void TiFlashTestEnv::addGlobalContext(
         global_context->getFileProvider());
 
     global_context->setPageStorageRunMode(ps_run_mode);
+    global_context->initializeGlobalPageIdAllocator();
     global_context->initializeGlobalStoragePoolIfNeed(global_context->getPathPool());
     global_context->initializeWriteNodePageStorageIfNeed(global_context->getPathPool());
     LOG_INFO(Logger::get(), "Storage mode : {}", static_cast<UInt8>(global_context->getPageStorageRunMode()));
@@ -194,6 +195,7 @@ ContextPtr TiFlashTestEnv::getContext(const DB::Settings & settings, Strings tes
     context.setPath(root_path);
     auto paths = getPathPool(testdata_path);
     context.setPathPool(paths.first, paths.second, Strings{}, context.getPathCapacity(), context.getFileProvider());
+    global_contexts[0]->initializeGlobalPageIdAllocator();
     global_contexts[0]->initializeGlobalStoragePoolIfNeed(context.getPathPool());
     global_contexts[0]->tryReleaseWriteNodePageStorageForTest();
     global_contexts[0]->initializeWriteNodePageStorageIfNeed(context.getPathPool());
