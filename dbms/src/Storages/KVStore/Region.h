@@ -243,6 +243,7 @@ public: // Raft Read and Write
         UInt64 term,
         TMTContext & tmt);
 
+    std::shared_ptr<const TiKVValue> getLockByKey(const TiKVKey & key) { return data.getLockByKey(key); }
     UInt64 getSnapshotEventFlag() const { return snapshot_event_flag; }
 
     // IngestSST will first be applied to the `temp_region`, then we need to
