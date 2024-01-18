@@ -262,6 +262,28 @@ DecodedLockCFValuePtr RegionData::getLockInfo(const RegionLockReadQuery & query)
     return nullptr;
 }
 
+std::shared_ptr<const TiKVValue> RegionData::getLockByKey(const TiKVKey & key) const
+{
+    const auto & map = lock_cf.getData();
+    const auto & lock_key = RegionLockCFDataTrait::Key{nullptr, std::string_view(key.data(), key.dataSize())};
+    if (auto lock_it = map.find(lock_key); lock_it != map.end())
+    {
+        const auto & [tikv_key, tikv_val, lock_info_ptr] = lock_it->second;
+        std::ignore = tikv_key;
+        std::ignore = lock_info_ptr;
+        return tikv_val;
+    }
+
+    // It is safe to ignore the missing lock key after restart, print a warning log and return nullptr
+    LOG_WARNING(
+        Logger::get(),
+        "Failed to get lock by key in region data, key={} map_size={} count={}",
+        key.toDebugString(),
+        map.size(),
+        map.count(lock_key));
+    return nullptr;
+}
+
 void RegionData::splitInto(const RegionRange & range, RegionData & new_region_data)
 {
     size_t size_changed = 0;
