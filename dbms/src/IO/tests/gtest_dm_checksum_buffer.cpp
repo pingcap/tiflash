@@ -16,12 +16,12 @@
 #pragma GCC diagnostic ignored "-Wsign-compare"
 #include <gtest/gtest.h>
 #pragma GCC diagnostic pop
+#include <BaseFile/PosixRandomAccessFile.h>
+#include <BaseFile/PosixWritableFile.h>
+#include <BaseFile/RateLimiter.h>
 #include <Encryption/CompressedReadBufferFromFileProvider.h>
 #include <Encryption/FileProvider.h>
 #include <Encryption/MockKeyManager.h>
-#include <Encryption/PosixRandomAccessFile.h>
-#include <Encryption/PosixWritableFile.h>
-#include <Encryption/RateLimiter.h>
 #include <Encryption/createReadBufferFromFileBaseByFileProvider.h>
 #include <Encryption/createWriteBufferFromFileBaseByFileProvider.h>
 #include <IO/ChecksumBuffer.h>
@@ -95,8 +95,11 @@ auto prepareIO()
 
 } // namespace
 
-#define TEST_STREAM(ALGO) \
-    TEST(ChecksumBuffer##ALGO, Streaming) { runStreamingTest<Digest::ALGO>(); } // NOLINT(cert-err58-cpp)
+#define TEST_STREAM(ALGO)                 \
+    TEST(ChecksumBuffer##ALGO, Streaming) \
+    {                                     \
+        runStreamingTest<Digest::ALGO>(); \
+    } // NOLINT(cert-err58-cpp)
 
 template <class D>
 void runStreamingTest()
@@ -133,8 +136,11 @@ TEST_STREAM(CRC64)
 TEST_STREAM(City128)
 TEST_STREAM(XXH3)
 
-#define TEST_SEEK(ALGO) \
-    TEST(ChecksumBuffer##ALGO, Seeking) { runSeekingTest<Digest::ALGO>(); } // NOLINT(cert-err58-cpp)
+#define TEST_SEEK(ALGO)                 \
+    TEST(ChecksumBuffer##ALGO, Seeking) \
+    {                                   \
+        runSeekingTest<Digest::ALGO>(); \
+    } // NOLINT(cert-err58-cpp)
 
 template <class D>
 void runSeekingTest()
@@ -225,8 +231,11 @@ void runReadBigTest()
     file.remove();
 }
 
-#define TEST_BIG_READING(ALGO) \
-    TEST(ChecksumBuffer##ALGO, BigReading) { runReadBigTest<DB::Digest::ALGO>(); } // NOLINT(cert-err58-cpp)
+#define TEST_BIG_READING(ALGO)              \
+    TEST(ChecksumBuffer##ALGO, BigReading)  \
+    {                                       \
+        runReadBigTest<DB::Digest::ALGO>(); \
+    } // NOLINT(cert-err58-cpp)
 
 TEST_BIG_READING(None)
 TEST_BIG_READING(CRC32)
@@ -277,8 +286,11 @@ void runStackingTest()
     file.remove();
 }
 
-#define TEST_STACKING(ALGO) \
-    TEST(DMChecksumBuffer##ALGO, Stacking) { runStackingTest<ChecksumAlgo::ALGO>(); } // NOLINT(cert-err58-cpp)
+#define TEST_STACKING(ALGO)                    \
+    TEST(DMChecksumBuffer##ALGO, Stacking)     \
+    {                                          \
+        runStackingTest<ChecksumAlgo::ALGO>(); \
+    } // NOLINT(cert-err58-cpp)
 
 TEST_STACKING(None)
 TEST_STACKING(CRC32)

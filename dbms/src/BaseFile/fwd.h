@@ -14,39 +14,26 @@
 
 #pragma once
 
-#include <Encryption/RandomAccessFile.h>
-#include <Encryption/WritableFile.h>
-#include <common/types.h>
-
 #include <memory>
 
 namespace DB
 {
-/**
- * Do not add write/read/seek, This may cause some multi-threaded reading and writing problems
- */
-class WriteReadableFile
-{
-public:
-    virtual ~WriteReadableFile() = default;
+class ReadLimiter;
+using ReadLimiterPtr = std::shared_ptr<ReadLimiter>;
+class WriteLimiter;
+using WriteLimiterPtr = std::shared_ptr<WriteLimiter>;
 
-    virtual ssize_t pwrite(char * buf, size_t size, off_t offset) const = 0;
+class PosixRandomAccessFile;
+class PosixWritableFile;
+class PosixWriteReadableFile;
 
-    virtual ssize_t pread(char * buf, size_t size, off_t offset) const = 0;
+class RandomAccessFile;
+using RandomAccessFilePtr = std::shared_ptr<RandomAccessFile>;
 
-    virtual int fsync() = 0;
+class WritableFile;
+using WritableFilePtr = std::shared_ptr<WritableFile>;
 
-    virtual int getFd() const = 0;
-
-    virtual bool isClosed() const = 0;
-
-    virtual void close() = 0;
-
-    virtual int ftruncate(off_t length) = 0;
-
-    virtual String getFileName() const = 0;
-};
-
+class WriteReadableFile;
 using WriteReadableFilePtr = std::shared_ptr<WriteReadableFile>;
 
 } // namespace DB

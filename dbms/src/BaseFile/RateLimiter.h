@@ -14,19 +14,17 @@
 
 #pragma once
 
+#include <BaseFile/IORateLimitConfig.h>
 #include <Common/Stopwatch.h>
 #include <Common/nocopyable.h>
-#include <Server/StorageConfigParser.h>
 #include <fmt/std.h>
 
 #include <atomic>
-#include <chrono>
 #include <condition_variable>
 #include <magic_enum.hpp>
 #include <mutex>
 #include <thread>
 
-// TODO: separate IO utility(i.e. FileProvider, RateLimiter) from Encryption directory
 namespace Poco::Util
 {
 class AbstractConfiguration;
@@ -227,18 +225,18 @@ public:
 private:
 #endif
 
-    Int64 getReadBytes(const std::string & fname);
+    Int64 getReadBytes(const std::string & fname) const;
     void getCurrentIOInfo();
 
     std::unique_ptr<IOLimitTuner> createIOLimitTuner();
     void autoTune();
     void runAutoTune();
     // readConfig return true if need to update limiter.
-    bool readConfig(Poco::Util::AbstractConfiguration & config_, StorageIORateLimitConfig & new_io_config);
+    bool readConfig(Poco::Util::AbstractConfiguration & config_, IORateLimitConfig & new_io_config);
     void updateReadLimiter(Int64 bg_bytes, Int64 fg_bytes);
     void updateWriteLimiter(Int64 bg_bytes, Int64 fg_bytes);
 
-    StorageIORateLimitConfig io_config;
+    IORateLimitConfig io_config;
     WriteLimiterPtr bg_write_limiter;
     WriteLimiterPtr fg_write_limiter;
     ReadLimiterPtr bg_read_limiter;
@@ -312,7 +310,7 @@ public:
         LimiterStatUPtr fg_write_stat_,
         LimiterStatUPtr bg_read_stat_,
         LimiterStatUPtr fg_read_stat_,
-        const StorageIORateLimitConfig & io_config_);
+        const IORateLimitConfig & io_config_);
 
     String toString() const
     {
@@ -464,7 +462,7 @@ private:
     LimiterStatUPtr fg_write_stat;
     LimiterStatUPtr bg_read_stat;
     LimiterStatUPtr fg_read_stat;
-    StorageIORateLimitConfig io_config;
+    IORateLimitConfig io_config;
     LoggerPtr log;
 };
 } // namespace DB

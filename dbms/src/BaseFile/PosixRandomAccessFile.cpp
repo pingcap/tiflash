@@ -12,12 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <BaseFile/PosixRandomAccessFile.h>
+#include <BaseFile/RateLimiter.h>
 #include <Common/Exception.h>
 #include <Common/ProfileEvents.h>
 #include <Common/TiFlashMetrics.h>
-#include <Encryption/PosixRandomAccessFile.h>
-#include <Encryption/RateLimiter.h>
-#include <Storages/S3/FileCache.h>
 #include <fcntl.h>
 #include <unistd.h>
 

@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include <Common/FailPoint.h>
-#include <Encryption/PosixRandomAccessFile.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Storages/KVStore/FFI/ProxyFFI.h>

@@ -17,7 +17,6 @@
 #include <Common/Stopwatch.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/TiFlashMetrics.h>
-#include <Encryption/RandomAccessFile.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/S3/FileCache.h>
 #include <Storages/S3/MemoryRandomAccessFile.h>
@@ -25,10 +24,9 @@
 #include <Storages/S3/S3Filename.h>
 #include <Storages/S3/S3RandomAccessFile.h>
 #include <aws/s3/model/GetObjectRequest.h>
+#include <common/likely.h>
 
-#include <chrono>
 #include <optional>
-#include <thread>
 
 namespace ProfileEvents
 {

@@ -16,7 +16,6 @@
 #include <Common/SyncPoint/SyncPoint.h>
 #include <Common/TiFlashMetrics.h>
 #include <Common/setThreadName.h>
-#include <Encryption/PosixRandomAccessFile.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Storages/KVStore/Decode/PartitionStreams.h>

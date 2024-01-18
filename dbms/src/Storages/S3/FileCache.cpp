@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <BaseFile/PosixRandomAccessFile.h>
 #include <Common/CurrentMetrics.h>
 #include <Common/Exception.h>
 #include <Common/ProfileEvents.h>
 #include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
 #include <Common/escapeForFileName.h>
-#include <Encryption/PosixRandomAccessFile.h>
 #include <IO/IOThreadPools.h>
 #include <Interpreters/Settings.h>
 #include <Server/StorageConfigParser.h>
