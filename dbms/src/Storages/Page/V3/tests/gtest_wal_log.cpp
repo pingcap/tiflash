@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <BaseFile/WriteReadableFile.h>
 #include <Common/FailPoint.h>
 #include <Common/RedactHelpers.h>
 #include <Core/Defines.h>

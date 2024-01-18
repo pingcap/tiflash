@@ -989,4 +989,37 @@ BaseBuffView cppStringAsBuff(const std::string & s)
 {
     return BaseBuffView{.data = s.data(), .len = s.size()};
 }
+
+BaseBuffView GetLockByKey(const EngineStoreServerWrap * server, uint64_t region_id, BaseBuffView key)
+{
+    auto tikv_key = TiKVKey(key.data, key.len);
+    try
+    {
+        auto & kvstore = server->tmt->getKVStore();
+        auto region = kvstore->getRegion(region_id);
+        auto value = region->getLockByKey(tikv_key);
+        if (!value)
+        {
+            // key not exist
+            LOG_WARNING(
+                Logger::get(),
+                "Failed to get lock by key {}, region_id={}",
+                tikv_key.toDebugString(),
+                region_id);
+            return BaseBuffView{};
+        }
+
+        return BaseBuffView{value->data(), value->dataSize()};
+    }
+    catch (...)
+    {
+        LOG_WARNING( //
+            Logger::get(),
+            "Failed to get lock by key {}, region_id={}",
+            tikv_key.toDebugString(),
+            region_id);
+        return BaseBuffView{};
+    }
+}
+
 } // namespace DB

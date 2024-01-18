@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <BaseFile/PosixRandomAccessFile.h>
+#include <BaseFile/PosixWritableFile.h>
 #include <Common/FailPoint.h>
 #include <Core/ColumnWithTypeAndName.h>
-#include <Encryption/PosixRandomAccessFile.h>
-#include <Encryption/PosixWritableFile.h>
 #include <Interpreters/Context.h>
 #include <Poco/DirectoryIterator.h>
 #include <Storages/DeltaMerge/DMContext.h>
