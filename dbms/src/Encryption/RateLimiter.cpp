@@ -141,27 +141,6 @@ void metricPendingCount(LimiterType type)
     }
 }
 
-void metricPendingCount(LimiterType type)
-{
-    switch (type)
-    {
-    case LimiterType::FG_READ:
-        GET_METRIC(tiflash_storage_io_limiter_pending_count, type_fg_read).Increment();
-        break;
-    case LimiterType::BG_READ:
-        GET_METRIC(tiflash_storage_io_limiter_pending_count, type_bg_read).Increment();
-        break;
-    case LimiterType::FG_WRITE:
-        GET_METRIC(tiflash_storage_io_limiter_pending_count, type_fg_write).Increment();
-        break;
-    case LimiterType::BG_WRITE:
-        GET_METRIC(tiflash_storage_io_limiter_pending_count, type_bg_write).Increment();
-        break;
-    default:
-        break;
-    }
-}
-
 WriteLimiter::WriteLimiter(Int64 rate_limit_per_sec_, LimiterType type_, UInt64 refill_period_ms_)
     : refill_period_ms{refill_period_ms_}
     , refill_balance_per_period{calculateRefillBalancePerPeriod(rate_limit_per_sec_)}
