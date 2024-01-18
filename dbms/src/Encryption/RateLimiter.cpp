@@ -99,6 +99,48 @@ inline CurrentMetrics::Increment pendingRequestMetrics(LimiterType type)
     }
 }
 
+void metricPendingDuration(LimiterType type, double second)
+{
+    switch (type)
+    {
+    case LimiterType::FG_READ:
+        GET_METRIC(tiflash_storage_io_limiter_pending_seconds, type_fg_read).Observe(second);
+        break;
+    case LimiterType::BG_READ:
+        GET_METRIC(tiflash_storage_io_limiter_pending_seconds, type_bg_read).Observe(second);
+        break;
+    case LimiterType::FG_WRITE:
+        GET_METRIC(tiflash_storage_io_limiter_pending_seconds, type_fg_write).Observe(second);
+        break;
+    case LimiterType::BG_WRITE:
+        GET_METRIC(tiflash_storage_io_limiter_pending_seconds, type_bg_write).Observe(second);
+        break;
+    default:
+        break;
+    }
+}
+
+void metricPendingCount(LimiterType type)
+{
+    switch (type)
+    {
+    case LimiterType::FG_READ:
+        GET_METRIC(tiflash_storage_io_limiter_pending_count, type_fg_read).Increment();
+        break;
+    case LimiterType::BG_READ:
+        GET_METRIC(tiflash_storage_io_limiter_pending_count, type_bg_read).Increment();
+        break;
+    case LimiterType::FG_WRITE:
+        GET_METRIC(tiflash_storage_io_limiter_pending_count, type_fg_write).Increment();
+        break;
+    case LimiterType::BG_WRITE:
+        GET_METRIC(tiflash_storage_io_limiter_pending_count, type_bg_write).Increment();
+        break;
+    default:
+        break;
+    }
+}
+
 void metricPendingCount(LimiterType type)
 {
     switch (type)
@@ -156,12 +198,8 @@ void WriteLimiter::request(Int64 bytes)
     Stopwatch sw_pending;
     Int64 wait_times = 0;
     auto pending_request = pendingRequestMetrics(type);
-<<<<<<< HEAD
-
-=======
     metricPendingCount(type);
     SCOPE_EXIT({ metricPendingDuration(type, sw_pending.elapsedSeconds()); });
->>>>>>> 63eb295f06 (Storages: Add metrics in RateLimiter (#8636))
     // request cannot be satisfied at this moment, enqueue
     Request r(bytes);
     req_queue.push_back(&r);
@@ -736,10 +774,6 @@ IOLimitTuner::TuneResult IOLimitTuner::tune() const
 {
     if (limiterCount() < 2)
     {
-<<<<<<< HEAD
-        LOG_TRACE(log, "{} NOT need to tune.", msg);
-=======
->>>>>>> 63eb295f06 (Storages: Add metrics in RateLimiter (#8636))
         return {0, 0, false, 0, 0, false};
     }
     if (bg_write_stat)
