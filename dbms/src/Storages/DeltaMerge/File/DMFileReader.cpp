@@ -91,18 +91,17 @@ DMFileReader::Stream::Stream(
                     return res;
 
                 // first read from merged file to get the raw data(contains the header)
-                auto buffer = ReadBufferFromFileProvider(
-                    reader.file_provider,
+                auto buffer = reader.file_provider->newReadBufferFromRandomAccessFile(
                     file_path,
                     encryp_path,
                     reader.dmfile->getConfiguration()->getChecksumFrameLength(),
                     read_limiter);
-                buffer.seek(offset);
+                buffer->seek(offset);
 
                 String raw_data;
                 raw_data.resize(data_size);
 
-                buffer.read(reinterpret_cast<char *>(raw_data.data()), data_size);
+                buffer->read(reinterpret_cast<char *>(raw_data.data()), data_size);
                 // read from the buffer based on the raw data
                 auto buf = createReadBufferFromData(
                     std::move(raw_data),
@@ -235,18 +234,17 @@ DMFileReader::Stream::Stream(
             auto size = info->second.size;
 
             // first read from merged file to get the raw data(contains the header)
-            auto buffer = ReadBufferFromFileProvider(
-                reader.file_provider,
+            auto buffer = reader.file_provider->newReadBufferFromRandomAccessFile(
                 file_path,
                 encryp_path,
                 reader.dmfile->getConfiguration()->getChecksumFrameLength(),
                 read_limiter);
-            buffer.seek(offset);
+            buffer->seek(offset);
 
             String raw_data;
             raw_data.resize(size);
 
-            buffer.read(reinterpret_cast<char *>(raw_data.data()), size);
+            buffer->read(reinterpret_cast<char *>(raw_data.data()), size);
             // read from the buffer based on the raw data
             buf = std::make_unique<CompressedReadBufferFromFileProvider</*has_checksum=*/false>>(
                 std::move(raw_data),

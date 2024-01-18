@@ -20,7 +20,6 @@
 #include <Databases/DatabaseFactory.h>
 #include <Databases/IDatabase.h>
 #include <Encryption/FileProvider.h>
-#include <Encryption/WriteBufferFromFileProvider.h>
 #include <IO/WriteHelpers.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/ExpressionActions.h>
@@ -131,20 +130,19 @@ BlockIO InterpreterCreateQuery::createDatabase(ASTCreateQuery & create)
         String statement = statement_stream.str();
 
         /// Exclusive flag guarantees, that database is not created right now in another thread.
-        WriteBufferFromFileProvider out(
-            context.getFileProvider(),
+        auto out = context.getFileProvider()->newWriteBufferFromWritableFile(
             metadata_file_tmp_path,
             EncryptionPath(metadata_file_tmp_path, ""),
             true,
             nullptr,
             statement.size(),
             O_WRONLY | O_CREAT | O_EXCL);
-        writeString(statement, out);
+        writeString(statement, *out);
 
-        out.next();
+        out->next();
         if (context.getSettingsRef().fsync_metadata)
-            out.sync();
-        out.close();
+            out->sync();
+        out->close();
     }
 
     try

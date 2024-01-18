@@ -14,7 +14,7 @@
 
 #include <Common/Stopwatch.h>
 #include <Databases/DatabasesCommon.h>
-#include <Encryption/ReadBufferFromFileProvider.h>
+#include <Encryption/FileProvider.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterCreateQuery.h>
 #include <Parsers/ASTCreateQuery.h>
@@ -229,12 +229,11 @@ ASTPtr getQueryFromMetadata(const Context & context, const String & metadata_pat
 
     String query;
     {
-        ReadBufferFromFileProvider in(
-            context.getFileProvider(),
+        auto in = context.getFileProvider()->newReadBufferFromRandomAccessFile(
             metadata_path,
             EncryptionPath(metadata_path, ""),
             4096);
-        readStringUntilEOF(query, in);
+        readStringUntilEOF(query, *in);
     }
 
     ParserCreateQuery parser;
@@ -326,12 +325,11 @@ std::tuple<String, StoragePtr> loadTable(
 
     String s;
     {
-        ReadBufferFromFileProvider in(
-            context.getFileProvider(),
+        auto in = context.getFileProvider()->newReadBufferFromRandomAccessFile(
             table_metadata_path,
             EncryptionPath(table_metadata_path, ""),
             1024);
-        readStringUntilEOF(s, in);
+        readStringUntilEOF(s, *in);
     }
 
     /** Empty files with metadata are generated after a rough restart of the server.

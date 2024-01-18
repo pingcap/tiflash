@@ -16,8 +16,6 @@
 
 #include <Core/Types.h>
 #include <Encryption/FileProvider.h>
-#include <Encryption/ReadBufferFromFileProvider.h>
-#include <Encryption/WriteBufferFromFileProvider.h>
 #include <Poco/File.h>
 #include <Storages/DeltaMerge/ColumnStat.h>
 #include <Storages/DeltaMerge/DMChecksumConfig.h>
@@ -525,14 +523,13 @@ public:
     friend bool ::DTTool::Migrate::needFrameMigration(const DB::DM::DMFile & file, const std::string & target);
 };
 
-inline ReadBufferFromFileProvider openForRead(
+inline std::unique_ptr<ReadBufferFromRandomAccessFile> openForRead(
     const FileProviderPtr & file_provider,
     const String & path,
     const EncryptionPath & encryption_path,
     const size_t & file_size)
 {
-    return ReadBufferFromFileProvider(
-        file_provider,
+    return file_provider->newReadBufferFromRandomAccessFile(
         path,
         encryption_path,
         std::min(static_cast<size_t>(DBMS_DEFAULT_BUFFER_SIZE), file_size));

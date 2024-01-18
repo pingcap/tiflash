@@ -16,9 +16,7 @@
 #include <Common/StringUtils/StringRefUtils.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/escapeForFileName.h>
-#include <Encryption/WriteBufferFromFileProvider.h>
 #include <Encryption/createReadBufferFromFileBaseByFileProvider.h>
-#include <Encryption/createWriteBufferFromFileBaseByFileProvider.h>
 #include <IO/IOSWrapper.h>
 #include <IO/ReadBufferFromString.h>
 #include <IO/ReadHelpers.h>
@@ -364,7 +362,9 @@ void DMFile::writeMeta(const FileProviderPtr & file_provider, const WriteLimiter
     String tmp_meta_path = meta_path + ".tmp";
 
     {
-        WriteBufferFromFileProvider buf(file_provider, tmp_meta_path, encryptionMetaPath(), false, write_limiter, 4096);
+        auto buf
+            = file_provider
+                  ->newWriteBufferFromWritableFile(tmp_meta_path, encryptionMetaPath(), false, write_limiter, 4096);
         if (configuration)
         {
             auto digest = configuration->createUnifiedDigest();
@@ -373,13 +373,13 @@ void DMFile::writeMeta(const FileProviderPtr & file_provider, const WriteLimiter
             auto serialized = tmp_buffer.releaseStr();
             digest->update(serialized.data(), serialized.length());
             configuration->addChecksum(metaFileName(), digest->raw());
-            buf.write(serialized.data(), serialized.size());
+            buf->write(serialized.data(), serialized.size());
         }
         else
         {
-            writeMetaToBuffer(buf);
+            writeMetaToBuffer(*buf);
         }
-        buf.sync();
+        buf->sync();
     }
     Poco::File(tmp_meta_path).renameTo(meta_path);
 }
@@ -389,19 +389,23 @@ void DMFile::writePackProperty(const FileProviderPtr & file_provider, const Writ
     String property_path = packPropertyPath();
     String tmp_property_path = property_path + ".tmp";
     {
-        WriteBufferFromFileProvider
-            buf(file_provider, tmp_property_path, encryptionPackPropertyPath(), false, write_limiter, 4096);
+        auto buf = file_provider->newWriteBufferFromWritableFile(
+            tmp_property_path,
+            encryptionPackPropertyPath(),
+            false,
+            write_limiter,
+            4096);
         if (configuration)
         {
             auto digest = configuration->createUnifiedDigest();
-            writePackPropertyToBuffer(buf, digest.get());
+            writePackPropertyToBuffer(*buf, digest.get());
             configuration->addChecksum(packPropertyFileName(), digest->raw());
         }
         else
         {
-            writePackPropertyToBuffer(buf);
+            writePackPropertyToBuffer(*buf);
         }
-        buf.sync();
+        buf->sync();
     }
     Poco::File(tmp_property_path).renameTo(property_path);
 }
@@ -413,18 +417,17 @@ void DMFile::writeConfiguration(const FileProviderPtr & file_provider, const Wri
     String config_path = configurationPath();
     String tmp_config_path = config_path + ".tmp";
     {
-        WriteBufferFromFileProvider buf(
-            file_provider,
+        auto buf = file_provider->newWriteBufferFromWritableFile(
             tmp_config_path,
             encryptionConfigurationPath(),
             false,
             write_limiter,
             DBMS_DEFAULT_BUFFER_SIZE);
         {
-            auto stream = OutputStreamWrapper{buf};
+            auto stream = OutputStreamWrapper{*buf};
             stream << *configuration;
         }
-        buf.sync();
+        buf->sync();
     }
     Poco::File(tmp_config_path).renameTo(config_path);
 }
@@ -471,11 +474,15 @@ void DMFile::upgradeMetaIfNeed(const FileProviderPtr & file_provider, DMFileForm
 void DMFile::readColumnStat(const FileProviderPtr & file_provider, const MetaPackInfo & meta_pack_info)
 {
     const auto name = metaFileName();
-    auto file_buf = openForRead(file_provider, metaPath(), encryptionMetaPath(), meta_pack_info.column_stat_size);
+    auto file_buf = openForRead(
+        file_provider,
+        metaPath(),
+        encryptionMetaPath(),
+        std::min(static_cast<size_t>(DBMS_DEFAULT_BUFFER_SIZE), meta_pack_info.column_stat_size));
     auto meta_buf = std::vector<char>(meta_pack_info.column_stat_size);
     auto meta_reader = ReadBufferFromMemory{meta_buf.data(), meta_buf.size()};
-    ReadBuffer * buf = &file_buf;
-    file_buf.seek(meta_pack_info.column_stat_offset);
+    ReadBuffer * buf = &(*file_buf); // buf is a pointer to ReadBufferFromRandomAccessFile
+    file_buf->seek(meta_pack_info.column_stat_offset);
 
     // checksum examination
     if (configuration)
@@ -484,7 +491,7 @@ void DMFile::readColumnStat(const FileProviderPtr & file_provider, const MetaPac
         if (location != configuration->getEmbeddedChecksum().end())
         {
             auto digest = configuration->createUnifiedDigest();
-            file_buf.readBig(meta_buf.data(), meta_buf.size());
+            file_buf->readBig(meta_buf.data(), meta_buf.size());
             digest->update(meta_buf.data(), meta_buf.size());
             if (unlikely(!digest->compareRaw(location->second)))
             {
@@ -540,9 +547,9 @@ void DMFile::readPackStat(const FileProviderPtr & file_provider, const MetaPackI
     else
     {
         auto buf = openForRead(file_provider, path, encryptionPackStatPath(), meta_pack_info.pack_stat_size);
-        buf.seek(meta_pack_info.pack_stat_offset);
+        buf->seek(meta_pack_info.pack_stat_offset);
         if (sizeof(PackStat) * packs
-            != buf.readBig(reinterpret_cast<char *>(pack_stats.data()), sizeof(PackStat) * packs))
+            != buf->readBig(reinterpret_cast<char *>(pack_stats.data()), sizeof(PackStat) * packs))
         {
             throw Exception("Cannot read all data", ErrorCodes::CANNOT_READ_ALL_DATA);
         }
@@ -553,9 +560,9 @@ void DMFile::readConfiguration(const FileProviderPtr & file_provider)
 {
     if (Poco::File(configurationPath()).exists())
     {
-        auto file
+        auto buf
             = openForRead(file_provider, configurationPath(), encryptionConfigurationPath(), DBMS_DEFAULT_BUFFER_SIZE);
-        auto stream = InputStreamWrapper{file};
+        auto stream = InputStreamWrapper{*buf};
         configuration.emplace(stream);
         version = DMFileFormat::V2;
     }
@@ -575,9 +582,9 @@ void DMFile::readPackProperty(const FileProviderPtr & file_provider, const MetaP
         packPropertyPath(),
         encryptionPackPropertyPath(),
         meta_pack_info.pack_property_size);
-    buf.seek(meta_pack_info.pack_property_offset);
+    buf->seek(meta_pack_info.pack_property_offset);
 
-    readStringBinary(tmp_buf, buf);
+    readStringBinary(tmp_buf, *buf);
     pack_properties.ParseFromString(tmp_buf);
 
     if (configuration)
@@ -932,7 +939,7 @@ std::vector<char> DMFile::readMetaV2(const FileProviderPtr & file_provider) cons
     size_t read_bytes = 0;
     for (;;)
     {
-        read_bytes += rbuf.readBig(buf.data() + read_bytes, meta_buffer_size);
+        read_bytes += rbuf->readBig(buf.data() + read_bytes, meta_buffer_size);
         if (likely(read_bytes < buf.size()))
         {
             break;
@@ -1131,12 +1138,13 @@ void DMFile::checkMergedFile(
         writer.file_info.size = 0;
         writer.buffer.reset();
 
-        writer.buffer = std::make_unique<WriteBufferFromFileProvider>(
-            file_provider,
+        auto file = file_provider->newWritableFile(
             mergedPath(writer.file_info.number),
             encryptionMergedPath(writer.file_info.number),
+            /*truncate_if_exists*/ true,
             /*create_new_encryption_info*/ false,
             write_limiter);
+        writer.buffer = std::make_unique<WriteBufferFromWritableFile>(file);
     }
 }
 
@@ -1148,10 +1156,9 @@ void DMFile::finalizeSmallFiles(
     auto copy_file_to_cur = [&](const String & fname, UInt64 fsize) {
         checkMergedFile(writer, file_provider, write_limiter);
 
-        auto read_file
-            = openForRead(file_provider, subFilePath(fname), EncryptionPath(encryptionBasePath(), fname), fsize);
+        auto file = openForRead(file_provider, subFilePath(fname), EncryptionPath(encryptionBasePath(), fname), fsize);
         std::vector<char> read_buf(fsize);
-        auto read_size = read_file.readBig(read_buf.data(), read_buf.size());
+        auto read_size = file->readBig(read_buf.data(), read_buf.size());
         RUNTIME_CHECK(read_size == fsize, fname, read_size, fsize);
 
         writer.buffer->write(read_buf.data(), read_buf.size());

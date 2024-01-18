@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Encryption/WriteBufferFromFileProvider.h>
 #include <Encryption/createWriteBufferFromFileBaseByFileProvider.h>
 #if !defined(__APPLE__) && !defined(__FreeBSD__) && !defined(_MSC_VER)
 #include <IO/WriteBufferAIO.h>
@@ -43,17 +42,15 @@ std::unique_ptr<WriteBufferFromFileBase> createWriteBufferFromFileBaseByFileProv
 {
     if ((aio_threshold == 0) || (estimated_size < aio_threshold))
     {
-        return std::make_unique<WriteBufferFromFileProvider>(
-            file_provider,
+        auto file = file_provider->newWritableFile(
             filename_,
             encryption_path_,
+            true,
             create_new_encryption_info_,
             write_limiter_,
-            buffer_size_,
             flags_,
-            mode,
-            existing_memory_,
-            alignment);
+            mode);
+        return std::make_unique<WriteBufferFromWritableFile>(file, buffer_size_, existing_memory_, alignment);
     }
     else
     {

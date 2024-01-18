@@ -22,7 +22,6 @@
 #include <Encryption/CompressedReadBufferFromFileProvider.h>
 #include <Encryption/FileProvider.h>
 #include <Encryption/MockKeyManager.h>
-#include <Encryption/createReadBufferFromFileBaseByFileProvider.h>
 #include <Encryption/createWriteBufferFromFileBaseByFileProvider.h>
 #include <IO/ChecksumBuffer.h>
 #include <IO/CompressedReadBuffer.h>

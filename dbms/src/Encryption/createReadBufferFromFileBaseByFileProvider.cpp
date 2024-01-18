@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Encryption/ReadBufferFromFileProvider.h>
 #include <Encryption/createReadBufferFromFileBaseByFileProvider.h>
+#include <IO/ReadBufferFromRandomAccessFile.h>
 
 #if !defined(__APPLE__) && !defined(__FreeBSD__) && !defined(_MSC_VER)
 #include <IO/ReadBufferAIO.h>
@@ -43,15 +43,8 @@ std::unique_ptr<ReadBufferFromFileBase> createReadBufferFromFileBaseByFileProvid
 {
     if ((aio_threshold == 0) || (estimated_size < aio_threshold))
     {
-        return std::make_unique<ReadBufferFromFileProvider>(
-            file_provider,
-            filename_,
-            encryption_path_,
-            buffer_size_,
-            read_limiter,
-            flags_,
-            existing_memory_,
-            alignment);
+        auto file = file_provider->newRandomAccessFile(filename_, encryption_path_, read_limiter, flags_);
+        return std::make_unique<ReadBufferFromRandomAccessFile>(file, buffer_size_, existing_memory_, alignment);
     }
     else
     {

@@ -28,6 +28,8 @@
 #include <Storages/S3/S3WritableFile.h>
 #include <common/likely.h>
 
+#include <memory>
+
 namespace DB
 {
 RandomAccessFilePtr FileProvider::newRandomAccessFile(
@@ -49,6 +51,19 @@ RandomAccessFilePtr FileProvider::newRandomAccessFile(
         file = std::make_shared<EncryptedRandomAccessFile>(file, stream);
     }
     return file;
+}
+
+std::unique_ptr<ReadBufferFromRandomAccessFile> FileProvider::newReadBufferFromRandomAccessFile(
+    const std::string & file_name_,
+    const EncryptionPath & encryption_path_,
+    size_t buf_size,
+    const ReadLimiterPtr & read_limiter,
+    int flags,
+    char * existing_memory,
+    size_t alignment) const
+{
+    auto file = newRandomAccessFile(file_name_, encryption_path_, read_limiter, flags);
+    return std::make_unique<ReadBufferFromRandomAccessFile>(file, buf_size, existing_memory, alignment);
 }
 
 WritableFilePtr FileProvider::newWritableFile(
@@ -85,6 +100,22 @@ WritableFilePtr FileProvider::newWritableFile(
         }
     }
     return file;
+}
+
+std::unique_ptr<WriteBufferFromWritableFile> FileProvider::newWriteBufferFromWritableFile(
+    const std::string & file_name_,
+    const EncryptionPath & encryption_path,
+    bool create_new_encryption_info_,
+    const WriteLimiterPtr & write_limiter_,
+    size_t buf_size,
+    int flags,
+    mode_t mode,
+    char * existing_memory,
+    size_t alignment) const
+{
+    auto writeable_file
+        = newWritableFile(file_name_, encryption_path, true, create_new_encryption_info_, write_limiter_, flags, mode);
+    return std::make_unique<WriteBufferFromWritableFile>(writeable_file, buf_size, existing_memory, alignment);
 }
 
 WriteReadableFilePtr FileProvider::newWriteReadableFile(

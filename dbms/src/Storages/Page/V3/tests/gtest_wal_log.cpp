@@ -17,9 +17,7 @@
 #include <Common/RedactHelpers.h>
 #include <Core/Defines.h>
 #include <Encryption/EncryptionPath.h>
-#include <Encryption/ReadBufferFromFileProvider.h>
 #include <Encryption/createReadBufferFromFileBaseByFileProvider.h>
-#include <Encryption/createWriteBufferFromFileBaseByFileProvider.h>
 #include <IO/ReadBufferFromString.h>
 #include <IO/WriteBuffer.h>
 #include <IO/WriteBufferFromFile.h>

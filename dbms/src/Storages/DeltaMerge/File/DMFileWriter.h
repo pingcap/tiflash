@@ -16,7 +16,6 @@
 
 #include <DataStreams/IBlockOutputStream.h>
 #include <DataStreams/MarkInCompressedFile.h>
-#include <Encryption/WriteBufferFromFileProvider.h>
 #include <Encryption/createWriteBufferFromFileBaseByFileProvider.h>
 #include <IO/CompressedWriteBuffer.h>
 #include <IO/WriteBufferFromOStream.h>
@@ -145,7 +144,7 @@ public:
     void write(const Block & block, const BlockProperty & block_property);
     void finalize();
 
-    const DMFilePtr getFile() const { return dmfile; }
+    DMFilePtr getFile() const { return dmfile; }
 
 private:
     void finalizeColumn(ColId col_id, DataTypePtr type);

@@ -17,7 +17,6 @@
 #include <Common/Exception.h>
 #include <Common/Logger.h>
 #include <Common/TiFlashMetrics.h>
-#include <Encryption/ReadBufferFromFileProvider.h>
 #include <Encryption/createReadBufferFromFileBaseByFileProvider.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/Filter/FilterHelper.h>
@@ -262,13 +261,12 @@ private:
                 {dmfile->getReadFileSize(col_id, dmfile->colIndexFileName(file_name_base)), scan_context});
             if (!dmfile->configuration) // v1
             {
-                auto index_buf = ReadBufferFromFileProvider(
-                    file_provider,
+                auto index_buf = file_provider->newReadBufferFromRandomAccessFile(
                     dmfile->colIndexPath(file_name_base),
                     dmfile->encryptionIndexPath(file_name_base),
                     std::min(static_cast<size_t>(DBMS_DEFAULT_BUFFER_SIZE), index_file_size),
                     read_limiter);
-                return MinMaxIndex::read(*type, index_buf, index_file_size);
+                return MinMaxIndex::read(*type, *index_buf, index_file_size);
             }
             else if (dmfile->useMetaV2()) // v3
             {
@@ -285,18 +283,17 @@ private:
                 auto offset = info->second.offset;
                 auto data_size = info->second.size;
 
-                auto buffer = ReadBufferFromFileProvider(
-                    file_provider,
+                auto buffer = file_provider->newReadBufferFromRandomAccessFile(
                     file_path,
                     encryp_path,
                     dmfile->getConfiguration()->getChecksumFrameLength(),
                     read_limiter);
-                buffer.seek(offset);
+                buffer->seek(offset);
 
                 String raw_data;
                 raw_data.resize(data_size);
 
-                buffer.read(reinterpret_cast<char *>(raw_data.data()), data_size);
+                buffer->read(reinterpret_cast<char *>(raw_data.data()), data_size);
 
                 auto buf = createReadBufferFromData(
                     std::move(raw_data),

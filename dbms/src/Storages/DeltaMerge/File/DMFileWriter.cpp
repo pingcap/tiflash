@@ -47,12 +47,13 @@ DMFileWriter::DMFileWriter(
 
     if (dmfile->useMetaV2())
     {
-        merged_file.buffer = std::make_unique<WriteBufferFromFileProvider>(
-            file_provider,
+        auto file = file_provider->newWritableFile(
             dmfile->mergedPath(0),
             dmfile->encryptionMergedPath(0),
-            /*create_new_encryption_info*/ false,
+            false,
+            /*create_new_encryption_info*/ true,
             write_limiter);
+        merged_file.buffer = std::make_unique<WriteBufferFromWritableFile>(file);
 
         merged_file.file_info = DMFile::MergedFile({0, 0});
     }
@@ -82,13 +83,13 @@ DMFileWriter::WriteBufferFromFileBasePtr DMFileWriter::createMetaFile()
 
 DMFileWriter::WriteBufferFromFileBasePtr DMFileWriter::createMetaV2File()
 {
-    return std::make_unique<WriteBufferFromFileProvider>(
-        file_provider,
+    auto file = file_provider->newWritableFile(
         dmfile->metav2Path(),
         dmfile->encryptionMetav2Path(),
+        /*truncate_if_exists*/ true,
         /*create_new_encryption_info*/ true,
-        write_limiter,
-        DMFile::meta_buffer_size);
+        write_limiter);
+    return std::make_unique<WriteBufferFromWritableFile>(file, DMFile::meta_buffer_size);
 }
 
 DMFileWriter::WriteBufferFromFileBasePtr DMFileWriter::createPackStatsFile()
@@ -424,19 +425,18 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
             {
                 if (!dmfile->configuration)
                 {
-                    WriteBufferFromFileProvider buf(
-                        file_provider,
+                    auto buf = file_provider->newWriteBufferFromWritableFile(
                         dmfile->colIndexPath(stream_name),
                         dmfile->encryptionIndexPath(stream_name),
                         false,
                         write_limiter);
-                    stream->minmaxes->write(*type, buf);
-                    buf.sync();
+                    stream->minmaxes->write(*type, *buf);
+                    buf->sync();
                     // Ignore data written in index file when the dmfile is empty.
                     // This is ok because the index file in this case is tiny, and we already ignore other small files like meta and pack stat file.
                     // The motivation to do this is to show a zero `stable_size_on_disk` for empty segments,
                     // and we cannot change the index file format for empty dmfile because of backward compatibility.
-                    index_bytes = buf.getMaterializedBytes();
+                    index_bytes = buf->getMaterializedBytes();
                     bytes_written += is_empty_file ? 0 : index_bytes;
                 }
                 else

@@ -18,8 +18,6 @@
 #include <Common/escapeForFileName.h>
 #include <Common/typeid_cast.h>
 #include <Databases/DatabaseTiFlash.h>
-#include <Encryption/ReadBufferFromFileProvider.h>
-#include <Encryption/WriteBufferFromFileProvider.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterCreateQuery.h>
 #include <Parsers/ASTCreateQuery.h>
@@ -239,19 +237,18 @@ void DatabaseTiFlash::createTable(const Context & context, const String & table_
         const String statement = getTableDefinitionFromCreateQuery(query);
 
         /// Exclusive flags guarantees, that table is not created right now in another thread. Otherwise, exception will be thrown.
-        WriteBufferFromFileProvider out(
-            context.getFileProvider(),
+        auto out = context.getFileProvider()->newWriteBufferFromWritableFile(
             table_metadata_tmp_path,
             EncryptionPath(table_metadata_tmp_path, ""),
             true,
             nullptr,
             statement.size(),
             O_WRONLY | O_CREAT | O_EXCL);
-        writeString(statement, out);
-        out.next();
+        writeString(statement, *out);
+        out->next();
         if (settings.fsync_metadata)
-            out.sync();
-        out.close();
+            out->sync();
+        out->close();
     }
 
     try
@@ -349,15 +346,14 @@ void DatabaseTiFlash::renameTable(
         {
             {
                 char in_buf[METADATA_FILE_BUFFER_SIZE];
-                ReadBufferFromFileProvider in(
-                    context.getFileProvider(),
+                auto in = context.getFileProvider()->newReadBufferFromRandomAccessFile(
                     old_tbl_meta_file,
                     EncryptionPath(old_tbl_meta_file, ""),
                     METADATA_FILE_BUFFER_SIZE,
                     /*read_limiter*/ nullptr,
                     -1,
                     in_buf);
-                readStringUntilEOF(statement, in);
+                readStringUntilEOF(statement, *in);
             }
             ParserCreateQuery parser;
             ast = parseQuery(
@@ -389,19 +385,18 @@ void DatabaseTiFlash::renameTable(
                                                                  : EncryptionPath(new_tbl_meta_file_tmp, "");
         {
             bool create_new_encryption_info = !use_target_encrypt_info && !statement.empty();
-            WriteBufferFromFileProvider out(
-                context.getFileProvider(),
+            auto out = context.getFileProvider()->newWriteBufferFromWritableFile(
                 new_tbl_meta_file_tmp,
                 encryption_path,
                 create_new_encryption_info,
                 nullptr,
                 statement.size(),
                 O_WRONLY | O_CREAT | O_EXCL);
-            writeString(statement, out);
-            out.next();
+            writeString(statement, *out);
+            out->next();
             if (context.getSettingsRef().fsync_metadata)
-                out.sync();
-            out.close();
+                out->sync();
+            out->close();
         }
 
         try
@@ -470,15 +465,14 @@ void DatabaseTiFlash::alterTable(
 
     {
         char in_buf[METADATA_FILE_BUFFER_SIZE];
-        ReadBufferFromFileProvider in(
-            context.getFileProvider(),
+        auto in = context.getFileProvider()->newReadBufferFromRandomAccessFile(
             table_metadata_path,
             EncryptionPath(table_metadata_path, ""),
             METADATA_FILE_BUFFER_SIZE,
             /*read_limiter*/ nullptr,
             -1,
             in_buf);
-        readStringUntilEOF(statement, in);
+        readStringUntilEOF(statement, *in);
     }
 
     ParserCreateQuery parser;
@@ -505,19 +499,18 @@ void DatabaseTiFlash::alterTable(
                                                              : EncryptionPath(table_metadata_tmp_path, "");
     {
         bool create_new_encryption_info = !use_target_encrypt_info && !statement.empty();
-        WriteBufferFromFileProvider out(
-            context.getFileProvider(),
+        auto out = context.getFileProvider()->newWriteBufferFromWritableFile(
             table_metadata_tmp_path,
             encryption_path,
             create_new_encryption_info,
             nullptr,
             statement.size(),
             O_WRONLY | O_CREAT | O_EXCL);
-        writeString(statement, out);
-        out.next();
+        writeString(statement, *out);
+        out->next();
         if (context.getSettingsRef().fsync_metadata)
-            out.sync();
-        out.close();
+            out->sync();
+        out->close();
     }
 
     try
@@ -686,19 +679,18 @@ void DatabaseTiFlash::alterTombstone(const Context & context, Timestamp tombston
         EncryptionPath encryption_path = reuse_encrypt_info ? EncryptionPath(database_metadata_path, "")
                                                             : EncryptionPath(database_metadata_tmp_path, "");
         {
-            WriteBufferFromFileProvider out(
-                provider,
+            auto out = provider->newWriteBufferFromWritableFile(
                 database_metadata_tmp_path,
                 encryption_path,
                 !reuse_encrypt_info,
                 nullptr,
                 statement.size(),
                 O_WRONLY | O_CREAT | O_TRUNC);
-            writeString(statement, out);
-            out.next();
+            writeString(statement, *out);
+            out->next();
             if (context.getSettingsRef().fsync_metadata)
-                out.sync();
-            out.close();
+                out->sync();
+            out->close();
         }
 
         try

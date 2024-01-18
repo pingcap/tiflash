@@ -21,8 +21,6 @@
 #include <Databases/DatabaseOrdinary.h>
 #include <Databases/DatabasesCommon.h>
 #include <Encryption/FileProvider.h>
-#include <Encryption/ReadBufferFromFileProvider.h>
-#include <Encryption/WriteBufferFromFileProvider.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterCreateQuery.h>
 #include <Interpreters/Settings.h>
@@ -213,19 +211,18 @@ void DatabaseOrdinary::createTable(const Context & context, const String & table
         statement = getTableDefinitionFromCreateQuery(query);
 
         /// Exclusive flags guarantees, that table is not created right now in another thread. Otherwise, exception will be thrown.
-        WriteBufferFromFileProvider out(
-            context.getFileProvider(),
+        auto out = context.getFileProvider()->newWriteBufferFromWritableFile(
             table_metadata_tmp_path,
             EncryptionPath(table_metadata_tmp_path, ""),
             true,
             nullptr,
             statement.size(),
             O_WRONLY | O_CREAT | O_EXCL);
-        writeString(statement, out);
-        out.next();
+        writeString(statement, *out);
+        out->next();
         if (settings.fsync_metadata)
-            out.sync();
-        out.close();
+            out->sync();
+        out->close();
     }
 
     try
@@ -451,15 +448,14 @@ void DatabaseOrdinary::alterTable(
 
     {
         char in_buf[METADATA_FILE_BUFFER_SIZE];
-        ReadBufferFromFileProvider in(
-            context.getFileProvider(),
+        auto in = context.getFileProvider()->newReadBufferFromRandomAccessFile(
             table_metadata_path,
             EncryptionPath(table_metadata_path, ""),
             METADATA_FILE_BUFFER_SIZE,
             /*read_limiter*/ nullptr,
             -1,
             in_buf);
-        readStringUntilEOF(statement, in);
+        readStringUntilEOF(statement, *in);
     }
 
     ParserCreateQuery parser;
@@ -485,19 +481,18 @@ void DatabaseOrdinary::alterTable(
                                                              : EncryptionPath(table_metadata_tmp_path, "");
     {
         bool create_new_encryption_info = !use_target_encrypt_info && !statement.empty();
-        WriteBufferFromFileProvider out(
-            context.getFileProvider(),
+        auto out = context.getFileProvider()->newWriteBufferFromWritableFile(
             table_metadata_tmp_path,
             encryption_path,
             create_new_encryption_info,
             nullptr,
             statement.size(),
             O_WRONLY | O_CREAT | O_EXCL);
-        writeString(statement, out);
-        out.next();
+        writeString(statement, *out);
+        out->next();
         if (context.getSettingsRef().fsync_metadata)
-            out.sync();
-        out.close();
+            out->sync();
+        out->close();
     }
 
     try
