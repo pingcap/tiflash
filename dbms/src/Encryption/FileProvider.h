@@ -83,7 +83,7 @@ public:
     // Drop encryption info of keyspace_id.
     // !!!Warn!!: after calling this method, the keyspace encryption key can not be found anymore.
     // Be catious and make sure there is no data in this keyspace before calling this method.
-    // Only for CSEDataKeyManager now.
+    // Only for KeyspacesKeymanager now.
     void dropEncryptionInfo(KeyspaceID keyspace_id) const;
 
     // Encrypt/Decrypt page data in place, using encryption_path_ to find the encryption info

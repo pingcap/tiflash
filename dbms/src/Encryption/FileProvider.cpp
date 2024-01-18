@@ -13,11 +13,11 @@
 // limitations under the License.
 
 #include <Common/TiFlashException.h>
-#include <Encryption/CSEDataKeyManager.h>
 #include <Encryption/EncryptedRandomAccessFile.h>
 #include <Encryption/EncryptedWritableFile.h>
 #include <Encryption/EncryptedWriteReadableFile.h>
 #include <Encryption/FileProvider.h>
+#include <Encryption/KeyspacesKeymanager.h>
 #include <Encryption/PosixRandomAccessFile.h>
 #include <Encryption/PosixWritableFile.h>
 #include <Encryption/PosixWriteReadableFile.h>
@@ -203,8 +203,8 @@ void FileProvider::deleteEncryptionInfo(const EncryptionPath & encryption_path_,
 
 void FileProvider::dropEncryptionInfo(KeyspaceID keyspace_id) const
 {
-    if (auto * cse_key_manager = dynamic_cast<CSEDataKeyManager *>(key_manager.get()); cse_key_manager)
-        cse_key_manager->deleteKey(keyspace_id);
+    if (auto * keyspaces_key_manager = dynamic_cast<KeyspacesKeymanager *>(key_manager.get()); keyspaces_key_manager)
+        keyspaces_key_manager->deleteKey(keyspace_id);
 }
 
 void FileProvider::encryptPage(KeyspaceID keyspace_id, char * data, size_t data_size, PageIdU64 page_id)

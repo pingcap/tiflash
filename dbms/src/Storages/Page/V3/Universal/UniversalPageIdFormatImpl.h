@@ -152,6 +152,7 @@ public:
     enum class LocalKVKeyType : uint64_t
     {
         FAPIngestInfo = 1,
+        EncryptionKey = 2,
     };
 
     // LOCAL_PREFIX type region_id

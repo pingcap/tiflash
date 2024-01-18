@@ -37,9 +37,9 @@
 #include <Common/getNumberOfCPUCores.h>
 #include <Common/setThreadName.h>
 #include <Core/TiFlashDisaggregatedMode.h>
-#include <Encryption/CSEDataKeyManager.h>
 #include <Encryption/DataKeyManager.h>
 #include <Encryption/FileProvider.h>
+#include <Encryption/KeyspacesKeymanager.h>
 #include <Encryption/MockKeyManager.h>
 #include <Encryption/RateLimiter.h>
 #include <Flash/DiagnosticsService.h>
@@ -1082,16 +1082,16 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->getSharedContextDisagg()->use_autoscaler = use_autoscaler;
 
     /// Init File Provider
-    // ps_write is a weak_ptr, now it is nullptr, pass it by reference to init CSEDataKeyManager.
+    // ps_write is a UniversalPageStoragePtr, now it is nullptr, pass it by reference to init KeyspacesKeymanager.
     // After UniversalPageStorage is init, ps_write will point to the UniversalPageStorage.
-    std::weak_ptr<UniversalPageStorage> ps_write;
+    UniversalPageStoragePtr ps_write;
     if (proxy_conf.is_proxy_runnable)
     {
         const bool enable_encryption = tiflash_instance_wrap.proxy_helper->checkEncryptionEnabled();
         if (enable_encryption && storage_config.s3_config.isS3Enabled())
         {
             LOG_INFO(log, "encryption can be enabled, method is Aes256Ctr");
-            KeyManagerPtr key_manager = std::make_shared<CSEDataKeyManager>(&tiflash_instance_wrap, ps_write);
+            KeyManagerPtr key_manager = std::make_shared<KeyspacesKeymanager>(&tiflash_instance_wrap, ps_write);
             global_context->initializeFileProvider(key_manager, true);
         }
         else if (enable_encryption)

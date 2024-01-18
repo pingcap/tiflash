@@ -206,13 +206,13 @@ try
     for (int i = 0; i < 10; ++i) // test 10 times
     {
         auto encryption_key = master_key->generateEncryptionKey();
-        auto exported = encryption_key.exportString();
+        auto exported = encryption_key->exportString();
         auto new_encryption_key = master_key->decryptEncryptionKey(exported);
-        ASSERT_EQ(exported, new_encryption_key.exportString());
+        ASSERT_EQ(exported, new_encryption_key->exportString());
 
-        auto info = encryption_key.generateEncryptionInfo(String(reinterpret_cast<const char *>(test::IV_RANDOM), 16));
+        auto info = encryption_key->generateEncryptionInfo(String(reinterpret_cast<const char *>(test::IV_RANDOM), 16));
         {
-            auto new_info = new_encryption_key.generateEncryptionInfo(
+            auto new_info = new_encryption_key->generateEncryptionInfo(
                 String(reinterpret_cast<const char *>(test::IV_RANDOM), 16));
             ASSERT_TRUE(info.equals(new_info));
         }

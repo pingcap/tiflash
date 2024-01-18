@@ -15,31 +15,27 @@
 #pragma once
 
 #include <Common/Exception.h>
+#include <Common/LRUCache.h>
 #include <Common/TiFlashException.h>
 #include <Encryption/KeyManager.h>
 #include <Encryption/MasterKey.h>
 #include <Storages/Page/PageStorage_fwd.h>
-
-#include <unordered_map>
 
 namespace DB
 {
 
 struct EngineStoreServerWrap;
 
-/// CSEDataKeyManager is a KeyManager implementation that designed for Cloud Storage Engine.
+/// KeyspacesKeymanager is a KeyManager implementation that designed for Cloud Storage Engine.
 /// It will store all encryption keys which have been encrypted using MasterKey in PageStorage.
-class CSEDataKeyManager : public KeyManager
+class KeyspacesKeymanager : public KeyManager
 {
 public:
-    static constexpr UInt64 ENCRYPTION_KEY_RESERVED_NAMESPACE_ID = std::numeric_limits<UInt64>::max();
     static constexpr UInt64 ENCRYPTION_KEY_RESERVED_PAGEU64_ID = std::numeric_limits<UInt64>::max();
 
-    explicit CSEDataKeyManager(
-        EngineStoreServerWrap * tiflash_instance_wrap_,
-        std::weak_ptr<UniversalPageStorage> & ps_write_);
+    explicit KeyspacesKeymanager(EngineStoreServerWrap * tiflash_instance_wrap_, UniversalPageStoragePtr & ps_write_);
 
-    ~CSEDataKeyManager() override = default;
+    ~KeyspacesKeymanager() override = default;
 
     FileEncryptionInfo getInfo(const EncryptionPath & ep) override;
 
@@ -57,10 +53,10 @@ public:
 
 private:
     EngineStoreServerWrap * tiflash_instance_wrap;
-    // Note: it is a reference of a weak_ptr point to UniversalPageStorage
-    std::weak_ptr<UniversalPageStorage> & ps_write;
+    // Note: it is a reference of a shared_ptr point to UniversalPageStorage
+    UniversalPageStoragePtr & ps_write;
     // cache, keyspace_id -> encryption_key
-    std::unordered_map<KeyspaceID, EncryptionKey> keyspace_id_to_key;
+    LRUCache<KeyspaceID, EncryptionKey> keyspace_id_to_key;
     const MasterKeyPtr master_key;
 };
 

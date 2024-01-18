@@ -167,4 +167,6 @@ private:
     std::shared_ptr<EncryptionKeyCore> core;
 };
 
+using EncryptionKeyPtr = std::shared_ptr<EncryptionKey>;
+
 } // namespace DB
