@@ -63,6 +63,7 @@
 #include <Storages/KVStore/BackgroundService.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/MarkCache.h>
+#include <Storages/Page/PageConstants.h>
 #include <Storages/Page/V3/PageStorageImpl.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorageService.h>
 #include <Storages/PathCapacityMetrics.h>
@@ -77,8 +78,6 @@
 #include <pcg_random.hpp>
 #include <set>
 #include <unordered_map>
-
-#include "Storages/Page/PageConstants.h"
 
 
 namespace ProfileEvents

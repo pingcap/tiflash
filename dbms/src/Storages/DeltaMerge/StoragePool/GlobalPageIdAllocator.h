@@ -62,7 +62,8 @@ private:
 private:
     std::atomic<PageIdU64> max_log_page_id = 0;
     std::atomic<PageIdU64> max_data_page_id = 0;
-    std::atomic<PageIdU64> max_meta_page_id = 0;
+    // The meta_page_id == 1 is reserved for first segment in each physical table
+    std::atomic<PageIdU64> max_meta_page_id = 1;
 };
 
 } // namespace DB::DM
