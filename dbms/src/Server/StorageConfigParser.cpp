@@ -13,13 +13,6 @@
 // limitations under the License.
 
 /// Suppress gcc warning: ‘*((void*)&<anonymous> +4)’ may be used uninitialized in this function
-<<<<<<< HEAD
-=======
-#include <cmath>
-#include <cstdlib>
-#include <filesystem>
-#include <string_view>
->>>>>>> 63eb295f06 (Storages: Add metrics in RateLimiter (#8636))
 #if !__clang__
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
