@@ -7157,7 +7157,7 @@
           "timeFrom": null,
           "timeRegions": [],
           "timeShift": null,
-          "title": "I/O Limiter",
+          "title": "I/O Limiter Throughput",
           "tooltip": {
             "shared": true,
             "sort": 0,
@@ -7201,7 +7201,7 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
-          "description": "I/O Limiter pending tasks.",
+          "description": "The storage I/O limiter metrics.",
           "fieldConfig": {
             "defaults": {},
             "overrides": []
@@ -7212,7 +7212,117 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 64
+            "y": 61
+          },
+          "hiddenSeries": false,
+          "id": 266,
+          "legend": {
+            "alignAsTable": true,
+            "avg": false,
+            "current": true,
+            "max": true,
+            "min": false,
+            "rightSide": true,
+            "show": true,
+            "total": false,
+            "values": true
+          },
+          "lines": true,
+          "linewidth": 1,
+          "links": [],
+          "nullPointMode": "null as zero",
+          "options": {
+            "alertThreshold": true
+          },
+          "percentage": false,
+          "pluginVersion": "7.5.11",
+          "pointradius": 2,
+          "points": false,
+          "renderer": "flot",
+          "seriesOverrides": [
+            {
+              "$$hashKey": "object:563",
+              "alias": "/-/",
+              "yaxis": 2
+            }
+          ],
+          "spaceLength": 10,
+          "stack": false,
+          "steppedLine": false,
+          "targets": [
+            {
+              "exemplar": true,
+              "expr": "sum(rate(tiflash_storage_io_limiter_pending_count{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (type)",
+              "format": "time_series",
+              "instant": false,
+              "interval": "",
+              "intervalFactor": 2,
+              "legendFormat": "{{type}}",
+              "refId": "A"
+            }
+          ],
+          "thresholds": [],
+          "timeFrom": null,
+          "timeRegions": [],
+          "timeShift": null,
+          "title": "I/O Limiter Pending Rate",
+          "tooltip": {
+            "shared": true,
+            "sort": 0,
+            "value_type": "individual"
+          },
+          "type": "graph",
+          "xaxis": {
+            "buckets": null,
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": []
+          },
+          "yaxes": [
+            {
+              "$$hashKey": "object:230",
+              "decimals": 0,
+              "format": "ops",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": "0",
+              "show": true
+            },
+            {
+              "$$hashKey": "object:231",
+              "format": "s",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": true
+            }
+          ],
+          "yaxis": {
+            "align": false,
+            "alignLevel": null
+          }
+        },
+        {
+          "aliasColors": {},
+          "bars": false,
+          "dashLength": 10,
+          "dashes": false,
+          "datasource": "${DS_TEST-CLUSTER}",
+          "description": "I/O Limiter current pending count.",
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
+          "fill": 1,
+          "fillGradient": 0,
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 70
           },
           "hiddenSeries": false,
           "id": 86,
@@ -7239,7 +7349,12 @@
           "pointradius": 2,
           "points": false,
           "renderer": "flot",
-          "seriesOverrides": [],
+          "seriesOverrides": [
+            {
+              "alias": "/pending/",
+              "yaxis": 2
+            }
+          ],
           "spaceLength": 10,
           "stack": false,
           "steppedLine": false,
@@ -7249,15 +7364,16 @@
               "format": "time_series",
               "interval": "",
               "intervalFactor": 1,
-              "legendFormat": "other-{{instance}}",
-              "refId": "A"
+              "legendFormat": "other-current-{{instance}}",
+              "refId": "A",
+              "hide": true
             },
             {
               "exemplar": true,
               "expr": "avg(tiflash_system_current_metric_IOLimiterPendingBgWriteReq{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}) by (instance)",
               "hide": false,
               "interval": "",
-              "legendFormat": "bgwrite-{{instance}}",
+              "legendFormat": "bgwrite-current-{{instance}}",
               "refId": "B"
             },
             {
@@ -7265,7 +7381,7 @@
               "expr": "avg(tiflash_system_current_metric_IOLimiterPendingFgWriteReq{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}) by (instance)",
               "hide": false,
               "interval": "",
-              "legendFormat": "fgwrite-{{instance}}",
+              "legendFormat": "fgwrite-current-{{instance}}",
               "refId": "C"
             },
             {
@@ -7273,7 +7389,7 @@
               "expr": "avg(tiflash_system_current_metric_IOLimiterPendingBgReadReq{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}) by (instance)",
               "hide": false,
               "interval": "",
-              "legendFormat": "bgread-{{instance}}",
+              "legendFormat": "bgread-current-{{instance}}",
               "refId": "D"
             },
             {
@@ -7281,15 +7397,31 @@
               "expr": "avg(tiflash_system_current_metric_IOLimiterPendingFgReadReq{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}) by (instance)",
               "hide": false,
               "interval": "",
-              "legendFormat": "fgread-{{instance}}",
+              "legendFormat": "fgread-current-{{instance}}",
               "refId": "E"
+            },
+            {
+              "exemplar": true,
+              "expr": "histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_storage_io_limiter_pending_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m]))) by (le, type) / 1000000000)",
+              "hide": false,
+              "interval": "",
+              "legendFormat": "{{type}}-pending-max",
+              "refId": "F"
+            },
+            {
+              "exemplar": true,
+              "expr": "histogram_quantile(0.99, sum(rate(tiflash_storage_io_limiter_pending_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le, type))",
+              "hide": false,
+              "interval": "",
+              "legendFormat": "{{type}}-pending-P99",
+              "refId": "G"
             }
           ],
           "thresholds": [],
           "timeFrom": null,
           "timeRegions": [],
           "timeShift": null,
-          "title": "I/O Limiter Pending Tasks",
+          "title": "I/O Limiter Current Pending Count and Duration",
           "tooltip": {
             "shared": true,
             "sort": 0,
@@ -7314,7 +7446,7 @@
               "show": true
             },
             {
-              "format": "short",
+              "format": "s",
               "label": null,
               "logBase": 1,
               "max": null,

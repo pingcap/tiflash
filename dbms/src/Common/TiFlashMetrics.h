@@ -277,7 +277,17 @@ namespace DB
     M(tiflash_storage_read_thread_seconds, "Bucketed histogram of read thread", Histogram,                                                \
         F(type_merged_task, {{"type", "merged_task"}}, ExpBuckets{0.001, 2, 20}))                                                         \
     M(tiflash_mpp_task_manager, "The gauge of mpp task manager", Gauge,                                                                   \
-        F(type_mpp_query_count, {"type", "mpp_query_count"}))
+        F(type_mpp_query_count, {"type", "mpp_query_count"}))                                                                             \
+    M(tiflash_storage_io_limiter_pending_seconds, "I/O limiter pending duration in seconds", Histogram,                                   \
+        F(type_fg_read, {{"type", "fg_read"}}, ExpBuckets{0.001, 2, 20}),                                                                 \
+        F(type_bg_read, {{"type", "bg_read"}}, ExpBuckets{0.001, 2, 20}),                                                                 \
+        F(type_fg_write, {{"type", "fg_write"}}, ExpBuckets{0.001, 2, 20}),                                                               \
+        F(type_bg_write, {{"type", "bg_write"}}, ExpBuckets{0.001, 2, 20}))                                                               \
+    M(tiflash_storage_io_limiter_pending_count, "I/O limiter pending count", Counter,                                                     \
+        F(type_fg_read, {"type", "fg_read"}),                                                                                             \
+        F(type_bg_read, {"type", "bg_read"}),                                                                                             \
+        F(type_fg_write, {"type", "fg_write"}),                                                                                           \
+        F(type_bg_write, {"type", "bg_write"}))
 
 // clang-format on
 

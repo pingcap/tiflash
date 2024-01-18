@@ -14,7 +14,6 @@
 
 #pragma once
 
-#include <Common/Logger.h>
 #include <Core/Types.h>
 
 #include <tuple>
@@ -31,6 +30,9 @@ class LayeredConfiguration;
 
 namespace DB
 {
+class Logger;
+using LoggerPtr = std::shared_ptr<Logger>;
+
 struct StorageIORateLimitConfig
 {
 public:
