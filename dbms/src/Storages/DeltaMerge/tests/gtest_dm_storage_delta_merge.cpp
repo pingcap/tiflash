@@ -34,7 +34,7 @@
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/DeltaTree.h>
 #include <Storages/DeltaMerge/ScanContext.h>
-#include <Storages/DeltaMerge/StoragePool.h>
+#include <Storages/DeltaMerge/StoragePool/StoragePool.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
 #include <Storages/KVStore/Decode/TiKVRange.h>
 #include <Storages/KVStore/MultiRaft/RegionRangeKeys.h>
