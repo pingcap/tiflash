@@ -23,7 +23,7 @@
 #include <Poco/PatternFormatter.h>
 #include <Server/RaftConfigParser.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h>
-#include <Storages/DeltaMerge/StoragePool.h>
+#include <Storages/DeltaMerge/StoragePool/StoragePool.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/S3/S3Common.h>
 #include <TestUtils/TiFlashTestEnv.h>
