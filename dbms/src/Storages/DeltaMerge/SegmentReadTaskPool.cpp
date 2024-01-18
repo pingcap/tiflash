@@ -162,7 +162,45 @@ BlockInputStreamPtr SegmentReadTaskPool::buildInputStream(SegmentReadTaskPtr & t
     return stream;
 }
 
+<<<<<<< HEAD
 void SegmentReadTaskPool::finishSegment(const SegmentPtr & seg)
+=======
+SegmentReadTaskPool::SegmentReadTaskPool(
+    int extra_table_id_index_,
+    const ColumnDefines & columns_to_read_,
+    const PushDownFilterPtr & filter_,
+    uint64_t max_version_,
+    size_t expected_block_size_,
+    ReadMode read_mode_,
+    SegmentReadTasks && tasks_,
+    AfterSegmentRead after_segment_read_,
+    const String & tracing_id,
+    bool enable_read_thread_,
+    Int64 num_streams_,
+    const String & res_group_name_)
+    : pool_id(nextPoolId())
+    , mem_tracker(current_memory_tracker == nullptr ? nullptr : current_memory_tracker->shared_from_this())
+    , extra_table_id_index(extra_table_id_index_)
+    , columns_to_read(columns_to_read_)
+    , filter(filter_)
+    , max_version(max_version_)
+    , expected_block_size(expected_block_size_)
+    , read_mode(read_mode_)
+    , tasks_wrapper(enable_read_thread_, std::move(tasks_))
+    , after_segment_read(after_segment_read_)
+    , log(Logger::get(tracing_id))
+    , unordered_input_stream_ref_count(0)
+    , exception_happened(false)
+    // If the queue is too short, only 1 in the extreme case, it may cause the computation thread
+    // to encounter empty queues frequently, resulting in too much waiting and thread context switching.
+    // We limit the length of block queue to be 1.5 times of `num_streams_`, and in the extreme case,
+    // when `num_streams_` is 1, `block_slot_limit` is at least 2.
+    , block_slot_limit(std::ceil(num_streams_ * 1.5))
+    // Limiting the minimum number of reading segments to 2 is to avoid, as much as possible,
+    // situations where the computation may be faster and the storage layer may not be able to keep up.
+    , active_segment_limit(std::max(num_streams_, 2))
+    , res_group_name(res_group_name_)
+>>>>>>> 1614f4ad44 (Storages: Update the length of Block queue and the number of read threads (#8702))
 {
     after_segment_read(dm_context, seg);
     bool pool_finished = false;
