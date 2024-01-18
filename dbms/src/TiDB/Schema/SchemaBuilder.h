@@ -15,13 +15,15 @@
 #pragma once
 
 #include <Interpreters/Context_fwd.h>
-#include <Storages/KVStore/TMTStorages.h>
+#include <Storages/KVStore/Types.h>
 #include <TiDB/Schema/DatabaseInfoCache.h>
 #include <TiDB/Schema/SchemaGetter.h>
 #include <TiDB/Schema/TableIDMap.h>
 
 namespace DB
 {
+class IManageableStorage;
+using ManageableStoragePtr = std::shared_ptr<IManageableStorage>;
 
 template <typename Getter, typename NameMapper>
 struct SchemaBuilder
@@ -73,12 +75,16 @@ private:
 
     void applyRecoverDatabase(DatabaseID database_id);
 
-    void applyCreateTable(DatabaseID database_id, TableID table_id);
-    void applyCreateStorageInstance(DatabaseID database_id, const TiDB::TableInfoPtr & table_info, bool is_tombstone);
+    void applyCreateTable(DatabaseID database_id, TableID table_id, std::string_view action);
+    void applyCreateStorageInstance(
+        DatabaseID database_id,
+        const TiDB::TableInfoPtr & table_info,
+        bool is_tombstone,
+        std::string_view action);
 
-    void applyDropTable(DatabaseID database_id, TableID table_id);
+    void applyDropTable(DatabaseID database_id, TableID table_id, std::string_view action);
     /// Parameter schema_name should be mapped.
-    void applyDropPhysicalTable(const String & db_name, TableID table_id);
+    void applyDropPhysicalTable(const String & db_name, TableID table_id, std::string_view action);
 
     void applyRecoverTable(DatabaseID database_id, TiDB::TableID table_id);
     void applyRecoverLogicalTable(DatabaseID database_id, const TiDB::TableInfoPtr & table_info);
