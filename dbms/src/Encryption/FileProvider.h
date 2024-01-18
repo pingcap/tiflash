@@ -14,13 +14,11 @@
 
 #pragma once
 
+#include <BaseFile/fwd.h>
 #include <Core/Types.h>
 #include <Encryption/BlockAccessCipherStream.h>
 #include <Encryption/FileProvider_fwd.h>
 #include <Encryption/KeyManager.h>
-#include <Encryption/RandomAccessFile.h>
-#include <Encryption/WritableFile.h>
-#include <Encryption/WriteReadableFile.h>
 #include <Storages/Page/PageDefinesBase.h>
 
 

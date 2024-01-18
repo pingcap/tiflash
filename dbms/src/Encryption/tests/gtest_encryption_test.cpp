@@ -12,6 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <BaseFile/PosixRandomAccessFile.h>
+#include <BaseFile/PosixWritableFile.h>
+#include <BaseFile/PosixWriteReadableFile.h>
+#include <BaseFile/WriteReadableFile.h>
 #include <Common/RandomData.h>
 #include <Encryption/AESCTRCipherStream.h>
 #include <Encryption/EncryptedRandomAccessFile.h>
@@ -20,10 +24,6 @@
 #include <Encryption/FileProvider.h>
 #include <Encryption/MasterKey.h>
 #include <Encryption/MockKeyManager.h>
-#include <Encryption/PosixRandomAccessFile.h>
-#include <Encryption/PosixWritableFile.h>
-#include <Encryption/PosixWriteReadableFile.h>
-#include <Encryption/WriteReadableFile.h>
 #include <Storages/KVStore/FFI/FileEncryption.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <gtest/gtest.h>

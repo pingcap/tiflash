@@ -14,8 +14,8 @@
 
 #pragma once
 
+#include <BaseFile/RandomAccessFile.h>
 #include <Encryption/AESCTRCipherStream.h>
-#include <Encryption/RandomAccessFile.h>
 
 #include <string>
 

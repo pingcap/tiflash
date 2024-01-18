@@ -14,8 +14,9 @@
 
 #pragma once
 
+#include <BaseFile/RandomAccessFile.h>
 #include <Common/Exception.h>
-#include <Encryption/RandomAccessFile.h>
+#include <common/likely.h>
 #include <common/types.h>
 
 namespace DB
