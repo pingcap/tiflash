@@ -16,7 +16,7 @@
 
 #include <DataStreams/IBlockOutputStream.h>
 #include <DataStreams/MarkInCompressedFile.h>
-#include <Encryption/createWriteBufferFromFileBaseByFileProvider.h>
+#include <Encryption/ChecksumWriteBufferBuilder.h>
 #include <IO/CompressedWriteBuffer.h>
 #include <IO/WriteBufferFromOStream.h>
 #include <Storages/DeltaMerge/DMChecksumConfig.h>
@@ -53,17 +53,16 @@ public:
             FileProviderPtr & file_provider,
             const WriteLimiterPtr & write_limiter_,
             bool do_index)
-            : plain_file(WriteBufferByFileProviderBuilder(
-                             dmfile->configuration.has_value(),
-                             file_provider,
-                             dmfile->colDataPath(file_base_name),
-                             dmfile->encryptionDataPath(file_base_name),
-                             false,
-                             write_limiter_)
-                             .with_buffer_size(max_compress_block_size)
-                             .with_checksum_algorithm(detail::getAlgorithmOrNone(*dmfile))
-                             .with_checksum_frame_size(detail::getFrameSizeOrDefault(*dmfile))
-                             .build())
+            : plain_file(ChecksumWriteBufferBuilder::build(
+                dmfile->configuration.has_value(),
+                file_provider,
+                dmfile->colDataPath(file_base_name),
+                dmfile->encryptionDataPath(file_base_name),
+                false,
+                write_limiter_,
+                detail::getAlgorithmOrNone(*dmfile),
+                detail::getFrameSizeOrDefault(*dmfile),
+                max_compress_block_size))
             , compressed_buf(
                   dmfile->configuration ? std::unique_ptr<WriteBuffer>(
                       new CompressedWriteBuffer<false>(*plain_file, compression_settings))
@@ -73,17 +72,16 @@ public:
         {
             if (!dmfile->useMetaV2())
             {
-                mark_file
-                    = WriteBufferByFileProviderBuilder( // will not used in DMFileFormat::V3, could be removed when v3 is default
-                          dmfile->configuration.has_value(),
-                          file_provider,
-                          dmfile->colMarkPath(file_base_name),
-                          dmfile->encryptionMarkPath(file_base_name),
-                          false,
-                          write_limiter_)
-                          .with_checksum_algorithm(detail::getAlgorithmOrNone(*dmfile))
-                          .with_checksum_frame_size(detail::getFrameSizeOrDefault(*dmfile))
-                          .build();
+                mark_file = ChecksumWriteBufferBuilder::
+                    build( // will not used in DMFileFormat::V3, could be removed when v3 is default
+                        dmfile->configuration.has_value(),
+                        file_provider,
+                        dmfile->colMarkPath(file_base_name),
+                        dmfile->encryptionMarkPath(file_base_name),
+                        false,
+                        write_limiter_,
+                        detail::getAlgorithmOrNone(*dmfile),
+                        detail::getFrameSizeOrDefault(*dmfile));
             }
             else
             {

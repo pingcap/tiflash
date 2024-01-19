@@ -16,7 +16,6 @@
 #include <Common/RedactHelpers.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Encryption/FileProvider.h>
-#include <Encryption/createReadBufferFromFileBaseByFileProvider.h>
 #include <IO/WriteHelpers.h>
 #include <Poco/DirectoryIterator.h>
 #include <Poco/File.h>
@@ -175,16 +174,11 @@ LogReaderPtr WALStoreReader::createLogReader(
     Poco::File f(fullname);
     const auto file_size = f.getSize();
     LOG_DEBUG(logger, "Open log file for reading, file={} size={}", fullname, file_size);
-
-    auto read_buf = createReadBufferFromFileBaseByFileProvider(
-        provider,
+    auto read_buf = provider->newReadBufferFromRandomAccessFile(
         fullname,
         EncryptionPath{fullname, ""},
-        /*estimated_size*/ Format::BLOCK_SIZE,
-        /*aio_threshold*/ 0,
-        /*read_limiter*/ read_limiter,
-        /*buffer_size*/ Format::BLOCK_SIZE // Must be `Format::BLOCK_SIZE`
-    );
+        Format::BLOCK_SIZE, // Must be `Format::BLOCK_SIZE`
+        read_limiter);
     return std::make_unique<LogReader>(
         std::move(read_buf),
         reporter,

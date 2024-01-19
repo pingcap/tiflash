@@ -16,7 +16,7 @@
 #include <Common/StringUtils/StringRefUtils.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/escapeForFileName.h>
-#include <Encryption/createReadBufferFromFileBaseByFileProvider.h>
+#include <Encryption/ChecksumReadBufferBuilder.h>
 #include <IO/IOSWrapper.h>
 #include <IO/ReadBufferFromString.h>
 #include <IO/ReadHelpers.h>
@@ -529,7 +529,7 @@ void DMFile::readPackStat(const FileProviderPtr & file_provider, const MetaPackI
     const auto path = packStatPath();
     if (configuration)
     {
-        auto buf = createReadBufferFromFileBaseByFileProvider(
+        auto buf = ChecksumReadBufferBuilder::build(
             file_provider,
             path,
             encryptionPackStatPath(),

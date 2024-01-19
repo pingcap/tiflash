@@ -17,7 +17,7 @@
 #include <Common/Exception.h>
 #include <Common/Logger.h>
 #include <Common/TiFlashMetrics.h>
-#include <Encryption/createReadBufferFromFileBaseByFileProvider.h>
+#include <Encryption/ChecksumReadBufferBuilder.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/Filter/FilterHelper.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
@@ -295,7 +295,7 @@ private:
 
                 buffer->read(reinterpret_cast<char *>(raw_data.data()), data_size);
 
-                auto buf = createReadBufferFromData(
+                auto buf = ChecksumReadBufferBuilder::build(
                     std::move(raw_data),
                     dmfile->colDataPath(file_name_base),
                     dmfile->getConfiguration()->getChecksumFrameLength(),
@@ -310,7 +310,7 @@ private:
             }
             else
             { // v2
-                auto index_buf = createReadBufferFromFileBaseByFileProvider(
+                auto index_buf = ChecksumReadBufferBuilder::build(
                     file_provider,
                     dmfile->colIndexPath(file_name_base),
                     dmfile->encryptionIndexPath(file_name_base),

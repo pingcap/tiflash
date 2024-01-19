@@ -12,15 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Encryption/createReadBufferFromFileBaseByFileProvider.h>
-#include <IO/ReadBufferFromRandomAccessFile.h>
-
-#if !defined(__APPLE__) && !defined(__FreeBSD__) && !defined(_MSC_VER)
-#include <IO/ReadBufferAIO.h>
-#endif
-#include <Common/ProfileEvents.h>
-#include <IO/ChecksumBuffer.h>
-#include <Storages/S3/MemoryRandomAccessFile.h>
+#include <BaseFile/MemoryRandomAccessFile.h>
+#include <Encryption/ChecksumBuffer.h>
+#include <Encryption/ChecksumReadBufferBuilder.h>
 
 namespace DB
 {
@@ -29,31 +23,7 @@ namespace ErrorCodes
 extern const int NOT_IMPLEMENTED;
 }
 
-std::unique_ptr<ReadBufferFromFileBase> createReadBufferFromFileBaseByFileProvider(
-    FileProviderPtr & file_provider,
-    const std::string & filename_,
-    const EncryptionPath & encryption_path_,
-    size_t estimated_size,
-    size_t aio_threshold,
-    const ReadLimiterPtr & read_limiter,
-    size_t buffer_size_,
-    int flags_,
-    char * existing_memory_,
-    size_t alignment)
-{
-    if ((aio_threshold == 0) || (estimated_size < aio_threshold))
-    {
-        auto file = file_provider->newRandomAccessFile(filename_, encryption_path_, read_limiter, flags_);
-        return std::make_unique<ReadBufferFromRandomAccessFile>(file, buffer_size_, existing_memory_, alignment);
-    }
-    else
-    {
-        // TODO: support encryption when AIO enabled
-        throw Exception("AIO is not implemented when create file using FileProvider", ErrorCodes::NOT_IMPLEMENTED);
-    }
-}
-
-std::unique_ptr<ReadBufferFromFileBase> createReadBufferFromFileBaseByFileProvider(
+std::unique_ptr<ReadBufferFromFileBase> ChecksumReadBufferBuilder::build(
     const FileProviderPtr & file_provider,
     const std::string & filename_,
     const EncryptionPath & encryption_path_,
@@ -82,7 +52,7 @@ std::unique_ptr<ReadBufferFromFileBase> createReadBufferFromFileBaseByFileProvid
 }
 
 
-std::unique_ptr<ReadBufferFromFileBase> createReadBufferFromData(
+std::unique_ptr<ReadBufferFromFileBase> ChecksumReadBufferBuilder::build(
     String && data,
     const String & file_name,
     size_t estimated_size,

@@ -52,10 +52,7 @@ private:
 private:
     WritableFilePtr file;
 
-    friend std::unique_ptr<WriteBufferFromFileBase> createWriteBufferFromFileBaseByWriterBuffer(
-        std::unique_ptr<WriteBufferFromWritableFile> & writer_buffer,
-        ChecksumAlgo checksum_algorithm,
-        size_t checksum_frame_size);
+    friend class ChecksumWriteBufferBuilder;
 };
 
 using WriteBufferFromWritableFilePtr = std::unique_ptr<WriteBufferFromWritableFile>;

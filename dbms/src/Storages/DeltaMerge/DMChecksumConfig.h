@@ -15,7 +15,7 @@
 #pragma once
 #include <Common/TiFlashBuildInfo.h>
 #include <Common/TiFlashException.h>
-#include <IO/ChecksumBuffer.h>
+#include <Encryption/ChecksumBuffer.h>
 #include <Interpreters/Context_fwd.h>
 
 #include <map>

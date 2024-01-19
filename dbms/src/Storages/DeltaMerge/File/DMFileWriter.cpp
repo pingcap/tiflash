@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include <Common/TiFlashException.h>
-#include <Encryption/createWriteBufferFromFileBaseByFileProvider.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/File/DMFileWriter.h>
 #include <Storages/S3/S3Common.h>
@@ -94,23 +93,18 @@ DMFileWriter::WriteBufferFromFileBasePtr DMFileWriter::createMetaV2File()
 
 DMFileWriter::WriteBufferFromFileBasePtr DMFileWriter::createPackStatsFile()
 {
-    return dmfile->configuration ? createWriteBufferFromFileBaseByFileProvider(
-               file_provider,
-               dmfile->packStatPath(),
-               dmfile->encryptionPackStatPath(),
-               /*create_new_encryption_info*/ true,
-               write_limiter,
-               dmfile->configuration->getChecksumAlgorithm(),
-               dmfile->configuration->getChecksumFrameLength())
-                                 : createWriteBufferFromFileBaseByFileProvider(
-                                     file_provider,
-                                     dmfile->packStatPath(),
-                                     dmfile->encryptionPackStatPath(),
-                                     /*create_new_encryption_info*/ true,
-                                     write_limiter,
-                                     0,
-                                     0,
-                                     options.max_compress_block_size);
+    return ChecksumWriteBufferBuilder::build(
+        dmfile->configuration.has_value(),
+        file_provider,
+        dmfile->packStatPath(),
+        dmfile->encryptionPackStatPath(),
+        /*create_new_encryption_info*/ true,
+        write_limiter,
+        dmfile->configuration->getChecksumAlgorithm(),
+        dmfile->configuration->getChecksumFrameLength(),
+        /*flags*/ 1,
+        /*mode*/ 0666,
+        options.max_compress_block_size);
 }
 
 void DMFileWriter::addStreams(ColId col_id, DataTypePtr type, bool do_index)
@@ -330,7 +324,7 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
 
                 auto fname = dmfile->colIndexFileName(stream_name);
 
-                auto buffer = createWriteBufferFromFileBaseByWriterBuffer(
+                auto buffer = ChecksumWriteBufferBuilder::build(
                     merged_file.buffer,
                     dmfile->configuration->getChecksumAlgorithm(),
                     dmfile->configuration->getChecksumFrameLength());
@@ -352,7 +346,7 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
 
                 auto fname = dmfile->colMarkFileName(stream_name);
 
-                auto buffer = createWriteBufferFromFileBaseByWriterBuffer(
+                auto buffer = ChecksumWriteBufferBuilder::build(
                     merged_file.buffer,
                     dmfile->configuration->getChecksumAlgorithm(),
                     dmfile->configuration->getChecksumFrameLength());
@@ -423,45 +417,29 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
 
             if (stream->minmaxes)
             {
-                if (!dmfile->configuration)
-                {
-                    auto buf = file_provider->newWriteBufferFromWritableFile(
-                        dmfile->colIndexPath(stream_name),
-                        dmfile->encryptionIndexPath(stream_name),
-                        false,
-                        write_limiter);
-                    stream->minmaxes->write(*type, *buf);
-                    buf->sync();
-                    // Ignore data written in index file when the dmfile is empty.
-                    // This is ok because the index file in this case is tiny, and we already ignore other small files like meta and pack stat file.
-                    // The motivation to do this is to show a zero `stable_size_on_disk` for empty segments,
-                    // and we cannot change the index file format for empty dmfile because of backward compatibility.
-                    index_bytes = buf->getMaterializedBytes();
-                    bytes_written += is_empty_file ? 0 : index_bytes;
-                }
-                else
-                {
-                    auto buf = createWriteBufferFromFileBaseByFileProvider(
-                        file_provider,
-                        dmfile->colIndexPath(stream_name),
-                        dmfile->encryptionIndexPath(stream_name),
-                        false,
-                        write_limiter,
-                        dmfile->configuration->getChecksumAlgorithm(),
-                        dmfile->configuration->getChecksumFrameLength());
-                    stream->minmaxes->write(*type, *buf);
-                    buf->sync();
-                    // Ignore data written in index file when the dmfile is empty.
-                    // This is ok because the index file in this case is tiny, and we already ignore other small files like meta and pack stat file.
-                    // The motivation to do this is to show a zero `stable_size_on_disk` for empty segments,
-                    // and we cannot change the index file format for empty dmfile because of backward compatibility.
-                    index_bytes = buf->getMaterializedBytes();
-                    bytes_written += is_empty_file ? 0 : index_bytes;
-
+                auto buf = ChecksumWriteBufferBuilder::build(
+                    dmfile->configuration.has_value(),
+                    file_provider,
+                    dmfile->colIndexPath(stream_name),
+                    dmfile->encryptionIndexPath(stream_name),
+                    false,
+                    write_limiter,
+                    dmfile->configuration->getChecksumAlgorithm(),
+                    dmfile->configuration->getChecksumFrameLength());
+                stream->minmaxes->write(*type, *buf);
+                buf->sync();
+                // Ignore data written in index file when the dmfile is empty.
+                // This is ok because the index file in this case is tiny, and we already ignore other small files like meta and pack stat file.
+                // The motivation to do this is to show a zero `stable_size_on_disk` for empty segments,
+                // and we cannot change the index file format for empty dmfile because of backward compatibility.
+                index_bytes = buf->getMaterializedBytes();
+                bytes_written += is_empty_file ? 0 : index_bytes;
 #ifndef NDEBUG
+                if (dmfile->configuration)
+                {
                     examine_buffer_size(*buf, *this->file_provider);
-#endif
                 }
+#endif
             }
         }
     };

@@ -19,11 +19,11 @@
 #include <BaseFile/PosixRandomAccessFile.h>
 #include <BaseFile/PosixWritableFile.h>
 #include <BaseFile/RateLimiter.h>
+#include <Encryption/ChecksumBuffer.h>
+#include <Encryption/ChecksumWriteBufferBuilder.h>
 #include <Encryption/CompressedReadBufferFromFileProvider.h>
 #include <Encryption/FileProvider.h>
 #include <Encryption/MockKeyManager.h>
-#include <Encryption/createWriteBufferFromFileBaseByFileProvider.h>
-#include <IO/ChecksumBuffer.h>
 #include <IO/CompressedReadBuffer.h>
 #include <IO/CompressedWriteBuffer.h>
 #include <Poco/File.h>
@@ -256,7 +256,8 @@ void runStackingTest()
     {
         auto [data, seed] = randomData(size);
         {
-            auto buffer = createWriteBufferFromFileBaseByFileProvider(
+            auto buffer = ChecksumWriteBufferBuilder::build(
+                true,
                 provider,
                 filename,
                 {"/tmp/test.enc", "test.enc"},
@@ -313,7 +314,8 @@ void runStackedSeekingTest()
     std::vector<std::tuple<std::vector<char>, size_t, size_t>> slices;
     auto [data, seed] = randomData(size);
     {
-        auto buffer = createWriteBufferFromFileBaseByFileProvider(
+        auto buffer = ChecksumWriteBufferBuilder::build(
+            true,
             provider,
             filename,
             {"/tmp/test.enc", "test.enc"},
