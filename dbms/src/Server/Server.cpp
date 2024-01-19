@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <AggregateFunctions/registerAggregateFunctions.h>
+#include <BaseFile/RateLimiter.h>
 #include <Common/CPUAffinityManager.h>
 #include <Common/ComputeLabelHolder.h>
 #include <Common/Config/ConfigReloader.h>
@@ -41,7 +42,6 @@
 #include <Encryption/FileProvider.h>
 #include <Encryption/KeyspacesKeymanager.h>
 #include <Encryption/MockKeyManager.h>
-#include <Encryption/RateLimiter.h>
 #include <Flash/DiagnosticsService.h>
 #include <Flash/FlashService.h>
 #include <Flash/Mpp/GRPCCompletionQueuePool.h>
