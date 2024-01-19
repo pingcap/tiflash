@@ -26,18 +26,18 @@ namespace DB
 
 struct EngineStoreServerWrap;
 
-/// KeyspacesKeymanager is a KeyManager implementation that designed for Cloud Storage Engine.
+/// KeyspacesKeyManager is a KeyManager implementation that designed for Cloud Storage Engine.
 /// It will store all encryption keys which have been encrypted using MasterKey in PageStorage.
-class KeyspacesKeymanager : public KeyManager
+class KeyspacesKeyManager : public KeyManager
 {
 public:
     static constexpr UInt64 ENCRYPTION_KEY_RESERVED_PAGEU64_ID = std::numeric_limits<UInt64>::max();
 
-    explicit KeyspacesKeymanager(EngineStoreServerWrap * tiflash_instance_wrap_);
+    explicit KeyspacesKeyManager(EngineStoreServerWrap * tiflash_instance_wrap_);
 
     void setUniversalPageStorage(const UniversalPageStoragePtr & ps_write_) { ps_write = ps_write_; }
 
-    ~KeyspacesKeymanager() override = default;
+    ~KeyspacesKeyManager() override = default;
 
     FileEncryptionInfo getInfo(const EncryptionPath & ep) override;
 

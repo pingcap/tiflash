@@ -81,7 +81,7 @@ public:
 
     // Drop encryption info of keyspace_id.
     // Note: after calling this method, the keyspace encryption key can not be found anymore.
-    // Only for KeyspacesKeymanager now.
+    // Only for KeyspacesKeyManager now.
     void dropEncryptionInfo(KeyspaceID keyspace_id) const;
 
     // Encrypt/Decrypt page data in place, using encryption_path_ to find the encryption info

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Encryption/KeyspacesKeymanager.h>
+#include <Encryption/KeyspacesKeyManager.h>
 #include <IO/MemoryReadWriteBuffer.h>
 #include <Poco/Path.h>
 #include <Storages/KVStore/FFI/FileEncryption.h>
@@ -25,13 +25,13 @@
 namespace DB
 {
 
-KeyspacesKeymanager::KeyspacesKeymanager(EngineStoreServerWrap * tiflash_instance_wrap_)
+KeyspacesKeyManager::KeyspacesKeyManager(EngineStoreServerWrap * tiflash_instance_wrap_)
     : tiflash_instance_wrap(tiflash_instance_wrap_)
     , keyspace_id_to_key(1024, 1024)
     , master_key(std::make_unique<MasterKey>(tiflash_instance_wrap->proxy_helper->getMasterKey()))
 {}
 
-FileEncryptionInfo KeyspacesKeymanager::getInfo(const EncryptionPath & ep)
+FileEncryptionInfo KeyspacesKeyManager::getInfo(const EncryptionPath & ep)
 {
     const auto keyspace_id = ep.keyspace_id;
     if (unlikely(keyspace_id == NullspaceID)
@@ -69,7 +69,7 @@ FileEncryptionInfo KeyspacesKeymanager::getInfo(const EncryptionPath & ep)
     return key->generateEncryptionInfo(String(reinterpret_cast<const char *>(md5_value)));
 }
 
-FileEncryptionInfo KeyspacesKeymanager::newInfo(const EncryptionPath & ep)
+FileEncryptionInfo KeyspacesKeyManager::newInfo(const EncryptionPath & ep)
 {
     const auto keyspace_id = ep.keyspace_id;
     if (unlikely(keyspace_id == NullspaceID)
@@ -109,7 +109,7 @@ FileEncryptionInfo KeyspacesKeymanager::newInfo(const EncryptionPath & ep)
     return key->generateEncryptionInfo(String(reinterpret_cast<const char *>(md5_value)));
 }
 
-void KeyspacesKeymanager::deleteInfo(const EncryptionPath & ep, bool /*throw_on_error*/)
+void KeyspacesKeyManager::deleteInfo(const EncryptionPath & ep, bool /*throw_on_error*/)
 {
     const auto keyspace_id = ep.keyspace_id;
     if (unlikely(keyspace_id == NullspaceID)
@@ -118,12 +118,12 @@ void KeyspacesKeymanager::deleteInfo(const EncryptionPath & ep, bool /*throw_on_
     // do nothing
 }
 
-void KeyspacesKeymanager::linkInfo(const EncryptionPath & /*src_ep*/, const EncryptionPath & /*dst_ep*/)
+void KeyspacesKeyManager::linkInfo(const EncryptionPath & /*src_ep*/, const EncryptionPath & /*dst_ep*/)
 {
     throw DB::Exception("linkFile is not supported", ErrorCodes::NOT_IMPLEMENTED);
 }
 
-void KeyspacesKeymanager::deleteKey(KeyspaceID keyspace_id)
+void KeyspacesKeyManager::deleteKey(KeyspaceID keyspace_id)
 {
     if (unlikely(keyspace_id == NullspaceID)
         || (likely(!tiflash_instance_wrap->proxy_helper->getKeyspaceEncryption(keyspace_id))))
@@ -139,7 +139,7 @@ void KeyspacesKeymanager::deleteKey(KeyspaceID keyspace_id)
     keyspace_id_to_key.remove(keyspace_id);
 }
 
-bool KeyspacesKeymanager::isEncryptionEnabled(KeyspaceID keyspace_id)
+bool KeyspacesKeyManager::isEncryptionEnabled(KeyspaceID keyspace_id)
 {
     return keyspace_id != NullspaceID && tiflash_instance_wrap->proxy_helper->getKeyspaceEncryption(keyspace_id);
 }

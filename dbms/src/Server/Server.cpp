@@ -40,7 +40,7 @@
 #include <Core/TiFlashDisaggregatedMode.h>
 #include <Encryption/DataKeyManager.h>
 #include <Encryption/FileProvider.h>
-#include <Encryption/KeyspacesKeymanager.h>
+#include <Encryption/KeyspacesKeyManager.h>
 #include <Encryption/MockKeyManager.h>
 #include <Flash/DiagnosticsService.h>
 #include <Flash/FlashService.h>
@@ -1088,8 +1088,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
         if (enable_encryption && storage_config.s3_config.isS3Enabled())
         {
             LOG_INFO(log, "encryption can be enabled, method is Aes256Ctr");
-            // The UniversalPageStorage has not been init yet, the UniversalPageStoragePtr in KeyspacesKeymanager is nullptr.
-            KeyManagerPtr key_manager = std::make_shared<KeyspacesKeymanager>(&tiflash_instance_wrap);
+            // The UniversalPageStorage has not been init yet, the UniversalPageStoragePtr in KeyspacesKeyManager is nullptr.
+            KeyManagerPtr key_manager = std::make_shared<KeyspacesKeyManager>(&tiflash_instance_wrap);
             global_context->initializeFileProvider(key_manager, true);
         }
         else if (enable_encryption)
