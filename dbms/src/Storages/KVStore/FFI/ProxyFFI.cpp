@@ -544,7 +544,7 @@ FileEncryptionInfo TiFlashRaftProxyHelper::linkFile(const std::string & src, con
 {
     return FileEncryptionInfo(fn_handle_link_file(proxy_ptr, strIntoView(&src), strIntoView(&dst)));
 }
-std::string TiFlashRaftProxyHelper::getMasterKey() const
+String TiFlashRaftProxyHelper::getMasterKey() const
 {
     return String(*cloud_storage_engine_interfaces.fn_get_master_key(proxy_ptr));
 }
