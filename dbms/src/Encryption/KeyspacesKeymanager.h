@@ -33,7 +33,9 @@ class KeyspacesKeymanager : public KeyManager
 public:
     static constexpr UInt64 ENCRYPTION_KEY_RESERVED_PAGEU64_ID = std::numeric_limits<UInt64>::max();
 
-    explicit KeyspacesKeymanager(EngineStoreServerWrap * tiflash_instance_wrap_, UniversalPageStoragePtr & ps_write_);
+    explicit KeyspacesKeymanager(EngineStoreServerWrap * tiflash_instance_wrap_);
+
+    void setUniversalPageStorage(const UniversalPageStoragePtr & ps_write_) { ps_write = ps_write_; }
 
     ~KeyspacesKeymanager() override = default;
 
@@ -53,8 +55,7 @@ public:
 
 private:
     EngineStoreServerWrap * tiflash_instance_wrap;
-    // Note: it is a reference of a shared_ptr point to UniversalPageStorage
-    UniversalPageStoragePtr & ps_write;
+    UniversalPageStoragePtr ps_write = nullptr;
     // cache, keyspace_id -> encryption_key
     LRUCache<KeyspaceID, EncryptionKey> keyspace_id_to_key;
     const MasterKeyPtr master_key;

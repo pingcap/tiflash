@@ -22,6 +22,7 @@
 #include <Encryption/WritableFile.h>
 #include <Encryption/WriteReadableFile.h>
 #include <Storages/Page/PageDefinesBase.h>
+#include <Storages/Page/PageStorage_fwd.h>
 
 
 namespace DB
@@ -81,8 +82,7 @@ public:
     void deleteEncryptionInfo(const EncryptionPath & encryption_path_, bool throw_on_error = true) const;
 
     // Drop encryption info of keyspace_id.
-    // !!!Warn!!: after calling this method, the keyspace encryption key can not be found anymore.
-    // Be catious and make sure there is no data in this keyspace before calling this method.
+    // Note: after calling this method, the keyspace encryption key can not be found anymore.
     // Only for KeyspacesKeymanager now.
     void dropEncryptionInfo(KeyspaceID keyspace_id) const;
 
@@ -119,6 +119,8 @@ public:
         const String & dst_file_path_,
         const EncryptionPath & dst_encryption_path_,
         bool rename_encryption_info_) const;
+
+    void setPageStoragePtrForKeyManager(const UniversalPageStoragePtr & page_storage_ptr_);
 
     ~FileProvider() = default;
 

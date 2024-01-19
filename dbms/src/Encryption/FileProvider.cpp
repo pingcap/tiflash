@@ -301,4 +301,10 @@ void FileProvider::renameFile(
         key_manager->deleteInfo(src_encryption_path_, false);
 }
 
+void FileProvider::setPageStoragePtrForKeyManager(const UniversalPageStoragePtr & page_storage_ptr_)
+{
+    if (auto * keyspaces_key_manager = dynamic_cast<KeyspacesKeymanager *>(key_manager.get()); keyspaces_key_manager)
+        keyspaces_key_manager->setUniversalPageStorage(page_storage_ptr_);
+}
+
 } // namespace DB

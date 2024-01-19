@@ -25,11 +25,8 @@
 namespace DB
 {
 
-KeyspacesKeymanager::KeyspacesKeymanager(
-    EngineStoreServerWrap * tiflash_instance_wrap_,
-    UniversalPageStoragePtr & ps_write_)
+KeyspacesKeymanager::KeyspacesKeymanager(EngineStoreServerWrap * tiflash_instance_wrap_)
     : tiflash_instance_wrap(tiflash_instance_wrap_)
-    , ps_write(ps_write_)
     , keyspace_id_to_key(1024, 1024)
     , master_key(std::make_unique<MasterKey>(tiflash_instance_wrap->proxy_helper->getMasterKey()))
 {}
@@ -48,6 +45,8 @@ FileEncryptionInfo KeyspacesKeymanager::getInfo(const EncryptionPath & ep)
             nullptr,
         };
     }
+
+    RUNTIME_CHECK(ps_write != nullptr);
     auto load_func = [this, keyspace_id]() -> EncryptionKeyPtr {
         const auto page_id = UniversalPageIdFormat::toFullPageId(
             UniversalPageIdFormat::toLocalKVPrefix(UniversalPageIdFormat::LocalKVKeyType::EncryptionKey, keyspace_id),
@@ -85,6 +84,7 @@ FileEncryptionInfo KeyspacesKeymanager::newInfo(const EncryptionPath & ep)
         };
     }
 
+    RUNTIME_CHECK(ps_write != nullptr);
     auto load_func = [this, keyspace_id]() -> EncryptionKeyPtr {
         // Generate new encryption key
         const auto encryption_key = master_key->generateEncryptionKey();
@@ -128,6 +128,8 @@ void KeyspacesKeymanager::deleteKey(KeyspaceID keyspace_id)
     if (unlikely(keyspace_id == NullspaceID)
         || (likely(!tiflash_instance_wrap->proxy_helper->getKeyspaceEncryption(keyspace_id))))
         return;
+
+    RUNTIME_CHECK(ps_write != nullptr);
     const auto page_id = UniversalPageIdFormat::toFullPageId(
         UniversalPageIdFormat::toLocalKVPrefix(UniversalPageIdFormat::LocalKVKeyType::EncryptionKey, keyspace_id),
         ENCRYPTION_KEY_RESERVED_PAGEU64_ID);

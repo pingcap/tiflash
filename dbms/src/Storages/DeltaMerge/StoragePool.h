@@ -15,7 +15,6 @@
 #pragma once
 
 #include <Common/CurrentMetrics.h>
-#include <Common/Exception.h>
 #include <Common/Logger.h>
 #include <Storages/BackgroundProcessingPool.h>
 #include <Storages/DeltaMerge/StoragePool_fwd.h>
@@ -174,16 +173,7 @@ public:
 
     PageIdU64 newDataPageIdForDTFile(StableDiskDelegator & delegator, const char * who);
     PageIdU64 newLogPageId() { return ++max_log_page_id; }
-    PageIdU64 newMetaPageId()
-    {
-        // Reserve the last page id for encryption key
-        RUNTIME_CHECK_MSG( // NOLINT
-            ns_id < std::numeric_limits<UInt64>::max() || max_meta_page_id < std::numeric_limits<UInt64>::max(),
-            "ns_id {}, page_id {} are reserved for keyspace encryption key",
-            ns_id,
-            max_meta_page_id);
-        return ++max_meta_page_id;
-    }
+    PageIdU64 newMetaPageId() { return ++max_meta_page_id; }
 
 #ifndef DBMS_PUBLIC_GTEST
 private:

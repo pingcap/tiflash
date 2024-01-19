@@ -1082,16 +1082,14 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->getSharedContextDisagg()->use_autoscaler = use_autoscaler;
 
     /// Init File Provider
-    // ps_write is a UniversalPageStoragePtr, now it is nullptr, pass it by reference to init KeyspacesKeymanager.
-    // After UniversalPageStorage is init, ps_write will point to the UniversalPageStorage.
-    UniversalPageStoragePtr ps_write;
     if (proxy_conf.is_proxy_runnable)
     {
         const bool enable_encryption = tiflash_instance_wrap.proxy_helper->checkEncryptionEnabled();
         if (enable_encryption && storage_config.s3_config.isS3Enabled())
         {
             LOG_INFO(log, "encryption can be enabled, method is Aes256Ctr");
-            KeyManagerPtr key_manager = std::make_shared<KeyspacesKeymanager>(&tiflash_instance_wrap, ps_write);
+            // The UniversalPageStorage has not been init yet, the UniversalPageStoragePtr in KeyspacesKeymanager is nullptr.
+            KeyManagerPtr key_manager = std::make_shared<KeyspacesKeymanager>(&tiflash_instance_wrap);
             global_context->initializeFileProvider(key_manager, true);
         }
         else if (enable_encryption)
@@ -1315,7 +1313,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
         global_context->initializeWriteNodePageStorageIfNeed(global_context->getPathPool());
         if (auto wn_ps = global_context->tryGetWriteNodePageStorage(); wn_ps != nullptr)
         {
-            ps_write = wn_ps; // now ps_write point to the UniversalPageStorage
+            if (tiflash_instance_wrap.proxy_helper->checkEncryptionEnabled() && storage_config.s3_config.isS3Enabled())
+            {
+                global_context->getFileProvider()->setPageStoragePtrForKeyManager(wn_ps);
+            }
             store_ident = tryGetStoreIdent(wn_ps);
             if (!store_ident)
             {
