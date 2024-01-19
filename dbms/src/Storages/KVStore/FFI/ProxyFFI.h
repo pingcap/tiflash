@@ -41,6 +41,8 @@ class TMTContext;
 struct EngineStoreServerWrap;
 struct TiFlashRaftProxyHelper;
 
+using String = std::string;
+
 struct EngineStoreServerWrap
 {
     TMTContext * tmt{nullptr};
