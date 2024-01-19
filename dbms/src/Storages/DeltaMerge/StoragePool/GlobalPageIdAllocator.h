@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Storages/KVStore/Types.h>
+#include <Storages/Page/PageDefinesBase.h>
 #include <Storages/Page/PageStorage_fwd.h>
 
 #include <atomic>
@@ -41,23 +42,7 @@ public:
     }
 
 private:
-    static void raiseTargetByLowerBound(std::atomic<PageIdU64> & target, PageIdU64 lower_bound)
-    {
-        PageIdU64 old_value = target.load();
-        while (true)
-        {
-            // already satisfied the lower_bound, done.
-            if (old_value > lower_bound)
-                break;
-            // try raise to the lower_bound
-            if (target.compare_exchange_strong(old_value, lower_bound))
-            {
-                // raise success, done.
-                break;
-            }
-            // else the `old_value` is updated, try again
-        }
-    }
+    static void raiseTargetByLowerBound(std::atomic<PageIdU64> & target, PageIdU64 lower_bound);
 
 private:
     std::atomic<PageIdU64> max_log_page_id = 0;

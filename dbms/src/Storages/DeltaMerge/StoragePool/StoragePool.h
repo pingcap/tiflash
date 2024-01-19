@@ -16,6 +16,8 @@
 
 #include <Common/CurrentMetrics.h>
 #include <Common/Logger.h>
+#include <Interpreters/Context_fwd.h>
+#include <Interpreters/Settings_fwd.h>
 #include <Storages/BackgroundProcessingPool.h>
 #include <Storages/DeltaMerge/StoragePool/StoragePool_fwd.h>
 #include <Storages/KVStore/Types.h>
@@ -32,8 +34,6 @@ using WriteLimiterPtr = std::shared_ptr<WriteLimiter>;
 class ReadLimiter;
 using ReadLimiterPtr = std::shared_ptr<ReadLimiter>;
 
-struct Settings;
-class Context;
 class StoragePathPool;
 class PathPool;
 class StableDiskDelegator;
