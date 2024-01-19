@@ -53,9 +53,18 @@ public:
     StoragePool(
         Context & global_ctx,
         KeyspaceID keyspace_id_,
-        NamespaceID ns_id_,
+        NamespaceID table_id_,
         StoragePathPool & storage_path_pool_,
-        const String & name = "");
+        const String & name);
+    
+    // For test
+    StoragePool(
+        Context & global_ctx,
+        KeyspaceID keyspace_id_,
+        NamespaceID table_id_,
+        StoragePathPool & storage_path_pool_,
+        GlobalPageIdAllocatorPtr page_id_allocator_,
+        const String & name);
 
     PageStorageRunMode restore();
 
@@ -63,7 +72,7 @@ public:
 
     KeyspaceID getKeyspaceID() const { return keyspace_id; }
 
-    NamespaceID getNamespaceID() const { return ns_id; }
+    NamespaceID getTableID() const { return table_id; }
 
     PageStorageRunMode getPageStorageRunMode() const { return run_mode; }
 
@@ -149,11 +158,8 @@ private:
     LoggerPtr logger;
 
     PageStorageRunMode run_mode;
-
     const KeyspaceID keyspace_id;
-
-    // whether the three storage instance is owned by this StoragePool
-    const NamespaceID ns_id;
+    const NamespaceID table_id;
 
     StoragePathPool & storage_path_pool;
 
