@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/TiFlashException.h>
+#include <Encryption/WriteBufferFromWritableFileBuilder.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/File/DMFileWriter.h>
 #include <Storages/S3/S3Common.h>
@@ -46,14 +47,12 @@ DMFileWriter::DMFileWriter(
 
     if (dmfile->useMetaV2())
     {
-        auto file = file_provider->newWritableFile(
+        merged_file.buffer = WriteBufferFromWritableFileBuilder::build(
+            file_provider,
             dmfile->mergedPath(0),
             dmfile->encryptionMergedPath(0),
-            false,
-            /*create_new_encryption_info*/ true,
+            /*create_new_encryption_info*/ false,
             write_limiter);
-        merged_file.buffer = std::make_unique<WriteBufferFromWritableFile>(file);
-
         merged_file.file_info = DMFile::MergedFile({0, 0});
     }
 
@@ -82,13 +81,13 @@ DMFileWriter::WriteBufferFromFileBasePtr DMFileWriter::createMetaFile()
 
 DMFileWriter::WriteBufferFromFileBasePtr DMFileWriter::createMetaV2File()
 {
-    auto file = file_provider->newWritableFile(
+    return WriteBufferFromWritableFileBuilder::build(
+        file_provider,
         dmfile->metav2Path(),
         dmfile->encryptionMetav2Path(),
-        /*truncate_if_exists*/ true,
         /*create_new_encryption_info*/ true,
-        write_limiter);
-    return std::make_unique<WriteBufferFromWritableFile>(file, DMFile::meta_buffer_size);
+        write_limiter,
+        DMFile::meta_buffer_size);
 }
 
 DMFileWriter::WriteBufferFromFileBasePtr DMFileWriter::createPackStatsFile()

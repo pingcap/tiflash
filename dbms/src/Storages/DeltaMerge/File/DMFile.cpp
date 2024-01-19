@@ -17,6 +17,7 @@
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/escapeForFileName.h>
 #include <Encryption/ChecksumReadBufferBuilder.h>
+#include <Encryption/WriteBufferFromWritableFileBuilder.h>
 #include <IO/IOSWrapper.h>
 #include <IO/ReadBufferFromString.h>
 #include <IO/ReadHelpers.h>
@@ -362,9 +363,13 @@ void DMFile::writeMeta(const FileProviderPtr & file_provider, const WriteLimiter
     String tmp_meta_path = meta_path + ".tmp";
 
     {
-        auto buf
-            = file_provider
-                  ->newWriteBufferFromWritableFile(tmp_meta_path, encryptionMetaPath(), false, write_limiter, 4096);
+        auto buf = WriteBufferFromWritableFileBuilder::build(
+            file_provider,
+            tmp_meta_path,
+            encryptionMetaPath(),
+            false,
+            write_limiter,
+            4096);
         if (configuration)
         {
             auto digest = configuration->createUnifiedDigest();
@@ -389,7 +394,8 @@ void DMFile::writePackProperty(const FileProviderPtr & file_provider, const Writ
     String property_path = packPropertyPath();
     String tmp_property_path = property_path + ".tmp";
     {
-        auto buf = file_provider->newWriteBufferFromWritableFile(
+        auto buf = WriteBufferFromWritableFileBuilder::build(
+            file_provider,
             tmp_property_path,
             encryptionPackPropertyPath(),
             false,
@@ -417,7 +423,8 @@ void DMFile::writeConfiguration(const FileProviderPtr & file_provider, const Wri
     String config_path = configurationPath();
     String tmp_config_path = config_path + ".tmp";
     {
-        auto buf = file_provider->newWriteBufferFromWritableFile(
+        auto buf = WriteBufferFromWritableFileBuilder::build(
+            file_provider,
             tmp_config_path,
             encryptionConfigurationPath(),
             false,

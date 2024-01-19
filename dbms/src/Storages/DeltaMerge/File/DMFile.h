@@ -15,7 +15,8 @@
 #pragma once
 
 #include <Core/Types.h>
-#include <Encryption/FileProvider.h>
+#include <Encryption/ReadBufferFromRandomAccessFileBuilder.h>
+#include <IO/WriteBufferFromWritableFile.h>
 #include <Poco/File.h>
 #include <Storages/DeltaMerge/ColumnStat.h>
 #include <Storages/DeltaMerge/DMChecksumConfig.h>
@@ -495,7 +496,7 @@ public:
     struct MergedFileWriter
     {
         MergedFile file_info;
-        std::unique_ptr<WriteBufferFromWritableFile> buffer;
+        WriteBufferFromWritableFilePtr buffer;
     };
     PaddedPODArray<MergedFile> merged_files;
     // Filename -> MergedSubFileInfo
@@ -523,13 +524,14 @@ public:
     friend bool ::DTTool::Migrate::needFrameMigration(const DB::DM::DMFile & file, const std::string & target);
 };
 
-inline std::unique_ptr<ReadBufferFromRandomAccessFile> openForRead(
+inline ReadBufferFromRandomAccessFilePtr openForRead(
     const FileProviderPtr & file_provider,
     const String & path,
     const EncryptionPath & encryption_path,
     const size_t & file_size)
 {
-    return file_provider->newReadBufferFromRandomAccessFile(
+    return ReadBufferFromRandomAccessFileBuilder::build(
+        file_provider,
         path,
         encryption_path,
         std::min(static_cast<size_t>(DBMS_DEFAULT_BUFFER_SIZE), file_size));

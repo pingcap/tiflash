@@ -17,6 +17,7 @@
 #include <Common/RedactHelpers.h>
 #include <Core/Defines.h>
 #include <Encryption/EncryptionPath.h>
+#include <Encryption/ReadBufferFromRandomAccessFileBuilder.h>
 #include <IO/ReadBufferFromString.h>
 #include <IO/WriteBuffer.h>
 #include <IO/WriteBufferFromFile.h>
@@ -148,7 +149,8 @@ public:
         const WALRecoveryMode wal_recovery_mode = WALRecoveryMode::TolerateCorruptedTailRecords,
         size_t log_num = 0)
     {
-        auto read_buf = provider->newReadBufferFromRandomAccessFile(
+        auto read_buf = ReadBufferFromRandomAccessFileBuilder::build(
+            provider,
             file_name,
             EncryptionPath{file_name, ""},
             Format::BLOCK_SIZE // Must be `Format::BLOCK_SIZE`
@@ -832,7 +834,8 @@ TEST(LogFileRWTest2, ManuallySync)
     }
     writer->sync();
 
-    auto read_buf = provider->newReadBufferFromRandomAccessFile(
+    auto read_buf = ReadBufferFromRandomAccessFileBuilder::build(
+        provider,
         file_name,
         EncryptionPath{file_name, ""},
         Format::BLOCK_SIZE // Must be `Format::BLOCK_SIZE`

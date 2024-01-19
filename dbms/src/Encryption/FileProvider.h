@@ -18,8 +18,6 @@
 #include <Encryption/BlockAccessCipherStream.h>
 #include <Encryption/FileProvider_fwd.h>
 #include <Encryption/KeyManager.h>
-#include <IO/ReadBufferFromRandomAccessFile.h>
-#include <IO/WriteBufferFromWritableFile.h>
 #include <Storages/Page/PageDefinesBase.h>
 
 
@@ -46,14 +44,6 @@ public:
         const EncryptionPath & encryption_path_,
         const ReadLimiterPtr & read_limiter = nullptr,
         int flags = -1) const;
-    std::unique_ptr<ReadBufferFromRandomAccessFile> newReadBufferFromRandomAccessFile(
-        const std::string & file_name_,
-        const EncryptionPath & encryption_path_,
-        size_t buf_size = DBMS_DEFAULT_BUFFER_SIZE,
-        const ReadLimiterPtr & read_limiter = nullptr,
-        int flags = -1,
-        char * existing_memory = nullptr,
-        size_t alignment = 0) const;
 
     WritableFilePtr newWritableFile(
         const String & file_path_,
@@ -63,16 +53,6 @@ public:
         const WriteLimiterPtr & write_limiter_ = nullptr,
         int flags = -1,
         mode_t mode = 0666) const;
-    std::unique_ptr<WriteBufferFromWritableFile> newWriteBufferFromWritableFile(
-        const std::string & file_name_,
-        const EncryptionPath & encryption_path,
-        bool create_new_encryption_info_ = true,
-        const WriteLimiterPtr & write_limiter_ = nullptr,
-        size_t buf_size = DBMS_DEFAULT_BUFFER_SIZE,
-        int flags = -1,
-        mode_t mode = 0666,
-        char * existing_memory = nullptr,
-        size_t alignment = 0) const;
 
     WriteReadableFilePtr newWriteReadableFile(
         const String & file_path_,

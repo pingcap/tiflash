@@ -14,6 +14,7 @@
 
 #include <Encryption/ChecksumBuffer.h>
 #include <Encryption/ChecksumWriteBufferBuilder.h>
+#include <Encryption/WriteBufferFromWritableFileBuilder.h>
 
 namespace DB
 {
@@ -90,7 +91,8 @@ std::unique_ptr<WriteBufferFromFileBase> ChecksumWriteBufferBuilder::build(
     }
     else
     {
-        return file_provider->newWriteBufferFromWritableFile(
+        return WriteBufferFromWritableFileBuilder::build(
+            file_provider,
             filename_,
             encryption_path_,
             create_new_encryption_info_,
@@ -104,7 +106,7 @@ std::unique_ptr<WriteBufferFromFileBase> ChecksumWriteBufferBuilder::build(
 }
 
 std::unique_ptr<WriteBufferFromFileBase> ChecksumWriteBufferBuilder::build(
-    std::unique_ptr<WriteBufferFromWritableFile> & writer_buffer,
+    WriteBufferFromWritableFilePtr & writer_buffer,
     ChecksumAlgo checksum_algorithm,
     size_t checksum_frame_size)
 {

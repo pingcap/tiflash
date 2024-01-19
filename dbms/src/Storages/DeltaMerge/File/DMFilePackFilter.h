@@ -261,7 +261,8 @@ private:
                 {dmfile->getReadFileSize(col_id, dmfile->colIndexFileName(file_name_base)), scan_context});
             if (!dmfile->configuration) // v1
             {
-                auto index_buf = file_provider->newReadBufferFromRandomAccessFile(
+                auto index_buf = ReadBufferFromRandomAccessFileBuilder::build(
+                    file_provider,
                     dmfile->colIndexPath(file_name_base),
                     dmfile->encryptionIndexPath(file_name_base),
                     std::min(static_cast<size_t>(DBMS_DEFAULT_BUFFER_SIZE), index_file_size),
@@ -283,7 +284,8 @@ private:
                 auto offset = info->second.offset;
                 auto data_size = info->second.size;
 
-                auto buffer = file_provider->newReadBufferFromRandomAccessFile(
+                auto buffer = ReadBufferFromRandomAccessFileBuilder::build(
+                    file_provider,
                     file_path,
                     encryp_path,
                     dmfile->getConfiguration()->getChecksumFrameLength(),

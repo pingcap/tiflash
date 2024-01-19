@@ -16,6 +16,7 @@
 #include <Common/FmtUtils.h>
 #include <Common/formatReadable.h>
 #include <Encryption/ChecksumReadBufferBuilder.h>
+#include <Encryption/ReadBufferFromRandomAccessFileBuilder.h>
 #include <Server/DTTool/DTTool.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
@@ -105,7 +106,10 @@ int inspectServiceMain(DB::Context & context, const InspectArgs & args)
                 }
                 else
                 {
-                    consume(*fp->newReadBufferFromRandomAccessFile(full_path, DB::EncryptionPath(full_path, i)));
+                    consume(*DB::ReadBufferFromRandomAccessFileBuilder::build(
+                        fp,
+                        full_path,
+                        DB::EncryptionPath(full_path, i)));
                 }
                 LOG_INFO(logger, "[success]");
             }

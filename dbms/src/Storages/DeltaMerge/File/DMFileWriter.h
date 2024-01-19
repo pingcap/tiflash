@@ -62,6 +62,8 @@ public:
                 write_limiter_,
                 detail::getAlgorithmOrNone(*dmfile),
                 detail::getFrameSizeOrDefault(*dmfile),
+                /*flags*/ -1,
+                /*mode*/ 0666,
                 max_compress_block_size))
             , compressed_buf(
                   dmfile->configuration ? std::unique_ptr<WriteBuffer>(

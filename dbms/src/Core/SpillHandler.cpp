@@ -16,7 +16,8 @@
 #include <Common/Stopwatch.h>
 #include <Core/SpillHandler.h>
 #include <DataStreams/IBlockInputStream.h>
-#include <Encryption/FileProvider.h>
+#include <Encryption/EncryptionPath.h>
+#include <Encryption/WriteBufferFromWritableFileBuilder.h>
 
 namespace DB
 {
@@ -31,7 +32,8 @@ SpillHandler::SpillWriter::SpillWriter(
     bool append_write,
     const Block & header,
     size_t spill_version)
-    : file_buf(file_provider->newWriteBufferFromWritableFile(
+    : file_buf(WriteBufferFromWritableFileBuilder::build(
+        file_provider,
         file_name,
         EncryptionPath(file_name, ""),
         true,

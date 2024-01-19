@@ -15,7 +15,7 @@
 #include <Common/Logger.h>
 #include <Common/RedactHelpers.h>
 #include <Common/StringUtils/StringUtils.h>
-#include <Encryption/FileProvider.h>
+#include <Encryption/ReadBufferFromRandomAccessFileBuilder.h>
 #include <IO/WriteHelpers.h>
 #include <Poco/DirectoryIterator.h>
 #include <Poco/File.h>
@@ -174,7 +174,8 @@ LogReaderPtr WALStoreReader::createLogReader(
     Poco::File f(fullname);
     const auto file_size = f.getSize();
     LOG_DEBUG(logger, "Open log file for reading, file={} size={}", fullname, file_size);
-    auto read_buf = provider->newReadBufferFromRandomAccessFile(
+    auto read_buf = ReadBufferFromRandomAccessFileBuilder::build(
+        provider,
         fullname,
         EncryptionPath{fullname, ""},
         Format::BLOCK_SIZE, // Must be `Format::BLOCK_SIZE`

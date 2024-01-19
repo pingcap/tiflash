@@ -15,6 +15,7 @@
 #include <Common/FailPoint.h>
 #include <Common/UniThreadPool.h>
 #include <Databases/DatabaseTiFlash.h>
+#include <Encryption/ReadBufferFromRandomAccessFileBuilder.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterCreateQuery.h>
 #include <Interpreters/InterpreterDropQuery.h>
@@ -893,7 +894,7 @@ String getDatabaseMetadataPath(const String & base_path)
 String readFile(Context & ctx, const String & file)
 {
     String res;
-    auto in = ctx.getFileProvider()->newReadBufferFromRandomAccessFile(file, EncryptionPath(file, ""));
+    auto in = ReadBufferFromRandomAccessFileBuilder::build(ctx.getFileProvider(), file, EncryptionPath(file, ""));
     readStringUntilEOF(res, *in);
     return res;
 }

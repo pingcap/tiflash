@@ -17,6 +17,7 @@
 #include <Databases/DatabaseOrdinary.h>
 #include <Databases/DatabaseTiFlash.h>
 #include <Databases/DatabasesCommon.h>
+#include <Encryption/ReadBufferFromRandomAccessFileBuilder.h>
 #include <IO/IOThreadPools.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterCreateQuery.h>
@@ -74,7 +75,8 @@ static void loadDatabase(
 
     if (Poco::File(database_metadata_file).exists())
     {
-        auto in = context.getFileProvider()->newReadBufferFromRandomAccessFile(
+        auto in = ReadBufferFromRandomAccessFileBuilder::build(
+            context.getFileProvider(),
             database_metadata_file,
             EncryptionPath(database_metadata_file, ""),
             1024);
@@ -153,7 +155,8 @@ void loadMetadata(Context & context)
         String database_attach_query;
         if (Poco::File(database_metadata_file).exists())
         {
-            auto in = context.getFileProvider()->newReadBufferFromRandomAccessFile(
+            auto in = ReadBufferFromRandomAccessFileBuilder::build(
+                context.getFileProvider(),
                 database_metadata_file,
                 EncryptionPath(database_metadata_file, ""),
                 1024);

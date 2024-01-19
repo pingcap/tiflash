@@ -22,7 +22,6 @@
 #include <Encryption/ChecksumBuffer.h>
 #include <Encryption/ChecksumWriteBufferBuilder.h>
 #include <Encryption/CompressedReadBufferFromFileProvider.h>
-#include <Encryption/FileProvider.h>
 #include <Encryption/MockKeyManager.h>
 #include <IO/CompressedReadBuffer.h>
 #include <IO/CompressedWriteBuffer.h>

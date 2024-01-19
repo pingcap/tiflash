@@ -14,7 +14,7 @@
 
 #include <Common/Stopwatch.h>
 #include <Databases/DatabasesCommon.h>
-#include <Encryption/FileProvider.h>
+#include <Encryption/ReadBufferFromRandomAccessFileBuilder.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterCreateQuery.h>
 #include <Parsers/ASTCreateQuery.h>
@@ -229,7 +229,8 @@ ASTPtr getQueryFromMetadata(const Context & context, const String & metadata_pat
 
     String query;
     {
-        auto in = context.getFileProvider()->newReadBufferFromRandomAccessFile(
+        auto in = ReadBufferFromRandomAccessFileBuilder::build(
+            context.getFileProvider(),
             metadata_path,
             EncryptionPath(metadata_path, ""),
             4096);
@@ -325,7 +326,8 @@ std::tuple<String, StoragePtr> loadTable(
 
     String s;
     {
-        auto in = context.getFileProvider()->newReadBufferFromRandomAccessFile(
+        auto in = ReadBufferFromRandomAccessFileBuilder::build(
+            context.getFileProvider(),
             table_metadata_path,
             EncryptionPath(table_metadata_path, ""),
             1024);

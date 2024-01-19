@@ -21,6 +21,8 @@
 #include <Databases/DatabaseOrdinary.h>
 #include <Databases/DatabasesCommon.h>
 #include <Encryption/FileProvider.h>
+#include <Encryption/ReadBufferFromRandomAccessFileBuilder.h>
+#include <Encryption/WriteBufferFromWritableFileBuilder.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterCreateQuery.h>
 #include <Interpreters/Settings.h>
@@ -211,7 +213,8 @@ void DatabaseOrdinary::createTable(const Context & context, const String & table
         statement = getTableDefinitionFromCreateQuery(query);
 
         /// Exclusive flags guarantees, that table is not created right now in another thread. Otherwise, exception will be thrown.
-        auto out = context.getFileProvider()->newWriteBufferFromWritableFile(
+        auto out = WriteBufferFromWritableFileBuilder::build(
+            context.getFileProvider(),
             table_metadata_tmp_path,
             EncryptionPath(table_metadata_tmp_path, ""),
             true,
@@ -448,7 +451,8 @@ void DatabaseOrdinary::alterTable(
 
     {
         char in_buf[METADATA_FILE_BUFFER_SIZE];
-        auto in = context.getFileProvider()->newReadBufferFromRandomAccessFile(
+        auto in = ReadBufferFromRandomAccessFileBuilder::build(
+            context.getFileProvider(),
             table_metadata_path,
             EncryptionPath(table_metadata_path, ""),
             METADATA_FILE_BUFFER_SIZE,
@@ -481,7 +485,8 @@ void DatabaseOrdinary::alterTable(
                                                              : EncryptionPath(table_metadata_tmp_path, "");
     {
         bool create_new_encryption_info = !use_target_encrypt_info && !statement.empty();
-        auto out = context.getFileProvider()->newWriteBufferFromWritableFile(
+        auto out = WriteBufferFromWritableFileBuilder::build(
+            context.getFileProvider(),
             table_metadata_tmp_path,
             encryption_path,
             create_new_encryption_info,

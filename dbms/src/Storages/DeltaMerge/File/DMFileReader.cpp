@@ -91,7 +91,8 @@ DMFileReader::Stream::Stream(
                     return res;
 
                 // first read from merged file to get the raw data(contains the header)
-                auto buffer = reader.file_provider->newReadBufferFromRandomAccessFile(
+                auto buffer = ReadBufferFromRandomAccessFileBuilder::build(
+                    reader.file_provider,
                     file_path,
                     encryp_path,
                     reader.dmfile->getConfiguration()->getChecksumFrameLength(),
@@ -234,7 +235,8 @@ DMFileReader::Stream::Stream(
             auto size = info->second.size;
 
             // first read from merged file to get the raw data(contains the header)
-            auto buffer = reader.file_provider->newReadBufferFromRandomAccessFile(
+            auto buffer = ReadBufferFromRandomAccessFileBuilder::build(
+                reader.file_provider,
                 file_path,
                 encryp_path,
                 reader.dmfile->getConfiguration()->getChecksumFrameLength(),
