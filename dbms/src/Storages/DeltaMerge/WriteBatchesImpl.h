@@ -15,7 +15,7 @@
 #pragma once
 
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
-#include <Storages/DeltaMerge/StoragePool.h>
+#include <Storages/DeltaMerge/StoragePool/StoragePool.h>
 #include <Storages/Page/PageStorage.h>
 #include <Storages/Page/WriteBatchWrapperImpl.h>
 
