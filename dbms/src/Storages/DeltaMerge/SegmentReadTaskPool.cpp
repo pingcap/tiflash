@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/CurrentMetrics.h>
+#include <Common/TiFlashMetrics.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 
@@ -266,12 +267,7 @@ void SegmentReadTaskPool::pushBlock(Block && block)
 {
     blk_stat.push(block);
     global_blk_stat.push(block);
-<<<<<<< HEAD
-=======
-    auto bytes = block.bytes();
-    read_bytes_after_last_check += bytes;
-    GET_METRIC(tiflash_storage_read_thread_counter, type_push_block_bytes).Increment(bytes);
->>>>>>> 904bec8a55 (Storages: Refine metrics of read threads and data sharing (#8653))
+    GET_METRIC(tiflash_storage_read_thread_counter, type_push_block_bytes).Increment(block.bytes());
     q.push(std::move(block), nullptr);
 }
 
