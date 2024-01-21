@@ -316,6 +316,12 @@ try
         func_name,
         R"({"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{}}}}}}}}}}})",
         R"({"a": {"a": {"a": {"a": {"a": {"a": {"a": {"a": {"a": {"a": {}}}}}}}}}}})");
+
+    // duplicate keys
+    // https://github.com/pingcap/tiflash/issues/8712
+    executeAndAssert<String, true>(func_name, R"({"a":1, "a":2})", R"({"a":2})");
+    executeAndAssert<String, true>(func_name, R"({"a":2, "a":3, "a":1})", R"({"a":1})");
+    executeAndAssert<String, true>(func_name, R"({"a":1, "A":1})", R"({"a":1, "A":1})");
 }
 CATCH
 
