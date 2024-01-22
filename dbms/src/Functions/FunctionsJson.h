@@ -594,25 +594,22 @@ public:
             if (json_column->isColumnNullable())
             {
                 const auto & json_column_nullable = static_cast<const ColumnNullable &>(*json_column);
-                if (path_column->isColumnConst())
+                if (path_column->onlyNull())
                 {
-                    if (path_column->onlyNull())
-                    {
-                        doExecuteConstForTwoArgs<true, true>(
-                            json_source,
-                            json_column_nullable.getNullMapData(),
-                            nullptr,
-                            rows);
-                    }
-                    else
-                    {
-                        auto path_source = createDynamicStringSource(*nested_block.getByPosition(arguments[1]).column);
-                        doExecuteConstForTwoArgs<true, false>(
-                            json_source,
-                            json_column_nullable.getNullMapData(),
-                            path_source,
-                            rows);
-                    }
+                    doExecuteConstForTwoArgs<true, true>(
+                        json_source,
+                        json_column_nullable.getNullMapData(),
+                        nullptr,
+                        rows);
+                }
+                else if (path_column->isColumnConst())
+                {
+                    auto path_source = createDynamicStringSource(*nested_block.getByPosition(arguments[1]).column);
+                    doExecuteConstForTwoArgs<true, false>(
+                        json_source,
+                        json_column_nullable.getNullMapData(),
+                        path_source,
+                        rows);
                 }
                 else
                 {
@@ -640,17 +637,14 @@ public:
             }
             else
             {
-                if (path_column->isColumnConst())
+                if (path_column->onlyNull())
                 {
-                    if (path_column->onlyNull())
-                    {
-                        doExecuteConstForTwoArgs<false, true>(json_source, {}, nullptr, rows);
-                    }
-                    else
-                    {
-                        auto path_source = createDynamicStringSource(*nested_block.getByPosition(arguments[1]).column);
-                        doExecuteConstForTwoArgs<false, false>(json_source, {}, path_source, rows);
-                    }
+                    doExecuteConstForTwoArgs<false, true>(json_source, {}, nullptr, rows);
+                }
+                else if (path_column->isColumnConst())
+                {
+                    auto path_source = createDynamicStringSource(*nested_block.getByPosition(arguments[1]).column);
+                    doExecuteConstForTwoArgs<false, false>(json_source, {}, path_source, rows);
                 }
                 else
                 {
