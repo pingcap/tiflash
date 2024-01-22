@@ -82,7 +82,7 @@ std::vector<JsonPathExprRefContainerPtr> buildPathExprContainer(const StringRef 
     auto path_expr = JsonPathExpr::parseJsonPathExpr(path);
     /// If path_expr failed to parse, throw exception
     if unlikely (!path_expr)
-        throw Exception("Illegal json path expression", ErrorCodes::LOGICAL_ERROR);
+        throw Exception("Invalid JSON path expression", ErrorCodes::LOGICAL_ERROR);
     auto path_expr_container = std::make_unique<JsonPathExprRefContainer>(path_expr);
     if unlikely (path_expr_container->firstRef() && path_expr_container->firstRef()->couldMatchMultipleValues())
     {
