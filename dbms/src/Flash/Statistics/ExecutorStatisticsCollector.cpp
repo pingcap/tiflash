@@ -204,6 +204,27 @@ void ExecutorStatisticsCollector::collectRuntimeDetails()
 
 void ExecutorStatisticsCollector::fillLocalExecutionSummaries(tipb::SelectResponse & response)
 {
+    // local_ru should already setup before fill.
+    RUNTIME_CHECK_MSG(local_ru, "local ru consumption info not setup");
+
+    // Always put ru consumption in root executor exec summary.
+    auto fill_local_ru = [&]() {
+        auto & execution_summaries = *response.mutable_execution_summaries();
+        const String root_executor_id = dag_context->dag_request.rootExecutorID();
+        bool setup = false;
+        for (auto & summary : execution_summaries)
+        {
+            if (summary.executor_id() == root_executor_id)
+            {
+                RUNTIME_CHECK_MSG(local_ru->SerializeToString(summary.mutable_ru_consumption()),
+                        "failed to serialize tiflash ru consumption into select response");
+                setup = true;
+                break;
+            }
+        }
+        RUNTIME_CHECK_MSG(setup, "cannot find root executor({}) to put tiflash ru consuomption", root_executor_id);
+    };
+
     if (dag_context->dag_request.isTreeBased())
     {
         // fill in tree-based executors' execution summary
@@ -214,6 +235,8 @@ void ExecutorStatisticsCollector::fillLocalExecutionSummaries(tipb::SelectRespon
                 p.second->getBaseRuntimeStatistics(),
                 p.second->processTimeForJoinBuild(),
                 dag_context->scan_context_map);
+
+        fill_local_ru();
     }
     else
     {
@@ -230,14 +253,9 @@ void ExecutorStatisticsCollector::fillLocalExecutionSummaries(tipb::SelectRespon
                 0, // No join executors in list-based executors
                 dag_context->scan_context_map);
         }
-    }
 
-    // local_ru should already setup before fill.
-    RUNTIME_CHECK_MSG(local_ru, "local ru consumption info not setup");
-    assert(!response.execution_summaries().empty());
-    RUNTIME_CHECK_MSG(
-        local_ru->SerializeToString((*response.mutable_execution_summaries())[0].mutable_ru_consumption()),
-        "failed to serialize tiflash ru consumption into response");
+        fill_local_ru();
+    }
 }
 
 void ExecutorStatisticsCollector::fillRemoteExecutionSummaries(tipb::SelectResponse & response)
