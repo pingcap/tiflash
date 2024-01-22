@@ -215,8 +215,9 @@ void ExecutorStatisticsCollector::fillLocalExecutionSummaries(tipb::SelectRespon
         {
             if (summary.executor_id() == root_executor_id)
             {
-                RUNTIME_CHECK_MSG(local_ru->SerializeToString(summary.mutable_ru_consumption()),
-                        "failed to serialize tiflash ru consumption into select response");
+                RUNTIME_CHECK_MSG(
+                    local_ru->SerializeToString(summary.mutable_ru_consumption()),
+                    "failed to serialize tiflash ru consumption into select response");
                 setup = true;
                 break;
             }
