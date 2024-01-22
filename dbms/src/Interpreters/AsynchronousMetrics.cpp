@@ -20,7 +20,6 @@
 #include <Common/typeid_cast.h>
 #include <Core/TiFlashDisaggregatedMode.h>
 #include <Databases/IDatabase.h>
-#include <IO/UncompressedCache.h>
 #include <Interpreters/AsynchronousMetrics.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
@@ -203,14 +202,6 @@ void AsynchronousMetrics::update()
         {
             set("MinMaxIndexCacheBytes", min_max_cache->weight());
             set("MinMaxIndexFiles", min_max_cache->count());
-        }
-    }
-
-    {
-        if (auto uncompressed_cache = context.getUncompressedCache())
-        {
-            set("UncompressedCacheBytes", uncompressed_cache->weight());
-            set("UncompressedCacheCells", uncompressed_cache->count());
         }
     }
 

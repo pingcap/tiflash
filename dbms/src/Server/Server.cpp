@@ -1410,11 +1410,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /// Limit on total number of concurrently executed queries.
     global_context->getProcessList().setMaxSize(config().getInt("max_concurrent_queries", 0));
 
-    /// Size of cache for uncompressed blocks. Zero means disabled.
-    size_t uncompressed_cache_size = config().getUInt64("uncompressed_cache_size", 0);
-    if (uncompressed_cache_size)
-        global_context->setUncompressedCache(uncompressed_cache_size);
-
     /// Size of cache for marks (index of MergeTree family of tables). It is necessary.
     size_t mark_cache_size = config().getUInt64("mark_cache_size", DEFAULT_MARK_CACHE_SIZE);
     if (mark_cache_size)
