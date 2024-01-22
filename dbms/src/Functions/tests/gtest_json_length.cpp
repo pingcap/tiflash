@@ -19,6 +19,7 @@
 
 #include <string>
 #include <vector>
+
 #include "common/types.h"
 
 namespace DB::tests
@@ -40,9 +41,7 @@ TEST_F(TestJsonLength, OneArg)
 try
 {
     auto execute_assert = [&](const String & json, const UInt64 & expect) {
-        auto res_col = executeFunction(
-            func_name,
-            {castStringToJson(createColumn<String>({json, json}))});
+        auto res_col = executeFunction(func_name, {castStringToJson(createColumn<String>({json, json}))});
         auto expect_col = createColumn<UInt64>({expect, expect});
         ASSERT_COLUMN_EQ(expect_col, res_col);
     };
@@ -85,16 +84,14 @@ try
         {
             auto res_col = executeFunction(
                 func_name,
-                {castStringToJson(createColumn<String>({json, json})),
-                createColumn<String>({path, path})});
+                {castStringToJson(createColumn<String>({json, json})), createColumn<String>({path, path})});
             ASSERT_COLUMN_EQ(expect_col, res_col);
         }
         // column, const
         {
             auto res_col = executeFunction(
                 func_name,
-                {castStringToJson(createColumn<String>({json, json})),
-                createConstColumn<String>(2, path)});
+                {castStringToJson(createColumn<String>({json, json})), createConstColumn<String>(2, path)});
             ASSERT_COLUMN_EQ(expect_col, res_col);
         }
     };
