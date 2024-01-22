@@ -577,26 +577,23 @@ public:
         {
             if (json_column->isColumnNullable())
             {
-                assert(res_col->isColumnNullable());
                 const auto & json_column_nullable = static_cast<const ColumnNullable &>(*json_column);
                 res_col = doExecuteForOneArg<true>(json_source, json_column_nullable.getNullMapData(), rows);
             }
             else
             {
-                assert(!res_col->isColumnNullable());
                 res_col = doExecuteForOneArg<false>(json_source, {}, rows);
             }
         }
         else
         {
-            assert(res_col->isColumnNullable());
             const auto * path_column = block.getByPosition(arguments[1]).column.get();
             if (json_column->isColumnNullable())
             {
                 const auto & json_column_nullable = static_cast<const ColumnNullable &>(*json_column);
                 if (path_column->onlyNull())
                 {
-                    doExecuteConstForTwoArgs<true, true>(
+                    res_col = doExecuteConstForTwoArgs<true, true>(
                         json_source,
                         json_column_nullable.getNullMapData(),
                         nullptr,
@@ -605,7 +602,7 @@ public:
                 else if (path_column->isColumnConst())
                 {
                     auto path_source = createDynamicStringSource(*nested_block.getByPosition(arguments[1]).column);
-                    doExecuteConstForTwoArgs<true, false>(
+                    res_col = doExecuteConstForTwoArgs<true, false>(
                         json_source,
                         json_column_nullable.getNullMapData(),
                         path_source,
@@ -617,7 +614,7 @@ public:
                     if (path_column->isColumnNullable())
                     {
                         const auto & path_column_nullable = static_cast<const ColumnNullable &>(*path_column);
-                        doExecuteCommonForTwoArgs<true, true>(
+                        res_col = doExecuteCommonForTwoArgs<true, true>(
                             json_source,
                             json_column_nullable.getNullMapData(),
                             path_source,
@@ -626,7 +623,7 @@ public:
                     }
                     else
                     {
-                        doExecuteCommonForTwoArgs<true, false>(
+                        res_col = doExecuteCommonForTwoArgs<true, false>(
                             json_source,
                             json_column_nullable.getNullMapData(),
                             path_source,
@@ -639,12 +636,12 @@ public:
             {
                 if (path_column->onlyNull())
                 {
-                    doExecuteConstForTwoArgs<false, true>(json_source, {}, nullptr, rows);
+                    res_col = doExecuteConstForTwoArgs<false, true>(json_source, {}, nullptr, rows);
                 }
                 else if (path_column->isColumnConst())
                 {
                     auto path_source = createDynamicStringSource(*nested_block.getByPosition(arguments[1]).column);
-                    doExecuteConstForTwoArgs<false, false>(json_source, {}, path_source, rows);
+                    res_col = doExecuteConstForTwoArgs<false, false>(json_source, {}, path_source, rows);
                 }
                 else
                 {
@@ -652,7 +649,7 @@ public:
                     if (path_column->isColumnNullable())
                     {
                         const auto & path_column_nullable = static_cast<const ColumnNullable &>(*path_column);
-                        doExecuteCommonForTwoArgs<false, true>(
+                        res_col = doExecuteCommonForTwoArgs<false, true>(
                             json_source,
                             {},
                             path_source,
@@ -661,7 +658,7 @@ public:
                     }
                     else
                     {
-                        doExecuteCommonForTwoArgs<false, false>(json_source, {}, path_source, {}, rows);
+                        res_col = doExecuteCommonForTwoArgs<false, false>(json_source, {}, path_source, {}, rows);
                     }
                 }
             }
