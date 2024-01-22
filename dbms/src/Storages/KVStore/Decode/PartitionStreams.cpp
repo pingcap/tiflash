@@ -71,7 +71,7 @@ static DM::WriteResult writeRegionDataToStorage(
         auto storage = tmt.getStorages().get(keyspace_id, table_id);
         if (storage == nullptr)
         {
-            return force_decode;
+            return false;
         }
 
         /// Get a structure read lock throughout decode, during which schema must not change.
@@ -212,7 +212,6 @@ static DM::WriteResult writeRegionDataToStorage(
         if (!atomic_read_write(true))
         {
             // Failure won't be tolerated this time.
-            // TODO: Enrich exception message.
             throw Exception(
                 ErrorCodes::LOGICAL_ERROR,
                 "Write region failed! region_id={} keyspace={} table_id={}",
