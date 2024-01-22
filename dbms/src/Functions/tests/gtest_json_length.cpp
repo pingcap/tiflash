@@ -112,6 +112,16 @@ try
     // string
     execute_assert("\"sdhfgjksdahfjksdhfjhsdjkfhjskdhfkjsdhfjksdhfkj\"", "$.a", 1);
     execute_assert("\"\"", "$.a", 1);
+
+    // array
+    execute_assert("[1, 2, 3]", "$.a", {});
+    execute_assert("[1, 2, 3]", "$", 3);
+
+    // obj
+    execute_assert(R"({"a":1,"b":2})", "$.a", 1);
+    execute_assert(R"({"a":{},"b":2})", "$.a", 0);
+    execute_assert(R"({"a":1,"b":2})", "$.c", {});
+    execute_assert(R"({"a":1,"b":2})", "$", 2);
 }
 CATCH
 
