@@ -30,9 +30,6 @@
     M(WriteBufferAIOWrite)                     \
     M(WriteBufferAIOWriteBytes)                \
                                                \
-    M(UncompressedCacheHits)                   \
-    M(UncompressedCacheMisses)                 \
-    M(UncompressedCacheWeightLost)             \
     M(MarkCacheHits)                           \
     M(MarkCacheMisses)                         \
                                                \
