@@ -36,6 +36,8 @@ public:
     {
         return region->splitInto(std::move(meta));
     }
+
+    static void dropTable(Context & ctx, TableID table_id);
 };
 
 inline void validateSSTGeneration(
