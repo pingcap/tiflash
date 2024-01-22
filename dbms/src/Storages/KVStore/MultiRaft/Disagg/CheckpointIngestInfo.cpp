@@ -44,7 +44,7 @@ CheckpointIngestInfoPtr CheckpointIngestInfo::restore(
     auto snapshot = uni_ps->getSnapshot(fmt::format("read_fap_i_{}", region_id));
     RUNTIME_CHECK(snapshot != nullptr);
     auto page_id
-        = UniversalPageIdFormat::toLocalKVPrefix(UniversalPageIdFormat::LocalKVKeyType::FAPIngestInfo, region_id);
+        = UniversalPageIdFormat::toLocalKVPageID(UniversalPageIdFormat::LocalKVKeyType::FAPIngestInfo, region_id);
     Page page = uni_ps->read(page_id, nullptr, snapshot, /*throw_on_not_exist*/ false);
     if (!page.isValid())
     {
@@ -164,7 +164,7 @@ void CheckpointIngestInfo::persistToLocal() const
     auto data_size = s.size();
     auto read_buf = std::make_shared<ReadBufferFromOwnString>(s);
     auto page_id
-        = UniversalPageIdFormat::toLocalKVPrefix(UniversalPageIdFormat::LocalKVKeyType::FAPIngestInfo, region_id);
+        = UniversalPageIdFormat::toLocalKVPageID(UniversalPageIdFormat::LocalKVKeyType::FAPIngestInfo, region_id);
     wb.putPage(UniversalPageId(page_id.data(), page_id.size()), 0, read_buf, data_size);
     uni_ps->write(std::move(wb), DB::PS::V3::PageType::Local, nullptr);
     LOG_INFO(
@@ -182,7 +182,7 @@ static void removeFromLocal(TMTContext & tmt, UInt64 region_id)
     auto uni_ps = tmt.getContext().getWriteNodePageStorage();
     UniversalWriteBatch del_batch;
     del_batch.delPage(
-        UniversalPageIdFormat::toLocalKVPrefix(UniversalPageIdFormat::LocalKVKeyType::FAPIngestInfo, region_id));
+        UniversalPageIdFormat::toLocalKVPageID(UniversalPageIdFormat::LocalKVKeyType::FAPIngestInfo, region_id));
     uni_ps->write(std::move(del_batch), PageType::Local);
 }
 

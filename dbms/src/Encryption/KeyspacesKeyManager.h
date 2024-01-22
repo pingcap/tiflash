@@ -31,8 +31,6 @@ struct EngineStoreServerWrap;
 class KeyspacesKeyManager : public KeyManager
 {
 public:
-    static constexpr UInt64 ENCRYPTION_KEY_RESERVED_PAGEU64_ID = std::numeric_limits<UInt64>::max();
-
     explicit KeyspacesKeyManager(EngineStoreServerWrap * tiflash_instance_wrap_);
 
     void setUniversalPageStorage(const UniversalPageStoragePtr & ps_write_) { ps_write = ps_write_; }

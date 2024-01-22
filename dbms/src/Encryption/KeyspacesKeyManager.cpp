@@ -48,9 +48,7 @@ FileEncryptionInfo KeyspacesKeyManager::getInfo(const EncryptionPath & ep)
 
     RUNTIME_CHECK(ps_write != nullptr);
     auto load_func = [this, keyspace_id]() -> EncryptionKeyPtr {
-        const auto page_id = UniversalPageIdFormat::toFullPageId(
-            UniversalPageIdFormat::toLocalKVPrefix(UniversalPageIdFormat::LocalKVKeyType::EncryptionKey, keyspace_id),
-            ENCRYPTION_KEY_RESERVED_PAGEU64_ID);
+        const auto page_id = UniversalPageIdFormat::toEncryptionKeyPageID(keyspace_id);
         // getFile will be called after newFile, so page must exist
         Page page = ps_write->read(
             page_id,
@@ -87,12 +85,10 @@ FileEncryptionInfo KeyspacesKeyManager::newInfo(const EncryptionPath & ep)
     RUNTIME_CHECK(ps_write != nullptr);
     auto load_func = [this, keyspace_id]() -> EncryptionKeyPtr {
         // Generate new encryption key
-        const auto encryption_key = master_key->generateEncryptionKey();
+        auto encryption_key = master_key->generateEncryptionKey();
         // Write encrypted key to PageStorage
         UniversalWriteBatch wb;
-        const auto page_id = UniversalPageIdFormat::toFullPageId(
-            UniversalPageIdFormat::toLocalKVPrefix(UniversalPageIdFormat::LocalKVKeyType::EncryptionKey, keyspace_id),
-            ENCRYPTION_KEY_RESERVED_PAGEU64_ID);
+        const auto page_id = UniversalPageIdFormat::toEncryptionKeyPageID(keyspace_id);
         MemoryWriteBuffer wb_buffer;
         writeBinary(encryption_key->exportString(), wb_buffer);
         auto read_buf = wb_buffer.tryGetReadBuffer();
@@ -130,9 +126,7 @@ void KeyspacesKeyManager::deleteKey(KeyspaceID keyspace_id)
         return;
 
     RUNTIME_CHECK(ps_write != nullptr);
-    const auto page_id = UniversalPageIdFormat::toFullPageId(
-        UniversalPageIdFormat::toLocalKVPrefix(UniversalPageIdFormat::LocalKVKeyType::EncryptionKey, keyspace_id),
-        ENCRYPTION_KEY_RESERVED_PAGEU64_ID);
+    const auto page_id = UniversalPageIdFormat::toEncryptionKeyPageID(keyspace_id);
     UniversalWriteBatch wb;
     wb.delPage(page_id);
     ps_write->write(std::move(wb));

@@ -326,6 +326,7 @@ PageIdU64 ColumnFileTiny::writeColumnFileData(
     }
 
     auto data_size = write_buf.count();
+    auto buf = write_buf.tryGetReadBuffer();
     if (const auto & file_provider = dm_context.global_context.getFileProvider();
         unlikely(file_provider->isEncryptionEnabled(dm_context.keyspace_id)))
     {
@@ -334,11 +335,14 @@ PageIdU64 ColumnFileTiny::writeColumnFileData(
         {
             file_provider->createEncryptionInfo(ep);
         }
-        auto * data = write_buf.buffer().begin();
-        file_provider->encryptPage(dm_context.keyspace_id, data, data_size, page_id);
-    }
 
-    auto buf = write_buf.tryGetReadBuffer();
+        char page_data[data_size];
+        buf->readStrict(page_data, data_size);
+        // encrypt the page data in place
+        file_provider->encryptPage(dm_context.keyspace_id, page_data, data_size, page_id);
+        // ReadBufferFromOwnString will copy the data, and own the data.
+        buf = std::make_shared<ReadBufferFromOwnString>(std::string_view(page_data, data_size));
+    }
     wbs.log.putPage(page_id, 0, buf, data_size, col_data_sizes);
 
     return page_id;

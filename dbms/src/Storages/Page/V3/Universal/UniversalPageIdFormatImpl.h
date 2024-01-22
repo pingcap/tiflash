@@ -156,13 +156,20 @@ public:
     };
 
     // LOCAL_PREFIX type region_id
-    static String toLocalKVPrefix(LocalKVKeyType type, UInt64 region_id)
+    static String toLocalKVPageID(LocalKVKeyType type, UInt64 region_id)
     {
         WriteBufferFromOwnString buff;
         writeChar(LOCAL_KV_PREFIX, buff);
         encodeUInt64(magic_enum::enum_underlying(type), buff);
         encodeUInt64(region_id, buff);
         return buff.releaseStr();
+    }
+
+    // LOCAL_PREFIX type keyspace_id(64 bits)
+    static String toEncryptionKeyPageID(KeyspaceID keyspace_id)
+    {
+        // use keyspace_id as region_id
+        return toLocalKVPageID(LocalKVKeyType::EncryptionKey, keyspace_id);
     }
 
     // RAFT_PREFIX LOCAL_PREFIX REGION_RAFT_PREFIX region_id (RAFT_LOG_SUFFIX + 1)
