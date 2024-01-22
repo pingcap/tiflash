@@ -62,5 +62,8 @@ mysql> set tidb_allow_mpp=1;set tidb_enforce_mpp=1; set tidb_isolation_read_engi
 | [1, 2, [3, 4]]         | $.kk     | NULL |
 +------------------------+----------+------+
 
+mysql> set tidb_allow_mpp=1;set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash'; select json_length(col_json, '') from test.t_json;
+{#REGEXP}.*Invalid JSON path expression*
+
 # Clean up.
 mysql> drop table if exists test.t;
