@@ -101,7 +101,7 @@ DMFileWriter::WriteBufferFromFileBasePtr DMFileWriter::createPackStatsFile()
         write_limiter,
         dmfile->configuration->getChecksumAlgorithm(),
         dmfile->configuration->getChecksumFrameLength(),
-        /*flags*/ 1,
+        /*flags*/ -1,
         /*mode*/ 0666,
         options.max_compress_block_size);
 }
