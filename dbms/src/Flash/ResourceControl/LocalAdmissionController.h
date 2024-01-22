@@ -703,13 +703,9 @@ private:
     // Utilities for fetch token from GAC.
     void fetchTokensForLowTokenResourceGroups();
     void fetchTokensForAllResourceGroups();
-
-    // TiFlash will not report RU consumption for now.
-    // RU consumption will report to tidb by execution summary and tidb will report to PD.
     static std::optional<AcquireTokenInfo> buildAcquireInfo(
         const ResourceGroupPtr & resource_group,
-        bool is_periodically_fetch,
-        bool report_ru_consumption = false);
+        bool is_periodically_fetch);
 
     // Watch GAC utilities.
     void doWatch();

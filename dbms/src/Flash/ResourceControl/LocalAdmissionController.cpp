@@ -157,8 +157,7 @@ void LocalAdmissionController::fetchTokensForLowTokenResourceGroups()
 
 std::optional<LocalAdmissionController::AcquireTokenInfo> LocalAdmissionController::buildAcquireInfo(
     const ResourceGroupPtr & resource_group,
-    bool is_periodically_fetch,
-    bool report_ru_consumption)
+    bool is_periodically_fetch)
 {
     double token_consumption = 0.0;
     double acquire_tokens = 0.0;
@@ -166,8 +165,7 @@ std::optional<LocalAdmissionController::AcquireTokenInfo> LocalAdmissionControll
 
     const auto consumption_update_info
         = resource_group->updateConsumptionSpeedInfoIfNecessary(now, DEFAULT_FETCH_GAC_INTERVAL);
-
-    if (report_ru_consumption && consumption_update_info.updated)
+    if (consumption_update_info.updated)
         token_consumption = consumption_update_info.delta;
 
     auto get_acquire_tokens = [&]() {
