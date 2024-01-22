@@ -126,7 +126,7 @@ public:
         TableID table_id,
         std::function<void(const InternalRegions &)> && callback) const;
 
-    size_t numRegionsForTable(KeyspaceID keyspace_id, TableID table_id) const;
+    std::vector<RegionID> getRegionIdsByTable(KeyspaceID keyspace_id, TableID table_id) const;
     std::vector<std::pair<RegionID, RegionPtr>> getRegionsByTable(KeyspaceID keyspace_id, TableID table_id) const;
 
     /// Write the data of the given region into the table with the given table ID, fill the data list for outer to remove.

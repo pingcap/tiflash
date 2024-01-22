@@ -333,20 +333,29 @@ void RegionTable::handleInternalRegionsByTable(
     }
 }
 
-size_t RegionTable::numRegionsForTable(KeyspaceID keyspace_id, TableID table_id) const
+std::vector<RegionID> RegionTable::getRegionIdsByTable(KeyspaceID keyspace_id, TableID table_id) const
 {
     fiu_do_on(FailPoints::force_set_num_regions_for_table, {
         if (auto v = FailPointHelper::getFailPointVal(FailPoints::force_set_num_regions_for_table); v)
         {
-            auto num_regions = std::any_cast<std::size_t>(v.value());
+            auto num_regions = std::any_cast<std::vector<RegionID>>(v.value());
             return num_regions;
         }
     });
 
     std::lock_guard lock(mutex);
-    if (auto iter = tables.find(KeyspaceTableID{keyspace_id, table_id}); iter != tables.end())
-        return iter->second.regions.size();
-    return 0;
+    if (auto iter = tables.find(KeyspaceTableID{keyspace_id, table_id}); //
+        unlikely(iter != tables.end()))
+    {
+        std::vector<RegionID> ret_regions;
+        ret_regions.reserve(iter->second.regions.size());
+        for (const auto & r : iter->second.regions)
+        {
+            ret_regions.emplace_back(r.first);
+        }
+        return ret_regions;
+    }
+    return {};
 }
 
 std::vector<std::pair<RegionID, RegionPtr>> RegionTable::getRegionsByTable(

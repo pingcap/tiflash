@@ -32,6 +32,7 @@
 #include <TiDB/Schema/SchemaSyncService.h>
 #include <TiDB/Schema/TiDBSchemaManager.h>
 #include <common/defines.h>
+
 #include <limits>
 
 namespace DB
@@ -344,7 +345,9 @@ try
     }
 
     // prevent the storage instance from being physically removed
-    FailPointHelper::enableFailPoint(FailPoints::force_set_num_regions_for_table, static_cast<size_t>(1));
+    FailPointHelper::enableFailPoint(
+        FailPoints::force_set_num_regions_for_table,
+        std::vector<RegionID>{1001, 1002, 1003});
 
     auto sync_service = std::make_shared<SchemaSyncService>(global_ctx);
     ASSERT_TRUE(sync_service->gc(std::numeric_limits<UInt64>::max(), NullspaceID));

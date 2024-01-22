@@ -286,13 +286,14 @@ bool SchemaSyncService::gc(Timestamp gc_safepoint, KeyspaceID keyspace_id)
         }();
 
         auto & region_table = tmt_context.getRegionTable();
-        if (auto num_regions = region_table.numRegionsForTable(keyspace_id, table_info.id); num_regions > 0)
+        if (auto remain_regions = region_table.getRegionIdsByTable(keyspace_id, table_info.id); //
+            !remain_regions.empty())
         {
             LOG_WARNING(
                 keyspace_log,
-                "Physically drop table is skip, regions are not totally removed from TiFlash, num_regions={}"
+                "Physically drop table is skip, regions are not totally removed from TiFlash, remain_region_ids={}"
                 " table_tombstone={} safepoint={} {}",
-                num_regions,
+                remain_regions,
                 storage->getTombstone(),
                 gc_safepoint,
                 canonical_name);
