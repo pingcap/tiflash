@@ -206,8 +206,7 @@ void ExecutorStatisticsCollector::fillLocalExecutionSummaries(tipb::SelectRespon
 {
     // local_ru should already setup before fill.
     RUNTIME_CHECK_MSG(local_ru, "local ru consumption info not setup");
-
-    // Always put ru consumption in root executor exec summary.
+    // Put ru consumption in root executor exec summary.
     auto fill_local_ru = [&]() {
         auto & execution_summaries = *response.mutable_execution_summaries();
         const String root_executor_id = dag_context->dag_request.rootExecutorID();
