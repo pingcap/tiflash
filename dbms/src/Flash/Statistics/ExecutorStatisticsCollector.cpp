@@ -255,6 +255,13 @@ void ExecutorStatisticsCollector::fillLocalExecutionSummaries(tipb::SelectRespon
 
         fill_local_ru();
     }
+
+    // local_ru should already setup before fill.
+    RUNTIME_CHECK_MSG(local_ru, "local ru consumption info not setup");
+    assert(!response.execution_summaries().empty());
+    RUNTIME_CHECK_MSG(
+        local_ru->SerializeToString((*response.mutable_execution_summaries())[0].mutable_ru_consumption()),
+        "failed to serialize tiflash ru consumption into response");
 }
 
 void ExecutorStatisticsCollector::fillRemoteExecutionSummaries(tipb::SelectResponse & response)
