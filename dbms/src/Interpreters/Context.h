@@ -56,7 +56,6 @@ class QuotaForIntervals;
 class BackgroundProcessingPool;
 class MergeList;
 class MarkCache;
-class UncompressedCache;
 class DBGInvoker;
 class TMTContext;
 using TMTContextPtr = std::shared_ptr<TMTContext>;
@@ -376,11 +375,6 @@ public:
     /// List all queries.
     ProcessList & getProcessList();
     const ProcessList & getProcessList() const;
-
-    /// Create a cache of uncompressed blocks of specified size. This can be done only once.
-    void setUncompressedCache(size_t max_size_in_bytes);
-    std::shared_ptr<UncompressedCache> getUncompressedCache() const;
-    void dropUncompressedCache() const;
 
     /// Execute inner functions, debug only.
     DBGInvoker & getDBGInvoker() const;
