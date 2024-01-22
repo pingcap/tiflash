@@ -208,10 +208,18 @@ void KVStore::onSnapshot(
                 }
                 else if constexpr (std::is_same_v<RegionPtrWrap, RegionPtrWithCheckpointInfo>)
                 {
-                    dm_storage->ingestSegmentsFromCheckpointInfo(
+                    auto ingested_bytes = dm_storage->ingestSegmentsFromCheckpointInfo(
                         new_key_range,
                         new_region_wrap.checkpoint_info,
                         context.getSettingsRef());
+                    if (auto [count, is_syncing] = getTiFlashReplicaSyncInfo(dm_storage); is_syncing)
+                    {
+                        // For write, 1 RU per KB. Reference: https://docs.pingcap.com/tidb/v7.0/tidb-resource-control
+                        // Only calculate RU of one replica. So each replica reports 1/count consumptions.
+                        TiFlashMetrics::instance().addReplicaSyncRU(
+                            keyspace_id,
+                            std::ceil(static_cast<double>(ingested_bytes) / 1024.0 / count));
+                    }
                 }
                 else
                 {

@@ -1078,6 +1078,7 @@ public:
     static TiFlashMetrics & instance();
 
     void addReplicaSyncRU(UInt32 keyspace_id, UInt64 ru);
+    UInt64 queryReplicaSyncRU(UInt32 keyspace_id);
 
 private:
     TiFlashMetrics();

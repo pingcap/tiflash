@@ -133,7 +133,7 @@ public:
         CheckpointInfoPtr checkpoint_info,
         const Settings & settings);
 
-    void ingestSegmentsFromCheckpointInfo(
+    UInt64 ingestSegmentsFromCheckpointInfo(
         const DM::RowKeyRange & range,
         const CheckpointIngestInfoPtr & checkpoint_info,
         const Settings & settings);
