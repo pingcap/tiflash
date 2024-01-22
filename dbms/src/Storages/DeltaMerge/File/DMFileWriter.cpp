@@ -99,8 +99,8 @@ DMFileWriter::WriteBufferFromFileBasePtr DMFileWriter::createPackStatsFile()
         dmfile->encryptionPackStatPath(),
         /*create_new_encryption_info*/ true,
         write_limiter,
-        dmfile->configuration->getChecksumAlgorithm(),
-        dmfile->configuration->getChecksumFrameLength(),
+        detail::getAlgorithmOrNone(*dmfile),
+        detail::getFrameSizeOrDefault(*dmfile),
         /*flags*/ -1,
         /*mode*/ 0666,
         options.max_compress_block_size);
@@ -423,8 +423,8 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
                     dmfile->encryptionIndexPath(stream_name),
                     false,
                     write_limiter,
-                    dmfile->configuration->getChecksumAlgorithm(),
-                    dmfile->configuration->getChecksumFrameLength());
+                    detail::getAlgorithmOrNone(*dmfile),
+                    detail::getFrameSizeOrDefault(*dmfile));
                 stream->minmaxes->write(*type, *buf);
                 buf->sync();
                 // Ignore data written in index file when the dmfile is empty.
