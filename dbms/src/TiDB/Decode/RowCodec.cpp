@@ -675,20 +675,25 @@ bool appendRowV1ToBlock(
             }
             if (datum.invalidNull(column_info))
             {
-                // Null value with non-null type detected, fatal if force_decode is true,
-                // as schema being newer and with invalid null shouldn't happen.
-                // Otherwise return false to outer, outer should sync schema and try again.
-                if (force_decode)
+                if (!force_decode)
                 {
-                    throw Exception(
-                        "Detected invalid null when decoding data " + std::to_string(unflattened.get<UInt64>())
-                            + " of column " + column_info.name + " with type " + raw_column->getName(),
-                        ErrorCodes::LOGICAL_ERROR);
+                    // Detect `NULL` column value in a non-nullable column in the schema, let upper level try to sync the schema.
+                    return false;
                 }
-
-                return false;
+                else
+                {
+                    // If user turn a nullable column (with default value) to a non-nullable column. There could exists some rows
+                    // with `NULL` values inside the SST files. Or some key-values encoded with old schema come after the schema
+                    // change is applied in TiFlash because of network issue.
+                    // If the column_id exists in null_column_ids, it means the column has default value but filled with NULL.
+                    // Just filled with default value for these old schema rows.
+                    raw_column->insert(column_info.defaultValueToField());
+                }
             }
-            raw_column->insert(unflattened);
+            else
+            {
+                raw_column->insert(unflattened);
+            }
             decoded_field_iter++;
             column_ids_iter++;
             block_column_pos++;
