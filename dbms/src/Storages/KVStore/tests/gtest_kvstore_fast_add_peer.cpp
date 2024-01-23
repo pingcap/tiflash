@@ -456,6 +456,10 @@ try
     exe_lock.unlock();
     fap_context->tasks_trace->fetchResult(region_id);
 
+    auto region_to_ingest
+        = fap_context
+              ->getOrRestoreCheckpointIngestInfo(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333)
+              ->getRegion();
     // Remove the checkpoint ingest info and region from memory.
     // Testing whether FAP can be handled properly after restart.
     fap_context->debugRemoveCheckpointIngestInfo(region_id);
@@ -466,7 +470,14 @@ try
 
     auto prev_ru = TiFlashMetrics::instance().queryReplicaSyncRU(NullspaceID);
     // After restart, continue the FAP from persisted checkpoint ingest info.
-    ApplyFapSnapshotImpl(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333);
+    ApplyFapSnapshotImpl(
+        global_context.getTMTContext(),
+        proxy_helper.get(),
+        region_id,
+        2333,
+        true,
+        region_to_ingest->appliedIndex(),
+        region_to_ingest->appliedIndexTerm());
     auto current_ru = TiFlashMetrics::instance().queryReplicaSyncRU(NullspaceID);
     ASSERT_GT(current_ru, prev_ru);
 
@@ -836,12 +847,25 @@ try
     exe_lock.unlock();
     fap_context->tasks_trace->fetchResult(region_id);
 
+    auto region_to_ingest
+        = fap_context
+              ->getOrRestoreCheckpointIngestInfo(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333)
+              ->getRegion();
     // Make sure prehandling will not clean fap snapshot.
     std::vector<SSTView> ssts;
     SSTViewVec snaps{ssts.data(), ssts.size()};
     kvs.preHandleSnapshotToFiles(kv_region, snaps, 100, 100, std::nullopt, global_context.getTMTContext());
 
-    EXPECT_THROW(ApplyFapSnapshotImpl(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333), Exception);
+    EXPECT_THROW(
+        ApplyFapSnapshotImpl(
+            global_context.getTMTContext(),
+            proxy_helper.get(),
+            region_id,
+            2333,
+            false,
+            region_to_ingest->appliedIndex(),
+            region_to_ingest->appliedIndexTerm()),
+        Exception);
 }
 CATCH
 

@@ -188,8 +188,19 @@ void HandleSafeTSUpdate(
     uint64_t self_safe_ts,
     uint64_t leader_safe_ts);
 FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, uint64_t new_peer_id);
-uint8_t ApplyFapSnapshot(EngineStoreServerWrap * server, uint64_t region_id, uint64_t peer_id, uint8_t assert_exist);
-FapSnapshotState QueryFapSnapshotState(EngineStoreServerWrap * server, uint64_t region_id, uint64_t peer_id);
+uint8_t ApplyFapSnapshot(
+    EngineStoreServerWrap * server,
+    uint64_t region_id,
+    uint64_t peer_id,
+    uint8_t assert_exist,
+    uint64_t index,
+    uint64_t term);
+FapSnapshotState QueryFapSnapshotState(
+    EngineStoreServerWrap * server,
+    uint64_t region_id,
+    uint64_t peer_id,
+    uint64_t index,
+    uint64_t term);
 void ClearFapSnapshot(EngineStoreServerWrap * server, uint64_t region_id);
 bool KvstoreRegionExists(EngineStoreServerWrap * server, uint64_t region_id);
 }

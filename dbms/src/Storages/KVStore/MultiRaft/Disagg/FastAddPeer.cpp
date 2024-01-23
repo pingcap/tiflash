@@ -458,7 +458,14 @@ FastAddPeerRes FastAddPeerImpl(
     }
 }
 
-uint8_t ApplyFapSnapshotImpl(TMTContext & tmt, TiFlashRaftProxyHelper * proxy_helper, UInt64 region_id, UInt64 peer_id)
+uint8_t ApplyFapSnapshotImpl(
+    TMTContext & tmt,
+    TiFlashRaftProxyHelper * proxy_helper,
+    UInt64 region_id,
+    UInt64 peer_id,
+    bool assert_exist,
+    UInt64 index,
+    UInt64 term)
 {
     auto log = Logger::get("FastAddPeer");
     Stopwatch watch_ingest;
@@ -467,6 +474,14 @@ uint8_t ApplyFapSnapshotImpl(TMTContext & tmt, TiFlashRaftProxyHelper * proxy_he
     auto checkpoint_ingest_info = fap_ctx->getOrRestoreCheckpointIngestInfo(tmt, proxy_helper, region_id, peer_id);
     if (!checkpoint_ingest_info)
     {
+        if (assert_exist)
+        {
+            throw Exception(
+                ErrorCodes::LOGICAL_ERROR,
+                "Expected to have fap snapshot, region_id={}, peer_id={}",
+                region_id,
+                peer_id);
+        }
         // If fap is enabled, and this region is not currently exists on proxy's side,
         // proxy will check if we have a fap snapshot first.
         // If we don't, the snapshot should be a regular snapshot.
@@ -478,11 +493,27 @@ uint8_t ApplyFapSnapshotImpl(TMTContext & tmt, TiFlashRaftProxyHelper * proxy_he
         return false;
     }
     auto begin = checkpoint_ingest_info->beginTime();
-    if (kvstore->getRegion(region_id))
+    auto region = kvstore->getRegion(region_id);
+    if (region)
     {
         throw Exception(
             ErrorCodes::LOGICAL_ERROR,
             "Don't support FAP for an existing region, region_id={} peer_id={} begin_time={}",
+            region_id,
+            peer_id,
+            begin);
+    }
+    auto region_to_ingest = checkpoint_ingest_info->getRegion();
+    RUNTIME_CHECK(region_to_ingest != nullptr);
+    if (!(region_to_ingest->appliedIndex() == index && region_to_ingest->appliedIndexTerm() == term))
+    {
+        throw Exception(
+            ErrorCodes::LOGICAL_ERROR,
+            "Mismatched region and term, expected=({},{}) actual=({},{}) region_id={} peer_id={} begin_time={}",
+            index,
+            term,
+            region_to_ingest->appliedIndex(),
+            region_to_ingest->appliedIndexTerm(),
             region_id,
             peer_id,
             begin);
@@ -509,7 +540,12 @@ uint8_t ApplyFapSnapshotImpl(TMTContext & tmt, TiFlashRaftProxyHelper * proxy_he
     }
 }
 
-FapSnapshotState QueryFapSnapshotState(EngineStoreServerWrap * server, uint64_t region_id, uint64_t peer_id)
+FapSnapshotState QueryFapSnapshotState(
+    EngineStoreServerWrap * server,
+    uint64_t region_id,
+    uint64_t peer_id,
+    uint64_t index,
+    uint64_t term)
 {
     try
     {
@@ -519,10 +555,14 @@ FapSnapshotState QueryFapSnapshotState(EngineStoreServerWrap * server, uint64_t 
             return FapSnapshotState::Other;
         auto fap_ctx = server->tmt->getContext().getSharedContextDisagg()->fap_context;
         // We just restore it, since if there is, it will soon be used.
-        if (fap_ctx->getOrRestoreCheckpointIngestInfo(*(server->tmt), server->proxy_helper, region_id, peer_id)
-            != nullptr)
+        if (auto ptr
+            = fap_ctx->getOrRestoreCheckpointIngestInfo(*(server->tmt), server->proxy_helper, region_id, peer_id);
+            ptr != nullptr)
         {
-            return FapSnapshotState::Persisted;
+            RUNTIME_CHECK(ptr->getRegion() != nullptr);
+            if (ptr->getRegion()->appliedIndex() == index && ptr->getRegion()->appliedIndexTerm() == term)
+                return FapSnapshotState::Persisted;
+            return FapSnapshotState::NotFound;
         }
         return FapSnapshotState::NotFound;
     }
@@ -535,17 +575,21 @@ FapSnapshotState QueryFapSnapshotState(EngineStoreServerWrap * server, uint64_t 
     }
 }
 
-uint8_t ApplyFapSnapshot(EngineStoreServerWrap * server, uint64_t region_id, uint64_t peer_id, uint8_t assert_exist)
+uint8_t ApplyFapSnapshot(
+    EngineStoreServerWrap * server,
+    uint64_t region_id,
+    uint64_t peer_id,
+    uint8_t assert_exist,
+    uint64_t index,
+    uint64_t term)
 {
-    // TODO(fap) use assert_exist to check.
-    UNUSED(assert_exist);
     try
     {
         RUNTIME_CHECK_MSG(server->tmt, "TMTContext is null");
         RUNTIME_CHECK_MSG(server->proxy_helper, "proxy_helper is null");
         if (!server->tmt->getContext().getSharedContextDisagg()->isDisaggregatedStorageMode())
             return false;
-        return ApplyFapSnapshotImpl(*server->tmt, server->proxy_helper, region_id, peer_id);
+        return ApplyFapSnapshotImpl(*server->tmt, server->proxy_helper, region_id, peer_id, assert_exist, index, term);
     }
     catch (...)
     {
