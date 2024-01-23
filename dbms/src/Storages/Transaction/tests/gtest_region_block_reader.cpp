@@ -175,7 +175,7 @@ protected:
                 {
                     if (fields_map.count(column_element.column_id) > 0)
                     {
-                        if (!invalid_null_column_ids.contains(column_element.column_id))
+                        if (!invalid_null_column_ids.count(column_element.column_id) > 0)
                         {
                             ASSERT_FIELD_EQ((*column_element.column)[row], fields_map.at(column_element.column_id))
                                 << gen_error_log();
