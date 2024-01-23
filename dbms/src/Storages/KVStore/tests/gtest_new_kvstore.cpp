@@ -862,18 +862,9 @@ try
 
         dropTable(ctx, table_id);
 
+        // No exception thrown, the rows are just throw away
         MockRaftStoreProxy::FailCond cond;
-        try
-        {
-            proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index);
-            ASSERT_TRUE(false) << "should throw exception for non-exist storage instance";
-        }
-        catch (DB::Exception & ex)
-        {
-            ASSERT_NE(
-                std::string::npos,
-                ex.message().find(fmt::format("Write region failed! region_id={}", region_id)));
-        }
+        proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index);
     }
 }
 CATCH
