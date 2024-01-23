@@ -115,8 +115,8 @@ mysql> insert into test.t_drop values(1, 1);
 
 func> wait_table test t_drop
 
-=> DBGInvoke __enable_schema_sync_service('false') 
-=> DBGInvoke __init_fail_point()
+>> DBGInvoke __enable_schema_sync_service('false') 
+>> DBGInvoke __init_fail_point()
 
 mysql> alter table test.t_drop add column c int;
 
@@ -127,7 +127,7 @@ mysql> insert into test.t_drop values(1,2,3);
 
 mysql> drop table test.t_drop;
 
-=> DBGInvoke __refresh_schemas()
+>> DBGInvoke __refresh_schemas()
 
 # make write cmd take effect
 >> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
@@ -151,7 +151,7 @@ mysql> set session tidb_isolation_read_engines='tiflash';select * from test.t_dr
 
 mysql> drop table test.t_drop;
 
-=> DBGInvoke __refresh_schemas()
+>> DBGInvoke __refresh_schemas()
 >> select tidb_database,tidb_name from system.tables where tidb_database = 'test' and tidb_name = 't_drop'
 ┌─tidb_database─┬─tidb_name─┐
 │ test          │ t_drop    │

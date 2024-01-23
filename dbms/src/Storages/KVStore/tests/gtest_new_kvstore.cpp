@@ -827,7 +827,7 @@ void RegionKVStoreTest::dropTable(Context & ctx, TableID table_id)
     auto schema_syncer = tmt.getSchemaSyncerManager();
     schema_syncer->syncSchemas(ctx, NullspaceID);
     auto sync_service = std::make_shared<SchemaSyncService>(ctx);
-    sync_service->gc(std::numeric_limits<Timestamp>::max(), NullspaceID);
+    sync_service->gcImpl(std::numeric_limits<Timestamp>::max(), NullspaceID, /*ignore_remain_regions*/ true);
     sync_service->shutdown();
 }
 

@@ -33,9 +33,8 @@
 #include <TiDB/Schema/TiDBSchemaManager.h>
 #include <common/defines.h>
 
+#include <ext/scope_guard.h>
 #include <limits>
-
-#include "ext/scope_guard.h"
 
 namespace DB
 {

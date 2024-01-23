@@ -25,6 +25,10 @@
 
 namespace DB
 {
+namespace tests
+{
+class RegionKVStoreTest;
+}
 class Logger;
 using LoggerPtr = std::shared_ptr<Logger>;
 
@@ -60,6 +64,7 @@ private:
     Context & context;
 
     friend void dbgFuncGcSchemas(Context &, const ASTs &, DBGInvokerPrinter);
+    friend class tests::RegionKVStoreTest;
 
     struct KeyspaceGCContext
     {
