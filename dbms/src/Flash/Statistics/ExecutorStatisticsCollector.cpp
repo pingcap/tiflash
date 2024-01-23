@@ -211,9 +211,9 @@ void ExecutorStatisticsCollector::fillLocalExecutionSummaries(tipb::SelectRespon
         auto & execution_summaries = *response.mutable_execution_summaries();
         const String root_executor_id = dag_context->dag_request.rootExecutorID();
         tipb::ExecutorExecutionSummary * target_executor_summary = nullptr;
-        if (root_executor_id.empty())
+        if unlikely (root_executor_id.empty())
         {
-            if (!execution_summaries.empty())
+            if likely (!execution_summaries.empty())
                 target_executor_summary = &(execution_summaries[0]);
         }
         else
