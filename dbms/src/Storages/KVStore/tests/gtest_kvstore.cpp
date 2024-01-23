@@ -13,13 +13,35 @@
 // limitations under the License.
 
 #include <Debug/dbgTools.h>
+<<<<<<< HEAD
 #include <Storages/KVStore/tests/kvstore_helper.h>
 
 namespace DB
+=======
+#include <Storages/KVStore/MultiRaft/RegionsRangeIndex.h>
+#include <Storages/KVStore/tests/kvstore_helper.h>
+
+
+namespace DB::tests
+>>>>>>> 6058d19646 (ddl: Fix the storage instance may be physically dropped when the region is not removed (#8721))
 {
 namespace tests
 {
+<<<<<<< HEAD
 TEST_F(RegionKVStoreTest, PersistenceV1)
+=======
+public:
+    void testRaftMerge(Context & ctx, KVStore & kvs, TMTContext & tmt);
+    static void testRaftMergeRollback(KVStore & kvs, TMTContext & tmt);
+    RegionKVStoreOldTest()
+    {
+        log = DB::Logger::get("RegionKVStoreOldTest");
+        test_path = TiFlashTestEnv::getTemporaryPath("/region_kvs_old_test");
+    }
+};
+
+TEST_F(RegionKVStoreOldTest, PersistenceV1)
+>>>>>>> 6058d19646 (ddl: Fix the storage instance may be physically dropped when the region is not removed (#8721))
 try
 {
     auto ctx = TiFlashTestEnv::getGlobalContext();
@@ -255,7 +277,6 @@ void RegionKVStoreTest::testRaftMergeRollback(KVStore & kvs, TMTContext & tmt)
         auto source_region = kvs.getRegion(region_id);
         auto target_region = kvs.getRegion(1);
 
-
         auto && [request, response]
             = MockRaftStoreProxy::composePrepareMerge(target_region->cloneMetaRegion(), source_region->appliedIndex());
         kvs.handleAdminRaftCmd(std::move(request), std::move(response), region_id, 31, 6, tmt);
@@ -302,9 +323,10 @@ void RegionKVStoreTest::testRaftMergeRollback(KVStore & kvs, TMTContext & tmt)
 
 static void testRaftSplit(KVStore & kvs, TMTContext & tmt, std::unique_ptr<MockRaftStoreProxy> & proxy_instance)
 {
+    const TableID table_id = 1;
     {
         auto region = kvs.getRegion(1);
-        auto table_id = 1;
+        // row with handle_id == 3
         region->insert(
             "lock",
             RecordKVFormat::genKey(table_id, 3),
@@ -314,7 +336,7 @@ static void testRaftSplit(KVStore & kvs, TMTContext & tmt, std::unique_ptr<MockR
             "write",
             RecordKVFormat::genKey(table_id, 3, 8),
             RecordKVFormat::encodeWriteCfValue(RecordKVFormat::CFModifyFlag::PutFlag, 5));
-
+        // row with handle_id == 8
         region->insert(
             "lock",
             RecordKVFormat::genKey(table_id, 8),
@@ -327,16 +349,19 @@ static void testRaftSplit(KVStore & kvs, TMTContext & tmt, std::unique_ptr<MockR
 
         ASSERT_EQ(region->dataInfo(), "[write 2 lock 2 default 2 ]");
     }
+
     // Split region
     RegionID region_id = 1;
     RegionID region_id2 = 7;
     auto source_region = kvs.getRegion(region_id);
     auto old_epoch = source_region->mutMeta().getMetaRegion().region_epoch();
     const auto & ori_source_range = source_region->getRange()->comparableKeys();
-    RegionRangeKeys::RegionRange new_source_range
-        = RegionRangeKeys::makeComparableKeys(RecordKVFormat::genKey(1, 5), RecordKVFormat::genKey(1, 10));
-    RegionRangeKeys::RegionRange new_target_range
-        = RegionRangeKeys::makeComparableKeys(RecordKVFormat::genKey(1, 0), RecordKVFormat::genKey(1, 5));
+    RegionRangeKeys::RegionRange new_source_range = RegionRangeKeys::makeComparableKeys( //
+        RecordKVFormat::genKey(table_id, 5),
+        RecordKVFormat::genKey(table_id, 10));
+    RegionRangeKeys::RegionRange new_target_range = RegionRangeKeys::makeComparableKeys( //
+        RecordKVFormat::genKey(table_id, 0),
+        RecordKVFormat::genKey(table_id, 5));
     auto && [request, response] = MockRaftStoreProxy::composeBatchSplit(
         {region_id, region_id2},
         regionRangeToEncodeKeys(new_source_range, new_target_range),
@@ -344,18 +369,18 @@ static void testRaftSplit(KVStore & kvs, TMTContext & tmt, std::unique_ptr<MockR
     kvs.handleAdminRaftCmd(raft_cmdpb::AdminRequest(request), raft_cmdpb::AdminResponse(response), 1, 20, 5, tmt);
     {
         auto mmp = kvs.getRegionsByRangeOverlap(new_target_range);
-        ASSERT_TRUE(mmp.count(7) != 0);
+        ASSERT_TRUE(mmp.count(region_id2) != 0);
         ASSERT_EQ(mmp.size(), 1);
     }
     {
         auto mmp = kvs.getRegionsByRangeOverlap(new_source_range);
-        ASSERT_TRUE(mmp.count(1) != 0);
+        ASSERT_TRUE(mmp.count(region_id) != 0);
         ASSERT_EQ(mmp.size(), 1);
     }
     {
         // We don't force migration of committed data from derived region to dm store.
-        ASSERT_EQ(kvs.getRegion(1)->dataInfo(), "[write 1 lock 1 default 1 ]");
-        ASSERT_EQ(kvs.getRegion(7)->dataInfo(), "[lock 1 ]");
+        ASSERT_EQ(kvs.getRegion(region_id)->dataInfo(), "[write 1 lock 1 default 1 ]");
+        ASSERT_EQ(kvs.getRegion(region_id2)->dataInfo(), "[lock 1 ]");
     }
     // Rollback 1 to before split
     // 7 is persisted
@@ -411,16 +436,29 @@ static void testRaftSplit(KVStore & kvs, TMTContext & tmt, std::unique_ptr<MockR
     }
 }
 
+<<<<<<< HEAD
 void RegionKVStoreTest::testRaftMerge(KVStore & kvs, TMTContext & tmt)
+=======
+void RegionKVStoreOldTest::testRaftMerge(Context & ctx, KVStore & kvs, TMTContext & tmt)
+>>>>>>> 6058d19646 (ddl: Fix the storage instance may be physically dropped when the region is not removed (#8721))
 {
+    const RegionID source_region_id = 7;
+    const RegionID target_region_id = 1;
+    const TableID table_id = 1;
+    proxy_instance->debugAddRegions(
+        kvs,
+        ctx.getTMTContext(),
+        {target_region_id, source_region_id},
+        {{RecordKVFormat::genKey(table_id, 0), RecordKVFormat::genKey(table_id, 5)},
+         {RecordKVFormat::genKey(table_id, 5), RecordKVFormat::genKey(table_id, 10)}});
+
     {
-        auto region_id = 7;
-        kvs.getRegion(1)->clearAllData();
-        kvs.getRegion(region_id)->clearAllData();
+        kvs.getRegion(target_region_id)->clearAllData();
+        kvs.getRegion(source_region_id)->clearAllData();
 
         {
-            auto region = kvs.getRegion(1);
-            auto table_id = 1;
+            // Region 1 with handle_id == 6
+            auto region = kvs.getRegion(target_region_id);
             region->insert(
                 "lock",
                 RecordKVFormat::genKey(table_id, 6),
@@ -433,8 +471,8 @@ void RegionKVStoreTest::testRaftMerge(KVStore & kvs, TMTContext & tmt)
             ASSERT_EQ(region->dataInfo(), "[write 1 lock 1 default 1 ]");
         }
         {
-            auto region = kvs.getRegion(region_id);
-            auto table_id = 1;
+            // Region 7 with handle_id == 2
+            auto region = kvs.getRegion(source_region_id);
             region->insert(
                 "lock",
                 RecordKVFormat::genKey(table_id, 2),
@@ -448,10 +486,10 @@ void RegionKVStoreTest::testRaftMerge(KVStore & kvs, TMTContext & tmt)
         }
     }
 
+    // Prepare merge for region 7
     {
-        auto region_id = 7;
-        auto source_region = kvs.getRegion(region_id);
-        auto target_region = kvs.getRegion(1);
+        auto source_region = kvs.getRegion(source_region_id);
+        auto target_region = kvs.getRegion(target_region_id);
         auto && [request, response]
             = MockRaftStoreProxy::composePrepareMerge(target_region->cloneMetaRegion(), source_region->appliedIndex());
         kvs.handleAdminRaftCmd(std::move(request), std::move(response), source_region->id(), 35, 6, tmt);
@@ -459,9 +497,8 @@ void RegionKVStoreTest::testRaftMerge(KVStore & kvs, TMTContext & tmt)
     }
 
     {
-        auto source_id = 7, target_id = 1;
-        auto source_region = kvs.getRegion(source_id);
-
+        /// Mock that source region is Applying, reject
+        auto source_region = kvs.getRegion(source_region_id);
         auto && [request, response]
             = MockRaftStoreProxy::composeCommitMerge(source_region->cloneMetaRegion(), source_region->appliedIndex());
         source_region->setStateApplying();
@@ -469,24 +506,30 @@ void RegionKVStoreTest::testRaftMerge(KVStore & kvs, TMTContext & tmt)
         const auto & source_region_meta_delegate = source_region->meta.makeRaftCommandDelegate();
         try
         {
-            kvs.getRegion(target_id)->meta.makeRaftCommandDelegate().checkBeforeCommitMerge(
-                request,
-                source_region_meta_delegate);
+            kvs.getRegion(target_region_id)
+                ->meta.makeRaftCommandDelegate()
+                .checkBeforeCommitMerge(request, source_region_meta_delegate);
             ASSERT_TRUE(false);
         }
         catch (Exception & e)
         {
             ASSERT_EQ(e.message(), "checkBeforeCommitMerge: unexpected state Applying of source 1");
         }
+    }
+
+    {
+        /// Mock that source region is Normal but meta not exist, reject
+        auto source_region = kvs.getRegion(source_region_id);
+        auto && [request, response]
+            = MockRaftStoreProxy::composeCommitMerge(source_region->cloneMetaRegion(), source_region->appliedIndex());
         source_region->setPeerState(raft_serverpb::PeerState::Normal);
-        {
-            request.mutable_commit_merge()->mutable_source()->mutable_start_key()->clear();
-        }
+        request.mutable_commit_merge()->mutable_source()->mutable_start_key()->clear();
+        const auto & source_region_meta_delegate = source_region->meta.makeRaftCommandDelegate();
         try
         {
-            kvs.getRegion(target_id)->meta.makeRaftCommandDelegate().checkBeforeCommitMerge(
-                request,
-                source_region_meta_delegate);
+            kvs.getRegion(target_region_id)
+                ->meta.makeRaftCommandDelegate()
+                .checkBeforeCommitMerge(request, source_region_meta_delegate);
             ASSERT_TRUE(false);
         }
         catch (Exception & e)
@@ -496,61 +539,74 @@ void RegionKVStoreTest::testRaftMerge(KVStore & kvs, TMTContext & tmt)
     }
 
     {
-        auto source_id = 7, target_id = 1;
-        auto source_region = kvs.getRegion(source_id);
+        /// Commit merge for merging region 7 -> region 1
+        auto source_region = kvs.getRegion(source_region_id);
         auto && [request, response]
             = MockRaftStoreProxy::composeCommitMerge(source_region->cloneMetaRegion(), source_region->appliedIndex());
+
+        // before commit merge
         {
-            auto mmp = kvs.getRegionsByRangeOverlap(RegionRangeKeys::makeComparableKeys(TiKVKey(""), TiKVKey("")));
-            ASSERT_TRUE(mmp.count(target_id) != 0);
-            ASSERT_EQ(mmp.size(), 2);
+            auto region_map
+                = kvs.getRegionsByRangeOverlap(RegionRangeKeys::makeComparableKeys(TiKVKey(""), TiKVKey("")));
+            ASSERT_TRUE(region_map.contains(target_region_id));
+            ASSERT_EQ(region_map.size(), 2);
         }
 
         kvs.handleAdminRaftCmd(
             raft_cmdpb::AdminRequest(request),
             raft_cmdpb::AdminResponse(response),
-            target_id,
+            target_region_id,
             36,
             6,
             tmt);
 
-        ASSERT_EQ(kvs.getRegion(source_id), nullptr);
+        // checks after commit merge
+        ASSERT_EQ(kvs.getRegion(source_region_id), nullptr);
         {
-            auto mmp = kvs.getRegionsByRangeOverlap(
-                RegionRangeKeys::makeComparableKeys(RecordKVFormat::genKey(1, 0), RecordKVFormat::genKey(1, 5)));
-            ASSERT_TRUE(mmp.count(1) != 0);
+            auto mmp = kvs.getRegionsByRangeOverlap(RegionRangeKeys::makeComparableKeys(
+                RecordKVFormat::genKey(table_id, 0),
+                RecordKVFormat::genKey(table_id, 5)));
+            ASSERT_TRUE(mmp.contains(target_region_id));
             ASSERT_EQ(mmp.size(), 1);
         }
+        ASSERT_EQ(kvs.getRegion(target_region_id)->dataInfo(), "[lock 2 ]");
+
+        // Add region 7 back and merge again
         {
             // add 7 back
             auto task_lock = kvs.genTaskLock();
             auto lock = kvs.genRegionMgrWriteLock(task_lock);
-            auto region
-                = makeRegion(7, RecordKVFormat::genKey(1, 0), RecordKVFormat::genKey(1, 5), kvs.getProxyHelper());
-            lock.regions.emplace(7, region);
+            auto region = makeRegion(
+                source_region_id,
+                RecordKVFormat::genKey(table_id, 0),
+                RecordKVFormat::genKey(table_id, 5),
+                kvs.getProxyHelper());
+            lock.regions.emplace(source_region_id, region);
             lock.index.add(region);
         }
         {
-            auto mmp = kvs.getRegionsByRangeOverlap(
-                RegionRangeKeys::makeComparableKeys(RecordKVFormat::genKey(1, 0), RecordKVFormat::genKey(1, 5)));
-            ASSERT_TRUE(mmp.count(7) != 0);
-            ASSERT_TRUE(mmp.count(1) != 0);
+            auto mmp = kvs.getRegionsByRangeOverlap(RegionRangeKeys::makeComparableKeys(
+                RecordKVFormat::genKey(table_id, 0),
+                RecordKVFormat::genKey(table_id, 5)));
+            ASSERT_TRUE(mmp.contains(source_region_id));
+            ASSERT_TRUE(mmp.contains(target_region_id));
             ASSERT_EQ(mmp.size(), 2);
         }
         kvs.handleAdminRaftCmd(
             raft_cmdpb::AdminRequest(request),
             raft_cmdpb::AdminResponse(response),
-            target_id,
+            target_region_id,
             36,
             6,
             tmt);
         {
-            auto mmp = kvs.getRegionsByRangeOverlap(
-                RegionRangeKeys::makeComparableKeys(RecordKVFormat::genKey(1, 0), RecordKVFormat::genKey(1, 5)));
-            ASSERT_TRUE(mmp.count(1) != 0);
+            auto mmp = kvs.getRegionsByRangeOverlap(RegionRangeKeys::makeComparableKeys(
+                RecordKVFormat::genKey(table_id, 0),
+                RecordKVFormat::genKey(table_id, 5)));
+            ASSERT_TRUE(mmp.contains(target_region_id));
             ASSERT_EQ(mmp.size(), 1);
         }
-        ASSERT_EQ(kvs.getRegion(1)->dataInfo(), "[lock 2 ]");
+        ASSERT_EQ(kvs.getRegion(target_region_id)->dataInfo(), "[lock 2 ]");
     }
 }
 
@@ -891,7 +947,11 @@ TEST_F(RegionKVStoreTest, AdminSplit)
     }
 }
 
+<<<<<<< HEAD
 TEST_F(RegionKVStoreTest, AdminMerge)
+=======
+TEST_F(RegionKVStoreOldTest, AdminMergeRollback)
+>>>>>>> 6058d19646 (ddl: Fix the storage instance may be physically dropped when the region is not removed (#8721))
 {
     createDefaultRegions();
     auto ctx = TiFlashTestEnv::getGlobalContext();
@@ -902,13 +962,25 @@ TEST_F(RegionKVStoreTest, AdminMerge)
         {1, 7},
         {{RecordKVFormat::genKey(1, 0), RecordKVFormat::genKey(1, 5)},
          {RecordKVFormat::genKey(1, 5), RecordKVFormat::genKey(1, 10)}});
+<<<<<<< HEAD
 
     {
         testRaftMergeRollback(kvs, ctx.getTMTContext());
         testRaftMerge(kvs, ctx.getTMTContext());
     }
+=======
+    testRaftMergeRollback(kvs, ctx.getTMTContext());
+>>>>>>> 6058d19646 (ddl: Fix the storage instance may be physically dropped when the region is not removed (#8721))
 }
 
+TEST_F(RegionKVStoreOldTest, AdminMerge)
+try
+{
+    auto ctx = TiFlashTestEnv::getGlobalContext();
+    KVStore & kvs = getKVS();
+    testRaftMerge(ctx, kvs, ctx.getTMTContext());
+}
+CATCH
 
 TEST_F(RegionKVStoreTest, AdminChangePeer)
 {

@@ -471,8 +471,13 @@ void MockRaftStoreProxy::unsafeInvokeForTest(std::function<void(MockRaftStorePro
 void MockRaftStoreProxy::bootstrapWithRegion(
     KVStore & kvs,
     TMTContext & tmt,
+<<<<<<< HEAD:dbms/src/Debug/MockRaftStoreProxy.cpp
     UInt64 region_id,
     std::optional<std::pair<std::string, std::string>> maybe_range)
+=======
+    RegionID region_id,
+    std::optional<std::pair<std::string, std::string>> maybe_range) NO_THREAD_SAFETY_ANALYSIS
+>>>>>>> 6058d19646 (ddl: Fix the storage instance may be physically dropped when the region is not removed (#8721)):dbms/src/Debug/MockKVStore/MockRaftStoreProxy.cpp
 {
     {
         auto _ = genLockGuard();
