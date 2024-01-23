@@ -227,7 +227,7 @@ struct RowEncoderV2
         is_big = is_big || value_length > std::numeric_limits<RowV2::Types<false>::ValueOffsetType>::max();
 
         /// Encode header.
-        encodeUInt(UInt8(RowCodecVer::ROW_V2), ss);
+        encodeUInt(static_cast<UInt8>(RowCodecVer::ROW_V2), ss);
         UInt8 row_flag = 0;
         row_flag |= is_big ? RowV2::BigRowMask : 0;
         encodeUInt(row_flag, ss);
@@ -533,19 +533,26 @@ bool appendRowV2ToBlockImpl(
                 {
                     if (!force_decode)
                     {
+                        // Detect `NULL` column value in a non-nullable column in the schema, let upper level try to sync the schema.
                         return false;
                     }
                     else
                     {
-                        throw Exception(
-                            "Detected invalid null when decoding data of column " + column_info.name
-                                + " with column type " + raw_column->getName(),
-                            ErrorCodes::LOGICAL_ERROR);
+                        // If user turn a nullable column (with default value) to a non-nullable column. There could exists some rows
+                        // with `NULL` values inside the SST files. Or some key-values encoded with old schema come after the schema
+                        // change is applied in TiFlash because of network issue.
+                        // If the column_id exists in null_column_ids, it means the column has default value but filled with NULL.
+                        // Just filled with default value for these old schema rows.
+                        raw_column->insert(column_info.defaultValueToField());
+                        idx_null++;
                     }
                 }
-                // ColumnNullable::insertDefault just insert a null value
-                raw_column->insertDefault();
-                idx_null++;
+                else
+                {
+                    // ColumnNullable::insertDefault just insert a null value
+                    raw_column->insertDefault();
+                    idx_null++;
+                }
             }
             else
             {
