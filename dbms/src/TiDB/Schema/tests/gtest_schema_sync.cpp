@@ -35,6 +35,8 @@
 
 #include <limits>
 
+#include "ext/scope_guard.h"
+
 namespace DB
 {
 namespace FailPoints
@@ -348,6 +350,7 @@ try
     FailPointHelper::enableFailPoint(
         FailPoints::force_set_num_regions_for_table,
         std::vector<RegionID>{1001, 1002, 1003});
+    SCOPE_EXIT({ FailPointHelper::disableFailPoint(FailPoints::force_set_num_regions_for_table); });
 
     auto sync_service = std::make_shared<SchemaSyncService>(global_ctx);
     ASSERT_TRUE(sync_service->gc(std::numeric_limits<UInt64>::max(), NullspaceID));
