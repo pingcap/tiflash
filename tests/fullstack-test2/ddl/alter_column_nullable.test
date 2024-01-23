@@ -128,6 +128,7 @@ mysql> select * from test.alt2 order by a;
 +------+---+----+
 # Send snapshot to TiFlash
 mysql> alter table test.alt2 set tiflash replica 1;
+func> wait_table test alt2
 mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.alt2 order by a;
 +------+---+----+
 | a    | b | c  |
