@@ -227,7 +227,7 @@ void ExecutorStatisticsCollector::fillLocalExecutionSummaries(tipb::SelectRespon
                 }
             }
         }
-        RUNTIME_CHECK_MSG(!target_executor_summary, "cannot find executor summary to put ru consumption");
+        RUNTIME_CHECK_MSG(target_executor_summary, "cannot find executor summary to put ru consumption");
         RUNTIME_CHECK_MSG(
             local_ru->SerializeToString(target_executor_summary->mutable_ru_consumption()),
             "failed to serialize tiflash ru consumption into select response");
