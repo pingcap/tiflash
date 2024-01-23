@@ -204,6 +204,11 @@ void SchemaSyncService::updateLastGcSafepoint(KeyspaceID keyspace_id, Timestamp 
 
 bool SchemaSyncService::gc(Timestamp gc_safepoint, KeyspaceID keyspace_id)
 {
+    return gcImpl(gc_safepoint, keyspace_id, /*ignore_remain_regions*/ false);
+}
+
+bool SchemaSyncService::gcImpl(Timestamp gc_safepoint, KeyspaceID keyspace_id, bool ignore_remain_regions)
+{
     const std::optional<Timestamp> last_gc_safepoint = lastGcSafePoint(keyspace_id);
     // for new deploy cluster, there is an interval that gc_safepoint return 0, skip it
     if (gc_safepoint == 0)
@@ -289,15 +294,30 @@ bool SchemaSyncService::gc(Timestamp gc_safepoint, KeyspaceID keyspace_id)
         if (auto remain_regions = region_table.getRegionIdsByTable(keyspace_id, table_info.id); //
             !remain_regions.empty())
         {
-            LOG_WARNING(
-                keyspace_log,
-                "Physically drop table is skip, regions are not totally removed from TiFlash, remain_region_ids={}"
-                " table_tombstone={} safepoint={} {}",
-                remain_regions,
-                storage->getTombstone(),
-                gc_safepoint,
-                canonical_name);
-            continue;
+            if (likely(!ignore_remain_regions))
+            {
+                LOG_WARNING(
+                    keyspace_log,
+                    "Physically drop table is skip, regions are not totally removed from TiFlash, remain_region_ids={}"
+                    " table_tombstone={} safepoint={} {}",
+                    remain_regions,
+                    storage->getTombstone(),
+                    gc_safepoint,
+                    canonical_name);
+                continue;
+            }
+            else
+            {
+                LOG_WARNING(
+                    keyspace_log,
+                    "Physically drop table is executed while regions are not totally removed from TiFlash,"
+                    " remain_region_ids={} ignore_remain_regions={} table_tombstone={} safepoint={} {} ",
+                    remain_regions,
+                    ignore_remain_regions,
+                    storage->getTombstone(),
+                    gc_safepoint,
+                    canonical_name);
+            }
         }
 
         LOG_INFO(

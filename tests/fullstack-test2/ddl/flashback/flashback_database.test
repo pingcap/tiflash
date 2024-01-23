@@ -55,7 +55,7 @@ mysql> set session tidb_isolation_read_engines='tiflash'; select * from d1_new.t
 # ensure the flashbacked table and database is not mark as tombstone
 >> DBGInvoke __enable_schema_sync_service('true')
 => DBGInvoke __refresh_schemas()
->> DBGInvoke __gc_schemas(18446744073709551615)
+>> DBGInvoke __gc_schemas(18446744073709551615, 'true')
 
 mysql> set session tidb_isolation_read_engines='tiflash'; select * from d1_new.t3 order by a;
 +------+------+
@@ -126,7 +126,7 @@ mysql> set session tidb_isolation_read_engines='tiflash'; select * from d1_new.t
 => DBGInvoke __refresh_schemas()
 # ensure the flashbacked table and database is not mark as tombstone
 >> DBGInvoke __enable_schema_sync_service('true')
->> DBGInvoke __gc_schemas(18446744073709551615)
+>> DBGInvoke __gc_schemas(18446744073709551615, 'true')
 >> DBGInvoke __enable_schema_sync_service('false')
 mysql> set session tidb_isolation_read_engines='tiflash'; select * from d1_new.t1 order by a;
 +------+------+
@@ -176,7 +176,7 @@ mysql> set session tidb_isolation_read_engines='tiflash'; select * from d1_new.t
 => DBGInvoke __refresh_schemas()
 # ensure the flashbacked table and database is not mark as tombstone
 >> DBGInvoke __enable_schema_sync_service('true')
->> DBGInvoke __gc_schemas(18446744073709551615)
+>> DBGInvoke __gc_schemas(18446744073709551615, 'true')
 >> DBGInvoke __enable_schema_sync_service('false')
 mysql> set session tidb_isolation_read_engines='tiflash'; select * from d1_new.t2 order by id;
 +----+------+------+
@@ -223,7 +223,7 @@ mysql> set session tidb_isolation_read_engines='tiflash'; select * from d1_new.t
 
 # ensure the flashbacked table and database is not mark as tombstone
 >> DBGInvoke __enable_schema_sync_service('true')
->> DBGInvoke __gc_schemas(18446744073709551615)
+>> DBGInvoke __gc_schemas(18446744073709551615, 'true')
 >> DBGInvoke __enable_schema_sync_service('false')
 mysql> set session tidb_isolation_read_engines='tiflash'; select * from d1_new.t1 order by a;
 +------+

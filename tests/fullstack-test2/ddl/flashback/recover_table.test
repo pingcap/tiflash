@@ -14,7 +14,7 @@
 
 # Clean the tombstone table in the testing env
 >> DBGInvoke __enable_schema_sync_service('true')
->> DBGInvoke __gc_schemas(18446744073709551615)
+>> DBGInvoke __gc_schemas(18446744073709551615, 'true')
 
 ### Case 1
 ## Test case for applying raft cmd for tombstoned table
@@ -157,8 +157,8 @@ mysql> drop table test.t_drop;
 │ test          │ t_drop    │
 └───────────────┴───────────┘
 
-=> DBGInvoke __enable_schema_sync_service('true') 
-=> DBGInvoke __gc_schemas(9223372036854775807)
+>> DBGInvoke __enable_schema_sync_service('true') 
+>> DBGInvoke __gc_schemas(18446744073709551615, 'true')
 
 # check the table is physically dropped
 >> select tidb_database,tidb_name from system.tables where tidb_database = 'test' and tidb_name = 't_drop'
