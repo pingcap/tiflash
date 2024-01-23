@@ -210,19 +210,26 @@ void ExecutorStatisticsCollector::fillLocalExecutionSummaries(tipb::SelectRespon
     auto fill_local_ru = [&]() {
         auto & execution_summaries = *response.mutable_execution_summaries();
         const String root_executor_id = dag_context->dag_request.rootExecutorID();
-        bool setup = false;
-        for (auto & summary : execution_summaries)
+        tipb::ExecutorExecutionSummary * target_executor_summary = nullptr;
+        if (root_executor_id.empty() && !execution_summaries.empty())
         {
-            if (summary.executor_id() == root_executor_id)
+            target_executor_summary = &(execution_summaries[0]);
+        }
+        else
+        {
+            for (auto & summary : execution_summaries)
             {
-                RUNTIME_CHECK_MSG(
-                    local_ru->SerializeToString(summary.mutable_ru_consumption()),
-                    "failed to serialize tiflash ru consumption into select response");
-                setup = true;
-                break;
+                if (summary.executor_id() == root_executor_id)
+                {
+                    target_executor_summary = &summary;
+                    break;
+                }
             }
         }
-        RUNTIME_CHECK_MSG(setup, "cannot find root executor({}) to put tiflash ru consuomption", root_executor_id);
+        RUNTIME_CHECK_MSG(!target_executor_summary, "cannot find executor summary to put ru consumption");
+        RUNTIME_CHECK_MSG(
+                local_ru->SerializeToString(target_executor_summary->mutable_ru_consumption()),
+                "failed to serialize tiflash ru consumption into select response");
     };
 
     if (dag_context->dag_request.isTreeBased())
