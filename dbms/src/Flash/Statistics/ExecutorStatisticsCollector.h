@@ -97,7 +97,7 @@ private:
     std::map<String, ExecutorStatisticsPtr> profiles;
     const LoggerPtr log;
     bool force_fill_executor_id; // for testing list based executors
-    std::unique_ptr<resource_manager::Consumption> local_ru;
+    std::optional<resource_manager::Consumption> local_ru;
 };
 using ExecutorStatisticsCollectorPtr = std::unique_ptr<ExecutorStatisticsCollector>;
 } // namespace DB

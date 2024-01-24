@@ -153,7 +153,7 @@ tipb::TiFlashExecutionInfo ExecutorStatisticsCollector::genTiFlashExecutionInfo(
 
 void ExecutorStatisticsCollector::setLocalRUConsumption(const RUConsumption & ru_info)
 {
-    local_ru = std::make_unique<resource_manager::Consumption>();
+    local_ru = std::make_optional<resource_manager::Consumption>();
     local_ru->set_r_r_u(ru_info.cpu_ru + ru_info.read_ru);
     local_ru->set_total_cpu_time_ms(toCPUTimeMillisecond(ru_info.cpu_time_ns));
     local_ru->set_read_bytes(ru_info.read_bytes);
@@ -243,8 +243,6 @@ void ExecutorStatisticsCollector::fillLocalExecutionSummaries(tipb::SelectRespon
                 p.second->getBaseRuntimeStatistics(),
                 p.second->processTimeForJoinBuild(),
                 dag_context->scan_context_map);
-
-        fill_local_ru();
     }
     else
     {
@@ -261,9 +259,8 @@ void ExecutorStatisticsCollector::fillLocalExecutionSummaries(tipb::SelectRespon
                 0, // No join executors in list-based executors
                 dag_context->scan_context_map);
         }
-
-        fill_local_ru();
     }
+    fill_local_ru();
 }
 
 void ExecutorStatisticsCollector::fillRemoteExecutionSummaries(tipb::SelectResponse & response)
