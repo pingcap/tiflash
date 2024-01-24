@@ -176,7 +176,7 @@ protected:
                 }
                 else
                 {
-                    if (fields_map.count(column_element.column_id) > 0)
+                    if (fields_map.contains(column_element.column_id))
                     {
                         if (!invalid_null_column_ids.contains(column_element.column_id))
                         {
