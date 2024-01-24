@@ -43,9 +43,16 @@ protected:
         return createColumn<Nullable<String>>(v);
     }
 
-    static ColumnWithTypeAndName toVec(const std::vector<String> & v)
+    static ColumnWithTypeAndName toVec(const std::vector<std::optional<String>> & v)
     {
-        return createColumn<String>(v);
+        std::vector<String> strings;
+        strings.reserve(v.size());
+        for (std::optional<String> s : v)
+        {
+            strings.push_back(s.value());
+        }
+
+        return createColumn<String>(strings);
     }
 
     static ColumnWithTypeAndName toConst(const String & s)
@@ -56,29 +63,43 @@ protected:
 
 TEST_F(StringUpper, upperAll)
 {
-    ASSERT_COLUMN_EQ(
-        toNullableVec({"ONE WEEK’S TIME TEST", "ABC测试DEF", "ABCテストABC", "ЀЁЂЃЄЅІЇЈЉЊЋЌЍЎЏ", "+Ѐ-Ё*Ђ/Ѓ!Є@Ѕ#І$@Ї%Ј……Љ&Њ（Ћ）Ќ￥Ѝ#Ў@Џ！^", "ΑΒΓΔΕΖΗΘΙΚΛΜΝΞΟΠΡΣΤΥΦΧΨΩΣ", "▲Α▼ΒΓ➨ΔΕ☎ΖΗ✂ΘΙ€ΚΛ♫ΜΝ✓ΞΟ✚ΠΡ℉ΣΤ♥ΥΦ♖ΧΨ♘Ω★Σ✕", "ԹՓՁՋՐՉՃԺԾՔՈԵՌՏԸՒԻՕՊԱՍԴՖԳՀՅԿԼԽԶՂՑՎԲՆՄՇ"}),
-        executeFunction(
-            "upperUTF8",
-            toNullableVec({"one week’s time TEST", "abc测试DeF", "AbCテストAbC", "ѐёђѓєѕіїјЉЊЋЌЍЎЏ", "+ѐ-ё*ђ/ѓ!є@ѕ#і$@ї%ј……Љ&Њ（Ћ）Ќ￥Ѝ#Ў@Џ！^", "αβγδεζηθικλμνξοπρστυφχψως", "▲α▼βγ➨δε☎ζη✂θι€κλ♫μν✓ξο✚πρ℉στ♥υφ♖χψ♘ω★ς✕", "թփձջրչճժծքոեռտըւիօպասդֆգհյկլխզղցվբնմշ"})));
+    std::vector<std::optional<String>> candidate_strings
+        = {"one week's time TEST",
+           "abc测试DeF",
+           "AbCテストAbC",
+           "ѐёђѓєѕіїјЉЊЋЌЍЎЏ",
+           "+ѐ-ё*ђ/ѓ!є@ѕ#і$@ї%ј……Љ&Њ（Ћ）Ќ￥Ѝ#Ў@Џ！^",
+           "ſⱥⱦⱥaſfɫoomɑɱɒ",
+           "αβγδεζηθικλμνξοπρστυφχψως",
+           "test_wrong_utf8_1\x80\xe0\x21",
+           "▲α▼βγ➨δε☎ζη✂θι€κλ♫μν✓ξο✚πρ℉στ♥υφ♖χψ♘ω★ς✕",
+           "ȿɀabcdefghijklmnopɥı",
+           "test_wrong_utf8_2\xf1\x22",
+           "թփձջրչճժծքոեռտըւիօպասդֆգհյկլխզղցվբնմշ"};
+
+    std::vector<std::optional<String>> upper_case_strings
+        = {"ONE WEEK'S TIME TEST",
+           "ABC测试DEF",
+           "ABCテストABC",
+           "ЀЁЂЃЄЅІЇЈЉЊЋЌЍЎЏ",
+           "+Ѐ-Ё*Ђ/Ѓ!Є@Ѕ#І$@Ї%Ј……Љ&Њ（Ћ）Ќ￥Ѝ#Ў@Џ！^",
+           "SȺȾȺASFⱢOOMⱭⱮⱰ",
+           "ΑΒΓΔΕΖΗΘΙΚΛΜΝΞΟΠΡΣΤΥΦΧΨΩΣ",
+           "TEST_WRONG_UTF8_1\x80\xe0\x21",
+           "▲Α▼ΒΓ➨ΔΕ☎ΖΗ✂ΘΙ€ΚΛ♫ΜΝ✓ΞΟ✚ΠΡ℉ΣΤ♥ΥΦ♖ΧΨ♘Ω★Σ✕",
+           "ⱾⱿABCDEFGHIJKLMNOPꞍI",
+           "TEST_WRONG_UTF8_2\xf1\x22",
+           "ԹՓՁՋՐՉՃԺԾՔՈԵՌՏԸՒԻՕՊԱՍԴՖԳՀՅԿԼԽԶՂՑՎԲՆՄՇ"};
+
+    ASSERT_COLUMN_EQ(toNullableVec(upper_case_strings), executeFunction("upperUTF8", toNullableVec(candidate_strings)));
+
+    ASSERT_COLUMN_EQ(toVec(upper_case_strings), executeFunction("upperUTF8", toVec(candidate_strings)));
 
     ASSERT_COLUMN_EQ(
-        toVec({"ONE WEEK’S TIME TEST", "ABC测试DEF", "ABCテストABC", "ЀЁЂЃЄЅІЇЈЉЊЋЌЍЎЏ", "+Ѐ-Ё*Ђ/Ѓ!Є@Ѕ#І$@Ї%Ј……Љ&Њ（Ћ）Ќ￥Ѝ#Ў@Џ！^", "ΑΒΓΔΕΖΗΘΙΚΛΜΝΞΟΠΡΣΤΥΦΧΨΩΣ", "▲Α▼ΒΓ➨ΔΕ☎ΖΗ✂ΘΙ€ΚΛ♫ΜΝ✓ΞΟ✚ΠΡ℉ΣΤ♥ΥΦ♖ΧΨ♘Ω★Σ✕", "ԹՓՁՋՐՉՃԺԾՔՈԵՌՏԸՒԻՕՊԱՍԴՖԳՀՅԿԼԽԶՂՑՎԲՆՄՇ"}),
-        executeFunction(
-            "upperUTF8",
-            toVec({"one week’s time TEST", "abc测试DeF", "AbCテストAbC", "ѐёђѓєѕіїјЉЊЋЌЍЎЏ", "+ѐ-ё*ђ/ѓ!є@ѕ#і$@ї%ј……Љ&Њ（Ћ）Ќ￥Ѝ#Ў@Џ！^", "αβγδεζηθικλμνξοπρστυφχψως", "▲α▼βγ➨δε☎ζη✂θι€κλ♫μν✓ξο✚πρ℉στ♥υφ♖χψ♘ω★ς✕", "թփձջրչճժծքոեռտըւիօպասդֆգհյկլխզղցվբնմշ"})));
+        toNullableVec(candidate_strings),
+        executeFunction("upperBinary", toNullableVec(candidate_strings)));
 
-    ASSERT_COLUMN_EQ(
-        toNullableVec({"one week’s time TEST", "abc测试DeF", "AbCテストAbC", "ѐёђѓєѕіїјЉЊЋЌЍЎЏ", "αβγδεζηθικλμνξοπρστυφχψως", "թփձջրչճժծքոեռտըւիօպասդֆգհյկլխզղցվբնմշ"}),
-        executeFunction(
-            "upperBinary",
-            toNullableVec({"one week’s time TEST", "abc测试DeF", "AbCテストAbC", "ѐёђѓєѕіїјЉЊЋЌЍЎЏ", "αβγδεζηθικλμνξοπρστυφχψως", "թփձջրչճժծքոեռտըւիօպասդֆգհյկլխզղցվբնմշ"})));
-
-    ASSERT_COLUMN_EQ(
-        toVec({"one week’s time TEST", "abc测试DeF", "AbCテストAbC", "ѐёђѓєѕіїјЉЊЋЌЍЎЏ", "αβγδεζηθικλμνξοπρστυφχψως", "թփձջրչճժծքոեռտըւիօպասդֆգհյկլխզղցվբնմշ"}),
-        executeFunction(
-            "upperBinary",
-            toVec({"one week’s time TEST", "abc测试DeF", "AbCテストAbC", "ѐёђѓєѕіїјЉЊЋЌЍЎЏ", "αβγδεζηθικλμνξοπρστυφχψως", "թփձջրչճժծքոեռտըւիօպասդֆգհյկլխզղցվբնմշ"})));
+    ASSERT_COLUMN_EQ(toVec(candidate_strings), executeFunction("upperBinary", toVec(candidate_strings)));
 
     ASSERT_COLUMN_EQ(
         toConst("ONE WEEK’S TIME TEST"),
