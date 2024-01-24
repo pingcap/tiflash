@@ -108,14 +108,11 @@ private:
 
     void initExchangeReceivers();
 
-<<<<<<< HEAD
-=======
     String getErrString() const;
     void setErrString(const String & message);
 
 private:
     // To make sure dag_req is not destroyed before the mpp task ends.
->>>>>>> 12bda10fd1 (Tsan: fix data race on `ComputeServerRunner.cancelJoinTasks` (#7434))
     tipb::DAGRequest dag_req;
     mpp::TaskMeta meta;
     MPPTaskId id;
