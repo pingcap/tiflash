@@ -19,6 +19,7 @@
 #include <Flash/Coprocessor/collectOutputFieldTypes.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <Flash/Statistics/traverseExecutors.h>
+#include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <kvproto/disaggregated.pb.h>
 #include <tipb/executor.pb.h>
@@ -41,7 +42,7 @@ bool strictSqlMode(UInt64 sql_mode)
 // for non-mpp(cop/batchCop)
 DAGContext::DAGContext(tipb::DAGRequest & dag_request_, TablesRegionsInfo && tables_regions_info_, KeyspaceID keyspace_id_, const String & tidb_host_, bool is_batch_cop_, LoggerPtr log_)
     : dag_request(&dag_request_)
-    , dummy_query_string(dag_request->DebugString())
+    , dummy_query_string(dag_request->ShortDebugString())
     , dummy_ast(makeDummyQuery())
     , tidb_host(tidb_host_)
     , collect_execution_summaries(dag_request->has_collect_execution_summaries() && dag_request->collect_execution_summaries())
@@ -63,7 +64,7 @@ DAGContext::DAGContext(tipb::DAGRequest & dag_request_, TablesRegionsInfo && tab
 // for mpp
 DAGContext::DAGContext(tipb::DAGRequest & dag_request_, const mpp::TaskMeta & meta_, bool is_root_mpp_task_)
     : dag_request(&dag_request_)
-    , dummy_query_string(dag_request->DebugString())
+    , dummy_query_string(dag_request->ShortDebugString())
     , dummy_ast(makeDummyQuery())
     , collect_execution_summaries(dag_request->has_collect_execution_summaries() && dag_request->collect_execution_summaries())
     , is_mpp_task(true)
@@ -85,7 +86,7 @@ DAGContext::DAGContext(tipb::DAGRequest & dag_request_, const mpp::TaskMeta & me
 // for disaggregated task on write node
 DAGContext::DAGContext(tipb::DAGRequest & dag_request_, const disaggregated::DisaggTaskMeta & task_meta_, TablesRegionsInfo && tables_regions_info_, const String & compute_node_host_, LoggerPtr log_)
     : dag_request(&dag_request_)
-    , dummy_query_string(dag_request->DebugString())
+    , dummy_query_string(dag_request->ShortDebugString())
     , dummy_ast(makeDummyQuery())
     , tidb_host(compute_node_host_)
     , collect_execution_summaries(dag_request->has_collect_execution_summaries() && dag_request->collect_execution_summaries())
@@ -123,7 +124,7 @@ DAGContext::DAGContext(UInt64 max_error_count_)
 // for tests need to run query tasks.
 DAGContext::DAGContext(tipb::DAGRequest & dag_request_, String log_identifier, size_t concurrency)
     : dag_request(&dag_request_)
-    , dummy_query_string(dag_request->DebugString())
+    , dummy_query_string(dag_request->ShortDebugString())
     , dummy_ast(makeDummyQuery())
     , initialize_concurrency(concurrency)
     , collect_execution_summaries(dag_request->has_collect_execution_summaries() && dag_request->collect_execution_summaries())

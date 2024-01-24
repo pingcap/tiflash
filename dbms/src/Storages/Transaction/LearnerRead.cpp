@@ -144,6 +144,11 @@ struct LearnerReadStatistics
     UInt64 read_index_elapsed_ms = 0;
     UInt64 wait_index_elapsed_ms = 0;
 
+    // num_regions == num_read_index_request + num_cached_read_index + num_stale_read
+    UInt64 num_regions = 0;
+    //
+    UInt64 num_read_index_request = 0;
+    UInt64 num_cached_read_index = 0;
     UInt64 num_stale_read = 0;
 };
 
@@ -183,16 +188,15 @@ LearnerReadSnapshot doLearnerRead(
             regions_info.size(),
             regions_snapshot.size());
 
-    const size_t num_regions = regions_info.size();
-
     // TODO: refactor this enormous lambda into smaller parts
     UnavailableRegions unavailable_regions;
     LearnerReadStatistics stats;
+    stats.num_regions = regions_info.size();
     const auto batch_wait_index = [&](const size_t region_begin_idx) -> void {
         Stopwatch batch_wait_data_watch;
         Stopwatch watch;
 
-        const size_t ori_batch_region_size = num_regions - region_begin_idx;
+        const size_t ori_batch_region_size = stats.num_regions - region_begin_idx;
         std::unordered_map<RegionID, kvrpcpb::ReadIndexResponse> batch_read_index_result;
 
         std::vector<kvrpcpb::ReadIndexRequest> batch_read_index_req;
@@ -202,7 +206,7 @@ LearnerReadSnapshot doLearnerRead(
             // If using `std::numeric_limits<uint64_t>::max()`, set `start-ts` 0 to get the latest index but let read-index-worker do not record as history.
             auto read_index_tso = mvcc_query_info->read_tso == std::numeric_limits<uint64_t>::max() ? 0 : mvcc_query_info->read_tso;
             RegionTable & region_table = tmt.getRegionTable();
-            for (size_t region_idx = region_begin_idx; region_idx < num_regions; ++region_idx)
+            for (size_t region_idx = region_begin_idx; region_idx < stats.num_regions; ++region_idx)
             {
                 const auto & region_to_query = regions_info[region_idx];
                 const RegionID region_id = region_to_query.region_id;
@@ -215,11 +219,13 @@ LearnerReadSnapshot doLearnerRead(
                         auto resp = kvrpcpb::ReadIndexResponse();
                         resp.set_read_index(ori_read_index);
                         batch_read_index_result.emplace(region_id, std::move(resp));
+                        ++stats.num_cached_read_index;
                     }
                     else
                     {
                         auto & region = regions_snapshot.find(region_id)->second;
                         batch_read_index_req.emplace_back(GenRegionReadIndexReq(*region, read_index_tso));
+                        ++stats.num_read_index_request;
                     }
                 }
                 else
@@ -276,15 +282,19 @@ LearnerReadSnapshot doLearnerRead(
         {
             stats.read_index_elapsed_ms = watch.elapsedMilliseconds();
             GET_METRIC(tiflash_raft_read_index_duration_seconds).Observe(stats.read_index_elapsed_ms / 1000.0);
-            const size_t cached_size = ori_batch_region_size - batch_read_index_req.size();
 
-            LOG_DEBUG(
+            const auto log_lvl = unavailable_regions.empty() ? Poco::Message::PRIO_DEBUG : Poco::Message::PRIO_INFORMATION;
+            LOG_IMPL(
                 log,
-                "Batch read index, original size {}, send & get {} message, cost {}ms{}",
-                ori_batch_region_size,
-                batch_read_index_req.size(),
-                stats.read_index_elapsed_ms,
-                (cached_size != 0) ? (fmt::format(", {} in cache", cached_size)) : "");
+                log_lvl,
+                "[Learner Read] Batch read index, num_regions={} num_requests={} num_cached_index={} "
+                "num_unavailable={} "
+                "cost={}ms",
+                stats.num_regions,
+                stats.num_read_index_request,
+                stats.num_cached_read_index,
+                unavailable_regions.size(),
+                stats.read_index_elapsed_ms);
 
             watch.restart(); // restart to count the elapsed of wait index
         }
@@ -326,7 +336,7 @@ LearnerReadSnapshot doLearnerRead(
             throw TiFlashException(Errors::Coprocessor::RegionError, "Region {} is unavailable at {}", region_id, index);
         };
         const auto wait_index_timeout_ms = tmt.waitIndexTimeout();
-        for (size_t region_idx = region_begin_idx, read_index_res_idx = 0; region_idx < num_regions; ++region_idx, ++read_index_res_idx)
+        for (size_t region_idx = region_begin_idx, read_index_res_idx = 0; region_idx < stats.num_regions; ++region_idx, ++read_index_res_idx)
         {
             const auto & region_to_query = regions_info[region_idx];
 
@@ -405,11 +415,13 @@ LearnerReadSnapshot doLearnerRead(
         }
         GET_METRIC(tiflash_syncing_data_freshness).Observe(batch_wait_data_watch.elapsedSeconds()); // For DBaaS SLI
         stats.wait_index_elapsed_ms = watch.elapsedMilliseconds();
-        LOG_DEBUG(
+        const auto log_lvl = unavailable_regions.empty() ? Poco::Message::PRIO_DEBUG : Poco::Message::PRIO_INFORMATION;
+        LOG_IMPL(
             log,
-            "Finish wait index | resolve locks | check memory cache for {} regions, cost {}ms, {} unavailable regions",
-            batch_read_index_req.size(),
+            log_lvl,
+            "[Learner Read] Finish wait index and resolve locks, wait_cost={}ms n_regions={} n_unavailable={}",
             stats.wait_index_elapsed_ms,
+            stats.num_regions,
             unavailable_regions.size());
     };
 
@@ -422,8 +434,10 @@ LearnerReadSnapshot doLearnerRead(
 
     const auto end_time = Clock::now();
     const auto time_elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
-    // Use info level if read wait index run slow
-    const auto log_lvl = time_elapsed_ms > 1000 ? Poco::Message::PRIO_INFORMATION : Poco::Message::PRIO_DEBUG;
+    // Use info level if read wait index run slow or any unavailable region exists
+    const auto log_lvl = (time_elapsed_ms > 1000 || !unavailable_regions.empty()) //
+        ? Poco::Message::PRIO_INFORMATION
+        : Poco::Message::PRIO_DEBUG;
     LOG_IMPL(
         log,
         log_lvl,
@@ -432,7 +446,7 @@ LearnerReadSnapshot doLearnerRead(
         time_elapsed_ms,
         stats.read_index_elapsed_ms,
         stats.wait_index_elapsed_ms,
-        num_regions,
+        stats.num_regions,
         stats.num_stale_read,
         unavailable_regions.size());
 

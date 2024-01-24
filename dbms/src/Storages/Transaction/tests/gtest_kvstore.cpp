@@ -1042,7 +1042,7 @@ try
             }
             catch (Exception & e)
             {
-                ASSERT_EQ(e.message(), fmt::format("[region {}] already has newer apply-index 8 than 6, should not happen", region_id));
+                ASSERT_EQ(e.message(), fmt::format("[region {}] already has newer apply-index 8 than 6, should not happen: (while applyPreHandledSnapshot region_id={})", region_id, region_id));
             }
         }
 
