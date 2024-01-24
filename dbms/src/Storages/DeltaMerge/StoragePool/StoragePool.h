@@ -56,7 +56,7 @@ public:
         NamespaceID table_id_,
         StoragePathPool & storage_path_pool_,
         const String & name);
-    
+
     // For test
     StoragePool(
         Context & global_ctx,
