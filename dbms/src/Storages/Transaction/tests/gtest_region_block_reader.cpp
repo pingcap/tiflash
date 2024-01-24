@@ -50,6 +50,7 @@ protected:
 
     RegionDataReadInfoList data_list_read;
     std::unordered_map<ColumnID, Field> fields_map;
+    std::unordered_set<ColumnID> invalid_null_column_ids;
 
     LoggerPtr logger;
 
@@ -172,8 +173,23 @@ protected:
                 }
                 else
                 {
+<<<<<<< HEAD:dbms/src/Storages/Transaction/tests/gtest_region_block_reader.cpp
                     if (fields_map.count(column_element.column_id) > 0)
                         ASSERT_FIELD_EQ((*column_element.column)[row], fields_map.at(column_element.column_id)) << gen_error_log();
+=======
+                    if (fields_map.contains(column_element.column_id))
+                    {
+                        if (!invalid_null_column_ids.contains(column_element.column_id))
+                        {
+                            ASSERT_FIELD_EQ((*column_element.column)[row], fields_map.at(column_element.column_id))
+                                << gen_error_log();
+                        }
+                        else
+                        {
+                            ASSERT_FIELD_EQ((*column_element.column)[row], UInt64(0));
+                        }
+                    }
+>>>>>>> 24663e93c5 (ddl: Fix NULL value in non-nullable column (#8722)):dbms/src/Storages/KVStore/tests/gtest_region_block_reader.cpp
                     else
                         LOG_INFO(logger, "ignore value check for new added column, id={}, name={}", column_element.column_id, column_element.name);
                 }
@@ -401,11 +417,12 @@ try
     encodeColumns(table_info, fields, RowEncodeVersion::RowV2);
 
     auto new_table_info = getTableInfoFieldsForInvalidNULLTest({EXTRA_HANDLE_COLUMN_ID}, false);
+    invalid_null_column_ids.emplace(11);
     ASSERT_TRUE(new_table_info.getColumnInfo(11).hasNotNullFlag()); // col 11 is not null
 
     auto new_decoding_schema = getDecodingStorageSchemaSnapshot(new_table_info);
     ASSERT_FALSE(decodeAndCheckColumns(new_decoding_schema, false));
-    ASSERT_ANY_THROW(decodeAndCheckColumns(new_decoding_schema, true));
+    ASSERT_TRUE(decodeAndCheckColumns(new_decoding_schema, true));
 }
 CATCH
 
@@ -413,10 +430,14 @@ TEST_F(RegionBlockReaderTest, InvalidNULLRowV1)
 {
     auto [table_info, fields] = getNormalTableInfoFields({EXTRA_HANDLE_COLUMN_ID}, false);
     encodeColumns(table_info, fields, RowEncodeVersion::RowV1);
+
     auto new_table_info = getTableInfoFieldsForInvalidNULLTest({EXTRA_HANDLE_COLUMN_ID}, false);
+    invalid_null_column_ids.emplace(11);
+    ASSERT_TRUE(new_table_info.getColumnInfo(11).hasNotNullFlag()); // col 11 is not null
+
     auto new_decoding_schema = getDecodingStorageSchemaSnapshot(new_table_info);
     ASSERT_FALSE(decodeAndCheckColumns(new_decoding_schema, false));
-    ASSERT_ANY_THROW(decodeAndCheckColumns(new_decoding_schema, true));
+    ASSERT_TRUE(decodeAndCheckColumns(new_decoding_schema, true));
 }
 
 
