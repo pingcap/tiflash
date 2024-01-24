@@ -68,7 +68,7 @@ MockTiDB::MockTiDB()
     databases["default"] = 0;
 }
 
-TablePtr MockTiDB::dropTableInternal(
+TablePtr MockTiDB::dropTableByNameImpl(
     Context & context,
     const String & database_name,
     const String & table_name,
@@ -79,10 +79,41 @@ TablePtr MockTiDB::dropTableInternal(
     if (it_by_name == tables_by_name.end())
         return nullptr;
 
+    auto table = it_by_name->second;
+    dropTableInternal(context, table, drop_regions);
+
+    tables_by_name.erase(it_by_name);
+    return table;
+}
+
+TablePtr MockTiDB::dropTableByIdImpl(Context & context, const TableID table_id, bool drop_regions)
+{
+    auto iter = tables_by_id.find(table_id);
+    if (iter == tables_by_id.end())
+        return nullptr;
+
+    auto table = iter->second;
+    dropTableInternal(context, table, drop_regions);
+
+    // erase from `tables_by_name`
+    for (auto iter_by_name = tables_by_name.begin(); iter_by_name != tables_by_name.end(); /* empty */)
+    {
+        if (table != iter_by_name->second)
+        {
+            ++iter_by_name;
+            continue;
+        }
+        LOG_INFO(Logger::get(), "removing table from MockTiDB, name={} table_id={}", iter_by_name->first, table_id);
+        iter_by_name = tables_by_name.erase(iter_by_name);
+    }
+    return table;
+}
+
+TablePtr MockTiDB::dropTableInternal(Context & context, const TablePtr & table, bool drop_regions)
+{
     auto & kvstore = context.getTMTContext().getKVStore();
     auto & region_table = context.getTMTContext().getRegionTable();
 
-    auto table = it_by_name->second;
     if (table->isPartitionTable())
     {
         for (const auto & partition : table->table_info.partition.definitions)
@@ -97,8 +128,6 @@ TablePtr MockTiDB::dropTableInternal(
         }
     }
     tables_by_id.erase(table->id());
-
-    tables_by_name.erase(it_by_name);
 
     if (drop_regions)
     {
@@ -121,7 +150,7 @@ void MockTiDB::dropDB(Context & context, const String & database_name, bool drop
     });
 
     for (const auto & table_name : table_names)
-        dropTableInternal(context, database_name, table_name, drop_regions);
+        dropTableByNameImpl(context, database_name, table_name, drop_regions);
 
     version++;
 
@@ -141,7 +170,25 @@ void MockTiDB::dropTable(Context & context, const String & database_name, const 
 {
     std::lock_guard lock(tables_mutex);
 
-    auto table = dropTableInternal(context, database_name, table_name, drop_regions);
+    auto table = dropTableByNameImpl(context, database_name, table_name, drop_regions);
+    if (!table)
+        return;
+
+    version++;
+
+    SchemaDiff diff;
+    diff.type = SchemaActionType::DropTable;
+    diff.schema_id = table->database_id;
+    diff.table_id = table->id();
+    diff.version = version;
+    version_diff[version] = diff;
+}
+
+void MockTiDB::dropTableById(Context & context, const TableID & table_id, bool drop_regions)
+{
+    std::lock_guard lock(tables_mutex);
+
+    auto table = dropTableByIdImpl(context, table_id, drop_regions);
     if (!table)
         return;
 
