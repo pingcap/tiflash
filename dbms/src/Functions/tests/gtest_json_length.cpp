@@ -20,8 +20,6 @@
 #include <string>
 #include <vector>
 
-#include "common/types.h"
-
 namespace DB::tests
 {
 class TestJsonLength : public DB::tests::FunctionTest
