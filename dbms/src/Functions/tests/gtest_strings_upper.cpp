@@ -99,7 +99,6 @@ TEST_F(StringUpper, upperAll)
         executeFunction("upperBinary", toNullableVec(candidate_strings)));
 
     ASSERT_COLUMN_EQ(toVec(candidate_strings), executeFunction("upperBinary", toVec(candidate_strings)));
->>>>>>> 1305baefd6 (lowerUTF8/upperUTF8 allow lower/uppercase characters occupy different number of bytes (#8622))
 
     ASSERT_COLUMN_EQ(
         toConst("ONE WEEK’S TIME TEST"),
