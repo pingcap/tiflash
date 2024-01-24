@@ -190,6 +190,9 @@ Block hstackBlocks(Blocks && blocks, const Block & header);
 template <bool check_reserve = false>
 Block vstackBlocks(Blocks && blocks);
 
+template <typename Iter, bool check_reserve>
+Block vstackBlocks(Iter begin, Iter end);
+
 Block popBlocksListFront(BlocksList & blocks);
 
 /// Compare number of columns, data types, column types, column names, and values of constant columns.

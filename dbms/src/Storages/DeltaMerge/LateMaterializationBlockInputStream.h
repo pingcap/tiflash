@@ -35,32 +35,33 @@ class LateMaterializationBlockInputStream : public IProfilingBlockInputStream
 public:
     LateMaterializationBlockInputStream(
         const ColumnDefines & columns_to_read,
-        const String & filter_column_name_,
         BlockInputStreamPtr filter_column_stream_,
-        SkippableBlockInputStreamPtr rest_column_stream_,
+        std::shared_ptr<ConcatSkippableBlockInputStream<false>> rest_column_stream_,
         const BitmapFilterPtr & bitmap_filter_,
-        const String & req_id_);
+        UInt64 filter_column_max_block_rows_);
 
     String getName() const override { return NAME; }
 
     Block getHeader() const override { return header; }
 
 protected:
+    // Return a block less than or equal to max_block_size.
     Block readImpl() override;
 
 private:
     Block header;
-    // The name of the tmp filter column in filter_column_block which is added by the FilterBlockInputStream.
-    // The column is used to filter the block, but it is not included in the returned block.
-    const String & filter_column_name;
     // The stream used to read the filter column, and filter the block.
     BlockInputStreamPtr filter_column_stream;
     // The stream used to read the rest columns.
-    SkippableBlockInputStreamPtr rest_column_stream;
+    std::shared_ptr<ConcatSkippableBlockInputStream<false>> rest_column_stream;
     // The MVCC-bitmap.
     BitmapFilterPtr bitmap_filter;
 
-    const LoggerPtr log;
+    const UInt64 filter_column_max_block_rows;
+    std::vector<UInt64> start_offset_each_stream;
+    UInt64 current_stream_index = 0;
+    Blocks blocks;
+    IColumn::Filter filter;
 };
 
 } // namespace DB::DM

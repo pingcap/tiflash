@@ -45,10 +45,6 @@ namespace ErrorCodes
 {
 extern const int LOGICAL_ERROR;
 }
-namespace FailPoints
-{
-extern const char skip_seek_before_read_dmfile[];
-} // namespace FailPoints
 namespace DM
 {
 DMFileReader::Stream::Stream(
@@ -364,50 +360,6 @@ bool DMFileReader::getSkippedRows(size_t & skip_rows)
     return next_pack_id < use_packs.size();
 }
 
-size_t DMFileReader::skipNextBlock()
-{
-    // Go to next available pack.
-    size_t skip;
-    if (!getSkippedRows(skip))
-        return 0;
-
-    // Find the next contiguous packs will be read in next read,
-    // let next_pack_id point to the next pack of the contiguous packs.
-    // For example, if we have 10 packs, use_packs is [0, 1, 1, 0, 1, 1, 0, 0, 1, 1],
-    // and now next_pack_id is 1, then we will skip 2 packs(index 1 and 2), and next_pack_id will be 3.
-    size_t read_pack_limit = read_one_pack_every_time ? 1 : 0;
-    const std::vector<RSResult> & handle_res = pack_filter.getHandleRes();
-    RSResult expected_handle_res = handle_res[next_pack_id];
-    auto & use_packs = pack_filter.getUsePacks();
-    size_t start_pack_id = next_pack_id;
-    const auto & pack_stats = dmfile->getPackStats();
-    size_t read_rows = 0;
-    for (; next_pack_id < use_packs.size() && use_packs[next_pack_id] && read_rows < rows_threshold_per_read;
-         ++next_pack_id)
-    {
-        if (read_pack_limit != 0 && next_pack_id - start_pack_id >= read_pack_limit)
-            break;
-        if (enable_handle_clean_read && handle_res[next_pack_id] != expected_handle_res)
-            break;
-
-        read_rows += pack_stats[next_pack_id].rows;
-        scan_context->total_dmfile_skipped_packs += 1;
-    }
-
-    scan_context->total_dmfile_skipped_rows += read_rows;
-    next_row_offset += read_rows;
-
-    // When we read dmfile, if the previous pack is not read,
-    // then we should seek to the right offset of dmfile.
-    // So if skip some packs successfully,
-    // then we set the last pack to false to indicate that we should seek before read.
-    if (likely(read_rows > 0))
-        use_packs[next_pack_id - 1] = false;
-
-    scan_context->late_materialization_skip_rows += read_rows;
-    return read_rows;
-}
-
 Block DMFileReader::readWithFilter(const IColumn::Filter & filter)
 {
     size_t skip_rows;
@@ -679,9 +631,6 @@ Block DMFileReader::read()
                         column->reserve(read_rows);
                         for (auto & [range, strategy] : read_strategy)
                         {
-                            fiu_do_on(FailPoints::skip_seek_before_read_dmfile, {
-                                strategy = ColumnCache::Strategy::Disk;
-                            });
                             if (strategy == ColumnCache::Strategy::Memory)
                             {
                                 for (size_t cursor = range.first; cursor < range.second; cursor++)
@@ -764,6 +713,7 @@ Block DMFileReader::read()
             e.rethrow();
         }
     }
+    scan_context->user_read_bytes += res.bytes();
     return res;
 }
 
@@ -789,7 +739,6 @@ void DMFileReader::readFromDisk(
 
                 if (should_seek)
                 {
-                    fiu_do_on(FailPoints::skip_seek_before_read_dmfile, { return sub_stream->buf.get(); });
                     sub_stream->buf->seek(
                         sub_stream->getOffsetInFile(start_pack_id),
                         sub_stream->getOffsetInDecompressedBlock(start_pack_id));

@@ -42,7 +42,6 @@
 #include <Storages/DeltaMerge/Remote/DataStore/DataStore.h>
 #include <Storages/DeltaMerge/Remote/ObjectId.h>
 #include <Storages/DeltaMerge/Remote/RNDeltaIndexCache.h>
-#include <Storages/DeltaMerge/RowKeyOrderedBlockInputStream.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 #include <Storages/DeltaMerge/Segment_fwd.h>
@@ -3114,18 +3113,17 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(
             filter->filter_column_name,
             dm_context.tracing_id);
         stream->setExtraInfo("push down filter");
-        stream
-            = std::make_shared<ExpressionBlockInputStream>(stream, filter->project_after_where, dm_context.tracing_id);
+        stream = std::make_shared<ExpressionBlockInputStream>( //
+            stream,
+            filter->project_after_where,
+            dm_context.tracing_id);
         stream->setExtraInfo("project after where");
         return stream;
     }
 
-    BlockInputStreamPtr filter_column_stream = std::make_shared<RowKeyOrderedBlockInputStream>(
-        *filter_columns,
-        filter_column_stable_stream,
-        filter_column_delta_stream,
-        segment_snap->stable->getDMFilesRows(),
-        dm_context.tracing_id);
+    auto temp_stream = std::dynamic_pointer_cast<ConcatSkippableBlockInputStream<false>>(filter_column_stable_stream);
+    temp_stream->appendChild(filter_column_delta_stream, segment_snap->delta->getRows());
+    BlockInputStreamPtr filter_column_stream = temp_stream;
 
     // construct extra cast stream if needed
     if (filter->extra_cast)
@@ -3164,7 +3162,7 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(
         data_ranges,
         filter->rs_operator,
         max_version,
-        expected_block_size,
+        std::numeric_limits<UInt64>::max(), // do not limit block size for rest columns
         enable_handle_clean_read,
         is_fast_scan,
         enable_del_clean_read);
@@ -3173,21 +3171,16 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(
         segment_snap->delta,
         rest_columns_to_read,
         this->rowkey_range);
-    SkippableBlockInputStreamPtr rest_column_stream = std::make_shared<RowKeyOrderedBlockInputStream>(
-        *rest_columns_to_read,
-        rest_column_stable_stream,
-        rest_column_delta_stream,
-        segment_snap->stable->getDMFilesRows(),
-        dm_context.tracing_id);
-
+    auto rest_column_stream
+        = std::dynamic_pointer_cast<ConcatSkippableBlockInputStream<false>>(rest_column_stable_stream);
+    rest_column_stream->appendChild(rest_column_delta_stream, segment_snap->delta->getRows());
     // construct late materialization stream
     return std::make_shared<LateMaterializationBlockInputStream>(
         columns_to_read,
-        filter->filter_column_name,
         filter_column_stream,
         rest_column_stream,
         bitmap_filter,
-        dm_context.tracing_id);
+        expected_block_size);
 }
 
 RowKeyRanges Segment::shrinkRowKeyRanges(const RowKeyRanges & read_ranges) const

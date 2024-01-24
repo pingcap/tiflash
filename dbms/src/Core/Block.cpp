@@ -531,7 +531,7 @@ static ReturnType checkBlockStructure(const Block & lhs, const Block & rhs, cons
         }
     }
 
-    return ReturnType(true);
+    return static_cast<ReturnType>(true);
 }
 
 /// join blocks by columns
@@ -561,23 +561,31 @@ Block hstackBlocks(Blocks && blocks, const Block & header)
 template <bool check_reserve>
 Block vstackBlocks(Blocks && blocks)
 {
-    if (blocks.empty())
+    return vstackBlocks<Blocks::const_iterator, check_reserve>(blocks.cbegin(), blocks.cend());
+}
+
+/// join blocks by rows
+/// Note: blocks in original container will be moved.
+template <typename Iter, bool check_reserve>
+Block vstackBlocks(Iter begin, Iter end)
+{
+    if (begin == end)
     {
         return {};
     }
 
-    if (blocks.size() == 1)
+    if (std::next(begin) == end)
     {
-        return std::move(blocks[0]);
+        return std::move(*begin);
     }
 
     size_t result_rows = 0;
-    for (const auto & block : blocks)
+    for (auto it = begin; it != end; ++it)
     {
-        result_rows += block.rows();
+        result_rows += it->rows();
     }
 
-    auto & first_block = blocks.front();
+    auto & first_block = *begin;
     MutableColumns dst_columns(first_block.columns());
 
     for (size_t i = 0; i < first_block.columns(); ++i)
@@ -588,9 +596,9 @@ Block vstackBlocks(Blocks && blocks)
         else
         {
             size_t total_memory = 0;
-            for (const auto & block : blocks)
+            for (auto it = begin; it != end; ++it)
             {
-                total_memory += block.getByPosition(i).column->byteSize();
+                total_memory += it->getByPosition(i).column->byteSize();
             }
             dst_columns[i]->reserveWithTotalMemoryHint(result_rows, total_memory);
         }
@@ -602,14 +610,14 @@ Block vstackBlocks(Blocks && blocks)
             total_allocated_bytes += column->allocatedBytes();
     }
 
-    for (size_t i = 1; i < blocks.size(); ++i)
+    for (auto it = std::next(begin); it != end; ++it)
     {
-        if (likely(blocks[i].rows() > 0))
+        if (likely(it->rows() > 0))
         {
-            assert(blocksHaveEqualStructure(first_block, blocks[i]));
-            for (size_t idx = 0; idx < blocks[i].columns(); ++idx)
+            assert(blocksHaveEqualStructure(first_block, *it));
+            for (size_t idx = 0; idx < it->columns(); ++idx)
             {
-                dst_columns[idx]->insertRangeFrom(*blocks[i].getByPosition(idx).column, 0, blocks[i].rows());
+                dst_columns[idx]->insertRangeFrom(*it->getByPosition(idx).column, 0, it->rows());
             }
         }
     }
@@ -739,5 +747,5 @@ void Block::updateHash(SipHash & hash) const
 
 template Block vstackBlocks<false>(Blocks && blocks);
 template Block vstackBlocks<true>(Blocks && blocks);
-
+template Block vstackBlocks<Blocks::const_iterator, false>(Blocks::const_iterator begin, Blocks::const_iterator end);
 } // namespace DB

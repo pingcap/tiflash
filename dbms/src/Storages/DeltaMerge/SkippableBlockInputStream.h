@@ -34,11 +34,6 @@ public:
     /// Return false if it is the end of stream.
     virtual bool getSkippedRows(size_t & skip_rows) = 0;
 
-    /// Skip next block in the stream.
-    /// Return the number of rows of the next block.
-    /// Return 0 if failed to skip or the end of stream.
-    virtual size_t skipNextBlock() = 0;
-
     /// Read specific rows of next block in the stream according to the filter.
     /// Return empty block if failed to read or the end of stream.
     /// Note: filter can not be all false.
@@ -62,8 +57,6 @@ public:
 
     bool getSkippedRows(size_t &) override { return false; }
 
-    size_t skipNextBlock() override { return 0; }
-
     Block readWithFilter(const IColumn::Filter &) override { return {}; }
 
     Block read() override { return {}; }
@@ -79,7 +72,6 @@ public:
     ConcatSkippableBlockInputStream(SkippableBlockInputStreams inputs_, const ScanContextPtr & scan_context_)
         : rows(inputs_.size(), 0)
         , precede_stream_rows(0)
-        , scan_context(scan_context_)
         , lac_bytes_collector(scan_context_ ? scan_context_->resource_group_name : "")
     {
         children.insert(children.end(), inputs_.begin(), inputs_.end());
@@ -92,7 +84,6 @@ public:
         const ScanContextPtr & scan_context_)
         : rows(std::move(rows_))
         , precede_stream_rows(0)
-        , scan_context(scan_context_)
         , lac_bytes_collector(scan_context_ ? scan_context_->resource_group_name : "")
     {
         children.insert(children.end(), inputs_.begin(), inputs_.end());
@@ -120,35 +111,11 @@ public:
             }
             else
             {
-                (*current_stream)->readSuffix();
-                precede_stream_rows += rows[current_stream - children.begin()];
-                ++current_stream;
+                switchToNextStream();
             }
         }
 
         return false;
-    }
-
-    size_t skipNextBlock() override
-    {
-        while (current_stream != children.end())
-        {
-            auto * skippable_stream = dynamic_cast<SkippableBlockInputStream *>((*current_stream).get());
-
-            size_t skipped_rows = skippable_stream->skipNextBlock();
-
-            if (skipped_rows > 0)
-            {
-                return skipped_rows;
-            }
-            else
-            {
-                (*current_stream)->readSuffix();
-                precede_stream_rows += rows[current_stream - children.begin()];
-                ++current_stream;
-            }
-        }
-        return 0;
     }
 
     Block readWithFilter(const IColumn::Filter & filter) override
@@ -168,9 +135,7 @@ public:
             }
             else
             {
-                (*current_stream)->readSuffix();
-                precede_stream_rows += rows[current_stream - children.begin()];
-                ++current_stream;
+                switchToNextStream();
             }
         }
         return res;
@@ -196,14 +161,28 @@ public:
             }
             else
             {
-                (*current_stream)->readSuffix();
-                precede_stream_rows += rows[current_stream - children.begin()];
-                ++current_stream;
+                switchToNextStream();
             }
         }
 
         return res;
     }
+
+    void switchToNextStream()
+    {
+        (*current_stream)->readSuffix();
+        precede_stream_rows += rows[current_stream - children.begin()];
+        ++current_stream;
+    }
+
+    void appendChild(SkippableBlockInputStreamPtr child, size_t rows_)
+    {
+        children.push_back(child);
+        rows.push_back(rows_);
+        current_stream = children.begin();
+    }
+
+    std::vector<size_t> & getRows() { return rows; }
 
 private:
     ColumnPtr createSegmentRowIdCol(UInt64 start, UInt64 limit)
@@ -219,19 +198,14 @@ private:
     }
     void addReadBytes(UInt64 bytes)
     {
-        if (likely(scan_context != nullptr))
+        if constexpr (!need_row_id)
         {
-            scan_context->user_read_bytes += bytes;
-            if constexpr (!need_row_id)
-            {
-                lac_bytes_collector.collect(bytes);
-            }
+            lac_bytes_collector.collect(bytes);
         }
     }
     BlockInputStreams::iterator current_stream;
     std::vector<size_t> rows;
     size_t precede_stream_rows;
-    const ScanContextPtr scan_context;
     LACBytesCollector lac_bytes_collector;
 };
 

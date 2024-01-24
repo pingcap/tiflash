@@ -502,42 +502,30 @@ public:
 
     bool getSkippedRows(size_t &) override { throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED); }
 
-    /// Skip next block in the stream.
-    /// Return the number of rows skipped.
-    /// Return 0 if meet the end of the stream.
-    size_t skipNextBlock() override
-    {
-        size_t skipped_rows = 0;
-        if (persisted_files_done)
-        {
-            skipped_rows = mem_table_input_stream.skipNextBlock();
-            read_rows += skipped_rows;
-            return skipped_rows;
-        }
-
-        if (skipped_rows = persisted_files_input_stream.skipNextBlock(); skipped_rows > 0)
-        {
-            read_rows += skipped_rows;
-            return skipped_rows;
-        }
-        else
-        {
-            persisted_files_done = true;
-            skipped_rows = mem_table_input_stream.skipNextBlock();
-            read_rows += skipped_rows;
-            return skipped_rows;
-        }
-    }
-
     Block readWithFilter(const IColumn::Filter & filter) override
     {
-        auto block = read();
-        if (size_t passed_count = countBytesInFilter(filter); passed_count != block.rows())
+        // LateMaterializationBlockInputStream will only read 16 blocks at most from the filter column,
+        // and since the block size in delta layer is small,
+        // we can stack all the blocks in memory and filter them together.
+        size_t total_rows = 0;
+        Blocks blocks;
+        do
         {
-            for (auto & col : block)
-            {
-                col.column = col.column->filter(filter, passed_count);
-            }
+            auto block = doRead();
+            if (!block)
+                break;
+            total_rows += block.rows();
+            blocks.emplace_back(std::move(block));
+        } while (total_rows < filter.size());
+        if (blocks.empty())
+            return {};
+        auto block = vstackBlocks(std::move(blocks));
+        block.setStartOffset(read_rows);
+        read_rows += block.rows();
+        size_t passed_count = countBytesInFilter(filter);
+        for (auto & col : block)
+        {
+            col.column = col.column->filter(filter, passed_count);
         }
         return block;
     }
@@ -545,6 +533,8 @@ public:
     Block read() override
     {
         auto block = doRead();
+        if (!block)
+            return {};
         block.setStartOffset(read_rows);
         read_rows += block.rows();
         return block;

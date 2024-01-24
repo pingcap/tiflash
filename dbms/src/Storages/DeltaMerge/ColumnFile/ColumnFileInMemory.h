@@ -136,8 +136,6 @@ public:
 
     Block readNextBlock() override;
 
-    size_t skipNextBlock() override;
-
     ColumnFileReaderPtr createNewReader(const ColumnDefinesPtr & new_col_defs) override;
 };
 

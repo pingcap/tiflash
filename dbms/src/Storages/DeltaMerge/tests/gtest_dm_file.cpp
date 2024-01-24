@@ -47,7 +47,6 @@ namespace FailPoints
 {
 extern const char exception_before_dmfile_remove_encryption[];
 extern const char exception_before_dmfile_remove_from_disk[];
-extern const char skip_seek_before_read_dmfile[];
 } // namespace FailPoints
 
 namespace DM
@@ -246,101 +245,6 @@ try
             createColumns({
                 createColumn<Int64>(createNumbers<Int64>(0, num_rows_write)),
             }));
-    }
-}
-CATCH
-
-// test seek
-TEST_P(DMFileTest, Seek)
-try
-{
-    auto cols = DMTestEnv::getDefaultColumns(DMTestEnv::PkType::HiddenTiDBRowID, /*add_nullable*/ true);
-
-    const size_t num_rows_write = 192;
-
-    DMFileBlockOutputStream::BlockProperty block_property1;
-    block_property1.effective_num_rows = 1;
-    block_property1.gc_hint_version = 1;
-    block_property1.deleted_rows = 1;
-    DMFileBlockOutputStream::BlockProperty block_property2;
-    block_property2.effective_num_rows = 2;
-    block_property2.gc_hint_version = 2;
-    block_property2.deleted_rows = 2;
-    DMFileBlockOutputStream::BlockProperty block_property3;
-    block_property3.effective_num_rows = 3;
-    block_property3.gc_hint_version = 3;
-    block_property3.deleted_rows = 3;
-    std::vector<DMFileBlockOutputStream::BlockProperty> block_propertys;
-    block_propertys.push_back(block_property1);
-    block_propertys.push_back(block_property2);
-    block_propertys.push_back(block_property3);
-    {
-        // Prepare for write
-        // Block 1: [0, 64)
-        Block block1 = DMTestEnv::prepareSimpleWriteBlockWithNullable(0, num_rows_write / 3);
-        // Block 2: [64, 128)
-        Block block2 = DMTestEnv::prepareSimpleWriteBlockWithNullable(num_rows_write / 3, num_rows_write * 2 / 3);
-        // Block 3: [128, 192)
-        Block block3 = DMTestEnv::prepareSimpleWriteBlockWithNullable(num_rows_write * 2 / 3, num_rows_write);
-        auto stream = std::make_shared<DMFileBlockOutputStream>(dbContext(), dm_file, *cols);
-        stream->writePrefix();
-        stream->write(block1, block_property1);
-        stream->write(block2, block_property2);
-        stream->write(block3, block_property3);
-        stream->writeSuffix();
-
-        ASSERT_EQ(dm_file->getPackProperties().property_size(), 3);
-    }
-    {
-        /// Test read
-        DMFileBlockInputStreamBuilder builder(dbContext());
-        auto stream
-            = builder.setColumnCache(column_cache)
-                  .build(dm_file, *cols, RowKeyRanges{RowKeyRange::newAll(false, 1)}, std::make_shared<ScanContext>());
-        ASSERT_INPUTSTREAM_COLS_UR(
-            stream,
-            Strings({DMTestEnv::pk_name}),
-            createColumns({
-                createColumn<Int64>(createNumbers<Int64>(0, num_rows_write)),
-            }));
-    }
-    {
-        /// Test read after skip
-        DMFileBlockInputStreamBuilder builder(dbContext());
-        auto stream
-            = builder.setColumnCache(column_cache)
-                  .build(dm_file, *cols, RowKeyRanges{RowKeyRange::newAll(false, 1)}, std::make_shared<ScanContext>());
-        auto & use_packs = stream->reader.pack_filter.getUsePacks();
-        use_packs[1] = false;
-        stream->skipNextBlock();
-        use_packs[1] = true;
-        ASSERT_INPUTSTREAM_COLS_UR(
-            stream,
-            Strings({DMTestEnv::pk_name}),
-            createColumns({
-                createColumn<Int64>(createNumbers<Int64>(num_rows_write / 3, num_rows_write)),
-            }));
-    }
-    {
-        /// Test not seek before read
-        DMFileBlockInputStreamBuilder builder(dbContext());
-        auto stream
-            = builder.setColumnCache(column_cache)
-                  .enableCleanRead(false, true, false, std::numeric_limits<UInt64>::max())
-                  .build(dm_file, *cols, RowKeyRanges{RowKeyRange::newAll(false, 1)}, std::make_shared<ScanContext>());
-        auto & use_packs = stream->reader.pack_filter.getUsePacks();
-        use_packs[1] = false;
-        // let next_pack_id = 1
-        stream->skipNextBlock();
-        FailPointHelper::enableFailPoint(FailPoints::skip_seek_before_read_dmfile);
-        // should equal to [128, 192) but equal to [0, 64)
-        ASSERT_INPUTSTREAM_COLS_UR(
-            stream,
-            Strings({DMTestEnv::pk_name}),
-            createColumns({
-                createColumn<Int64>(createNumbers<Int64>(0, num_rows_write / 3)),
-            }));
-        FailPointHelper::disableFailPoint(FailPoints::skip_seek_before_read_dmfile);
     }
 }
 CATCH

@@ -15,7 +15,6 @@
 #include <Columns/ColumnsCommon.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/LateMaterializationBlockInputStream.h>
-#include <Storages/DeltaMerge/ReadUtil.h>
 
 
 namespace DB::DM
@@ -23,139 +22,125 @@ namespace DB::DM
 
 LateMaterializationBlockInputStream::LateMaterializationBlockInputStream(
     const ColumnDefines & columns_to_read,
-    const String & filter_column_name_,
     BlockInputStreamPtr filter_column_stream_,
-    SkippableBlockInputStreamPtr rest_column_stream_,
+    std::shared_ptr<ConcatSkippableBlockInputStream<false>> rest_column_stream_,
     const BitmapFilterPtr & bitmap_filter_,
-    const String & req_id_)
+    UInt64 filter_column_max_block_rows_)
     : header(toEmptyBlock(columns_to_read))
-    , filter_column_name(filter_column_name_)
     , filter_column_stream(std::move(filter_column_stream_))
     , rest_column_stream(std::move(rest_column_stream_))
     , bitmap_filter(bitmap_filter_)
-    , log(Logger::get(NAME, req_id_))
-{}
+    , filter_column_max_block_rows(filter_column_max_block_rows_)
+{
+    start_offset_each_stream.resize(rest_column_stream->getRows().size() + 1);
+    std::partial_sum(
+        rest_column_stream->getRows().begin(),
+        rest_column_stream->getRows().end(),
+        start_offset_each_stream.begin() + 1);
+}
 
 Block LateMaterializationBlockInputStream::readImpl()
 {
-    Block filter_column_block;
-    FilterPtr filter = nullptr;
+    size_t passed_count = countBytesInFilter(filter);
+    size_t total_read_rows = filter.size();
 
-    // Until non-empty block after filtering or end of stream.
     while (true)
     {
-        filter_column_block = filter_column_stream->read(filter, true);
-
+        FilterPtr block_filter = nullptr;
+        auto filter_column_block = filter_column_stream->read(block_filter, true);
         // If filter_column_block is empty, it means that the stream has ended.
-        // No need to read the rest_column_stream, just return an empty block.
         if (!filter_column_block)
-            return filter_column_block;
+            break;
 
-        // If filter is nullptr, it means that these push down filters are always true.
-        if (!filter)
+        if (filter_column_block.startOffset() >= start_offset_each_stream[current_stream_index + 1])
         {
-            IColumn::Filter col_filter;
-            col_filter.resize(filter_column_block.rows());
-            Block rest_column_block;
-            if (bitmap_filter->get(col_filter, filter_column_block.startOffset(), filter_column_block.rows()))
+            // When filter_column_block.startOffset() > start_offset_each_stream[current_stream_index + 1],
+            // it means that the filter_column_stream has been switched to the next stream.
+            // If there is no rows passed in the previous stream, clear the blocks and filter, and continue to read the next stream.
+            if (passed_count == 0)
             {
-                rest_column_block = rest_column_stream->read();
+                blocks.clear();
+                filter.clear();
+                total_read_rows = 0;
+                rest_column_stream->switchToNextStream();
             }
-            else
-            {
-                rest_column_block = rest_column_stream->read();
-                size_t passed_count = countBytesInFilter(col_filter);
-                for (auto & col : rest_column_block)
-                {
-                    col.column = col.column->filter(col_filter, passed_count);
-                }
-                for (auto & col : filter_column_block)
-                {
-                    col.column = col.column->filter(col_filter, passed_count);
-                }
-            }
-            return hstackBlocks({std::move(filter_column_block), std::move(rest_column_block)}, header);
         }
 
-        size_t rows = filter_column_block.rows();
-        // bitmap_filter[start_offset, start_offset + rows] & filter -> filter
-        bitmap_filter->rangeAnd(*filter, filter_column_block.startOffset(), rows);
-
-        if (size_t passed_count = countBytesInFilter(*filter); passed_count == 0)
+        filter.resize(total_read_rows + filter_column_block.rows(), 1);
+        if (block_filter)
         {
-            // if all rows are filtered, skip the next block of rest_column_stream
-            if (size_t skipped_rows = rest_column_stream->skipNextBlock(); skipped_rows == 0)
-            {
-                // if we fail to skip, we need to call read() of rest_column_stream, but ignore the result
-                // NOTE: skipNextBlock() return 0 only if failed to skip or meets the end of stream,
-                //       but the filter_column_stream doesn't meet the end of stream
-                //       so it is an unexpected behavior.
-                rest_column_stream->read();
-                LOG_ERROR(
-                    log,
-                    "Late materialization skip block failed, at start_offset: {}, rows: {}",
-                    filter_column_block.startOffset(),
-                    filter_column_block.rows());
-            }
+            std::copy(block_filter->begin(), block_filter->end(), filter.begin() + total_read_rows);
+            passed_count += countBytesInFilter(*block_filter);
         }
         else
         {
-            Block rest_column_block;
-            auto filter_out_count = rows - passed_count;
-            if (filter_out_count >= DEFAULT_MERGE_BLOCK_SIZE * 2)
-            {
-                // When DEFAULT_MERGE_BLOCK_SIZE < row_left < DEFAULT_MERGE_BLOCK_SIZE * 2,
-                // the possibility of skipping a pack in the next block is quite small, less than 1%.
-                // And the performance read and then filter is is better than readWithFilter,
-                // so only if the number of rows left after filtering out is large enough,
-                // we can skip some packs of the next block, call readWithFilter to get the next block.
-                rest_column_block = rest_column_stream->readWithFilter(*filter);
-                for (auto & col : filter_column_block)
-                {
-                    if (col.name == filter_column_name)
-                        continue;
-                    col.column = col.column->filter(*filter, passed_count);
-                }
-            }
-            else if (filter_out_count > 0)
-            {
-                // if the number of rows left after filtering out is small, we can't skip any packs of the next block
-                // so we call read() to get the next block, and then filter it.
-                rest_column_block = rest_column_stream->read();
-                for (auto & col : rest_column_block)
-                {
-                    col.column = col.column->filter(*filter, passed_count);
-                }
-                for (auto & col : filter_column_block)
-                {
-                    if (col.name == filter_column_name)
-                        continue;
-                    col.column = col.column->filter(*filter, passed_count);
-                }
-            }
-            else
-            {
-                // if all rows are passed, just read the next block of rest_column_stream
-                rest_column_block = rest_column_stream->read();
-            }
-
-            // make sure the position and size of filter_column_block and rest_column_block are the same
-            RUNTIME_CHECK_MSG(
-                rest_column_block.startOffset() == filter_column_block.startOffset(),
-                "Late materialization meets unexpected block unmatched, filter_column_block: [start_offset={}, "
-                "rows={}], rest_column_block: [start_offset={}, rows={}], pass_count={}",
-                filter_column_block.startOffset(),
-                filter_column_block.rows(),
-                rest_column_block.startOffset(),
-                rest_column_block.rows(),
-                passed_count);
-            // join filter_column_block and rest_column_block by columns,
-            // the tmp column added by FilterBlockInputStream will be removed.
-            return hstackBlocks({std::move(filter_column_block), std::move(rest_column_block)}, header);
+            // If the filter is empty, it means that all rows in the block are passed.
+            passed_count += filter_column_block.rows();
         }
+        total_read_rows += filter_column_block.rows();
+        blocks.emplace_back(std::move(filter_column_block));
+        if (passed_count >= filter_column_max_block_rows)
+            break;
+        if (current_stream_index < start_offset_each_stream.size() - 1
+            && blocks.back().startOffset() >= start_offset_each_stream[current_stream_index + 1])
+            break;
     }
 
-    return filter_column_block;
+    if (blocks.empty())
+        return {};
+
+    size_t offset = blocks.front().startOffset();
+    Block filter_column_block;
+    IColumn::Filter block_filter;
+    if (blocks.size() > 1
+        // one block can be larger than filter_column_max_block_rows, in this case, do not need to back up.
+        && ((current_stream_index < start_offset_each_stream.size() - 1
+             && blocks.back().startOffset() >= start_offset_each_stream[current_stream_index + 1])
+            || passed_count >= filter_column_max_block_rows))
+    {
+        // need to back up the last block
+        auto next_read_block = std::move(blocks.back());
+        blocks.pop_back();
+        filter_column_block = vstackBlocks<Blocks::const_iterator, false>(blocks.cbegin(), blocks.cend());
+        blocks.clear();
+        blocks.emplace_back(std::move(next_read_block));
+
+        total_read_rows = filter.size() - blocks.back().rows();
+        block_filter.reserve(blocks.back().rows());
+        std::move(filter.begin() + total_read_rows, filter.end(), std::back_inserter(block_filter));
+        filter.resize(total_read_rows);
+
+        if (current_stream_index < start_offset_each_stream.size() - 1
+            && blocks.back().startOffset() >= start_offset_each_stream[current_stream_index + 1])
+            ++current_stream_index;
+    }
+    else
+    {
+        if (current_stream_index < start_offset_each_stream.size() - 1
+            && blocks.back().startOffset() >= start_offset_each_stream[current_stream_index + 1])
+            ++current_stream_index;
+
+        filter_column_block = vstackBlocks<Blocks::const_iterator, false>(blocks.cbegin(), blocks.cend());
+        blocks.clear();
+    }
+    std::swap(filter, block_filter);
+    // bitmap_filter[start_offset, start_offset + rows] & filter -> filter
+    bitmap_filter->rangeAnd(block_filter, offset, total_read_rows);
+    passed_count = countBytesInFilter(block_filter);
+    for (auto & col : filter_column_block)
+        col.column = col.column->filter(block_filter, passed_count);
+
+    auto rest_column_block = rest_column_stream->readWithFilter(block_filter);
+    RUNTIME_CHECK_MSG(
+        rest_column_block.startOffset() == offset && rest_column_block.rows() == passed_count,
+        "Late materialization meets unexpected block unmatched, filter_column_block: [start_offset={}, "
+        "rows={}], rest_column_block: [start_offset={}, rows={}], total_read_rows={}",
+        offset,
+        total_read_rows,
+        rest_column_block.startOffset(),
+        rest_column_block.rows(),
+        total_read_rows);
+    return hstackBlocks({std::move(filter_column_block), std::move(rest_column_block)}, header);
 }
 
 } // namespace DB::DM

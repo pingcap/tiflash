@@ -98,13 +98,7 @@ public:
     /// Return false if it is the end of stream.
     bool getSkippedRows(size_t & skip_rows);
 
-    /// NOTE: skipNextBlock and readWithFilter are only used by late materialization.
-
-    /// Skip the packs to read next
-    /// Return the number of rows skipped.
-    /// Return 0 if it is the end of file.
-    size_t skipNextBlock();
-
+    /// NOTE: only used by late materialization.
     /// Read specified rows.
     Block readWithFilter(const IColumn::Filter & filter);
 
