@@ -225,7 +225,7 @@ struct RowEncoderV2
         is_big = is_big || value_length > std::numeric_limits<RowV2::Types<false>::ValueOffsetType>::max();
 
         /// Encode header.
-        encodeUInt(UInt8(RowCodecVer::ROW_V2), ss);
+        encodeUInt(static_cast<UInt8>(RowCodecVer::ROW_V2), ss);
         UInt8 row_flag = 0;
         row_flag |= is_big ? RowV2::BigRowMask : 0;
         encodeUInt(row_flag, ss);

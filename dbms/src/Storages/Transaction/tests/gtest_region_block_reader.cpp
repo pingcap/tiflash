@@ -173,9 +173,15 @@ protected:
                 }
                 else
                 {
+<<<<<<< HEAD:dbms/src/Storages/Transaction/tests/gtest_region_block_reader.cpp
                     if (fields_map.count(column_element.column_id) > 0)
                     {
                         if (invalid_null_column_ids.count(column_element.column_id) == 0)
+=======
+                    if (fields_map.contains(column_element.column_id))
+                    {
+                        if (!invalid_null_column_ids.contains(column_element.column_id))
+>>>>>>> 24663e93c5 (ddl: Fix NULL value in non-nullable column (#8722)):dbms/src/Storages/KVStore/tests/gtest_region_block_reader.cpp
                         {
                             ASSERT_FIELD_EQ((*column_element.column)[row], fields_map.at(column_element.column_id))
                                 << gen_error_log();

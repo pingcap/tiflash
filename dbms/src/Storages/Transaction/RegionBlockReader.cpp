@@ -178,8 +178,16 @@ bool RegionBlockReader::readImpl(Block & block, const RegionDataReadInfoList & d
                         }
                         else
                         {
+<<<<<<< HEAD:dbms/src/Storages/Transaction/RegionBlockReader.cpp
                             throw Exception(fmt::format("Detected overflow value when decoding pk column, type={} handle={}", raw_pk_column->getName(), handle_value),
                                             ErrorCodes::LOGICAL_ERROR);
+=======
+                            throw Exception(
+                                ErrorCodes::LOGICAL_ERROR,
+                                "Detected overflow value when decoding pk column, type={} handle={}",
+                                raw_pk_column->getName(),
+                                handle_value);
+>>>>>>> 24663e93c5 (ddl: Fix NULL value in non-nullable column (#8722)):dbms/src/Storages/KVStore/Decode/RegionBlockReader.cpp
                         }
                     }
                 }
