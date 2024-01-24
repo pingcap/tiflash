@@ -56,6 +56,7 @@ struct InspectArgs
     bool check;
     bool dump_columns;
     bool dump_all_columns;
+    bool with_pack_info;
     size_t file_id;
     std::string workdir;
 };

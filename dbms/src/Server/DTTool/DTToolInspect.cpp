@@ -181,6 +181,8 @@ int inspectServiceMain(DB::Context & context, const InspectArgs & args)
                         DB::applyVisitor(DB::FieldVisitorDump(), f),
                         ((col_no < block.columns() - 1) ? "," : ""));
                 }
+                if (args.with_pack_info)
+                    buff.fmtAppend(", {}", block_no);
                 LOG_INFO(logger, "pack_no={}, row_no={}, fields=[{}]", block_no, row_no, buff.toString());
             }
 
@@ -215,6 +217,7 @@ int inspectEntry(const std::vector<std::string> & opts, RaftStoreFFIFunc ffi_fun
     bool imitative = false;
     bool dump_columns = false;
     bool dump_all_columns = false;
+    bool with_pack_info = false;
 
     bpo::variables_map vm;
     bpo::options_description options{"Delta Merge Inspect"};
@@ -223,6 +226,9 @@ int inspectEntry(const std::vector<std::string> & opts, RaftStoreFFIFunc ffi_fun
         ("check", bpo::bool_switch(&check), "Check integrity for the delta-tree file.") //
         ("dump", bpo::bool_switch(&dump_columns), "Dump the handle, pk, tag column values.") //
         ("dump_all", bpo::bool_switch(&dump_all_columns), "Dump all column values.") //
+        ("dump_all_with_pack_info",
+         bpo::bool_switch(&with_pack_info),
+         "Dump all column values with pack informations.") //
         ("workdir",
          bpo::value<std::string>()->required(),
          "Target directory. Will inpsect the delta-tree file ${workdir}/dmf_${file-id}/") //
@@ -263,7 +269,7 @@ int inspectEntry(const std::vector<std::string> & opts, RaftStoreFFIFunc ffi_fun
 
         auto workdir = vm["workdir"].as<std::string>();
         auto file_id = vm["file-id"].as<size_t>();
-        auto args = InspectArgs{check, dump_columns, dump_all_columns, file_id, workdir};
+        auto args = InspectArgs{check, dump_columns, dump_all_columns, with_pack_info, file_id, workdir};
         if (imitative)
         {
             auto env = detail::ImitativeEnv{args.workdir};
