@@ -171,8 +171,9 @@ protected:
 
 protected:
     std::tuple<uint64_t, uint64_t, uint64_t> prepareForProactiveFlushTest();
-    static void testRaftMerge(KVStore & kvs, TMTContext & tmt);
+    void testRaftMerge(Context & ctx, KVStore & kvs, TMTContext & tmt);
     static void testRaftMergeRollback(KVStore & kvs, TMTContext & tmt);
+    static void dropTable(Context & ctx, TableID table_id);
 
     static std::unique_ptr<PathPool> createCleanPathPool(const String & path)
     {

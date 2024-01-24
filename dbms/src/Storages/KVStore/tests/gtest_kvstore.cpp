@@ -13,35 +13,14 @@
 // limitations under the License.
 
 #include <Debug/dbgTools.h>
-<<<<<<< HEAD
-#include <Storages/KVStore/tests/kvstore_helper.h>
-
-namespace DB
-=======
 #include <Storages/KVStore/MultiRaft/RegionsRangeIndex.h>
 #include <Storages/KVStore/tests/kvstore_helper.h>
 
 
 namespace DB::tests
->>>>>>> 6058d19646 (ddl: Fix the storage instance may be physically dropped when the region is not removed (#8721))
 {
-namespace tests
-{
-<<<<<<< HEAD
-TEST_F(RegionKVStoreTest, PersistenceV1)
-=======
-public:
-    void testRaftMerge(Context & ctx, KVStore & kvs, TMTContext & tmt);
-    static void testRaftMergeRollback(KVStore & kvs, TMTContext & tmt);
-    RegionKVStoreOldTest()
-    {
-        log = DB::Logger::get("RegionKVStoreOldTest");
-        test_path = TiFlashTestEnv::getTemporaryPath("/region_kvs_old_test");
-    }
-};
 
-TEST_F(RegionKVStoreOldTest, PersistenceV1)
->>>>>>> 6058d19646 (ddl: Fix the storage instance may be physically dropped when the region is not removed (#8721))
+TEST_F(RegionKVStoreTest, PersistenceV1)
 try
 {
     auto ctx = TiFlashTestEnv::getGlobalContext();
@@ -436,11 +415,7 @@ static void testRaftSplit(KVStore & kvs, TMTContext & tmt, std::unique_ptr<MockR
     }
 }
 
-<<<<<<< HEAD
-void RegionKVStoreTest::testRaftMerge(KVStore & kvs, TMTContext & tmt)
-=======
-void RegionKVStoreOldTest::testRaftMerge(Context & ctx, KVStore & kvs, TMTContext & tmt)
->>>>>>> 6058d19646 (ddl: Fix the storage instance may be physically dropped when the region is not removed (#8721))
+void RegionKVStoreTest::testRaftMerge(Context & ctx, KVStore & kvs, TMTContext & tmt)
 {
     const RegionID source_region_id = 7;
     const RegionID target_region_id = 1;
@@ -947,11 +922,7 @@ TEST_F(RegionKVStoreTest, AdminSplit)
     }
 }
 
-<<<<<<< HEAD
-TEST_F(RegionKVStoreTest, AdminMerge)
-=======
-TEST_F(RegionKVStoreOldTest, AdminMergeRollback)
->>>>>>> 6058d19646 (ddl: Fix the storage instance may be physically dropped when the region is not removed (#8721))
+TEST_F(RegionKVStoreTest, AdminMergeRollback)
 {
     createDefaultRegions();
     auto ctx = TiFlashTestEnv::getGlobalContext();
@@ -962,18 +933,10 @@ TEST_F(RegionKVStoreOldTest, AdminMergeRollback)
         {1, 7},
         {{RecordKVFormat::genKey(1, 0), RecordKVFormat::genKey(1, 5)},
          {RecordKVFormat::genKey(1, 5), RecordKVFormat::genKey(1, 10)}});
-<<<<<<< HEAD
-
-    {
-        testRaftMergeRollback(kvs, ctx.getTMTContext());
-        testRaftMerge(kvs, ctx.getTMTContext());
-    }
-=======
     testRaftMergeRollback(kvs, ctx.getTMTContext());
->>>>>>> 6058d19646 (ddl: Fix the storage instance may be physically dropped when the region is not removed (#8721))
 }
 
-TEST_F(RegionKVStoreOldTest, AdminMerge)
+TEST_F(RegionKVStoreTest, AdminMerge)
 try
 {
     auto ctx = TiFlashTestEnv::getGlobalContext();
@@ -1732,5 +1695,4 @@ TEST_F(RegionKVStoreTest, RegionRange)
     }
 }
 
-} // namespace tests
-} // namespace DB
+} // namespace DB::tests
