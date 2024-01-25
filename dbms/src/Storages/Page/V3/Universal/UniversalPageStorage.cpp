@@ -144,6 +144,16 @@ Page UniversalPageStorage::read(
         auto page = remote_reader->read(page_entry);
         UniversalWriteBatch wb;
         auto buf = std::make_shared<ReadBufferFromMemory>(page.data.begin(), page.data.size());
+        {
+            // StorageType::Log type page in local storage may needs to be encrypted.
+            auto page_id_u64 = UniversalPageIdFormat::getU64ID(page_id);
+            auto keyspace_id = UniversalPageIdFormat::getKeyspaceID(page_id);
+            if (unlikely(file_provider->isEncryptionEnabled(keyspace_id)) && !page.data.empty()
+                && UniversalPageIdFormat::isType(page_id, StorageType::Log))
+            {
+                file_provider->decryptPage(keyspace_id, buf->buffer().begin(), page.data.size(), page_id_u64);
+            }
+        }
         wb.updateRemotePage(page_id, buf, page.data.size());
         tryUpdateLocalCacheForRemotePages(wb, snapshot);
         return page;
