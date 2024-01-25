@@ -832,12 +832,13 @@ SegmentPtr SegmentTestBasic::reload(
                                                   : pre_define_columns;
     setColumns(cols);
 
+    // Always return the first segment
     return Segment::newSegment(
         Logger::get(),
         *dm_context,
         table_columns,
         RowKeyRange::newAll(is_common_handle, 1),
-        storage_pool->newMetaPageId(),
+        DELTA_MERGE_FIRST_SEGMENT_ID,
         0);
 }
 

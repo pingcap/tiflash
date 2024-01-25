@@ -753,6 +753,7 @@ try
         table_info.pk_is_handle = false;
 
         // max page id is only updated at restart, so we need recreate page v3 before recreate table
+        ctx->getGlobalContext().initializeGlobalPageIdAllocator();
         ctx->getGlobalContext().initializeGlobalStoragePoolIfNeed(ctx->getPathPool());
         storage = StorageDeltaMerge::create(
             "TiFlash",
