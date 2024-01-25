@@ -75,7 +75,7 @@ public:
     const RegionDefaultCFData & defaultCF() const;
     const RegionLockCFData & lockCF() const;
 
-    RegionData() {}
+    RegionData() = default;
 
     RegionData(RegionData && data);
     RegionData & operator=(RegionData &&);
