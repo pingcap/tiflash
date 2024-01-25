@@ -18,6 +18,8 @@
 
 namespace DB::DM
 {
+class GlobalPageIdAllocator;
+using GlobalPageIdAllocatorPtr = std::shared_ptr<GlobalPageIdAllocator>;
 
 class StoragePool;
 using StoragePoolPtr = std::shared_ptr<StoragePool>;

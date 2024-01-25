@@ -170,7 +170,7 @@ struct MockRaftStoreProxy : MutexLockWrap
     void bootstrapWithRegion(
         KVStore & kvs,
         TMTContext & tmt,
-        UInt64 region_id,
+        RegionID region_id,
         std::optional<std::pair<std::string, std::string>> maybe_range);
 
     /// Boostrap a table.
