@@ -272,7 +272,7 @@ void DeltaMergeStore::setUpBackgroundTask(const DMContextPtr & dm_context)
     // that callbacks is called after the `DeltaMergeStore` shutdown or dropped,
     // we must make the callbacks safe.
     ExternalPageCallbacks callbacks;
-    callbacks.prefix = storage_pool->getNamespaceID();
+    callbacks.prefix = storage_pool->getTableID();
     if (auto data_store = dm_context->global_context.getSharedContextDisagg()->remote_data_store; !data_store)
     {
         callbacks.scanner
