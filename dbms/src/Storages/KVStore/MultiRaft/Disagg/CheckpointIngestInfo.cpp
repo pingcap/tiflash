@@ -260,17 +260,19 @@ bool CheckpointIngestInfo::forciblyClean(
     TMTContext & tmt,
     const TiFlashRaftProxyHelper * proxy_helper,
     UInt64 region_id,
-    bool in_memory)
+    bool in_memory,
+    CleanReason reason)
 {
     auto log = DB::Logger::get();
     // For most cases, ingest infos are deleted in `removeFromLocal`.
     auto checkpoint_ptr = CheckpointIngestInfo::restore(tmt, proxy_helper, region_id, 0);
     LOG_INFO(
         log,
-        "Erase CheckpointIngestInfo from disk by force, region_id={} exist={} in_memory={}",
+        "Erase CheckpointIngestInfo from disk by force, region_id={} exist={} in_memory={} reason={}",
         region_id,
         checkpoint_ptr != nullptr,
-        in_memory);
+        in_memory,
+        magic_enum::enum_name(reason));
     if (unlikely(checkpoint_ptr))
     {
         CheckpointIngestInfo::deleteWrittenData(

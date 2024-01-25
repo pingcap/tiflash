@@ -67,7 +67,7 @@ public:
         TMTContext & tmt,
         const struct TiFlashRaftProxyHelper * proxy_helper,
         UInt64 region_id,
-        bool is_succeed);
+        CheckpointIngestInfo::CleanReason reason);
     void resolveFapSnapshotState(
         TMTContext & tmt,
         const struct TiFlashRaftProxyHelper * proxy_helper,
