@@ -45,11 +45,11 @@ public:
     void SetUp() override
     {
         TiFlashStorageTestBasic::SetUp();
-        reloadWithOptions({});
+        buildFirstSegmentWithOptions({});
     }
 
 public:
-    void reloadWithOptions(SegmentTestOptions config);
+    void buildFirstSegmentWithOptions(SegmentTestOptions config);
 
     /**
      * When `check_rows` is true, it will compare the rows num before and after the segment update.
@@ -153,7 +153,10 @@ protected:
     std::pair<SegmentPtr, SegmentSnapshotPtr> getSegmentForRead(PageIdU64 segment_id);
 
 private:
-    SegmentPtr reload(bool is_common_handle, const ColumnDefinesPtr & pre_define_columns, DB::Settings && db_settings);
+    SegmentPtr buildFirstSegment(
+        bool is_common_handle,
+        const ColumnDefinesPtr & pre_define_columns,
+        DB::Settings && db_settings);
 
 protected:
     inline static constexpr PageIdU64 NAMESPACE_ID = 100;
