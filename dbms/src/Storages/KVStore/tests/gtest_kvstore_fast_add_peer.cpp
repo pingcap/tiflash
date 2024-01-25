@@ -468,7 +468,7 @@ try
     SCOPE_EXIT({ FailPointHelper::disableFailPoint("force_not_clean_fap_on_destroy"); });
     kvstore->handleDestroy(region_id, global_context.getTMTContext());
 
-    auto prev_ru = TiFlashMetrics::instance().queryReplicaSyncRU(NullspaceID);
+    auto prev_ru = TiFlashMetrics::instance().debugQueryReplicaSyncRU(NullspaceID);
     // After restart, continue the FAP from persisted checkpoint ingest info.
     ApplyFapSnapshotImpl(
         global_context.getTMTContext(),
@@ -478,7 +478,7 @@ try
         true,
         region_to_ingest->appliedIndex(),
         region_to_ingest->appliedIndexTerm());
-    auto current_ru = TiFlashMetrics::instance().queryReplicaSyncRU(NullspaceID);
+    auto current_ru = TiFlashMetrics::instance().debugQueryReplicaSyncRU(NullspaceID);
     ASSERT_GT(current_ru, prev_ru);
 
     {

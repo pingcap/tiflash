@@ -493,8 +493,7 @@ uint8_t ApplyFapSnapshotImpl(
         return false;
     }
     auto begin = checkpoint_ingest_info->beginTime();
-    auto region = kvstore->getRegion(region_id);
-    if (region)
+    if (kvstore->getRegion(region_id))
     {
         throw Exception(
             ErrorCodes::LOGICAL_ERROR,
@@ -503,6 +502,7 @@ uint8_t ApplyFapSnapshotImpl(
             peer_id,
             begin);
     }
+    // `region_to_ingest` is not the region in kvstore.
     auto region_to_ingest = checkpoint_ingest_info->getRegion();
     RUNTIME_CHECK(region_to_ingest != nullptr);
     if (!(region_to_ingest->appliedIndex() == index && region_to_ingest->appliedIndexTerm() == term))
