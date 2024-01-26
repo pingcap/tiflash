@@ -509,16 +509,24 @@ uint8_t ApplyFapSnapshotImpl(
     RUNTIME_CHECK(region_to_ingest != nullptr);
     if (!(region_to_ingest->appliedIndex() == index && region_to_ingest->appliedIndexTerm() == term))
     {
-        throw Exception(
-            ErrorCodes::LOGICAL_ERROR,
-            "Mismatched region and term, expected=({},{}) actual=({},{}) region_id={} peer_id={} begin_time={}",
-            index,
-            term,
-            region_to_ingest->appliedIndex(),
-            region_to_ingest->appliedIndexTerm(),
-            region_id,
-            peer_id,
-            begin);
+        if (assert_exist)
+        {
+            throw Exception(
+                ErrorCodes::LOGICAL_ERROR,
+                "Mismatched region and term, expected=({},{}) actual=({},{}) region_id={} peer_id={} begin_time={}",
+                index,
+                term,
+                region_to_ingest->appliedIndex(),
+                region_to_ingest->appliedIndexTerm(),
+                region_id,
+                peer_id,
+                begin);
+        }
+        else
+        {
+            LOG_DEBUG(log, "Fap snapshot not match, maybe stale, region_id={}, peer_id={}", region_id, peer_id);
+            return false;
+        }
     }
     LOG_INFO(log, "Begin apply fap snapshot, region_id={} peer_id={} begin_time={}", region_id, peer_id, begin);
     // If there is `checkpoint_ingest_info`, it is exactly the data we want to ingest. Consider two scene:

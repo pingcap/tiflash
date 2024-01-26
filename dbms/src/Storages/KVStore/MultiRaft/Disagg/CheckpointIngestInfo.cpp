@@ -275,11 +275,13 @@ bool CheckpointIngestInfo::forciblyClean(
         magic_enum::enum_name(reason));
     if (unlikely(checkpoint_ptr))
     {
+        // First delete the page, it may cause dangling data.
+        // However, never point to incomplete data then.
+        removeFromLocal(tmt, region_id);
         CheckpointIngestInfo::deleteWrittenData(
             tmt,
             checkpoint_ptr->getRegion(),
             checkpoint_ptr->getRestoredSegments());
-        removeFromLocal(tmt, region_id);
         return true;
     }
     return false;
