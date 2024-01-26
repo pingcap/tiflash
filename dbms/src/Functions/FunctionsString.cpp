@@ -584,18 +584,11 @@ TIFLASH_DECLARE_MULTITARGET_FUNCTION_TP(
      to_case),
     void,
     lowerUpperUTF8ArrayImplTiDB,
-<<<<<<< HEAD
-    (src, src_end, dst),
-    (ConstPtr<UInt8> & src,
-     const ConstPtr<UInt8> src_end,
-     Ptr<UInt8> & dst),
-=======
     (src_data, src_offsets, dst_data, dst_offsets),
     (const ColumnString::Chars_t & src_data,
      const IColumn::Offsets & src_offsets,
      ColumnString::Chars_t & dst_data,
      IColumn::Offsets & dst_offsets),
->>>>>>> 1305baefd6 (lowerUTF8/upperUTF8 allow lower/uppercase characters occupy different number of bytes (#8622))
     {
         dst_data.reserve(src_data.size());
         dst_offsets.assign(src_offsets);
@@ -683,16 +676,6 @@ TIFLASH_DECLARE_MULTITARGET_FUNCTION_TP(
                 dst_offsets[i] = src_offsets[i] + diff;
             }
         }
-<<<<<<< HEAD
-        while (src < src_end)
-            toCaseImplTiDB<
-                not_case_lower_bound,
-                not_case_upper_bound,
-                ascii_upper_bound,
-                flip_case_mask,
-                to_case>(src, src_end, dst);
-=======
->>>>>>> 1305baefd6 (lowerUTF8/upperUTF8 allow lower/uppercase characters occupy different number of bytes (#8622))
     })
 } // namespace
 
@@ -738,57 +721,7 @@ void TiDBLowerUpperUTF8Impl<not_case_lower_bound, not_case_upper_bound, to_case>
     size_t /*n*/,
     ColumnString::Chars_t & /*res_data*/)
 {
-<<<<<<< HEAD
-    res_data.resize(data.size());
-    array(data.data(), data.data() + data.size(), res_data.data());
-}
-
-template <char not_case_lower_bound,
-          char not_case_upper_bound,
-          int to_case(int)>
-void TiDBLowerUpperUTF8Impl<not_case_lower_bound, not_case_upper_bound, to_case>::constant(
-    const std::string & data,
-    std::string & res_data)
-{
-    res_data.resize(data.size());
-    array(reinterpret_cast<const UInt8 *>(data.data()),
-          reinterpret_cast<const UInt8 *>(data.data() + data.size()),
-          reinterpret_cast<UInt8 *>(&res_data[0]));
-}
-
-template <char not_case_lower_bound,
-          char not_case_upper_bound,
-          int to_case(int)>
-void TiDBLowerUpperUTF8Impl<not_case_lower_bound, not_case_upper_bound, to_case>::toCase(
-    const UInt8 *& src,
-    const UInt8 * src_end,
-    UInt8 *& dst)
-{
-    toCaseImplTiDB<
-        not_case_lower_bound,
-        not_case_upper_bound,
-        ascii_upper_bound,
-        flip_case_mask,
-        to_case>(src, src_end, dst);
-}
-
-template <char not_case_lower_bound,
-          char not_case_upper_bound,
-          int to_case(int)>
-void TiDBLowerUpperUTF8Impl<not_case_lower_bound, not_case_upper_bound, to_case>::array(
-    const UInt8 * src,
-    const UInt8 * src_end,
-    UInt8 * dst)
-{
-    lowerUpperUTF8ArrayImplTiDB<
-        not_case_lower_bound,
-        not_case_upper_bound,
-        ascii_upper_bound,
-        flip_case_mask,
-        to_case>(src, src_end, dst);
-=======
     throw Exception("Cannot apply function TiDBLowerUpperUTF8 to fixed string.", ErrorCodes::ILLEGAL_COLUMN);
->>>>>>> 1305baefd6 (lowerUTF8/upperUTF8 allow lower/uppercase characters occupy different number of bytes (#8622))
 }
 
 /** If the string is encoded in UTF-8, then it selects a substring of code points in it.
