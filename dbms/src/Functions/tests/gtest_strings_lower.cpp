@@ -49,10 +49,6 @@ protected:
 
 TEST_F(StringLower, lowerAll)
 {
-<<<<<<< HEAD
-    std::vector<std::optional<String>> candidate_strings = {"one WEEK’S time TEST", "abc测试def", "ABCテストabc", "ЀЁЂѓЄЅІїЈЉЊЋЌѝЎЏ", "+Ѐ-ё*Ђ/ѓ!Є@Ѕ#І$@Ї%Ј……љ&Њ（Ћ）Ќ￥Ѝ#Ў@Џ！^", "ΑΒΓΔΕΖΗΘικΛΜΝΞΟΠΡΣτΥΦΧΨωΣ", "▲Α▼Βγ➨ΔΕ☎ΖΗ✂ΘΙ€ΚΛ♫ΜΝ✓ΞΟ✚ΠΡ℉ΣΤ♥ΥΦ♖ΧΨ♘Ω★Σ✕", "թՓՁՋՐՉՃԺԾՔՈԵՌՏԸՒԻՕՊԱՍԴՖԳՀՅԿԼԽԶՂՑՎԲՆմՇ"};
-    std::vector<std::optional<String>> lower_case_strings = {"one week’s time test", "abc测试def", "abcテストabc", "ѐёђѓєѕіїјљњћќѝўџ", "+ѐ-ё*ђ/ѓ!є@ѕ#і$@ї%ј……љ&њ（ћ）ќ￥ѝ#ў@џ！^", "αβγδεζηθικλμνξοπρστυφχψωσ", "▲α▼βγ➨δε☎ζη✂θι€κλ♫μν✓ξο✚πρ℉στ♥υφ♖χψ♘ω★σ✕", "թփձջրչճժծքոեռտըւիօպասդֆգհյկլխզղցվբնմշ"};
-=======
     std::vector<std::optional<String>> candidate_strings
         = {"one WEEK'S time TEST",
            "abc测试def",
@@ -82,8 +78,6 @@ TEST_F(StringLower, lowerAll)
            "ɱɑⱥωabcdefghijklmnopɥaⱦ",
            "test_wrong_utf8_2\xf1\x22",
            "թփձջրչճժծքոեռտըւիօպասդֆգհյկլխզղցվբնմշ"};
->>>>>>> 1305baefd6 (lowerUTF8/upperUTF8 allow lower/uppercase characters occupy different number of bytes (#8622))
-
 
     ASSERT_COLUMN_EQ(
         toNullableVec(lower_case_strings),
