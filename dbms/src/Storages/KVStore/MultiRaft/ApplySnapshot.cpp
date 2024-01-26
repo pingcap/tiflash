@@ -140,7 +140,7 @@ std::pair<UInt64, bool> getTiFlashReplicaSyncInfo(StorageDeltaMergePtr & dm_stor
     return {replica_info.count, is_syncing};
 }
 
-static inline maybeUpdateRU(StorageDeltaMergePtr & dm_storage, UInt64 keyspace_id, UInt64 ingested_bytes)
+static inline void maybeUpdateRU(StorageDeltaMergePtr & dm_storage, UInt64 keyspace_id, UInt64 ingested_bytes)
 {
     if (auto [count, is_syncing] = getTiFlashReplicaSyncInfo(dm_storage); is_syncing)
     {
