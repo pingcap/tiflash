@@ -151,7 +151,11 @@ Page UniversalPageStorage::read(
             if (unlikely(file_provider->isEncryptionEnabled(keyspace_id)) && !page.data.empty()
                 && UniversalPageIdFormat::isType(page_id, StorageType::Log))
             {
-                file_provider->decryptPage(keyspace_id, buf->buffer().begin(), page.data.size(), page_id_u64);
+                if (const auto ep = EncryptionPath("", "", keyspace_id); unlikely(!file_provider->isFileEncrypted(ep)))
+                {
+                    file_provider->createEncryptionInfo(ep);
+                }
+                file_provider->encryptPage(keyspace_id, buf->buffer().begin(), page.data.size(), page_id_u64);
             }
         }
         wb.updateRemotePage(page_id, buf, page.data.size());

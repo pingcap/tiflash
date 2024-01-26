@@ -93,28 +93,14 @@ void FileEncryptionInfo::cipherData(char * data, size_t data_size) const
         magic_enum::enum_name(method),
         iv->size(),
         DB::Encryption::blockSize(method));
-    if constexpr (op == Encrypt)
-    {
-        DB::Encryption::Cipher(
-            0,
-            data,
-            data_size,
-            encryption_key,
-            method,
-            reinterpret_cast<unsigned char *>(iv->data()),
-            /*is_encrypt*/ true);
-    }
-    else if constexpr (op == Decrypt)
-    {
-        DB::Encryption::Cipher(
-            0,
-            data,
-            data_size,
-            encryption_key,
-            method,
-            reinterpret_cast<unsigned char *>(iv->data()),
-            /*is_encrypt*/ false);
-    }
+    DB::Encryption::Cipher(
+        0,
+        data,
+        data_size,
+        encryption_key,
+        method,
+        reinterpret_cast<unsigned char *>(iv->data()),
+        /*is_encrypt*/ op == Encrypt);
 }
 
 template void FileEncryptionInfo::cipherData<FileEncryptionInfo::Encrypt>(char * data, size_t data_size) const;
