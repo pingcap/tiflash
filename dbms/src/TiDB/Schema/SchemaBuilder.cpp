@@ -1164,8 +1164,7 @@ void SchemaBuilder<Getter, NameMapper>::applyCreateStorageInstance(
         LOG_WARNING(
             log,
             "database instance is not exist (applyCreateStorageInstance), may has been dropped, create a database "
-            "with "
-            "fake DatabaseInfo for it, database_id={} database_name={} action={}",
+            "with fake DatabaseInfo for it, database_id={} database_name={} action={}",
             database_id,
             database_mapped_name,
             action);
@@ -1496,8 +1495,8 @@ bool SchemaBuilder<Getter, NameMapper>::applyTable(
         {
             LOG_WARNING(
                 log,
-                "new table info in TiKV is not partition table {}, applyTable need retry, database_id={} "
-                "table_id={}",
+                "new table info in TiKV is not partition table {}, applyTable need retry"
+                ", database_id={} table_id={}",
                 name_mapper.debugCanonicalName(*table_info, database_id, keyspace_id),
                 database_id,
                 table_info->id);
