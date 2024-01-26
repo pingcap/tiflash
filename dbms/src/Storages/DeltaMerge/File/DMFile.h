@@ -299,11 +299,11 @@ public:
     DMConfigurationOpt & getConfiguration() { return configuration; }
 
     /**
-     * Return all column defines sort by column id. This is useful if you want to read all data from a dmfile.
+     * Return all column defines. This is useful if you want to read all data from a dmfile.
      * Note that only the column id and type is valid.
      * @return All columns
      */
-    ColumnDefines getColumnDefines()
+    ColumnDefines getColumnDefines(bool sort_by_id = true)
     {
         ColumnDefines results{};
         results.reserve(this->column_stats.size());
@@ -311,8 +311,10 @@ public:
         {
             results.emplace_back(cs.first, "", cs.second.type);
         }
-        // sort by column id
-        std::sort(results.begin(), results.end(), [](const auto & lhs, const auto & rhs) { return lhs.id < rhs.id; });
+        if (sort_by_id)
+            std::sort(results.begin(), results.end(), [](const auto & lhs, const auto & rhs) {
+                return lhs.id < rhs.id;
+            });
         return results;
     }
 
