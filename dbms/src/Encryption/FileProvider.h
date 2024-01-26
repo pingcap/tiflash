@@ -19,6 +19,7 @@
 #include <Encryption/FileProvider_fwd.h>
 #include <Encryption/KeyManager.h>
 #include <Storages/Page/PageDefinesBase.h>
+#include <Storages/Page/PageStorage_fwd.h>
 
 
 namespace DB
@@ -77,9 +78,14 @@ public:
 
     void deleteEncryptionInfo(const EncryptionPath & encryption_path_, bool throw_on_error = true) const;
 
+    // Drop encryption info of keyspace_id.
+    // Note: after calling this method, the keyspace encryption key can not be found anymore.
+    // Only for KeyspacesKeyManager now.
+    void dropEncryptionInfo(KeyspaceID keyspace_id) const;
+
     // Encrypt/Decrypt page data in place, using encryption_path_ to find the encryption info
-    void encryptPage(const EncryptionPath & encryption_path_, char * data, size_t data_size, PageIdU64 page_id);
-    void decryptPage(const EncryptionPath & encryption_path_, char * data, size_t data_size, PageIdU64 page_id);
+    void encryptPage(KeyspaceID keyspace_id, char * data, size_t data_size, PageIdU64 page_id);
+    void decryptPage(KeyspaceID keyspace_id, char * data, size_t data_size, PageIdU64 page_id);
 
     // Please check `ln -h`
     // It will be link_encryption_name_ link to src_encryption_path_
@@ -92,6 +98,9 @@ public:
 
     bool isEncryptionEnabled() const;
     bool isKeyspaceEncryptionEnabled() const;
+    // A quick way to check if encryption is enabled for a keyspace.
+    // Normally you can just assume keyspace encryption is enabled, and if actully not, we will just skip the encryption.
+    bool isEncryptionEnabled(KeyspaceID keyspace_id) const;
 
     // `renameFile` includes two steps,
     // 1. rename encryption info
@@ -108,12 +117,14 @@ public:
         const EncryptionPath & dst_encryption_path_,
         bool rename_encryption_info_) const;
 
+    void setPageStoragePtrForKeyManager(const UniversalPageStoragePtr & page_storage_ptr_);
+
     ~FileProvider() = default;
 
 private:
     KeyManagerPtr key_manager;
     const bool encryption_enabled;
-    // always false, only allow set to true when keyspace feature is GA in On-Promise.
+    // Always false for On-Promise, only allow set to true when keyspace feature is GA.
     const bool keyspace_encryption_enabled = false;
 };
 

@@ -404,15 +404,13 @@ void SchemaBuilder<Getter, NameMapper>::applySetTiFlashReplica(DatabaseID databa
 
     assert(table_info->replica_info.count != 0);
     // Replica number is set to non-zero, create the storage if not exists.
+    auto action = fmt::format("SetTiFlashReplica-{}", table_info->replica_info.count);
     auto storage = tmt_context.getStorages().get(keyspace_id, table_info->id);
     if (storage == nullptr)
     {
         if (!table_id_map.tableIDInDatabaseIdMap(table_id))
         {
-            applyCreateTable(
-                database_id,
-                table_id,
-                fmt::format("SetTiFlashReplica-{}", table_info->replica_info.count));
+            applyCreateTable(database_id, table_id, action);
         }
         return;
     }
@@ -420,10 +418,20 @@ void SchemaBuilder<Getter, NameMapper>::applySetTiFlashReplica(DatabaseID databa
     // Recover the table if tombstone
     if (storage->isTombstone())
     {
-        applyRecoverLogicalTable(database_id, table_info);
+        applyRecoverLogicalTable(database_id, table_info, action);
         return;
     }
 
+    updateTiFlashReplicaNumOnStorage(database_id, table_id, storage, table_info);
+}
+
+template <typename Getter, typename NameMapper>
+void SchemaBuilder<Getter, NameMapper>::updateTiFlashReplicaNumOnStorage(
+    DatabaseID database_id,
+    TableID table_id,
+    const ManageableStoragePtr & storage,
+    const TiDB::TableInfoPtr & table_info)
+{
     auto local_logical_storage_table_info = storage->getTableInfo(); // copy
     // Check whether replica_count and available changed
     if (const auto & local_logical_storage_replica_info = local_logical_storage_table_info.replica_info;
@@ -437,6 +445,7 @@ void SchemaBuilder<Getter, NameMapper>::applySetTiFlashReplica(DatabaseID databa
     size_t new_replica_count = 0;
     if (table_info->isLogicalPartitionTable())
     {
+        auto & tmt_context = context.getTMTContext();
         for (const auto & part_def : table_info->partition.definitions)
         {
             auto new_part_table_info = table_info->producePartitionTableInfo(part_def.id, name_mapper);
@@ -756,13 +765,14 @@ void SchemaBuilder<Getter, NameMapper>::applyRecoverTable(DatabaseID database_id
         return;
     }
 
-    applyRecoverLogicalTable(database_id, table_info);
+    applyRecoverLogicalTable(database_id, table_info, "RecoverTable");
 }
 
 template <typename Getter, typename NameMapper>
 void SchemaBuilder<Getter, NameMapper>::applyRecoverLogicalTable(
     const DatabaseID database_id,
-    const TiDB::TableInfoPtr & table_info)
+    const TiDB::TableInfoPtr & table_info,
+    std::string_view action)
 {
     assert(table_info != nullptr);
     if (table_info->isLogicalPartitionTable())
@@ -770,11 +780,11 @@ void SchemaBuilder<Getter, NameMapper>::applyRecoverLogicalTable(
         for (const auto & part_def : table_info->partition.definitions)
         {
             auto part_table_info = table_info->producePartitionTableInfo(part_def.id, name_mapper);
-            tryRecoverPhysicalTable(database_id, part_table_info);
+            tryRecoverPhysicalTable(database_id, part_table_info, action);
         }
     }
 
-    tryRecoverPhysicalTable(database_id, table_info);
+    tryRecoverPhysicalTable(database_id, table_info, action);
 }
 
 // Return true - the Storage instance exists and is recovered (or not tombstone)
@@ -782,7 +792,8 @@ void SchemaBuilder<Getter, NameMapper>::applyRecoverLogicalTable(
 template <typename Getter, typename NameMapper>
 bool SchemaBuilder<Getter, NameMapper>::tryRecoverPhysicalTable(
     const DatabaseID database_id,
-    const TiDB::TableInfoPtr & table_info)
+    const TiDB::TableInfoPtr & table_info,
+    std::string_view action)
 {
     assert(table_info != nullptr);
     auto & tmt_context = context.getTMTContext();
@@ -791,8 +802,9 @@ bool SchemaBuilder<Getter, NameMapper>::tryRecoverPhysicalTable(
     {
         LOG_INFO(
             log,
-            "Storage instance does not exist, tryRecoverPhysicalTable is ignored, table_id={}",
-            table_info->id);
+            "Storage instance does not exist, tryRecoverPhysicalTable is ignored, table_id={} action={}",
+            table_info->id,
+            action);
         return false;
     }
 
@@ -800,19 +812,21 @@ bool SchemaBuilder<Getter, NameMapper>::tryRecoverPhysicalTable(
     {
         LOG_INFO(
             log,
-            "Trying to recover table {} but it is not marked as tombstone, skip, database_id={} table_id={}",
+            "Trying to recover table {} but it is not marked as tombstone, skip, database_id={} table_id={} action={}",
             name_mapper.debugCanonicalName(*table_info, database_id, keyspace_id),
             database_id,
-            table_info->id);
+            table_info->id,
+            action);
         return true;
     }
 
     LOG_INFO(
         log,
-        "Create table {} by recover begin, database_id={} table_id={}",
+        "Create table {} by recover begin, database_id={} table_id={} action={}",
         name_mapper.debugCanonicalName(*table_info, database_id, keyspace_id),
         database_id,
-        table_info->id);
+        table_info->id,
+        action);
     AlterCommands commands;
     {
         AlterCommand command;
@@ -829,10 +843,11 @@ bool SchemaBuilder<Getter, NameMapper>::tryRecoverPhysicalTable(
         context);
     LOG_INFO(
         log,
-        "Create table {} by recover end, database_id={} table_id={}",
+        "Create table {} by recover end, database_id={} table_id={} action={}",
         name_mapper.debugCanonicalName(*table_info, database_id, keyspace_id),
         database_id,
-        table_info->id);
+        table_info->id,
+        action);
     return true;
 }
 
@@ -946,11 +961,12 @@ void SchemaBuilder<Getter, NameMapper>::applyRecoverDatabase(DatabaseID database
 
     {
         //TODO: it seems may need a lot time, maybe we can do it in a background thread
+        auto action = fmt::format("RecoverSchema-database_id={}", database_id);
         auto table_ids = table_id_map.findTablesByDatabaseID(database_id);
         for (auto table_id : table_ids)
         {
             auto table_info = getter.getTableInfo(database_id, table_id);
-            applyRecoverLogicalTable(database_id, table_info);
+            applyRecoverLogicalTable(database_id, table_info, action);
         }
     }
 
@@ -1106,7 +1122,7 @@ void SchemaBuilder<Getter, NameMapper>::applyCreateStorageInstance(
         action);
 
     /// Try to recover the existing storage instance
-    if (tryRecoverPhysicalTable(database_id, table_info))
+    if (tryRecoverPhysicalTable(database_id, table_info, action))
     {
         return;
     }
@@ -1147,8 +1163,8 @@ void SchemaBuilder<Getter, NameMapper>::applyCreateStorageInstance(
     {
         LOG_WARNING(
             log,
-            "database instance is not exist (applyCreateStorageInstance), may has been dropped, create a database with "
-            "fake DatabaseInfo for it, database_id={} database_name={} action={}",
+            "database instance is not exist (applyCreateStorageInstance), may has been dropped, create a database "
+            "with fake DatabaseInfo for it, database_id={} database_name={} action={}",
             database_id,
             database_mapped_name,
             action);
@@ -1479,7 +1495,8 @@ bool SchemaBuilder<Getter, NameMapper>::applyTable(
         {
             LOG_WARNING(
                 log,
-                "new table info in TiKV is not partition table {}, applyTable need retry, database_id={} table_id={}",
+                "new table info in TiKV is not partition table {}, applyTable need retry"
+                ", database_id={} table_id={}",
                 name_mapper.debugCanonicalName(*table_info, database_id, keyspace_id),
                 database_id,
                 table_info->id);
@@ -1583,6 +1600,9 @@ void SchemaBuilder<Getter, NameMapper>::dropAllSchema()
         applyDropDatabaseByName(db.first);
         LOG_INFO(log, "Database {} dropped during drop all schemas", db.first);
     }
+
+    /// Drop keyspace encryption key
+    context.getFileProvider()->dropEncryptionInfo(keyspace_id);
 
     LOG_INFO(log, "Drop all schemas end");
 }

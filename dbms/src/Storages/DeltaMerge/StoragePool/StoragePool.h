@@ -16,6 +16,8 @@
 
 #include <Common/CurrentMetrics.h>
 #include <Common/Logger.h>
+#include <Interpreters/Context_fwd.h>
+#include <Interpreters/Settings_fwd.h>
 #include <Storages/BackgroundProcessingPool.h>
 #include <Storages/DeltaMerge/StoragePool/StoragePool_fwd.h>
 #include <Storages/KVStore/Types.h>
@@ -32,8 +34,6 @@ using WriteLimiterPtr = std::shared_ptr<WriteLimiter>;
 class ReadLimiter;
 using ReadLimiterPtr = std::shared_ptr<ReadLimiter>;
 
-struct Settings;
-class Context;
 class StoragePathPool;
 class PathPool;
 class StableDiskDelegator;
@@ -53,9 +53,18 @@ public:
     StoragePool(
         Context & global_ctx,
         KeyspaceID keyspace_id_,
-        NamespaceID ns_id_,
+        NamespaceID table_id_,
         StoragePathPool & storage_path_pool_,
-        const String & name = "");
+        const String & name);
+
+    // For test
+    StoragePool(
+        Context & global_ctx,
+        KeyspaceID keyspace_id_,
+        NamespaceID table_id_,
+        StoragePathPool & storage_path_pool_,
+        GlobalPageIdAllocatorPtr page_id_allocator_,
+        const String & name);
 
     PageStorageRunMode restore();
 
@@ -63,7 +72,7 @@ public:
 
     KeyspaceID getKeyspaceID() const { return keyspace_id; }
 
-    NamespaceID getNamespaceID() const { return ns_id; }
+    NamespaceID getTableID() const { return table_id; }
 
     PageStorageRunMode getPageStorageRunMode() const { return run_mode; }
 
@@ -131,9 +140,9 @@ public:
     // StoragePool will assign the max_log_page_id/max_meta_page_id/max_data_page_id by the global max id
     // regardless of ns_id while being restored. This causes the ids in a table to not be continuously incremented.
 
-    PageIdU64 newDataPageIdForDTFile(StableDiskDelegator & delegator, const char * who);
-    PageIdU64 newLogPageId() { return ++max_log_page_id; }
-    PageIdU64 newMetaPageId() { return ++max_meta_page_id; }
+    PageIdU64 newDataPageIdForDTFile(StableDiskDelegator & delegator, const char * who) const;
+    PageIdU64 newLogPageId() const;
+    PageIdU64 newMetaPageId() const;
 
 #ifndef DBMS_PUBLIC_GTEST
 private:
@@ -149,11 +158,8 @@ private:
     LoggerPtr logger;
 
     PageStorageRunMode run_mode;
-
     const KeyspaceID keyspace_id;
-
-    // whether the three storage instance is owned by this StoragePool
-    const NamespaceID ns_id;
+    const NamespaceID table_id;
 
     StoragePathPool & storage_path_pool;
 
@@ -181,9 +187,7 @@ private:
 
     Context & global_context;
 
-    std::atomic<PageIdU64> max_log_page_id = 0;
-    std::atomic<PageIdU64> max_data_page_id = 0;
-    std::atomic<PageIdU64> max_meta_page_id = 0;
+    GlobalPageIdAllocatorPtr global_id_allocator;
 
     BackgroundProcessingPool::TaskHandle gc_handle = nullptr;
 
