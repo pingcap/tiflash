@@ -117,6 +117,11 @@ private:
         const ManageableStoragePtr & storage);
 
     void applySetTiFlashReplica(DatabaseID database_id, TableID table_id);
+    void updateTiFlashReplicaNumOnStorage(
+        DatabaseID database_id,
+        TableID table_id,
+        const ManageableStoragePtr & storage,
+        const TiDB::TableInfoPtr & table_info);
 
     void applyExchangeTablePartition(const SchemaDiff & diff);
 

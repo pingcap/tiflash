@@ -422,6 +422,16 @@ void SchemaBuilder<Getter, NameMapper>::applySetTiFlashReplica(DatabaseID databa
         return;
     }
 
+    updateTiFlashReplicaNumOnStorage(database_id, table_id, storage, table_info);
+}
+
+template <typename Getter, typename NameMapper>
+void SchemaBuilder<Getter, NameMapper>::updateTiFlashReplicaNumOnStorage(
+    DatabaseID database_id,
+    TableID table_id,
+    const ManageableStoragePtr & storage,
+    const TiDB::TableInfoPtr & table_info)
+{
     auto local_logical_storage_table_info = storage->getTableInfo(); // copy
     // Check whether replica_count and available changed
     if (const auto & local_logical_storage_replica_info = local_logical_storage_table_info.replica_info;
@@ -435,6 +445,7 @@ void SchemaBuilder<Getter, NameMapper>::applySetTiFlashReplica(DatabaseID databa
     size_t new_replica_count = 0;
     if (table_info->isLogicalPartitionTable())
     {
+        auto & tmt_context = context.getTMTContext();
         for (const auto & part_def : table_info->partition.definitions)
         {
             auto new_part_table_info = table_info->producePartitionTableInfo(part_def.id, name_mapper);
@@ -1152,7 +1163,8 @@ void SchemaBuilder<Getter, NameMapper>::applyCreateStorageInstance(
     {
         LOG_WARNING(
             log,
-            "database instance is not exist (applyCreateStorageInstance), may has been dropped, create a database with "
+            "database instance is not exist (applyCreateStorageInstance), may has been dropped, create a database "
+            "with "
             "fake DatabaseInfo for it, database_id={} database_name={} action={}",
             database_id,
             database_mapped_name,
@@ -1484,7 +1496,8 @@ bool SchemaBuilder<Getter, NameMapper>::applyTable(
         {
             LOG_WARNING(
                 log,
-                "new table info in TiKV is not partition table {}, applyTable need retry, database_id={} table_id={}",
+                "new table info in TiKV is not partition table {}, applyTable need retry, database_id={} "
+                "table_id={}",
                 name_mapper.debugCanonicalName(*table_info, database_id, keyspace_id),
                 database_id,
                 table_info->id);
