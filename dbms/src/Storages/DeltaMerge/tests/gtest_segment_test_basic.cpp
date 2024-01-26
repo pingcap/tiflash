@@ -19,7 +19,7 @@
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
 #include <Storages/DeltaMerge/Segment.h>
-#include <Storages/DeltaMerge/StoragePool.h>
+#include <Storages/DeltaMerge/StoragePool/StoragePool.h>
 #include <Storages/DeltaMerge/WriteBatchesImpl.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
 #include <Storages/DeltaMerge/tests/gtest_segment_test_basic.h>
@@ -49,7 +49,7 @@ extern DMFilePtr writeIntoNewDMFile(
 namespace DB::DM::tests
 {
 
-void SegmentTestBasic::reloadWithOptions(SegmentTestOptions config)
+void SegmentTestBasic::buildFirstSegmentWithOptions(SegmentTestOptions config)
 {
     {
         auto const seed = std::random_device{}();
@@ -63,7 +63,7 @@ void SegmentTestBasic::reloadWithOptions(SegmentTestOptions config)
     options = config;
     table_columns = std::make_shared<ColumnDefines>();
 
-    root_segment = reload(config.is_common_handle, nullptr, std::move(config.db_settings));
+    root_segment = buildFirstSegment(config.is_common_handle, nullptr, std::move(config.db_settings));
     ASSERT_EQ(root_segment->segmentId(), DELTA_MERGE_FIRST_SEGMENT_ID);
     segments.clear();
     segments[DELTA_MERGE_FIRST_SEGMENT_ID] = root_segment;
@@ -818,7 +818,7 @@ std::set<PageIdU64> SegmentTestBasic::getAliveExternalPageIdsAfterGC(NamespaceID
     }
 }
 
-SegmentPtr SegmentTestBasic::reload(
+SegmentPtr SegmentTestBasic::buildFirstSegment(
     bool is_common_handle,
     const ColumnDefinesPtr & pre_define_columns,
     DB::Settings && db_settings)
@@ -832,12 +832,13 @@ SegmentPtr SegmentTestBasic::reload(
                                                   : pre_define_columns;
     setColumns(cols);
 
+    // Always return the first segment
     return Segment::newSegment(
         Logger::get(),
         *dm_context,
         table_columns,
         RowKeyRange::newAll(is_common_handle, 1),
-        storage_pool->newMetaPageId(),
+        DELTA_MERGE_FIRST_SEGMENT_ID,
         0);
 }
 
@@ -983,7 +984,7 @@ class SegmentFrameworkTest : public SegmentTestBasic
 TEST_F(SegmentFrameworkTest, PrepareWriteBlock)
 try
 {
-    reloadWithOptions({.is_common_handle = false});
+    buildFirstSegmentWithOptions({.is_common_handle = false});
 
     auto s1_id = splitSegmentAt(DELTA_MERGE_FIRST_SEGMENT_ID, 10);
     ASSERT_TRUE(s1_id.has_value());

@@ -113,6 +113,8 @@ class DeltaIndexManager;
 class GlobalStoragePool;
 class SharedBlockSchemas;
 using GlobalStoragePoolPtr = std::shared_ptr<GlobalStoragePool>;
+class GlobalPageIdAllocator;
+using GlobalPageIdAllocatorPtr = std::shared_ptr<GlobalPageIdAllocator>;
 } // namespace DM
 
 /// (database name, table name)
@@ -451,6 +453,10 @@ public:
     void initializePageStorageMode(const PathPool & path_pool, UInt64 storage_page_format_version);
     void setPageStorageRunMode(PageStorageRunMode run_mode) const;
     PageStorageRunMode getPageStorageRunMode() const;
+
+    bool initializeGlobalPageIdAllocator();
+    DM::GlobalPageIdAllocatorPtr getGlobalPageIdAllocator() const;
+
     bool initializeGlobalStoragePoolIfNeed(const PathPool & path_pool);
     DM::GlobalStoragePoolPtr getGlobalStoragePool() const;
 
