@@ -211,13 +211,13 @@ void FileProvider::encryptPage(KeyspaceID keyspace_id, char * data, size_t data_
 {
     // pass page_id as file_path to genarate unique IV.
     const auto info = key_manager->getInfo(EncryptionPath(std::to_string(page_id), "", keyspace_id));
-    info.cipherData</*is_encrypt*/ true>(data, data_size);
+    info.cipherData<FileEncryptionInfo::Encrypt>(data, data_size);
 }
 
 void FileProvider::decryptPage(KeyspaceID keyspace_id, char * data, size_t data_size, PageIdU64 page_id)
 {
     const auto info = key_manager->getInfo(EncryptionPath(std::to_string(page_id), "", keyspace_id));
-    info.cipherData</*is_encrypt*/ false>(data, data_size);
+    info.cipherData<FileEncryptionInfo::Decrypt>(data, data_size);
 }
 
 void FileProvider::linkEncryptionInfo(

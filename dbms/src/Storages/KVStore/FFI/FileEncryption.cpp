@@ -72,7 +72,7 @@ BlockAccessCipherStreamPtr FileEncryptionInfo::createCipherStream(
     return std::make_shared<AESCTRCipherStream>(method, encryption_key, iv_high, iv_low);
 }
 
-template <bool is_encrypt>
+template <FileEncryptionInfo::Operation op>
 void FileEncryptionInfo::cipherData(char * data, size_t data_size) const
 {
     if (res == FileEncryptionRes::Disabled || method == EncryptionMethod::Plaintext
@@ -93,17 +93,31 @@ void FileEncryptionInfo::cipherData(char * data, size_t data_size) const
         magic_enum::enum_name(method),
         iv->size(),
         DB::Encryption::blockSize(method));
-    DB::Encryption::Cipher(
-        0,
-        data,
-        data_size,
-        encryption_key,
-        method,
-        reinterpret_cast<unsigned char *>(iv->data()),
-        is_encrypt);
+    if constexpr (op == Encrypt)
+    {
+        DB::Encryption::Cipher(
+            0,
+            data,
+            data_size,
+            encryption_key,
+            method,
+            reinterpret_cast<unsigned char *>(iv->data()),
+            /*is_encrypt*/ true);
+    }
+    else if constexpr (op == Decrypt)
+    {
+        DB::Encryption::Cipher(
+            0,
+            data,
+            data_size,
+            encryption_key,
+            method,
+            reinterpret_cast<unsigned char *>(iv->data()),
+            /*is_encrypt*/ false);
+    }
 }
 
-template void FileEncryptionInfo::cipherData<true>(char * data, size_t data_size) const;
-template void FileEncryptionInfo::cipherData<false>(char * data, size_t data_size) const;
+template void FileEncryptionInfo::cipherData<FileEncryptionInfo::Encrypt>(char * data, size_t data_size) const;
+template void FileEncryptionInfo::cipherData<FileEncryptionInfo::Decrypt>(char * data, size_t data_size) const;
 
 } // namespace DB

@@ -90,8 +90,14 @@ struct FileEncryptionInfo : private FileEncryptionInfoRaw
         const EncryptionPath & encryption_path,
         bool is_new_created_info = false) const;
 
+    enum Operation : uint64_t
+    {
+        Encrypt,
+        Decrypt,
+    };
+
     // Encrypt/decrypt the data in place.
-    template <bool is_encrypt>
+    template <Operation op>
     void cipherData(char * data, size_t data_size) const;
 
     bool isValid() const { return (res == FileEncryptionRes::Ok || res == FileEncryptionRes::Disabled); }
