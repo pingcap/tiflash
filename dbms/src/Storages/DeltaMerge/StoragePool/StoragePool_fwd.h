@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Inc.
+// Copyright 2024 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,6 +18,8 @@
 
 namespace DB::DM
 {
+class GlobalPageIdAllocator;
+using GlobalPageIdAllocatorPtr = std::shared_ptr<GlobalPageIdAllocator>;
 
 class StoragePool;
 using StoragePoolPtr = std::shared_ptr<StoragePool>;
@@ -27,5 +29,7 @@ using GlobalStoragePoolPtr = std::shared_ptr<GlobalStoragePool>;
 
 struct StorageSnapshot;
 using StorageSnapshotPtr = std::shared_ptr<StorageSnapshot>;
+
+static constexpr std::chrono::seconds DELTA_MERGE_GC_PERIOD(60);
 
 } // namespace DB::DM
