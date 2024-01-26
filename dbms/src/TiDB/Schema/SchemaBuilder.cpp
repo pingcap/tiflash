@@ -398,7 +398,9 @@ void SchemaBuilder<Getter, NameMapper>::applySetTiFlashReplica(DatabaseID databa
             return;
         }
 
-        applyDropTable(database_id, table_id, "SetTiFlashReplica-0");
+        updateTiFlashReplicaNumOnStorage(database_id, table_id, storage, table_info);
+        // FIXME: Do not drop the table under release-7.5 branch, need more testing
+        // applyDropTable(database_id, table_id, "SetTiFlashReplica-0");
         return;
     }
 
