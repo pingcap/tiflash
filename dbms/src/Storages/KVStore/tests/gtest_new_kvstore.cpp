@@ -14,17 +14,21 @@
 
 #include <Common/MemoryTracker.h>
 #include <Debug/MockKVStore/MockSSTGenerator.h>
+#include <Debug/MockTiDB.h>
+#include <RaftStoreProxyFFI/ColumnFamily.h>
 #include <Storages/KVStore/Read/LearnerRead.h>
 #include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/Utils/AsyncTasks.h>
 #include <Storages/KVStore/tests/region_kvstore_test.h>
 #include <Storages/RegionQueryInfo.h>
+#include <TiDB/Schema/SchemaSyncService.h>
+#include <TiDB/Schema/TiDBSchemaManager.h>
+
+#include <limits>
 
 extern std::shared_ptr<MemoryTracker> root_of_kvstore_mem_trackers;
 
-namespace DB
-{
-namespace tests
+namespace DB::tests
 {
 
 TEST_F(RegionKVStoreTest, RegionStruct)
@@ -43,15 +47,17 @@ try
         = RecordKVFormat::encodeLockCfValue(RecordKVFormat::CFModifyFlag::PutFlag, "PK", 111, 999).toString();
     proxy_instance->bootstrapWithRegion(kvs, ctx.getTMTContext(), 1, std::nullopt);
     {
-        auto kvr1 = kvs.getRegion(1);
+        RegionID region_id = 1;
+        auto kvr1 = kvs.getRegion(region_id);
+        ASSERT_NE(kvr1, nullptr);
         auto [index, term] = proxy_instance->rawWrite(
-            1,
+            region_id,
             {str_key, str_key},
             {str_lock_value, str_val_default},
             {WriteCmdType::Put, WriteCmdType::Put},
             {ColumnFamilyType::Lock, ColumnFamilyType::Default});
         UNUSED(term);
-        proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, 1, index);
+        proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index);
         ASSERT_EQ(kvr1->getLockByKey(str_key)->dataSize(), str_lock_value.size());
         ASSERT_EQ(kvr1->getLockByKey(RecordKVFormat::genKey(table_id, 1, 112)), nullptr);
     }
@@ -814,5 +820,53 @@ try
 }
 CATCH
 
-} // namespace tests
-} // namespace DB
+void RegionKVStoreTest::dropTable(Context & ctx, TableID table_id)
+{
+    MockTiDB::instance().dropTableById(ctx, table_id, /*drop_regions*/ false);
+    auto & tmt = ctx.getTMTContext();
+    auto schema_syncer = tmt.getSchemaSyncerManager();
+    schema_syncer->syncSchemas(ctx, NullspaceID);
+    auto sync_service = std::make_shared<SchemaSyncService>(ctx);
+    sync_service->gcImpl(std::numeric_limits<Timestamp>::max(), NullspaceID, /*ignore_remain_regions*/ true);
+    sync_service->shutdown();
+}
+
+TEST_F(RegionKVStoreTest, KVStoreApplyWriteToNonExistStorage)
+try
+{
+    auto ctx = TiFlashTestEnv::getGlobalContext();
+    proxy_instance->cluster_ver = RaftstoreVer::V2;
+    RegionID region_id = 2;
+    initStorages();
+    KVStore & kvs = getKVS();
+    TableID table_id = proxy_instance->bootstrapTable(ctx, kvs, ctx.getTMTContext());
+    auto start = RecordKVFormat::genKey(table_id, 0);
+    auto end = RecordKVFormat::genKey(table_id, 100);
+    proxy_instance
+        ->bootstrapWithRegion(kvs, ctx.getTMTContext(), region_id, std::make_pair(start.toString(), end.toString()));
+
+    {
+        auto str_key = RecordKVFormat::genKey(table_id, 1, 111);
+        auto [str_val_write, str_val_default] = proxy_instance->generateTiKVKeyValue(111, 999);
+        auto str_lock_value
+            = RecordKVFormat::encodeLockCfValue(RecordKVFormat::CFModifyFlag::PutFlag, "PK", 111, 999).toString();
+        auto kvr1 = kvs.getRegion(region_id);
+        ASSERT_NE(kvr1, nullptr);
+        auto [index, term] = proxy_instance->rawWrite(
+            region_id,
+            {str_key, str_key, str_key},
+            {str_lock_value, str_val_default, str_val_write},
+            {WriteCmdType::Put, WriteCmdType::Put, WriteCmdType::Put},
+            {ColumnFamilyType::Lock, ColumnFamilyType::Default, ColumnFamilyType::Write});
+        UNUSED(term);
+
+        dropTable(ctx, table_id);
+
+        // No exception thrown, the rows are just throw away
+        MockRaftStoreProxy::FailCond cond;
+        proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index);
+    }
+}
+CATCH
+
+} // namespace DB::tests
