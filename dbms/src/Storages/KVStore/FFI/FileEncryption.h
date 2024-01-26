@@ -90,10 +90,15 @@ struct FileEncryptionInfo : private FileEncryptionInfoRaw
         const EncryptionPath & encryption_path,
         bool is_new_created_info = false) const;
 
-    // Encrypt/decrypt the page data in place.
-    // The page_id is used to calculate the real iv for every page.
-    template <bool is_encrypt>
-    void cipherPage(char * data, size_t data_size, PageIdU64 page_id) const;
+    enum Operation : uint64_t
+    {
+        Encrypt,
+        Decrypt,
+    };
+
+    // Encrypt/decrypt the data in place.
+    template <Operation op>
+    void cipherData(char * data, size_t data_size) const;
 
     bool isValid() const { return (res == FileEncryptionRes::Ok || res == FileEncryptionRes::Disabled); }
     // FileEncryptionRes::Disabled means encryption feature has never been enabled, so no file will be encrypted.

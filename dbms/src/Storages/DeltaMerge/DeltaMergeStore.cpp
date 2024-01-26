@@ -1946,7 +1946,7 @@ void DeltaMergeStore::listLocalStableFiles(const std::function<void(UInt64, cons
     auto path_delegate = path_pool->getStableDiskDelegator();
     for (const auto & root_path : path_delegate.listPaths())
     {
-        for (const auto & file_id : DMFile::listAllInPath(file_provider, root_path, options))
+        for (const auto & file_id : DMFile::listAllInPath(file_provider, root_path, options, keyspace_id))
         {
             handle(file_id, root_path);
         }

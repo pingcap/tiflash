@@ -15,18 +15,27 @@
 #pragma once
 
 #include <Common/Exception.h>
+#include <Common/LRUCache.h>
 #include <Common/TiFlashException.h>
 #include <Encryption/KeyManager.h>
+#include <Encryption/MasterKey.h>
+#include <Storages/Page/PageStorage_fwd.h>
 
 namespace DB
 {
+
 struct EngineStoreServerWrap;
-class DataKeyManager : public KeyManager
+
+/// KeyspacesKeyManager is a KeyManager implementation that designed for Cloud Storage Engine.
+/// It will store all encryption keys which have been encrypted using MasterKey in PageStorage.
+class KeyspacesKeyManager : public KeyManager
 {
 public:
-    explicit DataKeyManager(EngineStoreServerWrap * tiflash_instance_wrap_);
+    explicit KeyspacesKeyManager(EngineStoreServerWrap * tiflash_instance_wrap_);
 
-    ~DataKeyManager() override = default;
+    void setUniversalPageStorage(const UniversalPageStoragePtr & ps_write_) { ps_write = ps_write_; }
+
+    ~KeyspacesKeyManager() override = default;
 
     FileEncryptionInfo getInfo(const EncryptionPath & ep) override;
 
@@ -34,11 +43,20 @@ public:
 
     void deleteInfo(const EncryptionPath & ep, bool throw_on_error) override;
 
-    void linkInfo(const EncryptionPath & src_ep, const EncryptionPath & dst_ep) override;
+    // Note: This function will not be used.
+    void linkInfo(const EncryptionPath & /*src_cp*/, const EncryptionPath & /*dst_cp*/) override;
+
+    // delete the keyspace encryption key
+    void deleteKey(KeyspaceID keyspace_id);
 
     bool isEncryptionEnabled(KeyspaceID keyspace_id) override;
 
 private:
     EngineStoreServerWrap * tiflash_instance_wrap;
+    UniversalPageStoragePtr ps_write = nullptr;
+    // cache, keyspace_id -> encryption_key
+    LRUCache<KeyspaceID, EncryptionKey> keyspace_id_to_key;
+    const MasterKeyPtr master_key;
 };
+
 } // namespace DB
