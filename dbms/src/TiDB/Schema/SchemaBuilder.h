@@ -87,8 +87,14 @@ private:
     void applyDropPhysicalTable(const String & db_name, TableID table_id, std::string_view action);
 
     void applyRecoverTable(DatabaseID database_id, TiDB::TableID table_id);
-    void applyRecoverLogicalTable(DatabaseID database_id, const TiDB::TableInfoPtr & table_info);
-    bool tryRecoverPhysicalTable(DatabaseID database_id, const TiDB::TableInfoPtr & table_info);
+    void applyRecoverLogicalTable(
+        DatabaseID database_id,
+        const TiDB::TableInfoPtr & table_info,
+        std::string_view action);
+    bool tryRecoverPhysicalTable(
+        DatabaseID database_id,
+        const TiDB::TableInfoPtr & table_info,
+        std::string_view action);
 
     void applyPartitionDiff(DatabaseID database_id, TableID table_id);
     void applyPartitionDiffOnLogicalTable(
@@ -111,6 +117,11 @@ private:
         const ManageableStoragePtr & storage);
 
     void applySetTiFlashReplica(DatabaseID database_id, TableID table_id);
+    void updateTiFlashReplicaNumOnStorage(
+        DatabaseID database_id,
+        TableID table_id,
+        const ManageableStoragePtr & storage,
+        const TiDB::TableInfoPtr & table_info);
 
     void applyExchangeTablePartition(const SchemaDiff & diff);
 
