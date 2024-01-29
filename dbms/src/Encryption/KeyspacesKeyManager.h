@@ -19,6 +19,8 @@
 #include <Common/TiFlashException.h>
 #include <Encryption/KeyManager.h>
 #include <Encryption/MasterKey.h>
+#include <Encryption/MockTiFlashRaftProxyHelper.h>
+#include <Storages/KVStore/FFI/ProxyFFI.h>
 #include <Storages/Page/PageStorage_fwd.h>
 
 namespace DB
@@ -31,7 +33,19 @@ struct EngineStoreServerWrap;
 class KeyspacesKeyManager : public KeyManager
 {
 public:
-    explicit KeyspacesKeyManager(EngineStoreServerWrap * tiflash_instance_wrap_);
+#ifndef DBMS_PUBLIC_GTEST
+    explicit KeyspacesKeyManager(TiFlashRaftProxyHelper * proxy_helper_)
+        : proxy_helper(proxy_helper_)
+        , keyspace_id_to_key(1024, 1024)
+        , master_key(std::make_unique<MasterKey>(proxy_helper->getMasterKey()))
+    {}
+#else
+    explicit KeyspacesKeyManager(MockTiFlashRaftProxyHelper * proxy_helper_)
+        : proxy_helper(proxy_helper_)
+        , keyspace_id_to_key(1024, 1024)
+        , master_key(std::make_unique<MasterKey>(proxy_helper->getMasterKey()))
+    {}
+#endif
 
     void setUniversalPageStorage(const UniversalPageStoragePtr & ps_write_) { ps_write = ps_write_; }
 
@@ -52,7 +66,12 @@ public:
     bool isEncryptionEnabled(KeyspaceID keyspace_id) override;
 
 private:
-    EngineStoreServerWrap * tiflash_instance_wrap;
+#ifndef DBMS_PUBLIC_GTEST
+    TiFlashRaftProxyHelper * proxy_helper;
+#else
+public:
+    MockTiFlashRaftProxyHelper * proxy_helper;
+#endif
     UniversalPageStoragePtr ps_write = nullptr;
     // cache, keyspace_id -> encryption_key
     LRUCache<KeyspaceID, EncryptionKey> keyspace_id_to_key;

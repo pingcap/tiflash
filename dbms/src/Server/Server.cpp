@@ -1089,7 +1089,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         {
             LOG_INFO(log, "encryption can be enabled, method is Aes256Ctr");
             // The UniversalPageStorage has not been init yet, the UniversalPageStoragePtr in KeyspacesKeyManager is nullptr.
-            KeyManagerPtr key_manager = std::make_shared<KeyspacesKeyManager>(&tiflash_instance_wrap);
+            KeyManagerPtr key_manager = std::make_shared<KeyspacesKeyManager>(tiflash_instance_wrap.proxy_helper);
             global_context->initializeFileProvider(key_manager, true);
         }
         else if (enable_encryption)

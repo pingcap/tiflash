@@ -85,6 +85,7 @@ public:
     void dropEncryptionInfo(KeyspaceID keyspace_id) const;
 
     // Encrypt/Decrypt page data in place, using encryption_path_ to find the encryption info
+    // createEncryptionInfo should be called before calling encryptPage.
     void encryptPage(KeyspaceID keyspace_id, char * data, size_t data_size, PageIdU64 page_id);
     void decryptPage(KeyspaceID keyspace_id, char * data, size_t data_size, PageIdU64 page_id);
 

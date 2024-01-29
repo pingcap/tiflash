@@ -184,6 +184,12 @@ public:
         misses = 0;
     }
 
+    bool contains(const Key & key) const
+    {
+        std::lock_guard cache_lock(mutex);
+        return cells.contains(key);
+    }
+
     virtual ~LRUCache() = default;
 
 private:
