@@ -18,6 +18,7 @@
 #include <Storages/DeltaMerge/ReadThread/SegmentReadTaskScheduler.h>
 #include <Storages/DeltaMerge/ReadThread/SegmentReader.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
+#include <stdlib.h>
 
 #include <ext/scope_guard.h>
 
