@@ -65,7 +65,9 @@ private:
         if (ret != 0)
         {
             // It can be failed due to some CPU core cannot access, such as CPU offline.
-            LOG_WARNING(log, "sched_setaffinity fail, cpus={} errno={}", cpus, std::strerror(errno));
+            char buff[1024];
+            strerror_r(errno, buff, sizeof(buff));
+            LOG_WARNING(log, "sched_setaffinity fail, cpus={} errno={}", cpus, buff);
         }
         else
         {
