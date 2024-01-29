@@ -357,12 +357,12 @@ public:
         return buildSegmentsFromCheckpointInfo(dm_context, range, checkpoint_info);
     }
 
-    void ingestSegmentsFromCheckpointInfo(
+    UInt64 ingestSegmentsFromCheckpointInfo(
         const DMContextPtr & dm_context,
         const DM::RowKeyRange & range,
         const CheckpointIngestInfoPtr & checkpoint_info);
 
-    void ingestSegmentsFromCheckpointInfo(
+    UInt64 ingestSegmentsFromCheckpointInfo(
         const Context & db_context,
         const DB::Settings & db_settings,
         const DM::RowKeyRange & range,
