@@ -60,9 +60,6 @@ target_link_libraries (read_write_int tiflash_common_io)
 add_executable (mempbrk mempbrk.cpp ${SRCS})
 target_link_libraries (mempbrk tiflash_common_io)
 
-add_executable (cached_compressed_read_buffer cached_compressed_read_buffer.cpp ${SRCS})
-target_link_libraries (cached_compressed_read_buffer tiflash_common_io)
-
 add_executable (o_direct_and_dirty_pages o_direct_and_dirty_pages.cpp ${SRCS})
 target_link_libraries (o_direct_and_dirty_pages tiflash_common_io)
 

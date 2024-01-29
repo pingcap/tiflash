@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <BaseFile/RateLimiter.h>
 #include <Common/CurrentMetrics.h>
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
@@ -21,25 +22,19 @@
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/TiFlashException.h>
 #include <Encryption/FileProvider.h>
+#include <IO/WriteBufferFromFile.h>
 #include <IO/WriteHelpers.h>
+#include <Poco/File.h>
 #include <Storages/Page/Page.h>
 #include <boost_wrapper/string_split.h>
 #include <common/logger_useful.h>
 
 #include <boost/algorithm/string/classification.hpp>
-#include <random>
+#include <ext/scope_guard.h>
 
 #ifndef __APPLE__
 #include <fcntl.h>
 #endif
-#include <Encryption/RandomAccessFile.h>
-#include <Encryption/RateLimiter.h>
-#include <Encryption/WritableFile.h>
-#include <Encryption/WriteReadableFile.h>
-#include <IO/WriteBufferFromFile.h>
-#include <Poco/File.h>
-
-#include <ext/scope_guard.h>
 
 
 namespace ProfileEvents

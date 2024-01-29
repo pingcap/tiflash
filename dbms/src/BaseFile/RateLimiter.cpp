@@ -12,16 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <BaseFile/RateLimiter.h>
 #include <Common/CurrentMetrics.h>
 #include <Common/Exception.h>
 #include <Common/TiFlashMetrics.h>
-#include <Encryption/RateLimiter.h>
 #include <Poco/Util/AbstractConfiguration.h>
 #include <boost_wrapper/string.h>
 #include <common/likely.h>
 #include <common/logger_useful.h>
 
-#include <cassert>
 #include <fstream>
 
 namespace CurrentMetrics
@@ -475,7 +474,7 @@ ReadLimiterPtr IORateLimiter::getReadLimiter()
 
 void IORateLimiter::updateConfig(Poco::Util::AbstractConfiguration & config_)
 {
-    StorageIORateLimitConfig new_io_config;
+    IORateLimitConfig new_io_config;
     if (!readConfig(config_, new_io_config))
     {
         return;
@@ -485,7 +484,7 @@ void IORateLimiter::updateConfig(Poco::Util::AbstractConfiguration & config_)
     updateWriteLimiter(io_config.getBgWriteMaxBytesPerSec(), io_config.getFgWriteMaxBytesPerSec());
 }
 
-bool IORateLimiter::readConfig(Poco::Util::AbstractConfiguration & config_, StorageIORateLimitConfig & new_io_config)
+bool IORateLimiter::readConfig(Poco::Util::AbstractConfiguration & config_, IORateLimitConfig & new_io_config)
 {
     if (config_.has("storage.io_rate_limit"))
     {
@@ -579,7 +578,7 @@ void IORateLimiter::setBackgroundThreadIds(std::vector<pid_t> thread_ids)
     LOG_INFO(log, "bg_thread_ids {} => {}", bg_thread_ids.size(), bg_thread_ids);
 }
 
-Int64 IORateLimiter::getReadBytes(const std::string & fname [[maybe_unused]])
+Int64 IORateLimiter::getReadBytes(const std::string & fname [[maybe_unused]]) const
 {
 #if __linux__
     std::ifstream ifs(fname);
@@ -701,7 +700,7 @@ std::unique_ptr<IOLimitTuner> IORateLimiter::createIOLimitTuner()
 {
     WriteLimiterPtr bg_write, fg_write;
     ReadLimiterPtr bg_read, fg_read;
-    StorageIORateLimitConfig t_io_config;
+    IORateLimitConfig t_io_config;
     {
         std::lock_guard lock(mtx);
         bg_write = bg_write_limiter;
@@ -747,7 +746,7 @@ IOLimitTuner::IOLimitTuner(
     LimiterStatUPtr fg_write_stat_,
     LimiterStatUPtr bg_read_stat_,
     LimiterStatUPtr fg_read_stat_,
-    const StorageIORateLimitConfig & io_config_)
+    const IORateLimitConfig & io_config_)
     : bg_write_stat(std::move(bg_write_stat_))
     , fg_write_stat(std::move(fg_write_stat_))
     , bg_read_stat(std::move(bg_read_stat_))

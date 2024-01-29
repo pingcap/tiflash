@@ -20,6 +20,7 @@
 #include <Storages/KVStore/MultiRaft/Disagg/FastAddPeer.h>
 #include <Storages/KVStore/MultiRaft/Disagg/FastAddPeerCache.h>
 #include <Storages/KVStore/MultiRaft/Disagg/FastAddPeerContext.h>
+#include <Storages/KVStore/Types.h>
 #include <Storages/KVStore/Utils/AsyncTasks.h>
 #include <Storages/KVStore/tests/kvstore_helper.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
@@ -31,11 +32,7 @@
 #include <aws/s3/model/CreateBucketRequest.h>
 #include <common/logger_useful.h>
 
-#include <chrono>
-#include <mutex>
-#include <numeric>
 #include <optional>
-#include <thread>
 
 using raft_serverpb::RaftApplyState;
 using raft_serverpb::RegionLocalState;
@@ -178,13 +175,14 @@ protected:
 
 protected:
     UInt64 upload_sequence = 1000;
+    UInt64 table_id;
 
 private:
     ContextPtr context;
     bool already_initialize_data_store = false;
     bool already_initialize_write_ps = false;
-    DB::PageStorageRunMode orig_mode;
-    DisaggregatedMode orig_disagg_mode;
+    DB::PageStorageRunMode orig_mode = PageStorageRunMode::UNI_PS;
+    DisaggregatedMode orig_disagg_mode = DisaggregatedMode::None;
 };
 
 void persistAfterWrite(
@@ -357,7 +355,7 @@ CheckpointRegionInfoAndData RegionKVStoreTestFAP::prepareForRestart(FAPTestOpt o
     global_context.getTMTContext().debugSetKVStore(kvstore);
     auto page_storage = global_context.getWriteNodePageStorage();
 
-    TableID table_id = proxy_instance->bootstrapTable(global_context, kvs, global_context.getTMTContext());
+    table_id = proxy_instance->bootstrapTable(global_context, kvs, global_context.getTMTContext());
     auto fap_context = global_context.getSharedContextDisagg()->fap_context;
     proxy_instance->bootstrapWithRegion(kvs, global_context.getTMTContext(), region_id, std::nullopt);
     auto proxy_helper = proxy_instance->generateProxyHelper();
@@ -369,6 +367,7 @@ CheckpointRegionInfoAndData RegionKVStoreTestFAP::prepareForRestart(FAPTestOpt o
     UInt64 index = 0;
     if (!opt.persist_empty_segment)
     {
+        LOG_DEBUG(log, "Do write to the region");
         auto k1 = RecordKVFormat::genKey(table_id, 1, 111);
         auto && [value_write1, value_default1] = proxy_instance->generateTiKVKeyValue(111, 999);
         UInt64 term = 0;
@@ -419,6 +418,15 @@ CheckpointRegionInfoAndData RegionKVStoreTestFAP::prepareForRestart(FAPTestOpt o
     return mock_data;
 }
 
+// This function get tiflash replica count from local schema.
+void setTiFlashReplicaSyncInfo(StorageDeltaMergePtr & dm_storage)
+{
+    auto table_info = dm_storage->getTableInfo();
+    table_info.replica_info.count = 1;
+    table_info.replica_info.available = false;
+    dm_storage->setTableInfo(table_info);
+}
+
 // Test load from restart.
 TEST_F(RegionKVStoreTestFAP, RestoreFromRestart1)
 try
@@ -429,6 +437,13 @@ try
     auto & global_context = TiFlashTestEnv::getGlobalContext();
     auto fap_context = global_context.getSharedContextDisagg()->fap_context;
     uint64_t region_id = 1;
+
+    {
+        auto storage = global_context.getTMTContext().getStorages().get(NullspaceID, table_id);
+        auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
+        ASSERT_TRUE(dm_storage != nullptr);
+        setTiFlashReplicaSyncInfo(dm_storage);
+    }
 
     std::mutex exe_mut;
     std::unique_lock exe_lock(exe_mut);
@@ -441,6 +456,10 @@ try
     exe_lock.unlock();
     fap_context->tasks_trace->fetchResult(region_id);
 
+    auto region_to_ingest
+        = fap_context
+              ->getOrRestoreCheckpointIngestInfo(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333)
+              ->getRegion();
     // Remove the checkpoint ingest info and region from memory.
     // Testing whether FAP can be handled properly after restart.
     fap_context->debugRemoveCheckpointIngestInfo(region_id);
@@ -449,8 +468,18 @@ try
     SCOPE_EXIT({ FailPointHelper::disableFailPoint("force_not_clean_fap_on_destroy"); });
     kvstore->handleDestroy(region_id, global_context.getTMTContext());
 
+    auto prev_ru = TiFlashMetrics::instance().debugQueryReplicaSyncRU(NullspaceID);
     // After restart, continue the FAP from persisted checkpoint ingest info.
-    ApplyFapSnapshotImpl(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333);
+    ApplyFapSnapshotImpl(
+        global_context.getTMTContext(),
+        proxy_helper.get(),
+        region_id,
+        2333,
+        true,
+        region_to_ingest->appliedIndex(),
+        region_to_ingest->appliedIndexTerm());
+    auto current_ru = TiFlashMetrics::instance().debugQueryReplicaSyncRU(NullspaceID);
+    ASSERT_GT(current_ru, prev_ru);
 
     {
         auto keyspace_id = kv_region->getKeyspaceID();
@@ -818,12 +847,25 @@ try
     exe_lock.unlock();
     fap_context->tasks_trace->fetchResult(region_id);
 
+    auto region_to_ingest
+        = fap_context
+              ->getOrRestoreCheckpointIngestInfo(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333)
+              ->getRegion();
     // Make sure prehandling will not clean fap snapshot.
     std::vector<SSTView> ssts;
     SSTViewVec snaps{ssts.data(), ssts.size()};
     kvs.preHandleSnapshotToFiles(kv_region, snaps, 100, 100, std::nullopt, global_context.getTMTContext());
 
-    EXPECT_THROW(ApplyFapSnapshotImpl(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333), Exception);
+    EXPECT_THROW(
+        ApplyFapSnapshotImpl(
+            global_context.getTMTContext(),
+            proxy_helper.get(),
+            region_id,
+            2333,
+            false,
+            region_to_ingest->appliedIndex(),
+            region_to_ingest->appliedIndexTerm()),
+        Exception);
 }
 CATCH
 

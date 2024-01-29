@@ -12,9 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <BaseFile/PosixWritableFile.h>
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
-#include <Encryption/PosixWritableFile.h>
+#include <Encryption/MockKeyManager.h>
 #include <Interpreters/Context.h>
 #include <Poco/DigestStream.h>
 #include <Poco/MD5Engine.h>
@@ -40,11 +41,13 @@
 #include <aws/s3/model/CreateBucketRequest.h>
 #include <aws/s3/model/DeleteBucketCorsRequest.h>
 #include <fmt/chrono.h>
+#include <gtest/gtest-param-test.h>
 #include <gtest/gtest.h>
 
 #include <chrono>
 #include <ext/scope_guard.h>
 #include <fstream>
+
 
 using namespace std::chrono_literals;
 using namespace DB::DM;
@@ -61,7 +64,9 @@ namespace DB::tests
 using DMFileBlockOutputStreamPtr = std::shared_ptr<DMFileBlockOutputStream>;
 using DMFileBlockInputStreamPtr = std::shared_ptr<DMFileBlockInputStream>;
 
-class S3FileTest : public DB::base::TiFlashStorageTestBasic
+class S3FileTest
+    : public DB::base::TiFlashStorageTestBasic
+    , public testing::WithParamInterface<bool>
 {
 public:
     static void SetUpTestCase() {}
@@ -76,6 +81,11 @@ public:
 
         buf_unit.resize(256);
         std::iota(buf_unit.begin(), buf_unit.end(), 0);
+
+        bool is_encrypted = GetParam();
+        KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(is_encrypted);
+        auto file_provider = std::make_shared<FileProvider>(key_manager, is_encrypted);
+        db_context->setFileProvider(file_provider);
 
         s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
         data_store = std::make_shared<DM::Remote::DataStoreS3>(dbContext().getFileProvider());
@@ -192,9 +202,10 @@ protected:
     std::shared_ptr<TiFlashS3Client> s3_client;
     S3WritableFile::UploadInfo last_upload_info;
     Remote::IDataStorePtr data_store;
+    KeyspaceID keyspace_id = 0x12345678;
 };
 
-TEST_F(S3FileTest, SinglePart)
+TEST_P(S3FileTest, SinglePart)
 try
 {
     for (int i = 0; i < 10; i++)
@@ -211,7 +222,7 @@ try
 }
 CATCH
 
-TEST_F(S3FileTest, MultiPart)
+TEST_P(S3FileTest, MultiPart)
 try
 {
     const auto size = 1024 * 1024 * 18; // 18MB
@@ -228,7 +239,7 @@ try
 }
 CATCH
 
-TEST_F(S3FileTest, Seek)
+TEST_P(S3FileTest, Seek)
 try
 {
     const auto size = 1024 * 1024 * 10; // 10MB
@@ -256,7 +267,7 @@ try
 }
 CATCH
 
-TEST_F(S3FileTest, WriteRead)
+TEST_P(S3FileTest, WriteRead)
 try
 {
     auto cols = DMTestEnv::getDefaultColumns(DMTestEnv::PkType::HiddenTiDBRowID, /*add_nullable*/ true);
@@ -282,6 +293,7 @@ try
     oid.file_id = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now())
                       .time_since_epoch()
                       .count();
+    oid.keyspace_id = keyspace_id;
 
     {
         // Prepare for write
@@ -297,7 +309,7 @@ try
             std::move(configuration),
             128 * 1024,
             16 * 1024 * 1024,
-            NullspaceID,
+            keyspace_id,
             DMFileFormat::V3);
         auto stream = std::make_shared<DMFileBlockOutputStream>(dbContext(), dmfile, *cols);
         stream->writePrefix();
@@ -345,8 +357,19 @@ try
             auto copy_fname = fmt::format("{}/{}", copy_dir, filename);
             auto local_md5 = md5(local_fname);
             auto copy_md5 = md5(copy_fname);
-            ASSERT_EQ(copy_md5, local_md5) << fmt::format("local_fname={}, copy_fname={}", local_fname, copy_fname);
-            LOG_TRACE(log, "local_fname={}, copy_fname={}, md5={}", local_fname, copy_fname, local_md5);
+            bool is_encrypted = GetParam();
+            if (is_encrypted)
+            {
+                // if encryption is enabled, local file is encrypted, but remote file is not encrypted,
+                // so md5 is different
+                ASSERT_NE(copy_md5, local_md5) << fmt::format("local_fname={}, copy_fname={}", local_fname, copy_fname);
+                LOG_TRACE(log, "local_fname={}, copy_fname={}, md5={}", local_fname, copy_fname, local_md5);
+            }
+            else
+            {
+                ASSERT_EQ(copy_md5, local_md5) << fmt::format("local_fname={}, copy_fname={}", local_fname, copy_fname);
+                LOG_TRACE(log, "local_fname={}, copy_fname={}, md5={}", local_fname, copy_fname, local_md5);
+            }
         }
     }
 
@@ -375,7 +398,7 @@ try
 }
 CATCH
 
-TEST_F(S3FileTest, RemoveLocal)
+TEST_P(S3FileTest, RemoveLocal)
 try
 {
     auto cols = DMTestEnv::getDefaultColumns(DMTestEnv::PkType::HiddenTiDBRowID, /*add_nullable*/ true);
@@ -413,6 +436,7 @@ try
     oid.file_id = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now())
                       .time_since_epoch()
                       .count();
+    oid.keyspace_id = keyspace_id;
 
     {
         // Prepare for write
@@ -428,7 +452,7 @@ try
             std::move(configuration),
             128 * 1024,
             16 * 1024 * 1024,
-            NullspaceID,
+            keyspace_id,
             DMFileFormat::V3);
         auto stream = std::make_shared<DMFileBlockOutputStream>(dbContext(), dmfile, *cols);
         stream->writePrefix();
@@ -472,7 +496,7 @@ struct TestFileInfo
     std::chrono::system_clock::time_point mtime;
 };
 
-TEST_F(S3FileTest, CheckpointUpload)
+TEST_P(S3FileTest, CheckpointUpload)
 try
 {
     auto timepoint = std::chrono::system_clock::now();
@@ -615,7 +639,7 @@ try
 }
 CATCH
 
-TEST_F(S3FileTest, RetryWrapper)
+TEST_P(S3FileTest, RetryWrapper)
 try
 {
     // Always succ
@@ -663,5 +687,7 @@ try
     }
 }
 CATCH
+
+INSTANTIATE_TEST_CASE_P(S3File, S3FileTest, testing::Values(false, true));
 
 } // namespace DB::tests

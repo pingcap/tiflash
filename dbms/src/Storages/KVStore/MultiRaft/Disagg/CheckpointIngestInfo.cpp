@@ -43,8 +43,7 @@ CheckpointIngestInfoPtr CheckpointIngestInfo::restore(
     RUNTIME_CHECK(uni_ps != nullptr);
     auto snapshot = uni_ps->getSnapshot(fmt::format("read_fap_i_{}", region_id));
     RUNTIME_CHECK(snapshot != nullptr);
-    auto page_id
-        = UniversalPageIdFormat::toLocalKVPrefix(UniversalPageIdFormat::LocalKVKeyType::FAPIngestInfo, region_id);
+    auto page_id = UniversalPageIdFormat::toFAPIngestInfoPageID(region_id);
     Page page = uni_ps->read(page_id, nullptr, snapshot, /*throw_on_not_exist*/ false);
     if (!page.isValid())
     {
@@ -163,8 +162,7 @@ void CheckpointIngestInfo::persistToLocal() const
     auto s = ingest_info_persisted.SerializeAsString();
     auto data_size = s.size();
     auto read_buf = std::make_shared<ReadBufferFromOwnString>(s);
-    auto page_id
-        = UniversalPageIdFormat::toLocalKVPrefix(UniversalPageIdFormat::LocalKVKeyType::FAPIngestInfo, region_id);
+    auto page_id = UniversalPageIdFormat::toFAPIngestInfoPageID(region_id);
     wb.putPage(UniversalPageId(page_id.data(), page_id.size()), 0, read_buf, data_size);
     uni_ps->write(std::move(wb), DB::PS::V3::PageType::Local, nullptr);
     LOG_INFO(
@@ -181,8 +179,7 @@ static void removeFromLocal(TMTContext & tmt, UInt64 region_id)
 {
     auto uni_ps = tmt.getContext().getWriteNodePageStorage();
     UniversalWriteBatch del_batch;
-    del_batch.delPage(
-        UniversalPageIdFormat::toLocalKVPrefix(UniversalPageIdFormat::LocalKVKeyType::FAPIngestInfo, region_id));
+    del_batch.delPage(UniversalPageIdFormat::toFAPIngestInfoPageID(region_id));
     uni_ps->write(std::move(del_batch), PageType::Local);
 }
 
@@ -260,24 +257,28 @@ bool CheckpointIngestInfo::forciblyClean(
     TMTContext & tmt,
     const TiFlashRaftProxyHelper * proxy_helper,
     UInt64 region_id,
-    bool in_memory)
+    bool in_memory,
+    CleanReason reason)
 {
     auto log = DB::Logger::get();
     // For most cases, ingest infos are deleted in `removeFromLocal`.
     auto checkpoint_ptr = CheckpointIngestInfo::restore(tmt, proxy_helper, region_id, 0);
     LOG_INFO(
         log,
-        "Erase CheckpointIngestInfo from disk by force, region_id={} exist={} in_memory={}",
+        "Erase CheckpointIngestInfo from disk by force, region_id={} exist={} in_memory={} reason={}",
         region_id,
         checkpoint_ptr != nullptr,
-        in_memory);
+        in_memory,
+        magic_enum::enum_name(reason));
     if (unlikely(checkpoint_ptr))
     {
+        // First delete the page, it may cause dangling data.
+        // However, never point to incomplete data then.
+        removeFromLocal(tmt, region_id);
         CheckpointIngestInfo::deleteWrittenData(
             tmt,
             checkpoint_ptr->getRegion(),
             checkpoint_ptr->getRestoredSegments());
-        removeFromLocal(tmt, region_id);
         return true;
     }
     return false;

@@ -273,7 +273,7 @@ public:
 
     bool isExternalPage() const { return type == EditRecordType::VAR_EXTERNAL; }
 
-    [[nodiscard]] PageLock acquireLock() const NO_THREAD_SAFETY_ANALYSIS { return std::lock_guard(m); }
+    [[nodiscard]] PageLock acquireLock() const;
 
     void createNewEntry(const PageVersion & ver, const PageEntryV3 & entry);
 
@@ -351,11 +351,7 @@ public:
 
     void collapseTo(UInt64 seq, const PageId & page_id, PageEntriesEdit & edit);
 
-    size_t size() const NO_THREAD_SAFETY_ANALYSIS
-    {
-        auto lock = acquireLock();
-        return entries.size();
-    }
+    size_t size() const;
 
     String toDebugString() const
     {

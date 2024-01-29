@@ -113,6 +113,7 @@ class ImitativeEnv
             global_context->getPathCapacity(),
             global_context->getFileProvider());
         TiFlashRaftConfig raft_config;
+        global_context->initializeGlobalPageIdAllocator();
         global_context->initializeGlobalStoragePoolIfNeed(global_context->getPathPool());
         raft_config.ignore_databases = {"default", "system"};
         raft_config.engine = TiDB::StorageEngine::DT;

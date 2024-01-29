@@ -1186,7 +1186,7 @@ DM::Segments StorageDeltaMerge::buildSegmentsFromCheckpointInfo(
     return getAndMaybeInitStore()->buildSegmentsFromCheckpointInfo(global_context, settings, range, checkpoint_info);
 }
 
-void StorageDeltaMerge::ingestSegmentsFromCheckpointInfo(
+UInt64 StorageDeltaMerge::ingestSegmentsFromCheckpointInfo(
     const DM::RowKeyRange & range,
     const CheckpointIngestInfoPtr & checkpoint_info,
     const Settings & settings)

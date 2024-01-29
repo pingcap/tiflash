@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <BaseFile/RateLimiter.h>
 #include <Common/Exception.h>
-#include <Encryption/RateLimiter.h>
 #include <fcntl.h>
 #include <gtest/gtest.h>
 #include <unistd.h>
@@ -394,8 +394,8 @@ TEST(IORateLimiterTest, IOStat)
     int ret = ::posix_memalign(&buf, buf_size, buf_size);
     ASSERT_EQ(ret, 0) << strerror(errno);
     std::unique_ptr<void, std::function<void(void *)>> defer_free(buf, [](void * p) {
-        ::free(p);
-    }); // NOLINT(cppcoreguidelines-no-malloc)
+        ::free(p); // NOLINT(cppcoreguidelines-no-malloc)
+    });
 
     ssize_t n = ::pwrite(fd, buf, buf_size, 0);
     ASSERT_EQ(n, buf_size) << strerror(errno);
@@ -436,8 +436,8 @@ TEST(IORateLimiterTest, IOStatMultiThread)
         void * buf = nullptr;
         int ret = ::posix_memalign(&buf, buf_size, buf_size);
         std::unique_ptr<void, std::function<void(void *)>> auto_free(buf, [](void * p) {
-            free(p);
-        }); // NOLINT(cppcoreguidelines-no-malloc)
+            free(p); // NOLINT(cppcoreguidelines-no-malloc)
+        });
         ASSERT_EQ(ret, 0) << strerror(errno);
 
         ssize_t n = ::pwrite(fd, buf, buf_size, 0);
@@ -498,7 +498,7 @@ LimiterStatUPtr createLimiterStat(
 
 TEST(IOLimitTunerTest, Watermark)
 {
-    StorageIORateLimitConfig io_config;
+    IORateLimitConfig io_config;
     io_config.emergency_pct = 95;
     io_config.high_pct = 80;
     io_config.medium_pct = 60;
@@ -525,7 +525,7 @@ TEST(IOLimitTunerTest, Watermark)
 
 TEST(IOLimitTunerTest, NotNeedTune)
 {
-    StorageIORateLimitConfig io_config;
+    IORateLimitConfig io_config;
     io_config.max_bytes_per_sec = 1000;
 
     auto assert_tuner = [](const auto & tuner, int write_limiter_cnt, int read_limiter_cnt) {
@@ -596,14 +596,14 @@ IOLimitTuner::Watermark watermarkOfFgRead(const T & tuner)
     return tuner.getWatermark(tuner.fg_read_stat->pct());
 }
 
-void updateWatermarkPct(StorageIORateLimitConfig & io_config, int emergency, int high, int medium)
+void updateWatermarkPct(IORateLimitConfig & io_config, int emergency, int high, int medium)
 {
     io_config.emergency_pct = emergency;
     io_config.high_pct = high;
     io_config.medium_pct = medium;
 }
 
-void updateWeight(StorageIORateLimitConfig & io_config, int bg_write, int fg_write, int bg_read, int fg_read)
+void updateWeight(IORateLimitConfig & io_config, int bg_write, int fg_write, int bg_read, int fg_read)
 {
     io_config.bg_write_weight = bg_write;
     io_config.fg_write_weight = fg_write;
@@ -618,7 +618,7 @@ constexpr auto Emergency = IOLimitTuner::Watermark::Emergency;
 
 TEST(IOLimitTunerTest, Tune)
 {
-    StorageIORateLimitConfig io_config;
+    IORateLimitConfig io_config;
     io_config.max_bytes_per_sec = 2000;
     updateWatermarkPct(io_config, 90, 80, 50);
     io_config.min_bytes_per_sec = 10;
@@ -740,7 +740,7 @@ TEST(IOLimitTunerTest, Tune)
 
 TEST(IOLimitTunerTest, Tune2)
 {
-    StorageIORateLimitConfig io_config;
+    IORateLimitConfig io_config;
     io_config.max_bytes_per_sec = 2000;
     io_config.min_bytes_per_sec = 10;
 

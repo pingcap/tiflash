@@ -57,6 +57,7 @@ void DataStoreS3::putDMFile(DMFilePtr local_dmfile, const S3::DMFileOID & oid, b
     auto s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
 
     std::vector<std::future<void>> upload_results;
+    upload_results.reserve(local_files.size() - 1);
     for (const auto & fname : local_files)
     {
         if (fname == DMFile::metav2FileName())
@@ -67,8 +68,13 @@ void DataStoreS3::putDMFile(DMFilePtr local_dmfile, const S3::DMFileOID & oid, b
         auto local_fname = fmt::format("{}/{}", local_dir, fname);
         auto remote_fname = fmt::format("{}/{}", remote_dir, fname);
         auto task = std::make_shared<std::packaged_task<void()>>(
-            [&, local_fname = std::move(local_fname), remote_fname = std::move(remote_fname)]() {
-                S3::uploadFile(*s3_client, local_fname, remote_fname);
+            [&, local_fname = std::move(local_fname), remote_fname = std::move(remote_fname)]() -> void {
+                S3::uploadFile(
+                    *s3_client,
+                    local_fname,
+                    remote_fname,
+                    EncryptionPath(local_dmfile->path(), fname, oid.keyspace_id),
+                    file_provider);
             });
         upload_results.push_back(task->get_future());
         DataStoreS3Pool::get().scheduleOrThrowOnError([task]() { (*task)(); });
@@ -81,8 +87,12 @@ void DataStoreS3::putDMFile(DMFilePtr local_dmfile, const S3::DMFileOID & oid, b
     // Only when the meta upload is successful, the dmfile upload can be considered successful.
     auto local_meta_fname = fmt::format("{}/{}", local_dir, DMFile::metav2FileName());
     auto remote_meta_fname = fmt::format("{}/{}", remote_dir, DMFile::metav2FileName());
-    S3::uploadFile(*s3_client, local_meta_fname, remote_meta_fname);
-
+    S3::uploadFile(
+        *s3_client,
+        local_meta_fname,
+        remote_meta_fname,
+        EncryptionPath(local_dmfile->path(), DMFile::metav2FileName(), oid.keyspace_id),
+        file_provider);
     if (remove_local)
     {
         local_dmfile->switchToRemote(oid);
@@ -103,13 +113,19 @@ bool DataStoreS3::putCheckpointFiles(
 
     std::vector<std::future<void>> upload_results;
     // upload in parallel
+    // Note: Local checkpoint files are always not encrypted.
     for (size_t file_idx = 0; file_idx < local_files.data_files.size(); ++file_idx)
     {
         auto task = std::make_shared<std::packaged_task<void()>>([&, idx = file_idx] {
             const auto & local_datafile = local_files.data_files[idx];
             auto s3key = S3::S3Filename::newCheckpointData(store_id, upload_seq, idx);
             auto lock_key = s3key.toView().getLockKey(store_id, upload_seq);
-            S3::uploadFile(*s3_client, local_datafile, s3key.toFullKey());
+            S3::uploadFile(
+                *s3_client,
+                local_datafile,
+                s3key.toFullKey(),
+                EncryptionPath(local_datafile, "", NullspaceID),
+                file_provider);
             S3::uploadEmptyFile(*s3_client, lock_key);
         });
         upload_results.push_back(task->get_future());
@@ -122,7 +138,12 @@ bool DataStoreS3::putCheckpointFiles(
 
     // upload manifest after all CheckpointData uploaded
     auto s3key = S3::S3Filename::newCheckpointManifest(store_id, upload_seq);
-    S3::uploadFile(*s3_client, local_files.manifest_file, s3key.toFullKey());
+    S3::uploadFile(
+        *s3_client,
+        local_files.manifest_file,
+        s3key.toFullKey(),
+        EncryptionPath(local_files.manifest_file, "", NullspaceID),
+        file_provider);
 
     return true; // upload success
 }

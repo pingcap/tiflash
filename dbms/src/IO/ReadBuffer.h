@@ -135,6 +135,15 @@ public:
         return bytes_ignored;
     }
 
+    /** Peeks a single byte. */
+    bool ALWAYS_INLINE peek(char & c)
+    {
+        if (eof())
+            return false;
+        c = *pos;
+        return true;
+    }
+
     /** Reads as many as there are, no more than n bytes. */
     size_t read(char * to, size_t n)
     {
@@ -181,5 +190,12 @@ private:
 
 using ReadBufferPtr = std::shared_ptr<ReadBuffer>;
 
+/// Due to inconsistencies in ReadBuffer-family interfaces:
+///  - some require to fully wrap underlying buffer and own it,
+///  - some just wrap the reference without ownership,
+/// we need to be able to wrap reference-only buffers with movable transparent proxy-buffer.
+/// The uniqueness of such wraps is responsibility of the code author.
+std::unique_ptr<ReadBuffer> wrapReadBufferReference(ReadBuffer & ref);
+std::unique_ptr<ReadBuffer> wrapReadBufferPointer(ReadBufferPtr ptr);
 
 } // namespace DB

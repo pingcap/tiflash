@@ -14,6 +14,7 @@
 
 #include <Common/FailPoint.h>
 #include <Common/Logger.h>
+#include <Encryption/EncryptionPath.h>
 #include <Flash/Disaggregated/MockS3LockClient.h>
 #include <Storages/DeltaMerge/Remote/DataStore/DataStore.h>
 #include <Storages/DeltaMerge/Remote/DataStore/DataStoreS3.h>
@@ -662,7 +663,12 @@ try
         LOG_DEBUG(log, "Checkpoint data paths: {}", data_paths);
         writer.reset();
 
-        S3::uploadFile(*mock_s3_client, manifest_file_path1, manifest_file_id1);
+        S3::uploadFile(
+            *mock_s3_client,
+            manifest_file_path1,
+            manifest_file_id1,
+            EncryptionPath(manifest_file_path1, ""),
+            ::DB::tests::TiFlashTestEnv::getMockFileProvider());
     }
     { // prepare the second manifest on S3
         const String entry_data = "cherry_value";
@@ -699,7 +705,12 @@ try
         LOG_DEBUG(log, "Checkpoint data paths: {}", data_paths);
         writer.reset();
 
-        S3::uploadFile(*mock_s3_client, manifest_file_path2, manifest_file_id2);
+        S3::uploadFile(
+            *mock_s3_client,
+            manifest_file_path2,
+            manifest_file_id2,
+            EncryptionPath(manifest_file_path2, ""),
+            ::DB::tests::TiFlashTestEnv::getMockFileProvider());
     }
 
     // read from S3 key

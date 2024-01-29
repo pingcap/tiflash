@@ -16,7 +16,7 @@
 
 #include <Core/Types.h>
 #include <common/types.h>
-#include <pingcap/pd/IClient.h>
+#include <pingcap/pd/Types.h>
 
 #include <chrono>
 #include <unordered_set>

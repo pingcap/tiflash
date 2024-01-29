@@ -16,7 +16,9 @@
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/Segment.h>
-#include <Storages/DeltaMerge/StoragePool.h>
+#include <Storages/DeltaMerge/Segment_fwd.h>
+#include <Storages/DeltaMerge/StoragePool/GlobalPageIdAllocator.h>
+#include <Storages/DeltaMerge/StoragePool/StoragePool.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
 #include <Storages/PathPool.h>
 #include <TestUtils/InputStreamTestUtils.h>
@@ -44,40 +46,46 @@ public:
     void SetUp() override
     {
         TiFlashStorageTestBasic::SetUp();
-        table_columns_ = std::make_shared<ColumnDefines>();
+        table_columns = std::make_shared<ColumnDefines>();
 
-        segment = reload();
+        segment = buildFirstSegment();
         ASSERT_EQ(segment->segmentId(), DELTA_MERGE_FIRST_SEGMENT_ID);
     }
 
 protected:
-    SegmentPtr reload(ColumnDefinesPtr cols = {}, DB::Settings && db_settings = DB::Settings())
+    SegmentPtr buildFirstSegment(ColumnDefinesPtr cols = {}, DB::Settings && db_settings = DB::Settings())
     {
         TiFlashStorageTestBasic::reload(std::move(db_settings));
         path_pool = std::make_shared<StoragePathPool>(db_context->getPathPool().withTable("test", "t", false));
-        storage_pool = std::make_shared<StoragePool>(*db_context, NullspaceID, /*table_id*/ 100, *path_pool, "test.t1");
+        page_id_allocator = std::make_shared<GlobalPageIdAllocator>();
+        storage_pool = std::make_shared<StoragePool>(
+            *db_context,
+            NullspaceID,
+            /*table_id*/ 100,
+            *path_pool,
+            page_id_allocator,
+            "test.t1");
         storage_pool->restore();
         if (!cols)
             cols = DMTestEnv::getDefaultColumns(
                 is_common_handle ? DMTestEnv::PkType::CommonHandle : DMTestEnv::PkType::HiddenTiDBRowID);
         setColumns(cols);
 
-        auto segment_id = storage_pool->newMetaPageId();
         return Segment::newSegment(
             Logger::get(),
-            *dm_context_,
-            table_columns_,
+            *dm_context,
+            table_columns,
             RowKeyRange::newAll(is_common_handle, rowkey_column_size),
-            segment_id,
+            DELTA_MERGE_FIRST_SEGMENT_ID,
             0);
     }
 
     // setColumns should update dm_context at the same time
     void setColumns(const ColumnDefinesPtr & columns)
     {
-        *table_columns_ = *columns;
+        *table_columns = *columns;
 
-        dm_context_ = DMContext::createUnique(
+        dm_context = DMContext::createUnique(
             *db_context,
             path_pool,
             storage_pool,
@@ -89,18 +97,19 @@ protected:
             db_context->getSettingsRef());
     }
 
-    const ColumnDefinesPtr & tableColumns() const { return table_columns_; }
+    const ColumnDefinesPtr & tableColumns() const { return table_columns; }
 
-    DMContext & dmContext() { return *dm_context_; }
+    DMContext & dmContext() { return *dm_context; }
 
 private:
     /// all these var lives as ref in dm_context
+    GlobalPageIdAllocatorPtr page_id_allocator;
     std::shared_ptr<StoragePathPool> path_pool;
     std::shared_ptr<StoragePool> storage_pool;
-    ColumnDefinesPtr table_columns_;
+    ColumnDefinesPtr table_columns;
     DM::DeltaMergeStore::Settings settings;
     /// dm_context
-    std::unique_ptr<DMContext> dm_context_;
+    std::unique_ptr<DMContext> dm_context;
 
 protected:
     // the segment we are going to test
@@ -306,13 +315,13 @@ try
 }
 CATCH
 
-class SegmentDeletion_Common_Handle_test
+class SegmentDeletionCommonHandleTest
     : public SegmentCommonHandleTest
     , public testing::WithParamInterface<std::tuple<bool, bool>>
 {
 };
 
-TEST_P(SegmentDeletion_Common_Handle_test, DeleteDataInDelta)
+TEST_P(SegmentDeletionCommonHandleTest, DeleteDataInDelta)
 try
 {
     const size_t num_rows_write = 100;
@@ -382,7 +391,7 @@ try
 }
 CATCH
 
-TEST_P(SegmentDeletion_Common_Handle_test, DeleteDataInStable)
+TEST_P(SegmentDeletionCommonHandleTest, DeleteDataInStable)
 try
 {
     const size_t num_rows_write = 100;
@@ -460,7 +469,7 @@ try
 }
 CATCH
 
-TEST_P(SegmentDeletion_Common_Handle_test, DeleteDataInStableAndDelta)
+TEST_P(SegmentDeletionCommonHandleTest, DeleteDataInStableAndDelta)
 try
 {
     const size_t num_rows_write = 100;
@@ -550,7 +559,7 @@ CATCH
 
 INSTANTIATE_TEST_CASE_P(
     WhetherReadOrMergeDeltaBeforeDeleteRange,
-    SegmentDeletion_Common_Handle_test,
+    SegmentDeletionCommonHandleTest,
     testing::Combine(testing::Bool(), testing::Bool()));
 
 TEST_F(SegmentCommonHandleTest, DeleteRead)
@@ -929,7 +938,7 @@ try
     settings.dt_segment_limit_rows = 11;
     settings.dt_segment_delta_limit_rows = 7;
 
-    segment = reload(DMTestEnv::getDefaultColumns(DMTestEnv::PkType::CommonHandle), std::move(settings));
+    segment = buildFirstSegment(DMTestEnv::getDefaultColumns(DMTestEnv::PkType::CommonHandle), std::move(settings));
 
     size_t num_batches_written = 0;
     const size_t num_rows_per_write = 5;

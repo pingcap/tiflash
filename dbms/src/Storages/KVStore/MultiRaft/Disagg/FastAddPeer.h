@@ -46,5 +46,12 @@ FastAddPeerRes FastAddPeerImpl(
     UInt64 region_id,
     UInt64 new_peer_id,
     UInt64 start_time);
-uint8_t ApplyFapSnapshotImpl(TMTContext & tmt, TiFlashRaftProxyHelper * proxy_helper, UInt64 region_id, UInt64 peer_id);
+uint8_t ApplyFapSnapshotImpl(
+    TMTContext & tmt,
+    TiFlashRaftProxyHelper * proxy_helper,
+    UInt64 region_id,
+    UInt64 peer_id,
+    bool assert_exist,
+    UInt64 index,
+    UInt64 term);
 } // namespace DB

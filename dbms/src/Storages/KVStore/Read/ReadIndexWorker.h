@@ -167,21 +167,9 @@ struct RegionNotifyMap : MutexLockWrap
 {
     using Data = std::unordered_set<RegionID>;
 
-    bool empty() const NO_THREAD_SAFETY_ANALYSIS
-    {
-        auto _ = genLockGuard();
-        return data.empty();
-    }
-    void add(RegionID id) NO_THREAD_SAFETY_ANALYSIS
-    {
-        auto _ = genLockGuard();
-        data.emplace(id);
-    }
-    Data popAll() NO_THREAD_SAFETY_ANALYSIS
-    {
-        auto _ = genLockGuard();
-        return std::move(data);
-    }
+    bool empty() const;
+    void add(RegionID id);
+    Data popAll();
 
     Data data;
 };
@@ -229,25 +217,11 @@ struct ReadIndexDataNode : MutexLockWrap
     {
         using Data = std::deque<std::pair<Timestamp, ReadIndexFuturePtr>>;
 
-        void add(Timestamp ts, ReadIndexFuturePtr f) NO_THREAD_SAFETY_ANALYSIS
-        {
-            auto _ = genLockGuard();
-            waiting_tasks.emplace_back(ts, std::move(f));
-        }
+        void add(Timestamp ts, ReadIndexFuturePtr f);
 
-        std::optional<Data> popAll() NO_THREAD_SAFETY_ANALYSIS
-        {
-            auto _ = genLockGuard();
-            if (waiting_tasks.empty())
-                return {};
-            return std::move(waiting_tasks);
-        }
+        std::optional<Data> popAll();
 
-        size_t size() const NO_THREAD_SAFETY_ANALYSIS
-        {
-            auto _ = genLockGuard();
-            return waiting_tasks.size();
-        }
+        size_t size() const;
 
         Data waiting_tasks;
     };

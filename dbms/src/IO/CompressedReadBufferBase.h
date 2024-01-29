@@ -22,7 +22,7 @@ namespace DB
 class ReadBuffer;
 
 /** Basic functionality for implementation of
-  *  CompressedReadBuffer, CompressedReadBufferFromFile and CachedCompressedReadBuffer.
+  *  CompressedReadBuffer and CompressedReadBufferFromFile.
   */
 template <bool has_checksum = true>
 class CompressedReadBufferBase
