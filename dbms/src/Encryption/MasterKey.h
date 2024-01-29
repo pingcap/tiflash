@@ -30,7 +30,7 @@ public:
         : master_key(std::move(master_key_))
     {}
 
-    EncryptionKey generateEncryptionKey()
+    EncryptionKeyPtr generateEncryptionKey()
     {
         String plain_text = DB::random::randomString(EncryptionKey::KEY_LENGTH);
         String cipher_text = plain_text;
@@ -42,10 +42,10 @@ public:
             EncryptionMethod::Aes256Ctr,
             nullptr,
             true);
-        return EncryptionKey(cipher_text, plain_text, 0);
+        return std::make_shared<EncryptionKey>(cipher_text, plain_text, 0);
     }
 
-    EncryptionKey decryptEncryptionKey(const String & exported)
+    EncryptionKeyPtr decryptEncryptionKey(const String & exported)
     {
         RUNTIME_CHECK_MSG(
             exported.size() == EncryptionKey::EXPORT_KEY_LENGTH,
@@ -69,7 +69,7 @@ public:
             EncryptionMethod::Aes256Ctr,
             nullptr,
             false);
-        return EncryptionKey(cipher_text, plain_text, current_ver);
+        return std::make_shared<EncryptionKey>(cipher_text, plain_text, current_ver);
     }
 
 private:

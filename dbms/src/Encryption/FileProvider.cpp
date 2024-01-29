@@ -20,6 +20,7 @@
 #include <Encryption/EncryptedWritableFile.h>
 #include <Encryption/EncryptedWriteReadableFile.h>
 #include <Encryption/FileProvider.h>
+#include <Encryption/KeyspacesKeyManager.h>
 #include <Poco/File.h>
 #include <Poco/Path.h>
 #include <Storages/KVStore/FFI/FileEncryption.h>
@@ -43,7 +44,7 @@ RandomAccessFilePtr FileProvider::newRandomAccessFile(
     // Unrecognized xx:// protocol.
     RUNTIME_CHECK_MSG(file_path_.find("://") == std::string::npos, "Unsupported protocol in path {}", file_path_);
     RandomAccessFilePtr file = std::make_shared<PosixRandomAccessFile>(file_path_, flags, read_limiter);
-    auto encryption_info = key_manager->getFile(encryption_path_.full_path);
+    auto encryption_info = key_manager->getInfo(encryption_path_);
     if (auto stream = encryption_info.createCipherStream(encryption_path_); stream)
     {
         file = std::make_shared<EncryptedRandomAccessFile>(file, stream);
@@ -70,7 +71,7 @@ WritableFilePtr FileProvider::newWritableFile(
         = std::make_shared<PosixWritableFile>(file_path_, truncate_if_exists_, flags, mode, write_limiter_);
     if (encryption_enabled && create_new_encryption_info_)
     {
-        auto encryption_info = key_manager->newFile(encryption_path_.full_path);
+        auto encryption_info = key_manager->newInfo(encryption_path_);
         if (auto stream = encryption_info.createCipherStream(encryption_path_, true); stream)
         {
             file = std::make_shared<EncryptedWritableFile>(file, stream);
@@ -78,7 +79,7 @@ WritableFilePtr FileProvider::newWritableFile(
     }
     else if (!create_new_encryption_info_)
     {
-        auto encryption_info = key_manager->getFile(encryption_path_.full_path);
+        auto encryption_info = key_manager->getInfo(encryption_path_);
         if (auto stream = encryption_info.createCipherStream(encryption_path_); stream)
         {
             file = std::make_shared<EncryptedWritableFile>(file, stream);
@@ -110,7 +111,7 @@ WriteReadableFilePtr FileProvider::newWriteReadableFile(
 
     if (encryption_enabled && create_new_encryption_info_)
     {
-        auto encryption_info = key_manager->newFile(encryption_path_.full_path);
+        auto encryption_info = key_manager->newInfo(encryption_path_);
         if (auto stream = encryption_info.createCipherStream(encryption_path_, true); stream)
         {
             file = std::make_shared<EncryptedWriteReadableFile>(file, stream);
@@ -118,7 +119,7 @@ WriteReadableFilePtr FileProvider::newWriteReadableFile(
     }
     else if (!create_new_encryption_info_)
     {
-        auto encryption_info = key_manager->getFile(encryption_path_.full_path);
+        auto encryption_info = key_manager->getInfo(encryption_path_);
         if (auto stream = encryption_info.createCipherStream(encryption_path_); stream)
         {
             file = std::make_shared<EncryptedWriteReadableFile>(file, stream);
@@ -134,7 +135,7 @@ void FileProvider::deleteDirectory(const String & dir_path_, bool dir_path_as_en
     {
         if (dir_path_as_encryption_path)
         {
-            key_manager->deleteFile(dir_path_, true);
+            key_manager->deleteInfo(EncryptionPath(dir_path_, ""), true);
             dir_file.remove(recursive);
         }
         else if (recursive)
@@ -145,7 +146,7 @@ void FileProvider::deleteDirectory(const String & dir_path_, bool dir_path_as_en
             {
                 if (file.isFile())
                 {
-                    key_manager->deleteFile(file.path(), true);
+                    key_manager->deleteInfo(EncryptionPath(file.path(), ""), true);
                 }
                 else if (file.isDirectory())
                 {
@@ -183,7 +184,7 @@ void FileProvider::deleteRegularFile(const String & file_path_, const Encryption
         // In the worst case that TiFlash crash between removing the file on disk and removing the encryption key, we may leave
         // the encryption key not deleted. However, this is a rare case and won't cause serious problem.
         data_file.remove(false);
-        key_manager->deleteFile(encryption_path_.full_path, true);
+        key_manager->deleteInfo(encryption_path_, true);
     }
 }
 
@@ -191,33 +192,32 @@ void FileProvider::createEncryptionInfo(const EncryptionPath & encryption_path_)
 {
     if (encryption_enabled)
     {
-        key_manager->newFile(encryption_path_.full_path);
+        key_manager->newInfo(encryption_path_);
     }
 }
 
 void FileProvider::deleteEncryptionInfo(const EncryptionPath & encryption_path_, bool throw_on_error) const
 {
-    key_manager->deleteFile(encryption_path_.full_path, throw_on_error);
+    key_manager->deleteInfo(encryption_path_, throw_on_error);
 }
 
-void FileProvider::encryptPage(
-    const EncryptionPath & encryption_path_,
-    char * data,
-    size_t data_size,
-    PageIdU64 page_id)
+void FileProvider::dropEncryptionInfo(KeyspaceID keyspace_id) const
 {
-    const auto info = key_manager->getFile(encryption_path_.full_path);
-    info.cipherPage</*is_encrypt*/ true>(data, data_size, page_id);
+    if (auto * keyspaces_key_manager = dynamic_cast<KeyspacesKeyManager *>(key_manager.get()); keyspaces_key_manager)
+        keyspaces_key_manager->deleteKey(keyspace_id);
 }
 
-void FileProvider::decryptPage(
-    const EncryptionPath & encryption_path_,
-    char * data,
-    size_t data_size,
-    PageIdU64 page_id)
+void FileProvider::encryptPage(KeyspaceID keyspace_id, char * data, size_t data_size, PageIdU64 page_id)
 {
-    const auto info = key_manager->getFile(encryption_path_.full_path);
-    info.cipherPage</*is_encrypt*/ false>(data, data_size, page_id);
+    // pass page_id as file_path to genarate unique IV.
+    const auto info = key_manager->getInfo(EncryptionPath(std::to_string(page_id), "", keyspace_id));
+    info.cipherData<FileEncryptionInfo::Encrypt>(data, data_size);
+}
+
+void FileProvider::decryptPage(KeyspaceID keyspace_id, char * data, size_t data_size, PageIdU64 page_id)
+{
+    const auto info = key_manager->getInfo(EncryptionPath(std::to_string(page_id), "", keyspace_id));
+    info.cipherData<FileEncryptionInfo::Decrypt>(data, data_size);
 }
 
 void FileProvider::linkEncryptionInfo(
@@ -226,13 +226,13 @@ void FileProvider::linkEncryptionInfo(
 {
     // delete the encryption info for dst_path if any
     if (isFileEncrypted(link_encryption_name_))
-        key_manager->deleteFile(link_encryption_name_.full_path, true);
-    key_manager->linkFile(src_encryption_path_.full_path, link_encryption_name_.full_path);
+        key_manager->deleteInfo(link_encryption_name_, true);
+    key_manager->linkInfo(src_encryption_path_, link_encryption_name_);
 }
 
 bool FileProvider::isFileEncrypted(const EncryptionPath & encryption_path_) const
 {
-    auto encryption_info = key_manager->getFile(encryption_path_.full_path);
+    auto encryption_info = key_manager->getInfo(encryption_path_);
     return encryption_info.isEncrypted();
 }
 
@@ -244,6 +244,11 @@ bool FileProvider::isEncryptionEnabled() const
 bool FileProvider::isKeyspaceEncryptionEnabled() const
 {
     return encryption_enabled && keyspace_encryption_enabled;
+}
+
+bool FileProvider::isEncryptionEnabled(KeyspaceID keyspace_id) const
+{
+    return encryption_enabled && keyspace_encryption_enabled && key_manager->isEncryptionEnabled(keyspace_id);
 }
 
 void FileProvider::renameFile(
@@ -283,17 +288,23 @@ void FileProvider::renameFile(
 
     // delete the encryption info for dst_path if any
     if (isFileEncrypted(dst_encryption_path_))
-        key_manager->deleteFile(dst_encryption_path_.full_path, true);
+        key_manager->deleteInfo(dst_encryption_path_, true);
 
     // rename encryption info(if any) before rename the underlying file
     bool is_file_encrypted = isFileEncrypted(src_encryption_path_);
     if (is_file_encrypted)
-        key_manager->linkFile(src_encryption_path_.full_path, dst_encryption_path_.full_path);
+        key_manager->linkInfo(src_encryption_path_, dst_encryption_path_);
 
     data_file.renameTo(dst_file_path_);
 
     if (is_file_encrypted)
-        key_manager->deleteFile(src_encryption_path_.full_path, false);
+        key_manager->deleteInfo(src_encryption_path_, false);
+}
+
+void FileProvider::setPageStoragePtrForKeyManager(const UniversalPageStoragePtr & page_storage_ptr_)
+{
+    if (auto * keyspaces_key_manager = dynamic_cast<KeyspacesKeyManager *>(key_manager.get()); keyspaces_key_manager)
+        keyspaces_key_manager->setUniversalPageStorage(page_storage_ptr_);
 }
 
 } // namespace DB
