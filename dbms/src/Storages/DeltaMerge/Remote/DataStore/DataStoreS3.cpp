@@ -73,7 +73,7 @@ void DataStoreS3::putDMFile(DMFilePtr local_dmfile, const S3::DMFileOID & oid, b
                     *s3_client,
                     local_fname,
                     remote_fname,
-                    EncryptionPath(local_dmfile->path(), fname),
+                    EncryptionPath(local_dmfile->path(), fname, oid.keyspace_id),
                     file_provider);
             });
         upload_results.push_back(task->get_future());
@@ -91,7 +91,7 @@ void DataStoreS3::putDMFile(DMFilePtr local_dmfile, const S3::DMFileOID & oid, b
         *s3_client,
         local_meta_fname,
         remote_meta_fname,
-        EncryptionPath(local_dmfile->path(), DMFile::metav2FileName()),
+        EncryptionPath(local_dmfile->path(), DMFile::metav2FileName(), oid.keyspace_id),
         file_provider);
     if (remove_local)
     {
@@ -124,7 +124,7 @@ bool DataStoreS3::putCheckpointFiles(
                 *s3_client,
                 local_datafile,
                 s3key.toFullKey(),
-                EncryptionPath(local_datafile, ""),
+                EncryptionPath(local_datafile, "", NullspaceID),
                 file_provider);
             S3::uploadEmptyFile(*s3_client, lock_key);
         });
@@ -142,7 +142,7 @@ bool DataStoreS3::putCheckpointFiles(
         *s3_client,
         local_files.manifest_file,
         s3key.toFullKey(),
-        EncryptionPath(local_files.manifest_file, ""),
+        EncryptionPath(local_files.manifest_file, "", NullspaceID),
         file_provider);
 
     return true; // upload success

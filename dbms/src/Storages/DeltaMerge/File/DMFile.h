@@ -226,7 +226,8 @@ public:
     static std::set<UInt64> listAllInPath(
         const FileProviderPtr & file_provider,
         const String & parent_path,
-        const ListOptions & options);
+        const ListOptions & options,
+        KeyspaceID keyspace_id = NullspaceID);
 
     // static helper function for getting path
     static String getPathByStatus(const String & parent_path, UInt64 file_id, DMFile::Status status);

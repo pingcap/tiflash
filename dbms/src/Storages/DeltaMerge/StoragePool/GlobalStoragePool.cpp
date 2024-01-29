@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Interpreters/Context.h>
+#include <Storages/DeltaMerge/StoragePool/GlobalPageIdAllocator.h>
 #include <Storages/DeltaMerge/StoragePool/GlobalStoragePool.h>
 #include <Storages/DeltaMerge/StoragePool/StoragePoolConfig.h>
 #include <Storages/Page/Page.h>

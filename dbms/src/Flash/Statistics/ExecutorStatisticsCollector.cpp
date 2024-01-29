@@ -151,6 +151,14 @@ tipb::TiFlashExecutionInfo ExecutorStatisticsCollector::genTiFlashExecutionInfo(
     return execution_info;
 }
 
+void ExecutorStatisticsCollector::setLocalRUConsumption(const RUConsumption & ru_info)
+{
+    local_ru = std::make_optional<resource_manager::Consumption>();
+    local_ru->set_r_r_u(ru_info.cpu_ru + ru_info.read_ru);
+    local_ru->set_total_cpu_time_ms(toCPUTimeMillisecond(ru_info.cpu_time_ns));
+    local_ru->set_read_bytes(ru_info.read_bytes);
+}
+
 void ExecutorStatisticsCollector::fillExecutionSummary(
     tipb::SelectResponse & response,
     const String & executor_id,
@@ -196,6 +204,35 @@ void ExecutorStatisticsCollector::collectRuntimeDetails()
 
 void ExecutorStatisticsCollector::fillLocalExecutionSummaries(tipb::SelectResponse & response)
 {
+    // local_ru should already setup before fill.
+    RUNTIME_CHECK_MSG(local_ru, "local ru consumption info not setup");
+    // Put ru consumption in root executor exec summary.
+    auto fill_local_ru = [&]() {
+        auto & execution_summaries = *response.mutable_execution_summaries();
+        const String root_executor_id = dag_context->dag_request.rootExecutorID();
+        tipb::ExecutorExecutionSummary * target_executor_summary = nullptr;
+        if unlikely (root_executor_id.empty())
+        {
+            if likely (!execution_summaries.empty())
+                target_executor_summary = &(execution_summaries[0]);
+        }
+        else
+        {
+            for (auto & summary : execution_summaries)
+            {
+                if (summary.executor_id() == root_executor_id)
+                {
+                    target_executor_summary = &summary;
+                    break;
+                }
+            }
+        }
+        RUNTIME_CHECK_MSG(target_executor_summary, "cannot find executor summary to put ru consumption");
+        RUNTIME_CHECK_MSG(
+            local_ru->SerializeToString(target_executor_summary->mutable_ru_consumption()),
+            "failed to serialize tiflash ru consumption into select response");
+    };
+
     if (dag_context->dag_request.isTreeBased())
     {
         // fill in tree-based executors' execution summary
@@ -223,6 +260,7 @@ void ExecutorStatisticsCollector::fillLocalExecutionSummaries(tipb::SelectRespon
                 dag_context->scan_context_map);
         }
     }
+    fill_local_ru();
 }
 
 void ExecutorStatisticsCollector::fillRemoteExecutionSummaries(tipb::SelectResponse & response)

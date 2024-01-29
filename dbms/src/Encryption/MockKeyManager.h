@@ -32,13 +32,15 @@ public:
 
     MockKeyManager(EncryptionMethod method_, const String & key_, const String & iv, bool encryption_enabled_ = true);
 
-    FileEncryptionInfo getFile(const String & fname) override;
+    FileEncryptionInfo getInfo(const EncryptionPath & ep) override;
 
-    FileEncryptionInfo newFile(const String & fname) override;
+    FileEncryptionInfo newInfo(const EncryptionPath & ep) override;
 
-    void deleteFile(const String & fname, bool /*throw_on_error*/) override;
+    void deleteInfo(const EncryptionPath & ep, bool /*throw_on_error*/) override;
 
-    void linkFile(const String & src_fname, const String & dst_fname) override;
+    void linkInfo(const EncryptionPath & src_ep, const EncryptionPath & dst_ep) override;
+
+    bool isEncryptionEnabled(KeyspaceID /*keyspace_id*/) override;
 
 private:
     bool fileExist(const String & fname) const;
