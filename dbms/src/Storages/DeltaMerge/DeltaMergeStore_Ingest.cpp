@@ -1183,7 +1183,7 @@ Segments DeltaMergeStore::buildSegmentsFromCheckpointInfo(
     return {};
 }
 
-void DeltaMergeStore::ingestSegmentsFromCheckpointInfo(
+UInt64 DeltaMergeStore::ingestSegmentsFromCheckpointInfo(
     const DMContextPtr & dm_context,
     const DM::RowKeyRange & range,
     const CheckpointIngestInfoPtr & checkpoint_info)
@@ -1202,18 +1202,25 @@ void DeltaMergeStore::ingestSegmentsFromCheckpointInfo(
             "Ingest checkpoint from remote meet empty range, ignore, store_id={} region_id={}",
             checkpoint_info->getRemoteStoreId(),
             checkpoint_info->regionId());
-        return;
+        return 0;
     }
 
     auto restored_segments = checkpoint_info->getRestoredSegments();
     auto updated_segments = ingestSegmentsUsingSplit(dm_context, range, restored_segments);
+    auto estimated_bytes = 0;
+
+    for (const auto & segment : restored_segments)
+    {
+        estimated_bytes += segment->getEstimatedBytes();
+    }
+
     LOG_INFO(
         log,
-        "Ingest checkpoint from remote done, store_id={} region_id={} n_segments={}",
+        "Ingest checkpoint from remote done, store_id={} region_id={} n_segments={} est_bytes={}",
         checkpoint_info->getRemoteStoreId(),
         checkpoint_info->regionId(),
-        restored_segments.size());
-
+        restored_segments.size(),
+        estimated_bytes);
 
     WriteBatches wbs{*dm_context->storage_pool};
     for (auto & segment : restored_segments)
@@ -1228,6 +1235,8 @@ void DeltaMergeStore::ingestSegmentsFromCheckpointInfo(
     // TODO(fap) This could be executed in a dedicated thread if it consumes too much time.
     for (auto & segment : updated_segments)
         checkSegmentUpdate(dm_context, segment, ThreadType::Write, InputType::RaftSSTAndSnap);
+
+    return estimated_bytes;
 }
 
 } // namespace DM

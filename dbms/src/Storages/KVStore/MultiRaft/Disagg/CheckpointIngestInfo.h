@@ -74,12 +74,22 @@ struct CheckpointIngestInfo
         UInt64 region_id,
         UInt64 peer_id);
 
+    enum class CleanReason
+    {
+        Success,
+        ProxyFallback,
+        TiFlashCancel,
+        ResolveStateApplySnapshot,
+        ResolveStateDestroy,
+    };
+
     // Only call to clean dangling CheckpointIngestInfo.
     static bool forciblyClean(
         TMTContext & tmt,
         const TiFlashRaftProxyHelper * proxy_helper,
         UInt64 region_id,
-        bool in_memory);
+        bool in_memory,
+        CleanReason reason);
     static bool cleanOnSuccess(TMTContext & tmt, UInt64 region_id);
 
     FastAddPeerProto::CheckpointIngestInfoPersisted serializeMeta() const;

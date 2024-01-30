@@ -28,7 +28,8 @@
 #include <Poco/Logger.h>
 #include <Server/StorageConfigParser.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
-#include <Storages/DeltaMerge/StoragePool.h>
+#include <Storages/DeltaMerge/StoragePool/GlobalStoragePool.h>
+#include <Storages/DeltaMerge/StoragePool/StoragePool.h>
 #include <Storages/KVStore/MultiRaft/RegionManager.h>
 #include <Storages/KVStore/MultiRaft/RegionPersister.h>
 #include <Storages/KVStore/Region.h>
@@ -86,7 +87,6 @@ ip = "::/0"
 [profiles.default]
 load_balancing = "random"
 max_memory_usage = 0
-use_uncompressed_cache = 1
 [profiles.readonly]
 readonly = 1
 
@@ -139,7 +139,6 @@ dt_enable_rough_set_filter = false
             // `setUser` will check user, password, address, update settings and quota for current user
             ASSERT_NO_THROW(ctx.setUser("default", "", addr, ""));
             const auto & settings = ctx.getSettingsRef();
-            EXPECT_EQ(settings.use_uncompressed_cache, 1U);
             if (i == 2)
             {
                 EXPECT_EQ(settings.max_memory_usage.getActualBytes(0), 123456UL);

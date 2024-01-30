@@ -17,7 +17,7 @@
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/Segment.h>
-#include <Storages/DeltaMerge/StoragePool.h>
+#include <Storages/DeltaMerge/StoragePool/StoragePool.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
 #include <Storages/PathPool.h>
@@ -138,8 +138,6 @@ protected:
     // <name, number_of_success_runs>
     std::map<std::string, size_t> operation_statistics;
 
-    SegmentPtr reload(bool is_common_handle, const ColumnDefinesPtr & pre_define_columns, DB::Settings && db_settings);
-
     // setColumns should update dm_context at the same time
     void setColumns(const ColumnDefinesPtr & columns);
 
@@ -153,6 +151,9 @@ protected:
     std::unique_ptr<DMContext> createDMContext();
 
     std::pair<SegmentPtr, SegmentSnapshotPtr> getSegmentForRead(PageIdU64 segment_id);
+
+private:
+    SegmentPtr reload(bool is_common_handle, const ColumnDefinesPtr & pre_define_columns, DB::Settings && db_settings);
 
 protected:
     inline static constexpr PageIdU64 NAMESPACE_ID = 100;

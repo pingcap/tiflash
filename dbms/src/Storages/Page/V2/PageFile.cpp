@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <BaseFile/RandomAccessFile.h>
+#include <BaseFile/WritableFile.h>
 #include <Common/CurrentMetrics.h>
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>

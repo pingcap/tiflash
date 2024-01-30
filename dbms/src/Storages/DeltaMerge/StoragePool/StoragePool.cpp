@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Inc.
+// Copyright 2024 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,7 +16,10 @@
 #include <Common/FailPoint.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/Settings.h>
-#include <Storages/DeltaMerge/StoragePool.h>
+#include <Storages/DeltaMerge/StoragePool/GlobalPageIdAllocator.h>
+#include <Storages/DeltaMerge/StoragePool/GlobalStoragePool.h>
+#include <Storages/DeltaMerge/StoragePool/StoragePool.h>
+#include <Storages/DeltaMerge/StoragePool/StoragePoolConfig.h>
 #include <Storages/Page/ConfigSettings.h>
 #include <Storages/Page/FileUsage.h>
 #include <Storages/Page/Page.h>
@@ -48,149 +51,40 @@ namespace FailPoints
 {
 extern const char force_set_dtfile_exist_when_acquire_id[];
 } // namespace FailPoints
+} // namespace DB
 
-namespace DM
+namespace DB::DM
 {
 
-PageStorageConfig extractConfig(const Settings & settings, StorageType subtype)
+StoragePool::StoragePool(
+    Context & global_ctx,
+    KeyspaceID keyspace_id_,
+    NamespaceID table_id_,
+    StoragePathPool & storage_path_pool_,
+    const String & name)
+    : StoragePool(global_ctx, keyspace_id_, table_id_, storage_path_pool_, global_ctx.getGlobalPageIdAllocator(), name)
 {
-#define SET_CONFIG(NAME)                                                            \
-    config.num_write_slots = settings.dt_storage_pool_##NAME##_write_slots;         \
-    config.gc_min_files = settings.dt_storage_pool_##NAME##_gc_min_file_num;        \
-    config.gc_min_bytes = settings.dt_storage_pool_##NAME##_gc_min_bytes;           \
-    config.gc_min_legacy_num = settings.dt_storage_pool_##NAME##_gc_min_legacy_num; \
-    config.gc_max_valid_rate = settings.dt_storage_pool_##NAME##_gc_max_valid_rate; \
-    config.blob_heavy_gc_valid_rate = settings.dt_page_gc_threshold;
-
-    PageStorageConfig config = getConfigFromSettings(settings);
-
-    switch (subtype)
-    {
-    case StorageType::Log:
-        SET_CONFIG(log);
-        break;
-    case StorageType::Data:
-        SET_CONFIG(data);
-        break;
-    case StorageType::Meta:
-        SET_CONFIG(meta);
-        break;
-    default:
-        throw Exception(
-            fmt::format("Unknown subtype in extractConfig: {} ", static_cast<Int32>(subtype)),
-            ErrorCodes::LOGICAL_ERROR);
-    }
-#undef SET_CONFIG
-
-    return config;
-}
-
-GlobalStoragePool::GlobalStoragePool(const PathPool & path_pool, Context & global_ctx, const Settings & settings)
-    : log_storage(PageStorage::create(
-        "__global__.log",
-        path_pool.getPSDiskDelegatorGlobalMulti(PathPool::log_path_prefix),
-        extractConfig(settings, StorageType::Log),
-        global_ctx.getFileProvider(),
-        global_ctx,
-        true))
-    , data_storage(PageStorage::create(
-          "__global__.data",
-          path_pool.getPSDiskDelegatorGlobalMulti(PathPool::data_path_prefix),
-          extractConfig(settings, StorageType::Data),
-          global_ctx.getFileProvider(),
-          global_ctx,
-          true))
-    , meta_storage(PageStorage::create(
-          "__global__.meta",
-          path_pool.getPSDiskDelegatorGlobalMulti(PathPool::meta_path_prefix),
-          extractConfig(settings, StorageType::Meta),
-          global_ctx.getFileProvider(),
-          global_ctx,
-          true))
-    , global_context(global_ctx)
-{}
-
-
-GlobalStoragePool::~GlobalStoragePool()
-{
-    shutdown();
-}
-
-void GlobalStoragePool::restore()
-{
-    log_storage->restore();
-    data_storage->restore();
-    meta_storage->restore();
-
-    gc_handle = global_context.getBackgroundPool().addTask(
-        [this] { return this->gc(global_context.getSettingsRef()); },
-        false);
-}
-
-void GlobalStoragePool::shutdown()
-{
-    if (gc_handle)
-    {
-        global_context.getBackgroundPool().removeTask(gc_handle);
-        gc_handle = {};
-    }
-}
-
-FileUsageStatistics GlobalStoragePool::getLogFileUsage() const
-{
-    return log_storage->getFileUsageStatistics();
-}
-
-bool GlobalStoragePool::gc()
-{
-    return gc(global_context.getSettingsRef(), /*immediately=*/true, DELTA_MERGE_GC_PERIOD);
-}
-
-bool GlobalStoragePool::gc(const Settings & settings, bool immediately, const Seconds & try_gc_period)
-{
-    Timepoint now = Clock::now();
-    if (!immediately)
-    {
-        // No need lock
-        if (now < (last_try_gc_time.load() + try_gc_period))
-            return false;
-    }
-
-    last_try_gc_time = now;
-
-    bool done_anything = false;
-    auto write_limiter = global_context.getWriteLimiter();
-    auto read_limiter = global_context.getReadLimiter();
-    auto config = extractConfig(settings, StorageType::Meta);
-    meta_storage->reloadSettings(config);
-    done_anything |= meta_storage->gc(/*not_skip*/ false, write_limiter, read_limiter);
-
-    config = extractConfig(settings, StorageType::Data);
-    data_storage->reloadSettings(config);
-    done_anything |= data_storage->gc(/*not_skip*/ false, write_limiter, read_limiter);
-
-    config = extractConfig(settings, StorageType::Log);
-    log_storage->reloadSettings(config);
-    done_anything |= log_storage->gc(/*not_skip*/ false, write_limiter, read_limiter);
-
-    return done_anything;
+    //
 }
 
 StoragePool::StoragePool(
     Context & global_ctx,
     KeyspaceID keyspace_id_,
-    NamespaceID ns_id_,
+    NamespaceID table_id_,
     StoragePathPool & storage_path_pool_,
+    GlobalPageIdAllocatorPtr page_id_allocator_,
     const String & name)
-    : logger(Logger::get(!name.empty() ? name : DB::toString(ns_id_)))
+    : logger(Logger::get(!name.empty() ? name : DB::toString(table_id_)))
     , run_mode(global_ctx.getPageStorageRunMode())
     , keyspace_id(keyspace_id_)
-    , ns_id(ns_id_)
+    , table_id(table_id_)
     , storage_path_pool(storage_path_pool_)
     , uni_ps(run_mode == PageStorageRunMode::UNI_PS ? global_ctx.getWriteNodePageStorage() : nullptr)
     , global_context(global_ctx)
+    , global_id_allocator(std::move(page_id_allocator_))
     , storage_pool_metrics(CurrentMetrics::StoragePoolV3Only, 0)
 {
+    assert(global_id_allocator != nullptr);
     const auto & global_storage_pool = global_context.getGlobalStoragePool();
     switch (run_mode)
     {
@@ -218,7 +112,7 @@ StoragePool::StoragePool(
             run_mode,
             keyspace_id,
             StorageType::Log,
-            ns_id,
+            table_id,
             log_storage_v2,
             /*storage_v3_*/ nullptr,
             /*uni_ps_*/ nullptr,
@@ -227,7 +121,7 @@ StoragePool::StoragePool(
             run_mode,
             keyspace_id,
             StorageType::Data,
-            ns_id,
+            table_id,
             data_storage_v2,
             /*storage_v3_*/ nullptr,
             /*uni_ps_*/ nullptr,
@@ -236,7 +130,7 @@ StoragePool::StoragePool(
             run_mode,
             keyspace_id,
             StorageType::Meta,
-            ns_id,
+            table_id,
             meta_storage_v2,
             /*storage_v3_*/ nullptr,
             /*uni_ps_*/ nullptr,
@@ -273,7 +167,7 @@ StoragePool::StoragePool(
             run_mode,
             keyspace_id,
             StorageType::Log,
-            ns_id,
+            table_id,
             /*storage_v2_*/ nullptr,
             log_storage_v3,
             /*uni_ps_*/ nullptr,
@@ -282,7 +176,7 @@ StoragePool::StoragePool(
             run_mode,
             keyspace_id,
             StorageType::Data,
-            ns_id,
+            table_id,
             /*storage_v2_*/ nullptr,
             data_storage_v3,
             /*uni_ps_*/ nullptr,
@@ -291,7 +185,7 @@ StoragePool::StoragePool(
             run_mode,
             keyspace_id,
             StorageType::Meta,
-            ns_id,
+            table_id,
             /*storage_v2_*/ nullptr,
             meta_storage_v3,
             /*uni_ps_*/ nullptr,
@@ -328,10 +222,10 @@ StoragePool::StoragePool(
         {
             LOG_INFO(
                 logger,
-                "PageStorage V2 is already mark deleted. Current pagestorage change from {} to {} [ns_id={}]", //
+                "PageStorage V2 is already mark deleted. Current pagestorage change from {} to {} [table_id={}]", //
                 static_cast<UInt8>(PageStorageRunMode::MIX_MODE), //
                 static_cast<UInt8>(PageStorageRunMode::ONLY_V3), //
-                ns_id);
+                table_id);
             log_storage_v2 = nullptr;
             data_storage_v2 = nullptr;
             meta_storage_v2 = nullptr;
@@ -373,7 +267,7 @@ StoragePool::StoragePool(
             run_mode,
             keyspace_id,
             StorageType::Log,
-            ns_id,
+            table_id,
             log_storage_v2,
             log_storage_v3,
             /*uni_ps_*/ nullptr,
@@ -382,7 +276,7 @@ StoragePool::StoragePool(
             run_mode,
             keyspace_id,
             StorageType::Data,
-            ns_id,
+            table_id,
             data_storage_v2,
             data_storage_v3,
             /*uni_ps_*/ nullptr,
@@ -391,7 +285,7 @@ StoragePool::StoragePool(
             run_mode,
             keyspace_id,
             StorageType::Meta,
-            ns_id,
+            table_id,
             meta_storage_v2,
             meta_storage_v3,
             /*uni_ps_*/ nullptr,
@@ -423,7 +317,7 @@ StoragePool::StoragePool(
             run_mode,
             keyspace_id,
             StorageType::Log,
-            ns_id,
+            table_id,
             /*storage_v2_*/ nullptr,
             /*storage_v3_*/ nullptr,
             uni_ps,
@@ -432,7 +326,7 @@ StoragePool::StoragePool(
             run_mode,
             keyspace_id,
             StorageType::Data,
-            ns_id,
+            table_id,
             /*storage_v2_*/ nullptr,
             /*storage_v3_*/ nullptr,
             uni_ps,
@@ -441,7 +335,7 @@ StoragePool::StoragePool(
             run_mode,
             keyspace_id,
             StorageType::Meta,
-            ns_id,
+            table_id,
             /*storage_v2_*/ nullptr,
             /*storage_v3_*/ nullptr,
             uni_ps,
@@ -468,9 +362,7 @@ StoragePool::StoragePool(
         break;
     }
     default:
-        throw Exception(
-            fmt::format("Unknown PageStorageRunMode {}", static_cast<UInt8>(run_mode)),
-            ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Unknown PageStorageRunMode {}", static_cast<UInt8>(run_mode));
     }
 }
 
@@ -478,7 +370,10 @@ void StoragePool::forceTransformMetaV2toV3()
 {
     if (unlikely(run_mode != PageStorageRunMode::MIX_MODE))
         throw Exception(
-            fmt::format("Transform meta must run under mix mode [run_mode={}]", static_cast<Int32>(run_mode)));
+            ErrorCodes::LOGICAL_ERROR,
+            "Transform meta must run under mix mode [run_mode={}]",
+            static_cast<Int32>(run_mode));
+
     assert(meta_storage_v2 != nullptr);
     assert(meta_storage_v3 != nullptr);
     auto meta_transform_storage_writer = std::make_shared<PageWriter>(
@@ -491,7 +386,7 @@ void StoragePool::forceTransformMetaV2toV3()
         run_mode,
         keyspace_id,
         StorageType::Meta,
-        ns_id,
+        table_id,
         meta_storage_v2,
         meta_storage_v3,
         /*uni_ps_*/ nullptr,
@@ -504,8 +399,8 @@ void StoragePool::forceTransformMetaV2toV3()
 
     meta_transform_storage_reader->traverse(meta_transform_acceptor, /*only_v2*/ true, /*only_v3*/ false);
 
-    WriteBatch write_batch_transform{ns_id};
-    WriteBatch write_batch_del_v2{ns_id};
+    WriteBatch write_batch_transform{table_id};
+    WriteBatch write_batch_del_v2{table_id};
 
     for (const auto & page_transform : pages_transform)
     {
@@ -515,11 +410,10 @@ void StoragePool::forceTransformMetaV2toV3()
         if (!page_transform_entry.field_offsets.empty())
         {
             throw Exception(
-                fmt::format(
-                    "Can't transform meta from V2 to V3, [page_id={}] {}", //
-                    page_transform.page_id,
-                    page_transform_entry.toDebugString()),
-                ErrorCodes::LOGICAL_ERROR);
+                ErrorCodes::LOGICAL_ERROR,
+                "Can't transform meta from V2 to V3, [page_id={}] {}", //
+                page_transform.page_id,
+                page_transform_entry.toDebugString());
         }
 
         write_batch_transform.putPage(
@@ -548,7 +442,9 @@ void StoragePool::forceTransformDataV2toV3()
 {
     if (unlikely(run_mode != PageStorageRunMode::MIX_MODE))
         throw Exception(
-            fmt::format("Transform meta must run under mix mode [run_mode={}]", static_cast<Int32>(run_mode)));
+            ErrorCodes::LOGICAL_ERROR,
+            "Transform meta must run under mix mode [run_mode={}]",
+            static_cast<Int32>(run_mode));
     assert(data_storage_v2 != nullptr);
     assert(data_storage_v3 != nullptr);
     auto data_transform_storage_writer = std::make_shared<PageWriter>(
@@ -580,8 +476,8 @@ void StoragePool::forceTransformDataV2toV3()
     // The page ids that can be accessed by DeltaTree
     const auto all_page_ids = v2_snap->view.validPageIds();
 
-    WriteBatch write_batch_transform{ns_id};
-    WriteBatch write_batch_del_v2{ns_id};
+    WriteBatch write_batch_transform{table_id};
+    WriteBatch write_batch_del_v2{table_id};
 
     PageIdU64Set created_dt_file_id;
     for (const auto page_id : all_page_ids)
@@ -628,18 +524,18 @@ PageStorageRunMode StoragePool::restore()
         data_storage_v2->restore();
         meta_storage_v2->restore();
 
-        max_log_page_id = log_storage_v2->getMaxId();
-        max_data_page_id = data_storage_v2->getMaxId();
-        max_meta_page_id = meta_storage_v2->getMaxId();
+        global_id_allocator->raiseLogPageIdLowerBound(log_storage_v2->getMaxId());
+        global_id_allocator->raiseDataPageIdLowerBound(data_storage_v2->getMaxId());
+        global_id_allocator->raiseMetaPageIdLowerBound(meta_storage_v2->getMaxId());
 
         storage_pool_metrics = CurrentMetrics::Increment{CurrentMetrics::StoragePoolV2Only};
         break;
     }
     case PageStorageRunMode::ONLY_V3:
     {
-        max_log_page_id = log_storage_v3->getMaxId();
-        max_data_page_id = data_storage_v3->getMaxId();
-        max_meta_page_id = meta_storage_v3->getMaxId();
+        global_id_allocator->raiseLogPageIdLowerBound(log_storage_v3->getMaxId());
+        global_id_allocator->raiseDataPageIdLowerBound(data_storage_v3->getMaxId());
+        global_id_allocator->raiseMetaPageIdLowerBound(meta_storage_v3->getMaxId());
 
         storage_pool_metrics = CurrentMetrics::Increment{CurrentMetrics::StoragePoolV3Only};
         break;
@@ -656,46 +552,46 @@ PageStorageRunMode StoragePool::restore()
         {
             LOG_INFO(
                 logger,
-                "Current pool.meta transform to V3 begin [ns_id={}] [pages_before_transform={}]",
-                ns_id,
+                "Current pool.meta transform to V3 begin [table_id={}] [pages_before_transform={}]",
+                table_id,
                 meta_remain_pages);
             forceTransformMetaV2toV3();
             const auto & meta_remain_pages_after_transform = meta_storage_v2->getNumberOfPages();
             LOG_INFO(
                 logger,
-                "Current pool.meta transform to V3 finished [ns_id={}] [done={}] [pages_before_transform={}], "
+                "Current pool.meta transform to V3 finished [table_id={}] [done={}] [pages_before_transform={}], "
                 "[pages_after_transform={}]", //
-                ns_id,
+                table_id,
                 meta_remain_pages_after_transform == 0,
                 meta_remain_pages,
                 meta_remain_pages_after_transform);
         }
         else
         {
-            LOG_INFO(logger, "Current pool.meta transform already done before restored [ns_id={}] ", ns_id);
+            LOG_INFO(logger, "Current pool.meta transform already done before restored [table_id={}] ", table_id);
         }
 
         if (const auto & data_remain_pages = data_storage_v2->getNumberOfPages(); data_remain_pages != 0)
         {
             LOG_INFO(
                 logger,
-                "Current pool.data transform to V3 begin [ns_id={}] [pages_before_transform={}]",
-                ns_id,
+                "Current pool.data transform to V3 begin [table_id={}] [pages_before_transform={}]",
+                table_id,
                 data_remain_pages);
             forceTransformDataV2toV3();
             const auto & data_remain_pages_after_transform = data_storage_v2->getNumberOfPages();
             LOG_INFO(
                 logger,
-                "Current pool.data transform to V3 finished [ns_id={}] [done={}] [pages_before_transform={}], "
+                "Current pool.data transform to V3 finished [table_id={}] [done={}] [pages_before_transform={}], "
                 "[pages_after_transform={}]", //
-                ns_id,
+                table_id,
                 data_remain_pages_after_transform == 0,
                 data_remain_pages,
                 data_remain_pages_after_transform);
         }
         else
         {
-            LOG_INFO(logger, "Current pool.data transform already done before restored [ns_id={}]", ns_id);
+            LOG_INFO(logger, "Current pool.data transform already done before restored [table_id={}]", table_id);
         }
 
         // Check number of valid pages in v2
@@ -705,10 +601,10 @@ PageStorageRunMode StoragePool::restore()
         {
             LOG_INFO(
                 logger,
-                "Current pagestorage change from {} to {} [ns_id={}]", //
+                "Current pagestorage change from {} to {} [table_id={}]", //
                 static_cast<UInt8>(PageStorageRunMode::MIX_MODE),
                 static_cast<UInt8>(PageStorageRunMode::ONLY_V3),
-                ns_id);
+                table_id);
             if (storage_path_pool.createPSV2DeleteMarkFile())
             {
                 log_storage_v2->drop();
@@ -724,7 +620,7 @@ PageStorageRunMode StoragePool::restore()
                 PageStorageRunMode::ONLY_V3,
                 keyspace_id,
                 StorageType::Log,
-                ns_id,
+                table_id,
                 /*storage_v2_*/ nullptr,
                 log_storage_v3,
                 /*uni_ps_*/ nullptr,
@@ -733,7 +629,7 @@ PageStorageRunMode StoragePool::restore()
                 PageStorageRunMode::ONLY_V3,
                 keyspace_id,
                 StorageType::Data,
-                ns_id,
+                table_id,
                 /*storage_v2_*/ nullptr,
                 data_storage_v3,
                 /*uni_ps_*/ nullptr,
@@ -742,7 +638,7 @@ PageStorageRunMode StoragePool::restore()
                 PageStorageRunMode::ONLY_V3,
                 keyspace_id,
                 StorageType::Meta,
-                ns_id,
+                table_id,
                 /*storage_v2_*/ nullptr,
                 meta_storage_v3,
                 /*uni_ps_*/ nullptr,
@@ -767,27 +663,31 @@ PageStorageRunMode StoragePool::restore()
                 meta_storage_v3,
                 /*uni_ps_*/ nullptr);
 
-            max_log_page_id = log_storage_v3->getMaxId();
-            max_data_page_id = data_storage_v3->getMaxId();
-            max_meta_page_id = meta_storage_v3->getMaxId();
+            global_id_allocator->raiseLogPageIdLowerBound(log_storage_v3->getMaxId());
+            global_id_allocator->raiseDataPageIdLowerBound(data_storage_v3->getMaxId());
+            global_id_allocator->raiseMetaPageIdLowerBound(meta_storage_v3->getMaxId());
 
             run_mode = PageStorageRunMode::ONLY_V3;
             storage_pool_metrics = CurrentMetrics::Increment{CurrentMetrics::StoragePoolV3Only};
         }
         else // Still running Mix Mode
         {
-            max_log_page_id = std::max(log_storage_v2->getMaxId(), log_storage_v3->getMaxId());
-            max_data_page_id = std::max(data_storage_v2->getMaxId(), data_storage_v3->getMaxId());
-            max_meta_page_id = std::max(meta_storage_v2->getMaxId(), meta_storage_v3->getMaxId());
+            auto max_log_page_id = std::max(log_storage_v2->getMaxId(), log_storage_v3->getMaxId());
+            auto max_data_page_id = std::max(data_storage_v2->getMaxId(), data_storage_v3->getMaxId());
+            auto max_meta_page_id = std::max(meta_storage_v2->getMaxId(), meta_storage_v3->getMaxId());
+            global_id_allocator->raiseLogPageIdLowerBound(max_log_page_id);
+            global_id_allocator->raiseDataPageIdLowerBound(max_data_page_id);
+            global_id_allocator->raiseMetaPageIdLowerBound(max_meta_page_id);
             storage_pool_metrics = CurrentMetrics::Increment{CurrentMetrics::StoragePoolMixMode};
         }
         break;
     }
     case PageStorageRunMode::UNI_PS:
     {
-        max_log_page_id = uni_ps->getMaxIdAfterRestart();
-        max_data_page_id = uni_ps->getMaxIdAfterRestart();
-        max_meta_page_id = uni_ps->getMaxIdAfterRestart();
+        auto max_page_id = uni_ps->getMaxIdAfterRestart();
+        global_id_allocator->raiseLogPageIdLowerBound(max_page_id);
+        global_id_allocator->raiseDataPageIdLowerBound(max_page_id);
+        global_id_allocator->raiseMetaPageIdLowerBound(max_page_id);
 
         storage_pool_metrics = CurrentMetrics::Increment{CurrentMetrics::StoragePoolUniPS};
         break;
@@ -795,12 +695,14 @@ PageStorageRunMode StoragePool::restore()
     default:
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Unknown PageStorageRunMode {}", static_cast<UInt8>(run_mode));
     }
-    LOG_TRACE(
+    auto [max_log_page_id, max_data_page_id, max_meta_page_id] = global_id_allocator->getCurrentIds();
+    LOG_INFO(
         logger,
-        "Finished StoragePool restore. [current_run_mode={}] [ns_id={}]"
-        " [max_log_page_id={}] [max_data_page_id={}] [max_meta_page_id={}]",
+        "Finished StoragePool restore. run_mode={} keyspace_id={} table_id={}"
+        " max_log_page_id={} max_data_page_id={} max_meta_page_id={}",
         magic_enum::enum_name(run_mode),
-        ns_id,
+        keyspace_id,
+        table_id,
         max_log_page_id,
         max_data_page_id,
         max_meta_page_id);
@@ -847,7 +749,7 @@ void StoragePool::startup(ExternalPageCallbacks && callbacks)
         UniversalExternalPageCallbacks us_callbacks;
         us_callbacks.remover = std::move(callbacks.remover);
         us_callbacks.scanner = std::move(callbacks.scanner);
-        us_callbacks.prefix = UniversalPageIdFormat::toFullPrefix(keyspace_id, StorageType::Data, ns_id);
+        us_callbacks.prefix = UniversalPageIdFormat::toFullPrefix(keyspace_id, StorageType::Data, table_id);
         uni_ps->registerUniversalExternalPagesCallbacks(us_callbacks);
         break;
     }
@@ -872,12 +774,12 @@ void StoragePool::shutdown()
         meta_storage_v2->shutdown();
         log_storage_v2->shutdown();
         data_storage_v2->shutdown();
-        data_storage_v2->unregisterExternalPagesCallbacks(ns_id);
+        data_storage_v2->unregisterExternalPagesCallbacks(table_id);
         break;
     }
     case PageStorageRunMode::ONLY_V3:
     {
-        data_storage_v3->unregisterExternalPagesCallbacks(ns_id);
+        data_storage_v3->unregisterExternalPagesCallbacks(table_id);
         break;
     }
     case PageStorageRunMode::MIX_MODE:
@@ -887,13 +789,13 @@ void StoragePool::shutdown()
         data_storage_v2->shutdown();
         // We have transformed all external pages from V2 to V3 in `restore`, so
         // only need to unregister callbacks for V3.
-        data_storage_v3->unregisterExternalPagesCallbacks(ns_id);
+        data_storage_v3->unregisterExternalPagesCallbacks(table_id);
         break;
     }
     case PageStorageRunMode::UNI_PS:
     {
         uni_ps->unregisterUniversalExternalPagesCallbacks(
-            UniversalPageIdFormat::toFullPrefix(keyspace_id, StorageType::Data, ns_id));
+            UniversalPageIdFormat::toFullPrefix(keyspace_id, StorageType::Data, table_id));
         break;
     }
     default:
@@ -953,7 +855,7 @@ void StoragePool::drop()
     }
 }
 
-PageIdU64 StoragePool::newDataPageIdForDTFile(StableDiskDelegator & delegator, const char * who)
+PageIdU64 StoragePool::newDataPageIdForDTFile(StableDiskDelegator & delegator, const char * who) const
 {
     // In case that there is a DTFile created on disk but TiFlash crashes without persisting the ID.
     // After TiFlash process restored, the ID will be inserted into the stable delegator, but we may
@@ -961,7 +863,7 @@ PageIdU64 StoragePool::newDataPageIdForDTFile(StableDiskDelegator & delegator, c
     PageIdU64 dtfile_id;
     do
     {
-        dtfile_id = ++max_data_page_id;
+        dtfile_id = global_id_allocator->newDataPageIdForDTFile();
 
         auto existed_path = delegator.getDTFilePath(dtfile_id, /*throw_on_not_exist=*/false);
         fiu_do_on(FailPoints::force_set_dtfile_exist_when_acquire_id, {
@@ -987,12 +889,22 @@ PageIdU64 StoragePool::newDataPageIdForDTFile(StableDiskDelegator & delegator, c
     return dtfile_id;
 }
 
+PageIdU64 StoragePool::newLogPageId() const
+{
+    return global_id_allocator->newLogPageId();
+}
+
+PageIdU64 StoragePool::newMetaPageId() const
+{
+    return global_id_allocator->newMetaPageId();
+}
+
 template <typename T>
 inline static PageReaderPtr newReader(
     const PageStorageRunMode run_mode,
     KeyspaceID keyspace_id,
     StorageType tag,
-    const NamespaceID ns_id,
+    const NamespaceID table_id,
     T & storage_v2,
     T & storage_v3,
     UniversalPageStoragePtr uni_ps,
@@ -1007,7 +919,7 @@ inline static PageReaderPtr newReader(
             run_mode,
             keyspace_id,
             tag,
-            ns_id,
+            table_id,
             storage_v2,
             nullptr,
             /*uni_ps*/ nullptr,
@@ -1018,7 +930,7 @@ inline static PageReaderPtr newReader(
             run_mode,
             keyspace_id,
             tag,
-            ns_id,
+            table_id,
             nullptr,
             storage_v3,
             /*uni_ps*/ nullptr,
@@ -1029,7 +941,7 @@ inline static PageReaderPtr newReader(
             run_mode,
             keyspace_id,
             tag,
-            ns_id,
+            table_id,
             storage_v2,
             storage_v3,
             /*uni_ps*/ nullptr,
@@ -1043,16 +955,14 @@ inline static PageReaderPtr newReader(
             run_mode,
             keyspace_id,
             tag,
-            ns_id,
+            table_id,
             nullptr,
             nullptr,
             uni_ps,
             snapshot_read ? uni_ps->getSnapshot(tracing_id) : nullptr,
             read_limiter);
     default:
-        throw Exception(
-            fmt::format("Unknown PageStorageRunMode {}", static_cast<UInt8>(run_mode)),
-            ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Unknown PageStorageRunMode {}", static_cast<UInt8>(run_mode));
     }
 }
 
@@ -1062,7 +972,7 @@ PageReaderPtr StoragePool::newLogReader(ReadLimiterPtr read_limiter, bool snapsh
         run_mode,
         keyspace_id,
         StorageType::Log,
-        ns_id,
+        table_id,
         log_storage_v2,
         log_storage_v3,
         uni_ps,
@@ -1077,7 +987,7 @@ PageReaderPtr StoragePool::newLogReader(ReadLimiterPtr read_limiter, PageStorage
         run_mode,
         keyspace_id,
         StorageType::Log,
-        ns_id,
+        table_id,
         log_storage_v2,
         log_storage_v3,
         uni_ps,
@@ -1091,27 +1001,13 @@ PageReaderPtr StoragePool::newDataReader(ReadLimiterPtr read_limiter, bool snaps
         run_mode,
         keyspace_id,
         StorageType::Data,
-        ns_id,
+        table_id,
         data_storage_v2,
         data_storage_v3,
         uni_ps,
         read_limiter,
         snapshot_read,
         tracing_id);
-}
-
-PageReaderPtr StoragePool::newDataReader(ReadLimiterPtr read_limiter, PageStorage::SnapshotPtr & snapshot)
-{
-    return std::make_shared<PageReader>(
-        run_mode,
-        keyspace_id,
-        StorageType::Data,
-        ns_id,
-        data_storage_v2,
-        data_storage_v3,
-        uni_ps,
-        snapshot,
-        read_limiter);
 }
 
 PageReaderPtr StoragePool::newMetaReader(ReadLimiterPtr read_limiter, bool snapshot_read, const String & tracing_id)
@@ -1120,7 +1016,7 @@ PageReaderPtr StoragePool::newMetaReader(ReadLimiterPtr read_limiter, bool snaps
         run_mode,
         keyspace_id,
         StorageType::Meta,
-        ns_id,
+        table_id,
         meta_storage_v2,
         meta_storage_v3,
         uni_ps,
@@ -1129,19 +1025,4 @@ PageReaderPtr StoragePool::newMetaReader(ReadLimiterPtr read_limiter, bool snaps
         tracing_id);
 }
 
-PageReaderPtr StoragePool::newMetaReader(ReadLimiterPtr read_limiter, PageStorage::SnapshotPtr & snapshot)
-{
-    return std::make_shared<PageReader>(
-        run_mode,
-        keyspace_id,
-        StorageType::Meta,
-        ns_id,
-        meta_storage_v2,
-        meta_storage_v3,
-        uni_ps,
-        snapshot,
-        read_limiter);
-}
-
-} // namespace DM
-} // namespace DB
+} // namespace DB::DM

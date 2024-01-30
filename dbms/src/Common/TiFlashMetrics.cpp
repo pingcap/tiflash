@@ -67,6 +67,13 @@ void TiFlashMetrics::addReplicaSyncRU(UInt32 keyspace_id, UInt64 ru)
     counter->Increment(ru);
 }
 
+UInt64 TiFlashMetrics::debugQueryReplicaSyncRU(UInt32 keyspace_id)
+{
+    std::unique_lock lock(replica_sync_ru_mtx);
+    auto * counter = getReplicaSyncRUCounter(keyspace_id, lock);
+    return counter->Value();
+}
+
 prometheus::Counter * TiFlashMetrics::getReplicaSyncRUCounter(UInt32 keyspace_id, std::unique_lock<std::mutex> &)
 {
     auto itr = registered_keyspace_sync_replica_ru.find(keyspace_id);

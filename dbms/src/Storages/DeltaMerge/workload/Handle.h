@@ -14,8 +14,8 @@
 
 #pragma once
 
-#include <Encryption/PosixRandomAccessFile.h>
-#include <Encryption/PosixWritableFile.h>
+#include <BaseFile/PosixRandomAccessFile.h>
+#include <BaseFile/PosixWritableFile.h>
 #include <Storages/DeltaMerge/workload/TableGenerator.h>
 #include <fcntl.h>
 

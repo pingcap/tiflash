@@ -370,6 +370,8 @@ void ExecutorTest::testForExecutionSummary(
     ASSERT_TRUE(dag_context.collect_execution_summaries);
     ExecutorStatisticsCollector statistics_collector("test_execution_summary", true);
     statistics_collector.initialize(&dag_context);
+    statistics_collector.setLocalRUConsumption(
+        RUConsumption{.cpu_ru = 0.0, .cpu_time_ns = 0, .read_ru = 0.0, .read_bytes = 0});
     auto summaries = statistics_collector.genExecutionSummaryResponse().execution_summaries();
     bool enable_planner = context.context->getSettingsRef().enable_planner;
     bool enable_pipeline = context.context->getSettingsRef().enable_resource_control;

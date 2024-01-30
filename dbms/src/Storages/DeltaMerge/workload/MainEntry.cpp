@@ -236,6 +236,7 @@ void run(WorkloadOptions & opts, ContextPtr context)
     std::vector<Statistics> stats;
     try
     {
+        context->initializeGlobalPageIdAllocator();
         // HandleTable is a unordered_map that stores handle->timestamp for data verified.
         auto handle_table = createHandleTable(opts);
         // Table Schema

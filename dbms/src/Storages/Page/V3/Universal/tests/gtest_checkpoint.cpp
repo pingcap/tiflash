@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <BaseFile/PosixRandomAccessFile.h>
 #include <Common/SyncPoint/SyncPoint.h>
 #include <Encryption/FileProvider.h>
-#include <Encryption/PosixRandomAccessFile.h>
 #include <Flash/Disaggregated/MockS3LockClient.h>
 #include <IO/ReadBufferFromFile.h>
 #include <Interpreters/Context.h>

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <BaseFile/PosixRandomAccessFile.h>
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
 #include <Common/Logger.h>
@@ -20,7 +21,7 @@
 #include <Common/Stopwatch.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/TiFlashMetrics.h>
-#include <Encryption/PosixRandomAccessFile.h>
+#include <Encryption/FileProvider.h>
 #include <IO/ReadBufferFromRandomAccessFile.h>
 #include <IO/StdStreamFromReadBuffer.h>
 #include <IO/WriteBufferFromWritableFile.h>
@@ -73,7 +74,6 @@
 #include <any>
 #include <boost/algorithm/string/case_conv.hpp>
 #include <boost/algorithm/string/predicate.hpp>
-#include <cstddef>
 #include <filesystem>
 #include <ios>
 #include <magic_enum.hpp>

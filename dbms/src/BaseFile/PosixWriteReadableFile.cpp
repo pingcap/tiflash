@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <BaseFile/PosixWriteReadableFile.h>
 #include <Common/Exception.h>
 #include <Common/ProfileEvents.h>
 #include <Common/TiFlashMetrics.h>
-#include <Encryption/PosixWriteReadableFile.h>
 #include <fcntl.h>
 #include <unistd.h>
 

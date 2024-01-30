@@ -357,12 +357,12 @@ public:
         return buildSegmentsFromCheckpointInfo(dm_context, range, checkpoint_info);
     }
 
-    void ingestSegmentsFromCheckpointInfo(
+    UInt64 ingestSegmentsFromCheckpointInfo(
         const DMContextPtr & dm_context,
         const DM::RowKeyRange & range,
         const CheckpointIngestInfoPtr & checkpoint_info);
 
-    void ingestSegmentsFromCheckpointInfo(
+    UInt64 ingestSegmentsFromCheckpointInfo(
         const Context & db_context,
         const DB::Settings & db_settings,
         const DM::RowKeyRange & range,
@@ -788,7 +788,7 @@ public:
         const RowKeyValueRef & start_key,
         bool create_if_empty,
         bool throw_if_notfound);
-    void createFirstSegment(DM::DMContext & dm_context, PageStorageRunMode page_storage_run_mode);
+    void createFirstSegment(DM::DMContext & dm_context);
 
     Context & global_context;
     std::shared_ptr<StoragePathPool> path_pool;
