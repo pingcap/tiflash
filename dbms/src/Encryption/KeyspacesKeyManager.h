@@ -17,9 +17,9 @@
 #include <Common/Exception.h>
 #include <Common/LRUCache.h>
 #include <Common/TiFlashException.h>
+#include <Debug/MockProxyEncryptionFFI.h>
 #include <Encryption/KeyManager.h>
 #include <Encryption/MasterKey.h>
-#include <Encryption/MockTiFlashRaftProxyHelper.h>
 #include <Storages/KVStore/FFI/ProxyFFI.h>
 #include <Storages/Page/PageStorage_fwd.h>
 
@@ -38,7 +38,7 @@ public:
         , master_key(std::make_unique<MasterKey>(proxy_helper->getMasterKey()))
     {}
 #else
-    explicit KeyspacesKeyManager(MockTiFlashRaftProxyHelper * proxy_helper_)
+    explicit KeyspacesKeyManager(MockProxyEncryptionFFI * proxy_helper_)
         : proxy_helper(proxy_helper_)
         , keyspace_id_to_key(1024, 1024)
         , master_key(std::make_unique<MasterKey>(proxy_helper->getMasterKey()))
@@ -68,7 +68,7 @@ private:
     TiFlashRaftProxyHelper * proxy_helper;
 #else
 public:
-    MockTiFlashRaftProxyHelper * proxy_helper;
+    MockProxyEncryptionFFI * proxy_helper;
 #endif
     UniversalPageStoragePtr ps_write = nullptr;
     // cache, keyspace_id -> encryption_key

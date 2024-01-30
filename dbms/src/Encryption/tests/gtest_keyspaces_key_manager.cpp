@@ -38,7 +38,7 @@ public:
         TiFlashStorageTestBasic::SetUp();
         auto path = getTemporaryPath();
         createIfNotExist(path);
-        proxy_helper = new MockTiFlashRaftProxyHelper(true, MasterKey); // NOLINT
+        proxy_helper = new MockProxyEncryptionFFI(true, MasterKey); // NOLINT
         key_manager = std::make_shared<KeyspacesKeyManager>(proxy_helper);
         file_provider = std::make_shared<FileProvider>(key_manager, true, true);
         auto delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
@@ -80,7 +80,7 @@ protected:
     std::shared_ptr<S3::TiFlashS3Client> s3_client;
     PageStorageConfig config;
     std::shared_ptr<UniversalPageStorage> page_storage;
-    MockTiFlashRaftProxyHelper * proxy_helper = nullptr;
+    MockProxyEncryptionFFI * proxy_helper = nullptr;
     std::shared_ptr<KeyspacesKeyManager> key_manager;
 };
 

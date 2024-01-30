@@ -25,9 +25,9 @@ namespace DB
 using String = std::string;
 using KeyspaceID = pingcap::pd::KeyspaceID;
 
-struct MockTiFlashRaftProxyHelper
+struct MockProxyEncryptionFFI
 {
-    MockTiFlashRaftProxyHelper(bool encryption_enabled_, String master_key_)
+    MockProxyEncryptionFFI(bool encryption_enabled_, String master_key_)
         : encryption_enabled(encryption_enabled_)
         , master_key(master_key_)
     {}
