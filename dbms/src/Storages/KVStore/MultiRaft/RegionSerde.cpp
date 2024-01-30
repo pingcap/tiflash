@@ -82,6 +82,18 @@ std::tuple<size_t, UInt64> Region::serializeImpl(
 
     UInt32 actual_extension_count = 0;
 
+    if (binary_version >= 3) {
+        if (region_opt.is_disagg_storage_mode) {
+            auto s = incr_snap_mgr->serializeToString();
+            total_size += Region::writePersistExtension(
+                actual_extension_count,
+                buf,
+                magic_enum::enum_underlying(RegionPersistExtension::DisaggIncrementalSnapshot),
+                s.data(),
+                s.size());
+        }
+    }
+
     total_size += extra_handler(actual_extension_count, buf);
     RUNTIME_CHECK(expected_extension_count == actual_extension_count, expected_extension_count, actual_extension_count);
 
@@ -154,6 +166,17 @@ RegionPtr Region::deserializeImpl(
         for (UInt32 i = 0; i < extension_cnt; i++)
         {
             auto [extension_type, length] = getPersistExtensionTypeAndLength(buf);
+
+            if (extension_type == RegionPersistExtension::DisaggIncrementalSnapshot) {
+                if (incr_snap_mgr) {
+                    auto s = buf.readStringWithLength(buf, length);
+                    incr_snap_mgr->deserializeFromString(s);
+                }
+                else {
+                    buf.ignore(length);
+                }
+            }
+
             // Used in tests.
             if (extra_handler(extension_type, buf, length))
                 continue;

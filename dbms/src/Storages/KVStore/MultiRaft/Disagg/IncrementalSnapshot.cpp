@@ -57,8 +57,8 @@ std::optional<ReuseSummary> IncrementalSnapshotMgr::tryReuseDeltaSummary(
         return std::nullopt;
     }
 
-    auto prev_set = std::multiset<UInt64>(summary.l0_ids().cbegin(), summary.l0_ids().cend());
-    auto new_set = std::multiset<UInt64>(new_l0_ids, new_l0_ids + new_l0_id_size);
+    auto prev_set = std::unordered_set<UInt64>(summary.l0_ids().cbegin(), summary.l0_ids().cend());
+    auto new_set = std::unordered_set<UInt64>(new_l0_ids, new_l0_ids + new_l0_id_size);
 
     ReuseSummary reuse;
     for (auto e : prev_set)

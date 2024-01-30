@@ -176,7 +176,7 @@ try
             cond.type = MockRaftStoreProxy::FailCond::Type::BEFORE_KVSTORE_WRITE;
 
             auto kvr1 = kvs.getRegion(region_id);
-            ASSERT_FALSE(kvs->getCurrentRegionOpt().is_disagg_storage_mode);
+            ASSERT_FALSE(kvs.getCurrentRegionOpt().is_disagg_storage_mode);
             ASSERT_FALSE(kvr1->getRegionOpt().is_disagg_storage_mode);
             auto r1 = proxy_instance->getRegion(region_id);
             applied_index = r1->getLatestAppliedIndex();
