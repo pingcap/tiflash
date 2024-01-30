@@ -420,7 +420,7 @@ static void runInParallel(
     std::shared_ptr<StorageDeltaMerge> dm_storage)
 {
     std::string limit_tag = part_limit.toDebugString();
-    auto part_new_region = std::make_shared<Region>(new_region->mutMeta().clone());
+    auto part_new_region = std::make_shared<Region>(new_region->mutMeta().clone(), proxy_helper);
     auto part_sst_stream = std::make_shared<DM::SSTFilesToBlockInputStream>(
         part_new_region,
         index,

@@ -330,10 +330,6 @@ RegionMetaSnapshot Region::dumpRegionMetaSnapshot() const
     return meta.dumpRegionMetaSnapshot();
 }
 
-Region::Region(RegionMeta && meta_)
-    : Region(std::move(meta_), nullptr)
-{}
-
 Region::Region(DB::RegionMeta && meta_, const TiFlashRaftProxyHelper * proxy_helper_)
     : meta(std::move(meta_))
     , eager_truncated_index(meta.truncateIndex())
