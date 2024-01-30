@@ -26,8 +26,6 @@
 namespace DB
 {
 
-struct EngineStoreServerWrap;
-
 /// KeyspacesKeyManager is a KeyManager implementation that designed for Cloud Storage Engine.
 /// It will store all encryption keys which have been encrypted using MasterKey in PageStorage.
 class KeyspacesKeyManager : public KeyManager
