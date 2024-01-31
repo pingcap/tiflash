@@ -32,6 +32,7 @@
 #include <fiu.h>
 
 #include <atomic>
+#include <magic_enum.hpp>
 
 using TimePoint = std::atomic<std::chrono::time_point<std::chrono::steady_clock>>;
 
@@ -101,7 +102,11 @@ struct PDClientHelper
                 {
                     // The backoff meets deadline exceeded
                     // Wrap the exception by DB::Exception to get the stacktrack
-                    throw DB::Exception(e);
+                    throw DB::Exception(
+                        ErrorCodes::LOGICAL_ERROR,
+                        "pingcap::Exception code={} msg={}",
+                        magic_enum::enum_name(static_cast<pingcap::ErrorCodes>(e.code())),
+                        e.message());
                 }
             }
         }
