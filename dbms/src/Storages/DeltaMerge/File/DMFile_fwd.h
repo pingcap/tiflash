@@ -14,16 +14,11 @@
 
 #pragma once
 
-#include <Storages/Page/PageDefinesBase.h>
+#include <memory>
 
 namespace DB::DM
 {
-
-constexpr PageIdU64 DELTA_MERGE_FIRST_SEGMENT_ID = 1;
-
-class Segment;
-using SegmentPtr = std::shared_ptr<Segment>;
-using Segments = std::vector<SegmentPtr>;
-using SegmentPair = std::pair<SegmentPtr, SegmentPtr>;
-
+class DMFile;
+using DMFilePtr = std::shared_ptr<DMFile>;
+using DMFiles = std::vector<DMFilePtr>;
 } // namespace DB::DM

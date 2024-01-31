@@ -22,6 +22,7 @@
 #include <Storages/DeltaMerge/ColumnStat.h>
 #include <Storages/DeltaMerge/DMChecksumConfig.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
+#include <Storages/DeltaMerge/File/DMFile_fwd.h>
 #include <Storages/DeltaMerge/File/MergedFile.h>
 #include <Storages/DeltaMerge/File/dtpb/dmfile.pb.h>
 #include <Storages/FormatVersion.h>
@@ -29,10 +30,6 @@
 #include <Storages/S3/S3RandomAccessFile.h>
 #include <common/logger_useful.h>
 
-namespace DB::DM
-{
-class DMFile;
-}
 namespace DTTool::Migrate
 {
 struct MigrateArgs;
@@ -41,12 +38,8 @@ bool needFrameMigration(const DB::DM::DMFile & file, const std::string & target)
 int migrateServiceMain(DB::Context & context, const MigrateArgs & args);
 } // namespace DTTool::Migrate
 
-namespace DB
+namespace DB::DM
 {
-namespace DM
-{
-using DMFilePtr = std::shared_ptr<DMFile>;
-using DMFiles = std::vector<DMFilePtr>;
 
 class DMFile : private boost::noncopyable
 {
@@ -543,5 +536,4 @@ inline ReadBufferFromFileProvider openForRead(
         std::min(static_cast<size_t>(DBMS_DEFAULT_BUFFER_SIZE), file_size));
 }
 
-} // namespace DM
-} // namespace DB
+} // namespace DB::DM

@@ -41,10 +41,6 @@ class StorageDeltaMerge;
 
 namespace DM
 {
-struct ColumnDefine;
-using ColumnDefines = std::vector<ColumnDefine>;
-using ColumnDefinesPtr = std::shared_ptr<ColumnDefines>;
-
 // forward declaration
 class SSTFilesToBlockInputStream;
 using SSTFilesToBlockInputStreamPtr = std::shared_ptr<SSTFilesToBlockInputStream>;
