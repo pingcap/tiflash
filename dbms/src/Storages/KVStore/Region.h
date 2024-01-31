@@ -119,7 +119,6 @@ public:
     };
 
 public: // Simple Read and Write
-    explicit Region(RegionMeta && meta_);
     explicit Region(RegionMeta && meta_, const TiFlashRaftProxyHelper *);
     ~Region();
 
