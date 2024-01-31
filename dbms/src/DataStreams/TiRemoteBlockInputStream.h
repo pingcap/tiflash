@@ -23,7 +23,6 @@
 #include <Flash/Coprocessor/RemoteExecutionSummary.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <Flash/Statistics/ConnectionProfileInfo.h>
-#include <Storages/DeltaMerge/ScanContext.h>
 #include <common/logger_useful.h>
 
 #include <chrono>

@@ -164,14 +164,16 @@ protected:
     {
         if (auto region = kvs.getRegion(region_id); region)
         {
-            kvs.persistRegion(*region, std::nullopt, PersistRegionReason::Debug, "");
+            auto region_task_lock = kvs.region_manager.genRegionTaskLock(region_id);
+            kvs.persistRegion(*region, region_task_lock, PersistRegionReason::Debug, "");
         }
     }
 
 protected:
     std::tuple<uint64_t, uint64_t, uint64_t> prepareForProactiveFlushTest();
-    static void testRaftMerge(KVStore & kvs, TMTContext & tmt);
+    void testRaftMerge(Context & ctx, KVStore & kvs, TMTContext & tmt);
     static void testRaftMergeRollback(KVStore & kvs, TMTContext & tmt);
+    static void dropTable(Context & ctx, TableID table_id);
 
     static std::unique_ptr<PathPool> createCleanPathPool(const String & path)
     {

@@ -29,7 +29,7 @@
 #include <Storages/DeltaMerge/Filter/PushDownFilter.h>
 #include <Storages/DeltaMerge/Remote/DisaggSnapshot_fwd.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
-#include <Storages/DeltaMerge/ScanContext.h>
+#include <Storages/DeltaMerge/ScanContext_fwd.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 #include <Storages/KVStore/Decode/DecodingStorageSchemaSnapshot.h>
 #include <Storages/Page/PageStorage_fwd.h>
@@ -769,7 +769,7 @@ public:
         const RowKeyValueRef & start_key,
         bool create_if_empty,
         bool throw_if_notfound);
-    void createFirstSegment(DM::DMContext & dm_context, PageStorageRunMode page_storage_run_mode);
+    void createFirstSegment(DM::DMContext & dm_context);
 
     Context & global_context;
     std::shared_ptr<StoragePathPool> path_pool;

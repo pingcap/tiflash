@@ -51,6 +51,7 @@ namespace DB
 namespace FailPoints
 {
 extern const char force_owner_mgr_state[];
+extern const char force_owner_mgr_campaign_failed[];
 extern const char force_fail_to_create_etcd_session[];
 } // namespace FailPoints
 
@@ -227,10 +228,10 @@ std::pair<bool, Etcd::SessionPtr> EtcdOwnerManager::runNextCampaign(Etcd::Sessio
 void EtcdOwnerManager::tryChangeState(State coming_state)
 {
     std::unique_lock lk(mtx_camaign);
-    // The campaign is stopping, it will cause
-    // - leader key deleted in watch thread
-    // - etcd lease expired in keepalive task
-    // Do not overwrite `CancelByStop` because the next campaign is expected to be stopped.
+    // When the campaign is stopping, it will cause
+    // - leader key deleted in watch thread => try set state to `CancelByKeyDeleted`
+    // - etcd lease expired in keepalive task => try set state to `CancelByLeaseInvalid`
+    // Do not let those actually overwrite `CancelByStop` because the next campaign is expected to be stopped.
     if (state != State::CancelByStop)
     {
         // ok to set the state
@@ -258,6 +259,10 @@ void EtcdOwnerManager::camaignLoop(Etcd::SessionPtr session)
                 campaing_ctx = std::make_unique<grpc::ClientContext>();
             }
             auto && [new_leader, status] = client->campaign(campaing_ctx.get(), campaign_name, id, lease_id);
+            fiu_do_on(FailPoints::force_owner_mgr_campaign_failed, {
+                status = grpc::Status(grpc::StatusCode::UNKNOWN, "<mock error> etcdserver: requested lease not found");
+                LOG_WARNING(log, "force_owner_mgr_campaign_failed enabled, return failed grpc::Status");
+            });
             if (!status.ok())
             {
                 // if error, continue next campaign
@@ -268,6 +273,9 @@ void EtcdOwnerManager::camaignLoop(Etcd::SessionPtr session)
                     lease_id,
                     status.error_code(),
                     status.error_message());
+                // The error is possible cause by lease invalid, create a new etcd
+                // session next round.
+                tryChangeState(State::CancelByLeaseInvalid);
                 static constexpr std::chrono::milliseconds CampaignRetryInterval(200);
                 std::this_thread::sleep_for(CampaignRetryInterval);
                 continue;
@@ -372,7 +380,7 @@ void EtcdOwnerManager::watchOwner(const String & owner_key, grpc::ClientContext 
             }
         } // loop until key deleted or failed
         auto s = rw->Finish();
-        LOG_DEBUG(log, "watch finish, code={} msg={}", s.error_code(), s.error_message());
+        LOG_INFO(log, "watch finish, code={} msg={}", s.error_code(), s.error_message());
     }
     catch (...)
     {

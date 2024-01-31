@@ -12,14 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/MemoryTracker.h>
+#include <Debug/MockTiDB.h>
+#include <RaftStoreProxyFFI/ColumnFamily.h>
 #include <Storages/DeltaMerge/Decode/SSTFilesToBlockInputStream.h>
 #include <Storages/KVStore/Read/LearnerRead.h>
+#include <Storages/KVStore/Region.h>
+#include <Storages/KVStore/Utils/AsyncTasks.h>
+#include <Storages/RegionQueryInfo.h>
+#include <TiDB/Schema/SchemaSyncService.h>
+#include <TiDB/Schema/TiDBSchemaManager.h>
+
+#include <limits>
 
 #include "kvstore_helper.h"
 
-namespace DB
-{
-namespace tests
+namespace DB::tests
 {
 TEST_F(RegionKVStoreTest, KVStoreFailRecovery)
 try
@@ -1133,6 +1141,53 @@ try
 }
 CATCH
 
+void RegionKVStoreTest::dropTable(Context & ctx, TableID table_id)
+{
+    MockTiDB::instance().dropTableById(ctx, table_id, /*drop_regions*/ false);
+    auto & tmt = ctx.getTMTContext();
+    auto schema_syncer = tmt.getSchemaSyncerManager();
+    schema_syncer->syncSchemas(ctx, NullspaceID);
+    auto sync_service = std::make_shared<SchemaSyncService>(ctx);
+    sync_service->gcImpl(std::numeric_limits<Timestamp>::max(), NullspaceID, /*ignore_remain_regions*/ true);
+    sync_service->shutdown();
+}
 
-} // namespace tests
-} // namespace DB
+TEST_F(RegionKVStoreTest, KVStoreApplyWriteToNonExistStorage)
+try
+{
+    auto ctx = TiFlashTestEnv::getGlobalContext();
+    proxy_instance->cluster_ver = RaftstoreVer::V2;
+    RegionID region_id = 2;
+    initStorages();
+    KVStore & kvs = getKVS();
+    TableID table_id = proxy_instance->bootstrapTable(ctx, kvs, ctx.getTMTContext());
+    auto start = RecordKVFormat::genKey(table_id, 0);
+    auto end = RecordKVFormat::genKey(table_id, 100);
+    proxy_instance
+        ->bootstrapWithRegion(kvs, ctx.getTMTContext(), region_id, std::make_pair(start.toString(), end.toString()));
+
+    {
+        auto str_key = RecordKVFormat::genKey(table_id, 1, 111);
+        auto [str_val_write, str_val_default] = proxy_instance->generateTiKVKeyValue(111, 999);
+        auto str_lock_value
+            = RecordKVFormat::encodeLockCfValue(RecordKVFormat::CFModifyFlag::PutFlag, "PK", 111, 999).toString();
+        auto kvr1 = kvs.getRegion(region_id);
+        ASSERT_NE(kvr1, nullptr);
+        auto [index, term] = proxy_instance->rawWrite(
+            region_id,
+            {str_key, str_key, str_key},
+            {str_lock_value, str_val_default, str_val_write},
+            {WriteCmdType::Put, WriteCmdType::Put, WriteCmdType::Put},
+            {ColumnFamilyType::Lock, ColumnFamilyType::Default, ColumnFamilyType::Write});
+        UNUSED(term);
+
+        dropTable(ctx, table_id);
+
+        // No exception thrown, the rows are just throw away
+        MockRaftStoreProxy::FailCond cond;
+        proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index);
+    }
+}
+CATCH
+
+} // namespace DB::tests

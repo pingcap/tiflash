@@ -388,7 +388,14 @@ bool Session::keepAliveOne()
     // the lease is not valid anymore
     if (resp.ttl() <= 0)
     {
-        LOG_DEBUG(log, "keep alive fail, ttl={}", resp.ttl());
+        auto status = writer->Finish();
+        LOG_INFO(
+            log,
+            "keep alive fail, ttl={}, code={} msg={}",
+            resp.ttl(),
+            status.error_code(),
+            status.error_message());
+        finished = true;
         return false;
     }
     lease_deadline = next_timepoint + std::chrono::seconds(resp.ttl());
