@@ -115,9 +115,7 @@ private:
 
     void run()
     {
-#ifndef DBMS_PUBLIC_GTEST // Does not bind CPUs in gtest.
         setCPUAffinity(cpus, log);
-#endif
         setThreadName(name.c_str());
         while (!isStop())
         {
