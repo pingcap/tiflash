@@ -49,10 +49,9 @@ extern const char exception_before_dmfile_remove_encryption[];
 extern const char exception_before_dmfile_remove_from_disk[];
 extern const char skip_seek_before_read_dmfile[];
 } // namespace FailPoints
+} // namespace DB
 
-namespace DM
-{
-namespace tests
+namespace DB::DM::tests
 {
 enum class DMFileMode
 {
@@ -155,6 +154,21 @@ public:
     DMContext & dmContext() { return *dm_context; }
 
     Context & dbContext() { return *db_context; }
+
+    static void checkMergedFile(
+        const DMFilePtr & dmfile,
+        UInt64 merged_number,
+        const std::set<String> & not_uploaded_files,
+        std::set<String> & checked_fnames);
+    static void checkColumnStats(const DMFilePtr & dmfile1, const DMFilePtr & dmfile2);
+
+    static void breakFileMetaV2File(const DMFilePtr & dmfile)
+    {
+        PosixWritableFile file(dmfile->metav2Path(), false, -1, 0666);
+        String s = "hello";
+        auto n = file.pwrite(s.data(), s.size(), 0);
+        ASSERT_EQ(n, s.size());
+    }
 
 private:
     std::unique_ptr<DMContext> dm_context{};
@@ -535,6 +549,38 @@ try
 }
 CATCH
 
+void DMFileTest::checkColumnStats(const DMFilePtr & dmfile1, const DMFilePtr & dmfile2)
+{
+    const auto & col_defs = dmfile1->getColumnDefines();
+    for (const auto & col_def : col_defs)
+    {
+        const auto & col_stat1 = dmfile1->getColumnStat(col_def.id);
+        const auto & col_stat2 = dmfile2->getColumnStat(col_def.id);
+        ASSERT_DOUBLE_EQ(col_stat1.avg_size, col_stat2.avg_size);
+        ASSERT_EQ(col_stat1.col_id, col_stat2.col_id);
+        ASSERT_EQ(col_stat1.type->getName(), col_stat2.type->getName());
+        ASSERT_GT(col_stat1.serialized_bytes, col_stat2.serialized_bytes); // v3 without mrk
+
+        ASSERT_EQ(col_stat2.serialized_bytes, col_stat2.data_bytes + col_stat2.nullmap_data_bytes) << fmt::format(
+            "data_bytes={} nullmap_data_bytes={} col_id={} type={}",
+            col_stat2.data_bytes,
+            col_stat2.nullmap_data_bytes,
+            col_stat2.col_id,
+            col_stat2.type->getName());
+
+        ASSERT_EQ(dmfile1->colDataSize(col_def.id, false), dmfile2->colDataSize(col_def.id, false));
+        ASSERT_EQ(dmfile1->isColIndexExist(col_def.id), dmfile2->isColIndexExist(col_def.id));
+        if (dmfile1->isColIndexExist(col_def.id))
+        {
+            ASSERT_EQ(dmfile1->colIndexSize(col_def.id), dmfile2->colIndexSize(col_def.id));
+        }
+        if (col_def.type->isNullable())
+        {
+            ASSERT_EQ(dmfile1->colDataSize(col_def.id, true), dmfile2->colDataSize(col_def.id, true));
+        }
+    }
+}
+
 TEST_P(DMFileTest, MetaV2)
 try
 {
@@ -562,43 +608,12 @@ try
         }
     };
 
-    auto check_column_stats = [](const DMFilePtr & dmfile1, const DMFilePtr & dmfile2) {
-        const auto & col_defs = dmfile1->getColumnDefines();
-        for (const auto & col_def : col_defs)
-        {
-            const auto & col_stat1 = dmfile1->getColumnStat(col_def.id);
-            const auto & col_stat2 = dmfile2->getColumnStat(col_def.id);
-            ASSERT_DOUBLE_EQ(col_stat1.avg_size, col_stat2.avg_size);
-            ASSERT_EQ(col_stat1.col_id, col_stat2.col_id);
-            ASSERT_EQ(col_stat1.type->getName(), col_stat2.type->getName());
-            ASSERT_GT(col_stat1.serialized_bytes, col_stat2.serialized_bytes); // v3 without mrk
-
-            ASSERT_EQ(col_stat2.serialized_bytes, col_stat2.data_bytes + col_stat2.nullmap_data_bytes) << fmt::format(
-                "data_bytes={} nullmap_data_bytes={} col_id={} type={}",
-                col_stat2.data_bytes,
-                col_stat2.nullmap_data_bytes,
-                col_stat2.col_id,
-                col_stat2.type->getName());
-
-            ASSERT_EQ(dmfile1->colDataSize(col_def.id, false), dmfile2->colDataSize(col_def.id, false));
-            ASSERT_EQ(dmfile1->isColIndexExist(col_def.id), dmfile2->isColIndexExist(col_def.id));
-            if (dmfile1->isColIndexExist(col_def.id))
-            {
-                ASSERT_EQ(dmfile1->colIndexSize(col_def.id), dmfile2->colIndexSize(col_def.id));
-            }
-            if (col_def.type->isNullable())
-            {
-                ASSERT_EQ(dmfile1->colDataSize(col_def.id, true), dmfile2->colDataSize(col_def.id, true));
-            }
-        }
-    };
-
     auto check_meta = [&](const DMFilePtr & dmfile1, const DMFilePtr & dmfile2) {
         ASSERT_FALSE(dmfile1->useMetaV2());
         ASSERT_TRUE(dmfile2->useMetaV2());
         check_pack_stats(dmfile1, dmfile2);
         check_pack_properties(dmfile1, dmfile2);
-        check_column_stats(dmfile1, dmfile2);
+        checkColumnStats(dmfile1, dmfile2);
     };
 
     auto cols = DMTestEnv::getDefaultColumns(DMTestEnv::PkType::HiddenTiDBRowID, /*add_nullable*/ true);
@@ -682,7 +697,7 @@ try
 }
 CATCH
 
-void checkMergedFile(
+void DMFileTest::checkMergedFile(
     const DMFilePtr & dmfile,
     UInt64 merged_number,
     const std::set<String> & not_uploaded_files,
@@ -760,12 +775,7 @@ try
     stream->write(block2, block_property2);
     stream->writeSuffix();
 
-    {
-        PosixWritableFile file(dmfile->metav2Path(), false, -1, 0666);
-        String s = "hello";
-        auto n = file.pwrite(s.data(), s.size(), 0);
-        ASSERT_EQ(n, s.size());
-    }
+    breakFileMetaV2File(dmfile);
 
     try
     {
@@ -1934,6 +1944,4 @@ INSTANTIATE_TEST_CASE_P(
     testing::Values(DMFileMode::DirectoryLegacy, DMFileMode::DirectoryChecksum, DMFileMode::DirectoryMetaV2),
     paramToString);
 
-} // namespace tests
-} // namespace DM
-} // namespace DB
+} // namespace DB::DM::tests

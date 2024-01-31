@@ -40,6 +40,11 @@ int migrateServiceMain(DB::Context & context, const MigrateArgs & args);
 
 namespace DB::DM
 {
+namespace tests
+{
+class DMFileTest;
+class DMStoreForSegmentReadTaskTest;
+} // namespace tests
 
 class DMFile : private boost::noncopyable
 {
@@ -313,14 +318,11 @@ public:
     }
 
     static String metav2FileName() { return "meta"; }
+    bool useMetaV2() const { return version == DMFileFormat::V3; }
     std::vector<String> listFilesForUpload() const;
     void switchToRemote(const S3::DMFileOID & oid);
 
-#ifndef DBMS_PUBLIC_GTEST
 private:
-#else
-public:
-#endif
     DMFile(
         UInt64 file_id_,
         UInt64 page_id_,
@@ -460,7 +462,6 @@ public:
     void parsePackProperty(std::string_view buffer);
     void parsePackStat(std::string_view buffer);
     void finalizeDirName();
-    bool useMetaV2() const { return version == DMFileFormat::V3; }
 
     UInt64 getFileSize(ColId col_id, const String & filename) const;
     UInt64 getReadFileSize(ColId col_id, const String & filename) const;
@@ -516,6 +517,8 @@ public:
     friend class DMFileReader;
     friend class DMFilePackFilter;
     friend class DMFileBlockInputStreamBuilder;
+    friend class tests::DMFileTest;
+    friend class tests::DMStoreForSegmentReadTaskTest;
     friend int ::DTTool::Migrate::migrateServiceMain(
         DB::Context & context,
         const ::DTTool::Migrate::MigrateArgs & args);
