@@ -95,5 +95,5 @@ inline RegionPtr makeRegion(RegionMeta && meta)
 {
     return std::make_shared<Region>(std::move(meta), nullptr);
 }
-} // namespace RegionBench
-} // namespace DB
+
+} // namespace DB:: RegionBench
