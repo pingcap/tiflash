@@ -68,7 +68,7 @@ void Region::insert(ColumnFamilyType type, TiKVKey && key, TiKVValue && value, D
 
 size_t Region::doInsert(ColumnFamilyType type, TiKVKey && key, TiKVValue && value, DupCheck mode)
 {
-    if (getClusterRaftstoreVer() == RaftstoreVer::V2)
+    if unlikely (getClusterRaftstoreVer() == RaftstoreVer::V2)
     {
         if (type == ColumnFamilyType::Write)
         {
