@@ -20,13 +20,12 @@
 #ifdef __clang__
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 #endif
-#include <Common/Logger.h>
-#include <Core/Types.h>
 #include <pingcap/kv/RegionClient.h>
 #include <pingcap/pd/IClient.h>
 #pragma GCC diagnostic pop
 
 #include <Common/Exception.h>
+#include <Common/Logger.h>
 #include <Core/Types.h>
 #include <Storages/KVStore/Types.h>
 #include <common/logger_useful.h>
@@ -65,8 +64,9 @@ struct PDClientHelper
 {
     static constexpr int get_safepoint_maxtime = 120000; // 120s. waiting pd recover.
 
-    // 5s timeout for getting TSO
-    static constexpr int get_tso_maxtime = 5'000;
+    // 10 seconds timeout for getting TSO
+    // https://github.com/pingcap/tidb/blob/069631e2ecfedc000ffb92c67207bea81380f020/pkg/store/mockstore/unistore/pd/client.go#L256-L276
+    static constexpr int get_tso_maxtime = 10'000;
 
     static bool enable_safepoint_v2;
 
