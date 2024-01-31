@@ -128,10 +128,22 @@ void SchemaSyncService::removeKeyspaceGCTasks()
             ++ks_handle_iter;
             continue;
         }
+<<<<<<< HEAD
         auto ks_log = log->getChild(fmt::format("keyspace={}", ks));
         LOG_INFO(ks_log, "remove sync schema task");
         background_pool.removeTask(ks_handle_iter->second);
         ks_handle_iter = ks_handle_map.erase(ks_handle_iter);
+=======
+
+        auto keyspace_log = log->getChild(fmt::format("keyspace={}", keyspace));
+        LOG_INFO(keyspace_log, "remove sync schema task");
+        background_pool.removeTask(keyspace_handle_iter->second);
+        keyspace_handle_iter = keyspace_handle_map.erase(keyspace_handle_iter);
+
+        context.getTMTContext().getSchemaSyncerManager()->removeSchemaSyncer(keyspace);
+        PDClientHelper::removeKeyspaceGCSafepoint(keyspace);
+        keyspace_gc_context.erase(keyspace); // clear the last gc safepoint
+>>>>>>> e1a8fe30a8 (client-c: Add retry for getting TSO from PD (#8571))
         num_remove_tasks += 1;
         // remove schema version for this keyspace
         removeCurrentVersion(ks);

@@ -62,6 +62,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
 
     bool isTooOldSchema(Int64 cur_ver, Int64 new_version) { return cur_ver == 0 || new_version - cur_ver > maxNumberOfDiffs; }
 
+<<<<<<< HEAD
     Getter createSchemaGetter(KeyspaceID keyspace_id)
     {
         [[maybe_unused]] auto tso = cluster->pd_client->getTS();
@@ -74,6 +75,9 @@ struct TiDBSchemaSyncer : public SchemaSyncer
             return Getter(cluster.get(), tso, keyspace_id);
         }
     }
+=======
+    Getter createSchemaGetter(KeyspaceID keyspace_id);
+>>>>>>> e1a8fe30a8 (client-c: Add retry for getting TSO from PD (#8571))
 
     // just for test
     // It clear all synced database info and reset the `cur_version` to 0.

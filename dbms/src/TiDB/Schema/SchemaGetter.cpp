@@ -247,9 +247,14 @@ TiDB::DBInfoPtr SchemaGetter::getDatabase(DatabaseID db_id)
     if (json.empty())
         return nullptr;
 
+<<<<<<< HEAD
     LOG_DEBUG(log, "Get DB Info from TiKV : " + json);
     auto db_info = std::make_shared<TiDB::DBInfo>(json, keyspace_id);
     return db_info;
+=======
+    LOG_DEBUG(log, "Get DatabaseInfo from TiKV, database_id={} {}", db_id, json);
+    return std::make_shared<TiDB::DBInfo>(json, keyspace_id);
+>>>>>>> e1a8fe30a8 (client-c: Add retry for getting TSO from PD (#8571))
 }
 
 TiDB::TableInfoPtr SchemaGetter::getTableInfo(DatabaseID db_id, TableID table_id)
@@ -262,10 +267,34 @@ TiDB::TableInfoPtr SchemaGetter::getTableInfo(DatabaseID db_id, TableID table_id
     String table_key = getTableKey(table_id);
     String table_info_json = TxnStructure::hGet(snap, db_key, table_key);
     if (table_info_json.empty())
+<<<<<<< HEAD
         return nullptr;
     LOG_DEBUG(log, "Get Table Info from TiKV : " + table_info_json);
     TiDB::TableInfoPtr table_info = std::make_shared<TiDB::TableInfo>(table_info_json, keyspace_id);
     return table_info;
+=======
+    {
+        if constexpr (!mvcc_get)
+        {
+            return {nullptr, false};
+        }
+
+        LOG_WARNING(log, "The table is dropped in TiKV, try to get the latest table_info, table_id={}", table_id);
+        table_info_json = TxnStructure::mvccGet(snap, db_key, table_key);
+        get_by_mvcc = true;
+        if (table_info_json.empty())
+        {
+            LOG_ERROR(
+                log,
+                "The table is dropped in TiKV, and the latest table_info is still empty, it should be GCed, "
+                "table_id={}",
+                table_id);
+            return {nullptr, get_by_mvcc};
+        }
+    }
+    LOG_DEBUG(log, "Get TableInfo from TiKV, table_id={} {}", table_id, table_info_json);
+    return {std::make_shared<TiDB::TableInfo>(table_info_json, keyspace_id), get_by_mvcc};
+>>>>>>> e1a8fe30a8 (client-c: Add retry for getting TSO from PD (#8571))
 }
 
 std::vector<TiDB::DBInfoPtr> SchemaGetter::listDBs()
@@ -291,7 +320,12 @@ std::vector<TiDB::TableInfoPtr> SchemaGetter::listTables(DatabaseID db_id)
     auto db_key = getDBKey(db_id);
     if (!checkDBExists(db_key))
     {
+<<<<<<< HEAD
         throw TiFlashException("DB Not Exists!", Errors::Table::SyncError);
+=======
+        LOG_ERROR(log, "The database does not exist, database_id={}", db_id);
+        return {};
+>>>>>>> e1a8fe30a8 (client-c: Add retry for getting TSO from PD (#8571))
     }
 
     std::vector<TiDB::TableInfoPtr> res;
@@ -313,5 +347,4 @@ std::vector<TiDB::TableInfoPtr> SchemaGetter::listTables(DatabaseID db_id)
     return res;
 }
 
-// end of namespace.
 } // namespace DB

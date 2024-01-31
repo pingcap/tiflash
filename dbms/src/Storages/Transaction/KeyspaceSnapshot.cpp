@@ -12,9 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
 #include <IO/Endian.h>
+<<<<<<< HEAD:dbms/src/Storages/Transaction/KeyspaceSnapshot.cpp
 #include <Storages/Transaction/KeyspaceSnapshot.h>
 #include <Storages/Transaction/TiKVKeyspaceIDImpl.h>
+=======
+#include <Storages/KVStore/TiKVHelpers/KeyspaceSnapshot.h>
+#include <Storages/KVStore/TiKVHelpers/TiKVKeyspaceIDImpl.h>
+#include <pingcap/Exception.h>
+
+#include <magic_enum.hpp>
+>>>>>>> e1a8fe30a8 (client-c: Add retry for getting TSO from PD (#8571)):dbms/src/Storages/KVStore/TiKVHelpers/KeyspaceSnapshot.cpp
 
 namespace DB
 {
@@ -31,20 +40,77 @@ KeyspaceSnapshot::KeyspaceSnapshot(KeyspaceID keyspace_id_, pingcap::kv::Cluster
 
 std::string KeyspaceSnapshot::Get(const std::string & key)
 {
-    auto encoded_key = encodeKey(key);
-    return snap.Get(encoded_key);
+    try
+    {
+        auto encoded_key = encodeKey(key);
+        return snap.Get(encoded_key);
+    }
+    catch (pingcap::Exception & e)
+    {
+        // turn into DB::Exception with stack trace
+        throw DB::Exception(
+            ErrorCodes::LOGICAL_ERROR,
+            "pingcap::Exception code={} msg={}",
+            magic_enum::enum_name(static_cast<pingcap::ErrorCodes>(e.code())),
+            e.message());
+    }
 }
 
+<<<<<<< HEAD:dbms/src/Storages/Transaction/KeyspaceSnapshot.cpp
+=======
+kvrpcpb::MvccInfo KeyspaceSnapshot::mvccGet(const std::string & key)
+{
+    try
+    {
+        auto encoded_key = encodeKey(key);
+        return snap.mvccGet(encoded_key);
+    }
+    catch (pingcap::Exception & e)
+    {
+        // turn into DB::Exception with stack trace
+        throw DB::Exception(
+            ErrorCodes::LOGICAL_ERROR,
+            "pingcap::Exception code={} msg={}",
+            magic_enum::enum_name(static_cast<pingcap::ErrorCodes>(e.code())),
+            e.message());
+    }
+}
+
+>>>>>>> e1a8fe30a8 (client-c: Add retry for getting TSO from PD (#8571)):dbms/src/Storages/KVStore/TiKVHelpers/KeyspaceSnapshot.cpp
 std::string KeyspaceSnapshot::Get(pingcap::kv::Backoffer & bo, const std::string & key)
 {
-    auto encoded_key = encodeKey(key);
-    return snap.Get(bo, encoded_key);
+    try
+    {
+        auto encoded_key = encodeKey(key);
+        return snap.Get(bo, encoded_key);
+    }
+    catch (pingcap::Exception & e)
+    {
+        // turn into DB::Exception with stack trace
+        throw DB::Exception(
+            ErrorCodes::LOGICAL_ERROR,
+            "pingcap::Exception code={} msg={}",
+            magic_enum::enum_name(static_cast<pingcap::ErrorCodes>(e.code())),
+            e.message());
+    }
 }
 
 KeyspaceScanner KeyspaceSnapshot::Scan(const std::string & begin, const std::string & end)
 {
-    auto inner = snap.Scan(encodeKey(begin), encodeKey(end));
-    return KeyspaceScanner(inner, /* need_cut_ */ !prefix.empty());
+    try
+    {
+        auto inner = snap.Scan(encodeKey(begin), encodeKey(end));
+        return KeyspaceScanner(inner, /* need_cut_ */ !prefix.empty());
+    }
+    catch (pingcap::Exception & e)
+    {
+        // turn into DB::Exception with stack trace
+        throw DB::Exception(
+            ErrorCodes::LOGICAL_ERROR,
+            "pingcap::Exception code={} msg={}",
+            magic_enum::enum_name(static_cast<pingcap::ErrorCodes>(e.code())),
+            e.message());
+    }
 }
 
 std::string KeyspaceSnapshot::encodeKey(const std::string & key)

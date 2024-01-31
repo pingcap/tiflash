@@ -1013,8 +1013,13 @@ void SchemaBuilder<Getter, NameMapper>::applyDropSchema(const String & db_name)
     // 2. Use the same GC safe point as TiDB.
     // In such way our database (and its belonging tables) will be GC-ed later than TiDB, which is safe and correct.
     auto & tmt_context = context.getTMTContext();
+<<<<<<< HEAD
     auto tombstone = tmt_context.getPDClient()->getTS();
     db->alterTombstone(context, tombstone, nullptr);
+=======
+    auto tombstone = PDClientHelper::getTSO(tmt_context.getPDClient(), PDClientHelper::get_tso_maxtime);
+    db->alterTombstone(context, tombstone, /*new_db_info*/ nullptr); // keep the old db_info
+>>>>>>> e1a8fe30a8 (client-c: Add retry for getting TSO from PD (#8571))
 
     LOG_INFO(log, "Tombstoned database {}, tombstone={}", db_name, tombstone);
 }
@@ -1187,7 +1192,20 @@ void SchemaBuilder<Getter, NameMapper>::applyCreatePhysicalTable(const DBInfoPtr
         table_info->engine_type = tmt_context.getEngineType();
     }
 
+<<<<<<< HEAD
     String stmt = createTableStmt(*db_info, *table_info, name_mapper, log);
+=======
+    // We need to create a Storage instance to handle its raft log and snapshot when it
+    // is "dropped" but not physically removed in TiDB. To handle it porperly, we get a
+    // tso from PD to create the table. The tso must be newer than what "DROP TABLE" DDL
+    // is executed. So when the gc-safepoint is larger than tombstone_ts, the table can
+    // be safe to physically drop on TiFlash.
+    UInt64 tombstone_ts = 0;
+    if (is_tombstone)
+    {
+        tombstone_ts = PDClientHelper::getTSO(context.getTMTContext().getPDClient(), PDClientHelper::get_tso_maxtime);
+    }
+>>>>>>> e1a8fe30a8 (client-c: Add retry for getting TSO from PD (#8571))
 
     LOG_INFO(log, "Creating table {} with statement: {}", name_mapper.debugCanonicalName(*db_info, *table_info), stmt);
 
@@ -1248,8 +1266,21 @@ void SchemaBuilder<Getter, NameMapper>::applyDropPhysicalTable(const String & db
         return;
     }
     GET_METRIC(tiflash_schema_internal_ddl_count, type_drop_table).Increment();
+<<<<<<< HEAD
     LOG_INFO(log, "Tombstoning table {}.{}", db_name, name_mapper.debugTableName(storage->getTableInfo()));
     const UInt64 tombstone_ts = tmt_context.getPDClient()->getTS();
+=======
+    LOG_INFO(
+        log,
+        "Tombstone table {}.{} begin, table_id={} action={}",
+        db_name,
+        name_mapper.debugTableName(storage->getTableInfo()),
+        table_id,
+        action);
+
+    const UInt64 tombstone_ts = PDClientHelper::getTSO(tmt_context.getPDClient(), PDClientHelper::get_tso_maxtime);
+    // TODO:try to optimize alterCommands
+>>>>>>> e1a8fe30a8 (client-c: Add retry for getting TSO from PD (#8571))
     AlterCommands commands;
     {
         AlterCommand command;
