@@ -33,6 +33,7 @@
 #include <TiDB/Schema/SchemaSyncer.h>
 #include <TiDB/Schema/TiDBSchemaManager.h>
 #include <common/logger_useful.h>
+#include <fiu.h>
 
 namespace DB
 {
@@ -71,6 +72,10 @@ static DM::WriteResult writeRegionDataToStorage(
         auto storage = tmt.getStorages().get(keyspace_id, table_id);
         if (storage == nullptr)
         {
+            // - force_decode == false and storage not exist, let upper level sync schema and retry.
+            // - force_decode == true and storage not exist. It could be the RaftLog or Snapshot comes
+            //   after the schema is totally exceed the GC safepoint. And TiFlash know nothing about
+            //   the schema. We can only throw away those committed rows.
             return force_decode;
         }
 
@@ -212,7 +217,6 @@ static DM::WriteResult writeRegionDataToStorage(
         if (!atomic_read_write(true))
         {
             // Failure won't be tolerated this time.
-            // TODO: Enrich exception message.
             throw Exception(
                 ErrorCodes::LOGICAL_ERROR,
                 "Write region failed! region_id={} keyspace={} table_id={}",

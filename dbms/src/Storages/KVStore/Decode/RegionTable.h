@@ -101,9 +101,6 @@ public:
         InternalRegions regions;
     };
 
-    using TableMap = std::unordered_map<KeyspaceTableID, Table, boost::hash<KeyspaceTableID>>;
-    using RegionInfoMap = std::unordered_map<RegionID, KeyspaceTableID>;
-
     explicit RegionTable(Context & context_);
     void restore();
 
@@ -126,6 +123,8 @@ public:
         KeyspaceID keyspace_id,
         TableID table_id,
         std::function<void(const InternalRegions &)> && callback) const;
+
+    std::vector<RegionID> getRegionIdsByTable(KeyspaceID keyspace_id, TableID table_id) const;
     std::vector<std::pair<RegionID, RegionPtr>> getRegionsByTable(KeyspaceID keyspace_id, TableID table_id) const;
 
     /// Write the data of the given region into the table with the given table ID, fill the data list for outer to remove.
@@ -188,7 +187,10 @@ private:
     InternalRegion & doGetInternalRegion(KeyspaceTableID ks_table_id, RegionID region_id);
 
 private:
+    using TableMap = std::unordered_map<KeyspaceTableID, Table, boost::hash<KeyspaceTableID>>;
     TableMap tables;
+
+    using RegionInfoMap = std::unordered_map<RegionID, KeyspaceTableID>;
     RegionInfoMap regions;
     SafeTsMap safe_ts_map;
 
