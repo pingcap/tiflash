@@ -66,9 +66,7 @@ private:
         if (ret != 0)
         {
             // It can be failed due to some CPU core cannot access, such as CPU offline.
-            char buff[1024];
-            char * ret_str = strerror_r(errno, buff, sizeof(buff));
-            LOG_WARNING(log, "sched_setaffinity fail, cpus={} errno={} errno_str={}", cpus, errno, ret_str);
+            LOG_WARNING(log, "sched_setaffinity fail, cpus={} errno={}", cpus, errno);
         }
         else
         {
