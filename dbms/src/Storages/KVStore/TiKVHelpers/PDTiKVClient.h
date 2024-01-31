@@ -29,10 +29,19 @@
 #include <Core/Types.h>
 #include <Storages/KVStore/Types.h>
 #include <common/logger_useful.h>
+#include <fiu.h>
 
 #include <atomic>
 
 using TimePoint = std::atomic<std::chrono::time_point<std::chrono::steady_clock>>;
+
+
+namespace DB
+{
+namespace FailPoints
+{
+extern const char force_pd_grpc_error[];
+} // namespace FailPoints
 
 struct KeyspaceGCInfo
 {
@@ -58,8 +67,7 @@ struct KeyspaceGCInfo
     }
 };
 
-namespace DB
-{
+
 struct PDClientHelper
 {
     static constexpr int get_safepoint_maxtime = 120000; // 120s. waiting pd recover.
@@ -77,6 +85,10 @@ struct PDClientHelper
         {
             try
             {
+                fiu_do_on(FailPoints::force_pd_grpc_error, {
+                    throw pingcap::Exception("force_pd_grpc_error", pingcap::ErrorCodes::GRPCErrorCode);
+                });
+
                 return pd_client->getTS();
             }
             catch (pingcap::Exception & e)
@@ -116,7 +128,8 @@ struct PDClientHelper
             auto now = std::chrono::steady_clock::now();
             const auto duration
                 = std::chrono::duration_cast<std::chrono::seconds>(now - safe_point_last_update_time.load());
-            const auto min_interval = std::max(Int64(1), safe_point_update_interval_seconds); // at least one second
+            const auto min_interval
+                = std::max(static_cast<Int64>(1), safe_point_update_interval_seconds); // at least one second
             if (duration.count() < min_interval)
                 return cached_gc_safe_point;
         }
