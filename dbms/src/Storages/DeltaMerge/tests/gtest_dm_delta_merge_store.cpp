@@ -1561,7 +1561,9 @@ CATCH
 TEST_P(DeltaMergeStoreRWTest, IngestDupHandleVersion)
 try
 {
-    setStorageFormat(5); // Some old formats does not support ingest DMFiles.
+    // Some old formats does not support ingest DMFiles.
+    if (mode == TestMode::V1_BlockOnly)
+        return;
 
     // Add a column for extra value.
     const String value_col_name = "value";
@@ -1594,6 +1596,7 @@ try
             /* is_fast_scan= */ false,
             DEFAULT_BLOCK_SIZE)[0];
         std::unordered_map<Int64, UInt64> data;
+        stream->readPrefix();
         for (;;)
         {
             auto block = stream->read();
@@ -1608,6 +1611,7 @@ try
                 data[handle[i]] = value[i];
             }
         }
+        stream->readSuffix();
         return data;
     };
 

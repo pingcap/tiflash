@@ -18,6 +18,7 @@
 #include <Poco/File.h>
 #include <Storages/DeltaMerge/ReadThread/CPU.h>
 #include <common/logger_useful.h>
+#include <stdlib.h>
 
 #include <exception>
 #include <string>
@@ -119,5 +120,31 @@ std::vector<std::vector<int>> getNumaNodes(const LoggerPtr & log)
     LOG_WARNING(log, "Cannot recognize the CPU NUMA infomation, use the CPU as 'one numa node'");
     std::vector<std::vector<int>> numa_nodes(1); // "One numa node"
     return numa_nodes;
+}
+
+void setCPUAffinity(const std::vector<int> & cpus, const LoggerPtr & log)
+{
+    if (cpus.empty())
+    {
+        return;
+    }
+#ifdef __linux__
+    cpu_set_t cpu_set;
+    CPU_ZERO(&cpu_set);
+    for (int i : cpus)
+    {
+        CPU_SET(i, &cpu_set);
+    }
+    int ret = sched_setaffinity(0, sizeof(cpu_set), &cpu_set);
+    if (ret != 0)
+    {
+        // It can be failed due to some CPU core cannot access, such as CPU offline.
+        LOG_WARNING(log, "sched_setaffinity fail, cpus={} errno={}", cpus, errno);
+    }
+    else
+    {
+        LOG_DEBUG(log, "sched_setaffinity succ, cpus={}", cpus);
+    }
+#endif
 }
 } // namespace DB::DM
