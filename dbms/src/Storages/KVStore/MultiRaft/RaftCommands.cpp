@@ -316,6 +316,7 @@ std::pair<EngineStoreApplyRes, DM::WriteResult> Region::handleWriteRaftCmd(
     size_t lock_put_key_count = 0;
     size_t default_put_key_count = 0;
     size_t lock_del_key_count = 0;
+    size_t write_del_key_count = 0;
     // How many bytes has been written to KVStore(and maybe then been moved to underlying DeltaTree).
     // We don't count DEL because it is only used to delete LOCK, which is small and not count in doInsert.
     size_t write_size = 0;
@@ -330,6 +331,7 @@ std::pair<EngineStoreApplyRes, DM::WriteResult> Region::handleWriteRaftCmd(
         GET_METRIC(tiflash_raft_process_keys, type_lock_put).Increment(lock_put_key_count);
         GET_METRIC(tiflash_raft_process_keys, type_default_put).Increment(default_put_key_count);
         GET_METRIC(tiflash_raft_process_keys, type_lock_del).Increment(lock_del_key_count);
+        GET_METRIC(tiflash_raft_process_keys, type_write_del).Increment(write_del_key_count);
         auto after_size = dataSize();
         if (after_size > prev_size + RAFT_REGION_BIG_WRITE_THRES)
             GET_METRIC(tiflash_raft_write_flow_bytes, type_big_write_to_region).Observe(after_size - prev_size);
@@ -393,7 +395,11 @@ std::pair<EngineStoreApplyRes, DM::WriteResult> Region::handleWriteRaftCmd(
         case WriteCmdType::Del:
         {
             auto tikv_key = TiKVKey(cmds.keys[i].data, cmds.keys[i].len);
-            if (unlikely(cf == ColumnFamilyType::Lock))
+            if unlikely (cf == ColumnFamilyType::Write)
+            {
+                write_del_key_count++;
+            }
+            else if (cf == ColumnFamilyType::Lock)
             {
                 lock_del_key_count++;
             }
