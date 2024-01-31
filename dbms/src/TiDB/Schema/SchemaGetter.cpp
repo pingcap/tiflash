@@ -276,9 +276,8 @@ TiDB::DBInfoPtr SchemaGetter::getDatabase(DatabaseID db_id)
     if (json.empty())
         return nullptr;
 
-    LOG_DEBUG(log, "Get DB Info from TiKV, database_id={} {}", db_id, json);
-    auto db_info = std::make_shared<TiDB::DBInfo>(json, keyspace_id);
-    return db_info;
+    LOG_DEBUG(log, "Get DatabaseInfo from TiKV, database_id={} {}", db_id, json);
+    return std::make_shared<TiDB::DBInfo>(json, keyspace_id);
 }
 
 template <bool mvcc_get>
@@ -310,7 +309,7 @@ std::pair<TiDB::TableInfoPtr, bool> SchemaGetter::getTableInfoImpl(DatabaseID db
             return {nullptr, get_by_mvcc};
         }
     }
-    LOG_DEBUG(log, "Get Table Info from TiKV, table_id={} {}", table_id, table_info_json);
+    LOG_DEBUG(log, "Get TableInfo from TiKV, table_id={} {}", table_id, table_info_json);
     return {std::make_shared<TiDB::TableInfo>(table_info_json, keyspace_id), get_by_mvcc};
 }
 template std::pair<TiDB::TableInfoPtr, bool> SchemaGetter::getTableInfoImpl<false>(DatabaseID db_id, TableID table_id);
@@ -339,7 +338,7 @@ std::vector<TiDB::TableInfoPtr> SchemaGetter::listTables(DatabaseID db_id)
     auto db_key = getDBKey(db_id);
     if (!checkDBExists(db_key))
     {
-        LOG_ERROR(log, "DB {} Not Exists!", db_id);
+        LOG_ERROR(log, "The database does not exist, database_id={}", db_id);
         return {};
     }
 
@@ -362,5 +361,4 @@ std::vector<TiDB::TableInfoPtr> SchemaGetter::listTables(DatabaseID db_id)
     return res;
 }
 
-// end of namespace.
 } // namespace DB

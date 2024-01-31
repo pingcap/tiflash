@@ -144,7 +144,7 @@ void SchemaSyncService::removeKeyspaceGCTasks()
         keyspace_handle_iter = keyspace_handle_map.erase(keyspace_handle_iter);
 
         context.getTMTContext().getSchemaSyncerManager()->removeSchemaSyncer(keyspace);
-        PDClientHelper::remove_ks_gc_sp(keyspace);
+        PDClientHelper::removeKeyspaceGCSafepoint(keyspace);
         keyspace_gc_context.erase(keyspace); // clear the last gc safepoint
         num_remove_tasks += 1;
     }

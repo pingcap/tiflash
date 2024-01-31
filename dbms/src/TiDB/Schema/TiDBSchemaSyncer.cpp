@@ -14,6 +14,7 @@
 
 #include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
+#include <Storages/KVStore/TiKVHelpers/PDTiKVClient.h>
 #include <TiDB/Schema/SchemaBuilder.h>
 #include <TiDB/Schema/TiDBSchemaSyncer.h>
 #include <common/logger_useful.h>
@@ -23,6 +24,21 @@
 
 namespace DB
 {
+template <bool mock_getter, bool mock_mapper>
+typename TiDBSchemaSyncer<mock_getter, mock_mapper>::Getter TiDBSchemaSyncer<mock_getter, mock_mapper>::
+    createSchemaGetter(KeyspaceID keyspace_id)
+{
+    if constexpr (mock_getter)
+    {
+        return Getter();
+    }
+    else
+    {
+        auto tso = PDClientHelper::getTSO(cluster->pd_client, PDClientHelper::get_tso_maxtime);
+        return Getter(cluster.get(), tso, keyspace_id);
+    }
+}
+
 template <bool mock_getter, bool mock_mapper>
 bool TiDBSchemaSyncer<mock_getter, mock_mapper>::syncSchemas(Context & context)
 {
