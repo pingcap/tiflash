@@ -18,6 +18,7 @@
 #include <Poco/File.h>
 #include <Storages/DeltaMerge/ReadThread/CPU.h>
 #include <common/logger_useful.h>
+#include <stdlib.h>
 
 #include <exception>
 #include <string>
@@ -138,7 +139,7 @@ void setCPUAffinity(const std::vector<int> & cpus, const LoggerPtr & log)
     if (ret != 0)
     {
         // It can be failed due to some CPU core cannot access, such as CPU offline.
-        LOG_INFO(log, "sched_setaffinity fail, cpus={} errno={}", cpus, std::strerror(errno));
+        LOG_WARNING(log, "sched_setaffinity fail, cpus={} errno={}", cpus, errno);
     }
     else
     {
