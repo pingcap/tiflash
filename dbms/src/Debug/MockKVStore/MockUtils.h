@@ -18,7 +18,7 @@
 #include <Storages/KVStore/MultiRaft/RegionPersister.h>
 #include <Storages/KVStore/TiKVHelpers/TiKVRecordFormat.h>
 
-namespace DB:: RegionBench
+namespace DB::RegionBench
 {
 
 
@@ -96,4 +96,4 @@ inline RegionPtr makeRegion(RegionMeta && meta)
     return std::make_shared<Region>(std::move(meta), nullptr);
 }
 
-} // namespace DB:: RegionBench
+} // namespace DB::RegionBench
