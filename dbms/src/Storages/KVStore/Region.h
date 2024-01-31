@@ -258,12 +258,7 @@ private:
 
     // Private methods no need to lock mutex, normally
 
-<<<<<<< HEAD
     void doInsert(ColumnFamilyType type, TiKVKey && key, TiKVValue && value, DupCheck mode);
-    void doCheckTable(const DecodedTiKVKey & key) const;
-=======
-    size_t doInsert(ColumnFamilyType type, TiKVKey && key, TiKVValue && value, DupCheck mode);
->>>>>>> e1a8fe30a8 (client-c: Add retry for getting TSO from PD (#8571))
     void doRemove(ColumnFamilyType type, const TiKVKey & key);
 
     std::optional<RegionDataReadInfo> readDataByWriteIt(
