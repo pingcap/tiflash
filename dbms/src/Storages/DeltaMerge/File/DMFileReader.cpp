@@ -38,7 +38,7 @@ extern const Metric OpenFileForRead;
 namespace DB::ErrorCodes
 {
 extern const int LOGICAL_ERROR;
-}
+} // namespace DB::ErrorCodes
 
 namespace DB::DM
 {

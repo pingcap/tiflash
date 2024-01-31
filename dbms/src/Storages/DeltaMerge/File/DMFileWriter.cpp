@@ -25,10 +25,9 @@
 #endif
 
 
-namespace DB
+namespace DB::DM
 {
-namespace DM
-{
+
 DMFileWriter::DMFileWriter(
     const DMFilePtr & dmfile_,
     const ColumnDefines & write_columns_,
@@ -118,7 +117,8 @@ void DMFileWriter::addStreams(ColId col_id, DataTypePtr type, bool do_index)
             options.max_compress_block_size,
             file_provider,
             write_limiter,
-            IDataType::isNullMap(substream_path) ? false : do_index);
+            IDataType::isNullMap(substream_path) ? false : do_index // TODO: ignore array_size
+            );
         column_streams.emplace(stream_name, std::move(stream));
     };
 
@@ -269,6 +269,9 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
     size_t nullmap_data_bytes = 0;
     size_t nullmap_mark_bytes = 0;
     size_t index_bytes = 0;
+    size_t array_sizes_bytes = 0;
+    size_t array_sizes_mark_bytes = 0;
+
 #ifndef NDEBUG
     auto examine_buffer_size = [&](auto & buf, auto & fp) {
         if (!fp.isEncryptionEnabled())
@@ -290,10 +293,26 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
         }
         return false;
     };
+    auto is_array_sizes_stream = [](const IDataType::SubstreamPath & substream) {
+        for (const auto & s : substream)
+        {
+            if (s.type == IDataType::Substream::ArraySizes)
+            {
+                return true;
+            }
+        }
+        return false;
+    };
+
     auto callback = [&](const IDataType::SubstreamPath & substream) {
         const auto stream_name = DMFile::getFileNameBase(col_id, substream);
         auto & stream = column_streams.at(stream_name);
 
+        const bool is_null = is_nullmap_stream(substream);
+        const bool is_array = is_array_sizes_stream(substream);
+
+        // FIXME: remove
+        LOG_INFO(Logger::get(), "stream_name={} is_null={} is_array={}", stream_name, is_null, is_array);
         // v3
         if (dmfile->useMetaV2())
         {
@@ -303,9 +322,13 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
 
             bytes_written += stream->plain_file->getMaterializedBytes();
 
-            if (is_nullmap_stream(substream))
+            if (is_null)
             {
                 nullmap_data_bytes = stream->plain_file->getMaterializedBytes();
+            }
+            else if (is_array)
+            {
+                array_sizes_bytes = stream->plain_file->getMaterializedBytes();
             }
             else
             {
@@ -363,9 +386,13 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
                 merged_file.file_info.size += mark_size;
                 buffer->next();
 
-                if (is_nullmap_stream(substream))
+                if (is_null)
                 {
                     nullmap_mark_bytes = mark_size;
+                }
+                else if (is_array)
+                {
+                    array_sizes_mark_bytes = mark_size;
                 }
                 else
                 {
@@ -387,7 +414,7 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
             if (!dmfile->configuration)
             { // v1
                 bytes_written += stream->plain_file->getMaterializedBytes() + stream->mark_file->getMaterializedBytes();
-                if (is_nullmap_stream(substream))
+                if (is_null)
                 {
                     nullmap_data_bytes = stream->plain_file->getMaterializedBytes();
                     nullmap_mark_bytes = stream->mark_file->getMaterializedBytes();
@@ -401,7 +428,7 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
             else
             { // v2
                 bytes_written += stream->plain_file->getMaterializedBytes() + stream->mark_file->getMaterializedBytes();
-                if (is_nullmap_stream(substream))
+                if (is_null)
                 {
                     nullmap_data_bytes = stream->plain_file->getMaterializedBytes();
                     nullmap_mark_bytes = stream->mark_file->getMaterializedBytes();
@@ -452,7 +479,10 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
     col_stat.nullmap_data_bytes = nullmap_data_bytes;
     col_stat.index_bytes = index_bytes;
     col_stat.nullmap_mark_bytes = nullmap_mark_bytes;
+    col_stat.array_sizes_bytes = array_sizes_bytes;
+    col_stat.array_sizes_mark_bytes = array_sizes_mark_bytes;
+    // FIXME: remove
+    LOG_INFO(Logger::get(), "col_id={} stat={}", col_id, col_stat.toProto().ShortDebugString());
 }
 
-} // namespace DM
-} // namespace DB
+} // namespace DB::DM
