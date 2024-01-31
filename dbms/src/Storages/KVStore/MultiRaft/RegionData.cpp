@@ -138,6 +138,51 @@ RegionData::WriteCFIter RegionData::removeDataByWriteIt(const WriteCFIter & writ
     return write_cf.getDataMut().erase(write_it);
 }
 
+// Return true - the orphan key is safe to omit
+// Return false - this is still a hard error
+static bool omitOrphanWriteKey(
+    RegionData::OrphanKeysInfo & orphan_keys_info,
+    const std::shared_ptr<const TiKVKey> & key)
+{
+    if (orphan_keys_info.pre_handling)
+    {
+        RUNTIME_CHECK_MSG(
+            orphan_keys_info.snapshot_index.has_value(),
+            "Snapshot index shall be set when Applying snapshot");
+        // While pre-handling snapshot from raftstore v2, we accept and store the orphan keys in memory
+        // These keys should be resolved in later raft logs
+        orphan_keys_info.observeExtraKey(TiKVKey::copyFrom(*key));
+        return true;
+    }
+    else
+    {
+        // We can't delete this orphan key here, since it can be triggered from `onSnapshot`.
+        if (orphan_keys_info.snapshot_index.has_value())
+        {
+            if (orphan_keys_info.containsExtraKey(*key))
+            {
+                return true;
+            }
+            // We can't throw here, since a PUT write may be replayed while its corresponding default not replayed.
+            // TODO Parse some extra data to tell the difference.
+            return true;
+        }
+        else
+        {
+            // After restart, we will lose all orphan key info. We we can't do orphan key checking for now.
+            // So we print out a log here, and neglect the error.
+            // TODO We will try to recover the state from cached apply snapshot after restart.
+            return true;
+        }
+
+        // Otherwise, this is still a hard error.
+        // TODO We still need to check if there are remained orphan keys after we have applied after peer's flushed_index.
+        // Since the registered orphan write key may come from a raft log smaller than snapshot_index with its default key lost,
+        // thus this write key will not be replicated any more, which cause a slient data loss.
+    }
+    return false;
+}
+
 /// This function is called by `ReadRegionCommitCache`.
 std::optional<RegionDataReadInfo> RegionData::readDataByWriteIt(
     const ConstWriteCFIter & write_it,
@@ -171,47 +216,10 @@ std::optional<RegionDataReadInfo> RegionData::readDataByWriteIt(
         {
             if (!hard_error)
             {
-                if (orphan_keys_info.pre_handling)
+                if (omitOrphanWriteKey(orphan_keys_info, key))
                 {
-                    RUNTIME_CHECK_MSG(
-                        orphan_keys_info.snapshot_index.has_value(),
-                        "Snapshot index shall be set when Applying snapshot");
-                    // While pre-handling snapshot from raftstore v2, we accept and store the orphan keys in memory
-                    // These keys should be resolved in later raft logs
-                    orphan_keys_info.observeExtraKey(TiKVKey::copyFrom(*key));
                     return std::nullopt;
                 }
-                else
-                {
-                    // We can't delete this orphan key here, since it can be triggered from `onSnapshot`.
-                    if (orphan_keys_info.snapshot_index.has_value())
-                    {
-                        if (orphan_keys_info.containsExtraKey(*key))
-                        {
-                            return std::nullopt;
-                        }
-                        // We can't throw here, since a PUT write may be replayed while its corresponding default not replayed.
-                        // TODO Parse some extra data to tell the difference.
-                        return std::nullopt;
-                    }
-                    else
-                    {
-                        // After restart, we will lose all orphan key info. We we can't do orphan key checking for now.
-                        // So we print out a log here, and neglect the error.
-                        // TODO We currently comment this line, since it will cause too many log outputs.
-                        // We will also tried to recover the state from cached apply snapshot after restart.
-                        // LOG_INFO(&Poco::Logger::get("RegionData"), "Orphan key info lost after restart, Raw TiDB PK: {}, Prewrite ts: {} can not found in default cf for key: {}, region_id: {}, applied: {}", pk.toDebugString(), decoded_val.prewrite_ts, key->toDebugString(), region_id, applied);
-                        return std::nullopt;
-                    }
-
-                    // Otherwise, this is still a hard error.
-                    // TODO We still need to check if there are remained orphan keys after we have applied after peer's flushed_index.
-                    // Since the registered orphan write key may come from a raft log smaller than snapshot_index with its default key lost,
-                    // thus this write key will not be replicated any more, which cause a slient data loss.
-                }
-            }
-            if (!hard_error)
-            {
                 orphan_key_debug_msg = fmt::format(
                     "orphan_info: ({}, snapshot_index: {}, {}, orphan key size {})",
                     hard_error ? "" : ", not orphan key",
