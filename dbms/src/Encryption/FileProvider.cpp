@@ -203,7 +203,8 @@ void FileProvider::deleteEncryptionInfo(const EncryptionPath & encryption_path_,
 
 void FileProvider::dropEncryptionInfo(KeyspaceID keyspace_id) const
 {
-    if (auto * keyspaces_key_manager = dynamic_cast<KeyspacesKeyManager *>(key_manager.get()); keyspaces_key_manager)
+    if (auto * keyspaces_key_manager = dynamic_cast<KeyspacesKeyManager<TiFlashRaftProxyHelper> *>(key_manager.get());
+        keyspaces_key_manager)
         keyspaces_key_manager->deleteKey(keyspace_id);
 }
 
@@ -303,7 +304,8 @@ void FileProvider::renameFile(
 
 void FileProvider::setPageStoragePtrForKeyManager(const UniversalPageStoragePtr & page_storage_ptr_)
 {
-    if (auto * keyspaces_key_manager = dynamic_cast<KeyspacesKeyManager *>(key_manager.get()); keyspaces_key_manager)
+    if (auto * keyspaces_key_manager = dynamic_cast<KeyspacesKeyManager<TiFlashRaftProxyHelper> *>(key_manager.get());
+        keyspaces_key_manager)
         keyspaces_key_manager->setUniversalPageStorage(page_storage_ptr_);
 }
 

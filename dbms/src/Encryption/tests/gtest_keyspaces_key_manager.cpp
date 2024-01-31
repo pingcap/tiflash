@@ -39,7 +39,7 @@ public:
         auto path = getTemporaryPath();
         createIfNotExist(path);
         proxy_helper = new MockProxyEncryptionFFI(true, MasterKey); // NOLINT
-        key_manager = std::make_shared<KeyspacesKeyManager>(proxy_helper);
+        key_manager = std::make_shared<KeyspacesKeyManager<MockProxyEncryptionFFI>>(proxy_helper);
         file_provider = std::make_shared<FileProvider>(key_manager, true, true);
         auto delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
         s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
@@ -81,7 +81,7 @@ protected:
     PageStorageConfig config;
     std::shared_ptr<UniversalPageStorage> page_storage;
     MockProxyEncryptionFFI * proxy_helper = nullptr;
-    std::shared_ptr<KeyspacesKeyManager> key_manager;
+    std::shared_ptr<KeyspacesKeyManager<MockProxyEncryptionFFI>> key_manager;
 };
 
 TEST_F(KeyspacesKeyManagerTest, SimpleNewGetTest)

@@ -25,7 +25,8 @@
 namespace DB
 {
 
-FileEncryptionInfo KeyspacesKeyManager::getInfo(const EncryptionPath & ep)
+template <typename ProxyHelper>
+FileEncryptionInfo KeyspacesKeyManager<ProxyHelper>::getInfo(const EncryptionPath & ep)
 {
     const auto keyspace_id = ep.keyspace_id;
     if (unlikely(keyspace_id == NullspaceID) || (likely(!proxy_helper->getKeyspaceEncryption(keyspace_id))))
@@ -62,7 +63,8 @@ FileEncryptionInfo KeyspacesKeyManager::getInfo(const EncryptionPath & ep)
     return key->generateEncryptionInfo(String(reinterpret_cast<const char *>(md5_value), MD5_DIGEST_LENGTH));
 }
 
-FileEncryptionInfo KeyspacesKeyManager::newInfo(const EncryptionPath & ep)
+template <typename ProxyHelper>
+FileEncryptionInfo KeyspacesKeyManager<ProxyHelper>::newInfo(const EncryptionPath & ep)
 {
     const auto keyspace_id = ep.keyspace_id;
     if (unlikely(keyspace_id == NullspaceID) || (likely(!proxy_helper->getKeyspaceEncryption(keyspace_id))))
@@ -99,7 +101,8 @@ FileEncryptionInfo KeyspacesKeyManager::newInfo(const EncryptionPath & ep)
     return key->generateEncryptionInfo(String(reinterpret_cast<const char *>(md5_value), MD5_DIGEST_LENGTH));
 }
 
-void KeyspacesKeyManager::deleteInfo(const EncryptionPath & ep, bool /*throw_on_error*/)
+template <typename ProxyHelper>
+void KeyspacesKeyManager<ProxyHelper>::deleteInfo(const EncryptionPath & ep, bool /*throw_on_error*/)
 {
     const auto keyspace_id = ep.keyspace_id;
     if (unlikely(keyspace_id == NullspaceID) || (likely(!proxy_helper->getKeyspaceEncryption(keyspace_id))))
@@ -107,12 +110,14 @@ void KeyspacesKeyManager::deleteInfo(const EncryptionPath & ep, bool /*throw_on_
     // do nothing
 }
 
-void KeyspacesKeyManager::linkInfo(const EncryptionPath & /*src_ep*/, const EncryptionPath & /*dst_ep*/)
+template <typename ProxyHelper>
+void KeyspacesKeyManager<ProxyHelper>::linkInfo(const EncryptionPath & /*src_ep*/, const EncryptionPath & /*dst_ep*/)
 {
     throw DB::Exception("linkFile is not supported", ErrorCodes::NOT_IMPLEMENTED);
 }
 
-void KeyspacesKeyManager::deleteKey(KeyspaceID keyspace_id)
+template <typename ProxyHelper>
+void KeyspacesKeyManager<ProxyHelper>::deleteKey(KeyspaceID keyspace_id)
 {
     if (unlikely(keyspace_id == NullspaceID) || (likely(!proxy_helper->getKeyspaceEncryption(keyspace_id))))
         return;
@@ -125,9 +130,13 @@ void KeyspacesKeyManager::deleteKey(KeyspaceID keyspace_id)
     keyspace_id_to_key.remove(keyspace_id);
 }
 
-bool KeyspacesKeyManager::isEncryptionEnabled(KeyspaceID keyspace_id)
+template <typename ProxyHelper>
+bool KeyspacesKeyManager<ProxyHelper>::isEncryptionEnabled(KeyspaceID keyspace_id)
 {
     return keyspace_id != NullspaceID && proxy_helper->getKeyspaceEncryption(keyspace_id);
 }
+
+template class KeyspacesKeyManager<TiFlashRaftProxyHelper>;
+template class KeyspacesKeyManager<MockProxyEncryptionFFI>;
 
 } // namespace DB
