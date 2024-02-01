@@ -369,7 +369,7 @@ static inline void reportUpstreamLatency(const RegionDataReadInfoList & data_lis
     }
 }
 
-DM::WriteResult RegionTable::writeBlockByRegion(
+DM::WriteResult RegionTable::writeCommittedByRegion(
     Context & context,
     const RegionPtrWithBlock & region,
     RegionDataReadInfoList & data_list_to_remove,
