@@ -356,7 +356,7 @@ static inline void reportUpstreamLatency(const RegionDataReadInfoList & data_lis
     {
         return;
     }
-    auto ts = std::get<2>(data_list_read.front());
+    auto ts = data_list_read.front().commit_ts;
     auto [physical_ms, logical] = parseTS(ts);
     std::ignore = logical;
     UInt64 curr_ms = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now())

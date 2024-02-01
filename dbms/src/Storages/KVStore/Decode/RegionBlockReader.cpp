@@ -98,7 +98,7 @@ bool RegionBlockReader::read(Block & block, const RegionDataReadInfoList & data_
         exc.addMessage("TiKV value contains: ");
         for (const auto & data : data_list)
         {
-            exc.addMessage(fmt::format("{}, ", std::get<3>(data)->toDebugString()));
+            exc.addMessage(fmt::format("{}, ", data.value->toDebugString()));
         }
         exc.rethrow();
         return false;
