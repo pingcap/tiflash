@@ -485,10 +485,6 @@ bool appendRowV2ToBlockImpl(
                     }
                     else
                     {
-<<<<<<< HEAD:dbms/src/Storages/Transaction/RowCodec.cpp
-                        throw Exception("Detected invalid null when decoding data of column " + column_info.name + " with column type " + raw_column->getName(),
-                                        ErrorCodes::LOGICAL_ERROR);
-=======
                         // If user turn a nullable column (with default value) to a non-nullable column. There could exists some rows
                         // with `NULL` values inside the SST files. Or some key-values encoded with old schema come after the schema
                         // change is applied in TiFlash because of network issue.
@@ -496,7 +492,6 @@ bool appendRowV2ToBlockImpl(
                         // Just filled with default value for these old schema rows.
                         raw_column->insert(column_info.defaultValueToField());
                         idx_null++;
->>>>>>> 24663e93c5 (ddl: Fix NULL value in non-nullable column (#8722)):dbms/src/TiDB/Decode/RowCodec.cpp
                     }
                 }
                 else
@@ -617,11 +612,6 @@ bool appendRowV1ToBlock(
             {
                 if (!force_decode)
                 {
-<<<<<<< HEAD:dbms/src/Storages/Transaction/RowCodec.cpp
-                    throw Exception("Detected invalid null when decoding data " + std::to_string(unflattened.get<UInt64>())
-                                        + " of column " + column_info.name + " with type " + raw_column->getName(),
-                                    ErrorCodes::LOGICAL_ERROR);
-=======
                     // Detect `NULL` column value in a non-nullable column in the schema, let upper level try to sync the schema.
                     return false;
                 }
@@ -633,7 +623,6 @@ bool appendRowV1ToBlock(
                     // If the column_id exists in null_column_ids, it means the column has default value but filled with NULL.
                     // Just filled with default value for these old schema rows.
                     raw_column->insert(column_info.defaultValueToField());
->>>>>>> 24663e93c5 (ddl: Fix NULL value in non-nullable column (#8722)):dbms/src/TiDB/Decode/RowCodec.cpp
                 }
             }
             else
