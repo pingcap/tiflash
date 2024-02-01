@@ -114,7 +114,7 @@ try
     /// test parallel aggregation
     ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams));
     /// test spill with small max_block_size
-    /// the avg rows in one bucket is ~10240/256 = 400, so set the small_max_block_size to 300
+    /// the avg rows in one bucket is ~10240/256 = 400, so set the small_max_block_size to 100
     /// is enough to test the output spilt
     size_t small_max_block_size = 100;
     context.context->setSetting("max_block_size", Field(static_cast<UInt64>(small_max_block_size)));
