@@ -128,8 +128,8 @@ void SchemaSyncService::removeKeyspaceGCTasks()
             ++ks_handle_iter;
             continue;
         }
-        auto ks_log = log->getChild(fmt::format("keyspace={}", ks));
-        LOG_INFO(ks_log, "remove sync schema task");
+        auto keyspace_log = log->getChild(fmt::format("keyspace={}", ks));
+        LOG_INFO(keyspace_log, "remove sync schema task");
         background_pool.removeTask(ks_handle_iter->second);
         ks_handle_iter = ks_handle_map.erase(ks_handle_iter);
         num_remove_tasks += 1;
