@@ -16,16 +16,14 @@
 
 #include <Common/Logger.h>
 #include <IO/MemoryReadWriteBuffer.h>
+#include <Interpreters/Context_fwd.h>
 #include <Storages/KVStore/Types.h>
 #include <Storages/Page/FileUsage.h>
 #include <Storages/Page/PageStorage.h>
 #include <Storages/Page/V3/Universal/UniversalPageIdFormatImpl.h>
-#include <Storages/Page/WriteBatchImpl.h>
 
 namespace DB
 {
-class Context;
-
 class PathPool;
 class Region;
 using RegionPtr = std::shared_ptr<Region>;
@@ -39,10 +37,9 @@ struct TiFlashRaftProxyHelper;
 class RegionPersister final : private boost::noncopyable
 {
 public:
-    RegionPersister(Context & global_context_, const RegionManager & region_manager_);
+    explicit RegionPersister(Context & global_context_);
 
     void drop(RegionID region_id, const RegionTaskLock &);
-    void persist(const Region & region);
     void persist(const Region & region, const RegionTaskLock & lock);
     RegionMap restore(
         PathPool & path_pool,
@@ -61,9 +58,7 @@ private:
     void forceTransformKVStoreV2toV3();
 
     void doPersist(RegionCacheWriteElement & region_write_buffer, const RegionTaskLock & lock, const Region & region);
-    void doPersist(const Region & region, const RegionTaskLock * lock);
 
-private:
     inline std::variant<String, NamespaceID> getWriteBatchPrefix() const
     {
         switch (run_mode)
@@ -81,9 +76,7 @@ private:
     PageWriterPtr page_writer;
     PageReaderPtr page_reader;
 
-    NamespaceID ns_id = KVSTORE_NAMESPACE_ID;
-    const RegionManager & region_manager;
-    std::mutex mutex;
+    const NamespaceID ns_id = KVSTORE_NAMESPACE_ID;
     LoggerPtr log;
 };
 } // namespace DB

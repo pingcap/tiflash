@@ -1,0 +1,204 @@
+# Copyright 2023 PingCAP, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+
+>> DBGInvoke __enable_schema_sync_service('true')
+mysql> drop table if exists test.e;
+mysql> drop table if exists test.e2;
+mysql> drop table if exists test_new.e2;
+mysql> drop database if exists test_new;
+
+mysql> create table test.e(id INT NOT NULL,fname VARCHAR(30),lname VARCHAR(30)) PARTITION BY RANGE (id) ( PARTITION p0 VALUES LESS THAN (50),PARTITION p1 VALUES LESS THAN (150));
+mysql> alter table test.e set tiflash replica 1;
+
+mysql> create table test.e2(id int not null, fname varchar(30), lname varchar(30));
+mysql> alter table test.e2 set tiflash replica 1;
+
+mysql> create database test_new;
+mysql> create table test_new.e2(id int not null, fname varchar(30), lname varchar(30));
+mysql> alter table test_new.e2 set tiflash replica 1;
+
+mysql> insert into test.e values (1, 'a', 'b'),(108, 'a', 'b');
+mysql> insert into test.e2 values (2, 'a', 'b');
+mysql> insert into test_new.e2 values (3, 'a', 'b');
+
+func> wait_table test e
+func> wait_table test e2
+func> wait_table test_new e2
+
+# disable schema sync service
+>> DBGInvoke __enable_schema_sync_service('false')
+>> DBGInvoke __refresh_schemas()
+
+# case 1, exchange partition in the same database, no error happens
+mysql> set @@tidb_enable_exchange_partition=1; alter table test.e exchange partition p0 with table test.e2
+>> DBGInvoke __refresh_schemas()
+mysql> alter table test.e add column c1 int;
+>> DBGInvoke __refresh_table_schema(test, e)
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.e order by id;
++-----+-------+-------+------+
+| id  | fname | lname | c1   |
++-----+-------+-------+------+
+|   2 | a     | b     | NULL |
+| 108 | a     | b     | NULL |
++-----+-------+-------+------+
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.e2;
++----+-------+-------+
+| id | fname | lname |
++----+-------+-------+
+|  1 | a     | b     |
++----+-------+-------+
+mysql> alter table test.e drop column c1;
+>> DBGInvoke __refresh_table_schema(test, e)
+
+# case 2, exchange partition across databases, no error happens
+mysql> set @@tidb_enable_exchange_partition=1; alter table test.e exchange partition p0 with table test_new.e2
+>> DBGInvoke __refresh_schemas()
+mysql> alter table test.e add column c1 int;
+>> DBGInvoke __refresh_table_schema(test, e)
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.e order by id;
++-----+-------+-------+------+
+| id  | fname | lname | c1   |
++-----+-------+-------+------+
+|   3 | a     | b     | NULL |
+| 108 | a     | b     | NULL |
++-----+-------+-------+------+
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test_new.e2;
++----+-------+-------+
+| id | fname | lname |
++----+-------+-------+
+|  2 | a     | b     |
++----+-------+-------+
+mysql> alter table test.e drop column c1;
+>> DBGInvoke __refresh_table_schema(test, e)
+
+# cleanup
+mysql> drop table if exists test.e;
+mysql> drop table if exists test.e2;
+mysql> drop table if exists test_new.e2;
+mysql> drop database if exists test_new;
+
+## case 11, create non-partition table and execute exchagne partition immediately
+mysql> create table test.e(id INT NOT NULL,fname VARCHAR(30),lname VARCHAR(30)) PARTITION BY RANGE (id) ( PARTITION p0 VALUES LESS THAN (50),PARTITION p1 VALUES LESS THAN (100),PARTITION p2 VALUES LESS THAN (150), PARTITION p3 VALUES LESS THAN (MAXVALUE));
+mysql> insert into test.e values (1, 'a', 'b'),(108, 'a', 'b');
+# sync the partition table to tiflash
+>> DBGInvoke __refresh_schemas()
+
+mysql> create table test.e2(id int not null,fname varchar(30),lname varchar(30));
+>> DBGInvoke __refresh_schemas()
+mysql> insert into test.e2 values (2, 'a', 'b');
+mysql> set @@tidb_enable_exchange_partition=1; alter table test.e exchange partition p0 with table test.e2
+mysql> alter table test.e add column c1 int;
+mysql> alter table test.e2 add column c2 int;
+mysql> insert into test.e2 values (3, 'a', 'b', 3); insert into test.e values (4, 'a', 'b', 4);
+
+mysql> alter table test.e set tiflash replica 1;
+mysql> alter table test.e2 set tiflash replica 1;
+func> wait_table test e e2
+# ensure tiflash see the column `e.c1` and `e2.c2`
+>> DBGInvoke __refresh_schemas()
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.e order by id;
++-----+-------+-------+------+
+| id  | fname | lname | c1   |
++-----+-------+-------+------+
+|   2 | a     | b     | NULL |
+|   4 | a     | b     |    4 |
+| 108 | a     | b     | NULL |
++-----+-------+-------+------+
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.e2 order by id;
++----+-------+-------+------+
+| id | fname | lname | c2   |
++----+-------+-------+------+
+|  1 | a     | b     | NULL |
+|  3 | a     | b     |    3 |
++----+-------+-------+------+
+
+# ensure the swap out table is not mark as tombstone
+>> DBGInvoke __enable_schema_sync_service('true')
+>> DBGInvoke __gc_schemas(18446744073709551615, 'true')
+>> DBGInvoke __enable_schema_sync_service('false')
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.e order by id;
++-----+-------+-------+------+
+| id  | fname | lname | c1   |
++-----+-------+-------+------+
+|   2 | a     | b     | NULL |
+|   4 | a     | b     |    4 |
+| 108 | a     | b     | NULL |
++-----+-------+-------+------+
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.e2 order by id;
++----+-------+-------+------+
+| id | fname | lname | c2   |
++----+-------+-------+------+
+|  1 | a     | b     | NULL |
+|  3 | a     | b     |    3 |
++----+-------+-------+------+
+
+## case 12, create partition table, non-partition table and execute exchagne partition immediately
+mysql> drop table if exists test.e
+mysql> drop table if exists test.e2
+mysql> create table test.e(id INT NOT NULL,fname VARCHAR(30),lname VARCHAR(30)) PARTITION BY RANGE (id) ( PARTITION p0 VALUES LESS THAN (50),PARTITION p1 VALUES LESS THAN (100),PARTITION p2 VALUES LESS THAN (150), PARTITION p3 VALUES LESS THAN (MAXVALUE));
+mysql> insert into test.e values (1, 'a', 'b'),(108, 'a', 'b');
+mysql> create table test.e2(id int not null,fname varchar(30),lname varchar(30));
+mysql> insert into test.e2 values (2, 'a', 'b');
+mysql> set @@tidb_enable_exchange_partition=1; alter table test.e exchange partition p0 with table test.e2
+mysql> alter table test.e add column c1 int;
+mysql> alter table test.e2 add column c2 int;
+mysql> insert into test.e2 values (3, 'a', 'b', 3); insert into test.e values (4, 'a', 'b', 4);
+
+mysql> alter table test.e set tiflash replica 1;
+mysql> alter table test.e2 set tiflash replica 1;
+func> wait_table test e e2
+# tiflash the final result
+>> DBGInvoke __refresh_schemas()
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.e order by id;
++-----+-------+-------+------+
+| id  | fname | lname | c1   |
++-----+-------+-------+------+
+|   2 | a     | b     | NULL |
+|   4 | a     | b     |    4 |
+| 108 | a     | b     | NULL |
++-----+-------+-------+------+
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.e2 order by id;
++----+-------+-------+------+
+| id | fname | lname | c2   |
++----+-------+-------+------+
+|  1 | a     | b     | NULL |
+|  3 | a     | b     |    3 |
++----+-------+-------+------+
+# ensure the swap out table is not mark as tombstone
+>> DBGInvoke __enable_schema_sync_service('true')
+>> DBGInvoke __gc_schemas(18446744073709551615, 'true')
+>> DBGInvoke __enable_schema_sync_service('false')
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.e order by id;
++-----+-------+-------+------+
+| id  | fname | lname | c1   |
++-----+-------+-------+------+
+|   2 | a     | b     | NULL |
+|   4 | a     | b     |    4 |
+| 108 | a     | b     | NULL |
++-----+-------+-------+------+
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.e2 order by id;
++----+-------+-------+------+
+| id | fname | lname | c2   |
++----+-------+-------+------+
+|  1 | a     | b     | NULL |
+|  3 | a     | b     |    3 |
++----+-------+-------+------+
+
+# cleanup
+mysql> drop table if exists test.e;
+mysql> drop table if exists test.e2;
+mysql> drop table if exists test_new.e2;
+mysql> drop database if exists test_new;
+>> DBGInvoke __enable_schema_sync_service('true')

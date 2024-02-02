@@ -1300,6 +1300,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         settings.bytes_that_rss_larger_than_limit);
 
     /// PageStorage run mode has been determined above
+    global_context->initializeGlobalPageIdAllocator();
     if (!global_context->getSharedContextDisagg()->isDisaggregatedComputeMode())
     {
         global_context->initializeGlobalStoragePoolIfNeed(global_context->getPathPool());

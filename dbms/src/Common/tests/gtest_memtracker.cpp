@@ -39,8 +39,7 @@ TEST_F(MemTrackerTest, testRootAndChild)
 try
 {
     auto root_mem_tracker = MemoryTracker::create();
-    auto child_mem_tracker = MemoryTracker::create(512);
-    child_mem_tracker->setNext(root_mem_tracker.get());
+    auto child_mem_tracker = MemoryTracker::create(512, root_mem_tracker.get());
     // alloc 500
     child_mem_tracker->alloc(500);
     ASSERT_EQ(500, child_mem_tracker->get());
@@ -71,10 +70,8 @@ TEST_F(MemTrackerTest, testRootAndMultipleChild)
 try
 {
     auto root = MemoryTracker::create(512); // limit 512
-    auto child1 = MemoryTracker::create(512); // limit 512
-    auto child2 = MemoryTracker::create(512); // limit 512
-    child1->setNext(root.get());
-    child2->setNext(root.get());
+    auto child1 = MemoryTracker::create(512, root.get()); // limit 512
+    auto child2 = MemoryTracker::create(512, root.get()); // limit 512
     // alloc 500 on child1
     child1->alloc(500);
     ASSERT_EQ(500, child1->get());

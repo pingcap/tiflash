@@ -105,8 +105,10 @@ tipb::TiFlashExecutionInfo MPPTaskStatistics::genTiFlashExecutionInfo()
 
 void MPPTaskStatistics::logTracingJson()
 {
-    LOG_INFO(
+    LOG_IMPL(
         log,
+        /// don't use info log for initializing status since it does not contains too many information
+        status == INITIALIZING ? Poco::Message::PRIO_DEBUG : Poco::Message::PRIO_INFORMATION,
         R"({{"query_tso":{},"task_id":{},"is_root":{},"sender_executor_id":"{}","executors":{},"host":"{}")"
         R"(,"task_init_timestamp":{},"task_start_timestamp":{},"task_end_timestamp":{})"
         R"(,"compile_start_timestamp":{},"compile_end_timestamp":{})"

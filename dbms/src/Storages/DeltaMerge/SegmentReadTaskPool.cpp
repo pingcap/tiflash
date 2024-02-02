@@ -169,6 +169,11 @@ BlockInputStreamPtr SegmentReadTaskPool::buildInputStream(SegmentReadTaskPtr & t
     auto block_size = std::max(
         expected_block_size,
         static_cast<size_t>(dm_context->db_context.getSettingsRef().dt_segment_stable_pack_rows));
+    if (likely(read_mode == ReadMode::Bitmap && !res_group_name.empty()))
+    {
+        auto bytes = t->read_snapshot->estimatedBytesOfInternalColumns();
+        LocalAdmissionController::global_instance->consumeBytesResource(res_group_name, bytesToRU(bytes));
+    }
     stream = t->segment->getInputStream(
         read_mode,
         *dm_context,
@@ -201,7 +206,8 @@ SegmentReadTaskPool::SegmentReadTaskPool(
     AfterSegmentRead after_segment_read_,
     const String & tracing_id,
     bool enable_read_thread_,
-    Int64 num_streams_)
+    Int64 num_streams_,
+    const String & res_group_name_)
     : pool_id(nextPoolId())
     , physical_table_id(physical_table_id_)
     , mem_tracker(current_memory_tracker == nullptr ? nullptr : current_memory_tracker->shared_from_this())
@@ -218,12 +224,14 @@ SegmentReadTaskPool::SegmentReadTaskPool(
     , unordered_input_stream_ref_count(0)
     , exception_happened(false)
     // If the queue is too short, only 1 in the extreme case, it may cause the computation thread
-    // to encounter empty queues frequently, resulting in too much waiting and thread context
-    // switching, so we limit the lower limit to 3, which provides two blocks of buffer space.
-    , block_slot_limit(std::max(num_streams_, 3))
+    // to encounter empty queues frequently, resulting in too much waiting and thread context switching.
+    // We limit the length of block queue to be 1.5 times of `num_streams_`, and in the extreme case,
+    // when `num_streams_` is 1, `block_slot_limit` is at least 2.
+    , block_slot_limit(std::ceil(num_streams_ * 1.5))
     // Limiting the minimum number of reading segments to 2 is to avoid, as much as possible,
     // situations where the computation may be faster and the storage layer may not be able to keep up.
     , active_segment_limit(std::max(num_streams_, 2))
+    , res_group_name(res_group_name_)
 {
     if (tasks_wrapper.empty())
     {
@@ -355,6 +363,9 @@ void SegmentReadTaskPool::pushBlock(Block && block)
 {
     blk_stat.push(block);
     global_blk_stat.push(block);
+    auto bytes = block.bytes();
+    read_bytes_after_last_check += bytes;
+    GET_METRIC(tiflash_storage_read_thread_counter, type_push_block_bytes).Increment(bytes);
     q.push(std::move(block), nullptr);
 }
 
@@ -383,6 +394,12 @@ Int64 SegmentReadTaskPool::getFreeActiveSegmentsUnlock() const
     return active_segment_limit - static_cast<Int64>(active_segment_ids.size());
 }
 
+Int64 SegmentReadTaskPool::getPendingSegmentCount() const
+{
+    std::lock_guard lock(mutex);
+    return tasks_wrapper.getTasks().size();
+}
+
 bool SegmentReadTaskPool::exceptionHappened() const
 {
     return exception_happened.load(std::memory_order_relaxed);
@@ -401,6 +418,65 @@ void SegmentReadTaskPool::setException(const DB::Exception & e)
         exception_happened.store(true, std::memory_order_relaxed);
         q.finish();
     }
+}
+
+static Int64 currentMS()
+{
+    return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch())
+        .count();
+}
+
+static bool checkIsRUExhausted(const String & res_group_name)
+{
+    auto priority = LocalAdmissionController::global_instance->getPriority(res_group_name);
+    if (unlikely(!priority.has_value()))
+    {
+        return false;
+    }
+    return LocalAdmissionController::isRUExhausted(*priority);
+}
+
+bool SegmentReadTaskPool::isRUExhausted()
+{
+    auto res = isRUExhaustedImpl();
+    if (res)
+    {
+        GET_METRIC(tiflash_storage_read_thread_counter, type_ru_exhausted).Increment();
+    }
+    return res;
+}
+
+bool SegmentReadTaskPool::isRUExhaustedImpl()
+{
+    if (unlikely(res_group_name.empty() || LocalAdmissionController::global_instance == nullptr))
+    {
+        return false;
+    }
+
+    // To reduce lock contention in resource control,
+    // check if RU is exhuasted every `bytes_of_one_hundred_ru` or every `100ms`.
+
+    // Fast path.
+    Int64 ms = currentMS();
+    if (read_bytes_after_last_check < bytes_of_one_hundred_ru && ms - last_time_check_ru < check_ru_interval_ms)
+    {
+        return ru_is_exhausted; // Return result of last time.
+    }
+
+    std::lock_guard lock(ru_mu);
+    // If last thread has check is ru exhausted, use the result of last thread.
+    // Attention: `read_bytes_after_last_check` can be written concurrently in `pushBlock`.
+    ms = currentMS();
+    if (read_bytes_after_last_check < bytes_of_one_hundred_ru && ms - last_time_check_ru < check_ru_interval_ms)
+    {
+        return ru_is_exhausted; // Return result of last time.
+    }
+
+    // Check and reset everything.
+    read_bytes_after_last_check = 0;
+    ru_is_exhausted = checkIsRUExhausted(res_group_name);
+    last_time_check_ru = ms;
+    return ru_is_exhausted;
 }
 
 } // namespace DB::DM

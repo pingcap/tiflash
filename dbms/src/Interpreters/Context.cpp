@@ -57,11 +57,14 @@
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h>
 #include <Storages/DeltaMerge/DeltaIndexManager.h>
 #include <Storages/DeltaMerge/Index/MinMaxIndex.h>
-#include <Storages/DeltaMerge/StoragePool.h>
+#include <Storages/DeltaMerge/StoragePool/GlobalPageIdAllocator.h>
+#include <Storages/DeltaMerge/StoragePool/GlobalStoragePool.h>
+#include <Storages/DeltaMerge/StoragePool/StoragePool.h>
 #include <Storages/IStorage.h>
 #include <Storages/KVStore/BackgroundService.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/MarkCache.h>
+#include <Storages/Page/PageConstants.h>
 #include <Storages/Page/V3/PageStorageImpl.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorageService.h>
 #include <Storages/PathCapacityMetrics.h>
@@ -167,6 +170,7 @@ struct ContextShared
     FileProviderPtr file_provider; /// File provider.
     IORateLimiter io_rate_limiter;
     PageStorageRunMode storage_run_mode = PageStorageRunMode::ONLY_V3;
+    DM::GlobalPageIdAllocatorPtr global_page_id_allocator;
     DM::GlobalStoragePoolPtr global_storage_pool;
 
     /// The PS instance available on Write Node.
@@ -1717,6 +1721,22 @@ void Context::setPageStorageRunMode(PageStorageRunMode run_mode) const
 {
     auto lock = getLock();
     shared->storage_run_mode = run_mode;
+}
+
+bool Context::initializeGlobalPageIdAllocator()
+{
+    auto lock = getLock();
+    if (!shared->global_page_id_allocator)
+    {
+        shared->global_page_id_allocator = std::make_shared<DM::GlobalPageIdAllocator>();
+    }
+    return true;
+}
+
+DM::GlobalPageIdAllocatorPtr Context::getGlobalPageIdAllocator() const
+{
+    auto lock = getLock();
+    return shared->global_page_id_allocator;
 }
 
 bool Context::initializeGlobalStoragePoolIfNeed(const PathPool & path_pool)

@@ -471,8 +471,8 @@ void MockRaftStoreProxy::unsafeInvokeForTest(std::function<void(MockRaftStorePro
 void MockRaftStoreProxy::bootstrapWithRegion(
     KVStore & kvs,
     TMTContext & tmt,
-    UInt64 region_id,
-    std::optional<std::pair<std::string, std::string>> maybe_range)
+    RegionID region_id,
+    std::optional<std::pair<std::string, std::string>> maybe_range) NO_THREAD_SAFETY_ANALYSIS
 {
     {
         auto _ = genLockGuard();

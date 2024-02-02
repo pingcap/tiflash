@@ -387,7 +387,7 @@ CATCH
 TEST_F(SegmentOperationTest, SegmentLogicalSplit)
 try
 {
-    reloadWithOptions(
+    buildFirstSegmentWithOptions(
         {.db_settings = {
              .dt_segment_stable_pack_rows = 100,
              .dt_enable_logical_split = true,
@@ -423,7 +423,7 @@ TEST_F(SegmentOperationTest, Issue5570)
 try
 {
     // a smaller pack rows for logical split
-    reloadWithOptions({.db_settings = {.dt_segment_stable_pack_rows = 100}});
+    buildFirstSegmentWithOptions({.db_settings = {.dt_segment_stable_pack_rows = 100}});
 
     writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 200);
     flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
@@ -481,7 +481,7 @@ TEST_F(SegmentOperationTest, DeltaPagesAfterDeltaMerge)
 try
 {
     // a smaller pack rows for logical split
-    reloadWithOptions(
+    buildFirstSegmentWithOptions(
         {.db_settings = {
              .dt_segment_stable_pack_rows = 100,
              .dt_enable_logical_split = true,
@@ -662,7 +662,7 @@ protected:
     void SetUp() override
     {
         SegmentOperationTest::SetUp();
-        reloadWithOptions(
+        buildFirstSegmentWithOptions(
             {.db_settings = {
                  .dt_segment_stable_pack_rows = 100,
                  .dt_enable_logical_split = true,
@@ -739,7 +739,7 @@ class SegmentSplitTest : public SegmentTestBasic
 TEST_F(SegmentSplitTest, AutoModePhycialSplitByDefault)
 try
 {
-    reloadWithOptions({.db_settings = {.dt_segment_stable_pack_rows = 100}});
+    buildFirstSegmentWithOptions({.db_settings = {.dt_segment_stable_pack_rows = 100}});
     ASSERT_FALSE(dm_context->enable_logical_split);
 
     writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 1000);
@@ -757,7 +757,7 @@ TEST_F(SegmentSplitTest, PhysicalSplitMode)
 try
 {
     // Even if we explicitly set enable_logical_split, we will still do physical split in SplitMode::Physical.
-    reloadWithOptions(
+    buildFirstSegmentWithOptions(
         {.db_settings = {
              .dt_segment_stable_pack_rows = 100,
              .dt_enable_logical_split = true,
@@ -816,7 +816,7 @@ CATCH
 TEST_F(SegmentSplitTest, LogicalSplitModeDoesLogicalSplit)
 try
 {
-    reloadWithOptions({.db_settings = {.dt_segment_stable_pack_rows = 100}});
+    buildFirstSegmentWithOptions({.db_settings = {.dt_segment_stable_pack_rows = 100}});
     // Logical split will be performed if we use logical split mode, even when enable_logical_split is false.
     ASSERT_FALSE(dm_context->enable_logical_split);
 
@@ -856,7 +856,7 @@ CATCH
 TEST_F(SegmentSplitTest, LogicalSplitModeOnePackInStable)
 try
 {
-    reloadWithOptions({.db_settings = {.dt_segment_stable_pack_rows = 100}});
+    buildFirstSegmentWithOptions({.db_settings = {.dt_segment_stable_pack_rows = 100}});
 
     writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 50);
     flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
@@ -874,7 +874,7 @@ CATCH
 TEST_F(SegmentSplitTest, LogicalSplitModeOnePackWithHoleInStable)
 try
 {
-    reloadWithOptions({.db_settings = {.dt_segment_stable_pack_rows = 100}});
+    buildFirstSegmentWithOptions({.db_settings = {.dt_segment_stable_pack_rows = 100}});
 
     writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 10, /* at */ 0);
     writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 10, /* at */ 90);
@@ -948,7 +948,7 @@ CATCH
 TEST_F(SegmentSplitAtTest, AutoModeEnableLogicalSplit)
 try
 {
-    reloadWithOptions({.db_settings = {.dt_enable_logical_split = true}});
+    buildFirstSegmentWithOptions({.db_settings = {.dt_enable_logical_split = true}});
 
     writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100, /* at */ 0);
     flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
@@ -985,7 +985,7 @@ CATCH
 TEST_F(SegmentSplitAtTest, PhysicalSplitMode)
 try
 {
-    reloadWithOptions({.db_settings = {.dt_enable_logical_split = true}});
+    buildFirstSegmentWithOptions({.db_settings = {.dt_enable_logical_split = true}});
 
     writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100, /* at */ 0);
     flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);

@@ -347,8 +347,11 @@ try
             write_cf.finish_file(SSTFormatKind::KIND_TABLET);
             write_cf.freeze();
 
-            std::shared_ptr<std::atomic_uint64_t> fpv = std::make_shared<std::atomic_uint64_t>(0);
+            auto fpv = std::make_shared<std::atomic_uint64_t>(0);
+            FailPointHelper::enableFailPoint(FailPoints::force_raise_prehandle_exception, fpv);
+            SCOPE_EXIT({ FailPointHelper::disableFailPoint("force_raise_prehandle_exception"); });
             {
+                LOG_INFO(log, "Try decode when meet the first ErrUpdateSchema");
                 fpv->store(1);
                 FailPointHelper::enableFailPoint(FailPoints::force_raise_prehandle_exception, fpv);
                 auto [kvr1, res]
@@ -358,6 +361,7 @@ try
                 ASSERT_EQ(res.stats.parallels, 4);
             }
             {
+                LOG_INFO(log, "Try decode when always meet ErrUpdateSchema");
                 fpv->store(2);
                 EXPECT_THROW(
                     proxy_instance

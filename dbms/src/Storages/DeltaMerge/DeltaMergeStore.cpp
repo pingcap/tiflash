@@ -260,14 +260,16 @@ DeltaMergeStore::DeltaMergeStore(
     try
     {
         page_storage_run_mode = storage_pool->restore(); // restore from disk
+        // If there is meta of `DELTA_MERGE_FIRST_SEGMENT_ID`, restore all segments
+        // If there is no `DELTA_MERGE_FIRST_SEGMENT_ID`, the first segment will be created by `createFirstSegment` later
         if (const auto first_segment_entry = storage_pool->metaReader()->getPageEntry(DELTA_MERGE_FIRST_SEGMENT_ID);
             first_segment_entry.isValid())
         {
+            // Restore all existing segments
             auto segment_id = DELTA_MERGE_FIRST_SEGMENT_ID;
-
-            // parallel restore segment to speed up
             if (thread_pool)
             {
+                // parallel restore segment to speed up
                 auto wait_group = thread_pool->waitGroup();
                 auto segment_ids = Segment::getAllSegmentIds(*dm_context, segment_id);
                 for (auto & segment_id : segment_ids)
@@ -285,6 +287,7 @@ DeltaMergeStore::DeltaMergeStore(
             }
             else
             {
+                // restore segment one by one
                 while (segment_id != 0)
                 {
                     auto segment = Segment::restoreSegment(log, *dm_context, segment_id);
@@ -612,6 +615,8 @@ DM::WriteResult DeltaMergeStore::write(const Context & db_context, const DB::Set
             {
                 if (segment->writeToCache(*dm_context, block, offset, limit))
                 {
+                    GET_METRIC(tiflash_storage_subtask_throughput_bytes, type_write_to_cache).Increment(alloc_bytes);
+                    GET_METRIC(tiflash_storage_subtask_throughput_rows, type_write_to_cache).Increment(limit);
                     updated_segments.push_back(segment);
                     break;
                 }
@@ -635,6 +640,8 @@ DM::WriteResult DeltaMergeStore::write(const Context & db_context, const DB::Set
                 // Write could fail, because other threads could already updated the instance. Like split/merge, merge delta.
                 if (segment->writeToDisk(*dm_context, write_column_file))
                 {
+                    GET_METRIC(tiflash_storage_subtask_throughput_bytes, type_write_to_disk).Increment(alloc_bytes);
+                    GET_METRIC(tiflash_storage_subtask_throughput_rows, type_write_to_disk).Increment(limit);
                     updated_segments.push_back(segment);
                     break;
                 }
@@ -960,7 +967,8 @@ BlockInputStreams DeltaMergeStore::readRaw(
         after_segment_read,
         req_info,
         enable_read_thread,
-        final_num_stream);
+        final_num_stream,
+        dm_context->scan_context->resource_group_name);
 
     BlockInputStreams res;
     for (size_t i = 0; i < final_num_stream; ++i)
@@ -1062,7 +1070,8 @@ void DeltaMergeStore::readRaw(
         after_segment_read,
         req_info,
         enable_read_thread,
-        final_num_stream);
+        final_num_stream,
+        dm_context->scan_context->resource_group_name);
 
     if (enable_read_thread)
     {
@@ -1196,7 +1205,9 @@ BlockInputStreams DeltaMergeStore::read(
         after_segment_read,
         log_tracing_id,
         enable_read_thread,
-        final_num_stream);
+        final_num_stream,
+        dm_context->scan_context->resource_group_name);
+    dm_context->scan_context->read_mode = read_mode;
 
     BlockInputStreams res;
     for (size_t i = 0; i < final_num_stream; ++i)
@@ -1229,7 +1240,11 @@ BlockInputStreams DeltaMergeStore::read(
         }
         res.push_back(stream);
     }
-    LOG_DEBUG(tracing_logger, "Read create stream done");
+    LOG_INFO(
+        tracing_logger,
+        "Read create stream done, pool_id={} num_streams={}",
+        read_task_pool->pool_id,
+        final_num_stream);
 
     return res;
 }
@@ -1270,7 +1285,7 @@ void DeltaMergeStore::read(
         /*try_split_task =*/!enable_read_thread);
     auto log_tracing_id = getLogTracingId(*dm_context);
     auto tracing_logger = log->getChild(log_tracing_id);
-    LOG_DEBUG(
+    LOG_INFO(
         tracing_logger,
         "Read create segment snapshot done, keep_order={} dt_enable_read_thread={} enable_read_thread={}",
         keep_order,
@@ -1299,7 +1314,9 @@ void DeltaMergeStore::read(
         after_segment_read,
         log_tracing_id,
         enable_read_thread,
-        final_num_stream);
+        final_num_stream,
+        dm_context->scan_context->resource_group_name);
+    dm_context->scan_context->read_mode = read_mode;
 
     if (enable_read_thread)
     {
@@ -1341,7 +1358,11 @@ void DeltaMergeStore::read(
         });
     }
 
-    LOG_DEBUG(tracing_logger, "Read create PipelineExec done");
+    LOG_INFO(
+        tracing_logger,
+        "Read create PipelineExec done, pool_id={} num_streams={}",
+        read_task_pool->pool_id,
+        final_num_stream);
 }
 
 Remote::DisaggPhysicalTableReadSnapshotPtr DeltaMergeStore::writeNodeBuildRemoteReadSnapshot(
@@ -1364,7 +1385,7 @@ Remote::DisaggPhysicalTableReadSnapshotPtr DeltaMergeStore::writeNodeBuildRemote
     SegmentReadTasks tasks
         = getReadTasksByRanges(*dm_context, sorted_ranges, num_streams, read_segments, /* try_split_task */ false);
     GET_METRIC(tiflash_disaggregated_read_tasks_count).Increment(tasks.size());
-    LOG_DEBUG(tracing_logger, "Read create segment snapshot done");
+    LOG_INFO(tracing_logger, "Read create segment snapshot done");
 
     return std::make_unique<Remote::DisaggPhysicalTableReadSnapshot>(
         KeyspaceTableID{keyspace_id, physical_table_id},
@@ -2030,6 +2051,8 @@ SegmentReadTasks DeltaMergeStore::getReadTasksByRanges(
                 ++seg_it;
         }
     }
+
+    // how many segments involved for the given key ranges
     const auto tasks_before_split = tasks.size();
     if (try_split_task)
     {
@@ -2043,6 +2066,12 @@ SegmentReadTasks DeltaMergeStore::getReadTasksByRanges(
         /// Merge continuously ranges.
         task->mergeRanges();
         total_ranges += task->ranges.size();
+    }
+
+    if (dm_context.scan_context)
+    {
+        dm_context.scan_context->num_segments += tasks_before_split;
+        dm_context.scan_context->num_read_tasks += tasks.size();
     }
 
     auto tracing_logger = log->getChild(getLogTracingId(dm_context));
@@ -2098,9 +2127,10 @@ std::pair<SegmentPtr, bool> DeltaMergeStore::getSegmentByStartKey(
         if (create_if_empty && is_empty)
         {
             auto dm_context = newDMContext(global_context, global_context.getSettingsRef());
-            auto page_storage_run_mode = storage_pool->getPageStorageRunMode();
-            createFirstSegment(*dm_context, page_storage_run_mode);
+            createFirstSegment(*dm_context);
         }
+        // The first segment may be created in this thread or another thread,
+        // try again to get the new created segment.
     } while (create_if_empty && is_empty);
 
     if (throw_if_notfound)
@@ -2116,7 +2146,7 @@ std::pair<SegmentPtr, bool> DeltaMergeStore::getSegmentByStartKey(
     }
 }
 
-void DeltaMergeStore::createFirstSegment(DM::DMContext & dm_context, PageStorageRunMode page_storage_run_mode)
+void DeltaMergeStore::createFirstSegment(DM::DMContext & dm_context)
 {
     std::unique_lock lock(read_write_mutex);
     if (!segments.empty())
@@ -2124,22 +2154,10 @@ void DeltaMergeStore::createFirstSegment(DM::DMContext & dm_context, PageStorage
         return;
     }
 
-    auto segment_id = storage_pool->newMetaPageId();
-    if (segment_id != DELTA_MERGE_FIRST_SEGMENT_ID)
-    {
-        RUNTIME_CHECK_MSG(
-            page_storage_run_mode != PageStorageRunMode::ONLY_V2,
-            "The first segment id should be {}, but get {}, run_mode={}",
-            DELTA_MERGE_FIRST_SEGMENT_ID,
-            segment_id,
-            magic_enum::enum_name(page_storage_run_mode));
-
-        // In ONLY_V3 or MIX_MODE, If create a new DeltaMergeStore
-        // Should used fixed DELTA_MERGE_FIRST_SEGMENT_ID to create first segment
-        segment_id = DELTA_MERGE_FIRST_SEGMENT_ID;
-    }
+    const auto segment_id = DELTA_MERGE_FIRST_SEGMENT_ID;
     LOG_INFO(log, "creating the first segment with segment_id={}", segment_id);
 
+    // newSegment will also commit the segment meta to PageStorage
     auto first_segment = Segment::newSegment( //
         log,
         dm_context,

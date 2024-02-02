@@ -27,6 +27,8 @@
 #include <TiDB/Schema/TiDBSchemaManager.h>
 #include <common/logger_useful.h>
 
+#include <optional>
+
 namespace DB
 {
 namespace ErrorCodes
@@ -54,9 +56,10 @@ SchemaSyncService::SchemaSyncService(DB::Context & context_)
 void SchemaSyncService::addKeyspaceGCTasks()
 {
     const auto keyspaces = context.getTMTContext().getStorages().getAllKeyspaces();
-    std::unique_lock<std::shared_mutex> lock(keyspace_map_mutex);
 
+    UInt64 num_add_tasks = 0;
     // Add new sync schema task for new keyspace.
+    std::unique_lock<std::shared_mutex> lock(keyspace_map_mutex);
     for (auto const iter : keyspaces)
     {
         auto keyspace = iter.first;
@@ -75,14 +78,14 @@ void SchemaSyncService::addKeyspaceGCTasks()
                     /// They must be performed synchronously,
                     /// otherwise table may get mis-GC-ed if RECOVER was not properly synced caused by schema sync pause but GC runs too aggressively.
                     // GC safe point must be obtained ahead of syncing schema.
-                    auto gc_safe_point
-                        = PDClientHelper::getGCSafePointWithRetry(context.getTMTContext().getPDClient(), keyspace);
                     stage = "Sync schemas";
                     done_anything = syncSchemas(keyspace);
                     if (done_anything)
                         GET_METRIC(tiflash_schema_trigger_count, type_timer).Increment();
 
                     stage = "GC";
+                    auto gc_safe_point
+                        = PDClientHelper::getGCSafePointWithRetry(context.getTMTContext().getPDClient(), keyspace);
                     done_anything = gc(gc_safe_point, keyspace);
 
                     return done_anything;
@@ -91,18 +94,19 @@ void SchemaSyncService::addKeyspaceGCTasks()
                 {
                     LOG_ERROR(
                         ks_log,
-                        "{} failed by {} \n stack : {}",
+                        "{}, keyspace={} failed by {} \n stack : {}",
                         stage,
+                        keyspace,
                         e.displayText(),
                         e.getStackTrace().toString());
                 }
                 catch (const Poco::Exception & e)
                 {
-                    LOG_ERROR(ks_log, "{} failed by {}", stage, e.displayText());
+                    LOG_ERROR(ks_log, "{}, keyspace={} failed by {}", stage, keyspace, e.displayText());
                 }
                 catch (const std::exception & e)
                 {
-                    LOG_ERROR(ks_log, "{} failed by {}", stage, e.what());
+                    LOG_ERROR(ks_log, "{}, keyspace={} failed by {}", stage, keyspace, e.what());
                 }
                 return false;
             },
@@ -110,15 +114,20 @@ void SchemaSyncService::addKeyspaceGCTasks()
             context.getSettingsRef().ddl_sync_interval_seconds * 1000);
 
         keyspace_handle_map.emplace(keyspace, task_handle);
+        num_add_tasks += 1;
     }
+
+    auto log_level = num_add_tasks > 0 ? Poco::Message::PRIO_INFORMATION : Poco::Message::PRIO_DEBUG;
+    LOG_IMPL(log, log_level, "add sync schema task for keyspaces done, num_add_tasks={}", num_add_tasks);
 }
 
 void SchemaSyncService::removeKeyspaceGCTasks()
 {
     const auto keyspaces = context.getTMTContext().getStorages().getAllKeyspaces();
-    std::unique_lock<std::shared_mutex> lock(keyspace_map_mutex);
 
+    UInt64 num_remove_tasks = 0;
     // Remove stale sync schema task.
+    std::unique_lock<std::shared_mutex> lock(keyspace_map_mutex);
     for (auto keyspace_handle_iter = keyspace_handle_map.begin(); keyspace_handle_iter != keyspace_handle_map.end();
          /*empty*/)
     {
@@ -128,24 +137,29 @@ void SchemaSyncService::removeKeyspaceGCTasks()
             ++keyspace_handle_iter;
             continue;
         }
+
         auto keyspace_log = log->getChild(fmt::format("keyspace={}", keyspace));
         LOG_INFO(keyspace_log, "remove sync schema task");
         background_pool.removeTask(keyspace_handle_iter->second);
         keyspace_handle_iter = keyspace_handle_map.erase(keyspace_handle_iter);
 
         context.getTMTContext().getSchemaSyncerManager()->removeSchemaSyncer(keyspace);
-        PDClientHelper::remove_ks_gc_sp(keyspace);
-
-        keyspace_gc_context.erase(keyspace);
+        PDClientHelper::removeKeyspaceGCSafepoint(keyspace);
+        keyspace_gc_context.erase(keyspace); // clear the last gc safepoint
+        num_remove_tasks += 1;
     }
+
+    auto log_level = num_remove_tasks > 0 ? Poco::Message::PRIO_INFORMATION : Poco::Message::PRIO_DEBUG;
+    LOG_IMPL(log, log_level, "remove sync schema task for keyspaces done, num_remove_tasks={}", num_remove_tasks);
 }
 
-SchemaSyncService::~SchemaSyncService()
+void SchemaSyncService::shutdown()
 {
     if (handle)
     {
         // stop the root handle first
         background_pool.removeTask(handle);
+        handle = nullptr;
     }
 
     for (auto const & iter : keyspace_handle_map)
@@ -154,6 +168,11 @@ SchemaSyncService::~SchemaSyncService()
         background_pool.removeTask(task_handle);
     }
     LOG_INFO(log, "SchemaSyncService stopped");
+}
+
+SchemaSyncService::~SchemaSyncService()
+{
+    shutdown();
 }
 
 bool SchemaSyncService::syncSchemas(KeyspaceID keyspace_id)
@@ -168,12 +187,12 @@ inline std::tuple<bool, Timestamp> isSafeForGC(const DatabaseOrTablePtr & ptr, T
     return {tombstone_ts != 0 && tombstone_ts < gc_safepoint, tombstone_ts};
 }
 
-Timestamp SchemaSyncService::lastGcSafePoint(KeyspaceID keyspace_id) const
+std::optional<Timestamp> SchemaSyncService::lastGcSafePoint(KeyspaceID keyspace_id) const
 {
     std::shared_lock lock(keyspace_map_mutex);
     auto iter = keyspace_gc_context.find(keyspace_id);
     if (iter == keyspace_gc_context.end())
-        return 0;
+        return std::nullopt;
     return iter->second.last_gc_safepoint;
 }
 
@@ -185,12 +204,24 @@ void SchemaSyncService::updateLastGcSafepoint(KeyspaceID keyspace_id, Timestamp 
 
 bool SchemaSyncService::gc(Timestamp gc_safepoint, KeyspaceID keyspace_id)
 {
-    const Timestamp last_gc_safepoint = lastGcSafePoint(keyspace_id);
-    if (last_gc_safepoint != 0 && gc_safepoint == last_gc_safepoint)
+    return gcImpl(gc_safepoint, keyspace_id, /*ignore_remain_regions*/ false);
+}
+
+bool SchemaSyncService::gcImpl(Timestamp gc_safepoint, KeyspaceID keyspace_id, bool ignore_remain_regions)
+{
+    const std::optional<Timestamp> last_gc_safepoint = lastGcSafePoint(keyspace_id);
+    // for new deploy cluster, there is an interval that gc_safepoint return 0, skip it
+    if (gc_safepoint == 0)
+        return false;
+    // the gc safepoint is not changed since last schema gc run, skip it
+    if (last_gc_safepoint.has_value() && gc_safepoint == *last_gc_safepoint)
         return false;
 
+    String last_gc_safepoint_str = "none";
+    if (last_gc_safepoint.has_value())
+        last_gc_safepoint_str = fmt::format("{}", *last_gc_safepoint);
     auto keyspace_log = log->getChild(fmt::format("keyspace={}", keyspace_id));
-    LOG_INFO(keyspace_log, "Schema GC begin, last_safepoint={} safepoint={}", last_gc_safepoint, gc_safepoint);
+    LOG_INFO(keyspace_log, "Schema GC begin, last_safepoint={} safepoint={}", last_gc_safepoint_str, gc_safepoint);
 
     size_t num_tables_removed = 0;
     size_t num_databases_removed = 0;
@@ -221,7 +252,7 @@ bool SchemaSyncService::gc(Timestamp gc_safepoint, KeyspaceID keyspace_id)
                 // it is dropped.
                 storages_to_gc.emplace_back(std::weak_ptr<IManageableStorage>(managed_storage));
                 LOG_INFO(
-                    log,
+                    keyspace_log,
                     "Detect stale table, database_name={} table_name={} database_tombstone={} table_tombstone={} "
                     "safepoint={}",
                     managed_storage->getDatabaseName(),
@@ -232,6 +263,8 @@ bool SchemaSyncService::gc(Timestamp gc_safepoint, KeyspaceID keyspace_id)
             }
         }
     }
+
+    auto schema_sync_manager = tmt_context.getSchemaSyncerManager();
 
     // Physically drop tables
     bool succeeded = true;
@@ -246,25 +279,53 @@ bool SchemaSyncService::gc(Timestamp gc_safepoint, KeyspaceID keyspace_id)
         String table_name = storage->getTableName();
         const auto & table_info = storage->getTableInfo();
 
-        tmt_context.getSchemaSyncerManager()->removeTableID(keyspace_id, table_info.id);
-
         auto canonical_name = [&]() {
-            // DB info maintenance is parallel with GC logic so we can't always assume one specific DB info's existence, thus checking its validity.
-            auto db_info = tmt_context.getSchemaSyncerManager()->getDBInfoByMappedName(keyspace_id, database_name);
-            return db_info ? fmt::format(
-                       "{}, database_id={} table_id={}",
-                       SchemaNameMapper().debugCanonicalName(*db_info, table_info),
-                       db_info->id,
-                       table_info.id)
-                           : fmt::format(
-                               "({}).{}, table_id={}",
-                               database_name,
-                               SchemaNameMapper().debugTableName(table_info),
-                               table_info.id);
+            auto database_id = SchemaNameMapper::tryGetDatabaseID(database_name);
+            if (!database_id.has_value())
+            {
+                return fmt::format("{}.{} table_id={}", database_name, table_name, table_info.id);
+            }
+            return fmt::format(
+                "{}.{} database_id={} table_id={}",
+                database_name,
+                table_name,
+                *database_id,
+                table_info.id);
         }();
+
+        auto & region_table = tmt_context.getRegionTable();
+        if (auto remain_regions = region_table.getRegionIdsByTable(keyspace_id, table_info.id); //
+            !remain_regions.empty())
+        {
+            if (likely(!ignore_remain_regions))
+            {
+                LOG_WARNING(
+                    keyspace_log,
+                    "Physically drop table is skip, regions are not totally removed from TiFlash, remain_region_ids={}"
+                    " table_tombstone={} safepoint={} {}",
+                    remain_regions,
+                    storage->getTombstone(),
+                    gc_safepoint,
+                    canonical_name);
+                continue;
+            }
+            else
+            {
+                LOG_WARNING(
+                    keyspace_log,
+                    "Physically drop table is executed while regions are not totally removed from TiFlash,"
+                    " remain_region_ids={} ignore_remain_regions={} table_tombstone={} safepoint={} {} ",
+                    remain_regions,
+                    ignore_remain_regions,
+                    storage->getTombstone(),
+                    gc_safepoint,
+                    canonical_name);
+            }
+        }
+
         LOG_INFO(
             keyspace_log,
-            "Physically dropping table, table_tombstone={} safepoint={} {}",
+            "Physically drop table begin, table_tombstone={} safepoint={} {}",
             storage->getTombstone(),
             gc_safepoint,
             canonical_name);
@@ -278,7 +339,9 @@ bool SchemaSyncService::gc(Timestamp gc_safepoint, KeyspaceID keyspace_id)
         {
             InterpreterDropQuery drop_interpreter(ast_drop_query, context);
             drop_interpreter.execute();
-            LOG_INFO(keyspace_log, "Physically dropped table {}", canonical_name);
+            LOG_INFO(keyspace_log, "Physically drop table {} end", canonical_name);
+            // remove the id mapping after physically dropped
+            schema_sync_manager->removeTableID(keyspace_id, table_info.id);
             ++num_tables_removed;
         }
         catch (DB::Exception & e)
@@ -322,7 +385,7 @@ bool SchemaSyncService::gc(Timestamp gc_safepoint, KeyspaceID keyspace_id)
             continue;
         }
 
-        LOG_INFO(keyspace_log, "Physically dropping database, database_tombstone={} {}", db->getTombstone(), db_name);
+        LOG_INFO(keyspace_log, "Physically drop database begin, database_tombstone={} {}", db->getTombstone(), db_name);
         auto drop_query = std::make_shared<ASTDropQuery>();
         drop_query->database = db_name;
         drop_query->if_exists = true;
@@ -332,7 +395,7 @@ bool SchemaSyncService::gc(Timestamp gc_safepoint, KeyspaceID keyspace_id)
         {
             InterpreterDropQuery drop_interpreter(ast_drop_query, context);
             drop_interpreter.execute();
-            LOG_INFO(keyspace_log, "Physically dropped database {}, safepoint={}", db_name, gc_safepoint);
+            LOG_INFO(keyspace_log, "Physically drop database {} end, safepoint={}", db_name, gc_safepoint);
             ++num_databases_removed;
         }
         catch (DB::Exception & e)
@@ -363,7 +426,7 @@ bool SchemaSyncService::gc(Timestamp gc_safepoint, KeyspaceID keyspace_id)
         LOG_INFO(
             keyspace_log,
             "Schema GC meet error, will try again later, last_safepoint={} safepoint={}",
-            last_gc_safepoint,
+            last_gc_safepoint_str,
             gc_safepoint);
     }
 

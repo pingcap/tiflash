@@ -122,8 +122,9 @@ DM::Remote::RNReadTaskPtr StorageDisaggregated::buildReadTaskWithBackoff(const C
 {
     using namespace pingcap;
 
-    auto scan_context = std::make_shared<DM::ScanContext>();
-    context.getDAGContext()->scan_context_map[table_scan.getTableScanExecutorID()] = scan_context;
+    auto * dag_context = context.getDAGContext();
+    auto scan_context = std::make_shared<DM::ScanContext>(dag_context->getResourceGroupName());
+    dag_context->scan_context_map[table_scan.getTableScanExecutorID()] = scan_context;
 
     DM::Remote::RNReadTaskPtr read_task;
 

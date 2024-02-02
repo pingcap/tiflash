@@ -36,7 +36,7 @@ mysql> truncate table test.t;
 
 mysql> select * from test.t;
 
->> select tidb_database,tidb_name from system.tables where tidb_database = 'test' and tidb_name='t' and is_tombstone = 0
+>> select tidb_database,tidb_name,tidb_table_id,is_tombstone from system.tables where tidb_database = 'test' and tidb_name='t' and is_tombstone = 0
 
 
 mysql> insert into test.t values (2, 2);
