@@ -63,8 +63,8 @@ static inline bool atomicReadWrite(
     const RegionPtrWithBlock & region,
     ReadList & data_list_read,
     bool force_decode,
-    DM::WriteResult & write_result
-) {
+    DM::WriteResult & write_result)
+{
     UInt64 region_decode_cost = -1, write_part_cost = -1;
     /// Get storage based on table ID.
     auto storage = tmt.getStorages().get(keyspace_id, table_id);

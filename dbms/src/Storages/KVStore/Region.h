@@ -20,6 +20,7 @@
 #include <Storages/KVStore/MultiRaft/RegionData.h>
 #include <Storages/KVStore/MultiRaft/RegionMeta.h>
 #include <Storages/KVStore/MultiRaft/RegionSerde.h>
+#include <Storages/KVStore/MultiRaft/Spill/Spill.h>
 #include <common/logger_useful.h>
 
 #include <shared_mutex>
@@ -120,6 +121,7 @@ public:
 
 public: // Simple Read and Write
     explicit Region(RegionMeta && meta_, const TiFlashRaftProxyHelper *);
+    Region() = delete;
     ~Region();
 
     void insert(const std::string & cf, TiKVKey && key, TiKVValue && value, DupCheck mode = DupCheck::Deny);
@@ -253,7 +255,11 @@ public: // Raft Read and Write
     void beforePrehandleSnapshot(uint64_t region_id, std::optional<uint64_t> deadline_index);
     void afterPrehandleSnapshot(int64_t ongoing);
 
-    Region() = delete;
+public: // Spill
+    SpilledMemtable spillDefaultCf(const TiKVKey & start_ts, const RegionTaskLock &);
+
+    // Don't require Region task lock
+    void ingestSpilledFile(const RegionRange & region_range, Timestamp start_ts, SpillFileVersion spill_file_version);
 
 private:
     friend class RegionRaftCommandDelegate;
