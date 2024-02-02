@@ -22,6 +22,7 @@
 namespace DB
 {
 
+// << PK, write_type, commit_ts, value >>
 using RegionDataReadInfo = std::tuple<RawTiDBPK, UInt8, Timestamp, std::shared_ptr<const TiKVValue>>;
 
 using RegionDataReadInfoList = std::vector<RegionDataReadInfo>;
