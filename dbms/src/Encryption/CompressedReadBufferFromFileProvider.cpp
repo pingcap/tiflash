@@ -53,8 +53,12 @@ CompressedReadBufferFromFileProvider<has_checksum>::CompressedReadBufferFromFile
     const ReadLimiterPtr & read_limiter_,
     size_t buf_size)
     : CompressedSeekableReaderBuffer()
-    , p_file_in(
-          ReadBufferFromRandomAccessFileBuilder::buildPtr(file_provider, path, encryption_path, buf_size, read_limiter_))
+    , p_file_in(ReadBufferFromRandomAccessFileBuilder::buildPtr(
+          file_provider,
+          path,
+          encryption_path,
+          buf_size,
+          read_limiter_))
     , file_in(*p_file_in)
 {
     this->compressed_in = &file_in;
