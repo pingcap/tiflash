@@ -303,7 +303,7 @@ public:
      * Note that only the column id and type is valid.
      * @return All columns
      */
-    ColumnDefines getColumnDefines()
+    ColumnDefines getColumnDefines(bool sort_by_id = true)
     {
         ColumnDefines results{};
         results.reserve(this->column_stats.size());
@@ -311,6 +311,10 @@ public:
         {
             results.emplace_back(cs.first, "", cs.second.type);
         }
+        if (sort_by_id)
+            std::sort(results.begin(), results.end(), [](const auto & lhs, const auto & rhs) {
+                return lhs.id < rhs.id;
+            });
         return results;
     }
 

@@ -1018,7 +1018,7 @@ void SchemaBuilder<Getter, NameMapper>::applyDropDatabaseByName(const String & d
     // 2. Use the same GC safe point as TiDB.
     // In such way our database (and its belonging tables) will be GC-ed later than TiDB, which is safe and correct.
     auto & tmt_context = context.getTMTContext();
-    auto tombstone = tmt_context.getPDClient()->getTS();
+    auto tombstone = PDClientHelper::getTSO(tmt_context.getPDClient(), PDClientHelper::get_tso_maxtime);
     db->alterTombstone(context, tombstone, /*new_db_info*/ nullptr); // keep the old db_info
 
     LOG_INFO(log, "Tombstone database end, db_name={} tombstone={}", db_name, tombstone);
@@ -1143,7 +1143,7 @@ void SchemaBuilder<Getter, NameMapper>::applyCreateStorageInstance(
     UInt64 tombstone_ts = 0;
     if (is_tombstone)
     {
-        tombstone_ts = context.getTMTContext().getPDClient()->getTS();
+        tombstone_ts = PDClientHelper::getTSO(context.getTMTContext().getPDClient(), PDClientHelper::get_tso_maxtime);
     }
 
     String stmt = createTableStmt(keyspace_id, database_id, *table_info, name_mapper, tombstone_ts, log);
@@ -1231,7 +1231,7 @@ void SchemaBuilder<Getter, NameMapper>::applyDropPhysicalTable(
         table_id,
         action);
 
-    const UInt64 tombstone_ts = tmt_context.getPDClient()->getTS();
+    const UInt64 tombstone_ts = PDClientHelper::getTSO(tmt_context.getPDClient(), PDClientHelper::get_tso_maxtime);
     // TODO:try to optimize alterCommands
     AlterCommands commands;
     {

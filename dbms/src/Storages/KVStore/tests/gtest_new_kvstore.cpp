@@ -704,7 +704,7 @@ CATCH
 TEST_F(RegionKVStoreTest, LearnerRead)
 try
 {
-    auto ctx = TiFlashTestEnv::getGlobalContext();
+    auto & ctx = TiFlashTestEnv::getGlobalContext();
     const RegionID region_id = 1;
     KVStore & kvs = getKVS();
     ctx.getTMTContext().debugSetKVStore(kvstore);
@@ -787,7 +787,7 @@ CATCH
 TEST_F(RegionKVStoreTest, KVStoreApplyEmptySnapshot)
 try
 {
-    auto ctx = TiFlashTestEnv::getGlobalContext();
+    auto & ctx = TiFlashTestEnv::getGlobalContext();
     proxy_instance->cluster_ver = RaftstoreVer::V2;
     UInt64 region_id = 1;
     TableID table_id;
@@ -834,7 +834,7 @@ void RegionKVStoreTest::dropTable(Context & ctx, TableID table_id)
 TEST_F(RegionKVStoreTest, KVStoreApplyWriteToNonExistStorage)
 try
 {
-    auto ctx = TiFlashTestEnv::getGlobalContext();
+    auto & ctx = TiFlashTestEnv::getGlobalContext();
     proxy_instance->cluster_ver = RaftstoreVer::V2;
     RegionID region_id = 2;
     initStorages();
