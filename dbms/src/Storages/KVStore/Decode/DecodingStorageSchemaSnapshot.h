@@ -156,7 +156,7 @@ struct DecodingStorageSchemaSnapshot
 using DecodingStorageSchemaSnapshotPtr = std::shared_ptr<DecodingStorageSchemaSnapshot>;
 using DecodingStorageSchemaSnapshotConstPtr = std::shared_ptr<const DecodingStorageSchemaSnapshot>;
 
-Block createBlockSortByColumnID(DecodingStorageSchemaSnapshotConstPtr schema_snapshot);
+Block createBlockSortByColumnID(DecodingStorageSchemaSnapshotConstPtr schema_snapshot, bool has_version_column = true);
 
 void clearBlockData(Block & block);
 

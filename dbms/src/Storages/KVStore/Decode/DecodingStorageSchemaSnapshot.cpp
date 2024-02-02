@@ -32,15 +32,23 @@ TMTPKType getTMTPKType(const IDataType & rhs)
     return TMTPKType::UNSPECIFIED;
 }
 
-Block createBlockSortByColumnID(DecodingStorageSchemaSnapshotConstPtr schema_snapshot)
+Block createBlockSortByColumnID(DecodingStorageSchemaSnapshotConstPtr schema_snapshot, bool has_version_column)
 {
+    UNUSED(has_version_column);
     Block block;
     for (auto iter = schema_snapshot->sorted_column_id_with_pos.begin();
          iter != schema_snapshot->sorted_column_id_with_pos.end();
          iter++)
     {
+        // col_id == cd.id
+        // Including some internal columns:
+        // - (VersionColumnID, _INTERNAL_VERSION, u64)
+        // - (DelMarkColumnID, _INTERNAL_DELMARK, u8)
+        // - (TiDBPkColumnID, _tidb_rowid, i64)
         auto col_id = iter->first;
         auto & cd = (*(schema_snapshot->column_defines))[iter->second];
+        if (!has_version_column && cd.id == VersionColumnID)
+            continue;
         block.insert({cd.type->createColumn(), cd.type, cd.name, col_id});
     }
     return block;

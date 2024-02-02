@@ -201,7 +201,8 @@ public:
 
     std::pair<DB::DecodingStorageSchemaSnapshotConstPtr, BlockUPtr> getSchemaSnapshotAndBlockForDecoding(
         const TableStructureLockHolder & table_structure_lock,
-        bool /* need_block */) override;
+        bool need_block,
+        bool has_version_column) override;
 
     void releaseDecodingBlock(Int64 block_decoding_schema_epoch, BlockUPtr block) override;
 

@@ -38,8 +38,8 @@ RegionBlockReader::RegionBlockReader(DecodingStorageSchemaSnapshotConstPtr schem
     : schema_snapshot{std::move(schema_snapshot_)}
 {}
 
-
-bool RegionBlockReader::read(Block & block, const RegionDataReadInfoList & data_list, bool force_decode)
+template <typename ReadList>
+bool RegionBlockReader::read(Block & block, const ReadList & data_list, bool force_decode)
 {
     try
     {
@@ -105,8 +105,23 @@ bool RegionBlockReader::read(Block & block, const RegionDataReadInfoList & data_
     }
 }
 
-template <TMTPKType pk_type>
-bool RegionBlockReader::readImpl(Block & block, const RegionDataReadInfoList & data_list, bool force_decode)
+template bool RegionBlockReader::read<RegionDataReadInfoList>(
+    Block & block,
+    const RegionDataReadInfoList & data_list,
+    bool force_decode);
+
+template <typename ReadList>
+static size_t getExpectedReservedColCount()
+{
+    if constexpr (std::is_same_v<ReadList, RegionDataReadInfoList>)
+    {
+        return 3;
+    }
+    return 2;
+}
+
+template <TMTPKType pk_type, typename ReadList>
+bool RegionBlockReader::readImpl(Block & block, const ReadList & data_list, bool force_decode)
 {
     if (unlikely(block.columns() != schema_snapshot->column_defines->size()))
         throw Exception("block structure doesn't match schema_snapshot.", ErrorCodes::LOGICAL_ERROR);
@@ -150,15 +165,15 @@ bool RegionBlockReader::readImpl(Block & block, const RegionDataReadInfoList & d
         column_ids_iter++;
     }
     // extra handle, del, version must exists
-    constexpr size_t MustHaveColCnt = 3; // NOLINT(readability-identifier-naming)
-    if (unlikely(next_column_pos != MustHaveColCnt))
-        throw Exception("del, version column must exist before all other visible columns.", ErrorCodes::LOGICAL_ERROR);
+    if (unlikely(next_column_pos != getExpectedReservedColCount<ReadList>()))
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "del, version column mismatch, actual_size={}", next_column_pos);
+    // constexpr bool has_version_col = std::is_same_v<ReadList, RegionDataReadInfoList>();
 
     ColumnUInt8::Container & delmark_data = raw_delmark_col->getData();
     ColumnUInt64::Container & version_data = raw_version_col->getData();
     delmark_data.reserve(data_list.size());
     version_data.reserve(data_list.size());
-    bool need_decode_value = block.columns() > MustHaveColCnt;
+    bool need_decode_value = block.columns() > getExpectedReservedColCount<ReadList>();
     if (need_decode_value)
     {
         size_t expected_rows = data_list.size();

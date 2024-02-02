@@ -610,7 +610,8 @@ RegionPtrWithBlock::CachePtr GenRegionPreDecodeBlockData(const RegionPtr & regio
         }
 
         DecodingStorageSchemaSnapshotConstPtr decoding_schema_snapshot;
-        std::tie(decoding_schema_snapshot, std::ignore) = storage->getSchemaSnapshotAndBlockForDecoding(lock, false);
+        std::tie(decoding_schema_snapshot, std::ignore)
+            = storage->getSchemaSnapshotAndBlockForDecoding(lock, false, true);
         res_block = createBlockSortByColumnID(decoding_schema_snapshot);
         auto reader = RegionBlockReader(decoding_schema_snapshot);
         return reader.read(res_block, *data_list_read, force_decode);

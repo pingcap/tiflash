@@ -53,6 +53,7 @@ extern const int ILLFORMAT_RAFT_ROW;
 extern const int TABLE_IS_DROPPED;
 } // namespace ErrorCodes
 
+// TODO Fix too many arguments
 template <typename ReadList>
 static inline bool atomicReadWrite(
     const LoggerPtr & log,
@@ -128,7 +129,7 @@ static inline bool atomicReadWrite(
     {
         LOG_TRACE(log, "begin to decode keyspace={} table_id={} region_id={}", keyspace_id, table_id, region->id());
         DecodingStorageSchemaSnapshotConstPtr decoding_schema_snapshot;
-        std::tie(decoding_schema_snapshot, block_ptr) = storage->getSchemaSnapshotAndBlockForDecoding(lock, true);
+        std::tie(decoding_schema_snapshot, block_ptr) = storage->getSchemaSnapshotAndBlockForDecoding(lock, true, true);
         block_decoding_schema_epoch = decoding_schema_snapshot->decoding_schema_epoch;
 
         auto reader = RegionBlockReader(decoding_schema_snapshot);
@@ -479,7 +480,7 @@ AtomicGetStorageSchema(const RegionPtr & region, TMTContext & tmt)
         auto table_lock = storage->lockStructureForShare(getThreadNameAndID());
         dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
         // only dt storage engine support `getSchemaSnapshotAndBlockForDecoding`, other engine will throw exception
-        std::tie(schema_snapshot, std::ignore) = storage->getSchemaSnapshotAndBlockForDecoding(table_lock, false);
+        std::tie(schema_snapshot, std::ignore) = storage->getSchemaSnapshotAndBlockForDecoding(table_lock, false, true);
         std::tie(std::ignore, drop_lock) = std::move(table_lock).release();
         return true;
     };

@@ -35,11 +35,12 @@ public:
     ///
     /// `RegionBlockReader::read` is the common routine used by both 'flush' and 'read' processes of Delta-Tree engine,
     /// which will use carefully adjusted 'force_decode' with appropriate error handling/retry to get what they want.
-    bool read(Block & block, const RegionDataReadInfoList & data_list, bool force_decode);
+    template <typename ReadList>
+    bool read(Block & block, const ReadList & data_list, bool force_decode);
 
 private:
-    template <TMTPKType pk_type>
-    bool readImpl(Block & block, const RegionDataReadInfoList & data_list, bool force_decode);
+    template <TMTPKType pk_type, typename ReadList>
+    bool readImpl(Block & block, const ReadList & data_list, bool force_decode);
 
 private:
     DecodingStorageSchemaSnapshotConstPtr schema_snapshot;
