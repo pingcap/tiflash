@@ -729,37 +729,34 @@ private:
                     continue;
                 }
             }
-
             const auto & json_val = json_source->getWhole();
             assert(json_val.size > 0);
             JsonBinary json_binary(json_val.data[0], StringRef(&json_val.data[1], json_val.size - 1));
-            if (json_binary.getType() == JsonBinary::TYPE_CODE_ARRAY
-                || json_binary.getType() == JsonBinary::TYPE_CODE_OBJECT)
-            {
-                if constexpr (is_path_nullable)
-                {
-                    if (null_map_path[row])
-                    {
-                        FINISH_PER_ROW
-                        null_map_to[row] = 1;
-                        continue;
-                    }
-                }
 
-                const auto & path_val = path_source->getWhole();
-                auto path_expr_container_vec = buildPathExprContainer(StringRef{path_val.data, path_val.size});
-                auto extract_json_binaries = json_binary.extract(path_expr_container_vec);
-                if (extract_json_binaries.empty())
+            if constexpr (is_path_nullable)
+            {
+                if (null_map_path[row])
                 {
                     FINISH_PER_ROW
                     null_map_to[row] = 1;
                     continue;
                 }
-                const auto & extract_json_binary = extract_json_binaries.back();
-                if (extract_json_binary.getType() == JsonBinary::TYPE_CODE_ARRAY
-                    || extract_json_binary.getType() == JsonBinary::TYPE_CODE_OBJECT)
-                    data_to[row] = extract_json_binary.getElementCount();
             }
+            const auto & path_val = path_source->getWhole();
+            auto path_expr_container_vec = buildPathExprContainer(StringRef{path_val.data, path_val.size});
+
+            auto extract_json_binaries = json_binary.extract(path_expr_container_vec);
+            if (extract_json_binaries.empty())
+            {
+                FINISH_PER_ROW
+                null_map_to[row] = 1;
+                continue;
+            }
+            assert(extract_json_binaries.size() == 1);
+            const auto & extract_json_binary = extract_json_binaries.back();
+            if (extract_json_binary.getType() == JsonBinary::TYPE_CODE_ARRAY
+                || extract_json_binary.getType() == JsonBinary::TYPE_CODE_OBJECT)
+                data_to[row] = extract_json_binary.getElementCount();
             FINISH_PER_ROW
         }
 #undef FINISH_PER_ROW
@@ -798,21 +795,18 @@ private:
             const auto & json_val = json_source->getWhole();
             assert(json_val.size > 0);
             JsonBinary json_binary(json_val.data[0], StringRef(&json_val.data[1], json_val.size - 1));
-            if (json_binary.getType() == JsonBinary::TYPE_CODE_ARRAY
-                || json_binary.getType() == JsonBinary::TYPE_CODE_OBJECT)
+            auto extract_json_binaries = json_binary.extract(path_expr_container_vec);
+            if (extract_json_binaries.empty())
             {
-                auto extract_json_binaries = json_binary.extract(path_expr_container_vec);
-                if (extract_json_binaries.empty())
-                {
-                    json_source->next();
-                    null_map_to[row] = 1;
-                    continue;
-                }
-                const auto & extract_json_binary = extract_json_binaries.back();
-                if (extract_json_binary.getType() == JsonBinary::TYPE_CODE_ARRAY
-                    || extract_json_binary.getType() == JsonBinary::TYPE_CODE_OBJECT)
-                    data_to[row] = extract_json_binary.getElementCount();
+                json_source->next();
+                null_map_to[row] = 1;
+                continue;
             }
+            assert(extract_json_binaries.size() == 1);
+            const auto & extract_json_binary = extract_json_binaries.back();
+            if (extract_json_binary.getType() == JsonBinary::TYPE_CODE_ARRAY
+                || extract_json_binary.getType() == JsonBinary::TYPE_CODE_OBJECT)
+                data_to[row] = extract_json_binary.getElementCount();
             json_source->next();
         }
 

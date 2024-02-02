@@ -95,18 +95,18 @@ try
     };
 
     // int
-    execute_assert("0", "$.a", 1);
-    execute_assert("1", "$.a", 1);
-    execute_assert("-1", "$.a", 1);
+    execute_assert("0", "$", 1);
+    execute_assert("1", "$", 1);
+    execute_assert("-1", "$", 1);
     // double
-    execute_assert("1.1111", "$.a", 1);
-    execute_assert("-1.1111", "$.a", 1);
+    execute_assert("1.1111", "$", 1);
+    execute_assert("-1.1111", "$", 1);
     // bool
-    execute_assert("true", "$.a", 1);
-    execute_assert("false", "$.a", 1);
+    execute_assert("true", "$", 1);
+    execute_assert("false", "$", 1);
     // string
-    execute_assert("\"sdhfgjksdahfjksdhfjhsdjkfhjskdhfkjsdhfjksdhfkj\"", "$.a", 1);
-    execute_assert("\"\"", "$.a", 1);
+    execute_assert("\"sdhfgjksdahfjksdhfjhsdjkfhjskdhfkjsdhfjksdhfkj\"", "$", 1);
+    execute_assert("\"\"", "$", 1);
 
     // array
     execute_assert("[1, 2, 3]", "$.a", {});
@@ -149,17 +149,17 @@ try
 
     // two arg
     ASSERT_COLUMN_EQ(int_column0, executeFunction(func_name, json_column, path_column));
-    ASSERT_COLUMN_EQ(null_int_column, executeFunction(func_name, json_column, only_null_const));
-    ASSERT_COLUMN_EQ(null_int_column, executeFunction(func_name, json_column, null_string_const));
+    ASSERT_COLUMN_EQ(null_int_const, executeFunction(func_name, json_column, only_null_const));
+    ASSERT_COLUMN_EQ(null_int_const, executeFunction(func_name, json_column, null_string_const));
     ASSERT_COLUMN_EQ(null_int_column, executeFunction(func_name, json_column, null_string_column));
     ASSERT_COLUMN_EQ(int_column0, executeFunction(func_name, json_column2, path_column));
-    ASSERT_COLUMN_EQ(null_int_column, executeFunction(func_name, json_column2, only_null_const));
-    ASSERT_COLUMN_EQ(null_int_column, executeFunction(func_name, json_column2, null_string_const));
+    ASSERT_COLUMN_EQ(null_int_const, executeFunction(func_name, json_column2, only_null_const));
+    ASSERT_COLUMN_EQ(null_int_const, executeFunction(func_name, json_column2, null_string_const));
     ASSERT_COLUMN_EQ(null_int_column, executeFunction(func_name, json_column2, null_string_column));
     ASSERT_COLUMN_EQ(int_column1, executeFunction(func_name, json_column3, path_column));
-    ASSERT_COLUMN_EQ(int_column1, executeFunction(func_name, json_column3, only_null_const));
-    ASSERT_COLUMN_EQ(int_column1, executeFunction(func_name, json_column3, null_string_const));
-    ASSERT_COLUMN_EQ(int_column1, executeFunction(func_name, json_column3, null_string_column));
+    ASSERT_COLUMN_EQ(null_int_const, executeFunction(func_name, json_column3, only_null_const));
+    ASSERT_COLUMN_EQ(null_int_const, executeFunction(func_name, json_column3, null_string_const));
+    ASSERT_COLUMN_EQ(null_int_column, executeFunction(func_name, json_column3, null_string_column));
     ASSERT_COLUMN_EQ(null_int_const, executeFunction(func_name, only_null_const, path_column));
     ASSERT_COLUMN_EQ(null_int_const, executeFunction(func_name, only_null_const, only_null_const));
     ASSERT_COLUMN_EQ(null_int_const, executeFunction(func_name, only_null_const, null_string_const));
