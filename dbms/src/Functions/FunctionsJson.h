@@ -563,7 +563,7 @@ public:
     {
         size_t rows = block.rows();
         auto & res_col = block.getByPosition(result).column;
-        /// First check if JsonObject is only null, if so, result is null, no need to parse path exprs even if path is
+        /// First check if Json object is only null.
         const auto * json_column = block.getByPosition(arguments[0]).column.get();
         if unlikely (json_column->onlyNull())
         {
@@ -588,21 +588,20 @@ public:
         else
         {
             const auto * path_column = block.getByPosition(arguments[1]).column.get();
+            /// First check if path expr is only null.
+            if unlikely (path_column->onlyNull())
+            {
+                res_col = block.getByPosition(result).type->createColumnConst(rows, Null());
+                return;
+            }
+
             if (json_column->isColumnNullable())
             {
                 const auto & json_column_nullable = static_cast<const ColumnNullable &>(*json_column);
-                if (path_column->onlyNull())
-                {
-                    res_col = doExecuteConstForTwoArgs<true, true>(
-                        json_source,
-                        json_column_nullable.getNullMapData(),
-                        nullptr,
-                        rows);
-                }
-                else if (path_column->isColumnConst())
+                if (path_column->isColumnConst())
                 {
                     auto path_source = createDynamicStringSource(*nested_block.getByPosition(arguments[1]).column);
-                    res_col = doExecuteConstForTwoArgs<true, false>(
+                    res_col = doExecuteConstForTwoArgs<true>(
                         json_source,
                         json_column_nullable.getNullMapData(),
                         path_source,
@@ -634,14 +633,10 @@ public:
             }
             else
             {
-                if (path_column->onlyNull())
-                {
-                    res_col = doExecuteConstForTwoArgs<false, true>(json_source, {}, nullptr, rows);
-                }
-                else if (path_column->isColumnConst())
+                if (path_column->isColumnConst())
                 {
                     auto path_source = createDynamicStringSource(*nested_block.getByPosition(arguments[1]).column);
-                    res_col = doExecuteConstForTwoArgs<false, false>(json_source, {}, path_source, rows);
+                    res_col = doExecuteConstForTwoArgs<false>(json_source, {}, path_source, rows);
                 }
                 else
                 {
@@ -772,7 +767,7 @@ private:
         return ColumnNullable::create(std::move(col_to), std::move(col_null_map));
     }
 
-    template <bool is_json_nullable, bool is_path_only_null>
+    template <bool is_json_nullable>
     static MutableColumnPtr doExecuteConstForTwoArgs(
         const std::unique_ptr<IStringSource> & json_source,
         const NullMap & null_map_json,
@@ -780,12 +775,9 @@ private:
         size_t rows)
     {
         std::vector<JsonPathExprRefContainerPtr> path_expr_container_vec;
-        if constexpr (!is_path_only_null)
-        {
-            assert(path_source);
-            const auto & path_val = path_source->getWhole();
-            path_expr_container_vec = buildPathExprContainer(StringRef{path_val.data, path_val.size});
-        }
+        assert(path_source);
+        const auto & path_val = path_source->getWhole();
+        path_expr_container_vec = buildPathExprContainer(StringRef{path_val.data, path_val.size});
 
         auto col_to = ColumnUInt64::create(rows, 1);
         auto & data_to = col_to->getData();
@@ -809,13 +801,6 @@ private:
             if (json_binary.getType() == JsonBinary::TYPE_CODE_ARRAY
                 || json_binary.getType() == JsonBinary::TYPE_CODE_OBJECT)
             {
-                if constexpr (is_path_only_null)
-                {
-                    json_source->next();
-                    null_map_to[row] = 1;
-                    continue;
-                }
-
                 auto extract_json_binaries = json_binary.extract(path_expr_container_vec);
                 if (extract_json_binaries.empty())
                 {
