@@ -444,7 +444,10 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       "Total number of keys processed in some types of Raft commands",                                                              \
       Counter,                                                                                                                      \
       F(type_write_put, {"type", "write_put"}),                                                                                     \
+      F(type_lock_put, {"type", "lock_put"}),                                                                                       \
+      F(type_default_put, {"type", "default_put"}),                                                                                 \
       F(type_write_del, {"type", "write_del"}),                                                                                     \
+      F(type_lock_del, {"type", "lock_del"}),                                                                                       \
       F(type_apply_snapshot, {"type", "apply_snapshot"}),                                                                           \
       F(type_ingest_sst, {"type", "ingest_sst"}))                                                                                   \
     M(tiflash_raft_apply_write_command_duration_seconds,                                                                            \
