@@ -230,7 +230,7 @@ private:
             {
                 auto rowkey_value = rowkey_column.getRowKeyValue(i);
                 auto version = version_column[i];
-                int cmp_result = compare(rowkey_value, last_value_ref);
+                int cmp_result = rowkey_value <=> last_value_ref;
                 if (cmp_result < 0 || (cmp_result == 0 && version < last_version))
                 {
                     ProfileEvents::increment(ProfileEvents::DTDeltaIndexError);
