@@ -53,138 +53,149 @@ extern const int ILLFORMAT_RAFT_ROW;
 extern const int TABLE_IS_DROPPED;
 } // namespace ErrorCodes
 
+template <typename ReadList>
+static inline bool atomicReadWrite(
+    const LoggerPtr & log,
+    const Context & context,
+    const TMTContext & tmt,
+    KeyspaceID keyspace_id,
+    TableID table_id,
+    const RegionPtrWithBlock & region,
+    ReadList & data_list_read,
+    bool force_decode,
+    DM::WriteResult & write_result
+) {
+    UInt64 region_decode_cost = -1, write_part_cost = -1;
+    /// Get storage based on table ID.
+    auto storage = tmt.getStorages().get(keyspace_id, table_id);
+    if (storage == nullptr)
+    {
+        // - force_decode == false and storage not exist, let upper level sync schema and retry.
+        // - force_decode == true and storage not exist. It could be the RaftLog or Snapshot comes
+        //   after the schema is totally exceed the GC safepoint. And TiFlash know nothing about
+        //   the schema. We can only throw away those committed rows.
+        return force_decode;
+    }
 
+    /// Get a structure read lock throughout decode, during which schema must not change.
+    TableStructureLockHolder lock;
+    try
+    {
+        lock = storage->lockStructureForShare(getThreadNameAndID());
+    }
+    catch (DB::Exception & e)
+    {
+        // If the storage is physical dropped (but not removed from `ManagedStorages`) when we want to write raft data into it, consider the write done.
+        if (e.code() == ErrorCodes::TABLE_IS_DROPPED)
+            return true;
+        else
+            throw;
+    }
+
+    Block block;
+    bool need_decode = true;
+
+    // try to use block cache if exists
+    if (region.pre_decode_cache)
+    {
+        auto schema_version = storage->getTableInfo().schema_version;
+        std::stringstream ss;
+        region.pre_decode_cache->toString(ss);
+        LOG_DEBUG(
+            log,
+            "{} got pre-decode cache {}, storage schema version: {}",
+            region->toString(),
+            ss.str(),
+            schema_version);
+
+        if (region.pre_decode_cache->schema_version == schema_version)
+        {
+            block = std::move(region.pre_decode_cache->block);
+            need_decode = false;
+        }
+        else
+        {
+            LOG_DEBUG(log, "schema version not equal, try to re-decode region cache into block");
+            region.pre_decode_cache->block.clear();
+        }
+    }
+
+    /// Read region data as block.
+    Stopwatch watch;
+    Int64 block_decoding_schema_epoch = -1;
+    BlockUPtr block_ptr = nullptr;
+    if (need_decode)
+    {
+        LOG_TRACE(log, "begin to decode keyspace={} table_id={} region_id={}", keyspace_id, table_id, region->id());
+        DecodingStorageSchemaSnapshotConstPtr decoding_schema_snapshot;
+        std::tie(decoding_schema_snapshot, block_ptr) = storage->getSchemaSnapshotAndBlockForDecoding(lock, true);
+        block_decoding_schema_epoch = decoding_schema_snapshot->decoding_schema_epoch;
+
+        auto reader = RegionBlockReader(decoding_schema_snapshot);
+        if (!reader.read(*block_ptr, data_list_read, force_decode))
+            return false;
+        region_decode_cost = watch.elapsedMilliseconds();
+        GET_METRIC(tiflash_raft_write_data_to_storage_duration_seconds, type_decode)
+            .Observe(region_decode_cost / 1000.0);
+    }
+
+    /// Write block into storage.
+    // Release the alter lock so that writing does not block DDL operations
+    TableLockHolder drop_lock;
+    std::tie(std::ignore, drop_lock) = std::move(lock).release();
+    watch.restart();
+    // Note: do NOT use typeid_cast, since Storage is multi-inherited and typeid_cast will return nullptr
+    switch (storage->engineType())
+    {
+    case ::TiDB::StorageEngine::DT:
+    {
+        auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
+        if (need_decode)
+        {
+            write_result = dm_storage->write(*block_ptr, context.getSettingsRef());
+        }
+        else
+        {
+            write_result = dm_storage->write(block, context.getSettingsRef());
+        }
+        break;
+    }
+    default:
+        throw Exception(
+            ErrorCodes::LOGICAL_ERROR,
+            "Unknown StorageEngine: {}",
+            static_cast<Int32>(storage->engineType()));
+    }
+
+    write_part_cost = watch.elapsedMilliseconds();
+    GET_METRIC(tiflash_raft_write_data_to_storage_duration_seconds, type_write).Observe(write_part_cost / 1000.0);
+    if (need_decode)
+        storage->releaseDecodingBlock(block_decoding_schema_epoch, std::move(block_ptr));
+
+    LOG_TRACE(
+        log,
+        "keyspace={} table_id={} region_id={} cost [region decode {}, write part {}] ms",
+        keyspace_id,
+        table_id,
+        region->id(),
+        region_decode_cost,
+        write_part_cost);
+    return true;
+}
+
+// ReadList could be RegionDataReadInfoList
+template <typename ReadList>
 static DM::WriteResult writeRegionDataToStorage(
     Context & context,
     const RegionPtrWithBlock & region,
-    RegionDataReadInfoList & data_list_read,
+    ReadList & data_list_read,
     const LoggerPtr & log)
 {
     const auto & tmt = context.getTMTContext();
     const auto keyspace_id = region->getKeyspaceID();
     const auto table_id = region->getMappedTableID();
-    UInt64 region_decode_cost = -1, write_part_cost = -1;
 
     DM::WriteResult write_result = std::nullopt;
-    /// Declare lambda of atomic read then write to call multiple times.
-    auto atomic_read_write = [&](bool force_decode) {
-        /// Get storage based on table ID.
-        auto storage = tmt.getStorages().get(keyspace_id, table_id);
-        if (storage == nullptr)
-        {
-            // - force_decode == false and storage not exist, let upper level sync schema and retry.
-            // - force_decode == true and storage not exist. It could be the RaftLog or Snapshot comes
-            //   after the schema is totally exceed the GC safepoint. And TiFlash know nothing about
-            //   the schema. We can only throw away those committed rows.
-            return force_decode;
-        }
-
-        /// Get a structure read lock throughout decode, during which schema must not change.
-        TableStructureLockHolder lock;
-        try
-        {
-            lock = storage->lockStructureForShare(getThreadNameAndID());
-        }
-        catch (DB::Exception & e)
-        {
-            // If the storage is physical dropped (but not removed from `ManagedStorages`) when we want to write raft data into it, consider the write done.
-            if (e.code() == ErrorCodes::TABLE_IS_DROPPED)
-                return true;
-            else
-                throw;
-        }
-
-        Block block;
-        bool need_decode = true;
-
-        // try to use block cache if exists
-        if (region.pre_decode_cache)
-        {
-            auto schema_version = storage->getTableInfo().schema_version;
-            std::stringstream ss;
-            region.pre_decode_cache->toString(ss);
-            LOG_DEBUG(
-                log,
-                "{} got pre-decode cache {}, storage schema version: {}",
-                region->toString(),
-                ss.str(),
-                schema_version);
-
-            if (region.pre_decode_cache->schema_version == schema_version)
-            {
-                block = std::move(region.pre_decode_cache->block);
-                need_decode = false;
-            }
-            else
-            {
-                LOG_DEBUG(log, "schema version not equal, try to re-decode region cache into block");
-                region.pre_decode_cache->block.clear();
-            }
-        }
-
-        /// Read region data as block.
-        Stopwatch watch;
-
-        Int64 block_decoding_schema_epoch = -1;
-        BlockUPtr block_ptr = nullptr;
-        if (need_decode)
-        {
-            LOG_TRACE(log, "begin to decode keyspace={} table_id={} region_id={}", keyspace_id, table_id, region->id());
-            DecodingStorageSchemaSnapshotConstPtr decoding_schema_snapshot;
-            std::tie(decoding_schema_snapshot, block_ptr) = storage->getSchemaSnapshotAndBlockForDecoding(lock, true);
-            block_decoding_schema_epoch = decoding_schema_snapshot->decoding_schema_epoch;
-
-            auto reader = RegionBlockReader(decoding_schema_snapshot);
-            if (!reader.read(*block_ptr, data_list_read, force_decode))
-                return false;
-            region_decode_cost = watch.elapsedMilliseconds();
-            GET_METRIC(tiflash_raft_write_data_to_storage_duration_seconds, type_decode)
-                .Observe(region_decode_cost / 1000.0);
-        }
-
-        /// Write block into storage.
-        // Release the alter lock so that writing does not block DDL operations
-        TableLockHolder drop_lock;
-        std::tie(std::ignore, drop_lock) = std::move(lock).release();
-        watch.restart();
-        // Note: do NOT use typeid_cast, since Storage is multi-inherited and typeid_cast will return nullptr
-        switch (storage->engineType())
-        {
-        case ::TiDB::StorageEngine::DT:
-        {
-            auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
-            if (need_decode)
-            {
-                write_result = dm_storage->write(*block_ptr, context.getSettingsRef());
-            }
-            else
-            {
-                write_result = dm_storage->write(block, context.getSettingsRef());
-            }
-            break;
-        }
-        default:
-            throw Exception(
-                ErrorCodes::LOGICAL_ERROR,
-                "Unknown StorageEngine: {}",
-                static_cast<Int32>(storage->engineType()));
-        }
-
-        write_part_cost = watch.elapsedMilliseconds();
-        GET_METRIC(tiflash_raft_write_data_to_storage_duration_seconds, type_write).Observe(write_part_cost / 1000.0);
-        if (need_decode)
-            storage->releaseDecodingBlock(block_decoding_schema_epoch, std::move(block_ptr));
-
-        LOG_TRACE(
-            log,
-            "keyspace={} table_id={} region_id={} cost [region decode {}, write part {}] ms",
-            keyspace_id,
-            table_id,
-            region->id(),
-            region_decode_cost,
-            write_part_cost);
-        return true;
-    };
 
     /// In TiFlash, the actions between applying raft log and schema changes are not strictly synchronized.
     /// There could be a chance that some raft logs come after a table gets tombstoned. Take care of it when
@@ -201,7 +212,7 @@ static DM::WriteResult writeRegionDataToStorage(
 
     /// Try read then write once.
     {
-        if (atomic_read_write(false))
+        if (atomicReadWrite(log, context, tmt, keyspace_id, table_id, region, data_list_read, false, write_result))
         {
             return write_result;
         }
@@ -214,7 +225,7 @@ static DM::WriteResult writeRegionDataToStorage(
         tmt.getSchemaSyncerManager()->syncTableSchema(context, keyspace_id, table_id);
         auto schema_sync_cost = watch.elapsedMilliseconds();
         LOG_INFO(log, "sync schema cost {} ms, keyspace={} table_id={}", schema_sync_cost, keyspace_id, table_id);
-        if (!atomic_read_write(true))
+        if (!atomicReadWrite(log, context, tmt, keyspace_id, table_id, region, data_list_read, true, write_result))
         {
             // Failure won't be tolerated this time.
             throw Exception(
