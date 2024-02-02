@@ -19,9 +19,9 @@
 #include <Encryption/ReadBufferFromFileProvider.h>
 #include <Encryption/WriteBufferFromFileProvider.h>
 #include <Poco/File.h>
-#include <Storages/DeltaMerge/ColumnStat.h>
 #include <Storages/DeltaMerge/DMChecksumConfig.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
+#include <Storages/DeltaMerge/File/ColumnStat.h>
 #include <Storages/DeltaMerge/File/DMFile_fwd.h>
 #include <Storages/DeltaMerge/File/MergedFile.h>
 #include <Storages/DeltaMerge/File/dtpb/dmfile.pb.h>
