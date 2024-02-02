@@ -497,8 +497,8 @@ void DMFile::readColumnStat(const FileProviderPtr & file_provider, const MetaPac
         std::min(static_cast<size_t>(DBMS_DEFAULT_BUFFER_SIZE), meta_pack_info.column_stat_size));
     auto meta_buf = std::vector<char>(meta_pack_info.column_stat_size);
     auto meta_reader = ReadBufferFromMemory{meta_buf.data(), meta_buf.size()};
-    ReadBuffer * buf = &(*file_buf); // buf is a pointer to ReadBufferFromRandomAccessFile
-    file_buf->seek(meta_pack_info.column_stat_offset);
+    ReadBuffer * buf = &file_buf;
+    file_buf.seek(meta_pack_info.column_stat_offset);
 
     // checksum examination
     if (configuration)
@@ -507,7 +507,7 @@ void DMFile::readColumnStat(const FileProviderPtr & file_provider, const MetaPac
         if (location != configuration->getEmbeddedChecksum().end())
         {
             auto digest = configuration->createUnifiedDigest();
-            file_buf->readBig(meta_buf.data(), meta_buf.size());
+            file_buf.readBig(meta_buf.data(), meta_buf.size());
             digest->update(meta_buf.data(), meta_buf.size());
             if (unlikely(!digest->compareRaw(location->second)))
             {
@@ -563,9 +563,9 @@ void DMFile::readPackStat(const FileProviderPtr & file_provider, const MetaPackI
     else
     {
         auto buf = openForRead(file_provider, path, encryptionPackStatPath(), meta_pack_info.pack_stat_size);
-        buf->seek(meta_pack_info.pack_stat_offset);
+        buf.seek(meta_pack_info.pack_stat_offset);
         if (sizeof(PackStat) * packs
-            != buf->readBig(reinterpret_cast<char *>(pack_stats.data()), sizeof(PackStat) * packs))
+            != buf.readBig(reinterpret_cast<char *>(pack_stats.data()), sizeof(PackStat) * packs))
         {
             throw Exception("Cannot read all data", ErrorCodes::CANNOT_READ_ALL_DATA);
         }
@@ -578,7 +578,7 @@ void DMFile::readConfiguration(const FileProviderPtr & file_provider)
     {
         auto buf
             = openForRead(file_provider, configurationPath(), encryptionConfigurationPath(), DBMS_DEFAULT_BUFFER_SIZE);
-        auto stream = InputStreamWrapper{*buf};
+        auto stream = InputStreamWrapper{buf};
         configuration.emplace(stream);
         version = DMFileFormat::V2;
     }
@@ -598,9 +598,9 @@ void DMFile::readPackProperty(const FileProviderPtr & file_provider, const MetaP
         packPropertyPath(),
         encryptionPackPropertyPath(),
         meta_pack_info.pack_property_size);
-    buf->seek(meta_pack_info.pack_property_offset);
+    buf.seek(meta_pack_info.pack_property_offset);
 
-    readStringBinary(tmp_buf, *buf);
+    readStringBinary(tmp_buf, buf);
     pack_properties.ParseFromString(tmp_buf);
 
     if (configuration)
@@ -958,7 +958,7 @@ std::vector<char> DMFile::readMetaV2(const FileProviderPtr & file_provider) cons
     size_t read_bytes = 0;
     for (;;)
     {
-        read_bytes += rbuf->readBig(buf.data() + read_bytes, meta_buffer_size);
+        read_bytes += rbuf.readBig(buf.data() + read_bytes, meta_buffer_size);
         if (likely(read_bytes < buf.size()))
         {
             break;
@@ -1181,7 +1181,7 @@ void DMFile::finalizeSmallFiles(
             EncryptionPath(encryptionBasePath(), fname, keyspace_id),
             fsize);
         std::vector<char> read_buf(fsize);
-        auto read_size = file->readBig(read_buf.data(), read_buf.size());
+        auto read_size = file.readBig(read_buf.data(), read_buf.size());
         RUNTIME_CHECK(read_size == fsize, fname, read_size, fsize);
 
         writer.buffer->write(read_buf.data(), read_buf.size());

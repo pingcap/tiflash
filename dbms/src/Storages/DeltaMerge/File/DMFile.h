@@ -529,13 +529,13 @@ public:
     friend bool ::DTTool::Migrate::needFrameMigration(const DB::DM::DMFile & file, const std::string & target);
 };
 
-inline ReadBufferFromRandomAccessFilePtr openForRead(
+inline ReadBufferFromRandomAccessFile openForRead(
     const FileProviderPtr & file_provider,
     const String & path,
     const EncryptionPath & encryption_path,
     const size_t & file_size)
 {
-    return ReadBufferFromRandomAccessFileBuilder::buildPtr(
+    return ReadBufferFromRandomAccessFileBuilder::build(
         file_provider,
         path,
         encryption_path,
