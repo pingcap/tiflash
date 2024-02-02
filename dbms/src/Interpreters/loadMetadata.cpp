@@ -80,7 +80,7 @@ static void loadDatabase(
             database_metadata_file,
             EncryptionPath(database_metadata_file, ""),
             1024);
-        readStringUntilEOF(database_attach_query, *in);
+        readStringUntilEOF(database_attach_query, in);
     }
     else
     {
@@ -160,7 +160,7 @@ void loadMetadata(Context & context)
                 database_metadata_file,
                 EncryptionPath(database_metadata_file, ""),
                 1024);
-            readStringUntilEOF(database_attach_query, *in);
+            readStringUntilEOF(database_attach_query, in);
         }
         else
         {

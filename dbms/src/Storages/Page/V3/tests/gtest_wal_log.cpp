@@ -149,7 +149,7 @@ public:
         const WALRecoveryMode wal_recovery_mode = WALRecoveryMode::TolerateCorruptedTailRecords,
         size_t log_num = 0)
     {
-        auto read_buf = ReadBufferFromRandomAccessFileBuilder::build(
+        auto read_buf = ReadBufferFromRandomAccessFileBuilder::buildPtr(
             provider,
             file_name,
             EncryptionPath{file_name, ""},
@@ -834,7 +834,7 @@ TEST(LogFileRWTest2, ManuallySync)
     }
     writer->sync();
 
-    auto read_buf = ReadBufferFromRandomAccessFileBuilder::build(
+    auto read_buf = ReadBufferFromRandomAccessFileBuilder::buildPtr(
         provider,
         file_name,
         EncryptionPath{file_name, ""},

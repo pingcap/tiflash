@@ -387,13 +387,13 @@ void DMFile::writeMeta(const FileProviderPtr & file_provider, const WriteLimiter
             auto serialized = tmp_buffer.releaseStr();
             digest->update(serialized.data(), serialized.length());
             configuration->addChecksum(metaFileName(), digest->raw());
-            buf->write(serialized.data(), serialized.size());
+            buf.write(serialized.data(), serialized.size());
         }
         else
         {
-            writeMetaToBuffer(*buf);
+            writeMetaToBuffer(buf);
         }
-        buf->sync();
+        buf.sync();
     }
     Poco::File(tmp_meta_path).renameTo(meta_path);
 }
@@ -413,14 +413,14 @@ void DMFile::writePackProperty(const FileProviderPtr & file_provider, const Writ
         if (configuration)
         {
             auto digest = configuration->createUnifiedDigest();
-            writePackPropertyToBuffer(*buf, digest.get());
+            writePackPropertyToBuffer(buf, digest.get());
             configuration->addChecksum(packPropertyFileName(), digest->raw());
         }
         else
         {
-            writePackPropertyToBuffer(*buf);
+            writePackPropertyToBuffer(buf);
         }
-        buf->sync();
+        buf.sync();
     }
     Poco::File(tmp_property_path).renameTo(property_path);
 }
@@ -440,10 +440,10 @@ void DMFile::writeConfiguration(const FileProviderPtr & file_provider, const Wri
             write_limiter,
             DBMS_DEFAULT_BUFFER_SIZE);
         {
-            auto stream = OutputStreamWrapper{*buf};
+            auto stream = OutputStreamWrapper{buf};
             stream << *configuration;
         }
-        buf->sync();
+        buf.sync();
     }
     Poco::File(tmp_config_path).renameTo(config_path);
 }

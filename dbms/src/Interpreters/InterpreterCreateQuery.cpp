@@ -139,12 +139,12 @@ BlockIO InterpreterCreateQuery::createDatabase(ASTCreateQuery & create)
             nullptr,
             statement.size(),
             O_WRONLY | O_CREAT | O_EXCL);
-        writeString(statement, *out);
+        writeString(statement, out);
 
-        out->next();
+        out.next();
         if (context.getSettingsRef().fsync_metadata)
-            out->sync();
-        out->close();
+            out.sync();
+        out.close();
     }
 
     try

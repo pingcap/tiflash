@@ -267,7 +267,7 @@ private:
                     dmfile->encryptionIndexPath(file_name_base),
                     std::min(static_cast<size_t>(DBMS_DEFAULT_BUFFER_SIZE), index_file_size),
                     read_limiter);
-                return MinMaxIndex::read(*type, *index_buf, index_file_size);
+                return MinMaxIndex::read(*type, index_buf, index_file_size);
             }
             else if (dmfile->useMetaV2()) // v3
             {
@@ -290,12 +290,12 @@ private:
                     encryp_path,
                     dmfile->getConfiguration()->getChecksumFrameLength(),
                     read_limiter);
-                buffer->seek(offset);
+                buffer.seek(offset);
 
                 String raw_data;
                 raw_data.resize(data_size);
 
-                buffer->read(reinterpret_cast<char *>(raw_data.data()), data_size);
+                buffer.read(reinterpret_cast<char *>(raw_data.data()), data_size);
 
                 auto buf = ChecksumReadBufferBuilder::build(
                     std::move(raw_data),

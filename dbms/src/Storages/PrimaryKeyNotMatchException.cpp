@@ -80,11 +80,11 @@ String fixCreateStatementWithPriKeyNotMatchException( //
                 nullptr,
                 statement.size(),
                 O_WRONLY | O_CREAT | O_EXCL);
-            writeString(statement, *out);
-            out->next();
+            writeString(statement, out);
+            out.next();
             if (context.getSettingsRef().fsync_metadata)
-                out->sync();
-            out->close();
+                out.sync();
+            out.close();
         }
 
         try

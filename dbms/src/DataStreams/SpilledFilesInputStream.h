@@ -53,7 +53,7 @@ private:
     struct SpilledFileStream
     {
         SpilledFileInfo spilled_file_info;
-        ReadBufferFromRandomAccessFilePtr file_in;
+        ReadBufferFromRandomAccessFile file_in;
         CompressedReadBuffer<> compressed_in;
         BlockInputStreamPtr block_in;
 
@@ -67,7 +67,7 @@ private:
                   file_provider,
                   spilled_file_info.path,
                   EncryptionPath(spilled_file_info.path, "")))
-            , compressed_in(*file_in)
+            , compressed_in(file_in)
         {
             Int64 file_spill_version = 0;
             readVarInt(file_spill_version, compressed_in);

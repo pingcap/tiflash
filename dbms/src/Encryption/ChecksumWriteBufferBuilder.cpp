@@ -91,7 +91,7 @@ std::unique_ptr<WriteBufferFromFileBase> ChecksumWriteBufferBuilder::build(
     }
     else
     {
-        return WriteBufferFromWritableFileBuilder::build(
+        return WriteBufferFromWritableFileBuilder::buildPtr(
             file_provider,
             filename_,
             encryption_path_,

@@ -106,7 +106,7 @@ int inspectServiceMain(DB::Context & context, const InspectArgs & args)
                 }
                 else
                 {
-                    consume(*DB::ReadBufferFromRandomAccessFileBuilder::build(
+                    consume(*DB::ReadBufferFromRandomAccessFileBuilder::buildPtr(
                         fp,
                         full_path,
                         DB::EncryptionPath(full_path, i)));

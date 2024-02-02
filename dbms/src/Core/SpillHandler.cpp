@@ -40,7 +40,7 @@ SpillHandler::SpillWriter::SpillWriter(
         nullptr,
         DBMS_DEFAULT_BUFFER_SIZE,
         append_write ? O_APPEND | O_WRONLY : -1))
-    , compressed_buf(*file_buf)
+    , compressed_buf(file_buf)
 {
     if (!append_write)
         writeVarUInt(spill_version, compressed_buf);
@@ -52,9 +52,9 @@ SpillDetails SpillHandler::SpillWriter::finishWrite()
 {
     out->flush();
     compressed_buf.next();
-    file_buf->next();
+    file_buf.next();
     out->writeSuffix();
-    return {written_rows, compressed_buf.count(), file_buf->count()};
+    return {written_rows, compressed_buf.count(), file_buf.count()};
 }
 
 void SpillHandler::SpillWriter::write(const Block & block)

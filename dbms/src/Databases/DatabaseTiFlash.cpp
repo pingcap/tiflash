@@ -248,11 +248,11 @@ void DatabaseTiFlash::createTable(const Context & context, const String & table_
             nullptr,
             statement.size(),
             O_WRONLY | O_CREAT | O_EXCL);
-        writeString(statement, *out);
-        out->next();
+        writeString(statement, out);
+        out.next();
         if (settings.fsync_metadata)
-            out->sync();
-        out->close();
+            out.sync();
+        out.close();
     }
 
     try
@@ -358,7 +358,7 @@ void DatabaseTiFlash::renameTable(
                     /*read_limiter*/ nullptr,
                     -1,
                     in_buf);
-                readStringUntilEOF(statement, *in);
+                readStringUntilEOF(statement, in);
             }
             ParserCreateQuery parser;
             ast = parseQuery(
@@ -398,11 +398,11 @@ void DatabaseTiFlash::renameTable(
                 nullptr,
                 statement.size(),
                 O_WRONLY | O_CREAT | O_EXCL);
-            writeString(statement, *out);
-            out->next();
+            writeString(statement, out);
+            out.next();
             if (context.getSettingsRef().fsync_metadata)
-                out->sync();
-            out->close();
+                out.sync();
+            out.close();
         }
 
         try
@@ -479,7 +479,7 @@ void DatabaseTiFlash::alterTable(
             /*read_limiter*/ nullptr,
             -1,
             in_buf);
-        readStringUntilEOF(statement, *in);
+        readStringUntilEOF(statement, in);
     }
 
     ParserCreateQuery parser;
@@ -514,11 +514,11 @@ void DatabaseTiFlash::alterTable(
             nullptr,
             statement.size(),
             O_WRONLY | O_CREAT | O_EXCL);
-        writeString(statement, *out);
-        out->next();
+        writeString(statement, out);
+        out.next();
         if (context.getSettingsRef().fsync_metadata)
-            out->sync();
-        out->close();
+            out.sync();
+        out.close();
     }
 
     try
@@ -695,11 +695,11 @@ void DatabaseTiFlash::alterTombstone(const Context & context, Timestamp tombston
                 nullptr,
                 statement.size(),
                 O_WRONLY | O_CREAT | O_TRUNC);
-            writeString(statement, *out);
-            out->next();
+            writeString(statement, out);
+            out.next();
             if (context.getSettingsRef().fsync_metadata)
-                out->sync();
-            out->close();
+                out.sync();
+            out.close();
         }
 
         try

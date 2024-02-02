@@ -234,7 +234,7 @@ ASTPtr getQueryFromMetadata(const Context & context, const String & metadata_pat
             metadata_path,
             EncryptionPath(metadata_path, ""),
             4096);
-        readStringUntilEOF(query, *in);
+        readStringUntilEOF(query, in);
     }
 
     ParserCreateQuery parser;
@@ -331,7 +331,7 @@ std::tuple<String, StoragePtr> loadTable(
             table_metadata_path,
             EncryptionPath(table_metadata_path, ""),
             1024);
-        readStringUntilEOF(s, *in);
+        readStringUntilEOF(s, in);
     }
 
     /** Empty files with metadata are generated after a rough restart of the server.

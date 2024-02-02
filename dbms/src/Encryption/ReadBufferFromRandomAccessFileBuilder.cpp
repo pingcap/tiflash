@@ -19,7 +19,7 @@
 namespace DB
 {
 
-ReadBufferFromRandomAccessFilePtr ReadBufferFromRandomAccessFileBuilder::build(
+ReadBufferFromRandomAccessFilePtr ReadBufferFromRandomAccessFileBuilder::buildPtr(
     const FileProviderPtr & file_provider,
     const std::string & file_name_,
     const EncryptionPath & encryption_path_,
@@ -31,6 +31,20 @@ ReadBufferFromRandomAccessFilePtr ReadBufferFromRandomAccessFileBuilder::build(
 {
     auto file = file_provider->newRandomAccessFile(file_name_, encryption_path_, read_limiter, flags);
     return std::make_unique<ReadBufferFromRandomAccessFile>(file, buf_size, existing_memory, alignment);
+}
+
+ReadBufferFromRandomAccessFile ReadBufferFromRandomAccessFileBuilder::build(
+    const FileProviderPtr & file_provider,
+    const std::string & file_name_,
+    const EncryptionPath & encryption_path_,
+    size_t buf_size,
+    const ReadLimiterPtr & read_limiter,
+    int flags,
+    char * existing_memory,
+    size_t alignment)
+{
+    auto file = file_provider->newRandomAccessFile(file_name_, encryption_path_, read_limiter, flags);
+    return ReadBufferFromRandomAccessFile(file, buf_size, existing_memory, alignment);
 }
 
 } // namespace DB

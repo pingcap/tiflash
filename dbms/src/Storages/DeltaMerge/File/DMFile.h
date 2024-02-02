@@ -531,7 +531,7 @@ inline ReadBufferFromRandomAccessFilePtr openForRead(
     const EncryptionPath & encryption_path,
     const size_t & file_size)
 {
-    return ReadBufferFromRandomAccessFileBuilder::build(
+    return ReadBufferFromRandomAccessFileBuilder::buildPtr(
         file_provider,
         path,
         encryption_path,

@@ -18,7 +18,7 @@
 namespace DB
 {
 
-WriteBufferFromWritableFilePtr WriteBufferFromWritableFileBuilder::build(
+WriteBufferFromWritableFilePtr WriteBufferFromWritableFileBuilder::buildPtr(
     const FileProviderPtr & file_provider,
     const std::string & file_name_,
     const EncryptionPath & encryption_path,
@@ -39,6 +39,29 @@ WriteBufferFromWritableFilePtr WriteBufferFromWritableFileBuilder::build(
         flags,
         mode);
     return std::make_unique<WriteBufferFromWritableFile>(writeable_file, buf_size, existing_memory, alignment);
+}
+
+WriteBufferFromWritableFile WriteBufferFromWritableFileBuilder::build(
+    const FileProviderPtr & file_provider,
+    const std::string & file_name_,
+    const EncryptionPath & encryption_path,
+    bool create_new_encryption_info_,
+    const WriteLimiterPtr & write_limiter_,
+    size_t buf_size,
+    int flags,
+    mode_t mode,
+    char * existing_memory,
+    size_t alignment)
+{
+    auto writeable_file = file_provider->newWritableFile(
+        file_name_,
+        encryption_path,
+        true,
+        create_new_encryption_info_,
+        write_limiter_,
+        flags,
+        mode);
+    return WriteBufferFromWritableFile(writeable_file, buf_size, existing_memory, alignment);
 }
 
 } // namespace DB

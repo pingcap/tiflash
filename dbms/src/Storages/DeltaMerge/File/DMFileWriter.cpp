@@ -47,7 +47,7 @@ DMFileWriter::DMFileWriter(
 
     if (dmfile->useMetaV2())
     {
-        merged_file.buffer = WriteBufferFromWritableFileBuilder::build(
+        merged_file.buffer = WriteBufferFromWritableFileBuilder::buildPtr(
             file_provider,
             dmfile->mergedPath(0),
             dmfile->encryptionMergedPath(0),
@@ -81,7 +81,7 @@ DMFileWriter::WriteBufferFromFileBasePtr DMFileWriter::createMetaFile()
 
 DMFileWriter::WriteBufferFromFileBasePtr DMFileWriter::createMetaV2File()
 {
-    return WriteBufferFromWritableFileBuilder::build(
+    return WriteBufferFromWritableFileBuilder::buildPtr(
         file_provider,
         dmfile->metav2Path(),
         dmfile->encryptionMetav2Path(),

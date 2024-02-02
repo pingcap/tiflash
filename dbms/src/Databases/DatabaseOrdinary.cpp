@@ -221,11 +221,11 @@ void DatabaseOrdinary::createTable(const Context & context, const String & table
             nullptr,
             statement.size(),
             O_WRONLY | O_CREAT | O_EXCL);
-        writeString(statement, *out);
-        out->next();
+        writeString(statement, out);
+        out.next();
         if (settings.fsync_metadata)
-            out->sync();
-        out->close();
+            out.sync();
+        out.close();
     }
 
     try
@@ -459,7 +459,7 @@ void DatabaseOrdinary::alterTable(
             /*read_limiter*/ nullptr,
             -1,
             in_buf);
-        readStringUntilEOF(statement, *in);
+        readStringUntilEOF(statement, in);
     }
 
     ParserCreateQuery parser;
@@ -493,11 +493,11 @@ void DatabaseOrdinary::alterTable(
             nullptr,
             statement.size(),
             O_WRONLY | O_CREAT | O_EXCL);
-        writeString(statement, *out);
-        out->next();
+        writeString(statement, out);
+        out.next();
         if (context.getSettingsRef().fsync_metadata)
-            out->sync();
-        out->close();
+            out.sync();
+        out.close();
     }
 
     try

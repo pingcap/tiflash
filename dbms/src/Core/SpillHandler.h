@@ -52,7 +52,7 @@ private:
         void write(const Block & block);
 
     private:
-        WriteBufferFromWritableFilePtr file_buf;
+        WriteBufferFromWritableFile file_buf;
         CompressedWriteBuffer<> compressed_buf;
         std::unique_ptr<IBlockOutputStream> out;
         size_t written_rows = 0;

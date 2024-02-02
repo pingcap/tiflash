@@ -174,7 +174,7 @@ LogReaderPtr WALStoreReader::createLogReader(
     Poco::File f(fullname);
     const auto file_size = f.getSize();
     LOG_DEBUG(logger, "Open log file for reading, file={} size={}", fullname, file_size);
-    auto read_buf = ReadBufferFromRandomAccessFileBuilder::build(
+    auto read_buf = ReadBufferFromRandomAccessFileBuilder::buildPtr(
         provider,
         fullname,
         EncryptionPath{fullname, ""},

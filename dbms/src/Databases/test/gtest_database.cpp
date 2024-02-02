@@ -895,7 +895,7 @@ String readFile(Context & ctx, const String & file)
 {
     String res;
     auto in = ReadBufferFromRandomAccessFileBuilder::build(ctx.getFileProvider(), file, EncryptionPath(file, ""));
-    readStringUntilEOF(res, *in);
+    readStringUntilEOF(res, in);
     return res;
 }
 

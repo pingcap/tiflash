@@ -25,7 +25,19 @@ namespace DB
 class WriteBufferFromWritableFileBuilder
 {
 public:
-    static WriteBufferFromWritableFilePtr build(
+    static WriteBufferFromWritableFilePtr buildPtr(
+        const FileProviderPtr & file_provider,
+        const std::string & file_name_,
+        const EncryptionPath & encryption_path,
+        bool create_new_encryption_info_ = true,
+        const WriteLimiterPtr & write_limiter_ = nullptr,
+        size_t buf_size = DBMS_DEFAULT_BUFFER_SIZE,
+        int flags = -1,
+        mode_t mode = 0666,
+        char * existing_memory = nullptr,
+        size_t alignment = 0);
+
+    static WriteBufferFromWritableFile build(
         const FileProviderPtr & file_provider,
         const std::string & file_name_,
         const EncryptionPath & encryption_path,
