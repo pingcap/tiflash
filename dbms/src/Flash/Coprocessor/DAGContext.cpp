@@ -20,6 +20,7 @@
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <Flash/Statistics/transformProfiles.h>
 #include <Flash/Statistics/traverseExecutors.h>
+#include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <kvproto/disaggregated.pb.h>
 #include <tipb/executor.pb.h>
@@ -467,15 +468,15 @@ const SingleTableRegions & DAGContext::getTableRegionsInfoByTableID(Int64 table_
     return tables_regions_info.getTableRegionInfoByTableID(table_id);
 }
 
-RU DAGContext::getReadRU() const
+UInt64 DAGContext::getReadBytes() const
 {
     UInt64 read_bytes = 0;
     for (const auto & [id, sc] : scan_context_map)
     {
         (void)id; // Disable unused variable warnning.
-        read_bytes += sc->total_user_read_bytes;
+        read_bytes += sc->user_read_bytes;
     }
-    return bytesToRU(read_bytes);
+    return read_bytes;
 }
 
 } // namespace DB

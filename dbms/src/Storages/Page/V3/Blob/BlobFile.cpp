@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Encryption/WriteReadableFile.h>
+#include <BaseFile/WriteReadableFile.h>
 #include <Storages/Page/PageUtil.h>
 #include <Storages/Page/V3/Blob/BlobFile.h>
 #include <Storages/PathPool.h>
@@ -41,7 +41,10 @@ BlobFile::BlobFile(
         getPath(),
         getEncryptionPath(),
         false,
-        /*create_new_encryption_info_*/ !file_in_disk.exists());
+        /*create_new_encryption_info_*/ !file_in_disk.exists(),
+        /*skip_encryption*/ file_provider->isKeyspaceEncryptionEnabled()
+        // When keyspace encryption is enabled, we encrypt the page data instead of the whole BlobFile
+    );
 
     file_size = file_in_disk.getSize();
     {

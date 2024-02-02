@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <BaseFile/fwd.h>
 #include <Common/Config/ConfigProcessor.h>
 #include <Common/DNSCache.h>
 #include <Common/FailPoint.h>
@@ -30,10 +31,8 @@
 #include <Debug/MockStorage.h>
 #include <Encryption/DataKeyManager.h>
 #include <Encryption/FileProvider.h>
-#include <Encryption/RateLimiter.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <IO/ReadBufferFromFile.h>
-#include <IO/UncompressedCache.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/ISecurityManager.h>
 #include <Interpreters/ProcessList.h>
@@ -57,11 +56,14 @@
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h>
 #include <Storages/DeltaMerge/DeltaIndexManager.h>
 #include <Storages/DeltaMerge/Index/MinMaxIndex.h>
-#include <Storages/DeltaMerge/StoragePool.h>
+#include <Storages/DeltaMerge/StoragePool/GlobalPageIdAllocator.h>
+#include <Storages/DeltaMerge/StoragePool/GlobalStoragePool.h>
+#include <Storages/DeltaMerge/StoragePool/StoragePool.h>
 #include <Storages/IStorage.h>
 #include <Storages/KVStore/BackgroundService.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/MarkCache.h>
+#include <Storages/Page/PageConstants.h>
 #include <Storages/Page/V3/PageStorageImpl.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorageService.h>
 #include <Storages/PathCapacityMetrics.h>
@@ -144,7 +146,6 @@ struct ContextShared
     String system_profile_name; /// Profile used by system processes
     std::shared_ptr<ISecurityManager> security_manager; /// Known users.
     Quotas quotas; /// Known quotas for resource use.
-    mutable UncompressedCachePtr uncompressed_cache; /// The cache of decompressed blocks.
     mutable DBGInvoker dbg_invoker; /// Execute inner functions, debug only.
     mutable MarkCachePtr mark_cache; /// Cache of marks in compressed files.
     mutable DM::MinMaxIndexCachePtr minmax_index_cache; /// Cache of minmax index in compressed files.
@@ -167,6 +168,7 @@ struct ContextShared
     FileProviderPtr file_provider; /// File provider.
     IORateLimiter io_rate_limiter;
     PageStorageRunMode storage_run_mode = PageStorageRunMode::ONLY_V3;
+    DM::GlobalPageIdAllocatorPtr global_page_id_allocator;
     DM::GlobalStoragePoolPtr global_storage_pool;
 
     /// The PS instance available on Write Node.
@@ -1323,30 +1325,6 @@ DAGContext * Context::getDAGContext() const
     return dag_context;
 }
 
-void Context::setUncompressedCache(size_t max_size_in_bytes)
-{
-    auto lock = getLock();
-
-    if (shared->uncompressed_cache)
-        throw Exception("Uncompressed cache has been already created.", ErrorCodes::LOGICAL_ERROR);
-
-    shared->uncompressed_cache = std::make_shared<UncompressedCache>(max_size_in_bytes);
-}
-
-
-UncompressedCachePtr Context::getUncompressedCache() const
-{
-    auto lock = getLock();
-    return shared->uncompressed_cache;
-}
-
-void Context::dropUncompressedCache() const
-{
-    auto lock = getLock();
-    if (shared->uncompressed_cache)
-        shared->uncompressed_cache->reset();
-}
-
 DBGInvoker & Context::getDBGInvoker() const
 {
     auto lock = getLock();
@@ -1429,9 +1407,6 @@ DM::DeltaIndexManagerPtr Context::getDeltaIndexManager() const
 void Context::dropCaches() const
 {
     auto lock = getLock();
-
-    if (shared->uncompressed_cache)
-        shared->uncompressed_cache->reset();
 
     if (shared->mark_cache)
         shared->mark_cache->reset();
@@ -1548,18 +1523,24 @@ void Context::initializeTiFlashMetrics() const
     (void)TiFlashMetrics::instance();
 }
 
-void Context::initializeFileProvider(KeyManagerPtr key_manager, bool enable_encryption)
+void Context::initializeFileProvider(KeyManagerPtr key_manager, bool enable_encryption, bool enable_keyspace_encryption)
 {
     auto lock = getLock();
     if (shared->file_provider)
         throw Exception("File provider has already been initialized.", ErrorCodes::LOGICAL_ERROR);
-    shared->file_provider = std::make_shared<FileProvider>(key_manager, enable_encryption);
+    shared->file_provider = std::make_shared<FileProvider>(key_manager, enable_encryption, enable_keyspace_encryption);
 }
 
 FileProviderPtr Context::getFileProvider() const
 {
     auto lock = getLock();
     return shared->file_provider;
+}
+
+void Context::setFileProvider(FileProviderPtr file_provider)
+{
+    auto lock = getLock();
+    shared->file_provider = file_provider;
 }
 
 void Context::initializeRateLimiter(
@@ -1717,6 +1698,22 @@ void Context::setPageStorageRunMode(PageStorageRunMode run_mode) const
 {
     auto lock = getLock();
     shared->storage_run_mode = run_mode;
+}
+
+bool Context::initializeGlobalPageIdAllocator()
+{
+    auto lock = getLock();
+    if (!shared->global_page_id_allocator)
+    {
+        shared->global_page_id_allocator = std::make_shared<DM::GlobalPageIdAllocator>();
+    }
+    return true;
+}
+
+DM::GlobalPageIdAllocatorPtr Context::getGlobalPageIdAllocator() const
+{
+    auto lock = getLock();
+    return shared->global_page_id_allocator;
 }
 
 bool Context::initializeGlobalStoragePoolIfNeed(const PathPool & path_pool)

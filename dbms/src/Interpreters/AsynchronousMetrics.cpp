@@ -20,12 +20,12 @@
 #include <Common/typeid_cast.h>
 #include <Core/TiFlashDisaggregatedMode.h>
 #include <Databases/IDatabase.h>
-#include <IO/UncompressedCache.h>
 #include <Interpreters/AsynchronousMetrics.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
-#include <Storages/DeltaMerge/StoragePool.h>
+#include <Storages/DeltaMerge/StoragePool/GlobalStoragePool.h>
+#include <Storages/DeltaMerge/StoragePool/StoragePool.h>
 #include <Storages/KVStore/KVStore.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/MarkCache.h>
@@ -202,14 +202,6 @@ void AsynchronousMetrics::update()
         {
             set("MinMaxIndexCacheBytes", min_max_cache->weight());
             set("MinMaxIndexFiles", min_max_cache->count());
-        }
-    }
-
-    {
-        if (auto uncompressed_cache = context.getUncompressedCache())
-        {
-            set("UncompressedCacheBytes", uncompressed_cache->weight());
-            set("UncompressedCacheCells", uncompressed_cache->count());
         }
     }
 

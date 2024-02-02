@@ -13,8 +13,7 @@
 // limitations under the License.
 
 #include <Storages/KVStore/Read/LearnerRead.h>
-
-#include "region_kvstore_test.h"
+#include <Storages/KVStore/tests/region_kvstore_test.h>
 
 namespace DB
 {
@@ -150,7 +149,7 @@ CATCH
 TEST_F(RegionKVStoreV2Test, KVStoreExtraDataSnapshot1)
 try
 {
-    auto ctx = TiFlashTestEnv::getGlobalContext();
+    auto & ctx = TiFlashTestEnv::getGlobalContext();
     proxy_instance->cluster_ver = RaftstoreVer::V2;
     ASSERT_NE(proxy_helper->sst_reader_interfaces.fn_key, nullptr);
     UInt64 region_id = 1;
@@ -245,7 +244,7 @@ CATCH
 TEST_F(RegionKVStoreV2Test, KVStoreExtraDataSnapshot2)
 try
 {
-    auto ctx = TiFlashTestEnv::getGlobalContext();
+    auto & ctx = TiFlashTestEnv::getGlobalContext();
     proxy_instance->cluster_ver = RaftstoreVer::V2;
     UInt64 region_id = 1;
     TableID table_id;
@@ -355,7 +354,7 @@ CATCH
 TEST_F(RegionKVStoreV2Test, KVStoreExtraDataSnapshot)
 try
 {
-    auto ctx = TiFlashTestEnv::getGlobalContext();
+    auto & ctx = TiFlashTestEnv::getGlobalContext();
     proxy_instance->cluster_ver = RaftstoreVer::V2;
     UInt64 region_id = 1;
     TableID table_id;
@@ -466,7 +465,7 @@ CATCH
 TEST_F(RegionKVStoreV2Test, KVStoreSingleSnapCancel)
 try
 {
-    auto ctx = TiFlashTestEnv::getGlobalContext();
+    auto & ctx = TiFlashTestEnv::getGlobalContext();
     proxy_instance->cluster_ver = RaftstoreVer::V2;
     ASSERT_NE(proxy_helper->sst_reader_interfaces.fn_key, nullptr);
     ASSERT_NE(proxy_helper->fn_get_config_json, nullptr);
@@ -533,7 +532,7 @@ CATCH
 TEST_F(RegionKVStoreV2Test, KVStoreSingleSnap1)
 try
 {
-    auto ctx = TiFlashTestEnv::getGlobalContext();
+    auto & ctx = TiFlashTestEnv::getGlobalContext();
     proxy_instance->cluster_ver = RaftstoreVer::V2;
     ASSERT_NE(proxy_helper->sst_reader_interfaces.fn_key, nullptr);
     ASSERT_NE(proxy_helper->fn_get_config_json, nullptr);
@@ -617,7 +616,7 @@ CATCH
 TEST_F(RegionKVStoreV2Test, KVStoreSingleSnap2)
 try
 {
-    auto ctx = TiFlashTestEnv::getGlobalContext();
+    auto & ctx = TiFlashTestEnv::getGlobalContext();
     proxy_instance->cluster_ver = RaftstoreVer::V2;
     ASSERT_NE(proxy_helper->sst_reader_interfaces.fn_key, nullptr);
     ASSERT_NE(proxy_helper->fn_get_config_json, nullptr);
@@ -677,7 +676,7 @@ CATCH
 TEST_F(RegionKVStoreV2Test, KVStoreSingleSnap3)
 try
 {
-    auto ctx = TiFlashTestEnv::getGlobalContext();
+    auto & ctx = TiFlashTestEnv::getGlobalContext();
     proxy_instance->cluster_ver = RaftstoreVer::V2;
     ASSERT_NE(proxy_helper->sst_reader_interfaces.fn_key, nullptr);
     ASSERT_NE(proxy_helper->fn_get_config_json, nullptr);
@@ -737,7 +736,7 @@ CATCH
 TEST_F(RegionKVStoreV2Test, KVStoreSingleSnap4)
 try
 {
-    auto ctx = TiFlashTestEnv::getGlobalContext();
+    auto & ctx = TiFlashTestEnv::getGlobalContext();
     proxy_instance->cluster_ver = RaftstoreVer::V2;
     ASSERT_NE(proxy_helper->sst_reader_interfaces.fn_key, nullptr);
     ASSERT_NE(proxy_helper->fn_get_config_json, nullptr);
@@ -781,10 +780,11 @@ try
             write_cf.finish_file(SSTFormatKind::KIND_TABLET);
             write_cf.freeze();
 
-            std::shared_ptr<std::atomic_uint64_t> fpv = std::make_shared<std::atomic_uint64_t>(0);
+            auto fpv = std::make_shared<std::atomic_uint64_t>(0);
             FailPointHelper::enableFailPoint(FailPoints::force_raise_prehandle_exception, fpv);
             SCOPE_EXIT({ FailPointHelper::disableFailPoint("force_raise_prehandle_exception"); });
             {
+                LOG_INFO(log, "Try decode when meet the first ErrUpdateSchema");
                 fpv->store(1);
                 auto [kvr1, res]
                     = proxy_instance
@@ -793,6 +793,7 @@ try
                 ASSERT_EQ(res.stats.parallels, 4);
             }
             {
+                LOG_INFO(log, "Try decode when always meet ErrUpdateSchema");
                 fpv->store(2);
                 EXPECT_THROW(
                     proxy_instance
@@ -808,7 +809,7 @@ CATCH
 TEST_F(RegionKVStoreV2Test, KVStoreSingleSnap5)
 try
 {
-    auto ctx = TiFlashTestEnv::getGlobalContext();
+    auto & ctx = TiFlashTestEnv::getGlobalContext();
     proxy_instance->cluster_ver = RaftstoreVer::V2;
     ASSERT_NE(proxy_helper->sst_reader_interfaces.fn_key, nullptr);
     ASSERT_NE(proxy_helper->fn_get_config_json, nullptr);
@@ -868,7 +869,7 @@ CATCH
 TEST_F(RegionKVStoreV2Test, KVStoreSingleSnap6)
 try
 {
-    auto ctx = TiFlashTestEnv::getGlobalContext();
+    auto & ctx = TiFlashTestEnv::getGlobalContext();
     proxy_instance->cluster_ver = RaftstoreVer::V2;
     proxy_instance->proxy_config_string = R"({"raftstore":{"snap-handle-pool-size":3}})";
     KVStore & kvs = getKVS();

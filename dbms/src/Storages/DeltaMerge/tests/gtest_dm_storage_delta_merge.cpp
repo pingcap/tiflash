@@ -34,7 +34,7 @@
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/DeltaTree.h>
 #include <Storages/DeltaMerge/ScanContext.h>
-#include <Storages/DeltaMerge/StoragePool.h>
+#include <Storages/DeltaMerge/StoragePool/StoragePool.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
 #include <Storages/KVStore/Decode/TiKVRange.h>
 #include <Storages/KVStore/MultiRaft/RegionRangeKeys.h>
@@ -124,12 +124,17 @@ try
         ctx->getSettingsRef().resolve_locks,
         std::numeric_limits<UInt64>::max(),
         scan_context);
+    // these field should live long enough because `DAGQueryInfo` only
+    // keep a ref on them
+    const google::protobuf::RepeatedPtrField<tipb::Expr> filters{};
     const google::protobuf::RepeatedPtrField<tipb::Expr> pushed_down_filters{};
+    ColumnInfos source_columns{};
+    const std::vector<int> runtime_filter_ids;
     query_info.dag_query = std::make_unique<DAGQueryInfo>(
-        google::protobuf::RepeatedPtrField<tipb::Expr>(),
+        filters,
         pushed_down_filters, // Not care now
-        std::vector<TiDB::ColumnInfo>{}, // Not care now
-        std::vector<int>{},
+        source_columns, // Not care now
+        runtime_filter_ids,
         0,
         ctx->getTimezoneInfo());
     BlockInputStreams ins = storage->read(column_names, query_info, *ctx, stage2, 8192, 1);
@@ -674,12 +679,17 @@ try
         ctx->getSettingsRef().resolve_locks,
         std::numeric_limits<UInt64>::max(),
         scan_context);
+    // these field should live long enough because `DAGQueryInfo` only
+    // keep a ref on them
+    const google::protobuf::RepeatedPtrField<tipb::Expr> filters{};
     const google::protobuf::RepeatedPtrField<tipb::Expr> pushed_down_filters{};
+    ColumnInfos source_columns{};
+    const std::vector<int> runtime_filter_ids;
     query_info.dag_query = std::make_unique<DAGQueryInfo>(
-        google::protobuf::RepeatedPtrField<tipb::Expr>(),
+        filters,
         pushed_down_filters, // Not care now
-        std::vector<TiDB::ColumnInfo>{}, // Not care now
-        std::vector<int>{},
+        source_columns, // Not care now
+        runtime_filter_ids,
         0,
         ctx->getTimezoneInfo());
     Names read_columns = {"col1", EXTRA_TABLE_ID_COLUMN_NAME, "col2"};
@@ -753,6 +763,7 @@ try
         table_info.pk_is_handle = false;
 
         // max page id is only updated at restart, so we need recreate page v3 before recreate table
+        ctx->getGlobalContext().initializeGlobalPageIdAllocator();
         ctx->getGlobalContext().initializeGlobalStoragePoolIfNeed(ctx->getPathPool());
         storage = StorageDeltaMerge::create(
             "TiFlash",
@@ -786,12 +797,17 @@ try
             ctx->getSettingsRef().resolve_locks,
             std::numeric_limits<UInt64>::max(),
             scan_context);
+        // these field should live long enough because `DAGQueryInfo` only
+        // keep a ref on them
+        const google::protobuf::RepeatedPtrField<tipb::Expr> filters{};
         const google::protobuf::RepeatedPtrField<tipb::Expr> pushed_down_filters{};
+        ColumnInfos source_columns{};
+        const std::vector<int> runtime_filter_ids;
         query_info.dag_query = std::make_unique<DAGQueryInfo>(
-            google::protobuf::RepeatedPtrField<tipb::Expr>(),
+            filters,
             pushed_down_filters, // Not care now
-            std::vector<TiDB::ColumnInfo>{}, // Not care now
-            std::vector<int>{},
+            source_columns, // Not care now
+            runtime_filter_ids,
             0,
             ctx->getTimezoneInfo());
         Names read_columns = {"col1", EXTRA_TABLE_ID_COLUMN_NAME, "col2"};

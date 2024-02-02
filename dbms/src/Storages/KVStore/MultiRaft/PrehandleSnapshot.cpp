@@ -16,12 +16,14 @@
 #include <Common/FailPoint.h>
 #include <Common/TiFlashMetrics.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/SharedContexts/Disagg.h>
 #include <Storages/DeltaMerge/Decode/SSTFilesToBlockInputStream.h>
 #include <Storages/DeltaMerge/Decode/SSTFilesToDTFilesOutputStream.h>
 #include <Storages/KVStore/Decode/PartitionStreams.h>
 #include <Storages/KVStore/FFI/ProxyFFI.h>
 #include <Storages/KVStore/FFI/SSTReader.h>
 #include <Storages/KVStore/KVStore.h>
+#include <Storages/KVStore/MultiRaft/Disagg/FastAddPeerContext.h>
 #include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/KVStore/Types.h>
@@ -167,11 +169,13 @@ static inline std::tuple<ReadFromStreamResult, PrehandleResult> executeTransform
                 auto flag = std::any_cast<std::shared_ptr<std::atomic_uint64_t>>(v.value());
                 if (flag->load() == 1)
                 {
+                    LOG_INFO(log, "Throw fake exception once");
                     flag->store(0);
                     throw Exception("fake exception once", ErrorCodes::REGION_DATA_SCHEMA_UPDATED);
                 }
                 else if (flag->load() == 2)
                 {
+                    LOG_INFO(log, "Throw fake exception always");
                     throw Exception("fake exception", ErrorCodes::REGION_DATA_SCHEMA_UPDATED);
                 }
             }
@@ -242,6 +246,7 @@ PrehandleResult KVStore::preHandleSnapshotToFiles(
     TMTContext & tmt)
 {
     new_region->beforePrehandleSnapshot(new_region->id(), deadline_index);
+
     ongoing_prehandle_task_count.fetch_add(1);
 
     FAIL_POINT_PAUSE(FailPoints::pause_before_prehandle_snapshot);
@@ -291,7 +296,7 @@ size_t KVStore::getMaxParallelPrehandleSize() const
     return total_concurrency;
 }
 
-// If size is 0, do not parallel prehandle for this snapshot, which is legacy.
+// If size is 0, do not parallel prehandle for this snapshot, which is regular.
 // If size is non-zero, use extra this many threads to prehandle.
 static inline std::pair<std::vector<std::string>, size_t> getSplitKey(
     LoggerPtr log,
@@ -415,7 +420,7 @@ static void runInParallel(
     std::shared_ptr<StorageDeltaMerge> dm_storage)
 {
     std::string limit_tag = part_limit.toDebugString();
-    auto part_new_region = std::make_shared<Region>(new_region->mutMeta().clone());
+    auto part_new_region = std::make_shared<Region>(new_region->mutMeta().clone(), proxy_helper);
     auto part_sst_stream = std::make_shared<DM::SSTFilesToBlockInputStream>(
         part_new_region,
         index,
@@ -439,7 +444,7 @@ static void runInParallel(
             tmt);
         LOG_INFO(
             log,
-            "Finished extra parallel prehandle task limit {} write cf {} lock cf {} default cf {} dmfiles {} error {}, "
+            "Finished extra parallel prehandle task limit {} write_cf={} lock_cf={} default_cf={} dmfiles={} error={}, "
             "split_id={} region_id={}",
             limit_tag,
             part_prehandle_result.stats.write_cf_keys,
@@ -552,8 +557,8 @@ void executeParallelTransform(
         = executeTransform(log, new_region, trace, prehandle_task, job_type, storage, sst_stream, opt, tmt);
     LOG_INFO(
         log,
-        "Finished extra parallel prehandle task limit {} write cf {} lock cf {} default cf {} dmfiles {} "
-        "error {}, split_id={}, "
+        "Finished extra parallel prehandle task limit={} write_cf {} lock_cf={} default_cf={} dmfiles={} "
+        "error={}, split_id={}, "
         "region_id={}",
         sst_stream->getSoftLimit()->toDebugString(),
         head_prehandle_result.stats.write_cf_keys,
@@ -596,6 +601,7 @@ void executeParallelTransform(
             {
                 // Once a prehandle has non-ok result, we quit further loop
                 result = ctx->gather_res[extra_id];
+                result.extra_msg = fmt::format(", from {}", extra_id);
                 break;
             }
         }
@@ -614,6 +620,7 @@ void executeParallelTransform(
     {
         // Otherwise, fallback to error handling or exception handling.
         result = head_result;
+        result.extra_msg = fmt::format(", from {}", DM::SSTScanSoftLimit::HEAD_OR_ONLY_SPLIT);
     }
 }
 
@@ -666,10 +673,10 @@ PrehandleResult KVStore::preHandleSSTsToDTFiles(
             if (unlikely(storage == nullptr))
             {
                 // The storage must be physically dropped, throw exception and do cleanup.
-                throw Exception("", ErrorCodes::TABLE_IS_DROPPED);
+                throw Exception(ErrorCodes::TABLE_IS_DROPPED, "Can't get table");
             }
 
-            // Get a gc safe point for compacting
+            // Get a gc safe point for compact filter.
             Timestamp gc_safepoint = 0;
             if (auto pd_client = tmt.getPDClient(); !pd_client->isMock())
             {
@@ -750,7 +757,9 @@ PrehandleResult KVStore::preHandleSSTsToDTFiles(
                 if (force_decode)
                 {
                     // Can not decode data with `force_decode == true`, must be something wrong
-                    throw Exception(result.extra_msg, ErrorCodes::REGION_DATA_SCHEMA_UPDATED);
+                    throw Exception(
+                        ErrorCodes::REGION_DATA_SCHEMA_UPDATED,
+                        fmt::format("Force decode failed {}", result.extra_msg));
                 }
 
                 // Update schema and try to decode again
@@ -763,6 +772,8 @@ PrehandleResult KVStore::preHandleSSTsToDTFiles(
                 tmt.getSchemaSyncerManager()->syncTableSchema(context, keyspace_id, physical_table_id);
                 // Next time should force_decode
                 force_decode = true;
+                prehandle_result = PrehandleResult{};
+                prehandle_task->reset();
 
                 continue;
             }

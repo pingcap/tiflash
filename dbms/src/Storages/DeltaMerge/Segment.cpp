@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
+#include <Common/Stopwatch.h>
 #include <Common/SyncPoint/SyncPoint.h>
 #include <Common/TiFlashMetrics.h>
 #include <DataStreams/ConcatBlockInputStream.h>
@@ -44,7 +45,8 @@
 #include <Storages/DeltaMerge/RowKeyOrderedBlockInputStream.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
-#include <Storages/DeltaMerge/StoragePool.h>
+#include <Storages/DeltaMerge/Segment_fwd.h>
+#include <Storages/DeltaMerge/StoragePool/StoragePool.h>
 #include <Storages/DeltaMerge/WriteBatchesImpl.h>
 #include <Storages/KVStore/KVStore.h>
 #include <Storages/KVStore/MultiRaft/Disagg/FastAddPeerCache.h>
@@ -399,28 +401,39 @@ Segment::SegmentMetaInfos Segment::readAllSegmentsMetaInfoInRange( //
 
     // If cache is empty, we read from DELTA_MERGE_FIRST_SEGMENT_ID to the end and build the cache.
     // Otherwise, we just read the segment that cover the range.
-    PageIdU64 current_segment_id = 1;
+    PageIdU64 current_segment_id = DELTA_MERGE_FIRST_SEGMENT_ID;
     auto end_to_segment_id_cache = checkpoint_info->checkpoint_data_holder->getEndToSegmentIdCache(
         KeyspaceTableID{context.keyspace_id, context.physical_table_id});
     auto lock = end_to_segment_id_cache->lock();
     bool is_cache_ready = end_to_segment_id_cache->isReady(lock);
     if (is_cache_ready)
     {
-        // TODO bisect for end
         current_segment_id
             = end_to_segment_id_cache->getSegmentIdContainingKey(lock, target_range.getStart().toRowKeyValue());
     }
     LOG_DEBUG(Logger::get(), "Read segment meta info from segment {}", current_segment_id);
     std::vector<std::pair<DM::RowKeyValue, UInt64>> end_key_and_segment_ids;
     SegmentMetaInfos segment_infos;
-    // TODO(fap) After #7642 there could be no segment, so it could panic later.
     while (current_segment_id != 0)
     {
         Segment::SegmentMetaInfo segment_info;
         auto target_id = UniversalPageIdFormat::toFullPageId(
             UniversalPageIdFormat::toFullPrefix(context.keyspace_id, StorageType::Meta, context.physical_table_id),
             current_segment_id);
-        auto page = checkpoint_info->temp_ps->read(target_id);
+        auto page = checkpoint_info->temp_ps->read(target_id, nullptr, {}, false);
+        if unlikely (!page.isValid())
+        {
+            // After #7642, DELTA_MERGE_FIRST_SEGMENT_ID may not exist, however, such checkpoint won't be selected.
+            // If it were to be selected, the FAP task could fallback to regular snapshot.
+            throw Exception(
+                ErrorCodes::LOGICAL_ERROR,
+                "Can't find page id {}, keyspace={} table_id={} current_segment_id={} range={}",
+                target_id,
+                context.keyspace_id,
+                context.physical_table_id,
+                current_segment_id,
+                target_range.toDebugString());
+        }
         segment_info.segment_id = current_segment_id;
         ReadBufferFromMemory buf(page.data.begin(), page.data.size());
         readSegmentMetaInfo(buf, segment_info);
@@ -767,11 +780,14 @@ SegmentSnapshotPtr Segment::createSnapshot(const DMContext & dm_context, bool fo
     const
 {
     Stopwatch watch;
-    SCOPE_EXIT({ dm_context.scan_context->total_create_snapshot_time_ns += watch.elapsed(); });
+    SCOPE_EXIT({ dm_context.scan_context->create_snapshot_time_ns += watch.elapsed(); });
     auto delta_snap = delta->createSnapshot(dm_context, for_update, metric);
     auto stable_snap = stable->createSnapshot();
     if (!delta_snap || !stable_snap)
         return {};
+
+    dm_context.scan_context->delta_rows += delta_snap->getRows();
+    dm_context.scan_context->delta_bytes += delta_snap->getBytes();
     return std::make_shared<SegmentSnapshot>(
         std::move(delta_snap),
         std::move(stable_snap),
@@ -917,7 +933,8 @@ BlockInputStreamPtr Segment::getInputStreamModeNormal(
         columns_to_read,
         max_version,
         is_common_handle,
-        dm_context.tracing_id);
+        dm_context.tracing_id,
+        dm_context.scan_context);
 
     LOG_TRACE(
         segment_snap->log,
@@ -2345,6 +2362,16 @@ void Segment::drop(const FileProviderPtr & file_provider, WriteBatches & wbs)
     stable->drop(file_provider);
 }
 
+void Segment::dropAsFAPTemp(const FileProviderPtr & file_provider, WriteBatches & wbs)
+{
+    // The segment_id, delta_id, stable_id are invalid, just cleanup the persisted page_id in
+    // delta layer and stable layer
+    delta->recordRemoveColumnFilesPages(wbs);
+    stable->recordRemovePacksPages(wbs);
+    wbs.writeAll();
+    stable->drop(file_provider);
+}
+
 Segment::ReadInfo Segment::getReadInfo(
     const DMContext & dm_context,
     const ColumnDefines & read_columns,
@@ -2769,6 +2796,7 @@ BitmapFilterPtr Segment::buildBitmapFilterNormal(
     ColumnDefines columns_to_read{
         getExtraHandleColumnDefine(is_common_handle),
     };
+    // Generate the bitmap according to the MVCC filter result
     auto stream = getInputStreamModeNormal(
         dm_context,
         columns_to_read,
@@ -2778,15 +2806,19 @@ BitmapFilterPtr Segment::buildBitmapFilterNormal(
         max_version,
         expected_block_size,
         /*need_row_id*/ true);
+    // `total_rows` is the rows read for building bitmap
     auto total_rows = segment_snap->delta->getRows() + segment_snap->stable->getDMFilesRows();
     auto bitmap_filter = std::make_shared<BitmapFilter>(total_rows, /*default_value*/ false);
     bitmap_filter->set(stream);
     bitmap_filter->runOptimize();
+
+    const auto elapse_ns = sw_total.elapsed();
+    dm_context.scan_context->build_bitmap_time_ns += elapse_ns;
     LOG_DEBUG(
         segment_snap->log,
-        "buildBitmapFilterNormal total_rows={} cost={}ms",
+        "buildBitmapFilterNormal total_rows={} cost={:.3f}ms",
         total_rows,
-        sw_total.elapsedMilliseconds());
+        elapse_ns / 1'000'000.0);
     return bitmap_filter;
 }
 
@@ -2899,16 +2931,23 @@ BitmapFilterPtr Segment::buildBitmapFilterStableOnly(
     const auto & dmfiles = segment_snap->stable->getDMFiles();
     RUNTIME_CHECK(!dmfiles.empty());
 
+    auto commit_elapse = [&sw, &dm_context]() -> double {
+        const auto elapse_ns = sw.elapsed();
+        dm_context.scan_context->build_bitmap_time_ns += elapse_ns;
+        return elapse_ns / 1'000'000.0;
+    };
+
     auto [skipped_ranges, some_packs_sets] = parseDMFilePackInfo(dmfiles, dm_context, read_ranges, filter, max_version);
 
     if (skipped_ranges.size() == 1 && skipped_ranges[0].offset == 0
         && skipped_ranges[0].rows == segment_snap->stable->getDMFilesRows())
     {
+        auto elapse_ms = commit_elapse();
         LOG_DEBUG(
             segment_snap->log,
-            "buildBitmapFilterStableOnly all match, total_rows={}, cost={}ms",
+            "buildBitmapFilterStableOnly all match, total_rows={}, cost={:.3f}ms",
             segment_snap->stable->getDMFilesRows(),
-            sw.elapsedMilliseconds());
+            elapse_ms);
         return std::make_shared<BitmapFilter>(segment_snap->stable->getDMFilesRows(), /*default_value*/ true);
     }
 
@@ -2930,11 +2969,12 @@ BitmapFilterPtr Segment::buildBitmapFilterStableOnly(
     }
     if (!has_some_packs)
     {
+        auto elapse_ms = commit_elapse();
         LOG_DEBUG(
             segment_snap->log,
-            "buildBitmapFilterStableOnly not have some packs, total_rows={}, cost={}ms",
+            "buildBitmapFilterStableOnly not have some packs, total_rows={}, cost={:.3f}ms",
             segment_snap->stable->getDMFilesRows(),
-            sw.elapsedMilliseconds());
+            elapse_ms);
         return bitmap_filter;
     }
 
@@ -2966,12 +3006,14 @@ BitmapFilterPtr Segment::buildBitmapFilterStableOnly(
         is_common_handle,
         dm_context.tracing_id);
     bitmap_filter->set(stream);
+
+    auto elapse_ms = commit_elapse();
     LOG_DEBUG(
         segment_snap->log,
-        "buildBitmapFilterStableOnly read_packs={} total_rows={} cost={}ms",
+        "buildBitmapFilterStableOnly read_packs={} total_rows={} cost={:.3f}ms",
         some_packs_sets.size(),
         segment_snap->stable->getDMFilesRows(),
-        sw.elapsedMilliseconds());
+        elapse_ms);
     return bitmap_filter;
 }
 
@@ -3032,7 +3074,7 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(
     constexpr auto is_fast_scan = true;
     auto enable_del_clean_read = !hasColumn(columns_to_read, TAG_COLUMN_ID);
 
-    // construct filter column stream
+    // construct (stable and delta) streams by the filter column
     const auto & filter_columns = filter->filter_columns;
     SkippableBlockInputStreamPtr filter_column_stable_stream = segment_snap->stable->getInputStream(
         dm_context,
@@ -3051,7 +3093,9 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(
     {
         LOG_ERROR(
             segment_snap->log,
-            "Late materialization filter columns size equal to read columns size, which is not expected.");
+            "Late materialization filter columns size equal to read columns size, which is not expected, "
+            "filter_columns_size={}",
+            filter_columns->size());
         BlockInputStreamPtr stream = std::make_shared<BitmapFilterBlockInputStream>(
             *filter_columns,
             filter_column_stable_stream,
@@ -3113,7 +3157,7 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(
             rest_columns_to_read->end());
     }
 
-    // construct rest column stream
+    // construct stream for the rest columns
     SkippableBlockInputStreamPtr rest_column_stable_stream = segment_snap->stable->getInputStream(
         dm_context,
         *rest_columns_to_read,

@@ -15,7 +15,7 @@
 #include <Common/TiFlashMetrics.h>
 #include <Storages/KVStore/KVStore.h>
 #include <Storages/KVStore/MultiRaft/Disagg/CheckpointIngestInfo.h>
-#include <Storages/KVStore/MultiRaft/Disagg/FastAddPeer.h>
+#include <Storages/KVStore/MultiRaft/Disagg/FastAddPeerContext.h>
 #include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/Page/V3/Universal/UniversalPageIdFormatImpl.h>
@@ -128,8 +128,12 @@ CheckpointIngestInfoPtr FastAddPeerContext::getOrRestoreCheckpointIngestInfo(
         // The caller ensure there is no concurrency operation on the same region_id so
         // that we can call restore without locking `ingest_info_mu`
         auto info = CheckpointIngestInfo::restore(tmt, proxy_helper, region_id, peer_id);
-        std::scoped_lock<std::mutex> lock(ingest_info_mu);
-        checkpoint_ingest_info_map.emplace(region_id, info);
+        if (info)
+        {
+            GET_METRIC(tiflash_fap_task_result, type_restore).Increment();
+            std::scoped_lock<std::mutex> lock(ingest_info_mu);
+            checkpoint_ingest_info_map.emplace(region_id, info);
+        }
         return info;
     }
 }
@@ -140,24 +144,31 @@ void FastAddPeerContext::debugRemoveCheckpointIngestInfo(UInt64 region_id)
     checkpoint_ingest_info_map.erase(region_id);
 }
 
-void FastAddPeerContext::cleanCheckpointIngestInfo(TMTContext & tmt, UInt64 region_id)
+void FastAddPeerContext::cleanTask(
+    TMTContext & tmt,
+    const TiFlashRaftProxyHelper * proxy_helper,
+    UInt64 region_id,
+    CheckpointIngestInfo::CleanReason reason)
 {
-    // TODO(fap) We can move checkpoint_ingest_info to a dedicated queue, and schedule a timed task to clean it, if this costs much.
+    bool in_memory = false;
+    // TODO(fap) We use a dedicated queue and thread to clean, if this costs much.
     // However, we have to make sure the clean task will not override if a new fap snapshot of the same region comes later.
-    bool pre_check = true;
     {
-        // If it's still managed by fap context.
         std::scoped_lock<std::mutex> lock(ingest_info_mu);
         auto iter = checkpoint_ingest_info_map.find(region_id);
         if (iter != checkpoint_ingest_info_map.end())
         {
-            // the ingest info exist, do not need to check again later
-            pre_check = false;
+            in_memory = true;
             checkpoint_ingest_info_map.erase(iter);
         }
     }
-    // clean without locking `ingest_info_mu`
-    CheckpointIngestInfo::forciblyClean(tmt, region_id, pre_check);
+    if (reason == CheckpointIngestInfo::CleanReason::Success)
+        CheckpointIngestInfo::cleanOnSuccess(tmt, region_id);
+    else
+    {
+        RUNTIME_CHECK(proxy_helper != nullptr);
+        CheckpointIngestInfo::forciblyClean(tmt, proxy_helper, region_id, in_memory, reason);
+    }
 }
 
 std::optional<CheckpointIngestInfoPtr> FastAddPeerContext::tryGetCheckpointIngestInfo(UInt64 region_id) const
@@ -207,6 +218,46 @@ void FastAddPeerContext::insertCheckpointIngestInfo(
     }
     // persist without locking on `ingest_info_mu`
     info->persistToLocal();
+}
+
+void FastAddPeerContext::resolveFapSnapshotState(
+    TMTContext & tmt,
+    const TiFlashRaftProxyHelper * proxy_helper,
+    UInt64 region_id,
+    bool is_regular_snapshot)
+{
+    auto prev_state = tasks_trace->queryState(region_id);
+    /// --- The regular snapshot case ---
+    /// Legacy snapshot is not concurrent with FAP snapshot in both phase 1 and phase 2:
+    /// Can't be InQueue/Running because:
+    /// - Proxy will not actively cancel FAP, so it will not fallback if FAP phase 1 is still running.
+    /// Cancel in `FastAddPeer` is blocking, so a regular snapshot won't meet a canceling snapshot.
+    /// Can't be Finished because:
+    /// - A finished task must be fetched by proxy on the next `FastAddPeer`.
+    /// -- The destroy region case ---
+    /// When FAP goes on, it blocks all MsgAppend messages to this region peer, so the destroy won't happen.
+    /// If the region is destroyed now and sent to this store later, it must be with another peer_id.
+    RUNTIME_CHECK_MSG(
+        prev_state == FAPAsyncTasks::TaskState::NotScheduled,
+        "FastAddPeer: find scheduled fap task, region_id={} fap_state={} is_regular_snapshot={}",
+        region_id,
+        magic_enum::enum_name(prev_state),
+        is_regular_snapshot);
+    // 1. There leaves some non-ingested data on disk after restart.
+    // 2. There has been no fap at all.
+    // 3. FAP is enabled before, but disabled for now.
+    LOG_DEBUG(
+        log,
+        "FastAddPeer: no find ongoing fap task, region_id={} is_regular_snapshot={}",
+        region_id,
+        is_regular_snapshot);
+    // Still need to clean because there could be data left.
+    cleanTask(
+        tmt,
+        proxy_helper,
+        region_id,
+        is_regular_snapshot ? CheckpointIngestInfo::CleanReason::ResolveStateApplySnapshot
+                            : CheckpointIngestInfo::CleanReason::ResolveStateDestroy);
 }
 
 } // namespace DB

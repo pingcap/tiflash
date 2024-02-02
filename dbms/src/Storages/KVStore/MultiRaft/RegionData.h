@@ -55,6 +55,8 @@ public:
 
     DecodedLockCFValuePtr getLockInfo(const RegionLockReadQuery & query) const;
 
+    std::shared_ptr<const TiKVValue> getLockByKey(const TiKVKey & key) const;
+
     void splitInto(const RegionRange & range, RegionData & new_region_data);
     void mergeFrom(const RegionData & ori_region_data);
 
@@ -77,7 +79,7 @@ public:
     const RegionDefaultCFData & defaultCF() const;
     const RegionLockCFData & lockCF() const;
 
-    RegionData() {}
+    RegionData() = default;
 
     RegionData(RegionData && data);
     RegionData & operator=(RegionData &&);
@@ -96,6 +98,8 @@ public:
         void mergeFrom(const OrphanKeysInfo & other);
 
         void advanceAppliedIndex(uint64_t);
+
+        bool omitOrphanWriteKey(const std::shared_ptr<const TiKVKey> & key);
 
         // Providing a `snapshot_index` indicates we can scanning a snapshot of index `snapshot_index`.
         // `snapshot_index` can be set to null if TiFlash is not in a raftstore v2 cluster.

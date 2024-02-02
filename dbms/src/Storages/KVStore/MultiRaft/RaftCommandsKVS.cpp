@@ -14,7 +14,6 @@
 
 #include <Common/FmtUtils.h>
 #include <Common/Stopwatch.h>
-#include <Common/SyncPoint/SyncPoint.h>
 #include <Common/TiFlashMetrics.h>
 #include <Common/setThreadName.h>
 #include <Interpreters/Context.h>
@@ -63,7 +62,7 @@ EngineStoreApplyRes KVStore::handleWriteRaftCmdInner(
 
         std::tie(apply_res, write_result) = region->handleWriteRaftCmd(cmds, index, term, tmt);
 
-        if (region->getClusterRaftstoreVer() == RaftstoreVer::V2)
+        if unlikely (region->getClusterRaftstoreVer() == RaftstoreVer::V2)
         {
             region->orphanKeysInfo().advanceAppliedIndex(index);
         }
@@ -73,7 +72,7 @@ EngineStoreApplyRes KVStore::handleWriteRaftCmdInner(
             /// We should execute eager RaftLog GC, persist the Region in both TiFlash and proxy
             // Persist RegionMeta on the storage engine
             tryFlushRegionCacheInStorage(tmt, *region, Logger::get());
-            persistRegion(*region, &region_persist_lock, PersistRegionReason::EagerRaftGc, "");
+            persistRegion(*region, region_persist_lock, PersistRegionReason::EagerRaftGc, "");
             // return "Persist" to proxy for persisting the RegionMeta
             apply_res = EngineStoreApplyRes::Persist;
         }
@@ -110,7 +109,7 @@ EngineStoreApplyRes KVStore::handleUselessAdminRaftCmd(
         term,
         index);
 
-    if (curr_region.getClusterRaftstoreVer() == RaftstoreVer::V2)
+    if unlikely (curr_region.getClusterRaftstoreVer() == RaftstoreVer::V2)
     {
         curr_region.orphanKeysInfo().advanceAppliedIndex(index);
     }
@@ -133,7 +132,7 @@ EngineStoreApplyRes KVStore::handleUselessAdminRaftCmd(
         tryFlushRegionCacheInStorage(tmt, curr_region, log);
         persistRegion(
             curr_region,
-            &region_task_lock,
+            region_task_lock,
             PersistRegionReason::UselessAdminCommand,
             raft_cmdpb::AdminCmdType_Name(cmd_type).c_str());
         return EngineStoreApplyRes::Persist;
@@ -213,7 +212,7 @@ EngineStoreApplyRes KVStore::handleAdminRaftCmd(
         auto & curr_region = *curr_region_ptr;
 
         // Admin cmd contains no normal data, we can advance orphan keys info just before handling.
-        if (curr_region.getClusterRaftstoreVer() == RaftstoreVer::V2)
+        if unlikely (curr_region.getClusterRaftstoreVer() == RaftstoreVer::V2)
         {
             curr_region.orphanKeysInfo().advanceAppliedIndex(index);
         }
@@ -236,7 +235,7 @@ EngineStoreApplyRes KVStore::handleAdminRaftCmd(
 
         const auto persist_and_sync = [&](const Region & region) {
             tryFlushRegionCacheInStorage(tmt, region, log);
-            persistRegion(region, &region_task_lock, PersistRegionReason::AdminCommand, "");
+            persistRegion(region, region_task_lock, PersistRegionReason::AdminCommand, "");
         };
 
         const auto handle_batch_split = [&](Regions & split_regions) {

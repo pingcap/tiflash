@@ -15,7 +15,7 @@
 #pragma once
 
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
-#include <Storages/DeltaMerge/StoragePool.h>
+#include <Storages/DeltaMerge/StoragePool/StoragePool.h>
 #include <Storages/Page/PageStorage.h>
 #include <Storages/Page/WriteBatchWrapperImpl.h>
 
@@ -46,7 +46,7 @@ struct WriteBatches : private boost::noncopyable
 
     explicit WriteBatches(StoragePool & storage_pool_, const WriteLimiterPtr & write_limiter_ = nullptr)
         : keyspace_id(storage_pool_.getKeyspaceID())
-        , ns_id(storage_pool_.getNamespaceID())
+        , ns_id(storage_pool_.getTableID())
         , run_mode(storage_pool_.getPageStorageRunMode())
         , log(run_mode, keyspace_id, StorageType::Log, ns_id)
         , data(run_mode, keyspace_id, StorageType::Data, ns_id)

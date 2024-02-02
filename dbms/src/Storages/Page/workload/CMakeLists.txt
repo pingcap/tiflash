@@ -14,7 +14,7 @@
 
 include_directories (${CMAKE_CURRENT_BINARY_DIR})
 
-set (page-workload-src MainEntry.cpp PSBackground.cpp PSRunnable.cpp PSStressEnv.cpp PSWorkload.cpp)
+set (page-workload-src MainEntry.cpp PSBackground.cpp PSRunnable.cpp PSStressEnv.cpp PSWorkload.cpp TiFlashMetricsHelper.cpp)
 
 add_library (page-workload-lib ${page-workload-src})
 target_link_libraries (page-workload-lib dbms)

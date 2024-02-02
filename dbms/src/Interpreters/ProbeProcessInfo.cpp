@@ -36,18 +36,12 @@ void ProbeProcessInfo::resetBlock(Block && block_, size_t partition_index_)
     null_map_holder = nullptr;
     filter.reset();
     offsets_to_replicate.reset();
-    key_columns.clear();
-    materialized_columns.clear();
-    hash_data = nullptr;
-    result_block_schema.clear();
-    right_column_index.clear();
-    right_rows_to_be_added_when_matched = 0;
-    cross_probe_mode = CrossProbeMode::DEEP_COPY_RIGHT_BLOCK;
-    right_block_size = 0;
-    next_right_block_index = 0;
-    row_num_filtered_by_left_condition = 0;
-    has_row_matched = false;
-    has_row_null = false;
+    if (hash_join_data)
+        hash_join_data->reset();
+    if (cross_join_data)
+        cross_join_data->reset();
+    if (null_aware_join_data)
+        null_aware_join_data->reset();
 }
 
 void ProbeProcessInfo::prepareForHashProbe(
@@ -61,11 +55,14 @@ void ProbeProcessInfo::prepareForHashProbe(
 {
     if (prepare_for_probe_done)
         return;
+    if (unlikely(hash_join_data == nullptr))
+        hash_join_data = std::make_unique<HashJoinProbeProcessData>();
     /// Rare case, when keys are constant. To avoid code bloat, simply materialize them.
     /// Note: this variable can't be removed because it will take smart pointers' lifecycle to the end of this function.
-    key_columns = extractAndMaterializeKeyColumns(block, materialized_columns, key_names);
+    hash_join_data->key_columns
+        = extractAndMaterializeKeyColumns(block, hash_join_data->materialized_columns, key_names);
     /// Keys with NULL value in any column won't join to anything.
-    extractNestedColumnsAndNullMap(key_columns, null_map_holder, null_map);
+    extractNestedColumnsAndNullMap(hash_join_data->key_columns, null_map_holder, null_map);
     /// reuse null_map to record the filtered rows, the rows contains NULL or does not
     /// match the join filter won't join to anything
     recordFilteredRows(block, filter_column, null_map_holder, null_map);
@@ -93,12 +90,18 @@ void ProbeProcessInfo::prepareForHashProbe(
     if (!isSemiFamily(kind) && !isLeftOuterSemiFamily(kind) && strictness == ASTTableJoin::Strictness::All)
         offsets_to_replicate = std::make_unique<IColumn::Offsets>(block.rows());
 
-    hash_data = std::make_unique<WeakHash32>(0);
+    hash_join_data->hash_data = std::make_unique<WeakHash32>(0);
     if (need_compute_hash)
     {
         std::vector<std::string> sort_key_containers;
-        sort_key_containers.resize(key_columns.size());
-        computeDispatchHash(block.rows(), key_columns, collators, sort_key_containers, restore_round, *hash_data);
+        sort_key_containers.resize(hash_join_data->key_columns.size());
+        computeDispatchHash(
+            block.rows(),
+            hash_join_data->key_columns,
+            collators,
+            sort_key_containers,
+            restore_round,
+            *hash_join_data->hash_data);
     }
     prepare_for_probe_done = true;
 }
@@ -107,17 +110,20 @@ void ProbeProcessInfo::prepareForCrossProbe(
     const String & filter_column,
     ASTTableJoin::Kind kind,
     ASTTableJoin::Strictness strictness,
-    const Block & sample_block_with_columns_to_add,
+    const Block & sample_block_without_keys,
+    const NameSet & output_column_names_set,
     size_t right_rows_to_be_added_when_matched_,
     CrossProbeMode cross_probe_mode_,
     size_t right_block_size_)
 {
     if (prepare_for_probe_done)
         return;
+    if (unlikely(cross_join_data == nullptr))
+        cross_join_data = std::make_unique<CrossJoinProbeProcessData>();
 
-    right_rows_to_be_added_when_matched = right_rows_to_be_added_when_matched_;
-    cross_probe_mode = cross_probe_mode_;
-    right_block_size = right_block_size_;
+    cross_join_data->right_rows_to_be_added_when_matched = right_rows_to_be_added_when_matched_;
+    cross_join_data->cross_probe_mode = cross_probe_mode_;
+    cross_join_data->right_block_size = right_block_size_;
 
     recordFilteredRows(block, filter_column, null_map_holder, null_map);
     if (kind == ASTTableJoin::Kind::Cross_Anti && strictness == ASTTableJoin::Strictness::All)
@@ -128,23 +134,58 @@ void ProbeProcessInfo::prepareForCrossProbe(
 
     /// Should convert all the columns in block to nullable if it is cross right join, here we don't need
     /// to do so because cross_right join is converted to cross left join during compile
-    result_block_schema = block.cloneEmpty();
-    for (size_t i = 0; i < sample_block_with_columns_to_add.columns(); ++i)
+    if unlikely (cross_join_data->result_block_schema.columns() == 0)
     {
-        const ColumnWithTypeAndName & src_column = sample_block_with_columns_to_add.getByPosition(i);
-        RUNTIME_CHECK_MSG(
-            !result_block_schema.has(src_column.name),
-            "block from probe side has a column with the same name: {} as a column in sample_block_with_columns_to_add",
-            src_column.name);
-        result_block_schema.insert(src_column);
+        /// these information only need to be init once
+        for (size_t i = 0; i < block.columns(); ++i)
+        {
+            auto & column = block.getByPosition(i);
+            if (output_column_names_set.contains(column.name))
+            {
+                cross_join_data->result_block_schema.insert(column.cloneEmpty());
+                cross_join_data->left_column_index_in_left_block.push_back(i);
+            }
+        }
+        for (size_t i = 0; i < sample_block_without_keys.columns(); ++i)
+        {
+            const ColumnWithTypeAndName & src_column = sample_block_without_keys.getByPosition(i);
+            if (output_column_names_set.contains(src_column.name))
+            {
+                RUNTIME_CHECK_MSG(
+                    !cross_join_data->result_block_schema.has(src_column.name),
+                    "block from probe side has a column with the same name: {} as a column in "
+                    "sample_block_without_keys",
+                    src_column.name);
+                cross_join_data->result_block_schema.insert(src_column);
+                cross_join_data->right_column_index_in_right_block.push_back(i);
+            }
+        }
     }
-    size_t num_existing_columns = block.columns();
-    size_t num_columns_to_add = sample_block_with_columns_to_add.columns();
-    for (size_t i = 0; i < num_columns_to_add; ++i)
-        right_column_index.push_back(num_existing_columns + i);
+    if (cross_join_data->cross_probe_mode == CrossProbeMode::SHALLOW_COPY_RIGHT_BLOCK && null_map != nullptr)
+        cross_join_data->row_num_filtered_by_left_condition = countBytesInFilter(*null_map);
+    prepare_for_probe_done = true;
+}
 
-    if (cross_probe_mode == CrossProbeMode::SHALLOW_COPY_RIGHT_BLOCK && null_map != nullptr)
-        row_num_filtered_by_left_condition = countBytesInFilter(*null_map);
+void ProbeProcessInfo::prepareForNullAware(const Names & key_names, const String & filter_column)
+{
+    assert(prepare_for_probe_done == false);
+    if unlikely (null_aware_join_data == nullptr)
+        null_aware_join_data = std::make_unique<NullAwareJoinProbeProcessData>();
+    /// Rare case, when keys are constant. To avoid code bloat, simply materialize them.
+    /// Note: this variable can't be removed because it will take smart pointers' lifecycle to the end of this function.
+    null_aware_join_data->key_columns
+        = extractAndMaterializeKeyColumns(block, null_aware_join_data->materialized_columns, key_names);
+
+    /// Note that `extractAllKeyNullMap` must be done before `extractNestedColumnsAndNullMap`
+    /// because `extractNestedColumnsAndNullMap` will change the nullable column to its nested column.
+    extractAllKeyNullMap(
+        null_aware_join_data->key_columns,
+        null_aware_join_data->all_key_null_map_holder,
+        null_aware_join_data->all_key_null_map);
+
+    extractNestedColumnsAndNullMap(null_aware_join_data->key_columns, null_map_holder, null_map);
+
+    recordFilteredRows(block, filter_column, null_aware_join_data->filter_map_holder, null_aware_join_data->filter_map);
     prepare_for_probe_done = true;
 }
 
@@ -159,13 +200,13 @@ void ProbeProcessInfo::cutFilterAndOffsetVector(size_t start, size_t end) const
 bool ProbeProcessInfo::isCurrentProbeRowFinished() const
 {
     /// only used in cross join of shallow copy cross probe mode
-    return next_right_block_index == right_block_size;
+    return cross_join_data->next_right_block_index == cross_join_data->right_block_size;
 }
 
-void ProbeProcessInfo::finishCurrentProbeRow()
+void ProbeProcessInfo::finishCurrentProbeRow() const
 {
     /// only used in cross join of shallow copy cross probe mode
-    next_right_block_index = right_block_size;
+    cross_join_data->next_right_block_index = cross_join_data->right_block_size;
 }
 
 } // namespace DB

@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Interpreters/Context_fwd.h>
 #include <Poco/Util/AbstractConfiguration.h>
 #include <Storages/GCManager.h>
 #include <Storages/KVStore/Decode/RegionTable.h>
@@ -23,8 +24,6 @@
 
 namespace DB
 {
-class Context;
-
 class PathPool;
 
 class KVStore;
@@ -79,7 +78,7 @@ public:
 public:
     const KVStorePtr & getKVStore() const;
     KVStorePtr & getKVStore();
-    void debugSetKVStore(const KVStorePtr & new_kvstore) { kvstore = new_kvstore; }
+    void debugSetKVStore(const KVStorePtr &);
 
     const ManagedStorages & getStorages() const;
     ManagedStorages & getStorages();

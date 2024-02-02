@@ -14,9 +14,10 @@
 
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
+#include <Common/SyncPoint/SyncPoint.h>
 #include <IO/MemoryReadWriteBuffer.h>
 #include <Interpreters/Context.h>
-#include <Storages/DeltaMerge/StoragePool.h>
+#include <Storages/DeltaMerge/StoragePool/StoragePool.h>
 #include <Storages/KVStore/MultiRaft/RegionManager.h>
 #include <Storages/KVStore/MultiRaft/RegionPersister.h>
 #include <Storages/KVStore/Region.h>
@@ -24,12 +25,16 @@
 #include <Storages/Page/FileUsage.h>
 #include <Storages/Page/V2/PageStorage.h>
 #include <Storages/Page/V3/PageStorageImpl.h>
+#include <Storages/Page/WriteBatchImpl.h>
 #include <Storages/Page/WriteBatchWrapperImpl.h>
 #include <Storages/PathPool.h>
 #include <common/logger_useful.h>
+#include <fiu.h>
 
+#include <chrono>
 #include <magic_enum.hpp>
 #include <memory>
+#include <thread>
 
 namespace CurrentMetrics
 {
@@ -42,6 +47,11 @@ namespace ErrorCodes
 {
 extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
+namespace FailPoints
+{
+extern const char pause_when_persist_region[];
+extern const char random_region_persister_latency_failpoint[];
+} // namespace FailPoints
 
 void RegionPersister::drop(RegionID region_id, const RegionTaskLock &)
 {
@@ -76,24 +86,11 @@ size_t RegionPersister::computeRegionWriteBuffer(const Region & region, WriteBuf
 
 void RegionPersister::persist(const Region & region, const RegionTaskLock & lock)
 {
-    doPersist(region, &lock);
-}
-
-void RegionPersister::persist(const Region & region)
-{
-    doPersist(region, nullptr);
-}
-
-void RegionPersister::doPersist(const Region & region, const RegionTaskLock * lock)
-{
     // Support only one thread persist.
     RegionCacheWriteElement region_buffer;
     computeRegionWriteBuffer(region, region_buffer);
 
-    if (lock)
-        doPersist(region_buffer, *lock, region);
-    else
-        doPersist(region_buffer, region_manager.genRegionTaskLock(region.id()), region);
+    doPersist(region_buffer, lock, region);
 }
 
 void RegionPersister::doPersist(
@@ -102,8 +99,6 @@ void RegionPersister::doPersist(
     const Region & region)
 {
     auto & [region_id, buffer, region_size, applied_index] = region_write_buffer;
-
-    std::lock_guard lock(mutex);
 
     auto entry = page_reader->getPageEntry(region_id);
     if (entry.isValid() && entry.tag > applied_index)
@@ -121,13 +116,35 @@ void RegionPersister::doPersist(
     wb.putPage(region_id, applied_index, read_buf, region_size);
     page_writer->write(std::move(wb), global_context.getWriteLimiter());
 
+#ifdef FIU_ENABLE
+    fiu_do_on(FailPoints::pause_when_persist_region, {
+        if (auto v = FailPointHelper::getFailPointVal(FailPoints::pause_when_persist_region); v)
+        {
+            // Only pause for the given region_id
+            auto pause_region_id = std::any_cast<RegionID>(v.value());
+            if (region_id == pause_region_id)
+            {
+                SYNC_FOR("before_RegionPersister::persist_write_done");
+            }
+        }
+        else
+        {
+            // Pause for all persisting requests
+            SYNC_FOR("before_RegionPersister::persist_write_done");
+        }
+    });
+    fiu_do_on(FailPoints::random_region_persister_latency_failpoint, {
+        using namespace std::chrono_literals;
+        std::this_thread::sleep_for(1ms);
+    });
+#endif
+
     region.updateLastCompactLogApplied(region_task_lock);
 }
 
-RegionPersister::RegionPersister(Context & global_context_, const RegionManager & region_manager_)
+RegionPersister::RegionPersister(Context & global_context_)
     : global_context(global_context_)
     , run_mode(global_context.getPageStorageRunMode())
-    , region_manager(region_manager_)
     , log(Logger::get())
 {}
 

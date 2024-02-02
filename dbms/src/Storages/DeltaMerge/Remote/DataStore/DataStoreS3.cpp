@@ -57,6 +57,7 @@ void DataStoreS3::putDMFile(DMFilePtr local_dmfile, const S3::DMFileOID & oid, b
     auto s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
 
     std::vector<std::future<void>> upload_results;
+    upload_results.reserve(local_files.size() - 1);
     for (const auto & fname : local_files)
     {
         if (fname == DMFile::metav2FileName())
@@ -67,8 +68,13 @@ void DataStoreS3::putDMFile(DMFilePtr local_dmfile, const S3::DMFileOID & oid, b
         auto local_fname = fmt::format("{}/{}", local_dir, fname);
         auto remote_fname = fmt::format("{}/{}", remote_dir, fname);
         auto task = std::make_shared<std::packaged_task<void()>>(
-            [&, local_fname = std::move(local_fname), remote_fname = std::move(remote_fname)]() {
-                S3::uploadFile(*s3_client, local_fname, remote_fname);
+            [&, local_fname = std::move(local_fname), remote_fname = std::move(remote_fname)]() -> void {
+                S3::uploadFile(
+                    *s3_client,
+                    local_fname,
+                    remote_fname,
+                    EncryptionPath(local_dmfile->path(), fname, oid.keyspace_id),
+                    file_provider);
             });
         upload_results.push_back(task->get_future());
         DataStoreS3Pool::get().scheduleOrThrowOnError([task]() { (*task)(); });
@@ -81,8 +87,12 @@ void DataStoreS3::putDMFile(DMFilePtr local_dmfile, const S3::DMFileOID & oid, b
     // Only when the meta upload is successful, the dmfile upload can be considered successful.
     auto local_meta_fname = fmt::format("{}/{}", local_dir, DMFile::metav2FileName());
     auto remote_meta_fname = fmt::format("{}/{}", remote_dir, DMFile::metav2FileName());
-    S3::uploadFile(*s3_client, local_meta_fname, remote_meta_fname);
-
+    S3::uploadFile(
+        *s3_client,
+        local_meta_fname,
+        remote_meta_fname,
+        EncryptionPath(local_dmfile->path(), DMFile::metav2FileName(), oid.keyspace_id),
+        file_provider);
     if (remove_local)
     {
         local_dmfile->switchToRemote(oid);

@@ -102,6 +102,7 @@ public:
         MutableColumns & added_columns,
         size_t left_columns,
         size_t right_columns,
+        const std::vector<size_t> & right_column_indices_to_add,
         size_t & current_offset,
         size_t max_pace);
 
@@ -134,7 +135,7 @@ public:
     SemiJoinHelper(
         Block & block,
         size_t left_columns,
-        size_t right_columns,
+        const std::vector<size_t> & right_column_indices_to_add,
         size_t max_block_size,
         const JoinNonEqualConditions & non_equal_conditions);
 
@@ -153,6 +154,7 @@ private:
     Block & block;
     size_t left_columns;
     size_t right_columns;
+    std::vector<size_t> right_column_indices_to_add;
     size_t max_block_size;
 
     const JoinNonEqualConditions & non_equal_conditions;

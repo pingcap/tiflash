@@ -31,7 +31,7 @@ class FinalizeRule : public Rule
 public:
     PhysicalPlanNodePtr apply(const Context &, PhysicalPlanNodePtr plan, const LoggerPtr &) override
     {
-        plan->finalize();
+        plan->finalize(toNames(plan->getSchema()));
         return plan;
     }
 

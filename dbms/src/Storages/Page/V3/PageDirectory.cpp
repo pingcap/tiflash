@@ -47,6 +47,14 @@
 #include "pcg_random.hpp"
 #endif // FIU_ENABLE
 
+#pragma GCC diagnostic push
+#ifdef __clang__
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#endif
+// include to suppress warnings on NO_THREAD_SAFETY_ANALYSIS. clang can't work without this include, don't know why
+#include <grpcpp/security/credentials.h>
+#pragma GCC diagnostic pop
+
 namespace CurrentMetrics
 {
 extern const Metric PSMVCCSnapshotsList;
@@ -74,6 +82,19 @@ namespace PS::V3
 /********************************
  * VersionedPageEntries methods *
  ********************************/
+
+template <typename Trait>
+PageLock VersionedPageEntries<Trait>::acquireLock() const NO_THREAD_SAFETY_ANALYSIS
+{
+    return std::lock_guard(m);
+}
+
+template <typename Trait>
+size_t VersionedPageEntries<Trait>::size() const NO_THREAD_SAFETY_ANALYSIS
+{
+    auto lock = acquireLock();
+    return entries.size();
+}
 
 template <typename Trait>
 void VersionedPageEntries<Trait>::createNewEntry(const PageVersion & ver, const PageEntryV3 & entry)
@@ -2047,6 +2068,7 @@ typename PageDirectory<Trait>::PageEntries PageDirectory<Trait>::gcInMemEntries(
     {
         // Cleanup released snapshots
         std::lock_guard lock(snapshots_mutex);
+        std::unordered_set<String> tracing_id_set;
         for (auto iter = snapshots.begin(); iter != snapshots.end(); /* empty */)
         {
             if (auto snap = iter->lock(); snap == nullptr)
@@ -2063,13 +2085,17 @@ typename PageDirectory<Trait>::PageEntries PageDirectory<Trait>::gcInMemEntries(
 
                 if (alive_time_seconds > 10 * 60) // TODO: Make `10 * 60` as a configuration
                 {
-                    LOG_WARNING(
-                        log,
-                        "Meet a stale snapshot [thread id={}] [tracing id={}] [seq={}] [alive time(s)={}]",
-                        snap->create_thread,
-                        snap->tracing_id,
-                        snap->sequence,
-                        alive_time_seconds);
+                    if (!tracing_id_set.contains(snap->tracing_id))
+                    {
+                        LOG_WARNING(
+                            log,
+                            "Meet a stale snapshot [thread id={}] [tracing id={}] [seq={}] [alive time(s)={}]",
+                            snap->create_thread,
+                            snap->tracing_id,
+                            snap->sequence,
+                            alive_time_seconds);
+                        tracing_id_set.emplace(snap->tracing_id);
+                    }
                     stale_snapshot_nums++;
                 }
 
@@ -2158,8 +2184,10 @@ typename PageDirectory<Trait>::PageEntries PageDirectory<Trait>::gcInMemEntries(
         }
     }
 
-    LOG_DEBUG(
+    auto log_level = stale_snapshot_nums > 0 ? Poco::Message::PRIO_INFORMATION : Poco::Message::PRIO_DEBUG;
+    LOG_IMPL(
         log,
+        log_level,
         "After MVCC gc in memory [lowest_seq={}] "
         "clean [invalid_snapshot_nums={}] [invalid_page_nums={}] "
         "[total_deref_counter={}] [all_del_entries={}]. "

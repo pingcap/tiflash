@@ -66,8 +66,8 @@ try
         {"d", TiDB::TP::TypeLongLong},
         {"e", TiDB::TP::TypeLongLong}};
     ColumnsWithTypeAndName column_datas;
-    size_t table_rows = 51200;
-    size_t duplicated_rows = 25600;
+    size_t table_rows = 12800;
+    size_t duplicated_rows = 6400;
     UInt64 max_block_size = 500;
     size_t original_max_streams = 20;
     size_t total_data_size = 0;
@@ -114,9 +114,9 @@ try
     /// test parallel aggregation
     ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams));
     /// test spill with small max_block_size
-    /// the avg rows in one bucket is ~10240/256 = 400, so set the small_max_block_size to 300
+    /// the avg rows in one bucket is ~10240/256 = 400, so set the small_max_block_size to 100
     /// is enough to test the output spilt
-    size_t small_max_block_size = 300;
+    size_t small_max_block_size = 100;
     context.context->setSetting("max_block_size", Field(static_cast<UInt64>(small_max_block_size)));
     auto blocks = getExecuteStreamsReturnBlocks(request, 1);
     for (auto & block : blocks)

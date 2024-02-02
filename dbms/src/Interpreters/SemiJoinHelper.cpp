@@ -40,6 +40,7 @@ void SemiJoinResult<KIND, All>::fillRightColumns(
     MutableColumns & added_columns,
     size_t left_columns,
     size_t right_columns,
+    const std::vector<size_t> & right_column_indices_to_add,
     size_t & current_offset,
     size_t max_pace)
 {
@@ -60,7 +61,9 @@ void SemiJoinResult<KIND, All>::fillRightColumns(
     for (size_t i = 0; i < current_pace && iter != nullptr; ++i)
     {
         for (size_t j = 0; j < right_columns; ++j)
-            added_columns[j + left_columns]->insertFrom(*iter->block->getByPosition(j).column.get(), iter->row_num);
+            added_columns[j + left_columns]->insertFrom(
+                *iter->block->getByPosition(right_column_indices_to_add[j]).column.get(),
+                iter->row_num);
         ++current_offset;
         iter = iter->next;
     }
@@ -142,17 +145,18 @@ template <ASTTableJoin::Kind KIND, typename Mapped>
 SemiJoinHelper<KIND, Mapped>::SemiJoinHelper(
     Block & block_,
     size_t left_columns_,
-    size_t right_columns_,
+    const std::vector<size_t> & right_column_indices_to_added_,
     size_t max_block_size_,
     const JoinNonEqualConditions & non_equal_conditions_)
     : block(block_)
     , left_columns(left_columns_)
-    , right_columns(right_columns_)
+    , right_column_indices_to_add(right_column_indices_to_added_)
     , max_block_size(max_block_size_)
     , non_equal_conditions(non_equal_conditions_)
 {
     static_assert(KIND == Semi || KIND == Anti || KIND == LeftOuterAnti || KIND == LeftOuterSemi);
 
+    right_columns = right_column_indices_to_add.size();
     RUNTIME_CHECK(block.columns() == left_columns + right_columns);
 
     if constexpr (KIND == LeftOuterAnti || KIND == LeftOuterSemi)
@@ -195,6 +199,7 @@ void SemiJoinHelper<KIND, Mapped>::joinResult(std::list<Result *> & res_list)
                 columns,
                 left_columns,
                 right_columns,
+                right_column_indices_to_add,
                 current_offset,
                 max_block_size - current_offset);
 

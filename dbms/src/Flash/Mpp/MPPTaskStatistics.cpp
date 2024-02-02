@@ -105,8 +105,10 @@ tipb::TiFlashExecutionInfo MPPTaskStatistics::genTiFlashExecutionInfo()
 
 void MPPTaskStatistics::logTracingJson()
 {
-    LOG_INFO(
+    LOG_IMPL(
         log,
+        /// don't use info log for initializing status since it does not contains too many information
+        status == INITIALIZING ? Poco::Message::PRIO_DEBUG : Poco::Message::PRIO_INFORMATION,
         R"({{"query_tso":{},"task_id":{},"is_root":{},"sender_executor_id":"{}","executors":{},"host":"{}")"
         R"(,"task_init_timestamp":{},"task_start_timestamp":{},"task_end_timestamp":{})"
         R"(,"compile_start_timestamp":{},"compile_end_timestamp":{})"
@@ -131,8 +133,8 @@ void MPPTaskStatistics::logTracingJson()
         output_bytes,
         magic_enum::enum_name(status),
         error_message,
-        cpu_ru,
-        read_ru,
+        ru_info.cpu_ru,
+        ru_info.read_ru,
         memory_peak);
 }
 
@@ -141,10 +143,10 @@ void MPPTaskStatistics::setMemoryPeak(Int64 memory_peak_)
     memory_peak = memory_peak_;
 }
 
-void MPPTaskStatistics::setRU(RU cpu_ru_, RU read_ru_)
+void MPPTaskStatistics::setRUInfo(const RUConsumption & ru_info_)
 {
-    cpu_ru = cpu_ru_;
-    read_ru = read_ru_;
+    ru_info = ru_info_;
+    executor_statistics_collector.setLocalRUConsumption(ru_info_);
 }
 
 void MPPTaskStatistics::setCompileTimestamp(const Timestamp & start_timestamp, const Timestamp & end_timestamp)

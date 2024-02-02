@@ -19,10 +19,12 @@
 #include <Encryption/EncryptionPath.h>
 #include <RaftStoreProxyFFI/EncryptionFFI.h>
 #include <Storages/KVStore/FFI/ProxyFFICommon.h>
+#include <common/likely.h>
 
 
 namespace DB
 {
+using PageIdU64 = uint64_t;
 
 const char * IntoEncryptionMethodName(EncryptionMethod);
 struct EngineStoreServerWrap;
@@ -88,9 +90,31 @@ struct FileEncryptionInfo : private FileEncryptionInfoRaw
         const EncryptionPath & encryption_path,
         bool is_new_created_info = false) const;
 
+    enum Operation : uint8_t
+    {
+        Encrypt,
+        Decrypt,
+    };
+
+    // Encrypt/decrypt the data in place.
+    template <Operation op>
+    void cipherData(char * data, size_t data_size) const;
+
     bool isValid() const { return (res == FileEncryptionRes::Ok || res == FileEncryptionRes::Disabled); }
     // FileEncryptionRes::Disabled means encryption feature has never been enabled, so no file will be encrypted.
     bool isEncrypted() const { return (res != FileEncryptionRes::Disabled && method != EncryptionMethod::Plaintext); }
+
+    // Check if two FileEncryptionInfo are equal.
+    // Both of them must be valid, and the key and iv must be not null, otherwise return false.
+    // Only used in test now.
+    bool equals(const FileEncryptionInfo & rhs) const
+    {
+        if (!isValid() || !rhs.isValid())
+            return false;
+        if (unlikely(key == nullptr || iv == nullptr || rhs.key == nullptr || rhs.iv == nullptr))
+            return false;
+        return res == rhs.res && method == rhs.method && *key == *rhs.key && *iv == *rhs.iv;
+    }
 
     std::string getErrorMsg() const { return error_msg ? std::string(*error_msg) : ""; }
 };

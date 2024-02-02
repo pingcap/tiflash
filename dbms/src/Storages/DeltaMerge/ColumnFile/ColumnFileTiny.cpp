@@ -25,6 +25,7 @@
 
 #include <memory>
 
+
 namespace DB
 {
 namespace DM
@@ -93,6 +94,15 @@ Columns ColumnFileTiny::readFromDisk(
 
     // Read the columns from disk and apply DDL cast if need
     Page page = data_provider->readTinyData(data_page_id, fields);
+    // use `unlikely` to reduce performance impact on keyspaces without enable encryption
+    if (unlikely(file_provider->isEncryptionEnabled(keyspace_id)))
+    {
+        // decrypt the page data in place
+        size_t data_size = page.data.size();
+        char * data = page.mem_holder.get();
+        file_provider->decryptPage(keyspace_id, data, data_size, data_page_id);
+    }
+
     for (size_t index = col_start; index < col_end; ++index)
     {
         const size_t index_in_read_columns = index - col_start;
@@ -179,7 +189,7 @@ ColumnFilePersistedPtr ColumnFileTiny::deserializeMetadata(
     readIntBinary(rows, buf);
     readIntBinary(bytes, buf);
 
-    return std::make_shared<ColumnFileTiny>(schema, rows, bytes, data_page_id);
+    return std::make_shared<ColumnFileTiny>(schema, rows, bytes, data_page_id, context);
 }
 
 std::tuple<ColumnFilePersistedPtr, BlockPtr> ColumnFileTiny::createFromCheckpoint(
@@ -228,7 +238,10 @@ std::tuple<ColumnFilePersistedPtr, BlockPtr> ColumnFileTiny::createFromCheckpoin
     wbs.log.putRemotePage(new_cf_id, 0, entry.size, new_remote_data_location, std::move(entry.field_offsets));
 
     auto column_file_schema = std::make_shared<ColumnFileSchema>(*schema);
-    return {std::make_shared<ColumnFileTiny>(column_file_schema, rows, bytes, new_cf_id), std::move(schema)};
+    return {
+        std::make_shared<ColumnFileTiny>(column_file_schema, rows, bytes, new_cf_id, context),
+        std::move(schema),
+    };
 }
 
 Block ColumnFileTiny::readBlockForMinorCompaction(const PageReader & page_reader) const
@@ -277,7 +290,7 @@ ColumnFileTinyPtr ColumnFileTiny::writeColumnFile(
     auto schema = getSharedBlockSchemas(context)->getOrCreate(block);
 
     auto bytes = block.bytes(offset, limit);
-    return std::make_shared<ColumnFileTiny>(schema, limit, bytes, page_id, cache);
+    return std::make_shared<ColumnFileTiny>(schema, limit, bytes, page_id, context, cache);
 }
 
 PageIdU64 ColumnFileTiny::writeColumnFileData(
@@ -314,6 +327,22 @@ PageIdU64 ColumnFileTiny::writeColumnFileData(
 
     auto data_size = write_buf.count();
     auto buf = write_buf.tryGetReadBuffer();
+    if (const auto & file_provider = dm_context.global_context.getFileProvider();
+        unlikely(file_provider->isEncryptionEnabled(dm_context.keyspace_id)))
+    {
+        if (const auto ep = EncryptionPath("", "", dm_context.keyspace_id);
+            unlikely(!file_provider->isFileEncrypted(ep)))
+        {
+            file_provider->createEncryptionInfo(ep);
+        }
+
+        char page_data[data_size];
+        buf->readStrict(page_data, data_size);
+        // encrypt the page data in place
+        file_provider->encryptPage(dm_context.keyspace_id, page_data, data_size, page_id);
+        // ReadBufferFromOwnString will copy the data, and own the data.
+        buf = std::make_shared<ReadBufferFromOwnString>(std::string_view(page_data, data_size));
+    }
     wbs.log.putPage(page_id, 0, buf, data_size, col_data_sizes);
 
     return page_id;

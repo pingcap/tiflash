@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/Logger.h>
+#include <Storages/KVStore/MultiRaft/Disagg/fast_add_peer.pb.h>
 #include <common/types.h>
 
 #include <memory>
@@ -73,15 +74,32 @@ struct CheckpointIngestInfo
         UInt64 region_id,
         UInt64 peer_id);
 
+    enum class CleanReason
+    {
+        Success,
+        ProxyFallback,
+        TiFlashCancel,
+        ResolveStateApplySnapshot,
+        ResolveStateDestroy,
+    };
+
     // Only call to clean dangling CheckpointIngestInfo.
-    static bool forciblyClean(TMTContext & tmt, UInt64 region_id, bool pre_check = true);
+    static bool forciblyClean(
+        TMTContext & tmt,
+        const TiFlashRaftProxyHelper * proxy_helper,
+        UInt64 region_id,
+        bool in_memory,
+        CleanReason reason);
+    static bool cleanOnSuccess(TMTContext & tmt, UInt64 region_id);
+
+    FastAddPeerProto::CheckpointIngestInfoPersisted serializeMeta() const;
 
 private:
     friend class FastAddPeerContext;
     // Safety: raftstore ensures a region is handled in a single thread.
     // `persistToLocal` is called at a fixed place in this thread.
     void persistToLocal() const;
-    static void removeFromLocal(TMTContext & tmt, UInt64 region_id);
+    static void deleteWrittenData(TMTContext & tmt, RegionPtr region, const DM::Segments & segments);
 
 private:
     TMTContext & tmt;

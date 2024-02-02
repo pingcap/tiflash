@@ -14,15 +14,14 @@
 
 #pragma once
 
+#include <BaseFile/fwd.h>
 #include <Core/Types.h>
 #include <Encryption/BlockAccessCipherStream.h>
 #include <Encryption/FileProvider_fwd.h>
 #include <Encryption/KeyManager.h>
-#include <Encryption/RandomAccessFile.h>
-#include <Encryption/WritableFile.h>
-#include <Encryption/WriteReadableFile.h>
+#include <Storages/Page/PageDefinesBase.h>
+#include <Storages/Page/PageStorage_fwd.h>
 
-#include <string>
 
 namespace DB
 {
@@ -36,9 +35,10 @@ using ReadLimiterPtr = std::shared_ptr<ReadLimiter>;
 class FileProvider
 {
 public:
-    FileProvider(KeyManagerPtr key_manager_, bool encryption_enabled_)
+    FileProvider(KeyManagerPtr key_manager_, bool encryption_enabled_, bool keyspace_encryption_enabled_ = false)
         : key_manager{std::move(key_manager_)}
         , encryption_enabled{encryption_enabled_}
+        , keyspace_encryption_enabled{keyspace_encryption_enabled_}
     {}
 
     RandomAccessFilePtr newRandomAccessFile(
@@ -61,6 +61,7 @@ public:
         const EncryptionPath & encryption_path_,
         bool truncate_if_exists_ = true,
         bool create_new_encryption_info_ = true,
+        bool skip_encryption_ = false,
         const WriteLimiterPtr & write_limiter_ = nullptr,
         const ReadLimiterPtr & read_limiter = nullptr,
         int flags = -1,
@@ -78,6 +79,16 @@ public:
 
     void deleteEncryptionInfo(const EncryptionPath & encryption_path_, bool throw_on_error = true) const;
 
+    // Drop encryption info of keyspace_id.
+    // Note: after calling this method, the keyspace encryption key can not be found anymore.
+    // Only for KeyspacesKeyManager now.
+    void dropEncryptionInfo(KeyspaceID keyspace_id) const;
+
+    // Encrypt/Decrypt page data in place, using encryption_path_ to find the encryption info
+    // createEncryptionInfo should be called before calling encryptPage.
+    void encryptPage(KeyspaceID keyspace_id, char * data, size_t data_size, PageIdU64 page_id);
+    void decryptPage(KeyspaceID keyspace_id, char * data, size_t data_size, PageIdU64 page_id);
+
     // Please check `ln -h`
     // It will be link_encryption_name_ link to src_encryption_path_
     // For example: file0 have some data, file1 want to keep same data as file0
@@ -88,6 +99,10 @@ public:
     bool isFileEncrypted(const EncryptionPath & encryption_path_) const;
 
     bool isEncryptionEnabled() const;
+    bool isKeyspaceEncryptionEnabled() const;
+    // A quick way to check if encryption is enabled for a keyspace.
+    // Normally you can just assume keyspace encryption is enabled, and if actully not, we will just skip the encryption.
+    bool isEncryptionEnabled(KeyspaceID keyspace_id) const;
 
     // `renameFile` includes two steps,
     // 1. rename encryption info
@@ -104,11 +119,15 @@ public:
         const EncryptionPath & dst_encryption_path_,
         bool rename_encryption_info_) const;
 
+    void setPageStoragePtrForKeyManager(const UniversalPageStoragePtr & page_storage_ptr_);
+
     ~FileProvider() = default;
 
 private:
     KeyManagerPtr key_manager;
-    bool encryption_enabled;
+    const bool encryption_enabled;
+    // Always false for On-Promise, only allow set to true when keyspace feature is GA.
+    const bool keyspace_encryption_enabled = false;
 };
 
 } // namespace DB

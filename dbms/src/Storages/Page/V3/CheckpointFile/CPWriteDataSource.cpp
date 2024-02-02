@@ -13,6 +13,8 @@
 // limitations under the License.
 
 #include <Storages/Page/V3/CheckpointFile/CPWriteDataSource.h>
+#include <Storages/Page/V3/Universal/UniversalPageIdFormatImpl.h>
+
 
 namespace DB::PS::V3
 {
@@ -26,7 +28,17 @@ Page CPWriteDataSourceBlobStore::read(const BlobStore<universal::BlobStoreTrait>
     }
     else
     {
-        return blob_store.read(page_id_and_entry);
+        // StorageType::Log type page in local storage may be encrypted.
+        Page page = blob_store.read(page_id_and_entry);
+        const auto & ups_page_id = page_id_and_entry.first;
+        auto page_id_u64 = UniversalPageIdFormat::getU64ID(ups_page_id);
+        auto keyspace_id = UniversalPageIdFormat::getKeyspaceID(ups_page_id);
+        if (unlikely(file_provider->isEncryptionEnabled(keyspace_id)) && !page.data.empty()
+            && UniversalPageIdFormat::isType(ups_page_id, StorageType::Log))
+        {
+            file_provider->decryptPage(keyspace_id, page.mem_holder.get(), page.data.size(), page_id_u64);
+        }
+        return page;
     }
 }
 
@@ -36,11 +48,11 @@ Page CPWriteDataSourceFixture::read(const BlobStore<universal::BlobStoreTrait>::
     if (it == data.end())
         return Page::invalidPage();
 
-    auto & value = it->second;
+    std::string_view value = it->second;
 
     Page page(1);
     page.mem_holder = nullptr;
-    page.data = std::string_view(value);
+    page.data = value;
     return page;
 }
 

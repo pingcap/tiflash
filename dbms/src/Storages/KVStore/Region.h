@@ -19,6 +19,7 @@
 #include <Storages/KVStore/Decode/DecodedTiKVKeyValue.h>
 #include <Storages/KVStore/MultiRaft/RegionData.h>
 #include <Storages/KVStore/MultiRaft/RegionMeta.h>
+#include <Storages/KVStore/MultiRaft/RegionSerde.h>
 #include <common/logger_useful.h>
 
 #include <shared_mutex>
@@ -117,8 +118,7 @@ public:
         std::unique_lock<std::shared_mutex> lock; // A unique_lock so that we can safely remove committed data.
     };
 
-public:
-    explicit Region(RegionMeta && meta_);
+public: // Simple Read and Write
     explicit Region(RegionMeta && meta_, const TiFlashRaftProxyHelper *);
     ~Region();
 
@@ -129,12 +129,13 @@ public:
     // Directly drop all data in this Region object.
     void clearAllData();
 
-    CommittedScanner createCommittedScanner(bool use_lock, bool need_value);
-    CommittedRemover createCommittedRemover(bool use_lock = true);
+    void mergeDataFrom(const Region & other);
+    RegionMeta & mutMeta() { return meta; }
 
-    std::tuple<size_t, UInt64> serialize(WriteBuffer & buf) const;
-    static RegionPtr deserialize(ReadBuffer & buf, const TiFlashRaftProxyHelper * proxy_helper = nullptr);
+    // Assign data and meta by moving from `new_region`.
+    void assignRegion(Region && new_region);
 
+public: // Stats
     RegionID id() const;
     ImutRegionRangePtr getRange() const;
 
@@ -161,6 +162,25 @@ public:
     std::pair<UInt64, UInt64> getRaftLogEagerGCRange() const;
     void updateRaftLogEagerIndex(UInt64 new_truncate_index);
 
+    static size_t writePersistExtension(
+        UInt32 & cnt,
+        WriteBuffer & wb,
+        MaybeRegionPersistExtension ext_type,
+        const char * data,
+        UInt32 size);
+    std::tuple<size_t, UInt64> serialize(WriteBuffer & buf) const;
+    static RegionPtr deserialize(ReadBuffer & buf, const TiFlashRaftProxyHelper * proxy_helper = nullptr);
+    std::tuple<size_t, UInt64> serializeImpl(
+        UInt32 binary_version,
+        UInt32 expected_extension_count,
+        std::function<size_t(UInt32 &, WriteBuffer &)> extra_handler,
+        WriteBuffer & buf) const;
+    static RegionPtr deserializeImpl(
+        UInt32 current_version,
+        std::function<bool(UInt32, ReadBuffer &, UInt32)> extra_handler,
+        ReadBuffer & buf,
+        const TiFlashRaftProxyHelper * proxy_helper = nullptr);
+
     friend bool operator==(const Region & region1, const Region & region2)
     {
         std::shared_lock<std::shared_mutex> lock1(region1.mutex);
@@ -168,15 +188,6 @@ public:
 
         return region1.meta == region2.meta && region1.data == region2.data;
     }
-
-    // Check if we can read by this index.
-    bool checkIndex(UInt64 index) const;
-    // Return <WaitIndexStatus, time cost(seconds)> for wait-index.
-    std::tuple<WaitIndexStatus, double> waitIndex(
-        UInt64 index,
-        UInt64 timeout_ms,
-        std::function<bool(void)> && check_running,
-        const LoggerPtr & log);
 
     // Requires RegionMeta's lock
     UInt64 appliedIndex() const;
@@ -189,10 +200,33 @@ public:
     RegionVersion version() const;
     RegionVersion confVer() const;
 
-    RegionMetaSnapshot dumpRegionMetaSnapshot() const;
+    TableID getMappedTableID() const;
+    KeyspaceID getKeyspaceID() const;
 
-    // Assign data and meta by moving from `new_region`.
-    void assignRegion(Region && new_region);
+    /// get approx rows, bytes info about mem cache.
+    std::pair<size_t, size_t> getApproxMemCacheInfo() const;
+    void cleanApproxMemCacheInfo() const;
+
+    // Check the raftstore cluster version of this region.
+    // Currently, all version in the same TiFlash store should be the same.
+    RaftstoreVer getClusterRaftstoreVer();
+    RegionData::OrphanKeysInfo & orphanKeysInfo() { return data.orphan_keys_info; }
+    const RegionData::OrphanKeysInfo & orphanKeysInfo() const { return data.orphan_keys_info; }
+
+public: // Raft Read and Write
+    CommittedScanner createCommittedScanner(bool use_lock, bool need_value);
+    CommittedRemover createCommittedRemover(bool use_lock = true);
+
+    // Check if we can read by this index.
+    bool checkIndex(UInt64 index) const;
+    // Return <WaitIndexStatus, time cost(seconds)> for wait-index.
+    std::tuple<WaitIndexStatus, double> waitIndex(
+        UInt64 index,
+        UInt64 timeout_ms,
+        std::function<bool(void)> && check_running,
+        const LoggerPtr & log);
+
+    RegionMetaSnapshot dumpRegionMetaSnapshot() const;
 
     void tryCompactionFilter(Timestamp safe_point);
 
@@ -202,36 +236,22 @@ public:
     raft_serverpb::MergeState cloneMergeState() const;
     const raft_serverpb::MergeState & getMergeState() const;
 
-    TableID getMappedTableID() const;
-    KeyspaceID getKeyspaceID() const;
     std::pair<EngineStoreApplyRes, DM::WriteResult> handleWriteRaftCmd(
         const WriteCmdsView & cmds,
         UInt64 index,
         UInt64 term,
         TMTContext & tmt);
 
-    /// get approx rows, bytes info about mem cache.
-    std::pair<size_t, size_t> getApproxMemCacheInfo() const;
-    void cleanApproxMemCacheInfo() const;
-
-    RegionMeta & mutMeta() { return meta; }
-
+    std::shared_ptr<const TiKVValue> getLockByKey(const TiKVKey & key) { return data.getLockByKey(key); }
     UInt64 getSnapshotEventFlag() const { return snapshot_event_flag; }
 
     // IngestSST will first be applied to the `temp_region`, then we need to
     // copy the key-values from `temp_region` and move forward the `index` and `term`
     void finishIngestSSTByDTFile(RegionPtr && temp_region, UInt64 index, UInt64 term);
 
-    // Check the raftstore cluster version of this region.
-    // Currently, all version in the same TiFlash store should be the same.
-    RaftstoreVer getClusterRaftstoreVer();
     // Methods to handle orphan keys under raftstore v2.
     void beforePrehandleSnapshot(uint64_t region_id, std::optional<uint64_t> deadline_index);
     void afterPrehandleSnapshot(int64_t ongoing);
-    RegionData::OrphanKeysInfo & orphanKeysInfo() { return data.orphan_keys_info; }
-    const RegionData::OrphanKeysInfo & orphanKeysInfo() const { return data.orphan_keys_info; }
-
-    void mergeDataFrom(const Region & other);
 
     Region() = delete;
 
@@ -245,7 +265,6 @@ private:
     // Private methods no need to lock mutex, normally
 
     size_t doInsert(ColumnFamilyType type, TiKVKey && key, TiKVValue && value, DupCheck mode);
-    void doCheckTable(const DecodedTiKVKey & key) const;
     void doRemove(ColumnFamilyType type, const TiKVKey & key);
 
     std::optional<RegionDataReadInfo> readDataByWriteIt(

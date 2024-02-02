@@ -140,9 +140,10 @@ SegmentReadTaskPool::SegmentReadTaskPool(
     , unordered_input_stream_ref_count(0)
     , exception_happened(false)
     // If the queue is too short, only 1 in the extreme case, it may cause the computation thread
-    // to encounter empty queues frequently, resulting in too much waiting and thread context
-    // switching, so we limit the lower limit to 3, which provides two blocks of buffer space.
-    , block_slot_limit(std::max(num_streams_, 3))
+    // to encounter empty queues frequently, resulting in too much waiting and thread context switching.
+    // We limit the length of block queue to be 1.5 times of `num_streams_`, and in the extreme case,
+    // when `num_streams_` is 1, `block_slot_limit` is at least 2.
+    , block_slot_limit(std::ceil(num_streams_ * 1.5))
     // Limiting the minimum number of reading segments to 2 is to avoid, as much as possible,
     // situations where the computation may be faster and the storage layer may not be able to keep up.
     , active_segment_limit(std::max(num_streams_, 2))
@@ -195,7 +196,8 @@ const std::unordered_map<GlobalSegmentID, SegmentReadTaskPtr> & SegmentReadTaskP
 // Returns <segment_id, pool_ids>.
 MergingSegments::iterator SegmentReadTaskPool::scheduleSegment(
     MergingSegments & segments,
-    uint64_t expected_merge_count)
+    UInt64 expected_merge_count,
+    bool enable_data_sharing)
 {
     auto target = segments.end();
     std::lock_guard lock(mutex);
@@ -209,20 +211,18 @@ MergingSegments::iterator SegmentReadTaskPool::scheduleSegment(
     for (const auto & [seg_id, task] : tasks)
     {
         auto itr = segments.find(seg_id);
-        if (itr == segments.end())
-        {
-            throw DB::Exception(fmt::format("segment_id {} not found from merging segments", task));
-        }
-        if (std::find(itr->second.begin(), itr->second.end(), pool_id) == itr->second.end())
-        {
-            throw DB::Exception(
-                fmt::format("pool_id={} not found from merging segment {}=>{}", pool_id, task, itr->second));
-        }
+        RUNTIME_CHECK_MSG(itr != segments.end(), "segment_id {} not found from merging segments", task);
+        RUNTIME_CHECK_MSG(
+            std::find(itr->second.begin(), itr->second.end(), pool_id) != itr->second.end(),
+            "pool_id={} not found from merging segment {}=>{}",
+            pool_id,
+            task,
+            itr->second);
         if (target == segments.end() || itr->second.size() > target->second.size())
         {
             target = itr;
         }
-        if (target->second.size() >= expected_merge_count || ++iter_count >= max_iter_count)
+        if (target->second.size() >= expected_merge_count || ++iter_count >= max_iter_count || !enable_data_sharing)
         {
             break;
         }
@@ -278,7 +278,9 @@ void SegmentReadTaskPool::pushBlock(Block && block)
 {
     blk_stat.push(block);
     global_blk_stat.push(block);
-    read_bytes_after_last_check += block.bytes();
+    auto bytes = block.bytes();
+    read_bytes_after_last_check += bytes;
+    GET_METRIC(tiflash_storage_read_thread_counter, type_push_block_bytes).Increment(bytes);
     q.push(std::move(block), nullptr);
 }
 

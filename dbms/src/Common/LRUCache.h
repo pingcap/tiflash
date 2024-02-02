@@ -60,7 +60,7 @@ public:
 
     MappedPtr get(const Key & key)
     {
-        std::lock_guard cache_lock(mutex);
+        std::scoped_lock cache_lock(mutex);
 
         auto res = getImpl(key, cache_lock);
         if (res)
@@ -73,7 +73,7 @@ public:
 
     void set(const Key & key, const MappedPtr & mapped)
     {
-        std::lock_guard cache_lock(mutex);
+        std::scoped_lock cache_lock(mutex);
 
         setImpl(key, mapped, cache_lock);
     }
@@ -91,7 +91,7 @@ public:
     {
         InsertTokenHolder token_holder;
         {
-            std::lock_guard cache_lock(mutex);
+            std::scoped_lock cache_lock(mutex);
 
             auto val = getImpl(key, cache_lock);
             if (val)
@@ -109,7 +109,7 @@ public:
 
         InsertToken * token = token_holder.token.get();
 
-        std::lock_guard token_lock(token->mutex);
+        std::scoped_lock token_lock(token->mutex);
 
         token_holder.cleaned_up = token->cleaned_up;
 
@@ -123,7 +123,7 @@ public:
         ++misses;
         token->value = load_func();
 
-        std::lock_guard cache_lock(mutex);
+        std::scoped_lock cache_lock(mutex);
 
         /// Insert the new value only if the token is still in present in insert_tokens.
         /// (The token may be absent because of a concurrent reset() call).
@@ -143,7 +143,7 @@ public:
 
     void remove(const Key & key)
     {
-        std::lock_guard cache_lock(mutex);
+        std::scoped_lock cache_lock(mutex);
         auto it = cells.find(key);
         if (it == cells.end())
             return;
@@ -156,32 +156,38 @@ public:
 
     void getStats(size_t & out_hits, size_t & out_misses) const
     {
-        std::lock_guard cache_lock(mutex);
+        std::scoped_lock cache_lock(mutex);
         out_hits = hits;
         out_misses = misses;
     }
 
     size_t weight() const
     {
-        std::lock_guard cache_lock(mutex);
+        std::scoped_lock cache_lock(mutex);
         return current_weight;
     }
 
     size_t count() const
     {
-        std::lock_guard cache_lock(mutex);
+        std::scoped_lock cache_lock(mutex);
         return cells.size();
     }
 
     void reset()
     {
-        std::lock_guard cache_lock(mutex);
+        std::scoped_lock cache_lock(mutex);
         queue.clear();
         cells.clear();
         insert_tokens.clear();
         current_weight = 0;
         hits = 0;
         misses = 0;
+    }
+
+    bool contains(const Key & key) const
+    {
+        std::scoped_lock cache_lock(mutex);
+        return cells.contains(key);
     }
 
     virtual ~LRUCache() = default;
@@ -218,7 +224,7 @@ private:
         void acquire(
             const Key * key_,
             const std::shared_ptr<InsertToken> & token_,
-            [[maybe_unused]] std::lock_guard<std::mutex> & cache_lock)
+            [[maybe_unused]] std::scoped_lock<std::mutex> & cache_lock)
         {
             key = key_;
             token = token_;
@@ -226,8 +232,8 @@ private:
         }
 
         void cleanup(
-            [[maybe_unused]] std::lock_guard<std::mutex> & token_lock,
-            [[maybe_unused]] std::lock_guard<std::mutex> & cache_lock)
+            [[maybe_unused]] std::scoped_lock<std::mutex> & token_lock,
+            [[maybe_unused]] std::scoped_lock<std::mutex> & cache_lock)
         {
             token->cache.insert_tokens.erase(*key);
             token->cleaned_up = true;
@@ -242,12 +248,12 @@ private:
             if (cleaned_up)
                 return;
 
-            std::lock_guard token_lock(token->mutex);
+            std::scoped_lock token_lock(token->mutex);
 
             if (token->cleaned_up)
                 return;
 
-            std::lock_guard cache_lock(token->cache.mutex);
+            std::scoped_lock cache_lock(token->cache.mutex);
 
             --token->refcount;
             if (token->refcount == 0)
@@ -286,7 +292,7 @@ private:
     const WeightFunction weight_function;
 
 private:
-    MappedPtr getImpl(const Key & key, [[maybe_unused]] std::lock_guard<std::mutex> & cache_lock)
+    MappedPtr getImpl(const Key & key, [[maybe_unused]] std::scoped_lock<std::mutex> & cache_lock)
     {
         auto it = cells.find(key);
         if (it == cells.end())
@@ -301,7 +307,7 @@ private:
         return cell.value;
     }
 
-    void setImpl(const Key & key, const MappedPtr & mapped, [[maybe_unused]] std::lock_guard<std::mutex> & cache_lock)
+    void setImpl(const Key & key, const MappedPtr & mapped, [[maybe_unused]] std::scoped_lock<std::mutex> & cache_lock)
     {
         auto [it, inserted]
             = cells.emplace(std::piecewise_construct, std::forward_as_tuple(key), std::forward_as_tuple());
