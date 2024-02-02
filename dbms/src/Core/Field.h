@@ -92,7 +92,7 @@ public:
         //  if precise_dividend is false, the dividend still could have chance to be precisely represented. It doesn't affect
         // the correctness.
         auto v = static_cast<Float64>(dec.value);
-        auto nearest_v = v > 0 ? v + 1 : v - 1;
+        auto nearest_v = v > 0 ? v - 1 : v + 1;
         bool precise_dividend
             = ((dec.value <= (1LL << 53) && (dec.value >= -(1LL << 53)))
                || (static_cast<NativeType>(v) == dec.value && static_cast<NativeType>(nearest_v) != dec.value));
