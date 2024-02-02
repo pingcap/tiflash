@@ -427,7 +427,7 @@ private:
     void writeMetadata(const FileProviderPtr & file_provider, const WriteLimiterPtr & write_limiter);
     void readMetadata(const FileProviderPtr & file_provider, const ReadMetaMode & read_meta_mode);
 
-    void upgradeMetaIfNeed(const FileProviderPtr & file_provider, DMFileFormat::Version ver);
+    void tryUpgradeColumnStatInMetaV1(const FileProviderPtr & file_provider, DMFileFormat::Version ver);
 
     void addPack(const PackStat & pack_stat) { pack_stats.push_back(pack_stat); }
 
@@ -468,11 +468,11 @@ private:
     UInt64 getMergedFileSizeOfColumn(const MergedSubFileInfo & file_info) const;
 
     // The id to construct the file path on disk.
-    UInt64 file_id;
+    const UInt64 file_id;
     // It is the page_id that represent this file in the PageStorage. It could be the same as file id.
-    UInt64 page_id;
+    const UInt64 page_id;
     // The id of the keyspace that this file belongs to.
-    KeyspaceID keyspace_id;
+    const KeyspaceID keyspace_id;
     String parent_path;
 
     PackStats pack_stats;
