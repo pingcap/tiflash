@@ -86,10 +86,11 @@ public:
         };
         // clang-format on
 
-        // Use double divide algorithm in two situations: when both the dividend and the divisor can be precisely represented by double
+        // Use double divide algorithm when both the dividend and the divisor can be precisely represented by double
         // 1e0,1e1,...1e22 can be precisely represented by double
         // Note: ensure that if precise_dividend is true, then the dividend must be precisely represented;
-        //  if precise_dividend is false, the dividend still could have chance to be precisely represented
+        //  if precise_dividend is false, the dividend still could have chance to be precisely represented. It doesn't affect
+        // the correctness.
         auto v = static_cast<Float64>(dec.value);
         auto nearest_v = v > 0 ? v + 1 : v - 1;
         bool precise_dividend
