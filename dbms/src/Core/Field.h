@@ -95,6 +95,8 @@ public:
         bool precise_dividend
             = ((dec.value <= (1LL << 53) && (dec.value >= -(1LL << 53)))
                || (static_cast<NativeType>(v) == dec.value && static_cast<NativeType>(nearest_v) != dec.value));
+        // Note: even if scale = 0, we should still check precise_dividend here, because cast<double>(int256) doesn't
+        // satisfy IEEE754 perfectly
         if likely (precise_dividend && scale <= 22)
         {
             v = v / ScaleMultiplierArray[scale];
