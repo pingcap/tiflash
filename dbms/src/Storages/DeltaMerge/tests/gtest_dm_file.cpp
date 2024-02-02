@@ -184,6 +184,77 @@ protected:
     ColumnCachePtr column_cache;
 };
 
+void DMFileTest::checkMergedFile(
+    const DMFilePtr & dmfile,
+    UInt64 merged_number,
+    const std::set<String> & not_uploaded_files,
+    std::set<String> & checked_fnames)
+{
+    auto merged_filename = dmfile->mergedPath(merged_number);
+    auto merged_file = PosixRandomAccessFile::create(merged_filename);
+
+    for (const auto & fname : not_uploaded_files)
+    {
+        auto itr = dmfile->merged_sub_file_infos.find(fname);
+        ASSERT_NE(itr, dmfile->merged_sub_file_infos.end());
+        if (itr->second.number != merged_number)
+        {
+            continue;
+        }
+        checked_fnames.insert(fname);
+
+        String merged_data;
+        {
+            merged_data.resize(itr->second.size);
+            auto n = merged_file->pread(merged_data.data(), itr->second.size, itr->second.offset);
+            ASSERT_EQ(n, itr->second.size);
+        }
+
+        String sub_data;
+        {
+            auto sub_path = fmt::format("{}/{}", dmfile->path(), fname);
+            auto sub_fsize = std::filesystem::file_size(sub_path);
+            ASSERT_EQ(sub_fsize, itr->second.size);
+            auto sub_file = PosixRandomAccessFile::create(sub_path);
+            sub_data.resize(sub_fsize);
+            auto n = sub_file->pread(sub_data.data(), sub_fsize, 0);
+            ASSERT_EQ(n, sub_fsize);
+        }
+        ASSERT_EQ(merged_data, sub_data);
+    }
+}
+
+void DMFileTest::checkColumnStats(const DMFilePtr & dmfile1, const DMFilePtr & dmfile2)
+{
+    const auto & col_defs = dmfile1->getColumnDefines();
+    for (const auto & col_def : col_defs)
+    {
+        const auto & col_stat1 = dmfile1->getColumnStat(col_def.id);
+        const auto & col_stat2 = dmfile2->getColumnStat(col_def.id);
+        ASSERT_DOUBLE_EQ(col_stat1.avg_size, col_stat2.avg_size);
+        ASSERT_EQ(col_stat1.col_id, col_stat2.col_id);
+        ASSERT_EQ(col_stat1.type->getName(), col_stat2.type->getName());
+        ASSERT_GT(col_stat1.serialized_bytes, col_stat2.serialized_bytes); // v3 without mrk
+
+        ASSERT_EQ(col_stat2.serialized_bytes, col_stat2.data_bytes + col_stat2.nullmap_data_bytes) << fmt::format(
+            "data_bytes={} nullmap_data_bytes={} col_id={} type={}",
+            col_stat2.data_bytes,
+            col_stat2.nullmap_data_bytes,
+            col_stat2.col_id,
+            col_stat2.type->getName());
+
+        ASSERT_EQ(dmfile1->colDataSize(col_def.id, false), dmfile2->colDataSize(col_def.id, false));
+        ASSERT_EQ(dmfile1->isColIndexExist(col_def.id), dmfile2->isColIndexExist(col_def.id));
+        if (dmfile1->isColIndexExist(col_def.id))
+        {
+            ASSERT_EQ(dmfile1->colIndexSize(col_def.id), dmfile2->colIndexSize(col_def.id));
+        }
+        if (col_def.type->isNullable())
+        {
+            ASSERT_EQ(dmfile1->colDataSize(col_def.id, true), dmfile2->colDataSize(col_def.id, true));
+        }
+    }
+}
 
 TEST_P(DMFileTest, WriteRead)
 try
@@ -549,38 +620,6 @@ try
 }
 CATCH
 
-void DMFileTest::checkColumnStats(const DMFilePtr & dmfile1, const DMFilePtr & dmfile2)
-{
-    const auto & col_defs = dmfile1->getColumnDefines();
-    for (const auto & col_def : col_defs)
-    {
-        const auto & col_stat1 = dmfile1->getColumnStat(col_def.id);
-        const auto & col_stat2 = dmfile2->getColumnStat(col_def.id);
-        ASSERT_DOUBLE_EQ(col_stat1.avg_size, col_stat2.avg_size);
-        ASSERT_EQ(col_stat1.col_id, col_stat2.col_id);
-        ASSERT_EQ(col_stat1.type->getName(), col_stat2.type->getName());
-        ASSERT_GT(col_stat1.serialized_bytes, col_stat2.serialized_bytes); // v3 without mrk
-
-        ASSERT_EQ(col_stat2.serialized_bytes, col_stat2.data_bytes + col_stat2.nullmap_data_bytes) << fmt::format(
-            "data_bytes={} nullmap_data_bytes={} col_id={} type={}",
-            col_stat2.data_bytes,
-            col_stat2.nullmap_data_bytes,
-            col_stat2.col_id,
-            col_stat2.type->getName());
-
-        ASSERT_EQ(dmfile1->colDataSize(col_def.id, false), dmfile2->colDataSize(col_def.id, false));
-        ASSERT_EQ(dmfile1->isColIndexExist(col_def.id), dmfile2->isColIndexExist(col_def.id));
-        if (dmfile1->isColIndexExist(col_def.id))
-        {
-            ASSERT_EQ(dmfile1->colIndexSize(col_def.id), dmfile2->colIndexSize(col_def.id));
-        }
-        if (col_def.type->isNullable())
-        {
-            ASSERT_EQ(dmfile1->colDataSize(col_def.id, true), dmfile2->colDataSize(col_def.id, true));
-        }
-    }
-}
-
 TEST_P(DMFileTest, MetaV2)
 try
 {
@@ -696,46 +735,6 @@ try
     }
 }
 CATCH
-
-void DMFileTest::checkMergedFile(
-    const DMFilePtr & dmfile,
-    UInt64 merged_number,
-    const std::set<String> & not_uploaded_files,
-    std::set<String> & checked_fnames)
-{
-    auto merged_filename = dmfile->mergedPath(merged_number);
-    auto merged_file = PosixRandomAccessFile::create(merged_filename);
-
-    for (const auto & fname : not_uploaded_files)
-    {
-        auto itr = dmfile->merged_sub_file_infos.find(fname);
-        ASSERT_NE(itr, dmfile->merged_sub_file_infos.end());
-        if (itr->second.number != merged_number)
-        {
-            continue;
-        }
-        checked_fnames.insert(fname);
-
-        String merged_data;
-        {
-            merged_data.resize(itr->second.size);
-            auto n = merged_file->pread(merged_data.data(), itr->second.size, itr->second.offset);
-            ASSERT_EQ(n, itr->second.size);
-        }
-
-        String sub_data;
-        {
-            auto sub_path = fmt::format("{}/{}", dmfile->path(), fname);
-            auto sub_fsize = std::filesystem::file_size(sub_path);
-            ASSERT_EQ(sub_fsize, itr->second.size);
-            auto sub_file = PosixRandomAccessFile::create(sub_path);
-            sub_data.resize(sub_fsize);
-            auto n = sub_file->pread(sub_data.data(), sub_fsize, 0);
-            ASSERT_EQ(n, sub_fsize);
-        }
-        ASSERT_EQ(merged_data, sub_data);
-    }
-}
 
 TEST_P(DMFileTest, MetaV2Broken)
 try
