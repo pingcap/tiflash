@@ -1,4 +1,4 @@
-// Copyright 2024 PingCAP, Inc.
+// Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,16 +14,16 @@
 
 #pragma once
 
-#include <Storages/Page/PageDefinesBase.h>
+#include <Storages/KVStore/Types.h>
+
+#include <memory>
+#include <unordered_map>
+#include <vector>
 
 namespace DB::DM
 {
-
-constexpr PageIdU64 DELTA_MERGE_FIRST_SEGMENT_ID = 1;
-
-class Segment;
-using SegmentPtr = std::shared_ptr<Segment>;
-using Segments = std::vector<SegmentPtr>;
-using SegmentPair = std::pair<SegmentPtr, SegmentPtr>;
-
+struct ColumnDefine;
+using ColumnDefines = std::vector<ColumnDefine>;
+using ColumnDefinesPtr = std::shared_ptr<ColumnDefines>;
+using ColumnDefineMap = std::unordered_map<DB::ColumnID, ColumnDefine>;
 } // namespace DB::DM

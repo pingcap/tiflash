@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Storages/DeltaMerge/Segment_fwd.h>
 #include <Storages/KVStore/FFI/ProxyFFI.h>
 #include <Storages/KVStore/MultiRaft/Disagg/CheckpointIngestInfo.h>
 #include <Storages/KVStore/MultiRaft/Disagg/FastAddPeerCache.h>
@@ -28,13 +29,6 @@ class Region;
 using RegionPtr = std::shared_ptr<Region>;
 using CheckpointRegionInfoAndData
     = std::tuple<CheckpointInfoPtr, RegionPtr, raft_serverpb::RaftApplyState, raft_serverpb::RegionLocalState>;
-
-namespace DM
-{
-class Segment;
-using SegmentPtr = std::shared_ptr<Segment>;
-using Segments = std::vector<SegmentPtr>;
-} // namespace DM
 
 class FastAddPeerContext
 {
