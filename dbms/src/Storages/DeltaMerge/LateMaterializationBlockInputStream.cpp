@@ -46,7 +46,6 @@ Block LateMaterializationBlockInputStream::readImpl()
     size_t passed_count = countBytesInFilter(filter);
     size_t total_read_rows = filter.size();
     bool need_switch_stream = false;
-    bool need_split_blocks = false;
 
     while (true)
     {
@@ -75,25 +74,20 @@ Block LateMaterializationBlockInputStream::readImpl()
             }
         }
 
-        size_t block_passed_count = 0;
         filter.resize(total_read_rows + filter_column_block.rows(), 1);
         if (block_filter)
         {
             std::copy(block_filter->begin(), block_filter->end(), filter.begin() + total_read_rows);
-            block_passed_count = countBytesInFilter(*block_filter);
+            passed_count += countBytesInFilter(*block_filter);
         }
         else
         {
             // If the filter is empty, it means that all rows in the block are passed.
-            block_passed_count = filter_column_block.rows();
+            passed_count += filter_column_block.rows();
         }
-        if (passed_count + block_passed_count >= filter_column_max_block_rows && passed_count > 0)
-            need_split_blocks = true;
-
-        passed_count += block_passed_count;
         total_read_rows += filter_column_block.rows();
         blocks.emplace_back(std::move(filter_column_block));
-        if (need_switch_stream || need_split_blocks)
+        if (need_switch_stream || passed_count >= filter_column_max_block_rows)
             break;
     }
 
@@ -106,7 +100,7 @@ Block LateMaterializationBlockInputStream::readImpl()
     size_t offset = blocks.front().startOffset();
     Block filter_column_block;
     IColumn::Filter block_filter;
-    if (need_switch_stream || need_split_blocks)
+    if (need_switch_stream)
     {
         RUNTIME_CHECK(blocks.size() > 1, blocks.size());
         // need to back up the last block
