@@ -19,10 +19,10 @@
 #include <BaseFile/PosixRandomAccessFile.h>
 #include <BaseFile/PosixWritableFile.h>
 #include <BaseFile/RateLimiter.h>
-#include <Encryption/ChecksumBuffer.h>
-#include <Encryption/ChecksumWriteBufferBuilder.h>
 #include <Encryption/CompressedReadBufferFromFileProvider.h>
 #include <Encryption/MockKeyManager.h>
+#include <IO/Checksum/ChecksumBuffer.h>
+#include <IO/Checksum/ChecksumWriteBufferBuilder.h>
 #include <IO/CompressedReadBuffer.h>
 #include <IO/CompressedWriteBuffer.h>
 #include <Poco/File.h>

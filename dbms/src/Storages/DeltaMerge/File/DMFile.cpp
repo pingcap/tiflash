@@ -16,8 +16,8 @@
 #include <Common/StringUtils/StringRefUtils.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/escapeForFileName.h>
-#include <Encryption/ChecksumReadBufferBuilder.h>
 #include <Encryption/WriteBufferFromWritableFileBuilder.h>
+#include <IO/Checksum/ChecksumReadBufferBuilder.h>
 #include <IO/IOSWrapper.h>
 #include <IO/ReadBufferFromString.h>
 #include <IO/ReadHelpers.h>

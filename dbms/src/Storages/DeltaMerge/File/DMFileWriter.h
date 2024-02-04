@@ -16,7 +16,7 @@
 
 #include <DataStreams/IBlockOutputStream.h>
 #include <DataStreams/MarkInCompressedFile.h>
-#include <Encryption/ChecksumWriteBufferBuilder.h>
+#include <IO/Checksum/ChecksumWriteBufferBuilder.h>
 #include <IO/CompressedWriteBuffer.h>
 #include <IO/WriteBufferFromOStream.h>
 #include <Storages/DeltaMerge/DMChecksumConfig.h>

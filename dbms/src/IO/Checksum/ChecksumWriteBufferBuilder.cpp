@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Encryption/ChecksumBuffer.h>
-#include <Encryption/ChecksumWriteBufferBuilder.h>
 #include <Encryption/WriteBufferFromWritableFileBuilder.h>
+#include <IO/Checksum/ChecksumBuffer.h>
+#include <IO/Checksum/ChecksumWriteBufferBuilder.h>
 
 namespace DB
 {

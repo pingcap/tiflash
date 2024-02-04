@@ -17,7 +17,7 @@
 #include <Common/Exception.h>
 #include <Common/Logger.h>
 #include <Common/TiFlashMetrics.h>
-#include <Encryption/ChecksumReadBufferBuilder.h>
+#include <IO/Checksum/ChecksumReadBufferBuilder.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/Filter/FilterHelper.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>

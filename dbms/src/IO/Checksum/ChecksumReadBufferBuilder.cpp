@@ -13,8 +13,8 @@
 // limitations under the License.
 
 #include <BaseFile/MemoryRandomAccessFile.h>
-#include <Encryption/ChecksumBuffer.h>
-#include <Encryption/ChecksumReadBufferBuilder.h>
+#include <IO/Checksum/ChecksumBuffer.h>
+#include <IO/Checksum/ChecksumReadBufferBuilder.h>
 
 namespace DB
 {
