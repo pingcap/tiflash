@@ -316,9 +316,12 @@ inline bool operator!=(const RowKeyValueRef & a, const RowKeyValueRef & b)
     return (a <=> b) != std::strong_ordering::equal;
 }
 
-inline std::strong_ordering operator<=>(const RowKeyValue & a, const RowKeyValue & b)
+// For compare `RowKeyValue`, do not use operator<=> of `RowKeyValueRef`.
+// Because `is_common_handle` of `a` and `b` may not match.
+inline auto operator<=>(const RowKeyValue & a, const RowKeyValue & b)
 {
-    return a.toRowKeyValueRef() <=> b.toRowKeyValueRef();
+    // Seems std::string::operator<=> is not support in clang-15.
+    return compare(a.value->data(), a.value->size(), b.value->data(), b.value->size());
 }
 
 inline bool operator==(const RowKeyValue & a, const RowKeyValue & b)
