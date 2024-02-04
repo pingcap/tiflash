@@ -33,7 +33,7 @@ using HandleValuePtr = std::shared_ptr<String>;
 struct RowKeyRange;
 using RowKeyRanges = std::vector<RowKeyRange>;
 
-namespace
+namespace CommonHandle
 {
 inline std::strong_ordering compare(const char * a, size_t a_size, const char * b, size_t b_size)
 {
@@ -51,7 +51,7 @@ inline std::strong_ordering compare(const char * a, size_t a_size, const char * 
         return a_size <=> b_size;
     }
 }
-} // namespace
+} // namespace CommonHandle
 
 struct RowKeyValue;
 
@@ -182,6 +182,10 @@ struct RowKeyValue
         return std::make_shared<DecodedTiKVKey>(prefix + *value);
     }
 
+    bool operator==(const RowKeyValue & v) const
+    {
+        return is_common_handle == v.is_common_handle && (*value) == (*v.value) && int_value == v.int_value;
+    }
     /**
      * Returns the key so that the range [this, this.toPrefixNext()) contains
      * all keys with the prefix `this`.
@@ -274,7 +278,7 @@ inline std::strong_ordering operator<=>(const RowKeyValueRef & a, const RowKeyVa
             "Should not reach here, common handle rowkey value compare with non common handle rowkey value");
     if (a.is_common_handle)
     {
-        return compare(a.data, a.size, b.data, b.size);
+        return CommonHandle::compare(a.data, a.size, b.data, b.size);
     }
     else
     {
@@ -288,14 +292,14 @@ inline std::strong_ordering operator<=>(const RowKeyValueRef & a, const RowKeyVa
         bool a_inf = false;
         bool b_inf = false;
         if (a.data != nullptr)
-            a_inf = compare(
+            a_inf = CommonHandle::compare(
                         a.data,
                         a.size,
                         RowKeyValue::INT_HANDLE_MAX_KEY.value->data(),
                         RowKeyValue::INT_HANDLE_MAX_KEY.value->size())
                 == std::strong_ordering::equal;
         if (b.data != nullptr)
-            b_inf = compare(
+            b_inf = CommonHandle::compare(
                         b.data,
                         b.size,
                         RowKeyValue::INT_HANDLE_MAX_KEY.value->data(),
@@ -321,12 +325,7 @@ inline bool operator!=(const RowKeyValueRef & a, const RowKeyValueRef & b)
 inline auto operator<=>(const RowKeyValue & a, const RowKeyValue & b)
 {
     // Seems std::string::operator<=> is not support in clang-15.
-    return compare(a.value->data(), a.value->size(), b.value->data(), b.value->size());
-}
-
-inline bool operator==(const RowKeyValue & a, const RowKeyValue & b)
-{
-    return a.is_common_handle == b.is_common_handle && (*a.value) == (*b.value) && a.int_value == b.int_value;
+    return CommonHandle::compare(a.value->data(), a.value->size(), b.value->data(), b.value->size());
 }
 
 struct RowKeyColumnContainer
