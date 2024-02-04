@@ -729,9 +729,6 @@ private:
                     continue;
                 }
             }
-            const auto & json_val = json_source->getWhole();
-            assert(json_val.size > 0);
-            JsonBinary json_binary(json_val.data[0], StringRef(&json_val.data[1], json_val.size - 1));
 
             if constexpr (is_path_nullable)
             {
@@ -742,6 +739,11 @@ private:
                     continue;
                 }
             }
+
+            const auto & json_val = json_source->getWhole();
+            assert(json_val.size > 0);
+            JsonBinary json_binary(json_val.data[0], StringRef(&json_val.data[1], json_val.size - 1));
+
             const auto & path_val = path_source->getWhole();
             auto path_expr_container_vec = buildPathExprContainer(StringRef{path_val.data, path_val.size});
 
