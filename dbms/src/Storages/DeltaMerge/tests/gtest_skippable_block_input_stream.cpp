@@ -57,16 +57,16 @@ public:
         size_t mode = e() % 3;
         if (mode == 0)
         {
-            std::fill(filter.begin(), filter.end(), 1);
+            std::fill(filter.begin(), filter.end(), 0);
         }
         else if (mode == 1)
         {
-            std::fill(filter.begin(), filter.end(), 0);
+            std::fill(filter.begin(), filter.end(), 1);
         }
         else
         {
-            std::transform(filter.begin(), filter.end(), filter.begin(), [&e = e](auto) {
-                return e() % 8192 == 0 ? 1 : 0;
+            std::transform(filter.begin(), filter.end(), filter.begin(), [&e = e, &blk](auto) {
+                return e() % blk.rows() == 0 ? 1 : 0;
             });
             filter[e() % blk.rows()] = 1; // should not be all 0.
         }
@@ -229,7 +229,10 @@ protected:
         {
             col.column = col.column->filter(*filter, passed_count);
         }
-        ASSERT_BLOCK_EQ(block1, block2);
+        if (!block1)
+            ASSERT_TRUE(block2.rows() == 0);
+        else
+            ASSERT_BLOCK_EQ(block1, block2);
     }
 
     void writeSegment(const SegDataUnit & unit)

@@ -405,7 +405,7 @@ Block DMFileReader::readWithFilter(const IColumn::Filter & filter)
         }
         // filter.size() equals to the number of rows in the next block
         // so read_rows should be equal to filter.size() here.
-        RUNTIME_CHECK(read_rows == filter.size());
+        RUNTIME_CHECK(read_rows == filter.size(), read_rows, filter.size());
     }
 
     // mark the next pack after next read as not used temporarily

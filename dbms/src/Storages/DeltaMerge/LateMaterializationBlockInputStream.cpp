@@ -16,6 +16,8 @@
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/LateMaterializationBlockInputStream.h>
 
+#include <iostream>
+
 
 namespace DB::DM
 {
@@ -43,6 +45,8 @@ Block LateMaterializationBlockInputStream::readImpl()
 {
     size_t passed_count = countBytesInFilter(filter);
     size_t total_read_rows = filter.size();
+    bool need_switch_stream = false;
+    bool need_split_blocks = false;
 
     while (true)
     {
@@ -63,41 +67,48 @@ Block LateMaterializationBlockInputStream::readImpl()
                 filter.clear();
                 total_read_rows = 0;
                 rest_column_stream->switchToNextStream();
+                ++current_stream_index;
+            }
+            else
+            {
+                need_switch_stream = true;
             }
         }
 
+        size_t block_passed_count = 0;
         filter.resize(total_read_rows + filter_column_block.rows(), 1);
         if (block_filter)
         {
             std::copy(block_filter->begin(), block_filter->end(), filter.begin() + total_read_rows);
-            passed_count += countBytesInFilter(*block_filter);
+            block_passed_count = countBytesInFilter(*block_filter);
         }
         else
         {
             // If the filter is empty, it means that all rows in the block are passed.
-            passed_count += filter_column_block.rows();
+            block_passed_count = filter_column_block.rows();
         }
+        if (passed_count + block_passed_count >= filter_column_max_block_rows && passed_count > 0)
+            need_split_blocks = true;
+
+        passed_count += block_passed_count;
         total_read_rows += filter_column_block.rows();
         blocks.emplace_back(std::move(filter_column_block));
-        if (passed_count >= filter_column_max_block_rows)
-            break;
-        if (current_stream_index < start_offset_each_stream.size() - 1
-            && blocks.back().startOffset() >= start_offset_each_stream[current_stream_index + 1])
+        if (need_switch_stream || need_split_blocks)
             break;
     }
 
     if (blocks.empty())
         return {};
 
+    if (need_switch_stream)
+        ++current_stream_index;
+
     size_t offset = blocks.front().startOffset();
     Block filter_column_block;
     IColumn::Filter block_filter;
-    if (blocks.size() > 1
-        // one block can be larger than filter_column_max_block_rows, in this case, do not need to back up.
-        && ((current_stream_index < start_offset_each_stream.size() - 1
-             && blocks.back().startOffset() >= start_offset_each_stream[current_stream_index + 1])
-            || passed_count >= filter_column_max_block_rows))
+    if (need_switch_stream || need_split_blocks)
     {
+        RUNTIME_CHECK(blocks.size() > 1, blocks.size());
         // need to back up the last block
         auto next_read_block = std::move(blocks.back());
         blocks.pop_back();
@@ -109,17 +120,9 @@ Block LateMaterializationBlockInputStream::readImpl()
         block_filter.reserve(blocks.back().rows());
         std::move(filter.begin() + total_read_rows, filter.end(), std::back_inserter(block_filter));
         filter.resize(total_read_rows);
-
-        if (current_stream_index < start_offset_each_stream.size() - 1
-            && blocks.back().startOffset() >= start_offset_each_stream[current_stream_index + 1])
-            ++current_stream_index;
     }
     else
     {
-        if (current_stream_index < start_offset_each_stream.size() - 1
-            && blocks.back().startOffset() >= start_offset_each_stream[current_stream_index + 1])
-            ++current_stream_index;
-
         filter_column_block = vstackBlocks<Blocks::const_iterator, false>(blocks.cbegin(), blocks.cend());
         blocks.clear();
     }
@@ -127,6 +130,11 @@ Block LateMaterializationBlockInputStream::readImpl()
     // bitmap_filter[start_offset, start_offset + rows] & filter -> filter
     bitmap_filter->rangeAnd(block_filter, offset, total_read_rows);
     passed_count = countBytesInFilter(block_filter);
+    if (passed_count == 0)
+    {
+        RUNTIME_CHECK_MSG(!filter_column_stream->read(), "pass_count is 0, but there are still blocks to read.");
+        return {};
+    }
     for (auto & col : filter_column_block)
         col.column = col.column->filter(block_filter, passed_count);
 
@@ -136,7 +144,7 @@ Block LateMaterializationBlockInputStream::readImpl()
         "Late materialization meets unexpected block unmatched, filter_column_block: [start_offset={}, "
         "rows={}], rest_column_block: [start_offset={}, rows={}], total_read_rows={}",
         offset,
-        total_read_rows,
+        passed_count,
         rest_column_block.startOffset(),
         rest_column_block.rows(),
         total_read_rows);
