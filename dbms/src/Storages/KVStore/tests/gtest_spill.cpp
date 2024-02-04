@@ -13,10 +13,13 @@
 // limitations under the License.
 
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
+#include <Storages/KVStore/MultiRaft/Spill/RegionUncommittedDataList.h>
+#include <Storages/KVStore/KVStore.h>
 #include <Storages/KVStore/tests/region_kvstore_test.h>
 #include <Storages/RegionQueryInfo.h>
 #include <TiDB/Schema/SchemaSyncService.h>
 #include <TiDB/Schema/TiDBSchemaManager.h>
+#include <Storages/KVStore/Decode/RegionBlockReader.h>
 
 namespace DB::tests
 {
@@ -39,43 +42,56 @@ public:
     void setupStorage()
     {
         auto & ctx = TiFlashTestEnv::getGlobalContext();
-        auto columns = DM::tests::DMTestEnv::getDefaultTableColumns(pk_type);
-        auto table_info = DM::tests::DMTestEnv::getMinimalTableInfo(/* table id */ 100, pk_type);
-        auto astptr = DM::tests::DMTestEnv::getPrimaryKeyExpr("test_table", pk_type);
-
-        storage = StorageDeltaMerge::create(
-            "TiFlash",
-            "default" /* db_name */,
-            "test_table" /* table_name */,
-            table_info,
-            ColumnsDescription{columns},
-            astptr,
-            0,
-            ctx);
-        storage->startup();
+        initStorages();
+        KVStore & kvs = getKVS();
+        table_id = proxy_instance->bootstrapTable(ctx, kvs, ctx.getTMTContext());
+        auto maybe_storage = ctx.getTMTContext().getStorages().get(NullspaceID, table_id);
+        RUNTIME_CHECK(maybe_storage);
+        storage = std::dynamic_pointer_cast<StorageDeltaMerge>(maybe_storage);
     }
 
 protected:
     StorageDeltaMergePtr storage;
-    DM::tests::DMTestEnv::PkType pk_type = DM::tests::DMTestEnv::PkType::HiddenTiDBRowID;
+    TableID table_id;
 };
 
-TEST_F(KVStoreSpillTest, KVStoreSpill)
+TEST_F(KVStoreSpillTest, CreateBlock)
 try
 {
     auto table_lock = storage->lockStructureForShare("foo_query_id");
     {
         auto [schema_snapshot, block] = storage->getSchemaSnapshotAndBlockForDecoding(table_lock, true, true);
         UNUSED(schema_snapshot);
-        ASSERT_EQ(block->columns(), 3);
+        ASSERT_EQ(block->columns(), 4);
     }
     {
         auto [schema_snapshot, block] = storage->getSchemaSnapshotAndBlockForDecoding(table_lock, true, false);
         UNUSED(schema_snapshot);
         EXPECT_NO_THROW(block->getPositionByName(MutableSupport::delmark_column_name));
         EXPECT_THROW(block->getPositionByName(MutableSupport::version_column_name), Exception);
-        ASSERT_EQ(block->columns(), 2);
+        ASSERT_EQ(block->columns(), 3);
     }
+}
+CATCH
+
+TEST_F(KVStoreSpillTest, BlockReader)
+try
+{
+    auto table_lock = storage->lockStructureForShare("foo_query_id");
+    auto [decoding_schema_snapshot, block_ptr] = storage->getSchemaSnapshotAndBlockForDecoding(table_lock, true, false);
+
+    DB::RegionUncommittedDataList data_list_read;
+
+    auto str_key = RecordKVFormat::genKey(table_id, 1, 111);
+    auto [str_val_write, str_val_default] = proxy_instance->generateTiKVKeyValue(111, 999);
+    auto str_lock_value
+        = RecordKVFormat::encodeLockCfValue(RecordKVFormat::CFModifyFlag::PutFlag, "PK", 111, 999).toString();
+    auto pk = RecordKVFormat::getRawTiDBPK(RecordKVFormat::decodeTiKVKey(str_key));
+    auto value = std::make_shared<TiKVValue>(TiKVValue::copyFrom(str_val_default));
+    data_list_read.data.push_back(RegionUncommittedData(std::move(pk), RecordKVFormat::CFModifyFlag::PutFlag, value));
+
+    auto reader = RegionBlockReader(decoding_schema_snapshot);
+    ASSERT_TRUE(reader.read(*block_ptr, data_list_read, true));
 }
 CATCH
 

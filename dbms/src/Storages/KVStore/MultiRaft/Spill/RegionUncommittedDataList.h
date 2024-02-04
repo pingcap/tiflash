@@ -34,10 +34,10 @@ struct RegionUncommittedData
         , write_type(write_type_)
         , value(value_)
     {}
-    RegionUncommittedData(const RegionDataReadInfo &) = default;
-    RegionUncommittedData(RegionDataReadInfo &&) = default;
-    RegionUncommittedData & operator=(const RegionDataReadInfo &) = default;
-    RegionUncommittedData & operator=(RegionDataReadInfo &&) = default;
+    RegionUncommittedData(const RegionUncommittedData &) = default;
+    RegionUncommittedData(RegionUncommittedData &&) = default;
+    RegionUncommittedData & operator=(const RegionUncommittedData &) = default;
+    RegionUncommittedData & operator=(RegionUncommittedData &&) = default;
 
 public:
     RawTiDBPK pk;
@@ -47,8 +47,38 @@ public:
 
 struct RegionUncommittedDataList
 {
-    std::vector<RegionUncommittedData> data;
+    using Inner = std::vector<RegionUncommittedData>;
+
+    Inner data;
     Timestamp start_ts;
-}
+
+    Inner::const_iterator cbegin() const {
+        return data.cbegin();
+    }
+
+    Inner::const_iterator cend() const {
+        return data.cend();
+    }
+
+    Inner::iterator begin() {
+        return data.begin();
+    }
+
+    Inner::const_iterator begin() const {
+        return data.begin();
+    }
+
+    Inner::iterator end() {
+        return data.end();
+    }
+
+    Inner::const_iterator end() const {
+        return data.end();
+    }
+
+    size_t size() const {
+        return data.size();
+    }
+};
 
 } // namespace DB
