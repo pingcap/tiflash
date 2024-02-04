@@ -116,15 +116,15 @@ private:
         if constexpr (MODE == DM_VERSION_FILTER_MODE_MVCC)
         {
             filter[i] = !deleted && cur_version <= version_limit
-                && (compare(cur_handle, next_handle) != 0 || next_version > version_limit);
+                && (cur_handle != next_handle || next_version > version_limit);
         }
         else if constexpr (MODE == DM_VERSION_FILTER_MODE_COMPACT)
         {
             filter[i] = cur_version >= version_limit
-                || ((compare(cur_handle, next_handle) != 0 || next_version > version_limit) && !deleted);
-            not_clean[i] = filter[i] && (compare(cur_handle, next_handle) == 0 || deleted);
+                || ((cur_handle != next_handle || next_version > version_limit) && !deleted);
+            not_clean[i] = filter[i] && (cur_handle == next_handle || deleted);
             is_deleted[i] = filter[i] && deleted;
-            effective[i] = filter[i] && (compare(cur_handle, next_handle) != 0);
+            effective[i] = filter[i] && (cur_handle != next_handle);
             if (filter[i])
                 gc_hint_version = std::min(
                     gc_hint_version,
@@ -190,12 +190,12 @@ private:
         // update status variable for next row if need
         if (next_handle_valid)
         {
-            if (compare(cur_handle, next_handle) != 0)
+            if (cur_handle != next_handle)
             {
                 is_first_oldest_version = true;
                 is_second_oldest_version = false;
             }
-            else if (is_first_oldest_version && (compare(cur_handle, next_handle) == 0))
+            else if (is_first_oldest_version && cur_handle == next_handle)
             {
                 is_first_oldest_version = false;
                 is_second_oldest_version = true;
