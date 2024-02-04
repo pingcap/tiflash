@@ -326,7 +326,7 @@ inline auto operator<=>(const RowKeyValue & a, const RowKeyValue & b)
 
 inline bool operator==(const RowKeyValue & a, const RowKeyValue & b)
 {
-    return (a <=> b) == std::strong_ordering::equal;
+    return a.is_common_handle == b.is_common_handle && (*a.value) == (*b.value) && a.int_value == b.int_value;
 }
 
 struct RowKeyColumnContainer
