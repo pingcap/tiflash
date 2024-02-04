@@ -33,13 +33,25 @@ using HandleValuePtr = std::shared_ptr<String>;
 struct RowKeyRange;
 using RowKeyRanges = std::vector<RowKeyRange>;
 
-inline int compare(const char * a, size_t a_size, const char * b, size_t b_size)
+namespace
+{
+inline std::strong_ordering compare(const char * a, size_t a_size, const char * b, size_t b_size)
 {
     int res = memcmp(a, b, std::min(a_size, b_size));
-    if (res != 0)
-        return res;
-    return a_size == b_size ? 0 : a_size > b_size ? 1 : -1;
+    if (res < 0)
+    {
+        return std::strong_ordering::less;
+    }
+    else if (res > 0)
+    {
+        return std::strong_ordering::greater;
+    }
+    else
+    {
+        return a_size <=> b_size;
+    }
 }
+} // namespace
 
 struct RowKeyValue;
 
@@ -255,7 +267,7 @@ using RowKeyValues = std::vector<RowKeyValue>;
 
 /// An optimized implementation that will try to compare IntHandle via comparing Int values directly.
 /// For common handles, per-byte comparison will be still used.
-inline int operator<=>(const RowKeyValueRef & a, const RowKeyValueRef & b)
+inline std::strong_ordering operator<=>(const RowKeyValueRef & a, const RowKeyValueRef & b)
 {
     if (unlikely(a.is_common_handle != b.is_common_handle))
         throw Exception(
@@ -267,11 +279,9 @@ inline int operator<=>(const RowKeyValueRef & a, const RowKeyValueRef & b)
     else
     {
         /// in case of non common handle, we can compare the int value directly in most cases
-        if (a.int_value != b.int_value)
-            return a.int_value > b.int_value ? 1 : -1;
-        if (likely(
-                a.int_value != RowKeyValue::INT_HANDLE_MAX_KEY.int_value || (a.data == nullptr && b.data == nullptr)))
-            return 0;
+        if (a.int_value != b.int_value
+            || (a.int_value != RowKeyValue::INT_HANDLE_MAX_KEY.int_value || (a.data == nullptr && b.data == nullptr)))
+            return a.int_value <=> b.int_value;
 
         /// if a.int_value == b.int_value == Int64::max_value, we need to further check the data field because even if
         /// the RowKeyValueRef is bigger that Int64::max_value, the int_value field is Int64::max_value at most.
@@ -283,43 +293,37 @@ inline int operator<=>(const RowKeyValueRef & a, const RowKeyValueRef & b)
                         a.size,
                         RowKeyValue::INT_HANDLE_MAX_KEY.value->data(),
                         RowKeyValue::INT_HANDLE_MAX_KEY.value->size())
-                == 0;
+                == std::strong_ordering::equal;
         if (b.data != nullptr)
             b_inf = compare(
                         b.data,
                         b.size,
                         RowKeyValue::INT_HANDLE_MAX_KEY.value->data(),
                         RowKeyValue::INT_HANDLE_MAX_KEY.value->size())
-                == 0;
-        if (a_inf != b_inf)
-        {
-            return a_inf ? 1 : -1;
-        }
-        else
-        {
-            return 0;
-        }
+                == std::strong_ordering::equal;
+
+        return static_cast<int>(a_inf) <=> static_cast<int>(b_inf);
     }
 }
 
 inline bool operator==(const RowKeyValueRef & a, const RowKeyValueRef & b)
 {
-    return (a <=> b) == 0;
+    return (a <=> b) == std::strong_ordering::equal;
 }
 
 inline bool operator!=(const RowKeyValueRef & a, const RowKeyValueRef & b)
 {
-    return (a <=> b) != 0;
+    return (a <=> b) != std::strong_ordering::equal;
 }
 
-inline int operator<=>(const RowKeyValue & a, const RowKeyValue & b)
+inline std::strong_ordering operator<=>(const RowKeyValue & a, const RowKeyValue & b)
 {
     return a.toRowKeyValueRef() <=> b.toRowKeyValueRef();
 }
 
 inline bool operator==(const RowKeyValue & a, const RowKeyValue & b)
 {
-    return (a <=> b) == 0;
+    return (a <=> b) == std::strong_ordering::equal;
 }
 
 struct RowKeyColumnContainer
