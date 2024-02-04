@@ -42,6 +42,7 @@ namespace DB::DM
 namespace tests
 {
 class DMFileTest;
+class DMFileMetaV2Test;
 class DMStoreForSegmentReadTaskTest;
 } // namespace tests
 
@@ -514,9 +515,12 @@ private:
     friend class DMFileWriter;
     friend class DMFileWriterRemote;
     friend class DMFileReader;
+    friend class MarkLoader;
+    friend class ColumnReadStream;
     friend class DMFilePackFilter;
     friend class DMFileBlockInputStreamBuilder;
     friend class tests::DMFileTest;
+    friend class tests::DMFileMetaV2Test;
     friend class tests::DMStoreForSegmentReadTaskTest;
     friend int ::DTTool::Migrate::migrateServiceMain(
         DB::Context & context,

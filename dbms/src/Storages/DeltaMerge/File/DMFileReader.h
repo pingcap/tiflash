@@ -19,6 +19,7 @@
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/File/ColumnCache.h>
+#include <Storages/DeltaMerge/File/ColumnStream.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/File/DMFilePackFilter.h>
 #include <Storages/DeltaMerge/ReadThread/ColumnSharingCache.h>
@@ -26,42 +27,16 @@
 #include <Storages/DeltaMerge/ScanContext_fwd.h>
 #include <Storages/MarkCache.h>
 
-namespace DB
-{
-namespace DM
+namespace DB::DM
 {
 class RSOperator;
 using RSOperatorPtr = std::shared_ptr<RSOperator>;
 
-inline static const size_t DMFILE_READ_ROWS_THRESHOLD = DEFAULT_MERGE_BLOCK_SIZE * 3;
 
 class DMFileReader
 {
 public:
     static bool isCacheableColumn(const ColumnDefine & cd);
-    // Read stream for single column
-    struct Stream
-    {
-        Stream(
-            DMFileReader & reader,
-            ColId col_id,
-            const String & file_name_base,
-            size_t aio_threshold,
-            size_t max_read_buffer_size,
-            const LoggerPtr & log,
-            const ReadLimiterPtr & read_limiter);
-
-        double avg_size_hint;
-        MarksInCompressedFilePtr marks;
-
-        size_t getOffsetInFile(size_t i) const { return (*marks)[i].offset_in_compressed_file; }
-
-        size_t getOffsetInDecompressedBlock(size_t i) const { return (*marks)[i].offset_in_decompressed_block; }
-
-        std::unique_ptr<CompressedSeekableReaderBuffer> buf;
-    };
-    using StreamPtr = std::unique_ptr<Stream>;
-    using ColumnStreams = std::map<String, StreamPtr>;
 
     DMFileReader(
         const DMFilePtr & dmfile_,
@@ -117,6 +92,10 @@ public:
     }
     void addCachedPacks(ColId col_id, size_t start_pack_id, size_t pack_count, ColumnPtr & col) const;
 
+    friend class MarkLoader;
+    friend class ColumnReadStream;
+    friend class tests::DMFileMetaV2Test;
+
 private:
     bool shouldSeek(size_t pack_id) const;
 
@@ -138,7 +117,7 @@ private:
 
     DMFilePtr dmfile;
     ColumnDefines read_columns;
-    ColumnStreams column_streams{};
+    ColumnReadStreams column_streams{};
 
     const bool is_common_handle;
 
@@ -155,15 +134,9 @@ private:
 
     const UInt64 max_read_version;
 
-    /// Filters
-#ifdef DBMS_PUBLIC_GTEST
-public:
-    DMFilePackFilter pack_filter;
-
 private:
-#else
+    /// Filters
     DMFilePackFilter pack_filter;
-#endif
 
     std::vector<size_t> skip_packs_by_column{};
 
@@ -183,9 +156,9 @@ private:
 
     LoggerPtr log;
 
+    // DataSharing
     std::unique_ptr<ColumnSharingCacheMap> col_data_cache{};
     std::unordered_map<ColId, bool> last_read_from_cache{};
 };
 
-} // namespace DM
-} // namespace DB
+} // namespace DB::DM
