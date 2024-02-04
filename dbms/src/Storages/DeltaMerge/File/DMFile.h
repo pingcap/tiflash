@@ -19,9 +19,10 @@
 #include <Encryption/ReadBufferFromFileProvider.h>
 #include <Encryption/WriteBufferFromFileProvider.h>
 #include <Poco/File.h>
-#include <Storages/DeltaMerge/ColumnStat.h>
 #include <Storages/DeltaMerge/DMChecksumConfig.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
+#include <Storages/DeltaMerge/File/ColumnStat.h>
+#include <Storages/DeltaMerge/File/DMFile_fwd.h>
 #include <Storages/DeltaMerge/File/MergedFile.h>
 #include <Storages/DeltaMerge/File/dtpb/dmfile.pb.h>
 #include <Storages/FormatVersion.h>
@@ -29,10 +30,6 @@
 #include <Storages/S3/S3RandomAccessFile.h>
 #include <common/logger_useful.h>
 
-namespace DB::DM
-{
-class DMFile;
-}
 namespace DTTool::Migrate
 {
 struct MigrateArgs;
@@ -41,12 +38,13 @@ bool needFrameMigration(const DB::DM::DMFile & file, const std::string & target)
 int migrateServiceMain(DB::Context & context, const MigrateArgs & args);
 } // namespace DTTool::Migrate
 
-namespace DB
+namespace DB::DM
 {
-namespace DM
+namespace tests
 {
-using DMFilePtr = std::shared_ptr<DMFile>;
-using DMFiles = std::vector<DMFilePtr>;
+class DMFileTest;
+class DMStoreForSegmentReadTaskTest;
+} // namespace tests
 
 class DMFile : private boost::noncopyable
 {
@@ -320,14 +318,11 @@ public:
     }
 
     static String metav2FileName() { return "meta"; }
+    bool useMetaV2() const { return version == DMFileFormat::V3; }
     std::vector<String> listFilesForUpload() const;
     void switchToRemote(const S3::DMFileOID & oid);
 
-#ifndef DBMS_PUBLIC_GTEST
 private:
-#else
-public:
-#endif
     DMFile(
         UInt64 file_id_,
         UInt64 page_id_,
@@ -432,7 +427,7 @@ public:
     void writeMetadata(const FileProviderPtr & file_provider, const WriteLimiterPtr & write_limiter);
     void readMetadata(const FileProviderPtr & file_provider, const ReadMetaMode & read_meta_mode);
 
-    void upgradeMetaIfNeed(const FileProviderPtr & file_provider, DMFileFormat::Version ver);
+    void tryUpgradeColumnStatInMetaV1(const FileProviderPtr & file_provider, DMFileFormat::Version ver);
 
     void addPack(const PackStat & pack_stat) { pack_stats.push_back(pack_stat); }
 
@@ -467,18 +462,17 @@ public:
     void parsePackProperty(std::string_view buffer);
     void parsePackStat(std::string_view buffer);
     void finalizeDirName();
-    bool useMetaV2() const { return version == DMFileFormat::V3; }
 
     UInt64 getFileSize(ColId col_id, const String & filename) const;
     UInt64 getReadFileSize(ColId col_id, const String & filename) const;
     UInt64 getMergedFileSizeOfColumn(const MergedSubFileInfo & file_info) const;
 
     // The id to construct the file path on disk.
-    UInt64 file_id;
+    const UInt64 file_id;
     // It is the page_id that represent this file in the PageStorage. It could be the same as file id.
-    UInt64 page_id;
+    const UInt64 page_id;
     // The id of the keyspace that this file belongs to.
-    KeyspaceID keyspace_id;
+    const KeyspaceID keyspace_id;
     String parent_path;
 
     PackStats pack_stats;
@@ -523,6 +517,8 @@ public:
     friend class DMFileReader;
     friend class DMFilePackFilter;
     friend class DMFileBlockInputStreamBuilder;
+    friend class tests::DMFileTest;
+    friend class tests::DMStoreForSegmentReadTaskTest;
     friend int ::DTTool::Migrate::migrateServiceMain(
         DB::Context & context,
         const ::DTTool::Migrate::MigrateArgs & args);
@@ -543,5 +539,4 @@ inline ReadBufferFromFileProvider openForRead(
         std::min(static_cast<size_t>(DBMS_DEFAULT_BUFFER_SIZE), file_size));
 }
 
-} // namespace DM
-} // namespace DB
+} // namespace DB::DM
