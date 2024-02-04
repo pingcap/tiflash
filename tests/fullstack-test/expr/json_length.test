@@ -44,21 +44,21 @@ mysql> set tidb_allow_mpp=1;set tidb_enforce_mpp=1; set tidb_isolation_read_engi
 | NULL                   | $        | NULL |
 | NULL                   | $.a      | NULL |
 | NULL                   | $.kk     | NULL |
-| "hello world"          | NULL     |    1 |
+| "hello world"          | NULL     | NULL |
 | "hello world"          | $        |    1 |
-| "hello world"          | $.a      |    1 |
-| "hello world"          | $.kk     |    1 |
+| "hello world"          | $.a      | NULL |
+| "hello world"          | $.kk     | NULL |
 | {"a": "b", "aa": "bb"} | NULL     | NULL |
 | {"a": "b", "aa": "bb"} | $        |    2 |
 | {"a": "b", "aa": "bb"} | $.a      |    1 |
 | {"a": "b", "aa": "bb"} | $.kk     | NULL |
 | [1, 2, {"a": "b"}]     | NULL     | NULL |
-| [1, 2, {"a": "b"}]     | $        |    3 |
-| [1, 2, {"a": "b"}]     | $.a      | NULL |
-| [1, 2, {"a": "b"}]     | $.kk     | NULL |
 | [1, 2, [3, 4]]         | NULL     | NULL |
+| [1, 2, {"a": "b"}]     | $        |    3 |
 | [1, 2, [3, 4]]         | $        |    3 |
+| [1, 2, {"a": "b"}]     | $.a      | NULL |
 | [1, 2, [3, 4]]         | $.a      | NULL |
+| [1, 2, {"a": "b"}]     | $.kk     | NULL |
 | [1, 2, [3, 4]]         | $.kk     | NULL |
 +------------------------+----------+------+
 
