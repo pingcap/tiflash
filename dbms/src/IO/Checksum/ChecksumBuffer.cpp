@@ -12,24 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Encryption/FileProvider.h>
-#include <Encryption/ReadBufferFromFileProvider.h>
+#include <IO/Checksum/ChecksumBuffer.h>
 
 namespace DB
 {
-ReadBufferFromFileProvider::ReadBufferFromFileProvider(
-    const FileProviderPtr & file_provider_,
-    const std::string & file_name_,
-    const EncryptionPath & encryption_path_,
-    size_t buf_size,
-    const ReadLimiterPtr & read_limiter,
-    int flags,
-    char * existing_memory,
-    size_t alignment)
-    : ReadBufferFromRandomAccessFile(
-        file_provider_->newRandomAccessFile(file_name_, encryption_path_, read_limiter, flags),
-        buf_size,
-        existing_memory,
-        alignment)
-{}
+using namespace DB::Digest;
+
+template class FramedChecksumReadBuffer<None>;
+template class FramedChecksumReadBuffer<CRC32>;
+template class FramedChecksumReadBuffer<CRC64>;
+template class FramedChecksumReadBuffer<City128>;
+template class FramedChecksumReadBuffer<XXH3>;
+
+template class FramedChecksumWriteBuffer<None>;
+template class FramedChecksumWriteBuffer<CRC32>;
+template class FramedChecksumWriteBuffer<CRC64>;
+template class FramedChecksumWriteBuffer<City128>;
+template class FramedChecksumWriteBuffer<XXH3>;
+
 } // namespace DB

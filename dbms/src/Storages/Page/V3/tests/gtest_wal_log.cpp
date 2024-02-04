@@ -17,9 +17,7 @@
 #include <Common/RedactHelpers.h>
 #include <Core/Defines.h>
 #include <Encryption/EncryptionPath.h>
-#include <Encryption/ReadBufferFromFileProvider.h>
-#include <Encryption/createReadBufferFromFileBaseByFileProvider.h>
-#include <Encryption/createWriteBufferFromFileBaseByFileProvider.h>
+#include <Encryption/ReadBufferFromRandomAccessFileBuilder.h>
 #include <IO/ReadBufferFromString.h>
 #include <IO/WriteBuffer.h>
 #include <IO/WriteBufferFromFile.h>
@@ -151,16 +149,12 @@ public:
         const WALRecoveryMode wal_recovery_mode = WALRecoveryMode::TolerateCorruptedTailRecords,
         size_t log_num = 0)
     {
-        auto read_buf = createReadBufferFromFileBaseByFileProvider(
+        auto read_buf = ReadBufferFromRandomAccessFileBuilder::buildPtr(
             provider,
             file_name,
             EncryptionPath{file_name, ""},
-            /*estimated_size*/ Format::BLOCK_SIZE,
-            /*aio_threshold*/ 0,
-            /*read_limiter*/ nullptr,
-            /*buffer_size*/ Format::BLOCK_SIZE // Must be `Format::BLOCK_SIZE`
+            Format::BLOCK_SIZE // Must be `Format::BLOCK_SIZE`
         );
-
         return std::make_unique<LogReader>(
             std::move(read_buf),
             &report,
@@ -840,14 +834,11 @@ TEST(LogFileRWTest2, ManuallySync)
     }
     writer->sync();
 
-    auto read_buf = createReadBufferFromFileBaseByFileProvider(
+    auto read_buf = ReadBufferFromRandomAccessFileBuilder::buildPtr(
         provider,
         file_name,
         EncryptionPath{file_name, ""},
-        /*estimated_size*/ Format::BLOCK_SIZE,
-        /*aio_threshold*/ 0,
-        /*read_limiter*/ nullptr,
-        /*buffer_size*/ Format::BLOCK_SIZE // Must be `Format::BLOCK_SIZE`
+        Format::BLOCK_SIZE // Must be `Format::BLOCK_SIZE`
     );
 
     DB::PS::V3::ReportCollector reporter;

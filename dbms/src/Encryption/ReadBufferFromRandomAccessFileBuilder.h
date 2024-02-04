@@ -14,31 +14,35 @@
 
 #pragma once
 
+#include <BaseFile/fwd.h>
 #include <Encryption/EncryptionPath.h>
 #include <Encryption/FileProvider_fwd.h>
-#include <IO/WriteBufferFromWritableFile.h>
+#include <IO/ReadBufferFromRandomAccessFile.h>
+
 
 namespace DB
 {
 
-class WriteLimiter;
-using WriteLimiterPtr = std::shared_ptr<WriteLimiter>;
-
-/**
- * Note: This class maybe removed in the future, use WriteBufferFromWritableFile instead if possible
- */
-class WriteBufferFromFileProvider : public WriteBufferFromWritableFile
+class ReadBufferFromRandomAccessFileBuilder
 {
 public:
-    WriteBufferFromFileProvider(
-        const FileProviderPtr & file_provider_,
+    static ReadBufferFromRandomAccessFilePtr buildPtr(
+        const FileProviderPtr & file_provider,
         const std::string & file_name_,
-        const EncryptionPath & encryption_path,
-        bool create_new_encryption_info_ = true,
-        const WriteLimiterPtr & write_limiter_ = nullptr,
+        const EncryptionPath & encryption_path_,
         size_t buf_size = DBMS_DEFAULT_BUFFER_SIZE,
+        const ReadLimiterPtr & read_limiter = nullptr,
         int flags = -1,
-        mode_t mode = 0666,
+        char * existing_memory = nullptr,
+        size_t alignment = 0);
+
+    static ReadBufferFromRandomAccessFile build(
+        const FileProviderPtr & file_provider,
+        const std::string & file_name_,
+        const EncryptionPath & encryption_path_,
+        size_t buf_size = DBMS_DEFAULT_BUFFER_SIZE,
+        const ReadLimiterPtr & read_limiter = nullptr,
+        int flags = -1,
         char * existing_memory = nullptr,
         size_t alignment = 0);
 };

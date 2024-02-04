@@ -29,7 +29,6 @@
 #include <Storages/S3/S3WritableFile.h>
 #include <common/likely.h>
 
-#include <memory>
 
 namespace DB
 {

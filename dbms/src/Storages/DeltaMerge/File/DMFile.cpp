@@ -16,9 +16,8 @@
 #include <Common/StringUtils/StringRefUtils.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/escapeForFileName.h>
-#include <Encryption/WriteBufferFromFileProvider.h>
-#include <Encryption/createReadBufferFromFileBaseByFileProvider.h>
-#include <Encryption/createWriteBufferFromFileBaseByFileProvider.h>
+#include <Encryption/WriteBufferFromWritableFileBuilder.h>
+#include <IO/Checksum/ChecksumReadBufferBuilder.h>
 #include <IO/IOSWrapper.h>
 #include <IO/ReadBufferFromString.h>
 #include <IO/ReadHelpers.h>
@@ -373,7 +372,13 @@ void DMFile::writeMeta(const FileProviderPtr & file_provider, const WriteLimiter
     String tmp_meta_path = meta_path + ".tmp";
 
     {
-        WriteBufferFromFileProvider buf(file_provider, tmp_meta_path, encryptionMetaPath(), false, write_limiter, 4096);
+        auto buf = WriteBufferFromWritableFileBuilder::build(
+            file_provider,
+            tmp_meta_path,
+            encryptionMetaPath(),
+            false,
+            write_limiter,
+            4096);
         if (configuration)
         {
             auto digest = configuration->createUnifiedDigest();
@@ -398,8 +403,13 @@ void DMFile::writePackProperty(const FileProviderPtr & file_provider, const Writ
     String property_path = packPropertyPath();
     String tmp_property_path = property_path + ".tmp";
     {
-        WriteBufferFromFileProvider
-            buf(file_provider, tmp_property_path, encryptionPackPropertyPath(), false, write_limiter, 4096);
+        auto buf = WriteBufferFromWritableFileBuilder::build(
+            file_provider,
+            tmp_property_path,
+            encryptionPackPropertyPath(),
+            false,
+            write_limiter,
+            4096);
         if (configuration)
         {
             auto digest = configuration->createUnifiedDigest();
@@ -422,7 +432,7 @@ void DMFile::writeConfiguration(const FileProviderPtr & file_provider, const Wri
     String config_path = configurationPath();
     String tmp_config_path = config_path + ".tmp";
     {
-        WriteBufferFromFileProvider buf(
+        auto buf = WriteBufferFromWritableFileBuilder::build(
             file_provider,
             tmp_config_path,
             encryptionConfigurationPath(),
@@ -480,7 +490,11 @@ void DMFile::tryUpgradeColumnStatInMetaV1(const FileProviderPtr & file_provider,
 void DMFile::readColumnStat(const FileProviderPtr & file_provider, const MetaPackInfo & meta_pack_info)
 {
     const auto name = metaFileName();
-    auto file_buf = openForRead(file_provider, metaPath(), encryptionMetaPath(), meta_pack_info.column_stat_size);
+    auto file_buf = openForRead(
+        file_provider,
+        metaPath(),
+        encryptionMetaPath(),
+        std::min(static_cast<size_t>(DBMS_DEFAULT_BUFFER_SIZE), meta_pack_info.column_stat_size));
     auto meta_buf = std::vector<char>(meta_pack_info.column_stat_size);
     auto meta_reader = ReadBufferFromMemory{meta_buf.data(), meta_buf.size()};
     ReadBuffer * buf = &file_buf;
@@ -529,7 +543,7 @@ void DMFile::readPackStat(const FileProviderPtr & file_provider, const MetaPackI
     const auto path = packStatPath();
     if (configuration)
     {
-        auto buf = createReadBufferFromFileBaseByFileProvider(
+        auto buf = ChecksumReadBufferBuilder::build(
             file_provider,
             path,
             encryptionPackStatPath(),
@@ -560,9 +574,9 @@ void DMFile::readConfiguration(const FileProviderPtr & file_provider)
 {
     if (Poco::File(configurationPath()).exists())
     {
-        auto file
+        auto buf
             = openForRead(file_provider, configurationPath(), encryptionConfigurationPath(), DBMS_DEFAULT_BUFFER_SIZE);
-        auto stream = InputStreamWrapper{file};
+        auto stream = InputStreamWrapper{buf};
         configuration.emplace(stream);
         version = DMFileFormat::V2;
     }
@@ -1142,12 +1156,13 @@ void DMFile::checkMergedFile(
         writer.file_info.size = 0;
         writer.buffer.reset();
 
-        writer.buffer = std::make_unique<WriteBufferFromFileProvider>(
-            file_provider,
+        auto file = file_provider->newWritableFile(
             mergedPath(writer.file_info.number),
             encryptionMergedPath(writer.file_info.number),
+            /*truncate_if_exists*/ true,
             /*create_new_encryption_info*/ false,
             write_limiter);
+        writer.buffer = std::make_unique<WriteBufferFromWritableFile>(file);
     }
 }
 
@@ -1159,13 +1174,13 @@ void DMFile::finalizeSmallFiles(
     auto copy_file_to_cur = [&](const String & fname, UInt64 fsize) {
         checkMergedFile(writer, file_provider, write_limiter);
 
-        auto read_file = openForRead(
+        auto file = openForRead(
             file_provider,
             subFilePath(fname),
             EncryptionPath(encryptionBasePath(), fname, keyspace_id),
             fsize);
         std::vector<char> read_buf(fsize);
-        auto read_size = read_file.readBig(read_buf.data(), read_buf.size());
+        auto read_size = file.readBig(read_buf.data(), read_buf.size());
         RUNTIME_CHECK(read_size == fsize, fname, read_size, fsize);
 
         writer.buffer->write(read_buf.data(), read_buf.size());

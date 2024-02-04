@@ -28,7 +28,7 @@ protected:
     void nextImpl() override;
 
 public:
-    WriteBufferFromWritableFile(
+    explicit WriteBufferFromWritableFile(
         WritableFilePtr file_,
         size_t buf_size = DBMS_DEFAULT_BUFFER_SIZE,
         char * existing_memory = nullptr,
@@ -52,10 +52,9 @@ private:
 private:
     WritableFilePtr file;
 
-    friend std::unique_ptr<WriteBufferFromFileBase> createWriteBufferFromFileBaseByWriterBuffer(
-        std::unique_ptr<WriteBufferFromWritableFile> & writer_buffer,
-        ChecksumAlgo checksum_algorithm,
-        size_t checksum_frame_size);
+    friend class ChecksumWriteBufferBuilder;
 };
+
+using WriteBufferFromWritableFilePtr = std::unique_ptr<WriteBufferFromWritableFile>;
 
 } // namespace DB

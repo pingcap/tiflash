@@ -13,7 +13,8 @@
 // limitations under the License.
 
 #include <Encryption/CompressedReadBufferFromFileProvider.h>
-#include <Encryption/createReadBufferFromFileBaseByFileProvider.h>
+#include <Encryption/ReadBufferFromRandomAccessFileBuilder.h>
+#include <IO/Checksum/ChecksumReadBufferBuilder.h>
 #include <IO/WriteHelpers.h>
 
 
@@ -47,19 +48,17 @@ CompressedReadBufferFromFileProvider<has_checksum>::CompressedReadBufferFromFile
     FileProviderPtr & file_provider,
     const std::string & path,
     const EncryptionPath & encryption_path,
-    size_t estimated_size,
-    size_t aio_threshold,
+    size_t /*estimated_size*/,
+    size_t /*aio_threshold*/,
     const ReadLimiterPtr & read_limiter_,
     size_t buf_size)
     : CompressedSeekableReaderBuffer()
-    , p_file_in(createReadBufferFromFileBaseByFileProvider(
+    , p_file_in(ReadBufferFromRandomAccessFileBuilder::buildPtr(
           file_provider,
           path,
           encryption_path,
-          estimated_size,
-          aio_threshold,
-          read_limiter_,
-          buf_size))
+          buf_size,
+          read_limiter_))
     , file_in(*p_file_in)
 {
     this->compressed_in = &file_in;
@@ -75,7 +74,7 @@ CompressedReadBufferFromFileProvider<has_checksum>::CompressedReadBufferFromFile
     ChecksumAlgo checksum_algorithm,
     size_t checksum_frame_size)
     : CompressedSeekableReaderBuffer()
-    , p_file_in(createReadBufferFromFileBaseByFileProvider(
+    , p_file_in(ChecksumReadBufferBuilder::build(
           file_provider,
           path,
           encryption_path,
@@ -96,7 +95,7 @@ CompressedReadBufferFromFileProvider<has_checksum>::CompressedReadBufferFromFile
     ChecksumAlgo checksum_algorithm,
     size_t checksum_frame_size)
     : CompressedSeekableReaderBuffer()
-    , p_file_in(createReadBufferFromData(
+    , p_file_in(ChecksumReadBufferBuilder::build(
           std::forward<String>(data),
           file_name,
           estimated_size,
