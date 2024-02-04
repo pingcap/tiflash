@@ -458,33 +458,33 @@ void DMFile::writeMetadata(const FileProviderPtr & file_provider, const WriteLim
     }
 }
 
-void DMFile::upgradeMetaIfNeed(const FileProviderPtr & file_provider, DMFileFormat::Version ver)
+void DMFile::tryUpgradeColumnStatInMetaV1(const FileProviderPtr & file_provider, DMFileFormat::Version ver)
 {
-    if (unlikely(ver == DMFileFormat::V0))
+    if (likely(ver != DMFileFormat::V0))
+        return;
+
+    // Update ColumnStat.serialized_bytes
+    for (auto && c : column_stats)
     {
-        // Update ColumnStat.serialized_bytes
-        for (auto && c : column_stats)
-        {
-            auto col_id = c.first;
-            auto & stat = c.second;
-            c.second.type->enumerateStreams(
-                [col_id, &stat, this](const IDataType::SubstreamPath & substream) {
-                    String stream_name = DMFile::getFileNameBase(col_id, substream);
-                    String data_file = colDataPath(stream_name);
-                    if (Poco::File f(data_file); f.exists())
-                        stat.serialized_bytes += f.getSize();
-                    String mark_file = colDataPath(stream_name);
-                    if (Poco::File f(mark_file); f.exists())
-                        stat.serialized_bytes += f.getSize();
-                    String index_file = colIndexPath(stream_name);
-                    if (Poco::File f(index_file); f.exists())
-                        stat.serialized_bytes += f.getSize();
-                },
-                {});
-        }
-        // Update ColumnStat in meta.
-        writeMeta(file_provider, nullptr);
+        auto col_id = c.first;
+        auto & stat = c.second;
+        c.second.type->enumerateStreams(
+            [col_id, &stat, this](const IDataType::SubstreamPath & substream) {
+                String stream_name = DMFile::getFileNameBase(col_id, substream);
+                String data_file = colDataPath(stream_name);
+                if (Poco::File f(data_file); f.exists())
+                    stat.serialized_bytes += f.getSize();
+                String mark_file = colDataPath(stream_name);
+                if (Poco::File f(mark_file); f.exists())
+                    stat.serialized_bytes += f.getSize();
+                String index_file = colIndexPath(stream_name);
+                if (Poco::File f(index_file); f.exists())
+                    stat.serialized_bytes += f.getSize();
+            },
+            {});
     }
+    // Update ColumnStat in metaV1.
+    writeMeta(file_provider, nullptr);
 }
 
 void DMFile::readColumnStat(const FileProviderPtr & file_provider, const MetaPackInfo & meta_pack_info)
@@ -511,9 +511,7 @@ void DMFile::readColumnStat(const FileProviderPtr & file_provider, const MetaPac
             digest->update(meta_buf.data(), meta_buf.size());
             if (unlikely(!digest->compareRaw(location->second)))
             {
-                throw TiFlashException(
-                    fmt::format("checksum mismatch for {}", metaPath()),
-                    Errors::Checksum::DataCorruption);
+                throw TiFlashException(Errors::Checksum::DataCorruption, "checksum mismatch for {}", metaPath());
             }
             buf = &meta_reader;
         }
@@ -535,7 +533,7 @@ void DMFile::readColumnStat(const FileProviderPtr & file_provider, const MetaPac
     {
         throw TiFlashException("configuration expected but not loaded", Errors::Checksum::Missing);
     }
-    upgradeMetaIfNeed(file_provider, ver);
+    tryUpgradeColumnStatInMetaV1(file_provider, ver);
 }
 
 void DMFile::readPackStat(const FileProviderPtr & file_provider, const MetaPackInfo & meta_pack_info)
@@ -614,8 +612,9 @@ void DMFile::readPackProperty(const FileProviderPtr & file_provider, const MetaP
             if (unlikely(!digest->compareRaw(target)))
             {
                 throw TiFlashException(
-                    fmt::format("checksum mismatch for {}", packPropertyPath()),
-                    Errors::Checksum::DataCorruption);
+                    Errors::Checksum::DataCorruption,
+                    "checksum mismatch for {}",
+                    packPropertyPath());
             }
         }
         else
@@ -847,11 +846,11 @@ void DMFile::initializeIndices()
         }
         catch (const std::invalid_argument & err)
         {
-            throw DB::Exception(fmt::format("invalid ColId: {} from file: {}", err.what(), data));
+            throw DB::Exception(ErrorCodes::LOGICAL_ERROR, "invalid ColId: {} from file: {}", err.what(), data);
         }
         catch (const std::out_of_range & err)
         {
-            throw DB::Exception(fmt::format("invalid ColId: {} from file: {}", err.what(), data));
+            throw DB::Exception(ErrorCodes::LOGICAL_ERROR, "invalid ColId: {} from file: {}", err.what(), data);
         }
     };
 
