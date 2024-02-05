@@ -136,8 +136,7 @@ Block createBlockSortByColumnID(DecodingStorageSchemaSnapshotConstPtr schema_sna
     // # Safety
     // Though `col_id_to_block_pos` lasks some fields in `col_id_to_def_pos`,
     // it is always a sub-sequence of `col_id_to_def_pos`.
-    for (auto iter = schema_snapshot->getColId2DefPosMap().begin();
-         iter != schema_snapshot->getColId2DefPosMap().end();
+    for (auto iter = schema_snapshot->getColId2DefPosMap().begin(); iter != schema_snapshot->getColId2DefPosMap().end();
          iter++)
     {
         // col_id == cd.id

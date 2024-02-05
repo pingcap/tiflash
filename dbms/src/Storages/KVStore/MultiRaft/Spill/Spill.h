@@ -21,18 +21,4 @@
 namespace DB
 {
 
-struct SpillFileVersion
-{
-};
-
-struct SpillingTxn
-{
-    RegionDefaultCFData default_cf;
-};
-
-struct SpilledMemtable
-{
-    // start_ts -> SpillingTxn
-};
-
 } // namespace DB

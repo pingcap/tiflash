@@ -81,6 +81,7 @@ struct DecodingStorageSchemaSnapshot
     TMTPKType pk_type = TMTPKType::UNSPECIFIED;
     // an internal increasing version for `DecodingStorageSchemaSnapshot`, has no relation with the table schema version
     Int64 decoding_schema_epoch;
+
 private:
     // `col_id_to_def_pos` is originally `sorted_column_id_with_pos`.
     // We may omit some cols in block, e.g. version col. So `col_id_to_def_pos` may have more items than `col_id_to_block_pos`.

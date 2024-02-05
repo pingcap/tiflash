@@ -255,12 +255,6 @@ public: // Raft Read and Write
     void beforePrehandleSnapshot(uint64_t region_id, std::optional<uint64_t> deadline_index);
     void afterPrehandleSnapshot(int64_t ongoing);
 
-public: // Spill
-    SpilledMemtable spillDefaultCf(const TiKVKey & start_ts, const RegionTaskLock &);
-
-    // Don't require Region task lock
-    void ingestSpilledFile(const RegionRange & region_range, Timestamp start_ts, SpillFileVersion spill_file_version);
-
 private:
     friend class RegionRaftCommandDelegate;
     friend class RegionMockTest;
