@@ -141,6 +141,7 @@ bool DMFileReader::getSkippedRows(size_t & skip_rows)
         scan_context->total_dmfile_skipped_rows += pack_stats[next_pack_id].rows;
     }
     next_row_offset += skip_rows;
+    // return false if it is the end of stream.
     return next_pack_id < use_packs.size();
 }
 
@@ -155,9 +156,9 @@ size_t DMFileReader::skipNextBlock()
     // let next_pack_id point to the next pack of the contiguous packs.
     // For example, if we have 10 packs, use_packs is [0, 1, 1, 0, 1, 1, 0, 0, 1, 1],
     // and now next_pack_id is 1, then we will skip 2 packs(index 1 and 2), and next_pack_id will be 3.
-    size_t read_pack_limit = read_one_pack_every_time ? 1 : 0;
+    const size_t read_pack_limit = read_one_pack_every_time ? 1 : 0;
     const std::vector<RSResult> & handle_res = pack_filter.getHandleRes();
-    RSResult expected_handle_res = handle_res[next_pack_id];
+    const RSResult expected_handle_res = handle_res[next_pack_id];
     auto & use_packs = pack_filter.getUsePacks();
     size_t start_pack_id = next_pack_id;
     const auto & pack_stats = dmfile->getPackStats();
