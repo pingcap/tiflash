@@ -76,9 +76,6 @@ if (NOT OS_DARWIN AND NOT OS_FREEBSD)
     target_link_libraries (read_buffer_aio tiflash_common_io ${Boost_FILESYSTEM_LIBRARY})
 endif ()
 
-add_executable (zlib_buffers zlib_buffers.cpp ${SRCS})
-target_link_libraries (zlib_buffers tiflash_common_io)
-
 add_executable (remote_read_write_buffer remote_read_write_buffer.cpp ${SRCS})
 target_link_libraries (remote_read_write_buffer tiflash_common_io)
 
