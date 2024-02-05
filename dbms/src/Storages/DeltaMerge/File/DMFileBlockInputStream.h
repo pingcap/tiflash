@@ -159,7 +159,6 @@ private:
     DMFileBlockInputStreamBuilder & setFromSettings(const Settings & settings)
     {
         enable_column_cache = settings.dt_enable_stable_column_cache;
-        aio_threshold = settings.min_bytes_to_use_direct_io;
         max_read_buffer_size = settings.max_read_buffer_size;
         max_sharing_column_bytes_for_all = settings.dt_max_sharing_column_bytes_for_all;
         max_sharing_column_count = settings.dt_max_sharing_column_count;
@@ -193,7 +192,6 @@ private:
     bool enable_column_cache = false;
     ColumnCachePtr column_cache;
     ReadLimiterPtr read_limiter;
-    size_t aio_threshold{};
     size_t max_read_buffer_size{};
     size_t rows_threshold_per_read = DMFILE_READ_ROWS_THRESHOLD;
     bool read_one_pack_every_time = false;

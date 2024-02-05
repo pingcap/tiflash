@@ -134,13 +134,11 @@ private:
     }
 };
 
-// TODO: `aio_threshold` and `max_read_buffer_size` does not change anything, remove them
 std::unique_ptr<CompressedSeekableReaderBuffer> ColumnReadStream::buildColDataReadBuffWithoutChecksum(
     DMFileReader & reader,
     ColId col_id,
     const String & file_name_base,
-    size_t packs,
-    size_t aio_threshold,
+    size_t n_packs,
     size_t max_read_buffer_size,
     const ReadLimiterPtr & read_limiter,
     const LoggerPtr & log) const
@@ -150,11 +148,10 @@ std::unique_ptr<CompressedSeekableReaderBuffer> ColumnReadStream::buildColDataRe
     auto is_null_map = endsWith(file_name_base, ".null");
     size_t data_file_size = reader.dmfile->colDataSize(col_id, is_null_map);
 
+    // Try to get the largest buffer size of reading continuous packs
     size_t buffer_size = 0;
-    size_t estimated_size = 0;
-
     const auto & use_packs = reader.pack_filter.getUsePacksConst();
-    for (size_t i = 0; i < packs; /*empty*/)
+    for (size_t i = 0; i < n_packs; /*empty*/)
     {
         if (!use_packs[i])
         {
@@ -163,49 +160,43 @@ std::unique_ptr<CompressedSeekableReaderBuffer> ColumnReadStream::buildColDataRe
         }
         size_t cur_offset_in_file = getOffsetInFile(i);
         size_t end = i + 1;
-        // First find the end of current available range.
-        while (end < packs && use_packs[end])
+        // First, find the end of current available range.
+        while (end < n_packs && use_packs[end])
             ++end;
 
-        // Second If the end of range is inside the block, we will need to read it too.
-        if (end < packs)
+        // Second, if the end of range is inside the block, we will need to read it too.
+        if (end < n_packs)
         {
             size_t last_offset_in_file = getOffsetInFile(end);
             if (getOffsetInDecompressedBlock(end) > 0)
             {
-                while (end < packs && getOffsetInFile(end) == last_offset_in_file)
+                while (end < n_packs && getOffsetInFile(end) == last_offset_in_file)
                     ++end;
             }
         }
 
-        size_t range_end_in_file = (end == packs) ? data_file_size : getOffsetInFile(end);
+        size_t range_end_in_file = (end == n_packs) ? data_file_size : getOffsetInFile(end);
 
         size_t range = range_end_in_file - cur_offset_in_file;
         buffer_size = std::max(buffer_size, range);
 
-        estimated_size += range;
         i = end;
     }
-
     buffer_size = std::min(buffer_size, max_read_buffer_size);
 
     LOG_TRACE(
         log,
-        "col_id: {}, file_name_base: {}, file size: {}, estimated read size: {}, buffer_size: {}"
-        " (aio_threshold: {}, max_read_buffer_size: {})",
+        "col_id={} file_name_base={} file_size={} buffer_size={}",
         col_id,
         file_name_base,
         data_file_size,
-        estimated_size,
-        buffer_size,
-        aio_threshold,
-        max_read_buffer_size);
+        buffer_size);
     return std::make_unique<CompressedReadBufferFromFileProvider<true>>(
         reader.file_provider,
         reader.dmfile->colDataPath(file_name_base),
         reader.dmfile->encryptionDataPath(file_name_base),
-        estimated_size,
-        aio_threshold,
+        /*estimated_size*/ 0,
+        /*aio_threshold*/ 0,
         read_limiter,
         buffer_size);
 }
@@ -277,7 +268,6 @@ ColumnReadStream::ColumnReadStream(
     DMFileReader & reader,
     ColId col_id,
     const String & file_name_base,
-    size_t aio_threshold,
     size_t max_read_buffer_size,
     const LoggerPtr & log,
     const ReadLimiterPtr & read_limiter)
@@ -312,7 +302,6 @@ ColumnReadStream::ColumnReadStream(
             col_id,
             file_name_base,
             packs,
-            aio_threshold,
             max_read_buffer_size,
             read_limiter,
             log);

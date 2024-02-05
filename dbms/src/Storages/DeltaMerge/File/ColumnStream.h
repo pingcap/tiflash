@@ -35,7 +35,6 @@ public:
         DMFileReader & reader,
         ColId col_id,
         const String & file_name_base,
-        size_t aio_threshold,
         size_t max_read_buffer_size,
         const LoggerPtr & log,
         const ReadLimiterPtr & read_limiter);
@@ -55,7 +54,6 @@ private:
         ColId col_id,
         const String & file_name_base,
         size_t packs,
-        size_t aio_threshold,
         size_t max_read_buffer_size,
         const ReadLimiterPtr & read_limiter,
         const LoggerPtr & log) const;

@@ -57,7 +57,6 @@ public:
         const MarkCachePtr & mark_cache_,
         bool enable_column_cache_,
         const ColumnCachePtr & column_cache_,
-        size_t aio_threshold,
         size_t max_read_buffer_size,
         const FileProviderPtr & file_provider_,
         const ReadLimiterPtr & read_limiter,
@@ -117,7 +116,7 @@ private:
 
     DMFilePtr dmfile;
     ColumnDefines read_columns;
-    ColumnReadStreams column_streams{};
+    ColumnReadStreams column_streams;
 
     const bool is_common_handle;
 
@@ -132,6 +131,8 @@ private:
     const bool enable_del_clean_read;
     const bool is_fast_scan;
 
+    const bool enable_column_cache;
+
     const UInt64 max_read_version;
 
 private:
@@ -142,7 +143,6 @@ private:
 
     /// Caches
     MarkCachePtr mark_cache;
-    const bool enable_column_cache;
     ColumnCachePtr column_cache;
 
     const ScanContextPtr scan_context;

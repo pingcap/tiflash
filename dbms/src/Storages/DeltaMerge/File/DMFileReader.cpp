@@ -66,7 +66,6 @@ DMFileReader::DMFileReader(
     const MarkCachePtr & mark_cache_,
     bool enable_column_cache_,
     const ColumnCachePtr & column_cache_,
-    size_t aio_threshold,
     size_t max_read_buffer_size,
     const FileProviderPtr & file_provider_,
     const ReadLimiterPtr & read_limiter,
@@ -82,11 +81,11 @@ DMFileReader::DMFileReader(
     , enable_handle_clean_read(enable_handle_clean_read_)
     , enable_del_clean_read(enable_del_clean_read_)
     , is_fast_scan(is_fast_scan_)
+    , enable_column_cache(enable_column_cache_ && column_cache_)
     , max_read_version(max_read_version_)
     , pack_filter(std::move(pack_filter_))
     , skip_packs_by_column(read_columns.size(), 0)
     , mark_cache(mark_cache_)
-    , enable_column_cache(enable_column_cache_ && column_cache_)
     , column_cache(column_cache_)
     , scan_context(scan_context_)
     , rows_threshold_per_read(rows_threshold_per_read_)
@@ -106,7 +105,6 @@ DMFileReader::DMFileReader(
                 *this,
                 cd.id,
                 stream_name,
-                aio_threshold,
                 max_read_buffer_size,
                 log,
                 read_limiter);
