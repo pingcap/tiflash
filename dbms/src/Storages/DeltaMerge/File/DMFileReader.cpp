@@ -44,10 +44,6 @@ namespace ErrorCodes
 {
 extern const int LOGICAL_ERROR;
 }
-namespace FailPoints
-{
-extern const char skip_seek_before_read_dmfile[];
-} // namespace FailPoints
 } // namespace DB
 
 namespace DB::DM
@@ -462,9 +458,6 @@ Block DMFileReader::read()
                         column->reserve(read_rows);
                         for (auto & [range, strategy] : read_strategy)
                         {
-                            fiu_do_on(FailPoints::skip_seek_before_read_dmfile, {
-                                strategy = ColumnCache::Strategy::Disk;
-                            });
                             if (strategy == ColumnCache::Strategy::Memory)
                             {
                                 for (size_t cursor = range.first; cursor < range.second; cursor++)
@@ -565,7 +558,6 @@ void DMFileReader::readFromDisk(
 
                 if (should_seek)
                 {
-                    fiu_do_on(FailPoints::skip_seek_before_read_dmfile, { return sub_stream->buf.get(); });
                     sub_stream->buf->seek(
                         sub_stream->getOffsetInFile(start_pack_id),
                         sub_stream->getOffsetInDecompressedBlock(start_pack_id));

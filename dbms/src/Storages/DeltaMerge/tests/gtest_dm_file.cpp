@@ -48,7 +48,6 @@ namespace FailPoints
 {
 extern const char exception_before_dmfile_remove_encryption[];
 extern const char exception_before_dmfile_remove_from_disk[];
-extern const char skip_seek_before_read_dmfile[];
 } // namespace FailPoints
 } // namespace DB
 
@@ -806,7 +805,7 @@ try
         auto stream
             = builder.setColumnCache(column_cache)
                   .build(dm_file, *cols, RowKeyRanges{RowKeyRange::newAll(false, 1)}, std::make_shared<ScanContext>());
-        auto & use_packs = stream->reader.pack_filter.getUsePacks();
+        auto & use_packs = getReaderUsePacks(stream);
         use_packs[1] = false;
         ASSERT_EQ(stream->skipNextBlock(), num_rows_write / 3);
         use_packs[1] = true;
@@ -817,29 +816,6 @@ try
                 createColumn<Int64>(createNumbers<Int64>(num_rows_write / 3, num_rows_write)),
             }));
     }
-#if 0
-    {
-        /// Test not seek before read
-        DMFileBlockInputStreamBuilder builder(dbContext());
-        auto stream
-            = builder.setColumnCache(column_cache)
-                  .enableCleanRead(false, true, false, std::numeric_limits<UInt64>::max())
-                  .build(dm_file, *cols, RowKeyRanges{RowKeyRange::newAll(false, 1)}, std::make_shared<ScanContext>());
-        auto & use_packs = stream->reader.pack_filter.getUsePacks();
-        use_packs[1] = false;
-        // let next_pack_id = 1
-        stream->skipNextBlock();
-        FailPointHelper::enableFailPoint(FailPoints::skip_seek_before_read_dmfile);
-        // should equal to [128, 192) but equal to [0, 64)
-        ASSERT_INPUTSTREAM_COLS_UR(
-            stream,
-            Strings({DMTestEnv::pk_name}),
-            createColumns({
-                createColumn<Int64>(createNumbers<Int64>(0, num_rows_write / 3)),
-            }));
-        FailPointHelper::disableFailPoint(FailPoints::skip_seek_before_read_dmfile);
-    }
-#endif
 }
 CATCH
 
@@ -964,6 +940,7 @@ try
             }));
     }
 }
+CATCH
 
 TEST_P(DMFileTest, GcFlag)
 try
