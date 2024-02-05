@@ -159,7 +159,7 @@ struct VersionColResolver<RegionUncommittedDataList>
     void build(ColumnUInt64 * raw_version_col_) { raw_version_col = raw_version_col_; }
     void preRead(size_t) {} // NOLINT conform to main template
     void read(const RegionUncommittedData &) {} // NOLINT conform to main template
-    void check(const Block & block, size_t expected) const
+    void check(const Block & block, size_t expected) const // NOLINT conform to main template
     {
         if (unlikely(block.columns() + 1 != expected))
             throw Exception(
