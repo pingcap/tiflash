@@ -315,7 +315,8 @@ inline DecodingStorageSchemaSnapshotConstPtr getDecodingStorageSchemaSnapshot(co
             std::make_shared<ColumnDefines>(store_columns),
             table_info,
             *iter,
-            /* decoding_schema_epoch_ */ 1);
+            /* decoding_schema_epoch_ */ 1,
+            true);
     }
     else
     {
@@ -323,7 +324,8 @@ inline DecodingStorageSchemaSnapshotConstPtr getDecodingStorageSchemaSnapshot(co
             std::make_shared<ColumnDefines>(store_columns),
             table_info,
             store_columns[0],
-            /* decoding_schema_epoch_ */ 1);
+            /* decoding_schema_epoch_ */ 1,
+            true);
     }
 }
 

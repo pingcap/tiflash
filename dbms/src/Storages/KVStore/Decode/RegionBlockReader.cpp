@@ -154,7 +154,7 @@ template<>
 struct VersionColResolver<RegionUncommittedDataList> {
     VersionColResolver() {}
     bool needBuild() const {
-        return raw_version_col == nullptr;
+        return false;
     }
     void build(ColumnUInt64 * raw_version_col_) {
         raw_version_col = raw_version_col_;
@@ -221,8 +221,7 @@ bool RegionBlockReader::readImpl(Block & block, const ReadList & data_list, bool
         column_ids_iter++;
     }
     // extra handle, del, version
-    constexpr size_t MustHaveCntInSchema = 3;
-    if (unlikely(next_column_pos != MustHaveCntInSchema))
+    if (unlikely(next_column_pos != version_col_resolver.reservedCount()))
         throw Exception(ErrorCodes::LOGICAL_ERROR, "del, version column mismatch, actual_size={}", next_column_pos);
 
     ColumnUInt8::Container & delmark_data = raw_delmark_col->getData();
@@ -273,10 +272,10 @@ bool RegionBlockReader::readImpl(Block & block, const ReadList & data_list, bool
             {
                 LOG_INFO(DB::Logger::get(), "!!!!!! Z next_column_pos {}", next_column_pos);
                 for (auto it = column_ids_iter; it != read_column_ids.end(); it ++) {
-                    LOG_INFO(DB::Logger::get(), "!!!!!! Z col_id {}", it->first);
+                    LOG_INFO(DB::Logger::get(), "!!!!!! Z col_id {} -> {}", it->first, it->second);
                 }
                 for (const auto & q : block.getNames()) {
-                    LOG_INFO(DB::Logger::get(), "!!!!!! Z gq {}", q);
+                    LOG_INFO(DB::Logger::get(), "!!!!!! Z gq {} next_column_pos {}", q, next_column_pos);
                 }
                 // Parse column value from encoded value
                 if (!appendRowToBlock(
