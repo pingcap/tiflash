@@ -429,7 +429,15 @@ S3Filename S3Filename::newCheckpointData(StoreID store_id, UInt64 upload_seq, UI
     };
 }
 
-String S3Filename::newCheckpointDataNameTemplate(StoreID store_id, UInt64 lock_seq)
+String S3Filename::newCheckpointDataNameTemplate(StoreID store_id)
+{
+    return fmt::format(
+        details::fmt_data_file,
+        fmt::arg("store_id", store_id),
+        fmt::arg("subpath", details::fmt_subpath_checkpoint_data)); // available placeholder `seq`, `index`
+}
+
+String S3Filename::newCheckpointLockNameTemplate(StoreID store_id, UInt64 lock_seq)
 {
     return fmt::format(
         details::fmt_lock_file,

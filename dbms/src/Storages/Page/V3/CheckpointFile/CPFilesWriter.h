@@ -29,6 +29,10 @@
 namespace DB::PS::V3
 {
 
+/*
+ * CPFilesWriter is used to write checkpoint files to S3.
+ * The order of writing is: data file -> lock file -> [data file -> lock file] -> manifest file.
+ */
 class CPFilesWriter : private boost::noncopyable
 {
 public:
@@ -48,7 +52,7 @@ public:
          */
         const std::unordered_set<String> & must_locked_files = {};
         UInt64 sequence;
-        UInt64 max_data_file_size = 256 * 1024 * 1024;
+        UInt64 max_data_file_size = 256 * 1024 * 1024; // 256MB
         UInt64 max_edit_records_per_part = 100000;
     };
 
@@ -101,11 +105,7 @@ public:
      */
     [[nodiscard]] std::vector<String> writeSuffix();
 
-#ifndef DBMS_PUBLIC_GTEST
 private:
-#else
-public:
-#endif
     enum class WriteStage
     {
         WritingPrefix,

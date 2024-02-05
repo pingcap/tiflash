@@ -26,15 +26,6 @@ using IDataStorePtr = std::shared_ptr<IDataStore>;
 
 namespace DB
 {
-struct CheckpointUploadFunctor
-{
-    const StoreID store_id;
-    const UInt64 sequence;
-    const DM::Remote::IDataStorePtr remote_store;
-
-    bool operator()(const PS::V3::LocalCheckpointFiles & checkpoint) const;
-};
-
 // This is wrapper class for UniversalPageStorage.
 // It mainly manages background tasks like gc for UniversalPageStorage.
 // It is like StoragePool for Page V2, and GlobalStoragePool for Page V3.
@@ -76,10 +67,6 @@ private:
 public:
 #endif
     explicit UniversalPageStorageService(Context & global_context_);
-    // If the TiFlash process restart unexpectedly, some local checkpoint files can be left,
-    // remove these files when the process restarting.
-    void removeAllLocalCheckpointFiles() const;
-    Poco::Path getCheckpointLocalDir(UInt64 seq) const;
 
 #ifndef DBMS_PUBLIC_GTEST
 private:
@@ -102,7 +89,5 @@ public:
     // other background tasks unexpectly.
     std::unique_ptr<BackgroundProcessingPool> checkpoint_pool;
     BackgroundProcessingPool::TaskHandle remote_checkpoint_handle;
-
-    inline static const String checkpoint_dirname_prefix = "checkpoint_upload_";
 };
 } // namespace DB

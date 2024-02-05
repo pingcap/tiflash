@@ -68,6 +68,7 @@ S3WritableFile::S3WritableFile(
     allocateBuffer();
 }
 
+// TODO: abort multipart upload if exception happens?
 S3WritableFile::~S3WritableFile() = default;
 
 ssize_t S3WritableFile::write(char * buf, size_t size)
@@ -113,6 +114,9 @@ int S3WritableFile::fsync()
     if (multipart_upload_id.empty())
     {
         makeSinglepartUpload();
+        // Reset buffer after singlepart upload.
+        // Try to avoid upload the same data multiple times.
+        allocateBuffer();
     }
     else
     {
@@ -283,6 +287,11 @@ void S3WritableFile::makeSinglepartUpload()
             client_ptr->root(),
             remote_fname);
     }
+    else if (size == 0)
+    {
+        LOG_DEBUG(log, "Skipping writing single part. Buffer is empty.");
+        return;
+    }
     PutObjectTask task;
     fillPutRequest(task.req);
     processPutRequest(task);
@@ -341,11 +350,4 @@ void S3WritableFile::processPutRequest(const PutObjectTask & task)
     }
 }
 
-std::shared_ptr<S3WritableFile> S3WritableFile::create(const String & remote_fname_)
-{
-    return std::make_shared<S3WritableFile>(
-        S3::ClientFactory::instance().sharedTiFlashClient(),
-        remote_fname_,
-        WriteSettings{});
-}
 } // namespace DB::S3

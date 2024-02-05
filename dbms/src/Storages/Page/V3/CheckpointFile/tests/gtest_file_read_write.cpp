@@ -21,6 +21,8 @@
 #include <Storages/Page/V3/CheckpointFile/CPWriteDataSource.h>
 #include <Storages/Page/V3/PageEntryCheckpointInfo.h>
 #include <Storages/Page/V3/Universal/UniversalWriteBatchImpl.h>
+#include <Storages/S3/MockS3Client.h>
+#include <Storages/S3/S3Filename.h>
 #include <TestUtils/MockDiskDelegator.h>
 #include <TestUtils/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestBasic.h>
@@ -39,15 +41,17 @@ public:
         dropDataOnDisk(dir);
         createIfNotExist(dir);
 
-        data_file_path_pattern = dir + "/data_{index}";
-        data_file_id_pattern = "data_{index}";
-        manifest_file_path = dir + "/manifest_foo";
-        manifest_file_id = "manifest_foo";
+        data_file_id_pattern = S3::S3Filename::newCheckpointLockNameTemplate(0, 1);
+        data_file_path_pattern = S3::S3Filename::newCheckpointDataNameTemplate(0);
+        manifest_file_path = S3::S3Filename::newCheckpointManifest(0, 1).toFullKey();
+        manifest_file_id = S3::S3Filename::newCheckpointManifest(0, 1).toFullKey();
 
+        s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
+        ASSERT_TRUE(::DB::tests::TiFlashTestEnv::createBucketIfNotExist(*s3_client));
         log = Logger::get("CheckpointFileTest");
     }
 
-    std::string readData(const V3::CheckpointLocation & location)
+    static std::string readData(const V3::CheckpointLocation & location)
     {
         RUNTIME_CHECK(location.offset_in_file > 0);
         RUNTIME_CHECK(location.data_file_id != nullptr && !location.data_file_id->empty());
@@ -55,7 +59,10 @@ public:
         std::string ret;
         ret.resize(location.size_in_file);
 
-        auto data_file = PosixRandomAccessFile::create(dir + "/" + *location.data_file_id);
+        // parse from lockkey to data_file_key
+        auto data_file_key = S3::S3FilenameView::fromKey(*location.data_file_id).asDataFile().toFullKey();
+
+        auto data_file = S3::S3RandomAccessFile::create(data_file_key);
         ReadBufferFromRandomAccessFile buf(data_file);
         buf.seek(location.offset_in_file);
         auto n = buf.readBig(ret.data(), location.size_in_file);
@@ -70,6 +77,7 @@ protected:
     String data_file_path_pattern;
     String manifest_file_id;
     String manifest_file_path;
+    std::shared_ptr<S3::TiFlashS3Client> s3_client;
     LoggerPtr log;
 };
 
@@ -89,17 +97,17 @@ try
         .sequence = 5,
         .last_sequence = 3,
     });
-    auto data_file_paths = writer->data_file_paths;
+    auto data_file_paths = writer->writeSuffix();
     writer.reset();
 
     ASSERT_FALSE(data_file_paths.empty());
     for (const auto & path : data_file_paths)
     {
-        ASSERT_TRUE(Poco::File(path).exists());
+        ASSERT_TRUE(S3::objectExists(*s3_client, path));
     }
-    ASSERT_TRUE(Poco::File(manifest_file_path).exists());
+    ASSERT_TRUE(S3::objectExists(*s3_client, manifest_file_path));
 
-    auto manifest_file = PosixRandomAccessFile::create(manifest_file_path);
+    auto manifest_file = S3::S3RandomAccessFile::create(manifest_file_path);
     auto manifest_reader = CPManifestFileReader::create({
         .plain_file = manifest_file,
     });
@@ -152,7 +160,7 @@ try
     LOG_DEBUG(log, "Checkpoint data paths: {}", data_paths);
     writer.reset();
 
-    auto manifest_file = PosixRandomAccessFile::create(manifest_file_path);
+    auto manifest_file = S3::S3RandomAccessFile::create(manifest_file_path);
     auto manifest_reader = CPManifestFileReader::create({
         .plain_file = manifest_file,
     });
@@ -219,7 +227,7 @@ try
     LOG_DEBUG(log, "Checkpoint data paths: {}", data_paths);
     writer.reset();
 
-    auto manifest_file = PosixRandomAccessFile::create(manifest_file_path);
+    auto manifest_file = S3::S3RandomAccessFile::create(manifest_file_path);
     auto manifest_reader = CPManifestFileReader::create({
         .plain_file = manifest_file,
     });
@@ -243,7 +251,7 @@ try
         ASSERT_EQ(29, r[0].entry.size);
         ASSERT_TRUE(r[0].entry.checkpoint_info.is_valid);
         ASSERT_TRUE(r[0].entry.checkpoint_info.is_local_data_reclaimed);
-        ASSERT_EQ("data_0", *r[0].entry.checkpoint_info.data_location.data_file_id);
+        ASSERT_EQ("lock/s0/dat_0_0.lock_s0_1", *r[0].entry.checkpoint_info.data_location.data_file_id);
         ASSERT_EQ("Said she just dreamed a dream", readData(r[0].entry.checkpoint_info.data_location));
 
         ASSERT_EQ(EditRecordType::VAR_REF, r[1].type);
@@ -256,7 +264,7 @@ try
         ASSERT_EQ(22, r[2].entry.size);
         ASSERT_TRUE(r[2].entry.checkpoint_info.is_valid);
         ASSERT_TRUE(r[2].entry.checkpoint_info.is_local_data_reclaimed);
-        ASSERT_EQ("data_0", *r[2].entry.checkpoint_info.data_location.data_file_id);
+        ASSERT_EQ("lock/s0/dat_0_0.lock_s0_1", *r[2].entry.checkpoint_info.data_location.data_file_id);
         ASSERT_EQ("nahida opened her eyes", readData(r[2].entry.checkpoint_info.data_location));
 
         ASSERT_EQ(EditRecordType::VAR_DELETE, r[3].type);
@@ -274,8 +282,9 @@ try
     {
         auto locks = manifest_reader->readLocks();
         ASSERT_TRUE(locks.has_value());
+        LOG_DEBUG(log, "Locks: {}", *locks);
         ASSERT_EQ(1, locks->size());
-        ASSERT_EQ(1, locks->count("data_0"));
+        ASSERT_EQ(1, locks->count("lock/s0/dat_0_0.lock_s0_1"));
     }
     {
         auto locks = manifest_reader->readLocks();
@@ -327,7 +336,7 @@ try
     LOG_DEBUG(log, "Checkpoint data paths: {}", data_paths);
     writer.reset();
 
-    auto manifest_file = PosixRandomAccessFile::create(manifest_file_path);
+    auto manifest_file = S3::S3RandomAccessFile::create(manifest_file_path);
     auto manifest_reader = CPManifestFileReader::create({
         .plain_file = manifest_file,
     });
@@ -357,7 +366,7 @@ try
         ASSERT_EQ(22, r[2].entry.size);
         ASSERT_TRUE(r[2].entry.checkpoint_info.is_valid);
         ASSERT_TRUE(r[2].entry.checkpoint_info.is_local_data_reclaimed);
-        ASSERT_EQ("data_0", *r[2].entry.checkpoint_info.data_location.data_file_id);
+        ASSERT_EQ("lock/s0/dat_0_0.lock_s0_1", *r[2].entry.checkpoint_info.data_location.data_file_id);
         ASSERT_EQ("nahida opened her eyes", readData(r[2].entry.checkpoint_info.data_location));
 
         ASSERT_EQ(EditRecordType::VAR_DELETE, r[3].type);
@@ -371,7 +380,7 @@ try
         auto locks = manifest_reader->readLocks();
         ASSERT_TRUE(locks.has_value());
         ASSERT_EQ(2, locks->size());
-        ASSERT_EQ(1, locks->count("data_0"));
+        ASSERT_EQ(1, locks->count("lock/s0/dat_0_0.lock_s0_1"));
         ASSERT_EQ(1, locks->count("my_file_id"));
     }
     {
@@ -545,7 +554,7 @@ try
     LOG_DEBUG(log, "Checkpoint data paths: {}", data_paths);
     writer.reset();
 
-    auto manifest_file = PosixRandomAccessFile::create(manifest_file_path);
+    auto manifest_file = S3::S3RandomAccessFile::create(manifest_file_path);
     auto manifest_reader = CPManifestFileReader::create({
         .plain_file = manifest_file,
     });
@@ -589,7 +598,7 @@ try
     LOG_DEBUG(log, "Checkpoint data paths: {}", data_paths);
     writer.reset();
 
-    auto manifest_file = PosixRandomAccessFile::create(manifest_file_path);
+    auto manifest_file = S3::S3RandomAccessFile::create(manifest_file_path);
     auto manifest_reader = CPManifestFileReader::create({
         .plain_file = manifest_file,
     });
@@ -647,7 +656,7 @@ try
     LOG_DEBUG(log, "Checkpoint data paths: {}", data_paths);
     writer.reset();
 
-    auto manifest_file = PosixRandomAccessFile::create(manifest_file_path);
+    auto manifest_file = S3::S3RandomAccessFile::create(manifest_file_path);
     auto manifest_reader = CPManifestFileReader::create({
         .plain_file = manifest_file,
     });
@@ -665,11 +674,12 @@ try
     {
         auto locks = manifest_reader->readLocks();
         ASSERT_TRUE(locks.has_value());
+        LOG_DEBUG(log, "Locks: {}", *locks);
         ASSERT_EQ(4, locks->size());
         ASSERT_EQ(1, locks->count("f1"));
         ASSERT_EQ(1, locks->count("fx"));
         ASSERT_EQ(1, locks->count("my_file_id"));
-        ASSERT_EQ(1, locks->count("data_0"));
+        ASSERT_EQ(1, locks->count("lock/s0/dat_0_0.lock_s0_1"));
     }
     {
         auto locks = manifest_reader->readLocks();
@@ -708,7 +718,7 @@ try
     LOG_DEBUG(log, "Checkpoint data paths: {}", data_paths);
     writer.reset();
 
-    auto manifest_file = PosixRandomAccessFile::create(manifest_file_path);
+    auto manifest_file = S3::S3RandomAccessFile::create(manifest_file_path);
     auto manifest_reader = CPManifestFileReader::create({
         .plain_file = manifest_file,
     });

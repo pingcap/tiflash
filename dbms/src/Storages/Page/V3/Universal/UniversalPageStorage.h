@@ -59,7 +59,6 @@ using S3LockLocalManagerPtr = std::unique_ptr<S3LockLocalManager>;
 } // namespace PS::V3
 using PS::V3::PageType;
 using PS::V3::PageTypeAndConfig;
-using PS::V3::PageTypeConfig;
 
 class UniversalPageStorage;
 using UniversalPageStoragePtr = std::shared_ptr<UniversalPageStorage>;
@@ -195,23 +194,22 @@ public:
         const std::unordered_set<String> & must_locked_files = {};
 
         /**
-         * A callback to persist the checkpoint to remote data store.
-         *
-         * If the checkpoint persist failed, it must throw an exception or return false
-         * to prevent the incremental data lost between checkpoints.
-         */
-        const std::function<bool(const PS::V3::LocalCheckpointFiles &)> persist_checkpoint;
-
-        /**
          * Override the value of `seq` placeholder in the data files and manifest file.
          * By default it is std::nullopt, use the snapshot->sequence as `seq` value.
          */
         std::optional<UInt64> override_sequence = std::nullopt;
 
+
         /**
-         * Trigger a full compaction aka re-upload all local page data to S3.
+         * Max checkpoint data file size. If total page data size is larger than this value, split.
          */
-        bool full_compact = false;
+        UInt64 max_data_file_size = 256 * 1024 * 1024; // 256MB
+
+        /**
+         * Max edit records per part in checkpoint manifest file. If total edit records is larger than this value, split.
+         */
+        UInt64 max_edit_records_per_part = 100000;
+
         /**
          * When full_compact is false, try use this callback to get the S3 data
          * file list for compaction.
@@ -219,12 +217,14 @@ public:
         const std::function<std::unordered_set<String>()> compact_getter = nullptr;
 
         /**
+         * Trigger a full compaction aka re-upload all local page data to S3.
+         */
+        bool full_compact = false;
+
+        /**
          * Only upload the manifest file.
          */
         bool only_upload_manifest = false;
-
-        UInt64 max_data_file_size = 256 * 1024 * 1024; // 256MB
-        UInt64 max_edit_records_per_part = 100000;
     };
 
     PS::V3::CPDataDumpStats dumpIncrementalCheckpoint(const DumpCheckpointOptions & options);

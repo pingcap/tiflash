@@ -68,6 +68,11 @@ public:
 
         ASSERT_TRUE(::DB::tests::TiFlashTestEnv::createBucketIfNotExist(*s3_client));
 
+        data_file_id_pattern = S3::S3Filename::newCheckpointLockNameTemplate(test_store_id, test_sequence);
+        data_file_path_pattern = S3::S3Filename::newCheckpointDataNameTemplate(test_store_id);
+        manifest_file_path = S3::S3Filename::newCheckpointManifest(test_store_id, test_sequence).toFullKey();
+        manifest_file_id = S3::S3Filename::newCheckpointManifest(test_store_id, test_sequence).toFullKey();
+
         page_storage = UniversalPageStorage::create("write", delegator, config, file_provider);
         page_storage->restore();
         DB::tests::TiFlashTestEnv::enableS3Config();
@@ -84,19 +89,6 @@ public:
         auto mock_s3lock_client = std::make_shared<S3::MockS3LockClient>(s3_client);
         storage->initLocksLocalManager(100, mock_s3lock_client);
         return storage;
-    }
-
-    void uploadFile(const String & full_path)
-    {
-        String f_name = std::filesystem::path(full_path).filename();
-        ReadBufferPtr src_buf = std::make_shared<ReadBufferFromFile>(full_path);
-        S3::WriteSettings write_setting;
-        WritableFilePtr dst_file = std::make_shared<S3::S3WritableFile>(s3_client, f_name, write_setting);
-        WriteBufferPtr dst_buf = std::make_shared<WriteBufferFromWritableFile>(dst_file);
-        copyData(*src_buf, *dst_buf);
-        dst_buf->next();
-        auto r = dst_file->fsync();
-        ASSERT_EQ(r, 0);
     }
 
     void TearDown() override { DB::tests::TiFlashTestEnv::disableS3Config(); }
@@ -119,6 +111,8 @@ protected:
     String data_file_path_pattern;
     String manifest_file_id;
     String manifest_file_path;
+    UInt64 test_sequence = 5;
+    UInt64 test_last_sequence = 3;
 };
 
 TEST_P(UniPageStorageRemoteReadTest, WriteRead)
@@ -134,8 +128,8 @@ try
 
     writer->writePrefix({
         .writer = {},
-        .sequence = 5,
-        .last_sequence = 3,
+        .sequence = test_sequence,
+        .last_sequence = test_last_sequence,
     });
     {
         auto edits = PS::V3::universal::PageEntriesEdit{};
@@ -146,13 +140,8 @@ try
     }
     auto data_paths = writer->writeSuffix();
     writer.reset();
-    for (const auto & data_path : data_paths)
-    {
-        uploadFile(data_path);
-    }
-    uploadFile(manifest_file_path);
 
-    auto manifest_file = PosixRandomAccessFile::create(manifest_file_path);
+    auto manifest_file = S3::S3RandomAccessFile::create(manifest_file_path);
     auto manifest_reader = PS::V3::CPManifestFileReader::create({
         .plain_file = manifest_file,
     });
@@ -218,8 +207,8 @@ try
 
     writer->writePrefix({
         .writer = {},
-        .sequence = 5,
-        .last_sequence = 3,
+        .sequence = test_sequence,
+        .last_sequence = test_last_sequence,
     });
     {
         auto edits = PS::V3::universal::PageEntriesEdit{};
@@ -229,13 +218,8 @@ try
     }
     auto data_paths = writer->writeSuffix();
     writer.reset();
-    for (const auto & data_path : data_paths)
-    {
-        uploadFile(data_path);
-    }
-    uploadFile(manifest_file_path);
 
-    auto manifest_file = PosixRandomAccessFile::create(manifest_file_path);
+    auto manifest_file = S3::S3RandomAccessFile::create(manifest_file_path);
     auto manifest_reader = PS::V3::CPManifestFileReader::create({
         .plain_file = manifest_file,
     });
@@ -292,8 +276,8 @@ try
 
     writer->writePrefix({
         .writer = {},
-        .sequence = 5,
-        .last_sequence = 3,
+        .sequence = test_sequence,
+        .last_sequence = test_last_sequence,
     });
     {
         auto edits = PS::V3::universal::PageEntriesEdit{};
@@ -303,13 +287,8 @@ try
     }
     auto data_paths = writer->writeSuffix();
     writer.reset();
-    for (const auto & data_path : data_paths)
-    {
-        uploadFile(data_path);
-    }
-    uploadFile(manifest_file_path);
 
-    auto manifest_file = PosixRandomAccessFile::create(manifest_file_path);
+    auto manifest_file = S3::S3RandomAccessFile::create(manifest_file_path);
     auto manifest_reader = PS::V3::CPManifestFileReader::create({
         .plain_file = manifest_file,
     });
@@ -381,8 +360,8 @@ try
 
     writer->writePrefix({
         .writer = {},
-        .sequence = 5,
-        .last_sequence = 3,
+        .sequence = test_sequence,
+        .last_sequence = test_last_sequence,
     });
     UniversalPageId page_id1 = "aaabbb";
     UniversalPageId page_id2 = "aaabbb2";
@@ -396,13 +375,8 @@ try
     }
     auto data_paths = writer->writeSuffix();
     writer.reset();
-    for (const auto & data_path : data_paths)
-    {
-        uploadFile(data_path);
-    }
-    uploadFile(manifest_file_path);
 
-    auto manifest_file = PosixRandomAccessFile::create(manifest_file_path);
+    auto manifest_file = S3::S3RandomAccessFile::create(manifest_file_path);
     auto manifest_reader = PS::V3::CPManifestFileReader::create({
         .plain_file = manifest_file,
     });
@@ -492,19 +466,14 @@ try
     });
     writer->writePrefix({
         .writer = {},
-        .sequence = 5,
-        .last_sequence = 3,
+        .sequence = test_sequence,
+        .last_sequence = test_last_sequence,
     });
     writer->writeEditsAndApplyCheckpointInfo(edits);
     auto data_paths = writer->writeSuffix();
     writer.reset();
-    for (const auto & data_path : data_paths)
-    {
-        uploadFile(data_path);
-    }
-    uploadFile(manifest_file_path);
 
-    auto manifest_file = PosixRandomAccessFile::create(manifest_file_path);
+    auto manifest_file = S3::S3RandomAccessFile::create(manifest_file_path);
     auto manifest_reader = PS::V3::CPManifestFileReader::create({
         .plain_file = manifest_file,
     });

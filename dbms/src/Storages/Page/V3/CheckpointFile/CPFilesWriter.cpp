@@ -234,9 +234,14 @@ std::vector<String> CPFilesWriter::writeSuffix()
     manifest_writer->writeLocksFinish();
 
     data_writer->writeSuffix();
-    data_writer->flush();
+    // upload empty file as LockFile to S3
+    S3::uploadEmptyFile(
+        *S3::ClientFactory::instance().sharedTiFlashClient(),
+        fmt::format(
+            fmt::runtime(data_file_id_pattern),
+            fmt::arg("seq", sequence),
+            fmt::arg("index", data_file_index - 1)));
     manifest_writer->writeSuffix();
-    manifest_writer->flush();
 
     write_stage = WriteStage::WritingFinished;
     return data_file_paths;
@@ -248,7 +253,13 @@ void CPFilesWriter::newDataWriter()
     {
         total_written_records += data_writer->writtenRecords();
         data_writer->writeSuffix();
-        data_writer->flush();
+        // upload empty file as LockFile to S3
+        S3::uploadEmptyFile(
+            *S3::ClientFactory::instance().sharedTiFlashClient(),
+            fmt::format(
+                fmt::runtime(data_file_id_pattern),
+                fmt::arg("seq", sequence),
+                fmt::arg("index", data_file_index - 1)));
     }
     current_write_size = 0;
     data_file_paths.push_back(fmt::format(
@@ -261,6 +272,7 @@ void CPFilesWriter::newDataWriter()
             fmt::runtime(data_file_id_pattern),
             fmt::arg("seq", sequence),
             fmt::arg("index", data_file_index)),
+        .max_data_file_size = max_data_file_size,
     });
     data_prefix.set_create_at_ms(Poco::Timestamp().epochMicroseconds() / 1000);
     data_prefix.set_sub_file_index(data_file_index);

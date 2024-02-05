@@ -16,10 +16,12 @@
 
 #include <Common/Exception.h>
 #include <IO/CompressedWriteBuffer.h>
-#include <IO/WriteBufferFromFile.h>
+#include <IO/WriteBufferFromWritableFile.h>
 #include <Storages/Page/V3/CheckpointFile/Proto/manifest_file.pb.h>
 #include <Storages/Page/V3/CheckpointFile/fwd.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
+#include <Storages/S3/S3Filename.h>
+#include <Storages/S3/S3WritableFile.h>
 
 #include <string>
 
@@ -41,14 +43,20 @@ public:
     }
 
     explicit CPManifestFileWriter(Options options)
-        : file_writer(std::make_unique<WriteBufferFromFile>(options.file_path))
+        : file_writer(std::make_unique<WriteBufferFromWritableFile>(std::make_shared<S3::S3WritableFile>(
+            S3::ClientFactory::instance().sharedTiFlashClient(),
+            options.file_path,
+            S3::WriteSettings{})))
         , compressed_writer(std::make_unique<CompressedWriteBuffer<true>>(*file_writer, CompressionSettings()))
         , max_edit_records_per_part(options.max_edit_records_per_part)
     {
         RUNTIME_CHECK(max_edit_records_per_part > 0, max_edit_records_per_part);
     }
 
-    ~CPManifestFileWriter() { flush(); }
+    // Note: do not call `flush()` in destructor, because:
+    //  1. `flush()` may throw exceptions, and we should not throw exceptions in destructor.
+    //  2. Avoid incomplete data file flushed to S3.
+    ~CPManifestFileWriter() = default;
 
     /// Must be called first.
     void writePrefix(const CheckpointProto::ManifestFilePrefix & prefix);
@@ -61,11 +69,14 @@ public:
     void writeLocks(const std::unordered_set<String> & lock_files);
     void writeLocksFinish();
 
+    /**
+     * This function must be called, and must be called last, after other `writeXxx`.
+     * Otherwise, some data may be lost.
+     */
     void writeSuffix();
 
-    void flush();
-
 private:
+    void flush();
     void writeEditsPart(const universal::PageEntriesEdit & edit, UInt64 start, UInt64 limit);
 
     enum class WriteStage
@@ -78,8 +89,11 @@ private:
         WritingFinished,
     };
 
-    // compressed<plain_file>
-    const std::unique_ptr<WriteBufferFromFile> file_writer;
+    // WriteBuffer from S3WritableFile
+    // So the data will be uploaded to S3 when the buffer is full.
+    // no checksum, no encryption
+    const std::unique_ptr<WriteBufferFromWritableFile> file_writer;
+    // compressed<file_writer>
     const WriteBufferPtr compressed_writer;
     const UInt64 max_edit_records_per_part;
 

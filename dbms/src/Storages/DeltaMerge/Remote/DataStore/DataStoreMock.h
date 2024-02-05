@@ -39,11 +39,6 @@ public:
 
     IPreparedDMFileTokenPtr prepareDMFileByKey(const String & remote_key) override;
 
-    bool putCheckpointFiles(const PS::V3::LocalCheckpointFiles &, StoreID, UInt64) override
-    {
-        throw Exception("DataStoreMock::putCheckpointFiles unsupported");
-    }
-
     std::unordered_map<String, DataFileInfo> getDataFilesInfo(const std::unordered_set<String> &) override
     {
         throw Exception("DataStoreMock::getDataFilesInfo unsupported");
