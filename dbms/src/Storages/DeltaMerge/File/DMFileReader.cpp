@@ -48,7 +48,9 @@ namespace FailPoints
 {
 extern const char skip_seek_before_read_dmfile[];
 } // namespace FailPoints
-namespace DM
+} // namespace DB
+
+namespace DB::DM
 {
 
 DMFileReader::DMFileReader(
@@ -644,5 +646,4 @@ bool DMFileReader::getCachedPacks(
     col_data_cache->del(col_id, next_pack_id);
     return found;
 }
-} // namespace DM
-} // namespace DB
+} // namespace DB::DM

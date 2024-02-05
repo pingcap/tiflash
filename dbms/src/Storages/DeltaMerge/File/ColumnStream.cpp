@@ -29,14 +29,15 @@ public:
             return res;
 
         size_t size = sizeof(MarkInCompressedFile) * reader.dmfile->getPacks();
-        auto mark_guard = S3::S3RandomAccessFile::setReadFileInfo(
-            {reader.dmfile->getReadFileSize(col_id, reader.dmfile->colMarkFileName(file_name_base)),
-             reader.scan_context});
+        auto mark_guard = S3::S3RandomAccessFile::setReadFileInfo({
+            .size = reader.dmfile->getReadFileSize(col_id, reader.dmfile->colMarkFileName(file_name_base)),
+            .scan_context = reader.scan_context,
+        });
 
         if (likely(reader.dmfile->useMetaV2()))
         {
             // the col_mark is merged into metav2
-            return loadColMarkFromMetav2(res, size);
+            return loadColMarkFromMetav2To(res, size);
         }
         else if (unlikely(!reader.dmfile->configuration))
         {
@@ -45,9 +46,8 @@ public:
         }
         else
         {
-            assert(!reader.dmfile->useMetaV2());
             // checksum is enabled but not merged into meta v2
-            return loadColMarkWithChecksum(res, size);
+            return loadColMarkWithChecksumTo(res, size);
         }
     }
 
@@ -77,7 +77,7 @@ private:
         PageUtil::readFile(file, 0, reinterpret_cast<char *>(res->data()), bytes_size, read_limiter);
         return res;
     }
-    MarksInCompressedFilePtr loadColMarkWithChecksum(const MarksInCompressedFilePtr & res, size_t bytes_size)
+    MarksInCompressedFilePtr loadColMarkWithChecksumTo(const MarksInCompressedFilePtr & res, size_t bytes_size)
     {
         auto buffer = ChecksumReadBufferBuilder::build(
             reader.file_provider,
@@ -90,7 +90,7 @@ private:
         buffer->readBig(reinterpret_cast<char *>(res->data()), bytes_size);
         return res;
     }
-    MarksInCompressedFilePtr loadColMarkFromMetav2(const MarksInCompressedFilePtr & res, size_t bytes_size)
+    MarksInCompressedFilePtr loadColMarkFromMetav2To(const MarksInCompressedFilePtr & res, size_t bytes_size)
     {
         auto info = reader.dmfile->merged_sub_file_infos.find(reader.dmfile->colMarkFileName(file_name_base));
         if (info == reader.dmfile->merged_sub_file_infos.end())
@@ -287,8 +287,10 @@ ColumnReadStream::ColumnReadStream(
     if (packs == 0)
         return;
 
-    auto data_guard = S3::S3RandomAccessFile::setReadFileInfo(
-        {reader.dmfile->getReadFileSize(col_id, reader.dmfile->colDataFileName(file_name_base)), reader.scan_context});
+    auto data_guard = S3::S3RandomAccessFile::setReadFileInfo({
+        .size = reader.dmfile->getReadFileSize(col_id, reader.dmfile->colDataFileName(file_name_base)),
+        .scan_context = reader.scan_context,
+    });
 
     // load column data read buffer
     if (likely(reader.dmfile->useMetaV2()))
@@ -308,7 +310,6 @@ ColumnReadStream::ColumnReadStream(
     }
     else
     {
-        assert(!reader.dmfile->useMetaV2());
         buf = buildColDataReadBuffWitChecksum(reader, col_id, file_name_base, read_limiter);
     }
 }

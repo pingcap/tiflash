@@ -69,7 +69,8 @@ private:
         const ReadLimiterPtr & read_limiter);
 };
 using ColumnReadStreamPtr = std::unique_ptr<ColumnReadStream>;
-using ColumnReadStreams = std::map<String, ColumnReadStreamPtr>;
+// stream_name/substream_name -> stream_ptr
+using ColumnReadStreamMap = std::map<String, ColumnReadStreamPtr>;
 
 
 } // namespace DB::DM

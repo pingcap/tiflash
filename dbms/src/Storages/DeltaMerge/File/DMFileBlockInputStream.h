@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Interpreters/Context_fwd.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/File/ColumnCache.h>
 #include <Storages/DeltaMerge/File/DMFileReader.h>
@@ -23,14 +24,9 @@
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
 
 
-namespace DB
+namespace DB::DM
 {
-class Context;
-class Logger;
-using LoggerPtr = std::shared_ptr<Logger>;
-namespace DM
-{
-inline static const size_t DMFILE_READ_ROWS_THRESHOLD = DEFAULT_MERGE_BLOCK_SIZE * 3;
+inline static constexpr size_t DMFILE_READ_ROWS_THRESHOLD = DEFAULT_MERGE_BLOCK_SIZE * 3;
 
 class DMFileBlockInputStream : public SkippableBlockInputStream
 {
@@ -226,5 +222,4 @@ inline DMFileBlockInputStreamPtr createSimpleBlockInputStream(
         .build(file, cols, DB::DM::RowKeyRanges{}, std::make_shared<ScanContext>());
 }
 
-} // namespace DM
-} // namespace DB
+} // namespace DB::DM

@@ -116,7 +116,7 @@ private:
 
     DMFilePtr dmfile;
     ColumnDefines read_columns;
-    ColumnReadStreams column_streams;
+    ColumnReadStreamMap column_streams;
 
     const bool is_common_handle;
 
