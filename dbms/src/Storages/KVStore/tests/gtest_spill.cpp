@@ -79,12 +79,10 @@ try
         auto it2_end = schema_snapshot->getColId2DefPosMap().end();
         auto it = schema_snapshot->getColId2BlockPosMap().begin();
         auto it_end = schema_snapshot->getColId2BlockPosMap().end();
-        for (; it != it_end; it++)
+        for (; it != it_end && it2 != it2_end; it++)
         {
-            while (it2->first != it->first && it2 != it2_end)
+            if (it2->first == it->first)
                 it2++;
-            if (it2 == it2_end)
-                break;
         }
         ASSERT_TRUE(it == it_end && it2 == it2_end);
     }

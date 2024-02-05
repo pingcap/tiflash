@@ -56,12 +56,47 @@ extern const int TABLE_IS_DROPPED;
 
 struct AtomicReadWriteCtx
 {
-    AtomicReadWriteCtx(const Context & context_, const TMTContext & tmt_, KeyspaceID keyspace_id_, TableID table_id_)
-        : context(context_)
+    AtomicReadWriteCtx(
+        const LoggerPtr & log_,
+        const Context & context_,
+        const TMTContext & tmt_,
+        KeyspaceID keyspace_id_,
+        TableID table_id_)
+        : log(log_)
+        , context(context_)
         , tmt(tmt_)
         , keyspace_id(keyspace_id_)
         , table_id(table_id_)
     {}
+
+    std::optional<Block> tryUseDecodeCache(const RegionPtrWithBlock & region, ManageableStoragePtr & storage)
+    {
+        if unlikely (region.pre_decode_cache)
+        {
+            auto schema_version = storage->getTableInfo().schema_version;
+            std::stringstream ss;
+            region.pre_decode_cache->toString(ss);
+            LOG_DEBUG(
+                log,
+                "{} got pre-decode cache {}, storage schema version: {}",
+                region->toString(),
+                ss.str(),
+                schema_version);
+
+            if (region.pre_decode_cache->schema_version == schema_version)
+            {
+                return std::move(region.pre_decode_cache->block);
+            }
+            else
+            {
+                LOG_DEBUG(log, "schema version not equal, try to re-decode region cache into block");
+                region.pre_decode_cache->block.clear();
+            }
+        }
+        return std::nullopt;
+    }
+
+    const LoggerPtr & log;
     const Context & context;
     const TMTContext & tmt;
     KeyspaceID keyspace_id;
@@ -75,9 +110,6 @@ static void writeCommittedBlockDataIntoStorage(
     AtomicReadWriteCtx & rw_ctx,
     TableStructureLockHolder & lock,
     ManageableStoragePtr & storage,
-    bool need_decode,
-    Int64 block_decoding_schema_epoch,
-    BlockUPtr & block_ptr,
     Block & block)
 {
     /// Write block into storage.
@@ -91,14 +123,7 @@ static void writeCommittedBlockDataIntoStorage(
     case ::TiDB::StorageEngine::DT:
     {
         auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
-        if (need_decode)
-        {
-            rw_ctx.write_result = dm_storage->write(*block_ptr, rw_ctx.context.getSettingsRef());
-        }
-        else
-        {
-            rw_ctx.write_result = dm_storage->write(block, rw_ctx.context.getSettingsRef());
-        }
+        rw_ctx.write_result = dm_storage->write(block, rw_ctx.context.getSettingsRef());
         break;
     }
     default:
@@ -111,11 +136,8 @@ static void writeCommittedBlockDataIntoStorage(
     rw_ctx.write_part_cost = watch.elapsedMilliseconds();
     GET_METRIC(tiflash_raft_write_data_to_storage_duration_seconds, type_write)
         .Observe(rw_ctx.write_part_cost / 1000.0);
-    if (need_decode)
-        storage->releaseDecodingBlock(block_decoding_schema_epoch, std::move(block_ptr));
 }
 
-// TODO Fix too many arguments
 template <typename ReadList>
 static inline bool atomicReadWrite(
     const LoggerPtr & log,
@@ -132,6 +154,7 @@ static inline bool atomicReadWrite(
         // - force_decode == true and storage not exist. It could be the RaftLog or Snapshot comes
         //   after the schema is totally exceed the GC safepoint. And TiFlash know nothing about
         //   the schema. We can only throw away those committed rows.
+        // In both cases, no exception will be thrown.
         return force_decode;
     }
 
@@ -150,33 +173,15 @@ static inline bool atomicReadWrite(
             throw;
     }
 
-    // TODO get rid of pre_decode logic with rw_ctx.
+    // TODO get rid of pre_decode logic.
     Block block;
     bool need_decode = true;
-
-    // try to use block cache if exists
-    if (region.pre_decode_cache)
+    // Try to use block cache if exists
+    auto maybe_block = rw_ctx.tryUseDecodeCache(region, storage);
+    if unlikely (maybe_block.has_value())
     {
-        auto schema_version = storage->getTableInfo().schema_version;
-        std::stringstream ss;
-        region.pre_decode_cache->toString(ss);
-        LOG_DEBUG(
-            log,
-            "{} got pre-decode cache {}, storage schema version: {}",
-            region->toString(),
-            ss.str(),
-            schema_version);
-
-        if (region.pre_decode_cache->schema_version == schema_version)
-        {
-            block = std::move(region.pre_decode_cache->block);
-            need_decode = false;
-        }
-        else
-        {
-            LOG_DEBUG(log, "schema version not equal, try to re-decode region cache into block");
-            region.pre_decode_cache->block.clear();
-        }
+        block = std::move(maybe_block.value());
+        need_decode = false;
     }
 
     /// Read region data as block.
@@ -188,7 +193,7 @@ static inline bool atomicReadWrite(
     {
         should_handle_version_col = false;
     }
-    if (need_decode)
+    if likely (need_decode)
     {
         LOG_TRACE(
             log,
@@ -210,14 +215,16 @@ static inline bool atomicReadWrite(
     }
     if constexpr (std::is_same_v<ReadList, RegionDataReadInfoList>)
     {
-        writeCommittedBlockDataIntoStorage(
-            rw_ctx,
-            lock,
-            storage,
-            need_decode,
-            block_decoding_schema_epoch,
-            block_ptr,
-            block);
+        if likely (need_decode)
+        {
+            RUNTIME_CHECK(block_ptr != nullptr);
+            writeCommittedBlockDataIntoStorage(rw_ctx, lock, storage, *block_ptr);
+            storage->releaseDecodingBlock(block_decoding_schema_epoch, std::move(block_ptr));
+        }
+        else
+        {
+            writeCommittedBlockDataIntoStorage(rw_ctx, lock, storage, block);
+        }
     }
     else
     {
@@ -259,7 +266,7 @@ DM::WriteResult writeRegionDataToStorage(
     const auto keyspace_id = region->getKeyspaceID();
     const auto table_id = region->getMappedTableID();
 
-    AtomicReadWriteCtx rw_ctx(context, tmt, keyspace_id, table_id);
+    AtomicReadWriteCtx rw_ctx(log, context, tmt, keyspace_id, table_id);
 
     /// In TiFlash, the actions between applying raft log and schema changes are not strictly synchronized.
     /// There could be a chance that some raft logs come after a table gets tombstoned. Take care of it when
