@@ -1306,7 +1306,6 @@ std::pair<DB::DecodingStorageSchemaSnapshotConstPtr, BlockUPtr> StorageDeltaMerg
     bool need_block,
     bool has_version_column)
 {
-    LOG_INFO(DB::Logger::get(), "!!!!! BB");
     (void)table_structure_lock;
     std::lock_guard lock{decode_schema_mutex};
     if (!decoding_schema_snapshot || decoding_schema_changed)
@@ -1322,7 +1321,6 @@ std::pair<DB::DecodingStorageSchemaSnapshotConstPtr, BlockUPtr> StorageDeltaMerg
         decoding_schema_changed = false;
     }
 
-    LOG_INFO(DB::Logger::get(), "!!!!! AA");
     if (need_block)
     {
         if (cache_blocks.empty() || !has_version_column)

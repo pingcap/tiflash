@@ -116,64 +116,58 @@ template bool RegionBlockReader::read<RegionUncommittedDataList>(
     const RegionUncommittedDataList & data_list,
     bool force_decode);
 
-template<typename ReadList>
-struct VersionColResolver {
+template <typename ReadList>
+struct VersionColResolver
+{
     VersionColResolver() {}
-    bool needBuild() const {
-        return raw_version_col == nullptr;
-    }
-    void build(ColumnUInt64 * raw_version_col_) {
-        raw_version_col = raw_version_col_;
-    }
-    void preRead(size_t size) {
+    bool needBuild() const { return raw_version_col == nullptr; }
+    void build(ColumnUInt64 * raw_version_col_) { raw_version_col = raw_version_col_; }
+    void preRead(size_t size)
+    {
         RUNTIME_CHECK(raw_version_col);
         ColumnUInt64::Container & version_data = raw_version_col->getData();
         version_data.reserve(size);
     }
-    void read(const RegionDataReadInfo & info) {
+    void read(const RegionDataReadInfo & info)
+    {
         RUNTIME_CHECK(raw_version_col);
         ColumnUInt64::Container & version_data = raw_version_col->getData();
         version_data.emplace_back(info.commit_ts);
     }
-    void check(const Block & block, size_t expected) const {
+    void check(const Block & block, size_t expected) const
+    {
         if (unlikely(block.columns() != expected))
-            throw Exception(ErrorCodes::LOGICAL_ERROR, 
+            throw Exception(
+                ErrorCodes::LOGICAL_ERROR,
                 "Block structure doesn't match schema_snapshot, block={} def={}",
                 block.columns(),
-                expected
-            );
+                expected);
     }
-    size_t reservedCount() const {
-        return 3;
-    }
+    size_t reservedCount() const { return 3; }
+
 private:
     ColumnUInt64 * raw_version_col = nullptr;
 };
 
-template<>
-struct VersionColResolver<RegionUncommittedDataList> {
+template <>
+struct VersionColResolver<RegionUncommittedDataList>
+{
     VersionColResolver() {}
-    bool needBuild() const {
-        return false;
-    }
-    void build(ColumnUInt64 * raw_version_col_) {
-        raw_version_col = raw_version_col_;
-    }
-    void preRead(size_t) {
-    }
-    void read(const RegionUncommittedData &) {
-    }
-    void check(const Block & block, size_t expected) const {
+    bool needBuild() const { return false; }
+    void build(ColumnUInt64 * raw_version_col_) { raw_version_col = raw_version_col_; }
+    void preRead(size_t) {}
+    void read(const RegionUncommittedData &) {}
+    void check(const Block & block, size_t expected) const
+    {
         if (unlikely(block.columns() + 1 != expected))
-            throw Exception(ErrorCodes::LOGICAL_ERROR, 
+            throw Exception(
+                ErrorCodes::LOGICAL_ERROR,
                 "Block structure doesn't match schema_snapshot, block={} def={}",
                 block.columns(),
-                expected
-            );
+                expected);
     }
-    size_t reservedCount() const {
-        return 2;
-    }
+    size_t reservedCount() const { return 2; }
+
 private:
     ColumnUInt64 * raw_version_col = nullptr;
 };
@@ -202,7 +196,8 @@ bool RegionBlockReader::readImpl(Block & block, const ReadList & data_list, bool
     // we cannot figure out extra_handle's column type now, so we just remember it's pos here
     size_t extra_handle_column_pos = invalid_column_pos;
 
-    while (raw_delmark_col == nullptr || version_col_resolver.needBuild() || extra_handle_column_pos == invalid_column_pos)
+    while (raw_delmark_col == nullptr || version_col_resolver.needBuild()
+           || extra_handle_column_pos == invalid_column_pos)
     {
         if (column_ids_iter->first == DelMarkColumnID)
         {
@@ -211,7 +206,8 @@ bool RegionBlockReader::readImpl(Block & block, const ReadList & data_list, bool
         }
         else if (column_ids_iter->first == VersionColumnID)
         {
-            version_col_resolver.build(static_cast<ColumnUInt64 *>(const_cast<IColumn *>(block.getByPosition(next_column_pos).column.get())));
+            version_col_resolver.build(
+                static_cast<ColumnUInt64 *>(const_cast<IColumn *>(block.getByPosition(next_column_pos).column.get())));
         }
         else if (column_ids_iter->first == TiDBPkColumnID)
         {
@@ -270,13 +266,6 @@ bool RegionBlockReader::readImpl(Block & block, const ReadList & data_list, bool
             }
             else
             {
-                LOG_INFO(DB::Logger::get(), "!!!!!! Z next_column_pos {}", next_column_pos);
-                for (auto it = column_ids_iter; it != read_column_ids.end(); it ++) {
-                    LOG_INFO(DB::Logger::get(), "!!!!!! Z col_id {} -> {}", it->first, it->second);
-                }
-                for (const auto & q : block.getNames()) {
-                    LOG_INFO(DB::Logger::get(), "!!!!!! Z gq {} next_column_pos {}", q, next_column_pos);
-                }
                 // Parse column value from encoded value
                 if (!appendRowToBlock(
                         *value_ptr,

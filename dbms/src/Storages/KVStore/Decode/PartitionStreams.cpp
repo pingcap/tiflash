@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include <Common/Allocator.h>
-#include <Storages/KVStore/MultiRaft/Spill/RegionUncommittedDataList.h>
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
 #include <Common/TiFlashMetrics.h>
@@ -26,6 +25,7 @@
 #include <Storages/KVStore/Decode/RegionBlockReader.h>
 #include <Storages/KVStore/Decode/RegionTable.h>
 #include <Storages/KVStore/Decode/TiKVRange.h>
+#include <Storages/KVStore/MultiRaft/Spill/RegionUncommittedDataList.h>
 #include <Storages/KVStore/Read/LockException.h>
 #include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/TMTContext.h>
@@ -127,14 +127,16 @@ static inline bool atomicReadWrite(
     Int64 block_decoding_schema_epoch = -1;
     BlockUPtr block_ptr = nullptr;
     bool should_handle_version_col = true;
-    if constexpr (std::is_same_v<ReadList, RegionUncommittedDataList>) {
+    if constexpr (std::is_same_v<ReadList, RegionUncommittedDataList>)
+    {
         should_handle_version_col = false;
     }
     if (need_decode)
     {
         LOG_TRACE(log, "begin to decode keyspace={} table_id={} region_id={}", keyspace_id, table_id, region->id());
         DecodingStorageSchemaSnapshotConstPtr decoding_schema_snapshot;
-        std::tie(decoding_schema_snapshot, block_ptr) = storage->getSchemaSnapshotAndBlockForDecoding(lock, true, should_handle_version_col);
+        std::tie(decoding_schema_snapshot, block_ptr)
+            = storage->getSchemaSnapshotAndBlockForDecoding(lock, true, should_handle_version_col);
         block_decoding_schema_epoch = decoding_schema_snapshot->decoding_schema_epoch;
 
         auto reader = RegionBlockReader(decoding_schema_snapshot);

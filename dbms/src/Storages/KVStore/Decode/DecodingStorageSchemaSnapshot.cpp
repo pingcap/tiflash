@@ -35,41 +35,38 @@ DecodingStorageSchemaSnapshot::DecodingStorageSchemaSnapshot(
         const auto & ci = table_info_.columns[i];
         column_lut.emplace(ci.id, i);
     }
-    LOG_INFO(DB::Logger::get(), "!!!!!! fs1 define {}", column_defines->size());
     // column_defines has internal cols.
     size_t index_in_block = 0;
     for (size_t i = 0; i < column_defines->size(); i++)
     {
         auto & cd = (*column_defines)[i];
-        LOG_INFO(DB::Logger::get(), "!!!!!! ZX cd.id {} i {} lut {}", cd.id, i, column_lut.size());
-        if(cd.id != VersionColumnID || has_version_column) {
-            LOG_INFO(DB::Logger::get(), "!!!!!! sorted_column_id_with_pos cd.id {} i {} lut {} index_in_block {}", cd.id, i, column_lut.size(), index_in_block);
+        if (cd.id != VersionColumnID || has_version_column)
+        {
             sorted_column_id_with_pos.insert({cd.id, index_in_block++});
         }
         sorted_column_id_with_pos_total.insert({cd.id, i});
-        if(cd.id == VersionColumnID)
+        if (cd.id == VersionColumnID)
         {
-            LOG_INFO(DB::Logger::get(), "!!!!!! VL cd.id {} i {} lut {}", cd.id, i, column_lut.size());
-            if (has_version_column) {
+            if (has_version_column)
+            {
                 column_infos.push_back(ColumnInfo());
-            } else {
+            }
+            else
+            {
                 // Do nothing.
             }
         }
         else if (cd.id != TiDBPkColumnID && cd.id != DelMarkColumnID)
         {
-            LOG_INFO(DB::Logger::get(), "!!!!!! VK cd.id {} i {} lut {}", cd.id, i, column_lut.size());
             const auto & columns = table_info_.columns;
             column_infos.push_back(columns[column_lut.at(cd.id)]);
         }
         else
         {
-            LOG_INFO(DB::Logger::get(), "!!!!!! VM cd.id {} i {} lut {}", cd.id, i, column_lut.size());
             column_infos.push_back(ColumnInfo());
         }
     }
 
-    LOG_INFO(DB::Logger::get(), "!!!!!! fs2");
     // create pk related metadata if needed
     if (is_common_handle)
     {
@@ -136,7 +133,6 @@ TMTPKType getTMTPKType(const IDataType & rhs)
 Block createBlockSortByColumnID(DecodingStorageSchemaSnapshotConstPtr schema_snapshot, bool has_version_column)
 {
     Block block;
-    LOG_INFO(DB::Logger::get(), "!!!!! createBlockSortByColumnID KPI size {}", schema_snapshot->sorted_column_id_with_pos_total.size());
     for (auto iter = schema_snapshot->sorted_column_id_with_pos_total.begin();
          iter != schema_snapshot->sorted_column_id_with_pos_total.end();
          iter++)
@@ -147,9 +143,7 @@ Block createBlockSortByColumnID(DecodingStorageSchemaSnapshotConstPtr schema_sna
         // - (DelMarkColumnID, _INTERNAL_DELMARK, u8)
         // - (TiDBPkColumnID, _tidb_rowid, i64)
         auto col_id = iter->first;
-        LOG_INFO(DB::Logger::get(), "!!!!! createBlockSortByColumnID Z iter->second {}", iter->second);
         auto & cd = (*(schema_snapshot->column_defines))[iter->second];
-        LOG_INFO(DB::Logger::get(), "!!!!! createBlockSortByColumnID cd.id {} cd.name {} iter->second {}", cd.id, cd.name, iter->second);
         if (!has_version_column && cd.id == VersionColumnID)
             continue;
         block.insert({cd.type->createColumn(), cd.type, cd.name, col_id});

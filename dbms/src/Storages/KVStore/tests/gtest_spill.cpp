@@ -13,13 +13,13 @@
 // limitations under the License.
 
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
-#include <Storages/KVStore/MultiRaft/Spill/RegionUncommittedDataList.h>
+#include <Storages/KVStore/Decode/RegionBlockReader.h>
 #include <Storages/KVStore/KVStore.h>
+#include <Storages/KVStore/MultiRaft/Spill/RegionUncommittedDataList.h>
 #include <Storages/KVStore/tests/region_kvstore_test.h>
 #include <Storages/RegionQueryInfo.h>
 #include <TiDB/Schema/SchemaSyncService.h>
 #include <TiDB/Schema/TiDBSchemaManager.h>
-#include <Storages/KVStore/Decode/RegionBlockReader.h>
 
 namespace DB::tests
 {

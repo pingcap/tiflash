@@ -654,7 +654,6 @@ bool appendRowV1ToBlock(
                 continue;
             }
 
-            LOG_INFO(DB::Logger::get(), "!!!! block_column_pos {} column_ids_iter->second {}", block_column_pos, column_ids_iter->second);
             auto * raw_column = const_cast<IColumn *>((block.safeGetByPosition(block_column_pos)).column.get());
             const auto & column_info = column_infos[column_ids_iter->second];
             DatumFlat datum(decoded_field_iter->second, column_info.tp);
