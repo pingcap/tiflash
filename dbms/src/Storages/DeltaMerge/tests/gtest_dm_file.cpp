@@ -716,7 +716,7 @@ try
     auto array_cd = ColumnDefine(100, "array", tests::typeFromString("Array(Float32)"));
     cols->emplace_back(array_cd);
 
-    const size_t num_rows_write = 192;
+    const size_t num_rows_write = 8192;
 
     DMFileBlockOutputStream::BlockProperty block_property1{
         .deleted_rows = 1,
@@ -740,8 +740,8 @@ try
     };
 
     Array vec1{Field(1.0), Field(2.0), Field(3.0)};
-    Array vec2{Field(11.0), Field(12.0), Field(13.0)};
-    Array vec3{Field(111.0), Field(222.0), Field(333.0)};
+    Array vec2{Field(11.0), Field(12.0), Field(13.0), Field(14.0)};
+    Array vec3{Field(111.0), Field(222.0), Field(333.0), Field(444.0), Field(555.0)};
     {
         // Prepare for write
         // Block 1: [0, 64)
@@ -751,11 +751,11 @@ try
         // Block 2: [64, 128)
         Block block2 = DMTestEnv::prepareSimpleWriteBlockWithNullable(num_rows_write / 3, num_rows_write * 2 / 3);
         block2.insert(
-            createVecFloat32Column<Array>(std::vector<Array>(num_rows_write / 3, vec2), array_cd.name, array_cd.id));
+            createVecFloat32Column<Array>(std::vector<Array>(block2.rows(), vec2), array_cd.name, array_cd.id));
         // Block 3: [128, 192)
         Block block3 = DMTestEnv::prepareSimpleWriteBlockWithNullable(num_rows_write * 2 / 3, num_rows_write);
         block3.insert(
-            createVecFloat32Column<Array>(std::vector<Array>(num_rows_write / 3, vec3), array_cd.name, array_cd.id));
+            createVecFloat32Column<Array>(std::vector<Array>(block3.rows(), vec3), array_cd.name, array_cd.id));
         auto stream = std::make_shared<DMFileBlockOutputStream>(dbContext(), dm_file, *cols);
         stream->writePrefix();
         stream->write(block1, block_property1);
@@ -777,7 +777,7 @@ try
             expect_arr_values.emplace_back(vec3);
     }
     {
-        /// Test read
+        // Read all packs
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream
             = builder.setColumnCache(column_cache)
@@ -788,6 +788,99 @@ try
             createColumns({
                 createColumn<Int64>(createNumbers<Int64>(0, num_rows_write)),
                 createVecFloat32Column<Array>(expect_arr_values),
+            }));
+    }
+    {
+        DMFileBlockInputStreamBuilder builder(dbContext());
+        // Only read pack[0]
+        auto read_ids = std::make_shared<IdSet>(IdSet{0});
+        auto stream
+            = builder.setColumnCache(column_cache)
+                  .setReadPacks(read_ids)
+                  .build(dm_file, *cols, RowKeyRanges{RowKeyRange::newAll(false, 1)}, std::make_shared<ScanContext>());
+        std::vector<Array> partial_expect_arr_values;
+        partial_expect_arr_values.insert(
+            partial_expect_arr_values.cend(),
+            expect_arr_values.begin(),
+            expect_arr_values.begin() + num_rows_write / 3);
+        ASSERT_INPUTSTREAM_COLS_UR(
+            stream,
+            Strings({DMTestEnv::pk_name, array_cd.name}),
+            createColumns({
+                createColumn<Int64>(createNumbers<Int64>(0, num_rows_write / 3)),
+                createVecFloat32Column<Array>(partial_expect_arr_values),
+            }));
+    }
+    {
+        DMFileBlockInputStreamBuilder builder(dbContext());
+        // Only read pack[1]
+        auto read_ids = std::make_shared<IdSet>(IdSet{1});
+        auto stream
+            = builder.setColumnCache(column_cache)
+                  .setReadPacks(read_ids)
+                  .build(dm_file, *cols, RowKeyRanges{RowKeyRange::newAll(false, 1)}, std::make_shared<ScanContext>());
+        std::vector<Array> partial_expect_arr_values;
+        partial_expect_arr_values.insert(
+            partial_expect_arr_values.cend(),
+            expect_arr_values.begin() + num_rows_write / 3,
+            expect_arr_values.begin() + num_rows_write * 2 / 3);
+        ASSERT_INPUTSTREAM_COLS_UR(
+            stream,
+            Strings({DMTestEnv::pk_name, array_cd.name}),
+            createColumns({
+                createColumn<Int64>(createNumbers<Int64>(num_rows_write / 3, num_rows_write * 2 / 3)),
+                createVecFloat32Column<Array>(partial_expect_arr_values),
+            }));
+    }
+    {
+        /// Test read
+        DMFileBlockInputStreamBuilder builder(dbContext());
+        // Only read pack[2]
+        auto read_ids = std::make_shared<IdSet>(IdSet{2});
+        auto stream
+            = builder.setColumnCache(column_cache)
+                  .setReadPacks(read_ids)
+                  .build(dm_file, *cols, RowKeyRanges{RowKeyRange::newAll(false, 1)}, std::make_shared<ScanContext>());
+        std::vector<Array> partial_expect_arr_values;
+        partial_expect_arr_values.insert(
+            partial_expect_arr_values.cend(),
+            expect_arr_values.begin() + num_rows_write * 2 / 3,
+            expect_arr_values.end());
+        ASSERT_INPUTSTREAM_COLS_UR(
+            stream,
+            Strings({DMTestEnv::pk_name, array_cd.name}),
+            createColumns({
+                createColumn<Int64>(createNumbers<Int64>(num_rows_write * 2 / 3, num_rows_write)),
+                createVecFloat32Column<Array>(partial_expect_arr_values),
+            }));
+    }
+    {
+        /// Test read
+        DMFileBlockInputStreamBuilder builder(dbContext());
+        // Only read pack[0, 2]
+        auto read_ids = std::make_shared<IdSet>(IdSet{0, 2});
+        auto stream
+            = builder.setColumnCache(column_cache)
+                  .setReadPacks(read_ids)
+                  .build(dm_file, *cols, RowKeyRanges{RowKeyRange::newAll(false, 1)}, std::make_shared<ScanContext>());
+        std::vector<Int64> partial_pk = createNumbers<Int64>(0, num_rows_write / 3);
+        std::vector<Int64> pk_pack2 = createNumbers<Int64>(num_rows_write * 2 / 3, num_rows_write);
+        partial_pk.insert(partial_pk.end(), pk_pack2.begin(), pk_pack2.end());
+        std::vector<Array> partial_expect_arr_values;
+        partial_expect_arr_values.insert(
+            partial_expect_arr_values.cend(),
+            expect_arr_values.begin(),
+            expect_arr_values.begin() + num_rows_write / 3);
+        partial_expect_arr_values.insert(
+            partial_expect_arr_values.cend(),
+            expect_arr_values.begin() + num_rows_write * 2 / 3,
+            expect_arr_values.end());
+        ASSERT_INPUTSTREAM_COLS_UR(
+            stream,
+            Strings({DMTestEnv::pk_name, array_cd.name}),
+            createColumns({
+                createColumn<Int64>(partial_pk),
+                createVecFloat32Column<Array>(partial_expect_arr_values),
             }));
     }
     {
@@ -812,33 +905,6 @@ try
                 createColumn<Int64>(createNumbers<Int64>(num_rows_write / 3, num_rows_write)),
                 createVecFloat32Column<Array>(partial_expect_arr_values),
             }));
-    }
-    {
-        /// Test not seek before read
-        DMFileBlockInputStreamBuilder builder(dbContext());
-        auto stream
-            = builder.setColumnCache(column_cache)
-                  .enableCleanRead(false, true, false, std::numeric_limits<UInt64>::max())
-                  .build(dm_file, *cols, RowKeyRanges{RowKeyRange::newAll(false, 1)}, std::make_shared<ScanContext>());
-        auto & use_packs = getReaderUsePacks(stream);
-        use_packs[1] = false;
-        // let next_pack_id = 1
-        stream->skipNextBlock();
-        FailPointHelper::enableFailPoint(FailPoints::skip_seek_before_read_dmfile);
-        // should equal to [128, 192) but equal to [0, 64)
-        std::vector<Array> partial_expect_arr_values;
-        partial_expect_arr_values.insert(
-            partial_expect_arr_values.cend(),
-            expect_arr_values.begin(),
-            expect_arr_values.begin() + num_rows_write / 3);
-        ASSERT_INPUTSTREAM_COLS_UR(
-            stream,
-            Strings({DMTestEnv::pk_name, array_cd.name}),
-            createColumns({
-                createColumn<Int64>(createNumbers<Int64>(0, num_rows_write / 3)),
-                createVecFloat32Column<Array>(partial_expect_arr_values),
-            }));
-        FailPointHelper::disableFailPoint(FailPoints::skip_seek_before_read_dmfile);
     }
 }
 CATCH

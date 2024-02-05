@@ -102,7 +102,6 @@ struct ColumnStat
         readIntBinary(nullmap_mark_bytes, buf);
         readIntBinary(index_bytes, buf);
     }
-
 };
 
 using ColumnStats = std::unordered_map<ColId, ColumnStat>;

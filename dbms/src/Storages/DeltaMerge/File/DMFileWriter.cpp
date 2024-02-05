@@ -109,6 +109,8 @@ void DMFileWriter::addStreams(ColId col_id, DataTypePtr type, bool do_index)
 {
     auto callback = [&](const IDataType::SubstreamPath & substream_path) {
         const auto stream_name = DMFile::getFileNameBase(col_id, substream_path);
+        bool substream_do_index
+            = do_index && !IDataType::isNullMap(substream_path) && !IDataType::isArraySizes(substream_path);
         auto stream = std::make_unique<Stream>(
             dmfile,
             stream_name,
@@ -117,8 +119,7 @@ void DMFileWriter::addStreams(ColId col_id, DataTypePtr type, bool do_index)
             options.max_compress_block_size,
             file_provider,
             write_limiter,
-            IDataType::isNullMap(substream_path) ? false : do_index // TODO: ignore array_size
-            );
+            substream_do_index);
         column_streams.emplace(stream_name, std::move(stream));
     };
 
@@ -128,6 +129,11 @@ void DMFileWriter::addStreams(ColId col_id, DataTypePtr type, bool do_index)
 
 void DMFileWriter::write(const Block & block, const BlockProperty & block_property)
 {
+#ifndef NDEBUG
+    // In the prod env, the #rows is checked in upper level
+    block.checkNumberOfRows();
+#endif
+
     is_empty_file = false;
     DMFile::PackStat stat{};
     stat.rows = block.rows();
@@ -151,6 +157,8 @@ void DMFileWriter::write(const Block & block, const BlockProperty & block_proper
     }
 
     dmfile->addPack(stat);
+    // FIXME: remove
+    LOG_INFO(Logger::get(), "write pack, rows={}", stat.rows);
 
     auto & properties = dmfile->getPackProperties();
     auto * property = properties.add_property();
@@ -263,14 +271,8 @@ void DMFileWriter::writeColumn(
 
 void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
 {
-    size_t bytes_written = 0;
-    size_t data_bytes = 0;
-    size_t mark_bytes = 0;
-    size_t nullmap_data_bytes = 0;
-    size_t nullmap_mark_bytes = 0;
-    size_t index_bytes = 0;
-    size_t array_sizes_bytes = 0;
-    size_t array_sizes_mark_bytes = 0;
+    // Update column's bytes in memory
+    auto & col_stat = dmfile->column_stats.at(col_id);
 
 #ifndef NDEBUG
     auto examine_buffer_size = [&](auto & buf, auto & fp) {
@@ -283,33 +285,13 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
         }
     };
 #endif
-    auto is_nullmap_stream = [](const IDataType::SubstreamPath & substream) {
-        for (const auto & s : substream)
-        {
-            if (s.type == IDataType::Substream::NullMap)
-            {
-                return true;
-            }
-        }
-        return false;
-    };
-    auto is_array_sizes_stream = [](const IDataType::SubstreamPath & substream) {
-        for (const auto & s : substream)
-        {
-            if (s.type == IDataType::Substream::ArraySizes)
-            {
-                return true;
-            }
-        }
-        return false;
-    };
 
     auto callback = [&](const IDataType::SubstreamPath & substream) {
         const auto stream_name = DMFile::getFileNameBase(col_id, substream);
         auto & stream = column_streams.at(stream_name);
 
-        const bool is_null = is_nullmap_stream(substream);
-        const bool is_array = is_array_sizes_stream(substream);
+        const bool is_null = IDataType::isNullMap(substream);
+        const bool is_array = IDataType::isArraySizes(substream);
 
         // FIXME: remove
         LOG_INFO(Logger::get(), "stream_name={} is_null={} is_array={}", stream_name, is_null, is_array);
@@ -320,19 +302,19 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
             stream->plain_file->next();
             stream->plain_file->sync();
 
-            bytes_written += stream->plain_file->getMaterializedBytes();
+            col_stat.serialized_bytes += stream->plain_file->getMaterializedBytes();
 
             if (is_null)
             {
-                nullmap_data_bytes = stream->plain_file->getMaterializedBytes();
+                col_stat.nullmap_data_bytes = stream->plain_file->getMaterializedBytes();
             }
             else if (is_array)
             {
-                array_sizes_bytes = stream->plain_file->getMaterializedBytes();
+                col_stat.array_sizes_bytes = stream->plain_file->getMaterializedBytes();
             }
             else
             {
-                data_bytes = stream->plain_file->getMaterializedBytes();
+                col_stat.data_bytes = stream->plain_file->getMaterializedBytes();
             }
 
 #ifndef NDEBUG
@@ -353,11 +335,16 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
 
                 stream->minmaxes->write(*type, *buffer);
 
-                index_bytes = buffer->getMaterializedBytes();
-                MergedSubFileInfo info{fname, merged_file.file_info.number, merged_file.file_info.size, index_bytes};
+                col_stat.index_bytes = buffer->getMaterializedBytes();
+
+                MergedSubFileInfo info{
+                    fname,
+                    merged_file.file_info.number,
+                    merged_file.file_info.size,
+                    col_stat.index_bytes};
                 dmfile->merged_sub_file_infos[fname] = info;
 
-                merged_file.file_info.size += index_bytes;
+                merged_file.file_info.size += col_stat.index_bytes;
                 buffer->next();
             }
 
@@ -388,15 +375,15 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
 
                 if (is_null)
                 {
-                    nullmap_mark_bytes = mark_size;
+                    col_stat.nullmap_mark_bytes = mark_size;
                 }
                 else if (is_array)
                 {
-                    array_sizes_mark_bytes = mark_size;
+                    col_stat.array_sizes_mark_bytes = mark_size;
                 }
                 else
                 {
-                    mark_bytes = mark_size;
+                    col_stat.mark_bytes = mark_size;
                 }
             }
         }
@@ -411,32 +398,35 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
             examine_buffer_size(*stream->mark_file, *this->file_provider);
             examine_buffer_size(*stream->plain_file, *this->file_provider);
 #endif
+            // TODO: these two branch can be merge.
             if (!dmfile->configuration)
             { // v1
-                bytes_written += stream->plain_file->getMaterializedBytes() + stream->mark_file->getMaterializedBytes();
+                col_stat.serialized_bytes
+                    += stream->plain_file->getMaterializedBytes() + stream->mark_file->getMaterializedBytes();
                 if (is_null)
                 {
-                    nullmap_data_bytes = stream->plain_file->getMaterializedBytes();
-                    nullmap_mark_bytes = stream->mark_file->getMaterializedBytes();
+                    col_stat.nullmap_data_bytes = stream->plain_file->getMaterializedBytes();
+                    col_stat.nullmap_mark_bytes = stream->mark_file->getMaterializedBytes();
                 }
                 else
                 {
-                    data_bytes = stream->plain_file->getMaterializedBytes();
-                    mark_bytes = stream->mark_file->getMaterializedBytes();
+                    col_stat.data_bytes = stream->plain_file->getMaterializedBytes();
+                    col_stat.mark_bytes = stream->mark_file->getMaterializedBytes();
                 }
             }
             else
             { // v2
-                bytes_written += stream->plain_file->getMaterializedBytes() + stream->mark_file->getMaterializedBytes();
+                col_stat.serialized_bytes
+                    += stream->plain_file->getMaterializedBytes() + stream->mark_file->getMaterializedBytes();
                 if (is_null)
                 {
-                    nullmap_data_bytes = stream->plain_file->getMaterializedBytes();
-                    nullmap_mark_bytes = stream->mark_file->getMaterializedBytes();
+                    col_stat.nullmap_data_bytes = stream->plain_file->getMaterializedBytes();
+                    col_stat.nullmap_mark_bytes = stream->mark_file->getMaterializedBytes();
                 }
                 else
                 {
-                    data_bytes = stream->plain_file->getMaterializedBytes();
-                    mark_bytes = stream->mark_file->getMaterializedBytes();
+                    col_stat.data_bytes = stream->plain_file->getMaterializedBytes();
+                    col_stat.mark_bytes = stream->mark_file->getMaterializedBytes();
                 }
             }
 
@@ -458,8 +448,8 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
                 // This is ok because the index file in this case is tiny, and we already ignore other small files like meta and pack stat file.
                 // The motivation to do this is to show a zero `stable_size_on_disk` for empty segments,
                 // and we cannot change the index file format for empty dmfile because of backward compatibility.
-                index_bytes = buf->getMaterializedBytes();
-                bytes_written += is_empty_file ? 0 : index_bytes;
+                col_stat.index_bytes = buf->getMaterializedBytes();
+                col_stat.serialized_bytes += is_empty_file ? 0 : col_stat.index_bytes;
 #ifndef NDEBUG
                 if (dmfile->configuration)
                 {
@@ -471,16 +461,6 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
     };
     type->enumerateStreams(callback, {});
 
-    // Update column's bytes in disk
-    auto & col_stat = dmfile->column_stats.at(col_id);
-    col_stat.serialized_bytes = bytes_written;
-    col_stat.data_bytes = data_bytes;
-    col_stat.mark_bytes = mark_bytes;
-    col_stat.nullmap_data_bytes = nullmap_data_bytes;
-    col_stat.index_bytes = index_bytes;
-    col_stat.nullmap_mark_bytes = nullmap_mark_bytes;
-    col_stat.array_sizes_bytes = array_sizes_bytes;
-    col_stat.array_sizes_mark_bytes = array_sizes_mark_bytes;
     // FIXME: remove
     LOG_INFO(Logger::get(), "col_id={} stat={}", col_id, col_stat.toProto().ShortDebugString());
 }

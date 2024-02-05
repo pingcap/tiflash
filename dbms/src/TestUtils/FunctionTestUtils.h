@@ -286,7 +286,10 @@ ColumnWithTypeAndName createColumn(const InferredDataVector<T> & vec, const Stri
 }
 
 template <typename T>
-ColumnWithTypeAndName createVecFloat32Column(const InferredDataVector<T> & vec, const String & name = "", Int64 column_id = 0)
+ColumnWithTypeAndName createVecFloat32Column(
+    const InferredDataVector<T> & vec,
+    const String & name = "",
+    Int64 column_id = 0)
 {
     DataTypePtr data_type = std::make_shared<DataTypeArray>(typeFromString("Float32"));
     return {makeColumn<T>(data_type, vec), data_type, name, column_id};

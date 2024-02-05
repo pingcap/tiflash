@@ -264,6 +264,7 @@ size_t DMFile::colDataSize(ColId id, bool is_null_map, bool is_array_map)
     }
     else
     {
+        RUNTIME_CHECK_MSG(!is_array_map, "Can not get array map size by filename, col_id={}", id);
         auto namebase = is_null_map ? getFileNameBase(id, {IDataType::Substream::NullMap}) : getFileNameBase(id);
         return colDataSizeByName(namebase);
     }
@@ -943,6 +944,8 @@ void DMFile::finalizeMetaV2(WriteBuffer & buffer)
 #if 1
         writeColumnStatToBuffer(tmp_buffer),
 #else
+        // ExtendColumnStat is not enabled yet because it cause downgrade compatibility, wait
+        // to be released with other binary format changes.
         writeExtendColumnStatToBuffer(tmp_buffer),
 #endif
         writeMergedSubFilePosotionsToBuffer(tmp_buffer),
@@ -1248,19 +1251,16 @@ void DMFile::finalizeSmallFiles(
         }
 
         // check .null.data
-        if (stat.type->isNullable())
+        if (stat.type->isNullable() && stat.nullmap_data_bytes <= small_file_size_threshold)
         {
-            if (stat.nullmap_data_bytes <= small_file_size_threshold)
-            {
-                auto fname = colDataFileName(getFileNameBase(col_id, {IDataType::Substream::NullMap}));
-                auto fsize = stat.nullmap_data_bytes;
-                copy_file_to_cur(fname, fsize);
-                delete_file_name.push_back(fname);
-            }
+            auto fname = colDataFileName(getFileNameBase(col_id, {IDataType::Substream::NullMap}));
+            auto fsize = stat.nullmap_data_bytes;
+            copy_file_to_cur(fname, fsize);
+            delete_file_name.push_back(fname);
         }
 
         // check .size0.dat
-        if (stat.array_sizes_bytes > 0)
+        if (stat.array_sizes_bytes > 0 && stat.array_sizes_bytes <= small_file_size_threshold)
         {
             auto fname = colDataFileName(getFileNameBase(col_id, {IDataType::Substream::ArraySizes}));
             auto fsize = stat.array_sizes_bytes;
