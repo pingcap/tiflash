@@ -18,6 +18,7 @@
 
 namespace DB::DM
 {
+// TODO: make `MarkLoader` as a part of DMFile?
 class MarkLoader
 {
 public:
@@ -32,19 +33,22 @@ public:
             {reader.dmfile->getReadFileSize(col_id, reader.dmfile->colMarkFileName(file_name_base)),
              reader.scan_context});
 
-        if (unlikely(!reader.dmfile->configuration))
+        if (likely(reader.dmfile->useMetaV2()))
+        {
+            // the col_mark is merged into metav2
+            return loadColMarkFromMetav2(res, size);
+        }
+        else if (unlikely(!reader.dmfile->configuration))
         {
             // without checksum, simply load the raw bytes from file
             return loadRawColMarkTo(res, size);
         }
-        if (unlikely(!reader.dmfile->useMetaV2()))
+        else
         {
+            assert(!reader.dmfile->useMetaV2());
             // checksum is enabled but not merged into meta v2
             return loadColMarkWithChecksum(res, size);
         }
-        assert(reader.dmfile->useMetaV2());
-        // the col_mark is merged into metav2
-        return loadColMarkFromMetav2(res, size);
     }
 
 public:
@@ -130,6 +134,7 @@ private:
     }
 };
 
+// TODO: `aio_threshold` and `max_read_buffer_size` does not change anything, remove them
 std::unique_ptr<CompressedSeekableReaderBuffer> ColumnReadStream::buildColDataReadBuffWithoutChecksum(
     DMFileReader & reader,
     ColId col_id,
@@ -140,66 +145,56 @@ std::unique_ptr<CompressedSeekableReaderBuffer> ColumnReadStream::buildColDataRe
     const ReadLimiterPtr & read_limiter,
     const LoggerPtr & log) const
 {
+    assert(!reader.dmfile->configuration);
+
     auto is_null_map = endsWith(file_name_base, ".null");
     size_t data_file_size = reader.dmfile->colDataSize(col_id, is_null_map);
-    // FIXME: remove it
-    LOG_INFO(
-        Logger::get(),
-        "col_id={} is_null_map={} file_name_base={} colDataSize={}",
-        col_id,
-        is_null_map,
-        file_name_base,
-        data_file_size);
 
     size_t buffer_size = 0;
     size_t estimated_size = 0;
 
     const auto & use_packs = reader.pack_filter.getUsePacksConst();
-    if (!reader.dmfile->configuration)
+    for (size_t i = 0; i < packs; /*empty*/)
     {
-        for (size_t i = 0; i < packs; /*empty*/)
+        if (!use_packs[i])
         {
-            if (!use_packs[i])
-            {
-                ++i;
-                continue;
-            }
-            size_t cur_offset_in_file = getOffsetInFile(i);
-            size_t end = i + 1;
-            // First find the end of current available range.
-            while (end < packs && use_packs[end])
-                ++end;
-
-            // Second If the end of range is inside the block, we will need to read it too.
-            if (end < packs)
-            {
-                size_t last_offset_in_file = getOffsetInFile(end);
-                if (getOffsetInDecompressedBlock(end) > 0)
-                {
-                    while (end < packs && getOffsetInFile(end) == last_offset_in_file)
-                        ++end;
-                }
-            }
-
-            size_t range_end_in_file = (end == packs) ? data_file_size : getOffsetInFile(end);
-
-            size_t range = range_end_in_file - cur_offset_in_file;
-            buffer_size = std::max(buffer_size, range);
-
-            estimated_size += range;
-            i = end;
+            ++i;
+            continue;
         }
-    }
-    else
-    {
-        estimated_size = data_file_size;
+        size_t cur_offset_in_file = getOffsetInFile(i);
+        size_t end = i + 1;
+        // First find the end of current available range.
+        while (end < packs && use_packs[end])
+            ++end;
+
+        // Second If the end of range is inside the block, we will need to read it too.
+        if (end < packs)
+        {
+            size_t last_offset_in_file = getOffsetInFile(end);
+            if (getOffsetInDecompressedBlock(end) > 0)
+            {
+                while (end < packs && getOffsetInFile(end) == last_offset_in_file)
+                    ++end;
+            }
+        }
+
+        size_t range_end_in_file = (end == packs) ? data_file_size : getOffsetInFile(end);
+
+        size_t range = range_end_in_file - cur_offset_in_file;
+        buffer_size = std::max(buffer_size, range);
+
+        estimated_size += range;
+        i = end;
     }
 
     buffer_size = std::min(buffer_size, max_read_buffer_size);
 
     LOG_TRACE(
         log,
-        "file size: {}, estimated read size: {}, buffer_size: {} (aio_threshold: {}, max_read_buffer_size: {})",
+        "col_id: {}, file_name_base: {}, file size: {}, estimated read size: {}, buffer_size: {}"
+        " (aio_threshold: {}, max_read_buffer_size: {})",
+        col_id,
+        file_name_base,
         data_file_size,
         estimated_size,
         buffer_size,
@@ -288,7 +283,8 @@ ColumnReadStream::ColumnReadStream(
     const ReadLimiterPtr & read_limiter)
     : avg_size_hint(reader.dmfile->getColumnStat(col_id).avg_size)
 {
-    // load mark data, TODO: Do we still need `marks` if the reader don't contains any pack?
+    // load mark data
+    // TODO: Do we still need `marks` if the reader don't contains any pack?
     if (reader.mark_cache)
         marks = reader.mark_cache->getOrSet(
             reader.dmfile->colMarkCacheKey(file_name_base),
@@ -304,7 +300,12 @@ ColumnReadStream::ColumnReadStream(
     auto data_guard = S3::S3RandomAccessFile::setReadFileInfo(
         {reader.dmfile->getReadFileSize(col_id, reader.dmfile->colDataFileName(file_name_base)), reader.scan_context});
 
-    if (unlikely(!reader.dmfile->configuration)) // checksum not enabled
+    // load column data read buffer
+    if (likely(reader.dmfile->useMetaV2()))
+    {
+        buf = buildColDataReadBuffByMetaV2(reader, col_id, file_name_base, read_limiter);
+    }
+    else if (unlikely(!reader.dmfile->configuration)) // checksum not enabled
     {
         buf = buildColDataReadBuffWithoutChecksum(
             reader,
@@ -316,13 +317,10 @@ ColumnReadStream::ColumnReadStream(
             read_limiter,
             log);
     }
-    else if (unlikely(!reader.dmfile->useMetaV2()))
-    {
-        buf = buildColDataReadBuffWitChecksum(reader, col_id, file_name_base, read_limiter);
-    }
     else
     {
-        buf = buildColDataReadBuffByMetaV2(reader, col_id, file_name_base, read_limiter);
+        assert(!reader.dmfile->useMetaV2());
+        buf = buildColDataReadBuffWitChecksum(reader, col_id, file_name_base, read_limiter);
     }
 }
 

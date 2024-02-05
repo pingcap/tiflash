@@ -46,6 +46,9 @@ class DMFileMetaV2Test;
 class DMStoreForSegmentReadTaskTest;
 } // namespace tests
 
+// TODO: Split DMFile into subclasses and separate
+//       the logic under different version? There are
+//       some member is not used under the latest version
 class DMFile : private boost::noncopyable
 {
 public:
