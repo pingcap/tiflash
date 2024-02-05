@@ -30,7 +30,7 @@ struct CompactCtxBase
 {
     static constexpr char CompactFileName[8] = "compact";
     static constexpr size_t MagicNumber = 19910905;
-    static constexpr short Version = 1;
+    static constexpr Int16 Version = 1;
 };
 
 struct CompactWriteCtx : public CompactCtxBase
@@ -57,14 +57,14 @@ struct CompactWriteCtx : public CompactCtxBase
     void endMark(std::string name);
 
     // write EOF flag for hashing buffer.
-    void writeEOF(std::shared_ptr<HashingWriteBuffer>);
+    static void writeEOF(std::shared_ptr<HashingWriteBuffer>);
 
     void finalize(size_t);
 
     void mergeMarksStream(std::string, size_t);
 
 private:
-    size_t flushAllMarks();
+    size_t flushAllMarks() const;
 
     void writeFooter(size_t, size_t);
 };
@@ -82,7 +82,7 @@ struct CompactReadCtx : public CompactCtxBase
     };
     std::unordered_map<std::string, FilePosition> mark_map;
 
-    CompactReadCtx(std::string compact_path_);
+    explicit CompactReadCtx(std::string compact_path_);
 
     bool hasColumn(std::string col);
 

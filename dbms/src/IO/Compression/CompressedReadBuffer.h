@@ -15,7 +15,7 @@
 #pragma once
 
 #include <IO/BufferWithOwnMemory.h>
-#include <IO/CompressedReadBufferBase.h>
+#include <IO/Compression/CompressedReadBufferBase.h>
 #include <IO/ReadBuffer.h>
 
 

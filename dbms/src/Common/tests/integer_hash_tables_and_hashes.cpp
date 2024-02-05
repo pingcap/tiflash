@@ -27,7 +27,7 @@
 #include <Common/HashTable/HashMap.h>
 #include <Common/SipHash.h>
 #include <Core/Types.h>
-#include <IO/CompressedReadBuffer.h>
+#include <IO/Compression/CompressedReadBuffer.h>
 #include <IO/ReadBufferFromFile.h>
 
 using Key = UInt64;

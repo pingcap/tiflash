@@ -14,12 +14,12 @@
 
 #include <Common/Stopwatch.h>
 #include <Core/Types.h>
+#include <IO/Compression/ZlibDeflatingWriteBuffer.h>
+#include <IO/Compression/ZlibInflatingReadBuffer.h>
 #include <IO/ReadBufferFromFile.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteBufferFromFile.h>
 #include <IO/WriteHelpers.h>
-#include <IO/ZlibDeflatingWriteBuffer.h>
-#include <IO/ZlibInflatingReadBuffer.h>
 
 #include <iomanip>
 #include <iostream>

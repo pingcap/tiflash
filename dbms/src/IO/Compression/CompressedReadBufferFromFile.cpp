@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <IO/CompressedReadBufferFromFile.h>
+#include <IO/Compression/CompressedReadBufferFromFile.h>
 #include <IO/WriteHelpers.h>
 #include <IO/createReadBufferFromFileBase.h>
 

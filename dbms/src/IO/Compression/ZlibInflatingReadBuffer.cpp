@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <IO/ZlibInflatingReadBuffer.h>
+#include <IO/Compression/ZlibInflatingReadBuffer.h>
 
 
 namespace DB
@@ -25,14 +25,15 @@ ZlibInflatingReadBuffer::ZlibInflatingReadBuffer(
     size_t alignment)
     : BufferWithOwnMemory<ReadBuffer>(buf_size, existing_memory, alignment)
     , in(in_)
+    , zstr()
     , eof(false)
 {
     zstr.zalloc = Z_NULL;
     zstr.zfree = Z_NULL;
     zstr.opaque = Z_NULL;
-    zstr.next_in = 0;
+    zstr.next_in = nullptr;
     zstr.avail_in = 0;
-    zstr.next_out = 0;
+    zstr.next_out = nullptr;
     zstr.avail_out = 0;
 
     int window_bits = 15;

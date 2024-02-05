@@ -46,9 +46,6 @@ target_link_libraries (radix_sort tiflash_common_io)
 add_executable (shell_command_test shell_command_test.cpp)
 target_link_libraries (shell_command_test tiflash_common_io)
 
-add_executable (arena_with_free_lists arena_with_free_lists.cpp)
-target_link_libraries (arena_with_free_lists tiflash_common_io)
-
 add_executable (pod_array pod_array.cpp)
 target_link_libraries (pod_array tiflash_common_io)
 

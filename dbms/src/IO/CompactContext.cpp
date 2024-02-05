@@ -14,7 +14,7 @@
 
 #include <Common/ProfileEvents.h>
 #include <IO/CompactContext.h>
-#include <IO/CompressedStream.h>
+#include <IO/Compression/CompressedStream.h>
 #include <IO/ReadBufferFromIStream.h>
 #include <IO/WriteHelpers.h>
 #include <city.h>
@@ -38,8 +38,8 @@ extern const int UNKNOWN_FORMAT;
 extern const int FORMAT_VERSION_TOO_OLD;
 } // namespace ErrorCodes
 
-CompactWriteCtx::CompactWriteCtx(std::string compact_path_, size_t buffer_size)
-    : file_name(compact_path_)
+CompactWriteCtx::CompactWriteCtx(std::string part_path, size_t buffer_size)
+    : file_name(part_path)
     , fd(::open(file_name.c_str(), O_WRONLY | O_TRUNC | O_CREAT, 0666))
     , plain_file(WriteBufferFromFile(fd, file_name, buffer_size))
     , plain_hashing(std::make_shared<HashingWriteBuffer>(plain_file))
@@ -53,7 +53,7 @@ CompactWriteCtx::CompactWriteCtx(std::string compact_path_, size_t buffer_size)
     }
 }
 
-size_t CompactWriteCtx::flushAllMarks()
+size_t CompactWriteCtx::flushAllMarks() const
 {
     plain_hashing->next();
     size_t offset_of_all_marks = plain_hashing->count();
@@ -64,16 +64,16 @@ size_t CompactWriteCtx::flushAllMarks()
 
 void CompactWriteCtx::writeFooter(size_t rows_count, size_t offset_of_all_marks)
 {
-    size_t footerOffset = plain_hashing->count();
+    size_t footer_offset = plain_hashing->count();
     writeIntBinary(mark_map.size(), *plain_hashing);
-    for (auto it = mark_map.begin(); it != mark_map.end(); it++)
+    for (auto & it : mark_map)
     {
-        writeBinary(it->first, *plain_hashing);
-        writeIntBinary(it->second.begin + offset_of_all_marks, *plain_hashing);
-        writeIntBinary(it->second.end + offset_of_all_marks, *plain_hashing);
+        writeBinary(it.first, *plain_hashing);
+        writeIntBinary(it.second.begin + offset_of_all_marks, *plain_hashing);
+        writeIntBinary(it.second.end + offset_of_all_marks, *plain_hashing);
     }
     writeIntBinary(rows_count, *plain_hashing);
-    writeIntBinary(footerOffset, *plain_hashing);
+    writeIntBinary(footer_offset, *plain_hashing);
     writeIntBinary(MagicNumber << 2 | Version, *plain_hashing);
     plain_hashing->next();
 }
@@ -119,8 +119,9 @@ void CompactWriteCtx::writeEOF(std::shared_ptr<HashingWriteBuffer> hashing)
 }
 
 CompactReadCtx::CompactReadCtx(std::string compact_path_)
+    : compact_path(compact_path_)
+    , rows_count(0)
 {
-    compact_path = compact_path_;
     auto plain_file = ReadBufferFromFile(compact_path);
     loadFooter(plain_file);
 }

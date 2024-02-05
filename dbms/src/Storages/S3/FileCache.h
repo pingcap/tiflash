@@ -14,9 +14,9 @@
 
 #pragma once
 
-#include <BaseFile/fwd.h>
 #include <Common/Logger.h>
 #include <Common/nocopyable.h>
+#include <IO/BaseFile/fwd.h>
 #include <Interpreters/Settings_fwd.h>
 #include <Poco/Util/AbstractConfiguration.h>
 #include <Server/StorageConfigParser.h>

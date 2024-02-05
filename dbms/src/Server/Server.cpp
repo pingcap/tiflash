@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include <AggregateFunctions/registerAggregateFunctions.h>
-#include <BaseFile/RateLimiter.h>
 #include <Common/CPUAffinityManager.h>
 #include <Common/ComputeLabelHolder.h>
 #include <Common/Config/ConfigReloader.h>
@@ -48,6 +47,7 @@
 #include <Flash/Pipeline/Schedule/TaskScheduler.h>
 #include <Flash/ResourceControl/LocalAdmissionController.h>
 #include <Functions/registerFunctions.h>
+#include <IO/BaseFile/RateLimiter.h>
 #include <IO/HTTPCommon.h>
 #include <IO/IOThreadPools.h>
 #include <IO/ReadHelpers.h>

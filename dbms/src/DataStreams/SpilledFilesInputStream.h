@@ -18,7 +18,7 @@
 #include <DataStreams/NativeBlockInputStream.h>
 #include <Encryption/EncryptionPath.h>
 #include <Encryption/ReadBufferFromRandomAccessFileBuilder.h>
-#include <IO/CompressedReadBuffer.h>
+#include <IO/Compression/CompressedReadBuffer.h>
 #include <IO/ReadBufferFromFile.h>
 
 namespace DB

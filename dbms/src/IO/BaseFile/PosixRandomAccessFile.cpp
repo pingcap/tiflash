@@ -12,10 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <BaseFile/PosixWriteReadableFile.h>
 #include <Common/Exception.h>
 #include <Common/ProfileEvents.h>
 #include <Common/TiFlashMetrics.h>
+#include <IO/BaseFile/PosixRandomAccessFile.h>
+#include <IO/BaseFile/RateLimiter.h>
 #include <fcntl.h>
 #include <unistd.h>
 
@@ -23,7 +24,6 @@ namespace ProfileEvents
 {
 extern const Event FileOpen;
 extern const Event FileOpenFailed;
-extern const Event FileFSync;
 } // namespace ProfileEvents
 
 namespace DB
@@ -33,36 +33,34 @@ namespace ErrorCodes
 extern const int FILE_DOESNT_EXIST;
 extern const int CANNOT_OPEN_FILE;
 extern const int CANNOT_CLOSE_FILE;
-extern const int LOGICAL_ERROR;
+extern const int CANNOT_READ_FROM_FILE_DESCRIPTOR;
+extern const int ARGUMENT_OUT_OF_BOUND;
+extern const int CANNOT_SEEK_THROUGH_FILE;
+extern const int CANNOT_SELECT;
 } // namespace ErrorCodes
 
-PosixWriteReadableFile::PosixWriteReadableFile(
-    const String & file_name_,
-    bool truncate_when_exists_,
+RandomAccessFilePtr PosixRandomAccessFile::create(const String & file_name_)
+{
+    return std::make_shared<PosixRandomAccessFile>(file_name_, /*flags*/ -1, /*read_limiter_*/ nullptr);
+}
+
+PosixRandomAccessFile::PosixRandomAccessFile(
+    const std::string & file_name_,
     int flags,
-    mode_t mode,
-    const WriteLimiterPtr & write_limiter_,
-    const ReadLimiterPtr & read_limiter_)
+    const ReadLimiterPtr & read_limiter_,
+    const FileSegmentPtr & file_seg_)
     : file_name{file_name_}
-    , write_limiter{write_limiter_}
-    , read_limiter{read_limiter_}
+    , read_limiter(read_limiter_)
+    , file_seg(file_seg_)
 {
     ProfileEvents::increment(ProfileEvents::FileOpen);
+
 #ifdef __APPLE__
     bool o_direct = (flags != -1) && (flags & O_DIRECT);
     if (o_direct)
         flags = flags & ~O_DIRECT;
 #endif
-
-    if (flags == -1)
-    {
-        if (truncate_when_exists_)
-            flags = O_RDWR | O_TRUNC | O_CREAT;
-        else
-            flags = O_RDWR | O_CREAT;
-    }
-
-    fd = ::open(file_name.c_str(), flags, mode);
+    fd = open(file_name.c_str(), flags == -1 ? O_RDONLY : flags);
 
     if (-1 == fd)
     {
@@ -71,9 +69,6 @@ PosixWriteReadableFile::PosixWriteReadableFile(
             "Cannot open file " + file_name,
             errno == ENOENT ? ErrorCodes::FILE_DOESNT_EXIST : ErrorCodes::CANNOT_OPEN_FILE);
     }
-
-    metric_increment.changeTo(1); // Add metrics for `CurrentMetrics::OpenFileForWrite`
-
 #ifdef __APPLE__
     if (o_direct)
     {
@@ -86,67 +81,55 @@ PosixWriteReadableFile::PosixWriteReadableFile(
 #endif
 }
 
-PosixWriteReadableFile::~PosixWriteReadableFile()
+PosixRandomAccessFile::~PosixRandomAccessFile()
 {
-    metric_increment.destroy();
     if (fd < 0)
         return;
 
     ::close(fd);
 }
 
-
-void PosixWriteReadableFile::close()
+void PosixRandomAccessFile::close()
 {
     if (fd < 0)
-    {
         return;
-    }
-
-    while (0 != ::close(fd))
-    {
+    while (::close(fd) != 0)
         if (errno != EINTR)
-        {
             throwFromErrno("Cannot close file " + file_name, ErrorCodes::CANNOT_CLOSE_FILE);
-        }
-    }
-
-
-    metric_increment.changeTo(0); // Subtract metrics for `CurrentMetrics::OpenFileForReadWrite`
 
     fd = -1;
+    metric_increment.destroy();
 }
 
-ssize_t PosixWriteReadableFile::pwrite(char * buf, size_t size, off_t offset) const
+off_t PosixRandomAccessFile::seek(off_t offset, int whence)
 {
-    if (write_limiter)
-    {
-        write_limiter->request(size);
-    }
-
-    return ::pwrite(fd, buf, size, offset);
+    return ::lseek(fd, offset, whence);
 }
 
-ssize_t PosixWriteReadableFile::pread(char * buf, size_t size, off_t offset) const
+ssize_t PosixRandomAccessFile::read(char * buf, size_t size)
 {
     if (read_limiter != nullptr)
     {
         read_limiter->request(size);
     }
+    if (file_seg != nullptr)
+    {
+        GET_METRIC(tiflash_storage_remote_cache_bytes, type_dtfile_read_bytes).Increment(size);
+    }
+    return ::read(fd, buf, size);
+}
+
+ssize_t PosixRandomAccessFile::pread(char * buf, size_t size, off_t offset) const
+{
+    if (read_limiter != nullptr)
+    {
+        read_limiter->request(size);
+    }
+    if (file_seg != nullptr)
+    {
+        GET_METRIC(tiflash_storage_remote_cache_bytes, type_dtfile_read_bytes).Increment(size);
+    }
     return ::pread(fd, buf, size, offset);
-}
-
-int PosixWriteReadableFile::fsync()
-{
-    ProfileEvents::increment(ProfileEvents::FileFSync);
-    Stopwatch sw;
-    SCOPE_EXIT({ GET_METRIC(tiflash_system_seconds, type_fsync).Observe(sw.elapsedSeconds()); });
-    return ::fsync(fd);
-}
-
-int PosixWriteReadableFile::ftruncate(off_t length)
-{
-    return ::ftruncate(fd, length);
 }
 
 } // namespace DB
