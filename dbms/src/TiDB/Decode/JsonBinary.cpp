@@ -1135,24 +1135,6 @@ void JsonBinary::buildKeyArrayInBuffer(const std::vector<StringRef> & keys, Json
     write_buffer.setOffset(buffer_start_pos + data_offset);
 }
 
-UInt64 JsonBinary::getJsonLength(const std::string_view & raw_value)
-{
-    if (raw_value.empty())
-    {
-        return 0;
-    }
-    size_t cursor = 0;
-    switch (raw_value[0]) // JSON Root element type
-    {
-    case JsonBinary::TYPE_CODE_OBJECT:
-    case JsonBinary::TYPE_CODE_ARRAY:
-        ++cursor;
-        return decodeNumeric<UInt32>(cursor, raw_value);
-    default:
-        return 1;
-    }
-}
-
 void JsonBinary::appendNumber(JsonBinaryWriteBuffer & write_buffer, bool value)
 {
     write_buffer.write(TYPE_CODE_LITERAL);

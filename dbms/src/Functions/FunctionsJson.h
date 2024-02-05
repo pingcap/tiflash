@@ -533,49 +533,286 @@ public:
 
     String getName() const override { return name; }
 
-    size_t getNumberOfArguments() const override { return 1; }
+    bool isVariadic() const override { return true; }
+    size_t getNumberOfArguments() const override { return 0; }
+
+    bool useDefaultImplementationForNulls() const override { return false; }
+    bool useDefaultImplementationForConstants() const override { return true; }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
-        if (!arguments[0]->isString())
+        if (unlikely(arguments.size() != 1 && arguments.size() != 2))
             throw Exception(
-                fmt::format("Illegal type {} of argument of function {}", arguments[0]->getName(), getName()),
+                fmt::format("Illegal arguments count {} of function {}", arguments.size(), getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-
-        return std::make_shared<DataTypeUInt64>();
+        for (const auto & arg : arguments)
+        {
+            if (!arg->onlyNull())
+            {
+                if (unlikely(!removeNullable(arg)->isString()))
+                    throw Exception(
+                        fmt::format("Illegal type {} of argument of function {}", arg->getName(), getName()),
+                        ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            }
+        }
+        return (arguments[0]->isNullable() || arguments.size() == 2) ? makeNullable(std::make_shared<DataTypeUInt64>())
+                                                                     : std::make_shared<DataTypeUInt64>();
     }
-
-    bool useDefaultImplementationForConstants() const override { return true; }
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
-        const ColumnPtr column = block.getByPosition(arguments[0]).column;
-        if (const auto * col = checkAndGetColumn<ColumnString>(column.get()))
+        size_t rows = block.rows();
+        auto & res_col = block.getByPosition(result).column;
+        /// First check if Json object is only null.
+        const auto * json_column = block.getByPosition(arguments[0]).column.get();
+        if unlikely (json_column->onlyNull())
         {
-            auto col_res = ColumnUInt64::create();
-            typename ColumnUInt64::Container & vec_col_res = col_res->getData();
-            {
-                const auto & data = col->getChars();
-                const auto & offsets = col->getOffsets();
-                const size_t size = offsets.size();
-                vec_col_res.resize(size);
+            res_col = block.getByPosition(result).type->createColumnConst(rows, Null());
+            return;
+        }
 
-                ColumnString::Offset prev_offset = 0;
-                for (size_t i = 0; i < size; ++i)
-                {
-                    std::string_view sv(
-                        reinterpret_cast<const char *>(&data[prev_offset]),
-                        offsets[i] - prev_offset - 1);
-                    vec_col_res[i] = JsonBinary::getJsonLength(sv);
-                    prev_offset = offsets[i];
-                }
+        auto nested_block = createBlockWithNestedColumns(block, arguments);
+        auto json_source = createDynamicStringSource(*nested_block.getByPosition(arguments[0]).column);
+        if (arguments.size() == 1)
+        {
+            if (json_column->isColumnNullable())
+            {
+                const auto & json_column_nullable = static_cast<const ColumnNullable &>(*json_column);
+                res_col = doExecuteForOneArg<true>(json_source, json_column_nullable.getNullMapData(), rows);
             }
-            block.getByPosition(result).column = std::move(col_res);
+            else
+            {
+                res_col = doExecuteForOneArg<false>(json_source, {}, rows);
+            }
         }
         else
-            throw Exception(
-                fmt::format("Illegal column {} of argument of function {}", column->getName(), getName()),
-                ErrorCodes::ILLEGAL_COLUMN);
+        {
+            const auto * path_column = block.getByPosition(arguments[1]).column.get();
+            /// First check if path expr is only null.
+            if unlikely (path_column->onlyNull())
+            {
+                res_col = block.getByPosition(result).type->createColumnConst(rows, Null());
+                return;
+            }
+
+            if (json_column->isColumnNullable())
+            {
+                const auto & json_column_nullable = static_cast<const ColumnNullable &>(*json_column);
+                if (path_column->isColumnConst())
+                {
+                    auto path_source = createDynamicStringSource(*nested_block.getByPosition(arguments[1]).column);
+                    res_col = doExecuteConstForTwoArgs<true>(
+                        json_source,
+                        json_column_nullable.getNullMapData(),
+                        path_source,
+                        rows);
+                }
+                else
+                {
+                    auto path_source = createDynamicStringSource(*nested_block.getByPosition(arguments[1]).column);
+                    if (path_column->isColumnNullable())
+                    {
+                        const auto & path_column_nullable = static_cast<const ColumnNullable &>(*path_column);
+                        res_col = doExecuteCommonForTwoArgs<true, true>(
+                            json_source,
+                            json_column_nullable.getNullMapData(),
+                            path_source,
+                            path_column_nullable.getNullMapData(),
+                            rows);
+                    }
+                    else
+                    {
+                        res_col = doExecuteCommonForTwoArgs<true, false>(
+                            json_source,
+                            json_column_nullable.getNullMapData(),
+                            path_source,
+                            {},
+                            rows);
+                    }
+                }
+            }
+            else
+            {
+                if (path_column->isColumnConst())
+                {
+                    auto path_source = createDynamicStringSource(*nested_block.getByPosition(arguments[1]).column);
+                    res_col = doExecuteConstForTwoArgs<false>(json_source, {}, path_source, rows);
+                }
+                else
+                {
+                    auto path_source = createDynamicStringSource(*nested_block.getByPosition(arguments[1]).column);
+                    if (path_column->isColumnNullable())
+                    {
+                        const auto & path_column_nullable = static_cast<const ColumnNullable &>(*path_column);
+                        res_col = doExecuteCommonForTwoArgs<false, true>(
+                            json_source,
+                            {},
+                            path_source,
+                            path_column_nullable.getNullMapData(),
+                            rows);
+                    }
+                    else
+                    {
+                        res_col = doExecuteCommonForTwoArgs<false, false>(json_source, {}, path_source, {}, rows);
+                    }
+                }
+            }
+        }
+    }
+
+private:
+    template <bool is_nullable>
+    static MutableColumnPtr doExecuteForOneArg(
+        const std::unique_ptr<IStringSource> & json_source,
+        const NullMap & null_map_json,
+        size_t rows)
+    {
+        auto col_to = ColumnUInt64::create(rows, 1);
+        auto & data_to = col_to->getData();
+        ColumnUInt8::MutablePtr col_null_map;
+        if constexpr (is_nullable)
+            col_null_map = ColumnUInt8::create(rows, 0);
+        else
+            col_null_map = ColumnUInt8::create(0, 0);
+        ColumnUInt8::Container & null_map_to = col_null_map->getData();
+        for (size_t row = 0; row < rows; ++row)
+        {
+            if constexpr (is_nullable)
+            {
+                if (null_map_json[row])
+                {
+                    json_source->next();
+                    null_map_to[row] = 1;
+                    continue;
+                }
+            }
+
+            const auto & json_val = json_source->getWhole();
+            assert(json_val.size > 0);
+            JsonBinary json_binary(json_val.data[0], StringRef(&json_val.data[1], json_val.size - 1));
+            if (json_binary.getType() == JsonBinary::TYPE_CODE_ARRAY
+                || json_binary.getType() == JsonBinary::TYPE_CODE_OBJECT)
+                data_to[row] = json_binary.getElementCount();
+            json_source->next();
+        }
+
+        if constexpr (is_nullable)
+            return ColumnNullable::create(std::move(col_to), std::move(col_null_map));
+        else
+            return col_to;
+    }
+
+    template <bool is_json_nullable, bool is_path_nullable>
+    static MutableColumnPtr doExecuteCommonForTwoArgs(
+        const std::unique_ptr<IStringSource> & json_source,
+        const NullMap & null_map_json,
+        const std::unique_ptr<IStringSource> & path_source,
+        const NullMap & null_map_path,
+        size_t rows)
+    {
+#define FINISH_PER_ROW   \
+    json_source->next(); \
+    path_source->next();
+
+        auto col_to = ColumnUInt64::create(rows, 1);
+        auto & data_to = col_to->getData();
+        ColumnUInt8::MutablePtr col_null_map = ColumnUInt8::create(rows, 0);
+        ColumnUInt8::Container & null_map_to = col_null_map->getData();
+        for (size_t row = 0; row < rows; ++row)
+        {
+            if constexpr (is_json_nullable)
+            {
+                if (null_map_json[row])
+                {
+                    FINISH_PER_ROW
+                    null_map_to[row] = 1;
+                    continue;
+                }
+            }
+
+            if constexpr (is_path_nullable)
+            {
+                if (null_map_path[row])
+                {
+                    FINISH_PER_ROW
+                    null_map_to[row] = 1;
+                    continue;
+                }
+            }
+
+            const auto & json_val = json_source->getWhole();
+            assert(json_val.size > 0);
+            JsonBinary json_binary(json_val.data[0], StringRef(&json_val.data[1], json_val.size - 1));
+
+            const auto & path_val = path_source->getWhole();
+            auto path_expr_container_vec = buildPathExprContainer(StringRef{path_val.data, path_val.size});
+
+            auto extract_json_binaries = json_binary.extract(path_expr_container_vec);
+            if (extract_json_binaries.empty())
+            {
+                FINISH_PER_ROW
+                null_map_to[row] = 1;
+                continue;
+            }
+            assert(extract_json_binaries.size() == 1);
+            const auto & extract_json_binary = extract_json_binaries.back();
+            if (extract_json_binary.getType() == JsonBinary::TYPE_CODE_ARRAY
+                || extract_json_binary.getType() == JsonBinary::TYPE_CODE_OBJECT)
+                data_to[row] = extract_json_binary.getElementCount();
+            FINISH_PER_ROW
+        }
+#undef FINISH_PER_ROW
+
+        return ColumnNullable::create(std::move(col_to), std::move(col_null_map));
+    }
+
+    template <bool is_json_nullable>
+    static MutableColumnPtr doExecuteConstForTwoArgs(
+        const std::unique_ptr<IStringSource> & json_source,
+        const NullMap & null_map_json,
+        const std::unique_ptr<IStringSource> & path_source,
+        size_t rows)
+    {
+        std::vector<JsonPathExprRefContainerPtr> path_expr_container_vec;
+        assert(path_source);
+        const auto & path_val = path_source->getWhole();
+        path_expr_container_vec = buildPathExprContainer(StringRef{path_val.data, path_val.size});
+
+        auto col_to = ColumnUInt64::create(rows, 1);
+        auto & data_to = col_to->getData();
+        ColumnUInt8::MutablePtr col_null_map = ColumnUInt8::create(rows, 0);
+        ColumnUInt8::Container & null_map_to = col_null_map->getData();
+        for (size_t row = 0; row < rows; ++row)
+        {
+            if constexpr (is_json_nullable)
+            {
+                if (null_map_json[row])
+                {
+                    json_source->next();
+                    null_map_to[row] = 1;
+                    continue;
+                }
+            }
+
+            const auto & json_val = json_source->getWhole();
+            assert(json_val.size > 0);
+            JsonBinary json_binary(json_val.data[0], StringRef(&json_val.data[1], json_val.size - 1));
+            auto extract_json_binaries = json_binary.extract(path_expr_container_vec);
+            if (extract_json_binaries.empty())
+            {
+                json_source->next();
+                null_map_to[row] = 1;
+                continue;
+            }
+            assert(extract_json_binaries.size() == 1);
+            const auto & extract_json_binary = extract_json_binaries.back();
+            if (extract_json_binary.getType() == JsonBinary::TYPE_CODE_ARRAY
+                || extract_json_binary.getType() == JsonBinary::TYPE_CODE_OBJECT)
+                data_to[row] = extract_json_binary.getElementCount();
+            json_source->next();
+        }
+
+        return ColumnNullable::create(std::move(col_to), std::move(col_null_map));
     }
 };
 
@@ -2295,7 +2532,7 @@ public:
 
 private:
     template <bool is_json_nullable, bool is_path_nullable>
-    void doExecuteCommon(
+    static void doExecuteCommon(
         const std::unique_ptr<IStringSource> & json_source,
         const NullMap & null_map_json,
         const std::unique_ptr<IStringSource> & path_source,
@@ -2303,7 +2540,7 @@ private:
         size_t rows,
         ColumnString::Chars_t & data_to,
         ColumnString::Offsets & offsets_to,
-        NullMap & null_map_to) const
+        NullMap & null_map_to)
     {
 #define SET_NULL_AND_CONTINUE             \
     null_map_to[i] = 1;                   \
@@ -2333,7 +2570,8 @@ private:
                 }
             }
 
-            auto path_expr_container_vec = buildPathExprContainer(path_source->getWhole());
+            const auto & path_val = path_source->getWhole();
+            auto path_expr_container_vec = buildPathExprContainer(StringRef{path_val.data, path_val.size});
 
             const auto & json_val = json_source->getWhole();
             assert(json_val.size > 0);
@@ -2362,17 +2600,18 @@ private:
     }
 
     template <bool is_json_nullable>
-    void doExecuteForConstPath(
+    static void doExecuteForConstPath(
         const std::unique_ptr<IStringSource> & json_source,
         const NullMap & null_map_json,
         const std::unique_ptr<IStringSource> & path_source,
         size_t rows,
         ColumnString::Chars_t & data_to,
         ColumnString::Offsets & offsets_to,
-        NullMap & null_map_to) const
+        NullMap & null_map_to)
     {
         // build path expr for const path col first.
-        auto path_expr_container_vec = buildPathExprContainer(path_source->getWhole());
+        const auto & path_val = path_source->getWhole();
+        auto path_expr_container_vec = buildPathExprContainer(StringRef{path_val.data, path_val.size});
 
 #define SET_NULL_AND_CONTINUE             \
     null_map_to[i] = 1;                   \
@@ -2417,28 +2656,6 @@ private:
         }
 
 #undef SET_NULL_AND_CONTINUE
-    }
-
-    std::vector<JsonPathExprRefContainerPtr> buildPathExprContainer(const IStringSource::Slice & path_val) const
-    {
-        auto path_expr = JsonPathExpr::parseJsonPathExpr(StringRef{path_val.data, path_val.size});
-        /// If path_expr failed to parse, throw exception
-        if unlikely (!path_expr)
-            throw Exception(
-                fmt::format("Illegal json path expression of function {}", getName()),
-                ErrorCodes::ILLEGAL_COLUMN);
-        auto path_expr_container = std::make_unique<JsonPathExprRefContainer>(path_expr);
-        if unlikely (path_expr_container->firstRef() && path_expr_container->firstRef()->couldMatchMultipleValues())
-        {
-            throw Exception(
-                fmt::format(
-                    "In this situation, path expressions may not contain the * and ** tokens or range selection.",
-                    getName()),
-                ErrorCodes::ILLEGAL_COLUMN);
-        }
-        std::vector<JsonPathExprRefContainerPtr> path_expr_container_vec(1);
-        path_expr_container_vec[0] = std::move(path_expr_container);
-        return path_expr_container_vec;
     }
 };
 } // namespace DB

@@ -175,8 +175,6 @@ public:
         JsonBinaryWriteBuffer & write_buffer);
     static void buildKeyArrayInBuffer(const std::vector<StringRef> & keys, JsonBinaryWriteBuffer & write_buffer);
 
-    static UInt64 getJsonLength(const std::string_view & raw_value);
-
     static void appendNumber(JsonBinaryWriteBuffer & write_buffer, bool value);
     static void appendNumber(JsonBinaryWriteBuffer & write_buffer, UInt64 value);
     static void appendNumber(JsonBinaryWriteBuffer & write_buffer, Int64 value);
