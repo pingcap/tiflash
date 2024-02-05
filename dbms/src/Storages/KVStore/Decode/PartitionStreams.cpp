@@ -54,22 +54,78 @@ extern const int ILLFORMAT_RAFT_ROW;
 extern const int TABLE_IS_DROPPED;
 } // namespace ErrorCodes
 
+struct AtomicReadWriteCtx
+{
+    AtomicReadWriteCtx(const Context & context_, const TMTContext & tmt_, KeyspaceID keyspace_id_, TableID table_id_)
+        : context(context_)
+        , tmt(tmt_)
+        , keyspace_id(keyspace_id_)
+        , table_id(table_id_)
+    {}
+    const Context & context;
+    const TMTContext & tmt;
+    KeyspaceID keyspace_id;
+    TableID table_id;
+    DM::WriteResult write_result = std::nullopt;
+    UInt64 region_decode_cost = -1;
+    UInt64 write_part_cost = -1;
+};
+
+static void writeCommittedBlockDataIntoStorage(
+    AtomicReadWriteCtx & rw_ctx,
+    TableStructureLockHolder & lock,
+    ManageableStoragePtr & storage,
+    bool need_decode,
+    Int64 block_decoding_schema_epoch,
+    BlockUPtr & block_ptr,
+    Block & block)
+{
+    /// Write block into storage.
+    // Release the alter lock so that writing does not block DDL operations
+    TableLockHolder drop_lock;
+    std::tie(std::ignore, drop_lock) = std::move(lock).release();
+    Stopwatch watch;
+    // Note: do NOT use typeid_cast, since Storage is multi-inherited and typeid_cast will return nullptr
+    switch (storage->engineType())
+    {
+    case ::TiDB::StorageEngine::DT:
+    {
+        auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
+        if (need_decode)
+        {
+            rw_ctx.write_result = dm_storage->write(*block_ptr, rw_ctx.context.getSettingsRef());
+        }
+        else
+        {
+            rw_ctx.write_result = dm_storage->write(block, rw_ctx.context.getSettingsRef());
+        }
+        break;
+    }
+    default:
+        throw Exception(
+            ErrorCodes::LOGICAL_ERROR,
+            "Unknown StorageEngine: {}",
+            static_cast<Int32>(storage->engineType()));
+    }
+
+    rw_ctx.write_part_cost = watch.elapsedMilliseconds();
+    GET_METRIC(tiflash_raft_write_data_to_storage_duration_seconds, type_write)
+        .Observe(rw_ctx.write_part_cost / 1000.0);
+    if (need_decode)
+        storage->releaseDecodingBlock(block_decoding_schema_epoch, std::move(block_ptr));
+}
+
 // TODO Fix too many arguments
 template <typename ReadList>
 static inline bool atomicReadWrite(
     const LoggerPtr & log,
-    const Context & context,
-    const TMTContext & tmt,
-    KeyspaceID keyspace_id,
-    TableID table_id,
+    AtomicReadWriteCtx & rw_ctx,
     const RegionPtrWithBlock & region,
     ReadList & data_list_read,
-    bool force_decode,
-    DM::WriteResult & write_result)
+    bool force_decode)
 {
-    UInt64 region_decode_cost = -1, write_part_cost = -1;
     /// Get storage based on table ID.
-    auto storage = tmt.getStorages().get(keyspace_id, table_id);
+    auto storage = rw_ctx.tmt.getStorages().get(rw_ctx.keyspace_id, rw_ctx.table_id);
     if (storage == nullptr)
     {
         // - force_decode == false and storage not exist, let upper level sync schema and retry.
@@ -94,6 +150,7 @@ static inline bool atomicReadWrite(
             throw;
     }
 
+    // TODO get rid of pre_decode logic with rw_ctx.
     Block block;
     bool need_decode = true;
 
@@ -133,7 +190,12 @@ static inline bool atomicReadWrite(
     }
     if (need_decode)
     {
-        LOG_TRACE(log, "begin to decode keyspace={} table_id={} region_id={}", keyspace_id, table_id, region->id());
+        LOG_TRACE(
+            log,
+            "begin to decode keyspace={} table_id={} region_id={}",
+            rw_ctx.keyspace_id,
+            rw_ctx.table_id,
+            region->id());
         DecodingStorageSchemaSnapshotConstPtr decoding_schema_snapshot;
         std::tie(decoding_schema_snapshot, block_ptr)
             = storage->getSchemaSnapshotAndBlockForDecoding(lock, true, should_handle_version_col);
@@ -142,58 +204,52 @@ static inline bool atomicReadWrite(
         auto reader = RegionBlockReader(decoding_schema_snapshot);
         if (!reader.read(*block_ptr, data_list_read, force_decode))
             return false;
-        region_decode_cost = watch.elapsedMilliseconds();
+        rw_ctx.region_decode_cost = watch.elapsedMilliseconds();
         GET_METRIC(tiflash_raft_write_data_to_storage_duration_seconds, type_decode)
-            .Observe(region_decode_cost / 1000.0);
+            .Observe(rw_ctx.region_decode_cost / 1000.0);
     }
-
-    /// Write block into storage.
-    // Release the alter lock so that writing does not block DDL operations
-    TableLockHolder drop_lock;
-    std::tie(std::ignore, drop_lock) = std::move(lock).release();
-    watch.restart();
-    // Note: do NOT use typeid_cast, since Storage is multi-inherited and typeid_cast will return nullptr
-    switch (storage->engineType())
+    if constexpr (std::is_same_v<ReadList, RegionDataReadInfoList>)
     {
-    case ::TiDB::StorageEngine::DT:
+        writeCommittedBlockDataIntoStorage(
+            rw_ctx,
+            lock,
+            storage,
+            need_decode,
+            block_decoding_schema_epoch,
+            block_ptr,
+            block);
+    }
+    else
     {
-        auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
-        if (need_decode)
-        {
-            write_result = dm_storage->write(*block_ptr, context.getSettingsRef());
-        }
-        else
-        {
-            write_result = dm_storage->write(block, context.getSettingsRef());
-        }
-        break;
+        // TODO Implement spill logic.
+        RUNTIME_CHECK(false);
     }
-    default:
-        throw Exception(
-            ErrorCodes::LOGICAL_ERROR,
-            "Unknown StorageEngine: {}",
-            static_cast<Int32>(storage->engineType()));
-    }
-
-    write_part_cost = watch.elapsedMilliseconds();
-    GET_METRIC(tiflash_raft_write_data_to_storage_duration_seconds, type_write).Observe(write_part_cost / 1000.0);
-    if (need_decode)
-        storage->releaseDecodingBlock(block_decoding_schema_epoch, std::move(block_ptr));
-
     LOG_TRACE(
         log,
         "keyspace={} table_id={} region_id={} cost [region decode {}, write part {}] ms",
-        keyspace_id,
-        table_id,
+        rw_ctx.keyspace_id,
+        rw_ctx.table_id,
         region->id(),
-        region_decode_cost,
-        write_part_cost);
+        rw_ctx.region_decode_cost,
+        rw_ctx.write_part_cost);
     return true;
 }
 
+template DM::WriteResult writeRegionDataToStorage<RegionUncommittedDataList>(
+    Context & context,
+    const RegionPtrWithBlock & region,
+    RegionUncommittedDataList & data_list_read,
+    const LoggerPtr & log);
+template DM::WriteResult writeRegionDataToStorage<RegionDataReadInfoList>(
+    Context & context,
+    const RegionPtrWithBlock & region,
+    RegionDataReadInfoList & data_list_read,
+    const LoggerPtr & log);
+
+// TODO rename it after we support spill.
 // ReadList could be RegionDataReadInfoList
 template <typename ReadList>
-static DM::WriteResult writeRegionDataToStorage(
+DM::WriteResult writeRegionDataToStorage(
     Context & context,
     const RegionPtrWithBlock & region,
     ReadList & data_list_read,
@@ -203,7 +259,7 @@ static DM::WriteResult writeRegionDataToStorage(
     const auto keyspace_id = region->getKeyspaceID();
     const auto table_id = region->getMappedTableID();
 
-    DM::WriteResult write_result = std::nullopt;
+    AtomicReadWriteCtx rw_ctx(context, tmt, keyspace_id, table_id);
 
     /// In TiFlash, the actions between applying raft log and schema changes are not strictly synchronized.
     /// There could be a chance that some raft logs come after a table gets tombstoned. Take care of it when
@@ -220,9 +276,9 @@ static DM::WriteResult writeRegionDataToStorage(
 
     /// Try read then write once.
     {
-        if (atomicReadWrite(log, context, tmt, keyspace_id, table_id, region, data_list_read, false, write_result))
+        if (atomicReadWrite(log, rw_ctx, region, data_list_read, false))
         {
-            return write_result;
+            return std::move(rw_ctx.write_result);
         }
     }
 
@@ -233,7 +289,7 @@ static DM::WriteResult writeRegionDataToStorage(
         tmt.getSchemaSyncerManager()->syncTableSchema(context, keyspace_id, table_id);
         auto schema_sync_cost = watch.elapsedMilliseconds();
         LOG_INFO(log, "sync schema cost {} ms, keyspace={} table_id={}", schema_sync_cost, keyspace_id, table_id);
-        if (!atomicReadWrite(log, context, tmt, keyspace_id, table_id, region, data_list_read, true, write_result))
+        if (!atomicReadWrite(log, rw_ctx, region, data_list_read, true))
         {
             // Failure won't be tolerated this time.
             throw Exception(
@@ -243,7 +299,7 @@ static DM::WriteResult writeRegionDataToStorage(
                 keyspace_id,
                 table_id);
         }
-        return write_result;
+        return std::move(rw_ctx.write_result);
     }
 }
 

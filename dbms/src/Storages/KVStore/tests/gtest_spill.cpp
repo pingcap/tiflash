@@ -91,12 +91,8 @@ try
 }
 CATCH
 
-TEST_F(KVStoreSpillTest, BlockReader)
-try
+static DB::RegionUncommittedDataList buildUncommitReadList(TableID table_id, MockRaftStoreProxy * proxy_instance)
 {
-    auto table_lock = storage->lockStructureForShare("foo_query_id");
-    auto [decoding_schema_snapshot, block_ptr] = storage->getSchemaSnapshotAndBlockForDecoding(table_lock, true, false);
-
     DB::RegionUncommittedDataList data_list_read;
 
     auto str_key = RecordKVFormat::genKey(table_id, 1, 111);
@@ -107,12 +103,42 @@ try
     auto value = std::make_shared<TiKVValue>(TiKVValue::copyFrom(str_val_default));
     data_list_read.data.push_back(RegionUncommittedData(std::move(pk), RecordKVFormat::CFModifyFlag::PutFlag, value));
 
-    auto reader = RegionBlockReader(decoding_schema_snapshot);
-    ASSERT_TRUE(reader.read(*block_ptr, data_list_read, true));
-    auto block_pos = decoding_schema_snapshot->getColId2BlockPosMap().find(1)->second;
-    const auto & col_data = block_ptr->safeGetByPosition(block_pos);
-    ASSERT_EQ(col_data.name, "a");
-    ASSERT_EQ(col_data.column->getName(), "Int64");
+    return data_list_read;
+}
+
+TEST_F(KVStoreSpillTest, BlockReader)
+try
+{
+    auto & ctx = TiFlashTestEnv::getGlobalContext();
+    {
+        // Test if a block with correct cols can be constructed.
+        auto table_lock = storage->lockStructureForShare("foo_query_id");
+        auto [decoding_schema_snapshot, block_ptr]
+            = storage->getSchemaSnapshotAndBlockForDecoding(table_lock, true, false);
+
+        DB::RegionUncommittedDataList data_list_read = buildUncommitReadList(table_id, proxy_instance.get());
+
+        auto reader = RegionBlockReader(decoding_schema_snapshot);
+        ASSERT_TRUE(reader.read(*block_ptr, data_list_read, true));
+        auto block_pos = decoding_schema_snapshot->getColId2BlockPosMap().find(1)->second;
+        const auto & col_data = block_ptr->safeGetByPosition(block_pos);
+        ASSERT_EQ(col_data.name, "a");
+        ASSERT_EQ(col_data.column->getName(), "Int64");
+    }
+    {
+        auto table_lock = storage->lockStructureForShare("foo_query_id");
+        auto [decoding_schema_snapshot, block_ptr]
+            = storage->getSchemaSnapshotAndBlockForDecoding(table_lock, true, false);
+
+        DB::RegionUncommittedDataList data_list_read = buildUncommitReadList(table_id, proxy_instance.get());
+
+        KVStore & kvs = getKVS();
+        proxy_instance->bootstrapWithRegion(kvs, ctx.getTMTContext(), 1, std::nullopt);
+        auto region = kvs.getRegion(1);
+        RegionPtrWithBlock region_with_cache = RegionPtrWithBlock(region, nullptr);
+        // TODO spill logic
+        EXPECT_THROW(writeRegionDataToStorage(ctx, region_with_cache, data_list_read, log), Exception);
+    }
 }
 CATCH
 
