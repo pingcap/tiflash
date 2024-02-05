@@ -26,13 +26,14 @@ ZlibDeflatingWriteBuffer::ZlibDeflatingWriteBuffer(
     size_t alignment)
     : BufferWithOwnMemory<WriteBuffer>(buf_size, existing_memory, alignment)
     , out(out_)
+    , zstr()
 {
     zstr.zalloc = Z_NULL;
     zstr.zfree = Z_NULL;
     zstr.opaque = Z_NULL;
-    zstr.next_in = 0;
+    zstr.next_in = nullptr;
     zstr.avail_in = 0;
-    zstr.next_out = 0;
+    zstr.next_out = nullptr;
     zstr.avail_out = 0;
 
     int window_bits = 15;

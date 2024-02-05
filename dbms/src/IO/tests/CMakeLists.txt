@@ -48,12 +48,6 @@ target_link_libraries (read_escaped_string tiflash_common_io)
 add_executable (async_write async_write.cpp ${SRCS})
 target_link_libraries (async_write tiflash_common_io)
 
-add_executable (parse_int_perf parse_int_perf.cpp ${SRCS})
-target_link_libraries (parse_int_perf tiflash_common_io)
-
-add_executable (parse_int_perf2 parse_int_perf2.cpp ${SRCS})
-target_link_libraries (parse_int_perf2 tiflash_common_io)
-
 add_executable (read_write_int read_write_int.cpp ${SRCS})
 target_link_libraries (read_write_int tiflash_common_io)
 
