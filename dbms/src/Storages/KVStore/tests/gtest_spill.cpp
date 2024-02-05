@@ -109,6 +109,10 @@ try
 
     auto reader = RegionBlockReader(decoding_schema_snapshot);
     ASSERT_TRUE(reader.read(*block_ptr, data_list_read, true));
+    auto block_pos = decoding_schema_snapshot->getColId2BlockPosMap().find(1)->second;
+    const auto & col_data = block_ptr->safeGetByPosition(block_pos);
+    ASSERT_EQ(col_data.name, "a");
+    ASSERT_EQ(col_data.column->getName(), "Int64");
 }
 CATCH
 

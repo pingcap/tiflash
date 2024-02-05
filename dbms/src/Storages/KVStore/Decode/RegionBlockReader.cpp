@@ -121,7 +121,7 @@ template bool RegionBlockReader::read<RegionUncommittedDataList>(
 template <typename ReadList>
 struct VersionColResolver
 {
-    VersionColResolver() {}
+    VersionColResolver() = default;
     bool needBuild() const { return raw_version_col == nullptr; }
     void build(ColumnUInt64 * raw_version_col_) { raw_version_col = raw_version_col_; }
     void preRead(size_t size)
@@ -154,11 +154,11 @@ private:
 template <>
 struct VersionColResolver<RegionUncommittedDataList>
 {
-    VersionColResolver() {}
-    bool needBuild() const { return false; }
+    VersionColResolver() = default;
+    bool needBuild() const { return false; } // NOLINT conform to main template
     void build(ColumnUInt64 * raw_version_col_) { raw_version_col = raw_version_col_; }
-    void preRead(size_t) {}
-    void read(const RegionUncommittedData &) {}
+    void preRead(size_t) {} // NOLINT conform to main template
+    void read(const RegionUncommittedData &) {} // NOLINT conform to main template
     void check(const Block & block, size_t expected) const
     {
         if (unlikely(block.columns() + 1 != expected))
@@ -168,7 +168,7 @@ struct VersionColResolver<RegionUncommittedDataList>
                 block.columns(),
                 expected);
     }
-    size_t reservedCount() const { return 2; }
+    size_t reservedCount() const { return 2; } // NOLINT conform to main template
 
 private:
     ColumnUInt64 * raw_version_col = nullptr;
