@@ -24,8 +24,10 @@
 #include <Storages/AlterCommands.h>
 #include <Storages/BackgroundProcessingPool.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFilePersisted.h>
+#include <Storages/DeltaMerge/DMContext_fwd.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaMergeInterfaces.h>
+#include <Storages/DeltaMerge/File/DMFile_fwd.h>
 #include <Storages/DeltaMerge/Filter/PushDownFilter.h>
 #include <Storages/DeltaMerge/Remote/DisaggSnapshot_fwd.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
@@ -58,15 +60,8 @@ namespace DM
 {
 class StoragePool;
 using StoragePoolPtr = std::shared_ptr<StoragePool>;
-class DMFile;
-using DMFilePtr = std::shared_ptr<DMFile>;
-class Segment;
-using SegmentPtr = std::shared_ptr<Segment>;
-using SegmentPair = std::pair<SegmentPtr, SegmentPtr>;
 class RSOperator;
 using RSOperatorPtr = std::shared_ptr<RSOperator>;
-struct DMContext;
-using DMContextPtr = std::shared_ptr<DMContext>;
 using NotCompress = std::unordered_set<ColId>;
 using SegmentIdSet = std::unordered_set<UInt64>;
 struct ExternalDTFileInfo;
@@ -357,12 +352,12 @@ public:
         return buildSegmentsFromCheckpointInfo(dm_context, range, checkpoint_info);
     }
 
-    void ingestSegmentsFromCheckpointInfo(
+    UInt64 ingestSegmentsFromCheckpointInfo(
         const DMContextPtr & dm_context,
         const DM::RowKeyRange & range,
         const CheckpointIngestInfoPtr & checkpoint_info);
 
-    void ingestSegmentsFromCheckpointInfo(
+    UInt64 ingestSegmentsFromCheckpointInfo(
         const Context & db_context,
         const DB::Settings & db_settings,
         const DM::RowKeyRange & range,
@@ -788,7 +783,7 @@ public:
         const RowKeyValueRef & start_key,
         bool create_if_empty,
         bool throw_if_notfound);
-    void createFirstSegment(DM::DMContext & dm_context, PageStorageRunMode page_storage_run_mode);
+    void createFirstSegment(DM::DMContext & dm_context);
 
     Context & global_context;
     std::shared_ptr<StoragePathPool> path_pool;

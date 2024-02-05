@@ -59,6 +59,7 @@ add_headers_and_sources(tiflash_common_io src/Common)
 add_headers_and_sources(tiflash_common_io src/Common/HashTable)
 add_headers_and_sources(tiflash_common_io src/Common/SyncPoint)
 add_headers_and_sources(tiflash_common_io src/IO)
+add_headers_and_sources(tiflash_common_io src/IO/Checksum)
 
 add_headers_and_sources(dbms src/Analyzers)
 add_headers_and_sources(dbms src/Core)

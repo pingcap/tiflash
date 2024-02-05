@@ -20,6 +20,7 @@
 #include <Core/NamesAndTypes.h>
 #include <Core/Types.h>
 #include <DataTypes/DataTypeFactory.h>
+#include <Storages/DeltaMerge/ColumnDefine_fwd.h>
 #include <Storages/DeltaMerge/Range.h>
 #include <Storages/FormatVersion.h>
 #include <Storages/KVStore/Types.h>
@@ -94,10 +95,6 @@ struct ColumnDefine
         , default_value(std::move(default_value_))
     {}
 };
-
-using ColumnDefines = std::vector<ColumnDefine>;
-using ColumnDefinesPtr = std::shared_ptr<ColumnDefines>;
-using ColumnDefineMap = std::unordered_map<ColId, ColumnDefine>;
 
 using ColumnMap = std::unordered_map<ColId, ColumnPtr>;
 using MutableColumnMap = std::unordered_map<ColId, MutableColumnPtr>;

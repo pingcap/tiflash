@@ -12,22 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <IO/ChecksumBuffer.h>
+#pragma once
 
-namespace DB
+#include <Storages/KVStore/Types.h>
+
+#include <memory>
+#include <unordered_map>
+#include <vector>
+
+namespace DB::DM
 {
-using namespace DB::Digest;
-
-template class FramedChecksumReadBuffer<None>;
-template class FramedChecksumReadBuffer<CRC32>;
-template class FramedChecksumReadBuffer<CRC64>;
-template class FramedChecksumReadBuffer<City128>;
-template class FramedChecksumReadBuffer<XXH3>;
-
-template class FramedChecksumWriteBuffer<None>;
-template class FramedChecksumWriteBuffer<CRC32>;
-template class FramedChecksumWriteBuffer<CRC64>;
-template class FramedChecksumWriteBuffer<City128>;
-template class FramedChecksumWriteBuffer<XXH3>;
-
-} // namespace DB
+struct ColumnDefine;
+using ColumnDefines = std::vector<ColumnDefine>;
+using ColumnDefinesPtr = std::shared_ptr<ColumnDefines>;
+using ColumnDefineMap = std::unordered_map<DB::ColumnID, ColumnDefine>;
+} // namespace DB::DM

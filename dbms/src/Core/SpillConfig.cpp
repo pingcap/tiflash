@@ -14,7 +14,6 @@
 
 #include <Common/Exception.h>
 #include <Core/SpillConfig.h>
-#include <Encryption/FileProvider.h>
 #include <Poco/Path.h>
 
 namespace DB

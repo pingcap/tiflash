@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/Logger.h>
+#include <Storages/DeltaMerge/Segment_fwd.h>
 #include <Storages/KVStore/MultiRaft/Disagg/fast_add_peer.pb.h>
 #include <common/types.h>
 
@@ -22,14 +23,6 @@
 
 namespace DB
 {
-namespace DM
-{
-class Segment;
-using SegmentPtr = std::shared_ptr<Segment>;
-using Segments = std::vector<SegmentPtr>;
-struct DMContext;
-using DMContextPtr = std::shared_ptr<DMContext>;
-} // namespace DM
 class Region;
 using RegionPtr = std::shared_ptr<Region>;
 class TMTContext;
@@ -74,12 +67,22 @@ struct CheckpointIngestInfo
         UInt64 region_id,
         UInt64 peer_id);
 
+    enum class CleanReason
+    {
+        Success,
+        ProxyFallback,
+        TiFlashCancel,
+        ResolveStateApplySnapshot,
+        ResolveStateDestroy,
+    };
+
     // Only call to clean dangling CheckpointIngestInfo.
     static bool forciblyClean(
         TMTContext & tmt,
         const TiFlashRaftProxyHelper * proxy_helper,
         UInt64 region_id,
-        bool in_memory);
+        bool in_memory,
+        CleanReason reason);
     static bool cleanOnSuccess(TMTContext & tmt, UInt64 region_id);
 
     FastAddPeerProto::CheckpointIngestInfoPersisted serializeMeta() const;

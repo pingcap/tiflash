@@ -76,6 +76,7 @@ namespace DB
     M(skip_check_segment_update)                             \
     M(force_set_page_file_write_errno)                       \
     M(force_split_io_size_4k)                                \
+    M(force_set_num_regions_for_table)                       \
     M(minimum_block_size_for_cross_join)                     \
     M(random_exception_after_dt_write_done)                  \
     M(random_slow_page_storage_write)                        \
@@ -87,6 +88,7 @@ namespace DB
     M(force_set_dtfile_exist_when_acquire_id)                \
     M(force_no_local_region_for_mpp_task)                    \
     M(force_remote_read_for_batch_cop)                       \
+    M(force_pd_grpc_error)                                   \
     M(force_context_path)                                    \
     M(force_slow_page_storage_snapshot_release)              \
     M(force_pick_all_blobs_to_full_gc)                       \

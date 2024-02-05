@@ -17,7 +17,6 @@
 #include <Common/CurrentMetrics.h>
 #include <Common/Logger.h>
 #include <Common/nocopyable.h>
-#include <Encryption/FileProvider.h>
 #include <Poco/Ext/ThreadNumber.h>
 #include <Storages/Page/Snapshot.h>
 #include <Storages/Page/V3/BlobStore.h>
@@ -36,7 +35,6 @@
 #include <memory>
 #include <mutex>
 #include <shared_mutex>
-#include <unordered_map>
 
 namespace CurrentMetrics
 {

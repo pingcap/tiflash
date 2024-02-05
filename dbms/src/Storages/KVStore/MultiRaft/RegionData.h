@@ -99,6 +99,8 @@ public:
 
         void advanceAppliedIndex(uint64_t);
 
+        bool omitOrphanWriteKey(const std::shared_ptr<const TiKVKey> & key);
+
         // Providing a `snapshot_index` indicates we can scanning a snapshot of index `snapshot_index`.
         // `snapshot_index` can be set to null if TiFlash is not in a raftstore v2 cluster.
         std::optional<uint64_t> snapshot_index;

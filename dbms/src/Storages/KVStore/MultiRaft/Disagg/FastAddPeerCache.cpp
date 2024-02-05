@@ -57,7 +57,7 @@ UInt64 EndToSegmentId::getSegmentIdContainingKey(std::unique_lock<std::mutex> & 
         end_to_segment_id.end(),
         key,
         [](const DM::RowKeyValue & key1, const std::pair<DM::RowKeyValue, UInt64> & element2) {
-            return compare(key1.toRowKeyValueRef(), element2.first.toRowKeyValueRef()) < 0;
+            return key1.toRowKeyValueRef() < element2.first.toRowKeyValueRef();
         });
     RUNTIME_CHECK(
         iter != end_to_segment_id.end(),

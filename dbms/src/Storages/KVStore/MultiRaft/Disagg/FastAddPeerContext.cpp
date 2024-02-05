@@ -148,7 +148,7 @@ void FastAddPeerContext::cleanTask(
     TMTContext & tmt,
     const TiFlashRaftProxyHelper * proxy_helper,
     UInt64 region_id,
-    bool is_succeed)
+    CheckpointIngestInfo::CleanReason reason)
 {
     bool in_memory = false;
     // TODO(fap) We use a dedicated queue and thread to clean, if this costs much.
@@ -162,12 +162,12 @@ void FastAddPeerContext::cleanTask(
             checkpoint_ingest_info_map.erase(iter);
         }
     }
-    if (is_succeed)
+    if (reason == CheckpointIngestInfo::CleanReason::Success)
         CheckpointIngestInfo::cleanOnSuccess(tmt, region_id);
     else
     {
         RUNTIME_CHECK(proxy_helper != nullptr);
-        CheckpointIngestInfo::forciblyClean(tmt, proxy_helper, region_id, in_memory);
+        CheckpointIngestInfo::forciblyClean(tmt, proxy_helper, region_id, in_memory, reason);
     }
 }
 
@@ -252,7 +252,12 @@ void FastAddPeerContext::resolveFapSnapshotState(
         region_id,
         is_regular_snapshot);
     // Still need to clean because there could be data left.
-    cleanTask(tmt, proxy_helper, region_id, false);
+    cleanTask(
+        tmt,
+        proxy_helper,
+        region_id,
+        is_regular_snapshot ? CheckpointIngestInfo::CleanReason::ResolveStateApplySnapshot
+                            : CheckpointIngestInfo::CleanReason::ResolveStateDestroy);
 }
 
 } // namespace DB

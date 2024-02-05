@@ -20,7 +20,6 @@
 #include <BaseFile/RandomAccessFile.h>
 #include <BaseFile/WritableFile.h>
 #include <Common/Checksum.h>
-#include <Encryption/FileProvider.h>
 #include <IO/ReadBufferFromFileDescriptor.h>
 #include <IO/WriteBufferFromFileDescriptor.h>
 #include <fmt/format.h>
