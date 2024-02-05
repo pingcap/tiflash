@@ -71,6 +71,20 @@ try
         EXPECT_THROW(block->getPositionByName(MutableSupport::version_column_name), Exception);
         ASSERT_EQ(block->columns(), 3);
     }
+    {
+        // getColId2BlockPosMap should be a sub-sequence of getColId2DefPosMap.
+        auto [schema_snapshot, block] = storage->getSchemaSnapshotAndBlockForDecoding(table_lock, true, false);
+        UNUSED(block);
+        auto it2 = schema_snapshot->getColId2DefPosMap().begin();
+        auto it2_end = schema_snapshot->getColId2DefPosMap().end();
+        auto it = schema_snapshot->getColId2BlockPosMap().begin();
+        auto it_end = schema_snapshot->getColId2BlockPosMap().end();
+        for (; it != it_end; it++) {
+            while (it2->first != it->first && it2 != it2_end) it2++;
+            if (it2 == it2_end) break;
+        }
+        ASSERT_TRUE(it == it_end && it2 == it2_end);
+    }
 }
 CATCH
 

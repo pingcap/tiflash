@@ -337,15 +337,15 @@ size_t valueStartPos(const TableInfo & table_info)
 
 inline Block decodeRowToBlock(const String & row_value, DecodingStorageSchemaSnapshotConstPtr decoding_schema)
 {
-    const auto & sorted_column_id_with_pos = decoding_schema->sorted_column_id_with_pos;
-    auto iter = sorted_column_id_with_pos.begin();
+    const auto & col_id_to_block_pos = decoding_schema->getColId2BlockPosMap();
+    auto iter = col_id_to_block_pos.begin();
     const size_t value_column_num = 3;
     // skip first three column which is EXTRA_HANDLE_COLUMN, VERSION_COLUMN, TAG_COLUMN
     for (size_t i = 0; i < value_column_num; i++)
         iter++;
 
     Block block = createBlockSortByColumnID(decoding_schema);
-    appendRowToBlock(row_value, iter, sorted_column_id_with_pos.end(), block, value_column_num, decoding_schema, true);
+    appendRowToBlock(row_value, iter, col_id_to_block_pos.end(), block, value_column_num, decoding_schema, true);
 
     // remove first three column
     for (size_t i = 0; i < value_column_num; i++)

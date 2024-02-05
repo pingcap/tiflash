@@ -57,16 +57,14 @@ struct DecodingStorageSchemaSnapshot
 
     DecodingStorageSchemaSnapshot(DecodingStorageSchemaSnapshot &&) = default;
 
+    const SortedColumnIDWithPos & getColId2BlockPosMap() const { return col_id_to_block_pos; }
+    const SortedColumnIDWithPos & getColId2DefPosMap() const { return col_id_to_def_pos; }
+
     // There is a one-to-one correspondence between elements in `column_defines` and elements in `column_infos`
     // Note that some columns(EXTRA_HANDLE_COLUMN, VERSION_COLUMN, TAG_COLUMN) may not be a real column in tidb schema,
     // so their corresponding elements in `column_infos` are just nullptr and won't be used when decoding.
     DM::ColumnDefinesPtr column_defines;
     ColumnInfos column_infos;
-
-    // column id -> column pos in block in column_defines/column_infos
-    SortedColumnIDWithPos sorted_column_id_with_pos;
-    // column id -> column pos in column_defines/column_infos
-    SortedColumnIDWithPos sorted_column_id_with_pos_total;
 
     // 1. when the table doesn't have a common handle,
     //    1) if `pk_is_handle` is false, `pk_column_ids` is empty
@@ -83,6 +81,12 @@ struct DecodingStorageSchemaSnapshot
     TMTPKType pk_type = TMTPKType::UNSPECIFIED;
     // an internal increasing version for `DecodingStorageSchemaSnapshot`, has no relation with the table schema version
     Int64 decoding_schema_epoch;
+private:
+    // `col_id_to_def_pos` is originally `sorted_column_id_with_pos`.
+    // We may omit some cols in block, e.g. version col. So `col_id_to_def_pos` may have more items than `col_id_to_block_pos`.
+    // Both of the maps are sorted in ColumnID order, which makes the internal cols in first.
+    SortedColumnIDWithPos col_id_to_block_pos;
+    SortedColumnIDWithPos col_id_to_def_pos;
 };
 using DecodingStorageSchemaSnapshotPtr = std::shared_ptr<DecodingStorageSchemaSnapshot>;
 using DecodingStorageSchemaSnapshotConstPtr = std::shared_ptr<const DecodingStorageSchemaSnapshot>;

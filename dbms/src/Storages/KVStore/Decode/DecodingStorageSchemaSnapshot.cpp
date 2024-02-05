@@ -42,9 +42,9 @@ DecodingStorageSchemaSnapshot::DecodingStorageSchemaSnapshot(
         auto & cd = (*column_defines)[i];
         if (cd.id != VersionColumnID || has_version_column)
         {
-            sorted_column_id_with_pos.insert({cd.id, index_in_block++});
+            col_id_to_block_pos.insert({cd.id, index_in_block++});
         }
-        sorted_column_id_with_pos_total.insert({cd.id, i});
+        col_id_to_def_pos.insert({cd.id, i});
         if (cd.id == VersionColumnID)
         {
             if (has_version_column)
@@ -98,7 +98,7 @@ DecodingStorageSchemaSnapshot::DecodingStorageSchemaSnapshot(
     {
         auto pk_pos_iter = pk_pos_map.begin();
         size_t column_pos_in_block = 0;
-        for (auto & column_id_with_pos : sorted_column_id_with_pos)
+        for (auto & column_id_with_pos : col_id_to_block_pos)
         {
             if (pk_pos_iter == pk_pos_map.end())
                 break;
@@ -133,8 +133,11 @@ TMTPKType getTMTPKType(const IDataType & rhs)
 Block createBlockSortByColumnID(DecodingStorageSchemaSnapshotConstPtr schema_snapshot, bool has_version_column)
 {
     Block block;
-    for (auto iter = schema_snapshot->sorted_column_id_with_pos_total.begin();
-         iter != schema_snapshot->sorted_column_id_with_pos_total.end();
+    // # Safety
+    // Though `col_id_to_block_pos` lasks some fields in `col_id_to_def_pos`,
+    // it is always a sub-sequence of `col_id_to_def_pos`.
+    for (auto iter = schema_snapshot->getColId2DefPosMap().begin();
+         iter != schema_snapshot->getColId2DefPosMap().end();
          iter++)
     {
         // col_id == cd.id

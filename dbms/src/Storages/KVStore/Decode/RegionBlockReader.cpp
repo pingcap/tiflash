@@ -87,12 +87,14 @@ bool RegionBlockReader::read(Block & block, const ReadList & data_list, bool for
         };
 
         exc.addMessage(fmt::format(
-            "pk_type is {}, schema_snapshot->sorted_column_id_with_pos is {}, "
+            "pk_type is {}, schema_snapshot->col_id_to_block_pos is {}, "
+            "schema_snapshot->col_id_to_def_pos is {},"
             "schema_snapshot->column_defines is {}, "
             "decoding_snapshot_epoch is {}, "
             "block schema is {} ",
             magic_enum::enum_name(schema_snapshot->pk_type),
-            print_map(schema_snapshot->sorted_column_id_with_pos),
+            print_map(schema_snapshot->getColId2BlockPosMap()),
+            print_map(schema_snapshot->getColId2DefPosMap()),
             print_column_defines(schema_snapshot->column_defines),
             schema_snapshot->decoding_schema_epoch,
             block.dumpJsonStructure()));
@@ -177,7 +179,7 @@ bool RegionBlockReader::readImpl(Block & block, const ReadList & data_list, bool
 {
     VersionColResolver<ReadList> version_col_resolver;
     version_col_resolver.check(block, schema_snapshot->column_defines->size());
-    const auto & read_column_ids = schema_snapshot->sorted_column_id_with_pos;
+    const auto & read_column_ids = schema_snapshot->getColId2BlockPosMap();
     const auto & pk_column_ids = schema_snapshot->pk_column_ids;
     const auto & pk_pos_map = schema_snapshot->pk_pos_map;
 
