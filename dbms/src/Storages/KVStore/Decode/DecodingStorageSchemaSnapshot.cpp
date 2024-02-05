@@ -45,18 +45,8 @@ DecodingStorageSchemaSnapshot::DecodingStorageSchemaSnapshot(
             col_id_to_block_pos.insert({cd.id, index_in_block++});
         }
         col_id_to_def_pos.insert({cd.id, i});
-        if (cd.id == VersionColumnID)
-        {
-            if (has_version_column)
-            {
-                column_infos.push_back(ColumnInfo());
-            }
-            else
-            {
-                // Do nothing.
-            }
-        }
-        else if (cd.id != TiDBPkColumnID && cd.id != DelMarkColumnID)
+
+        if (cd.id != TiDBPkColumnID && cd.id != VersionColumnID && cd.id != DelMarkColumnID)
         {
             const auto & columns = table_info_.columns;
             column_infos.push_back(columns[column_lut.at(cd.id)]);
