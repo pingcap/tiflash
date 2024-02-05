@@ -12,13 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Encryption/WriteBufferFromFileProvider.h>
-#include <Encryption/createWriteBufferFromFileBaseByFileProvider.h>
-#if !defined(__APPLE__) && !defined(__FreeBSD__) && !defined(_MSC_VER)
-#include <IO/WriteBufferAIO.h>
-#endif
-#include <Common/ProfileEvents.h>
-#include <IO/ChecksumBuffer.h>
+#include <Encryption/WriteBufferFromWritableFileBuilder.h>
+#include <IO/Checksum/ChecksumBuffer.h>
+#include <IO/Checksum/ChecksumWriteBufferBuilder.h>
 
 namespace DB
 {
@@ -27,41 +23,8 @@ namespace ErrorCodes
 extern const int NOT_IMPLEMENTED;
 }
 
-std::unique_ptr<WriteBufferFromFileBase> createWriteBufferFromFileBaseByFileProvider(
-    const FileProviderPtr & file_provider,
-    const std::string & filename_,
-    const EncryptionPath & encryption_path_,
-    bool create_new_encryption_info_,
-    const WriteLimiterPtr & write_limiter_,
-    size_t estimated_size,
-    size_t aio_threshold,
-    size_t buffer_size_,
-    int flags_,
-    mode_t mode,
-    char * existing_memory_,
-    size_t alignment)
+namespace
 {
-    if ((aio_threshold == 0) || (estimated_size < aio_threshold))
-    {
-        return std::make_unique<WriteBufferFromFileProvider>(
-            file_provider,
-            filename_,
-            encryption_path_,
-            create_new_encryption_info_,
-            write_limiter_,
-            buffer_size_,
-            flags_,
-            mode,
-            existing_memory_,
-            alignment);
-    }
-    else
-    {
-        // TODO: support encryption when AIO enabled
-        throw Exception("AIO is not implemented when create file using FileProvider", ErrorCodes::NOT_IMPLEMENTED);
-    }
-}
-
 std::unique_ptr<WriteBufferFromFileBase> createWriteBufferFromFileBaseByFileProvider(
     const FileProviderPtr & file_provider,
     const std::string & filename_,
@@ -96,10 +59,54 @@ std::unique_ptr<WriteBufferFromFileBase> createWriteBufferFromFileBaseByFileProv
     }
     throw Exception("error creating framed checksum buffer instance: checksum unrecognized");
 }
+} // namespace
 
+std::unique_ptr<WriteBufferFromFileBase> ChecksumWriteBufferBuilder::build(
+    bool has_checksum,
+    const FileProviderPtr & file_provider,
+    const std::string & filename_,
+    const EncryptionPath & encryption_path_,
+    bool create_new_encryption_info_,
+    const WriteLimiterPtr & write_limiter_,
+    ChecksumAlgo checksum_algorithm,
+    size_t checksum_frame_size,
+    int flags_,
+    mode_t mode,
+    size_t buf_size,
+    char * existing_memory,
+    size_t alignment)
+{
+    if (has_checksum)
+    {
+        return createWriteBufferFromFileBaseByFileProvider(
+            file_provider,
+            filename_,
+            encryption_path_,
+            create_new_encryption_info_,
+            write_limiter_,
+            checksum_algorithm,
+            checksum_frame_size,
+            flags_,
+            mode);
+    }
+    else
+    {
+        return WriteBufferFromWritableFileBuilder::buildPtr(
+            file_provider,
+            filename_,
+            encryption_path_,
+            create_new_encryption_info_,
+            write_limiter_,
+            buf_size,
+            flags_,
+            mode,
+            existing_memory,
+            alignment);
+    }
+}
 
-std::unique_ptr<WriteBufferFromFileBase> createWriteBufferFromFileBaseByWriterBuffer(
-    std::unique_ptr<WriteBufferFromWritableFile> & writer_buffer,
+std::unique_ptr<WriteBufferFromFileBase> ChecksumWriteBufferBuilder::build(
+    WriteBufferFromWritableFilePtr & writer_buffer,
     ChecksumAlgo checksum_algorithm,
     size_t checksum_frame_size)
 {
@@ -119,4 +126,5 @@ std::unique_ptr<WriteBufferFromFileBase> createWriteBufferFromFileBaseByWriterBu
     }
     throw Exception("error creating framed checksum buffer instance: checksum unrecognized");
 }
+
 } // namespace DB

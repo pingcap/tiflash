@@ -18,7 +18,6 @@
 #include <Encryption/AESCTRCipherStream.h>
 #include <common/types.h>
 
-#include <string>
 
 namespace DB
 {

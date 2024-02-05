@@ -12,3 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# TODO: 
+# 1. remove Storages/KVStore/FFI and Storages/S3 out of the Storages directory, so that this directory does not need to reply on Storages.
+# 2. remove dbms/src/Encryption/CompressedReadBufferFromFileProvider.* out of this directory.

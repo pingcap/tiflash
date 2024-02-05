@@ -19,8 +19,8 @@
 #include <Common/escapeForFileName.h>
 #include <DataTypes/IDataType.h>
 #include <Encryption/FileProvider.h>
-#include <Encryption/createReadBufferFromFileBaseByFileProvider.h>
 #include <Flash/Coprocessor/DAGContext.h>
+#include <IO/Checksum/ChecksumReadBufferBuilder.h>
 #include <IO/CompressedReadBuffer.h>
 #include <Poco/File.h>
 #include <Poco/Thread_STD.h>
@@ -91,7 +91,7 @@ DMFileReader::Stream::Stream(
                     return res;
 
                 // first read from merged file to get the raw data(contains the header)
-                auto buffer = ReadBufferFromFileProvider(
+                auto buffer = ReadBufferFromRandomAccessFileBuilder::build(
                     reader.file_provider,
                     file_path,
                     encryp_path,
@@ -104,7 +104,7 @@ DMFileReader::Stream::Stream(
 
                 buffer.read(reinterpret_cast<char *>(raw_data.data()), data_size);
                 // read from the buffer based on the raw data
-                auto buf = createReadBufferFromData(
+                auto buf = ChecksumReadBufferBuilder::build(
                     std::move(raw_data),
                     reader.dmfile->colDataPath(file_name_base),
                     reader.dmfile->getConfiguration()->getChecksumFrameLength(),
@@ -114,7 +114,7 @@ DMFileReader::Stream::Stream(
             }
             else
             { // v2
-                auto buffer = createReadBufferFromFileBaseByFileProvider(
+                auto buffer = ChecksumReadBufferBuilder::build(
                     reader.file_provider,
                     reader.dmfile->colMarkPath(file_name_base),
                     reader.dmfile->encryptionMarkPath(file_name_base),
@@ -235,7 +235,7 @@ DMFileReader::Stream::Stream(
             auto size = info->second.size;
 
             // first read from merged file to get the raw data(contains the header)
-            auto buffer = ReadBufferFromFileProvider(
+            auto buffer = ReadBufferFromRandomAccessFileBuilder::build(
                 reader.file_provider,
                 file_path,
                 encryp_path,

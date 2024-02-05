@@ -45,4 +45,6 @@ private:
 private:
     RandomAccessFilePtr file;
 };
+
+using ReadBufferFromRandomAccessFilePtr = std::unique_ptr<ReadBufferFromRandomAccessFile>;
 } // namespace DB

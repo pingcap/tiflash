@@ -29,7 +29,6 @@
 #include <Databases/IDatabase.h>
 #include <Debug/DBGInvoker.h>
 #include <Debug/MockStorage.h>
-#include <Encryption/DataKeyManager.h>
 #include <Encryption/FileProvider.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <IO/ReadBufferFromFile.h>
