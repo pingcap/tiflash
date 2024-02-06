@@ -25,7 +25,7 @@ namespace DB
 namespace tests
 {
 
-TEST(WriteBufferFromOwnString, TestFinalize_ShortBuffer)
+TEST(WriteBufferFromOwnString, TestFinalizeShortBuffer)
 {
     WriteBufferFromOwnString buffer;
     buffer << "a";
@@ -35,7 +35,7 @@ TEST(WriteBufferFromOwnString, TestFinalize_ShortBuffer)
     EXPECT_EQ(buffer.count(), str.size());
 }
 
-TEST(WriteBufferFromOwnString, TestFinalize_LongBuffer)
+TEST(WriteBufferFromOwnString, TestFinalizeLongBuffer)
 {
     std::string expect;
     WriteBufferFromOwnString buffer;
