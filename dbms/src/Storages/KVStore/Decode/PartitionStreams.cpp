@@ -99,8 +99,8 @@ struct AtomicReadWriteCtx
     const LoggerPtr & log;
     const Context & context;
     const TMTContext & tmt;
-    KeyspaceID keyspace_id;
-    TableID table_id;
+    const KeyspaceID keyspace_id;
+    const TableID table_id;
     DM::WriteResult write_result = std::nullopt;
     UInt64 region_decode_cost = -1;
     UInt64 write_part_cost = -1;
