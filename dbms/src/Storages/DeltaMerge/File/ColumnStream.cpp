@@ -246,7 +246,7 @@ std::unique_ptr<CompressedSeekableReaderBuffer> ColumnReadStream::buildColDataRe
     auto offset = info->second.offset;
     auto size = info->second.size;
 
-    // first read from merged file to get the raw data(contains the header)
+    // First, read from merged file to get the raw data(contains the header)
     auto buffer = ReadBufferFromRandomAccessFileBuilder::build(
         reader.file_provider,
         file_path,
@@ -255,11 +255,13 @@ std::unique_ptr<CompressedSeekableReaderBuffer> ColumnReadStream::buildColDataRe
         read_limiter);
     buffer.seek(offset);
 
+    // Read the raw data into memory. It is OK because the mark merged into
+    // merged_file is small enough.
     String raw_data;
     raw_data.resize(size);
-
     buffer.read(reinterpret_cast<char *>(raw_data.data()), size);
-    // read from the buffer based on the raw data
+
+    // Then read from the buffer based on the raw data
     return std::make_unique<CompressedReadBufferFromFileProvider</*has_checksum=*/false>>(
         std::move(raw_data),
         file_path,
