@@ -16,6 +16,8 @@
 #include <Storages/DeltaMerge/File/DMFileReader.h>
 #include <Storages/Page/PageUtil.h>
 
+#include "IO/Compression/CompressedReadBufferFromFile.h"
+
 namespace DB::DM
 {
 // TODO: make `MarkLoader` as a part of DMFile?
@@ -195,7 +197,7 @@ std::unique_ptr<CompressedSeekableReaderBuffer> ColumnReadStream::buildColDataRe
         file_name_base,
         data_file_size,
         buffer_size);
-    return std::make_unique<CompressedReadBufferFromFileProvider<true>>(
+    return LegacyCompressedReadBufferFromFileProvider::buildLegacyReadBuffer(
         reader.file_provider,
         reader.dmfile->colDataPath(file_name_base),
         reader.dmfile->encryptionDataPath(file_name_base),
@@ -211,7 +213,7 @@ std::unique_ptr<CompressedSeekableReaderBuffer> ColumnReadStream::buildColDataRe
     const String & file_name_base,
     const ReadLimiterPtr & read_limiter)
 {
-    return std::make_unique<CompressedReadBufferFromFileProvider</*has_checksum=*/false>>(
+    return std::make_unique<CompressedReadBufferFromFileProvider>(
         reader.file_provider,
         reader.dmfile->colDataPath(file_name_base),
         reader.dmfile->encryptionDataPath(file_name_base),
@@ -230,7 +232,7 @@ std::unique_ptr<CompressedSeekableReaderBuffer> ColumnReadStream::buildColDataRe
     auto info = reader.dmfile->merged_sub_file_infos.find(reader.dmfile->colDataFileName(file_name_base));
     if (info == reader.dmfile->merged_sub_file_infos.end())
     {
-        return std::make_unique<CompressedReadBufferFromFileProvider<false>>(
+        return std::make_unique<CompressedReadBufferFromFileProvider>(
             reader.file_provider,
             reader.dmfile->colDataPath(file_name_base),
             reader.dmfile->encryptionDataPath(file_name_base),
@@ -262,7 +264,7 @@ std::unique_ptr<CompressedSeekableReaderBuffer> ColumnReadStream::buildColDataRe
     buffer.read(reinterpret_cast<char *>(raw_data.data()), size);
 
     // Then read from the buffer based on the raw data
-    return std::make_unique<CompressedReadBufferFromFileProvider</*has_checksum=*/false>>(
+    return std::make_unique<CompressedReadBufferFromFileProvider>(
         std::move(raw_data),
         file_path,
         reader.dmfile->getConfiguration()->getChecksumFrameLength(),

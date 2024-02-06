@@ -45,8 +45,8 @@ extern const int CANNOT_DECOMPRESS;
 
 /// Read compressed data into compressed_buffer. Get size of decompressed data from block header. Checksum if need.
 /// Returns number of compressed bytes read.
-template <bool has_checksum>
-size_t CompressedReadBufferBase<has_checksum>::readCompressedData(
+template <bool has_legacy_checksum>
+size_t CompressedReadBufferBase<has_legacy_checksum>::readCompressedData(
     size_t & size_decompressed,
     size_t & size_compressed_without_checksum)
 {
@@ -54,7 +54,7 @@ size_t CompressedReadBufferBase<has_checksum>::readCompressedData(
         return 0;
 
     CityHash_v1_0_2::uint128 checksum;
-    if constexpr (has_checksum)
+    if constexpr (has_legacy_checksum)
     {
         compressed_in->readStrict(reinterpret_cast<char *>(&checksum), sizeof(checksum));
     }
@@ -108,7 +108,7 @@ size_t CompressedReadBufferBase<has_checksum>::readCompressedData(
             size_compressed - COMPRESSED_BLOCK_HEADER_SIZE);
     }
 
-    if constexpr (has_checksum)
+    if constexpr (has_legacy_checksum)
     {
         if (!disable_checksum[0] && checksum != CityHash_v1_0_2::CityHash128(compressed_buffer, size_compressed))
             throw Exception("Checksum doesn't match: corrupted data.", ErrorCodes::CHECKSUM_DOESNT_MATCH);
@@ -120,8 +120,8 @@ size_t CompressedReadBufferBase<has_checksum>::readCompressedData(
     }
 }
 
-template <bool has_checksum>
-void CompressedReadBufferBase<has_checksum>::decompress(
+template <bool has_legacy_checksum>
+void CompressedReadBufferBase<has_legacy_checksum>::decompress(
     char * to,
     size_t size_decompressed,
     size_t size_compressed_without_checksum)
@@ -175,15 +175,15 @@ void CompressedReadBufferBase<has_checksum>::decompress(
 
 
 /// 'compressed_in' could be initialized lazily, but before first call of 'readCompressedData'.
-template <bool has_checksum>
-CompressedReadBufferBase<has_checksum>::CompressedReadBufferBase(ReadBuffer * in)
+template <bool has_legacy_checksum>
+CompressedReadBufferBase<has_legacy_checksum>::CompressedReadBufferBase(ReadBuffer * in)
     : compressed_in(in)
     , own_compressed_buffer(COMPRESSED_BLOCK_HEADER_SIZE)
 {}
 
-template <bool has_checksum>
-CompressedReadBufferBase<has_checksum>::~CompressedReadBufferBase()
-    = default; /// Proper destruction of unique_ptr of forward-declared type.
+/// Proper destruction of unique_ptr of forward-declared type.
+template <bool has_legacy_checksum>
+CompressedReadBufferBase<has_legacy_checksum>::~CompressedReadBufferBase() = default;
 
 
 template class CompressedReadBufferBase<true>;
