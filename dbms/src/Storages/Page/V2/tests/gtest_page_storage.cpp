@@ -50,10 +50,10 @@ extern const int CANNOT_WRITE_TO_FILE_DESCRIPTOR;
 
 namespace PS::V2::tests
 {
-class PageStorage_test : public DB::base::TiFlashStorageTestBasic
+class PageStorageTest : public DB::base::TiFlashStorageTestBasic
 {
 public:
-    PageStorage_test()
+    PageStorageTest()
         : file_provider{DB::tests::TiFlashTestEnv::getDefaultFileProvider()}
     {}
 
@@ -89,7 +89,7 @@ protected:
     const FileProviderPtr file_provider;
 };
 
-TEST_F(PageStorage_test, WriteRead)
+TEST_F(PageStorageTest, WriteRead)
 try
 {
     const UInt64 tag = 0;
@@ -126,7 +126,7 @@ try
 }
 CATCH
 
-TEST_F(PageStorage_test, WriteMultipleBatchRead)
+TEST_F(PageStorageTest, WriteMultipleBatchRead)
 try
 {
     const UInt64 tag = 0;
@@ -167,7 +167,7 @@ try
 }
 CATCH
 
-TEST_F(PageStorage_test, WriteReadAfterGc)
+TEST_F(PageStorageTest, WriteReadAfterGc)
 try
 {
     const size_t buf_sz = 256;
@@ -234,7 +234,7 @@ try
 }
 CATCH
 
-TEST_F(PageStorage_test, WriteReadGcExternalPage)
+TEST_F(PageStorageTest, WriteReadGcExternalPage)
 try
 {
     {
@@ -309,7 +309,7 @@ try
 }
 CATCH
 
-TEST_F(PageStorage_test, IdempotentDelAndRef)
+TEST_F(PageStorageTest, IdempotentDelAndRef)
 try
 {
     const size_t buf_sz = 1024;
@@ -387,7 +387,7 @@ try
 }
 CATCH
 
-TEST_F(PageStorage_test, ListPageFiles)
+TEST_F(PageStorageTest, ListPageFiles)
 try
 {
     constexpr size_t buf_sz = 128;
@@ -460,7 +460,7 @@ try
 }
 CATCH
 
-TEST_F(PageStorage_test, RenewWriter)
+TEST_F(PageStorageTest, RenewWriter)
 try
 {
     constexpr size_t buf_sz = 100;
@@ -493,7 +493,7 @@ try
 CATCH
 
 /// Check if we can correctly do read / write after restore from disk.
-TEST_F(PageStorage_test, WriteReadRestore)
+TEST_F(PageStorageTest, WriteReadRestore)
 try
 {
     const UInt64 tag = 0;
@@ -620,7 +620,7 @@ try
 }
 CATCH
 
-TEST_F(PageStorage_test, WriteReadWithSpecifyFields)
+TEST_F(PageStorageTest, WriteReadWithSpecifyFields)
 try
 {
     const UInt64 tag = 0;
@@ -787,7 +787,7 @@ try
 }
 CATCH
 
-TEST_F(PageStorage_test, IgnoreIncompleteWriteBatch1)
+TEST_F(PageStorageTest, IgnoreIncompleteWriteBatch1)
 try
 {
     // If there is any incomplete write batch, we should able to ignore those
@@ -873,7 +873,7 @@ try
 }
 CATCH
 
-TEST_F(PageStorage_test, IgnoreIncompleteWriteBatch2)
+TEST_F(PageStorageTest, IgnoreIncompleteWriteBatch2)
 try
 {
     // If there is any incomplete write batch, we should able to ignore those
@@ -961,7 +961,7 @@ CATCH
 /**
  * PageStorage tests with predefine Page1 && Page2
  */
-class PageStorageWith2PagesTest : public PageStorage_test
+class PageStorageWith2PagesTest : public PageStorageTest
 {
 public:
     PageStorageWith2PagesTest() = default;
@@ -969,7 +969,7 @@ public:
 protected:
     void SetUp() override
     {
-        PageStorage_test::SetUp();
+        PageStorageTest::SetUp();
         // put predefine Page1, Page2
         const size_t buf_sz = 1024;
         char buf[buf_sz];
