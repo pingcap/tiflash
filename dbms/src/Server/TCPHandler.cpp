@@ -28,7 +28,7 @@
 #include <IO/Compression/CompressedWriteBuffer.h>
 #include <IO/Compression/CompressionSettings.h>
 #include <IO/Progress.h>
-#include <IO/copyData.h>
+#include <IO/Util/copyData.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/Quota.h>
 #include <Interpreters/SharedQueries.h>

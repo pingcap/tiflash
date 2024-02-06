@@ -23,8 +23,8 @@
 #include <IO/Buffer/WriteBuffer.h>
 #include <IO/Buffer/WriteBufferFromString.h>
 #include <IO/DoubleConverter.h>
-#include <IO/VarInt.h>
-#include <IO/WriteIntText.h>
+#include <IO/Util/VarInt.h>
+#include <IO/Util/WriteIntText.h>
 #include <common/DateLUT.h>
 #include <common/LocalDate.h>
 #include <common/LocalDateTime.h>
@@ -488,7 +488,7 @@ inline void writeXMLString(const StringRef & s, WriteBuffer & buf)
 }
 
 template <typename IteratorSrc, typename IteratorDst>
-void formatHex(IteratorSrc src, IteratorDst dst, const size_t num_bytes);
+void formatHex(IteratorSrc src, IteratorDst dst, size_t num_bytes);
 void formatUUID(const UInt8 * src16, UInt8 * dst36);
 void formatUUID(std::reverse_iterator<const UInt8 *> dst16, UInt8 * dst36);
 

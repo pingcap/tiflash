@@ -61,6 +61,7 @@ add_headers_and_sources(tiflash_common_io src/IO/BaseFile)
 add_headers_and_sources(tiflash_common_io src/IO/Buffer)
 add_headers_and_sources(tiflash_common_io src/IO/Checksum)
 add_headers_and_sources(tiflash_common_io src/IO/Compression)
+add_headers_and_sources(tiflash_common_io src/IO/Util)
 
 add_headers_and_sources(dbms src/Analyzers)
 add_headers_and_sources(dbms src/Core)

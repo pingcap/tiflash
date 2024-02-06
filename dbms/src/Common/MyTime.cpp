@@ -16,7 +16,7 @@
 #include <Common/MyTime.h>
 #include <Common/StringUtils/StringRefUtils.h>
 #include <Common/StringUtils/StringUtils.h>
-#include <IO/WriteHelpers.h>
+#include <IO/Util/WriteHelpers.h>
 #include <Poco/String.h>
 #include <common/StringRef.h>
 #include <common/logger_useful.h>
@@ -323,15 +323,15 @@ MyTimeBase::MyTimeBase(UInt64 packed)
 {
     UInt64 ymdhms = packed >> 24;
     UInt64 ymd = ymdhms >> 17;
-    day = UInt8(ymd & ((1 << 5) - 1));
+    day = static_cast<UInt8>(ymd & ((1 << 5) - 1));
     UInt64 ym = ymd >> 5;
-    month = UInt8(ym % 13);
-    year = UInt16(ym / 13);
+    month = static_cast<UInt8>(ym % 13);
+    year = static_cast<UInt16>(ym / 13);
 
     UInt64 hms = ymdhms & ((1 << 17) - 1);
-    second = UInt8(hms & ((1 << 6) - 1));
-    minute = UInt8((hms >> 6) & ((1 << 6) - 1));
-    hour = UInt16(hms >> 12);
+    second = static_cast<UInt8>(hms & ((1 << 6) - 1));
+    minute = static_cast<UInt8>((hms >> 6) & ((1 << 6) - 1));
+    hour = static_cast<UInt16>(hms >> 12);
 
     micro_second = packed % (1 << 24);
 }
@@ -365,13 +365,13 @@ UInt64 MyTimeBase::toCoreTime() const
 {
     // copied from https://github.com/pingcap/tidb/blob/master/types/time.go
     UInt64 v = 0;
-    v |= (UInt64(micro_second) << MICROSECOND_BIT_FIELD_OFFSET) & MICROSECOND_BIT_FIELD_MASK;
-    v |= (UInt64(second) << SECOND_BIT_FIELD_OFFSET) & SECOND_BIT_FIELD_MASK;
-    v |= (UInt64(minute) << MINUTE_BIT_FIELD_OFFSET) & MINUTE_BIT_FIELD_MASK;
-    v |= (UInt64(hour) << HOUR_BIT_FIELD_OFFSET) & HOUR_BIT_FIELD_MASK;
-    v |= (UInt64(day) << DAY_BIT_FIELD_OFFSET) & DAY_BIT_FIELD_MASK;
-    v |= (UInt64(month) << MONTH_BIT_FIELD_OFFSET) & MONTH_BIT_FIELD_MASK;
-    v |= (UInt64(year) << YEAR_BIT_FIELD_OFFSET) & YEAR_BIT_FIELD_MASK;
+    v |= (static_cast<UInt64>(micro_second) << MICROSECOND_BIT_FIELD_OFFSET) & MICROSECOND_BIT_FIELD_MASK;
+    v |= (static_cast<UInt64>(second) << SECOND_BIT_FIELD_OFFSET) & SECOND_BIT_FIELD_MASK;
+    v |= (static_cast<UInt64>(minute) << MINUTE_BIT_FIELD_OFFSET) & MINUTE_BIT_FIELD_MASK;
+    v |= (static_cast<UInt64>(hour) << HOUR_BIT_FIELD_OFFSET) & HOUR_BIT_FIELD_MASK;
+    v |= (static_cast<UInt64>(day) << DAY_BIT_FIELD_OFFSET) & DAY_BIT_FIELD_MASK;
+    v |= (static_cast<UInt64>(month) << MONTH_BIT_FIELD_OFFSET) & MONTH_BIT_FIELD_MASK;
+    v |= (static_cast<UInt64>(year) << YEAR_BIT_FIELD_OFFSET) & YEAR_BIT_FIELD_MASK;
     return v;
 }
 
@@ -825,7 +825,7 @@ std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(
     {
         // if tz_sign is empty, it's certain that the string literal contains timezone (e.g., 2010-10-10T10:10:10Z),
         // therefore we could safely skip this branch.
-        if (!no_absorb(seps) && !(!tz_minute.empty() && tz_sep.empty()))
+        if (!no_absorb(seps) && (tz_minute.empty() || !tz_sep.empty()))
         {
             // we can't absorb timezone if there is no separate between tz_hour and tz_minute
             if (!tz_hour.empty())
@@ -1107,7 +1107,7 @@ std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(
     // TODO: adjust year is very complex, now we only consider the simplest way.
     if (seps[0].size() <= 2 && !isFloat)
     {
-        if (!(year == 0 && month == 0 && day == 0 && hour == 0 && minute == 0 && second == 0 && frac_str.empty()))
+        if (year != 0 || month != 0 || day != 0 || hour != 0 || minute != 0 || second != 0 || !frac_str.empty())
         {
             year = adjustYear(year);
         }
@@ -1691,7 +1691,7 @@ size_t maxFormattedDateTimeStringLength(const String & format)
 
 bool MyTimeBase::isValid(bool allow_zero_in_date, bool allow_invalid_date) const
 {
-    if (!(year == 0 && month == 0 && day == 0))
+    if (year != 0 || month != 0 || day != 0)
     {
         if (!allow_zero_in_date && (month == 0 || day == 0))
         {

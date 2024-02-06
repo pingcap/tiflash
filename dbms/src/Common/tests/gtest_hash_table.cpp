@@ -16,7 +16,7 @@
 #include <Common/HashTable/HashMap.h>
 #include <Common/HashTable/HashSet.h>
 #include <IO/Buffer/ReadBufferFromString.h>
-#include <IO/WriteHelpers.h>
+#include <IO/Util/WriteHelpers.h>
 #include <Interpreters/AggregationCommon.h>
 #include <gtest/gtest.h>
 

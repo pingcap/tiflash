@@ -14,7 +14,7 @@
 
 #include <IO/Buffer/createReadBufferFromFileBase.h>
 #include <IO/Compression/CompressedReadBufferFromFile.h>
-#include <IO/WriteHelpers.h>
+#include <IO/Util/WriteHelpers.h>
 
 
 namespace DB

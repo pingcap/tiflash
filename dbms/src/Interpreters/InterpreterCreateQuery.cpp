@@ -20,8 +20,8 @@
 #include <Databases/DatabaseFactory.h>
 #include <Databases/IDatabase.h>
 #include <IO/FileProvider.h>
+#include <IO/Util/WriteHelpers.h>
 #include <IO/WriteBufferFromWritableFileBuilder.h>
-#include <IO/WriteHelpers.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/ExpressionAnalyzer.h>

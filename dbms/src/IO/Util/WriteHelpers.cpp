@@ -13,14 +13,14 @@
 // limitations under the License.
 
 #include <Common/hex.h>
-#include <IO/WriteHelpers.h>
+#include <IO/Util/WriteHelpers.h>
 #include <inttypes.h>
 
 
 namespace DB
 {
 template <typename IteratorSrc, typename IteratorDst>
-void formatHex(IteratorSrc src, IteratorDst dst, const size_t num_bytes)
+void formatHex(IteratorSrc src, IteratorDst dst, size_t num_bytes)
 {
     size_t src_pos = 0;
     size_t dst_pos = 0;

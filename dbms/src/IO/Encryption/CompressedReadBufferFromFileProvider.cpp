@@ -15,7 +15,7 @@
 #include <IO/Checksum/ChecksumReadBufferBuilder.h>
 #include <IO/Encryption/CompressedReadBufferFromFileProvider.h>
 #include <IO/ReadBufferFromRandomAccessFileBuilder.h>
-#include <IO/WriteHelpers.h>
+#include <IO/Util/WriteHelpers.h>
 
 
 namespace DB

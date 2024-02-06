@@ -17,7 +17,7 @@
 #include <Common/Stopwatch.h>
 #include <IO/Buffer/WriteBufferFromString.h>
 #include <IO/FileProvider_fwd.h>
-#include <IO/WriteHelpers.h>
+#include <IO/Util/WriteHelpers.h>
 #include <Storages/DeltaMerge/Remote/DataStore/DataStore.h>
 #include <Storages/Page/Config.h>
 #include <Storages/Page/ExternalPageCallbacks.h>

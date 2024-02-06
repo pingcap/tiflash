@@ -14,8 +14,8 @@
 
 #include <DataStreams/CSVRowInputStream.h>
 #include <DataStreams/verbosePrintString.h>
-#include <IO/Operators.h>
-#include <IO/ReadHelpers.h>
+#include <IO/Util/Operators.h>
+#include <IO/Util/ReadHelpers.h>
 
 
 namespace DB

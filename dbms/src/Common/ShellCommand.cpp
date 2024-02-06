@@ -15,7 +15,7 @@
 #include <Common/Exception.h>
 #include <Common/ShellCommand.h>
 #include <IO/Buffer/WriteBufferFromVector.h>
-#include <IO/WriteHelpers.h>
+#include <IO/Util/WriteHelpers.h>
 #include <dlfcn.h>
 #include <fcntl.h>
 #include <port/unistd.h>

@@ -27,9 +27,9 @@
 #include <IO/Buffer/WriteBufferFromPocoSocket.h>
 #include <IO/Compression/CompressedReadBuffer.h>
 #include <IO/Compression/CompressedWriteBuffer.h>
-#include <IO/ReadHelpers.h>
-#include <IO/WriteHelpers.h>
-#include <IO/copyData.h>
+#include <IO/Util/ReadHelpers.h>
+#include <IO/Util/WriteHelpers.h>
+#include <IO/Util/copyData.h>
 #include <Interpreters/ClientInfo.h>
 #include <Poco/Net/NetException.h>
 

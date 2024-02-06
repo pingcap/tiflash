@@ -16,7 +16,7 @@
 #include <Common/ProfileEvents.h>
 #include <Common/Stopwatch.h>
 #include <IO/Buffer/ReadBufferFromFileDescriptor.h>
-#include <IO/WriteHelpers.h>
+#include <IO/Util/WriteHelpers.h>
 #include <errno.h>
 #include <time.h>
 
@@ -139,12 +139,14 @@ off_t ReadBufferFromFileDescriptor::doSeekInFile(off_t offset, int whence)
 
 
 /// Assuming file descriptor supports 'select', check that we have data to read or wait until timeout.
-bool ReadBufferFromFileDescriptor::poll(size_t timeout_microseconds)
+bool ReadBufferFromFileDescriptor::poll(size_t timeout_microseconds) const
 {
     fd_set fds;
     FD_ZERO(&fds);
     FD_SET(fd, &fds);
-    timeval timeout = {time_t(timeout_microseconds / 1000000), suseconds_t(timeout_microseconds % 1000000)};
+    timeval timeout
+        = {static_cast<time_t>(timeout_microseconds / 1000000),
+           static_cast<suseconds_t>(timeout_microseconds % 1000000)};
 
     int res = select(1, &fds, nullptr, nullptr, &timeout);
 

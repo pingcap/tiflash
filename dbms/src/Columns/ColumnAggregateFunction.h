@@ -20,7 +20,7 @@
 #include <Core/Field.h>
 #include <IO/Buffer/ReadBufferFromString.h>
 #include <IO/Buffer/WriteBuffer.h>
-#include <IO/WriteHelpers.h>
+#include <IO/Util/WriteHelpers.h>
 
 
 namespace DB

@@ -14,7 +14,7 @@
 
 #include <DataStreams/XMLRowOutputStream.h>
 #include <IO/Buffer/WriteBufferValidUTF8.h>
-#include <IO/WriteHelpers.h>
+#include <IO/Util/WriteHelpers.h>
 
 
 namespace DB

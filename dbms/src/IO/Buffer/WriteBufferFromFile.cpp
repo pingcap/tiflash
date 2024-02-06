@@ -14,7 +14,7 @@
 
 #include <Common/ProfileEvents.h>
 #include <IO/Buffer/WriteBufferFromFile.h>
-#include <IO/WriteHelpers.h>
+#include <IO/Util/WriteHelpers.h>
 #include <fcntl.h>
 #include <sys/stat.h>
 

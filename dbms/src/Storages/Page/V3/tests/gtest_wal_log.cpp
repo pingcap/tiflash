@@ -23,7 +23,7 @@
 #include <IO/Buffer/createReadBufferFromFileBase.h>
 #include <IO/EncryptionPath.h>
 #include <IO/ReadBufferFromRandomAccessFileBuilder.h>
-#include <IO/WriteHelpers.h>
+#include <IO/Util/WriteHelpers.h>
 #include <Storages/Page/PageUtil.h>
 #include <Storages/Page/V3/LogFile/LogFormat.h>
 #include <Storages/Page/V3/LogFile/LogReader.h>
@@ -168,7 +168,7 @@ public:
         reader = getNewReader(wal_recovery_mode, log_file_num);
     }
 
-    void write(const std::string & msg)
+    static void write(const std::string & msg)
     {
         ReadBufferFromString buff(msg);
 
@@ -190,7 +190,7 @@ public:
 
     /// Some methods to break to written bytes
 
-    void incrementByte(int offset, char delta)
+    static void incrementByte(int offset, char delta)
     {
         char old_one[1] = "";
         PageUtil::readFile(wr_file, offset, old_one, 1, nullptr);
@@ -202,7 +202,7 @@ public:
 
     void shrinkSize(int bytes) { PageUtil::ftruncateFile(wr_file, writtenBytes() - bytes); }
 
-    void fixChecksum(int header_offset, int payload_len, bool recyclable)
+    static void fixChecksum(int header_offset, int payload_len, bool recyclable)
     {
         // Compute crc of type/len/data
         int header_size = recyclable ? Format::RECYCLABLE_HEADER_SIZE : Format::HEADER_SIZE;

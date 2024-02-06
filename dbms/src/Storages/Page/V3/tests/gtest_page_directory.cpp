@@ -16,7 +16,7 @@
 #include <Common/FmtUtils.h>
 #include <Common/SyncPoint/Ctl.h>
 #include <IO/FileProvider.h>
-#include <IO/WriteHelpers.h>
+#include <IO/Util/WriteHelpers.h>
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageConstants.h>
 #include <Storages/Page/PageDefinesBase.h>
