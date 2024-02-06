@@ -22,14 +22,13 @@ DecodingStorageSchemaSnapshot::DecodingStorageSchemaSnapshot(
     const TiDB::TableInfo & table_info_,
     const DM::ColumnDefine & original_handle_,
     Int64 decoding_schema_epoch_,
-    bool has_version_column)
+    bool with_version_column)
     : column_defines{std::move(column_defines_)}
     , pk_is_handle{table_info_.pk_is_handle}
     , is_common_handle{table_info_.is_common_handle}
     , decoding_schema_epoch{decoding_schema_epoch_}
 {
     std::unordered_map<ColumnID, size_t> column_lut(table_info_.columns.size());
-    col_id_to_block_pos.
     // col id -> tidb pos, has no internal cols.
     for (size_t i = 0; i < table_info_.columns.size(); i++)
     {
@@ -41,7 +40,7 @@ DecodingStorageSchemaSnapshot::DecodingStorageSchemaSnapshot(
     for (size_t i = 0; i < column_defines->size(); i++)
     {
         auto & cd = (*column_defines)[i];
-        if (cd.id != VersionColumnID || has_version_column)
+        if (cd.id != VersionColumnID || with_version_column)
         {
             col_id_to_block_pos.insert({cd.id, index_in_block++});
         }
@@ -121,7 +120,7 @@ TMTPKType getTMTPKType(const IDataType & rhs)
     return TMTPKType::UNSPECIFIED;
 }
 
-Block createBlockSortByColumnID(DecodingStorageSchemaSnapshotConstPtr schema_snapshot, bool has_version_column)
+Block createBlockSortByColumnID(DecodingStorageSchemaSnapshotConstPtr schema_snapshot, bool with_version_column)
 {
     Block block;
     // # Safety
@@ -137,7 +136,7 @@ Block createBlockSortByColumnID(DecodingStorageSchemaSnapshotConstPtr schema_sna
         // - (TiDBPkColumnID, _tidb_rowid, i64)
         auto col_id = iter->first;
         auto & cd = (*(schema_snapshot->column_defines))[iter->second];
-        if (!has_version_column && cd.id == VersionColumnID)
+        if (!with_version_column && cd.id == VersionColumnID)
             continue;
         block.insert({cd.type->createColumn(), cd.type, cd.name, col_id});
     }

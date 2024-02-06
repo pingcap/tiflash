@@ -51,7 +51,7 @@ struct DecodingStorageSchemaSnapshot
         const TiDB::TableInfo & table_info_,
         const DM::ColumnDefine & original_handle_,
         Int64 decoding_schema_epoch_,
-        bool has_version_column);
+        bool with_version_column);
 
     DISALLOW_COPY(DecodingStorageSchemaSnapshot);
 
@@ -92,7 +92,7 @@ private:
 using DecodingStorageSchemaSnapshotPtr = std::shared_ptr<DecodingStorageSchemaSnapshot>;
 using DecodingStorageSchemaSnapshotConstPtr = std::shared_ptr<const DecodingStorageSchemaSnapshot>;
 
-Block createBlockSortByColumnID(DecodingStorageSchemaSnapshotConstPtr schema_snapshot, bool has_version_column = true);
+Block createBlockSortByColumnID(DecodingStorageSchemaSnapshotConstPtr schema_snapshot, bool with_version_column = true);
 
 void clearBlockData(Block & block);
 
