@@ -311,8 +311,12 @@ NamesAndTypes TiFlashJoin::genColumnsForOtherJoinFilter(
                       columns_for_other_join_filter.emplace_back(p.name, make_nullable ? makeNullable(p.type) : p.type);
               }
           };
-    append_new_columns(probe_prepare_join_actions->getSampleBlock(), join.join_type() == tipb::JoinType::TypeRightOuterJoin);
-    append_new_columns(build_prepare_join_actions->getSampleBlock(), join.join_type() == tipb::JoinType::TypeLeftOuterJoin);
+    append_new_columns(
+        probe_prepare_join_actions->getSampleBlock(),
+        join.join_type() == tipb::JoinType::TypeRightOuterJoin);
+    append_new_columns(
+        build_prepare_join_actions->getSampleBlock(),
+        join.join_type() == tipb::JoinType::TypeLeftOuterJoin);
 
     return columns_for_other_join_filter;
 }
@@ -355,7 +359,8 @@ void TiFlashJoin::fillJoinOtherConditionsAction(
     const Names & build_key_names,
     JoinNonEqualConditions & join_non_equal_conditions) const
 {
-    auto columns_for_other_join_filter = genColumnsForOtherJoinFilter(left_cols, right_cols, probe_side_prepare_join, build_side_prepare_join);
+    auto columns_for_other_join_filter
+        = genColumnsForOtherJoinFilter(left_cols, right_cols, probe_side_prepare_join, build_side_prepare_join);
 
     if (join.other_conditions_size() == 0 && join.other_eq_conditions_from_in_size() == 0
         && !join.is_null_aware_semi_join())
