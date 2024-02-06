@@ -21,7 +21,7 @@ namespace DB
 {
 struct RegionUncommittedData
 {
-    RegionUncommittedData(RawTiDBPK && pk_, UInt8 && write_type_, std::shared_ptr<const TiKVValue> && value_)
+    RegionUncommittedData(RawTiDBPK && pk_, UInt8 write_type_, std::shared_ptr<const TiKVValue> && value_)
         : pk(std::move(pk_))
         , write_type(write_type_)
         , value(std::move(value_))
