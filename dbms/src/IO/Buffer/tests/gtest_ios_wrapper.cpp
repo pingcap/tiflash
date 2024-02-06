@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <IO/IOSWrapper.h>
 #include <IO/Buffer/ReadBufferFromString.h>
 #include <IO/Buffer/WriteBufferFromString.h>
+#include <IO/IOSWrapper.h>
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wsign-compare"
 #include <gtest/gtest.h>

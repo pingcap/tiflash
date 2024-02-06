@@ -106,7 +106,10 @@ public:
         }
         else
         {
-            [&]() __attribute__((noinline)) { write(reinterpret_cast<const char *>(from), sizeof(T)); }
+            [&]() __attribute__((noinline))
+            {
+                write(reinterpret_cast<const char *>(from), sizeof(T));
+            }
             ();
         }
     }

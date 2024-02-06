@@ -13,8 +13,8 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
-#include <IO/Operators.h>
 #include <IO/Buffer/WriteBufferFromString.h>
+#include <IO/Operators.h>
 #include <IO/WriteHelpers.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
