@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <BaseFile/PosixRandomAccessFile.h>
 #include <Common/FailPoint.h>
 #include <Encryption/MockKeyManager.h>
+#include <IO/BaseFile/PosixRandomAccessFile.h>
 #include <IO/ReadBufferFromRandomAccessFile.h>
 #include <Storages/Page/V3/CheckpointFile/CPFilesWriter.h>
 #include <Storages/Page/V3/CheckpointFile/CPManifestFileReader.h>

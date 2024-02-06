@@ -19,7 +19,7 @@
 #include <Core/SortDescription.h>
 #include <Core/Spiller.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
-#include <IO/CompressedReadBuffer.h>
+#include <IO/Compression/CompressedReadBuffer.h>
 #include <IO/ReadBufferFromFile.h>
 #include <Interpreters/SortSpillContext.h>
 #include <Poco/TemporaryFile.h>

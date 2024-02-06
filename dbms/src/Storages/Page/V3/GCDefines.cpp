@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <BaseFile/RateLimiter.h>
 #include <Common/FailPoint.h>
 #include <Common/SyncPoint/SyncPoint.h>
 #include <Common/TiFlashMetrics.h>
+#include <IO/BaseFile/RateLimiter.h>
 #include <Poco/Message.h>
 #include <Storages/Page/V3/GCDefines.h>
 #include <fmt/format.h>

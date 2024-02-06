@@ -14,9 +14,9 @@
 
 #pragma once
 
-#include <BaseFile/IORateLimitConfig.h>
 #include <Common/Stopwatch.h>
 #include <Common/nocopyable.h>
+#include <IO/BaseFile/IORateLimitConfig.h>
 #include <fmt/std.h>
 
 #include <atomic>

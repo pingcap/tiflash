@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <IO/AsynchronousWriteBuffer.h>
-#include <IO/CompressedWriteBuffer.h>
+#include <IO/Compression/CompressedWriteBuffer.h>
 #include <IO/ReadBufferFromFileDescriptor.h>
 #include <IO/WriteBufferFromFileDescriptor.h>
 #include <IO/copyData.h>

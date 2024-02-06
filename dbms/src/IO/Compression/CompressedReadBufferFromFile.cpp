@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <IO/CompressedReadBufferFromFile.h>
+#include <IO/Compression/CompressedReadBufferFromFile.h>
 #include <IO/WriteHelpers.h>
 #include <IO/createReadBufferFromFileBase.h>
 
@@ -33,6 +33,7 @@ bool CompressedReadBufferFromFile<has_checksum>::nextImpl()
     if (!size_compressed)
         return false;
 
+    assert(size_decompressed > 0 && size_compressed_without_checksum > 0);
     memory.resize(size_decompressed);
     working_buffer = Buffer(&memory[0], &memory[size_decompressed]);
 
@@ -117,6 +118,7 @@ size_t CompressedReadBufferFromFile<has_checksum>::readBig(char * to, size_t n)
         {
             size_compressed = new_size_compressed;
             bytes += offset();
+            assert(size_decompressed > 0 && size_compressed_without_checksum > 0);
             memory.resize(size_decompressed);
             working_buffer = Buffer(&memory[0], &memory[size_decompressed]);
             pos = working_buffer.begin();

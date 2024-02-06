@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include <IO/CompressedReadBufferBase.h>
+#include <IO/Compression/CompressedReadBufferBase.h>
 #include <IO/ReadBufferFromFileBase.h>
 #include <time.h>
 

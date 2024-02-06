@@ -14,9 +14,9 @@
 
 #pragma once
 
-#include <BaseFile/fwd.h>
 #include <Common/Logger.h>
 #include <Common/nocopyable.h>
+#include <IO/BaseFile/fwd.h>
 #include <Interpreters/Settings_fwd.h>
 #include <Poco/Util/AbstractConfiguration.h>
 #include <Server/StorageConfigParser.h>
@@ -244,7 +244,7 @@ public:
     static void prepareParentDir(const String & local_fname);
     static bool isS3Filename(const String & fname);
     String toLocalFilename(const String & s3_key);
-    String toS3Key(const String & local_fname);
+    String toS3Key(const String & local_fname) const;
 
     void restore();
     void restoreWriteNode(const std::filesystem::directory_entry & write_node_entry);
@@ -257,7 +257,7 @@ public:
         const String & s3_key,
         FileSegmentPtr & f,
         bool force = false);
-    void removeDiskFile(const String & local_fname);
+    void removeDiskFile(const String & local_fname) const;
 
     // Estimated size is an empirical value.
     // We don't know object size before get object from S3.

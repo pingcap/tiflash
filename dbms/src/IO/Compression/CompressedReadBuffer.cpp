@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <Common/config.h>
-#include <IO/CompressedReadBuffer.h>
+#include <IO/Compression/CompressedReadBuffer.h>
 
 namespace DB
 {

@@ -15,38 +15,32 @@
 #pragma once
 
 #include <IO/BufferWithOwnMemory.h>
+#include <IO/Compression/CompressedReadBufferBase.h>
 #include <IO/ReadBuffer.h>
-#include <IO/ZlibCompressionMethod.h>
-#include <zlib.h>
 
 
 namespace DB
 {
-namespace ErrorCodes
+template <bool has_checksum = true>
+class CompressedReadBuffer
+    : public CompressedReadBufferBase<has_checksum>
+    , public BufferWithOwnMemory<ReadBuffer>
 {
-extern const int ZLIB_INFLATE_FAILED;
-}
-
-/// Reads compressed data from ReadBuffer in_ and performs decompression using zlib library.
-/// This buffer is able to seamlessly decompress multiple concatenated zlib streams.
-class ZlibInflatingReadBuffer : public BufferWithOwnMemory<ReadBuffer>
-{
-public:
-    ZlibInflatingReadBuffer(
-        ReadBuffer & in_,
-        ZlibCompressionMethod compression_method,
-        size_t buf_size = DBMS_DEFAULT_BUFFER_SIZE,
-        char * existing_memory = nullptr,
-        size_t alignment = 0);
-
-    ~ZlibInflatingReadBuffer() override;
-
 private:
+    size_t size_compressed = 0;
+
     bool nextImpl() override;
 
-    ReadBuffer & in;
-    z_stream zstr;
-    bool eof;
+public:
+    CompressedReadBuffer(ReadBuffer & in_)
+        : CompressedReadBufferBase<has_checksum>(&in_)
+        , BufferWithOwnMemory<ReadBuffer>(0)
+    {}
+
+    size_t readBig(char * to, size_t n) override;
+
+    /// The compressed size of the current block.
+    size_t getSizeCompressed() const { return size_compressed; }
 };
 
 } // namespace DB

@@ -12,15 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <BaseFile/PosixRandomAccessFile.h>
-#include <BaseFile/PosixWritableFile.h>
-#include <BaseFile/PosixWriteReadableFile.h>
 #include <Common/TiFlashException.h>
 #include <Encryption/EncryptedRandomAccessFile.h>
 #include <Encryption/EncryptedWritableFile.h>
 #include <Encryption/EncryptedWriteReadableFile.h>
 #include <Encryption/FileProvider.h>
 #include <Encryption/KeyspacesKeyManager.h>
+#include <IO/BaseFile/PosixRandomAccessFile.h>
+#include <IO/BaseFile/PosixWritableFile.h>
+#include <IO/BaseFile/PosixWriteReadableFile.h>
 #include <Poco/File.h>
 #include <Poco/Path.h>
 #include <Storages/KVStore/FFI/FileEncryption.h>
