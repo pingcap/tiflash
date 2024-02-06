@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include <IO/CompressedStream.h>
+#include <IO/Compression/CompressedStream.h>
 
 
 namespace DB

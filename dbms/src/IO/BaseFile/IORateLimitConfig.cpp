@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <BaseFile/IORateLimitConfig.h>
 #include <Common/Logger.h>
+#include <IO/BaseFile/IORateLimitConfig.h>
 
 #if !__clang__
 #pragma GCC diagnostic push

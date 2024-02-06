@@ -16,7 +16,7 @@
 
 #if USE_QPL
 #include <Common/Exception.h>
-#include <IO/CodecDeflateQpl.h>
+#include <IO/Compression/CodecDeflateQpl.h>
 
 #include <cassert>
 #include <memory>

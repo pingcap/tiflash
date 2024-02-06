@@ -16,8 +16,8 @@
 #include <Common/PODArray.h>
 #include <Common/ProfileEvents.h>
 #include <IO/BufferWithOwnMemory.h>
-#include <IO/CompressedReadBufferBase.h>
-#include <IO/CompressedStream.h>
+#include <IO/Compression/CompressedReadBufferBase.h>
+#include <IO/Compression/CompressedStream.h>
 #include <IO/ReadBuffer.h>
 #include <IO/WriteHelpers.h>
 #include <city.h>
@@ -29,7 +29,7 @@
 #include <vector>
 
 #if USE_QPL
-#include <IO/CodecDeflateQpl.h>
+#include <IO/Compression/CodecDeflateQpl.h>
 #endif
 
 namespace DB

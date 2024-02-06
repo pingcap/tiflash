@@ -21,7 +21,6 @@
 #include <Encryption/FileProvider.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <IO/Checksum/ChecksumReadBufferBuilder.h>
-#include <IO/CompressedReadBuffer.h>
 #include <Poco/File.h>
 #include <Poco/Thread_STD.h>
 #include <Storages/DeltaMerge/DMContext.h>
