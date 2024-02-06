@@ -106,7 +106,7 @@ struct AtomicReadWriteCtx
     UInt64 write_part_cost = -1;
 };
 
-static void writeCommittedBlockDataIntoStorage(
+static void inline writeCommittedBlockDataIntoStorage(
     AtomicReadWriteCtx & rw_ctx,
     TableStructureLockHolder & lock,
     ManageableStoragePtr & storage,
@@ -140,7 +140,6 @@ static void writeCommittedBlockDataIntoStorage(
 
 template <typename ReadList>
 static inline bool atomicReadWrite(
-    const LoggerPtr & log,
     AtomicReadWriteCtx & rw_ctx,
     const RegionPtrWithBlock & region,
     ReadList & data_list_read,
@@ -196,7 +195,7 @@ static inline bool atomicReadWrite(
     if likely (need_decode)
     {
         LOG_TRACE(
-            log,
+            rw_ctx.log,
             "begin to decode keyspace={} table_id={} region_id={}",
             rw_ctx.keyspace_id,
             rw_ctx.table_id,
@@ -232,7 +231,7 @@ static inline bool atomicReadWrite(
         RUNTIME_CHECK(false);
     }
     LOG_TRACE(
-        log,
+        rw_ctx.log,
         "keyspace={} table_id={} region_id={} cost [region decode {}, write part {}] ms",
         rw_ctx.keyspace_id,
         rw_ctx.table_id,
