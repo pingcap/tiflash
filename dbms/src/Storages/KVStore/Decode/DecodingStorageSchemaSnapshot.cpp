@@ -126,16 +126,14 @@ Block createBlockSortByColumnID(DecodingStorageSchemaSnapshotConstPtr schema_sna
     // # Safety
     // Though `col_id_to_block_pos` lasks some fields in `col_id_to_def_pos`,
     // it is always a sub-sequence of `col_id_to_def_pos`.
-    for (auto iter = schema_snapshot->getColId2DefPosMap().begin(); iter != schema_snapshot->getColId2DefPosMap().end();
-         iter++)
+    for (const auto & [col_id, def_pos] : schema_snapshot->getColId2DefPosMap())
     {
         // col_id == cd.id
         // Including some internal columns:
         // - (VersionColumnID, _INTERNAL_VERSION, u64)
         // - (DelMarkColumnID, _INTERNAL_DELMARK, u8)
         // - (TiDBPkColumnID, _tidb_rowid, i64)
-        auto col_id = iter->first;
-        auto & cd = (*(schema_snapshot->column_defines))[iter->second];
+        auto & cd = (*(schema_snapshot->column_defines))[def_pos];
         if (!with_version_column && cd.id == VersionColumnID)
             continue;
         block.insert({cd.type->createColumn(), cd.type, cd.name, col_id});
