@@ -41,7 +41,7 @@ XMLRowOutputStream::XMLRowOutputStream(WriteBuffer & ostr_, const Block & sample
         for (const char * pos = begin; pos != end; ++pos)
         {
             char c = *pos;
-            if (!(isAlphaASCII(c) || (pos != begin && isNumericASCII(c)) || c == '_' || c == '-' || c == '.'))
+            if (!isAlphaASCII(c) && (pos == begin || !isNumericASCII(c)) && c != '_' && c != '-' && c != '.')
             {
                 is_column_name_suitable = false;
                 break;

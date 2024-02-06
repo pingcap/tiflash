@@ -191,7 +191,7 @@ UInt64 stringToDateTime(const String & s)
     if (!in.eof())
         throw Exception("String is too long for DateTime: " + s);
 
-    return UInt64(date_time);
+    return static_cast<UInt64>(date_time);
 }
 
 UInt128 stringToUUID(const String & s)

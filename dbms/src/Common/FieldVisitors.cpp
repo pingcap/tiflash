@@ -190,7 +190,7 @@ String FieldVisitorToString::operator()(const Array & x) const
     WriteBufferFromOwnString wb;
 
     writeChar('[', wb);
-    for (Array::const_iterator it = x.begin(); it != x.end(); ++it)
+    for (auto it = x.begin(); it != x.end(); ++it)
     {
         if (it != x.begin())
             wb.write(", ", 2);
@@ -279,7 +279,7 @@ String FieldVisitorToDebugString::operator()(const Array & x) const
     WriteBufferFromOwnString wb;
 
     writeChar('[', wb);
-    for (Array::const_iterator it = x.begin(); it != x.end(); ++it)
+    for (auto it = x.begin(); it != x.end(); ++it)
     {
         if (it != x.begin())
             wb.write(", ", 2);

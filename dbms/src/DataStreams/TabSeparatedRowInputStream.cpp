@@ -208,7 +208,7 @@ bool TabSeparatedRowInputStream::parseRowAndPrintDiagnosticInfo(
             << "type: " << data_types[i]->getName() << ", "
             << std::string(max_length_of_data_type_name - data_types[i]->getName().size(), ' ');
 
-        auto prev_position = istr.position();
+        auto * prev_position = istr.position();
         std::exception_ptr exception;
 
         try
@@ -220,7 +220,7 @@ bool TabSeparatedRowInputStream::parseRowAndPrintDiagnosticInfo(
             exception = std::current_exception();
         }
 
-        auto curr_position = istr.position();
+        auto * curr_position = istr.position();
 
         if (curr_position < prev_position)
             throw Exception("Logical error: parsing is non-deterministic.", ErrorCodes::LOGICAL_ERROR);

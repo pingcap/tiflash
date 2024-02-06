@@ -531,7 +531,7 @@ static ReturnType checkBlockStructure(const Block & lhs, const Block & rhs, cons
         }
     }
 
-    return ReturnType(true);
+    return static_cast<ReturnType>(true);
 }
 
 /// join blocks by columns

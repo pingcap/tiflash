@@ -40,7 +40,7 @@ void OwnPatternFormatter::format(const Poco::Message & msg, std::string & text)
     }
 
     /// Output time with microsecond resolution.
-    timeval tv;
+    timeval tv{};
     if (0 != gettimeofday(&tv, nullptr))
         DB::throwFromErrno("Cannot gettimeofday");
 

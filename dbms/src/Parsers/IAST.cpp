@@ -50,7 +50,7 @@ String backQuoteIfNeed(const String & x)
 }
 
 
-void IAST::writeAlias(const String & name, std::ostream & s, bool hilite) const
+void IAST::writeAlias(const String & name, std::ostream & s, bool hilite)
 {
     s << (hilite ? hilite_keyword : "") << " AS " << (hilite ? hilite_alias : "");
 

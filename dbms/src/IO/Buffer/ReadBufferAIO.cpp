@@ -113,10 +113,11 @@ bool ReadBufferAIO::nextImpl()
 
     if (profile_callback)
     {
-        ProfileInfo info;
-        info.bytes_requested = requested_byte_count;
-        info.bytes_read = bytes_read;
-        info.nanoseconds = watch->elapsed();
+        ProfileInfo info{
+            .bytes_requested = requested_byte_count,
+            .bytes_read = static_cast<size_t>(bytes_read),
+            .nanoseconds = watch->elapsed(),
+        };
         profile_callback(info);
     }
 

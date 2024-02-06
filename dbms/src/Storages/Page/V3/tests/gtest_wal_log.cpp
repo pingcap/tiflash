@@ -85,7 +85,7 @@ private:
     {
     public:
         size_t dropped_bytes;
-        String message;
+        String message{};
 
         ReportCollector()
             : dropped_bytes(0)
@@ -98,13 +98,13 @@ private:
     };
 
     ReportCollector report;
-    std::unique_ptr<LogWriter> writer;
-    std::unique_ptr<LogReader> reader;
-    LoggerPtr log;
+    std::unique_ptr<LogWriter> writer{};
+    std::unique_ptr<LogReader> reader{};
+    LoggerPtr log{};
 
 protected:
-    String path;
-    String file_name;
+    String path{};
+    String file_name{};
     FileProviderPtr provider;
     WriteReadableFilePtr wr_file;
 

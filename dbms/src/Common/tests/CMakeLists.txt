@@ -12,8 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_subdirectory(StringUtils)
-
-if (ENABLE_TESTS)
-    add_subdirectory (tests EXCLUDE_FROM_ALL)
-endif ()
+add_executable(bench_common
+    bench_logger.cpp
+)
+target_link_libraries(bench_common benchmark::benchmark_main tiflash_common_io)

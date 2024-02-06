@@ -31,7 +31,7 @@ using namespace DB;
 template <typename T>
 struct DummyHash
 {
-    size_t operator()(T key) const { return T(key); }
+    size_t operator()(T key) const { return (key); }
 };
 
 template <typename HashTable>

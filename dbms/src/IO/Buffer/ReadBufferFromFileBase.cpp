@@ -20,7 +20,7 @@ ReadBufferFromFileBase::ReadBufferFromFileBase(size_t buf_size, char * existing_
     : BufferWithOwnMemory<ReadBuffer>(buf_size, existing_memory, alignment)
 {}
 
-ReadBufferFromFileBase::~ReadBufferFromFileBase() {}
+ReadBufferFromFileBase::~ReadBufferFromFileBase() = default;
 
 off_t ReadBufferFromFileBase::seek(off_t off, int whence)
 {

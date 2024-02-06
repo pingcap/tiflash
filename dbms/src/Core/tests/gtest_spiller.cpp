@@ -53,7 +53,7 @@ protected:
         if (spiller_dir.exists())
             spiller_dir.remove(true);
     }
-    Blocks generateBlocks(size_t block_num, const Block & schema)
+    static Blocks generateBlocks(size_t block_num, const Block & schema)
     {
         Blocks ret;
         for (size_t i = 0; i < block_num; ++i)

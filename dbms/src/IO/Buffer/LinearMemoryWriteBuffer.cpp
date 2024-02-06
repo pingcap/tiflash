@@ -43,7 +43,7 @@ public:
         return setChunk();
     }
 
-    ~ReadBufferFromLinearMemoryWriteBuffer()
+    ~ReadBufferFromLinearMemoryWriteBuffer() override
     {
         for (const auto & range : chunk_list)
             allocator.free(range.begin(), range.size());
@@ -113,7 +113,7 @@ void LinearMemoryWriteBuffer::addChunk()
         chunk_tail = chunk_list.before_begin();
     }
 
-    Position begin = reinterpret_cast<Position>(allocator.alloc(chunk_size));
+    auto * begin = reinterpret_cast<Position>(allocator.alloc(chunk_size));
     chunk_tail = chunk_list.emplace_after(chunk_tail, begin, begin + chunk_size);
     total_chunks_size += chunk_size;
 

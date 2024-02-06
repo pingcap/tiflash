@@ -440,7 +440,7 @@ try
         auto page_files = storage->listAllPageFiles(file_provider, storage->delegator, storage->log, opt);
         // Legacy should be ignored
         ASSERT_EQ(page_files.size(), 1UL);
-        for (auto & page_file : page_files)
+        for (const auto & page_file : page_files)
         {
             EXPECT_TRUE(page_file.getType() != PageFile::Type::Legacy);
         }
@@ -452,7 +452,7 @@ try
         auto page_files = storage->listAllPageFiles(file_provider, storage->delegator, storage->log, opt);
         // Snapshot should be ignored
         ASSERT_EQ(page_files.size(), 1UL);
-        for (auto & page_file : page_files)
+        for (const auto & page_file : page_files)
         {
             EXPECT_TRUE(page_file.getType() != PageFile::Type::Checkpoint);
         }
@@ -849,7 +849,7 @@ try
         ASSERT_EQ(page1.data.size(), buf_sz);
         for (size_t i = 0; i < page1.data.size(); ++i)
         {
-            auto p = page1.data.begin();
+            const auto * p = page1.data.begin();
             EXPECT_EQ(*p, 0x02);
         }
     }
@@ -866,7 +866,7 @@ try
         ASSERT_EQ(page1.data.size(), buf_sz);
         for (size_t i = 0; i < page1.data.size(); ++i)
         {
-            auto p = page1.data.begin();
+            const auto * p = page1.data.begin();
             EXPECT_EQ(*p, 0x02);
         }
     }
@@ -934,7 +934,7 @@ try
         ASSERT_EQ(page1.data.size(), buf_sz);
         for (size_t i = 0; i < page1.data.size(); ++i)
         {
-            auto p = page1.data.begin();
+            const auto * p = page1.data.begin();
             EXPECT_EQ(*p, 0x02);
         }
     }
@@ -951,7 +951,7 @@ try
         ASSERT_EQ(page1.data.size(), buf_sz);
         for (size_t i = 0; i < page1.data.size(); ++i)
         {
-            auto p = page1.data.begin();
+            const auto * p = page1.data.begin();
             EXPECT_EQ(*p, 0x02);
         }
     }
@@ -961,12 +961,10 @@ CATCH
 /**
  * PageStorage tests with predefine Page1 && Page2
  */
-class PageStorageWith2Pages_test : public PageStorage_test
+class PageStorageWith2PagesTest : public PageStorage_test
 {
 public:
-    PageStorageWith2Pages_test()
-        : PageStorage_test()
-    {}
+    PageStorageWith2PagesTest() = default;
 
 protected:
     void SetUp() override
@@ -990,7 +988,7 @@ protected:
     }
 };
 
-TEST_F(PageStorageWith2Pages_test, UpdateRefPages)
+TEST_F(PageStorageWith2PagesTest, UpdateRefPages)
 {
     /// update on RefPage, all references get updated.
     const UInt64 tag = 0;
@@ -1045,7 +1043,7 @@ TEST_F(PageStorageWith2Pages_test, UpdateRefPages)
     }
 }
 
-TEST_F(PageStorageWith2Pages_test, DeleteRefPages)
+TEST_F(PageStorageWith2PagesTest, DeleteRefPages)
 {
     // put ref page: RefPage3 -> Page2, RefPage4 -> Page2
     {
@@ -1073,7 +1071,7 @@ TEST_F(PageStorageWith2Pages_test, DeleteRefPages)
     }
 }
 
-TEST_F(PageStorageWith2Pages_test, PutRefPagesOverRefPages)
+TEST_F(PageStorageWith2PagesTest, PutRefPagesOverRefPages)
 {
     /// put ref page to ref page, ref path collapse to normal page
     {
@@ -1114,7 +1112,7 @@ TEST_F(PageStorageWith2Pages_test, PutRefPagesOverRefPages)
     }
 }
 
-TEST_F(PageStorageWith2Pages_test, PutDuplicateRefPages)
+TEST_F(PageStorageWith2PagesTest, PutDuplicateRefPages)
 {
     /// put duplicated RefPages in different WriteBatch
     {
@@ -1157,7 +1155,7 @@ TEST_F(PageStorageWith2Pages_test, PutDuplicateRefPages)
     }
 }
 
-TEST_F(PageStorageWith2Pages_test, PutCollapseDuplicatedRefPages)
+TEST_F(PageStorageWith2PagesTest, PutCollapseDuplicatedRefPages)
 {
     /// put duplicated RefPages due to ref-path-collapse
     {
@@ -1208,7 +1206,7 @@ TEST_F(PageStorageWith2Pages_test, PutCollapseDuplicatedRefPages)
     }
 }
 
-TEST_F(PageStorageWith2Pages_test, AddRefPageToNonExistPage)
+TEST_F(PageStorageWith2PagesTest, AddRefPageToNonExistPage)
 try
 {
     {
@@ -1267,7 +1265,7 @@ CurrentMetrics::Value getPSMVCCNumSnapshots()
 } // namespace
 
 
-TEST_F(PageStorageWith2Pages_test, SnapshotReadSnapshotVersion)
+TEST_F(PageStorageWith2PagesTest, SnapshotReadSnapshotVersion)
 {
     char ch_before = 0x01;
     char ch_update = 0xFF;
@@ -1331,7 +1329,7 @@ TEST_F(PageStorageWith2Pages_test, SnapshotReadSnapshotVersion)
     }
 }
 
-TEST_F(PageStorageWith2Pages_test, GetIdenticalSnapshots)
+TEST_F(PageStorageWith2PagesTest, GetIdenticalSnapshots)
 {
     char ch_before = 0x01;
     char ch_update = 0xFF;
