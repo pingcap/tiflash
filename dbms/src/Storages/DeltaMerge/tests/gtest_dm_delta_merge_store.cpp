@@ -1576,7 +1576,8 @@ try
     auto create_block = [&](UInt64 beg, UInt64 end, UInt64 value) {
         constexpr UInt64 ts = 1; // Always use the same ts.
         auto block = DMTestEnv::prepareSimpleWriteBlock(beg, end, false, ts);
-        block.insert(createColumn<UInt64>(std::vector<UInt64>(end - beg + 1, value), value_col_name, value_col_id));
+        block.insert(createColumn<UInt64>(std::vector<UInt64>(end - beg, value), value_col_name, value_col_id));
+        block.checkNumberOfRows();
         return block;
     };
 

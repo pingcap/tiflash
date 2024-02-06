@@ -394,38 +394,18 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
             examine_buffer_size(*stream->mark_file, *this->file_provider);
             examine_buffer_size(*stream->plain_file, *this->file_provider);
 #endif
-            // TODO: these two branch can be merge.
-            if (!dmfile->configuration)
-            { // v1
-                col_stat.serialized_bytes
-                    += stream->plain_file->getMaterializedBytes() + stream->mark_file->getMaterializedBytes();
-                if (is_null)
-                {
-                    col_stat.nullmap_data_bytes = stream->plain_file->getMaterializedBytes();
-                    col_stat.nullmap_mark_bytes = stream->mark_file->getMaterializedBytes();
-                }
-                else
-                {
-                    col_stat.data_bytes = stream->plain_file->getMaterializedBytes();
-                    col_stat.mark_bytes = stream->mark_file->getMaterializedBytes();
-                }
+            col_stat.serialized_bytes
+                += stream->plain_file->getMaterializedBytes() + stream->mark_file->getMaterializedBytes();
+            if (is_null)
+            {
+                col_stat.nullmap_data_bytes = stream->plain_file->getMaterializedBytes();
+                col_stat.nullmap_mark_bytes = stream->mark_file->getMaterializedBytes();
             }
             else
-            { // v2
-                col_stat.serialized_bytes
-                    += stream->plain_file->getMaterializedBytes() + stream->mark_file->getMaterializedBytes();
-                if (is_null)
-                {
-                    col_stat.nullmap_data_bytes = stream->plain_file->getMaterializedBytes();
-                    col_stat.nullmap_mark_bytes = stream->mark_file->getMaterializedBytes();
-                }
-                else
-                {
-                    col_stat.data_bytes = stream->plain_file->getMaterializedBytes();
-                    col_stat.mark_bytes = stream->mark_file->getMaterializedBytes();
-                }
+            {
+                col_stat.data_bytes = stream->plain_file->getMaterializedBytes();
+                col_stat.mark_bytes = stream->mark_file->getMaterializedBytes();
             }
-
 
             if (stream->minmaxes)
             {
@@ -456,7 +436,6 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
         }
     };
     type->enumerateStreams(callback, {});
-
 }
 
 } // namespace DB::DM
