@@ -252,46 +252,46 @@ void QuotaForIntervals::setMax(const QuotaForIntervals & quota)
 
 void QuotaForIntervals::checkExceeded(time_t current_time)
 {
-    for (auto & it : std::ranges::reverse_view(cont))
-        it.second.checkExceeded(current_time, quota_name, user_name);
+    for (auto it = cont.rbegin(); it != cont.rend(); ++it)
+        it->second.checkExceeded(current_time, quota_name, user_name);
 }
 
 void QuotaForIntervals::addQuery() noexcept
 {
-    for (auto & it : std::ranges::reverse_view(cont))
-        it.second.addQuery();
+    for (auto it = cont.rbegin(); it != cont.rend(); ++it)
+        it->second.addQuery();
 }
 
 void QuotaForIntervals::addError() noexcept
 {
-    for (auto & it : std::ranges::reverse_view(cont))
-        it.second.addError();
+    for (auto it = cont.rbegin(); it != cont.rend(); ++it)
+        it->second.addError();
 }
 
 void QuotaForIntervals::checkAndAddResultRowsBytes(time_t current_time, size_t rows, size_t bytes)
 {
-    for (auto & it : std::ranges::reverse_view(cont))
-        it.second.checkAndAddResultRowsBytes(current_time, quota_name, user_name, rows, bytes);
+    for (auto it = cont.rbegin(); it != cont.rend(); ++it)
+        it->second.checkAndAddResultRowsBytes(current_time, quota_name, user_name, rows, bytes);
 }
 
 void QuotaForIntervals::checkAndAddReadRowsBytes(time_t current_time, size_t rows, size_t bytes)
 {
-    for (auto & it : std::ranges::reverse_view(cont))
-        it.second.checkAndAddReadRowsBytes(current_time, quota_name, user_name, rows, bytes);
+    for (auto it = cont.rbegin(); it != cont.rend(); ++it)
+        it->second.checkAndAddReadRowsBytes(current_time, quota_name, user_name, rows, bytes);
 }
 
 void QuotaForIntervals::checkAndAddExecutionTime(time_t current_time, Poco::Timespan amount)
 {
-    for (auto & it : std::ranges::reverse_view(cont))
-        it.second.checkAndAddExecutionTime(current_time, quota_name, user_name, amount);
+    for (auto it = cont.rbegin(); it != cont.rend(); ++it)
+        it->second.checkAndAddExecutionTime(current_time, quota_name, user_name, amount);
 }
 
 String QuotaForIntervals::toString() const
 {
     std::stringstream res;
 
-    for (const auto & it : std::ranges::reverse_view(cont))
-        res << std::endl << it.second.toString();
+    for (auto it = cont.rbegin(); it != cont.rend(); ++it)
+        res << std::endl << it->second.toString();
 
     return res.str();
 }
