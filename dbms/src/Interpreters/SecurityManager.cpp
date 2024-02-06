@@ -13,8 +13,8 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
-#include <IO/HexWriteBuffer.h>
-#include <IO/WriteBufferFromString.h>
+#include <IO/Buffer/HexWriteBuffer.h>
+#include <IO/Buffer/WriteBufferFromString.h>
 #include <IO/WriteHelpers.h>
 #include <Interpreters/SecurityManager.h>
 #include <Poco/Net/IPAddress.h>

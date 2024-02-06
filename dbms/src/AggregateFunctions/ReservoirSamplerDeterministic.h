@@ -18,7 +18,7 @@
 #include <Common/HashTable/Hash.h>
 #include <Common/NaNUtils.h>
 #include <Common/PODArray.h>
-#include <IO/ReadBuffer.h>
+#include <IO/Buffer/ReadBuffer.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
 #include <Poco/Exception.h>

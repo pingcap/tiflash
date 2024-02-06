@@ -13,8 +13,8 @@
 // limitations under the License.
 
 #include <Core/SortDescription.h>
+#include <IO/Buffer/WriteBufferFromString.h>
 #include <IO/Operators.h>
-#include <IO/WriteBufferFromString.h>
 #include <TiDB/Collation/Collator.h>
 
 #include <sstream>

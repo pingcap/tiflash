@@ -16,8 +16,8 @@
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/hex.h>
 #include <Core/Defines.h>
+#include <IO/Buffer/WriteBufferFromString.h>
 #include <IO/Operators.h>
-#include <IO/WriteBufferFromString.h>
 #include <IO/WriteHelpers.h>
 #include <IO/readFloatText.h>
 #include <common/find_symbols.h>

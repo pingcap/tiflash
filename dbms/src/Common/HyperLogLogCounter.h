@@ -18,9 +18,9 @@
 #include <Common/HashTable/Hash.h>
 #include <Common/HyperLogLogBiasEstimator.h>
 #include <Core/Defines.h>
-#include <IO/ReadBuffer.h>
+#include <IO/Buffer/ReadBuffer.h>
+#include <IO/Buffer/WriteBuffer.h>
 #include <IO/ReadHelpers.h>
-#include <IO/WriteBuffer.h>
 #include <IO/WriteHelpers.h>
 #include <common/types.h>
 

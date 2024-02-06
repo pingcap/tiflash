@@ -14,8 +14,8 @@
 
 #include <Common/CurrentMetrics.h>
 #include <Common/TiFlashMetrics.h>
-#include <IO/ReadBuffer.h>
-#include <IO/ReadBufferFromString.h>
+#include <IO/Buffer/ReadBuffer.h>
+#include <IO/Buffer/ReadBufferFromString.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/Remote/RNLocalPageCache.h>

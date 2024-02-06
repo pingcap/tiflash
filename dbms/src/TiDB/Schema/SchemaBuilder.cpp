@@ -23,7 +23,7 @@
 #include <Databases/DatabaseTiFlash.h>
 #include <Debug/MockSchemaGetter.h>
 #include <Debug/MockSchemaNameMapper.h>
-#include <Encryption/FileProvider.h>
+#include <IO/FileProvider.h>
 #include <IO/WriteHelpers.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterAlterQuery.h>

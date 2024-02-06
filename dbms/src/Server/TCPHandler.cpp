@@ -22,12 +22,12 @@
 #include <DataStreams/AsynchronousBlockInputStream.h>
 #include <DataStreams/NativeBlockInputStream.h>
 #include <DataStreams/NativeBlockOutputStream.h>
+#include <IO/Buffer/ReadBufferFromPocoSocket.h>
+#include <IO/Buffer/WriteBufferFromPocoSocket.h>
 #include <IO/Compression/CompressedReadBuffer.h>
 #include <IO/Compression/CompressedWriteBuffer.h>
 #include <IO/Compression/CompressionSettings.h>
 #include <IO/Progress.h>
-#include <IO/ReadBufferFromPocoSocket.h>
-#include <IO/WriteBufferFromPocoSocket.h>
 #include <IO/copyData.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/Quota.h>

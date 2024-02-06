@@ -20,10 +20,10 @@
 #include <Common/nocopyable.h>
 #include <Core/Defines.h>
 #include <Core/Types.h>
-#include <IO/ReadBuffer.h>
+#include <IO/Buffer/ReadBuffer.h>
+#include <IO/Buffer/WriteBuffer.h>
 #include <IO/ReadHelpers.h>
 #include <IO/VarInt.h>
-#include <IO/WriteBuffer.h>
 #include <IO/WriteHelpers.h>
 #include <common/likely.h>
 #include <math.h>

@@ -15,7 +15,7 @@
 #include <Common/Logger.h>
 #include <Common/RedactHelpers.h>
 #include <Common/StringUtils/StringUtils.h>
-#include <Encryption/ReadBufferFromRandomAccessFileBuilder.h>
+#include <IO/ReadBufferFromRandomAccessFileBuilder.h>
 #include <IO/WriteHelpers.h>
 #include <Poco/DirectoryIterator.h>
 #include <Poco/File.h>

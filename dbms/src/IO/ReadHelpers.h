@@ -21,8 +21,8 @@
 #include <Common/StringUtils/StringUtils.h>
 #include <Core/Types.h>
 #include <Core/UUID.h>
-#include <IO/ReadBuffer.h>
-#include <IO/ReadBufferFromMemory.h>
+#include <IO/Buffer/ReadBuffer.h>
+#include <IO/Buffer/ReadBufferFromMemory.h>
 #include <IO/VarInt.h>
 #include <common/DateLUT.h>
 #include <common/LocalDate.h>

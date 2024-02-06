@@ -16,8 +16,8 @@
 #include <Common/Stopwatch.h>
 #include <Core/SpillHandler.h>
 #include <DataStreams/IBlockInputStream.h>
-#include <Encryption/EncryptionPath.h>
-#include <Encryption/WriteBufferFromWritableFileBuilder.h>
+#include <IO/EncryptionPath.h>
+#include <IO/WriteBufferFromWritableFileBuilder.h>
 
 namespace DB
 {

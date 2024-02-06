@@ -17,8 +17,8 @@
 #include <Core/Spiller.h>
 #include <DataStreams/BlocksListBlockInputStream.h>
 #include <DataStreams/materializeBlock.h>
-#include <Encryption/FileProvider.h>
-#include <Encryption/MockKeyManager.h>
+#include <IO/Encryption/MockKeyManager.h>
+#include <IO/FileProvider.h>
 #include <TestUtils/ColumnGenerator.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>

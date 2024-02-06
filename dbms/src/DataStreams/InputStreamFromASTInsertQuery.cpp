@@ -14,8 +14,8 @@
 
 #include <DataStreams/BlockIO.h>
 #include <DataStreams/InputStreamFromASTInsertQuery.h>
-#include <IO/ConcatReadBuffer.h>
-#include <IO/ReadBufferFromMemory.h>
+#include <IO/Buffer/ConcatReadBuffer.h>
+#include <IO/Buffer/ReadBufferFromMemory.h>
 #include <Interpreters/Context.h>
 #include <Parsers/ASTInsertQuery.h>
 

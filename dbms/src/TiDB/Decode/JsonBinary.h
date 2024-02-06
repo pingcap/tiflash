@@ -20,7 +20,7 @@
 #include <Common/UTF8Helpers.h>
 #include <Common/VectorWriter.h>
 #include <Core/Types.h>
-#include <IO/WriteBufferFromVector.h>
+#include <IO/Buffer/WriteBufferFromVector.h>
 #include <common/StringRef.h>
 #include <common/memcpy.h>
 #include <simdjson.h>

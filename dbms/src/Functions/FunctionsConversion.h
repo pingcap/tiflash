@@ -43,9 +43,9 @@
 #include <Functions/FunctionsDateTime.h>
 #include <Functions/FunctionsMiscellaneous.h>
 #include <Functions/IFunction.h>
+#include <IO/Buffer/ReadBufferFromMemory.h>
+#include <IO/Buffer/WriteBufferFromVector.h>
 #include <IO/Operators.h>
-#include <IO/ReadBufferFromMemory.h>
-#include <IO/WriteBufferFromVector.h>
 #include <IO/parseDateTimeBestEffort.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/ExpressionActions.h>
@@ -767,8 +767,8 @@ struct ConvertThroughParsing
             return true;
 
         /// Special case, that allows to parse string with DateTime as Date.
-        if ((std::is_same_v<ToDataType, DataTypeDate> || std::is_same_v<ToDataType, DataTypeMyDate>)&&(
-                in.buffer().size())
+        if ((std::is_same_v<ToDataType, DataTypeDate>
+             || std::is_same_v<ToDataType, DataTypeMyDate>)&&(in.buffer().size())
             == strlen("YYYY-MM-DD hh:mm:ss"))
             return true;
 

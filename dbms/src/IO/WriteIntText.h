@@ -15,7 +15,7 @@
 #pragma once
 
 #include <Core/Types.h>
-#include <IO/WriteBuffer.h>
+#include <IO/Buffer/WriteBuffer.h>
 #include <common/likely.h>
 
 #include <limits>

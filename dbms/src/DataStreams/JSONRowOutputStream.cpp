@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <DataStreams/JSONRowOutputStream.h>
-#include <IO/WriteBufferValidUTF8.h>
+#include <IO/Buffer/WriteBufferValidUTF8.h>
 #include <IO/WriteHelpers.h>
 
 

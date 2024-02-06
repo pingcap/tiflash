@@ -20,10 +20,10 @@
 #include <Common/StringUtils/StringUtils.h>
 #include <Core/Types.h>
 #include <Core/UUID.h>
+#include <IO/Buffer/WriteBuffer.h>
+#include <IO/Buffer/WriteBufferFromString.h>
 #include <IO/DoubleConverter.h>
 #include <IO/VarInt.h>
-#include <IO/WriteBuffer.h>
-#include <IO/WriteBufferFromString.h>
 #include <IO/WriteIntText.h>
 #include <common/DateLUT.h>
 #include <common/LocalDate.h>

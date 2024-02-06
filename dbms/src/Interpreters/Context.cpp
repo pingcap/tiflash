@@ -28,10 +28,10 @@
 #include <Databases/IDatabase.h>
 #include <Debug/DBGInvoker.h>
 #include <Debug/MockStorage.h>
-#include <Encryption/FileProvider.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <IO/BaseFile/fwd.h>
-#include <IO/ReadBufferFromFile.h>
+#include <IO/Buffer/ReadBufferFromFile.h>
+#include <IO/FileProvider.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/ISecurityManager.h>
 #include <Interpreters/ProcessList.h>

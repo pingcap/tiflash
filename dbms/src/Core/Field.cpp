@@ -15,9 +15,9 @@
 #include <Common/FieldVisitors.h>
 #include <Core/DecimalComparison.h>
 #include <Core/Field.h>
-#include <IO/ReadBuffer.h>
+#include <IO/Buffer/ReadBuffer.h>
+#include <IO/Buffer/WriteBuffer.h>
 #include <IO/ReadHelpers.h>
-#include <IO/WriteBuffer.h>
 #include <IO/WriteHelpers.h>
 #include <fmt/core.h>
 

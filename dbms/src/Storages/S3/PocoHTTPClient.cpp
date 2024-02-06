@@ -18,9 +18,9 @@
 #include <Common/Stopwatch.h>
 #include <Common/Throttler.h>
 #include <Common/TiFlashMetrics.h>
+#include <IO/Buffer/WriteBufferFromString.h>
 #include <IO/HTTPCommon.h>
 #include <IO/Operators.h>
-#include <IO/WriteBufferFromString.h>
 #include <Poco/Net/HTTPRequest.h>
 #include <Poco/Net/HTTPResponse.h>
 #include <Poco/StreamCopier.h>

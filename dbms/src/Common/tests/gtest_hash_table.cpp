@@ -15,7 +15,7 @@
 #include <Common/HashTable/Hash.h>
 #include <Common/HashTable/HashMap.h>
 #include <Common/HashTable/HashSet.h>
-#include <IO/ReadBufferFromString.h>
+#include <IO/Buffer/ReadBufferFromString.h>
 #include <IO/WriteHelpers.h>
 #include <Interpreters/AggregationCommon.h>
 #include <gtest/gtest.h>

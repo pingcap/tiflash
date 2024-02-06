@@ -17,9 +17,9 @@
 #include <Common/NaNUtils.h>
 #include <Common/PODArray.h>
 #include <Core/Types.h>
-#include <IO/ReadBuffer.h>
+#include <IO/Buffer/ReadBuffer.h>
+#include <IO/Buffer/WriteBuffer.h>
 #include <IO/VarInt.h>
-#include <IO/WriteBuffer.h>
 
 
 namespace DB

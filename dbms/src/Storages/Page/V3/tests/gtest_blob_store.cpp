@@ -15,7 +15,7 @@
 #include <Common/FailPoint.h>
 #include <Common/Logger.h>
 #include <IO/BaseFile/RateLimiter.h>
-#include <IO/ReadBufferFromMemory.h>
+#include <IO/Buffer/ReadBufferFromMemory.h>
 #include <Poco/Logger.h>
 #include <Storages/Page/PageConstants.h>
 #include <Storages/Page/PageDefinesBase.h>

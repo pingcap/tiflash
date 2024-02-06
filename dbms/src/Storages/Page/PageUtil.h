@@ -21,7 +21,7 @@
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/TiFlashException.h>
 #include <IO/BaseFile/RateLimiter.h>
-#include <IO/WriteBufferFromFile.h>
+#include <IO/Buffer/WriteBufferFromFile.h>
 #include <IO/WriteHelpers.h>
 #include <Poco/File.h>
 #include <Storages/Page/Page.h>

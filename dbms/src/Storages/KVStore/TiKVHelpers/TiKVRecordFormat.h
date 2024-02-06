@@ -16,8 +16,8 @@
 
 #include <Common/Exception.h>
 #include <Core/Types.h>
+#include <IO/Buffer/WriteBufferFromString.h>
 #include <IO/Endian.h>
-#include <IO/WriteBufferFromString.h>
 #include <Storages/KVStore/Decode/DecodedTiKVKeyValue.h>
 #include <Storages/KVStore/Decode/TiKVHandle.h>
 #include <Storages/KVStore/TiKVHelpers/TiKVVarInt.h>

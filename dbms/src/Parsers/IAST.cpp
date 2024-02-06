@@ -13,9 +13,9 @@
 // limitations under the License.
 
 #include <Common/SipHash.h>
+#include <IO/Buffer/WriteBufferFromOStream.h>
+#include <IO/Buffer/WriteBufferFromString.h>
 #include <IO/Operators.h>
-#include <IO/WriteBufferFromOStream.h>
-#include <IO/WriteBufferFromString.h>
 #include <IO/WriteHelpers.h>
 #include <Parsers/IAST.h>
 

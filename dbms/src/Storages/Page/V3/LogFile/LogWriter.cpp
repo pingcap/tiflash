@@ -16,8 +16,8 @@
 #include <Common/Exception.h>
 #include <Common/Logger.h>
 #include <IO/BaseFile/WritableFile.h>
-#include <IO/ReadBuffer.h>
-#include <IO/WriteBufferFromFile.h>
+#include <IO/Buffer/ReadBuffer.h>
+#include <IO/Buffer/WriteBufferFromFile.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/Page/PageUtil.h>
 #include <Storages/Page/V3/LogFile/LogFormat.h>

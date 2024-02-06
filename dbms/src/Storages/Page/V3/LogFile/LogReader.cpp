@@ -15,7 +15,7 @@
 #include <Common/Checksum.h>
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
-#include <IO/ReadBufferFromMemory.h>
+#include <IO/Buffer/ReadBufferFromMemory.h>
 #include <IO/ReadHelpers.h>
 #include <Storages/Page/V3/LogFile/LogFormat.h>
 #include <Storages/Page/V3/LogFile/LogReader.h>

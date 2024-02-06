@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <Common/StringUtils/StringUtils.h>
-#include <IO/ReadBuffer.h>
+#include <IO/Buffer/ReadBuffer.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
 #include <IO/parseDateTimeBestEffort.h>

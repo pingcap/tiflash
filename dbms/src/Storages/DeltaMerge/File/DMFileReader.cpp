@@ -18,9 +18,9 @@
 #include <Common/Stopwatch.h>
 #include <Common/escapeForFileName.h>
 #include <DataTypes/IDataType.h>
-#include <Encryption/FileProvider.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <IO/Checksum/ChecksumReadBufferBuilder.h>
+#include <IO/FileProvider.h>
 #include <Poco/File.h>
 #include <Poco/Thread_STD.h>
 #include <Storages/DeltaMerge/DMContext.h>
