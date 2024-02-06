@@ -282,7 +282,7 @@ DM::WriteResult writeRegionDataToStorage(
 
     /// Try read then write once.
     {
-        if (atomicReadWrite(log, rw_ctx, region, data_list_read, false))
+        if (atomicReadWrite(rw_ctx, region, data_list_read, false))
         {
             return std::move(rw_ctx.write_result);
         }
@@ -295,7 +295,7 @@ DM::WriteResult writeRegionDataToStorage(
         tmt.getSchemaSyncerManager()->syncTableSchema(context, keyspace_id, table_id);
         auto schema_sync_cost = watch.elapsedMilliseconds();
         LOG_INFO(log, "sync schema cost {} ms, keyspace={} table_id={}", schema_sync_cost, keyspace_id, table_id);
-        if (!atomicReadWrite(log, rw_ctx, region, data_list_read, true))
+        if (!atomicReadWrite(rw_ctx, region, data_list_read, true))
         {
             // Failure won't be tolerated this time.
             throw Exception(
