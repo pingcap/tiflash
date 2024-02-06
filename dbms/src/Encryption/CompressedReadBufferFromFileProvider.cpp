@@ -44,29 +44,6 @@ bool CompressedReadBufferFromFileProviderImpl<has_legacy_checksum>::nextImpl()
 }
 
 template <bool has_legacy_checksum>
-std::unique_ptr<CompressedSeekableReaderBuffer> //
-CompressedReadBufferFromFileProviderImpl<has_legacy_checksum>::buildLegacyReadBuffer(
-    FileProviderPtr & file_provider,
-    const std::string & path,
-    const EncryptionPath & encryption_path,
-    size_t estimated_size,
-    size_t aio_threshold,
-    const ReadLimiterPtr & read_limiter_,
-    size_t buf_size)
-{
-    assert(has_legacy_checksum == true);
-    return std::unique_ptr<CompressedReadBufferFromFileProviderImpl<has_legacy_checksum>>(
-        new CompressedReadBufferFromFileProviderImpl<has_legacy_checksum>(
-            file_provider,
-            path,
-            encryption_path,
-            estimated_size,
-            aio_threshold,
-            read_limiter_,
-            buf_size));
-}
-
-template <bool has_legacy_checksum>
 CompressedReadBufferFromFileProviderImpl<has_legacy_checksum>::CompressedReadBufferFromFileProviderImpl(
     FileProviderPtr & file_provider,
     const std::string & path,

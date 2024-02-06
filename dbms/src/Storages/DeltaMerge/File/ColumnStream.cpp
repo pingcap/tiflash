@@ -16,8 +16,6 @@
 #include <Storages/DeltaMerge/File/DMFileReader.h>
 #include <Storages/Page/PageUtil.h>
 
-#include "IO/Compression/CompressedReadBufferFromFile.h"
-
 namespace DB::DM
 {
 // TODO: make `MarkLoader` as a part of DMFile?

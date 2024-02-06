@@ -80,7 +80,19 @@ public:
         size_t estimated_size,
         size_t aio_threshold,
         const ReadLimiterPtr & read_limiter_,
-        size_t buf_size = DBMS_DEFAULT_BUFFER_SIZE);
+        size_t buf_size = DBMS_DEFAULT_BUFFER_SIZE)
+    {
+        assert(has_legacy_checksum == true);
+        return std::unique_ptr<CompressedReadBufferFromFileProviderImpl<has_legacy_checksum>>(
+            new CompressedReadBufferFromFileProviderImpl<has_legacy_checksum>(
+                file_provider,
+                path,
+                encryption_path,
+                estimated_size,
+                aio_threshold,
+                read_limiter_,
+                buf_size));
+    }
 
     /// @attention: estimated_size should be at least DBMS_DEFAULT_BUFFER_SIZE if one want to do seeking; however, if one knows that target file
     /// only consists of a single small frame, one can use a smaller estimated_size to reduce memory footprint.
@@ -114,6 +126,7 @@ public:
 
 using LegacyCompressedReadBufferFromFileProvider
     = CompressedReadBufferFromFileProviderImpl</*has_legacy_checksum*/ true>;
-using CompressedReadBufferFromFileProvider = CompressedReadBufferFromFileProviderImpl</*has_legacy_checksum*/ false>;
+using CompressedReadBufferFromFileProvider //
+    = CompressedReadBufferFromFileProviderImpl</*has_legacy_checksum*/ false>;
 
 } // namespace DB
