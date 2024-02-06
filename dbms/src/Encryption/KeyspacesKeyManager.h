@@ -32,11 +32,7 @@ template <typename ProxyHelper>
 class KeyspacesKeyManager : public KeyManager
 {
 public:
-    explicit KeyspacesKeyManager(ProxyHelper * proxy_helper_)
-        : proxy_helper(proxy_helper_)
-        , keyspace_id_to_key(1024, 1024)
-        , master_key(std::make_unique<MasterKey>(proxy_helper->getMasterKey()))
-    {}
+    explicit KeyspacesKeyManager(ProxyHelper * proxy_helper_);
 
     void setUniversalPageStorage(const UniversalPageStoragePtr & ps_write_) { ps_write = ps_write_; }
 
@@ -62,7 +58,7 @@ private:
 public:
 #endif
     ProxyHelper * proxy_helper;
-    UniversalPageStoragePtr ps_write = nullptr;
+    std::weak_ptr<UniversalPageStorage> ps_write;
     // cache, keyspace_id -> encryption_key
     LRUCache<KeyspaceID, EncryptionKey> keyspace_id_to_key;
     const MasterKeyPtr master_key;
