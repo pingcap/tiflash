@@ -157,8 +157,6 @@ void DMFileWriter::write(const Block & block, const BlockProperty & block_proper
     }
 
     dmfile->addPack(stat);
-    // FIXME: remove
-    LOG_INFO(Logger::get(), "write pack, rows={}", stat.rows);
 
     auto & properties = dmfile->getPackProperties();
     auto * property = properties.add_property();
@@ -293,8 +291,6 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
         const bool is_null = IDataType::isNullMap(substream);
         const bool is_array = IDataType::isArraySizes(substream);
 
-        // FIXME: remove
-        LOG_INFO(Logger::get(), "stream_name={} is_null={} is_array={}", stream_name, is_null, is_array);
         // v3
         if (dmfile->useMetaV2())
         {
@@ -461,8 +457,6 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
     };
     type->enumerateStreams(callback, {});
 
-    // FIXME: remove
-    LOG_INFO(Logger::get(), "col_id={} stat={}", col_id, col_stat.toProto().ShortDebugString());
 }
 
 } // namespace DB::DM

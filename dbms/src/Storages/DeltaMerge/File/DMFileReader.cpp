@@ -548,8 +548,6 @@ void DMFileReader::readFromDisk(
         column_define.id,
         stream_name);
 
-    // FIXME: remove
-    LOG_INFO(Logger::get(), "reading stream, column_id={} stream_name={}", column_define.id, stream_name);
 #endif
     auto & top_stream = iter->second;
     bool should_seek = force_seek || shouldSeek(start_pack_id) || skip_packs > 0;
@@ -559,14 +557,6 @@ void DMFileReader::readFromDisk(
         [&](const IDataType::SubstreamPath & substream_path) {
             const auto substream_name = DMFile::getFileNameBase(column_define.id, substream_path);
             auto & sub_stream = column_streams.at(substream_name);
-            // FIXME: remove
-            LOG_INFO(
-                Logger::get(),
-                "reading substream, column_id={} stream_name={} substream_name={} should_seek={}",
-                column_define.id,
-                stream_name,
-                substream_name,
-                should_seek);
 
             if (should_seek)
             {
@@ -587,13 +577,6 @@ void DMFileReader::readFromDisk(
         top_stream->avg_size_hint,
         true,
         {});
-    // FIXME: remove
-    LOG_INFO(
-        Logger::get(),
-        "reading stream, column_id={}, stream_name={} size={}",
-        column_define.id,
-        stream_name,
-        column->size());
     IDataType::updateAvgValueSizeHint(*column, top_stream->avg_size_hint);
 }
 
