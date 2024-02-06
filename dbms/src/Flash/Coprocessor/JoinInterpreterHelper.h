@@ -184,6 +184,7 @@ struct TiFlashJoin
         const NamesAndTypes & left_cols,
         const NamesAndTypes & right_cols,
         const ExpressionActionsPtr & probe_side_prepare_join,
+        const ExpressionActionsPtr & build_side_prepare_join,
         const Names & probe_key_names,
         const Names & build_key_names,
         JoinNonEqualConditions & join_non_equal_conditions) const;
