@@ -30,6 +30,8 @@ class Logger;
 using LoggerPtr = std::shared_ptr<Logger>;
 namespace DM
 {
+inline static const size_t DMFILE_READ_ROWS_THRESHOLD = DEFAULT_MERGE_BLOCK_SIZE * 3;
+
 class DMFileBlockInputStream : public SkippableBlockInputStream
 {
 public:

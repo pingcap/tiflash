@@ -21,7 +21,7 @@
 namespace DB::DM
 {
 
-inline RSOperatorPtr toFilter(RowKeyRange & rowkey_range)
+inline RSOperatorPtr toFilter(const RowKeyRange & rowkey_range)
 {
     Attr handle_attr
         = {EXTRA_HANDLE_COLUMN_NAME,
