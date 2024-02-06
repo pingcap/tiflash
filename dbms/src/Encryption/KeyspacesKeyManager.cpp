@@ -48,7 +48,7 @@ FileEncryptionInfo KeyspacesKeyManager<ProxyHelper>::getInfo(const EncryptionPat
     }
 
     auto ps_write_locked = ps_write.lock();
-    RUNTIME_CHECK(!ps_write_locked);
+    RUNTIME_CHECK(ps_write_locked != nullptr);
     auto load_func = [this, keyspace_id, &ps_write_locked]() -> EncryptionKeyPtr {
         const auto page_id = UniversalPageIdFormat::toEncryptionKeyPageID(keyspace_id);
         // getFile will be called after newFile, so page must exist
@@ -87,7 +87,7 @@ FileEncryptionInfo KeyspacesKeyManager<ProxyHelper>::newInfo(const EncryptionPat
     }
 
     auto ps_write_locked = ps_write.lock();
-    RUNTIME_CHECK(!ps_write_locked);
+    RUNTIME_CHECK(ps_write_locked != nullptr);
     auto load_func = [this, keyspace_id, ps_write_locked]() -> EncryptionKeyPtr {
         // Generate new encryption key
         auto encryption_key = master_key->generateEncryptionKey();
@@ -132,7 +132,7 @@ void KeyspacesKeyManager<ProxyHelper>::deleteKey(KeyspaceID keyspace_id)
         return;
 
     auto ps_write_locked = ps_write.lock();
-    RUNTIME_CHECK(!ps_write_locked);
+    RUNTIME_CHECK(ps_write_locked != nullptr);
     const auto page_id = UniversalPageIdFormat::toEncryptionKeyPageID(keyspace_id);
     UniversalWriteBatch wb;
     wb.delPage(page_id);
