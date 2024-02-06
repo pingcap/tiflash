@@ -23,8 +23,8 @@
 #include <Core/Defines.h>
 #include <DataStreams/NativeBlockInputStream.h>
 #include <DataStreams/NativeBlockOutputStream.h>
-#include <IO/CompressedReadBuffer.h>
-#include <IO/CompressedWriteBuffer.h>
+#include <IO/Compression/CompressedReadBuffer.h>
+#include <IO/Compression/CompressedWriteBuffer.h>
 #include <IO/ReadBufferFromPocoSocket.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteBufferFromPocoSocket.h>

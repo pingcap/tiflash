@@ -90,7 +90,7 @@ struct FileEncryptionInfo : private FileEncryptionInfoRaw
         const EncryptionPath & encryption_path,
         bool is_new_created_info = false) const;
 
-    enum Operation : uint64_t
+    enum Operation : uint8_t
     {
         Encrypt,
         Decrypt,

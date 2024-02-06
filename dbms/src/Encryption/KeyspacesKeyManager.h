@@ -17,21 +17,26 @@
 #include <Common/Exception.h>
 #include <Common/LRUCache.h>
 #include <Common/TiFlashException.h>
+#include <Debug/MockProxyEncryptionFFI.h>
 #include <Encryption/KeyManager.h>
 #include <Encryption/MasterKey.h>
+#include <Storages/KVStore/FFI/ProxyFFI.h>
 #include <Storages/Page/PageStorage_fwd.h>
 
 namespace DB
 {
 
-struct EngineStoreServerWrap;
-
 /// KeyspacesKeyManager is a KeyManager implementation that designed for Cloud Storage Engine.
 /// It will store all encryption keys which have been encrypted using MasterKey in PageStorage.
+template <typename ProxyHelper>
 class KeyspacesKeyManager : public KeyManager
 {
 public:
-    explicit KeyspacesKeyManager(EngineStoreServerWrap * tiflash_instance_wrap_);
+    explicit KeyspacesKeyManager(ProxyHelper * proxy_helper_)
+        : proxy_helper(proxy_helper_)
+        , keyspace_id_to_key(1024, 1024)
+        , master_key(std::make_unique<MasterKey>(proxy_helper->getMasterKey()))
+    {}
 
     void setUniversalPageStorage(const UniversalPageStoragePtr & ps_write_) { ps_write = ps_write_; }
 
@@ -51,8 +56,12 @@ public:
 
     bool isEncryptionEnabled(KeyspaceID keyspace_id) override;
 
+#ifndef DBMS_PUBLIC_GTEST
 private:
-    EngineStoreServerWrap * tiflash_instance_wrap;
+#else
+public:
+#endif
+    ProxyHelper * proxy_helper;
     UniversalPageStoragePtr ps_write = nullptr;
     // cache, keyspace_id -> encryption_key
     LRUCache<KeyspaceID, EncryptionKey> keyspace_id_to_key;

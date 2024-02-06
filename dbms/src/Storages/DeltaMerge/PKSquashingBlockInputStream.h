@@ -151,7 +151,7 @@ private:
         for (/* */; cut_offset < next_col->size(); ++cut_offset)
         {
             const auto next_pk = next_rowkey_column.getRowKeyValue(cut_offset);
-            if (compare(next_pk, last_curr_pk) != 0)
+            if (next_pk != last_curr_pk)
             {
                 if constexpr (DM_RUN_CHECK)
                 {

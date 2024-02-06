@@ -17,7 +17,7 @@
 #include <Core/Types.h>
 #include <DataStreams/IBlockOutputStream.h>
 #include <DataTypes/IDataType.h>
-#include <IO/CompressedWriteBuffer.h>
+#include <IO/Compression/CompressedWriteBuffer.h>
 
 namespace DB
 {

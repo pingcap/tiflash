@@ -15,7 +15,7 @@
 #include <Common/Stopwatch.h>
 #include <Common/formatReadable.h>
 #include <Core/Types.h>
-#include <IO/CompressedReadBuffer.h>
+#include <IO/Compression/CompressedReadBuffer.h>
 #include <IO/Operators.h>
 #include <IO/ReadBufferFromFileDescriptor.h>
 #include <IO/WriteBufferFromFileDescriptor.h>

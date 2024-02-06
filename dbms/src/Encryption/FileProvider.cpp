@@ -12,15 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <BaseFile/PosixRandomAccessFile.h>
-#include <BaseFile/PosixWritableFile.h>
-#include <BaseFile/PosixWriteReadableFile.h>
 #include <Common/TiFlashException.h>
 #include <Encryption/EncryptedRandomAccessFile.h>
 #include <Encryption/EncryptedWritableFile.h>
 #include <Encryption/EncryptedWriteReadableFile.h>
 #include <Encryption/FileProvider.h>
 #include <Encryption/KeyspacesKeyManager.h>
+#include <IO/BaseFile/PosixRandomAccessFile.h>
+#include <IO/BaseFile/PosixWritableFile.h>
+#include <IO/BaseFile/PosixWriteReadableFile.h>
 #include <Poco/File.h>
 #include <Poco/Path.h>
 #include <Storages/KVStore/FFI/FileEncryption.h>
@@ -28,6 +28,7 @@
 #include <Storages/S3/S3RandomAccessFile.h>
 #include <Storages/S3/S3WritableFile.h>
 #include <common/likely.h>
+
 
 namespace DB
 {
@@ -203,7 +204,13 @@ void FileProvider::deleteEncryptionInfo(const EncryptionPath & encryption_path_,
 
 void FileProvider::dropEncryptionInfo(KeyspaceID keyspace_id) const
 {
-    if (auto * keyspaces_key_manager = dynamic_cast<KeyspacesKeyManager *>(key_manager.get()); keyspaces_key_manager)
+    if (auto keyspaces_key_manager
+        = std::dynamic_pointer_cast<KeyspacesKeyManager<TiFlashRaftProxyHelper>>(key_manager);
+        keyspaces_key_manager)
+        keyspaces_key_manager->deleteKey(keyspace_id);
+    if (auto keyspaces_key_manager
+        = std::dynamic_pointer_cast<KeyspacesKeyManager<MockProxyEncryptionFFI>>(key_manager);
+        keyspaces_key_manager)
         keyspaces_key_manager->deleteKey(keyspace_id);
 }
 
@@ -303,7 +310,13 @@ void FileProvider::renameFile(
 
 void FileProvider::setPageStoragePtrForKeyManager(const UniversalPageStoragePtr & page_storage_ptr_)
 {
-    if (auto * keyspaces_key_manager = dynamic_cast<KeyspacesKeyManager *>(key_manager.get()); keyspaces_key_manager)
+    if (auto keyspaces_key_manager
+        = std::dynamic_pointer_cast<KeyspacesKeyManager<TiFlashRaftProxyHelper>>(key_manager);
+        keyspaces_key_manager)
+        keyspaces_key_manager->setUniversalPageStorage(page_storage_ptr_);
+    if (auto keyspaces_key_manager
+        = std::dynamic_pointer_cast<KeyspacesKeyManager<MockProxyEncryptionFFI>>(key_manager);
+        keyspaces_key_manager)
         keyspaces_key_manager->setUniversalPageStorage(page_storage_ptr_);
 }
 

@@ -16,7 +16,7 @@
 
 #include <Common/Checksum.h>
 #include <Encryption/FileProvider.h>
-#include <IO/CompressedReadBufferBase.h>
+#include <IO/Compression/CompressedReadBufferBase.h>
 #include <IO/ReadBufferFromFileBase.h>
 #include <time.h>
 

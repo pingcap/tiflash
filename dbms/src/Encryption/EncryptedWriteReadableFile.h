@@ -14,11 +14,10 @@
 
 #pragma once
 
-#include <BaseFile/WriteReadableFile.h>
 #include <Encryption/AESCTRCipherStream.h>
+#include <IO/BaseFile/WriteReadableFile.h>
 #include <common/types.h>
 
-#include <string>
 
 namespace DB
 {

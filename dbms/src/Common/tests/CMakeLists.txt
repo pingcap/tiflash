@@ -46,9 +46,6 @@ target_link_libraries (radix_sort tiflash_common_io)
 add_executable (shell_command_test shell_command_test.cpp)
 target_link_libraries (shell_command_test tiflash_common_io)
 
-add_executable (arena_with_free_lists arena_with_free_lists.cpp)
-target_link_libraries (arena_with_free_lists tiflash_common_io)
-
 add_executable (pod_array pod_array.cpp)
 target_link_libraries (pod_array tiflash_common_io)
 
@@ -57,10 +54,6 @@ target_link_libraries (array_cache tiflash_common_io)
 
 add_executable (space_saving space_saving.cpp)
 target_link_libraries (space_saving tiflash_common_io)
-
-add_executable (integer_hash_tables_and_hashes integer_hash_tables_and_hashes.cpp)
-target_include_directories (integer_hash_tables_and_hashes BEFORE PRIVATE ${SPARCEHASH_INCLUDE_DIR})
-target_link_libraries (integer_hash_tables_and_hashes tiflash_common_io)
 
 add_executable (cow_columns cow_columns.cpp)
 target_link_libraries (cow_columns tiflash_common_io)

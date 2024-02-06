@@ -25,17 +25,11 @@
 namespace DB
 {
 
-KeyspacesKeyManager::KeyspacesKeyManager(EngineStoreServerWrap * tiflash_instance_wrap_)
-    : tiflash_instance_wrap(tiflash_instance_wrap_)
-    , keyspace_id_to_key(1024, 1024)
-    , master_key(std::make_unique<MasterKey>(tiflash_instance_wrap->proxy_helper->getMasterKey()))
-{}
-
-FileEncryptionInfo KeyspacesKeyManager::getInfo(const EncryptionPath & ep)
+template <typename ProxyHelper>
+FileEncryptionInfo KeyspacesKeyManager<ProxyHelper>::getInfo(const EncryptionPath & ep)
 {
     const auto keyspace_id = ep.keyspace_id;
-    if (unlikely(keyspace_id == NullspaceID)
-        || (likely(!tiflash_instance_wrap->proxy_helper->getKeyspaceEncryption(keyspace_id))))
+    if (unlikely(keyspace_id == NullspaceID) || (likely(!proxy_helper->getKeyspaceEncryption(keyspace_id))))
     {
         return FileEncryptionInfo{
             FileEncryptionRes::Disabled,
@@ -55,8 +49,10 @@ FileEncryptionInfo KeyspacesKeyManager::getInfo(const EncryptionPath & ep)
             nullptr,
             {},
             /*throw_on_not_exist*/ true);
-        auto data = page.getFieldData(0);
-        return master_key->decryptEncryptionKey(String(data));
+        ReadBufferFromString rb(page.data);
+        String exported;
+        readStringBinary(exported, rb);
+        return master_key->decryptEncryptionKey(exported);
     };
     auto [key, exist] = keyspace_id_to_key.getOrSet<>(keyspace_id, load_func);
     // Use MD5 of file path as IV
@@ -64,14 +60,14 @@ FileEncryptionInfo KeyspacesKeyManager::getInfo(const EncryptionPath & ep)
     static_assert(MD5_DIGEST_LENGTH == sizeof(uint64_t) * 2);
     String file_path = fmt::format("{}/{}", ep.full_path, ep.file_name);
     MD5(reinterpret_cast<const unsigned char *>(file_path.c_str()), file_path.size(), md5_value);
-    return key->generateEncryptionInfo(String(reinterpret_cast<const char *>(md5_value)));
+    return key->generateEncryptionInfo(String(reinterpret_cast<const char *>(md5_value), MD5_DIGEST_LENGTH));
 }
 
-FileEncryptionInfo KeyspacesKeyManager::newInfo(const EncryptionPath & ep)
+template <typename ProxyHelper>
+FileEncryptionInfo KeyspacesKeyManager<ProxyHelper>::newInfo(const EncryptionPath & ep)
 {
     const auto keyspace_id = ep.keyspace_id;
-    if (unlikely(keyspace_id == NullspaceID)
-        || (likely(!tiflash_instance_wrap->proxy_helper->getKeyspaceEncryption(keyspace_id))))
+    if (unlikely(keyspace_id == NullspaceID) || (likely(!proxy_helper->getKeyspaceEncryption(keyspace_id))))
     {
         return FileEncryptionInfo{
             FileEncryptionRes::Disabled,
@@ -102,27 +98,28 @@ FileEncryptionInfo KeyspacesKeyManager::newInfo(const EncryptionPath & ep)
     static_assert(MD5_DIGEST_LENGTH == sizeof(uint64_t) * 2);
     String file_path = fmt::format("{}/{}", ep.full_path, ep.file_name);
     MD5(reinterpret_cast<const unsigned char *>(file_path.c_str()), file_path.size(), md5_value);
-    return key->generateEncryptionInfo(String(reinterpret_cast<const char *>(md5_value)));
+    return key->generateEncryptionInfo(String(reinterpret_cast<const char *>(md5_value), MD5_DIGEST_LENGTH));
 }
 
-void KeyspacesKeyManager::deleteInfo(const EncryptionPath & ep, bool /*throw_on_error*/)
+template <typename ProxyHelper>
+void KeyspacesKeyManager<ProxyHelper>::deleteInfo(const EncryptionPath & ep, bool /*throw_on_error*/)
 {
     const auto keyspace_id = ep.keyspace_id;
-    if (unlikely(keyspace_id == NullspaceID)
-        || (likely(!tiflash_instance_wrap->proxy_helper->getKeyspaceEncryption(keyspace_id))))
+    if (unlikely(keyspace_id == NullspaceID) || (likely(!proxy_helper->getKeyspaceEncryption(keyspace_id))))
         return;
     // do nothing
 }
 
-void KeyspacesKeyManager::linkInfo(const EncryptionPath & /*src_ep*/, const EncryptionPath & /*dst_ep*/)
+template <typename ProxyHelper>
+void KeyspacesKeyManager<ProxyHelper>::linkInfo(const EncryptionPath & /*src_ep*/, const EncryptionPath & /*dst_ep*/)
 {
     throw DB::Exception("linkFile is not supported", ErrorCodes::NOT_IMPLEMENTED);
 }
 
-void KeyspacesKeyManager::deleteKey(KeyspaceID keyspace_id)
+template <typename ProxyHelper>
+void KeyspacesKeyManager<ProxyHelper>::deleteKey(KeyspaceID keyspace_id)
 {
-    if (unlikely(keyspace_id == NullspaceID)
-        || (likely(!tiflash_instance_wrap->proxy_helper->getKeyspaceEncryption(keyspace_id))))
+    if (unlikely(keyspace_id == NullspaceID) || (likely(!proxy_helper->getKeyspaceEncryption(keyspace_id))))
         return;
 
     RUNTIME_CHECK(ps_write != nullptr);
@@ -133,9 +130,13 @@ void KeyspacesKeyManager::deleteKey(KeyspaceID keyspace_id)
     keyspace_id_to_key.remove(keyspace_id);
 }
 
-bool KeyspacesKeyManager::isEncryptionEnabled(KeyspaceID keyspace_id)
+template <typename ProxyHelper>
+bool KeyspacesKeyManager<ProxyHelper>::isEncryptionEnabled(KeyspaceID keyspace_id)
 {
-    return keyspace_id != NullspaceID && tiflash_instance_wrap->proxy_helper->getKeyspaceEncryption(keyspace_id);
+    return keyspace_id != NullspaceID && proxy_helper->getKeyspaceEncryption(keyspace_id);
 }
+
+template class KeyspacesKeyManager<TiFlashRaftProxyHelper>;
+template class KeyspacesKeyManager<MockProxyEncryptionFFI>;
 
 } // namespace DB

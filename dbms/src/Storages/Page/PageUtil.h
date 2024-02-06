@@ -14,14 +14,13 @@
 
 #pragma once
 
-#include <BaseFile/RateLimiter.h>
 #include <Common/CurrentMetrics.h>
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
 #include <Common/ProfileEvents.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/TiFlashException.h>
-#include <Encryption/FileProvider.h>
+#include <IO/BaseFile/RateLimiter.h>
 #include <IO/WriteBufferFromFile.h>
 #include <IO/WriteHelpers.h>
 #include <Poco/File.h>

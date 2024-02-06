@@ -20,6 +20,7 @@
 #include <Flash/Coprocessor/RemoteRequest.h>
 #include <Flash/Mpp/MPPTaskId.h>
 #include <Interpreters/Context_fwd.h>
+#include <Storages/DeltaMerge/ColumnDefine_fwd.h>
 #include <Storages/DeltaMerge/Remote/DisaggTaskId.h>
 #include <Storages/DeltaMerge/Remote/RNWorkers_fwd.h>
 #include <Storages/DeltaMerge/SegmentReadTask.h>
@@ -38,9 +39,6 @@ class DAGContext;
 
 namespace DM
 {
-struct ColumnDefine;
-using ColumnDefines = std::vector<ColumnDefine>;
-using ColumnDefinesPtr = std::shared_ptr<ColumnDefines>;
 class RSOperator;
 using RSOperatorPtr = std::shared_ptr<RSOperator>;
 } // namespace DM

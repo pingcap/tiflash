@@ -18,7 +18,7 @@
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/MarkInCompressedFile.h>
 #include <Flash/Coprocessor/CodecUtils.h>
-#include <IO/CompressedReadBufferFromFile.h>
+#include <IO/Compression/CompressedReadBufferFromFile.h>
 
 namespace DB
 {
