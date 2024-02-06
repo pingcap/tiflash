@@ -26,7 +26,7 @@ struct RegionDataReadInfo
 {
     RegionDataReadInfo(
         RawTiDBPK && pk_,
-        UInt8 && write_type_,
+        UInt8 write_type_,
         Timestamp && commit_ts_,
         std::shared_ptr<const TiKVValue> && value_)
         : pk(std::move(pk_))
