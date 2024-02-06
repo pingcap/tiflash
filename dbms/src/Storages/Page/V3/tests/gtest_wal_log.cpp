@@ -168,7 +168,7 @@ public:
         reader = getNewReader(wal_recovery_mode, log_file_num);
     }
 
-    static void write(const std::string & msg)
+    void write(const std::string & msg)
     {
         ReadBufferFromString buff(msg);
 
@@ -190,7 +190,7 @@ public:
 
     /// Some methods to break to written bytes
 
-    static void incrementByte(int offset, char delta)
+    void incrementByte(int offset, char delta)
     {
         char old_one[1] = "";
         PageUtil::readFile(wr_file, offset, old_one, 1, nullptr);
@@ -202,7 +202,7 @@ public:
 
     void shrinkSize(int bytes) { PageUtil::ftruncateFile(wr_file, writtenBytes() - bytes); }
 
-    static void fixChecksum(int header_offset, int payload_len, bool recyclable)
+    void fixChecksum(int header_offset, int payload_len, bool recyclable)
     {
         // Compute crc of type/len/data
         int header_size = recyclable ? Format::RECYCLABLE_HEADER_SIZE : Format::HEADER_SIZE;
