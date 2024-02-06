@@ -511,7 +511,7 @@ void TrieDictionary::getItemsNumber(
     ValueSetter && set_value,
     DefaultGetter && get_default) const
 {
-    if (false) {}
+    if (false) {} // NOLINT
 #define DISPATCH(TYPE)                                                                        \
     else if (attribute.type == AttributeUnderlyingType::TYPE) getItemsImpl<TYPE, OutputType>( \
         attribute,                                                                            \

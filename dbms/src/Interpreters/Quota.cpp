@@ -211,12 +211,12 @@ void QuotaForIntervals::initFromConfig(
     Poco::Util::AbstractConfiguration::Keys config_keys;
     config.keys(config_elem, config_keys);
 
-    for (auto it = config_keys.begin(); it != config_keys.end(); ++it)
+    for (auto & config_key : config_keys)
     {
-        if (!startsWith(*it, "interval"))
+        if (!startsWith(config_key, "interval"))
             continue;
 
-        String interval_config_elem = config_elem + "." + *it;
+        String interval_config_elem = config_elem + "." + config_key;
         time_t duration = config.getInt(interval_config_elem + ".duration", 0);
         time_t offset = 0;
 
@@ -252,37 +252,37 @@ void QuotaForIntervals::setMax(const QuotaForIntervals & quota)
 
 void QuotaForIntervals::checkExceeded(time_t current_time)
 {
-    for (auto it = cont.rbegin(); it != cont.rend(); ++it)
+    for (auto it = cont.rbegin(); it != cont.rend(); ++it) // NOLINT
         it->second.checkExceeded(current_time, quota_name, user_name);
 }
 
 void QuotaForIntervals::addQuery() noexcept
 {
-    for (auto it = cont.rbegin(); it != cont.rend(); ++it)
+    for (auto it = cont.rbegin(); it != cont.rend(); ++it) // NOLINT
         it->second.addQuery();
 }
 
 void QuotaForIntervals::addError() noexcept
 {
-    for (auto it = cont.rbegin(); it != cont.rend(); ++it)
+    for (auto it = cont.rbegin(); it != cont.rend(); ++it) // NOLINT
         it->second.addError();
 }
 
 void QuotaForIntervals::checkAndAddResultRowsBytes(time_t current_time, size_t rows, size_t bytes)
 {
-    for (auto it = cont.rbegin(); it != cont.rend(); ++it)
+    for (auto it = cont.rbegin(); it != cont.rend(); ++it) // NOLINT
         it->second.checkAndAddResultRowsBytes(current_time, quota_name, user_name, rows, bytes);
 }
 
 void QuotaForIntervals::checkAndAddReadRowsBytes(time_t current_time, size_t rows, size_t bytes)
 {
-    for (auto it = cont.rbegin(); it != cont.rend(); ++it)
+    for (auto it = cont.rbegin(); it != cont.rend(); ++it) // NOLINT
         it->second.checkAndAddReadRowsBytes(current_time, quota_name, user_name, rows, bytes);
 }
 
 void QuotaForIntervals::checkAndAddExecutionTime(time_t current_time, Poco::Timespan amount)
 {
-    for (auto it = cont.rbegin(); it != cont.rend(); ++it)
+    for (auto it = cont.rbegin(); it != cont.rend(); ++it) // NOLINT
         it->second.checkAndAddExecutionTime(current_time, quota_name, user_name, amount);
 }
 
@@ -290,7 +290,7 @@ String QuotaForIntervals::toString() const
 {
     std::stringstream res;
 
-    for (auto it = cont.rbegin(); it != cont.rend(); ++it)
+    for (auto it = cont.rbegin(); it != cont.rend(); ++it) // NOLINT
         res << std::endl << it->second.toString();
 
     return res.str();
@@ -371,11 +371,11 @@ void Quotas::loadFromConfig(Poco::Util::AbstractConfiguration & config)
     }
 
     // Load quotas from current config
-    for (auto it = config_keys.begin(); it != config_keys.end(); ++it)
+    for (auto & config_key : config_keys)
     {
-        if (!cont.count(*it))
-            cont.try_emplace(*it);
-        cont[*it].loadFromConfig("quotas." + *it, *it, config, rng);
+        if (!cont.count(config_key))
+            cont.try_emplace(config_key);
+        cont[config_key].loadFromConfig("quotas." + config_key, config_key, config, rng);
     }
     // Create a "default" if not exists
     if (!cont.count(QuotaForInterval::DEFAULT_QUOTA_NAME))
