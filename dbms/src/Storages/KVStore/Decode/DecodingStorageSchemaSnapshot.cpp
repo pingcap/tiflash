@@ -27,10 +27,9 @@ DecodingStorageSchemaSnapshot::DecodingStorageSchemaSnapshot(
     , pk_is_handle{table_info_.pk_is_handle}
     , is_common_handle{table_info_.is_common_handle}
     , decoding_schema_epoch{decoding_schema_epoch_}
-    , col_id_to_block_pos(column_defines.size())
-    , col_id_to_def_pos(column_defines.size())
 {
     std::unordered_map<ColumnID, size_t> column_lut(table_info_.columns.size());
+    col_id_to_block_pos.
     // col id -> tidb pos, has no internal cols.
     for (size_t i = 0; i < table_info_.columns.size(); i++)
     {
