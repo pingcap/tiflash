@@ -352,7 +352,7 @@ protected:
         wal->rollToNewLogWriter(guard);
     }
 
-    static size_t getNumLogFiles()
+    size_t getNumLogFiles()
     {
         auto log_files = WALStoreReader::listAllFiles(delegator, log);
         return log_files.size();
