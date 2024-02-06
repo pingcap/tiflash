@@ -76,4 +76,22 @@ std::pair<JsonPathLegRawPtr, ConstJsonPathExprRawPtr> JsonPathExprRef::popOneLeg
 {
     return container->pop(this);
 }
+
+std::vector<JsonPathExprRefContainerPtr> buildPathExprContainer(const StringRef & path)
+{
+    auto path_expr = JsonPathExpr::parseJsonPathExpr(path);
+    /// If path_expr failed to parse, throw exception
+    if unlikely (!path_expr)
+        throw Exception("Invalid JSON path expression", ErrorCodes::LOGICAL_ERROR);
+    auto path_expr_container = std::make_unique<JsonPathExprRefContainer>(path_expr);
+    if unlikely (path_expr_container->firstRef() && path_expr_container->firstRef()->couldMatchMultipleValues())
+    {
+        throw Exception(
+            "In this situation, path expressions may not contain the * and ** tokens or range selection.",
+            ErrorCodes::LOGICAL_ERROR);
+    }
+    std::vector<JsonPathExprRefContainerPtr> path_expr_container_vec(1);
+    path_expr_container_vec[0] = std::move(path_expr_container);
+    return path_expr_container_vec;
+}
 } // namespace DB

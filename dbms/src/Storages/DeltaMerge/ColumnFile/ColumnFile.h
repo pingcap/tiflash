@@ -18,7 +18,7 @@
 #include <Core/Block.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileDataProvider_fwd.h>
-#include <Storages/DeltaMerge/File/DMFile.h>
+#include <Storages/DeltaMerge/DMContext_fwd.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/StoragePool/StoragePool_fwd.h>
 #include <Storages/Page/PageDefinesBase.h>
@@ -29,7 +29,6 @@ namespace DM
 {
 static constexpr size_t COLUMN_FILE_SERIALIZE_BUFFER_SIZE = 65536;
 
-struct DMContext;
 class ColumnFile;
 using ColumnFilePtr = std::shared_ptr<ColumnFile>;
 using ColumnFiles = std::vector<ColumnFilePtr>;

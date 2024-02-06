@@ -285,7 +285,7 @@ Segments DeltaMergeStore::ingestDTFilesUsingSplit(
             if (succeeded)
             {
                 updated_segments.insert(segment);
-                RUNTIME_CHECK(compare(delete_range.getEnd(), remaining_delete_range.getStart()) >= 0);
+                RUNTIME_CHECK(delete_range.getEnd() >= remaining_delete_range.getStart());
                 remaining_delete_range.setStart(delete_range.end); // We always move forward
             }
             else
@@ -402,7 +402,7 @@ Segments DeltaMergeStore::ingestDTFilesUsingSplit(
             {
                 updated_segments.insert(segment);
                 // We have ingested (DTFileRange ∪ ThisSegmentRange), let's try with next overlapped segment.
-                RUNTIME_CHECK(compare(segment_ingest_range.getEnd(), file_ingest_range.getStart()) > 0);
+                RUNTIME_CHECK(segment_ingest_range.getEnd() > file_ingest_range.getStart());
                 file_ingest_range.setStart(segment_ingest_range.end);
             }
             else
@@ -436,16 +436,16 @@ bool DeltaMergeStore::ingestDTFileIntoSegmentUsingSplit(
     // The ingest_range must fall in segment's range.
     RUNTIME_CHECK(!ingest_range.none(), ingest_range.toDebugString());
     RUNTIME_CHECK(
-        compare(segment_range.getStart(), ingest_range.getStart()) <= 0,
+        segment_range.getStart() <= ingest_range.getStart(),
         segment_range.toDebugString(),
         ingest_range.toDebugString());
     RUNTIME_CHECK(
-        compare(segment_range.getEnd(), ingest_range.getEnd()) >= 0,
+        segment_range.getEnd() >= ingest_range.getEnd(),
         segment_range.toDebugString(),
         ingest_range.toDebugString());
 
-    const bool is_start_matching = (compare(segment_range.getStart(), ingest_range.getStart()) == 0);
-    const bool is_end_matching = (compare(segment_range.getEnd(), ingest_range.getEnd()) == 0);
+    const bool is_start_matching = segment_range.getStart() == ingest_range.getStart();
+    const bool is_end_matching = segment_range.getEnd() == ingest_range.getEnd();
 
     if (is_start_matching && is_end_matching)
     {
@@ -605,7 +605,7 @@ UInt64 DeltaMergeStore::ingestFiles(
         {
             RUNTIME_CHECK(!ext_file.range.none(), ext_file.toString());
             RUNTIME_CHECK(
-                compare(last_end.toRowKeyValueRef(), ext_file.range.getStart()) <= 0,
+                last_end.toRowKeyValueRef() <= ext_file.range.getStart(),
                 last_end.toDebugString(),
                 ext_file.toString());
             last_end = ext_file.range.end;
@@ -617,8 +617,7 @@ UInt64 DeltaMergeStore::ingestFiles(
             for (const auto & ext_file : external_files)
             {
                 RUNTIME_CHECK_MSG(
-                    compare(range.getStart(), ext_file.range.getStart()) <= 0
-                        && compare(range.getEnd(), ext_file.range.getEnd()) >= 0,
+                    range.getStart() <= ext_file.range.getStart() && range.getEnd() >= ext_file.range.getEnd(),
                     "Detected illegal region boundary: range={} file_range={} keyspace={} table_id={}. "
                     "TiFlash will exit to prevent data inconsistency. "
                     "If you accept data inconsistency and want to continue the service, "
@@ -877,7 +876,7 @@ std::vector<SegmentPtr> DeltaMergeStore::ingestSegmentsUsingSplit(
             if (succeeded)
             {
                 updated_segments.insert(segment);
-                RUNTIME_CHECK(compare(delete_range.getEnd(), remaining_delete_range.getStart()) >= 0);
+                RUNTIME_CHECK(delete_range.getEnd() >= remaining_delete_range.getStart());
                 remaining_delete_range.setStart(delete_range.end); // We always move forward
             }
             else
@@ -986,7 +985,7 @@ std::vector<SegmentPtr> DeltaMergeStore::ingestSegmentsUsingSplit(
             {
                 updated_segments.insert(segment);
                 // We have ingested (DTFileRange ∪ ThisSegmentRange), let's try with next overlapped segment.
-                RUNTIME_CHECK(compare(segment_ingest_range.getEnd(), file_ingest_range.getStart()) > 0);
+                RUNTIME_CHECK(segment_ingest_range.getEnd() > file_ingest_range.getStart());
                 file_ingest_range.setStart(segment_ingest_range.end);
             }
             else
@@ -1016,16 +1015,16 @@ bool DeltaMergeStore::ingestSegmentDataIntoSegmentUsingSplit(
     // The ingest_range must fall in segment's range.
     RUNTIME_CHECK(!ingest_range.none(), ingest_range.toDebugString());
     RUNTIME_CHECK(
-        compare(segment_range.getStart(), ingest_range.getStart()) <= 0,
+        segment_range.getStart() <= ingest_range.getStart(),
         segment_range.toDebugString(),
         ingest_range.toDebugString());
     RUNTIME_CHECK(
-        compare(segment_range.getEnd(), ingest_range.getEnd()) >= 0,
+        segment_range.getEnd() >= ingest_range.getEnd(),
         segment_range.toDebugString(),
         ingest_range.toDebugString());
 
-    const bool is_start_matching = (compare(segment_range.getStart(), ingest_range.getStart()) == 0);
-    const bool is_end_matching = (compare(segment_range.getEnd(), ingest_range.getEnd()) == 0);
+    const bool is_start_matching = segment_range.getStart() == ingest_range.getStart();
+    const bool is_end_matching = segment_range.getEnd() == ingest_range.getEnd();
 
     if (is_start_matching && is_end_matching)
     {

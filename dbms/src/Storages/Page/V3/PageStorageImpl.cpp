@@ -17,7 +17,6 @@
 #include <Common/Stopwatch.h>
 #include <Common/SyncPoint/SyncPoint.h>
 #include <Common/TiFlashMetrics.h>
-#include <Encryption/FileProvider.h>
 #include <Storages/Page/PageStorage.h>
 #include <Storages/Page/V3/BlobStore.h>
 #include <Storages/Page/V3/PageDefines.h>
@@ -30,7 +29,6 @@
 #include <Storages/PathPool.h>
 #include <common/logger_useful.h>
 
-#include <mutex>
 
 namespace DB::ErrorCodes
 {
