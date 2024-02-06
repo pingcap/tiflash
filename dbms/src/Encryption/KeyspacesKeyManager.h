@@ -58,6 +58,10 @@ private:
 public:
 #endif
     ProxyHelper * proxy_helper;
+    // Use weak_ptr to avoid circular reference, the relationship is:
+    // file_provider -> key_manager
+    // key_manager -> page_storage
+    // page_storage -> file_provider
     std::weak_ptr<UniversalPageStorage> ps_write;
     // cache, keyspace_id -> encryption_key
     LRUCache<KeyspaceID, EncryptionKey> keyspace_id_to_key;
