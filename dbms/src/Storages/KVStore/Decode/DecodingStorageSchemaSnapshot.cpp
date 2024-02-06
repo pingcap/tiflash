@@ -124,7 +124,7 @@ Block createBlockSortByColumnID(DecodingStorageSchemaSnapshotConstPtr schema_sna
 {
     Block block;
     // # Safety
-    // Though `col_id_to_block_pos` lasks some fields in `col_id_to_def_pos`,
+    // Though `col_id_to_block_pos` lacks some fields in `col_id_to_def_pos`,
     // it is always a sub-sequence of `col_id_to_def_pos`.
     for (const auto & [col_id, def_pos] : schema_snapshot->getColId2DefPosMap())
     {
