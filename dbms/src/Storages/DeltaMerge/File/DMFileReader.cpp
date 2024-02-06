@@ -38,13 +38,10 @@ namespace CurrentMetrics
 extern const Metric OpenFileForRead;
 }
 
-namespace DB
-{
-namespace ErrorCodes
+namespace DB::ErrorCodes
 {
 extern const int LOGICAL_ERROR;
 }
-} // namespace DB
 
 namespace DB::DM
 {

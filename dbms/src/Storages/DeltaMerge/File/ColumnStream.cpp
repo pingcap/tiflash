@@ -22,6 +22,8 @@ namespace DB::DM
 class MarkLoader
 {
 public:
+    // Make the instance of `MarkLoader` as a callable object that is used in
+    // `mark_cache->getOrSet(...)`.
     MarksInCompressedFilePtr operator()()
     {
         auto res = std::make_shared<MarksInCompressedFile>(reader.dmfile->getPacks());
@@ -109,7 +111,7 @@ private:
         if (data_size == 0)
             return res;
 
-        // first read from merged file to get the raw data(contains the header)
+        // First, read from merged file to get the raw data(contains the header)
         auto buffer = ReadBufferFromRandomAccessFileBuilder::build(
             reader.file_provider,
             file_path,
@@ -118,11 +120,13 @@ private:
             read_limiter);
         buffer.seek(offset);
 
+        // Read the raw data into memory. It is OK because the mark merged into
+        // merged_file is small enough.
         String raw_data;
         raw_data.resize(data_size);
-
         buffer.read(reinterpret_cast<char *>(raw_data.data()), data_size);
-        // read from the buffer based on the raw data
+
+        // Then read from the buffer based on the raw data
         auto buf = ChecksumReadBufferBuilder::build(
             std::move(raw_data),
             reader.dmfile->colDataPath(file_name_base),
