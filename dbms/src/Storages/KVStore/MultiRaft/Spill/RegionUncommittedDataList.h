@@ -28,7 +28,7 @@ struct RegionUncommittedData
     {}
     RegionUncommittedData(
         const RawTiDBPK & pk_,
-        const UInt8 & write_type_,
+        const UInt8 write_type_,
         const std::shared_ptr<const TiKVValue> & value_)
         : pk(pk_)
         , write_type(write_type_)
