@@ -17,8 +17,8 @@
 
 namespace DB
 {
-template <bool has_checksum>
-bool CompressedReadBuffer<has_checksum>::nextImpl()
+template <bool has_legacy_checksum>
+bool CompressedReadBuffer<has_legacy_checksum>::nextImpl()
 {
     size_t size_decompressed;
     size_t size_compressed_without_checksum;
@@ -35,8 +35,8 @@ bool CompressedReadBuffer<has_checksum>::nextImpl()
     return true;
 }
 
-template <bool has_checksum>
-size_t CompressedReadBuffer<has_checksum>::readBig(char * to, size_t n)
+template <bool has_legacy_checksum>
+size_t CompressedReadBuffer<has_legacy_checksum>::readBig(char * to, size_t n)
 {
     size_t bytes_read = 0;
 
