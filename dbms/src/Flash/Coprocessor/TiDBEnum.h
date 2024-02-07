@@ -32,6 +32,6 @@ public:
         , name(name_)
     {}
     UInt64 value;
-    const StringRef & name;
+    const StringRef name;
 };
 } // namespace DB
