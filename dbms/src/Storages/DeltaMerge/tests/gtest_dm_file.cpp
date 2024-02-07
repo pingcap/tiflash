@@ -622,7 +622,7 @@ public:
 
     void SetUp() override
     {
-        TiFlashStorageTestBasic::SetUp();
+        DB::DM::tests::DMFileMetaV2Test::SetUp();
 
         auto mode = GetParam();
         auto configuration = createConfiguration(mode);

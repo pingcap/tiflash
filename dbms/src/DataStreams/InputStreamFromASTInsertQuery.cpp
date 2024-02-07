@@ -14,8 +14,8 @@
 
 #include <DataStreams/BlockIO.h>
 #include <DataStreams/InputStreamFromASTInsertQuery.h>
-#include <IO/ConcatReadBuffer.h>
-#include <IO/ReadBufferFromMemory.h>
+#include <IO/Buffer/ConcatReadBuffer.h>
+#include <IO/Buffer/ReadBufferFromMemory.h>
 #include <Interpreters/Context.h>
 #include <Parsers/ASTInsertQuery.h>
 
@@ -34,7 +34,7 @@ InputStreamFromASTInsertQuery::InputStreamFromASTInsertQuery(
     const BlockIO & streams,
     Context & context)
 {
-    const ASTInsertQuery * ast_insert_query = dynamic_cast<const ASTInsertQuery *>(ast.get());
+    const auto * ast_insert_query = dynamic_cast<const ASTInsertQuery *>(ast.get());
 
     if (!ast_insert_query)
         throw Exception(

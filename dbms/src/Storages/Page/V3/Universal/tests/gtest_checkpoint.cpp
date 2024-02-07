@@ -13,10 +13,10 @@
 // limitations under the License.
 
 #include <Common/SyncPoint/SyncPoint.h>
-#include <Encryption/FileProvider.h>
 #include <Flash/Disaggregated/MockS3LockClient.h>
 #include <IO/BaseFile/PosixRandomAccessFile.h>
-#include <IO/ReadBufferFromFile.h>
+#include <IO/Buffer/ReadBufferFromFile.h>
+#include <IO/FileProvider.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/Remote/DataStore/DataStoreS3.h>
 #include <Storages/Page/V3/CheckpointFile/CPManifestFileReader.h>

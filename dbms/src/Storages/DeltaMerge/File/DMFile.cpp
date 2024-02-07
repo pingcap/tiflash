@@ -16,12 +16,12 @@
 #include <Common/StringUtils/StringRefUtils.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/escapeForFileName.h>
-#include <Encryption/WriteBufferFromWritableFileBuilder.h>
+#include <IO/Buffer/ReadBufferFromString.h>
 #include <IO/Checksum/ChecksumReadBufferBuilder.h>
 #include <IO/IOSWrapper.h>
-#include <IO/ReadBufferFromString.h>
-#include <IO/ReadHelpers.h>
-#include <IO/WriteHelpers.h>
+#include <IO/Util/ReadHelpers.h>
+#include <IO/Util/WriteHelpers.h>
+#include <IO/WriteBufferFromWritableFileBuilder.h>
 #include <Poco/DirectoryIterator.h>
 #include <Poco/File.h>
 #include <Poco/Path.h>

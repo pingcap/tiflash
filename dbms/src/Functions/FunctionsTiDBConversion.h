@@ -47,9 +47,9 @@
 #include <Functions/FunctionsMiscellaneous.h>
 #include <Functions/IFunction.h>
 #include <Functions/castTypeToEither.h>
-#include <IO/Operators.h>
-#include <IO/ReadBufferFromMemory.h>
-#include <IO/WriteBufferFromVector.h>
+#include <IO/Buffer/ReadBufferFromMemory.h>
+#include <IO/Buffer/WriteBufferFromVector.h>
+#include <IO/Util/Operators.h>
 #include <IO/parseDateTimeBestEffort.h>
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/ExpressionActions.h>

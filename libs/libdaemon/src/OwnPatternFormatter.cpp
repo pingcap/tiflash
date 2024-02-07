@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <IO/WriteBufferFromString.h>
-#include <IO/WriteHelpers.h>
+#include <IO/Buffer/WriteBufferFromString.h>
+#include <IO/Util/WriteHelpers.h>
 #include <Poco/Ext/ThreadNumber.h>
 #include <daemon/BaseDaemon.h>
 #include <daemon/OwnPatternFormatter.h>
@@ -40,7 +40,7 @@ void OwnPatternFormatter::format(const Poco::Message & msg, std::string & text)
     }
 
     /// Output time with microsecond resolution.
-    timeval tv;
+    timeval tv{};
     if (0 != gettimeofday(&tv, nullptr))
         DB::throwFromErrno("Cannot gettimeofday");
 

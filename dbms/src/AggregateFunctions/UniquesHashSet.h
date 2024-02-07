@@ -16,11 +16,11 @@
 
 #include <Common/HashTable/Hash.h>
 #include <Common/HashTable/HashTableAllocator.h>
-#include <IO/ReadBuffer.h>
-#include <IO/ReadHelpers.h>
-#include <IO/VarInt.h>
-#include <IO/WriteBuffer.h>
-#include <IO/WriteHelpers.h>
+#include <IO/Buffer/ReadBuffer.h>
+#include <IO/Buffer/WriteBuffer.h>
+#include <IO/Util/ReadHelpers.h>
+#include <IO/Util/VarInt.h>
+#include <IO/Util/WriteHelpers.h>
 #include <common/types.h>
 #include <math.h>
 

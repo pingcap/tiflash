@@ -15,8 +15,8 @@
 #include <Core/Block.h>
 #include <DataStreams/BlockStreamProfileInfo.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
-#include <IO/ReadHelpers.h>
-#include <IO/WriteHelpers.h>
+#include <IO/Util/ReadHelpers.h>
+#include <IO/Util/WriteHelpers.h>
 
 namespace DB
 {

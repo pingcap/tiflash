@@ -38,8 +38,8 @@
 #include <Functions/FunctionsLogical.h>
 #include <Functions/IFunction.h>
 #include <Functions/StringUtil.h>
-#include <IO/ReadBufferFromMemory.h>
-#include <IO/ReadHelpers.h>
+#include <IO/Buffer/ReadBufferFromMemory.h>
+#include <IO/Util/ReadHelpers.h>
 #include <fmt/core.h>
 
 #include <limits>
