@@ -347,9 +347,10 @@ void flashEnumColToArrowCol(
                 enum_value,
                 enum_value_size);
 
+	const auto & enum_name = enum_type->getNameForValue(static_cast<const DataTypeEnum16::FieldType>(enum_value));
         TiDBEnum ti_enum(
             enum_value,
-            enum_type->getNameForValue(static_cast<const DataTypeEnum16::FieldType>(enum_value)));
+            enum_name);
         dag_column.append(ti_enum);
     }
 }
