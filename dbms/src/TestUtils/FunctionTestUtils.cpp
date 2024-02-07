@@ -94,7 +94,8 @@ template <typename ExpectedT, typename ActualT, typename ExpectedDisplayT, typen
     const ColumnPtr & expected,
     const ColumnPtr & actual,
     const TiDB::ITiDBCollator * collator,
-    bool is_floating_point)
+    bool is_floating_point,
+    bool exact_match_for_floating_point)
 {
     ASSERT_EQUAL(expected->getName(), actual->getName(), "Column name mismatch");
     ASSERT_EQUAL(expected->size(), actual->size(), "Column size mismatch");
@@ -123,7 +124,7 @@ template <typename ExpectedT, typename ActualT, typename ExpectedDisplayT, typen
         auto expected_field = (*expected)[i];
         auto actual_field = (*actual)[i];
 
-        if (!is_floating_point)
+        if (!is_floating_point || exact_match_for_floating_point)
         {
             if (collator != nullptr && !expected_field.isNull() && !actual_field.isNull())
             {
@@ -159,12 +160,18 @@ template <typename ExpectedT, typename ActualT, typename ExpectedDisplayT, typen
 ::testing::AssertionResult columnEqual(
     const ColumnWithTypeAndName & expected,
     const ColumnWithTypeAndName & actual,
-    const TiDB::ITiDBCollator * collator)
+    const TiDB::ITiDBCollator * collator,
+    bool exact_match_for_floating_point)
 {
     if (auto ret = dataTypeEqual(expected.type, actual.type); !ret)
         return ret;
 
-    return columnEqual(expected.column, actual.column, collator, expected.type->isFloatingPoint());
+    return columnEqual(
+        expected.column,
+        actual.column,
+        collator,
+        expected.type->isFloatingPoint(),
+        exact_match_for_floating_point);
 }
 
 ::testing::AssertionResult blockEqual(const Block & expected, const Block & actual)
