@@ -16,9 +16,9 @@
 
 #include <Common/Checksum.h>
 #include <Common/nocopyable.h>
-#include <Encryption/FileProvider.h>
-#include <IO/WriteBufferFromFileBase.h>
-#include <IO/WriteBufferFromWritableFile.h>
+#include <IO/Buffer/WriteBufferFromFileBase.h>
+#include <IO/Buffer/WriteBufferFromWritableFile.h>
+#include <IO/FileProvider.h>
 
 #include <string>
 

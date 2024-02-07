@@ -14,7 +14,7 @@
 
 #include <Common/RedactHelpers.h>
 #include <Common/hex.h>
-#include <IO/WriteHelpers.h>
+#include <IO/Util/WriteHelpers.h>
 #include <common/types.h>
 #include <pingcap/RedactHelpers.h>
 
@@ -72,7 +72,7 @@ void Redact::keyToDebugString(const char * key, const size_t size, std::ostream 
     for (size_t i = 0; i < size; ++i)
     {
         // width need to be set for each output (https://stackoverflow.com/questions/405039/permanent-stdsetw)
-        oss << std::setw(2) << Int32(UInt8(key[i]));
+        oss << std::setw(2) << static_cast<Int32>(static_cast<UInt8>(key[i]));
     }
     oss.flags(flags); // restore flags
 }

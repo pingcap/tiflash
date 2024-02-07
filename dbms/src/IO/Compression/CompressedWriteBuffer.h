@@ -15,16 +15,23 @@
 #pragma once
 
 #include <Common/PODArray.h>
-#include <IO/BufferWithOwnMemory.h>
+#include <IO/Buffer/BufferWithOwnMemory.h>
+#include <IO/Buffer/WriteBuffer.h>
 #include <IO/Compression/CompressionSettings.h>
-#include <IO/WriteBuffer.h>
 
 #include <memory>
 
 
 namespace DB
 {
-template <bool add_checksum = true>
+/**
+  * add_legacy_checksum:
+  *   For the clickhouse implementation, there is a built-in checksum inside
+  *   CompressedWriteBuffer.
+  *   It is recommand to combine `FramedChecksumWriteBuffer` with
+  *   `CompressedWriteBuffer<add_legacy_checksum=false>` instead.
+  */
+template <bool add_legacy_checksum = true>
 class CompressedWriteBuffer : public BufferWithOwnMemory<WriteBuffer>
 {
 private:
@@ -40,6 +47,18 @@ public:
         WriteBuffer & out_,
         CompressionSettings compression_settings = CompressionSettings(),
         size_t buf_size = DBMS_DEFAULT_BUFFER_SIZE);
+
+    static std::unique_ptr<WriteBuffer> build(
+        WriteBuffer & plain_file,
+        CompressionSettings compression_settings,
+        bool enable_legacy_checksum)
+    {
+        if (!enable_legacy_checksum)
+        {
+            return std::make_unique<CompressedWriteBuffer<false>>(plain_file, std::move(compression_settings));
+        }
+        return std::make_unique<CompressedWriteBuffer<true>>(plain_file, std::move(compression_settings));
+    }
 
     /// The amount of compressed data
     size_t getCompressedBytes()

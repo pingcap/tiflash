@@ -16,9 +16,9 @@
 
 #include <DataStreams/IBlockOutputStream.h>
 #include <DataStreams/MarkInCompressedFile.h>
+#include <IO/Buffer/WriteBufferFromOStream.h>
 #include <IO/Checksum/ChecksumWriteBufferBuilder.h>
 #include <IO/Compression/CompressedWriteBuffer.h>
-#include <IO/WriteBufferFromOStream.h>
 #include <Storages/DeltaMerge/DMChecksumConfig.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/Index/MinMaxIndex.h>
@@ -65,11 +65,7 @@ public:
                 /*flags*/ -1,
                 /*mode*/ 0666,
                 max_compress_block_size))
-            , compressed_buf(
-                  dmfile->configuration ? std::unique_ptr<WriteBuffer>(
-                      new CompressedWriteBuffer<false>(*plain_file, compression_settings))
-                                        : std::unique_ptr<WriteBuffer>(
-                                            new CompressedWriteBuffer<true>(*plain_file, compression_settings)))
+            , compressed_buf(CompressedWriteBuffer<>::build(*plain_file, compression_settings, !dmfile->configuration))
             , minmaxes(do_index ? std::make_shared<MinMaxIndex>(*type) : nullptr)
         {
             if (!dmfile->useMetaV2())

@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <DataStreams/TabSeparatedRowOutputStream.h>
-#include <IO/WriteHelpers.h>
+#include <IO/Util/WriteHelpers.h>
 
 
 namespace DB

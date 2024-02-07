@@ -15,8 +15,8 @@
 #pragma once
 
 #include <Core/Types.h>
-#include <Encryption/ReadBufferFromRandomAccessFileBuilder.h>
-#include <IO/WriteBufferFromWritableFile.h>
+#include <IO/Buffer/WriteBufferFromWritableFile.h>
+#include <IO/ReadBufferFromRandomAccessFileBuilder.h>
 #include <Poco/File.h>
 #include <Storages/DeltaMerge/DMChecksumConfig.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
@@ -42,9 +42,13 @@ namespace DB::DM
 namespace tests
 {
 class DMFileTest;
+class DMFileMetaV2Test;
 class DMStoreForSegmentReadTaskTest;
 } // namespace tests
 
+// TODO: Split DMFile into subclasses and separate
+//       the logic under different version? There are
+//       some member is not used under the latest version
 class DMFile : private boost::noncopyable
 {
 public:
@@ -514,9 +518,12 @@ private:
     friend class DMFileWriter;
     friend class DMFileWriterRemote;
     friend class DMFileReader;
+    friend class MarkLoader;
+    friend class ColumnReadStream;
     friend class DMFilePackFilter;
     friend class DMFileBlockInputStreamBuilder;
     friend class tests::DMFileTest;
+    friend class tests::DMFileMetaV2Test;
     friend class tests::DMStoreForSegmentReadTaskTest;
     friend int ::DTTool::Migrate::migrateServiceMain(
         DB::Context & context,

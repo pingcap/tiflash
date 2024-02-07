@@ -15,7 +15,7 @@
 #include <Common/ErrorExporter.h>
 #include <Common/TiFlashBuildInfo.h>
 #include <Common/config.h>
-#include <IO/WriteBufferFromFile.h>
+#include <IO/Buffer/WriteBufferFromFile.h>
 #include <common/config_common.h>
 #include <config_tools.h>
 
