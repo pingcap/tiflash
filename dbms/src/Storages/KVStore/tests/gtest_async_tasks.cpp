@@ -247,10 +247,16 @@ try
 
         if (s[to_be_canceled] && !f[to_be_canceled])
         {
+            auto state = async_tasks->queryState(to_be_canceled);
+            RUNTIME_CHECK(state == TestAsyncTasks::TaskState::InQueue || state == TestAsyncTasks::TaskState::Running);
             async_tasks->asyncCancelTask(
                 to_be_canceled,
-                [&]() { f[to_be_canceled] = true; },
+                []() {},
                 true);
+            f[to_be_canceled] = true;
+            ASSERT_EQ(async_tasks->queryState(to_be_canceled), TestAsyncTasks::TaskState::NotScheduled);
+            ASSERT_EQ(f[to_be_canceled], true);
+            ASSERT_EQ(s[to_be_canceled], true);
         }
 
         // Add tasks
@@ -294,8 +300,7 @@ try
             {
                 if (async_tasks->isReady(i))
                 {
-                    auto r = async_tasks->fetchResult(i);
-                    UNUSED(r);
+                    [[maybe_unused]] auto r = async_tasks->fetchResult(i);
                     f[i] = true;
                 }
             }
