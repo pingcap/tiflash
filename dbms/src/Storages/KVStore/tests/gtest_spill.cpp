@@ -99,7 +99,8 @@ static DB::RegionUncommittedDataList buildUncommitReadList(TableID table_id, Moc
         = RecordKVFormat::encodeLockCfValue(RecordKVFormat::CFModifyFlag::PutFlag, "PK", 111, 999).toString();
     auto pk = RecordKVFormat::getRawTiDBPK(RecordKVFormat::decodeTiKVKey(str_key));
     auto value = std::make_shared<TiKVValue>(TiKVValue::copyFrom(str_val_default));
-    data_list_read.data.push_back(RegionUncommittedData(std::move(pk), RecordKVFormat::CFModifyFlag::PutFlag, value));
+    data_list_read.getInner().push_back(
+        RegionUncommittedData(std::move(pk), RecordKVFormat::CFModifyFlag::PutFlag, value));
 
     return data_list_read;
 }

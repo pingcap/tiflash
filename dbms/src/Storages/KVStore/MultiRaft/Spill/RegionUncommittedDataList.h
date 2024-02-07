@@ -39,7 +39,6 @@ struct RegionUncommittedData
     RegionUncommittedData & operator=(const RegionUncommittedData &) = default;
     RegionUncommittedData & operator=(RegionUncommittedData &&) = default;
 
-public:
     RawTiDBPK pk;
     UInt8 write_type;
     std::shared_ptr<const TiKVValue> value;
@@ -48,9 +47,6 @@ public:
 struct RegionUncommittedDataList
 {
     using Inner = std::vector<RegionUncommittedData>;
-
-    Inner data;
-    Timestamp start_ts;
 
     Inner::const_iterator cbegin() const { return data.cbegin(); }
 
@@ -65,6 +61,13 @@ struct RegionUncommittedDataList
     Inner::const_iterator end() const { return data.end(); }
 
     size_t size() const { return data.size(); }
+
+    Inner & getInner() { return data; }
+    const Inner & getInner() const { return data; }
+
+private:
+    Inner data;
+    // Timestamp start_ts;
 };
 
 } // namespace DB
