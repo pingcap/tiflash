@@ -22,8 +22,8 @@
 #include <DataStreams/InputStreamFromASTInsertQuery.h>
 #include <DataStreams/copyData.h>
 #include <Flash/Coprocessor/DAGContext.h>
-#include <IO/ConcatReadBuffer.h>
-#include <IO/WriteBufferFromFile.h>
+#include <IO/Buffer/ConcatReadBuffer.h>
+#include <IO/Buffer/WriteBufferFromFile.h>
 #include <Interpreters/IQuerySource.h>
 #include <Interpreters/InterpreterFactory.h>
 #include <Interpreters/ProcessList.h>
@@ -96,8 +96,7 @@ void setExceptionStackTrace(QueryLogElement & elem)
         elem.stack_trace = e.getStackTrace().toString();
     }
     catch (...)
-    {
-    }
+    {}
 }
 
 

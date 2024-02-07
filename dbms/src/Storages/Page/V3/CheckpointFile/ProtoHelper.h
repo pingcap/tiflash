@@ -14,8 +14,8 @@
 
 #pragma once
 
-#include <IO/ReadBuffer.h>
-#include <IO/WriteBuffer.h>
+#include <IO/Buffer/ReadBuffer.h>
+#include <IO/Buffer/WriteBuffer.h>
 #include <google/protobuf/message.h>
 
 namespace DB::PS::V3::details

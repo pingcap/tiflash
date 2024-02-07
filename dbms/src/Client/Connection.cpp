@@ -23,13 +23,13 @@
 #include <Core/Defines.h>
 #include <DataStreams/NativeBlockInputStream.h>
 #include <DataStreams/NativeBlockOutputStream.h>
+#include <IO/Buffer/ReadBufferFromPocoSocket.h>
+#include <IO/Buffer/WriteBufferFromPocoSocket.h>
 #include <IO/Compression/CompressedReadBuffer.h>
 #include <IO/Compression/CompressedWriteBuffer.h>
-#include <IO/ReadBufferFromPocoSocket.h>
-#include <IO/ReadHelpers.h>
-#include <IO/WriteBufferFromPocoSocket.h>
-#include <IO/WriteHelpers.h>
-#include <IO/copyData.h>
+#include <IO/Util/ReadHelpers.h>
+#include <IO/Util/WriteHelpers.h>
+#include <IO/Util/copyData.h>
 #include <Interpreters/ClientInfo.h>
 #include <Poco/Net/NetException.h>
 

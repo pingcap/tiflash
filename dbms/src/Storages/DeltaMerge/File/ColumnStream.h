@@ -15,7 +15,7 @@
 #pragma once
 
 #include <DataStreams/MarkInCompressedFile.h>
-#include <Encryption/CompressedReadBufferFromFileProvider.h>
+#include <IO/Encryption/CompressedReadBufferFromFileProvider.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <common/types.h>
 

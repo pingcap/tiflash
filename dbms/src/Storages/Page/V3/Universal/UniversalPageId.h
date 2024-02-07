@@ -15,8 +15,8 @@
 #pragma once
 
 #include <Common/RedactHelpers.h>
-#include <IO/WriteBufferFromString.h>
-#include <IO/WriteHelpers.h>
+#include <IO/Buffer/WriteBufferFromString.h>
+#include <IO/Util/WriteHelpers.h>
 #include <Storages/Page/PageDefinesBase.h>
 
 namespace DB

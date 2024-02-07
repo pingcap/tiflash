@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include <IO/Endian.h>
+#include <IO/Util/Endian.h>
 #include <Storages/KVStore/Types.h>
 #include <common/defines.h>
 

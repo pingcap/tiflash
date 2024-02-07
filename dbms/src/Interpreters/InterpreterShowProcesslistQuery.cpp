@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <IO/ReadBufferFromString.h>
+#include <IO/Buffer/ReadBufferFromString.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterShowProcesslistQuery.h>
 #include <Interpreters/executeQuery.h>

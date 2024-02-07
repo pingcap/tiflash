@@ -16,8 +16,8 @@
 
 #include <Common/TiFlashBuildInfo.h>
 #include <Common/UnifiedLogFormatter.h>
-#include <Encryption/DataKeyManager.h>
-#include <Encryption/MockKeyManager.h>
+#include <IO/Encryption/DataKeyManager.h>
+#include <IO/Encryption/MockKeyManager.h>
 #include <Interpreters/Context.h>
 #include <Poco/ConsoleChannel.h>
 #include <Poco/File.h>

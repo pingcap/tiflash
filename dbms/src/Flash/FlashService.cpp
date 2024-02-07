@@ -35,8 +35,8 @@
 #include <Flash/Mpp/MppVersion.h>
 #include <Flash/Mpp/Utils.h>
 #include <Flash/ServiceUtils.h>
+#include <IO/Buffer/MemoryReadWriteBuffer.h>
 #include <IO/IOThreadPools.h>
-#include <IO/MemoryReadWriteBuffer.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Interpreters/executeQuery.h>

@@ -13,8 +13,8 @@
 // limitations under the License.
 
 #include <DataStreams/TSKVRowOutputStream.h>
-#include <IO/WriteBufferFromString.h>
-#include <IO/WriteHelpers.h>
+#include <IO/Buffer/WriteBufferFromString.h>
+#include <IO/Util/WriteHelpers.h>
 
 
 namespace DB

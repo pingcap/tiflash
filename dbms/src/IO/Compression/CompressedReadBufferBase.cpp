@@ -15,11 +15,11 @@
 #include <Common/Exception.h>
 #include <Common/PODArray.h>
 #include <Common/ProfileEvents.h>
-#include <IO/BufferWithOwnMemory.h>
+#include <IO/Buffer/BufferWithOwnMemory.h>
+#include <IO/Buffer/ReadBuffer.h>
 #include <IO/Compression/CompressedReadBufferBase.h>
 #include <IO/Compression/CompressedStream.h>
-#include <IO/ReadBuffer.h>
-#include <IO/WriteHelpers.h>
+#include <IO/Util/WriteHelpers.h>
 #include <city.h>
 #include <common/unaligned.h>
 #include <lz4.h>

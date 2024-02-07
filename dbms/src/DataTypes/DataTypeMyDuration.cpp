@@ -17,7 +17,7 @@
 #include <Common/typeid_cast.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <DataTypes/DataTypeMyDuration.h>
-#include <IO/WriteHelpers.h>
+#include <IO/Util/WriteHelpers.h>
 #include <Parsers/ASTLiteral.h>
 
 
@@ -57,7 +57,7 @@ static DataTypePtr create(const ASTPtr & arguments)
             "MyDuration data type can optionally have only one argument - fsp",
             ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
-    const ASTLiteral * arg = typeid_cast<const ASTLiteral *>(arguments->children[0].get());
+    const auto * arg = typeid_cast<const ASTLiteral *>(arguments->children[0].get());
     if (!arg || arg->value.getType() != Field::Types::UInt64)
         throw Exception(
             "Parameter for MyDuration data type must be uint literal",
