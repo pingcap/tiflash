@@ -16,8 +16,8 @@
 
 #include <Core/Block.h>
 #include <DataStreams/JSONRowOutputStream.h>
-#include <IO/WriteBuffer.h>
-#include <IO/WriteBufferValidUTF8.h>
+#include <IO/Buffer/WriteBuffer.h>
+#include <IO/Buffer/WriteBufferValidUTF8.h>
 
 namespace DB
 {

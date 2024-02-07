@@ -14,7 +14,7 @@
 
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
-#include <IO/ReadBufferFromString.h>
+#include <IO/Buffer/ReadBufferFromString.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/SchemaUpdate.h>
 #include <Storages/DeltaMerge/convertColumnTypeHelpers.h>
@@ -31,8 +31,8 @@ TEST(ConvertColumnTypeTest, CastNumeric)
 
         DataTypePtr disk_data_type = typeFromString("UInt8");
         MutableColumnPtr disk_col = disk_data_type->createColumn();
-        disk_col->insert(Field(UInt64(15)));
-        disk_col->insert(Field(UInt64(255)));
+        disk_col->insert(Field(static_cast<UInt64>(15)));
+        disk_col->insert(Field(static_cast<UInt64>(255)));
 
         for (const String & to_type : to_types)
         {
@@ -51,8 +51,8 @@ TEST(ConvertColumnTypeTest, CastNumeric)
 
         DataTypePtr disk_data_type = typeFromString("UInt16");
         MutableColumnPtr disk_col = disk_data_type->createColumn();
-        disk_col->insert(Field(UInt64(15)));
-        disk_col->insert(Field(UInt64(255)));
+        disk_col->insert(Field(static_cast<UInt64>(15)));
+        disk_col->insert(Field(static_cast<UInt64>(255)));
 
         for (const String & to_type : to_types)
         {
@@ -71,8 +71,8 @@ TEST(ConvertColumnTypeTest, CastNumeric)
 
         DataTypePtr disk_data_type = typeFromString("UInt32");
         MutableColumnPtr disk_col = disk_data_type->createColumn();
-        disk_col->insert(Field(UInt64(15)));
-        disk_col->insert(Field(UInt64(255)));
+        disk_col->insert(Field(static_cast<UInt64>(15)));
+        disk_col->insert(Field(static_cast<UInt64>(255)));
 
         for (const String & to_type : to_types)
         {
@@ -91,8 +91,8 @@ TEST(ConvertColumnTypeTest, CastNumeric)
 
         DataTypePtr disk_data_type = typeFromString("Int8");
         MutableColumnPtr disk_col = disk_data_type->createColumn();
-        disk_col->insert(Field(Int64(127)));
-        disk_col->insert(Field(Int64(-1)));
+        disk_col->insert(Field(static_cast<Int64>(127)));
+        disk_col->insert(Field(static_cast<Int64>(-1)));
 
         for (const String & to_type : to_types)
         {
@@ -111,8 +111,8 @@ TEST(ConvertColumnTypeTest, CastNumeric)
 
         DataTypePtr disk_data_type = typeFromString("Int16");
         MutableColumnPtr disk_col = disk_data_type->createColumn();
-        disk_col->insert(Field(Int64(127)));
-        disk_col->insert(Field(Int64(-1)));
+        disk_col->insert(Field(static_cast<Int64>(127)));
+        disk_col->insert(Field(static_cast<Int64>(-1)));
 
         for (const String & to_type : to_types)
         {
@@ -131,8 +131,8 @@ TEST(ConvertColumnTypeTest, CastNumeric)
 
         DataTypePtr disk_data_type = typeFromString("Int32");
         MutableColumnPtr disk_col = disk_data_type->createColumn();
-        disk_col->insert(Field(Int64(127)));
-        disk_col->insert(Field(Int64(-1)));
+        disk_col->insert(Field(static_cast<Int64>(127)));
+        disk_col->insert(Field(static_cast<Int64>(-1)));
 
         for (const String & to_type : to_types)
         {
@@ -150,18 +150,18 @@ TEST(ConvertColumnTypeTest, CastNumeric)
         const Strings to_types = {"Float64"};
         DataTypePtr disk_data_type = typeFromString("Float32");
         auto disk_col = ColumnFloat32::create();
-        disk_col->insert(Float32(3.0));
-        disk_col->insert(Float32(3.1));
-        disk_col->insert(Float32(3.14));
-        disk_col->insert(Float32(3.141));
-        disk_col->insert(Float32(3.1415));
-        disk_col->insert(Float32(3.14151415141514151415141));
-        disk_col->insert(Float32(-3.0));
-        disk_col->insert(Float32(-3.1));
-        disk_col->insert(Float32(-3.14));
-        disk_col->insert(Float32(-3.141));
-        disk_col->insert(Float32(-3.1415));
-        disk_col->insert(Float32(-3.14151415141514151415141));
+        disk_col->insert(static_cast<Float32>(3.0));
+        disk_col->insert(static_cast<Float32>(3.1));
+        disk_col->insert(static_cast<Float32>(3.14));
+        disk_col->insert(static_cast<Float32>(3.141));
+        disk_col->insert(static_cast<Float32>(3.1415));
+        disk_col->insert(static_cast<Float32>(3.14151415141514151415141));
+        disk_col->insert(static_cast<Float32>(-3.0));
+        disk_col->insert(static_cast<Float32>(-3.1));
+        disk_col->insert(static_cast<Float32>(-3.14));
+        disk_col->insert(static_cast<Float32>(-3.141));
+        disk_col->insert(static_cast<Float32>(-3.1415));
+        disk_col->insert(static_cast<Float32>(-3.14151415141514151415141));
         for (const String & to_type : to_types)
         {
             ColumnDefine read_define(0, "c", typeFromString(to_type));
@@ -222,13 +222,13 @@ TEST(ConvertColumnTypeTest, CastNullableToNotNull)
     DataTypePtr disk_data_type = typeFromString("Nullable(Int8)");
     MutableColumnPtr disk_col = disk_data_type->createColumn();
     disk_col->insert(Field()); // a "NULL" value
-    disk_col->insert(Field(Int64(127)));
-    disk_col->insert(Field(Int64(-1)));
+    disk_col->insert(Field(static_cast<Int64>(127)));
+    disk_col->insert(Field(static_cast<Int64>(-1)));
 
     for (const String & to_type : to_types)
     {
         ColumnDefine read_define(0, "c", typeFromString(to_type));
-        read_define.default_value = Field(Int64(99));
+        read_define.default_value = Field(static_cast<Int64>(99));
         auto memory_column = convertColumnByColumnDefineIfNeed(disk_data_type, disk_col->getPtr(), read_define);
 
         Int64 val1 = memory_column->getInt(0);
@@ -247,13 +247,13 @@ TEST(ConvertColumnTypeTest, CastNullableToNotNullWithNonZeroDefaultValue)
     DataTypePtr disk_data_type = typeFromString("Nullable(Int8)");
     MutableColumnPtr disk_col = disk_data_type->createColumn();
     disk_col->insert(Field()); // a "NULL" value
-    disk_col->insert(Field(Int64(127)));
-    disk_col->insert(Field(Int64(-1)));
+    disk_col->insert(Field(static_cast<Int64>(127)));
+    disk_col->insert(Field(static_cast<Int64>(-1)));
 
     for (const String & to_type : to_types)
     {
         ColumnDefine read_define(0, "c", typeFromString(to_type));
-        read_define.default_value = Field(Int64(5));
+        read_define.default_value = Field(static_cast<Int64>(5));
         auto memory_column = convertColumnByColumnDefineIfNeed(disk_data_type, disk_col->getPtr(), read_define);
 
         Int64 val1 = memory_column->getInt(0);
@@ -272,8 +272,8 @@ TEST(ConvertColumnTypeTest, CastNullableToNullable)
     DataTypePtr disk_data_type = typeFromString("Nullable(Int8)");
     MutableColumnPtr disk_col = disk_data_type->createColumn();
     disk_col->insert(Field()); // a "NULL" value
-    disk_col->insert(Field(Int64(127)));
-    disk_col->insert(Field(Int64(-1)));
+    disk_col->insert(Field(static_cast<Int64>(127)));
+    disk_col->insert(Field(static_cast<Int64>(-1)));
 
     for (const String & to_type : to_types)
     {
@@ -302,8 +302,8 @@ TEST(ConvertColumnTypeTest, CastNotNullToNullable)
 
     DataTypePtr disk_data_type = typeFromString("Int8");
     MutableColumnPtr disk_col = disk_data_type->createColumn();
-    disk_col->insert(Field(Int64(127)));
-    disk_col->insert(Field(Int64(-1)));
+    disk_col->insert(Field(static_cast<Int64>(127)));
+    disk_col->insert(Field(static_cast<Int64>(-1)));
 
     for (const String & to_type : to_types)
     {

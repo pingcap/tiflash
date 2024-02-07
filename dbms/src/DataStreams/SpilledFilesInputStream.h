@@ -16,10 +16,10 @@
 
 #include <Core/Spiller.h>
 #include <DataStreams/NativeBlockInputStream.h>
-#include <Encryption/EncryptionPath.h>
-#include <Encryption/ReadBufferFromRandomAccessFileBuilder.h>
+#include <IO/Buffer/ReadBufferFromFile.h>
 #include <IO/Compression/CompressedReadBuffer.h>
-#include <IO/ReadBufferFromFile.h>
+#include <IO/EncryptionPath.h>
+#include <IO/ReadBufferFromRandomAccessFileBuilder.h>
 
 namespace DB
 {

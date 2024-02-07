@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include <IO/WriteBuffer.h>
+#include <IO/Buffer/WriteBuffer.h>
 
 #include <string>
 

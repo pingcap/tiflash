@@ -18,10 +18,11 @@
 #endif // TIFLASH_DEFAULT_CHECKSUM_FRAME_SIZE
 
 #include <Common/Checksum.h>
+#include <Common/TiFlashException.h>
 #include <IO/BaseFile/RandomAccessFile.h>
 #include <IO/BaseFile/WritableFile.h>
-#include <IO/ReadBufferFromFileDescriptor.h>
-#include <IO/WriteBufferFromFileDescriptor.h>
+#include <IO/Buffer/ReadBufferFromFileDescriptor.h>
+#include <IO/Buffer/WriteBufferFromFileDescriptor.h>
 #include <fmt/format.h>
 
 namespace ProfileEvents

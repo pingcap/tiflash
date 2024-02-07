@@ -13,9 +13,9 @@
 // limitations under the License.
 
 #include <Common/formatReadable.h>
+#include <IO/Buffer/WriteBufferFromString.h>
 #include <IO/DoubleConverter.h>
-#include <IO/WriteBufferFromString.h>
-#include <IO/WriteHelpers.h>
+#include <IO/Util/WriteHelpers.h>
 
 #include <cmath>
 #include <iomanip>
