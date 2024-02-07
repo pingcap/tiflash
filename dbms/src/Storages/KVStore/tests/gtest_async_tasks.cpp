@@ -249,7 +249,9 @@ try
         {
             async_tasks->asyncCancelTask(
                 to_be_canceled,
-                []() {},
+                [&]() {
+                    f[to_be_canceled] = true;
+                },
                 true);
         }
 
