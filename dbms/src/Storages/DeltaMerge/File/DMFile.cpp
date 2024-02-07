@@ -247,15 +247,15 @@ size_t DMFile::colIndexSize(ColId id)
     }
 }
 
-size_t DMFile::colDataSize(ColId id, bool is_null_map, bool is_array_map)
+size_t DMFile::colDataSize(ColId id, ColDataType type)
 {
     if (useMetaV2())
     {
         if (auto itr = column_stats.find(id); itr != column_stats.end())
         {
-            return is_null_map ? itr->second.nullmap_data_bytes
-                : is_array_map ? itr->second.array_sizes_bytes
-                               : itr->second.data_bytes;
+            return type == ColDataType::NullMap   ? itr->second.nullmap_data_bytes
+                : type == ColDataType::ArraySizes ? itr->second.array_sizes_bytes
+                                                  : itr->second.data_bytes;
         }
         else
         {
@@ -264,8 +264,9 @@ size_t DMFile::colDataSize(ColId id, bool is_null_map, bool is_array_map)
     }
     else
     {
-        RUNTIME_CHECK_MSG(!is_array_map, "Can not get array map size by filename, col_id={}", id);
-        auto namebase = is_null_map ? getFileNameBase(id, {IDataType::Substream::NullMap}) : getFileNameBase(id);
+        RUNTIME_CHECK_MSG(type != ColDataType::ArraySizes, "Can not get array map size by filename, col_id={}", id);
+        auto namebase = //
+            (type == ColDataType::NullMap) ? getFileNameBase(id, {IDataType::Substream::NullMap}) : getFileNameBase(id);
         return colDataSizeByName(namebase);
     }
 }
@@ -1247,7 +1248,7 @@ void DMFile::finalizeSmallFiles(
             auto fname = colDataFileName(getFileNameBase(col_id, {}));
             auto fsize = stat.data_bytes;
             copy_file_to_cur(fname, fsize);
-            delete_file_name.push_back(fname);
+            delete_file_name.emplace_back(std::move(fname));
         }
 
         // check .null.data
@@ -1256,7 +1257,7 @@ void DMFile::finalizeSmallFiles(
             auto fname = colDataFileName(getFileNameBase(col_id, {IDataType::Substream::NullMap}));
             auto fsize = stat.nullmap_data_bytes;
             copy_file_to_cur(fname, fsize);
-            delete_file_name.push_back(fname);
+            delete_file_name.emplace_back(std::move(fname));
         }
 
         // check .size0.dat
@@ -1265,7 +1266,7 @@ void DMFile::finalizeSmallFiles(
             auto fname = colDataFileName(getFileNameBase(col_id, {IDataType::Substream::ArraySizes}));
             auto fsize = stat.array_sizes_bytes;
             copy_file_to_cur(fname, fsize);
-            delete_file_name.push_back(fname);
+            delete_file_name.emplace_back(std::move(fname));
         }
     }
 

@@ -244,7 +244,9 @@ void DMFileMetaV2Test::checkColumnStats(const DMFilePtr & dmfile1, const DMFileP
             col_stat2.col_id,
             col_stat2.type->getName());
 
-        ASSERT_EQ(dmfile1->colDataSize(col_def.id, false, false), dmfile2->colDataSize(col_def.id, false, false));
+        ASSERT_EQ(
+            dmfile1->colDataSize(col_def.id, DMFile::ColDataType::Elements),
+            dmfile2->colDataSize(col_def.id, DMFile::ColDataType::Elements));
         ASSERT_EQ(dmfile1->isColIndexExist(col_def.id), dmfile2->isColIndexExist(col_def.id));
         if (dmfile1->isColIndexExist(col_def.id))
         {
@@ -252,7 +254,15 @@ void DMFileMetaV2Test::checkColumnStats(const DMFilePtr & dmfile1, const DMFileP
         }
         if (col_def.type->isNullable())
         {
-            ASSERT_EQ(dmfile1->colDataSize(col_def.id, true, false), dmfile2->colDataSize(col_def.id, true, false));
+            ASSERT_EQ(
+                dmfile1->colDataSize(col_def.id, DMFile::ColDataType::NullMap),
+                dmfile2->colDataSize(col_def.id, DMFile::ColDataType::NullMap));
+        }
+        if (col_def.type->getTypeId() == TypeIndex::Array)
+        {
+            ASSERT_EQ(
+                dmfile1->colDataSize(col_def.id, DMFile::ColDataType::ArraySizes),
+                dmfile2->colDataSize(col_def.id, DMFile::ColDataType::ArraySizes));
         }
     }
 }
