@@ -25,8 +25,8 @@ namespace ErrorCodes
 extern const int SEEK_POSITION_OUT_OF_BOUND;
 }
 
-template <bool has_checksum>
-bool CompressedReadBufferFromFileProvider<has_checksum>::nextImpl()
+template <bool has_legacy_checksum>
+bool CompressedReadBufferFromFileProviderImpl<has_legacy_checksum>::nextImpl()
 {
     size_t size_decompressed;
     size_t size_compressed_without_checksum;
@@ -43,8 +43,8 @@ bool CompressedReadBufferFromFileProvider<has_checksum>::nextImpl()
     return true;
 }
 
-template <bool has_checksum>
-CompressedReadBufferFromFileProvider<has_checksum>::CompressedReadBufferFromFileProvider(
+template <bool has_legacy_checksum>
+CompressedReadBufferFromFileProviderImpl<has_legacy_checksum>::CompressedReadBufferFromFileProviderImpl(
     FileProviderPtr & file_provider,
     const std::string & path,
     const EncryptionPath & encryption_path,
@@ -61,11 +61,12 @@ CompressedReadBufferFromFileProvider<has_checksum>::CompressedReadBufferFromFile
           read_limiter_))
     , file_in(*p_file_in)
 {
+    assert(has_legacy_checksum == true);
     this->compressed_in = &file_in;
 }
 
-template <bool has_checksum>
-CompressedReadBufferFromFileProvider<has_checksum>::CompressedReadBufferFromFileProvider(
+template <bool has_legacy_checksum>
+CompressedReadBufferFromFileProviderImpl<has_legacy_checksum>::CompressedReadBufferFromFileProviderImpl(
     FileProviderPtr & file_provider,
     const std::string & path,
     const EncryptionPath & encryption_path,
@@ -84,11 +85,12 @@ CompressedReadBufferFromFileProvider<has_checksum>::CompressedReadBufferFromFile
           checksum_frame_size))
     , file_in(*p_file_in)
 {
+    assert(has_legacy_checksum == false);
     this->compressed_in = &file_in;
 }
 
-template <bool has_checksum>
-CompressedReadBufferFromFileProvider<has_checksum>::CompressedReadBufferFromFileProvider(
+template <bool has_legacy_checksum>
+CompressedReadBufferFromFileProviderImpl<has_legacy_checksum>::CompressedReadBufferFromFileProviderImpl(
     String && data,
     const String & file_name,
     size_t estimated_size,
@@ -103,11 +105,12 @@ CompressedReadBufferFromFileProvider<has_checksum>::CompressedReadBufferFromFile
           checksum_frame_size))
     , file_in(*p_file_in)
 {
+    assert(has_legacy_checksum == false);
     this->compressed_in = &file_in;
 }
 
-template <bool has_checksum>
-void CompressedReadBufferFromFileProvider<has_checksum>::seek(
+template <bool has_legacy_checksum>
+void CompressedReadBufferFromFileProviderImpl<has_legacy_checksum>::seek(
     size_t offset_in_compressed_file,
     size_t offset_in_decompressed_block)
 {
@@ -138,8 +141,8 @@ void CompressedReadBufferFromFileProvider<has_checksum>::seek(
     }
 }
 
-template <bool has_checksum>
-size_t CompressedReadBufferFromFileProvider<has_checksum>::readBig(char * to, size_t n)
+template <bool has_legacy_checksum>
+size_t CompressedReadBufferFromFileProviderImpl<has_legacy_checksum>::readBig(char * to, size_t n)
 {
     size_t bytes_read = 0;
 
@@ -184,7 +187,7 @@ size_t CompressedReadBufferFromFileProvider<has_checksum>::readBig(char * to, si
     return bytes_read;
 }
 
-template class CompressedReadBufferFromFileProvider<true>;
-template class CompressedReadBufferFromFileProvider<false>;
+template class CompressedReadBufferFromFileProviderImpl<true>;
+template class CompressedReadBufferFromFileProviderImpl<false>;
 
 } // namespace DB

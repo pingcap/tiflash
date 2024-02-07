@@ -26,7 +26,7 @@
 namespace DB
 {
 /// CompressedSeekableReaderBuffer provides an extra abstraction layer to unify compressed buffers
-/// This helps to unify CompressedReadBufferFromFileProvider<false> and CompressedReadBufferFromFileProvider<true>
+/// This helps to unify CompressedReadBufferFromFileProviderImpl<false> and CompressedReadBufferFromFileProviderImpl<true>
 struct CompressedSeekableReaderBuffer : public BufferWithOwnMemory<ReadBuffer>
 {
     virtual void setProfileCallback(
@@ -43,9 +43,9 @@ struct CompressedSeekableReaderBuffer : public BufferWithOwnMemory<ReadBuffer>
 
 
 /// Unlike CompressedReadBuffer, it can do seek.
-template <bool has_checksum = true>
-class CompressedReadBufferFromFileProvider
-    : public CompressedReadBufferBase<has_checksum>
+template <bool has_legacy_checksum = true>
+class CompressedReadBufferFromFileProviderImpl
+    : public CompressedReadBufferBase<has_legacy_checksum>
     , public CompressedSeekableReaderBuffer
 {
 private:
@@ -62,8 +62,8 @@ private:
 
     bool nextImpl() override;
 
-public:
-    CompressedReadBufferFromFileProvider(
+    // Only accessible for `buildLegacyReadBuffer`
+    CompressedReadBufferFromFileProviderImpl(
         FileProviderPtr & file_provider,
         const std::string & path,
         const EncryptionPath & encryption_path,
@@ -72,9 +72,31 @@ public:
         const ReadLimiterPtr & read_limiter_,
         size_t buf_size = DBMS_DEFAULT_BUFFER_SIZE);
 
+public:
+    static std::unique_ptr<CompressedSeekableReaderBuffer> buildLegacyReadBuffer(
+        FileProviderPtr & file_provider,
+        const std::string & path,
+        const EncryptionPath & encryption_path,
+        size_t estimated_size,
+        size_t aio_threshold,
+        const ReadLimiterPtr & read_limiter_,
+        size_t buf_size = DBMS_DEFAULT_BUFFER_SIZE)
+    {
+        assert(has_legacy_checksum == true);
+        return std::unique_ptr<CompressedReadBufferFromFileProviderImpl<has_legacy_checksum>>(
+            new CompressedReadBufferFromFileProviderImpl<has_legacy_checksum>(
+                file_provider,
+                path,
+                encryption_path,
+                estimated_size,
+                aio_threshold,
+                read_limiter_,
+                buf_size));
+    }
+
     /// @attention: estimated_size should be at least DBMS_DEFAULT_BUFFER_SIZE if one want to do seeking; however, if one knows that target file
     /// only consists of a single small frame, one can use a smaller estimated_size to reduce memory footprint.
-    CompressedReadBufferFromFileProvider(
+    CompressedReadBufferFromFileProviderImpl(
         FileProviderPtr & file_provider,
         const std::string & path,
         const EncryptionPath & encryption_path,
@@ -84,7 +106,7 @@ public:
         size_t checksum_frame_size);
 
 
-    CompressedReadBufferFromFileProvider(
+    CompressedReadBufferFromFileProviderImpl(
         String && data,
         const String & file_name,
         size_t estimated_size,
@@ -101,5 +123,10 @@ public:
         file_in.setProfileCallback(profile_callback_, clock_type_);
     }
 };
+
+using LegacyCompressedReadBufferFromFileProvider
+    = CompressedReadBufferFromFileProviderImpl</*has_legacy_checksum*/ true>;
+using CompressedReadBufferFromFileProvider //
+    = CompressedReadBufferFromFileProviderImpl</*has_legacy_checksum*/ false>;
 
 } // namespace DB

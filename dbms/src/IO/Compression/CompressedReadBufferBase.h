@@ -23,8 +23,13 @@ class ReadBuffer;
 
 /** Basic functionality for implementation of
   *  CompressedReadBuffer and CompressedReadBufferFromFile.
+  * has_legacy_checksum:
+  *   For the clickhouse implementation, there is a built-in checksum inside
+  *   CompressedReadBufferBase. But for TiFlash, we use `FramedChecksumReadBuffer`
+  *   to handle the checksum. TiFlash set `has_legacy_check = false` for the new IO
+  *   implementation.
   */
-template <bool has_checksum = true>
+template <bool has_legacy_checksum = true>
 class CompressedReadBufferBase
 {
 protected:
@@ -36,7 +41,7 @@ protected:
     char * compressed_buffer = nullptr;
 
     /// Don't checksum on decompressing.
-    bool disable_checksum[has_checksum]{};
+    bool disable_checksum[has_legacy_checksum]{};
 
 
     /// Read compressed data into compressed_buffer. Get size of decompressed data from block header. Checksum if need.
@@ -56,7 +61,7 @@ public:
       */
     void disableChecksumming()
     {
-        if constexpr (has_checksum)
+        if constexpr (has_legacy_checksum)
         {
             disable_checksum[0] = true;
         }
