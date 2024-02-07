@@ -268,7 +268,7 @@ void runStackingTest()
             compression_buffer.write(data.data(), data.size());
         }
         {
-            auto buffer = CompressedReadBufferFromFileProvider<false>(
+            auto buffer = CompressedReadBufferFromFileProvider(
                 provider,
                 filename,
                 {"/tmp/test.enc", "test.enc"},
@@ -340,7 +340,7 @@ void runStackedSeekingTest()
         }
     }
     {
-        auto buffer = CompressedReadBufferFromFileProvider<false>(
+        auto buffer = CompressedReadBufferFromFileProvider(
             provider,
             filename,
             {"/tmp/test.enc", "test.enc"},
