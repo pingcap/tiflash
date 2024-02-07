@@ -14,7 +14,7 @@
 
 mysql> drop table if exists test.t1
 mysql> create table test.t1 (COL1 enum('^YSQT0]V@9TFN>^WB6G?NG@S8>VYOM;BSC@<BCQ6'), COL2 mediumint(41) DEFAULT NULL, COL3 year(4) DEFAULT NULL, KEY `U_M_COL4` (`COL1`,`COL2`), KEY U_M_COL5 (COL3, COL2));
-mysql> insert into t1 values ('^YSQT0]V@9TFN>^WB6G?NG@S8>VYOM;BSC@<BCQ6', -1881752, 1986);
+mysql> insert into test.t1 values ('^YSQT0]V@9TFN>^WB6G?NG@S8>VYOM;BSC@<BCQ6', -1881752, 1986);
 mysql> alter table test.t1 set tiflash replica 1
 func> wait_table test t1
 
