@@ -243,10 +243,12 @@ size_t DMFile::colIndexSize(ColId id)
     }
     else
     {
+        // Even metav2 is not enabled, we can still read the index size from column_stats instead of disk IO?
         return colIndexSizeByName(getFileNameBase(id));
     }
 }
 
+// Only used when metav2 is not enabled, clean it up
 size_t DMFile::colDataSize(ColId id, ColDataType type)
 {
     if (useMetaV2())
