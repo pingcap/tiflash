@@ -13,10 +13,10 @@
 // limitations under the License.
 
 #include <Core/Types.h>
-#include <IO/ReadBufferFromFileDescriptor.h>
-#include <IO/ReadHelpers.h>
-#include <IO/WriteBufferFromFileDescriptor.h>
-#include <IO/WriteHelpers.h>
+#include <IO/Buffer/ReadBufferFromFileDescriptor.h>
+#include <IO/Buffer/WriteBufferFromFileDescriptor.h>
+#include <IO/Util/ReadHelpers.h>
+#include <IO/Util/WriteHelpers.h>
 #include <Parsers/Lexer.h>
 #include <Parsers/TokenIterator.h>
 

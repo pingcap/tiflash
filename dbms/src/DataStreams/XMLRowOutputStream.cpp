@@ -13,8 +13,8 @@
 // limitations under the License.
 
 #include <DataStreams/XMLRowOutputStream.h>
-#include <IO/WriteBufferValidUTF8.h>
-#include <IO/WriteHelpers.h>
+#include <IO/Buffer/WriteBufferValidUTF8.h>
+#include <IO/Util/WriteHelpers.h>
 
 
 namespace DB
@@ -41,7 +41,7 @@ XMLRowOutputStream::XMLRowOutputStream(WriteBuffer & ostr_, const Block & sample
         for (const char * pos = begin; pos != end; ++pos)
         {
             char c = *pos;
-            if (!(isAlphaASCII(c) || (pos != begin && isNumericASCII(c)) || c == '_' || c == '-' || c == '.'))
+            if (!isAlphaASCII(c) && (pos == begin || !isNumericASCII(c)) && c != '_' && c != '-' && c != '.')
             {
                 is_column_name_suitable = false;
                 break;

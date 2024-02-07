@@ -70,7 +70,7 @@ protected:
     size_t num_files = 1024, num_legacy = 1003, num_compact = 2, num_removed = 80;
 
 public:
-    void SetUp(const ::benchmark::State & /*state*/)
+    void SetUp(const ::benchmark::State & /*state*/) override
     {
         Poco::AutoPtr<Poco::Channel> channel(new TestChannel());
         Poco::AutoPtr<Poco::Formatter> formatter(new UnifiedLogFormatter<false>());

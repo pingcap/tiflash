@@ -20,8 +20,8 @@
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypesNumber.h>
-#include <IO/WriteBuffer.h>
-#include <IO/WriteHelpers.h>
+#include <IO/Buffer/WriteBuffer.h>
+#include <IO/Util/WriteHelpers.h>
 #include <Interpreters/Context.h>
 #include <Poco/String.h>
 
