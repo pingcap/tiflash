@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include <Flash/Mpp/TrackedMppDataPacket.h>
-#include <IO/CompressedStream.h>
 #include <IO/ReadBuffer.h>
 #include <IO/WriteBuffer.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileDataProvider_fwd.h>

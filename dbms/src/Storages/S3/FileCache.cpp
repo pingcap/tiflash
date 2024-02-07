@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <BaseFile/PosixRandomAccessFile.h>
 #include <Common/CurrentMetrics.h>
 #include <Common/Exception.h>
 #include <Common/ProfileEvents.h>
 #include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
 #include <Common/escapeForFileName.h>
+#include <IO/BaseFile/PosixRandomAccessFile.h>
 #include <IO/IOThreadPools.h>
 #include <Interpreters/Settings.h>
 #include <Server/StorageConfigParser.h>
@@ -166,7 +166,7 @@ FileSegmentPtr FileCache::get(const S3::S3FilenameView & s3_fname, const std::op
 }
 
 // Remove `local_fname` from disk and remove parent directory if parent directory is empty.
-void FileCache::removeDiskFile(const String & local_fname)
+void FileCache::removeDiskFile(const String & local_fname) const
 {
     if (!std::filesystem::exists(local_fname))
     {
@@ -554,7 +554,7 @@ String FileCache::toLocalFilename(const String & s3_key)
     return fmt::format("{}/{}", cache_dir, s3_key);
 }
 
-String FileCache::toS3Key(const String & local_fname)
+String FileCache::toS3Key(const String & local_fname) const
 {
     return local_fname.substr(cache_dir.size() + 1);
 }

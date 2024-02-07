@@ -14,9 +14,9 @@
 
 #pragma once
 
-#include <BaseFile/fwd.h>
 #include <Encryption/EncryptionPath.h>
 #include <Encryption/FileProvider_fwd.h>
+#include <IO/BaseFile/fwd.h>
 #include <IO/ReadBufferFromRandomAccessFile.h>
 
 

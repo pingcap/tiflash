@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_subdirectory (BaseFile)
 add_subdirectory (Columns)
 add_subdirectory (Common)
 add_subdirectory (Core)

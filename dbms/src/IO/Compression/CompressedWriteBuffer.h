@@ -16,7 +16,7 @@
 
 #include <Common/PODArray.h>
 #include <IO/BufferWithOwnMemory.h>
-#include <IO/CompressionSettings.h>
+#include <IO/Compression/CompressionSettings.h>
 #include <IO/WriteBuffer.h>
 
 #include <memory>

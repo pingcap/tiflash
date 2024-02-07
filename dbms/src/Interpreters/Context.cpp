@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <BaseFile/fwd.h>
 #include <Common/Config/ConfigProcessor.h>
 #include <Common/DNSCache.h>
 #include <Common/FailPoint.h>
@@ -31,6 +30,7 @@
 #include <Debug/MockStorage.h>
 #include <Encryption/FileProvider.h>
 #include <Flash/Coprocessor/DAGContext.h>
+#include <IO/BaseFile/fwd.h>
 #include <IO/ReadBufferFromFile.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/ISecurityManager.h>

@@ -14,7 +14,7 @@
 
 #include <Common/config.h>
 #include <Core/Types.h>
-#include <IO/CompressedWriteBuffer.h>
+#include <IO/Compression/CompressedWriteBuffer.h>
 #include <city.h>
 #include <common/unaligned.h>
 #include <lz4.h>

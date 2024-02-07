@@ -16,7 +16,6 @@
 #include <Core/Defines.h>
 #include <DataStreams/NativeBlockInputStream.h>
 #include <DataTypes/DataTypeFactory.h>
-#include <IO/CompressedReadBufferFromFile.h>
 #include <IO/ReadHelpers.h>
 #include <IO/VarInt.h>
 #include <fmt/core.h>
