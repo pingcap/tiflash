@@ -1089,7 +1089,10 @@ void DMFile::parseExtendColumnStat(std::string_view buffer)
         ColumnStat stat;
         stat.mergeFromProto(msg);
         // replace the ColumnStat if exists
-        column_stats.emplace(stat.col_id, stat).first->second = stat;
+        if (auto [iter, inserted] = column_stats.emplace(stat.col_id, stat); unlikely(!inserted))
+        {
+            iter->second = stat;
+        }
     }
 }
 
