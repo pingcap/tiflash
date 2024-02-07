@@ -560,13 +560,6 @@ void DMFileReader::readFromDisk(
 
             if (should_seek)
             {
-                LOG_INFO(
-                    Logger::get(),
-                    "reading substream, column_id={} substream_name={} seek_compress_off={} seek_decompress_off={}",
-                    column_define.id,
-                    substream_name,
-                    sub_stream->getOffsetInFile(start_pack_id),
-                    sub_stream->getOffsetInDecompressedBlock(start_pack_id));
                 sub_stream->buf->seek(
                     sub_stream->getOffsetInFile(start_pack_id),
                     sub_stream->getOffsetInDecompressedBlock(start_pack_id));

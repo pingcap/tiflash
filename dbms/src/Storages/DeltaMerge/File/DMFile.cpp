@@ -627,6 +627,7 @@ void DMFile::readPackProperty(const FileProviderPtr & file_provider, const MetaP
     }
 }
 
+// Only used when metav2 is not enabled
 void DMFile::readMetadata(const FileProviderPtr & file_provider, const ReadMetaMode & read_meta_mode)
 {
     Footer footer;
@@ -914,7 +915,7 @@ DMFile::MetaBlockHandle DMFile::writeExtendColumnStatToBuffer(WriteBuffer & buff
     }
     String output;
     msg_stats.SerializeToString(&output);
-    writeStringBinary(output, buffer);
+    writeString(output.data(), output.length(), buffer);
     return MetaBlockHandle{MetaBlockType::ExtendColumnStat, offset, buffer.count() - offset};
 }
 
@@ -938,18 +939,18 @@ DMFile::MetaBlockHandle DMFile::writeMergedSubFilePosotionsToBuffer(WriteBuffer 
 void DMFile::finalizeMetaV2(WriteBuffer & buffer)
 {
     auto tmp_buffer = WriteBufferFromOwnString{};
-    std::array meta_block_handles = { //
-        writeSLPackStatToBuffer(tmp_buffer),
-        writeSLPackPropertyToBuffer(tmp_buffer),
+    std::array meta_block_handles
+        = { writeSLPackStatToBuffer(tmp_buffer),
+            writeSLPackPropertyToBuffer(tmp_buffer),
 #if 1
-        writeColumnStatToBuffer(tmp_buffer),
+            writeColumnStatToBuffer(tmp_buffer),
 #else
-        // ExtendColumnStat is not enabled yet because it cause downgrade compatibility, wait
-        // to be released with other binary format changes.
-        writeExtendColumnStatToBuffer(tmp_buffer),
+            // ExtendColumnStat is not enabled yet because it cause downgrade compatibility, wait
+            // to be released with other binary format changes.
+            writeExtendColumnStatToBuffer(tmp_buffer),
 #endif
-        writeMergedSubFilePosotionsToBuffer(tmp_buffer),
-    };
+            writeMergedSubFilePosotionsToBuffer(tmp_buffer),
+          };
     writePODBinary(meta_block_handles, tmp_buffer);
     writeIntBinary(static_cast<UInt64>(meta_block_handles.size()), tmp_buffer);
     writeIntBinary(version, tmp_buffer);
@@ -1035,6 +1036,7 @@ void DMFile::parseMetaV2(std::string_view buffer)
     {
         ptr = ptr - sizeof(MetaBlockHandle);
         const auto * handle = reinterpret_cast<const MetaBlockHandle *>(ptr);
+        // omit the default branch. If there are unknown MetaBlock (after in-place downgrade), just ignore and throw away
         switch (handle->type)
         {
         case MetaBlockType::ColumnStat: // parse the `ColumnStat` from old version
@@ -1052,11 +1054,6 @@ void DMFile::parseMetaV2(std::string_view buffer)
         case MetaBlockType::MergedSubFilePos:
             parseMergedSubFilePos(buffer.substr(handle->offset, handle->size));
             break;
-        default:
-            throw Exception(
-                ErrorCodes::INCORRECT_DATA,
-                "MetaBlockType {} is not recognized",
-                magic_enum::enum_name(handle->type));
         }
     }
 }
@@ -1071,6 +1068,8 @@ void DMFile::parseColumnStat(std::string_view buffer)
     {
         ColumnStat stat;
         stat.parseFromBuffer(rbuf);
+        // Do not overwrite the ColumnStat if already exist, it may
+        // created by `ExteandColumnStat`
         column_stats.emplace(stat.col_id, std::move(stat));
     }
 }
@@ -1078,7 +1077,7 @@ void DMFile::parseColumnStat(std::string_view buffer)
 void DMFile::parseExtendColumnStat(std::string_view buffer)
 {
     dtpb::ColumnStats msg_stats;
-    auto parse_ok = msg_stats.ParseFromArray(buffer.begin(), buffer.size());
+    auto parse_ok = msg_stats.ParseFromString(String(buffer.begin(), buffer.size()));
     RUNTIME_CHECK_MSG(parse_ok, "Parse extend column stat fail! filename={}", path());
     column_stats.reserve(msg_stats.column_stats_size());
     for (int i = 0; i < msg_stats.column_stats_size(); ++i)
@@ -1086,7 +1085,8 @@ void DMFile::parseExtendColumnStat(std::string_view buffer)
         const auto & msg = msg_stats.column_stats(i);
         ColumnStat stat;
         stat.mergeFromProto(msg);
-        column_stats.emplace(stat.col_id, std::move(stat));
+        // replace the ColumnStat if exists
+        column_stats.emplace(stat.col_id, stat).first->second = stat;
     }
 }
 

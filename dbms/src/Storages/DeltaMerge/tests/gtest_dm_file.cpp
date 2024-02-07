@@ -766,6 +766,8 @@ try
         ASSERT_EQ(dm_file->getPackProperties().property_size(), 3);
     }
 
+    dm_file = restoreDMFile();
+
     std::vector<Array> expect_arr_values;
     for (size_t i = 0; i < num_rows_write; ++i)
     {
