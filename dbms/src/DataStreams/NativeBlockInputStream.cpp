@@ -16,8 +16,8 @@
 #include <Core/Defines.h>
 #include <DataStreams/NativeBlockInputStream.h>
 #include <DataTypes/DataTypeFactory.h>
-#include <IO/ReadHelpers.h>
-#include <IO/VarInt.h>
+#include <IO/Util/ReadHelpers.h>
+#include <IO/Util/VarInt.h>
 #include <fmt/core.h>
 
 #include <ext/range.h>

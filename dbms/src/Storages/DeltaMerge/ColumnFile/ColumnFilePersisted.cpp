@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <IO/Buffer/MemoryReadWriteBuffer.h>
+#include <IO/Buffer/ReadBufferFromString.h>
 #include <IO/Compression/CompressedReadBuffer.h>
 #include <IO/Compression/CompressedWriteBuffer.h>
-#include <IO/MemoryReadWriteBuffer.h>
-#include <IO/ReadBufferFromString.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileBig.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileDeleteRange.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileInMemory.h>

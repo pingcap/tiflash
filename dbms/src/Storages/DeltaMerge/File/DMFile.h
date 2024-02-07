@@ -15,8 +15,8 @@
 #pragma once
 
 #include <Core/Types.h>
-#include <Encryption/ReadBufferFromRandomAccessFileBuilder.h>
-#include <IO/WriteBufferFromWritableFile.h>
+#include <IO/Buffer/WriteBufferFromWritableFile.h>
+#include <IO/ReadBufferFromRandomAccessFileBuilder.h>
 #include <Poco/File.h>
 #include <Storages/DeltaMerge/DMChecksumConfig.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>

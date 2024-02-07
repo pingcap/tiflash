@@ -13,8 +13,8 @@
 // limitations under the License.
 
 #include <Common/TiFlashException.h>
-#include <Encryption/AESCTRCipherStream.h>
-#include <IO/Endian.h>
+#include <IO/Encryption/AESCTRCipherStream.h>
+#include <IO/Util/Endian.h>
 #include <Storages/KVStore/FFI/FileEncryption.h>
 #include <openssl/md5.h>
 

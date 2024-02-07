@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
-#include <Encryption/MockKeyManager.h>
+#include <IO/Encryption/MockKeyManager.h>
 #include <Poco/ConsoleChannel.h>
 #include <Poco/FormattingChannel.h>
 #include <Poco/Logger.h>

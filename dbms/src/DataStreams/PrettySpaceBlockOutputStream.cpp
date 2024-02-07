@@ -13,8 +13,8 @@
 // limitations under the License.
 
 #include <DataStreams/PrettySpaceBlockOutputStream.h>
-#include <IO/WriteBuffer.h>
-#include <IO/WriteHelpers.h>
+#include <IO/Buffer/WriteBuffer.h>
+#include <IO/Util/WriteHelpers.h>
 
 
 namespace DB

@@ -17,8 +17,8 @@
 #include <Columns/ColumnString.h>
 #include <DataStreams/BlocksListBlockInputStream.h>
 #include <DataStreams/materializeBlock.h>
-#include <Encryption/MockKeyManager.h>
 #include <Functions/FunctionHelpers.h>
+#include <IO/Encryption/MockKeyManager.h>
 #include <TestUtils/ColumnGenerator.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>

@@ -14,9 +14,9 @@
 
 #pragma once
 
-#include <IO/BufferWithOwnMemory.h>
+#include <IO/Buffer/BufferWithOwnMemory.h>
+#include <IO/Buffer/ReadBuffer.h>
 #include <IO/Compression/CompressedReadBufferBase.h>
-#include <IO/ReadBuffer.h>
 
 
 namespace DB

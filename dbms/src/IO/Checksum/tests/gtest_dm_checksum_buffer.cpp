@@ -16,8 +16,6 @@
 #pragma GCC diagnostic ignored "-Wsign-compare"
 #include <gtest/gtest.h>
 #pragma GCC diagnostic pop
-#include <Encryption/CompressedReadBufferFromFileProvider.h>
-#include <Encryption/MockKeyManager.h>
 #include <IO/BaseFile/PosixRandomAccessFile.h>
 #include <IO/BaseFile/PosixWritableFile.h>
 #include <IO/BaseFile/RateLimiter.h>
@@ -25,6 +23,8 @@
 #include <IO/Checksum/ChecksumWriteBufferBuilder.h>
 #include <IO/Compression/CompressedReadBuffer.h>
 #include <IO/Compression/CompressedWriteBuffer.h>
+#include <IO/Encryption/CompressedReadBufferFromFileProvider.h>
+#include <IO/Encryption/MockKeyManager.h>
 #include <Poco/File.h>
 #include <Storages/DeltaMerge/DMChecksumConfig.h>
 #include <Storages/Page/PageUtil.h>

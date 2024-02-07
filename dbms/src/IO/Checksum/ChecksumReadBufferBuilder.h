@@ -15,8 +15,8 @@
 #pragma once
 
 #include <Common/Checksum.h>
-#include <Encryption/FileProvider.h>
-#include <IO/ReadBufferFromFileBase.h>
+#include <IO/Buffer/ReadBufferFromFileBase.h>
+#include <IO/FileProvider.h>
 
 
 namespace DB

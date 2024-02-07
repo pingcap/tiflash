@@ -17,9 +17,9 @@
 #include <Client/Connection.h>
 #include <DataStreams/AsynchronousBlockInputStream.h>
 #include <DataTypes/DataTypeFactory.h>
-#include <IO/ReadBufferFromFile.h>
-#include <IO/ReadBufferFromIStream.h>
-#include <IO/copyData.h>
+#include <IO/Buffer/ReadBufferFromFile.h>
+#include <IO/Buffer/ReadBufferFromIStream.h>
+#include <IO/Util/copyData.h>
 #include <Interpreters/Context.h>
 #include <Poco/Net/HTMLForm.h>
 #include <Poco/Net/MessageHeader.h>

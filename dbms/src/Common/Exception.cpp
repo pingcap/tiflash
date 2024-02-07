@@ -15,9 +15,9 @@
 #include <Common/Exception.h>
 #include <Common/FmtUtils.h>
 #include <Common/Logger.h>
-#include <IO/Operators.h>
-#include <IO/ReadBufferFromString.h>
-#include <IO/WriteHelpers.h>
+#include <IO/Buffer/ReadBufferFromString.h>
+#include <IO/Util/Operators.h>
+#include <IO/Util/WriteHelpers.h>
 #include <Poco/String.h>
 #include <common/demangle.h>
 #include <common/logger_useful.h>

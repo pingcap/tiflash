@@ -15,9 +15,9 @@
 #pragma once
 
 #include <Common/PODArray.h>
-#include <IO/BufferWithOwnMemory.h>
+#include <IO/Buffer/BufferWithOwnMemory.h>
+#include <IO/Buffer/WriteBuffer.h>
 #include <IO/Compression/CompressionSettings.h>
-#include <IO/WriteBuffer.h>
 
 #include <memory>
 
