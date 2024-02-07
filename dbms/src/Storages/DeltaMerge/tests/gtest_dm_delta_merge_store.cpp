@@ -2715,6 +2715,7 @@ try
             }));
     }
 
+    SCOPE_EXIT({ FailPointHelper::disableFailPoint(FailPoints::proactive_flush_force_set_type); });
     {
         // write and triggle flush
         std::shared_ptr<std::atomic<size_t>> ai = std::make_shared<std::atomic<size_t>>();
