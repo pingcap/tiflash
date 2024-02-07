@@ -160,8 +160,8 @@ size_t CompressionEncode(
     return compressed_size;
 }
 
-template <bool add_checksum>
-void CompressedWriteBuffer<add_checksum>::nextImpl()
+template <bool add_legacy_checksum>
+void CompressedWriteBuffer<add_legacy_checksum>::nextImpl()
 {
     if (!offset())
         return;
@@ -171,7 +171,7 @@ void CompressedWriteBuffer<add_checksum>::nextImpl()
     size_t compressed_size = CompressionEncode({source, source_size}, compression_settings, compressed_buffer);
     const auto * compressed_buffer_ptr = &compressed_buffer[0];
 
-    if constexpr (add_checksum)
+    if constexpr (add_legacy_checksum)
     {
         CityHash_v1_0_2::uint128 checksum = CityHash_v1_0_2::CityHash128(compressed_buffer_ptr, compressed_size);
         out.write(reinterpret_cast<const char *>(&checksum), sizeof(checksum));
@@ -180,8 +180,8 @@ void CompressedWriteBuffer<add_checksum>::nextImpl()
     out.write(compressed_buffer_ptr, compressed_size);
 }
 
-template <bool add_checksum>
-CompressedWriteBuffer<add_checksum>::CompressedWriteBuffer(
+template <bool add_legacy_checksum>
+CompressedWriteBuffer<add_legacy_checksum>::CompressedWriteBuffer(
     WriteBuffer & out_,
     CompressionSettings compression_settings_,
     size_t buf_size)
@@ -190,8 +190,8 @@ CompressedWriteBuffer<add_checksum>::CompressedWriteBuffer(
     , compression_settings(compression_settings_)
 {}
 
-template <bool add_checksum>
-CompressedWriteBuffer<add_checksum>::~CompressedWriteBuffer()
+template <bool add_legacy_checksum>
+CompressedWriteBuffer<add_legacy_checksum>::~CompressedWriteBuffer()
 {
     try
     {
