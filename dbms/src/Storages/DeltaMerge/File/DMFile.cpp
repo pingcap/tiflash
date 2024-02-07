@@ -940,18 +940,18 @@ DMFile::MetaBlockHandle DMFile::writeMergedSubFilePosotionsToBuffer(WriteBuffer 
 void DMFile::finalizeMetaV2(WriteBuffer & buffer)
 {
     auto tmp_buffer = WriteBufferFromOwnString{};
-    std::array meta_block_handles
-        = { writeSLPackStatToBuffer(tmp_buffer),
-            writeSLPackPropertyToBuffer(tmp_buffer),
+    std::array meta_block_handles = { //
+        writeSLPackStatToBuffer(tmp_buffer),
+        writeSLPackPropertyToBuffer(tmp_buffer),
 #if 1
-            writeColumnStatToBuffer(tmp_buffer),
+        writeColumnStatToBuffer(tmp_buffer),
 #else
-            // ExtendColumnStat is not enabled yet because it cause downgrade compatibility, wait
-            // to be released with other binary format changes.
-            writeExtendColumnStatToBuffer(tmp_buffer),
+        // ExtendColumnStat is not enabled yet because it cause downgrade compatibility, wait
+        // to be released with other binary format changes.
+        writeExtendColumnStatToBuffer(tmp_buffer),
 #endif
-            writeMergedSubFilePosotionsToBuffer(tmp_buffer),
-          };
+        writeMergedSubFilePosotionsToBuffer(tmp_buffer),
+    };
     writePODBinary(meta_block_handles, tmp_buffer);
     writeIntBinary(static_cast<UInt64>(meta_block_handles.size()), tmp_buffer);
     writeIntBinary(version, tmp_buffer);
