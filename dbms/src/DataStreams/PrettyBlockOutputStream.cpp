@@ -14,9 +14,9 @@
 
 #include <Common/UTF8Helpers.h>
 #include <DataStreams/PrettyBlockOutputStream.h>
-#include <IO/WriteBuffer.h>
-#include <IO/WriteBufferFromString.h>
-#include <IO/WriteHelpers.h>
+#include <IO/Buffer/WriteBuffer.h>
+#include <IO/Buffer/WriteBufferFromString.h>
+#include <IO/Util/WriteHelpers.h>
 #include <port/unistd.h>
 #include <sys/ioctl.h>
 

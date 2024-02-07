@@ -15,8 +15,8 @@
 #include <Common/SyncPoint/SyncPoint.h>
 #include <Common/TiFlashMetrics.h>
 #include <Functions/FunctionHelpers.h>
-#include <IO/MemoryReadWriteBuffer.h>
-#include <IO/ReadHelpers.h>
+#include <IO/Buffer/MemoryReadWriteBuffer.h>
+#include <IO/Util/ReadHelpers.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Storages/DeltaMerge/DMContext.h>

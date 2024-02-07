@@ -15,8 +15,8 @@
 #pragma once
 
 #include <Common/Exception.h>
-#include <IO/CompressedWriteBuffer.h>
-#include <IO/WriteBufferFromFile.h>
+#include <IO/Buffer/WriteBufferFromFile.h>
+#include <IO/Compression/CompressedWriteBuffer.h>
 #include <Storages/Page/V3/CheckpointFile/Proto/manifest_file.pb.h>
 #include <Storages/Page/V3/CheckpointFile/fwd.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>

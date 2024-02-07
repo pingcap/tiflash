@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <BaseFile/MemoryRandomAccessFile.h>
+#include <IO/BaseFile/MemoryRandomAccessFile.h>
 #include <IO/Checksum/ChecksumBuffer.h>
 #include <IO/Checksum/ChecksumReadBufferBuilder.h>
 

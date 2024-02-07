@@ -14,9 +14,9 @@
 
 #pragma once
 
-#include <IO/BufferBase.h>
-#include <IO/MemoryReadWriteBuffer.h>
-#include <IO/WriteHelpers.h>
+#include <IO/Buffer/BufferBase.h>
+#include <IO/Buffer/MemoryReadWriteBuffer.h>
+#include <IO/Util/WriteHelpers.h>
 #include <Storages/Page/PageDefinesBase.h>
 
 #include <map>

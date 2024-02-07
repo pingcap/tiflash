@@ -16,15 +16,15 @@
 #pragma GCC diagnostic ignored "-Wsign-compare"
 #include <gtest/gtest.h>
 #pragma GCC diagnostic pop
-#include <BaseFile/PosixRandomAccessFile.h>
-#include <BaseFile/PosixWritableFile.h>
-#include <BaseFile/RateLimiter.h>
-#include <Encryption/CompressedReadBufferFromFileProvider.h>
-#include <Encryption/MockKeyManager.h>
+#include <IO/BaseFile/PosixRandomAccessFile.h>
+#include <IO/BaseFile/PosixWritableFile.h>
+#include <IO/BaseFile/RateLimiter.h>
 #include <IO/Checksum/ChecksumBuffer.h>
 #include <IO/Checksum/ChecksumWriteBufferBuilder.h>
-#include <IO/CompressedReadBuffer.h>
-#include <IO/CompressedWriteBuffer.h>
+#include <IO/Compression/CompressedReadBuffer.h>
+#include <IO/Compression/CompressedWriteBuffer.h>
+#include <IO/Encryption/CompressedReadBufferFromFileProvider.h>
+#include <IO/Encryption/MockKeyManager.h>
 #include <Poco/File.h>
 #include <Storages/DeltaMerge/DMChecksumConfig.h>
 #include <Storages/Page/PageUtil.h>

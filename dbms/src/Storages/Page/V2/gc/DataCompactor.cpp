@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <Common/FailPoint.h>
-#include <IO/ReadBufferFromMemory.h>
+#include <IO/Buffer/ReadBufferFromMemory.h>
 #include <Storages/Page/V2/gc/DataCompactor.h>
 #include <Storages/PathPool.h>
 

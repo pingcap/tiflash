@@ -15,10 +15,10 @@
 #include <Common/Exception.h>
 #include <Common/SimpleCache.h>
 #include <Common/StringUtils/StringUtils.h>
-#include <IO/HexWriteBuffer.h>
-#include <IO/ReadHelpers.h>
-#include <IO/WriteBufferFromString.h>
-#include <IO/WriteHelpers.h>
+#include <IO/Buffer/HexWriteBuffer.h>
+#include <IO/Buffer/WriteBufferFromString.h>
+#include <IO/Util/ReadHelpers.h>
+#include <IO/Util/WriteHelpers.h>
 #include <Interpreters/Quota.h>
 #include <Interpreters/Users.h>
 #include <Poco/Net/DNS.h>

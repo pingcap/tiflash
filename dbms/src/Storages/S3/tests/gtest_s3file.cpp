@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <BaseFile/PosixWritableFile.h>
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
-#include <Encryption/MockKeyManager.h>
+#include <IO/BaseFile/PosixWritableFile.h>
+#include <IO/Encryption/MockKeyManager.h>
 #include <Interpreters/Context.h>
 #include <Poco/DigestStream.h>
 #include <Poco/MD5Engine.h>

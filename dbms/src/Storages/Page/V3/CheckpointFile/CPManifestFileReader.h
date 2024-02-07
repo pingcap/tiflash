@@ -14,8 +14,8 @@
 
 #pragma once
 
-#include <IO/CompressedReadBuffer.h>
-#include <IO/ReadBufferFromRandomAccessFile.h>
+#include <IO/Buffer/ReadBufferFromRandomAccessFile.h>
+#include <IO/Compression/CompressedReadBuffer.h>
 #include <Storages/Page/V3/CheckpointFile/Proto/manifest_file.pb.h>
 #include <Storages/Page/V3/CheckpointFile/fwd.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>

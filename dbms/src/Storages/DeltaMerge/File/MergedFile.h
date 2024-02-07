@@ -14,10 +14,10 @@
 
 #pragma once
 
-#include <IO/ReadBuffer.h>
-#include <IO/ReadHelpers.h>
-#include <IO/WriteBuffer.h>
-#include <IO/WriteHelpers.h>
+#include <IO/Buffer/ReadBuffer.h>
+#include <IO/Buffer/WriteBuffer.h>
+#include <IO/Util/ReadHelpers.h>
+#include <IO/Util/WriteHelpers.h>
 
 namespace DB::DM
 {

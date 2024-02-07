@@ -16,9 +16,9 @@
 
 #include <Core/Spiller.h>
 #include <DataStreams/NativeBlockOutputStream.h>
-#include <IO/CompressedWriteBuffer.h>
-#include <IO/VarInt.h>
-#include <IO/WriteBufferFromWritableFile.h>
+#include <IO/Buffer/WriteBufferFromWritableFile.h>
+#include <IO/Compression/CompressedWriteBuffer.h>
+#include <IO/Util/VarInt.h>
 
 namespace DB
 {

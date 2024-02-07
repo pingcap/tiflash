@@ -19,7 +19,7 @@
 #include <Common/toSafeUnsigned.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/FunctionUnaryArithmetic.h>
-#include <IO/WriteHelpers.h>
+#include <IO/Util/WriteHelpers.h>
 
 #include <array>
 #include <cfenv>

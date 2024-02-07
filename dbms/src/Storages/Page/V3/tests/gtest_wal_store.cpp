@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <Common/SyncPoint/Ctl.h>
-#include <Encryption/MockKeyManager.h>
+#include <IO/Encryption/MockKeyManager.h>
 #include <Poco/Logger.h>
 #include <Storages/Page/V3/LogFile/LogFilename.h>
 #include <Storages/Page/V3/LogFile/LogFormat.h>

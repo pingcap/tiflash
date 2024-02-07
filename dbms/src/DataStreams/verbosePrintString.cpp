@@ -14,7 +14,7 @@
 
 #include <Common/hex.h>
 #include <DataStreams/verbosePrintString.h>
-#include <IO/Operators.h>
+#include <IO/Util/Operators.h>
 
 
 namespace DB
@@ -30,7 +30,7 @@ void verbosePrintString(const char * begin, const char * end, WriteBuffer & out)
 
     out << "\"";
 
-    for (auto pos = begin; pos < end; ++pos)
+    for (const auto * pos = begin; pos < end; ++pos)
     {
         switch (*pos)
         {

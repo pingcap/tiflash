@@ -15,7 +15,7 @@
 #include <Common/FailPoint.h>
 #include <Common/UniThreadPool.h>
 #include <Databases/DatabaseTiFlash.h>
-#include <Encryption/ReadBufferFromRandomAccessFileBuilder.h>
+#include <IO/ReadBufferFromRandomAccessFileBuilder.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterCreateQuery.h>
 #include <Interpreters/InterpreterDropQuery.h>
