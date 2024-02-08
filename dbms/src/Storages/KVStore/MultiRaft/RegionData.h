@@ -118,6 +118,12 @@ public:
         std::unordered_set<TiKVKey> remained_keys;
     };
 
+    bool isLargeTxnByStartTS(const Timestamp &)
+    {
+        // TODO detect large txn.
+        return false;
+    }
+
 private:
     friend class Region;
 

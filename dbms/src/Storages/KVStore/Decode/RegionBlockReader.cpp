@@ -146,6 +146,11 @@ struct VersionColResolver
                 expected);
     }
     size_t reservedCount() const { return 3; }
+    bool isLargeTxnCommitRecord() const
+    {
+        // TODO detect large txn commit record.
+        return false;
+    }
 
 private:
     ColumnUInt64 * raw_version_col = nullptr;
@@ -169,6 +174,7 @@ struct VersionColResolver<RegionUncommittedDataList>
                 expected);
     }
     size_t reservedCount() const { return 2; } // NOLINT conform to main template
+    bool isLargeTxnCommitRecord() const { return false; }
 
 private:
     ColumnUInt64 * raw_version_col = nullptr;

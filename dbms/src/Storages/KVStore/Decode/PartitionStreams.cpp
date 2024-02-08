@@ -36,6 +36,8 @@
 #include <common/logger_useful.h>
 #include <fiu.h>
 
+#include <memory>
+
 namespace DB
 {
 namespace FailPoints
@@ -104,6 +106,7 @@ struct AtomicReadWriteCtx
     DM::WriteResult write_result = std::nullopt;
     UInt64 region_decode_cost = -1;
     UInt64 write_part_cost = -1;
+    SpillingTxnMap spilling_txn_map;
 };
 
 static void inline writeCommittedBlockDataIntoStorage(
@@ -410,10 +413,11 @@ void RemoveRegionCommitCache(const RegionPtr & region, const RegionDataReadInfoL
 {
     /// Remove data in region.
     auto remover = region->createCommittedRemover(lock_region);
-    for (const auto & [handle, write_type, commit_ts, value] : data_list_read)
+    for (const auto & [handle, write_type, commit_ts, value, big_txn_start_ts] : data_list_read)
     {
         std::ignore = write_type;
         std::ignore = value;
+        std::ignore = big_txn_start_ts;
         remover.remove({handle, commit_ts});
     }
 }
@@ -457,24 +461,29 @@ DM::WriteResult RegionTable::writeCommittedByRegion(
     const LoggerPtr & log,
     bool lock_region)
 {
-    std::optional<RegionDataReadInfoList> data_list_read = std::nullopt;
+    std::optional<RegionDataReadInfoList> maybe_data_list_read = std::nullopt;
     if (region.pre_decode_cache)
     {
         // if schema version changed, use the kv data to rebuild block cache
-        data_list_read = std::move(region.pre_decode_cache->data_list_read);
+        maybe_data_list_read = std::move(region.pre_decode_cache->data_list_read);
     }
     else
     {
-        data_list_read = ReadRegionCommitCache(region, lock_region);
+        maybe_data_list_read = ReadRegionCommitCache(region, lock_region);
     }
 
-    if (!data_list_read)
+    if (!maybe_data_list_read.has_value())
         return std::nullopt;
 
-    reportUpstreamLatency(*data_list_read);
-    auto write_result = writeRegionDataToStorage(context, region, *data_list_read, log);
+    RegionDataReadInfoList & data_list_read = maybe_data_list_read.value();
+    reportUpstreamLatency(data_list_read);
+    auto write_result = writeRegionDataToStorage(context, region, data_list_read, log);
     auto prev_region_size = region->dataSize();
-    RemoveRegionCommitCache(region, *data_list_read, lock_region);
+    RemoveRegionCommitCache(region, data_list_read, lock_region);
+    if unlikely (data_list_read.hasLargeTxn())
+    {
+        LOG_DEBUG(log, "Observed large txns [{}], region_id={}", data_list_read.toLargeTxnDebugString(), region->id());
+    }
     auto new_region_size = region->dataSize();
     if likely (new_region_size <= prev_region_size)
     {
@@ -484,7 +493,7 @@ DM::WriteResult RegionTable::writeCommittedByRegion(
         GET_METRIC(tiflash_raft_raft_frequent_events_count, type_write_commit).Increment(1);
     }
     /// Save removed data to outer.
-    data_list_to_remove = std::move(*data_list_read);
+    data_list_to_remove = std::move(data_list_read);
     return write_result;
 }
 

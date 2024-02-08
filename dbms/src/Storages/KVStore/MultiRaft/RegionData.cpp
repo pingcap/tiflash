@@ -166,7 +166,25 @@ std::optional<RegionDataReadInfo> RegionData::readDataByWriteIt(
     {
         const auto & map = default_cf.getData();
         if (auto data_it = map.find({pk, decoded_val.prewrite_ts}); data_it != map.end())
-            return RegionDataReadInfo{pk, decoded_val.write_type, ts, RegionDefaultCFDataTrait::getTiKVValue(data_it)};
+        {
+            if unlikely (isLargeTxnByStartTS(decoded_val.prewrite_ts))
+            {
+                return RegionDataReadInfo{
+                    pk,
+                    decoded_val.write_type,
+                    ts,
+                    RegionDefaultCFDataTrait::getTiKVValue(data_it)};
+            }
+            else
+            {
+                return RegionDataReadInfo{
+                    pk,
+                    decoded_val.write_type,
+                    ts,
+                    RegionDefaultCFDataTrait::getTiKVValue(data_it),
+                    decoded_val.prewrite_ts};
+            }
+        }
         else
         {
             if (!hard_error)

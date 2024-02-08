@@ -20,6 +20,7 @@
 #include <Storages/KVStore/MultiRaft/RegionData.h>
 #include <Storages/KVStore/MultiRaft/RegionMeta.h>
 #include <Storages/KVStore/MultiRaft/RegionSerde.h>
+#include <Storages/KVStore/MultiRaft/Spill/Spill.h>
 #include <common/logger_useful.h>
 
 #include <shared_mutex>
@@ -254,6 +255,12 @@ public: // Raft Read and Write
     void beforePrehandleSnapshot(uint64_t region_id, std::optional<uint64_t> deadline_index);
     void afterPrehandleSnapshot(int64_t ongoing);
 
+public: // Spill
+    // Requires Region task lock
+    SpillingMemtable spillDefaultCf(const Timestamp & start_ts);
+    SpillTxnCtx & getSpillTxnCtx() { return spill_ctx; }
+    const SpillTxnCtx & getSpillTxnCtx() const { return spill_ctx; }
+
 private:
     friend class RegionRaftCommandDelegate;
     friend class RegionMockTest;
@@ -301,6 +308,8 @@ private:
     UInt64 last_restart_log_applied{0};
     mutable std::atomic<size_t> approx_mem_cache_rows{0};
     mutable std::atomic<size_t> approx_mem_cache_bytes{0};
+
+    SpillTxnCtx spill_ctx;
 };
 
 class RegionRaftCommandDelegate
