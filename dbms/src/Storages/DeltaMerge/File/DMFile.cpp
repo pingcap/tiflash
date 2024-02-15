@@ -253,22 +253,37 @@ size_t DMFile::colDataSize(ColId id, ColDataType type)
 {
     if (useMetaV2())
     {
-        if (auto itr = column_stats.find(id); itr != column_stats.end())
+        auto itr = column_stats.find(id);
+        RUNTIME_CHECK_MSG(itr != column_stats.end(), "Data of column not exist, col_id={} path={}", id, path());
+        switch (type)
         {
-            return type == ColDataType::NullMap   ? itr->second.nullmap_data_bytes
-                : type == ColDataType::ArraySizes ? itr->second.array_sizes_bytes
-                                                  : itr->second.data_bytes;
-        }
-        else
-        {
-            throw Exception(ErrorCodes::FILE_DOESNT_EXIST, "Data of {} not exist", id);
+        case ColDataType::Elements:
+            return itr->second.data_bytes;
+        case ColDataType::NullMap:
+            return itr->second.nullmap_data_bytes;
+        case ColDataType::ArraySizes:
+            return itr->second.array_sizes_bytes;
         }
     }
     else
     {
-        RUNTIME_CHECK_MSG(type != ColDataType::ArraySizes, "Can not get array map size by filename, col_id={}", id);
-        auto namebase = //
-            (type == ColDataType::NullMap) ? getFileNameBase(id, {IDataType::Substream::NullMap}) : getFileNameBase(id);
+        String namebase;
+        switch (type)
+        {
+        case ColDataType::Elements:
+            namebase = getFileNameBase(id);
+            break;
+        case ColDataType::NullMap:
+            namebase = getFileNameBase(id, {IDataType::Substream::NullMap});
+            break;
+        case ColDataType::ArraySizes:
+            RUNTIME_CHECK_MSG(
+                type != ColDataType::ArraySizes,
+                "Can not get array map size by filename, col_id={} path={}",
+                id,
+                path());
+            break;
+        }
         return colDataSizeByName(namebase);
     }
 }
@@ -1080,7 +1095,7 @@ void DMFile::parseColumnStat(std::string_view buffer)
 void DMFile::parseExtendColumnStat(std::string_view buffer)
 {
     dtpb::ColumnStats msg_stats;
-    auto parse_ok = msg_stats.ParseFromString(String(buffer.begin(), buffer.size()));
+    auto parse_ok = msg_stats.ParseFromArray(buffer.begin(), buffer.size());
     RUNTIME_CHECK_MSG(parse_ok, "Parse extend column stat fail! filename={}", path());
     column_stats.reserve(msg_stats.column_stats_size());
     for (int i = 0; i < msg_stats.column_stats_size(); ++i)
