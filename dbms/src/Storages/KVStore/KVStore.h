@@ -23,6 +23,7 @@
 #include <Storages/KVStore/MultiRaft/RegionManager.h>
 #include <Storages/KVStore/MultiRaft/RegionRangeKeys.h>
 #include <Storages/KVStore/StorageEngineType.h>
+#include <Storages/KVStore/MultiRaft/Spill/Spill.h>
 
 #include <condition_variable>
 #include <magic_enum.hpp>
@@ -364,6 +365,11 @@ private:
     //  ---- Raft Read ----  //
 
     void releaseReadIndexWorkers();
+    
+    //  ---- Spill ----  //
+    std::vector<TiKVKey> findSpillableTxn(const RegionPtr & region);
+    bool canSpillRegion(const RegionPtr & region, RegionTaskLock &) const;
+    SpilledMemtable maybeSpillDefaultCf(RegionPtr & region, RegionTaskLock &);
 
 #ifndef DBMS_PUBLIC_GTEST
 private:

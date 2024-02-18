@@ -257,9 +257,10 @@ public: // Raft Read and Write
 
 public: // Spill
     // Requires Region task lock
-    SpillingMemtable spillDefaultCf(const Timestamp & start_ts);
+    void checkAndCommitBigTxn(const Timestamp & start_ts);
     SpillTxnCtx & getSpillTxnCtx() { return spill_ctx; }
     const SpillTxnCtx & getSpillTxnCtx() const { return spill_ctx; }
+    void meetLargeTxnLock(const Timestamp & tso);
 
 private:
     friend class RegionRaftCommandDelegate;

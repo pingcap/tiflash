@@ -116,6 +116,7 @@ struct RegionDataReadInfoList
     constexpr Inner::reference front() { return data.front(); }
     constexpr Inner::const_reference front() const { return data.front(); }
 
+    // Large txn information of written keys in this read list.
     bool hasLargeTxn() const { return !large_txns.empty(); }
     std::unordered_set<Timestamp> & getLargeTxns() { return large_txns; }
     const std::unordered_set<Timestamp> & getLargeTxns() const { return large_txns; }

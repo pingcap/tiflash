@@ -19,12 +19,12 @@
 #include <unordered_map>
 
 namespace DB {
-struct SpillingMemtable {
+struct SpilledMemtable {
     RegionDefaultCFData default_cf;
     // Should we include RegionLockCFData? See following discussion.
 };
 
-using SpillingMemtablePtr = std::shared_ptr<SpillingMemtable>;
+using SpilledMemtablePtr = std::shared_ptr<SpilledMemtable>;
 
 struct SpillingTxn {
 
@@ -37,6 +37,7 @@ struct SpillTxnCtx {
     bool isLargeTxn(const Timestamp & ts) const {
         return txns.contains(ts);
     }
+    void meetLargeTxnLock(const Timestamp & tso);
     // start_ts -> SpillingTxn
     SpillingTxnMap txns;
 };

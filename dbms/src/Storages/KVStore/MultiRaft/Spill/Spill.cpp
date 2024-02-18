@@ -13,9 +13,46 @@
 // limitations under the License.
 
 #include <Storages/KVStore/MultiRaft/Spill/Spill.h>
+#include <Storages/KVStore/KVStore.h>
+#include <Storages/KVStore/Region.h>
 
 namespace DB {
 
+void SpillTxnCtx::meetLargeTxnLock(const Timestamp & tso) {
+    if (!txns.contains(tso)) {
+        txns[tso] = std::make_shared<SpillingTxn>();
+    }
+}
 
+void Region::checkAndCommitBigTxn(const Timestamp &) {
+    // TODO
+    // Check if the lock cf exists. And ingest all SpillFile into DM.
+}
+
+void Region::meetLargeTxnLock(const Timestamp & tso) {
+
+}
+
+std::vector<TiKVKey> KVStore::findSpillableTxn(const RegionPtr & region) {
+    // TODO
+    return {};
+}
+
+bool KVStore::canSpillRegion(const RegionPtr & region, RegionTaskLock &) const {
+    // TODO
+    // Is split contradict with persist?
+    return false;
+}
+
+SpilledMemtable KVStore::maybeSpillDefaultCf(RegionPtr & region, RegionTaskLock & l) {
+    SpilledMemtable spilled_memtable;
+    auto spillable_txns = findSpillableTxn(region);
+    if (!spillable_txns.empty() && canSpillRegion(region, l)) {
+        for (const auto & start_ts : spillable_txns) {
+            spilled_memtable += region->maybeSpillDefaultCf(start_ts);
+        }
+    }
+    return spilled_memtable;
+}
 
 } // namespace DB

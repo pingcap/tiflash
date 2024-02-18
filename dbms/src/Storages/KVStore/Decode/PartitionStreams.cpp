@@ -26,6 +26,7 @@
 #include <Storages/KVStore/Decode/RegionTable.h>
 #include <Storages/KVStore/Decode/TiKVRange.h>
 #include <Storages/KVStore/MultiRaft/Spill/RegionUncommittedDataList.h>
+#include <Storages/KVStore/MultiRaft/Spill/Spill.h>
 #include <Storages/KVStore/Read/LockException.h>
 #include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/TMTContext.h>
@@ -106,7 +107,6 @@ struct AtomicReadWriteCtx
     DM::WriteResult write_result = std::nullopt;
     UInt64 region_decode_cost = -1;
     UInt64 write_part_cost = -1;
-    SpillingTxnMap spilling_txn_map;
 };
 
 static void inline writeCommittedBlockDataIntoStorage(
@@ -483,6 +483,9 @@ DM::WriteResult RegionTable::writeCommittedByRegion(
     if unlikely (data_list_read.hasLargeTxn())
     {
         LOG_DEBUG(log, "Observed large txns [{}], region_id={}", data_list_read.toLargeTxnDebugString(), region->id());
+        for (const Timestamp & start_ts : data_list_read.getLargeTxns()) {
+            region->checkAndCommitBigTxn(start_ts);
+        }
     }
     auto new_region_size = region->dataSize();
     if likely (new_region_size <= prev_region_size)
