@@ -19,6 +19,8 @@
 #include <unordered_map>
 
 namespace DB {
+
+// TODO(spill) track memory usage.
 struct SpilledMemtable {
     RegionDefaultCFData default_cf;
     // Should we include RegionLockCFData? See following discussion.
@@ -26,22 +28,23 @@ struct SpilledMemtable {
 
 using SpilledMemtablePtr = std::shared_ptr<SpilledMemtable>;
 
-struct SpillingTxn {
-
+struct LargeTxn {
+    
 };
 
-using SpillingTxnMap = std::unordered_map<Timestamp, SpillingTxn>;
+using LargeTxnPtr = std::shared_ptr<LargeTxn>;
+using LargeTxnMap = std::unordered_map<Timestamp, LargeTxnPtr>;
 
-// TODO Safety maybe shares region's lock?
-struct SpillTxnCtx {
+struct SpillTxnCtx : public SharedMutexLockWrap {
     bool isLargeTxn(const Timestamp & ts) const {
         return txns.contains(ts);
     }
     void meetLargeTxnLock(const Timestamp & tso);
-    // start_ts -> SpillingTxn
-    SpillingTxnMap txns;
+    std::optional<std::pair<Timestamp, LargeTxnPtr>>> pickOne() const;
+    // start_ts -> LargeTxn
+    LargeTxnMap txns;
 };
 
-using SpillTxnCtxPtr = std::shared_ptr<SpillingTxn>;
+using SpillTxnCtxPtr = std::shared_ptr<LargeTxn>;
 
 } // namespace DB

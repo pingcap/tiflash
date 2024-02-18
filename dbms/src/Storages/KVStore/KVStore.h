@@ -122,7 +122,6 @@ struct ProxyConfigSummary
     size_t snap_handle_pool_size = 0;
 };
 
-/// TODO: brief design document.
 class KVStore final : private boost::noncopyable
 {
 public:
@@ -367,7 +366,6 @@ private:
     void releaseReadIndexWorkers();
     
     //  ---- Spill ----  //
-    std::vector<TiKVKey> findSpillableTxn(const RegionPtr & region);
     bool canSpillRegion(const RegionPtr & region, RegionTaskLock &) const;
     SpilledMemtable maybeSpillDefaultCf(RegionPtr & region, RegionTaskLock &);
 

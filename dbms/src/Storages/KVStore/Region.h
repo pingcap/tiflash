@@ -257,7 +257,7 @@ public: // Raft Read and Write
 
 public: // Spill
     // Requires Region task lock
-    void checkAndCommitBigTxn(const Timestamp & start_ts);
+    void checkAndCommitLargeTxn(const Timestamp & start_ts);
     SpillTxnCtx & getSpillTxnCtx() { return spill_ctx; }
     const SpillTxnCtx & getSpillTxnCtx() const { return spill_ctx; }
     void meetLargeTxnLock(const Timestamp & tso);
@@ -284,6 +284,8 @@ private:
 
     RegionPtr splitInto(RegionMeta && meta);
     void setPeerState(raft_serverpb::PeerState state);
+
+    void spillMemtable(SpilledMemtable &);
 
 private:
     // Modification to data or meta requires this mutex.

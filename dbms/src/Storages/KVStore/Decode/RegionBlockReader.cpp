@@ -148,7 +148,7 @@ struct VersionColResolver
     size_t reservedCount() const { return 3; }
     bool isLargeTxnCommitRecord() const
     {
-        // TODO detect large txn commit record.
+        // TODO(spill) detect large txn commit record.
         return false;
     }
 

@@ -230,7 +230,7 @@ static inline bool atomicReadWrite(
     }
     else
     {
-        // TODO Implement spill logic.
+        // TODO(spill) Implement spill logic.
         RUNTIME_CHECK(false);
     }
     LOG_TRACE(
@@ -255,7 +255,7 @@ template DM::WriteResult writeRegionDataToStorage<RegionDataReadInfoList>(
     RegionDataReadInfoList & data_list_read,
     const LoggerPtr & log);
 
-// TODO rename it after we support spill.
+// TODO(spill) rename it after we support spill.
 // ReadList could be RegionDataReadInfoList
 template <typename ReadList>
 DM::WriteResult writeRegionDataToStorage(
@@ -484,7 +484,7 @@ DM::WriteResult RegionTable::writeCommittedByRegion(
     {
         LOG_DEBUG(log, "Observed large txns [{}], region_id={}", data_list_read.toLargeTxnDebugString(), region->id());
         for (const Timestamp & start_ts : data_list_read.getLargeTxns()) {
-            region->checkAndCommitBigTxn(start_ts);
+            region->checkAndCommitLargeTxn(start_ts);
         }
     }
     auto new_region_size = region->dataSize();

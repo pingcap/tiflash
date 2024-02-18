@@ -120,9 +120,11 @@ public:
 
     bool isLargeTxnByStartTS(const Timestamp &)
     {
-        // TODO detect large txn.
+        // TODO(spill) detect large txn.
         return false;
     }
+
+    RegionDefaultCFData takeDefaultCf();
 
 private:
     friend class Region;

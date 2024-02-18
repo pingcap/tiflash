@@ -67,6 +67,8 @@ EngineStoreApplyRes KVStore::handleWriteRaftCmdInner(
             region->orphanKeysInfo().advanceAppliedIndex(index);
         }
 
+        maybeSpillDefaultCf(region, region_persist_lock);
+
         if (tryRegisterEagerRaftLogGCTask(region, region_persist_lock))
         {
             /// We should execute eager RaftLog GC, persist the Region in both TiFlash and proxy

@@ -20,39 +20,41 @@ namespace DB {
 
 void SpillTxnCtx::meetLargeTxnLock(const Timestamp & tso) {
     if (!txns.contains(tso)) {
-        txns[tso] = std::make_shared<SpillingTxn>();
+        txns.emplace(tso, std::make_shared<LargeTxn>());
     }
 }
 
-void Region::checkAndCommitBigTxn(const Timestamp &) {
-    // TODO
+std::optional<std::pair<Timestamp, LargeTxnPtr>>> SpillTxnCtx::pickOne() const {
+    if likely(txns.empty()) return std::nullopt;
+    // TODO(spill) pick the largest one.
+    return *txns.begin();
+}
+
+void Region::checkAndCommitLargeTxn(const Timestamp &) {
+    // TODO(spill)
     // Check if the lock cf exists. And ingest all SpillFile into DM.
 }
 
-void Region::meetLargeTxnLock(const Timestamp & tso) {
-
-}
-
-std::vector<TiKVKey> KVStore::findSpillableTxn(const RegionPtr & region) {
-    // TODO
-    return {};
-}
-
-bool KVStore::canSpillRegion(const RegionPtr & region, RegionTaskLock &) const {
-    // TODO
-    // Is split contradict with persist?
+bool KVStore::canSpillRegion(const RegionPtr &, RegionTaskLock &) const {
+    // TODO(spill) Is split contradict with persist?
     return false;
 }
 
-SpilledMemtable KVStore::maybeSpillDefaultCf(RegionPtr & region, RegionTaskLock & l) {
+std::optional<SpilledMemtable> KVStore::maybeSpillDefaultCf(RegionPtr & region, RegionTaskLock &) {
+    auto txn = region->getSpillTxnCtx().pickOne();
+    if likely(!txn.has_value()) return std::nullopt;
+    if (!canSpillRegion(region, l)) return std::nullopt;
     SpilledMemtable spilled_memtable;
-    auto spillable_txns = findSpillableTxn(region);
-    if (!spillable_txns.empty() && canSpillRegion(region, l)) {
-        for (const auto & start_ts : spillable_txns) {
-            spilled_memtable += region->maybeSpillDefaultCf(start_ts);
-        }
-    }
+    region->spillMemtable(spilled_memtable);
     return spilled_memtable;
+}
+
+void Region::spillMemtable(SpilledMemtable & spilled_memtable, RegionTaskLock &) {
+    // In this case, most of the key-value pairs blong to large txn,
+    // So we move backward.
+    spilled_memtable.default_cf = data.takeDefaultCf();
+    // TODO(spill) improve performance
+    
 }
 
 } // namespace DB
