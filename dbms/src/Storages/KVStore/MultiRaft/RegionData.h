@@ -118,6 +118,14 @@ public:
         std::unordered_set<TiKVKey> remained_keys;
     };
 
+    bool isLargeTxnByStartTS(const Timestamp &)
+    {
+        // TODO(spill) detect large txn.
+        return false;
+    }
+
+    RegionDefaultCFData takeDefaultCf();
+
 private:
     friend class Region;
 

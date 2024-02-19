@@ -23,6 +23,7 @@
 #include <Storages/KVStore/MultiRaft/RegionManager.h>
 #include <Storages/KVStore/MultiRaft/RegionRangeKeys.h>
 #include <Storages/KVStore/StorageEngineType.h>
+#include <Storages/KVStore/MultiRaft/Spill/Spill.h>
 
 #include <condition_variable>
 #include <magic_enum.hpp>
@@ -121,7 +122,14 @@ struct ProxyConfigSummary
     size_t snap_handle_pool_size = 0;
 };
 
-/// TODO: brief design document.
+
+/// KVStore manages raft replication and transactions.
+/// - Holds all regions in this TiFlash store.
+/// - Manages region -> table mapping.
+/// - Manages persistence of all regions.
+/// - Implements learner read.
+/// - Wraps FFI interfaces.
+/// - Use `Decoder` to transform row format into col format.
 class KVStore final : private boost::noncopyable
 {
 public:
@@ -364,6 +372,12 @@ private:
     //  ---- Raft Read ----  //
 
     void releaseReadIndexWorkers();
+    
+    //  ---- Spill ----  //
+    bool canSpillRegion(const RegionPtr & region, RegionTaskLock &) const;
+    SpilledMemtableMap maybeSpillDefaultCf(RegionPtr & region, RegionTaskLock &);
+    SpillTxnCtx & getSpillTxnCtx() { return spill_ctx; }
+    const SpillTxnCtx & getSpillTxnCtx() const { return spill_ctx; }
 
 #ifndef DBMS_PUBLIC_GTEST
 private:
@@ -414,6 +428,8 @@ private:
     // we can't have access to these codes though.
     std::atomic<int64_t> ongoing_prehandle_task_count{0};
     ProxyConfigSummary proxy_config_summary;
+
+    SpillTxnCtx spill_ctx;
 };
 
 /// Encapsulation of lock guard of task mutex in KVStore

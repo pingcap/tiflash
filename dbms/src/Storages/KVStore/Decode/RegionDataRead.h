@@ -22,10 +22,119 @@
 namespace DB
 {
 
-// << PK, write_type, commit_ts, value >>
-using RegionDataReadInfo = std::tuple<RawTiDBPK, UInt8, Timestamp, std::shared_ptr<const TiKVValue>>;
+struct RegionDataReadInfo
+{
+    RegionDataReadInfo(
+        RawTiDBPK && pk_,
+        UInt8 write_type_,
+        Timestamp && commit_ts_,
+        std::shared_ptr<const TiKVValue> && value_,
+        std::optional<Timestamp> large_txn_start_ts_ = std::nullopt)
+        : pk(std::move(pk_))
+        , write_type(write_type_)
+        , commit_ts(std::move(commit_ts_))
+        , value(std::move(value_))
+        , large_txn_start_ts(std::move(large_txn_start_ts_))
+    {}
+    RegionDataReadInfo(
+        const RawTiDBPK & pk_,
+        UInt8 write_type_,
+        const Timestamp & commit_ts_,
+        const std::shared_ptr<const TiKVValue> & value_,
+        std::optional<Timestamp> large_txn_start_ts_ = std::nullopt)
+        : pk(pk_)
+        , write_type(write_type_)
+        , commit_ts(commit_ts_)
+        , value(value_)
+        , large_txn_start_ts(std::move(large_txn_start_ts_))
+    {}
+    RegionDataReadInfo(const RegionDataReadInfo &) = default;
+    RegionDataReadInfo(RegionDataReadInfo &&) = default;
+    RegionDataReadInfo & operator=(const RegionDataReadInfo &) = default;
+    RegionDataReadInfo & operator=(RegionDataReadInfo &&) = default;
 
-using RegionDataReadInfoList = std::vector<RegionDataReadInfo>;
+public:
+    RawTiDBPK pk;
+    UInt8 write_type;
+    Timestamp commit_ts;
+    std::shared_ptr<const TiKVValue> value;
+    std::optional<Timestamp> large_txn_start_ts;
+};
+
+struct RegionDataReadInfoList
+{
+    using Inner = std::vector<RegionDataReadInfo>;
+
+    Inner::const_iterator cbegin() const { return data.cbegin(); }
+
+    Inner::const_iterator cend() const { return data.cend(); }
+
+    Inner::iterator begin() { return data.begin(); }
+
+    Inner::const_iterator begin() const { return data.begin(); }
+
+    Inner::iterator end() { return data.end(); }
+
+    Inner::const_iterator end() const { return data.end(); }
+
+    size_t size() const { return data.size(); }
+
+    Inner & getInner() { return data; }
+    const Inner & getInner() const { return data; }
+
+    template <typename... Args>
+    constexpr Inner::reference emplace_back(Args &&... args)
+    {
+        Inner::reference elem = data.emplace_back(std::forward<Args>(args)...);
+        if unlikely (elem.large_txn_start_ts.has_value())
+        {
+            large_txns.insert(elem.large_txn_start_ts.value());
+        }
+        return elem;
+    }
+    constexpr void push_back(const RegionDataReadInfo & value)
+    {
+        if unlikely (value.large_txn_start_ts.has_value())
+        {
+            large_txns.insert(value.large_txn_start_ts.value());
+        }
+        data.push_back(value);
+    }
+    constexpr void push_back(RegionDataReadInfo && value)
+    {
+        if unlikely (value.large_txn_start_ts.has_value())
+        {
+            large_txns.insert(value.large_txn_start_ts.value());
+        }
+        data.push_back(std::move(value));
+    }
+    Inner::reference operator[](Inner::size_type pos) { return data[pos]; }
+    Inner::const_reference operator[](Inner::size_type pos) const { return data[pos]; }
+    void clear() { data.clear(); }
+    constexpr void reserve(Inner::size_type new_cap) { data.reserve(new_cap); }
+    bool empty() const { return data.empty(); }
+    constexpr Inner::reference front() { return data.front(); }
+    constexpr Inner::const_reference front() const { return data.front(); }
+
+    // Large txn information of written keys in this read list.
+    bool hasLargeTxn() const { return !large_txns.empty(); }
+    std::unordered_set<Timestamp> & getLargeTxns() { return large_txns; }
+    const std::unordered_set<Timestamp> & getLargeTxns() const { return large_txns; }
+    std::string toLargeTxnDebugString() const
+    {
+        FmtBuffer buff;
+        buff.joinStr(
+            large_txns.begin(),
+            large_txns.end(),
+            [](const auto & x, FmtBuffer & fmt_buf) { fmt_buf.fmtAppend("{}", x); },
+            ",");
+        return buff.toString();
+    }
+
+private:
+    Inner data;
+    std::unordered_set<Timestamp> large_txns;
+};
 
 struct PrehandleResult
 {

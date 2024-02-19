@@ -54,7 +54,7 @@ EngineStoreApplyRes KVStore::handleWriteRaftCmdInner(
     {
         auto region_persist_lock = region_manager.genRegionTaskLock(region_id);
 
-        const RegionPtr region = getRegion(region_id);
+        RegionPtr region = getRegion(region_id);
         if (region == nullptr)
         {
             return EngineStoreApplyRes::NotFound;
@@ -66,6 +66,8 @@ EngineStoreApplyRes KVStore::handleWriteRaftCmdInner(
         {
             region->orphanKeysInfo().advanceAppliedIndex(index);
         }
+
+        maybeSpillDefaultCf(region, region_persist_lock);
 
         if (tryRegisterEagerRaftLogGCTask(region, region_persist_lock))
         {

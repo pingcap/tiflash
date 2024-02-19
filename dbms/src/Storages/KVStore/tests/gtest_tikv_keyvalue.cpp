@@ -227,14 +227,14 @@ TEST(TiKVKeyValueTest, PortedTests)
         ASSERT_TRUE(
             d.insert(
                 RecordKVFormat::genKey(1, 2, 3),
-                RecordKVFormat::encodeWriteCfValue(Region::PutFlag, 4, "value", true))
+                RecordKVFormat::encodeWriteCfValue(Region::PutFlag, 4, "value", true)).size
             == 0);
         ASSERT_TRUE(d.getSize() == 1);
 
         ASSERT_TRUE(
             d.insert(
                 RecordKVFormat::genKey(1, 2, 3),
-                RecordKVFormat::encodeWriteCfValue(RecordKVFormat::UselessCFModifyFlag::LockFlag, 4, "value"))
+                RecordKVFormat::encodeWriteCfValue(RecordKVFormat::UselessCFModifyFlag::LockFlag, 4, "value")).size
             == 0);
         ASSERT_TRUE(d.getSize() == 1);
 

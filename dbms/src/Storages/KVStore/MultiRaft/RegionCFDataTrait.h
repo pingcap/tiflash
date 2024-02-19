@@ -37,6 +37,10 @@ struct RegionWriteCFDataTrait
     using Key = std::pair<RawTiDBPK, Timestamp>;
     using Value = std::tuple<std::shared_ptr<const TiKVKey>, std::shared_ptr<const TiKVValue>, DecodedWriteCFValue>;
     using Map = std::map<Key, Value>;
+    struct InsertRes {
+        size_t size;
+    };
+    using Res = InsertRes;
 
     static std::optional<Map::value_type> genKVPair(TiKVKey && key, const DecodedTiKVKey & raw_key, TiKVValue && value)
     {
@@ -68,6 +72,10 @@ struct RegionDefaultCFDataTrait
     using Key = std::pair<RawTiDBPK, Timestamp>;
     using Value = std::tuple<std::shared_ptr<const TiKVKey>, std::shared_ptr<const TiKVValue>>;
     using Map = std::map<Key, Value>;
+    struct InsertRes {
+        size_t size;
+    };
+    using Res = InsertRes;
 
     static std::optional<Map::value_type> genKVPair(TiKVKey && key, const DecodedTiKVKey & raw_key, TiKVValue && value)
     {
@@ -104,6 +112,11 @@ struct RegionLockCFDataTrait
         std::shared_ptr<const TiKVValue>,
         std::shared_ptr<const DecodedLockCFValue>>;
     using Map = std::unordered_map<Key, Value, Key::Hash>;
+    struct InsertRes {
+        size_t size;
+        bool is_large_txn;
+    };
+    using Res = InsertRes;
 
     static Map::value_type genKVPair(TiKVKey && key_, TiKVValue && value_)
     {

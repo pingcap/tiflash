@@ -81,6 +81,7 @@ size_t Region::doInsert(ColumnFamilyType type, TiKVKey && key, TiKVValue && valu
         }
     }
     auto ans = data.insert(type, std::move(key), std::move(value), mode);
+
     return ans;
 }
 
@@ -395,4 +396,5 @@ void Region::mergeDataFrom(const Region & other)
     this->data.mergeFrom(other.data);
     this->data.orphan_keys_info.mergeFrom(other.data.orphan_keys_info);
 }
+
 } // namespace DB

@@ -16,6 +16,7 @@
 #include <Storages/KVStore/MultiRaft/RegionCFDataTrait.h>
 #include <Storages/KVStore/MultiRaft/RegionData.h>
 #include <Storages/KVStore/MultiRaft/RegionRangeKeys.h>
+#include <type_traits>
 
 namespace DB
 {
@@ -40,29 +41,29 @@ const TiKVValue & RegionCFDataBase<Trait>::getTiKVValue(const Value & val)
 }
 
 template <typename Trait>
-RegionDataRes RegionCFDataBase<Trait>::insert(TiKVKey && key, TiKVValue && value, DupCheck mode)
+typename Trait::Res RegionCFDataBase<Trait>::insert(TiKVKey && key, TiKVValue && value, DupCheck mode)
 {
     const auto & raw_key = RecordKVFormat::decodeTiKVKey(key);
     auto kv_pair = Trait::genKVPair(std::move(key), raw_key, std::move(value));
     if (!kv_pair)
-        return 0;
+        return {0};
 
-    return insert(std::move(*kv_pair), mode);
+    return doInsert(std::move(*kv_pair), mode);
 }
 
 template <>
-RegionDataRes RegionCFDataBase<RegionLockCFDataTrait>::insert(TiKVKey && key, TiKVValue && value, DupCheck mode)
+typename RegionLockCFDataTrait::Res RegionCFDataBase<RegionLockCFDataTrait>::insert(TiKVKey && key, TiKVValue && value, DupCheck mode)
 {
     UNUSED(mode);
     Pair kv_pair = RegionLockCFDataTrait::genKVPair(std::move(key), std::move(value));
     // according to the process of pessimistic lock, just overwrite.
     data.insert_or_assign(std::move(kv_pair.first), std::move(kv_pair.second));
     // lock cf is not count into the size of RegionData, always return 0
-    return 0;
+    return {0, false};
 }
 
 template <typename Trait>
-RegionDataRes RegionCFDataBase<Trait>::insert(std::pair<Key, Value> && kv_pair, DupCheck mode)
+typename Trait::Res RegionCFDataBase<Trait>::doInsert(std::pair<Key, Value> && kv_pair, DupCheck mode)
 {
     auto & map = data;
     TiKVValue prev_value;
@@ -94,8 +95,12 @@ RegionDataRes RegionCFDataBase<Trait>::insert(std::pair<Key, Value> && kv_pair, 
                         + " new_val: " + prev_value.toDebugString(),
                     ErrorCodes::LOGICAL_ERROR);
             }
-            // duplicated key is ignored
-            return 0;
+            // Duplicated key is ignored
+            if constexpr (std::is_same_v<Trait, RegionLockCFDataTrait>) {
+                RUNTIME_CHECK(false);
+            } else {
+                return {0};
+            }
         }
         else
         {
@@ -104,8 +109,11 @@ RegionDataRes RegionCFDataBase<Trait>::insert(std::pair<Key, Value> && kv_pair, 
                 ErrorCodes::LOGICAL_ERROR);
         }
     }
-
-    return calcTiKVKeyValueSize(it->second);
+    if constexpr (std::is_same_v<Trait, RegionLockCFDataTrait>) {
+        RUNTIME_CHECK(false);
+    } else {
+        return {calcTiKVKeyValueSize(it->second)};
+    }
 }
 
 template <typename Trait>
@@ -309,7 +317,7 @@ size_t RegionCFDataBase<Trait>::deserialize(ReadBuffer & buf, RegionCFDataBase &
     {
         auto key = TiKVKey::deserialize(buf);
         auto value = TiKVValue::deserialize(buf);
-        cf_data_size += new_region_data.insert(std::move(key), std::move(value));
+        cf_data_size += new_region_data.insert(std::move(key), std::move(value)).size;
     }
     return cf_data_size;
 }
