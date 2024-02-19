@@ -117,22 +117,14 @@ static void inline writeCommittedBlockDataIntoStorage(
     TableLockHolder drop_lock;
     std::tie(std::ignore, drop_lock) = std::move(lock).release();
     Stopwatch watch;
-    // Note: do NOT use typeid_cast, since Storage is multi-inherited and typeid_cast will return nullptr
-    switch (storage->engineType())
-    {
-    case ::TiDB::StorageEngine::DT:
-    {
-        auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
-        rw_ctx.write_result = dm_storage->write(block, rw_ctx.context.getSettingsRef());
-        break;
-    }
-    default:
-        throw Exception(
-            ErrorCodes::LOGICAL_ERROR,
-            "Unknown StorageEngine: {}",
-            static_cast<Int32>(storage->engineType()));
-    }
 
+    RUNTIME_CHECK_MSG(
+        storage->engineType() == ::TiDB::StorageEngine::DT,
+        "Unknown StorageEngine: {}",
+        static_cast<Int32>(storage->engineType()));
+    // Note: do NOT use typeid_cast, since Storage is multi-inherited and typeid_cast will return nullptr
+    auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
+    rw_ctx.write_result = dm_storage->write(block, rw_ctx.context.getSettingsRef());
     rw_ctx.write_part_cost = watch.elapsedMilliseconds();
     GET_METRIC(tiflash_raft_write_data_to_storage_duration_seconds, type_write)
         .Observe(rw_ctx.write_part_cost / 1000.0);
