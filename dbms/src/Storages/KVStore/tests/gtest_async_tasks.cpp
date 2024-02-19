@@ -221,6 +221,7 @@ TEST(AsyncTasksTest, AsyncTasksNormal)
 }
 
 TEST(AsyncTasksTest, AsyncTasksCommon)
+try
 {
     using namespace std::chrono_literals;
 
@@ -236,7 +237,6 @@ TEST(AsyncTasksTest, AsyncTasksCommon)
     while (true)
     {
         ASSERT(current_step < max_steps);
-        SCOPE_EXIT({ initial_loop = false; });
         auto count = std::accumulate(f.begin(), f.end(), 0, [&](int a, bool b) -> int { return a + int(b); });
         if (count >= total)
         {
@@ -244,22 +244,25 @@ TEST(AsyncTasksTest, AsyncTasksCommon)
         }
 
         auto to_be_canceled = total - 1;
-        if (count == total - 1)
+
+        if (s[to_be_canceled] && !f[to_be_canceled])
         {
-            if (async_tasks->isScheduled(to_be_canceled))
-            {
-                async_tasks->asyncCancelTask(
-                    to_be_canceled,
-                    []() {},
-                    true);
-            }
-            // Otherwise, the task is not added.
+            auto state = async_tasks->queryState(to_be_canceled);
+            RUNTIME_CHECK(state == TestAsyncTasks::TaskState::InQueue || state == TestAsyncTasks::TaskState::Running);
+            async_tasks->asyncCancelTask(
+                to_be_canceled,
+                []() {},
+                true);
+            f[to_be_canceled] = true;
+            ASSERT_EQ(async_tasks->queryState(to_be_canceled), TestAsyncTasks::TaskState::NotScheduled);
+            ASSERT_EQ(f[to_be_canceled], true);
+            ASSERT_EQ(s[to_be_canceled], true);
         }
 
         // Add tasks
         for (int i = 0; i < total; ++i)
         {
-            if (!async_tasks->isScheduled(i) && !s[i])
+            if (!s[i])
             {
                 auto res = async_tasks->addTask(i, [i, &async_tasks, to_be_canceled, &f]() {
                     if (i == to_be_canceled)
@@ -281,7 +284,9 @@ TEST(AsyncTasksTest, AsyncTasksCommon)
                     return 1;
                 });
                 if (res)
+                {
                     s[i] = true;
+                }
                 // In the first loop, only the first task can run.
                 if (initial_loop)
                     ASSERT_EQ(res, i <= 1);
@@ -293,20 +298,21 @@ TEST(AsyncTasksTest, AsyncTasksCommon)
         {
             if (!f[i])
             {
-                if (i == to_be_canceled)
-                    continue;
                 if (async_tasks->isReady(i))
                 {
-                    auto r = async_tasks->fetchResult(i);
-                    UNUSED(r);
+                    [[maybe_unused]] auto r = async_tasks->fetchResult(i);
                     f[i] = true;
                 }
             }
         }
+        initial_loop = false;
         std::this_thread::sleep_for(100ms);
+        current_step++;
     }
 
     ASSERT_EQ(async_tasks->count(), 0);
 }
+CATCH
+
 } // namespace tests
 } // namespace DB

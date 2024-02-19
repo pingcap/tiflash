@@ -14,8 +14,8 @@
 
 #pragma once
 
-#include <IO/ReadBufferFromString.h>
-#include <IO/WriteHelpers.h>
+#include <IO/Buffer/ReadBufferFromString.h>
+#include <IO/Util/WriteHelpers.h>
 #include <Storages/Page/PageDefinesBase.h>
 #include <Storages/Page/V3/PageEntryCheckpointInfo.h>
 

@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <IO/Buffer/createReadBufferFromFileBase.h>
 #include <IO/Compression/CompressedReadBufferFromFile.h>
-#include <IO/WriteHelpers.h>
-#include <IO/createReadBufferFromFileBase.h>
+#include <IO/Util/WriteHelpers.h>
 
 
 namespace DB
@@ -24,8 +24,8 @@ namespace ErrorCodes
 extern const int SEEK_POSITION_OUT_OF_BOUND;
 }
 
-template <bool has_checksum>
-bool CompressedReadBufferFromFile<has_checksum>::nextImpl()
+template <bool has_legacy_checksum>
+bool CompressedReadBufferFromFile<has_legacy_checksum>::nextImpl()
 {
     size_t size_decompressed;
     size_t size_compressed_without_checksum;
@@ -42,8 +42,8 @@ bool CompressedReadBufferFromFile<has_checksum>::nextImpl()
     return true;
 }
 
-template <bool has_checksum>
-CompressedReadBufferFromFile<has_checksum>::CompressedReadBufferFromFile(
+template <bool has_legacy_checksum>
+CompressedReadBufferFromFile<has_legacy_checksum>::CompressedReadBufferFromFile(
     const std::string & path,
     size_t estimated_size,
     size_t aio_threshold,
@@ -55,8 +55,8 @@ CompressedReadBufferFromFile<has_checksum>::CompressedReadBufferFromFile(
     this->compressed_in = &file_in;
 }
 
-template <bool has_checksum>
-void CompressedReadBufferFromFile<has_checksum>::seek(
+template <bool has_legacy_checksum>
+void CompressedReadBufferFromFile<has_legacy_checksum>::seek(
     size_t offset_in_compressed_file,
     size_t offset_in_decompressed_block)
 {
@@ -87,8 +87,8 @@ void CompressedReadBufferFromFile<has_checksum>::seek(
     }
 }
 
-template <bool has_checksum>
-size_t CompressedReadBufferFromFile<has_checksum>::readBig(char * to, size_t n)
+template <bool has_legacy_checksum>
+size_t CompressedReadBufferFromFile<has_legacy_checksum>::readBig(char * to, size_t n)
 {
     size_t bytes_read = 0;
 

@@ -17,7 +17,7 @@
 #include <Core/Block.h>
 #include <DataStreams/IRowOutputStream.h>
 #include <DataTypes/FormatSettingsJSON.h>
-#include <IO/WriteBuffer.h>
+#include <IO/Buffer/WriteBuffer.h>
 
 
 namespace DB

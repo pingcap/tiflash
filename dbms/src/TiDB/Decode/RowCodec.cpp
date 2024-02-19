@@ -13,8 +13,8 @@
 // limitations under the License.
 
 #include <Columns/IColumn.h>
-#include <IO/Endian.h>
-#include <IO/Operators.h>
+#include <IO/Util/Endian.h>
+#include <IO/Util/Operators.h>
 #include <TiDB/Decode/Datum.h>
 #include <TiDB/Decode/DatumCodec.h>
 #include <TiDB/Decode/RowCodec.h>
@@ -654,7 +654,7 @@ bool appendRowV1ToBlock(
                 continue;
             }
 
-            auto * raw_column = const_cast<IColumn *>((block.safeGetByPosition(block_column_pos)).column.get());
+            auto * raw_column = const_cast<IColumn *>((block.getByPosition(block_column_pos)).column.get());
             const auto & column_info = column_infos[column_ids_iter->second];
             DatumFlat datum(decoded_field_iter->second, column_info.tp);
             const Field & unflattened = datum.field();

@@ -120,22 +120,14 @@ static void inline writeCommittedBlockDataIntoStorage(
     TableLockHolder drop_lock;
     std::tie(std::ignore, drop_lock) = std::move(lock).release();
     Stopwatch watch;
-    // Note: do NOT use typeid_cast, since Storage is multi-inherited and typeid_cast will return nullptr
-    switch (storage->engineType())
-    {
-    case ::TiDB::StorageEngine::DT:
-    {
-        auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
-        rw_ctx.write_result = dm_storage->write(block, rw_ctx.context.getSettingsRef());
-        break;
-    }
-    default:
-        throw Exception(
-            ErrorCodes::LOGICAL_ERROR,
-            "Unknown StorageEngine: {}",
-            static_cast<Int32>(storage->engineType()));
-    }
 
+    RUNTIME_CHECK_MSG(
+        storage->engineType() == ::TiDB::StorageEngine::DT,
+        "Unknown StorageEngine: {}",
+        static_cast<Int32>(storage->engineType()));
+    // Note: do NOT use typeid_cast, since Storage is multi-inherited and typeid_cast will return nullptr
+    auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
+    rw_ctx.write_result = dm_storage->write(block, rw_ctx.context.getSettingsRef());
     rw_ctx.write_part_cost = watch.elapsedMilliseconds();
     GET_METRIC(tiflash_raft_write_data_to_storage_duration_seconds, type_write)
         .Observe(rw_ctx.write_part_cost / 1000.0);
@@ -230,7 +222,7 @@ static inline bool atomicReadWrite(
     }
     else
     {
-        // TODO(spill) Implement spill logic.
+        // TODO(Spill) Implement spill logic.
         RUNTIME_CHECK(false);
     }
     LOG_TRACE(
@@ -255,7 +247,8 @@ template DM::WriteResult writeRegionDataToStorage<RegionDataReadInfoList>(
     RegionDataReadInfoList & data_list_read,
     const LoggerPtr & log);
 
-// TODO(spill) rename it after we support spill.
+
+// TODO(Spill) rename it after we support spill.
 // ReadList could be RegionDataReadInfoList
 template <typename ReadList>
 DM::WriteResult writeRegionDataToStorage(
@@ -480,6 +473,7 @@ DM::WriteResult RegionTable::writeCommittedByRegion(
     auto write_result = writeRegionDataToStorage(context, region, data_list_read, log);
     auto prev_region_size = region->dataSize();
     RemoveRegionCommitCache(region, data_list_read, lock_region);
+
     if unlikely (data_list_read.hasLargeTxn())
     {
         LOG_DEBUG(log, "Observed large txns [{}], region_id={}", data_list_read.toLargeTxnDebugString(), region->id());
@@ -487,6 +481,7 @@ DM::WriteResult RegionTable::writeCommittedByRegion(
             region->checkAndCommitLargeTxn(start_ts);
         }
     }
+
     auto new_region_size = region->dataSize();
     if likely (new_region_size <= prev_region_size)
     {

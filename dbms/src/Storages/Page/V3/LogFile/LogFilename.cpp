@@ -31,7 +31,7 @@ LogFilename LogFilename::parseFrom(const String & parent_path, const String & fi
         LOG_INFO(log, "Ignore not log file [dir={}] [file={}]", parent_path, filename);
         return {LogFileStage::Invalid, 0, 0, 0, 0, ""};
     }
-    Strings ss;
+    std::vector<String> ss;
     boost::split(ss, filename, boost::is_any_of("_"));
     if (ss.size() != 3 && ss.size() != 4)
     {

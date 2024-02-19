@@ -17,8 +17,8 @@
 #include <Common/Stopwatch.h>
 #include <Core/Block.h>
 #include <DataStreams/IRowOutputStream.h>
+#include <IO/Buffer/WriteBuffer.h>
 #include <IO/Progress.h>
-#include <IO/WriteBuffer.h>
 
 
 namespace DB

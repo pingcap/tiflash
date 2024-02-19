@@ -676,7 +676,7 @@ RawCppPtr PreHandleSnapshot(
 #endif
 
         // Pre-decode and save as DTFiles
-        // TODO Forward deadline_index when TiKV supports.
+        // TODO(raftstore-v2) Forward deadline_index when TiKV supports.
         auto prehandle_result = kvstore->preHandleSnapshotToFiles(new_region, snaps, index, term, std::nullopt, tmt);
         auto * res = new PreHandledSnapshotWithFiles{new_region, std::move(prehandle_result)};
         return GenRawCppPtr(res, RawCppPtrTypeImpl::PreHandledSnapshotWithFiles);

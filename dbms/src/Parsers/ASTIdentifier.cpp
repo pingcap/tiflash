@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <IO/WriteBufferFromOStream.h>
-#include <IO/WriteHelpers.h>
+#include <IO/Buffer/WriteBufferFromOStream.h>
+#include <IO/Util/WriteHelpers.h>
 #include <Parsers/ASTIdentifier.h>
 
 

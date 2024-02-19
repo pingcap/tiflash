@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Interpreters/Context_fwd.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/File/ColumnCache.h>
 #include <Storages/DeltaMerge/File/DMFileReader.h>
@@ -23,13 +24,10 @@
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
 
 
-namespace DB
+namespace DB::DM
 {
-class Context;
-class Logger;
-using LoggerPtr = std::shared_ptr<Logger>;
-namespace DM
-{
+inline static constexpr size_t DMFILE_READ_ROWS_THRESHOLD = DEFAULT_MERGE_BLOCK_SIZE * 3;
+
 class DMFileBlockInputStream : public SkippableBlockInputStream
 {
 public:
@@ -62,11 +60,11 @@ public:
     Block read() override { return reader.read(); }
 
     Block readWithFilter(const IColumn::Filter & filter) override { return reader.readWithFilter(filter); }
-#ifndef DBMS_PUBLIC_GTEST
+
 private:
-#endif
+    friend class tests::DMFileMetaV2Test;
     DMFileReader reader;
-    bool enable_data_sharing;
+    const bool enable_data_sharing;
 };
 
 using DMFileBlockInputStreamPtr = std::shared_ptr<DMFileBlockInputStream>;
@@ -157,7 +155,6 @@ private:
     DMFileBlockInputStreamBuilder & setFromSettings(const Settings & settings)
     {
         enable_column_cache = settings.dt_enable_stable_column_cache;
-        aio_threshold = settings.min_bytes_to_use_direct_io;
         max_read_buffer_size = settings.max_read_buffer_size;
         max_sharing_column_bytes_for_all = settings.dt_max_sharing_column_bytes_for_all;
         max_sharing_column_count = settings.dt_max_sharing_column_count;
@@ -191,7 +188,6 @@ private:
     bool enable_column_cache = false;
     ColumnCachePtr column_cache;
     ReadLimiterPtr read_limiter;
-    size_t aio_threshold{};
     size_t max_read_buffer_size{};
     size_t rows_threshold_per_read = DMFILE_READ_ROWS_THRESHOLD;
     bool read_one_pack_every_time = false;
@@ -226,5 +222,4 @@ inline DMFileBlockInputStreamPtr createSimpleBlockInputStream(
         .build(file, cols, DB::DM::RowKeyRanges{}, std::make_shared<ScanContext>());
 }
 
-} // namespace DM
-} // namespace DB
+} // namespace DB::DM

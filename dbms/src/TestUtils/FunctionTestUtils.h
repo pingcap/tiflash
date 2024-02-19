@@ -586,13 +586,15 @@ ColumnsWithTypeAndName createColumns(const ColumnsWithTypeAndName & cols);
     const ColumnPtr & expected,
     const ColumnPtr & actual,
     const TiDB::ITiDBCollator * collator = nullptr,
-    bool is_floating_point = false);
+    bool is_floating_point = false,
+    bool exact_match_for_floating_point = false);
 
 // ignore name
 ::testing::AssertionResult columnEqual(
     const ColumnWithTypeAndName & expected,
     const ColumnWithTypeAndName & actual,
-    const TiDB::ITiDBCollator * collator = nullptr);
+    const TiDB::ITiDBCollator * collator = nullptr,
+    bool exact_match_for_floating_point = false);
 
 ::testing::AssertionResult blockEqual(const Block & expected, const Block & actual);
 
@@ -855,6 +857,8 @@ protected:
 };
 
 #define ASSERT_COLUMN_EQ(expected, actual) ASSERT_TRUE(DB::tests::columnEqual((expected), (actual)))
+/// ASSERT_COLUMN_EQ_V2 compares floating point using exact match algorithm
+#define ASSERT_COLUMN_EQ_V2(expected, actual) ASSERT_TRUE(DB::tests::columnEqual((expected), (actual), nullptr, true))
 #define ASSERT_BLOCK_EQ(expected, actual) ASSERT_TRUE(DB::tests::blockEqual((expected), (actual)))
 
 /// restrictly checking columns equality, both data set and each row's offset should be the same

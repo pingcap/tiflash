@@ -14,7 +14,7 @@
 
 #include <Common/FieldVisitors.h>
 #include <Functions/FunctionsConversion.h>
-#include <IO/ReadBufferFromMemory.h>
+#include <IO/Buffer/ReadBufferFromMemory.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTLiteral.h>
 #include <Storages/DeltaMerge/SchemaUpdate.h>

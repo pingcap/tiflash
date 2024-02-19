@@ -14,8 +14,8 @@
 
 #pragma once
 
+#include <IO/Buffer/ReadBufferFromFileBase.h>
 #include <IO/Compression/CompressedReadBufferBase.h>
-#include <IO/ReadBufferFromFileBase.h>
 #include <time.h>
 
 #include <memory>
@@ -24,9 +24,9 @@
 namespace DB
 {
 /// Unlike CompressedReadBuffer, it can do seek.
-template <bool has_checksum = true>
+template <bool has_legacy_checksum = true>
 class CompressedReadBufferFromFile
-    : public CompressedReadBufferBase<has_checksum>
+    : public CompressedReadBufferBase<has_legacy_checksum>
     , public BufferWithOwnMemory<ReadBuffer>
 {
 private:

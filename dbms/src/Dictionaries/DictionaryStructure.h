@@ -15,7 +15,7 @@
 #pragma once
 
 #include <DataTypes/IDataType.h>
-#include <IO/ReadBufferFromString.h>
+#include <IO/Buffer/ReadBufferFromString.h>
 #include <Interpreters/IExternalLoadable.h>
 #include <Poco/Util/AbstractConfiguration.h>
 

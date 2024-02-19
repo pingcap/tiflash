@@ -15,15 +15,15 @@
 #include <Common/FailPoint.h>
 #include <Common/RedactHelpers.h>
 #include <Core/Defines.h>
-#include <Encryption/EncryptionPath.h>
-#include <Encryption/ReadBufferFromRandomAccessFileBuilder.h>
 #include <IO/BaseFile/WriteReadableFile.h>
-#include <IO/ReadBufferFromString.h>
-#include <IO/WriteBuffer.h>
-#include <IO/WriteBufferFromFile.h>
-#include <IO/WriteBufferFromFileBase.h>
-#include <IO/WriteHelpers.h>
-#include <IO/createReadBufferFromFileBase.h>
+#include <IO/Buffer/ReadBufferFromString.h>
+#include <IO/Buffer/WriteBuffer.h>
+#include <IO/Buffer/WriteBufferFromFile.h>
+#include <IO/Buffer/WriteBufferFromFileBase.h>
+#include <IO/Buffer/createReadBufferFromFileBase.h>
+#include <IO/EncryptionPath.h>
+#include <IO/ReadBufferFromRandomAccessFileBuilder.h>
+#include <IO/Util/WriteHelpers.h>
 #include <Storages/Page/PageUtil.h>
 #include <Storages/Page/V3/LogFile/LogFormat.h>
 #include <Storages/Page/V3/LogFile/LogReader.h>
@@ -85,7 +85,7 @@ private:
     {
     public:
         size_t dropped_bytes;
-        String message;
+        String message{};
 
         ReportCollector()
             : dropped_bytes(0)
@@ -98,13 +98,13 @@ private:
     };
 
     ReportCollector report;
-    std::unique_ptr<LogWriter> writer;
-    std::unique_ptr<LogReader> reader;
-    LoggerPtr log;
+    std::unique_ptr<LogWriter> writer{};
+    std::unique_ptr<LogReader> reader{};
+    LoggerPtr log{};
 
 protected:
-    String path;
-    String file_name;
+    String path{};
+    String file_name{};
     FileProviderPtr provider;
     WriteReadableFilePtr wr_file;
 

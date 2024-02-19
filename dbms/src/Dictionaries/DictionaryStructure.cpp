@@ -16,7 +16,7 @@
 #include <Common/StringUtils/StringUtils.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <Dictionaries/DictionaryStructure.h>
-#include <IO/WriteHelpers.h>
+#include <IO/Util/WriteHelpers.h>
 
 #include <ext/range.h>
 #include <numeric>
@@ -280,7 +280,7 @@ std::vector<DictionaryAttribute> DictionaryStructure::getAttributes(
 
     for (const auto & key : keys)
     {
-        if (!startsWith(key.data(), "attribute"))
+        if (!startsWith(key, "attribute"))
             continue;
 
         const auto prefix = config_prefix + '.' + key + '.';

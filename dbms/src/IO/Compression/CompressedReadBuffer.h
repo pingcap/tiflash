@@ -14,16 +14,16 @@
 
 #pragma once
 
-#include <IO/BufferWithOwnMemory.h>
+#include <IO/Buffer/BufferWithOwnMemory.h>
+#include <IO/Buffer/ReadBuffer.h>
 #include <IO/Compression/CompressedReadBufferBase.h>
-#include <IO/ReadBuffer.h>
 
 
 namespace DB
 {
-template <bool has_checksum = true>
+template <bool has_legacy_checksum = true>
 class CompressedReadBuffer
-    : public CompressedReadBufferBase<has_checksum>
+    : public CompressedReadBufferBase<has_legacy_checksum>
     , public BufferWithOwnMemory<ReadBuffer>
 {
 private:
@@ -33,7 +33,7 @@ private:
 
 public:
     CompressedReadBuffer(ReadBuffer & in_)
-        : CompressedReadBufferBase<has_checksum>(&in_)
+        : CompressedReadBufferBase<has_legacy_checksum>(&in_)
         , BufferWithOwnMemory<ReadBuffer>(0)
     {}
 
