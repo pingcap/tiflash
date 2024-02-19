@@ -462,7 +462,7 @@ DM::WriteResult RegionTable::writeCommittedByRegion(
 
     if (!maybe_data_list_read.has_value())
         return std::nullopt;
-        
+
     RegionDataReadInfoList & data_list_read = maybe_data_list_read.value();
     reportUpstreamLatency(data_list_read);
     auto write_result = writeRegionDataToStorage(context, region, data_list_read, log);
