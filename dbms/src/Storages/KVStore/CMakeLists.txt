@@ -23,7 +23,6 @@ add_headers_and_sources(kvstore ./Decode)
 add_headers_and_sources(kvstore ./Read)
 
 add_subdirectory (./MultiRaft/Disagg)
-add_subdirectory (./MultiRaft/Spill)
 
 add_library(kvstore ${kvstore_headers} ${kvstore_sources})
 target_include_directories(kvstore PRIVATE ${TiFlash_SOURCE_DIR}/contrib/GmSSL/include)
