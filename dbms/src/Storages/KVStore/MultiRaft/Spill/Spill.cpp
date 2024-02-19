@@ -19,12 +19,19 @@
 namespace DB {
 
 void SpillTxnCtx::meetLargeTxnLock(const Timestamp & tso) {
-    if (!txns.contains(tso)) {
+    {
+        std::shared_lock l(mut);
+        if(txns.contains(tso)) return;
+    }
+    {
+        std::unique_lock l(mut);
+        if(txns.contains(tso)) return;
         txns.emplace(tso, std::make_shared<LargeTxn>());
     }
 }
 
-std::optional<std::pair<Timestamp, LargeTxnPtr>>> SpillTxnCtx::pickOne() const {
+std::optional<std::pair<Timestamp, LargeTxnPtr>> SpillTxnCtx::pickOne() const {
+    std::shared_lock l(mut);
     if likely(txns.empty()) return std::nullopt;
     // TODO(spill) pick the largest one.
     return *txns.begin();
@@ -36,25 +43,25 @@ void Region::checkAndCommitLargeTxn(const Timestamp &) {
 }
 
 bool KVStore::canSpillRegion(const RegionPtr &, RegionTaskLock &) const {
-    // TODO(spill) Is split contradict with persist?
+    // TODO(spill)
+    // Is split contradict with persist?
     return false;
 }
 
-std::optional<SpilledMemtable> KVStore::maybeSpillDefaultCf(RegionPtr & region, RegionTaskLock &) {
-    auto txn = region->getSpillTxnCtx().pickOne();
-    if likely(!txn.has_value()) return std::nullopt;
-    if (!canSpillRegion(region, l)) return std::nullopt;
-    SpilledMemtable spilled_memtable;
-    region->spillMemtable(spilled_memtable);
-    return spilled_memtable;
+SpilledMemtableMap KVStore::maybeSpillDefaultCf(RegionPtr & region, RegionTaskLock & l) {
+    if likely(!txn.hasLargeTxn()) return {};
+    if (!canSpillRegion(region, l)) return {};
+    
+    SpilledMemtableMap spilled_memtables = region->spillMemtable(getSpillTxnCtx(), l);
+    return spilled_memtables;
 }
 
-void Region::spillMemtable(SpilledMemtable & spilled_memtable, RegionTaskLock &) {
+SpilledMemtableMap Region::spillMemtable(SpillTxnCtx & ctx, RegionTaskLock &) {
     // In this case, most of the key-value pairs blong to large txn,
     // So we move backward.
     spilled_memtable.default_cf = data.takeDefaultCf();
     // TODO(spill) improve performance
-    
+
 }
 
 } // namespace DB

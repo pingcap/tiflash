@@ -367,7 +367,9 @@ private:
     
     //  ---- Spill ----  //
     bool canSpillRegion(const RegionPtr & region, RegionTaskLock &) const;
-    SpilledMemtable maybeSpillDefaultCf(RegionPtr & region, RegionTaskLock &);
+    SpilledMemtableMap maybeSpillDefaultCf(RegionPtr & region, RegionTaskLock &);
+    SpillTxnCtx & getSpillTxnCtx() { return spill_ctx; }
+    const SpillTxnCtx & getSpillTxnCtx() const { return spill_ctx; }
 
 #ifndef DBMS_PUBLIC_GTEST
 private:
@@ -418,6 +420,8 @@ private:
     // we can't have access to these codes though.
     std::atomic<int64_t> ongoing_prehandle_task_count{0};
     ProxyConfigSummary proxy_config_summary;
+
+    SpillTxnCtx spill_ctx;
 };
 
 /// Encapsulation of lock guard of task mutex in KVStore

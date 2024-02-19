@@ -258,8 +258,6 @@ public: // Raft Read and Write
 public: // Spill
     // Requires Region task lock
     void checkAndCommitLargeTxn(const Timestamp & start_ts);
-    SpillTxnCtx & getSpillTxnCtx() { return spill_ctx; }
-    const SpillTxnCtx & getSpillTxnCtx() const { return spill_ctx; }
     void meetLargeTxnLock(const Timestamp & tso);
 
 private:
@@ -285,7 +283,7 @@ private:
     RegionPtr splitInto(RegionMeta && meta);
     void setPeerState(raft_serverpb::PeerState state);
 
-    void spillMemtable(SpilledMemtable &);
+    SpilledMemtableMap spillMemtable(SpillTxnCtx & ctx, RegionTaskLock &);
 
 private:
     // Modification to data or meta requires this mutex.
@@ -311,8 +309,6 @@ private:
     UInt64 last_restart_log_applied{0};
     mutable std::atomic<size_t> approx_mem_cache_rows{0};
     mutable std::atomic<size_t> approx_mem_cache_bytes{0};
-
-    SpillTxnCtx spill_ctx;
 };
 
 class RegionRaftCommandDelegate

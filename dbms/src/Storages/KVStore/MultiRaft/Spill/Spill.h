@@ -27,6 +27,8 @@ struct SpilledMemtable {
 };
 
 using SpilledMemtablePtr = std::shared_ptr<SpilledMemtable>;
+using SpilledMemtables = std::vector<SpilledMemtable>;
+using SpilledMemtableMap = std::unordered_map<SpilledMemtable>;
 
 struct LargeTxn {
     
@@ -35,14 +37,20 @@ struct LargeTxn {
 using LargeTxnPtr = std::shared_ptr<LargeTxn>;
 using LargeTxnMap = std::unordered_map<Timestamp, LargeTxnPtr>;
 
-struct SpillTxnCtx : public SharedMutexLockWrap {
+struct SpillTxnCtx {
     bool isLargeTxn(const Timestamp & ts) const {
+        std::shared_lock l(mut);
         return txns.contains(ts);
     }
+    bool hasLargeTxn() const {
+        std::shared_lock l(mut);
+        return !txns.empty();
+    }
     void meetLargeTxnLock(const Timestamp & tso);
-    std::optional<std::pair<Timestamp, LargeTxnPtr>>> pickOne() const;
+    std::optional<std::pair<Timestamp, LargeTxnPtr>> pickOne() const;
     // start_ts -> LargeTxn
     LargeTxnMap txns;
+    mutable std::shared_mutex mut;
 };
 
 using SpillTxnCtxPtr = std::shared_ptr<LargeTxn>;

@@ -150,7 +150,7 @@ try
 
     proxy_instance->bootstrapWithRegion(kvs, ctx.getTMTContext(), 1, std::nullopt);
     auto kv_region = kvs.getRegion(1);
-    kv_region->getSpillTxnCtx()
+    kv_region->getSpillTxnCtx();
 }
 CATCH
 
