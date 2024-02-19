@@ -453,12 +453,12 @@ std::pair<EngineStoreApplyRes, DM::WriteResult> Region::handleWriteRaftCmd(
     DM::WriteResult write_result = std::nullopt;
     {
         {
-            // RegionTable::writeBlockByRegion may lead to persistRegion when flush proactively.
+            // RegionTable::writeCommittedByRegion may lead to persistRegion when flush proactively.
             // So we can't lock here.
             // Safety: Mutations to a region come from raft applying and bg flushing of storage layer.
             // 1. A raft applying process should acquire the region task lock.
             // 2. While bg/fg flushing, applying raft logs should also be prevented with region task lock.
-            // So between here and RegionTable::writeBlockByRegion, there will be no new data applied.
+            // So between here and RegionTable::writeCommittedByRegion, there will be no new data applied.
             std::unique_lock<std::shared_mutex> lock(mutex);
             handle_write_cmd_func();
         }
@@ -471,7 +471,7 @@ std::pair<EngineStoreApplyRes, DM::WriteResult> Region::handleWriteRaftCmd(
             try
             {
                 write_result
-                    = RegionTable::writeBlockByRegion(context, shared_from_this(), data_list_to_remove, log, true);
+                    = RegionTable::writeCommittedByRegion(context, shared_from_this(), data_list_to_remove, log, true);
             }
             catch (DB::Exception & e)
             {
@@ -489,7 +489,8 @@ std::pair<EngineStoreApplyRes, DM::WriteResult> Region::handleWriteRaftCmd(
                 }
                 LOG_ERROR(
                     log,
-                    "{} catch exception: {}, while applying `RegionTable::writeBlockByRegion` on [term {}, index {}], "
+                    "{} catch exception: {}, while applying `RegionTable::writeCommittedByRegion` on [term {}, index "
+                    "{}], "
                     "entries {}",
                     toString(),
                     e.message(),

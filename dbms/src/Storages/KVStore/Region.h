@@ -120,6 +120,7 @@ public:
 
 public: // Simple Read and Write
     explicit Region(RegionMeta && meta_, const TiFlashRaftProxyHelper *);
+    Region() = delete;
     ~Region();
 
     void insert(const std::string & cf, TiKVKey && key, TiKVValue && value, DupCheck mode = DupCheck::Deny);
@@ -252,8 +253,6 @@ public: // Raft Read and Write
     // Methods to handle orphan keys under raftstore v2.
     void beforePrehandleSnapshot(uint64_t region_id, std::optional<uint64_t> deadline_index);
     void afterPrehandleSnapshot(int64_t ongoing);
-
-    Region() = delete;
 
 private:
     friend class RegionRaftCommandDelegate;
