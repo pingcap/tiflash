@@ -17,6 +17,7 @@
 #include <Storages/KVStore/Decode/RegionDataRead.h>
 #include <Storages/KVStore/MultiRaft/RegionCFDataBase.h>
 #include <Storages/KVStore/MultiRaft/RegionCFDataTrait.h>
+#include <Storages/KVStore/MultiRaft/LargeTxnDefaultCf.h>
 
 namespace DB
 {
@@ -30,6 +31,7 @@ enum class ColumnFamilyType : uint8_t;
 
 struct RegionLockReadQuery;
 class Region;
+
 
 class RegionData
 {
@@ -74,10 +76,12 @@ public:
 
     RegionWriteCFData & writeCF();
     RegionDefaultCFData & defaultCF();
+    LargeTxnDefaultCf & largeDefautCf();
 
     const RegionWriteCFData & writeCF() const;
     const RegionDefaultCFData & defaultCF() const;
     const RegionLockCFData & lockCF() const;
+    const LargeTxnDefaultCf & largeDefautCf() const;
 
     RegionData() = default;
 
@@ -125,6 +129,7 @@ private:
     RegionWriteCFData write_cf;
     RegionDefaultCFData default_cf;
     RegionLockCFData lock_cf;
+    LargeTxnDefaultCf large_default_cf;
     OrphanKeysInfo orphan_keys_info;
 
     // Size of data cf & write cf, without lock cf.

@@ -312,6 +312,10 @@ RegionDefaultCFData & RegionData::defaultCF()
 {
     return default_cf;
 }
+LargeTxnDefaultCf & RegionData::largeDefautCf()
+{
+    return large_default_cf;
+}
 
 const RegionWriteCFData & RegionData::writeCF() const
 {
@@ -324,6 +328,10 @@ const RegionDefaultCFData & RegionData::defaultCF() const
 const RegionLockCFData & RegionData::lockCF() const
 {
     return lock_cf;
+}
+const LargeTxnDefaultCf & RegionData::largeDefautCf() const
+{
+    return large_default_cf;
 }
 
 bool RegionData::isEqual(const RegionData & r2) const

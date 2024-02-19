@@ -141,4 +141,21 @@ try
 }
 CATCH
 
+TEST_F(KVStoreSpillTest, LargeTxnDefaultCf)
+try
+{
+    LargeTxnDefaultCf cf;
+    auto str_key = RecordKVFormat::genKey(table_id, 1, 111);
+    auto [str_val_write, str_val_default] = proxy_instance->generateTiKVKeyValue(111, 999);
+    cf.insert(TiKVKey::copyFrom(str_key), TiKVValue::copyFrom(str_val_default));
+    ASSERT_EQ(cf.getSize(), 1);
+    ASSERT_EQ(cf.getTxnCount(), 1);
+    auto str_key2 = RecordKVFormat::genKey(table_id, 2, 111);
+    auto [str_val_write2, str_val_default2] = proxy_instance->generateTiKVKeyValue(111, 999);
+    cf.insert(TiKVKey::copyFrom(str_key2), TiKVValue::copyFrom(str_val_default2));
+    ASSERT_EQ(cf.getSize(), 2);
+    ASSERT_EQ(cf.getTxnCount(), 1);
+}
+CATCH
+
 } // namespace DB::tests

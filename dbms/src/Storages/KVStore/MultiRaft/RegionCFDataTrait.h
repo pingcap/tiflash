@@ -62,7 +62,6 @@ struct RegionWriteCFDataTrait
     static UInt8 getWriteType(const Value & value) { return std::get<2>(value).write_type; }
 };
 
-
 struct RegionDefaultCFDataTrait
 {
     using Key = std::pair<RawTiDBPK, Timestamp>;

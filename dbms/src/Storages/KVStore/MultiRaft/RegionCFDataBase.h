@@ -23,6 +23,7 @@ namespace DB
 {
 
 struct TiKVRangeKey;
+
 using RegionRange = RegionRangeKeys::RegionRange;
 using RegionDataRes = size_t;
 
@@ -43,7 +44,6 @@ struct RegionCFDataBase
     using Status = bool;
 
     static const TiKVKey & getTiKVKey(const Value & val);
-
     static const TiKVValue & getTiKVValue(const Value & val);
 
     RegionDataRes insert(TiKVKey && key, TiKVValue && value, DupCheck mode = DupCheck::Deny);
@@ -68,16 +68,15 @@ struct RegionCFDataBase
     size_t mergeFrom(const RegionCFDataBase & ori_region_data);
 
     size_t serialize(WriteBuffer & buf) const;
-
     static size_t deserialize(ReadBuffer & buf, RegionCFDataBase & new_region_data);
 
     const Data & getData() const;
 
     Data & getDataMut();
 
+    RegionDataRes doInsert(std::pair<Key, Value> && kv_pair, DupCheck mode = DupCheck::Deny);
 private:
     static bool shouldIgnoreRemove(const Value & value);
-    RegionDataRes insert(std::pair<Key, Value> && kv_pair, DupCheck mode = DupCheck::Deny);
 
 private:
     Data data;

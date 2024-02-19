@@ -47,7 +47,7 @@ RegionDataRes RegionCFDataBase<Trait>::insert(TiKVKey && key, TiKVValue && value
     if (!kv_pair)
         return 0;
 
-    return insert(std::move(*kv_pair), mode);
+    return doInsert(std::move(*kv_pair), mode);
 }
 
 template <>
@@ -62,7 +62,7 @@ RegionDataRes RegionCFDataBase<RegionLockCFDataTrait>::insert(TiKVKey && key, Ti
 }
 
 template <typename Trait>
-RegionDataRes RegionCFDataBase<Trait>::insert(std::pair<Key, Value> && kv_pair, DupCheck mode)
+RegionDataRes RegionCFDataBase<Trait>::doInsert(std::pair<Key, Value> && kv_pair, DupCheck mode)
 {
     auto & map = data;
     TiKVValue prev_value;
