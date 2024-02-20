@@ -103,9 +103,11 @@ static std::function<size_t(UInt32 &, WriteBuffer &)> mockSerFactory(int value)
     };
 }
 
-static std::function<bool(UInt32, ReadBuffer &, UInt32)> mockDeserFactory(int value, std::shared_ptr<int> counter)
+static std::function<bool(UInt32, ReadBuffer &, UInt32, RegionDeserResult &)> mockDeserFactory(
+    int value,
+    std::shared_ptr<int> counter)
 {
-    return [value, counter](UInt32 extension_type, ReadBuffer & buf, UInt32 length) -> bool {
+    return [value, counter](UInt32 extension_type, ReadBuffer & buf, UInt32 length, RegionDeserResult &) -> bool {
         if (value & 1)
         {
             if (extension_type == magic_enum::enum_underlying(RegionPersistExtension::ReservedForTest))

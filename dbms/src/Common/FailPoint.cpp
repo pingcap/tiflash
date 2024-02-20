@@ -111,6 +111,7 @@ namespace DB
     M(force_set_fap_candidate_store_id)                      \
     M(force_not_clean_fap_on_destroy)                        \
     M(delta_tree_create_node_fail)                           \
+    M(force_write_to_large_txn_default)                      \
     M(disable_flush_cache)
 
 #define APPLY_FOR_PAUSEABLE_FAILPOINTS_ONCE(M) \

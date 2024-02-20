@@ -12,10 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/FailPoint.h>
 #include <IO/Util/ReadHelpers.h>
 #include <IO/Util/WriteHelpers.h>
 #include <Storages/KVStore/FFI/ColumnFamily.h>
 #include <Storages/KVStore/MultiRaft/RegionData.h>
+#include <Storages/KVStore/MultiRaft/RegionSerde.h>
 #include <Storages/KVStore/Read/RegionLockInfo.h>
 
 namespace DB
@@ -25,6 +27,11 @@ namespace ErrorCodes
 extern const int LOGICAL_ERROR;
 extern const int ILLFORMAT_RAFT_ROW;
 } // namespace ErrorCodes
+
+namespace FailPoints
+{
+extern const char force_write_to_large_txn_default[];
+} // namespace FailPoints
 
 void RegionData::reportAlloc(size_t delta)
 {
@@ -61,6 +68,13 @@ size_t RegionData::insert(ColumnFamilyType cf, TiKVKey && key, TiKVValue && valu
     }
     case ColumnFamilyType::Default:
     {
+        auto use_large = [&]() {
+            auto delta = large_default_cf.insert(std::move(key), std::move(value), mode);
+            cf_data_size += delta;
+            reportAlloc(delta);
+            return delta;
+        };
+        fiu_do_on(FailPoints::force_write_to_large_txn_default, { return use_large(); });
         auto delta = default_cf.insert(std::move(key), std::move(value), mode);
         cf_data_size += delta;
         reportAlloc(delta);
@@ -254,6 +268,7 @@ void RegionData::splitInto(const RegionRange & range, RegionData & new_region_da
     size_changed += write_cf.splitInto(range, new_region_data.write_cf);
     // reportAlloc: Remember to track memory here if we have a region-wise metrics later.
     size_changed += lock_cf.splitInto(range, new_region_data.lock_cf);
+    size_changed += large_default_cf.splitInto(range, new_region_data.large_default_cf);
     cf_data_size -= size_changed;
     new_region_data.cf_data_size += size_changed;
 }
@@ -265,6 +280,7 @@ void RegionData::mergeFrom(const RegionData & ori_region_data)
     size_changed += write_cf.mergeFrom(ori_region_data.write_cf);
     // reportAlloc: Remember to track memory here if we have a region-wise metrics later.
     size_changed += lock_cf.mergeFrom(ori_region_data.lock_cf);
+    size_changed += large_default_cf.mergeFrom(ori_region_data.large_default_cf);
     cf_data_size += size_changed;
 }
 
@@ -278,6 +294,7 @@ void RegionData::assignRegionData(RegionData && new_region_data)
     default_cf = std::move(new_region_data.default_cf);
     write_cf = std::move(new_region_data.write_cf);
     lock_cf = std::move(new_region_data.lock_cf);
+    large_default_cf = std::move(new_region_data.large_default_cf);
     orphan_keys_info = std::move(new_region_data.orphan_keys_info);
 
     cf_data_size = new_region_data.cf_data_size.load();
@@ -290,17 +307,34 @@ size_t RegionData::serialize(WriteBuffer & buf) const
     total_size += default_cf.serialize(buf);
     total_size += write_cf.serialize(buf);
     total_size += lock_cf.serialize(buf);
+    if unlikely (large_default_cf.getTxnCount() > 0)
+    {
+        total_size += large_default_cf.serialize(buf);
+    }
 
     return total_size;
 }
 
-void RegionData::deserialize(ReadBuffer & buf, RegionData & region_data)
+std::optional<std::string> RegionData::serializeLargeTxnMeta() const
+{
+    WriteBufferFromOwnString wb;
+    size_t size = large_default_cf.serializeMeta(wb);
+    if likely (size == 0)
+        return std::nullopt;
+    RUNTIME_CHECK(size == wb.count(), size, wb.count());
+    return wb.releaseStr();
+}
+
+void RegionData::deserialize(ReadBuffer & buf, RegionData & region_data, const RegionDeserResult & result)
 {
     size_t total_size = 0;
     total_size += RegionDefaultCFData::deserialize(buf, region_data.default_cf);
     total_size += RegionWriteCFData::deserialize(buf, region_data.write_cf);
     total_size += RegionLockCFData::deserialize(buf, region_data.lock_cf);
-
+    if unlikely (result.large_txn_count != 0)
+    {
+        total_size += LargeTxnDefaultCf::deserialize(buf, result.large_txn_count, region_data.large_default_cf);
+    }
     region_data.cf_data_size += total_size;
 }
 

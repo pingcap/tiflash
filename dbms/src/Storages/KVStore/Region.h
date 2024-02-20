@@ -132,6 +132,7 @@ public: // Simple Read and Write
 
     void mergeDataFrom(const Region & other);
     RegionMeta & mutMeta() { return meta; }
+    const RegionData & debugData() const { return data; }
 
     // Assign data and meta by moving from `new_region`.
     void assignRegion(Region && new_region);
@@ -178,7 +179,7 @@ public: // Stats
         WriteBuffer & buf) const;
     static RegionPtr deserializeImpl(
         UInt32 current_version,
-        std::function<bool(UInt32, ReadBuffer &, UInt32)> extra_handler,
+        std::function<bool(UInt32, ReadBuffer &, UInt32, RegionDeserResult &)> extra_handler,
         ReadBuffer & buf,
         const TiFlashRaftProxyHelper * proxy_helper = nullptr);
 

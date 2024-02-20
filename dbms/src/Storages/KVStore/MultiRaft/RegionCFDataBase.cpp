@@ -16,6 +16,7 @@
 #include <Storages/KVStore/MultiRaft/RegionCFDataTrait.h>
 #include <Storages/KVStore/MultiRaft/RegionData.h>
 #include <Storages/KVStore/MultiRaft/RegionRangeKeys.h>
+#include <Storages/KVStore/MultiRaft/Spill/LargeTxnDefaultCf.h>
 
 namespace DB
 {
@@ -326,4 +327,5 @@ typename RegionCFDataBase<Trait>::Data & RegionCFDataBase<Trait>::getDataMut()
 template struct RegionCFDataBase<RegionWriteCFDataTrait>;
 template struct RegionCFDataBase<RegionDefaultCFDataTrait>;
 template struct RegionCFDataBase<RegionLockCFDataTrait>;
+template struct RegionCFDataBase<LargeDefaultCFDataTrait>;
 } // namespace DB

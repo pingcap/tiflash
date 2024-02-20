@@ -21,6 +21,11 @@
 #include <TiDB/Schema/SchemaSyncService.h>
 #include <TiDB/Schema/TiDBSchemaManager.h>
 
+namespace DB::FailPoints
+{
+extern const char force_write_to_large_txn_default[];
+} // namespace DB::FailPoints
+
 namespace DB::tests
 {
 class KVStoreSpillTest : public KVStoreTestBase
@@ -176,14 +181,43 @@ try
     // Empty for start_ts=112
     ASSERT_EQ(cf3.getTxnCount(), 2);
 
+    MemoryWriteBuffer wb_meta;
+    cf.serializeMeta(wb_meta);
     MemoryWriteBuffer wb;
     cf.serialize(wb);
     LargeTxnDefaultCf cf_recover;
-    LargeTxnDefaultCf::deserialize(*wb.tryGetReadBuffer(), cf_recover);
+    auto txn_count_recover = LargeTxnDefaultCf::deserializeMeta(*wb_meta.tryGetReadBuffer());
+    ASSERT_EQ(2, txn_count_recover);
+    LargeTxnDefaultCf::deserialize(*wb.tryGetReadBuffer(), txn_count_recover, cf_recover);
     ASSERT_EQ(cf_recover.getSize(), 3);
     ASSERT_EQ(cf_recover.getTxnCount(), 2);
     ASSERT_TRUE(cf_recover.hasTxn(111));
     ASSERT_TRUE(cf_recover.hasTxn(112));
+}
+CATCH
+
+TEST_F(KVStoreSpillTest, RegionPersister)
+try
+{
+    FailPointHelper::enableFailPoint(FailPoints::force_write_to_large_txn_default);
+    auto & ctx = TiFlashTestEnv::getGlobalContext();
+    KVStore & kvs = getKVS();
+    proxy_instance->bootstrapWithRegion(kvs, ctx.getTMTContext(), 1, std::nullopt);
+    auto str_key = RecordKVFormat::genKey(table_id, 1, 111);
+    auto [str_val_write, str_val_default] = proxy_instance->generateTiKVKeyValue(111, 999);
+
+    auto region = kvs.getRegion(1);
+    region->insert(ColumnFamilyType::Default, TiKVKey::copyFrom(str_key), TiKVValue::copyFrom(str_val_default));
+    auto str_key2 = RecordKVFormat::genKey(table_id, 2, 111);
+    auto [str_val_write2, str_val_default2] = proxy_instance->generateTiKVKeyValue(111, 999);
+    auto str_key3 = RecordKVFormat::genKey(table_id, 3, 111);
+    auto [str_val_write3, str_val_default3] = proxy_instance->generateTiKVKeyValue(112, 999);
+    region->insert(ColumnFamilyType::Default, TiKVKey::copyFrom(str_key2), TiKVValue::copyFrom(str_val_default2));
+    region->insert(ColumnFamilyType::Default, TiKVKey::copyFrom(str_key3), TiKVValue::copyFrom(str_val_default3));
+    MemoryWriteBuffer wb;
+    region->serialize(wb);
+    auto region2 = Region::deserialize(*wb.tryGetReadBuffer());
+    ASSERT_EQ(region2->debugData().largeDefautCf().getSize(), 3);
 }
 CATCH
 

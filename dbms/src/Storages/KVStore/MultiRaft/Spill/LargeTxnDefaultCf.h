@@ -22,10 +22,33 @@
 
 namespace DB
 {
+
+struct LargeDefaultCFDataTrait
+{
+    using Key = RawTiDBPK;
+    using Value = std::tuple<std::shared_ptr<const TiKVKey>, std::shared_ptr<const TiKVValue>>;
+    using Map = std::map<Key, Value>;
+
+    static std::optional<Map::value_type> genKVPair(TiKVKey && key, const DecodedTiKVKey & raw_key, TiKVValue && value)
+    {
+        RawTiDBPK tidb_pk = RecordKVFormat::getRawTiDBPK(raw_key);
+        return Map::value_type(
+            std::move(tidb_pk),
+            Value(
+                std::make_shared<const TiKVKey>(std::move(key)),
+                std::make_shared<const TiKVValue>(std::move(value))));
+    }
+
+    static std::shared_ptr<const TiKVValue> getTiKVValue(const Map::const_iterator & it)
+    {
+        return std::get<1>(it->second);
+    }
+};
+
 struct LargeTxnDefaultCf
 {
-    using Trait = RegionDefaultCFDataTrait;
-    using Inner = RegionCFDataBase<RegionDefaultCFDataTrait>;
+    using Trait = LargeDefaultCFDataTrait;
+    using Inner = RegionCFDataBase<LargeDefaultCFDataTrait>;
     using Level1Key = Timestamp;
     using Key = typename Trait::Key;
     using Value = typename Trait::Value;
@@ -64,8 +87,10 @@ struct LargeTxnDefaultCf
     size_t splitInto(const RegionRange & range, LargeTxnDefaultCf & new_region_data);
     size_t mergeFrom(const LargeTxnDefaultCf & ori_region_data);
 
+    size_t serializeMeta(WriteBuffer & buf) const;
     size_t serialize(WriteBuffer & buf) const;
-    static size_t deserialize(ReadBuffer & buf, LargeTxnDefaultCf & new_region_data);
+    static size_t deserializeMeta(ReadBuffer & buf);
+    static size_t deserialize(ReadBuffer & buf, size_t txn_count, LargeTxnDefaultCf & new_region_data);
 
     const Data & getData() const { return txns; }
     Data & getDataMut() { return txns; }
@@ -74,7 +99,6 @@ struct LargeTxnDefaultCf
     bool hasTxn(const Level1Key & ts) const { return txns.contains(ts); }
 
 private:
-    // TODO(Spill) We can neglect Timestamp in RegionDefaultCFDataTrait to save memory.
     Data txns;
 };
 

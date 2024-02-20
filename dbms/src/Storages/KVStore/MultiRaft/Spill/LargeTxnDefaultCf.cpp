@@ -29,12 +29,12 @@ std::shared_ptr<LargeTxnDefaultCf::Inner> & LargeTxnDefaultCf::mustGet(
 RegionDataRes LargeTxnDefaultCf::insert(TiKVKey && key, TiKVValue && value, DupCheck mode)
 {
     const auto & raw_key = RecordKVFormat::decodeTiKVKey(key);
+    const auto & timestamp = RecordKVFormat::getTs(key);
     auto maybe_kv_pair = Trait::genKVPair(std::move(key), raw_key, std::move(value));
     if (!maybe_kv_pair)
         return 0;
 
     auto & kv_pair = maybe_kv_pair.value();
-    const auto & timestamp = kv_pair.first.second;
     return LargeTxnDefaultCf::mustGet(*this, timestamp)->doInsert(std::move(kv_pair), mode);
 }
 
@@ -49,7 +49,7 @@ size_t LargeTxnDefaultCf::calcTiKVKeyValueSize(const TiKVKey & key, const TiKVVa
 
 size_t LargeTxnDefaultCf::remove(const Key & key, bool quiet)
 {
-    auto & txn = txns.at(key.first);
+    auto & txn = txns.at(key);
     return txn->remove(key, quiet);
 }
 
@@ -111,12 +111,21 @@ size_t LargeTxnDefaultCf::mergeFrom(const LargeTxnDefaultCf & ori_region_data)
     return size_changed;
 }
 
-size_t LargeTxnDefaultCf::serialize(WriteBuffer & buf) const
+size_t LargeTxnDefaultCf::serializeMeta(WriteBuffer & buf) const
 {
     size_t total_size = 0;
 
     size_t txn_count = getTxnCount();
+    if likely (txn_count == 0)
+        return 0;
     total_size += writeBinary2(txn_count, buf);
+    return total_size;
+}
+
+size_t LargeTxnDefaultCf::serialize(WriteBuffer & buf) const
+{
+    size_t total_size = 0;
+
     for (const auto & e : txns)
     {
         total_size += writeBinary2(e.first, buf);
@@ -125,9 +134,15 @@ size_t LargeTxnDefaultCf::serialize(WriteBuffer & buf) const
 
     return total_size;
 }
-size_t LargeTxnDefaultCf::deserialize(ReadBuffer & buf, LargeTxnDefaultCf & new_region_data)
+
+size_t LargeTxnDefaultCf::deserializeMeta(ReadBuffer & buf)
 {
     auto txn_count = readBinary2<size_t>(buf);
+    return txn_count;
+}
+
+size_t LargeTxnDefaultCf::deserialize(ReadBuffer & buf, size_t txn_count, LargeTxnDefaultCf & new_region_data)
+{
     size_t cf_data_size = 0;
     for (size_t i = 0; i < txn_count; i++)
     {

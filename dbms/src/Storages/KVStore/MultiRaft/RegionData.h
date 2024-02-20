@@ -15,9 +15,9 @@
 #pragma once
 
 #include <Storages/KVStore/Decode/RegionDataRead.h>
-#include <Storages/KVStore/MultiRaft/Spill/LargeTxnDefaultCf.h>
 #include <Storages/KVStore/MultiRaft/RegionCFDataBase.h>
 #include <Storages/KVStore/MultiRaft/RegionCFDataTrait.h>
+#include <Storages/KVStore/MultiRaft/Spill/LargeTxnDefaultCf.h>
 
 namespace DB
 {
@@ -30,8 +30,8 @@ using DecodedLockCFValuePtr = std::shared_ptr<const RecordKVFormat::DecodedLockC
 enum class ColumnFamilyType : uint8_t;
 
 struct RegionLockReadQuery;
+struct RegionDeserResult;
 class Region;
-
 
 class RegionData
 {
@@ -67,8 +67,9 @@ public:
     void assignRegionData(RegionData && new_region_data);
 
     size_t serialize(WriteBuffer & buf) const;
+    std::optional<std::string> serializeLargeTxnMeta() const;
 
-    static void deserialize(ReadBuffer & buf, RegionData & region_data);
+    static void deserialize(ReadBuffer & buf, RegionData & region_data, const RegionDeserResult & result);
 
     friend bool operator==(const RegionData & r1, const RegionData & r2) { return r1.isEqual(r2); }
 
