@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Storages/KVStore/MultiRaft/LargeTxnDefaultCf.h>
+#include <Storages/KVStore/MultiRaft/Spill/LargeTxnDefaultCf.h>
 
 namespace DB
 {
