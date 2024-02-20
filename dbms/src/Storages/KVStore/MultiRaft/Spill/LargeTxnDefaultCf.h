@@ -97,6 +97,15 @@ struct LargeTxnDefaultCf
     const Inner & getTxn(const Level1Key & ts) const { return *txns.at(ts); }
     Inner & getTxnMut(const Level1Key & ts) { return *txns.at(ts); }
     bool hasTxn(const Level1Key & ts) const { return txns.contains(ts); }
+    size_t getTxnKeyCount(const Level1Key & ts) const
+    {
+        auto t = txns.find(ts);
+        if (t == txns.end())
+        {
+            return 0;
+        }
+        return t->second->getSize();
+    }
 
 private:
     Data txns;

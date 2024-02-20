@@ -196,6 +196,19 @@ try
 }
 CATCH
 
+struct DebugRegion
+{
+    DebugRegion(RegionPtr region_ptr)
+        : region(*region_ptr)
+    {}
+    RegionPtr debugSplitInto(RegionMeta && meta) { return region.splitInto(std::move(meta)); }
+    Region * operator->() { return &region; }
+    Region * operator->() const { return &region; }
+
+private:
+    Region & region;
+};
+
 TEST_F(KVStoreSpillTest, RegionPersister)
 try
 {
@@ -203,21 +216,43 @@ try
     auto & ctx = TiFlashTestEnv::getGlobalContext();
     KVStore & kvs = getKVS();
     proxy_instance->bootstrapWithRegion(kvs, ctx.getTMTContext(), 1, std::nullopt);
+    auto orig_region = kvs.getRegion(1);
+    auto region = DebugRegion(orig_region);
+
     auto str_key = RecordKVFormat::genKey(table_id, 1, 111);
     auto [str_val_write, str_val_default] = proxy_instance->generateTiKVKeyValue(111, 999);
-
-    auto region = kvs.getRegion(1);
-    region->insert(ColumnFamilyType::Default, TiKVKey::copyFrom(str_key), TiKVValue::copyFrom(str_val_default));
     auto str_key2 = RecordKVFormat::genKey(table_id, 2, 111);
     auto [str_val_write2, str_val_default2] = proxy_instance->generateTiKVKeyValue(111, 999);
-    auto str_key3 = RecordKVFormat::genKey(table_id, 3, 111);
+    auto str_key3 = RecordKVFormat::genKey(table_id, 3, 112);
     auto [str_val_write3, str_val_default3] = proxy_instance->generateTiKVKeyValue(112, 999);
+    auto str_key4 = RecordKVFormat::genKey(table_id, 4, 113);
+    auto [str_val_write4, str_val_default4] = proxy_instance->generateTiKVKeyValue(113, 999);
+    region->insert(ColumnFamilyType::Default, TiKVKey::copyFrom(str_key), TiKVValue::copyFrom(str_val_default));
     region->insert(ColumnFamilyType::Default, TiKVKey::copyFrom(str_key2), TiKVValue::copyFrom(str_val_default2));
     region->insert(ColumnFamilyType::Default, TiKVKey::copyFrom(str_key3), TiKVValue::copyFrom(str_val_default3));
+    region->insert(ColumnFamilyType::Default, TiKVKey::copyFrom(str_key4), TiKVValue::copyFrom(str_val_default4));
     MemoryWriteBuffer wb;
     region->serialize(wb);
     auto region2 = Region::deserialize(*wb.tryGetReadBuffer());
-    ASSERT_EQ(region2->debugData().largeDefautCf().getSize(), 3);
+    ASSERT_EQ(region2->debugData().largeDefautCf().getSize(), 4);
+    ASSERT_EQ(region2->debugData().largeDefautCf().getTxnCount(), 3);
+    ASSERT_TRUE(region2->debugData().largeDefautCf().hasTxn(111));
+    ASSERT_TRUE(region2->debugData().largeDefautCf().hasTxn(112));
+    ASSERT_TRUE(region2->debugData().largeDefautCf().hasTxn(113));
+    ASSERT_EQ(region2->debugData().largeDefautCf().getTxnKeyCount(111), 2);
+    ASSERT_EQ(region2->debugData().largeDefautCf().getTxnKeyCount(112), 1);
+    ASSERT_EQ(region2->debugData().largeDefautCf().getTxnKeyCount(113), 1);
+    FailPointHelper::disableFailPoint(FailPoints::force_write_to_large_txn_default);
+    auto splitted = region.debugSplitInto(tests::createRegionMeta(2, table_id, 3, 5));
+    ASSERT_EQ(region->debugData().largeDefautCf().getSize(), 2);
+    ASSERT_EQ(splitted->debugData().largeDefautCf().getSize(), 2);
+    // Have an empty txn 111.
+    ASSERT_EQ(splitted->debugData().largeDefautCf().getTxnCount(), 3);
+    ASSERT_TRUE(splitted->debugData().largeDefautCf().hasTxn(112));
+    ASSERT_TRUE(splitted->debugData().largeDefautCf().hasTxn(113));
+    ASSERT_EQ(splitted->debugData().largeDefautCf().getTxnKeyCount(112), 1);
+    ASSERT_EQ(splitted->debugData().largeDefautCf().getTxnKeyCount(113), 1);
+    ASSERT_EQ(splitted->debugData().largeDefautCf().getTxnKeyCount(111), 0);
 }
 CATCH
 
