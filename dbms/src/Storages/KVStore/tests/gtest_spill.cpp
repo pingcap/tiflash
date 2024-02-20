@@ -155,6 +155,35 @@ try
     cf.insert(TiKVKey::copyFrom(str_key2), TiKVValue::copyFrom(str_val_default2));
     ASSERT_EQ(cf.getSize(), 2);
     ASSERT_EQ(cf.getTxnCount(), 1);
+
+    LargeTxnDefaultCf cf2;
+    auto str_key3 = RecordKVFormat::genKey(table_id, 3, 111);
+    auto [str_val_write3, str_val_default3] = proxy_instance->generateTiKVKeyValue(111, 999);
+    cf2.insert(TiKVKey::copyFrom(str_key3), TiKVValue::copyFrom(str_val_default3));
+    auto str_key4 = RecordKVFormat::genKey(table_id, 4, 112);
+    auto [str_val_write4, str_val_default4] = proxy_instance->generateTiKVKeyValue(112, 999);
+    cf2.insert(TiKVKey::copyFrom(str_key4), TiKVValue::copyFrom(str_val_default4));
+    cf.mergeFrom(cf2);
+    ASSERT_EQ(cf.getSize(), 4);
+    ASSERT_EQ(cf.getTxnCount(), 2);
+
+    LargeTxnDefaultCf cf3;
+    RegionRangeKeys new_range{TiKVKey::copyFrom(str_key), TiKVKey::copyFrom(str_key2)};
+    cf.splitInto(new_range.comparableKeys(), cf3);
+    ASSERT_EQ(cf.getSize(), 3);
+    ASSERT_EQ(cf.getTxnCount(), 2);
+    ASSERT_EQ(cf3.getSize(), 1);
+    // Empty for start_ts=112
+    ASSERT_EQ(cf3.getTxnCount(), 2);
+
+    MemoryWriteBuffer wb;
+    cf.serialize(wb);
+    LargeTxnDefaultCf cf_recover;
+    LargeTxnDefaultCf::deserialize(*wb.tryGetReadBuffer(), cf_recover);
+    ASSERT_EQ(cf_recover.getSize(), 3);
+    ASSERT_EQ(cf_recover.getTxnCount(), 2);
+    ASSERT_TRUE(cf_recover.hasTxn(111));
+    ASSERT_TRUE(cf_recover.hasTxn(112));
 }
 CATCH
 

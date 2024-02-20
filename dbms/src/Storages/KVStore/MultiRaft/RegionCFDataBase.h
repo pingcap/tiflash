@@ -75,6 +75,7 @@ struct RegionCFDataBase
     Data & getDataMut();
 
     RegionDataRes doInsert(std::pair<Key, Value> && kv_pair, DupCheck mode = DupCheck::Deny);
+
 private:
     static bool shouldIgnoreRemove(const Value & value);
 

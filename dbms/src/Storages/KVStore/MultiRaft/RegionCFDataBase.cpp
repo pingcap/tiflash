@@ -258,15 +258,12 @@ size_t RegionCFDataBase<Trait>::splitInto(const RegionRange & range, RegionCFDat
 {
     const auto & [start_key, end_key] = range;
     size_t size_changed = 0;
-
     {
         auto & ori_map = data;
         auto & tar_map = new_region_data.data;
-
         for (auto it = ori_map.begin(); it != ori_map.end();)
         {
             const auto & key = getTiKVKey(it->second);
-
             if (start_key.compare(key) <= 0 && end_key.compare(key) > 0)
             {
                 size_changed += calcTiKVKeyValueSize(it->second);

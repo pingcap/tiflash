@@ -14,14 +14,16 @@
 
 #pragma once
 
-#include <Storages/KVStore/MultiRaft/RegionCFDataBase.h>
 #include <Storages/KVStore/Decode/DecodedTiKVKeyValue.h>
+#include <Storages/KVStore/MultiRaft/RegionCFDataBase.h>
+#include <Storages/KVStore/MultiRaft/RegionCFDataTrait.h>
 #include <Storages/KVStore/MultiRaft/RegionRangeKeys.h>
 #include <Storages/KVStore/TiKVHelpers/TiKVRecordFormat.h>
-#include <Storages/KVStore/MultiRaft/RegionCFDataTrait.h>
 
-namespace DB {
-struct LargeTxnDefaultCf {
+namespace DB
+{
+struct LargeTxnDefaultCf
+{
     using Trait = RegionDefaultCFDataTrait;
     using Inner = RegionCFDataBase<RegionDefaultCFDataTrait>;
     using Level1Key = Timestamp;
@@ -65,16 +67,15 @@ struct LargeTxnDefaultCf {
     size_t serialize(WriteBuffer & buf) const;
     static size_t deserialize(ReadBuffer & buf, LargeTxnDefaultCf & new_region_data);
 
-    const Data & getData() const {
-        return txns;
-    }
-    Data & getDataMut() {
-        return txns;
-    }
+    const Data & getData() const { return txns; }
+    Data & getDataMut() { return txns; }
+    const Inner & getTxn(const Level1Key & ts) const { return *txns.at(ts); }
+    Inner & getTxnMut(const Level1Key & ts) { return *txns.at(ts); }
+    bool hasTxn(const Level1Key & ts) const { return txns.contains(ts); }
+
 private:
-    // TODO(Split) We can neglect Timestamp in RegionDefaultCFDataTrait to save memory.
+    // TODO(Spill) We can neglect Timestamp in RegionDefaultCFDataTrait to save memory.
     Data txns;
 };
 
 } // namespace DB
-
