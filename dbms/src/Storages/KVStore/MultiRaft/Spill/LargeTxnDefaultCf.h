@@ -23,6 +23,8 @@
 namespace DB
 {
 
+class RegionData;
+
 struct LargeDefaultCFDataTrait
 {
     using Key = RawTiDBPK;
@@ -112,6 +114,7 @@ struct LargeTxnDefaultCf
     std::optional<Inner::Map::const_iterator> find(const Key & key, const Timestamp & ts) const;
 
 private:
+    friend class RegionData;
     void erase(const Key & key, const Level1Key ts);
 
 private:

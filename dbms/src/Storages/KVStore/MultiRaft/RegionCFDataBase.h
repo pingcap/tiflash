@@ -52,7 +52,7 @@ struct RegionCFDataBase
 
     static size_t calcTiKVKeyValueSize(const TiKVKey & key, const TiKVValue & value);
 
-    size_t remove(const Key & key, bool quiet = false);
+    size_t remove(const Key & key, bool quiet);
 
     static bool cmp(const Map & a, const Map & b);
 

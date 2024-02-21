@@ -22,7 +22,7 @@ std::shared_ptr<LargeTxnDefaultCf::Inner> & LargeTxnDefaultCf::mustGet(
     const LargeTxnDefaultCf::Level1Key & key)
 {
     if (!cf.txns.contains(key))
-        cf.txns[key] = std::make_shared<LargeTxnDefaultCf::Inner>();
+        cf.txns.emplace(key, std::make_shared<LargeTxnDefaultCf::Inner>());
     return cf.txns[key];
 }
 
@@ -85,14 +85,19 @@ size_t LargeTxnDefaultCf::getTiKVKeyValueSize(const Key & key, const Level1Key &
 
 size_t LargeTxnDefaultCf::remove(const Key & key, const Level1Key ts, bool quiet)
 {
-    auto & txn = txns.at(ts);
-    return txn->remove(key, quiet);
+    auto iter = txns.find(ts);
+    if (iter != txns.end()) {
+        iter->second->remove(key, quiet);
+    }
+    return 0;
 }
 
 void LargeTxnDefaultCf::erase(const Key & key, const Level1Key ts)
 {
-    auto & txn = txns.at(ts);
-    txn->getDataMut().erase(key);
+    auto iter = txns.find(ts);
+    if (iter != txns.end()) {
+        iter->second->getDataMut().erase(key);
+    }
 }
 
 bool LargeTxnDefaultCf::cmp(const Map & a, const Map & b)

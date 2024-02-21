@@ -111,6 +111,10 @@ void RegionData::remove(ColumnFamilyType cf, const TiKVKey & key)
         Timestamp ts = RecordKVFormat::getTs(key);
         // removed by gc, may not exist.
         auto delta = default_cf.remove(RegionDefaultCFData::Key{pk, ts}, true);
+        // ALso check large txn cf if we actually removed nothing.
+        if unlikely(delta == 0) {
+            delta = large_default_cf.remove(pk, ts, true);
+        }
         cf_data_size -= delta;
         reportDealloc(delta);
         return;

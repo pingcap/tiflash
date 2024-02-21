@@ -239,7 +239,7 @@ TEST(TiKVKeyValueTest, PortedTests)
         ASSERT_TRUE(d.getSize() == 1);
 
         auto pk = RecordKVFormat::getRawTiDBPK(RecordKVFormat::genRawKey(1, 2));
-        d.remove(RegionWriteCFData::Key{pk, 3});
+        d.remove(RegionWriteCFData::Key{pk, 3}, false);
         ASSERT_TRUE(d.getSize() == 0);
     }
 

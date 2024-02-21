@@ -258,6 +258,11 @@ try
     ASSERT_EQ(region->debugData().largeDefautCf().getTxnKeyCount(111), 1);
     ASSERT_EQ(region->debugData().largeDefautCf().getSize(), 3);
 
+    auto [index2, term2]
+        = proxy_instance->rawWrite(1, {str_key3}, {str_val_write3}, {WriteCmdType::Del}, {ColumnFamilyType::Default});
+    proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, 1, index2, std::nullopt);
+    ASSERT_EQ(region->debugData().largeDefautCf().getSize(), 2);
+
     FailPointHelper::disableFailPoint(FailPoints::force_write_to_large_txn_default);
 }
 CATCH
