@@ -132,8 +132,6 @@ public: // Simple Read and Write
     void clearAllData();
 
     void mergeDataFrom(const Region & other);
-    RegionMeta & mutMeta() { return meta; }
-    const RegionMeta & getMeta() const { return meta; }
 
     // Assign data and meta by moving from `new_region`.
     void assignRegion(Region && new_region);
@@ -144,6 +142,9 @@ public: // Stats
 
     std::string getDebugString() const;
     std::string toString(bool dump_status = true) const;
+
+    RegionMeta & mutMeta() { return meta; }
+    const RegionMeta & getMeta() const { return meta; }
 
     bool isPendingRemove() const;
     void setPendingRemove();
