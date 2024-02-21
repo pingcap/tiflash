@@ -414,8 +414,8 @@ CheckpointRegionInfoAndData RegionKVStoreTestFAP::prepareForRestart(FAPTestOpt o
     CheckpointRegionInfoAndData mock_data = std::make_tuple(
         checkpoint_info,
         kv_region,
-        kv_region->mutMeta().clonedApplyState(),
-        kv_region->mutMeta().clonedRegionState());
+        kv_region->getMeta().clonedApplyState(),
+        kv_region->getMeta().clonedRegionState());
     return mock_data;
 }
 

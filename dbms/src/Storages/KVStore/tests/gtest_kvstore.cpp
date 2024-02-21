@@ -344,7 +344,7 @@ static void testRaftSplit(KVStore & kvs, TMTContext & tmt, std::unique_ptr<MockR
     RegionID region_id = 1;
     RegionID region_id2 = 7;
     auto source_region = kvs.getRegion(region_id);
-    auto old_epoch = source_region->mutMeta().getMetaRegion().region_epoch();
+    auto old_epoch = source_region->getMeta().getMetaRegion().region_epoch();
     const auto & ori_source_range = source_region->getRange()->comparableKeys();
     RegionRangeKeys::RegionRange new_source_range = RegionRangeKeys::makeComparableKeys( //
         RecordKVFormat::genKey(table_id, 5),

@@ -133,6 +133,7 @@ public: // Simple Read and Write
 
     void mergeDataFrom(const Region & other);
     RegionMeta & mutMeta() { return meta; }
+    const RegionMeta & getMeta() const { return meta; }
 
     // Assign data and meta by moving from `new_region`.
     void assignRegion(Region && new_region);
