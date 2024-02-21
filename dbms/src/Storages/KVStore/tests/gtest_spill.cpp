@@ -229,7 +229,6 @@ try
     ASSERT_EQ(region2->debugData().largeDefautCf().getTxnKeyCount(111), 2);
     ASSERT_EQ(region2->debugData().largeDefautCf().getTxnKeyCount(112), 1);
     ASSERT_EQ(region2->debugData().largeDefautCf().getTxnKeyCount(113), 1);
-    FailPointHelper::disableFailPoint(FailPoints::force_write_to_large_txn_default);
     auto splitted = region.debugSplitInto(tests::createRegionMeta(2, table_id, 3, 5));
     ASSERT_EQ(region->debugData().largeDefautCf().getSize(), 2);
     ASSERT_EQ(splitted->debugData().largeDefautCf().getSize(), 2);
@@ -240,6 +239,26 @@ try
     ASSERT_EQ(splitted->debugData().largeDefautCf().getTxnKeyCount(112), 1);
     ASSERT_EQ(splitted->debugData().largeDefautCf().getTxnKeyCount(113), 1);
     ASSERT_EQ(splitted->debugData().largeDefautCf().getTxnKeyCount(111), 0);
+
+    region2 = splitted;
+    ASSERT_EQ(splitted->debugData().largeDefautCf().getSize(), 2);
+    ASSERT_EQ(region2->debugData().largeDefautCf().getTxnCount(), 3);
+    ASSERT_TRUE(region2->debugData().largeDefautCf().hasTxn(112));
+    ASSERT_TRUE(region2->debugData().largeDefautCf().hasTxn(113));
+    ASSERT_EQ(region2->debugData().largeDefautCf().getTxnKeyCount(112), 1);
+    ASSERT_EQ(region2->debugData().largeDefautCf().getTxnKeyCount(113), 1);
+    ASSERT_EQ(region2->debugData().largeDefautCf().getTxnKeyCount(111), 0);
+
+    region->mergeDataFrom(*region2);
+    ASSERT_EQ(region->debugData().largeDefautCf().getSize(), 4);
+    auto [index, term]
+        = proxy_instance->rawWrite(1, {str_key}, {str_val_write}, {WriteCmdType::Put}, {ColumnFamilyType::Write});
+    MockRaftStoreProxy::FailCond cond;
+    proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, 1, index, std::nullopt);
+    ASSERT_EQ(region->debugData().largeDefautCf().getTxnKeyCount(111), 1);
+    ASSERT_EQ(region->debugData().largeDefautCf().getSize(), 3);
+
+    FailPointHelper::disableFailPoint(FailPoints::force_write_to_large_txn_default);
 }
 CATCH
 

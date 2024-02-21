@@ -38,19 +38,61 @@ RegionDataRes LargeTxnDefaultCf::insert(TiKVKey && key, TiKVValue && value, DupC
     return LargeTxnDefaultCf::mustGet(*this, timestamp)->doInsert(std::move(kv_pair), mode);
 }
 
-size_t LargeTxnDefaultCf::calcTiKVKeyValueSize(const Value & value)
+size_t LargeTxnDefaultCf::calcTiKVKeyValueSize(const Inner::Value & value)
 {
-    return Inner::calcTiKVKeyValueSize(value);
+    return calcTiKVKeyValueSize(Inner::getTiKVKey(value), Inner::getTiKVValue(value));
 }
 size_t LargeTxnDefaultCf::calcTiKVKeyValueSize(const TiKVKey & key, const TiKVValue & value)
 {
-    return Inner::calcTiKVKeyValueSize(key, value);
+    if constexpr (std::is_same<Trait, RegionLockCFDataTrait>::value)
+    {
+        std::ignore = key;
+        std::ignore = value;
+        return 0;
+    }
+    else
+    {
+        return key.dataSize() + value.dataSize();
+    }
 }
 
-size_t LargeTxnDefaultCf::remove(const Key & key, bool quiet)
+std::optional<LargeTxnDefaultCf::Inner::Map::const_iterator> LargeTxnDefaultCf::find(
+    const Key & key,
+    const Timestamp & ts) const
 {
-    auto & txn = txns.at(key);
+    auto t = txns.find(ts);
+    if (t == txns.end())
+    {
+        return std::nullopt;
+    }
+    auto kv = t->second->getData().find(key);
+    if (kv == t->second->getData().end())
+    {
+        return std::nullopt;
+    }
+    return kv;
+}
+
+size_t LargeTxnDefaultCf::getTiKVKeyValueSize(const Key & key, const Level1Key & ts) const
+{
+    auto maybe_kv = find(key, ts);
+    if (maybe_kv.has_value())
+    {
+        return LargeTxnDefaultCf::Inner::calcTiKVKeyValueSize(maybe_kv.value()->second);
+    }
+    return 0;
+}
+
+size_t LargeTxnDefaultCf::remove(const Key & key, const Level1Key ts, bool quiet)
+{
+    auto & txn = txns.at(ts);
     return txn->remove(key, quiet);
+}
+
+void LargeTxnDefaultCf::erase(const Key & key, const Level1Key ts)
+{
+    auto & txn = txns.at(ts);
+    txn->getDataMut().erase(key);
 }
 
 bool LargeTxnDefaultCf::cmp(const Map & a, const Map & b)
@@ -101,6 +143,7 @@ size_t LargeTxnDefaultCf::splitInto(const RegionRange & range, LargeTxnDefaultCf
     }
     return size_changed;
 }
+
 size_t LargeTxnDefaultCf::mergeFrom(const LargeTxnDefaultCf & ori_region_data)
 {
     size_t size_changed = 0;

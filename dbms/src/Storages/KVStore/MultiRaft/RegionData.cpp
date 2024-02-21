@@ -143,6 +143,13 @@ RegionData::WriteCFIter RegionData::removeDataByWriteIt(const WriteCFIter & writ
             map.erase(data_it);
             reportDealloc(delta);
         }
+        else if unlikely (large_default_cf.hasTxn(decoded_val.prewrite_ts))
+        {
+            auto delta = large_default_cf.getTiKVKeyValueSize(pk, ts);
+            cf_data_size -= delta;
+            large_default_cf.erase(pk, ts);
+            reportDealloc(delta);
+        }
     }
 
     auto delta = RegionWriteCFData::calcTiKVKeyValueSize(write_it->second);
@@ -175,12 +182,27 @@ std::optional<RegionDataReadInfo> RegionData::readDataByWriteIt(
     if (decoded_val.write_type != RecordKVFormat::CFModifyFlag::PutFlag)
         return RegionDataReadInfo{pk, decoded_val.write_type, ts, nullptr};
 
+
     std::string orphan_key_debug_msg;
     if (!decoded_val.short_value)
     {
         const auto & map = default_cf.getData();
         if (auto data_it = map.find({pk, decoded_val.prewrite_ts}); data_it != map.end())
+        {
             return RegionDataReadInfo{pk, decoded_val.write_type, ts, RegionDefaultCFDataTrait::getTiKVValue(data_it)};
+        }
+        else if unlikely (large_default_cf.hasTxn(decoded_val.prewrite_ts))
+        {
+            const auto & maybe_kv = large_default_cf.find(pk, ts);
+            if likely (maybe_kv.has_value())
+            {
+                return RegionDataReadInfo{
+                    pk,
+                    decoded_val.write_type,
+                    ts,
+                    LargeDefaultCFDataTrait::getTiKVValue(maybe_kv.value())};
+            }
+        }
         else
         {
             if (!hard_error)
@@ -371,13 +393,14 @@ const LargeTxnDefaultCf & RegionData::largeDefautCf() const
 bool RegionData::isEqual(const RegionData & r2) const
 {
     return default_cf == r2.default_cf && write_cf == r2.write_cf && lock_cf == r2.lock_cf
-        && cf_data_size == r2.cf_data_size;
+        && cf_data_size == r2.cf_data_size && large_default_cf == r2.large_default_cf;
 }
 
 RegionData::RegionData(RegionData && data)
     : write_cf(std::move(data.write_cf))
     , default_cf(std::move(data.default_cf))
     , lock_cf(std::move(data.lock_cf))
+    , large_default_cf(std::move(data.large_default_cf))
     , cf_data_size(data.cf_data_size.load())
 {}
 
@@ -386,6 +409,7 @@ RegionData & RegionData::operator=(RegionData && rhs)
     write_cf = std::move(rhs.write_cf);
     default_cf = std::move(rhs.default_cf);
     lock_cf = std::move(rhs.lock_cf);
+    large_default_cf = std::move(rhs.large_default_cf);
     reportDelta(cf_data_size, rhs.cf_data_size.load());
     cf_data_size = rhs.cf_data_size.load();
     return *this;

@@ -61,10 +61,10 @@ struct LargeTxnDefaultCf
 
     RegionDataRes insert(TiKVKey && key, TiKVValue && value, DupCheck mode = DupCheck::Deny);
 
-    static size_t calcTiKVKeyValueSize(const Value & value);
+    static size_t calcTiKVKeyValueSize(const Inner::Value & value);
     static size_t calcTiKVKeyValueSize(const TiKVKey & key, const TiKVValue & value);
 
-    size_t remove(const Key & key, bool quiet = false);
+    size_t remove(const Key & key, const Level1Key ts, bool quiet = false);
     static bool cmp(const Map & a, const Map & b);
 
     bool operator==(const LargeTxnDefaultCf & cf) const;
@@ -106,6 +106,10 @@ struct LargeTxnDefaultCf
         }
         return t->second->getSize();
     }
+
+    size_t getTiKVKeyValueSize(const Key & key, const Level1Key & ts) const;
+    std::optional<Inner::Map::const_iterator> find(const Key & key, const Timestamp & ts) const;
+    void erase(const Key & key, const Level1Key ts);
 
 private:
     Data txns;
