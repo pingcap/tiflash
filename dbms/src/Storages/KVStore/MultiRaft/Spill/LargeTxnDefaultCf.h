@@ -64,6 +64,7 @@ struct LargeTxnDefaultCf
     static size_t calcTiKVKeyValueSize(const Inner::Value & value);
     static size_t calcTiKVKeyValueSize(const TiKVKey & key, const TiKVValue & value);
 
+    /// Serves "Del" raft command.
     size_t remove(const Key & key, const Level1Key ts, bool quiet = false);
     static bool cmp(const Map & a, const Map & b);
 
@@ -109,6 +110,8 @@ struct LargeTxnDefaultCf
 
     size_t getTiKVKeyValueSize(const Key & key, const Level1Key & ts) const;
     std::optional<Inner::Map::const_iterator> find(const Key & key, const Timestamp & ts) const;
+
+private:
     void erase(const Key & key, const Level1Key ts);
 
 private:
