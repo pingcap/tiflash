@@ -196,19 +196,6 @@ try
 }
 CATCH
 
-struct DebugRegion
-{
-    DebugRegion(RegionPtr region_ptr)
-        : region(*region_ptr)
-    {}
-    RegionPtr debugSplitInto(RegionMeta && meta) { return region.splitInto(std::move(meta)); }
-    Region * operator->() { return &region; }
-    Region * operator->() const { return &region; }
-
-private:
-    Region & region;
-};
-
 TEST_F(KVStoreSpillTest, RegionPersister)
 try
 {

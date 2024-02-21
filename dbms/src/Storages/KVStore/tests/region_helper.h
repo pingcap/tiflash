@@ -23,4 +23,19 @@ using DB::RegionBench::createPeer;
 using DB::RegionBench::createRegionInfo;
 using DB::RegionBench::createRegionMeta;
 using DB::RegionBench::makeRegion;
+
+
+struct DebugRegion
+{
+    DebugRegion(RegionPtr region_ptr)
+        : region(*region_ptr)
+    {}
+    RegionPtr debugSplitInto(RegionMeta && meta) { return region.splitInto(std::move(meta)); }
+    Region * operator->() { return &region; }
+    Region * operator->() const { return &region; }
+
+private:
+    Region & region;
+};
+
 } // namespace DB::tests
