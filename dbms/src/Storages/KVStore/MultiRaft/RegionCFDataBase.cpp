@@ -40,6 +40,21 @@ const TiKVValue & RegionCFDataBase<Trait>::getTiKVValue(const Value & val)
     return *getTiKVValuePtr<Value>(val);
 }
 
+RegionDataRes insertWithTs(
+    RegionCFDataBase<RegionDefaultCFDataTrait> & default_cf,
+    TiKVKey && key,
+    TiKVValue && value,
+    Timestamp ts,
+    DupCheck mode)
+{
+    const auto & raw_key = RecordKVFormat::decodeTiKVKey(key);
+    auto kv_pair = RegionDefaultCFDataTrait::genKVPairWithTs(std::move(key), ts, raw_key, std::move(value));
+    if (!kv_pair)
+        return 0;
+
+    return default_cf.doInsert(std::move(*kv_pair), mode);
+}
+
 template <typename Trait>
 RegionDataRes RegionCFDataBase<Trait>::insert(TiKVKey && key, TiKVValue && value, DupCheck mode)
 {

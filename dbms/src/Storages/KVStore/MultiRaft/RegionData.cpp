@@ -68,6 +68,7 @@ size_t RegionData::insert(ColumnFamilyType cf, TiKVKey && key, TiKVValue && valu
     }
     case ColumnFamilyType::Default:
     {
+        // TODO(Spill) Find out whether it is a large txn, then use `insertWithTs`.
         auto use_large = [&]() {
             auto delta = large_default_cf.insert(std::move(key), std::move(value), mode);
             cf_data_size += delta;
@@ -112,7 +113,8 @@ void RegionData::remove(ColumnFamilyType cf, const TiKVKey & key)
         // removed by gc, may not exist.
         auto delta = default_cf.remove(RegionDefaultCFData::Key{pk, ts}, true);
         // ALso check large txn cf if we actually removed nothing.
-        if unlikely(delta == 0) {
+        if unlikely (delta == 0)
+        {
             delta = large_default_cf.remove(pk, ts, true);
         }
         cf_data_size -= delta;

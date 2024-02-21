@@ -31,6 +31,7 @@ struct DebugRegion
         : region(*region_ptr)
     {}
     RegionPtr debugSplitInto(RegionMeta && meta) { return region.splitInto(std::move(meta)); }
+    RegionData & debugData() { return region.data; }
     Region * operator->() { return &region; }
     Region * operator->() const { return &region; }
 

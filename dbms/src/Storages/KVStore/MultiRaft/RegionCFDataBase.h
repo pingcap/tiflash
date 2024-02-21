@@ -21,7 +21,7 @@
 
 namespace DB
 {
-
+struct RegionDefaultCFDataTrait;
 struct TiKVRangeKey;
 
 using RegionRange = RegionRangeKeys::RegionRange;
@@ -82,5 +82,12 @@ private:
 private:
     Data data;
 };
+
+RegionDataRes insertWithTs(
+    RegionCFDataBase<RegionDefaultCFDataTrait> & default_cf,
+    TiKVKey && key,
+    TiKVValue && value,
+    Timestamp ts,
+    DupCheck mode);
 
 } // namespace DB

@@ -26,22 +26,28 @@ std::shared_ptr<LargeTxnDefaultCf::Inner> & LargeTxnDefaultCf::mustGet(
     return cf.txns[key];
 }
 
-RegionDataRes LargeTxnDefaultCf::insert(TiKVKey && key, TiKVValue && value, DupCheck mode)
+RegionDataRes LargeTxnDefaultCf::insertWithTs(TiKVKey && key, TiKVValue && value, Timestamp ts, DupCheck mode)
 {
     const auto & raw_key = RecordKVFormat::decodeTiKVKey(key);
-    const auto & timestamp = RecordKVFormat::getTs(key);
     auto maybe_kv_pair = Trait::genKVPair(std::move(key), raw_key, std::move(value));
     if (!maybe_kv_pair)
         return 0;
 
     auto & kv_pair = maybe_kv_pair.value();
-    return LargeTxnDefaultCf::mustGet(*this, timestamp)->doInsert(std::move(kv_pair), mode);
+    return LargeTxnDefaultCf::mustGet(*this, ts)->doInsert(std::move(kv_pair), mode);
+}
+
+RegionDataRes LargeTxnDefaultCf::insert(TiKVKey && key, TiKVValue && value, DupCheck mode)
+{
+    const auto & ts = RecordKVFormat::getTs(key);
+    return insertWithTs(std::move(key), std::move(value), ts, mode);
 }
 
 size_t LargeTxnDefaultCf::calcTiKVKeyValueSize(const Inner::Value & value)
 {
     return calcTiKVKeyValueSize(Inner::getTiKVKey(value), Inner::getTiKVValue(value));
 }
+
 size_t LargeTxnDefaultCf::calcTiKVKeyValueSize(const TiKVKey & key, const TiKVValue & value)
 {
     if constexpr (std::is_same<Trait, RegionLockCFDataTrait>::value)
@@ -86,7 +92,8 @@ size_t LargeTxnDefaultCf::getTiKVKeyValueSize(const Key & key, const Level1Key &
 size_t LargeTxnDefaultCf::remove(const Key & key, const Level1Key ts, bool quiet)
 {
     auto iter = txns.find(ts);
-    if (iter != txns.end()) {
+    if (iter != txns.end())
+    {
         iter->second->remove(key, quiet);
     }
     return 0;
@@ -95,7 +102,8 @@ size_t LargeTxnDefaultCf::remove(const Key & key, const Level1Key ts, bool quiet
 void LargeTxnDefaultCf::erase(const Key & key, const Level1Key ts)
 {
     auto iter = txns.find(ts);
-    if (iter != txns.end()) {
+    if (iter != txns.end())
+    {
         iter->second->getDataMut().erase(key);
     }
 }
@@ -137,6 +145,16 @@ size_t LargeTxnDefaultCf::getSize() const
 size_t LargeTxnDefaultCf::getTxnCount() const
 {
     return txns.size();
+}
+
+size_t LargeTxnDefaultCf::getTxnKeyCount(const Level1Key & ts) const
+{
+    auto t = txns.find(ts);
+    if (t == txns.end())
+    {
+        return 0;
+    }
+    return t->second->getSize();
 }
 
 size_t LargeTxnDefaultCf::splitInto(const RegionRange & range, LargeTxnDefaultCf & new_region_data)
