@@ -774,7 +774,7 @@ struct TiDBConvertToFloat
 
             for (size_t i = 0; i < size; ++i)
             {
-		auto raw_field = (*col_from)[i];
+                auto raw_field = (*col_from)[i];
                 const auto & field = raw_field.template safeGet<DecimalField<FromFieldType>>();
                 vec_to[i] = toFloat(field);
             }
