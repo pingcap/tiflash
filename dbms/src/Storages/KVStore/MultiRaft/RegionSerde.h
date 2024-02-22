@@ -21,7 +21,6 @@ enum class RegionPersistVersion
 {
     V1 = 1,
     V2, // For eager gc
-    V3, // For large txn
 };
 
 namespace RegionPersistFormat

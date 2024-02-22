@@ -26,6 +26,8 @@ namespace DB::FailPoints
 extern const char force_write_to_large_txn_default[];
 } // namespace DB::FailPoints
 
+extern std::shared_ptr<MemoryTracker> root_of_kvstore_mem_trackers;
+
 namespace DB::tests
 {
 class KVStoreSpillTest : public KVStoreTestBase
@@ -218,9 +220,15 @@ try
     region->insert(ColumnFamilyType::Default, TiKVKey::copyFrom(str_key2), TiKVValue::copyFrom(str_val_default2));
     region->insert(ColumnFamilyType::Default, TiKVKey::copyFrom(str_key3), TiKVValue::copyFrom(str_val_default3));
     region->insert(ColumnFamilyType::Default, TiKVKey::copyFrom(str_key4), TiKVValue::copyFrom(str_val_default4));
+    size_t s1 = str_key.dataSize() + str_val_default.size();
+    size_t s2 = str_key2.dataSize() + str_val_default2.size();
+    size_t s3 = str_key3.dataSize() + str_val_default3.size();
+    size_t s4 = str_key4.dataSize() + str_val_default4.size();
+    ASSERT_EQ(root_of_kvstore_mem_trackers->get(), s1 + s2 + s3 + s4);
     MemoryWriteBuffer wb;
     region->serialize(wb);
     auto orig_region2 = Region::deserialize(*wb.tryGetReadBuffer());
+    ASSERT_EQ(root_of_kvstore_mem_trackers->get(), (s1 + s2 + s3 + s4) * 2);
     auto region2 = DebugRegion(orig_region2);
     ASSERT_EQ(region2.debugData().largeDefautCf().getSize(), 4);
     ASSERT_EQ(region2.debugData().largeDefautCf().getTxnCount(), 3);
@@ -231,6 +239,7 @@ try
     ASSERT_EQ(region2.debugData().largeDefautCf().getTxnKeyCount(112), 1);
     ASSERT_EQ(region2.debugData().largeDefautCf().getTxnKeyCount(113), 1);
     auto orig_splitted = region.debugSplitInto(tests::createRegionMeta(2, table_id, 3, 5));
+    ASSERT_EQ(root_of_kvstore_mem_trackers->get(), (s1 + s2 + s3 + s4) * 2);
     auto splitted = DebugRegion(orig_splitted);
     ASSERT_EQ(region.debugData().largeDefautCf().getSize(), 2);
     ASSERT_EQ(splitted.debugData().largeDefautCf().getSize(), 2);
@@ -243,6 +252,8 @@ try
     ASSERT_EQ(splitted.debugData().largeDefautCf().getTxnKeyCount(111), 0);
 
     orig_region2->assignRegion(std::move(*orig_splitted));
+    // region: s1 + s2, region2: s3 + s4.
+    ASSERT_EQ(root_of_kvstore_mem_trackers->get(), s1 + s2 + s3 + s4);
     ASSERT_EQ(region2.debugData().largeDefautCf().getTxnCount(), 3);
     ASSERT_TRUE(region2.debugData().largeDefautCf().hasTxn(112));
     ASSERT_TRUE(region2.debugData().largeDefautCf().hasTxn(113));

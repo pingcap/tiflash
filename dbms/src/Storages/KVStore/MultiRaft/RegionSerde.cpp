@@ -22,7 +22,7 @@
 namespace DB
 {
 
-constexpr UInt32 Region::CURRENT_VERSION = static_cast<UInt32>(RegionPersistVersion::V3);
+constexpr UInt32 Region::CURRENT_VERSION = static_cast<UInt32>(RegionPersistVersion::V2);
 
 std::pair<MaybeRegionPersistExtension, UInt32> getPersistExtensionTypeAndLength(ReadBuffer & buf)
 {
@@ -60,7 +60,7 @@ std::tuple<size_t, UInt64> Region::serialize(WriteBuffer & buf) const
         expected_total,
         [&](UInt32 & actual_extension_count, WriteBuffer & buf) -> size_t {
             size_t total_size = 0;
-            if (maybe_large_txn_seri.has_value())
+            if unlikely(maybe_large_txn_seri.has_value())
             {
                 total_size += Region::writePersistExtension(
                     actual_extension_count,

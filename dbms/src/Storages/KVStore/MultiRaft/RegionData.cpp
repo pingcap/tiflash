@@ -319,6 +319,7 @@ size_t RegionData::dataSize() const
 
 void RegionData::assignRegionData(RegionData && new_region_data)
 {
+    reportDealloc(cf_data_size);
     default_cf = std::move(new_region_data.default_cf);
     write_cf = std::move(new_region_data.write_cf);
     lock_cf = std::move(new_region_data.lock_cf);
@@ -326,6 +327,7 @@ void RegionData::assignRegionData(RegionData && new_region_data)
     orphan_keys_info = std::move(new_region_data.orphan_keys_info);
 
     cf_data_size = new_region_data.cf_data_size.load();
+    new_region_data.cf_data_size.store(0);
 }
 
 size_t RegionData::serialize(WriteBuffer & buf) const

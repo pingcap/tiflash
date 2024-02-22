@@ -52,7 +52,6 @@ public:
     static size_t computeRegionWriteBuffer(const Region & region, WriteBuffer & buffer);
 
     PageStorageConfig getPageStorageSettings() const;
-
     FileUsageStatistics getFileUsageStatistics() const;
 
 private:
