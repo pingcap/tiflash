@@ -112,11 +112,11 @@ bool LargeTxnDefaultCf::cmp(const Map & a, const Map & b)
 {
     if (a.size() != b.size())
         return false;
-    for (auto it = a.cbegin(); it != a.cend(); it++)
+    for (const auto & it : a)
     {
-        if (auto it2 = b.find(it->first); it2 != b.end())
+        if (auto it2 = b.find(it.first); it2 != b.end())
         {
-            if (!Inner::cmp(it->second->getData(), it2->second->getData()))
+            if (!Inner::cmp(it.second->getData(), it2->second->getData()))
                 return false;
         }
         else
@@ -135,9 +135,9 @@ bool LargeTxnDefaultCf::operator==(const LargeTxnDefaultCf & cf) const
 size_t LargeTxnDefaultCf::getSize() const
 {
     size_t size = 0;
-    for (auto it = txns.begin(); it != txns.end(); it++)
+    for (const auto & txn : txns)
     {
-        size += it->second->getSize();
+        size += txn.second->getSize();
     }
     return size;
 }
@@ -160,9 +160,9 @@ size_t LargeTxnDefaultCf::getTxnKeyCount(const Level1Key & ts) const
 size_t LargeTxnDefaultCf::splitInto(const RegionRange & range, LargeTxnDefaultCf & new_region_data)
 {
     size_t size_changed = 0;
-    for (auto it = txns.begin(); it != txns.end(); it++)
+    for (auto & txn : txns)
     {
-        size_changed += it->second->splitInto(range, *LargeTxnDefaultCf::mustGet(new_region_data, it->first));
+        size_changed += txn.second->splitInto(range, *LargeTxnDefaultCf::mustGet(new_region_data, txn.first));
     }
     return size_changed;
 }
@@ -170,9 +170,9 @@ size_t LargeTxnDefaultCf::splitInto(const RegionRange & range, LargeTxnDefaultCf
 size_t LargeTxnDefaultCf::mergeFrom(const LargeTxnDefaultCf & ori_region_data)
 {
     size_t size_changed = 0;
-    for (auto it = ori_region_data.txns.begin(); it != ori_region_data.txns.end(); it++)
+    for (const auto & txn : ori_region_data.txns)
     {
-        size_changed += LargeTxnDefaultCf::mustGet(*this, it->first)->mergeFrom(*it->second);
+        size_changed += LargeTxnDefaultCf::mustGet(*this, txn.first)->mergeFrom(*txn.second);
     }
     return size_changed;
 }
