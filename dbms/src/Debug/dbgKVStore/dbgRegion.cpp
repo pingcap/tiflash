@@ -17,7 +17,13 @@
 namespace DB::RegionBench
 {
 
-RegionPtr DebugRegion::debugSplitInto(RegionMeta && meta) { return region.splitInto(std::move(meta)); }
-RegionData & DebugRegion::debugData() { return region.data; }
-
+RegionPtr DebugRegion::debugSplitInto(RegionMeta && meta)
+{
+    return region.splitInto(std::move(meta));
 }
+RegionData & DebugRegion::debugData()
+{
+    return region.data;
+}
+
+} // namespace DB::RegionBench
