@@ -201,7 +201,7 @@ try
 }
 CATCH
 
-TEST_F(KVStoreSpillTest, RegionPersister)
+TEST_F(KVStoreSpillTest, RegionOperations)
 try
 {
     RegionSerdeOpts opts;
@@ -279,6 +279,20 @@ try
     proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, 1, index2, std::nullopt);
     ASSERT_EQ(region.debugData().largeDefautCf().getSize(), 2);
 
+    {
+        // Ensures normal codes not affected.
+        // TODO(Spill) Remove this test when GA.
+        DebugKVStore debug_kvs(kvs);
+        debug_kvs.mutRegionSerdeOpts().large_txn_enabled = false;
+        auto lock = kvs.region_manager.genRegionTaskLock(1);
+        kvs.persistRegion(*orig_region, lock, PersistRegionReason::Flush, "test");
+        reloadKVSFromDisk();
+        auto & kvs2 = getKVS();
+        auto orig_region3 = kvs2.getRegion(1);
+        auto region3 = DebugRegion(orig_region3);
+        ASSERT_EQ(region3.debugData().largeDefautCf().getSize(), 0);
+        ASSERT_EQ(region3.debugData().largeDefautCf().getTxnCount(), 0);
+    }
     FailPointHelper::disableFailPoint(FailPoints::force_write_to_large_txn_default);
 }
 CATCH
