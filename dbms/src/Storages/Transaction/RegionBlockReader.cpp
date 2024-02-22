@@ -226,8 +226,11 @@ bool RegionBlockReader::readImpl(Block & block, const RegionDataReadInfoList & d
                         }
                         else
                         {
-                            throw Exception(fmt::format("Detected overflow value when decoding pk column, type={} handle={}", raw_pk_column->getName(), handle_value),
-                                            ErrorCodes::LOGICAL_ERROR);
+                            throw Exception(
+                                ErrorCodes::LOGICAL_ERROR,
+                                "Detected overflow value when decoding pk column, type={} handle={}",
+                                raw_pk_column->getName(),
+                                handle_value);
                         }
                     }
                 }
