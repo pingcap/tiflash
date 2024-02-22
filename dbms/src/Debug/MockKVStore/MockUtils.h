@@ -69,8 +69,8 @@ inline metapb::Region createRegionInfo(
 inline RegionMeta createRegionMeta(
     UInt64 id,
     DB::TableID table_id,
-    HandleID from = 0,
-    HandleID to = 300,
+    const HandleID from = 0,
+    const HandleID to = 300,
     std::optional<raft_serverpb::RaftApplyState> apply_state = std::nullopt)
 {
     return RegionMeta(
