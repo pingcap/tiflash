@@ -744,7 +744,6 @@ struct TiDBConvertToFloat
         return produceTargetFloat64(f, need_truncate, shift, max_f, context);
     }
 
-    NO_SANITIZE_ADDRESS	    
     static void execute(
         Block & block,
         const ColumnNumbers & arguments,
@@ -775,7 +774,8 @@ struct TiDBConvertToFloat
 
             for (size_t i = 0; i < size; ++i)
             {
-                const auto & field = (*col_from)[i].template safeGet<DecimalField<FromFieldType>>();
+		auto raw_field = (*col_from)[i];
+                const auto & field = raw_field.template safeGet<DecimalField<FromFieldType>>();
                 vec_to[i] = toFloat(field);
             }
         }
