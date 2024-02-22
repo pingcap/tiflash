@@ -149,8 +149,12 @@ std::unique_ptr<CompressedSeekableReaderBuffer> ColumnReadStream::buildColDataRe
 {
     assert(!reader.dmfile->configuration);
 
-    auto is_null_map = endsWith(file_name_base, ".null");
-    size_t data_file_size = reader.dmfile->colDataSize(col_id, is_null_map);
+    DMFile::ColDataType type = DMFile::ColDataType::Elements;
+    if (endsWith(file_name_base, ".null"))
+        type = DMFile::ColDataType::NullMap;
+    else if (endsWith(file_name_base, ".size0"))
+        type = DMFile::ColDataType::ArraySizes;
+    size_t data_file_size = reader.dmfile->colDataSize(col_id, type);
 
     // Try to get the largest buffer size of reading continuous packs
     size_t buffer_size = 0;
