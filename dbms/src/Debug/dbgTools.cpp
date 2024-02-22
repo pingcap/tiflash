@@ -15,7 +15,7 @@
 #include <Common/typeid_cast.h>
 #include <Debug/MockTiDB.h>
 #include <Debug/MockTiKV.h>
-#include <Debug/dbgKVStore.h>
+#include <Debug/dbgKVStore/dbgKVStore.h>
 #include <Debug/dbgTools.h>
 #include <Interpreters/Context.h>
 #include <Parsers/ASTLiteral.h>

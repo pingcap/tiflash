@@ -89,7 +89,7 @@ size_t LargeTxnDefaultCf::getTiKVKeyValueSize(const Key & key, const Level1Key &
     return 0;
 }
 
-size_t LargeTxnDefaultCf::remove(const Key & key, const Level1Key ts, bool quiet)
+size_t LargeTxnDefaultCf::remove(const Key & key, const Level1Key & ts, bool quiet)
 {
     auto iter = txns.find(ts);
     if (iter != txns.end())
@@ -99,7 +99,7 @@ size_t LargeTxnDefaultCf::remove(const Key & key, const Level1Key ts, bool quiet
     return 0;
 }
 
-void LargeTxnDefaultCf::erase(const Key & key, const Level1Key ts)
+void LargeTxnDefaultCf::erase(const Key & key, const Level1Key & ts)
 {
     auto iter = txns.find(ts);
     if (iter != txns.end())

@@ -19,7 +19,7 @@
 #include <Common/SyncPoint/SyncPoint.h>
 #include <Debug/MockKVStore/MockRaftStoreProxy.h>
 #include <Debug/MockKVStore/MockSSTReader.h>
-#include <Debug/dbgKVStore.h>
+#include <Debug/dbgKVStore/dbgKVStore.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/ExternalDTFileInfo.h>
 #include <Storages/DeltaMerge/GCOptions.h>
