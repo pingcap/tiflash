@@ -28,6 +28,11 @@ struct DebugKVStore
     KVStore * operator->() const { return &kvstore; }
 
     RegionSerdeOpts & mutRegionSerdeOpts();
+    template <typename RegionPtrWrap>
+    void onSnapshot(const RegionPtrWrap & r, RegionPtr old_region, UInt64 old_region_index, TMTContext & tmt)
+    {
+        kvstore.onSnapshot<RegionPtrWrap>(r, old_region, old_region_index, tmt);
+    }
 
 private:
     KVStore & kvstore;
