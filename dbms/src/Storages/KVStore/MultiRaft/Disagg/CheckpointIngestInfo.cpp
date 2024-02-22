@@ -143,7 +143,7 @@ FastAddPeerProto::CheckpointIngestInfoPersisted CheckpointIngestInfo::serializeM
         RegionPersister::computeRegionWriteBuffer(
             *region,
             wb,
-            tmt.getKVStore()->region_persister->getRegionSerdeOpts());
+            tmt.getKVStore()->getRegionPersister().getRegionSerdeOpts());
         ingest_info_persisted.set_region_info(wb.releaseStr());
     }
     ingest_info_persisted.set_remote_store_id(remote_store_id);
