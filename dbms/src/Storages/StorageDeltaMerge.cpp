@@ -1303,7 +1303,8 @@ DM::DeltaMergeStorePtr StorageDeltaMerge::getStoreIfInited() const
 
 std::pair<DB::DecodingStorageSchemaSnapshotConstPtr, BlockUPtr> StorageDeltaMerge::getSchemaSnapshotAndBlockForDecoding(
     const TableStructureLockHolder & table_structure_lock,
-    bool need_block)
+    bool need_block,
+    bool with_version_column)
 {
     (void)table_structure_lock;
     std::lock_guard lock{decode_schema_mutex};
@@ -1314,16 +1315,18 @@ std::pair<DB::DecodingStorageSchemaSnapshotConstPtr, BlockUPtr> StorageDeltaMerg
             store->getStoreColumns(),
             tidb_table_info,
             store->getHandle(),
-            decoding_schema_epoch++);
+            decoding_schema_epoch++,
+            with_version_column);
         cache_blocks.clear();
         decoding_schema_changed = false;
     }
 
     if (need_block)
     {
-        if (cache_blocks.empty())
+        if (cache_blocks.empty() || !with_version_column)
         {
-            BlockUPtr block = std::make_unique<Block>(createBlockSortByColumnID(decoding_schema_snapshot));
+            BlockUPtr block
+                = std::make_unique<Block>(createBlockSortByColumnID(decoding_schema_snapshot, with_version_column));
             auto digest = hashSchema(*block);
             auto schema = global_context.getSharedBlockSchemas()->find(digest);
             if (schema)

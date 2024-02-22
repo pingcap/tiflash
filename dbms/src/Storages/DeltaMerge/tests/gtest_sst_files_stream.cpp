@@ -179,7 +179,7 @@ TEST_F(SSTFilesToDTFilesOutputStreamTest, OutputNoDTFile)
 try
 {
     auto table_lock = storage->lockStructureForShare("foo_query_id");
-    auto [schema_snapshot, unused] = storage->getSchemaSnapshotAndBlockForDecoding(table_lock, false);
+    auto [schema_snapshot, unused] = storage->getSchemaSnapshotAndBlockForDecoding(table_lock, false, true);
 
     auto mock_stream = makeMockChild(prepareBlocks(100, 100, /*block_size=*/5));
     auto prehandle_task = std::make_shared<PreHandlingTrace::Item>();
@@ -209,7 +209,7 @@ TEST_F(SSTFilesToDTFilesOutputStreamTest, OutputSingleDTFile)
 try
 {
     auto table_lock = storage->lockStructureForShare("foo_query_id");
-    auto [schema_snapshot, unused] = storage->getSchemaSnapshotAndBlockForDecoding(table_lock, false);
+    auto [schema_snapshot, unused] = storage->getSchemaSnapshotAndBlockForDecoding(table_lock, false, true);
 
     auto mock_stream = makeMockChild(prepareBlocks(50, 100, /*block_size=*/5));
     auto prehandle_task = std::make_shared<PreHandlingTrace::Item>();
@@ -241,7 +241,7 @@ TEST_F(SSTFilesToDTFilesOutputStreamTest, OutputSingleDTFileWithOneBlock)
 try
 {
     auto table_lock = storage->lockStructureForShare("foo_query_id");
-    auto [schema_snapshot, unused] = storage->getSchemaSnapshotAndBlockForDecoding(table_lock, false);
+    auto [schema_snapshot, unused] = storage->getSchemaSnapshotAndBlockForDecoding(table_lock, false, true);
 
     auto mock_stream = makeMockChild(prepareBlocks(50, 100, /*block_size=*/1000));
     auto prehandle_task = std::make_shared<PreHandlingTrace::Item>();
@@ -274,7 +274,7 @@ TEST_F(SSTFilesToDTFilesOutputStreamTest, OutputMultipleDTFile)
 try
 {
     auto table_lock = storage->lockStructureForShare("foo_query_id");
-    auto [schema_snapshot, unused] = storage->getSchemaSnapshotAndBlockForDecoding(table_lock, false);
+    auto [schema_snapshot, unused] = storage->getSchemaSnapshotAndBlockForDecoding(table_lock, false, true);
 
     auto mock_stream = makeMockChild(prepareBlocks(50, 100, /*block_size=*/1));
     auto prehandle_task = std::make_shared<PreHandlingTrace::Item>();
@@ -313,7 +313,7 @@ TEST_F(SSTFilesToDTFilesOutputStreamTest, SplitAtBlockBoundary)
 try
 {
     auto table_lock = storage->lockStructureForShare("foo_query_id");
-    auto [schema_snapshot, unused] = storage->getSchemaSnapshotAndBlockForDecoding(table_lock, false);
+    auto [schema_snapshot, unused] = storage->getSchemaSnapshotAndBlockForDecoding(table_lock, false, true);
 
     auto mock_stream = makeMockChild(prepareBlocks(50, 100, /*block_size=*/20));
     auto prehandle_task = std::make_shared<PreHandlingTrace::Item>();
@@ -348,7 +348,7 @@ TEST_F(SSTFilesToDTFilesOutputStreamTest, VeryLargeSplitThreshold)
 try
 {
     auto table_lock = storage->lockStructureForShare("foo_query_id");
-    auto [schema_snapshot, unused] = storage->getSchemaSnapshotAndBlockForDecoding(table_lock, false);
+    auto [schema_snapshot, unused] = storage->getSchemaSnapshotAndBlockForDecoding(table_lock, false, true);
 
     auto mock_stream = makeMockChild(prepareBlocks(50, 100, /*block_size=*/20));
     auto prehandle_task = std::make_shared<PreHandlingTrace::Item>();
@@ -380,7 +380,7 @@ TEST_F(SSTFilesToDTFilesOutputStreamTest, NonContinuousBlock)
 try
 {
     auto table_lock = storage->lockStructureForShare("foo_query_id");
-    auto [schema_snapshot, unused] = storage->getSchemaSnapshotAndBlockForDecoding(table_lock, false);
+    auto [schema_snapshot, unused] = storage->getSchemaSnapshotAndBlockForDecoding(table_lock, false, true);
 
     auto blocks1 = prepareBlocks(50, 100, /*block_size=*/20);
     auto blocks2 = prepareBlocks(130, 150, /*block_size=*/10);
@@ -422,7 +422,7 @@ TEST_F(SSTFilesToDTFilesOutputStreamTest, BrokenChild)
 try
 {
     auto table_lock = storage->lockStructureForShare("foo_query_id");
-    auto [schema_snapshot, unused] = storage->getSchemaSnapshotAndBlockForDecoding(table_lock, false);
+    auto [schema_snapshot, unused] = storage->getSchemaSnapshotAndBlockForDecoding(table_lock, false, true);
 
     auto blocks1 = prepareBlocks(50, 100, /*block_size=*/20);
     auto blocks2 = prepareBlocks(0, 30, /*block_size=*/20);
@@ -458,7 +458,7 @@ TEST_F(SSTFilesToDTFilesOutputStreamTest, Cancel)
 try
 {
     auto table_lock = storage->lockStructureForShare("foo_query_id");
-    auto [schema_snapshot, unused] = storage->getSchemaSnapshotAndBlockForDecoding(table_lock, false);
+    auto [schema_snapshot, unused] = storage->getSchemaSnapshotAndBlockForDecoding(table_lock, false, true);
 
     auto mock_stream = makeMockChild(prepareBlocks(50, 100, /*block_size=*/1));
     auto prehandle_task = std::make_shared<PreHandlingTrace::Item>();
@@ -507,7 +507,7 @@ TEST_F(SSTFilesToDTFilesOutputStreamTest, UpperLayerCancel)
 try
 {
     auto table_lock = storage->lockStructureForShare("foo_query_id");
-    auto [schema_snapshot, unused] = storage->getSchemaSnapshotAndBlockForDecoding(table_lock, false);
+    auto [schema_snapshot, unused] = storage->getSchemaSnapshotAndBlockForDecoding(table_lock, false, true);
 
     auto mock_stream = makeMockChild(prepareBlocks(50, 100, /*block_size=*/1));
     auto prehandle_task = std::make_shared<PreHandlingTrace::Item>();

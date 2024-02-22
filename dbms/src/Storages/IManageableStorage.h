@@ -180,7 +180,8 @@ public:
     /// This method must be called under the protection of table structure lock
     virtual std::pair<DB::DecodingStorageSchemaSnapshotConstPtr, BlockUPtr> getSchemaSnapshotAndBlockForDecoding(
         const TableStructureLockHolder & /* table_structure_lock */,
-        bool /* need_block */)
+        bool /* need_block */,
+        bool /* has_version_block */)
     {
         throw Exception(
             "Method getDecodingSchemaSnapshot is not supported by storage " + getName(),
