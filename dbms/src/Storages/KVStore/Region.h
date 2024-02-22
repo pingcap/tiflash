@@ -32,12 +32,16 @@ class ReadIndexRequest;
 
 namespace DB
 {
+
+namespace RegionBench{
+struct DebugRegion;
+} // namespace RegionBench
+
 namespace tests
 {
 class KVStoreTestBase;
 class RegionKVStoreOldTest;
 class RegionKVStoreTest;
-struct DebugRegion;
 } // namespace tests
 
 class Region;
@@ -262,7 +266,7 @@ private:
     friend class tests::KVStoreTestBase;
     friend class tests::RegionKVStoreOldTest;
     friend class tests::RegionKVStoreTest;
-    friend struct tests::DebugRegion;
+    friend struct RegionBench::DebugRegion;
 
     // Private methods no need to lock mutex, normally
 
