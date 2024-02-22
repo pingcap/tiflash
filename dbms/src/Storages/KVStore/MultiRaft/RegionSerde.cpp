@@ -21,9 +21,6 @@
 
 namespace DB
 {
-
-constexpr UInt32 Region::CURRENT_VERSION = static_cast<UInt32>(RegionPersistVersion::V2);
-
 std::pair<MaybeRegionPersistExtension, UInt32> getPersistExtensionTypeAndLength(ReadBuffer & buf)
 {
     auto ext_type = readBinary2<MaybeRegionPersistExtension>(buf);
@@ -47,20 +44,24 @@ size_t Region::writePersistExtension(
     return total_size;
 }
 
-std::tuple<size_t, UInt64> Region::serialize(WriteBuffer & buf) const
+std::tuple<size_t, UInt64> Region::serialize(WriteBuffer & buf, const RegionSerdeOpts & region_serde_opts) const
 {
     auto expected_total = 0;
-    auto maybe_large_txn_seri = data.serializeLargeTxnMeta();
-    if unlikely (maybe_large_txn_seri.has_value())
+    std::optional<std::string> maybe_large_txn_seri = std::nullopt;
+    if unlikely (region_serde_opts.large_txn_enabled)
     {
-        expected_total += 1;
+        maybe_large_txn_seri = data.serializeLargeTxnMeta();
+        if unlikely (maybe_large_txn_seri.has_value())
+        {
+            expected_total += 1;
+        }
     }
     return serializeImpl(
-        Region::CURRENT_VERSION,
+        RegionSerdeOpts::CURRENT_VERSION,
         expected_total,
         [&](UInt32 & actual_extension_count, WriteBuffer & buf) -> size_t {
             size_t total_size = 0;
-            if unlikely(maybe_large_txn_seri.has_value())
+            if unlikely (maybe_large_txn_seri.has_value())
             {
                 total_size += Region::writePersistExtension(
                     actual_extension_count,
@@ -71,14 +72,16 @@ std::tuple<size_t, UInt64> Region::serialize(WriteBuffer & buf) const
             }
             return total_size;
         },
-        buf);
+        buf,
+        region_serde_opts);
 }
 
 std::tuple<size_t, UInt64> Region::serializeImpl(
     UInt32 binary_version,
     UInt32 expected_extension_count,
     std::function<size_t(UInt32 &, WriteBuffer &)> extra_handler,
-    WriteBuffer & buf) const
+    WriteBuffer & buf,
+    const RegionSerdeOpts & region_serde_opts) const
 {
     size_t total_size = writeBinary2(binary_version, buf);
 
@@ -103,7 +106,7 @@ std::tuple<size_t, UInt64> Region::serializeImpl(
     RUNTIME_CHECK(expected_extension_count == actual_extension_count, expected_extension_count, actual_extension_count);
 
     // serialize data
-    total_size += data.serialize(buf);
+    total_size += data.serialize(buf, region_serde_opts);
 
     return {total_size, applied_index};
 }
@@ -111,7 +114,7 @@ std::tuple<size_t, UInt64> Region::serializeImpl(
 RegionPtr Region::deserialize(ReadBuffer & buf, const TiFlashRaftProxyHelper * proxy_helper)
 {
     return Region::deserializeImpl(
-        Region::CURRENT_VERSION,
+        RegionSerdeOpts::CURRENT_VERSION,
         [](UInt32 type, ReadBuffer & buf, UInt32, RegionDeserResult & result) -> bool {
             if (type == magic_enum::enum_underlying(RegionPersistExtension::LargeTxnDefaultCfMeta))
             {

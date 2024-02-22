@@ -17,6 +17,7 @@
 #include <Storages/KVStore/Decode/RegionDataRead.h>
 #include <Storages/KVStore/MultiRaft/RegionCFDataBase.h>
 #include <Storages/KVStore/MultiRaft/RegionCFDataTrait.h>
+#include <Storages/KVStore/MultiRaft/RegionSerde.h>
 #include <Storages/KVStore/MultiRaft/Spill/LargeTxnDefaultCf.h>
 
 namespace DB
@@ -66,7 +67,7 @@ public:
 
     void assignRegionData(RegionData && new_region_data);
 
-    size_t serialize(WriteBuffer & buf) const;
+    size_t serialize(WriteBuffer & buf, const RegionSerdeOpts & region_serde_opts) const;
     std::optional<std::string> serializeLargeTxnMeta() const;
 
     static void deserialize(ReadBuffer & buf, RegionData & region_data, const RegionDeserResult & result);

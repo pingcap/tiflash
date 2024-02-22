@@ -204,6 +204,7 @@ CATCH
 TEST_F(RegionSeriTest, RegionOldFormatVersion)
 try
 {
+    RegionSerdeOpts opts;
     TableID table_id = 100;
     auto region = makeTmpRegion();
     TiKVKey key = RecordKVFormat::genKey(table_id, 323, 9983);
@@ -215,7 +216,7 @@ try
 
     const auto path = dir_path + "/region.test";
     WriteBufferFromFile write_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_CREAT);
-    size_t region_ser_size = std::get<0>(region->serializeImpl(1, 0, mockSerFactory(0), write_buf));
+    size_t region_ser_size = std::get<0>(region->serializeImpl(1, 0, mockSerFactory(0), write_buf, opts));
     write_buf.next();
     write_buf.sync();
     ASSERT_EQ(region_ser_size, (size_t)Poco::File(path).getSize());
@@ -236,6 +237,7 @@ CATCH
 TEST_F(RegionSeriTest, Region)
 try
 {
+    RegionSerdeOpts opts;
     TableID table_id = 100;
     auto region = makeTmpRegion();
     TiKVKey key = RecordKVFormat::genKey(table_id, 323, 9983);
@@ -247,7 +249,7 @@ try
 
     const auto path = dir_path + "/region.test";
     WriteBufferFromFile write_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_CREAT);
-    size_t region_ser_size = std::get<0>(region->serialize(write_buf));
+    size_t region_ser_size = std::get<0>(region->serialize(write_buf, opts));
     write_buf.next();
     write_buf.sync();
     ASSERT_EQ(region_ser_size, (size_t)Poco::File(path).getSize());
@@ -265,6 +267,7 @@ CATCH
 TEST_F(RegionSeriTest, RegionStat)
 try
 {
+    RegionSerdeOpts opts;
     RegionPtr region = nullptr;
     TableID table_id = 100;
     {
@@ -292,7 +295,7 @@ try
 
     const auto path = dir_path + "/region_state.test";
     WriteBufferFromFile write_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_CREAT);
-    size_t region_ser_size = std::get<0>(region->serialize(write_buf));
+    size_t region_ser_size = std::get<0>(region->serialize(write_buf, opts));
     write_buf.next();
 
     ASSERT_EQ(region_ser_size, (size_t)Poco::File(path).getSize());
@@ -305,6 +308,7 @@ CATCH
 TEST_F(RegionSeriTest, FlexibleRestore)
 try
 {
+    RegionSerdeOpts opts;
     auto ext_cnt_2 = 0; // Suppose has no ext.
     auto ext_cnt_3 = 1; // Suppose has ReservedForTest.
     auto ext_cnt_4 = 2; // Suppose has UNUSED_EXTENSION_NUMBER_FOR_TEST.
@@ -315,7 +319,7 @@ try
         region->updateRaftLogEagerIndex(5678);
         const auto path = dir_path + "/region0.test";
         WriteBufferFromFile write_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_CREAT);
-        size_t region_ser_size = std::get<0>(region->serializeImpl(2, ext_cnt_2, mockSerFactory(0), write_buf));
+        size_t region_ser_size = std::get<0>(region->serializeImpl(2, ext_cnt_2, mockSerFactory(0), write_buf, opts));
         write_buf.next();
         write_buf.sync();
         ASSERT_EQ(region_ser_size, (size_t)Poco::File(path).getSize());
@@ -333,7 +337,7 @@ try
         region->updateRaftLogEagerIndex(5678);
         const auto path = dir_path + "/region.test";
         WriteBufferFromFile write_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_CREAT);
-        size_t region_ser_size = std::get<0>(region->serializeImpl(3, ext_cnt_3, mockSerFactory(1), write_buf));
+        size_t region_ser_size = std::get<0>(region->serializeImpl(3, ext_cnt_3, mockSerFactory(1), write_buf, opts));
         write_buf.next();
         write_buf.sync();
         ASSERT_EQ(region_ser_size, (size_t)Poco::File(path).getSize());
@@ -352,7 +356,8 @@ try
         // In V2, will also write UNUSED_EXTENSION_NUMBER_FOR_TEST.
         const auto path = dir_path + "/region2.test";
         WriteBufferFromFile write_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_CREAT);
-        size_t region_ser_size = std::get<0>(region->serializeImpl(4, ext_cnt_4, mockSerFactory(1 | 2), write_buf));
+        size_t region_ser_size
+            = std::get<0>(region->serializeImpl(4, ext_cnt_4, mockSerFactory(1 | 2), write_buf, opts));
         write_buf.next();
         write_buf.sync();
         ASSERT_EQ(region_ser_size, (size_t)Poco::File(path).getSize());
@@ -370,7 +375,8 @@ try
         region->updateRaftLogEagerIndex(5678);
         const auto path = dir_path + "/region3.test";
         WriteBufferFromFile write_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_CREAT);
-        size_t region_ser_size = std::get<0>(region->serializeImpl(4, ext_cnt_4, mockSerFactory(1 | 2), write_buf));
+        size_t region_ser_size
+            = std::get<0>(region->serializeImpl(4, ext_cnt_4, mockSerFactory(1 | 2), write_buf, opts));
         write_buf.next();
         write_buf.sync();
         ASSERT_EQ(region_ser_size, (size_t)Poco::File(path).getSize());
@@ -398,7 +404,7 @@ try
         region->updateRaftLogEagerIndex(5678);
         const auto path = dir_path + "/region4.test";
         WriteBufferFromFile write_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_CREAT);
-        size_t region_ser_size = std::get<0>(region->serializeImpl(2, ext_cnt_2, mockSerFactory(0), write_buf));
+        size_t region_ser_size = std::get<0>(region->serializeImpl(2, ext_cnt_2, mockSerFactory(0), write_buf, opts));
         write_buf.next();
         write_buf.sync();
         ASSERT_EQ(region_ser_size, (size_t)Poco::File(path).getSize());
@@ -415,7 +421,7 @@ try
         region->updateRaftLogEagerIndex(5678);
         const auto path = dir_path + "/region5.test";
         WriteBufferFromFile write_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_CREAT);
-        size_t region_ser_size = std::get<0>(region->serializeImpl(2, ext_cnt_2, mockSerFactory(0), write_buf));
+        size_t region_ser_size = std::get<0>(region->serializeImpl(2, ext_cnt_2, mockSerFactory(0), write_buf, opts));
         write_buf.next();
         write_buf.sync();
         ASSERT_EQ(region_ser_size, (size_t)Poco::File(path).getSize());
@@ -427,7 +433,7 @@ try
             ASSERT_EQ(new_region->getRaftLogEagerGCRange().first, 5678);
             ASSERT_REGION_EQ(*new_region, *region);
             WriteBufferFromFile write_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_CREAT);
-            region->serializeImpl(3, ext_cnt_3, mockSerFactory(1), write_buf);
+            region->serializeImpl(3, ext_cnt_3, mockSerFactory(1), write_buf, opts);
             ASSERT_EQ(*counter, 0);
         }
 
@@ -440,14 +446,14 @@ try
             ASSERT_EQ(new_region->getRaftLogEagerGCRange().first, 5678);
             ASSERT_REGION_EQ(*new_region, *region);
             WriteBufferFromFile write_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_CREAT);
-            region->serializeImpl(4, ext_cnt_4, mockSerFactory(1 | 2), write_buf);
+            region->serializeImpl(4, ext_cnt_4, mockSerFactory(1 | 2), write_buf, opts);
         }
 
         {
             // 4 -> 2
             auto counter = std::make_shared<int>(0);
             ReadBufferFromFile read_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_RDONLY);
-            region->serializeImpl(2, ext_cnt_2, mockSerFactory(0), write_buf);
+            region->serializeImpl(2, ext_cnt_2, mockSerFactory(0), write_buf, opts);
             EXPECT_THROW(Region::deserializeImpl(2, mockDeserFactory(0, counter), read_buf), Exception);
         }
     }
@@ -458,7 +464,7 @@ try
         region->updateRaftLogEagerIndex(5678);
         const auto path = dir_path + "/region6.test";
         WriteBufferFromFile write_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_CREAT);
-        size_t region_ser_size = std::get<0>(region->serializeImpl(2, ext_cnt_2, mockSerFactory(0), write_buf));
+        size_t region_ser_size = std::get<0>(region->serializeImpl(2, ext_cnt_2, mockSerFactory(0), write_buf, opts));
         write_buf.next();
         write_buf.sync();
         ASSERT_EQ(region_ser_size, (size_t)Poco::File(path).getSize());
@@ -473,7 +479,7 @@ try
         region->updateRaftLogEagerIndex(5678);
         const auto path = dir_path + "/region7.test";
         WriteBufferFromFile write_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_CREAT);
-        size_t region_ser_size = std::get<0>(region->serializeImpl(3, ext_cnt_3, mockSerFactory(1), write_buf));
+        size_t region_ser_size = std::get<0>(region->serializeImpl(3, ext_cnt_3, mockSerFactory(1), write_buf, opts));
         write_buf.next();
         write_buf.sync();
         ASSERT_EQ(region_ser_size, (size_t)Poco::File(path).getSize());

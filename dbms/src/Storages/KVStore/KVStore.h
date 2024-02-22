@@ -46,7 +46,8 @@ struct ExternalDTFileInfo;
 namespace tests
 {
 class KVStoreTestBase;
-}
+struct DebugKVStore;
+} // namespace tests
 
 class IAST;
 using ASTPtr = std::shared_ptr<IAST>;
@@ -271,6 +272,7 @@ private:
     friend void dbgFuncPutRegion(Context &, const ASTs &, DBGInvokerPrinter);
     friend class tests::KVStoreTestBase;
     friend class ReadIndexStressTest;
+    friend struct tests::DebugKVStore;
     struct StoreMeta
     {
         mutable std::mutex mu;

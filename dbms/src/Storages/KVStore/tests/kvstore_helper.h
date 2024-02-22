@@ -74,6 +74,20 @@ extern void ChangeRegionStateRange(
 
 namespace tests
 {
+struct DebugKVStore
+{
+    DebugKVStore(KVStore & kvs)
+        : kvstore(kvs)
+    {}
+    KVStore * operator->() { return &kvstore; }
+    KVStore * operator->() const { return &kvstore; }
+
+    RegionSerdeOpts & mutRegionSerdeOpts() { return kvstore.region_persister->region_serde_opts; }
+
+private:
+    KVStore & kvstore;
+};
+
 // TODO: Use another way to workaround calling the private methods on KVStore
 class KVStoreTestBase : public ::testing::Test
 {

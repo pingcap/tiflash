@@ -69,4 +69,10 @@ struct RegionDeserResult
     size_t large_txn_count = 0;
 };
 
+struct RegionSerdeOpts
+{
+    constexpr static UInt32 CURRENT_VERSION = static_cast<UInt32>(RegionPersistVersion::V2);
+    bool large_txn_enabled = false;
+};
+
 } // namespace DB

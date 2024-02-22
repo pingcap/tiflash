@@ -36,6 +36,7 @@ public:
     void SetUp() override
     {
         log = DB::Logger::get("KVStoreSpillTest");
+        initStorages();
         KVStoreTestBase::SetUp();
         setupStorage();
     }
@@ -49,8 +50,10 @@ public:
     void setupStorage()
     {
         auto & ctx = TiFlashTestEnv::getGlobalContext();
-        initStorages();
         KVStore & kvs = getKVS();
+        DebugKVStore debug_kvs(kvs);
+        ctx.getTMTContext().debugSetKVStore(kvstore);
+        debug_kvs.mutRegionSerdeOpts().large_txn_enabled = true;
         table_id = proxy_instance->bootstrapTable(ctx, kvs, ctx.getTMTContext());
         auto maybe_storage = ctx.getTMTContext().getStorages().get(NullspaceID, table_id);
         RUNTIME_CHECK(maybe_storage);
@@ -201,13 +204,14 @@ CATCH
 TEST_F(KVStoreSpillTest, RegionPersister)
 try
 {
+    RegionSerdeOpts opts;
+    opts.large_txn_enabled = true;
     FailPointHelper::enableFailPoint(FailPoints::force_write_to_large_txn_default);
     auto & ctx = TiFlashTestEnv::getGlobalContext();
     KVStore & kvs = getKVS();
     proxy_instance->bootstrapWithRegion(kvs, ctx.getTMTContext(), 1, std::nullopt);
     auto orig_region = kvs.getRegion(1);
     auto region = DebugRegion(orig_region);
-
     auto str_key = RecordKVFormat::genKey(table_id, 1, 111);
     auto [str_val_write, str_val_default] = proxy_instance->generateTiKVKeyValue(111, 999);
     auto str_key2 = RecordKVFormat::genKey(table_id, 2, 111);
@@ -226,7 +230,7 @@ try
     size_t s4 = str_key4.dataSize() + str_val_default4.size();
     ASSERT_EQ(root_of_kvstore_mem_trackers->get(), s1 + s2 + s3 + s4);
     MemoryWriteBuffer wb;
-    region->serialize(wb);
+    region->serialize(wb, opts);
     auto orig_region2 = Region::deserialize(*wb.tryGetReadBuffer());
     ASSERT_EQ(root_of_kvstore_mem_trackers->get(), (s1 + s2 + s3 + s4) * 2);
     auto region2 = DebugRegion(orig_region2);

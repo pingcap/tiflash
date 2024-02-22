@@ -330,14 +330,14 @@ void RegionData::assignRegionData(RegionData && new_region_data)
     new_region_data.cf_data_size.store(0);
 }
 
-size_t RegionData::serialize(WriteBuffer & buf) const
+size_t RegionData::serialize(WriteBuffer & buf, const RegionSerdeOpts & region_serde_opts) const
 {
     size_t total_size = 0;
 
     total_size += default_cf.serialize(buf);
     total_size += write_cf.serialize(buf);
     total_size += lock_cf.serialize(buf);
-    if unlikely (large_default_cf.getTxnCount() > 0)
+    if unlikely (region_serde_opts.large_txn_enabled && large_default_cf.getTxnCount() != 0)
     {
         total_size += large_default_cf.serialize(buf);
     }
