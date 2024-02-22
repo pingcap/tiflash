@@ -35,7 +35,7 @@ struct RegionManager;
 
 struct TiFlashRaftProxyHelper;
 
-namespace tests
+namespace RegionBench
 {
 struct DebugKVStore;
 }
@@ -84,7 +84,7 @@ private:
     }
 
 private:
-    friend struct tests::DebugKVStore;
+    friend struct RegionBench::DebugKVStore;
     Context & global_context;
     PageStorageRunMode run_mode;
     PageWriterPtr page_writer;

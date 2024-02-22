@@ -35,7 +35,7 @@ namespace DB
 {
 namespace RegionBench
 {
-extern void concurrentBatchInsert(const TiDB::TableInfo &, Int64, Int64, Int64, UInt64, UInt64, Context &);
+struct DebugKVStore;
 } // namespace RegionBench
 namespace DM
 {
@@ -46,7 +46,6 @@ struct ExternalDTFileInfo;
 namespace tests
 {
 class KVStoreTestBase;
-struct DebugKVStore;
 } // namespace tests
 
 class IAST;
@@ -259,20 +258,12 @@ private:
     friend struct MockRaftCommand;
     friend class RegionMockTest;
     friend class NaturalDag;
-    friend void RegionBench::concurrentBatchInsert(
-        const TiDB::TableInfo &,
-        Int64,
-        Int64,
-        Int64,
-        UInt64,
-        UInt64,
-        Context &);
     using DBGInvokerPrinter = std::function<void(const std::string &)>;
     friend void dbgFuncRemoveRegion(Context &, const ASTs &, DBGInvokerPrinter);
     friend void dbgFuncPutRegion(Context &, const ASTs &, DBGInvokerPrinter);
     friend class tests::KVStoreTestBase;
     friend class ReadIndexStressTest;
-    friend struct tests::DebugKVStore;
+    friend struct RegionBench::DebugKVStore;
     struct StoreMeta
     {
         mutable std::mutex mu;
