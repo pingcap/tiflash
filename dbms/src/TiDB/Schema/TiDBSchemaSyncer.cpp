@@ -13,9 +13,11 @@
 // limitations under the License.
 
 #include <Common/Stopwatch.h>
+#include <Common/TiFlashException.h>
 #include <Common/TiFlashMetrics.h>
 #include <Storages/KVStore/TiKVHelpers/PDTiKVClient.h>
 #include <TiDB/Schema/SchemaBuilder.h>
+#include <TiDB/Schema/SchemaGetter.h>
 #include <TiDB/Schema/TiDBSchemaSyncer.h>
 #include <common/logger_useful.h>
 #include <common/types.h>
@@ -97,22 +99,15 @@ bool TiDBSchemaSyncer<mock_getter, mock_mapper>::syncSchemasByGetter(Context & c
         }
         else
         {
-            // After the feature concurrent DDL, TiDB does `update schema version` before `set schema diff`, and they are done in separate transactions.
-            // So TiFlash may see a schema version X but no schema diff X, meaning that the transaction of schema diff X has not been committed or has
-            // been aborted.
-            // However, TiDB makes sure that if we get a schema version X, then the schema diff X-1 must exist. Otherwise the transaction of schema diff
-            // X-1 is aborted and we can safely ignore it.
-            // Since TiDB can not make sure the schema diff of the latest schema version X is not empty, under this situation we should set the `cur_version`
-            // to X-1 and try to fetch the schema diff X next time.
             Int64 version_after_load_diff = syncSchemaDiffs(context, getter, version);
-            if (version_after_load_diff != SchemaGetter::SchemaVersionNotExist)
+            if (version_after_load_diff == SchemaGetter::SchemaVersionNotExist)
             {
-                cur_version = version_after_load_diff;
+                // when diff->regenerate_schema_map == true, or excpetion thrown, we use syncAllSchemas to reload all schemas
+                cur_version = syncAllSchemas(context, getter, version);
             }
             else
             {
-                // when diff->regenerate_schema_map == true, we use syncAllSchemas to reload all schemas
-                cur_version = syncAllSchemas(context, getter, version);
+                cur_version = version_after_load_diff;
             }
         }
     }
@@ -125,8 +120,15 @@ bool TiDBSchemaSyncer<mock_getter, mock_mapper>::syncSchemasByGetter(Context & c
     return true;
 }
 
+// After the feature concurrent DDL, TiDB does `update schema version` before `set schema diff`, and they are done in separate transactions.
+// So TiFlash may see a schema version X but no schema diff X, meaning that the transaction of schema diff X has not been committed or has
+// been aborted.
+// However, TiDB makes sure that if we get a schema version X, then the schema diff X-1 must exist. Otherwise the transaction of schema diff
+// X-1 is aborted and we can safely ignore it.
+// Since TiDB can not make sure the schema diff of the latest schema version X is not empty, under this situation we should set the `cur_version`
+// to X-1 and try to fetch the schema diff X next time.
 template <bool mock_getter, bool mock_mapper>
-Int64 TiDBSchemaSyncer<mock_getter, mock_mapper>::syncSchemaDiffs(
+Int64 TiDBSchemaSyncer<mock_getter, mock_mapper>::syncSchemaDiffsImpl(
     Context & context,
     Getter & getter,
     Int64 latest_version)
@@ -183,6 +185,50 @@ Int64 TiDBSchemaSyncer<mock_getter, mock_mapper>::syncSchemaDiffs(
         builder.applyDiff(*diff);
     }
     return cur_apply_version;
+}
+
+// An exception-safe wrapper of `syncSchemaDiffsImpl`.
+// If there is any exception thrown (mainly to catch network exception), or meet a schema
+// diff with `regenerate_schema_map`, return `SchemaGetter::SchemaVersionNotExist` and
+// the caller should retry by `syncAllSchemas`.
+template <bool mock_getter, bool mock_mapper>
+Int64 TiDBSchemaSyncer<mock_getter, mock_mapper>::syncSchemaDiffs(
+    Context & context,
+    Getter & getter,
+    Int64 latest_version)
+{
+    try
+    {
+        return syncSchemaDiffsImpl(context, getter, latest_version);
+    }
+    catch (TiFlashException & e)
+    {
+        LOG_WARNING(
+            log,
+            "apply diff meets TiFlashException: {}, stack: {}",
+            e.displayText(),
+            e.getStackTrace().toString());
+        return SchemaGetter::SchemaVersionNotExist;
+    }
+    catch (Exception & e)
+    {
+        LOG_WARNING(
+            log,
+            "apply diff meets DB::Exception: {}, stack: {}",
+            e.displayText(),
+            e.getStackTrace().toString());
+        return SchemaGetter::SchemaVersionNotExist;
+    }
+    catch (Poco::Exception & e)
+    {
+        LOG_WARNING(log, "apply diff meets Poco::Exception: {}", e.displayText());
+        return SchemaGetter::SchemaVersionNotExist;
+    }
+    catch (std::exception & e)
+    {
+        LOG_WARNING(log, "apply diff meets std::exception: {}", e.what());
+        return SchemaGetter::SchemaVersionNotExist;
+    }
 }
 
 template <bool mock_getter, bool mock_mapper>

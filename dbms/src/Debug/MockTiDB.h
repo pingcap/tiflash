@@ -144,6 +144,8 @@ public:
     // Return the schema_version with empty SchemaDiff
     Int64 skipSchemaVersion() { return ++version; }
 
+    Int64 regenerateSchemaMap();
+
     TablePtr getTableByName(const String & database_name, const String & table_name);
 
     TiDB::TableInfoPtr getTableInfoByID(TableID table_id);
