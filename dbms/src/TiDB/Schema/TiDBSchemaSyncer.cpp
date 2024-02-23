@@ -177,7 +177,11 @@ Int64 TiDBSchemaSyncer<mock_getter, mock_mapper>::syncSchemaDiffsImpl(
         {
             // `FLASHBACK CLUSTER` is executed, return `SchemaGetter::SchemaVersionNotExist`.
             // The caller should let TiFlash reload schema info from TiKV.
-            LOG_INFO(log, "Meets a schema diff with regenerate_schema_map flag, schema_version={}", cur_apply_version);
+            LOG_INFO(
+                log,
+                "Meets a schema diff with regenerate_schema_map flag, schema_version={} diff_type={}",
+                cur_apply_version,
+                static_cast<Int32>(diff->type));
             return SchemaGetter::SchemaVersionNotExist;
         }
 

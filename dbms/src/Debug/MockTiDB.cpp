@@ -748,6 +748,7 @@ Int64 MockTiDB::regenerateSchemaMap()
     std::lock_guard lock(tables_mutex);
 
     SchemaDiff diff;
+    diff.type = SchemaActionType::None;
     diff.regenerate_schema_map = true;
     diff.version = version + 1;
     version++;
