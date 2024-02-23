@@ -63,8 +63,8 @@ size_t LargeTxnDefaultCf::calcTiKVKeyValueSize(const TiKVKey & key, const TiKVVa
 }
 
 std::optional<LargeTxnDefaultCf::Inner::Map::const_iterator> LargeTxnDefaultCf::find(
-    const Key & key,
-    const Timestamp & ts) const
+    const Level2Key & key,
+    const Level1Key & ts) const
 {
     auto t = txns.find(ts);
     if (t == txns.end())
@@ -79,7 +79,7 @@ std::optional<LargeTxnDefaultCf::Inner::Map::const_iterator> LargeTxnDefaultCf::
     return kv;
 }
 
-size_t LargeTxnDefaultCf::getTiKVKeyValueSize(const Key & key, const Level1Key & ts) const
+size_t LargeTxnDefaultCf::getTiKVKeyValueSize(const Level2Key & key, const Level1Key & ts) const
 {
     auto maybe_kv = find(key, ts);
     if (maybe_kv.has_value())
@@ -89,7 +89,7 @@ size_t LargeTxnDefaultCf::getTiKVKeyValueSize(const Key & key, const Level1Key &
     return 0;
 }
 
-size_t LargeTxnDefaultCf::remove(const Key & key, const Level1Key & ts, bool quiet)
+size_t LargeTxnDefaultCf::remove(const Level2Key & key, const Level1Key & ts, bool quiet)
 {
     auto iter = txns.find(ts);
     if (iter != txns.end())
@@ -99,7 +99,7 @@ size_t LargeTxnDefaultCf::remove(const Key & key, const Level1Key & ts, bool qui
     return 0;
 }
 
-void LargeTxnDefaultCf::erase(const Key & key, const Level1Key & ts)
+void LargeTxnDefaultCf::erase(const Level2Key & key, const Level1Key & ts)
 {
     auto iter = txns.find(ts);
     if (iter != txns.end())

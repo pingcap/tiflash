@@ -52,12 +52,15 @@ struct LargeTxnDefaultCf
     using Trait = LargeDefaultCFDataTrait;
     using Inner = RegionCFDataBase<LargeDefaultCFDataTrait>;
     using Level1Key = Timestamp;
-    using Key = typename Trait::Key;
+    using Level2Key = typename Trait::Key; // Actually RawTiDBPK
     using Value = typename Trait::Value;
     using Map = typename std::unordered_map<Level1Key, std::shared_ptr<Inner>>;
+    using InnerMap = Inner::Map;
     using Data = Map;
-    using Pair = std::pair<Key, Value>;
+    using Pair = std::pair<Level2Key, Value>;
     using Status = bool;
+
+    std::optional<Inner::Map::const_iterator> find(const Level2Key & key, const Level1Key & ts) const;
 
     static std::shared_ptr<Inner> & mustGet(LargeTxnDefaultCf & cf, const Level1Key & key);
 
@@ -69,7 +72,7 @@ struct LargeTxnDefaultCf
     static size_t calcTiKVKeyValueSize(const TiKVKey & key, const TiKVValue & value);
 
     /// Serves "Del" raft command.
-    size_t remove(const Key & key, const Level1Key & ts, bool quiet = false);
+    size_t remove(const Level2Key & key, const Level1Key & ts, bool quiet = false);
     static bool cmp(const Map & a, const Map & b);
 
     bool operator==(const LargeTxnDefaultCf & cf) const;
@@ -104,12 +107,11 @@ struct LargeTxnDefaultCf
     bool hasTxn(const Level1Key & ts) const { return txns.contains(ts); }
     size_t getTxnKeyCount(const Level1Key & ts) const;
 
-    size_t getTiKVKeyValueSize(const Key & key, const Level1Key & ts) const;
-    std::optional<Inner::Map::const_iterator> find(const Key & key, const Level1Key & ts) const;
+    size_t getTiKVKeyValueSize(const Level2Key & key, const Level1Key & ts) const;
 
 private:
     friend class RegionData;
-    void erase(const Key & key, const Level1Key & ts);
+    void erase(const Level2Key & key, const Level1Key & ts);
 
 private:
     Data txns;
