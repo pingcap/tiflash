@@ -39,13 +39,12 @@ public:
         const LoggerPtr & log,
         const ReadLimiterPtr & read_limiter);
 
-    double avg_size_hint;
-    MarksInCompressedFilePtr marks;
-
     size_t getOffsetInFile(size_t i) const { return (*marks)[i].offset_in_compressed_file; }
 
     size_t getOffsetInDecompressedBlock(size_t i) const { return (*marks)[i].offset_in_decompressed_block; }
 
+    double avg_size_hint;
+    MarksInCompressedFilePtr marks;
     std::unique_ptr<CompressedSeekableReaderBuffer> buf;
 
 private:
