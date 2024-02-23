@@ -20,7 +20,7 @@
 #include <DataStreams/NullBlockInputStream.h>
 #include <DataStreams/SpilledFilesInputStream.h>
 #include <DataStreams/copyData.h>
-#include <IO/FileProvider.h>
+#include <IO/FileProvider/FileProvider.h>
 #include <Poco/Path.h>
 
 namespace DB

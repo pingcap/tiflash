@@ -15,7 +15,7 @@
 #include <Common/Exception.h>
 #include <IO/Buffer/ReadBuffer.h>
 #include <IO/Buffer/WriteBuffer.h>
-#include <IO/Util/copyData.h>
+#include <IO/copyData.h>
 
 #include <limits>
 

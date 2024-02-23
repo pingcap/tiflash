@@ -15,7 +15,7 @@
 #pragma once
 
 #include <Columns/ColumnVectorHelper.h>
-#include <IO/Util/Endian.h>
+#include <IO/Endian.h>
 
 #include <cmath>
 

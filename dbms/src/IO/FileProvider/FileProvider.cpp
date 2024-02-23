@@ -20,7 +20,7 @@
 #include <IO/Encryption/EncryptedWritableFile.h>
 #include <IO/Encryption/EncryptedWriteReadableFile.h>
 #include <IO/Encryption/KeyspacesKeyManager.h>
-#include <IO/FileProvider.h>
+#include <IO/FileProvider/FileProvider.h>
 #include <Poco/File.h>
 #include <Poco/Path.h>
 #include <Storages/KVStore/FFI/FileEncryption.h>

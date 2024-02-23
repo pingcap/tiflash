@@ -15,7 +15,7 @@
 #include <Common/Exception.h>
 #include <Common/Logger.h>
 #include <Common/SyncPoint/SyncPoint.h>
-#include <IO/FileProvider.h>
+#include <IO/FileProvider/FileProvider.h>
 #include <Poco/File.h>
 #include <Poco/Logger.h>
 #include <Poco/Path.h>

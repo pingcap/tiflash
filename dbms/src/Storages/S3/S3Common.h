@@ -17,8 +17,8 @@
 #include <Common/Exception.h>
 #include <Common/Logger.h>
 #include <Common/nocopyable.h>
-#include <IO/EncryptionPath.h>
-#include <IO/FileProvider_fwd.h>
+#include <IO/FileProvider/EncryptionPath.h>
+#include <IO/FileProvider/FileProvider_fwd.h>
 #include <Interpreters/Context_fwd.h>
 #include <Server/StorageConfigParser.h>
 #include <Storages/S3/S3RandomAccessFile.h>

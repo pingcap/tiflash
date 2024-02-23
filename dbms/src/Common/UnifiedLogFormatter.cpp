@@ -15,7 +15,7 @@
 #include <Common/FmtUtils.h>
 #include <Common/UnifiedLogFormatter.h>
 #include <IO/Buffer/WriteBufferFromString.h>
-#include <IO/Util/WriteHelpers.h>
+#include <IO/WriteHelpers.h>
 #include <Poco/Ext/ThreadNumber.h>
 #include <fmt/compile.h>
 #include <sys/time.h>

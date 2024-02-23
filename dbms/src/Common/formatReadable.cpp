@@ -15,7 +15,7 @@
 #include <Common/formatReadable.h>
 #include <IO/Buffer/WriteBufferFromString.h>
 #include <IO/DoubleConverter.h>
-#include <IO/Util/WriteHelpers.h>
+#include <IO/WriteHelpers.h>
 
 #include <cmath>
 #include <iomanip>

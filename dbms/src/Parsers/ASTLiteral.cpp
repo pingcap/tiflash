@@ -14,7 +14,7 @@
 
 #include <Common/FieldVisitors.h>
 #include <Common/SipHash.h>
-#include <IO/Util/WriteHelpers.h>
+#include <IO/WriteHelpers.h>
 #include <Parsers/ASTLiteral.h>
 
 

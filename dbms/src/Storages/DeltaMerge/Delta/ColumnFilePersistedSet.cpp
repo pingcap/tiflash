@@ -14,7 +14,7 @@
 
 #include <Functions/FunctionHelpers.h>
 #include <IO/Buffer/MemoryReadWriteBuffer.h>
-#include <IO/Util/ReadHelpers.h>
+#include <IO/ReadHelpers.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/Delta/ColumnFilePersistedSet.h>

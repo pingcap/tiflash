@@ -22,7 +22,7 @@
 #include <DataTypes/DataTypeTuple.h>
 #include <DataTypes/DataTypeUUID.h>
 #include <DataTypes/DataTypesNumber.h>
-#include <IO/Util/ReadHelpers.h>
+#include <IO/ReadHelpers.h>
 
 namespace DB
 {

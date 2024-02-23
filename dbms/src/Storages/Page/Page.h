@@ -16,7 +16,7 @@
 
 #include <IO/Buffer/BufferBase.h>
 #include <IO/Buffer/MemoryReadWriteBuffer.h>
-#include <IO/Util/WriteHelpers.h>
+#include <IO/WriteHelpers.h>
 #include <Storages/Page/PageDefinesBase.h>
 
 #include <map>

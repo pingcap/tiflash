@@ -18,8 +18,8 @@
 #include <Columns/ColumnNullable.h>
 #include <Columns/ColumnsCommon.h>
 #include <DataTypes/DataTypesNumber.h>
-#include <IO/Util/VarInt.h>
-#include <IO/Util/WriteHelpers.h>
+#include <IO/VarInt.h>
+#include <IO/WriteHelpers.h>
 
 #include <array>
 

@@ -20,11 +20,11 @@
 #include <IO/BaseFile/PosixWritableFile.h>
 #include <IO/BaseFile/RateLimiter.h>
 #include <IO/Checksum/ChecksumBuffer.h>
-#include <IO/Checksum/ChecksumWriteBufferBuilder.h>
 #include <IO/Compression/CompressedReadBuffer.h>
 #include <IO/Compression/CompressedWriteBuffer.h>
-#include <IO/Encryption/CompressedReadBufferFromFileProvider.h>
 #include <IO/Encryption/MockKeyManager.h>
+#include <IO/FileProvider/ChecksumWriteBufferBuilder.h>
+#include <IO/FileProvider/CompressedReadBufferFromFileBuilder.h>
 #include <Poco/File.h>
 #include <Storages/DeltaMerge/DMChecksumConfig.h>
 #include <Storages/Page/PageUtil.h>
@@ -268,7 +268,7 @@ void runStackingTest()
             compression_buffer.write(data.data(), data.size());
         }
         {
-            auto buffer = CompressedReadBufferFromFileProvider(
+            auto buffer = CompressedReadBufferFromFileBuilder::build(
                 provider,
                 filename,
                 {"/tmp/test.enc", "test.enc"},
@@ -277,7 +277,7 @@ void runStackingTest()
                 config.getChecksumAlgorithm(),
                 config.getChecksumFrameLength());
             auto cmp = std::vector<char>(size);
-            ASSERT_EQ(buffer.read(cmp.data(), size), size) << "random seed: " << seed << std::endl;
+            ASSERT_EQ(buffer->read(cmp.data(), size), size) << "random seed: " << seed << std::endl;
             ASSERT_EQ(data, cmp) << "random seed: " << seed << std::endl;
         }
     }
@@ -340,7 +340,7 @@ void runStackedSeekingTest()
         }
     }
     {
-        auto buffer = CompressedReadBufferFromFileProvider(
+        auto buffer = CompressedReadBufferFromFileBuilder::build(
             provider,
             filename,
             {"/tmp/test.enc", "test.enc"},
@@ -351,9 +351,9 @@ void runStackedSeekingTest()
         std::shuffle(slices.begin(), slices.end(), local_engine);
         for (const auto & [x, y, z] : slices)
         {
-            buffer.seek(y, z);
+            buffer->seek(y, z);
             auto cmp = std::vector<char>(x.size());
-            ASSERT_EQ(buffer.read(cmp.data(), cmp.size()), cmp.size()) << "random seed: " << seed << std::endl;
+            ASSERT_EQ(buffer->read(cmp.data(), cmp.size()), cmp.size()) << "random seed: " << seed << std::endl;
             ASSERT_EQ(x, cmp) << "random seed: " << seed << std::endl;
         }
     }

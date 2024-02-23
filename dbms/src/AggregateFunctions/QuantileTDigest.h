@@ -18,7 +18,7 @@
 #include <Common/RadixSort.h>
 #include <IO/Buffer/ReadBuffer.h>
 #include <IO/Buffer/WriteBuffer.h>
-#include <IO/Util/VarInt.h>
+#include <IO/VarInt.h>
 
 #include <cmath>
 

@@ -16,20 +16,48 @@
 
 #include <IO/Buffer/ReadBufferFromFileBase.h>
 #include <IO/Compression/CompressedReadBufferBase.h>
-#include <time.h>
-
-#include <memory>
-
 
 namespace DB
 {
+
+/// CompressedSeekableReaderBuffer provides an extra abstraction layer to unify compressed buffers
+/// This helps to unify CompressedReadBufferFromFileProviderImpl<false> and CompressedReadBufferFromFileProviderImpl<true>
+struct CompressedSeekableReaderBuffer : public BufferWithOwnMemory<ReadBuffer>
+{
+    virtual void setProfileCallback(
+        const ReadBufferFromFileBase::ProfileCallback & profile_callback_,
+        clockid_t clock_type_)
+        = 0;
+
+    virtual void seek(size_t offset_in_compressed_file, size_t offset_in_decompressed_block) = 0;
+
+    CompressedSeekableReaderBuffer()
+        : BufferWithOwnMemory<ReadBuffer>(0)
+    {}
+};
+
 /// Unlike CompressedReadBuffer, it can do seek.
 template <bool has_legacy_checksum = true>
-class CompressedReadBufferFromFile
+class CompressedReadBufferFromFileImpl
     : public CompressedReadBufferBase<has_legacy_checksum>
-    , public BufferWithOwnMemory<ReadBuffer>
+    , public CompressedSeekableReaderBuffer
 {
+public:
+    explicit CompressedReadBufferFromFileImpl(std::unique_ptr<ReadBufferFromFileBase> && file_in_);
+
+    void seek(size_t offset_in_compressed_file, size_t offset_in_decompressed_block) override;
+
+    size_t readBig(char * to, size_t n) override;
+
+    void setProfileCallback(const ReadBufferFromFileBase::ProfileCallback & profile_callback_, clockid_t clock_type_)
+        override
+    {
+        file_in.setProfileCallback(profile_callback_, clock_type_);
+    }
+
 private:
+    bool nextImpl() override;
+
     /** At any time, one of two things is true:
       * a) size_compressed = 0
       * b)
@@ -40,26 +68,9 @@ private:
     std::unique_ptr<ReadBufferFromFileBase> p_file_in;
     ReadBufferFromFileBase & file_in;
     size_t size_compressed = 0;
-
-    bool nextImpl() override;
-
-public:
-    CompressedReadBufferFromFile(
-        const std::string & path,
-        size_t estimated_size,
-        size_t aio_threshold,
-        size_t buf_size = DBMS_DEFAULT_BUFFER_SIZE);
-
-    void seek(size_t offset_in_compressed_file, size_t offset_in_decompressed_block);
-
-    size_t readBig(char * to, size_t n) override;
-
-    void setProfileCallback(
-        const ReadBufferFromFileBase::ProfileCallback & profile_callback_,
-        clockid_t clock_type_ = CLOCK_MONOTONIC_COARSE)
-    {
-        file_in.setProfileCallback(profile_callback_, clock_type_);
-    }
 };
+
+using LegacyCompressedReadBufferFromFile = CompressedReadBufferFromFileImpl</*has_legacy_checksum*/ true>;
+using CompressedReadBufferFromFile = CompressedReadBufferFromFileImpl</*has_legacy_checksum*/ false>;
 
 } // namespace DB

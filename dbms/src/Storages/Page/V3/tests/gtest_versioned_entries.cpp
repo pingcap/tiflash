@@ -15,7 +15,7 @@
 
 #include <Common/Exception.h>
 #include <Common/FmtUtils.h>
-#include <IO/FileProvider.h>
+#include <IO/FileProvider/FileProvider.h>
 #include <Storages/Page/Page.h>
 #include <Storages/Page/V3/PageDefines.h>
 #include <Storages/Page/V3/PageDirectory.h>
