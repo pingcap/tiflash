@@ -1326,7 +1326,6 @@ public:
 /// syncAllSchema will be called when
 /// - a new keyspace is created
 /// - meet diff->regenerate_schema_map = true
-/// - exception thrown in applyDiff
 /// Thus, we should not assume all the map is empty during syncAllSchema.
 template <typename Getter, typename NameMapper>
 void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
