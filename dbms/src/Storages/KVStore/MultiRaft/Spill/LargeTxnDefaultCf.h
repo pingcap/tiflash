@@ -107,9 +107,9 @@ struct LargeTxnDefaultCf
 
     const Data & getData() const { return txns; }
     Data & getDataMut() { return txns; }
-    const Inner & getTxn(const Level1Key & ts) const { return *txns.at(ts); }
-    Inner & getTxnMut(const Level1Key & ts) { return *txns.at(ts); }
-    bool hasTxn(const Level1Key & ts) const { return txns.contains(ts); }
+    const Inner & getTxn(const Level1Key & ts) const;
+    Inner & getTxnMut(const Level1Key & ts);
+    bool hasTxn(const Level1Key & ts) const;
     size_t getTxnKeyCount(const Level1Key & ts) const;
 
     static size_t getTiKVKeyValueSize(const ConstTwoLevelIt & it);

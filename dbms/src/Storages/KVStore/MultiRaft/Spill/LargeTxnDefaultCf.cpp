@@ -230,4 +230,33 @@ size_t LargeTxnDefaultCf::deserialize(ReadBuffer & buf, size_t txn_count, LargeT
     return cf_data_size;
 }
 
+const LargeTxnDefaultCf::Inner & LargeTxnDefaultCf::getTxn(const Level1Key & ts) const
+{
+    try
+    {
+        return *txns.at(ts);
+    }
+    catch (...)
+    {
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "LargeTxnDefaultCf doesn't have {}", ts);
+    }
+}
+
+LargeTxnDefaultCf::Inner & LargeTxnDefaultCf::getTxnMut(const Level1Key & ts)
+{
+    try
+    {
+        return *txns.at(ts);
+    }
+    catch (...)
+    {
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "LargeTxnDefaultCf doesn't have {}", ts);
+    }
+}
+
+bool LargeTxnDefaultCf::hasTxn(const Level1Key & ts) const
+{
+    return txns.contains(ts);
+}
+
 } // namespace DB
