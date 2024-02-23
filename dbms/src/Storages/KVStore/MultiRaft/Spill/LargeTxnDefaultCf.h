@@ -60,13 +60,15 @@ struct LargeTxnDefaultCf
     using Pair = std::pair<Level2Key, Value>;
     using Status = bool;
 
-    std::optional<Inner::Map::const_iterator> find(const Level2Key & key, const Level1Key & ts) const;
+    using ConstTwoLevelIt = std::optional<std::tuple<Map::const_iterator, InnerMap::const_iterator>>;
+    using TwoLevelIt = std::optional<std::tuple<Map::iterator, InnerMap::iterator>>;
+
+    ConstTwoLevelIt find(const Level2Key & key, const Level1Key & ts) const;
 
     static std::shared_ptr<Inner> & mustGet(LargeTxnDefaultCf & cf, const Level1Key & key);
 
     RegionDataRes insertWithTs(TiKVKey && key, TiKVValue && value, Timestamp ts, DupCheck mode = DupCheck::Deny);
     RegionDataRes insert(TiKVKey && key, TiKVValue && value, DupCheck mode = DupCheck::Deny);
-
 
     static size_t calcTiKVKeyValueSize(const Inner::Value & value);
     static size_t calcTiKVKeyValueSize(const TiKVKey & key, const TiKVValue & value);
@@ -107,11 +109,12 @@ struct LargeTxnDefaultCf
     bool hasTxn(const Level1Key & ts) const { return txns.contains(ts); }
     size_t getTxnKeyCount(const Level1Key & ts) const;
 
-    size_t getTiKVKeyValueSize(const Level2Key & key, const Level1Key & ts) const;
+    size_t getTiKVKeyValueSize(const ConstTwoLevelIt & it) const;
 
 private:
     friend class RegionData;
     void erase(const Level2Key & key, const Level1Key & ts);
+    void erase(const ConstTwoLevelIt & it);
 
 private:
     Data txns;

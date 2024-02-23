@@ -62,9 +62,7 @@ size_t LargeTxnDefaultCf::calcTiKVKeyValueSize(const TiKVKey & key, const TiKVVa
     }
 }
 
-std::optional<LargeTxnDefaultCf::Inner::Map::const_iterator> LargeTxnDefaultCf::find(
-    const Level2Key & key,
-    const Level1Key & ts) const
+LargeTxnDefaultCf::ConstTwoLevelIt LargeTxnDefaultCf::find(const Level2Key & key, const Level1Key & ts) const
 {
     auto t = txns.find(ts);
     if (t == txns.end())
@@ -76,15 +74,14 @@ std::optional<LargeTxnDefaultCf::Inner::Map::const_iterator> LargeTxnDefaultCf::
     {
         return std::nullopt;
     }
-    return kv;
+    return std::make_tuple(t, kv);
 }
 
-size_t LargeTxnDefaultCf::getTiKVKeyValueSize(const Level2Key & key, const Level1Key & ts) const
+size_t LargeTxnDefaultCf::getTiKVKeyValueSize(const ConstTwoLevelIt & it) const
 {
-    auto maybe_kv = find(key, ts);
-    if (maybe_kv.has_value())
+    if (it.has_value())
     {
-        return LargeTxnDefaultCf::Inner::calcTiKVKeyValueSize(maybe_kv.value()->second);
+        return LargeTxnDefaultCf::Inner::calcTiKVKeyValueSize(std::get<1>(it.value())->second);
     }
     return 0;
 }
@@ -105,6 +102,16 @@ void LargeTxnDefaultCf::erase(const Level2Key & key, const Level1Key & ts)
     if (iter != txns.end())
     {
         iter->second->getDataMut().erase(key);
+    }
+}
+
+void LargeTxnDefaultCf::erase(const ConstTwoLevelIt & it)
+{
+    if (it.has_value())
+    {
+        const auto & level1_iter = std::get<0>(it.value());
+        const auto & level2_iter = std::get<1>(it.value());
+        level1_iter->second->getDataMut().erase(level2_iter);
     }
 }
 

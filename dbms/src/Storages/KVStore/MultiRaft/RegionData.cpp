@@ -151,9 +151,10 @@ RegionData::WriteCFIter RegionData::removeDataByWriteIt(const WriteCFIter & writ
         }
         else if unlikely (large_default_cf.hasTxn(decoded_val.prewrite_ts))
         {
-            auto delta = large_default_cf.getTiKVKeyValueSize(pk, ts);
+            auto it = large_default_cf.find(pk, ts);
+            auto delta = large_default_cf.getTiKVKeyValueSize(it);
             cf_data_size -= delta;
-            large_default_cf.erase(pk, ts);
+            large_default_cf.erase(it);
             reportDealloc(delta);
         }
     }
@@ -199,14 +200,14 @@ std::optional<RegionDataReadInfo> RegionData::readDataByWriteIt(
         }
         else if unlikely (large_default_cf.hasTxn(decoded_val.prewrite_ts))
         {
-            const auto & maybe_kv = large_default_cf.find(pk, ts);
-            if likely (maybe_kv.has_value())
+            const auto & it = large_default_cf.find(pk, ts);
+            if likely (it.has_value())
             {
                 return RegionDataReadInfo{
                     pk,
                     decoded_val.write_type,
                     ts,
-                    LargeDefaultCFDataTrait::getTiKVValue(maybe_kv.value())};
+                    LargeDefaultCFDataTrait::getTiKVValue(std::get<1>(it.value()))};
             }
         }
         else
