@@ -152,7 +152,7 @@ RegionData::WriteCFIter RegionData::removeDataByWriteIt(const WriteCFIter & writ
         else if unlikely (large_default_cf.hasTxn(decoded_val.prewrite_ts))
         {
             auto it = large_default_cf.find(pk, ts);
-            auto delta = large_default_cf.getTiKVKeyValueSize(it);
+            auto delta = LargeTxnDefaultCf::getTiKVKeyValueSize(it);
             cf_data_size -= delta;
             large_default_cf.erase(it);
             reportDealloc(delta);

@@ -109,7 +109,7 @@ struct LargeTxnDefaultCf
     bool hasTxn(const Level1Key & ts) const { return txns.contains(ts); }
     size_t getTxnKeyCount(const Level1Key & ts) const;
 
-    size_t getTiKVKeyValueSize(const ConstTwoLevelIt & it) const;
+    static size_t getTiKVKeyValueSize(const ConstTwoLevelIt & it);
 
 private:
     friend class RegionData;

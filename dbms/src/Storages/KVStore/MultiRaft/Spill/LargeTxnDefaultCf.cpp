@@ -77,7 +77,7 @@ LargeTxnDefaultCf::ConstTwoLevelIt LargeTxnDefaultCf::find(const Level2Key & key
     return std::make_tuple(t, kv);
 }
 
-size_t LargeTxnDefaultCf::getTiKVKeyValueSize(const ConstTwoLevelIt & it) const
+size_t LargeTxnDefaultCf::getTiKVKeyValueSize(const ConstTwoLevelIt & it)
 {
     if (it.has_value())
     {
