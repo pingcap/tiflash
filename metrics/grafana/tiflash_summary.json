@@ -5936,7 +5936,7 @@
             },
             {
               "exemplar": true,
-              "expr": "sum by (instance) (\nrate(tiflash_system_profile_event_PSMWriteBytes{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[30m]) +\nrate(tiflash_system_profile_event_WriteBufferFromFileDescriptorWriteBytes{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[30m]))\n)\n/\nsum by (instance) (\nrate(tiflash_storage_throughput_bytes{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=~\"write|ingest\"}[30m])\n)",
+              "expr": "sum by (instance) (\nrate(tiflash_system_profile_event_PSMWriteBytes{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[30m]) +\nrate(tiflash_system_profile_event_WriteBufferFromFileDescriptorWriteBytes{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[30m])\n)\n/\nsum by (instance) (\nrate(tiflash_storage_throughput_bytes{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=~\"write|ingest\"}[30m])\n)",
               "format": "time_series",
               "hide": true,
               "interval": "",
