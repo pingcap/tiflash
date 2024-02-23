@@ -200,14 +200,14 @@ std::optional<RegionDataReadInfo> RegionData::readDataByWriteIt(
         }
         else if unlikely (large_default_cf.hasTxn(decoded_val.prewrite_ts))
         {
-            const auto & it = large_default_cf.find(pk, ts);
-            if likely (it.has_value())
+            if (const auto & it = large_default_cf.find(pk, ts); likely(it.has_value()))
             {
                 return RegionDataReadInfo{
                     pk,
                     decoded_val.write_type,
                     ts,
-                    LargeDefaultCFDataTrait::getTiKVValue(std::get<1>(it.value()))};
+                    LargeDefaultCFDataTrait::getTiKVValue(std::get<1>(it.value())),
+                };
             }
         }
         else
