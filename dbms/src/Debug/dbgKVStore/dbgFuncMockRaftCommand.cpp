@@ -15,8 +15,9 @@
 #include <Common/typeid_cast.h>
 #include <Debug/DBGInvoker.h>
 #include <Debug/MockTiDB.h>
-#include <Debug/MockTiKV.h>
-#include <Debug/dbgFuncMockRaftCommand.h>
+#include <Debug/dbgKVStore/MockTiKV.h>
+#include <Debug/dbgKVStore/dbgFuncMockRaftCommand.h>
+#include <Debug/dbgTools.h>
 #include <Interpreters/Context.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
@@ -25,8 +26,6 @@
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/KVStore/TiKVHelpers/TiKVRecordFormat.h>
 #include <fmt/core.h>
-
-#include "dbgTools.h"
 
 namespace DB
 {

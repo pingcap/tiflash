@@ -15,8 +15,8 @@
 #include <Common/FmtUtils.h>
 #include <Common/typeid_cast.h>
 #include <Debug/MockTiDB.h>
-#include <Debug/MockTiKV.h>
-#include <Debug/dbgFuncRegion.h>
+#include <Debug/dbgKVStore/MockTiKV.h>
+#include <Debug/dbgKVStore/dbgFuncRegion.h>
 #include <Debug/dbgTools.h>
 #include <Interpreters/Context.h>
 #include <Parsers/ASTIdentifier.h>
