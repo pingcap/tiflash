@@ -112,6 +112,10 @@ void LargeTxnDefaultCf::erase(const ConstTwoLevelIt & it)
         const auto & level1_iter = std::get<0>(it.value());
         const auto & level2_iter = std::get<1>(it.value());
         level1_iter->second->getDataMut().erase(level2_iter);
+        if (level1_iter->second->getDataMut().empty())
+        {
+            txns.erase(level1_iter);
+        }
     }
 }
 

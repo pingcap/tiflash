@@ -198,6 +198,15 @@ try
     ASSERT_EQ(cf_recover.getTxnCount(), 2);
     ASSERT_TRUE(cf_recover.hasTxn(111));
     ASSERT_TRUE(cf_recover.hasTxn(112));
+    
+    {
+        auto decoded = RecordKVFormat::genRawKey(table_id, 4);
+        auto pk = RecordKVFormat::getRawTiDBPK(decoded);
+        auto it = cf.find(pk, 112);
+        ASSERT_TRUE(it.has_value());
+        cf.erase(it);
+        ASSERT_EQ(cf.getTxnCount(), 1);
+    }
 }
 CATCH
 

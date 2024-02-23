@@ -73,8 +73,11 @@ struct LargeTxnDefaultCf
     static size_t calcTiKVKeyValueSize(const Inner::Value & value);
     static size_t calcTiKVKeyValueSize(const TiKVKey & key, const TiKVValue & value);
 
-    /// Serves "Del" raft command.
+    // Serves "Del" raft command.
     size_t remove(const Level2Key & key, const Level1Key & ts, bool quiet = false);
+    // Just remove the given key, if any.
+    void erase(const Level2Key & key, const Level1Key & ts);
+    void erase(const ConstTwoLevelIt & it);
     static bool cmp(const Map & a, const Map & b);
 
     bool operator==(const LargeTxnDefaultCf & cf) const;
@@ -113,8 +116,6 @@ struct LargeTxnDefaultCf
 
 private:
     friend class RegionData;
-    void erase(const Level2Key & key, const Level1Key & ts);
-    void erase(const ConstTwoLevelIt & it);
 
 private:
     Data txns;
