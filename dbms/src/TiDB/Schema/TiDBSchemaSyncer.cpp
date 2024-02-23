@@ -128,7 +128,7 @@ bool TiDBSchemaSyncer<mock_getter, mock_mapper>::syncSchemasByGetter(Context & c
 // Since TiDB can not make sure the schema diff of the latest schema version X is not empty, under this situation we should set the `cur_version`
 // to X-1 and try to fetch the schema diff X next time.
 template <bool mock_getter, bool mock_mapper>
-Int64 TiDBSchemaSyncer<mock_getter, mock_mapper>::syncSchemaDiffsImpl(
+Int64 TiDBSchemaSyncer<mock_getter, mock_mapper>::syncSchemaDiffs(
     Context & context,
     Getter & getter,
     Int64 latest_version)
@@ -189,50 +189,6 @@ Int64 TiDBSchemaSyncer<mock_getter, mock_mapper>::syncSchemaDiffsImpl(
         builder.applyDiff(*diff);
     }
     return cur_apply_version;
-}
-
-// An exception-safe wrapper of `syncSchemaDiffsImpl`.
-// If there is any exception thrown (mainly to catch network exception), or meet a schema
-// diff with `regenerate_schema_map`, return `SchemaGetter::SchemaVersionNotExist` and
-// the caller should retry by `syncAllSchemas`.
-template <bool mock_getter, bool mock_mapper>
-Int64 TiDBSchemaSyncer<mock_getter, mock_mapper>::syncSchemaDiffs(
-    Context & context,
-    Getter & getter,
-    Int64 latest_version)
-{
-    try
-    {
-        return syncSchemaDiffsImpl(context, getter, latest_version);
-    }
-    catch (TiFlashException & e)
-    {
-        LOG_WARNING(
-            log,
-            "apply diff meets TiFlashException: {}, stack: {}",
-            e.displayText(),
-            e.getStackTrace().toString());
-        return SchemaGetter::SchemaVersionNotExist;
-    }
-    catch (Exception & e)
-    {
-        LOG_WARNING(
-            log,
-            "apply diff meets DB::Exception: {}, stack: {}",
-            e.displayText(),
-            e.getStackTrace().toString());
-        return SchemaGetter::SchemaVersionNotExist;
-    }
-    catch (Poco::Exception & e)
-    {
-        LOG_WARNING(log, "apply diff meets Poco::Exception: {}", e.displayText());
-        return SchemaGetter::SchemaVersionNotExist;
-    }
-    catch (std::exception & e)
-    {
-        LOG_WARNING(log, "apply diff meets std::exception: {}", e.what());
-        return SchemaGetter::SchemaVersionNotExist;
-    }
 }
 
 template <bool mock_getter, bool mock_mapper>

@@ -81,7 +81,6 @@ public:
 
 private:
     Int64 syncSchemaDiffs(Context & context, Getter & getter, Int64 latest_version);
-    Int64 syncSchemaDiffsImpl(Context & context, Getter & getter, Int64 latest_version);
     Int64 syncAllSchemas(Context & context, Getter & getter, Int64 version);
 
     bool syncSchemasByGetter(Context & context, Getter & getter);
