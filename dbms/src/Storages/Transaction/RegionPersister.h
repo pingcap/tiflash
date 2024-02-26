@@ -80,7 +80,6 @@ private:
 
     NamespaceID ns_id = KVSTORE_NAMESPACE_ID;
     const RegionManager & region_manager;
-    std::mutex mutex;
     LoggerPtr log;
 };
 } // namespace DB

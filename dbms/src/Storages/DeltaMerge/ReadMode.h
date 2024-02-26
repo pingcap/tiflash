@@ -14,26 +14,29 @@
 
 #pragma once
 
-#include <Core/Defines.h>
-#include <Storages/Transaction/Types.h>
-
-namespace DB
+namespace DB::DM
 {
-struct DAGProperties
-{
-    String encode_type;
-    Int64 tz_offset = 0;
-    String tz_name;
-    Int32 collator = 0;
-    bool is_mpp_query = false;
-    bool use_broadcast_join = false;
-    Int32 mpp_partition_num = 1;
-    Timestamp start_ts = DEFAULT_MAX_READ_TSO;
-    UInt64 query_ts = 0;
-    UInt64 server_id = 1;
-    UInt64 local_query_id = 1;
-    Int64 task_id = 1;
 
-    Int32 mpp_timeout = 60;
+enum class ReadMode
+{
+    /**
+     * Read in normal mode. Data is ordered by PK, and only the most recent version is returned.
+     */
+    Normal,
+
+    /**
+     * Read in fast mode. Data is not sort merged, and all versions are returned. However, deleted records (del_mark=1)
+     * will be still filtered out.
+     */
+    Fast,
+
+    /**
+     * Read in raw mode, for example, for statements like `SELRAW *`. In raw mode, data is not sort merged and all versions
+     * are just returned.
+     */
+    Raw,
+
+    Bitmap,
 };
-} // namespace DB
+
+} // namespace DB::DM

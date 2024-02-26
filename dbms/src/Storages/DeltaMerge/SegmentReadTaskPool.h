@@ -16,6 +16,7 @@
 #include <Common/MemoryTrackerSetter.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/Filter/PushDownFilter.h>
+#include <Storages/DeltaMerge/ReadMode.h>
 #include <Storages/DeltaMerge/ReadThread/WorkQueue.h>
 #include <Storages/DeltaMerge/RowKeyRangeUtils.h>
 
@@ -111,28 +112,6 @@ private:
     std::atomic<int64_t> total_bytes;
 };
 
-enum class ReadMode
-{
-    /**
-     * Read in normal mode. Data is ordered by PK, and only the most recent version is returned.
-     */
-    Normal,
-
-    /**
-     * Read in fast mode. Data is not sort merged, and all versions are returned. However, deleted records (del_mark=1)
-     * will be still filtered out.
-     */
-    Fast,
-
-    /**
-     * Read in raw mode, for example, for statements like `SELRAW *`. In raw mode, data is not sort merged and all versions
-     * are just returned.
-     */
-    Raw,
-
-    Bitmap,
-};
-
 // If `enable_read_thread_` is true, `SegmentReadTasksWrapper` use `std::unordered_map` to index `SegmentReadTask` by segment id,
 // else it is the same as `SegmentReadTasks`, a `std::list` of `SegmentReadTask`.
 // `SegmeneReadTasksWrapper` is not thread-safe.
@@ -186,10 +165,10 @@ public:
         , unordered_input_stream_ref_count(0)
         , exception_happened(false)
         , mem_tracker(current_memory_tracker == nullptr ? nullptr : current_memory_tracker->shared_from_this())
-        // If the queue is too short, only 1 in the extreme case, it may cause the computation thread
-        // to encounter empty queues frequently, resulting in too much waiting and thread context
-        // switching, so we limit the lower limit to 3, which provides two blocks of buffer space.
-        , block_slot_limit(std::max(num_streams_, 3))
+        // to encounter empty queues frequently, resulting in too much waiting and thread context switching.
+        // We limit the length of block queue to be 1.5 times of `num_streams_`, and in the extreme case,
+        // when `num_streams_` is 1, `block_slot_limit` is at least 2.
+        , block_slot_limit(std::ceil(num_streams_ * 1.5))
         // Limiting the minimum number of reading segments to 2 is to avoid, as much as possible,
         // situations where the computation may be faster and the storage layer may not be able to keep up.
         , active_segment_limit(std::max(num_streams_, 2))

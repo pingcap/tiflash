@@ -33,7 +33,7 @@
 #include <Interpreters/SubqueryForSet.h>
 #include <Parsers/makeDummyQuery.h>
 #include <Storages/DeltaMerge/Remote/DisaggTaskId.h>
-#include <Storages/DeltaMerge/ScanContext.h>
+#include <Storages/DeltaMerge/ScanContext_fwd.h>
 #include <Storages/Transaction/TiDB.h>
 
 namespace DB

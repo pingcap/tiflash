@@ -1,0 +1,41 @@
+# Copyright 2023 PingCAP, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Preparation.
+mysql> drop table if exists test.t1;
+mysql> CREATE TABLE test.t1 (   `a` int(11) NOT NULL,   `b` int(11) DEFAULT NULL,   PRIMARY KEY (`a`) /*T![clustered_index] CLUSTERED */ ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+mysql> drop table if exists test.t2;
+mysql> CREATE TABLE test.t2 (   `a` int(11) NOT NULL,   `b` int(11) DEFAULT NULL,   PRIMARY KEY (`a`) /*T![clustered_index] CLUSTERED */ ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+mysql> insert into test.t1 values(30, 50);
+mysql> insert into test.t1 values(300, 500);
+mysql> insert into test.t2 values(30, 50);
+mysql> insert into test.t2 values(300, 500);
+
+mysql> alter table test.t1 set tiflash replica 1;
+mysql> alter table test.t2 set tiflash replica 1;
+
+func> wait_table test t1
+func> wait_table test t2
+
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp=1; SELECT * FROM test.t2 left outer join test.t1 on if(test.t2.a,null,null);
++-----+------+------+------+
+| a   | b    | a    | b    |
++-----+------+------+------+
+|  30 |   50 | NULL | NULL |
+| 300 |  500 | NULL | NULL |
++-----+------+------+------+
+
+# Clean up.
+mysql> drop table if exists test.t1;
+mysql> drop table if exists test.t2;

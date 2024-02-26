@@ -64,13 +64,13 @@ struct TiDBSchemaSyncer : public SchemaSyncer
 
     Getter createSchemaGetter(KeyspaceID keyspace_id)
     {
-        [[maybe_unused]] auto tso = cluster->pd_client->getTS();
         if constexpr (mock_getter)
         {
             return Getter();
         }
         else
         {
+            auto tso = PDClientHelper::getTSO(cluster->pd_client, PDClientHelper::get_tso_maxtime);
             return Getter(cluster.get(), tso, keyspace_id);
         }
     }

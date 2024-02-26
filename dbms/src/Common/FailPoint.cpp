@@ -88,6 +88,7 @@ namespace DB
     M(force_set_dtfile_exist_when_acquire_id)                \
     M(force_no_local_region_for_mpp_task)                    \
     M(force_remote_read_for_batch_cop)                       \
+    M(force_pd_grpc_error)                                   \
     M(force_context_path)                                    \
     M(force_slow_page_storage_snapshot_release)              \
     M(force_change_all_blobs_to_read_only)                   \
@@ -113,7 +114,8 @@ namespace DB
     M(pause_before_apply_raft_snapshot)        \
     M(pause_until_apply_raft_snapshot)         \
     M(pause_after_copr_streams_acquired_once)  \
-    M(pause_before_register_non_root_mpp_task)
+    M(pause_before_register_non_root_mpp_task) \
+    M(pause_when_persist_region)
 
 #define APPLY_FOR_PAUSEABLE_FAILPOINTS(M) \
     M(pause_when_reading_from_dt_stream)  \
@@ -148,7 +150,9 @@ namespace DB
     M(random_pipeline_model_cancel_failpoint)           \
     M(random_spill_to_disk_failpoint)                   \
     M(random_restore_from_disk_failpoint)               \
-    M(random_exception_when_connect_local_tunnel)
+    M(random_exception_when_connect_local_tunnel)       \
+    M(random_region_persister_latency_failpoint)
+
 namespace FailPoints
 {
 #define M(NAME) extern const char(NAME)[] = #NAME "";

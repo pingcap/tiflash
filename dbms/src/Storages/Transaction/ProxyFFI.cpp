@@ -98,7 +98,7 @@ EngineStoreApplyRes HandleWriteRaftCmd(
     }
     catch (...)
     {
-        tryLogCurrentException(__PRETTY_FUNCTION__);
+        tryLogCurrentFatalException(__PRETTY_FUNCTION__);
         exit(-1);
     }
 }
@@ -126,7 +126,7 @@ EngineStoreApplyRes HandleAdminRaftCmd(
     }
     catch (...)
     {
-        tryLogCurrentException(__PRETTY_FUNCTION__);
+        tryLogCurrentFatalException(__PRETTY_FUNCTION__);
         exit(-1);
     }
 }
@@ -140,7 +140,7 @@ uint8_t NeedFlushData(EngineStoreServerWrap * server, uint64_t region_id)
     }
     catch (...)
     {
-        tryLogCurrentException(__PRETTY_FUNCTION__);
+        tryLogCurrentFatalException(__PRETTY_FUNCTION__);
         exit(-1);
     }
 }
@@ -154,7 +154,7 @@ uint8_t TryFlushData(EngineStoreServerWrap * server, uint64_t region_id, uint8_t
     }
     catch (...)
     {
-        tryLogCurrentException(__PRETTY_FUNCTION__);
+        tryLogCurrentFatalException(__PRETTY_FUNCTION__);
         exit(-1);
     }
 }
@@ -170,7 +170,7 @@ RawCppPtr CreateWriteBatch(const EngineStoreServerWrap * dummy)
     }
     catch (...)
     {
-        tryLogCurrentException(__PRETTY_FUNCTION__);
+        tryLogCurrentFatalException(__PRETTY_FUNCTION__);
         exit(-1);
     }
 }
@@ -189,7 +189,7 @@ void WriteBatchPutPage(RawVoidPtr ptr, BaseBuffView page_id, BaseBuffView value)
     }
     catch (...)
     {
-        tryLogCurrentException(__PRETTY_FUNCTION__);
+        tryLogCurrentFatalException(__PRETTY_FUNCTION__);
         exit(-1);
     }
 }
@@ -204,7 +204,7 @@ void WriteBatchDelPage(RawVoidPtr ptr, BaseBuffView page_id)
     }
     catch (...)
     {
-        tryLogCurrentException(__PRETTY_FUNCTION__);
+        tryLogCurrentFatalException(__PRETTY_FUNCTION__);
         exit(-1);
     }
 }
@@ -218,7 +218,7 @@ uint64_t GetWriteBatchSize(RawVoidPtr ptr)
     }
     catch (...)
     {
-        tryLogCurrentException(__PRETTY_FUNCTION__);
+        tryLogCurrentFatalException(__PRETTY_FUNCTION__);
         exit(-1);
     }
 }
@@ -232,7 +232,7 @@ uint8_t IsWriteBatchEmpty(RawVoidPtr ptr)
     }
     catch (...)
     {
-        tryLogCurrentException(__PRETTY_FUNCTION__);
+        tryLogCurrentFatalException(__PRETTY_FUNCTION__);
         exit(-1);
     }
 }
@@ -247,7 +247,7 @@ void HandleMergeWriteBatch(RawVoidPtr lhs, RawVoidPtr rhs)
     }
     catch (...)
     {
-        tryLogCurrentException(__PRETTY_FUNCTION__);
+        tryLogCurrentFatalException(__PRETTY_FUNCTION__);
         exit(-1);
     }
 }
@@ -261,7 +261,7 @@ void HandleClearWriteBatch(RawVoidPtr ptr)
     }
     catch (...)
     {
-        tryLogCurrentException(__PRETTY_FUNCTION__);
+        tryLogCurrentFatalException(__PRETTY_FUNCTION__);
         exit(-1);
     }
 }
@@ -278,7 +278,7 @@ void HandleConsumeWriteBatch(const EngineStoreServerWrap * server, RawVoidPtr pt
     }
     catch (...)
     {
-        tryLogCurrentException(__PRETTY_FUNCTION__);
+        tryLogCurrentFatalException(__PRETTY_FUNCTION__);
         exit(-1);
     }
 }
@@ -303,7 +303,7 @@ CppStrWithView HandleReadPage(const EngineStoreServerWrap * server, BaseBuffView
     }
     catch (...)
     {
-        tryLogCurrentException(__PRETTY_FUNCTION__);
+        tryLogCurrentFatalException(__PRETTY_FUNCTION__);
         exit(-1);
     }
 }
@@ -340,7 +340,7 @@ RawCppPtrCarr HandleScanPage(const EngineStoreServerWrap * server, BaseBuffView 
     }
     catch (...)
     {
-        tryLogCurrentException(__PRETTY_FUNCTION__);
+        tryLogCurrentFatalException(__PRETTY_FUNCTION__);
         exit(-1);
     }
 }
@@ -366,7 +366,7 @@ CppStrWithView HandleGetLowerBound(const EngineStoreServerWrap * server, BaseBuf
     }
     catch (...)
     {
-        tryLogCurrentException(__PRETTY_FUNCTION__);
+        tryLogCurrentFatalException(__PRETTY_FUNCTION__);
         exit(-1);
     }
 }
@@ -380,7 +380,7 @@ uint8_t IsPSEmpty(const EngineStoreServerWrap * server)
     }
     catch (...)
     {
-        tryLogCurrentException(__PRETTY_FUNCTION__);
+        tryLogCurrentFatalException(__PRETTY_FUNCTION__);
         exit(-1);
     }
 }
@@ -394,7 +394,7 @@ void HandlePurgePageStorage(const EngineStoreServerWrap * server)
     }
     catch (...)
     {
-        tryLogCurrentException(__PRETTY_FUNCTION__);
+        tryLogCurrentFatalException(__PRETTY_FUNCTION__);
         exit(-1);
     }
 }
@@ -440,7 +440,7 @@ void HandleDestroy(EngineStoreServerWrap * server, uint64_t region_id)
     }
     catch (...)
     {
-        tryLogCurrentException(__PRETTY_FUNCTION__);
+        tryLogCurrentFatalException(__PRETTY_FUNCTION__);
         exit(-1);
     }
 }
@@ -454,7 +454,7 @@ EngineStoreApplyRes HandleIngestSST(EngineStoreServerWrap * server, SSTViewVec s
     }
     catch (...)
     {
-        tryLogCurrentException(__PRETTY_FUNCTION__);
+        tryLogCurrentFatalException(__PRETTY_FUNCTION__);
         exit(-1);
     }
 }
@@ -471,7 +471,7 @@ StoreStats HandleComputeStoreStats(EngineStoreServerWrap * server)
     }
     catch (...)
     {
-        tryLogCurrentException(__PRETTY_FUNCTION__);
+        tryLogCurrentFatalException(__PRETTY_FUNCTION__);
     }
     return res;
 }
@@ -629,7 +629,7 @@ RawCppPtr PreHandleSnapshot(
     }
     catch (...)
     {
-        tryLogCurrentException(__PRETTY_FUNCTION__);
+        tryLogCurrentFatalException(__PRETTY_FUNCTION__);
         exit(-1);
     }
 }
@@ -649,7 +649,7 @@ void ApplyPreHandledSnapshot(EngineStoreServerWrap * server, PreHandledSnapshot 
     }
     catch (...)
     {
-        tryLogCurrentException(__PRETTY_FUNCTION__);
+        tryLogCurrentFatalException(__PRETTY_FUNCTION__);
         exit(-1);
     }
 }
@@ -665,7 +665,7 @@ void ApplyPreHandledSnapshot(EngineStoreServerWrap * server, RawVoidPtr res, Raw
         break;
     }
     default:
-        LOG_ERROR(&Poco::Logger::get(__FUNCTION__), "unknown type {}", type);
+        LOG_FATAL(&Poco::Logger::get(__FUNCTION__), "unknown type {}", type);
         exit(-1);
     }
 }
@@ -692,7 +692,7 @@ void GcRawCppPtr(RawVoidPtr ptr, RawCppPtrType type)
             delete reinterpret_cast<Page *>(ptr);
             break;
         default:
-            LOG_ERROR(&Poco::Logger::get(__FUNCTION__), "unknown type {}", type);
+            LOG_FATAL(&Poco::Logger::get(__FUNCTION__), "unknown type {}", type);
             exit(-1);
         }
     }
@@ -716,7 +716,7 @@ void GcRawCppPtrCArr(RawVoidPtr ptr, RawCppPtrType type, uint64_t len)
             break;
         }
         default:
-            LOG_ERROR(&Poco::Logger::get(__FUNCTION__), "unknown type arr {}", type);
+            LOG_FATAL(&Poco::Logger::get(__FUNCTION__), "unknown type arr {}", type);
             exit(-1);
         }
     }
@@ -747,7 +747,7 @@ void GcSpecialRawCppPtr(void * ptr, uint64_t hint_size, SpecialCppPtrType type)
             break;
         }
         default:
-            LOG_ERROR(&Poco::Logger::get(__FUNCTION__), "unknown type {}", static_cast<std::underlying_type_t<SpecialCppPtrType>>(type));
+            LOG_FATAL(&Poco::Logger::get(__FUNCTION__), "unknown type {}", static_cast<std::underlying_type_t<SpecialCppPtrType>>(type));
             exit(-1);
         }
     }
@@ -864,7 +864,7 @@ void HandleSafeTSUpdate(EngineStoreServerWrap * server, uint64_t region_id, uint
     }
     catch (...)
     {
-        tryLogCurrentException(__PRETTY_FUNCTION__);
+        tryLogCurrentFatalException(__PRETTY_FUNCTION__);
         exit(-1);
     }
 }

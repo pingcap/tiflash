@@ -15,6 +15,8 @@
 #pragma once
 
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileSetSnapshot.h>
+#include <Storages/DeltaMerge/DMContext.h>
+#include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
 
 namespace DB
@@ -26,6 +28,7 @@ class ColumnFileSetReader
     friend class ColumnFileSetInputStream;
 
 private:
+    const DMContext & context;
     ColumnFileSetSnapshotPtr snapshot;
 
     // The columns expected to read. Note that we will do reading exactly in this column order.
@@ -40,7 +43,9 @@ private:
     std::vector<ColumnFileReaderPtr> column_file_readers;
 
 private:
-    ColumnFileSetReader() = default;
+    explicit ColumnFileSetReader(const DMContext & context_)
+        : context(context_)
+    {}
 
     Block readPKVersion(size_t offset, size_t limit);
 

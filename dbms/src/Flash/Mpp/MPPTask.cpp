@@ -115,7 +115,7 @@ bool MPPTask::isRootMPPTask() const
 void MPPTask::abortTunnels(const String & message, bool wait_sender_finish)
 {
     {
-        std::unique_lock lock(tunnel_and_receiver_mu);
+        std::unique_lock lock(mtx);
         if (unlikely(tunnel_set == nullptr))
             return;
     }
@@ -125,7 +125,7 @@ void MPPTask::abortTunnels(const String & message, bool wait_sender_finish)
 void MPPTask::abortReceivers()
 {
     {
-        std::unique_lock lock(tunnel_and_receiver_mu);
+        std::unique_lock lock(mtx);
         if unlikely (receiver_set == nullptr)
             return;
     }
@@ -180,7 +180,7 @@ void MPPTask::registerTunnels(const mpp::DispatchTaskRequest & task_request)
         injectFailPointDuringRegisterTunnel(dag_context->isRootMPPTask());
     }
     {
-        std::unique_lock lock(tunnel_and_receiver_mu);
+        std::unique_lock lock(mtx);
         if (status != INITIALIZING)
             throw Exception(fmt::format("The tunnels can not be registered, because the task is not in initializing state"));
         tunnel_set = std::move(tunnel_set_local);
@@ -220,7 +220,7 @@ void MPPTask::initExchangeReceivers()
         return true;
     });
     {
-        std::unique_lock lock(tunnel_and_receiver_mu);
+        std::unique_lock lock(mtx);
         if (status != RUNNING)
             throw Exception("exchange receiver map can not be initialized, because the task is not in running state");
         receiver_set = std::move(receiver_set_local);
@@ -236,7 +236,7 @@ std::pair<MPPTunnelPtr, String> MPPTask::getTunnel(const ::mpp::EstablishMPPConn
             "can't find tunnel ({} + {}) because the task is aborted, error message = {}",
             request->sender_meta().task_id(),
             request->receiver_meta().task_id(),
-            err_string);
+            getErrString());
         return {nullptr, err_msg};
     }
 
@@ -252,6 +252,18 @@ std::pair<MPPTunnelPtr, String> MPPTask::getTunnel(const ::mpp::EstablishMPPConn
         return {nullptr, err_msg};
     }
     return {tunnel_ptr, ""};
+}
+
+String MPPTask::getErrString() const
+{
+    std::lock_guard lock(mtx);
+    return err_string;
+}
+
+void MPPTask::setErrString(const String & message)
+{
+    std::lock_guard lock(mtx);
+    err_string = message;
 }
 
 void MPPTask::unregisterTask()
@@ -347,7 +359,7 @@ void MPPTask::preprocess()
     query_executor_holder.set(queryExecute(*context));
     LOG_DEBUG(log, "init query executor done");
     {
-        std::unique_lock lock(tunnel_and_receiver_mu);
+        std::unique_lock lock(mtx);
         if (status != RUNNING)
             throw Exception("task not in running state, may be cancelled");
         for (auto & r : dag_context->getCoprocessorReaders())
@@ -406,7 +418,15 @@ void MPPTask::runImpl()
         mpp_task_statistics.start();
 
         auto result = query_executor_holder->execute();
-        LOG_INFO(log, "mpp task finish execute, success: {}", result.is_success);
+        auto log_level = Poco::Message::PRIO_DEBUG;
+        if (!result.is_success || status != RUNNING)
+            log_level = Poco::Message::PRIO_INFORMATION;
+        LOG_IMPL(
+            log,
+            log_level,
+            "mpp task finish execute, is_success: {}, status: {}",
+            result.is_success,
+            magic_enum::enum_name(status.load()));
         if (likely(result.is_success))
         {
             /// Need to finish writing before closing the receiver.
@@ -479,7 +499,7 @@ void MPPTask::runImpl()
             }
         }
     }
-    mpp_task_statistics.end(status.load(), err_string);
+    mpp_task_statistics.end(status.load(), getErrString());
     mpp_task_statistics.logTracingJson();
 
     LOG_DEBUG(log, "task ends, time cost is {} ms.", stopwatch.elapsedMilliseconds());
@@ -519,7 +539,7 @@ void MPPTask::abort(const String & message, AbortType abort_type)
         }
         else if (previous_status == INITIALIZING && switchStatus(INITIALIZING, next_task_status))
         {
-            err_string = message;
+            setErrString(message);
             /// if the task is in initializing state, mpp task can return error to TiDB directly,
             /// so just close all tunnels here
             abortTunnels("", false);
@@ -531,7 +551,7 @@ void MPPTask::abort(const String & message, AbortType abort_type)
             /// abort the components from top to bottom because if bottom components are aborted
             /// first, the top components may see an error caused by the abort, which is not
             /// the original error
-            err_string = message;
+            setErrString(message);
             abortTunnels(message, false);
             abortQueryExecutor();
             abortReceivers();

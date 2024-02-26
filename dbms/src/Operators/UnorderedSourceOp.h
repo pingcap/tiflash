@@ -46,9 +46,20 @@ public:
             ColumnWithTypeAndName col{extra_table_id_col_define.type->createColumn(), extra_table_id_col_define.type, extra_table_id_col_define.name, extra_table_id_col_define.id, extra_table_id_col_define.default_value};
             header.insert(extra_table_id_index, col);
         }
-        auto ref_no = task_pool->increaseUnorderedInputStreamRefCount();
-        LOG_DEBUG(log, "Created, pool_id={} ref_no={}", task_pool->poolId(), ref_no);
+        ref_no = task_pool->increaseUnorderedInputStreamRefCount();
         addReadTaskPoolToScheduler();
+    }
+
+    ~UnorderedSourceOp() override
+    {
+        if (const auto rc_before_decr = task_pool->decreaseUnorderedInputStreamRefCount(); rc_before_decr == 1)
+        {
+            LOG_INFO(
+                log,
+                "All unordered input streams are finished, pool_id={} last_stream_ref_no={}",
+                task_pool->poolId(),
+                ref_no);
+        }
     }
 
     String getName() const override
@@ -68,6 +79,7 @@ private:
 
 private:
     DM::SegmentReadTaskPoolPtr task_pool;
+    int64_t ref_no;
     SegmentReadTransformAction action;
     std::optional<Block> t_block;
 };

@@ -14,6 +14,7 @@
 
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
+#include <Common/SyncPoint/SyncPoint.h>
 #include <IO/MemoryReadWriteBuffer.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/Settings.h>
@@ -44,6 +45,12 @@ namespace ErrorCodes
 {
 extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
+
+namespace FailPoints
+{
+extern const char pause_when_persist_region[];
+extern const char random_region_persister_latency_failpoint[];
+} // namespace FailPoints
 
 void RegionPersister::drop(RegionID region_id, const RegionTaskLock &)
 {
@@ -95,7 +102,6 @@ void RegionPersister::doPersist(RegionCacheWriteElement & region_write_buffer, c
 {
     auto & [region_id, buffer, region_size, applied_index] = region_write_buffer;
 
-    std::lock_guard lock(mutex);
 
     auto entry = page_reader->getPageEntry(region_id);
     if (entry.isValid() && entry.tag > applied_index)
@@ -112,6 +118,29 @@ void RegionPersister::doPersist(RegionCacheWriteElement & region_write_buffer, c
     DB::WriteBatchWrapper wb{run_mode, getWriteBatchPrefix()};
     wb.putPage(region_id, applied_index, read_buf, region_size);
     page_writer->write(std::move(wb), global_context.getWriteLimiter());
+
+#ifdef FIU_ENABLE
+    fiu_do_on(FailPoints::pause_when_persist_region, {
+        if (auto v = FailPointHelper::getFailPointVal(FailPoints::pause_when_persist_region); v)
+        {
+            // Only pause for the given region_id
+            auto pause_region_id = std::any_cast<RegionID>(v.value());
+            if (region_id == pause_region_id)
+            {
+                SYNC_FOR("before_RegionPersister::persist_write_done");
+            }
+        }
+        else
+        {
+            // Pause for all persisting requests
+            SYNC_FOR("before_RegionPersister::persist_write_done");
+        }
+    });
+    fiu_do_on(FailPoints::random_region_persister_latency_failpoint, {
+        using namespace std::chrono_literals;
+        std::this_thread::sleep_for(1ms);
+    });
+#endif
 }
 
 RegionPersister::RegionPersister(Context & global_context_, const RegionManager & region_manager_)
