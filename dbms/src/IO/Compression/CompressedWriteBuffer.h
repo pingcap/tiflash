@@ -18,6 +18,7 @@
 #include <IO/Buffer/BufferWithOwnMemory.h>
 #include <IO/Buffer/WriteBuffer.h>
 #include <IO/Compression/CompressionSettings.h>
+#include <IO/Compression/ICompressionCodec.h>
 
 #include <memory>
 
@@ -37,7 +38,7 @@ class CompressedWriteBuffer : public BufferWithOwnMemory<WriteBuffer>
 private:
     WriteBuffer & out;
     CompressionSettings compression_settings;
-
+    CompressionCodecPtr codec;
     PODArray<char> compressed_buffer;
 
     void nextImpl() override;

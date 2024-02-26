@@ -15,7 +15,7 @@
 #pragma once
 
 #include <IO/Buffer/MemoryReadWriteBuffer.h>
-#include <IO/Compression/CompressedStream.h>
+#include <IO/Compression/CompressionMethod.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFile.h>
 
 namespace DB

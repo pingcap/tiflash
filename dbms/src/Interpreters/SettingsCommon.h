@@ -22,7 +22,7 @@
 #include <DataStreams/SizeLimits.h>
 #include <Flash/Pipeline/Schedule/TaskQueues/TaskQueueType.h>
 #include <IO/Buffer/ReadBufferFromString.h>
-#include <IO/Compression/CompressedStream.h>
+#include <IO/Compression/CompressionMethod.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
 #include <Poco/String.h>

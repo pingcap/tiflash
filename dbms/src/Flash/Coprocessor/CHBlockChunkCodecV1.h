@@ -16,8 +16,8 @@
 
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <IO/Compression/CompressedReadBuffer.h>
-#include <IO/Compression/CompressedStream.h>
 #include <IO/Compression/CompressedWriteBuffer.h>
+#include <IO/Compression/CompressionMethod.h>
 
 namespace DB
 {
