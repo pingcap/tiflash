@@ -98,7 +98,8 @@ DMFileBlockInputStreamPtr DMFileBlockInputStreamBuilder::build(
         read_one_pack_every_time,
         tracing_id,
         max_sharing_column_count,
-        scan_context);
+        scan_context,
+        read_tag);
 
     return std::make_shared<DMFileBlockInputStream>(std::move(reader), max_sharing_column_count > 0);
 }

@@ -949,6 +949,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     TiFlashErrorRegistry::instance(); // This invocation is for initializing
 
+    DM::ScanContext::initCurrentInstanceId(config(), log);
+
     const auto disaggregated_mode = getDisaggregatedMode(config());
     const auto use_autoscaler = useAutoScaler(config());
 
