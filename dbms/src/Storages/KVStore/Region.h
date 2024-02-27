@@ -19,6 +19,7 @@
 #include <Storages/KVStore/Decode/DecodedTiKVKeyValue.h>
 #include <Storages/KVStore/MultiRaft/RegionData.h>
 #include <Storages/KVStore/MultiRaft/RegionMeta.h>
+#include <Storages/KVStore/MultiRaft/RegionSerde.h>
 #include <common/logger_useful.h>
 
 #include <shared_mutex>
@@ -129,9 +130,6 @@ public:
     CommittedScanner createCommittedScanner(bool use_lock, bool need_value);
     CommittedRemover createCommittedRemover(bool use_lock = true);
 
-    std::tuple<size_t, UInt64> serialize(WriteBuffer & buf) const;
-    static RegionPtr deserialize(ReadBuffer & buf, const TiFlashRaftProxyHelper * proxy_helper = nullptr);
-
     RegionID id() const;
     ImutRegionRangePtr getRange() const;
 
@@ -158,6 +156,25 @@ public:
     std::pair<UInt64, UInt64> getRaftLogEagerGCRange() const;
     void updateRaftLogEagerIndex(UInt64 new_truncate_index);
 
+    static size_t writePersistExtension(
+        UInt32 & cnt,
+        WriteBuffer & wb,
+        MaybeRegionPersistExtension ext_type,
+        const char * data,
+        UInt32 size);
+    std::tuple<size_t, UInt64> serialize(WriteBuffer & buf) const;
+    static RegionPtr deserialize(ReadBuffer & buf, const TiFlashRaftProxyHelper * proxy_helper = nullptr);
+    std::tuple<size_t, UInt64> serializeImpl(
+        UInt32 binary_version,
+        UInt32 expected_extension_count,
+        std::function<size_t(UInt32 &, WriteBuffer &)> extra_handler,
+        WriteBuffer & buf) const;
+    static RegionPtr deserializeImpl(
+        UInt32 current_version,
+        std::function<bool(UInt32, ReadBuffer &, UInt32)> extra_handler,
+        ReadBuffer & buf,
+        const TiFlashRaftProxyHelper * proxy_helper = nullptr);
+
     friend bool operator==(const Region & region1, const Region & region2)
     {
         std::shared_lock<std::shared_mutex> lock1(region1.mutex);
@@ -169,11 +186,12 @@ public:
     // Check if we can read by this index.
     bool checkIndex(UInt64 index) const;
 
-    // Return <WaitIndexResult, time cost(seconds)> for wait-index.
-    std::tuple<WaitIndexResult, double> waitIndex(
+    // Return <WaitIndexStatus, time cost(seconds)> for wait-index.
+    std::tuple<WaitIndexStatus, double> waitIndex(
         UInt64 index,
         UInt64 timeout_ms,
-        std::function<bool(void)> && check_running);
+        std::function<bool(void)> && check_running,
+        const LoggerPtr & log);
 
     // Requires RegionMeta's lock
     UInt64 appliedIndex() const;
@@ -241,7 +259,6 @@ private:
     // Private methods no need to lock mutex, normally
 
     void doInsert(ColumnFamilyType type, TiKVKey && key, TiKVValue && value, DupCheck mode);
-    void doCheckTable(const DecodedTiKVKey & key) const;
     void doRemove(ColumnFamilyType type, const TiKVKey & key);
 
     std::optional<RegionDataReadInfo> readDataByWriteIt(

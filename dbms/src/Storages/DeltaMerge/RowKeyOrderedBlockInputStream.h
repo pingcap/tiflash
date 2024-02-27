@@ -36,8 +36,8 @@ public:
         size_t stable_rows_,
         const String & req_id_)
         : header(toEmptyBlock(columns_to_read_))
-        , stable(stable_)
-        , delta(delta_)
+        , stable(std::move(stable_))
+        , delta(std::move(delta_))
         , stable_rows(stable_rows_)
         , log(Logger::get(NAME, req_id_))
     {}

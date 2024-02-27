@@ -39,9 +39,9 @@ struct MockSchemaGetter
         return MockTiDB::instance().getTableInfoByID(table_id);
     }
 
-    static std::tuple<TiDB::DBInfoPtr, TiDB::TableInfoPtr> getDatabaseAndTableInfo(DatabaseID db_id, TableID table_id)
+    static std::pair<TiDB::TableInfoPtr, bool> getTableInfoAndCheckMvcc(DatabaseID db_id, TableID table_id)
     {
-        return std::make_tuple(getDatabase(db_id), getTableInfo(db_id, table_id));
+        return {getTableInfo(db_id, table_id), false};
     }
 
     static std::vector<TiDB::DBInfoPtr> listDBs()

@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Storages/ColumnsDescription.h>
+#include <Storages/IStorage.h>
 #include <Storages/KVStore/Types.h>
 #include <TiDB/Schema/SchemaGetter.h>
 #include <TiDB/Schema/SchemaSyncer.h>
@@ -113,6 +114,7 @@ public:
     void dropPartition(const String & database_name, const String & table_name, TableID partition_id);
 
     void dropTable(Context & context, const String & database_name, const String & table_name, bool drop_regions);
+    void dropTableById(Context & context, const TableID & table_id, bool drop_regions);
 
     void dropDB(Context & context, const String & database_name, bool drop_regions);
 
@@ -137,6 +139,12 @@ public:
     void renameTables(const std::vector<std::tuple<std::string, std::string, std::string>> & table_name_map);
 
     void truncateTable(const String & database_name, const String & table_name);
+
+    // Mock that concurrent DDL meets conflict, it will retry with a new schema version
+    // Return the schema_version with empty SchemaDiff
+    Int64 skipSchemaVersion() { return ++version; }
+
+    Int64 regenerateSchemaMap();
 
     TablePtr getTableByName(const String & database_name, const String & table_name);
 
@@ -165,11 +173,13 @@ private:
         const String & partition_name,
         Timestamp tso,
         bool is_add_part);
-    TablePtr dropTableInternal(
+    TablePtr dropTableByNameImpl(
         Context & context,
         const String & database_name,
         const String & table_name,
         bool drop_regions);
+    TablePtr dropTableByIdImpl(Context & context, TableID table_id, bool drop_regions);
+    TablePtr dropTableInternal(Context & context, const TablePtr & table, bool drop_regions);
     TablePtr getTableByNameInternal(const String & database_name, const String & table_name);
     TablePtr getTableByID(TableID table_id);
 

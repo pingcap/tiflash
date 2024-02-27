@@ -34,7 +34,7 @@
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/DeltaTree.h>
 #include <Storages/DeltaMerge/ScanContext.h>
-#include <Storages/DeltaMerge/StoragePool.h>
+#include <Storages/DeltaMerge/StoragePool/StoragePool.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
 #include <Storages/KVStore/Decode/TiKVRange.h>
 #include <Storages/KVStore/MultiRaft/RegionRangeKeys.h>
@@ -753,6 +753,7 @@ try
         table_info.pk_is_handle = false;
 
         // max page id is only updated at restart, so we need recreate page v3 before recreate table
+        ctx->getGlobalContext().initializeGlobalPageIdAllocator();
         ctx->getGlobalContext().initializeGlobalStoragePoolIfNeed(ctx->getPathPool());
         storage = StorageDeltaMerge::create(
             "TiFlash",

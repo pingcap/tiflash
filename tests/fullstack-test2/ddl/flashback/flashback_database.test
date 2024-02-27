@@ -1,0 +1,239 @@
+# Copyright 2023 PingCAP, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+## case 1, normal flashback without failpoints
+
+mysql> drop database if exists d1;
+mysql> drop database if exists d1_new;
+
+# non-partition table
+mysql> create database d1;
+mysql> create table d1.t3 (a int);
+mysql> insert into d1.t3 values(1);
+# partition table
+mysql> create table d1.t4(id INT NOT NULL,name VARCHAR(30)) PARTITION BY RANGE (id) ( PARTITION p0 VALUES LESS THAN (50),PARTITION p1 VALUES LESS THAN (100));
+mysql> insert into d1.t4 values(1, 'abc'),(2, 'cde'),(53, 'efg');
+
+mysql> alter table d1.t3 set tiflash replica 1;
+mysql> alter table d1.t4 set tiflash replica 1;
+func> wait_table d1 t3 t4
+
+mysql> alter table d1.t3 add column b int;
+mysql> insert into d1.t3 values(2,2);
+mysql> alter table d1.t4 add column b int;
+
+mysql> drop database d1;
+
+mysql> flashback database d1 to d1_new
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from d1_new.t3 order by a;
++------+------+
+| a    | b    |
++------+------+
+|    1 | NULL |
+|    2 |    2 |
++------+------+
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from d1_new.t4 order by id;
++----+------+------+
+| id | name | b    |
++----+------+------+
+|  1 | abc  | NULL |
+|  2 | cde  | NULL |
+| 53 | efg  | NULL |
++----+------+------+
+
+# ensure the flashbacked table and database is not mark as tombstone
+>> DBGInvoke __enable_schema_sync_service('true')
+>> DBGInvoke __refresh_schemas()
+>> DBGInvoke __gc_schemas(18446744073709551615, 'true')
+
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from d1_new.t3 order by a;
++------+------+
+| a    | b    |
++------+------+
+|    1 | NULL |
+|    2 |    2 |
++------+------+
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from d1_new.t4 order by id;
++----+------+------+
+| id | name | b    |
++----+------+------+
+|  1 | abc  | NULL |
+|  2 | cde  | NULL |
+| 53 | efg  | NULL |
++----+------+------+
+
+>> DBGInvoke __enable_schema_sync_service('false')
+>> DBGInvoke __init_fail_point()
+
+mysql> drop database if exists d1;
+mysql> drop database if exists d1_new;
+
+## case 2, non-partition table
+mysql> create database d1;
+
+>> DBGInvoke __refresh_schemas()
+
+>> DBGInvoke mapped_database_exists(d1)
+┌─mapped_database_exists(d1)───┐
+│ true                         │
+└──────────────────────────────┘
+
+mysql> create table d1.t1 (a int);
+mysql> alter table d1.t1 set tiflash replica 1;
+mysql> insert into d1.t1 values(1);
+
+func> wait_table d1 t1
+
+mysql> alter table d1.t1 add column b int;
+
+>> DBGInvoke __enable_fail_point(pause_before_apply_raft_cmd)
+>> DBGInvoke __enable_fail_point(pause_before_prehandle_snapshot)
+
+# exactly write until fail point "pause_before_apply_raft_cmd" to be disable
+mysql> insert into d1.t1 values(2,2);
+
+mysql> drop database d1;
+
+>> DBGInvoke __refresh_schemas()
+
+# make write cmd take effect
+>> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
+>> DBGInvoke __disable_fail_point(pause_before_prehandle_snapshot)
+
+# the `t1` is still mark as tombstone
+>> select tidb_database,tidb_name,is_tombstone,tidb_table_id from system.tables where is_tombstone = 0 and tidb_database = 'd1' and tidb_name='t1';
+# check the row is written to the storage or not
+mysql> flashback database d1 to d1_new
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from d1_new.t1 order by a;
++------+------+
+| a    | b    |
++------+------+
+|    1 | NULL |
+|    2 |    2 |
++------+------+
+
+>> DBGInvoke __refresh_schemas()
+# ensure the flashbacked table and database is not mark as tombstone
+>> DBGInvoke __enable_schema_sync_service('true')
+>> DBGInvoke __gc_schemas(18446744073709551615, 'true')
+>> DBGInvoke __enable_schema_sync_service('false')
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from d1_new.t1 order by a;
++------+------+
+| a    | b    |
++------+------+
+|    1 | NULL |
+|    2 |    2 |
++------+------+
+
+mysql> drop database if exists d1;
+mysql> drop database if exists d1_new;
+
+## case 3, partition table
+mysql> create database d1;
+
+>> DBGInvoke __refresh_schemas()
+
+mysql> create table d1.t2(id INT NOT NULL,name VARCHAR(30)) PARTITION BY RANGE (id) ( PARTITION p0 VALUES LESS THAN (50),PARTITION p1 VALUES LESS THAN (100));
+mysql> insert into d1.t2 values(1, 'abc'),(2, 'cde'),(53, 'efg');
+
+>> DBGInvoke __enable_fail_point(pause_before_apply_raft_cmd)
+>> DBGInvoke __enable_fail_point(pause_before_prehandle_snapshot)
+mysql> alter table d1.t2 set tiflash replica 1;
+mysql> alter table d1.t2 add column b int;
+
+mysql> drop database d1;
+
+>> DBGInvoke __refresh_schemas()
+
+# make write cmd take effect
+>> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
+>> DBGInvoke __disable_fail_point(pause_before_prehandle_snapshot)
+
+# check the row is written to the storage or not
+mysql> flashback database d1 to d1_new
+
+func> wait_table d1_new t2
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from d1_new.t2 order by id;
++----+------+------+
+| id | name | b    |
++----+------+------+
+|  1 | abc  | NULL |
+|  2 | cde  | NULL |
+| 53 | efg  | NULL |
++----+------+------+
+
+>> DBGInvoke __refresh_schemas()
+# ensure the flashbacked table and database is not mark as tombstone
+>> DBGInvoke __enable_schema_sync_service('true')
+>> DBGInvoke __gc_schemas(18446744073709551615, 'true')
+>> DBGInvoke __enable_schema_sync_service('false')
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from d1_new.t2 order by id;
++----+------+------+
+| id | name | b    |
++----+------+------+
+|  1 | abc  | NULL |
+|  2 | cde  | NULL |
+| 53 | efg  | NULL |
++----+------+------+
+
+# cleanup
+mysql> drop database if exists d1;
+mysql> drop database if exists d1_new;
+
+## case 4, "create database" and "region snapshot" comes after "drop database" is executed in tidb
+
+# disable all raft log/snapshot
+>> DBGInvoke __enable_fail_point(pause_before_apply_raft_cmd)
+>> DBGInvoke __enable_fail_point(pause_before_prehandle_snapshot)
+
+mysql> create database d1;
+mysql> create table d1.t1 (a int);
+mysql> insert into d1.t1 values(1),(2),(3);
+mysql> alter table d1.t1 set tiflash replica 1;
+
+mysql> drop database d1;
+
+# "create database" and "snapshot" comes after "drop database"
+>> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
+>> DBGInvoke __disable_fail_point(pause_before_prehandle_snapshot)
+
+# check the row is written to the storage or not
+mysql> flashback database d1 to d1_new
+# wait available after flashback
+func> wait_table d1_new t1
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from d1_new.t1 order by a;
++------+
+| a    |
++------+
+|    1 |
+|    2 |
+|    3 |
++------+
+
+# ensure the flashbacked table and database is not mark as tombstone
+>> DBGInvoke __enable_schema_sync_service('true')
+>> DBGInvoke __gc_schemas(18446744073709551615, 'true')
+>> DBGInvoke __enable_schema_sync_service('false')
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from d1_new.t1 order by a;
++------+
+| a    |
++------+
+|    1 |
+|    2 |
+|    3 |
++------+
+
+# cleanup
+mysql> drop database if exists d1;
+mysql> drop database if exists d1_new;

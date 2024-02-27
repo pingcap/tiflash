@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/FailPoint.h>
 #include <Common/FmtUtils.h>
 #include <Common/ProfileEvents.h>
 #include <Common/Stopwatch.h>
@@ -23,7 +22,6 @@
 #include <Storages/KVStore/KVStore.h>
 #include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/TMTContext.h>
-#include <Storages/KVStore/Utils/SerializationHelper.h>
 #include <common/logger_useful.h>
 
 #include <ext/scope_guard.h>
@@ -31,23 +29,6 @@
 
 namespace DB
 {
-namespace ErrorCodes
-{
-extern const int UNKNOWN_FORMAT_VERSION;
-} // namespace ErrorCodes
-namespace FailPoints
-{
-extern const char force_region_persist_version[];
-} // namespace FailPoints
-
-enum class RegionPersistVersion
-{
-    V1 = 1,
-    V2 = 2,
-};
-
-const UInt32 Region::CURRENT_VERSION = static_cast<UInt64>(RegionPersistVersion::V2);
-
 RegionData::WriteCFIter Region::removeDataByWriteIt(const RegionData::WriteCFIter & write_it)
 {
     return data.removeDataByWriteIt(write_it);
@@ -143,87 +124,6 @@ RegionPtr Region::splitInto(RegionMeta && meta)
     data.splitInto(range->comparableKeys(), new_region->data);
 
     return new_region;
-}
-
-namespace RegionPersistFormat
-{
-static constexpr UInt32 HAS_EAGER_TRUNCATE_INDEX = 0x01;
-}
-
-std::tuple<size_t, UInt64> Region::serialize(WriteBuffer & buf) const
-{
-    auto binary_version = Region::CURRENT_VERSION;
-    fiu_do_on(FailPoints::force_region_persist_version, {
-        if (auto v = FailPointHelper::getFailPointVal(FailPoints::force_region_persist_version); v)
-        {
-            binary_version = std::any_cast<UInt64>(v.value());
-            LOG_WARNING(
-                Logger::get(),
-                "Failpoint force_region_persist_version set region binary version, value={}",
-                binary_version);
-        }
-    });
-    size_t total_size = writeBinary2(binary_version, buf);
-    UInt64 applied_index = -1;
-
-    {
-        std::shared_lock<std::shared_mutex> lock(mutex);
-
-        // serialize meta
-        const auto [meta_size, index] = meta.serialize(buf);
-        total_size += meta_size;
-        applied_index = index;
-
-        // try serialize extra flags
-        if (binary_version >= 2)
-        {
-            static_assert(sizeof(eager_truncated_index) == sizeof(UInt64));
-            UInt32 flags = RegionPersistFormat::HAS_EAGER_TRUNCATE_INDEX;
-            total_size += writeBinary2(flags, buf);
-            total_size += writeBinary2(eager_truncated_index, buf);
-        }
-
-        // serialize data
-        total_size += data.serialize(buf);
-    }
-
-    return {total_size, applied_index};
-}
-
-RegionPtr Region::deserialize(ReadBuffer & buf, const TiFlashRaftProxyHelper * proxy_helper)
-{
-    const auto binary_version = readBinary2<UInt32>(buf);
-    if (binary_version != static_cast<UInt64>(RegionPersistVersion::V1)
-        && binary_version != static_cast<UInt64>(RegionPersistVersion::V2))
-    {
-        throw Exception(
-            ErrorCodes::UNKNOWN_FORMAT_VERSION,
-            "{}: unexpected version: {}, expected: {}",
-            binary_version,
-            __PRETTY_FUNCTION__,
-            CURRENT_VERSION);
-    }
-
-    // deserialize meta
-    RegionPtr region = std::make_shared<Region>(RegionMeta::deserialize(buf), proxy_helper);
-
-    // try deserialize flags
-    if (binary_version >= 2)
-    {
-        auto flags = readBinary2<UInt32>(buf);
-        if ((flags & RegionPersistFormat::HAS_EAGER_TRUNCATE_INDEX) != 0)
-        {
-            region->eager_truncated_index = readBinary2<UInt64>(buf);
-        }
-    }
-
-    // deserialize data
-    RegionData::deserialize(buf, region->data);
-
-    // restore other var according to meta
-    region->last_restart_log_applied = region->appliedIndex();
-    region->setLastCompactLogApplied(region->appliedIndex());
-    return region;
 }
 
 std::string Region::getDebugString() const

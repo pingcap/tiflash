@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+#include <Common/setThreadName.h>
 #include <Storages/DeltaMerge/ReadThread/SegmentReadTaskScheduler.h>
 #include <Storages/DeltaMerge/ReadThread/SegmentReader.h>
 #include <Storages/DeltaMerge/Segment.h>
@@ -44,17 +45,17 @@ void SegmentReadTaskScheduler::add(const SegmentReadTaskPoolPtr & pool)
         auto seg_id = pa.first;
         merging_segments[pool->physical_table_id][seg_id].push_back(pool->pool_id);
     }
-    auto block_slots = pool->getFreeBlockSlots();
-    LOG_DEBUG(
+    LOG_INFO(
         log,
-        "Added, pool_id={} table_id={} block_slots={} segment_count={} pool_count={} cost={}ns do_add_cost={}ns", //
+        "Added, pool_id={} table_id={} block_slots={} segment_count={} pool_count={} "
+        "cost={:.3f}us do_add_cost={:.3f}us", //
         pool->pool_id,
         pool->physical_table_id,
-        block_slots,
+        pool->getFreeBlockSlots(),
         tasks.size(),
         read_pools.size(),
-        sw_add.elapsed(),
-        sw_do_add.elapsed());
+        sw_add.elapsed() / 1000.0,
+        sw_do_add.elapsed() / 1000.0);
 }
 
 std::pair<MergedTaskPtr, bool> SegmentReadTaskScheduler::scheduleMergedTask()
@@ -277,6 +278,7 @@ bool SegmentReadTaskScheduler::schedule()
 
 void SegmentReadTaskScheduler::schedLoop()
 {
+    setThreadName("segment-sched");
     while (!isStop())
     {
         if (!schedule())

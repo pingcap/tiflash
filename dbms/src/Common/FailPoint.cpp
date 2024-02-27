@@ -65,17 +65,18 @@ namespace DB
     M(force_ps_wal_compact)                                       \
     M(pause_before_full_gc_prepare)                               \
     M(force_owner_mgr_state)                                      \
+    M(force_owner_mgr_campaign_failed)                            \
     M(exception_during_spill)                                     \
     M(force_fail_to_create_etcd_session)                          \
     M(force_remote_read_for_batch_cop_once)                       \
     M(exception_new_dynamic_thread)                               \
-    M(force_region_persist_version)                               \
     M(force_wait_index_timeout)
 
 #define APPLY_FOR_FAILPOINTS(M)                              \
     M(skip_check_segment_update)                             \
     M(force_set_page_file_write_errno)                       \
     M(force_split_io_size_4k)                                \
+    M(force_set_num_regions_for_table)                       \
     M(minimum_block_size_for_cross_join)                     \
     M(random_exception_after_dt_write_done)                  \
     M(random_slow_page_storage_write)                        \
@@ -87,6 +88,7 @@ namespace DB
     M(force_set_dtfile_exist_when_acquire_id)                \
     M(force_no_local_region_for_mpp_task)                    \
     M(force_remote_read_for_batch_cop)                       \
+    M(force_pd_grpc_error)                                   \
     M(force_context_path)                                    \
     M(force_slow_page_storage_snapshot_release)              \
     M(force_pick_all_blobs_to_full_gc)                       \
@@ -106,7 +108,8 @@ namespace DB
     M(cop_send_failure)                                      \
     M(force_set_parallel_prehandle_threshold)                \
     M(force_raise_prehandle_exception)                       \
-    M(force_agg_on_partial_block)
+    M(force_agg_on_partial_block)                            \
+    M(delta_tree_create_node_fail)
 
 #define APPLY_FOR_PAUSEABLE_FAILPOINTS_ONCE(M) \
     M(pause_with_alter_locks_acquired)         \
@@ -127,6 +130,8 @@ namespace DB
     M(pause_when_altering_dt_store)       \
     M(pause_after_copr_streams_acquired)  \
     M(pause_query_init)                   \
+    M(pause_before_prehandle_snapshot)    \
+    M(pause_when_persist_region)          \
     M(pause_before_wn_establish_task)     \
     M(pause_passive_flush_before_persist_region)
 
@@ -155,6 +160,7 @@ namespace DB
     M(random_pipeline_model_execute_prefix_failpoint)        \
     M(random_pipeline_model_execute_suffix_failpoint)        \
     M(random_spill_to_disk_failpoint)                        \
+    M(random_region_persister_latency_failpoint)             \
     M(random_restore_from_disk_failpoint)                    \
     M(random_exception_when_connect_local_tunnel)            \
     M(random_exception_when_construct_async_request_handler) \

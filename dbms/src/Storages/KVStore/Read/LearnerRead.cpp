@@ -79,10 +79,7 @@ struct UnavailableRegions
             throw RegionException(std::move(ids), status);
     }
 
-    void addRegionWaitIndexTimeout(
-        const RegionID region_id,
-        UInt64 index_to_wait,
-        UInt64 current_applied_index)
+    void addRegionWaitIndexTimeout(const RegionID region_id, UInt64 index_to_wait, UInt64 current_applied_index)
     {
         if (!batch_cop)
         {
@@ -166,6 +163,9 @@ struct LearnerReadStatistics
     UInt64 read_index_elapsed_ms = 0;
     UInt64 wait_index_elapsed_ms = 0;
 
+    // num_regions == num_read_index_request + num_cached_read_index + num_stale_read
+    UInt64 num_regions = 0;
+    //
     UInt64 num_read_index_request = 0;
     UInt64 num_cached_read_index = 0;
     UInt64 num_stale_read = 0;
@@ -390,12 +390,10 @@ LearnerReadSnapshot doLearnerRead(
             regions_info.size(),
             regions_snapshot.size());
 
-    const size_t num_regions = regions_info.size();
-
     const auto start_time = Clock::now();
     UnavailableRegions unavailable_regions(for_batch_cop, is_wn_disagg_read);
     LearnerReadStatistics stats;
-
+    stats.num_regions = regions_info.size();
     // TODO: refactor this enormous lambda into smaller parts
     {
         Stopwatch batch_wait_data_watch;
@@ -408,7 +406,7 @@ LearnerReadSnapshot doLearnerRead(
         std::vector<kvrpcpb::ReadIndexRequest> batch_read_index_req = buildBatchReadIndexReq(
             region_table,
             mvcc_query_info,
-            num_regions,
+            stats.num_regions,
             regions_info,
             regions_snapshot,
             batch_read_index_result,
@@ -422,14 +420,19 @@ LearnerReadSnapshot doLearnerRead(
         {
             stats.read_index_elapsed_ms = watch.elapsedMilliseconds();
             GET_METRIC(tiflash_raft_read_index_duration_seconds).Observe(stats.read_index_elapsed_ms / 1000.0);
-            LOG_DEBUG(
+            const auto log_lvl
+                = unavailable_regions.empty() ? Poco::Message::PRIO_DEBUG : Poco::Message::PRIO_INFORMATION;
+            LOG_IMPL(
                 log,
+                log_lvl,
                 "[Learner Read] Batch read index, num_regions={} num_requests={} num_stale_read={} num_cached_index={} "
+                "num_unavailable={} "
                 "cost={}ms",
-                num_regions,
+                stats.num_regions,
                 stats.num_read_index_request,
                 stats.num_stale_read,
                 stats.num_cached_read_index,
+                unavailable_regions.size(),
                 stats.read_index_elapsed_ms);
         }
 
@@ -439,7 +442,7 @@ LearnerReadSnapshot doLearnerRead(
         watch.restart(); // restart to count the elapsed of wait index
 
         const auto wait_index_timeout_ms = tmt.waitIndexTimeout();
-        for (size_t region_idx = 0; region_idx < num_regions; ++region_idx)
+        for (size_t region_idx = 0; region_idx < stats.num_regions; ++region_idx)
         {
             const auto & region_to_query = regions_info[region_idx];
             // if region is unavailable, skip wait index.
@@ -454,9 +457,12 @@ LearnerReadSnapshot doLearnerRead(
             {
                 // Wait index timeout is disabled; or timeout is enabled but not happen yet, wait index for
                 // a specify Region.
-                auto [wait_res, time_cost]
-                    = region->waitIndex(index_to_wait, tmt.waitIndexTimeout(), [&tmt]() { return tmt.checkRunning(); });
-                if (wait_res != WaitIndexResult::Finished)
+                auto [wait_res, time_cost] = region->waitIndex(
+                    index_to_wait,
+                    tmt.waitIndexTimeout(),
+                    [&tmt]() { return tmt.checkRunning(); },
+                    log);
+                if (wait_res != WaitIndexStatus::Finished)
                 {
                     auto current = region->appliedIndex();
                     unavailable_regions.addRegionWaitIndexTimeout(region_to_query.region_id, index_to_wait, current);
@@ -525,7 +531,7 @@ LearnerReadSnapshot doLearnerRead(
             log_lvl,
             "[Learner Read] Finish wait index and resolve locks, wait_cost={}ms n_regions={} n_unavailable={}",
             stats.wait_index_elapsed_ms,
-            num_regions,
+            stats.num_regions,
             unavailable_regions.size());
     }
 
@@ -553,7 +559,7 @@ LearnerReadSnapshot doLearnerRead(
         time_elapsed_ms,
         stats.read_index_elapsed_ms,
         stats.wait_index_elapsed_ms,
-        num_regions,
+        stats.num_regions,
         stats.num_stale_read,
         unavailable_regions.size());
 

@@ -19,7 +19,7 @@
 #include <Storages/DeltaMerge/File/DMFileReader.h>
 #include <Storages/DeltaMerge/ReadThread/SegmentReader.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
-#include <Storages/DeltaMerge/ScanContext.h>
+#include <Storages/DeltaMerge/ScanContext_fwd.h>
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
 
 
@@ -33,11 +33,11 @@ namespace DM
 class DMFileBlockInputStream : public SkippableBlockInputStream
 {
 public:
-    explicit DMFileBlockInputStream(DMFileReader && reader_, bool enable_read_thread_)
+    explicit DMFileBlockInputStream(DMFileReader && reader_, bool enable_data_sharing_)
         : reader(std::move(reader_))
-        , enable_read_thread(enable_read_thread_)
+        , enable_data_sharing(enable_data_sharing_)
     {
-        if (enable_read_thread)
+        if (enable_data_sharing)
         {
             DMFileReaderPool::instance().add(reader);
         }
@@ -45,7 +45,7 @@ public:
 
     ~DMFileBlockInputStream() override
     {
-        if (enable_read_thread)
+        if (enable_data_sharing)
         {
             DMFileReaderPool::instance().del(reader);
         }
@@ -66,7 +66,7 @@ public:
 private:
 #endif
     DMFileReader reader;
-    bool enable_read_thread;
+    bool enable_data_sharing;
 };
 
 using DMFileBlockInputStreamPtr = std::shared_ptr<DMFileBlockInputStream>;
@@ -159,7 +159,8 @@ private:
         enable_column_cache = settings.dt_enable_stable_column_cache;
         aio_threshold = settings.min_bytes_to_use_direct_io;
         max_read_buffer_size = settings.max_read_buffer_size;
-        enable_read_thread = settings.dt_enable_read_thread;
+        max_sharing_column_bytes_for_all = settings.dt_max_sharing_column_bytes_for_all;
+        max_sharing_column_count = settings.dt_max_sharing_column_count;
         return *this;
     }
     DMFileBlockInputStreamBuilder & setCaches(
@@ -194,7 +195,8 @@ private:
     size_t max_read_buffer_size{};
     size_t rows_threshold_per_read = DMFILE_READ_ROWS_THRESHOLD;
     bool read_one_pack_every_time = false;
-    bool enable_read_thread = false;
+    size_t max_sharing_column_bytes_for_all = 0;
+    size_t max_sharing_column_count = 0;
     String tracing_id;
 };
 
