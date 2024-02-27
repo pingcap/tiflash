@@ -72,6 +72,7 @@ namespace ErrorCodes
 {
 extern const int DISAGG_ESTABLISH_RETRYABLE_ERROR;
 extern const int TIMEOUT_EXCEEDED;
+extern const int UNKNOWN_EXCEPTION;
 } // namespace ErrorCodes
 
 namespace
@@ -254,7 +255,12 @@ void StorageDisaggregated::buildReadTaskForWriteNode(
             req->address(),
             log->identifier());
     else if (!status.ok())
-        throw Exception(rpc.errMsg(status));
+        throw Exception(
+            ErrorCodes::UNKNOWN_EXCEPTION,
+            "EstablishDisaggTask failed, wn_address={}, errmsg={}, {}",
+            req->address(),
+            rpc.errMsg(status),
+            log->identifier());
 
     const DM::DisaggTaskId snapshot_id(resp.snapshot_id());
     LOG_DEBUG(
