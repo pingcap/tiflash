@@ -26,7 +26,7 @@
 #include <Flash/Coprocessor/ArrowColCodec.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Functions/FunctionHelpers.h>
-#include <IO/Util/copyData.h>
+#include <IO/copyData.h>
 
 namespace DB
 {

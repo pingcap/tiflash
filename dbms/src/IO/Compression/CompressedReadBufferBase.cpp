@@ -19,7 +19,7 @@
 #include <IO/Buffer/ReadBuffer.h>
 #include <IO/Compression/CompressedReadBufferBase.h>
 #include <IO/Compression/CompressedStream.h>
-#include <IO/Util/WriteHelpers.h>
+#include <IO/WriteHelpers.h>
 #include <city.h>
 #include <common/unaligned.h>
 #include <lz4.h>

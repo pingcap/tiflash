@@ -16,7 +16,7 @@
 
 #include <Common/Exception.h>
 #include <Common/Stopwatch.h>
-#include <IO/Util/WriteHelpers.h>
+#include <IO/WriteHelpers.h>
 #include <time.h> /// nanosleep
 
 #include <memory>

@@ -19,7 +19,7 @@
 #include <DataTypes/DataTypeString.h>
 #include <Dictionaries/DictionaryBlockInputStream.h>
 #include <Dictionaries/TrieDictionary.h>
-#include <IO/Util/WriteIntText.h>
+#include <IO/WriteIntText.h>
 #include <Poco/ByteOrder.h>
 #include <Poco/Net/IPAddress.h>
 #include <btrie.h>

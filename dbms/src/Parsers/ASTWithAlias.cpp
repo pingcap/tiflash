@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <IO/Buffer/WriteBufferFromOStream.h>
-#include <IO/Util/WriteHelpers.h>
+#include <IO/WriteHelpers.h>
 #include <Parsers/ASTWithAlias.h>
 
 

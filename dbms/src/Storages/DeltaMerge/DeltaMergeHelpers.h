@@ -20,7 +20,7 @@
 #include <Core/SortDescription.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <Functions/FunctionHelpers.h>
-#include <IO/Util/WriteHelpers.h>
+#include <IO/WriteHelpers.h>
 #include <Interpreters/sortBlock.h>
 #include <Storages/ColumnsDescription.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>

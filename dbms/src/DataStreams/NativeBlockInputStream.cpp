@@ -16,8 +16,8 @@
 #include <Core/Defines.h>
 #include <DataStreams/NativeBlockInputStream.h>
 #include <DataTypes/DataTypeFactory.h>
-#include <IO/Util/ReadHelpers.h>
-#include <IO/Util/VarInt.h>
+#include <IO/ReadHelpers.h>
+#include <IO/VarInt.h>
 #include <fmt/core.h>
 
 #include <ext/range.h>
@@ -71,7 +71,7 @@ NativeBlockInputStream::NativeBlockInputStream(
     , index_block_it(index_block_it_)
     , index_block_end(index_block_end_)
 {
-    istr_concrete = typeid_cast<CompressedReadBufferFromFile<> *>(&istr);
+    istr_concrete = typeid_cast<LegacyCompressedReadBufferFromFile *>(&istr);
     if (!istr_concrete)
         throw Exception(
             "When need to use index for NativeBlockInputStream, istr must be CompressedReadBufferFromFile.",

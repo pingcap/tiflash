@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <IO/Encryption/AESCTRCipherStream.h>
-#include <IO/Util/Endian.h>
+#include <IO/Endian.h>
 
 
 namespace DB

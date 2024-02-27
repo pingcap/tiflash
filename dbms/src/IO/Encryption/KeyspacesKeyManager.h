@@ -19,7 +19,7 @@
 #include <Common/TiFlashException.h>
 #include <Debug/MockProxyEncryptionFFI.h>
 #include <IO/Encryption/MasterKey.h>
-#include <IO/KeyManager.h>
+#include <IO/FileProvider/KeyManager.h>
 #include <Storages/KVStore/FFI/ProxyFFI.h>
 #include <Storages/Page/PageStorage_fwd.h>
 

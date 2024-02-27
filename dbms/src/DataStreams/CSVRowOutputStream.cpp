@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <DataStreams/CSVRowOutputStream.h>
-#include <IO/Util/WriteHelpers.h>
+#include <IO/WriteHelpers.h>
 
 
 namespace DB

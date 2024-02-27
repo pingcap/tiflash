@@ -19,8 +19,8 @@
 #include <Common/assert_cast.h>
 #include <Core/Field.h>
 #include <Core/Types.h>
-#include <IO/Util/ReadHelpers.h>
-#include <IO/Util/WriteHelpers.h>
+#include <IO/ReadHelpers.h>
+#include <IO/WriteHelpers.h>
 #include <TiDB/Collation/Collator.h>
 
 #include <cstddef>

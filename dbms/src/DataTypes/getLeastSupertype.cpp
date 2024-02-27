@@ -25,7 +25,7 @@
 #include <DataTypes/getLeastSupertype.h>
 #include <Functions/FunctionHelpers.h>
 #include <IO/Buffer/WriteBufferFromString.h>
-#include <IO/Util/Operators.h>
+#include <IO/Operators.h>
 
 #include <unordered_set>
 

@@ -32,7 +32,7 @@ private:
     bool nextImpl() override;
 
 public:
-    CompressedReadBuffer(ReadBuffer & in_)
+    explicit CompressedReadBuffer(ReadBuffer & in_)
         : CompressedReadBufferBase<has_legacy_checksum>(&in_)
         , BufferWithOwnMemory<ReadBuffer>(0)
     {}
