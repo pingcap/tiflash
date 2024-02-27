@@ -875,16 +875,9 @@ Block Join::doJoinBlockHash(ProbeProcessInfo & probe_process_info) const
                     auto helper_col = block.getByName(match_helper_name).column;
                     helper_col = helper_col->cut(probe_process_info.start_row, probe_process_info.end_row);
                 }
-<<<<<<< HEAD
                 offsets_to_replicate->assign(offsets_to_replicate->begin() + probe_process_info.start_row, offsets_to_replicate->begin() + probe_process_info.end_row);
-=======
-                offsets_to_replicate->assign(
-                    offsets_to_replicate->begin() + probe_process_info.start_row,
-                    offsets_to_replicate->begin() + probe_process_info.end_row);
                 if (isAntiJoin(kind) && filter != nullptr)
-                    filter->assign(filter->begin() + probe_process_info.start_row,
-                                   filter->begin() + probe_process_info.end_row);
->>>>>>> 9970e492df (fix anti semi join  (#8792))
+                    filter->assign(filter->begin() + probe_process_info.start_row, filter->begin() + probe_process_info.end_row);
             }
         }
     }
