@@ -508,6 +508,391 @@ try
         executeAndAssertColumnsEqual(request, expected_cols[i++]);
     }
 
+<<<<<<< HEAD
+=======
+TEST_F(JoinExecutorTestRunner, Issue8791)
+try
+{
+    auto build_key = toNullableVec<Int64>(
+        "id",
+        {
+            2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
+            4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
+            6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7,
+        });
+    auto build_col = toNullableVec<Int64>(
+        "build_value",
+        {
+            10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
+            10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
+            10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
+            10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
+        });
+    auto probe_key = toNullableVec<Int64>(
+        "id",
+        {
+            1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
+            4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 6,
+            6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7,
+        });
+    auto probe_col = toNullableVec<Int64>(
+        "probe_value",
+        {
+            20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20,
+            20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20,
+            20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20,
+            20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20,
+        });
+    context.addMockTable(
+        "issue_8791",
+        "build_table",
+        {{"id", TiDB::TP::TypeLongLong}, {"build_value", TiDB::TP::TypeLongLong}},
+        {build_key, build_col});
+    context.addMockTable(
+        "issue_8791",
+        "probe_table",
+        {{"id", TiDB::TP::TypeLongLong}, {"probe_value", TiDB::TP::TypeLongLong}},
+        {probe_key, probe_col});
+
+    auto request = context.scan("issue_8791", "probe_table")
+                       .join(
+                           context.scan("issue_8791", "build_table"),
+                           tipb::JoinType::TypeAntiSemiJoin,
+                           {col("id")},
+                           {},
+                           {},
+                           {gt(col("probe_value"), col("build_value"))},
+                           {})
+                       .aggregation({Count(col("id"))}, {})
+                       .build(context);
+
+    context.context->setSetting("max_block_size", Field(static_cast<UInt64>(200)));
+    auto expected_columns = {toVec<UInt64>({1})};
+    ASSERT_COLUMNS_EQ_UR(expected_columns, executeStreams(request, 1));
+}
+CATCH
+
+TEST_F(JoinExecutorTestRunner, CrossJoinWithoutCondition)
+try
+{
+    context.addMockTable(
+        "cross_join",
+        "t1",
+        {{"a", TiDB::TP::TypeString}, {"b", TiDB::TP::TypeString}},
+        {toNullableVec<String>("a", {"1", "2", {}, "1"}), toNullableVec<String>("b", {"3", "4", "3", {}})});
+    context.addMockTable(
+        "cross_join",
+        "t1_not_null",
+        {{"a", TiDB::TP::TypeString, false}, {"b", TiDB::TP::TypeString, false}},
+        {toVec<String>("a", {"1", "2", "5", "1"}), toVec<String>("b", {"3", "4", "3", "6"})});
+    context.addMockTable(
+        "cross_join",
+        "t2",
+        {{"a", TiDB::TP::TypeString}, {"b", TiDB::TP::TypeString}},
+        {toNullableVec<String>("a", {"1", "3", {}, "2"}), toNullableVec<String>("b", {"3", "4", "3", {}})});
+    context.addMockTable(
+        "cross_join",
+        "t2_not_null",
+        {{"a", TiDB::TP::TypeString, false}, {"b", TiDB::TP::TypeString, false}},
+        {toVec<String>("a", {"1", "3", "7", "2"}), toVec<String>("b", {"3", "4", "3", "8"})});
+    context.addMockTable(
+        "cross_join",
+        "empty_table",
+        {{"a", TiDB::TP::TypeString}, {"b", TiDB::TP::TypeString}},
+        {toNullableVec<String>("a", {}), toNullableVec<String>("b", {})});
+    context.addMockTable(
+        "cross_join",
+        "empty_table_not_null",
+        {{"a", TiDB::TP::TypeString, false}, {"b", TiDB::TP::TypeString, false}},
+        {toVec<String>("a", {}), toVec<String>("b", {})});
+
+    const auto gen_join_inputs = [&]() -> std::vector<std::pair<DAGRequestBuilder, DAGRequestBuilder>> {
+        return {
+            {context.scan("cross_join", "t1"), context.scan("cross_join", "t2")},
+            {context.scan("cross_join", "t1"), context.scan("cross_join", "t2_not_null")},
+            {context.scan("cross_join", "t1_not_null"), context.scan("cross_join", "t2")},
+            {context.scan("cross_join", "t1_not_null"), context.scan("cross_join", "t2_not_null")},
+
+            {context.scan("cross_join", "empty_table"), context.scan("cross_join", "t2")},
+            {context.scan("cross_join", "empty_table"), context.scan("cross_join", "t2_not_null")},
+            {context.scan("cross_join", "empty_table_not_null"), context.scan("cross_join", "t2")},
+            {context.scan("cross_join", "empty_table_not_null"), context.scan("cross_join", "t2_not_null")},
+
+            {context.scan("cross_join", "t1"), context.scan("cross_join", "empty_table")},
+            {context.scan("cross_join", "t1"), context.scan("cross_join", "empty_table_not_null")},
+            {context.scan("cross_join", "t1_not_null"), context.scan("cross_join", "empty_table")},
+            {context.scan("cross_join", "t1_not_null"), context.scan("cross_join", "empty_table_not_null")},
+
+            {context.scan("cross_join", "empty_table"), context.scan("cross_join", "empty_table")},
+            {context.scan("cross_join", "empty_table"), context.scan("cross_join", "empty_table_not_null")},
+            {context.scan("cross_join", "empty_table_not_null"), context.scan("cross_join", "empty_table")},
+            {context.scan("cross_join", "empty_table_not_null"), context.scan("cross_join", "empty_table_not_null")},
+        };
+    };
+
+    const ColumnsWithTypeAndName expected_cols[join_type_num * 4 * 4] = {
+        // non-empty inner non-empty
+        {
+            toNullableVec<String>({"1", "1", "1", "1", "2", "2", "2", "2", {}, {}, {}, {}, "1", "1", "1", "1"}),
+            toNullableVec<String>({"3", "3", "3", "3", "4", "4", "4", "4", "3", "3", "3", "3", {}, {}, {}, {}}),
+            toNullableVec<String>({"1", "3", {}, "2", "1", "3", {}, "2", "1", "3", {}, "2", "1", "3", {}, "2"}),
+            toNullableVec<String>({"3", "4", "3", {}, "3", "4", "3", {}, "3", "4", "3", {}, "3", "4", "3", {}}),
+        },
+        {
+            toNullableVec<String>({"1", "1", "1", "1", "2", "2", "2", "2", {}, {}, {}, {}, "1", "1", "1", "1"}),
+            toNullableVec<String>({"3", "3", "3", "3", "4", "4", "4", "4", "3", "3", "3", "3", {}, {}, {}, {}}),
+            toVec<String>({"1", "3", "7", "2", "1", "3", "7", "2", "1", "3", "7", "2", "1", "3", "7", "2"}),
+            toVec<String>({"3", "4", "3", "8", "3", "4", "3", "8", "3", "4", "3", "8", "3", "4", "3", "8"}),
+        },
+        {
+            toVec<String>({"1", "1", "1", "1", "2", "2", "2", "2", "5", "5", "5", "5", "1", "1", "1", "1"}),
+            toVec<String>({"3", "3", "3", "3", "4", "4", "4", "4", "3", "3", "3", "3", "6", "6", "6", "6"}),
+            toNullableVec<String>({"1", "3", {}, "2", "1", "3", {}, "2", "1", "3", {}, "2", "1", "3", {}, "2"}),
+            toNullableVec<String>({"3", "4", "3", {}, "3", "4", "3", {}, "3", "4", "3", {}, "3", "4", "3", {}}),
+        },
+        {
+            toVec<String>({"1", "1", "1", "1", "2", "2", "2", "2", "5", "5", "5", "5", "1", "1", "1", "1"}),
+            toVec<String>({"3", "3", "3", "3", "4", "4", "4", "4", "3", "3", "3", "3", "6", "6", "6", "6"}),
+            toVec<String>({"1", "3", "7", "2", "1", "3", "7", "2", "1", "3", "7", "2", "1", "3", "7", "2"}),
+            toVec<String>({"3", "4", "3", "8", "3", "4", "3", "8", "3", "4", "3", "8", "3", "4", "3", "8"}),
+        },
+        // empty inner non-empty
+        {},
+        {},
+        {},
+        {},
+        // non-empty inner empty
+        {toNullableVec<String>({}), toNullableVec<String>({}), toNullableVec<String>({}), toNullableVec<String>({})},
+        {toNullableVec<String>({}), toNullableVec<String>({}), toVec<String>({}), toVec<String>({})},
+        {toVec<String>({}), toVec<String>({}), toNullableVec<String>({}), toNullableVec<String>({})},
+        {toVec<String>({}), toVec<String>({}), toVec<String>({}), toVec<String>({})},
+        // empty inner empty
+        {},
+        {},
+        {},
+        {},
+        // non-empty left non-empty
+        {
+            toNullableVec<String>({"1", "1", "1", "1", "2", "2", "2", "2", {}, {}, {}, {}, "1", "1", "1", "1"}),
+            toNullableVec<String>({"3", "3", "3", "3", "4", "4", "4", "4", "3", "3", "3", "3", {}, {}, {}, {}}),
+            toNullableVec<String>({"1", "3", {}, "2", "1", "3", {}, "2", "1", "3", {}, "2", "1", "3", {}, "2"}),
+            toNullableVec<String>({"3", "4", "3", {}, "3", "4", "3", {}, "3", "4", "3", {}, "3", "4", "3", {}}),
+        },
+        {
+            toNullableVec<String>({"1", "1", "1", "1", "2", "2", "2", "2", {}, {}, {}, {}, "1", "1", "1", "1"}),
+            toNullableVec<String>({"3", "3", "3", "3", "4", "4", "4", "4", "3", "3", "3", "3", {}, {}, {}, {}}),
+            toNullableVec<String>({"1", "3", "7", "2", "1", "3", "7", "2", "1", "3", "7", "2", "1", "3", "7", "2"}),
+            toNullableVec<String>({"3", "4", "3", "8", "3", "4", "3", "8", "3", "4", "3", "8", "3", "4", "3", "8"}),
+        },
+        {
+            toVec<String>({"1", "1", "1", "1", "2", "2", "2", "2", "5", "5", "5", "5", "1", "1", "1", "1"}),
+            toVec<String>({"3", "3", "3", "3", "4", "4", "4", "4", "3", "3", "3", "3", "6", "6", "6", "6"}),
+            toNullableVec<String>({"1", "3", {}, "2", "1", "3", {}, "2", "1", "3", {}, "2", "1", "3", {}, "2"}),
+            toNullableVec<String>({"3", "4", "3", {}, "3", "4", "3", {}, "3", "4", "3", {}, "3", "4", "3", {}}),
+        },
+        {
+            toVec<String>({"1", "1", "1", "1", "2", "2", "2", "2", "5", "5", "5", "5", "1", "1", "1", "1"}),
+            toVec<String>({"3", "3", "3", "3", "4", "4", "4", "4", "3", "3", "3", "3", "6", "6", "6", "6"}),
+            toNullableVec<String>({"1", "3", "7", "2", "1", "3", "7", "2", "1", "3", "7", "2", "1", "3", "7", "2"}),
+            toNullableVec<String>({"3", "4", "3", "8", "3", "4", "3", "8", "3", "4", "3", "8", "3", "4", "3", "8"}),
+        },
+        // empty left non-empty
+        {},
+        {},
+        {},
+        {},
+        // non-empty left empty
+        {
+            toNullableVec<String>({"1", "2", {}, "1"}),
+            toNullableVec<String>({"3", "4", "3", {}}),
+            toNullableVec<String>({{}, {}, {}, {}}),
+            toNullableVec<String>({{}, {}, {}, {}}),
+        },
+        {
+            toNullableVec<String>({"1", "2", {}, "1"}),
+            toNullableVec<String>({"3", "4", "3", {}}),
+            toNullableVec<String>({{}, {}, {}, {}}),
+            toNullableVec<String>({{}, {}, {}, {}}),
+        },
+        {
+            toVec<String>({"1", "2", "5", "1"}),
+            toVec<String>({"3", "4", "3", "6"}),
+            toNullableVec<String>({{}, {}, {}, {}}),
+            toNullableVec<String>({{}, {}, {}, {}}),
+        },
+        {
+            toVec<String>({"1", "2", "5", "1"}),
+            toVec<String>({"3", "4", "3", "6"}),
+            toNullableVec<String>({{}, {}, {}, {}}),
+            toNullableVec<String>({{}, {}, {}, {}}),
+        },
+        // empty left empty
+        {},
+        {},
+        {},
+        {},
+        // non-empty right non-empty
+        {
+            toNullableVec<String>({"1", "1", "1", "1", "2", "2", "2", "2", {}, {}, {}, {}, "1", "1", "1", "1"}),
+            toNullableVec<String>({"3", "3", "3", "3", "4", "4", "4", "4", "3", "3", "3", "3", {}, {}, {}, {}}),
+            toNullableVec<String>({"1", "3", {}, "2", "1", "3", {}, "2", "1", "3", {}, "2", "1", "3", {}, "2"}),
+            toNullableVec<String>({"3", "4", "3", {}, "3", "4", "3", {}, "3", "4", "3", {}, "3", "4", "3", {}}),
+        },
+        {
+            toNullableVec<String>({"1", "1", "1", "1", "2", "2", "2", "2", {}, {}, {}, {}, "1", "1", "1", "1"}),
+            toNullableVec<String>({"3", "3", "3", "3", "4", "4", "4", "4", "3", "3", "3", "3", {}, {}, {}, {}}),
+            toVec<String>({"1", "3", "7", "2", "1", "3", "7", "2", "1", "3", "7", "2", "1", "3", "7", "2"}),
+            toVec<String>({"3", "4", "3", "8", "3", "4", "3", "8", "3", "4", "3", "8", "3", "4", "3", "8"}),
+        },
+        {
+            toNullableVec<String>({"1", "1", "1", "1", "2", "2", "2", "2", "5", "5", "5", "5", "1", "1", "1", "1"}),
+            toNullableVec<String>({"3", "3", "3", "3", "4", "4", "4", "4", "3", "3", "3", "3", "6", "6", "6", "6"}),
+            toNullableVec<String>({"1", "3", {}, "2", "1", "3", {}, "2", "1", "3", {}, "2", "1", "3", {}, "2"}),
+            toNullableVec<String>({"3", "4", "3", {}, "3", "4", "3", {}, "3", "4", "3", {}, "3", "4", "3", {}}),
+        },
+        {
+            toNullableVec<String>({"1", "1", "1", "1", "2", "2", "2", "2", "5", "5", "5", "5", "1", "1", "1", "1"}),
+            toNullableVec<String>({"3", "3", "3", "3", "4", "4", "4", "4", "3", "3", "3", "3", "6", "6", "6", "6"}),
+            toVec<String>({"1", "3", "7", "2", "1", "3", "7", "2", "1", "3", "7", "2", "1", "3", "7", "2"}),
+            toVec<String>({"3", "4", "3", "8", "3", "4", "3", "8", "3", "4", "3", "8", "3", "4", "3", "8"}),
+        },
+        // empty right non-empty
+        {
+            toNullableVec<String>({{}, {}, {}, {}}),
+            toNullableVec<String>({{}, {}, {}, {}}),
+            toNullableVec<String>({"1", "3", {}, "2"}),
+            toNullableVec<String>({"3", "4", "3", {}}),
+        },
+        {
+            toNullableVec<String>({{}, {}, {}, {}}),
+            toNullableVec<String>({{}, {}, {}, {}}),
+            toVec<String>({"1", "3", "7", "2"}),
+            toVec<String>({"3", "4", "3", "8"}),
+        },
+        {
+            toNullableVec<String>({{}, {}, {}, {}}),
+            toNullableVec<String>({{}, {}, {}, {}}),
+            toNullableVec<String>({"1", "3", {}, "2"}),
+            toNullableVec<String>({"3", "4", "3", {}}),
+        },
+        {
+            toNullableVec<String>({{}, {}, {}, {}}),
+            toNullableVec<String>({{}, {}, {}, {}}),
+            toVec<String>({"1", "3", "7", "2"}),
+            toVec<String>({"3", "4", "3", "8"}),
+        },
+        // non-empty right empty
+        {},
+        {},
+        {},
+        {},
+        // empty right empty
+        {},
+        {},
+        {},
+        {},
+        // non-empty semi non-empty
+        {toNullableVec<String>({"1", "2", {}, "1"}), toNullableVec<String>({"3", "4", "3", {}})},
+        {toNullableVec<String>({"1", "2", {}, "1"}), toNullableVec<String>({"3", "4", "3", {}})},
+        {toVec<String>({"1", "2", "5", "1"}), toVec<String>({"3", "4", "3", "6"})},
+        {toVec<String>({"1", "2", "5", "1"}), toVec<String>({"3", "4", "3", "6"})},
+        // empty semi non-empty
+        {},
+        {},
+        {},
+        {},
+        // non-empty semi empty
+        {toNullableVec<String>({}), toNullableVec<String>({})},
+        {toNullableVec<String>({}), toNullableVec<String>({})},
+        {toVec<String>({}), toVec<String>({})},
+        {toVec<String>({}), toVec<String>({})},
+        // empty semi empty
+        {},
+        {},
+        {},
+        {},
+        // non-empty anti semi non-empty
+        {toNullableVec<String>({}), toNullableVec<String>({})},
+        {toNullableVec<String>({}), toNullableVec<String>({})},
+        {toVec<String>({}), toVec<String>({})},
+        {toVec<String>({}), toVec<String>({})},
+        // empty anti semi non-empty
+        {},
+        {},
+        {},
+        {},
+        // non-empty anti semi empty
+        {toNullableVec<String>({"1", "2", {}, "1"}), toNullableVec<String>({"3", "4", "3", {}})},
+        {toNullableVec<String>({"1", "2", {}, "1"}), toNullableVec<String>({"3", "4", "3", {}})},
+        {toVec<String>({"1", "2", "5", "1"}), toVec<String>({"3", "4", "3", "6"})},
+        {toVec<String>({"1", "2", "5", "1"}), toVec<String>({"3", "4", "3", "6"})},
+        // empty anti semi empty
+        {},
+        {},
+        {},
+        {},
+        // non-empty left outer semi non-empty
+        {toNullableVec<String>({"1", "2", {}, "1"}),
+         toNullableVec<String>({"3", "4", "3", {}}),
+         toNullableVec<Int8>({1, 1, 1, 1})},
+        {toNullableVec<String>({"1", "2", {}, "1"}),
+         toNullableVec<String>({"3", "4", "3", {}}),
+         toNullableVec<Int8>({1, 1, 1, 1})},
+        {toVec<String>({"1", "2", "5", "1"}), toVec<String>({"3", "4", "3", "6"}), toNullableVec<Int8>({1, 1, 1, 1})},
+        {toVec<String>({"1", "2", "5", "1"}), toVec<String>({"3", "4", "3", "6"}), toNullableVec<Int8>({1, 1, 1, 1})},
+        // empty left outer semi non-empty
+        {},
+        {},
+        {},
+        {},
+        // non-empty left outer semi empty
+        {toNullableVec<String>({"1", "2", {}, "1"}),
+         toNullableVec<String>({"3", "4", "3", {}}),
+         toNullableVec<Int8>({0, 0, 0, 0})},
+        {toNullableVec<String>({"1", "2", {}, "1"}),
+         toNullableVec<String>({"3", "4", "3", {}}),
+         toNullableVec<Int8>({0, 0, 0, 0})},
+        {toVec<String>({"1", "2", "5", "1"}), toVec<String>({"3", "4", "3", "6"}), toNullableVec<Int8>({0, 0, 0, 0})},
+        {toVec<String>({"1", "2", "5", "1"}), toVec<String>({"3", "4", "3", "6"}), toNullableVec<Int8>({0, 0, 0, 0})},
+        // empty left outer semi empty
+        {},
+        {},
+        {},
+        {},
+        // non-empty anti left outer semi non-empty
+        {toNullableVec<String>({"1", "2", {}, "1"}),
+         toNullableVec<String>({"3", "4", "3", {}}),
+         toNullableVec<Int8>({0, 0, 0, 0})},
+        {toNullableVec<String>({"1", "2", {}, "1"}),
+         toNullableVec<String>({"3", "4", "3", {}}),
+         toNullableVec<Int8>({0, 0, 0, 0})},
+        {toVec<String>({"1", "2", "5", "1"}), toVec<String>({"3", "4", "3", "6"}), toNullableVec<Int8>({0, 0, 0, 0})},
+        {toVec<String>({"1", "2", "5", "1"}), toVec<String>({"3", "4", "3", "6"}), toNullableVec<Int8>({0, 0, 0, 0})},
+        // empty anti left outer semi non-empty
+        {},
+        {},
+        {},
+        {},
+        // non-empty anti left outer semi empty
+        {toNullableVec<String>({"1", "2", {}, "1"}),
+         toNullableVec<String>({"3", "4", "3", {}}),
+         toNullableVec<Int8>({1, 1, 1, 1})},
+        {toNullableVec<String>({"1", "2", {}, "1"}),
+         toNullableVec<String>({"3", "4", "3", {}}),
+         toNullableVec<Int8>({1, 1, 1, 1})},
+        {toVec<String>({"1", "2", "5", "1"}), toVec<String>({"3", "4", "3", "6"}), toNullableVec<Int8>({1, 1, 1, 1})},
+        {toVec<String>({"1", "2", "5", "1"}), toVec<String>({"3", "4", "3", "6"}), toNullableVec<Int8>({1, 1, 1, 1})},
+        // empty anti left outer semi empty
+        {},
+        {},
+        {},
+        {},
+    };
+
+    std::vector<UInt64> shallow_copy_thresholds{1, DEFAULT_BLOCK_SIZE * 100};
+
+    for (const auto shallow_copy_threshold : shallow_copy_thresholds)
+>>>>>>> 9970e492df (fix anti semi join  (#8792))
     {
         auto [t1, t2] = table_scan();
         auto request = t1
