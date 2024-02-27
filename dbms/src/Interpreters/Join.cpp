@@ -876,6 +876,8 @@ Block Join::doJoinBlockHash(ProbeProcessInfo & probe_process_info) const
                     helper_col = helper_col->cut(probe_process_info.start_row, probe_process_info.end_row);
                 }
                 offsets_to_replicate->assign(offsets_to_replicate->begin() + probe_process_info.start_row, offsets_to_replicate->begin() + probe_process_info.end_row);
+                if (isAntiJoin(kind) && filter != nullptr)
+                    filter->assign(filter->begin() + probe_process_info.start_row, filter->begin() + probe_process_info.end_row);
             }
         }
     }
