@@ -33,6 +33,7 @@ std::unique_ptr<LegacyCompressedReadBufferFromFile> CompressedReadBufferFromFile
         encryption_path,
         buf_size,
         read_limiter_);
+    // with legacy checksum in CompressedReadBuffer
     return std::make_unique<CompressedReadBufferFromFileImpl<true>>(std::move(file_in));
 }
 

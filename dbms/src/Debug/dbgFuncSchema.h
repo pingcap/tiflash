@@ -62,4 +62,9 @@ void dbgFuncIsTombstone(Context & context, const ASTs & args, DBGInvoker::Printe
 // Usage:
 //   ./storage-client.sh "DBGInvoke skip_schema_version()"
 void dbgFuncSkipSchemaVersion(Context & context, const ASTs & args, DBGInvoker::Printer output);
+
+// Mock that special DDL generate a SchemaDiff with regenerate_schema_map == true.
+// Usage:
+//   ./storage-client.sh "DBGInvoke regenerate_schema_map()"
+void dbgFuncRegrenationSchemaMap(Context & context, const ASTs & args, DBGInvoker::Printer output);
 } // namespace DB
