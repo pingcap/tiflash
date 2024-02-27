@@ -23,8 +23,8 @@
 #include <Flash/Pipeline/Schedule/TaskQueues/TaskQueueType.h>
 #include <IO/Buffer/ReadBufferFromString.h>
 #include <IO/Compression/CompressedStream.h>
-#include <IO/Util/ReadHelpers.h>
-#include <IO/Util/WriteHelpers.h>
+#include <IO/ReadHelpers.h>
+#include <IO/WriteHelpers.h>
 #include <Poco/String.h>
 #include <Poco/Timespan.h>
 

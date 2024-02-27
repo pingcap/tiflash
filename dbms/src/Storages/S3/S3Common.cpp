@@ -24,7 +24,7 @@
 #include <IO/Buffer/ReadBufferFromRandomAccessFile.h>
 #include <IO/Buffer/StdStreamFromReadBuffer.h>
 #include <IO/Buffer/WriteBufferFromWritableFile.h>
-#include <IO/FileProvider.h>
+#include <IO/FileProvider/FileProvider.h>
 #include <Interpreters/Context_fwd.h>
 #include <Server/StorageConfigParser.h>
 #include <Storages/S3/Credentials.h>

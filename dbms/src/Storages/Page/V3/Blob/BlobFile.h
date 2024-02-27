@@ -15,7 +15,7 @@
 #pragma once
 
 #include <Core/Types.h>
-#include <IO/FileProvider.h>
+#include <IO/FileProvider/FileProvider.h>
 #include <Poco/Logger.h>
 #include <Storages/FormatVersion.h>
 #include <Storages/Page/V3/PageDefines.h>

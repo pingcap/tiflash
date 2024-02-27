@@ -15,7 +15,7 @@
 #pragma once
 #include <Common/RedactHelpers.h>
 #include <Core/Types.h>
-#include <IO/Util/WriteHelpers.h>
+#include <IO/WriteHelpers.h>
 #include <Storages/KVStore/Types.h>
 
 namespace DB

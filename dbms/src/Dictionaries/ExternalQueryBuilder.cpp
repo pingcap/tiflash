@@ -17,7 +17,7 @@
 #include <Dictionaries/writeParenthesisedString.h>
 #include <IO/Buffer/WriteBuffer.h>
 #include <IO/Buffer/WriteBufferFromString.h>
-#include <IO/Util/WriteHelpers.h>
+#include <IO/WriteHelpers.h>
 
 #include <boost/range/join.hpp>
 #include <ext/range.h>

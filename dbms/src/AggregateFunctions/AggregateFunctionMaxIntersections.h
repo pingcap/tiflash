@@ -19,8 +19,8 @@
 #include <Common/ArenaAllocator.h>
 #include <Common/NaNUtils.h>
 #include <DataTypes/DataTypesNumber.h>
-#include <IO/Util/ReadHelpers.h>
-#include <IO/Util/WriteHelpers.h>
+#include <IO/ReadHelpers.h>
+#include <IO/WriteHelpers.h>
 #include <common/logger_useful.h>
 
 #define AGGREGATE_FUNCTION_MAX_INTERSECTIONS_MAX_ARRAY_SIZE 0xFFFFFF

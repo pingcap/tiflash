@@ -20,7 +20,7 @@
 #include <IO/Buffer/ReadBufferFromRandomAccessFile.h>
 #include <IO/Buffer/WriteBufferFromWritableFile.h>
 #include <IO/Encryption/MockKeyManager.h>
-#include <IO/Util/copyData.h>
+#include <IO/copyData.h>
 #include <Storages/Page/V3/BlobStore.h>
 #include <Storages/Page/V3/CheckpointFile/CPFilesWriter.h>
 #include <Storages/Page/V3/CheckpointFile/CPManifestFileReader.h>

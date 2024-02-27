@@ -16,8 +16,8 @@
 
 #include <IO/Buffer/WriteBuffer.h>
 #include <IO/Buffer/WriteBufferFromString.h>
-#include <IO/Util/Endian.h>
-#include <IO/Util/WriteHelpers.h>
+#include <IO/Endian.h>
+#include <IO/WriteHelpers.h>
 #include <Storages/KVStore/TiKVHelpers/TiKVKeyspaceIDImpl.h>
 #include <Storages/Page/PageConstants.h>
 #include <Storages/Page/V3/Universal/UniversalPageId.h>

@@ -14,8 +14,8 @@
 
 #pragma once
 
-#include <IO/FileProvider.h>
-#include <IO/Util/WriteHelpers.h>
+#include <IO/FileProvider/FileProvider.h>
+#include <IO/WriteHelpers.h>
 #include <Storages/FormatVersion.h>
 #include <Storages/Page/Page.h>
 #include <Storages/Page/V2/PageEntries.h>

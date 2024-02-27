@@ -22,7 +22,7 @@
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/getMostSubtype.h>
 #include <IO/Buffer/WriteBufferFromString.h>
-#include <IO/Util/Operators.h>
+#include <IO/Operators.h>
 
 
 namespace DB

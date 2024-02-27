@@ -13,8 +13,8 @@
 // limitations under the License.
 
 #include <IO/IOSWrapper.h>
-#include <IO/Util/ReadHelpers.h>
-#include <IO/Util/WriteHelpers.h>
+#include <IO/ReadHelpers.h>
+#include <IO/WriteHelpers.h>
 #include <Storages/Page/V3/CheckpointFile/ProtoHelper.h>
 
 namespace DB::PS::V3::details

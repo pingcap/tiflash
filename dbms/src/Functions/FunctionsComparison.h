@@ -39,7 +39,7 @@
 #include <Functions/IFunction.h>
 #include <Functions/StringUtil.h>
 #include <IO/Buffer/ReadBufferFromMemory.h>
-#include <IO/Util/ReadHelpers.h>
+#include <IO/ReadHelpers.h>
 #include <fmt/core.h>
 
 #include <limits>

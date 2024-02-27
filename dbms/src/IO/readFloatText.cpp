@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <IO/Util/readFloatText.h>
+#include <IO/readFloatText.h>
 
 namespace DB
 {

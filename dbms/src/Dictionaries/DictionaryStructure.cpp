@@ -16,7 +16,7 @@
 #include <Common/StringUtils/StringUtils.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <Dictionaries/DictionaryStructure.h>
-#include <IO/Util/WriteHelpers.h>
+#include <IO/WriteHelpers.h>
 
 #include <ext/range.h>
 #include <numeric>

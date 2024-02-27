@@ -14,7 +14,7 @@
 
 #include <Common/CurrentMetrics.h>
 #include <IO/Buffer/ReadBufferFromMemory.h>
-#include <IO/FileProvider.h>
+#include <IO/FileProvider/FileProvider.h>
 #include <Poco/AutoPtr.h>
 #include <Poco/File.h>
 #include <Poco/Logger.h>

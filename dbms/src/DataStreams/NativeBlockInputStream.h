@@ -117,7 +117,7 @@ private:
     IndexOfBlockForNativeFormat::Columns::const_iterator index_column_it;
 
     /// If an index is specified, then `istr` must be CompressedReadBufferFromFile.
-    CompressedReadBufferFromFile<> * istr_concrete = nullptr;
+    LegacyCompressedReadBufferFromFile * istr_concrete = nullptr;
 
     PODArray<double> avg_value_size_hints;
 

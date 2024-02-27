@@ -15,7 +15,7 @@
 #pragma once
 
 #include <Common/nocopyable.h>
-#include <IO/Util/Endian.h>
+#include <IO/Endian.h>
 #include <Poco/Crypto/DigestEngine.h>
 #include <Poco/HMACEngine.h>
 #include <RaftStoreProxyFFI/EncryptionFFI.h>

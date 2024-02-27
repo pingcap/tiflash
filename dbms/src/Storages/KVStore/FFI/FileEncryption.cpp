@@ -14,7 +14,7 @@
 
 #include <Common/TiFlashException.h>
 #include <IO/Encryption/AESCTRCipherStream.h>
-#include <IO/Util/Endian.h>
+#include <IO/Endian.h>
 #include <Storages/KVStore/FFI/FileEncryption.h>
 #include <openssl/md5.h>
 

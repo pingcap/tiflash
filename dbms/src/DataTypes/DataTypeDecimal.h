@@ -18,7 +18,7 @@
 #include <Common/Exception.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <DataTypes/IDataType.h>
-#include <IO/Util/WriteHelpers.h>
+#include <IO/WriteHelpers.h>
 #include <fmt/core.h>
 
 

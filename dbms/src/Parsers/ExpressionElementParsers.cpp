@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <IO/Buffer/ReadBufferFromMemory.h>
-#include <IO/Util/ReadHelpers.h>
+#include <IO/ReadHelpers.h>
 #include <Parsers/ASTAsterisk.h>
 #include <Parsers/ASTExpressionList.h>
 #include <Parsers/ASTFunction.h>
