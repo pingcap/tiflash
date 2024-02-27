@@ -17,8 +17,8 @@
 #include <Common/Exception.h>
 #include <IO/Buffer/ReadBufferFromFileDescriptor.h>
 #include <IO/Buffer/WriteBufferFromFileDescriptor.h>
-#include <IO/Util/ReadHelpers.h>
-#include <IO/Util/WriteHelpers.h>
+#include <IO/ReadHelpers.h>
+#include <IO/WriteHelpers.h>
 #include <Poco/Exception.h>
 #include <Poco/File.h>
 #include <common/types.h>

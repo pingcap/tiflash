@@ -15,7 +15,7 @@
 #include <Common/Exception.h>
 #include <IO/Buffer/HexWriteBuffer.h>
 #include <IO/Buffer/WriteBufferFromString.h>
-#include <IO/Util/WriteHelpers.h>
+#include <IO/WriteHelpers.h>
 #include <Interpreters/SecurityManager.h>
 #include <Poco/Net/IPAddress.h>
 #include <Poco/String.h>

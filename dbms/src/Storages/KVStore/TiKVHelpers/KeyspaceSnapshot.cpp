@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
-#include <IO/Util/copyData.h>
+#include <IO/copyData.h>
 #include <Storages/KVStore/TiKVHelpers/KeyspaceSnapshot.h>
 #include <Storages/KVStore/TiKVHelpers/TiKVKeyspaceIDImpl.h>
 #include <pingcap/Exception.h>

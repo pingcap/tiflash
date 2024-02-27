@@ -16,8 +16,8 @@
 #include <Common/Logger.h>
 #include <Common/escapeForFileName.h>
 #include <Core/Types.h>
-#include <IO/FileProvider.h>
-#include <IO/Util/WriteHelpers.h>
+#include <IO/FileProvider/FileProvider.h>
+#include <IO/WriteHelpers.h>
 #include <Poco/File.h>
 #include <Poco/Path.h>
 #include <Storages/KVStore/FFI/ProxyFFI.h>

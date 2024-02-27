@@ -35,7 +35,7 @@
 #include <Functions/IFunction.h>
 #include <Functions/IsOperation.h>
 #include <Functions/castTypeToEither.h>
-#include <IO/Util/WriteHelpers.h>
+#include <IO/WriteHelpers.h>
 #include <Interpreters/ExpressionActions.h>
 #include <fmt/core.h>
 

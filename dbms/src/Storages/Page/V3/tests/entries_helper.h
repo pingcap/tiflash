@@ -16,7 +16,7 @@
 
 #include <Common/Exception.h>
 #include <Common/FmtUtils.h>
-#include <IO/Util/WriteHelpers.h>
+#include <IO/WriteHelpers.h>
 #include <Storages/Page/Page.h>
 #include <Storages/Page/V3/BlobStore.h>
 #include <Storages/Page/V3/PageDefines.h>

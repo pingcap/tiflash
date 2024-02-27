@@ -44,15 +44,14 @@
 #include <Flash/ResourceControl/LocalAdmissionController.h>
 #include <Functions/registerFunctions.h>
 #include <IO/BaseFile/RateLimiter.h>
-#include <IO/Buffer/createReadBufferFromFileBase.h>
 #include <IO/Encryption/DataKeyManager.h>
 #include <IO/Encryption/KeyspacesKeyManager.h>
 #include <IO/Encryption/MockKeyManager.h>
-#include <IO/FileProvider.h>
+#include <IO/FileProvider/FileProvider.h>
 #include <IO/HTTPCommon.h>
 #include <IO/IOThreadPools.h>
+#include <IO/ReadHelpers.h>
 #include <IO/UseSSL.h>
-#include <IO/Util/ReadHelpers.h>
 #include <Interpreters/AsynchronousMetrics.h>
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/SharedContexts/Disagg.h>

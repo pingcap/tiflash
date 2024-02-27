@@ -17,9 +17,9 @@
 #include <Common/hex.h>
 #include <Core/Defines.h>
 #include <IO/Buffer/WriteBufferFromString.h>
-#include <IO/Util/Operators.h>
-#include <IO/Util/WriteHelpers.h>
-#include <IO/Util/readFloatText.h>
+#include <IO/Operators.h>
+#include <IO/WriteHelpers.h>
+#include <IO/readFloatText.h>
 #include <common/find_symbols.h>
 #include <stdlib.h>
 

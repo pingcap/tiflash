@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <IO/FileProvider.h>
-#include <IO/WriteBufferFromWritableFileBuilder.h>
+#include <IO/FileProvider/FileProvider.h>
+#include <IO/FileProvider/WriteBufferFromWritableFileBuilder.h>
 
 namespace DB
 {

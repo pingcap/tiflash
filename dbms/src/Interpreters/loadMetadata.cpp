@@ -17,8 +17,8 @@
 #include <Databases/DatabaseOrdinary.h>
 #include <Databases/DatabaseTiFlash.h>
 #include <Databases/DatabasesCommon.h>
+#include <IO/FileProvider/ReadBufferFromRandomAccessFileBuilder.h>
 #include <IO/IOThreadPools.h>
-#include <IO/ReadBufferFromRandomAccessFileBuilder.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterCreateQuery.h>
 #include <Interpreters/loadMetadata.h>

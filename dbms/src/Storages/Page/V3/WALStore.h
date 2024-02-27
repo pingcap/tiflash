@@ -15,7 +15,7 @@
 #pragma once
 
 #include <Common/Checksum.h>
-#include <IO/FileProvider_fwd.h>
+#include <IO/FileProvider/FileProvider_fwd.h>
 #include <Interpreters/SettingsCommon.h>
 #include <Storages/Page/FileUsage.h>
 #include <Storages/Page/V3/LogFile/LogFilename.h>

@@ -28,7 +28,7 @@
 #include <IO/Compression/CompressedWriteBuffer.h>
 #include <IO/Compression/CompressionSettings.h>
 #include <IO/Progress.h>
-#include <IO/Util/copyData.h>
+#include <IO/copyData.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/Quota.h>
 #include <Interpreters/SharedQueries.h>
@@ -41,7 +41,6 @@
 #include <common/logger_useful.h>
 
 #include <ext/scope_guard.h>
-#include <iomanip>
 
 namespace ProfileEvents
 {

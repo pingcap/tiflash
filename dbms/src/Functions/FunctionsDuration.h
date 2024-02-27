@@ -26,7 +26,7 @@
 #include <Functions/FunctionHelpers.h>
 #include <Functions/FunctionsDateTime.h>
 #include <Functions/IFunction.h>
-#include <IO/Util/WriteHelpers.h>
+#include <IO/WriteHelpers.h>
 #include <Poco/String.h>
 #include <common/DateLUT.h>
 

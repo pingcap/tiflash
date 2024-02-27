@@ -13,8 +13,8 @@
 // limitations under the License.
 
 #include <IO/Checksum/ChecksumBuffer.h>
-#include <IO/Checksum/ChecksumWriteBufferBuilder.h>
-#include <IO/WriteBufferFromWritableFileBuilder.h>
+#include <IO/FileProvider/ChecksumWriteBufferBuilder.h>
+#include <IO/FileProvider/WriteBufferFromWritableFileBuilder.h>
 
 namespace DB
 {

@@ -16,7 +16,7 @@
 
 #include <Common/Exception.h>
 #include <Common/TiFlashException.h>
-#include <IO/KeyManager.h>
+#include <IO/FileProvider/KeyManager.h>
 
 namespace DB
 {

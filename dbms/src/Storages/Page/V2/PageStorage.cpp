@@ -18,7 +18,7 @@
 #include <Common/assert_cast.h>
 #include <IO/Buffer/ReadBufferFromMemory.h>
 #include <IO/Buffer/WriteBufferFromFile.h>
-#include <IO/FileProvider.h>
+#include <IO/FileProvider/FileProvider.h>
 #include <Poco/File.h>
 #include <Poco/Path.h>
 #include <Storages/Page/PageStorage.h>

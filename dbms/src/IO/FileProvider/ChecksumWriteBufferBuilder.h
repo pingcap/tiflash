@@ -14,40 +14,39 @@
 
 #pragma once
 
-#include <IO/BaseFile/fwd.h>
+#include <Common/Checksum.h>
+#include <Common/nocopyable.h>
+#include <IO/Buffer/WriteBufferFromFileBase.h>
 #include <IO/Buffer/WriteBufferFromWritableFile.h>
-#include <IO/EncryptionPath.h>
-#include <IO/FileProvider_fwd.h>
+#include <IO/FileProvider/FileProvider.h>
+
+#include <string>
 
 namespace DB
 {
 
-class WriteBufferFromWritableFileBuilder
+class ChecksumWriteBufferBuilder
 {
 public:
-    static WriteBufferFromWritableFilePtr buildPtr(
+    static std::unique_ptr<WriteBufferFromFileBase> build(
+        bool has_checksum,
         const FileProviderPtr & file_provider,
-        const std::string & file_name_,
-        const EncryptionPath & encryption_path,
-        bool create_new_encryption_info_ = true,
-        const WriteLimiterPtr & write_limiter_ = nullptr,
-        size_t buf_size = DBMS_DEFAULT_BUFFER_SIZE,
-        int flags = -1,
+        const std::string & filename_,
+        const EncryptionPath & encryption_path_,
+        bool create_new_encryption_info_,
+        const WriteLimiterPtr & write_limiter_,
+        ChecksumAlgo checksum_algorithm,
+        size_t checksum_frame_size,
+        int flags_ = -1,
         mode_t mode = 0666,
+        size_t buf_size = DBMS_DEFAULT_BUFFER_SIZE,
         char * existing_memory = nullptr,
         size_t alignment = 0);
 
-    static WriteBufferFromWritableFile build(
-        const FileProviderPtr & file_provider,
-        const std::string & file_name_,
-        const EncryptionPath & encryption_path,
-        bool create_new_encryption_info_ = true,
-        const WriteLimiterPtr & write_limiter_ = nullptr,
-        size_t buf_size = DBMS_DEFAULT_BUFFER_SIZE,
-        int flags = -1,
-        mode_t mode = 0666,
-        char * existing_memory = nullptr,
-        size_t alignment = 0);
+    static std::unique_ptr<WriteBufferFromFileBase> build(
+        WriteBufferFromWritableFilePtr & writer_buffer,
+        ChecksumAlgo checksum_algorithm,
+        size_t checksum_frame_size);
 };
 
 } // namespace DB

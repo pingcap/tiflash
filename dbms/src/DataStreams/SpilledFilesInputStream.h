@@ -18,8 +18,8 @@
 #include <DataStreams/NativeBlockInputStream.h>
 #include <IO/Buffer/ReadBufferFromFile.h>
 #include <IO/Compression/CompressedReadBuffer.h>
-#include <IO/EncryptionPath.h>
-#include <IO/ReadBufferFromRandomAccessFileBuilder.h>
+#include <IO/FileProvider/EncryptionPath.h>
+#include <IO/FileProvider/ReadBufferFromRandomAccessFileBuilder.h>
 
 namespace DB
 {

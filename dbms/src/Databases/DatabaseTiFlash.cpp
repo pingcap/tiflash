@@ -18,9 +18,9 @@
 #include <Common/escapeForFileName.h>
 #include <Common/typeid_cast.h>
 #include <Databases/DatabaseTiFlash.h>
-#include <IO/FileProvider.h>
-#include <IO/ReadBufferFromRandomAccessFileBuilder.h>
-#include <IO/WriteBufferFromWritableFileBuilder.h>
+#include <IO/FileProvider/FileProvider.h>
+#include <IO/FileProvider/ReadBufferFromRandomAccessFileBuilder.h>
+#include <IO/FileProvider/WriteBufferFromWritableFileBuilder.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterCreateQuery.h>
 #include <Parsers/ASTCreateQuery.h>
