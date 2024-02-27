@@ -631,6 +631,21 @@ public:
         this->c_end = this->c_start + bytes_to_copy;
     }
 
+    void assignFromSelf(size_t start, size_t end)
+    {
+        if unlikely (start == 0)
+        {
+            return;
+        }
+        assert(end >= start && end <= this->size());
+        const auto & from_begin = this->begin() + start;
+        const auto & from_end = this->begin() + end;
+        size_t required_capacity = from_end - from_begin;
+        size_t bytes_to_copy = this->byte_size(required_capacity);
+        memmove(this->c_start, reinterpret_cast<const void *>(&*from_begin), bytes_to_copy);
+        this->c_end = this->c_start + bytes_to_copy;
+    }
+
     void assign(const PODArray & from) { assign(from.begin(), from.end()); }
 
 
