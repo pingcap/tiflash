@@ -634,9 +634,8 @@ public:
     void assignFromSelf(size_t start, size_t end)
     {
         if unlikely (start == 0)
-        {
             return;
-        }
+
         assert(end >= start && end <= this->size());
         const auto & from_begin = this->begin() + start;
         const auto & from_end = this->begin() + end;
