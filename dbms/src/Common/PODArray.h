@@ -644,7 +644,12 @@ public:
         this->c_end = this->c_start + bytes_to_copy;
     }
 
-    void assign(const PODArray & from) { assign(from.begin(), from.end()); }
+    void assign(const PODArray & from)
+    {
+        if unlikely (this == &from)
+            return;
+        assign(from.begin(), from.end());
+    }
 
 
     bool operator==(const PODArray & other) const
