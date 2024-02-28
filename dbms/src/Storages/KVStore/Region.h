@@ -120,6 +120,7 @@ public:
 
 public: // Simple Read and Write
     explicit Region(RegionMeta && meta_, const TiFlashRaftProxyHelper *);
+    Region(const Region &) = delete;
     Region() = delete;
     ~Region();
 

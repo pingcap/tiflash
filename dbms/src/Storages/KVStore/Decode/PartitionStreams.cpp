@@ -491,7 +491,7 @@ AtomicGetStorageSchema(const RegionPtr & region, TMTContext & tmt)
     auto keyspace_id = region->getKeyspaceID();
     auto table_id = region->getMappedTableID();
     LOG_DEBUG(Logger::get(__PRETTY_FUNCTION__), "Get schema, keyspace={} table_id={}", keyspace_id, table_id);
-    auto context = tmt.getContext();
+    auto & context = tmt.getContext();
     const auto atomic_get = [&](bool force_decode) -> bool {
         auto storage = tmt.getStorages().get(keyspace_id, table_id);
         if (storage == nullptr)

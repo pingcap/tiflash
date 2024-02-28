@@ -65,8 +65,8 @@ struct ReadFromStreamResult
     RegionPtr region;
 };
 
-struct PrehandleTransformCtx {
-    RegionPtr new_region;
+struct PrehandleTransformCtx
+{
     PreHandlingTrace & trace;
     std::shared_ptr<PreHandlingTrace::Item> prehandle_task;
     DM::FileConvertJobType job_type;
@@ -125,11 +125,11 @@ void PreHandlingTrace::waitForSubtaskResources(uint64_t region_id, size_t parall
 static inline std::tuple<ReadFromStreamResult, PrehandleResult> executeTransform(
     LoggerPtr log,
     PrehandleTransformCtx & prehandle_ctx,
+    RegionPtr new_region,
     const std::shared_ptr<DM::SSTFilesToBlockInputStream> & sst_stream)
 {
     const auto & opts = prehandle_ctx.opts;
     auto & tmt = prehandle_ctx.tmt;
-    const auto & new_region = prehandle_ctx.new_region;
     auto & trace = prehandle_ctx.trace;
 
     auto region_id = new_region->id();
@@ -412,10 +412,10 @@ struct ParallelPrehandleCtx
 };
 using ParallelPrehandleCtxPtr = std::shared_ptr<ParallelPrehandleCtx>;
 
-// TODO fix the very long argument list
 static void runInParallel(
     LoggerPtr log,
     PrehandleTransformCtx & prehandle_ctx,
+    RegionPtr new_region,
     const SSTViewVec & snaps,
     const TiFlashRaftProxyHelper * proxy_helper,
     uint64_t index,
@@ -424,7 +424,7 @@ static void runInParallel(
     DM::SSTScanSoftLimit && part_limit)
 {
     std::string limit_tag = part_limit.toDebugString();
-    auto part_new_region = std::make_shared<Region>(prehandle_ctx.new_region->mutMeta().clone(), proxy_helper);
+    auto part_new_region = std::make_shared<Region>(new_region->mutMeta().clone(), proxy_helper);
     auto part_sst_stream = std::make_shared<DM::SSTFilesToBlockInputStream>(
         part_new_region,
         index,
@@ -436,7 +436,8 @@ static void runInParallel(
         DM::SSTFilesToBlockInputStreamOpts(prehandle_ctx.opts));
     try
     {
-        auto [part_result, part_prehandle_result] = executeTransform(log, prehandle_ctx, part_sst_stream);
+        auto [part_result, part_prehandle_result]
+            = executeTransform(log, prehandle_ctx, part_new_region, part_sst_stream);
         LOG_INFO(
             log,
             "Finished extra parallel prehandle task limit {} write_cf={} lock_cf={} default_cf={} dmfiles={} error={}, "
@@ -478,10 +479,10 @@ static void runInParallel(
     }
 }
 
-// TODO fix the very long argument list
 void executeParallelTransform(
     LoggerPtr log,
     PrehandleTransformCtx & prehandle_ctx,
+    RegionPtr new_region,
     ReadFromStreamResult & result,
     PrehandleResult & prehandle_result,
     const std::vector<std::string> & split_keys,
@@ -490,7 +491,6 @@ void executeParallelTransform(
     const TiFlashRaftProxyHelper * proxy_helper,
     uint64_t index)
 {
-    const auto & new_region = prehandle_ctx.new_region;
     CurrentMetrics::add(CurrentMetrics::RaftNumParallelPrehandlingTasks);
     SCOPE_EXIT({ CurrentMetrics::sub(CurrentMetrics::RaftNumParallelPrehandlingTasks); });
     using SingleSnapshotAsyncTasks = AsyncTasks<uint64_t, std::function<bool()>, bool>;
@@ -523,6 +523,7 @@ void executeParallelTransform(
             runInParallel(
                 log,
                 prehandle_ctx,
+                new_region,
                 snaps,
                 proxy_helper,
                 index,
@@ -538,8 +539,7 @@ void executeParallelTransform(
             new_region->id());
     }
     // This will read the keys from the beginning to the first split key
-    auto [head_result, head_prehandle_result]
-        = executeTransform(log, prehandle_ctx, sst_stream);
+    auto [head_result, head_prehandle_result] = executeTransform(log, prehandle_ctx, new_region, sst_stream);
     LOG_INFO(
         log,
         "Finished extra parallel prehandle task limit={} write_cf {} lock_cf={} default_cf={} dmfiles={} "
@@ -624,7 +624,7 @@ PrehandleResult KVStore::preHandleSSTsToDTFiles(
     {
         return {};
     }
-    auto context = tmt.getContext();
+    auto & context = tmt.getContext();
     auto keyspace_id = new_region->getKeyspaceID();
     bool force_decode = false;
     size_t expected_block_size = DEFAULT_MERGE_BLOCK_SIZE;
@@ -690,15 +690,13 @@ PrehandleResult KVStore::preHandleSSTsToDTFiles(
                 prehandle_task,
                 DM::SSTFilesToBlockInputStreamOpts(opt));
 
-            PrehandleTransformCtx prehandle_ctx {
-                .new_region = new_region,
+            PrehandleTransformCtx prehandle_ctx{
                 .trace = prehandling_trace,
                 .prehandle_task = prehandle_task,
                 .job_type = job_type,
                 .storage = storage,
                 .opts = opt,
-                .tmt = tmt
-            };
+                .tmt = tmt};
 
             // `split_keys` do not begin with 'z'.
             auto [split_keys, approx_bytes] = getSplitKey(log, this, new_region, sst_stream);
@@ -711,13 +709,14 @@ PrehandleResult KVStore::preHandleSSTsToDTFiles(
                     "Single threaded prehandling for single region, range={} region_id={}",
                     new_region->getRange()->toDebugString(),
                     new_region->id());
-                std::tie(result, prehandle_result) = executeTransform(log, prehandle_ctx, sst_stream);
+                std::tie(result, prehandle_result) = executeTransform(log, prehandle_ctx, new_region, sst_stream);
             }
             else
             {
                 executeParallelTransform(
                     log,
                     prehandle_ctx,
+                    new_region,
                     result,
                     prehandle_result,
                     split_keys,
