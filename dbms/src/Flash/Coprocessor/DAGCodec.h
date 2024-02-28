@@ -26,6 +26,7 @@ void encodeDAGFloat64(Float64, WriteBuffer &);
 void encodeDAGString(const String &, WriteBuffer &);
 void encodeDAGBytes(const String &, WriteBuffer &);
 void encodeDAGDecimal(const Field &, WriteBuffer &);
+void encodeDAGVectorFloat32(const Array &, WriteBuffer &);
 
 Int64 decodeDAGInt64(const String &);
 UInt64 decodeDAGUInt64(const String &);
@@ -34,5 +35,6 @@ Float64 decodeDAGFloat64(const String &);
 String decodeDAGString(const String &);
 String decodeDAGBytes(const String &);
 Field decodeDAGDecimal(const String &);
+Field decodeDAGVectorFloat32(const String &);
 
 } // namespace DB

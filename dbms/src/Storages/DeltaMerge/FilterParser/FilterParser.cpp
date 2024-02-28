@@ -64,6 +64,7 @@ inline bool isRoughSetFilterSupportType(const Int32 field_type)
     case TiDB::TypeString:
         return false;
     // Unknown.
+    case TiDB::TypeTiDBVectorFloat32:
     case TiDB::TypeDecimal:
     case TiDB::TypeNewDecimal:
     case TiDB::TypeFloat:

@@ -167,14 +167,29 @@ void ColumnNullable::get(size_t n, Field & res) const
         getNestedColumn().get(n, res);
 }
 
-StringRef ColumnNullable::getDataAt(size_t /*n*/) const
+StringRef ColumnNullable::getDataAt(size_t n) const
 {
-    throw Exception(fmt::format("Method getDataAt is not supported for {}", getName()), ErrorCodes::NOT_IMPLEMENTED);
+    if (!isNullAt(n))
+        return getNestedColumn().getDataAt(n);
+
+    throw Exception(
+        ErrorCodes::NOT_IMPLEMENTED,
+        "Method getDataAt is not supported for {} in case if value is NULL",
+        getName());
 }
 
-void ColumnNullable::insertData(const char * /*pos*/, size_t /*length*/)
+void ColumnNullable::insertData(const char * pos, size_t length)
 {
-    throw Exception(fmt::format("Method insertData is not supported for {}", getName()), ErrorCodes::NOT_IMPLEMENTED);
+    if (pos == nullptr)
+    {
+        getNestedColumn().insertDefault();
+        getNullMapData().push_back(1);
+    }
+    else
+    {
+        getNestedColumn().insertData(pos, length);
+        getNullMapData().push_back(0);
+    }
 }
 
 bool ColumnNullable::decodeTiDBRowV2Datum(size_t cursor, const String & raw_value, size_t length, bool force_decode)
@@ -183,6 +198,12 @@ bool ColumnNullable::decodeTiDBRowV2Datum(size_t cursor, const String & raw_valu
         return false;
     getNullMapData().push_back(0);
     return true;
+}
+
+void ColumnNullable::insertFromDatumData(const char * cursor, size_t len)
+{
+    getNestedColumn().insertFromDatumData(cursor, len);
+    getNullMapData().push_back(0);
 }
 
 StringRef ColumnNullable::serializeValueIntoArena(

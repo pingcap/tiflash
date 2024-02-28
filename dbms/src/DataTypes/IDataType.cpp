@@ -91,6 +91,18 @@ bool IDataType::isNullMap(const IDataType::SubstreamPath & path)
     return false;
 }
 
+bool IDataType::isArraySizes(const SubstreamPath & path)
+{
+    for (const auto & elem : path)
+    {
+        if (elem.type == IDataType::Substream::ArraySizes)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
 String IDataType::getFileNameForStream(const String & column_name, const IDataType::SubstreamPath & path)
 {
     String nested_table_name = Nested::extractTableName(column_name);

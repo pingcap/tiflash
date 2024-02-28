@@ -34,7 +34,7 @@ public:
 
     const char * getFamilyName() const override { return "Array"; }
 
-    bool canBeInsideNullable() const override { return false; }
+    bool canBeInsideNullable() const override { return true; }
 
     TypeIndex getTypeId() const override { return TypeIndex::Array; }
 

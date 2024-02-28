@@ -21,6 +21,7 @@
 #include <Common/typeid_cast.h>
 #include <Core/Block.h>
 #include <Core/ColumnNumbers.h>
+#include <DataTypes/DataTypeArray.h>
 #include <DataTypes/IDataType.h>
 
 #include <memory>
@@ -42,6 +43,16 @@ bool checkDataType(const IDataType * data_type)
     return checkAndGetDataType<Type>(data_type);
 }
 
+template <typename InnerType>
+bool checkDataTypeArray(const IDataType * data_type)
+{
+    const auto * array_type = checkAndGetDataType<DataTypeArray>(data_type);
+    if unlikely (!array_type)
+        return false;
+
+    const DataTypePtr & inner_type = array_type->getNestedType();
+    return checkDataType<InnerType>(inner_type.get());
+}
 
 template <typename Type>
 const Type * checkAndGetColumn(const IColumn * column)

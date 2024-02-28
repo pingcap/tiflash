@@ -25,6 +25,7 @@
 #include <Storages/MutableSupport.h>
 #include <TiDB/Collation/Collator.h>
 #include <TiDB/Decode/JsonBinary.h>
+#include <TiDB/Decode/Vector.h>
 #include <TiDB/Schema/SchemaNameMapper.h>
 #include <TiDB/Schema/TiDB.h>
 #include <common/logger_useful.h>
@@ -76,6 +77,8 @@ Field GenDefaultField(const TiDB::ColumnInfo & col_info)
         return Field(static_cast<UInt64>(0));
     case TiDB::CodecFlagJson:
         return TiDB::genJsonNull();
+    case TiDB::CodecFlagVectorFloat32:
+        return Field(Array(0));
     case TiDB::CodecFlagDuration:
         return Field(static_cast<Int64>(0));
     default:

@@ -65,9 +65,11 @@ public:
     Field operator[](size_t n) const override;
     void get(size_t n, Field & res) const override;
     UInt64 get64(size_t n) const override { return nested_column->get64(n); }
-    StringRef getDataAt(size_t n) const override;
+    StringRef getDataAt(size_t) const override;
+    /// Will insert null value if pos=nullptr
     void insertData(const char * pos, size_t length) override;
     bool decodeTiDBRowV2Datum(size_t cursor, const String & raw_value, size_t length, bool force_decode) override;
+    void insertFromDatumData(const char *, size_t) override;
     StringRef serializeValueIntoArena(
         size_t n,
         Arena & arena,

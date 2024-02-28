@@ -110,6 +110,13 @@ void literalFieldToTiPBExpr(const ColumnInfo & ci, const Field & val_field, tipb
             encodeDAGInt64(val, ss);
             break;
         }
+        case TiDB::TypeTiDBVectorFloat32:
+        {
+            expr->set_tp(tipb::ExprType::TiDBVectorFloat32);
+            const auto & val = val_field.safeGet<Array>();
+            encodeDAGVectorFloat32(val, ss);
+            break;
+        }
         default:
             throw Exception(fmt::format(
                 "Type {} does not support literal in function unit test",
