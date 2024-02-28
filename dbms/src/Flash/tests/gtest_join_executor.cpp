@@ -1263,14 +1263,6 @@ CATCH
 TEST_F(JoinExecutorTestRunner, Issue8791)
 try
 {
-<<<<<<< HEAD
-    auto build_key = toNullableVec<Int64>(
-        "id",
-        {
-            2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
-            4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
-            6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7,
-=======
     // clang-format off
     auto build_key = toNullableVec<Int64>(
         "id",
@@ -1281,33 +1273,20 @@ try
             5, 5, 5, 5, 5, 5,
             6, 6, 6, 6, 6, 6,
             7, 7, 7, 7, 7, 7,
->>>>>>> 9c0f851b08 (fix potential memcpy overlap issue in join (#8797))
         });
     auto build_col = toNullableVec<Int64>(
         "build_value",
         {
-<<<<<<< HEAD
-            10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
-            10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
-            10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
-            10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
-=======
             10, 30, 10, 30, 10, 30, 10, 10, 10, 30, 10, 30, 10, 30, 30,
             10, 30, 10, 30, 10, 30, 10, 30,
             30, 30, 30, 30, 30,
             30, 30, 30, 30, 30, 10,
             30, 30, 10, 30, 30, 30,
             30, 30, 30, 10, 10, 30,
->>>>>>> 9c0f851b08 (fix potential memcpy overlap issue in join (#8797))
         });
     auto probe_key = toNullableVec<Int64>(
         "id",
         {
-<<<<<<< HEAD
-            1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
-            4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 6,
-            6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7,
-=======
             1,
             2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
             3, 7, 3, 7, 3, 7, 3, 7, 3, 7, 3, 7, 3, 7, 3,
@@ -1315,18 +1294,10 @@ try
             5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
             6, 4, 6, 4, 6, 4, 6, 4, 6, 4, 6, 4, 6, 4, 6,
             7, 3, 7, 3, 7, 3, 7, 3, 7, 3, 7, 3, 7, 3, 7,
->>>>>>> 9c0f851b08 (fix potential memcpy overlap issue in join (#8797))
         });
     auto probe_col = toNullableVec<Int64>(
         "probe_value",
         {
-<<<<<<< HEAD
-            20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20,
-            20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20,
-            20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20,
-            20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20,
-        });
-=======
             20,
             20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20,
             20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20,
@@ -1336,7 +1307,6 @@ try
             20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20,
         });
     // clang-format on
->>>>>>> 9c0f851b08 (fix potential memcpy overlap issue in join (#8797))
     context.addMockTable(
         "issue_8791",
         "build_table",
@@ -1348,23 +1318,6 @@ try
         {{"id", TiDB::TP::TypeLongLong}, {"probe_value", TiDB::TP::TypeLongLong}},
         {probe_key, probe_col});
 
-<<<<<<< HEAD
-    auto request = context.scan("issue_8791", "probe_table")
-                       .join(
-                           context.scan("issue_8791", "build_table"),
-                           tipb::JoinType::TypeAntiSemiJoin,
-                           {col("id")},
-                           {},
-                           {},
-                           {gt(col("probe_value"), col("build_value"))},
-                           {})
-                       .aggregation({Count(col("id"))}, {})
-                       .build(context);
-
-    context.context->setSetting("max_block_size", Field(static_cast<UInt64>(200)));
-    auto expected_columns = {toVec<UInt64>({1})};
-    ASSERT_COLUMNS_EQ_UR(expected_columns, executeStreams(request, 1));
-=======
     context.context->setSetting("max_block_size", Field(static_cast<UInt64>(90)));
     {
         auto anti_join_request = context.scan("issue_8791", "probe_table")
@@ -1398,7 +1351,6 @@ try
         auto expected_columns = {toVec<UInt64>({240})};
         ASSERT_COLUMNS_EQ_UR(expected_columns, executeStreams(inner_join_request, 1));
     }
->>>>>>> 9c0f851b08 (fix potential memcpy overlap issue in join (#8797))
 }
 CATCH
 
