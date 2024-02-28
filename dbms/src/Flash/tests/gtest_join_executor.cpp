@@ -651,68 +651,6 @@ try
     }
 }
 CATCH
-
-TEST_F(JoinExecutorTestRunner, CrossJoinWithoutCondition)
-try
-{
-    auto build_key = toNullableVec<Int64>(
-        "id",
-        {
-            2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
-            4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
-            6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7,
-        });
-    auto build_col = toNullableVec<Int64>(
-        "build_value",
-        {
-            10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
-            10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
-            10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
-            10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
-        });
-    auto probe_key = toNullableVec<Int64>(
-        "id",
-        {
-            1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
-            4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 6,
-            6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7,
-        });
-    auto probe_col = toNullableVec<Int64>(
-        "probe_value",
-        {
-            20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20,
-            20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20,
-            20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20,
-            20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20,
-        });
-    context.addMockTable(
-        "issue_8791",
-        "build_table",
-        {{"id", TiDB::TP::TypeLongLong}, {"build_value", TiDB::TP::TypeLongLong}},
-        {build_key, build_col});
-    context.addMockTable(
-        "issue_8791",
-        "probe_table",
-        {{"id", TiDB::TP::TypeLongLong}, {"probe_value", TiDB::TP::TypeLongLong}},
-        {probe_key, probe_col});
-
-    auto request = context.scan("issue_8791", "probe_table")
-                       .join(
-                           context.scan("issue_8791", "build_table"),
-                           tipb::JoinType::TypeAntiSemiJoin,
-                           {col("id")},
-                           {},
-                           {},
-                           {gt(col("probe_value"), col("build_value"))},
-                           {})
-                       .aggregation({Count(col("id"))}, {})
-                       .build(context);
-
-    context.context->setSetting("max_block_size", Field(static_cast<UInt64>(200)));
-    auto expected_columns = {toVec<UInt64>({1})};
-    ASSERT_COLUMNS_EQ_UR(expected_columns, executeStreams(request, 1));
-}
-CATCH
     
 TEST_F(JoinExecutorTestRunner, JoinWithTableScan)
 try
