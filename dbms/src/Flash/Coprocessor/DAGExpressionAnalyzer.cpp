@@ -988,6 +988,12 @@ String DAGExpressionAnalyzer::convertToUInt8(const ExpressionActionsPtr & action
         auto const_expr_name = getActions(const_expr, actions);
         return applyFunction("notEquals", {column_name, const_expr_name}, actions, nullptr);
     }
+    else if (checkDataTypeArray<DataTypeFloat32>(org_type.get()))
+    {
+        tipb::Expr const_expr = constructZeroVectorFloat32TiExpr();
+        auto const_expr_name = getActions(const_expr, actions);
+        return applyFunction("notEquals", {column_name, const_expr_name}, actions, nullptr);
+    }
     throw TiFlashException(
         fmt::format("Filter on {} is not supported.", org_type->getName()),
         Errors::Coprocessor::Unimplemented);

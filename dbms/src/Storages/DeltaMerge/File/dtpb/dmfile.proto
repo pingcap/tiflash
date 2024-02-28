@@ -48,3 +48,21 @@ message ChecksumConfig {
     // additional information
     repeated ChecksumDebugInfo debug_info = 5;
 }
+
+message ColumnStat {
+    optional int64 col_id = 1;
+    optional string type_name = 2;
+    optional double avg_size = 3;
+    optional uint64 serialized_bytes = 4;
+    optional uint64 data_bytes = 5;
+    optional uint64 mark_bytes = 6;
+    optional uint64 nullmap_data_bytes = 7;
+    optional uint64 nullmap_mark_bytes = 8;
+    optional uint64 index_bytes = 9;
+    optional uint64 array_sizes_bytes = 10;
+    optional uint64 array_sizes_mark_bytes = 11;
+}
+
+message ColumnStats {
+    repeated ColumnStat column_stats = 1;
+}

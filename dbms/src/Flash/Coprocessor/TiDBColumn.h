@@ -27,7 +27,7 @@ namespace DB
 class TiDBColumn
 {
 public:
-    TiDBColumn(Int8 element_len);
+    explicit TiDBColumn(Int8 element_len);
 
     void appendNull();
     void append(Int64 value);
@@ -44,10 +44,13 @@ public:
     void encodeColumn(WriteBuffer & ss);
     void clear();
 
-private:
-    bool isFixed() { return fixed_size != VAR_SIZE; };
+    std::unique_ptr<WriteBufferFromOwnString> data;
     void finishAppendFixed();
     void finishAppendVar(UInt32 size);
+
+private:
+    bool isFixed() const { return fixed_size != VAR_SIZE; };
+
     void appendNullBitMap(bool value);
 
     UInt32 length;
@@ -55,7 +58,7 @@ private:
     std::vector<UInt8> null_bitmap;
     std::vector<Int64> var_offsets;
     // WriteBufferFromOwnString is not moveable.
-    std::unique_ptr<WriteBufferFromOwnString> data;
+
     std::string default_value;
     UInt64 current_data_size;
     Int8 fixed_size;

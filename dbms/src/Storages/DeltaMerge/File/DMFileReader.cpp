@@ -145,8 +145,13 @@ DMFileReader::Stream::Stream(
     else
         marks = mark_load();
 
-    auto is_null_map = endsWith(file_name_base, ".null");
-    size_t data_file_size = reader.dmfile->colDataSize(col_id, is_null_map);
+    DMFile::ColDataType type = DMFile::ColDataType::Elements;
+    if (endsWith(file_name_base, ".null"))
+        type = DMFile::ColDataType::NullMap;
+    else if (endsWith(file_name_base, ".size0"))
+        type = DMFile::ColDataType::ArraySizes;
+    size_t data_file_size = reader.dmfile->colDataSize(col_id, type);
+
     size_t packs = reader.dmfile->getPacks();
     if (packs == 0)
         return;
@@ -781,32 +786,37 @@ void DMFileReader::readFromDisk(
     bool force_seek)
 {
     const auto stream_name = DMFile::getFileNameBase(column_define.id);
-    if (auto iter = column_streams.find(stream_name); iter != column_streams.end())
-    {
-        auto & top_stream = iter->second;
-        bool should_seek = force_seek || shouldSeek(start_pack_id) || skip_packs > 0;
-        auto data_type = dmfile->getColumnStat(column_define.id).type;
-        data_type->deserializeBinaryBulkWithMultipleStreams( //
-            *column,
-            [&](const IDataType::SubstreamPath & substream_path) {
-                const auto substream_name = DMFile::getFileNameBase(column_define.id, substream_path);
-                auto & sub_stream = column_streams.at(substream_name);
+    auto iter = column_streams.find(stream_name);
+#ifndef NDEBUG
+    RUNTIME_CHECK_MSG(
+        iter != column_streams.end(),
+        "Can not find column_stream, column_id={} stream_name={}",
+        column_define.id,
+        stream_name);
 
-                if (should_seek)
-                {
-                    fiu_do_on(FailPoints::skip_seek_before_read_dmfile, { return sub_stream->buf.get(); });
-                    sub_stream->buf->seek(
-                        sub_stream->getOffsetInFile(start_pack_id),
-                        sub_stream->getOffsetInDecompressedBlock(start_pack_id));
-                }
-                return sub_stream->buf.get();
-            },
-            read_rows,
-            top_stream->avg_size_hint,
-            true,
-            {});
-        IDataType::updateAvgValueSizeHint(*column, top_stream->avg_size_hint);
-    }
+#endif
+    auto & top_stream = iter->second;
+    bool should_seek = force_seek || shouldSeek(start_pack_id) || skip_packs > 0;
+    auto data_type = dmfile->getColumnStat(column_define.id).type;
+    data_type->deserializeBinaryBulkWithMultipleStreams( //
+        *column,
+        [&](const IDataType::SubstreamPath & substream_path) {
+            const auto substream_name = DMFile::getFileNameBase(column_define.id, substream_path);
+            auto & sub_stream = column_streams.at(substream_name);
+
+            if (should_seek)
+            {
+                sub_stream->buf->seek(
+                    sub_stream->getOffsetInFile(start_pack_id),
+                    sub_stream->getOffsetInDecompressedBlock(start_pack_id));
+            }
+            return sub_stream->buf.get();
+        },
+        read_rows,
+        top_stream->avg_size_hint,
+        true,
+        {});
+    IDataType::updateAvgValueSizeHint(*column, top_stream->avg_size_hint);
 }
 
 void DMFileReader::readColumn(

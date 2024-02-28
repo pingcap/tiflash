@@ -13,10 +13,13 @@
 // limitations under the License.
 
 #include <DataTypes/DataTypeDecimal.h>
+#include <IO/Endian.h>
 #include <IO/Operators.h>
+#include <IO/WriteHelpers.h>
 #include <Storages/KVStore/TiKVHelpers/TiKVVarInt.h>
 #include <TiDB/Decode/DatumCodec.h>
 #include <TiDB/Decode/JsonBinary.h>
+#include <TiDB/Decode/Vector.h>
 #include <TiDB/Schema/TiDB.h>
 
 namespace DB
@@ -339,6 +342,44 @@ Field DecodeDatumForCHRow(size_t & cursor, const String & raw_value, const TiDB:
     }
 }
 
+void EncodeVectorFloat32(const Array & val, WriteBuffer & ss)
+{
+    RUNTIME_CHECK(boost::endian::order::native == boost::endian::order::little);
+
+    writeIntBinary(static_cast<UInt32>(val.size()), ss);
+    for (const auto & s : val)
+        writeFloatBinary(static_cast<Float32>(s.safeGet<NearestFieldType<Float32>::Type>()), ss);
+}
+
+void SkipVectorFloat32(size_t & cursor, const String & raw_value)
+{
+    RUNTIME_CHECK(boost::endian::order::native == boost::endian::order::little);
+
+    auto elements_n = readLittleEndian<UInt32>(&raw_value[cursor]);
+    auto size = sizeof(elements_n) + elements_n * sizeof(Float32);
+    cursor += size;
+}
+
+Field DecodeVectorFloat32(size_t & cursor, const String & raw_value)
+{
+    RUNTIME_CHECK(boost::endian::order::native == boost::endian::order::little);
+
+    auto n = readLittleEndian<UInt32>(&raw_value[cursor]);
+    cursor += sizeof(UInt32);
+
+    Array res;
+    res.reserve(n);
+
+    for (size_t i = 0; i < n; i++)
+    {
+        auto v = readLittleEndian<Float32>(&raw_value[cursor]);
+        res.emplace_back(static_cast<Float64>(v));
+        cursor += sizeof(Float32);
+    }
+
+    return res;
+}
+
 Field DecodeDatum(size_t & cursor, const String & raw_value)
 {
     switch (raw_value[cursor++])
@@ -365,6 +406,8 @@ Field DecodeDatum(size_t & cursor, const String & raw_value)
         return DecodeDecimal(cursor, raw_value);
     case TiDB::CodecFlagJson:
         return JsonBinary::DecodeJsonAsBinary(cursor, raw_value);
+    case TiDB::CodecFlagVectorFloat32:
+        return DecodeVectorFloat32(cursor, raw_value);
     default:
         throw Exception("Unknown Type:" + std::to_string(raw_value[cursor - 1]), ErrorCodes::LOGICAL_ERROR);
     }
@@ -405,6 +448,9 @@ void SkipDatum(size_t & cursor, const String & raw_value)
         return;
     case TiDB::CodecFlagJson:
         JsonBinary::SkipJson(cursor, raw_value);
+        return;
+    case TiDB::CodecFlagVectorFloat32:
+        SkipVectorFloat32(cursor, raw_value);
         return;
     default:
         throw Exception("Unknown Type:" + std::to_string(raw_value[cursor - 1]), ErrorCodes::LOGICAL_ERROR);
@@ -659,6 +705,8 @@ void EncodeDatum(const Field & field, TiDB::CodecFlag flag, WriteBuffer & ss)
         return EncodeInt64(field.safeGet<Int64>(), ss);
     case TiDB::CodecFlagJson:
         return EncodeJSON(field.safeGet<String>(), ss);
+    case TiDB::CodecFlagVectorFloat32:
+        return EncodeVectorFloat32(field.safeGet<Array>(), ss);
     case TiDB::CodecFlagNil:
         return;
     default:

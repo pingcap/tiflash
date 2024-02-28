@@ -61,6 +61,7 @@ tipb::Expr constructStringLiteralTiExpr(const String & value);
 tipb::Expr constructInt64LiteralTiExpr(Int64 value);
 tipb::Expr constructDateTimeLiteralTiExpr(UInt64 packed_value);
 tipb::Expr constructNULLLiteralTiExpr();
+tipb::Expr constructZeroVectorFloat32TiExpr();
 DataTypePtr inferDataType4Literal(const tipb::Expr & expr);
 SortDescription getSortDescription(
     const std::vector<NameAndTypePair> & order_columns,

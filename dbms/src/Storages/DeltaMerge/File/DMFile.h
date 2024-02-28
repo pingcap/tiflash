@@ -158,8 +158,9 @@ public:
     {
         PackStat = 0,
         PackProperty,
-        ColumnStat,
+        ColumnStat, // Deprecated, use `ExtendColumnStat` instead
         MergedSubFilePos,
+        ExtendColumnStat,
     };
     struct MetaBlockHandle
     {
@@ -376,7 +377,13 @@ public:
         return Poco::File(colDataPath(file_name_base)).getSize();
     }
     size_t colIndexSize(ColId id);
-    size_t colDataSize(ColId id, bool is_null_map);
+    enum class ColDataType
+    {
+        Elements,
+        NullMap,
+        ArraySizes,
+    };
+    size_t colDataSize(ColId id, ColDataType type);
 
     String colDataPath(const FileNameBase & file_name_base) const
     {
@@ -466,10 +473,12 @@ public:
     MetaBlockHandle writeSLPackStatToBuffer(WriteBuffer & buffer);
     MetaBlockHandle writeSLPackPropertyToBuffer(WriteBuffer & buffer);
     MetaBlockHandle writeColumnStatToBuffer(WriteBuffer & buffer);
+    MetaBlockHandle writeExtendColumnStatToBuffer(WriteBuffer & buffer);
     MetaBlockHandle writeMergedSubFilePosotionsToBuffer(WriteBuffer & buffer);
     std::vector<char> readMetaV2(const FileProviderPtr & file_provider);
     void parseMetaV2(std::string_view buffer);
     void parseColumnStat(std::string_view buffer);
+    void parseExtendColumnStat(std::string_view buffer);
     void parseMergedSubFilePos(std::string_view buffer);
     void parsePackProperty(std::string_view buffer);
     void parsePackStat(std::string_view buffer);
