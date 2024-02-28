@@ -1296,21 +1296,14 @@ Block Join::doJoinBlockHash(ProbeProcessInfo & probe_process_info) const
 
             if (rows != process_rows)
             {
-<<<<<<< HEAD
                 if (isLeftOuterSemiFamily(kind))
                 {
                     auto helper_col = block.getByName(match_helper_name).column;
                     helper_col = helper_col->cut(probe_process_info.start_row, probe_process_info.end_row);
                 }
-                offsets_to_replicate->assign(
-                    offsets_to_replicate->begin() + probe_process_info.start_row,
-                    offsets_to_replicate->begin() + probe_process_info.end_row);
-                if (isAntiJoin(kind) && filter != nullptr)
-                    filter->assign(filter->begin() + probe_process_info.start_row,
-                                   filter->begin() + probe_process_info.end_row);
-=======
                 offsets_to_replicate->assignFromSelf(probe_process_info.start_row, probe_process_info.end_row);
->>>>>>> 9c0f851b08 (fix potential memcpy overlap issue in join (#8797))
+                if (isAntiJoin(kind) && filter != nullptr)
+                    filter->assignFromSelf(probe_process_info.start_row, probe_process_info.end_row);
             }
         }
     }
