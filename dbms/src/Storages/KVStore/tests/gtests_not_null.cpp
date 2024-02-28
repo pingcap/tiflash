@@ -19,15 +19,18 @@
 namespace DB::tests
 {
 
-void mustNotNull(NotNullRaw<int*> nn) {
+void mustNotNull(NotNullRaw<int *> nn)
+{
     UNUSED(nn);
 }
 
-void mustNotNullPtr(NotNullShared<int*> nnp) {
+void mustNotNullPtr(NotNullShared<int *> nnp)
+{
     UNUSED(nnp);
 }
 
-void mustNotNullUPtr(NotNullUnique<int*> nnp) {
+void mustNotNullUPtr(NotNullUnique<int *> nnp)
+{
     UNUSED(nnp);
 }
 
@@ -35,8 +38,9 @@ void mustNotNullUPtr(NotNullUnique<int*> nnp) {
 static volatile int MAYBE_NOT_ZERO = 0;
 
 template <typename T>
-T* getNullPtr() {
-    return reinterpret_cast<T*>(MAYBE_NOT_ZERO);
+T * getNullPtr()
+{
+    return reinterpret_cast<T *>(MAYBE_NOT_ZERO);
 }
 
 TEST(NotNullTest, Raw)
@@ -51,4 +55,4 @@ TEST(NotNullTest, Raw)
     // mustNotNull(newNotNullRaw(nullptr));
 }
 
-}
+} // namespace DB::tests

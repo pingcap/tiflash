@@ -14,25 +14,27 @@
 
 #pragma once
 
-#include <not_null.hpp>
 #include <memory>
+#include <not_null.hpp>
 
-namespace DB {
+namespace DB
+{
 
-template<typename T>
+template <typename T>
 using NotNullRaw = cpp::bitwizeshift::not_null<T>;
 
 // It involves an extra check when constructing,
 // if we can't tell if `ptr` is nullptr at compile time.
 template <class T>
-auto newNotNullRaw(T&& ptr) noexcept {
+auto newNotNullRaw(T && ptr) noexcept
+{
     return cpp::bitwizeshift::check_not_null(std::move(ptr));
 }
 
-template<typename T>
+template <typename T>
 using NotNullShared = cpp::bitwizeshift::not_null<std::shared_ptr<T>>;
 
-template<typename T>
+template <typename T>
 using NotNullUnique = cpp::bitwizeshift::not_null<std::unique_ptr<T>>;
 
-};
+}; // namespace DB
