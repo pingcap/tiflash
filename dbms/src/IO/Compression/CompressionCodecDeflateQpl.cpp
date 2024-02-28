@@ -325,9 +325,9 @@ CompressionCodecDeflateQpl::CompressionCodecDeflateQpl()
     , sw_codec(std::make_unique<SoftwareCodecDeflateQpl>())
 {}
 
-uint8_t CompressionCodecDeflateQpl::getMethodByte() const
+UInt8 CompressionCodecDeflateQpl::getMethodByte() const
 {
-    return static_cast<uint8_t>(CompressionMethodByte::QPL);
+    return static_cast<UInt8>(CompressionMethodByte::QPL);
 }
 
 UInt32 CompressionCodecDeflateQpl::getMaxCompressedDataSize(UInt32 uncompressed_size) const

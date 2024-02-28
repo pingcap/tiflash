@@ -52,13 +52,35 @@ public:
         case CompressionMethod::NONE:
             return std::make_shared<CompressionCodecNone>();
         default:
-            throw Exception("Unknown compression method", ErrorCodes::UNKNOWN_COMPRESSION_METHOD);
+            throw Exception(
+                ErrorCodes::UNKNOWN_COMPRESSION_METHOD,
+                "Unknown compression method: {}",
+                static_cast<UInt8>(settings.method));
         }
     }
 
-    static CompressionCodecPtr create(UInt8 method)
+    static CompressionCodecPtr create(UInt8 method_byte)
     {
-        CompressionSettings settings(static_cast<CompressionMethod>(method));
+        CompressionSettings settings;
+        switch (method_byte)
+        {
+        case static_cast<UInt8>(CompressionMethodByte::LZ4):
+            settings.method = CompressionMethod::LZ4;
+            break;
+        case static_cast<UInt8>(CompressionMethodByte::ZSTD):
+            settings.method = CompressionMethod::ZSTD;
+            break;
+#if USE_QPL
+        case static_cast<UInt8>(CompressionMethodByte::QPL):
+            settings.method = CompressionMethod::QPL;
+            break;
+#endif
+        case static_cast<UInt8>(CompressionMethodByte::NONE):
+            settings.method = CompressionMethod::NONE;
+            break;
+        default:
+            throw Exception(ErrorCodes::UNKNOWN_COMPRESSION_METHOD, "Unknown compression method byte: {}", method_byte);
+        }
         return create(settings);
     }
 };

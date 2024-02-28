@@ -25,9 +25,9 @@ extern const int CANNOT_COMPRESS;
 extern const int CANNOT_DECOMPRESS;
 } // namespace ErrorCodes
 
-uint8_t CompressionCodecZSTD::getMethodByte() const
+UInt8 CompressionCodecZSTD::getMethodByte() const
 {
-    return static_cast<uint8_t>(CompressionMethodByte::ZSTD);
+    return static_cast<UInt8>(CompressionMethodByte::ZSTD);
 }
 
 UInt32 CompressionCodecZSTD::getMaxCompressedDataSize(UInt32 uncompressed_size) const

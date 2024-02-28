@@ -35,19 +35,19 @@ extern const int CANNOT_DECOMPRESS;
 
 static void readHeaderAndGetCodec(const char * compressed_buffer, CompressionCodecPtr & codec)
 {
-    UInt8 method = ICompressionCodec::readMethod(compressed_buffer);
+    UInt8 method_byte = ICompressionCodec::readMethod(compressed_buffer);
 
     if (!codec)
     {
-        codec = CompressionFactory::create(method);
+        codec = CompressionFactory::create(method_byte);
     }
-    else if (codec->getMethodByte() != method)
+    else if (codec->getMethodByte() != method_byte)
     {
         throw Exception(
             ErrorCodes::CANNOT_DECOMPRESS,
             "Data compressed with different methods, given method "
             "byte {#x}, previous method byte {#x}",
-            method,
+            method_byte,
             codec->getMethodByte());
     }
 }

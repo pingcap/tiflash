@@ -61,7 +61,7 @@ public:
     UInt32 readDecompressedBlockSize(const char * source) const;
 
     /// Read method byte from compressed source
-    static uint8_t readMethod(const char * source);
+    static UInt8 readMethod(const char * source);
 
     /// Return true if this codec actually compressing something. Otherwise it can be just transformation that helps compression (e.g. Delta).
     virtual bool isCompression() const = 0;

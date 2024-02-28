@@ -24,7 +24,7 @@ CompressionCodecNone::CompressionCodecNone() = default;
 
 uint8_t CompressionCodecNone::getMethodByte() const
 {
-    return static_cast<uint8_t>(CompressionMethodByte::NONE);
+    return static_cast<UInt8>(CompressionMethodByte::NONE);
 }
 
 UInt32 CompressionCodecNone::doCompressData(const char * source, UInt32 source_size, char * dest) const

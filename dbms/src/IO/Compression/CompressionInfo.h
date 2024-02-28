@@ -25,7 +25,7 @@
 
 namespace DB
 {
-
+using UInt8 = std::uint8_t;
 /** The compressed block format is as follows:
   *
   * The first 16 bytes are the checksum from all other bytes of the block. Now only CityHash128 is used.
@@ -48,7 +48,7 @@ namespace DB
   */
 
 // clang-format off
-enum class CompressionMethodByte : uint8_t
+enum class CompressionMethodByte : UInt8
 {
     NONE            = 0x02,
     LZ4             = 0x82,

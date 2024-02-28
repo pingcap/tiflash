@@ -24,7 +24,7 @@ class CompressionCodecDelta : public ICompressionCodec
 public:
     explicit CompressionCodecDelta(UInt8 delta_bytes_size_);
 
-    uint8_t getMethodByte() const override;
+    UInt8 getMethodByte() const override;
 
 protected:
     UInt32 doCompressData(const char * source, UInt32 source_size, char * dest) const override;

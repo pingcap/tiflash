@@ -24,7 +24,7 @@ class CompressionCodecLZ4 : public ICompressionCodec
 public:
     explicit CompressionCodecLZ4(int level_);
 
-    uint8_t getMethodByte() const override;
+    UInt8 getMethodByte() const override;
 
 protected:
     UInt32 doCompressData(const char * source, UInt32 source_size, char * dest) const override;

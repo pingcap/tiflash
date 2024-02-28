@@ -33,9 +33,9 @@ CompressionCodecLZ4::CompressionCodecLZ4(int level_)
     : level(level_)
 {}
 
-uint8_t CompressionCodecLZ4::getMethodByte() const
+UInt8 CompressionCodecLZ4::getMethodByte() const
 {
-    return static_cast<uint8_t>(CompressionMethodByte::LZ4);
+    return static_cast<UInt8>(CompressionMethodByte::LZ4);
 }
 
 UInt32 CompressionCodecLZ4::getMaxCompressedDataSize(UInt32 uncompressed_size) const

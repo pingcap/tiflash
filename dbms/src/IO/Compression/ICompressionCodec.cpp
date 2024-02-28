@@ -53,8 +53,8 @@ void ICompressionCodec::decompress(const char * source, UInt32 source_size, char
             source_size,
             static_cast<size_t>(header_size));
 
-    uint8_t our_method = getMethodByte();
-    uint8_t method = source[0];
+    UInt8 our_method = getMethodByte();
+    UInt8 method = source[0];
     if (method != our_method)
         throw Exception(
             decompression_error_code,
@@ -87,9 +87,9 @@ UInt32 ICompressionCodec::readDecompressedBlockSize(const char * source) const
 }
 
 
-uint8_t ICompressionCodec::readMethod(const char * source)
+UInt8 ICompressionCodec::readMethod(const char * source)
 {
-    return static_cast<uint8_t>(source[0]);
+    return static_cast<UInt8>(source[0]);
 }
 
 } // namespace DB

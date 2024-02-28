@@ -35,9 +35,9 @@ CompressionCodecDelta::CompressionCodecDelta(UInt8 delta_bytes_size_)
     : delta_bytes_size(delta_bytes_size_)
 {}
 
-uint8_t CompressionCodecDelta::getMethodByte() const
+UInt8 CompressionCodecDelta::getMethodByte() const
 {
-    return static_cast<uint8_t>(CompressionMethodByte::Delta);
+    return static_cast<UInt8>(CompressionMethodByte::Delta);
 }
 
 namespace
