@@ -26,6 +26,7 @@ add_subdirectory (./MultiRaft/Disagg)
 
 add_library(kvstore ${kvstore_headers} ${kvstore_sources})
 target_include_directories(kvstore PRIVATE ${TiFlash_SOURCE_DIR}/contrib/GmSSL/include)
+target_include_directories(kvstore PUBLIC ${TiFlash_SOURCE_DIR}/contrib/not_null/include)
 target_link_libraries(kvstore PRIVATE dbms page KVStoreFastAddPeerProto)
 
 if (ENABLE_TESTS)
