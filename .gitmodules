@@ -145,4 +145,4 @@
 	url = https://github.com/simdjson/simdjson
 [submodule "contrib/not_null"]
 	path = contrib/not_null
-	url = git@github.com:bitwizeshift/not_null.git
+	url = https://github.com/bitwizeshift/not_null.git
