@@ -226,6 +226,11 @@ Block Aggregator::getHeader(bool final) const
     return params.getHeader(final);
 }
 
+Block Aggregator::getSourceHeader() const
+{
+    return params.src_header;
+}
+
 Block Aggregator::Params::getHeader(
     const Block & src_header,
     const Block & intermediate_header,
