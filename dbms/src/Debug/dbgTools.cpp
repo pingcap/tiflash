@@ -470,6 +470,10 @@ struct BatchCtrl
             throw Exception(
                 "Not implented yet: BatchCtrl::encodeDatum, TiDB::CodecFlagJson",
                 ErrorCodes::LOGICAL_ERROR);
+        case TiDB::CodecFlagVectorFloat32:
+            throw Exception(
+                "Not implented yet: BatchCtrl::encodeDatum, TiDB::CodecFlagVectorFloat32",
+                ErrorCodes::LOGICAL_ERROR);
         case TiDB::CodecFlagMax:
             throw Exception("Not implented yet: BatchCtrl::encodeDatum, TiDB::CodecFlagMax", ErrorCodes::LOGICAL_ERROR);
         case TiDB::CodecFlagDuration:
