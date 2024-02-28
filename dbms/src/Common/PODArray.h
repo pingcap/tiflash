@@ -633,10 +633,13 @@ public:
 
     void assignFromSelf(size_t start, size_t end)
     {
-        if unlikely (start == 0)
-            return;
-
         assert(end >= start && end <= this->size());
+        if unlikely (start == 0)
+        {
+            this->c_end = this->c_start + this->byte_size(end);
+            return;
+        }
+
         size_t required_capacity = end - start;
         size_t bytes_to_copy = this->byte_size(required_capacity);
         const auto & from_begin = this->begin() + start;
