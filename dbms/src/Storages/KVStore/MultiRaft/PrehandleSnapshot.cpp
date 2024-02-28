@@ -408,7 +408,7 @@ static void runInParallel(
     LoggerPtr log,
     RegionPtr new_region,
     PreHandlingTrace & trace,
-    DM::SSTFilesToBlockInputStreamOpts & opt,
+    const DM::SSTFilesToBlockInputStreamOpts & opt,
     const SSTViewVec & snaps,
     const TiFlashRaftProxyHelper * proxy_helper,
     TMTContext & tmt,
