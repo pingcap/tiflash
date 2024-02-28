@@ -634,10 +634,6 @@ public:
         this->c_end = this->c_start + bytes_to_copy;
     }
 
-<<<<<<< HEAD
-    void assign(const PODArray & from)
-    {
-=======
     void assignFromSelf(size_t start, size_t end)
     {
         assert(end >= start && end <= this->size());
@@ -658,7 +654,6 @@ public:
     {
         if unlikely (this == &from)
             return;
->>>>>>> 9c0f851b08 (fix potential memcpy overlap issue in join (#8797))
         assign(from.begin(), from.end());
     }
 
