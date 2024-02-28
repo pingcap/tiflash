@@ -559,8 +559,6 @@ try
 CATCH
 
 TEST_F(JoinExecutorTestRunner, Issue8791)
-<<<<<<< HEAD
-=======
 try
 {
     // clang-format off
@@ -655,7 +653,6 @@ try
 CATCH
 
 TEST_F(JoinExecutorTestRunner, CrossJoinWithoutCondition)
->>>>>>> 9c0f851b08 (fix potential memcpy overlap issue in join (#8797))
 try
 {
     auto build_key = toNullableVec<Int64>(
