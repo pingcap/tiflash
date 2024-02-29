@@ -55,7 +55,7 @@ public:
             throw Exception(
                 ErrorCodes::UNKNOWN_COMPRESSION_METHOD,
                 "Unknown compression method: {}",
-                static_cast<UInt8>(settings.method));
+                static_cast<int>(settings.method));
         }
     }
 
