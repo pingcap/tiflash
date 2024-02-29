@@ -142,9 +142,9 @@ void ProbeProcessInfo::prepareForCrossProbe(
 void ProbeProcessInfo::cutFilterAndOffsetVector(size_t start, size_t end) const
 {
     if (filter != nullptr)
-        filter->assign(filter->begin() + start, filter->begin() + end);
+        filter->assignFromSelf(start, end);
     if (offsets_to_replicate != nullptr)
-        offsets_to_replicate->assign(offsets_to_replicate->begin() + start, offsets_to_replicate->begin() + end);
+        offsets_to_replicate->assignFromSelf(start, end);
 }
 
 bool ProbeProcessInfo::isCurrentProbeRowFinished() const
