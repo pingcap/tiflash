@@ -69,15 +69,6 @@ struct AtomicReadWriteCtx
         , table_id(table_id_)
     {}
 
-    std::optional<Block> tryUseDecodeCache(const RegionPtrWithBlock &, ManageableStoragePtr &) // NOLINT
-    {
-        // Currently, RegionPtrWithBlock with a not-null CachePtr is only used in debug functions
-        // to apply a pre-decoded snapshot. So it will not take place here.
-        // we keep this function here as a tombstone, so we don't have to bisect some codes to
-        // find out why some codes are missing.
-        return std::nullopt;
-    }
-
     const LoggerPtr & log;
     const Context & context;
     const TMTContext & tmt;
@@ -155,7 +146,10 @@ static inline bool atomicReadWrite(
     {
         should_handle_version_col = false;
     }
-    // We always pre decode now.
+
+    // Currently, RegionPtrWithBlock with a not-null CachePtr is only used in debug functions
+    // to apply a pre-decoded snapshot. So it will not take place here.
+    // In short, we always decode here because there is no pre-decode cache.
     {
         LOG_TRACE(
             rw_ctx.log,
