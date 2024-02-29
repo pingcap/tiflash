@@ -51,6 +51,8 @@ static constexpr UInt64 DEFAULT_DISAGG_TASK_BUILD_TIMEOUT_SEC = 60;
 // It is now a short period to avoid long stale snapshots causing system
 // instable.
 static constexpr UInt64 DEFAULT_DISAGG_TASK_TIMEOUT_SEC = 5 * 60;
+// Timeout for FetchDisaggPages in the TiFlash compute node.
+static constexpr UInt64 DEFAULT_DISAGG_FETCH_PAGES_TIMEOUT_SEC = 30;
 
 #define DEFAULT_DAG_RECORDS_PER_CHUNK 1024L
 #define DEFAULT_BATCH_SEND_MIN_LIMIT (-1)
