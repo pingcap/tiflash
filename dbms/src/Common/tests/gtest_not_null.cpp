@@ -1,0 +1,107 @@
+// Copyright 2024 PingCAP, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+#include <Common/NotNull.h>
+#include <common/defines.h>
+#include <gtest/gtest.h>
+
+namespace DB::tests
+{
+
+struct Ball
+{
+    Ball()
+    {
+        copied = 0;
+        moved = 0;
+        value = 0;
+    }
+    Ball(const Ball & ball)
+        : copied(ball.copied + 1)
+        , moved(ball.moved)
+    {}
+    Ball(Ball && ball)
+        : copied(ball.copied)
+        , moved(ball.moved + 1)
+    {}
+
+    Ball & operator=(const Ball & ball) = delete;
+    Ball & operator=(Ball && ball) = delete;
+
+    size_t copied;
+    size_t moved;
+    int value;
+};
+
+template <typename T>
+void mustNotNull(const NotNull<T> & nn)
+{
+    RUNTIME_CHECK(nn != nullptr);
+}
+
+template <typename T>
+void mustNotNullPtr(const NotNullShared<T> & nn)
+{
+    RUNTIME_CHECK(nn != nullptr);
+}
+
+template <typename T>
+void mustNotNullUPtr(const NotNullUnique<T> & nn)
+{
+    RUNTIME_CHECK(nn != nullptr);
+}
+
+// Use volatile to prevent optimization.
+static volatile int MAYBE_NOT_ZERO = 0;
+
+template <typename T>
+T * getNullPtr()
+{
+    return reinterpret_cast<T *>(MAYBE_NOT_ZERO);
+}
+
+TEST(NotNullTest, Raw)
+{
+    [[maybe_unused]] auto p1 = newNotNull(new int(1));
+    // The following assignment can't compile.
+    // p1 = nullptr;
+    auto p3 = newNotNull(getNullPtr<int>());
+    mustNotNull(p3);
+}
+
+TEST(NotNullTest, Shared)
+{
+    NotNull<std::shared_ptr<Ball>> p1 = makeNotNullShared<Ball>();
+    auto p2 = std::move(p1);
+    ASSERT_EQ(p2->moved, 0);
+    ASSERT_EQ(p2->copied, 0);
+    NotNull<std::shared_ptr<Ball>> p3(p2);
+    ASSERT_EQ(p3->moved, 0);
+    ASSERT_EQ(p3->copied, 0);
+    p2->value = 1;
+    ASSERT_EQ(p3->value, 1);
+    // The following assignment can't compile.
+    // p1 = nullptr;
+}
+
+TEST(NotNullTest, Unique)
+{
+    auto p1 = makeNotNullUnique<Ball>();
+    auto p2 = std::move(p1);
+    mustNotNullUPtr(p2);
+    ASSERT_EQ(p2->moved, 0);
+    ASSERT_EQ(p2->copied, 0);
+}
+
+} // namespace DB::tests
