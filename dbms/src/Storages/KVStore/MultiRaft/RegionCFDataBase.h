@@ -24,7 +24,7 @@ namespace DB
 
 struct TiKVRangeKey;
 using RegionRange = RegionRangeKeys::RegionRange;
-using RegionDataRes = size_t;
+using RegionDataRes = int64_t;
 
 enum class DupCheck
 {

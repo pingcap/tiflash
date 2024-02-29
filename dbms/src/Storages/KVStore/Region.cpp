@@ -66,7 +66,7 @@ void Region::insert(ColumnFamilyType type, TiKVKey && key, TiKVValue && value, D
     doInsert(type, std::move(key), std::move(value), mode);
 }
 
-size_t Region::doInsert(ColumnFamilyType type, TiKVKey && key, TiKVValue && value, DupCheck mode)
+RegionDataRes Region::doInsert(ColumnFamilyType type, TiKVKey && key, TiKVValue && value, DupCheck mode)
 {
     if unlikely (getClusterRaftstoreVer() == RaftstoreVer::V2)
     {
