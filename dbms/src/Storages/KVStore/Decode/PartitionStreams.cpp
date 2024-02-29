@@ -69,7 +69,7 @@ struct AtomicReadWriteCtx
         , table_id(table_id_)
     {}
 
-    std::optional<Block> tryUseDecodeCache(const RegionPtrWithBlock &, ManageableStoragePtr &)
+    std::optional<Block> tryUseDecodeCache(const RegionPtrWithBlock &, ManageableStoragePtr &) // NOLINT
     {
         // Currently, RegionPtrWithBlock with a not-null CachePtr is only used in debug functions
         // to apply a pre-decoded snapshot. So it will not take place here.
