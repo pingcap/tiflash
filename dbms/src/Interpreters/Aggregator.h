@@ -1216,6 +1216,7 @@ public:
 
     /// Get data structure of the result.
     Block getHeader(bool final) const;
+    Block getSourceHeader() const;
 
 protected:
     friend struct AggregatedDataVariants;
