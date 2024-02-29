@@ -56,12 +56,16 @@ RegionDataRes RegionCFDataBase<RegionLockCFDataTrait>::insert(TiKVKey && key, Ti
     UNUSED(mode);
     RegionDataRes added_size = calcTiKVKeyValueSize(key, value);
     Pair kv_pair = RegionLockCFDataTrait::genKVPair(std::move(key), std::move(value));
-    // according to the process of pessimistic lock, just overwrite.
-    auto [it, inserted] = data.emplace(std::move(kv_pair.first), std::move(kv_pair.second));
-    if (!inserted)
     {
-        added_size -= calcTiKVKeyValueSize(it->second);
+        auto iter = data.find(kv_pair.first);
+        if (iter != data.end())
+        {
+            added_size -= calcTiKVKeyValueSize(iter->second);
+            data.erase(iter);
+        }
     }
+    // according to the process of pessimistic lock, just overwrite.
+    data.emplace(std::move(kv_pair.first), std::move(kv_pair.second));
     return added_size;
 }
 
