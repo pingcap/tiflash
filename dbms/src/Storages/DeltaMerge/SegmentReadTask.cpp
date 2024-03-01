@@ -551,6 +551,7 @@ void SegmentReadTask::doFetchPages(const disaggregated::FetchDisaggPagesRequest 
         cluster->rpc_client,
         extra_remote_info->store_address);
     grpc::ClientContext client_context;
+    // set timeout for the streaming call to avoid inf wait before `Finish()`
     rpc.setClientContext(client_context, dm_context->global_context.getSettingsRef().disagg_fetch_pages_timeout);
     auto stream_resp = rpc.call(&client_context, request);
     RUNTIME_CHECK(stream_resp != nullptr);
