@@ -48,7 +48,7 @@ void RegionData::reportDelta(size_t prev, size_t current)
     }
 }
 
-size_t RegionData::insert(ColumnFamilyType cf, TiKVKey && key, TiKVValue && value, DupCheck mode)
+RegionDataRes RegionData::insert(ColumnFamilyType cf, TiKVKey && key, TiKVValue && value, DupCheck mode)
 {
     switch (cf)
     {
