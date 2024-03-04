@@ -44,6 +44,72 @@ struct Ball
     int value;
 };
 
+template<typename T>
+struct MockSharedPtr {
+    using element_type = T;
+    using pointer      = element_type*;
+    using reference    = typename std::add_lvalue_reference<element_type>::type;
+
+    MockSharedPtr(T * ptr) : hold_ptr(ptr) {
+        copied = 0;
+        moved = 0;
+    }
+
+    MockSharedPtr(const MockSharedPtr & p) {
+        hold_ptr = p.hold_ptr;
+        copied = p.copied + 1;
+        moved = p.moved;
+    }
+
+    MockSharedPtr(MockSharedPtr && p) {
+        hold_ptr = p.hold_ptr;
+        copied = p.copied;
+        moved = p.moved + 1;
+    }
+
+    T & operator=(const MockSharedPtr & p) {
+        hold_ptr = p.hold_ptr;
+    }
+    T & operator=(MockSharedPtr && p) {
+        hold_ptr = p.hold_ptr;
+    }
+
+    T & operator*() const {
+        return *hold_ptr;
+    }
+    T * operator->() const {
+        return hold_ptr;
+    }
+
+    operator bool() const {
+        return hold_ptr == nullptr;
+    }
+    
+    size_t get_copied() const {
+        return copied;
+    }
+    size_t get_moved() const {
+        return moved;
+    }
+
+    T* get() const noexcept {
+        return hold_ptr;
+    }
+
+private:
+    T * hold_ptr;
+    size_t copied;
+    size_t moved;
+};
+
+template<class T>
+bool operator==( const MockSharedPtr<T>& lhs, std::nullptr_t) noexcept {
+    if (lhs) {
+        return true;
+    }
+    return false;
+}
+
 template <typename T>
 void mustNotNull(const NotNull<T> & nn)
 {
@@ -95,6 +161,24 @@ TEST(NotNullTest, Shared)
     // p1 = nullptr;
 }
 
+TEST(NotNullTest, MockShared)
+{
+    Ball * ball = new Ball();
+    auto p1 = newNotNull<MockSharedPtr<Ball>>(MockSharedPtr(ball));
+    auto base_move = p1.as_nullable().get_moved();
+    auto p2 = std::move(p1);
+    ASSERT_EQ(p2.as_nullable().get_moved(), base_move + 1);
+    ASSERT_EQ(p2.as_nullable().get_copied(), 0);
+    auto p3(p2);
+    ASSERT_EQ(p3.as_nullable().get_moved(), base_move + 1);
+    ASSERT_EQ(p3.as_nullable().get_copied(), 1);
+    p2->value = 1;
+    ASSERT_EQ(p3->value, 1);
+    // The following assignment can't compile.
+    // p1 = nullptr;
+}
+
+
 TEST(NotNullTest, Unique)
 {
     auto p1 = makeNotNullUnique<Ball>();
@@ -103,5 +187,11 @@ TEST(NotNullTest, Unique)
     ASSERT_EQ(p2->moved, 0);
     ASSERT_EQ(p2->copied, 0);
 }
+
+TEST(NotNullTest, Example)
+{
+    
+}
+
 
 } // namespace DB::tests
