@@ -31,6 +31,8 @@ struct Ball
         copied = 0;
         moved = 0;
         value = 0;
+        copy_assigned = 0;
+        move_assigned = 0;
         asserts = asserts_;
     }
 
@@ -41,11 +43,38 @@ struct Ball
     Ball(const Ball & ball)
         : copied(ball.copied + 1)
         , moved(ball.moved)
+        , copy_assigned(ball.copy_assigned)
+        , move_assigned(ball.move_assigned)
+        , value(ball.value)
     {}
+
     Ball(Ball && ball)
         : copied(ball.copied)
         , moved(ball.moved + 1)
+        , copy_assigned(ball.copy_assigned)
+        , move_assigned(ball.move_assigned)
+        , value(ball.value)
     {}
+
+    Ball & operator=(const Ball & p)
+    {
+        copied = p.copied;
+        moved = p.moved;
+        copy_assigned = p.copy_assigned + 1;
+        move_assigned = p.move_assigned;
+        value = p.value;
+        return *this;
+    }
+
+    Ball & operator=(Ball && p)
+    {
+        copied = p.copied;
+        moved = p.moved;
+        copy_assigned = p.copy_assigned;
+        move_assigned = p.move_assigned + 1;
+        value = p.value;
+        return *this;
+    }
 
     ~Ball()
     {
@@ -56,11 +85,10 @@ struct Ball
         return;
     }
 
-    Ball & operator=(const Ball & ball) = delete;
-    Ball & operator=(Ball && ball) = delete;
-
     size_t copied;
     size_t moved;
+    size_t copy_assigned;
+    size_t move_assigned;
     int value;
     Asserts * asserts;
 };
@@ -149,13 +177,29 @@ T * getNullPtr()
     return reinterpret_cast<T *>(MAYBE_NOT_ZERO);
 }
 
+template <typename T, typename U>
+void must_not_assign(const T &, const U &)
+{
+    static_assert(!std::is_assignable_v<T, U>);
+}
+
+template <typename T, typename U>
+void must_not_construct(const U &)
+{
+    static_assert(!std::is_constructible_v<T, U>);
+}
+
+template <typename T>
+void must_not_copy(const T &)
+{
+    static_assert(!std::is_copy_constructible_v<T>);
+}
+
 TEST(NotNullTest, Raw)
 {
     [[maybe_unused]] auto p1 = newNotNull(new int(1));
-    // The following assignment can't compile.
-    // p1 = nullptr;
-    auto p3 = newNotNull(getNullPtr<int>());
-    mustNotNull(p3);
+    must_not_assign(p1, nullptr);
+    EXPECT_ANY_THROW(p1 = newNotNull(getNullPtr<int>()));
 }
 
 TEST(NotNullTest, Shared)
@@ -169,8 +213,8 @@ TEST(NotNullTest, Shared)
     ASSERT_EQ(p3->copied, 0);
     p2->value = 1;
     ASSERT_EQ(p3->value, 1);
-    // The following assignment can't compile.
-    // p1 = nullptr;
+    must_not_assign(p1, nullptr);
+    must_not_assign(p1, std::make_shared<Ball>(nullptr));
 }
 
 TEST(NotNullTest, MockShared)
@@ -186,8 +230,7 @@ TEST(NotNullTest, MockShared)
     ASSERT_EQ(p3.as_nullable().get_copied(), 1);
     p2->value = 1;
     ASSERT_EQ(p3->value, 1);
-    // The following assignment can't compile.
-    // p1 = nullptr;
+    must_not_assign(p1, nullptr);
 }
 
 
@@ -231,8 +274,9 @@ TEST(NotNullTest, ToNullablePointer)
     takesNotNullUnique(std::move(p1));
     ASSERT_EQ(asserts.destructed_count, 1);
     // Can't copy-constructs not_null<unique_ptr<T>>
-    // auto p1_1 = makeNotNullUnique<Ball>(&asserts);
-    // takesNotNullUnique(p1_1);
+    auto p3 = makeNotNullUnique<Ball>(&asserts);
+    must_not_copy(p3);
+
     auto p2 = makeNotNullShared<Ball>(&asserts);
     takesNotNullShared(p2);
     ASSERT_EQ(asserts.destructed_count, 1); // destructs when return

@@ -28,7 +28,7 @@ using NotNull = cpp::bitwizeshift::not_null<T>;
 // It involves an extra check when constructing,
 // if we can't tell if `ptr` is nullptr at compile time.
 template <class T>
-auto newNotNull(T && ptr) noexcept
+auto newNotNull(T && ptr)
 {
     return cpp::bitwizeshift::check_not_null(std::move(ptr));
 }
