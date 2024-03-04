@@ -19,10 +19,10 @@
 namespace DB
 {
 
-class CompressionCodecDelta : public ICompressionCodec
+class CompressionCodecZigZag : public ICompressionCodec
 {
 public:
-    explicit CompressionCodecDelta(UInt8 delta_bytes_size_);
+    explicit CompressionCodecZigZag(UInt8 delta_bytes_size_);
 
     UInt8 getMethodByte() const override;
 

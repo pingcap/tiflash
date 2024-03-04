@@ -90,11 +90,8 @@ protected:
         = 0;
 
     const int decompression_error_code = ErrorCodes::CORRUPTED_DATA;
-
-private:
-    std::vector<CompressionMethodByte> methods;
 };
 
 using CompressionCodecPtr = std::shared_ptr<ICompressionCodec>;
-
+using Codecs = std::vector<CompressionCodecPtr>;
 } // namespace DB

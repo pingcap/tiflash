@@ -22,11 +22,6 @@
 namespace DB
 {
 
-namespace ErrorCodes
-{
-extern const int LOGICAL_ERROR;
-}
-
 UInt32 ICompressionCodec::compress(const char * source, UInt32 source_size, char * dest) const
 {
     assert(source != nullptr && dest != nullptr);

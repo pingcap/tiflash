@@ -15,6 +15,7 @@
 #pragma once
 
 #include <IO/Compression/CompressionMethod.h>
+#include <common/types.h>
 
 
 namespace DB
@@ -25,6 +26,7 @@ struct CompressionSettings
 {
     CompressionMethod method;
     int level;
+    UInt8 delta_bytes_size = 0;
 
     CompressionSettings()
         : CompressionSettings(CompressionMethod::LZ4)

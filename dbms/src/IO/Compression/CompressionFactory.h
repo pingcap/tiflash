@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/config.h>
+#include <IO/Compression/CompressionCodecDelta.h>
 #include <IO/Compression/CompressionCodecLZ4.h>
 #include <IO/Compression/CompressionCodecNone.h>
 #include <IO/Compression/CompressionCodecZSTD.h>
@@ -75,6 +76,8 @@ public:
             settings.method = CompressionMethod::QPL;
             break;
 #endif
+        case static_cast<UInt8>(CompressionMethodByte::Delta):
+            return std::make_shared<CompressionCodecDelta>(settings.delta_bytes_size);
         case static_cast<UInt8>(CompressionMethodByte::NONE):
             settings.method = CompressionMethod::NONE;
             break;
