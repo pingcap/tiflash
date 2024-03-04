@@ -41,13 +41,11 @@ struct Ball
     Ball(const Ball & ball)
         : copied(ball.copied + 1)
         , moved(ball.moved)
-    {
-    }
+    {}
     Ball(Ball && ball)
         : copied(ball.copied)
         , moved(ball.moved + 1)
-    {
-    }
+    {}
 
     ~Ball()
     {
@@ -95,14 +93,8 @@ struct MockSharedPtr
         moved = p.moved + 1;
     }
 
-    T & operator=(const MockSharedPtr & p)
-    {
-        hold_ptr = p.hold_ptr;
-    }
-    T & operator=(MockSharedPtr && p)
-    {
-        hold_ptr = p.hold_ptr;
-    }
+    T & operator=(const MockSharedPtr & p) { hold_ptr = p.hold_ptr; }
+    T & operator=(MockSharedPtr && p) { hold_ptr = p.hold_ptr; }
 
     T & operator*() const { return *hold_ptr; }
     T * operator->() const { return hold_ptr; }
@@ -253,19 +245,21 @@ TEST(NotNullTest, ToNullablePointer)
     ASSERT_EQ(asserts.destructed_count, 2);
 }
 
-namespace {
-void consNotNullPointer(std::unique_ptr<Ball> ptr) {
+namespace
+{
+void consNotNullPointer(std::unique_ptr<Ball> ptr)
+{
     auto p = newNotNull(std::move(ptr));
     ASSERT_EQ(p->copied, 0);
     ASSERT_EQ(p->moved, 0);
 }
-void consNotNullPointer(std::shared_ptr<Ball> ptr) {
+void consNotNullPointer(std::shared_ptr<Ball> ptr)
+{
     auto p = newNotNull(std::move(ptr));
     ASSERT_EQ(p->copied, 0);
     ASSERT_EQ(p->moved, 0);
 }
-
-}
+} // namespace
 
 TEST(NotNullTest, ToNotNullPointer)
 {
@@ -280,6 +274,37 @@ TEST(NotNullTest, ToNotNullPointer)
     auto p2_1_1 = p2_1;
     consNotNullPointer(std::move(p2_1));
     ASSERT_EQ(asserts.destructed_count, 2);
+}
+
+namespace
+{
+template <typename T, typename U>
+void convertNotNullPointer(NotNull<U> ptr)
+{
+    NotNull<T> p = cpp::bitwizeshift::not_null<T>(std::move(ptr));
+    ASSERT_EQ(p->copied, 0);
+    ASSERT_EQ(p->moved, 0);
+}
+} // namespace
+
+TEST(NotNullTest, Converts)
+{
+    Ball::Asserts asserts;
+    auto p1 = makeNotNullUnique<Ball>(&asserts);
+    convertNotNullPointer<std::shared_ptr<Ball>>(std::move(p1));
+    ASSERT_EQ(asserts.destructed_count, 1);
+
+    // auto p2 = makeNotNullShared<Ball>(&asserts);
+    // convertNotNullPointer<std::unique_ptr<Ball>>(std::move(p2));
+
+    static_assert(NOT_NULL_NS_IMPL::detail::
+                      not_null_is_implicit_convertible<std::shared_ptr<Ball>, std::unique_ptr<Ball> &&>::value);
+    static_assert(!NOT_NULL_NS_IMPL::detail::
+                      not_null_is_implicit_convertible<std::unique_ptr<Ball>, std::shared_ptr<Ball> &&>::value);
+    static_assert(!NOT_NULL_NS_IMPL::detail::
+                      not_null_is_explicit_convertible<std::shared_ptr<Ball>, std::unique_ptr<Ball> &&>::value);
+    static_assert(!NOT_NULL_NS_IMPL::detail::
+                      not_null_is_explicit_convertible<std::unique_ptr<Ball>, std::shared_ptr<Ball> &&>::value);
 }
 
 } // namespace DB::tests
