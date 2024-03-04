@@ -42,13 +42,11 @@ struct Ball
         : copied(ball.copied + 1)
         , moved(ball.moved)
     {
-        LOG_INFO(&Poco::Logger::get(""), "!!!!!== copy");
     }
     Ball(Ball && ball)
         : copied(ball.copied)
         , moved(ball.moved + 1)
     {
-        LOG_INFO(&Poco::Logger::get(""), "!!!!!== mov");
     }
 
     ~Ball()
@@ -57,7 +55,6 @@ struct Ball
         {
             asserts->destructed_count++;
         }
-        LOG_INFO(&Poco::Logger::get(""), "!!!!!== des");
         return;
     }
 
@@ -86,7 +83,6 @@ struct MockSharedPtr
 
     MockSharedPtr(const MockSharedPtr & p)
     {
-        LOG_INFO(&Poco::Logger::get(""), "!!!!! copy");
         hold_ptr = p.hold_ptr;
         copied = p.copied + 1;
         moved = p.moved;
@@ -94,7 +90,6 @@ struct MockSharedPtr
 
     MockSharedPtr(MockSharedPtr && p)
     {
-        LOG_INFO(&Poco::Logger::get(""), "!!!!! move");
         hold_ptr = p.hold_ptr;
         copied = p.copied;
         moved = p.moved + 1;
@@ -102,12 +97,10 @@ struct MockSharedPtr
 
     T & operator=(const MockSharedPtr & p)
     {
-        LOG_INFO(&Poco::Logger::get(""), "!!!!! cass");
         hold_ptr = p.hold_ptr;
     }
     T & operator=(MockSharedPtr && p)
     {
-        LOG_INFO(&Poco::Logger::get(""), "!!!!! mass");
         hold_ptr = p.hold_ptr;
     }
 
@@ -239,7 +232,7 @@ void takesNotNullShared(NotNullShared<Ball> ptr)
 }
 } // namespace
 
-TEST(NotNullTest, ToRawPointer)
+TEST(NotNullTest, ToNullablePointer)
 {
     Ball::Asserts asserts;
     auto p1 = makeNotNullUnique<Ball>(&asserts);
@@ -250,15 +243,43 @@ TEST(NotNullTest, ToRawPointer)
     // takesNotNullUnique(p1_1);
     auto p2 = makeNotNullShared<Ball>(&asserts);
     takesNotNullShared(p2);
-    ASSERT_EQ(asserts.destructed_count, 1);
+    ASSERT_EQ(asserts.destructed_count, 1); // destructs when return
     auto p2_1 = makeNotNullShared<Ball>(&asserts);
     takesNotNullShared(std::move(p2_1));
-    ASSERT_EQ(asserts.destructed_count, 2);
+    ASSERT_EQ(asserts.destructed_count, 2); // destructs when return
     auto p2_2 = makeNotNullShared<Ball>(&asserts);
     auto p2_2_1 = p2_2.as_nullable();
     takesNotNullShared(std::move(p2_2));
     ASSERT_EQ(asserts.destructed_count, 2);
 }
 
+namespace {
+void consNotNullPointer(std::unique_ptr<Ball> ptr) {
+    auto p = newNotNull(std::move(ptr));
+    ASSERT_EQ(p->copied, 0);
+    ASSERT_EQ(p->moved, 0);
+}
+void consNotNullPointer(std::shared_ptr<Ball> ptr) {
+    auto p = newNotNull(std::move(ptr));
+    ASSERT_EQ(p->copied, 0);
+    ASSERT_EQ(p->moved, 0);
+}
+
+}
+
+TEST(NotNullTest, ToNotNullPointer)
+{
+    Ball::Asserts asserts;
+    auto p1 = std::make_unique<Ball>(&asserts);
+    consNotNullPointer(std::move(p1));
+    ASSERT_EQ(asserts.destructed_count, 1);
+    auto p2 = std::make_shared<Ball>(&asserts);
+    consNotNullPointer(std::move(p2));
+    ASSERT_EQ(asserts.destructed_count, 2);
+    auto p2_1 = std::make_shared<Ball>(&asserts);
+    auto p2_1_1 = p2_1;
+    consNotNullPointer(std::move(p2_1));
+    ASSERT_EQ(asserts.destructed_count, 2);
+}
 
 } // namespace DB::tests
