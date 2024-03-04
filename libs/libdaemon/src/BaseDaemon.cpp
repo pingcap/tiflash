@@ -1172,10 +1172,10 @@ void BaseDaemon::initialize(Application & self)
 void BaseDaemon::logVersion() const
 {
     auto * log = &Logger::root();
-    LOG_WARNING(log, "Welcome to TiFlash");
+    LOG_INFO(log, "Welcome to TiFlash");
     std::stringstream ss;
     TiFlashBuildInfo::outputDetail(ss);
-    LOG_WARNING(log, "TiFlash build info: {}", ss.str());
+    LOG_INFO(log, "TiFlash build info: {}", ss.str());
 }
 
 /// Used for exitOnTaskError()
