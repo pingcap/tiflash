@@ -21,20 +21,45 @@ namespace DB::tests
 
 struct Ball
 {
-    Ball()
+    struct Asserts
+    {
+        size_t destructed_count = 0;
+    };
+
+    Ball(Asserts * asserts_)
     {
         copied = 0;
         moved = 0;
         value = 0;
+        asserts = asserts_;
     }
+
+    Ball()
+        : Ball(nullptr)
+    {}
+
     Ball(const Ball & ball)
         : copied(ball.copied + 1)
         , moved(ball.moved)
-    {}
+    {
+        LOG_INFO(&Poco::Logger::get(""), "!!!!!== copy");
+    }
     Ball(Ball && ball)
         : copied(ball.copied)
         , moved(ball.moved + 1)
-    {}
+    {
+        LOG_INFO(&Poco::Logger::get(""), "!!!!!== mov");
+    }
+
+    ~Ball()
+    {
+        if (asserts != nullptr)
+        {
+            asserts->destructed_count++;
+        }
+        LOG_INFO(&Poco::Logger::get(""), "!!!!!== des");
+        return;
+    }
 
     Ball & operator=(const Ball & ball) = delete;
     Ball & operator=(Ball && ball) = delete;
@@ -42,59 +67,59 @@ struct Ball
     size_t copied;
     size_t moved;
     int value;
+    Asserts * asserts;
 };
 
-template<typename T>
-struct MockSharedPtr {
+template <typename T>
+struct MockSharedPtr
+{
     using element_type = T;
-    using pointer      = element_type*;
-    using reference    = typename std::add_lvalue_reference<element_type>::type;
+    using pointer = element_type *;
+    using reference = typename std::add_lvalue_reference<element_type>::type;
 
-    MockSharedPtr(T * ptr) : hold_ptr(ptr) {
+    MockSharedPtr(T * ptr)
+        : hold_ptr(ptr)
+    {
         copied = 0;
         moved = 0;
     }
 
-    MockSharedPtr(const MockSharedPtr & p) {
+    MockSharedPtr(const MockSharedPtr & p)
+    {
+        LOG_INFO(&Poco::Logger::get(""), "!!!!! copy");
         hold_ptr = p.hold_ptr;
         copied = p.copied + 1;
         moved = p.moved;
     }
 
-    MockSharedPtr(MockSharedPtr && p) {
+    MockSharedPtr(MockSharedPtr && p)
+    {
+        LOG_INFO(&Poco::Logger::get(""), "!!!!! move");
         hold_ptr = p.hold_ptr;
         copied = p.copied;
         moved = p.moved + 1;
     }
 
-    T & operator=(const MockSharedPtr & p) {
+    T & operator=(const MockSharedPtr & p)
+    {
+        LOG_INFO(&Poco::Logger::get(""), "!!!!! cass");
         hold_ptr = p.hold_ptr;
     }
-    T & operator=(MockSharedPtr && p) {
+    T & operator=(MockSharedPtr && p)
+    {
+        LOG_INFO(&Poco::Logger::get(""), "!!!!! mass");
         hold_ptr = p.hold_ptr;
     }
 
-    T & operator*() const {
-        return *hold_ptr;
-    }
-    T * operator->() const {
-        return hold_ptr;
-    }
+    T & operator*() const { return *hold_ptr; }
+    T * operator->() const { return hold_ptr; }
 
-    operator bool() const {
-        return hold_ptr == nullptr;
-    }
-    
-    size_t get_copied() const {
-        return copied;
-    }
-    size_t get_moved() const {
-        return moved;
-    }
+    operator bool() const { return hold_ptr == nullptr; }
 
-    T* get() const noexcept {
-        return hold_ptr;
-    }
+    size_t get_copied() const { return copied; }
+    size_t get_moved() const { return moved; }
+
+    T * get() const noexcept { return hold_ptr; }
 
 private:
     T * hold_ptr;
@@ -102,9 +127,11 @@ private:
     size_t moved;
 };
 
-template<class T>
-bool operator==( const MockSharedPtr<T>& lhs, std::nullptr_t) noexcept {
-    if (lhs) {
+template <class T>
+bool operator==(const MockSharedPtr<T> & lhs, std::nullptr_t) noexcept
+{
+    if (lhs)
+    {
         return true;
     }
     return false;
@@ -188,9 +215,49 @@ TEST(NotNullTest, Unique)
     ASSERT_EQ(p2->copied, 0);
 }
 
-TEST(NotNullTest, Example)
+namespace
 {
-    
+void takesUnique(std::unique_ptr<Ball> ptr)
+{
+    // Either move of not_null or unqiue_ptr will not change `moved`.
+    ASSERT_EQ(ptr->moved, 0);
+}
+
+void takesShared(std::shared_ptr<Ball> ptr)
+{
+    ASSERT_EQ(ptr->moved, 0);
+}
+
+void takesNotNullUnique(NotNullUnique<Ball> ptr)
+{
+    takesUnique(std::move(ptr).as_nullable());
+}
+
+void takesNotNullShared(NotNullShared<Ball> ptr)
+{
+    takesShared(ptr.as_nullable());
+}
+} // namespace
+
+TEST(NotNullTest, ToRawPointer)
+{
+    Ball::Asserts asserts;
+    auto p1 = makeNotNullUnique<Ball>(&asserts);
+    takesNotNullUnique(std::move(p1));
+    ASSERT_EQ(asserts.destructed_count, 1);
+    // Can't copy-constructs not_null<unique_ptr<T>>
+    // auto p1_1 = makeNotNullUnique<Ball>(&asserts);
+    // takesNotNullUnique(p1_1);
+    auto p2 = makeNotNullShared<Ball>(&asserts);
+    takesNotNullShared(p2);
+    ASSERT_EQ(asserts.destructed_count, 1);
+    auto p2_1 = makeNotNullShared<Ball>(&asserts);
+    takesNotNullShared(std::move(p2_1));
+    ASSERT_EQ(asserts.destructed_count, 2);
+    auto p2_2 = makeNotNullShared<Ball>(&asserts);
+    auto p2_2_1 = p2_2.as_nullable();
+    takesNotNullShared(std::move(p2_2));
+    ASSERT_EQ(asserts.destructed_count, 2);
 }
 
 
