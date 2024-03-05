@@ -120,6 +120,7 @@ public:
 
 public: // Simple Read and Write
     explicit Region(RegionMeta && meta_, const TiFlashRaftProxyHelper *);
+    Region(const Region &) = delete;
     Region() = delete;
     ~Region();
 
@@ -263,7 +264,8 @@ private:
 
     // Private methods no need to lock mutex, normally
 
-    size_t doInsert(ColumnFamilyType type, TiKVKey && key, TiKVValue && value, DupCheck mode);
+    // Returns the size of data change(inc or dec)
+    RegionDataRes doInsert(ColumnFamilyType type, TiKVKey && key, TiKVValue && value, DupCheck mode);
     void doRemove(ColumnFamilyType type, const TiKVKey & key);
 
     std::optional<RegionDataReadInfo> readDataByWriteIt(

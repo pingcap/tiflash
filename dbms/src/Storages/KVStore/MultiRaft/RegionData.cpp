@@ -48,7 +48,7 @@ void RegionData::reportDelta(size_t prev, size_t current)
     }
 }
 
-size_t RegionData::insert(ColumnFamilyType cf, TiKVKey && key, TiKVValue && value, DupCheck mode)
+RegionDataRes RegionData::insert(ColumnFamilyType cf, TiKVKey && key, TiKVValue && value, DupCheck mode)
 {
     switch (cf)
     {
@@ -68,8 +68,16 @@ size_t RegionData::insert(ColumnFamilyType cf, TiKVKey && key, TiKVValue && valu
     }
     case ColumnFamilyType::Lock:
     {
-        // lock cf is not count into the size of RegionData
-        lock_cf.insert(std::move(key), std::move(value), mode);
+        auto delta = lock_cf.insert(std::move(key), std::move(value), mode);
+        cf_data_size += delta;
+        if likely (delta >= 0)
+        {
+            reportAlloc(delta);
+        }
+        else
+        {
+            reportDealloc(-delta);
+        }
         return 0;
     }
     }
@@ -103,7 +111,10 @@ void RegionData::remove(ColumnFamilyType cf, const TiKVKey & key)
     }
     case ColumnFamilyType::Lock:
     {
-        lock_cf.remove(RegionLockCFDataTrait::Key{nullptr, std::string_view(key.data(), key.dataSize())}, true);
+        auto delta
+            = lock_cf.remove(RegionLockCFDataTrait::Key{nullptr, std::string_view(key.data(), key.dataSize())}, true);
+        cf_data_size -= delta;
+        reportDealloc(delta);
         return;
     }
     }
