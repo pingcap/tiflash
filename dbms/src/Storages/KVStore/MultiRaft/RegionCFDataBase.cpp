@@ -54,11 +54,19 @@ template <>
 RegionDataRes RegionCFDataBase<RegionLockCFDataTrait>::insert(TiKVKey && key, TiKVValue && value, DupCheck mode)
 {
     UNUSED(mode);
+    RegionDataRes added_size = calcTiKVKeyValueSize(key, value);
     Pair kv_pair = RegionLockCFDataTrait::genKVPair(std::move(key), std::move(value));
+    {
+        auto iter = data.find(kv_pair.first);
+        if (iter != data.end())
+        {
+            added_size -= calcTiKVKeyValueSize(iter->second);
+            data.erase(iter);
+        }
+    }
     // according to the process of pessimistic lock, just overwrite.
-    data.insert_or_assign(std::move(kv_pair.first), std::move(kv_pair.second));
-    // lock cf is not count into the size of RegionData, always return 0
-    return 0;
+    data.emplace(std::move(kv_pair.first), std::move(kv_pair.second));
+    return added_size;
 }
 
 template <typename Trait>
@@ -119,9 +127,8 @@ size_t RegionCFDataBase<Trait>::calcTiKVKeyValueSize(const TiKVKey & key, const 
 {
     if constexpr (std::is_same<Trait, RegionLockCFDataTrait>::value)
     {
-        std::ignore = key;
-        std::ignore = value;
-        return 0;
+        // We start to count size of Lock Cf.
+        return key.dataSize() + value.dataSize();
     }
     else
     {
