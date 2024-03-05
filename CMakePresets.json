@@ -66,13 +66,6 @@
       }
     },
     {
-      "name": "tests-off",
-      "hidden": true,
-      "cacheVariables": {
-        "ENABLE_TESTS": "OFF"
-      }
-    },
-    {
       "name": "dev",
       "inherits": [
         "base-debug",
