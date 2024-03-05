@@ -1,0 +1,121 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 21,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "generator": "Ninja"
+    },
+    {
+      "name": "base-debug",
+      "inherits": "base",
+      "hidden": true,
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "DEBUG"
+      }
+    },
+    {
+      "name": "base-release",
+      "inherits": "base",
+      "hidden": true,
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RELEASE"
+      }
+    },
+    {
+      "name": "base-relwithdebinfo",
+      "inherits": "base",
+      "hidden": true,
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RELWITHDEBINFO"
+      }
+    },
+    {
+      "name": "base-asan",
+      "inherits": "base",
+      "hidden": true,
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "ASAN"
+      }
+    },
+    {
+      "name": "base-tsan",
+      "inherits": "base",
+      "hidden": true,
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "TSAN"
+      }
+    },
+    {
+      "name": "tests-off",
+      "hidden": true,
+      "cacheVariables": {
+        "ENABLE_TESTS": "OFF"
+      }
+    },
+    {
+      "name": "tests-on",
+      "hidden": true,
+      "cacheVariables": {
+        "ENABLE_TESTS": "ON"
+      }
+    },
+    {
+      "name": "tests-off",
+      "hidden": true,
+      "cacheVariables": {
+        "ENABLE_TESTS": "OFF"
+      }
+    },
+    {
+      "name": "dev",
+      "inherits": [
+        "base-debug",
+        "tests-on"
+      ],
+      "displayName": "Development: DEBUG build with tests enabled",
+      "cacheVariables": {}
+    },
+    {
+      "name": "release",
+      "inherits": [
+        "base-relwithdebinfo",
+        "tests-off"
+      ],
+      "displayName": "Release: RELWITHDEBINFO build without tests enabled",
+      "cacheVariables": {}
+    },
+    {
+      "name": "asan",
+      "inherits": [
+        "base-asan",
+        "tests-on"
+      ],
+      "displayName": "AddressSanitizer: ASAN build with tests enabled",
+      "cacheVariables": {}
+    },
+    {
+      "name": "tsan",
+      "inherits": [
+        "base-tsan",
+        "tests-on"
+      ],
+      "displayName": "ThreadSanitizer: TSAN build with tests enabled",
+      "cacheVariables": {}
+    },
+    {
+      "name": "benchmarks",
+      "inherits": [
+        "base-release",
+        "tests-on"
+      ],
+      "displayName": "Benchmarks: RELEASE build with benchmarks enabled",
+      "cacheVariables": {}
+    }
+  ]
+}
