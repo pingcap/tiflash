@@ -184,6 +184,10 @@ void RNWorkerFetchPages::doFetchPages(
         seg_task->meta.store_address);
 
     grpc::ClientContext client_context;
+    // set timeout for the streaming call to avoid inf wait before `Finish()`
+    rpc.setClientContext(
+        client_context,
+        seg_task->meta.dm_context->db_context.getSettingsRef().disagg_fetch_pages_timeout);
     auto stream_resp = rpc.call(&client_context, request);
 
     SCOPE_EXIT({
@@ -317,9 +321,10 @@ void RNWorkerFetchPages::doFetchPages(
     // Verify all pending pages are now received.
     RUNTIME_CHECK_MSG(
         remaining_pages_to_fetch.empty(),
-        "Failed to fetch all pages (from {}), remaining_pages_to_fetch={}",
+        "Failed to fetch all pages for {}, remaining_pages_to_fetch={}, wn_address={}",
         seg_task->info(),
-        remaining_pages_to_fetch);
+        remaining_pages_to_fetch,
+        seg_task->meta.store_address);
 
     LOG_DEBUG(
         log,
