@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <BaseFile/RateLimiter.h>
+#include <IO/BaseFile/RateLimiter.h>
 
 namespace DB
 {

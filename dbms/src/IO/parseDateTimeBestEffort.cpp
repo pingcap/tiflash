@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <Common/StringUtils/StringUtils.h>
-#include <IO/ReadBuffer.h>
+#include <IO/Buffer/ReadBuffer.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
 #include <IO/parseDateTimeBestEffort.h>
@@ -114,13 +114,13 @@ ReturnType parseDateTimeBestEffortImpl(
             {
                 /// This is unix timestamp.
                 readDecimalNumber<10>(res, digits);
-                return ReturnType(true);
+                return static_cast<ReturnType>(true);
             }
             else if (num_digits == 9 && !year && !has_time)
             {
                 /// This is unix timestamp.
                 readDecimalNumber<9>(res, digits);
-                return ReturnType(true);
+                return static_cast<ReturnType>(true);
             }
             else if (num_digits == 14 && !year && !has_time)
             {
@@ -563,7 +563,7 @@ ReturnType parseDateTimeBestEffortImpl(
         res = local_time_zone.makeDateTime(year, month, day_of_month, hour, minute, second);
     }
 
-    return ReturnType(true);
+    return static_cast<ReturnType>(true);
 }
 
 } // namespace

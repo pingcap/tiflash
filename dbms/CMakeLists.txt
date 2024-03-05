@@ -54,11 +54,14 @@ set(dbms_sources)
 
 include(${TiFlash_SOURCE_DIR}/cmake/dbms_glob_sources.cmake)
 
-add_headers_and_sources(tiflash_common_io src/BaseFile)
 add_headers_and_sources(tiflash_common_io src/Common)
 add_headers_and_sources(tiflash_common_io src/Common/HashTable)
 add_headers_and_sources(tiflash_common_io src/Common/SyncPoint)
 add_headers_and_sources(tiflash_common_io src/IO)
+add_headers_and_sources(tiflash_common_io src/IO/BaseFile)
+add_headers_and_sources(tiflash_common_io src/IO/Buffer)
+add_headers_and_sources(tiflash_common_io src/IO/Checksum)
+add_headers_and_sources(tiflash_common_io src/IO/Compression)
 
 add_headers_and_sources(dbms src/Analyzers)
 add_headers_and_sources(dbms src/Core)
@@ -70,7 +73,11 @@ add_headers_and_sources(dbms src/Debug)
 add_headers_and_sources(dbms src/Debug/MockExecutor)
 add_headers_and_sources(dbms src/Debug/MockKVStore)
 add_headers_and_sources(dbms src/Dictionaries)
-add_headers_and_sources(dbms src/Encryption)
+# Encryption needs to link tiflash-proxy, but we do not want to link tiflash-proxy to tiflash_common_io.
+# So we put the encryption source files in dbms.
+add_headers_and_sources(dbms src/IO/Encryption)
+# FileProvider relies on Encryption, so we put it in dbms as well.
+add_headers_and_sources(dbms src/IO/FileProvider)
 add_headers_and_sources(dbms src/Interpreters)
 add_headers_and_sources(dbms src/Interpreters/SharedContexts)
 add_headers_and_sources(dbms src/Columns)

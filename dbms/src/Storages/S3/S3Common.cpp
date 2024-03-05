@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <BaseFile/PosixRandomAccessFile.h>
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
 #include <Common/Logger.h>
@@ -21,10 +20,11 @@
 #include <Common/Stopwatch.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/TiFlashMetrics.h>
-#include <Encryption/FileProvider.h>
-#include <IO/ReadBufferFromRandomAccessFile.h>
-#include <IO/StdStreamFromReadBuffer.h>
-#include <IO/WriteBufferFromWritableFile.h>
+#include <IO/BaseFile/PosixRandomAccessFile.h>
+#include <IO/Buffer/ReadBufferFromRandomAccessFile.h>
+#include <IO/Buffer/StdStreamFromReadBuffer.h>
+#include <IO/Buffer/WriteBufferFromWritableFile.h>
+#include <IO/FileProvider/FileProvider.h>
 #include <Interpreters/Context_fwd.h>
 #include <Server/StorageConfigParser.h>
 #include <Storages/S3/Credentials.h>

@@ -14,8 +14,8 @@
 
 #include <Common/Logger.h>
 #include <Core/QueryOperatorSpillContexts.h>
-#include <Encryption/FileProvider.h>
-#include <Encryption/MockKeyManager.h>
+#include <IO/Encryption/MockKeyManager.h>
+#include <IO/FileProvider/FileProvider.h>
 #include <Interpreters/AggSpillContext.h>
 #include <Interpreters/SortSpillContext.h>
 #include <Poco/File.h>

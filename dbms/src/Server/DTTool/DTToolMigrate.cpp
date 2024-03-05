@@ -13,8 +13,7 @@
 // limitations under the License.
 
 #include <Common/config.h>
-#include <Encryption/createReadBufferFromFileBaseByFileProvider.h>
-#include <IO/ChecksumBuffer.h>
+#include <IO/Checksum/ChecksumBuffer.h>
 #include <IO/IOSWrapper.h>
 #include <Server/DTTool/DTTool.h>
 #include <Storages/DeltaMerge/File/DMFile.h>

@@ -17,10 +17,10 @@
 #include <Common/ArenaWithFreeLists.h>
 #include <Common/HashTable/Hash.h>
 #include <Common/HashTable/HashMap.h>
-#include <IO/ReadBuffer.h>
+#include <IO/Buffer/ReadBuffer.h>
+#include <IO/Buffer/WriteBuffer.h>
 #include <IO/ReadHelpers.h>
 #include <IO/VarInt.h>
-#include <IO/WriteBuffer.h>
 #include <IO/WriteHelpers.h>
 
 #include <boost/range/adaptor/reversed.hpp>

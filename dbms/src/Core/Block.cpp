@@ -17,8 +17,8 @@
 #include <Common/FieldVisitors.h>
 #include <Common/typeid_cast.h>
 #include <Core/Block.h>
+#include <IO/Buffer/WriteBufferFromString.h>
 #include <IO/Operators.h>
-#include <IO/WriteBufferFromString.h>
 
 #include <iterator>
 #include <memory>
@@ -531,7 +531,7 @@ static ReturnType checkBlockStructure(const Block & lhs, const Block & rhs, cons
         }
     }
 
-    return ReturnType(true);
+    return static_cast<ReturnType>(true);
 }
 
 /// join blocks by columns

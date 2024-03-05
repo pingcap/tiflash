@@ -16,6 +16,8 @@
 #include <Common/Stopwatch.h>
 #include <Core/SpillHandler.h>
 #include <DataStreams/IBlockInputStream.h>
+#include <IO/FileProvider/EncryptionPath.h>
+#include <IO/FileProvider/WriteBufferFromWritableFileBuilder.h>
 
 namespace DB
 {
@@ -30,14 +32,14 @@ SpillHandler::SpillWriter::SpillWriter(
     bool append_write,
     const Block & header,
     size_t spill_version)
-    : file_buf(
+    : file_buf(WriteBufferFromWritableFileBuilder::build(
         file_provider,
         file_name,
         EncryptionPath(file_name, ""),
         true,
         nullptr,
         DBMS_DEFAULT_BUFFER_SIZE,
-        append_write ? O_APPEND | O_WRONLY : -1)
+        append_write ? O_APPEND | O_WRONLY : -1))
     , compressed_buf(file_buf)
 {
     if (!append_write)

@@ -15,9 +15,9 @@
 #pragma once
 
 #include <Common/Exception.h>
-#include <IO/ReadBufferFromFileDescriptor.h>
+#include <IO/Buffer/ReadBufferFromFileDescriptor.h>
+#include <IO/Buffer/WriteBufferFromFileDescriptor.h>
 #include <IO/ReadHelpers.h>
-#include <IO/WriteBufferFromFileDescriptor.h>
 #include <IO/WriteHelpers.h>
 #include <Poco/Exception.h>
 #include <Poco/File.h>

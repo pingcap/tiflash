@@ -121,7 +121,13 @@ struct ProxyConfigSummary
     size_t snap_handle_pool_size = 0;
 };
 
-/// TODO: brief design document.
+/// KVStore manages raft replication and transactions.
+/// - Holds all regions in this TiFlash store.
+/// - Manages region -> table mapping.
+/// - Manages persistence of all regions.
+/// - Implements learner read.
+/// - Wraps FFI interfaces.
+/// - Use `Decoder` to transform row format into col format.
 class KVStore final : private boost::noncopyable
 {
 public:

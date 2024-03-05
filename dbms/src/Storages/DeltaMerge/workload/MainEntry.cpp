@@ -16,7 +16,7 @@
 #include <Common/Exception.h>
 #include <Common/Logger.h>
 #include <Common/UniThreadPool.h>
-#include <Encryption/EncryptionPath.h>
+#include <IO/FileProvider/EncryptionPath.h>
 #include <IO/IOThreadPools.h>
 #include <IO/UseSSL.h>
 #include <Interpreters/Context.h>

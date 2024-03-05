@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_subdirectory (BaseFile)
 add_subdirectory (Columns)
 add_subdirectory (Common)
 add_subdirectory (Core)
@@ -29,7 +28,6 @@ add_subdirectory (Server)
 add_subdirectory (Client)
 add_subdirectory (TableFunctions)
 add_subdirectory (Flash)
-add_subdirectory (Encryption)
 if (ENABLE_TESTS)
   add_subdirectory (TestUtils EXCLUDE_FROM_ALL)
 endif ()

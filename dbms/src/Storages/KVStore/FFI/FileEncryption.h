@@ -15,8 +15,8 @@
 #pragma once
 
 #include <Common/nocopyable.h>
-#include <Encryption/BlockAccessCipherStream.h>
-#include <Encryption/EncryptionPath.h>
+#include <IO/Encryption/BlockAccessCipherStream.h>
+#include <IO/FileProvider/EncryptionPath.h>
 #include <RaftStoreProxyFFI/EncryptionFFI.h>
 #include <Storages/KVStore/FFI/ProxyFFICommon.h>
 #include <common/likely.h>

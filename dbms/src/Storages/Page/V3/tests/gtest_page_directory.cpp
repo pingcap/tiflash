@@ -15,7 +15,7 @@
 #include <Common/Exception.h>
 #include <Common/FmtUtils.h>
 #include <Common/SyncPoint/Ctl.h>
-#include <Encryption/FileProvider.h>
+#include <IO/FileProvider/FileProvider.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageConstants.h>

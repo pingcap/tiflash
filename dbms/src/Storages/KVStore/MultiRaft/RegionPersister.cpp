@@ -15,7 +15,7 @@
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
 #include <Common/SyncPoint/SyncPoint.h>
-#include <IO/MemoryReadWriteBuffer.h>
+#include <IO/Buffer/MemoryReadWriteBuffer.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/StoragePool/StoragePool.h>
 #include <Storages/KVStore/MultiRaft/RegionManager.h>

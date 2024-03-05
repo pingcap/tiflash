@@ -14,8 +14,8 @@
 
 #include <Common/RandomData.h>
 #include <Common/TiFlashMetrics.h>
-#include <Encryption/MockKeyManager.h>
-#include <IO/ChecksumBuffer.h>
+#include <IO/Checksum/ChecksumBuffer.h>
+#include <IO/Encryption/MockKeyManager.h>
 #include <Poco/Path.h>
 #include <Server/DTTool/DTTool.h>
 #include <Server/RaftConfigParser.h>

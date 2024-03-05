@@ -18,8 +18,7 @@
 #include <Core/TiFlashDisaggregatedMode.h>
 #include <Core/Types.h>
 #include <Debug/MockServerInfo.h>
-#include <Encryption/FileProvider_fwd.h>
-#include <IO/CompressionSettings.h>
+#include <IO/FileProvider/FileProvider_fwd.h>
 #include <Interpreters/ClientInfo.h>
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/Settings.h>

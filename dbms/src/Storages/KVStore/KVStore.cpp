@@ -147,6 +147,7 @@ RegionPtr KVStore::getRegion(RegionID region_id) const
         return it->second;
     return nullptr;
 }
+
 // TODO: may get regions not in segment?
 RegionMap KVStore::getRegionsByRangeOverlap(const RegionRange & range) const
 {

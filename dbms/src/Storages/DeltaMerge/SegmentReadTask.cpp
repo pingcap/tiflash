@@ -551,6 +551,8 @@ void SegmentReadTask::doFetchPages(const disaggregated::FetchDisaggPagesRequest 
         cluster->rpc_client,
         extra_remote_info->store_address);
     grpc::ClientContext client_context;
+    // set timeout for the streaming call to avoid inf wait before `Finish()`
+    rpc.setClientContext(client_context, dm_context->global_context.getSettingsRef().disagg_fetch_pages_timeout);
     auto stream_resp = rpc.call(&client_context, request);
     RUNTIME_CHECK(stream_resp != nullptr);
     SCOPE_EXIT({
@@ -574,10 +576,11 @@ void SegmentReadTask::doFetchPages(const disaggregated::FetchDisaggPagesRequest 
                 stream_resp.reset(); // Reset to avoid calling `Finish()` repeatedly.
                 RUNTIME_CHECK_MSG(
                     status.ok(),
-                    "Failed to fetch all pages from {}, status={}, message={}",
+                    "Failed to fetch all pages for {}, status={}, message={}, wn_address={}",
                     *this,
                     static_cast<int>(status.error_code()),
-                    status.error_message());
+                    status.error_message(),
+                    extra_remote_info->store_address);
                 return false;
             }
         },
@@ -706,9 +709,10 @@ void SegmentReadTask::doFetchPagesImpl(
     checkMemTableSetReady();
     RUNTIME_CHECK_MSG(
         remaining_pages_to_fetch.empty(),
-        "Failed to fetch all pages (from {}), remaining_pages_to_fetch={}",
+        "Failed to fetch all pages for {}, remaining_pages_to_fetch={}, wn_address={}",
         *this,
-        remaining_pages_to_fetch);
+        remaining_pages_to_fetch,
+        extra_remote_info->store_address);
 
     GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_rpc_fetch_page)
         .Observe(read_page_ns / 1000000000.0);

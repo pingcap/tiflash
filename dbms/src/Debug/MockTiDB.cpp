@@ -743,6 +743,19 @@ void MockTiDB::truncateTable(const String & database_name, const String & table_
     version_diff[version] = diff;
 }
 
+Int64 MockTiDB::regenerateSchemaMap()
+{
+    std::lock_guard lock(tables_mutex);
+
+    SchemaDiff diff;
+    diff.type = SchemaActionType::None;
+    diff.regenerate_schema_map = true;
+    diff.version = version + 1;
+    version++;
+    version_diff[version] = diff;
+    return version;
+}
+
 TablePtr MockTiDB::getTableByName(const String & database_name, const String & table_name)
 {
     std::lock_guard lock(tables_mutex);

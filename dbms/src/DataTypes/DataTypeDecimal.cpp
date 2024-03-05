@@ -41,7 +41,7 @@ void DataTypeDecimal<T>::serializeBinary(const Field & field, WriteBuffer & ostr
 template <typename T>
 void DataTypeDecimal<T>::deserializeBinary(Field & field, ReadBuffer & istr) const
 {
-    T x;
+    T x{};
     readBinary(x, istr);
     field = DecimalField(T(x), scale);
 }
@@ -55,7 +55,7 @@ void DataTypeDecimal<T>::serializeBinary(const IColumn & column, size_t row_num,
 template <typename T>
 void DataTypeDecimal<T>::deserializeBinary(IColumn & column, ReadBuffer & istr) const
 {
-    T x;
+    T x{};
     readBinary(x, istr);
     static_cast<ColumnType &>(column).getData().push_back(FieldType(x));
 }
@@ -109,7 +109,7 @@ void DataTypeDecimal<T>::readText(T & x, ReadBuffer & istr) const
 template <typename T>
 void DataTypeDecimal<T>::deserializeTextEscaped(IColumn & column, ReadBuffer & istr) const
 {
-    T v;
+    T v{};
     this->readText(v, istr);
     static_cast<ColumnType &>(column).getData().push_back(v);
 }
@@ -123,7 +123,7 @@ void DataTypeDecimal<T>::serializeTextQuoted(const IColumn & column, size_t row_
 template <typename T>
 void DataTypeDecimal<T>::deserializeTextQuoted(IColumn & column, ReadBuffer & istr) const
 {
-    T v;
+    T v{};
     this->readText(v, istr);
     static_cast<ColumnType &>(column).getData().push_back(v);
 }
@@ -154,7 +154,7 @@ void DataTypeDecimal<T>::serializeTextCSV(const IColumn & column, size_t row_num
 template <typename T>
 void DataTypeDecimal<T>::deserializeTextCSV(IColumn & column, ReadBuffer & istr, const char /*delimiter*/) const
 {
-    T x;
+    T x{};
     readCSVDecimal(x, istr, precision, scale);
     static_cast<ColumnType &>(column).getData().push_back(x);
 }
@@ -202,12 +202,12 @@ static DataTypePtr create(const ASTPtr & arguments)
     {
         throw Exception("Decimal data type family must have exactly two arguments: precision and scale");
     }
-    const ASTLiteral * arg0 = typeid_cast<const ASTLiteral *>(arguments->children[0].get());
+    const auto * arg0 = typeid_cast<const ASTLiteral *>(arguments->children[0].get());
     if (!arg0 || arg0->value.getType() != Field::Types::UInt64 || arg0->value.get<UInt64>() == 0)
         throw Exception(
             "Decimal data type family must have a number (positive integer) as its argument",
             ErrorCodes::ARGUMENT_OUT_OF_BOUND);
-    const ASTLiteral * arg1 = typeid_cast<const ASTLiteral *>(arguments->children[1].get());
+    const auto * arg1 = typeid_cast<const ASTLiteral *>(arguments->children[1].get());
     if (!arg1 || arg1->value.getType() != Field::Types::UInt64)
         throw Exception(
             "Decimal data type family must have a number (positive integer) as its argument",

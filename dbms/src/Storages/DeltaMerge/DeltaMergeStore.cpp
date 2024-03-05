@@ -1810,7 +1810,7 @@ void DeltaMergeStore::check(const Context & /*db_context*/)
 
             throw Exception(fmt::format("Segment [{}] is expected to have id [{}]", segment_id, next_segment_id));
         }
-        if (compare(last_end.data, last_end.size, range.getStart().data, range.getStart().size) != 0)
+        if (last_end != range.getStart())
             throw Exception(fmt::format(
                 "Segment [{}:{}] is expected to have the same start edge value like the end edge value in {}",
                 segment_id,

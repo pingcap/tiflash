@@ -16,6 +16,7 @@
 
 #include <Storages/ColumnsDescription.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
+#include <Storages/DeltaMerge/DeltaMergeInterfaces.h>
 #include <Storages/KVStore/Decode/DecodingStorageSchemaSnapshot.h>
 #include <Storages/KVStore/Decode/RegionDataRead.h>
 #include <Storages/TableLockHolder.h>
@@ -27,6 +28,7 @@ class Region;
 using RegionPtr = std::shared_ptr<Region>;
 class StorageDeltaMerge;
 class TMTContext;
+struct RegionPtrWithBlock;
 
 std::optional<RegionDataReadInfoList> ReadRegionCommitCache(const RegionPtr & region, bool lock_region);
 void RemoveRegionCommitCache(
@@ -43,5 +45,12 @@ Block GenRegionBlockDataWithSchema(
     Timestamp gc_safepoint,
     bool force_decode,
     TMTContext & tmt);
+
+template <typename ReadList>
+DM::WriteResult writeRegionDataToStorage(
+    Context & context,
+    const RegionPtrWithBlock & region,
+    ReadList & data_list_read,
+    const LoggerPtr & log);
 
 } // namespace DB

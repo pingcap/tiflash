@@ -18,6 +18,7 @@
 #include <RaftStoreProxyFFI/ColumnFamily.h>
 #include <Storages/DeltaMerge/Decode/SSTFilesToBlockInputStream.h>
 #include <Storages/DeltaMerge/ExternalDTFileInfo.h>
+#include <Storages/DeltaMerge/File/DMFile_fwd.h>
 #include <Storages/KVStore/MultiRaft/PreHandlingTrace.h>
 #include <Storages/Page/PageDefinesBase.h>
 
@@ -38,12 +39,6 @@ struct DecodingStorageSchemaSnapshot;
 
 namespace DM
 {
-struct ColumnDefine;
-using ColumnDefines = std::vector<ColumnDefine>;
-using ColumnDefinesPtr = std::shared_ptr<ColumnDefines>;
-
-class DMFile;
-using DMFilePtr = std::shared_ptr<DMFile>;
 class DMFileBlockOutputStream;
 
 enum class FileConvertJobType

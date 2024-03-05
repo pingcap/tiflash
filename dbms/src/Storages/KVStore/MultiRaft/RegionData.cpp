@@ -156,17 +156,17 @@ std::optional<RegionDataReadInfo> RegionData::readDataByWriteIt(
     }
 
     if (!need_value)
-        return std::make_tuple(pk, decoded_val.write_type, ts, nullptr);
+        return RegionDataReadInfo{pk, decoded_val.write_type, ts, nullptr};
 
     if (decoded_val.write_type != RecordKVFormat::CFModifyFlag::PutFlag)
-        return std::make_tuple(pk, decoded_val.write_type, ts, nullptr);
+        return RegionDataReadInfo{pk, decoded_val.write_type, ts, nullptr};
 
     std::string orphan_key_debug_msg;
     if (!decoded_val.short_value)
     {
         const auto & map = default_cf.getData();
         if (auto data_it = map.find({pk, decoded_val.prewrite_ts}); data_it != map.end())
-            return std::make_tuple(pk, decoded_val.write_type, ts, RegionDefaultCFDataTrait::getTiKVValue(data_it));
+            return RegionDataReadInfo{pk, decoded_val.write_type, ts, RegionDefaultCFDataTrait::getTiKVValue(data_it)};
         else
         {
             if (!hard_error)
@@ -198,7 +198,7 @@ std::optional<RegionDataReadInfo> RegionData::readDataByWriteIt(
         }
     }
 
-    return std::make_tuple(pk, decoded_val.write_type, ts, decoded_val.short_value);
+    return RegionDataReadInfo{pk, decoded_val.write_type, ts, decoded_val.short_value};
 }
 
 DecodedLockCFValuePtr RegionData::getLockInfo(const RegionLockReadQuery & query) const

@@ -18,9 +18,9 @@
 #include <Common/Logger.h>
 #include <Common/ProfileEvents.h>
 #include <DataStreams/IBlockInputStream.h>
-#include <IO/ReadBufferFromFile.h>
+#include <IO/Buffer/ReadBufferFromFile.h>
+#include <IO/Buffer/WriteBufferFromFile.h>
 #include <IO/ReadHelpers.h>
-#include <IO/WriteBufferFromFile.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaTree.h>
@@ -230,8 +230,9 @@ private:
             {
                 auto rowkey_value = rowkey_column.getRowKeyValue(i);
                 auto version = version_column[i];
-                int cmp_result = compare(rowkey_value, last_value_ref);
-                if (cmp_result < 0 || (cmp_result == 0 && version < last_version))
+                auto cmp_result = rowkey_value <=> last_value_ref;
+                if (cmp_result == std::strong_ordering::less
+                    || (cmp_result == std::strong_ordering::equal && version < last_version))
                 {
                     ProfileEvents::increment(ProfileEvents::DTDeltaIndexError);
                     LOG_ERROR(

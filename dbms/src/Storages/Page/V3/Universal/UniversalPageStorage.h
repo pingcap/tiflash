@@ -15,8 +15,8 @@
 #pragma once
 
 #include <Common/Stopwatch.h>
-#include <Encryption/FileProvider_fwd.h>
-#include <IO/WriteBufferFromString.h>
+#include <IO/Buffer/WriteBufferFromString.h>
+#include <IO/FileProvider/FileProvider_fwd.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/DeltaMerge/Remote/DataStore/DataStore.h>
 #include <Storages/Page/Config.h>

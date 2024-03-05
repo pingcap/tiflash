@@ -403,6 +403,7 @@ struct ParallelPrehandleCtx
 };
 using ParallelPrehandleCtxPtr = std::shared_ptr<ParallelPrehandleCtx>;
 
+// TODO fix the very long argument list
 static void runInParallel(
     LoggerPtr log,
     RegionPtr new_region,
@@ -483,6 +484,7 @@ static void runInParallel(
     }
 }
 
+// TODO fix the very long argument list
 void executeParallelTransform(
     LoggerPtr log,
     ReadFromStreamResult & result,

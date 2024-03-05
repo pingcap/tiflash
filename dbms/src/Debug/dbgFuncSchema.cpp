@@ -242,4 +242,16 @@ void dbgFuncSkipSchemaVersion(Context &, const ASTs &, DBGInvoker::Printer outpu
     output(fmt::format("Generate an empty schema diff with schema_version={}", empty_schema_version));
 }
 
+void dbgFuncRegrenationSchemaMap(Context &, const ASTs &, DBGInvoker::Printer output)
+{
+    auto regen_schema_version = MockTiDB::instance().regenerateSchemaMap();
+    LOG_WARNING(
+        Logger::get(),
+        "Generate a schema diff with regenerate_schema_map == true, schema_version={}",
+        regen_schema_version);
+    output(fmt::format(
+        "Generate a empty schema diff with regenerate_schema_map == true, schema_version={}",
+        regen_schema_version));
+}
+
 } // namespace DB

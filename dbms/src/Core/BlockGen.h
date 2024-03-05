@@ -16,7 +16,7 @@
 
 #include <Core/Block.h>
 #include <DataTypes/DataTypeFactory.h>
-#include <IO/ReadBufferFromString.h>
+#include <IO/Buffer/ReadBufferFromString.h>
 
 namespace DB
 {

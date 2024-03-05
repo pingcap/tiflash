@@ -723,21 +723,21 @@ struct DateBinaryOperationTraits
                    If<IsIntegral<LeftDataType> && IsDateOrDateTime<RightDataType>,
                       Then<RightDataType>,
                       Else<InvalidType>>>>>,
-        Else<If<
-            std::is_same_v<Op, MinusImpl<T0, T1>>,
-            Then<
-                If<IsDateOrDateTime<LeftDataType>,
-                   Then<
-                       If<std::is_same_v<LeftDataType, RightDataType>,
-                          Then<DataTypeInt32>,
-                          Else<If<IsIntegral<RightDataType>, Then<LeftDataType>, Else<InvalidType>>>>>,
-                   Else<InvalidType>>>,
-            Else<If<
-                std::is_same_v<
-                    T0,
-                    T1> && (std::is_same_v<Op, BinaryLeastBaseImpl<T0, T1>> || std::is_same_v<Op, BinaryGreatestBaseImpl<T0, T1>>),
-                Then<LeftDataType>,
-                Else<InvalidType>>>>>>;
+        Else<
+            If<std::is_same_v<Op, MinusImpl<T0, T1>>,
+               Then<
+                   If<IsDateOrDateTime<LeftDataType>,
+                      Then<
+                          If<std::is_same_v<LeftDataType, RightDataType>,
+                             Then<DataTypeInt32>,
+                             Else<If<IsIntegral<RightDataType>, Then<LeftDataType>, Else<InvalidType>>>>>,
+                      Else<InvalidType>>>,
+               Else<
+                   If<std::is_same_v<T0, T1>
+                          && (std::is_same_v<Op, BinaryLeastBaseImpl<T0, T1>>
+                              || std::is_same_v<Op, BinaryGreatestBaseImpl<T0, T1>>),
+                      Then<LeftDataType>,
+                      Else<InvalidType>>>>>>;
 };
 
 
@@ -1145,8 +1145,8 @@ public:
                 using T1 = typename RightDataType::FieldType;
                 using ResultType = typename ResultDataType::FieldType;
                 using ExpectedResultType = typename Op<T0, T1>::ResultType;
-                if constexpr ((!IsDecimal<ResultType> || !IsDecimal<ExpectedResultType>)&&!std::
-                                  is_same_v<ResultType, ExpectedResultType>)
+                if constexpr ((!IsDecimal<ResultType>
+                               || !IsDecimal<ExpectedResultType>)&&!std::is_same_v<ResultType, ExpectedResultType>)
                 {
                     return false;
                 }

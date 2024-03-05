@@ -16,8 +16,8 @@
 #include <Common/Logger.h>
 #include <Common/Stopwatch.h>
 #include <Common/SyncPoint/Ctl.h>
-#include <IO/ReadBufferFromFile.h>
-#include <IO/WriteBufferFromFile.h>
+#include <IO/Buffer/ReadBufferFromFile.h>
+#include <IO/Buffer/WriteBufferFromFile.h>
 #include <Interpreters/Context.h>
 #include <RaftStoreProxyFFI/ColumnFamily.h>
 #include <Storages/KVStore/MultiRaft/RegionManager.h>

@@ -12,14 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <BaseFile/RandomAccessFile.h>
-#include <BaseFile/WritableFile.h>
 #include <Common/CurrentMetrics.h>
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
 #include <Common/ProfileEvents.h>
 #include <Common/StringUtils/StringUtils.h>
-#include <IO/WriteBufferFromFile.h>
+#include <IO/BaseFile/RandomAccessFile.h>
+#include <IO/BaseFile/WritableFile.h>
+#include <IO/Buffer/WriteBufferFromFile.h>
 #include <IO/WriteHelpers.h>
 #include <Poco/File.h>
 #include <Storages/Page/PageUtil.h>

@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include <AggregateFunctions/registerAggregateFunctions.h>
-#include <BaseFile/RateLimiter.h>
 #include <Common/CPUAffinityManager.h>
 #include <Common/ComputeLabelHolder.h>
 #include <Common/Config/ConfigReloader.h>
@@ -38,21 +37,21 @@
 #include <Common/getNumberOfCPUCores.h>
 #include <Common/setThreadName.h>
 #include <Core/TiFlashDisaggregatedMode.h>
-#include <Encryption/DataKeyManager.h>
-#include <Encryption/FileProvider.h>
-#include <Encryption/KeyspacesKeyManager.h>
-#include <Encryption/MockKeyManager.h>
 #include <Flash/DiagnosticsService.h>
 #include <Flash/FlashService.h>
 #include <Flash/Mpp/GRPCCompletionQueuePool.h>
 #include <Flash/Pipeline/Schedule/TaskScheduler.h>
 #include <Flash/ResourceControl/LocalAdmissionController.h>
 #include <Functions/registerFunctions.h>
+#include <IO/BaseFile/RateLimiter.h>
+#include <IO/Encryption/DataKeyManager.h>
+#include <IO/Encryption/KeyspacesKeyManager.h>
+#include <IO/Encryption/MockKeyManager.h>
+#include <IO/FileProvider/FileProvider.h>
 #include <IO/HTTPCommon.h>
 #include <IO/IOThreadPools.h>
 #include <IO/ReadHelpers.h>
 #include <IO/UseSSL.h>
-#include <IO/createReadBufferFromFileBase.h>
 #include <Interpreters/AsynchronousMetrics.h>
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/SharedContexts/Disagg.h>

@@ -15,8 +15,8 @@
 #include <Common/Exception.h>
 #include <Common/MemoryTracker.h>
 #include <Common/formatReadable.h>
-#include <Encryption/MockKeyManager.h>
-#include <IO/ReadBufferFromMemory.h>
+#include <IO/Buffer/ReadBufferFromMemory.h>
+#include <IO/Encryption/MockKeyManager.h>
 #include <Poco/File.h>
 #include <Poco/Logger.h>
 #include <Storages/Page/PageDefinesBase.h>

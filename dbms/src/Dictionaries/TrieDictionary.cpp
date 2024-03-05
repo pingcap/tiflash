@@ -350,7 +350,7 @@ void TrieDictionary::loadData()
         for (const auto row_idx : ext::range(0, rows))
         {
             /// calculate key once per row
-            const auto key_column = key_column_ptrs.front();
+            const auto & key_column = key_column_ptrs.front();
 
             for (const auto attribute_idx : ext::range(0, attributes_size))
             {
@@ -431,7 +431,7 @@ void TrieDictionary::calculateBytesAllocated()
     bytes_allocated += btrie_allocated(trie);
 }
 
-void TrieDictionary::validateKeyTypes(const DataTypes & key_types) const
+void TrieDictionary::validateKeyTypes(const DataTypes & key_types)
 {
     if (key_types.size() != 1)
         throw Exception{"Expected a single IP address", ErrorCodes::TYPE_MISMATCH};
@@ -511,7 +511,7 @@ void TrieDictionary::getItemsNumber(
     ValueSetter && set_value,
     DefaultGetter && get_default) const
 {
-    if (false) {}
+    if (false) {} // NOLINT
 #define DISPATCH(TYPE)                                                                        \
     else if (attribute.type == AttributeUnderlyingType::TYPE) getItemsImpl<TYPE, OutputType>( \
         attribute,                                                                            \
@@ -542,13 +542,13 @@ void TrieDictionary::getItemsImpl(
 {
     auto & vec = *std::get<ContainerPtrType<AttributeType>>(attribute.maps);
 
-    const auto first_column = key_columns.front();
+    const auto & first_column = key_columns.front();
     const auto rows = first_column->size();
     if (first_column->isNumeric())
     {
         for (const auto i : ext::range(0, rows))
         {
-            auto addr = Int32(first_column->get64(i));
+            auto addr = static_cast<Int32>(first_column->get64(i));
             uintptr_t slot = btrie_find(trie, addr);
             set_value(i, slot != BTRIE_NULL ? static_cast<OutputType>(vec[slot]) : get_default(i));
         }
@@ -607,8 +607,8 @@ bool TrieDictionary::setAttributeValueImpl(Attribute & attribute, const StringRe
         return btrie_insert(trie, addr_v4, mask_v4, row) == 0;
     }
 
-    const uint8_t * addr_v6 = reinterpret_cast<const uint8_t *>(addr.addr());
-    const uint8_t * mask_v6 = reinterpret_cast<const uint8_t *>(mask.addr());
+    const auto * addr_v6 = reinterpret_cast<const uint8_t *>(addr.addr());
+    const auto * mask_v6 = reinterpret_cast<const uint8_t *>(mask.addr());
     return btrie_insert_a6(trie, addr_v6, mask_v6, row) == 0;
 }
 
@@ -641,7 +641,7 @@ bool TrieDictionary::setAttributeValue(Attribute & attribute, const StringRef ke
     case AttributeUnderlyingType::String:
     {
         const auto & string = value.get<String>();
-        const auto string_in_arena = attribute.string_arena->insert(string.data(), string.size());
+        const auto * const string_in_arena = attribute.string_arena->insert(string.data(), string.size());
         setAttributeValueImpl<StringRef>(attribute, key, StringRef{string_in_arena, string.size()});
         return true;
     }
@@ -662,13 +662,13 @@ const TrieDictionary::Attribute & TrieDictionary::getAttribute(const std::string
 template <typename T>
 void TrieDictionary::has(const Attribute &, const Columns & key_columns, PaddedPODArray<UInt8> & out) const
 {
-    const auto first_column = key_columns.front();
+    const auto & first_column = key_columns.front();
     const auto rows = first_column->size();
     if (first_column->isNumeric())
     {
         for (const auto i : ext::range(0, rows))
         {
-            auto addr = Int32(first_column->get64(i));
+            auto addr = static_cast<Int32>(first_column->get64(i));
             uintptr_t slot = btrie_find(trie, addr);
             out[i] = (slot != BTRIE_NULL);
         }
@@ -705,7 +705,7 @@ void TrieDictionary::trieTraverse(const btrie_t * tree, Getter && getter) const
         node = node->left;
     }
 
-    auto getBit = [&high_bit](size_t size) {
+    auto get_bit = [&high_bit](size_t size) {
         return size ? (high_bit >> (size - 1)) : 0;
     };
 
@@ -719,14 +719,14 @@ void TrieDictionary::trieTraverse(const btrie_t * tree, Getter && getter) const
 
         if (node && node->right)
         {
-            stack.push(NULL);
-            key |= getBit(stack.size());
+            stack.push(nullptr);
+            key |= get_bit(stack.size());
             stack.push(node->right);
             while (stack.top()->left)
                 stack.push(stack.top()->left);
         }
         else
-            key &= ~getBit(stack.size());
+            key &= ~get_bit(stack.size());
     }
 }
 
@@ -737,7 +737,7 @@ Columns TrieDictionary::getKeyColumns() const
 
 #if defined(__SIZEOF_INT128__)
     auto getter = [&ip_column, &mask_column](__uint128_t ip, size_t mask) {
-        UInt64 * ip_array = reinterpret_cast<UInt64 *>(&ip);
+        auto * ip_array = reinterpret_cast<UInt64 *>(&ip);
         ip_array[0] = Poco::ByteOrder::fromNetwork(ip_array[0]);
         ip_array[1] = Poco::ByteOrder::fromNetwork(ip_array[1]);
         std::swap(ip_array[0], ip_array[1]);
@@ -756,14 +756,14 @@ BlockInputStreamPtr TrieDictionary::getBlockInputStream(const Names & column_nam
 {
     using BlockInputStreamType = DictionaryBlockInputStream<TrieDictionary, UInt64>;
 
-    auto getKeys = [](const Columns & columns, const std::vector<DictionaryAttribute> & attributes) {
+    auto get_keys = [](const Columns & columns, const std::vector<DictionaryAttribute> & attributes) {
         const auto & attr = attributes.front();
         return ColumnsWithTypeAndName({ColumnWithTypeAndName(
             columns.front(),
             std::make_shared<DataTypeFixedString>(IPV6_BINARY_LENGTH),
             attr.name)});
     };
-    auto getView = [](const Columns & columns, const std::vector<DictionaryAttribute> & attributes) {
+    auto get_view = [](const Columns & columns, const std::vector<DictionaryAttribute> & attributes) {
         auto column = ColumnString::create();
         const auto & ip_column = static_cast<const ColumnFixedString &>(*columns.front());
         const auto & mask_column = static_cast<const ColumnVector<UInt8> &>(*columns.back());
@@ -785,8 +785,8 @@ BlockInputStreamPtr TrieDictionary::getBlockInputStream(const Names & column_nam
         max_block_size,
         getKeyColumns(),
         column_names,
-        std::move(getKeys),
-        std::move(getView));
+        std::move(get_keys),
+        std::move(get_view));
 }
 
 } // namespace DB

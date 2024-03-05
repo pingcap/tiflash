@@ -18,9 +18,9 @@
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <DataTypes/DataTypeTuple.h>
+#include <IO/Buffer/WriteBufferFromString.h>
 #include <IO/Operators.h>
 #include <IO/ReadHelpers.h>
-#include <IO/WriteBufferFromString.h>
 #include <IO/WriteHelpers.h>
 #include <Parsers/ASTNameTypePair.h>
 #include <Parsers/IAST.h>
@@ -382,7 +382,7 @@ bool DataTypeTuple::equals(const IDataType & rhs) const
     if (typeid(rhs) != typeid(*this))
         return false;
 
-    const DataTypeTuple & rhs_tuple = static_cast<const DataTypeTuple &>(rhs);
+    const auto & rhs_tuple = static_cast<const DataTypeTuple &>(rhs);
 
     size_t size = elems.size();
     if (size != rhs_tuple.elems.size())
@@ -451,7 +451,7 @@ static DataTypePtr create(const ASTPtr & arguments)
 
     for (const ASTPtr & child : arguments->children)
     {
-        if (const ASTNameTypePair * name_and_type_pair = typeid_cast<const ASTNameTypePair *>(child.get()))
+        if (const auto * name_and_type_pair = typeid_cast<const ASTNameTypePair *>(child.get()))
         {
             nested_types.emplace_back(DataTypeFactory::instance().get(name_and_type_pair->type));
             names.emplace_back(name_and_type_pair->name);
