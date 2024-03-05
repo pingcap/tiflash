@@ -73,8 +73,6 @@ struct WriteCmdsView;
 enum class EngineStoreApplyRes : uint32_t;
 
 struct TiFlashRaftProxyHelper;
-struct RegionPreDecodeBlockData;
-using RegionPreDecodeBlockDataPtr = std::unique_ptr<RegionPreDecodeBlockData>;
 class ReadIndexWorkerManager;
 using BatchReadIndexRes = std::vector<std::pair<kvrpcpb::ReadIndexResponse, uint64_t>>;
 class ReadIndexStressTest;
