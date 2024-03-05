@@ -24,7 +24,7 @@
 #include <Functions/Regexps.h>
 #include <Functions/StringUtil.h>
 #include <Functions/re2Util.h>
-#include <IO/Util/WriteHelpers.h>
+#include <IO/WriteHelpers.h>
 #include <Poco/UTF8String.h>
 #include <TiDB/Collation/CollatorUtils.h>
 #include <fmt/core.h>

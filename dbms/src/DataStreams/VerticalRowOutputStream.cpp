@@ -15,7 +15,7 @@
 #include <Common/UTF8Helpers.h>
 #include <DataStreams/VerticalRowOutputStream.h>
 #include <IO/Buffer/WriteBufferFromString.h>
-#include <IO/Util/WriteHelpers.h>
+#include <IO/WriteHelpers.h>
 
 #include <cmath>
 

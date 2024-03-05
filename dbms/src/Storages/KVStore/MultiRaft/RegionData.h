@@ -44,7 +44,7 @@ public:
     static void reportDealloc(size_t delta);
     static void reportDelta(size_t prev, size_t current);
 
-    size_t insert(ColumnFamilyType cf, TiKVKey && key, TiKVValue && value, DupCheck mode = DupCheck::Deny);
+    RegionDataRes insert(ColumnFamilyType cf, TiKVKey && key, TiKVValue && value, DupCheck mode = DupCheck::Deny);
     void remove(ColumnFamilyType cf, const TiKVKey & key);
 
     WriteCFIter removeDataByWriteIt(const WriteCFIter & write_it);

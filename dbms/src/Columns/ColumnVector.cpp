@@ -20,7 +20,7 @@
 #include <Common/NaNUtils.h>
 #include <Common/SipHash.h>
 #include <DataStreams/ColumnGathererStream.h>
-#include <IO/Util/WriteHelpers.h>
+#include <IO/WriteHelpers.h>
 
 #include <cmath>
 #include <cstring>

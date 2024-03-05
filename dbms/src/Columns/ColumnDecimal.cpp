@@ -20,7 +20,7 @@
 #include <Common/SipHash.h>
 #include <DataStreams/ColumnGathererStream.h>
 #include <DataTypes/DataTypeDecimal.h>
-#include <IO/Util/WriteHelpers.h>
+#include <IO/WriteHelpers.h>
 #include <common/unaligned.h>
 
 

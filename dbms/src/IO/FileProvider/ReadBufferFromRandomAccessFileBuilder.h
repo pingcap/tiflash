@@ -14,39 +14,37 @@
 
 #pragma once
 
-#include <Common/Checksum.h>
-#include <Common/nocopyable.h>
-#include <IO/Buffer/WriteBufferFromFileBase.h>
-#include <IO/Buffer/WriteBufferFromWritableFile.h>
-#include <IO/FileProvider.h>
+#include <IO/BaseFile/fwd.h>
+#include <IO/Buffer/ReadBufferFromRandomAccessFile.h>
+#include <IO/FileProvider/EncryptionPath.h>
+#include <IO/FileProvider/FileProvider_fwd.h>
 
-#include <string>
 
 namespace DB
 {
 
-class ChecksumWriteBufferBuilder
+class ReadBufferFromRandomAccessFileBuilder
 {
 public:
-    static std::unique_ptr<WriteBufferFromFileBase> build(
-        bool has_checksum,
+    static ReadBufferFromRandomAccessFilePtr buildPtr(
         const FileProviderPtr & file_provider,
-        const std::string & filename_,
+        const std::string & file_name_,
         const EncryptionPath & encryption_path_,
-        bool create_new_encryption_info_,
-        const WriteLimiterPtr & write_limiter_,
-        ChecksumAlgo checksum_algorithm,
-        size_t checksum_frame_size,
-        int flags_ = -1,
-        mode_t mode = 0666,
         size_t buf_size = DBMS_DEFAULT_BUFFER_SIZE,
+        const ReadLimiterPtr & read_limiter = nullptr,
+        int flags = -1,
         char * existing_memory = nullptr,
         size_t alignment = 0);
 
-    static std::unique_ptr<WriteBufferFromFileBase> build(
-        WriteBufferFromWritableFilePtr & writer_buffer,
-        ChecksumAlgo checksum_algorithm,
-        size_t checksum_frame_size);
+    static ReadBufferFromRandomAccessFile build(
+        const FileProviderPtr & file_provider,
+        const std::string & file_name_,
+        const EncryptionPath & encryption_path_,
+        size_t buf_size = DBMS_DEFAULT_BUFFER_SIZE,
+        const ReadLimiterPtr & read_limiter = nullptr,
+        int flags = -1,
+        char * existing_memory = nullptr,
+        size_t alignment = 0);
 };
 
 } // namespace DB

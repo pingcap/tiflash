@@ -31,7 +31,7 @@
 #include <Flash/Coprocessor/DAGContext.h>
 #include <IO/BaseFile/fwd.h>
 #include <IO/Buffer/ReadBufferFromFile.h>
-#include <IO/FileProvider.h>
+#include <IO/FileProvider/FileProvider.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/ISecurityManager.h>
 #include <Interpreters/ProcessList.h>

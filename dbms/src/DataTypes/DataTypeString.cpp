@@ -19,9 +19,9 @@
 #include <Core/Defines.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <DataTypes/DataTypeString.h>
-#include <IO/Util/ReadHelpers.h>
-#include <IO/Util/VarInt.h>
-#include <IO/Util/WriteHelpers.h>
+#include <IO/ReadHelpers.h>
+#include <IO/VarInt.h>
+#include <IO/WriteHelpers.h>
 
 #if __SSE2__
 #include <emmintrin.h>

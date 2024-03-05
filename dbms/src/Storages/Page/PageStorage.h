@@ -16,7 +16,7 @@
 
 #include <Common/Logger.h>
 #include <Core/Types.h>
-#include <IO/FileProvider_fwd.h>
+#include <IO/FileProvider/FileProvider_fwd.h>
 #include <Storages/KVStore/Types.h>
 #include <Storages/Page/Config.h>
 #include <Storages/Page/ExternalPageCallbacks.h>

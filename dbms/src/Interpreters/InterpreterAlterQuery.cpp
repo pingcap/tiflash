@@ -15,7 +15,7 @@
 #include <Common/escapeForFileName.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <IO/Buffer/ReadBufferFromFile.h>
-#include <IO/Util/copyData.h>
+#include <IO/copyData.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterAlterQuery.h>
 #include <Parsers/ASTAlterQuery.h>

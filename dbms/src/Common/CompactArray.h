@@ -18,8 +18,8 @@
 #include <Core/Defines.h>
 #include <IO/Buffer/ReadBuffer.h>
 #include <IO/Buffer/WriteBuffer.h>
-#include <IO/Util/ReadHelpers.h>
-#include <IO/Util/WriteHelpers.h>
+#include <IO/ReadHelpers.h>
+#include <IO/WriteHelpers.h>
 
 namespace DB
 {

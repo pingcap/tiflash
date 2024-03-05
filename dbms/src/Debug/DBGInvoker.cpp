@@ -91,6 +91,7 @@ DBGInvoker::DBGInvoker()
     regSchemalessFunc("refresh_table_schema", dbgFuncRefreshTableSchema);
     regSchemalessFunc("refresh_mapped_table_schema", dbgFuncRefreshMappedTableSchema);
     regSchemalessFunc("skip_schema_version", dbgFuncSkipSchemaVersion);
+    regSchemalessFunc("regenerate_schema_map", dbgFuncRegrenationSchemaMap);
 
     regSchemalessFunc("region_split", MockRaftCommand::dbgFuncRegionBatchSplit);
     regSchemalessFunc("region_prepare_merge", MockRaftCommand::dbgFuncPrepareMerge);

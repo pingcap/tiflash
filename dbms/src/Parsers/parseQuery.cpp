@@ -16,8 +16,8 @@
 #include <Common/UTF8Helpers.h>
 #include <Common/typeid_cast.h>
 #include <IO/Buffer/WriteBufferFromString.h>
-#include <IO/Util/Operators.h>
-#include <IO/Util/WriteHelpers.h>
+#include <IO/Operators.h>
+#include <IO/WriteHelpers.h>
 #include <Parsers/ASTInsertQuery.h>
 #include <Parsers/Lexer.h>
 #include <Parsers/ParserQuery.h>

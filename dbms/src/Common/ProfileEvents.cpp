@@ -25,10 +25,6 @@
     M(ReadBufferFromFileDescriptorReadBytes)   \
     M(WriteBufferFromFileDescriptorWrite)      \
     M(WriteBufferFromFileDescriptorWriteBytes) \
-    M(ReadBufferAIORead)                       \
-    M(ReadBufferAIOReadBytes)                  \
-    M(WriteBufferAIOWrite)                     \
-    M(WriteBufferAIOWriteBytes)                \
                                                \
     M(MarkCacheHits)                           \
     M(MarkCacheMisses)                         \

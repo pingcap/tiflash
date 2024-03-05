@@ -144,7 +144,7 @@ try
         KVStore & kvs = getKVS();
         proxy_instance->bootstrapWithRegion(kvs, ctx.getTMTContext(), 1, std::nullopt);
         auto region = kvs.getRegion(1);
-        RegionPtrWithBlock region_with_cache = RegionPtrWithBlock(region, nullptr);
+        RegionPtrWithBlock region_with_cache = RegionPtrWithBlock(region);
         // TODO(Spill) spill logic
         EXPECT_THROW(writeRegionDataToStorage(ctx, region_with_cache, data_list_read, log), Exception);
     }

@@ -15,8 +15,8 @@
 #include <Common/Exception.h>
 #include <Common/FmtUtils.h>
 #include <Common/formatReadable.h>
-#include <IO/Checksum/ChecksumReadBufferBuilder.h>
-#include <IO/ReadBufferFromRandomAccessFileBuilder.h>
+#include <IO/FileProvider/ChecksumReadBufferBuilder.h>
+#include <IO/FileProvider/ReadBufferFromRandomAccessFileBuilder.h>
 #include <Server/DTTool/DTTool.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>

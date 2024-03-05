@@ -17,8 +17,8 @@
 #include <Common/NaNUtils.h>
 #include <Common/PODArray.h>
 #include <IO/Buffer/ReadBuffer.h>
-#include <IO/Util/ReadHelpers.h>
-#include <IO/Util/WriteHelpers.h>
+#include <IO/ReadHelpers.h>
+#include <IO/WriteHelpers.h>
 #include <Poco/Exception.h>
 #include <common/types.h>
 

@@ -14,8 +14,8 @@
 
 #pragma once
 
-#include <IO/Util/ReadHelpers.h>
-#include <IO/Util/WriteHelpers.h>
+#include <IO/ReadHelpers.h>
+#include <IO/WriteHelpers.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/File/dtpb/dmfile.pb.h>
 

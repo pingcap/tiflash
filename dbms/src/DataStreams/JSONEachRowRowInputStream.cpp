@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <DataStreams/JSONEachRowRowInputStream.h>
-#include <IO/Util/ReadHelpers.h>
+#include <IO/ReadHelpers.h>
 
 
 namespace DB

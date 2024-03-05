@@ -16,7 +16,7 @@
 
 #include <Common/PODArray.h>
 #include <Core/Types.h>
-#include <IO/Util/WriteHelpers.h>
+#include <IO/WriteHelpers.h>
 
 #include <tuple>
 

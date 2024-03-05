@@ -14,7 +14,7 @@
 
 #include <Common/Stopwatch.h>
 #include <Databases/DatabasesCommon.h>
-#include <IO/ReadBufferFromRandomAccessFileBuilder.h>
+#include <IO/FileProvider/ReadBufferFromRandomAccessFileBuilder.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterCreateQuery.h>
 #include <Parsers/ASTCreateQuery.h>

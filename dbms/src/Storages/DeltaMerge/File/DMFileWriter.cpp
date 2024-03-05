@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <Common/TiFlashException.h>
-#include <IO/WriteBufferFromWritableFileBuilder.h>
+#include <IO/FileProvider/WriteBufferFromWritableFileBuilder.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/File/DMFileWriter.h>
 #include <Storages/S3/S3Common.h>

@@ -31,7 +31,7 @@
 #include <DataTypes/DataTypeUUID.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <IO/Buffer/ReadBufferFromString.h>
-#include <IO/Util/ReadHelpers.h>
+#include <IO/ReadHelpers.h>
 #include <Interpreters/convertFieldToType.h>
 
 

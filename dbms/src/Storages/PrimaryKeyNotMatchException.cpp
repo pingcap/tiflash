@@ -14,8 +14,8 @@
 
 
 #include <Databases/DatabasesCommon.h>
-#include <IO/FileProvider.h>
-#include <IO/WriteBufferFromWritableFileBuilder.h>
+#include <IO/FileProvider/FileProvider.h>
+#include <IO/FileProvider/WriteBufferFromWritableFileBuilder.h>
 #include <Interpreters/Context.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ParserCreateQuery.h>

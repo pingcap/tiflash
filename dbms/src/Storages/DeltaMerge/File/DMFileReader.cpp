@@ -20,7 +20,7 @@
 #include <Common/escapeForFileName.h>
 #include <DataTypes/IDataType.h>
 #include <Flash/Coprocessor/DAGContext.h>
-#include <IO/Checksum/ChecksumReadBufferBuilder.h>
+#include <IO/FileProvider/ChecksumReadBufferBuilder.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
 #include <Storages/DeltaMerge/File/DMFilePackFilter.h>

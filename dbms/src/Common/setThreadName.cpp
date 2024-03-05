@@ -22,7 +22,7 @@
 #endif
 #include <Common/Exception.h>
 #include <Common/setThreadName.h>
-#include <IO/Util/WriteHelpers.h>
+#include <IO/WriteHelpers.h>
 
 #include <cstring>
 #include <iostream>

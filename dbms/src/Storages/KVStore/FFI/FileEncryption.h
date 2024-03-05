@@ -16,7 +16,7 @@
 
 #include <Common/nocopyable.h>
 #include <IO/Encryption/BlockAccessCipherStream.h>
-#include <IO/EncryptionPath.h>
+#include <IO/FileProvider/EncryptionPath.h>
 #include <RaftStoreProxyFFI/EncryptionFFI.h>
 #include <Storages/KVStore/FFI/ProxyFFICommon.h>
 #include <common/likely.h>

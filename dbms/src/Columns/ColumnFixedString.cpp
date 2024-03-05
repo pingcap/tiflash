@@ -19,7 +19,7 @@
 #include <Common/SipHash.h>
 #include <Common/memcpySmall.h>
 #include <DataStreams/ColumnGathererStream.h>
-#include <IO/Util/WriteHelpers.h>
+#include <IO/WriteHelpers.h>
 
 #if __SSE2__
 #include <emmintrin.h>

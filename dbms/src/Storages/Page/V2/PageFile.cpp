@@ -20,7 +20,7 @@
 #include <IO/BaseFile/RandomAccessFile.h>
 #include <IO/BaseFile/WritableFile.h>
 #include <IO/Buffer/WriteBufferFromFile.h>
-#include <IO/Util/WriteHelpers.h>
+#include <IO/WriteHelpers.h>
 #include <Poco/File.h>
 #include <Storages/Page/PageUtil.h>
 #include <Storages/Page/V2/PageFile.h>

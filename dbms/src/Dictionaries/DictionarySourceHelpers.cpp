@@ -19,7 +19,7 @@
 #include <DataTypes/DataTypesNumber.h>
 #include <Dictionaries/DictionarySourceHelpers.h>
 #include <Dictionaries/DictionaryStructure.h>
-#include <IO/Util/WriteHelpers.h>
+#include <IO/WriteHelpers.h>
 
 
 namespace DB

@@ -17,7 +17,7 @@
 #include <Common/FailPoint.h>
 #include <Common/TargetSpecific.h>
 #include <Core/Types.h>
-#include <IO/Util/WriteHelpers.h>
+#include <IO/WriteHelpers.h>
 
 #include <algorithm>
 #include <cstddef>

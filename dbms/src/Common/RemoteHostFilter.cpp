@@ -15,7 +15,7 @@
 #include <Common/Exception.h>
 #include <Common/RemoteHostFilter.h>
 #include <Common/StringUtils/StringUtils.h>
-#include <IO/Util/WriteHelpers.h>
+#include <IO/WriteHelpers.h>
 #include <Poco/URI.h>
 #include <Poco/Util/AbstractConfiguration.h>
 #include <re2/re2.h>

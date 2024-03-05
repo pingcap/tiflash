@@ -21,7 +21,7 @@
 
 #include <Common/TiFlashException.h>
 #include <Core/Types.h>
-#include <IO/Util/Endian.h>
+#include <IO/Endian.h>
 #include <common/StringRef.h>
 
 namespace DB

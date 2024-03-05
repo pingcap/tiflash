@@ -18,7 +18,7 @@
 #include <IO/Buffer/LimitReadBuffer.h>
 #include <IO/Buffer/ReadBufferFromFile.h>
 #include <IO/Buffer/WriteBufferFromFileDescriptor.h>
-#include <IO/Util/Operators.h>
+#include <IO/Operators.h>
 #include <Poco/File.h>
 #include <common/LocalDateTime.h>
 #include <common/logger_useful.h>

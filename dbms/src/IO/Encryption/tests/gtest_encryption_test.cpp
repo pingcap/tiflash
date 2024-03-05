@@ -23,7 +23,7 @@
 #include <IO/Encryption/EncryptedWriteReadableFile.h>
 #include <IO/Encryption/MasterKey.h>
 #include <IO/Encryption/MockKeyManager.h>
-#include <IO/FileProvider.h>
+#include <IO/FileProvider/FileProvider.h>
 #include <Storages/KVStore/FFI/FileEncryption.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <gtest/gtest.h>

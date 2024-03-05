@@ -17,11 +17,11 @@
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/escapeForFileName.h>
 #include <IO/Buffer/ReadBufferFromString.h>
-#include <IO/Checksum/ChecksumReadBufferBuilder.h>
+#include <IO/FileProvider/ChecksumReadBufferBuilder.h>
+#include <IO/FileProvider/WriteBufferFromWritableFileBuilder.h>
 #include <IO/IOSWrapper.h>
-#include <IO/Util/ReadHelpers.h>
-#include <IO/Util/WriteHelpers.h>
-#include <IO/WriteBufferFromWritableFileBuilder.h>
+#include <IO/ReadHelpers.h>
+#include <IO/WriteHelpers.h>
 #include <Poco/DirectoryIterator.h>
 #include <Poco/File.h>
 #include <Poco/Path.h>

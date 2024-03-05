@@ -23,7 +23,7 @@
 #include <Core/UUID.h>
 #include <IO/Buffer/ReadBuffer.h>
 #include <IO/Buffer/ReadBufferFromMemory.h>
-#include <IO/Util/VarInt.h>
+#include <IO/VarInt.h>
 #include <common/DateLUT.h>
 #include <common/LocalDate.h>
 #include <common/LocalDateTime.h>

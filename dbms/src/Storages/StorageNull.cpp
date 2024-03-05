@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <Databases/IDatabase.h>
-#include <IO/Util/WriteHelpers.h>
+#include <IO/WriteHelpers.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterAlterQuery.h>
 #include <Storages/StorageFactory.h>

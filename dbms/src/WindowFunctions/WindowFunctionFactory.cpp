@@ -15,7 +15,7 @@
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/typeid_cast.h>
 #include <DataTypes/DataTypeArray.h>
-#include <IO/Util/WriteHelpers.h>
+#include <IO/WriteHelpers.h>
 #include <WindowFunctions/WindowFunctionFactory.h>
 
 

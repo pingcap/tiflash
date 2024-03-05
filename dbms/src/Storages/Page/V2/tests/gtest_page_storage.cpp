@@ -15,7 +15,7 @@
 #include <Common/CurrentMetrics.h>
 #include <Common/FailPoint.h>
 #include <IO/Buffer/ReadBufferFromMemory.h>
-#include <IO/FileProvider.h>
+#include <IO/FileProvider/FileProvider.h>
 #include <Interpreters/Context.h>
 #include <Poco/AutoPtr.h>
 #include <Poco/ConsoleChannel.h>

@@ -17,8 +17,8 @@
 #include <Columns/ColumnsNumber.h>
 #include <DataTypes/DataTypeNumberBase.h>
 #include <DataTypes/IDataType.h>
-#include <IO/Util/ReadHelpers.h>
-#include <IO/Util/WriteHelpers.h>
+#include <IO/ReadHelpers.h>
+#include <IO/WriteHelpers.h>
 
 namespace DB
 {

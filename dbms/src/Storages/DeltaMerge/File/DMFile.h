@@ -16,7 +16,7 @@
 
 #include <Core/Types.h>
 #include <IO/Buffer/WriteBufferFromWritableFile.h>
-#include <IO/ReadBufferFromRandomAccessFileBuilder.h>
+#include <IO/FileProvider/ReadBufferFromRandomAccessFileBuilder.h>
 #include <Poco/File.h>
 #include <Storages/DeltaMerge/DMChecksumConfig.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>

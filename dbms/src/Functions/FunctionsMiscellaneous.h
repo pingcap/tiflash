@@ -18,7 +18,7 @@
 #include <DataTypes/DataTypeFunction.h>
 #include <Functions/IFunction.h>
 #include <IO/Buffer/WriteBufferFromString.h>
-#include <IO/Util/Operators.h>
+#include <IO/Operators.h>
 #include <Interpreters/ExpressionActions.h>
 
 namespace DB

@@ -19,7 +19,7 @@
 #include <Core/Defines.h>
 #include <DataTypes/IDataType.h>
 #include <DataTypes/NestedUtils.h>
-#include <IO/Util/WriteHelpers.h>
+#include <IO/WriteHelpers.h>
 
 
 namespace DB

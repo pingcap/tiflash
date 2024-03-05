@@ -16,7 +16,7 @@
 
 #include <Common/Checksum.h>
 #include <IO/Buffer/ReadBufferFromFileBase.h>
-#include <IO/FileProvider.h>
+#include <IO/FileProvider/FileProvider.h>
 
 
 namespace DB

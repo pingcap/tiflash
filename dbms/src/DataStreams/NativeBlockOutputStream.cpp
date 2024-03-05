@@ -17,8 +17,8 @@
 #include <Core/Defines.h>
 #include <DataStreams/MarkInCompressedFile.h>
 #include <DataStreams/NativeBlockOutputStream.h>
-#include <IO/Util/VarInt.h>
-#include <IO/Util/WriteHelpers.h>
+#include <IO/VarInt.h>
+#include <IO/WriteHelpers.h>
 
 namespace DB
 {

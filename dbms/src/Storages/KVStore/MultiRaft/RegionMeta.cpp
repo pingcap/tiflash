@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <Common/FmtUtils.h>
-#include <IO/Util/WriteHelpers.h>
+#include <IO/WriteHelpers.h>
 #include <Storages/KVStore/MultiRaft/RegionExecutionResult.h>
 #include <Storages/KVStore/MultiRaft/RegionMeta.h>
 #include <common/types.h>

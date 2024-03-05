@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <IO/Util/ReadHelpers.h>
+#include <IO/ReadHelpers.h>
 #include <Parsers/ASTSampleRatio.h>
 #include <Parsers/CommonParsers.h>
 #include <Parsers/ParserSampleRatio.h>

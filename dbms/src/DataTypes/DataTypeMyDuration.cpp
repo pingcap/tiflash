@@ -17,7 +17,7 @@
 #include <Common/typeid_cast.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <DataTypes/DataTypeMyDuration.h>
-#include <IO/Util/WriteHelpers.h>
+#include <IO/WriteHelpers.h>
 #include <Parsers/ASTLiteral.h>
 
 

@@ -23,8 +23,8 @@
 #include <IO/Buffer/WriteBuffer.h>
 #include <IO/Buffer/WriteBufferFromString.h>
 #include <IO/DoubleConverter.h>
-#include <IO/Util/VarInt.h>
-#include <IO/Util/WriteIntText.h>
+#include <IO/VarInt.h>
+#include <IO/WriteIntText.h>
 #include <common/DateLUT.h>
 #include <common/LocalDate.h>
 #include <common/LocalDateTime.h>

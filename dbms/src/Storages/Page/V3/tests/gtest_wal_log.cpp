@@ -20,10 +20,9 @@
 #include <IO/Buffer/WriteBuffer.h>
 #include <IO/Buffer/WriteBufferFromFile.h>
 #include <IO/Buffer/WriteBufferFromFileBase.h>
-#include <IO/Buffer/createReadBufferFromFileBase.h>
-#include <IO/EncryptionPath.h>
-#include <IO/ReadBufferFromRandomAccessFileBuilder.h>
-#include <IO/Util/WriteHelpers.h>
+#include <IO/FileProvider/EncryptionPath.h>
+#include <IO/FileProvider/ReadBufferFromRandomAccessFileBuilder.h>
+#include <IO/WriteHelpers.h>
 #include <Storages/Page/PageUtil.h>
 #include <Storages/Page/V3/LogFile/LogFormat.h>
 #include <Storages/Page/V3/LogFile/LogReader.h>
