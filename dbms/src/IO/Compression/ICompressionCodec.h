@@ -23,11 +23,6 @@
 namespace DB
 {
 
-namespace ErrorCodes
-{
-extern const int CORRUPTED_DATA;
-} // namespace ErrorCodes
-
 /**
 * Represents interface for compression codecs like LZ4, ZSTD, etc.
 */
@@ -55,10 +50,10 @@ public:
     static constexpr UInt8 getHeaderSize() { return COMPRESSED_BLOCK_HEADER_SIZE; }
 
     /// Read size of compressed block from compressed source
-    UInt32 readCompressedBlockSize(const char * source) const;
+    static UInt32 readCompressedBlockSize(const char * source);
 
     /// Read size of decompressed block from compressed source
-    UInt32 readDecompressedBlockSize(const char * source) const;
+    static UInt32 readDecompressedBlockSize(const char * source);
 
     /// Read method byte from compressed source
     static UInt8 readMethod(const char * source);
@@ -88,11 +83,6 @@ protected:
     /// Actually decompress data without header
     virtual void doDecompressData(const char * source, UInt32 source_size, char * dest, UInt32 uncompressed_size) const
         = 0;
-
-    const int decompression_error_code = ErrorCodes::CORRUPTED_DATA;
-
-private:
-    std::vector<CompressionMethodByte> methods;
 };
 
 using CompressionCodecPtr = std::shared_ptr<ICompressionCodec>;

@@ -16,12 +16,14 @@
 
 #include <string.h>
 
+#include <bit>
 #include <type_traits>
 
 
 template <typename T>
 inline T unalignedLoad(const void * address)
 {
+    static_assert(std::endian::native == std::endian::little, "Only little endian is supported");
     T res{};
     memcpy(&res, address, sizeof(res));
     return res;
@@ -34,6 +36,7 @@ inline T unalignedLoad(const void * address)
 template <typename T>
 inline void unalignedStore(void * address, const typename std::enable_if<true, T>::type & src)
 {
+    static_assert(std::endian::native == std::endian::little, "Only little endian is supported");
     static_assert(std::is_trivially_copyable_v<T>);
     memcpy(address, &src, sizeof(src));
 }

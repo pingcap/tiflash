@@ -179,7 +179,6 @@ target_link_libraries (tiflash_common_io
     ${LINK_LIBRARIES_ONLY_ON_X86_64}
     ${LZ4_LIBRARY}
     ${ZSTD_LIBRARY}
-    ${QPL_LIBRARY}
     ${DOUBLE_CONVERSION_LIBRARIES}
     ${Poco_Net_LIBRARY}
     ${Poco_Data_LIBRARY}
@@ -263,8 +262,9 @@ if (NOT USE_INTERNAL_ZSTD_LIBRARY)
 endif ()
 
 if (USE_QPL)
+    target_link_libraries (tiflash_common_io PUBLIC ${QPL_LIBRARY})
     target_include_directories (dbms BEFORE PRIVATE ${QPL_INCLUDE_DIR})
-    set_source_files_properties(
+    set_source_files_properties (
         src/IO/Compression/CompressionCodecDeflateQpl.cpp
         PROPERTIES COMPILE_FLAGS "-mwaitpkg")
 endif ()

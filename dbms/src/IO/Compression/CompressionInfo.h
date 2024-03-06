@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include <cstdint>
+#include <common/types.h>
 
 /** Common defines for compression */
 
@@ -25,7 +25,7 @@
 
 namespace DB
 {
-using UInt8 = std::uint8_t;
+
 /** The compressed block format is as follows:
   *
   * The first 16 bytes are the checksum from all other bytes of the block. Now only CityHash128 is used.
