@@ -21,6 +21,8 @@
 #include <IO/Compression/CompressionSettings.h>
 #include <IO/Compression/ICompressionCodec.h>
 
+#include <magic_enum.hpp>
+
 #if USE_QPL
 #include <IO/Compression/CompressionCodecDeflateQpl.h>
 #endif
@@ -62,20 +64,23 @@ public:
     static CompressionCodecPtr create(UInt8 method_byte)
     {
         CompressionSettings settings;
-        switch (method_byte)
+        auto mb = magic_enum::enum_cast<CompressionMethodByte>(method_byte);
+        if (!mb.has_value())
+            throw Exception(ErrorCodes::UNKNOWN_COMPRESSION_METHOD, "Unknown compression method byte: {}", method_byte);
+        switch (mb.value())
         {
-        case static_cast<UInt8>(CompressionMethodByte::LZ4):
+        case CompressionMethodByte::LZ4:
             settings.method = CompressionMethod::LZ4;
             break;
-        case static_cast<UInt8>(CompressionMethodByte::ZSTD):
+        case CompressionMethodByte::ZSTD:
             settings.method = CompressionMethod::ZSTD;
             break;
 #if USE_QPL
-        case static_cast<UInt8>(CompressionMethodByte::QPL):
+        case CompressionMethodByte::QPL:
             settings.method = CompressionMethod::QPL;
             break;
 #endif
-        case static_cast<UInt8>(CompressionMethodByte::NONE):
+        case CompressionMethodByte::NONE:
             settings.method = CompressionMethod::NONE;
             break;
         default:
