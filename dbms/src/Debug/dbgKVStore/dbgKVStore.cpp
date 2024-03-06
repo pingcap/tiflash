@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Inc.
+// Copyright 2024 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,17 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#pragma once
-#include <Debug/MockKVStore/MockUtils.h>
-#include <Debug/dbgKVStore/dbgRegion.h>
+#include <Debug/dbgKVStore/dbgKVStore.h>
+#include <Storages/KVStore/MultiRaft/RegionPersister.h>
 
-#include <optional>
-
-namespace DB::tests
+namespace DB::RegionBench
 {
-using DB::RegionBench::createPeer;
-using DB::RegionBench::createRegionInfo;
-using DB::RegionBench::createRegionMeta;
-using DB::RegionBench::DebugRegion;
-using DB::RegionBench::makeRegion;
-} // namespace DB::tests
+
+void DebugKVStore::mockRemoveRegion(DB::RegionID region_id, RegionTable & region_table)
+{
+    auto task_lock = kvstore.genTaskLock();
+    auto region_lock = kvstore.region_manager.genRegionTaskLock(region_id);
+    // mock remove region should remove data by default
+    kvstore.removeRegion(region_id, /* remove_data */ true, region_table, task_lock, region_lock);
+}
+
+} // namespace DB::RegionBench

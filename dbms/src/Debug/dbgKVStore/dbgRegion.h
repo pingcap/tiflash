@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Inc.
+// Copyright 2024 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,16 +13,22 @@
 // limitations under the License.
 
 #pragma once
-#include <Debug/MockKVStore/MockUtils.h>
-#include <Debug/dbgKVStore/dbgRegion.h>
 
-#include <optional>
+#include <Storages/KVStore/Region.h>
 
-namespace DB::tests
+namespace DB::RegionBench
 {
-using DB::RegionBench::createPeer;
-using DB::RegionBench::createRegionInfo;
-using DB::RegionBench::createRegionMeta;
-using DB::RegionBench::DebugRegion;
-using DB::RegionBench::makeRegion;
-} // namespace DB::tests
+struct DebugRegion
+{
+    DebugRegion(RegionPtr region_ptr)
+        : region(*region_ptr)
+    {}
+    RegionPtr debugSplitInto(RegionMeta && meta);
+    RegionData & debugData();
+    Region * operator->() { return &region; }
+    Region * operator->() const { return &region; }
+
+private:
+    Region & region;
+};
+} // namespace DB::RegionBench

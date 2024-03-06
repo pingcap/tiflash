@@ -14,6 +14,7 @@
 
 #include <Debug/MockTiDB.h>
 #include <Debug/dbgFuncMockTiDBTable.h>
+#include <Debug/dbgKVStore/dbgKVStore.h>
 #include <Debug/dbgTools.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterCreateQuery.h>
@@ -309,6 +310,7 @@ void MockTiDBTable::dbgFuncCleanUpRegions(DB::Context & context, const DB::ASTs 
 {
     std::vector<RegionID> regions;
     auto & kvstore = context.getTMTContext().getKVStore();
+    auto debug_kvstore = RegionBench::DebugKVStore(*kvstore);
     auto & region_table = context.getTMTContext().getRegionTable();
     {
         {
@@ -318,7 +320,7 @@ void MockTiDBTable::dbgFuncCleanUpRegions(DB::Context & context, const DB::ASTs 
         }
 
         for (const auto & region_id : regions)
-            kvstore->mockRemoveRegion(region_id, region_table);
+            debug_kvstore.mockRemoveRegion(region_id, region_table);
     }
     output("all regions have been cleaned");
 }
