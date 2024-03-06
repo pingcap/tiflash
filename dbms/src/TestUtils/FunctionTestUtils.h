@@ -20,6 +20,7 @@
 #include <Core/ColumnsWithTypeAndName.h>
 #include <Core/Field.h>
 #include <Core/Types.h>
+#include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeDecimal.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <DataTypes/DataTypeMyDate.h>
@@ -209,6 +210,12 @@ struct InferredDataType<Decimal<T>>
     using Type = DataTypeDecimal<Decimal<T>>;
 };
 
+template <>
+struct InferredDataType<Array>
+{
+    using Type = DataTypeArray;
+};
+
 template <typename T>
 using InferredFieldType = typename TypeTraits<T>::FieldType;
 
@@ -275,6 +282,16 @@ template <typename T>
 ColumnWithTypeAndName createColumn(const InferredDataVector<T> & vec, const String & name = "", Int64 column_id = 0)
 {
     DataTypePtr data_type = makeDataType<T>();
+    return {makeColumn<T>(data_type, vec), data_type, name, column_id};
+}
+
+template <typename T>
+ColumnWithTypeAndName createVecFloat32Column(
+    const InferredDataVector<T> & vec,
+    const String & name = "",
+    Int64 column_id = 0)
+{
+    DataTypePtr data_type = std::make_shared<DataTypeArray>(typeFromString("Float32"));
     return {makeColumn<T>(data_type, vec), data_type, name, column_id};
 }
 

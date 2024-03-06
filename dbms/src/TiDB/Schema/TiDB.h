@@ -16,8 +16,8 @@
 
 #include <Core/Field.h>
 #include <Core/Types.h>
-#include <IO/Util/ReadHelpers.h>
-#include <IO/Util/WriteHelpers.h>
+#include <IO/ReadHelpers.h>
+#include <IO/WriteHelpers.h>
 #include <Storages/KVStore/StorageEngineType.h>
 #include <Storages/KVStore/Types.h>
 #include <tipb/schema.pb.h>

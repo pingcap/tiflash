@@ -20,6 +20,7 @@
 #include <Storages/IManageableStorage.h>
 #include <Storages/KVStore/Decode/DecodingStorageSchemaSnapshot.h>
 #include <Storages/KVStore/Decode/RegionBlockReader.h>
+#include <Storages/KVStore/MultiRaft/Spill/RegionUncommittedDataList.h>
 #include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/Types.h>
 #include <TiDB/Decode/Datum.h>
@@ -38,8 +39,8 @@ RegionBlockReader::RegionBlockReader(DecodingStorageSchemaSnapshotConstPtr schem
     : schema_snapshot{std::move(schema_snapshot_)}
 {}
 
-
-bool RegionBlockReader::read(Block & block, const RegionDataReadInfoList & data_list, bool force_decode)
+template <typename ReadList>
+bool RegionBlockReader::read(Block & block, const ReadList & data_list, bool force_decode)
 {
     try
     {
@@ -86,32 +87,99 @@ bool RegionBlockReader::read(Block & block, const RegionDataReadInfoList & data_
         };
 
         exc.addMessage(fmt::format(
-            "pk_type is {}, schema_snapshot->sorted_column_id_with_pos is {}, "
+            "pk_type is {}, schema_snapshot->col_id_to_block_pos is {}, "
+            "schema_snapshot->col_id_to_def_pos is {},"
             "schema_snapshot->column_defines is {}, "
             "decoding_snapshot_epoch is {}, "
             "block schema is {} ",
             magic_enum::enum_name(schema_snapshot->pk_type),
-            print_map(schema_snapshot->sorted_column_id_with_pos),
+            print_map(schema_snapshot->getColId2BlockPosMap()),
+            print_map(schema_snapshot->getColId2DefPosMap()),
             print_column_defines(schema_snapshot->column_defines),
             schema_snapshot->decoding_schema_epoch,
             block.dumpJsonStructure()));
         exc.addMessage("TiKV value contains: ");
         for (const auto & data : data_list)
         {
-            exc.addMessage(fmt::format("{}, ", std::get<3>(data)->toDebugString()));
+            exc.addMessage(fmt::format("{}, ", data.value->toDebugString()));
         }
         exc.rethrow();
         return false;
     }
 }
 
-template <TMTPKType pk_type>
-bool RegionBlockReader::readImpl(Block & block, const RegionDataReadInfoList & data_list, bool force_decode)
-{
-    if (unlikely(block.columns() != schema_snapshot->column_defines->size()))
-        throw Exception("block structure doesn't match schema_snapshot.", ErrorCodes::LOGICAL_ERROR);
+template bool RegionBlockReader::read<RegionDataReadInfoList>(
+    Block & block,
+    const RegionDataReadInfoList & data_list,
+    bool force_decode);
 
-    const auto & read_column_ids = schema_snapshot->sorted_column_id_with_pos;
+template bool RegionBlockReader::read<RegionUncommittedDataList>(
+    Block & block,
+    const RegionUncommittedDataList & data_list,
+    bool force_decode);
+
+template <typename ReadList>
+struct VersionColResolver
+{
+    VersionColResolver() = default;
+    bool needBuild() const { return raw_version_col == nullptr; }
+    void build(ColumnUInt64 * raw_version_col_) { raw_version_col = raw_version_col_; }
+    void preRead(size_t size)
+    {
+        RUNTIME_CHECK(raw_version_col);
+        ColumnUInt64::Container & version_data = raw_version_col->getData();
+        version_data.reserve(size);
+    }
+    void read(const RegionDataReadInfo & info)
+    {
+        RUNTIME_CHECK(raw_version_col);
+        ColumnUInt64::Container & version_data = raw_version_col->getData();
+        version_data.emplace_back(info.commit_ts);
+    }
+    void check(const Block & block, size_t expected) const
+    {
+        if (unlikely(block.columns() != expected))
+            throw Exception(
+                ErrorCodes::LOGICAL_ERROR,
+                "Block structure doesn't match schema_snapshot, block={} def={}",
+                block.columns(),
+                expected);
+    }
+    size_t reservedCount() const { return 3; }
+
+private:
+    ColumnUInt64 * raw_version_col = nullptr;
+};
+
+template <>
+struct VersionColResolver<RegionUncommittedDataList>
+{
+    VersionColResolver() = default;
+    bool needBuild() const { return false; } // NOLINT conform to main template
+    void build(ColumnUInt64 * raw_version_col_) { raw_version_col = raw_version_col_; }
+    void preRead(size_t) {} // NOLINT conform to main template
+    void read(const RegionUncommittedData &) {} // NOLINT conform to main template
+    void check(const Block & block, size_t expected) const // NOLINT conform to main template
+    {
+        if (unlikely(block.columns() + 1 != expected))
+            throw Exception(
+                ErrorCodes::LOGICAL_ERROR,
+                "Block structure doesn't match schema_snapshot, block={} def={}",
+                block.columns(),
+                expected);
+    }
+    size_t reservedCount() const { return 2; } // NOLINT conform to main template
+
+private:
+    ColumnUInt64 * raw_version_col = nullptr;
+};
+
+template <TMTPKType pk_type, typename ReadList>
+bool RegionBlockReader::readImpl(Block & block, const ReadList & data_list, bool force_decode)
+{
+    VersionColResolver<ReadList> version_col_resolver;
+    version_col_resolver.check(block, schema_snapshot->column_defines->size());
+    const auto & read_column_ids = schema_snapshot->getColId2BlockPosMap();
     const auto & pk_column_ids = schema_snapshot->pk_column_ids;
     const auto & pk_pos_map = schema_snapshot->pk_pos_map;
 
@@ -126,11 +194,12 @@ bool RegionBlockReader::readImpl(Block & block, const RegionDataReadInfoList & d
     /// extra handle, del, version column is with column id smaller than other visible column id,
     /// so they must exists before all other columns, and we can get them before decoding other columns
     ColumnUInt8 * raw_delmark_col = nullptr;
-    ColumnUInt64 * raw_version_col = nullptr;
     const size_t invalid_column_pos = std::numeric_limits<size_t>::max();
     // we cannot figure out extra_handle's column type now, so we just remember it's pos here
     size_t extra_handle_column_pos = invalid_column_pos;
-    while (raw_delmark_col == nullptr || raw_version_col == nullptr || extra_handle_column_pos == invalid_column_pos)
+
+    while (raw_delmark_col == nullptr || version_col_resolver.needBuild()
+           || extra_handle_column_pos == invalid_column_pos)
     {
         if (column_ids_iter->first == DelMarkColumnID)
         {
@@ -139,8 +208,8 @@ bool RegionBlockReader::readImpl(Block & block, const RegionDataReadInfoList & d
         }
         else if (column_ids_iter->first == VersionColumnID)
         {
-            raw_version_col
-                = static_cast<ColumnUInt64 *>(const_cast<IColumn *>(block.getByPosition(next_column_pos).column.get()));
+            version_col_resolver.build(
+                static_cast<ColumnUInt64 *>(const_cast<IColumn *>(block.getByPosition(next_column_pos).column.get())));
         }
         else if (column_ids_iter->first == TiDBPkColumnID)
         {
@@ -149,16 +218,14 @@ bool RegionBlockReader::readImpl(Block & block, const RegionDataReadInfoList & d
         next_column_pos++;
         column_ids_iter++;
     }
-    // extra handle, del, version must exists
-    constexpr size_t MustHaveColCnt = 3; // NOLINT(readability-identifier-naming)
-    if (unlikely(next_column_pos != MustHaveColCnt))
-        throw Exception("del, version column must exist before all other visible columns.", ErrorCodes::LOGICAL_ERROR);
+    // extra handle, del, version
+    if (unlikely(next_column_pos != version_col_resolver.reservedCount()))
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "del, version column mismatch, actual_size={}", next_column_pos);
 
     ColumnUInt8::Container & delmark_data = raw_delmark_col->getData();
-    ColumnUInt64::Container & version_data = raw_version_col->getData();
     delmark_data.reserve(data_list.size());
-    version_data.reserve(data_list.size());
-    bool need_decode_value = block.columns() > MustHaveColCnt;
+    version_col_resolver.preRead(data_list.size());
+    bool need_decode_value = block.columns() > version_col_resolver.reservedCount();
     if (need_decode_value)
     {
         size_t expected_rows = data_list.size();
@@ -170,11 +237,14 @@ bool RegionBlockReader::readImpl(Block & block, const RegionDataReadInfoList & d
     }
 
     size_t index = 0;
-    for (const auto & [pk, write_type, commit_ts, value_ptr] : data_list)
+    for (const auto & item : data_list)
     {
+        const auto & pk = item.pk;
+        const auto & write_type = item.write_type;
+        const auto & value_ptr = item.value;
         /// set delmark and version column
         delmark_data.emplace_back(write_type == Region::DelFlag);
-        version_data.emplace_back(commit_ts);
+        version_col_resolver.read(item);
 
         if (need_decode_value)
         {

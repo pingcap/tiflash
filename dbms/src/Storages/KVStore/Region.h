@@ -125,6 +125,8 @@ public:
 
 public: // Simple Read and Write
     explicit Region(RegionMeta && meta_, const TiFlashRaftProxyHelper *);
+    Region(const Region &) = delete;
+    Region() = delete;
     ~Region();
 
     void insert(const std::string & cf, TiKVKey && key, TiKVValue && value, DupCheck mode = DupCheck::Deny);
@@ -258,8 +260,6 @@ public: // Raft Read and Write
     void beforePrehandleSnapshot(uint64_t region_id, std::optional<uint64_t> deadline_index);
     void afterPrehandleSnapshot(int64_t ongoing);
 
-    Region() = delete;
-
 private:
     friend class RegionRaftCommandDelegate;
     friend class RegionMockTest;
@@ -270,7 +270,8 @@ private:
 
     // Private methods no need to lock mutex, normally
 
-    size_t doInsert(ColumnFamilyType type, TiKVKey && key, TiKVValue && value, DupCheck mode);
+    // Returns the size of data change(inc or dec)
+    RegionDataRes doInsert(ColumnFamilyType type, TiKVKey && key, TiKVValue && value, DupCheck mode);
     void doRemove(ColumnFamilyType type, const TiKVKey & key);
 
     std::optional<RegionDataReadInfo> readDataByWriteIt(

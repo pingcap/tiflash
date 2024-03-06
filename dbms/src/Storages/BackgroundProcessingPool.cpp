@@ -17,7 +17,7 @@
 #include <Common/MemoryTracker.h>
 #include <Common/randomSeed.h>
 #include <Common/setThreadName.h>
-#include <IO/Util/WriteHelpers.h>
+#include <IO/WriteHelpers.h>
 #include <Interpreters/Context.h>
 #include <Poco/Timespan.h>
 #include <Storages/BackgroundProcessingPool.h>

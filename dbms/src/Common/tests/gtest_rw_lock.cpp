@@ -16,7 +16,7 @@
 #include <Common/RWLock.h>
 #include <Common/Stopwatch.h>
 #include <Core/Types.h>
-#include <IO/Util/WriteHelpers.h>
+#include <IO/WriteHelpers.h>
 #include <gtest/gtest.h>
 
 #include <atomic>

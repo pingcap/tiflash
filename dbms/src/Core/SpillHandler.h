@@ -18,7 +18,7 @@
 #include <DataStreams/NativeBlockOutputStream.h>
 #include <IO/Buffer/WriteBufferFromWritableFile.h>
 #include <IO/Compression/CompressedWriteBuffer.h>
-#include <IO/Util/VarInt.h>
+#include <IO/VarInt.h>
 
 namespace DB
 {

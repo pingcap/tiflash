@@ -18,7 +18,7 @@
 #include <Common/typeid_cast.h>
 #include <Core/Block.h>
 #include <IO/Buffer/WriteBufferFromString.h>
-#include <IO/Util/Operators.h>
+#include <IO/Operators.h>
 
 #include <iterator>
 #include <memory>

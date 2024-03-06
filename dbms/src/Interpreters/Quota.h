@@ -16,7 +16,7 @@
 
 #include <Common/Exception.h>
 #include <Core/Types.h>
-#include <IO/Util/WriteHelpers.h>
+#include <IO/WriteHelpers.h>
 #include <Poco/Net/IPAddress.h>
 #include <Poco/Timespan.h>
 #include <Poco/Util/AbstractConfiguration.h>

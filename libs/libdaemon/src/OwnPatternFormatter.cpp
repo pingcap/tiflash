@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <IO/Buffer/WriteBufferFromString.h>
-#include <IO/Util/WriteHelpers.h>
+#include <IO/WriteHelpers.h>
 #include <Poco/Ext/ThreadNumber.h>
 #include <daemon/BaseDaemon.h>
 #include <daemon/OwnPatternFormatter.h>

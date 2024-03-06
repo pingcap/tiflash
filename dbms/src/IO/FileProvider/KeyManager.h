@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include <IO/EncryptionPath.h>
+#include <IO/FileProvider/EncryptionPath.h>
 
 
 namespace DB

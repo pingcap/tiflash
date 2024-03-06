@@ -14,6 +14,7 @@
 
 #include <Columns/ColumnNothing.h>
 #include <Columns/ColumnSet.h>
+#include <Common/Exception.h>
 #include <Common/FmtUtils.h>
 #include <Core/ColumnNumbers.h>
 #include <Core/Row.h>
@@ -103,8 +104,8 @@ template <typename ExpectedT, typename ActualT, typename ExpectedDisplayT, typen
     if unlikely (typeid_cast<const ColumnNothing *>(expected.get()) || typeid_cast<const ColumnNothing *>(actual.get()))
     {
         /// ColumnNothing compares size only
-        const ColumnNothing * expected_nothing = typeid_cast<const ColumnNothing *>(expected.get());
-        const ColumnNothing * actual_nothing = typeid_cast<const ColumnNothing *>(actual.get());
+        const auto * expected_nothing = typeid_cast<const ColumnNothing *>(expected.get());
+        const auto * actual_nothing = typeid_cast<const ColumnNothing *>(actual.get());
         ASSERT_EQUAL(
             expected_nothing && actual_nothing,
             true,
@@ -512,15 +513,17 @@ String getColumnsContent(const ColumnsWithTypeAndName & cols, size_t begin, size
     assert(col_size >= end);
     assert(col_size > begin);
 
-    bool is_same [[maybe_unused]] = true;
-
+    /// Ensure the sizes of columns in cols have the same number of rows
     for (size_t i = 1; i < col_num; ++i)
     {
-        if (cols[i].column->size() != col_size)
-            is_same = false;
+        RUNTIME_CHECK_MSG(
+            cols[i].column->size() == col_size,
+            "col_size={} actual_col_size={} col_name={} col_id={}",
+            col_size,
+            cols[i].column->size(),
+            cols[i].name,
+            cols[i].column_id);
     }
-
-    assert(is_same); /// Ensure the sizes of columns in cols are the same
 
     std::vector<std::pair<size_t, String>> col_content;
     FmtBuffer fmt_buf;

@@ -17,8 +17,8 @@
 #include <Common/StringUtils/StringUtils.h>
 #include <IO/Buffer/HexWriteBuffer.h>
 #include <IO/Buffer/WriteBufferFromString.h>
-#include <IO/Util/ReadHelpers.h>
-#include <IO/Util/WriteHelpers.h>
+#include <IO/ReadHelpers.h>
+#include <IO/WriteHelpers.h>
 #include <Interpreters/Quota.h>
 #include <Interpreters/Users.h>
 #include <Poco/Net/DNS.h>

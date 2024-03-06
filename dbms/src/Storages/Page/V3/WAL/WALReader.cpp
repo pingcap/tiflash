@@ -15,8 +15,8 @@
 #include <Common/Logger.h>
 #include <Common/RedactHelpers.h>
 #include <Common/StringUtils/StringUtils.h>
-#include <IO/ReadBufferFromRandomAccessFileBuilder.h>
-#include <IO/Util/WriteHelpers.h>
+#include <IO/FileProvider/ReadBufferFromRandomAccessFileBuilder.h>
+#include <IO/WriteHelpers.h>
 #include <Poco/DirectoryIterator.h>
 #include <Poco/File.h>
 #include <Storages/Page/V3/LogFile/LogFilename.h>

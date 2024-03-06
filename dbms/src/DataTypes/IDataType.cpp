@@ -19,7 +19,7 @@
 #include <Core/Defines.h>
 #include <DataTypes/IDataType.h>
 #include <DataTypes/NestedUtils.h>
-#include <IO/Util/WriteHelpers.h>
+#include <IO/WriteHelpers.h>
 
 
 namespace DB
@@ -83,10 +83,22 @@ size_t IDataType::getSizeOfValueInMemory() const
 
 bool IDataType::isNullMap(const IDataType::SubstreamPath & path)
 {
-    for (const Substream & elem : path)
+    for (const auto & elem : path)
     {
         if (elem.type == Substream::NullMap)
             return true;
+    }
+    return false;
+}
+
+bool IDataType::isArraySizes(const SubstreamPath & path)
+{
+    for (const auto & elem : path)
+    {
+        if (elem.type == IDataType::Substream::ArraySizes)
+        {
+            return true;
+        }
     }
     return false;
 }

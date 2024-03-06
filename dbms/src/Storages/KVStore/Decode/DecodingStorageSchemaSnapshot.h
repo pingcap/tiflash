@@ -46,14 +46,25 @@ using ColumnInfo = TiDB::ColumnInfo;
 using ColumnInfos = std::vector<ColumnInfo>;
 struct DecodingStorageSchemaSnapshot
 {
+    DecodingStorageSchemaSnapshot(
+        DM::ColumnDefinesPtr column_defines_,
+        const TiDB::TableInfo & table_info_,
+        const DM::ColumnDefine & original_handle_,
+        Int64 decoding_schema_epoch_,
+        bool with_version_column);
+
+    DISALLOW_COPY(DecodingStorageSchemaSnapshot);
+
+    DecodingStorageSchemaSnapshot(DecodingStorageSchemaSnapshot &&) = default;
+
+    const SortedColumnIDWithPos & getColId2BlockPosMap() const { return col_id_to_block_pos; }
+    const SortedColumnIDWithPos & getColId2DefPosMap() const { return col_id_to_def_pos; }
+
     // There is a one-to-one correspondence between elements in `column_defines` and elements in `column_infos`
     // Note that some columns(EXTRA_HANDLE_COLUMN, VERSION_COLUMN, TAG_COLUMN) may not be a real column in tidb schema,
     // so their corresponding elements in `column_infos` are just nullptr and won't be used when decoding.
     DM::ColumnDefinesPtr column_defines;
     ColumnInfos column_infos;
-
-    // column id -> column pos in column_defines/column_infos
-    SortedColumnIDWithPos sorted_column_id_with_pos;
 
     // 1. when the table doesn't have a common handle,
     //    1) if `pk_is_handle` is false, `pk_column_ids` is empty
@@ -71,92 +82,17 @@ struct DecodingStorageSchemaSnapshot
     // an internal increasing version for `DecodingStorageSchemaSnapshot`, has no relation with the table schema version
     Int64 decoding_schema_epoch;
 
-    DecodingStorageSchemaSnapshot(
-        DM::ColumnDefinesPtr column_defines_,
-        const TiDB::TableInfo & table_info_,
-        const DM::ColumnDefine & original_handle_,
-        Int64 decoding_schema_epoch_)
-        : column_defines{std::move(column_defines_)}
-        , pk_is_handle{table_info_.pk_is_handle}
-        , is_common_handle{table_info_.is_common_handle}
-        , decoding_schema_epoch{decoding_schema_epoch_}
-    {
-        std::unordered_map<ColumnID, size_t> column_lut;
-        for (size_t i = 0; i < table_info_.columns.size(); i++)
-        {
-            const auto & ci = table_info_.columns[i];
-            column_lut.emplace(ci.id, i);
-        }
-        for (size_t i = 0; i < column_defines->size(); i++)
-        {
-            auto & cd = (*column_defines)[i];
-            sorted_column_id_with_pos.insert({cd.id, i});
-            if (cd.id != TiDBPkColumnID && cd.id != VersionColumnID && cd.id != DelMarkColumnID)
-            {
-                const auto & columns = table_info_.columns;
-                column_infos.push_back(columns[column_lut.at(cd.id)]);
-            }
-            else
-            {
-                column_infos.push_back(ColumnInfo());
-            }
-        }
-
-        // create pk related metadata if needed
-        if (is_common_handle)
-        {
-            const auto & primary_index_cols = table_info_.getPrimaryIndexInfo().idx_cols;
-            for (const auto & primary_index_col : primary_index_cols)
-            {
-                auto pk_column_id = table_info_.columns[primary_index_col.offset].id;
-                pk_column_ids.emplace_back(pk_column_id);
-                pk_pos_map.emplace(pk_column_id, reinterpret_cast<size_t>(std::numeric_limits<size_t>::max()));
-            }
-            pk_type = TMTPKType::STRING;
-            rowkey_column_size = pk_column_ids.size();
-        }
-        else if (table_info_.pk_is_handle)
-        {
-            pk_column_ids.emplace_back(original_handle_.id);
-            pk_pos_map.emplace(original_handle_.id, reinterpret_cast<size_t>(std::numeric_limits<size_t>::max()));
-            pk_type = getTMTPKType(*original_handle_.type);
-            rowkey_column_size = 1;
-        }
-        else
-        {
-            pk_type = TMTPKType::INT64;
-            rowkey_column_size = 1;
-        }
-
-        // calculate pk column pos in block
-        if (!pk_pos_map.empty())
-        {
-            auto pk_pos_iter = pk_pos_map.begin();
-            size_t column_pos_in_block = 0;
-            for (auto & column_id_with_pos : sorted_column_id_with_pos)
-            {
-                if (pk_pos_iter == pk_pos_map.end())
-                    break;
-                if (pk_pos_iter->first == column_id_with_pos.first)
-                {
-                    pk_pos_iter->second = column_pos_in_block;
-                    pk_pos_iter++;
-                }
-                column_pos_in_block++;
-            }
-            if (unlikely(pk_pos_iter != pk_pos_map.end()))
-                throw Exception("Cannot find all pk columns in block", ErrorCodes::LOGICAL_ERROR);
-        }
-    }
-
-    DISALLOW_COPY(DecodingStorageSchemaSnapshot);
-
-    DecodingStorageSchemaSnapshot(DecodingStorageSchemaSnapshot &&) = default;
+private:
+    // `col_id_to_def_pos` is originally `sorted_column_id_with_pos`.
+    // We may omit some cols in block, e.g. version col. So `col_id_to_def_pos` may have more items than `col_id_to_block_pos`.
+    // Both of the maps are sorted in ColumnID order, which makes the internal cols in first.
+    SortedColumnIDWithPos col_id_to_block_pos;
+    SortedColumnIDWithPos col_id_to_def_pos;
 };
 using DecodingStorageSchemaSnapshotPtr = std::shared_ptr<DecodingStorageSchemaSnapshot>;
 using DecodingStorageSchemaSnapshotConstPtr = std::shared_ptr<const DecodingStorageSchemaSnapshot>;
 
-Block createBlockSortByColumnID(DecodingStorageSchemaSnapshotConstPtr schema_snapshot);
+Block createBlockSortByColumnID(DecodingStorageSchemaSnapshotConstPtr schema_snapshot, bool with_version_column = true);
 
 void clearBlockData(Block & block);
 

@@ -22,8 +22,8 @@
 #include <Core/QueryProcessingStage.h>
 #include <DataStreams/BlockIO.h>
 #include <IO/Progress.h>
-#include <IO/Util/ReadHelpers.h>
-#include <IO/Util/WriteHelpers.h>
+#include <IO/ReadHelpers.h>
+#include <IO/WriteHelpers.h>
 #include <Interpreters/Context.h>
 #include <Poco/Net/TCPServerConnection.h>
 #include <Storages/KVStore/Read/RegionLockInfo.h>

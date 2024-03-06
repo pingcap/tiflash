@@ -13,8 +13,8 @@
 // limitations under the License.
 
 #include <Columns/IColumn.h>
-#include <IO/Util/Endian.h>
-#include <IO/Util/Operators.h>
+#include <IO/Endian.h>
+#include <IO/Operators.h>
 #include <TiDB/Decode/Datum.h>
 #include <TiDB/Decode/DatumCodec.h>
 #include <TiDB/Decode/RowCodec.h>

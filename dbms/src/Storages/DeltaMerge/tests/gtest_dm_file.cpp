@@ -244,7 +244,9 @@ void DMFileMetaV2Test::checkColumnStats(const DMFilePtr & dmfile1, const DMFileP
             col_stat2.col_id,
             col_stat2.type->getName());
 
-        ASSERT_EQ(dmfile1->colDataSize(col_def.id, false), dmfile2->colDataSize(col_def.id, false));
+        ASSERT_EQ(
+            dmfile1->colDataSize(col_def.id, DMFile::ColDataType::Elements),
+            dmfile2->colDataSize(col_def.id, DMFile::ColDataType::Elements));
         ASSERT_EQ(dmfile1->isColIndexExist(col_def.id), dmfile2->isColIndexExist(col_def.id));
         if (dmfile1->isColIndexExist(col_def.id))
         {
@@ -252,7 +254,15 @@ void DMFileMetaV2Test::checkColumnStats(const DMFilePtr & dmfile1, const DMFileP
         }
         if (col_def.type->isNullable())
         {
-            ASSERT_EQ(dmfile1->colDataSize(col_def.id, true), dmfile2->colDataSize(col_def.id, true));
+            ASSERT_EQ(
+                dmfile1->colDataSize(col_def.id, DMFile::ColDataType::NullMap),
+                dmfile2->colDataSize(col_def.id, DMFile::ColDataType::NullMap));
+        }
+        if (col_def.type->getTypeId() == TypeIndex::Array)
+        {
+            ASSERT_EQ(
+                dmfile1->colDataSize(col_def.id, DMFile::ColDataType::ArraySizes),
+                dmfile2->colDataSize(col_def.id, DMFile::ColDataType::ArraySizes));
         }
     }
 }
@@ -473,7 +483,6 @@ try
         check_pack_properties(dmfile1, dmfile2);
         checkColumnStats(dmfile1, dmfile2);
     };
-
     auto cols = DMTestEnv::getDefaultColumns(DMTestEnv::PkType::HiddenTiDBRowID, /*add_nullable*/ true);
 
     const size_t num_rows_write = 128;
@@ -609,6 +618,305 @@ try
     catch (const DB::Exception & e)
     {
         ASSERT_EQ(e.code(), ErrorCodes::CORRUPTED_DATA) << e.message();
+    }
+}
+CATCH
+
+TEST_F(DMFileMetaV2Test, WriteReadWithArray)
+try
+{
+    auto cols = DMTestEnv::getDefaultColumns(DMTestEnv::PkType::HiddenTiDBRowID, /*add_nullable*/ true);
+    auto array_cd = ColumnDefine(100, "array", tests::typeFromString("Array(Float32)"));
+    cols->emplace_back(array_cd);
+
+    const size_t num_rows_write = 128;
+
+    DMFileBlockOutputStream::BlockProperty block_property1{
+        .deleted_rows = 1,
+        .effective_num_rows = 1,
+        .gc_hint_version = 1,
+    };
+    DMFileBlockOutputStream::BlockProperty block_property2{
+        .deleted_rows = 2,
+        .effective_num_rows = 2,
+        .gc_hint_version = 2,
+    };
+    std::vector<DMFileBlockOutputStream::BlockProperty> block_propertys{block_property1, block_property2};
+
+    Array vec1{Field(1.0), Field(2.0), Field(3.0)};
+    Array vec2{Field(11.0), Field(12.0), Field(13.0)};
+    {
+        // Prepare for write
+        // Block 1: [0, 64)
+        Block block1 = DMTestEnv::prepareSimpleWriteBlockWithNullable(0, num_rows_write / 2);
+        block1.insert(
+            createVecFloat32Column<Array>(std::vector<Array>(num_rows_write / 2, vec1), array_cd.name, array_cd.id));
+        // Block 2: [64, 128)
+        Block block2 = DMTestEnv::prepareSimpleWriteBlockWithNullable(num_rows_write / 2, num_rows_write);
+        block2.insert(
+            createVecFloat32Column<Array>(std::vector<Array>(num_rows_write / 2, vec2), array_cd.name, array_cd.id));
+        auto stream = std::make_shared<DMFileBlockOutputStream>(dbContext(), dm_file, *cols);
+        stream->writePrefix();
+        stream->write(block1, block_property1);
+        stream->write(block2, block_property2);
+        stream->writeSuffix();
+
+        ASSERT_EQ(dm_file->getPackProperties().property_size(), 2);
+    }
+
+    std::vector<Array> expect_arr_values;
+    for (size_t i = 0; i < num_rows_write; ++i)
+    {
+        if (i < num_rows_write / 2)
+            expect_arr_values.emplace_back(vec1);
+        else
+            expect_arr_values.emplace_back(vec2);
+    }
+    {
+        // Test read
+        DMFileBlockInputStreamBuilder builder(dbContext());
+        auto stream
+            = builder.setColumnCache(column_cache)
+                  .build(dm_file, *cols, RowKeyRanges{RowKeyRange::newAll(false, 1)}, std::make_shared<ScanContext>());
+        ASSERT_INPUTSTREAM_COLS_UR(
+            stream,
+            Strings({DMTestEnv::pk_name, array_cd.name}),
+            createColumns({
+                createColumn<Int64>(createNumbers<Int64>(0, num_rows_write)),
+                createVecFloat32Column<Array>(expect_arr_values),
+            }));
+    }
+
+    /// Test restore the file from disk and read
+    {
+        dm_file = restoreDMFile();
+
+        // Test dt property read success
+        auto propertys = dm_file->getPackProperties();
+        ASSERT_EQ(propertys.property_size(), 2);
+        for (int i = 0; i < propertys.property_size(); i++)
+        {
+            const auto & property = propertys.property(i);
+            ASSERT_EQ((size_t)property.num_rows(), (size_t)block_propertys[i].effective_num_rows);
+            ASSERT_EQ((size_t)property.gc_hint_version(), (size_t)block_propertys[i].effective_num_rows);
+            ASSERT_EQ((size_t)property.deleted_rows(), (size_t)block_propertys[i].deleted_rows);
+        }
+    }
+    {
+        // Test read after restore
+        DMFileBlockInputStreamBuilder builder(dbContext());
+        auto stream
+            = builder.setColumnCache(column_cache)
+                  .build(dm_file, *cols, RowKeyRanges{RowKeyRange::newAll(false, 1)}, std::make_shared<ScanContext>());
+        ASSERT_INPUTSTREAM_COLS_UR(
+            stream,
+            Strings({DMTestEnv::pk_name, array_cd.name}),
+            createColumns({
+                createColumn<Int64>(createNumbers<Int64>(0, num_rows_write)),
+                createVecFloat32Column<Array>(expect_arr_values),
+            }));
+    }
+}
+CATCH
+
+TEST_F(DMFileMetaV2Test, SeekWithArray)
+try
+{
+    auto cols = DMTestEnv::getDefaultColumns(DMTestEnv::PkType::HiddenTiDBRowID, /*add_nullable*/ true);
+    auto array_cd = ColumnDefine(100, "array", tests::typeFromString("Array(Float32)"));
+    cols->emplace_back(array_cd);
+
+    const size_t num_rows_write = 8192;
+
+    DMFileBlockOutputStream::BlockProperty block_property1{
+        .deleted_rows = 1,
+        .effective_num_rows = 1,
+        .gc_hint_version = 1,
+    };
+    DMFileBlockOutputStream::BlockProperty block_property2{
+        .deleted_rows = 2,
+        .effective_num_rows = 2,
+        .gc_hint_version = 2,
+    };
+    DMFileBlockOutputStream::BlockProperty block_property3{
+        .deleted_rows = 3,
+        .effective_num_rows = 3,
+        .gc_hint_version = 3,
+    };
+    std::vector<DMFileBlockOutputStream::BlockProperty> block_propertys{
+        block_property1,
+        block_property2,
+        block_property3,
+    };
+
+    Array vec1{Field(1.0), Field(2.0), Field(3.0)};
+    Array vec2{Field(11.0), Field(12.0), Field(13.0), Field(14.0)};
+    Array vec3{Field(111.0), Field(222.0), Field(333.0), Field(444.0), Field(555.0)};
+    {
+        // Prepare for write
+        // Block 1: [0, 64)
+        Block block1 = DMTestEnv::prepareSimpleWriteBlockWithNullable(0, num_rows_write / 3);
+        block1.insert(
+            createVecFloat32Column<Array>(std::vector<Array>(num_rows_write / 3, vec1), array_cd.name, array_cd.id));
+        // Block 2: [64, 128)
+        Block block2 = DMTestEnv::prepareSimpleWriteBlockWithNullable(num_rows_write / 3, num_rows_write * 2 / 3);
+        block2.insert(
+            createVecFloat32Column<Array>(std::vector<Array>(block2.rows(), vec2), array_cd.name, array_cd.id));
+        // Block 3: [128, 192)
+        Block block3 = DMTestEnv::prepareSimpleWriteBlockWithNullable(num_rows_write * 2 / 3, num_rows_write);
+        block3.insert(
+            createVecFloat32Column<Array>(std::vector<Array>(block3.rows(), vec3), array_cd.name, array_cd.id));
+        auto stream = std::make_shared<DMFileBlockOutputStream>(dbContext(), dm_file, *cols);
+        stream->writePrefix();
+        stream->write(block1, block_property1);
+        stream->write(block2, block_property2);
+        stream->write(block3, block_property3);
+        stream->writeSuffix();
+
+        ASSERT_EQ(dm_file->getPackProperties().property_size(), 3);
+    }
+
+    dm_file = restoreDMFile();
+
+    std::vector<Array> expect_arr_values;
+    for (size_t i = 0; i < num_rows_write; ++i)
+    {
+        if (i < num_rows_write / 3)
+            expect_arr_values.emplace_back(vec1);
+        else if (i < num_rows_write * 2 / 3)
+            expect_arr_values.emplace_back(vec2);
+        else
+            expect_arr_values.emplace_back(vec3);
+    }
+    {
+        // Read all packs
+        DMFileBlockInputStreamBuilder builder(dbContext());
+        auto stream
+            = builder.setColumnCache(column_cache)
+                  .build(dm_file, *cols, RowKeyRanges{RowKeyRange::newAll(false, 1)}, std::make_shared<ScanContext>());
+        ASSERT_INPUTSTREAM_COLS_UR(
+            stream,
+            Strings({DMTestEnv::pk_name, array_cd.name}),
+            createColumns({
+                createColumn<Int64>(createNumbers<Int64>(0, num_rows_write)),
+                createVecFloat32Column<Array>(expect_arr_values),
+            }));
+    }
+    {
+        DMFileBlockInputStreamBuilder builder(dbContext());
+        // Only read pack[0]
+        auto read_ids = std::make_shared<IdSet>(IdSet{0});
+        auto stream
+            = builder.setColumnCache(column_cache)
+                  .setReadPacks(read_ids)
+                  .build(dm_file, *cols, RowKeyRanges{RowKeyRange::newAll(false, 1)}, std::make_shared<ScanContext>());
+        std::vector<Array> partial_expect_arr_values;
+        partial_expect_arr_values.insert(
+            partial_expect_arr_values.cend(),
+            expect_arr_values.begin(),
+            expect_arr_values.begin() + num_rows_write / 3);
+        ASSERT_INPUTSTREAM_COLS_UR(
+            stream,
+            Strings({DMTestEnv::pk_name, array_cd.name}),
+            createColumns({
+                createColumn<Int64>(createNumbers<Int64>(0, num_rows_write / 3)),
+                createVecFloat32Column<Array>(partial_expect_arr_values),
+            }));
+    }
+    {
+        DMFileBlockInputStreamBuilder builder(dbContext());
+        // Only read pack[1]
+        auto read_ids = std::make_shared<IdSet>(IdSet{1});
+        auto stream
+            = builder.setColumnCache(column_cache)
+                  .setReadPacks(read_ids)
+                  .build(dm_file, *cols, RowKeyRanges{RowKeyRange::newAll(false, 1)}, std::make_shared<ScanContext>());
+        std::vector<Array> partial_expect_arr_values;
+        partial_expect_arr_values.insert(
+            partial_expect_arr_values.cend(),
+            expect_arr_values.begin() + num_rows_write / 3,
+            expect_arr_values.begin() + num_rows_write * 2 / 3);
+        ASSERT_INPUTSTREAM_COLS_UR(
+            stream,
+            Strings({DMTestEnv::pk_name, array_cd.name}),
+            createColumns({
+                createColumn<Int64>(createNumbers<Int64>(num_rows_write / 3, num_rows_write * 2 / 3)),
+                createVecFloat32Column<Array>(partial_expect_arr_values),
+            }));
+    }
+    {
+        /// Test read
+        DMFileBlockInputStreamBuilder builder(dbContext());
+        // Only read pack[2]
+        auto read_ids = std::make_shared<IdSet>(IdSet{2});
+        auto stream
+            = builder.setColumnCache(column_cache)
+                  .setReadPacks(read_ids)
+                  .build(dm_file, *cols, RowKeyRanges{RowKeyRange::newAll(false, 1)}, std::make_shared<ScanContext>());
+        std::vector<Array> partial_expect_arr_values;
+        partial_expect_arr_values.insert(
+            partial_expect_arr_values.cend(),
+            expect_arr_values.begin() + num_rows_write * 2 / 3,
+            expect_arr_values.end());
+        ASSERT_INPUTSTREAM_COLS_UR(
+            stream,
+            Strings({DMTestEnv::pk_name, array_cd.name}),
+            createColumns({
+                createColumn<Int64>(createNumbers<Int64>(num_rows_write * 2 / 3, num_rows_write)),
+                createVecFloat32Column<Array>(partial_expect_arr_values),
+            }));
+    }
+    {
+        /// Test read
+        DMFileBlockInputStreamBuilder builder(dbContext());
+        // Only read pack[0, 2]
+        auto read_ids = std::make_shared<IdSet>(IdSet{0, 2});
+        auto stream
+            = builder.setColumnCache(column_cache)
+                  .setReadPacks(read_ids)
+                  .build(dm_file, *cols, RowKeyRanges{RowKeyRange::newAll(false, 1)}, std::make_shared<ScanContext>());
+        std::vector<Int64> partial_pk = createNumbers<Int64>(0, num_rows_write / 3);
+        std::vector<Int64> pk_pack2 = createNumbers<Int64>(num_rows_write * 2 / 3, num_rows_write);
+        partial_pk.insert(partial_pk.end(), pk_pack2.begin(), pk_pack2.end());
+        std::vector<Array> partial_expect_arr_values;
+        partial_expect_arr_values.insert(
+            partial_expect_arr_values.cend(),
+            expect_arr_values.begin(),
+            expect_arr_values.begin() + num_rows_write / 3);
+        partial_expect_arr_values.insert(
+            partial_expect_arr_values.cend(),
+            expect_arr_values.begin() + num_rows_write * 2 / 3,
+            expect_arr_values.end());
+        ASSERT_INPUTSTREAM_COLS_UR(
+            stream,
+            Strings({DMTestEnv::pk_name, array_cd.name}),
+            createColumns({
+                createColumn<Int64>(partial_pk),
+                createVecFloat32Column<Array>(partial_expect_arr_values),
+            }));
+    }
+    {
+        /// Test read after skip
+        DMFileBlockInputStreamBuilder builder(dbContext());
+        auto stream
+            = builder.setColumnCache(column_cache)
+                  .build(dm_file, *cols, RowKeyRanges{RowKeyRange::newAll(false, 1)}, std::make_shared<ScanContext>());
+        auto & use_packs = getReaderUsePacks(stream);
+        use_packs[1] = false;
+        stream->skipNextBlock();
+        use_packs[1] = true;
+        std::vector<Array> partial_expect_arr_values;
+        partial_expect_arr_values.insert(
+            partial_expect_arr_values.cend(),
+            expect_arr_values.begin() + num_rows_write / 3,
+            expect_arr_values.end());
+        ASSERT_INPUTSTREAM_COLS_UR(
+            stream,
+            Strings({DMTestEnv::pk_name, array_cd.name}),
+            createColumns({
+                createColumn<Int64>(createNumbers<Int64>(num_rows_write / 3, num_rows_write)),
+                createVecFloat32Column<Array>(partial_expect_arr_values),
+            }));
     }
 }
 CATCH

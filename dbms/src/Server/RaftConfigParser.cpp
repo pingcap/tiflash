@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <Common/FmtUtils.h>
-#include <IO/Util/WriteHelpers.h>
+#include <IO/WriteHelpers.h>
 #include <Poco/String.h>
 #include <Poco/StringTokenizer.h>
 #include <Poco/Util/AbstractConfiguration.h>

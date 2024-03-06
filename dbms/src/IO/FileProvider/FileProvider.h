@@ -16,8 +16,8 @@
 
 #include <IO/BaseFile/fwd.h>
 #include <IO/Encryption/BlockAccessCipherStream.h>
-#include <IO/FileProvider_fwd.h>
-#include <IO/KeyManager.h>
+#include <IO/FileProvider/FileProvider_fwd.h>
+#include <IO/FileProvider/KeyManager.h>
 #include <Storages/Page/PageDefinesBase.h>
 #include <Storages/Page/PageStorage_fwd.h>
 

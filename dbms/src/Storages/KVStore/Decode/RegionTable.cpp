@@ -286,7 +286,7 @@ RegionDataReadInfoList RegionTable::tryWriteBlockByRegion(const RegionPtrWithBlo
     try
     {
         /// Write region data into corresponding storage.
-        writeBlockByRegion(*context, region, data_list_to_remove, log);
+        writeCommittedByRegion(*context, region, data_list_to_remove, log);
     }
     catch (const Exception & e)
     {

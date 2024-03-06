@@ -22,7 +22,7 @@
 #include <Common/TiFlashException.h>
 #include <IO/BaseFile/RateLimiter.h>
 #include <IO/Buffer/WriteBufferFromFile.h>
-#include <IO/Util/WriteHelpers.h>
+#include <IO/WriteHelpers.h>
 #include <Poco/File.h>
 #include <Storages/Page/Page.h>
 #include <boost_wrapper/string_split.h>

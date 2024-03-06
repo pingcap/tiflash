@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <IO/Util/ReadHelpers.h>
-#include <IO/Util/WriteHelpers.h>
+#include <IO/ReadHelpers.h>
+#include <IO/WriteHelpers.h>
 #include <Storages/KVStore/FFI/ColumnFamily.h>
 #include <Storages/KVStore/MultiRaft/RegionData.h>
 #include <Storages/KVStore/Read/RegionLockInfo.h>
@@ -48,7 +48,7 @@ void RegionData::reportDelta(size_t prev, size_t current)
     }
 }
 
-size_t RegionData::insert(ColumnFamilyType cf, TiKVKey && key, TiKVValue && value, DupCheck mode)
+RegionDataRes RegionData::insert(ColumnFamilyType cf, TiKVKey && key, TiKVValue && value, DupCheck mode)
 {
     switch (cf)
     {
@@ -68,8 +68,16 @@ size_t RegionData::insert(ColumnFamilyType cf, TiKVKey && key, TiKVValue && valu
     }
     case ColumnFamilyType::Lock:
     {
-        // lock cf is not count into the size of RegionData
-        lock_cf.insert(std::move(key), std::move(value), mode);
+        auto delta = lock_cf.insert(std::move(key), std::move(value), mode);
+        cf_data_size += delta;
+        if likely (delta >= 0)
+        {
+            reportAlloc(delta);
+        }
+        else
+        {
+            reportDealloc(-delta);
+        }
         return 0;
     }
     }
@@ -103,7 +111,10 @@ void RegionData::remove(ColumnFamilyType cf, const TiKVKey & key)
     }
     case ColumnFamilyType::Lock:
     {
-        lock_cf.remove(RegionLockCFDataTrait::Key{nullptr, std::string_view(key.data(), key.dataSize())}, true);
+        auto delta
+            = lock_cf.remove(RegionLockCFDataTrait::Key{nullptr, std::string_view(key.data(), key.dataSize())}, true);
+        cf_data_size -= delta;
+        reportDealloc(delta);
         return;
     }
     }
@@ -156,17 +167,17 @@ std::optional<RegionDataReadInfo> RegionData::readDataByWriteIt(
     }
 
     if (!need_value)
-        return std::make_tuple(pk, decoded_val.write_type, ts, nullptr);
+        return RegionDataReadInfo{pk, decoded_val.write_type, ts, nullptr};
 
     if (decoded_val.write_type != RecordKVFormat::CFModifyFlag::PutFlag)
-        return std::make_tuple(pk, decoded_val.write_type, ts, nullptr);
+        return RegionDataReadInfo{pk, decoded_val.write_type, ts, nullptr};
 
     std::string orphan_key_debug_msg;
     if (!decoded_val.short_value)
     {
         const auto & map = default_cf.getData();
         if (auto data_it = map.find({pk, decoded_val.prewrite_ts}); data_it != map.end())
-            return std::make_tuple(pk, decoded_val.write_type, ts, RegionDefaultCFDataTrait::getTiKVValue(data_it));
+            return RegionDataReadInfo{pk, decoded_val.write_type, ts, RegionDefaultCFDataTrait::getTiKVValue(data_it)};
         else
         {
             if (!hard_error)
@@ -198,7 +209,7 @@ std::optional<RegionDataReadInfo> RegionData::readDataByWriteIt(
         }
     }
 
-    return std::make_tuple(pk, decoded_val.write_type, ts, decoded_val.short_value);
+    return RegionDataReadInfo{pk, decoded_val.write_type, ts, decoded_val.short_value};
 }
 
 DecodedLockCFValuePtr RegionData::getLockInfo(const RegionLockReadQuery & query) const

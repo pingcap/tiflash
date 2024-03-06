@@ -16,7 +16,7 @@
 #include <Common/ProfileEvents.h>
 #include <Common/Stopwatch.h>
 #include <IO/Buffer/ReadBufferFromFileDescriptor.h>
-#include <IO/Util/WriteHelpers.h>
+#include <IO/WriteHelpers.h>
 #include <errno.h>
 #include <time.h>
 

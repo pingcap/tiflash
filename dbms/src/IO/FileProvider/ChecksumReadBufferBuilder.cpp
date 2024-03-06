@@ -14,7 +14,7 @@
 
 #include <IO/BaseFile/MemoryRandomAccessFile.h>
 #include <IO/Checksum/ChecksumBuffer.h>
-#include <IO/Checksum/ChecksumReadBufferBuilder.h>
+#include <IO/FileProvider/ChecksumReadBufferBuilder.h>
 
 namespace DB
 {

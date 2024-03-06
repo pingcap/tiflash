@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <Core/Types.h>
-#include <IO/Util/WriteHelpers.h>
+#include <IO/WriteHelpers.h>
 #include <Interpreters/Context.h>
 #include <Storages/KVStore/FFI/ProxyFFI.h>
 #include <Storages/Page/V3/PageDefines.h>

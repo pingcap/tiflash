@@ -63,6 +63,7 @@ class RegionKVStoreTestFAP : public KVStoreTestBase
 public:
     void SetUp() override
     {
+        test_path = TiFlashTestEnv::getTemporaryPath("/region_kvs_fap_test");
         auto & global_context = TiFlashTestEnv::getGlobalContext();
         // clean data and create path pool instance
         path_pool = TiFlashTestEnv::createCleanPathPool(test_path);

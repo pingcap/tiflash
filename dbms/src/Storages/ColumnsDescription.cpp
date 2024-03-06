@@ -18,8 +18,8 @@
 #include <IO/Buffer/ReadBufferFromString.h>
 #include <IO/Buffer/WriteBuffer.h>
 #include <IO/Buffer/WriteBufferFromString.h>
-#include <IO/Util/ReadHelpers.h>
-#include <IO/Util/WriteHelpers.h>
+#include <IO/ReadHelpers.h>
+#include <IO/WriteHelpers.h>
 #include <Parsers/ExpressionListParsers.h>
 #include <Parsers/parseQuery.h>
 #include <Parsers/queryToString.h>

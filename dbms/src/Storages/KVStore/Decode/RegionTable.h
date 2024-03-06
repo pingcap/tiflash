@@ -41,6 +41,7 @@ struct TableInfo;
 
 namespace DB
 {
+struct MockRaftCommand;
 struct ColumnsDescription;
 class IStorage;
 using StoragePtr = std::shared_ptr<IStorage>;
@@ -133,7 +134,7 @@ public:
     /// Will trigger schema sync on read error for only once,
     /// assuming that newer schema can always apply to older data by setting force_decode to true in RegionBlockReader::read.
     /// Note that table schema must be keep unchanged throughout the process of read then write, we take good care of the lock.
-    static DM::WriteResult writeBlockByRegion(
+    static DM::WriteResult writeCommittedByRegion(
         Context & context,
         const RegionPtrWithBlock & region,
         RegionDataReadInfoList & data_list_to_remove,
@@ -141,7 +142,7 @@ public:
         bool lock_region = true);
 
     /// Check transaction locks in region, and write committed data in it into storage engine if check passed. Otherwise throw an LockException.
-    /// The write logic is the same as #writeBlockByRegion, with some extra checks about region version and conf_version.
+    /// The write logic is the same as #writeCommittedByRegion, with some extra checks about region version and conf_version.
     using ResolveLocksAndWriteRegionRes = std::variant<LockInfoPtr, RegionException::RegionReadStatus>;
     static ResolveLocksAndWriteRegionRes resolveLocksAndWriteRegion(
         TMTContext & tmt,
@@ -236,10 +237,9 @@ struct RegionPtrWithBlock
     using Base = RegionPtr;
     using CachePtr = std::unique_ptr<RegionPreDecodeBlockData>;
 
-    /// can accept const ref of RegionPtr without cache
-    RegionPtrWithBlock(const Base & base_, CachePtr cache = nullptr)
+    RegionPtrWithBlock(const Base & base_)
         : base(base_)
-        , pre_decode_cache(std::move(cache))
+        , pre_decode_cache(nullptr)
     {}
 
     /// to be compatible with usage as RegionPtr.
@@ -251,6 +251,14 @@ struct RegionPtrWithBlock
 
     const Base & base;
     CachePtr pre_decode_cache;
+
+private:
+    friend struct MockRaftCommand;
+    /// Can accept const ref of RegionPtr without cache
+    RegionPtrWithBlock(const Base & base_, CachePtr cache)
+        : base(base_)
+        , pre_decode_cache(std::move(cache))
+    {}
 };
 
 

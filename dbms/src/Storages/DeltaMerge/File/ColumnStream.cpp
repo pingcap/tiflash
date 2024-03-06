@@ -149,8 +149,12 @@ std::unique_ptr<CompressedSeekableReaderBuffer> ColumnReadStream::buildColDataRe
 {
     assert(!reader.dmfile->configuration);
 
-    auto is_null_map = endsWith(file_name_base, ".null");
-    size_t data_file_size = reader.dmfile->colDataSize(col_id, is_null_map);
+    DMFile::ColDataType type = DMFile::ColDataType::Elements;
+    if (endsWith(file_name_base, ".null"))
+        type = DMFile::ColDataType::NullMap;
+    else if (endsWith(file_name_base, ".size0"))
+        type = DMFile::ColDataType::ArraySizes;
+    size_t data_file_size = reader.dmfile->colDataSize(col_id, type);
 
     // Try to get the largest buffer size of reading continuous packs
     size_t buffer_size = 0;
@@ -195,12 +199,10 @@ std::unique_ptr<CompressedSeekableReaderBuffer> ColumnReadStream::buildColDataRe
         file_name_base,
         data_file_size,
         buffer_size);
-    return LegacyCompressedReadBufferFromFileProvider::buildLegacyReadBuffer(
+    return CompressedReadBufferFromFileBuilder::buildLegacy(
         reader.file_provider,
         reader.dmfile->colDataPath(file_name_base),
         reader.dmfile->encryptionDataPath(file_name_base),
-        /*estimated_size*/ 0,
-        /*aio_threshold*/ 0,
         read_limiter,
         buffer_size);
 }
@@ -211,7 +213,7 @@ std::unique_ptr<CompressedSeekableReaderBuffer> ColumnReadStream::buildColDataRe
     const String & file_name_base,
     const ReadLimiterPtr & read_limiter)
 {
-    return std::make_unique<CompressedReadBufferFromFileProvider>(
+    return CompressedReadBufferFromFileBuilder::build(
         reader.file_provider,
         reader.dmfile->colDataPath(file_name_base),
         reader.dmfile->encryptionDataPath(file_name_base),
@@ -230,7 +232,7 @@ std::unique_ptr<CompressedSeekableReaderBuffer> ColumnReadStream::buildColDataRe
     auto info = reader.dmfile->merged_sub_file_infos.find(reader.dmfile->colDataFileName(file_name_base));
     if (info == reader.dmfile->merged_sub_file_infos.end())
     {
-        return std::make_unique<CompressedReadBufferFromFileProvider>(
+        return CompressedReadBufferFromFileBuilder::build(
             reader.file_provider,
             reader.dmfile->colDataPath(file_name_base),
             reader.dmfile->encryptionDataPath(file_name_base),
@@ -262,7 +264,7 @@ std::unique_ptr<CompressedSeekableReaderBuffer> ColumnReadStream::buildColDataRe
     buffer.read(reinterpret_cast<char *>(raw_data.data()), size);
 
     // Then read from the buffer based on the raw data
-    return std::make_unique<CompressedReadBufferFromFileProvider>(
+    return CompressedReadBufferFromFileBuilder::build(
         std::move(raw_data),
         file_path,
         reader.dmfile->getConfiguration()->getChecksumFrameLength(),

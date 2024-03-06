@@ -14,7 +14,7 @@
 
 #include <Common/SipHash.h>
 #include <Common/StringUtils/StringUtils.h>
-#include <IO/Util/ReadHelpers.h>
+#include <IO/ReadHelpers.h>
 #include <Interpreters/Quota.h>
 #include <common/logger_useful.h>
 

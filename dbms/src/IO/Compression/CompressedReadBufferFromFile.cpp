@@ -12,20 +12,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <IO/Buffer/createReadBufferFromFileBase.h>
 #include <IO/Compression/CompressedReadBufferFromFile.h>
-#include <IO/Util/WriteHelpers.h>
-
 
 namespace DB
 {
+
 namespace ErrorCodes
 {
 extern const int SEEK_POSITION_OUT_OF_BOUND;
 }
 
 template <bool has_legacy_checksum>
-bool CompressedReadBufferFromFile<has_legacy_checksum>::nextImpl()
+CompressedReadBufferFromFileImpl<has_legacy_checksum>::CompressedReadBufferFromFileImpl(
+    std::unique_ptr<ReadBufferFromFileBase> && file_in_)
+    : CompressedSeekableReaderBuffer()
+    , p_file_in(std::move(file_in_))
+    , file_in(*p_file_in)
+{
+    this->compressed_in = &file_in;
+}
+
+template <bool has_legacy_checksum>
+bool CompressedReadBufferFromFileImpl<has_legacy_checksum>::nextImpl()
 {
     size_t size_decompressed;
     size_t size_compressed_without_checksum;
@@ -33,7 +41,7 @@ bool CompressedReadBufferFromFile<has_legacy_checksum>::nextImpl()
     if (!size_compressed)
         return false;
 
-    assert(size_decompressed > 0 && size_compressed_without_checksum > 0);
+    assert(size_decompressed > 0);
     memory.resize(size_decompressed);
     working_buffer = Buffer(&memory[0], &memory[size_decompressed]);
 
@@ -43,20 +51,7 @@ bool CompressedReadBufferFromFile<has_legacy_checksum>::nextImpl()
 }
 
 template <bool has_legacy_checksum>
-CompressedReadBufferFromFile<has_legacy_checksum>::CompressedReadBufferFromFile(
-    const std::string & path,
-    size_t estimated_size,
-    size_t aio_threshold,
-    size_t buf_size)
-    : BufferWithOwnMemory<ReadBuffer>(0)
-    , p_file_in(createReadBufferFromFileBase(path, estimated_size, aio_threshold, buf_size))
-    , file_in(*p_file_in)
-{
-    this->compressed_in = &file_in;
-}
-
-template <bool has_legacy_checksum>
-void CompressedReadBufferFromFile<has_legacy_checksum>::seek(
+void CompressedReadBufferFromFileImpl<has_legacy_checksum>::seek(
     size_t offset_in_compressed_file,
     size_t offset_in_decompressed_block)
 {
@@ -77,10 +72,10 @@ void CompressedReadBufferFromFile<has_legacy_checksum>::seek(
 
         if (offset_in_decompressed_block > working_buffer.size())
             throw Exception(
-                "Seek position is beyond the decompressed block"
-                " (pos: "
-                    + toString(offset_in_decompressed_block) + ", block size: " + toString(working_buffer.size()) + ")",
-                ErrorCodes::SEEK_POSITION_OUT_OF_BOUND);
+                ErrorCodes::SEEK_POSITION_OUT_OF_BOUND,
+                "Seek position is beyond the decompressed block (pos: {}, block size: {})",
+                offset_in_decompressed_block,
+                working_buffer.size());
 
         pos = working_buffer.begin() + offset_in_decompressed_block;
         bytes -= offset();
@@ -88,7 +83,7 @@ void CompressedReadBufferFromFile<has_legacy_checksum>::seek(
 }
 
 template <bool has_legacy_checksum>
-size_t CompressedReadBufferFromFile<has_legacy_checksum>::readBig(char * to, size_t n)
+size_t CompressedReadBufferFromFileImpl<has_legacy_checksum>::readBig(char * to, size_t n)
 {
     size_t bytes_read = 0;
 
@@ -118,7 +113,7 @@ size_t CompressedReadBufferFromFile<has_legacy_checksum>::readBig(char * to, siz
         {
             size_compressed = new_size_compressed;
             bytes += offset();
-            assert(size_decompressed > 0 && size_compressed_without_checksum > 0);
+            assert(size_decompressed > 0);
             memory.resize(size_decompressed);
             working_buffer = Buffer(&memory[0], &memory[size_decompressed]);
             pos = working_buffer.begin();
@@ -133,7 +128,7 @@ size_t CompressedReadBufferFromFile<has_legacy_checksum>::readBig(char * to, siz
     return bytes_read;
 }
 
-template class CompressedReadBufferFromFile<true>;
-template class CompressedReadBufferFromFile<false>;
+template class CompressedReadBufferFromFileImpl<true>;
+template class CompressedReadBufferFromFileImpl<false>;
 
 } // namespace DB

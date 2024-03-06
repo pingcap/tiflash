@@ -15,8 +15,8 @@
 #include <Core/ColumnWithTypeAndName.h>
 #include <Core/ColumnsWithTypeAndName.h>
 #include <IO/Buffer/WriteBufferFromString.h>
-#include <IO/Util/Operators.h>
-#include <IO/Util/WriteHelpers.h>
+#include <IO/Operators.h>
+#include <IO/WriteHelpers.h>
 
 
 namespace DB

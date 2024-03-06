@@ -65,6 +65,16 @@ struct ReadFromStreamResult
     RegionPtr region;
 };
 
+struct PrehandleTransformCtx
+{
+    PreHandlingTrace & trace;
+    std::shared_ptr<PreHandlingTrace::Item> prehandle_task;
+    DM::FileConvertJobType job_type;
+    StorageDeltaMergePtr storage;
+    const DM::SSTFilesToBlockInputStreamOpts & opts;
+    TMTContext & tmt;
+};
+
 void PreHandlingTrace::waitForSubtaskResources(uint64_t region_id, size_t parallel, size_t parallel_subtask_limit)
 {
     {
@@ -114,15 +124,14 @@ void PreHandlingTrace::waitForSubtaskResources(uint64_t region_id, size_t parall
 
 static inline std::tuple<ReadFromStreamResult, PrehandleResult> executeTransform(
     LoggerPtr log,
-    const RegionPtr & new_region,
-    PreHandlingTrace & trace,
-    const std::shared_ptr<PreHandlingTrace::Item> & prehandle_task,
-    DM::FileConvertJobType job_type,
-    const std::shared_ptr<StorageDeltaMerge> & storage,
-    const std::shared_ptr<DM::SSTFilesToBlockInputStream> & sst_stream,
-    const DM::SSTFilesToBlockInputStreamOpts & opts,
-    TMTContext & tmt)
+    PrehandleTransformCtx & prehandle_ctx,
+    RegionPtr new_region,
+    const std::shared_ptr<DM::SSTFilesToBlockInputStream> & sst_stream)
 {
+    const auto & opts = prehandle_ctx.opts;
+    auto & tmt = prehandle_ctx.tmt;
+    auto & trace = prehandle_ctx.trace;
+
     auto region_id = new_region->id();
     auto split_id = sst_stream->getSplitId();
     CurrentMetrics::add(CurrentMetrics::RaftNumPrehandlingSubTasks);
@@ -152,13 +161,13 @@ static inline std::tuple<ReadFromStreamResult, PrehandleResult> executeTransform
         stream = std::make_shared<DM::SSTFilesToDTFilesOutputStream<DM::BoundedSSTFilesToBlockInputStreamPtr>>(
             opts.log_prefix,
             bounded_stream,
-            storage,
+            prehandle_ctx.storage,
             opts.schema_snap,
-            job_type,
+            prehandle_ctx.job_type,
             /* split_after_rows */ global_settings.dt_segment_limit_rows,
             /* split_after_size */ global_settings.dt_segment_limit_size,
             region_id,
-            prehandle_task,
+            prehandle_ctx.prehandle_task,
             context);
 
         sst_stream->maybeSkipBySoftLimit();
@@ -185,7 +194,7 @@ static inline std::tuple<ReadFromStreamResult, PrehandleResult> executeTransform
         stream->write();
         stream->writeSuffix();
         auto res = ReadFromStreamResult{.error = PrehandleTransformStatus::Ok, .extra_msg = "", .region = new_region};
-        auto abort_reason = prehandle_task->abortReason();
+        auto abort_reason = prehandle_ctx.prehandle_task->abortReason();
         if (abort_reason)
         {
             stream->cancel();
@@ -405,19 +414,14 @@ using ParallelPrehandleCtxPtr = std::shared_ptr<ParallelPrehandleCtx>;
 
 static void runInParallel(
     LoggerPtr log,
+    PrehandleTransformCtx & prehandle_ctx,
     RegionPtr new_region,
-    PreHandlingTrace & trace,
-    DM::SSTFilesToBlockInputStreamOpts & opt,
     const SSTViewVec & snaps,
     const TiFlashRaftProxyHelper * proxy_helper,
-    TMTContext & tmt,
-    std::shared_ptr<PreHandlingTrace::Item> prehandle_task,
-    DM::FileConvertJobType job_type,
     uint64_t index,
     uint64_t extra_id,
-    ParallelPrehandleCtxPtr ctx,
-    DM::SSTScanSoftLimit && part_limit,
-    std::shared_ptr<StorageDeltaMerge> dm_storage)
+    ParallelPrehandleCtxPtr parallel_ctx,
+    DM::SSTScanSoftLimit && part_limit)
 {
     std::string limit_tag = part_limit.toDebugString();
     auto part_new_region = std::make_shared<Region>(new_region->mutMeta().clone(), proxy_helper);
@@ -426,22 +430,14 @@ static void runInParallel(
         index,
         snaps,
         proxy_helper,
-        tmt,
+        prehandle_ctx.tmt,
         std::move(part_limit),
-        prehandle_task,
-        DM::SSTFilesToBlockInputStreamOpts(opt));
+        prehandle_ctx.prehandle_task,
+        DM::SSTFilesToBlockInputStreamOpts(prehandle_ctx.opts));
     try
     {
-        auto [part_result, part_prehandle_result] = executeTransform(
-            log,
-            part_new_region,
-            trace,
-            prehandle_task,
-            job_type,
-            dm_storage,
-            part_sst_stream,
-            opt,
-            tmt);
+        auto [part_result, part_prehandle_result]
+            = executeTransform(log, prehandle_ctx, part_new_region, part_sst_stream);
         LOG_INFO(
             log,
             "Finished extra parallel prehandle task limit {} write_cf={} lock_cf={} default_cf={} dmfiles={} error={}, "
@@ -456,12 +452,12 @@ static void runInParallel(
             part_new_region->id());
         if (part_result.error == PrehandleTransformStatus::ErrUpdateSchema)
         {
-            prehandle_task->abortFor(PrehandleTransformStatus::ErrUpdateSchema);
+            prehandle_ctx.prehandle_task->abortFor(PrehandleTransformStatus::ErrUpdateSchema);
         }
         {
-            std::scoped_lock l(ctx->mut);
-            ctx->gather_res[extra_id] = std::move(part_result);
-            ctx->gather_prehandle_res[extra_id] = std::move(part_prehandle_result);
+            std::scoped_lock l(parallel_ctx->mut);
+            parallel_ctx->gather_res[extra_id] = std::move(part_result);
+            parallel_ctx->gather_prehandle_res[extra_id] = std::move(part_prehandle_result);
         }
     }
     catch (Exception & e)
@@ -478,27 +474,22 @@ static void runInParallel(
             processed_keys.write_cf,
             extra_id,
             part_new_region->id());
-        prehandle_task->abortFor(PrehandleTransformStatus::Aborted);
+        prehandle_ctx.prehandle_task->abortFor(PrehandleTransformStatus::Aborted);
         throw;
     }
 }
 
 void executeParallelTransform(
     LoggerPtr log,
+    PrehandleTransformCtx & prehandle_ctx,
+    RegionPtr new_region,
     ReadFromStreamResult & result,
-    PreHandlingTrace & trace,
     PrehandleResult & prehandle_result,
     const std::vector<std::string> & split_keys,
     std::shared_ptr<DM::SSTFilesToBlockInputStream> sst_stream,
-    RegionPtr new_region,
-    DM::SSTFilesToBlockInputStreamOpts & opt,
     const SSTViewVec & snaps,
     const TiFlashRaftProxyHelper * proxy_helper,
-    TMTContext & tmt,
-    std::shared_ptr<PreHandlingTrace::Item> prehandle_task,
-    DM::FileConvertJobType job_type,
-    uint64_t index,
-    std::shared_ptr<StorageDeltaMerge> storage)
+    uint64_t index)
 {
     CurrentMetrics::add(CurrentMetrics::RaftNumParallelPrehandlingTasks);
     SCOPE_EXIT({ CurrentMetrics::sub(CurrentMetrics::RaftNumParallelPrehandlingTasks); });
@@ -520,7 +511,7 @@ void executeParallelTransform(
     sst_stream->resetSoftLimit(
         DM::SSTScanSoftLimit(DM::SSTScanSoftLimit::HEAD_OR_ONLY_SPLIT, std::string(""), std::string(split_keys[0])));
 
-    ParallelPrehandleCtxPtr ctx = std::make_shared<ParallelPrehandleCtx>();
+    ParallelPrehandleCtxPtr parallel_ctx = std::make_shared<ParallelPrehandleCtx>();
 
     for (size_t extra_id = 0; extra_id < split_key_count; extra_id++)
     {
@@ -531,19 +522,14 @@ void executeParallelTransform(
                 extra_id + 1 == split_key_count ? std::string("") : std::string(split_keys[extra_id + 1]));
             runInParallel(
                 log,
+                prehandle_ctx,
                 new_region,
-                trace,
-                opt,
                 snaps,
                 proxy_helper,
-                tmt,
-                prehandle_task,
-                job_type,
                 index,
                 extra_id,
-                ctx,
-                std::move(limit),
-                storage);
+                parallel_ctx,
+                std::move(limit));
             return true;
         });
         RUNTIME_CHECK_MSG(
@@ -553,8 +539,7 @@ void executeParallelTransform(
             new_region->id());
     }
     // This will read the keys from the beginning to the first split key
-    auto [head_result, head_prehandle_result]
-        = executeTransform(log, new_region, trace, prehandle_task, job_type, storage, sst_stream, opt, tmt);
+    auto [head_result, head_prehandle_result] = executeTransform(log, prehandle_ctx, new_region, sst_stream);
     LOG_INFO(
         log,
         "Finished extra parallel prehandle task limit={} write_cf {} lock_cf={} default_cf={} dmfiles={} "
@@ -583,11 +568,11 @@ void executeParallelTransform(
         // Aggregate results.
         for (size_t extra_id = 0; extra_id < split_key_count; extra_id++)
         {
-            std::scoped_lock l(ctx->mut);
-            if (ctx->gather_res[extra_id].error == PrehandleTransformStatus::Ok)
+            std::scoped_lock l(parallel_ctx->mut);
+            if (parallel_ctx->gather_res[extra_id].error == PrehandleTransformStatus::Ok)
             {
                 result.error = PrehandleTransformStatus::Ok;
-                auto & v = ctx->gather_prehandle_res[extra_id];
+                auto & v = parallel_ctx->gather_prehandle_res[extra_id];
                 prehandle_result.ingest_ids.insert(
                     prehandle_result.ingest_ids.end(),
                     std::make_move_iterator(v.ingest_ids.begin()),
@@ -595,12 +580,12 @@ void executeParallelTransform(
                 v.ingest_ids.clear();
                 prehandle_result.stats.mergeFrom(v.stats);
                 // Merge all uncommitted data in different splits.
-                new_region->mergeDataFrom(*ctx->gather_res[extra_id].region);
+                new_region->mergeDataFrom(*parallel_ctx->gather_res[extra_id].region);
             }
             else
             {
                 // Once a prehandle has non-ok result, we quit further loop
-                result = ctx->gather_res[extra_id];
+                result = parallel_ctx->gather_res[extra_id];
                 result.extra_msg = fmt::format(", from {}", extra_id);
                 break;
             }
@@ -639,7 +624,7 @@ PrehandleResult KVStore::preHandleSSTsToDTFiles(
     {
         return {};
     }
-    auto context = tmt.getContext();
+    auto & context = tmt.getContext();
     auto keyspace_id = new_region->getKeyspaceID();
     bool force_decode = false;
     size_t expected_block_size = DEFAULT_MERGE_BLOCK_SIZE;
@@ -705,6 +690,14 @@ PrehandleResult KVStore::preHandleSSTsToDTFiles(
                 prehandle_task,
                 DM::SSTFilesToBlockInputStreamOpts(opt));
 
+            PrehandleTransformCtx prehandle_ctx{
+                .trace = prehandling_trace,
+                .prehandle_task = prehandle_task,
+                .job_type = job_type,
+                .storage = storage,
+                .opts = opt,
+                .tmt = tmt};
+
             // `split_keys` do not begin with 'z'.
             auto [split_keys, approx_bytes] = getSplitKey(log, this, new_region, sst_stream);
             prehandling_trace.waitForSubtaskResources(region_id, split_keys.size() + 1, getMaxParallelPrehandleSize());
@@ -716,35 +709,21 @@ PrehandleResult KVStore::preHandleSSTsToDTFiles(
                     "Single threaded prehandling for single region, range={} region_id={}",
                     new_region->getRange()->toDebugString(),
                     new_region->id());
-                std::tie(result, prehandle_result) = executeTransform(
-                    log,
-                    new_region,
-                    prehandling_trace,
-                    prehandle_task,
-                    job_type,
-                    storage,
-                    sst_stream,
-                    opt,
-                    tmt);
+                std::tie(result, prehandle_result) = executeTransform(log, prehandle_ctx, new_region, sst_stream);
             }
             else
             {
                 executeParallelTransform(
                     log,
+                    prehandle_ctx,
+                    new_region,
                     result,
-                    prehandling_trace,
                     prehandle_result,
                     split_keys,
                     sst_stream,
-                    new_region,
-                    opt,
                     snaps,
                     proxy_helper,
-                    tmt,
-                    prehandle_task,
-                    job_type,
-                    index,
-                    storage);
+                    index);
             }
 
             prehandle_result.stats.approx_raft_snapshot_size = approx_bytes;

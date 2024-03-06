@@ -14,9 +14,10 @@
 
 #pragma once
 
-#include <IO/Util/ReadHelpers.h>
-#include <IO/Util/WriteHelpers.h>
+#include <IO/ReadHelpers.h>
+#include <IO/WriteHelpers.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
+#include <Storages/DeltaMerge/File/dtpb/dmfile.pb.h>
 
 namespace DB
 {
@@ -37,6 +38,42 @@ struct ColumnStat
     size_t nullmap_data_bytes = 0;
     size_t nullmap_mark_bytes = 0;
     size_t index_bytes = 0;
+    size_t array_sizes_bytes = 0;
+    size_t array_sizes_mark_bytes = 0;
+
+    dtpb::ColumnStat toProto() const
+    {
+        dtpb::ColumnStat stat;
+        stat.set_col_id(col_id);
+        stat.set_type_name(type->getName());
+        stat.set_avg_size(avg_size);
+        stat.set_serialized_bytes(serialized_bytes);
+        stat.set_data_bytes(data_bytes);
+        stat.set_mark_bytes(mark_bytes);
+        stat.set_nullmap_data_bytes(nullmap_data_bytes);
+        stat.set_nullmap_mark_bytes(nullmap_mark_bytes);
+        stat.set_index_bytes(index_bytes);
+        stat.set_array_sizes_bytes(array_sizes_bytes);
+        stat.set_array_sizes_mark_bytes(array_sizes_mark_bytes);
+        return stat;
+    }
+
+    void mergeFromProto(const dtpb::ColumnStat & proto)
+    {
+        col_id = proto.col_id();
+        type = DataTypeFactory::instance().getOrSet(proto.type_name());
+        avg_size = proto.avg_size();
+        serialized_bytes = proto.serialized_bytes();
+        data_bytes = proto.data_bytes();
+        mark_bytes = proto.mark_bytes();
+        nullmap_data_bytes = proto.nullmap_data_bytes();
+        nullmap_mark_bytes = proto.nullmap_mark_bytes();
+        index_bytes = proto.index_bytes();
+        array_sizes_bytes = proto.array_sizes_bytes();
+        array_sizes_mark_bytes = proto.array_sizes_mark_bytes();
+    }
+
+    // @deprecated. New fields should be added via protobuf. Use `toProto` instead
     void serializeToBuffer(WriteBuffer & buf) const
     {
         writeIntBinary(col_id, buf);
@@ -50,6 +87,7 @@ struct ColumnStat
         writeIntBinary(index_bytes, buf);
     }
 
+    // @deprecated. This only presents for reading with old data. Use `mergeFromProto` instead
     void parseFromBuffer(ReadBuffer & buf)
     {
         readIntBinary(col_id, buf);
@@ -106,7 +144,7 @@ inline void writeText(const ColumnStats & column_sats, DMFileFormat::Version ver
     DB::writeText(column_sats.size(), buf);
     DB::writeString("\n\n", buf);
 
-    for (auto & [id, stat] : column_sats)
+    for (const auto & [id, stat] : column_sats)
     {
         DB::writeText(id, buf);
         DB::writeChar(' ', buf);

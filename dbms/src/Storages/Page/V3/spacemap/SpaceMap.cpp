@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <Core/Types.h>
-#include <IO/Util/WriteHelpers.h>
+#include <IO/WriteHelpers.h>
 #include <Storages/Page/V3/spacemap/SpaceMap.h>
 #include <Storages/Page/V3/spacemap/SpaceMapSTDMap.h>
 #include <common/likely.h>

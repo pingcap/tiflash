@@ -16,7 +16,7 @@
 #include <DataStreams/PrettyBlockOutputStream.h>
 #include <IO/Buffer/WriteBuffer.h>
 #include <IO/Buffer/WriteBufferFromString.h>
-#include <IO/Util/WriteHelpers.h>
+#include <IO/WriteHelpers.h>
 #include <port/unistd.h>
 #include <sys/ioctl.h>
 

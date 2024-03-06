@@ -17,7 +17,7 @@
 #include <Common/Decimal.h>
 #include <Core/Field.h>
 #include <IO/Buffer/WriteBuffer.h>
-#include <IO/Util/Endian.h>
+#include <IO/Endian.h>
 #include <TiDB/Decode/TypeMapping.h>
 #include <TiDB/Schema/TiDB.h>
 

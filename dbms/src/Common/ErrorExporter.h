@@ -16,7 +16,7 @@
 
 #include <Common/TiFlashException.h>
 #include <IO/Buffer/WriteBuffer.h>
-#include <IO/Util/WriteHelpers.h>
+#include <IO/WriteHelpers.h>
 #include <fmt/printf.h>
 
 namespace DB

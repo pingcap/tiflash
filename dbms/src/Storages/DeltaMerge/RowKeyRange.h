@@ -16,7 +16,7 @@
 #include <Columns/ColumnString.h>
 #include <Core/Types.h>
 #include <Functions/FunctionHelpers.h>
-#include <IO/Util/WriteHelpers.h>
+#include <IO/WriteHelpers.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/KVStore/Decode/DecodedTiKVKeyValue.h>

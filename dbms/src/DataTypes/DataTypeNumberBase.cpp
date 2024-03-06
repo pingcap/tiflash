@@ -18,8 +18,8 @@
 #include <Common/typeid_cast.h>
 #include <DataTypes/DataTypeNumberBase.h>
 #include <DataTypes/FormatSettingsJSON.h>
-#include <IO/Util/ReadHelpers.h>
-#include <IO/Util/WriteHelpers.h>
+#include <IO/ReadHelpers.h>
+#include <IO/WriteHelpers.h>
 
 #include <type_traits>
 

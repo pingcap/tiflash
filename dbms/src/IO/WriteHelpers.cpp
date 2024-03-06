@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <Common/hex.h>
-#include <IO/Util/WriteHelpers.h>
+#include <IO/WriteHelpers.h>
 #include <inttypes.h>
 
 

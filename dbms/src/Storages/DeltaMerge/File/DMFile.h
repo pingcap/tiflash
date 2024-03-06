@@ -16,7 +16,7 @@
 
 #include <Core/Types.h>
 #include <IO/Buffer/WriteBufferFromWritableFile.h>
-#include <IO/ReadBufferFromRandomAccessFileBuilder.h>
+#include <IO/FileProvider/ReadBufferFromRandomAccessFileBuilder.h>
 #include <Poco/File.h>
 #include <Storages/DeltaMerge/DMChecksumConfig.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
@@ -143,8 +143,9 @@ public:
     {
         PackStat = 0,
         PackProperty,
-        ColumnStat,
+        ColumnStat, // Deprecated, use `ExtendColumnStat` instead
         MergedSubFilePos,
+        ExtendColumnStat,
     };
     struct MetaBlockHandle
     {
@@ -367,7 +368,13 @@ private:
         return Poco::File(colDataPath(file_name_base)).getSize();
     }
     size_t colIndexSize(ColId id);
-    size_t colDataSize(ColId id, bool is_null_map);
+    enum class ColDataType
+    {
+        Elements,
+        NullMap,
+        ArraySizes,
+    };
+    size_t colDataSize(ColId id, ColDataType type);
 
     String colDataPath(const FileNameBase & file_name_base) const
     {
@@ -457,10 +464,12 @@ private:
     MetaBlockHandle writeSLPackStatToBuffer(WriteBuffer & buffer);
     MetaBlockHandle writeSLPackPropertyToBuffer(WriteBuffer & buffer) const;
     MetaBlockHandle writeColumnStatToBuffer(WriteBuffer & buffer);
+    MetaBlockHandle writeExtendColumnStatToBuffer(WriteBuffer & buffer);
     MetaBlockHandle writeMergedSubFilePosotionsToBuffer(WriteBuffer & buffer);
     std::vector<char> readMetaV2(const FileProviderPtr & file_provider) const;
     void parseMetaV2(std::string_view buffer);
     void parseColumnStat(std::string_view buffer);
+    void parseExtendColumnStat(std::string_view buffer);
     void parseMergedSubFilePos(std::string_view buffer);
     void parsePackProperty(std::string_view buffer);
     void parsePackStat(std::string_view buffer);

@@ -16,7 +16,7 @@
 #include <Common/typeid_cast.h>
 #include <Core/Block.h>
 #include <DataStreams/ValuesRowInputStream.h>
-#include <IO/Util/ReadHelpers.h>
+#include <IO/ReadHelpers.h>
 #include <Interpreters/convertFieldToType.h>
 #include <Interpreters/evaluateConstantExpression.h>
 #include <Parsers/ExpressionListParsers.h>

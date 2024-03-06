@@ -17,11 +17,11 @@
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/escapeForFileName.h>
 #include <IO/Buffer/ReadBufferFromString.h>
-#include <IO/Checksum/ChecksumReadBufferBuilder.h>
+#include <IO/FileProvider/ChecksumReadBufferBuilder.h>
+#include <IO/FileProvider/WriteBufferFromWritableFileBuilder.h>
 #include <IO/IOSWrapper.h>
-#include <IO/Util/ReadHelpers.h>
-#include <IO/Util/WriteHelpers.h>
-#include <IO/WriteBufferFromWritableFileBuilder.h>
+#include <IO/ReadHelpers.h>
+#include <IO/WriteHelpers.h>
 #include <Poco/DirectoryIterator.h>
 #include <Poco/File.h>
 #include <Poco/Path.h>
@@ -243,26 +243,47 @@ size_t DMFile::colIndexSize(ColId id)
     }
     else
     {
+        // Even metav2 is not enabled, we can still read the index size from column_stats instead of disk IO?
         return colIndexSizeByName(getFileNameBase(id));
     }
 }
 
-size_t DMFile::colDataSize(ColId id, bool is_null_map)
+// Only used when metav2 is not enabled, clean it up
+size_t DMFile::colDataSize(ColId id, ColDataType type)
 {
     if (useMetaV2())
     {
-        if (auto itr = column_stats.find(id); itr != column_stats.end())
+        auto itr = column_stats.find(id);
+        RUNTIME_CHECK_MSG(itr != column_stats.end(), "Data of column not exist, col_id={} path={}", id, path());
+        switch (type)
         {
-            return is_null_map ? itr->second.nullmap_data_bytes : itr->second.data_bytes;
-        }
-        else
-        {
-            throw Exception(ErrorCodes::FILE_DOESNT_EXIST, "Data of {} not exist", id);
+        case ColDataType::Elements:
+            return itr->second.data_bytes;
+        case ColDataType::NullMap:
+            return itr->second.nullmap_data_bytes;
+        case ColDataType::ArraySizes:
+            return itr->second.array_sizes_bytes;
         }
     }
     else
     {
-        auto namebase = is_null_map ? getFileNameBase(id, {IDataType::Substream::NullMap}) : getFileNameBase(id);
+        String namebase;
+        switch (type)
+        {
+        case ColDataType::Elements:
+            namebase = getFileNameBase(id);
+            break;
+        case ColDataType::NullMap:
+            namebase = getFileNameBase(id, {IDataType::Substream::NullMap});
+            break;
+        case ColDataType::ArraySizes:
+            RUNTIME_CHECK_MSG(
+                type != ColDataType::ArraySizes,
+                "Can not get array map size by filename, col_id={} path={}",
+                id,
+                path());
+            break;
+        }
         return colDataSizeByName(namebase);
     }
 }
@@ -624,6 +645,7 @@ void DMFile::readPackProperty(const FileProviderPtr & file_provider, const MetaP
     }
 }
 
+// Only used when metav2 is not enabled
 void DMFile::readMetadata(const FileProviderPtr & file_provider, const ReadMetaMode & read_meta_mode)
 {
     Footer footer;
@@ -900,6 +922,21 @@ DMFile::MetaBlockHandle DMFile::writeColumnStatToBuffer(WriteBuffer & buffer)
     return MetaBlockHandle{MetaBlockType::ColumnStat, offset, buffer.count() - offset};
 }
 
+DMFile::MetaBlockHandle DMFile::writeExtendColumnStatToBuffer(WriteBuffer & buffer)
+{
+    auto offset = buffer.count();
+    dtpb::ColumnStats msg_stats;
+    for (const auto & [id, stat] : column_stats)
+    {
+        auto msg = stat.toProto();
+        msg_stats.add_column_stats()->Swap(&msg);
+    }
+    String output;
+    msg_stats.SerializeToString(&output);
+    writeString(output.data(), output.length(), buffer);
+    return MetaBlockHandle{MetaBlockType::ExtendColumnStat, offset, buffer.count() - offset};
+}
+
 DMFile::MetaBlockHandle DMFile::writeMergedSubFilePosotionsToBuffer(WriteBuffer & buffer)
 {
     auto offset = buffer.count();
@@ -920,10 +957,16 @@ DMFile::MetaBlockHandle DMFile::writeMergedSubFilePosotionsToBuffer(WriteBuffer 
 void DMFile::finalizeMetaV2(WriteBuffer & buffer)
 {
     auto tmp_buffer = WriteBufferFromOwnString{};
-    std::array meta_block_handles = {
+    std::array meta_block_handles = { //
         writeSLPackStatToBuffer(tmp_buffer),
         writeSLPackPropertyToBuffer(tmp_buffer),
+#if 1
         writeColumnStatToBuffer(tmp_buffer),
+#else
+        // ExtendColumnStat is not enabled yet because it cause downgrade compatibility, wait
+        // to be released with other binary format changes.
+        writeExtendColumnStatToBuffer(tmp_buffer),
+#endif
         writeMergedSubFilePosotionsToBuffer(tmp_buffer),
     };
     writePODBinary(meta_block_handles, tmp_buffer);
@@ -1011,10 +1054,14 @@ void DMFile::parseMetaV2(std::string_view buffer)
     {
         ptr = ptr - sizeof(MetaBlockHandle);
         const auto * handle = reinterpret_cast<const MetaBlockHandle *>(ptr);
+        // omit the default branch. If there are unknown MetaBlock (after in-place downgrade), just ignore and throw away
         switch (handle->type)
         {
-        case MetaBlockType::ColumnStat:
+        case MetaBlockType::ColumnStat: // parse the `ColumnStat` from old version
             parseColumnStat(buffer.substr(handle->offset, handle->size));
+            break;
+        case MetaBlockType::ExtendColumnStat:
+            parseExtendColumnStat(buffer.substr(handle->offset, handle->size));
             break;
         case MetaBlockType::PackProperty:
             parsePackProperty(buffer.substr(handle->offset, handle->size));
@@ -1025,11 +1072,6 @@ void DMFile::parseMetaV2(std::string_view buffer)
         case MetaBlockType::MergedSubFilePos:
             parseMergedSubFilePos(buffer.substr(handle->offset, handle->size));
             break;
-        default:
-            throw Exception(
-                ErrorCodes::INCORRECT_DATA,
-                "MetaBlockType {} is not recognized",
-                magic_enum::enum_name(handle->type));
         }
     }
 }
@@ -1044,7 +1086,28 @@ void DMFile::parseColumnStat(std::string_view buffer)
     {
         ColumnStat stat;
         stat.parseFromBuffer(rbuf);
+        // Do not overwrite the ColumnStat if already exist, it may
+        // created by `ExteandColumnStat`
         column_stats.emplace(stat.col_id, std::move(stat));
+    }
+}
+
+void DMFile::parseExtendColumnStat(std::string_view buffer)
+{
+    dtpb::ColumnStats msg_stats;
+    auto parse_ok = msg_stats.ParseFromArray(buffer.begin(), buffer.size());
+    RUNTIME_CHECK_MSG(parse_ok, "Parse extend column stat fail! filename={}", path());
+    column_stats.reserve(msg_stats.column_stats_size());
+    for (int i = 0; i < msg_stats.column_stats_size(); ++i)
+    {
+        const auto & msg = msg_stats.column_stats(i);
+        ColumnStat stat;
+        stat.mergeFromProto(msg);
+        // replace the ColumnStat if exists
+        if (auto [iter, inserted] = column_stats.emplace(stat.col_id, stat); unlikely(!inserted))
+        {
+            iter->second = stat;
+        }
     }
 }
 
@@ -1166,6 +1229,8 @@ void DMFile::checkMergedFile(
     }
 }
 
+// Merge the small files into a single file to avoid
+// filesystem inodes exhausting
 void DMFile::finalizeSmallFiles(
     MergedFileWriter & writer,
     FileProviderPtr & file_provider,
@@ -1203,19 +1268,25 @@ void DMFile::finalizeSmallFiles(
             auto fname = colDataFileName(getFileNameBase(col_id, {}));
             auto fsize = stat.data_bytes;
             copy_file_to_cur(fname, fsize);
-            delete_file_name.push_back(fname);
+            delete_file_name.emplace_back(std::move(fname));
         }
 
         // check .null.data
-        if (stat.type->isNullable())
+        if (stat.type->isNullable() && stat.nullmap_data_bytes <= small_file_size_threshold)
         {
-            if (stat.nullmap_data_bytes <= small_file_size_threshold)
-            {
-                auto fname = colDataFileName(getFileNameBase(col_id, {IDataType::Substream::NullMap}));
-                auto fsize = stat.nullmap_data_bytes;
-                copy_file_to_cur(fname, fsize);
-                delete_file_name.push_back(fname);
-            }
+            auto fname = colDataFileName(getFileNameBase(col_id, {IDataType::Substream::NullMap}));
+            auto fsize = stat.nullmap_data_bytes;
+            copy_file_to_cur(fname, fsize);
+            delete_file_name.emplace_back(std::move(fname));
+        }
+
+        // check .size0.dat
+        if (stat.array_sizes_bytes > 0 && stat.array_sizes_bytes <= small_file_size_threshold)
+        {
+            auto fname = colDataFileName(getFileNameBase(col_id, {IDataType::Substream::ArraySizes}));
+            auto fsize = stat.array_sizes_bytes;
+            copy_file_to_cur(fname, fsize);
+            delete_file_name.emplace_back(std::move(fname));
         }
     }
 
@@ -1236,6 +1307,7 @@ UInt64 DMFile::getFileSize(ColId col_id, const String & filename) const
     {
         return itr->second.index_bytes;
     }
+    // Note that ".null.dat"/"null.mrk" must be check before ".dat"/".mrk"
     else if (endsWith(filename, ".null.dat"))
     {
         return itr->second.nullmap_data_bytes;
@@ -1243,6 +1315,15 @@ UInt64 DMFile::getFileSize(ColId col_id, const String & filename) const
     else if (endsWith(filename, ".null.mrk"))
     {
         return itr->second.nullmap_mark_bytes;
+    }
+    // Note that ".size0.dat"/".size0.mrk" must be check before ".dat"/".mrk"
+    else if (endsWith(filename, ".size0.dat"))
+    {
+        return itr->second.array_sizes_bytes;
+    }
+    else if (endsWith(filename, ".size0.mrk"))
+    {
+        return itr->second.array_sizes_mark_bytes;
     }
     else if (endsWith(filename, ".dat"))
     {

@@ -16,7 +16,7 @@
 #include <Common/MyTime.h>
 #include <Common/StringUtils/StringRefUtils.h>
 #include <Common/StringUtils/StringUtils.h>
-#include <IO/Util/WriteHelpers.h>
+#include <IO/WriteHelpers.h>
 #include <Poco/String.h>
 #include <common/StringRef.h>
 #include <common/logger_useful.h>

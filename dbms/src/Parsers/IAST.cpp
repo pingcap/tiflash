@@ -15,8 +15,8 @@
 #include <Common/SipHash.h>
 #include <IO/Buffer/WriteBufferFromOStream.h>
 #include <IO/Buffer/WriteBufferFromString.h>
-#include <IO/Util/Operators.h>
-#include <IO/Util/WriteHelpers.h>
+#include <IO/Operators.h>
+#include <IO/WriteHelpers.h>
 #include <Parsers/IAST.h>
 
 

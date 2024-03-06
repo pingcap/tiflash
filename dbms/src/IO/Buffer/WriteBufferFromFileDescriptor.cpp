@@ -17,7 +17,7 @@
 #include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
 #include <IO/Buffer/WriteBufferFromFileDescriptor.h>
-#include <IO/Util/WriteHelpers.h>
+#include <IO/WriteHelpers.h>
 #include <errno.h>
 #include <port/unistd.h>
 

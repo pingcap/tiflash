@@ -21,7 +21,7 @@
 #include <Functions/FunctionsGeo.h>
 #include <Functions/GeoUtils.h>
 #include <Functions/ObjectPool.h>
-#include <IO/Util/WriteHelpers.h>
+#include <IO/WriteHelpers.h>
 #include <Interpreters/ExpressionActions.h>
 #include <boost_wrapper/geometry.h>
 
