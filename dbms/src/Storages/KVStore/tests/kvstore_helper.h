@@ -76,7 +76,6 @@ extern void ChangeRegionStateRange(
 namespace tests
 {
 using DebugKVStore = RegionBench::DebugKVStore;
-
 // TODO: Use another way to workaround calling the private methods on KVStore
 class KVStoreTestBase : public ::testing::Test
 {

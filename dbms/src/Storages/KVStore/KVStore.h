@@ -311,7 +311,6 @@ private:
         RegionTable & region_table,
         const KVStoreTaskLock & task_lock,
         const RegionTaskLock & region_lock);
-    void mockRemoveRegion(RegionID region_id, RegionTable & region_table);
     KVStoreTaskLock genTaskLock() const;
     RegionManager::RegionReadLock genRegionMgrReadLock() const;
     RegionManager::RegionWriteLock genRegionMgrWriteLock(const KVStoreTaskLock &);

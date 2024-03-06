@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Storages/KVStore/Decode/RegionTable.h>
 #include <Storages/KVStore/KVStore.h>
 #include <Storages/KVStore/MultiRaft/RegionSerde.h>
 
@@ -33,6 +34,8 @@ struct DebugKVStore
     {
         kvstore.onSnapshot<RegionPtrWrap>(r, old_region, old_region_index, tmt);
     }
+
+    void mockRemoveRegion(RegionID region_id, RegionTable & region_table);
 
 private:
     KVStore & kvstore;

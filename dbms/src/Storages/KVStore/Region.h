@@ -32,7 +32,6 @@ class ReadIndexRequest;
 
 namespace DB
 {
-
 namespace RegionBench
 {
 struct DebugRegion;

@@ -198,8 +198,8 @@ void MockRaftStoreProxy::loadRegionFromKVStore(KVStore & kvs, TMTContext & tmt, 
     }
     MockProxyRegionPtr r = getRegion(region_id);
     {
-        r->state = kvr->mutMeta().getRegionState().getBase();
-        r->apply = kvr->mutMeta().clonedApplyState();
+        r->state = kvr->getMeta().getRegionState().getBase();
+        r->apply = kvr->getMeta().clonedApplyState();
         if (r->apply.commit_index() == 0)
         {
             r->apply.set_commit_index(commit_index);
@@ -603,7 +603,7 @@ std::tuple<RegionPtr, PrehandleResult> MockRaftStoreProxy::snapshot(
         region_id,
         std::move(cfs),
         old_kv_region->cloneMetaRegion(),
-        old_kv_region->mutMeta().peerId(),
+        old_kv_region->getMeta().peerId(),
         index,
         term,
         deadline_index,

@@ -22,5 +22,13 @@ RegionSerdeOpts & DebugKVStore::mutRegionSerdeOpts()
 {
     return kvstore.region_persister->region_serde_opts;
 }
+  
+void DebugKVStore::mockRemoveRegion(DB::RegionID region_id, RegionTable & region_table)
+{
+    auto task_lock = kvstore.genTaskLock();
+    auto region_lock = kvstore.region_manager.genRegionTaskLock(region_id);
+    // mock remove region should remove data by default
+    kvstore.removeRegion(region_id, /* remove_data */ true, region_table, task_lock, region_lock);
+}
 
 } // namespace DB::RegionBench

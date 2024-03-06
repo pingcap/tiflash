@@ -575,12 +575,12 @@ void concurrentBatchInsert(
     Int64 key_num_each_region = flush_num * batch_num;
     HandleID handle_begin = curr_max_handle_id;
 
+
+    auto debug_kvstore = RegionBench::DebugKVStore(*tmt.getKVStore());
     Regions regions
         = createRegions(table_info.id, concurrent_num, key_num_each_region, handle_begin, curr_max_region_id + 1);
     for (const RegionPtr & region : regions)
-    {
-        debug_kvs.onSnapshot<RegionPtrWithBlock>(region, nullptr, 0, tmt);
-    }
+        debug_kvstore.onSnapshot<RegionPtrWithBlock>(region, nullptr, 0, tmt);
 
     std::list<std::thread> threads;
     for (Int64 i = 0; i < concurrent_num; i++, handle_begin += key_num_each_region)
