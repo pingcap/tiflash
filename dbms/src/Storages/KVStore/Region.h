@@ -32,6 +32,11 @@ class ReadIndexRequest;
 
 namespace DB
 {
+namespace RegionBench
+{
+struct DebugRegion;
+} // namespace RegionBench
+
 namespace tests
 {
 class KVStoreTestBase;
@@ -132,7 +137,6 @@ public: // Simple Read and Write
     void clearAllData();
 
     void mergeDataFrom(const Region & other);
-    RegionMeta & mutMeta() { return meta; }
 
     // Assign data and meta by moving from `new_region`.
     void assignRegion(Region && new_region);
@@ -143,6 +147,9 @@ public: // Stats
 
     std::string getDebugString() const;
     std::string toString(bool dump_status = true) const;
+
+    RegionMeta & mutMeta() { return meta; }
+    const RegionMeta & getMeta() const { return meta; }
 
     bool isPendingRemove() const;
     void setPendingRemove();
@@ -261,6 +268,7 @@ private:
     friend class tests::KVStoreTestBase;
     friend class tests::RegionKVStoreOldTest;
     friend class tests::RegionKVStoreTest;
+    friend struct RegionBench::DebugRegion;
 
     // Private methods no need to lock mutex, normally
 

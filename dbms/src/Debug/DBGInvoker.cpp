@@ -20,12 +20,12 @@
 #include <Debug/dbgFuncCoprocessor.h>
 #include <Debug/dbgFuncFailPoint.h>
 #include <Debug/dbgFuncMisc.h>
-#include <Debug/dbgFuncMockRaftCommand.h>
 #include <Debug/dbgFuncMockTiDBData.h>
 #include <Debug/dbgFuncMockTiDBTable.h>
-#include <Debug/dbgFuncRegion.h>
 #include <Debug/dbgFuncSchema.h>
 #include <Debug/dbgFuncSchemaName.h>
+#include <Debug/dbgKVStore/dbgFuncMockRaftCommand.h>
+#include <Debug/dbgKVStore/dbgFuncRegion.h>
 #include <Parsers/ASTLiteral.h>
 
 #include <thread>
