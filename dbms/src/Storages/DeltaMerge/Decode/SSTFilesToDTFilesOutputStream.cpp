@@ -92,6 +92,8 @@ void SSTFilesToDTFilesOutputStream<ChildStream>::writeSuffix()
             .Observe(watch.elapsedSeconds());
         // Note that number of keys in different cf will be aggregated into one metrics
         GET_METRIC(tiflash_raft_process_keys, type_apply_snapshot).Increment(process_keys.total());
+        GET_METRIC(tiflash_raft_process_keys, type_apply_snapshot_default).Increment(process_keys.default_cf);
+        GET_METRIC(tiflash_raft_process_keys, type_apply_snapshot_write).Increment(process_keys.write_cf);
         break;
     }
     case FileConvertJobType::IngestSST:

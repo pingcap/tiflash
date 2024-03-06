@@ -317,6 +317,8 @@ std::pair<EngineStoreApplyRes, DM::WriteResult> Region::handleWriteRaftCmd(
     size_t default_put_key_count = 0;
     size_t lock_del_key_count = 0;
     size_t write_del_key_count = 0;
+    // Considering short value embeded in lock cf, it's necessary to record deletion from default cf.
+    size_t default_del_key_count = 0;
     // How many bytes has been written to KVStore(and maybe then been moved to underlying DeltaTree).
     // We don't count DEL because it is only used to delete LOCK, which is small and not count in doInsert.
     size_t write_size = 0;
@@ -332,6 +334,7 @@ std::pair<EngineStoreApplyRes, DM::WriteResult> Region::handleWriteRaftCmd(
         GET_METRIC(tiflash_raft_process_keys, type_default_put).Increment(default_put_key_count);
         GET_METRIC(tiflash_raft_process_keys, type_lock_del).Increment(lock_del_key_count);
         GET_METRIC(tiflash_raft_process_keys, type_write_del).Increment(write_del_key_count);
+        GET_METRIC(tiflash_raft_process_keys, type_default_del).Increment(default_del_key_count);
         auto after_size = dataSize();
         if (after_size > prev_size + RAFT_REGION_BIG_WRITE_THRES)
             GET_METRIC(tiflash_raft_write_flow_bytes, type_big_write_to_region).Observe(after_size - prev_size);
@@ -368,7 +371,7 @@ std::pair<EngineStoreApplyRes, DM::WriteResult> Region::handleWriteRaftCmd(
             }
             try
             {
-                if (is_v2)
+                if unlikely(is_v2)
                 {
                     // There may be orphan default key in a snapshot.
                     write_size += doInsert(cf, std::move(tikv_key), std::move(tikv_value), DupCheck::AllowSame);
@@ -402,6 +405,10 @@ std::pair<EngineStoreApplyRes, DM::WriteResult> Region::handleWriteRaftCmd(
             else if (cf == ColumnFamilyType::Lock)
             {
                 lock_del_key_count++;
+            }
+            else if (cf == ColumnFamilyType::Default)
+            {
+                default_del_key_count ++;
             }
             try
             {

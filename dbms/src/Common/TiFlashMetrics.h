@@ -448,7 +448,10 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_default_put, {"type", "default_put"}),                                                                                 \
       F(type_write_del, {"type", "write_del"}),                                                                                     \
       F(type_lock_del, {"type", "lock_del"}),                                                                                       \
+      F(type_default_del, {"type", "default_del"}),                                                                                 \
       F(type_apply_snapshot, {"type", "apply_snapshot"}),                                                                           \
+      F(type_apply_snapshot_default, {"type", "apply_snapshot_default"}),                                                           \
+      F(type_apply_snapshot_write, {"type", "apply_snapshot_write"}),                                                               \
       F(type_ingest_sst, {"type", "ingest_sst"}))                                                                                   \
     M(tiflash_raft_apply_write_command_duration_seconds,                                                                            \
       "Bucketed histogram of applying write command Raft logs",                                                                     \
