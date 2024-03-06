@@ -280,23 +280,11 @@ void flashEnumColToArrowCol(
                 continue;
             }
         }
-<<<<<<< HEAD
         auto enum_value = (UInt64)flash_col->getElement(i);
         if (enum_value == 0 || enum_value > enum_value_size)
             throw TiFlashException("number of enum overflow enum boundary", Errors::Coprocessor::Internal);
-        TiDBEnum ti_enum(enum_value, enum_type->getNameForValue((const DataTypeEnum16::FieldType)enum_value));
-=======
-        auto enum_value = static_cast<UInt64>(flash_col->getElement(i));
-        if (enum_value > enum_value_size)
-            throw TiFlashException(
-                Errors::Coprocessor::Internal,
-                "number of enum value {} overflow enum boundary {}",
-                enum_value,
-                enum_value_size);
-
         const auto & enum_name = enum_type->getNameForValue(static_cast<const DataTypeEnum16::FieldType>(enum_value));
         TiDBEnum ti_enum(enum_value, enum_name);
->>>>>>> 561b28b58d (Fix tem object out of scope issue (#8767))
         dag_column.append(ti_enum);
     }
 }
