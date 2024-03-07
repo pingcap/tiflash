@@ -516,6 +516,7 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       "Raft handled bytes in global",                                                                                               \
       Counter,                                                                                                                      \
       F(type_write, {{"type", "write"}}),                                                                                           \
+      F(type_snapshot_committed, {{"type", "snapshot_committed"}}),                                                                 \
       F(type_write_committed, {{"type", "write_committed"}}))                                                                       \
     M(tiflash_raft_write_flow_bytes,                                                                                                \
       "Bucketed histogram of bytes for each write",                                                                                 \
