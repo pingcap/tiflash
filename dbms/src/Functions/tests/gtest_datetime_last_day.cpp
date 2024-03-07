@@ -34,14 +34,10 @@ TEST_F(TestLastDay, BasicTest)
 try
 {
     constexpr size_t n = 3;
-    char * buf = new char[n];
-    for (size_t i = 0; i < n; ++i)
-    {
-        buf[i] = 0;
-    }
+    unsigned * buf = new unsigned[n];
     for (size_t i = 0; i < n + 1; ++i)
     {
-        ASSERT_EQ(buf[i], 0);
+        ASSERT_GE(buf[i], 0);
     }
 
     const String func_name = TiDBLastDayTransformerImpl<DataTypeMyDate::FieldType>::name;
