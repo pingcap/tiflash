@@ -768,8 +768,18 @@ BlockInputStreamPtr Segment::getInputStream(
     UInt64 max_version,
     size_t expected_block_size)
 {
+<<<<<<< HEAD
     auto clipped_block_rows
         = clipBlockRows(dm_context.db_context, expected_block_size, columns_to_read, segment_snap->stable->stable);
+=======
+    Stopwatch sw;
+    SCOPE_EXIT({ dm_context.scan_context->build_inputstream_time_ns += sw.elapsed(); });
+    auto clipped_block_rows = clipBlockRows( //
+        dm_context.global_context,
+        expected_block_size,
+        columns_to_read,
+        segment_snap->stable->stable);
+>>>>>>> ee471e9e75 (Storage: Add the time cost about stream in local/remote (#8676))
     switch (read_mode)
     {
     case ReadMode::Normal:
