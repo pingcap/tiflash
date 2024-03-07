@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Inc.
+// Copyright 2024 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,12 +14,14 @@
 
 #include <Storages/KVStore/MultiRaft/RegionCFDataBase.h>
 #include <Storages/KVStore/MultiRaft/RegionCFDataTrait.h>
+#include <Storages/KVStore/TiKVHelpers/DecodedLockCFValue.h>
 #include <Storages/KVStore/TiKVHelpers/TiKVRecordFormat.h>
 
 namespace DB
 {
 namespace RecordKVFormat
 {
+
 // https://github.com/tikv/tikv/blob/master/components/txn_types/src/lock.rs
 inline void decodeLockCfValue(DecodedLockCFValue & res)
 {
@@ -46,6 +48,7 @@ inline void decodeLockCfValue(DecodedLockCFValue & res)
     res.lock_type = lock_type;
     res.primary_lock = readVarString<std::string_view>(data, len);
     res.lock_version = readVarUInt(data, len);
+    res.generation = 0;
 
     if (len > 0)
     {
@@ -122,6 +125,11 @@ inline void decodeLockCfValue(DecodedLockCFValue & res)
                 // https://github.com/pingcap/tidb/issues/43540
                 break;
             }
+            case GENERATION_PREFIX:
+            {
+                res.generation = readVarUInt(data, len);
+                break;
+            }
             default:
             {
                 std::string msg = std::string("invalid flag ") + flag + " in lock value " + value.toDebugString();
@@ -170,6 +178,11 @@ std::unique_ptr<kvrpcpb::LockInfo> DecodedLockCFValue::intoLockInfo() const
     auto res = std::make_unique<kvrpcpb::LockInfo>();
     intoLockInfo(*res);
     return res;
+}
+
+bool DecodedLockCFValue::isLargeTxn() const
+{
+    return generation > 0;
 }
 
 } // namespace RecordKVFormat

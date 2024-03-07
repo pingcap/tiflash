@@ -371,7 +371,7 @@ std::pair<EngineStoreApplyRes, DM::WriteResult> Region::handleWriteRaftCmd(
             }
             try
             {
-                if unlikely(is_v2)
+                if unlikely (is_v2)
                 {
                     // There may be orphan default key in a snapshot.
                     write_size += doInsert(cf, std::move(tikv_key), std::move(tikv_value), DupCheck::AllowSame);
@@ -408,7 +408,7 @@ std::pair<EngineStoreApplyRes, DM::WriteResult> Region::handleWriteRaftCmd(
             }
             else if (cf == ColumnFamilyType::Default)
             {
-                default_del_key_count ++;
+                default_del_key_count++;
             }
             try
             {
