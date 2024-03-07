@@ -39,7 +39,7 @@
 #include <chrono>
 
 #if USE_JEMALLOC
-#include <jemalloc/jemalloc.h>
+#include "jemalloc_ep/dist/include/jemalloc/jemalloc.h"
 #endif
 
 #if USE_MIMALLOC
@@ -363,7 +363,7 @@ void AsynchronousMetrics::update()
     {                                                      \
         TYPE value{};                                      \
         size_t size = sizeof(value);                       \
-        mallctl("stats." NAME, &value, &size, nullptr, 0); \
+        je_mallctl("stats." NAME, &value, &size, nullptr, 0); \
         set("jemalloc." NAME, value);                      \
     } while (0);
 
