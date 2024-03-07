@@ -92,7 +92,7 @@ void SimplePKTestBasic::ensureSegmentBreakpoints(const std::vector<Int64> & brea
         {
             auto [segment, is_empty] = store->getSegmentByStartKey(bp_key.toRowKeyValueRef(), true, true);
             // The segment is already break at the boundary
-            if (compare(segment->getRowKeyRange().getStart(), bp_key.toRowKeyValueRef()) == 0)
+            if (segment->getRowKeyRange().getStart() == bp_key.toRowKeyValueRef())
                 break;
             auto split_mode = use_logical_split ? DeltaMergeStore::SegmentSplitMode::Logical
                                                 : DeltaMergeStore::SegmentSplitMode::Physical;

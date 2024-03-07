@@ -19,7 +19,7 @@
 #include <Core/Defines.h>
 #include <Core/TypeListNumber.h>
 #include <Core/Types.h>
-#include <IO/WriteBufferFromString.h>
+#include <IO/Buffer/WriteBufferFromString.h>
 #include <boost_wrapper/geometry.h>
 
 #include <algorithm>

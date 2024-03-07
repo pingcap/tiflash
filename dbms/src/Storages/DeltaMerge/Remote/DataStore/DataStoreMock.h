@@ -14,7 +14,6 @@
 
 #pragma once
 
-#include <Encryption/FileProvider.h>
 #include <Storages/DeltaMerge/Remote/DataStore/DataStore.h>
 
 namespace DB::DM::Remote

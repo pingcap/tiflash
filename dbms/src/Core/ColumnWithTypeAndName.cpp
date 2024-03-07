@@ -14,8 +14,8 @@
 
 #include <Core/ColumnWithTypeAndName.h>
 #include <Core/ColumnsWithTypeAndName.h>
+#include <IO/Buffer/WriteBufferFromString.h>
 #include <IO/Operators.h>
-#include <IO/WriteBufferFromString.h>
 #include <IO/WriteHelpers.h>
 
 

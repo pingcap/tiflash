@@ -16,12 +16,14 @@
 
 #include <Storages/Page/PageDefinesBase.h>
 
-namespace DB
-{
-namespace DM
+namespace DB::DM
 {
 
 constexpr PageIdU64 DELTA_MERGE_FIRST_SEGMENT_ID = 1;
 
-} // namespace DM
-} // namespace DB
+class Segment;
+using SegmentPtr = std::shared_ptr<Segment>;
+using Segments = std::vector<SegmentPtr>;
+using SegmentPair = std::pair<SegmentPtr, SegmentPtr>;
+
+} // namespace DB::DM

@@ -18,8 +18,8 @@
 #include <Columns/IColumn.h>
 #include <Common/Arena.h>
 #include <Core/Field.h>
-#include <IO/ReadBufferFromString.h>
-#include <IO/WriteBuffer.h>
+#include <IO/Buffer/ReadBufferFromString.h>
+#include <IO/Buffer/WriteBuffer.h>
 #include <IO/WriteHelpers.h>
 
 

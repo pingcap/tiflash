@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <Common/CurrentMetrics.h>
-#include <IO/ReadBufferFromMemory.h>
+#include <IO/Buffer/ReadBufferFromMemory.h>
 #include <Interpreters/Context.h>
 #include <Poco/AutoPtr.h>
 #include <Poco/ConsoleChannel.h>

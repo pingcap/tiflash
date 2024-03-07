@@ -16,7 +16,7 @@
 #include <Common/typeid_cast.h>
 #include <DataTypes/DataTypeEnum.h>
 #include <DataTypes/DataTypeFactory.h>
-#include <IO/WriteBufferFromString.h>
+#include <IO/Buffer/WriteBufferFromString.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/IAST.h>
@@ -260,7 +260,7 @@ void DataTypeEnum<Type>::deserializeBinaryBulk(
 template <typename Type>
 Field DataTypeEnum<Type>::getDefault() const
 {
-    return typename NearestFieldType<FieldType>::Type(values.front().second);
+    return static_cast<typename NearestFieldType<FieldType>::Type>(values.front().second);
 }
 
 template <typename Type>
@@ -365,7 +365,7 @@ static DataTypePtr create(const ASTPtr & arguments)
     /// Children must be functions 'equals' with string literal as left argument and numeric literal as right argument.
     for (const ASTPtr & child : arguments->children)
     {
-        const ASTFunction * func = typeid_cast<const ASTFunction *>(child.get());
+        const auto * func = typeid_cast<const ASTFunction *>(child.get());
         if (!func || func->name != "equals" || func->parameters || !func->arguments
             || func->arguments->children.size() != 2)
             throw Exception(
@@ -373,8 +373,8 @@ static DataTypePtr create(const ASTPtr & arguments)
                 "is an integer",
                 ErrorCodes::UNEXPECTED_AST_STRUCTURE);
 
-        const ASTLiteral * name_literal = typeid_cast<const ASTLiteral *>(func->arguments->children[0].get());
-        const ASTLiteral * value_literal = typeid_cast<const ASTLiteral *>(func->arguments->children[1].get());
+        const auto * name_literal = typeid_cast<const ASTLiteral *>(func->arguments->children[0].get());
+        const auto * value_literal = typeid_cast<const ASTLiteral *>(func->arguments->children[1].get());
 
         if (!name_literal || !value_literal || name_literal->value.getType() != Field::Types::String
             || (value_literal->value.getType() != Field::Types::UInt64
@@ -384,7 +384,7 @@ static DataTypePtr create(const ASTPtr & arguments)
                 "is an integer",
                 ErrorCodes::UNEXPECTED_AST_STRUCTURE);
 
-        const String & name = name_literal->value.get<String>();
+        const auto & name = name_literal->value.get<String>();
         const auto value = value_literal->value.get<typename NearestFieldType<FieldType>::Type>();
 
         if (value > std::numeric_limits<FieldType>::max() || value < std::numeric_limits<FieldType>::min())

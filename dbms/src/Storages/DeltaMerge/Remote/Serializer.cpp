@@ -13,8 +13,7 @@
 // limitations under the License.
 
 #include <Common/StringUtils/StringUtils.h>
-#include <IO/CompressedReadBuffer.h>
-#include <IO/CompressedWriteBuffer.h>
+#include <IO/Compression/CompressionSettings.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFile.h>

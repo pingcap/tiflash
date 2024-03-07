@@ -78,3 +78,27 @@ mysql> set @@tidb_allow_mpp=0; set @@tidb_allow_tiflash_cop = 1; set @@tidb_allo
 # Clean up.
 mysql> drop table if exists test.t;
 mysql> drop table if exists test.t1;
+
+# https://github.com/pingcap/tidb/issues/51204
+mysql> create table test.t (id int, client_no char(18), taxpayer_no varchar(50), client_type tinyint, status tinyint, update_time datetime);
+mysql> insert into test.t values(1, 'Z9005', 'TAX001', 1, 1, '2024-02-18 10:00:00'),(2, 'Z9006', 'TAX004', 1, 1, '2024-02-18 12:00:00'),(3, 'Z9007', 'TAX005', 1, 1, '2024-02-18 13:00:00'),(4, 'Z9005', 'TAX002', 1, 1, '2024-02-18 14:00:00'),(5, 'Z9006', 'TAX003', 1, 1, '2024-02-18 15:00:00');
+mysql> insert into test.t select * from test.t; insert into test.t select * from test.t; insert into test.t select * from test.t;
+mysql> insert into test.t select * from test.t; insert into test.t select * from test.t; insert into test.t select * from test.t;
+mysql> insert into test.t select * from test.t; insert into test.t select * from test.t; insert into test.t select * from test.t;
+mysql> insert into test.t select * from test.t; insert into test.t select * from test.t; insert into test.t select * from test.t;
+mysql> create table test.t1 (id int, company_no char(18), name varchar(200), tax_registry_no varchar(30), UNIQUE KEY `uk_company_no` (`company_no`));
+mysql> insert into test.t1 (id, company_no, name, tax_registry_no) values(1, 'Z9005', 'AA', 'aaa'),(2, 'Z9006', 'BB', 'bbb'),(3, 'Z9007', 'CC', 'ccc');
+mysql> alter table test.t set tiflash replica 1;
+
+func> wait_table test t
+
+mysql> select company_no, ifnull((select taxpayer_no from test.t where client_no = c.company_no and client_type = 1 order by update_time desc limit 1), tax_registry_no) as tax_registry_no from test.t1 c where company_no = 'Z9005' limit 1;
++------------+-----------------+
+| company_no | tax_registry_no |
++------------+-----------------+
+| Z9005      | TAX002          |
++------------+-----------------+
+
+# Clean up.
+mysql> drop table if exists test.t;
+mysql> drop table if exists test.t1;

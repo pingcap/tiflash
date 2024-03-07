@@ -15,7 +15,7 @@
 #pragma once
 
 #include <Common/RedactHelpers.h>
-#include <IO/WriteBufferFromString.h>
+#include <IO/Buffer/WriteBufferFromString.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/Page/PageDefinesBase.h>
 

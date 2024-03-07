@@ -15,7 +15,7 @@
 #pragma once
 
 #include <Core/Defines.h>
-#include <Encryption/FileProvider_fwd.h>
+#include <IO/FileProvider/FileProvider_fwd.h>
 #include <common/types.h>
 
 namespace DB

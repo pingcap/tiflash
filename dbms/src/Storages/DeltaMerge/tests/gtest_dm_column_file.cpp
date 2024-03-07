@@ -14,7 +14,7 @@
 
 #include <Common/Exception.h>
 #include <Core/ColumnsWithTypeAndName.h>
-#include <Encryption/MockKeyManager.h>
+#include <IO/Encryption/MockKeyManager.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileBig.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileDataProvider.h>

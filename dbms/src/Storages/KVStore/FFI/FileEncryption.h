@@ -15,8 +15,8 @@
 #pragma once
 
 #include <Common/nocopyable.h>
-#include <Encryption/BlockAccessCipherStream.h>
-#include <Encryption/EncryptionPath.h>
+#include <IO/Encryption/BlockAccessCipherStream.h>
+#include <IO/FileProvider/EncryptionPath.h>
 #include <RaftStoreProxyFFI/EncryptionFFI.h>
 #include <Storages/KVStore/FFI/ProxyFFICommon.h>
 #include <common/likely.h>
@@ -90,7 +90,7 @@ struct FileEncryptionInfo : private FileEncryptionInfoRaw
         const EncryptionPath & encryption_path,
         bool is_new_created_info = false) const;
 
-    enum Operation : uint64_t
+    enum Operation : uint8_t
     {
         Encrypt,
         Decrypt,

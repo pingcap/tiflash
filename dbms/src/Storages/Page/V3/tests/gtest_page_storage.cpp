@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <BaseFile/PosixRandomAccessFile.h>
-#include <BaseFile/RandomAccessFile.h>
-#include <BaseFile/RateLimiter.h>
 #include <Common/FailPoint.h>
 #include <Common/SyncPoint/Ctl.h>
-#include <Encryption/MockKeyManager.h>
+#include <IO/BaseFile/PosixRandomAccessFile.h>
+#include <IO/BaseFile/RandomAccessFile.h>
+#include <IO/BaseFile/RateLimiter.h>
+#include <IO/Encryption/MockKeyManager.h>
 #include <Interpreters/Context.h>
 #include <Storages/Page/ConfigSettings.h>
 #include <Storages/Page/Page.h>

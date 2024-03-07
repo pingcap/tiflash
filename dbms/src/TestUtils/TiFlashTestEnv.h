@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include <Encryption/FileProvider_fwd.h>
+#include <IO/FileProvider/FileProvider_fwd.h>
 #include <Interpreters/Context_fwd.h>
 #include <Poco/Environment.h>
 #include <Poco/File.h>

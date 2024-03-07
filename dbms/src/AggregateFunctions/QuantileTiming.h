@@ -17,9 +17,9 @@
 #include <Common/HashTable/Hash.h>
 #include <Common/MemoryTracker.h>
 #include <Common/PODArray.h>
-#include <IO/ReadBuffer.h>
+#include <IO/Buffer/ReadBuffer.h>
+#include <IO/Buffer/WriteBuffer.h>
 #include <IO/ReadHelpers.h>
-#include <IO/WriteBuffer.h>
 #include <IO/WriteHelpers.h>
 #include <common/likely.h>
 

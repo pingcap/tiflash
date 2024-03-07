@@ -19,7 +19,7 @@
 #include <DataTypes/DataTypeNullable.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Flash/Coprocessor/DAGUtils.h>
-#include <IO/ReadBufferFromString.h>
+#include <IO/Buffer/ReadBufferFromString.h>
 
 namespace DB
 {

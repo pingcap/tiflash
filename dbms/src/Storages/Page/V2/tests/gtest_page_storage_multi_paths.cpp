@@ -13,8 +13,8 @@
 // limitations under the License.
 
 #include <Common/CurrentMetrics.h>
-#include <Encryption/FileProvider.h>
-#include <IO/ReadBufferFromMemory.h>
+#include <IO/Buffer/ReadBufferFromMemory.h>
+#include <IO/FileProvider/FileProvider.h>
 #include <Poco/AutoPtr.h>
 #include <Poco/File.h>
 #include <Poco/Logger.h>

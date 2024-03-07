@@ -231,7 +231,7 @@ void NaturalDag::buildTables(Context & context)
             RegionMeta region_meta(std::move(peer), std::move(region_pb), initialApplyState());
             auto raft_index = RAFT_INIT_LOG_INDEX;
             region_meta.setApplied(raft_index, RAFT_INIT_LOG_TERM);
-            RegionPtr region_ptr = std::make_shared<Region>(std::move(region_meta));
+            RegionPtr region_ptr = RegionBench::makeRegion(std::move(region_meta));
             tmt.getKVStore()->onSnapshot<RegionPtrWithBlock>(region_ptr, nullptr, 0, tmt);
 
             auto & pairs = region.pairs;

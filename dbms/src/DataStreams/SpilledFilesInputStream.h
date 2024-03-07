@@ -16,9 +16,10 @@
 
 #include <Core/Spiller.h>
 #include <DataStreams/NativeBlockInputStream.h>
-#include <Encryption/ReadBufferFromFileProvider.h>
-#include <IO/CompressedReadBuffer.h>
-#include <IO/ReadBufferFromFile.h>
+#include <IO/Buffer/ReadBufferFromFile.h>
+#include <IO/Compression/CompressedReadBuffer.h>
+#include <IO/FileProvider/EncryptionPath.h>
+#include <IO/FileProvider/ReadBufferFromRandomAccessFileBuilder.h>
 
 namespace DB
 {
@@ -26,7 +27,7 @@ struct SpilledFileInfo
 {
     String path;
     std::unique_ptr<SpilledFile> file;
-    SpilledFileInfo(const String path_)
+    explicit SpilledFileInfo(const String path_)
         : path(path_)
     {}
 };
@@ -52,7 +53,7 @@ private:
     struct SpilledFileStream
     {
         SpilledFileInfo spilled_file_info;
-        ReadBufferFromFileProvider file_in;
+        ReadBufferFromRandomAccessFile file_in;
         CompressedReadBuffer<> compressed_in;
         BlockInputStreamPtr block_in;
 
@@ -62,7 +63,10 @@ private:
             const FileProviderPtr & file_provider,
             Int64 max_supported_spill_version)
             : spilled_file_info(std::move(spilled_file_info_))
-            , file_in(file_provider, spilled_file_info.path, EncryptionPath(spilled_file_info.path, ""))
+            , file_in(ReadBufferFromRandomAccessFileBuilder::build(
+                  file_provider,
+                  spilled_file_info.path,
+                  EncryptionPath(spilled_file_info.path, "")))
             , compressed_in(file_in)
         {
             Int64 file_spill_version = 0;

@@ -20,12 +20,12 @@
 #include <Debug/dbgFuncCoprocessor.h>
 #include <Debug/dbgFuncFailPoint.h>
 #include <Debug/dbgFuncMisc.h>
-#include <Debug/dbgFuncMockRaftCommand.h>
 #include <Debug/dbgFuncMockTiDBData.h>
 #include <Debug/dbgFuncMockTiDBTable.h>
-#include <Debug/dbgFuncRegion.h>
 #include <Debug/dbgFuncSchema.h>
 #include <Debug/dbgFuncSchemaName.h>
+#include <Debug/dbgKVStore/dbgFuncMockRaftCommand.h>
+#include <Debug/dbgKVStore/dbgFuncRegion.h>
 #include <Parsers/ASTLiteral.h>
 
 #include <thread>
@@ -91,6 +91,7 @@ DBGInvoker::DBGInvoker()
     regSchemalessFunc("refresh_table_schema", dbgFuncRefreshTableSchema);
     regSchemalessFunc("refresh_mapped_table_schema", dbgFuncRefreshMappedTableSchema);
     regSchemalessFunc("skip_schema_version", dbgFuncSkipSchemaVersion);
+    regSchemalessFunc("regenerate_schema_map", dbgFuncRegrenationSchemaMap);
 
     regSchemalessFunc("region_split", MockRaftCommand::dbgFuncRegionBatchSplit);
     regSchemalessFunc("region_prepare_merge", MockRaftCommand::dbgFuncPrepareMerge);

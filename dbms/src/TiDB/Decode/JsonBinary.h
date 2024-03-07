@@ -20,7 +20,7 @@
 #include <Common/UTF8Helpers.h>
 #include <Common/VectorWriter.h>
 #include <Core/Types.h>
-#include <IO/WriteBufferFromVector.h>
+#include <IO/Buffer/WriteBufferFromVector.h>
 #include <common/StringRef.h>
 #include <common/memcpy.h>
 #include <simdjson.h>
@@ -174,8 +174,6 @@ public:
         const std::vector<JsonBinary> & json_binary_vec,
         JsonBinaryWriteBuffer & write_buffer);
     static void buildKeyArrayInBuffer(const std::vector<StringRef> & keys, JsonBinaryWriteBuffer & write_buffer);
-
-    static UInt64 getJsonLength(const std::string_view & raw_value);
 
     static void appendNumber(JsonBinaryWriteBuffer & write_buffer, bool value);
     static void appendNumber(JsonBinaryWriteBuffer & write_buffer, UInt64 value);

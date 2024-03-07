@@ -16,10 +16,9 @@
 
 #include <DataStreams/IBlockOutputStream.h>
 #include <DataStreams/MarkInCompressedFile.h>
-#include <Encryption/WriteBufferFromFileProvider.h>
-#include <Encryption/createWriteBufferFromFileBaseByFileProvider.h>
-#include <IO/CompressedWriteBuffer.h>
-#include <IO/WriteBufferFromOStream.h>
+#include <IO/Buffer/WriteBufferFromOStream.h>
+#include <IO/Compression/CompressedWriteBuffer.h>
+#include <IO/FileProvider/ChecksumWriteBufferBuilder.h>
 #include <Storages/DeltaMerge/DMChecksumConfig.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/Index/MinMaxIndex.h>
@@ -54,37 +53,33 @@ public:
             FileProviderPtr & file_provider,
             const WriteLimiterPtr & write_limiter_,
             bool do_index)
-            : plain_file(WriteBufferByFileProviderBuilder(
-                             dmfile->configuration.has_value(),
-                             file_provider,
-                             dmfile->colDataPath(file_base_name),
-                             dmfile->encryptionDataPath(file_base_name),
-                             false,
-                             write_limiter_)
-                             .with_buffer_size(max_compress_block_size)
-                             .with_checksum_algorithm(detail::getAlgorithmOrNone(*dmfile))
-                             .with_checksum_frame_size(detail::getFrameSizeOrDefault(*dmfile))
-                             .build())
-            , compressed_buf(
-                  dmfile->configuration ? std::unique_ptr<WriteBuffer>(
-                      new CompressedWriteBuffer<false>(*plain_file, compression_settings))
-                                        : std::unique_ptr<WriteBuffer>(
-                                            new CompressedWriteBuffer<true>(*plain_file, compression_settings)))
+            : plain_file(ChecksumWriteBufferBuilder::build(
+                dmfile->configuration.has_value(),
+                file_provider,
+                dmfile->colDataPath(file_base_name),
+                dmfile->encryptionDataPath(file_base_name),
+                false,
+                write_limiter_,
+                detail::getAlgorithmOrNone(*dmfile),
+                detail::getFrameSizeOrDefault(*dmfile),
+                /*flags*/ -1,
+                /*mode*/ 0666,
+                max_compress_block_size))
+            , compressed_buf(CompressedWriteBuffer<>::build(*plain_file, compression_settings, !dmfile->configuration))
             , minmaxes(do_index ? std::make_shared<MinMaxIndex>(*type) : nullptr)
         {
             if (!dmfile->useMetaV2())
             {
-                mark_file
-                    = WriteBufferByFileProviderBuilder( // will not used in DMFileFormat::V3, could be removed when v3 is default
-                          dmfile->configuration.has_value(),
-                          file_provider,
-                          dmfile->colMarkPath(file_base_name),
-                          dmfile->encryptionMarkPath(file_base_name),
-                          false,
-                          write_limiter_)
-                          .with_checksum_algorithm(detail::getAlgorithmOrNone(*dmfile))
-                          .with_checksum_frame_size(detail::getFrameSizeOrDefault(*dmfile))
-                          .build();
+                mark_file = ChecksumWriteBufferBuilder::
+                    build( // will not used in DMFileFormat::V3, could be removed when v3 is default
+                        dmfile->configuration.has_value(),
+                        file_provider,
+                        dmfile->colMarkPath(file_base_name),
+                        dmfile->encryptionMarkPath(file_base_name),
+                        false,
+                        write_limiter_,
+                        detail::getAlgorithmOrNone(*dmfile),
+                        detail::getFrameSizeOrDefault(*dmfile));
             }
             else
             {
@@ -145,7 +140,7 @@ public:
     void write(const Block & block, const BlockProperty & block_property);
     void finalize();
 
-    const DMFilePtr getFile() const { return dmfile; }
+    DMFilePtr getFile() const { return dmfile; }
 
 private:
     void finalizeColumn(ColId col_id, DataTypePtr type);

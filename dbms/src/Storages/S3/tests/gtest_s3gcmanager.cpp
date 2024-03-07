@@ -14,8 +14,8 @@
 
 #include <Common/FailPoint.h>
 #include <Common/Logger.h>
-#include <Encryption/EncryptionPath.h>
 #include <Flash/Disaggregated/MockS3LockClient.h>
+#include <IO/FileProvider/EncryptionPath.h>
 #include <Storages/DeltaMerge/Remote/DataStore/DataStore.h>
 #include <Storages/DeltaMerge/Remote/DataStore/DataStoreS3.h>
 #include <Storages/Page/V3/CheckpointFile/CPFilesWriter.h>

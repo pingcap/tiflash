@@ -17,7 +17,6 @@
 #include <Core/Defines.h>
 #include <DataStreams/MarkInCompressedFile.h>
 #include <DataStreams/NativeBlockOutputStream.h>
-#include <IO/CompressedWriteBuffer.h>
 #include <IO/VarInt.h>
 #include <IO/WriteHelpers.h>
 

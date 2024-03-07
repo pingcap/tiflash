@@ -24,6 +24,7 @@
 #include <Storages/DeltaMerge/DeltaTree.h>
 #include <Storages/DeltaMerge/Range.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
+#include <Storages/DeltaMerge/Segment_fwd.h>
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
 #include <Storages/DeltaMerge/StableValueSpace.h>
 #include <Storages/KVStore/MultiRaft/Disagg/CheckpointInfo.h>
@@ -32,7 +33,6 @@
 
 namespace DB::DM
 {
-class Segment;
 struct SegmentSnapshot;
 using SegmentSnapshotPtr = std::shared_ptr<SegmentSnapshot>;
 class StableValueSpace;
@@ -43,10 +43,6 @@ class RSOperator;
 using RSOperatorPtr = std::shared_ptr<RSOperator>;
 class PushDownFilter;
 using PushDownFilterPtr = std::shared_ptr<PushDownFilter>;
-
-using SegmentPtr = std::shared_ptr<Segment>;
-using SegmentPair = std::pair<SegmentPtr, SegmentPtr>;
-using Segments = std::vector<SegmentPtr>;
 
 enum class ReadMode;
 

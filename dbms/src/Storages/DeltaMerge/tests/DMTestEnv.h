@@ -18,8 +18,8 @@
 #include <Common/typeid_cast.h>
 #include <Core/Block.h>
 #include <DataTypes/DataTypesNumber.h>
+#include <IO/Buffer/WriteBufferFromString.h>
 #include <IO/Operators.h>
-#include <IO/WriteBufferFromString.h>
 #include <Interpreters/Context_fwd.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>

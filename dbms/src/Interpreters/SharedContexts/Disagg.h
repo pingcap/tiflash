@@ -15,7 +15,7 @@
 #pragma once
 
 #include <Core/TiFlashDisaggregatedMode.h>
-#include <Encryption/FileProvider_fwd.h>
+#include <IO/FileProvider/FileProvider_fwd.h>
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/SharedContexts/Disagg_fwd.h>
 #include <Storages/DeltaMerge/Remote/DataStore/DataStore_fwd.h>

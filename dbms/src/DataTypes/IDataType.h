@@ -243,7 +243,8 @@ public:
         const IColumn & column,
         size_t row_num,
         WriteBuffer & ostr,
-        const FormatSettingsJSON & settings) const = 0;
+        const FormatSettingsJSON & settings) const
+        = 0;
     virtual void deserializeTextJSON(IColumn & column, ReadBuffer & istr) const = 0;
 
     /** Text serialization for putting into the XML format.
@@ -432,6 +433,7 @@ public:
     static String getFileNameForStream(const String & column_name, const SubstreamPath & path);
 
     static bool isNullMap(const SubstreamPath & path);
+    static bool isArraySizes(const SubstreamPath & path);
 };
 
 

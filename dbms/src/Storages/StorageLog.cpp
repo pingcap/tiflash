@@ -19,11 +19,11 @@
 #include <DataStreams/IBlockOutputStream.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataTypes/NestedUtils.h>
-#include <IO/CompressedReadBuffer.h>
-#include <IO/CompressedWriteBuffer.h>
-#include <IO/ReadBufferFromFile.h>
+#include <IO/Buffer/ReadBufferFromFile.h>
+#include <IO/Buffer/WriteBufferFromFile.h>
+#include <IO/Compression/CompressedReadBuffer.h>
+#include <IO/Compression/CompressedWriteBuffer.h>
 #include <IO/ReadHelpers.h>
-#include <IO/WriteBufferFromFile.h>
 #include <IO/WriteHelpers.h>
 #include <Interpreters/Context.h>
 #include <Poco/DirectoryIterator.h>

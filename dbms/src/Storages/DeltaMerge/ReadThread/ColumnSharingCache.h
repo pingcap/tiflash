@@ -17,7 +17,7 @@
 #include <Common/Logger.h>
 #include <Common/TiFlashMetrics.h>
 #include <DataTypes/IDataType.h>
-#include <Storages/DeltaMerge/File/DMFile.h>
+#include <Storages/DeltaMerge/DeltaMergeDefines.h>
 
 #include <memory>
 
@@ -34,7 +34,7 @@ enum class ColumnCacheStatus
     GET_HIT,
     GET_COPY,
 
-    _TOTAL_COUNT,
+    _TOTAL_COUNT, // NOLINT(bugprone-reserved-identifier)
 };
 
 class ColumnSharingCache

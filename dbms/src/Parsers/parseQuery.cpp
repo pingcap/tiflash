@@ -15,8 +15,8 @@
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/UTF8Helpers.h>
 #include <Common/typeid_cast.h>
+#include <IO/Buffer/WriteBufferFromString.h>
 #include <IO/Operators.h>
-#include <IO/WriteBufferFromString.h>
 #include <IO/WriteHelpers.h>
 #include <Parsers/ASTInsertQuery.h>
 #include <Parsers/Lexer.h>
@@ -342,7 +342,7 @@ ASTPtr parseQuery(
     const std::string & query_description,
     size_t max_query_size)
 {
-    auto pos = begin;
+    const auto * pos = begin;
     return parseQueryAndMovePosition(parser, pos, end, query_description, false, max_query_size);
 }
 
@@ -383,7 +383,7 @@ std::pair<const char *, bool> splitMultipartQuery(const std::string & queries, s
         if (!ast)
             break;
 
-        ASTInsertQuery * insert = typeid_cast<ASTInsertQuery *>(ast.get());
+        auto * insert = typeid_cast<ASTInsertQuery *>(ast.get());
 
         if (insert && insert->data)
         {

@@ -766,10 +766,7 @@ SegmentPtr Segment::ingestDataForTest(DMContext & dm_context, const DMFilePtr & 
     auto new_segment = applyIngestData(segment_lock, dm_context, data_file, ii);
     if (new_segment.get() != this)
     {
-        RUNTIME_CHECK(
-            compare(getRowKeyRange().getEnd(), new_segment->getRowKeyRange().getEnd()) == 0,
-            info(),
-            new_segment->info());
+        RUNTIME_CHECK(getRowKeyRange().getEnd() == new_segment->getRowKeyRange().getEnd(), info(), new_segment->info());
         RUNTIME_CHECK(segmentId() == new_segment->segmentId(), info(), new_segment->info());
     }
 
@@ -1632,8 +1629,7 @@ std::optional<RowKeyValue> Segment::getSplitPointSlow(
 
 bool isSplitPointValid(const RowKeyRange & segment_range, const RowKeyValueRef & split_point)
 {
-    return segment_range.check(split_point) && //
-        compare(split_point, segment_range.getStart()) != 0;
+    return segment_range.check(split_point) && split_point != segment_range.getStart();
 }
 
 std::optional<Segment::SplitInfo> Segment::prepareSplit(
@@ -2079,7 +2075,7 @@ StableValueSpacePtr Segment::prepareMerge(
     for (size_t i = 1; i < ordered_segments.size(); i++)
     {
         RUNTIME_CHECK(
-            compare(ordered_segments[i - 1]->rowkey_range.getEnd(), ordered_segments[i]->rowkey_range.getStart()) == 0,
+            ordered_segments[i - 1]->rowkey_range.getEnd() == ordered_segments[i]->rowkey_range.getStart(),
             i,
             ordered_segments[i - 1]->info(),
             ordered_segments[i]->info());
@@ -2646,7 +2642,7 @@ bool Segment::placeUpsert(
     RowKeyValueRef range_start = relevant_range.getStart();
 
     auto place_handle_range = skippable_place
-        ? RowKeyRange::startFrom(max(first_rowkey, range_start), is_common_handle, rowkey_column_size)
+        ? RowKeyRange::startFrom(std::max(first_rowkey, range_start), is_common_handle, rowkey_column_size)
         : RowKeyRange::newAll(is_common_handle, rowkey_column_size);
 
     auto compacted_index = update_delta_tree.getCompactedEntries();

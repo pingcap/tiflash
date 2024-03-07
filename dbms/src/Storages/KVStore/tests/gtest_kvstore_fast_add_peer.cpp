@@ -63,6 +63,7 @@ class RegionKVStoreTestFAP : public KVStoreTestBase
 public:
     void SetUp() override
     {
+        test_path = TiFlashTestEnv::getTemporaryPath("/region_kvs_fap_test");
         auto & global_context = TiFlashTestEnv::getGlobalContext();
         // clean data and create path pool instance
         path_pool = TiFlashTestEnv::createCleanPathPool(test_path);
@@ -413,8 +414,8 @@ CheckpointRegionInfoAndData RegionKVStoreTestFAP::prepareForRestart(FAPTestOpt o
     CheckpointRegionInfoAndData mock_data = std::make_tuple(
         checkpoint_info,
         kv_region,
-        kv_region->mutMeta().clonedApplyState(),
-        kv_region->mutMeta().clonedRegionState());
+        kv_region->getMeta().clonedApplyState(),
+        kv_region->getMeta().clonedRegionState());
     return mock_data;
 }
 

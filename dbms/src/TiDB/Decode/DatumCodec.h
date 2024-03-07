@@ -16,8 +16,8 @@
 
 #include <Common/Decimal.h>
 #include <Core/Field.h>
+#include <IO/Buffer/WriteBuffer.h>
 #include <IO/Endian.h>
-#include <IO/WriteBuffer.h>
 #include <TiDB/Decode/TypeMapping.h>
 #include <TiDB/Schema/TiDB.h>
 

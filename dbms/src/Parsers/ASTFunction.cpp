@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <Common/typeid_cast.h>
-#include <IO/WriteBufferFromString.h>
+#include <IO/Buffer/WriteBufferFromString.h>
 #include <IO/WriteHelpers.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTLiteral.h>
@@ -31,7 +31,7 @@ String ASTFunction::getColumnNameImpl() const
     if (parameters)
     {
         writeChar('(', wb);
-        for (ASTs::const_iterator it = parameters->children.begin(); it != parameters->children.end(); ++it)
+        for (auto it = parameters->children.begin(); it != parameters->children.end(); ++it)
         {
             if (it != parameters->children.begin())
                 writeCString(", ", wb);
@@ -41,7 +41,7 @@ String ASTFunction::getColumnNameImpl() const
     }
 
     writeChar('(', wb);
-    for (ASTs::const_iterator it = arguments->children.begin(); it != arguments->children.end(); ++it)
+    for (auto it = arguments->children.begin(); it != arguments->children.end(); ++it)
     {
         if (it != arguments->children.begin())
             writeCString(", ", wb);
@@ -205,7 +205,7 @@ void ASTFunction::formatImplWithoutAlias(const FormatSettings & settings, Format
             if (!written && 0 == strcmp(name.c_str(), "tupleElement"))
             {
                 /// It can be printed in a form of 'x.1' only if right hand side is unsigned integer literal.
-                if (const ASTLiteral * lit = typeid_cast<const ASTLiteral *>(arguments->children[1].get()))
+                if (const auto * lit = typeid_cast<const ASTLiteral *>(arguments->children[1].get()))
                 {
                     if (lit->value.getType() == Field::Types::UInt64)
                     {
@@ -225,7 +225,7 @@ void ASTFunction::formatImplWithoutAlias(const FormatSettings & settings, Format
                 if (frame.need_parens)
                     settings.ostr << '(';
 
-                const ASTFunction * first_arg_func = typeid_cast<const ASTFunction *>(arguments->children[0].get());
+                const auto * first_arg_func = typeid_cast<const ASTFunction *>(arguments->children[0].get());
                 if (first_arg_func && first_arg_func->name == "tuple" && first_arg_func->arguments
                     && first_arg_func->arguments->children.size() == 1)
                 {

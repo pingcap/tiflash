@@ -22,7 +22,7 @@
 #include <DataStreams/BlockStreamProfileInfo.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <DataStreams/IBlockOutputStream.h>
-#include <IO/CompressionSettings.h>
+#include <IO/Compression/CompressionSettings.h>
 #include <IO/ConnectionTimeouts.h>
 #include <IO/Progress.h>
 #include <Interpreters/Settings_fwd.h>

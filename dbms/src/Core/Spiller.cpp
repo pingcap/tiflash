@@ -20,7 +20,7 @@
 #include <DataStreams/NullBlockInputStream.h>
 #include <DataStreams/SpilledFilesInputStream.h>
 #include <DataStreams/copyData.h>
-#include <Encryption/FileProvider.h>
+#include <IO/FileProvider/FileProvider.h>
 #include <Poco/Path.h>
 
 namespace DB
@@ -323,7 +323,7 @@ BlockInputStreams Spiller::restoreBlocks(UInt64 partition_id, UInt64 max_stream_
                 auto & file = partition_spilled_files[i];
                 RUNTIME_CHECK_MSG(file->exists(), "Spill file {} does not exists", file->path());
                 details.merge(file->getSpillDetails());
-                file_infos[i % spill_file_read_stream_num].push_back(file->path());
+                file_infos[i % spill_file_read_stream_num].emplace_back(file->path());
                 restore_stream_read_rows[i % spill_file_read_stream_num] += file->getSpillDetails().rows;
                 if (release_spilled_file_on_restore)
                     file_infos[i % spill_file_read_stream_num].back().file = std::move(file);

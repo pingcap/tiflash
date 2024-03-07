@@ -23,6 +23,7 @@
 #include <Databases/DatabaseTiFlash.h>
 #include <Debug/MockSchemaGetter.h>
 #include <Debug/MockSchemaNameMapper.h>
+#include <IO/FileProvider/FileProvider.h>
 #include <IO/WriteHelpers.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterAlterQuery.h>
@@ -51,6 +52,7 @@
 #include <mutex>
 #include <string_view>
 #include <tuple>
+#include <unordered_set>
 
 namespace DB
 {
@@ -1017,7 +1019,7 @@ void SchemaBuilder<Getter, NameMapper>::applyDropDatabaseByName(const String & d
     // 2. Use the same GC safe point as TiDB.
     // In such way our database (and its belonging tables) will be GC-ed later than TiDB, which is safe and correct.
     auto & tmt_context = context.getTMTContext();
-    auto tombstone = tmt_context.getPDClient()->getTS();
+    auto tombstone = PDClientHelper::getTSO(tmt_context.getPDClient(), PDClientHelper::get_tso_maxtime);
     db->alterTombstone(context, tombstone, /*new_db_info*/ nullptr); // keep the old db_info
 
     LOG_INFO(log, "Tombstone database end, db_name={} tombstone={}", db_name, tombstone);
@@ -1142,7 +1144,7 @@ void SchemaBuilder<Getter, NameMapper>::applyCreateStorageInstance(
     UInt64 tombstone_ts = 0;
     if (is_tombstone)
     {
-        tombstone_ts = context.getTMTContext().getPDClient()->getTS();
+        tombstone_ts = PDClientHelper::getTSO(context.getTMTContext().getPDClient(), PDClientHelper::get_tso_maxtime);
     }
 
     String stmt = createTableStmt(keyspace_id, database_id, *table_info, name_mapper, tombstone_ts, log);
@@ -1230,7 +1232,7 @@ void SchemaBuilder<Getter, NameMapper>::applyDropPhysicalTable(
         table_id,
         action);
 
-    const UInt64 tombstone_ts = tmt_context.getPDClient()->getTS();
+    const UInt64 tombstone_ts = PDClientHelper::getTSO(tmt_context.getPDClient(), PDClientHelper::get_tso_maxtime);
     // TODO:try to optimize alterCommands
     AlterCommands commands;
     {
@@ -1303,7 +1305,27 @@ void SchemaBuilder<Getter, NameMapper>::applyDropTable(
     applyDropPhysicalTable(name_mapper.mapDatabaseName(database_id, keyspace_id), table_info.id, action);
 }
 
-/// syncAllSchema will be called when a new keyspace is created or we meet diff->regenerate_schema_map = true.
+class SyncedDatabaseSet
+{
+private:
+    std::unordered_set<String> nameset;
+    std::mutex mtx;
+
+public:
+    // Thread-safe emplace
+    void emplace(const String & name)
+    {
+        std::unique_lock lock(mtx);
+        nameset.emplace(name);
+    }
+
+    // Non thread-safe check.
+    bool nonThreadSafeContains(const String & name) const { return nameset.contains(name); }
+};
+
+/// syncAllSchema will be called when
+/// - a new keyspace is created
+/// - meet diff->regenerate_schema_map = true
 /// Thus, we should not assume all the map is empty during syncAllSchema.
 template <typename Getter, typename NameMapper>
 void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
@@ -1319,11 +1341,14 @@ void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
         = ThreadPool(default_num_threads, default_num_threads / 2, default_num_threads * 2);
     auto sync_all_schema_wait_group = sync_all_schema_thread_pool.waitGroup();
 
-    std::mutex created_db_set_mutex;
-    std::unordered_set<String> created_db_set;
+    SyncedDatabaseSet latest_db_nameset;
     for (const auto & db_info : all_db_info)
     {
-        auto task = [this, db_info, &created_db_set, &created_db_set_mutex] {
+        auto task = [this, db_info, &latest_db_nameset] {
+            // Insert into nameset no matter it already present in local or not.
+            // Otherwise "drop all unmapped databases" result in unexpected data dropped.
+            latest_db_nameset.emplace(name_mapper.mapDatabaseName(*db_info));
+
             do
             {
                 if (databases.exists(db_info->id))
@@ -1331,11 +1356,6 @@ void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
                     break;
                 }
                 applyCreateDatabaseByInfo(db_info);
-                {
-                    std::unique_lock<std::mutex> created_db_set_lock(created_db_set_mutex);
-                    created_db_set.emplace(name_mapper.mapDatabaseName(*db_info));
-                }
-
                 LOG_INFO(
                     log,
                     "Database {} created during sync all schemas, database_id={}",
@@ -1426,7 +1446,7 @@ void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
         {
             continue;
         }
-        if (created_db_set.count(it->first) == 0 && !isReservedDatabase(context, it->first))
+        if (!latest_db_nameset.nonThreadSafeContains(it->first) && !isReservedDatabase(context, it->first))
         {
             applyDropDatabaseByName(it->first);
             LOG_INFO(log, "Database {} dropped during sync all schemas", it->first);

@@ -14,8 +14,8 @@
 
 
 #include <Databases/DatabasesCommon.h>
-#include <Encryption/FileProvider.h>
-#include <Encryption/WriteBufferFromFileProvider.h>
+#include <IO/FileProvider/FileProvider.h>
+#include <IO/FileProvider/WriteBufferFromWritableFileBuilder.h>
 #include <Interpreters/Context.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ParserCreateQuery.h>
@@ -72,7 +72,7 @@ String fixCreateStatementWithPriKeyNotMatchException( //
                                                                  : EncryptionPath(table_metadata_tmp_path, "");
         {
             bool create_new_encryption_info = !use_target_encrypt_info && !statement.empty();
-            WriteBufferFromFileProvider out(
+            auto out = WriteBufferFromWritableFileBuilder::build(
                 context.getFileProvider(),
                 table_metadata_tmp_path,
                 encryption_path,

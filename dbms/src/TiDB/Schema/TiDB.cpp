@@ -17,7 +17,7 @@
 #include <Common/MyTime.h>
 #include <Core/Types.h>
 #include <DataTypes/DataTypeDecimal.h>
-#include <IO/ReadBufferFromString.h>
+#include <IO/Buffer/ReadBufferFromString.h>
 #include <Poco/Base64Decoder.h>
 #include <Poco/MemoryStream.h>
 #include <Poco/StreamCopier.h>

@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Flash/Mpp/MPPTunnelSet.h>
+#include <IO/Compression/CompressedStream.h>
 
 namespace DB
 {

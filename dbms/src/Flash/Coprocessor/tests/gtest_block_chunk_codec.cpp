@@ -14,7 +14,7 @@
 
 #include <DataTypes/DataTypesNumber.h>
 #include <Flash/Coprocessor/CHBlockChunkCodecV1.h>
-#include <IO/ReadBufferFromString.h>
+#include <IO/Buffer/ReadBufferFromString.h>
 #include <TestUtils/ColumnGenerator.h>
 #include <gtest/gtest.h>
 

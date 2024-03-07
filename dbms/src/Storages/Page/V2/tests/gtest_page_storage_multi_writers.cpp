@@ -13,8 +13,8 @@
 // limitations under the License.
 
 #include <Common/CurrentMetrics.h>
-#include <Encryption/FileProvider.h>
-#include <IO/ReadBufferFromMemory.h>
+#include <IO/Buffer/ReadBufferFromMemory.h>
+#include <IO/FileProvider/FileProvider.h>
 #include <Interpreters/Context.h>
 #include <Poco/AutoPtr.h>
 #include <Poco/File.h>
@@ -42,10 +42,10 @@ namespace DB::PS::V2::tests
 {
 using PSPtr = std::shared_ptr<PageStorage>;
 
-class PageStorageMultiWriters_test : public DB::base::TiFlashStorageTestBasic
+class PageStorageMultiWritersTest : public DB::base::TiFlashStorageTestBasic
 {
 public:
-    PageStorageMultiWriters_test()
+    PageStorageMultiWritersTest()
         : file_provider{DB::tests::TiFlashTestEnv::getDefaultFileProvider()}
     {}
 
@@ -130,7 +130,7 @@ public:
     {
         // fill page with random bytes
         const size_t buff_sz = approx_page_kb * 1024 + random() % 300;
-        char * buff = (char *)malloc(buff_sz);
+        char * buff = static_cast<char *>(malloc(buff_sz));
         const char buff_ch = pageId % 0xFF;
         memset(buff, buff_ch, buff_sz);
 
@@ -365,7 +365,7 @@ struct Suit
     StressTimeout cancel_runner;
 };
 
-TEST_F(PageStorageMultiWriters_test, DISABLED_MultiWriteReadRestore)
+TEST_F(PageStorageMultiWritersTest, DISABLED_MultiWriteReadRestore)
 try
 {
     size_t num_writers = 4;

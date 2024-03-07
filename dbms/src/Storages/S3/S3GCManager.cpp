@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <BaseFile/PosixRandomAccessFile.h>
 #include <Common/Exception.h>
 #include <Common/Logger.h>
 #include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
 #include <Core/Types.h>
 #include <Flash/Disaggregated/S3LockClient.h>
+#include <IO/BaseFile/PosixRandomAccessFile.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Storages/DeltaMerge/Remote/DataStore/DataStore.h>

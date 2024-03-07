@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
-#include <Encryption/MockKeyManager.h>
+#include <IO/Encryption/MockKeyManager.h>
 #include <Poco/Logger.h>
 #include <Storages/Page/Page.h>
 #include <Storages/Page/V2/PageFile.h>

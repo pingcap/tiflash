@@ -51,18 +51,7 @@ private:
     DatabaseInfoCache databases;
     TableIDMap table_id_map;
 
-    Getter createSchemaGetter(KeyspaceID keyspace_id)
-    {
-        if constexpr (mock_getter)
-        {
-            return Getter();
-        }
-        else
-        {
-            auto tso = cluster->pd_client->getTS();
-            return Getter(cluster.get(), tso, keyspace_id);
-        }
-    }
+    Getter createSchemaGetter(KeyspaceID keyspace_id);
 
 public:
     TiDBSchemaSyncer(KVClusterPtr cluster_, KeyspaceID keyspace_id_)

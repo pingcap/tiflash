@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/Exception.h>
 #include <Core/Types.h>
 #include <TiDB/Decode/JsonPathExpr.h>
 #include <common/StringRef.h>
@@ -21,6 +22,11 @@
 
 namespace DB
 {
+namespace ErrorCodes
+{
+extern const int LOGICAL_ERROR;
+} // namespace ErrorCodes
+
 struct JsonPathLeg;
 class JsonPathExpr;
 struct JsonPathExprRef;
@@ -30,7 +36,7 @@ using ConstJsonPathExprRawPtr = JsonPathExprRef const *;
 class JsonPathExprRefContainer
 {
 public:
-    JsonPathExprRefContainer(JsonPathExprPtr source_);
+    explicit JsonPathExprRefContainer(JsonPathExprPtr source_);
     /// Return nullptr for empty JsonPathExpr, which parsed from '$', means extract all
     ConstJsonPathExprRawPtr firstRef() const
     {
@@ -45,6 +51,7 @@ private:
     JsonPathExprPtr source;
     std::vector<JsonPathExprRefPtr> all_refs;
 };
+using JsonPathExprRefContainerPtr = std::unique_ptr<JsonPathExprRefContainer>;
 
 /// Represent a view of JsonPathExpr[i:]
 struct JsonPathExprRef
@@ -67,5 +74,7 @@ private:
     size_t leg_pos;
     JsonPathExpressionFlag flag = 0U;
 };
+
+std::vector<JsonPathExprRefContainerPtr> buildPathExprContainer(const StringRef & path);
 
 } // namespace DB

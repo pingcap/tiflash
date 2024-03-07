@@ -91,7 +91,6 @@ DMFileBlockInputStreamPtr DMFileBlockInputStreamBuilder::build(
         mark_cache,
         enable_column_cache,
         column_cache,
-        aio_threshold,
         max_read_buffer_size,
         file_provider,
         read_limiter,

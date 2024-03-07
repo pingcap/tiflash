@@ -15,7 +15,7 @@
 #pragma once
 
 #include <Common/Logger.h>
-#include <IO/MemoryReadWriteBuffer.h>
+#include <IO/Buffer/MemoryReadWriteBuffer.h>
 #include <Interpreters/Context_fwd.h>
 #include <Storages/KVStore/Types.h>
 #include <Storages/Page/FileUsage.h>

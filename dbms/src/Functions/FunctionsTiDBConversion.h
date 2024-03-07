@@ -47,9 +47,9 @@
 #include <Functions/FunctionsMiscellaneous.h>
 #include <Functions/IFunction.h>
 #include <Functions/castTypeToEither.h>
+#include <IO/Buffer/ReadBufferFromMemory.h>
+#include <IO/Buffer/WriteBufferFromVector.h>
 #include <IO/Operators.h>
-#include <IO/ReadBufferFromMemory.h>
-#include <IO/WriteBufferFromVector.h>
 #include <IO/parseDateTimeBestEffort.h>
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/ExpressionActions.h>
@@ -774,7 +774,8 @@ struct TiDBConvertToFloat
 
             for (size_t i = 0; i < size; ++i)
             {
-                auto & field = (*col_from)[i].template safeGet<DecimalField<FromFieldType>>();
+                auto raw_field = (*col_from)[i];
+                const auto & field = raw_field.template safeGet<DecimalField<FromFieldType>>();
                 vec_to[i] = toFloat(field);
             }
         }

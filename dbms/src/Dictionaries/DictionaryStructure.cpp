@@ -280,7 +280,7 @@ std::vector<DictionaryAttribute> DictionaryStructure::getAttributes(
 
     for (const auto & key : keys)
     {
-        if (!startsWith(key.data(), "attribute"))
+        if (!startsWith(key, "attribute"))
             continue;
 
         const auto prefix = config_prefix + '.' + key + '.';

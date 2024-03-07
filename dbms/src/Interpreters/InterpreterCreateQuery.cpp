@@ -19,8 +19,8 @@
 #include <DataTypes/NestedUtils.h>
 #include <Databases/DatabaseFactory.h>
 #include <Databases/IDatabase.h>
-#include <Encryption/FileProvider.h>
-#include <Encryption/WriteBufferFromFileProvider.h>
+#include <IO/FileProvider/FileProvider.h>
+#include <IO/FileProvider/WriteBufferFromWritableFileBuilder.h>
 #include <IO/WriteHelpers.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/ExpressionActions.h>
@@ -131,7 +131,7 @@ BlockIO InterpreterCreateQuery::createDatabase(ASTCreateQuery & create)
         String statement = statement_stream.str();
 
         /// Exclusive flag guarantees, that database is not created right now in another thread.
-        WriteBufferFromFileProvider out(
+        auto out = WriteBufferFromWritableFileBuilder::build(
             context.getFileProvider(),
             metadata_file_tmp_path,
             EncryptionPath(metadata_file_tmp_path, ""),

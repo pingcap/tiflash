@@ -370,9 +370,8 @@ struct OneAdder
     static void ALWAYS_INLINE add(Data & data, const IColumn & column, size_t row_num)
     {
         if constexpr (
-            std::is_same_v<
-                Data,
-                AggregateFunctionUniqUniquesHashSetData> || std::is_same_v<Data, AggregateFunctionUniqHLL12Data<T>>)
+            std::is_same_v<Data, AggregateFunctionUniqUniquesHashSetData>
+            || std::is_same_v<Data, AggregateFunctionUniqHLL12Data<T>>)
         {
             if constexpr (!std::is_same_v<T, String>)
             {

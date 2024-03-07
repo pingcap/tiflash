@@ -13,9 +13,9 @@
 // limitations under the License.
 
 #include <Common/UnifiedLogFormatter.h>
-#include <Encryption/FileProvider.h>
-#include <Encryption/MockKeyManager.h>
 #include <Flash/Coprocessor/DAGContext.h>
+#include <IO/Encryption/MockKeyManager.h>
+#include <IO/FileProvider/FileProvider.h>
 #include <Interpreters/Context.h>
 #include <Poco/ConsoleChannel.h>
 #include <Poco/FormattingChannel.h>

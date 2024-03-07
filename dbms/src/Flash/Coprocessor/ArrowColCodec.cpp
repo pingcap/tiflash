@@ -26,7 +26,7 @@
 #include <Flash/Coprocessor/ArrowColCodec.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Functions/FunctionHelpers.h>
-#include <IO/Endian.h>
+#include <IO/copyData.h>
 
 namespace DB
 {
@@ -347,9 +347,8 @@ void flashEnumColToArrowCol(
                 enum_value,
                 enum_value_size);
 
-        TiDBEnum ti_enum(
-            enum_value,
-            enum_type->getNameForValue(static_cast<const DataTypeEnum16::FieldType>(enum_value)));
+        const auto & enum_name = enum_type->getNameForValue(static_cast<const DataTypeEnum16::FieldType>(enum_value));
+        TiDBEnum ti_enum(enum_value, enum_name);
         dag_column.append(ti_enum);
     }
 }

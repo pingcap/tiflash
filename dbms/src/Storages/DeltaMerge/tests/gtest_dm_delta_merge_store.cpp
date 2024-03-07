@@ -1561,7 +1561,9 @@ CATCH
 TEST_P(DeltaMergeStoreRWTest, IngestDupHandleVersion)
 try
 {
-    setStorageFormat(5); // Some old formats does not support ingest DMFiles.
+    // Some old formats does not support ingest DMFiles.
+    if (mode == TestMode::V1_BlockOnly)
+        return;
 
     // Add a column for extra value.
     const String value_col_name = "value";
@@ -1574,7 +1576,8 @@ try
     auto create_block = [&](UInt64 beg, UInt64 end, UInt64 value) {
         constexpr UInt64 ts = 1; // Always use the same ts.
         auto block = DMTestEnv::prepareSimpleWriteBlock(beg, end, false, ts);
-        block.insert(createColumn<UInt64>(std::vector<UInt64>(end - beg + 1, value), value_col_name, value_col_id));
+        block.insert(createColumn<UInt64>(std::vector<UInt64>(end - beg, value), value_col_name, value_col_id));
+        block.checkNumberOfRows();
         return block;
     };
 
@@ -1594,6 +1597,7 @@ try
             /* is_fast_scan= */ false,
             DEFAULT_BLOCK_SIZE)[0];
         std::unordered_map<Int64, UInt64> data;
+        stream->readPrefix();
         for (;;)
         {
             auto block = stream->read();
@@ -1608,6 +1612,7 @@ try
                 data[handle[i]] = value[i];
             }
         }
+        stream->readSuffix();
         return data;
     };
 
@@ -2710,6 +2715,7 @@ try
             }));
     }
 
+    SCOPE_EXIT({ FailPointHelper::disableFailPoint(FailPoints::proactive_flush_force_set_type); });
     {
         // write and triggle flush
         std::shared_ptr<std::atomic<size_t>> ai = std::make_shared<std::atomic<size_t>>();

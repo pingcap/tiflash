@@ -23,6 +23,7 @@
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Debug/MockTiDB.h>
+#include <Debug/dbgKVStore/dbgKVStore.h>
 #include <Interpreters/Context.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTLiteral.h>
@@ -112,6 +113,7 @@ TablePtr MockTiDB::dropTableByIdImpl(Context & context, const TableID table_id, 
 TablePtr MockTiDB::dropTableInternal(Context & context, const TablePtr & table, bool drop_regions)
 {
     auto & kvstore = context.getTMTContext().getKVStore();
+    auto debug_kvstore = RegionBench::DebugKVStore(*kvstore);
     auto & region_table = context.getTMTContext().getRegionTable();
 
     if (table->isPartitionTable())
@@ -122,7 +124,7 @@ TablePtr MockTiDB::dropTableInternal(Context & context, const TablePtr & table, 
             if (drop_regions)
             {
                 for (auto & e : region_table.getRegionsByTable(NullspaceID, partition.id))
-                    kvstore->mockRemoveRegion(e.first, region_table);
+                    debug_kvstore.mockRemoveRegion(e.first, region_table);
                 region_table.removeTable(NullspaceID, partition.id);
             }
         }
@@ -132,7 +134,7 @@ TablePtr MockTiDB::dropTableInternal(Context & context, const TablePtr & table, 
     if (drop_regions)
     {
         for (auto & e : region_table.getRegionsByTable(NullspaceID, table->id()))
-            kvstore->mockRemoveRegion(e.first, region_table);
+            debug_kvstore.mockRemoveRegion(e.first, region_table);
         region_table.removeTable(NullspaceID, table->id());
     }
 
@@ -741,6 +743,19 @@ void MockTiDB::truncateTable(const String & database_name, const String & table_
     diff.table_id = table->id();
     diff.version = version;
     version_diff[version] = diff;
+}
+
+Int64 MockTiDB::regenerateSchemaMap()
+{
+    std::lock_guard lock(tables_mutex);
+
+    SchemaDiff diff;
+    diff.type = SchemaActionType::None;
+    diff.regenerate_schema_map = true;
+    diff.version = version + 1;
+    version++;
+    version_diff[version] = diff;
+    return version;
 }
 
 TablePtr MockTiDB::getTableByName(const String & database_name, const String & table_name)

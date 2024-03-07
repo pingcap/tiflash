@@ -14,7 +14,7 @@
 
 #include <Common/Exception.h>
 #include <Common/ShellCommand.h>
-#include <IO/WriteBufferFromVector.h>
+#include <IO/Buffer/WriteBufferFromVector.h>
 #include <IO/WriteHelpers.h>
 #include <dlfcn.h>
 #include <fcntl.h>
@@ -43,7 +43,7 @@ struct Pipe
 {
     union
     {
-        int fds[2];
+        int fds[2]{};
         struct
         {
             int read_fd;
@@ -52,6 +52,8 @@ struct Pipe
     };
 
     Pipe()
+        : read_fd(0)
+        , write_fd(0)
     {
 #ifndef __APPLE__
         if (0 != pipe2(fds, O_CLOEXEC))
@@ -128,21 +130,21 @@ std::unique_ptr<ShellCommand> ShellCommand::executeImpl(
 
         /// Replace the file descriptors with the ends of our pipes.
         if (STDIN_FILENO != dup2(pipe_stdin.read_fd, STDIN_FILENO))
-            _exit(int(ReturnCodes::CANNOT_DUP_STDIN));
+            _exit(static_cast<int>(ReturnCodes::CANNOT_DUP_STDIN));
 
         if (!pipe_stdin_only)
         {
             if (STDOUT_FILENO != dup2(pipe_stdout.write_fd, STDOUT_FILENO))
-                _exit(int(ReturnCodes::CANNOT_DUP_STDOUT));
+                _exit(static_cast<int>(ReturnCodes::CANNOT_DUP_STDOUT));
 
             if (STDERR_FILENO != dup2(pipe_stderr.write_fd, STDERR_FILENO))
-                _exit(int(ReturnCodes::CANNOT_DUP_STDERR));
+                _exit(static_cast<int>(ReturnCodes::CANNOT_DUP_STDERR));
         }
 
         execv(filename, argv);
         /// If the process is running, then `execv` does not return here.
 
-        _exit(int(ReturnCodes::CANNOT_EXEC));
+        _exit(static_cast<int>(ReturnCodes::CANNOT_EXEC));
     }
 
     std::unique_ptr<ShellCommand> res(
@@ -233,13 +235,13 @@ void ShellCommand::wait()
     {
         switch (retcode)
         {
-        case int(ReturnCodes::CANNOT_DUP_STDIN):
+        case static_cast<int>(ReturnCodes::CANNOT_DUP_STDIN):
             throw Exception("Cannot dup2 stdin of child process", ErrorCodes::CANNOT_CREATE_CHILD_PROCESS);
-        case int(ReturnCodes::CANNOT_DUP_STDOUT):
+        case static_cast<int>(ReturnCodes::CANNOT_DUP_STDOUT):
             throw Exception("Cannot dup2 stdout of child process", ErrorCodes::CANNOT_CREATE_CHILD_PROCESS);
-        case int(ReturnCodes::CANNOT_DUP_STDERR):
+        case static_cast<int>(ReturnCodes::CANNOT_DUP_STDERR):
             throw Exception("Cannot dup2 stderr of child process", ErrorCodes::CANNOT_CREATE_CHILD_PROCESS);
-        case int(ReturnCodes::CANNOT_EXEC):
+        case static_cast<int>(ReturnCodes::CANNOT_EXEC):
             throw Exception("Cannot execv in child process", ErrorCodes::CANNOT_CREATE_CHILD_PROCESS);
         default:
             throw Exception(

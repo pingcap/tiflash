@@ -14,8 +14,8 @@
 
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/TiDBColumn.h>
-#include <IO/Endian.h>
 #include <IO/Operators.h>
+#include <IO/copyData.h>
 
 namespace DB
 {

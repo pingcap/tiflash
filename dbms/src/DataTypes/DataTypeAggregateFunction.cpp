@@ -63,7 +63,7 @@ std::string DataTypeAggregateFunction::getName() const
 
 void DataTypeAggregateFunction::serializeBinary(const Field & field, WriteBuffer & ostr) const
 {
-    const String & s = get<const String &>(field);
+    const auto & s = get<const String &>(field);
     writeVarUInt(s.size(), ostr);
     writeString(s, ostr);
 }
@@ -73,7 +73,7 @@ void DataTypeAggregateFunction::deserializeBinary(Field & field, ReadBuffer & is
     UInt64 size;
     readVarUInt(size, istr);
     field = String();
-    String & s = get<String &>(field);
+    auto & s = get<String &>(field);
     s.resize(size);
     istr.readStrict(&s[0], size);
 }
@@ -85,7 +85,7 @@ void DataTypeAggregateFunction::serializeBinary(const IColumn & column, size_t r
 
 void DataTypeAggregateFunction::deserializeBinary(IColumn & column, ReadBuffer & istr) const
 {
-    ColumnAggregateFunction & column_concrete = static_cast<ColumnAggregateFunction &>(column);
+    auto & column_concrete = static_cast<ColumnAggregateFunction &>(column);
 
     Arena & arena = column_concrete.createOrGetArena();
     size_t size_of_state = function->sizeOfData();
@@ -171,7 +171,7 @@ static String serializeToString(const AggregateFunctionPtr & function, const ICo
 
 static void deserializeFromString(const AggregateFunctionPtr & function, IColumn & column, const String & s)
 {
-    ColumnAggregateFunction & column_concrete = static_cast<ColumnAggregateFunction &>(column);
+    auto & column_concrete = static_cast<ColumnAggregateFunction &>(column);
 
     Arena & arena = column_concrete.createOrGetArena();
     size_t size_of_state = function->sizeOfData();
@@ -317,7 +317,7 @@ static DataTypePtr create(const ASTPtr & arguments)
             "name of aggregate function and list of data types for arguments",
             ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
-    if (const ASTFunction * parametric = typeid_cast<const ASTFunction *>(arguments->children[0].get()))
+    if (const auto * parametric = typeid_cast<const ASTFunction *>(arguments->children[0].get()))
     {
         if (parametric->parameters)
             throw Exception("Unexpected level of parameters to aggregate function", ErrorCodes::SYNTAX_ERROR);
@@ -328,7 +328,7 @@ static DataTypePtr create(const ASTPtr & arguments)
 
         for (size_t i = 0; i < parameters.size(); ++i)
         {
-            const ASTLiteral * lit = typeid_cast<const ASTLiteral *>(parameters[i].get());
+            const auto * lit = typeid_cast<const ASTLiteral *>(parameters[i].get());
             if (!lit)
                 throw Exception(
                     "Parameters to aggregate functions must be literals",

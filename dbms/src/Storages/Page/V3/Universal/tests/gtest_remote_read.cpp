@@ -12,14 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <BaseFile/PosixRandomAccessFile.h>
 #include <Common/FailPoint.h>
-#include <Encryption/MockKeyManager.h>
 #include <Flash/Disaggregated/MockS3LockClient.h>
 #include <Flash/Disaggregated/S3LockClient.h>
-#include <IO/ReadBufferFromFile.h>
-#include <IO/ReadBufferFromRandomAccessFile.h>
-#include <IO/WriteBufferFromWritableFile.h>
+#include <IO/BaseFile/PosixRandomAccessFile.h>
+#include <IO/Buffer/ReadBufferFromFile.h>
+#include <IO/Buffer/ReadBufferFromRandomAccessFile.h>
+#include <IO/Buffer/WriteBufferFromWritableFile.h>
+#include <IO/Encryption/MockKeyManager.h>
 #include <IO/copyData.h>
 #include <Storages/Page/V3/BlobStore.h>
 #include <Storages/Page/V3/CheckpointFile/CPFilesWriter.h>

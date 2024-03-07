@@ -17,8 +17,7 @@
 #include <Common/Exception.h>
 #include <Common/Logger.h>
 #include <Common/TiFlashMetrics.h>
-#include <Encryption/ReadBufferFromFileProvider.h>
-#include <Encryption/createReadBufferFromFileBaseByFileProvider.h>
+#include <IO/FileProvider/ChecksumReadBufferBuilder.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/Filter/FilterHelper.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
@@ -258,11 +257,13 @@ private:
             auto index_file_size = dmfile->colIndexSize(col_id);
             if (index_file_size == 0)
                 return std::make_shared<MinMaxIndex>(*type);
-            auto index_guard = S3::S3RandomAccessFile::setReadFileInfo(
-                {dmfile->getReadFileSize(col_id, dmfile->colIndexFileName(file_name_base)), scan_context});
+            auto index_guard = S3::S3RandomAccessFile::setReadFileInfo({
+                .size = dmfile->getReadFileSize(col_id, dmfile->colIndexFileName(file_name_base)),
+                .scan_context = scan_context,
+            });
             if (!dmfile->configuration) // v1
             {
-                auto index_buf = ReadBufferFromFileProvider(
+                auto index_buf = ReadBufferFromRandomAccessFileBuilder::build(
                     file_provider,
                     dmfile->colIndexPath(file_name_base),
                     dmfile->encryptionIndexPath(file_name_base),
@@ -285,7 +286,7 @@ private:
                 auto offset = info->second.offset;
                 auto data_size = info->second.size;
 
-                auto buffer = ReadBufferFromFileProvider(
+                auto buffer = ReadBufferFromRandomAccessFileBuilder::build(
                     file_provider,
                     file_path,
                     encryp_path,
@@ -298,7 +299,7 @@ private:
 
                 buffer.read(reinterpret_cast<char *>(raw_data.data()), data_size);
 
-                auto buf = createReadBufferFromData(
+                auto buf = ChecksumReadBufferBuilder::build(
                     std::move(raw_data),
                     dmfile->colDataPath(file_name_base),
                     dmfile->getConfiguration()->getChecksumFrameLength(),
@@ -313,7 +314,7 @@ private:
             }
             else
             { // v2
-                auto index_buf = createReadBufferFromFileBaseByFileProvider(
+                auto index_buf = ChecksumReadBufferBuilder::build(
                     file_provider,
                     dmfile->colIndexPath(file_name_base),
                     dmfile->encryptionIndexPath(file_name_base),
