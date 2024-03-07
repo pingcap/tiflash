@@ -138,12 +138,10 @@ public:
         total_dmfile_skipped_rows += other.total_dmfile_skipped_rows;
         total_dmfile_rough_set_index_check_time_ns += other.total_dmfile_rough_set_index_check_time_ns;
         total_dmfile_read_time_ns += other.total_dmfile_read_time_ns;
-        create_snapshot_time_ns += other.create_snapshot_time_ns;
 
         total_local_region_num += other.total_local_region_num;
         total_remote_region_num += other.total_remote_region_num;
         user_read_bytes += other.user_read_bytes;
-        learner_read_ns += other.learner_read_ns;
         disagg_read_cache_hit_size += other.disagg_read_cache_hit_size;
         disagg_read_cache_miss_size += other.disagg_read_cache_miss_size;
 
