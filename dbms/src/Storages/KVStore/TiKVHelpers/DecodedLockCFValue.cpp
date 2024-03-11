@@ -48,7 +48,6 @@ inline void decodeLockCfValue(DecodedLockCFValue & res)
     res.lock_type = lock_type;
     res.primary_lock = readVarString<std::string_view>(data, len);
     res.lock_version = readVarUInt(data, len);
-    res.generation = 0;
 
     if (len > 0)
     {
@@ -127,7 +126,7 @@ inline void decodeLockCfValue(DecodedLockCFValue & res)
             }
             case GENERATION_PREFIX:
             {
-                res.generation = readVarUInt(data, len);
+                res.generation = readUInt64(data, len);
                 break;
             }
             default:

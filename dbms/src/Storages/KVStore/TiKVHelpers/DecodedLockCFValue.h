@@ -42,7 +42,7 @@ struct DecodedLockCFValue : boost::noncopyable
     std::string_view secondaries;
     std::string_view primary_lock;
     // For large txn, generation is not zero.
-    UInt64 generation;
+    UInt64 generation{0};
 };
 
 } // namespace RecordKVFormat
