@@ -801,6 +801,8 @@ BlockInputStreamPtr Segment::getInputStream(
     UInt64 max_version,
     size_t expected_block_size)
 {
+    Stopwatch sw;
+    SCOPE_EXIT({ dm_context.scan_context->build_inputstream_time_ns += sw.elapsed(); });
     auto clipped_block_rows = clipBlockRows( //
         dm_context.global_context,
         expected_block_size,

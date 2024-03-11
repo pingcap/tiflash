@@ -49,6 +49,7 @@ public:
 
     std::atomic<uint64_t> total_remote_region_num{0};
     std::atomic<uint64_t> total_local_region_num{0};
+    std::atomic<uint64_t> num_stale_read{0};
 
     // the read bytes from delta layer and stable layer (in-mem, decompressed)
     std::atomic<uint64_t> user_read_bytes{0};
@@ -82,6 +83,7 @@ public:
     std::atomic<uint64_t> learner_read_ns{0};
     // Create snapshot from PageStorage
     std::atomic<uint64_t> create_snapshot_time_ns{0};
+    std::atomic<uint64_t> build_inputstream_time_ns{0};
     // Building bitmap
     std::atomic<uint64_t> build_bitmap_time_ns{0};
 
@@ -138,12 +140,10 @@ public:
         total_dmfile_skipped_rows += other.total_dmfile_skipped_rows;
         total_dmfile_rough_set_index_check_time_ns += other.total_dmfile_rough_set_index_check_time_ns;
         total_dmfile_read_time_ns += other.total_dmfile_read_time_ns;
-        create_snapshot_time_ns += other.create_snapshot_time_ns;
 
         total_local_region_num += other.total_local_region_num;
         total_remote_region_num += other.total_remote_region_num;
         user_read_bytes += other.user_read_bytes;
-        learner_read_ns += other.learner_read_ns;
         disagg_read_cache_hit_size += other.disagg_read_cache_hit_size;
         disagg_read_cache_miss_size += other.disagg_read_cache_miss_size;
 
@@ -157,6 +157,12 @@ public:
         mvcc_input_rows += other.mvcc_input_rows;
         mvcc_input_bytes += other.mvcc_input_bytes;
         mvcc_output_rows += other.mvcc_output_rows;
+        late_materialization_skip_rows += other.late_materialization_skip_rows;
+
+        learner_read_ns += other.learner_read_ns;
+        create_snapshot_time_ns += other.create_snapshot_time_ns;
+        build_inputstream_time_ns += other.build_inputstream_time_ns;
+        build_bitmap_time_ns += other.build_bitmap_time_ns;
     }
 
     void merge(const tipb::TiFlashScanContext & other)
