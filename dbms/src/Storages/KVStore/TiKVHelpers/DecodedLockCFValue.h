@@ -43,5 +43,4 @@ struct DecodedLockCFValue : boost::noncopyable
     UInt64 generation{0};
 };
 
-} // namespace RecordKVFormat
-} // namespace DB
+} // namespace DB::RecordKVFormat
