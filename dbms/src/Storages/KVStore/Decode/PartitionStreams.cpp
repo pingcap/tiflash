@@ -599,9 +599,15 @@ Block GenRegionBlockDataWithSchema(
 
     res_block = sortColumnsBySchemaSnap(std::move(res_block), *(schema_snap->column_defines));
 
+    auto prev_region_size = region->dataSize();
     // Remove committed data
     RemoveRegionCommitCache(region, *data_list_read);
-
+    auto new_region_size = region->dataSize();
+    if likely (new_region_size <= prev_region_size)
+    {
+        auto committed_bytes = prev_region_size - new_region_size;
+        GET_METRIC(tiflash_raft_throughput_bytes, type_snapshot_committed).Increment(committed_bytes);
+    }
     return res_block;
 }
 

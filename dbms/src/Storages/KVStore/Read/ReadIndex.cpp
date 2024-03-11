@@ -70,7 +70,7 @@ std::tuple<WaitIndexStatus, double> Region::waitIndex(
     const LoggerPtr & log)
 {
     fiu_return_on(FailPoints::force_wait_index_timeout, std::make_tuple(WaitIndexStatus::Timeout, 1.0));
-    if (proxy_helper == nullptr) // just for debug
+    if unlikely (proxy_helper == nullptr) // just for debug
         return {WaitIndexStatus::Finished, 0};
 
     if (meta.checkIndex(index))
