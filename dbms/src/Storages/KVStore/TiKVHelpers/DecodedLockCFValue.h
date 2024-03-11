@@ -18,9 +18,7 @@
 #include <Core/Types.h>
 #include <Storages/KVStore/Decode/DecodedTiKVKeyValue.h>
 
-namespace DB
-{
-namespace RecordKVFormat
+namespace DB::RecordKVFormat
 {
 
 struct DecodedLockCFValue : boost::noncopyable
