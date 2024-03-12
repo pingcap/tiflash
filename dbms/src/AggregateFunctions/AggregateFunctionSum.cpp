@@ -84,6 +84,7 @@ AggregateFunctionPtr createDecimalFunction(const IDataType * p)
 
 template <template <typename> class Function, typename Name>
 AggregateFunctionPtr createAggregateFunctionSum(
+    const Context & /* context not used */,
     const std::string & name,
     const DataTypes & argument_types,
     const Array & parameters)

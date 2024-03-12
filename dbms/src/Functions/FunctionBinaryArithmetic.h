@@ -29,6 +29,7 @@
 #include <DataTypes/DataTypeNothing.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/NumberTraits.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Functions/DataTypeFromFieldType.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionHelpers.h>
@@ -36,6 +37,7 @@
 #include <Functions/IsOperation.h>
 #include <Functions/castTypeToEither.h>
 #include <IO/WriteHelpers.h>
+#include <Interpreters/Context.h>
 #include <Interpreters/ExpressionActions.h>
 #include <fmt/core.h>
 
@@ -831,15 +833,20 @@ private:
                     left_prec,
                     0,
                     right_prec,
-                    right_scale);
+                    right_scale,
+                    context.getDAGContext()->getDivPrecisionIncrement());
                 return createDecimal(result_prec, result_scale);
             }
             else if constexpr (std::is_integral_v<RightFieldType>)
             {
                 ScaleType right_prec = IntPrec<RightFieldType>::prec;
                 auto [left_prec, left_scale] = getPrecAndScale(arguments[0].get());
-                auto [result_prec, result_scale]
-                    = Op<LeftFieldType, RightFieldType>::ResultPrecInferer::infer(left_prec, left_scale, right_prec, 0);
+                auto [result_prec, result_scale] = Op<LeftFieldType, RightFieldType>::ResultPrecInferer::infer(
+                    left_prec,
+                    left_scale,
+                    right_prec,
+                    0,
+                    context.getDAGContext()->getDivPrecisionIncrement());
                 return createDecimal(result_prec, result_scale);
             }
             auto [left_prec, left_scale] = getPrecAndScale(arguments[0].get());
@@ -848,7 +855,8 @@ private:
                 left_prec,
                 left_scale,
                 right_prec,
-                right_scale);
+                right_scale,
+                context.getDAGContext()->getDivPrecisionIncrement());
 
             return createDecimal(result_prec, result_scale);
         }

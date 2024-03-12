@@ -63,6 +63,7 @@ inline AggregateFunctionPtr createAggregateFunctionGroupArrayImpl(const DataType
 
 
 static AggregateFunctionPtr createAggregateFunctionGroupArray(
+    const Context & /* context not used */,
     const std::string & name,
     const DataTypes & argument_types,
     const Array & parameters)

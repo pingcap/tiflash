@@ -25,6 +25,7 @@ namespace DB
 namespace
 {
 AggregateFunctionPtr createAggregateFunctionSumMap(
+    const Context & /* context not used */,
     const std::string & name,
     const DataTypes & arguments,
     const Array & params)

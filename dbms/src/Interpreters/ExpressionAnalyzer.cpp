@@ -2141,7 +2141,7 @@ void ExpressionAnalyzer::getAggregates(const ASTPtr & ast, ExpressionActionsPtr 
         }
 
         aggregate.parameters = (node->parameters) ? getAggregateFunctionParametersArray(node->parameters) : Array();
-        aggregate.function = AggregateFunctionFactory::instance().get(node->name, types, aggregate.parameters);
+        aggregate.function = AggregateFunctionFactory::instance().get(context, node->name, types, aggregate.parameters);
 
         aggregate_descriptions.push_back(aggregate);
     }

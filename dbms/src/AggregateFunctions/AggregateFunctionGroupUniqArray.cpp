@@ -59,6 +59,7 @@ static IAggregateFunction * createWithExtraTypes(const DataTypePtr & argument_ty
 }
 
 AggregateFunctionPtr createAggregateFunctionGroupUniqArray(
+    const Context & /* context not used */,
     const std::string & name,
     const DataTypes & argument_types,
     const Array & parameters)
