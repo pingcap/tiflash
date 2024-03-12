@@ -12,9 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
 #include <Flash/Coprocessor/ExecutionSummary.h>
 #include <Flash/Statistics/BaseRuntimeStatistics.h>
 #include <Storages/DeltaMerge/ScanContext.h>
+#include <common/likely.h>
 
 namespace DB
 {
@@ -28,6 +30,7 @@ void ExecutionSummary::merge(const ExecutionSummary & other)
     num_produced_rows += other.num_produced_rows;
     num_iterations += other.num_iterations;
     concurrency += other.concurrency;
+    ru_consumption = mergeRUConsumption(ru_consumption, other.ru_consumption);
     scan_context->merge(*other.scan_context);
 }
 
@@ -37,6 +40,7 @@ void ExecutionSummary::merge(const tipb::ExecutorExecutionSummary & other)
     num_produced_rows += other.num_produced_rows();
     num_iterations += other.num_iterations();
     concurrency += other.concurrency();
+    ru_consumption = mergeRUConsumption(ru_consumption, parseRUConsumption(other));
     scan_context->merge(other.tiflash_scan_context());
 }
 
@@ -54,6 +58,32 @@ void ExecutionSummary::init(const tipb::ExecutorExecutionSummary & other)
     num_produced_rows = other.num_produced_rows();
     num_iterations = other.num_iterations();
     concurrency = other.concurrency();
+    ru_consumption = parseRUConsumption(other);
     scan_context->deserialize(other.tiflash_scan_context());
+}
+
+resource_manager::Consumption parseRUConsumption(const tipb::ExecutorExecutionSummary & pb)
+{
+    resource_manager::Consumption ru_consumption;
+    if (pb.has_ru_consumption())
+    {
+        RUNTIME_CHECK_MSG(
+            ru_consumption.ParseFromString(pb.ru_consumption()),
+            "failed to parse ru consumption from execution summary");
+    }
+    return ru_consumption;
+}
+
+resource_manager::Consumption mergeRUConsumption(
+    const resource_manager::Consumption & left,
+    const resource_manager::Consumption & right)
+{
+    // TiFlash only support read related RU for now.
+    // So ignore merge other fields.
+    resource_manager::Consumption sum;
+    sum.set_r_r_u(left.r_r_u() + right.r_r_u());
+    sum.set_read_bytes(left.read_bytes() + right.read_bytes());
+    sum.set_total_cpu_time_ms(left.total_cpu_time_ms() + right.total_cpu_time_ms());
+    return sum;
 }
 } // namespace DB

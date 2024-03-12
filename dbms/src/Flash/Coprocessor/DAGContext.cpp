@@ -457,7 +457,7 @@ const SingleTableRegions & DAGContext::getTableRegionsInfoByTableID(Int64 table_
     return tables_regions_info.getTableRegionInfoByTableID(table_id);
 }
 
-RU DAGContext::getReadRU() const
+UInt64 DAGContext::getReadBytes() const
 {
     UInt64 read_bytes = 0;
     for (const auto & [id, sc] : scan_context_map)
@@ -465,7 +465,7 @@ RU DAGContext::getReadRU() const
         (void)id; // Disable unused variable warnning.
         read_bytes += sc->user_read_bytes;
     }
-    return bytesToRU(read_bytes);
+    return read_bytes;
 }
 
 } // namespace DB

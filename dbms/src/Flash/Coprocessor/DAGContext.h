@@ -321,7 +321,7 @@ public:
     // For now, only called for BlockIO execution engine to disable report RU of storage layer.
     void clearResourceGroupName() { resource_group_name = ""; }
 
-    RU getReadRU() const;
+    UInt64 getReadBytes() const;
 
     void switchToStreamMode()
     {

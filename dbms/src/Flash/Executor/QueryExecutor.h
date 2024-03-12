@@ -49,7 +49,7 @@ public:
 
     virtual int estimateNewThreadCount() = 0;
 
-    virtual RU collectRequestUnit() = 0;
+    virtual UInt64 collectCPUTimeNs() = 0;
 
     virtual Block getSampleBlock() const = 0;
 

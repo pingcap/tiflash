@@ -36,6 +36,7 @@ public:
     bool isTreeBased() const { return is_tree_based; }
 
     const tipb::Executor & rootExecutor() const;
+    String rootExecutorID() const;
 
     /// traverse tipb::executor of DAGRequest and apply function.
     /// func: (const tipb::Executor &) -> bool, return true to continue traverse.
