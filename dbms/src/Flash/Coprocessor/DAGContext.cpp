@@ -79,7 +79,7 @@ DAGContext::DAGContext(
 {
     RUNTIME_ASSERT(kind != DAGRequestKind::MPP, log, "DAGContext non-mpp constructor get a mpp kind");
     if (dag_request->has_div_precision_increment())
-          div_precision_increment = dag_request->div_precision_increment();
+        div_precision_increment = dag_request->div_precision_increment();
     initOutputInfo();
 }
 

@@ -30,10 +30,8 @@ AggregateFunctionPtr createAggregateFunctionAvgForDecimal(const IDataType * p, I
     if (const auto * dec_type = typeid_cast<const T *>(p))
     {
         AggregateFunctionPtr res;
-        auto [result_prec, result_scale] = AvgDecimalInferer::infer(
-            dec_type->getPrec(),
-            dec_type->getScale(),
-            div_precincrement);
+        auto [result_prec, result_scale]
+            = AvgDecimalInferer::infer(dec_type->getPrec(), dec_type->getScale(), div_precincrement);
         auto result_type = createDecimal(result_prec, result_scale);
         if (checkDecimal<Decimal32>(*result_type))
             res = AggregateFunctionPtr(createWithDecimalType<AggregateFunctionAvg, Decimal32>(
@@ -80,7 +78,8 @@ AggregateFunctionPtr createAggregateFunctionAvg(
     AggregateFunctionPtr res;
 
     Int32 div_precincrement = DEFAULT_DIV_PRECISION_INCREMENT;
-    if (context.getDAGContext()) {
+    if (context.getDAGContext())
+    {
         div_precincrement = context.getDAGContext()->getDivPrecisionIncrement();
     }
     const IDataType * p = argument_types[0].get();

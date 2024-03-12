@@ -96,15 +96,9 @@ AggregateFunctionPtr createAggregateFunctionSum(
     const IDataType * p = argument_types[0].get();
 
     if ((res = createDecimalFunction<Decimal32, Name>(p)) != nullptr) {}
-    else if ((res = createDecimalFunction<Decimal64, Name>(p)) != nullptr)
-    {
-    }
-    else if ((res = createDecimalFunction<Decimal128, Name>(p)) != nullptr)
-    {
-    }
-    else if ((res = createDecimalFunction<Decimal256, Name>(p)) != nullptr)
-    {
-    }
+    else if ((res = createDecimalFunction<Decimal64, Name>(p)) != nullptr) {}
+    else if ((res = createDecimalFunction<Decimal128, Name>(p)) != nullptr) {}
+    else if ((res = createDecimalFunction<Decimal256, Name>(p)) != nullptr) {}
     else
     {
         res = AggregateFunctionPtr(createWithNumericType<Function>(*p));

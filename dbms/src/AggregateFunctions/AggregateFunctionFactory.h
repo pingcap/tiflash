@@ -44,7 +44,8 @@ public:
       * Parameters are for "parametric" aggregate functions.
       * For example, in quantileWeighted(0.9)(x, weight), 0.9 is "parameter" and x, weight are "arguments".
       */
-    using Creator = std::function<AggregateFunctionPtr(const Context &, const String &, const DataTypes &, const Array &)>;
+    using Creator
+        = std::function<AggregateFunctionPtr(const Context &, const String &, const DataTypes &, const Array &)>;
 
     /// For compatibility with SQL, it's possible to specify that certain aggregate function name is case insensitive.
     enum CaseSensitiveness

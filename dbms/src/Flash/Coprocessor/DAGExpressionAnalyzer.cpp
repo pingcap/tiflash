@@ -166,7 +166,8 @@ void appendAggDescription(
 
     aggregate.column_name = func_string;
     aggregate.parameters = Array();
-    aggregate.function = AggregateFunctionFactory::instance().get(context, agg_func_name, arg_types, {}, 0, empty_input_as_null);
+    aggregate.function
+        = AggregateFunctionFactory::instance().get(context, agg_func_name, arg_types, {}, 0, empty_input_as_null);
     aggregate.function->setCollators(arg_collators);
 
     aggregated_columns.emplace_back(func_string, aggregate.function->getReturnType());
@@ -468,7 +469,8 @@ void DAGExpressionAnalyzer::buildGroupConcat(
     aggregate.column_name = func_string;
     aggregate.parameters = Array();
     /// if there is group by clause, there is no need to consider the empty input case
-    aggregate.function = AggregateFunctionFactory::instance().get(context, agg_func_name, types, {}, 0, result_is_nullable);
+    aggregate.function
+        = AggregateFunctionFactory::instance().get(context, agg_func_name, types, {}, 0, result_is_nullable);
 
     /// TODO(FZH) deliver these arguments through aggregate.parameters of Array() type to keep the same code fashion, the special arguments
     /// sort_description, all_columns_names_and_types can be set like the way of collators
