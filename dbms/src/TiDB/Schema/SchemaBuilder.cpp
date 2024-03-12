@@ -1006,8 +1006,8 @@ void SchemaBuilder<Getter, NameMapper>::applyDropSchema(const String & db_name)
     // 2. Use the same GC safe point as TiDB.
     // In such way our database (and its belonging tables) will be GC-ed later than TiDB, which is safe and correct.
     auto & tmt_context = context.getTMTContext();
-    auto tombstone = tmt_context.getPDClient()->getTS();
-    db->alterTombstone(context, tombstone, nullptr);
+    auto tombstone = PDClientHelper::getTSO(tmt_context.getPDClient(), PDClientHelper::get_tso_maxtime);
+    db->alterTombstone(context, tombstone, /*new_db_info*/ nullptr); // keep the old db_info
 
     LOG_INFO(log, "Tombstoned database {}, tombstone={}", db_name, tombstone);
 }
@@ -1242,7 +1242,7 @@ void SchemaBuilder<Getter, NameMapper>::applyDropPhysicalTable(const String & db
     }
     GET_METRIC(tiflash_schema_internal_ddl_count, type_drop_table).Increment();
     LOG_INFO(log, "Tombstoning table {}.{}", db_name, name_mapper.debugTableName(storage->getTableInfo()));
-    const UInt64 tombstone_ts = tmt_context.getPDClient()->getTS();
+    const auto tombstone_ts = PDClientHelper::getTSO(tmt_context.getPDClient(), PDClientHelper::get_tso_maxtime);
     AlterCommands commands;
     {
         AlterCommand command;

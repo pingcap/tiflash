@@ -231,9 +231,8 @@ TiDB::DBInfoPtr SchemaGetter::getDatabase(DatabaseID db_id)
     if (json.empty())
         return nullptr;
 
-    LOG_DEBUG(log, "Get DB Info from TiKV : " + json);
-    auto db_info = std::make_shared<TiDB::DBInfo>(json);
-    return db_info;
+    LOG_DEBUG(log, "Get DatabaseInfo from TiKV, database_id={} {}", db_id, json);
+    return std::make_shared<TiDB::DBInfo>(json);
 }
 
 TiDB::TableInfoPtr SchemaGetter::getTableInfo(DatabaseID db_id, TableID table_id)
@@ -247,9 +246,8 @@ TiDB::TableInfoPtr SchemaGetter::getTableInfo(DatabaseID db_id, TableID table_id
     String table_info_json = TxnStructure::hGet(snap, db_key, table_key);
     if (table_info_json.empty())
         return nullptr;
-    LOG_DEBUG(log, "Get Table Info from TiKV : " + table_info_json);
-    TiDB::TableInfoPtr table_info = std::make_shared<TiDB::TableInfo>(table_info_json);
-    return table_info;
+    LOG_DEBUG(log, "Get TableInfo from TiKV, table_id={} {}", table_id, table_info_json);
+    return std::make_shared<TiDB::TableInfo>(table_info_json, keyspace_id);
 }
 
 std::vector<TiDB::DBInfoPtr> SchemaGetter::listDBs()
@@ -275,7 +273,7 @@ std::vector<TiDB::TableInfoPtr> SchemaGetter::listTables(DatabaseID db_id)
     auto db_key = getDBKey(db_id);
     if (!checkDBExists(db_key))
     {
-        throw TiFlashException("DB Not Exists!", Errors::Table::SyncError);
+        throw TiFlashException(fmt::format("The database does not exist, database_id={}", db_id), Errors::Table::SyncError);
     }
 
     std::vector<TiDB::TableInfoPtr> res;
@@ -297,5 +295,4 @@ std::vector<TiDB::TableInfoPtr> SchemaGetter::listTables(DatabaseID db_id)
     return res;
 }
 
-// end of namespace.
 } // namespace DB
