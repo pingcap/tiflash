@@ -247,7 +247,7 @@ TiDB::TableInfoPtr SchemaGetter::getTableInfo(DatabaseID db_id, TableID table_id
     if (table_info_json.empty())
         return nullptr;
     LOG_DEBUG(log, "Get TableInfo from TiKV, table_id={} {}", table_id, table_info_json);
-    return std::make_shared<TiDB::TableInfo>(table_info_json, keyspace_id);
+    return std::make_shared<TiDB::TableInfo>(table_info_json);
 }
 
 std::vector<TiDB::DBInfoPtr> SchemaGetter::listDBs()
