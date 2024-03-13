@@ -825,7 +825,7 @@ private:
         {
             Int32 div_prec_incr = DEFAULT_DIV_PRECISION_INCREMENT;
             // For some test cases, context won't have DAGContext, use default value
-            if likely (context.getDAGContext())
+            if likely (context.getDAGContext() != nullptr)
             {
                 div_prec_incr = context.getDAGContext()->getDivPrecisionIncrement();
             }
