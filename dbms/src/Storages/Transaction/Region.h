@@ -211,7 +211,6 @@ private:
     // Private methods no need to lock mutex, normally
 
     void doInsert(ColumnFamilyType type, TiKVKey && key, TiKVValue && value);
-    void doCheckTable(const DecodedTiKVKey & key) const;
     void doRemove(ColumnFamilyType type, const TiKVKey & key);
 
     RegionDataReadInfo readDataByWriteIt(const RegionData::ConstWriteCFIter & write_it, bool need_value = true) const;
