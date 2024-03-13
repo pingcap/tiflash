@@ -823,18 +823,23 @@ private:
         }
         else
         {
+            Int32 div_prec_incr = DEFAULT_DIV_PRECISION_INCREMENT;
+            // For some test cases, context won't have DAGContext, use default value
+            if likely (context.getDAGContext())
+            {
+                div_prec_incr = context.getDAGContext()->getDivPrecisionIncrement();
+            }
             // Treat integer as a kind of decimal;
             if constexpr (std::is_integral_v<LeftFieldType>)
             {
                 PrecType left_prec = IntPrec<LeftFieldType>::prec;
                 auto [right_prec, right_scale] = getPrecAndScale(arguments[1].get());
-
                 auto [result_prec, result_scale] = Op<LeftFieldType, RightFieldType>::ResultPrecInferer::infer(
                     left_prec,
                     0,
                     right_prec,
                     right_scale,
-                    context.getDAGContext()->getDivPrecisionIncrement());
+                    div_prec_incr);
                 return createDecimal(result_prec, result_scale);
             }
             else if constexpr (std::is_integral_v<RightFieldType>)
@@ -846,7 +851,7 @@ private:
                     left_scale,
                     right_prec,
                     0,
-                    context.getDAGContext()->getDivPrecisionIncrement());
+                    div_prec_incr);
                 return createDecimal(result_prec, result_scale);
             }
             auto [left_prec, left_scale] = getPrecAndScale(arguments[0].get());
@@ -856,7 +861,7 @@ private:
                 left_scale,
                 right_prec,
                 right_scale,
-                context.getDAGContext()->getDivPrecisionIncrement());
+                div_prec_incr);
 
             return createDecimal(result_prec, result_scale);
         }
