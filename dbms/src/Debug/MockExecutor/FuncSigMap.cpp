@@ -92,6 +92,7 @@ std::unordered_map<String, tipb::ExprType> agg_func_name_to_sig({
     {"first_row", tipb::ExprType::First},
     {"uniqRawRes", tipb::ExprType::ApproxCountDistinct},
     {"group_concat", tipb::ExprType::GroupConcat},
+    {"avg", tipb::ExprType::Avg},
 });
 
 std::unordered_map<String, tipb::ExprType> window_func_name_to_sig({

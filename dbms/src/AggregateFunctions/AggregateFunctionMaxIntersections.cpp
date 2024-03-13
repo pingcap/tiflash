@@ -47,7 +47,10 @@ void registerAggregateFunctionsMaxIntersections(AggregateFunctionFactory & facto
 {
     factory.registerFunction(
         "maxIntersections",
-        [](const std::string & name, const DataTypes & argument_types, const Array & parameters) {
+        [](const Context & /* context not used */,
+           const std::string & name,
+           const DataTypes & argument_types,
+           const Array & parameters) {
             return createAggregateFunctionMaxIntersections(
                 AggregateFunctionIntersectionsKind::Count,
                 name,
@@ -57,7 +60,10 @@ void registerAggregateFunctionsMaxIntersections(AggregateFunctionFactory & facto
 
     factory.registerFunction(
         "maxIntersectionsPosition",
-        [](const std::string & name, const DataTypes & argument_types, const Array & parameters) {
+        [](const Context & /* context not used */,
+           const std::string & name,
+           const DataTypes & argument_types,
+           const Array & parameters) {
             return createAggregateFunctionMaxIntersections(
                 AggregateFunctionIntersectionsKind::Position,
                 name,

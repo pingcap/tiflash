@@ -47,6 +47,7 @@ class AggregateFunctionAvg final
     ScaleType scale;
     PrecType result_prec;
     ScaleType result_scale;
+    ScaleType div_precincrement;
 
 public:
     AggregateFunctionAvg() = default;

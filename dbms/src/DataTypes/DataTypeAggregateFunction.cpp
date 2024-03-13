@@ -21,6 +21,7 @@
 #include <DataTypes/DataTypeFactory.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
+#include <Interpreters/Context.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
@@ -297,13 +298,12 @@ Field DataTypeAggregateFunction::getDefault() const
     return field;
 }
 
-
 bool DataTypeAggregateFunction::equals(const IDataType & rhs) const
 {
     return typeid(rhs) == typeid(*this) && getName() == rhs.getName();
 }
 
-
+/// This function is only used in test
 static DataTypePtr create(const ASTPtr & arguments)
 {
     String function_name;
@@ -360,7 +360,9 @@ static DataTypePtr create(const ASTPtr & arguments)
     if (function_name.empty())
         throw Exception("Logical error: empty name of aggregate function passed", ErrorCodes::LOGICAL_ERROR);
 
-    function = AggregateFunctionFactory::instance().get(function_name, argument_types, params_row);
+    /// This is for test usage only
+    auto context_ptr = Context::createGlobal();
+    function = AggregateFunctionFactory::instance().get(*context_ptr, function_name, argument_types, params_row);
     return std::make_shared<DataTypeAggregateFunction>(function, argument_types, params_row);
 }
 
@@ -368,6 +370,5 @@ void registerDataTypeAggregateFunction(DataTypeFactory & factory)
 {
     factory.registerDataType("AggregateFunction", create);
 }
-
 
 } // namespace DB
