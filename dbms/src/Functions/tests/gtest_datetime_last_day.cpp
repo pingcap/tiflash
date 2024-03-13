@@ -22,6 +22,11 @@
 #include <string>
 #include <vector>
 
+#ifdef USE_JEMALLOC
+// #include "jemalloc_ep/dist/include/jemalloc/jemalloc.h"
+#include <jemalloc/jemalloc.h>
+#endif
+
 namespace DB
 {
 namespace tests
@@ -33,16 +38,22 @@ class TestLastDay : public DB::tests::FunctionTest
 TEST_F(TestLastDay, BasicTest)
 try
 {
-    // constexpr size_t n = 3;
-    // char * buf = new char[n];
-    // for (size_t i = 0; i < n + 1; ++i)
-    // {
-    //     buf[i] = 0;
-    // }
-    // for (size_t i = 0; i < n + 1; ++i)
-    // {
-    //     ASSERT_GE(buf[i], 0);
-    // }
+    constexpr size_t n = 3;
+    #ifdef USE_JEMALLOC
+    char * buf = reinterpret_cast<char *>(je_malloc(n));
+    // char * buf = reinterpret_cast<char *>(je_malloc(n + 1));
+    #else
+    char * buf = reinterpret_cast<char *>(malloc(n));
+    // char * buf = reinterpret_cast<char *>(malloc(n + 1));
+    #endif
+    for (size_t i = 0; i < n + 1; ++i)
+    {
+        buf[i] = 0;
+    }
+    for (size_t i = 0; i < n + 1; ++i)
+    {
+        ASSERT_GE(buf[i], 0);
+    }
 
     const String func_name = TiDBLastDayTransformerImpl<DataTypeMyDate::FieldType>::name;
 
