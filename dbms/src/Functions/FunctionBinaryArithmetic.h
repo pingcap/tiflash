@@ -765,12 +765,16 @@ public:
 
     explicit FunctionBinaryArithmetic(const Context & context)
         : context(context)
+        , div_prec_incr(
+              context.getDAGContext() ? context.getDAGContext()->getDivPrecisionIncrement()
+                                      : DEFAULT_DIV_PRECISION_INCREMENT)
     {}
 
     bool useDefaultImplementationForNulls() const override { return default_impl_for_nulls; }
 
 private:
     const Context & context;
+    const Int32 div_prec_incr;
 
     template <typename ResultDataType>
     bool checkRightTypeImpl(DataTypePtr & type_res) const
@@ -823,12 +827,6 @@ private:
         }
         else
         {
-            Int32 div_prec_incr = DEFAULT_DIV_PRECISION_INCREMENT;
-            // For some test cases, context won't have DAGContext, use default value
-            if likely (context.getDAGContext() != nullptr)
-            {
-                div_prec_incr = context.getDAGContext()->getDivPrecisionIncrement();
-            }
             // Treat integer as a kind of decimal;
             if constexpr (std::is_integral_v<LeftFieldType>)
             {
