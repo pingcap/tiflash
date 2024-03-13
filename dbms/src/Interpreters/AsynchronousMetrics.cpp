@@ -39,7 +39,8 @@
 #include <chrono>
 
 #if USE_JEMALLOC
-#include "jemalloc_ep/dist/include/jemalloc/jemalloc.h"
+// #include "jemalloc_ep/dist/include/jemalloc/jemalloc.h"
+#include <jemalloc/jemalloc.h>
 #endif
 
 #if USE_MIMALLOC

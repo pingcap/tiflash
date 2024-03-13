@@ -66,6 +66,15 @@
       }
     },
     {
+      "name": "dev-je",
+      "inherits": [
+        "base-debug",
+        "tests-on"
+      ],
+      "displayName": "Development: DEBUG build with tests enabled jemalloc submodule",
+      "cacheVariables": {"JEMALLOC_SUBMODULE": "ON"}
+    },
+    {
       "name": "dev",
       "inherits": [
         "base-debug",
