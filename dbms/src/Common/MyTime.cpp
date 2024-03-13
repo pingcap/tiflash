@@ -26,6 +26,8 @@
 #include <initializer_list>
 #include <vector>
 
+UInt32 * YmdArray(UInt32 y, UInt32 m, UInt32 d);
+
 namespace DB
 {
 namespace ErrorCodes
@@ -355,10 +357,7 @@ MyTimeBase::MyTimeBase(
 
 UInt64 MyTimeBase::toPackedUInt() const
 {
-    auto *p = reinterpret_cast<UInt32*>(malloc(2 * sizeof(UInt32)));
-    p[0] = year;
-    p[1] = month;
-    p[2] = day;
+    auto p = YmdArray(year, month, day);
     UInt64 ymd = ((p[0] * 13 + p[1]) << 5) | p[2];
     UInt64 hms = (hour << 12) | (minute << 6) | second;
     free(p);

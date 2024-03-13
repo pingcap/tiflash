@@ -15,6 +15,15 @@
 #include <Common/FmtUtils.h>
 #include <Common/MyDuration.h>
 
+UInt32* YmdArray(UInt32 y, UInt32 m, UInt32 d) {
+    // auto *p = reinterpret_cast<UInt32*>(malloc(3 * sizeof(UInt32) - 1));
+    auto *p = reinterpret_cast<UInt32*>(malloc(3 * sizeof(UInt32)));
+    p[0] = y;
+    p[1] = m;
+    p[2] = d;
+    return p;
+}
+
 namespace DB
 {
 DurationParts MyDuration::splitDuration() const

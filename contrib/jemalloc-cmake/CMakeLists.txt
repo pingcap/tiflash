@@ -96,7 +96,7 @@ if (ARCH_LINUX)
         set (JEMALLOC_CONFIG_MALLOC_CONF "percpu_arena:percpu,oversize_threshold:0,muzzy_decay_ms:5000,dirty_decay_ms:5000")
     endif ()
 else ()
-    set (JEMALLOC_CONFIG_MALLOC_CONF "oversize_threshold:0,muzzy_decay_ms:5000,dirty_decay_ms:5000")
+    set (JEMALLOC_CONFIG_MALLOC_CONF "invalid:invalid,stats_print:true,oversize_threshold:0,muzzy_decay_ms:5000,dirty_decay_ms:5000")
 endif ()
 
 message (STATUS "jemalloc malloc_conf: ${JEMALLOC_CONFIG_MALLOC_CONF}")
