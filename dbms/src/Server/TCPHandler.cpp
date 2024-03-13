@@ -22,7 +22,6 @@
 #include <DataStreams/AsynchronousBlockInputStream.h>
 #include <DataStreams/NativeBlockInputStream.h>
 #include <DataStreams/NativeBlockOutputStream.h>
-#include <Flash/Coprocessor/DAGContext.h>
 #include <IO/Buffer/ReadBufferFromPocoSocket.h>
 #include <IO/Buffer/WriteBufferFromPocoSocket.h>
 #include <IO/Compression/CompressedReadBuffer.h>
@@ -182,10 +181,6 @@ void TCPHandler::runImpl()
             state.maybe_compressed_in.reset(); /// For more accurate accounting by MemoryTracker.
 
             /// Processing Query
-            /// Hack DAGContext for test usage
-            auto dag_context_ptr = std::make_unique<DAGContext>(1ULL);
-            if (!query_context.getDAGContext())
-                query_context.setDAGContext(dag_context_ptr.get());
             state.io = executeQuery(state.query, query_context, false, state.stage);
             if (state.io.out)
                 state.need_receive_data_for_insert = true;
