@@ -188,6 +188,12 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       Histogram,                                                                                                                    \
       F(type_sync_schema_apply_duration, {{"type", "sync_schema_duration"}}, ExpBuckets{0.001, 2, 20}),                             \
       F(type_sync_table_schema_apply_duration, {{"type", "sync_table_schema_duration"}}, ExpBuckets{0.001, 2, 20}))                 \
+    M(tiflash_raft_proxy_thread_memory_usage, "Memory Usage of Proxy by thread", Gauge,                                             \
+      F(type_raftstore, {"type", "raftstore"}),                                                                                     \
+      F(type_apply_low, {"type", "apply_low"}),                                                                                     \
+      F(type_sst_importer, {"type", "sst_importer"}),                                                                               \
+      F(type_region_task, {"type", "region_task"}),                                                                                 \
+      F(type_apply, {"type", "apply"}))                                                                                             \
     M(tiflash_raft_read_index_count, "Total number of raft read index", Counter)                                                    \
     M(tiflash_stale_read_count, "Total number of stale read", Counter)                                                              \
     M(tiflash_raft_read_index_duration_seconds,                                                                                     \

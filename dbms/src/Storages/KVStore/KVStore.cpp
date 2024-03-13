@@ -68,6 +68,17 @@ KVStore::KVStore(Context & context)
 {
     // default config about compact-log: rows 40k, bytes 32MB, gap 200.
     LOG_INFO(log, "KVStore inited, eager_raft_log_gc_enabled={}", eager_raft_log_gc_enabled);
+    using namespace std::chrono_literals;
+    monitoring_thread = new std::thread([&](){
+        while(true) {
+            std::unique_lock l(monitoring_mut);
+            monitoring_cv.wait_for(l, 5000ms, [&](){
+                return is_terminated;
+            });
+            if (is_terminated) return;
+            reportThreadAllocInfo();
+        }
+    });
 }
 
 void KVStore::restore(PathPool & path_pool, const TiFlashRaftProxyHelper * proxy_helper)
@@ -425,6 +436,13 @@ void KVStore::StoreMeta::update(Base && base_)
 KVStore::~KVStore()
 {
     LOG_INFO(log, "Destroy KVStore");
+    {
+        std::unique_lock lk(monitoring_mut);
+        is_terminated = true;
+        monitoring_cv.notify_all();
+    }
+    monitoring_thread->join();
+    delete monitoring_thread;
     releaseReadIndexWorkers();
 }
 
@@ -481,6 +499,49 @@ RegionPtr KVStore::genRegionPtr(metapb::Region && region, UInt64 peer_id, UInt64
 RegionTaskLock KVStore::genRegionTaskLock(UInt64 region_id) const
 {
     return region_manager.genRegionTaskLock(region_id);
+}
+
+static std::string getThreadNameAggPrefix(const std::string & s) {
+    if(auto pos = s.find_last_of('-'); pos != std::string::npos) {
+        return s.substr(0, pos);
+    }
+    return s;
+}
+
+void KVStore::registerThreadAllocInfo(std::string_view thdname, uint64_t type, uint64_t value) {
+    if (value == 0) return;
+    std::unique_lock l(memory_allocation_mut);
+    LOG_INFO(DB::Logger::get(), "!!!!!!! RRR register");
+    auto [it, ok] = memory_allocation_map.emplace(thdname, ThreadInfoJealloc());
+    if (type == 0) {
+        it->second.allocated_ptr = value;
+    } else if (type == 1) {
+        it->second.deallocated_ptr = value;
+    }
+}
+
+void KVStore::reportThreadAllocInfo() {
+    std::shared_lock l(memory_allocation_mut);
+    std::unordered_map<std::string, uint64_t> agg_remaining;
+    for (const auto & [k, v]: memory_allocation_map) {
+        auto agg_thread_name = getThreadNameAggPrefix(k);
+        auto [it, ok] = agg_remaining.emplace(agg_thread_name, 0);
+        it->second += v.remaining();
+    }
+
+    for (const auto & [k, v]: agg_remaining) {
+        if(k == "raftstore") {
+            GET_METRIC(tiflash_raft_proxy_thread_memory_usage, type_raftstore).Set(v);
+        } else if(k == "apply") {
+            GET_METRIC(tiflash_raft_proxy_thread_memory_usage, type_apply).Set(v);
+        } else if(k == "apply-low") {
+            GET_METRIC(tiflash_raft_proxy_thread_memory_usage, type_apply_low).Set(v);
+        } else if(k == "sst-importer") {
+            GET_METRIC(tiflash_raft_proxy_thread_memory_usage, type_sst_importer).Set(v);
+        } else if(k == "region-task") {
+            GET_METRIC(tiflash_raft_proxy_thread_memory_usage, type_region_task).Set(v);
+        }
+    }
 }
 
 } // namespace DB

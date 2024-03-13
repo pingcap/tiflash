@@ -206,6 +206,9 @@ FapSnapshotState QueryFapSnapshotState(
     uint64_t term);
 void ClearFapSnapshot(EngineStoreServerWrap * server, uint64_t region_id);
 bool KvstoreRegionExists(EngineStoreServerWrap * server, uint64_t region_id);
+void ReportThreadAllocateInfo(EngineStoreServerWrap *,
+                                BaseBuffView name, uint64_t type,
+                                uint64_t value);
 }
 
 inline EngineStoreServerHelper GetEngineStoreServerHelper(EngineStoreServerWrap * tiflash_instance_wrap)
@@ -257,7 +260,7 @@ inline EngineStoreServerHelper GetEngineStoreServerHelper(EngineStoreServerWrap 
         .fn_fast_add_peer = FastAddPeer,
         .fn_query_fap_snapshot_state = QueryFapSnapshotState,
         .fn_clear_fap_snapshot = ClearFapSnapshot,
-        .fn_kvstore_region_exists = KvstoreRegionExists,
+        .fn_report_thread_allocate_info = ReportThreadAllocateInfo,
     };
 }
 

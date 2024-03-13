@@ -1030,4 +1030,24 @@ BaseBuffView GetLockByKey(const EngineStoreServerWrap * server, uint64_t region_
     }
 }
 
+void ReportThreadAllocateInfo(EngineStoreServerWrap * server, BaseBuffView name, uint64_t type, uint64_t value)
+{
+    try
+    {
+        LOG_INFO(DB::Logger::get(), "!!!!!!! RRR report 1");
+        if(server == nullptr) return;
+        LOG_INFO(DB::Logger::get(), "!!!!!!! RRR report 2");
+        if(server->tmt == nullptr) return;
+        LOG_INFO(DB::Logger::get(), "!!!!!!! RRR report 3");
+        if(server->tmt->getKVStore() == nullptr) return;
+        LOG_INFO(DB::Logger::get(), "!!!!!!! RRR report 4");
+        server->tmt->getKVStore()->registerThreadAllocInfo(buffToStrView(name), type, value);
+    }
+    catch (...)
+    {
+        tryLogCurrentFatalException(__PRETTY_FUNCTION__);
+        exit(-1);
+    }
+}
+
 } // namespace DB
