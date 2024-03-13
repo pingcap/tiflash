@@ -119,6 +119,11 @@ else ()
     message (FATAL_ERROR "internal jemalloc: This OS is not supported")
 endif ()
 
+if (APPLE)
+        set (JEMALLOC_PREFIX "je_")
+        set (JEMALLOC_CPREFIX "JE_")
+        endif ()
+
 if (ARCH_AMD64)
     if (USE_MUSL)
         set(JEMALLOC_INCLUDE_PREFIX "${JEMALLOC_INCLUDE_PREFIX}_x86_64_musl")
@@ -137,10 +142,13 @@ endif ()
 
 configure_file(${JEMALLOC_INCLUDE_PREFIX}/jemalloc/internal/jemalloc_internal_defs.h.in
         ${JEMALLOC_INCLUDE_PREFIX}/jemalloc/internal/jemalloc_internal_defs.h)
+configure_file(include/jemalloc/jemalloc_rename.h.in
+        include/jemalloc/jemalloc_rename.h)
+
 target_include_directories(jemalloc SYSTEM PRIVATE
         "${CMAKE_CURRENT_BINARY_DIR}/${JEMALLOC_INCLUDE_PREFIX}/jemalloc/internal")
 
-target_include_directories(jemalloc PUBLIC ${JEMALLOC_SOURCE_DIR}/include ${TiFlash_SOURCE_DIR}/contrib/jemalloc-cmake/include)
+target_include_directories(jemalloc PUBLIC "${CMAKE_CURRENT_BINARY_DIR}/include/jemalloc" ${JEMALLOC_SOURCE_DIR}/include ${TiFlash_SOURCE_DIR}/contrib/jemalloc-cmake/include)
 
 target_compile_definitions(jemalloc PRIVATE -DJEMALLOC_NO_PRIVATE_NAMESPACE)
 
