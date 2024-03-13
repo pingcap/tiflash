@@ -93,13 +93,22 @@
       "cacheVariables": {}
     },
     {
+      "name": "asan-je-ep",
+      "inherits": [
+        "base-asan",
+        "tests-on"
+      ],
+      "displayName": "AddressSanitizer: ASAN build with tests enabled with jemalloc as ep",
+      "cacheVariables": {}
+    },
+    {
       "name": "asan",
       "inherits": [
         "base-asan",
         "tests-on"
       ],
       "displayName": "AddressSanitizer: ASAN build with tests enabled",
-      "cacheVariables": {}
+      "cacheVariables": {"JEMALLOC_SUBMODULE": "ON"}
     },
     {
       "name": "tsan",
