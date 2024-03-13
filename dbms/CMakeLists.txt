@@ -183,6 +183,7 @@ target_link_libraries (tiflash_common_io
     ${LZ4_LIBRARY}
     ${ZSTD_LIBRARY}
     ${QPL_LIBRARY}
+    trle
     ${DOUBLE_CONVERSION_LIBRARIES}
     ${Poco_Net_LIBRARY}
     ${Poco_Data_LIBRARY}

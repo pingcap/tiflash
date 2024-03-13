@@ -142,4 +142,7 @@
 	url = https://github.com/intel/qpl.git
 [submodule "contrib/simdjson"]
 	path = contrib/simdjson
-	url = https://github.com/simdjson/simdjson
+	url = https://github.com/simdjson/simdjson.git
+[submodule "contrib/Turbo-Run-Length-Encoding"]
+	path = contrib/Turbo-Run-Length-Encoding
+	url = https://github.com/powturbo/Turbo-Run-Length-Encoding.git

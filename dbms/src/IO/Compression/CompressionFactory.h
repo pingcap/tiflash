@@ -18,6 +18,7 @@
 #include <IO/Compression/CompressionCodecDelta.h>
 #include <IO/Compression/CompressionCodecLZ4.h>
 #include <IO/Compression/CompressionCodecNone.h>
+#include <IO/Compression/CompressionCodecRLE.h>
 #include <IO/Compression/CompressionCodecZSTD.h>
 #include <IO/Compression/CompressionSettings.h>
 #include <IO/Compression/ICompressionCodec.h>
@@ -78,6 +79,8 @@ public:
 #endif
         case static_cast<UInt8>(CompressionMethodByte::Delta):
             return std::make_shared<CompressionCodecDelta>(settings.delta_bytes_size);
+        case static_cast<UInt8>(CompressionMethodByte::RLE):
+            return std::make_shared<CompressionCodecRLE>(settings.delta_bytes_size);
         case static_cast<UInt8>(CompressionMethodByte::NONE):
             settings.method = CompressionMethod::NONE;
             break;
