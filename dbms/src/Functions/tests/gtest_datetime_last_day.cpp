@@ -33,16 +33,16 @@ class TestLastDay : public DB::tests::FunctionTest
 TEST_F(TestLastDay, BasicTest)
 try
 {
-    constexpr size_t n = 3;
-    char * buf = new char[n];
-    for (size_t i = 0; i < n + 1; ++i)
-    {
-        buf[i] = 0;
-    }
-    for (size_t i = 0; i < n + 1; ++i)
-    {
-        ASSERT_GE(buf[i], 0);
-    }
+    // constexpr size_t n = 3;
+    // char * buf = new char[n];
+    // for (size_t i = 0; i < n + 1; ++i)
+    // {
+    //     buf[i] = 0;
+    // }
+    // for (size_t i = 0; i < n + 1; ++i)
+    // {
+    //     ASSERT_GE(buf[i], 0);
+    // }
 
     const String func_name = TiDBLastDayTransformerImpl<DataTypeMyDate::FieldType>::name;
 
@@ -52,6 +52,15 @@ try
     dag_context.addFlag(TiDBSQLFlags::TRUNCATE_AS_WARNING);
     dag_context.clearWarnings();
 
+    auto res = executeFunction(
+        func_name,
+        {createColumn<MyDate>(
+            {MyDate{2001, 2, 10}.toPackedUInt(),
+             MyDate{2000, 2, 10}.toPackedUInt(),
+             MyDate{2000, 6, 10}.toPackedUInt(),
+             MyDate{2000, 5, 10}.toPackedUInt(),
+             MyDate{2000, 0, 10}.toPackedUInt()})});
+
     // nullable column test
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<MyDate>>(
@@ -60,14 +69,7 @@ try
              MyDate{2000, 6, 30}.toPackedUInt(),
              MyDate{2000, 5, 31}.toPackedUInt(),
              {}}),
-        executeFunction(
-            func_name,
-            {createColumn<MyDate>(
-                {MyDate{2001, 2, 10}.toPackedUInt(),
-                 MyDate{2000, 2, 10}.toPackedUInt(),
-                 MyDate{2000, 6, 10}.toPackedUInt(),
-                 MyDate{2000, 5, 10}.toPackedUInt(),
-                 MyDate{2000, 0, 10}.toPackedUInt()})}));
+        res);
 
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<MyDate>>(

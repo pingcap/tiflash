@@ -355,8 +355,13 @@ MyTimeBase::MyTimeBase(
 
 UInt64 MyTimeBase::toPackedUInt() const
 {
-    UInt64 ymd = ((year * 13 + month) << 5) | day;
+    auto *p = reinterpret_cast<UInt32*>(malloc(2 * sizeof(UInt32)));
+    p[0] = year;
+    p[1] = month;
+    p[2] = day;
+    UInt64 ymd = ((p[0] * 13 + p[1]) << 5) | p[2];
     UInt64 hms = (hour << 12) | (minute << 6) | second;
+    free(p);
     return (ymd << 17 | hms) << 24 | micro_second;
 }
 
