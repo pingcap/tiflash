@@ -49,10 +49,32 @@ try
             {createColumn<Decimal32>(std::make_tuple(8, 1), {"2.2", "3.3"}),
              createColumn<Decimal32>(std::make_tuple(2, 0), {"3", "2"})}));
 
+    /// div_precision_increment 5
     context->getDAGContext()->setDivPrecisionIncrement(5);
-    /// Decimal32
     ASSERT_COLUMN_EQ_V2(
         createColumn<Nullable<Decimal64>>(std::make_tuple(13, 6), {"0.733333", "1.650000"}),
+        DB::tests::executeFunction(
+            *context,
+            func_name,
+            {createColumn<Decimal32>(std::make_tuple(8, 1), {"2.2", "3.3"}),
+             createColumn<Decimal32>(std::make_tuple(2, 0), {"3", "2"})}));
+
+    /// div_precision_increment 0
+    context->getDAGContext()->setDivPrecisionIncrement(0);
+    ASSERT_COLUMN_EQ_V2(
+        createColumn<Nullable<Decimal32>>(std::make_tuple(8, 1), {"0.7", "1.7"}),
+        DB::tests::executeFunction(
+            *context,
+            func_name,
+            {createColumn<Decimal32>(std::make_tuple(8, 1), {"2.2", "3.3"}),
+             createColumn<Decimal32>(std::make_tuple(2, 0), {"3", "2"})}));
+
+    /// div_precision_increment 30
+    context->getDAGContext()->setDivPrecisionIncrement(30);
+    ASSERT_COLUMN_EQ_V2(
+        createColumn<Nullable<Decimal128>>(
+            std::make_tuple(38, 30),
+            {"0.733333333333333333333333333333", "1.650000000000000000000000000000"}),
         DB::tests::executeFunction(
             *context,
             func_name,
