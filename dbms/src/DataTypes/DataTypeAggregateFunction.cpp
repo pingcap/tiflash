@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <Columns/ColumnAggregateFunction.h>
 #include <Common/FieldVisitors.h>
 #include <Common/FmtUtils.h>
@@ -20,7 +21,10 @@
 #include <DataTypes/DataTypeFactory.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
+#include <Interpreters/Context.h>
+#include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
+#include <Parsers/ASTLiteral.h>
 
 
 namespace DB
@@ -294,10 +298,77 @@ Field DataTypeAggregateFunction::getDefault() const
     return field;
 }
 
-
 bool DataTypeAggregateFunction::equals(const IDataType & rhs) const
 {
     return typeid(rhs) == typeid(*this) && getName() == rhs.getName();
+}
+
+/// This function is only used in test
+static DataTypePtr create(const ASTPtr & arguments)
+{
+    String function_name;
+    AggregateFunctionPtr function;
+    DataTypes argument_types;
+    Array params_row;
+
+    if (!arguments || arguments->children.empty())
+        throw Exception(
+            "Data type AggregateFunction requires parameters: "
+            "name of aggregate function and list of data types for arguments",
+            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+
+    if (const auto * parametric = typeid_cast<const ASTFunction *>(arguments->children[0].get()))
+    {
+        if (parametric->parameters)
+            throw Exception("Unexpected level of parameters to aggregate function", ErrorCodes::SYNTAX_ERROR);
+        function_name = parametric->name;
+
+        const ASTs & parameters = typeid_cast<const ASTExpressionList &>(*parametric->arguments).children;
+        params_row.resize(parameters.size());
+
+        for (size_t i = 0; i < parameters.size(); ++i)
+        {
+            const auto * lit = typeid_cast<const ASTLiteral *>(parameters[i].get());
+            if (!lit)
+                throw Exception(
+                    "Parameters to aggregate functions must be literals",
+                    ErrorCodes::PARAMETERS_TO_AGGREGATE_FUNCTIONS_MUST_BE_LITERALS);
+
+            params_row[i] = lit->value;
+        }
+    }
+    else if (const ASTIdentifier * identifier = typeid_cast<ASTIdentifier *>(arguments->children[0].get()))
+    {
+        function_name = identifier->name;
+    }
+    else if (typeid_cast<ASTLiteral *>(arguments->children[0].get()))
+    {
+        throw Exception(
+            "Aggregate function name for data type AggregateFunction must be passed as identifier (without quotes) or "
+            "function",
+            ErrorCodes::BAD_ARGUMENTS);
+    }
+    else
+        throw Exception(
+            "Unexpected AST element passed as aggregate function name for data type AggregateFunction. Must be "
+            "identifier or function.",
+            ErrorCodes::BAD_ARGUMENTS);
+
+    for (size_t i = 1; i < arguments->children.size(); ++i)
+        argument_types.push_back(DataTypeFactory::instance().get(arguments->children[i]));
+
+    if (function_name.empty())
+        throw Exception("Logical error: empty name of aggregate function passed", ErrorCodes::LOGICAL_ERROR);
+
+    /// This is for test usage only
+    auto context_ptr = Context::createGlobal();
+    function = AggregateFunctionFactory::instance().get(*context_ptr, function_name, argument_types, params_row);
+    return std::make_shared<DataTypeAggregateFunction>(function, argument_types, params_row);
+}
+
+void registerDataTypeAggregateFunction(DataTypeFactory & factory)
+{
+    factory.registerDataType("AggregateFunction", create);
 }
 
 } // namespace DB
