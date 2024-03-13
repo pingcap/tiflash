@@ -22,7 +22,7 @@
 #include <string>
 #include <vector>
 
-#ifdef USE_JEMALLOC
+#if USE_JEMALLOC
 // #include "jemalloc_ep/dist/include/jemalloc/jemalloc.h"
 #include <jemalloc/jemalloc.h>
 #endif
@@ -39,7 +39,7 @@ TEST_F(TestLastDay, BasicTest)
 try
 {
     constexpr size_t n = 3;
-    #ifdef USE_JEMALLOC
+    #if USE_JEMALLOC
     char * buf = reinterpret_cast<char *>(je_malloc(n));
     // char * buf = reinterpret_cast<char *>(je_malloc(n + 1));
     #else
