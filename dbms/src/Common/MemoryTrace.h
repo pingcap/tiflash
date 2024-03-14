@@ -13,6 +13,7 @@
 // limitations under the License.
 
 
+#include <tuple>
 #ifdef WITH_JEMALLOC
 #include <jemalloc/jemalloc.h>
 #endif

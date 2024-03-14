@@ -515,6 +515,8 @@ static std::string getThreadNameAggPrefix(const std::string_view & s)
 
 void KVStore::reportThreadAllocInfo(std::string_view thdname, ReportThreadAllocateInfoType type, uint64_t value)
 {
+    // Many threads have empty name, better just not handle.
+    if (thdname.empty()) return;
     std::unique_lock l(memory_allocation_mut);
     std::string tname(thdname.begin(), thdname.end());
     if (type == ReportThreadAllocateInfoType::Reset)
@@ -583,6 +585,9 @@ void KVStore::recordThreadAllocInfo()
 /// For those threads with shorter life, we must only update in their call chain.
 void KVStore::reportThreadAllocBatch(std::string_view name, ReportThreadAllocateInfoBatch data)
 {
+    // Many threads have empty name, better just not handle.
+    if (name.empty()) return;
+    // TODO(o11y) Could be costy.
     auto k = getThreadNameAggPrefix(name);
     int64_t v = static_cast<int64_t>(data.alloc) - static_cast<int64_t>(data.dealloc);
     auto & tiflash_metrics = TiFlashMetrics::instance();
