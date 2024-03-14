@@ -1032,19 +1032,21 @@ BaseBuffView GetLockByKey(const EngineStoreServerWrap * server, uint64_t region_
 
 void ReportThreadAllocateInfo(
     EngineStoreServerWrap * server,
+    uint64_t tid,
     BaseBuffView name,
     ReportThreadAllocateInfoType type,
     uint64_t value)
 {
     try
     {
+        UNUSED(tid);
         if (server == nullptr)
             return;
         if (server->tmt == nullptr)
             return;
         if (server->tmt->getKVStore() == nullptr)
             return;
-        server->tmt->getKVStore()->registerThreadAllocInfo(buffToStrView(name), type, value);
+        server->tmt->getKVStore()->reportThreadAllocInfo(buffToStrView(name), type, value);
     }
     catch (...)
     {
@@ -1053,17 +1055,18 @@ void ReportThreadAllocateInfo(
     }
 }
 
-void ReportThreadAllocateBatch(EngineStoreServerWrap * server, BaseBuffView name, ReportThreadAllocateInfoBatch data)
+void ReportThreadAllocateBatch(EngineStoreServerWrap * server, uint64_t tid, BaseBuffView name, ReportThreadAllocateInfoBatch data)
 {
     try
     {
+        UNUSED(tid);
         if (server == nullptr)
             return;
         if (server->tmt == nullptr)
             return;
         if (server->tmt->getKVStore() == nullptr)
             return;
-        server->tmt->getKVStore()->registerThreadAllocBatch(buffToStrView(name), data);
+        server->tmt->getKVStore()->reportThreadAllocBatch(buffToStrView(name), data);
     }
     catch (...)
     {

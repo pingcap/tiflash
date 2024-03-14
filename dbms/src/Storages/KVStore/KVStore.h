@@ -141,10 +141,6 @@ struct ThreadInfoJealloc
     }
     int64_t remaining() const
     {
-        if (deallocated_ptr == 0)
-            return 0;
-        if (allocated_ptr == 0)
-            return 0;
         return static_cast<int64_t>(allocated()) - static_cast<int64_t>(deallocated());
     }
 };
@@ -177,9 +173,9 @@ public:
     FileUsageStatistics getFileUsageStatistics() const;
     // Proxy will validate and refit the config items from the toml file.
     const ProxyConfigSummary & getProxyConfigSummay() const { return proxy_config_summary; }
-    void registerThreadAllocInfo(std::string_view, ReportThreadAllocateInfoType type, uint64_t value);
-    void registerThreadAllocBatch(std::string_view, ReportThreadAllocateInfoBatch data);
-    void reportThreadAllocInfo();
+    void reportThreadAllocInfo(std::string_view, ReportThreadAllocateInfoType type, uint64_t value);
+    void reportThreadAllocBatch(std::string_view, ReportThreadAllocateInfoBatch data);
+    void recordThreadAllocInfo();
     void stopThreadAllocInfo();
 
 public: // Region Management

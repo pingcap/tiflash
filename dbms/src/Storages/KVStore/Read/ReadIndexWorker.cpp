@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/Stopwatch.h>
+#include <Common/MemoryTrace.h>
 #include <Common/setThreadName.h>
 #include <Storages/KVStore/FFI/ProxyFFI.h>
 #include <Storages/KVStore/KVStore.h>
@@ -774,9 +775,11 @@ void ReadIndexWorker::runOneRound(SteadyClock::duration min_dur)
 
 ReadIndexWorker::ReadIndexWorker(
     const TiFlashRaftProxyHelper & proxy_helper_,
+    KVStore & kvstore_,
     size_t id_,
     AsyncWaker::NotifierPtr notifier_)
     : proxy_helper(proxy_helper_)
+    , kvstore(kvstore_)
     , id(id_)
     , read_index_notify_ctrl(std::make_shared<ReadIndexNotifyCtrl>(notifier_))
 {}
@@ -798,16 +801,19 @@ ReadIndexWorker & ReadIndexWorkerManager::getWorkerByRegion(RegionID region_id)
 
 ReadIndexWorkerManager::ReadIndexWorkerManager(
     const TiFlashRaftProxyHelper & proxy_helper_,
+    KVStore & kvstore_,
     size_t workers_cnt,
     ReadIndexWorkerManager::FnGetTickTime && fn_min_dur_handle_region,
     size_t runner_cnt)
     : proxy_helper(proxy_helper_)
+    , kvstore(kvstore_)
     , logger(Logger::get("ReadIndexWorkers"))
 {
     for (size_t i = 0; i < runner_cnt; ++i)
         runners.emplace_back(std::make_unique<ReadIndexRunner>(
             i,
             runner_cnt,
+            kvstore,
             workers,
             logger,
             fn_min_dur_handle_region,
@@ -822,7 +828,7 @@ ReadIndexWorkerManager::ReadIndexWorkerManager(
         {
             for (size_t wid = rid; wid < workers_cnt; wid += runner_cnt)
             {
-                workers[wid] = std::make_unique<ReadIndexWorker>(proxy_helper, wid, runners[rid]->global_notifier);
+                workers[wid] = std::make_unique<ReadIndexWorker>(proxy_helper, kvstore, wid, runners[rid]->global_notifier);
             }
         }
     }
@@ -946,6 +952,7 @@ BatchReadIndexRes KVStore::batchReadIndex(const std::vector<kvrpcpb::ReadIndexRe
 
 std::unique_ptr<ReadIndexWorkerManager> ReadIndexWorkerManager::newReadIndexWorkerManager(
     const TiFlashRaftProxyHelper & proxy_helper,
+    KVStore & kvstore,
     size_t cap,
     ReadIndexWorkerManager::FnGetTickTime && fn_min_dur_handle_region,
     size_t runner_cnt)
@@ -953,7 +960,7 @@ std::unique_ptr<ReadIndexWorkerManager> ReadIndexWorkerManager::newReadIndexWork
 #ifdef ADD_TEST_DEBUG_LOG_FMT
     global_logger_for_test = &Poco::Logger::get("TestReadIndexWork");
 #endif
-    return std::make_unique<ReadIndexWorkerManager>(proxy_helper, cap, std::move(fn_min_dur_handle_region), runner_cnt);
+    return std::make_unique<ReadIndexWorkerManager>(proxy_helper, kvstore, cap, std::move(fn_min_dur_handle_region), runner_cnt);
 }
 
 void KVStore::initReadIndexWorkers(
@@ -970,6 +977,7 @@ void KVStore::initReadIndexWorkers(
     LOG_INFO(log, "Start to initialize read-index workers: worker count {}, runner count {}", worker_cnt, runner_cnt);
     auto * ptr = ReadIndexWorkerManager::newReadIndexWorkerManager(
                      *proxy_helper,
+                     *this,
                      worker_cnt,
                      std::move(fn_min_dur_handle_region),
                      runner_cnt)
@@ -1041,6 +1049,10 @@ void ReadIndexWorkerManager::ReadIndexRunner::asyncRun()
     work_thread = std::make_unique<std::thread>([this]() {
         std::string name = fmt::format("ReadIndexWkr-{}", id);
         setThreadName(name.data());
+        auto [ptr_a, ptr_d] = getAllocDeallocPtr();
+        kvstore.reportThreadAllocInfo(name, ReportThreadAllocateInfoType::Reset, 0);
+        kvstore.reportThreadAllocInfo(name, ReportThreadAllocateInfoType::AllocPtr, reinterpret_cast<uint64_t>(ptr_a));
+        kvstore.reportThreadAllocInfo(name, ReportThreadAllocateInfoType::DeallocPtr, reinterpret_cast<uint64_t>(ptr_d));
         LOG_INFO(logger, "Start read-index runner {}", id);
         while (true)
         {
@@ -1050,6 +1062,7 @@ void ReadIndexWorkerManager::ReadIndexRunner::asyncRun()
             if (state.load(std::memory_order_acquire) != State::Running)
                 break;
         }
+        kvstore.reportThreadAllocInfo(name, ReportThreadAllocateInfoType::Remove, 0);
         LOG_INFO(logger, "Start to stop read-index runner {}", id);
     });
 }
@@ -1057,12 +1070,14 @@ void ReadIndexWorkerManager::ReadIndexRunner::asyncRun()
 ReadIndexWorkerManager::ReadIndexRunner::ReadIndexRunner(
     size_t id_,
     size_t runner_cnt_,
+    KVStore & kvstore_,
     ReadIndexWorkers & workers_,
     LoggerPtr logger_,
     FnGetTickTime fn_min_dur_handle_region_,
     AsyncWaker::NotifierPtr global_notifier_)
     : id(id_)
     , runner_cnt(runner_cnt_)
+    , kvstore(kvstore_)
     , workers(workers_)
     , logger(std::move(logger_))
     , fn_min_dur_handle_region(std::move(fn_min_dur_handle_region_))

@@ -373,6 +373,10 @@ else ()
     message (STATUS "Set jemalloc narenas ${JEMALLOC_NARENAS}")
 endif ()
 
+if (ENABLE_JEMALLOC)
+    add_compile_definitions(WITH_JEMALLOC)
+endif ()
+
 option (TEST_LLVM_COVERAGE "Enables flags for test coverage" OFF)
 if (TEST_LLVM_COVERAGE AND CMAKE_BUILD_TYPE_UC STREQUAL "DEBUG")
     set (CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fprofile-instr-generate -fcoverage-mapping -DTIFLASH_LLVM_COVERAGE=1")

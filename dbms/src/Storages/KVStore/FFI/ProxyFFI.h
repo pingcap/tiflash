@@ -208,10 +208,11 @@ void ClearFapSnapshot(EngineStoreServerWrap * server, uint64_t region_id);
 bool KvstoreRegionExists(EngineStoreServerWrap * server, uint64_t region_id);
 void ReportThreadAllocateInfo(
     EngineStoreServerWrap *,
+    uint64_t tid,
     BaseBuffView name,
     ReportThreadAllocateInfoType type,
     uint64_t value);
-void ReportThreadAllocateBatch(EngineStoreServerWrap *, BaseBuffView name, ReportThreadAllocateInfoBatch data);
+void ReportThreadAllocateBatch(EngineStoreServerWrap *, uint64_t tid, BaseBuffView name, ReportThreadAllocateInfoBatch data);
 }
 
 inline EngineStoreServerHelper GetEngineStoreServerHelper(EngineStoreServerWrap * tiflash_instance_wrap)

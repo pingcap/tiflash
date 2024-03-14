@@ -1029,6 +1029,12 @@ int Server::main(const std::vector<std::string> & /*args*/)
         LOG_INFO(log, "UniPS is not enabled for proxy, page_version={}", STORAGE_FORMAT_CURRENT.page);
     }
 
+    #ifdef WITH_JEMALLOC
+        LOG_INFO(log, "Using Jemalloc for TiFlash");
+    #else
+        LOG_INFO(log, "Not using Jemalloc for TiFlash");
+    #endif
+
     RaftStoreProxyRunner proxy_runner(RaftStoreProxyRunner::RunRaftStoreProxyParms{&helper, proxy_conf}, log);
 
     if (proxy_conf.is_proxy_runnable)

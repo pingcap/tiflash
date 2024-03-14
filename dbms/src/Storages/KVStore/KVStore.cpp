@@ -76,7 +76,7 @@ KVStore::KVStore(Context & context)
             monitoring_cv.wait_for(l, 5000ms, [&]() { return is_terminated; });
             if (is_terminated)
                 return;
-            reportThreadAllocInfo();
+            recordThreadAllocInfo();
         }
     });
 }
@@ -513,18 +513,22 @@ static std::string getThreadNameAggPrefix(const std::string_view & s)
     return std::string(s.begin(), s.end());
 }
 
-void KVStore::registerThreadAllocInfo(std::string_view thdname, ReportThreadAllocateInfoType type, uint64_t value)
+void KVStore::reportThreadAllocInfo(std::string_view thdname, ReportThreadAllocateInfoType type, uint64_t value)
 {
-    if (value == 0)
-        return;
     std::unique_lock l(memory_allocation_mut);
     std::string tname(thdname.begin(), thdname.end());
     if (type == ReportThreadAllocateInfoType::Reset)
     {
         memory_allocation_map.insert_or_assign(tname, ThreadInfoJealloc());
     }
+    else if (type == ReportThreadAllocateInfoType::Remove)
+    {
+        memory_allocation_map.erase(tname);
+    }
     else if (type == ReportThreadAllocateInfoType::AllocPtr)
     {
+        if (value == 0)
+            return;
         auto it = memory_allocation_map.find(tname);
         if unlikely (it == memory_allocation_map.end())
         {
@@ -534,6 +538,8 @@ void KVStore::registerThreadAllocInfo(std::string_view thdname, ReportThreadAllo
     }
     else if (type == ReportThreadAllocateInfoType::DeallocPtr)
     {
+        if (value == 0)
+            return;
         auto it = memory_allocation_map.find(tname);
         if unlikely (it == memory_allocation_map.end())
         {
@@ -543,48 +549,41 @@ void KVStore::registerThreadAllocInfo(std::string_view thdname, ReportThreadAllo
     }
 }
 
-void KVStore::reportThreadAllocInfo()
+static const std::unordered_set<std::string> WHITE_LIST_THREAD_PREFIX = {"ReadIndexWkr"};
+
+/// For those everlasting threads, we can directly access their allocatedp/allocatedp.
+void KVStore::recordThreadAllocInfo()
 {
     std::shared_lock l(memory_allocation_mut);
-    std::unordered_map<std::string, uint64_t> agg_remaining;
+    std::unordered_map<std::string, int64_t> agg_remaining;
     for (const auto & [k, v] : memory_allocation_map)
     {
         auto agg_thread_name = getThreadNameAggPrefix(k);
-        auto [it, ok] = agg_remaining.emplace(agg_thread_name, 0);
-        it->second += v.remaining();
+        // Some thread may have shorter lifetime, we can't use this timed task here to upgrade.
+        if (WHITE_LIST_THREAD_PREFIX.contains(agg_thread_name)) {
+            auto [it, ok] = agg_remaining.emplace(agg_thread_name, 0);
+            it->second += v.remaining();
+        }
     }
-
-    // auto & tiflash_metrics = TiFlashMetrics::instance();
-    // for (const auto & [k, v]: agg_remaining) {
-    // if(startsWith(k, "raftstore")) {
-    //     GET_METRIC(tiflash_raft_proxy_thread_memory_usage, type_raftstore).Set(v);
-    // } else if(startsWith(k, "apply-low")) {
-    //     GET_METRIC(tiflash_raft_proxy_thread_memory_usage, type_apply_low).Set(v);
-    // } else if(startsWith(k, "apply")) {
-    //     GET_METRIC(tiflash_raft_proxy_thread_memory_usage, type_apply).Set(v);
-    // } else if(startsWith(k, "sst-importer")) {
-    //     GET_METRIC(tiflash_raft_proxy_thread_memory_usage, type_sst_importer).Set(v);
-    // } else if(startsWith(k, "region-task")) {
-    //     GET_METRIC(tiflash_raft_proxy_thread_memory_usage, type_region_task).Set(v);
-    // }
-    // if (!tiflash_metrics.registered_raft_proxy_thread_memory_usage_metrics.count(k))
-    // {
-    //     // Add new keyspace store usage metric
-    //     tiflash_metrics.registered_raft_proxy_thread_memory_usage_metrics.emplace(
-    //         k,
-    //         &tiflash_metrics.registered_raft_proxy_thread_memory_usage_family->Add(
-    //             {{"type", k}}));
-    // }
-    // tiflash_metrics.registered_raft_proxy_thread_memory_usage_metrics[k]->Set(v);
-    // }
+    for (const auto & [k, v] : agg_remaining) {
+        auto & tiflash_metrics = TiFlashMetrics::instance();
+        if unlikely (!tiflash_metrics.registered_raft_proxy_thread_memory_usage_metrics.count(k))
+        {
+            // Add new keyspace store usage metric
+            tiflash_metrics.registered_raft_proxy_thread_memory_usage_metrics.emplace(
+                k,
+                &tiflash_metrics.registered_raft_proxy_thread_memory_usage_family->Add({{"type", k}}));
+        }
+        tiflash_metrics.registered_raft_proxy_thread_memory_usage_metrics[k]->Set(v);
+    }
 }
 
-
-void KVStore::registerThreadAllocBatch(std::string_view name, ReportThreadAllocateInfoBatch data)
+/// For those threads with shorter life, we must only update in their call chain.
+void KVStore::reportThreadAllocBatch(std::string_view name, ReportThreadAllocateInfoBatch data)
 {
-    auto & tiflash_metrics = TiFlashMetrics::instance();
     auto k = getThreadNameAggPrefix(name);
     int64_t v = static_cast<int64_t>(data.alloc) - static_cast<int64_t>(data.dealloc);
+    auto & tiflash_metrics = TiFlashMetrics::instance();
     if unlikely (!tiflash_metrics.registered_raft_proxy_thread_memory_usage_metrics.count(k))
     {
         // Add new keyspace store usage metric
