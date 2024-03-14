@@ -14,10 +14,10 @@
 
 if (CMAKE_BUILD_TYPE_UC STREQUAL "DEBUG" OR SAN_DEBUG)
     set(_TIFLASH_PROXY_BUILD_PROFILE "debug")
-    set(_TIFLASH_PROXY_MAKE_COMMAND make debug)
+    set(_TIFLASH_PROXY_MAKE_COMMAND ENABLE_FEATURES="external-jemalloc" make debug)
 else()
     set(_TIFLASH_PROXY_BUILD_PROFILE "release")
-    set(_TIFLASH_PROXY_MAKE_COMMAND make release)
+    set(_TIFLASH_PROXY_MAKE_COMMAND ENABLE_FEATURES="external-jemalloc" make release)
 endif()
 
 set(_TIFLASH_PROXY_SOURCE_DIR "${TiFlash_SOURCE_DIR}/contrib/tiflash-proxy")
