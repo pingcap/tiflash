@@ -358,13 +358,13 @@ void AsynchronousMetrics::update()
     M("background_thread.num_runs", uint64_t)  \
     M("background_thread.run_interval", uint64_t)
 
-#define GET_JEMALLOC_METRIC(NAME, TYPE)                    \
-    do                                                     \
-    {                                                      \
-        TYPE value{};                                      \
-        size_t size = sizeof(value);                       \
-        mallctl("stats." NAME, &value, &size, nullptr, 0); \
-        set("jemalloc." NAME, value);                      \
+#define GET_JEMALLOC_METRIC(NAME, TYPE)                       \
+    do                                                        \
+    {                                                         \
+        TYPE value{};                                         \
+        size_t size = sizeof(value);                          \
+        je_mallctl("stats." NAME, &value, &size, nullptr, 0); \
+        set("jemalloc." NAME, value);                         \
     } while (0);
 
         FOR_EACH_METRIC(GET_JEMALLOC_METRIC);
