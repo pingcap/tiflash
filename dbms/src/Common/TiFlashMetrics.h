@@ -34,6 +34,7 @@
 
 namespace DB
 {
+class KVStore;
 constexpr size_t RAFT_REGION_BIG_WRITE_THRES = 2 * 1024;
 constexpr size_t RAFT_REGION_BIG_WRITE_MAX = 4 * 1024 * 1024; // raft-entry-max-size = 8MiB
 static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Invalid RAFT_REGION_BIG_WRITE_THRES");
@@ -188,12 +189,6 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       Histogram,                                                                                                                    \
       F(type_sync_schema_apply_duration, {{"type", "sync_schema_duration"}}, ExpBuckets{0.001, 2, 20}),                             \
       F(type_sync_table_schema_apply_duration, {{"type", "sync_table_schema_duration"}}, ExpBuckets{0.001, 2, 20}))                 \
-    M(tiflash_raft_proxy_thread_memory_usage, "Memory Usage of Proxy by thread", Gauge,                                             \
-      F(type_raftstore, {"type", "raftstore"}),                                                                                     \
-      F(type_apply_low, {"type", "apply_low"}),                                                                                     \
-      F(type_sst_importer, {"type", "sst_importer"}),                                                                               \
-      F(type_region_task, {"type", "region_task"}),                                                                                 \
-      F(type_apply, {"type", "apply"}))                                                                                             \
     M(tiflash_raft_read_index_count, "Total number of raft read index", Counter)                                                    \
     M(tiflash_stale_read_count, "Total number of stale read", Counter)                                                              \
     M(tiflash_raft_read_index_duration_seconds,                                                                                     \
@@ -1096,6 +1091,7 @@ public:
     UInt64 debugQueryReplicaSyncRU(UInt32 keyspace_id);
 
 private:
+    friend class KVStore;
     TiFlashMetrics();
 
     prometheus::Counter * getReplicaSyncRUCounter(UInt32 keyspace_id, std::unique_lock<std::mutex> &);
@@ -1104,6 +1100,7 @@ private:
     static constexpr auto profile_events_prefix = "tiflash_system_profile_event_";
     static constexpr auto current_metrics_prefix = "tiflash_system_current_metric_";
     static constexpr auto async_metrics_prefix = "tiflash_system_asynchronous_metric_";
+    static constexpr auto raft_proxy_thread_memory_usage = "tiflash_raft_proxy_thread_memory_usage";
 
     std::shared_ptr<prometheus::Registry> registry = std::make_shared<prometheus::Registry>();
     // Here we add a ProcessCollector to collect cpu/rss/vsize/start_time information.
@@ -1123,6 +1120,9 @@ private:
     prometheus::Family<prometheus::Counter> * registered_keyspace_sync_replica_ru_family;
     std::mutex replica_sync_ru_mtx;
     std::unordered_map<KeyspaceID, prometheus::Counter *> registered_keyspace_sync_replica_ru;
+
+    prometheus::Family<prometheus::Gauge> * registered_raft_proxy_thread_memory_usage_family;
+    std::unordered_map<std::string, prometheus::Gauge *> registered_raft_proxy_thread_memory_usage_metrics;
 
 public:
 #define MAKE_METRIC_MEMBER_M(family_name, help, type, ...) \

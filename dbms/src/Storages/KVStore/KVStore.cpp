@@ -69,13 +69,13 @@ KVStore::KVStore(Context & context)
     // default config about compact-log: rows 40k, bytes 32MB, gap 200.
     LOG_INFO(log, "KVStore inited, eager_raft_log_gc_enabled={}", eager_raft_log_gc_enabled);
     using namespace std::chrono_literals;
-    monitoring_thread = new std::thread([&](){
-        while(true) {
+    monitoring_thread = new std::thread([&]() {
+        while (true)
+        {
             std::unique_lock l(monitoring_mut);
-            monitoring_cv.wait_for(l, 5000ms, [&](){
-                return is_terminated;
-            });
-            if (is_terminated) return;
+            monitoring_cv.wait_for(l, 5000ms, [&]() { return is_terminated; });
+            if (is_terminated)
+                return;
             reportThreadAllocInfo();
         }
     });
@@ -436,13 +436,7 @@ void KVStore::StoreMeta::update(Base && base_)
 KVStore::~KVStore()
 {
     LOG_INFO(log, "Destroy KVStore");
-    {
-        std::unique_lock lk(monitoring_mut);
-        is_terminated = true;
-        monitoring_cv.notify_all();
-    }
-    monitoring_thread->join();
-    delete monitoring_thread;
+    stopThreadAllocInfo();
     releaseReadIndexWorkers();
 }
 
@@ -501,47 +495,118 @@ RegionTaskLock KVStore::genRegionTaskLock(UInt64 region_id) const
     return region_manager.genRegionTaskLock(region_id);
 }
 
-static std::string getThreadNameAggPrefix(const std::string & s) {
-    if(auto pos = s.find_last_of('-'); pos != std::string::npos) {
+static std::string getThreadNameAggPrefix(const std::string & s)
+{
+    if (auto pos = s.find_last_of('-'); pos != std::string::npos)
+    {
         return s.substr(0, pos);
     }
     return s;
 }
 
-void KVStore::registerThreadAllocInfo(std::string_view thdname, uint64_t type, uint64_t value) {
-    if (value == 0) return;
+static std::string getThreadNameAggPrefix(const std::string_view & s)
+{
+    if (auto pos = s.find_last_of('-'); pos != std::string::npos)
+    {
+        return std::string(s.begin(), s.begin() + pos);
+    }
+    return std::string(s.begin(), s.end());
+}
+
+void KVStore::registerThreadAllocInfo(std::string_view thdname, ReportThreadAllocateInfoType type, uint64_t value)
+{
+    if (value == 0)
+        return;
     std::unique_lock l(memory_allocation_mut);
-    LOG_INFO(DB::Logger::get(), "!!!!!!! RRR register");
-    auto [it, ok] = memory_allocation_map.emplace(thdname, ThreadInfoJealloc());
-    if (type == 0) {
+    std::string tname(thdname.begin(), thdname.end());
+    if (type == ReportThreadAllocateInfoType::Reset)
+    {
+        memory_allocation_map.insert_or_assign(tname, ThreadInfoJealloc());
+    }
+    else if (type == ReportThreadAllocateInfoType::AllocPtr)
+    {
+        auto it = memory_allocation_map.find(tname);
+        if unlikely (it == memory_allocation_map.end())
+        {
+            return;
+        }
         it->second.allocated_ptr = value;
-    } else if (type == 1) {
+    }
+    else if (type == ReportThreadAllocateInfoType::DeallocPtr)
+    {
+        auto it = memory_allocation_map.find(tname);
+        if unlikely (it == memory_allocation_map.end())
+        {
+            return;
+        }
         it->second.deallocated_ptr = value;
     }
 }
 
-void KVStore::reportThreadAllocInfo() {
+void KVStore::reportThreadAllocInfo()
+{
     std::shared_lock l(memory_allocation_mut);
     std::unordered_map<std::string, uint64_t> agg_remaining;
-    for (const auto & [k, v]: memory_allocation_map) {
+    for (const auto & [k, v] : memory_allocation_map)
+    {
         auto agg_thread_name = getThreadNameAggPrefix(k);
         auto [it, ok] = agg_remaining.emplace(agg_thread_name, 0);
         it->second += v.remaining();
     }
 
-    for (const auto & [k, v]: agg_remaining) {
-        if(k == "raftstore") {
-            GET_METRIC(tiflash_raft_proxy_thread_memory_usage, type_raftstore).Set(v);
-        } else if(k == "apply") {
-            GET_METRIC(tiflash_raft_proxy_thread_memory_usage, type_apply).Set(v);
-        } else if(k == "apply-low") {
-            GET_METRIC(tiflash_raft_proxy_thread_memory_usage, type_apply_low).Set(v);
-        } else if(k == "sst-importer") {
-            GET_METRIC(tiflash_raft_proxy_thread_memory_usage, type_sst_importer).Set(v);
-        } else if(k == "region-task") {
-            GET_METRIC(tiflash_raft_proxy_thread_memory_usage, type_region_task).Set(v);
-        }
+    // auto & tiflash_metrics = TiFlashMetrics::instance();
+    // for (const auto & [k, v]: agg_remaining) {
+    // if(startsWith(k, "raftstore")) {
+    //     GET_METRIC(tiflash_raft_proxy_thread_memory_usage, type_raftstore).Set(v);
+    // } else if(startsWith(k, "apply-low")) {
+    //     GET_METRIC(tiflash_raft_proxy_thread_memory_usage, type_apply_low).Set(v);
+    // } else if(startsWith(k, "apply")) {
+    //     GET_METRIC(tiflash_raft_proxy_thread_memory_usage, type_apply).Set(v);
+    // } else if(startsWith(k, "sst-importer")) {
+    //     GET_METRIC(tiflash_raft_proxy_thread_memory_usage, type_sst_importer).Set(v);
+    // } else if(startsWith(k, "region-task")) {
+    //     GET_METRIC(tiflash_raft_proxy_thread_memory_usage, type_region_task).Set(v);
+    // }
+    // if (!tiflash_metrics.registered_raft_proxy_thread_memory_usage_metrics.count(k))
+    // {
+    //     // Add new keyspace store usage metric
+    //     tiflash_metrics.registered_raft_proxy_thread_memory_usage_metrics.emplace(
+    //         k,
+    //         &tiflash_metrics.registered_raft_proxy_thread_memory_usage_family->Add(
+    //             {{"type", k}}));
+    // }
+    // tiflash_metrics.registered_raft_proxy_thread_memory_usage_metrics[k]->Set(v);
+    // }
+}
+
+
+void KVStore::registerThreadAllocBatch(std::string_view name, ReportThreadAllocateInfoBatch data)
+{
+    auto & tiflash_metrics = TiFlashMetrics::instance();
+    auto k = getThreadNameAggPrefix(name);
+    int64_t v = static_cast<int64_t>(data.alloc) - static_cast<int64_t>(data.dealloc);
+    if unlikely (!tiflash_metrics.registered_raft_proxy_thread_memory_usage_metrics.count(k))
+    {
+        // Add new keyspace store usage metric
+        tiflash_metrics.registered_raft_proxy_thread_memory_usage_metrics.emplace(
+            k,
+            &tiflash_metrics.registered_raft_proxy_thread_memory_usage_family->Add({{"type", k}}));
     }
+    tiflash_metrics.registered_raft_proxy_thread_memory_usage_metrics[k]->Set(v);
+}
+
+void KVStore::stopThreadAllocInfo()
+{
+    {
+        std::unique_lock lk(monitoring_mut);
+        if (monitoring_thread == nullptr)
+            return;
+        is_terminated = true;
+        monitoring_cv.notify_all();
+    }
+    monitoring_thread->join();
+    delete monitoring_thread;
+    monitoring_thread = nullptr;
 }
 
 } // namespace DB

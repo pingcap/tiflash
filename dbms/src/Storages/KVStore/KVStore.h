@@ -48,6 +48,9 @@ namespace tests
 class KVStoreTestBase;
 } // namespace tests
 
+enum class ReportThreadAllocateInfoType : uint64_t;
+struct ReportThreadAllocateInfoBatch;
+
 class IAST;
 using ASTPtr = std::shared_ptr<IAST>;
 using ASTs = std::vector<ASTPtr>;
@@ -119,20 +122,29 @@ struct ProxyConfigSummary
     size_t snap_handle_pool_size = 0;
 };
 
-struct ThreadInfoJealloc {
+struct ThreadInfoJealloc
+{
     uint64_t allocated_ptr{0};
     uint64_t deallocated_ptr{0};
 
-    uint64_t allocated() const {
-        if(allocated_ptr == 0) return 0;
+    uint64_t allocated() const
+    {
+        if (allocated_ptr == 0)
+            return 0;
         return *reinterpret_cast<uint64_t *>(allocated_ptr);
     }
-    uint64_t deallocated() const {
-        if(deallocated_ptr == 0) return 0;
+    uint64_t deallocated() const
+    {
+        if (deallocated_ptr == 0)
+            return 0;
         return *reinterpret_cast<uint64_t *>(deallocated_ptr);
     }
-    int64_t remaining() const {
-        RUNTIME_CHECK(allocated_ptr != 0);
+    int64_t remaining() const
+    {
+        if (deallocated_ptr == 0)
+            return 0;
+        if (allocated_ptr == 0)
+            return 0;
         return static_cast<int64_t>(allocated()) - static_cast<int64_t>(deallocated());
     }
 };
@@ -165,8 +177,10 @@ public:
     FileUsageStatistics getFileUsageStatistics() const;
     // Proxy will validate and refit the config items from the toml file.
     const ProxyConfigSummary & getProxyConfigSummay() const { return proxy_config_summary; }
-    void registerThreadAllocInfo(std::string_view, uint64_t type, uint64_t value);
+    void registerThreadAllocInfo(std::string_view, ReportThreadAllocateInfoType type, uint64_t value);
+    void registerThreadAllocBatch(std::string_view, ReportThreadAllocateInfoBatch data);
     void reportThreadAllocInfo();
+    void stopThreadAllocInfo();
 
 public: // Region Management
     void restore(PathPool & path_pool, const TiFlashRaftProxyHelper *);
@@ -433,7 +447,7 @@ private:
 
     mutable std::shared_mutex memory_allocation_mut;
     std::unordered_map<std::string, ThreadInfoJealloc> memory_allocation_map;
-    
+
     bool is_terminated{false};
     mutable std::mutex monitoring_mut;
     std::condition_variable monitoring_cv;

@@ -58,6 +58,8 @@ TiFlashMetrics::TiFlashMetrics()
                                                       .Name("tiflash_storage_sync_replica_ru")
                                                       .Help("RU for synchronous replica of keyspace")
                                                       .Register(*registry);
+    registered_raft_proxy_thread_memory_usage_family
+        = &prometheus::BuildGauge().Name(raft_proxy_thread_memory_usage).Help("").Register(*registry);
 }
 
 void TiFlashMetrics::addReplicaSyncRU(UInt32 keyspace_id, UInt64 ru)

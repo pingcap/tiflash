@@ -206,9 +206,12 @@ FapSnapshotState QueryFapSnapshotState(
     uint64_t term);
 void ClearFapSnapshot(EngineStoreServerWrap * server, uint64_t region_id);
 bool KvstoreRegionExists(EngineStoreServerWrap * server, uint64_t region_id);
-void ReportThreadAllocateInfo(EngineStoreServerWrap *,
-                                BaseBuffView name, uint64_t type,
-                                uint64_t value);
+void ReportThreadAllocateInfo(
+    EngineStoreServerWrap *,
+    BaseBuffView name,
+    ReportThreadAllocateInfoType type,
+    uint64_t value);
+void ReportThreadAllocateBatch(EngineStoreServerWrap *, BaseBuffView name, ReportThreadAllocateInfoBatch data);
 }
 
 inline EngineStoreServerHelper GetEngineStoreServerHelper(EngineStoreServerWrap * tiflash_instance_wrap)
@@ -261,6 +264,7 @@ inline EngineStoreServerHelper GetEngineStoreServerHelper(EngineStoreServerWrap 
         .fn_query_fap_snapshot_state = QueryFapSnapshotState,
         .fn_clear_fap_snapshot = ClearFapSnapshot,
         .fn_report_thread_allocate_info = ReportThreadAllocateInfo,
+        .fn_report_thread_allocate_batch = ReportThreadAllocateBatch,
     };
 }
 
