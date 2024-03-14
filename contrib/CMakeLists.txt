@@ -102,6 +102,7 @@ if (USE_INTERNAL_POCO_LIBRARY)
         # Bug in poco https://github.com/pocoproject/poco/pull/2100 found on macos
         target_include_directories(Crypto PUBLIC ${OPENSSL_INCLUDE_DIR})
     endif ()
+    target_no_warning(Net deprecated-enum-enum-conversion)
 endif ()
 
 if (USE_INTERNAL_PROTOBUF_LIBRARY)
@@ -191,3 +192,10 @@ add_subdirectory(aws-cmake)
 add_subdirectory(simdjson)
 
 add_subdirectory(Turbo-Run-Length-Encoding-cmake)
+target_no_warning(trle ncompatible-pointer-types)
+target_no_warning(trle compare-distinct-pointer-types)
+target_no_warning(trle unused-but-set-variable)
+target_no_warning(trle incompatible-pointer-types-discards-qualifiers)
+target_no_warning(trle unused-variable)
+target_no_warning(trle incompatible-pointer-types)
+target_no_warning(trle macro-redefined)

@@ -1,8 +1,11 @@
 SET(LIBRARY_DIR ${TiFlash_SOURCE_DIR}/contrib/Turbo-Run-Length-Encoding/include)
 
-add_library (trle ${LIBRARY_DIR}/trle.h)
+add_library (trle
+    ${LIBRARY_DIR}/trle.h
+    ${LIBRARY_DIR}/../trlec.c
+    ${LIBRARY_DIR}/../trled.c
+)
 target_include_directories(trle PUBLIC ${LIBRARY_DIR})
-set_target_properties(trle PROPERTIES LINKER_LANGUAGE C)
 
 if (TIFLASH_ENABLE_ARCH_HASWELL_SUPPORT)
     target_compile_definitions(trle PRIVATE AVX2=1)
