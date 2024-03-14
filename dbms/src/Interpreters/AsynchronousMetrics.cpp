@@ -363,7 +363,7 @@ void AsynchronousMetrics::update()
     {                                                      \
         TYPE value{};                                      \
         size_t size = sizeof(value);                       \
-        mallctl("stats." NAME, &value, &size, nullptr, 0); \
+        je_mallctl("stats." NAME, &value, &size, nullptr, 0); \
         set("jemalloc." NAME, value);                      \
     } while (0);
 
