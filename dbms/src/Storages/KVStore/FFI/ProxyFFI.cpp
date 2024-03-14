@@ -1055,7 +1055,11 @@ void ReportThreadAllocateInfo(
     }
 }
 
-void ReportThreadAllocateBatch(EngineStoreServerWrap * server, uint64_t tid, BaseBuffView name, ReportThreadAllocateInfoBatch data)
+void ReportThreadAllocateBatch(
+    EngineStoreServerWrap * server,
+    uint64_t tid,
+    BaseBuffView name,
+    ReportThreadAllocateInfoBatch data)
 {
     try
     {

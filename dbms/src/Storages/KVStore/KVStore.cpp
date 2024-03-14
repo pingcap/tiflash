@@ -560,12 +560,14 @@ void KVStore::recordThreadAllocInfo()
     {
         auto agg_thread_name = getThreadNameAggPrefix(k);
         // Some thread may have shorter lifetime, we can't use this timed task here to upgrade.
-        if (WHITE_LIST_THREAD_PREFIX.contains(agg_thread_name)) {
+        if (WHITE_LIST_THREAD_PREFIX.contains(agg_thread_name))
+        {
             auto [it, ok] = agg_remaining.emplace(agg_thread_name, 0);
             it->second += v.remaining();
         }
     }
-    for (const auto & [k, v] : agg_remaining) {
+    for (const auto & [k, v] : agg_remaining)
+    {
         auto & tiflash_metrics = TiFlashMetrics::instance();
         if unlikely (!tiflash_metrics.registered_raft_proxy_thread_memory_usage_metrics.count(k))
         {

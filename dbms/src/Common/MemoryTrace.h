@@ -17,20 +17,23 @@
 #include <jemalloc/jemalloc.h>
 #endif
 
-namespace DB {
+namespace DB
+{
 #ifdef WITH_JEMALLOC
-std::tuple<uint64_t*, uint64_t*> getAllocDeallocPtr() {
+std::tuple<uint64_t *, uint64_t *> getAllocDeallocPtr()
+{
     uint64_t * ptr1 = nullptr;
     uint64_t size1 = sizeof ptr1;
-    mallctl("thread.allocatedp", (void*)&ptr1, &size1, NULL, 0);
+    mallctl("thread.allocatedp", (void *)&ptr1, &size1, NULL, 0);
     uint64_t * ptr2 = nullptr;
     uint64_t size2 = sizeof ptr2;
-    mallctl("thread.deallocatedp", (void*)&ptr2, &size2, NULL, 0);
+    mallctl("thread.deallocatedp", (void *)&ptr2, &size2, NULL, 0);
     return std::make_tuple(ptr1, ptr2);
 }
 #else
-std::tuple<uint64_t*, uint64_t*> getAllocDeallocPtr() {
+std::tuple<uint64_t *, uint64_t *> getAllocDeallocPtr()
+{
     return std::make_tuple(nullptr, nullptr);
 }
 #endif
-}
+} // namespace DB

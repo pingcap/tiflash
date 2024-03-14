@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/Stopwatch.h>
 #include <Common/MemoryTrace.h>
+#include <Common/Stopwatch.h>
 #include <Common/setThreadName.h>
 #include <Storages/KVStore/FFI/ProxyFFI.h>
 #include <Storages/KVStore/KVStore.h>
@@ -828,7 +828,8 @@ ReadIndexWorkerManager::ReadIndexWorkerManager(
         {
             for (size_t wid = rid; wid < workers_cnt; wid += runner_cnt)
             {
-                workers[wid] = std::make_unique<ReadIndexWorker>(proxy_helper, kvstore, wid, runners[rid]->global_notifier);
+                workers[wid]
+                    = std::make_unique<ReadIndexWorker>(proxy_helper, kvstore, wid, runners[rid]->global_notifier);
             }
         }
     }
@@ -960,7 +961,12 @@ std::unique_ptr<ReadIndexWorkerManager> ReadIndexWorkerManager::newReadIndexWork
 #ifdef ADD_TEST_DEBUG_LOG_FMT
     global_logger_for_test = &Poco::Logger::get("TestReadIndexWork");
 #endif
-    return std::make_unique<ReadIndexWorkerManager>(proxy_helper, kvstore, cap, std::move(fn_min_dur_handle_region), runner_cnt);
+    return std::make_unique<ReadIndexWorkerManager>(
+        proxy_helper,
+        kvstore,
+        cap,
+        std::move(fn_min_dur_handle_region),
+        runner_cnt);
 }
 
 void KVStore::initReadIndexWorkers(
@@ -1052,7 +1058,10 @@ void ReadIndexWorkerManager::ReadIndexRunner::asyncRun()
         auto [ptr_a, ptr_d] = getAllocDeallocPtr();
         kvstore.reportThreadAllocInfo(name, ReportThreadAllocateInfoType::Reset, 0);
         kvstore.reportThreadAllocInfo(name, ReportThreadAllocateInfoType::AllocPtr, reinterpret_cast<uint64_t>(ptr_a));
-        kvstore.reportThreadAllocInfo(name, ReportThreadAllocateInfoType::DeallocPtr, reinterpret_cast<uint64_t>(ptr_d));
+        kvstore.reportThreadAllocInfo(
+            name,
+            ReportThreadAllocateInfoType::DeallocPtr,
+            reinterpret_cast<uint64_t>(ptr_d));
         LOG_INFO(logger, "Start read-index runner {}", id);
         while (true)
         {

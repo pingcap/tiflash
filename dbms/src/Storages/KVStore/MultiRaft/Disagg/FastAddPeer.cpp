@@ -630,7 +630,7 @@ FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, u
             GET_METRIC(tiflash_fap_task_state, type_queueing_stage).Increment();
             auto job_func = [server, region_id, new_peer_id, fap_ctx, current_time]() {
                 std::string origin_name = getThreadName();
-                SCOPE_EXIT({setThreadName(origin_name.c_str()); });
+                SCOPE_EXIT({ setThreadName(origin_name.c_str()); });
                 setThreadName("fap-builder");
                 return FastAddPeerImpl(
                     fap_ctx,

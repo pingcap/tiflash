@@ -139,10 +139,7 @@ struct ThreadInfoJealloc
             return 0;
         return *reinterpret_cast<uint64_t *>(deallocated_ptr);
     }
-    int64_t remaining() const
-    {
-        return static_cast<int64_t>(allocated()) - static_cast<int64_t>(deallocated());
-    }
+    int64_t remaining() const { return static_cast<int64_t>(allocated()) - static_cast<int64_t>(deallocated()); }
 };
 
 /// KVStore manages raft replication and transactions.

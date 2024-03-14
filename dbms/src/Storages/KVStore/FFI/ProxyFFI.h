@@ -212,7 +212,11 @@ void ReportThreadAllocateInfo(
     BaseBuffView name,
     ReportThreadAllocateInfoType type,
     uint64_t value);
-void ReportThreadAllocateBatch(EngineStoreServerWrap *, uint64_t tid, BaseBuffView name, ReportThreadAllocateInfoBatch data);
+void ReportThreadAllocateBatch(
+    EngineStoreServerWrap *,
+    uint64_t tid,
+    BaseBuffView name,
+    ReportThreadAllocateInfoBatch data);
 }
 
 inline EngineStoreServerHelper GetEngineStoreServerHelper(EngineStoreServerWrap * tiflash_instance_wrap)
