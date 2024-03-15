@@ -35,4 +35,4 @@
 //     return std::make_tuple(nullptr, nullptr);
 // #endif
 // }
-} // namespace DB
+// } // namespace DB
