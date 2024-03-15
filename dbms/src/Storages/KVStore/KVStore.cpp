@@ -520,35 +520,37 @@ void KVStore::reportThreadAllocInfo(std::string_view thdname, ReportThreadAlloca
         return;
     std::unique_lock l(memory_allocation_mut);
     std::string tname(thdname.begin(), thdname.end());
-    if (type == ReportThreadAllocateInfoType::Reset)
-    {
-        memory_allocation_map.insert_or_assign(tname, ThreadInfoJealloc());
-    }
-    else if (type == ReportThreadAllocateInfoType::Remove)
-    {
-        memory_allocation_map.erase(tname);
-    }
-    else if (type == ReportThreadAllocateInfoType::AllocPtr)
-    {
-        if (value == 0)
-            return;
-        auto it = memory_allocation_map.find(tname);
-        if unlikely (it == memory_allocation_map.end())
+    switch (type) {
+        case ReportThreadAllocateInfoType::Reset:
+            memory_allocation_map.insert_or_assign(tname, ThreadInfoJealloc());
+            break;
+        case ReportThreadAllocateInfoType::Remove:
+            memory_allocation_map.erase(tname);
+            break;
+        case ReportThreadAllocateInfoType::AllocPtr:
         {
-            return;
+            if (value == 0)
+                return;
+            auto it = memory_allocation_map.find(tname);
+            if unlikely (it == memory_allocation_map.end())
+            {
+                return;
+            }
+            it->second.allocated_ptr = value;
+            break;
         }
-        it->second.allocated_ptr = value;
-    }
-    else if (type == ReportThreadAllocateInfoType::DeallocPtr)
-    {
-        if (value == 0)
-            return;
-        auto it = memory_allocation_map.find(tname);
-        if unlikely (it == memory_allocation_map.end())
+        case ReportThreadAllocateInfoType::DeallocPtr:
         {
-            return;
+            if (value == 0)
+                return;
+            auto it = memory_allocation_map.find(tname);
+            if unlikely (it == memory_allocation_map.end())
+            {
+                return;
+            }
+            it->second.deallocated_ptr = value;
+            break;
         }
-        it->second.deallocated_ptr = value;
     }
 }
 
