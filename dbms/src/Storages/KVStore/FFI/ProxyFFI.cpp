@@ -1040,12 +1040,8 @@ void ReportThreadAllocateInfo(
     try
     {
         UNUSED(tid);
-        if (server == nullptr)
-            return;
-        if (server->tmt == nullptr)
-            return;
-        if (server->tmt->getKVStore() == nullptr)
-            return;
+        if (!server || !server->tmt || !server->tmt->getKVStore())
+             return;
         server->tmt->getKVStore()->reportThreadAllocInfo(buffToStrView(name), type, value);
     }
     catch (...)
