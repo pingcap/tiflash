@@ -171,7 +171,7 @@ public:
     // Proxy will validate and refit the config items from the toml file.
     const ProxyConfigSummary & getProxyConfigSummay() const { return proxy_config_summary; }
     void reportThreadAllocInfo(std::string_view, ReportThreadAllocateInfoType type, uint64_t value);
-    void reportThreadAllocBatch(std::string_view, ReportThreadAllocateInfoBatch data);
+    static void reportThreadAllocBatch(std::string_view, ReportThreadAllocateInfoBatch data);
     void recordThreadAllocInfo();
     void stopThreadAllocInfo();
 
