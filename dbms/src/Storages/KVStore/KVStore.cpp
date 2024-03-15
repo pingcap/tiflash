@@ -589,7 +589,7 @@ void KVStore::reportThreadAllocBatch(std::string_view name, ReportThreadAllocate
     // Many threads have empty name, better just not handle.
     if (name.empty())
         return;
-    // TODO(o11y) Could be costy.
+    // TODO(jemalloc-trace) Could be costy.
     auto k = getThreadNameAggPrefix(name);
     int64_t v = static_cast<int64_t>(data.alloc) - static_cast<int64_t>(data.dealloc);
     auto & tiflash_metrics = TiFlashMetrics::instance();
