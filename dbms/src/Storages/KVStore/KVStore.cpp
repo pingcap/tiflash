@@ -555,7 +555,7 @@ void KVStore::recordThreadAllocInfo()
     std::unordered_map<std::string, int64_t> agg_remaining;
     for (const auto & [k, v] : memory_allocation_map)
     {
-        auto agg_thread_name = getThreadNameAggPrefix(std::string_view(k.begin(), k.end()));
+        auto agg_thread_name = getThreadNameAggPrefix(std::string_view(k.data(), k.size()));
         // Some thread may have shorter lifetime, we can't use this timed task here to upgrade.
         if (WHITE_LIST_THREAD_PREFIX.contains(agg_thread_name))
         {
