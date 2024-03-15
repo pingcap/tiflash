@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#pragma once
 
 #include <tuple>
 #ifdef WITH_JEMALLOC
@@ -20,9 +21,9 @@
 
 namespace DB
 {
-#ifdef WITH_JEMALLOC
 std::tuple<uint64_t *, uint64_t *> getAllocDeallocPtr()
 {
+#ifdef WITH_JEMALLOC
     uint64_t * ptr1 = nullptr;
     uint64_t size1 = sizeof ptr1;
     mallctl("thread.allocatedp", (void *)&ptr1, &size1, NULL, 0);
@@ -30,11 +31,8 @@ std::tuple<uint64_t *, uint64_t *> getAllocDeallocPtr()
     uint64_t size2 = sizeof ptr2;
     mallctl("thread.deallocatedp", (void *)&ptr2, &size2, NULL, 0);
     return std::make_tuple(ptr1, ptr2);
-}
 #else
-std::tuple<uint64_t *, uint64_t *> getAllocDeallocPtr()
-{
     return std::make_tuple(nullptr, nullptr);
-}
 #endif
+}
 } // namespace DB
