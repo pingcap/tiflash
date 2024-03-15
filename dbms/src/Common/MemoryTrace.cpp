@@ -18,6 +18,8 @@
 #include <jemalloc/jemalloc.h>
 #endif
 
+namespace DB
+{
 std::tuple<uint64_t *, uint64_t *> getAllocDeallocPtr()
 {
 #ifdef USE_JEMALLOC
@@ -32,3 +34,4 @@ std::tuple<uint64_t *, uint64_t *> getAllocDeallocPtr()
     return std::make_tuple(nullptr, nullptr);
 #endif
 }
+} // namespace DB
