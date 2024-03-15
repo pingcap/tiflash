@@ -34,7 +34,6 @@
 
 namespace DB
 {
-class KVStore;
 constexpr size_t RAFT_REGION_BIG_WRITE_THRES = 2 * 1024;
 constexpr size_t RAFT_REGION_BIG_WRITE_MAX = 4 * 1024 * 1024; // raft-entry-max-size = 8MiB
 static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Invalid RAFT_REGION_BIG_WRITE_THRES");
@@ -1089,10 +1088,10 @@ public:
 
     void addReplicaSyncRU(UInt32 keyspace_id, UInt64 ru);
     UInt64 debugQueryReplicaSyncRU(UInt32 keyspace_id);
+    void setProxyThreadMemory(const std::string & k, Int64 v);
     double getProxyThreadMemory(const std::string & k);
 
 private:
-    friend class KVStore;
     TiFlashMetrics();
 
     prometheus::Counter * getReplicaSyncRUCounter(UInt32 keyspace_id, std::unique_lock<std::mutex> &);
@@ -1123,6 +1122,7 @@ private:
     std::unordered_map<KeyspaceID, prometheus::Counter *> registered_keyspace_sync_replica_ru;
 
     prometheus::Family<prometheus::Gauge> * registered_raft_proxy_thread_memory_usage_family;
+    std::mutex proxy_thread_ru_mtx;
     std::unordered_map<std::string, prometheus::Gauge *> registered_raft_proxy_thread_memory_usage_metrics;
 
 public:

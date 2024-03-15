@@ -566,14 +566,7 @@ void KVStore::recordThreadAllocInfo()
     for (const auto & [k, v] : agg_remaining)
     {
         auto & tiflash_metrics = TiFlashMetrics::instance();
-        if unlikely (!tiflash_metrics.registered_raft_proxy_thread_memory_usage_metrics.count(k))
-        {
-            // Add new keyspace store usage metric
-            tiflash_metrics.registered_raft_proxy_thread_memory_usage_metrics.emplace(
-                k,
-                &tiflash_metrics.registered_raft_proxy_thread_memory_usage_family->Add({{"type", k}}));
-        }
-        tiflash_metrics.registered_raft_proxy_thread_memory_usage_metrics[k]->Set(v);
+        tiflash_metrics.setProxyThreadMemory(k, v);
     }
 }
 
@@ -587,14 +580,7 @@ void KVStore::reportThreadAllocBatch(std::string_view name, ReportThreadAllocate
     auto k = getThreadNameAggPrefix(name);
     int64_t v = static_cast<int64_t>(data.alloc) - static_cast<int64_t>(data.dealloc);
     auto & tiflash_metrics = TiFlashMetrics::instance();
-    if unlikely (!tiflash_metrics.registered_raft_proxy_thread_memory_usage_metrics.count(k))
-    {
-        // Add new keyspace store usage metric
-        tiflash_metrics.registered_raft_proxy_thread_memory_usage_metrics.emplace(
-            k,
-            &tiflash_metrics.registered_raft_proxy_thread_memory_usage_family->Add({{"type", k}}));
-    }
-    tiflash_metrics.registered_raft_proxy_thread_memory_usage_metrics[k]->Set(v);
+    tiflash_metrics.setProxyThreadMemory(k, v);
 }
 
 void KVStore::stopThreadAllocInfo()
