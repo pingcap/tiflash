@@ -1089,6 +1089,7 @@ public:
 
     void addReplicaSyncRU(UInt32 keyspace_id, UInt64 ru);
     UInt64 debugQueryReplicaSyncRU(UInt32 keyspace_id);
+    double getProxyThreadMemory(const std::string & k);
 
 private:
     friend class KVStore;

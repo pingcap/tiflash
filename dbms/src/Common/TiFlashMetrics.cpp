@@ -98,4 +98,10 @@ void TiFlashMetrics::removeReplicaSyncRUCounter(UInt32 keyspace_id)
     registered_keyspace_sync_replica_ru_family->Remove(itr->second);
     registered_keyspace_sync_replica_ru.erase(itr);
 }
+
+double TiFlashMetrics::getProxyThreadMemory(const std::string & k)
+{
+    return registered_raft_proxy_thread_memory_usage_metrics[k]->Value();
+}
+
 } // namespace DB

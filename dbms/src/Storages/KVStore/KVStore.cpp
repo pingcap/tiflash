@@ -495,15 +495,6 @@ RegionTaskLock KVStore::genRegionTaskLock(UInt64 region_id) const
     return region_manager.genRegionTaskLock(region_id);
 }
 
-static std::string getThreadNameAggPrefix(const std::string & s)
-{
-    if (auto pos = s.find_last_of('-'); pos != std::string::npos)
-    {
-        return s.substr(0, pos);
-    }
-    return s;
-}
-
 static std::string getThreadNameAggPrefix(const std::string_view & s)
 {
     if (auto pos = s.find_last_of('-'); pos != std::string::npos)
@@ -520,37 +511,38 @@ void KVStore::reportThreadAllocInfo(std::string_view thdname, ReportThreadAlloca
         return;
     std::unique_lock l(memory_allocation_mut);
     std::string tname(thdname.begin(), thdname.end());
-    switch (type) {
-        case ReportThreadAllocateInfoType::Reset:
-            memory_allocation_map.insert_or_assign(tname, ThreadInfoJealloc());
-            break;
-        case ReportThreadAllocateInfoType::Remove:
-            memory_allocation_map.erase(tname);
-            break;
-        case ReportThreadAllocateInfoType::AllocPtr:
+    switch (type)
+    {
+    case ReportThreadAllocateInfoType::Reset:
+        memory_allocation_map.insert_or_assign(tname, ThreadInfoJealloc());
+        break;
+    case ReportThreadAllocateInfoType::Remove:
+        memory_allocation_map.erase(tname);
+        break;
+    case ReportThreadAllocateInfoType::AllocPtr:
+    {
+        if (value == 0)
+            return;
+        auto it = memory_allocation_map.find(tname);
+        if unlikely (it == memory_allocation_map.end())
         {
-            if (value == 0)
-                return;
-            auto it = memory_allocation_map.find(tname);
-            if unlikely (it == memory_allocation_map.end())
-            {
-                return;
-            }
-            it->second.allocated_ptr = value;
-            break;
+            return;
         }
-        case ReportThreadAllocateInfoType::DeallocPtr:
+        it->second.allocated_ptr = value;
+        break;
+    }
+    case ReportThreadAllocateInfoType::DeallocPtr:
+    {
+        if (value == 0)
+            return;
+        auto it = memory_allocation_map.find(tname);
+        if unlikely (it == memory_allocation_map.end())
         {
-            if (value == 0)
-                return;
-            auto it = memory_allocation_map.find(tname);
-            if unlikely (it == memory_allocation_map.end())
-            {
-                return;
-            }
-            it->second.deallocated_ptr = value;
-            break;
+            return;
         }
+        it->second.deallocated_ptr = value;
+        break;
+    }
     }
 }
 
@@ -563,7 +555,7 @@ void KVStore::recordThreadAllocInfo()
     std::unordered_map<std::string, int64_t> agg_remaining;
     for (const auto & [k, v] : memory_allocation_map)
     {
-        auto agg_thread_name = getThreadNameAggPrefix(k);
+        auto agg_thread_name = getThreadNameAggPrefix(std::string_view(k.begin(), k.end()));
         // Some thread may have shorter lifetime, we can't use this timed task here to upgrade.
         if (WHITE_LIST_THREAD_PREFIX.contains(agg_thread_name))
         {

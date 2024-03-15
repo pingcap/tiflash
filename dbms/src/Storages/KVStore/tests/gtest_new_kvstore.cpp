@@ -902,4 +902,50 @@ try
 }
 CATCH
 
+TEST_F(RegionKVStoreTest, MemoryTrace)
+try
+{
+    KVStore & kvs = getKVS();
+    std::string name = "test1-1";
+    kvs.reportThreadAllocBatch(
+        std::string_view(name.begin(), name.end()),
+        ReportThreadAllocateInfoBatch{.alloc = 1, .dealloc = 2});
+    auto & tiflash_metrics = TiFlashMetrics::instance();
+    ASSERT_EQ(tiflash_metrics.getProxyThreadMemory("test1"), -1);
+    std::thread t([&]() {
+        kvs.reportThreadAllocInfo(std::string_view(name.begin(), name.end()), ReportThreadAllocateInfoType::Reset, 0);
+        uint64_t mock = 999;
+        uint64_t alloc_ptr = reinterpret_cast<uint64_t>(&mock);
+        kvs.reportThreadAllocInfo(
+            std::string_view(name.begin(), name.end()),
+            ReportThreadAllocateInfoType::AllocPtr,
+            alloc_ptr);
+        kvs.recordThreadAllocInfo();
+        ASSERT_EQ(tiflash_metrics.getProxyThreadMemory("test1"), -1);
+
+        std::string name2 = "ReadIndexWkr-1";
+        kvs.reportThreadAllocInfo(std::string_view(name2.begin(), name2.end()), ReportThreadAllocateInfoType::Reset, 0);
+        kvs.reportThreadAllocInfo(
+            std::string_view(name2.begin(), name2.end()),
+            ReportThreadAllocateInfoType::AllocPtr,
+            alloc_ptr);
+        kvs.recordThreadAllocInfo();
+        ASSERT_EQ(tiflash_metrics.getProxyThreadMemory("ReadIndexWkr"), 999);
+        uint64_t mock2 = 998;
+        uint64_t dealloc_ptr = reinterpret_cast<uint64_t>(&mock2);
+        kvs.reportThreadAllocInfo(
+            std::string_view(name2.begin(), name2.end()),
+            ReportThreadAllocateInfoType::DeallocPtr,
+            dealloc_ptr);
+        kvs.recordThreadAllocInfo();
+        ASSERT_EQ(tiflash_metrics.getProxyThreadMemory("ReadIndexWkr"), 1);
+        kvs.reportThreadAllocInfo(
+            std::string_view(name2.begin(), name2.end()),
+            ReportThreadAllocateInfoType::Remove,
+            0);
+    });
+    t.join();
+}
+CATCH
+
 } // namespace DB::tests
