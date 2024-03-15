@@ -158,8 +158,7 @@ TMTContext::TMTContext(
     , read_index_worker_tick_ms(DEFAULT_READ_INDEX_WORKER_TICK_MS)
     , wait_region_ready_timeout_sec(DEFAULT_WAIT_REGION_READY_TIMEOUT_SEC)
 {
-    // startMonitorMPPTaskThread(mpp_task_manager);
-    UNUSED(startMonitorMPPTaskThread);
+    startMonitorMPPTaskThread(mpp_task_manager);
 
     etcd_client = Etcd::Client::create(cluster->pd_client, cluster_config);
     if (!raft_config.pd_addrs.empty() && S3::ClientFactory::instance().isEnabled()
