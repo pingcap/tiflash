@@ -1029,7 +1029,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         LOG_INFO(log, "UniPS is not enabled for proxy, page_version={}", STORAGE_FORMAT_CURRENT.page);
     }
 
-#ifdef WITH_JEMALLOC
+#ifdef USE_JEMALLOC
     LOG_INFO(log, "Using Jemalloc for TiFlash");
 #else
     LOG_INFO(log, "Not using Jemalloc for TiFlash");
