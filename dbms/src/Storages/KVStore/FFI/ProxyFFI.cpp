@@ -1041,7 +1041,7 @@ void ReportThreadAllocateInfo(
     {
         UNUSED(tid);
         if (!server || !server->tmt || !server->tmt->getKVStore())
-             return;
+            return;
         server->tmt->getKVStore()->reportThreadAllocInfo(buffToStrView(name), type, value);
     }
     catch (...)
