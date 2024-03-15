@@ -1064,11 +1064,7 @@ void ReportThreadAllocateBatch(
     try
     {
         UNUSED(tid);
-        if (server == nullptr)
-            return;
-        if (server->tmt == nullptr)
-            return;
-        if (server->tmt->getKVStore() == nullptr)
+        if (!server || !server->tmt || !server->tmt->getKVStore())
             return;
         server->tmt->getKVStore()->reportThreadAllocBatch(buffToStrView(name), data);
     }

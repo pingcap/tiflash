@@ -25,6 +25,7 @@ extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
 namespace
 {
 AggregateFunctionPtr createAggregateFunctionSequenceCount(
+    const Context & /* context not used */,
     const std::string & name,
     const DataTypes & argument_types,
     const Array & params)
@@ -39,6 +40,7 @@ AggregateFunctionPtr createAggregateFunctionSequenceCount(
 }
 
 AggregateFunctionPtr createAggregateFunctionSequenceMatch(
+    const Context & /* context not used */,
     const std::string & name,
     const DataTypes & argument_types,
     const Array & params)

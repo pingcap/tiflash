@@ -1,0 +1,31 @@
+/*
+ * Name mangling for public symbols is controlled by --with-mangling and
+ * --with-jemalloc-prefix.  With default settings the je_ prefix is stripped by
+ * these macro definitions.
+ */
+#ifndef JEMALLOC_NO_RENAME
+#define je_aligned_alloc @JEMALLOC_PREFIX@aligned_alloc
+#define je_calloc @JEMALLOC_PREFIX@calloc
+#define je_dallocx @JEMALLOC_PREFIX@dallocx
+#define je_free @JEMALLOC_PREFIX@free
+#define je_mallctl @JEMALLOC_PREFIX@mallctl
+#define je_mallctlbymib @JEMALLOC_PREFIX@mallctlbymib
+#define je_mallctlnametomib @JEMALLOC_PREFIX@mallctlnametomib
+#define je_malloc @JEMALLOC_PREFIX@malloc
+#define je_malloc_conf @JEMALLOC_PREFIX@malloc_conf
+#define je_malloc_conf_2_conf_harder @JEMALLOC_PREFIX@malloc_conf_2_conf_harder
+#define je_malloc_message @JEMALLOC_PREFIX@malloc_message
+#define je_malloc_stats_print @JEMALLOC_PREFIX@malloc_stats_print
+#define je_malloc_usable_size @JEMALLOC_PREFIX@malloc_usable_size
+#define je_mallocx @JEMALLOC_PREFIX@mallocx
+#define je_smallocx_ca709c3139f77f4c00a903cdee46d71e9028f6c6 @JEMALLOC_PREFIX@smallocx_ca709c3139f77f4c00a903cdee46d71e9028f6c6
+#define je_nallocx @JEMALLOC_PREFIX@nallocx
+#define je_posix_memalign @JEMALLOC_PREFIX@posix_memalign
+#define je_rallocx @JEMALLOC_PREFIX@rallocx
+#define je_realloc @JEMALLOC_PREFIX@realloc
+#define je_sallocx @JEMALLOC_PREFIX@sallocx
+#define je_sdallocx @JEMALLOC_PREFIX@sdallocx
+#define je_xallocx @JEMALLOC_PREFIX@xallocx
+#define je_memalign @JEMALLOC_PREFIX@memalign
+#define je_valloc @JEMALLOC_PREFIX@valloc
+#endif

@@ -41,6 +41,7 @@ namespace
 
 template <typename Data, typename DataForVariadic>
 AggregateFunctionPtr createAggregateFunctionUniq(
+    const Context & /* context not used */,
     const std::string & name,
     const DataTypes & argument_types,
     const Array & params)
@@ -89,6 +90,7 @@ AggregateFunctionPtr createAggregateFunctionUniq(
 
 template <template <typename> class Data, typename DataForVariadic>
 AggregateFunctionPtr createAggregateFunctionUniq(
+    const Context & /* context not used */,
     const std::string & name,
     const DataTypes & argument_types,
     const Array & params)
@@ -137,6 +139,7 @@ AggregateFunctionPtr createAggregateFunctionUniq(
 }
 
 AggregateFunctionPtr createAggregateFunctionUniqRawRes(
+    const Context & /* context not used */,
     const std::string & name,
     const DataTypes & argument_types,
     const Array & params)
