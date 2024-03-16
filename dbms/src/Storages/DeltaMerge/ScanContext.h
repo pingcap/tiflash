@@ -98,19 +98,18 @@ public:
         dmfile_mvcc_skipped_rows = tiflash_scan_context_pb.dmfile_mvcc_skipped_rows();
         dmfile_lm_filter_scanned_rows = tiflash_scan_context_pb.dmfile_lm_filter_scanned_rows();
         dmfile_lm_filter_skipped_rows = tiflash_scan_context_pb.dmfile_lm_filter_skipped_rows();
-        total_dmfile_rough_set_index_check_time_ns
-            = tiflash_scan_context_pb.dmfile_rough_set_index_check_time_ms() * 1000000;
-        total_dmfile_read_time_ns = tiflash_scan_context_pb.dmfile_read_time_ms() * 1000000;
-        create_snapshot_time_ns = tiflash_scan_context_pb.create_snapshot_time_ms() * 1000000;
-        total_remote_region_num = tiflash_scan_context_pb.remote_region_num();
-        total_local_region_num = tiflash_scan_context_pb.local_region_num();
+        total_dmfile_rough_set_index_check_time_ns = tiflash_scan_context_pb.total_dmfile_rs_check_ms() * 1000000;
+        total_dmfile_read_time_ns = tiflash_scan_context_pb.total_dmfile_read_ms() * 1000000;
+        create_snapshot_time_ns = tiflash_scan_context_pb.total_build_snapshot_ms() * 1000000;
+        total_remote_region_num = tiflash_scan_context_pb.remote_regions();
+        total_local_region_num = tiflash_scan_context_pb.local_regions();
         user_read_bytes = tiflash_scan_context_pb.user_read_bytes();
-        learner_read_ns = tiflash_scan_context_pb.learner_read_ms() * 1000000;
-        disagg_read_cache_hit_size = tiflash_scan_context_pb.disagg_read_cache_hit_size();
-        disagg_read_cache_miss_size = tiflash_scan_context_pb.disagg_read_cache_miss_size();
+        learner_read_ns = tiflash_scan_context_pb.total_learner_read_ms() * 1000000;
+        disagg_read_cache_hit_size = tiflash_scan_context_pb.disagg_read_cache_hit_bytes();
+        disagg_read_cache_miss_size = tiflash_scan_context_pb.disagg_read_cache_miss_bytes();
 
-        num_segments = tiflash_scan_context_pb.num_segments();
-        num_read_tasks = tiflash_scan_context_pb.num_read_tasks();
+        num_segments = tiflash_scan_context_pb.segments();
+        num_read_tasks = tiflash_scan_context_pb.read_tasks();
 
         delta_rows = tiflash_scan_context_pb.delta_rows();
         delta_bytes = tiflash_scan_context_pb.delta_bytes();
@@ -118,16 +117,16 @@ public:
         mvcc_input_rows = tiflash_scan_context_pb.mvcc_input_rows();
         mvcc_input_bytes = tiflash_scan_context_pb.mvcc_input_bytes();
         mvcc_output_rows = tiflash_scan_context_pb.mvcc_output_rows();
-        late_materialization_skip_rows = tiflash_scan_context_pb.late_materialization_skip_rows();
-        build_bitmap_time_ns = tiflash_scan_context_pb.build_bitmap_time_ms() * 1000000;
-        num_stale_read = tiflash_scan_context_pb.num_stale_read();
-        build_inputstream_time_ns = tiflash_scan_context_pb.build_inputstream_time_ms() * 1000000;
+        late_materialization_skip_rows = tiflash_scan_context_pb.lm_skip_rows();
+        build_bitmap_time_ns = tiflash_scan_context_pb.total_build_bitmap_ms() * 1000000;
+        num_stale_read = tiflash_scan_context_pb.stale_read_regions();
+        build_inputstream_time_ns = tiflash_scan_context_pb.total_build_inputstream_ms() * 1000000;
 
         setStreamCost(
-            tiflash_scan_context_pb.local_min_stream_cost_ms() * 1000000,
-            tiflash_scan_context_pb.local_max_stream_cost_ms() * 1000000,
-            tiflash_scan_context_pb.remote_min_stream_cost_ms() * 1000000,
-            tiflash_scan_context_pb.remote_max_stream_cost_ms() * 1000000);
+            tiflash_scan_context_pb.min_local_stream_ms() * 1000000,
+            tiflash_scan_context_pb.max_local_stream_ms() * 1000000,
+            tiflash_scan_context_pb.min_remote_stream_ms() * 1000000,
+            tiflash_scan_context_pb.max_remote_stream_ms() * 1000000);
 
         deserializeRegionNumberOfInstance(tiflash_scan_context_pb);
     }
@@ -141,19 +140,18 @@ public:
         tiflash_scan_context_pb.set_dmfile_mvcc_skipped_rows(dmfile_mvcc_skipped_rows);
         tiflash_scan_context_pb.set_dmfile_lm_filter_scanned_rows(dmfile_lm_filter_scanned_rows);
         tiflash_scan_context_pb.set_dmfile_lm_filter_skipped_rows(dmfile_lm_filter_skipped_rows);
-        tiflash_scan_context_pb.set_dmfile_rough_set_index_check_time_ms(
-            total_dmfile_rough_set_index_check_time_ns / 1000000);
-        tiflash_scan_context_pb.set_dmfile_read_time_ms(total_dmfile_read_time_ns / 1000000);
-        tiflash_scan_context_pb.set_create_snapshot_time_ms(create_snapshot_time_ns / 1000000);
-        tiflash_scan_context_pb.set_remote_region_num(total_remote_region_num);
-        tiflash_scan_context_pb.set_local_region_num(total_local_region_num);
+        tiflash_scan_context_pb.set_total_dmfile_rs_check_ms(total_dmfile_rough_set_index_check_time_ns / 1000000);
+        tiflash_scan_context_pb.set_total_dmfile_read_ms(total_dmfile_read_time_ns / 1000000);
+        tiflash_scan_context_pb.set_total_build_snapshot_ms(create_snapshot_time_ns / 1000000);
+        tiflash_scan_context_pb.set_remote_regions(total_remote_region_num);
+        tiflash_scan_context_pb.set_local_regions(total_local_region_num);
         tiflash_scan_context_pb.set_user_read_bytes(user_read_bytes);
-        tiflash_scan_context_pb.set_learner_read_ms(learner_read_ns / 1000000);
-        tiflash_scan_context_pb.set_disagg_read_cache_hit_size(disagg_read_cache_hit_size);
-        tiflash_scan_context_pb.set_disagg_read_cache_miss_size(disagg_read_cache_miss_size);
+        tiflash_scan_context_pb.set_total_learner_read_ms(learner_read_ns / 1000000);
+        tiflash_scan_context_pb.set_disagg_read_cache_hit_bytes(disagg_read_cache_hit_size);
+        tiflash_scan_context_pb.set_disagg_read_cache_miss_bytes(disagg_read_cache_miss_size);
 
-        tiflash_scan_context_pb.set_num_segments(num_segments);
-        tiflash_scan_context_pb.set_num_read_tasks(num_read_tasks);
+        tiflash_scan_context_pb.set_segments(num_segments);
+        tiflash_scan_context_pb.set_read_tasks(num_read_tasks);
 
         tiflash_scan_context_pb.set_delta_rows(delta_rows);
         tiflash_scan_context_pb.set_delta_bytes(delta_bytes);
@@ -161,15 +159,15 @@ public:
         tiflash_scan_context_pb.set_mvcc_input_rows(mvcc_input_rows);
         tiflash_scan_context_pb.set_mvcc_input_bytes(mvcc_input_bytes);
         tiflash_scan_context_pb.set_mvcc_output_rows(mvcc_output_rows);
-        tiflash_scan_context_pb.set_late_materialization_skip_rows(late_materialization_skip_rows);
-        tiflash_scan_context_pb.set_build_bitmap_time_ms(build_bitmap_time_ns / 1000000);
-        tiflash_scan_context_pb.set_num_stale_read(num_stale_read);
-        tiflash_scan_context_pb.set_build_inputstream_time_ms(build_inputstream_time_ns / 1000000);
+        tiflash_scan_context_pb.set_lm_skip_rows(late_materialization_skip_rows);
+        tiflash_scan_context_pb.set_total_build_bitmap_ms(build_bitmap_time_ns / 1000000);
+        tiflash_scan_context_pb.set_stale_read_regions(num_stale_read);
+        tiflash_scan_context_pb.set_total_build_inputstream_ms(build_inputstream_time_ns / 1000000);
 
-        tiflash_scan_context_pb.set_local_min_stream_cost_ms(local_min_stream_cost_ns / 1000000);
-        tiflash_scan_context_pb.set_local_max_stream_cost_ms(local_max_stream_cost_ns / 1000000);
-        tiflash_scan_context_pb.set_remote_min_stream_cost_ms(remote_min_stream_cost_ns / 1000000);
-        tiflash_scan_context_pb.set_remote_max_stream_cost_ms(remote_max_stream_cost_ns / 1000000);
+        tiflash_scan_context_pb.set_min_local_stream_ms(local_min_stream_cost_ns / 1000000);
+        tiflash_scan_context_pb.set_max_local_stream_ms(local_max_stream_cost_ns / 1000000);
+        tiflash_scan_context_pb.set_min_remote_stream_ms(remote_min_stream_cost_ns / 1000000);
+        tiflash_scan_context_pb.set_max_remote_stream_ms(remote_max_stream_cost_ns / 1000000);
 
         serializeRegionNumOfInstance(tiflash_scan_context_pb);
 
@@ -229,18 +227,18 @@ public:
         dmfile_mvcc_skipped_rows += other.dmfile_mvcc_skipped_rows();
         dmfile_lm_filter_scanned_rows += other.dmfile_lm_filter_scanned_rows();
         dmfile_lm_filter_skipped_rows += other.dmfile_lm_filter_skipped_rows();
-        total_dmfile_rough_set_index_check_time_ns += other.dmfile_rough_set_index_check_time_ms() * 1000000;
-        total_dmfile_read_time_ns += other.dmfile_read_time_ms() * 1000000;
-        create_snapshot_time_ns += other.create_snapshot_time_ms() * 1000000;
-        total_local_region_num += other.local_region_num();
-        total_remote_region_num += other.remote_region_num();
+        total_dmfile_rough_set_index_check_time_ns += other.total_dmfile_rs_check_ms() * 1000000;
+        total_dmfile_read_time_ns += other.total_dmfile_read_ms() * 1000000;
+        create_snapshot_time_ns += other.total_build_snapshot_ms() * 1000000;
+        total_local_region_num += other.local_regions();
+        total_remote_region_num += other.remote_regions();
         user_read_bytes += other.user_read_bytes();
-        learner_read_ns += other.learner_read_ms() * 1000000;
-        disagg_read_cache_hit_size += other.disagg_read_cache_hit_size();
-        disagg_read_cache_miss_size += other.disagg_read_cache_miss_size();
+        learner_read_ns += other.total_learner_read_ms() * 1000000;
+        disagg_read_cache_hit_size += other.disagg_read_cache_hit_bytes();
+        disagg_read_cache_miss_size += other.disagg_read_cache_miss_bytes();
 
-        num_segments += other.num_segments();
-        num_read_tasks += other.num_read_tasks();
+        num_segments += other.segments();
+        num_read_tasks += other.read_tasks();
 
         delta_rows += other.delta_rows();
         delta_bytes += other.delta_bytes();
@@ -248,16 +246,16 @@ public:
         mvcc_input_rows += other.mvcc_input_rows();
         mvcc_input_bytes += other.mvcc_input_bytes();
         mvcc_output_rows += other.mvcc_output_rows();
-        late_materialization_skip_rows += other.late_materialization_skip_rows();
-        build_bitmap_time_ns += other.build_bitmap_time_ms() * 1000000;
-        num_stale_read += other.num_stale_read();
-        build_inputstream_time_ns += other.build_inputstream_time_ms() * 1000000;
+        late_materialization_skip_rows += other.lm_skip_rows();
+        build_bitmap_time_ns += other.total_build_bitmap_ms() * 1000000;
+        num_stale_read += other.stale_read_regions();
+        build_inputstream_time_ns += other.total_build_inputstream_ms() * 1000000;
 
         mergeStreamCost(
-            other.local_min_stream_cost_ms() * 1000000,
-            other.local_max_stream_cost_ms() * 1000000,
-            other.remote_min_stream_cost_ms() * 1000000,
-            other.remote_max_stream_cost_ms() * 1000000);
+            other.min_local_stream_ms() * 1000000,
+            other.max_local_stream_ms() * 1000000,
+            other.min_remote_stream_ms() * 1000000,
+            other.max_remote_stream_ms() * 1000000);
 
         mergeRegionNumberOfInstance(other);
     }

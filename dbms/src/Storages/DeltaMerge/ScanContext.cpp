@@ -46,7 +46,7 @@ void ScanContext::serializeRegionNumOfInstance(tipb::TiFlashScanContext & proto)
 {
     for (const auto & [id, num] : region_num_of_instance)
     {
-        auto * p = proto.add_region_num_of_instance();
+        auto * p = proto.add_regions_of_instance();
         p->set_instance_id(id);
         p->set_region_num(num);
     }
@@ -54,7 +54,7 @@ void ScanContext::serializeRegionNumOfInstance(tipb::TiFlashScanContext & proto)
 
 void ScanContext::deserializeRegionNumberOfInstance(const tipb::TiFlashScanContext & proto)
 {
-    for (const auto & t : proto.region_num_of_instance())
+    for (const auto & t : proto.regions_of_instance())
     {
         region_num_of_instance[t.instance_id()] = t.region_num();
     }
@@ -70,7 +70,7 @@ void ScanContext::mergeRegionNumberOfInstance(const ScanContext & other)
 
 void ScanContext::mergeRegionNumberOfInstance(const tipb::TiFlashScanContext & other)
 {
-    for (const auto & t : other.region_num_of_instance())
+    for (const auto & t : other.regions_of_instance())
     {
         region_num_of_instance[t.instance_id()] += t.region_num();
     }
