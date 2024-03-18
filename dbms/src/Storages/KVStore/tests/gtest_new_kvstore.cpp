@@ -916,7 +916,6 @@ try
     kvs.reportThreadAllocBatch(
         std::string_view(namee.data(), namee.size()),
         ReportThreadAllocateInfoBatch{.alloc = 1, .dealloc = 2});
-    auto & tiflash_metrics = TiFlashMetrics::instance();
     EXPECT_ANY_THROW(tiflash_metrics.getProxyThreadMemory(""));
     std::thread t([&]() {
         kvs.reportThreadAllocInfo(std::string_view(name.begin(), name.end()), ReportThreadAllocateInfoType::Reset, 0);

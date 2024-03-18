@@ -557,7 +557,7 @@ void KVStore::reportThreadAllocInfo(std::string_view thdname, ReportThreadAlloca
     }
 }
 
-static const std::unordered_set<std::string> WHITE_LIST_THREAD_PREFIX = {"ReadIndexWkr"};
+static const std::unordered_set<std::string> RECORD_WHITE_LIST_THREAD_PREFIX = {"ReadIndexWkr"};
 
 /// For those everlasting threads, we can directly access their allocatedp/allocatedp.
 void KVStore::recordThreadAllocInfo()
@@ -568,7 +568,7 @@ void KVStore::recordThreadAllocInfo()
     {
         auto agg_thread_name = getThreadNameAggPrefix(std::string_view(k.data(), k.size()));
         // Some thread may have shorter lifetime, we can't use this timed task here to upgrade.
-        if (WHITE_LIST_THREAD_PREFIX.contains(agg_thread_name))
+        if (RECORD_WHITE_LIST_THREAD_PREFIX.contains(agg_thread_name))
         {
             auto [it, ok] = agg_remaining.emplace(agg_thread_name, 0);
             it->second += v.remaining();
