@@ -140,3 +140,6 @@
 [submodule "contrib/qpl"]
 	path = contrib/qpl
 	url = https://github.com/intel/qpl.git
+[submodule "contrib/usearch"]
+	path = contrib/usearch
+	url = https://github.com/unum-cloud/usearch.git

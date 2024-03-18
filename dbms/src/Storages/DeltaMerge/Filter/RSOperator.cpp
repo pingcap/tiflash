@@ -28,6 +28,7 @@
 #include <Storages/DeltaMerge/Filter/Or.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/Filter/Unsupported.h>
+#include <Storages/DeltaMerge/Filter/WithANNQueryInfo.h>
 
 namespace DB::DM
 {
@@ -49,5 +50,10 @@ RSOperatorPtr createOr(const RSOperators & children)                            
 RSOperatorPtr createIsNull(const Attr & attr)                                                   { return std::make_shared<IsNull>(attr);}
 RSOperatorPtr createUnsupported(const String & content, const String & reason, bool is_not)     { return std::make_shared<Unsupported>(content, reason, is_not); }
 // clang-format on
+
+RSOperatorPtr wrapWithANNQueryInfo(const RSOperatorPtr & op, const ANNQueryInfoPtr & ann_query_info)
+{
+    return std::make_shared<WithANNQueryInfo>(op, ann_query_info);
+}
 
 } // namespace DB::DM

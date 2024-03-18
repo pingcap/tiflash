@@ -24,6 +24,7 @@
 #include <Storages/FormatVersion.h>
 #include <Storages/KVStore/Types.h>
 #include <Storages/MutableSupport.h>
+#include <TiDB/Schema/VectorIndex.h>
 
 #include <limits>
 #include <memory>
@@ -89,11 +90,22 @@ struct ColumnDefine
     DataTypePtr type;
     Field default_value;
 
-    explicit ColumnDefine(ColId id_ = 0, String name_ = "", DataTypePtr type_ = nullptr, Field default_value_ = Field{})
+    /// Note: ColumnDefine is used in both Write path and Read path.
+    /// In the read path, vector_index is usually not available. Use AnnQueryInfo for
+    /// read related vector index information.
+    TiDB::VectorIndexInfoPtr vector_index;
+
+    explicit ColumnDefine(
+        ColId id_ = 0,
+        String name_ = "",
+        DataTypePtr type_ = nullptr,
+        Field default_value_ = Field{},
+        TiDB::VectorIndexInfoPtr vector_index_ = nullptr)
         : id(id_)
         , name(std::move(name_))
         , type(std::move(type_))
         , default_value(std::move(default_value_))
+        , vector_index(vector_index_)
     {}
 };
 

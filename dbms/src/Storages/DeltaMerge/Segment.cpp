@@ -3035,7 +3035,10 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(
         enable_handle_clean_read,
         ReadTag::Query,
         is_fast_scan,
-        enable_del_clean_read);
+        enable_del_clean_read,
+        /* read_packs */ {},
+        /* need_row_id */ false,
+        /* bitmap_filter */ bitmap_filter);
 
     auto columns_to_read_ptr = std::make_shared<ColumnDefines>(columns_to_read);
     SkippableBlockInputStreamPtr delta_stream = std::make_shared<DeltaValueInputStream>(

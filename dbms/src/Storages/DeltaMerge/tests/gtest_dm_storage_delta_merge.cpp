@@ -127,6 +127,7 @@ try
     const google::protobuf::RepeatedPtrField<tipb::Expr> pushed_down_filters{};
     query_info.dag_query = std::make_unique<DAGQueryInfo>(
         google::protobuf::RepeatedPtrField<tipb::Expr>(),
+        tipb::ANNQueryInfo{},
         pushed_down_filters, // Not care now
         std::vector<TiDB::ColumnInfo>{}, // Not care now
         std::vector<int>{},
@@ -677,6 +678,7 @@ try
     const google::protobuf::RepeatedPtrField<tipb::Expr> pushed_down_filters{};
     query_info.dag_query = std::make_unique<DAGQueryInfo>(
         google::protobuf::RepeatedPtrField<tipb::Expr>(),
+        tipb::ANNQueryInfo{},
         pushed_down_filters, // Not care now
         std::vector<TiDB::ColumnInfo>{}, // Not care now
         std::vector<int>{},
@@ -790,6 +792,7 @@ try
         const google::protobuf::RepeatedPtrField<tipb::Expr> pushed_down_filters{};
         query_info.dag_query = std::make_unique<DAGQueryInfo>(
             google::protobuf::RepeatedPtrField<tipb::Expr>(),
+            tipb::ANNQueryInfo{},
             pushed_down_filters, // Not care now
             std::vector<TiDB::ColumnInfo>{}, // Not care now
             std::vector<int>{},

@@ -94,6 +94,7 @@ DM::PushDownFilterPtr ParsePushDownFilterTest::generatePushDownFilter(
         }
         dag_query = std::make_unique<DAGQueryInfo>(
             conditions,
+            tipb::ANNQueryInfo{},
             pushed_down_filters,
             table_info.columns,
             std::vector<int>(), // don't care runtime filter

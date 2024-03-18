@@ -472,6 +472,7 @@ DM::RSOperatorPtr StorageDisaggregated::buildRSOperator(
 
     auto dag_query = std::make_unique<DAGQueryInfo>(
         filter_conditions.conditions,
+        table_scan.getANNQueryInfo(),
         table_scan.getPushedDownFilters(),
         table_scan.getColumns(),
         std::vector<int>{},
