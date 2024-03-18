@@ -194,6 +194,7 @@ target_link_libraries (dbms
     ${OPENSSL_CRYPTO_LIBRARY}
     ${BTRIE_LIBRARIES}
     absl::synchronization
+    tiflash_contrib::usearch
     tiflash_contrib::aws_s3
 
     etcdpb

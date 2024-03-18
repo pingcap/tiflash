@@ -201,6 +201,7 @@ BlockInputStreamPtr MockStorage::getStreamFromDeltaMerge(
         auto analyzer = std::make_unique<DAGExpressionAnalyzer>(names_and_types_map_for_delta_merge[table_id], context);
         query_info.dag_query = std::make_unique<DAGQueryInfo>(
             filter_conditions->conditions,
+            tipb::ANNQueryInfo(),
             empty_pushed_down_filters, // Not care now
             mockColumnInfosToTiDBColumnInfos(table_schema_for_delta_merge[table_id]),
             runtime_filter_ids,
@@ -228,6 +229,7 @@ BlockInputStreamPtr MockStorage::getStreamFromDeltaMerge(
         static const google::protobuf::RepeatedPtrField<tipb::Expr> empty_filters{};
         query_info.dag_query = std::make_unique<DAGQueryInfo>(
             empty_filters,
+            tipb::ANNQueryInfo(),
             empty_pushed_down_filters, // Not care now
             mockColumnInfosToTiDBColumnInfos(table_schema_for_delta_merge[table_id]),
             runtime_filter_ids,
@@ -258,6 +260,7 @@ void MockStorage::buildExecFromDeltaMerge(
         auto analyzer = std::make_unique<DAGExpressionAnalyzer>(names_and_types_map_for_delta_merge[table_id], context);
         query_info.dag_query = std::make_unique<DAGQueryInfo>(
             filter_conditions->conditions,
+            tipb::ANNQueryInfo(),
             empty_pushed_down_filters, // Not care now
             mockColumnInfosToTiDBColumnInfos(table_schema_for_delta_merge[table_id]),
             runtime_filter_ids,
@@ -290,6 +293,7 @@ void MockStorage::buildExecFromDeltaMerge(
         static const google::protobuf::RepeatedPtrField<tipb::Expr> empty_filters{};
         query_info.dag_query = std::make_unique<DAGQueryInfo>(
             empty_filters,
+            tipb::ANNQueryInfo(),
             empty_pushed_down_filters, // Not care now
             mockColumnInfosToTiDBColumnInfos(table_schema_for_delta_merge[table_id]),
             runtime_filter_ids,

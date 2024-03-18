@@ -32,6 +32,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <magic_enum.hpp>
 
 namespace DB
 {
@@ -381,6 +382,19 @@ try
     json->set("state", static_cast<Int32>(state));
     json->set("comment", comment);
 
+    if (vector_index)
+    {
+        RUNTIME_CHECK(vector_index->kind != VectorIndexKind::INVALID);
+        RUNTIME_CHECK(vector_index->distance_metric != DistanceMetric::INVALID);
+
+        Poco::JSON::Object::Ptr vector_index_json = new Poco::JSON::Object();
+        vector_index_json->set("kind", String(magic_enum::enum_name(vector_index->kind)));
+        vector_index_json->set("dimension", vector_index->dimension);
+        vector_index_json->set("distance_metric", String(magic_enum::enum_name(vector_index->distance_metric)));
+
+        json->set("vector_index", vector_index_json);
+    }
+
 #ifndef NDEBUG
     // Check stringify in Debug mode
     std::stringstream str;
@@ -430,6 +444,27 @@ try
         collate = type_json->get("Collate");
     state = static_cast<SchemaState>(json->getValue<Int32>("state"));
     comment = json->getValue<String>("comment");
+
+    auto vector_index_json = json->getObject("vector_index");
+    if (vector_index_json)
+    {
+        vector_index = std::make_shared<VectorIndexInfo>();
+
+        auto vector_kind = magic_enum::enum_cast<VectorIndexKind>(vector_index_json->getValue<String>("kind"));
+        RUNTIME_CHECK(vector_kind.has_value());
+        RUNTIME_CHECK(vector_kind.value() != VectorIndexKind::INVALID);
+        vector_index->kind = vector_kind.value();
+
+        vector_index->dimension = vector_index_json->getValue<UInt64>("dimension");
+        RUNTIME_CHECK(vector_index->dimension > 0);
+        RUNTIME_CHECK(vector_index->dimension <= 16000); // Just a protection
+
+        auto distance_metric
+            = magic_enum::enum_cast<DistanceMetric>(vector_index_json->getValue<String>("distance_metric"));
+        RUNTIME_CHECK(distance_metric.has_value());
+        RUNTIME_CHECK(distance_metric.value() != DistanceMetric::INVALID);
+        vector_index->distance_metric = distance_metric.value();
+    }
 }
 catch (const Poco::Exception & e)
 {

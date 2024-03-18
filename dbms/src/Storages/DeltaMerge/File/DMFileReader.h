@@ -31,6 +31,9 @@ namespace DB
 {
 namespace DM
 {
+
+class DMFileWithVectorIndexBlockInputStream;
+
 class RSOperator;
 using RSOperatorPtr = std::shared_ptr<RSOperator>;
 
@@ -38,6 +41,8 @@ inline static const size_t DMFILE_READ_ROWS_THRESHOLD = DEFAULT_MERGE_BLOCK_SIZE
 
 class DMFileReader
 {
+    friend class DMFileWithVectorIndexBlockInputStream;
+
 public:
     static bool isCacheableColumn(const ColumnDefine & cd);
     // Read stream for single column

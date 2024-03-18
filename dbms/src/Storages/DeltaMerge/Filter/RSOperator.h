@@ -18,6 +18,7 @@
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/Index/RSIndex.h>
 #include <Storages/DeltaMerge/Index/RSResult.h>
+#include <Storages/DeltaMerge/Index/VectorIndex_fwd.h>
 
 namespace DB::DM
 {
@@ -141,5 +142,8 @@ RSOperatorPtr createNotLike(const Attr & attr, const Field & values);
 RSOperatorPtr createIsNull(const Attr & attr);
 //
 RSOperatorPtr createUnsupported(const String & content, const String & reason, bool is_not);
+
+/// Wrap with a ANNQueryInfo
+RSOperatorPtr wrapWithANNQueryInfo(const RSOperatorPtr & op, const ANNQueryInfoPtr & ann_query_info);
 
 } // namespace DB::DM

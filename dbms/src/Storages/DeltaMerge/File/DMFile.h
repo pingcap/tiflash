@@ -44,11 +44,16 @@ namespace DB
 {
 namespace DM
 {
+
+class DMFileWithVectorIndexBlockInputStream;
+
 using DMFilePtr = std::shared_ptr<DMFile>;
 using DMFiles = std::vector<DMFilePtr>;
 
 class DMFile : private boost::noncopyable
 {
+    friend class DMFileWithVectorIndexBlockInputStream;
+
 public:
     enum Status : int
     {

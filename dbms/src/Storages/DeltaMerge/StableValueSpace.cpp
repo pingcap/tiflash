@@ -449,7 +449,8 @@ SkippableBlockInputStreamPtr StableValueSpace::Snapshot::getInputStream(
     bool is_fast_scan,
     bool enable_del_clean_read,
     const std::vector<IdSetPtr> & read_packs,
-    bool need_row_id)
+    bool need_row_id,
+    BitmapFilterPtr bitmap_filter)
 {
     LOG_DEBUG(
         log,
@@ -462,6 +463,9 @@ SkippableBlockInputStreamPtr StableValueSpace::Snapshot::getInputStream(
     std::vector<size_t> rows;
     streams.reserve(stable->files.size());
     rows.reserve(stable->files.size());
+
+    size_t last_rows = 0;
+
     for (size_t i = 0; i < stable->files.size(); i++)
     {
         DMFileBlockInputStreamBuilder builder(context.db_context);
@@ -471,7 +475,14 @@ SkippableBlockInputStreamPtr StableValueSpace::Snapshot::getInputStream(
             .setTracingID(context.tracing_id)
             .setRowsThreshold(expected_block_size)
             .setReadPacks(read_packs.size() > i ? read_packs[i] : nullptr);
-        streams.push_back(builder.build(stable->files[i], read_columns, rowkey_ranges, context.scan_context));
+        if (bitmap_filter)
+        {
+            builder = builder.setBitmapFilter(
+                BitmapFilterView(bitmap_filter, last_rows, last_rows + stable->files[i]->getRows()));
+            last_rows += stable->files[i]->getRows();
+        }
+
+        streams.push_back(builder.build2(stable->files[i], read_columns, rowkey_ranges, context.scan_context));
         rows.push_back(stable->files[i]->getRows());
     }
     if (need_row_id)

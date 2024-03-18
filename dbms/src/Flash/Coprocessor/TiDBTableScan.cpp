@@ -30,6 +30,9 @@ TiDBTableScan::TiDBTableScan(
     , pushed_down_filters(
           is_partition_table_scan ? std::move(table_scan->partition_table_scan().pushed_down_filter_conditions())
                                   : std::move(table_scan->tbl_scan().pushed_down_filter_conditions()))
+    , ann_query_info(
+          is_partition_table_scan ? std::move(table_scan->partition_table_scan().ann_query())
+                                  : std::move(table_scan->tbl_scan().ann_query()))
     // Only No-partition table need keep order when tablescan executor required keep order.
     // If keep_order is not set, keep order for safety.
     , keep_order(

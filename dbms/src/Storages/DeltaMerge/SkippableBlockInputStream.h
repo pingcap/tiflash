@@ -178,11 +178,17 @@ public:
 
     Block read() override
     {
+        FilterPtr filter = nullptr;
+        return read(filter, false);
+    }
+
+    Block read(FilterPtr & res_filter, bool return_filter) override
+    {
         Block res;
 
         while (current_stream != children.end())
         {
-            res = (*current_stream)->read();
+            res = (*current_stream)->read(res_filter, return_filter);
 
             if (res)
             {

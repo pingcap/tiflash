@@ -914,6 +914,7 @@ std::unordered_map<TableID, SelectQueryInfo> DAGStorageInterpreter::generateSele
         query_info.query = dagContext().dummy_ast;
         query_info.dag_query = std::make_unique<DAGQueryInfo>(
             filter_conditions.conditions,
+            table_scan.getANNQueryInfo(),
             table_scan.getPushedDownFilters(),
             table_scan.getColumns(),
             table_scan.getRuntimeFilterIDs(),

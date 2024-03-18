@@ -103,6 +103,7 @@ DM::RSOperatorPtr FilterParserTest::generateRsOperator(
     const google::protobuf::RepeatedPtrField<tipb::Expr> pushed_down_filters{}; // don't care pushed down filters
     std::unique_ptr<DAGQueryInfo> dag_query = std::make_unique<DAGQueryInfo>(
         conditions,
+        tipb::ANNQueryInfo{},
         pushed_down_filters,
         table_info.columns,
         std::vector<int>(), // don't care runtime filter

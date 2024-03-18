@@ -85,6 +85,15 @@ public:
     // Building bitmap
     std::atomic<uint64_t> build_bitmap_time_ns{0};
 
+    std::atomic<uint64_t> total_vector_idx_load_from_disk{0};
+    std::atomic<uint64_t> total_vector_idx_load_from_cache{0};
+    std::atomic<uint64_t> total_vector_idx_load_time_ms{0};
+    std::atomic<uint64_t> total_vector_idx_search_time_ms{0};
+    std::atomic<uint64_t> total_vector_idx_search_visited_nodes{0};
+    std::atomic<uint64_t> total_vector_idx_search_discarded_nodes{0};
+    std::atomic<uint64_t> total_vector_idx_read_vec_time_ms{0};
+    std::atomic<uint64_t> total_vector_idx_read_others_time_ms{0};
+
     const String resource_group_name;
 
     explicit ScanContext(const String & name = "")
@@ -107,6 +116,15 @@ public:
         learner_read_ns = tiflash_scan_context_pb.total_learner_read_ms() * 1000000;
         disagg_read_cache_hit_size = tiflash_scan_context_pb.total_disagg_read_cache_hit_size();
         disagg_read_cache_miss_size = tiflash_scan_context_pb.total_disagg_read_cache_miss_size();
+
+        total_vector_idx_load_from_disk = tiflash_scan_context_pb.total_vector_idx_load_from_disk();
+        total_vector_idx_load_from_cache = tiflash_scan_context_pb.total_vector_idx_load_from_cache();
+        total_vector_idx_load_time_ms = tiflash_scan_context_pb.total_vector_idx_load_time_ms();
+        total_vector_idx_search_time_ms = tiflash_scan_context_pb.total_vector_idx_search_time_ms();
+        total_vector_idx_search_visited_nodes = tiflash_scan_context_pb.total_vector_idx_search_visited_nodes();
+        total_vector_idx_search_discarded_nodes = tiflash_scan_context_pb.total_vector_idx_search_discarded_nodes();
+        total_vector_idx_read_vec_time_ms = tiflash_scan_context_pb.total_vector_idx_read_vec_time_ms();
+        total_vector_idx_read_others_time_ms = tiflash_scan_context_pb.total_vector_idx_read_others_time_ms();
     }
 
     tipb::TiFlashScanContext serialize()
@@ -126,6 +144,15 @@ public:
         tiflash_scan_context_pb.set_total_learner_read_ms(learner_read_ns / 1000000);
         tiflash_scan_context_pb.set_total_disagg_read_cache_hit_size(disagg_read_cache_hit_size);
         tiflash_scan_context_pb.set_total_disagg_read_cache_miss_size(disagg_read_cache_miss_size);
+
+        tiflash_scan_context_pb.set_total_vector_idx_load_from_disk(total_vector_idx_load_from_disk);
+        tiflash_scan_context_pb.set_total_vector_idx_load_from_cache(total_vector_idx_load_from_cache);
+        tiflash_scan_context_pb.set_total_vector_idx_load_time_ms(total_vector_idx_load_time_ms);
+        tiflash_scan_context_pb.set_total_vector_idx_search_time_ms(total_vector_idx_search_time_ms);
+        tiflash_scan_context_pb.set_total_vector_idx_search_visited_nodes(total_vector_idx_search_visited_nodes);
+        tiflash_scan_context_pb.set_total_vector_idx_search_discarded_nodes(total_vector_idx_search_discarded_nodes);
+        tiflash_scan_context_pb.set_total_vector_idx_read_vec_time_ms(total_vector_idx_read_vec_time_ms);
+        tiflash_scan_context_pb.set_total_vector_idx_read_others_time_ms(total_vector_idx_read_others_time_ms);
 
         return tiflash_scan_context_pb;
     }
@@ -157,6 +184,15 @@ public:
         mvcc_input_rows += other.mvcc_input_rows;
         mvcc_input_bytes += other.mvcc_input_bytes;
         mvcc_output_rows += other.mvcc_output_rows;
+
+        total_vector_idx_load_from_disk += other.total_vector_idx_load_from_disk;
+        total_vector_idx_load_from_cache += other.total_vector_idx_load_from_cache;
+        total_vector_idx_load_time_ms += other.total_vector_idx_load_time_ms;
+        total_vector_idx_search_time_ms += other.total_vector_idx_search_time_ms;
+        total_vector_idx_search_visited_nodes += other.total_vector_idx_search_visited_nodes;
+        total_vector_idx_search_discarded_nodes += other.total_vector_idx_search_discarded_nodes;
+        total_vector_idx_read_vec_time_ms += other.total_vector_idx_read_vec_time_ms;
+        total_vector_idx_read_others_time_ms += other.total_vector_idx_read_others_time_ms;
     }
 
     void merge(const tipb::TiFlashScanContext & other)
@@ -174,6 +210,15 @@ public:
         learner_read_ns += other.total_learner_read_ms() * 1000000;
         disagg_read_cache_hit_size += other.total_disagg_read_cache_hit_size();
         disagg_read_cache_miss_size += other.total_disagg_read_cache_miss_size();
+
+        total_vector_idx_load_from_disk += other.total_vector_idx_load_from_disk();
+        total_vector_idx_load_from_cache += other.total_vector_idx_load_from_cache();
+        total_vector_idx_load_time_ms += other.total_vector_idx_load_time_ms();
+        total_vector_idx_search_time_ms += other.total_vector_idx_search_time_ms();
+        total_vector_idx_search_visited_nodes += other.total_vector_idx_search_visited_nodes();
+        total_vector_idx_search_discarded_nodes += other.total_vector_idx_search_discarded_nodes();
+        total_vector_idx_read_vec_time_ms += other.total_vector_idx_read_vec_time_ms();
+        total_vector_idx_read_others_time_ms += other.total_vector_idx_read_others_time_ms();
     }
 
     String toJson() const;
