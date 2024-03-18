@@ -114,6 +114,15 @@ void TableScanStatistics::collectExtraRuntimeDetail()
         });
         break;
     }
+
+    if (auto it = dag_context.scan_context_map.find(executor_id); it != dag_context.scan_context_map.end())
+    {
+        it->second->setStreamCost(
+            std::max(local_table_scan_detail.min_stream_cost_ns, 0.0),
+            std::max(local_table_scan_detail.max_stream_cost_ns, 0.0),
+            std::max(remote_table_scan_detail.min_stream_cost_ns, 0.0),
+            std::max(remote_table_scan_detail.max_stream_cost_ns, 0.0));
+    }
 }
 
 TableScanStatistics::TableScanStatistics(const tipb::Executor * executor, DAGContext & dag_context_)
