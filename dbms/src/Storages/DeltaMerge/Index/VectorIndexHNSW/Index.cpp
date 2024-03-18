@@ -78,9 +78,9 @@ constexpr tipb::VectorDistanceMetric toTiDBQueryDistanceMetric(unum::usearch::me
     case unum::usearch::metric_kind_t::l2sq_k:
         return tipb::VectorDistanceMetric::L2;
     case unum::usearch::metric_kind_t::cos_k:
-        return tipb::VectorDistanceMetric::Cosine;
+        return tipb::VectorDistanceMetric::COSINE;
     default:
-        return tipb::VectorDistanceMetric::InvalidMetric;
+        return tipb::VectorDistanceMetric::INVALID_DISTANCE_METRIC;
     }
 }
 
@@ -189,12 +189,13 @@ std::vector<VectorIndex::Key> VectorIndexHNSW<Metric>::search(
 
     RUNTIME_CHECK(index != nullptr);
 
-    auto predicate = [&valid_rows, &statistics](USearchIndexWithSerialization<Metric>::member_cref_t const & member) {
-        statistics.visited_nodes++;
-        if (!valid_rows[member.key])
-            statistics.discarded_nodes++;
-        return valid_rows[member.key];
-    };
+    auto predicate
+        = [&valid_rows, &statistics](typename USearchIndexWithSerialization<Metric>::member_cref_t const & member) {
+              statistics.visited_nodes++;
+              if (!valid_rows[member.key])
+                  statistics.discarded_nodes++;
+              return valid_rows[member.key];
+          };
 
     // TODO: Support efSearch.
     auto result = index->search( //
