@@ -907,6 +907,7 @@ try
 {
     KVStore & kvs = getKVS();
     std::string name = "test1-1";
+    kvs.reportThreadAllocInfo(std::string_view(name.data(), name.size()), ReportThreadAllocateInfoType::Reset, 0);
     kvs.reportThreadAllocBatch(
         std::string_view(name.data(), name.size()),
         ReportThreadAllocateInfoBatch{.alloc = 1, .dealloc = 2});
