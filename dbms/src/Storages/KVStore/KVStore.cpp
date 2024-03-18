@@ -515,7 +515,7 @@ void KVStore::reportThreadAllocInfo(std::string_view thdname, ReportThreadAlloca
     case ReportThreadAllocateInfoType::Reset:
     {
         auto & metrics = TiFlashMetrics::instance();
-        metrics.registerProxyThreadMemory(tname);
+        metrics.registerProxyThreadMemory(getThreadNameAggPrefix(tname));
         {
             std::unique_lock l(memory_allocation_mut);
             memory_allocation_map.insert_or_assign(tname, ThreadInfoJealloc());
