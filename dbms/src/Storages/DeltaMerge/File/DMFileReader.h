@@ -28,12 +28,17 @@
 
 namespace DB::DM
 {
+
+class DMFileWithVectorIndexBlockInputStream;
+
 class RSOperator;
 using RSOperatorPtr = std::shared_ptr<RSOperator>;
 
 
 class DMFileReader
 {
+    friend class DMFileWithVectorIndexBlockInputStream;
+
 public:
     static bool isCacheableColumn(const ColumnDefine & cd);
 

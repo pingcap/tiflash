@@ -46,6 +46,37 @@ std::pair<Block, bool> readBlock(SkippableBlockInputStreamPtr & stable, Skippabl
     }
 }
 
+std::pair<Block, bool> readBlockWithReturnFilter(
+    SkippableBlockInputStreamPtr & stable,
+    SkippableBlockInputStreamPtr & delta,
+    FilterPtr & filter)
+{
+    if (stable == nullptr && delta == nullptr)
+    {
+        return {{}, false};
+    }
+
+    if (stable == nullptr)
+    {
+        return {delta->read(filter, true), true};
+    }
+
+    auto block = stable->read(filter, true);
+    if (block)
+    {
+        return {block, false};
+    }
+    else
+    {
+        stable = nullptr;
+        if (delta != nullptr)
+        {
+            block = delta->read(filter, true);
+        }
+        return {block, true};
+    }
+}
+
 size_t skipBlock(SkippableBlockInputStreamPtr & stable, SkippableBlockInputStreamPtr & delta)
 {
     if (stable == nullptr && delta == nullptr)

@@ -15,9 +15,12 @@
 #pragma once
 
 #include <Interpreters/Context_fwd.h>
+#include <Storages/DeltaMerge/BitmapFilter/BitmapFilterView.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/File/ColumnCache.h>
 #include <Storages/DeltaMerge/File/DMFileReader.h>
+#include <Storages/DeltaMerge/File/DMFileWithVectorIndexBlockInputStream_fwd.h>
+#include <Storages/DeltaMerge/Index/VectorIndex_fwd.h>
 #include <Storages/DeltaMerge/ReadThread/SegmentReader.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/ScanContext_fwd.h>
@@ -89,6 +92,20 @@ public:
         const RowKeyRanges & rowkey_ranges,
         const ScanContextPtr & scan_context);
 
+    // Build the final stream ptr. The return value could be DMFileBlockInputStreamPtr or DMFileWithVectorIndexBlockInputStream.
+    // Empty `rowkey_ranges` means not filter by rowkey
+    // Should not use the builder again after `build` is called.
+    // In the following conditions DMFileWithVectorIndexBlockInputStream will be returned:
+    // 1. BitmapFilter is provided
+    // 2. ANNQueryInfo is available in the RSFilter
+    // 3. The vector column mentioned by ANNQueryInfo is in the read_columns
+    // 4. The vector column mentioned by ANNQueryInfo exists vector index file
+    SkippableBlockInputStreamPtr build2(
+        const DMFilePtr & dmfile,
+        const ColumnDefines & read_columns,
+        const RowKeyRanges & rowkey_ranges,
+        const ScanContextPtr & scan_context);
+
     // **** filters **** //
 
     // Only set enable_handle_clean_read_ param to true when
@@ -110,6 +127,12 @@ public:
         enable_del_clean_read = enable_del_clean_read_;
         is_fast_scan = is_fast_scan_;
         max_data_version = max_data_version_;
+        return *this;
+    }
+
+    DMFileBlockInputStreamBuilder & setBitmapFilter(const BitmapFilterView & bitmap_filter_)
+    {
+        bitmap_filter.emplace(bitmap_filter_);
         return *this;
     }
 
@@ -162,10 +185,12 @@ private:
 
     DMFileBlockInputStreamBuilder & setCaches(
         const MarkCachePtr & mark_cache_,
-        const MinMaxIndexCachePtr & index_cache_)
+        const MinMaxIndexCachePtr & index_cache_,
+        const VectorIndexCachePtr & vector_index_cache_)
     {
         mark_cache = mark_cache_;
         index_cache = index_cache_;
+        vector_index_cache = vector_index_cache_;
         return *this;
     }
 
@@ -194,6 +219,10 @@ private:
     size_t max_sharing_column_bytes_for_all = 0;
     String tracing_id;
     ReadTag read_tag = ReadTag::Internal;
+
+    VectorIndexCachePtr vector_index_cache;
+    // Note: Currently thie field is assigned only for Stable streams, not available for ColumnFileBig
+    std::optional<BitmapFilterView> bitmap_filter;
 };
 
 /**

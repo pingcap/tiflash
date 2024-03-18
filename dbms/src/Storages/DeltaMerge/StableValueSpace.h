@@ -234,7 +234,8 @@ public:
             bool is_fast_scan = false,
             bool enable_del_clean_read = false,
             const std::vector<IdSetPtr> & read_packs = {},
-            bool need_row_id = false);
+            bool need_row_id = false,
+            BitmapFilterPtr bitmap_filter = nullptr);
 
         RowsAndBytes getApproxRowsAndBytes(const DMContext & context, const RowKeyRange & range) const;
 

@@ -40,6 +40,11 @@ class DMFileMetaV2Test;
 class DMStoreForSegmentReadTaskTest;
 } // namespace tests
 
+class DMFileWithVectorIndexBlockInputStream;
+
+using DMFilePtr = std::shared_ptr<DMFile>;
+using DMFiles = std::vector<DMFilePtr>;
+
 class DMFile : private boost::noncopyable
 {
 public:
@@ -290,6 +295,7 @@ private:
     friend class ColumnReadStream;
     friend class DMFilePackFilter;
     friend class DMFileBlockInputStreamBuilder;
+    friend class DMFileWithVectorIndexBlockInputStream;
     friend class tests::DMFileTest;
     friend class tests::DMFileMetaV2Test;
     friend class tests::DMStoreForSegmentReadTaskTest;

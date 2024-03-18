@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Storages/DeltaMerge/Index/MinMaxIndex.h>
+#include <Storages/DeltaMerge/Index/VectorIndex_fwd.h>
 
 namespace DB::DM
 {
@@ -22,10 +23,16 @@ struct RSIndex
 {
     DataTypePtr type;
     MinMaxIndexPtr minmax;
+    VectorIndexPtr vector; // TODO: Actually this is not a rough index. We put it here for convenience.
 
     RSIndex(const DataTypePtr & type_, const MinMaxIndexPtr & minmax_)
         : type(type_)
         , minmax(minmax_)
+    {}
+
+    RSIndex(const DataTypePtr & type_, const VectorIndexPtr & vector_)
+        : type(type_)
+        , vector(vector_)
     {}
 };
 

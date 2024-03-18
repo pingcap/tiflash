@@ -44,6 +44,7 @@
 #include <Storages/DeltaMerge/Filter/PushDownFilter.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/FilterParser/FilterParser.h>
+#include <Storages/DeltaMerge/Index/VectorIndex.h>
 #include <Storages/DeltaMerge/Remote/DisaggSnapshot.h>
 #include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/TMTContext.h>
@@ -182,6 +183,7 @@ void StorageDeltaMerge::updateTableColumnInfo()
             if (itr != columns.end())
             {
                 col_def.default_value = itr->defaultValueToField();
+                col_def.vector_index = itr->vector_index;
             }
 
             if (col_def.id != TiDBPkColumnID && col_def.id != VersionColumnID && col_def.id != DelMarkColumnID
@@ -297,6 +299,22 @@ void StorageDeltaMerge::updateTableColumnInfo()
         rowkey_column_defines.push_back(handle_column_define);
     }
     rowkey_column_size = rowkey_column_defines.size();
+
+    LOG_INFO(
+        log,
+        "updateTableColumnInfo finished, table_name={} table_column_defines={}",
+        table_column_info->table_name,
+        [&] {
+            FmtBuffer fmt_buf;
+            fmt_buf.joinStr(
+                table_column_defines.begin(),
+                table_column_defines.end(),
+                [](const ColumnDefine & col, FmtBuffer & fb) {
+                    fb.fmtAppend("{} {} {}", col.name, col.type->getFamilyName(), col.vector_index);
+                },
+                ", ");
+            return fmt_buf.toString();
+        }());
 }
 
 void StorageDeltaMerge::clearData()
