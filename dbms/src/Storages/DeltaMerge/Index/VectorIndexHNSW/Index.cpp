@@ -189,12 +189,13 @@ std::vector<VectorIndex::Key> VectorIndexHNSW<Metric>::search(
 
     RUNTIME_CHECK(index != nullptr);
 
-    auto predicate = [&valid_rows, &statistics](USearchIndexWithSerialization<Metric>::member_cref_t const & member) {
-        statistics.visited_nodes++;
-        if (!valid_rows[member.key])
-            statistics.discarded_nodes++;
-        return valid_rows[member.key];
-    };
+    auto predicate
+        = [&valid_rows, &statistics](typename USearchIndexWithSerialization<Metric>::member_cref_t const & member) {
+              statistics.visited_nodes++;
+              if (!valid_rows[member.key])
+                  statistics.discarded_nodes++;
+              return valid_rows[member.key];
+          };
 
     // TODO: Support efSearch.
     auto result = index->search( //
