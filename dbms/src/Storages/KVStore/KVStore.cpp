@@ -514,6 +514,16 @@ void KVStore::reportThreadAllocInfo(std::string_view thdname, ReportThreadAlloca
     switch (type)
     {
     case ReportThreadAllocateInfoType::Reset:
+    {
+        std::unique_lock lock(proxy_thread_ru_mtx);
+        if unlikely (!registered_raft_proxy_thread_memory_usage_metrics.count(k))
+        {
+            // Add new keyspace store usage metric
+            registered_raft_proxy_thread_memory_usage_metrics.emplace(
+                k,
+                &registered_raft_proxy_thread_memory_usage_family->Add({{"type", k}}));
+        }
+    }
         memory_allocation_map.insert_or_assign(tname, ThreadInfoJealloc());
         break;
     case ReportThreadAllocateInfoType::Remove:
