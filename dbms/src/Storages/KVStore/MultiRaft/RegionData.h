@@ -17,6 +17,8 @@
 #include <Storages/KVStore/Decode/RegionDataRead.h>
 #include <Storages/KVStore/MultiRaft/RegionCFDataBase.h>
 #include <Storages/KVStore/MultiRaft/RegionCFDataTrait.h>
+#include <Storages/KVStore/MultiRaft/RegionSerde.h>
+#include <Storages/KVStore/MultiRaft/Spill/LargeTxnDefaultCf.h>
 
 namespace DB
 {
@@ -29,6 +31,7 @@ using DecodedLockCFValuePtr = std::shared_ptr<const RecordKVFormat::DecodedLockC
 enum class ColumnFamilyType : uint8_t;
 
 struct RegionLockReadQuery;
+struct RegionDeserResult;
 class Region;
 
 class RegionData
@@ -64,9 +67,10 @@ public:
 
     void assignRegionData(RegionData && new_region_data);
 
-    size_t serialize(WriteBuffer & buf) const;
+    size_t serialize(WriteBuffer & buf, const RegionSerdeOpts & region_serde_opts) const;
+    std::optional<std::string> serializeLargeTxnMeta() const;
 
-    static void deserialize(ReadBuffer & buf, RegionData & region_data);
+    static void deserialize(ReadBuffer & buf, RegionData & region_data, const RegionDeserResult & result);
 
     friend bool operator==(const RegionData & r1, const RegionData & r2) { return r1.isEqual(r2); }
 
@@ -74,10 +78,12 @@ public:
 
     RegionWriteCFData & writeCF();
     RegionDefaultCFData & defaultCF();
+    LargeTxnDefaultCf & largeDefautCf();
 
     const RegionWriteCFData & writeCF() const;
     const RegionDefaultCFData & defaultCF() const;
     const RegionLockCFData & lockCF() const;
+    const LargeTxnDefaultCf & largeDefautCf() const;
 
     RegionData() = default;
 
@@ -125,6 +131,7 @@ private:
     RegionWriteCFData write_cf;
     RegionDefaultCFData default_cf;
     RegionLockCFData lock_cf;
+    LargeTxnDefaultCf large_default_cf;
     OrphanKeysInfo orphan_keys_info;
 
     // Size of data cf & write cf, without lock cf.

@@ -13,8 +13,8 @@
 // limitations under the License.
 
 #include <Debug/MockTiDB.h>
-#include <Debug/MockTiKV.h>
 #include <Debug/dbgFuncCoprocessor.h>
+#include <Debug/dbgKVStore/MockTiKV.h>
 #include <Debug/dbgNaturalDag.h>
 #include <Debug/dbgTools.h>
 #include <Flash/Coprocessor/DAGContext.h>

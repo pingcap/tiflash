@@ -17,6 +17,7 @@
 #include <Common/Logger.h>
 #include <IO/Buffer/MemoryReadWriteBuffer.h>
 #include <Interpreters/Context_fwd.h>
+#include <Storages/KVStore/MultiRaft/RegionSerde.h>
 #include <Storages/KVStore/Types.h>
 #include <Storages/Page/FileUsage.h>
 #include <Storages/Page/PageStorage.h>
@@ -34,6 +35,11 @@ struct RegionManager;
 
 struct TiFlashRaftProxyHelper;
 
+namespace RegionBench
+{
+struct DebugKVStore;
+}
+
 class RegionPersister final : private boost::noncopyable
 {
 public:
@@ -48,12 +54,18 @@ public:
     bool gc();
 
     using RegionCacheWriteElement = std::tuple<RegionID, MemoryWriteBuffer, size_t, UInt64>;
-    static void computeRegionWriteBuffer(const Region & region, RegionCacheWriteElement & region_write_buffer);
-    static size_t computeRegionWriteBuffer(const Region & region, WriteBuffer & buffer);
+    static void computeRegionWriteBuffer(
+        const Region & region,
+        RegionCacheWriteElement & region_write_buffer,
+        const RegionSerdeOpts & region_serde_opts);
+    static size_t computeRegionWriteBuffer(
+        const Region & region,
+        WriteBuffer & buffer,
+        const RegionSerdeOpts & region_serde_opts);
 
     PageStorageConfig getPageStorageSettings() const;
-
     FileUsageStatistics getFileUsageStatistics() const;
+    const RegionSerdeOpts & getRegionSerdeOpts() const { return region_serde_opts; }
 
 private:
     void forceTransformKVStoreV2toV3();
@@ -72,10 +84,12 @@ private:
     }
 
 private:
+    friend struct RegionBench::DebugKVStore;
     Context & global_context;
     PageStorageRunMode run_mode;
     PageWriterPtr page_writer;
     PageReaderPtr page_reader;
+    RegionSerdeOpts region_serde_opts;
 
     const NamespaceID ns_id = KVSTORE_NAMESPACE_ID;
     LoggerPtr log;

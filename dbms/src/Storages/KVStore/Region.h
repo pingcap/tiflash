@@ -67,8 +67,6 @@ class RegionTaskLock;
 class Region : public std::enable_shared_from_this<Region>
 {
 public:
-    const static UInt32 CURRENT_VERSION;
-
     static const auto PutFlag = RecordKVFormat::CFModifyFlag::PutFlag;
     static const auto DelFlag = RecordKVFormat::CFModifyFlag::DelFlag;
 
@@ -177,16 +175,17 @@ public: // Stats
         MaybeRegionPersistExtension ext_type,
         const char * data,
         UInt32 size);
-    std::tuple<size_t, UInt64> serialize(WriteBuffer & buf) const;
+    std::tuple<size_t, UInt64> serialize(WriteBuffer & buf, const RegionSerdeOpts &) const;
     static RegionPtr deserialize(ReadBuffer & buf, const TiFlashRaftProxyHelper * proxy_helper = nullptr);
     std::tuple<size_t, UInt64> serializeImpl(
         UInt32 binary_version,
         UInt32 expected_extension_count,
         std::function<size_t(UInt32 &, WriteBuffer &)> extra_handler,
-        WriteBuffer & buf) const;
+        WriteBuffer & buf,
+        const RegionSerdeOpts & region_serde_opts) const;
     static RegionPtr deserializeImpl(
         UInt32 current_version,
-        std::function<bool(UInt32, ReadBuffer &, UInt32)> extra_handler,
+        std::function<bool(UInt32, ReadBuffer &, UInt32, RegionDeserResult &)> extra_handler,
         ReadBuffer & buf,
         const TiFlashRaftProxyHelper * proxy_helper = nullptr);
 

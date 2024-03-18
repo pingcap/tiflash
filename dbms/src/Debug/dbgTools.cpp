@@ -14,7 +14,7 @@
 
 #include <Common/typeid_cast.h>
 #include <Debug/MockTiDB.h>
-#include <Debug/MockTiKV.h>
+#include <Debug/dbgKVStore/MockTiKV.h>
 #include <Debug/dbgKVStore/dbgKVStore.h>
 #include <Debug/dbgTools.h>
 #include <Interpreters/Context.h>
@@ -560,10 +560,12 @@ void concurrentBatchInsert(
     Context & context)
 {
     TMTContext & tmt = context.getTMTContext();
+    auto & orig_kvs = tmt.getKVStore();
+    auto debug_kvs = DebugKVStore(*orig_kvs);
 
     RegionID curr_max_region_id(InvalidRegionID);
     HandleID curr_max_handle_id = 0;
-    tmt.getKVStore()->traverseRegions([&](const RegionID region_id, const RegionPtr & region) {
+    debug_kvs->traverseRegions([&](const RegionID region_id, const RegionPtr & region) {
         curr_max_region_id
             = (curr_max_region_id == InvalidRegionID) ? region_id : std::max<RegionID>(curr_max_region_id, region_id);
         const auto range = region->getRange();

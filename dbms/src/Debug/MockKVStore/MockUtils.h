@@ -69,11 +69,13 @@ inline metapb::Region createRegionInfo(
 inline RegionMeta createRegionMeta(
     UInt64 id,
     DB::TableID table_id,
+    const HandleID from = 0,
+    const HandleID to = 300,
     std::optional<raft_serverpb::RaftApplyState> apply_state = std::nullopt)
 {
     return RegionMeta(
         /*peer=*/createPeer(31, true),
-        /*region=*/createRegionInfo(id, RecordKVFormat::genKey(table_id, 0), RecordKVFormat::genKey(table_id, 300)),
+        /*region=*/createRegionInfo(id, RecordKVFormat::genKey(table_id, from), RecordKVFormat::genKey(table_id, to)),
         /*apply_state_=*/apply_state.value_or(initialApplyState()));
 }
 

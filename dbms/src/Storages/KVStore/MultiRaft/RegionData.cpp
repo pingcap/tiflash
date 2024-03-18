@@ -12,10 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/FailPoint.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/KVStore/FFI/ColumnFamily.h>
 #include <Storages/KVStore/MultiRaft/RegionData.h>
+#include <Storages/KVStore/MultiRaft/RegionSerde.h>
 #include <Storages/KVStore/Read/RegionLockInfo.h>
 
 namespace DB
@@ -25,6 +27,11 @@ namespace ErrorCodes
 extern const int LOGICAL_ERROR;
 extern const int ILLFORMAT_RAFT_ROW;
 } // namespace ErrorCodes
+
+namespace FailPoints
+{
+extern const char force_write_to_large_txn_default[];
+} // namespace FailPoints
 
 void RegionData::reportAlloc(size_t delta)
 {
@@ -61,6 +68,14 @@ RegionDataRes RegionData::insert(ColumnFamilyType cf, TiKVKey && key, TiKVValue 
     }
     case ColumnFamilyType::Default:
     {
+        // TODO(Spill) Find out whether it is a large txn, then use `insertWithTs`.
+        auto use_large = [&]() {
+            auto delta = large_default_cf.insert(std::move(key), std::move(value), mode);
+            cf_data_size += delta;
+            reportAlloc(delta);
+            return delta;
+        };
+        fiu_do_on(FailPoints::force_write_to_large_txn_default, { return use_large(); });
         auto delta = default_cf.insert(std::move(key), std::move(value), mode);
         cf_data_size += delta;
         reportAlloc(delta);
@@ -105,6 +120,11 @@ void RegionData::remove(ColumnFamilyType cf, const TiKVKey & key)
         Timestamp ts = RecordKVFormat::getTs(key);
         // removed by gc, may not exist.
         auto delta = default_cf.remove(RegionDefaultCFData::Key{pk, ts}, true);
+        // ALso check large txn cf if we actually removed nothing.
+        if unlikely (delta == 0)
+        {
+            delta = large_default_cf.remove(pk, ts, true);
+        }
         cf_data_size -= delta;
         reportDealloc(delta);
         return;
@@ -140,6 +160,14 @@ RegionData::WriteCFIter RegionData::removeDataByWriteIt(const WriteCFIter & writ
             map.erase(data_it);
             reportDealloc(delta);
         }
+        else if unlikely (large_default_cf.hasTxn(decoded_val.prewrite_ts))
+        {
+            auto it = large_default_cf.find(pk, ts);
+            auto delta = LargeTxnDefaultCf::getTiKVKeyValueSize(it);
+            cf_data_size -= delta;
+            large_default_cf.erase(it);
+            reportDealloc(delta);
+        }
     }
 
     auto delta = RegionWriteCFData::calcTiKVKeyValueSize(write_it->second);
@@ -172,12 +200,27 @@ std::optional<RegionDataReadInfo> RegionData::readDataByWriteIt(
     if (decoded_val.write_type != RecordKVFormat::CFModifyFlag::PutFlag)
         return RegionDataReadInfo{pk, decoded_val.write_type, ts, nullptr};
 
+
     std::string orphan_key_debug_msg;
     if (!decoded_val.short_value)
     {
         const auto & map = default_cf.getData();
         if (auto data_it = map.find({pk, decoded_val.prewrite_ts}); data_it != map.end())
+        {
             return RegionDataReadInfo{pk, decoded_val.write_type, ts, RegionDefaultCFDataTrait::getTiKVValue(data_it)};
+        }
+        else if unlikely (large_default_cf.hasTxn(decoded_val.prewrite_ts))
+        {
+            if (const auto & it = large_default_cf.find(pk, ts); likely(it.has_value()))
+            {
+                return RegionDataReadInfo{
+                    pk,
+                    decoded_val.write_type,
+                    ts,
+                    LargeDefaultCFDataTrait::getTiKVValue(std::get<1>(it.value())),
+                };
+            }
+        }
         else
         {
             if (!hard_error)
@@ -265,6 +308,7 @@ void RegionData::splitInto(const RegionRange & range, RegionData & new_region_da
     size_changed += write_cf.splitInto(range, new_region_data.write_cf);
     // reportAlloc: Remember to track memory here if we have a region-wise metrics later.
     size_changed += lock_cf.splitInto(range, new_region_data.lock_cf);
+    size_changed += large_default_cf.splitInto(range, new_region_data.large_default_cf);
     cf_data_size -= size_changed;
     new_region_data.cf_data_size += size_changed;
 }
@@ -276,6 +320,7 @@ void RegionData::mergeFrom(const RegionData & ori_region_data)
     size_changed += write_cf.mergeFrom(ori_region_data.write_cf);
     // reportAlloc: Remember to track memory here if we have a region-wise metrics later.
     size_changed += lock_cf.mergeFrom(ori_region_data.lock_cf);
+    size_changed += large_default_cf.mergeFrom(ori_region_data.large_default_cf);
     cf_data_size += size_changed;
 }
 
@@ -286,32 +331,52 @@ size_t RegionData::dataSize() const
 
 void RegionData::assignRegionData(RegionData && new_region_data)
 {
+    reportDealloc(cf_data_size);
     default_cf = std::move(new_region_data.default_cf);
     write_cf = std::move(new_region_data.write_cf);
     lock_cf = std::move(new_region_data.lock_cf);
+    large_default_cf = std::move(new_region_data.large_default_cf);
     orphan_keys_info = std::move(new_region_data.orphan_keys_info);
 
     cf_data_size = new_region_data.cf_data_size.load();
+    new_region_data.cf_data_size.store(0);
 }
 
-size_t RegionData::serialize(WriteBuffer & buf) const
+size_t RegionData::serialize(WriteBuffer & buf, const RegionSerdeOpts & region_serde_opts) const
 {
     size_t total_size = 0;
 
     total_size += default_cf.serialize(buf);
     total_size += write_cf.serialize(buf);
     total_size += lock_cf.serialize(buf);
+    if unlikely (region_serde_opts.large_txn_enabled && large_default_cf.getTxnCount() != 0)
+    {
+        total_size += large_default_cf.serialize(buf);
+    }
 
     return total_size;
 }
 
-void RegionData::deserialize(ReadBuffer & buf, RegionData & region_data)
+std::optional<std::string> RegionData::serializeLargeTxnMeta() const
+{
+    WriteBufferFromOwnString wb;
+    size_t size = large_default_cf.serializeMeta(wb);
+    if likely (size == 0)
+        return std::nullopt;
+    RUNTIME_CHECK(size == wb.count(), size, wb.count());
+    return wb.releaseStr();
+}
+
+void RegionData::deserialize(ReadBuffer & buf, RegionData & region_data, const RegionDeserResult & result)
 {
     size_t total_size = 0;
     total_size += RegionDefaultCFData::deserialize(buf, region_data.default_cf);
     total_size += RegionWriteCFData::deserialize(buf, region_data.write_cf);
     total_size += RegionLockCFData::deserialize(buf, region_data.lock_cf);
-
+    if unlikely (result.large_txn_count != 0)
+    {
+        total_size += LargeTxnDefaultCf::deserialize(buf, result.large_txn_count, region_data.large_default_cf);
+    }
     region_data.cf_data_size += total_size;
 }
 
@@ -322,6 +387,10 @@ RegionWriteCFData & RegionData::writeCF()
 RegionDefaultCFData & RegionData::defaultCF()
 {
     return default_cf;
+}
+LargeTxnDefaultCf & RegionData::largeDefautCf()
+{
+    return large_default_cf;
 }
 
 const RegionWriteCFData & RegionData::writeCF() const
@@ -336,17 +405,22 @@ const RegionLockCFData & RegionData::lockCF() const
 {
     return lock_cf;
 }
+const LargeTxnDefaultCf & RegionData::largeDefautCf() const
+{
+    return large_default_cf;
+}
 
 bool RegionData::isEqual(const RegionData & r2) const
 {
     return default_cf == r2.default_cf && write_cf == r2.write_cf && lock_cf == r2.lock_cf
-        && cf_data_size == r2.cf_data_size;
+        && cf_data_size == r2.cf_data_size && large_default_cf == r2.large_default_cf;
 }
 
 RegionData::RegionData(RegionData && data)
     : write_cf(std::move(data.write_cf))
     , default_cf(std::move(data.default_cf))
     , lock_cf(std::move(data.lock_cf))
+    , large_default_cf(std::move(data.large_default_cf))
     , cf_data_size(data.cf_data_size.load())
 {}
 
@@ -355,6 +429,7 @@ RegionData & RegionData::operator=(RegionData && rhs)
     write_cf = std::move(rhs.write_cf);
     default_cf = std::move(rhs.default_cf);
     lock_cf = std::move(rhs.lock_cf);
+    large_default_cf = std::move(rhs.large_default_cf);
     reportDelta(cf_data_size, rhs.cf_data_size.load());
     cf_data_size = rhs.cf_data_size.load();
     return *this;

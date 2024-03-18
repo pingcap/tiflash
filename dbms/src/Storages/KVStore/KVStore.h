@@ -147,6 +147,7 @@ public:
     FileUsageStatistics getFileUsageStatistics() const;
     // Proxy will validate and refit the config items from the toml file.
     const ProxyConfigSummary & getProxyConfigSummay() const { return proxy_config_summary; }
+    const RegionPersister & getRegionPersister() const { return *region_persister; }
 
 public: // Region Management
     void restore(PathPool & path_pool, const TiFlashRaftProxyHelper *);

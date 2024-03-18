@@ -36,8 +36,9 @@ static constexpr UInt32 HAS_EAGER_TRUNCATE_INDEX = 0x01;
 enum class RegionPersistExtension : MaybeRegionPersistExtension
 {
     ReservedForTest = 1,
+    LargeTxnDefaultCfMeta = 2,
     // It should always be equal to the maximum supported type + 1
-    MaxKnownFlag = 2,
+    MaxKnownFlag = 3,
 };
 
 /// The flexible pattern
@@ -62,5 +63,16 @@ static_assert(
     magic_enum::enum_count<RegionPersistExtension>()
     == magic_enum::enum_underlying(RegionPersistExtension::MaxKnownFlag));
 static_assert(RegionPersistFormat::HAS_EAGER_TRUNCATE_INDEX == 0x01);
+
+struct RegionDeserResult
+{
+    size_t large_txn_count = 0;
+};
+
+struct RegionSerdeOpts
+{
+    constexpr static UInt32 CURRENT_VERSION = static_cast<UInt32>(RegionPersistVersion::V2);
+    bool large_txn_enabled = false;
+};
 
 } // namespace DB

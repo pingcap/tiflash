@@ -83,7 +83,9 @@ inline bool checkTableInvolveRange(const TableID table_id, const RangeRef & rang
 {
     const TiKVKey start_key = RecordKVFormat::genKey(table_id, std::numeric_limits<HandleID>::min());
     const TiKVKey end_key = RecordKVFormat::genKey(table_id, std::numeric_limits<HandleID>::max());
-    return !(end_key < range.first || (!range.second.empty() && start_key >= range.second));
+    bool right_bound = !range.second.empty() && start_key >= range.second;
+    bool left_bound = end_key < range.first;
+    return !right_bound && !left_bound;
 }
 
 inline TiKVKey genIndex(const TableID tableId, const Int64 id)
@@ -239,7 +241,7 @@ TEST(TiKVKeyValueTest, PortedTests)
         ASSERT_TRUE(d.getSize() == 1);
 
         auto pk = RecordKVFormat::getRawTiDBPK(RecordKVFormat::genRawKey(1, 2));
-        d.remove(RegionWriteCFData::Key{pk, 3});
+        d.remove(RegionWriteCFData::Key{pk, 3}, false);
         ASSERT_TRUE(d.getSize() == 0);
     }
 

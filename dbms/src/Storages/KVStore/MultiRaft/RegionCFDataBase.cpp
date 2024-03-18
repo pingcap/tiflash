@@ -17,6 +17,7 @@
 #include <Storages/KVStore/MultiRaft/RegionCFDataTrait.h>
 #include <Storages/KVStore/MultiRaft/RegionData.h>
 #include <Storages/KVStore/MultiRaft/RegionRangeKeys.h>
+#include <Storages/KVStore/MultiRaft/Spill/LargeTxnDefaultCf.h>
 
 namespace DB
 {
@@ -40,6 +41,21 @@ const TiKVValue & RegionCFDataBase<Trait>::getTiKVValue(const Value & val)
     return *getTiKVValuePtr<Value>(val);
 }
 
+RegionDataRes insertWithTs(
+    RegionCFDataBase<RegionDefaultCFDataTrait> & default_cf,
+    TiKVKey && key,
+    TiKVValue && value,
+    Timestamp ts,
+    DupCheck mode)
+{
+    const auto & raw_key = RecordKVFormat::decodeTiKVKey(key);
+    auto kv_pair = RegionDefaultCFDataTrait::genKVPairWithTs(std::move(key), ts, raw_key, std::move(value));
+    if (!kv_pair)
+        return 0;
+
+    return default_cf.doInsert(std::move(*kv_pair), mode);
+}
+
 template <typename Trait>
 RegionDataRes RegionCFDataBase<Trait>::insert(TiKVKey && key, TiKVValue && value, DupCheck mode)
 {
@@ -48,7 +64,7 @@ RegionDataRes RegionCFDataBase<Trait>::insert(TiKVKey && key, TiKVValue && value
     if (!kv_pair)
         return 0;
 
-    return insert(std::move(*kv_pair), mode);
+    return doInsert(std::move(*kv_pair), mode);
 }
 
 template <>
@@ -80,7 +96,7 @@ RegionDataRes RegionCFDataBase<RegionLockCFDataTrait>::insert(TiKVKey && key, Ti
 }
 
 template <typename Trait>
-RegionDataRes RegionCFDataBase<Trait>::insert(std::pair<Key, Value> && kv_pair, DupCheck mode)
+RegionDataRes RegionCFDataBase<Trait>::doInsert(std::pair<Key, Value> && kv_pair, DupCheck mode)
 {
     auto & map = data;
     TiKVValue prev_value;
@@ -283,15 +299,12 @@ size_t RegionCFDataBase<Trait>::splitInto(const RegionRange & range, RegionCFDat
 {
     const auto & [start_key, end_key] = range;
     size_t size_changed = 0;
-
     {
         auto & ori_map = data;
         auto & tar_map = new_region_data.data;
-
         for (auto it = ori_map.begin(); it != ori_map.end();)
         {
             const auto & key = getTiKVKey(it->second);
-
             if (start_key.compare(key) <= 0 && end_key.compare(key) > 0)
             {
                 size_changed += calcTiKVKeyValueSize(it->second);
@@ -354,4 +367,5 @@ typename RegionCFDataBase<Trait>::Data & RegionCFDataBase<Trait>::getDataMut()
 template struct RegionCFDataBase<RegionWriteCFDataTrait>;
 template struct RegionCFDataBase<RegionDefaultCFDataTrait>;
 template struct RegionCFDataBase<RegionLockCFDataTrait>;
+template struct RegionCFDataBase<LargeDefaultCFDataTrait>;
 } // namespace DB

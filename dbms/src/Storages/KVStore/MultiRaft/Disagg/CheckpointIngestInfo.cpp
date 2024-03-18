@@ -140,7 +140,10 @@ FastAddPeerProto::CheckpointIngestInfoPersisted CheckpointIngestInfo::serializeM
         // Although the region is the first peer of this region in this store, we can't write it to formal KVStore for now.
         // Otherwise it could be uploaded and then overwritten.
         WriteBufferFromOwnString wb;
-        RegionPersister::computeRegionWriteBuffer(*region, wb);
+        RegionPersister::computeRegionWriteBuffer(
+            *region,
+            wb,
+            tmt.getKVStore()->getRegionPersister().getRegionSerdeOpts());
         ingest_info_persisted.set_region_info(wb.releaseStr());
     }
     ingest_info_persisted.set_remote_store_id(remote_store_id);

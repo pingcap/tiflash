@@ -18,6 +18,11 @@
 namespace DB::RegionBench
 {
 
+RegionSerdeOpts & DebugKVStore::mutRegionSerdeOpts()
+{
+    return kvstore.region_persister->region_serde_opts;
+}
+  
 void DebugKVStore::mockRemoveRegion(DB::RegionID region_id, RegionTable & region_table)
 {
     auto task_lock = kvstore.genTaskLock();

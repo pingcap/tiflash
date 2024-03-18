@@ -63,7 +63,6 @@ struct RegionWriteCFDataTrait
     static UInt8 getWriteType(const Value & value) { return std::get<2>(value).write_type; }
 };
 
-
 struct RegionDefaultCFDataTrait
 {
     using Key = std::pair<RawTiDBPK, Timestamp>;
@@ -74,6 +73,20 @@ struct RegionDefaultCFDataTrait
     {
         RawTiDBPK tidb_pk = RecordKVFormat::getRawTiDBPK(raw_key);
         Timestamp ts = RecordKVFormat::getTs(key);
+        return Map::value_type(
+            Key(std::move(tidb_pk), ts),
+            Value(
+                std::make_shared<const TiKVKey>(std::move(key)),
+                std::make_shared<const TiKVValue>(std::move(value))));
+    }
+
+    static std::optional<Map::value_type> genKVPairWithTs(
+        TiKVKey && key,
+        Timestamp ts,
+        const DecodedTiKVKey & raw_key,
+        TiKVValue && value)
+    {
+        RawTiDBPK tidb_pk = RecordKVFormat::getRawTiDBPK(raw_key);
         return Map::value_type(
             Key(std::move(tidb_pk), ts),
             Value(
