@@ -446,11 +446,12 @@ public:
         const DMContext & context_,
         const DeltaSnapshotPtr & delta_snap_,
         const ColumnDefinesPtr & col_defs_,
-        const RowKeyRange & segment_range_);
+        const RowKeyRange & segment_range_,
+        ReadTag read_tag_);
 
     // If we need to read columns besides pk and version, a DeltaValueReader can NOT be used more than once.
     // This method create a new reader based on then current one. It will reuse some caches in the current reader.
-    DeltaValueReaderPtr createNewReader(const ColumnDefinesPtr & new_col_defs);
+    DeltaValueReaderPtr createNewReader(const ColumnDefinesPtr & new_col_defs, ReadTag read_tag);
 
     void setDeltaIndex(const DeltaIndexCompactedPtr & delta_index_) { compacted_delta_index = delta_index_; }
 
@@ -492,9 +493,15 @@ public:
         const DMContext & context_,
         const DeltaSnapshotPtr & delta_snap_,
         const ColumnDefinesPtr & col_defs_,
-        const RowKeyRange & segment_range_)
-        : mem_table_input_stream(context_, delta_snap_->getMemTableSetSnapshot(), col_defs_, segment_range_)
-        , persisted_files_input_stream(context_, delta_snap_->getPersistedFileSetSnapshot(), col_defs_, segment_range_)
+        const RowKeyRange & segment_range_,
+        ReadTag read_tag_)
+        : mem_table_input_stream(context_, delta_snap_->getMemTableSetSnapshot(), col_defs_, segment_range_, read_tag_)
+        , persisted_files_input_stream(
+              context_,
+              delta_snap_->getPersistedFileSetSnapshot(),
+              col_defs_,
+              segment_range_,
+              read_tag_)
     {}
 
     String getName() const override { return "DeltaValue"; }

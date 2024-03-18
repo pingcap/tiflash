@@ -19,6 +19,7 @@
 #include <Common/SyncPoint/SyncPoint.h>
 #include <Debug/MockKVStore/MockRaftStoreProxy.h>
 #include <Debug/MockKVStore/MockSSTReader.h>
+#include <Debug/dbgKVStore/dbgKVStore.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/ExternalDTFileInfo.h>
 #include <Storages/DeltaMerge/GCOptions.h>
@@ -74,6 +75,7 @@ extern void ChangeRegionStateRange(
 
 namespace tests
 {
+using DebugKVStore = RegionBench::DebugKVStore;
 // TODO: Use another way to workaround calling the private methods on KVStore
 class KVStoreTestBase : public ::testing::Test
 {

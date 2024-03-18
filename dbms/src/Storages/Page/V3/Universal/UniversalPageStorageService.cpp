@@ -66,14 +66,24 @@ UniversalPageStorageServicePtr UniversalPageStorageService::create(
         // Only upload checkpoint when S3 is enabled
         service->checkpoint_pool = std::make_unique<BackgroundProcessingPool>(1, "ps-checkpoint");
         service->remote_checkpoint_handle = service->checkpoint_pool->addTask(
-            [service] { return service->uploadCheckpoint(); },
+            [srv_weak = std::weak_ptr<UniversalPageStorageService>(service)] {
+                auto service = srv_weak.lock();
+                if (!service)
+                    return false;
+                return service->uploadCheckpoint();
+            },
             /*multi*/ false,
             /*interval_ms*/ interval_s * 1000);
     }
 
     auto & bkg_pool = context.getBackgroundPool();
     service->gc_handle = bkg_pool.addTask(
-        [service] { return service->gc(); },
+        [srv_weak = std::weak_ptr<UniversalPageStorageService>(service)] {
+            auto service = srv_weak.lock();
+            if (!service)
+                return false;
+            return service->gc();
+        },
         false,
         /*interval_ms*/ 60 * 1000);
     return service;

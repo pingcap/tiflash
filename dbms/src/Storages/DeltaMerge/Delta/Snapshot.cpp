@@ -71,29 +71,32 @@ DeltaValueReader::DeltaValueReader(
     const DMContext & context,
     const DeltaSnapshotPtr & delta_snap_,
     const ColumnDefinesPtr & col_defs_,
-    const RowKeyRange & segment_range_)
+    const RowKeyRange & segment_range_,
+    ReadTag read_tag_)
     : delta_snap(delta_snap_)
     , mem_table_reader(std::make_shared<ColumnFileSetReader>(
           context,
           delta_snap_->getMemTableSetSnapshot(),
           col_defs_,
-          segment_range_))
+          segment_range_,
+          read_tag_))
     , persisted_files_reader(std::make_shared<ColumnFileSetReader>(
           context,
           delta_snap_->getPersistedFileSetSnapshot(),
           col_defs_,
-          segment_range_))
+          segment_range_,
+          read_tag_))
     , col_defs(col_defs_)
     , segment_range(segment_range_)
 {}
 
-DeltaValueReaderPtr DeltaValueReader::createNewReader(const ColumnDefinesPtr & new_col_defs)
+DeltaValueReaderPtr DeltaValueReader::createNewReader(const ColumnDefinesPtr & new_col_defs, ReadTag read_tag)
 {
     auto * new_reader = new DeltaValueReader();
     new_reader->delta_snap = delta_snap;
     new_reader->compacted_delta_index = compacted_delta_index;
-    new_reader->persisted_files_reader = persisted_files_reader->createNewReader(new_col_defs);
-    new_reader->mem_table_reader = mem_table_reader->createNewReader(new_col_defs);
+    new_reader->persisted_files_reader = persisted_files_reader->createNewReader(new_col_defs, read_tag);
+    new_reader->mem_table_reader = mem_table_reader->createNewReader(new_col_defs, read_tag);
     new_reader->col_defs = new_col_defs;
     new_reader->segment_range = segment_range;
 

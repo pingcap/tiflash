@@ -62,7 +62,8 @@ public:
         bool read_one_pack_every_time_,
         const String & tracing_id_,
         size_t max_sharing_column_count,
-        const ScanContextPtr & scan_context_);
+        const ScanContextPtr & scan_context_,
+        ReadTag read_tag_);
 
     Block getHeader() const { return toEmptyBlock(read_columns); }
 
@@ -112,6 +113,9 @@ private:
         size_t skip_packs);
     bool getCachedPacks(ColId col_id, size_t start_pack_id, size_t pack_count, size_t read_rows, ColumnPtr & col) const;
 
+    void addScannedRows(UInt64 rows);
+    void addSkippedRows(UInt64 rows);
+
     DMFilePtr dmfile;
     ColumnDefines read_columns;
     ColumnReadStreamMap column_streams;
@@ -144,6 +148,7 @@ private:
     ColumnCachePtr column_cache;
 
     const ScanContextPtr scan_context;
+    const ReadTag read_tag;
 
     const size_t rows_threshold_per_read;
 
