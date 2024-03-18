@@ -908,10 +908,16 @@ try
     KVStore & kvs = getKVS();
     std::string name = "test1-1";
     kvs.reportThreadAllocBatch(
-        std::string_view(name.begin(), name.end()),
+        std::string_view(name.data(), name.size()),
         ReportThreadAllocateInfoBatch{.alloc = 1, .dealloc = 2});
     auto & tiflash_metrics = TiFlashMetrics::instance();
     ASSERT_EQ(tiflash_metrics.getProxyThreadMemory("test1"), -1);
+    std::string namee = "";
+    kvs.reportThreadAllocBatch(
+        std::string_view(namee.data(), namee.size()),
+        ReportThreadAllocateInfoBatch{.alloc = 1, .dealloc = 2});
+    auto & tiflash_metrics = TiFlashMetrics::instance();
+    EXPECT_ANY_THROW(tiflash_metrics.getProxyThreadMemory(""));
     std::thread t([&]() {
         kvs.reportThreadAllocInfo(std::string_view(name.begin(), name.end()), ReportThreadAllocateInfoType::Reset, 0);
         uint64_t mock = 999;
@@ -926,7 +932,7 @@ try
         std::string name2 = "ReadIndexWkr-1";
         kvs.reportThreadAllocInfo(std::string_view(name2.begin(), name2.end()), ReportThreadAllocateInfoType::Reset, 0);
         kvs.reportThreadAllocInfo(
-            std::string_view(name2.begin(), name2.end()),
+            std::string_view(name2.data(), name2.size()),
             ReportThreadAllocateInfoType::AllocPtr,
             alloc_ptr);
         kvs.recordThreadAllocInfo();
@@ -934,7 +940,7 @@ try
         uint64_t mock2 = 998;
         uint64_t dealloc_ptr = reinterpret_cast<uint64_t>(&mock2);
         kvs.reportThreadAllocInfo(
-            std::string_view(name2.begin(), name2.end()),
+            std::string_view(name2.data(), name2.size()),
             ReportThreadAllocateInfoType::DeallocPtr,
             dealloc_ptr);
         kvs.recordThreadAllocInfo();
