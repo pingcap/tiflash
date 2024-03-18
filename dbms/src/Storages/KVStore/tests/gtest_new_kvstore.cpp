@@ -918,7 +918,7 @@ try
         ReportThreadAllocateInfoBatch{.alloc = 1, .dealloc = 2});
     EXPECT_ANY_THROW(tiflash_metrics.getProxyThreadMemory(""));
     std::thread t([&]() {
-        kvs.reportThreadAllocInfo(std::string_view(name.begin(), name.end()), ReportThreadAllocateInfoType::Reset, 0);
+        kvs.reportThreadAllocInfo(std::string_view(name.data(), name.size()), ReportThreadAllocateInfoType::Reset, 0);
         uint64_t mock = 999;
         uint64_t alloc_ptr = reinterpret_cast<uint64_t>(&mock);
         kvs.reportThreadAllocInfo(
@@ -929,7 +929,7 @@ try
         ASSERT_EQ(tiflash_metrics.getProxyThreadMemory("test1"), -1);
 
         std::string name2 = "ReadIndexWkr-1";
-        kvs.reportThreadAllocInfo(std::string_view(name2.begin(), name2.end()), ReportThreadAllocateInfoType::Reset, 0);
+        kvs.reportThreadAllocInfo(std::string_view(name2.data(), name2.size()), ReportThreadAllocateInfoType::Reset, 0);
         kvs.reportThreadAllocInfo(
             std::string_view(name2.data(), name2.size()),
             ReportThreadAllocateInfoType::AllocPtr,
@@ -945,7 +945,7 @@ try
         kvs.recordThreadAllocInfo();
         ASSERT_EQ(tiflash_metrics.getProxyThreadMemory("ReadIndexWkr"), 1);
         kvs.reportThreadAllocInfo(
-            std::string_view(name2.begin(), name2.end()),
+            std::string_view(name2.data(), name2.size()),
             ReportThreadAllocateInfoType::Remove,
             0);
     });
