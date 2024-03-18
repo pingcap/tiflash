@@ -509,28 +509,37 @@ void KVStore::reportThreadAllocInfo(std::string_view thdname, ReportThreadAlloca
     // Many threads have empty name, better just not handle.
     if (thdname.empty())
         return;
-    std::unique_lock l(memory_allocation_mut);
     std::string tname(thdname.begin(), thdname.end());
     switch (type)
     {
     case ReportThreadAllocateInfoType::Reset:
     {
-        std::unique_lock lock(proxy_thread_ru_mtx);
-        if unlikely (!registered_raft_proxy_thread_memory_usage_metrics.count(k))
         {
-            // Add new keyspace store usage metric
-            registered_raft_proxy_thread_memory_usage_metrics.emplace(
-                k,
-                &registered_raft_proxy_thread_memory_usage_family->Add({{"type", k}}));
+            auto & metrics = TiFlashMetrics::instance();
+            std::unique_lock lock(metrics.proxy_thread_ru_mtx);
+            if unlikely (!metrics.registered_raft_proxy_thread_memory_usage_metrics.count(k))
+            {
+                // Add new keyspace store usage metric
+                metrics.registered_raft_proxy_thread_memory_usage_metrics.emplace(
+                    k,
+                    &metrics.registered_raft_proxy_thread_memory_usage_family->Add({{"type", k}}));
+            }
         }
-    }
-        memory_allocation_map.insert_or_assign(tname, ThreadInfoJealloc());
+        {
+            std::unique_lock l(memory_allocation_mut);
+            memory_allocation_map.insert_or_assign(tname, ThreadInfoJealloc());
+        }
         break;
+    }
     case ReportThreadAllocateInfoType::Remove:
+    {
+        std::unique_lock l(memory_allocation_mut);
         memory_allocation_map.erase(tname);
         break;
+    }
     case ReportThreadAllocateInfoType::AllocPtr:
     {
+        std::shared_lock l(memory_allocation_mut);
         if (value == 0)
             return;
         auto it = memory_allocation_map.find(tname);
@@ -543,6 +552,7 @@ void KVStore::reportThreadAllocInfo(std::string_view thdname, ReportThreadAlloca
     }
     case ReportThreadAllocateInfoType::DeallocPtr:
     {
+        std::shared_lock l(memory_allocation_mut);
         if (value == 0)
             return;
         auto it = memory_allocation_map.find(tname);

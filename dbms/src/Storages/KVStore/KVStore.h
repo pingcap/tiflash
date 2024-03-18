@@ -438,7 +438,6 @@ private:
     std::atomic<int64_t> ongoing_prehandle_task_count{0};
     ProxyConfigSummary proxy_config_summary;
 
-    // TODO: Use CAS+HazPtr to remove the lock and proxy_thread_ru_mtx.
     mutable std::shared_mutex memory_allocation_mut;
     std::unordered_map<std::string, ThreadInfoJealloc> memory_allocation_map;
 
