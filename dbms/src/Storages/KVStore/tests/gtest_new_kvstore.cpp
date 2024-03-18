@@ -922,7 +922,7 @@ try
         uint64_t mock = 999;
         uint64_t alloc_ptr = reinterpret_cast<uint64_t>(&mock);
         kvs.reportThreadAllocInfo(
-            std::string_view(name.begin(), name.end()),
+            std::string_view(name.data(), name.size()),
             ReportThreadAllocateInfoType::AllocPtr,
             alloc_ptr);
         kvs.recordThreadAllocInfo();
