@@ -103,7 +103,7 @@ double TiFlashMetrics::getProxyThreadMemory(const std::string & k)
 {
     std::shared_lock lock(proxy_thread_report_mtx);
     auto it = registered_raft_proxy_thread_memory_usage_metrics.find(k);
-    RUNTIME_CHECK(it != registered_raft_proxy_thread_memory_usage_metrics.end());
+    RUNTIME_CHECK(it != registered_raft_proxy_thread_memory_usage_metrics.end(), k);
     return it->second->Value();
 }
 
