@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/MemoryTrace.h>
+#include <Common/MemoryAllocTrace.h>
 
 #ifdef USE_JEMALLOC
 #include <jemalloc/jemalloc.h>

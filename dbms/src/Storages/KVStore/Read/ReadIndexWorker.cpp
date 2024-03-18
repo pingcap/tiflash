@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/MemoryTrace.h>
+#include <Common/MemoryAllocTrace.h>
 #include <Common/Stopwatch.h>
 #include <Common/setThreadName.h>
 #include <Storages/KVStore/FFI/ProxyFFI.h>
