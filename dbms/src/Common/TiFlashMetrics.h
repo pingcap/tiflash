@@ -1090,6 +1090,7 @@ public:
     UInt64 debugQueryReplicaSyncRU(UInt32 keyspace_id);
     void setProxyThreadMemory(const std::string & k, Int64 v);
     double getProxyThreadMemory(const std::string & k);
+    void registerProxyThreadMemory(const std::string & k);
 
 private:
     TiFlashMetrics();
@@ -1121,9 +1122,9 @@ private:
     std::mutex replica_sync_ru_mtx;
     std::unordered_map<KeyspaceID, prometheus::Counter *> registered_keyspace_sync_replica_ru;
 
-    // TODO: Use CAS+HazPtr to remove proxy_thread_ru_mtx.
+    // TODO: Use CAS+HazPtr to remove proxy_thread_report_mtx, or hash some slots here.
     prometheus::Family<prometheus::Gauge> * registered_raft_proxy_thread_memory_usage_family;
-    std::shared_mutex proxy_thread_ru_mtx;
+    std::shared_mutex proxy_thread_report_mtx;
     std::unordered_map<std::string, prometheus::Gauge *> registered_raft_proxy_thread_memory_usage_metrics;
 
 public:

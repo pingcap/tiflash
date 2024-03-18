@@ -514,17 +514,8 @@ void KVStore::reportThreadAllocInfo(std::string_view thdname, ReportThreadAlloca
     {
     case ReportThreadAllocateInfoType::Reset:
     {
-        {
-            auto & metrics = TiFlashMetrics::instance();
-            std::unique_lock lock(metrics.proxy_thread_ru_mtx);
-            if unlikely (!metrics.registered_raft_proxy_thread_memory_usage_metrics.count(k))
-            {
-                // Add new keyspace store usage metric
-                metrics.registered_raft_proxy_thread_memory_usage_metrics.emplace(
-                    k,
-                    &metrics.registered_raft_proxy_thread_memory_usage_family->Add({{"type", k}}));
-            }
-        }
+        auto & metrics = TiFlashMetrics::instance();
+        metrics.registerProxyThreadMemory(tname);
         {
             std::unique_lock l(memory_allocation_mut);
             memory_allocation_map.insert_or_assign(tname, ThreadInfoJealloc());

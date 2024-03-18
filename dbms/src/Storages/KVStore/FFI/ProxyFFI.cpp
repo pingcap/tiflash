@@ -1059,6 +1059,7 @@ void ReportThreadAllocateBatch(
 {
     try
     {
+        UNUSED(server);
         UNUSED(tid);
         KVStore::reportThreadAllocBatch(buffToStrView(name), data);
     }

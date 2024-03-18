@@ -101,7 +101,7 @@ void TiFlashMetrics::removeReplicaSyncRUCounter(UInt32 keyspace_id)
 
 double TiFlashMetrics::getProxyThreadMemory(const std::string & k)
 {
-    std::shared_lock lock(proxy_thread_ru_mtx);
+    std::shared_lock lock(proxy_thread_report_mtx);
     auto it = registered_raft_proxy_thread_memory_usage_metrics.find(k);
     RUNTIME_CHECK(it != registered_raft_proxy_thread_memory_usage_metrics.end());
     return it->second->Value();
@@ -109,13 +109,24 @@ double TiFlashMetrics::getProxyThreadMemory(const std::string & k)
 
 void TiFlashMetrics::setProxyThreadMemory(const std::string & k, Int64 v)
 {
-    std::shared_lock lock(proxy_thread_ru_mtx);
+    std::shared_lock lock(proxy_thread_report_mtx);
     if unlikely (!registered_raft_proxy_thread_memory_usage_metrics.count(k))
     {
         // New metrics added through `Reset`.
         return;
     }
     registered_raft_proxy_thread_memory_usage_metrics[k]->Set(v);
+}
+
+void TiFlashMetrics::registerProxyThreadMemory(const std::string & k)
+{
+    std::unique_lock lock(proxy_thread_report_mtx);
+    if unlikely (!registered_raft_proxy_thread_memory_usage_metrics.count(k))
+    {
+        registered_raft_proxy_thread_memory_usage_metrics.emplace(
+            k,
+            &registered_raft_proxy_thread_memory_usage_family->Add({{"type", k}}));
+    }
 }
 
 } // namespace DB
