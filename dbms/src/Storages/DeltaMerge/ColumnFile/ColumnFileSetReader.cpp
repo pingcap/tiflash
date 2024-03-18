@@ -84,7 +84,8 @@ ColumnFileSetReader::ColumnFileSetReader(
     const DMContext & context_,
     const ColumnFileSetSnapshotPtr & snapshot_,
     const ColumnDefinesPtr & col_defs_,
-    const RowKeyRange & segment_range_)
+    const RowKeyRange & segment_range_,
+    ReadTag read_tag_)
     : context(context_)
     , snapshot(snapshot_)
     , col_defs(col_defs_)
@@ -98,10 +99,11 @@ ColumnFileSetReader::ColumnFileSetReader(
         column_file_rows.push_back(f->getRows());
         column_file_rows_end.push_back(total_rows);
         column_file_readers.push_back(f->getReader(context, snapshot->getDataProvider(), col_defs));
+        column_file_readers.back()->setReadTag(read_tag_);
     }
 }
 
-ColumnFileSetReaderPtr ColumnFileSetReader::createNewReader(const ColumnDefinesPtr & new_col_defs)
+ColumnFileSetReaderPtr ColumnFileSetReader::createNewReader(const ColumnDefinesPtr & new_col_defs, ReadTag read_tag)
 {
     auto * new_reader = new ColumnFileSetReader(context);
     new_reader->snapshot = snapshot;
@@ -111,7 +113,10 @@ ColumnFileSetReaderPtr ColumnFileSetReader::createNewReader(const ColumnDefinesP
     new_reader->column_file_rows_end = column_file_rows_end;
 
     for (auto & fr : column_file_readers)
+    {
         new_reader->column_file_readers.push_back(fr->createNewReader(new_col_defs));
+        new_reader->column_file_readers.back()->setReadTag(read_tag);
+    }
 
     return std::shared_ptr<ColumnFileSetReader>(new_reader);
 }
