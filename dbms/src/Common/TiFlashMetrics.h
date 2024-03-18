@@ -1122,7 +1122,7 @@ private:
     std::unordered_map<KeyspaceID, prometheus::Counter *> registered_keyspace_sync_replica_ru;
 
     prometheus::Family<prometheus::Gauge> * registered_raft_proxy_thread_memory_usage_family;
-    std::mutex proxy_thread_ru_mtx;
+    std::shared_mutex proxy_thread_ru_mtx;
     std::unordered_map<std::string, prometheus::Gauge *> registered_raft_proxy_thread_memory_usage_metrics;
 
 public:
