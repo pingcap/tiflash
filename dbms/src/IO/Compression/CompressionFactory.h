@@ -64,23 +64,20 @@ public:
     static CompressionCodecPtr create(UInt8 method_byte)
     {
         CompressionSettings settings;
-        auto mb = magic_enum::enum_cast<CompressionMethodByte>(method_byte);
-        if (!mb.has_value())
-            throw Exception(ErrorCodes::UNKNOWN_COMPRESSION_METHOD, "Unknown compression method byte: {}", method_byte);
-        switch (mb.value())
+        switch (method_byte)
         {
-        case CompressionMethodByte::LZ4:
+        case static_cast<UInt8>(CompressionMethodByte::LZ4):
             settings.method = CompressionMethod::LZ4;
             break;
-        case CompressionMethodByte::ZSTD:
+        case static_cast<UInt8>(CompressionMethodByte::ZSTD):
             settings.method = CompressionMethod::ZSTD;
             break;
 #if USE_QPL
-        case CompressionMethodByte::QPL:
+        case static_cast<UInt8>(CompressionMethodByte::QPL):
             settings.method = CompressionMethod::QPL;
             break;
 #endif
-        case CompressionMethodByte::NONE:
+        case static_cast<UInt8>(CompressionMethodByte::NONE):
             settings.method = CompressionMethod::NONE;
             break;
         default:
