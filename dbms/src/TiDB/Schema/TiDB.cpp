@@ -106,6 +106,16 @@ ColumnInfo::ColumnInfo(Poco::JSON::Object::Ptr json)
     deserialize(json);
 }
 
+#define TRY_CATCH_DEFAULT_VALUE_TO_FIELD(try_block) \
+    try                                             \
+    {                                               \
+        try_block                                   \
+    }                                               \
+    catch (...)                                     \
+    {                                               \
+        return DB::GenDefaultField(*this);          \
+    }
+
 
 Field ColumnInfo::defaultValueToField() const
 {
@@ -156,16 +166,19 @@ Field ColumnInfo::defaultValueToField() const
                 return DB::GenDefaultField(*this);
             return Field();
         }
-        return getBitValue(bit_value.convert<String>());
+        TRY_CATCH_DEFAULT_VALUE_TO_FIELD({ return getBitValue(bit_value.convert<String>()); });
     }
     // Floating type.
     case TypeFloat:
     case TypeDouble:
-        return value.convert<double>();
+        if (value.isNumeric())
+            return value.convert<double>();
+        else
+            return DB::GenDefaultField(*this);
     case TypeDate:
     case TypeDatetime:
     case TypeTimestamp:
-        return DB::parseMyDateTime(value.convert<String>());
+        TRY_CATCH_DEFAULT_VALUE_TO_FIELD({ return DB::parseMyDateTime(value.convert<String>()); });
     case TypeVarchar:
     case TypeTinyBlob:
     case TypeMediumBlob:
@@ -191,23 +204,26 @@ Field ColumnInfo::defaultValueToField() const
         // JSON can't have a default value
         return genJsonNull();
     case TypeEnum:
-        return getEnumIndex(value.convert<String>());
+        TRY_CATCH_DEFAULT_VALUE_TO_FIELD({ return getEnumIndex(value.convert<String>()); });
     case TypeNull:
         return Field();
     case TypeDecimal:
     case TypeNewDecimal:
-        return getDecimalValue(value.convert<String>());
+        TRY_CATCH_DEFAULT_VALUE_TO_FIELD({ return getDecimalValue(value.convert<String>()); });
     case TypeTime:
-        return getTimeValue(value.convert<String>());
+        TRY_CATCH_DEFAULT_VALUE_TO_FIELD({ return getTimeValue(value.convert<String>()); });
     case TypeYear:
+        // Never throw exception here, do not use TRY_CATCH_DEFAULT_VALUE_TO_FIELD
         return getYearValue(value.convert<String>());
     case TypeSet:
-        return getSetValue(value.convert<String>());
+        TRY_CATCH_DEFAULT_VALUE_TO_FIELD({ return getSetValue(value.convert<String>()); });
     default:
         throw Exception("Have not processed type: " + std::to_string(tp));
     }
     return Field();
 }
+
+#undef TRY_CATCH_DEFAULT_VALUE_TO_FIELD
 
 DB::Field ColumnInfo::getDecimalValue(const String & decimal_text) const
 {
@@ -247,26 +263,28 @@ Int64 ColumnInfo::getEnumIndex(const String & enum_id_or_text) const
 {
     const auto * collator = ITiDBCollator::getCollator(collate.isEmpty() ? "binary" : collate.convert<String>());
     if (!collator)
-        // todo if new collation is enabled, should use "utf8mb4_bin"
+        // TODO: if new collation is enabled, should use "utf8mb4_bin"
         collator = ITiDBCollator::getCollator("binary");
     for (const auto & elem : elems)
     {
-        if (collator
-                ->compareFastPath(elem.first.data(), elem.first.size(), enum_id_or_text.data(), enum_id_or_text.size())
+        if (collator->compareFastPath(
+                elem.first.data(),
+                elem.first.size(),
+                enum_id_or_text.data(),
+                enum_id_or_text.size()) //
             == 0)
         {
             return elem.second;
         }
     }
-    int num = std::stoi(enum_id_or_text);
-    return num;
+    return std::stoi(enum_id_or_text);
 }
 
 UInt64 ColumnInfo::getSetValue(const String & set_str) const
 {
     const auto * collator = ITiDBCollator::getCollator(collate.isEmpty() ? "binary" : collate.convert<String>());
     if (!collator)
-        // todo if new collation is enabled, should use "utf8mb4_bin"
+        // TODO: if new collation is enabled, should use "utf8mb4_bin"
         collator = ITiDBCollator::getCollator("binary");
     std::string sort_key_container;
     Poco::StringTokenizer string_tokens(set_str, ",");
@@ -290,7 +308,7 @@ UInt64 ColumnInfo::getSetValue(const String & set_str) const
     if (marked.empty())
         return value;
 
-    throw DB::Exception(std::string(__PRETTY_FUNCTION__) + ": can't parse set type value.");
+    return 0;
 }
 
 Int64 ColumnInfo::getTimeValue(const String & time_str)
@@ -316,7 +334,9 @@ Int64 ColumnInfo::getTimeValue(const String & time_str)
 
 Int64 ColumnInfo::getYearValue(const String & val)
 {
-    // do not check validation of the val because TiDB will do it
+    // make sure the year is non-negative integer
+    if (val.empty() || !std::all_of(val.begin(), val.end(), ::isdigit))
+        return 0;
     Int64 year = std::stol(val);
     if (0 < year && year < 70)
         return 2000 + year;
