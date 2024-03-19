@@ -263,8 +263,11 @@ if (NOT USE_INTERNAL_ZSTD_LIBRARY)
 endif ()
 
 if (USE_QPL)
-    target_link_libraries (dbms ${QPL_LIBRARY})
-    target_include_directories (dbms PRIVATE ${QPL_INCLUDE_DIR})
+    target_link_libraries (tiflash_common_io PUBLIC ${QPL_LIBRARY})
+    target_include_directories (dbms BEFORE PRIVATE ${QPL_INCLUDE_DIR})
+    set_source_files_properties (
+        src/IO/Compression/CompressionCodecDeflateQpl.cpp
+        PROPERTIES COMPILE_FLAGS "-mwaitpkg")
 endif ()
 
 target_include_directories (dbms PUBLIC ${DBMS_INCLUDE_DIR})

@@ -14,35 +14,16 @@
 
 #pragma once
 
-#include <IO/Compression/CompressionMethod.h>
-
-
 namespace DB
 {
-struct Settings;
-
-struct CompressionSettings
+/** Compression method */
+enum class CompressionMethod
 {
-    CompressionMethod method;
-    int level;
-
-    CompressionSettings()
-        : CompressionSettings(CompressionMethod::LZ4)
-    {}
-
-    explicit CompressionSettings(CompressionMethod method_)
-        : method(method_)
-        , level(getDefaultLevel(method))
-    {}
-
-    CompressionSettings(CompressionMethod method_, int level_)
-        : method(method_)
-        , level(level_)
-    {}
-
-    explicit CompressionSettings(const Settings & settings);
-
-    static int getDefaultLevel(CompressionMethod method);
+    LZ4 = 1,
+    LZ4HC = 2, /// The format is the same as for LZ4. The difference is only in compression.
+    ZSTD = 3, /// Experimental algorithm: https://github.com/Cyan4973/zstd
+    QPL = 4, /// The Intel Query Processing Library (QPL) is an open-source library to provide high-performance query processing operations
+    NONE = 5, /// No compression
 };
 
 } // namespace DB
