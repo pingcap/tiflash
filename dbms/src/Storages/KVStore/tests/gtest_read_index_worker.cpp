@@ -53,14 +53,15 @@ public:
 void ReadIndexTest::testError()
 {
     // test error
-
+    auto & ctx = TiFlashTestEnv::getGlobalContext();
+    KVStore kvs = KVStore{ctx};
     MockRaftStoreProxy proxy_instance;
     TiFlashRaftProxyHelper proxy_helper;
     {
         proxy_helper = MockRaftStoreProxy::setRaftStoreProxyFFIHelper(RaftStoreProxyPtr{&proxy_instance});
         proxy_instance.init(10);
     }
-    auto manager = ReadIndexWorkerManager::newReadIndexWorkerManager(proxy_helper, 5, [&]() {
+    auto manager = ReadIndexWorkerManager::newReadIndexWorkerManager(proxy_helper, kvs, 5, [&]() {
         return std::chrono::milliseconds(10);
     });
     {
@@ -274,7 +275,8 @@ void ReadIndexTest::testBasic()
 void ReadIndexTest::testNormal()
 {
     // test normal
-
+    auto & ctx = TiFlashTestEnv::getGlobalContext();
+    KVStore kvs = KVStore{ctx};
     MockRaftStoreProxy proxy_instance;
     TiFlashRaftProxyHelper proxy_helper;
     {
@@ -283,6 +285,7 @@ void ReadIndexTest::testNormal()
     }
     auto manager = ReadIndexWorkerManager::newReadIndexWorkerManager(
         proxy_helper,
+        kvs,
         5,
         [&]() { return std::chrono::milliseconds(10); },
         3);
@@ -461,13 +464,15 @@ void ReadIndexTest::testNormal()
 void ReadIndexTest::testBatch()
 {
     // test batch
+    auto & ctx = TiFlashTestEnv::getGlobalContext();
+    KVStore kvs = KVStore{ctx};
     MockRaftStoreProxy proxy_instance;
     TiFlashRaftProxyHelper proxy_helper;
     {
         proxy_helper = MockRaftStoreProxy::setRaftStoreProxyFFIHelper(RaftStoreProxyPtr{&proxy_instance});
         proxy_instance.init(10);
     }
-    auto manager = ReadIndexWorkerManager::newReadIndexWorkerManager(proxy_helper, 5, [&]() {
+    auto manager = ReadIndexWorkerManager::newReadIndexWorkerManager(proxy_helper, kvs, 5, [&]() {
         return std::chrono::milliseconds(10);
     });
     // DO NOT run manager and mock proxy in other threads.

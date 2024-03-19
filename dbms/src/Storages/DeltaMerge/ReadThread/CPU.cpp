@@ -122,7 +122,7 @@ std::vector<std::vector<int>> getNumaNodes(const LoggerPtr & log)
     return numa_nodes;
 }
 
-void setCPUAffinity(const std::vector<int> & cpus, const LoggerPtr & log)
+void setCPUAffinity(const std::vector<int> & cpus, const LoggerPtr & log [[maybe_unused]])
 {
     if (cpus.empty())
     {

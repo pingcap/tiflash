@@ -36,7 +36,6 @@ protected:
 
     bool isCompression() const override { return false; }
     bool isGenericCompression() const override { return false; }
-    bool isNone() const override { return true; }
 };
 
 } // namespace DB

@@ -72,6 +72,7 @@ add_headers_and_sources(dbms src/Databases)
 add_headers_and_sources(dbms src/Debug)
 add_headers_and_sources(dbms src/Debug/MockExecutor)
 add_headers_and_sources(dbms src/Debug/MockKVStore)
+add_headers_and_sources(dbms src/Debug/dbgKVStore)
 add_headers_and_sources(dbms src/Dictionaries)
 # Encryption needs to link tiflash-proxy, but we do not want to link tiflash-proxy to tiflash_common_io.
 # So we put the encryption source files in dbms.
@@ -267,8 +268,9 @@ if (NOT USE_INTERNAL_ZSTD_LIBRARY)
 endif ()
 
 if (USE_QPL)
+    target_link_libraries (tiflash_common_io PUBLIC ${QPL_LIBRARY})
     target_include_directories (dbms BEFORE PRIVATE ${QPL_INCLUDE_DIR})
-    set_source_files_properties(
+    set_source_files_properties (
         src/IO/Compression/CompressionCodecDeflateQpl.cpp
         PROPERTIES COMPILE_FLAGS "-mwaitpkg")
 endif ()

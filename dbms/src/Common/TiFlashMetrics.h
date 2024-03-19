@@ -448,7 +448,12 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_default_put, {"type", "default_put"}),                                                                                 \
       F(type_write_del, {"type", "write_del"}),                                                                                     \
       F(type_lock_del, {"type", "lock_del"}),                                                                                       \
+      F(type_default_del, {"type", "default_del"}),                                                                                 \
       F(type_apply_snapshot, {"type", "apply_snapshot"}),                                                                           \
+      F(type_apply_snapshot_default, {"type", "apply_snapshot_default"}),                                                           \
+      F(type_apply_snapshot_write, {"type", "apply_snapshot_write"}),                                                               \
+      F(type_large_txn_lock_put, {"type", "large_txn_lock_put"}),                                                                   \
+      F(type_large_txn_lock_del, {"type", "large_txn_lock_del"}),                                                                   \
       F(type_ingest_sst, {"type", "ingest_sst"}))                                                                                   \
     M(tiflash_raft_apply_write_command_duration_seconds,                                                                            \
       "Bucketed histogram of applying write command Raft logs",                                                                     \
@@ -513,6 +518,7 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       "Raft handled bytes in global",                                                                                               \
       Counter,                                                                                                                      \
       F(type_write, {{"type", "write"}}),                                                                                           \
+      F(type_snapshot_committed, {{"type", "snapshot_committed"}}),                                                                 \
       F(type_write_committed, {{"type", "write_committed"}}))                                                                       \
     M(tiflash_raft_write_flow_bytes,                                                                                                \
       "Bucketed histogram of bytes for each write",                                                                                 \
@@ -1082,6 +1088,9 @@ public:
 
     void addReplicaSyncRU(UInt32 keyspace_id, UInt64 ru);
     UInt64 debugQueryReplicaSyncRU(UInt32 keyspace_id);
+    void setProxyThreadMemory(const std::string & k, Int64 v);
+    double getProxyThreadMemory(const std::string & k);
+    void registerProxyThreadMemory(const std::string & k);
 
 private:
     TiFlashMetrics();
@@ -1092,6 +1101,7 @@ private:
     static constexpr auto profile_events_prefix = "tiflash_system_profile_event_";
     static constexpr auto current_metrics_prefix = "tiflash_system_current_metric_";
     static constexpr auto async_metrics_prefix = "tiflash_system_asynchronous_metric_";
+    static constexpr auto raft_proxy_thread_memory_usage = "tiflash_raft_proxy_thread_memory_usage";
 
     std::shared_ptr<prometheus::Registry> registry = std::make_shared<prometheus::Registry>();
     // Here we add a ProcessCollector to collect cpu/rss/vsize/start_time information.
@@ -1111,6 +1121,11 @@ private:
     prometheus::Family<prometheus::Counter> * registered_keyspace_sync_replica_ru_family;
     std::mutex replica_sync_ru_mtx;
     std::unordered_map<KeyspaceID, prometheus::Counter *> registered_keyspace_sync_replica_ru;
+
+    // TODO: Use CAS+HazPtr to remove proxy_thread_report_mtx, or hash some slots here.
+    prometheus::Family<prometheus::Gauge> * registered_raft_proxy_thread_memory_usage_family;
+    std::shared_mutex proxy_thread_report_mtx;
+    std::unordered_map<std::string, prometheus::Gauge *> registered_raft_proxy_thread_memory_usage_metrics;
 
 public:
 #define MAKE_METRIC_MEMBER_M(family_name, help, type, ...) \

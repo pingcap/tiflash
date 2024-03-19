@@ -41,6 +41,7 @@ struct TableInfo;
 
 namespace DB
 {
+struct MockRaftCommand;
 struct ColumnsDescription;
 class IStorage;
 using StoragePtr = std::shared_ptr<IStorage>;
@@ -236,10 +237,9 @@ struct RegionPtrWithBlock
     using Base = RegionPtr;
     using CachePtr = std::unique_ptr<RegionPreDecodeBlockData>;
 
-    /// can accept const ref of RegionPtr without cache
-    RegionPtrWithBlock(const Base & base_, CachePtr cache = nullptr)
+    RegionPtrWithBlock(const Base & base_)
         : base(base_)
-        , pre_decode_cache(std::move(cache))
+        , pre_decode_cache(nullptr)
     {}
 
     /// to be compatible with usage as RegionPtr.
@@ -251,6 +251,14 @@ struct RegionPtrWithBlock
 
     const Base & base;
     CachePtr pre_decode_cache;
+
+private:
+    friend struct MockRaftCommand;
+    /// Can accept const ref of RegionPtr without cache
+    RegionPtrWithBlock(const Base & base_, CachePtr cache)
+        : base(base_)
+        , pre_decode_cache(std::move(cache))
+    {}
 };
 
 

@@ -1111,9 +1111,7 @@ void ExpressionAnalyzer::normalizeTreeImpl(
             normalizeTreeImpl(child, finished_asts, current_asts, current_alias, level + 1);
         }
     }
-    else if (identifier_node)
-    {
-    }
+    else if (identifier_node) {}
     else
     {
         for (auto & child : ast->children)
@@ -2141,7 +2139,7 @@ void ExpressionAnalyzer::getAggregates(const ASTPtr & ast, ExpressionActionsPtr 
         }
 
         aggregate.parameters = (node->parameters) ? getAggregateFunctionParametersArray(node->parameters) : Array();
-        aggregate.function = AggregateFunctionFactory::instance().get(node->name, types, aggregate.parameters);
+        aggregate.function = AggregateFunctionFactory::instance().get(context, node->name, types, aggregate.parameters);
 
         aggregate_descriptions.push_back(aggregate);
     }

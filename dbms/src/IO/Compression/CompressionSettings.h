@@ -15,7 +15,6 @@
 #pragma once
 
 #include <IO/Compression/CompressionMethod.h>
-#include <common/types.h>
 
 
 namespace DB

@@ -37,6 +37,7 @@ extern const int NOT_IMPLEMENTED;
 }
 
 class Arena;
+class Context;
 class ReadBuffer;
 class WriteBuffer;
 class IColumn;
@@ -203,6 +204,8 @@ public:
     virtual const char * getHeaderFilePath() const = 0;
 
     virtual void setCollators(TiDB::TiDBCollators &) {}
+
+    virtual void setContext(const Context &) {}
 };
 
 /// Implement method to obtain an address of 'add' function.
