@@ -12,18 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
-mysql> set sql_mode='ansi';
-
 # use an empty string as the default value for decimal column
-mysql> create table test.t (a int, d decimal(34, 2) default '', d2 decimal(34, 2) default 'abcd');
+mysql> set sql_mode='ansi'; create table test.t (a int, d decimal(34, 2) default '', d2 decimal(34, 2) default 'abcd');
 
 mysql> alter table test.t set tiflash replica 1;
 
 func> wait_table test t;
 
-mysql> insert into test.t (a) values (1),(2),(3),(4);
-mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;
+mysql> set sql_mode='ansi'; insert into test.t (a) values (1),(2),(3),(4);
+mysql> set sql_mode='ansi'; set session tidb_isolation_read_engines='tiflash'; select * from test.t;
 +---+------+------+
 | a | d    | d2   |
 +---+------+------+
