@@ -32,8 +32,6 @@
 #include <algorithm>
 #include <cmath>
 
-#include "Core/Field.h"
-
 namespace DB
 {
 namespace ErrorCodes
