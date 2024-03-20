@@ -139,15 +139,13 @@ Field ColumnInfo::defaultValueToField() const
         // like 9223372036854775808 which is larger than the maximum value of Int64,
         // static_cast<UInt64>(static_cast<Int64>(9223372036854775808)) == 9223372036854775808
         // so we don't need consider unsigned here.
-        try
+        if (value.isInteger())
         {
             return value.convert<Int64>();
         }
-        catch (...)
+        else
         {
-            // due to https://github.com/pingcap/tidb/issues/34881
-            // we do this to avoid exception in older version of TiDB.
-            return static_cast<Int64>(std::llround(value.convert<double>()));
+            return DB::GenDefaultField(*this);
         }
     }
     case TypeBit:
