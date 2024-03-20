@@ -358,7 +358,6 @@ inline void readDecimalText(Decimal<T> & x, ReadBuffer & buf, PrecType precision
         value = -value;
     x.value = static_cast<T>(value);
     checkDecimalOverflow(x, precision);
-    return;
 }
 
 template <typename T, typename ReturnType = void>

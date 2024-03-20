@@ -32,6 +32,8 @@
 #include <algorithm>
 #include <cmath>
 
+#include "Core/Field.h"
+
 namespace DB
 {
 namespace ErrorCodes
@@ -207,7 +209,12 @@ Field ColumnInfo::defaultValueToField() const
         return Field();
     case TypeDecimal:
     case TypeNewDecimal:
-        TRY_CATCH_DEFAULT_VALUE_TO_FIELD({ return getDecimalValue(value.convert<String>()); });
+        TRY_CATCH_DEFAULT_VALUE_TO_FIELD({
+            auto text = value.convert<String>();
+            if (text.empty())
+                return DB::GenDefaultField(*this);
+            return getDecimalValue(text);
+        });
     case TypeTime:
         TRY_CATCH_DEFAULT_VALUE_TO_FIELD({ return getTimeValue(value.convert<String>()); });
     case TypeYear:
