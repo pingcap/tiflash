@@ -41,4 +41,28 @@ mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.a1 
 |  4 | D    |
 +----+------+
 
+mysql> SET SESSION SQL_MODE = ''; insert into test.a1 values (5,'');
+
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.a1 order by id;
++----+------+
+| id | name |
++----+------+
+|  1 | A    |
+|  2 | B    |
+|  3 | C    |
+|  4 | D    |
+|  5 |      |
++----+------+
+
+mysql> set session tidb_isolation_read_engines='tiflash'; select name+0 from test.a1 order by id;
++--------+
+| name+0 |
++--------+
+|      1 |
+|      2 |
+|      3 |
+|      4 |
+|      0 |
++--------+
+
 mysql> drop table if exists test.a1
