@@ -37,16 +37,26 @@ namespace DB
 struct MatchResult {
     String database_name;
     String table_name;
-    std::unordered_set<UInt64> in_default;
-    std::unordered_set<UInt64> in_write;
-    std::unordered_set<UInt64> in_lock;
+    std::vector<std::pair<UInt64, UInt64>> in_default;
+    std::vector<std::pair<UInt64, UInt64>> in_write;
+    std::vector<UInt64> in_lock;
     std::unordered_map<UInt64, RegionPtr> regions;
 
     std::string toString() const {
         FmtBuffer fmt_buf;
-        fmt_buf.fmtAppend("default_cf {}, ", fmt::join(in_default.begin(), in_default.end(), ":"));
-        fmt_buf.fmtAppend("write_cf {}, ", fmt::join(in_write.begin(), in_write.end(), ":"));
-        fmt_buf.fmtAppend("lock_cf {}, ", fmt::join(in_lock.begin(), in_lock.end(), ":"));
+        FmtBuffer fmt_buf1;
+        FmtBuffer fmt_buf2;
+        FmtBuffer fmt_buf3;
+        for (const auto & a: in_default) {
+            fmt_buf1.fmtAppend("{}-{}:", a.first, a.second);
+        }
+        for (const auto & a: in_write) {
+            fmt_buf2.fmtAppend("{}-{}:", a.first, a.second);
+        }
+        for (const auto & a: in_lock) {
+            fmt_buf3.fmtAppend("{}:", a);
+        }
+        fmt_buf.fmtAppend("default_cf {}, write_cf {}, lock_cf {}, ", fmt_buf1.toString(), fmt_buf2.toString(), fmt_buf3.toString());
         for (const auto & [region_id, region]: regions) {
             fmt_buf.fmtAppend("region {} {}, ", region_id, region->getDebugString());
         }
@@ -94,6 +104,7 @@ static void findKeyInKVStore(Context & context, const ASTs & args, DBGInvoker::P
     auto table_id = table_info.id;
 
     TiKVKey start_key, end_key;
+    HandleID start_handle, end_handle;
     size_t handle_column_size = table_info.is_common_handle ? table_info.getPrimaryIndexInfo().idx_cols.size() : 1;
 
 
@@ -130,10 +141,17 @@ static void findKeyInKVStore(Context & context, const ASTs & args, DBGInvoker::P
     }
     else
     {
-        auto start_handle = static_cast<HandleID>(safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[OFFSET]).value));
+        start_handle = static_cast<HandleID>(safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[OFFSET]).value));
         LOG_INFO(DB::Logger::get(), "!!!!! findKeyInKVStore b start_handle {}", start_handle);
         start_key = RecordKVFormat::genKey(table_id, start_handle);
-        auto end_handle = static_cast<HandleID>(safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[OFFSET + 1]).value));
+        auto start_key2 = RecordKVFormat::genKey(table_id, start_handle, 0);
+        LOG_INFO(DB::Logger::get(), "!!!!! findKeyInKVStore b start_key2 {}", start_key2.toDebugString());
+        auto kkk2 = RecordKVFormat::decodeTiKVKey(start_key2);
+        LOG_INFO(DB::Logger::get(), "!!!!! findKeyInKVStore b kkk2 {}", kkk2.toDebugString());
+        auto rawpk2 = RecordKVFormat::getRawTiDBPK(kkk2);
+        LOG_INFO(DB::Logger::get(), "!!!!! findKeyInKVStore b rawpk2 {}", rawpk2.toDebugString());
+        LOG_INFO(DB::Logger::get(), "!!!!! findKeyInKVStore b handle {}", (HandleID)rawpk2);
+        end_handle = static_cast<HandleID>(safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[OFFSET + 1]).value));
         LOG_INFO(DB::Logger::get(), "!!!!! findKeyInKVStore b end_handle {}", end_handle);
         end_key = RecordKVFormat::genKey(table_id, end_handle);
         LOG_INFO(DB::Logger::get(), "!!!!! findKeyInKVStore b2 {} {}", start_key.toDebugString(), end_key.toDebugString());
@@ -144,22 +162,33 @@ static void findKeyInKVStore(Context & context, const ASTs & args, DBGInvoker::P
     auto regions = kvstore.getRegionsByRangeOverlap(range.comparableKeys());
 
     for (const auto & [region_id, region]: regions) {
-        LOG_INFO(DB::Logger::get(), "!!!!! findKeyInKVStore t {}", region_id);
         auto r = RegionBench::DebugRegion(region);
-        LOG_INFO(DB::Logger::get(), "!!!!! findKeyInKVStore t1 {}", region_id);
         auto & data = r.debugData();
-        LOG_INFO(DB::Logger::get(), "!!!!! findKeyInKVStore t12 {}", region_id);
-        auto c = RegionDefaultCFDataTrait::genKey(start_key);
-        LOG_INFO(DB::Logger::get(), "!!!!! findKeyInKVStore 22211t {}", region_id);
-        if(data.defaultCF().getData().contains(c)) {
-            result.in_default.insert(region_id);
+
+                LOG_INFO(DB::Logger::get(), "!!!!! findKeyInKVStore S1 {}", data.defaultCF().getSize());
+        for(const auto & [k, v]: data.defaultCF().getData()) {
+                LOG_INFO(DB::Logger::get(), "!!!!! findKeyInKVStore YYYYY {}", k.first.toDebugString());
+            if (k.first.toDebugString() == std::to_string(start_handle)) {
+                LOG_INFO(DB::Logger::get(), "!!!!! findKeyInKVStore find default {}", region_id);
+                result.in_default.emplace_back(std::make_pair(region_id, k.second));
+            }
         }
-        LOG_INFO(DB::Logger::get(), "!!!!! findKeyInKVStore t123 {}", region_id);
-        if(data.writeCF().getData().contains(RegionWriteCFDataTrait::genKey(start_key)))
-            result.in_write.insert(region_id);
+                LOG_INFO(DB::Logger::get(), "!!!!! findKeyInKVStore S2 {}", data.writeCF().getSize());
+        for(const auto & [k, v]: data.writeCF().getData()) {
+            LOG_INFO(DB::Logger::get(), "!!!!! findKeyInKVStore XXXXX {} {} {}", k.first.toDebugString(), start_handle, (HandleID)k.first);
+            if (k.first.toDebugString() == std::to_string(start_handle)) {
+                LOG_INFO(DB::Logger::get(), "!!!!! findKeyInKVStore find write {}", region_id);
+                result.in_write.emplace_back(std::make_pair(region_id, k.second));
+            }
+        }
+        
+                LOG_INFO(DB::Logger::get(), "!!!!! findKeyInKVStore S3 {}", data.lockCF().getSize());
         LOG_INFO(DB::Logger::get(), "!!!!! findKeyInKVStore t1234 {}", region_id);
+        for(const auto & [k, v]: data.lockCF().getData()) {
+            LOG_INFO(DB::Logger::get(), "!!!!! findKeyInKVStore ZZZZ {}", k.key->toDebugString());
+        }
         if(data.lockCF().getData().contains(RegionLockCFDataTrait::genKey(start_key)))
-            result.in_lock.insert(region_id);
+            result.in_lock.emplace_back(region_id);
     }
     result.regions = regions;
     output(fmt::format("find key result {}", result.toString()));

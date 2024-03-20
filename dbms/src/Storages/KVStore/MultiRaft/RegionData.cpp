@@ -54,6 +54,7 @@ RegionDataRes RegionData::insert(ColumnFamilyType cf, TiKVKey && key, TiKVValue 
     {
     case ColumnFamilyType::Write:
     {
+        LOG_INFO(DB::Logger::get(), "!!!! findKeyInKVStore ssssss w");
         auto delta = write_cf.insert(std::move(key), std::move(value), mode);
         cf_data_size += delta;
         reportAlloc(delta);
