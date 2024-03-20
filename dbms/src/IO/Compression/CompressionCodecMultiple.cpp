@@ -24,6 +24,11 @@
 namespace DB
 {
 
+namespace ErrorCodes
+{
+extern const int CORRUPTED_DATA;
+}
+
 CompressionCodecMultiple::CompressionCodecMultiple(Codecs codecs_)
     : codecs(codecs_)
 {}
@@ -75,7 +80,7 @@ void CompressionCodecMultiple::doDecompressData(
     UInt32 decompressed_size) const
 {
     if (source_size < 1 || !source[0])
-        throw Exception(decompression_error_code, "Wrong compression methods list");
+        throw Exception(ErrorCodes::CORRUPTED_DATA, "Wrong compression methods list");
 
     UInt8 compression_methods_size = source[0];
 
@@ -93,7 +98,7 @@ void CompressionCodecMultiple::doDecompressData(
 
         if (idx == 0 && uncompressed_size != decompressed_size)
             throw Exception(
-                decompression_error_code,
+                ErrorCodes::CORRUPTED_DATA,
                 "Wrong final decompressed size in codec Multiple, got {}, expected {}",
                 uncompressed_size,
                 decompressed_size);

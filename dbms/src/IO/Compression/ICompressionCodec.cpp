@@ -65,7 +65,7 @@ void ICompressionCodec::decompress(const char * source, UInt32 source_size, char
     doDecompressData(&source[header_size], source_size - header_size, dest, dest_size);
 }
 
-UInt32 ICompressionCodec::readCompressedBlockSize(const char * source) const
+UInt32 ICompressionCodec::readCompressedBlockSize(const char * source)
 {
     auto compressed_block_size = unalignedLoad<UInt32>(&source[1]);
     if (compressed_block_size == 0)
@@ -75,7 +75,7 @@ UInt32 ICompressionCodec::readCompressedBlockSize(const char * source) const
     return compressed_block_size;
 }
 
-UInt32 ICompressionCodec::readDecompressedBlockSize(const char * source) const
+UInt32 ICompressionCodec::readDecompressedBlockSize(const char * source)
 {
     auto decompressed_block_size = unalignedLoad<UInt32>(&source[5]);
     if (decompressed_block_size == 0)
