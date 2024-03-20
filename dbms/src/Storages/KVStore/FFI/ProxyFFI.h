@@ -268,6 +268,7 @@ inline EngineStoreServerHelper GetEngineStoreServerHelper(EngineStoreServerWrap 
         .fn_fast_add_peer = FastAddPeer,
         .fn_query_fap_snapshot_state = QueryFapSnapshotState,
         .fn_clear_fap_snapshot = ClearFapSnapshot,
+        .fn_kvstore_region_exists = KvstoreRegionExists,
         .fn_report_thread_allocate_info = ReportThreadAllocateInfo,
         .fn_report_thread_allocate_batch = ReportThreadAllocateBatch,
     };
