@@ -46,7 +46,11 @@ public:
 
     using RangeWithStrategy = std::pair<PackRange, ColumnCache::Strategy>;
     using RangeWithStrategys = std::vector<RangeWithStrategy>;
-    RangeWithStrategys getReadStrategy(size_t pack_id, size_t pack_count, ColId column_id);
+    RangeWithStrategys getReadStrategy(size_t start_pack_id, size_t pack_count, ColId column_id);
+    static RangeWithStrategys getReadStrategy(
+        size_t start_pack_id,
+        size_t pack_count,
+        std::unordered_set<size_t> memory_pack_ids);
 
     void tryPutColumn(size_t pack_id, ColId column_id, const ColumnPtr & column, size_t rows_offset, size_t rows_count);
 

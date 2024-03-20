@@ -18,15 +18,15 @@ namespace DB
 {
 namespace DM
 {
-RangeWithStrategys ColumnCache::getReadStrategy(size_t pack_id, size_t pack_count, ColId column_id)
+RangeWithStrategys ColumnCache::getReadStrategy(size_t start_pack_id, size_t pack_count, ColId column_id)
 {
-    PackRange target_range{pack_id, pack_id + pack_count};
+    PackRange target_range{start_pack_id, start_pack_id + pack_count};
 
     RangeWithStrategys range_and_strategys;
 
     Strategy strategy = Strategy::Unknown;
     size_t range_start = 0;
-    for (size_t cursor = target_range.first; cursor < target_range.second; cursor++)
+    for (size_t cursor = target_range.first; cursor < target_range.second; ++cursor)
     {
         if (isPackInCache(cursor, column_id))
         {
@@ -57,6 +57,50 @@ RangeWithStrategys ColumnCache::getReadStrategy(size_t pack_id, size_t pack_coun
     }
     range_and_strategys.emplace_back(std::make_pair(PackRange{range_start, target_range.second}, strategy));
 
+    return range_and_strategys;
+}
+
+RangeWithStrategys ColumnCache::getReadStrategy(
+    size_t start_pack_id,
+    size_t pack_count,
+    std::unordered_set<size_t> memory_pack_ids)
+{
+    PackRange target_range{start_pack_id, start_pack_id + pack_count};
+
+    RangeWithStrategys range_and_strategys;
+
+    Strategy strategy = Strategy::Unknown;
+    size_t range_start = 0;
+    for (size_t cursor = target_range.first; cursor < target_range.second; ++cursor)
+    {
+        if (memory_pack_ids.contains(cursor))
+        {
+            if (strategy == Strategy::Memory)
+            {
+                continue;
+            }
+            else if (strategy == Strategy::Disk)
+            {
+                range_and_strategys.emplace_back(std::make_pair(PackRange{range_start, cursor}, Strategy::Disk));
+            }
+            range_start = cursor;
+            strategy = Strategy::Memory;
+        }
+        else
+        {
+            if (strategy == Strategy::Memory)
+            {
+                range_and_strategys.emplace_back(std::make_pair(PackRange{range_start, cursor}, Strategy::Memory));
+            }
+            else if (strategy == Strategy::Disk)
+            {
+                continue;
+            }
+            range_start = cursor;
+            strategy = Strategy::Disk;
+        }
+    }
+    range_and_strategys.emplace_back(std::make_pair(PackRange{range_start, target_range.second}, strategy));
     return range_and_strategys;
 }
 
