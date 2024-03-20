@@ -14,35 +14,28 @@
 
 #pragma once
 
-#include <IO/Compression/CompressionMethod.h>
-
+#include <IO/Buffer/BufferWithOwnMemory.h>
+#include <IO/Buffer/WriteBuffer.h>
+#include <IO/Compression/ICompressionCodec.h>
 
 namespace DB
 {
-struct Settings;
 
-struct CompressionSettings
+class CompressionCodecNone final : public ICompressionCodec
 {
-    CompressionMethod method;
-    int level;
+public:
+    CompressionCodecNone();
 
-    CompressionSettings()
-        : CompressionSettings(CompressionMethod::LZ4)
-    {}
+    UInt8 getMethodByte() const override;
 
-    explicit CompressionSettings(CompressionMethod method_)
-        : method(method_)
-        , level(getDefaultLevel(method))
-    {}
+protected:
+    UInt32 doCompressData(const char * source, UInt32 source_size, char * dest) const override;
 
-    CompressionSettings(CompressionMethod method_, int level_)
-        : method(method_)
-        , level(level_)
-    {}
+    void doDecompressData(const char * source, UInt32 source_size, char * dest, UInt32 uncompressed_size)
+        const override;
 
-    explicit CompressionSettings(const Settings & settings);
-
-    static int getDefaultLevel(CompressionMethod method);
+    bool isCompression() const override { return false; }
+    bool isGenericCompression() const override { return false; }
 };
 
 } // namespace DB

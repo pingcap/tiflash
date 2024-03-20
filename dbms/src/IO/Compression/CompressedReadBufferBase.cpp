@@ -13,35 +13,75 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
-#include <Common/PODArray.h>
-#include <Common/ProfileEvents.h>
 #include <IO/Buffer/BufferWithOwnMemory.h>
 #include <IO/Buffer/ReadBuffer.h>
 #include <IO/Compression/CompressedReadBufferBase.h>
-#include <IO/Compression/CompressedStream.h>
+#include <IO/Compression/CompressionFactory.h>
+#include <IO/Compression/CompressionMethod.h>
 #include <IO/WriteHelpers.h>
 #include <city.h>
-#include <common/unaligned.h>
-#include <lz4.h>
-#include <string.h>
-#include <zstd.h>
 
-#include <vector>
-
-#if USE_QPL
-#include <IO/Compression/CodecDeflateQpl.h>
-#endif
 
 namespace DB
 {
 namespace ErrorCodes
 {
-extern const int UNKNOWN_COMPRESSION_METHOD;
 extern const int TOO_LARGE_SIZE_COMPRESSED;
 extern const int CHECKSUM_DOESNT_MATCH;
 extern const int CANNOT_DECOMPRESS;
+extern const int CORRUPTED_DATA;
 } // namespace ErrorCodes
 
+
+static void readHeaderAndGetCodec(const char * compressed_buffer, CompressionCodecPtr & codec)
+{
+    UInt8 method_byte = ICompressionCodec::readMethod(compressed_buffer);
+
+    if (!codec)
+    {
+        codec = CompressionFactory::create(method_byte);
+    }
+    else if (codec->getMethodByte() != method_byte)
+    {
+        throw Exception(
+            ErrorCodes::CANNOT_DECOMPRESS,
+            "Data compressed with different methods, given method "
+            "byte {#x}, previous method byte {#x}",
+            method_byte,
+            codec->getMethodByte());
+    }
+}
+
+static void readHeaderAndGetCodecAndSize(
+    const char * compressed_buffer,
+    UInt8 header_size,
+    CompressionCodecPtr & codec,
+    size_t & size_decompressed,
+    size_t & size_compressed_without_checksum)
+{
+    readHeaderAndGetCodec(compressed_buffer, codec);
+
+    size_compressed_without_checksum = codec->readCompressedBlockSize(compressed_buffer);
+    size_decompressed = codec->readDecompressedBlockSize(compressed_buffer);
+
+    /// This is for clang static analyzer.
+    assert(size_decompressed > 0);
+
+    if (size_compressed_without_checksum > DBMS_MAX_COMPRESSED_SIZE)
+        throw Exception(
+            ErrorCodes::TOO_LARGE_SIZE_COMPRESSED,
+            "Too large size_compressed_without_checksum: {}. "
+            "Most likely corrupted data.",
+            size_compressed_without_checksum);
+
+    if (size_compressed_without_checksum < header_size)
+        throw Exception(
+            ErrorCodes::CORRUPTED_DATA,
+            "Can't decompress data: "
+            "the compressed data size ({}, this should include header size) is less than the header size ({})",
+            size_compressed_without_checksum,
+            static_cast<size_t>(header_size));
+}
 
 /// Read compressed data into compressed_buffer. Get size of decompressed data from block header. Checksum if need.
 /// Returns number of compressed bytes read.
@@ -59,53 +99,36 @@ size_t CompressedReadBufferBase<has_legacy_checksum>::readCompressedData(
         compressed_in->readStrict(reinterpret_cast<char *>(&checksum), sizeof(checksum));
     }
 
-    own_compressed_buffer.resize(COMPRESSED_BLOCK_HEADER_SIZE);
-    compressed_in->readStrict(&own_compressed_buffer[0], COMPRESSED_BLOCK_HEADER_SIZE);
+    constexpr UInt8 header_size = ICompressionCodec::getHeaderSize();
 
-    UInt8 method = own_compressed_buffer[0]; /// See CompressedWriteBuffer.h
+    own_compressed_buffer.resize(header_size);
+    compressed_in->readStrict(own_compressed_buffer.data(), header_size);
 
-    if (method == static_cast<UInt8>(CompressionMethodByte::COL_END))
+    if (ICompressionCodec::readMethod(own_compressed_buffer.data())
+        == static_cast<UInt8>(CompressionMethodByte::COL_END))
         return 0;
 
+    readHeaderAndGetCodecAndSize(
+        own_compressed_buffer.data(),
+        header_size,
+        codec,
+        size_decompressed,
+        size_compressed_without_checksum);
+
     size_t & size_compressed = size_compressed_without_checksum;
-
-#if USE_QPL
-    if (method == static_cast<UInt8>(CompressionMethodByte::LZ4)
-        || method == static_cast<UInt8>(CompressionMethodByte::QPL)
-        || method == static_cast<UInt8>(CompressionMethodByte::ZSTD)
-        || method == static_cast<UInt8>(CompressionMethodByte::NONE))
-#else
-    if (method == static_cast<UInt8>(CompressionMethodByte::LZ4)
-        || method == static_cast<UInt8>(CompressionMethodByte::ZSTD)
-        || method == static_cast<UInt8>(CompressionMethodByte::NONE))
-#endif
-    {
-        size_compressed = unalignedLoad<UInt32>(&own_compressed_buffer[1]);
-        size_decompressed = unalignedLoad<UInt32>(&own_compressed_buffer[5]);
-    }
-    else
-        throw Exception("Unknown compression method: " + toString(method), ErrorCodes::UNKNOWN_COMPRESSION_METHOD);
-
-    if (size_compressed > DBMS_MAX_COMPRESSED_SIZE)
-        throw Exception(
-            "Too large size_compressed. Most likely corrupted data.",
-            ErrorCodes::TOO_LARGE_SIZE_COMPRESSED);
-
     /// Is whole compressed block located in 'compressed_in' buffer?
-    if (compressed_in->offset() >= COMPRESSED_BLOCK_HEADER_SIZE
-        && compressed_in->position() + size_compressed - COMPRESSED_BLOCK_HEADER_SIZE <= compressed_in->buffer().end())
+    if (compressed_in->offset() >= header_size
+        && compressed_in->position() + size_compressed - header_size <= compressed_in->buffer().end())
     {
-        compressed_in->position() -= COMPRESSED_BLOCK_HEADER_SIZE;
+        compressed_in->position() -= header_size;
         compressed_buffer = compressed_in->position();
         compressed_in->position() += size_compressed;
     }
     else
     {
         own_compressed_buffer.resize(size_compressed);
-        compressed_buffer = &own_compressed_buffer[0];
-        compressed_in->readStrict(
-            compressed_buffer + COMPRESSED_BLOCK_HEADER_SIZE,
-            size_compressed - COMPRESSED_BLOCK_HEADER_SIZE);
+        compressed_buffer = own_compressed_buffer.data();
+        compressed_in->readStrict(compressed_buffer + header_size, size_compressed - header_size);
     }
 
     if constexpr (has_legacy_checksum)
@@ -126,53 +149,9 @@ void CompressedReadBufferBase<has_legacy_checksum>::decompress(
     size_t size_decompressed,
     size_t size_compressed_without_checksum)
 {
-    UInt8 method = compressed_buffer[0]; /// See CompressedWriteBuffer.h
-
-    if (method == static_cast<UInt8>(CompressionMethodByte::LZ4))
-    {
-        if (unlikely(
-                LZ4_decompress_safe(
-                    compressed_buffer + COMPRESSED_BLOCK_HEADER_SIZE,
-                    to,
-                    size_compressed_without_checksum - COMPRESSED_BLOCK_HEADER_SIZE,
-                    size_decompressed)
-                < 0))
-            throw Exception("Cannot LZ4_decompress_safe", ErrorCodes::CANNOT_DECOMPRESS);
-    }
-    else if (method == static_cast<UInt8>(CompressionMethodByte::ZSTD))
-    {
-        size_t res = ZSTD_decompress(
-            to,
-            size_decompressed,
-            compressed_buffer + COMPRESSED_BLOCK_HEADER_SIZE,
-            size_compressed_without_checksum - COMPRESSED_BLOCK_HEADER_SIZE);
-
-        if (ZSTD_isError(res))
-            throw Exception(
-                "Cannot ZSTD_decompress: " + std::string(ZSTD_getErrorName(res)),
-                ErrorCodes::CANNOT_DECOMPRESS);
-    }
-#if USE_QPL
-    else if (method == static_cast<UInt8>(CompressionMethodByte::QPL))
-    {
-        if (unlikely(
-                QPL::QPL_decompress(
-                    compressed_buffer + COMPRESSED_BLOCK_HEADER_SIZE,
-                    size_compressed_without_checksum - COMPRESSED_BLOCK_HEADER_SIZE,
-                    to,
-                    size_decompressed)
-                < 0))
-            throw Exception("Cannot QplDecompressData", ErrorCodes::CANNOT_DECOMPRESS);
-    }
-#endif
-    else if (method == static_cast<UInt8>(CompressionMethodByte::NONE))
-    {
-        memcpy(to, &compressed_buffer[COMPRESSED_BLOCK_HEADER_SIZE], size_decompressed);
-    }
-    else
-        throw Exception("Unknown compression method: " + toString(method), ErrorCodes::UNKNOWN_COMPRESSION_METHOD);
+    readHeaderAndGetCodec(compressed_buffer, codec);
+    codec->decompress(compressed_buffer, size_compressed_without_checksum, to, size_decompressed);
 }
-
 
 /// 'compressed_in' could be initialized lazily, but before first call of 'readCompressedData'.
 template <bool has_legacy_checksum>
