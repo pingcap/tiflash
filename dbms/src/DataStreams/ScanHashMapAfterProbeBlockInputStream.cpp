@@ -82,7 +82,7 @@ struct AdderMapEntry<ASTTableJoin::Strictness::All, Mapped>
             /// handle left columns later to utilize insertManyDefaults
             for (size_t j = 0; j < column_indices_right.size(); ++j)
                 columns_right[j]->insertFrom(
-                    *current->block->getByPosition(key_num + column_indices_right[j]).column.get(),
+                    *current->columns[key_num + column_indices_right[j]].column.get(),
                     current->row_num);
             ++rows_added;
         };
@@ -145,7 +145,7 @@ struct AdderRowFlaggedMapEntry
                 /// handle left columns later to utilize insertManyDefaults if any
                 for (size_t j = 0; j < column_indices_right.size(); ++j)
                     columns_right[j]->insertFrom(
-                        *current->block->getByPosition(key_num + column_indices_right[j]).column.get(),
+                        *current->columns[key_num + column_indices_right[j]].column.get(),
                         current->row_num);
                 ++rows_added;
             }
@@ -424,7 +424,7 @@ void ScanHashMapAfterProbeBlockInputStream::fillColumns(
         /// handle left columns later to utilize insertManyDefaults
         for (size_t j = 0; j < column_indices_right.size(); ++j)
             mutable_columns_right[j]->insertFrom(
-                *not_mapped_row_pos->block->getByPosition(key_num + column_indices_right[j]).column.get(),
+                *not_mapped_row_pos->columns[key_num + column_indices_right[j]].column.get(),
                 not_mapped_row_pos->row_num);
 
         not_mapped_row_pos = not_mapped_row_pos->next;

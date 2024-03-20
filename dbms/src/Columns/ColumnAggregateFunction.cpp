@@ -382,15 +382,8 @@ ColumnPtr ColumnAggregateFunction::replicateRange(size_t start_row, size_t end_r
     auto & res_data = res->getData();
     res_data.reserve(offsets[end_row - 1]);
 
-    IColumn::Offset prev_offset = 0;
     for (size_t i = start_row; i < end_row; ++i)
-    {
-        size_t size_to_replicate = offsets[i] - prev_offset;
-        prev_offset = offsets[i];
-
-        for (size_t j = 0; j < size_to_replicate; ++j)
-            res_data.push_back(data[i]);
-    }
+        res_data.resize_fill(offsets[i], data[i]);
 
     return res;
 }

@@ -120,6 +120,14 @@ struct ProbeProcessInfo
     /// for null-aware join
     std::unique_ptr<NullAwareJoinProbeProcessData> null_aware_join_data;
 
+    /// Used for constructing columns during join probing
+    std::vector<ColumnRawPtrs> column_ptrs_buffer;
+    IColumn::GatherRanges gather_ranges_buffer;
+
+    /// Used for (null-aware) semi join
+    std::vector<size_t> semi_offsets;
+    IColumn::Disjuncts semi_disjuncts;
+
     ProbeProcessInfo(UInt64 max_block_size_, UInt64 cache_columns_threshold_)
         : partition_index(0)
         , max_block_size(max_block_size_)
@@ -127,7 +135,8 @@ struct ProbeProcessInfo
         , start_row(0)
         , end_row(0)
         , all_rows_joined_finish(true)
-        , cache_columns_threshold(cache_columns_threshold_){};
+        , cache_columns_threshold(cache_columns_threshold_)
+    {}
 
     void resetBlock(Block && block_, size_t partition_index_ = 0);
     template <bool is_shallow_cross_probe_mode>
@@ -191,5 +200,9 @@ struct ProbeProcessInfo
     void cutFilterAndOffsetVector(size_t start, size_t end) const;
     bool isCurrentProbeRowFinished() const;
     void finishCurrentProbeRow() const;
+
+    void resetColumnBuffer(size_t num_columns_to_add);
+    /// Fill columns starting from index offset with buffered columns data
+    void fillBufferedColumns(MutableColumns & added_columns, size_t offset = 0);
 };
 } // namespace DB

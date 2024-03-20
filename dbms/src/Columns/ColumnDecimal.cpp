@@ -318,14 +318,40 @@ void ColumnDecimal<T>::insertManyFrom(const IColumn & src, size_t position, size
 }
 
 template <typename T>
-void ColumnDecimal<T>::insertDisjunctFrom(const IColumn & src, const std::vector<size_t> & position_vec)
+void ColumnDecimal<T>::insertDisjunctManyFrom(const IColumn & src, const IColumn::Disjuncts & disjuncts)
 {
-    const auto & src_data = static_cast<const ColumnDecimal &>(src).data;
+    if (disjuncts.empty())
+        return;
+    const auto & src_container = static_cast<const Self &>(src).getData();
     size_t old_size = data.size();
-    size_t to_add_size = position_vec.size();
-    data.resize(old_size + to_add_size);
-    for (size_t i = 0; i < to_add_size; ++i)
-        data[i + old_size] = src_data[position_vec[i]];
+    data.reserve(old_size + disjuncts.back().count_offset);
+    for (const auto & d : disjuncts)
+        data.resize_fill(old_size + d.count_offset, src_container[d.position]);
+}
+
+template <typename T>
+void ColumnDecimal<T>::insertGatherRangeFrom(ColumnRawPtrs & src, const IColumn::GatherRanges & gather_ranges)
+{
+    if (gather_ranges.empty())
+        return;
+    assert(src.size() == gather_ranges.size());
+    size_t old_size = data.size();
+    data.reserve(old_size + gather_ranges.back().length_offset);
+    size_t sz = src.size(), prev_len = 0;
+    for (size_t i = 0; i < sz; ++i)
+    {
+        const auto & g = gather_ranges[i];
+        if (src[i] == nullptr)
+        {
+            data.resize_fill(old_size + g.length_offset, T());
+        }
+        else
+        {
+            const auto & column_src = static_cast<const Self &>(*src[i]);
+            data.insert(&column_src.data[g.start_pos], &column_src.data[g.start_pos + g.length_offset - prev_len]);
+        }
+        prev_len = g.length_offset;
+    }
 }
 
 #pragma GCC diagnostic pop
@@ -380,15 +406,8 @@ ColumnPtr ColumnDecimal<T>::replicateRange(size_t start_row, size_t end_row, con
     typename Self::Container & res_data = res->getData();
     res_data.reserve(offsets[end_row - 1]);
 
-    IColumn::Offset prev_offset = 0;
     for (size_t i = start_row; i < end_row; ++i)
-    {
-        size_t size_to_replicate = offsets[i] - prev_offset;
-        prev_offset = offsets[i];
-
-        for (size_t j = 0; j < size_to_replicate; ++j)
-            res_data.push_back(data[i]);
-    }
+        res_data.resize_fill(offsets[i], data[i]);
 
     return res;
 }

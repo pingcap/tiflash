@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Flash/Coprocessor/JoinInterpreterHelper.h>
+#include <Interpreters/ProbeProcessInfo.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
 
 namespace DB
@@ -99,8 +100,7 @@ public:
 
     template <typename Mapped>
     void fillRightColumns(
-        MutableColumns & added_columns,
-        size_t left_columns,
+        ProbeProcessInfo & probe_process_info,
         size_t right_columns,
         const std::vector<size_t> & right_column_indices_to_add,
         size_t & current_offset,
@@ -139,7 +139,7 @@ public:
         size_t max_block_size,
         const JoinNonEqualConditions & non_equal_conditions);
 
-    void joinResult(std::list<Result *> & res_list);
+    void joinResult(std::list<Result *> & res_list, ProbeProcessInfo & probe_process_info);
 
 private:
     template <bool has_other_eq_cond_from_in, bool has_other_cond, bool has_other_cond_null_map>

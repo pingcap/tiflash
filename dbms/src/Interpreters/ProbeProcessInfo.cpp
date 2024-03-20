@@ -209,4 +209,38 @@ void ProbeProcessInfo::finishCurrentProbeRow() const
     cross_join_data->next_right_block_index = cross_join_data->right_block_size;
 }
 
+void ProbeProcessInfo::resetColumnBuffer(size_t num_columns_to_add)
+{
+    if (column_ptrs_buffer.size() != num_columns_to_add || gather_ranges_buffer.size() > 8 * max_block_size)
+    {
+        IColumn::GatherRanges empty_ranges;
+        gather_ranges_buffer.swap(empty_ranges);
+        gather_ranges_buffer.reserve(max_block_size);
+        column_ptrs_buffer.resize(num_columns_to_add);
+        for (size_t i = 0; i < num_columns_to_add; ++i)
+        {
+            ColumnRawPtrs empty_ptr;
+            column_ptrs_buffer[i].swap(empty_ptr);
+            column_ptrs_buffer[i].reserve(max_block_size);
+        }
+        return;
+    }
+    gather_ranges_buffer.clear();
+    for (size_t i = 0; i < num_columns_to_add; ++i)
+        column_ptrs_buffer[i].clear();
+}
+
+void ProbeProcessInfo::fillBufferedColumns(MutableColumns & added_columns, size_t offset)
+{
+    if (gather_ranges_buffer.empty())
+        return;
+
+    size_t num_columns_to_add = column_ptrs_buffer.size();
+    assert(added_columns.size() - offset >= num_columns_to_add);
+    for (size_t j = 0; j < num_columns_to_add; ++j)
+        added_columns[offset + j]->insertGatherRangeFrom(column_ptrs_buffer[j], gather_ranges_buffer);
+
+    resetColumnBuffer(num_columns_to_add);
+}
+
 } // namespace DB
