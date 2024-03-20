@@ -34,24 +34,31 @@ TEST(AsyncTasksTest, AsyncTasksNormal)
         auto m2 = std::make_shared<std::mutex>();
         int flag = 0;
         std::unique_lock cl(*m);
+        LOG_INFO(DB::Logger::get(), "!!!!! add task");
         async_tasks->addTask(1, [m, &flag, &async_tasks, &m2]() {
             auto cancel_handle = async_tasks->getCancelHandleFromExecutor(1);
             std::scoped_lock rl2(*m2);
+            LOG_INFO(DB::Logger::get(), "!!!!! r2");
             std::scoped_lock rl(*m);
+            LOG_INFO(DB::Logger::get(), "!!!!! r1");
             if (cancel_handle->isCanceled())
             {
                 return;
             }
             flag = 1;
         });
+        LOG_INFO(DB::Logger::get(), "!!!!! asyncCancelTask");
         async_tasks->asyncCancelTask(1);
         ASSERT_FALSE(async_tasks->isScheduled(1));
+        LOG_INFO(DB::Logger::get(), "!!!!! addTask");
         async_tasks->addTask(1, [&flag]() { flag = 2; });
         cl.unlock();
         std::scoped_lock rl2(*m2);
+        LOG_INFO(DB::Logger::get(), "!!!!! rl2");
         ASSERT_NO_THROW(async_tasks->fetchResult(1));
         ASSERT_EQ(flag, 2);
     }
+    
     // Lifetime of tasks
     LOG_INFO(log, "Lifetime of tasks");
     {

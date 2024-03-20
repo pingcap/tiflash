@@ -15,7 +15,7 @@
 #include <Common/FmtUtils.h>
 #include <Common/typeid_cast.h>
 #include <Debug/MockTiDB.h>
-#include <Debug/MockTiKV.h>
+#include <Debug/MockKVStore/MockTiKV.h>
 #include <Debug/dbgKVStore/dbgFuncRegion.h>
 #include <Debug/dbgKVStore/dbgKVStore.h>
 #include <Debug/dbgTools.h>
@@ -164,6 +164,7 @@ void dbgFuncDumpAllRegion(
                 region->toString(dump_status),
                 RecordKVFormat::DecodedTiKVKeyRangeToDebugString(rawkeys));
         }
+        fmt_buf.fmtAppend(" tikv_ranges: {}, ", region->getRange()->toDebugString());
         fmt_buf.fmtAppend("state: {}", raft_serverpb::PeerState_Name(region->peerState()));
         if (auto s = region->dataInfo(); s.size() > 2)
             fmt_buf.fmtAppend(", {}", s);

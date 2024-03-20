@@ -15,7 +15,7 @@
 #include <Common/typeid_cast.h>
 #include <Debug/DBGInvoker.h>
 #include <Debug/MockTiDB.h>
-#include <Debug/MockTiKV.h>
+#include <Debug/MockKVStore/MockTiKV.h>
 #include <Debug/dbgKVStore/dbgFuncMockRaftCommand.h>
 #include <Debug/dbgTools.h>
 #include <Interpreters/Context.h>
