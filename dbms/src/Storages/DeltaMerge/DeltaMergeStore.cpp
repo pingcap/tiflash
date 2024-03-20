@@ -654,6 +654,8 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
             {
                 if (segment->writeToCache(*dm_context, block, offset, limit))
                 {
+                    GET_METRIC(tiflash_storage_subtask_throughput_bytes, type_write_to_cache).Increment(alloc_bytes);
+                    GET_METRIC(tiflash_storage_subtask_throughput_rows, type_write_to_cache).Increment(limit);
                     updated_segments.push_back(segment);
                     break;
                 }
@@ -677,6 +679,8 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
                 // Write could fail, because other threads could already updated the instance. Like split/merge, merge delta.
                 if (segment->writeToDisk(*dm_context, write_column_file))
                 {
+                    GET_METRIC(tiflash_storage_subtask_throughput_bytes, type_write_to_disk).Increment(alloc_bytes);
+                    GET_METRIC(tiflash_storage_subtask_throughput_rows, type_write_to_disk).Increment(limit);
                     updated_segments.push_back(segment);
                     break;
                 }
