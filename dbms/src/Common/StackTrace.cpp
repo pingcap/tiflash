@@ -20,22 +20,22 @@
 #include <execinfo.h>
 StackTrace::StackTrace()
 {
-    frames_size = backtrace(frames, STACK_TRACE_MAX_DEPTH);
+    frames_size = 0;
 }
 
 std::string StackTrace::toString() const
 {
     DB::FmtBuffer output;
-
+    output.append("\n");
     for (size_t f = 0; f < frames_size; ++f)
     {
         output.append("\n");
-        auto demangle_func = [](const char * name) {
+        /*auto demangle_func = [](const char * name) {
             int status = 0;
             auto result = demangle(name, status);
             return std::pair<std::string, int>{result, status};
         };
-        addr2line(demangle_func, output, frames[f]);
+        addr2line(demangle_func, output, frames[f]);*/
     }
 
     return output.toString();
