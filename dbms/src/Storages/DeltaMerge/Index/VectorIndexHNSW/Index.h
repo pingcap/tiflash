@@ -15,7 +15,13 @@
 #pragma once
 
 #include <Storages/DeltaMerge/Index/VectorIndex.h>
+
+#if __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wpass-failed"
 #include <Storages/DeltaMerge/Index/VectorIndexHNSW/usearch_index_dense.h>
+#pragma clang diagnostic pop
+#endif
 
 namespace DB::DM
 {
