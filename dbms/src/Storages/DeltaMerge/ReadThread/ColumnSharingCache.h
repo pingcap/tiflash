@@ -46,14 +46,9 @@ public:
         ColumnPtr col_data;
     };
 
-    void add(size_t start_pack_id, size_t pack_count, ColumnPtr & col_data, size_t max_sharing_column_count)
+    void add(size_t start_pack_id, size_t pack_count, ColumnPtr & col_data)
     {
         std::lock_guard lock(mtx);
-        if (packs.size() >= max_sharing_column_count)
-        {
-            GET_METRIC(tiflash_storage_read_thread_counter, type_add_cache_reach_count_limit).Increment();
-            return;
-        }
         GET_METRIC(tiflash_storage_read_thread_counter, type_add_cache_succ).Increment();
         auto & value = packs[start_pack_id];
         if (value.pack_count < pack_count)
@@ -134,11 +129,9 @@ public:
     ColumnSharingCacheMap(
         const String & dmfile_name_,
         const ColumnDefines & cds,
-        size_t max_sharing_column_count_,
         LoggerPtr & log_)
         : dmfile_name(dmfile_name_)
         , stats(static_cast<int>(ColumnCacheStatus::_TOTAL_COUNT))
-        , max_sharing_column_count(max_sharing_column_count_)
         , log(log_)
     {
         for (const auto & cd : cds)
@@ -164,7 +157,7 @@ public:
         {
             return;
         }
-        itr->second.add(start_pack_id, pack_count, col_data, max_sharing_column_count);
+        itr->second.add(start_pack_id, pack_count, col_data);
     }
 
     bool get(
@@ -223,7 +216,6 @@ private:
     std::string dmfile_name;
     std::unordered_map<int64_t, ColumnSharingCache> cols;
     std::vector<std::atomic<int64_t>> stats;
-    size_t max_sharing_column_count;
     LoggerPtr log;
 };
 
