@@ -184,6 +184,7 @@ struct TiFlashJoin
         const NamesAndTypes & left_cols,
         const NamesAndTypes & right_cols,
         const ExpressionActionsPtr & probe_side_prepare_join,
+        const ExpressionActionsPtr & build_side_prepare_join,
         const Names & probe_key_names,
         const Names & build_key_names,
         JoinNonEqualConditions & join_non_equal_conditions) const;
@@ -200,7 +201,8 @@ struct TiFlashJoin
     NamesAndTypes genColumnsForOtherJoinFilter(
         const NamesAndTypes & left_cols,
         const NamesAndTypes & right_cols,
-        const ExpressionActionsPtr & probe_prepare_join_actions) const;
+        const ExpressionActionsPtr & probe_prepare_join_actions,
+        const ExpressionActionsPtr & build_prepare_join_actions) const;
 
     std::vector<RuntimeFilterPtr> genRuntimeFilterList(
         const Context & context,

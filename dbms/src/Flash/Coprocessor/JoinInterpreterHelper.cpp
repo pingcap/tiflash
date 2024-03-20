@@ -252,7 +252,8 @@ String TiFlashJoin::genFlagMappedEntryHelperName(const Block & header1, const Bl
 NamesAndTypes TiFlashJoin::genColumnsForOtherJoinFilter(
     const NamesAndTypes & left_cols,
     const NamesAndTypes & right_cols,
-    const ExpressionActionsPtr & probe_prepare_join_actions) const
+    const ExpressionActionsPtr & probe_prepare_join_actions,
+    const ExpressionActionsPtr & build_prepare_join_actions) const
 {
 #ifndef NDEBUG
     auto is_prepare_actions_valid = [](const NamesAndTypes & cols, const ExpressionActionsPtr & prepare_actions) {
@@ -310,9 +311,12 @@ NamesAndTypes TiFlashJoin::genColumnsForOtherJoinFilter(
                       columns_for_other_join_filter.emplace_back(p.name, make_nullable ? makeNullable(p.type) : p.type);
               }
           };
-    bool make_nullable = build_side_index == 1 ? join.join_type() == tipb::JoinType::TypeRightOuterJoin
-                                               : join.join_type() == tipb::JoinType::TypeLeftOuterJoin;
-    append_new_columns(probe_prepare_join_actions->getSampleBlock(), make_nullable);
+    append_new_columns(
+        probe_prepare_join_actions->getSampleBlock(),
+        join.join_type() == tipb::JoinType::TypeRightOuterJoin);
+    append_new_columns(
+        build_prepare_join_actions->getSampleBlock(),
+        join.join_type() == tipb::JoinType::TypeLeftOuterJoin);
 
     return columns_for_other_join_filter;
 }
@@ -350,11 +354,13 @@ void TiFlashJoin::fillJoinOtherConditionsAction(
     const NamesAndTypes & left_cols,
     const NamesAndTypes & right_cols,
     const ExpressionActionsPtr & probe_side_prepare_join,
+    const ExpressionActionsPtr & build_side_prepare_join,
     const Names & probe_key_names,
     const Names & build_key_names,
     JoinNonEqualConditions & join_non_equal_conditions) const
 {
-    auto columns_for_other_join_filter = genColumnsForOtherJoinFilter(left_cols, right_cols, probe_side_prepare_join);
+    auto columns_for_other_join_filter
+        = genColumnsForOtherJoinFilter(left_cols, right_cols, probe_side_prepare_join, build_side_prepare_join);
 
     if (join.other_conditions_size() == 0 && join.other_eq_conditions_from_in_size() == 0
         && !join.is_null_aware_semi_join())
