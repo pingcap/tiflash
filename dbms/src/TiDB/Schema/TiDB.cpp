@@ -138,7 +138,18 @@ Field ColumnInfo::defaultValueToField() const
     case TypeLong:
     case TypeLongLong:
     case TypeInt24:
-        TRY_CATCH_DEFAULT_VALUE_TO_FIELD({ return value.convert<Int64>(); });
+        TRY_CATCH_DEFAULT_VALUE_TO_FIELD({
+            try
+            {
+                return value.convert<Int64>();
+            }
+            catch (...)
+            {
+                // due to https://github.com/pingcap/tidb/issues/34881
+                // we do this to avoid exception in older version of TiDB.
+                return static_cast<Int64>(std::llround(value.convert<double>()));
+            }
+        });
     case TypeBit:
     {
         // TODO: We shall use something like `orig_default_bit`, which will never change once created,
