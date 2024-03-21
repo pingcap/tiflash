@@ -110,6 +110,7 @@ DBGInvoker::DBGInvoker()
     regSchemalessFunc("region_snapshot_apply_file", /*      */ MockRaftCommand::dbgFuncRegionSnapshotApplyDTFiles);
     regSchemalessFunc("region_ingest_sst", MockRaftCommand::dbgFuncIngestSST);
     regSchemalessFunc("find_key", dbgFuncFindKey);
+    regSchemafulFunc("find_key_dt", dbgFuncFindKeyDt);
 
     regSchemalessFunc("init_fail_point", DbgFailPointFunc::dbgInitFailPoint);
     regSchemalessFunc("enable_fail_point", DbgFailPointFunc::dbgEnableFailPoint);

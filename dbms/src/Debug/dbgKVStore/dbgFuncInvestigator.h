@@ -22,5 +22,6 @@ namespace DB
 {
 
 void dbgFuncFindKey(Context & context, const ASTs & args, DBGInvoker::Printer output);
+BlockInputStreamPtr dbgFuncFindKeyDt(Context & context, const ASTs & args);
 
 }
