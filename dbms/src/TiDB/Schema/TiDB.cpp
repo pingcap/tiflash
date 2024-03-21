@@ -31,6 +31,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <regex>
 
 namespace DB
 {
@@ -139,12 +140,15 @@ Field ColumnInfo::defaultValueToField() const
         // like 9223372036854775808 which is larger than the maximum value of Int64,
         // static_cast<UInt64>(static_cast<Int64>(9223372036854775808)) == 9223372036854775808
         // so we don't need consider unsigned here.
-        if (value.isInteger())
+        if likely (value.isInteger())
         {
             return value.convert<Int64>();
         }
         else
         {
+            auto str = value.convert<String>();
+            if likely (std::regex_match(str, std::regex("[(-|+)|][0-9]+")))
+                return value.convert<Int64>();
             return DB::GenDefaultField(*this);
         }
     }
