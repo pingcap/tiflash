@@ -31,7 +31,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <regex>
 
 namespace DB
 {
@@ -130,28 +129,16 @@ Field ColumnInfo::defaultValueToField() const
     switch (tp)
     {
     // Integer Type.
+    // In c++, cast a unsigned integer to signed integer will not change the value.
+    // like 9223372036854775808 which is larger than the maximum value of Int64,
+    // static_cast<UInt64>(static_cast<Int64>(9223372036854775808)) == 9223372036854775808
+    // so we don't need consider unsigned here.
     case TypeTiny:
     case TypeShort:
     case TypeLong:
     case TypeLongLong:
     case TypeInt24:
-    {
-        // In c++, cast a unsigned integer to signed integer will not change the value.
-        // like 9223372036854775808 which is larger than the maximum value of Int64,
-        // static_cast<UInt64>(static_cast<Int64>(9223372036854775808)) == 9223372036854775808
-        // so we don't need consider unsigned here.
-        if likely (value.isInteger())
-        {
-            return value.convert<Int64>();
-        }
-        else
-        {
-            auto str = value.convert<String>();
-            if likely (std::regex_match(str, std::regex("[(-|+)|][0-9]+")))
-                return value.convert<Int64>();
-            return DB::GenDefaultField(*this);
-        }
-    }
+        TRY_CATCH_DEFAULT_VALUE_TO_FIELD({ return value.convert<Int64>(); });
     case TypeBit:
     {
         // TODO: We shall use something like `orig_default_bit`, which will never change once created,
@@ -173,10 +160,7 @@ Field ColumnInfo::defaultValueToField() const
     // Floating type.
     case TypeFloat:
     case TypeDouble:
-        if (value.isNumeric())
-            return value.convert<double>();
-        else
-            return DB::GenDefaultField(*this);
+        TRY_CATCH_DEFAULT_VALUE_TO_FIELD({ return value.convert<double>(); });
     case TypeDate:
     case TypeDatetime:
     case TypeTimestamp:
