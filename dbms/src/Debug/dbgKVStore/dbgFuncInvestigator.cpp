@@ -227,30 +227,21 @@ BlockInputStreamPtr dbgFuncFindKeyDt(Context & context, const ASTs & args)
     const String & database_name_raw = typeid_cast<const ASTIdentifier &>(*args[0]).name;
     const String & table_name_raw = typeid_cast<const ASTIdentifier &>(*args[1]).name;
 
-    LOG_INFO(DB::Logger::get(), "!!!!!! dbgFuncFindKeyDt 1");
     auto maybe_database_name = mappedDatabaseWithOptional(context, database_name_raw);
     if (maybe_database_name == std::nullopt)
     {
         LOG_INFO(DB::Logger::get(), "Can't find database {}", database_name_raw);
         return std::make_shared<StringStreamBlockInputStream>("Error");
     }
-    LOG_INFO(DB::Logger::get(), "!!!!!! dbgFuncFindKeyDt 2");
     auto database_name = maybe_database_name.value();
 
     auto mapped_table_name = mappedTable(context, database_name_raw, table_name_raw);
     auto table_name = mapped_table_name.second;
-
     auto & tmt = context.getTMTContext();
 
     auto schema_syncer = tmt.getSchemaSyncerManager();
     auto storage = tmt.getStorages().getByName(database_name, table_name_raw, false);
 
-    LOG_INFO(
-        DB::Logger::get(),
-        "!!!!!! dbgFuncFindKeyDt 3 {} {} {}",
-        database_name,
-        table_name,
-        mapped_table_name.first);
     if (storage == nullptr)
     {
         LOG_INFO(DB::Logger::get(), "Can't find database and table {}.{}", database_name, table_name);
@@ -266,21 +257,15 @@ BlockInputStreamPtr dbgFuncFindKeyDt(Context & context, const ASTs & args)
         }
     }
 
-    LOG_INFO(DB::Logger::get(), "!!!!!! dbgFuncFindKeyDt 4");
     String key = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[2]).value);
     String value = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[3]).value);
-    if (table_info.pk_is_handle) {}
-    else {}
     auto query
         = fmt::format("selraw *,_INTERNAL_VERSION from {}.{} where {} = {}", database_name, table_name, key, value);
 
-    LOG_INFO(DB::Logger::get(), "!!!!!! dbgFuncFindKeyDt 5");
     ParserSelectQuery parser;
     ASTPtr ast = parseQuery(parser, query.data(), query.data() + query.size(), "dbgFuncFindKeyDt", 0);
 
-    LOG_INFO(DB::Logger::get(), "!!!!!! dbgFuncFindKeyDt 6");
     InterpreterSelectQuery interpreter(ast, context);
-    LOG_INFO(DB::Logger::get(), "!!!!!! dbgFuncFindKeyDt 7");
     auto res = interpreter.execute();
     return res.in;
 }
