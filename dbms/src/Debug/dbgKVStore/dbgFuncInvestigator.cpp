@@ -70,14 +70,14 @@ struct MatchResult
             fmt_buf3.fmtAppend("{}:", a);
         }
         fmt_buf.fmtAppend(
-            "default_cf {}, write_cf {}, lock_cf {}, ",
+            "default_cf {}; write_cf {}; lock_cf {}; ",
             fmt_buf1.toString(),
             fmt_buf2.toString(),
             fmt_buf3.toString());
         for (const auto & [region_id, region] : regions)
         {
             fmt_buf.fmtAppend(
-                "region {} {}, tikv_range: {}",
+                "region {} {}, tikv_range: {}; ",
                 region_id,
                 region->getDebugString(),
                 region->getRange()->toDebugString());
