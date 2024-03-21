@@ -220,7 +220,7 @@ BlockInputStreamPtr dbgFuncFindKeyDt(Context & context, const ASTs & args)
 {
     if (args.size() < 4)
         throw Exception(
-            "Args not matched, should be: database-name, table-name, start1 [, start2, ...], end1, [, end2, ...]",
+            "Args not matched, should be: database-name, table-name, key, value",
             ErrorCodes::BAD_ARGUMENTS);
 
     const String & database_name_raw = typeid_cast<const ASTIdentifier &>(*args[0]).name;
@@ -259,7 +259,7 @@ BlockInputStreamPtr dbgFuncFindKeyDt(Context & context, const ASTs & args)
     String key = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[2]).value);
     String value = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[3]).value);
     auto query
-        = fmt::format("selraw *,_INTERNAL_VERSION from {}.{} where {} = {}", database_name, table_name, key, value);
+        = fmt::format("selraw *,_INTERNAL_VERSION,_INTERNAL_DELMARK,_tidb_rowid from {}.{} where {} = {}", database_name, table_name, key, value);
 
     ParserSelectQuery parser;
     ASTPtr ast = parseQuery(parser, query.data(), query.data() + query.size(), "dbgFuncFindKeyDt", 0);
