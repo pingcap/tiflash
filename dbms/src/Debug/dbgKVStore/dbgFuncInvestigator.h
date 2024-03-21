@@ -14,7 +14,6 @@
 
 #pragma once
 
-#include <Parsers/ASTLiteral.h>
 #include <Debug/DBGInvoker.h>
 #include <Parsers/ASTLiteral.h>
 
@@ -24,4 +23,4 @@ namespace DB
 void dbgFuncFindKey(Context & context, const ASTs & args, DBGInvoker::Printer output);
 BlockInputStreamPtr dbgFuncFindKeyDt(Context & context, const ASTs & args);
 
-}
+} // namespace DB

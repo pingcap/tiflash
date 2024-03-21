@@ -39,7 +39,8 @@ struct RegionWriteCFDataTrait
     using Value = std::tuple<std::shared_ptr<const TiKVKey>, std::shared_ptr<const TiKVValue>, DecodedWriteCFValue>;
     using Map = std::map<Key, Value>;
 
-    static Key genKey(const TiKVKey & key) {
+    static Key genKey(const TiKVKey & key)
+    {
         DecodedTiKVKey raw_key = RecordKVFormat::decodeTiKVKey(key);
         RawTiDBPK tidb_pk = RecordKVFormat::getRawTiDBPK(raw_key);
         Timestamp ts = RecordKVFormat::getTs(key);
@@ -77,7 +78,8 @@ struct RegionDefaultCFDataTrait
     using Value = std::tuple<std::shared_ptr<const TiKVKey>, std::shared_ptr<const TiKVValue>>;
     using Map = std::map<Key, Value>;
 
-    static Key genKey(const TiKVKey & key) {
+    static Key genKey(const TiKVKey & key)
+    {
         DecodedTiKVKey raw_key = RecordKVFormat::decodeTiKVKey(key);
         RawTiDBPK tidb_pk = RecordKVFormat::getRawTiDBPK(raw_key);
         Timestamp ts = RecordKVFormat::getTs(key);
@@ -120,7 +122,8 @@ struct RegionLockCFDataTrait
         std::shared_ptr<const DecodedLockCFValue>>;
     using Map = std::unordered_map<Key, Value, Key::Hash>;
 
-    static Key genKey(const TiKVKey & key_) {
+    static Key genKey(const TiKVKey & key_)
+    {
         auto key = std::make_shared<const TiKVKey>(TiKVKey::copyFrom(key_));
         return {key, std::string_view(key->data(), key->dataSize())};
     }
