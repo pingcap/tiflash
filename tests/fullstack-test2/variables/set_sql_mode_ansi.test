@@ -18,7 +18,7 @@ mysql> set sql_mode='ansi'; CREATE TABLE test.t (id int, i int default '1.1', f 
 mysql> set sql_mode='ansi'; insert into test.t (id) values (1),(2),(3),(4);
 mysql> alter table test.t set tiflash replica 1;
 
-func> wait_table test t;
+func> wait_table test t
 
 mysql> set sql_mode='ansi'; insert into test.t (id) values (5),(6),(7),(8);
 mysql> set sql_mode='ansi'; set session tidb_isolation_read_engines='tikv'; select * from test.t;
