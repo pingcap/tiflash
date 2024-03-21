@@ -126,10 +126,7 @@ private:
 class ColumnSharingCacheMap
 {
 public:
-    ColumnSharingCacheMap(
-        const String & dmfile_name_,
-        const ColumnDefines & cds,
-        LoggerPtr & log_)
+    ColumnSharingCacheMap(const String & dmfile_name_, const ColumnDefines & cds, LoggerPtr & log_)
         : dmfile_name(dmfile_name_)
         , stats(static_cast<int>(ColumnCacheStatus::_TOTAL_COUNT))
         , log(log_)

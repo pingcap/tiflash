@@ -30,6 +30,7 @@
 #include <Storages/S3/S3Common.h>
 #include <Storages/S3/S3RandomAccessFile.h>
 #include <fmt/format.h>
+
 #include <utility>
 
 namespace CurrentMetrics
@@ -583,7 +584,8 @@ void DMFileReader::readColumn(
     size_t skip_packs)
 {
     bool has_concurrent_reader = DMFileReaderPool::instance().hasConcurrentReader(*this);
-    bool reach_sharing_column_memory_limit = std::cmp_greater_equal(shared_column_data_mem_tracker->get(), max_sharing_column_bytes);
+    bool reach_sharing_column_memory_limit
+        = std::cmp_greater_equal(shared_column_data_mem_tracker->get(), max_sharing_column_bytes);
     if (reach_sharing_column_memory_limit)
     {
         GET_METRIC(tiflash_storage_read_thread_counter, type_add_cache_total_bytes_limit).Increment();
