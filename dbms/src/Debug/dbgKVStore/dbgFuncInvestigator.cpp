@@ -109,7 +109,6 @@ static void findKeyInKVStore(Context & context, const ASTs & args, DBGInvoker::P
 
     auto schema_syncer = tmt.getSchemaSyncerManager();
     auto storage = tmt.getStorages().getByName(database_name, table_name, false);
-    std::string debug;
 
     if (storage == nullptr)
     {
