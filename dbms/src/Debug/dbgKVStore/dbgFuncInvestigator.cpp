@@ -80,7 +80,9 @@ struct MatchResult
     }
 };
 
-/// 1. If the arg is [start1, end1], changed to 123
+/// 1. If the arg is [start1, end1], find all key-value pairs in this range;
+/// 2. If the arg is [start1], make sure it is not a common handle, and we will only check the key-value pair by start1;
+/// 3. If the arg is [start1, end1, start2, end2, ...], it must be a common handle, return all key-value pairs within the range.
 void dbgFuncFindKey(Context & context, const ASTs & args, DBGInvoker::Printer output)
 {
     if (args.size() < 3)
