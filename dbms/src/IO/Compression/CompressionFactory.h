@@ -58,9 +58,9 @@ public:
         switch (settings.method_byte)
         {
         case CompressionMethodByte::Delta:
-            return std::make_shared<CompressionCodecDelta>(settings.delta_bytes_size);
+            return std::make_shared<CompressionCodecDelta>(settings.type_bytes_size);
         case CompressionMethodByte::RLE:
-            return std::make_shared<CompressionCodecRLE>(settings.delta_bytes_size);
+            return std::make_shared<CompressionCodecRLE>(settings.type_bytes_size);
         case CompressionMethodByte::NONE:
             return std::make_shared<CompressionCodecNone>();
         default:
