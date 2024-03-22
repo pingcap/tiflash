@@ -53,8 +53,8 @@ message (STATUS "CMAKE_BUILD_TYPE: ${CMAKE_BUILD_TYPE}")
 
 # ASan - build type with address sanitizer
 # UBSan - build type with undefined behaviour sanitizer
-# TSan is not supported due to false positive errors in libstdc++ and necessity to rebuild libstdc++ with TSan
-set (CMAKE_CONFIGURATION_TYPES "RelWithDebInfo;Debug;Release;MinSizeRel;ASan;UBSan" CACHE STRING "" FORCE)
+# TSan - build type with thread sanitizer
+set (CMAKE_CONFIGURATION_TYPES "RelWithDebInfo;Debug;Release;MinSizeRel;ASan;UBSan;TSan" CACHE STRING "" FORCE)
 
 if (NOT MSVC)
     set (COMMON_WARNING_FLAGS "${COMMON_WARNING_FLAGS} -Wall")    # -Werror is also added inside directories with our own code.
