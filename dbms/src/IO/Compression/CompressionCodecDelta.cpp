@@ -80,15 +80,15 @@ void compressDataFor32bits(const UInt32 * __restrict__ source, UInt32 source_siz
     for (; i < source_size / 8; ++i)
     {
         // curr = {a0, a1, a2, a3, a4, a5, a6, a7}
-        __m256i curr = _mm256_loadu_si256(reinterpret_cast<const __m256i *>(source) + i);
+        auto curr = _mm256_loadu_si256(reinterpret_cast<const __m256i *>(source) + i);
         // x0 = {prev[7], a0, a1, a2, a3, a4, a5, a6}
         const __m256i p_curr = {0x0000000000000007, 0x0000000200000001, 0x0000000400000003, 0x0000000600000005};
         const __m256i p_prev = {0x0000000700000007, 0x0000000700000007, 0x0000000700000007, 0x0000000700000007};
-        __m256i x0 = _mm256_blend_epi32(
+        auto x0 = _mm256_blend_epi32(
             _mm256_permutevar8x32_epi32(curr, p_curr), // {a7, a0, a1, a2, a3, a4, a5, a6}
             _mm256_permutevar8x32_epi32(prev, p_prev), // {prev[7], prev[7], ...}
             0b00000001);
-        __m256i delta = _mm256_sub_epi32(curr, x0);
+        auto delta = _mm256_sub_epi32(curr, x0);
         _mm256_storeu_si256(reinterpret_cast<__m256i *>(dest) + i, delta);
         prev = curr;
     }
@@ -107,9 +107,9 @@ void decompressDataFor32bits(const UInt32 * __restrict__ source, UInt32 source_s
     size_t i = 0;
     for (; i < source_size / 4; i++)
     {
-        __m128i curr = _mm_lddqu_si128(reinterpret_cast<const __m128i *>(source) + i);
-        const __m128i tmp1 = _mm_add_epi32(_mm_slli_si128(curr, 8), curr);
-        const __m128i tmp2 = _mm_add_epi32(_mm_slli_si128(tmp1, 4), tmp1);
+        auto curr = _mm_lddqu_si128(reinterpret_cast<const __m128i *>(source) + i);
+        const auto tmp1 = _mm_add_epi32(_mm_slli_si128(curr, 8), curr);
+        const auto tmp2 = _mm_add_epi32(_mm_slli_si128(tmp1, 4), tmp1);
         prev = _mm_add_epi32(tmp2, _mm_shuffle_epi32(prev, 0xff));
         _mm_storeu_si128(reinterpret_cast<__m128i *>(dest) + i, prev);
     }
@@ -128,13 +128,13 @@ void compressDataFor64bits(const UInt64 * __restrict__ source, UInt32 source_siz
     for (; i < source_size / 4; ++i)
     {
         // curr = {a0, a1, a2, a3}
-        __m256i curr = _mm256_loadu_si256(reinterpret_cast<const __m256i *>(source) + i);
+        auto curr = _mm256_loadu_si256(reinterpret_cast<const __m256i *>(source) + i);
         // x0 = {prev[3], a0, a1, a2}
-        __m256i x0 = _mm256_blend_epi32(
+        auto x0 = _mm256_blend_epi32(
             _mm256_permute4x64_epi64(curr, 0b10010011), // {a3, a0, a1, a2}
             _mm256_permute4x64_epi64(prev, 0b11111111), // {prev[3], prev[3], prev[3], prev[3]}
             0b00000011);
-        __m256i delta = _mm256_sub_epi64(curr, x0);
+        auto delta = _mm256_sub_epi64(curr, x0);
         _mm256_storeu_si256(reinterpret_cast<__m256i *>(dest) + i, delta);
         prev = curr;
     }
@@ -156,13 +156,13 @@ void decompressDataFor64bits(const UInt64 * __restrict__ source, UInt32 source_s
     for (; i < source_size / 4; ++i)
     {
         // curr = {a0, a1, a2, a3}
-        __m256i curr = _mm256_loadu_si256(reinterpret_cast<const __m256i *>(source) + i);
+        auto curr = _mm256_loadu_si256(reinterpret_cast<const __m256i *>(source) + i);
         // x0 = {0, a0, a1, a2}
-        __m256i x0 = _mm256_blend_epi32(_mm256_permute4x64_epi64(curr, 0b10010011), zero, 0b00000011);
+        auto x0 = _mm256_blend_epi32(_mm256_permute4x64_epi64(curr, 0b10010011), zero, 0b00000011);
         // x1 = {a0, a01, a12, a23}
-        __m256i x1 = _mm256_add_epi64(curr, x0);
+        auto x1 = _mm256_add_epi64(curr, x0);
         // x2 = {0, 0, a0, a01}
-        __m256i x2 = _mm256_permute2f128_si256(x1, x1, 0b00101000);
+        auto x2 = _mm256_permute2f128_si256(x1, x1, 0b00101000);
         // prev = prev + {a0, a01, a012, a0123}
         prev = _mm256_add_epi64(prev, _mm256_add_epi64(x1, x2));
         _mm256_storeu_si256(reinterpret_cast<__m256i *>(dest) + i, prev);

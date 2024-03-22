@@ -50,7 +50,7 @@ CompressedWriteBuffer<add_legacy_checksum>::CompressedWriteBuffer(
     : BufferWithOwnMemory<WriteBuffer>(buf_size)
     , out(out_)
     , compression_settings(compression_settings_)
-    , codec(CompressionFactory::create(compression_settings))
+    , codec(CompressionFactory::createForCompress(compression_settings))
 {}
 
 template <bool add_legacy_checksum>

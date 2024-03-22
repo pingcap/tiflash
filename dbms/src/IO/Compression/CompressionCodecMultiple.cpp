@@ -92,7 +92,7 @@ void CompressionCodecMultiple::doDecompressData(
     for (int idx = compression_methods_size - 1; idx >= 0; --idx)
     {
         UInt8 compression_method = source[idx + 1];
-        const auto codec = CompressionFactory::create(compression_method);
+        const auto codec = CompressionFactory::createForDecompress(compression_method);
 
         UInt32 uncompressed_size = readDecompressedBlockSize(compressed_buf.data());
 

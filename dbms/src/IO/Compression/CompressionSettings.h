@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <IO/Compression/CompressionInfo.h>
 #include <IO/Compression/CompressionMethod.h>
 #include <common/types.h>
 
@@ -22,11 +23,30 @@ namespace DB
 {
 struct Settings;
 
+constexpr CompressionMethodByte method_byte_map[] = {
+    CompressionMethodByte::NONE, // Invalid
+    CompressionMethodByte::LZ4, // LZ4
+    CompressionMethodByte::LZ4, // LZ4HC
+    CompressionMethodByte::ZSTD, // ZSTD
+    CompressionMethodByte::QPL, // QPL
+    CompressionMethodByte::NONE, // NONE
+};
+
+const std::unordered_map<CompressionMethodByte, CompressionMethod> method_map = {
+    {CompressionMethodByte::LZ4, CompressionMethod::LZ4},
+    {CompressionMethodByte::ZSTD, CompressionMethod::ZSTD},
+    {CompressionMethodByte::QPL, CompressionMethod::QPL},
+    {CompressionMethodByte::NONE, CompressionMethod::NONE},
+    {CompressionMethodByte::Delta, CompressionMethod::NONE},
+    {CompressionMethodByte::RLE, CompressionMethod::NONE},
+};
+
 struct CompressionSettings
 {
     CompressionMethod method;
+    CompressionMethodByte method_byte;
     int level;
-    UInt8 delta_bytes_size = 0;
+    UInt8 type_bytes_size = 1;
 
     CompressionSettings()
         : CompressionSettings(CompressionMethod::LZ4)
@@ -34,11 +54,19 @@ struct CompressionSettings
 
     explicit CompressionSettings(CompressionMethod method_)
         : method(method_)
+        , method_byte(method_byte_map[static_cast<size_t>(method_)])
+        , level(getDefaultLevel(method))
+    {}
+
+    explicit CompressionSettings(CompressionMethodByte method_byte_)
+        : method(method_map.at(method_byte_))
+        , method_byte(method_byte_)
         , level(getDefaultLevel(method))
     {}
 
     CompressionSettings(CompressionMethod method_, int level_)
         : method(method_)
+        , method_byte(method_byte_map[static_cast<size_t>(method_)])
         , level(level_)
     {}
 

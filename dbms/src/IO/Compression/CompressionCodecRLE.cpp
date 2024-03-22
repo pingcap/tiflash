@@ -19,6 +19,8 @@
 #include <common/unaligned.h>
 #include <trle.h>
 
+#include "common/types.h"
+
 namespace DB
 {
 
@@ -32,9 +34,15 @@ CompressionCodecRLE::CompressionCodecRLE(UInt8 delta_bytes_size_)
     : delta_bytes_size(delta_bytes_size_)
 {}
 
-uint8_t CompressionCodecRLE::getMethodByte() const
+UInt8 CompressionCodecRLE::getMethodByte() const
 {
     return static_cast<uint8_t>(CompressionMethodByte::RLE);
+}
+
+UInt32 CompressionCodecRLE::getMaxCompressedDataSize(UInt32 uncompressed_size) const
+{
+    // 1 byte for delta_bytes_size, then (x, n) pairs, x is delta_bytes_size bytes, n is 2 byte.
+    return 1 + uncompressed_size + (uncompressed_size / delta_bytes_size) * 2;
 }
 
 UInt32 CompressionCodecRLE::doCompressData(const char * source, UInt32 source_size, char * dest) const
