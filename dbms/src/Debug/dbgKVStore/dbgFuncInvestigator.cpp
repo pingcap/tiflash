@@ -99,17 +99,14 @@ static void findKeyInKVStore(Context & context, const ASTs & args, DBGInvoker::P
         output(fmt::format("Database {} not found.", database_name_raw));
         return;
     }
-
     result.mapped_database_name = maybe_database_name.value();
     auto mapped_database_name = result.mapped_database_name;
     result.table_name = table_name;
 
     auto & tmt = context.getTMTContext();
     auto & kvstore = *tmt.getKVStore();
-
     auto schema_syncer = tmt.getSchemaSyncerManager();
     auto storage = tmt.getStorages().getByName(mapped_database_name, table_name, false);
-
     if (storage == nullptr)
     {
         output(fmt::format("can't find table {} {}", mapped_database_name, table_name));
@@ -196,7 +193,9 @@ static void findKeyInKVStore(Context & context, const ASTs & args, DBGInvoker::P
             }
         }
 
-        if (data.lockCF().getData().contains(RegionLockCFDataTrait::genKey(start_key)))
+        auto lock_key = std::make_shared<const TiKVKey>(TiKVKey::copyFrom(start_key));
+        if (data.lockCF().getData().contains(
+                RegionLockCFDataTrait::Key{{lock_key, std::string_view(lock_key->data(), lock_key->dataSize())}}))
             result.in_lock.emplace_back(region_id);
     }
     result.regions = regions;
@@ -230,19 +229,18 @@ BlockInputStreamPtr dbgFuncFindKeyDt(Context & context, const ASTs & args)
         return std::make_shared<StringStreamBlockInputStream>("Error");
     }
     auto mapped_database_name = maybe_database_name.value();
-
     auto mapped_table_name = mappedTable(context, database_name_raw, table_name_raw);
     auto table_name = mapped_table_name.second;
-    auto & tmt = context.getTMTContext();
 
+    auto & tmt = context.getTMTContext();
     auto schema_syncer = tmt.getSchemaSyncerManager();
     auto storage = tmt.getStorages().getByName(mapped_database_name, table_name_raw, false);
-
     if (storage == nullptr)
     {
         LOG_INFO(DB::Logger::get(), "Can't find database and table {}.{}", mapped_database_name, table_name);
         return std::make_shared<StringStreamBlockInputStream>("Error");
     }
+
     auto table_info = storage->getTableInfo();
     schema_syncer->syncTableSchema(context, table_info.keyspace_id, table_info.id);
     if (table_info.partition.num > 0)
