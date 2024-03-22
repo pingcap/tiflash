@@ -80,6 +80,7 @@ struct MatchResult
     }
 };
 
+/// 1. If the arg is [start1, end1], changed to 123
 void dbgFuncFindKey(Context & context, const ASTs & args, DBGInvoker::Printer output)
 {
     if (args.size() < 3)
@@ -266,14 +267,27 @@ BlockInputStreamPtr dbgFuncFindKeyDt(Context & context, const ASTs & args)
         String v = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[OFFSET + 2 * i + 1]).value);
         fmt_buf.fmtAppend(" and {} = {}", k, v);
     }
-    auto query = fmt::format(
-        "selraw *,_INTERNAL_VERSION,_INTERNAL_DELMARK,_tidb_rowid from {}.{} where {} = {}{}",
-        mapped_database_name,
-        mapped_table_name,
-        key,
-        value,
-        fmt_buf.toString());
-
+    String query;
+    if (table_info.is_common_handle && !table_info.pk_is_handle)
+    {
+        query = fmt::format(
+            "selraw *,_INTERNAL_VERSION,_INTERNAL_DELMARK,_tidb_rowid from {}.{} where {} = {}{}",
+            mapped_database_name,
+            mapped_table_name,
+            key,
+            value,
+            fmt_buf.toString());
+    }
+    else
+    {
+        query = fmt::format(
+            "selraw *,_INTERNAL_VERSION,_INTERNAL_DELMARK from {}.{} where {} = {}{}",
+            mapped_database_name,
+            mapped_table_name,
+            key,
+            value,
+            fmt_buf.toString());
+    }
     LOG_INFO(DB::Logger::get(), "The query is {}", query);
     ParserSelectQuery parser;
     ASTPtr ast = parseQuery(parser, query.data(), query.data() + query.size(), "dbgFuncFindKeyDt", 0);
