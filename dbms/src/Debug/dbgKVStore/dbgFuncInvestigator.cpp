@@ -194,7 +194,8 @@ static void findKeyInKVStore(Context & context, const ASTs & args, DBGInvoker::P
         }
 
         auto lock_key = std::make_shared<const TiKVKey>(TiKVKey::copyFrom(start_key));
-        if (data.lockCF().getData().contains(RegionLockCFDataTrait::Key{lock_key, std::string_view(lock_key->data(), lock_key->dataSize())}))
+        if (data.lockCF().getData().contains(
+                RegionLockCFDataTrait::Key{lock_key, std::string_view(lock_key->data(), lock_key->dataSize())}))
             result.in_lock.emplace_back(region_id);
     }
     result.regions = regions;
@@ -261,7 +262,7 @@ BlockInputStreamPtr dbgFuncFindKeyDt(Context & context, const ASTs & args)
         LOG_INFO(DB::Logger::get(), "Key-values should be in pair {}", database_name_raw, table_name_raw);
         return std::make_shared<StringStreamBlockInputStream>("Error");
     }
-    for (size_t i = OFFSET; i != args.size(); i++)
+    for (size_t i = 0; i != key_size / 2; i++)
     {
         String k = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[OFFSET + 2 * i]).value);
         String v = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[OFFSET + 2 * i + 1]).value);
@@ -275,6 +276,7 @@ BlockInputStreamPtr dbgFuncFindKeyDt(Context & context, const ASTs & args)
         value,
         fmt_buf.toString());
 
+    LOG_INFO(DB::Logger::get(), "The query is {}", query);
     ParserSelectQuery parser;
     ASTPtr ast = parseQuery(parser, query.data(), query.data() + query.size(), "dbgFuncFindKeyDt", 0);
 
