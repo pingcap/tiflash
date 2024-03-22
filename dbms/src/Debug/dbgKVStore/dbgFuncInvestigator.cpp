@@ -190,14 +190,14 @@ void dbgFuncFindKey(Context & context, const ASTs & args, DBGInvoker::Printer ou
         {
             if (k.first == start_handle)
             {
-                result.in_default.emplace_back(std::make_pair(region_id, k.second));
+                result.in_default.emplace_back(region_id, k.second);
             }
         }
         for (const auto & [k, v] : data.writeCF().getData())
         {
             if (k.first == start_handle)
             {
-                result.in_write.emplace_back(std::make_pair(region_id, k.second));
+                result.in_write.emplace_back(region_id, k.second);
             }
         }
 
