@@ -44,7 +44,7 @@ namespace DB
 
 struct MatchResult
 {
-    String database_name;
+    String mapped_database_name;
     String table_name;
     std::vector<std::pair<UInt64, UInt64>> in_default;
     std::vector<std::pair<UInt64, UInt64>> in_write;
@@ -100,19 +100,19 @@ static void findKeyInKVStore(Context & context, const ASTs & args, DBGInvoker::P
         return;
     }
 
-    result.database_name = maybe_database_name.value();
-    auto database_name = result.database_name;
+    result.mapped_database_name = maybe_database_name.value();
+    auto mapped_database_name = result.mapped_database_name;
     result.table_name = table_name;
 
     auto & tmt = context.getTMTContext();
     auto & kvstore = *tmt.getKVStore();
 
     auto schema_syncer = tmt.getSchemaSyncerManager();
-    auto storage = tmt.getStorages().getByName(database_name, table_name, false);
+    auto storage = tmt.getStorages().getByName(mapped_database_name, table_name, false);
 
     if (storage == nullptr)
     {
-        output(fmt::format("can't find table {} {}", database_name, table_name));
+        output(fmt::format("can't find table {} {}", mapped_database_name, table_name));
         return;
     }
 
@@ -169,9 +169,6 @@ static void findKeyInKVStore(Context & context, const ASTs & args, DBGInvoker::P
     {
         start_handle = static_cast<HandleID>(safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[OFFSET]).value));
         start_key = RecordKVFormat::genKey(table_id, start_handle);
-        auto start_key2 = RecordKVFormat::genKey(table_id, start_handle, 0);
-        auto kkk2 = RecordKVFormat::decodeTiKVKey(start_key2);
-        auto rawpk2 = RecordKVFormat::getRawTiDBPK(kkk2);
         end_handle = static_cast<HandleID>(safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[OFFSET + 1]).value));
         end_key = RecordKVFormat::genKey(table_id, end_handle);
     }
@@ -220,7 +217,7 @@ BlockInputStreamPtr dbgFuncFindKeyDt(Context & context, const ASTs & args)
 {
     if (args.size() < 4)
         throw Exception(
-            "Args not matched, should be: database-name, table-name, key, value",
+            "Args not matched, should be: database-name, table-name, key, value, [key2, value2, ...]",
             ErrorCodes::BAD_ARGUMENTS);
 
     const String & database_name_raw = typeid_cast<const ASTIdentifier &>(*args[0]).name;
@@ -232,18 +229,18 @@ BlockInputStreamPtr dbgFuncFindKeyDt(Context & context, const ASTs & args)
         LOG_INFO(DB::Logger::get(), "Can't find database {}", database_name_raw);
         return std::make_shared<StringStreamBlockInputStream>("Error");
     }
-    auto database_name = maybe_database_name.value();
+    auto mapped_database_name = maybe_database_name.value();
 
     auto mapped_table_name = mappedTable(context, database_name_raw, table_name_raw);
     auto table_name = mapped_table_name.second;
     auto & tmt = context.getTMTContext();
 
     auto schema_syncer = tmt.getSchemaSyncerManager();
-    auto storage = tmt.getStorages().getByName(database_name, table_name_raw, false);
+    auto storage = tmt.getStorages().getByName(mapped_database_name, table_name_raw, false);
 
     if (storage == nullptr)
     {
-        LOG_INFO(DB::Logger::get(), "Can't find database and table {}.{}", database_name, table_name);
+        LOG_INFO(DB::Logger::get(), "Can't find database and table {}.{}", mapped_database_name, table_name);
         return std::make_shared<StringStreamBlockInputStream>("Error");
     }
     auto table_info = storage->getTableInfo();
@@ -258,8 +255,28 @@ BlockInputStreamPtr dbgFuncFindKeyDt(Context & context, const ASTs & args)
 
     String key = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[2]).value);
     String value = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[3]).value);
-    auto query
-        = fmt::format("selraw *,_INTERNAL_VERSION,_INTERNAL_DELMARK,_tidb_rowid from {}.{} where {} = {}", database_name, table_name, key, value);
+
+    constexpr size_t OFFSET = 4;
+    FmtBuffer fmt_buf;
+    auto key_size = atgs.size() = OFFSET;
+    if (key_size & 1)
+    {
+        LOG_INFO(DB::Logger::get(), "Key-values should be in pair {}", database_name_raw, table_name_raw);
+        return std::make_shared<StringStreamBlockInputStream>("Error");
+    }
+    for (size_t i = OFFSET; i != args.size(); i++)
+    {
+        String k = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[OFFSET + 2 * i]).value);
+        String v = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[OFFSET + 2 * i + 1]).value);
+        fmt_buf.fmtAppend(" and {} = {}", k, v);
+    }
+    auto query = fmt::format(
+        "selraw *,_INTERNAL_VERSION,_INTERNAL_DELMARK,_tidb_rowid from {}.{} where {} = {}{}",
+        mapped_database_name,
+        table_name,
+        key,
+        value,
+        fmt_buf.toString());
 
     ParserSelectQuery parser;
     ASTPtr ast = parseQuery(parser, query.data(), query.data() + query.size(), "dbgFuncFindKeyDt", 0);
