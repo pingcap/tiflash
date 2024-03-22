@@ -140,7 +140,9 @@ void dbgFuncFindKey(Context & context, const ASTs & args, DBGInvoker::Printer ou
         size_t handle_column_size = table_info.is_common_handle ? table_info.getPrimaryIndexInfo().idx_cols.size() : 1;
         auto key_size = arg_size / 2;
         std::vector<Field> start_field;
+        start_field.reserve(key_size);
         std::vector<Field> end_field;
+        end_field.reserve(key_size);
 
         for (size_t i = 0; i < handle_column_size; i++)
         {
