@@ -185,7 +185,7 @@ void dbgFuncFindKey(Context & context, const ASTs & args, DBGInvoker::Printer ou
     for (const auto & [region_id, region] : regions)
     {
         auto r = RegionBench::DebugRegion(region);
-        auto & data = r.debugData();
+        const auto & data = r.debugData();
 
         for (const auto & [k, v] : data.defaultCF().getData())
         {
@@ -205,7 +205,9 @@ void dbgFuncFindKey(Context & context, const ASTs & args, DBGInvoker::Printer ou
         auto lock_key = std::make_shared<const TiKVKey>(TiKVKey::copyFrom(start_key));
         if (data.lockCF().getData().contains(
                 RegionLockCFDataTrait::Key{lock_key, std::string_view(lock_key->data(), lock_key->dataSize())}))
+        {
             result.in_lock.emplace_back(region_id);
+        }
     }
     result.regions = regions;
     output(fmt::format("find key result {}", result.toString()));
