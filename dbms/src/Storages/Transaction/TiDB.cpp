@@ -265,16 +265,7 @@ Int64 ColumnInfo::getEnumIndex(const String & enum_id_or_text) const
         collator = ITiDBCollator::getCollator("binary");
     for (const auto & elem : elems)
     {
-<<<<<<< HEAD:dbms/src/Storages/Transaction/TiDB.cpp
         if (collator->compareFastPath(elem.first.data(), elem.first.size(), enum_id_or_text.data(), enum_id_or_text.size()) == 0)
-=======
-        if (collator->compareFastPath(
-                elem.first.data(),
-                elem.first.size(),
-                enum_id_or_text.data(),
-                enum_id_or_text.size()) //
-            == 0)
->>>>>>> 4f268df84e (Schema: replace invalid default value to zero value under not strict sql mode (#8850)):dbms/src/TiDB/Schema/TiDB.cpp
         {
             return elem.second;
         }
