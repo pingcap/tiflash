@@ -18,6 +18,7 @@
 #include <IO/Compression/CompressionMethod.h>
 #include <common/types.h>
 
+#include <unordered_map>
 
 namespace DB
 {

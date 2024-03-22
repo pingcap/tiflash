@@ -430,18 +430,18 @@ TEST_P(CodecTest, TranscodingWithDataType)
 // output value MUST be of the same type as input value.
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-// auto SameValueGenerator = [](auto value) {
-//     return [=](auto i) {
-//         return static_cast<decltype(i)>(value);
-//     };
-// };
+auto SameValueGenerator = [](auto value) {
+    return [=](auto i) {
+        return static_cast<decltype(i)>(value);
+    };
+};
 
-// auto SequentialGenerator = [](auto stride = 1) {
-//     return [=](auto i) {
-//         using ValueType = decltype(i);
-//         return static_cast<ValueType>(stride * i);
-//     };
-// };
+auto SequentialGenerator = [](auto stride = 1) {
+    return [=](auto i) {
+        using ValueType = decltype(i);
+        return static_cast<ValueType>(stride * i);
+    };
+};
 
 template <typename T>
 using uniform_distribution = typename std::conditional_t<
@@ -496,26 +496,26 @@ private:
     uniform_distribution<T> distribution;
 };
 
-// auto RandomishGenerator = [](auto i) {
-//     using T = decltype(i);
-//     double sin_value = sin(static_cast<double>(i * i)) * i;
-//     if (sin_value < std::numeric_limits<T>::lowest() || sin_value > static_cast<double>(std::numeric_limits<T>::max()))
-//         return T{};
-//     return static_cast<T>(sin_value);
-// };
+auto RandomishGenerator = [](auto i) {
+    using T = decltype(i);
+    double sin_value = sin(static_cast<double>(i * i)) * i;
+    if (sin_value < std::numeric_limits<T>::lowest() || sin_value > static_cast<double>(std::numeric_limits<T>::max()))
+        return T{};
+    return static_cast<T>(sin_value);
+};
 
-// auto MinMaxGenerator = []() {
-//     return [step = 0](auto i) mutable {
-//         if (step++ % 2 == 0)
-//         {
-//             return std::numeric_limits<decltype(i)>::min();
-//         }
-//         else
-//         {
-//             return std::numeric_limits<decltype(i)>::max();
-//         }
-//     };
-// };
+auto MinMaxGenerator = []() {
+    return [step = 0](auto i) mutable {
+        if (step++ % 2 == 0)
+        {
+            return std::numeric_limits<decltype(i)>::min();
+        }
+        else
+        {
+            return std::numeric_limits<decltype(i)>::max();
+        }
+    };
+};
 
 // Makes many sequences with generator, first sequence length is 0, second is 1..., third is 2 up to `sequences_count`.
 template <typename T, typename Generator>

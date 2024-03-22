@@ -190,12 +190,3 @@ add_subdirectory(magic_enum)
 add_subdirectory(aws-cmake)
 
 add_subdirectory(simdjson)
-
-add_subdirectory(Turbo-Run-Length-Encoding-cmake)
-target_no_warning(trle ncompatible-pointer-types)
-target_no_warning(trle compare-distinct-pointer-types)
-target_no_warning(trle unused-but-set-variable)
-target_no_warning(trle incompatible-pointer-types-discards-qualifiers)
-target_no_warning(trle unused-variable)
-target_no_warning(trle incompatible-pointer-types)
-target_no_warning(trle macro-redefined)

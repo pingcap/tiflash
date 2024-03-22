@@ -183,8 +183,6 @@ target_link_libraries (tiflash_common_io
     ${LINK_LIBRARIES_ONLY_ON_X86_64}
     ${LZ4_LIBRARY}
     ${ZSTD_LIBRARY}
-    ${QPL_LIBRARY}
-    trle
     ${DOUBLE_CONVERSION_LIBRARIES}
     ${Poco_Net_LIBRARY}
     ${Poco_Data_LIBRARY}
