@@ -771,7 +771,7 @@ TablePtr MockTiDB::getTableByNameInternal(const String & database_name, const St
     auto it = tables_by_name.find(qualified_name);
     if (it == tables_by_name.end())
     {
-        throw Exception(ErrorCodes::UNKNOWN_TABLE, "Mock TiDB table " + qualified_name + " does not exists");
+        throw Exception(ErrorCodes::UNKNOWN_TABLE, "Mock TiDB table {} does not exists", qualified_name);
     }
 
     return it->second;
