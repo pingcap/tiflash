@@ -135,7 +135,8 @@ void dbgFuncFindKey(Context & context, const ASTs & args, DBGInvoker::Printer ou
         if ((arg_size & 1) != 0)
         {
             throw Exception(
-                "Args not matched, should be: database-name, table-name, start1 [, start2, ..., end1, end2, ...]",
+                "Args not matched for common handle table, arg_size={}, should be: database-name, table-name, start_col, [, start_col2, ..., end_col1, end_col2, ...]",
+                arg_size,
                 ErrorCodes::BAD_ARGUMENTS);
         }
         size_t handle_column_size = table_info.is_common_handle ? table_info.getPrimaryIndexInfo().idx_cols.size() : 1;
