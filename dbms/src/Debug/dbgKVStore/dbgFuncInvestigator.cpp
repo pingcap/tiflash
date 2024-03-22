@@ -87,6 +87,8 @@ void dbgFuncFindKey(Context & context, const ASTs & args, DBGInvoker::Printer ou
             "Args not matched, should be: database-name, table-name, start1 [, start2, ..., end1, end2, ...]",
             ErrorCodes::BAD_ARGUMENTS);
 
+    auto & tmt = context.getTMTContext();
+    auto & kvstore = *tmt.getKVStore();
     MatchResult result;
     const String & database_name_raw = typeid_cast<const ASTIdentifier &>(*args[0]).name;
     const String & table_name = typeid_cast<const ASTIdentifier &>(*args[1]).name;
@@ -101,8 +103,6 @@ void dbgFuncFindKey(Context & context, const ASTs & args, DBGInvoker::Printer ou
     auto & mapped_database_name = result.mapped_database_name;
     result.table_name = table_name;
 
-    auto & tmt = context.getTMTContext();
-    auto & kvstore = *tmt.getKVStore();
     auto schema_syncer = tmt.getSchemaSyncerManager();
     auto storage = tmt.getStorages().getByName(mapped_database_name, table_name, false);
     if (storage == nullptr)
@@ -215,6 +215,7 @@ BlockInputStreamPtr dbgFuncFindKeyDt(Context & context, const ASTs & args)
             "Args not matched, should be: database-name, table-name, key, value, [key2, value2, ...]",
             ErrorCodes::BAD_ARGUMENTS);
 
+    auto & tmt = context.getTMTContext();
     const String & database_name_raw = typeid_cast<const ASTIdentifier &>(*args[0]).name;
     const String & table_name_raw = typeid_cast<const ASTIdentifier &>(*args[1]).name;
 
@@ -225,15 +226,14 @@ BlockInputStreamPtr dbgFuncFindKeyDt(Context & context, const ASTs & args)
         return std::make_shared<StringStreamBlockInputStream>("Error");
     }
     auto mapped_database_name = maybe_database_name.value();
-    auto mapped_table_name = mappedTable(context, database_name_raw, table_name_raw);
-    auto table_name = mapped_table_name.second;
+    auto mapped_qualified_table_name = mappedTable(context, database_name_raw, table_name_raw);
+    auto mapped_table_name = mapped_qualified_table_name.second;
 
-    auto & tmt = context.getTMTContext();
     auto schema_syncer = tmt.getSchemaSyncerManager();
     auto storage = tmt.getStorages().getByName(mapped_database_name, table_name_raw, false);
     if (storage == nullptr)
     {
-        LOG_INFO(DB::Logger::get(), "Can't find database and table {}.{}", mapped_database_name, table_name);
+        LOG_INFO(DB::Logger::get(), "Can't find database and table {}.{}", mapped_database_name, mapped_table_name);
         return std::make_shared<StringStreamBlockInputStream>("Error");
     }
 
@@ -267,7 +267,7 @@ BlockInputStreamPtr dbgFuncFindKeyDt(Context & context, const ASTs & args)
     auto query = fmt::format(
         "selraw *,_INTERNAL_VERSION,_INTERNAL_DELMARK,_tidb_rowid from {}.{} where {} = {}{}",
         mapped_database_name,
-        table_name,
+        mapped_table_name,
         key,
         value,
         fmt_buf.toString());
