@@ -52,7 +52,7 @@
   "gnetId": null,
   "graphTooltip": 1,
   "id": null,
-  "iteration": 1703085129908,
+  "iteration": 1711113465187,
   "links": [],
   "panels": [
     {
@@ -7956,7 +7956,6 @@
           "renderer": "flot",
           "seriesOverrides": [
             {
-              "$$hashKey": "object:563",
               "alias": "/-/",
               "yaxis": 2
             }
@@ -7996,7 +7995,6 @@
           },
           "yaxes": [
             {
-              "$$hashKey": "object:230",
               "decimals": 0,
               "format": "ops",
               "label": null,
@@ -8006,7 +8004,6 @@
               "show": true
             },
             {
-              "$$hashKey": "object:231",
               "format": "s",
               "label": null,
               "logBase": 1,
@@ -8077,11 +8074,11 @@
             {
               "expr": "avg(tiflash_system_current_metric_RateLimiterPendingWriteRequest{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}) by (instance)",
               "format": "time_series",
+              "hide": true,
               "interval": "",
               "intervalFactor": 1,
               "legendFormat": "other-current-{{instance}}",
-              "refId": "A",
-              "hide": true
+              "refId": "A"
             },
             {
               "exemplar": true,
@@ -8352,7 +8349,6 @@
           "renderer": "flot",
           "seriesOverrides": [
             {
-              "$$hashKey": "object:308",
               "alias": "/push_block/",
               "yaxis": 2
             }
@@ -8392,7 +8388,6 @@
           },
           "yaxes": [
             {
-              "$$hashKey": "object:321",
               "decimals": null,
               "format": "ops",
               "label": null,
@@ -8402,7 +8397,6 @@
               "show": true
             },
             {
-              "$$hashKey": "object:322",
               "format": "binBps",
               "label": null,
               "logBase": 1,
@@ -11102,13 +11096,113 @@
             "defaults": {},
             "overrides": []
           },
+          "fill": 0,
+          "fillGradient": 0,
+          "gridPos": {
+            "h": 7,
+            "w": 12,
+            "x": 6,
+            "y": 16
+          },
+          "hiddenSeries": false,
+          "id": 270,
+          "legend": {
+            "alignAsTable": false,
+            "avg": false,
+            "current": false,
+            "max": false,
+            "min": false,
+            "rightSide": false,
+            "show": true,
+            "total": false,
+            "values": false
+          },
+          "lines": true,
+          "linewidth": 1,
+          "links": [],
+          "nullPointMode": "null as zero",
+          "options": {
+            "alertThreshold": true
+          },
+          "percentage": false,
+          "pluginVersion": "7.5.11",
+          "pointradius": 5,
+          "points": false,
+          "renderer": "flot",
+          "seriesOverrides": [],
+          "spaceLength": 10,
+          "stack": false,
+          "steppedLine": false,
+          "targets": [
+            {
+              "exemplar": true,
+              "expr": "sum(rate(tiflash_raft_learner_read_failures_count{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (type)",
+              "format": "time_series",
+              "interval": "",
+              "intervalFactor": 1,
+              "legendFormat": "{{type}}",
+              "refId": "A"
+            }
+          ],
+          "thresholds": [],
+          "timeFrom": null,
+          "timeRegions": [],
+          "timeShift": null,
+          "title": "Learner Read Failures",
+          "tooltip": {
+            "shared": true,
+            "sort": 0,
+            "value_type": "individual"
+          },
+          "type": "graph",
+          "xaxis": {
+            "buckets": null,
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": []
+          },
+          "yaxes": [
+            {
+              "decimals": null,
+              "format": "ops",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": "0",
+              "show": true
+            },
+            {
+              "format": "none",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": true
+            }
+          ],
+          "yaxis": {
+            "align": false,
+            "alignLevel": null
+          }
+        },
+        {
+          "aliasColors": {},
+          "bars": false,
+          "dashLength": 10,
+          "dashes": false,
+          "datasource": "${DS_TEST-CLUSTER}",
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
           "fill": 1,
           "fillGradient": 0,
           "gridPos": {
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 16
+            "y": 23
           },
           "hiddenSeries": false,
           "id": 37,
@@ -11242,7 +11336,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 16
+            "y": 23
           },
           "hiddenSeries": false,
           "id": 36,
@@ -11364,7 +11458,7 @@
             "h": 7,
             "w": 24,
             "x": 0,
-            "y": 23
+            "y": 30
           },
           "hiddenSeries": false,
           "id": 82,
@@ -11519,7 +11613,7 @@
             "h": 7,
             "w": 24,
             "x": 0,
-            "y": 30
+            "y": 37
           },
           "hiddenSeries": false,
           "id": 242,
@@ -11630,7 +11724,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 37
+            "y": 44
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -11700,7 +11794,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 37
+            "y": 44
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -11770,7 +11864,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 44
+            "y": 51
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -11842,7 +11936,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 44
+            "y": 51
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -11904,7 +11998,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 51
+            "y": 58
           },
           "hiddenSeries": false,
           "id": 235,
@@ -12004,7 +12098,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 51
+            "y": 58
           },
           "hiddenSeries": false,
           "id": 241,
@@ -12112,7 +12206,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 58
+            "y": 65
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -12193,7 +12287,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 58
+            "y": 65
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -12266,7 +12360,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 65
+            "y": 72
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -12342,7 +12436,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 65
+            "y": 72
           },
           "hiddenSeries": false,
           "id": 249,
@@ -12448,7 +12542,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 72
+            "y": 79
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -12521,7 +12615,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 72
+            "y": 79
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -12594,7 +12688,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 79
+            "y": 86
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -12667,7 +12761,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 79
+            "y": 86
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -12732,7 +12826,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 86
+            "y": 93
           },
           "hiddenSeries": false,
           "id": 240,
@@ -12836,7 +12930,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 86
+            "y": 93
           },
           "hiddenSeries": false,
           "id": 239,
@@ -12973,7 +13067,7 @@
             "h": 7,
             "w": 24,
             "x": 0,
-            "y": 93
+            "y": 100
           },
           "hiddenSeries": false,
           "id": 75,
@@ -13097,7 +13191,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 100
+            "y": 107
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -13167,7 +13261,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 100
+            "y": 107
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -13230,7 +13324,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 107
+            "y": 114
           },
           "hiddenSeries": false,
           "id": 263,
@@ -13290,7 +13384,6 @@
           },
           "yaxes": [
             {
-              "$$hashKey": "object:1524",
               "format": "bytes",
               "label": null,
               "logBase": 1,
@@ -13299,7 +13392,6 @@
               "show": true
             },
             {
-              "$$hashKey": "object:1525",
               "format": "short",
               "label": null,
               "logBase": 1,
@@ -13337,7 +13429,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 107
+            "y": 114
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -13403,7 +13495,7 @@
             "h": 7,
             "w": 24,
             "x": 0,
-            "y": 114
+            "y": 121
           },
           "height": "",
           "hiddenSeries": false,
@@ -13511,7 +13603,7 @@
             "h": 7,
             "w": 24,
             "x": 0,
-            "y": 121
+            "y": 128
           },
           "height": "",
           "hiddenSeries": false,
@@ -13582,7 +13674,6 @@
           },
           "yaxes": [
             {
-              "$$hashKey": "object:164",
               "format": "short",
               "label": null,
               "logBase": 1,
@@ -13591,7 +13682,6 @@
               "show": true
             },
             {
-              "$$hashKey": "object:165",
               "format": "short",
               "label": null,
               "logBase": 1,
@@ -13629,7 +13719,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 128
+            "y": 135
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -13698,7 +13788,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 128
+            "y": 135
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -13768,7 +13858,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 135
+            "y": 142
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -13834,7 +13924,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 135
+            "y": 142
           },
           "hiddenSeries": false,
           "id": 91,
@@ -15666,7 +15756,6 @@
           },
           "yaxes": [
             {
-              "$$hashKey": "object:1167",
               "decimals": null,
               "format": "bytes",
               "label": null,
@@ -15676,7 +15765,6 @@
               "show": true
             },
             {
-              "$$hashKey": "object:1168",
               "format": "percentunit",
               "label": null,
               "logBase": 1,
