@@ -54,30 +54,24 @@ struct MatchResult
     std::string toString() const
     {
         FmtBuffer fmt_buf;
-        FmtBuffer fmt_buf1;
-        FmtBuffer fmt_buf2;
-        FmtBuffer fmt_buf3;
-        for (const auto & a : in_default)
-        {
-            fmt_buf1.fmtAppend("{}-{}:", a.first, a.second);
-        }
-        for (const auto & a : in_write)
-        {
-            fmt_buf2.fmtAppend("{}-{}:", a.first, a.second);
-        }
-        for (const auto & a : in_lock)
-        {
-            fmt_buf3.fmtAppend("{}:", a);
-        }
-        fmt_buf.fmtAppend(
-            "default_cf {}; write_cf {}; lock_cf {}; ",
-            fmt_buf1.toString(),
-            fmt_buf2.toString(),
-            fmt_buf3.toString());
+        fmt_buf.fmtAppend("default_cf ");
+        fmt_buf.joinStr(
+            in_default.begin(),
+            in_default.end(),
+            [](const auto & a, const auto &) { return fmt::format("{}-{}", a.first, a.second); },
+            ":");
+        fmt_buf.fmtAppend("; write_cf ");
+        fmt_buf.joinStr(
+            in_write.begin(),
+            in_write.end(),
+            [](const auto & a, const auto &) { return fmt::format("{}-{}", a.first, a.second); },
+            ":");
+        fmt_buf.fmtAppend("; lock_cf ");
+        fmt_buf.joinStr(in_lock.begin(), in_lock.end(), ":");
         for (const auto & [region_id, region] : regions)
         {
             fmt_buf.fmtAppend(
-                "region {} {}, tikv_range: {}; ",
+                "; region {} {}, tikv_range: {}; ",
                 region_id,
                 region->getDebugString(),
                 region->getRange()->toDebugString());
@@ -86,9 +80,13 @@ struct MatchResult
     }
 };
 
-// tablePrefix_rowPrefix_tableID_rowID
-static void findKeyInKVStore(Context & context, const ASTs & args, DBGInvoker::Printer output)
+void dbgFuncFindKey(Context & context, const ASTs & args, DBGInvoker::Printer output)
 {
+    if (args.size() < 3)
+        throw Exception(
+            "Args not matched, should be: database-name, table-name, start1 [, start2, ..., end1, end2, ...]",
+            ErrorCodes::BAD_ARGUMENTS);
+
     MatchResult result;
     const String & database_name_raw = typeid_cast<const ASTIdentifier &>(*args[0]).name;
     const String & table_name = typeid_cast<const ASTIdentifier &>(*args[1]).name;
@@ -100,7 +98,7 @@ static void findKeyInKVStore(Context & context, const ASTs & args, DBGInvoker::P
         return;
     }
     result.mapped_database_name = maybe_database_name.value();
-    auto mapped_database_name = result.mapped_database_name;
+    auto & mapped_database_name = result.mapped_database_name;
     result.table_name = table_name;
 
     auto & tmt = context.getTMTContext();
@@ -125,22 +123,22 @@ static void findKeyInKVStore(Context & context, const ASTs & args, DBGInvoker::P
 
     auto table_id = table_info.id;
 
+    // tablePrefix_rowPrefix_tableID_rowID
     TiKVKey start_key, end_key;
     HandleID start_handle, end_handle;
-    size_t handle_column_size = table_info.is_common_handle ? table_info.getPrimaryIndexInfo().idx_cols.size() : 1;
 
     constexpr static size_t OFFSET = 2;
-    size_t arg_size = args.size() - OFFSET;
-    if ((arg_size & 1) != 0)
-    {
-        throw Exception(
-            "Args not matched, should be: database-name, table-name, start1 [, start2, ...], end1, [, end2, ...]",
-            ErrorCodes::BAD_ARGUMENTS);
-    }
-    auto key_size = arg_size / 2;
-
     if (table_info.is_common_handle)
     {
+        size_t arg_size = args.size() - OFFSET;
+        if ((arg_size & 1) != 0)
+        {
+            throw Exception(
+                "Args not matched, should be: database-name, table-name, start1 [, start2, ..., end1, end2, ...]",
+                ErrorCodes::BAD_ARGUMENTS);
+        }
+        size_t handle_column_size = table_info.is_common_handle ? table_info.getPrimaryIndexInfo().idx_cols.size() : 1;
+        auto key_size = arg_size / 2;
         std::vector<Field> start_field;
         std::vector<Field> end_field;
 
@@ -166,7 +164,15 @@ static void findKeyInKVStore(Context & context, const ASTs & args, DBGInvoker::P
     {
         start_handle = static_cast<HandleID>(safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[OFFSET]).value));
         start_key = RecordKVFormat::genKey(table_id, start_handle);
-        end_handle = static_cast<HandleID>(safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[OFFSET + 1]).value));
+        if (args.size() == 3)
+        {
+            end_handle = start_handle + 1;
+        }
+        else
+        {
+            end_handle
+                = static_cast<HandleID>(safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[OFFSET + 1]).value));
+        }
         end_key = RecordKVFormat::genKey(table_id, end_handle);
     }
 
@@ -200,16 +206,6 @@ static void findKeyInKVStore(Context & context, const ASTs & args, DBGInvoker::P
     }
     result.regions = regions;
     output(fmt::format("find key result {}", result.toString()));
-}
-
-void dbgFuncFindKey(Context & context, const ASTs & args, DBGInvoker::Printer output)
-{
-    if (args.size() < 4)
-        throw Exception(
-            "Args not matched, should be: database-name, table-name, start1 [, start2, ...], end1, [, end2, ...]",
-            ErrorCodes::BAD_ARGUMENTS);
-
-    findKeyInKVStore(context, args, output);
 }
 
 BlockInputStreamPtr dbgFuncFindKeyDt(Context & context, const ASTs & args)

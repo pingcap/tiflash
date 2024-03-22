@@ -109,7 +109,9 @@ DBGInvoker::DBGInvoker()
         MockRaftCommand::dbgFuncRegionSnapshotPreHandleDTFilesWithHandles);
     regSchemalessFunc("region_snapshot_apply_file", /*      */ MockRaftCommand::dbgFuncRegionSnapshotApplyDTFiles);
     regSchemalessFunc("region_ingest_sst", MockRaftCommand::dbgFuncIngestSST);
+    // Test whether a PK exists in KVStore.
     regSchemalessFunc("find_key_kvstore", dbgFuncFindKey);
+    // Test whether a PK exists in DT.
     regSchemafulFunc("find_key_dt", dbgFuncFindKeyDt);
 
     regSchemalessFunc("init_fail_point", DbgFailPointFunc::dbgInitFailPoint);

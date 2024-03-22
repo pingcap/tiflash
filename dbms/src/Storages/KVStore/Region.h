@@ -113,10 +113,9 @@ public:
 
         void remove(const RegionWriteCFData::Key & key)
         {
-            UNUSED(key);
-            // auto & write_cf_data = region->data.writeCF().getDataMut();
-            // if (auto it = write_cf_data.find(key); it != write_cf_data.end())
-            //     region->removeDataByWriteIt(it);
+            auto & write_cf_data = region->data.writeCF().getDataMut();
+            if (auto it = write_cf_data.find(key); it != write_cf_data.end())
+                region->removeDataByWriteIt(it);
         }
 
     private:
