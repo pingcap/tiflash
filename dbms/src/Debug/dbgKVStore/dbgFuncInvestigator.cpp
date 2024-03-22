@@ -194,8 +194,7 @@ static void findKeyInKVStore(Context & context, const ASTs & args, DBGInvoker::P
         }
 
         auto lock_key = std::make_shared<const TiKVKey>(TiKVKey::copyFrom(start_key));
-        if (data.lockCF().getData().contains(
-                RegionLockCFDataTrait::Key{{lock_key, std::string_view(lock_key->data(), lock_key->dataSize())}}))
+        if (data.lockCF().getData().contains(RegionLockCFDataTrait::Key{lock_key, std::string_view(lock_key->data(), lock_key->dataSize())}))
             result.in_lock.emplace_back(region_id);
     }
     result.regions = regions;
@@ -256,7 +255,7 @@ BlockInputStreamPtr dbgFuncFindKeyDt(Context & context, const ASTs & args)
 
     constexpr size_t OFFSET = 4;
     FmtBuffer fmt_buf;
-    auto key_size = atgs.size() = OFFSET;
+    auto key_size = args.size() - OFFSET;
     if (key_size & 1)
     {
         LOG_INFO(DB::Logger::get(), "Key-values should be in pair {}", database_name_raw, table_name_raw);
