@@ -184,7 +184,7 @@ void dbgFuncFindKey(Context & context, const ASTs & args, DBGInvoker::Printer ou
     for (const auto & [region_id, region] : regions)
     {
         auto r = RegionBench::DebugRegion(region);
-        auto & data = r.debugData();
+        const auto & data = r.debugData();
 
         for (const auto & [k, v] : data.defaultCF().getData())
         {
