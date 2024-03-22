@@ -533,6 +533,19 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       "Bucketed snapshot total size",                                                                                               \
       Histogram,                                                                                                                    \
       F(type_approx_raft_snapshot, {{"type", "approx_raft_snapshot"}}, ExpBuckets{1024, 2, 24})) /* 16G */                          \
+    M(tiflash_raft_learner_read_failures_count,                                                                                     \
+      "Raft learner read failure reason counter",                                                                                   \
+      Counter,                                                                                                                      \
+      F(type_not_found_tiflash, {{"type", "not_found_tiflash"}}),                                                                   \
+      F(type_epoch_not_match, {{"type", "epoch_not_match"}}),                                                                       \
+      F(type_not_leader, {{"type", "not_leader"}}),                                                                                 \
+      F(type_not_found_tikv, {{"type", "not_found_tikv"}}),                                                                         \
+      F(type_bucket_epoch_not_match, {{"type", "bucket_epoch_not_match"}}),                                                         \
+      F(type_flashback, {{"type", "flashback"}}),                                                                                   \
+      F(type_key_not_in_region, {{"type", "key_not_in_region"}}),                                                                   \
+      F(type_tikv_server_issue, {{"type", "tikv_server_issue"}}),                                                                   \
+      F(type_tikv_lock, {{"type", "tikv_lock"}}),                                                                                   \
+      F(type_other, {{"type", "write"}}))                                                                                           \
     /* required by DBaaS */                                                                                                         \
     M(tiflash_server_info,                                                                                                          \
       "Indicate the tiflash server info, and the value is the start timestamp (s).",                                                \
