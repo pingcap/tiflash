@@ -102,6 +102,16 @@ ColumnInfo::ColumnInfo(Poco::JSON::Object::Ptr json)
     deserialize(json);
 }
 
+#define TRY_CATCH_DEFAULT_VALUE_TO_FIELD(try_block) \
+    try                                             \
+    {                                               \
+        try_block                                   \
+    }                                               \
+    catch (...)                                     \
+    {                                               \
+        return DB::GenDefaultField(*this);          \
+    }
+
 
 Field ColumnInfo::defaultValueToField() const
 {
@@ -115,27 +125,27 @@ Field ColumnInfo::defaultValueToField() const
     switch (tp)
     {
     // Integer Type.
+    // In c++, cast a unsigned integer to signed integer will not change the value.
+    // like 9223372036854775808 which is larger than the maximum value of Int64,
+    // static_cast<UInt64>(static_cast<Int64>(9223372036854775808)) == 9223372036854775808
+    // so we don't need consider unsigned here.
     case TypeTiny:
     case TypeShort:
     case TypeLong:
     case TypeLongLong:
     case TypeInt24:
-    {
-        // In c++, cast a unsigned integer to signed integer will not change the value.
-        // like 9223372036854775808 which is larger than the maximum value of Int64,
-        // static_cast<UInt64>(static_cast<Int64>(9223372036854775808)) == 9223372036854775808
-        // so we don't need consider unsigned here.
-        try
-        {
-            return value.convert<Int64>();
-        }
-        catch (...)
-        {
-            // due to https://github.com/pingcap/tidb/issues/34881
-            // we do this to avoid exception in older version of TiDB.
-            return static_cast<Int64>(std::llround(value.convert<double>()));
-        }
-    }
+        TRY_CATCH_DEFAULT_VALUE_TO_FIELD({
+            try
+            {
+                return value.convert<Int64>();
+            }
+            catch (...)
+            {
+                // due to https://github.com/pingcap/tidb/issues/34881
+                // we do this to avoid exception in older version of TiDB.
+                return static_cast<Int64>(std::llround(value.convert<double>()));
+            }
+        });
     case TypeBit:
     {
         // TODO: We shall use something like `orig_default_bit`, which will never change once created,
@@ -152,16 +162,16 @@ Field ColumnInfo::defaultValueToField() const
                 return DB::GenDefaultField(*this);
             return Field();
         }
-        return getBitValue(bit_value.convert<String>());
+        TRY_CATCH_DEFAULT_VALUE_TO_FIELD({ return getBitValue(bit_value.convert<String>()); });
     }
     // Floating type.
     case TypeFloat:
     case TypeDouble:
-        return value.convert<double>();
+        TRY_CATCH_DEFAULT_VALUE_TO_FIELD({ return value.convert<double>(); });
     case TypeDate:
     case TypeDatetime:
     case TypeTimestamp:
-        return DB::parseMyDateTime(value.convert<String>());
+        TRY_CATCH_DEFAULT_VALUE_TO_FIELD({ return DB::parseMyDateTime(value.convert<String>()); });
     case TypeVarchar:
     case TypeTinyBlob:
     case TypeMediumBlob:
@@ -187,23 +197,31 @@ Field ColumnInfo::defaultValueToField() const
         // JSON can't have a default value
         return genJsonNull();
     case TypeEnum:
-        return getEnumIndex(value.convert<String>());
+        TRY_CATCH_DEFAULT_VALUE_TO_FIELD({ return getEnumIndex(value.convert<String>()); });
     case TypeNull:
         return Field();
     case TypeDecimal:
     case TypeNewDecimal:
-        return getDecimalValue(value.convert<String>());
+        TRY_CATCH_DEFAULT_VALUE_TO_FIELD({
+            auto text = value.convert<String>();
+            if (text.empty())
+                return DB::GenDefaultField(*this);
+            return getDecimalValue(text);
+        });
     case TypeTime:
-        return getTimeValue(value.convert<String>());
+        TRY_CATCH_DEFAULT_VALUE_TO_FIELD({ return getTimeValue(value.convert<String>()); });
     case TypeYear:
+        // Never throw exception here, do not use TRY_CATCH_DEFAULT_VALUE_TO_FIELD
         return getYearValue(value.convert<String>());
     case TypeSet:
-        return getSetValue(value.convert<String>());
+        TRY_CATCH_DEFAULT_VALUE_TO_FIELD({ return getSetValue(value.convert<String>()); });
     default:
         throw Exception("Have not processed type: " + std::to_string(tp));
     }
     return Field();
 }
+
+#undef TRY_CATCH_DEFAULT_VALUE_TO_FIELD
 
 DB::Field ColumnInfo::getDecimalValue(const String & decimal_text) const
 {
@@ -243,7 +261,7 @@ Int64 ColumnInfo::getEnumIndex(const String & enum_id_or_text) const
 {
     const auto * collator = ITiDBCollator::getCollator(collate.isEmpty() ? "binary" : collate.convert<String>());
     if (!collator)
-        // todo if new collation is enabled, should use "utf8mb4_bin"
+        // TODO: if new collation is enabled, should use "utf8mb4_bin"
         collator = ITiDBCollator::getCollator("binary");
     for (const auto & elem : elems)
     {
@@ -252,15 +270,14 @@ Int64 ColumnInfo::getEnumIndex(const String & enum_id_or_text) const
             return elem.second;
         }
     }
-    int num = std::stoi(enum_id_or_text);
-    return num;
+    return std::stoi(enum_id_or_text);
 }
 
 UInt64 ColumnInfo::getSetValue(const String & set_str) const
 {
     const auto * collator = ITiDBCollator::getCollator(collate.isEmpty() ? "binary" : collate.convert<String>());
     if (!collator)
-        // todo if new collation is enabled, should use "utf8mb4_bin"
+        // TODO: if new collation is enabled, should use "utf8mb4_bin"
         collator = ITiDBCollator::getCollator("binary");
     std::string sort_key_container;
     Poco::StringTokenizer string_tokens(set_str, ",");
@@ -283,7 +300,7 @@ UInt64 ColumnInfo::getSetValue(const String & set_str) const
     if (marked.empty())
         return value;
 
-    throw DB::Exception(std::string(__PRETTY_FUNCTION__) + ": can't parse set type value.");
+    return 0;
 }
 
 Int64 ColumnInfo::getTimeValue(const String & time_str)
@@ -308,7 +325,9 @@ Int64 ColumnInfo::getTimeValue(const String & time_str)
 
 Int64 ColumnInfo::getYearValue(const String & val)
 {
-    // do not check validation of the val because TiDB will do it
+    // make sure the year is non-negative integer
+    if (val.empty() || !std::all_of(val.begin(), val.end(), ::isdigit))
+        return 0;
     Int64 year = std::stol(val);
     if (0 < year && year < 70)
         return 2000 + year;
