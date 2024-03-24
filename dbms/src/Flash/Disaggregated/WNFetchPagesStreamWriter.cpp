@@ -18,6 +18,7 @@
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Flash/Disaggregated/WNFetchPagesStreamWriter.h>
 #include <Flash/Mpp/TrackedMppDataPacket.h>
+#include <Interpreters/Settings.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileDataProvider.h>
 #include <Storages/DeltaMerge/Delta/DeltaValueSpace.h>
@@ -149,5 +150,17 @@ void WNFetchPagesStreamWriter::syncWrite()
         send_pages_ns / 1000000);
 }
 
+WNFetchPagesStreamWriter::WNFetchPagesStreamWriter(
+    std::function<void(const disaggregated::PagesPacket &)> && sync_write_,
+    DM::SegmentReadTaskPtr seg_task_,
+    PageIdU64s read_page_ids_,
+    const Settings & settings_)
+    : sync_write(std::move(sync_write_))
+    , seg_task(std::move(seg_task_))
+    , read_page_ids(std::move(read_page_ids_))
+    , packet_limit_size(settings_.dt_fetch_pages_packet_limit_size)
+    , enable_fetch_memtableset(settings_.dt_enable_fetch_memtableset)
+    , mem_tracker_wrapper(fetch_pages_mem_tracker.get())
+{}
 
 } // namespace DB

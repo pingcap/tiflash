@@ -405,5 +405,21 @@ ColumnFileReaderPtr ColumnFileTinyReader::createNewReader(const ColumnDefinesPtr
     return std::make_shared<ColumnFileTinyReader>(tiny_file, data_provider, new_col_defs, cols_data_cache);
 }
 
+ColumnFileTiny::ColumnFileTiny(
+    const ColumnFileSchemaPtr & schema_,
+    UInt64 rows_,
+    UInt64 bytes_,
+    PageIdU64 data_page_id_,
+    const DMContext & dm_context,
+    const CachePtr & cache_)
+    : schema(schema_)
+    , rows(rows_)
+    , bytes(bytes_)
+    , data_page_id(data_page_id_)
+    , keyspace_id(dm_context.keyspace_id)
+    , file_provider(dm_context.global_context.getFileProvider())
+    , cache(cache_)
+{}
+
 } // namespace DM
 } // namespace DB

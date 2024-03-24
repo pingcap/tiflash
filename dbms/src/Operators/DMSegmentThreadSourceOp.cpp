@@ -15,6 +15,7 @@
 #include <Common/FailPoint.h>
 #include <Interpreters/Context.h>
 #include <Operators/DMSegmentThreadSourceOp.h>
+#include <Storages/DeltaMerge/DMContext.h>
 
 namespace DB
 {
