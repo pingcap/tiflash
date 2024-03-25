@@ -545,7 +545,7 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_key_not_in_region, {{"type", "key_not_in_region"}}),                                                                   \
       F(type_tikv_server_issue, {{"type", "tikv_server_issue"}}),                                                                   \
       F(type_tikv_lock, {{"type", "tikv_lock"}}),                                                                                   \
-      F(type_other, {{"type", "write"}}))                                                                                           \
+      F(type_other, {{"type", "other"}}))                                                                                           \
     /* required by DBaaS */                                                                                                         \
     M(tiflash_server_info,                                                                                                          \
       "Indicate the tiflash server info, and the value is the start timestamp (s).",                                                \
