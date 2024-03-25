@@ -201,7 +201,7 @@ struct ColumnInfo
     SchemaState state = StateNone;
     String comment;
 
-    VectorIndexInfoPtr vector_index = nullptr;
+    VectorIndexDefinitionPtr vector_index = nullptr;
 
 #ifdef M
 #error "Please undefine macro M first."

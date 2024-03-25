@@ -14,20 +14,24 @@
 
 #pragma once
 
-#include <tipb/executor.pb.h>
+#include <common/types.h>
 
-namespace DB::DM
+/// Remove the population of thread_local from Poco
+#ifdef thread_local
+#undef thread_local
+#endif
+
+namespace DB::PerfContext
 {
 
-using ANNQueryInfoPtr = std::shared_ptr<tipb::ANNQueryInfo>;
+struct FileCachePerfContext
+{
+    size_t fg_download_from_s3 = 0;
+    size_t fg_wait_download_from_s3 = 0;
 
-class VectorIndexBuilder;
-using VectorIndexBuilderPtr = std::shared_ptr<VectorIndexBuilder>;
+    void reset() { *this = {}; }
+};
 
-class VectorIndexViewer;
-using VectorIndexViewerPtr = std::shared_ptr<VectorIndexViewer>;
+extern thread_local FileCachePerfContext file_cache;
 
-class VectorIndexCache;
-using VectorIndexCachePtr = std::shared_ptr<VectorIndexCache>;
-
-} // namespace DB::DM
+} // namespace DB::PerfContext

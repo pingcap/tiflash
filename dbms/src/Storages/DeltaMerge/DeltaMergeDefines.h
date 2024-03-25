@@ -93,14 +93,14 @@ struct ColumnDefine
     /// Note: ColumnDefine is used in both Write path and Read path.
     /// In the read path, vector_index is usually not available. Use AnnQueryInfo for
     /// read related vector index information.
-    TiDB::VectorIndexInfoPtr vector_index;
+    TiDB::VectorIndexDefinitionPtr vector_index;
 
     explicit ColumnDefine(
         ColId id_ = 0,
         String name_ = "",
         DataTypePtr type_ = nullptr,
         Field default_value_ = Field{},
-        TiDB::VectorIndexInfoPtr vector_index_ = nullptr)
+        TiDB::VectorIndexDefinitionPtr vector_index_ = nullptr)
         : id(id_)
         , name(std::move(name_))
         , type(std::move(type_))

@@ -15,8 +15,10 @@
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionHelpers.h>
+#include <Storages/DeltaMerge/File/dtpb/dmfile.pb.h>
 #include <Storages/DeltaMerge/Index/VectorIndex.h>
 #include <Storages/DeltaMerge/Index/VectorIndexHNSW/Index.h>
+#include <tipb/executor.pb.h>
 
 namespace DB::ErrorCodes
 {
@@ -26,7 +28,7 @@ extern const int INCORRECT_QUERY;
 namespace DB::DM
 {
 
-bool VectorIndex::isSupportedType(const IDataType & type)
+bool VectorIndexBuilder::isSupportedType(const IDataType & type)
 {
     const auto * nullable = checkAndGetDataType<DataTypeNullable>(&type);
     if (nullable)
@@ -35,53 +37,40 @@ bool VectorIndex::isSupportedType(const IDataType & type)
     return checkDataTypeArray<DataTypeFloat32>(&type);
 }
 
-VectorIndexPtr VectorIndex::create(const TiDB::VectorIndexInfo & index_info)
+VectorIndexBuilderPtr VectorIndexBuilder::create(const TiDB::VectorIndexDefinitionPtr & definition)
 {
-    RUNTIME_CHECK(index_info.dimension > 0);
-    RUNTIME_CHECK(index_info.dimension <= std::numeric_limits<UInt32>::max());
+    RUNTIME_CHECK(definition->dimension > 0);
+    RUNTIME_CHECK(definition->dimension <= std::numeric_limits<UInt32>::max());
 
-    switch (index_info.kind)
+    switch (definition->kind)
     {
-    case TiDB::VectorIndexKind::HNSW:
-        switch (index_info.distance_metric)
-        {
-        case TiDB::DistanceMetric::L2:
-            return std::make_shared<VectorIndexHNSW<unum::usearch::metric_kind_t::l2sq_k>>(index_info.dimension);
-        case TiDB::DistanceMetric::COSINE:
-            return std::make_shared<VectorIndexHNSW<unum::usearch::metric_kind_t::cos_k>>(index_info.dimension);
-        default:
-            throw Exception(
-                ErrorCodes::INCORRECT_QUERY,
-                "Unsupported vector index distance metric {}",
-                index_info.distance_metric);
-        }
+    case tipb::VectorIndexKind::HNSW:
+        return std::make_shared<VectorIndexHNSWBuilder>(definition);
     default:
-        throw Exception(ErrorCodes::INCORRECT_QUERY, "Unsupported vector index {}", index_info.kind);
+        throw Exception( //
+            ErrorCodes::INCORRECT_QUERY,
+            "Unsupported vector index {}",
+            tipb::VectorIndexKind_Name(definition->kind));
     }
 }
 
-VectorIndexPtr VectorIndex::load(TiDB::VectorIndexKind kind, TiDB::DistanceMetric distance_metric, ReadBuffer & istr)
+VectorIndexViewerPtr VectorIndexViewer::view(const dtpb::VectorIndexFileProps & file_props, std::string_view path)
 {
-    RUNTIME_CHECK(kind != TiDB::VectorIndexKind::INVALID);
-    RUNTIME_CHECK(distance_metric != TiDB::DistanceMetric::INVALID);
+    RUNTIME_CHECK(file_props.dimensions() > 0);
+    RUNTIME_CHECK(file_props.dimensions() <= std::numeric_limits<UInt32>::max());
+
+    tipb::VectorIndexKind kind;
+    RUNTIME_CHECK(tipb::VectorIndexKind_Parse(file_props.index_kind(), &kind));
 
     switch (kind)
     {
-    case TiDB::VectorIndexKind::HNSW:
-        switch (distance_metric)
-        {
-        case TiDB::DistanceMetric::L2:
-            return VectorIndexHNSW<unum::usearch::metric_kind_t::l2sq_k>::deserializeBinary(istr);
-        case TiDB::DistanceMetric::COSINE:
-            return VectorIndexHNSW<unum::usearch::metric_kind_t::cos_k>::deserializeBinary(istr);
-        default:
-            throw Exception(
-                ErrorCodes::INCORRECT_QUERY,
-                "Unsupported vector index distance metric {}",
-                distance_metric);
-        }
+    case tipb::VectorIndexKind::HNSW:
+        return VectorIndexHNSWViewer::view(file_props, path);
     default:
-        throw Exception(ErrorCodes::INCORRECT_QUERY, "Unsupported vector index {}", kind);
+        throw Exception( //
+            ErrorCodes::INCORRECT_QUERY,
+            "Unsupported vector index {}",
+            file_props.index_kind());
     }
 }
 

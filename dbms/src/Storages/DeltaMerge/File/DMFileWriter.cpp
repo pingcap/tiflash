@@ -18,9 +18,9 @@
 #include <Storages/DeltaMerge/File/DMFileWriter.h>
 #include <Storages/DeltaMerge/Index/VectorIndex.h>
 #include <Storages/S3/S3Common.h>
+#include <sys/stat.h>
 
 #ifndef NDEBUG
-#include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
 #endif
@@ -60,7 +60,7 @@ DMFileWriter::DMFileWriter(
     for (auto & cd : write_columns)
     {
         if (cd.vector_index)
-            RUNTIME_CHECK(VectorIndex::isSupportedType(*cd.type));
+            RUNTIME_CHECK(VectorIndexBuilder::isSupportedType(*cd.type));
 
         // TODO: currently we only generate index for Integers, Date, DateTime types, and this should be configurable by user.
         /// for handle column always generate index
@@ -115,7 +115,11 @@ DMFileWriter::WriteBufferFromFileBasePtr DMFileWriter::createPackStatsFile()
                                      options.max_compress_block_size);
 }
 
-void DMFileWriter::addStreams(ColId col_id, DataTypePtr type, bool do_index, TiDB::VectorIndexInfoPtr do_vector_index)
+void DMFileWriter::addStreams(
+    ColId col_id,
+    DataTypePtr type,
+    bool do_index,
+    TiDB::VectorIndexDefinitionPtr do_vector_index)
 {
     auto callback = [&](const IDataType::SubstreamPath & substream_path) {
         const auto stream_name = DMFile::getFileNameBase(col_id, substream_path);
@@ -358,34 +362,20 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
 
             if (stream->vector_index && !is_empty_file)
             {
-                dmfile->checkMergedFile(merged_file, file_provider, write_limiter);
+                // Vector index files are always not written into the merged file
+                // because we want to allow to be mmaped by the usearch.
 
-                auto fname = dmfile->colIndexFileName(stream_name);
-
-                auto buffer = createWriteBufferFromFileBaseByWriterBuffer(
-                    merged_file.buffer,
-                    dmfile->configuration->getChecksumAlgorithm(),
-                    dmfile->configuration->getChecksumFrameLength());
-
-                stream->vector_index->serializeBinary(*buffer);
-
-                col_stat.index_bytes = buffer->getMaterializedBytes();
+                const auto index_name = dmfile->colIndexPath(stream_name);
+                stream->vector_index->save(index_name);
+                col_stat.index_bytes = Poco::File(index_name).getSize();
 
                 // Memorize what kind of vector index it is, so that we can correctly restore it when reading.
-                col_stat.vector_index = dtpb::ColumnVectorIndexInfo{};
-                col_stat.vector_index->set_index_kind(String(magic_enum::enum_name(stream->vector_index->kind)));
+                col_stat.vector_index.emplace();
+                col_stat.vector_index->set_index_kind(
+                    tipb::VectorIndexKind_Name(stream->vector_index->definition->kind));
                 col_stat.vector_index->set_distance_metric(
-                    String(magic_enum::enum_name(stream->vector_index->distance_metric)));
-
-                MergedSubFileInfo info{
-                    fname,
-                    merged_file.file_info.number,
-                    merged_file.file_info.size,
-                    col_stat.index_bytes};
-                dmfile->merged_sub_file_infos[fname] = info;
-
-                merged_file.file_info.size += col_stat.index_bytes;
-                buffer->next();
+                    tipb::VectorDistanceMetric_Name(stream->vector_index->definition->distance_metric));
+                col_stat.vector_index->set_dimensions(stream->vector_index->definition->dimension);
             }
 
             // write mark into merged_file_writer

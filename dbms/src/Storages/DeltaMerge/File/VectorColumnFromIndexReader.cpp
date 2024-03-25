@@ -14,8 +14,6 @@
 
 #include <Storages/DeltaMerge/File/VectorColumnFromIndexReader.h>
 
-#include <ext/scope_guard.h>
-
 namespace DB::DM
 {
 
@@ -32,7 +30,7 @@ std::vector<UInt32> VectorColumnFromIndexReader::calcPackStartRowID(const DMFile
 }
 
 MutableColumnPtr VectorColumnFromIndexReader::calcResultsByPack(
-    std::vector<VectorIndex::Key> && results,
+    std::vector<VectorIndexViewer::Key> && results,
     const DMFile::PackStats & pack_stats,
     const std::vector<UInt32> & pack_start_rowid)
 {
@@ -110,7 +108,7 @@ void VectorColumnFromIndexReader::read(MutableColumnPtr & column, size_t start_p
             RUNTIME_CHECK(filled_result_rows == offset_in_pack);
 
             // TODO: We could fill multiple rows if rowid is continuous.
-            VectorIndex::Key rowid = pack_start_rowid[pack_id] + offset_in_pack;
+            VectorIndexViewer::Key rowid = pack_start_rowid[pack_id] + offset_in_pack;
             index->get(rowid, value);
             column->insertData(reinterpret_cast<const char *>(value.data()), value.size() * sizeof(Float32));
             filled_result_rows++;

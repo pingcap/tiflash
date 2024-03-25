@@ -41,7 +41,7 @@ struct ColumnStat
     size_t array_sizes_bytes = 0;
     size_t array_sizes_mark_bytes = 0;
 
-    std::optional<dtpb::ColumnVectorIndexInfo> vector_index = std::nullopt;
+    std::optional<dtpb::VectorIndexFileProps> vector_index = std::nullopt;
 
     dtpb::ColumnStat toProto() const
     {

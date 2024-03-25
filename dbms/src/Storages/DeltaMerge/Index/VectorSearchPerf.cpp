@@ -12,22 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#pragma once
+#include <Storages/DeltaMerge/Index/VectorSearchPerf.h>
 
-#include <tipb/executor.pb.h>
-
-namespace DB::DM
+namespace DB::PerfContext
 {
 
-using ANNQueryInfoPtr = std::shared_ptr<tipb::ANNQueryInfo>;
+thread_local VectorSearchPerfContext vector_search = {};
 
-class VectorIndexBuilder;
-using VectorIndexBuilderPtr = std::shared_ptr<VectorIndexBuilder>;
-
-class VectorIndexViewer;
-using VectorIndexViewerPtr = std::shared_ptr<VectorIndexViewer>;
-
-class VectorIndexCache;
-using VectorIndexCachePtr = std::shared_ptr<VectorIndexCache>;
-
-} // namespace DB::DM
+}

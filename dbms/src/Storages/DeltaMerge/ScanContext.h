@@ -25,6 +25,10 @@
 
 #include <atomic>
 
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+#endif
 
 namespace DB::DM
 {
@@ -84,6 +88,7 @@ public:
     // Building bitmap
     std::atomic<uint64_t> build_bitmap_time_ns{0};
 
+    std::atomic<uint64_t> total_vector_idx_load_from_s3{0};
     std::atomic<uint64_t> total_vector_idx_load_from_disk{0};
     std::atomic<uint64_t> total_vector_idx_load_from_cache{0};
     std::atomic<uint64_t> total_vector_idx_load_time_ms{0};
@@ -139,6 +144,7 @@ public:
 
         deserializeRegionNumberOfInstance(tiflash_scan_context_pb);
 
+        total_vector_idx_load_from_s3 = tiflash_scan_context_pb.total_vector_idx_load_from_s3();
         total_vector_idx_load_from_disk = tiflash_scan_context_pb.total_vector_idx_load_from_disk();
         total_vector_idx_load_from_cache = tiflash_scan_context_pb.total_vector_idx_load_from_cache();
         total_vector_idx_load_time_ms = tiflash_scan_context_pb.total_vector_idx_load_time_ms();
@@ -189,6 +195,7 @@ public:
 
         serializeRegionNumOfInstance(tiflash_scan_context_pb);
 
+        tiflash_scan_context_pb.set_total_vector_idx_load_from_s3(total_vector_idx_load_from_s3);
         tiflash_scan_context_pb.set_total_vector_idx_load_from_disk(total_vector_idx_load_from_disk);
         tiflash_scan_context_pb.set_total_vector_idx_load_from_cache(total_vector_idx_load_from_cache);
         tiflash_scan_context_pb.set_total_vector_idx_load_time_ms(total_vector_idx_load_time_ms);
@@ -245,6 +252,7 @@ public:
 
         mergeRegionNumberOfInstance(other);
 
+        total_vector_idx_load_from_s3 += other.total_vector_idx_load_from_s3;
         total_vector_idx_load_from_disk += other.total_vector_idx_load_from_disk;
         total_vector_idx_load_from_cache += other.total_vector_idx_load_from_cache;
         total_vector_idx_load_time_ms += other.total_vector_idx_load_time_ms;
@@ -268,6 +276,7 @@ public:
         create_snapshot_time_ns += other.total_build_snapshot_ms() * 1000000;
         total_local_region_num += other.local_regions();
         total_remote_region_num += other.remote_regions();
+
         user_read_bytes += other.user_read_bytes();
         learner_read_ns += other.total_learner_read_ms() * 1000000;
         disagg_read_cache_hit_size += other.disagg_read_cache_hit_bytes();
@@ -297,6 +306,7 @@ public:
         disagg_read_cache_hit_size += other.disagg_read_cache_hit_bytes();
         disagg_read_cache_miss_size += other.disagg_read_cache_miss_bytes();
 
+        total_vector_idx_load_from_s3 += other.total_vector_idx_load_from_s3();
         total_vector_idx_load_from_disk += other.total_vector_idx_load_from_disk();
         total_vector_idx_load_from_cache += other.total_vector_idx_load_from_cache();
         total_vector_idx_load_time_ms += other.total_vector_idx_load_time_ms();
