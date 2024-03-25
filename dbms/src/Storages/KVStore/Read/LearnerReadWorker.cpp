@@ -265,7 +265,7 @@ void LearnerReadWorker::recordReadIndexError(
                 LOG_DEBUG(
                     log,
                     "meet abnormal region error {}, [region_id={}]",
-                    resp.region_error().DebugString(),
+                    resp.region_error().GetTypeName(),
                     region_id);
                 region_status = RegionException::RegionReadStatus::TIKV_SERVER_ISSUE;
             }
@@ -275,7 +275,7 @@ void LearnerReadWorker::recordReadIndexError(
                 LOG_DEBUG(
                     log,
                     "meet abnormal region error {}, [region_id={}]",
-                    resp.region_error().DebugString(),
+                    resp.region_error().GetTypeName(),
                     region_id);
             }
             unavailable_regions.addStatus(region_id, region_status, std::move(extra_msg));
