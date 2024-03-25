@@ -106,7 +106,7 @@ public:
         return input_stream;
     }
 
-    String string() const;
+    String toString() const;
 
 #ifndef DBMS_PUBLIC_GTEST
 private:
@@ -161,7 +161,7 @@ struct fmt::formatter<DB::DM::SegmentReadTask>
     template <typename FormatContext>
     auto format(const DB::DM::SegmentReadTask & t, FormatContext & ctx) const
     {
-        return fmt::format_to(ctx.out(), "{}", t.string());
+        return fmt::format_to(ctx.out(), "{}", t.toString());
     };
 };
 

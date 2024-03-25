@@ -735,7 +735,7 @@ void SegmentReadTask::doFetchPagesImpl(
         wait_write_page_ns / 1000000);
 }
 
-String SegmentReadTask::string() const
+String SegmentReadTask::toString() const
 {
     if (dm_context->keyspace_id == DB::NullspaceID)
     {
