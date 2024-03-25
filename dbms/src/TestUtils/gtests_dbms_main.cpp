@@ -69,6 +69,7 @@ int main(int argc, char ** argv)
     DB::tests::TiFlashTestEnv::setupLogger("trace", std::cerr, enable_colors);
     auto run_mode = DB::PageStorageRunMode::ONLY_V3;
     DB::tests::TiFlashTestEnv::initializeGlobalContext(/*testdata_path*/ {}, run_mode);
+    initStorageMemoryTracker(std::numeric_limits<Int64>::max(), std::numeric_limits<Int64>::max());
     DB::ServerInfo server_info;
     // `DMFileReaderPool` should be constructed before and destructed after `SegmentReaderPoolManager`.
     DB::DM::DMFileReaderPool::instance();
