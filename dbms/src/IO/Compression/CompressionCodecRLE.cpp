@@ -18,8 +18,6 @@
 #include <IO/Compression/ICompressionCodec.h>
 #include <common/unaligned.h>
 
-#include "common/types.h"
-
 
 namespace DB
 {
@@ -41,75 +39,80 @@ UInt8 CompressionCodecRLE::getMethodByte() const
 
 UInt32 CompressionCodecRLE::getMaxCompressedDataSize(UInt32 uncompressed_size) const
 {
-    // 1 byte for delta_bytes_size, then (x, n) pairs, x is delta_bytes_size bytes, n is 2 byte.
-    return 1 + uncompressed_size + (uncompressed_size / delta_bytes_size) * 2;
+    // If the encoded data is larger than the original data, we will store the original data
+    return 1 + uncompressed_size;
 }
 
 namespace
 {
+constexpr UInt8 JUST_COPY_CODE = 0xFF;
+
 // TODO: better implementation
 template <typename T>
 UInt32 compressDataForType(const char * source, UInt32 source_size, char * dest)
 {
-    if (source_size % sizeof(T) != 0)
-        throw Exception(
-            ErrorCodes::CANNOT_COMPRESS,
-            "Cannot compress with Delta codec, data size {} is not aligned to {}",
-            source_size,
-            sizeof(T));
+    UInt8 bytes_to_skip = source_size % sizeof(T);
     const char * source_end = source + source_size;
-    UInt32 dest_size = 0;
-    UInt16 count = 1;
-    T prev = unalignedLoad<T>(source);
-    source += sizeof(T);
-    while (source < source_end)
+    std::vector<std::pair<T, UInt16>> rle_vec;
+    rle_vec.reserve(source_size / sizeof(T));
+    static constexpr size_t RLE_PAIR_LENGTH = sizeof(T) + sizeof(UInt16);
+    for (const auto * src = source + bytes_to_skip; src < source_end; src += sizeof(T))
     {
-        T cur = unalignedLoad<T>(source);
-        if (prev == cur)
-        {
-            ++count;
-        }
+        T value = unalignedLoad<T>(src);
+        if (rle_vec.empty() || rle_vec.back().first != value)
+            rle_vec.emplace_back(value, 1);
         else
-        {
-            unalignedStore<T>(dest, prev);
-            dest += sizeof(T);
-            dest_size += sizeof(T);
-            unalignedStore<UInt16>(dest, count);
-            dest += sizeof(UInt16);
-            dest_size += sizeof(UInt16);
-            prev = cur;
-            count = 1;
-        }
-        source += sizeof(T);
+            ++rle_vec.back().second;
     }
-    unalignedStore<T>(dest, prev);
-    dest += sizeof(T);
-    dest_size += sizeof(T);
-    unalignedStore<UInt16>(dest, count);
-    dest += sizeof(UInt16);
-    dest_size += sizeof(UInt16);
-    return dest_size;
+
+    if (rle_vec.size() * RLE_PAIR_LENGTH > source_size)
+    {
+        dest[0] = JUST_COPY_CODE;
+        memcpy(&dest[1], source, source_size);
+        return 1 + source_size;
+    }
+
+    dest[0] = sizeof(T);
+    memcpy(&dest[1], source, bytes_to_skip);
+    dest += (1 + bytes_to_skip);
+    for (const auto & [value, count] : rle_vec)
+    {
+        unalignedStore<T>(dest, value);
+        dest += sizeof(T);
+        unalignedStore<UInt16>(dest, count);
+        dest += sizeof(UInt16);
+    }
+    return 1 + bytes_to_skip + rle_vec.size() * RLE_PAIR_LENGTH;
 }
 
 template <typename T>
 void decompressDataForType(const char * source, UInt32 source_size, char * dest, UInt32 output_size)
 {
     const char * output_end = dest + output_size;
-
-
     const char * source_end = source + source_size;
+
+    UInt8 bytes_size = source[0];
+    RUNTIME_CHECK(bytes_size == sizeof(T), bytes_size, sizeof(T));
+    source += 1;
+
+    static constexpr size_t RLE_PAIR_LENGTH = sizeof(T) + sizeof(UInt16);
+    UInt8 bytes_to_skip = (source_size - 1) % RLE_PAIR_LENGTH;
+    memcpy(dest, source, bytes_to_skip);
+    dest += bytes_to_skip;
+    source += bytes_to_skip;
+
     while (source < source_end)
     {
         T data = unalignedLoad<T>(source);
         source += sizeof(T);
         auto count = unalignedLoad<UInt16>(source);
         source += sizeof(UInt16);
+        if unlikely (dest + count * sizeof(T) > output_end)
+            throw Exception(
+                ErrorCodes::CANNOT_DECOMPRESS,
+                "Cannot decompress RLE-encoded data, output buffer is too small");
         for (UInt16 i = 0; i < count; ++i)
         {
-            if unlikely (dest + sizeof(T) > output_end)
-                throw Exception(
-                    ErrorCodes::CANNOT_DECOMPRESS,
-                    "Cannot decompress RLE-encoded data, output buffer is too small");
             unalignedStore<T>(dest, data);
             dest += sizeof(T);
         }
@@ -120,39 +123,16 @@ void decompressDataForType(const char * source, UInt32 source_size, char * dest,
 
 UInt32 CompressionCodecRLE::doCompressData(const char * source, UInt32 source_size, char * dest) const
 {
-    UInt8 bytes_to_skip = source_size % delta_bytes_size;
-    if unlikely ((source_size - bytes_to_skip) % delta_bytes_size != 0)
-        throw Exception(ErrorCodes::CANNOT_COMPRESS, "Cannot compress RLE-encoded data. File has wrong size");
-
-    dest[0] = delta_bytes_size;
-    memcpy(&dest[1], source, bytes_to_skip);
-    size_t start_pos = 1 + bytes_to_skip;
     switch (delta_bytes_size)
     {
     case 1:
-        return 1 + bytes_to_skip
-            + compressDataForType<UInt8>(
-                   reinterpret_cast<const char *>(&source[bytes_to_skip]),
-                   source_size - bytes_to_skip,
-                   &dest[start_pos]);
+        return compressDataForType<UInt8>(source, source_size, dest);
     case 2:
-        return 1 + bytes_to_skip
-            + compressDataForType<UInt16>(
-                   reinterpret_cast<const char *>(&source[bytes_to_skip]),
-                   source_size - bytes_to_skip,
-                   &dest[start_pos]);
+        return compressDataForType<UInt16>(source, source_size, dest);
     case 4:
-        return 1 + bytes_to_skip
-            + compressDataForType<UInt32>(
-                   reinterpret_cast<const char *>(&source[bytes_to_skip]),
-                   source_size - bytes_to_skip,
-                   &dest[start_pos]);
+        return compressDataForType<UInt32>(source, source_size, dest);
     case 8:
-        return 1 + bytes_to_skip
-            + compressDataForType<UInt64>(
-                   reinterpret_cast<const char *>(&source[bytes_to_skip]),
-                   source_size - bytes_to_skip,
-                   &dest[start_pos]);
+        return compressDataForType<UInt64>(source, source_size, dest);
     default:
         __builtin_unreachable();
     }
@@ -171,46 +151,34 @@ void CompressionCodecRLE::doDecompressData(
         return;
 
     UInt8 bytes_size = source[0];
+    if (bytes_size == JUST_COPY_CODE)
+    {
+        if (source_size - 1 < uncompressed_size)
+            throw Exception(ErrorCodes::CANNOT_DECOMPRESS, "Cannot decompress RLE-encoded data. File has wrong header");
 
+        memcpy(dest, &source[1], uncompressed_size);
+        return;
+    }
     if (bytes_size != 1 && bytes_size != 2 && bytes_size != 4 && bytes_size != 8)
         throw Exception(ErrorCodes::CANNOT_DECOMPRESS, "Cannot decompress RLE-encoded data. File has wrong header");
 
-    UInt8 bytes_to_skip = uncompressed_size % bytes_size;
-    UInt32 output_size = uncompressed_size - bytes_to_skip;
-
+    UInt8 bytes_to_skip = uncompressed_size % (bytes_size + sizeof(UInt16));
     if (static_cast<UInt32>(1 + bytes_to_skip) > source_size)
         throw Exception(ErrorCodes::CANNOT_DECOMPRESS, "Cannot decompress RLE-encoded data. File has wrong header");
 
-    UInt32 source_size_no_header = source_size - bytes_to_skip - 1;
     switch (bytes_size)
     {
     case 1:
-        decompressDataForType<UInt8>(
-            reinterpret_cast<const char *>(&source[1 + bytes_to_skip]),
-            source_size_no_header,
-            &dest[bytes_to_skip],
-            output_size);
+        decompressDataForType<UInt8>(source, source_size, dest, uncompressed_size);
         break;
     case 2:
-        decompressDataForType<UInt16>(
-            reinterpret_cast<const char *>(&source[1 + bytes_to_skip]),
-            source_size_no_header,
-            &dest[bytes_to_skip],
-            output_size);
+        decompressDataForType<UInt16>(source, source_size, dest, uncompressed_size);
         break;
     case 4:
-        decompressDataForType<UInt32>(
-            reinterpret_cast<const char *>(&source[1 + bytes_to_skip]),
-            source_size_no_header,
-            &dest[bytes_to_skip],
-            output_size);
+        decompressDataForType<UInt32>(source, source_size, dest, uncompressed_size);
         break;
     case 8:
-        decompressDataForType<UInt64>(
-            reinterpret_cast<const char *>(&source[1 + bytes_to_skip]),
-            source_size_no_header,
-            &dest[bytes_to_skip],
-            output_size);
+        decompressDataForType<UInt64>(source, source_size, dest, uncompressed_size);
         break;
     default:
         __builtin_unreachable();
