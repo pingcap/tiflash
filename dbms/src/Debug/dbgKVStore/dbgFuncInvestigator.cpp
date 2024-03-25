@@ -183,7 +183,7 @@ void dbgFuncFindKey(Context & context, const ASTs & args, DBGInvoker::Printer ou
         end_key = RecordKVFormat::genKey(table_id, end_handle);
     }
 
-    auto range = RegionRangeKeys(std::move(start_key), std::move(end_key));
+    auto range = RegionRangeKeys(TiKVKey::copyFrom(start_key), std::move(end_key));
     auto regions = kvstore.getRegionsByRangeOverlap(range.comparableKeys());
 
     for (const auto & [region_id, region] : regions)
@@ -256,10 +256,10 @@ BlockInputStreamPtr dbgFuncFindKeyDt(Context & context, const ASTs & args)
         }
     }
 
-    String key = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[2]).value);
-    String value = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[3]).value);
+    auto key = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[2]).value);
+    auto value = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[3]).value);
 
-    constexpr size_t OFFSET = 4;
+    constexpr static size_t OFFSET = 4;
     FmtBuffer fmt_buf;
     auto key_size = args.size() - OFFSET;
     if (key_size & 1)
@@ -269,8 +269,8 @@ BlockInputStreamPtr dbgFuncFindKeyDt(Context & context, const ASTs & args)
     }
     for (size_t i = 0; i != key_size / 2; i++)
     {
-        String k = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[OFFSET + 2 * i]).value);
-        String v = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[OFFSET + 2 * i + 1]).value);
+        auto k = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[OFFSET + 2 * i]).value);
+        auto v = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[OFFSET + 2 * i + 1]).value);
         fmt_buf.fmtAppend(" and {} = {}", k, v);
     }
     String query;
