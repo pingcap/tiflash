@@ -76,7 +76,7 @@ void BitmapFilter::set(const UInt32 * data, UInt32 size, const FilterPtr & f)
 void BitmapFilter::set(UInt32 start, UInt32 limit, bool value)
 {
     RUNTIME_CHECK(start + limit <= filter.size(), start, limit, filter.size());
-    std::fill(filter.begin() + start, filter.begin() + start + limit, value);
+    std::fill_n(filter.begin() + start, limit, value);
 }
 
 bool BitmapFilter::get(IColumn::Filter & f, UInt32 start, UInt32 limit) const
