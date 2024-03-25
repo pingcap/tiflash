@@ -134,7 +134,7 @@ void dbgFuncFindKey(Context & context, const ASTs & args, DBGInvoker::Printer ou
     if (table_info.is_common_handle)
     {
         size_t arg_size = args.size() - OFFSET;
-        // The `start` and `end` argments should be provided in pair.
+        // The `start` and `end` argments should be provided in pair. Therefore, the number of arguments must be even.
         if ((arg_size & 1) != 0)
         {
             throw Exception(
