@@ -217,19 +217,28 @@ void LearnerReadWorker::recordReadIndexError(
                 {
                     extra_msg = fmt::format("read_index_resp error, region_id={} not found in snapshot", region_id);
                 }
+                GET_METRIC(tiflash_raft_learner_read_failures_count, type_epoch_not_match).Increment();
                 region_status = RegionException::RegionReadStatus::EPOCH_NOT_MATCH;
             }
             else if (region_error.has_not_leader())
+            {
+                GET_METRIC(tiflash_raft_learner_read_failures_count, type_not_leader).Increment();
                 region_status = RegionException::RegionReadStatus::NOT_LEADER;
+            }
             else if (region_error.has_region_not_found())
+            {
+                GET_METRIC(tiflash_raft_learner_read_failures_count, type_not_found_tikv).Increment();
                 region_status = RegionException::RegionReadStatus::NOT_FOUND_TIKV;
+            }
             // Below errors seldomly happens in raftstore-v1, however, we are not sure if they will happen in v2.
             else if (region_error.has_flashbackinprogress() || region_error.has_flashbacknotprepared())
             {
+                GET_METRIC(tiflash_raft_learner_read_failures_count, type_flashback).Increment();
                 region_status = RegionException::RegionReadStatus::FLASHBACK;
             }
             else if (region_error.has_bucket_version_not_match())
             {
+                GET_METRIC(tiflash_raft_learner_read_failures_count, type_bucket_epoch_not_match).Increment();
                 LOG_DEBUG(
                     log,
                     "meet abnormal region error {}, [region_id={}]",
@@ -239,6 +248,7 @@ void LearnerReadWorker::recordReadIndexError(
             }
             else if (region_error.has_key_not_in_region())
             {
+                GET_METRIC(tiflash_raft_learner_read_failures_count, type_key_not_in_region).Increment();
                 LOG_DEBUG(
                     log,
                     "meet abnormal region error {}, [region_id={}]",
@@ -251,6 +261,7 @@ void LearnerReadWorker::recordReadIndexError(
                 || region_error.has_region_not_initialized() || region_error.has_disk_full()
                 || region_error.has_read_index_not_ready() || region_error.has_proposal_in_merging_mode())
             {
+                GET_METRIC(tiflash_raft_learner_read_failures_count, type_tikv_server_issue).Increment();
                 LOG_DEBUG(
                     log,
                     "meet abnormal region error {}, [region_id={}]",
@@ -260,6 +271,7 @@ void LearnerReadWorker::recordReadIndexError(
             }
             else
             {
+                GET_METRIC(tiflash_raft_learner_read_failures_count, type_other).Increment();
                 LOG_DEBUG(
                     log,
                     "meet abnormal region error {}, [region_id={}]",
@@ -270,6 +282,7 @@ void LearnerReadWorker::recordReadIndexError(
         }
         else if (resp.has_locked())
         {
+            GET_METRIC(tiflash_raft_learner_read_failures_count, type_tikv_lock).Increment();
             unavailable_regions.addRegionLock(region_id, LockInfoPtr(resp.release_locked()));
         }
         else

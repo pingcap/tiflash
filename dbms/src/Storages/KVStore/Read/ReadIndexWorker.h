@@ -85,6 +85,7 @@ public:
 
     explicit ReadIndexWorkerManager(
         const TiFlashRaftProxyHelper & proxy_helper_,
+        KVStore & kvstore_,
         size_t workers_cnt,
         FnGetTickTime && fn_min_dur_handle_region_,
         size_t runner_cnt);
@@ -100,6 +101,7 @@ public:
 
     static std::unique_ptr<ReadIndexWorkerManager> newReadIndexWorkerManager(
         const TiFlashRaftProxyHelper & proxy_helper,
+        KVStore & kvstore,
         size_t cap,
         FnGetTickTime && fn_min_dur_handle_region,
         size_t runner_cnt = 1);
@@ -135,6 +137,7 @@ private:
         ReadIndexRunner(
             size_t id_,
             size_t runner_cnt_,
+            KVStore & kvstore_,
             ReadIndexWorkers & workers_,
             LoggerPtr logger_,
             FnGetTickTime fn_min_dur_handle_region_,
@@ -142,6 +145,7 @@ private:
 
         const size_t id;
         const size_t runner_cnt;
+        KVStore & kvstore;
         ReadIndexWorkers & workers;
         LoggerPtr logger;
         const FnGetTickTime fn_min_dur_handle_region;
@@ -153,6 +157,7 @@ private:
 
 private:
     const TiFlashRaftProxyHelper & proxy_helper;
+    KVStore & kvstore;
     /// Each runner is mapped to a part of workers(worker_id % runner_cnt == runner_id).
     std::vector<std::unique_ptr<ReadIndexRunner>> runners;
     /// Each worker controls read-index process of region(region_id % worker_cnt == worker_id).
@@ -284,6 +289,7 @@ struct ReadIndexWorker
 
     explicit ReadIndexWorker(
         const TiFlashRaftProxyHelper & proxy_helper_,
+        KVStore & kvstore_,
         size_t id_,
         AsyncWaker::NotifierPtr notifier_);
 
@@ -311,6 +317,7 @@ struct ReadIndexWorker
     //    static std::atomic<size_t> max_read_index_history;
 
     const TiFlashRaftProxyHelper & proxy_helper;
+    KVStore & kvstore;
     const size_t id;
     DataMap data_map;
 
