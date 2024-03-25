@@ -17,6 +17,11 @@ option (ENABLE_JEMALLOC "Set to TRUE to use jemalloc" ON)
 option (ENABLE_JEMALLOC_PROF "Set to ON to enable jemalloc profiling" OFF)
 option (USE_INTERNAL_JEMALLOC_LIBRARY "Set to FALSE to use system jemalloc library instead of bundled" ${NOT_UNBUNDLED})
 
+if (ENABLE_JEMALLOC AND (CMAKE_BUILD_TYPE_UC STREQUAL "ASAN" OR CMAKE_BUILD_TYPE_UC STREQUAL "UBSAN" OR CMAKE_BUILD_TYPE_UC STREQUAL "TSAN"))
+    message (WARNING "ENABLE_JEMALLOC is set to OFF implicitly: jemalloc doesn't work with ${CMAKE_BUILD_TYPE_UC}")
+    set (ENABLE_JEMALLOC OFF)
+endif ()
+
 if (ENABLE_JEMALLOC)
     if (USE_INTERNAL_JEMALLOC_LIBRARY)
         set (JEMALLOC_LIBRARIES "jemalloc")
