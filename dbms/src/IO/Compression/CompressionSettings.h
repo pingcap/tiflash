@@ -81,12 +81,9 @@ struct CompressionSettings
     CompressionSettings()
         : settings(1, CompressionSetting(CompressionMethod::LZ4))
     {}
+
     explicit CompressionSettings(CompressionMethod method_)
         : settings(1, CompressionSetting(method_))
-    {}
-
-    explicit CompressionSettings(CompressionMethodByte method_byte_)
-        : settings(1, CompressionSetting(method_byte_))
     {}
 
     CompressionSettings(CompressionMethod method_, int level_)

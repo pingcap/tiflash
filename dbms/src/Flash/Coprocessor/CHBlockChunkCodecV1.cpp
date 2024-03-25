@@ -556,7 +556,7 @@ CHBlockChunkCodecV1::EncodeRes CHBlockChunkCodecV1::encode(std::string_view str,
     assert(compression_method != CompressionMethod::NONE);
 
     String compressed_buffer;
-    auto codec = CompressionFactory::createForCompress(CompressionSettings(compression_method));
+    auto codec = CompressionFactory::create(CompressionSetting(compression_method));
     compressed_buffer.resize(codec->getCompressedReserveSize(str.size()));
     size_t compressed_size = codec->compress(str.data(), str.size(), compressed_buffer.data());
     compressed_buffer.resize(compressed_size);

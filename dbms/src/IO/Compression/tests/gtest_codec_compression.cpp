@@ -383,7 +383,7 @@ CompressionCodecPtr makeCodec(const CompressionMethodByte method_byte, UInt8 typ
 {
     CompressionSetting setting(method_byte);
     setting.type_bytes_size = type_byte;
-    return CompressionFactory::createForCompress(setting);
+    return CompressionFactory::create(setting);
 }
 
 void testTranscoding(ICompressionCodec & codec, const CodecTestSequence & test_sequence)

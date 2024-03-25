@@ -40,16 +40,16 @@ class CompressionFactory
 #ifdef DBMS_PUBLIC_GTEST
 public:
 #endif
-    static CompressionCodecPtr createForCompress(const CompressionSetting & settings)
+    static CompressionCodecPtr create(const CompressionSetting & setting)
     {
-        switch (settings.method)
+        switch (setting.method)
         {
         case CompressionMethod::LZ4:
-            return std::make_shared<CompressionCodecLZ4>(settings.level);
+            return std::make_shared<CompressionCodecLZ4>(setting.level);
         case CompressionMethod::LZ4HC:
-            return std::make_shared<CompressionCodecLZ4HC>(settings.level);
+            return std::make_shared<CompressionCodecLZ4HC>(setting.level);
         case CompressionMethod::ZSTD:
-            return std::make_shared<CompressionCodecZSTD>(settings.level);
+            return std::make_shared<CompressionCodecZSTD>(setting.level);
 #if USE_QPL
         case CompressionMethod::QPL:
             return std::make_shared<CompressionCodecDeflateQpl>();
@@ -57,25 +57,25 @@ public:
         default:
             break;
         }
-        switch (settings.method_byte)
+        switch (setting.method_byte)
         {
         case CompressionMethodByte::Delta:
-            return std::make_shared<CompressionCodecDelta>(settings.type_bytes_size);
+            return std::make_shared<CompressionCodecDelta>(setting.type_bytes_size);
         case CompressionMethodByte::RLE:
-            return std::make_shared<CompressionCodecRLE>(settings.type_bytes_size);
+            return std::make_shared<CompressionCodecRLE>(setting.type_bytes_size);
         case CompressionMethodByte::NONE:
             return std::make_shared<CompressionCodecNone>();
         default:
             throw Exception(
                 ErrorCodes::UNKNOWN_COMPRESSION_METHOD,
                 "Unknown compression method byte: {:02x}",
-                static_cast<UInt16>(settings.method_byte));
+                static_cast<UInt16>(setting.method_byte));
         }
     }
 
 public:
-    // Create codec for compressing data with specified settings.
-    static CompressionCodecPtr createForCompress(const CompressionSettings & settings)
+    // Create codec for compressing/decompressing data with specified settings.
+    static CompressionCodecPtr create(const CompressionSettings & settings)
     {
         if (settings.settings.size() > 1)
         {
@@ -83,19 +83,19 @@ public:
             codecs.reserve(settings.settings.size());
             for (const auto & setting : settings.settings)
             {
-                codecs.push_back(createForCompress(setting));
+                codecs.push_back(create(setting));
             }
             return std::make_shared<CompressionCodecMultiple>(std::move(codecs));
         }
-        return createForCompress(settings.settings.front());
+        return create(settings.settings.front());
     }
 
     // Create codec for decompressing data with specified method byte.
     // All decompression codecs are stateless, so we don't need to pass settings.
     static CompressionCodecPtr createForDecompress(UInt8 method_byte)
     {
-        CompressionSettings settings(static_cast<CompressionMethodByte>(method_byte));
-        return createForCompress(settings);
+        CompressionSetting setting(static_cast<CompressionMethodByte>(method_byte));
+        return create(setting);
     }
 };
 
