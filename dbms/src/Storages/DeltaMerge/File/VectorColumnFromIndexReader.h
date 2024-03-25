@@ -19,6 +19,7 @@
 #include <Functions/FunctionHelpers.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
+#include <Storages/DeltaMerge/File/DMFileMeta.h>
 #include <Storages/DeltaMerge/File/VectorColumnFromIndexReader_fwd.h>
 #include <Storages/DeltaMerge/Index/VectorIndex.h>
 
@@ -43,7 +44,7 @@ private:
     const DMFileMeta::PackStats & pack_stats;
     const std::vector<UInt32> pack_start_rowid;
 
-    const VectorIndexPtr index;
+    const VectorIndexViewerPtr index;
     /// results_by_pack[i]=[a,b,c...] means pack[i]'s row offset [a,b,c,...] is contained in the result set.
     /// The rowid of a is pack_start_rowid[i]+a.
     MutableColumnPtr /* ColumnArray of UInt32 */ results_by_pack;
@@ -52,7 +53,7 @@ private:
     static std::vector<UInt32> calcPackStartRowID(const DMFileMeta::PackStats & pack_stats);
 
     static MutableColumnPtr calcResultsByPack(
-        std::vector<VectorIndex::Key> && results,
+        std::vector<VectorIndexViewer::Key> && results,
         const DMFileMeta::PackStats & pack_stats,
         const std::vector<UInt32> & pack_start_rowid);
 
@@ -61,8 +62,8 @@ public:
     /// including NULLs and delete marks.
     explicit VectorColumnFromIndexReader(
         const DMFilePtr & dmfile_,
-        const VectorIndexPtr & index_,
-        std::vector<VectorIndex::Key> && results_)
+        const VectorIndexViewerPtr & index_,
+        std::vector<VectorIndexViewer::Key> && results_)
         : dmfile(dmfile_)
         , pack_stats(dmfile_->getPackStats())
         , pack_start_rowid(calcPackStartRowID(pack_stats))

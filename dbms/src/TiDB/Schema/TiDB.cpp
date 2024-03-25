@@ -29,6 +29,7 @@
 #include <TiDB/Schema/SchemaNameMapper.h>
 #include <TiDB/Schema/TiDB.h>
 #include <common/logger_useful.h>
+#include <tipb/executor.pb.h>
 
 #include <algorithm>
 #include <cmath>
@@ -406,13 +407,13 @@ try
 
     if (vector_index)
     {
-        RUNTIME_CHECK(vector_index->kind != VectorIndexKind::INVALID);
-        RUNTIME_CHECK(vector_index->distance_metric != DistanceMetric::INVALID);
+        RUNTIME_CHECK(vector_index->kind != tipb::VectorIndexKind::INVALID_INDEX_KIND);
+        RUNTIME_CHECK(vector_index->distance_metric != tipb::VectorDistanceMetric::INVALID_DISTANCE_METRIC);
 
         Poco::JSON::Object::Ptr vector_index_json = new Poco::JSON::Object();
-        vector_index_json->set("kind", String(magic_enum::enum_name(vector_index->kind)));
+        vector_index_json->set("kind", tipb::VectorIndexKind_Name(vector_index->kind));
         vector_index_json->set("dimension", vector_index->dimension);
-        vector_index_json->set("distance_metric", String(magic_enum::enum_name(vector_index->distance_metric)));
+        vector_index_json->set("distance_metric", tipb::VectorDistanceMetric_Name(vector_index->distance_metric));
 
         json->set("vector_index", vector_index_json);
     }
@@ -470,22 +471,29 @@ try
     auto vector_index_json = json->getObject("vector_index");
     if (vector_index_json)
     {
-        vector_index = std::make_shared<VectorIndexInfo>();
+        tipb::VectorIndexKind kind = tipb::VectorIndexKind::INVALID_INDEX_KIND;
+        auto ok = tipb::VectorIndexKind_Parse( //
+            vector_index_json->getValue<String>("kind"),
+            &kind);
+        RUNTIME_CHECK(ok);
+        RUNTIME_CHECK(kind != tipb::VectorIndexKind::INVALID_INDEX_KIND);
 
-        auto vector_kind = magic_enum::enum_cast<VectorIndexKind>(vector_index_json->getValue<String>("kind"));
-        RUNTIME_CHECK(vector_kind.has_value());
-        RUNTIME_CHECK(vector_kind.value() != VectorIndexKind::INVALID);
-        vector_index->kind = vector_kind.value();
+        auto dimension = vector_index_json->getValue<UInt64>("dimension");
+        RUNTIME_CHECK(dimension > 0);
+        RUNTIME_CHECK(dimension <= 16000); // Just a protection
 
-        vector_index->dimension = vector_index_json->getValue<UInt64>("dimension");
-        RUNTIME_CHECK(vector_index->dimension > 0);
-        RUNTIME_CHECK(vector_index->dimension <= 16383); // Just a protection
+        tipb::VectorDistanceMetric distance_metric = tipb::VectorDistanceMetric::INVALID_DISTANCE_METRIC;
+        ok = tipb::VectorDistanceMetric_Parse( //
+            vector_index_json->getValue<String>("distance_metric"),
+            &distance_metric);
+        RUNTIME_CHECK(ok);
+        RUNTIME_CHECK(distance_metric != tipb::VectorDistanceMetric::INVALID_DISTANCE_METRIC);
 
-        auto distance_metric
-            = magic_enum::enum_cast<DistanceMetric>(vector_index_json->getValue<String>("distance_metric"));
-        RUNTIME_CHECK(distance_metric.has_value());
-        RUNTIME_CHECK(distance_metric.value() != DistanceMetric::INVALID);
-        vector_index->distance_metric = distance_metric.value();
+        vector_index = std::make_shared<const VectorIndexDefinition>(VectorIndexDefinition{
+            .kind = kind,
+            .dimension = dimension,
+            .distance_metric = distance_metric,
+        });
     }
 }
 catch (const Poco::Exception & e)

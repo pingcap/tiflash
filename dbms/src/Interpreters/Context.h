@@ -392,7 +392,7 @@ public:
     std::shared_ptr<DM::MinMaxIndexCache> getMinMaxIndexCache() const;
     void dropMinMaxIndexCache() const;
 
-    void setVectorIndexCache(size_t cache_size_in_bytes);
+    void setVectorIndexCache(size_t cache_entities);
     std::shared_ptr<DM::VectorIndexCache> getVectorIndexCache() const;
     void dropVectorIndexCache() const;
 
