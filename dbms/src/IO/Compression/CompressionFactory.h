@@ -37,9 +37,7 @@ extern const int UNKNOWN_COMPRESSION_METHOD;
 
 class CompressionFactory
 {
-#ifdef DBMS_PUBLIC_GTEST
 public:
-#endif
     static CompressionCodecPtr create(const CompressionSetting & setting)
     {
         switch (setting.method)
@@ -73,7 +71,6 @@ public:
         }
     }
 
-public:
     // Create codec for compressing/decompressing data with specified settings.
     static CompressionCodecPtr create(const CompressionSettings & settings)
     {
