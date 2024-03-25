@@ -156,7 +156,7 @@ void dbgFuncFindKey(Context & context, const ASTs & args, DBGInvoker::Printer ou
                 RegionBench::convertField(column_info, typeid_cast<const ASTLiteral &>(*args[OFFSET + i]).value),
                 column_info.tp);
             start_field.emplace_back(start_datum.field());
-            TiDB::DatumBumpy end_datum = TiDB::DatumBumpy(
+            auto end_datum = TiDB::DatumBumpy(
                 RegionBench::convertField(
                     column_info,
                     typeid_cast<const ASTLiteral &>(*args[OFFSET + key_size + i]).value),
