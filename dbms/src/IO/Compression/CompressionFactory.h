@@ -17,6 +17,7 @@
 #include <Common/config.h>
 #include <IO/Compression/CompressionCodecDelta.h>
 #include <IO/Compression/CompressionCodecLZ4.h>
+#include <IO/Compression/CompressionCodecMultiple.h>
 #include <IO/Compression/CompressionCodecNone.h>
 #include <IO/Compression/CompressionCodecRLE.h>
 #include <IO/Compression/CompressionCodecZSTD.h>
@@ -36,9 +37,10 @@ extern const int UNKNOWN_COMPRESSION_METHOD;
 
 class CompressionFactory
 {
+#ifdef DBMS_PUBLIC_GTEST
 public:
-    // Create codec for compressing data with specified settings.
-    static CompressionCodecPtr createForCompress(const CompressionSettings & settings)
+#endif
+    static CompressionCodecPtr createForCompress(const CompressionSetting & settings)
     {
         switch (settings.method)
         {
@@ -69,6 +71,23 @@ public:
                 "Unknown compression method byte: {:02x}",
                 static_cast<UInt16>(settings.method_byte));
         }
+    }
+
+public:
+    // Create codec for compressing data with specified settings.
+    static CompressionCodecPtr createForCompress(const CompressionSettings & settings)
+    {
+        if (settings.settings.size() > 1)
+        {
+            Codecs codecs;
+            codecs.reserve(settings.settings.size());
+            for (const auto & setting : settings.settings)
+            {
+                codecs.push_back(createForCompress(setting));
+            }
+            return std::make_shared<CompressionCodecMultiple>(std::move(codecs));
+        }
+        return createForCompress(settings.settings.front());
     }
 
     // Create codec for decompressing data with specified method byte.

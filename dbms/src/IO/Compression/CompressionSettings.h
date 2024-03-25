@@ -42,38 +42,66 @@ const std::unordered_map<CompressionMethodByte, CompressionMethod> method_map = 
     {CompressionMethodByte::RLE, CompressionMethod::NONE},
 };
 
-struct CompressionSettings
+struct CompressionSetting
 {
     CompressionMethod method;
     CompressionMethodByte method_byte;
     int level;
     UInt8 type_bytes_size = 1;
 
-    CompressionSettings()
-        : CompressionSettings(CompressionMethod::LZ4)
+    CompressionSetting()
+        : CompressionSetting(CompressionMethod::LZ4)
     {}
 
-    explicit CompressionSettings(CompressionMethod method_)
+    explicit CompressionSetting(CompressionMethod method_)
         : method(method_)
         , method_byte(method_byte_map[static_cast<size_t>(method_)])
         , level(getDefaultLevel(method))
     {}
 
-    explicit CompressionSettings(CompressionMethodByte method_byte_)
+    explicit CompressionSetting(CompressionMethodByte method_byte_)
         : method(method_map.at(method_byte_))
         , method_byte(method_byte_)
         , level(getDefaultLevel(method))
     {}
 
-    CompressionSettings(CompressionMethod method_, int level_)
+    CompressionSetting(CompressionMethod method_, int level_)
         : method(method_)
         , method_byte(method_byte_map[static_cast<size_t>(method_)])
         , level(level_)
     {}
 
-    explicit CompressionSettings(const Settings & settings);
+    explicit CompressionSetting(const Settings & settings);
 
     static int getDefaultLevel(CompressionMethod method);
+};
+
+struct CompressionSettings
+{
+    CompressionSettings()
+        : settings(1, CompressionSetting(CompressionMethod::LZ4))
+    {}
+    explicit CompressionSettings(CompressionMethod method_)
+        : settings(1, CompressionSetting(method_))
+    {}
+
+    explicit CompressionSettings(CompressionMethodByte method_byte_)
+        : settings(1, CompressionSetting(method_byte_))
+    {}
+
+    CompressionSettings(CompressionMethod method_, int level_)
+        : settings(1, CompressionSetting(method_, level_))
+    {}
+
+    explicit CompressionSettings(const Settings & settings)
+        : settings(1, CompressionSetting(settings))
+    {}
+
+    explicit CompressionSettings(const std::vector<CompressionSetting> & settings_)
+        : settings(settings_)
+    {}
+
+    std::vector<CompressionSetting> settings;
 };
 
 } // namespace DB

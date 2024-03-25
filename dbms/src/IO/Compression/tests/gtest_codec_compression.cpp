@@ -381,9 +381,9 @@ CodecTestSequence generateSeq(Generator gen, const char * gen_name, B Begin = 0,
 
 CompressionCodecPtr makeCodec(const CompressionMethodByte method_byte, UInt8 type_byte)
 {
-    CompressionSettings settings(method_byte);
-    settings.type_bytes_size = type_byte;
-    return CompressionFactory::createForCompress(settings);
+    CompressionSetting setting(method_byte);
+    setting.type_bytes_size = type_byte;
+    return CompressionFactory::createForCompress(setting);
 }
 
 void testTranscoding(ICompressionCodec & codec, const CodecTestSequence & test_sequence)
