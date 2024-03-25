@@ -17,7 +17,6 @@
 
 #include <Common/FailPoint.h>
 #include <Interpreters/Context.h>
-#include <Interpreters/Context_fwd.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
