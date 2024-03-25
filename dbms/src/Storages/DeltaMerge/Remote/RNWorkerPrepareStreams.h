@@ -16,6 +16,7 @@
 
 #include <Common/ThreadedWorker.h>
 #include <Interpreters/Context.h>
+#include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/Filter/PushDownFilter.h>
 #include <Storages/DeltaMerge/SegmentReadTask.h>
 

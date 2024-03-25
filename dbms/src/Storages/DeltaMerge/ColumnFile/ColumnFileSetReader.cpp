@@ -19,6 +19,7 @@
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileSetReader.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileTiny.h>
 #include <Storages/DeltaMerge/DMContext.h>
+#include <Storages/DeltaMerge/ScanContext.h>
 
 namespace DB
 {
@@ -79,6 +80,11 @@ std::pair<size_t, size_t> findColumnFile(const ColumnFiles & column_files, size_
 
     return {column_file_index, 0};
 }
+
+ColumnFileSetReader::ColumnFileSetReader(const DMContext & context_)
+    : context(context_)
+    , lac_bytes_collector(context_.scan_context ? context_.scan_context->resource_group_name : "")
+{}
 
 ColumnFileSetReader::ColumnFileSetReader(
     const DMContext & context_,
@@ -340,6 +346,7 @@ bool ColumnFileSetReader::shouldPlace(
 
     return false;
 }
+
 
 } // namespace DM
 } // namespace DB

@@ -44,6 +44,8 @@
 namespace DB
 {
 
+struct Settings;
+
 class Logger;
 using LoggerPtr = std::shared_ptr<Logger>;
 struct CheckpointInfo;
@@ -762,7 +764,7 @@ private:
      * This may be called from multiple threads, e.g. at the foreground write moment, or in background threads.
      * A `thread_type` should be specified indicating the type of the thread calling this function.
      * Depend on the thread type, the "update" to do may be varied.
-     * 
+     *
      * It returns a bool which indicates whether a flush of KVStore is recommended.
      */
     bool checkSegmentUpdate(
