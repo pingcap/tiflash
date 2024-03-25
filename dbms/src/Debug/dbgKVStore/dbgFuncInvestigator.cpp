@@ -51,7 +51,7 @@ struct MatchResult
     std::vector<UInt64> in_lock;
     std::unordered_map<UInt64, RegionPtr> regions;
 
-    std::string toString() const
+    String toString() const
     {
         FmtBuffer fmt_buf;
         fmt_buf.fmtAppend("default_cf ");
