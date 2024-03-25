@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include <Storages/DeltaMerge/DMContext.h>
+#include <Storages/DeltaMerge/DMContext_fwd.h>
 #include <Storages/DeltaMerge/Remote/DisaggTaskId.h>
 #include <Storages/DeltaMerge/Remote/Proto/remote.pb.h>
 #include <Storages/DeltaMerge/Remote/RNLocalPageCache.h>
@@ -82,16 +82,7 @@ public:
 
     ~SegmentReadTask();
 
-    GlobalSegmentID getGlobalSegmentID() const
-    {
-        return GlobalSegmentID{
-            .store_id = store_id,
-            .keyspace_id = dm_context->keyspace_id,
-            .physical_table_id = dm_context->physical_table_id,
-            .segment_id = segment->segmentId(),
-            .segment_epoch = segment->segmentEpoch(),
-        };
-    }
+    GlobalSegmentID getGlobalSegmentID() const;
 
     void addRange(const RowKeyRange & range);
 
@@ -114,6 +105,8 @@ public:
         RUNTIME_CHECK(input_stream != nullptr);
         return input_stream;
     }
+
+    String toString() const;
 
 #ifndef DBMS_PUBLIC_GTEST
 private:
@@ -168,27 +161,8 @@ struct fmt::formatter<DB::DM::SegmentReadTask>
     template <typename FormatContext>
     auto format(const DB::DM::SegmentReadTask & t, FormatContext & ctx) const
     {
-        if (t.dm_context->keyspace_id == DB::NullspaceID)
-        {
-            return fmt::format_to(
-                ctx.out(),
-                "s{}_t{}_{}_{}_{}",
-                t.store_id,
-                t.dm_context->physical_table_id,
-                t.segment->segmentId(),
-                t.segment->segmentEpoch(),
-                t.read_snapshot->delta->getDeltaIndexEpoch());
-        }
-        return fmt::format_to(
-            ctx.out(),
-            "s{}_ks{}_t{}_{}_{}_{}",
-            t.store_id,
-            t.dm_context->keyspace_id,
-            t.dm_context->physical_table_id,
-            t.segment->segmentId(),
-            t.segment->segmentEpoch(),
-            t.read_snapshot->delta->getDeltaIndexEpoch());
-    }
+        return fmt::format_to(ctx.out(), "{}", t.toString());
+    };
 };
 
 template <>

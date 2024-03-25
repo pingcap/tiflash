@@ -51,7 +51,7 @@ struct MatchResult
     std::vector<UInt64> in_lock;
     std::unordered_map<UInt64, RegionPtr> regions;
 
-    std::string toString() const
+    String toString() const
     {
         FmtBuffer fmt_buf;
         fmt_buf.fmtAppend("default_cf ");
@@ -153,11 +153,11 @@ void dbgFuncFindKey(Context & context, const ASTs & args, DBGInvoker::Printer ou
         for (size_t i = 0; i < handle_column_size; i++)
         {
             auto & column_info = table_info.columns[table_info.getPrimaryIndexInfo().idx_cols[i].offset];
-            TiDB::DatumBumpy start_datum = TiDB::DatumBumpy(
+            auto start_datum = TiDB::DatumBumpy(
                 RegionBench::convertField(column_info, typeid_cast<const ASTLiteral &>(*args[OFFSET + i]).value),
                 column_info.tp);
             start_field.emplace_back(start_datum.field());
-            TiDB::DatumBumpy end_datum = TiDB::DatumBumpy(
+            auto end_datum = TiDB::DatumBumpy(
                 RegionBench::convertField(
                     column_info,
                     typeid_cast<const ASTLiteral &>(*args[OFFSET + key_size + i]).value),
