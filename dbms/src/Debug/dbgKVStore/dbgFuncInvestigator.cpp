@@ -137,7 +137,8 @@ void dbgFuncFindKey(Context & context, const ASTs & args, DBGInvoker::Printer ou
         if ((arg_size & 1) != 0)
         {
             throw Exception(
-                "Args not matched for common handle table, arg_size={}, should be: database-name, table-name, start_col, [, start_col2, ..., end_col1, end_col2, ...]",
+                "Args not matched for common handle table, arg_size={}, should be: database-name, table-name, "
+                "start_col, [, start_col2, ..., end_col1, end_col2, ...]",
                 arg_size,
                 ErrorCodes::BAD_ARGUMENTS);
         }
