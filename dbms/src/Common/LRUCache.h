@@ -71,6 +71,14 @@ public:
         return res;
     }
 
+    /// Returns whether a specific key is in the LRU cache
+    /// without updating the LRU order.
+    bool contains(const Key & key)
+    {
+        std::lock_guard cache_lock(mutex);
+        return cells.find(key) != cells.end();
+    }
+
     void set(const Key & key, const MappedPtr & mapped)
     {
         std::lock_guard cache_lock(mutex);

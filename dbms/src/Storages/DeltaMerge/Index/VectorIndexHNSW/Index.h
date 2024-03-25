@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Storages/DeltaMerge/File/dtpb/dmfile.pb.h>
 #include <Storages/DeltaMerge/Index/VectorIndex.h>
 
 #if __clang__
@@ -26,48 +27,40 @@
 namespace DB::DM
 {
 
-using USearchImplType
-    = unum::usearch::index_dense_gt</* key_at */ VectorIndex::Key, /* compressed_slot_at */ VectorIndex::Key>;
+using USearchImplType = unum::usearch::
+    index_dense_gt</* key_at */ VectorIndexBuilder::Key, /* compressed_slot_at */ VectorIndexBuilder::Key>;
 
-template <unum::usearch::metric_kind_t Metric>
-class USearchIndexWithSerialization : public USearchImplType
-{
-    using Base = USearchImplType;
-
-public:
-    explicit USearchIndexWithSerialization(size_t dimensions);
-    void serialize(WriteBuffer & ostr) const;
-    void deserialize(ReadBuffer & istr);
-};
-
-template <unum::usearch::metric_kind_t Metric>
-using USearchIndexWithSerializationPtr = std::shared_ptr<USearchIndexWithSerialization<Metric>>;
-
-template <unum::usearch::metric_kind_t Metric>
-class VectorIndexHNSW : public VectorIndex
+class VectorIndexHNSWBuilder : public VectorIndexBuilder
 {
 public:
-    explicit VectorIndexHNSW(UInt32 dimensions_);
+    explicit VectorIndexHNSWBuilder(const TiDB::VectorIndexDefinitionPtr & definition_);
 
     void addBlock(const IColumn & column, const ColumnVector<UInt8> * del_mark) override;
 
-    void serializeBinary(WriteBuffer & ostr) const override;
-    static VectorIndexPtr deserializeBinary(ReadBuffer & istr);
+    void save(std::string_view path) const override;
 
-    size_t memoryUsage() const override { return index->memory_usage(); }
+private:
+    USearchImplType index;
+    UInt64 added_rows = 0; // Includes nulls and deletes. Used as the index key.
+};
+
+class VectorIndexHNSWViewer : public VectorIndexViewer
+{
+public:
+    static VectorIndexViewerPtr view(const dtpb::VectorIndexFileProps & props, std::string_view path);
+
+    explicit VectorIndexHNSWViewer(const dtpb::VectorIndexFileProps & props)
+        : VectorIndexViewer(props)
+    {}
 
     std::vector<Key> search( //
         const ANNQueryInfoPtr & queryInfo,
-        const RowFilter & valid_rows,
-        SearchStatistics & statistics) const override;
+        const RowFilter & valid_rows) const override;
 
     void get(Key key, std::vector<Float32> & out) const override;
 
 private:
-    const UInt32 dimensions;
-    const USearchIndexWithSerializationPtr<Metric> index;
-
-    UInt64 added_rows = 0; // Includes nulls and deletes. Used as the index key.
+    USearchImplType index;
 };
 
 } // namespace DB::DM

@@ -23,6 +23,10 @@
 
 #include <atomic>
 
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+#endif
 
 namespace DB::DM
 {
@@ -85,6 +89,7 @@ public:
     // Building bitmap
     std::atomic<uint64_t> build_bitmap_time_ns{0};
 
+    std::atomic<uint64_t> total_vector_idx_load_from_s3{0};
     std::atomic<uint64_t> total_vector_idx_load_from_disk{0};
     std::atomic<uint64_t> total_vector_idx_load_from_cache{0};
     std::atomic<uint64_t> total_vector_idx_load_time_ms{0};
@@ -102,21 +107,21 @@ public:
 
     void deserialize(const tipb::TiFlashScanContext & tiflash_scan_context_pb)
     {
-        total_dmfile_scanned_packs = tiflash_scan_context_pb.total_dmfile_scanned_packs();
-        total_dmfile_skipped_packs = tiflash_scan_context_pb.total_dmfile_skipped_packs();
-        total_dmfile_scanned_rows = tiflash_scan_context_pb.total_dmfile_scanned_rows();
-        total_dmfile_skipped_rows = tiflash_scan_context_pb.total_dmfile_skipped_rows();
-        total_dmfile_rough_set_index_check_time_ns
-            = tiflash_scan_context_pb.total_dmfile_rough_set_index_check_time_ms() * 1000000;
-        total_dmfile_read_time_ns = tiflash_scan_context_pb.total_dmfile_read_time_ms() * 1000000;
-        create_snapshot_time_ns = tiflash_scan_context_pb.total_create_snapshot_time_ms() * 1000000;
-        total_remote_region_num = tiflash_scan_context_pb.total_remote_region_num();
-        total_local_region_num = tiflash_scan_context_pb.total_local_region_num();
-        user_read_bytes = tiflash_scan_context_pb.total_user_read_bytes();
+        total_dmfile_scanned_packs = tiflash_scan_context_pb.dmfile_scanned_packs();
+        total_dmfile_skipped_packs = tiflash_scan_context_pb.dmfile_skipped_packs();
+        total_dmfile_scanned_rows = tiflash_scan_context_pb.dmfile_data_scanned_rows();
+        total_dmfile_skipped_rows = tiflash_scan_context_pb.dmfile_data_skipped_rows();
+        total_dmfile_rough_set_index_check_time_ns = tiflash_scan_context_pb.total_dmfile_rs_load_ms() * 1000000;
+        total_dmfile_read_time_ns = tiflash_scan_context_pb.total_dmfile_read_ms() * 1000000;
+        create_snapshot_time_ns = tiflash_scan_context_pb.total_build_snapshot_ms() * 1000000;
+        total_remote_region_num = tiflash_scan_context_pb.remote_regions();
+        total_local_region_num = tiflash_scan_context_pb.local_regions();
+        user_read_bytes = tiflash_scan_context_pb.user_read_bytes();
         learner_read_ns = tiflash_scan_context_pb.total_learner_read_ms() * 1000000;
-        disagg_read_cache_hit_size = tiflash_scan_context_pb.total_disagg_read_cache_hit_size();
-        disagg_read_cache_miss_size = tiflash_scan_context_pb.total_disagg_read_cache_miss_size();
+        disagg_read_cache_hit_size = tiflash_scan_context_pb.disagg_read_cache_hit_bytes();
+        disagg_read_cache_miss_size = tiflash_scan_context_pb.disagg_read_cache_miss_bytes();
 
+        total_vector_idx_load_from_s3 = tiflash_scan_context_pb.total_vector_idx_load_from_s3();
         total_vector_idx_load_from_disk = tiflash_scan_context_pb.total_vector_idx_load_from_disk();
         total_vector_idx_load_from_cache = tiflash_scan_context_pb.total_vector_idx_load_from_cache();
         total_vector_idx_load_time_ms = tiflash_scan_context_pb.total_vector_idx_load_time_ms();
@@ -130,21 +135,21 @@ public:
     tipb::TiFlashScanContext serialize()
     {
         tipb::TiFlashScanContext tiflash_scan_context_pb{};
-        tiflash_scan_context_pb.set_total_dmfile_scanned_packs(total_dmfile_scanned_packs);
-        tiflash_scan_context_pb.set_total_dmfile_skipped_packs(total_dmfile_skipped_packs);
-        tiflash_scan_context_pb.set_total_dmfile_scanned_rows(total_dmfile_scanned_rows);
-        tiflash_scan_context_pb.set_total_dmfile_skipped_rows(total_dmfile_skipped_rows);
-        tiflash_scan_context_pb.set_total_dmfile_rough_set_index_check_time_ms(
-            total_dmfile_rough_set_index_check_time_ns / 1000000);
-        tiflash_scan_context_pb.set_total_dmfile_read_time_ms(total_dmfile_read_time_ns / 1000000);
-        tiflash_scan_context_pb.set_total_create_snapshot_time_ms(create_snapshot_time_ns / 1000000);
-        tiflash_scan_context_pb.set_total_remote_region_num(total_remote_region_num);
-        tiflash_scan_context_pb.set_total_local_region_num(total_local_region_num);
-        tiflash_scan_context_pb.set_total_user_read_bytes(user_read_bytes);
+        tiflash_scan_context_pb.set_dmfile_scanned_packs(total_dmfile_scanned_packs);
+        tiflash_scan_context_pb.set_dmfile_skipped_packs(total_dmfile_skipped_packs);
+        tiflash_scan_context_pb.set_dmfile_data_scanned_rows(total_dmfile_scanned_rows);
+        tiflash_scan_context_pb.set_dmfile_data_skipped_rows(total_dmfile_skipped_rows);
+        tiflash_scan_context_pb.set_total_dmfile_rs_load_ms(total_dmfile_rough_set_index_check_time_ns / 1000000);
+        tiflash_scan_context_pb.set_total_dmfile_read_ms(total_dmfile_read_time_ns / 1000000);
+        tiflash_scan_context_pb.set_total_build_snapshot_ms(create_snapshot_time_ns / 1000000);
+        tiflash_scan_context_pb.set_remote_regions(total_remote_region_num);
+        tiflash_scan_context_pb.set_local_regions(total_local_region_num);
+        tiflash_scan_context_pb.set_user_read_bytes(user_read_bytes);
         tiflash_scan_context_pb.set_total_learner_read_ms(learner_read_ns / 1000000);
-        tiflash_scan_context_pb.set_total_disagg_read_cache_hit_size(disagg_read_cache_hit_size);
-        tiflash_scan_context_pb.set_total_disagg_read_cache_miss_size(disagg_read_cache_miss_size);
+        tiflash_scan_context_pb.set_disagg_read_cache_hit_bytes(disagg_read_cache_hit_size);
+        tiflash_scan_context_pb.set_disagg_read_cache_miss_bytes(disagg_read_cache_miss_size);
 
+        tiflash_scan_context_pb.set_total_vector_idx_load_from_s3(total_vector_idx_load_from_s3);
         tiflash_scan_context_pb.set_total_vector_idx_load_from_disk(total_vector_idx_load_from_disk);
         tiflash_scan_context_pb.set_total_vector_idx_load_from_cache(total_vector_idx_load_from_cache);
         tiflash_scan_context_pb.set_total_vector_idx_load_time_ms(total_vector_idx_load_time_ms);
@@ -185,6 +190,7 @@ public:
         mvcc_input_bytes += other.mvcc_input_bytes;
         mvcc_output_rows += other.mvcc_output_rows;
 
+        total_vector_idx_load_from_s3 += other.total_vector_idx_load_from_s3;
         total_vector_idx_load_from_disk += other.total_vector_idx_load_from_disk;
         total_vector_idx_load_from_cache += other.total_vector_idx_load_from_cache;
         total_vector_idx_load_time_ms += other.total_vector_idx_load_time_ms;
@@ -197,20 +203,21 @@ public:
 
     void merge(const tipb::TiFlashScanContext & other)
     {
-        total_dmfile_scanned_packs += other.total_dmfile_scanned_packs();
-        total_dmfile_skipped_packs += other.total_dmfile_skipped_packs();
-        total_dmfile_scanned_rows += other.total_dmfile_scanned_rows();
-        total_dmfile_skipped_rows += other.total_dmfile_skipped_rows();
-        total_dmfile_rough_set_index_check_time_ns += other.total_dmfile_rough_set_index_check_time_ms() * 1000000;
-        total_dmfile_read_time_ns += other.total_dmfile_read_time_ms() * 1000000;
-        create_snapshot_time_ns += other.total_create_snapshot_time_ms() * 1000000;
-        total_local_region_num += other.total_local_region_num();
-        total_remote_region_num += other.total_remote_region_num();
-        user_read_bytes += other.total_user_read_bytes();
+        total_dmfile_scanned_packs += other.dmfile_scanned_packs();
+        total_dmfile_skipped_packs += other.dmfile_skipped_packs();
+        total_dmfile_scanned_rows += other.dmfile_data_scanned_rows();
+        total_dmfile_skipped_rows += other.dmfile_data_skipped_rows();
+        total_dmfile_rough_set_index_check_time_ns += other.total_dmfile_rs_load_ms() * 1000000;
+        total_dmfile_read_time_ns += other.total_dmfile_read_ms() * 1000000;
+        create_snapshot_time_ns += other.total_build_snapshot_ms() * 1000000;
+        total_local_region_num += other.remote_regions();
+        total_remote_region_num += other.local_regions();
+        user_read_bytes += other.user_read_bytes();
         learner_read_ns += other.total_learner_read_ms() * 1000000;
-        disagg_read_cache_hit_size += other.total_disagg_read_cache_hit_size();
-        disagg_read_cache_miss_size += other.total_disagg_read_cache_miss_size();
+        disagg_read_cache_hit_size += other.disagg_read_cache_hit_bytes();
+        disagg_read_cache_miss_size += other.disagg_read_cache_miss_bytes();
 
+        total_vector_idx_load_from_s3 += other.total_vector_idx_load_from_s3();
         total_vector_idx_load_from_disk += other.total_vector_idx_load_from_disk();
         total_vector_idx_load_from_cache += other.total_vector_idx_load_from_cache();
         total_vector_idx_load_time_ms += other.total_vector_idx_load_time_ms();
