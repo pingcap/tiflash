@@ -49,7 +49,7 @@ namespace
 {
 
 template <typename T>
-void compressDataForType(const char * source, UInt32 source_size, char * dest)
+size_t compressDataForType(const char * source, UInt32 source_size, char * dest)
 {
     if (source_size % sizeof(T) != 0)
         throw Exception(
@@ -58,11 +58,12 @@ void compressDataForType(const char * source, UInt32 source_size, char * dest)
             source_size,
             sizeof(T));
 
+    const size_t count = source_size / sizeof(T);
 
     UInt8 width = BitpackingPrimitives::minimumBitWidth<T, false>(reinterpret_cast<const T *>(source), source_size);
     unalignedStore<UInt8>(dest, width);
     dest += sizeof(UInt8);
-    size_t required_size = BitpackingPrimitives::getRequiredSize(static_cast<size_t>(source_size / sizeof(T)), width);
+    size_t required_size = BitpackingPrimitives::getRequiredSize(count, width);
     if unlikely (required_size > source_size)
         throw Exception(
             ErrorCodes::CANNOT_COMPRESS,
@@ -73,8 +74,9 @@ void compressDataForType(const char * source, UInt32 source_size, char * dest)
     BitpackingPrimitives::packBuffer<T, false>(
         reinterpret_cast<unsigned char *>(dest),
         reinterpret_cast<const T *>(source),
-        source_size / sizeof(T),
+        count,
         width);
+    return 1 + required_size;
 }
 
 template <typename T>
@@ -106,21 +108,16 @@ UInt32 CompressionCodecBitPacking::doCompressData(const char * source, UInt32 so
     switch (bytes_size)
     {
     case 1:
-        compressDataForType<UInt8>(source + bytes_to_skip, source_size - bytes_to_skip, &dest[start_pos]);
-        break;
+        return 1 + compressDataForType<UInt8>(source + bytes_to_skip, source_size - bytes_to_skip, &dest[start_pos]);
     case 2:
-        compressDataForType<UInt16>(source + bytes_to_skip, source_size - bytes_to_skip, &dest[start_pos]);
-        break;
+        return 1 + compressDataForType<UInt16>(source + bytes_to_skip, source_size - bytes_to_skip, &dest[start_pos]);
     case 4:
-        compressDataForType<UInt32>(source + bytes_to_skip, source_size - bytes_to_skip, &dest[start_pos]);
-        break;
+        return 1 + compressDataForType<UInt32>(source + bytes_to_skip, source_size - bytes_to_skip, &dest[start_pos]);
     case 8:
-        compressDataForType<UInt64>(source + bytes_to_skip, source_size - bytes_to_skip, &dest[start_pos]);
-        break;
+        return 1 + compressDataForType<UInt64>(source + bytes_to_skip, source_size - bytes_to_skip, &dest[start_pos]);
     default:
         __builtin_unreachable();
     }
-    return 1 + source_size;
 }
 
 void CompressionCodecBitPacking::doDecompressData(
