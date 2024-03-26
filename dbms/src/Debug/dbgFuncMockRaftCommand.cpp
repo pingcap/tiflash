@@ -14,9 +14,15 @@
 
 #include <Common/typeid_cast.h>
 #include <Debug/DBGInvoker.h>
+#include <Debug/MockKVStore/MockTiKV.h>
 #include <Debug/MockTiDB.h>
+<<<<<<< HEAD:dbms/src/Debug/dbgFuncMockRaftCommand.cpp
 #include <Debug/MockTiKV.h>
 #include <Debug/dbgFuncMockRaftCommand.h>
+=======
+#include <Debug/dbgKVStore/dbgFuncMockRaftCommand.h>
+#include <Debug/dbgTools.h>
+>>>>>>> ce8ae39fb9 (Debug: Add find key debug invoker (#8853)):dbms/src/Debug/dbgKVStore/dbgFuncMockRaftCommand.cpp
 #include <Interpreters/Context.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>

@@ -15,11 +15,19 @@
 #include <Common/FailPoint.h>
 #include <Common/FmtUtils.h>
 #include <Common/typeid_cast.h>
+<<<<<<< HEAD:dbms/src/Debug/dbgFuncMockRaftSnapshot.cpp
 #include <Debug/MockSSTReader.h>
 #include <Debug/MockTiDB.h>
 #include <Debug/MockTiKV.h>
 #include <Debug/dbgFuncMockRaftCommand.h>
 #include <Debug/dbgFuncRegion.h>
+=======
+#include <Debug/MockKVStore/MockSSTReader.h>
+#include <Debug/MockKVStore/MockTiKV.h>
+#include <Debug/MockTiDB.h>
+#include <Debug/dbgKVStore/dbgFuncMockRaftCommand.h>
+#include <Debug/dbgKVStore/dbgFuncRegion.h>
+>>>>>>> ce8ae39fb9 (Debug: Add find key debug invoker (#8853)):dbms/src/Debug/dbgKVStore/dbgFuncMockRaftSnapshot.cpp
 #include <Debug/dbgTools.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterCreateQuery.h>

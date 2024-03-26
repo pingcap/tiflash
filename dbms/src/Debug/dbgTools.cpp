@@ -13,8 +13,13 @@
 // limitations under the License.
 
 #include <Common/typeid_cast.h>
+#include <Debug/MockKVStore/MockTiKV.h>
 #include <Debug/MockTiDB.h>
+<<<<<<< HEAD
 #include <Debug/MockTiKV.h>
+=======
+#include <Debug/dbgKVStore/dbgKVStore.h>
+>>>>>>> ce8ae39fb9 (Debug: Add find key debug invoker (#8853))
 #include <Debug/dbgTools.h>
 #include <Interpreters/Context.h>
 #include <Parsers/ASTLiteral.h>
