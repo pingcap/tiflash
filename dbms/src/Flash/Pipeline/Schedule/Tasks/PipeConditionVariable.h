@@ -31,8 +31,8 @@ public:
         assert(task->getStatus() == ExecTaskStatus::WAIT_FOR_NOTIFY);
         tasks.push_back(std::move(task));
 
-#ifdef __APPLE__
-        auto & metrics = GET_METRIC(tiflash_pipeline_scheduler, type_wait_for_notify_tasks_count);
+#if __APPLE__ && __clang__
+    __thread auto & metrics = GET_METRIC(tiflash_pipeline_scheduler, type_wait_for_notify_tasks_count);
 #else
         thread_local auto & metrics = GET_METRIC(tiflash_pipeline_scheduler, type_wait_for_notify_tasks_count);
 #endif
@@ -47,8 +47,8 @@ public:
             tasks.pop_front();
             notifyTaskDirectly(std::move(task));
 
-#ifdef __APPLE__
-            auto & metrics = GET_METRIC(tiflash_pipeline_scheduler, type_wait_for_notify_tasks_count);
+#if __APPLE__ && __clang__
+    __thread auto & metrics = GET_METRIC(tiflash_pipeline_scheduler, type_wait_for_notify_tasks_count);
 #else
             thread_local auto & metrics = GET_METRIC(tiflash_pipeline_scheduler, type_wait_for_notify_tasks_count);
 #endif
@@ -66,8 +66,8 @@ public:
             notifyTaskDirectly(std::move(task));
         }
 
-#ifdef __APPLE__
-        auto & metrics = GET_METRIC(tiflash_pipeline_scheduler, type_wait_for_notify_tasks_count);
+#if __APPLE__ && __clang__
+    __thread auto & metrics = GET_METRIC(tiflash_pipeline_scheduler, type_wait_for_notify_tasks_count);
 #else
         thread_local auto & metrics = GET_METRIC(tiflash_pipeline_scheduler, type_wait_for_notify_tasks_count);
 #endif

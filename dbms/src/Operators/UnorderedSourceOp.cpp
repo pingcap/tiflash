@@ -79,7 +79,7 @@ ReturnOpStatus UnorderedSourceOp::doFetchBlock()
     while (true)
     {
         if (!task_pool->tryPopBlock(t_block))
-            return {notify_future};
+            return notify_future;
         if (t_block)
         {
             if unlikely (t_block.rows() == 0)
