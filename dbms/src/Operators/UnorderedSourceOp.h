@@ -17,28 +17,12 @@
 #include <Common/Logger.h>
 #include <DataStreams/AddExtraTableIDColumnTransformAction.h>
 #include <Flash/Coprocessor/RuntimeFilterMgr.h>
-#include <Flash/Pipeline/Schedule/Tasks/NotifyFuture.h>
 #include <Operators/Operator.h>
 #include <Storages/DeltaMerge/ReadThread/SegmentReadTaskScheduler.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 
 namespace DB
 {
-class ScanNotifyFuture : public NotifyFuture
-{
-public:
-    explicit ScanNotifyFuture(const DM::SegmentReadTaskPoolPtr & task_pool_)
-        : task_pool(task_pool_)
-    {
-        assert(task_pool);
-    }
-
-    void registerTask(TaskPtr && task) override { task_pool->registerPipeTask(std::move(task)); }
-
-private:
-    DM::SegmentReadTaskPoolPtr task_pool;
-};
-
 /// Read blocks asyncly from Storage Layer by using read thread,
 /// The result can not guarantee the keep_order property
 class UnorderedSourceOp : public SourceOp
@@ -51,17 +35,7 @@ public:
         int extra_table_id_index_,
         const String & req_id,
         const RuntimeFilteList & runtime_filter_list_ = std::vector<RuntimeFilterPtr>{},
-        int max_wait_time_ms_ = 0)
-        : SourceOp(exec_context_, req_id)
-        , task_pool(task_pool_)
-        , ref_no(0)
-        , notify_future(std::make_shared<ScanNotifyFuture>(task_pool_))
-        , waiting_rf_list(runtime_filter_list_)
-        , max_wait_time_ms(max_wait_time_ms_)
-    {
-        setHeader(AddExtraTableIDColumnTransformAction::buildHeader(columns_to_read_, extra_table_id_index_));
-        ref_no = task_pool->increaseUnorderedInputStreamRefCount();
-    }
+        int max_wait_time_ms_ = 0);
 
     ~UnorderedSourceOp() override
     {

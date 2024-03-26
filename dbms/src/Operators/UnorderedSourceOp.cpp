@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Flash/Pipeline/Schedule/TaskScheduler.h>
+#include <Flash/Pipeline/Schedule/Tasks/NotifyFuture.h>
 #include <Flash/Pipeline/Schedule/Tasks/RFWaitTask.h>
 #include <Operators/UnorderedSourceOp.h>
 
@@ -20,6 +21,45 @@
 
 namespace DB
 {
+namespace
+{
+class ScanNotifyFuture : public NotifyFuture
+{
+public:
+    explicit ScanNotifyFuture(const DM::SegmentReadTaskPoolPtr & task_pool_)
+        : task_pool(task_pool_)
+    {
+        assert(task_pool);
+    }
+
+    ~ScanNotifyFuture() override = default;
+
+    void registerTask(TaskPtr && task) override { task_pool->registerPipeTask(std::move(task)); }
+
+private:
+    DM::SegmentReadTaskPoolPtr task_pool;
+};
+}; // namespace
+
+UnorderedSourceOp::UnorderedSourceOp(
+    PipelineExecutorContext & exec_context_,
+    const DM::SegmentReadTaskPoolPtr & task_pool_,
+    const DM::ColumnDefines & columns_to_read_,
+    int extra_table_id_index_,
+    const String & req_id,
+    const RuntimeFilteList & runtime_filter_list_,
+    int max_wait_time_ms_)
+    : SourceOp(exec_context_, req_id)
+    , task_pool(task_pool_)
+    , ref_no(0)
+    , notify_future(std::make_shared<ScanNotifyFuture>(task_pool_))
+    , waiting_rf_list(runtime_filter_list_)
+    , max_wait_time_ms(max_wait_time_ms_)
+{
+    setHeader(AddExtraTableIDColumnTransformAction::buildHeader(columns_to_read_, extra_table_id_index_));
+    ref_no = task_pool->increaseUnorderedInputStreamRefCount();
+}
+
 ReturnOpStatus UnorderedSourceOp::readImpl(Block & block)
 {
     if unlikely (done)

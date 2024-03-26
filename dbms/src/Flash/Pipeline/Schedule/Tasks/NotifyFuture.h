@@ -20,9 +20,9 @@ namespace DB
 {
 struct NotifyFuture
 {
+    NotifyFuture() = default;
     virtual ~NotifyFuture() = default;
-    virtual void registerTask(TaskPtr && task);
+    virtual void registerTask(TaskPtr && task) = 0;
 };
 using NotifyFuturePtr = std::shared_ptr<NotifyFuture>;
-
 } // namespace DB
