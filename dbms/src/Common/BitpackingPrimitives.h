@@ -47,7 +47,11 @@ public:
 
     // Unpacks a block of BITPACKING_ALGORITHM_GROUP_SIZE values
     template <typename T>
-    static void unPackBlock(unsigned char * dst, const unsigned char * src, UInt8 width, bool skip_sign_extension = false);
+    static void unPackBlock(
+        unsigned char * dst,
+        const unsigned char * src,
+        UInt8 width,
+        bool skip_sign_extension = false);
 
     // Calculates the minimum required number of bits per value that can store all values
     template <typename T, bool is_signed = std::numeric_limits<T>::IsSigned()>
@@ -86,7 +90,11 @@ private:
     static void packGroup(unsigned char * dst, const T * values, UInt8 width);
 
     template <typename T>
-    static void unPackGroup(unsigned char * dst, const unsigned char * src, UInt8 width, bool skip_sign_extension = false);
+    static void unPackGroup(
+        unsigned char * dst,
+        const unsigned char * src,
+        UInt8 width,
+        bool skip_sign_extension = false);
 };
 
 } // namespace DB
