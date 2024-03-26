@@ -30,7 +30,7 @@ public:
         tasks.push_back(std::move(task));
     }
 
-    void notifyOne()
+    bool notifyOne()
     {
         if (!tasks.empty())
         {
@@ -40,7 +40,14 @@ public:
             task->profile_info.elapsedWaitForNotifyTime();
             GET_METRIC(tiflash_pipeline_scheduler, type_wait_for_notify_tasks_count).Decrement();
             TaskScheduler::instance->submitToCPUTaskThreadPool(std::move(task));
+            return true;
         }
+        return false;
+    }
+
+    void notifyAll()
+    {
+        while (notifyOne()) {}
     }
 
 private:

@@ -68,7 +68,9 @@ public:
     {
         std::lock_guard lock(mu);
         pipe_cv.registerTask(std::move(task));
-        if (!queue.empty() || done)
+        if (done)
+            pipe_cv.notifyAll();
+        if (!queue.empty())
             pipe_cv.notifyOne();
     }
 
@@ -92,7 +94,7 @@ public:
             }
             if (done)
             {
-                pipe_cv.notifyOne();
+                pipe_cv.notifyAll();
                 return false;
             }
             queue.push(std::forward<U>(item));
@@ -194,6 +196,7 @@ public:
             std::lock_guard lock(mu);
             assert(!done);
             done = true;
+            pipe_cv.notifyAll();
         }
         reader_cv.notify_all();
         writer_cv.notify_all();
