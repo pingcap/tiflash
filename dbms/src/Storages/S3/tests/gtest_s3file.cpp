@@ -25,6 +25,7 @@
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
 #include <Storages/DeltaMerge/File/DMFileWriter.h>
 #include <Storages/DeltaMerge/Remote/DataStore/DataStoreS3.h>
+#include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
 #include <Storages/Page/V3/CheckpointFile/CPDataFileStat.h>
 #include <Storages/Page/V3/CheckpointFile/CheckpointFiles.h>

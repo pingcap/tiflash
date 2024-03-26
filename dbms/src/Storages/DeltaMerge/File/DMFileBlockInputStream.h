@@ -158,14 +158,8 @@ public:
 private:
     // These methods are called by the ctor
 
-    DMFileBlockInputStreamBuilder & setFromSettings(const Settings & settings)
-    {
-        enable_column_cache = settings.dt_enable_stable_column_cache;
-        max_read_buffer_size = settings.max_read_buffer_size;
-        max_sharing_column_bytes_for_all = settings.dt_max_sharing_column_bytes_for_all;
-        max_sharing_column_count = settings.dt_max_sharing_column_count;
-        return *this;
-    }
+    DMFileBlockInputStreamBuilder & setFromSettings(const Settings & settings);
+
     DMFileBlockInputStreamBuilder & setCaches(
         const MarkCachePtr & mark_cache_,
         const MinMaxIndexCachePtr & index_cache_)
@@ -198,7 +192,6 @@ private:
     size_t rows_threshold_per_read = DMFILE_READ_ROWS_THRESHOLD;
     bool read_one_pack_every_time = false;
     size_t max_sharing_column_bytes_for_all = 0;
-    size_t max_sharing_column_count = 0;
     String tracing_id;
     ReadTag read_tag = ReadTag::Internal;
 };
@@ -211,22 +204,9 @@ private:
  * @param cols The columns to read. Empty means read all columns.
  * @return A shared pointer of an input stream
  */
-inline DMFileBlockInputStreamPtr createSimpleBlockInputStream(
+DMFileBlockInputStreamPtr createSimpleBlockInputStream(
     const DB::Context & context,
     const DMFilePtr & file,
-    ColumnDefines cols = {})
-{
-    // disable clean read is needed, since we just want to read all data from the file, and we do not know about the column handle
-    // enable read_one_pack_every_time_ is needed to preserve same block structure as the original file
-    DMFileBlockInputStreamBuilder builder(context);
-    if (cols.empty())
-    {
-        // turn into read all columns from file
-        cols = file->getColumnDefines();
-    }
-    return builder.setRowsThreshold(DMFILE_READ_ROWS_THRESHOLD)
-        .onlyReadOnePackEveryTime()
-        .build(file, cols, DB::DM::RowKeyRanges{}, std::make_shared<ScanContext>());
-}
+    ColumnDefines cols = {});
 
 } // namespace DB::DM
