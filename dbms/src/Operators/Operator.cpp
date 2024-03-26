@@ -50,10 +50,10 @@ OperatorStatus Operator::await()
     // `exec_context.is_cancelled` has been checked by `EventTask`.
     // If `exec_context.is_cancelled` is checked here, the overhead of `exec_context.is_cancelled` will be amplified by the high frequency of `await` calls.
 
-    auto return_status = awaitImpl();
+    auto op_status = awaitImpl();
 #ifndef NDEBUG
     assertOperatorStatus(
-        return_status.status,
+        op_status,
         {OperatorStatus::FINISHED, OperatorStatus::NEED_INPUT, OperatorStatus::HAS_OUTPUT});
 #endif
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_operator_run_failpoint);
@@ -68,28 +68,28 @@ OperatorStatus Operator::await()
     //             ┌────────────────waiting time───────────┐
     // [non-waiting, waiting, waiting, waiting, .., waiting, non-waiting]
 
-    if (return_status.status != OperatorStatus::WAITING)
+    if (op_status != OperatorStatus::WAITING)
     {
         exec_context.triggerAutoSpill();
         profile_info.update();
     }
-    return return_status;
+    return op_status;
 }
 
 OperatorStatus Operator::executeIO()
 {
     CHECK_IS_CANCELLED
     profile_info.anchor();
-    auto return_status = executeIOImpl();
+    auto op_status = executeIOImpl();
 #ifndef NDEBUG
     assertOperatorStatus(
-        return_status.status,
+        op_status,
         {OperatorStatus::FINISHED, OperatorStatus::NEED_INPUT, OperatorStatus::HAS_OUTPUT});
 #endif
     exec_context.triggerAutoSpill();
     profile_info.update();
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_operator_run_failpoint);
-    return return_status;
+    return op_status;
 }
 
 OperatorStatus SourceOp::read(Block & block)
@@ -97,44 +97,44 @@ OperatorStatus SourceOp::read(Block & block)
     CHECK_IS_CANCELLED
     profile_info.anchor();
     assert(!block);
-    auto return_status = readImpl(block);
+    auto op_status = readImpl(block);
 #ifndef NDEBUG
-    if (return_status.status == OperatorStatus::HAS_OUTPUT && block)
+    if (op_status == OperatorStatus::HAS_OUTPUT && block)
     {
         Block header = getHeader();
         assertBlocksHaveEqualStructure(block, header, getName());
     }
-    assertOperatorStatus(return_status.status, {OperatorStatus::HAS_OUTPUT});
+    assertOperatorStatus(op_status, {OperatorStatus::HAS_OUTPUT});
 #endif
     exec_context.triggerAutoSpill();
-    if (return_status.status == OperatorStatus::HAS_OUTPUT)
+    if (op_status == OperatorStatus::HAS_OUTPUT)
         profile_info.update(block);
     else
         profile_info.update();
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_operator_run_failpoint);
-    return return_status;
+    return op_status;
 }
 
 OperatorStatus TransformOp::transform(Block & block)
 {
     CHECK_IS_CANCELLED
     profile_info.anchor();
-    auto return_status = transformImpl(block);
+    auto op_status = transformImpl(block);
 #ifndef NDEBUG
-    if (return_status.status == OperatorStatus::HAS_OUTPUT && block)
+    if (op_status == OperatorStatus::HAS_OUTPUT && block)
     {
         Block header = getHeader();
         assertBlocksHaveEqualStructure(block, header, getName());
     }
-    assertOperatorStatus(return_status.status, {OperatorStatus::NEED_INPUT, OperatorStatus::HAS_OUTPUT});
+    assertOperatorStatus(op_status, {OperatorStatus::NEED_INPUT, OperatorStatus::HAS_OUTPUT});
 #endif
     exec_context.triggerAutoSpill();
-    if (return_status.status == OperatorStatus::HAS_OUTPUT)
+    if (op_status == OperatorStatus::HAS_OUTPUT)
         profile_info.update(block);
     else
         profile_info.update();
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_operator_run_failpoint);
-    return return_status;
+    return op_status;
 }
 
 OperatorStatus TransformOp::tryOutput(Block & block)
@@ -142,35 +142,35 @@ OperatorStatus TransformOp::tryOutput(Block & block)
     CHECK_IS_CANCELLED
     profile_info.anchor();
     assert(!block);
-    auto return_status = tryOutputImpl(block);
+    auto op_status = tryOutputImpl(block);
 #ifndef NDEBUG
-    if (return_status.status == OperatorStatus::HAS_OUTPUT && block)
+    if (op_status == OperatorStatus::HAS_OUTPUT && block)
     {
         Block header = getHeader();
         assertBlocksHaveEqualStructure(block, header, getName());
     }
-    assertOperatorStatus(return_status.status, {OperatorStatus::NEED_INPUT, OperatorStatus::HAS_OUTPUT});
+    assertOperatorStatus(op_status, {OperatorStatus::NEED_INPUT, OperatorStatus::HAS_OUTPUT});
 #endif
     exec_context.triggerAutoSpill();
-    if (return_status.status == OperatorStatus::HAS_OUTPUT)
+    if (op_status == OperatorStatus::HAS_OUTPUT)
         profile_info.update(block);
     else
         profile_info.update();
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_operator_run_failpoint);
-    return return_status;
+    return op_status;
 }
 
 OperatorStatus SinkOp::prepare()
 {
     CHECK_IS_CANCELLED
     profile_info.anchor();
-    auto return_status = prepareImpl();
+    auto op_status = prepareImpl();
 #ifndef NDEBUG
-    assertOperatorStatus(return_status.status, {OperatorStatus::NEED_INPUT});
+    assertOperatorStatus(op_status, {OperatorStatus::NEED_INPUT});
 #endif
     profile_info.update();
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_operator_run_failpoint);
-    return return_status;
+    return op_status;
 }
 
 OperatorStatus SinkOp::write(Block && block)
@@ -184,14 +184,14 @@ OperatorStatus SinkOp::write(Block && block)
         assertBlocksHaveEqualStructure(block, header, getName());
     }
 #endif
-    auto return_status = writeImpl(std::move(block));
+    auto op_status = writeImpl(std::move(block));
 #ifndef NDEBUG
-    assertOperatorStatus(return_status.status, {OperatorStatus::FINISHED, OperatorStatus::NEED_INPUT});
+    assertOperatorStatus(op_status, {OperatorStatus::FINISHED, OperatorStatus::NEED_INPUT});
 #endif
     exec_context.triggerAutoSpill();
     profile_info.update();
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_operator_run_failpoint);
-    return return_status;
+    return op_status;
 }
 
 #undef CHECK_IS_CANCELLED
