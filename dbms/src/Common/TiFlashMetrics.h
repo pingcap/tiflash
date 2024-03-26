@@ -722,6 +722,7 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       "pipeline scheduler",                                                                                                         \
       Gauge,                                                                                                                        \
       F(type_waiting_tasks_count, {"type", "waiting_tasks_count"}),                                                                 \
+      F(type_wait_for_notify_tasks_count, {"type", "wait_for_notify_tasks_count"}),                                                 \
       F(type_cpu_pending_tasks_count, {"type", "cpu_pending_tasks_count"}),                                                         \
       F(type_cpu_executing_tasks_count, {"type", "cpu_executing_tasks_count"}),                                                     \
       F(type_io_pending_tasks_count, {"type", "io_pending_tasks_count"}),                                                           \
@@ -735,7 +736,8 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_io_execute, {{"type", "io_execute"}}, ExpBuckets{0.005, 2, 20}),                                                       \
       F(type_cpu_queue, {{"type", "cpu_queue"}}, ExpBuckets{0.005, 2, 20}),                                                         \
       F(type_io_queue, {{"type", "io_queue"}}, ExpBuckets{0.005, 2, 20}),                                                           \
-      F(type_await, {{"type", "await"}}, ExpBuckets{0.005, 2, 20}))                                                                 \
+      F(type_await, {{"type", "await"}}, ExpBuckets{0.005, 2, 20}),                                                                 \
+      F(type_wait_for_notify, {{"type", "wait_for_notify"}}, ExpBuckets{0.005, 2, 20}))                                             \
     M(tiflash_pipeline_task_execute_max_time_seconds_per_round,                                                                     \
       "Bucketed histogram of pipeline task execute max time per round in seconds",                                                  \
       Histogram, /* these command usually cost several hundred milliseconds to several seconds, increase the start bucket to 5ms */ \

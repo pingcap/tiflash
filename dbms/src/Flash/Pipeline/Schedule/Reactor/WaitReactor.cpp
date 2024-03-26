@@ -30,6 +30,7 @@ WaitReactor::WaitReactor(TaskScheduler & scheduler_)
     : scheduler(scheduler_)
 {
     GET_METRIC(tiflash_pipeline_scheduler, type_waiting_tasks_count).Set(0);
+    GET_METRIC(tiflash_pipeline_scheduler, type_wait_for_notify_tasks_count).Set(0);
     thread = std::thread(&WaitReactor::loop, this);
 }
 

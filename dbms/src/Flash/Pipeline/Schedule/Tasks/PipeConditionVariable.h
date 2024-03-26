@@ -25,6 +25,7 @@ class PipeConditionVariable
 public:
     void registerTask(TaskPtr && task)
     {
+        GET_METRIC(tiflash_pipeline_scheduler, type_wait_for_notify_tasks_count).Increment();
         assert(task->getStatus() == ExecTaskStatus::WAIT_FOR_NOTIFY);
         tasks.push_back(std::move(task));
     }
@@ -36,6 +37,8 @@ public:
             auto task = std::move(tasks.back());
             tasks.pop_back();
             task->notify();
+            task->profile_info.elapsedWaitForNotifyTime();
+            GET_METRIC(tiflash_pipeline_scheduler, type_wait_for_notify_tasks_count).Decrement();
             TaskScheduler::instance->submitToCPUTaskThreadPool(std::move(task));
         }
     }

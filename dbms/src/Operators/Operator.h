@@ -16,7 +16,6 @@
 
 #include <Common/Logger.h>
 #include <Core/Block.h>
-#include <Flash/Pipeline/Schedule/Tasks/NotifyFuture.h>
 #include <Operators/IOProfileInfo.h>
 #include <Operators/OperatorProfileInfo.h>
 
@@ -51,6 +50,9 @@ enum class OperatorStatus
 
 class PipelineExecutorContext;
 
+struct NotifyFuture;
+using NotifyFuturePtr = std::shared_ptr<NotifyFuture>;
+
 struct ReturnOpStatus
 {
     ReturnOpStatus(OperatorStatus status_) // NOLINT(google-explicit-constructor)
@@ -60,7 +62,7 @@ struct ReturnOpStatus
         assert(status != OperatorStatus::WAIT_FOR_NOTIFY);
     }
 
-    ReturnOpStatus(NotifyFuturePtr && furture_) // NOLINT(google-explicit-constructor)
+    ReturnOpStatus(NotifyFuturePtr furture_) // NOLINT(google-explicit-constructor)
         : status(OperatorStatus::WAIT_FOR_NOTIFY)
         , future(std::move(furture_))
     {

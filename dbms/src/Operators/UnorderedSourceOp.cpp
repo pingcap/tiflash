@@ -25,23 +25,21 @@ ReturnOpStatus UnorderedSourceOp::readImpl(Block & block)
     if unlikely (done)
         return OperatorStatus::HAS_OUTPUT;
 
-    auto await_status = awaitImpl();
+    auto await_status = doFetchBlock();
     if (await_status.status == OperatorStatus::HAS_OUTPUT)
         std::swap(block, t_block);
     return await_status;
 }
 
-ReturnOpStatus UnorderedSourceOp::awaitImpl()
+ReturnOpStatus UnorderedSourceOp::doFetchBlock()
 {
-    if unlikely (done)
-        return OperatorStatus::HAS_OUTPUT;
-    if unlikely (t_block)
+    if (t_block)
         return OperatorStatus::HAS_OUTPUT;
 
     while (true)
     {
         if (!task_pool->tryPopBlock(t_block))
-            return OperatorStatus::WAITING;
+            return {notify_future};
         if (t_block)
         {
             if unlikely (t_block.rows() == 0)

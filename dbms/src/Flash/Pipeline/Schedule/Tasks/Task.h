@@ -37,7 +37,7 @@ struct ReturnStatus
         assert(status != ExecTaskStatus::WAIT_FOR_NOTIFY);
     }
 
-    ReturnStatus(NotifyFuturePtr && furture_) // NOLINT(google-explicit-constructor)
+    ReturnStatus(NotifyFuturePtr furture_) // NOLINT(google-explicit-constructor)
         : status(ExecTaskStatus::WAIT_FOR_NOTIFY)
         , future(std::move(furture_))
     {
