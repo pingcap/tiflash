@@ -54,6 +54,7 @@ enum class CompressionMethodByte : UInt8
     LZ4             = 0x82,
     QPL             = 0x88,
     ZSTD            = 0x90,
+    Lightweight     = 0x91,
     // COL_END is not a compreesion method, but a flag of column end used in compact file.
     COL_END         = 0x66,
 };
