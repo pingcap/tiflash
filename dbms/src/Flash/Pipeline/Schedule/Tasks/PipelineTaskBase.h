@@ -66,7 +66,7 @@ public:
     }
 
 protected:
-    ExecTaskStatus runExecute()
+    ReturnStatus runExecute()
     {
         assert(pipeline_exec);
         auto op_status = (pipeline_exec)->execute();
@@ -82,7 +82,7 @@ protected:
         }
     }
 
-    ExecTaskStatus runExecuteIO()
+    ReturnStatus runExecuteIO()
     {
         assert(pipeline_exec);
         auto op_status = (pipeline_exec)->executeIO();
@@ -101,7 +101,7 @@ protected:
         }
     }
 
-    ExecTaskStatus runAwait()
+    ReturnStatus runAwait()
     {
         assert(pipeline_exec);
         auto op_status = (pipeline_exec)->await();

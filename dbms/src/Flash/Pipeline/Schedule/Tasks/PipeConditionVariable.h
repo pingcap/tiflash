@@ -14,28 +14,31 @@
 
 #pragma once
 
-#include <Flash/Pipeline/Schedule/Tasks/IOEventTask.h>
+#include <Flash/Pipeline/Schedule/Tasks/Task.h>
+#include <Flash/Pipeline/Schedule/TaskScheduler.h>
 
 namespace DB
 {
-class SpilledBucketInput;
-
-class LoadBucketTask : public InputIOEventTask
+// Must have lock to use this class
+class PipeConditionVariable
 {
 public:
-    LoadBucketTask(
-        PipelineExecutorContext & exec_context_,
-        const String & req_id,
-        const EventPtr & event_,
-        SpilledBucketInput & input_)
-        : IOEventTask(exec_context_, req_id, event_)
-        , input(input_)
-    {}
+    void registerTask(TaskPtr && task)
+    {
+        tasks.push_back(std::move(task));
+    }
+
+    void notifyOne()
+    {
+        if (!tasks.empty())
+        {
+            auto task = std::move(tasks.back());
+            tasks.pop_back();
+            TaskScheduler::instance->submitToCPUTaskThreadPool(std::move(task));
+        }
+    }
 
 private:
-    ReturnStatus executeIOImpl() override;
-
-private:
-    SpilledBucketInput & input;
+    std::vector<TaskPtr> tasks;
 };
 } // namespace DB

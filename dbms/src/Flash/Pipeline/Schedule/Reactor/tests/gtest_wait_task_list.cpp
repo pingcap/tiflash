@@ -30,7 +30,7 @@ public:
         : Task(exec_context_)
     {}
 
-    ExecTaskStatus executeImpl() noexcept override { return ExecTaskStatus::FINISHED; }
+    ReturnStatus executeImpl() noexcept override { return ExecTaskStatus::FINISHED; }
 };
 } // namespace
 

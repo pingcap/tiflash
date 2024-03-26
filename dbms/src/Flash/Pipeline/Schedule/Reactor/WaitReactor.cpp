@@ -19,6 +19,7 @@
 #include <Flash/Pipeline/Schedule/Reactor/WaitReactor.h>
 #include <Flash/Pipeline/Schedule/TaskScheduler.h>
 #include <Flash/Pipeline/Schedule/Tasks/TaskHelper.h>
+#include <Flash/Pipeline/Schedule/Tasks/NotifyFuture.h>
 #include <common/logger_useful.h>
 #include <errno.h>
 #include <sched.h>
@@ -36,8 +37,8 @@ bool WaitReactor::awaitAndCollectReadyTask(WaitingTask && task)
 {
     assert(task.first);
     auto * task_ptr = task.second;
-    auto status = task_ptr->await();
-    switch (status)
+    auto return_status = task_ptr->await();
+    switch (return_status.status)
     {
     case ExecTaskStatus::WAITING:
         return false;
@@ -50,6 +51,10 @@ bool WaitReactor::awaitAndCollectReadyTask(WaitingTask && task)
         task_ptr->profile_info.elapsedAwaitTime();
         io_tasks.push_back(std::move(task.first));
         return true;
+    case ExecTaskStatus::WAIT_FOR_NOTIFY:
+        assert(return_status.future);
+        return_status.future->registerTask(std::move(task.first));
+        return true;
     case FINISH_STATUS:
         task_ptr->profile_info.elapsedAwaitTime();
         task_ptr->startTraceMemory();
@@ -58,7 +63,7 @@ bool WaitReactor::awaitAndCollectReadyTask(WaitingTask && task)
         task.first.reset();
         return true;
     default:
-        UNEXPECTED_STATUS(logger, status);
+        UNEXPECTED_STATUS(logger, return_status.status);
     }
 }
 

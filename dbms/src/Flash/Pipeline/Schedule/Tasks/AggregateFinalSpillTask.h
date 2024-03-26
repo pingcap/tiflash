@@ -32,7 +32,7 @@ public:
         size_t index_);
 
 protected:
-    ExecTaskStatus executeIOImpl() override;
+    ReturnStatus executeIOImpl() override;
 
     void doFinalizeImpl() override;
 

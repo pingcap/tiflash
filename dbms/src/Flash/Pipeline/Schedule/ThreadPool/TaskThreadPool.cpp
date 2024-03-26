@@ -20,6 +20,7 @@
 #include <Flash/Pipeline/Schedule/Tasks/TaskHelper.h>
 #include <Flash/Pipeline/Schedule/ThreadPool/TaskThreadPool.h>
 #include <Flash/Pipeline/Schedule/ThreadPool/TaskThreadPoolImpl.h>
+#include <Flash/Pipeline/Schedule/Tasks/NotifyFuture.h>
 #include <common/likely.h>
 #include <common/logger_useful.h>
 
@@ -96,20 +97,20 @@ void TaskThreadPool<Impl>::handleTask(TaskPtr & task)
     metrics.elapsedPendingTime(task);
 
     ExecTaskStatus status_before_exec = task->getStatus();
-    ExecTaskStatus status_after_exec = status_before_exec;
+    ReturnStatus return_status_after_exec = status_before_exec;
     UInt64 total_time_spent = 0;
     while (true)
     {
-        status_after_exec = Impl::exec(task);
+        return_status_after_exec = Impl::exec(task);
         total_time_spent += task->profile_info.elapsedFromPrev();
         // The executing task should yield if it takes more than `YIELD_MAX_TIME_SPENT_NS`.
-        if (!Impl::isTargetStatus(status_after_exec) || total_time_spent >= YIELD_MAX_TIME_SPENT_NS)
+        if (!Impl::isTargetStatus(return_status_after_exec.status) || total_time_spent >= YIELD_MAX_TIME_SPENT_NS)
             break;
     }
     task_queue->updateStatistics(task, status_before_exec, total_time_spent);
     metrics.addExecuteTime(task, total_time_spent);
     metrics.decExecutingTask();
-    switch (status_after_exec)
+    switch (return_status_after_exec.status)
     {
     case ExecTaskStatus::RUNNING:
         task->endTraceMemory();
@@ -124,13 +125,17 @@ void TaskThreadPool<Impl>::handleTask(TaskPtr & task)
         task->endTraceMemory();
         scheduler.submitToWaitReactor(std::move(task));
         break;
+    case ExecTaskStatus::WAIT_FOR_NOTIFY:
+        assert(return_status_after_exec.future);
+        return_status_after_exec.future->registerTask(std::move(task));
+        break;;
     case FINISH_STATUS:
         task->finalize();
         task->endTraceMemory();
         task.reset();
         break;
     default:
-        UNEXPECTED_STATUS(task->log, status_after_exec);
+        UNEXPECTED_STATUS(task->log, return_status_after_exec.status);
     }
 }
 

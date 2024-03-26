@@ -17,34 +17,29 @@
 #include <Common/Logger.h>
 #include <Common/MemoryTracker.h>
 #include <Flash/Executor/PipelineExecutorContext.h>
+#include <Flash/Pipeline/Schedule/Tasks/ExecTaskStatus.h>
 #include <Flash/Pipeline/Schedule/Tasks/TaskProfileInfo.h>
 #include <memory.h>
 
 namespace DB
 {
-/**
- *           CANCELLED/ERROR/FINISHED
- *                      ▲
- *                      │
- *         ┌───────────────────────────────┐
- *         │     ┌──►RUNNING◄──┐           │
- * INIT───►│     │             │           │
- *         │     ▼             ▼           │
- *         │ WATITING◄────────►IO_IN/OUT   │
- *         └───────────────────────────────┘
- */
-enum class ExecTaskStatus
-{
-    WAITING,
-    RUNNING,
-    IO_IN,
-    IO_OUT,
-    FINISHED,
-    ERROR,
-    CANCELLED,
-};
-
 class PipelineExecutorContext;
+
+struct NotifyFuture;
+using NotifyFuturePtr = std::shared_ptr<NotifyFuture>;
+
+struct ReturnStatus
+{
+    ReturnStatus(ExecTaskStatus status_) // NOLINT(google-explicit-constructor)
+        : status(status_)
+        , future(nullptr)
+    {
+        assert(status != ExecTaskStatus::WAIT_FOR_NOTIFY);
+    }
+
+    ExecTaskStatus status;
+    NotifyFuturePtr future{nullptr};
+};
 
 class Task
 {
@@ -61,11 +56,11 @@ public:
 
     ExecTaskStatus getStatus() const { return task_status; }
 
-    ExecTaskStatus execute();
+    ReturnStatus execute();
 
-    ExecTaskStatus executeIO();
+    ReturnStatus executeIO();
 
-    ExecTaskStatus await();
+    ReturnStatus await();
 
     // `finalize` must be called before destructuring.
     // `TaskHelper::FINALIZE_TASK` can help this.
@@ -95,10 +90,10 @@ public:
     LoggerPtr log;
 
 protected:
-    virtual ExecTaskStatus executeImpl() = 0;
-    virtual ExecTaskStatus executeIOImpl() { return ExecTaskStatus::RUNNING; }
+    virtual ReturnStatus executeImpl() = 0;
+    virtual ReturnStatus executeIOImpl() { return ExecTaskStatus::RUNNING; }
     // Avoid allocating memory in `await` if possible.
-    virtual ExecTaskStatus awaitImpl() { return ExecTaskStatus::RUNNING; }
+    virtual ReturnStatus awaitImpl() { return ExecTaskStatus::RUNNING; }
 
     // Used to release held resources, just like `Event::finishImpl`.
     virtual void finalizeImpl() {}

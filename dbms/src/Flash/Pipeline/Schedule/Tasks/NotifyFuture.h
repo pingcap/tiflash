@@ -14,28 +14,15 @@
 
 #pragma once
 
-#include <Flash/Pipeline/Schedule/Tasks/IOEventTask.h>
+#include <Flash/Pipeline/Schedule/Tasks/Task.h>
 
 namespace DB
 {
-class SpilledBucketInput;
-
-class LoadBucketTask : public InputIOEventTask
+struct NotifyFuture
 {
-public:
-    LoadBucketTask(
-        PipelineExecutorContext & exec_context_,
-        const String & req_id,
-        const EventPtr & event_,
-        SpilledBucketInput & input_)
-        : IOEventTask(exec_context_, req_id, event_)
-        , input(input_)
-    {}
-
-private:
-    ReturnStatus executeIOImpl() override;
-
-private:
-    SpilledBucketInput & input;
+    virtual ~NotifyFuture() = default;
+    virtual void registerTask(TaskPtr && task);
 };
+using NotifyFuturePtr = std::shared_ptr<NotifyFuture>;
+
 } // namespace DB

@@ -33,7 +33,7 @@ namespace tests
             : Task(exec_context)                                                              \
         {}                                                                                    \
                                                                                               \
-        ExecTaskStatus executeImpl() override                                                 \
+        ReturnStatus executeImpl() override                                                 \
         {                                                                                     \
             if (task_exec_cur_count <= task_exec_total_count)                                 \
             {                                                                                 \

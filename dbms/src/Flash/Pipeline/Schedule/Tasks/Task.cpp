@@ -112,11 +112,11 @@ Task::~Task()
     }                                                                                       \
     try                                                                                     \
     {                                                                                       \
-        auto status = (function());                                                         \
+        auto return_status = (function());                                                  \
         FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_task_run_failpoint); \
         FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_query_run);               \
-        switchStatus(status);                                                               \
-        return task_status;                                                                 \
+        switchStatus(return_status.status);                                                 \
+        return return_status;                                                               \
     }                                                                                       \
     catch (...)                                                                             \
     {                                                                                       \
@@ -126,21 +126,21 @@ Task::~Task()
         return task_status;                                                                 \
     }
 
-ExecTaskStatus Task::execute()
+ReturnStatus Task::execute()
 {
     assert(mem_tracker_ptr == current_memory_tracker);
     assert(task_status == ExecTaskStatus::RUNNING);
     EXECUTE(executeImpl);
 }
 
-ExecTaskStatus Task::executeIO()
+ReturnStatus Task::executeIO()
 {
     assert(mem_tracker_ptr == current_memory_tracker);
     assert(task_status == ExecTaskStatus::IO_IN || task_status == ExecTaskStatus::IO_OUT);
     EXECUTE(executeIOImpl);
 }
 
-ExecTaskStatus Task::await()
+ReturnStatus Task::await()
 {
     // Because await only performs polling checks and does not involve computing/memory tracker memory allocation,
     // await will not invoke MemoryTracker, so current_memory_tracker must be nullptr here.

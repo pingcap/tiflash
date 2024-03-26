@@ -35,7 +35,7 @@ void AggregateFinalSpillTask::doFinalizeImpl()
     agg_context.reset();
 }
 
-ExecTaskStatus AggregateFinalSpillTask::executeIOImpl()
+ReturnStatus AggregateFinalSpillTask::executeIOImpl()
 {
     agg_context->spillData(index);
     return ExecTaskStatus::FINISHED;

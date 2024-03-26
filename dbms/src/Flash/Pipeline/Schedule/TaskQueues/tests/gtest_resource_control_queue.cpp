@@ -39,7 +39,7 @@ public:
 
     ~SimpleTask() override = default;
 
-    ExecTaskStatus executeImpl() noexcept override
+    ReturnStatus executeImpl() noexcept override
     {
         if (exec_time_counter < total_exec_times)
         {

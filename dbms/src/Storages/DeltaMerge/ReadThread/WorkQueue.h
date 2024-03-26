@@ -20,6 +20,8 @@
 #include <mutex>
 #include <queue>
 
+#include <Flash/Pipeline/Schedule/Tasks/PipeConditionVariable.h>
+
 namespace DB::DM
 {
 template <typename T>
@@ -30,6 +32,7 @@ class WorkQueue
     std::condition_variable reader_cv;
     std::condition_variable writer_cv;
     std::condition_variable finish_cv;
+    PipeConditionVariable pipe_cv;
     std::queue<T> queue;
     bool done;
     std::size_t max_size;
@@ -61,6 +64,15 @@ public:
         , pop_times(0)
         , pop_empty_times(0)
     {}
+
+    void registerPipeTask(TaskPtr && task)
+    {
+        std::lock_guard lock(mu);
+        pipe_cv.registerTask(std::move(task));
+        if (!queue.empty() || done)
+            pipe_cv.notifyOne();
+    }
+
     /**
    * Push an item onto the work queue.  Notify a single thread that work is
    * available.  If `finish()` has been called, do nothing and return false.
@@ -81,6 +93,7 @@ public:
             }
             if (done)
             {
+                pipe_cv.notifyOne();
                 return false;
             }
             queue.push(std::forward<U>(item));
@@ -89,6 +102,7 @@ public:
             {
                 *size = queue.size();
             }
+            pipe_cv.notifyOne();
         }
         reader_cv.notify_one();
         return true;

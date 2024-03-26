@@ -30,7 +30,7 @@ public:
         : Task(exec_context_, "", is_io_in ? ExecTaskStatus::IO_IN : ExecTaskStatus::IO_OUT)
     {}
 
-    ExecTaskStatus executeImpl() noexcept override { return ExecTaskStatus::FINISHED; }
+    ReturnStatus executeImpl() noexcept override { return ExecTaskStatus::FINISHED; }
 };
 } // namespace
 

@@ -167,6 +167,11 @@ public:
 
     std::once_flag & addToSchedulerFlag() { return add_to_scheduler; }
 
+    void registerPipeTask(TaskPtr && task)
+    {
+        q.registerPipeTask(std::move(task));
+    }
+
 public:
     const uint64_t pool_id;
 
@@ -175,7 +180,7 @@ public:
 
     ColumnDefines & getColumnToRead() { return columns_to_read; }
 
-    void appendRSOperator(RSOperatorPtr & new_filter)
+    void appendRSOperator(RSOperatorPtr & new_filter) const
     {
         if (filter->rs_operator == DM::EMPTY_RS_OPERATOR)
         {
