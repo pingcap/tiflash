@@ -90,8 +90,8 @@ struct CompressionSettings
         : settings(1, CompressionSetting(method_, level_))
     {}
 
-    explicit CompressionSettings(const Settings & settings)
-        : settings(1, CompressionSetting(settings))
+    explicit CompressionSettings(const Settings & settings_)
+        : settings(1, CompressionSetting(settings_))
     {}
 
     explicit CompressionSettings(const std::vector<CompressionSetting> & settings_)
