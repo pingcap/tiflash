@@ -262,21 +262,13 @@ void LearnerReadWorker::recordReadIndexError(
                 || region_error.has_read_index_not_ready() || region_error.has_proposal_in_merging_mode())
             {
                 GET_METRIC(tiflash_raft_learner_read_failures_count, type_tikv_server_issue).Increment();
-                LOG_DEBUG(
-                    log,
-                    "meet abnormal region error {}, [region_id={}]",
-                    resp.region_error().DebugString(),
-                    region_id);
+                LOG_DEBUG(log, "meet abnormal region error {}, [region_id={}]", resp.ShortDebugString(), region_id);
                 region_status = RegionException::RegionReadStatus::TIKV_SERVER_ISSUE;
             }
             else
             {
                 GET_METRIC(tiflash_raft_learner_read_failures_count, type_other).Increment();
-                LOG_DEBUG(
-                    log,
-                    "meet abnormal region error {}, [region_id={}]",
-                    resp.region_error().DebugString(),
-                    region_id);
+                LOG_DEBUG(log, "meet abnormal region error {}, [region_id={}]", resp.ShortDebugString(), region_id);
             }
             unavailable_regions.addStatus(region_id, region_status, std::move(extra_msg));
         }

@@ -24,6 +24,7 @@
 #include <Debug/dbgFuncMockTiDBTable.h>
 #include <Debug/dbgFuncSchema.h>
 #include <Debug/dbgFuncSchemaName.h>
+#include <Debug/dbgKVStore/dbgFuncInvestigator.h>
 #include <Debug/dbgKVStore/dbgFuncMockRaftCommand.h>
 #include <Debug/dbgKVStore/dbgFuncRegion.h>
 #include <Parsers/ASTLiteral.h>
@@ -108,6 +109,10 @@ DBGInvoker::DBGInvoker()
         MockRaftCommand::dbgFuncRegionSnapshotPreHandleDTFilesWithHandles);
     regSchemalessFunc("region_snapshot_apply_file", /*      */ MockRaftCommand::dbgFuncRegionSnapshotApplyDTFiles);
     regSchemalessFunc("region_ingest_sst", MockRaftCommand::dbgFuncIngestSST);
+    // Test whether a PK exists in KVStore.
+    regSchemalessFunc("find_key_kvstore", dbgFuncFindKey);
+    // Test whether a PK exists in DT.
+    regSchemafulFunc("find_key_dt", dbgFuncFindKeyDt);
 
     regSchemalessFunc("init_fail_point", DbgFailPointFunc::dbgInitFailPoint);
     regSchemalessFunc("enable_fail_point", DbgFailPointFunc::dbgEnableFailPoint);

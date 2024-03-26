@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Debug/MockKVStore/MockTiKV.h>
 #include <Debug/MockTiDB.h>
-#include <Debug/MockTiKV.h>
 #include <Debug/dbgFuncCoprocessor.h>
 #include <Debug/dbgNaturalDag.h>
 #include <Debug/dbgTools.h>
