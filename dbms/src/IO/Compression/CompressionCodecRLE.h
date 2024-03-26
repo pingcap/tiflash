@@ -22,7 +22,7 @@ namespace DB
 class CompressionCodecRLE : public ICompressionCodec
 {
 public:
-    explicit CompressionCodecRLE(UInt8 delta_bytes_size_);
+    explicit CompressionCodecRLE(UInt8 bytes_size_);
 
     UInt8 getMethodByte() const override;
 
@@ -37,7 +37,7 @@ protected:
     bool isGenericCompression() const override { return false; }
 
 private:
-    const UInt8 delta_bytes_size;
+    const UInt8 bytes_size;
 };
 
 } // namespace DB

@@ -212,19 +212,13 @@ UInt32 CompressionCodecDelta::doCompressData(const char * source, UInt32 source_
     dest[0] = delta_bytes_size;
     memcpy(&dest[1], source, bytes_to_skip);
     size_t start_pos = 1 + bytes_to_skip;
-    switch (delta_bytes_size) // NOLINT(bugprone-switch-missing-default-case)
+    switch (delta_bytes_size)
     {
     case 1:
-        compressDataForType<UInt8>(
-            reinterpret_cast<const char *>(source) + bytes_to_skip,
-            source_size - bytes_to_skip,
-            &dest[start_pos]);
+        compressDataForType<UInt8>(source + bytes_to_skip, source_size - bytes_to_skip, &dest[start_pos]);
         break;
     case 2:
-        compressDataForType<UInt16>(
-            reinterpret_cast<const char *>(source) + bytes_to_skip,
-            source_size - bytes_to_skip,
-            &dest[start_pos]);
+        compressDataForType<UInt16>(source + bytes_to_skip, source_size - bytes_to_skip, &dest[start_pos]);
         break;
     case 4:
 #if defined(__x86_64__) && defined(__AVX2__)
@@ -233,10 +227,7 @@ UInt32 CompressionCodecDelta::doCompressData(const char * source, UInt32 source_
             (source_size - bytes_to_skip) / 4,
             reinterpret_cast<UInt32 *>(&dest[start_pos]));
 #else
-        compressDataForType<UInt32>(
-            reinterpret_cast<const char *>(source) + bytes_to_skip,
-            source_size - bytes_to_skip,
-            &dest[start_pos]);
+        compressDataForType<UInt32>(source + bytes_to_skip, source_size - bytes_to_skip, &dest[start_pos]);
 #endif
         break;
     case 8:
@@ -246,12 +237,11 @@ UInt32 CompressionCodecDelta::doCompressData(const char * source, UInt32 source_
             (source_size - bytes_to_skip) / 8,
             reinterpret_cast<UInt64 *>(&dest[start_pos]));
 #else
-        compressDataForType<UInt64>(
-            reinterpret_cast<const char *>(source) + bytes_to_skip,
-            source_size - bytes_to_skip,
-            &dest[start_pos]);
+        compressDataForType<UInt64>(source + bytes_to_skip, source_size - bytes_to_skip, &dest[start_pos]);
 #endif
         break;
+    default:
+        __builtin_unreachable();
     }
     return 1 + source_size;
 }
@@ -326,6 +316,8 @@ void CompressionCodecDelta::doDecompressData(
             output_size);
 #endif
         break;
+    default:
+        __builtin_unreachable();
     }
 }
 

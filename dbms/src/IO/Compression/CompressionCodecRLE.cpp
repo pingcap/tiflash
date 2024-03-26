@@ -28,8 +28,8 @@ extern const int CANNOT_COMPRESS;
 extern const int CANNOT_DECOMPRESS;
 } // namespace ErrorCodes
 
-CompressionCodecRLE::CompressionCodecRLE(UInt8 delta_bytes_size_)
-    : delta_bytes_size(delta_bytes_size_)
+CompressionCodecRLE::CompressionCodecRLE(UInt8 bytes_size_)
+    : bytes_size(bytes_size_)
 {}
 
 UInt8 CompressionCodecRLE::getMethodByte() const
@@ -123,7 +123,7 @@ void decompressDataForType(const char * source, UInt32 source_size, char * dest,
 
 UInt32 CompressionCodecRLE::doCompressData(const char * source, UInt32 source_size, char * dest) const
 {
-    switch (delta_bytes_size)
+    switch (bytes_size)
     {
     case 1:
         return compressDataForType<UInt8>(source, source_size, dest);
