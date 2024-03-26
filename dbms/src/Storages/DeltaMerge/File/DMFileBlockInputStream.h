@@ -192,7 +192,6 @@ private:
     size_t rows_threshold_per_read = DMFILE_READ_ROWS_THRESHOLD;
     bool read_one_pack_every_time = false;
     size_t max_sharing_column_bytes_for_all = 0;
-    size_t max_sharing_column_count = 0;
     String tracing_id;
     ReadTag read_tag = ReadTag::Internal;
 };
