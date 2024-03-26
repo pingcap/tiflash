@@ -56,6 +56,7 @@ ALWAYS_INLINE void addToStatusMetrics(ExecTaskStatus to)
     switch (to)
     {
         M(ExecTaskStatus::WAITING, type_to_waiting)
+        M(ExecTaskStatus::WAIT_FOR_NOTIFY, type_to_wait_for_notify)
         M(ExecTaskStatus::RUNNING, type_to_running)
         M(ExecTaskStatus::IO_IN, type_to_io)
         M(ExecTaskStatus::IO_OUT, type_to_io)
@@ -150,6 +151,12 @@ ReturnStatus Task::await()
 }
 
 #undef EXECUTE
+
+void Task::notify()
+{
+    assert(task_status == ExecTaskStatus::WAIT_FOR_NOTIFY);
+    switchStatus(ExecTaskStatus::RUNNING);
+}
 
 void Task::finalize()
 {

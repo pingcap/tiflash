@@ -18,7 +18,7 @@
 namespace DB
 {
 template <typename LimitActionPtr>
-OperatorStatus LimitTransformOp<LimitActionPtr>::transformImpl(Block & block)
+ReturnOpStatus LimitTransformOp<LimitActionPtr>::transformImpl(Block & block)
 {
     if (!action->transform(block))
         block = {};

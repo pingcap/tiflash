@@ -34,7 +34,7 @@ public:
     String getName() const override { return "SetBlockSinkOp"; }
 
 protected:
-    OperatorStatus writeImpl(Block && block) override
+    ReturnOpStatus writeImpl(Block && block) override
     {
         if unlikely (!block)
             return OperatorStatus::FINISHED;
@@ -89,7 +89,7 @@ protected:
         exec_pool.clear();
     }
 
-    OperatorStatus readImpl(Block & block) override
+    ReturnOpStatus readImpl(Block & block) override
     {
         if unlikely (done)
             return OperatorStatus::HAS_OUTPUT;
@@ -104,7 +104,7 @@ protected:
         {
             assert(cur_exec);
             auto status = cur_exec->execute();
-            switch (status)
+            switch (status.status)
             {
             case OperatorStatus::NEED_INPUT:
                 assert(res);
@@ -125,25 +125,25 @@ protected:
         }
     }
 
-    OperatorStatus executeIOImpl() override
+    ReturnOpStatus executeIOImpl() override
     {
         if unlikely (done || res)
             return OperatorStatus::HAS_OUTPUT;
 
         assert(cur_exec);
         auto status = cur_exec->executeIO();
-        assert(status != OperatorStatus::FINISHED);
+        assert(status.status != OperatorStatus::FINISHED);
         return status;
     }
 
-    OperatorStatus awaitImpl() override
+    ReturnOpStatus awaitImpl() override
     {
         if unlikely (done || res)
             return OperatorStatus::HAS_OUTPUT;
 
         assert(cur_exec);
         auto status = cur_exec->await();
-        assert(status != OperatorStatus::FINISHED);
+        assert(status.status != OperatorStatus::FINISHED);
         return status;
     }
 

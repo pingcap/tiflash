@@ -60,11 +60,11 @@ public:
 
     String getName() const override { return "SharedQueueSinkOp"; }
 
-    OperatorStatus prepareImpl() override;
+    ReturnOpStatus prepareImpl() override;
 
-    OperatorStatus writeImpl(Block && block) override;
+    ReturnOpStatus writeImpl(Block && block) override;
 
-    OperatorStatus awaitImpl() override;
+    ReturnOpStatus awaitImpl() override;
 
 private:
     std::optional<Block> res;
@@ -87,9 +87,9 @@ public:
 
     String getName() const override { return "SharedQueueSourceOp"; }
 
-    OperatorStatus readImpl(Block & block) override;
+    ReturnOpStatus readImpl(Block & block) override;
 
-    OperatorStatus awaitImpl() override;
+    ReturnOpStatus awaitImpl() override;
 
 private:
     std::optional<Block> res;

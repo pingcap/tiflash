@@ -33,7 +33,7 @@ public:
     IOProfileInfoPtr getIOProfileInfo() const override { return IOProfileInfo::createForLocal(profile_info_ptr); }
 
 protected:
-    OperatorStatus readImpl(Block & block) override
+    ReturnOpStatus readImpl(Block & block) override
     {
         block = {};
         return OperatorStatus::HAS_OUTPUT;

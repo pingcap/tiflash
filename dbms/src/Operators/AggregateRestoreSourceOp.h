@@ -34,9 +34,9 @@ public:
     String getName() const override { return "AggregateRestoreSourceOp"; }
 
 protected:
-    OperatorStatus readImpl(Block & block) override;
+    ReturnOpStatus readImpl(Block & block) override;
 
-    OperatorStatus awaitImpl() override;
+    ReturnOpStatus awaitImpl() override;
 
 private:
     AggregateContextPtr agg_context;

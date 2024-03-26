@@ -16,7 +16,7 @@
 
 namespace DB
 {
-OperatorStatus Expand2TransformOp::transformImpl(Block & block)
+ReturnOpStatus Expand2TransformOp::transformImpl(Block & block)
 {
     if (likely(block))
         expand_transform_action.transform(block);
@@ -24,7 +24,7 @@ OperatorStatus Expand2TransformOp::transformImpl(Block & block)
     return OperatorStatus::HAS_OUTPUT;
 }
 
-OperatorStatus Expand2TransformOp::tryOutputImpl(Block & block)
+ReturnOpStatus Expand2TransformOp::tryOutputImpl(Block & block)
 {
     if (expand_transform_action.tryOutput(block))
         return OperatorStatus::HAS_OUTPUT;

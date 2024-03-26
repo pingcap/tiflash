@@ -36,8 +36,8 @@ protected:
     void operatePrefixImpl() override;
     void operateSuffixImpl() override;
 
-    OperatorStatus readImpl(Block & block) override;
-    OperatorStatus awaitImpl() override;
+    ReturnOpStatus readImpl(Block & block) override;
+    ReturnOpStatus awaitImpl() override;
 
     IOProfileInfoPtr getIOProfileInfo() const override { return io_profile_info; }
 

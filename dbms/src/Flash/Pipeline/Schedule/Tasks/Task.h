@@ -37,6 +37,13 @@ struct ReturnStatus
         assert(status != ExecTaskStatus::WAIT_FOR_NOTIFY);
     }
 
+    ReturnStatus(NotifyFuturePtr && furture_) // NOLINT(google-explicit-constructor)
+        : status(ExecTaskStatus::WAIT_FOR_NOTIFY)
+        , future(std::move(furture_))
+    {
+        assert(future != nullptr);
+    }
+
     ExecTaskStatus status;
     NotifyFuturePtr future{nullptr};
 };
@@ -61,6 +68,8 @@ public:
     ReturnStatus executeIO();
 
     ReturnStatus await();
+
+    void notify();
 
     // `finalize` must be called before destructuring.
     // `TaskHelper::FINALIZE_TASK` can help this.

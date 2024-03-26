@@ -29,7 +29,7 @@ AggregateConvergentSourceOp::AggregateConvergentSourceOp(
     setHeader(agg_context->getHeader());
 }
 
-OperatorStatus AggregateConvergentSourceOp::readImpl(Block & block)
+ReturnOpStatus AggregateConvergentSourceOp::readImpl(Block & block)
 {
     block = agg_context->readForConvergent(index);
     total_rows += block.rows();

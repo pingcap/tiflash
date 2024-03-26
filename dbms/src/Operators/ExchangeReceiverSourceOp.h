@@ -46,9 +46,9 @@ public:
 protected:
     void operateSuffixImpl() override;
 
-    OperatorStatus readImpl(Block & block) override;
+    ReturnOpStatus readImpl(Block & block) override;
 
-    OperatorStatus awaitImpl() override;
+    ReturnOpStatus awaitImpl() override;
 
 private:
     Block popFromBlockQueue();

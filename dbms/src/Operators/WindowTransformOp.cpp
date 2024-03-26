@@ -37,7 +37,7 @@ void WindowTransformOp::operateSuffixImpl()
         action->cleanUp();
 }
 
-OperatorStatus WindowTransformOp::transformImpl(Block & block)
+ReturnOpStatus WindowTransformOp::transformImpl(Block & block)
 {
     assert(action);
     assert(!action->input_is_finished);
@@ -57,7 +57,7 @@ OperatorStatus WindowTransformOp::transformImpl(Block & block)
     }
 }
 
-OperatorStatus WindowTransformOp::tryOutputImpl(Block & block)
+ReturnOpStatus WindowTransformOp::tryOutputImpl(Block & block)
 {
     assert(action);
     block = action->tryGetOutputBlock();

@@ -33,20 +33,20 @@ public:
     String getName() const override { return "LocalAggregateTransform"; }
 
 protected:
-    OperatorStatus transformImpl(Block & block) override;
+    ReturnOpStatus transformImpl(Block & block) override;
 
-    OperatorStatus tryOutputImpl(Block & block) override;
+    ReturnOpStatus tryOutputImpl(Block & block) override;
 
-    OperatorStatus executeIOImpl() override;
+    ReturnOpStatus executeIOImpl() override;
 
     void transformHeaderImpl(Block & header_) override;
 
 private:
     OperatorStatus tryFromBuildToSpill();
 
-    OperatorStatus fromBuildToConvergent(Block & block);
+    ReturnOpStatus fromBuildToConvergent(Block & block);
 
-    OperatorStatus fromBuildToFinalSpillOrRestore();
+    ReturnOpStatus fromBuildToFinalSpillOrRestore();
 
 private:
     Aggregator::Params params;

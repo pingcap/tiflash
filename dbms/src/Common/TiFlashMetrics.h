@@ -745,6 +745,7 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       "pipeline task change to status",                                                                                             \
       Counter,                                                                                                                      \
       F(type_to_waiting, {"type", "to_waiting"}),                                                                                   \
+      F(type_to_wait_for_notify, {"type", "to_wait_for_notify"}),                                                                   \
       F(type_to_running, {"type", "to_running"}),                                                                                   \
       F(type_to_io, {"type", "to_io"}),                                                                                             \
       F(type_to_finished, {"type", "to_finished"}),                                                                                 \

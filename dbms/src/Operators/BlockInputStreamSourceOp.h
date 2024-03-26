@@ -38,7 +38,7 @@ protected:
     void operatePrefixImpl() override;
     void operateSuffixImpl() override;
 
-    OperatorStatus readImpl(Block & block) override;
+    ReturnOpStatus readImpl(Block & block) override;
 
 private:
     BlockInputStreamPtr impl;

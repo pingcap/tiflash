@@ -29,26 +29,30 @@ namespace DB
 /// - OperatorStatus::WAITING                  ==>     ExecTaskStatus::WAITING
 /// - OperatorStatus::NEED_INPUT/HAS_OUTPUT    ==>     ExecTaskStatus::RUNNING
 
-#define MAP_NOT_RUNNING_TASK_STATUS       \
-    case OperatorStatus::FINISHED:        \
-    {                                     \
-        return ExecTaskStatus::FINISHED;  \
-    }                                     \
-    case OperatorStatus::CANCELLED:       \
-    {                                     \
-        return ExecTaskStatus::CANCELLED; \
-    }                                     \
-    case OperatorStatus::IO_IN:           \
-    {                                     \
-        return ExecTaskStatus::IO_IN;     \
-    }                                     \
-    case OperatorStatus::IO_OUT:          \
-    {                                     \
-        return ExecTaskStatus::IO_OUT;    \
-    }                                     \
-    case OperatorStatus::WAITING:         \
-    {                                     \
-        return ExecTaskStatus::WAITING;   \
+#define MAP_NOT_RUNNING_TASK_STATUS(op_status) \
+    case OperatorStatus::FINISHED:             \
+    {                                          \
+        return ExecTaskStatus::FINISHED;       \
+    }                                          \
+    case OperatorStatus::CANCELLED:            \
+    {                                          \
+        return ExecTaskStatus::CANCELLED;      \
+    }                                          \
+    case OperatorStatus::IO_IN:                \
+    {                                          \
+        return ExecTaskStatus::IO_IN;          \
+    }                                          \
+    case OperatorStatus::IO_OUT:               \
+    {                                          \
+        return ExecTaskStatus::IO_OUT;         \
+    }                                          \
+    case OperatorStatus::WAITING:              \
+    {                                          \
+        return ExecTaskStatus::WAITING;        \
+    }                                          \
+    case OperatorStatus::WAIT_FOR_NOTIFY:      \
+    {                                          \
+        return std::move((op_status).future);  \
     }
 
 #define UNEXPECTED_OP_STATUS(op_status, function_name) \
@@ -70,15 +74,15 @@ protected:
     {
         assert(pipeline_exec);
         auto op_status = (pipeline_exec)->execute();
-        switch (op_status)
+        switch (op_status.status)
         {
-            MAP_NOT_RUNNING_TASK_STATUS
+            MAP_NOT_RUNNING_TASK_STATUS(op_status)
         /* After `pipeline_exec->execute`, `NEED_INPUT` means that pipeline_exec need data to do the calculations and expect the next call to `execute` */
         /* And other states are unexpected. */
         case OperatorStatus::NEED_INPUT:
             return ExecTaskStatus::RUNNING;
         default:
-            UNEXPECTED_OP_STATUS(op_status, "PipelineExec::execute");
+            UNEXPECTED_OP_STATUS(op_status.status, "PipelineExec::execute");
         }
     }
 
@@ -86,9 +90,9 @@ protected:
     {
         assert(pipeline_exec);
         auto op_status = (pipeline_exec)->executeIO();
-        switch (op_status)
+        switch (op_status.status)
         {
-            MAP_NOT_RUNNING_TASK_STATUS
+            MAP_NOT_RUNNING_TASK_STATUS(op_status)
         /* After `pipeline_exec->executeIO`, */
         /* - `NEED_INPUT` means that pipeline_exec need data to do the calculations and expect the next call to `execute` */
         /* - `HAS_OUTPUT` means that pipeline_exec has data to do the calculations and expect the next call to `execute` */
@@ -97,7 +101,7 @@ protected:
         case OperatorStatus::HAS_OUTPUT:
             return ExecTaskStatus::RUNNING;
         default:
-            UNEXPECTED_OP_STATUS(op_status, "PipelineExec::execute");
+            UNEXPECTED_OP_STATUS(op_status.status, "PipelineExec::execute");
         }
     }
 
@@ -105,9 +109,9 @@ protected:
     {
         assert(pipeline_exec);
         auto op_status = (pipeline_exec)->await();
-        switch (op_status)
+        switch (op_status.status)
         {
-            MAP_NOT_RUNNING_TASK_STATUS
+            MAP_NOT_RUNNING_TASK_STATUS(op_status)
         /* After `pipeline_exec->await`, */
         /* - `NEED_INPUT` means that pipeline_exec need data to do the calculations and expect the next call to `execute` */
         /* - `HAS_OUTPUT` means that pipeline_exec has data to do the calculations and expect the next call to `execute` */
@@ -116,7 +120,7 @@ protected:
         case OperatorStatus::HAS_OUTPUT:
             return ExecTaskStatus::RUNNING;
         default:
-            UNEXPECTED_OP_STATUS(op_status, "PipelineExec::await");
+            UNEXPECTED_OP_STATUS(op_status.status, "PipelineExec::await");
         }
     }
 

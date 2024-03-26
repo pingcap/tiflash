@@ -32,8 +32,8 @@ public:
 protected:
     void operateSuffixImpl() override;
 
-    OperatorStatus transformImpl(Block & block) override;
-    OperatorStatus tryOutputImpl(Block & block) override;
+    ReturnOpStatus transformImpl(Block & block) override;
+    ReturnOpStatus tryOutputImpl(Block & block) override;
 
     void transformHeaderImpl(Block & header_) override;
 

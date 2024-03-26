@@ -76,8 +76,8 @@ public:
 protected:
     void operatePrefixImpl() override;
 
-    OperatorStatus readImpl(Block & block) override;
-    OperatorStatus awaitImpl() override;
+    ReturnOpStatus readImpl(Block & block) override;
+    ReturnOpStatus awaitImpl() override;
 
 private:
     DM::SegmentReadTaskPoolPtr task_pool;

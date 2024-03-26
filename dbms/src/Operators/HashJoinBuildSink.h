@@ -37,11 +37,11 @@ public:
     String getName() const override { return "HashJoinBuildSink"; }
 
 protected:
-    OperatorStatus writeImpl(Block && block) override;
+    ReturnOpStatus writeImpl(Block && block) override;
 
-    OperatorStatus prepareImpl() override;
+    ReturnOpStatus prepareImpl() override;
 
-    OperatorStatus executeIOImpl() override;
+    ReturnOpStatus executeIOImpl() override;
 
 private:
     JoinPtr join_ptr;

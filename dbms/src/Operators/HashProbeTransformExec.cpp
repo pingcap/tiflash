@@ -154,7 +154,7 @@ Block HashProbeTransformExec::popProbeRestoredBlock()
         return OperatorStatus::CANCELLED;    \
     continue;
 
-OperatorStatus HashProbeTransformExec::tryFillProcessInfoInRestoreProbeStage(ProbeProcessInfo & probe_process_info)
+ReturnOpStatus HashProbeTransformExec::tryFillProcessInfoInRestoreProbeStage(ProbeProcessInfo & probe_process_info)
 {
     while (true)
     {
@@ -205,7 +205,7 @@ OperatorStatus HashProbeTransformExec::tryFillProcessInfoInRestoreProbeStage(Pro
     }
 }
 
-OperatorStatus HashProbeTransformExec::tryFillProcessInfoInProbeStage(ProbeProcessInfo & probe_process_info)
+ReturnOpStatus HashProbeTransformExec::tryFillProcessInfoInProbeStage(ProbeProcessInfo & probe_process_info)
 {
     while (true)
     {
@@ -231,7 +231,7 @@ OperatorStatus HashProbeTransformExec::tryFillProcessInfoInProbeStage(ProbeProce
 
 #undef CONTINUE
 
-OperatorStatus HashProbeTransformExec::tryFillProcessInfoInProbeStage(
+ReturnOpStatus HashProbeTransformExec::tryFillProcessInfoInProbeStage(
     ProbeProcessInfo & probe_process_info,
     Block & input)
 {

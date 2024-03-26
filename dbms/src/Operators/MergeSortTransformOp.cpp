@@ -51,7 +51,7 @@ Block MergeSortTransformOp::getMergeOutput()
     return block;
 }
 
-OperatorStatus MergeSortTransformOp::fromPartialToMerge(Block & block)
+ReturnOpStatus MergeSortTransformOp::fromPartialToMerge(Block & block)
 {
     assert(status == MergeSortStatus::PARTIAL);
     // convert to merge phase.
@@ -72,7 +72,7 @@ OperatorStatus MergeSortTransformOp::fromPartialToMerge(Block & block)
     return OperatorStatus::HAS_OUTPUT;
 }
 
-OperatorStatus MergeSortTransformOp::fromPartialToRestore()
+ReturnOpStatus MergeSortTransformOp::fromPartialToRestore()
 {
     assert(status == MergeSortStatus::PARTIAL);
     // convert to restore phase.
@@ -99,7 +99,7 @@ OperatorStatus MergeSortTransformOp::fromPartialToRestore()
     return OperatorStatus::IO_IN;
 }
 
-OperatorStatus MergeSortTransformOp::fromPartialToSpill()
+ReturnOpStatus MergeSortTransformOp::fromPartialToSpill()
 {
     assert(status == MergeSortStatus::PARTIAL);
     // convert to restore phase.
@@ -121,7 +121,7 @@ OperatorStatus MergeSortTransformOp::fromPartialToSpill()
     return OperatorStatus::IO_OUT;
 }
 
-OperatorStatus MergeSortTransformOp::fromSpillToPartial()
+ReturnOpStatus MergeSortTransformOp::fromSpillToPartial()
 {
     assert(status == MergeSortStatus::SPILL);
     assert(cached_handler);
@@ -133,7 +133,7 @@ OperatorStatus MergeSortTransformOp::fromSpillToPartial()
     return OperatorStatus::NEED_INPUT;
 }
 
-OperatorStatus MergeSortTransformOp::transformImpl(Block & block)
+ReturnOpStatus MergeSortTransformOp::transformImpl(Block & block)
 {
     switch (status)
     {
@@ -162,7 +162,7 @@ OperatorStatus MergeSortTransformOp::transformImpl(Block & block)
     }
 }
 
-OperatorStatus MergeSortTransformOp::tryOutputImpl(Block & block)
+ReturnOpStatus MergeSortTransformOp::tryOutputImpl(Block & block)
 {
     switch (status)
     {
@@ -195,7 +195,7 @@ OperatorStatus MergeSortTransformOp::tryOutputImpl(Block & block)
     }
 }
 
-OperatorStatus MergeSortTransformOp::executeIOImpl()
+ReturnOpStatus MergeSortTransformOp::executeIOImpl()
 {
     switch (status)
     {

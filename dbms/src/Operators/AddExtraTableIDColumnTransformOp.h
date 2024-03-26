@@ -42,7 +42,7 @@ public:
     IOProfileInfoPtr getIOProfileInfo() const override { return IOProfileInfo::createForLocal(profile_info_ptr); }
 
 protected:
-    OperatorStatus transformImpl(Block & block) override;
+    ReturnOpStatus transformImpl(Block & block) override;
 
     void transformHeaderImpl(Block & header_) override;
 

@@ -54,7 +54,7 @@ Block CoprocessorReaderSourceOp::popFromBlockQueue()
     return block;
 }
 
-OperatorStatus CoprocessorReaderSourceOp::readImpl(Block & block)
+ReturnOpStatus CoprocessorReaderSourceOp::readImpl(Block & block)
 {
     if (!block_queue.empty())
     {
@@ -66,7 +66,7 @@ OperatorStatus CoprocessorReaderSourceOp::readImpl(Block & block)
     {
         assert(block_queue.empty());
         auto await_status = awaitImpl();
-        if (await_status == OperatorStatus::HAS_OUTPUT)
+        if (await_status.status == OperatorStatus::HAS_OUTPUT)
         {
             assert(reader_res);
             assert(reader_res->second || reader_res->first.finished);
@@ -112,7 +112,7 @@ OperatorStatus CoprocessorReaderSourceOp::readImpl(Block & block)
         return await_status;
     }
 }
-OperatorStatus CoprocessorReaderSourceOp::awaitImpl()
+ReturnOpStatus CoprocessorReaderSourceOp::awaitImpl()
 {
     if unlikely (!block_queue.empty())
         return OperatorStatus::HAS_OUTPUT;

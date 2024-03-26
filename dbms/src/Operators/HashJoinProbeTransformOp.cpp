@@ -71,7 +71,7 @@ void HashJoinProbeTransformOp::operateSuffixImpl()
         scan_hash_map_rows);
 }
 
-OperatorStatus HashJoinProbeTransformOp::onOutput(Block & block)
+ReturnOpStatus HashJoinProbeTransformOp::onOutput(Block & block)
 {
     while (true)
     {
@@ -83,7 +83,7 @@ OperatorStatus HashJoinProbeTransformOp::onOutput(Block & block)
             if (probe_process_info.all_rows_joined_finish)
             {
                 if (auto ret = probe_transform->tryFillProcessInfoInRestoreProbeStage(probe_process_info);
-                    ret != OperatorStatus::HAS_OUTPUT)
+                    ret.status != OperatorStatus::HAS_OUTPUT)
                     return ret;
             }
         case ProbeStatus::PROBE:
@@ -147,23 +147,23 @@ OperatorStatus HashJoinProbeTransformOp::onOutput(Block & block)
     }
 }
 
-OperatorStatus HashJoinProbeTransformOp::transformImpl(Block & block)
+ReturnOpStatus HashJoinProbeTransformOp::transformImpl(Block & block)
 {
     assert(status == ProbeStatus::PROBE);
     assert(probe_process_info.all_rows_joined_finish);
     if (auto ret = probe_transform->tryFillProcessInfoInProbeStage(probe_process_info, block);
-        ret != OperatorStatus::HAS_OUTPUT)
+        ret.status != OperatorStatus::HAS_OUTPUT)
         return ret;
 
     return onOutput(block);
 }
 
-OperatorStatus HashJoinProbeTransformOp::tryOutputImpl(Block & block)
+ReturnOpStatus HashJoinProbeTransformOp::tryOutputImpl(Block & block)
 {
     if (status == ProbeStatus::PROBE && probe_process_info.all_rows_joined_finish)
     {
         if (auto ret = probe_transform->tryFillProcessInfoInProbeStage(probe_process_info);
-            ret != OperatorStatus::HAS_OUTPUT)
+            ret.status != OperatorStatus::HAS_OUTPUT)
             return ret;
     }
 
@@ -206,7 +206,7 @@ void HashJoinProbeTransformOp::onGetRestoreJoin()
     }
 }
 
-OperatorStatus HashJoinProbeTransformOp::awaitImpl()
+ReturnOpStatus HashJoinProbeTransformOp::awaitImpl()
 {
     while (true)
     {
@@ -240,7 +240,7 @@ OperatorStatus HashJoinProbeTransformOp::awaitImpl()
     }
 }
 
-OperatorStatus HashJoinProbeTransformOp::executeIOImpl()
+ReturnOpStatus HashJoinProbeTransformOp::executeIOImpl()
 {
     switch (status)
     {

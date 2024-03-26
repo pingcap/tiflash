@@ -16,6 +16,7 @@
 
 #include <Common/Logger.h>
 #include <Core/Block.h>
+#include <Flash/Pipeline/Schedule/Tasks/NotifyFuture.h>
 #include <Operators/IOProfileInfo.h>
 #include <Operators/OperatorProfileInfo.h>
 
@@ -37,6 +38,7 @@ enum class OperatorStatus
     CANCELLED,
     /// waiting status
     WAITING,
+    WAIT_FOR_NOTIFY,
     /// io status
     IO_IN,
     IO_OUT,
@@ -49,6 +51,26 @@ enum class OperatorStatus
 
 class PipelineExecutorContext;
 
+struct ReturnOpStatus
+{
+    ReturnOpStatus(OperatorStatus status_) // NOLINT(google-explicit-constructor)
+        : status(status_)
+        , future(nullptr)
+    {
+        assert(status != OperatorStatus::WAIT_FOR_NOTIFY);
+    }
+
+    ReturnOpStatus(NotifyFuturePtr && furture_) // NOLINT(google-explicit-constructor)
+        : status(OperatorStatus::WAIT_FOR_NOTIFY)
+        , future(std::move(furture_))
+    {
+        assert(future != nullptr);
+    }
+
+    OperatorStatus status;
+    NotifyFuturePtr future{nullptr};
+};
+
 class Operator
 {
 public:
@@ -60,10 +82,10 @@ public:
     virtual ~Operator() = default;
 
     // running status may return are NEED_INPUT and HAS_OUTPUT here.
-    OperatorStatus executeIO();
+    ReturnOpStatus executeIO();
 
     // running status may return are NEED_INPUT and HAS_OUTPUT here.
-    OperatorStatus await();
+    ReturnOpStatus await();
 
     // These two methods are used to set state, log and etc, and should not perform calculation logic.
     void operatePrefix();
@@ -93,9 +115,9 @@ protected:
     virtual void operatePrefixImpl() {}
     virtual void operateSuffixImpl() {}
 
-    virtual OperatorStatus executeIOImpl() { throw Exception("Unsupport"); }
+    virtual ReturnOpStatus executeIOImpl() { throw Exception("Unsupport"); }
 
-    virtual OperatorStatus awaitImpl() { throw Exception("Unsupport"); }
+    virtual ReturnOpStatus awaitImpl() { throw Exception("Unsupport"); }
 
 protected:
     PipelineExecutorContext & exec_context;
@@ -117,8 +139,8 @@ public:
     // read will inplace the block when return status is HAS_OUTPUT;
     // Even after source has finished, source op still needs to return an empty block and HAS_OUTPUT,
     // because there are many operators that need an empty block as input, such as JoinProbe and WindowFunction.
-    OperatorStatus read(Block & block);
-    virtual OperatorStatus readImpl(Block & block) = 0;
+    ReturnOpStatus read(Block & block);
+    virtual ReturnOpStatus readImpl(Block & block) = 0;
 };
 using SourceOpPtr = std::unique_ptr<SourceOp>;
 using SourceOps = std::vector<SourceOpPtr>;
@@ -131,14 +153,14 @@ public:
     {}
     // running status may return are NEED_INPUT and HAS_OUTPUT here.
     // tryOutput will inplace the block when return status is HAS_OUPUT; do nothing to the block when NEED_INPUT or others.
-    OperatorStatus tryOutput(Block &);
-    virtual OperatorStatus tryOutputImpl(Block &) { return OperatorStatus::NEED_INPUT; }
+    ReturnOpStatus tryOutput(Block &);
+    virtual ReturnOpStatus tryOutputImpl(Block &) { return OperatorStatus::NEED_INPUT; }
     // running status may return are NEED_INPUT and HAS_OUTPUT here.
     // transform will inplace the block and if the return status is HAS_OUTPUT, this block can be used as input to subsequent operators.
     // Even if an empty block is input, transform will still return HAS_OUTPUT,
     // because there are many operators that need an empty block as input, such as JoinProbe and WindowFunction.
-    OperatorStatus transform(Block & block);
-    virtual OperatorStatus transformImpl(Block & block) = 0;
+    ReturnOpStatus transform(Block & block);
+    virtual ReturnOpStatus transformImpl(Block & block) = 0;
 
     virtual void transformHeaderImpl(Block & header_) = 0;
     void transformHeader(Block & header_)
@@ -158,11 +180,11 @@ public:
     SinkOp(PipelineExecutorContext & exec_context_, const String & req_id)
         : Operator(exec_context_, req_id)
     {}
-    OperatorStatus prepare();
-    virtual OperatorStatus prepareImpl() { return OperatorStatus::NEED_INPUT; }
+    ReturnOpStatus prepare();
+    virtual ReturnOpStatus prepareImpl() { return OperatorStatus::NEED_INPUT; }
 
-    OperatorStatus write(Block && block);
-    virtual OperatorStatus writeImpl(Block && block) = 0;
+    ReturnOpStatus write(Block && block);
+    virtual ReturnOpStatus writeImpl(Block && block) = 0;
 };
 using SinkOpPtr = std::unique_ptr<SinkOp>;
 } // namespace DB

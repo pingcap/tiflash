@@ -17,10 +17,10 @@
 #include <Common/Stopwatch.h>
 #include <Common/setThreadName.h>
 #include <Flash/Pipeline/Schedule/TaskScheduler.h>
+#include <Flash/Pipeline/Schedule/Tasks/NotifyFuture.h>
 #include <Flash/Pipeline/Schedule/Tasks/TaskHelper.h>
 #include <Flash/Pipeline/Schedule/ThreadPool/TaskThreadPool.h>
 #include <Flash/Pipeline/Schedule/ThreadPool/TaskThreadPoolImpl.h>
-#include <Flash/Pipeline/Schedule/Tasks/NotifyFuture.h>
 #include <common/likely.h>
 #include <common/logger_useful.h>
 
@@ -128,7 +128,8 @@ void TaskThreadPool<Impl>::handleTask(TaskPtr & task)
     case ExecTaskStatus::WAIT_FOR_NOTIFY:
         assert(return_status_after_exec.future);
         return_status_after_exec.future->registerTask(std::move(task));
-        break;;
+        break;
+        ;
     case FINISH_STATUS:
         task->finalize();
         task->endTraceMemory();

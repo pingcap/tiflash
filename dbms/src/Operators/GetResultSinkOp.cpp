@@ -16,7 +16,7 @@
 
 namespace DB
 {
-OperatorStatus GetResultSinkOp::writeImpl(Block && block)
+ReturnOpStatus GetResultSinkOp::writeImpl(Block && block)
 {
     if (!block)
         return OperatorStatus::FINISHED;
@@ -37,12 +37,12 @@ OperatorStatus GetResultSinkOp::writeImpl(Block && block)
     }
 }
 
-OperatorStatus GetResultSinkOp::prepareImpl()
+ReturnOpStatus GetResultSinkOp::prepareImpl()
 {
     return awaitImpl();
 }
 
-OperatorStatus GetResultSinkOp::awaitImpl()
+ReturnOpStatus GetResultSinkOp::awaitImpl()
 {
     if (!t_block)
         return OperatorStatus::NEED_INPUT;

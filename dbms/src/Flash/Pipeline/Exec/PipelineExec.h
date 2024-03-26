@@ -31,22 +31,22 @@ public:
     void executePrefix();
     void executeSuffix();
 
-    OperatorStatus execute();
+    ReturnOpStatus execute();
 
-    OperatorStatus executeIO();
+    ReturnOpStatus executeIO();
 
-    OperatorStatus await();
+    ReturnOpStatus await();
 
     void finalizeProfileInfo(UInt64 extra_time);
 
 private:
-    inline OperatorStatus executeImpl();
+    inline ReturnOpStatus executeImpl();
 
-    inline OperatorStatus executeIOImpl();
+    inline ReturnOpStatus executeIOImpl();
 
-    inline OperatorStatus awaitImpl();
+    inline ReturnOpStatus awaitImpl();
 
-    inline OperatorStatus fetchBlock(Block & block, size_t & start_transform_op_index);
+    inline ReturnOpStatus fetchBlock(Block & block, size_t & start_transform_op_index);
 
     ALWAYS_INLINE void fillAwaitable(Operator * op)
     {

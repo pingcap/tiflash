@@ -17,7 +17,7 @@
 
 namespace DB
 {
-OperatorStatus AggregateBuildSinkOp::prepareImpl()
+ReturnOpStatus AggregateBuildSinkOp::prepareImpl()
 {
     while (agg_context->hasLocalDataToBuild(index))
     {
@@ -28,7 +28,7 @@ OperatorStatus AggregateBuildSinkOp::prepareImpl()
     return agg_context->isTaskMarkedForSpill(index) ? OperatorStatus::IO_OUT : OperatorStatus::NEED_INPUT;
 }
 
-OperatorStatus AggregateBuildSinkOp::writeImpl(Block && block)
+ReturnOpStatus AggregateBuildSinkOp::writeImpl(Block && block)
 {
     if (unlikely(!block))
     {
@@ -44,7 +44,7 @@ OperatorStatus AggregateBuildSinkOp::writeImpl(Block && block)
     return agg_context->needSpill(index) ? OperatorStatus::IO_OUT : OperatorStatus::NEED_INPUT;
 }
 
-OperatorStatus AggregateBuildSinkOp::executeIOImpl()
+ReturnOpStatus AggregateBuildSinkOp::executeIOImpl()
 {
     agg_context->spillData(index);
     return is_final_spill ? OperatorStatus::FINISHED : OperatorStatus::NEED_INPUT;

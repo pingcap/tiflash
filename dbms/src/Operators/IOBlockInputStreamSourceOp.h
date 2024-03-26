@@ -42,7 +42,7 @@ protected:
 
     void operateSuffixImpl() override { impl->readSuffix(); }
 
-    OperatorStatus readImpl(Block & block) override
+    ReturnOpStatus readImpl(Block & block) override
     {
         if (unlikely(is_done))
             return OperatorStatus::HAS_OUTPUT;
@@ -53,7 +53,7 @@ protected:
         return OperatorStatus::HAS_OUTPUT;
     }
 
-    OperatorStatus executeIOImpl() override
+    ReturnOpStatus executeIOImpl() override
     {
         if unlikely (is_done || ret)
             return OperatorStatus::HAS_OUTPUT;

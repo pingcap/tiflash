@@ -17,7 +17,7 @@
 
 namespace DB
 {
-OperatorStatus HashJoinBuildSink::writeImpl(Block && block)
+ReturnOpStatus HashJoinBuildSink::writeImpl(Block && block)
 {
     if unlikely (!block)
     {
@@ -35,13 +35,13 @@ OperatorStatus HashJoinBuildSink::writeImpl(Block && block)
     return join_ptr->hasBuildSideMarkedSpillData(op_index) ? OperatorStatus::IO_OUT : OperatorStatus::NEED_INPUT;
 }
 
-OperatorStatus HashJoinBuildSink::prepareImpl()
+ReturnOpStatus HashJoinBuildSink::prepareImpl()
 {
     join_ptr->checkAndMarkPartitionSpilledIfNeeded(op_index);
     return join_ptr->hasBuildSideMarkedSpillData(op_index) ? OperatorStatus::IO_OUT : OperatorStatus::NEED_INPUT;
 }
 
-OperatorStatus HashJoinBuildSink::executeIOImpl()
+ReturnOpStatus HashJoinBuildSink::executeIOImpl()
 {
     join_ptr->flushBuildSideMarkedSpillData(op_index);
     if (is_finish_status)

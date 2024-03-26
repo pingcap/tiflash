@@ -49,9 +49,9 @@ public:
 protected:
     void operateSuffixImpl() override;
 
-    OperatorStatus readImpl(Block & block) override;
+    ReturnOpStatus readImpl(Block & block) override;
 
-    OperatorStatus executeIOImpl() override;
+    ReturnOpStatus executeIOImpl() override;
 
 private:
     DM::DMContextPtr dm_context;

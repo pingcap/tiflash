@@ -167,10 +167,7 @@ public:
 
     std::once_flag & addToSchedulerFlag() { return add_to_scheduler; }
 
-    void registerPipeTask(TaskPtr && task)
-    {
-        q.registerPipeTask(std::move(task));
-    }
+    void registerPipeTask(TaskPtr && task) { q.registerPipeTask(std::move(task)); }
 
 public:
     const uint64_t pool_id;

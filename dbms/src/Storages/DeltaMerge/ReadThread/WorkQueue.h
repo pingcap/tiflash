@@ -13,14 +13,13 @@
 // limitations under the License.
 #pragma once
 
+#include <Flash/Pipeline/Schedule/Tasks/PipeConditionVariable.h>
 #include <stdint.h>
 
 #include <cassert>
 #include <condition_variable>
 #include <mutex>
 #include <queue>
-
-#include <Flash/Pipeline/Schedule/Tasks/PipeConditionVariable.h>
 
 namespace DB::DM
 {

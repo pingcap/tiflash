@@ -49,7 +49,7 @@ LocalAggregateTransform::LocalAggregateTransform(
         });
 }
 
-OperatorStatus LocalAggregateTransform::transformImpl(Block & block)
+ReturnOpStatus LocalAggregateTransform::transformImpl(Block & block)
 {
     switch (status)
     {
@@ -68,7 +68,7 @@ OperatorStatus LocalAggregateTransform::transformImpl(Block & block)
     }
 }
 
-OperatorStatus LocalAggregateTransform::fromBuildToConvergent(Block & block)
+ReturnOpStatus LocalAggregateTransform::fromBuildToConvergent(Block & block)
 {
     // status from build to convergent.
     assert(status == LocalAggStatus::build);
@@ -79,7 +79,7 @@ OperatorStatus LocalAggregateTransform::fromBuildToConvergent(Block & block)
     return OperatorStatus::HAS_OUTPUT;
 }
 
-OperatorStatus LocalAggregateTransform::fromBuildToFinalSpillOrRestore()
+ReturnOpStatus LocalAggregateTransform::fromBuildToFinalSpillOrRestore()
 {
     assert(status == LocalAggStatus::build);
     if (agg_context.needSpill(task_index, /*try_mark_need_spill=*/true))
@@ -106,7 +106,7 @@ OperatorStatus LocalAggregateTransform::tryFromBuildToSpill()
     return OperatorStatus::NEED_INPUT;
 }
 
-OperatorStatus LocalAggregateTransform::tryOutputImpl(Block & block)
+ReturnOpStatus LocalAggregateTransform::tryOutputImpl(Block & block)
 {
     switch (status)
     {
@@ -128,7 +128,7 @@ OperatorStatus LocalAggregateTransform::tryOutputImpl(Block & block)
     }
 }
 
-OperatorStatus LocalAggregateTransform::executeIOImpl()
+ReturnOpStatus LocalAggregateTransform::executeIOImpl()
 {
     switch (status)
     {

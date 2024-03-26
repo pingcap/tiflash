@@ -29,7 +29,7 @@ Block ExchangeReceiverSourceOp::popFromBlockQueue()
     return block;
 }
 
-OperatorStatus ExchangeReceiverSourceOp::readImpl(Block & block)
+ReturnOpStatus ExchangeReceiverSourceOp::readImpl(Block & block)
 {
     if (!block_queue.empty())
     {
@@ -41,7 +41,7 @@ OperatorStatus ExchangeReceiverSourceOp::readImpl(Block & block)
     {
         assert(block_queue.empty());
         auto await_status = awaitImpl();
-        if (await_status == OperatorStatus::HAS_OUTPUT)
+        if (await_status.status == OperatorStatus::HAS_OUTPUT)
         {
             assert(receive_status != ReceiveStatus::empty);
             auto result
@@ -93,7 +93,7 @@ OperatorStatus ExchangeReceiverSourceOp::readImpl(Block & block)
     }
 }
 
-OperatorStatus ExchangeReceiverSourceOp::awaitImpl()
+ReturnOpStatus ExchangeReceiverSourceOp::awaitImpl()
 {
     if unlikely (!block_queue.empty())
         return OperatorStatus::HAS_OUTPUT;

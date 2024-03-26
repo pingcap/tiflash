@@ -82,10 +82,10 @@ public:
 
     HashProbeTransformExecPtr tryGetRestoreExec();
 
-    OperatorStatus tryFillProcessInfoInRestoreProbeStage(ProbeProcessInfo & probe_process_info);
+    ReturnOpStatus tryFillProcessInfoInRestoreProbeStage(ProbeProcessInfo & probe_process_info);
 
-    OperatorStatus tryFillProcessInfoInProbeStage(ProbeProcessInfo & probe_process_info);
-    OperatorStatus tryFillProcessInfoInProbeStage(ProbeProcessInfo & probe_process_info, Block & input);
+    ReturnOpStatus tryFillProcessInfoInProbeStage(ProbeProcessInfo & probe_process_info);
+    ReturnOpStatus tryFillProcessInfoInProbeStage(ProbeProcessInfo & probe_process_info, Block & input);
 
 private:
     // For restore probe stage

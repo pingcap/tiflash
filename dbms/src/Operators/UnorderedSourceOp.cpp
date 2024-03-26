@@ -20,18 +20,18 @@
 
 namespace DB
 {
-OperatorStatus UnorderedSourceOp::readImpl(Block & block)
+ReturnOpStatus UnorderedSourceOp::readImpl(Block & block)
 {
     if unlikely (done)
         return OperatorStatus::HAS_OUTPUT;
 
     auto await_status = awaitImpl();
-    if (await_status == OperatorStatus::HAS_OUTPUT)
+    if (await_status.status == OperatorStatus::HAS_OUTPUT)
         std::swap(block, t_block);
     return await_status;
 }
 
-OperatorStatus UnorderedSourceOp::awaitImpl()
+ReturnOpStatus UnorderedSourceOp::awaitImpl()
 {
     if unlikely (done)
         return OperatorStatus::HAS_OUTPUT;

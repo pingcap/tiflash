@@ -17,7 +17,7 @@
 
 namespace DB
 {
-OperatorStatus PartialSortTransformOp::transformImpl(Block & block)
+ReturnOpStatus PartialSortTransformOp::transformImpl(Block & block)
 {
     sortBlock(block, order_desc, limit);
     return OperatorStatus::HAS_OUTPUT;

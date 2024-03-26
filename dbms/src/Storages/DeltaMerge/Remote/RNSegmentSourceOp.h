@@ -55,14 +55,14 @@ protected:
 
     void operatePrefixImpl() override;
 
-    OperatorStatus readImpl(Block & block) override;
+    ReturnOpStatus readImpl(Block & block) override;
 
-    OperatorStatus awaitImpl() override;
+    ReturnOpStatus awaitImpl() override;
 
-    OperatorStatus executeIOImpl() override;
+    ReturnOpStatus executeIOImpl() override;
 
 private:
-    OperatorStatus startGettingNextReadyTask();
+    ReturnOpStatus startGettingNextReadyTask();
 
 private:
     const RNWorkersPtr workers;

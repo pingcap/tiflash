@@ -39,11 +39,11 @@ public:
 protected:
     void operateSuffixImpl() override;
 
-    OperatorStatus prepareImpl() override;
+    ReturnOpStatus prepareImpl() override;
 
-    OperatorStatus writeImpl(Block && block) override;
+    ReturnOpStatus writeImpl(Block && block) override;
 
-    OperatorStatus executeIOImpl() override;
+    ReturnOpStatus executeIOImpl() override;
 
 private:
     size_t index{};

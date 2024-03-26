@@ -35,9 +35,9 @@ public:
     String getName() const override { return "Expand2TransformOp"; }
 
 protected:
-    OperatorStatus transformImpl(Block & block) override;
+    ReturnOpStatus transformImpl(Block & block) override;
 
-    OperatorStatus tryOutputImpl(Block & block) override;
+    ReturnOpStatus tryOutputImpl(Block & block) override;
 
     void transformHeaderImpl(Block & header_) override;
 
