@@ -72,9 +72,6 @@ protected:
     OperatorStatus readImpl(Block & block) override;
 
 private:
-    OperatorStatus doFetchBlock();
-
-private:
     DM::SegmentReadTaskPoolPtr task_pool;
     int64_t ref_no;
     NotifyFuturePtr notify_future;
@@ -84,6 +81,5 @@ private:
     int max_wait_time_ms;
 
     bool done = false;
-    Block t_block;
 };
 } // namespace DB

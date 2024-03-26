@@ -65,30 +65,19 @@ OperatorStatus UnorderedSourceOp::readImpl(Block & block)
     if unlikely (done)
         return OperatorStatus::HAS_OUTPUT;
 
-    auto status = doFetchBlock();
-    if (status == OperatorStatus::HAS_OUTPUT)
-        std::swap(block, t_block);
-    return status;
-}
-
-OperatorStatus UnorderedSourceOp::doFetchBlock()
-{
-    if (t_block)
-        return OperatorStatus::HAS_OUTPUT;
-
     while (true)
     {
-        if (!task_pool->tryPopBlock(t_block))
+        if (!task_pool->tryPopBlock(block))
         {
             setNotifyFuture(notify_future);
             return OperatorStatus::WAIT_FOR_NOTIFY;
         }
 
-        if (t_block)
+        if (block)
         {
-            if unlikely (t_block.rows() == 0)
+            if unlikely (block.rows() == 0)
             {
-                t_block.clear();
+                block.clear();
                 continue;
             }
             return OperatorStatus::HAS_OUTPUT;
