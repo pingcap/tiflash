@@ -131,12 +131,15 @@ bool DMFileReader::getSkippedRows(size_t & skip_rows)
     return next_pack_id < use_packs.size();
 }
 
+// Skip the block which should be returned by next read()
 size_t DMFileReader::skipNextBlock()
 {
+    // find the first pack which is used
     size_t skip_rows;
     if (!getSkippedRows(skip_rows))
         return 0;
 
+    // move forward next_pack_id and next_row_offset
     size_t read_rows = getReadRows();
     if (read_rows == 0)
         return 0;
@@ -157,8 +160,8 @@ size_t DMFileReader::getReadRows()
     const auto & use_packs = pack_filter.getUsePacksConst();
     size_t start_pack_id = next_pack_id;
     // When read_one_pack_every_time is true, we can just read one pack every time.
-    // std::numeric_limits<UInt64>::max() means no limit
-    size_t read_pack_limit = read_one_pack_every_time ? 1 : std::numeric_limits<UInt64>::max();
+    // std::numeric_limits<size_t>::max() means no limit
+    size_t read_pack_limit = read_one_pack_every_time ? 1 : std::numeric_limits<size_t>::max();
     const auto & pack_stats = dmfile->getPackStats();
     size_t read_rows = 0;
     for (; next_pack_id < use_packs.size() && use_packs[next_pack_id] && read_rows < rows_threshold_per_read;
