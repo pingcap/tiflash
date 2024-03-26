@@ -18,6 +18,7 @@
 #include <Interpreters/Context.h>
 #include <Storages/KVStore/FFI/ProxyFFI.h>
 #include <Storages/KVStore/KVStore.h>
+#include <Storages/KVStore/Read/ReadIndexWorkerImpl.h>
 #include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <common/logger_useful.h>
@@ -307,6 +308,71 @@ void WaitCheckRegionReady(
         min_wait_tick_time,
         max_wait_tick_time,
         wait_region_ready_timeout_sec);
+}
+
+
+BatchReadIndexRes KVStore::batchReadIndex(const std::vector<kvrpcpb::ReadIndexRequest> & reqs, uint64_t timeout_ms)
+    const
+{
+    assert(this->proxy_helper);
+    if (read_index_worker_manager)
+    {
+        return this->read_index_worker_manager->batchReadIndex(reqs, timeout_ms);
+    }
+    else
+    {
+        return proxy_helper->batchReadIndex_v1(reqs, timeout_ms);
+    }
+}
+
+void KVStore::initReadIndexWorkers(
+    ReadIndexWorkerManager::FnGetTickTime && fn_min_dur_handle_region,
+    size_t runner_cnt,
+    size_t worker_coefficient)
+{
+    if (!runner_cnt)
+    {
+        LOG_WARNING(log, "Run without read-index workers");
+        return;
+    }
+    auto worker_cnt = worker_coefficient * runner_cnt;
+    LOG_INFO(log, "Start to initialize read-index workers: worker count {}, runner count {}", worker_cnt, runner_cnt);
+    auto * ptr = ReadIndexWorkerManager::newReadIndexWorkerManager(
+                     *proxy_helper,
+                     *this,
+                     worker_cnt,
+                     std::move(fn_min_dur_handle_region),
+                     runner_cnt)
+                     .release();
+    std::atomic_thread_fence(std::memory_order_seq_cst);
+    read_index_worker_manager = ptr;
+}
+
+void KVStore::asyncRunReadIndexWorkers() const
+{
+    if (!read_index_worker_manager)
+        return;
+
+    assert(this->proxy_helper);
+    read_index_worker_manager->asyncRun();
+}
+
+void KVStore::stopReadIndexWorkers() const
+{
+    if (!read_index_worker_manager)
+        return;
+
+    assert(this->proxy_helper);
+    read_index_worker_manager->stop();
+}
+
+void KVStore::releaseReadIndexWorkers()
+{
+    if (read_index_worker_manager)
+    {
+        delete read_index_worker_manager;
+        read_index_worker_manager = nullptr;
+    }
 }
 
 } // namespace DB
