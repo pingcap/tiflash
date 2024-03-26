@@ -26,6 +26,12 @@
 #include <Debug/dbgFuncRegion.h>
 #include <Debug/dbgFuncSchema.h>
 #include <Debug/dbgFuncSchemaName.h>
+<<<<<<< HEAD
+=======
+#include <Debug/dbgKVStore/dbgFuncInvestigator.h>
+#include <Debug/dbgKVStore/dbgFuncMockRaftCommand.h>
+#include <Debug/dbgKVStore/dbgFuncRegion.h>
+>>>>>>> ce8ae39fb9 (Debug: Add find key debug invoker (#8853))
 #include <Parsers/ASTLiteral.h>
 
 #include <thread>
@@ -108,6 +114,10 @@ DBGInvoker::DBGInvoker()
         MockRaftCommand::dbgFuncRegionSnapshotPreHandleDTFilesWithHandles);
     regSchemalessFunc("region_snapshot_apply_file", /*      */ MockRaftCommand::dbgFuncRegionSnapshotApplyDTFiles);
     regSchemalessFunc("region_ingest_sst", MockRaftCommand::dbgFuncIngestSST);
+    // Test whether a PK exists in KVStore.
+    regSchemalessFunc("find_key_kvstore", dbgFuncFindKey);
+    // Test whether a PK exists in DT.
+    regSchemafulFunc("find_key_dt", dbgFuncFindKeyDt);
 
     regSchemalessFunc("init_fail_point", DbgFailPointFunc::dbgInitFailPoint);
     regSchemalessFunc("enable_fail_point", DbgFailPointFunc::dbgEnableFailPoint);
