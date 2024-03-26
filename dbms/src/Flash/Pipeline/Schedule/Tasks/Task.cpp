@@ -114,11 +114,11 @@ Task::~Task()
     }                                                                                       \
     try                                                                                     \
     {                                                                                       \
-        auto return_status = (function());                                                  \
+        auto status = (function());                                                         \
         FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_task_run_failpoint); \
         FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_query_run);               \
-        switchStatus(return_status);                                                        \
-        return return_status;                                                               \
+        switchStatus(status);                                                               \
+        return status;                                                                      \
     }                                                                                       \
     catch (...)                                                                             \
     {                                                                                       \

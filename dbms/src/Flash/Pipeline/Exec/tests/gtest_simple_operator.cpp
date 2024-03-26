@@ -121,7 +121,7 @@ public:
         }};
         PipelineExecutorContext exec_context;
         auto op_pipeline = build(request, result_handler, exec_context);
-        while (op_pipeline->execute().status != OperatorStatus::FINISHED) {}
+        while (op_pipeline->execute() != OperatorStatus::FINISHED) {}
         ASSERT_COLUMNS_EQ_UR(expect_columns, vstackBlocks(std::move(blocks)).getColumnsWithTypeAndName());
     }
 };
@@ -140,7 +140,7 @@ try
     PipelineExecutorContext exec_context;
     auto op_pipeline = build(request, result_handler, exec_context);
     exec_context.cancel();
-    ASSERT_EQ(op_pipeline->execute().status, OperatorStatus::CANCELLED);
+    ASSERT_EQ(op_pipeline->execute(), OperatorStatus::CANCELLED);
 }
 CATCH
 
