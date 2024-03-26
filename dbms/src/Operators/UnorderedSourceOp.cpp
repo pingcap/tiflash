@@ -83,7 +83,7 @@ OperatorStatus UnorderedSourceOp::doFetchBlock()
             setNotifyFuture(notify_future);
             return OperatorStatus::WAIT_FOR_NOTIFY;
         }
-            
+
         if (t_block)
         {
             if unlikely (t_block.rows() == 0)

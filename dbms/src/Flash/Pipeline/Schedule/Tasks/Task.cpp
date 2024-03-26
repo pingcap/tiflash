@@ -117,7 +117,7 @@ Task::~Task()
         auto return_status = (function());                                                  \
         FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_task_run_failpoint); \
         FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_query_run);               \
-        switchStatus(return_status.status);                                                 \
+        switchStatus(return_status);                                                        \
         return return_status;                                                               \
     }                                                                                       \
     catch (...)                                                                             \

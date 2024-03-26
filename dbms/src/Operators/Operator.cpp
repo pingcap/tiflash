@@ -52,9 +52,7 @@ OperatorStatus Operator::await()
 
     auto op_status = awaitImpl();
 #ifndef NDEBUG
-    assertOperatorStatus(
-        op_status,
-        {OperatorStatus::FINISHED, OperatorStatus::NEED_INPUT, OperatorStatus::HAS_OUTPUT});
+    assertOperatorStatus(op_status, {OperatorStatus::FINISHED, OperatorStatus::NEED_INPUT, OperatorStatus::HAS_OUTPUT});
 #endif
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_operator_run_failpoint);
 
@@ -82,9 +80,7 @@ OperatorStatus Operator::executeIO()
     profile_info.anchor();
     auto op_status = executeIOImpl();
 #ifndef NDEBUG
-    assertOperatorStatus(
-        op_status,
-        {OperatorStatus::FINISHED, OperatorStatus::NEED_INPUT, OperatorStatus::HAS_OUTPUT});
+    assertOperatorStatus(op_status, {OperatorStatus::FINISHED, OperatorStatus::NEED_INPUT, OperatorStatus::HAS_OUTPUT});
 #endif
     exec_context.triggerAutoSpill();
     profile_info.update();

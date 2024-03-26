@@ -25,7 +25,7 @@ extern const char random_pipeline_model_execute_suffix_failpoint[];
 } // namespace FailPoints
 
 #define HANDLE_OP_STATUS(op, op_status, expect_status)                                                 \
-    switch ((op_status).status)                                                                        \
+    switch (op_status)                                                                                 \
     {                                                                                                  \
     /* For the expected status, it will not return here, */                                            \
     /* but instead return control to the macro caller, */                                              \
@@ -48,7 +48,7 @@ extern const char random_pipeline_model_execute_suffix_failpoint[];
 
 #define HANDLE_LAST_OP_STATUS(op, op_status)                                                           \
     assert(op);                                                                                        \
-    switch ((op_status).status)                                                                        \
+    switch (op_status)                                                                                 \
     {                                                                                                  \
     /* For the io status, the operator needs to be filled in io_op for later use in executeIO. */      \
     case OperatorStatus::IO_IN:                                                                        \
@@ -94,7 +94,7 @@ OperatorStatus PipelineExec::execute()
     auto op_status = executeImpl();
 #ifndef NDEBUG
     // `NEED_INPUT` means that pipeline_exec need data to do the calculations and expect the next call to `execute`.
-    assertOperatorStatus(op_status.status, {OperatorStatus::FINISHED, OperatorStatus::NEED_INPUT});
+    assertOperatorStatus(op_status, {OperatorStatus::FINISHED, OperatorStatus::NEED_INPUT});
 #endif
     return op_status;
 }
@@ -111,7 +111,7 @@ OperatorStatus PipelineExec::executeImpl()
     size_t start_transform_op_index = 0;
     auto op_status = fetchBlock(block, start_transform_op_index);
     // If the status `fetchBlock` returns isn't `HAS_OUTPUT`, it means that `fetchBlock` did not return a block.
-    if (op_status.status != OperatorStatus::HAS_OUTPUT)
+    if (op_status != OperatorStatus::HAS_OUTPUT)
         return op_status;
 
     // start from the next transform op after fetched block transform op.
@@ -150,9 +150,7 @@ OperatorStatus PipelineExec::executeIO()
 #ifndef NDEBUG
     // `NEED_INPUT` means that pipeline_exec need data to do the calculations and expect the next call to `execute`.
     // `HAS_OUTPUT` means that pipeline_exec has data to do the calculations and expect the next call to `execute`.
-    assertOperatorStatus(
-        op_status.status,
-        {OperatorStatus::FINISHED, OperatorStatus::HAS_OUTPUT, OperatorStatus::NEED_INPUT});
+    assertOperatorStatus(op_status, {OperatorStatus::FINISHED, OperatorStatus::HAS_OUTPUT, OperatorStatus::NEED_INPUT});
 #endif
     return op_status;
 }
@@ -160,9 +158,9 @@ OperatorStatus PipelineExec::executeIOImpl()
 {
     assert(io_op);
     auto op_status = io_op->executeIO();
-    if (op_status.status == OperatorStatus::WAITING)
+    if (op_status == OperatorStatus::WAITING)
         fillAwaitable(io_op);
-    if (op_status.status != OperatorStatus::IO_IN && op_status.status != OperatorStatus::IO_OUT)
+    if (op_status != OperatorStatus::IO_IN && op_status != OperatorStatus::IO_OUT)
         io_op = nullptr;
     return op_status;
 }
@@ -173,9 +171,7 @@ OperatorStatus PipelineExec::await()
 #ifndef NDEBUG
     // `HAS_OUTPUT` means that pipeline_exec has data to do the calculations and expect the next call to `execute`.
     // `NEED_INPUT` means that pipeline_exec need data to do the calculations and expect the next call to `execute`.
-    assertOperatorStatus(
-        op_status.status,
-        {OperatorStatus::FINISHED, OperatorStatus::HAS_OUTPUT, OperatorStatus::NEED_INPUT});
+    assertOperatorStatus(op_status, {OperatorStatus::FINISHED, OperatorStatus::HAS_OUTPUT, OperatorStatus::NEED_INPUT});
 #endif
     return op_status;
 }
@@ -183,9 +179,9 @@ OperatorStatus PipelineExec::awaitImpl()
 {
     assert(awaitable);
     auto op_status = awaitable->await();
-    if (op_status.status == OperatorStatus::IO_IN || op_status.status == OperatorStatus::IO_OUT)
+    if (op_status == OperatorStatus::IO_IN || op_status == OperatorStatus::IO_OUT)
         fillIOOp(awaitable);
-    if (op_status.status != OperatorStatus::WAITING)
+    if (op_status != OperatorStatus::WAITING)
         awaitable = nullptr;
     return op_status;
 }

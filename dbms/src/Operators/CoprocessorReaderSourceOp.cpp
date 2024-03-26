@@ -66,7 +66,7 @@ OperatorStatus CoprocessorReaderSourceOp::readImpl(Block & block)
     {
         assert(block_queue.empty());
         auto await_status = awaitImpl();
-        if (await_status.status == OperatorStatus::HAS_OUTPUT)
+        if (await_status == OperatorStatus::HAS_OUTPUT)
         {
             assert(reader_res);
             assert(reader_res->second || reader_res->first.finished);

@@ -41,7 +41,7 @@ OperatorStatus ExchangeReceiverSourceOp::readImpl(Block & block)
     {
         assert(block_queue.empty());
         auto await_status = awaitImpl();
-        if (await_status.status == OperatorStatus::HAS_OUTPUT)
+        if (await_status == OperatorStatus::HAS_OUTPUT)
         {
             assert(receive_status != ReceiveStatus::empty);
             auto result

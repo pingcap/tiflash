@@ -90,7 +90,7 @@ OperatorStatus SharedQueueSinkOp::awaitImpl()
 OperatorStatus SharedQueueSourceOp::readImpl(Block & block)
 {
     auto await_status = awaitImpl();
-    if (await_status.status == OperatorStatus::HAS_OUTPUT && res)
+    if (await_status == OperatorStatus::HAS_OUTPUT && res)
     {
         block = std::move(*res);
         res.reset();
