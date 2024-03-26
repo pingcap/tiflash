@@ -29,7 +29,7 @@ Block ExchangeReceiverSourceOp::popFromBlockQueue()
     return block;
 }
 
-ReturnOpStatus ExchangeReceiverSourceOp::readImpl(Block & block)
+OperatorStatus ExchangeReceiverSourceOp::readImpl(Block & block)
 {
     if (!block_queue.empty())
     {
@@ -93,7 +93,7 @@ ReturnOpStatus ExchangeReceiverSourceOp::readImpl(Block & block)
     }
 }
 
-ReturnOpStatus ExchangeReceiverSourceOp::awaitImpl()
+OperatorStatus ExchangeReceiverSourceOp::awaitImpl()
 {
     if unlikely (!block_queue.empty())
         return OperatorStatus::HAS_OUTPUT;

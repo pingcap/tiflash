@@ -34,7 +34,7 @@ public:
     {}
 
 protected:
-    ReturnStatus executeImpl() override
+    ExecTaskStatus executeImpl() override
     {
         --counter;
         return ExecTaskStatus::FINISHED;
@@ -75,7 +75,7 @@ public:
     {}
 
 protected:
-    ReturnStatus executeImpl() override
+    ExecTaskStatus executeImpl() override
     {
         while ((--loop_count) > 0)
             return ExecTaskStatus::RUNNING;
@@ -116,7 +116,7 @@ public:
     {}
 
 protected:
-    ReturnStatus executeImpl() override
+    ExecTaskStatus executeImpl() override
     {
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
         return ExecTaskStatus::RUNNING;
@@ -185,7 +185,7 @@ public:
     {}
 
 protected:
-    ReturnStatus executeImpl() override { throw Exception("throw exception in doExecuteImpl"); }
+    ExecTaskStatus executeImpl() override { throw Exception("throw exception in doExecuteImpl"); }
 };
 
 class ThrowExceptionEvent : public Event
@@ -291,7 +291,7 @@ public:
 
 protected:
     // executeImpl min_time ==> executeIOImpl min_time ==> awaitImpl min_time.
-    ReturnStatus executeImpl() override
+    ExecTaskStatus executeImpl() override
     {
         if (cpu_execute_time < min_time)
         {
@@ -302,7 +302,7 @@ protected:
         return ExecTaskStatus::IO_IN;
     }
 
-    ReturnStatus executeIOImpl() override
+    ExecTaskStatus executeIOImpl() override
     {
         if (io_execute_time < min_time)
         {
@@ -313,7 +313,7 @@ protected:
         return ExecTaskStatus::WAITING;
     }
 
-    ReturnStatus awaitImpl() override
+    ExecTaskStatus awaitImpl() override
     {
         if unlikely (!wait_stopwatch)
             wait_stopwatch.emplace(CLOCK_MONOTONIC_COARSE);

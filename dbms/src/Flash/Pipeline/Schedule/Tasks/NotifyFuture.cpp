@@ -14,30 +14,26 @@
 
 #pragma once
 
-#include <Flash/Pipeline/Schedule/Tasks/IOEventTask.h>
+#include <Flash/Pipeline/Schedule/Tasks/NotifyFuture.h>
 
 namespace DB
 {
-class AggregateContext;
-using AggregateContextPtr = std::shared_ptr<AggregateContext>;
+#if __APPLE__ && __clang__
+__thread NotifyFuturePtr current_notify_future = nullptr;
+#else
+thread_local NotifyFuturePtr current_notify_future = nullptr;
+#endif
 
-class AggregateFinalSpillTask : public OutputIOEventTask
+void setNotifyFuture(NotifyFuturePtr new_future)
 {
-public:
-    AggregateFinalSpillTask(
-        PipelineExecutorContext & exec_context_,
-        const String & req_id,
-        const EventPtr & event_,
-        AggregateContextPtr agg_context_,
-        size_t index_);
+    assert(current_notify_future == nullptr);
+    current_notify_future = std::move(new_future);
+}
 
-protected:
-    ExecTaskStatus executeIOImpl() override;
-
-    void doFinalizeImpl() override;
-
-private:
-    AggregateContextPtr agg_context;
-    size_t index;
-};
+void registerTaskToFuture(TaskPtr && task)
+{
+    assert(current_notify_future != nullptr);
+    current_notify_future->registerTask(std::move(task));
+    current_notify_future.reset();
+}
 } // namespace DB

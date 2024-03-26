@@ -54,7 +54,7 @@ Block CoprocessorReaderSourceOp::popFromBlockQueue()
     return block;
 }
 
-ReturnOpStatus CoprocessorReaderSourceOp::readImpl(Block & block)
+OperatorStatus CoprocessorReaderSourceOp::readImpl(Block & block)
 {
     if (!block_queue.empty())
     {
@@ -112,7 +112,7 @@ ReturnOpStatus CoprocessorReaderSourceOp::readImpl(Block & block)
         return await_status;
     }
 }
-ReturnOpStatus CoprocessorReaderSourceOp::awaitImpl()
+OperatorStatus CoprocessorReaderSourceOp::awaitImpl()
 {
     if unlikely (!block_queue.empty())
         return OperatorStatus::HAS_OUTPUT;

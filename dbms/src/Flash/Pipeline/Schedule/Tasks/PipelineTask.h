@@ -35,11 +35,11 @@ public:
     {}
 
 protected:
-    ReturnStatus executeImpl() override { return runExecute(); }
+    ExecTaskStatus executeImpl() override { return runExecute(); }
 
-    ReturnStatus executeIOImpl() override { return runExecuteIO(); }
+    ExecTaskStatus executeIOImpl() override { return runExecuteIO(); }
 
-    ReturnStatus awaitImpl() override { return runAwait(); }
+    ExecTaskStatus awaitImpl() override { return runAwait(); }
 
     void doFinalizeImpl() override
     {

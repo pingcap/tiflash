@@ -37,11 +37,11 @@ protected:
     void operatePrefixImpl() override;
     void operateSuffixImpl() override;
 
-    ReturnOpStatus writeImpl(Block && block) override;
+    OperatorStatus writeImpl(Block && block) override;
 
-    ReturnOpStatus prepareImpl() override;
+    OperatorStatus prepareImpl() override;
 
-    ReturnOpStatus awaitImpl() override;
+    OperatorStatus awaitImpl() override;
 
 private:
     std::unique_ptr<DAGResponseWriter> writer;

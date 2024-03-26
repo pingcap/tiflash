@@ -26,7 +26,7 @@ void ExchangeSenderSinkOp::operateSuffixImpl()
     LOG_DEBUG(log, "finish write with {} rows", total_rows);
 }
 
-ReturnOpStatus ExchangeSenderSinkOp::writeImpl(Block && block)
+OperatorStatus ExchangeSenderSinkOp::writeImpl(Block && block)
 {
     if (!block)
     {
@@ -39,12 +39,12 @@ ReturnOpStatus ExchangeSenderSinkOp::writeImpl(Block && block)
     return OperatorStatus::NEED_INPUT;
 }
 
-ReturnOpStatus ExchangeSenderSinkOp::prepareImpl()
+OperatorStatus ExchangeSenderSinkOp::prepareImpl()
 {
     return writer->isWritable() ? OperatorStatus::NEED_INPUT : OperatorStatus::WAITING;
 }
 
-ReturnOpStatus ExchangeSenderSinkOp::awaitImpl()
+OperatorStatus ExchangeSenderSinkOp::awaitImpl()
 {
     return writer->isWritable() ? OperatorStatus::NEED_INPUT : OperatorStatus::WAITING;
 }

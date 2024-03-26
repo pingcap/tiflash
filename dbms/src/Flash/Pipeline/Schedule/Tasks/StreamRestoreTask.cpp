@@ -20,7 +20,7 @@ namespace DB
 {
 namespace
 {
-ALWAYS_INLINE ReturnStatus tryPushBlock(const ResultQueuePtr & result_queue, Block & block)
+ALWAYS_INLINE ExecTaskStatus tryPushBlock(const ResultQueuePtr & result_queue, Block & block)
 {
     assert(block);
     auto ret = result_queue->tryPush(std::move(block));
@@ -53,12 +53,12 @@ StreamRestoreTask::StreamRestoreTask(
     assert(result_queue);
 }
 
-ReturnStatus StreamRestoreTask::executeImpl()
+ExecTaskStatus StreamRestoreTask::executeImpl()
 {
     return is_done ? ExecTaskStatus::FINISHED : ExecTaskStatus::IO_IN;
 }
 
-ReturnStatus StreamRestoreTask::awaitImpl()
+ExecTaskStatus StreamRestoreTask::awaitImpl()
 {
     if (unlikely(is_done))
         return ExecTaskStatus::FINISHED;
@@ -68,7 +68,7 @@ ReturnStatus StreamRestoreTask::awaitImpl()
     return tryPushBlock(result_queue, block);
 }
 
-ReturnStatus StreamRestoreTask::executeIOImpl()
+ExecTaskStatus StreamRestoreTask::executeIOImpl()
 {
     if (!block)
     {

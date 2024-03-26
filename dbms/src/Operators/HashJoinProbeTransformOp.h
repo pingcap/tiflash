@@ -34,20 +34,20 @@ public:
     String getName() const override { return "HashJoinProbeTransformOp"; }
 
 protected:
-    ReturnOpStatus transformImpl(Block & block) override;
+    OperatorStatus transformImpl(Block & block) override;
 
-    ReturnOpStatus tryOutputImpl(Block & block) override;
+    OperatorStatus tryOutputImpl(Block & block) override;
 
-    ReturnOpStatus awaitImpl() override;
+    OperatorStatus awaitImpl() override;
 
-    ReturnOpStatus executeIOImpl() override;
+    OperatorStatus executeIOImpl() override;
 
     void transformHeaderImpl(Block & header_) override;
 
     void operateSuffixImpl() override;
 
 private:
-    ReturnOpStatus onOutput(Block & block);
+    OperatorStatus onOutput(Block & block);
 
     inline void onWaitProbeFinishDone();
 

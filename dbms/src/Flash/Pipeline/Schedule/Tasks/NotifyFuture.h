@@ -25,4 +25,14 @@ struct NotifyFuture
     virtual void registerTask(TaskPtr && task) = 0;
 };
 using NotifyFuturePtr = std::shared_ptr<NotifyFuture>;
+
+#if __APPLE__ && __clang__
+extern __thread NotifyFuturePtr current_notify_future;
+#else
+extern thread_local NotifyFuturePtr current_notify_future;
+#endif
+
+void setNotifyFuture(NotifyFuturePtr new_future);
+void registerTaskToFuture(TaskPtr && task);
+
 } // namespace DB

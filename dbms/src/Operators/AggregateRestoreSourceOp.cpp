@@ -30,12 +30,12 @@ AggregateRestoreSourceOp::AggregateRestoreSourceOp(
     setHeader(agg_context->getHeader());
 }
 
-ReturnOpStatus AggregateRestoreSourceOp::readImpl(Block & block)
+OperatorStatus AggregateRestoreSourceOp::readImpl(Block & block)
 {
     return restorer->tryPop(block) ? OperatorStatus::HAS_OUTPUT : OperatorStatus::WAITING;
 }
 
-ReturnOpStatus AggregateRestoreSourceOp::awaitImpl()
+OperatorStatus AggregateRestoreSourceOp::awaitImpl()
 {
     return restorer->tryLoadBucketData() == SharedLoadResult::RETRY ? OperatorStatus::WAITING
                                                                     : OperatorStatus::HAS_OUTPUT;

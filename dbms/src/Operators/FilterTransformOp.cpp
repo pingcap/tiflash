@@ -16,7 +16,7 @@
 
 namespace DB
 {
-ReturnOpStatus FilterTransformOp::transformImpl(Block & block)
+OperatorStatus FilterTransformOp::transformImpl(Block & block)
 {
     if (unlikely(filter_transform_action.alwaysFalse()))
     {

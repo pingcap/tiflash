@@ -96,21 +96,21 @@ void TaskThreadPool<Impl>::handleTask(TaskPtr & task)
     metrics.incExecutingTask();
     metrics.elapsedPendingTime(task);
 
-    ExecTaskStatus status_before_exec = task->getStatus();
-    ReturnStatus return_status_after_exec = status_before_exec;
+    auto status_before_exec = task->getStatus();
+    auto status_after_exec = status_before_exec;
     UInt64 total_time_spent = 0;
     while (true)
     {
-        return_status_after_exec = Impl::exec(task);
+        status_after_exec = Impl::exec(task);
         total_time_spent += task->profile_info.elapsedFromPrev();
         // The executing task should yield if it takes more than `YIELD_MAX_TIME_SPENT_NS`.
-        if (!Impl::isTargetStatus(return_status_after_exec.status) || total_time_spent >= YIELD_MAX_TIME_SPENT_NS)
+        if (!Impl::isTargetStatus(status_after_exec) || total_time_spent >= YIELD_MAX_TIME_SPENT_NS)
             break;
     }
     task_queue->updateStatistics(task, status_before_exec, total_time_spent);
     metrics.addExecuteTime(task, total_time_spent);
     metrics.decExecutingTask();
-    switch (return_status_after_exec.status)
+    switch (status_after_exec)
     {
     case ExecTaskStatus::RUNNING:
         task->endTraceMemory();
@@ -126,8 +126,7 @@ void TaskThreadPool<Impl>::handleTask(TaskPtr & task)
         scheduler.submitToWaitReactor(std::move(task));
         break;
     case ExecTaskStatus::WAIT_FOR_NOTIFY:
-        assert(return_status_after_exec.future);
-        return_status_after_exec.future->registerTask(std::move(task));
+        registerTaskToFuture(std::move(task));
         break;
     case FINISH_STATUS:
         task->finalize();
@@ -135,7 +134,7 @@ void TaskThreadPool<Impl>::handleTask(TaskPtr & task)
         task.reset();
         break;
     default:
-        UNEXPECTED_STATUS(task->log, return_status_after_exec.status);
+        UNEXPECTED_STATUS(task->log, status_after_exec);
     }
 }
 

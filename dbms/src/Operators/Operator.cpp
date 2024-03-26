@@ -45,7 +45,7 @@ void Operator::operateSuffix()
     if (unlikely(exec_context.isCancelled()))                                             \
         return OperatorStatus::CANCELLED;
 
-ReturnOpStatus Operator::await()
+OperatorStatus Operator::await()
 {
     // `exec_context.is_cancelled` has been checked by `EventTask`.
     // If `exec_context.is_cancelled` is checked here, the overhead of `exec_context.is_cancelled` will be amplified by the high frequency of `await` calls.
@@ -76,7 +76,7 @@ ReturnOpStatus Operator::await()
     return return_status;
 }
 
-ReturnOpStatus Operator::executeIO()
+OperatorStatus Operator::executeIO()
 {
     CHECK_IS_CANCELLED
     profile_info.anchor();
@@ -92,7 +92,7 @@ ReturnOpStatus Operator::executeIO()
     return return_status;
 }
 
-ReturnOpStatus SourceOp::read(Block & block)
+OperatorStatus SourceOp::read(Block & block)
 {
     CHECK_IS_CANCELLED
     profile_info.anchor();
@@ -115,7 +115,7 @@ ReturnOpStatus SourceOp::read(Block & block)
     return return_status;
 }
 
-ReturnOpStatus TransformOp::transform(Block & block)
+OperatorStatus TransformOp::transform(Block & block)
 {
     CHECK_IS_CANCELLED
     profile_info.anchor();
@@ -137,7 +137,7 @@ ReturnOpStatus TransformOp::transform(Block & block)
     return return_status;
 }
 
-ReturnOpStatus TransformOp::tryOutput(Block & block)
+OperatorStatus TransformOp::tryOutput(Block & block)
 {
     CHECK_IS_CANCELLED
     profile_info.anchor();
@@ -160,7 +160,7 @@ ReturnOpStatus TransformOp::tryOutput(Block & block)
     return return_status;
 }
 
-ReturnOpStatus SinkOp::prepare()
+OperatorStatus SinkOp::prepare()
 {
     CHECK_IS_CANCELLED
     profile_info.anchor();
@@ -173,7 +173,7 @@ ReturnOpStatus SinkOp::prepare()
     return return_status;
 }
 
-ReturnOpStatus SinkOp::write(Block && block)
+OperatorStatus SinkOp::write(Block && block)
 {
     CHECK_IS_CANCELLED
     profile_info.anchor(block);

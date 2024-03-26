@@ -89,7 +89,7 @@ void PipelineExec::executeSuffix()
     source_op->operateSuffix();
 }
 
-ReturnOpStatus PipelineExec::execute()
+OperatorStatus PipelineExec::execute()
 {
     auto op_status = executeImpl();
 #ifndef NDEBUG
@@ -105,7 +105,7 @@ ReturnOpStatus PipelineExec::execute()
  *                                                          │ block
  *    write◄────transform◄─── ... ◄───transform◄────────────┘
  */
-ReturnOpStatus PipelineExec::executeImpl()
+OperatorStatus PipelineExec::executeImpl()
 {
     Block block;
     size_t start_transform_op_index = 0;
@@ -127,7 +127,7 @@ ReturnOpStatus PipelineExec::executeImpl()
 }
 
 // try fetch block from transform_ops and source_op.
-ReturnOpStatus PipelineExec::fetchBlock(Block & block, size_t & start_transform_op_index)
+OperatorStatus PipelineExec::fetchBlock(Block & block, size_t & start_transform_op_index)
 {
     auto op_status = sink_op->prepare();
     HANDLE_OP_STATUS(sink_op, op_status, OperatorStatus::NEED_INPUT);
@@ -144,7 +144,7 @@ ReturnOpStatus PipelineExec::fetchBlock(Block & block, size_t & start_transform_
     HANDLE_LAST_OP_STATUS(source_op, op_status);
 }
 
-ReturnOpStatus PipelineExec::executeIO()
+OperatorStatus PipelineExec::executeIO()
 {
     auto op_status = executeIOImpl();
 #ifndef NDEBUG
@@ -156,7 +156,7 @@ ReturnOpStatus PipelineExec::executeIO()
 #endif
     return op_status;
 }
-ReturnOpStatus PipelineExec::executeIOImpl()
+OperatorStatus PipelineExec::executeIOImpl()
 {
     assert(io_op);
     auto op_status = io_op->executeIO();
@@ -167,7 +167,7 @@ ReturnOpStatus PipelineExec::executeIOImpl()
     return op_status;
 }
 
-ReturnOpStatus PipelineExec::await()
+OperatorStatus PipelineExec::await()
 {
     auto op_status = awaitImpl();
 #ifndef NDEBUG
@@ -179,7 +179,7 @@ ReturnOpStatus PipelineExec::await()
 #endif
     return op_status;
 }
-ReturnOpStatus PipelineExec::awaitImpl()
+OperatorStatus PipelineExec::awaitImpl()
 {
     assert(awaitable);
     auto op_status = awaitable->await();

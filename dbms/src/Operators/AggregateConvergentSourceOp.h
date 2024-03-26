@@ -35,7 +35,7 @@ public:
 protected:
     void operateSuffixImpl() override;
 
-    ReturnOpStatus readImpl(Block & block) override;
+    OperatorStatus readImpl(Block & block) override;
 
 private:
     AggregateContextPtr agg_context;

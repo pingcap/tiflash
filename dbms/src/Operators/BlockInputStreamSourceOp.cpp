@@ -38,7 +38,7 @@ void BlockInputStreamSourceOp::operateSuffixImpl()
     impl->readSuffix();
 }
 
-ReturnOpStatus BlockInputStreamSourceOp::readImpl(Block & block)
+OperatorStatus BlockInputStreamSourceOp::readImpl(Block & block)
 {
     block = impl->read();
     return OperatorStatus::HAS_OUTPUT;

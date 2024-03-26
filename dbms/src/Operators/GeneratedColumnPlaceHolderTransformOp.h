@@ -34,7 +34,7 @@ public:
     String getName() const override;
 
 protected:
-    ReturnOpStatus transformImpl(Block & block) override;
+    OperatorStatus transformImpl(Block & block) override;
 
     void transformHeaderImpl(Block & header_) override;
 

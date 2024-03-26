@@ -20,7 +20,7 @@ String GeneratedColumnPlaceHolderTransformOp::getName() const
     return "GeneratedColumnPlaceholderTransformOp";
 }
 
-ReturnOpStatus GeneratedColumnPlaceHolderTransformOp::transformImpl(Block & block)
+OperatorStatus GeneratedColumnPlaceHolderTransformOp::transformImpl(Block & block)
 {
     action.transform(block);
     return OperatorStatus::HAS_OUTPUT;

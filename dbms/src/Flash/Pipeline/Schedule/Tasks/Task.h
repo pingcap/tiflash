@@ -17,36 +17,35 @@
 #include <Common/Logger.h>
 #include <Common/MemoryTracker.h>
 #include <Flash/Executor/PipelineExecutorContext.h>
-#include <Flash/Pipeline/Schedule/Tasks/ExecTaskStatus.h>
 #include <Flash/Pipeline/Schedule/Tasks/TaskProfileInfo.h>
 #include <memory.h>
 
 namespace DB
 {
-class PipelineExecutorContext;
-
-struct NotifyFuture;
-using NotifyFuturePtr = std::shared_ptr<NotifyFuture>;
-
-struct ReturnStatus
+/**
+ *                           CANCELLED/ERROR/FINISHED
+ *                                      ▲
+ *                                      │
+ *         ┌───────────────────────────────────────────────┐
+ *         │                     ┌──►RUNNING◄──┐           │
+ * INIT───►│                     │             │           │
+ *         │                     ▼             ▼           │
+ *         │ WAIT_FOR_NOTIFY/WATITING◄────────►IO_IN/OUT   │
+ *         └───────────────────────────────────────────────┘
+ */
+enum class ExecTaskStatus
 {
-    ReturnStatus(ExecTaskStatus status_) // NOLINT(google-explicit-constructor)
-        : status(status_)
-        , future(nullptr)
-    {
-        assert(status != ExecTaskStatus::WAIT_FOR_NOTIFY);
-    }
-
-    ReturnStatus(NotifyFuturePtr furture_) // NOLINT(google-explicit-constructor)
-        : status(ExecTaskStatus::WAIT_FOR_NOTIFY)
-        , future(std::move(furture_))
-    {
-        assert(future != nullptr);
-    }
-
-    ExecTaskStatus status;
-    NotifyFuturePtr future{nullptr};
+    WAIT_FOR_NOTIFY,
+    WAITING,
+    RUNNING,
+    IO_IN,
+    IO_OUT,
+    FINISHED,
+    ERROR,
+    CANCELLED,
 };
+
+class PipelineExecutorContext;
 
 class Task
 {
@@ -63,11 +62,11 @@ public:
 
     ExecTaskStatus getStatus() const { return task_status; }
 
-    ReturnStatus execute();
+    ExecTaskStatus execute();
 
-    ReturnStatus executeIO();
+    ExecTaskStatus executeIO();
 
-    ReturnStatus await();
+    ExecTaskStatus await();
 
     void notify();
 
@@ -99,10 +98,10 @@ public:
     LoggerPtr log;
 
 protected:
-    virtual ReturnStatus executeImpl() = 0;
-    virtual ReturnStatus executeIOImpl() { return ExecTaskStatus::RUNNING; }
+    virtual ExecTaskStatus executeImpl() = 0;
+    virtual ExecTaskStatus executeIOImpl() { return ExecTaskStatus::RUNNING; }
     // Avoid allocating memory in `await` if possible.
-    virtual ReturnStatus awaitImpl() { return ExecTaskStatus::RUNNING; }
+    virtual ExecTaskStatus awaitImpl() { return ExecTaskStatus::RUNNING; }
 
     // Used to release held resources, just like `Event::finishImpl`.
     virtual void finalizeImpl() {}

@@ -128,21 +128,21 @@ Task::~Task()
         return task_status;                                                                 \
     }
 
-ReturnStatus Task::execute()
+ExecTaskStatus Task::execute()
 {
     assert(mem_tracker_ptr == current_memory_tracker);
     assert(task_status == ExecTaskStatus::RUNNING);
     EXECUTE(executeImpl);
 }
 
-ReturnStatus Task::executeIO()
+ExecTaskStatus Task::executeIO()
 {
     assert(mem_tracker_ptr == current_memory_tracker);
     assert(task_status == ExecTaskStatus::IO_IN || task_status == ExecTaskStatus::IO_OUT);
     EXECUTE(executeIOImpl);
 }
 
-ReturnStatus Task::await()
+ExecTaskStatus Task::await()
 {
     // Because await only performs polling checks and does not involve computing/memory tracker memory allocation,
     // await will not invoke MemoryTracker, so current_memory_tracker must be nullptr here.

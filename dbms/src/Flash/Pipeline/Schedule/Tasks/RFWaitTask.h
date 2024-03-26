@@ -75,9 +75,9 @@ public:
     }
 
 private:
-    ReturnStatus executeImpl() override { return ExecTaskStatus::WAITING; }
+    ExecTaskStatus executeImpl() override { return ExecTaskStatus::WAITING; }
 
-    ReturnStatus awaitImpl() override
+    ExecTaskStatus awaitImpl() override
     {
         filterAndMoveReadyRfs(waiting_rf_list, ready_rf_list);
         if (waiting_rf_list.empty() || stopwatch.elapsed() >= max_wait_time_ns)

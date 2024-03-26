@@ -33,11 +33,11 @@ public:
         const ResultQueuePtr & result_queue_);
 
 protected:
-    ReturnStatus executeImpl() override;
+    ExecTaskStatus executeImpl() override;
 
-    ReturnStatus awaitImpl() override;
+    ExecTaskStatus awaitImpl() override;
 
-    ReturnStatus executeIOImpl() override;
+    ExecTaskStatus executeIOImpl() override;
 
     void finalizeImpl() override;
 

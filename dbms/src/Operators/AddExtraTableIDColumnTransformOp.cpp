@@ -17,7 +17,7 @@
 namespace DB
 {
 
-ReturnOpStatus AddExtraTableIDColumnTransformOp::transformImpl(Block & block)
+OperatorStatus AddExtraTableIDColumnTransformOp::transformImpl(Block & block)
 {
     if (!action.transform(block, physical_table_id))
         block = {};

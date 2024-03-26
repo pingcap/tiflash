@@ -23,6 +23,9 @@
 
 namespace DB
 {
+struct NotifyFuture;
+using NotifyFuturePtr = std::shared_ptr<NotifyFuture>;
+
 /// Read blocks asyncly from Storage Layer by using read thread,
 /// The result can not guarantee the keep_order property
 class UnorderedSourceOp : public SourceOp
@@ -66,10 +69,10 @@ public:
 protected:
     void operatePrefixImpl() override;
 
-    ReturnOpStatus readImpl(Block & block) override;
+    OperatorStatus readImpl(Block & block) override;
 
 private:
-    ReturnOpStatus doFetchBlock();
+    OperatorStatus doFetchBlock();
 
 private:
     DM::SegmentReadTaskPoolPtr task_pool;

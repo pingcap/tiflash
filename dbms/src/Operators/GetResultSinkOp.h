@@ -36,11 +36,11 @@ public:
     String getName() const override { return "GetResultSinkOp"; }
 
 protected:
-    ReturnOpStatus writeImpl(Block && block) override;
+    OperatorStatus writeImpl(Block && block) override;
 
-    ReturnOpStatus prepareImpl() override;
+    OperatorStatus prepareImpl() override;
 
-    ReturnOpStatus awaitImpl() override;
+    OperatorStatus awaitImpl() override;
 
 private:
     ResultQueuePtr result_queue;

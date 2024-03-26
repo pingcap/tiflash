@@ -39,7 +39,7 @@ public:
     String getName() const override { return "SimpleGetResultSinkOp"; }
 
 protected:
-    ReturnOpStatus writeImpl(Block && block) override
+    OperatorStatus writeImpl(Block && block) override
     {
         if (!block)
             return OperatorStatus::FINISHED;

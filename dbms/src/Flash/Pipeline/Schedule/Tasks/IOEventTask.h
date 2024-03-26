@@ -27,7 +27,7 @@ public:
     {}
 
 private:
-    ReturnStatus executeImpl() final
+    ExecTaskStatus executeImpl() final
     {
         if constexpr (is_input)
             return ExecTaskStatus::IO_IN;
@@ -35,7 +35,7 @@ private:
             return ExecTaskStatus::IO_OUT;
     }
 
-    ReturnStatus awaitImpl() final
+    ExecTaskStatus awaitImpl() final
     {
         if constexpr (is_input)
             return ExecTaskStatus::IO_IN;

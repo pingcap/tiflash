@@ -48,7 +48,7 @@ void RNSegmentSourceOp::operatePrefixImpl()
     workers->startInBackground();
 }
 
-ReturnOpStatus RNSegmentSourceOp::startGettingNextReadyTask()
+OperatorStatus RNSegmentSourceOp::startGettingNextReadyTask()
 {
     // Start timing the time of get next ready task.
     wait_stop_watch.start();
@@ -56,7 +56,7 @@ ReturnOpStatus RNSegmentSourceOp::startGettingNextReadyTask()
     return awaitImpl();
 }
 
-ReturnOpStatus RNSegmentSourceOp::readImpl(Block & block)
+OperatorStatus RNSegmentSourceOp::readImpl(Block & block)
 {
     if unlikely (done)
     {
@@ -75,7 +75,7 @@ ReturnOpStatus RNSegmentSourceOp::readImpl(Block & block)
     return current_seg_task ? OperatorStatus::IO_IN : startGettingNextReadyTask();
 }
 
-ReturnOpStatus RNSegmentSourceOp::awaitImpl()
+OperatorStatus RNSegmentSourceOp::awaitImpl()
 {
     if unlikely (done || t_block.has_value())
     {
@@ -117,7 +117,7 @@ ReturnOpStatus RNSegmentSourceOp::awaitImpl()
     }
 }
 
-ReturnOpStatus RNSegmentSourceOp::executeIOImpl()
+OperatorStatus RNSegmentSourceOp::executeIOImpl()
 {
     if unlikely (done || t_block.has_value())
         return OperatorStatus::HAS_OUTPUT;

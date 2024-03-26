@@ -32,7 +32,7 @@ public:
     {}
 
 protected:
-    ReturnStatus executeImpl() noexcept override
+    ExecTaskStatus executeImpl() noexcept override
     {
         while ((--loop_count) > 0)
             return ExecTaskStatus::RUNNING;
@@ -51,7 +51,7 @@ public:
     {}
 
 protected:
-    ReturnStatus executeImpl() noexcept override
+    ExecTaskStatus executeImpl() noexcept override
     {
         if (loop_count > 0)
         {
@@ -66,7 +66,7 @@ protected:
         return ExecTaskStatus::FINISHED;
     }
 
-    ReturnStatus awaitImpl() noexcept override
+    ExecTaskStatus awaitImpl() noexcept override
     {
         if (loop_count > 0)
         {
@@ -93,7 +93,7 @@ public:
     {}
 
 protected:
-    ReturnStatus executeImpl() override
+    ExecTaskStatus executeImpl() override
     {
         if (loop_count > 0)
         {
@@ -108,7 +108,7 @@ protected:
         return ExecTaskStatus::FINISHED;
     }
 
-    ReturnStatus executeIOImpl() override
+    ExecTaskStatus executeIOImpl() override
     {
         if (loop_count > 0)
         {
@@ -140,19 +140,19 @@ public:
     static constexpr Int64 MEMORY_TRACER_SUBMIT_THRESHOLD = 1024 * 1024; // 1 MiB
 
 protected:
-    ReturnStatus executeImpl() noexcept override
+    ExecTaskStatus executeImpl() noexcept override
     {
         CurrentMemoryTracker::alloc(MEMORY_TRACER_SUBMIT_THRESHOLD - 10);
         return ExecTaskStatus::IO_IN;
     }
 
-    ReturnStatus executeIOImpl() override
+    ExecTaskStatus executeIOImpl() override
     {
         CurrentMemoryTracker::alloc(MEMORY_TRACER_SUBMIT_THRESHOLD + 10);
         return ExecTaskStatus::WAITING;
     }
 
-    ReturnStatus awaitImpl() override
+    ExecTaskStatus awaitImpl() override
     {
         // await wouldn't call MemoryTracker.
         return ExecTaskStatus::FINISHED;
@@ -167,11 +167,11 @@ public:
     {}
 
 protected:
-    ReturnStatus executeImpl() override { return ExecTaskStatus::WAITING; }
+    ExecTaskStatus executeImpl() override { return ExecTaskStatus::WAITING; }
 
-    ReturnStatus awaitImpl() override { return ExecTaskStatus::IO_IN; }
+    ExecTaskStatus awaitImpl() override { return ExecTaskStatus::IO_IN; }
 
-    ReturnStatus executeIOImpl() override { return ExecTaskStatus::RUNNING; }
+    ExecTaskStatus executeIOImpl() override { return ExecTaskStatus::RUNNING; }
 };
 } // namespace
 

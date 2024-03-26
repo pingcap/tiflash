@@ -17,7 +17,7 @@
 
 namespace DB
 {
-ReturnOpStatus ExpressionTransformOp::transformImpl(Block & block)
+OperatorStatus ExpressionTransformOp::transformImpl(Block & block)
 {
     if (likely(block))
         expression->execute(block);

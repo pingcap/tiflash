@@ -57,7 +57,7 @@ void DMSegmentThreadSourceOp::operateSuffixImpl()
     LOG_DEBUG(log, "Finish read {} rows from storage", total_rows);
 }
 
-ReturnOpStatus DMSegmentThreadSourceOp::readImpl(Block & block)
+OperatorStatus DMSegmentThreadSourceOp::readImpl(Block & block)
 {
     if (done)
     {
@@ -74,7 +74,7 @@ ReturnOpStatus DMSegmentThreadSourceOp::readImpl(Block & block)
     return OperatorStatus::IO_IN;
 }
 
-ReturnOpStatus DMSegmentThreadSourceOp::executeIOImpl()
+OperatorStatus DMSegmentThreadSourceOp::executeIOImpl()
 {
     if (unlikely(done))
         return OperatorStatus::HAS_OUTPUT;

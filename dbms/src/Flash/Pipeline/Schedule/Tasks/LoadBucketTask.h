@@ -33,7 +33,7 @@ public:
     {}
 
 private:
-    ReturnStatus executeIOImpl() override;
+    ExecTaskStatus executeIOImpl() override;
 
 private:
     SpilledBucketInput & input;

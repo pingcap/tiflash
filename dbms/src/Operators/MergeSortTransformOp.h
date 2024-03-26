@@ -54,10 +54,10 @@ protected:
     void operatePrefixImpl() override;
     void operateSuffixImpl() override;
 
-    ReturnOpStatus transformImpl(Block & block) override;
-    ReturnOpStatus tryOutputImpl(Block & block) override;
+    OperatorStatus transformImpl(Block & block) override;
+    OperatorStatus tryOutputImpl(Block & block) override;
 
-    ReturnOpStatus executeIOImpl() override;
+    OperatorStatus executeIOImpl() override;
 
     void transformHeaderImpl(Block & header_) override;
 
@@ -65,14 +65,14 @@ private:
     Block getMergeOutput();
 
     // PARTIAL◄─────►SPILL
-    ReturnOpStatus fromPartialToSpill();
-    ReturnOpStatus fromSpillToPartial();
+    OperatorStatus fromPartialToSpill();
+    OperatorStatus fromSpillToPartial();
 
     // PARTIAL─────►RESTORE
-    ReturnOpStatus fromPartialToRestore();
+    OperatorStatus fromPartialToRestore();
 
     // PARTIAL─────►MERGE
-    ReturnOpStatus fromPartialToMerge(Block & block);
+    OperatorStatus fromPartialToMerge(Block & block);
 
 private:
     bool hasSpilledData() const { return sort_spill_context->hasSpilledData(); }

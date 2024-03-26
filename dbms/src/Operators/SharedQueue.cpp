@@ -50,7 +50,7 @@ void SharedQueue::producerFinish()
         queue.finish();
 }
 
-ReturnOpStatus SharedQueueSinkOp::writeImpl(Block && block)
+OperatorStatus SharedQueueSinkOp::writeImpl(Block && block)
 {
     if unlikely (!block)
         return OperatorStatus::FINISHED;
@@ -60,12 +60,12 @@ ReturnOpStatus SharedQueueSinkOp::writeImpl(Block && block)
     return awaitImpl();
 }
 
-ReturnOpStatus SharedQueueSinkOp::prepareImpl()
+OperatorStatus SharedQueueSinkOp::prepareImpl()
 {
     return awaitImpl();
 }
 
-ReturnOpStatus SharedQueueSinkOp::awaitImpl()
+OperatorStatus SharedQueueSinkOp::awaitImpl()
 {
     if (!res)
         return OperatorStatus::NEED_INPUT;
@@ -87,7 +87,7 @@ ReturnOpStatus SharedQueueSinkOp::awaitImpl()
     }
 }
 
-ReturnOpStatus SharedQueueSourceOp::readImpl(Block & block)
+OperatorStatus SharedQueueSourceOp::readImpl(Block & block)
 {
     auto await_status = awaitImpl();
     if (await_status.status == OperatorStatus::HAS_OUTPUT && res)
@@ -98,7 +98,7 @@ ReturnOpStatus SharedQueueSourceOp::readImpl(Block & block)
     return await_status;
 }
 
-ReturnOpStatus SharedQueueSourceOp::awaitImpl()
+OperatorStatus SharedQueueSourceOp::awaitImpl()
 {
     if (res)
         return OperatorStatus::HAS_OUTPUT;

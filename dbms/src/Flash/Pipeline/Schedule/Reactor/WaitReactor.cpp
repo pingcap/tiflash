@@ -38,8 +38,8 @@ bool WaitReactor::awaitAndCollectReadyTask(WaitingTask && task)
 {
     assert(task.first);
     auto * task_ptr = task.second;
-    auto return_status = task_ptr->await();
-    switch (return_status.status)
+    auto status = task_ptr->await();
+    switch (status)
     {
     case ExecTaskStatus::WAITING:
         return false;
@@ -53,8 +53,7 @@ bool WaitReactor::awaitAndCollectReadyTask(WaitingTask && task)
         io_tasks.push_back(std::move(task.first));
         return true;
     case ExecTaskStatus::WAIT_FOR_NOTIFY:
-        assert(return_status.future);
-        return_status.future->registerTask(std::move(task.first));
+        registerTaskToFuture(std::move(task.first));
         return true;
     case FINISH_STATUS:
         task_ptr->profile_info.elapsedAwaitTime();
@@ -64,7 +63,7 @@ bool WaitReactor::awaitAndCollectReadyTask(WaitingTask && task)
         task.first.reset();
         return true;
     default:
-        UNEXPECTED_STATUS(logger, return_status.status);
+        UNEXPECTED_STATUS(logger, status);
     }
 }
 

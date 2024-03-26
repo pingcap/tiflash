@@ -37,7 +37,7 @@ public:
     String getName() const override { return "MockSourceOp"; }
 
 protected:
-    ReturnOpStatus readImpl(Block & block) override
+    OperatorStatus readImpl(Block & block) override
     {
         std::swap(block, output);
         return OperatorStatus::HAS_OUTPUT;
