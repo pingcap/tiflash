@@ -23,8 +23,8 @@ RangeWithStrategys ColumnCache::getReadStrategy(size_t start_pack_id, size_t pac
     PackRange target_range{start_pack_id, start_pack_id + pack_count};
 
     RangeWithStrategys range_and_strategys;
-
-    Strategy strategy = Strategy::Unknown;
+    range_and_strategys.reserve(pack_count);
+    auto strategy = Strategy::Unknown;
     size_t range_start = 0;
     for (size_t cursor = target_range.first; cursor < target_range.second; ++cursor)
     {
@@ -36,7 +36,7 @@ RangeWithStrategys ColumnCache::getReadStrategy(size_t start_pack_id, size_t pac
             }
             else if (strategy == Strategy::Disk)
             {
-                range_and_strategys.emplace_back(std::make_pair(PackRange{range_start, cursor}, Strategy::Disk));
+                range_and_strategys.emplace_back(PackRange{range_start, cursor}, Strategy::Disk);
             }
             range_start = cursor;
             strategy = Strategy::Memory;
@@ -45,7 +45,7 @@ RangeWithStrategys ColumnCache::getReadStrategy(size_t start_pack_id, size_t pac
         {
             if (strategy == Strategy::Memory)
             {
-                range_and_strategys.emplace_back(std::make_pair(PackRange{range_start, cursor}, Strategy::Memory));
+                range_and_strategys.emplace_back(PackRange{range_start, cursor}, Strategy::Memory);
             }
             else if (strategy == Strategy::Disk)
             {
@@ -55,21 +55,21 @@ RangeWithStrategys ColumnCache::getReadStrategy(size_t start_pack_id, size_t pac
             strategy = Strategy::Disk;
         }
     }
-    range_and_strategys.emplace_back(std::make_pair(PackRange{range_start, target_range.second}, strategy));
-
+    range_and_strategys.emplace_back(PackRange{range_start, target_range.second}, strategy);
+    range_and_strategys.shrink_to_fit();
     return range_and_strategys;
 }
 
 RangeWithStrategys ColumnCache::getReadStrategy(
     size_t start_pack_id,
     size_t pack_count,
-    std::unordered_set<size_t> memory_pack_ids)
+    const std::unordered_set<size_t> & memory_pack_ids)
 {
     PackRange target_range{start_pack_id, start_pack_id + pack_count};
 
     RangeWithStrategys range_and_strategys;
-
-    Strategy strategy = Strategy::Unknown;
+    range_and_strategys.reserve(pack_count);
+    auto strategy = Strategy::Unknown;
     size_t range_start = 0;
     for (size_t cursor = target_range.first; cursor < target_range.second; ++cursor)
     {
@@ -81,7 +81,7 @@ RangeWithStrategys ColumnCache::getReadStrategy(
             }
             else if (strategy == Strategy::Disk)
             {
-                range_and_strategys.emplace_back(std::make_pair(PackRange{range_start, cursor}, Strategy::Disk));
+                range_and_strategys.emplace_back(PackRange{range_start, cursor}, Strategy::Disk);
             }
             range_start = cursor;
             strategy = Strategy::Memory;
@@ -90,7 +90,7 @@ RangeWithStrategys ColumnCache::getReadStrategy(
         {
             if (strategy == Strategy::Memory)
             {
-                range_and_strategys.emplace_back(std::make_pair(PackRange{range_start, cursor}, Strategy::Memory));
+                range_and_strategys.emplace_back(PackRange{range_start, cursor}, Strategy::Memory);
             }
             else if (strategy == Strategy::Disk)
             {
@@ -100,7 +100,8 @@ RangeWithStrategys ColumnCache::getReadStrategy(
             strategy = Strategy::Disk;
         }
     }
-    range_and_strategys.emplace_back(std::make_pair(PackRange{range_start, target_range.second}, strategy));
+    range_and_strategys.emplace_back(PackRange{range_start, target_range.second}, strategy);
+    range_and_strategys.shrink_to_fit();
     return range_and_strategys;
 }
 
