@@ -67,11 +67,19 @@ public:
     void registerPipeTask(TaskPtr && task)
     {
         std::lock_guard lock(mu);
-        pipe_cv.registerTask(std::move(task));
-        if (done)
+        if (unlikely(done))
+        {
+            PipeConditionVariable::notifyTaskDirectly(std::move(task));
             pipe_cv.notifyAll();
-        if (!queue.empty())
-            pipe_cv.notifyOne();
+        }
+        else if (!queue.empty())
+        {
+            PipeConditionVariable::notifyTaskDirectly(std::move(task));
+        }
+        else
+        {
+            pipe_cv.registerTask(std::move(task));
+        }
     }
 
     /**

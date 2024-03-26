@@ -17,40 +17,73 @@
 #include <Flash/Pipeline/Schedule/TaskScheduler.h>
 #include <Flash/Pipeline/Schedule/Tasks/Task.h>
 
+#include <deque>
+
 namespace DB
 {
 // Must have lock to use this class
 class PipeConditionVariable
 {
 public:
-    void registerTask(TaskPtr && task)
+    inline void registerTask(TaskPtr && task)
     {
-        GET_METRIC(tiflash_pipeline_scheduler, type_wait_for_notify_tasks_count).Increment();
+        assert(task);
         assert(task->getStatus() == ExecTaskStatus::WAIT_FOR_NOTIFY);
         tasks.push_back(std::move(task));
+
+#ifdef __APPLE__
+        auto & metrics = GET_METRIC(tiflash_pipeline_scheduler, type_wait_for_notify_tasks_count);
+#else
+        thread_local auto & metrics = GET_METRIC(tiflash_pipeline_scheduler, type_wait_for_notify_tasks_count);
+#endif
+        metrics.Increment();
     }
 
-    bool notifyOne()
+    inline void notifyOne()
     {
         if (!tasks.empty())
         {
-            auto task = std::move(tasks.back());
-            tasks.pop_back();
-            task->notify();
-            task->profile_info.elapsedWaitForNotifyTime();
-            GET_METRIC(tiflash_pipeline_scheduler, type_wait_for_notify_tasks_count).Decrement();
-            TaskScheduler::instance->submitToCPUTaskThreadPool(std::move(task));
-            return true;
+            auto task = std::move(tasks.front());
+            tasks.pop_front();
+            notifyTaskDirectly(std::move(task));
+
+#ifdef __APPLE__
+            auto & metrics = GET_METRIC(tiflash_pipeline_scheduler, type_wait_for_notify_tasks_count);
+#else
+            thread_local auto & metrics = GET_METRIC(tiflash_pipeline_scheduler, type_wait_for_notify_tasks_count);
+#endif
+            metrics.Decrement();
         }
-        return false;
     }
 
-    void notifyAll()
+    inline void notifyAll()
     {
-        while (notifyOne()) {}
+        size_t tasks_cnt = tasks.size();
+        while (!tasks.empty())
+        {
+            auto task = std::move(tasks.front());
+            tasks.pop_front();
+            notifyTaskDirectly(std::move(task));
+        }
+
+#ifdef __APPLE__
+        auto & metrics = GET_METRIC(tiflash_pipeline_scheduler, type_wait_for_notify_tasks_count);
+#else
+        thread_local auto & metrics = GET_METRIC(tiflash_pipeline_scheduler, type_wait_for_notify_tasks_count);
+#endif
+        metrics.Decrement(tasks_cnt);
+    }
+
+    static inline void notifyTaskDirectly(TaskPtr && task)
+    {
+        assert(task);
+        task->notify();
+        task->profile_info.elapsedWaitForNotifyTime();
+        assert(TaskScheduler::instance);
+        TaskScheduler::instance->submitToCPUTaskThreadPool(std::move(task));
     }
 
 private:
-    std::vector<TaskPtr> tasks;
+    std::deque<TaskPtr> tasks;
 };
 } // namespace DB

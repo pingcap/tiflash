@@ -129,7 +129,6 @@ void TaskThreadPool<Impl>::handleTask(TaskPtr & task)
         assert(return_status_after_exec.future);
         return_status_after_exec.future->registerTask(std::move(task));
         break;
-        ;
     case FINISH_STATUS:
         task->finalize();
         task->endTraceMemory();
