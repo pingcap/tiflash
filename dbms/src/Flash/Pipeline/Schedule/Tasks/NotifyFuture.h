@@ -33,6 +33,7 @@ extern thread_local NotifyFuturePtr current_notify_future;
 #endif
 
 void setNotifyFuture(NotifyFuturePtr new_future);
+void clearNotifyFuture();
 void registerTaskToFuture(TaskPtr && task);
 
 } // namespace DB

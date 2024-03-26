@@ -28,6 +28,11 @@ void setNotifyFuture(NotifyFuturePtr new_future)
     current_notify_future = std::move(new_future);
 }
 
+void clearNotifyFuture()
+{
+    current_notify_future.reset();
+}
+
 void registerTaskToFuture(TaskPtr && task)
 {
     assert(current_notify_future != nullptr);

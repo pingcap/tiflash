@@ -15,6 +15,7 @@
 #include <Common/FailPoint.h>
 #include <Common/TiFlashMetrics.h>
 #include <Flash/Executor/PipelineExecutorContext.h>
+#include <Flash/Pipeline/Schedule/Tasks/NotifyFuture.h>
 #include <Flash/Pipeline/Schedule/Tasks/Task.h>
 #include <Flash/Pipeline/Schedule/Tasks/TaskHelper.h>
 #include <common/logger_useful.h>
@@ -123,6 +124,7 @@ Task::~Task()
     catch (...)                                                                             \
     {                                                                                       \
         LOG_WARNING(log, "error occurred and cancel the query");                            \
+        clearNotifyFuture();                                                                \
         exec_context.onErrorOccurred(std::current_exception());                             \
         switchStatus(ExecTaskStatus::ERROR);                                                \
         return task_status;                                                                 \
@@ -130,6 +132,7 @@ Task::~Task()
 
 ExecTaskStatus Task::execute()
 {
+    assert(current_notify_future == nullptr);
     assert(mem_tracker_ptr == current_memory_tracker);
     assert(task_status == ExecTaskStatus::RUNNING);
     EXECUTE(executeImpl);
@@ -137,6 +140,7 @@ ExecTaskStatus Task::execute()
 
 ExecTaskStatus Task::executeIO()
 {
+    assert(current_notify_future == nullptr);
     assert(mem_tracker_ptr == current_memory_tracker);
     assert(task_status == ExecTaskStatus::IO_IN || task_status == ExecTaskStatus::IO_OUT);
     EXECUTE(executeIOImpl);
@@ -144,6 +148,7 @@ ExecTaskStatus Task::executeIO()
 
 ExecTaskStatus Task::await()
 {
+    assert(current_notify_future == nullptr);
     // Because await only performs polling checks and does not involve computing/memory tracker memory allocation,
     // await will not invoke MemoryTracker, so current_memory_tracker must be nullptr here.
     assert(current_memory_tracker == nullptr);
@@ -161,6 +166,7 @@ void Task::notify()
 
 void Task::finalize()
 {
+    assert(current_notify_future == nullptr);
     // To make sure that `finalize` only called once.
     RUNTIME_ASSERT(!is_finalized, log, "finalize can only be called once.");
     is_finalized = true;
