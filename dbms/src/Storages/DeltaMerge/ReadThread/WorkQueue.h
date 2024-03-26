@@ -105,7 +105,6 @@ public:
             }
             if (done)
             {
-                pipe_cv.notifyAll();
                 return false;
             }
             queue.push(std::forward<U>(item));
