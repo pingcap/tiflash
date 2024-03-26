@@ -14,6 +14,7 @@
 
 #include <Common/MemoryAllocTrace.h>
 #include <Common/Stopwatch.h>
+#include <Common/TiFlashMetrics.h>
 #include <Common/setThreadName.h>
 #include <Storages/KVStore/FFI/ProxyFFI.h>
 #include <Storages/KVStore/KVStore.h>
@@ -196,6 +197,8 @@ BatchReadIndexRes TiFlashRaftProxyHelper::batchReadIndex_v2(
     {
         if (auto task = makeReadIndexTask(r); !task)
         {
+            // The read index request is not sent successfully.
+            GET_METRIC(tiflash_raft_learner_read_failures_count, type_request_error).Increment();
             kvrpcpb::ReadIndexResponse res;
             res.mutable_region_error();
             resps.emplace_back(std::move(res), r.context().region_id());

@@ -64,8 +64,6 @@ void UnavailableRegions::addRegionWaitIndexTimeout(
         current_applied_index);
 }
 
-/// LearnerReadWorker ///
-
 LearnerReadWorker::LearnerReadWorker(
     MvccQueryInfo & mvcc_query_info_,
     TMTContext & tmt_,
@@ -134,6 +132,7 @@ std::vector<kvrpcpb::ReadIndexRequest> LearnerReadWorker::buildBatchReadIndexReq
 
         if (auto ori_read_index = mvcc_query_info.getReadIndexRes(region_id); ori_read_index)
         {
+            GET_METRIC(tiflash_raft_read_index_events_count, type_use_cache).Increment();
             // the read index result from cache
             auto resp = kvrpcpb::ReadIndexResponse();
             resp.set_read_index(ori_read_index);
