@@ -126,6 +126,7 @@ void TaskThreadPool<Impl>::handleTask(TaskPtr & task)
         scheduler.submitToWaitReactor(std::move(task));
         break;
     case ExecTaskStatus::WAIT_FOR_NOTIFY:
+        task->endTraceMemory();
         registerTaskToFuture(std::move(task));
         break;
     case FINISH_STATUS:
