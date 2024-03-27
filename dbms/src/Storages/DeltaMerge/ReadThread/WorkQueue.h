@@ -66,30 +66,15 @@ public:
 
     void registerPipeTask(TaskPtr && task)
     {
-        bool has_item{false};
-        bool is_done{false};
         {
             std::lock_guard lock(mu);
-            has_item = !queue.empty();
-            is_done = done;
-        }
-        if (has_item || (unlikely(is_done)))
-        {
-            PipeConditionVariable::notifyTaskDirectly(std::move(task));
-        }
-        else
-        {
-            // double check for the last case.
+            if (queue.empty() && !done)
             {
-                std::lock_guard lock(mu);
-                if (queue.empty() && !done)
-                {
-                    pipe_cv.registerTask(std::move(task));
-                    return;
-                }
+                pipe_cv.registerTask(std::move(task));
+                return;
             }
-            PipeConditionVariable::notifyTaskDirectly(std::move(task));
         }
+        PipeConditionVariable::notifyTaskDirectly(std::move(task));
     }
 
     /**
