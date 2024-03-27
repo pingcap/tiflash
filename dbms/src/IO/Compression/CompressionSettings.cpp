@@ -20,9 +20,10 @@
 
 namespace DB
 {
-CompressionSettings::CompressionSettings(const Settings & settings)
+CompressionSetting::CompressionSetting(const Settings & settings)
 {
     method = settings.network_compression_method;
+    method_byte = method_byte_map[static_cast<size_t>(method)];
     switch (method)
     {
     case CompressionMethod::ZSTD:
@@ -33,7 +34,7 @@ CompressionSettings::CompressionSettings(const Settings & settings)
     }
 }
 
-int CompressionSettings::getDefaultLevel(CompressionMethod method)
+int CompressionSetting::getDefaultLevel(CompressionMethod method)
 {
     switch (method)
     {

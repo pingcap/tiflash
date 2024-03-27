@@ -232,8 +232,10 @@ void DMFileWriter::writeColumn(
 
             if (dmfile->useMetaV2())
             {
-                stream->marks->emplace_back(
-                    MarkInCompressedFile{stream->plain_file->count(), offset_in_compressed_block});
+                stream->marks->emplace_back(MarkInCompressedFile{
+                    stream->plain_file->count(),
+                    offset_in_compressed_block,
+                });
             }
             else
             {

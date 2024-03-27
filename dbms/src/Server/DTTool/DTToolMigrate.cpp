@@ -372,9 +372,9 @@ int migrateEntry(const std::vector<std::string> & opts, RaftStoreFFIFunc ffi_fun
                 return -EINVAL;
             }
 
-            if (vm.count("level") == 0)
+            if (!vm.contains("level"))
             {
-                args.compression_level = DB::CompressionSettings::getDefaultLevel(args.compression_method);
+                args.compression_level = DB::CompressionSetting::getDefaultLevel(args.compression_method);
             }
             else
             {

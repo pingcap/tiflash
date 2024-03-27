@@ -39,7 +39,7 @@ static void readHeaderAndGetCodec(const char * compressed_buffer, CompressionCod
 
     if (!codec)
     {
-        codec = CompressionFactory::create(method_byte);
+        codec = CompressionFactory::createForDecompress(method_byte);
     }
     else if (codec->getMethodByte() != method_byte)
     {
