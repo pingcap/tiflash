@@ -54,7 +54,7 @@ inline void F_TEST_LOG_FMT(const std::string & s)
 inline void F_TEST_LOG_FMT(const std::string &) {}
 #endif
 
-
+// TODO(read index) Remove this helper functions, using AsyncNotifier is more clear.
 class BlockedReadIndexHelperTrait
 {
 public:
