@@ -740,12 +740,13 @@ String SegmentReadTask::toString() const
     if (dm_context->keyspace_id == DB::NullspaceID)
     {
         return fmt::format(
-            "s{}_t{}_{}_{}_{}",
+            "s{}_t{}_{}_{}_{}_{}",
             store_id,
             dm_context->physical_table_id,
             segment->segmentId(),
             segment->segmentEpoch(),
-            read_snapshot->delta->getDeltaIndexEpoch());
+            read_snapshot->delta->getDeltaIndexEpoch(),
+            read_snapshot->getRows());
     }
     return fmt::format(
         "s{}_ks{}_t{}_{}_{}_{}",
@@ -754,7 +755,8 @@ String SegmentReadTask::toString() const
         dm_context->physical_table_id,
         segment->segmentId(),
         segment->segmentEpoch(),
-        read_snapshot->delta->getDeltaIndexEpoch());
+        read_snapshot->delta->getDeltaIndexEpoch(),
+        read_snapshot->getRows());
 }
 
 GlobalSegmentID SegmentReadTask::getGlobalSegmentID() const
