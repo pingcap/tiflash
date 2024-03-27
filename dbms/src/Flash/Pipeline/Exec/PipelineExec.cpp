@@ -41,7 +41,7 @@ extern const char random_pipeline_model_execute_suffix_failpoint[];
     case OperatorStatus::WAITING:                                                                      \
         fillAwaitable((op).get());                                                                     \
         return (op_status);                                                                            \
-    /* For unexpected status, an immediate return is required. */                                      \
+    /* For other status, an immediate return is required. */                                           \
     default:                                                                                           \
         return (op_status);                                                                            \
     }
