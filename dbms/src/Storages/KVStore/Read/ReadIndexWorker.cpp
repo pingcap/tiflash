@@ -16,121 +16,6 @@
 
 namespace DB
 {
-
-BatchReadIndexRes TiFlashRaftProxyHelper::batchReadIndex(
-    const std::vector<kvrpcpb::ReadIndexRequest> & req,
-    uint64_t timeout_ms) const
-{
-    return batchReadIndex_v2(req, timeout_ms);
-}
-
-BatchReadIndexRes TiFlashRaftProxyHelper::batchReadIndex_v2(
-    const std::vector<kvrpcpb::ReadIndexRequest> & req,
-    uint64_t timeout_ms) const
-{
-    AsyncWaker waker(*this);
-    BlockedReadIndexHelper helper{timeout_ms, waker};
-
-    std::queue<std::pair<RegionID, ReadIndexTask>> tasks;
-    BatchReadIndexRes resps;
-    resps.reserve(req.size());
-
-    for (const auto & r : req)
-    {
-        if (auto task = makeReadIndexTask(r); !task)
-        {
-            // The read index request is not sent successfully.
-            GET_METRIC(tiflash_raft_learner_read_failures_count, type_request_error).Increment();
-            kvrpcpb::ReadIndexResponse res;
-            res.mutable_region_error();
-            resps.emplace_back(std::move(res), r.context().region_id());
-        }
-        else
-        {
-            tasks.emplace(r.context().region_id(), std::move(*task));
-        }
-    }
-
-    {
-        // Block wait for all tasks are ready or timeout.
-        kvrpcpb::ReadIndexResponse tmp;
-        while (!tasks.empty())
-        {
-            auto & it = tasks.front();
-            if (pollReadIndexTask(it.second, tmp, helper.getWaker().getRaw()))
-            {
-                resps.emplace_back(std::move(tmp), it.first);
-                tmp.Clear();
-                tasks.pop();
-            }
-            else
-            {
-                if (helper.blockedWait() == AsyncNotifier::Status::Timeout)
-                    break;
-            }
-        }
-    }
-    {
-        // If meets timeout, which means some of the regions can not get response from leader, try to poll rest tasks
-        while (!tasks.empty())
-        {
-            auto & it = tasks.front();
-            kvrpcpb::ReadIndexResponse tmp;
-            if (pollReadIndexTask(it.second, tmp))
-            {
-                resps.emplace_back(std::move(tmp), it.first);
-            }
-            else
-            {
-                tmp.mutable_region_error()->mutable_region_not_found();
-                resps.emplace_back(std::move(tmp), it.first);
-            }
-            tasks.pop();
-        }
-    }
-
-    return resps;
-}
-
-RawRustPtr TiFlashRaftProxyHelper::makeAsyncWaker(void (*wake_fn)(RawVoidPtr), RawCppPtr data) const
-{
-    return fn_make_async_waker(wake_fn, data);
-}
-
-std::optional<ReadIndexTask> TiFlashRaftProxyHelper::makeReadIndexTask(const kvrpcpb::ReadIndexRequest & req) const
-{
-    thread_local std::string buff_cache;
-    req.SerializeToString(&buff_cache);
-    auto req_view = strIntoView(&buff_cache);
-    if (RawRustPtr ptr = fn_make_read_index_task(proxy_ptr, req_view); ptr.ptr)
-    {
-        return ReadIndexTask{ptr};
-    }
-    else
-    {
-        return {};
-    }
-}
-
-bool TiFlashRaftProxyHelper::pollReadIndexTask(
-    ReadIndexTask & task,
-    kvrpcpb::ReadIndexResponse & resp,
-    RawVoidPtr waker) const
-{
-    return fn_poll_read_index_task(proxy_ptr, task.ptr, &resp, waker);
-}
-
-TimerTask TiFlashRaftProxyHelper::makeTimerTask(uint64_t time_ms) const
-{
-    return TimerTask{fn_make_timer_task(time_ms)};
-}
-
-bool TiFlashRaftProxyHelper::pollTimerTask(TimerTask & task, RawVoidPtr waker) const
-{
-    return fn_poll_timer_task(task.ptr, waker);
-}
-
-
 std::atomic<std::chrono::milliseconds> ReadIndexWorker::max_read_index_task_timeout
     = std::chrono::milliseconds{8 * 1000};
 //std::atomic<size_t> ReadIndexWorker::max_read_index_history{8};
@@ -140,11 +25,13 @@ bool RegionNotifyMap::empty() const NO_THREAD_SAFETY_ANALYSIS
     auto _ = genLockGuard();
     return data.empty();
 }
+
 void RegionNotifyMap::add(RegionID id) NO_THREAD_SAFETY_ANALYSIS
 {
     auto _ = genLockGuard();
     data.emplace(id);
 }
+
 RegionNotifyMap::Data RegionNotifyMap::popAll() NO_THREAD_SAFETY_ANALYSIS
 {
     auto _ = genLockGuard();
@@ -154,6 +41,7 @@ RegionNotifyMap::Data RegionNotifyMap::popAll() NO_THREAD_SAFETY_ANALYSIS
 void ReadIndexFuture::update(kvrpcpb::ReadIndexResponse resp) NO_THREAD_SAFETY_ANALYSIS
 {
     auto _ = genLockGuard();
+    // The future can only be set once.
     if (finished)
         return;
 
@@ -184,7 +72,6 @@ std::optional<kvrpcpb::ReadIndexResponse> ReadIndexFuture::poll(const std::share
     }
     return resp;
 }
-
 
 ReadIndexDataNodePtr ReadIndexWorker::DataMap::upsertDataNode(RegionID region_id) const
 {
