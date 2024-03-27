@@ -40,6 +40,7 @@ UInt8 CompressionCodecRLE::getMethodByte() const
 UInt32 CompressionCodecRLE::getMaxCompressedDataSize(UInt32 uncompressed_size) const
 {
     // If the encoded data is larger than the original data, we will store the original data
+    // Additional byte is used to store the size of the data type
     return 1 + uncompressed_size;
 }
 
@@ -134,7 +135,7 @@ UInt32 CompressionCodecRLE::doCompressData(const char * source, UInt32 source_si
     case 8:
         return compressDataForType<UInt64>(source, source_size, dest);
     default:
-        __builtin_unreachable();
+        throw Exception(ErrorCodes::CANNOT_COMPRESS, "Cannot compress RLE-encoded data. Unsupported bytes size");
     }
 }
 
@@ -159,8 +160,6 @@ void CompressionCodecRLE::doDecompressData(
         memcpy(dest, &source[1], uncompressed_size);
         return;
     }
-    if (bytes_size != 1 && bytes_size != 2 && bytes_size != 4 && bytes_size != 8)
-        throw Exception(ErrorCodes::CANNOT_DECOMPRESS, "Cannot decompress RLE-encoded data. File has wrong header");
 
     UInt8 bytes_to_skip = uncompressed_size % (bytes_size + sizeof(UInt16));
     if (static_cast<UInt32>(1 + bytes_to_skip) > source_size)
@@ -181,7 +180,7 @@ void CompressionCodecRLE::doDecompressData(
         decompressDataForType<UInt64>(source, source_size, dest, uncompressed_size);
         break;
     default:
-        __builtin_unreachable();
+        throw Exception(ErrorCodes::CANNOT_DECOMPRESS, "Cannot decompress RLE-encoded data. Unsupported bytes size");
     }
 }
 

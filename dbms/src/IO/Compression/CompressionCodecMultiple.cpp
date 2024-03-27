@@ -55,11 +55,10 @@ UInt32 CompressionCodecMultiple::doCompressData(const char * source, UInt32 sour
 
     dest[0] = static_cast<UInt8>(codecs.size());
 
-    size_t codecs_byte_pos = 1;
-    for (size_t idx = 0; idx < codecs.size(); ++idx, ++codecs_byte_pos)
+    for (size_t idx = 0; idx < codecs.size(); ++idx)
     {
         const auto codec = codecs[idx];
-        dest[codecs_byte_pos] = codec->getMethodByte();
+        dest[1 + idx] = codec->getMethodByte();
         compressed_buf.resize(codec->getCompressedReserveSize(source_size));
 
         UInt32 size_compressed = codec->compress(uncompressed_buf.data(), source_size, compressed_buf.data());

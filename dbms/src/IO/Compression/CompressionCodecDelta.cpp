@@ -241,7 +241,7 @@ UInt32 CompressionCodecDelta::doCompressData(const char * source, UInt32 source_
 #endif
         break;
     default:
-        __builtin_unreachable();
+        throw Exception(ErrorCodes::CANNOT_COMPRESS, "Cannot compress Delta-encoded data. Unsupported bytes size");
     }
     return 1 + source_size;
 }
@@ -259,10 +259,6 @@ void CompressionCodecDelta::doDecompressData(
         return;
 
     UInt8 bytes_size = source[0];
-
-    if unlikely (bytes_size != 1 && bytes_size != 2 && bytes_size != 4 && bytes_size != 8)
-        throw Exception(ErrorCodes::CANNOT_DECOMPRESS, "Cannot decompress delta-encoded data. File has wrong header");
-
     UInt8 bytes_to_skip = uncompressed_size % bytes_size;
     UInt32 output_size = uncompressed_size - bytes_to_skip;
 
@@ -317,7 +313,7 @@ void CompressionCodecDelta::doDecompressData(
 #endif
         break;
     default:
-        __builtin_unreachable();
+        throw Exception(ErrorCodes::CANNOT_DECOMPRESS, "Cannot decompress Delta-encoded data. Unsupported bytes size");
     }
 }
 
