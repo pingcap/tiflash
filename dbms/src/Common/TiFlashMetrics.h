@@ -536,11 +536,13 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
     M(tiflash_raft_read_index_events_count,                                                                                         \
       "Raft read index events counter",                                                                                             \
       Counter,                                                                                                                      \
+      F(type_use_histroy, {{"type", "use_histroy"}}),                                                                               \
       F(type_use_cache, {{"type", "use_cache"}}))                                                                                   \
     M(tiflash_raft_learner_read_failures_count,                                                                                     \
       "Raft learner read failure reason counter",                                                                                   \
       Counter,                                                                                                                      \
       F(type_request_error, {{"type", "request_error"}}),                                                                           \
+      F(type_read_index_timeout, {{"type", "read_index_timeout"}}),                                                                 \
       F(type_not_found_tiflash, {{"type", "not_found_tiflash"}}),                                                                   \
       F(type_epoch_not_match, {{"type", "epoch_not_match"}}),                                                                       \
       F(type_not_leader, {{"type", "not_leader"}}),                                                                                 \

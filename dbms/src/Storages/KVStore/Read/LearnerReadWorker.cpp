@@ -203,6 +203,8 @@ void LearnerReadWorker::recordReadIndexError(
             auto region_status = RegionException::RegionReadStatus::OTHER;
             if (region_error.has_epoch_not_match())
             {
+                // 1. From TiKV
+                // 2. Find a TiKV mem lock of start_ts, and retry all other ts in the batch
                 auto snapshot_region_iter = regions_snapshot.find(region_id);
                 if (snapshot_region_iter != regions_snapshot.end())
                 {
@@ -226,6 +228,9 @@ void LearnerReadWorker::recordReadIndexError(
             }
             else if (region_error.has_region_not_found())
             {
+                // 1. From TiKV
+                // 2. Can't send read index request
+                // 3. Read index timeout
                 GET_METRIC(tiflash_raft_learner_read_failures_count, type_not_found_tikv).Increment();
                 region_status = RegionException::RegionReadStatus::NOT_FOUND_TIKV;
             }
@@ -255,10 +260,18 @@ void LearnerReadWorker::recordReadIndexError(
                     region_id);
                 region_status = RegionException::RegionReadStatus::KEY_NOT_IN_REGION;
             }
+            else if (region_error.has_server_is_busy())
+            {
+                // 1. From TiKV
+                // 2. Read index request timeout
+                GET_METRIC(tiflash_raft_learner_read_failures_count, type_read_index_timeout).Increment();
+                LOG_DEBUG(log, "meet abnormal region error {}, [region_id={}]", resp.ShortDebugString(), region_id);
+                region_status = RegionException::RegionReadStatus::READ_INDEX_TIMEOUT;
+            }
             else if (
-                region_error.has_server_is_busy() || region_error.has_raft_entry_too_large()
-                || region_error.has_region_not_initialized() || region_error.has_disk_full()
-                || region_error.has_read_index_not_ready() || region_error.has_proposal_in_merging_mode())
+                region_error.has_raft_entry_too_large() || region_error.has_region_not_initialized()
+                || region_error.has_disk_full() || region_error.has_read_index_not_ready()
+                || region_error.has_proposal_in_merging_mode())
             {
                 GET_METRIC(tiflash_raft_learner_read_failures_count, type_tikv_server_issue).Increment();
                 LOG_DEBUG(log, "meet abnormal region error {}, [region_id={}]", resp.ShortDebugString(), region_id);

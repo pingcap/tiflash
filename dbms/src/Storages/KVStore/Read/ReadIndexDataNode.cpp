@@ -83,6 +83,7 @@ void ReadIndexDataNode::runOneRound(const TiFlashRaftProxyHelper & helper, const
             }
 
             cnt_use_history_tasks += waiting_tasks.size();
+            GET_METRIC(tiflash_raft_read_index_events_count, type_use_histroy).Increment(waiting_tasks.size());
         }
         else
         {
@@ -129,7 +130,10 @@ void ReadIndexDataNode::ReadIndexElement::doTriggerCallbacks()
             if (cb->req.start_ts() == start_ts)
                 res = resp;
             else
+            {
+                // There could be no lock on this ts, so retry.
                 res.mutable_region_error()->mutable_epoch_not_match();
+            }
             cb->update(std::move(res));
         }
     }
