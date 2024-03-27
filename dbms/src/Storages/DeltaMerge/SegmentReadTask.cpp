@@ -749,7 +749,7 @@ String SegmentReadTask::toString() const
             read_snapshot->getRows());
     }
     return fmt::format(
-        "s{}_ks{}_t{}_{}_{}_{}",
+        "s{}_ks{}_t{}_{}_{}_{}_{}",
         store_id,
         dm_context->keyspace_id,
         dm_context->physical_table_id,
