@@ -21,7 +21,6 @@
 
 namespace DB
 {
-// Must have lock to use this class
 class PipeConditionVariable
 {
 public:
@@ -29,7 +28,10 @@ public:
     {
         assert(task);
         assert(task->getStatus() == ExecTaskStatus::WAIT_FOR_NOTIFY);
-        tasks.push_back(std::move(task));
+        {
+            std::lock_guard lock(mu);
+            tasks.push_back(std::move(task));
+        }
 
 #if __APPLE__ && __clang__
         __thread auto & metrics = GET_METRIC(tiflash_pipeline_scheduler, type_wait_for_notify_tasks_count);
@@ -41,29 +43,37 @@ public:
 
     inline void notifyOne()
     {
-        if (!tasks.empty())
+        TaskPtr task;
         {
-            auto task = std::move(tasks.front());
+            std::lock_guard lock(mu);
+            if (tasks.empty())
+                return;
+            task = std::move(tasks.front());
             tasks.pop_front();
-            notifyTaskDirectly(std::move(task));
+        }
+        assert(task);
+        notifyTaskDirectly(std::move(task));
 
 #if __APPLE__ && __clang__
-            __thread auto & metrics = GET_METRIC(tiflash_pipeline_scheduler, type_wait_for_notify_tasks_count);
+        __thread auto & metrics = GET_METRIC(tiflash_pipeline_scheduler, type_wait_for_notify_tasks_count);
 #else
-            thread_local auto & metrics = GET_METRIC(tiflash_pipeline_scheduler, type_wait_for_notify_tasks_count);
+        thread_local auto & metrics = GET_METRIC(tiflash_pipeline_scheduler, type_wait_for_notify_tasks_count);
 #endif
-            metrics.Decrement();
-        }
+        metrics.Decrement();
     }
 
     inline void notifyAll()
     {
-        size_t tasks_cnt = tasks.size();
-        while (!tasks.empty())
+        std::deque<TaskPtr> cur_tasks;
         {
-            auto task = std::move(tasks.front());
-            tasks.pop_front();
-            notifyTaskDirectly(std::move(task));
+            std::lock_guard lock(mu);
+            std::swap(cur_tasks, tasks);
+        }
+        size_t tasks_cnt = cur_tasks.size();
+        while (!cur_tasks.empty())
+        {
+            notifyTaskDirectly(std::move(cur_tasks.front()));
+            cur_tasks.pop_front();
         }
 
 #if __APPLE__ && __clang__
@@ -84,6 +94,7 @@ public:
     }
 
 private:
+    std::mutex mu;
     std::deque<TaskPtr> tasks;
 };
 } // namespace DB

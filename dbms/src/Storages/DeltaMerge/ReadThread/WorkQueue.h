@@ -66,22 +66,29 @@ public:
 
     void registerPipeTask(TaskPtr && task)
     {
-        std::lock_guard lock(mu);
-        if (!queue.empty())
+        bool has_item{false};
+        bool is_done{false};
+        {
+            std::lock_guard lock(mu);
+            has_item = !queue.empty();
+            is_done = done;
+        }
+        if (has_item || (unlikely(is_done)))
         {
             PipeConditionVariable::notifyTaskDirectly(std::move(task));
         }
         else
         {
-            if (unlikely(done))
+            // double check for the last case.
             {
-                PipeConditionVariable::notifyTaskDirectly(std::move(task));
-                pipe_cv.notifyAll();
+                std::lock_guard lock(mu);
+                if (queue.empty() && !done)
+                {
+                    pipe_cv.registerTask(std::move(task));
+                    return;
+                }
             }
-            else
-            {
-                pipe_cv.registerTask(std::move(task));
-            }
+            PipeConditionVariable::notifyTaskDirectly(std::move(task));
         }
     }
 
@@ -113,8 +120,8 @@ public:
             {
                 *size = queue.size();
             }
-            pipe_cv.notifyOne();
         }
+        pipe_cv.notifyOne();
         reader_cv.notify_one();
         return true;
     }
@@ -161,7 +168,7 @@ public:
     bool tryPop(T & item)
     {
         {
-            std::unique_lock<std::mutex> lock(mu);
+            std::lock_guard lock(mu);
             ++pop_times;
             if (queue.empty())
             {
@@ -206,8 +213,8 @@ public:
             std::lock_guard lock(mu);
             assert(!done);
             done = true;
-            pipe_cv.notifyAll();
         }
+        pipe_cv.notifyAll();
         reader_cv.notify_all();
         writer_cv.notify_all();
         finish_cv.notify_all();
