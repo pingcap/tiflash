@@ -234,14 +234,8 @@ DMFileReader::DMFileReader(
     size_t rows_threshold_per_read_,
     bool read_one_pack_every_time_,
     const String & tracing_id_,
-<<<<<<< HEAD
-    size_t max_sharing_column_count,
-    const ScanContextPtr & scan_context_)
-=======
     size_t max_sharing_column_bytes_,
-    const ScanContextPtr & scan_context_,
-    const ReadTag read_tag_)
->>>>>>> 12d7a9617a (Storages: Refine memory tracker of data sharing (#8857))
+    const ScanContextPtr & scan_context_)
     : dmfile(dmfile_)
     , read_columns(read_columns_)
     , is_common_handle(is_common_handle_)
@@ -606,7 +600,7 @@ void DMFileReader::readColumn(ColumnDefine & column_define,
 {
     bool has_concurrent_reader = DMFileReaderPool::instance().hasConcurrentReader(*this);
     bool reach_sharing_column_memory_limit = shared_column_data_mem_tracker != nullptr
-        && std::cmp_greater_equal(shared_column_data_mem_tracker->get(), max_sharing_column_bytes);
+        && shared_column_data_mem_tracker->get() >= static_cast<Int64>(max_sharing_column_bytes);
     if (reach_sharing_column_memory_limit)
     {
         GET_METRIC(tiflash_storage_read_thread_counter, type_add_cache_total_bytes_limit).Increment();

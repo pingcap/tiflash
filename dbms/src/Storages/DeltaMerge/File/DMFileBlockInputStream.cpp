@@ -57,19 +57,7 @@ DMFileBlockInputStreamPtr DMFileBlockInputStreamBuilder::build(const DMFilePtr &
     if (!enable_read_thread || max_sharing_column_bytes_for_all <= 0)
     {
         // Disable data sharing.
-<<<<<<< HEAD
-        max_sharing_column_count = 0;
-    }
-    else if (
-        shared_column_data_mem_tracker != nullptr
-        && shared_column_data_mem_tracker->get() >= static_cast<Int64>(max_sharing_column_bytes_for_all))
-    {
-        // The memory used reaches the limitation by running queries, disable the data sharing for this DMFile
-        max_sharing_column_count = 0;
-        GET_METRIC(tiflash_storage_read_thread_counter, type_add_cache_total_bytes_limit).Increment();
-=======
         max_sharing_column_bytes_for_all = 0;
->>>>>>> 12d7a9617a (Storages: Refine memory tracker of data sharing (#8857))
     }
 
     DMFileReader reader(
@@ -91,45 +79,9 @@ DMFileBlockInputStreamPtr DMFileBlockInputStreamBuilder::build(const DMFilePtr &
         rows_threshold_per_read,
         read_one_pack_every_time,
         tracing_id,
-<<<<<<< HEAD
-        max_sharing_column_count,
-        scan_context);
-=======
         max_sharing_column_bytes_for_all,
-        scan_context,
-        read_tag);
->>>>>>> 12d7a9617a (Storages: Refine memory tracker of data sharing (#8857))
+        scan_context);
 
     return std::make_shared<DMFileBlockInputStream>(std::move(reader), max_sharing_column_bytes_for_all > 0);
 }
-<<<<<<< HEAD
-=======
-
-DMFileBlockInputStreamPtr createSimpleBlockInputStream(
-    const DB::Context & context,
-    const DMFilePtr & file,
-    ColumnDefines cols)
-{
-    // disable clean read is needed, since we just want to read all data from the file, and we do not know about the column handle
-    // enable read_one_pack_every_time_ is needed to preserve same block structure as the original file
-    DMFileBlockInputStreamBuilder builder(context);
-    if (cols.empty())
-    {
-        // turn into read all columns from file
-        cols = file->getColumnDefines();
-    }
-    return builder.setRowsThreshold(DMFILE_READ_ROWS_THRESHOLD)
-        .onlyReadOnePackEveryTime()
-        .build(file, cols, DB::DM::RowKeyRanges{}, std::make_shared<ScanContext>());
-}
-
-DMFileBlockInputStreamBuilder & DMFileBlockInputStreamBuilder::setFromSettings(const Settings & settings)
-{
-    enable_column_cache = settings.dt_enable_stable_column_cache;
-    max_read_buffer_size = settings.max_read_buffer_size;
-    max_sharing_column_bytes_for_all = settings.dt_max_sharing_column_bytes_for_all;
-    return *this;
-}
-
->>>>>>> 12d7a9617a (Storages: Refine memory tracker of data sharing (#8857))
 } // namespace DB::DM

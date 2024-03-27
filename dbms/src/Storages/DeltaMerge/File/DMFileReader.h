@@ -96,14 +96,8 @@ public:
         size_t rows_threshold_per_read_,
         bool read_one_pack_every_time_,
         const String & tracing_id_,
-<<<<<<< HEAD
-        size_t max_sharing_column_count,
-        const ScanContextPtr & scan_context_);
-=======
         size_t max_sharing_column_bytes_,
-        const ScanContextPtr & scan_context_,
-        ReadTag read_tag_);
->>>>>>> 12d7a9617a (Storages: Refine memory tracker of data sharing (#8857))
+        const ScanContextPtr & scan_context_);
 
     Block getHeader() const { return toEmptyBlock(read_columns); }
 
