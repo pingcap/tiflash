@@ -163,6 +163,7 @@ SegmentReaderPool::~SegmentReaderPool()
 std::vector<std::thread::id> SegmentReaderPool::getReaderIds() const
 {
     std::vector<std::thread::id> ids;
+    ids.reserve(readers.size());
     for (const auto & r : readers)
     {
         ids.push_back(r->getId());
