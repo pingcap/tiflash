@@ -23,9 +23,6 @@
 
 namespace DB
 {
-struct NotifyFuture;
-using NotifyFuturePtr = std::shared_ptr<NotifyFuture>;
-
 /// Read blocks asyncly from Storage Layer by using read thread,
 /// The result can not guarantee the keep_order property
 class UnorderedSourceOp : public SourceOp
@@ -74,7 +71,6 @@ protected:
 private:
     DM::SegmentReadTaskPoolPtr task_pool;
     int64_t ref_no;
-    NotifyFuturePtr notify_future;
 
     // runtime filter
     RuntimeFilteList waiting_rf_list;

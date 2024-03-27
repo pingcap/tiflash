@@ -13,34 +13,11 @@
 // limitations under the License.
 
 #include <Flash/Pipeline/Schedule/TaskScheduler.h>
-#include <Flash/Pipeline/Schedule/Tasks/NotifyFuture.h>
 #include <Flash/Pipeline/Schedule/Tasks/RFWaitTask.h>
 #include <Operators/UnorderedSourceOp.h>
 
-#include <memory>
-
 namespace DB
 {
-namespace
-{
-class ScanNotifyFuture : public NotifyFuture
-{
-public:
-    explicit ScanNotifyFuture(const DM::SegmentReadTaskPoolPtr & task_pool_)
-        : task_pool(task_pool_)
-    {
-        assert(task_pool);
-    }
-
-    ~ScanNotifyFuture() override = default;
-
-    void registerTask(TaskPtr && task) override { task_pool->registerPipeTask(std::move(task)); }
-
-private:
-    DM::SegmentReadTaskPoolPtr task_pool;
-};
-}; // namespace
-
 UnorderedSourceOp::UnorderedSourceOp(
     PipelineExecutorContext & exec_context_,
     const DM::SegmentReadTaskPoolPtr & task_pool_,
@@ -52,7 +29,6 @@ UnorderedSourceOp::UnorderedSourceOp(
     : SourceOp(exec_context_, req_id)
     , task_pool(task_pool_)
     , ref_no(0)
-    , notify_future(std::make_shared<ScanNotifyFuture>(task_pool_))
     , waiting_rf_list(runtime_filter_list_)
     , max_wait_time_ms(max_wait_time_ms_)
 {
@@ -69,7 +45,7 @@ OperatorStatus UnorderedSourceOp::readImpl(Block & block)
     {
         if (!task_pool->tryPopBlock(block))
         {
-            setNotifyFuture(notify_future);
+            setNotifyFuture(task_pool);
             return OperatorStatus::WAIT_FOR_NOTIFY;
         }
 
