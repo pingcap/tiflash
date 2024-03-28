@@ -189,3 +189,5 @@ add_subdirectory(magic_enum)
 add_subdirectory(aws-cmake)
 
 add_subdirectory(simdjson)
+
+add_subdirectory(fastpforlib)
