@@ -89,6 +89,7 @@ public:
         ReadBuffer & buf);
 
     static ColumnFilePersistedPtr createFromCheckpoint(
+        const LoggerPtr & parent_log,
         DMContext & context, //
         const RowKeyRange & target_range,
         ReadBuffer & buf,

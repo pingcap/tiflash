@@ -47,7 +47,6 @@ struct TiKVRangeKey : boost::noncopyable
     TiKVKey key;
 };
 
-using DecodedTiKVKeyPtr = std::shared_ptr<DecodedTiKVKey>;
 class RegionRangeKeys : boost::noncopyable
 {
 public:

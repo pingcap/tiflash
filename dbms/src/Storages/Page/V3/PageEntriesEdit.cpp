@@ -56,23 +56,30 @@ typename PageEntriesEdit<UniversalPageId>::EditRecord PageEntriesEdit<UniversalP
     CheckpointProto::StringsInternMap & strings_map)
 {
     EditRecord rec;
-    rec.type = typeFromProto(proto_edit.type());
-    rec.page_id = UniversalPageId(proto_edit.page_id());
-    rec.ori_page_id = UniversalPageId(proto_edit.ori_page_id());
-    rec.version.sequence = proto_edit.version_sequence();
-    rec.version.epoch = proto_edit.version_epoch();
-    rec.being_ref_count = 1;
+    try
+    {
+        rec.type = typeFromProto(proto_edit.type());
+        rec.page_id = UniversalPageId(proto_edit.page_id());
+        rec.ori_page_id = UniversalPageId(proto_edit.ori_page_id());
+        rec.version.sequence = proto_edit.version_sequence();
+        rec.version.epoch = proto_edit.version_epoch();
+        rec.being_ref_count = 1;
+    }
+    catch (const Exception & e)
+    {
+        tryLogCurrentException(
+            DB::Logger::get(),
+            fmt::format("EditRecord::fromProto failed, proto={}", proto_edit.DebugString()));
+        e.rethrow();
+    }
+
     if (rec.type == EditRecordType::VAR_ENTRY)
     {
         // uploading page data may be disabled
         auto checkpoint_loc = CheckpointLocation::fromProto(proto_edit.entry_location(), strings_map);
         if (checkpoint_loc.isValid())
         {
-            rec.entry.checkpoint_info = OptionalCheckpointInfo{
-                .data_location = std::move(checkpoint_loc),
-                .is_valid = true,
-                .is_local_data_reclaimed = true,
-            };
+            rec.entry.checkpoint_info = OptionalCheckpointInfo(std::move(checkpoint_loc), true, true);
         }
         rec.entry.size = proto_edit.entry_size();
         rec.entry.checksum = proto_edit.entry_checksum();
@@ -89,11 +96,10 @@ typename PageEntriesEdit<UniversalPageId>::EditRecord PageEntriesEdit<UniversalP
     }
     if (rec.type == EditRecordType::VAR_EXTERNAL)
     {
-        rec.entry.checkpoint_info = OptionalCheckpointInfo{
-            .data_location = CheckpointLocation::fromProto(proto_edit.entry_location(), strings_map),
-            .is_valid = true,
-            .is_local_data_reclaimed = true,
-        };
+        rec.entry.checkpoint_info = OptionalCheckpointInfo(
+            CheckpointLocation::fromProto(proto_edit.entry_location(), strings_map),
+            true,
+            true);
     }
     return rec;
 }

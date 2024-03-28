@@ -47,7 +47,7 @@ public:
     using FieldReadInfos = PS::V3::universal::BlobStoreType::FieldReadInfos;
     // return two page_maps, the first contains the whole page for given page id which is used to update local cache,
     // the second just contains read fields data.
-    std::pair<UniversalPageMap, UniversalPageMap> read(const FieldReadInfos & to_read);
+    std::pair<UniversalPageMap, UniversalPageMap> read(FieldReadInfos & to_read);
 };
 
 using S3PageReaderPtr = std::unique_ptr<S3PageReader>;

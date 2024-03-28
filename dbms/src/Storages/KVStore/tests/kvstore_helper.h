@@ -17,8 +17,8 @@
 #include <Common/FailPoint.h>
 #include <Common/Logger.h>
 #include <Common/SyncPoint/SyncPoint.h>
-#include <Debug/MockRaftStoreProxy.h>
-#include <Debug/MockSSTReader.h>
+#include <Debug/MockKVStore/MockRaftStoreProxy.h>
+#include <Debug/MockKVStore/MockSSTReader.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/ExternalDTFileInfo.h>
 #include <Storages/DeltaMerge/GCOptions.h>
@@ -75,22 +75,21 @@ extern void ChangeRegionStateRange(
 namespace tests
 {
 // TODO: Use another way to workaround calling the private methods on KVStore
-class RegionKVStoreTest : public ::testing::Test
+class KVStoreTestBase : public ::testing::Test
 {
 public:
-    RegionKVStoreTest() { test_path = TiFlashTestEnv::getTemporaryPath("/region_kvs_test"); }
+    KVStoreTestBase() { test_path = TiFlashTestEnv::getTemporaryPath("/region_kvs_test_base"); }
 
     static void SetUpTestCase() {}
 
     void SetUp() override
     {
         // clean data and create path pool instance
-        path_pool = createCleanPathPool(test_path);
-        reloadKVSFromDisk();
+        path_pool = TiFlashTestEnv::createCleanPathPool(test_path);
 
         proxy_instance = std::make_unique<MockRaftStoreProxy>();
         proxy_helper = proxy_instance->generateProxyHelper();
-        kvstore->restore(*path_pool, proxy_helper.get());
+        reloadKVSFromDisk();
         {
             auto store = metapb::Store{};
             store.set_id(1234);
@@ -98,24 +97,33 @@ public:
             ASSERT_EQ(kvstore->getStoreID(), store.id());
         }
 
-        LOG_INFO(Logger::get("Test"), "Finished setup");
+        LOG_INFO(log, "Finished setup");
     }
 
     void TearDown() override { proxy_instance->clear(); }
 
 protected:
     KVStore & getKVS() { return *kvstore; }
-    KVStore & reloadKVSFromDisk()
+    void resetKVStoreStorage()
     {
-        kvstore.reset();
         auto & global_ctx = TiFlashTestEnv::getGlobalContext();
         global_ctx.tryReleaseWriteNodePageStorageForTest();
         global_ctx.initializeWriteNodePageStorageIfNeed(*path_pool);
+    }
+    KVStore & reloadKVSFromDisk(bool with_reset = true)
+    {
+        auto & global_ctx = TiFlashTestEnv::getGlobalContext();
+        kvstore.reset();
+        if (with_reset)
+            resetKVStoreStorage();
         kvstore = std::make_shared<KVStore>(global_ctx);
-        // only recreate kvstore and restore data from disk, don't recreate proxy instance
+        // Only recreate kvstore and restore data from disk, don't recreate proxy instance
         kvstore->restore(*path_pool, proxy_helper.get());
+        proxy_instance->reload();
+        global_ctx.getTMTContext().getRegionTable().clear();
         return *kvstore;
     }
+    // Only handle mock proxy's part. Conflicts with `debugAddRegions`.
     void createDefaultRegions() { proxy_instance->init(100); }
     void initStorages()
     {
@@ -145,7 +153,7 @@ protected:
         over.store(false);
         ctx.getTMTContext().setStatusRunning();
         // Start mock proxy in other thread
-        proxy_runner.reset(new std::thread([&]() { proxy_instance->testRunNormal(over); }));
+        proxy_runner.reset(new std::thread([&]() { proxy_instance->testRunReadIndex(over); }));
         ASSERT_EQ(kvstore->getProxyHelper(), proxy_helper.get());
         kvstore->initReadIndexWorkers([]() { return std::chrono::milliseconds(10); }, 1);
         ASSERT_NE(kvstore->read_index_worker_manager, nullptr);
@@ -156,7 +164,7 @@ protected:
         kvstore->stopReadIndexWorkers();
         kvstore->releaseReadIndexWorkers();
         over = true;
-        proxy_instance->wakeNotifier();
+        proxy_instance->mock_read_index.wakeNotifier();
         proxy_runner->join();
     }
 
@@ -202,8 +210,9 @@ protected:
     std::unique_ptr<TiFlashRaftProxyHelper> proxy_helper;
     std::unique_ptr<std::thread> proxy_runner;
 
-    LoggerPtr log = DB::Logger::get("RegionKVStoreTest");
+    LoggerPtr log = DB::Logger::get("KVStoreTestBase");
     std::atomic_bool over{false};
 };
+
 } // namespace tests
 } // namespace DB

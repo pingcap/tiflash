@@ -693,6 +693,11 @@ void ApplyPreHandledSnapshot(EngineStoreServerWrap * server, RawVoidPtr res, Raw
             kvstore->applyPreHandledSnapshot(
                 RegionPtrWithSnapshotFiles{snap->region, std::move(snap->prehandle_result.ingest_ids)},
                 *server->tmt);
+            uint64_t end_time = std::chrono::duration_cast<std::chrono::milliseconds>(
+                                    std::chrono::system_clock::now().time_since_epoch())
+                                    .count();
+            double elapsed = (end_time - snap->prehandle_result.stats.start_time) / 1000.0;
+            GET_METRIC(tiflash_raft_command_duration_seconds, type_apply_snapshot_total).Observe(elapsed);
         }
         catch (...)
         {
@@ -736,6 +741,20 @@ void ReleasePreHandledSnapshot(EngineStoreServerWrap * server, RawVoidPtr res, R
         auto s = RegionPtrWithSnapshotFiles{snap->region, std::move(snap->prehandle_result.ingest_ids)};
         auto & kvstore = server->tmt->getKVStore();
         kvstore->releasePreHandledSnapshot(s, *server->tmt);
+    }
+    catch (...)
+    {
+        tryLogCurrentFatalException(__PRETTY_FUNCTION__);
+        exit(-1);
+    }
+}
+
+bool KvstoreRegionExists(EngineStoreServerWrap * server, uint64_t region_id)
+{
+    try
+    {
+        auto & kvstore = server->tmt->getKVStore();
+        return kvstore->getRegion(region_id) != nullptr;
     }
     catch (...)
     {

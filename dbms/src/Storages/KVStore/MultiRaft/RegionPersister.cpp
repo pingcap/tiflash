@@ -77,6 +77,13 @@ void RegionPersister::computeRegionWriteBuffer(const Region & region, RegionCach
     }
 }
 
+size_t RegionPersister::computeRegionWriteBuffer(const Region & region, WriteBuffer & buffer)
+{
+    auto region_size = 0;
+    std::tie(region_size, std::ignore) = region.serialize(buffer);
+    return region_size;
+}
+
 void RegionPersister::persist(const Region & region, const RegionTaskLock & lock)
 {
     // Support only one thread persist.

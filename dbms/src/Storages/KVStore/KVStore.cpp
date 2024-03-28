@@ -24,6 +24,7 @@
 #include <Storages/KVStore/Decode/RegionTable.h>
 #include <Storages/KVStore/FFI/ProxyFFI.h>
 #include <Storages/KVStore/KVStore.h>
+#include <Storages/KVStore/MultiRaft/Disagg/FastAddPeerContext.h>
 #include <Storages/KVStore/MultiRaft/RegionExecutionResult.h>
 #include <Storages/KVStore/MultiRaft/RegionPersister.h>
 #include <Storages/KVStore/Read/ReadIndexWorker.h>
@@ -49,6 +50,7 @@ namespace FailPoints
 {
 extern const char force_fail_in_flush_region_data[];
 extern const char pause_passive_flush_before_persist_region[];
+extern const char force_not_clean_fap_on_destroy[];
 } // namespace FailPoints
 
 KVStore::KVStore(Context & context)
@@ -108,29 +110,29 @@ void KVStore::restore(PathPool & path_pool, const TiFlashRaftProxyHelper * proxy
     }
 
     // Try fetch proxy's config as a json string
-    if (proxy_helper && proxy_helper->fn_get_config_json)
-    {
-        RustStrWithView rust_string
-            = proxy_helper->fn_get_config_json(proxy_helper->proxy_ptr, ConfigJsonType::ProxyConfigAddressed);
-        std::string cpp_string(rust_string.buff.data, rust_string.buff.len);
-        RustGcHelper::instance().gcRustPtr(rust_string.inner.ptr, rust_string.inner.type);
-        try
-        {
-            Poco::JSON::Parser parser;
-            auto obj = parser.parse(cpp_string);
-            auto ptr = obj.extract<Poco::JSON::Object::Ptr>();
-            auto raftstore = ptr->getObject("raftstore");
-            proxy_config_summary.snap_handle_pool_size = raftstore->getValue<uint64_t>("snap-handle-pool-size");
-            LOG_INFO(log, "Parsed proxy config snap_handle_pool_size {}", proxy_config_summary.snap_handle_pool_size);
-            proxy_config_summary.valid = true;
-        }
-        catch (...)
-        {
-            proxy_config_summary.valid = false;
-            // we don't care
-            LOG_WARNING(log, "Can't parse config from proxy {}", cpp_string);
-        }
-    }
+    // if (proxy_helper && proxy_helper->fn_get_config_json)
+    // {
+    //     RustStrWithView rust_string
+    //         = proxy_helper->fn_get_config_json(proxy_helper->proxy_ptr, ConfigJsonType::ProxyConfigAddressed);
+    //     std::string cpp_string(rust_string.buff.data, rust_string.buff.len);
+    //     RustGcHelper::instance().gcRustPtr(rust_string.inner.ptr, rust_string.inner.type);
+    //     try
+    //     {
+    //         Poco::JSON::Parser parser;
+    //         auto obj = parser.parse(cpp_string);
+    //         auto ptr = obj.extract<Poco::JSON::Object::Ptr>();
+    //         auto raftstore = ptr->getObject("raftstore");
+    //         proxy_config_summary.snap_handle_pool_size = raftstore->getValue<uint64_t>("snap-handle-pool-size");
+    //         LOG_INFO(log, "Parsed proxy config snap_handle_pool_size {}", proxy_config_summary.snap_handle_pool_size);
+    //         proxy_config_summary.valid = true;
+    //     }
+    //     catch (...)
+    //     {
+    //         proxy_config_summary.valid = false;
+    //         // we don't care
+    //         LOG_WARNING(log, "Can't parse config from proxy {}", cpp_string);
+    //     }
+    // }
 }
 
 RegionPtr KVStore::getRegion(RegionID region_id) const
@@ -326,6 +328,14 @@ void KVStore::handleDestroy(UInt64 region_id, TMTContext & tmt)
 void KVStore::handleDestroy(UInt64 region_id, TMTContext & tmt, const KVStoreTaskLock & task_lock)
 {
     const auto region = getRegion(region_id);
+    // Always try to clean obsolete FAP snapshot
+    if (tmt.getContext().getSharedContextDisagg()->isDisaggregatedStorageMode())
+    {
+        // Everytime we remove region, we try to clean obsolete fap ingest info.
+        auto fap_ctx = tmt.getContext().getSharedContextDisagg()->fap_context;
+        fiu_do_on(FailPoints::force_not_clean_fap_on_destroy, { return; });
+        fap_ctx->resolveFapSnapshotState(tmt, proxy_helper, region_id, false);
+    }
     if (region == nullptr)
     {
         LOG_INFO(log, "region_id={} not found, might be removed already", region_id);
@@ -611,9 +621,19 @@ KVStore::StoreMeta::Base KVStore::StoreMeta::getMeta() const
     return base;
 }
 
-metapb::Store KVStore::getStoreMeta() const
+metapb::Store KVStore::clonedStoreMeta() const
 {
     return getStore().getMeta();
+}
+
+const metapb::Store & KVStore::getStoreMeta() const
+{
+    return this->store.base;
+}
+
+metapb::Store & KVStore::debugMutStoreMeta()
+{
+    return this->store.base;
 }
 
 KVStore::StoreMeta & KVStore::getStore()
@@ -686,6 +706,11 @@ RegionPtr KVStore::genRegionPtr(metapb::Region && region, UInt64 peer_id, UInt64
     });
 
     return std::make_shared<Region>(std::move(meta), proxy_helper);
+}
+
+RegionTaskLock KVStore::genRegionTaskLock(UInt64 region_id) const
+{
+    return region_manager.genRegionTaskLock(region_id);
 }
 
 } // namespace DB

@@ -16,12 +16,14 @@
 #include <Common/FailPoint.h>
 #include <Common/TiFlashMetrics.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/SharedContexts/Disagg.h>
 #include <Storages/DeltaMerge/Decode/SSTFilesToBlockInputStream.h>
 #include <Storages/DeltaMerge/Decode/SSTFilesToDTFilesOutputStream.h>
 #include <Storages/KVStore/Decode/PartitionStreams.h>
 #include <Storages/KVStore/FFI/ProxyFFI.h>
 #include <Storages/KVStore/FFI/SSTReader.h>
 #include <Storages/KVStore/KVStore.h>
+#include <Storages/KVStore/MultiRaft/Disagg/FastAddPeerContext.h>
 #include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/KVStore/Types.h>
@@ -30,6 +32,8 @@
 #include <Storages/StorageDeltaMergeHelpers.h>
 #include <TiDB/Schema/SchemaSyncer.h>
 #include <TiDB/Schema/TiDBSchemaManager.h>
+
+#include <chrono>
 
 namespace CurrentMetrics
 {
@@ -193,10 +197,15 @@ PrehandleResult KVStore::preHandleSnapshotToFiles(
     TMTContext & tmt)
 {
     new_region->beforePrehandleSnapshot(new_region->id(), deadline_index);
+
     ongoing_prehandle_task_count.fetch_add(1);
 
     FAIL_POINT_PAUSE(FailPoints::pause_before_prehandle_snapshot);
 
+    PrehandleResult result;
+    uint64_t start_time
+        = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch())
+              .count();
     try
     {
         SCOPE_EXIT({
@@ -210,6 +219,7 @@ PrehandleResult KVStore::preHandleSnapshotToFiles(
             term,
             DM::FileConvertJobType::ApplySnapshot,
             tmt);
+        result.stats.start_time = start_time;
         return result;
     }
     catch (DB::Exception & e)
@@ -222,7 +232,7 @@ PrehandleResult KVStore::preHandleSnapshotToFiles(
     return PrehandleResult{};
 }
 
-// If size is 0, do not parallel prehandle for this snapshot, which is legacy.
+// If size is 0, do not parallel prehandle for this snapshot, which is regular.
 // If size is non-zero, use extra this many threads to prehandle.
 static inline std::pair<std::vector<std::string>, size_t> getSplitKey(
     LoggerPtr log,
@@ -592,7 +602,7 @@ PrehandleResult KVStore::preHandleSSTsToDTFiles(
                 throw Exception(ErrorCodes::TABLE_IS_DROPPED, "Can't get table");
             }
 
-            // Get a gc safe point for compacting
+            // Get a gc safe point for compact filter.
             Timestamp gc_safepoint = 0;
             if (auto pd_client = tmt.getPDClient(); !pd_client->isMock())
             {

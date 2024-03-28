@@ -45,6 +45,7 @@ S3RandomAccessFile::S3RandomAccessFile(std::shared_ptr<TiFlashS3Client> client_p
     , cur_offset(0)
     , log(Logger::get(remote_fname))
 {
+    RUNTIME_CHECK(client_ptr != nullptr);
     RUNTIME_CHECK(initialize(), remote_fname);
 }
 

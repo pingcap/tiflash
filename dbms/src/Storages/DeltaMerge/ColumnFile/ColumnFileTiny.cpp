@@ -183,6 +183,7 @@ ColumnFilePersistedPtr ColumnFileTiny::deserializeMetadata(
 }
 
 std::tuple<ColumnFilePersistedPtr, BlockPtr> ColumnFileTiny::createFromCheckpoint(
+    const LoggerPtr & parent_log,
     const DMContext & context,
     ReadBuffer & buf,
     UniversalPageStoragePtr temp_ps,
@@ -201,6 +202,7 @@ std::tuple<ColumnFilePersistedPtr, BlockPtr> ColumnFileTiny::createFromCheckpoin
     readIntBinary(rows, buf);
     readIntBinary(bytes, buf);
     auto new_cf_id = context.storage_pool->newLogPageId();
+    /// Generate a new RemotePage with an entry with data location on S3
     auto remote_page_id = UniversalPageIdFormat::toFullPageId(
         UniversalPageIdFormat::toFullPrefix(context.keyspace_id, StorageType::Log, context.physical_table_id),
         data_page_id);
@@ -213,14 +215,16 @@ std::tuple<ColumnFilePersistedPtr, BlockPtr> ColumnFileTiny::createFromCheckpoin
     PS::V3::CheckpointLocation new_remote_data_location{
         .data_file_id = std::make_shared<String>(remote_data_file_key),
         .offset_in_file = remote_data_location->offset_in_file,
-        .size_in_file = remote_data_location->size_in_file};
+        .size_in_file = remote_data_location->size_in_file,
+    };
+    // TODO: merge the `getEntry` and `getCheckpointLocation`
     auto entry = temp_ps->getEntry(remote_page_id);
     LOG_DEBUG(
-        Logger::get(),
-        "Write remote page[page_id={} remote_location={}] using local page id {}",
-        remote_page_id,
+        parent_log,
+        "Write remote page to local, page_id={} remote_location={} remote_page_id={}",
+        new_cf_id,
         new_remote_data_location.toDebugString(),
-        new_cf_id);
+        remote_page_id);
     wbs.log.putRemotePage(new_cf_id, 0, entry.size, new_remote_data_location, std::move(entry.field_offsets));
 
     auto column_file_schema = std::make_shared<ColumnFileSchema>(*schema);

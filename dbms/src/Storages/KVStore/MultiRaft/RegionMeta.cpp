@@ -89,6 +89,12 @@ raft_serverpb::RaftApplyState RegionMeta::clonedApplyState() const
     return apply_state;
 }
 
+raft_serverpb::RegionLocalState RegionMeta::clonedRegionState() const
+{
+    std::scoped_lock lock(mutex);
+    return region_state.getBase();
+}
+
 void RegionMeta::doSetRegion(const metapb::Region & region)
 {
     region_state.setRegion(region);
@@ -514,6 +520,12 @@ const raft_serverpb::MergeState & RegionMeta::getMergeState() const
 }
 
 const RegionState & RegionMeta::getRegionState() const
+{
+    std::lock_guard lock(mutex);
+    return region_state;
+}
+
+RegionState & RegionMeta::debugMutRegionState()
 {
     std::lock_guard lock(mutex);
     return region_state;

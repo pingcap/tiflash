@@ -1205,9 +1205,17 @@ UInt64 StorageDeltaMerge::ingestFiles(
     return getAndMaybeInitStore()->ingestFiles(global_context, settings, range, external_files, clear_data_in_range);
 }
 
-void StorageDeltaMerge::ingestSegmentsFromCheckpointInfo(
+DM::Segments StorageDeltaMerge::buildSegmentsFromCheckpointInfo(
     const DM::RowKeyRange & range,
     CheckpointInfoPtr checkpoint_info,
+    const Settings & settings)
+{
+    return getAndMaybeInitStore()->buildSegmentsFromCheckpointInfo(global_context, settings, range, checkpoint_info);
+}
+
+UInt64 StorageDeltaMerge::ingestSegmentsFromCheckpointInfo(
+    const DM::RowKeyRange & range,
+    const CheckpointIngestInfoPtr & checkpoint_info,
     const Settings & settings)
 {
     GET_METRIC(tiflash_storage_command_count, type_ingest_checkpoint).Increment();

@@ -188,6 +188,21 @@ void HandleSafeTSUpdate(
     uint64_t self_safe_ts,
     uint64_t leader_safe_ts);
 FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, uint64_t new_peer_id);
+uint8_t ApplyFapSnapshot(
+    EngineStoreServerWrap * server,
+    uint64_t region_id,
+    uint64_t peer_id,
+    uint8_t assert_exist,
+    uint64_t index,
+    uint64_t term);
+FapSnapshotState QueryFapSnapshotState(
+    EngineStoreServerWrap * server,
+    uint64_t region_id,
+    uint64_t peer_id,
+    uint64_t index,
+    uint64_t term);
+void ClearFapSnapshot(EngineStoreServerWrap * server, uint64_t region_id);
+bool KvstoreRegionExists(EngineStoreServerWrap * server, uint64_t region_id);
 }
 
 inline EngineStoreServerHelper GetEngineStoreServerHelper(EngineStoreServerWrap * tiflash_instance_wrap)
@@ -226,6 +241,7 @@ inline EngineStoreServerHelper GetEngineStoreServerHelper(EngineStoreServerWrap 
         .fn_apply_pre_handled_snapshot = ApplyPreHandledSnapshot,
         .fn_abort_pre_handle_snapshot = AbortPreHandledSnapshot,
         .fn_release_pre_handled_snapshot = ReleasePreHandledSnapshot,
+        .fn_apply_fap_snapshot = ApplyFapSnapshot,
         .fn_handle_http_request = HandleHttpRequest,
         .fn_check_http_uri_available = CheckHttpUriAvailable,
         .fn_gc_raw_cpp_ptr = GcRawCppPtr,
@@ -236,7 +252,9 @@ inline EngineStoreServerHelper GetEngineStoreServerHelper(EngineStoreServerWrap 
         .fn_set_pb_msg_by_bytes = SetPBMsByBytes,
         .fn_handle_safe_ts_update = HandleSafeTSUpdate,
         .fn_fast_add_peer = FastAddPeer,
-        .fn_get_lock_by_key = GetLockByKey,
+        .fn_query_fap_snapshot_state = QueryFapSnapshotState,
+        .fn_clear_fap_snapshot = ClearFapSnapshot,
+        .fn_kvstore_region_exists = KvstoreRegionExists,
     };
 }
 

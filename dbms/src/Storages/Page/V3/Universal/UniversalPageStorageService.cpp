@@ -131,7 +131,7 @@ bool UniversalPageStorageService::uploadCheckpoint()
 
     auto & tmt = global_context.getTMTContext();
 
-    auto store_info = tmt.getKVStore()->getStoreMeta();
+    auto store_info = tmt.getKVStore()->clonedStoreMeta();
     if (store_info.id() == InvalidStoreID)
     {
         LOG_INFO(log, "Skip checkpoint because store meta is not initialized");

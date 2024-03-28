@@ -25,7 +25,7 @@
 #include <Storages/DeltaMerge/WriteBatchesImpl.h>
 #include <Storages/KVStore/KVStore.h>
 #include <Storages/KVStore/MultiRaft/Disagg/CheckpointInfo.h>
-#include <Storages/KVStore/MultiRaft/Disagg/FastAddPeer.h>
+#include <Storages/KVStore/MultiRaft/Disagg/FastAddPeerContext.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/PathPool.h>
 
@@ -817,7 +817,7 @@ UInt64 DeltaMergeStore::ingestFiles(
 std::vector<SegmentPtr> DeltaMergeStore::ingestSegmentsUsingSplit(
     const DMContextPtr & dm_context,
     const RowKeyRange & ingest_range,
-    const std::vector<SegmentPtr> & target_segments)
+    const std::vector<SegmentPtr> & segments_to_ingest)
 {
     std::set<SegmentPtr> updated_segments;
 
@@ -902,19 +902,19 @@ std::vector<SegmentPtr> DeltaMergeStore::ingestSegmentsUsingSplit(
         log,
         "Table ingest checkpoint using split - split ingest phase - begin, ingest_range={}, files_n={}",
         ingest_range.toDebugString(),
-        target_segments.size());
+        segments_to_ingest.size());
 
-    for (size_t segment_idx = 0; segment_idx < target_segments.size(); segment_idx++)
+    for (size_t remote_segment_idx = 0; remote_segment_idx < segments_to_ingest.size(); remote_segment_idx++)
     {
         // We may meet empty segment, just ignore it
-        if (target_segments[segment_idx]->getEstimatedRows() == 0)
+        if (segments_to_ingest[remote_segment_idx]->getEstimatedRows() == 0)
         {
             LOG_INFO(
                 log,
                 "Table ingest checkpoint using split - split ingest phase - Meet empty Segment, skipped. "
                 "ingest_range={} segment_idx={}",
                 ingest_range.toDebugString(),
-                segment_idx);
+                remote_segment_idx);
             continue;
         }
 
@@ -926,7 +926,7 @@ std::vector<SegmentPtr> DeltaMergeStore::ingestSegmentsUsingSplit(
          *  │            │-- Seg --│------- Segment -----│                                │
          * We will try to ingest it into all overlapped segments.
          */
-        auto file_ingest_range = target_segments[segment_idx]->getRowKeyRange();
+        auto file_ingest_range = segments_to_ingest[remote_segment_idx]->getRowKeyRange();
         while (!file_ingest_range.none()) // This DMFile has remaining data to ingest
         {
             auto [segment, is_empty] = getSegmentByStartKey(
@@ -950,9 +950,9 @@ std::vector<SegmentPtr> DeltaMergeStore::ingestSegmentsUsingSplit(
             LOG_INFO(
                 log,
                 "Table ingest checkpoint using split - split ingest phase - Try to ingest file into segment, "
-                "segment_idx={} segment_id={} segment_ingest_range={} segment={} segment_ingest_range={}",
-                segment_idx,
-                target_segments[segment_idx]->segmentId(),
+                "remote_segment_idx={} remote_segment_id={} remote_ingest_range={} segment={} segment_ingest_range={}",
+                remote_segment_idx,
+                segments_to_ingest[remote_segment_idx]->segmentId(),
                 file_ingest_range.toDebugString(),
                 segment->simpleInfo(),
                 segment_ingest_range.toDebugString());
@@ -961,7 +961,7 @@ std::vector<SegmentPtr> DeltaMergeStore::ingestSegmentsUsingSplit(
                 *dm_context,
                 segment,
                 segment_ingest_range,
-                target_segments[segment_idx]);
+                segments_to_ingest[remote_segment_idx]);
             if (succeeded)
             {
                 updated_segments.insert(segment);
@@ -1111,10 +1111,62 @@ bool DeltaMergeStore::ingestSegmentDataIntoSegmentUsingSplit(
     }
 }
 
-void DeltaMergeStore::ingestSegmentsFromCheckpointInfo(
+Segments DeltaMergeStore::buildSegmentsFromCheckpointInfo(
     const DMContextPtr & dm_context,
     const DM::RowKeyRange & range,
-    CheckpointInfoPtr checkpoint_info)
+    const CheckpointInfoPtr & checkpoint_info) const
+{
+    if (unlikely(range.none()))
+    {
+        return {};
+    }
+    LOG_INFO(
+        log,
+        "Build checkpoint from remote, store_id={} region_id={}",
+        checkpoint_info->remote_store_id,
+        checkpoint_info->region_id);
+    WriteBatches wbs{*dm_context->storage_pool};
+    try
+    {
+        auto segment_meta_infos = Segment::readAllSegmentsMetaInfoInRange(*dm_context, range, checkpoint_info);
+        auto restored_segments = Segment::createTargetSegmentsFromCheckpoint( //
+            log,
+            *dm_context,
+            checkpoint_info->remote_store_id,
+            segment_meta_infos,
+            range,
+            checkpoint_info->temp_ps,
+            wbs);
+        if (restored_segments.empty())
+        {
+            return {};
+        }
+        wbs.writeLogAndData();
+        LOG_INFO(
+            log,
+            "Finish write fap checkpoint, region_id={} segments_num={}",
+            checkpoint_info->region_id,
+            segment_meta_infos.size());
+        return restored_segments;
+    }
+    catch (const Exception & e)
+    {
+        LOG_INFO(
+            log,
+            "Build checkpoint from remote failed for {}, region_id={} remote_store_id={}",
+            e.message(),
+            checkpoint_info->region_id,
+            checkpoint_info->remote_store_id);
+        wbs.setRollback();
+        e.rethrow();
+    }
+    return {};
+}
+
+UInt64 DeltaMergeStore::ingestSegmentsFromCheckpointInfo(
+    const DMContextPtr & dm_context,
+    const DM::RowKeyRange & range,
+    const CheckpointIngestInfoPtr & checkpoint_info)
 {
     if (unlikely(shutdown_called.load(std::memory_order_relaxed)))
     {
@@ -1128,43 +1180,29 @@ void DeltaMergeStore::ingestSegmentsFromCheckpointInfo(
         LOG_INFO(
             log,
             "Ingest checkpoint from remote meet empty range, ignore, store_id={} region_id={}",
-            checkpoint_info->remote_store_id,
-            checkpoint_info->region_id);
-        return;
+            checkpoint_info->getRemoteStoreId(),
+            checkpoint_info->regionId());
+        return 0;
     }
 
-    LOG_INFO(
-        log,
-        "Ingest checkpoint from remote, store_id={} region_id={}",
-        checkpoint_info->remote_store_id,
-        checkpoint_info->region_id);
-    auto segment_meta_infos = Segment::readAllSegmentsMetaInfoInRange(*dm_context, range, checkpoint_info);
-    LOG_INFO(log, "Ingest checkpoint segments num {}", segment_meta_infos.size());
-    WriteBatches wbs{*dm_context->storage_pool};
-    auto restored_segments = Segment::createTargetSegmentsFromCheckpoint( //
-        log,
-        *dm_context,
-        checkpoint_info->remote_store_id,
-        segment_meta_infos,
-        range,
-        checkpoint_info->temp_ps,
-        wbs);
-
-    if (restored_segments.empty())
-    {
-        LOG_DEBUG(log, "No segments to ingest.");
-        return;
-    }
-    wbs.writeLogAndData();
-
+    auto restored_segments = checkpoint_info->getRestoredSegments();
     auto updated_segments = ingestSegmentsUsingSplit(dm_context, range, restored_segments);
+    auto estimated_bytes = 0;
+
+    for (const auto & segment : restored_segments)
+    {
+        estimated_bytes += segment->getEstimatedBytes();
+    }
+
     LOG_INFO(
         log,
-        "Ingest checkpoint from remote done, store_id={} region_id={} n_segments={}",
-        checkpoint_info->remote_store_id,
-        checkpoint_info->region_id,
-        restored_segments.size());
+        "Ingest checkpoint from remote done, store_id={} region_id={} n_segments={} est_bytes={}",
+        checkpoint_info->getRemoteStoreId(),
+        checkpoint_info->regionId(),
+        restored_segments.size(),
+        estimated_bytes);
 
+    WriteBatches wbs{*dm_context->storage_pool};
     for (auto & segment : restored_segments)
     {
         auto delta = segment->getDelta();
@@ -1174,8 +1212,11 @@ void DeltaMergeStore::ingestSegmentsFromCheckpointInfo(
         wbs.writeRemoves();
     }
 
+    // TODO(fap) This could be executed in a dedicated thread if it consumes too much time.
     for (auto & segment : updated_segments)
-        checkSegmentUpdate(dm_context, segment, ThreadType::Write, InputType::NotRaft);
+        checkSegmentUpdate(dm_context, segment, ThreadType::Write, InputType::RaftSSTAndSnap);
+
+    return estimated_bytes;
 }
 
 } // namespace DM

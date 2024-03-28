@@ -15,6 +15,7 @@
 #include <Common/TiFlashMetrics.h>
 #include <Storages/Page/PageConstants.h>
 #include <Storages/Page/V3/CheckpointFile/CPDumpStat.h>
+#include <common/logger_useful.h>
 #include <fmt/core.h>
 
 namespace DB::PS::V3
@@ -76,7 +77,15 @@ void SetMetrics(const CPDataDumpStats & stats)
             GET_METRIC(tiflash_storage_page_data_by_types, type_meta).Set(stats.num_existing_bytes[i]);
             break;
         }
+        case DB::StorageType::LocalKV:
+        {
+            GET_METRIC(tiflash_storage_checkpoint_keys_by_types, type_localkv).Increment(stats.num_keys[i]);
+            GET_METRIC(tiflash_storage_checkpoint_flow_by_types, type_localkv).Increment(stats.num_bytes[i]);
+            GET_METRIC(tiflash_storage_page_data_by_types, type_localkv).Set(stats.num_existing_bytes[i]);
+            break;
+        }
         default:
+            LOG_FATAL(Logger::get("SetMetrics"), "unsupported storage type {}", magic_enum::enum_name(type));
             __builtin_unreachable();
         }
     }

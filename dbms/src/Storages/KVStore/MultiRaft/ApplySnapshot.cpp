@@ -16,9 +16,12 @@
 #include <Common/TiFlashMetrics.h>
 #include <Common/setThreadName.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/SharedContexts/Disagg.h>
 #include <Storages/KVStore/Decode/RegionTable.h>
 #include <Storages/KVStore/FFI/ProxyFFI.h>
 #include <Storages/KVStore/KVStore.h>
+#include <Storages/KVStore/MultiRaft/Disagg/CheckpointIngestInfo.h>
+#include <Storages/KVStore/MultiRaft/Disagg/FastAddPeerContext.h>
 #include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/StorageDeltaMerge.h>
@@ -113,7 +116,18 @@ void KVStore::checkAndApplyPreHandledSnapshot(const RegionPtrWrap & new_region, 
             }
         }
     }
-
+    // NOTE Do NOT move it to prehandle stage!
+    // Otherwise a fap snapshot may be cleaned when prehandling after restarted.
+    if (tmt.getContext().getSharedContextDisagg()->isDisaggregatedStorageMode())
+    {
+        if constexpr (!std::is_same_v<RegionPtrWrap, RegionPtrWithCheckpointInfo>)
+        {
+            auto fap_ctx = tmt.getContext().getSharedContextDisagg()->fap_context;
+            auto region_id = new_region->id();
+            // Everytime we meet a regular snapshot, we try to clean obsolete fap ingest info.
+            fap_ctx->resolveFapSnapshotState(tmt, proxy_helper, region_id, true);
+        }
+    }
     onSnapshot(new_region, old_region, old_applied_index, tmt);
 }
 
@@ -124,6 +138,18 @@ std::pair<UInt64, bool> getTiFlashReplicaSyncInfo(StorageDeltaMergePtr & dm_stor
     const auto & replica_info = dm_storage->getTableInfo().replica_info;
     auto is_syncing = replica_info.count > 0 && replica_info.available.has_value() && !(*replica_info.available);
     return {replica_info.count, is_syncing};
+}
+
+static inline void maybeUpdateRU(StorageDeltaMergePtr & dm_storage, UInt64 keyspace_id, UInt64 ingested_bytes)
+{
+    if (auto [count, is_syncing] = getTiFlashReplicaSyncInfo(dm_storage); is_syncing)
+    {
+        // For write, 1 RU per KB. Reference: https://docs.pingcap.com/tidb/v7.0/tidb-resource-control
+        // Only calculate RU of one replica. So each replica reports 1/count consumptions.
+        TiFlashMetrics::instance().addReplicaSyncRU(
+            keyspace_id,
+            std::ceil(static_cast<double>(ingested_bytes) / 1024.0 / count));
+    }
 }
 
 template <typename RegionPtrWrap>
@@ -183,21 +209,15 @@ void KVStore::onSnapshot(
                         new_region_wrap.external_files,
                         /*clear_data_in_range=*/true,
                         context.getSettingsRef());
-                    if (auto [count, is_syncing] = getTiFlashReplicaSyncInfo(dm_storage); is_syncing)
-                    {
-                        // For write, 1 RU per KB. Reference: https://docs.pingcap.com/tidb/v7.0/tidb-resource-control
-                        // Only calculate RU of one replica. So each replica reports 1/count consumptions.
-                        TiFlashMetrics::instance().addReplicaSyncRU(
-                            keyspace_id,
-                            std::ceil(static_cast<double>(ingested_bytes) / 1024.0 / count));
-                    }
+                    maybeUpdateRU(dm_storage, keyspace_id, ingested_bytes);
                 }
                 else if constexpr (std::is_same_v<RegionPtrWrap, RegionPtrWithCheckpointInfo>)
                 {
-                    dm_storage->ingestSegmentsFromCheckpointInfo(
+                    auto ingested_bytes = dm_storage->ingestSegmentsFromCheckpointInfo(
                         new_key_range,
                         new_region_wrap.checkpoint_info,
                         context.getSettingsRef());
+                    maybeUpdateRU(dm_storage, keyspace_id, ingested_bytes);
                 }
                 else
                 {
@@ -333,7 +353,7 @@ template void KVStore::onSnapshot<RegionPtrWithSnapshotFiles>(
     UInt64,
     TMTContext &);
 
-void KVStore::handleIngestCheckpoint(RegionPtr region, CheckpointInfoPtr checkpoint_info, TMTContext & tmt)
+void KVStore::handleIngestCheckpoint(RegionPtr region, CheckpointIngestInfoPtr checkpoint_info, TMTContext & tmt)
 {
     applyPreHandledSnapshot(RegionPtrWithCheckpointInfo{region, checkpoint_info}, tmt);
 }

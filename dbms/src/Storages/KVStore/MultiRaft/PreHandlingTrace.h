@@ -31,6 +31,8 @@ struct PreHandlingTrace : MutexLockWrap
         {}
         std::atomic_bool abort_flag;
     };
+
+    // Prehandle use thread pool from Proxy's side, so it can't benefit from AsyncTasks.
     std::unordered_map<uint64_t, std::shared_ptr<Item>> tasks;
 
     std::shared_ptr<Item> registerTask(uint64_t region_id)
@@ -51,10 +53,7 @@ struct PreHandlingTrace : MutexLockWrap
             tasks.erase(it);
             return b;
         }
-        else
-        {
-            return nullptr;
-        }
+        return nullptr;
     }
     bool hasTask(uint64_t region_id)
     {

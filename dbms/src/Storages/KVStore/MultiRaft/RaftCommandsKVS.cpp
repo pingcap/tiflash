@@ -14,7 +14,6 @@
 
 #include <Common/FmtUtils.h>
 #include <Common/Stopwatch.h>
-#include <Common/SyncPoint/SyncPoint.h>
 #include <Common/TiFlashMetrics.h>
 #include <Common/setThreadName.h>
 #include <Interpreters/Context.h>

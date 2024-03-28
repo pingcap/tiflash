@@ -38,6 +38,7 @@
 #include <DataStreams/UnionBlockInputStream.h>
 #include <DataStreams/copyData.h>
 #include <Encryption/FileProvider.h>
+#include <Flash/Coprocessor/DAGQueryInfo.h>
 #include <Interpreters/ExpressionAnalyzer.h>
 #include <Interpreters/InterpreterSelectQuery.h>
 #include <Interpreters/InterpreterSelectWithUnionQuery.h>
@@ -57,11 +58,15 @@
 #include <Storages/KVStore/Read/LearnerRead.h>
 #include <Storages/KVStore/StorageEngineType.h>
 #include <Storages/KVStore/TMTContext.h>
+#include <Storages/KVStore/Types.h>
 #include <Storages/RegionQueryInfo.h>
 #include <TableFunctions/ITableFunction.h>
 #include <TableFunctions/TableFunctionFactory.h>
 #include <TiDB/Schema/SchemaSyncer.h>
 #include <TiDB/Schema/TiDBSchemaManager.h>
+#include <common/logger_useful.h>
+#include <google/protobuf/text_format.h>
+
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #include <Poco/Dynamic/Var.h>
@@ -70,7 +75,6 @@
 #include <Poco/JSON/Parser.h>
 #pragma GCC diagnostic pop
 
-#include <google/protobuf/text_format.h>
 
 namespace ProfileEvents
 {
@@ -233,9 +237,8 @@ void InterpreterSelectQuery::getAndLockStorageWithSchemaVersion(const String & d
         auto storage_tmp = context.getTable(database_name, table_name);
         auto managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage_tmp);
         if (!managed_storage
-            || !(
-                managed_storage->engineType() == ::TiDB::StorageEngine::DT
-                || managed_storage->engineType() == ::TiDB::StorageEngine::TMT))
+            || (managed_storage->engineType() != ::TiDB::StorageEngine::DT
+                && managed_storage->engineType() != ::TiDB::StorageEngine::TMT))
         {
             LOG_DEBUG(log, "{}.{} is not ManageableStorage", database_name, table_name);
             storage = storage_tmp;
@@ -557,7 +560,6 @@ void InterpreterSelectQuery::executeImpl(Pipeline & pipeline, const BlockInputSt
         executeSubqueriesInSetsAndJoins(pipeline, expressions.subqueries_for_sets);
 }
 
-
 static void getLimitLengthAndOffset(ASTSelectQuery & query, size_t & length, size_t & offset)
 {
     length = 0;
@@ -569,6 +571,99 @@ static void getLimitLengthAndOffset(ASTSelectQuery & query, size_t & length, siz
             offset = safeGet<UInt64>(typeid_cast<ASTLiteral &>(*query.limit_offset).value);
     }
 }
+
+namespace
+{
+bool tryFillQueryRegionsByString(SelectQueryInfo & query_info, StoragePtr & storage, const String & request_str)
+{
+    if (request_str.empty())
+        return false; // parse fail
+
+    TableID table_id = InvalidTableID;
+    if (auto managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage); managed_storage)
+    {
+        table_id = managed_storage->getTableInfo().id;
+    }
+    else
+    {
+        throw Exception("Not supported request on non-manageable storage");
+    }
+    Poco::JSON::Parser parser;
+    Poco::Dynamic::Var result = parser.parse(request_str);
+    auto obj = result.extract<Poco::JSON::Object::Ptr>();
+    Poco::Dynamic::Var regions_obj = obj->get("regions");
+    auto arr = regions_obj.extract<Poco::JSON::Array::Ptr>();
+
+    for (size_t i = 0; i < arr->size(); i++)
+    {
+        auto str = arr->getElement<String>(i);
+        ::metapb::Region region;
+        ::google::protobuf::TextFormat::ParseFromString(str, &region);
+
+        const auto & epoch = region.region_epoch();
+        RegionQueryInfo info(region.id(), epoch.version(), epoch.conf_ver(), table_id);
+        {
+            // Extract the handle range according to current table
+            TiKVKey start_key = RecordKVFormat::encodeAsTiKVKey(region.start_key());
+            TiKVKey end_key = RecordKVFormat::encodeAsTiKVKey(region.end_key());
+            RegionRangeKeys region_range(std::move(start_key), std::move(end_key));
+            info.range_in_table = region_range.rawKeys();
+        }
+        query_info.mvcc_query_info->regions_query_info.push_back(info);
+    }
+
+    if (query_info.mvcc_query_info->regions_query_info.empty())
+        throw Exception("[InterpreterSelectQuery::executeFetchColumns] no region query", ErrorCodes::LOGICAL_ERROR);
+    return true; // parse OK
+}
+
+void tryFillDefaultQueryRegions(
+    Context & context,
+    SelectQueryInfo & query_info,
+    StoragePtr & storage,
+    const LoggerPtr & log)
+{
+    // Only for (integration) test, because regions_query_info should never be empty if query is from TiDB or TiSpark.
+    // TODO: support partition table
+    TableID table_id = InvalidTableID;
+    if (auto managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage); !managed_storage)
+    {
+        // We may run query on a table other than manageable storage on mock test, just skip
+        return;
+    }
+    else
+    {
+        table_id = managed_storage->getTableInfo().id;
+    }
+
+    auto & tmt = context.getTMTContext();
+    const auto regions = tmt.getRegionTable().getRegionsByTable(NullspaceID, table_id);
+    if (regions.empty())
+    {
+        // We may run query on a table without any regions on mock test, keep going
+        LOG_WARNING(
+            log,
+            "[InterpreterSelectQuery::executeFetchColumns] can not find any regions for the query, "
+            "table_id={}",
+            table_id);
+        return;
+    }
+
+    RUNTIME_CHECK_MSG(
+        query_info.mvcc_query_info->regions_query_info.empty(),
+        "the origin regions info is not empty! size={}",
+        query_info.mvcc_query_info->regions_query_info.size());
+
+    query_info.mvcc_query_info->regions_query_info.reserve(regions.size());
+    for (const auto & [id, region] : regions)
+    {
+        if (region == nullptr)
+            continue;
+        query_info.mvcc_query_info->regions_query_info
+            .emplace_back(id, region->version(), region->confVer(), table_id, region->getRange()->rawKeys());
+    }
+}
+} // namespace
 
 QueryProcessingStage::Enum InterpreterSelectQuery::executeFetchColumns(Pipeline & pipeline, bool dry_run)
 {
@@ -703,48 +798,11 @@ QueryProcessingStage::Enum InterpreterSelectQuery::executeFetchColumns(Pipeline 
         query_info.mvcc_query_info
             = std::make_unique<MvccQueryInfo>(settings.resolve_locks, settings.read_tso, scan_context);
 
-        const String & request_str = settings.regions;
-
-        if (!request_str.empty())
+        if (!tryFillQueryRegionsByString(query_info, storage, settings.regions))
         {
-            TableID table_id = InvalidTableID;
-            if (auto managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage); managed_storage)
-            {
-                table_id = managed_storage->getTableInfo().id;
-            }
-            else
-            {
-                throw Exception("Not supported request on non-manageable storage");
-            }
-            Poco::JSON::Parser parser;
-            Poco::Dynamic::Var result = parser.parse(request_str);
-            auto obj = result.extract<Poco::JSON::Object::Ptr>();
-            Poco::Dynamic::Var regions_obj = obj->get("regions");
-            auto arr = regions_obj.extract<Poco::JSON::Array::Ptr>();
-
-            for (size_t i = 0; i < arr->size(); i++)
-            {
-                auto str = arr->getElement<String>(i);
-                ::metapb::Region region;
-                ::google::protobuf::TextFormat::ParseFromString(str, &region);
-
-                const auto & epoch = region.region_epoch();
-                RegionQueryInfo info(region.id(), epoch.version(), epoch.conf_ver(), table_id);
-                if (const auto & managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage))
-                {
-                    // Extract the handle range according to current table
-                    TiKVKey start_key = RecordKVFormat::encodeAsTiKVKey(region.start_key());
-                    TiKVKey end_key = RecordKVFormat::encodeAsTiKVKey(region.end_key());
-                    RegionRangeKeys region_range(std::move(start_key), std::move(end_key));
-                    info.range_in_table = region_range.rawKeys();
-                }
-                query_info.mvcc_query_info->regions_query_info.push_back(info);
-            }
-
-            if (query_info.mvcc_query_info->regions_query_info.empty())
-                throw Exception(
-                    "[InterpreterSelectQuery::executeFetchColumns] no region query",
-                    ErrorCodes::LOGICAL_ERROR);
+            // Fail to get regions info from `settings.regions`, try to fill
+            // default regions
+            tryFillDefaultQueryRegions(context, query_info, storage, log);
         }
 
         /// PARTITION SELECT only supports MergeTree family now.
@@ -772,7 +830,7 @@ QueryProcessingStage::Enum InterpreterSelectQuery::executeFetchColumns(Pipeline 
                 if (const auto * select_query = typeid_cast<const ASTSelectQuery *>(query_info.query.get()))
                 {
                     // With `no_kvsotre` is true, we do not do learner read
-                    if (likely(!select_query->no_kvstore))
+                    if (likely(!select_query->no_kvstore && !query_info.mvcc_query_info->regions_query_info.empty()))
                     {
                         auto table_info = managed_storage->getTableInfo();
                         learner_read_snapshot
@@ -811,7 +869,7 @@ QueryProcessingStage::Enum InterpreterSelectQuery::executeFetchColumns(Pipeline 
 }
 
 
-void InterpreterSelectQuery::executeWhere(Pipeline & pipeline, const ExpressionActionsPtr & expression)
+void InterpreterSelectQuery::executeWhere(Pipeline & pipeline, const ExpressionActionsPtr & expression) const
 {
     pipeline.transform([&](auto & stream) {
         stream = std::make_shared<FilterBlockInputStream>(
@@ -965,7 +1023,7 @@ void InterpreterSelectQuery::executeMergeAggregated(Pipeline & pipeline, bool fi
 }
 
 
-void InterpreterSelectQuery::executeHaving(Pipeline & pipeline, const ExpressionActionsPtr & expression)
+void InterpreterSelectQuery::executeHaving(Pipeline & pipeline, const ExpressionActionsPtr & expression) const
 {
     pipeline.transform([&](auto & stream) {
         stream = std::make_shared<FilterBlockInputStream>(

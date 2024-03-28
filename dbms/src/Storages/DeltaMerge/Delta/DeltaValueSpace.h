@@ -105,6 +105,9 @@ private:
 
     LoggerPtr log;
 
+private:
+    void saveMeta(WriteBuffer & buf) const;
+
 public:
     explicit DeltaValueSpace(
         PageIdU64 id_,
@@ -116,8 +119,17 @@ public:
     /// Restore the metadata of this instance.
     /// Only called after reboot.
     static DeltaValueSpacePtr restore(DMContext & context, const RowKeyRange & segment_range, PageIdU64 id);
+    /// Restore from a checkpoint from other peer.
+    /// Only used in FAP.
+    static DeltaValueSpacePtr restore(
+        DMContext & context,
+        const RowKeyRange & segment_range,
+        ReadBuffer & buf,
+        PageIdU64 id);
+
 
     static DeltaValueSpacePtr createFromCheckpoint( //
+        const LoggerPtr & parent_log,
         DMContext & context,
         UniversalPageStoragePtr temp_ps,
         const RowKeyRange & segment_range,
@@ -157,6 +169,7 @@ public:
     bool hasAbandoned() const { return abandoned.load(std::memory_order_relaxed); }
 
     void saveMeta(WriteBatches & wbs) const;
+    std::string serializeMeta() const;
 
     void recordRemoveColumnFilesPages(WriteBatches & wbs) const;
 

@@ -25,6 +25,7 @@
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h>
 #include <Storages/DeltaMerge/StoragePool/StoragePool.h>
 #include <Storages/KVStore/TMTContext.h>
+#include <Storages/PathPool.h>
 #include <Storages/S3/S3Common.h>
 #include <TestUtils/TiFlashTestEnv.h>
 #include <aws/s3/S3Client.h>
@@ -251,6 +252,20 @@ void TiFlashTestEnv::setUpTestContext(
     /// by default non-mpp task will do collation insensitive group by, let the test do
     /// collation sensitive group by setting `group_by_collation_sensitive` to true
     context.setSetting("group_by_collation_sensitive", Field(static_cast<UInt64>(1)));
+}
+
+std::unique_ptr<PathPool> TiFlashTestEnv::createCleanPathPool(const String & path)
+{
+    // Drop files on disk
+    LOG_INFO(Logger::get("Test"), "Clean path {} for bootstrap", path);
+    tryRemovePath(path, /*recreate=*/true);
+
+    auto & global_ctx = TiFlashTestEnv::getGlobalContext();
+    auto path_capacity = global_ctx.getPathCapacity();
+    auto provider = global_ctx.getFileProvider();
+    // Create a PathPool instance on the clean directory
+    Strings main_data_paths{path};
+    return std::make_unique<PathPool>(main_data_paths, main_data_paths, Strings{}, path_capacity, provider);
 }
 
 FileProviderPtr TiFlashTestEnv::getMockFileProvider()

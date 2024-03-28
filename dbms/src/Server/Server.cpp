@@ -1339,7 +1339,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     if (global_context->getSharedContextDisagg()->isDisaggregatedStorageMode())
     {
         global_context->getSharedContextDisagg()->initWriteNodeSnapManager();
-        global_context->getSharedContextDisagg()->initFastAddPeerContext();
+        global_context->getSharedContextDisagg()->initFastAddPeerContext(settings.fap_handle_concurrency);
     }
 
     if (global_context->getSharedContextDisagg()->isDisaggregatedComputeMode())

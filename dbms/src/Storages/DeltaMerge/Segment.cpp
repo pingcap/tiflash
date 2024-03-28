@@ -45,6 +45,7 @@
 #include <Storages/DeltaMerge/RowKeyOrderedBlockInputStream.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
+#include <Storages/DeltaMerge/Segment_fwd.h>
 #include <Storages/DeltaMerge/StoragePool/StoragePool.h>
 #include <Storages/DeltaMerge/WriteBatchesImpl.h>
 #include <Storages/KVStore/KVStore.h>
@@ -318,7 +319,7 @@ SegmentPtr Segment::newSegment( //
         context.storage_pool->newMetaPageId());
 }
 
-inline void readSegmentMetaInfo(ReadBuffer & buf, Segment::SegmentMetaInfo & segment_info)
+void readSegmentMetaInfo(ReadBuffer & buf, Segment::SegmentMetaInfo & segment_info)
 {
     readIntBinary(segment_info.version, buf);
     readIntBinary(segment_info.epoch, buf);
@@ -399,7 +400,7 @@ Segment::SegmentMetaInfos Segment::readAllSegmentsMetaInfoInRange( //
 
     // If cache is empty, we read from DELTA_MERGE_FIRST_SEGMENT_ID to the end and build the cache.
     // Otherwise, we just read the segment that cover the range.
-    PageIdU64 current_segment_id = 1;
+    PageIdU64 current_segment_id = DELTA_MERGE_FIRST_SEGMENT_ID;
     auto end_to_segment_id_cache = checkpoint_info->checkpoint_data_holder->getEndToSegmentIdCache(
         KeyspaceTableID{context.keyspace_id, context.physical_table_id});
     auto lock = end_to_segment_id_cache->lock();
@@ -418,7 +419,20 @@ Segment::SegmentMetaInfos Segment::readAllSegmentsMetaInfoInRange( //
         auto target_id = UniversalPageIdFormat::toFullPageId(
             UniversalPageIdFormat::toFullPrefix(context.keyspace_id, StorageType::Meta, context.physical_table_id),
             current_segment_id);
-        auto page = checkpoint_info->temp_ps->read(target_id);
+        auto page = checkpoint_info->temp_ps->read(target_id, nullptr, {}, false);
+        if unlikely (!page.isValid())
+        {
+            // After #7642, DELTA_MERGE_FIRST_SEGMENT_ID may not exist, however, such checkpoint won't be selected.
+            // If it were to be selected, the FAP task could fallback to regular snapshot.
+            throw Exception(
+                ErrorCodes::LOGICAL_ERROR,
+                "Can't find page id {}, keyspace={} table_id={} current_segment_id={} range={}",
+                target_id,
+                context.keyspace_id,
+                context.physical_table_id,
+                current_segment_id,
+                target_range.toDebugString());
+        }
         segment_info.segment_id = current_segment_id;
         ReadBufferFromMemory buf(page.data.begin(), page.data.size());
         readSegmentMetaInfo(buf, segment_info);
@@ -471,9 +485,14 @@ Segments Segment::createTargetSegmentsFromCheckpoint( //
             segment_info.range.toDebugString(),
             segment_info.epoch,
             segment_info.next_segment_id);
-        auto stable = StableValueSpace::createFromCheckpoint(context, temp_ps, segment_info.stable_id, wbs);
-        auto delta
-            = DeltaValueSpace::createFromCheckpoint(context, temp_ps, segment_info.range, segment_info.delta_id, wbs);
+        auto stable = StableValueSpace::createFromCheckpoint(parent_log, context, temp_ps, segment_info.stable_id, wbs);
+        auto delta = DeltaValueSpace::createFromCheckpoint(
+            parent_log,
+            context,
+            temp_ps,
+            segment_info.range,
+            segment_info.delta_id,
+            wbs);
         auto segment = std::make_shared<Segment>(
             Logger::get("Checkpoint"),
             segment_info.epoch,
@@ -495,17 +514,33 @@ Segments Segment::createTargetSegmentsFromCheckpoint( //
     return segments;
 }
 
-void Segment::serialize(WriteBatchWrapper & wb)
+void Segment::serializeToFAPTempSegment(FastAddPeerProto::FAPTempSegmentInfo * segment_info)
 {
-    MemoryWriteBuffer buf(0, SEGMENT_BUFFER_SIZE);
+    {
+        WriteBufferFromOwnString wb;
+        storeSegmentMetaInfo(wb);
+        segment_info->set_segment_meta(wb.releaseStr());
+    }
+    segment_info->set_delta_meta(delta->serializeMeta());
+    segment_info->set_stable_meta(stable->serializeMeta());
+}
+
+UInt64 Segment::storeSegmentMetaInfo(WriteBuffer & buf) const
+{
     writeIntBinary(STORAGE_FORMAT_CURRENT.segment, buf);
     writeIntBinary(epoch, buf);
     rowkey_range.serialize(buf);
     writeIntBinary(next_segment_id, buf);
     writeIntBinary(delta->getId(), buf);
     writeIntBinary(stable->getId(), buf);
+    return buf.count();
+}
 
-    auto data_size = buf.count(); // Must be called before tryGetReadBuffer.
+void Segment::serialize(WriteBatchWrapper & wb) const
+{
+    MemoryWriteBuffer buf(0, SEGMENT_BUFFER_SIZE);
+    // Must be called before tryGetReadBuffer.
+    auto data_size = storeSegmentMetaInfo(buf);
     wb.putPage(segment_id, 0, buf.tryGetReadBuffer(), data_size);
 }
 
@@ -2311,6 +2346,16 @@ void Segment::drop(const FileProviderPtr & file_provider, WriteBatches & wbs)
     wbs.removed_meta.delPage(segment_id);
     wbs.removed_meta.delPage(delta->getId());
     wbs.removed_meta.delPage(stable->getId());
+    wbs.writeAll();
+    stable->drop(file_provider);
+}
+
+void Segment::dropAsFAPTemp(const FileProviderPtr & file_provider, WriteBatches & wbs)
+{
+    // The segment_id, delta_id, stable_id are invalid, just cleanup the persisted page_id in
+    // delta layer and stable layer
+    delta->recordRemoveColumnFilesPages(wbs);
+    stable->recordRemovePacksPages(wbs);
     wbs.writeAll();
     stable->drop(file_provider);
 }

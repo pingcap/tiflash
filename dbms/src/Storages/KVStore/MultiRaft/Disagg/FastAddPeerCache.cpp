@@ -148,8 +148,23 @@ ParsedCheckpointDataHolderPtr buildParsedCheckpointData(Context & context, const
         // Note the `data_file_id` in temp ps is all lock key, we need transform them to data key before write to local ps.
         for (auto & record : records)
         {
+            {
+                // Filter remote peer's local page storage pages.
+                if (UniversalPageIdFormat::getUniversalPageIdType(record.page_id) == StorageType::LocalKV)
+                {
+                    continue;
+                }
+            }
             if (record.type == PS::V3::EditRecordType::VAR_ENTRY)
             {
+                if (!record.entry.checkpoint_info.data_location.isValid())
+                {
+                    // Eventually fallback to regular snapshot
+                    throw Exception(
+                        ErrorCodes::LOGICAL_ERROR,
+                        "buildParsedCheckpointData: can't put remote page with empty data_location, page_id={}",
+                        record.page_id);
+                }
                 wb.putRemotePage(
                     record.page_id,
                     record.entry.tag,
@@ -168,6 +183,14 @@ ParsedCheckpointDataHolderPtr buildParsedCheckpointData(Context & context, const
             else if (record.type == PS::V3::EditRecordType::VAR_EXTERNAL)
             {
                 RUNTIME_CHECK(record.entry.checkpoint_info.has_value());
+                if (!record.entry.checkpoint_info.data_location.isValid())
+                {
+                    // Eventually fallback to regular snapshot
+                    throw Exception(
+                        ErrorCodes::LOGICAL_ERROR,
+                        "buildParsedCheckpointData: can't put external page with empty data_location, page_id={}",
+                        record.page_id);
+                }
                 wb.putRemoteExternal(record.page_id, record.entry.checkpoint_info.data_location);
             }
             else

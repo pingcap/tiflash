@@ -17,7 +17,7 @@
 #include <Core/Types.h>
 #include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/Types.h>
-#include <Storages/RegionQueryInfo.h>
+#include <Storages/RegionQueryInfo_fwd.h>
 
 #include <unordered_map>
 #include <vector>
@@ -42,7 +42,7 @@ struct RegionLearnerReadSnapshot : RegionPtr
 using LearnerReadSnapshot = std::unordered_map<RegionID, RegionLearnerReadSnapshot>;
 
 [[nodiscard]] LearnerReadSnapshot doLearnerRead(
-    const TiDB::TableID table_id,
+    TableID table_id,
     MvccQueryInfo & mvcc_query_info,
     bool for_batch_cop,
     Context & context,

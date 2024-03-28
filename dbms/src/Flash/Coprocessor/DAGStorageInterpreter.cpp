@@ -51,6 +51,7 @@
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/KVStore/Types.h>
 #include <Storages/MutableSupport.h>
+#include <Storages/RegionQueryInfo.h>
 #include <Storages/S3/S3Common.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <TiDB/Decode/TypeMapping.h>
@@ -249,7 +250,7 @@ void injectFailPointForLocalRead([[maybe_unused]] const SelectQueryInfo & query_
             "failpoint inject region_exception_after_read_from_storage_some_error, throw RegionException with "
             "region_ids={}",
             region_ids);
-        throw RegionException(std::move(region_ids), RegionException::RegionReadStatus::NOT_FOUND);
+        throw RegionException(std::move(region_ids), RegionException::RegionReadStatus::NOT_FOUND, nullptr);
     });
     fiu_do_on(FailPoints::region_exception_after_read_from_storage_all_error, {
         const auto & regions_info = query_info.mvcc_query_info->regions_query_info;
@@ -261,7 +262,7 @@ void injectFailPointForLocalRead([[maybe_unused]] const SelectQueryInfo & query_
             "failpoint inject region_exception_after_read_from_storage_all_error, throw RegionException with "
             "region_ids={}",
             region_ids);
-        throw RegionException(std::move(region_ids), RegionException::RegionReadStatus::NOT_FOUND);
+        throw RegionException(std::move(region_ids), RegionException::RegionReadStatus::NOT_FOUND, nullptr);
     });
 }
 
@@ -309,6 +310,8 @@ DAGStorageInterpreter::DAGStorageInterpreter(
             Errors::Coprocessor::BadRequest);
     }
 }
+
+DAGStorageInterpreter::~DAGStorageInterpreter() = default;
 
 void DAGStorageInterpreter::execute(DAGPipeline & pipeline)
 {
@@ -386,7 +389,7 @@ void DAGStorageInterpreter::executeImpl(
         for (const auto & info : context.getDAGContext()->retry_regions)
             region_ids.insert(info.region_id);
 
-        throw RegionException(std::move(region_ids), RegionException::RegionReadStatus::EPOCH_NOT_MATCH);
+        throw RegionException(std::move(region_ids), RegionException::RegionReadStatus::EPOCH_NOT_MATCH, "executeImpl");
     }
 
     // A failpoint to test pause before alter lock released
@@ -498,7 +501,7 @@ void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
         for (const auto & info : context.getDAGContext()->retry_regions)
             region_ids.insert(info.region_id);
 
-        throw RegionException(std::move(region_ids), RegionException::RegionReadStatus::EPOCH_NOT_MATCH);
+        throw RegionException(std::move(region_ids), RegionException::RegionReadStatus::EPOCH_NOT_MATCH, "executeImpl");
     }
 
     // A failpoint to test pause before alter lock released
@@ -831,7 +834,7 @@ LearnerReadSnapshot DAGStorageInterpreter::doCopLearnerRead()
     auto [info_retry, status] = MakeRegionQueryInfos(regions_for_local_read, {}, tmt, *mvcc_query_info, false);
 
     if (info_retry)
-        throw RegionException({info_retry->begin()->get().region_id}, status);
+        throw RegionException({info_retry->begin()->get().region_id}, status, "doCopLearnerRead");
 
     return doLearnerRead(logical_table_id, *mvcc_query_info, /*for_batch_cop=*/false, context, log);
 }

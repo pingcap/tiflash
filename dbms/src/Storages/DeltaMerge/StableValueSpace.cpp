@@ -81,23 +81,41 @@ void StableValueSpace::setFiles(const DMFiles & files_, const RowKeyRange & rang
 void StableValueSpace::saveMeta(WriteBatchWrapper & meta_wb)
 {
     MemoryWriteBuffer buf(0, 8192);
+    // The method must call `buf.count()` to get the last seralized size before `buf.tryGetReadBuffer`
+    auto data_size = saveMeta(buf);
+    meta_wb.putPage(id, 0, buf.tryGetReadBuffer(), data_size);
+}
+
+UInt64 StableValueSpace::saveMeta(WriteBuffer & buf) const
+{
     writeIntBinary(STORAGE_FORMAT_CURRENT.stable, buf);
     writeIntBinary(valid_rows, buf);
     writeIntBinary(valid_bytes, buf);
     writeIntBinary(static_cast<UInt64>(files.size()), buf);
-    for (auto & f : files)
+    for (const auto & f : files)
         writeIntBinary(f->pageId(), buf);
 
-    auto data_size = buf.count(); // Must be called before tryGetReadBuffer.
-    meta_wb.putPage(id, 0, buf.tryGetReadBuffer(), data_size);
+    return buf.count();
+}
+
+std::string StableValueSpace::serializeMeta() const
+{
+    WriteBufferFromOwnString wb;
+    saveMeta(wb);
+    return wb.releaseStr();
 }
 
 StableValueSpacePtr StableValueSpace::restore(DMContext & context, PageIdU64 id)
 {
-    auto stable = std::make_shared<StableValueSpace>(id);
-
     Page page = context.storage_pool->metaReader()->read(id); // not limit restore
     ReadBufferFromMemory buf(page.data.begin(), page.data.size());
+    return StableValueSpace::restore(context, buf, id);
+}
+
+StableValueSpacePtr StableValueSpace::restore(DMContext & context, ReadBuffer & buf, PageIdU64 id)
+{
+    auto stable = std::make_shared<StableValueSpace>(id);
+
     UInt64 version, valid_rows, valid_bytes, size;
     readIntBinary(version, buf);
     if (version != StableFormat::V1)
@@ -155,6 +173,7 @@ StableValueSpacePtr StableValueSpace::restore(DMContext & context, PageIdU64 id)
 }
 
 StableValueSpacePtr StableValueSpace::createFromCheckpoint( //
+    [[maybe_unused]] const LoggerPtr & parent_log,
     DMContext & context,
     UniversalPageStoragePtr temp_ps,
     PageIdU64 stable_id,

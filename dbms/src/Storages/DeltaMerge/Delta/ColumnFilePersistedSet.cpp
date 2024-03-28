@@ -29,14 +29,19 @@ namespace DB
 {
 namespace DM
 {
+inline UInt64 serializeColumnFilePersisteds(WriteBuffer & buf, const ColumnFilePersisteds & persisted_files)
+{
+    serializeSavedColumnFiles(buf, persisted_files);
+    return buf.count();
+}
+
 inline void serializeColumnFilePersisteds(
     WriteBatches & wbs,
     PageIdU64 id,
     const ColumnFilePersisteds & persisted_files)
 {
     MemoryWriteBuffer buf(0, COLUMN_FILE_SERIALIZE_BUFFER_SIZE);
-    serializeSavedColumnFiles(buf, persisted_files);
-    auto data_size = buf.count();
+    auto data_size = serializeColumnFilePersisteds(buf, persisted_files);
     wbs.meta.putPage(id, 0, buf.tryGetReadBuffer(), data_size);
 }
 
@@ -98,11 +103,21 @@ ColumnFilePersistedSetPtr ColumnFilePersistedSet::restore( //
 {
     Page page = context.storage_pool->metaReader()->read(id);
     ReadBufferFromMemory buf(page.data.begin(), page.data.size());
+    return ColumnFilePersistedSet::restore(context, segment_range, buf, id);
+}
+
+ColumnFilePersistedSetPtr ColumnFilePersistedSet::restore( //
+    DMContext & context,
+    const RowKeyRange & segment_range,
+    ReadBuffer & buf,
+    PageIdU64 id)
+{
     auto column_files = deserializeSavedColumnFiles(context, segment_range, buf);
     return std::make_shared<ColumnFilePersistedSet>(id, column_files);
 }
 
 ColumnFilePersistedSetPtr ColumnFilePersistedSet::createFromCheckpoint( //
+    const LoggerPtr & parent_log,
     DMContext & context,
     UniversalPageStoragePtr temp_ps,
     const RowKeyRange & segment_range,
@@ -114,7 +129,7 @@ ColumnFilePersistedSetPtr ColumnFilePersistedSet::createFromCheckpoint( //
         delta_id);
     auto meta_page = temp_ps->read(delta_page_id);
     ReadBufferFromMemory meta_buf(meta_page.data.begin(), meta_page.data.size());
-    auto column_files = createColumnFilesFromCheckpoint(context, segment_range, meta_buf, temp_ps, wbs);
+    auto column_files = createColumnFilesFromCheckpoint(parent_log, context, segment_range, meta_buf, temp_ps, wbs);
     auto new_persisted_set = std::make_shared<ColumnFilePersistedSet>(delta_id, column_files);
     return new_persisted_set;
 }
@@ -122,6 +137,11 @@ ColumnFilePersistedSetPtr ColumnFilePersistedSet::createFromCheckpoint( //
 void ColumnFilePersistedSet::saveMeta(WriteBatches & wbs) const
 {
     serializeColumnFilePersisteds(wbs, metadata_id, persisted_files);
+}
+
+void ColumnFilePersistedSet::saveMeta(WriteBuffer & buf) const
+{
+    serializeColumnFilePersisteds(buf, persisted_files);
 }
 
 void ColumnFilePersistedSet::recordRemoveColumnFilesPages(WriteBatches & wbs) const

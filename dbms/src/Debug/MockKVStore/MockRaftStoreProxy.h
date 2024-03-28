@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Debug/MockKVStore/MockSSTGenerator.h>
 #include <Storages/KVStore/KVStore.h>
 #include <Storages/KVStore/Read/ReadIndexWorker.h>
 #include <Storages/Page/V3/Universal/UniversalWriteBatchImpl.h>
@@ -29,9 +30,11 @@ kvrpcpb::ReadIndexRequest make_read_index_reqs(uint64_t region_id, uint64_t star
 struct MockProxyRegion : MutexLockWrap
 {
     raft_serverpb::RegionLocalState getState();
+    raft_serverpb::RegionLocalState & mutState();
     raft_serverpb::RaftApplyState getApply();
     void persistAppliedIndex();
-    void updateAppliedIndex(uint64_t index);
+    void persistAppliedIndex(const std::lock_guard<Mutex> & lock);
+    void updateAppliedIndex(uint64_t index, bool persist_at_once);
     uint64_t getPersistedAppliedIndex();
     uint64_t getLatestAppliedIndex();
     uint64_t getLatestCommitTerm();
@@ -42,6 +45,7 @@ struct MockProxyRegion : MutexLockWrap
     explicit MockProxyRegion(uint64_t id);
     UniversalWriteBatch persistMeta();
     void addPeer(uint64_t store_id, uint64_t peer_id, metapb::PeerRole role);
+    void reload();
 
     struct RawWrite
     {
@@ -74,6 +78,7 @@ struct MockProxyRegion : MutexLockWrap
     const uint64_t id;
     raft_serverpb::RegionLocalState state;
     raft_serverpb::RaftApplyState apply;
+    raft_serverpb::RaftApplyState persisted_apply;
     std::map<uint64_t, CachedCommand> commands;
 };
 
@@ -113,46 +118,26 @@ struct MockReadIndexTask
     std::shared_ptr<RawMockReadIndexTask> data;
 };
 
-struct MockRaftStoreProxy : MutexLockWrap
+struct MockReadIndex
 {
-    static std::string encodeSSTView(SSTFormatKind kind, std::string ori)
-    {
-        if (kind == SSTFormatKind::KIND_TABLET)
-        {
-            return "!" + ori;
-        }
-        return ori;
-    }
-
-    static SSTFormatKind parseSSTViewKind(std::string_view v)
-    {
-        if (v[0] == '!')
-        {
-            return SSTFormatKind::KIND_TABLET;
-        }
-        return SSTFormatKind::KIND_SST;
-    }
-
-    MockProxyRegionPtr getRegion(uint64_t id);
-    MockProxyRegionPtr doGetRegion(uint64_t id);
-
-    MockReadIndexTask * makeReadIndexTask(kvrpcpb::ReadIndexRequest req);
-
-    void init(size_t region_num);
-    std::unique_ptr<TiFlashRaftProxyHelper> generateProxyHelper();
-
-    size_t size() const;
-
+    MockReadIndex(LoggerPtr log_)
+        : log(log_)
+    {}
     void wakeNotifier();
-
-    void testRunNormal(const std::atomic_bool & over);
-
     /// Handle one read index task.
     void runOneRound();
 
-    void unsafeInvokeForTest(std::function<void(MockRaftStoreProxy &)> && cb);
+    LoggerPtr log;
+    // Mock Proxy will drop read index requests to these regions
+    std::unordered_set<uint64_t> region_id_to_drop;
+    // Mock Proxy will return error read index response to these regions
+    std::unordered_set<uint64_t> region_id_to_error;
+    std::list<std::shared_ptr<RawMockReadIndexTask>> read_index_tasks;
+    AsyncWaker::Notifier notifier;
+};
 
-    static TiFlashRaftProxyHelper SetRaftStoreProxyFFIHelper(RaftStoreProxyPtr);
+struct MockRaftStoreProxy : MutexLockWrap
+{
     /// Mutation funcs.
     struct FailCond
     {
@@ -161,10 +146,24 @@ struct MockRaftStoreProxy : MutexLockWrap
             NORMAL,
             BEFORE_KVSTORE_WRITE,
             BEFORE_KVSTORE_ADVANCE,
-            BEFORE_PROXY_ADVANCE,
+            BEFORE_PROXY_PERSIST_ADVANCE,
         };
         Type type = NORMAL;
     };
+
+    std::unique_ptr<TiFlashRaftProxyHelper> generateProxyHelper();
+    static TiFlashRaftProxyHelper SetRaftStoreProxyFFIHelper(RaftStoreProxyPtr);
+
+    MockProxyRegionPtr getRegion(uint64_t id);
+    MockProxyRegionPtr doGetRegion(uint64_t id);
+
+    void init(size_t region_num);
+    size_t size() const;
+
+    MockReadIndexTask * makeReadIndexTask(kvrpcpb::ReadIndexRequest req);
+    void testRunReadIndex(const std::atomic_bool & over);
+
+    void unsafeInvokeForTest(std::function<void(MockRaftStoreProxy &)> && cb);
 
     /// Boostrap with a given region.
     /// Similar to TiKV's `bootstrap_region`.
@@ -187,6 +186,8 @@ struct MockRaftStoreProxy : MutexLockWrap
         std::vector<UInt64> region_ids,
         std::vector<std::pair<std::string, std::string>> && ranges);
 
+    /// Use region meta info in KVStore to replace what's in MockProxy.
+    /// Do not use in normal logic.
     void loadRegionFromKVStore(KVStore & kvs, TMTContext & tmt, UInt64 region_id);
 
     /// We assume that we generate one command, and immediately commit.
@@ -205,7 +206,6 @@ struct MockRaftStoreProxy : MutexLockWrap
         std::vector<WriteCmdType> && cmd_types,
         std::vector<ColumnFamilyType> && cmd_cf,
         std::optional<uint64_t> forced_index = std::nullopt);
-
 
     std::tuple<uint64_t, uint64_t> adminCommand(
         UInt64 region_id,
@@ -232,39 +232,22 @@ struct MockRaftStoreProxy : MutexLockWrap
         std::vector<std::pair<std::string, std::string>> && ranges,
         metapb::RegionEpoch old_epoch);
 
-    struct Cf
-    {
-        Cf(UInt64 region_id_, TableID table_id_, ColumnFamilyType type_);
-
-        // Actual data will be stored in MockSSTReader.
-        void finish_file(SSTFormatKind kind = SSTFormatKind::KIND_SST);
-        void freeze() { freezed = true; }
-
-        void insert(HandleID key, std::string val);
-        void insert_raw(std::string key, std::string val);
-
-        ColumnFamilyType cf_type() const { return type; }
-
-        // Only use this after all sst_files is generated.
-        // vector::push_back can cause destruction of std::string,
-        // which is referenced by SSTView.
-        std::vector<SSTView> ssts() const;
-
-    protected:
-        UInt64 region_id;
-        TableID table_id;
-        ColumnFamilyType type;
-        std::vector<std::string> sst_files;
-        std::vector<std::pair<std::string, std::string>> kvs;
-        int c;
-        bool freezed;
-    };
-
     std::tuple<RegionPtr, PrehandleResult> snapshot(
         KVStore & kvs,
         TMTContext & tmt,
         UInt64 region_id,
-        std::vector<Cf> && cfs,
+        std::vector<MockSSTGenerator> && cfs,
+        metapb::Region && region_meta,
+        UInt64 peer_id,
+        uint64_t index,
+        uint64_t term,
+        std::optional<uint64_t> deadline_index,
+        bool cancel_after_prehandle);
+    std::tuple<RegionPtr, PrehandleResult> snapshot(
+        KVStore & kvs,
+        TMTContext & tmt,
+        UInt64 region_id,
+        std::vector<MockSSTGenerator> && cfs,
         uint64_t index,
         uint64_t term,
         std::optional<uint64_t> deadline_index,
@@ -278,6 +261,7 @@ struct MockRaftStoreProxy : MutexLockWrap
         uint64_t index,
         std::optional<bool> check_proactive_flush = std::nullopt);
 
+    void reload();
     void replay(KVStore & kvs, TMTContext & tmt, uint64_t region_id, uint64_t to);
 
     void clear()
@@ -289,23 +273,26 @@ struct MockRaftStoreProxy : MutexLockWrap
     std::pair<std::string, std::string> generateTiKVKeyValue(uint64_t tso, int64_t t) const;
 
     MockRaftStoreProxy()
+        : log(Logger::get("MockRaftStoreProxy"))
+        , mock_read_index(MockReadIndex(log))
+        , table_id(1)
+        , cluster_ver(RaftstoreVer::V1)
     {
-        log = Logger::get("MockRaftStoreProxy");
-        table_id = 1;
-        cluster_ver = RaftstoreVer::V1;
+        proxy_config_string = R"({"raftstore":{"snap-handle-pool-size":4}})";
     }
 
-    // Mock Proxy will drop read index requests to these regions
-    std::unordered_set<uint64_t> region_id_to_drop;
-    // Mock Proxy will return error read index response to these regions
-    std::unordered_set<uint64_t> region_id_to_error;
-    std::map<uint64_t, MockProxyRegionPtr> regions;
-    std::list<std::shared_ptr<RawMockReadIndexTask>> read_index_tasks;
-    AsyncWaker::Notifier notifier;
+    LoggerPtr log;
+    MockReadIndex mock_read_index;
     TableID table_id;
     RaftstoreVer cluster_ver;
-    LoggerPtr log;
+    std::string proxy_config_string;
+    std::map<uint64_t, MockProxyRegionPtr> regions;
 };
+
+inline MockRaftStoreProxy & as_ref(RaftStoreProxyPtr ptr)
+{
+    return *reinterpret_cast<MockRaftStoreProxy *>(reinterpret_cast<size_t>(ptr.inner));
+}
 
 enum class RawObjType : uint32_t
 {

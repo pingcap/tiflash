@@ -74,12 +74,13 @@ UniversalPageMap S3PageReader::read(const UniversalPageIdAndEntries & page_id_an
     return page_map;
 }
 
-std::pair<UniversalPageMap, UniversalPageMap> S3PageReader::read(const FieldReadInfos & to_read)
+std::pair<UniversalPageMap, UniversalPageMap> S3PageReader::read(FieldReadInfos & to_read)
 {
     UniversalPageMap complete_page_map;
     size_t read_fields_size = 0;
-    for (const auto & read_info : to_read)
+    for (auto & read_info : to_read)
     {
+        std::sort(read_info.fields.begin(), read_info.fields.end());
         const auto & page_entry = read_info.entry;
         // read the whole page from S3 and save it as `complete_page`
         complete_page_map.emplace(read_info.page_id, read(std::make_pair(read_info.page_id, page_entry)));

@@ -36,6 +36,8 @@ namespace DB
 {
 struct CheckpointInfo;
 using CheckpointInfoPtr = std::shared_ptr<CheckpointInfo>;
+struct CheckpointIngestInfo;
+using CheckpointIngestInfoPtr = std::shared_ptr<CheckpointIngestInfo>;
 namespace DM
 {
 struct RowKeyRange;
@@ -45,6 +47,9 @@ using DeltaMergeStorePtr = std::shared_ptr<DeltaMergeStore>;
 using RowKeyRanges = std::vector<RowKeyRange>;
 struct ExternalDTFileInfo;
 struct GCOptions;
+class Segment;
+using SegmentPtr = std::shared_ptr<Segment>;
+using Segments = std::vector<SegmentPtr>;
 } // namespace DM
 
 class StorageDeltaMerge
@@ -121,9 +126,14 @@ public:
         bool clear_data_in_range,
         const Settings & settings);
 
-    void ingestSegmentsFromCheckpointInfo(
+    DM::Segments buildSegmentsFromCheckpointInfo(
         const DM::RowKeyRange & range,
         CheckpointInfoPtr checkpoint_info,
+        const Settings & settings);
+
+    UInt64 ingestSegmentsFromCheckpointInfo(
+        const DM::RowKeyRange & range,
+        const CheckpointIngestInfoPtr & checkpoint_info,
         const Settings & settings);
 
     UInt64 onSyncGc(Int64, const DM::GCOptions &) override;

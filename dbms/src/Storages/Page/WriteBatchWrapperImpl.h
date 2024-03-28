@@ -156,6 +156,14 @@ public:
             return uwb->empty();
     }
 
+    size_t size() const
+    {
+        if (wb)
+            return wb->size();
+        else
+            return uwb->size();
+    }
+
     void clear()
     {
         if (wb)
