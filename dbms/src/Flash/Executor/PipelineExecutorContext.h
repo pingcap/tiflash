@@ -26,10 +26,15 @@
 #include <exception>
 #include <mutex>
 
+
 namespace DB
 {
 class OperatorSpillContext;
 using RegisterOperatorSpillContext = std::function<void(const std::shared_ptr<OperatorSpillContext> & ptr)>;
+
+class SharedQueue;
+using SharedQueuePtr = std::shared_ptr<SharedQueue>;
+
 class PipelineExecutorContext : private boost::noncopyable
 {
 public:
@@ -142,7 +147,7 @@ public:
 
     void cancel();
 
-    ALWAYS_INLINE bool isCancelled() { return is_cancelled.load(std::memory_order_acquire); }
+    ALWAYS_INLINE bool isCancelled() const { return is_cancelled.load(std::memory_order_acquire); }
 
     ResultQueuePtr toConsumeMode(size_t queue_size);
 
@@ -173,6 +178,8 @@ public:
 
     const String & getResourceGroupName() const { return resource_group_name; }
 
+    void addSharedQueue(const SharedQueuePtr & shared_queue);
+
 private:
     bool setExceptionPtr(const std::exception_ptr & exception_ptr_);
 
@@ -180,6 +187,8 @@ private:
     bool isWaitMode();
 
     ResultQueuePtr getConsumedResultQueue();
+
+    void cancelSharedQueues();
 
 private:
     const String query_id;
@@ -207,5 +216,7 @@ private:
     RegisterOperatorSpillContext register_operator_spill_context;
 
     const String resource_group_name;
+
+    std::vector<SharedQueuePtr> shared_queues;
 };
 } // namespace DB
