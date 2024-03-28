@@ -100,15 +100,22 @@ void restoreConcurrency(
     if (concurrency > 1 && group_builder.concurrency() == 1)
     {
         auto shared_queue = SharedQueue::build(1, concurrency, max_buffered_bytes);
+        exec_context.addSharedQueue(shared_queue);
         // sink op of builder must be empty.
+        auto shared_queue_sink_holder = std::make_shared<SharedQueueSinkHolder>(shared_queue);
         group_builder.transform([&](auto & builder) {
-            builder.setSinkOp(std::make_unique<SharedQueueSinkOp>(exec_context, log->identifier(), shared_queue));
+            builder.setSinkOp(
+                std::make_unique<SharedQueueSinkOp>(exec_context, log->identifier(), shared_queue_sink_holder));
         });
         auto cur_header = group_builder.getCurrentHeader();
         group_builder.addGroup();
+        auto shared_queue_source_holder = std::make_shared<SharedQueueSourceHolder>(shared_queue);
         for (size_t i = 0; i < concurrency; ++i)
-            group_builder.addConcurrency(
-                std::make_unique<SharedQueueSourceOp>(exec_context, log->identifier(), cur_header, shared_queue));
+            group_builder.addConcurrency(std::make_unique<SharedQueueSourceOp>(
+                exec_context,
+                log->identifier(),
+                cur_header,
+                shared_queue_source_holder));
     }
 }
 
@@ -121,13 +128,20 @@ void executeUnion(
     if (group_builder.concurrency() > 1)
     {
         auto shared_queue = SharedQueue::build(group_builder.concurrency(), 1, max_buffered_bytes);
+        exec_context.addSharedQueue(shared_queue);
+        auto shared_queue_sink_holder = std::make_shared<SharedQueueSinkHolder>(shared_queue);
         group_builder.transform([&](auto & builder) {
-            builder.setSinkOp(std::make_unique<SharedQueueSinkOp>(exec_context, log->identifier(), shared_queue));
+            builder.setSinkOp(
+                std::make_unique<SharedQueueSinkOp>(exec_context, log->identifier(), shared_queue_sink_holder));
         });
         auto cur_header = group_builder.getCurrentHeader();
         group_builder.addGroup();
-        group_builder.addConcurrency(
-            std::make_unique<SharedQueueSourceOp>(exec_context, log->identifier(), cur_header, shared_queue));
+        auto shared_queue_source_holder = std::make_shared<SharedQueueSourceHolder>(shared_queue);
+        group_builder.addConcurrency(std::make_unique<SharedQueueSourceOp>(
+            exec_context,
+            log->identifier(),
+            cur_header,
+            shared_queue_source_holder));
     }
 }
 

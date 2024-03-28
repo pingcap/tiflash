@@ -50,36 +50,41 @@ void SharedQueue::producerFinish()
         queue.finish();
 }
 
+void SharedQueue::cancel()
+{
+    queue.cancel();
+}
+
 OperatorStatus SharedQueueSinkOp::writeImpl(Block && block)
 {
     if unlikely (!block)
         return OperatorStatus::FINISHED;
 
-    assert(!res);
-    res.emplace(std::move(block));
-    return awaitImpl();
+    assert(!buffer);
+    buffer.emplace(std::move(block));
+    return tryFlush();
 }
 
 OperatorStatus SharedQueueSinkOp::prepareImpl()
 {
-    return awaitImpl();
+    return buffer ? tryFlush() : OperatorStatus::NEED_INPUT;
 }
 
-OperatorStatus SharedQueueSinkOp::awaitImpl()
+OperatorStatus SharedQueueSinkOp::tryFlush()
 {
-    if (!res)
-        return OperatorStatus::NEED_INPUT;
-
-    auto queue_result = shared_queue->tryPush(std::move(*res));
+    auto queue_result = shared_queue->tryPush(std::move(*buffer));
     switch (queue_result)
     {
     case MPMCQueueResult::FULL:
-        return OperatorStatus::WAITING;
+        setNotifyFuture(shared_queue);
+        return OperatorStatus::WAIT_FOR_NOTIFY;
     case MPMCQueueResult::OK:
-        res.reset();
+        buffer.reset();
         return OperatorStatus::NEED_INPUT;
+    case MPMCQueueResult::CANCELLED:
+        return OperatorStatus::CANCELLED;
     default:
-        // queue result can not be finish/cancelled/empty here.
+        // queue result can not be finish/empty here.
         RUNTIME_CHECK_MSG(
             false,
             "Unexpected queue result for SharedQueueSinkOp: {}",
@@ -89,34 +94,21 @@ OperatorStatus SharedQueueSinkOp::awaitImpl()
 
 OperatorStatus SharedQueueSourceOp::readImpl(Block & block)
 {
-    auto await_status = awaitImpl();
-    if (await_status == OperatorStatus::HAS_OUTPUT && res)
-    {
-        block = std::move(*res);
-        res.reset();
-    }
-    return await_status;
-}
-
-OperatorStatus SharedQueueSourceOp::awaitImpl()
-{
-    if (res)
-        return OperatorStatus::HAS_OUTPUT;
-
-    Block block;
     auto queue_result = shared_queue->tryPop(block);
     switch (queue_result)
     {
     case MPMCQueueResult::EMPTY:
-        return OperatorStatus::WAITING;
+        setNotifyFuture(shared_queue);
+        return OperatorStatus::WAIT_FOR_NOTIFY;
     case MPMCQueueResult::OK:
-        res.emplace(std::move(block));
         return OperatorStatus::HAS_OUTPUT;
     case MPMCQueueResult::FINISHED:
         // Even after queue has finished, source op still needs to return HAS_OUTPUT.
         return OperatorStatus::HAS_OUTPUT;
+    case MPMCQueueResult::CANCELLED:
+        return OperatorStatus::CANCELLED;
     default:
-        // queue result can not be cancelled/full here.
+        // queue result can not be full here.
         RUNTIME_CHECK_MSG(
             false,
             "Unexpected queue result for SharedQueueSourceOp: {}",

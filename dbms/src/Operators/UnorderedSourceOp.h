@@ -23,7 +23,6 @@
 
 namespace DB
 {
-
 /// Read blocks asyncly from Storage Layer by using read thread,
 /// The result can not guarantee the keep_order property
 class UnorderedSourceOp : public SourceOp
@@ -36,16 +35,7 @@ public:
         int extra_table_id_index_,
         const String & req_id,
         const RuntimeFilteList & runtime_filter_list_ = std::vector<RuntimeFilterPtr>{},
-        int max_wait_time_ms_ = 0)
-        : SourceOp(exec_context_, req_id)
-        , task_pool(task_pool_)
-        , ref_no(0)
-        , waiting_rf_list(runtime_filter_list_)
-        , max_wait_time_ms(max_wait_time_ms_)
-    {
-        setHeader(AddExtraTableIDColumnTransformAction::buildHeader(columns_to_read_, extra_table_id_index_));
-        ref_no = task_pool->increaseUnorderedInputStreamRefCount();
-    }
+        int max_wait_time_ms_ = 0);
 
     ~UnorderedSourceOp() override
     {
@@ -77,7 +67,6 @@ protected:
     void operatePrefixImpl() override;
 
     OperatorStatus readImpl(Block & block) override;
-    OperatorStatus awaitImpl() override;
 
 private:
     DM::SegmentReadTaskPoolPtr task_pool;
@@ -88,6 +77,5 @@ private:
     int max_wait_time_ms;
 
     bool done = false;
-    Block t_block;
 };
 } // namespace DB

@@ -16,37 +16,44 @@
 #include <Flash/Pipeline/Schedule/Tasks/RFWaitTask.h>
 #include <Operators/UnorderedSourceOp.h>
 
-#include <memory>
-
 namespace DB
 {
+UnorderedSourceOp::UnorderedSourceOp(
+    PipelineExecutorContext & exec_context_,
+    const DM::SegmentReadTaskPoolPtr & task_pool_,
+    const DM::ColumnDefines & columns_to_read_,
+    int extra_table_id_index_,
+    const String & req_id,
+    const RuntimeFilteList & runtime_filter_list_,
+    int max_wait_time_ms_)
+    : SourceOp(exec_context_, req_id)
+    , task_pool(task_pool_)
+    , ref_no(0)
+    , waiting_rf_list(runtime_filter_list_)
+    , max_wait_time_ms(max_wait_time_ms_)
+{
+    setHeader(AddExtraTableIDColumnTransformAction::buildHeader(columns_to_read_, extra_table_id_index_));
+    ref_no = task_pool->increaseUnorderedInputStreamRefCount();
+}
+
 OperatorStatus UnorderedSourceOp::readImpl(Block & block)
 {
     if unlikely (done)
         return OperatorStatus::HAS_OUTPUT;
 
-    auto await_status = awaitImpl();
-    if (await_status == OperatorStatus::HAS_OUTPUT)
-        std::swap(block, t_block);
-    return await_status;
-}
-
-OperatorStatus UnorderedSourceOp::awaitImpl()
-{
-    if unlikely (done)
-        return OperatorStatus::HAS_OUTPUT;
-    if unlikely (t_block)
-        return OperatorStatus::HAS_OUTPUT;
-
     while (true)
     {
-        if (!task_pool->tryPopBlock(t_block))
-            return OperatorStatus::WAITING;
-        if (t_block)
+        if (!task_pool->tryPopBlock(block))
         {
-            if unlikely (t_block.rows() == 0)
+            setNotifyFuture(task_pool);
+            return OperatorStatus::WAIT_FOR_NOTIFY;
+        }
+
+        if (block)
+        {
+            if unlikely (block.rows() == 0)
             {
-                t_block.clear();
+                block.clear();
                 continue;
             }
             return OperatorStatus::HAS_OUTPUT;
