@@ -38,6 +38,8 @@ MutableColumnPtr VectorColumnFromIndexReader::calcResultsByPack(
 
     // results must be in ascending order.
     std::sort(results.begin(), results.end());
+    // results must not contain duplicates. Usually there should be no duplicates.
+    results.erase(std::unique(results.begin(), results.end()), results.end());
 
     std::vector<UInt32> offsets_in_pack;
     size_t results_it = 0;

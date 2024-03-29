@@ -498,6 +498,73 @@ try
 }
 CATCH
 
+TEST_P(VectorIndexDMFileTest, OnePackWithDuplicateVectors)
+try
+{
+    auto cols = DMTestEnv::getDefaultColumns(DMTestEnv::PkType::HiddenTiDBRowID, /*add_nullable*/ true);
+    auto vec_cd = ColumnDefine(vec_column_id, vec_column_name, tests::typeFromString("Array(Float32)"));
+    vec_cd.vector_index = std::make_shared<TiDB::VectorIndexDefinition>(TiDB::VectorIndexDefinition{
+        .kind = tipb::VectorIndexKind::HNSW,
+        .dimension = 3,
+        .distance_metric = tipb::VectorDistanceMetric::L2,
+    });
+    cols->emplace_back(vec_cd);
+
+    ColumnDefines read_cols = *cols;
+    if (test_only_vec_column)
+        read_cols = {vec_cd};
+
+    // Prepare DMFile
+    {
+        Block block = DMTestEnv::prepareSimpleWriteBlockWithNullable(0, 5);
+        block.insert(createVecFloat32Column<Array>(
+            {//
+             {1.0, 2.0, 3.0},
+             {1.0, 2.0, 3.0},
+             {0.0, 0.0, 0.0},
+             {1.0, 2.0, 3.0},
+             {1.0, 2.0, 3.5}},
+            vec_cd.name,
+            vec_cd.id));
+        auto stream = std::make_shared<DMFileBlockOutputStream>(dbContext(), dm_file, *cols);
+        stream->writePrefix();
+        stream->write(block, DMFileBlockOutputStream::BlockProperty{0, 0, 0, 0});
+        stream->writeSuffix();
+    }
+
+    dm_file = restoreDMFile();
+
+    {
+        auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
+        ann_query_info->set_column_id(vec_cd.id);
+        ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
+        ann_query_info->set_top_k(4);
+        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0, 2.0, 3.5}));
+
+        DMFileBlockInputStreamBuilder builder(dbContext());
+        auto stream = builder.setRSOperator(wrapWithANNQueryInfo(nullptr, ann_query_info))
+                          .setBitmapFilter(BitmapFilterView(std::make_shared<BitmapFilter>(5, true), 0, 5))
+                          .build2(
+                              dm_file,
+                              read_cols,
+                              RowKeyRanges{RowKeyRange::newAll(false, 1)},
+                              std::make_shared<ScanContext>());
+
+        ASSERT_INPUTSTREAM_COLS_UR(
+            stream,
+            createColumnNames(),
+            createColumnData({
+                createColumn<Int64>({0, 1, 3, 4}),
+                createVecFloat32Column<Array>({//
+                                               {1.0, 2.0, 3.0},
+                                               {1.0, 2.0, 3.0},
+                                               {1.0, 2.0, 3.0},
+                                               {1.0, 2.0, 3.5}}),
+            }));
+    }
+}
+CATCH
+
 TEST_P(VectorIndexDMFileTest, MultiPacks)
 try
 {
