@@ -240,6 +240,7 @@ grpc::Status CoprocessorHandler<is_stream>::execute()
         case RegionException::RegionReadStatus::FLASHBACK:
         case RegionException::RegionReadStatus::KEY_NOT_IN_REGION:
         case RegionException::RegionReadStatus::TIKV_SERVER_ISSUE:
+        case RegionException::RegionReadStatus::READ_INDEX_TIMEOUT:
         case RegionException::RegionReadStatus::NOT_LEADER:
         case RegionException::RegionReadStatus::NOT_FOUND_TIKV:
         case RegionException::RegionReadStatus::NOT_FOUND:

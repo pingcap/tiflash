@@ -82,6 +82,8 @@ private:
 };
 
 using RegionsReadIndexResult = std::unordered_map<RegionID, kvrpcpb::ReadIndexResponse>;
+
+/// LearnerReadWorker is serves all read index requests in a query.
 class LearnerReadWorker
 {
 public:
