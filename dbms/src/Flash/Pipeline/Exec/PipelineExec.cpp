@@ -176,10 +176,21 @@ OperatorStatus PipelineExec::executeIOImpl()
     assert(!awaitable);
     assert(io_op);
     auto op_status = io_op->executeIO();
-    if (op_status == OperatorStatus::WAITING)
+    switch (op_status)
+    {
+    case OperatorStatus::IO_IN:
+    case OperatorStatus::IO_OUT:
+        return op_status;
+    case OperatorStatus::WAITING:
         fillAwaitable(io_op);
-    if (op_status != OperatorStatus::IO_IN && op_status != OperatorStatus::IO_OUT)
-        io_op = nullptr;
+        break;
+    case OperatorStatus::WAIT_FOR_NOTIFY:
+        fillWaitingForNotifyOp(io_op);
+        break;
+    default:
+        break;
+    }
+    io_op = nullptr;
     return op_status;
 }
 
@@ -199,10 +210,21 @@ OperatorStatus PipelineExec::awaitImpl()
     assert(!io_op);
     assert(awaitable);
     auto op_status = awaitable->await();
-    if (op_status == OperatorStatus::IO_IN || op_status == OperatorStatus::IO_OUT)
+    switch (op_status)
+    {
+    case OperatorStatus::WAITING:
+        return op_status;
+    case OperatorStatus::IO_IN:
+    case OperatorStatus::IO_OUT:
         fillIOOp(awaitable);
-    if (op_status != OperatorStatus::WAITING)
-        awaitable = nullptr;
+        break;
+    case OperatorStatus::WAIT_FOR_NOTIFY:
+        fillWaitingForNotifyOp(awaitable);
+        break;
+    default:
+        break;
+    }
+    awaitable = nullptr;
     return op_status;
 }
 

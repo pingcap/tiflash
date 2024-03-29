@@ -65,7 +65,7 @@ private:
     ALWAYS_INLINE void fillWaitingForNotifyOp(Operator * op)
     {
         assert(!waiting_for_notify);
-        assert(waiting_for_notify);
+        assert(op);
         waiting_for_notify = op;
     }
 
