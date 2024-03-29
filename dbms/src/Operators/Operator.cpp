@@ -168,8 +168,7 @@ OperatorStatus SinkOp::prepare()
 OperatorStatus SinkOp::write(Block && block)
 {
     CHECK_IS_CANCELLED
-    profile_info.anchor();
-    profile_info.updateInfoFromBlock(block);
+    profile_info.anchor(block);
 #ifndef NDEBUG
     if (block)
     {
