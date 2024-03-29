@@ -90,10 +90,7 @@ public:
         task->notify();
         task->profile_info.elapsedWaitForNotifyTime();
         assert(TaskScheduler::instance);
-        if (unlikely(task->getQueryExecContext().isCancelled()))
-            TaskScheduler::instance->submitToWaitReactor(std::move(task));
-        else
-            TaskScheduler::instance->submitToCPUTaskThreadPool(std::move(task));
+        TaskScheduler::instance->submitToCPUTaskThreadPool(std::move(task));
     }
 
 private:
