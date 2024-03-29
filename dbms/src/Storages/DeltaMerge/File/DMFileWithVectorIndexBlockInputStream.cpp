@@ -357,6 +357,7 @@ void DMFileWithVectorIndexBlockInputStream::loadVectorSearchResult()
 
     auto perf_begin = PerfContext::vector_search;
 
+    RUNTIME_CHECK(valid_rows.size() >= dmfile->getRows(), valid_rows.size(), dmfile->getRows());
     auto results_rowid = vec_index->search(ann_query_info, valid_rows);
 
     auto discarded_nodes = PerfContext::vector_search.discarded_nodes - perf_begin.discarded_nodes;
