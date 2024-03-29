@@ -182,7 +182,9 @@ TEST_F(RegionKVStoreOldTest, ReadIndex)
             auto region = kvs.getRegion(1);
             auto req = GenRegionReadIndexReq(*region, 8); // start_ts = 8
             auto resp = kvs.batchReadIndex({req}, 100);
-            ASSERT_EQ(resp[0].first.read_index(), 5);
+            auto proxy_region = proxy_instance->getRegion(1);
+            ASSERT_EQ(resp[0].first.read_index(), proxy_region->getLatestCommitIndex());
+            ASSERT_EQ(5, proxy_region->getLatestCommitIndex());
             {
                 auto r = region->waitIndex(
                     5,
@@ -214,6 +216,13 @@ TEST_F(RegionKVStoreOldTest, ReadIndex)
         {
             auto region = kvs.getRegion(1);
             auto req = GenRegionReadIndexReq(*region, 10);
+            auto resp = kvs.batchReadIndex({req}, 100);
+            ASSERT_EQ(resp[0].first.read_index(), 667);
+        }
+        {
+            // Found updated value in `history_success_tasks`
+            auto region = kvs.getRegion(1);
+            auto req = GenRegionReadIndexReq(*region, 8);
             auto resp = kvs.batchReadIndex({req}, 100);
             ASSERT_EQ(resp[0].first.read_index(), 667);
         }
