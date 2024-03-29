@@ -28,11 +28,11 @@ public:
     BitmapFilter(UInt32 size_, bool default_value);
 
     void set(BlockInputStreamPtr & stream);
-    // f[start, limit] = value
+    // f[start, satrt+limit) = value
     void set(UInt32 start, UInt32 limit, bool value = true);
     // If return true, all data is match and do not fill the filter.
     bool get(IColumn::Filter & f, UInt32 start, UInt32 limit) const;
-    // filter[start, limit] & f -> f
+    // filter[start, satrt+limit) & f -> f
     void rangeAnd(IColumn::Filter & f, UInt32 start, UInt32 limit) const;
 
     void runOptimize();
@@ -42,7 +42,7 @@ public:
 
 private:
     void set(const ColumnPtr & col, const FilterPtr & f);
-    void set(std::span<const UInt32> data, const FilterPtr & f);
+    void set(std::span<const UInt32> row_ids, const FilterPtr & f);
 
     std::vector<bool> filter;
     bool all_match;

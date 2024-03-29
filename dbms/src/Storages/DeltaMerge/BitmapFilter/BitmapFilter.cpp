@@ -49,25 +49,25 @@ void BitmapFilter::set(const ColumnPtr & col, const FilterPtr & f)
     set(span, f);
 }
 
-void BitmapFilter::set(std::span<const UInt32> data, const FilterPtr & f)
+void BitmapFilter::set(std::span<const UInt32> row_ids, const FilterPtr & f)
 {
-    if (data.empty())
+    if (row_ids.empty())
     {
         return;
     }
     if (!f)
     {
-        for (unsigned int row_id : data)
+        for (auto row_id : row_ids)
         {
             filter[row_id] = true;
         }
     }
     else
     {
-        RUNTIME_CHECK(data.size() == f->size(), data.size(), f->size());
-        for (UInt32 i = 0; i < data.size(); i++)
+        RUNTIME_CHECK(row_ids.size() == f->size(), row_ids.size(), f->size());
+        for (UInt32 i = 0; i < row_ids.size(); i++)
         {
-            filter[data[i]] = (*f)[i];
+            filter[row_ids[i]] = (*f)[i];
         }
     }
 }
