@@ -45,8 +45,7 @@ void BitmapFilter::set(BlockInputStreamPtr & stream)
 void BitmapFilter::set(const ColumnPtr & col, const FilterPtr & f)
 {
     const auto * v = toColumnVectorDataPtr<UInt32>(col);
-    std::span span{v->data(), v->size()};
-    set(span, f);
+    set({v->data(), v->size()}, f);
 }
 
 void BitmapFilter::set(std::span<const UInt32> row_ids, const FilterPtr & f)

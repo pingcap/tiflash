@@ -135,8 +135,7 @@ bool DMFileReader::getSkippedRows(size_t & skip_rows)
 size_t DMFileReader::skipNextBlock()
 {
     // find the first pack which is used
-    size_t skip_rows;
-    if (!getSkippedRows(skip_rows))
+    if (size_t skip_rows; !getSkippedRows(skip_rows))
         return 0;
 
     // move forward next_pack_id and next_row_offset
@@ -180,8 +179,7 @@ Block DMFileReader::readWithFilter(const IColumn::Filter & filter)
 {
     /// 1. Skip filtered out packs.
 
-    size_t skip_rows;
-    if (!getSkippedRows(skip_rows))
+    if (size_t skip_rows; !getSkippedRows(skip_rows))
         return {};
 
     /// 2. Mark use_packs[i] = false if all rows in the i-th pack are filtered out by filter.
@@ -301,8 +299,7 @@ Block DMFileReader::read()
 
     /// 1. Skip filtered out packs.
 
-    size_t skip_rows;
-    if (!getSkippedRows(skip_rows))
+    if (size_t skip_rows; !getSkippedRows(skip_rows))
         return {};
 
     /// 2. Find the max continuous rows can be read.
