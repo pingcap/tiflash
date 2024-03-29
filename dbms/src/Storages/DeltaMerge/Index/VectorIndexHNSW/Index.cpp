@@ -155,13 +155,24 @@ std::vector<VectorIndexBuilder::Key> VectorIndexHNSWViewer::search(
 
     std::atomic<size_t> visited_nodes = 0;
     std::atomic<size_t> discarded_nodes = 0;
+    std::atomic<bool> has_exception_in_search = false;
 
     auto predicate = [&](typename USearchImplType::member_cref_t const & member) {
-        // Note: We don't increase the thread_local perf, to be compatible with future multi-thread change.
-        visited_nodes++;
-        if (!valid_rows[member.key])
-            discarded_nodes++;
-        return valid_rows[member.key];
+        // Must catch exceptions in the predicate, because search runs on other threads.
+        try
+        {
+            // Note: We don't increase the thread_local perf, because search runs on other threads.
+            visited_nodes++;
+            if (!valid_rows[member.key])
+                discarded_nodes++;
+            return valid_rows[member.key];
+        }
+        catch (...)
+        {
+            tryLogCurrentException(__PRETTY_FUNCTION__);
+            has_exception_in_search = true;
+            return false;
+        }
     };
 
     // TODO: Support efSearch.
@@ -169,6 +180,10 @@ std::vector<VectorIndexBuilder::Key> VectorIndexHNSWViewer::search(
         reinterpret_cast<const Float32 *>(query_info->ref_vec_f32().data() + sizeof(UInt32)),
         query_info->top_k(),
         predicate);
+
+    if (has_exception_in_search)
+        throw Exception(ErrorCodes::INCORRECT_QUERY, "Exception happened occurred during search");
+
     std::vector<Key> keys(result.size());
     result.dump_to(keys.data());
 
