@@ -47,10 +47,12 @@ void Operator::operateSuffix()
 
 OperatorStatus Operator::await()
 {
+    if (op_status == OperatorStatus::WAIT_FOR_NOTIFY)
+        profile_info.update();
     // `exec_context.is_cancelled` has been checked by `EventTask`.
     // If `exec_context.is_cancelled` is checked here, the overhead of `exec_context.is_cancelled` will be amplified by the high frequency of `await` calls.
 
-    auto op_status = awaitImpl();
+    op_status = awaitImpl();
 #ifndef NDEBUG
     assertOperatorStatus(op_status, {OperatorStatus::FINISHED, OperatorStatus::NEED_INPUT, OperatorStatus::HAS_OUTPUT});
 #endif
@@ -77,8 +79,8 @@ OperatorStatus Operator::await()
 OperatorStatus Operator::executeIO()
 {
     CHECK_IS_CANCELLED
-    profile_info.anchor();
-    auto op_status = executeIOImpl();
+    op_status == OperatorStatus::WAIT_FOR_NOTIFY ? profile_info.update() : profile_info.anchor();
+    op_status = executeIOImpl();
 #ifndef NDEBUG
     assertOperatorStatus(op_status, {OperatorStatus::FINISHED, OperatorStatus::NEED_INPUT, OperatorStatus::HAS_OUTPUT});
 #endif
@@ -91,9 +93,9 @@ OperatorStatus Operator::executeIO()
 OperatorStatus SourceOp::read(Block & block)
 {
     CHECK_IS_CANCELLED
-    profile_info.anchor();
+    op_status == OperatorStatus::WAIT_FOR_NOTIFY ? profile_info.update() : profile_info.anchor();
     assert(!block);
-    auto op_status = readImpl(block);
+    op_status = readImpl(block);
 #ifndef NDEBUG
     if (op_status == OperatorStatus::HAS_OUTPUT && block)
     {
@@ -103,10 +105,7 @@ OperatorStatus SourceOp::read(Block & block)
     assertOperatorStatus(op_status, {OperatorStatus::HAS_OUTPUT});
 #endif
     exec_context.triggerAutoSpill();
-    if (op_status == OperatorStatus::HAS_OUTPUT)
-        profile_info.update(block);
-    else
-        profile_info.update();
+    op_status == OperatorStatus::HAS_OUTPUT ? profile_info.update(block) : profile_info.update();
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_operator_run_failpoint);
     return op_status;
 }
@@ -114,8 +113,9 @@ OperatorStatus SourceOp::read(Block & block)
 OperatorStatus TransformOp::transform(Block & block)
 {
     CHECK_IS_CANCELLED
+    assert(op_status != OperatorStatus::WAIT_FOR_NOTIFY);
     profile_info.anchor();
-    auto op_status = transformImpl(block);
+    op_status = transformImpl(block);
 #ifndef NDEBUG
     if (op_status == OperatorStatus::HAS_OUTPUT && block)
     {
@@ -125,10 +125,7 @@ OperatorStatus TransformOp::transform(Block & block)
     assertOperatorStatus(op_status, {OperatorStatus::NEED_INPUT, OperatorStatus::HAS_OUTPUT});
 #endif
     exec_context.triggerAutoSpill();
-    if (op_status == OperatorStatus::HAS_OUTPUT)
-        profile_info.update(block);
-    else
-        profile_info.update();
+    op_status == OperatorStatus::HAS_OUTPUT ? profile_info.update(block) : profile_info.update();
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_operator_run_failpoint);
     return op_status;
 }
@@ -136,9 +133,9 @@ OperatorStatus TransformOp::transform(Block & block)
 OperatorStatus TransformOp::tryOutput(Block & block)
 {
     CHECK_IS_CANCELLED
-    profile_info.anchor();
+    op_status == OperatorStatus::WAIT_FOR_NOTIFY ? profile_info.update() : profile_info.anchor();
     assert(!block);
-    auto op_status = tryOutputImpl(block);
+    op_status = tryOutputImpl(block);
 #ifndef NDEBUG
     if (op_status == OperatorStatus::HAS_OUTPUT && block)
     {
@@ -148,10 +145,7 @@ OperatorStatus TransformOp::tryOutput(Block & block)
     assertOperatorStatus(op_status, {OperatorStatus::NEED_INPUT, OperatorStatus::HAS_OUTPUT});
 #endif
     exec_context.triggerAutoSpill();
-    if (op_status == OperatorStatus::HAS_OUTPUT)
-        profile_info.update(block);
-    else
-        profile_info.update();
+    op_status == OperatorStatus::HAS_OUTPUT ? profile_info.update(block) : profile_info.update();
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_operator_run_failpoint);
     return op_status;
 }
@@ -159,8 +153,8 @@ OperatorStatus TransformOp::tryOutput(Block & block)
 OperatorStatus SinkOp::prepare()
 {
     CHECK_IS_CANCELLED
-    profile_info.anchor();
-    auto op_status = prepareImpl();
+    op_status == OperatorStatus::WAIT_FOR_NOTIFY ? profile_info.update() : profile_info.anchor();
+    op_status = prepareImpl();
 #ifndef NDEBUG
     assertOperatorStatus(op_status, {OperatorStatus::NEED_INPUT});
 #endif
@@ -172,7 +166,9 @@ OperatorStatus SinkOp::prepare()
 OperatorStatus SinkOp::write(Block && block)
 {
     CHECK_IS_CANCELLED
-    profile_info.anchor(block);
+    assert(op_status != OperatorStatus::WAIT_FOR_NOTIFY);
+    profile_info.anchor();
+    profile_info.updateInfoFromBlock(block);
 #ifndef NDEBUG
     if (block)
     {
@@ -180,7 +176,7 @@ OperatorStatus SinkOp::write(Block && block)
         assertBlocksHaveEqualStructure(block, header, getName());
     }
 #endif
-    auto op_status = writeImpl(std::move(block));
+    op_status = writeImpl(std::move(block));
 #ifndef NDEBUG
     assertOperatorStatus(op_status, {OperatorStatus::FINISHED, OperatorStatus::NEED_INPUT});
 #endif

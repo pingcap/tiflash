@@ -103,6 +103,8 @@ protected:
     const LoggerPtr log;
     Block header;
 
+    OperatorStatus op_status{OperatorStatus::NEED_INPUT};
+
     OperatorProfileInfoPtr profile_info_ptr = std::make_shared<OperatorProfileInfo>();
     // To reduce the overheads of `profile_info_ptr.get()`
     OperatorProfileInfo & profile_info = *profile_info_ptr;
