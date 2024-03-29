@@ -15,7 +15,7 @@
 #include <Common/FailPoint.h>
 #include <Common/SyncPoint/SyncPoint.h>
 #include <Common/TiFlashMetrics.h>
-#include <Encryption/RateLimiter.h>
+#include <IO/BaseFile/RateLimiter.h>
 #include <Poco/Message.h>
 #include <Storages/Page/V3/GCDefines.h>
 #include <fmt/format.h>

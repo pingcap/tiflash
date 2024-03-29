@@ -17,6 +17,8 @@
 #include <Common/Exception.h>
 #include <Common/Logger.h>
 #include <Common/nocopyable.h>
+#include <IO/FileProvider/EncryptionPath.h>
+#include <IO/FileProvider/FileProvider_fwd.h>
 #include <Interpreters/Context_fwd.h>
 #include <Server/StorageConfigParser.h>
 #include <Storages/S3/S3RandomAccessFile.h>
@@ -167,6 +169,8 @@ void uploadFile(
     const TiFlashS3Client & client,
     const String & local_fname,
     const String & remote_fname,
+    const EncryptionPath & encryption_path,
+    const FileProviderPtr & file_provider,
     int max_retry_times = 3);
 
 constexpr std::string_view TaggingObjectIsDeleted = "tiflash_deleted=true";

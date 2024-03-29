@@ -13,10 +13,10 @@
 // limitations under the License.
 
 #include <Flash/Mpp/TrackedMppDataPacket.h>
-#include <IO/CompressedStream.h>
-#include <IO/ReadBuffer.h>
-#include <IO/WriteBuffer.h>
+#include <IO/Buffer/ReadBuffer.h>
+#include <IO/Buffer/WriteBuffer.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileDataProvider_fwd.h>
+#include <Storages/DeltaMerge/DMContext_fwd.h>
 #include <Storages/DeltaMerge/Remote/DataStore/DataStore_fwd.h>
 #include <Storages/DeltaMerge/Remote/DisaggSnapshot_fwd.h>
 #include <Storages/DeltaMerge/Remote/DisaggTaskId.h>
@@ -33,7 +33,6 @@ using DataTypePtr = std::shared_ptr<const IDataType>;
 } // namespace DB
 namespace DB::DM
 {
-struct DMContext;
 struct RowKeyRange;
 using RowKeyRanges = std::vector<RowKeyRange>;
 struct SegmentSnapshot;

@@ -15,11 +15,11 @@
 #include <Common/FieldVisitors.h>
 #include <Common/RedactHelpers.h>
 #include <Common/SipHash.h>
-#include <IO/ReadBuffer.h>
-#include <IO/ReadBufferFromString.h>
+#include <IO/Buffer/ReadBuffer.h>
+#include <IO/Buffer/ReadBufferFromString.h>
+#include <IO/Buffer/WriteBuffer.h>
+#include <IO/Buffer/WriteBufferFromString.h>
 #include <IO/ReadHelpers.h>
-#include <IO/WriteBuffer.h>
-#include <IO/WriteBufferFromString.h>
 #include <IO/WriteHelpers.h>
 
 
@@ -190,7 +190,7 @@ String FieldVisitorToString::operator()(const Array & x) const
     WriteBufferFromOwnString wb;
 
     writeChar('[', wb);
-    for (Array::const_iterator it = x.begin(); it != x.end(); ++it)
+    for (auto it = x.begin(); it != x.end(); ++it)
     {
         if (it != x.begin())
             wb.write(", ", 2);
@@ -279,7 +279,7 @@ String FieldVisitorToDebugString::operator()(const Array & x) const
     WriteBufferFromOwnString wb;
 
     writeChar('[', wb);
-    for (Array::const_iterator it = x.begin(); it != x.end(); ++it)
+    for (auto it = x.begin(); it != x.end(); ++it)
     {
         if (it != x.begin())
             wb.write(", ", 2);

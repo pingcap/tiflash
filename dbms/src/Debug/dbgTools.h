@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Debug/MockKVStore/MockUtils.h>
 #include <Parsers/IAST.h>
 #include <Storages/DeltaMerge/DeltaMergeInterfaces.h>
 #include <Storages/KVStore/Decode/DecodedTiKVKeyValue.h>

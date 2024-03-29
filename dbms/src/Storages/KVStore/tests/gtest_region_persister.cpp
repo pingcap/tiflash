@@ -16,8 +16,8 @@
 #include <Common/Logger.h>
 #include <Common/Stopwatch.h>
 #include <Common/SyncPoint/Ctl.h>
-#include <IO/ReadBufferFromFile.h>
-#include <IO/WriteBufferFromFile.h>
+#include <IO/Buffer/ReadBufferFromFile.h>
+#include <IO/Buffer/WriteBufferFromFile.h>
 #include <Interpreters/Context.h>
 #include <RaftStoreProxyFFI/ColumnFamily.h>
 #include <Storages/KVStore/MultiRaft/RegionManager.h>
@@ -70,6 +70,10 @@ static ::testing::AssertionResult RegionCompare(
 }
 #define ASSERT_REGION_EQ(val1, val2) ASSERT_PRED_FORMAT2(::DB::tests::RegionCompare, val1, val2)
 
+static RegionPtr makeTmpRegion()
+{
+    return makeRegion(createRegionMeta(1001, 1));
+}
 
 static std::function<size_t(UInt32 &, WriteBuffer &)> mockSerFactory(int value)
 {
@@ -199,7 +203,7 @@ TEST_F(RegionSeriTest, RegionOldFormatVersion)
 try
 {
     TableID table_id = 100;
-    auto region = std::make_shared<Region>(createRegionMeta(1001, table_id));
+    auto region = makeTmpRegion();
     TiKVKey key = RecordKVFormat::genKey(table_id, 323, 9983);
     region->insert("default", TiKVKey::copyFrom(key), TiKVValue("value1"));
     region->insert("write", TiKVKey::copyFrom(key), RecordKVFormat::encodeWriteCfValue('P', 0));
@@ -221,7 +225,7 @@ try
         // For the region restored with binary_version == 1, the eager_truncated_index is equals to
         // truncated_index
         const auto & [eager_truncated_index, applied_index] = new_region->getRaftLogEagerGCRange();
-        ASSERT_EQ(new_region->mutMeta().truncateIndex(), 5);
+        ASSERT_EQ(new_region->getMeta().truncateIndex(), 5);
         ASSERT_EQ(eager_truncated_index, 5);
     }
 }
@@ -231,7 +235,7 @@ TEST_F(RegionSeriTest, Region)
 try
 {
     TableID table_id = 100;
-    auto region = std::make_shared<Region>(createRegionMeta(1001, table_id));
+    auto region = makeTmpRegion();
     TiKVKey key = RecordKVFormat::genKey(table_id, 323, 9983);
     region->insert("default", TiKVKey::copyFrom(key), TiKVValue("value1"));
     region->insert("write", TiKVKey::copyFrom(key), RecordKVFormat::encodeWriteCfValue('P', 0));
@@ -276,7 +280,7 @@ try
             *region_state.mutable_merge_state()->mutable_target()
                 = createRegionInfo(1111, RecordKVFormat::genKey(table_id, 300), RecordKVFormat::genKey(table_id, 400));
         }
-        region = std::make_shared<Region>(RegionMeta(createPeer(31, true), apply_state, 5, region_state));
+        region = makeRegion(RegionMeta(createPeer(31, true), apply_state, 5, region_state));
     }
 
     TiKVKey key = RecordKVFormat::genKey(table_id, 323, 9983);
@@ -305,7 +309,7 @@ try
     {
         auto counter = std::make_shared<int>(0);
         // V2 store, V2 load, no unrecognized fields
-        auto region = std::make_shared<Region>(createRegionMeta(1001, 1));
+        auto region = makeTmpRegion();
         region->updateRaftLogEagerIndex(5678);
         const auto path = dir_path + "/region0.test";
         WriteBufferFromFile write_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_CREAT);
@@ -323,7 +327,7 @@ try
     {
         auto counter = std::make_shared<int>(0);
         // V3 store, V3 load, no unrecognized fields
-        auto region = std::make_shared<Region>(createRegionMeta(1001, 1));
+        auto region = makeTmpRegion();
         region->updateRaftLogEagerIndex(5678);
         const auto path = dir_path + "/region.test";
         WriteBufferFromFile write_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_CREAT);
@@ -341,7 +345,7 @@ try
     {
         auto counter = std::make_shared<int>(0);
         // Downgrade. V4(whatever) store, V3 load, UNUSED_EXTENSION_NUMBER_FOR_TEST unrecognized.
-        auto region = std::make_shared<Region>(createRegionMeta(1001, 1));
+        auto region = makeTmpRegion();
         region->updateRaftLogEagerIndex(5678);
         // In V2, will also write UNUSED_EXTENSION_NUMBER_FOR_TEST.
         const auto path = dir_path + "/region2.test";
@@ -360,7 +364,7 @@ try
     {
         auto counter = std::make_shared<int>(0);
         // Downgrade. V4(whatever) store. V2 load. UNUSED_EXTENSION_NUMBER_FOR_TEST unrecognized.
-        auto region = std::make_shared<Region>(createRegionMeta(1001, 1));
+        auto region = makeTmpRegion();
         region->updateRaftLogEagerIndex(5678);
         const auto path = dir_path + "/region3.test";
         WriteBufferFromFile write_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_CREAT);
@@ -388,7 +392,7 @@ try
     {
         auto counter = std::make_shared<int>(0);
         // Upgrade. V2 to V3.
-        auto region = std::make_shared<Region>(createRegionMeta(1001, 1));
+        auto region = makeTmpRegion();
         region->updateRaftLogEagerIndex(5678);
         const auto path = dir_path + "/region4.test";
         WriteBufferFromFile write_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_CREAT);
@@ -405,7 +409,7 @@ try
     }
     {
         // Upgrade -> Upgrade -> Downgrade -> Downgrade
-        auto region = std::make_shared<Region>(createRegionMeta(1001, 1));
+        auto region = makeTmpRegion();
         region->updateRaftLogEagerIndex(5678);
         const auto path = dir_path + "/region5.test";
         WriteBufferFromFile write_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_CREAT);
@@ -448,7 +452,7 @@ try
     {
         // Downgrade. V2 store. V1 load.
         auto counter = std::make_shared<int>(0);
-        auto region = std::make_shared<Region>(createRegionMeta(1001, 1));
+        auto region = makeTmpRegion();
         region->updateRaftLogEagerIndex(5678);
         const auto path = dir_path + "/region6.test";
         WriteBufferFromFile write_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_CREAT);
@@ -463,7 +467,7 @@ try
     {
         // Downgrade. V3 store. V1 load.
         auto counter = std::make_shared<int>(0);
-        auto region = std::make_shared<Region>(createRegionMeta(1001, 1));
+        auto region = makeTmpRegion();
         region->updateRaftLogEagerIndex(5678);
         const auto path = dir_path + "/region7.test";
         WriteBufferFromFile write_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_CREAT);
@@ -561,7 +565,7 @@ try
     auto th_persist_region_100 = std::async([&]() {
         auto region_task_lock = region_manager.genRegionTaskLock(region_100);
 
-        auto region = std::make_shared<Region>(createRegionMeta(region_100, table_id));
+        auto region = makeRegion(createRegionMeta(region_100, table_id));
         TiKVKey key = RecordKVFormat::genKey(table_id, region_100, diff++);
         region->insert(ColumnFamilyType::Default, TiKVKey::copyFrom(key), TiKVValue("value1"));
         region->insert(ColumnFamilyType::Write, TiKVKey::copyFrom(key), RecordKVFormat::encodeWriteCfValue('P', 0));
@@ -582,7 +586,7 @@ try
     {
         auto region_task_lock = region_manager.genRegionTaskLock(region_101);
 
-        auto region = std::make_shared<Region>(createRegionMeta(region_101, table_id));
+        auto region = makeRegion(createRegionMeta(region_101, table_id));
         TiKVKey key = RecordKVFormat::genKey(table_id, region_101, diff++);
         region->insert(ColumnFamilyType::Default, TiKVKey::copyFrom(key), TiKVValue("value1"));
         region->insert(ColumnFamilyType::Write, TiKVKey::copyFrom(key), RecordKVFormat::encodeWriteCfValue('P', 0));
@@ -627,7 +631,7 @@ try
         {
             auto region_task_lock = region_manager.genRegionTaskLock(i);
 
-            auto region = std::make_shared<Region>(createRegionMeta(i, table_id));
+            auto region = makeRegion(createRegionMeta(i, table_id));
             TiKVKey key = RecordKVFormat::genKey(table_id, i, diff++);
             region->insert(ColumnFamilyType::Default, TiKVKey::copyFrom(key), TiKVValue("value1"));
             region->insert(ColumnFamilyType::Write, TiKVKey::copyFrom(key), RecordKVFormat::encodeWriteCfValue('P', 0));
@@ -712,7 +716,7 @@ try
 
         // Persist region
         auto gen_region_data = [&](RegionID region_id, UInt64 expect_size) {
-            auto region = std::make_shared<Region>(createRegionMeta(region_id, table_id));
+            auto region = makeRegion(createRegionMeta(region_id, table_id));
             UInt64 handle_id = 0;
             while (true)
             {

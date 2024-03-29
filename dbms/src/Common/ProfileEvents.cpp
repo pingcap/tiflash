@@ -25,14 +25,7 @@
     M(ReadBufferFromFileDescriptorReadBytes)   \
     M(WriteBufferFromFileDescriptorWrite)      \
     M(WriteBufferFromFileDescriptorWriteBytes) \
-    M(ReadBufferAIORead)                       \
-    M(ReadBufferAIOReadBytes)                  \
-    M(WriteBufferAIOWrite)                     \
-    M(WriteBufferAIOWriteBytes)                \
                                                \
-    M(UncompressedCacheHits)                   \
-    M(UncompressedCacheMisses)                 \
-    M(UncompressedCacheWeightLost)             \
     M(MarkCacheHits)                           \
     M(MarkCacheMisses)                         \
                                                \

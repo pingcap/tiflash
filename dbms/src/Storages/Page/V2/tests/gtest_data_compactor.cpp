@@ -131,9 +131,8 @@ try
         std::ignore = bytes_written;
         ASSERT_EQ(edits.size(), 3); // page 1, 2, 6
         auto & records = edits.getRecords();
-        for (size_t i = 0; i < records.size(); ++i)
+        for (auto & rec : records)
         {
-            const auto & rec = records[i];
             EXPECT_EQ(rec.type, WriteBatchWriteType::UPSERT);
             // Page 1, 2, 6 is moved to PageFile{2,1}
             if (rec.page_id == 1 || rec.page_id == 2 || rec.page_id == 6)

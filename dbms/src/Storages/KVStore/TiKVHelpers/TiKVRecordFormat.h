@@ -16,8 +16,8 @@
 
 #include <Common/Exception.h>
 #include <Core/Types.h>
+#include <IO/Buffer/WriteBufferFromString.h>
 #include <IO/Endian.h>
-#include <IO/WriteBufferFromString.h>
 #include <Storages/KVStore/Decode/DecodedTiKVKeyValue.h>
 #include <Storages/KVStore/Decode/TiKVHandle.h>
 #include <Storages/KVStore/TiKVHelpers/TiKVVarInt.h>
@@ -69,6 +69,7 @@ static const char LAST_CHANGE_PREFIX = 'l';
 static const char TXN_SOURCE_PREFIX_FOR_WRITE = 'S';
 static const char TXN_SOURCE_PREFIX_FOR_LOCK = 's';
 static const char PESSIMISTIC_LOCK_WITH_CONFLICT_PREFIX = 'F';
+static const char GENERATION_PREFIX = 'g';
 
 static const size_t SHORT_VALUE_MAX_LEN = 64;
 
@@ -299,25 +300,6 @@ inline TiKVValue encodeLockCfValue(
     }
     return TiKVValue(res.releaseStr());
 }
-
-struct DecodedLockCFValue : boost::noncopyable
-{
-    DecodedLockCFValue(std::shared_ptr<const TiKVKey> key_, std::shared_ptr<const TiKVValue> val_);
-    std::unique_ptr<kvrpcpb::LockInfo> intoLockInfo() const;
-    void intoLockInfo(kvrpcpb::LockInfo &) const;
-
-    std::shared_ptr<const TiKVKey> key;
-    std::shared_ptr<const TiKVValue> val;
-    UInt64 lock_version{0};
-    UInt64 lock_ttl{0};
-    UInt64 txn_size{0};
-    UInt64 lock_for_update_ts{0};
-    kvrpcpb::Op lock_type{kvrpcpb::Op_MIN};
-    bool use_async_commit{0};
-    UInt64 min_commit_ts{0};
-    std::string_view secondaries;
-    std::string_view primary_lock;
-};
 
 template <typename R = Int64>
 inline R readVarInt(const char *& data, size_t & len)

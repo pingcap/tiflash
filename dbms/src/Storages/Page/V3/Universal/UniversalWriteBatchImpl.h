@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include <IO/ReadBufferFromString.h>
+#include <IO/Buffer/ReadBufferFromString.h>
 #include <Storages/Page/PageDefinesBase.h>
 #include <Storages/Page/V3/PageEntryCheckpointInfo.h>
 #include <Storages/Page/V3/Universal/UniversalPageId.h>
@@ -195,6 +195,8 @@ public:
     }
 
     bool empty() const { return writes.empty(); }
+
+    size_t size() const { return writes.size(); }
 
     const Writes & getWrites() const { return writes; }
     Writes & getMutWrites() { return writes; }

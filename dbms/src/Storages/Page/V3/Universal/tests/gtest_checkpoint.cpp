@@ -13,10 +13,10 @@
 // limitations under the License.
 
 #include <Common/SyncPoint/SyncPoint.h>
-#include <Encryption/FileProvider.h>
-#include <Encryption/PosixRandomAccessFile.h>
 #include <Flash/Disaggregated/MockS3LockClient.h>
-#include <IO/ReadBufferFromFile.h>
+#include <IO/BaseFile/PosixRandomAccessFile.h>
+#include <IO/Buffer/ReadBufferFromFile.h>
+#include <IO/FileProvider/FileProvider.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/Remote/DataStore/DataStoreS3.h>
 #include <Storages/Page/V3/CheckpointFile/CPManifestFileReader.h>
@@ -1015,7 +1015,7 @@ protected:
     UInt64 tag = 0;
     UInt64 store_id = 2;
 
-    bool old_remote_checkpoint_only_upload_manifest;
+    bool old_remote_checkpoint_only_upload_manifest = false;
 
     LoggerPtr log;
 };

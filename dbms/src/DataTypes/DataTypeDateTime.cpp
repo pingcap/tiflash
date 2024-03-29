@@ -16,9 +16,9 @@
 #include <Common/typeid_cast.h>
 #include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeFactory.h>
+#include <IO/Buffer/WriteBufferFromString.h>
 #include <IO/Operators.h>
 #include <IO/ReadHelpers.h>
-#include <IO/WriteBufferFromString.h>
 #include <IO/WriteHelpers.h>
 #include <Parsers/ASTLiteral.h>
 #include <common/DateLUT.h>
@@ -145,7 +145,7 @@ static DataTypePtr create(const ASTPtr & arguments)
             "DateTime data type can optionally have only one argument - time zone name",
             ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
-    const ASTLiteral * arg = typeid_cast<const ASTLiteral *>(arguments->children[0].get());
+    const auto * arg = typeid_cast<const ASTLiteral *>(arguments->children[0].get());
     if (!arg || arg->value.getType() != Field::Types::String)
         throw Exception(
             "Parameter for DateTime data type must be string literal",

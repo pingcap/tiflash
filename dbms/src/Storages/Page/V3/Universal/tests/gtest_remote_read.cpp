@@ -13,12 +13,13 @@
 // limitations under the License.
 
 #include <Common/FailPoint.h>
-#include <Encryption/PosixRandomAccessFile.h>
 #include <Flash/Disaggregated/MockS3LockClient.h>
 #include <Flash/Disaggregated/S3LockClient.h>
-#include <IO/ReadBufferFromFile.h>
-#include <IO/ReadBufferFromRandomAccessFile.h>
-#include <IO/WriteBufferFromWritableFile.h>
+#include <IO/BaseFile/PosixRandomAccessFile.h>
+#include <IO/Buffer/ReadBufferFromFile.h>
+#include <IO/Buffer/ReadBufferFromRandomAccessFile.h>
+#include <IO/Buffer/WriteBufferFromWritableFile.h>
+#include <IO/Encryption/MockKeyManager.h>
 #include <IO/copyData.h>
 #include <Storages/Page/V3/BlobStore.h>
 #include <Storages/Page/V3/CheckpointFile/CPFilesWriter.h>
@@ -37,11 +38,12 @@
 
 #include <memory>
 
-namespace DB
+
+namespace DB::PS::universal::tests
 {
-namespace PS::universal::tests
-{
-class UniPageStorageRemoteReadTest : public DB::base::TiFlashStorageTestBasic
+class UniPageStorageRemoteReadTest
+    : public DB::base::TiFlashStorageTestBasic
+    , public testing::WithParamInterface<std::pair<bool, bool>>
 {
 public:
     UniPageStorageRemoteReadTest()
@@ -52,13 +54,15 @@ public:
     {
         TiFlashStorageTestBasic::SetUp();
         auto path = getTemporaryPath();
-        dir_ = path;
-        data_file_path_pattern = dir_ + "/data_{index}";
+        dir = path;
+        data_file_path_pattern = dir + "/data_{index}";
         data_file_id_pattern = "data_{index}";
-        manifest_file_path = dir_ + "/manifest_foo";
+        manifest_file_path = dir + "/manifest_foo";
         manifest_file_id = "manifest_foo";
         createIfNotExist(path);
-        file_provider = DB::tests::TiFlashTestEnv::getDefaultFileProvider();
+        auto [is_encrypted, is_keyspace_encrypted] = GetParam();
+        KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(is_encrypted);
+        file_provider = std::make_shared<FileProvider>(key_manager, is_encrypted, is_keyspace_encrypted);
         delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
         s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
 
@@ -102,7 +106,7 @@ protected:
 
 protected:
     StoreID test_store_id = 1234;
-    String dir_;
+    String dir;
     FileProviderPtr file_provider;
     PSDiskDelegatorPtr delegator;
     std::shared_ptr<S3::TiFlashS3Client> s3_client;
@@ -117,7 +121,7 @@ protected:
     String manifest_file_path;
 };
 
-TEST_F(UniPageStorageRemoteReadTest, WriteRead)
+TEST_P(UniPageStorageRemoteReadTest, WriteRead)
 try
 {
     auto writer = PS::V3::CPFilesWriter::create({
@@ -201,7 +205,7 @@ try
 }
 CATCH
 
-TEST_F(UniPageStorageRemoteReadTest, WriteReadWithRestart)
+TEST_P(UniPageStorageRemoteReadTest, WriteReadWithRestart)
 try
 {
     auto writer = PS::V3::CPFilesWriter::create({
@@ -275,7 +279,7 @@ try
 }
 CATCH
 
-TEST_F(UniPageStorageRemoteReadTest, WriteReadWithRef)
+TEST_P(UniPageStorageRemoteReadTest, WriteReadWithRef)
 try
 {
     auto writer = PS::V3::CPFilesWriter::create({
@@ -363,7 +367,7 @@ try
 }
 CATCH
 
-TEST_F(UniPageStorageRemoteReadTest, WriteReadMultiple)
+TEST_P(UniPageStorageRemoteReadTest, WriteReadMultiple)
 try
 {
     auto writer = PS::V3::CPFilesWriter::create({
@@ -450,7 +454,7 @@ try
 }
 CATCH
 
-TEST_F(UniPageStorageRemoteReadTest, WriteReadWithFields)
+TEST_P(UniPageStorageRemoteReadTest, WriteReadWithFields)
 try
 {
     PageTypeAndConfig page_type_and_config{
@@ -484,7 +488,7 @@ try
         .data_file_id_pattern = data_file_id_pattern,
         .manifest_file_path = manifest_file_path,
         .manifest_file_id = manifest_file_id,
-        .data_source = PS::V3::CPWriteDataSourceBlobStore::create(blob_store),
+        .data_source = PS::V3::CPWriteDataSourceBlobStore::create(blob_store, file_provider),
     });
     writer->writePrefix({
         .writer = {},
@@ -559,7 +563,7 @@ try
 }
 CATCH
 
-TEST_F(UniPageStorageRemoteReadTest, WriteReadExternal)
+TEST_P(UniPageStorageRemoteReadTest, WriteReadExternal)
 try
 {
     UniversalPageId page_id1{"aaabbb"};
@@ -606,5 +610,9 @@ try
 }
 CATCH
 
-} // namespace PS::universal::tests
-} // namespace DB
+INSTANTIATE_TEST_CASE_P(
+    UniPageStorageRemote,
+    UniPageStorageRemoteReadTest,
+    testing::Values(std::make_pair(false, false), std::make_pair(true, false), std::make_pair(true, true)));
+
+} // namespace DB::PS::universal::tests

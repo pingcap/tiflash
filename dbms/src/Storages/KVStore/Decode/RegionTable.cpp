@@ -24,9 +24,13 @@
 #include <Storages/KVStore/MultiRaft/RegionManager.h>
 #include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/TMTContext.h>
+#include <Storages/KVStore/Types.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/StorageDeltaMergeHelpers.h>
 #include <TiDB/Schema/SchemaSyncer.h>
+#include <fiu.h>
+
+#include <any>
 
 namespace DB
 {
@@ -37,6 +41,10 @@ extern const int UNKNOWN_TABLE;
 extern const int ILLFORMAT_RAFT_ROW;
 extern const int TABLE_IS_DROPPED;
 } // namespace ErrorCodes
+namespace FailPoints
+{
+extern const char force_set_num_regions_for_table[];
+} // namespace FailPoints
 
 RegionTable::Table & RegionTable::getOrCreateTable(const KeyspaceID keyspace_id, const TableID table_id)
 {
@@ -225,8 +233,8 @@ void RegionTable::removeRegion(const RegionID region_id, bool remove_data, const
         {
             tables.erase(ks_table_id);
         }
-        LOG_INFO(log, "remove region in RegionTable done, region_id={}", region_id);
     }
+    LOG_INFO(log, "remove region in RegionTable done, region_id={}", region_id);
 
     // Sometime we don't need to remove data. e.g. remove region after region merge.
     if (remove_data)
@@ -278,7 +286,7 @@ RegionDataReadInfoList RegionTable::tryWriteBlockByRegion(const RegionPtrWithBlo
     try
     {
         /// Write region data into corresponding storage.
-        writeBlockByRegion(*context, region, data_list_to_remove, log);
+        writeCommittedByRegion(*context, region, data_list_to_remove, log);
     }
     catch (const Exception & e)
     {
@@ -323,6 +331,31 @@ void RegionTable::handleInternalRegionsByTable(
     {
         callback(it->second.regions);
     }
+}
+
+std::vector<RegionID> RegionTable::getRegionIdsByTable(KeyspaceID keyspace_id, TableID table_id) const
+{
+    fiu_do_on(FailPoints::force_set_num_regions_for_table, {
+        if (auto v = FailPointHelper::getFailPointVal(FailPoints::force_set_num_regions_for_table); v)
+        {
+            auto num_regions = std::any_cast<std::vector<RegionID>>(v.value());
+            return num_regions;
+        }
+    });
+
+    std::lock_guard lock(mutex);
+    if (auto iter = tables.find(KeyspaceTableID{keyspace_id, table_id}); //
+        unlikely(iter != tables.end()))
+    {
+        std::vector<RegionID> ret_regions;
+        ret_regions.reserve(iter->second.regions.size());
+        for (const auto & r : iter->second.regions)
+        {
+            ret_regions.emplace_back(r.first);
+        }
+        return ret_regions;
+    }
+    return {};
 }
 
 std::vector<std::pair<RegionID, RegionPtr>> RegionTable::getRegionsByTable(

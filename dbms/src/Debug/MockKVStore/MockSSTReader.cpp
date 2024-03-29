@@ -16,6 +16,7 @@
 
 #include <Common/Exception.h>
 #include <Debug/MockKVStore/MockRaftStoreProxy.h>
+#include <Storages/KVStore/KVStore.h>
 
 #include <ext/scope_guard.h>
 

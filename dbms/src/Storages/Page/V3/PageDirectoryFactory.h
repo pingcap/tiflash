@@ -67,7 +67,8 @@ public:
         const String & storage_name,
         FileProviderPtr & file_provider,
         PSDiskDelegatorPtr & delegator,
-        PageEntriesEdit & edit);
+        PageEntriesEdit & edit,
+        UInt64 filter_seq = 0);
 
     // just for test
     PageDirectoryFactory<Trait> & setBlobStats(BlobStats & blob_stats_)
@@ -83,6 +84,7 @@ private:
         const PageDirectoryPtr & dir,
         const typename PageEntriesEdit::EditRecord & r,
         bool strict_check);
+    static void updateMaxIdByRecord(const PageDirectoryPtr & dir, const typename PageEntriesEdit::EditRecord & r);
 
     void restoreBlobStats(const PageDirectoryPtr & dir);
 

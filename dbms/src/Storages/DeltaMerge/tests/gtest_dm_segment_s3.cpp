@@ -18,7 +18,9 @@
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/Segment.h>
-#include <Storages/DeltaMerge/StoragePool.h>
+#include <Storages/DeltaMerge/Segment_fwd.h>
+#include <Storages/DeltaMerge/StoragePool/GlobalPageIdAllocator.h>
+#include <Storages/DeltaMerge/StoragePool/StoragePool.h>
 #include <Storages/DeltaMerge/WriteBatchesImpl.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
 #include <Storages/KVStore/KVStore.h>
@@ -35,7 +37,6 @@
 #include <gtest/gtest.h>
 
 #include <ctime>
-#include <future>
 #include <memory>
 
 namespace DB
@@ -97,7 +98,7 @@ public:
             kvstore->setStore(meta_store);
         }
 
-        segment = reload();
+        segment = buildFirstSegment();
         ASSERT_EQ(segment->segmentId(), DELTA_MERGE_FIRST_SEGMENT_ID);
     }
 
@@ -119,11 +120,20 @@ public:
     }
 
 protected:
-    SegmentPtr reload(const ColumnDefinesPtr & pre_define_columns = {}, DB::Settings && db_settings = DB::Settings())
+    SegmentPtr buildFirstSegment(
+        const ColumnDefinesPtr & pre_define_columns = {},
+        DB::Settings && db_settings = DB::Settings())
     {
         TiFlashStorageTestBasic::reload(std::move(db_settings));
         storage_path_pool = std::make_shared<StoragePathPool>(db_context->getPathPool().withTable("test", "t1", false));
-        storage_pool = std::make_shared<StoragePool>(*db_context, NullspaceID, ns_id, *storage_path_pool, "test.t1");
+        page_id_allocator = std::make_shared<GlobalPageIdAllocator>();
+        storage_pool = std::make_shared<StoragePool>(
+            *db_context,
+            NullspaceID,
+            ns_id,
+            *storage_path_pool,
+            page_id_allocator,
+            "test.t1");
         storage_pool->restore();
         ColumnDefinesPtr cols = (!pre_define_columns) ? DMTestEnv::getDefaultColumns() : pre_define_columns;
         setColumns(cols);
@@ -133,7 +143,7 @@ protected:
             *dm_context,
             table_columns,
             RowKeyRange::newAll(false, 1),
-            storage_pool->newMetaPageId(),
+            DELTA_MERGE_FIRST_SEGMENT_ID,
             0);
     }
 
@@ -160,6 +170,7 @@ protected:
 
 protected:
     /// all these var lives as ref in dm_context
+    GlobalPageIdAllocatorPtr page_id_allocator;
     std::shared_ptr<StoragePathPool> storage_path_pool;
     std::shared_ptr<StoragePool> storage_pool;
     ColumnDefinesPtr table_columns;

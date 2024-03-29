@@ -62,7 +62,7 @@ EngineStoreApplyRes KVStore::handleWriteRaftCmdInner(
 
         std::tie(apply_res, write_result) = region->handleWriteRaftCmd(cmds, index, term, tmt);
 
-        if (region->getClusterRaftstoreVer() == RaftstoreVer::V2)
+        if unlikely (region->getClusterRaftstoreVer() == RaftstoreVer::V2)
         {
             region->orphanKeysInfo().advanceAppliedIndex(index);
         }
@@ -109,7 +109,7 @@ EngineStoreApplyRes KVStore::handleUselessAdminRaftCmd(
         term,
         index);
 
-    if (curr_region.getClusterRaftstoreVer() == RaftstoreVer::V2)
+    if unlikely (curr_region.getClusterRaftstoreVer() == RaftstoreVer::V2)
     {
         curr_region.orphanKeysInfo().advanceAppliedIndex(index);
     }
@@ -212,7 +212,7 @@ EngineStoreApplyRes KVStore::handleAdminRaftCmd(
         auto & curr_region = *curr_region_ptr;
 
         // Admin cmd contains no normal data, we can advance orphan keys info just before handling.
-        if (curr_region.getClusterRaftstoreVer() == RaftstoreVer::V2)
+        if unlikely (curr_region.getClusterRaftstoreVer() == RaftstoreVer::V2)
         {
             curr_region.orphanKeysInfo().advanceAppliedIndex(index);
         }

@@ -18,9 +18,9 @@
 #include <Common/typeid_cast.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <DataTypes/DataTypeFixedString.h>
+#include <IO/Buffer/WriteBuffer.h>
 #include <IO/ReadHelpers.h>
 #include <IO/VarInt.h>
-#include <IO/WriteBuffer.h>
 #include <IO/WriteHelpers.h>
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/IAST.h>
@@ -45,7 +45,7 @@ std::string DataTypeFixedString::getName() const
 
 void DataTypeFixedString::serializeBinary(const Field & field, WriteBuffer & ostr) const
 {
-    const String & s = get<const String &>(field);
+    const auto & s = get<const String &>(field);
     ostr.write(s.data(), std::min(s.size(), n));
     if (s.size() < n)
         for (size_t i = s.size(); i < n; ++i)
@@ -56,7 +56,7 @@ void DataTypeFixedString::serializeBinary(const Field & field, WriteBuffer & ost
 void DataTypeFixedString::deserializeBinary(Field & field, ReadBuffer & istr) const
 {
     field = String();
-    String & s = get<String &>(field);
+    auto & s = get<String &>(field);
     s.resize(n);
     istr.readStrict(&s[0], n);
 }
@@ -244,7 +244,7 @@ static DataTypePtr create(const ASTPtr & arguments)
             "FixedString data type family must have exactly one argument - size in bytes",
             ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
-    const ASTLiteral * argument = typeid_cast<const ASTLiteral *>(arguments->children[0].get());
+    const auto * argument = typeid_cast<const ASTLiteral *>(arguments->children[0].get());
     if (!argument || argument->value.getType() != Field::Types::UInt64 || argument->value.get<UInt64>() == 0)
         throw Exception(
             "FixedString data type family must have a number (positive integer) as its argument",

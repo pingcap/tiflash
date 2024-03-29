@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include <IO/WriteBufferFromFile.h>
+#include <IO/Buffer/WriteBufferFromFile.h>
 #include <Poco/File.h>
 #include <Poco/Path.h>
 #include <Storages/Page/V3/CheckpointFile/Proto/data_file.pb.h>

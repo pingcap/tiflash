@@ -38,7 +38,8 @@ public:
 
     bool isReady(std::unique_lock<std::mutex> & lock) const;
 
-    // The caller must ensure `end_key_and_segment_id` is ordered
+    // The caller must ensure `end_key_and_segment_id` is ordered.
+    // Called in `Segment::readAllSegmentsMetaInfoInRange`.
     void build(
         std::unique_lock<std::mutex> & lock,
         std::vector<std::pair<DM::RowKeyValue, UInt64>> && end_key_and_segment_ids);
@@ -69,6 +70,7 @@ public:
     {
         for (const auto & path : paths)
         {
+            LOG_DEBUG(DB::Logger::get(), "ParsedCheckpointDataHolder destroyed path={}", path);
             Poco::File(path).remove(true);
         }
     }

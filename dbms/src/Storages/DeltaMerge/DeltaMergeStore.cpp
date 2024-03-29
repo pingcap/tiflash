@@ -42,6 +42,7 @@
 #include <Storages/DeltaMerge/ReadThread/SegmentReadTaskScheduler.h>
 #include <Storages/DeltaMerge/ReadThread/UnorderedInputStream.h>
 #include <Storages/DeltaMerge/Remote/DisaggSnapshot.h>
+#include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/DeltaMerge/SchemaUpdate.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
@@ -261,14 +262,16 @@ DeltaMergeStore::DeltaMergeStore(
     try
     {
         page_storage_run_mode = storage_pool->restore(); // restore from disk
+        // If there is meta of `DELTA_MERGE_FIRST_SEGMENT_ID`, restore all segments
+        // If there is no `DELTA_MERGE_FIRST_SEGMENT_ID`, the first segment will be created by `createFirstSegment` later
         if (const auto first_segment_entry = storage_pool->metaReader()->getPageEntry(DELTA_MERGE_FIRST_SEGMENT_ID);
             first_segment_entry.isValid())
         {
+            // Restore all existing segments
             auto segment_id = DELTA_MERGE_FIRST_SEGMENT_ID;
-
-            // parallel restore segment to speed up
             if (thread_pool)
             {
+                // parallel restore segment to speed up
                 auto wait_group = thread_pool->waitGroup();
                 auto segment_ids = Segment::getAllSegmentIds(*dm_context, segment_id);
                 for (auto & segment_id : segment_ids)
@@ -286,6 +289,7 @@ DeltaMergeStore::DeltaMergeStore(
             }
             else
             {
+                // restore segment one by one
                 while (segment_id != 0)
                 {
                     auto segment = Segment::restoreSegment(log, *dm_context, segment_id);
@@ -541,6 +545,17 @@ DM::WriteResult DeltaMergeStore::write(const Context & db_context, const DB::Set
 
     auto dm_context = newDMContext(db_context, db_settings, "write");
 
+    if (db_context.getSettingsRef().dt_log_record_version)
+    {
+        const auto & ver_col = block.getByName(VERSION_COLUMN_NAME).column;
+        const auto * ver = toColumnVectorDataPtr<UInt64>(ver_col);
+        std::unordered_set<UInt64> dedup_ver;
+        for (auto v : *ver)
+        {
+            dedup_ver.insert(v);
+        }
+        LOG_DEBUG(log, "Record count: {}, Versions: {}", block.rows(), dedup_ver);
+    }
     const auto bytes = block.bytes();
 
     {
@@ -1807,7 +1822,7 @@ void DeltaMergeStore::check(const Context & /*db_context*/)
 
             throw Exception(fmt::format("Segment [{}] is expected to have id [{}]", segment_id, next_segment_id));
         }
-        if (compare(last_end.data, last_end.size, range.getStart().data, range.getStart().size) != 0)
+        if (last_end != range.getStart())
             throw Exception(fmt::format(
                 "Segment [{}:{}] is expected to have the same start edge value like the end edge value in {}",
                 segment_id,
@@ -1943,7 +1958,7 @@ void DeltaMergeStore::listLocalStableFiles(const std::function<void(UInt64, cons
     auto path_delegate = path_pool->getStableDiskDelegator();
     for (const auto & root_path : path_delegate.listPaths())
     {
-        for (const auto & file_id : DMFile::listAllInPath(file_provider, root_path, options))
+        for (const auto & file_id : DMFile::listAllInPath(file_provider, root_path, options, keyspace_id))
         {
             handle(file_id, root_path);
         }
@@ -2129,9 +2144,10 @@ std::pair<SegmentPtr, bool> DeltaMergeStore::getSegmentByStartKey(
         if (create_if_empty && is_empty)
         {
             auto dm_context = newDMContext(global_context, global_context.getSettingsRef());
-            auto page_storage_run_mode = storage_pool->getPageStorageRunMode();
-            createFirstSegment(*dm_context, page_storage_run_mode);
+            createFirstSegment(*dm_context);
         }
+        // The first segment may be created in this thread or another thread,
+        // try again to get the new created segment.
     } while (create_if_empty && is_empty);
 
     if (throw_if_notfound)
@@ -2147,7 +2163,7 @@ std::pair<SegmentPtr, bool> DeltaMergeStore::getSegmentByStartKey(
     }
 }
 
-void DeltaMergeStore::createFirstSegment(DM::DMContext & dm_context, PageStorageRunMode page_storage_run_mode)
+void DeltaMergeStore::createFirstSegment(DM::DMContext & dm_context)
 {
     std::unique_lock lock(read_write_mutex);
     if (!segments.empty())
@@ -2155,22 +2171,10 @@ void DeltaMergeStore::createFirstSegment(DM::DMContext & dm_context, PageStorage
         return;
     }
 
-    auto segment_id = storage_pool->newMetaPageId();
-    if (segment_id != DELTA_MERGE_FIRST_SEGMENT_ID)
-    {
-        RUNTIME_CHECK_MSG(
-            page_storage_run_mode != PageStorageRunMode::ONLY_V2,
-            "The first segment id should be {}, but get {}, run_mode={}",
-            DELTA_MERGE_FIRST_SEGMENT_ID,
-            segment_id,
-            magic_enum::enum_name(page_storage_run_mode));
-
-        // In ONLY_V3 or MIX_MODE, If create a new DeltaMergeStore
-        // Should used fixed DELTA_MERGE_FIRST_SEGMENT_ID to create first segment
-        segment_id = DELTA_MERGE_FIRST_SEGMENT_ID;
-    }
+    const auto segment_id = DELTA_MERGE_FIRST_SEGMENT_ID;
     LOG_INFO(log, "creating the first segment with segment_id={}", segment_id);
 
+    // newSegment will also commit the segment meta to PageStorage
     auto first_segment = Segment::newSegment( //
         log,
         dm_context,

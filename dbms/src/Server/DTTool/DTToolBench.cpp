@@ -14,8 +14,8 @@
 
 #include <Common/RandomData.h>
 #include <Common/TiFlashMetrics.h>
-#include <Encryption/MockKeyManager.h>
-#include <IO/ChecksumBuffer.h>
+#include <IO/Checksum/ChecksumBuffer.h>
+#include <IO/Encryption/MockKeyManager.h>
 #include <Poco/Path.h>
 #include <Server/DTTool/DTTool.h>
 #include <Server/RaftConfigParser.h>
@@ -25,7 +25,8 @@
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
-#include <Storages/DeltaMerge/StoragePool.h>
+#include <Storages/DeltaMerge/ScanContext.h>
+#include <Storages/DeltaMerge/StoragePool/StoragePool.h>
 #include <Storages/FormatVersion.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/PathPool.h>

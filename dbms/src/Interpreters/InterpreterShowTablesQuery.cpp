@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <Common/typeid_cast.h>
-#include <IO/ReadBufferFromString.h>
+#include <IO/Buffer/ReadBufferFromString.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterShowTablesQuery.h>
 #include <Interpreters/executeQuery.h>

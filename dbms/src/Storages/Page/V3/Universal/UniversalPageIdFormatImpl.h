@@ -14,9 +14,9 @@
 
 #pragma once
 
+#include <IO/Buffer/WriteBuffer.h>
+#include <IO/Buffer/WriteBufferFromString.h>
 #include <IO/Endian.h>
-#include <IO/WriteBuffer.h>
-#include <IO/WriteBufferFromString.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/KVStore/TiKVHelpers/TiKVKeyspaceIDImpl.h>
 #include <Storages/Page/PageConstants.h>
@@ -149,18 +149,29 @@ public:
         return buff.releaseStr();
     }
 
-    enum class LocalKVKeyType : uint64_t
+    enum class LocalKVKeyType : UInt64
     {
         FAPIngestInfo = 1,
+        EncryptionKey = 2,
     };
 
-    // LOCAL_PREFIX type region_id
-    static String toLocalKVPrefix(LocalKVKeyType type, UInt64 region_id)
+    // LOCAL_PREFIX LocalKVKeyType::FAPIngestInfo region_id
+    static String toFAPIngestInfoPageID(UInt64 region_id)
     {
         WriteBufferFromOwnString buff;
         writeChar(LOCAL_KV_PREFIX, buff);
-        encodeUInt64(magic_enum::enum_underlying(type), buff);
+        encodeUInt64(static_cast<UInt64>(LocalKVKeyType::FAPIngestInfo), buff);
         encodeUInt64(region_id, buff);
+        return buff.releaseStr();
+    }
+
+    // LOCAL_PREFIX LocalKVKeyType::EncryptionKey keyspace_id(as 64bits)
+    static String toEncryptionKeyPageID(KeyspaceID keyspace_id)
+    {
+        WriteBufferFromOwnString buff;
+        writeChar(LOCAL_KV_PREFIX, buff);
+        encodeUInt64(static_cast<UInt64>(LocalKVKeyType::EncryptionKey), buff);
+        encodeUInt64(keyspace_id, buff);
         return buff.releaseStr();
     }
 

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <IO/ReadBufferFromMemory.h>
+#include <IO/Buffer/ReadBufferFromMemory.h>
 #include <IO/ReadHelpers.h>
 #include <Parsers/ASTAsterisk.h>
 #include <Parsers/ASTExpressionList.h>
@@ -173,12 +173,12 @@ bool ParserCompoundIdentifier::parseImpl(Pos & pos, ASTPtr & node, Expected & ex
         return false;
 
     String name;
-    const ASTExpressionList & list = static_cast<const ASTExpressionList &>(*id_list.get());
+    const auto & list = static_cast<const ASTExpressionList &>(*id_list.get());
     for (const auto & child : list.children)
     {
         if (!name.empty())
             name += '.';
-        name += static_cast<const ASTIdentifier &>(*child.get()).name;
+        name += static_cast<const ASTIdentifier &>(*child).name;
     }
 
     node = std::make_shared<ASTIdentifier>(name);
@@ -791,7 +791,7 @@ bool ParserWithOptionalAliasImpl<ParserAlias>::parseImpl(Pos & pos, ASTPtr & nod
       */
     bool allow_alias_without_as_keyword_now = allow_alias_without_as_keyword;
     if (allow_alias_without_as_keyword)
-        if (const ASTIdentifier * id = typeid_cast<const ASTIdentifier *>(node.get()))
+        if (const auto * id = typeid_cast<const ASTIdentifier *>(node.get()))
             if (0 == strcasecmp(id->name.data(), "FROM"))
                 allow_alias_without_as_keyword_now = false;
 
@@ -800,7 +800,7 @@ bool ParserWithOptionalAliasImpl<ParserAlias>::parseImpl(Pos & pos, ASTPtr & nod
     {
         String alias_name = typeid_cast<const ASTIdentifier &>(*alias_node).name;
 
-        if (ASTWithAlias * ast_with_alias = dynamic_cast<ASTWithAlias *>(node.get()))
+        if (auto * ast_with_alias = dynamic_cast<ASTWithAlias *>(node.get()))
         {
             ast_with_alias->alias = alias_name;
             ast_with_alias->prefer_alias_to_column_name = prefer_alias_to_column_name;

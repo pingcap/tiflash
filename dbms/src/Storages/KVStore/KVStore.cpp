@@ -24,7 +24,7 @@
 #include <Storages/KVStore/Decode/RegionTable.h>
 #include <Storages/KVStore/FFI/ProxyFFI.h>
 #include <Storages/KVStore/KVStore.h>
-#include <Storages/KVStore/MultiRaft/Disagg/FastAddPeer.h>
+#include <Storages/KVStore/MultiRaft/Disagg/FastAddPeerContext.h>
 #include <Storages/KVStore/MultiRaft/RegionExecutionResult.h>
 #include <Storages/KVStore/MultiRaft/RegionPersister.h>
 #include <Storages/KVStore/Read/ReadIndexWorker.h>
@@ -68,6 +68,17 @@ KVStore::KVStore(Context & context)
 {
     // default config about compact-log: rows 40k, bytes 32MB, gap 200.
     LOG_INFO(log, "KVStore inited, eager_raft_log_gc_enabled={}", eager_raft_log_gc_enabled);
+    using namespace std::chrono_literals;
+    monitoring_thread = new std::thread([&]() {
+        while (true)
+        {
+            std::unique_lock l(monitoring_mut);
+            monitoring_cv.wait_for(l, 5000ms, [&]() { return is_terminated; });
+            if (is_terminated)
+                return;
+            recordThreadAllocInfo();
+        }
+    });
 }
 
 void KVStore::restore(PathPool & path_pool, const TiFlashRaftProxyHelper * proxy_helper)
@@ -147,6 +158,7 @@ RegionPtr KVStore::getRegion(RegionID region_id) const
         return it->second;
     return nullptr;
 }
+
 // TODO: may get regions not in segment?
 RegionMap KVStore::getRegionsByRangeOverlap(const RegionRange & range) const
 {
@@ -333,6 +345,14 @@ void KVStore::handleDestroy(UInt64 region_id, TMTContext & tmt)
 void KVStore::handleDestroy(UInt64 region_id, TMTContext & tmt, const KVStoreTaskLock & task_lock)
 {
     const auto region = getRegion(region_id);
+    // Always try to clean obsolete FAP snapshot
+    if (tmt.getContext().getSharedContextDisagg()->isDisaggregatedStorageMode())
+    {
+        // Everytime we remove region, we try to clean obsolete fap ingest info.
+        auto fap_ctx = tmt.getContext().getSharedContextDisagg()->fap_context;
+        fiu_do_on(FailPoints::force_not_clean_fap_on_destroy, { return; });
+        fap_ctx->resolveFapSnapshotState(tmt, proxy_helper, region_id, false);
+    }
     if (region == nullptr)
     {
         LOG_INFO(log, "region_id={} not found, might be removed already", region_id);
@@ -346,14 +366,6 @@ void KVStore::handleDestroy(UInt64 region_id, TMTContext & tmt, const KVStoreTas
         tmt.getRegionTable(),
         task_lock,
         region_manager.genRegionTaskLock(region_id));
-
-    if (tmt.getContext().getSharedContextDisagg()->isDisaggregatedStorageMode())
-    {
-        fiu_do_on(FailPoints::force_not_clean_fap_on_destroy, { return; });
-        // Everytime we remove region, we try to clean obsolete fap ingest info.
-        auto fap_ctx = tmt.getContext().getSharedContextDisagg()->fap_context;
-        fap_ctx->cleanCheckpointIngestInfo(tmt, region_id);
-    }
 }
 
 void KVStore::setRegionCompactLogConfig(UInt64 rows, UInt64 bytes, UInt64 gap, UInt64 eager_gc_gap)
@@ -370,244 +382,6 @@ void KVStore::setRegionCompactLogConfig(UInt64 rows, UInt64 bytes, UInt64 gap, U
         bytes,
         gap,
         eager_gc_gap);
-}
-
-void KVStore::persistRegion(
-    const Region & region,
-    const RegionTaskLock & region_task_lock,
-    PersistRegionReason reason,
-    const char * extra_msg) const
-{
-    RUNTIME_CHECK_MSG(
-        region_persister,
-        "try access to region_persister without initialization, stack={}",
-        StackTrace().toString());
-
-    auto reason_id = magic_enum::enum_underlying(reason);
-    std::string caller = fmt::format("{} {}", PersistRegionReasonMap[reason_id], extra_msg);
-    LOG_INFO(
-        log,
-        "Start to persist {}, cache size: {} bytes for `{}`",
-        region.getDebugString(),
-        region.dataSize(),
-        caller);
-    region_persister->persist(region, region_task_lock);
-    LOG_DEBUG(log, "Persist {} done, cache size: {} bytes", region.toString(false), region.dataSize());
-
-    switch (reason)
-    {
-    case PersistRegionReason::UselessAdminCommand:
-        GET_METRIC(tiflash_raft_raft_events_count, type_flush_useless_admin).Increment(1);
-        break;
-    case PersistRegionReason::AdminCommand:
-        GET_METRIC(tiflash_raft_raft_events_count, type_flush_useful_admin).Increment(1);
-        break;
-    case PersistRegionReason::Flush:
-        // It used to be type_exec_compact.
-        GET_METRIC(tiflash_raft_raft_events_count, type_flush_passive).Increment(1);
-        break;
-    case PersistRegionReason::ProactiveFlush:
-        GET_METRIC(tiflash_raft_raft_events_count, type_flush_proactive).Increment(1);
-        break;
-    case PersistRegionReason::ApplySnapshotPrevRegion:
-    case PersistRegionReason::ApplySnapshotCurRegion:
-        GET_METRIC(tiflash_raft_raft_events_count, type_flush_apply_snapshot).Increment(1);
-        break;
-    case PersistRegionReason::IngestSst:
-        GET_METRIC(tiflash_raft_raft_events_count, type_flush_ingest_sst).Increment(1);
-        break;
-    case PersistRegionReason::EagerRaftGc:
-        GET_METRIC(tiflash_raft_raft_events_count, type_flush_eager_gc).Increment(1);
-        break;
-    case PersistRegionReason::Debug: // ignore
-        break;
-    }
-}
-
-bool KVStore::needFlushRegionData(UInt64 region_id, TMTContext & tmt)
-{
-    auto region_task_lock = region_manager.genRegionTaskLock(region_id);
-    const RegionPtr curr_region_ptr = getRegion(region_id);
-    // TODO Should handle when curr_region_ptr is null.
-    return canFlushRegionDataImpl(curr_region_ptr, false, false, tmt, region_task_lock, 0, 0, 0, 0);
-}
-
-bool KVStore::tryFlushRegionData(
-    UInt64 region_id,
-    bool force_persist,
-    bool try_until_succeed,
-    TMTContext & tmt,
-    UInt64 index,
-    UInt64 term,
-    uint64_t truncated_index,
-    uint64_t truncated_term)
-{
-    auto region_task_lock = region_manager.genRegionTaskLock(region_id);
-    const RegionPtr curr_region_ptr = getRegion(region_id);
-
-    if (curr_region_ptr == nullptr)
-    {
-        /// If we can't find region here, we return true so proxy can trigger a CompactLog.
-        /// The triggered CompactLog will be handled by `handleUselessAdminRaftCmd`,
-        /// and result in a `EngineStoreApplyRes::NotFound`.
-        /// Proxy will print this message and continue: `region not found in engine-store, maybe have exec `RemoveNode` first`.
-        LOG_WARNING(
-            log,
-            "[region_id={} term={} index={}] not exist when flushing, maybe have exec `RemoveNode` first",
-            region_id,
-            term,
-            index);
-        return true;
-    }
-
-    if (!force_persist)
-    {
-        GET_METRIC(tiflash_raft_raft_events_count, type_pre_exec_compact).Increment(1);
-        // try to flush RegionData according to the mem cache rows/bytes/interval
-        return canFlushRegionDataImpl(
-            curr_region_ptr,
-            true,
-            try_until_succeed,
-            tmt,
-            region_task_lock,
-            index,
-            term,
-            truncated_index,
-            truncated_term);
-    }
-
-    // force persist
-    auto & curr_region = *curr_region_ptr;
-    LOG_DEBUG(
-        log,
-        "flush region due to tryFlushRegionData by force, region_id={} term={} index={}",
-        curr_region.id(),
-        term,
-        index);
-    if (!forceFlushRegionDataImpl(curr_region, try_until_succeed, tmt, region_task_lock, index, term))
-    {
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "Force flush region failed, region_id={}", region_id);
-    }
-    return true;
-}
-
-bool KVStore::canFlushRegionDataImpl(
-    const RegionPtr & curr_region_ptr,
-    UInt8 flush_if_possible,
-    bool try_until_succeed,
-    TMTContext & tmt,
-    const RegionTaskLock & region_task_lock,
-    UInt64 index,
-    UInt64 term,
-    UInt64 truncated_index,
-    UInt64 truncated_term)
-{
-    if (curr_region_ptr == nullptr)
-    {
-        throw Exception("region not found when trying flush", ErrorCodes::LOGICAL_ERROR);
-    }
-    auto & curr_region = *curr_region_ptr;
-
-    bool can_flush = false;
-    auto [rows, size_bytes] = curr_region.getApproxMemCacheInfo();
-
-    // flush caused by rows
-    if (rows >= region_compact_log_min_rows.load(std::memory_order_relaxed))
-    {
-        GET_METRIC(tiflash_raft_raft_events_count, type_flush_rowcount).Increment(1);
-        can_flush = true;
-    }
-    // flush caused by bytes
-    if (size_bytes >= region_compact_log_min_bytes.load(std::memory_order_relaxed))
-    {
-        GET_METRIC(tiflash_raft_raft_events_count, type_flush_size).Increment(1);
-        can_flush = true;
-    }
-    // flush caused by gap
-    auto gap_threshold = region_compact_log_gap.load();
-    const auto last_restart_log_applied = curr_region.lastRestartLogApplied();
-    if (last_restart_log_applied + gap_threshold > index)
-    {
-        // Make it more likely to flush after restart to reduce memory consumption
-        gap_threshold = std::max(gap_threshold / 2, 1);
-    }
-    const auto last_compact_log_applied = curr_region.lastCompactLogApplied();
-    const auto current_applied_gap = index > last_compact_log_applied ? index - last_compact_log_applied : 0;
-
-    // TODO We will use truncated_index once Proxy/TiKV supports.
-    // When a Region is newly created in TiFlash, last_compact_log_applied is 0, we don't trigger immediately.
-    if (last_compact_log_applied == 0)
-    {
-        // We will set `last_compact_log_applied` to current applied_index if it is zero.
-        curr_region.setLastCompactLogApplied(index);
-    }
-    else if (last_compact_log_applied > 0 && index > last_compact_log_applied + gap_threshold)
-    {
-        GET_METRIC(tiflash_raft_raft_events_count, type_flush_log_gap).Increment(1);
-        can_flush = true;
-    }
-
-    LOG_DEBUG(
-        log,
-        "{} approx mem cache info: rows {}, bytes {}, gap {}/{}",
-        curr_region.toString(false),
-        rows,
-        size_bytes,
-        current_applied_gap,
-        gap_threshold);
-
-    if (can_flush && flush_if_possible)
-    {
-        // This rarely happens when there are too may raft logs, which don't trigger a proactive flush.
-        LOG_INFO(
-            log,
-            "{} flush region due to tryFlushRegionData, index {} term {} truncated_index {} truncated_term {}"
-            " gap {}/{}",
-            curr_region.toString(false),
-            index,
-            term,
-            truncated_index,
-            truncated_term,
-            current_applied_gap,
-            gap_threshold);
-        GET_METRIC(tiflash_raft_region_flush_bytes, type_flushed).Observe(size_bytes);
-        return forceFlushRegionDataImpl(curr_region, try_until_succeed, tmt, region_task_lock, index, term);
-    }
-    else
-    {
-        GET_METRIC(tiflash_raft_region_flush_bytes, type_unflushed).Observe(size_bytes);
-        GET_METRIC(tiflash_raft_raft_log_gap_count, type_unflushed_applied_index).Observe(current_applied_gap);
-    }
-    return can_flush;
-}
-
-bool KVStore::forceFlushRegionDataImpl(
-    Region & curr_region,
-    bool try_until_succeed,
-    TMTContext & tmt,
-    const RegionTaskLock & region_task_lock,
-    UInt64 index,
-    UInt64 term) const
-{
-    Stopwatch watch;
-    if (index)
-    {
-        // We advance index when pre exec CompactLog.
-        curr_region.handleWriteRaftCmd({}, index, term, tmt);
-    }
-
-    if (!tryFlushRegionCacheInStorage(tmt, curr_region, log, try_until_succeed))
-    {
-        return false;
-    }
-
-    // flush cache in storage level is done, persist the region info
-    persistRegion(curr_region, region_task_lock, PersistRegionReason::Flush, "");
-    // CompactLog will be done in proxy soon, we advance the eager truncate index in TiFlash
-    curr_region.updateRaftLogEagerIndex(index);
-    curr_region.cleanApproxMemCacheInfo();
-    GET_METRIC(tiflash_raft_apply_write_command_duration_seconds, type_flush_region).Observe(watch.elapsedSeconds());
-    return true;
 }
 
 void KVStore::setStore(metapb::Store store_)
@@ -627,9 +401,19 @@ KVStore::StoreMeta::Base KVStore::StoreMeta::getMeta() const
     return base;
 }
 
-metapb::Store KVStore::getStoreMeta() const
+metapb::Store KVStore::clonedStoreMeta() const
 {
     return getStore().getMeta();
+}
+
+const metapb::Store & KVStore::getStoreMeta() const
+{
+    return this->store.base;
+}
+
+metapb::Store & KVStore::debugMutStoreMeta()
+{
+    return this->store.base;
 }
 
 KVStore::StoreMeta & KVStore::getStore()
@@ -652,6 +436,7 @@ void KVStore::StoreMeta::update(Base && base_)
 KVStore::~KVStore()
 {
     LOG_INFO(log, "Destroy KVStore");
+    stopThreadAllocInfo();
     releaseReadIndexWorkers();
 }
 
@@ -703,6 +488,124 @@ RegionPtr KVStore::genRegionPtr(metapb::Region && region, UInt64 peer_id, UInt64
     });
 
     return std::make_shared<Region>(std::move(meta), proxy_helper);
+}
+
+RegionTaskLock KVStore::genRegionTaskLock(UInt64 region_id) const
+{
+    return region_manager.genRegionTaskLock(region_id);
+}
+
+static std::string getThreadNameAggPrefix(const std::string_view & s)
+{
+    if (auto pos = s.find_last_of('-'); pos != std::string::npos)
+    {
+        return std::string(s.begin(), s.begin() + pos);
+    }
+    return std::string(s.begin(), s.end());
+}
+
+void KVStore::reportThreadAllocInfo(std::string_view thdname, ReportThreadAllocateInfoType type, uint64_t value)
+{
+    // Many threads have empty name, better just not handle.
+    if (thdname.empty())
+        return;
+    std::string tname(thdname.begin(), thdname.end());
+    switch (type)
+    {
+    case ReportThreadAllocateInfoType::Reset:
+    {
+        auto & metrics = TiFlashMetrics::instance();
+        metrics.registerProxyThreadMemory(getThreadNameAggPrefix(tname));
+        {
+            std::unique_lock l(memory_allocation_mut);
+            memory_allocation_map.insert_or_assign(tname, ThreadInfoJealloc());
+        }
+        break;
+    }
+    case ReportThreadAllocateInfoType::Remove:
+    {
+        std::unique_lock l(memory_allocation_mut);
+        memory_allocation_map.erase(tname);
+        break;
+    }
+    case ReportThreadAllocateInfoType::AllocPtr:
+    {
+        std::shared_lock l(memory_allocation_mut);
+        if (value == 0)
+            return;
+        auto it = memory_allocation_map.find(tname);
+        if unlikely (it == memory_allocation_map.end())
+        {
+            return;
+        }
+        it->second.allocated_ptr = value;
+        break;
+    }
+    case ReportThreadAllocateInfoType::DeallocPtr:
+    {
+        std::shared_lock l(memory_allocation_mut);
+        if (value == 0)
+            return;
+        auto it = memory_allocation_map.find(tname);
+        if unlikely (it == memory_allocation_map.end())
+        {
+            return;
+        }
+        it->second.deallocated_ptr = value;
+        break;
+    }
+    }
+}
+
+static const std::unordered_set<std::string> RECORD_WHITE_LIST_THREAD_PREFIX = {"ReadIndexWkr"};
+
+/// For those everlasting threads, we can directly access their allocatedp/allocatedp.
+void KVStore::recordThreadAllocInfo()
+{
+    std::shared_lock l(memory_allocation_mut);
+    std::unordered_map<std::string, int64_t> agg_remaining;
+    for (const auto & [k, v] : memory_allocation_map)
+    {
+        auto agg_thread_name = getThreadNameAggPrefix(std::string_view(k.data(), k.size()));
+        // Some thread may have shorter lifetime, we can't use this timed task here to upgrade.
+        if (RECORD_WHITE_LIST_THREAD_PREFIX.contains(agg_thread_name))
+        {
+            auto [it, ok] = agg_remaining.emplace(agg_thread_name, 0);
+            it->second += v.remaining();
+        }
+    }
+    for (const auto & [k, v] : agg_remaining)
+    {
+        auto & tiflash_metrics = TiFlashMetrics::instance();
+        tiflash_metrics.setProxyThreadMemory(k, v);
+    }
+}
+
+/// For those threads with shorter life, we must only update in their call chain.
+void KVStore::reportThreadAllocBatch(std::string_view name, ReportThreadAllocateInfoBatch data)
+{
+    // Many threads have empty name, better just not handle.
+    if (name.empty())
+        return;
+    // TODO(jemalloc-trace) Could be costy.
+    auto k = getThreadNameAggPrefix(name);
+    int64_t v = static_cast<int64_t>(data.alloc) - static_cast<int64_t>(data.dealloc);
+    auto & tiflash_metrics = TiFlashMetrics::instance();
+    tiflash_metrics.setProxyThreadMemory(k, v);
+}
+
+void KVStore::stopThreadAllocInfo()
+{
+    {
+        std::unique_lock lk(monitoring_mut);
+        if (monitoring_thread == nullptr)
+            return;
+        is_terminated = true;
+        monitoring_cv.notify_all();
+    }
+    monitoring_thread->join();
+    delete monitoring_thread;
+    monitoring_thread = nullptr;
 }
 
 } // namespace DB

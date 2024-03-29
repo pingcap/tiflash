@@ -20,6 +20,14 @@
 
 #include <ext/scope_guard.h>
 
+#pragma GCC diagnostic push
+#ifdef __clang__
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#endif
+// include to suppress warnings on NO_THREAD_SAFETY_ANALYSIS. clang can't work without this include, don't know why
+#include <grpcpp/security/credentials.h>
+#pragma GCC diagnostic pop
+
 namespace DB
 {
 namespace FailPoints
@@ -45,14 +53,15 @@ public:
 void ReadIndexTest::testError()
 {
     // test error
-
+    auto & ctx = TiFlashTestEnv::getGlobalContext();
+    KVStore kvs = KVStore{ctx};
     MockRaftStoreProxy proxy_instance;
     TiFlashRaftProxyHelper proxy_helper;
     {
-        proxy_helper = MockRaftStoreProxy::SetRaftStoreProxyFFIHelper(RaftStoreProxyPtr{&proxy_instance});
+        proxy_helper = MockRaftStoreProxy::setRaftStoreProxyFFIHelper(RaftStoreProxyPtr{&proxy_instance});
         proxy_instance.init(10);
     }
-    auto manager = ReadIndexWorkerManager::newReadIndexWorkerManager(proxy_helper, 5, [&]() {
+    auto manager = ReadIndexWorkerManager::newReadIndexWorkerManager(proxy_helper, kvs, 5, [&]() {
         return std::chrono::milliseconds(10);
     });
     {
@@ -60,42 +69,45 @@ void ReadIndexTest::testError()
         std::vector<kvrpcpb::ReadIndexResponse> resps;
         std::list<ReadIndexFuturePtr> futures;
         {
+            // Test running_tasks
             reqs = {make_read_index_reqs(2, 10), make_read_index_reqs(2, 12), make_read_index_reqs(2, 13)};
             for (const auto & req : reqs)
             {
                 auto future = manager->genReadIndexFuture(req);
                 auto resp = future->poll();
-                ASSERT(!resp);
+                ASSERT_FALSE(resp.has_value());
                 futures.push_back(future);
             }
             manager->runOneRoundAll();
             for (auto & future : futures)
             {
                 auto resp = future->poll();
-                ASSERT(!resp);
+                ASSERT_FALSE(resp.has_value());
             }
             ASSERT_EQ(proxy_instance.mock_read_index.read_index_tasks.size(), 1);
-
-            // force response region error `data_is_not_ready`
+            ASSERT_EQ(proxy_instance.mock_read_index.read_index_tasks.front()->req.start_ts(), 13);
+        }
+        {
+            // Force response region error `data_is_not_ready`
             proxy_instance.mock_read_index.read_index_tasks.front()->update(false, true);
 
             for (auto & future : futures)
             {
                 auto resp = future->poll();
-                ASSERT(!resp);
+                ASSERT_FALSE(resp.has_value());
             }
             manager->runOneRoundAll();
             for (auto & future : futures)
             {
                 auto resp = future->poll();
-                ASSERT(resp);
+                ASSERT_TRUE(resp.has_value());
                 ASSERT(resp->region_error().has_data_is_not_ready());
             }
             {
-                // poll another time
+                // Poll another time
                 auto resp = futures.front()->poll();
-                ASSERT(resp);
-                // still old value
+                ASSERT_TRUE(resp.has_value());
+                // Still old value
                 ASSERT(resp->region_error().has_data_is_not_ready());
             }
             futures.clear();
@@ -143,7 +155,7 @@ void ReadIndexTest::testError()
             ASSERT(resps[1].region_error().has_epoch_not_match());
             ASSERT(resps[2].has_locked());
 
-            // history_success_tasks no update.
+            // `history_success_tasks` no update.
             ASSERT_FALSE(manager->getWorkerByRegion(2).data_map.getDataNode(2)->history_success_tasks);
         }
         {
@@ -189,18 +201,26 @@ void ReadIndexTest::testError()
     ASSERT(GCMonitor::instance().checkClean());
     ASSERT(!GCMonitor::instance().empty());
 }
-size_t ReadIndexTest::computeCntUseHistoryTasks(ReadIndexWorkerManager & manager) NO_THREAD_SAFETY_ANALYSIS
+
+struct Helper
+{
+    size_t & counter;
+    void operator()(std::unordered_map<RegionID, ReadIndexDataNodePtr> & d) NO_THREAD_SAFETY_ANALYSIS
+    {
+        for (auto & x : d)
+        {
+            auto _ = x.second->genLockGuard();
+            counter += x.second->cnt_use_history_tasks;
+        }
+    }
+};
+
+size_t ReadIndexTest::computeCntUseHistoryTasks(ReadIndexWorkerManager & manager)
 {
     size_t cnt_use_history_tasks = 0;
     for (auto & worker : manager.workers)
     {
-        worker->data_map.invoke([&](std::unordered_map<RegionID, ReadIndexDataNodePtr> & d) NO_THREAD_SAFETY_ANALYSIS {
-            for (auto & x : d)
-            {
-                auto _ = x.second->genLockGuard();
-                cnt_use_history_tasks += x.second->cnt_use_history_tasks;
-            }
-        });
+        worker->data_map.invoke(Helper{.counter = cnt_use_history_tasks});
     }
     return cnt_use_history_tasks;
 }
@@ -258,15 +278,17 @@ void ReadIndexTest::testBasic()
 void ReadIndexTest::testNormal()
 {
     // test normal
-
+    auto & ctx = TiFlashTestEnv::getGlobalContext();
+    KVStore kvs = KVStore{ctx};
     MockRaftStoreProxy proxy_instance;
     TiFlashRaftProxyHelper proxy_helper;
     {
-        proxy_helper = MockRaftStoreProxy::SetRaftStoreProxyFFIHelper(RaftStoreProxyPtr{&proxy_instance});
+        proxy_helper = MockRaftStoreProxy::setRaftStoreProxyFFIHelper(RaftStoreProxyPtr{&proxy_instance});
         proxy_instance.init(10);
     }
     auto manager = ReadIndexWorkerManager::newReadIndexWorkerManager(
         proxy_helper,
+        kvs,
         5,
         [&]() { return std::chrono::milliseconds(10); },
         3);
@@ -362,7 +384,7 @@ void ReadIndexTest::testNormal()
             ASSERT_EQ(computeCntUseHistoryTasks(*manager), expect_cnt_use_history_tasks);
         }
         {
-            // set region id to let mock proxy drop all related tasks.
+            // Set region id to let mock proxy drop all related tasks.
             proxy_instance.unsafeInvokeForTest(
                 [](MockRaftStoreProxy & proxy) { proxy.mock_read_index.region_id_to_drop.emplace(1); });
             std::vector<kvrpcpb::ReadIndexRequest> reqs;
@@ -445,13 +467,15 @@ void ReadIndexTest::testNormal()
 void ReadIndexTest::testBatch()
 {
     // test batch
+    auto & ctx = TiFlashTestEnv::getGlobalContext();
+    KVStore kvs = KVStore{ctx};
     MockRaftStoreProxy proxy_instance;
     TiFlashRaftProxyHelper proxy_helper;
     {
-        proxy_helper = MockRaftStoreProxy::SetRaftStoreProxyFFIHelper(RaftStoreProxyPtr{&proxy_instance});
+        proxy_helper = MockRaftStoreProxy::setRaftStoreProxyFFIHelper(RaftStoreProxyPtr{&proxy_instance});
         proxy_instance.init(10);
     }
-    auto manager = ReadIndexWorkerManager::newReadIndexWorkerManager(proxy_helper, 5, [&]() {
+    auto manager = ReadIndexWorkerManager::newReadIndexWorkerManager(proxy_helper, kvs, 5, [&]() {
         return std::chrono::milliseconds(10);
     });
     // DO NOT run manager and mock proxy in other threads.

@@ -19,7 +19,7 @@
 
 # Clean the tombstone table in the testing env
 >> DBGInvoke __enable_schema_sync_service('true')
->> DBGInvoke __gc_schemas(18446744073709551615)
+>> DBGInvoke __gc_schemas(18446744073709551615, 'true')
 
 ## create table and drop without tiflash replica
 mysql> drop table if exists test.t1;

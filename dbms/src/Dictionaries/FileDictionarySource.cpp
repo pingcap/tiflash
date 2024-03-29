@@ -14,7 +14,7 @@
 
 #include <DataStreams/OwningBlockInputStream.h>
 #include <Dictionaries/FileDictionarySource.h>
-#include <IO/ReadBufferFromFile.h>
+#include <IO/Buffer/ReadBufferFromFile.h>
 #include <Interpreters/Context.h>
 #include <Poco/File.h>
 

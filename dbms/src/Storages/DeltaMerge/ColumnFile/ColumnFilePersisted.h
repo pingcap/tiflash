@@ -14,8 +14,8 @@
 
 #pragma once
 
-#include <IO/CompressedStream.h>
-#include <IO/MemoryReadWriteBuffer.h>
+#include <IO/Buffer/MemoryReadWriteBuffer.h>
+#include <IO/Compression/CompressionMethod.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFile.h>
 
 namespace DB

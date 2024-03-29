@@ -14,6 +14,8 @@
 
 #include <Storages/Page/PageUtil.h>
 
+#include <random>
+
 namespace DB::PageUtil
 {
 UInt32 randInt(UInt32 min, UInt32 max)

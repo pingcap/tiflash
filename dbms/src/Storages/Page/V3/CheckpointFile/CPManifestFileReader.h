@@ -14,13 +14,12 @@
 
 #pragma once
 
-#include <IO/CompressedReadBuffer.h>
-#include <IO/ReadBufferFromRandomAccessFile.h>
+#include <IO/Buffer/ReadBufferFromRandomAccessFile.h>
+#include <IO/Compression/CompressedReadBuffer.h>
 #include <Storages/Page/V3/CheckpointFile/Proto/manifest_file.pb.h>
 #include <Storages/Page/V3/CheckpointFile/fwd.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
 
-#include <string>
 
 namespace DB::PS::V3
 {
@@ -62,7 +61,7 @@ private:
     };
 
     // compressed<plain_file>
-    const std::unique_ptr<ReadBufferFromRandomAccessFile> file_reader;
+    const ReadBufferFromRandomAccessFilePtr file_reader;
     const ReadBufferPtr compressed_reader;
 
     ReadStage read_stage = ReadStage::ReadingPrefix;

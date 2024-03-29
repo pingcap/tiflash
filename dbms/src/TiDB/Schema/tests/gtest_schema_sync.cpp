@@ -33,12 +33,16 @@
 #include <TiDB/Schema/TiDBSchemaManager.h>
 #include <common/defines.h>
 
+#include <ext/scope_guard.h>
+#include <limits>
+
 namespace DB
 {
 namespace FailPoints
 {
 extern const char exception_before_rename_table_old_meta_removed[];
 extern const char force_context_path[];
+extern const char force_set_num_regions_for_table[];
 } // namespace FailPoints
 namespace tests
 {
@@ -290,8 +294,7 @@ try
         refreshTableSchema(table_id);
     }
 
-    global_ctx.initializeSchemaSyncService();
-    auto sync_service = global_ctx.getSchemaSyncService();
+    auto sync_service = std::make_shared<SchemaSyncService>(global_ctx);
     // run gc with safepoint == 0, will be skip
     ASSERT_FALSE(sync_service->gc(0, NullspaceID));
     ASSERT_TRUE(sync_service->gc(10000000, NullspaceID));
@@ -303,6 +306,62 @@ try
     ASSERT_TRUE(sync_service->gc(20000000, 1024));
     // run gc with the same safepoint
     ASSERT_FALSE(sync_service->gc(20000000, 1024));
+
+    sync_service->shutdown();
+}
+CATCH
+
+TEST_F(SchemaSyncTest, PhysicalDropTableMeetsUnRemovedRegions)
+try
+{
+    auto pd_client = global_ctx.getTMTContext().getPDClient();
+
+    const String db_name = "mock_db";
+    MockTiDB::instance().newDataBase(db_name);
+
+    auto cols = ColumnsDescription({
+        {"col1", typeFromString("String")},
+        {"col2", typeFromString("Int64")},
+    });
+    // table_name, cols, pk_name
+    std::vector<std::tuple<String, ColumnsDescription, String>> tables{
+        {"t1", cols, ""},
+    };
+    auto table_ids = MockTiDB::instance().newTables(db_name, tables, pd_client->getTS(), "dt");
+
+    refreshSchema();
+    for (auto table_id : table_ids)
+    {
+        refreshTableSchema(table_id);
+    }
+
+    mustGetSyncedTableByName(db_name, "t1");
+
+    MockTiDB::instance().dropTable(global_ctx, db_name, "t1", true);
+
+    refreshSchema();
+    for (auto table_id : table_ids)
+    {
+        refreshTableSchema(table_id);
+    }
+
+    // prevent the storage instance from being physically removed
+    FailPointHelper::enableFailPoint(
+        FailPoints::force_set_num_regions_for_table,
+        std::vector<RegionID>{1001, 1002, 1003});
+    SCOPE_EXIT({ FailPointHelper::disableFailPoint(FailPoints::force_set_num_regions_for_table); });
+
+    auto sync_service = std::make_shared<SchemaSyncService>(global_ctx);
+    ASSERT_TRUE(sync_service->gc(std::numeric_limits<UInt64>::max(), NullspaceID));
+
+    size_t num_remain_tables = 0;
+    for (auto table_id : table_ids)
+    {
+        auto storage = global_ctx.getTMTContext().getStorages().get(NullspaceID, table_id);
+        ASSERT_TRUE(storage->isTombstone());
+        ++num_remain_tables;
+    }
+    ASSERT_EQ(num_remain_tables, 1);
 
     sync_service->shutdown();
 }

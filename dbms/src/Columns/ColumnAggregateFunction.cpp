@@ -23,7 +23,7 @@
 #include <DataTypes/DataTypeFixedString.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <Functions/FunctionHelpers.h>
-#include <IO/WriteBufferFromArena.h>
+#include <IO/Buffer/WriteBufferFromArena.h>
 #include <fmt/format.h>
 
 namespace DB

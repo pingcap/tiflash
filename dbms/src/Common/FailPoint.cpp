@@ -76,6 +76,7 @@ namespace DB
     M(skip_check_segment_update)                             \
     M(force_set_page_file_write_errno)                       \
     M(force_split_io_size_4k)                                \
+    M(force_set_num_regions_for_table)                       \
     M(minimum_block_size_for_cross_join)                     \
     M(random_exception_after_dt_write_done)                  \
     M(random_slow_page_storage_write)                        \
@@ -87,6 +88,7 @@ namespace DB
     M(force_set_dtfile_exist_when_acquire_id)                \
     M(force_no_local_region_for_mpp_task)                    \
     M(force_remote_read_for_batch_cop)                       \
+    M(force_pd_grpc_error)                                   \
     M(force_context_path)                                    \
     M(force_slow_page_storage_snapshot_release)              \
     M(force_pick_all_blobs_to_full_gc)                       \
@@ -99,7 +101,6 @@ namespace DB
     M(force_use_dmfile_format_v3)                            \
     M(force_set_mocked_s3_object_mtime)                      \
     M(force_stop_background_checkpoint_upload)               \
-    M(skip_seek_before_read_dmfile)                          \
     M(exception_after_large_write_exceed)                    \
     M(proactive_flush_force_set_type)                        \
     M(exception_when_fetch_disagg_pages)                     \
@@ -107,6 +108,7 @@ namespace DB
     M(force_set_parallel_prehandle_threshold)                \
     M(force_raise_prehandle_exception)                       \
     M(force_agg_on_partial_block)                            \
+    M(force_set_fap_candidate_store_id)                      \
     M(force_not_clean_fap_on_destroy)                        \
     M(delta_tree_create_node_fail)                           \
     M(disable_flush_cache)

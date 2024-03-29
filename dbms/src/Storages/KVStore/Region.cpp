@@ -66,9 +66,9 @@ void Region::insert(ColumnFamilyType type, TiKVKey && key, TiKVValue && value, D
     doInsert(type, std::move(key), std::move(value), mode);
 }
 
-size_t Region::doInsert(ColumnFamilyType type, TiKVKey && key, TiKVValue && value, DupCheck mode)
+RegionDataRes Region::doInsert(ColumnFamilyType type, TiKVKey && key, TiKVValue && value, DupCheck mode)
 {
-    if (getClusterRaftstoreVer() == RaftstoreVer::V2)
+    if unlikely (getClusterRaftstoreVer() == RaftstoreVer::V2)
     {
         if (type == ColumnFamilyType::Write)
         {
@@ -329,10 +329,6 @@ RegionMetaSnapshot Region::dumpRegionMetaSnapshot() const
 {
     return meta.dumpRegionMetaSnapshot();
 }
-
-Region::Region(RegionMeta && meta_)
-    : Region(std::move(meta_), nullptr)
-{}
 
 Region::Region(DB::RegionMeta && meta_, const TiFlashRaftProxyHelper * proxy_helper_)
     : meta(std::move(meta_))

@@ -17,6 +17,94 @@
 
 namespace DB
 {
+DecodingStorageSchemaSnapshot::DecodingStorageSchemaSnapshot(
+    DM::ColumnDefinesPtr column_defines_,
+    const TiDB::TableInfo & table_info_,
+    const DM::ColumnDefine & original_handle_,
+    Int64 decoding_schema_epoch_,
+    bool with_version_column)
+    : column_defines{std::move(column_defines_)}
+    , pk_is_handle{table_info_.pk_is_handle}
+    , is_common_handle{table_info_.is_common_handle}
+    , decoding_schema_epoch{decoding_schema_epoch_}
+{
+    std::unordered_map<ColumnID, size_t> column_lut(table_info_.columns.size());
+    // col id -> tidb pos, has no internal cols.
+    for (size_t i = 0; i < table_info_.columns.size(); i++)
+    {
+        const auto & ci = table_info_.columns[i];
+        column_lut.emplace(ci.id, i);
+    }
+    // column_defines has internal cols.
+    size_t index_in_block = 0;
+    for (size_t i = 0; i < column_defines->size(); i++)
+    {
+        auto & cd = (*column_defines)[i];
+        if (cd.id != VersionColumnID || with_version_column)
+        {
+            col_id_to_block_pos.insert({cd.id, index_in_block++});
+        }
+        col_id_to_def_pos.insert({cd.id, i});
+
+        if (cd.id != TiDBPkColumnID && cd.id != VersionColumnID && cd.id != DelMarkColumnID)
+        {
+            const auto & columns = table_info_.columns;
+            column_infos.push_back(columns[column_lut.at(cd.id)]);
+        }
+        else
+        {
+            column_infos.push_back(ColumnInfo());
+        }
+    }
+
+    // create pk related metadata if needed
+    if (is_common_handle)
+    {
+        const auto & primary_index_cols = table_info_.getPrimaryIndexInfo().idx_cols;
+        for (const auto & primary_index_col : primary_index_cols)
+        {
+            auto pk_column_id = table_info_.columns[primary_index_col.offset].id;
+            pk_column_ids.emplace_back(pk_column_id);
+            pk_pos_map.emplace(pk_column_id, reinterpret_cast<size_t>(std::numeric_limits<size_t>::max()));
+        }
+        pk_type = TMTPKType::STRING;
+        rowkey_column_size = pk_column_ids.size();
+    }
+    else if (table_info_.pk_is_handle)
+    {
+        pk_column_ids.emplace_back(original_handle_.id);
+        pk_pos_map.emplace(original_handle_.id, reinterpret_cast<size_t>(std::numeric_limits<size_t>::max()));
+        pk_type = getTMTPKType(*original_handle_.type);
+        rowkey_column_size = 1;
+    }
+    else
+    {
+        pk_type = TMTPKType::INT64;
+        rowkey_column_size = 1;
+    }
+
+    // calculate pk column pos in block
+    if (!pk_pos_map.empty())
+    {
+        auto pk_pos_iter = pk_pos_map.begin();
+        size_t column_pos_in_block = 0;
+        for (auto & column_id_with_pos : col_id_to_block_pos)
+        {
+            if (pk_pos_iter == pk_pos_map.end())
+                break;
+            if (pk_pos_iter->first == column_id_with_pos.first)
+            {
+                pk_pos_iter->second = column_pos_in_block;
+                pk_pos_iter++;
+            }
+            column_pos_in_block++;
+        }
+        if (unlikely(pk_pos_iter != pk_pos_map.end()))
+            throw Exception("Cannot find all pk columns in block", ErrorCodes::LOGICAL_ERROR);
+    }
+}
+
+
 TMTPKType getTMTPKType(const IDataType & rhs)
 {
     static const DataTypeInt64 & dataTypeInt64 = {}; // NOLINT
@@ -32,15 +120,22 @@ TMTPKType getTMTPKType(const IDataType & rhs)
     return TMTPKType::UNSPECIFIED;
 }
 
-Block createBlockSortByColumnID(DecodingStorageSchemaSnapshotConstPtr schema_snapshot)
+Block createBlockSortByColumnID(DecodingStorageSchemaSnapshotConstPtr schema_snapshot, bool with_version_column)
 {
     Block block;
-    for (auto iter = schema_snapshot->sorted_column_id_with_pos.begin();
-         iter != schema_snapshot->sorted_column_id_with_pos.end();
-         iter++)
+    // # Safety
+    // Though `col_id_to_block_pos` lacks some fields in `col_id_to_def_pos`,
+    // it is always a sub-sequence of `col_id_to_def_pos`.
+    for (const auto & [col_id, def_pos] : schema_snapshot->getColId2DefPosMap())
     {
-        auto col_id = iter->first;
-        auto & cd = (*(schema_snapshot->column_defines))[iter->second];
+        // col_id == cd.id
+        // Including some internal columns:
+        // - (VersionColumnID, _INTERNAL_VERSION, u64)
+        // - (DelMarkColumnID, _INTERNAL_DELMARK, u8)
+        // - (TiDBPkColumnID, _tidb_rowid, i64)
+        auto & cd = (*(schema_snapshot->column_defines))[def_pos];
+        if (!with_version_column && cd.id == VersionColumnID)
+            continue;
         block.insert({cd.type->createColumn(), cd.type, cd.name, col_id});
     }
     return block;

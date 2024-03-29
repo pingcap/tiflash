@@ -20,6 +20,11 @@
 #include <Common/Stopwatch.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/TiFlashMetrics.h>
+#include <IO/BaseFile/PosixRandomAccessFile.h>
+#include <IO/Buffer/ReadBufferFromRandomAccessFile.h>
+#include <IO/Buffer/StdStreamFromReadBuffer.h>
+#include <IO/Buffer/WriteBufferFromWritableFile.h>
+#include <IO/FileProvider/FileProvider.h>
 #include <Interpreters/Context_fwd.h>
 #include <Server/StorageConfigParser.h>
 #include <Storages/S3/Credentials.h>
@@ -70,13 +75,14 @@
 #include <boost/algorithm/string/case_conv.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 #include <filesystem>
-#include <fstream>
 #include <ios>
 #include <magic_enum.hpp>
 #include <memory>
 #include <mutex>
 #include <string_view>
 #include <thread>
+
+
 namespace ProfileEvents
 {
 extern const Event S3HeadObject;
@@ -588,6 +594,8 @@ static bool doUploadFile(
     const TiFlashS3Client & client,
     const String & local_fname,
     const String & remote_fname,
+    const EncryptionPath & encryption_path,
+    const FileProviderPtr & file_provider,
     Int32 max_retry_times,
     Int32 current_retry)
 {
@@ -596,10 +604,21 @@ static bool doUploadFile(
     Aws::S3::Model::PutObjectRequest req;
     client.setBucketAndKeyWithRoot(req, remote_fname);
     req.SetContentType("binary/octet-stream");
-    auto istr
-        = Aws::MakeShared<Aws::FStream>("PutObjectInputStream", local_fname, std::ios_base::in | std::ios_base::binary);
-    RUNTIME_CHECK_MSG(istr->is_open(), "Open {} fail: {}", local_fname, strerror(errno));
     auto write_bytes = std::filesystem::file_size(local_fname);
+    RandomAccessFilePtr local_file;
+    if (file_provider)
+    {
+        local_file = file_provider->newRandomAccessFile(local_fname, encryption_path, nullptr);
+    }
+    else
+    {
+        local_file = PosixRandomAccessFile::create(local_fname);
+    }
+    // Read at most 1MB each time.
+    auto read_buf
+        = std::make_unique<ReadBufferFromRandomAccessFile>(local_file, std::min(1 * 1024 * 1024, write_bytes));
+    auto istr = Aws::MakeShared<StdStreamFromReadBuffer>("PutObjectInputStream", std::move(read_buf), write_bytes);
+    req.SetContentLength(write_bytes);
     req.SetBody(istr);
     ProfileEvents::increment(is_dmfile ? ProfileEvents::S3PutDMFile : ProfileEvents::S3PutObject);
     if (current_retry > 0)
@@ -658,9 +677,11 @@ void uploadFile(
     const TiFlashS3Client & client,
     const String & local_fname,
     const String & remote_fname,
+    const EncryptionPath & encryption_path,
+    const FileProviderPtr & file_provider,
     int max_retry_times)
 {
-    retryWrapper(doUploadFile, client, local_fname, remote_fname, max_retry_times);
+    retryWrapper(doUploadFile, client, local_fname, remote_fname, encryption_path, file_provider, max_retry_times);
 }
 
 void downloadFile(const TiFlashS3Client & client, const String & local_fname, const String & remote_fname)

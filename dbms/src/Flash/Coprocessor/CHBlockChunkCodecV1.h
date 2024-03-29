@@ -15,9 +15,9 @@
 #pragma once
 
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
-#include <IO/CompressedReadBuffer.h>
-#include <IO/CompressedStream.h>
-#include <IO/CompressedWriteBuffer.h>
+#include <IO/Compression/CompressedReadBuffer.h>
+#include <IO/Compression/CompressedWriteBuffer.h>
+#include <IO/Compression/CompressionMethod.h>
 
 namespace DB
 {

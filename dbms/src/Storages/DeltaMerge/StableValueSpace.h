@@ -14,9 +14,10 @@
 
 #pragma once
 
+#include <Storages/DeltaMerge/DMContext_fwd.h>
 #include <Storages/DeltaMerge/File/ColumnCache.h>
-#include <Storages/DeltaMerge/File/DMFile.h>
-#include <Storages/DeltaMerge/File/DMFilePackFilter.h>
+#include <Storages/DeltaMerge/File/DMFilePackFilter_fwd.h>
+#include <Storages/DeltaMerge/File/DMFile_fwd.h>
 #include <Storages/DeltaMerge/Index/RSResult.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
@@ -29,7 +30,6 @@ namespace DM
 
 struct WriteBatches;
 
-struct DMContext;
 class RSOperator;
 using RSOperatorPtr = std::shared_ptr<RSOperator>;
 
@@ -230,6 +230,7 @@ public:
             UInt64 max_data_version,
             size_t expected_block_size,
             bool enable_handle_clean_read,
+            ReadTag read_tag,
             bool is_fast_scan = false,
             bool enable_del_clean_read = false,
             const std::vector<IdSetPtr> & read_packs = {},

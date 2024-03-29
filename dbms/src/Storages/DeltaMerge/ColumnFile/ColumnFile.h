@@ -18,9 +18,10 @@
 #include <Core/Block.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileDataProvider_fwd.h>
-#include <Storages/DeltaMerge/File/DMFile.h>
+#include <Storages/DeltaMerge/DMContext_fwd.h>
+#include <Storages/DeltaMerge/ReadMode.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
-#include <Storages/DeltaMerge/StoragePool_fwd.h>
+#include <Storages/DeltaMerge/StoragePool/StoragePool_fwd.h>
 #include <Storages/Page/PageDefinesBase.h>
 
 namespace DB
@@ -29,7 +30,6 @@ namespace DM
 {
 static constexpr size_t COLUMN_FILE_SERIALIZE_BUFFER_SIZE = 65536;
 
-struct DMContext;
 class ColumnFile;
 using ColumnFilePtr = std::shared_ptr<ColumnFile>;
 using ColumnFiles = std::vector<ColumnFilePtr>;
@@ -130,7 +130,8 @@ public:
     virtual ColumnFileReaderPtr getReader(
         const DMContext & context,
         const IColumnFileDataProviderPtr & data_provider,
-        const ColumnDefinesPtr & col_defs) const = 0;
+        const ColumnDefinesPtr & col_defs) const
+        = 0;
 
     /// Note: Only ColumnFileInMemory can be appendable. Other ColumnFiles (i.e. ColumnFilePersisted) have
     /// been persisted in the disk and their data will be immutable.
@@ -177,6 +178,8 @@ public:
 
     /// Create a new reader from current reader with different columns to read.
     virtual ColumnFileReaderPtr createNewReader(const ColumnDefinesPtr & col_defs) = 0;
+
+    virtual void setReadTag(ReadTag /*read_tag*/) {}
 };
 
 std::pair<size_t, size_t> copyColumnsData(

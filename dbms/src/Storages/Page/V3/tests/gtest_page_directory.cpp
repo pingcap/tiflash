@@ -15,7 +15,7 @@
 #include <Common/Exception.h>
 #include <Common/FmtUtils.h>
 #include <Common/SyncPoint/Ctl.h>
-#include <Encryption/FileProvider.h>
+#include <IO/FileProvider/FileProvider.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageConstants.h>
@@ -34,6 +34,7 @@
 #include <TestUtils/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TestUtils/TiFlashTestEnv.h>
+#include <common/UInt128.h>
 #include <common/logger_useful.h>
 #include <common/types.h>
 #include <fmt/format.h>
@@ -1296,6 +1297,31 @@ try
         auto normal_id = getNormalPageIdU64(restored_dir, 353, snap);
         EXPECT_EQ(normal_id, 352);
     }
+}
+CATCH
+
+TEST_F(PageDirectoryTest, RestoreWithIdempotentRef)
+try
+{
+    auto provider = DB::tests::TiFlashTestEnv::getDefaultFileProvider();
+    auto path = getTemporaryPath();
+    PSDiskDelegatorPtr delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
+    PageDirectoryFactory<u128::FactoryTrait> factory;
+
+    // Generate an edit with idempotent REF operation
+    const UInt64 filter_seq = 1000;
+    u128::PageEntriesEdit edit;
+    edit.appendRecord({.type = EditRecordType::UPSERT, .page_id = UInt128(10000), .version = PageVersion(53, 1)});
+    edit.appendRecord(
+        {.type = EditRecordType::REF,
+         .page_id = UInt128(90000),
+         .ori_page_id = UInt128(1),
+         .version = PageVersion(51)});
+    edit.appendRecord({.type = EditRecordType::UPSERT, .page_id = UInt128(1), .version = PageVersion(52, 1)});
+    edit.appendRecord({.type = EditRecordType::PUT, .page_id = UInt128(5), .version = PageVersion(1001)});
+
+    auto d = factory.createFromEditForTest(getCurrentTestName(), provider, delegator, edit, filter_seq);
+    EXPECT_EQ(d->getMaxIdAfterRestart(), 90000);
 }
 CATCH
 

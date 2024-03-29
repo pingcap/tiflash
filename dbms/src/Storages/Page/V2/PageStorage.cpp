@@ -16,9 +16,9 @@
 #include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
 #include <Common/assert_cast.h>
-#include <Encryption/FileProvider.h>
-#include <IO/ReadBufferFromMemory.h>
-#include <IO/WriteBufferFromFile.h>
+#include <IO/Buffer/ReadBufferFromMemory.h>
+#include <IO/Buffer/WriteBufferFromFile.h>
+#include <IO/FileProvider/FileProvider.h>
 #include <Poco/File.h>
 #include <Poco/Path.h>
 #include <Storages/Page/PageStorage.h>

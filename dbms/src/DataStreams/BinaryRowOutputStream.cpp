@@ -15,7 +15,7 @@
 #include <Columns/IColumn.h>
 #include <DataStreams/BinaryRowOutputStream.h>
 #include <DataTypes/IDataType.h>
-#include <IO/WriteBuffer.h>
+#include <IO/Buffer/WriteBuffer.h>
 
 
 namespace DB

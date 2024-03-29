@@ -13,82 +13,16 @@
 // limitations under the License.
 
 #pragma once
-#include <Storages/KVStore/MultiRaft/RegionMeta.h>
-#include <Storages/KVStore/MultiRaft/RegionPersister.h>
-#include <Storages/KVStore/TiKVHelpers/TiKVRecordFormat.h>
+#include <Debug/MockKVStore/MockUtils.h>
+#include <Debug/dbgKVStore/dbgRegion.h>
 
 #include <optional>
 
 namespace DB::tests
 {
-
-inline metapb::Peer createPeer(UInt64 id, bool)
-{
-    metapb::Peer peer;
-    peer.set_id(id);
-    return peer;
-}
-
-inline metapb::Region createRegionInfo(
-    UInt64 id,
-    const std::string start_key,
-    const std::string end_key,
-    std::optional<metapb::RegionEpoch> maybe_epoch = std::nullopt,
-    std::optional<std::vector<metapb::Peer>> maybe_peers = std::nullopt)
-{
-    metapb::Region region_info;
-    region_info.set_id(id);
-    region_info.set_start_key(start_key);
-    region_info.set_end_key(end_key);
-    if (maybe_epoch)
-    {
-        *region_info.mutable_region_epoch() = (maybe_epoch.value());
-    }
-    else
-    {
-        region_info.mutable_region_epoch()->set_version(5);
-        region_info.mutable_region_epoch()->set_version(6);
-    }
-    if (maybe_peers)
-    {
-        const auto & peers = maybe_peers.value();
-        for (const auto & peer : peers)
-        {
-            *(region_info.mutable_peers()->Add()) = peer;
-        }
-    }
-    else
-    {
-        *(region_info.mutable_peers()->Add()) = createPeer(1, true);
-        *(region_info.mutable_peers()->Add()) = createPeer(2, false);
-    }
-
-    return region_info;
-}
-
-inline RegionMeta createRegionMeta(
-    UInt64 id,
-    DB::TableID table_id,
-    std::optional<raft_serverpb::RaftApplyState> apply_state = std::nullopt)
-{
-    return RegionMeta(
-        /*peer=*/createPeer(31, true),
-        /*region=*/createRegionInfo(id, RecordKVFormat::genKey(table_id, 0), RecordKVFormat::genKey(table_id, 300)),
-        /*apply_state_=*/apply_state.value_or(initialApplyState()));
-}
-
-inline RegionPtr makeRegion(
-    UInt64 id,
-    const std::string start_key,
-    const std::string end_key,
-    const TiFlashRaftProxyHelper * proxy_helper = nullptr)
-{
-    return std::make_shared<Region>(
-        RegionMeta(
-            createPeer(2, true),
-            createRegionInfo(id, std::move(start_key), std::move(end_key)),
-            initialApplyState()),
-        proxy_helper);
-}
-
+using DB::RegionBench::createPeer;
+using DB::RegionBench::createRegionInfo;
+using DB::RegionBench::createRegionMeta;
+using DB::RegionBench::DebugRegion;
+using DB::RegionBench::makeRegion;
 } // namespace DB::tests

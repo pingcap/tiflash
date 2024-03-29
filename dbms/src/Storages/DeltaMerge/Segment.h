@@ -24,6 +24,7 @@
 #include <Storages/DeltaMerge/DeltaTree.h>
 #include <Storages/DeltaMerge/Range.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
+#include <Storages/DeltaMerge/Segment_fwd.h>
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
 #include <Storages/DeltaMerge/StableValueSpace.h>
 #include <Storages/KVStore/MultiRaft/Disagg/CheckpointInfo.h>
@@ -32,7 +33,6 @@
 
 namespace DB::DM
 {
-class Segment;
 struct SegmentSnapshot;
 using SegmentSnapshotPtr = std::shared_ptr<SegmentSnapshot>;
 class StableValueSpace;
@@ -43,10 +43,6 @@ class RSOperator;
 using RSOperatorPtr = std::shared_ptr<RSOperator>;
 class PushDownFilter;
 using PushDownFilterPtr = std::shared_ptr<PushDownFilter>;
-
-using SegmentPtr = std::shared_ptr<Segment>;
-using SegmentPair = std::pair<SegmentPtr, SegmentPtr>;
-using Segments = std::vector<SegmentPtr>;
 
 enum class ReadMode;
 
@@ -113,10 +109,13 @@ public:
             , read_columns(read_columns_)
         {}
 
-        DeltaValueReaderPtr getDeltaReader() const { return delta_reader->createNewReader(read_columns); }
-        DeltaValueReaderPtr getDeltaReader(ColumnDefinesPtr columns) const
+        DeltaValueReaderPtr getDeltaReader(ReadTag read_tag) const
         {
-            return delta_reader->createNewReader(columns);
+            return delta_reader->createNewReader(read_columns, read_tag);
+        }
+        DeltaValueReaderPtr getDeltaReader(ColumnDefinesPtr columns, ReadTag read_tag) const
+        {
+            return delta_reader->createNewReader(columns, read_tag);
         }
     };
 
@@ -580,6 +579,9 @@ public:
     void setValidDataRatioChecked() { check_valid_data_ratio.store(true, std::memory_order_relaxed); }
 
     void drop(const FileProviderPtr & file_provider, WriteBatches & wbs);
+    /// Only used in FAP.
+    /// Drop a segment built with invalid id.
+    void dropAsFAPTemp(const FileProviderPtr & file_provider, WriteBatches & wbs);
 
     bool isFlushing() const { return delta->isFlushing(); }
 
@@ -606,6 +608,7 @@ public:
         const ColumnDefines & read_columns,
         const SegmentSnapshotPtr & segment_snap,
         const RowKeyRanges & read_ranges,
+        ReadTag read_tag,
         UInt64 max_version = std::numeric_limits<UInt64>::max()) const;
 
     static ColumnDefinesPtr arrangeReadColumns(const ColumnDefine & handle, const ColumnDefines & columns_to_read);
@@ -622,6 +625,7 @@ public:
         const IndexIterator & delta_index_begin,
         const IndexIterator & delta_index_end,
         size_t expected_block_size,
+        ReadTag read_tag,
         UInt64 max_version = std::numeric_limits<UInt64>::max(),
         bool need_row_id = false);
 

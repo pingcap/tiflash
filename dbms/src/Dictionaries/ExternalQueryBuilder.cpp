@@ -15,8 +15,8 @@
 #include <Dictionaries/DictionaryStructure.h>
 #include <Dictionaries/ExternalQueryBuilder.h>
 #include <Dictionaries/writeParenthesisedString.h>
-#include <IO/WriteBuffer.h>
-#include <IO/WriteBufferFromString.h>
+#include <IO/Buffer/WriteBuffer.h>
+#include <IO/Buffer/WriteBufferFromString.h>
 #include <IO/WriteHelpers.h>
 
 #include <boost/range/join.hpp>

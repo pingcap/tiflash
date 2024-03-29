@@ -17,7 +17,7 @@
 #include <Common/FileChangesTracker.h>
 #include <Common/grpcpp.h>
 #include <Core/Types.h>
-#include <IO/createReadBufferFromFileBase.h>
+#include <IO/Buffer/ReadBufferFromFile.h>
 #include <Poco/Crypto/X509Certificate.h>
 #include <Poco/String.h>
 #include <Poco/StringTokenizer.h>
@@ -212,7 +212,7 @@ private:
         {
             return "";
         }
-        auto buffer = createReadBufferFromFileBase(filename, 1024, 0);
+        auto buffer = std::make_unique<ReadBufferFromFile>(filename);
         String result;
         while (!buffer->eof())
         {

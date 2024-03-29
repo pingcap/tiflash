@@ -20,6 +20,7 @@
 #include <Storages/DeltaMerge/Remote/DataStore/DataStoreMock.h>
 #include <Storages/DeltaMerge/Remote/DisaggSnapshot.h>
 #include <Storages/DeltaMerge/Remote/Serializer.h>
+#include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/DeltaMerge/SegmentReadTask.h>
 #include <Storages/DeltaMerge/tests/gtest_dm_delta_merge_store_test_basic.h>
 #include <Storages/DeltaMerge/tests/gtest_segment_test_basic.h>
@@ -269,6 +270,78 @@ public:
 
         ASSERT_INPUTSTREAM_BLOCKS(local_stream, remote_blks);
     }
+
+    static void checkDMFile(const DMFilePtr & dmfile_wn, const DMFilePtr & dmfile_cn)
+    {
+        ASSERT_EQ(dmfile_wn->file_id, dmfile_cn->file_id);
+        ASSERT_EQ(dmfile_wn->page_id, dmfile_cn->page_id);
+        ASSERT_EQ(dmfile_wn->parent_path, dmfile_cn->parent_path);
+        ASSERT_EQ(dmfile_wn->status, dmfile_cn->status);
+        ASSERT_EQ(dmfile_wn->version, dmfile_cn->version);
+
+        ASSERT_TRUE(dmfile_wn->configuration.has_value());
+        ASSERT_TRUE(dmfile_cn->configuration.has_value());
+        ASSERT_EQ(
+            dmfile_wn->configuration->getChecksumFrameLength(),
+            dmfile_cn->configuration->getChecksumFrameLength());
+        ASSERT_EQ(
+            dmfile_wn->configuration->getChecksumHeaderLength(),
+            dmfile_cn->configuration->getChecksumHeaderLength());
+        ASSERT_EQ(dmfile_wn->configuration->getChecksumAlgorithm(), dmfile_cn->configuration->getChecksumAlgorithm());
+        ASSERT_EQ(dmfile_wn->configuration->getEmbeddedChecksum(), dmfile_cn->configuration->getEmbeddedChecksum());
+        ASSERT_EQ(dmfile_wn->configuration->getDebugInfo(), dmfile_cn->configuration->getDebugInfo());
+
+        ASSERT_EQ(dmfile_wn->pack_stats.size(), dmfile_cn->pack_stats.size());
+        for (size_t j = 0; j < dmfile_wn->pack_stats.size(); j++)
+        {
+            ASSERT_EQ(dmfile_wn->pack_stats[j].toDebugString(), dmfile_cn->pack_stats[j].toDebugString());
+        }
+
+        ASSERT_EQ(dmfile_wn->pack_properties.property_size(), dmfile_cn->pack_properties.property_size());
+        for (int j = 0; j < dmfile_wn->pack_properties.property_size(); j++)
+        {
+            ASSERT_EQ(
+                dmfile_wn->pack_properties.property(j).ShortDebugString(),
+                dmfile_cn->pack_properties.property(j).ShortDebugString());
+        }
+
+        ASSERT_EQ(dmfile_wn->column_stats.size(), dmfile_cn->column_stats.size());
+        for (const auto & [col_id, col_stat_wn] : dmfile_wn->column_stats)
+        {
+            auto itr = dmfile_cn->column_stats.find(col_id);
+            ASSERT_NE(itr, dmfile_cn->column_stats.end());
+            const auto & col_stat_cn = itr->second;
+            WriteBufferFromOwnString wb_wn;
+            col_stat_wn.serializeToBuffer(wb_wn);
+            WriteBufferFromOwnString wb_cn;
+            col_stat_cn.serializeToBuffer(wb_cn);
+            ASSERT_EQ(wb_wn.str(), wb_cn.str());
+        }
+
+        ASSERT_EQ(dmfile_wn->column_indices, dmfile_cn->column_indices);
+
+        ASSERT_EQ(dmfile_wn->merged_files.size(), dmfile_cn->merged_files.size());
+        for (size_t j = 0; j < dmfile_wn->merged_files.size(); j++)
+        {
+            const auto & merged_file_wn = dmfile_wn->merged_files[j];
+            const auto & merged_file_cn = dmfile_cn->merged_files[j];
+            ASSERT_EQ(merged_file_wn.number, merged_file_cn.number);
+            ASSERT_EQ(merged_file_wn.size, merged_file_cn.size);
+        }
+
+        ASSERT_EQ(dmfile_wn->merged_sub_file_infos.size(), dmfile_cn->merged_sub_file_infos.size());
+        for (const auto & [fname, sub_files_wn] : dmfile_wn->merged_sub_file_infos)
+        {
+            auto itr = dmfile_cn->merged_sub_file_infos.find(fname);
+            ASSERT_NE(itr, dmfile_cn->merged_sub_file_infos.end());
+            const auto & sub_files_cn = itr->second;
+            WriteBufferFromOwnString wb_wn;
+            sub_files_wn.serializeToBuffer(wb_wn);
+            WriteBufferFromOwnString wb_cn;
+            sub_files_cn.serializeToBuffer(wb_cn);
+            ASSERT_EQ(wb_wn.str(), wb_cn.str());
+        }
+    };
 };
 
 TEST_F(DMStoreForSegmentReadTaskTest, DisaggReadSnapshot)
@@ -388,78 +461,6 @@ try
             ASSERT_TRUE(blockEqual(cf_wn->getCache()->block, cf_cn->getCache()->block, msg));
         }
 
-        auto check_dmfile = [](const DMFilePtr & dmfile_wn, const DMFilePtr & dmfile_cn) {
-            ASSERT_EQ(dmfile_wn->file_id, dmfile_cn->file_id);
-            ASSERT_EQ(dmfile_wn->page_id, dmfile_cn->page_id);
-            ASSERT_EQ(dmfile_wn->parent_path, dmfile_cn->parent_path);
-            ASSERT_EQ(dmfile_wn->status, dmfile_cn->status);
-            ASSERT_EQ(dmfile_wn->version, dmfile_cn->version);
-
-            ASSERT_TRUE(dmfile_wn->configuration.has_value());
-            ASSERT_TRUE(dmfile_cn->configuration.has_value());
-            ASSERT_EQ(
-                dmfile_wn->configuration->getChecksumFrameLength(),
-                dmfile_cn->configuration->getChecksumFrameLength());
-            ASSERT_EQ(
-                dmfile_wn->configuration->getChecksumHeaderLength(),
-                dmfile_cn->configuration->getChecksumHeaderLength());
-            ASSERT_EQ(
-                dmfile_wn->configuration->getChecksumAlgorithm(),
-                dmfile_cn->configuration->getChecksumAlgorithm());
-            ASSERT_EQ(dmfile_wn->configuration->getEmbeddedChecksum(), dmfile_cn->configuration->getEmbeddedChecksum());
-            ASSERT_EQ(dmfile_wn->configuration->getDebugInfo(), dmfile_cn->configuration->getDebugInfo());
-
-            ASSERT_EQ(dmfile_wn->pack_stats.size(), dmfile_cn->pack_stats.size());
-            for (size_t j = 0; j < dmfile_wn->pack_stats.size(); j++)
-            {
-                ASSERT_EQ(dmfile_wn->pack_stats[j].toDebugString(), dmfile_cn->pack_stats[j].toDebugString());
-            }
-
-            ASSERT_EQ(dmfile_wn->pack_properties.property_size(), dmfile_cn->pack_properties.property_size());
-            for (int j = 0; j < dmfile_wn->pack_properties.property_size(); j++)
-            {
-                ASSERT_EQ(
-                    dmfile_wn->pack_properties.property(j).ShortDebugString(),
-                    dmfile_cn->pack_properties.property(j).ShortDebugString());
-            }
-
-            ASSERT_EQ(dmfile_wn->column_stats.size(), dmfile_cn->column_stats.size());
-            for (const auto & [col_id, col_stat_wn] : dmfile_wn->column_stats)
-            {
-                auto itr = dmfile_cn->column_stats.find(col_id);
-                ASSERT_NE(itr, dmfile_cn->column_stats.end());
-                const auto & col_stat_cn = itr->second;
-                WriteBufferFromOwnString wb_wn;
-                col_stat_wn.serializeToBuffer(wb_wn);
-                WriteBufferFromOwnString wb_cn;
-                col_stat_cn.serializeToBuffer(wb_cn);
-                ASSERT_EQ(wb_wn.str(), wb_cn.str());
-            }
-
-            ASSERT_EQ(dmfile_wn->column_indices, dmfile_cn->column_indices);
-
-            ASSERT_EQ(dmfile_wn->merged_files.size(), dmfile_cn->merged_files.size());
-            for (size_t j = 0; j < dmfile_wn->merged_files.size(); j++)
-            {
-                const auto & merged_file_wn = dmfile_wn->merged_files[j];
-                const auto & merged_file_cn = dmfile_cn->merged_files[j];
-                ASSERT_EQ(merged_file_wn.number, merged_file_cn.number);
-                ASSERT_EQ(merged_file_wn.size, merged_file_cn.size);
-            }
-
-            ASSERT_EQ(dmfile_wn->merged_sub_file_infos.size(), dmfile_cn->merged_sub_file_infos.size());
-            for (const auto & [fname, sub_files_wn] : dmfile_wn->merged_sub_file_infos)
-            {
-                auto itr = dmfile_cn->merged_sub_file_infos.find(fname);
-                ASSERT_NE(itr, dmfile_cn->merged_sub_file_infos.end());
-                const auto & sub_files_cn = itr->second;
-                WriteBufferFromOwnString wb_wn;
-                sub_files_wn.serializeToBuffer(wb_wn);
-                WriteBufferFromOwnString wb_cn;
-                sub_files_cn.serializeToBuffer(wb_cn);
-                ASSERT_EQ(wb_wn.str(), wb_cn.str());
-            }
-        };
 
         // cf persist set
         auto persist_set_wn = delta_wn->getPersistedFileSet();
@@ -486,7 +487,7 @@ try
                 ASSERT_NE(cf_big_wn, nullptr);
                 auto * cf_big_cn = cf_cn->tryToBigFile();
                 ASSERT_NE(cf_big_cn, nullptr);
-                check_dmfile(cf_big_wn->getFile(), cf_big_cn->getFile());
+                checkDMFile(cf_big_wn->getFile(), cf_big_cn->getFile());
             }
             else
             {
@@ -509,7 +510,7 @@ try
         {
             const auto & dmfile_wn = stable_wn->getDMFiles()[i];
             const auto & dmfile_cn = stable_cn->getDMFiles()[i];
-            check_dmfile(dmfile_wn, dmfile_cn);
+            checkDMFile(dmfile_wn, dmfile_cn);
         }
     }
 }

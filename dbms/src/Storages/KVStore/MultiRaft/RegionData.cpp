@@ -48,7 +48,7 @@ void RegionData::reportDelta(size_t prev, size_t current)
     }
 }
 
-size_t RegionData::insert(ColumnFamilyType cf, TiKVKey && key, TiKVValue && value, DupCheck mode)
+RegionDataRes RegionData::insert(ColumnFamilyType cf, TiKVKey && key, TiKVValue && value, DupCheck mode)
 {
     switch (cf)
     {
@@ -68,8 +68,16 @@ size_t RegionData::insert(ColumnFamilyType cf, TiKVKey && key, TiKVValue && valu
     }
     case ColumnFamilyType::Lock:
     {
-        // lock cf is not count into the size of RegionData
-        lock_cf.insert(std::move(key), std::move(value), mode);
+        auto delta = lock_cf.insert(std::move(key), std::move(value), mode);
+        cf_data_size += delta;
+        if likely (delta >= 0)
+        {
+            reportAlloc(delta);
+        }
+        else
+        {
+            reportDealloc(-delta);
+        }
         return 0;
     }
     }
@@ -103,7 +111,10 @@ void RegionData::remove(ColumnFamilyType cf, const TiKVKey & key)
     }
     case ColumnFamilyType::Lock:
     {
-        lock_cf.remove(RegionLockCFDataTrait::Key{nullptr, std::string_view(key.data(), key.dataSize())}, true);
+        auto delta
+            = lock_cf.remove(RegionLockCFDataTrait::Key{nullptr, std::string_view(key.data(), key.dataSize())}, true);
+        cf_data_size -= delta;
+        reportDealloc(delta);
         return;
     }
     }
@@ -156,62 +167,25 @@ std::optional<RegionDataReadInfo> RegionData::readDataByWriteIt(
     }
 
     if (!need_value)
-        return std::make_tuple(pk, decoded_val.write_type, ts, nullptr);
+        return RegionDataReadInfo{pk, decoded_val.write_type, ts, nullptr};
 
     if (decoded_val.write_type != RecordKVFormat::CFModifyFlag::PutFlag)
-        return std::make_tuple(pk, decoded_val.write_type, ts, nullptr);
+        return RegionDataReadInfo{pk, decoded_val.write_type, ts, nullptr};
 
     std::string orphan_key_debug_msg;
     if (!decoded_val.short_value)
     {
         const auto & map = default_cf.getData();
         if (auto data_it = map.find({pk, decoded_val.prewrite_ts}); data_it != map.end())
-            return std::make_tuple(pk, decoded_val.write_type, ts, RegionDefaultCFDataTrait::getTiKVValue(data_it));
+            return RegionDataReadInfo{pk, decoded_val.write_type, ts, RegionDefaultCFDataTrait::getTiKVValue(data_it)};
         else
         {
             if (!hard_error)
             {
-                if (orphan_keys_info.pre_handling)
+                if (orphan_keys_info.omitOrphanWriteKey(key))
                 {
-                    RUNTIME_CHECK_MSG(
-                        orphan_keys_info.snapshot_index.has_value(),
-                        "Snapshot index shall be set when Applying snapshot");
-                    // While pre-handling snapshot from raftstore v2, we accept and store the orphan keys in memory
-                    // These keys should be resolved in later raft logs
-                    orphan_keys_info.observeExtraKey(TiKVKey::copyFrom(*key));
                     return std::nullopt;
                 }
-                else
-                {
-                    // We can't delete this orphan key here, since it can be triggered from `onSnapshot`.
-                    if (orphan_keys_info.snapshot_index.has_value())
-                    {
-                        if (orphan_keys_info.containsExtraKey(*key))
-                        {
-                            return std::nullopt;
-                        }
-                        // We can't throw here, since a PUT write may be replayed while its corresponding default not replayed.
-                        // TODO Parse some extra data to tell the difference.
-                        return std::nullopt;
-                    }
-                    else
-                    {
-                        // After restart, we will lose all orphan key info. We we can't do orphan key checking for now.
-                        // So we print out a log here, and neglect the error.
-                        // TODO We currently comment this line, since it will cause too many log outputs.
-                        // We will also tried to recover the state from cached apply snapshot after restart.
-                        // LOG_INFO(&Poco::Logger::get("RegionData"), "Orphan key info lost after restart, Raw TiDB PK: {}, Prewrite ts: {} can not found in default cf for key: {}, region_id: {}, applied: {}", pk.toDebugString(), decoded_val.prewrite_ts, key->toDebugString(), region_id, applied);
-                        return std::nullopt;
-                    }
-
-                    // Otherwise, this is still a hard error.
-                    // TODO We still need to check if there are remained orphan keys after we have applied after peer's flushed_index.
-                    // Since the registered orphan write key may come from a raft log smaller than snapshot_index with its default key lost,
-                    // thus this write key will not be replicated any more, which cause a slient data loss.
-                }
-            }
-            if (!hard_error)
-            {
                 orphan_key_debug_msg = fmt::format(
                     "orphan_info: ({}, snapshot_index: {}, {}, orphan key size {})",
                     hard_error ? "" : ", not orphan key",
@@ -235,7 +209,7 @@ std::optional<RegionDataReadInfo> RegionData::readDataByWriteIt(
         }
     }
 
-    return std::make_tuple(pk, decoded_val.write_type, ts, decoded_val.short_value);
+    return RegionDataReadInfo{pk, decoded_val.write_type, ts, decoded_val.short_value};
 }
 
 DecodedLockCFValuePtr RegionData::getLockInfo(const RegionLockReadQuery & query) const
@@ -259,6 +233,28 @@ DecodedLockCFValuePtr RegionData::getLockInfo(const RegionLockReadQuery & query)
         return lock_info_ptr;
     }
 
+    return nullptr;
+}
+
+std::shared_ptr<const TiKVValue> RegionData::getLockByKey(const TiKVKey & key) const
+{
+    const auto & map = lock_cf.getData();
+    const auto & lock_key = RegionLockCFDataTrait::Key{nullptr, std::string_view(key.data(), key.dataSize())};
+    if (auto lock_it = map.find(lock_key); lock_it != map.end())
+    {
+        const auto & [tikv_key, tikv_val, lock_info_ptr] = lock_it->second;
+        std::ignore = tikv_key;
+        std::ignore = lock_info_ptr;
+        return tikv_val;
+    }
+
+    // It is safe to ignore the missing lock key after restart, print a warning log and return nullptr
+    LOG_WARNING(
+        Logger::get(),
+        "Failed to get lock by key in region data, key={} map_size={} count={}",
+        key.toDebugString(),
+        map.size(),
+        map.count(lock_key));
     return nullptr;
 }
 
@@ -362,64 +358,6 @@ RegionData & RegionData::operator=(RegionData && rhs)
     reportDelta(cf_data_size, rhs.cf_data_size.load());
     cf_data_size = rhs.cf_data_size.load();
     return *this;
-}
-
-void RegionData::OrphanKeysInfo::observeExtraKey(TiKVKey && key)
-{
-    remained_keys.insert(std::move(key));
-}
-
-bool RegionData::OrphanKeysInfo::observeKeyFromNormalWrite(const TiKVKey & key)
-{
-    bool res = remained_keys.erase(key);
-    if (res)
-    {
-        // TODO since the check is temporarily disabled, we comment this to avoid extra memory cost.
-        // If we erased something, log that.
-        // So if we meet this key later due to some unknown replay mechanism, we can know it is a replayed orphan key.
-        // removed_remained_keys.insert(TiKVKey::copyFromObj(key));
-    }
-    return res;
-}
-
-bool RegionData::OrphanKeysInfo::containsExtraKey(const TiKVKey & key)
-{
-    return remained_keys.contains(key);
-}
-
-uint64_t RegionData::OrphanKeysInfo::remainedKeyCount() const
-{
-    return remained_keys.size();
-}
-
-void RegionData::OrphanKeysInfo::mergeFrom(const RegionData::OrphanKeysInfo & other)
-{
-    // TODO support move.
-    for (const auto & remained_key : other.remained_keys)
-    {
-        remained_keys.insert(TiKVKey::copyFrom(remained_key));
-    }
-}
-
-void RegionData::OrphanKeysInfo::advanceAppliedIndex(uint64_t applied_index)
-{
-    if (deadline_index && snapshot_index)
-    {
-        auto count = remainedKeyCount();
-        if (applied_index >= deadline_index.value() && count > 0)
-        {
-            auto one = remained_keys.begin()->toDebugString();
-            throw Exception(fmt::format(
-                "Orphan keys from snapshot still exists. One of total {} is {}. region_id={} snapshot_index={} "
-                "deadline_index={} applied_index={}",
-                count,
-                one,
-                region_id,
-                snapshot_index.value(),
-                deadline_index.value(),
-                applied_index));
-        }
-    }
 }
 
 } // namespace DB

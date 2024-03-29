@@ -130,6 +130,8 @@ constexpr UInt64 NO_ENGINE_SUBSTITUTION = 1ul << 30ul;
 constexpr UInt64 ALLOW_INVALID_DATES = 1ul << 32ul;
 } // namespace TiDBSQLMode
 
+constexpr Int32 DEFAULT_DIV_PRECISION_INCREMENT = 4;
+
 enum class ExecutionMode
 {
     None,
@@ -277,6 +279,10 @@ public:
     void delSQLMode(UInt64 f) { sql_mode &= (~f); }
     bool hasSQLMode(UInt64 f) const { return sql_mode & f; }
 
+    Int32 getDivPrecisionIncrement() const { return div_precision_increment; }
+    // for test usage only
+    void setDivPrecisionIncrement(Int32 new_value) { div_precision_increment = new_value; }
+
     void updateFinalConcurrency(size_t cur_streams_size, size_t streams_upper_limit);
 
     ExchangeReceiverPtr getMPPExchangeReceiver(const String & executor_id) const;
@@ -314,7 +320,7 @@ public:
     // For now, only called for BlockIO execution engine to disable report RU of storage layer.
     void clearResourceGroupName() { resource_group_name = ""; }
 
-    RU getReadRU() const;
+    UInt64 getReadBytes() const;
 
     void switchToStreamMode()
     {
@@ -426,6 +432,7 @@ private:
 
     UInt64 flags;
     UInt64 sql_mode;
+    Int32 div_precision_increment = DEFAULT_DIV_PRECISION_INCREMENT;
     mpp::TaskMeta mpp_task_meta;
     const MPPTaskId mpp_task_id = MPPTaskId::unknown_mpp_task_id;
     // The task id for disaggregated read

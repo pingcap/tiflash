@@ -14,7 +14,7 @@
 
 #include <Interpreters/Context.h>
 #include <Poco/Logger.h>
-#include <Storages/DeltaMerge/StoragePool.h>
+#include <Storages/DeltaMerge/StoragePool/StoragePool.h>
 #include <Storages/Page/PageStorage.h>
 #include <Storages/Page/WriteBatchImpl.h>
 #include <Storages/Page/WriteBatchWrapperImpl.h>

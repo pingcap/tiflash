@@ -22,7 +22,6 @@
 
 #include <atomic>
 #include <ext/singleton.h>
-#include <memory>
 #include <optional>
 #include <vector>
 
@@ -41,6 +40,8 @@ namespace DB
 class TMTContext;
 struct EngineStoreServerWrap;
 struct TiFlashRaftProxyHelper;
+
+using String = std::string;
 
 struct EngineStoreServerWrap
 {
@@ -107,6 +108,8 @@ struct TiFlashRaftProxyHelper : RaftStoreProxyFFIHelper
     FileEncryptionInfo newFile(const std::string &) const;
     FileEncryptionInfo deleteFile(const std::string &) const;
     FileEncryptionInfo linkFile(const std::string &, const std::string &) const;
+    String getMasterKey() const;
+    bool getKeyspaceEncryption(uint32_t keyspace_id) const;
     BatchReadIndexRes batchReadIndex_v1(const std::vector<kvrpcpb::ReadIndexRequest> &, uint64_t) const;
     BatchReadIndexRes batchReadIndex(const std::vector<kvrpcpb::ReadIndexRequest> &, uint64_t) const;
     BatchReadIndexRes batchReadIndex_v2(const std::vector<kvrpcpb::ReadIndexRequest> &, uint64_t) const;
@@ -172,6 +175,7 @@ RawCppPtr PreHandleSnapshot(
 void ApplyPreHandledSnapshot(EngineStoreServerWrap * server, void * res, RawCppPtrType type);
 void AbortPreHandledSnapshot(EngineStoreServerWrap * server, uint64_t region_id, uint64_t peer_id);
 void ReleasePreHandledSnapshot(EngineStoreServerWrap * server, void * res, RawCppPtrType type);
+BaseBuffView GetLockByKey(const EngineStoreServerWrap * server, uint64_t region_id, BaseBuffView key);
 HttpRequestRes HandleHttpRequest(EngineStoreServerWrap *, BaseBuffView path, BaseBuffView query, BaseBuffView body);
 uint8_t CheckHttpUriAvailable(BaseBuffView);
 void GcRawCppPtr(void * ptr, RawCppPtrType type);
@@ -187,7 +191,32 @@ void HandleSafeTSUpdate(
     uint64_t self_safe_ts,
     uint64_t leader_safe_ts);
 FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, uint64_t new_peer_id);
-void ApplyFapSnapshot(EngineStoreServerWrap * server, uint64_t region_id, uint64_t peer_id);
+uint8_t ApplyFapSnapshot(
+    EngineStoreServerWrap * server,
+    uint64_t region_id,
+    uint64_t peer_id,
+    uint8_t assert_exist,
+    uint64_t index,
+    uint64_t term);
+FapSnapshotState QueryFapSnapshotState(
+    EngineStoreServerWrap * server,
+    uint64_t region_id,
+    uint64_t peer_id,
+    uint64_t index,
+    uint64_t term);
+void ClearFapSnapshot(EngineStoreServerWrap * server, uint64_t region_id);
+bool KvstoreRegionExists(EngineStoreServerWrap * server, uint64_t region_id);
+void ReportThreadAllocateInfo(
+    EngineStoreServerWrap *,
+    uint64_t tid,
+    BaseBuffView name,
+    ReportThreadAllocateInfoType type,
+    uint64_t value);
+void ReportThreadAllocateBatch(
+    EngineStoreServerWrap *,
+    uint64_t tid,
+    BaseBuffView name,
+    ReportThreadAllocateInfoBatch data);
 }
 
 inline EngineStoreServerHelper GetEngineStoreServerHelper(EngineStoreServerWrap * tiflash_instance_wrap)
@@ -237,6 +266,11 @@ inline EngineStoreServerHelper GetEngineStoreServerHelper(EngineStoreServerWrap 
         .fn_set_pb_msg_by_bytes = SetPBMsByBytes,
         .fn_handle_safe_ts_update = HandleSafeTSUpdate,
         .fn_fast_add_peer = FastAddPeer,
+        .fn_query_fap_snapshot_state = QueryFapSnapshotState,
+        .fn_clear_fap_snapshot = ClearFapSnapshot,
+        .fn_kvstore_region_exists = KvstoreRegionExists,
+        .fn_report_thread_allocate_info = ReportThreadAllocateInfo,
+        .fn_report_thread_allocate_batch = ReportThreadAllocateBatch,
     };
 }
 

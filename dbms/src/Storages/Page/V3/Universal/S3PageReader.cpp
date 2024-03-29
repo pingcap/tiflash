@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <IO/ReadBufferFromRandomAccessFile.h>
+#include <IO/Buffer/ReadBufferFromRandomAccessFile.h>
 #include <Storages/Page/V3/Universal/S3PageReader.h>
 #include <Storages/Page/V3/Universal/UniversalPageIdFormatImpl.h>
 #include <Storages/S3/S3Common.h>

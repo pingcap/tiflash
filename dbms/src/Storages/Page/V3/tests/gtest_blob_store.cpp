@@ -14,8 +14,8 @@
 
 #include <Common/FailPoint.h>
 #include <Common/Logger.h>
-#include <Encryption/RateLimiter.h>
-#include <IO/ReadBufferFromMemory.h>
+#include <IO/BaseFile/RateLimiter.h>
+#include <IO/Buffer/ReadBufferFromMemory.h>
 #include <Poco/Logger.h>
 #include <Storages/Page/PageConstants.h>
 #include <Storages/Page/PageDefinesBase.h>
@@ -167,38 +167,43 @@ try
 
     // Generate blob [1,2,3]
     auto write_blob_datas = [](BlobStore & blob_store) {
-        WriteBatch write_batch;
         PageIdU64 page_id = 55;
         size_t buff_size = 1024;
         char c_buff[buff_size];
         memset(c_buff, 0x1, buff_size);
 
         // write blob 1
-        write_batch.putPage(
-            page_id,
-            /* tag */ 0,
-            std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff), buff_size),
-            buff_size);
-        blob_store.write(std::move(write_batch));
-        write_batch.clear();
+        {
+            WriteBatch write_batch;
+            write_batch.putPage(
+                page_id,
+                /* tag */ 0,
+                std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff), buff_size),
+                buff_size);
+            blob_store.write(std::move(write_batch));
+        }
 
         // write blob 2
-        write_batch.putPage(
-            page_id + 1,
-            /* tag */ 0,
-            std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff), buff_size),
-            buff_size);
-        blob_store.write(std::move(write_batch));
-        write_batch.clear();
+        {
+            WriteBatch write_batch;
+            write_batch.putPage(
+                page_id + 1,
+                /* tag */ 0,
+                std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff), buff_size),
+                buff_size);
+            blob_store.write(std::move(write_batch));
+        }
 
         // write blob 3
-        write_batch.putPage(
-            page_id + 2,
-            /* tag */ 0,
-            std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff), buff_size),
-            buff_size);
-        blob_store.write(std::move(write_batch));
-        write_batch.clear();
+        {
+            WriteBatch write_batch;
+            write_batch.putPage(
+                page_id + 2,
+                /* tag */ 0,
+                std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff), buff_size),
+                buff_size);
+            blob_store.write(std::move(write_batch));
+        }
     };
 
     auto check_in_disk_file = [](const Strings & paths, std::vector<BlobFileId> exited_blobs) -> bool {
@@ -679,8 +684,8 @@ try
 
     PageIdU64 page_id = 50;
     const size_t buff_size = 1024;
-    WriteBatch wb;
     {
+        WriteBatch wb;
         char c_buff1[buff_size] = {0};
         char c_buff2[buff_size] = {0};
 
@@ -717,8 +722,8 @@ try
     }
 
 
-    wb.clear();
     {
+        WriteBatch wb;
         wb.putRefPage(page_id + 1, page_id);
         wb.delPage(page_id + 1);
         wb.delPage(page_id);
@@ -742,8 +747,8 @@ try
         ASSERT_EQ(record.page_id.low, page_id);
     }
 
-    wb.clear();
     {
+        WriteBatch wb;
         char c_buff[buff_size];
 
         for (size_t i = 0; i < buff_size; ++i)
@@ -812,38 +817,42 @@ TEST_F(BlobStoreTest, DISABLED_testWriteOutOfLimitSize)
     {
         auto blob_store = BlobStore(getCurrentTestName(), file_provider, delegator, config, page_type_and_config);
 
-        WriteBatch wb;
         char c_buff1[buf_size];
         char c_buff2[buf_size];
 
         ReadBufferPtr buff1 = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff1), buf_size);
         ReadBufferPtr buff2 = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff2), buf_size);
+        {
+            WriteBatch wb;
 
-        wb.putPage(50, /*tag*/ 0, buff1, buf_size);
+            wb.putPage(50, /*tag*/ 0, buff1, buf_size);
 
-        auto edit = blob_store.write(std::move(wb));
-        ASSERT_EQ(edit.size(), 1);
+            auto edit = blob_store.write(std::move(wb));
+            ASSERT_EQ(edit.size(), 1);
 
-        auto records = edit.getRecords();
-        auto record = records[0];
-        ASSERT_EQ(record.type, EditRecordType::PUT);
-        ASSERT_EQ(record.page_id.low, 50);
-        ASSERT_EQ(record.entry.offset, 0);
-        ASSERT_EQ(record.entry.size, buf_size);
-        ASSERT_EQ(record.entry.file_id, 1);
+            auto records = edit.getRecords();
+            auto record = records[0];
+            ASSERT_EQ(record.type, EditRecordType::PUT);
+            ASSERT_EQ(record.page_id.low, 50);
+            ASSERT_EQ(record.entry.offset, 0);
+            ASSERT_EQ(record.entry.size, buf_size);
+            ASSERT_EQ(record.entry.file_id, 1);
+        }
 
-        wb.clear();
-        wb.putPage(51, /*tag*/ 0, buff2, buf_size);
-        edit = blob_store.write(std::move(wb));
-        ASSERT_EQ(edit.size(), 1);
+        {
+            WriteBatch wb;
+            wb.putPage(51, /*tag*/ 0, buff2, buf_size);
+            auto edit = blob_store.write(std::move(wb));
+            ASSERT_EQ(edit.size(), 1);
 
-        records = edit.getRecords();
-        record = records[0];
-        ASSERT_EQ(record.type, EditRecordType::PUT);
-        ASSERT_EQ(record.page_id.low, 51);
-        ASSERT_EQ(record.entry.offset, 0);
-        ASSERT_EQ(record.entry.size, buf_size);
-        ASSERT_EQ(record.entry.file_id, 2);
+            auto records = edit.getRecords();
+            auto record = records[0];
+            ASSERT_EQ(record.type, EditRecordType::PUT);
+            ASSERT_EQ(record.page_id.low, 51);
+            ASSERT_EQ(record.entry.offset, 0);
+            ASSERT_EQ(record.entry.size, buf_size);
+            ASSERT_EQ(record.entry.file_id, 2);
+        }
     }
 }
 
@@ -1151,7 +1160,6 @@ try
         page_type_and_config);
     char c_buff[buff_size * buff_nums];
 
-    WriteBatch wb;
 
     PageDirectory<u128::PageDirectoryTrait>::GcEntriesMap gc_context;
 
@@ -1164,6 +1172,7 @@ try
 
         ReadBufferPtr buff
             = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff + i * buff_size), buff_size);
+        WriteBatch wb;
         wb.putPage(page_id, /* tag */ 0, buff, buff_size);
         PageEntriesEdit edit = blob_store.write(std::move(wb));
 
@@ -1181,7 +1190,6 @@ try
         }
 
         page_id++;
-        wb.clear();
     }
 
     using PageTypeAndGcInfo = typename u128::PageDirectoryType::PageTypeAndGcInfo;
@@ -1211,7 +1219,6 @@ try
         page_type_and_config);
     char c_buff[buff_size * buff_nums];
 
-    WriteBatch wb;
 
     BlobStore::FieldReadInfos read_infos;
     for (size_t i = 0; i < buff_nums; ++i)
@@ -1224,6 +1231,7 @@ try
         ReadBufferPtr buff
             = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff + i * buff_size), buff_size);
         PageFieldSizes field_sizes{1, 2, 4, 8, (buff_size - 1 - 2 - 4 - 8)};
+        WriteBatch wb;
         wb.putPage(page_id, /* tag */ 0, buff, buff_size, field_sizes);
         PageEntriesEdit edit = blob_store.write(std::move(wb));
 
@@ -1233,7 +1241,6 @@ try
             BlobStore::FieldReadInfo(buildV3Id(TEST_NAMESPACE_ID, page_id), records[0].entry, {0, 1, 2, 3, 4}));
 
         page_id++;
-        wb.clear();
     }
 
     auto page_map = blob_store.read(read_infos);

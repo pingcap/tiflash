@@ -15,9 +15,9 @@
 #include <Common/Exception.h>
 #include <Common/SimpleCache.h>
 #include <Common/StringUtils/StringUtils.h>
-#include <IO/HexWriteBuffer.h>
+#include <IO/Buffer/HexWriteBuffer.h>
+#include <IO/Buffer/WriteBufferFromString.h>
 #include <IO/ReadHelpers.h>
-#include <IO/WriteBufferFromString.h>
 #include <IO/WriteHelpers.h>
 #include <Interpreters/Quota.h>
 #include <Interpreters/Users.h>

@@ -84,6 +84,7 @@ AggregateFunctionPtr createDecimalFunction(const IDataType * p)
 
 template <template <typename> class Function, typename Name>
 AggregateFunctionPtr createAggregateFunctionSum(
+    const Context & /* context not used */,
     const std::string & name,
     const DataTypes & argument_types,
     const Array & parameters)
@@ -95,15 +96,9 @@ AggregateFunctionPtr createAggregateFunctionSum(
     const IDataType * p = argument_types[0].get();
 
     if ((res = createDecimalFunction<Decimal32, Name>(p)) != nullptr) {}
-    else if ((res = createDecimalFunction<Decimal64, Name>(p)) != nullptr)
-    {
-    }
-    else if ((res = createDecimalFunction<Decimal128, Name>(p)) != nullptr)
-    {
-    }
-    else if ((res = createDecimalFunction<Decimal256, Name>(p)) != nullptr)
-    {
-    }
+    else if ((res = createDecimalFunction<Decimal64, Name>(p)) != nullptr) {}
+    else if ((res = createDecimalFunction<Decimal128, Name>(p)) != nullptr) {}
+    else if ((res = createDecimalFunction<Decimal256, Name>(p)) != nullptr) {}
     else
     {
         res = AggregateFunctionPtr(createWithNumericType<Function>(*p));

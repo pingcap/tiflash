@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include <IO/ReadBuffer.h>
+#include <IO/Buffer/ReadBuffer.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/Page/PageDefinesBase.h>
 #include <Storages/Page/V3/Universal/UniversalPageIdFormatImpl.h>
@@ -154,6 +154,14 @@ public:
             return wb->empty();
         else
             return uwb->empty();
+    }
+
+    size_t size() const
+    {
+        if (wb)
+            return wb->size();
+        else
+            return uwb->size();
     }
 
     void clear()

@@ -58,6 +58,8 @@ TiFlashMetrics::TiFlashMetrics()
                                                       .Name("tiflash_storage_sync_replica_ru")
                                                       .Help("RU for synchronous replica of keyspace")
                                                       .Register(*registry);
+    registered_raft_proxy_thread_memory_usage_family
+        = &prometheus::BuildGauge().Name(raft_proxy_thread_memory_usage).Help("").Register(*registry);
 }
 
 void TiFlashMetrics::addReplicaSyncRU(UInt32 keyspace_id, UInt64 ru)
@@ -65,6 +67,13 @@ void TiFlashMetrics::addReplicaSyncRU(UInt32 keyspace_id, UInt64 ru)
     std::unique_lock lock(replica_sync_ru_mtx);
     auto * counter = getReplicaSyncRUCounter(keyspace_id, lock);
     counter->Increment(ru);
+}
+
+UInt64 TiFlashMetrics::debugQueryReplicaSyncRU(UInt32 keyspace_id)
+{
+    std::unique_lock lock(replica_sync_ru_mtx);
+    auto * counter = getReplicaSyncRUCounter(keyspace_id, lock);
+    return counter->Value();
 }
 
 prometheus::Counter * TiFlashMetrics::getReplicaSyncRUCounter(UInt32 keyspace_id, std::unique_lock<std::mutex> &)
@@ -89,4 +98,35 @@ void TiFlashMetrics::removeReplicaSyncRUCounter(UInt32 keyspace_id)
     registered_keyspace_sync_replica_ru_family->Remove(itr->second);
     registered_keyspace_sync_replica_ru.erase(itr);
 }
+
+double TiFlashMetrics::getProxyThreadMemory(const std::string & k)
+{
+    std::shared_lock lock(proxy_thread_report_mtx);
+    auto it = registered_raft_proxy_thread_memory_usage_metrics.find(k);
+    RUNTIME_CHECK(it != registered_raft_proxy_thread_memory_usage_metrics.end(), k);
+    return it->second->Value();
+}
+
+void TiFlashMetrics::setProxyThreadMemory(const std::string & k, Int64 v)
+{
+    std::shared_lock lock(proxy_thread_report_mtx);
+    if unlikely (!registered_raft_proxy_thread_memory_usage_metrics.count(k))
+    {
+        // New metrics added through `Reset`.
+        return;
+    }
+    registered_raft_proxy_thread_memory_usage_metrics[k]->Set(v);
+}
+
+void TiFlashMetrics::registerProxyThreadMemory(const std::string & k)
+{
+    std::unique_lock lock(proxy_thread_report_mtx);
+    if unlikely (!registered_raft_proxy_thread_memory_usage_metrics.count(k))
+    {
+        registered_raft_proxy_thread_memory_usage_metrics.emplace(
+            k,
+            &registered_raft_proxy_thread_memory_usage_family->Add({{"type", k}}));
+    }
+}
+
 } // namespace DB

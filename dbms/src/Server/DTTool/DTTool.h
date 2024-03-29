@@ -16,8 +16,8 @@
 
 #include <Common/TiFlashBuildInfo.h>
 #include <Common/UnifiedLogFormatter.h>
-#include <Encryption/DataKeyManager.h>
-#include <Encryption/MockKeyManager.h>
+#include <IO/Encryption/DataKeyManager.h>
+#include <IO/Encryption/MockKeyManager.h>
 #include <Interpreters/Context.h>
 #include <Poco/ConsoleChannel.h>
 #include <Poco/File.h>
@@ -113,6 +113,7 @@ class ImitativeEnv
             global_context->getPathCapacity(),
             global_context->getFileProvider());
         TiFlashRaftConfig raft_config;
+        global_context->initializeGlobalPageIdAllocator();
         global_context->initializeGlobalStoragePoolIfNeed(global_context->getPathPool());
         raft_config.ignore_databases = {"default", "system"};
         raft_config.engine = TiDB::StorageEngine::DT;

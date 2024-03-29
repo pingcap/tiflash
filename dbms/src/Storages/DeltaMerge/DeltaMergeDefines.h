@@ -20,6 +20,7 @@
 #include <Core/NamesAndTypes.h>
 #include <Core/Types.h>
 #include <DataTypes/DataTypeFactory.h>
+#include <Storages/DeltaMerge/ColumnDefine_fwd.h>
 #include <Storages/DeltaMerge/Range.h>
 #include <Storages/FormatVersion.h>
 #include <Storages/KVStore/Types.h>
@@ -29,7 +30,6 @@
 #include <memory>
 #include <mutex>
 #include <optional>
-#include <type_traits>
 
 namespace TiDB
 {
@@ -59,7 +59,6 @@ class DTEntryIterator;
 template <size_t M, size_t F, size_t S, typename TAllocator = Allocator<false>>
 class DTEntriesCopy;
 
-struct RefTuple;
 
 struct EmptyValueSpace
 {
@@ -96,10 +95,6 @@ struct ColumnDefine
         , default_value(std::move(default_value_))
     {}
 };
-
-using ColumnDefines = std::vector<ColumnDefine>;
-using ColumnDefinesPtr = std::shared_ptr<ColumnDefines>;
-using ColumnDefineMap = std::unordered_map<ColId, ColumnDefine>;
 
 using ColumnMap = std::unordered_map<ColId, ColumnPtr>;
 using MutableColumnMap = std::unordered_map<ColId, MutableColumnPtr>;

@@ -91,3 +91,56 @@ mysql> select * from test.a1
 +----+-----+------+
 
 mysql> drop table if exists test.a1
+
+##########
+# From nullable to not null, then add tiflash replica
+mysql> drop table if exists test.alt2;
+mysql> create table test.alt2 (a int, b DECIMAL(20) NULL default 1.0, c int NOT NULL);
+mysql> insert into test.alt2(a,b,c) values (1,NULL,1),(2,NULL,2),(3,NULL,3),(4,NULL,4);
+mysql> insert into test.alt2(a,b,c) values (11,0.1,11),(12,0.2,12),(13,0.3,13),(14,0.4,14);
+mysql> update test.alt2 set b = 0 where b is null;
+mysql> select * from test.alt2 order by a;
++------+------+----+
+| a    | b    | c  |
++------+------+----+
+|    1 |    0 |  1 |
+|    2 |    0 |  2 |
+|    3 |    0 |  3 |
+|    4 |    0 |  4 |
+|   11 |    0 | 11 |
+|   12 |    0 | 12 |
+|   13 |    0 | 13 |
+|   14 |    0 | 14 |
++------+------+----+
+mysql> alter table test.alt2 modify column b DECIMAL(20) NOT NULL;
+mysql> select * from test.alt2 order by a;
++------+---+----+
+| a    | b | c  |
++------+---+----+
+|    1 | 0 |  1 |
+|    2 | 0 |  2 |
+|    3 | 0 |  3 |
+|    4 | 0 |  4 |
+|   11 | 0 | 11 |
+|   12 | 0 | 12 |
+|   13 | 0 | 13 |
+|   14 | 0 | 14 |
++------+---+----+
+# Send snapshot to TiFlash
+mysql> alter table test.alt2 set tiflash replica 1;
+func> wait_table test alt2
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.alt2 order by a;
++------+---+----+
+| a    | b | c  |
++------+---+----+
+|    1 | 0 |  1 |
+|    2 | 0 |  2 |
+|    3 | 0 |  3 |
+|    4 | 0 |  4 |
+|   11 | 0 | 11 |
+|   12 | 0 | 12 |
+|   13 | 0 | 13 |
+|   14 | 0 | 14 |
++------+---+----+
+
+mysql> drop table if exists test.alt2

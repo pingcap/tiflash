@@ -234,18 +234,22 @@ inline UInt64 appendValueOfSIMDJsonElem(
 {
     if (elem.is_object())
     {
+        // https://github.com/pingcap/tiflash/issues/8712
+        // To remove duplicates from the key.
+        std::map<std::string_view, simdjson::dom::element> obj_map;
+        for (auto [key, value] : elem.get_object())
+            obj_map[key] = std::move(value);
+
         /// elem_count(4 bytes)
         /// total_size(4 bytes)
         /// key_entries(obj.size() * KEY_ENTRY_SIZE)
         /// value_entries(obj.size() * VALUE_ENTRY_SIZE)
         /// key_datas
         /// value_datas
-
-        const auto & obj = elem.get_object();
         UInt32 buffer_start_pos = write_buffer.offset();
 
         // 1. write elem count
-        UInt32 element_count = obj.size();
+        UInt32 element_count = obj_map.size();
         encodeNumeric(write_buffer, element_count);
 
         // 2. advance for total size
@@ -253,9 +257,9 @@ inline UInt64 appendValueOfSIMDJsonElem(
         write_buffer.advance(4);
 
         // 3. write key entry with key offset.
-        UInt32 data_offset_start = HEADER_SIZE + obj.size() * (KEY_ENTRY_SIZE + VALUE_ENTRY_SIZE);
+        UInt32 data_offset_start = HEADER_SIZE + obj_map.size() * (KEY_ENTRY_SIZE + VALUE_ENTRY_SIZE);
         UInt32 data_offset = data_offset_start;
-        for (const auto & [key, _] : obj)
+        for (const auto & [key, _] : obj_map)
         {
             encodeNumeric(write_buffer, data_offset);
             data_offset += key.size();
@@ -268,13 +272,13 @@ inline UInt64 appendValueOfSIMDJsonElem(
 
         // 4. write key value.
         write_buffer.setOffset(buffer_start_pos + data_offset_start);
-        for (const auto & [key, _] : obj)
+        for (const auto & [key, _] : obj_map)
             write_buffer.write(key.data(), key.size());
 
         // 5. write value entry with value offset and value data.
         write_buffer.setOffset(value_entry_start_pos);
         UInt64 max_child_depth = 0;
-        for (const auto & [_, value] : obj)
+        for (const auto & [_, value] : obj_map)
         {
             auto child_depth = appendValueEntryAndData(buffer_start_pos, data_offset, value, write_buffer);
             max_child_depth = std::max(max_child_depth, child_depth);
@@ -1129,24 +1133,6 @@ void JsonBinary::buildKeyArrayInBuffer(const std::vector<StringRef> & keys, Json
     write_buffer.setOffset(total_size_pos);
     encodeNumeric(write_buffer, total_size);
     write_buffer.setOffset(buffer_start_pos + data_offset);
-}
-
-UInt64 JsonBinary::getJsonLength(const std::string_view & raw_value)
-{
-    if (raw_value.empty())
-    {
-        return 0;
-    }
-    size_t cursor = 0;
-    switch (raw_value[0]) // JSON Root element type
-    {
-    case JsonBinary::TYPE_CODE_OBJECT:
-    case JsonBinary::TYPE_CODE_ARRAY:
-        ++cursor;
-        return decodeNumeric<UInt32>(cursor, raw_value);
-    default:
-        return 1;
-    }
 }
 
 void JsonBinary::appendNumber(JsonBinaryWriteBuffer & write_buffer, bool value)

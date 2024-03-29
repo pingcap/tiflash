@@ -58,6 +58,10 @@ add_headers_and_sources(tiflash_common_io src/Common)
 add_headers_and_sources(tiflash_common_io src/Common/HashTable)
 add_headers_and_sources(tiflash_common_io src/Common/SyncPoint)
 add_headers_and_sources(tiflash_common_io src/IO)
+add_headers_and_sources(tiflash_common_io src/IO/BaseFile)
+add_headers_and_sources(tiflash_common_io src/IO/Buffer)
+add_headers_and_sources(tiflash_common_io src/IO/Checksum)
+add_headers_and_sources(tiflash_common_io src/IO/Compression)
 
 add_headers_and_sources(dbms src/Analyzers)
 add_headers_and_sources(dbms src/Core)
@@ -68,8 +72,13 @@ add_headers_and_sources(dbms src/Databases)
 add_headers_and_sources(dbms src/Debug)
 add_headers_and_sources(dbms src/Debug/MockExecutor)
 add_headers_and_sources(dbms src/Debug/MockKVStore)
+add_headers_and_sources(dbms src/Debug/dbgKVStore)
 add_headers_and_sources(dbms src/Dictionaries)
-add_headers_and_sources(dbms src/Encryption)
+# Encryption needs to link tiflash-proxy, but we do not want to link tiflash-proxy to tiflash_common_io.
+# So we put the encryption source files in dbms.
+add_headers_and_sources(dbms src/IO/Encryption)
+# FileProvider relies on Encryption, so we put it in dbms as well.
+add_headers_and_sources(dbms src/IO/FileProvider)
 add_headers_and_sources(dbms src/Interpreters)
 add_headers_and_sources(dbms src/Interpreters/SharedContexts)
 add_headers_and_sources(dbms src/Columns)
@@ -254,8 +263,11 @@ if (NOT USE_INTERNAL_ZSTD_LIBRARY)
 endif ()
 
 if (USE_QPL)
-    target_link_libraries (dbms ${QPL_LIBRARY})
-    target_include_directories (dbms PRIVATE ${QPL_INCLUDE_DIR})
+    target_link_libraries (tiflash_common_io PUBLIC ${QPL_LIBRARY})
+    target_include_directories (dbms BEFORE PRIVATE ${QPL_INCLUDE_DIR})
+    set_source_files_properties (
+        src/IO/Compression/CompressionCodecDeflateQpl.cpp
+        PROPERTIES COMPILE_FLAGS "-mwaitpkg")
 endif ()
 
 target_include_directories (dbms PUBLIC ${DBMS_INCLUDE_DIR})

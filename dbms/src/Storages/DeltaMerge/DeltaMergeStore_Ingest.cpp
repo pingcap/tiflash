@@ -16,6 +16,7 @@
 #include <Common/TiFlashMetrics.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
+#include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/ExternalDTFileInfo.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
@@ -25,7 +26,7 @@
 #include <Storages/DeltaMerge/WriteBatchesImpl.h>
 #include <Storages/KVStore/KVStore.h>
 #include <Storages/KVStore/MultiRaft/Disagg/CheckpointInfo.h>
-#include <Storages/KVStore/MultiRaft/Disagg/FastAddPeer.h>
+#include <Storages/KVStore/MultiRaft/Disagg/FastAddPeerContext.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/PathPool.h>
 
@@ -285,7 +286,7 @@ Segments DeltaMergeStore::ingestDTFilesUsingSplit(
             if (succeeded)
             {
                 updated_segments.insert(segment);
-                RUNTIME_CHECK(compare(delete_range.getEnd(), remaining_delete_range.getStart()) >= 0);
+                RUNTIME_CHECK(delete_range.getEnd() >= remaining_delete_range.getStart());
                 remaining_delete_range.setStart(delete_range.end); // We always move forward
             }
             else
@@ -402,7 +403,7 @@ Segments DeltaMergeStore::ingestDTFilesUsingSplit(
             {
                 updated_segments.insert(segment);
                 // We have ingested (DTFileRange ∪ ThisSegmentRange), let's try with next overlapped segment.
-                RUNTIME_CHECK(compare(segment_ingest_range.getEnd(), file_ingest_range.getStart()) > 0);
+                RUNTIME_CHECK(segment_ingest_range.getEnd() > file_ingest_range.getStart());
                 file_ingest_range.setStart(segment_ingest_range.end);
             }
             else
@@ -436,16 +437,16 @@ bool DeltaMergeStore::ingestDTFileIntoSegmentUsingSplit(
     // The ingest_range must fall in segment's range.
     RUNTIME_CHECK(!ingest_range.none(), ingest_range.toDebugString());
     RUNTIME_CHECK(
-        compare(segment_range.getStart(), ingest_range.getStart()) <= 0,
+        segment_range.getStart() <= ingest_range.getStart(),
         segment_range.toDebugString(),
         ingest_range.toDebugString());
     RUNTIME_CHECK(
-        compare(segment_range.getEnd(), ingest_range.getEnd()) >= 0,
+        segment_range.getEnd() >= ingest_range.getEnd(),
         segment_range.toDebugString(),
         ingest_range.toDebugString());
 
-    const bool is_start_matching = (compare(segment_range.getStart(), ingest_range.getStart()) == 0);
-    const bool is_end_matching = (compare(segment_range.getEnd(), ingest_range.getEnd()) == 0);
+    const bool is_start_matching = segment_range.getStart() == ingest_range.getStart();
+    const bool is_end_matching = segment_range.getEnd() == ingest_range.getEnd();
 
     if (is_start_matching && is_end_matching)
     {
@@ -605,7 +606,7 @@ UInt64 DeltaMergeStore::ingestFiles(
         {
             RUNTIME_CHECK(!ext_file.range.none(), ext_file.toString());
             RUNTIME_CHECK(
-                compare(last_end.toRowKeyValueRef(), ext_file.range.getStart()) <= 0,
+                last_end.toRowKeyValueRef() <= ext_file.range.getStart(),
                 last_end.toDebugString(),
                 ext_file.toString());
             last_end = ext_file.range.end;
@@ -617,8 +618,7 @@ UInt64 DeltaMergeStore::ingestFiles(
             for (const auto & ext_file : external_files)
             {
                 RUNTIME_CHECK_MSG(
-                    compare(range.getStart(), ext_file.range.getStart()) <= 0
-                        && compare(range.getEnd(), ext_file.range.getEnd()) >= 0,
+                    range.getStart() <= ext_file.range.getStart() && range.getEnd() >= ext_file.range.getEnd(),
                     "Detected illegal region boundary: range={} file_range={} keyspace={} table_id={}. "
                     "TiFlash will exit to prevent data inconsistency. "
                     "If you accept data inconsistency and want to continue the service, "
@@ -877,7 +877,7 @@ std::vector<SegmentPtr> DeltaMergeStore::ingestSegmentsUsingSplit(
             if (succeeded)
             {
                 updated_segments.insert(segment);
-                RUNTIME_CHECK(compare(delete_range.getEnd(), remaining_delete_range.getStart()) >= 0);
+                RUNTIME_CHECK(delete_range.getEnd() >= remaining_delete_range.getStart());
                 remaining_delete_range.setStart(delete_range.end); // We always move forward
             }
             else
@@ -986,7 +986,7 @@ std::vector<SegmentPtr> DeltaMergeStore::ingestSegmentsUsingSplit(
             {
                 updated_segments.insert(segment);
                 // We have ingested (DTFileRange ∪ ThisSegmentRange), let's try with next overlapped segment.
-                RUNTIME_CHECK(compare(segment_ingest_range.getEnd(), file_ingest_range.getStart()) > 0);
+                RUNTIME_CHECK(segment_ingest_range.getEnd() > file_ingest_range.getStart());
                 file_ingest_range.setStart(segment_ingest_range.end);
             }
             else
@@ -1016,16 +1016,16 @@ bool DeltaMergeStore::ingestSegmentDataIntoSegmentUsingSplit(
     // The ingest_range must fall in segment's range.
     RUNTIME_CHECK(!ingest_range.none(), ingest_range.toDebugString());
     RUNTIME_CHECK(
-        compare(segment_range.getStart(), ingest_range.getStart()) <= 0,
+        segment_range.getStart() <= ingest_range.getStart(),
         segment_range.toDebugString(),
         ingest_range.toDebugString());
     RUNTIME_CHECK(
-        compare(segment_range.getEnd(), ingest_range.getEnd()) >= 0,
+        segment_range.getEnd() >= ingest_range.getEnd(),
         segment_range.toDebugString(),
         ingest_range.toDebugString());
 
-    const bool is_start_matching = (compare(segment_range.getStart(), ingest_range.getStart()) == 0);
-    const bool is_end_matching = (compare(segment_range.getEnd(), ingest_range.getEnd()) == 0);
+    const bool is_start_matching = segment_range.getStart() == ingest_range.getStart();
+    const bool is_end_matching = segment_range.getEnd() == ingest_range.getEnd();
 
     if (is_start_matching && is_end_matching)
     {
@@ -1145,29 +1145,45 @@ Segments DeltaMergeStore::buildSegmentsFromCheckpointInfo(
         "Build checkpoint from remote, store_id={} region_id={}",
         checkpoint_info->remote_store_id,
         checkpoint_info->region_id);
-    auto segment_meta_infos = Segment::readAllSegmentsMetaInfoInRange(*dm_context, range, checkpoint_info);
-    LOG_INFO(log, "Ingest checkpoint segments num {}", segment_meta_infos.size());
     WriteBatches wbs{*dm_context->storage_pool};
-    auto restored_segments = Segment::createTargetSegmentsFromCheckpoint( //
-        log,
-        *dm_context,
-        checkpoint_info->remote_store_id,
-        segment_meta_infos,
-        range,
-        checkpoint_info->temp_ps,
-        wbs);
-
-    if (restored_segments.empty())
+    try
     {
-        LOG_DEBUG(log, "No segments to ingest.");
-        return {};
+        auto segment_meta_infos = Segment::readAllSegmentsMetaInfoInRange(*dm_context, range, checkpoint_info);
+        auto restored_segments = Segment::createTargetSegmentsFromCheckpoint( //
+            log,
+            *dm_context,
+            checkpoint_info->remote_store_id,
+            segment_meta_infos,
+            range,
+            checkpoint_info->temp_ps,
+            wbs);
+        if (restored_segments.empty())
+        {
+            return {};
+        }
+        wbs.writeLogAndData();
+        LOG_INFO(
+            log,
+            "Finish write fap checkpoint, region_id={} segments_num={}",
+            checkpoint_info->region_id,
+            segment_meta_infos.size());
+        return restored_segments;
     }
-    wbs.writeLogAndData();
-    LOG_INFO(log, "Finish write fap checkpoint, region_id={}", checkpoint_info->region_id);
-    return restored_segments;
+    catch (const Exception & e)
+    {
+        LOG_INFO(
+            log,
+            "Build checkpoint from remote failed for {}, region_id={} remote_store_id={}",
+            e.message(),
+            checkpoint_info->region_id,
+            checkpoint_info->remote_store_id);
+        wbs.setRollback();
+        e.rethrow();
+    }
+    return {};
 }
 
-void DeltaMergeStore::ingestSegmentsFromCheckpointInfo(
+UInt64 DeltaMergeStore::ingestSegmentsFromCheckpointInfo(
     const DMContextPtr & dm_context,
     const DM::RowKeyRange & range,
     const CheckpointIngestInfoPtr & checkpoint_info)
@@ -1186,18 +1202,25 @@ void DeltaMergeStore::ingestSegmentsFromCheckpointInfo(
             "Ingest checkpoint from remote meet empty range, ignore, store_id={} region_id={}",
             checkpoint_info->getRemoteStoreId(),
             checkpoint_info->regionId());
-        return;
+        return 0;
     }
 
     auto restored_segments = checkpoint_info->getRestoredSegments();
     auto updated_segments = ingestSegmentsUsingSplit(dm_context, range, restored_segments);
+    auto estimated_bytes = 0;
+
+    for (const auto & segment : restored_segments)
+    {
+        estimated_bytes += segment->getEstimatedBytes();
+    }
+
     LOG_INFO(
         log,
-        "Ingest checkpoint from remote done, store_id={} region_id={} n_segments={}",
+        "Ingest checkpoint from remote done, store_id={} region_id={} n_segments={} est_bytes={}",
         checkpoint_info->getRemoteStoreId(),
         checkpoint_info->regionId(),
-        restored_segments.size());
-
+        restored_segments.size(),
+        estimated_bytes);
 
     WriteBatches wbs{*dm_context->storage_pool};
     for (auto & segment : restored_segments)
@@ -1211,7 +1234,9 @@ void DeltaMergeStore::ingestSegmentsFromCheckpointInfo(
 
     // TODO(fap) This could be executed in a dedicated thread if it consumes too much time.
     for (auto & segment : updated_segments)
-        checkSegmentUpdate(dm_context, segment, ThreadType::Write, InputType::NotRaft);
+        checkSegmentUpdate(dm_context, segment, ThreadType::Write, InputType::RaftSSTAndSnap);
+
+    return estimated_bytes;
 }
 
 } // namespace DM

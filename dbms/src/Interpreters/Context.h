@@ -18,8 +18,7 @@
 #include <Core/TiFlashDisaggregatedMode.h>
 #include <Core/Types.h>
 #include <Debug/MockServerInfo.h>
-#include <Encryption/FileProvider_fwd.h>
-#include <IO/CompressionSettings.h>
+#include <IO/FileProvider/FileProvider_fwd.h>
 #include <Interpreters/ClientInfo.h>
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/Settings.h>
@@ -56,7 +55,6 @@ class QuotaForIntervals;
 class BackgroundProcessingPool;
 class MergeList;
 class MarkCache;
-class UncompressedCache;
 class DBGInvoker;
 class TMTContext;
 using TMTContextPtr = std::shared_ptr<TMTContext>;
@@ -111,6 +109,8 @@ class DeltaIndexManager;
 class GlobalStoragePool;
 class SharedBlockSchemas;
 using GlobalStoragePoolPtr = std::shared_ptr<GlobalStoragePool>;
+class GlobalPageIdAllocator;
+using GlobalPageIdAllocatorPtr = std::shared_ptr<GlobalPageIdAllocator>;
 } // namespace DM
 
 /// (database name, table name)
@@ -377,11 +377,6 @@ public:
     ProcessList & getProcessList();
     const ProcessList & getProcessList() const;
 
-    /// Create a cache of uncompressed blocks of specified size. This can be done only once.
-    void setUncompressedCache(size_t max_size_in_bytes);
-    std::shared_ptr<UncompressedCache> getUncompressedCache() const;
-    void dropUncompressedCache() const;
-
     /// Execute inner functions, debug only.
     DBGInvoker & getDBGInvoker() const;
 
@@ -450,6 +445,10 @@ public:
     void initializePageStorageMode(const PathPool & path_pool, UInt64 storage_page_format_version);
     void setPageStorageRunMode(PageStorageRunMode run_mode) const;
     PageStorageRunMode getPageStorageRunMode() const;
+
+    bool initializeGlobalPageIdAllocator();
+    DM::GlobalPageIdAllocatorPtr getGlobalPageIdAllocator() const;
+
     bool initializeGlobalStoragePoolIfNeed(const PathPool & path_pool);
     DM::GlobalStoragePoolPtr getGlobalStoragePool() const;
 

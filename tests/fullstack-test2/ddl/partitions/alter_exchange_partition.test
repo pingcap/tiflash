@@ -126,7 +126,7 @@ mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.e2 
 
 # ensure the swap out table is not mark as tombstone
 >> DBGInvoke __enable_schema_sync_service('true')
->> DBGInvoke __gc_schemas(18446744073709551615)
+>> DBGInvoke __gc_schemas(18446744073709551615, 'true')
 >> DBGInvoke __enable_schema_sync_service('false')
 mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.e order by id;
 +-----+-------+-------+------+
@@ -178,7 +178,7 @@ mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.e2 
 +----+-------+-------+------+
 # ensure the swap out table is not mark as tombstone
 >> DBGInvoke __enable_schema_sync_service('true')
->> DBGInvoke __gc_schemas(18446744073709551615)
+>> DBGInvoke __gc_schemas(18446744073709551615, 'true')
 >> DBGInvoke __enable_schema_sync_service('false')
 mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.e order by id;
 +-----+-------+-------+------+

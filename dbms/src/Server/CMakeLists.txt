@@ -53,6 +53,7 @@ target_link_libraries(tiflash-server-lib PRIVATE ${TIFLASH_PROXY_LIBRARY})
 
 target_link_libraries (tiflash-server-lib PUBLIC server_for_test tiflash_common_io daemon tiflash_storages_system tiflash_functions tiflash_aggregate_functions tiflash_table_functions)
 target_include_directories (tiflash-server-lib PUBLIC ${TiFlash_SOURCE_DIR}/libs/libdaemon/include)
+target_include_directories (tiflash-server-lib PRIVATE ${TiFlash_SOURCE_DIR}/contrib/GmSSL/include)
 
 add_library (tiflash-client-lib Client.cpp)
 target_link_libraries (tiflash-client-lib tiflash_functions tiflash_aggregate_functions ${LINE_EDITING_LIBS} ${Boost_PROGRAM_OPTIONS_LIBRARY})

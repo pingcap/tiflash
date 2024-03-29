@@ -24,13 +24,16 @@
 #include <Storages/AlterCommands.h>
 #include <Storages/BackgroundProcessingPool.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFilePersisted.h>
+#include <Storages/DeltaMerge/DMContext_fwd.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaMergeInterfaces.h>
+#include <Storages/DeltaMerge/File/DMFile_fwd.h>
 #include <Storages/DeltaMerge/Filter/PushDownFilter.h>
 #include <Storages/DeltaMerge/Remote/DisaggSnapshot_fwd.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/ScanContext_fwd.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
+#include <Storages/DeltaMerge/Segment_fwd.h>
 #include <Storages/KVStore/Decode/DecodingStorageSchemaSnapshot.h>
 #include <Storages/KVStore/MultiRaft/Disagg/CheckpointIngestInfo.h>
 #include <Storages/Page/PageStorage_fwd.h>
@@ -40,6 +43,8 @@
 
 namespace DB
 {
+
+struct Settings;
 
 class Logger;
 using LoggerPtr = std::shared_ptr<Logger>;
@@ -57,15 +62,8 @@ namespace DM
 {
 class StoragePool;
 using StoragePoolPtr = std::shared_ptr<StoragePool>;
-class DMFile;
-using DMFilePtr = std::shared_ptr<DMFile>;
-class Segment;
-using SegmentPtr = std::shared_ptr<Segment>;
-using SegmentPair = std::pair<SegmentPtr, SegmentPtr>;
 class RSOperator;
 using RSOperatorPtr = std::shared_ptr<RSOperator>;
-struct DMContext;
-using DMContextPtr = std::shared_ptr<DMContext>;
 using NotCompress = std::unordered_set<ColId>;
 using SegmentIdSet = std::unordered_set<UInt64>;
 struct ExternalDTFileInfo;
@@ -75,8 +73,6 @@ namespace tests
 {
 class DeltaMergeStoreTest;
 }
-
-inline static const PageIdU64 DELTA_MERGE_FIRST_SEGMENT_ID = 1;
 
 struct SegmentStats
 {
@@ -358,12 +354,12 @@ public:
         return buildSegmentsFromCheckpointInfo(dm_context, range, checkpoint_info);
     }
 
-    void ingestSegmentsFromCheckpointInfo(
+    UInt64 ingestSegmentsFromCheckpointInfo(
         const DMContextPtr & dm_context,
         const DM::RowKeyRange & range,
         const CheckpointIngestInfoPtr & checkpoint_info);
 
-    void ingestSegmentsFromCheckpointInfo(
+    UInt64 ingestSegmentsFromCheckpointInfo(
         const Context & db_context,
         const DB::Settings & db_settings,
         const DM::RowKeyRange & range,
@@ -768,7 +764,7 @@ private:
      * This may be called from multiple threads, e.g. at the foreground write moment, or in background threads.
      * A `thread_type` should be specified indicating the type of the thread calling this function.
      * Depend on the thread type, the "update" to do may be varied.
-     * 
+     *
      * It returns a bool which indicates whether a flush of KVStore is recommended.
      */
     bool checkSegmentUpdate(
@@ -789,7 +785,7 @@ public:
         const RowKeyValueRef & start_key,
         bool create_if_empty,
         bool throw_if_notfound);
-    void createFirstSegment(DM::DMContext & dm_context, PageStorageRunMode page_storage_run_mode);
+    void createFirstSegment(DM::DMContext & dm_context);
 
     Context & global_context;
     std::shared_ptr<StoragePathPool> path_pool;

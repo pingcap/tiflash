@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <Common/TiFlashException.h>
-#include <IO/ChecksumBuffer.h>
+#include <IO/Checksum/ChecksumBuffer.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DMChecksumConfig.h>
 #include <Storages/DeltaMerge/File/dtpb/dmfile.pb.h>

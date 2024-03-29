@@ -25,6 +25,10 @@
 
 namespace DB
 {
+namespace tests
+{
+class RegionKVStoreTest;
+}
 class Logger;
 using LoggerPtr = std::shared_ptr<Logger>;
 
@@ -54,11 +58,13 @@ private:
 
     std::optional<Timestamp> lastGcSafePoint(KeyspaceID keyspace_id) const;
     void updateLastGcSafepoint(KeyspaceID keyspace_id, Timestamp gc_safepoint);
+    bool gcImpl(Timestamp gc_safepoint, KeyspaceID keyspace_id, bool ignore_remain_regions);
 
 private:
     Context & context;
 
     friend void dbgFuncGcSchemas(Context &, const ASTs &, DBGInvokerPrinter);
+    friend class tests::RegionKVStoreTest;
 
     struct KeyspaceGCContext
     {

@@ -95,7 +95,8 @@ typename PageDirectoryFactory<Trait>::PageDirectoryPtr PageDirectoryFactory<Trai
     const String & storage_name,
     FileProviderPtr & file_provider,
     PSDiskDelegatorPtr & delegator,
-    PageEntriesEdit & edit)
+    PageEntriesEdit & edit,
+    UInt64 filter_seq)
 {
     auto [wal, reader] = WALStore::create(storage_name, file_provider, delegator, WALConfig());
     (void)reader;
@@ -108,7 +109,7 @@ typename PageDirectoryFactory<Trait>::PageDirectoryPtr PageDirectoryFactory<Trai
         r.version.sequence = ++mock_sequence;
     }
 
-    loadEdit(dir, edit, /*force_apply*/ true);
+    loadEdit(dir, edit, /*force_apply*/ false, filter_seq);
     // Reset the `sequence` to the maximum of persisted.
     dir->sequence = max_applied_ver.sequence;
     RUNTIME_CHECK(dir->sequence, mock_sequence);
@@ -204,9 +205,10 @@ void PageDirectoryFactory<Trait>::loadEdit(
             // So we filter the REF record which is less than or equal to the `filter_seq`
             // Is this entry could be duplicated with the dumped snapshot
             bool filter = !force_apply && r.version.sequence <= filter_seq && r.type == EditRecordType::REF;
-            if (filter)
+            if (unlikely(filter))
             {
                 LOG_INFO(Logger::get(), "Not idempotent REF record is ignored during restart, record={}", r);
+                updateMaxIdByRecord(dir, r);
                 continue;
             }
 
@@ -245,21 +247,7 @@ void PageDirectoryFactory<Trait>::applyRecord(
         }
     }
 
-    if constexpr (std::is_same_v<Trait, universal::FactoryTrait>)
-    {
-        // We only need page id under specific prefix after restart.
-        // If you want to add other prefix here, make sure the page id allocation space is still enough after adding it.
-        if (UniversalPageIdFormat::isType(r.page_id, StorageType::Data)
-            || UniversalPageIdFormat::isType(r.page_id, StorageType::Log)
-            || UniversalPageIdFormat::isType(r.page_id, StorageType::Meta))
-        {
-            dir->max_page_id = std::max(dir->max_page_id, Trait::PageIdTrait::getU64ID(r.page_id));
-        }
-    }
-    else
-    {
-        dir->max_page_id = std::max(dir->max_page_id, Trait::PageIdTrait::getU64ID(r.page_id));
-    }
+    updateMaxIdByRecord(dir, r);
 
     const auto & version_list = iter->second;
     const auto & restored_version = r.version;
@@ -359,6 +347,28 @@ void PageDirectoryFactory<Trait>::applyRecord(
             r.page_id,
             restored_version));
         throw e;
+    }
+}
+
+template <typename Trait>
+void PageDirectoryFactory<Trait>::updateMaxIdByRecord(
+    const PageDirectoryPtr & dir,
+    const typename PageEntriesEdit::EditRecord & r)
+{
+    if constexpr (std::is_same_v<Trait, universal::FactoryTrait>)
+    {
+        // We only need page id under specific prefix after restart.
+        // If you want to add other prefix here, make sure the page id allocation space is still enough after adding it.
+        if (UniversalPageIdFormat::isType(r.page_id, StorageType::Data)
+            || UniversalPageIdFormat::isType(r.page_id, StorageType::Log)
+            || UniversalPageIdFormat::isType(r.page_id, StorageType::Meta))
+        {
+            dir->max_page_id = std::max(dir->max_page_id, Trait::PageIdTrait::getU64ID(r.page_id));
+        }
+    }
+    else
+    {
+        dir->max_page_id = std::max(dir->max_page_id, Trait::PageIdTrait::getU64ID(r.page_id));
     }
 }
 

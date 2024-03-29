@@ -78,6 +78,8 @@ DAGContext::DAGContext(
     , connection_alias(connection_alias_)
 {
     RUNTIME_ASSERT(kind != DAGRequestKind::MPP, log, "DAGContext non-mpp constructor get a mpp kind");
+    if (dag_request->has_div_precision_increment())
+        div_precision_increment = dag_request->div_precision_increment();
     initOutputInfo();
 }
 
@@ -103,6 +105,8 @@ DAGContext::DAGContext(tipb::DAGRequest & dag_request_, const mpp::TaskMeta & me
     , connection_id(meta_.connection_id())
     , connection_alias(meta_.connection_alias())
 {
+    if (dag_request->has_div_precision_increment())
+        div_precision_increment = dag_request->div_precision_increment();
     // only mpp task has join executor.
     initExecutorIdToJoinIdMap();
     initOutputInfo();
@@ -137,6 +141,8 @@ DAGContext::DAGContext(
     , connection_id(task_meta_.connection_id())
     , connection_alias(task_meta_.connection_alias())
 {
+    if (dag_request->has_div_precision_increment())
+        div_precision_increment = dag_request->div_precision_increment();
     initOutputInfo();
 }
 
@@ -175,6 +181,8 @@ DAGContext::DAGContext(tipb::DAGRequest & dag_request_, String log_identifier, s
     , warning_count(0)
     , connection_id(0)
 {
+    if (dag_request->has_div_precision_increment())
+        div_precision_increment = dag_request->div_precision_increment();
     query_operator_spill_contexts
         = std::make_shared<QueryOperatorSpillContexts>(MPPQueryId(0, 0, 0, 0, "", 0, ""), 100);
     initOutputInfo();
@@ -468,7 +476,7 @@ const SingleTableRegions & DAGContext::getTableRegionsInfoByTableID(Int64 table_
     return tables_regions_info.getTableRegionInfoByTableID(table_id);
 }
 
-RU DAGContext::getReadRU() const
+UInt64 DAGContext::getReadBytes() const
 {
     UInt64 read_bytes = 0;
     for (const auto & [id, sc] : scan_context_map)
@@ -476,7 +484,7 @@ RU DAGContext::getReadRU() const
         (void)id; // Disable unused variable warnning.
         read_bytes += sc->user_read_bytes;
     }
-    return bytesToRU(read_bytes);
+    return read_bytes;
 }
 
 } // namespace DB

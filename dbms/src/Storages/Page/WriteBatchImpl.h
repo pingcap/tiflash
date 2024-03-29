@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include <IO/ReadBufferFromString.h>
+#include <IO/Buffer/ReadBufferFromString.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/Page/PageDefinesBase.h>
 #include <Storages/Page/V3/PageEntryCheckpointInfo.h>
@@ -216,6 +216,8 @@ public:
         sequence = 0;
         total_data_size = 0;
     }
+
+    size_t size() const { return writes.size(); }
 
     SequenceID getSequence() const { return sequence; }
 

@@ -26,6 +26,7 @@
 #include <Storages/DeltaMerge/Filter/PushDownFilter.h>
 #include <Storages/DeltaMerge/Remote/DisaggSnapshot_fwd.h>
 #include <Storages/DeltaMerge/ScanContext_fwd.h>
+#include <Storages/DeltaMerge/Segment_fwd.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/IStorage.h>
 #include <Storages/KVStore/Decode/DecodingStorageSchemaSnapshot.h>
@@ -48,9 +49,6 @@ using DeltaMergeStorePtr = std::shared_ptr<DeltaMergeStore>;
 using RowKeyRanges = std::vector<RowKeyRange>;
 struct ExternalDTFileInfo;
 struct GCOptions;
-class Segment;
-using SegmentPtr = std::shared_ptr<Segment>;
-using Segments = std::vector<SegmentPtr>;
 } // namespace DM
 
 class StorageDeltaMerge
@@ -133,7 +131,7 @@ public:
         CheckpointInfoPtr checkpoint_info,
         const Settings & settings);
 
-    void ingestSegmentsFromCheckpointInfo(
+    UInt64 ingestSegmentsFromCheckpointInfo(
         const DM::RowKeyRange & range,
         const CheckpointIngestInfoPtr & checkpoint_info,
         const Settings & settings);
@@ -201,7 +199,8 @@ public:
 
     std::pair<DB::DecodingStorageSchemaSnapshotConstPtr, BlockUPtr> getSchemaSnapshotAndBlockForDecoding(
         const TableStructureLockHolder & table_structure_lock,
-        bool /* need_block */) override;
+        bool need_block,
+        bool with_version_column) override;
 
     void releaseDecodingBlock(Int64 block_decoding_schema_epoch, BlockUPtr block) override;
 

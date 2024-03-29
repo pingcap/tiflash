@@ -15,13 +15,13 @@
 #include <Common/FailPoint.h>
 #include <Common/SyncPoint/SyncPoint.h>
 #include <Common/TiFlashMetrics.h>
-#include <Encryption/FileProvider.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
+#include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/GCOptions.h>
 #include <Storages/DeltaMerge/Segment.h>
-#include <Storages/DeltaMerge/StoragePool.h>
+#include <Storages/DeltaMerge/StoragePool/StoragePool.h>
 #include <Storages/KVStore/KVStore.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/PathPool.h>
@@ -82,7 +82,8 @@ public:
         for (auto & root_path : delegate.listPaths())
         {
             std::set<PageIdU64> ids_under_path;
-            auto file_ids_in_current_path = DMFile::listAllInPath(file_provider, root_path, options);
+            auto file_ids_in_current_path
+                = DMFile::listAllInPath(file_provider, root_path, options, path_pool->getKeyspaceID());
             path_and_ids_vec.emplace_back(root_path, std::move(file_ids_in_current_path));
         }
         return path_and_ids_vec;
@@ -272,7 +273,7 @@ void DeltaMergeStore::setUpBackgroundTask(const DMContextPtr & dm_context)
     // that callbacks is called after the `DeltaMergeStore` shutdown or dropped,
     // we must make the callbacks safe.
     ExternalPageCallbacks callbacks;
-    callbacks.prefix = storage_pool->getNamespaceID();
+    callbacks.prefix = storage_pool->getTableID();
     if (auto data_store = dm_context->global_context.getSharedContextDisagg()->remote_data_store; !data_store)
     {
         callbacks.scanner

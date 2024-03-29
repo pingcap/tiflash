@@ -174,7 +174,7 @@ mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t1 
 
 # ensure the partitions is not mark as tombstone
 >> DBGInvoke __enable_schema_sync_service('true')
->> DBGInvoke __gc_schemas(18446744073709551615)
+>> DBGInvoke __gc_schemas(18446744073709551615, 'true')
 >> DBGInvoke __enable_schema_sync_service('false')
 mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t1 order by id;
 +----+------+------+

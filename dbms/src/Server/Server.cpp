@@ -37,21 +37,21 @@
 #include <Common/getNumberOfCPUCores.h>
 #include <Common/setThreadName.h>
 #include <Core/TiFlashDisaggregatedMode.h>
-#include <Encryption/DataKeyManager.h>
-#include <Encryption/FileProvider.h>
-#include <Encryption/MockKeyManager.h>
-#include <Encryption/RateLimiter.h>
 #include <Flash/DiagnosticsService.h>
 #include <Flash/FlashService.h>
 #include <Flash/Mpp/GRPCCompletionQueuePool.h>
 #include <Flash/Pipeline/Schedule/TaskScheduler.h>
 #include <Flash/ResourceControl/LocalAdmissionController.h>
 #include <Functions/registerFunctions.h>
+#include <IO/BaseFile/RateLimiter.h>
+#include <IO/Encryption/DataKeyManager.h>
+#include <IO/Encryption/KeyspacesKeyManager.h>
+#include <IO/Encryption/MockKeyManager.h>
+#include <IO/FileProvider/FileProvider.h>
 #include <IO/HTTPCommon.h>
 #include <IO/IOThreadPools.h>
 #include <IO/ReadHelpers.h>
 #include <IO/UseSSL.h>
-#include <IO/createReadBufferFromFileBase.h>
 #include <Interpreters/AsynchronousMetrics.h>
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/SharedContexts/Disagg.h>
@@ -77,6 +77,7 @@
 #include <Storages/DeltaMerge/ReadThread/ColumnSharingCache.h>
 #include <Storages/DeltaMerge/ReadThread/SegmentReadTaskScheduler.h>
 #include <Storages/DeltaMerge/ReadThread/SegmentReader.h>
+#include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/FormatVersion.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/KVStore/FFI/FileEncryption.h>
@@ -102,7 +103,6 @@
 
 #include <boost/algorithm/string/classification.hpp>
 #include <ext/scope_guard.h>
-#include <limits>
 #include <magic_enum.hpp>
 #include <memory>
 #include <thread>
@@ -950,6 +950,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     TiFlashErrorRegistry::instance(); // This invocation is for initializing
 
+    DM::ScanContext::initCurrentInstanceId(config(), log);
+
     const auto disaggregated_mode = getDisaggregatedMode(config());
     const auto use_autoscaler = useAutoScaler(config());
 
@@ -1030,6 +1032,12 @@ int Server::main(const std::vector<std::string> & /*args*/)
         LOG_INFO(log, "UniPS is not enabled for proxy, page_version={}", STORAGE_FORMAT_CURRENT.page);
     }
 
+#ifdef USE_JEMALLOC
+    LOG_INFO(log, "Using Jemalloc for TiFlash");
+#else
+    LOG_INFO(log, "Not using Jemalloc for TiFlash");
+#endif
+
     RaftStoreProxyRunner proxy_runner(RaftStoreProxyRunner::RunRaftStoreProxyParms{&helper, proxy_conf}, log);
 
     if (proxy_conf.is_proxy_runnable)
@@ -1040,13 +1048,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
         while (!tiflash_instance_wrap.proxy_helper)
             std::this_thread::sleep_for(std::chrono::milliseconds(200));
         LOG_INFO(log, "tiflash proxy is initialized");
-        if (tiflash_instance_wrap.proxy_helper->checkEncryptionEnabled())
-        {
-            auto method = tiflash_instance_wrap.proxy_helper->getEncryptionMethod();
-            LOG_INFO(log, "encryption is enabled, method is {}", IntoEncryptionMethodName(method));
-        }
-        else
-            LOG_INFO(log, "encryption is disabled");
     }
     else
     {
@@ -1055,10 +1056,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     SCOPE_EXIT({
         if (!proxy_conf.is_proxy_runnable)
-        {
-            proxy_runner.join();
             return;
-        }
+
         LOG_INFO(log, "Let tiflash proxy shutdown");
         tiflash_instance_wrap.status = EngineStoreServerStatus::Terminated;
         tiflash_instance_wrap.tmt = nullptr;
@@ -1091,17 +1090,30 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->getSharedContextDisagg()->use_autoscaler = use_autoscaler;
 
     /// Init File Provider
-    bool enable_encryption = false;
     if (proxy_conf.is_proxy_runnable)
     {
-        enable_encryption = tiflash_instance_wrap.proxy_helper->checkEncryptionEnabled();
-        if (enable_encryption)
+        const bool enable_encryption = tiflash_instance_wrap.proxy_helper->checkEncryptionEnabled();
+        if (enable_encryption && storage_config.s3_config.isS3Enabled())
         {
-            auto method = tiflash_instance_wrap.proxy_helper->getEncryptionMethod();
-            enable_encryption = (method != EncryptionMethod::Plaintext);
+            LOG_INFO(log, "encryption can be enabled, method is Aes256Ctr");
+            // The UniversalPageStorage has not been init yet, the UniversalPageStoragePtr in KeyspacesKeyManager is nullptr.
+            KeyManagerPtr key_manager
+                = std::make_shared<KeyspacesKeyManager<TiFlashRaftProxyHelper>>(tiflash_instance_wrap.proxy_helper);
+            global_context->initializeFileProvider(key_manager, true);
         }
-        KeyManagerPtr key_manager = std::make_shared<DataKeyManager>(&tiflash_instance_wrap);
-        global_context->initializeFileProvider(key_manager, enable_encryption);
+        else if (enable_encryption)
+        {
+            const auto method = tiflash_instance_wrap.proxy_helper->getEncryptionMethod();
+            LOG_INFO(log, "encryption is enabled, method is {}", magic_enum::enum_name(method));
+            KeyManagerPtr key_manager = std::make_shared<DataKeyManager>(&tiflash_instance_wrap);
+            global_context->initializeFileProvider(key_manager, method != EncryptionMethod::Plaintext);
+        }
+        else
+        {
+            LOG_INFO(log, "encryption is disabled");
+            KeyManagerPtr key_manager = std::make_shared<DataKeyManager>(&tiflash_instance_wrap);
+            global_context->initializeFileProvider(key_manager, false);
+        }
     }
     else
     {
@@ -1123,14 +1135,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         storage_config.s3_config.isS3Enabled());
 
     if (storage_config.s3_config.isS3Enabled())
-    {
-        if (enable_encryption)
-        {
-            LOG_ERROR(log, "Cannot support S3 when encryption enabled.");
-            throw Exception("Cannot support S3 when encryption enabled.");
-        }
         S3::ClientFactory::instance().init(storage_config.s3_config);
-    }
 
     global_context->getSharedContextDisagg()->initRemoteDataStore(
         global_context->getFileProvider(),
@@ -1297,6 +1302,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         settings.bytes_that_rss_larger_than_limit);
 
     /// PageStorage run mode has been determined above
+    global_context->initializeGlobalPageIdAllocator();
     if (!global_context->getSharedContextDisagg()->isDisaggregatedComputeMode())
     {
         global_context->initializeGlobalStoragePoolIfNeed(global_context->getPathPool());
@@ -1317,6 +1323,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
         global_context->initializeWriteNodePageStorageIfNeed(global_context->getPathPool());
         if (auto wn_ps = global_context->tryGetWriteNodePageStorage(); wn_ps != nullptr)
         {
+            if (tiflash_instance_wrap.proxy_helper->checkEncryptionEnabled() && storage_config.s3_config.isS3Enabled())
+            {
+                global_context->getFileProvider()->setPageStoragePtrForKeyManager(wn_ps);
+            }
             store_ident = tryGetStoreIdent(wn_ps);
             if (!store_ident)
             {
@@ -1409,11 +1419,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     /// Limit on total number of concurrently executed queries.
     global_context->getProcessList().setMaxSize(config().getInt("max_concurrent_queries", 0));
-
-    /// Size of cache for uncompressed blocks. Zero means disabled.
-    size_t uncompressed_cache_size = config().getUInt64("uncompressed_cache_size", 0);
-    if (uncompressed_cache_size)
-        global_context->setUncompressedCache(uncompressed_cache_size);
 
     /// Size of cache for marks (index of MergeTree family of tables). It is necessary.
     size_t mark_cache_size = config().getUInt64("mark_cache_size", DEFAULT_MARK_CACHE_SIZE);
@@ -1583,7 +1588,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
 
     {
-        TcpHttpServersHolder tcpHttpServersHolder(*this, settings, log);
+        TcpHttpServersHolder tcp_http_servers_holder(*this, settings, log);
 
         main_config_reloader->addConfigObject(global_context->getSecurityConfig());
         main_config_reloader->start();
@@ -1607,7 +1612,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         SCOPE_EXIT({
             is_cancelled = true;
 
-            tcpHttpServersHolder.onExit();
+            tcp_http_servers_holder.onExit();
 
             main_config_reloader.reset();
             users_config_reloader.reset();
@@ -1712,6 +1717,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
                 LOG_ERROR(log, "Current status of engine-store is NOT Running, should not happen");
                 exit(-1);
             }
+            LOG_INFO(log, "Stop collecting thread alloc metrics");
+            tmt_context.getKVStore()->stopThreadAllocInfo();
             LOG_INFO(log, "Set store context status Stopping");
             tmt_context.setStatusStopping();
             {

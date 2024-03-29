@@ -20,6 +20,7 @@
 #include <Flash/Coprocessor/RemoteRequest.h>
 #include <Flash/Mpp/MPPTaskId.h>
 #include <Interpreters/Context_fwd.h>
+#include <Storages/DeltaMerge/ColumnDefine_fwd.h>
 #include <Storages/DeltaMerge/Remote/DisaggTaskId.h>
 #include <Storages/DeltaMerge/Remote/RNWorkers_fwd.h>
 #include <Storages/DeltaMerge/SegmentReadTask.h>
@@ -38,9 +39,6 @@ class DAGContext;
 
 namespace DM
 {
-struct ColumnDefine;
-using ColumnDefines = std::vector<ColumnDefine>;
-using ColumnDefinesPtr = std::shared_ptr<ColumnDefines>;
 class RSOperator;
 using RSOperatorPtr = std::shared_ptr<RSOperator>;
 } // namespace DM
@@ -127,7 +125,7 @@ private:
         size_t num_streams);
 
     using RemoteTableRange = std::pair<TableID, pingcap::coprocessor::KeyRanges>;
-    std::vector<RemoteTableRange> buildRemoteTableRanges();
+    std::tuple<std::vector<RemoteTableRange>, UInt64> buildRemoteTableRanges();
     std::vector<pingcap::coprocessor::BatchCopTask> buildBatchCopTasks(
         const std::vector<RemoteTableRange> & remote_table_ranges,
         const pingcap::kv::LabelFilter & label_filter);

@@ -23,7 +23,7 @@
 #include <Storages/DeltaMerge/RowKeyFilter.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/StableValueSpace.h>
-#include <Storages/DeltaMerge/StoragePool.h>
+#include <Storages/DeltaMerge/StoragePool/StoragePool.h>
 #include <Storages/DeltaMerge/WriteBatchesImpl.h>
 #include <Storages/Page/V3/Universal/UniversalPageIdFormatImpl.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
@@ -472,6 +472,7 @@ SkippableBlockInputStreamPtr StableValueSpace::Snapshot::getInputStream(
     UInt64 max_data_version,
     size_t expected_block_size,
     bool enable_handle_clean_read,
+    ReadTag read_tag,
     bool is_fast_scan,
     bool enable_del_clean_read,
     const std::vector<IdSetPtr> & read_packs,
@@ -496,7 +497,8 @@ SkippableBlockInputStreamPtr StableValueSpace::Snapshot::getInputStream(
             .setColumnCache(column_caches[i])
             .setTracingID(context.tracing_id)
             .setRowsThreshold(expected_block_size)
-            .setReadPacks(read_packs.size() > i ? read_packs[i] : nullptr);
+            .setReadPacks(read_packs.size() > i ? read_packs[i] : nullptr)
+            .setReadTag(read_tag);
         streams.push_back(builder.build(stable->files[i], read_columns, rowkey_ranges, context.scan_context));
         rows.push_back(stable->files[i]->getRows());
     }

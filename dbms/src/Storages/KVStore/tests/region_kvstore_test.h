@@ -15,12 +15,9 @@
 #pragma once
 
 #include <Storages/DeltaMerge/Decode/SSTFilesToBlockInputStream.h>
+#include <Storages/KVStore/tests/kvstore_helper.h>
 
-#include "kvstore_helper.h"
-
-namespace DB
-{
-namespace tests
+namespace DB::tests
 {
 
 class RegionKVStoreTest : public KVStoreTestBase
@@ -36,6 +33,8 @@ public:
     {
         return region->splitInto(std::move(meta));
     }
+
+    static void dropTable(Context & ctx, TableID table_id);
 };
 
 inline void validateSSTGeneration(
@@ -84,5 +83,4 @@ inline void validateSSTGeneration(
     ASSERT_EQ(counter, key_count);
 }
 
-} // namespace tests
-} // namespace DB
+} // namespace DB::tests

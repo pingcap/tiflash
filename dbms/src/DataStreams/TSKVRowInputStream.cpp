@@ -135,7 +135,7 @@ bool TSKVRowInputStream::read(MutableColumns & columns)
                 /// NOTE Optimization is possible by caching the order of fields (which is almost always the same)
                 /// and quickly checking for the next expected field, instead of searching the hash table.
 
-                auto it = name_map.find(name_ref);
+                auto * it = name_map.find(name_ref);
                 if (name_map.end() == it)
                 {
                     if (!skip_unknown)
@@ -164,7 +164,7 @@ bool TSKVRowInputStream::read(MutableColumns & columns)
             else
             {
                 /// The only thing that can go without value is `tskv` fragment that is ignored.
-                if (!(name_ref.size == 4 && 0 == memcmp(name_ref.data, "tskv", 4)))
+                if (name_ref.size != 4 || 0 != memcmp(name_ref.data, "tskv", 4))
                     throw Exception(
                         "Found field without value while parsing TSKV format: " + name_ref.toString(),
                         ErrorCodes::INCORRECT_DATA);

@@ -19,8 +19,8 @@
 #include <DataStreams/NativeBlockOutputStream.h>
 #include <DataStreams/SortHelper.h>
 #include <DataStreams/copyData.h>
-#include <IO/CompressedWriteBuffer.h>
-#include <IO/WriteBufferFromFile.h>
+#include <IO/Buffer/WriteBufferFromFile.h>
+#include <IO/Compression/CompressedWriteBuffer.h>
 #include <common/logger_useful.h>
 
 namespace DB

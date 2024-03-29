@@ -14,11 +14,12 @@
 
 #include <Common/CurrentMetrics.h>
 #include <Common/TiFlashMetrics.h>
-#include <IO/ReadBuffer.h>
-#include <IO/ReadBufferFromString.h>
+#include <IO/Buffer/ReadBuffer.h>
+#include <IO/Buffer/ReadBufferFromString.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/Remote/RNLocalPageCache.h>
+#include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
 #include <Storages/Page/V3/Universal/UniversalWriteBatchImpl.h>
 

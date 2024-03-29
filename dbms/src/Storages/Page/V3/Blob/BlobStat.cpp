@@ -21,6 +21,14 @@
 
 #include <boost/algorithm/string/classification.hpp>
 
+#pragma GCC diagnostic push
+#ifdef __clang__
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#endif
+// include to suppress warnings on NO_THREAD_SAFETY_ANALYSIS. clang can't work without this include, don't know why
+#include <grpcpp/security/credentials.h>
+#pragma GCC diagnostic pop
+
 namespace ProfileEvents
 {
 extern const Event PSMWritePages;
@@ -279,6 +287,12 @@ BlobStats::BlobStatPtr BlobStats::blobIdToStat(BlobFileId file_id, bool ignore_n
     }
 
     return nullptr;
+}
+
+BlobStats::StatsMap BlobStats::getStats() const NO_THREAD_SAFETY_ANALYSIS
+{
+    auto guard = lock();
+    return stats_map;
 }
 
 /*********************

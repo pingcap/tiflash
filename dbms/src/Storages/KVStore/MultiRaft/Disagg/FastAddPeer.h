@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Inc.
+// Copyright 2024 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,93 +15,43 @@
 #pragma once
 
 #include <Storages/KVStore/FFI/ProxyFFI.h>
-#include <Storages/KVStore/MultiRaft/Disagg/FastAddPeerCache.h>
 #include <Storages/KVStore/Utils/AsyncTasks.h>
 
 namespace DB
 {
-using FAPAsyncTasks = AsyncTasks<uint64_t, std::function<FastAddPeerRes()>, FastAddPeerRes>;
 struct CheckpointInfo;
 using CheckpointInfoPtr = std::shared_ptr<CheckpointInfo>;
 class Region;
 using RegionPtr = std::shared_ptr<Region>;
 using CheckpointRegionInfoAndData
     = std::tuple<CheckpointInfoPtr, RegionPtr, raft_serverpb::RaftApplyState, raft_serverpb::RegionLocalState>;
-struct CheckpointIngestInfo;
-using CheckpointIngestInfoPtr = std::shared_ptr<CheckpointIngestInfo>;
+FastAddPeerRes genFastAddPeerRes(FastAddPeerStatus status, std::string && apply_str, std::string && region_str);
+std::variant<CheckpointRegionInfoAndData, FastAddPeerRes> FastAddPeerImplSelect(
+    TMTContext & tmt,
+    const TiFlashRaftProxyHelper * proxy_helper,
+    uint64_t region_id,
+    uint64_t new_peer_id);
+FastAddPeerRes FastAddPeerImplWrite(
+    TMTContext & tmt,
+    const TiFlashRaftProxyHelper * proxy_helper,
+    UInt64 region_id,
+    UInt64 new_peer_id,
+    CheckpointRegionInfoAndData && checkpoint,
+    UInt64 start_time);
 
-namespace DM
-{
-class Segment;
-using SegmentPtr = std::shared_ptr<Segment>;
-using Segments = std::vector<SegmentPtr>;
-} // namespace DM
-
-class FastAddPeerContext
-{
-public:
-    explicit FastAddPeerContext(uint64_t thread_count = 0);
-
-    // Return parsed checkpoint data and its corresponding seq which is newer than `required_seq` if exists, otherwise return pair<required_seq, nullptr>
-    std::pair<UInt64, ParsedCheckpointDataHolderPtr> getNewerCheckpointData(
-        Context & context,
-        UInt64 store_id,
-        UInt64 required_seq);
-
-    // Checkpoint ingest management
-    CheckpointIngestInfoPtr getOrRestoreCheckpointIngestInfo(
-        TMTContext & tmt,
-        const struct TiFlashRaftProxyHelper * proxy_helper,
-        UInt64 region_id,
-        UInt64 peer_id);
-    void insertCheckpointIngestInfo(
-        TMTContext & tmt,
-        UInt64 region_id,
-        UInt64 peer_id,
-        UInt64 remote_store_id,
-        RegionPtr region,
-        DM::Segments && segments,
-        UInt64 start_time);
-    std::optional<CheckpointIngestInfoPtr> tryGetCheckpointIngestInfo(UInt64 region_id) const;
-    void cleanCheckpointIngestInfo(TMTContext & tmt, UInt64 region_id);
-
-    // Remove the checkpoint ingest info from memory. Only for testing.
-    void debugRemoveCheckpointIngestInfo(UInt64 region_id);
-
-public:
-    std::shared_ptr<FAPAsyncTasks> tasks_trace;
-
-private:
-    class CheckpointCacheElement
-    {
-    public:
-        explicit CheckpointCacheElement(const String & manifest_key_, UInt64 dir_seq_)
-            : manifest_key(manifest_key_)
-            , dir_seq(dir_seq_)
-        {}
-
-        ParsedCheckpointDataHolderPtr getParsedCheckpointData(Context & context);
-
-    private:
-        std::mutex mu;
-        String manifest_key;
-        UInt64 dir_seq;
-        ParsedCheckpointDataHolderPtr parsed_checkpoint_data;
-    };
-    using CheckpointCacheElementPtr = std::shared_ptr<CheckpointCacheElement>;
-
-    std::atomic<UInt64> temp_ps_dir_sequence = 0;
-
-    std::mutex cache_mu;
-    // Store the latest manifest data for every store
-    // StoreId -> std::pair<UploadSeq, CheckpointCacheElementPtr>
-    std::unordered_map<UInt64, std::pair<UInt64, CheckpointCacheElementPtr>> checkpoint_cache_map;
-
-    // Checkpoint that is persisted, but yet to be ingested into DeltaTree.
-    mutable std::mutex ingest_info_mu;
-    // RegionID->CheckpointIngestInfoPtr
-    std::unordered_map<UInt64, CheckpointIngestInfoPtr> checkpoint_ingest_info_map;
-
-    LoggerPtr log;
-};
+FastAddPeerRes FastAddPeerImpl(
+    FastAddPeerContextPtr fap_ctx,
+    TMTContext & tmt,
+    const TiFlashRaftProxyHelper * proxy_helper,
+    UInt64 region_id,
+    UInt64 new_peer_id,
+    UInt64 start_time);
+uint8_t ApplyFapSnapshotImpl(
+    TMTContext & tmt,
+    TiFlashRaftProxyHelper * proxy_helper,
+    UInt64 region_id,
+    UInt64 peer_id,
+    bool assert_exist,
+    UInt64 index,
+    UInt64 term);
 } // namespace DB

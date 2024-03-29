@@ -30,12 +30,12 @@
 #include <Core/Types.h>
 #include <DataStreams/AsynchronousBlockInputStream.h>
 #include <Functions/registerFunctions.h>
-#include <IO/ReadBufferFromFileDescriptor.h>
-#include <IO/ReadBufferFromMemory.h>
-#include <IO/ReadBufferFromString.h>
+#include <IO/Buffer/ReadBufferFromFileDescriptor.h>
+#include <IO/Buffer/ReadBufferFromMemory.h>
+#include <IO/Buffer/ReadBufferFromString.h>
+#include <IO/Buffer/WriteBufferFromFile.h>
+#include <IO/Buffer/WriteBufferFromFileDescriptor.h>
 #include <IO/ReadHelpers.h>
-#include <IO/WriteBufferFromFile.h>
-#include <IO/WriteBufferFromFileDescriptor.h>
 #include <IO/WriteHelpers.h>
 #include <Interpreters/Context.h>
 #include <Parsers/ASTIdentifier.h>

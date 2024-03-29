@@ -14,6 +14,7 @@
 
 #include <Common/SyncPoint/SyncPoint.h>
 #include <Common/TiFlashMetrics.h>
+#include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/WriteBatchesImpl.h>
@@ -597,7 +598,7 @@ SegmentPtr DeltaMergeStore::segmentIngestData(
             new_segment = apply_result;
 
             RUNTIME_CHECK(
-                compare(segment->getRowKeyRange().getEnd(), new_segment->getRowKeyRange().getEnd()) == 0,
+                segment->getRowKeyRange().getEnd() == new_segment->getRowKeyRange().getEnd(),
                 segment->info(),
                 new_segment->info());
             RUNTIME_CHECK(segment->segmentId() == new_segment->segmentId(), segment->info(), new_segment->info());
@@ -672,7 +673,7 @@ SegmentPtr DeltaMergeStore::segmentDangerouslyReplaceDataFromCheckpoint(
             column_file_persisteds);
 
         RUNTIME_CHECK(
-            compare(segment->getRowKeyRange().getEnd(), new_segment->getRowKeyRange().getEnd()) == 0,
+            segment->getRowKeyRange().getEnd() == new_segment->getRowKeyRange().getEnd(),
             segment->info(),
             new_segment->info());
         RUNTIME_CHECK(segment->segmentId() == new_segment->segmentId(), segment->info(), new_segment->info());

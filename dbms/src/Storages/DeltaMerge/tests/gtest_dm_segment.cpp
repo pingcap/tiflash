@@ -20,7 +20,9 @@
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
 #include <Storages/DeltaMerge/Segment.h>
-#include <Storages/DeltaMerge/StoragePool.h>
+#include <Storages/DeltaMerge/Segment_fwd.h>
+#include <Storages/DeltaMerge/StoragePool/GlobalPageIdAllocator.h>
+#include <Storages/DeltaMerge/StoragePool/StoragePool.h>
 #include <Storages/DeltaMerge/WriteBatchesImpl.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
 #include <Storages/DeltaMerge/tests/gtest_dm_simple_pk_test_basic.h>
@@ -35,6 +37,7 @@
 #include <ctime>
 #include <future>
 #include <memory>
+
 
 namespace CurrentMetrics
 {
@@ -71,17 +74,25 @@ public:
         TiFlashStorageTestBasic::SetUp();
         table_columns = std::make_shared<ColumnDefines>();
 
-        segment = reload();
+        segment = buildFirstSegment();
         ASSERT_EQ(segment->segmentId(), DELTA_MERGE_FIRST_SEGMENT_ID);
     }
 
 protected:
-    SegmentPtr reload(const ColumnDefinesPtr & pre_define_columns = {}, DB::Settings && db_settings = DB::Settings())
+    SegmentPtr buildFirstSegment(
+        const ColumnDefinesPtr & pre_define_columns = {},
+        DB::Settings && db_settings = DB::Settings())
     {
         TiFlashStorageTestBasic::reload(std::move(db_settings));
         storage_path_pool = std::make_shared<StoragePathPool>(db_context->getPathPool().withTable("test", "t1", false));
-        storage_pool
-            = std::make_shared<StoragePool>(*db_context, NullspaceID, /*ns_id*/ 100, *storage_path_pool, "test.t1");
+        page_id_allocator = std::make_shared<GlobalPageIdAllocator>();
+        storage_pool = std::make_shared<StoragePool>(
+            *db_context,
+            NullspaceID,
+            /*ns_id*/ 100,
+            *storage_path_pool,
+            page_id_allocator,
+            "test.t1");
         storage_pool->restore();
         ColumnDefinesPtr cols = (!pre_define_columns) ? DMTestEnv::getDefaultColumns() : pre_define_columns;
         setColumns(cols);
@@ -91,7 +102,7 @@ protected:
             *dm_context,
             table_columns,
             RowKeyRange::newAll(false, 1),
-            storage_pool->newMetaPageId(),
+            DELTA_MERGE_FIRST_SEGMENT_ID,
             0);
     }
 
@@ -118,6 +129,7 @@ protected:
 
 protected:
     /// all these var lives as ref in dm_context
+    GlobalPageIdAllocatorPtr page_id_allocator;
     std::shared_ptr<StoragePathPool> storage_path_pool;
     std::shared_ptr<StoragePool> storage_pool;
     ColumnDefinesPtr table_columns;
@@ -436,7 +448,7 @@ try
     Settings my_settings;
     const auto enable_relevant_place = GetParam();
     my_settings.dt_enable_relevant_place = enable_relevant_place;
-    this->reload({}, std::move(my_settings));
+    this->buildFirstSegment({}, std::move(my_settings));
 
     const size_t num_rows_write = 300;
     {
@@ -990,7 +1002,7 @@ try
     settings.dt_segment_limit_rows = 11;
     settings.dt_segment_delta_limit_rows = 7;
 
-    segment = reload(DMTestEnv::getDefaultColumns(), std::move(settings));
+    segment = buildFirstSegment(DMTestEnv::getDefaultColumns(), std::move(settings));
 
     size_t num_batches_written = 0;
     const size_t num_rows_per_write = 5;
@@ -1306,7 +1318,7 @@ try
         auto columns_before_ddl = DMTestEnv::getDefaultColumns();
         columns_before_ddl->emplace_back(column_i8_before_ddl);
         DB::Settings db_settings;
-        segment = reload(columns_before_ddl, std::move(db_settings));
+        segment = buildFirstSegment(columns_before_ddl, std::move(db_settings));
 
         /// write to segment
         Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
@@ -1431,7 +1443,7 @@ try
         auto columns_before_ddl = DMTestEnv::getDefaultColumns();
         // Not cache any rows
         DB::Settings db_settings;
-        segment = reload(columns_before_ddl, std::move(db_settings));
+        segment = buildFirstSegment(columns_before_ddl, std::move(db_settings));
     }
 
     const size_t num_rows_write = 100;
@@ -1551,7 +1563,7 @@ try
     Settings settings = dmContext().global_context.getSettings();
     settings.dt_segment_stable_pack_rows = 10;
 
-    segment = reload(DMTestEnv::getDefaultColumns(), std::move(settings));
+    segment = buildFirstSegment(DMTestEnv::getDefaultColumns(), std::move(settings));
 
     const size_t num_rows_write_every_round = 100;
     const size_t write_round = 3;
@@ -1592,7 +1604,7 @@ try
     Settings settings = dmContext().global_context.getSettings();
     settings.dt_segment_stable_pack_rows = 10;
 
-    segment = reload(DMTestEnv::getDefaultColumns(), std::move(settings));
+    segment = buildFirstSegment(DMTestEnv::getDefaultColumns(), std::move(settings));
 
     const size_t num_rows_write_every_round = 100;
     const size_t write_round = 3;

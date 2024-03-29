@@ -14,49 +14,22 @@
 
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaTree.h>
-#include <Storages/DeltaMerge/Tuple.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
 namespace DB::DM::tests
 {
-
-#define print(M) std::cout << "" #M ": " << M << std::endl
-
-class FakeValueSpace;
-using FakeDeltaTree = DeltaTree<FakeValueSpace, 2, 10>;
 
 class FakeValueSpace
 {
     using ValueSpace = FakeValueSpace;
 
 public:
-    void removeFromInsert(UInt64 id)
-    {
-        //
-        std::cout << "remove : " << id << std::endl;
-    }
-
-    void removeFromModify(UInt64 id, size_t column_id)
-    {
-        //
-        std::cout << "remove : " << id << ", column:" << column_id << std::endl;
-    }
-
-    UInt64 withModify(UInt64 old_tuple_id, const ValueSpace & /*modify_value_space*/, const RefTuple & tuple)
-    {
-        std::cout << "withModify, old_tuple_id:" << old_tuple_id << ", modifies:[";
-        for (const auto & m : tuple.values)
-        {
-            std::cout << m.column << ",";
-        }
-        std::cout << "]" << std::endl;
-        return old_tuple_id;
-    }
+    static void removeFromInsert(UInt64 /*id*/) {}
 };
-
 using FakeValueSpacePtr = std::shared_ptr<FakeValueSpace>;
+using FakeDeltaTree = DeltaTree<FakeValueSpace, 2, 10>;
 
-class DeltaTree_test : public ::testing::Test
+class DeltaTreeTest : public ::testing::Test
 {
 protected:
     void SetUp() override
@@ -77,18 +50,6 @@ protected:
     MemoryTrackerPtr memory_tracker;
     std::optional<MemoryTrackerSetter> memory_tracker_setter;
 };
-
-void printTree(const FakeDeltaTree & tree)
-{
-    print(tree.getHeight());
-    for (auto it = tree.begin(), end = tree.end(); it != end; ++it)
-    {
-        std::cout << "(" << it.getRid() << "|" << it.getSid() << "|"
-                  << DTType::DTTypeString(it.getMutation().isInsert()) << "|" << DB::toString(it.getMutation().count())
-                  << "|" << DB::toString(it.getMutation().value) << "),";
-    }
-    std::cout << std::endl;
-}
 
 std::string treeToString(const FakeDeltaTree & tree)
 {
@@ -120,15 +81,7 @@ void checkCopy(FakeDeltaTree & tree)
     tree.swap(copy);
 }
 
-TEST_F(DeltaTree_test, PrintSize)
-{
-    std::cout << "=====================\n";
-    std::cout << "DT leaf node size: " << sizeof(DTLeaf<55, 20, 3>) << "\n";
-    std::cout << "DT inter node size: " << sizeof(DTIntern<55, 20, 3>) << "\n";
-    std::cout << "=====================\n";
-}
-
-TEST_F(DeltaTree_test, Insert)
+TEST_F(DeltaTreeTest, Insert)
 {
     auto & tree = *fake_tree;
     // insert 100 items
@@ -137,8 +90,6 @@ TEST_F(DeltaTree_test, Insert)
         tree.addInsert(i, i);
         tree.checkAll();
     }
-    std::cout << "a====\n";
-    printTree(tree);
     checkCopy(tree);
 
     // delete 100 items
@@ -147,8 +98,6 @@ TEST_F(DeltaTree_test, Insert)
         tree.addDelete(0);
         tree.checkAll();
     }
-    std::cout << "b====\n";
-    printTree(tree);
     checkCopy(tree);
 
     // insert 100 items
@@ -157,8 +106,6 @@ TEST_F(DeltaTree_test, Insert)
         tree.addInsert(i, i);
         tree.checkAll();
     }
-    std::cout << "1111====\n";
-    printTree(tree);
     checkCopy(tree);
 
     // delete
@@ -167,8 +114,6 @@ TEST_F(DeltaTree_test, Insert)
         tree.addDelete(0);
         tree.checkAll();
     }
-    std::cout << "c====\n";
-    printTree(tree);
     checkCopy(tree);
 
     // delete
@@ -177,8 +122,6 @@ TEST_F(DeltaTree_test, Insert)
         tree.addDelete(i);
         tree.checkAll();
     }
-    std::cout << "f====\n";
-    printTree(tree);
     checkCopy(tree);
 
     // delete
@@ -197,8 +140,6 @@ TEST_F(DeltaTree_test, Insert)
     tree.addDelete(1);
     tree.addDelete(64);
 
-    std::cout << "g111====\n";
-    printTree(tree);
     checkCopy(tree);
 
     // insert
@@ -206,75 +147,69 @@ TEST_F(DeltaTree_test, Insert)
     {
         tree.addInsert(i, i);
     }
-    std::cout << "h====\n";
-    printTree(tree);
     checkCopy(tree);
 }
 
-TEST_F(DeltaTree_test, DeleteAfterInsert)
+TEST_F(DeltaTreeTest, DeleteAfterInsert)
 {
     auto & tree = *fake_tree;
     int batch_num = 100;
 
-    std::string expectedResult;
+    std::string expected_result;
     for (int i = 0; i < batch_num; ++i)
     {
         tree.addInsert(i, i);
         tree.checkAll();
-        expectedResult += "(" + std::to_string(i) + "|0|INS|1|" + std::to_string(i) + "),";
-        ASSERT_EQ(expectedResult, treeToString(tree));
+        expected_result += "(" + std::to_string(i) + "|0|INS|1|" + std::to_string(i) + "),";
+        ASSERT_EQ(expected_result, treeToString(tree));
     }
     checkCopy(tree);
-    std::cout << "after many insert 1\n";
 
-    expectedResult = "";
+    expected_result = "";
     for (int i = 0; i < batch_num; ++i)
     {
         tree.addDelete(0);
         tree.checkAll();
-        expectedResult = "";
+        expected_result = "";
         for (int j = 0; j < batch_num - i - 1; j++)
         {
-            expectedResult += "(" + std::to_string(j) + "|0|INS|1|" + std::to_string(j + i + 1) + "),";
+            expected_result += "(" + std::to_string(j) + "|0|INS|1|" + std::to_string(j + i + 1) + "),";
         }
-        ASSERT_EQ(expectedResult, treeToString(tree));
+        ASSERT_EQ(expected_result, treeToString(tree));
     }
 
-    expectedResult = "";
-    ASSERT_EQ(expectedResult, treeToString(tree));
+    expected_result = "";
+    ASSERT_EQ(expected_result, treeToString(tree));
     checkCopy(tree);
-    std::cout << "after many delete 1\n";
 
     for (int i = 0; i < batch_num; ++i)
     {
         tree.addInsert(0, i);
         tree.checkAll();
-        expectedResult = "";
+        expected_result = "";
         for (int j = 0; j <= i; j++)
         {
-            expectedResult += "(" + std::to_string(j) + "|0|INS|1|" + std::to_string(i - j) + "),";
+            expected_result += "(" + std::to_string(j) + "|0|INS|1|" + std::to_string(i - j) + "),";
         }
-        ASSERT_EQ(expectedResult, treeToString(tree));
+        ASSERT_EQ(expected_result, treeToString(tree));
     }
     checkCopy(tree);
-    std::cout << "after many insert 2\n";
 
     for (int i = batch_num - 1; i >= 0; --i)
     {
         tree.addDelete(i);
         tree.checkAll();
-        expectedResult = "";
+        expected_result = "";
         for (int j = 0; j < i; j++)
         {
-            expectedResult += "(" + std::to_string(j) + "|0|INS|1|" + std::to_string(batch_num - j - 1) + "),";
+            expected_result += "(" + std::to_string(j) + "|0|INS|1|" + std::to_string(batch_num - j - 1) + "),";
         }
-        ASSERT_EQ(expectedResult, treeToString(tree));
+        ASSERT_EQ(expected_result, treeToString(tree));
     }
     checkCopy(tree);
-    std::cout << "after many delete 2\n";
 }
 
-TEST_F(DeltaTree_test, Delete1)
+TEST_F(DeltaTreeTest, Delete1)
 {
     auto & tree = *fake_tree;
     int batch_num = 100;
@@ -285,58 +220,58 @@ TEST_F(DeltaTree_test, Delete1)
         tree.addDelete(0);
         tree.checkAll();
     }
-    std::string expectedResult = "(0|0|DEL|" + DB::toString(batch_num) + "|0),";
-    ASSERT_EQ(expectedResult, treeToString(tree));
+    std::string expected_result = "(0|0|DEL|" + DB::toString(batch_num) + "|0),";
+    ASSERT_EQ(expected_result, treeToString(tree));
     checkCopy(tree);
 }
 
-TEST_F(DeltaTree_test, Delete2)
+TEST_F(DeltaTreeTest, Delete2)
 {
     auto & tree = *fake_tree;
     int batch_num = 100;
 
-    std::string expectedResult;
+    std::string expected_result;
     // delete stable from end to begin
     // this kind of delete behavior may be improved to trigger merge
     for (int i = batch_num - 1; i >= 0; --i)
     {
         tree.addDelete(i);
         tree.checkAll();
-        expectedResult = "";
+        expected_result = "";
         for (int j = i; j < batch_num; j++)
         {
-            expectedResult += "(" + std::to_string(i) + "|" + std::to_string(j) + "|DEL|1|0),";
+            expected_result += "(" + std::to_string(i) + "|" + std::to_string(j) + "|DEL|1|0),";
         }
 
-        ASSERT_EQ(expectedResult, treeToString(tree));
+        ASSERT_EQ(expected_result, treeToString(tree));
     }
     checkCopy(tree);
 }
 
-TEST_F(DeltaTree_test, InsertSkipDelete)
+TEST_F(DeltaTreeTest, InsertSkipDelete)
 {
     auto & tree = *fake_tree;
     int batch_num = 100;
     tree.addDelete(0);
-    std::string expectedResult = "(0|0|DEL|1|0),";
-    ASSERT_EQ(expectedResult, treeToString(tree));
+    std::string expected_result = "(0|0|DEL|1|0),";
+    ASSERT_EQ(expected_result, treeToString(tree));
 
     for (int i = 0; i < batch_num; ++i)
     {
         tree.addInsert(0, i);
         tree.checkAll();
-        expectedResult = "(0|0|DEL|1|0),";
+        expected_result = "(0|0|DEL|1|0),";
         for (int j = 0; j <= i; j++)
         {
-            expectedResult += "(" + std::to_string(j) + "|1|INS|1|" + std::to_string(i - j) + "),";
+            expected_result += "(" + std::to_string(j) + "|1|INS|1|" + std::to_string(i - j) + "),";
         }
-        ASSERT_EQ(expectedResult, treeToString(tree));
+        ASSERT_EQ(expected_result, treeToString(tree));
     }
     checkCopy(tree);
 }
 
 
-TEST_F(DeltaTree_test, CreateNodeFailInCopyCtor)
+TEST_F(DeltaTreeTest, CreateNodeFailInCopyCtor)
 try
 {
     auto & tree = *fake_tree;

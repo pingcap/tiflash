@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <Functions/FunctionHelpers.h>
-#include <IO/MemoryReadWriteBuffer.h>
+#include <IO/Buffer/MemoryReadWriteBuffer.h>
 #include <IO/ReadHelpers.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h>
 #include <Storages/DeltaMerge/DMContext.h>

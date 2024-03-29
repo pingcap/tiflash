@@ -180,27 +180,30 @@ inline UInt32 readWord(int binIdx, const String & dec, int size)
     switch (size)
     {
     case 1:
-        v = Int32(Int8(dec[binIdx]));
+        v = static_cast<Int32>(static_cast<Int8>(dec[binIdx]));
         break;
     case 2:
         if ((dec[binIdx] & 128) > 0)
-            v = (255 << 24) | (255 << 16) | (UInt8(dec[binIdx]) << 8) | UInt8(dec[binIdx + 1]);
+            v = (255 << 24) | (255 << 16) | (static_cast<UInt8>(dec[binIdx]) << 8)
+                | static_cast<UInt8>(dec[binIdx + 1]);
         else
-            v = (UInt8(dec[binIdx]) << 8) | UInt8(dec[binIdx + 1]);
+            v = (static_cast<UInt8>(dec[binIdx]) << 8) | static_cast<UInt8>(dec[binIdx + 1]);
         break;
     case 3:
         if ((dec[binIdx] & 128) > 0)
         {
-            v = (255 << 24) | (UInt8(dec[binIdx]) << 16) | (UInt8(dec[binIdx + 1]) << 8) | UInt8(dec[binIdx + 2]);
+            v = (255 << 24) | (static_cast<UInt8>(dec[binIdx]) << 16) | (static_cast<UInt8>(dec[binIdx + 1]) << 8)
+                | static_cast<UInt8>(dec[binIdx + 2]);
         }
         else
         {
-            v = (UInt8(dec[binIdx]) << 16) | (UInt8(dec[binIdx + 1]) << 8) | UInt8(dec[binIdx + 2]);
+            v = (static_cast<UInt8>(dec[binIdx]) << 16) | (static_cast<UInt8>(dec[binIdx + 1]) << 8)
+                | static_cast<UInt8>(dec[binIdx + 2]);
         }
         break;
     case 4:
-        v = (UInt8(dec[binIdx]) << 24) | (UInt8(dec[binIdx + 1]) << 16) | (UInt8(dec[binIdx + 2]) << 8)
-            | UInt8(dec[binIdx + 3]);
+        v = (static_cast<UInt8>(dec[binIdx]) << 24) | (static_cast<UInt8>(dec[binIdx + 1]) << 16)
+            | (static_cast<UInt8>(dec[binIdx + 2]) << 8) | static_cast<UInt8>(dec[binIdx + 3]);
         break;
     }
     return v;
@@ -239,7 +242,7 @@ T DecodeDecimalImpl(size_t & cursor, const String & raw_value, PrecType prec, Sc
         bin_idx += i;
         value = x ^ mask;
     }
-    const int word_max = int(1e9);
+    const int word_max = static_cast<int>(1e9);
     for (int stop = bin_idx + words_int * wordSize + words_frac * wordSize; bin_idx < stop; bin_idx += wordSize)
     {
         UInt32 v = readWord(bin_idx, dec, 4) ^ mask;
@@ -446,7 +449,7 @@ void EncodeBytes(const String & ori_str, WriteBuffer & ss)
 
 void EncodeCompactBytes(const String & str, WriteBuffer & ss)
 {
-    TiKV::writeVarInt(Int64(str.size()), ss);
+    TiKV::writeVarInt(static_cast<Int64>(str.size()), ss);
     ss.write(str.c_str(), str.size());
 }
 
@@ -471,22 +474,22 @@ inline void writeWord(String & buf, Int32 word, int size)
     switch (size)
     {
     case 1:
-        buf.push_back(char(word));
+        buf.push_back(static_cast<char>(word));
         break;
     case 2:
-        buf.push_back(char(word >> 8));
-        buf.push_back(char(word));
+        buf.push_back(static_cast<char>(word >> 8));
+        buf.push_back(static_cast<char>(word));
         break;
     case 3:
-        buf.push_back(char(word >> 16));
-        buf.push_back(char(word >> 8));
-        buf.push_back(char(word));
+        buf.push_back(static_cast<char>(word >> 16));
+        buf.push_back(static_cast<char>(word >> 8));
+        buf.push_back(static_cast<char>(word));
         break;
     case 4:
-        buf.push_back(char(word >> 24));
-        buf.push_back(char(word >> 16));
-        buf.push_back(char(word >> 8));
-        buf.push_back(char(word));
+        buf.push_back(static_cast<char>(word >> 24));
+        buf.push_back(static_cast<char>(word >> 16));
+        buf.push_back(static_cast<char>(word >> 8));
+        buf.push_back(static_cast<char>(word));
         break;
     }
 }
@@ -506,8 +509,8 @@ void EncodeDecimalImpl(const T & dec, PrecType prec, ScaleType frac, WriteBuffer
         prec = frac;
     }
     constexpr Int32 decimal_mod = powers10[digitsPerWord];
-    ss.write(UInt8(prec));
-    ss.write(UInt8(frac));
+    ss.write(static_cast<UInt8>(prec));
+    ss.write(static_cast<UInt8>(frac));
 
     int digits_int = prec - frac;
     int words_int = digits_int / digitsPerWord;
@@ -628,7 +631,7 @@ void EncodeDatumForRow(const Field & field, TiDB::CodecFlag flag, WriteBuffer & 
 {
     if (flag == TiDB::CodecFlagDecimal && !field.isNull())
     {
-        EncodeUInt(UInt8(flag), ss);
+        EncodeUInt(static_cast<UInt8>(flag), ss);
         return EncodeDecimalForRow(field, ss, column_info);
     }
     return EncodeDatum(field, flag, ss);
@@ -638,7 +641,7 @@ void EncodeDatum(const Field & field, TiDB::CodecFlag flag, WriteBuffer & ss)
 {
     if (field.isNull())
         flag = TiDB::CodecFlagNil;
-    EncodeUInt(UInt8(flag), ss);
+    EncodeUInt(static_cast<UInt8>(flag), ss);
     switch (flag)
     {
     case TiDB::CodecFlagDecimal:

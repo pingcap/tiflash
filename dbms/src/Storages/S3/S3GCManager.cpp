@@ -17,8 +17,8 @@
 #include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
 #include <Core/Types.h>
-#include <Encryption/PosixRandomAccessFile.h>
 #include <Flash/Disaggregated/S3LockClient.h>
+#include <IO/BaseFile/PosixRandomAccessFile.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Storages/DeltaMerge/Remote/DataStore/DataStore.h>

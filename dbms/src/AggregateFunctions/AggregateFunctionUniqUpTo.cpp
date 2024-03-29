@@ -37,6 +37,7 @@ constexpr UInt8 uniq_upto_max_threshold = 100;
 
 
 AggregateFunctionPtr createAggregateFunctionUniqUpTo(
+    const Context & /* context not used */,
     const std::string & name,
     const DataTypes & argument_types,
     const Array & params)

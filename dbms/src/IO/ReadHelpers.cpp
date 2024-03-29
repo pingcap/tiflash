@@ -16,8 +16,8 @@
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/hex.h>
 #include <Core/Defines.h>
+#include <IO/Buffer/WriteBufferFromString.h>
 #include <IO/Operators.h>
-#include <IO/WriteBufferFromString.h>
 #include <IO/WriteHelpers.h>
 #include <IO/readFloatText.h>
 #include <common/find_symbols.h>
@@ -40,7 +40,7 @@ void parseHex(IteratorSrc src, IteratorDst dst, const size_t num_bytes)
     size_t dst_pos = 0;
     for (; dst_pos < num_bytes; ++dst_pos)
     {
-        dst[dst_pos] = UInt8(unhex(src[src_pos])) * 16 + UInt8(unhex(src[src_pos + 1]));
+        dst[dst_pos] = static_cast<UInt8>(unhex(src[src_pos])) * 16 + static_cast<UInt8>(unhex(src[src_pos + 1]));
         src_pos += 2;
     }
 }
@@ -270,7 +270,7 @@ static ReturnType parseJSONEscapeSequence(Vector & s, ReadBuffer & buf)
     auto error = [](const char * message, int code) {
         if (throw_exception)
             throw Exception(message, code);
-        return ReturnType(false);
+        return static_cast<ReturnType>(false);
     };
 
     ++buf.position();
@@ -317,7 +317,7 @@ static ReturnType parseJSONEscapeSequence(Vector & s, ReadBuffer & buf)
         if (0 == memcmp(hex_code, "0000", 4))
         {
             s.push_back(0);
-            return ReturnType(true);
+            return static_cast<ReturnType>(true);
         }
 
         UInt16 code_point = unhex4(hex_code);
@@ -371,7 +371,7 @@ static ReturnType parseJSONEscapeSequence(Vector & s, ReadBuffer & buf)
             }
         }
 
-        return ReturnType(true);
+        return static_cast<ReturnType>(true);
     }
     default:
         s.push_back(*buf.position());
@@ -379,7 +379,7 @@ static ReturnType parseJSONEscapeSequence(Vector & s, ReadBuffer & buf)
     }
 
     ++buf.position();
-    return ReturnType(true);
+    return static_cast<ReturnType>(true);
 }
 
 
@@ -615,7 +615,7 @@ ReturnType readJSONStringInto(Vector & s, ReadBuffer & buf)
     auto error = [](const char * message, int code) {
         if (throw_exception)
             throw Exception(message, code);
-        return ReturnType(false);
+        return static_cast<ReturnType>(false);
     };
 
     if (buf.eof() || *buf.position() != '"')
@@ -635,7 +635,7 @@ ReturnType readJSONStringInto(Vector & s, ReadBuffer & buf)
         if (*buf.position() == '"')
         {
             ++buf.position();
-            return ReturnType(true);
+            return static_cast<ReturnType>(true);
         }
 
         if (*buf.position() == '\\')

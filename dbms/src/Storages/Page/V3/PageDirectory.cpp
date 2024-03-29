@@ -47,6 +47,14 @@
 #include "pcg_random.hpp"
 #endif // FIU_ENABLE
 
+#pragma GCC diagnostic push
+#ifdef __clang__
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#endif
+// include to suppress warnings on NO_THREAD_SAFETY_ANALYSIS. clang can't work without this include, don't know why
+#include <grpcpp/security/credentials.h>
+#pragma GCC diagnostic pop
+
 namespace CurrentMetrics
 {
 extern const Metric PSMVCCSnapshotsList;
@@ -74,6 +82,19 @@ namespace PS::V3
 /********************************
  * VersionedPageEntries methods *
  ********************************/
+
+template <typename Trait>
+PageLock VersionedPageEntries<Trait>::acquireLock() const NO_THREAD_SAFETY_ANALYSIS
+{
+    return std::lock_guard(m);
+}
+
+template <typename Trait>
+size_t VersionedPageEntries<Trait>::size() const NO_THREAD_SAFETY_ANALYSIS
+{
+    auto lock = acquireLock();
+    return entries.size();
+}
 
 template <typename Trait>
 void VersionedPageEntries<Trait>::createNewEntry(const PageVersion & ver, const PageEntryV3 & entry)

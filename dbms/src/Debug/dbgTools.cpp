@@ -13,8 +13,9 @@
 // limitations under the License.
 
 #include <Common/typeid_cast.h>
+#include <Debug/MockKVStore/MockTiKV.h>
 #include <Debug/MockTiDB.h>
-#include <Debug/MockTiKV.h>
+#include <Debug/dbgKVStore/dbgKVStore.h>
 #include <Debug/dbgTools.h>
 #include <Interpreters/Context.h>
 #include <Parsers/ASTLiteral.h>
@@ -66,7 +67,7 @@ RegionPtr createRegion(
     if (index_)
         index = *index_;
     region_meta.setApplied(index, RAFT_INIT_LOG_TERM);
-    return std::make_shared<Region>(std::move(region_meta));
+    return makeRegion(std::move(region_meta));
 }
 
 Regions createRegions(
@@ -104,7 +105,7 @@ RegionPtr createRegion(
 
     RegionMeta region_meta(std::move(peer), std::move(region), initialApplyState());
     region_meta.setApplied(MockTiKV::instance().getRaftIndex(region_id), RAFT_INIT_LOG_TERM);
-    return std::make_shared<Region>(std::move(region_meta));
+    return RegionBench::makeRegion(std::move(region_meta));
 }
 
 void setupPutRequest(raft_cmdpb::Request * req, const std::string & cf, const TiKVKey & key, const TiKVValue & value)
@@ -572,10 +573,12 @@ void concurrentBatchInsert(
     Int64 key_num_each_region = flush_num * batch_num;
     HandleID handle_begin = curr_max_handle_id;
 
+
+    auto debug_kvstore = RegionBench::DebugKVStore(*tmt.getKVStore());
     Regions regions
         = createRegions(table_info.id, concurrent_num, key_num_each_region, handle_begin, curr_max_region_id + 1);
     for (const RegionPtr & region : regions)
-        tmt.getKVStore()->onSnapshot<RegionPtrWithBlock>(region, nullptr, 0, tmt);
+        debug_kvstore.onSnapshot<RegionPtrWithBlock>(region, nullptr, 0, tmt);
 
     std::list<std::thread> threads;
     for (Int64 i = 0; i < concurrent_num; i++, handle_begin += key_num_each_region)

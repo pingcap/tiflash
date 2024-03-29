@@ -169,6 +169,12 @@ const tipb::Executor & DAGRequest::rootExecutor() const
     return isTreeBased() ? dag_request->root_executor() : dag_request->executors(dag_request->executors_size() - 1);
 }
 
+String DAGRequest::rootExecutorID() const
+{
+    const auto & root_executor = rootExecutor();
+    return root_executor.executor_id();
+}
+
 void DAGRequest::traverse(std::function<bool(const tipb::Executor &)> && func) const
 {
     check(dag_request, "dagrequest can't be null");

@@ -94,13 +94,13 @@ Columns ColumnFileTiny::readFromDisk(
 
     // Read the columns from disk and apply DDL cast if need
     Page page = data_provider->readTinyData(data_page_id, fields);
-    if (file_provider->isKeyspaceEncryptionEnabled())
+    // use `unlikely` to reduce performance impact on keyspaces without enable encryption
+    if (unlikely(file_provider->isEncryptionEnabled(keyspace_id)))
     {
-        const auto ep = EncryptionPath(std::to_string(keyspace_id), "");
-        size_t data_size = page.data.size();
         // decrypt the page data in place
+        size_t data_size = page.data.size();
         char * data = page.mem_holder.get();
-        file_provider->decryptPage(ep, data, data_size, data_page_id);
+        file_provider->decryptPage(keyspace_id, data, data_size, data_page_id);
     }
 
     for (size_t index = col_start; index < col_end; ++index)
@@ -326,19 +326,23 @@ PageIdU64 ColumnFileTiny::writeColumnFileData(
     }
 
     auto data_size = write_buf.count();
+    auto buf = write_buf.tryGetReadBuffer();
     if (const auto & file_provider = dm_context.global_context.getFileProvider();
-        file_provider->isKeyspaceEncryptionEnabled())
+        unlikely(file_provider->isEncryptionEnabled(dm_context.keyspace_id)))
     {
-        const auto ep = EncryptionPath(std::to_string(dm_context.keyspace_id), "");
-        if (unlikely(!file_provider->isFileEncrypted(ep)))
+        if (const auto ep = EncryptionPath("", "", dm_context.keyspace_id);
+            unlikely(!file_provider->isFileEncrypted(ep)))
         {
             file_provider->createEncryptionInfo(ep);
         }
-        auto * data = write_buf.internalBuffer().begin();
-        file_provider->encryptPage(ep, data, data_size, page_id);
-    }
 
-    auto buf = write_buf.tryGetReadBuffer();
+        char page_data[data_size];
+        buf->readStrict(page_data, data_size);
+        // encrypt the page data in place
+        file_provider->encryptPage(dm_context.keyspace_id, page_data, data_size, page_id);
+        // ReadBufferFromOwnString will copy the data, and own the data.
+        buf = std::make_shared<ReadBufferFromOwnString>(std::string_view(page_data, data_size));
+    }
     wbs.log.putPage(page_id, 0, buf, data_size, col_data_sizes);
 
     return page_id;
@@ -400,6 +404,22 @@ ColumnFileReaderPtr ColumnFileTinyReader::createNewReader(const ColumnDefinesPtr
     // Reuse the cache data.
     return std::make_shared<ColumnFileTinyReader>(tiny_file, data_provider, new_col_defs, cols_data_cache);
 }
+
+ColumnFileTiny::ColumnFileTiny(
+    const ColumnFileSchemaPtr & schema_,
+    UInt64 rows_,
+    UInt64 bytes_,
+    PageIdU64 data_page_id_,
+    const DMContext & dm_context,
+    const CachePtr & cache_)
+    : schema(schema_)
+    , rows(rows_)
+    , bytes(bytes_)
+    , data_page_id(data_page_id_)
+    , keyspace_id(dm_context.keyspace_id)
+    , file_provider(dm_context.global_context.getFileProvider())
+    , cache(cache_)
+{}
 
 } // namespace DM
 } // namespace DB

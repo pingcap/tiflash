@@ -17,7 +17,6 @@
 #include <RaftStoreProxyFFI/ColumnFamily.h>
 #include <Storages/DeltaMerge/Decode/SSTFilesToBlockInputStream.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
-#include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/PKSquashingBlockInputStream.h>
 #include <Storages/KVStore/Decode/PartitionStreams.h>
 #include <Storages/KVStore/FFI/ProxyFFI.h>
@@ -27,14 +26,12 @@
 #include <Storages/StorageDeltaMerge.h>
 #include <common/logger_useful.h>
 
-namespace DB
-{
-namespace ErrorCodes
+namespace DB::ErrorCodes
 {
 extern const int ILLFORMAT_RAFT_ROW;
-} // namespace ErrorCodes
+} // namespace DB::ErrorCodes
 
-namespace DM
+namespace DB::DM
 {
 SSTFilesToBlockInputStream::SSTFilesToBlockInputStream( //
     RegionPtr region_,
@@ -520,5 +517,4 @@ bool SSTFilesToBlockInputStream::maybeStopBySoftLimit(ColumnFamilyType cf, SSTRe
     }
     return false;
 }
-} // namespace DM
-} // namespace DB
+} // namespace DB::DM

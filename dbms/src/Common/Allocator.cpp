@@ -92,9 +92,9 @@ void * Allocator<clear_memory_>::alloc(size_t size, size_t alignment)
         if (alignment <= MALLOC_MIN_ALIGNMENT)
         {
             if (clear_memory)
-                buf = ::calloc(size, 1);
+                buf = ::calloc(size, 1); // NOLINT
             else
-                buf = ::malloc(size);
+                buf = ::malloc(size); // NOLINT
 
             if (nullptr == buf)
                 DB::throwFromErrno(
@@ -134,7 +134,7 @@ void Allocator<clear_memory_>::free(void * buf, size_t size)
     }
     else
     {
-        ::free(buf);
+        ::free(buf); // NOLINT
     }
 
     CurrentMemoryTracker::free(size);
@@ -152,7 +152,7 @@ void * Allocator<clear_memory_>::realloc(void * buf, size_t old_size, size_t new
     {
         CurrentMemoryTracker::realloc(old_size, new_size);
 
-        buf = ::realloc(buf, new_size);
+        buf = ::realloc(buf, new_size); // NOLINT
 
         if (nullptr == buf)
             DB::throwFromErrno(
@@ -195,7 +195,7 @@ void * Allocator<clear_memory_>::realloc(void * buf, size_t old_size, size_t new
         memcpy(new_buf, buf, new_size);
         if (0 != munmap(buf, old_size))
         {
-            ::free(new_buf);
+            ::free(new_buf); // NOLINT
             DB::throwFromErrno(
                 "Allocator: Cannot munmap " + formatReadableSizeWithBinarySuffix(old_size) + ".",
                 DB::ErrorCodes::CANNOT_MUNMAP);

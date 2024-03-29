@@ -16,6 +16,7 @@
 
 #include <Storages/DeltaMerge/ColumnFile/ColumnFile.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFilePersisted.h>
+#include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/Remote/Serializer_fwd.h>
 
 namespace DB
@@ -138,6 +139,8 @@ private:
     Block cur_block;
     Columns cur_block_data; // The references to columns in cur_block, for faster access.
 
+    ReadTag read_tag;
+
 private:
     void initStream();
     std::pair<size_t, size_t> readRowsRepeatedly(
@@ -191,6 +194,8 @@ public:
     size_t skipNextBlock() override;
 
     ColumnFileReaderPtr createNewReader(const ColumnDefinesPtr & new_col_defs) override;
+
+    void setReadTag(ReadTag read_tag_) override;
 };
 
 } // namespace DM

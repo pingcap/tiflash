@@ -15,7 +15,7 @@
 #pragma once
 
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileDataProvider_fwd.h>
-#include <Storages/DeltaMerge/StoragePool_fwd.h>
+#include <Storages/DeltaMerge/StoragePool/StoragePool_fwd.h>
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageDefinesBase.h>
 

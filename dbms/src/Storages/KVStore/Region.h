@@ -32,6 +32,11 @@ class ReadIndexRequest;
 
 namespace DB
 {
+namespace RegionBench
+{
+struct DebugRegion;
+} // namespace RegionBench
+
 namespace tests
 {
 class KVStoreTestBase;
@@ -119,8 +124,9 @@ public:
     };
 
 public: // Simple Read and Write
-    explicit Region(RegionMeta && meta_);
     explicit Region(RegionMeta && meta_, const TiFlashRaftProxyHelper *);
+    Region(const Region &) = delete;
+    Region() = delete;
     ~Region();
 
     void insert(const std::string & cf, TiKVKey && key, TiKVValue && value, DupCheck mode = DupCheck::Deny);
@@ -131,7 +137,6 @@ public: // Simple Read and Write
     void clearAllData();
 
     void mergeDataFrom(const Region & other);
-    RegionMeta & mutMeta() { return meta; }
 
     // Assign data and meta by moving from `new_region`.
     void assignRegion(Region && new_region);
@@ -142,6 +147,9 @@ public: // Stats
 
     std::string getDebugString() const;
     std::string toString(bool dump_status = true) const;
+
+    RegionMeta & mutMeta() { return meta; }
+    const RegionMeta & getMeta() const { return meta; }
 
     bool isPendingRemove() const;
     void setPendingRemove();
@@ -243,6 +251,7 @@ public: // Raft Read and Write
         UInt64 term,
         TMTContext & tmt);
 
+    std::shared_ptr<const TiKVValue> getLockByKey(const TiKVKey & key) { return data.getLockByKey(key); }
     UInt64 getSnapshotEventFlag() const { return snapshot_event_flag; }
 
     // IngestSST will first be applied to the `temp_region`, then we need to
@@ -253,19 +262,18 @@ public: // Raft Read and Write
     void beforePrehandleSnapshot(uint64_t region_id, std::optional<uint64_t> deadline_index);
     void afterPrehandleSnapshot(int64_t ongoing);
 
-    Region() = delete;
-
 private:
     friend class RegionRaftCommandDelegate;
     friend class RegionMockTest;
     friend class tests::KVStoreTestBase;
     friend class tests::RegionKVStoreOldTest;
     friend class tests::RegionKVStoreTest;
+    friend struct RegionBench::DebugRegion;
 
     // Private methods no need to lock mutex, normally
 
-    size_t doInsert(ColumnFamilyType type, TiKVKey && key, TiKVValue && value, DupCheck mode);
-    void doCheckTable(const DecodedTiKVKey & key) const;
+    // Returns the size of data change(inc or dec)
+    RegionDataRes doInsert(ColumnFamilyType type, TiKVKey && key, TiKVValue && value, DupCheck mode);
     void doRemove(ColumnFamilyType type, const TiKVKey & key);
 
     std::optional<RegionDataReadInfo> readDataByWriteIt(

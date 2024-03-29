@@ -238,8 +238,8 @@ bool CSVRowInputStream::parseRowAndPrintDiagnosticInfo(
             << "type: " << data_types[i]->getName() << ", "
             << std::string(max_length_of_data_type_name - data_types[i]->getName().size(), ' ');
 
-        BufferBase::Position prev_position = istr.position();
-        BufferBase::Position curr_position = istr.position();
+        BufferBase::Position prev_position = istr.position(); // NOLINT
+        BufferBase::Position curr_position = istr.position(); // NOLINT
         std::exception_ptr exception;
 
         try

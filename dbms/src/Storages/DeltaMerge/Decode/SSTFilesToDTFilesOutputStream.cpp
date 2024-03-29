@@ -92,6 +92,8 @@ void SSTFilesToDTFilesOutputStream<ChildStream>::writeSuffix()
             .Observe(watch.elapsedSeconds());
         // Note that number of keys in different cf will be aggregated into one metrics
         GET_METRIC(tiflash_raft_process_keys, type_apply_snapshot).Increment(process_keys.total());
+        GET_METRIC(tiflash_raft_process_keys, type_apply_snapshot_default).Increment(process_keys.default_cf);
+        GET_METRIC(tiflash_raft_process_keys, type_apply_snapshot_write).Increment(process_keys.write_cf);
         break;
     }
     case FileConvertJobType::IngestSST:
@@ -395,7 +397,7 @@ void SSTFilesToDTFilesOutputStream<ChildStream>::updateRangeFromNonEmptyBlock(Bl
 
     // Note: The underlying stream ensures that one row key will not fall into two blocks (when there are multiple versions).
     // So we will never have overlapped range.
-    RUNTIME_CHECK(compare(block_start, block_end.toRowKeyValueRef()) < 0);
+    RUNTIME_CHECK(block_start < block_end.toRowKeyValueRef());
 
     if (!current_file_range.has_value())
     {
@@ -407,7 +409,7 @@ void SSTFilesToDTFilesOutputStream<ChildStream>::updateRangeFromNonEmptyBlock(Bl
     }
     else
     {
-        RUNTIME_CHECK(compare(block_start, current_file_range->getStart()) > 0);
+        RUNTIME_CHECK(block_start > current_file_range->getStart());
         current_file_range->setEnd(block_end);
     }
     RUNTIME_CHECK(!current_file_range->none());

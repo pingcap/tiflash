@@ -13,9 +13,12 @@
 // limitations under the License.
 
 #pragma once
+
 #include <Poco/Runnable.h>
 #include <Storages/Page/PageDefinesBase.h>
 #include <Storages/Page/workload/PSStressEnv.h>
+
+#include <random>
 
 namespace DB::PS::tests
 {

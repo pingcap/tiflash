@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <Common/TiFlashException.h>
-#include <Encryption/AESCTRCipherStream.h>
+#include <IO/Encryption/AESCTRCipherStream.h>
 #include <IO/Endian.h>
 #include <Storages/KVStore/FFI/FileEncryption.h>
 #include <openssl/md5.h>
@@ -72,20 +72,15 @@ BlockAccessCipherStreamPtr FileEncryptionInfo::createCipherStream(
     return std::make_shared<AESCTRCipherStream>(method, encryption_key, iv_high, iv_low);
 }
 
-template <bool is_encrypt>
-void FileEncryptionInfo::cipherPage(char * data, size_t data_size, PageIdU64 page_id) const
+template <FileEncryptionInfo::Operation op>
+void FileEncryptionInfo::cipherData(char * data, size_t data_size) const
 {
     if (res == FileEncryptionRes::Disabled || method == EncryptionMethod::Plaintext
         || method == EncryptionMethod::Unknown)
         return;
-    RUNTIME_CHECK_MSG(
-        res != FileEncryptionRes::Error,
-        "Failed to get encryption info, error message: {}, page_id: {}",
-        *error_msg,
-        page_id);
+    RUNTIME_CHECK_MSG(res != FileEncryptionRes::Error, "Failed to get encryption info, error message: {}", *error_msg);
 
     const String & encryption_key = *key;
-    size_t block_size = DB::Encryption::blockSize(method);
     RUNTIME_CHECK_MSG(
         encryption_key.size() == DB::Encryption::keySize(method),
         "Encryption key size mismatch, method: {}, key size: {}, expected size: {}.",
@@ -98,15 +93,17 @@ void FileEncryptionInfo::cipherPage(char * data, size_t data_size, PageIdU64 pag
         magic_enum::enum_name(method),
         iv->size(),
         DB::Encryption::blockSize(method));
-    auto iv_high = readBigEndian<uint64_t>(reinterpret_cast<const char *>(iv->data()));
-    iv_high ^= page_id;
-    unsigned char new_iv[block_size];
-    memcpy(new_iv, &iv_high, sizeof(uint64_t));
-    memcpy(new_iv + sizeof(uint64_t), iv->data() + sizeof(uint64_t), sizeof(uint64_t));
-    DB::Encryption::Cipher(0, data, data_size, encryption_key, method, new_iv, is_encrypt);
+    DB::Encryption::Cipher(
+        0,
+        data,
+        data_size,
+        encryption_key,
+        method,
+        reinterpret_cast<unsigned char *>(iv->data()),
+        /*is_encrypt*/ op == Encrypt);
 }
 
-template void FileEncryptionInfo::cipherPage<true>(char * data, size_t data_size, PageIdU64 page_id) const;
-template void FileEncryptionInfo::cipherPage<false>(char * data, size_t data_size, PageIdU64 page_id) const;
+template void FileEncryptionInfo::cipherData<FileEncryptionInfo::Encrypt>(char * data, size_t data_size) const;
+template void FileEncryptionInfo::cipherData<FileEncryptionInfo::Decrypt>(char * data, size_t data_size) const;
 
 } // namespace DB

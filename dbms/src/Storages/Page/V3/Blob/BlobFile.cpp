@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Encryption/WriteReadableFile.h>
+#include <IO/BaseFile/WriteReadableFile.h>
 #include <Storages/Page/PageUtil.h>
 #include <Storages/Page/V3/Blob/BlobFile.h>
 #include <Storages/PathPool.h>
