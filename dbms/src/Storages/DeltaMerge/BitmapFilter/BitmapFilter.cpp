@@ -45,30 +45,29 @@ void BitmapFilter::set(BlockInputStreamPtr & stream)
 void BitmapFilter::set(const ColumnPtr & col, const FilterPtr & f)
 {
     const auto * v = toColumnVectorDataPtr<UInt32>(col);
-    set(v->data(), v->size(), f);
+    std::span span{v->data(), v->size()};
+    set(span, f);
 }
 
-void BitmapFilter::set(const UInt32 * data, UInt32 size, const FilterPtr & f)
+void BitmapFilter::set(std::span<const UInt32> data, const FilterPtr & f)
 {
-    if (size == 0)
+    if (data.empty())
     {
         return;
     }
     if (!f)
     {
-        for (UInt32 i = 0; i < size; i++)
+        for (unsigned int row_id : data)
         {
-            UInt32 row_id = *(data + i);
             filter[row_id] = true;
         }
     }
     else
     {
-        RUNTIME_CHECK(size == f->size(), size, f->size());
-        for (UInt32 i = 0; i < size; i++)
+        RUNTIME_CHECK(data.size() == f->size(), data.size(), f->size());
+        for (UInt32 i = 0; i < data.size(); i++)
         {
-            UInt32 row_id = *(data + i);
-            filter[row_id] = (*f)[i];
+            filter[data[i]] = (*f)[i];
         }
     }
 }

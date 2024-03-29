@@ -17,6 +17,8 @@
 #include <Columns/IColumn.h>
 #include <DataStreams/IBlockInputStream.h>
 
+#include <span>
+
 namespace DB::DM
 {
 
@@ -26,8 +28,7 @@ public:
     BitmapFilter(UInt32 size_, bool default_value);
 
     void set(BlockInputStreamPtr & stream);
-    void set(const ColumnPtr & col, const FilterPtr & f);
-    void set(const UInt32 * data, UInt32 size, const FilterPtr & f);
+    // f[start, limit] = value
     void set(UInt32 start, UInt32 limit, bool value = true);
     // If return true, all data is match and do not fill the filter.
     bool get(IColumn::Filter & f, UInt32 start, UInt32 limit) const;
@@ -40,6 +41,9 @@ public:
     size_t count() const;
 
 private:
+    void set(const ColumnPtr & col, const FilterPtr & f);
+    void set(std::span<const UInt32> data, const FilterPtr & f);
+
     std::vector<bool> filter;
     bool all_match;
 };
