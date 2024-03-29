@@ -66,6 +66,8 @@ public:
     // running status may return are NEED_INPUT and HAS_OUTPUT here.
     OperatorStatus await();
 
+    void notify();
+
     // These two methods are used to set state, log and etc, and should not perform calculation logic.
     void operatePrefix();
     void operateSuffix();
@@ -102,8 +104,6 @@ protected:
     PipelineExecutorContext & exec_context;
     const LoggerPtr log;
     Block header;
-
-    OperatorStatus op_status{OperatorStatus::NEED_INPUT};
 
     OperatorProfileInfoPtr profile_info_ptr = std::make_shared<OperatorProfileInfo>();
     // To reduce the overheads of `profile_info_ptr.get()`

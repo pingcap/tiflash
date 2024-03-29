@@ -47,11 +47,10 @@ void Operator::operateSuffix()
 
 OperatorStatus Operator::await()
 {
-    assert(op_status != OperatorStatus::WAIT_FOR_NOTIFY);
     // `exec_context.is_cancelled` has been checked by `EventTask`.
     // If `exec_context.is_cancelled` is checked here, the overhead of `exec_context.is_cancelled` will be amplified by the high frequency of `await` calls.
 
-    op_status = awaitImpl();
+    auto op_status = awaitImpl();
 #ifndef NDEBUG
     assertOperatorStatus(op_status, {OperatorStatus::FINISHED, OperatorStatus::NEED_INPUT, OperatorStatus::HAS_OUTPUT});
 #endif
@@ -78,9 +77,8 @@ OperatorStatus Operator::await()
 OperatorStatus Operator::executeIO()
 {
     CHECK_IS_CANCELLED
-    assert(op_status != OperatorStatus::WAIT_FOR_NOTIFY);
     profile_info.anchor();
-    op_status = executeIOImpl();
+    auto op_status = executeIOImpl();
 #ifndef NDEBUG
     assertOperatorStatus(op_status, {OperatorStatus::FINISHED, OperatorStatus::NEED_INPUT, OperatorStatus::HAS_OUTPUT});
 #endif
@@ -90,13 +88,17 @@ OperatorStatus Operator::executeIO()
     return op_status;
 }
 
+void Operator::notify()
+{
+    profile_info.update();
+}
+
 OperatorStatus SourceOp::read(Block & block)
 {
     CHECK_IS_CANCELLED
-    if (op_status != OperatorStatus::WAIT_FOR_NOTIFY)
-        profile_info.anchor();
+    profile_info.anchor();
     assert(!block);
-    op_status = readImpl(block);
+    auto op_status = readImpl(block);
 #ifndef NDEBUG
     if (op_status == OperatorStatus::HAS_OUTPUT && block)
     {
@@ -114,9 +116,8 @@ OperatorStatus SourceOp::read(Block & block)
 OperatorStatus TransformOp::transform(Block & block)
 {
     CHECK_IS_CANCELLED
-    assert(op_status != OperatorStatus::WAIT_FOR_NOTIFY);
     profile_info.anchor();
-    op_status = transformImpl(block);
+    auto op_status = transformImpl(block);
 #ifndef NDEBUG
     if (op_status == OperatorStatus::HAS_OUTPUT && block)
     {
@@ -134,10 +135,9 @@ OperatorStatus TransformOp::transform(Block & block)
 OperatorStatus TransformOp::tryOutput(Block & block)
 {
     CHECK_IS_CANCELLED
-    if (op_status != OperatorStatus::WAIT_FOR_NOTIFY)
-        profile_info.anchor();
+    profile_info.anchor();
     assert(!block);
-    op_status = tryOutputImpl(block);
+    auto op_status = tryOutputImpl(block);
 #ifndef NDEBUG
     if (op_status == OperatorStatus::HAS_OUTPUT && block)
     {
@@ -155,9 +155,8 @@ OperatorStatus TransformOp::tryOutput(Block & block)
 OperatorStatus SinkOp::prepare()
 {
     CHECK_IS_CANCELLED
-    if (op_status != OperatorStatus::WAIT_FOR_NOTIFY)
-        profile_info.anchor();
-    op_status = prepareImpl();
+    profile_info.anchor();
+    auto op_status = prepareImpl();
 #ifndef NDEBUG
     assertOperatorStatus(op_status, {OperatorStatus::NEED_INPUT});
 #endif
@@ -169,7 +168,6 @@ OperatorStatus SinkOp::prepare()
 OperatorStatus SinkOp::write(Block && block)
 {
     CHECK_IS_CANCELLED
-    assert(op_status != OperatorStatus::WAIT_FOR_NOTIFY);
     profile_info.anchor();
     profile_info.updateInfoFromBlock(block);
 #ifndef NDEBUG
@@ -179,7 +177,7 @@ OperatorStatus SinkOp::write(Block && block)
         assertBlocksHaveEqualStructure(block, header, getName());
     }
 #endif
-    op_status = writeImpl(std::move(block));
+    auto op_status = writeImpl(std::move(block));
 #ifndef NDEBUG
     assertOperatorStatus(op_status, {OperatorStatus::FINISHED, OperatorStatus::NEED_INPUT});
 #endif
