@@ -47,8 +47,7 @@ void Operator::operateSuffix()
 
 OperatorStatus Operator::await()
 {
-    if (op_status == OperatorStatus::WAIT_FOR_NOTIFY)
-        profile_info.update();
+    assert(op_status != OperatorStatus::WAIT_FOR_NOTIFY);
     // `exec_context.is_cancelled` has been checked by `EventTask`.
     // If `exec_context.is_cancelled` is checked here, the overhead of `exec_context.is_cancelled` will be amplified by the high frequency of `await` calls.
 
@@ -79,7 +78,8 @@ OperatorStatus Operator::await()
 OperatorStatus Operator::executeIO()
 {
     CHECK_IS_CANCELLED
-    op_status == OperatorStatus::WAIT_FOR_NOTIFY ? profile_info.update() : profile_info.anchor();
+    assert(op_status != OperatorStatus::WAIT_FOR_NOTIFY);
+    profile_info.anchor();
     op_status = executeIOImpl();
 #ifndef NDEBUG
     assertOperatorStatus(op_status, {OperatorStatus::FINISHED, OperatorStatus::NEED_INPUT, OperatorStatus::HAS_OUTPUT});
@@ -93,7 +93,8 @@ OperatorStatus Operator::executeIO()
 OperatorStatus SourceOp::read(Block & block)
 {
     CHECK_IS_CANCELLED
-    op_status == OperatorStatus::WAIT_FOR_NOTIFY ? profile_info.update() : profile_info.anchor();
+    if (op_status != OperatorStatus::WAIT_FOR_NOTIFY)
+        profile_info.anchor();
     assert(!block);
     op_status = readImpl(block);
 #ifndef NDEBUG
@@ -133,7 +134,8 @@ OperatorStatus TransformOp::transform(Block & block)
 OperatorStatus TransformOp::tryOutput(Block & block)
 {
     CHECK_IS_CANCELLED
-    op_status == OperatorStatus::WAIT_FOR_NOTIFY ? profile_info.update() : profile_info.anchor();
+    if (op_status != OperatorStatus::WAIT_FOR_NOTIFY)
+        profile_info.anchor();
     assert(!block);
     op_status = tryOutputImpl(block);
 #ifndef NDEBUG
@@ -153,7 +155,8 @@ OperatorStatus TransformOp::tryOutput(Block & block)
 OperatorStatus SinkOp::prepare()
 {
     CHECK_IS_CANCELLED
-    op_status == OperatorStatus::WAIT_FOR_NOTIFY ? profile_info.update() : profile_info.anchor();
+    if (op_status != OperatorStatus::WAIT_FOR_NOTIFY)
+        profile_info.anchor();
     op_status = prepareImpl();
 #ifndef NDEBUG
     assertOperatorStatus(op_status, {OperatorStatus::NEED_INPUT});
