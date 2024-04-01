@@ -398,6 +398,7 @@ Block DMFileReader::read()
                 break;
             default:
                 col = readColumn(cd, start_pack_id, read_packs, read_rows, i);
+                break;
             }
             columns.emplace_back(ColumnWithTypeAndName{std::move(col), cd.type, cd.name, cd.id});
         }
