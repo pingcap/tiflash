@@ -88,9 +88,18 @@ public:
     {
         assert(task);
         task->notify();
-        task->profile_info.elapsedWaitForNotifyTime();
-        assert(TaskScheduler::instance);
-        TaskScheduler::instance->submitToCPUTaskThreadPool(std::move(task));
+        if (unlikely(task->getQueryExecContext().isCancelled()))
+        {
+            task->startTraceMemory();
+            task->finalize();
+            task->endTraceMemory();
+            task.reset();
+        }
+        else
+        {
+            assert(TaskScheduler::instance);
+            TaskScheduler::instance->submitToCPUTaskThreadPool(std::move(task));
+        }
     }
 
 private:

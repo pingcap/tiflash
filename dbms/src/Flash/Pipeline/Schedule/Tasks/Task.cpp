@@ -162,6 +162,8 @@ void Task::notify()
 {
     assert(task_status == ExecTaskStatus::WAIT_FOR_NOTIFY);
     switchStatus(ExecTaskStatus::RUNNING);
+    notifyImpl();
+    profile_info.elapsedWaitForNotifyTime();
 }
 
 void Task::finalize()

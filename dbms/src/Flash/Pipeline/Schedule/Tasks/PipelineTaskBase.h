@@ -133,6 +133,12 @@ protected:
         pipeline_exec_holder.reset();
     }
 
+    void runNotify()
+    {
+        assert(pipeline_exec);
+        pipeline_exec->notify();
+    }
+
 private:
     PipelineExecPtr pipeline_exec_holder;
     // To reduce the overheads of `pipeline_exec_holder.get()`

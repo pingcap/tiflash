@@ -37,6 +37,8 @@ public:
 
     OperatorStatus await();
 
+    void notify();
+
     void finalizeProfileInfo(UInt64 extra_time);
 
 private:

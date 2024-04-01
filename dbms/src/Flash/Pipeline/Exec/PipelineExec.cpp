@@ -97,6 +97,13 @@ void PipelineExec::executeSuffix()
     source_op->operateSuffix();
 }
 
+void PipelineExec::notify()
+{
+    assert(waiting_for_notify);
+    waiting_for_notify->notify();
+    waiting_for_notify = nullptr;
+}
+
 OperatorStatus PipelineExec::execute()
 {
     auto op_status = executeImpl();
@@ -117,11 +124,7 @@ OperatorStatus PipelineExec::executeImpl()
 {
     assert(!awaitable);
     assert(!io_op);
-    if (waiting_for_notify)
-    {
-        waiting_for_notify->notify();
-        waiting_for_notify = nullptr;
-    }
+    assert(!waiting_for_notify);
 
     Block block;
     size_t start_transform_op_index = 0;
