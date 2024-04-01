@@ -395,7 +395,7 @@ Block DMFileReader::read()
                 col = readExtraColumn(cd, start_pack_id, read_packs, read_rows, handle_column_clean_read_packs, i);
                 break;
             case TAG_COLUMN_ID:
-                col = readExtraColumn(cd, start_pack_id, read_packs, read_rows, handle_column_clean_read_packs, i);
+                col = readExtraColumn(cd, start_pack_id, read_packs, read_rows, del_column_clean_read_packs, i);
                 break;
             case VERSION_COLUMN_ID:
                 col = readExtraColumn(cd, start_pack_id, read_packs, read_rows, version_column_clean_read_packs, i);
