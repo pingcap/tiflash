@@ -90,6 +90,10 @@ public:
         task->notify();
         if (unlikely(task->getQueryExecContext().isCancelled()))
         {
+            // clear up the pre memory tracker first.
+            // because this function may be call in other threads.
+            task->endTraceMemory();
+
             task->startTraceMemory();
             task->finalize();
             task->endTraceMemory();
