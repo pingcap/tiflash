@@ -41,7 +41,7 @@ ALWAYS_INLINE void addToStatusMetrics(ExecTaskStatus to)
 #define M(expect_status, metric_name)                                                                            \
     case (expect_status):                                                                                        \
     {                                                                                                            \
-        __thread auto & metrics_##metric_name = GET_METRIC(tiflash_pipeline_task_change_to_status, metric_name); \
+        auto & metrics_##metric_name = GET_METRIC(tiflash_pipeline_task_change_to_status, metric_name); \
         (metrics_##metric_name).Increment();                                                                     \
         break;                                                                                                   \
     }

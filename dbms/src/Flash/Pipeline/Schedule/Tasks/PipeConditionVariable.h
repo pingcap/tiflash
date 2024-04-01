@@ -34,7 +34,7 @@ public:
         }
 
 #if __APPLE__ && __clang__
-        __thread auto & metrics = GET_METRIC(tiflash_pipeline_scheduler, type_wait_for_notify_tasks_count);
+        auto & metrics = GET_METRIC(tiflash_pipeline_scheduler, type_wait_for_notify_tasks_count);
 #else
         thread_local auto & metrics = GET_METRIC(tiflash_pipeline_scheduler, type_wait_for_notify_tasks_count);
 #endif
@@ -55,7 +55,7 @@ public:
         notifyTaskDirectly(std::move(task));
 
 #if __APPLE__ && __clang__
-        __thread auto & metrics = GET_METRIC(tiflash_pipeline_scheduler, type_wait_for_notify_tasks_count);
+        auto & metrics = GET_METRIC(tiflash_pipeline_scheduler, type_wait_for_notify_tasks_count);
 #else
         thread_local auto & metrics = GET_METRIC(tiflash_pipeline_scheduler, type_wait_for_notify_tasks_count);
 #endif
@@ -77,7 +77,7 @@ public:
         }
 
 #if __APPLE__ && __clang__
-        __thread auto & metrics = GET_METRIC(tiflash_pipeline_scheduler, type_wait_for_notify_tasks_count);
+        auto & metrics = GET_METRIC(tiflash_pipeline_scheduler, type_wait_for_notify_tasks_count);
 #else
         thread_local auto & metrics = GET_METRIC(tiflash_pipeline_scheduler, type_wait_for_notify_tasks_count);
 #endif
