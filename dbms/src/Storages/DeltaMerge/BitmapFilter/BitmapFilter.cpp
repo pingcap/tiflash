@@ -42,9 +42,9 @@ void BitmapFilter::set(BlockInputStreamPtr & stream)
     stream->readSuffix();
 }
 
-void BitmapFilter::set(const ColumnPtr & col, const FilterPtr & f)
+void BitmapFilter::set(const ColumnPtr & row_ids_col, const FilterPtr & f)
 {
-    const auto * v = toColumnVectorDataPtr<UInt32>(col);
+    const auto * v = toColumnVectorDataPtr<UInt32>(row_ids_col);
     set({v->data(), v->size()}, f);
 }
 

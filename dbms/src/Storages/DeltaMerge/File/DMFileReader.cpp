@@ -364,7 +364,7 @@ Block DMFileReader::read()
         {
             // If all handle in a pack are in the given range, no not_clean rows, and max version <= max_read_version,
             // we do not need to read handle column.
-            if (handle_res[i] == All && pack_stats[next_pack_id].not_clean == 0
+            if (handle_res[i] == All && pack_stats[i].not_clean == 0
                 && pack_filter.getMaxVersion(i) <= max_read_version)
             {
                 handle_column_clean_read_packs.insert(i);

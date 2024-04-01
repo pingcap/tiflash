@@ -18,9 +18,9 @@ namespace DB
 {
 namespace DM
 {
-RangeWithStrategys ColumnCache::getReadStrategy(size_t start_pack_id, size_t pack_count, ColId column_id)
+RangeWithStrategys ColumnCache::getReadStrategy(size_t start_pack_idx, size_t pack_count, ColId column_id)
 {
-    PackRange target_range{start_pack_id, start_pack_id + pack_count};
+    PackRange target_range{start_pack_idx, start_pack_idx + pack_count};
 
     RangeWithStrategys range_and_strategys;
     range_and_strategys.reserve(pack_count);
@@ -61,11 +61,11 @@ RangeWithStrategys ColumnCache::getReadStrategy(size_t start_pack_id, size_t pac
 }
 
 RangeWithStrategys ColumnCache::getReadStrategy(
-    size_t start_pack_id,
+    size_t start_pack_idx,
     size_t pack_count,
     const std::unordered_set<size_t> & memory_pack_ids)
 {
-    PackRange target_range{start_pack_id, start_pack_id + pack_count};
+    PackRange target_range{start_pack_idx, start_pack_idx + pack_count};
 
     RangeWithStrategys range_and_strategys;
     range_and_strategys.reserve(pack_count);

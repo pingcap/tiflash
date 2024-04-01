@@ -41,7 +41,7 @@ public:
     size_t count() const;
 
 private:
-    void set(const ColumnPtr & col, const FilterPtr & f);
+    void set(const ColumnPtr & row_ids_col, const FilterPtr & f);
     void set(std::span<const UInt32> row_ids, const FilterPtr & f);
 
     std::vector<bool> filter;
