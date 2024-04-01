@@ -27,6 +27,8 @@ class BitmapFilter
 public:
     BitmapFilter(UInt32 size_, bool default_value);
 
+    // Read blocks from `stream` and set the rows_id to be true according to the
+    // `segmentRowIdCol` in the block read from `stream`.
     void set(BlockInputStreamPtr & stream);
     // f[start, satrt+limit) = value
     void set(UInt32 start, UInt32 limit, bool value = true);
@@ -41,7 +43,6 @@ public:
     size_t count() const;
 
 private:
-    void set(const ColumnPtr & row_ids_col, const FilterPtr & f);
     void set(std::span<const UInt32> row_ids, const FilterPtr & f);
 
     std::vector<bool> filter;

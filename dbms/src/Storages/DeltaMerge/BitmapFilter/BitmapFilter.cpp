@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
 #include <Storages/DeltaMerge/BitmapFilter/BitmapFilter.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/Segment.h>
@@ -30,22 +31,17 @@ void BitmapFilter::set(BlockInputStreamPtr & stream)
     {
         FilterPtr f = nullptr;
         auto blk = stream->read(f, /*res_filter*/ true);
-        if (likely(blk))
-        {
-            set(blk.segmentRowIdCol(), f);
-        }
-        else
+        if (unlikely(!blk))
         {
             break;
         }
+
+        const auto & row_ids_col = blk.segmentRowIdCol();
+        const auto * v = toColumnVectorDataPtr<UInt32>(row_ids_col);
+        assert(v != nullptr); // the segmentRowIdCol must be a UInt32 column
+        set(std::span{v->data(), v->size()}, f);
     }
     stream->readSuffix();
-}
-
-void BitmapFilter::set(const ColumnPtr & row_ids_col, const FilterPtr & f)
-{
-    const auto * v = toColumnVectorDataPtr<UInt32>(row_ids_col);
-    set({v->data(), v->size()}, f);
 }
 
 void BitmapFilter::set(std::span<const UInt32> row_ids, const FilterPtr & f)
