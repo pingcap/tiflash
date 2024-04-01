@@ -265,6 +265,7 @@ inline EngineStoreServerHelper GetEngineStoreServerHelper(EngineStoreServerWrap 
         .fn_set_store = SetStore,
         .fn_set_pb_msg_by_bytes = SetPBMsByBytes,
         .fn_handle_safe_ts_update = HandleSafeTSUpdate,
+        .fn_get_lock_by_key = GetLockByKey,
         .fn_fast_add_peer = FastAddPeer,
         .fn_query_fap_snapshot_state = QueryFapSnapshotState,
         .fn_clear_fap_snapshot = ClearFapSnapshot,

@@ -228,8 +228,12 @@ DecodedLockCFValuePtr RegionData::getLockInfo(const RegionLockReadQuery & query)
             continue;
         if (lock_info.min_commit_ts > query.read_tso)
             continue;
-        if (query.bypass_lock_ts && query.bypass_lock_ts->count(lock_info.lock_version))
-            continue;
+        if (query.bypass_lock_ts) {
+            if (query.bypass_lock_ts->count(lock_info.lock_version)) {
+                GET_METRIC(tiflash_raft_read_index_events_count, type_bypass_lock).Increment();
+                continue;
+            }
+        }
         return lock_info_ptr;
     }
 
