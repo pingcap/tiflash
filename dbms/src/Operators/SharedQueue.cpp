@@ -19,7 +19,7 @@
 
 namespace DB
 {
-SharedQueuePtr buildInternal(size_t producer, size_t consumer, Int64 max_buffered_bytes)
+SharedQueuePtr SharedQueue::buildInternal(size_t producer, size_t consumer, Int64 max_buffered_bytes)
 {
     RUNTIME_CHECK(producer > 0 && consumer > 0);
     // The queue size is same as UnionBlockInputStream = concurrency * 5.
