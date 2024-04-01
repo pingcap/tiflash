@@ -63,7 +63,7 @@ RangeWithStrategys ColumnCache::getReadStrategy(size_t start_pack_idx, size_t pa
 RangeWithStrategys ColumnCache::getReadStrategy(
     size_t start_pack_idx,
     size_t pack_count,
-    const std::unordered_set<size_t> & memory_pack_ids)
+    const std::unordered_set<size_t> & clean_read_pack_idx)
 {
     PackRange target_range{start_pack_idx, start_pack_idx + pack_count};
 
@@ -73,7 +73,7 @@ RangeWithStrategys ColumnCache::getReadStrategy(
     size_t range_start = 0;
     for (size_t cursor = target_range.first; cursor < target_range.second; ++cursor)
     {
-        if (memory_pack_ids.contains(cursor))
+        if (clean_read_pack_idx.contains(cursor))
         {
             if (strategy == Strategy::Memory)
             {

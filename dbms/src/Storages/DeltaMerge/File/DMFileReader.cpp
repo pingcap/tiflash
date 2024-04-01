@@ -400,7 +400,7 @@ Block DMFileReader::read()
                 col = readColumn(cd, start_pack_id, read_packs, read_rows, i);
                 break;
             }
-            columns.emplace_back(ColumnWithTypeAndName{std::move(col), cd.type, cd.name, cd.id});
+            columns.emplace_back(std::move(col), cd.type, cd.name, cd.id);
         }
         catch (DB::Exception & e)
         {
@@ -413,6 +413,45 @@ Block DMFileReader::read()
     Block res(std::move(columns));
     res.setStartOffset(start_row_offset);
     return res;
+}
+
+ColumnPtr DMFileReader::cleanRead(
+    const ColumnDefine & cd,
+    size_t rows_count,
+    std::pair<size_t, size_t> range,
+    const DMFile::PackStats & pack_stats)
+{
+    switch (cd.id)
+    {
+    case EXTRA_HANDLE_COLUMN_ID:
+    {
+        if (is_common_handle)
+        {
+            StringRef min_handle = pack_filter.getMinStringHandle(range.first);
+            return cd.type->createColumnConst(rows_count, Field(min_handle.data, min_handle.size));
+        }
+        else
+        {
+            Handle min_handle = pack_filter.getMinHandle(range.first);
+            return cd.type->createColumnConst(rows_count, Field(min_handle));
+        }
+    }
+    case TAG_COLUMN_ID:
+    {
+        return cd.type->createColumnConst(rows_count, Field(static_cast<UInt64>(pack_stats[range.first].first_tag)));
+    }
+    case VERSION_COLUMN_ID:
+    {
+        return cd.type->createColumnConst(
+            rows_count,
+            Field(static_cast<UInt64>(pack_stats[range.first].first_version)));
+    }
+    default:
+    {
+        // This should not happen
+        throw Exception("Unknown column id", ErrorCodes::LOGICAL_ERROR);
+    }
+    }
 }
 
 ColumnPtr DMFileReader::readExtraColumn(
@@ -439,37 +478,7 @@ ColumnPtr DMFileReader::readExtraColumn(
         {
         case ColumnCache::Strategy::Memory:
         {
-            switch (cd.id)
-            {
-            case EXTRA_HANDLE_COLUMN_ID:
-            {
-                if (is_common_handle)
-                {
-                    StringRef min_handle = pack_filter.getMinStringHandle(range.first);
-                    col = cd.type->createColumnConst(rows_count, Field(min_handle.data, min_handle.size));
-                }
-                else
-                {
-                    Handle min_handle = pack_filter.getMinHandle(range.first);
-                    col = cd.type->createColumnConst(rows_count, Field(min_handle));
-                }
-                break;
-            }
-            case TAG_COLUMN_ID:
-            {
-                col = cd.type->createColumnConst(
-                    rows_count,
-                    Field(static_cast<UInt64>(pack_stats[range.first].first_tag)));
-                break;
-            }
-            case VERSION_COLUMN_ID:
-            {
-                col = cd.type->createColumnConst(
-                    rows_count,
-                    Field(static_cast<UInt64>(pack_stats[range.first].first_version)));
-                break;
-            }
-            }
+            col = cleanRead(cd, rows_count, range, pack_stats);
             must_seek[column_index] = true;
             break;
         }

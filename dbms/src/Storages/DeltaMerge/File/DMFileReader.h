@@ -124,6 +124,11 @@ private:
         size_t pack_count,
         size_t read_rows,
         size_t column_index);
+    ColumnPtr cleanRead(
+        const ColumnDefine & cd,
+        size_t rows_count,
+        std::pair<size_t, size_t> range,
+        const DMFile::PackStats & pack_stats);
     bool getCachedPacks(ColId col_id, size_t start_pack_id, size_t pack_count, size_t read_rows, ColumnPtr & col) const;
 
     void addScannedRows(UInt64 rows);

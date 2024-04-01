@@ -50,7 +50,7 @@ public:
     static RangeWithStrategys getReadStrategy(
         size_t start_pack_idx,
         size_t pack_count,
-        const std::unordered_set<size_t> & memory_pack_ids);
+        const std::unordered_set<size_t> & clean_read_pack_idx);
 
     void tryPutColumn(size_t pack_id, ColId column_id, const ColumnPtr & column, size_t rows_offset, size_t rows_count);
 
