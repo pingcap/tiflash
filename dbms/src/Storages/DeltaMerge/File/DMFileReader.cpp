@@ -384,24 +384,19 @@ Block DMFileReader::read()
         try
         {
             ColumnPtr col;
-            if (isExtraColumn(cd))
+            // For handle, tag and version column, we can try to do clean read.
+            switch (cd.id)
             {
-                // For handle, tag and version column, we can try to do clean read.
-                switch (cd.id)
-                {
-                case EXTRA_HANDLE_COLUMN_ID:
-                    col = readExtraColumn(cd, start_pack_id, read_packs, read_rows, handle_column_clean_read_packs, i);
-                    break;
-                case TAG_COLUMN_ID:
-                    col = readExtraColumn(cd, start_pack_id, read_packs, read_rows, handle_column_clean_read_packs, i);
-                    break;
-                case VERSION_COLUMN_ID:
-                    col = readExtraColumn(cd, start_pack_id, read_packs, read_rows, version_column_clean_read_packs, i);
-                    break;
-                }
-            }
-            else
-            {
+            case EXTRA_HANDLE_COLUMN_ID:
+                col = readExtraColumn(cd, start_pack_id, read_packs, read_rows, handle_column_clean_read_packs, i);
+                break;
+            case TAG_COLUMN_ID:
+                col = readExtraColumn(cd, start_pack_id, read_packs, read_rows, handle_column_clean_read_packs, i);
+                break;
+            case VERSION_COLUMN_ID:
+                col = readExtraColumn(cd, start_pack_id, read_packs, read_rows, version_column_clean_read_packs, i);
+                break;
+            default:
                 col = readColumn(cd, start_pack_id, read_packs, read_rows, i);
             }
             columns.emplace_back(ColumnWithTypeAndName{std::move(col), cd.type, cd.name, cd.id});
