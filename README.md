@@ -56,10 +56,10 @@ curl https://sh.rustup.rs -sSf | sh -s -- --default-toolchain none
 source $HOME/.cargo/env
 
 # Install LLVM, see https://apt.llvm.org for details
-# Clang will be available as /usr/bin/clang++-15
+# Clang will be available as /usr/bin/clang++-17
 wget https://apt.llvm.org/llvm.sh
 chmod +x llvm.sh
-sudo ./llvm.sh 15 all
+sudo ./llvm.sh 17 all
 
 # Install other dependencies
 sudo apt install -y cmake ninja-build zlib1g-dev libcurl4-openssl-dev ccache
@@ -162,8 +162,8 @@ Note: In Linux, usually you need to explicitly specify to use LLVM.
 ```shell
 # In cmake-build-debug directory:
 cmake .. -GNinja -DCMAKE_BUILD_TYPE=DEBUG \
-  -DCMAKE_C_COMPILER=/usr/bin/clang-14 \
-  -DCMAKE_CXX_COMPILER=/usr/bin/clang++-14
+  -DCMAKE_C_COMPILER=/usr/bin/clang-17 \
+  -DCMAKE_CXX_COMPILER=/usr/bin/clang++-17
 ```
 
 In MacOS, if you install llvm clang, you need to explicitly specify to use llvm clang.
