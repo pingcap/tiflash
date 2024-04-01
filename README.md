@@ -37,7 +37,7 @@ And the following operating systems:
 The following packages are required:
 
 - CMake 3.21.0+
-- Clang 14.0.0+
+- Clang 17.0.0+ under Linux or AppleClang 15.0.0+ under MacOS
 - Rust
 - Python 3.0+
 - Ninja-Build or GNU Make
@@ -250,7 +250,7 @@ cmake .. -GNinja -DCMAKE_BUILD_TYPE=DEBUG -DFOO=BAR
 
   There is another option to append extra paths for CMake to find system libraries:
 
-  - `PREBUILT_LIBS_ROOT`: Default as empty, can be specified with multiple values, seperated by `;`
+  - `PREBUILT_LIBS_ROOT`: Default as empty, can be specified with multiple values, separated by `;`
 
   </details>
 
