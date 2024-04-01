@@ -37,15 +37,6 @@ namespace
 // TODO supports more detailed status transfer metrics, such as from waiting to running.
 ALWAYS_INLINE void addToStatusMetrics(ExecTaskStatus to)
 {
-#if __APPLE__ && __clang__
-#define M(expect_status, metric_name)                                                                   \
-    case (expect_status):                                                                               \
-    {                                                                                                   \
-        auto & metrics_##metric_name = GET_METRIC(tiflash_pipeline_task_change_to_status, metric_name); \
-        (metrics_##metric_name).Increment();                                                            \
-        break;                                                                                          \
-    }
-#else
 #define M(expect_status, metric_name)                                                                                \
     case (expect_status):                                                                                            \
     {                                                                                                                \
@@ -53,7 +44,6 @@ ALWAYS_INLINE void addToStatusMetrics(ExecTaskStatus to)
         (metrics_##metric_name).Increment();                                                                         \
         break;                                                                                                       \
     }
-#endif
 
     switch (to)
     {
