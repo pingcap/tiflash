@@ -39,6 +39,8 @@ using SharedQueueSourceHolderPtr = std::shared_ptr<SharedQueueSourceHolder>;
 class SharedQueue
 {
 public:
+    static SharedQueuePtr buildInternal(size_t producer, size_t consumer, Int64 max_buffered_bytes);
+
     static std::pair<SharedQueueSinkHolderPtr, SharedQueueSourceHolderPtr> build(
         PipelineExecutorContext & exec_context,
         size_t producer,
