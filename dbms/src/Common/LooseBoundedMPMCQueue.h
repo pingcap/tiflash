@@ -88,11 +88,14 @@ public:
 
             if unlikely (status == MPMCQueueStatus::CANCELLED)
                 return MPMCQueueResult::CANCELLED;
-            if unlikely (status == MPMCQueueStatus::FINISHED)
+            else if unlikely (status == MPMCQueueStatus::FINISHED)
                 return MPMCQueueResult::FINISHED;
-
-            assert(!!isFullWithoutLock());
-            notify_writer = pushFront(std::forward<U>(data));
+            else
+            {
+                assert(status == MPMCQueueStatus::NORMAL);
+                assert(!isFullWithoutLock());
+                notify_writer = pushFront(std::forward<U>(data));
+            }
         }
         if (notify_writer)
             notifyWriter();
@@ -110,13 +113,14 @@ public:
 
             if unlikely (status == MPMCQueueStatus::CANCELLED)
                 return MPMCQueueResult::CANCELLED;
-            if unlikely (status == MPMCQueueStatus::FINISHED)
+            else if unlikely (status == MPMCQueueStatus::FINISHED)
                 return MPMCQueueResult::FINISHED;
-
-            if (isFullWithoutLock())
-                return MPMCQueueResult::FULL;
-
-            notify_writer = pushFront(std::forward<U>(data));
+            else
+            {
+                if (isFullWithoutLock())
+                    return MPMCQueueResult::FULL;
+                notify_writer = pushFront(std::forward<U>(data));
+            }
         }
         if (notify_writer)
             notifyWriter();
@@ -136,10 +140,10 @@ public:
 
             if unlikely (status == MPMCQueueStatus::CANCELLED)
                 return MPMCQueueResult::CANCELLED;
-            if unlikely (status == MPMCQueueStatus::FINISHED)
+            else if unlikely (status == MPMCQueueStatus::FINISHED)
                 return MPMCQueueResult::FINISHED;
-
-            notify_writer = pushFront(std::forward<U>(data));
+            else
+                notify_writer = pushFront(std::forward<U>(data));
         }
         if (notify_writer)
             notifyWriter();
