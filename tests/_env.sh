@@ -38,7 +38,7 @@ export storage_db="default"
 export tidb_server="127.0.0.1"
 
 # TiDB port
-export tidb_port="4000"
+export tidb_port="${tidb_port:-4000}"
 
 # TiDB status port
 export tidb_status_port="10080"
@@ -50,8 +50,7 @@ export tidb_db="test"
 export tidb_table="t"
 
 # Whether run scripts with verbose output
-export verbose="false"
-# export verbose="true"
+export verbose="${verbose:-"false"}"
 
 # Setup running env vars
 #source ../../_vars.sh
