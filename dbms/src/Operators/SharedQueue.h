@@ -29,10 +29,21 @@ namespace DB
 */
 class SharedQueue;
 using SharedQueuePtr = std::shared_ptr<SharedQueue>;
+
+class SharedQueueSinkHolder;
+using SharedQueueSinkHolderPtr = std::shared_ptr<SharedQueueSinkHolder>;
+
+class SharedQueueSourceHolder;
+using SharedQueueSourceHolderPtr = std::shared_ptr<SharedQueueSourceHolder>;
+
 class SharedQueue
 {
 public:
-    static SharedQueuePtr build(size_t producer, size_t consumer, Int64 max_buffered_bytes);
+    static std::pair<SharedQueueSinkHolderPtr, SharedQueueSourceHolderPtr> build(
+        PipelineExecutorContext & exec_context,
+        size_t producer,
+        size_t consumer,
+        Int64 max_buffered_bytes);
 
     SharedQueue(CapacityLimits queue_limits, size_t init_producer);
 
@@ -65,7 +76,6 @@ public:
 private:
     SharedQueuePtr queue;
 };
-using SharedQueueSinkHolderPtr = std::shared_ptr<SharedQueueSinkHolder>;
 
 class SharedQueueSinkOp : public SinkOp
 {
