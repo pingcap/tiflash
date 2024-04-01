@@ -1542,9 +1542,7 @@ TEST_F(RegionKVStoreOldTest, RegionRange)
         catch (Exception & e)
         {
             const auto & res = e.message();
-            ASSERT_EQ(
-                res,
-                "void DB::RegionsRangeIndex::remove(const RegionRange &, RegionID): not found region_id=1");
+            ASSERT_EQ(res, "void DB::RegionsRangeIndex::remove(const RegionRange &, RegionID): not found region_id=1");
         }
 
         region_index.add(makeRegion(2, RecordKVFormat::genKey(1, 3), RecordKVFormat::genKey(1, 5)));
