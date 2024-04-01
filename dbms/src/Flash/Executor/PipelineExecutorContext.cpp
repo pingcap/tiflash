@@ -17,7 +17,6 @@
 #include <Operators/SharedQueue.h>
 
 #include <exception>
-#include <type_traits>
 
 namespace DB
 {
