@@ -26,7 +26,6 @@
 #include <exception>
 #include <mutex>
 
-
 namespace DB
 {
 class OperatorSpillContext;
