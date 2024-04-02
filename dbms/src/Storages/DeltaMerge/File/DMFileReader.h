@@ -103,27 +103,23 @@ private:
         size_t start_pack_id,
         size_t pack_count,
         size_t read_rows,
-        const std::vector<size_t> & clean_read_packs,
-        size_t column_index);
+        const std::vector<size_t> & clean_read_packs);
     void readFromDisk(
         const ColumnDefine & column_define,
         MutableColumnPtr & column,
         size_t start_pack_id,
-        size_t read_rows,
-        bool force_seek);
+        size_t read_rows);
     void readFromDiskOrSharingCache(
         const ColumnDefine & column_define,
         ColumnPtr & column,
         size_t start_pack_id,
         size_t pack_count,
-        size_t read_rows,
-        size_t column_index);
+        size_t read_rows);
     ColumnPtr readColumn(
         const ColumnDefine & cd,
         size_t start_pack_id,
         size_t pack_count,
-        size_t read_rows,
-        size_t column_index);
+        size_t read_rows);
     ColumnPtr cleanRead(
         const ColumnDefine & cd,
         size_t rows_count,
@@ -158,8 +154,6 @@ private:
 private:
     /// Filters
     DMFilePackFilter pack_filter;
-
-    std::vector<bool> must_seek;
 
     /// Caches
     MarkCachePtr mark_cache;
