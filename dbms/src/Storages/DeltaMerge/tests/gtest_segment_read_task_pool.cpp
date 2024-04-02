@@ -31,11 +31,14 @@ protected:
         return std::make_shared<Segment>(Logger::get(), 0, RowKeyRange{}, seg_id, seg_id + 1, nullptr, nullptr);
     }
 
-    static SegmentSnapshotPtr createSegmentSnapshot()
+    SegmentSnapshotPtr createSegmentSnapshot()
     {
-        auto delta_snap = std::make_shared<DeltaValueSnapshot>(CurrentMetrics::Metric{});
-        delta_snap->delta = std::make_shared<DeltaValueSpace>(nullptr);
-        return std::make_shared<SegmentSnapshot>(std::move(delta_snap), /*stable*/ nullptr, Logger::get());
+        auto delta = std::make_shared<DeltaValueSpace>(1);
+        auto delta_snap = delta->createSnapshot(*createDMContext(), false, CurrentMetrics::Metric{});
+
+        auto stable = std::make_shared<StableValueSpace>(1);
+        auto stable_snap = stable->createSnapshot();
+        return std::make_shared<SegmentSnapshot>(std::move(delta_snap), std::move(stable_snap), Logger::get());
     }
 
     SegmentReadTaskPtr createSegmentReadTask(PageIdU64 seg_id)
