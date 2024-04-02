@@ -52,6 +52,7 @@ TEST(AsyncTasksTest, AsyncTasksNormal)
         ASSERT_NO_THROW(async_tasks->fetchResult(1));
         ASSERT_EQ(flag, 2);
     }
+
     // Lifetime of tasks
     LOG_INFO(log, "Lifetime of tasks");
     {

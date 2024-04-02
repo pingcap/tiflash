@@ -17,8 +17,8 @@
 #include <Common/setThreadName.h>
 #include <Common/typeid_cast.h>
 #include <Debug/MockKVStore/MockSSTReader.h>
+#include <Debug/MockKVStore/MockTiKV.h>
 #include <Debug/MockTiDB.h>
-#include <Debug/MockTiKV.h>
 #include <Debug/dbgKVStore/dbgFuncMockRaftCommand.h>
 #include <Debug/dbgKVStore/dbgFuncRegion.h>
 #include <Debug/dbgTools.h>

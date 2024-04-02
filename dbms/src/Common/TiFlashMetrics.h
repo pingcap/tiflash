@@ -533,9 +533,16 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       "Bucketed snapshot total size",                                                                                               \
       Histogram,                                                                                                                    \
       F(type_approx_raft_snapshot, {{"type", "approx_raft_snapshot"}}, ExpBuckets{1024, 2, 24})) /* 16G */                          \
+    M(tiflash_raft_read_index_events_count,                                                                                         \
+      "Raft read index events counter",                                                                                             \
+      Counter,                                                                                                                      \
+      F(type_use_histroy, {{"type", "use_histroy"}}),                                                                               \
+      F(type_use_cache, {{"type", "use_cache"}}))                                                                                   \
     M(tiflash_raft_learner_read_failures_count,                                                                                     \
       "Raft learner read failure reason counter",                                                                                   \
       Counter,                                                                                                                      \
+      F(type_request_error, {{"type", "request_error"}}),                                                                           \
+      F(type_read_index_timeout, {{"type", "read_index_timeout"}}),                                                                 \
       F(type_not_found_tiflash, {{"type", "not_found_tiflash"}}),                                                                   \
       F(type_epoch_not_match, {{"type", "epoch_not_match"}}),                                                                       \
       F(type_not_leader, {{"type", "not_leader"}}),                                                                                 \
@@ -545,7 +552,7 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_key_not_in_region, {{"type", "key_not_in_region"}}),                                                                   \
       F(type_tikv_server_issue, {{"type", "tikv_server_issue"}}),                                                                   \
       F(type_tikv_lock, {{"type", "tikv_lock"}}),                                                                                   \
-      F(type_other, {{"type", "write"}}))                                                                                           \
+      F(type_other, {{"type", "other"}}))                                                                                           \
     /* required by DBaaS */                                                                                                         \
     M(tiflash_server_info,                                                                                                          \
       "Indicate the tiflash server info, and the value is the start timestamp (s).",                                                \
@@ -735,6 +742,7 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       "pipeline scheduler",                                                                                                         \
       Gauge,                                                                                                                        \
       F(type_waiting_tasks_count, {"type", "waiting_tasks_count"}),                                                                 \
+      F(type_wait_for_notify_tasks_count, {"type", "wait_for_notify_tasks_count"}),                                                 \
       F(type_cpu_pending_tasks_count, {"type", "cpu_pending_tasks_count"}),                                                         \
       F(type_cpu_executing_tasks_count, {"type", "cpu_executing_tasks_count"}),                                                     \
       F(type_io_pending_tasks_count, {"type", "io_pending_tasks_count"}),                                                           \
@@ -748,7 +756,8 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_io_execute, {{"type", "io_execute"}}, ExpBuckets{0.005, 2, 20}),                                                       \
       F(type_cpu_queue, {{"type", "cpu_queue"}}, ExpBuckets{0.005, 2, 20}),                                                         \
       F(type_io_queue, {{"type", "io_queue"}}, ExpBuckets{0.005, 2, 20}),                                                           \
-      F(type_await, {{"type", "await"}}, ExpBuckets{0.005, 2, 20}))                                                                 \
+      F(type_await, {{"type", "await"}}, ExpBuckets{0.005, 2, 20}),                                                                 \
+      F(type_wait_for_notify, {{"type", "wait_for_notify"}}, ExpBuckets{0.005, 2, 20}))                                             \
     M(tiflash_pipeline_task_execute_max_time_seconds_per_round,                                                                     \
       "Bucketed histogram of pipeline task execute max time per round in seconds",                                                  \
       Histogram, /* these command usually cost several hundred milliseconds to several seconds, increase the start bucket to 5ms */ \
@@ -758,6 +767,7 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       "pipeline task change to status",                                                                                             \
       Counter,                                                                                                                      \
       F(type_to_waiting, {"type", "to_waiting"}),                                                                                   \
+      F(type_to_wait_for_notify, {"type", "to_wait_for_notify"}),                                                                   \
       F(type_to_running, {"type", "to_running"}),                                                                                   \
       F(type_to_io, {"type", "to_io"}),                                                                                             \
       F(type_to_finished, {"type", "to_finished"}),                                                                                 \
