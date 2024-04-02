@@ -18,16 +18,9 @@
 #include <Common/Stopwatch.h>
 #include <Common/escapeForFileName.h>
 #include <DataTypes/IDataType.h>
-#include <Flash/Coprocessor/DAGContext.h>
-#include <IO/FileProvider/ChecksumReadBufferBuilder.h>
-#include <Storages/DeltaMerge/DMContext.h>
-#include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
-#include <Storages/DeltaMerge/File/DMFilePackFilter.h>
 #include <Storages/DeltaMerge/File/DMFileReader.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/DeltaMerge/convertColumnTypeHelpers.h>
-#include <Storages/S3/S3Common.h>
-#include <Storages/S3/S3RandomAccessFile.h>
 #include <fmt/format.h>
 
 
