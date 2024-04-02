@@ -66,11 +66,7 @@ ALWAYS_INLINE static inline void * inline_memset(void * dst_, int c, size_t size
 #endif
 }
 
-#ifndef NDEBUG
 ALWAYS_INLINE static inline void * inline_memchr(const void * src_, int c, size_t size)
-#else
-ALWAYS_INLINE static inline const void * inline_memchr(const void * src_, int c, size_t size)
-#endif
 {
 #if __aarch64__
 #if __ARM_FEATURE_SVE
@@ -86,11 +82,7 @@ ALWAYS_INLINE static inline const void * inline_memchr(const void * src_, int c,
 #endif
 }
 
-#ifndef NDEBUG
 ALWAYS_INLINE static inline void * inline_memrchr(const void * src_, int c, size_t size)
-#else
-ALWAYS_INLINE static inline const void * inline_memrchr(const void * src_, int c, size_t size)
-#endif
 {
 #if __aarch64__
     return __memrchr_aarch64(src_, c, size);
@@ -153,11 +145,7 @@ ALWAYS_INLINE static inline int inline_strcmp(const char * src1_, const char * s
 #endif
 }
 
-#ifndef NDEBUG
 ALWAYS_INLINE static inline char * inline_strchr(const char * src_, int c)
-#else
-ALWAYS_INLINE static inline const char * inline_strchr(const char * src_, int c)
-#endif
 {
 #if __aarch64__
 #if __ARM_FEATURE_SVE
@@ -171,11 +159,7 @@ ALWAYS_INLINE static inline const char * inline_strchr(const char * src_, int c)
 #endif
 }
 
-#ifndef NDEBUG
 ALWAYS_INLINE static inline char * inline_strrchr(const char * src_, int c)
-#else
-ALWAYS_INLINE static inline const char * inline_strrchr(const char * src_, int c)
-#endif
 {
 #if __aarch64__
 #if __ARM_FEATURE_SVE
@@ -189,11 +173,7 @@ ALWAYS_INLINE static inline const char * inline_strrchr(const char * src_, int c
 #endif
 }
 
-#ifndef NDEBUG
 ALWAYS_INLINE static inline char * inline_strchrnul(const char * src_, int c)
-#else
-ALWAYS_INLINE static inline const char * inline_strchrnul(const char * src_, int c)
-#endif
 {
 #if __aarch64__
 #if __ARM_FEATURE_SVE

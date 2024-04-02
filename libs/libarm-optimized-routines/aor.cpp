@@ -32,20 +32,12 @@ extern "C" __attribute__((visibility("default"))) void * memset(void * dst, int 
     return inline_memset(dst, c, size);
 }
 
-#ifndef NDEBUG
 extern "C" __attribute__((visibility("default"))) void * memchr(const void * src, int c, size_t size)
-#else
-extern "C" __attribute__((visibility("default"))) const void * memchr(const void * src, int c, size_t size)
-#endif
 {
     return inline_memchr(src, c, size);
 }
 
-#ifndef NDEBUG
 extern "C" __attribute__((visibility("default"))) void * memrchr(const void * src, int c, size_t size)
-#else
-extern "C" __attribute__((visibility("default"))) const void * memrchr(const void * src, int c, size_t size)
-#endif
 {
     return inline_memrchr(src, c, size);
 }
@@ -74,29 +66,17 @@ extern "C" __attribute__((visibility("default"))) inline int strcmp(const char *
     return inline_strcmp(src1_, src2_);
 }
 
-#ifndef NDEBUG
 extern "C" __attribute__((visibility("default"))) inline char * strchr(const char * src_, int c)
-#else
-extern "C" __attribute__((visibility("default"))) inline const char * strchr(const char * src_, int c)
-#endif
 {
     return inline_strchr(src_, c);
 }
 
-#ifndef NDEBUG
 extern "C" __attribute__((visibility("default"))) inline char * strrchr(const char * src_, int c)
-#else
-extern "C" __attribute__((visibility("default"))) inline const char * strrchr(const char * src_, int c)
-#endif
 {
     return inline_strrchr(src_, c);
 }
 
-#ifndef NDEBUG
 extern "C" __attribute__((visibility("default"))) inline char * strchrnul(const char * src_, int c)
-#else
-extern "C" __attribute__((visibility("default"))) inline const char * strchrnul(const char * src_, int c)
-#endif
 {
     return inline_strchrnul(src_, c);
 }
