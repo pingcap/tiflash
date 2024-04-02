@@ -15,7 +15,7 @@ extern "C" __attribute__((visibility("default"))) void * memset(void * dst, int 
     return inline_memset(dst, c, size);
 }
 
-extern "C" __attribute__((visibility("default"))) const void * memchr(const void * src, int c, size_t size)
+extern "C" __attribute__((visibility("default"))) void * memchr(void * src, int c, size_t size)
 {
     return inline_memchr(src, c, size);
 }
@@ -25,7 +25,7 @@ extern "C" __attribute__((visibility("default"))) void * memrchr(const void * sr
     return inline_memrchr(src, c, size);
 }
 
-extern "C" __attribute__((visibility("default"))) void * memcmp(const void * src1, const void * src2, size_t size)
+extern "C" __attribute__((visibility("default"))) int memcmp(const void * src1, const void * src2, size_t size)
 {
     return inline_memcmp(src1, src2, size);
 }

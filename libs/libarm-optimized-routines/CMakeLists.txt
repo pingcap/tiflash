@@ -17,7 +17,7 @@ option(USE_ARM_OPTIMIZED_ROUTINES "Use ARM optimized routines" ON)
 set (aor_sources)
 
 if (ARCH_AARCH64 AND OS_LINUX AND USE_ARM_OPTIMIZED_ROUTINES)
-    list (APPEND aor_sources aoc.cpp)
+    list (APPEND aor_sources aor.cpp)
 else ()
     set (USE_ARM_OPTIMIZED_ROUTINES OFF)
 endif ()
@@ -31,6 +31,7 @@ check_then_add_sources_compile_flag (
 if (USE_ARM_OPTIMIZED_ROUTINES)
     add_library (aor STATIC ${aor_sources})
     target_link_libraries(aor PUBLIC tiflash-aarch64-string tiflash-aarch64-math)
+    target_include_directories(aor PUBLIC ${TiFlash_SOURCE_DIR}/contrib/arm-optimized-routines/string/include)
 
     set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fomit-frame-pointer")
     set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fomit-frame-pointer")

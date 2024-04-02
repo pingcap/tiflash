@@ -16,7 +16,7 @@
 #include <stringlib.h>
 
 #include <cstddef>
-#include <cstring>
+#include <string.h>
 
 ALWAYS_INLINE static inline void * inline_memcpy(void * __restrict dst_, const void * __restrict src_, size_t size)
 {
@@ -61,7 +61,11 @@ ALWAYS_INLINE static inline void * inline_memset(void * dst_, int c, size_t size
 #endif
 }
 
+#ifndef NDEBUG
+ALWAYS_INLINE static inline void * inline_memchr(const void * src_, int c, size_t size)
+#else
 ALWAYS_INLINE static inline const void * inline_memchr(const void * src_, int c, size_t size)
+#endif
 {
 #if __aarch64__
     return __memchr_aarch64(src_, c, size);
@@ -77,7 +81,11 @@ ALWAYS_INLINE static inline const void * inline_memchr(const void * src_, int c,
 #endif
 }
 
+#ifndef NDEBUG
+ALWAYS_INLINE static inline void * inline_memrchr(const void * src_, int c, size_t size)
+#else
 ALWAYS_INLINE static inline const void * inline_memrchr(const void * src_, int c, size_t size)
+#endif
 {
 #if __aarch64__
     return __memrchr_aarch64(src_, c, size);
