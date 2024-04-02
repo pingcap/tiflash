@@ -17,6 +17,7 @@ if (NOT NO_WERROR)
     set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Werror")
 endif ()
 
+add_subdirectory (libarm-optimized-routines)
 add_subdirectory (libcommon)
 add_subdirectory (libpocoext)
 add_subdirectory (libdaemon)

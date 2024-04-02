@@ -200,5 +200,5 @@ if (TIFLASH_ENABLE_SVE_SUPPORT)
 endif ()
 
 if (ARCH_AARCH64 AND OS_LINUX)
-    target_link_libraries (common PUBLIC tiflash-aarch64-string tiflash-aarch64-math)
+    target_link_libraries (common PUBLIC aor)
 endif()
