@@ -321,9 +321,9 @@ Block DMFileReader::read()
     const auto & pack_properties = dmfile->getPackProperties();
     const auto & handle_res = pack_filter.getHandleRes(); // alias of handle_res in pack_filter
     const size_t read_packs = next_pack_id - start_pack_id;
-    std::unordered_set<size_t> handle_column_clean_read_packs;
-    std::unordered_set<size_t> del_column_clean_read_packs;
-    std::unordered_set<size_t> version_column_clean_read_packs;
+    std::vector<size_t> handle_column_clean_read_packs;
+    std::vector<size_t> del_column_clean_read_packs;
+    std::vector<size_t> version_column_clean_read_packs;
     if (is_fast_scan)
     {
         if (enable_del_clean_read)
@@ -337,7 +337,7 @@ Block DMFileReader::read()
                     && (pack_properties.property(i).deleted_rows() == 0
                         || pack_properties.property(i).deleted_rows() == pack_stats[i].rows))
                 {
-                    del_column_clean_read_packs.insert(i);
+                    del_column_clean_read_packs.push_back(i);
                 }
             }
         }
@@ -347,14 +347,16 @@ Block DMFileReader::read()
             for (size_t i = start_pack_id; i < next_pack_id; ++i)
             {
                 // If all handle in a pack are in the given range, and del column do clean read, we do not need to read handle column.
-                if (del_column_clean_read_packs.contains(i) && handle_res[i] == All)
+                if (handle_res[i] == All
+                    && std::find(del_column_clean_read_packs.cbegin(), del_column_clean_read_packs.cend(), i)
+                        != del_column_clean_read_packs.cend())
                 {
-                    handle_column_clean_read_packs.insert(i);
+                    handle_column_clean_read_packs.push_back(i);
                 }
                 // If all handle in a pack are in the given range, but disable del clean read, we do not need to read handle column.
                 else if (!enable_del_clean_read && handle_res[i] == All)
                 {
-                    handle_column_clean_read_packs.insert(i);
+                    handle_column_clean_read_packs.push_back(i);
                 }
             }
         }
@@ -371,9 +373,9 @@ Block DMFileReader::read()
             if (handle_res[i] == All && pack_stats[i].not_clean == 0
                 && pack_filter.getMaxVersion(i) <= max_read_version)
             {
-                handle_column_clean_read_packs.insert(i);
-                version_column_clean_read_packs.insert(i);
-                del_column_clean_read_packs.insert(i);
+                handle_column_clean_read_packs.push_back(i);
+                version_column_clean_read_packs.push_back(i);
+                del_column_clean_read_packs.push_back(i);
             }
         }
     }
@@ -463,7 +465,7 @@ ColumnPtr DMFileReader::readExtraColumn(
     size_t start_pack_id,
     size_t pack_count,
     size_t read_rows,
-    const std::unordered_set<size_t> & clean_read_packs,
+    const std::vector<size_t> & clean_read_packs,
     size_t column_index)
 {
     const auto & pack_stats = dmfile->getPackStats();

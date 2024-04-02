@@ -103,7 +103,7 @@ private:
         size_t start_pack_id,
         size_t pack_count,
         size_t read_rows,
-        const std::unordered_set<size_t> & clean_read_packs,
+        const std::vector<size_t> & clean_read_packs,
         size_t column_index);
     void readFromDisk(
         const ColumnDefine & column_define,
