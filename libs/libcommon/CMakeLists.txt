@@ -112,7 +112,9 @@ if (GLIBC_COMPATIBILITY)
     set (GLIBC_COMPATIBILITY_LIBRARIES glibc-compatibility)
 endif ()
 
-if (USE_INTERNAL_MEMCPY)
+if (ARCH_AARCH64 AND OS_LINUX)
+    target_link_libraries (common PUBLIC aor)
+elseif (USE_INTERNAL_MEMCPY)
     set (MEMCPY_LIBRARIES memcpy)
 endif ()
 
@@ -198,7 +200,3 @@ if (TIFLASH_ENABLE_SVE_SUPPORT)
     # https://gcc.gnu.org/onlinedocs/gcc/ARM-Options.html
     # set_source_files_properties(<SOURCE_FILE> APPEND COMPILE_FLAGS "-march=armv8.6-a+sve")
 endif ()
-
-if (ARCH_AARCH64 AND OS_LINUX)
-    target_link_libraries (common PUBLIC tiflash-aarch64-string tiflash-aarch64-math)
-endif()
