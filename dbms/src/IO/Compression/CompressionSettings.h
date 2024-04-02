@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include <IO/Compression/CompressedStream.h>
+#include <IO/Compression/CompressionMethod.h>
 
 
 namespace DB
@@ -30,7 +30,7 @@ struct CompressionSettings
         : CompressionSettings(CompressionMethod::LZ4)
     {}
 
-    CompressionSettings(CompressionMethod method_)
+    explicit CompressionSettings(CompressionMethod method_)
         : method(method_)
         , level(getDefaultLevel(method))
     {}
@@ -40,7 +40,7 @@ struct CompressionSettings
         , level(level_)
     {}
 
-    CompressionSettings(const Settings & settings);
+    explicit CompressionSettings(const Settings & settings);
 
     static int getDefaultLevel(CompressionMethod method);
 };

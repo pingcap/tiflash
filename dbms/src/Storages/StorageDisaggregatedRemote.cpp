@@ -42,6 +42,7 @@
 #include <Storages/DeltaMerge/Remote/RNSegmentInputStream.h>
 #include <Storages/DeltaMerge/Remote/RNSegmentSourceOp.h>
 #include <Storages/DeltaMerge/Remote/RNWorkers.h>
+#include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/KVStore/Decode/DecodingStorageSchemaSnapshot.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/KVStore/Types.h>
@@ -199,7 +200,8 @@ DM::SegmentReadTasks StorageDisaggregated::buildReadTask(
     // First split the read task for different write nodes.
     // For each write node, a BatchCopTask is built.
     {
-        auto remote_table_ranges = buildRemoteTableRanges();
+        auto [remote_table_ranges, region_num] = buildRemoteTableRanges();
+        scan_context->setRegionNumOfCurrentInstance(region_num);
         // only send to tiflash node with label [{"engine":"tiflash"}, {"engine-role":"write"}]
         const auto label_filter = pingcap::kv::labelFilterOnlyTiFlashWriteNode;
         batch_cop_tasks = buildBatchCopTasks(remote_table_ranges, label_filter);
@@ -227,7 +229,7 @@ DM::SegmentReadTasks StorageDisaggregated::buildReadTask(
     {
         // TODO
     }
-
+    scan_context->num_segments = output_seg_tasks.size();
     return output_seg_tasks;
 }
 

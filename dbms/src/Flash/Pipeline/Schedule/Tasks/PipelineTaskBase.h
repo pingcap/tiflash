@@ -29,26 +29,30 @@ namespace DB
 /// - OperatorStatus::WAITING                  ==>     ExecTaskStatus::WAITING
 /// - OperatorStatus::NEED_INPUT/HAS_OUTPUT    ==>     ExecTaskStatus::RUNNING
 
-#define MAP_NOT_RUNNING_TASK_STATUS       \
-    case OperatorStatus::FINISHED:        \
-    {                                     \
-        return ExecTaskStatus::FINISHED;  \
-    }                                     \
-    case OperatorStatus::CANCELLED:       \
-    {                                     \
-        return ExecTaskStatus::CANCELLED; \
-    }                                     \
-    case OperatorStatus::IO_IN:           \
-    {                                     \
-        return ExecTaskStatus::IO_IN;     \
-    }                                     \
-    case OperatorStatus::IO_OUT:          \
-    {                                     \
-        return ExecTaskStatus::IO_OUT;    \
-    }                                     \
-    case OperatorStatus::WAITING:         \
-    {                                     \
-        return ExecTaskStatus::WAITING;   \
+#define MAP_NOT_RUNNING_TASK_STATUS             \
+    case OperatorStatus::FINISHED:              \
+    {                                           \
+        return ExecTaskStatus::FINISHED;        \
+    }                                           \
+    case OperatorStatus::CANCELLED:             \
+    {                                           \
+        return ExecTaskStatus::CANCELLED;       \
+    }                                           \
+    case OperatorStatus::IO_IN:                 \
+    {                                           \
+        return ExecTaskStatus::IO_IN;           \
+    }                                           \
+    case OperatorStatus::IO_OUT:                \
+    {                                           \
+        return ExecTaskStatus::IO_OUT;          \
+    }                                           \
+    case OperatorStatus::WAITING:               \
+    {                                           \
+        return ExecTaskStatus::WAITING;         \
+    }                                           \
+    case OperatorStatus::WAIT_FOR_NOTIFY:       \
+    {                                           \
+        return ExecTaskStatus::WAIT_FOR_NOTIFY; \
     }
 
 #define UNEXPECTED_OP_STATUS(op_status, function_name) \

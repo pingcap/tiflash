@@ -56,6 +56,8 @@ TEST(DataTypeDecimal_test, A)
         + (typeid_cast<const DataTypeDecimal64 *>(rhs.get()))->getScale();
 
     auto context = TiFlashTestEnv::getContext();
+    auto dag_context_ptr = std::make_unique<DAGContext>(1024);
+    context->setDAGContext(dag_context_ptr.get());
     DataTypes args{lhs, rhs};
 
     // Decimal(10, 4) + Decimal(10, 6)

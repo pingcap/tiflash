@@ -77,6 +77,7 @@
 #include <Storages/DeltaMerge/ReadThread/ColumnSharingCache.h>
 #include <Storages/DeltaMerge/ReadThread/SegmentReadTaskScheduler.h>
 #include <Storages/DeltaMerge/ReadThread/SegmentReader.h>
+#include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/FormatVersion.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/KVStore/FFI/FileEncryption.h>
@@ -949,6 +950,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     TiFlashErrorRegistry::instance(); // This invocation is for initializing
 
+    DM::ScanContext::initCurrentInstanceId(config(), log);
+
     const auto disaggregated_mode = getDisaggregatedMode(config());
     const auto use_autoscaler = useAutoScaler(config());
 
@@ -1028,6 +1031,12 @@ int Server::main(const std::vector<std::string> & /*args*/)
     {
         LOG_INFO(log, "UniPS is not enabled for proxy, page_version={}", STORAGE_FORMAT_CURRENT.page);
     }
+
+#ifdef USE_JEMALLOC
+    LOG_INFO(log, "Using Jemalloc for TiFlash");
+#else
+    LOG_INFO(log, "Not using Jemalloc for TiFlash");
+#endif
 
     RaftStoreProxyRunner proxy_runner(RaftStoreProxyRunner::RunRaftStoreProxyParms{&helper, proxy_conf}, log);
 
@@ -1708,6 +1717,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
                 LOG_ERROR(log, "Current status of engine-store is NOT Running, should not happen");
                 exit(-1);
             }
+            LOG_INFO(log, "Stop collecting thread alloc metrics");
+            tmt_context.getKVStore()->stopThreadAllocInfo();
             LOG_INFO(log, "Set store context status Stopping");
             tmt_context.setStatusStopping();
             {

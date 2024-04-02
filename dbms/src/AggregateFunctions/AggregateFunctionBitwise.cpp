@@ -24,6 +24,7 @@ namespace
 {
 template <template <typename> class Data>
 AggregateFunctionPtr createAggregateFunctionBitwise(
+    const Context & /* context not used */,
     const std::string & name,
     const DataTypes & argument_types,
     const Array & parameters)

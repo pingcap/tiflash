@@ -14,9 +14,10 @@
 
 #include <Common/FmtUtils.h>
 #include <Common/typeid_cast.h>
+#include <Debug/MockKVStore/MockTiKV.h>
 #include <Debug/MockTiDB.h>
-#include <Debug/MockTiKV.h>
-#include <Debug/dbgFuncRegion.h>
+#include <Debug/dbgKVStore/dbgFuncRegion.h>
+#include <Debug/dbgKVStore/dbgKVStore.h>
 #include <Debug/dbgTools.h>
 #include <Interpreters/Context.h>
 #include <Parsers/ASTIdentifier.h>
@@ -210,20 +211,12 @@ void dbgFuncRemoveRegion(Context & context, const ASTs & args, DBGInvoker::Print
 
     TMTContext & tmt = context.getTMTContext();
     KVStorePtr & kvstore = tmt.getKVStore();
+    auto debug_kvstore = RegionBench::DebugKVStore(*kvstore);
     RegionTable & region_table = tmt.getRegionTable();
-    kvstore->mockRemoveRegion(region_id, region_table);
+    debug_kvstore.mockRemoveRegion(region_id, region_table);
 
     output(fmt::format("remove region #{}", region_id));
 }
-
-void KVStore::mockRemoveRegion(DB::RegionID region_id, RegionTable & region_table)
-{
-    auto task_lock = genTaskLock();
-    auto region_lock = region_manager.genRegionTaskLock(region_id);
-    // mock remove region should remove data by default
-    removeRegion(region_id, /* remove_data */ true, region_table, task_lock, region_lock);
-}
-
 
 inline std::string ToPdKey(const char * key, const size_t len)
 {

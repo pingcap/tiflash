@@ -39,4 +39,11 @@ enum class ReadMode
     Bitmap,
 };
 
+enum class ReadTag
+{
+    Internal, // Read columns required by some internal tasks.
+    Query, // Read columns required by queries.
+    MVCC, // Read columns to build MVCC bitmap.
+    LMFilter, // Read columns required by late-materialization filter.
+};
 } // namespace DB::DM

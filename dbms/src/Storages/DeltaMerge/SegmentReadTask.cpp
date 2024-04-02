@@ -735,4 +735,39 @@ void SegmentReadTask::doFetchPagesImpl(
         wait_write_page_ns / 1000000);
 }
 
+String SegmentReadTask::toString() const
+{
+    if (dm_context->keyspace_id == DB::NullspaceID)
+    {
+        return fmt::format(
+            "s{}_t{}_{}_{}_{}_{}",
+            store_id,
+            dm_context->physical_table_id,
+            segment->segmentId(),
+            segment->segmentEpoch(),
+            read_snapshot->delta->getDeltaIndexEpoch(),
+            read_snapshot->getRows());
+    }
+    return fmt::format(
+        "s{}_ks{}_t{}_{}_{}_{}_{}",
+        store_id,
+        dm_context->keyspace_id,
+        dm_context->physical_table_id,
+        segment->segmentId(),
+        segment->segmentEpoch(),
+        read_snapshot->delta->getDeltaIndexEpoch(),
+        read_snapshot->getRows());
+}
+
+GlobalSegmentID SegmentReadTask::getGlobalSegmentID() const
+{
+    return GlobalSegmentID{
+        .store_id = store_id,
+        .keyspace_id = dm_context->keyspace_id,
+        .physical_table_id = dm_context->physical_table_id,
+        .segment_id = segment->segmentId(),
+        .segment_epoch = segment->segmentEpoch(),
+    };
+}
+
 } // namespace DB::DM

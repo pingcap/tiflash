@@ -38,6 +38,7 @@ public:
         FLASHBACK,
         KEY_NOT_IN_REGION,
         TIKV_SERVER_ISSUE,
+        READ_INDEX_TIMEOUT,
         OTHER,
     };
 

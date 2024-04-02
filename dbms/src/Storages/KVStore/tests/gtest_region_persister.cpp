@@ -225,7 +225,7 @@ try
         // For the region restored with binary_version == 1, the eager_truncated_index is equals to
         // truncated_index
         const auto & [eager_truncated_index, applied_index] = new_region->getRaftLogEagerGCRange();
-        ASSERT_EQ(new_region->mutMeta().truncateIndex(), 5);
+        ASSERT_EQ(new_region->getMeta().truncateIndex(), 5);
         ASSERT_EQ(eager_truncated_index, 5);
     }
 }

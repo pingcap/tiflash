@@ -42,6 +42,7 @@
 #include <Storages/DeltaMerge/ReadThread/SegmentReadTaskScheduler.h>
 #include <Storages/DeltaMerge/ReadThread/UnorderedInputStream.h>
 #include <Storages/DeltaMerge/Remote/DisaggSnapshot.h>
+#include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/DeltaMerge/SchemaUpdate.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
@@ -544,6 +545,17 @@ DM::WriteResult DeltaMergeStore::write(const Context & db_context, const DB::Set
 
     auto dm_context = newDMContext(db_context, db_settings, "write");
 
+    if (db_context.getSettingsRef().dt_log_record_version)
+    {
+        const auto & ver_col = block.getByName(VERSION_COLUMN_NAME).column;
+        const auto * ver = toColumnVectorDataPtr<UInt64>(ver_col);
+        std::unordered_set<UInt64> dedup_ver;
+        for (auto v : *ver)
+        {
+            dedup_ver.insert(v);
+        }
+        LOG_DEBUG(log, "Record count: {}, Versions: {}", block.rows(), dedup_ver);
+    }
     const auto bytes = block.bytes();
 
     {
