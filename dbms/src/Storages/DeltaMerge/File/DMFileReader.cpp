@@ -498,7 +498,7 @@ ColumnPtr DMFileReader::readExtraColumn(
         }
         if (read_strategy.size() == 1)
             return col;
-        if (column->isColumnConst())
+        if (col->isColumnConst())
             column->insertManyFrom(*col, 0, col->size());
         else
             column->insertRangeFrom(*col, 0, col->size());
