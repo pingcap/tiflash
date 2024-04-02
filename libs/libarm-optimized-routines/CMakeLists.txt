@@ -17,7 +17,7 @@ option(USE_ARM_OPTIMIZED_ROUTINES "Use ARM optimized routines" ON)
 set (aor_sources)
 
 if (ARCH_AARCH64 AND OS_LINUX AND USE_ARM_OPTIMIZED_ROUTINES)
-    list (APPEND aor_sources aor.cpp)
+    list (APPEND aor_sources aor.cpp aor.h)
 else ()
     set (USE_ARM_OPTIMIZED_ROUTINES OFF)
 endif ()
@@ -25,6 +25,12 @@ endif ()
 check_then_add_sources_compile_flag (
     TIFLASH_ENABLE_ASIMD_SUPPORT
     "-march=armv8-a+simd"
+    aor_sources
+)
+
+check_then_add_sources_compile_flag (
+    TIFLASH_ENABLE_SVE_SUPPORT
+    "-march=armv8-a+sve"
     aor_sources
 )
 
