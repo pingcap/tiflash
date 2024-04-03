@@ -131,14 +131,15 @@ std::string Region::getDebugString() const
 {
     const auto & meta_snap = meta.dumpRegionMetaSnapshot();
     return fmt::format(
-        "[region_id={} index={} table_id={} ver={} conf_ver={} state={} peer={}]",
+        "[region_id={} index={} table_id={} ver={} conf_ver={} state={} peer={} range={}]",
         id(),
         meta.appliedIndex(),
         mapped_table_id,
         meta_snap.ver,
         meta_snap.conf_ver,
         raft_serverpb::PeerState_Name(peerState()),
-        meta_snap.peer.ShortDebugString());
+        meta_snap.peer.ShortDebugString(),
+        getRange()->toDebugString());
 }
 
 std::string Region::toString(bool dump_status) const
