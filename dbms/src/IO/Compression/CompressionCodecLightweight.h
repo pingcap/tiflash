@@ -25,6 +25,7 @@ public:
     explicit CompressionCodecLightweight(UInt8 bytes_size_);
 
     UInt8 getMethodByte() const override;
+
 protected:
     UInt32 doCompressData(const char * source, UInt32 source_size, char * dest) const override;
     void doDecompressData(const char * source, UInt32 source_size, char * dest, UInt32 uncompressed_size)
