@@ -565,7 +565,7 @@ LearnerReadSnapshot doLearnerRead(
 
     if (auto * dag_context = context.getDAGContext())
     {
-        mvcc_query_info.scan_context->num_stale_read = worker.getStats().num_stale_read;
+        mvcc_query_info->scan_context->num_stale_read = stats.num_stale_read;
         dag_context->has_read_wait_index = true;
         dag_context->read_wait_index_start_timestamp = start_time;
         dag_context->read_wait_index_end_timestamp = end_time;
