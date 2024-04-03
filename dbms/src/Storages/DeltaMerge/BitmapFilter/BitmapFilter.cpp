@@ -15,7 +15,6 @@
 #include <Common/Exception.h>
 #include <Storages/DeltaMerge/BitmapFilter/BitmapFilter.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
-#include <Storages/DeltaMerge/Segment.h>
 
 namespace DB::DM
 {
