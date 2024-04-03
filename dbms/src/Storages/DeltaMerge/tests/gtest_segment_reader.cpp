@@ -33,10 +33,6 @@
 #include <common/logger_useful.h>
 #include <common/types.h>
 
-#include <algorithm>
-#include <future>
-#include <iterator>
-
 using namespace std::chrono_literals;
 
 namespace DB
@@ -151,7 +147,7 @@ try
 
     // Ensure stable is large enough, or this would be unstable.
     const size_t num_rows_write_stable = db_context->getGlobalContext().getSettingsRef().max_block_size;
-    constexpr size_t NUMBER_OF_BLOCK_IN_STABLE = 5;
+    constexpr size_t NUMBER_OF_BLOCK_IN_STABLE = 5; // NOLINT(readability-identifier-naming)
     const size_t stable_rows = num_rows_write_stable * NUMBER_OF_BLOCK_IN_STABLE;
     {
         for (size_t i = 0; i < NUMBER_OF_BLOCK_IN_STABLE; i++)
@@ -177,7 +173,7 @@ try
     }
 
     const size_t num_rows_write_delta = 128; // Avoid DeltaMerge.
-    constexpr size_t NUMBER_OF_BLOCKS_IN_DELTA = 5;
+    constexpr size_t NUMBER_OF_BLOCKS_IN_DELTA = 5; // NOLINT(readability-identifier-naming)
     const size_t delta_rows = num_rows_write_delta * NUMBER_OF_BLOCKS_IN_DELTA;
     // Ensure delta is not empty.
     {

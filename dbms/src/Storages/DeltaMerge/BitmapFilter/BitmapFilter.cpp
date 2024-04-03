@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
 #include <Storages/DeltaMerge/BitmapFilter/BitmapFilter.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
-#include <Storages/DeltaMerge/Segment.h>
 
 namespace DB::DM
 {
@@ -30,53 +30,46 @@ void BitmapFilter::set(BlockInputStreamPtr & stream)
     {
         FilterPtr f = nullptr;
         auto blk = stream->read(f, /*res_filter*/ true);
-        if (likely(blk))
-        {
-            set(blk.segmentRowIdCol(), f);
-        }
-        else
+        if (unlikely(!blk))
         {
             break;
         }
+
+        const auto & row_ids_col = blk.segmentRowIdCol();
+        const auto * v = toColumnVectorDataPtr<UInt32>(row_ids_col);
+        assert(v != nullptr); // the segmentRowIdCol must be a UInt32 column
+        set(std::span{v->data(), v->size()}, f);
     }
     stream->readSuffix();
 }
 
-void BitmapFilter::set(const ColumnPtr & col, const FilterPtr & f)
+void BitmapFilter::set(std::span<const UInt32> row_ids, const FilterPtr & f)
 {
-    const auto * v = toColumnVectorDataPtr<UInt32>(col);
-    set(v->data(), v->size(), f);
-}
-
-void BitmapFilter::set(const UInt32 * data, UInt32 size, const FilterPtr & f)
-{
-    if (size == 0)
+    if (row_ids.empty())
     {
         return;
     }
     if (!f)
     {
-        for (UInt32 i = 0; i < size; i++)
+        for (auto row_id : row_ids)
         {
-            UInt32 row_id = *(data + i);
             filter[row_id] = true;
         }
     }
     else
     {
-        RUNTIME_CHECK(size == f->size(), size, f->size());
-        for (UInt32 i = 0; i < size; i++)
+        RUNTIME_CHECK(row_ids.size() == f->size(), row_ids.size(), f->size());
+        for (UInt32 i = 0; i < row_ids.size(); i++)
         {
-            UInt32 row_id = *(data + i);
-            filter[row_id] = (*f)[i];
+            filter[row_ids[i]] = (*f)[i];
         }
     }
 }
 
-void BitmapFilter::set(UInt32 start, UInt32 limit)
+void BitmapFilter::set(UInt32 start, UInt32 limit, bool value)
 {
     RUNTIME_CHECK(start + limit <= filter.size(), start, limit, filter.size());
-    std::fill(filter.begin() + start, filter.begin() + start + limit, true);
+    std::fill_n(filter.begin() + start, limit, value);
 }
 
 bool BitmapFilter::get(IColumn::Filter & f, UInt32 start, UInt32 limit) const
