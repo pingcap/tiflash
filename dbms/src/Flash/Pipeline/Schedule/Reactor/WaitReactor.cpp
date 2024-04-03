@@ -166,11 +166,7 @@ void WaitReactor::react(WaitingTasks & local_waiting_tasks)
             ++task_it;
     }
 
-#if __APPLE__ && __clang__
-    __thread auto & metrics = GET_METRIC(tiflash_pipeline_scheduler, type_waiting_tasks_count);
-#else
     thread_local auto & metrics = GET_METRIC(tiflash_pipeline_scheduler, type_waiting_tasks_count);
-#endif
     metrics.Set(local_waiting_tasks.size());
 
     submitReadyTasks();

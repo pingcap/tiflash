@@ -16,11 +16,7 @@
 
 namespace DB
 {
-#if __APPLE__ && __clang__
-__thread NotifyFuturePtr current_notify_future = nullptr;
-#else
 thread_local NotifyFuturePtr current_notify_future = nullptr;
-#endif
 
 void setNotifyFuture(NotifyFuturePtr new_future)
 {

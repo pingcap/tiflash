@@ -19,46 +19,6 @@
 
 namespace DB
 {
-#ifdef __APPLE__
-#define INC_METRIC(metric_name, value)                                                       \
-    do                                                                                       \
-    {                                                                                        \
-        if constexpr (is_cpu)                                                                \
-        {                                                                                    \
-            GET_METRIC(tiflash_pipeline_scheduler, type_cpu_##metric_name).Increment(value); \
-        }                                                                                    \
-        else                                                                                 \
-        {                                                                                    \
-            GET_METRIC(tiflash_pipeline_scheduler, type_io_##metric_name).Increment(value);  \
-        }                                                                                    \
-    } while (0)
-
-#define DEC_METRIC(metric_name, value)                                                       \
-    do                                                                                       \
-    {                                                                                        \
-        if constexpr (is_cpu)                                                                \
-        {                                                                                    \
-            GET_METRIC(tiflash_pipeline_scheduler, type_cpu_##metric_name).Decrement(value); \
-        }                                                                                    \
-        else                                                                                 \
-        {                                                                                    \
-            GET_METRIC(tiflash_pipeline_scheduler, type_io_##metric_name).Decrement(value);  \
-        }                                                                                    \
-    } while (0)
-
-#define SET_METRIC(metric_name, value)                                                 \
-    do                                                                                 \
-    {                                                                                  \
-        if constexpr (is_cpu)                                                          \
-        {                                                                              \
-            GET_METRIC(tiflash_pipeline_scheduler, type_cpu_##metric_name).Set(value); \
-        }                                                                              \
-        else                                                                           \
-        {                                                                              \
-            GET_METRIC(tiflash_pipeline_scheduler, type_io_##metric_name).Set(value);  \
-        }                                                                              \
-    } while (0)
-#else
 #define INC_METRIC(metric_name, value)                                                                    \
     do                                                                                                    \
     {                                                                                                     \
@@ -103,7 +63,6 @@ namespace DB
             metrics.Set(value);                                                                           \
         }                                                                                                 \
     } while (0)
-#endif
 
 template <bool is_cpu>
 TaskThreadPoolMetrics<is_cpu>::TaskThreadPoolMetrics()

@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
+INSTALL_PREFIX=${INSTALL_PREFIX:-"/usr/local"}
 
 # Boostrap LLVM envriroment for CI/CD.
 # Require: git, ninja, cmake, compiler(devtoolset-10)
@@ -29,6 +29,7 @@ function bootstrap_llvm() {
 
     cmake -DCMAKE_BUILD_TYPE=Release \
         -GNinja \
+        -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} \
         -DLLVM_ENABLE_PROJECTS="clang;lld" \
         -DLLVM_ENABLE_RUNTIMES="libcxx;libcxxabi" \
         -DLLVM_TARGETS_TO_BUILD=Native \
@@ -44,7 +45,8 @@ function bootstrap_llvm() {
 
     cmake -DCMAKE_BUILD_TYPE=Release \
         -GNinja \
-        -DLLVM_ENABLE_PROJECTS="clang;lld;polly;clang-tools-extra" \
+        -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} \
+        -DLLVM_ENABLE_PROJECTS="clang;lld;polly;clang-tools-extra;bolt" \
         -DLLVM_ENABLE_RUNTIMES="libcxx;libcxxabi;openmp;compiler-rt" \
         -DLLVM_TARGETS_TO_BUILD=Native \
         -DCOMPILER_RT_DEFAULT_TARGET_ONLY=ON \
