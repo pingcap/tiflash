@@ -32,7 +32,6 @@
 #include <chrono>
 #include <cmath>
 #include <filesystem>
-#include <fstream>
 
 namespace ProfileEvents
 {
