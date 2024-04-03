@@ -36,7 +36,7 @@ MinTSOScheduler::MinTSOScheduler(UInt64 soft_limit, UInt64 hard_limit, UInt64 ac
     , log(Logger::get())
 {
     auto cores = static_cast<size_t>(getNumberOfLogicalCPUCores() / 2);
-    if (active_set_soft_limit == 0 || active_set_soft_limit > 10 * cores)
+    if (active_set_soft_limit == 0)
     {
         /// set active_set_soft_limit to a reasonable value
         active_set_soft_limit = (cores + 2) / 2; /// at least 1
