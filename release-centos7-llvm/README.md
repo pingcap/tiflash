@@ -45,6 +45,17 @@ Raft Proxy
 
 At last, change the suffix in `${REPO_DIR}/.toolchain.yml` and check the built target in the CI.
 
+
+How to get into a build container:
+
+```
+SUFFIX=-llvm-17.0.6
+# x86_64
+docker run -it --rm -v /your/path/to/tiflash:/build/tics hub.pingcap.net/tiflash/tiflash-llvm-base:amd64${SUFFIX} /bin/bash
+# arm
+docker run -it --rm -v /your/path/to/tiflash:/build/tics hub.pingcap.net/tiflash/tiflash-llvm-base:aarch64${SUFFIX} /bin/bash
+```
+
 ## Local toolchain prerequisites
 
 Check `env/README.md`
