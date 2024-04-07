@@ -76,20 +76,14 @@ public:
     {
         assert(task);
         task->notify();
-        if (unlikely(task->getQueryExecContext().isCancelled()))
+        assert(TaskScheduler::instance);
+        if (unlikely(task->getStatus() == ExecTaskStatus::WAITING))
         {
-            // clear up the pre memory tracker first.
-            // because this function may be call in other threads.
-            task->endTraceMemory();
-
-            task->startTraceMemory();
-            task->finalize();
-            task->endTraceMemory();
-            task.reset();
+            TaskScheduler::instance->submitToWaitReactor(std::move(task));
         }
         else
         {
-            assert(TaskScheduler::instance);
+            assert(task->getStatus() == ExecTaskStatus::RUNNING);
             TaskScheduler::instance->submitToCPUTaskThreadPool(std::move(task));
         }
     }
