@@ -100,6 +100,8 @@ protected:
 
     virtual OperatorStatus awaitImpl() { throw Exception("Unsupport"); }
 
+    virtual void notifyImpl(){};
+
 protected:
     PipelineExecutorContext & exec_context;
     const LoggerPtr log;

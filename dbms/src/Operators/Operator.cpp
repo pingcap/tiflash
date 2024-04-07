@@ -91,6 +91,7 @@ OperatorStatus Operator::executeIO()
 void Operator::notify()
 {
     profile_info.update();
+    notifyImpl();
 }
 
 OperatorStatus SourceOp::read(Block & block)
