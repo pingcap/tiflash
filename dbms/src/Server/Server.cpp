@@ -1162,7 +1162,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     if (const auto & config = storage_config.remote_cache_config; config.isCacheEnabled() && is_compute_mode)
     {
         config.initCacheDir();
-        GlobalFileCacheInstance::initialize(global_context->getPathCapacity(), config);
+        FileCache::initialize(global_context->getPathCapacity(), config);
     }
 
     /// Determining PageStorage run mode based on current files on disk and storage config.
@@ -1387,9 +1387,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
             global_context->getIORateLimiter().updateConfig(*config);
             global_context->reloadDeltaTreeConfig(*config);
             DM::SegmentReadTaskScheduler::instance().updateConfig(global_context->getSettingsRef());
-            if (GlobalFileCacheInstance::instance() != nullptr)
+            if (FileCache::instance() != nullptr)
             {
-                GlobalFileCacheInstance::instance()->updateConfig(global_context->getSettingsRef());
+                FileCache::instance()->updateConfig(global_context->getSettingsRef());
             }
             {
                 // update TiFlashSecurity and related config in client for ssl certificate reload.
@@ -1536,7 +1536,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         // `Context::shutdown()` will destroy `DeltaIndexManager`.
         // So, stop threads explicitly before `TiFlashTestEnv::shutdown()`.
         DB::DM::SegmentReaderPoolManager::instance().stop();
-        GlobalFileCacheInstance::shutdown();
+        FileCache::shutdown();
         global_context->shutdown();
         if (storage_config.s3_config.isS3Enabled())
         {

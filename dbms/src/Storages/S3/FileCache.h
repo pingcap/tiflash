@@ -199,6 +199,20 @@ private:
 class FileCache
 {
 public:
+    static void initialize(PathCapacityMetricsPtr capacity_metrics_, const StorageRemoteCacheConfig & config_)
+    {
+        global_file_cache_instance = std::make_unique<FileCache>(capacity_metrics_, config_);
+        global_file_cache_initialized.store(true, std::memory_order_release);
+    }
+
+    static FileCache * instance()
+    {
+        return global_file_cache_initialized.load(std::memory_order_acquire) ? global_file_cache_instance.get()
+                                                                             : nullptr;
+    }
+
+    static void shutdown() { global_file_cache_instance = nullptr; }
+
     FileCache(PathCapacityMetricsPtr capacity_metrics_, const StorageRemoteCacheConfig & config_);
 
     RandomAccessFilePtr getRandomAccessFile(
@@ -212,6 +226,9 @@ private:
 #else
 public:
 #endif
+
+    inline static std::atomic<bool> global_file_cache_initialized{false};
+    static std::unique_ptr<FileCache> global_file_cache_instance;
 
     DISALLOW_COPY_AND_MOVE(FileCache);
 
@@ -296,32 +313,6 @@ public:
 
     DB::LoggerPtr log;
 };
-
-class GlobalFileCacheInstance
-{
-public:
-    static void initialize(PathCapacityMetricsPtr capacity_metrics_, const StorageRemoteCacheConfig & config_)
-    {
-        global_file_cache_instance = std::make_unique<FileCache>(capacity_metrics_, config_);
-        global_file_cache_initialized.store(true, std::memory_order_release);
-    }
-
-    static FileCache * instance()
-    {
-        return global_file_cache_initialized.load(std::memory_order_acquire) ? global_file_cache_instance.get()
-                                                                             : nullptr;
-    }
-
-    static void shutdown() { global_file_cache_instance = nullptr; }
-
-private:
-    GlobalFileCacheInstance() = default;
-    ~GlobalFileCacheInstance() = default;
-
-    inline static std::unique_ptr<FileCache> global_file_cache_instance;
-    inline static std::atomic<bool> global_file_cache_initialized{false};
-};
-
 } // namespace DB
 
 // Make std::filesystem::path formattable.

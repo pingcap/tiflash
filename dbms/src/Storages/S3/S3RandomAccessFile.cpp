@@ -213,7 +213,7 @@ inline static RandomAccessFilePtr tryOpenCachedFile(const String & remote_fname,
 {
     try
     {
-        auto * file_cache = GlobalFileCacheInstance::instance();
+        auto * file_cache = FileCache::instance();
         return file_cache != nullptr
             ? file_cache->getRandomAccessFile(S3::S3FilenameView::fromKey(remote_fname), filesize)
             : nullptr;
