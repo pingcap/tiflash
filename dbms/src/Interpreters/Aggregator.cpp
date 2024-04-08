@@ -997,6 +997,7 @@ bool Aggregator::executeOnBlock(AggProcessInfo & agg_process_info, AggregatedDat
         LOG_TRACE(log, "Revocable bytes after insert one block {}, thread {}", revocable_bytes, thread_num);
     if (agg_spill_context->updatePerThreadRevocableMemory(revocable_bytes, thread_num))
     {
+        assert(!result.empty());
         result.tryMarkNeedSpill();
     }
 

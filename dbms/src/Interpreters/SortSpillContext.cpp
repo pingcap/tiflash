@@ -40,6 +40,8 @@ bool SortSpillContext::updateRevocableMemory(Int64 new_value)
     if (!in_spillable_stage || !isSpillEnabled())
         return false;
     revocable_memory = new_value;
+    if (new_value == 0)
+        return false;
     if (auto_spill_mode)
     {
         AutoSpillStatus old_value = AutoSpillStatus::NEED_AUTO_SPILL;
@@ -69,9 +71,12 @@ bool SortSpillContext::updateRevocableMemory(Int64 new_value)
 
 Int64 SortSpillContext::triggerSpillImpl(DB::Int64 expected_released_memories)
 {
-    AutoSpillStatus old_value = AutoSpillStatus::NO_NEED_AUTO_SPILL;
-    auto_spill_status.compare_exchange_strong(old_value, AutoSpillStatus::NEED_AUTO_SPILL);
-    expected_released_memories = std::max(expected_released_memories - revocable_memory, 0);
+    if (revocable_memory > 0)
+    {
+        AutoSpillStatus old_value = AutoSpillStatus::NO_NEED_AUTO_SPILL;
+        auto_spill_status.compare_exchange_strong(old_value, AutoSpillStatus::NEED_AUTO_SPILL);
+        expected_released_memories = std::max(expected_released_memories - revocable_memory, 0);
+    }
     return expected_released_memories;
 }
 

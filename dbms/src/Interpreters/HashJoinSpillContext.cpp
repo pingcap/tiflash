@@ -129,6 +129,8 @@ bool HashJoinSpillContext::updatePartitionRevocableMemory(size_t partition_id, I
         return false;
     bool is_spilled = (*partition_is_spilled)[partition_id];
     (*partition_revocable_memories)[partition_id] = new_value;
+    if (new_value == 0)
+        return false;
     if (operator_spill_threshold > 0)
     {
         auto force_spill = is_spilled && operator_spill_threshold > 0

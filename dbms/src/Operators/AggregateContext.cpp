@@ -60,6 +60,7 @@ bool AggregateContext::isTaskMarkedForSpill(size_t task_index)
         return true;
     if (getAggSpillContext()->updatePerThreadRevocableMemory(many_data[task_index]->revocableBytes(), task_index))
     {
+        assert(!many_data[task_index]->empty());
         return many_data[task_index]->tryMarkNeedSpill();
     }
     return false;
