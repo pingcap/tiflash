@@ -102,6 +102,7 @@ void ReadIndexDataNode::runOneRound(const TiFlashRaftProxyHelper & helper, const
                 else
                 {
                     TEST_LOG_FMT("failed to make ReadIndexTask for region_id={} ts {}", region_id, max_ts);
+                    GET_METRIC(tiflash_raft_learner_read_failures_count, type_request_error).Increment();
                     run_it = running_tasks.try_emplace(max_ts, region_id, max_ts).first;
                     run_it->second.resp.mutable_region_error();
                 }
@@ -182,8 +183,8 @@ void ReadIndexDataNode::ReadIndexElement::doPoll(
                 TEST_LOG_FMT("poll ReadIndexElement timeout for region_id={}", region_id);
 
                 clean_task = true;
-                resp.mutable_region_error()
-                    ->mutable_server_is_busy(); // set region_error `server_is_busy` for task timeout
+                // set region_error `server_is_busy` for task timeout
+                resp.mutable_region_error()->mutable_server_is_busy();
             }
             else
             {

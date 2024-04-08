@@ -543,6 +543,7 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       "Raft learner read failure reason counter",                                                                                   \
       Counter,                                                                                                                      \
       F(type_request_error, {{"type", "request_error"}}),                                                                           \
+      F(type_request_error_legacy, {{"type", "request_error_legacy"}}),                                                             \
       F(type_read_index_timeout, {{"type", "read_index_timeout"}}),                                                                 \
       F(type_not_found_tiflash, {{"type", "not_found_tiflash"}}),                                                                   \
       F(type_epoch_not_match, {{"type", "epoch_not_match"}}),                                                                       \
