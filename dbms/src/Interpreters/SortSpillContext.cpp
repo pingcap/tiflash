@@ -71,7 +71,7 @@ bool SortSpillContext::updateRevocableMemory(Int64 new_value)
 
 Int64 SortSpillContext::triggerSpillImpl(DB::Int64 expected_released_memories)
 {
-    if (revocable_memory > 0)
+    if (revocable_memory > MIN_SPILL_THRESHOLD)
     {
         AutoSpillStatus old_value = AutoSpillStatus::NO_NEED_AUTO_SPILL;
         auto_spill_status.compare_exchange_strong(old_value, AutoSpillStatus::NEED_AUTO_SPILL);
