@@ -100,8 +100,7 @@ Int64 AggSpillContext::triggerSpillImpl(Int64 expected_released_memories)
     for (; checked_thread < per_thread_revocable_memories.size(); ++checked_thread)
     {
         AutoSpillStatus old_value = AutoSpillStatus::NO_NEED_AUTO_SPILL;
-        if (per_thread_revocable_memories[checked_thread] == 0)
-            // meaningless to trigger spill if there is no data
+        if (per_thread_revocable_memories[checked_thread] <= MIN_SPILL_THRESHOLD)
             continue;
         if (per_thread_auto_spill_status[checked_thread].compare_exchange_strong(
                 old_value,

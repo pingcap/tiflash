@@ -246,7 +246,7 @@ Int64 HashJoinSpillContext::triggerSpillImpl(Int64 expected_released_memories)
         });
     for (const auto & pair : partition_index_to_revocable_memories)
     {
-        if (pair.second.second <= 0)
+        if (pair.second.second <= MIN_SPILL_THRESHOLD)
             continue;
         if (!in_build_stage && !isPartitionSpilled(pair.first))
             /// no new partition spill is allowed if not in build stage
