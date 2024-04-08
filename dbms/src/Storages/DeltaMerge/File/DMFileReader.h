@@ -97,30 +97,21 @@ public:
 
 private:
     bool shouldSeek(size_t pack_id) const;
-    size_t getReadRows();
-    ColumnPtr readExtraColumn(
-        const ColumnDefine & cd,
-        size_t start_pack_id,
-        size_t pack_count,
-        size_t read_rows,
-        const std::vector<size_t> & clean_read_packs);
+
     void readFromDisk(
         const ColumnDefine & column_define,
         MutableColumnPtr & column,
         size_t start_pack_id,
-        size_t read_rows);
-    void readFromDiskOrSharingCache(
+        size_t read_rows,
+        size_t skip_packs,
+        bool force_seek);
+    void readColumn(
         const ColumnDefine & column_define,
         ColumnPtr & column,
         size_t start_pack_id,
         size_t pack_count,
-        size_t read_rows);
-    ColumnPtr readColumn(const ColumnDefine & cd, size_t start_pack_id, size_t pack_count, size_t read_rows);
-    ColumnPtr cleanRead(
-        const ColumnDefine & cd,
-        size_t rows_count,
-        std::pair<size_t, size_t> range,
-        const DMFile::PackStats & pack_stats);
+        size_t read_rows,
+        size_t skip_packs);
     bool getCachedPacks(ColId col_id, size_t start_pack_id, size_t pack_count, size_t read_rows, ColumnPtr & col) const;
 
     void addScannedRows(UInt64 rows);
@@ -151,6 +142,8 @@ private:
     /// Filters
     DMFilePackFilter pack_filter;
 
+    std::vector<size_t> skip_packs_by_column{};
+
     /// Caches
     MarkCachePtr mark_cache;
     ColumnCachePtr column_cache;
@@ -170,6 +163,7 @@ private:
 
     // DataSharing
     std::unique_ptr<ColumnSharingCacheMap> col_data_cache{};
+    std::unordered_map<ColId, bool> last_read_from_cache{};
 };
 
 } // namespace DB::DM
