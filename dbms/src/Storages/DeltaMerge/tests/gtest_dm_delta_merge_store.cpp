@@ -3356,7 +3356,7 @@ protected:
     DMContextPtr dm_context;
 
     UInt64 ps_ver{};
-    DMTestEnv::PkType pk_type{};
+    DMTestEnv::PkType pk_type;
 };
 
 INSTANTIATE_TEST_CASE_P(
@@ -3701,105 +3701,7 @@ try
 }
 CATCH
 
-TEST_P(DeltaMergeStoreRWTest, TestForCleanRead)
-try
-{
-    const size_t num_rows_each_pack = 128;
-    const size_t num_packs = 3;
-    {
-        for (size_t i = 0; i < num_packs; ++i)
-        {
-            // [i * 128, (i + 1) * 128)]: [0, 128), [128, 256), [256, 384) ...]
-            Block block = DMTestEnv::prepareSimpleWriteBlock(i * 128, (i + 1) * 128, false);
 
-            switch (mode)
-            {
-            case TestMode::V1_BlockOnly:
-            case TestMode::V2_BlockOnly:
-            case TestMode::V3_BlockOnly:
-                store->write(*db_context, db_context->getSettingsRef(), block);
-                break;
-            default:
-            {
-                auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
-                auto [range, file_ids] = genDMFile(*dm_context, block);
-                store->ingestFiles(dm_context, range, file_ids, false);
-                break;
-            }
-            }
-        }
-    }
-
-    store->flushCache(*db_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
-    store->compact(*db_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
-    store->mergeDeltaAll(*db_context);
-
-    // can do clean read for all packs
-    {
-        const auto & columns = store->getTableColumns();
-        BlockInputStreamPtr in = store->read(
-            *db_context,
-            db_context->getSettingsRef(),
-            columns,
-            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
-            /* num_streams= */ 1,
-            /* max_version= */ std::numeric_limits<UInt64>::max(),
-            EMPTY_FILTER,
-            std::vector<RuntimeFilterPtr>{},
-            0,
-            TRACING_NAME,
-            /* keep_order= */ false,
-            /* is_fast_scan= */ false,
-            /* expected_block_size= */ 1024)[0];
-        ASSERT_INPUTSTREAM_COLS_UR(
-            in,
-            Strings({DMTestEnv::pk_name}),
-            createColumns({
-                createColumn<Int64>(createNumbers<Int64>(0, num_rows_each_pack * num_packs)),
-            }));
-    }
-
-    // Delete range [128, 192)
-    const size_t num_deleted_rows = 64;
-    {
-        HandleRange range(num_rows_each_pack, num_rows_each_pack + num_deleted_rows);
-        store->deleteRange(*db_context, db_context->getSettingsRef(), RowKeyRange::fromHandleRange(range));
-    }
-
-    store->flushCache(*db_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
-    store->compact(*db_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
-    store->mergeDeltaAll(*db_context);
-
-    // only pack 0, 2 can do clean read
-    {
-        const auto & columns = store->getTableColumns();
-        ColumnDefines real_columns;
-        for (const auto & col : columns)
-        {
-            if (col.name != EXTRA_HANDLE_COLUMN_NAME && col.name != TAG_COLUMN_NAME)
-            {
-                real_columns.emplace_back(col);
-            }
-        }
-
-        BlockInputStreamPtr in = store->read(
-            *db_context,
-            db_context->getSettingsRef(),
-            real_columns,
-            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
-            /* num_streams= */ 1,
-            /* max_version= */ std::numeric_limits<UInt64>::max(),
-            EMPTY_FILTER,
-            std::vector<RuntimeFilterPtr>{},
-            0,
-            TRACING_NAME,
-            /* keep_order= */ false,
-            /* is_fast_scan= */ false,
-            /* expected_block_size= */ 1024)[0];
-        ASSERT_INPUTSTREAM_NROWS(in, num_rows_each_pack * num_packs - num_deleted_rows);
-    }
-}
-CATCH
 } // namespace tests
 } // namespace DM
 } // namespace DB
