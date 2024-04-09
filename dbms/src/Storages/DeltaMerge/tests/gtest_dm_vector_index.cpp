@@ -28,15 +28,15 @@
 #include <Storages/KVStore/KVStore.h>
 #include <Storages/PathPool.h>
 #include <Storages/S3/FileCache.h>
+#include <Storages/S3/FileCachePerf.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/InputStreamTestUtils.h>
 #include <TestUtils/TiFlashStorageTestBasic.h>
 #include <gtest/gtest.h>
 #include <tipb/executor.pb.h>
 
+#include <ext/scope_guard.h>
 #include <filesystem>
-
-#include "Storages/S3/FileCachePerf.h"
 
 namespace CurrentMetrics
 {
@@ -46,6 +46,7 @@ extern const Metric DT_SnapshotOfRead;
 namespace DB::FailPoints
 {
 extern const char force_use_dmfile_format_v3[];
+extern const char file_cache_fg_download_fail[];
 } // namespace DB::FailPoints
 
 namespace DB::DM::tests
@@ -1875,6 +1876,31 @@ try
     // e.g. th_2 should not ever try to fgDownload.
     th_1.get();
     th_2.get();
+}
+CATCH
+
+TEST_F(VectorIndexSegmentOnS3Test, S3Failure)
+try
+{
+    prepareWriteNodeStable();
+    DB::FailPointHelper::enableFailPoint(DB::FailPoints::file_cache_fg_download_fail);
+    SCOPE_EXIT({ DB::FailPointHelper::disableFailPoint(DB::FailPoints::file_cache_fg_download_fail); });
+
+    {
+        auto * file_cache = FileCache::instance();
+        ASSERT_EQ(0, file_cache->getAll().size());
+    }
+    {
+        auto scan_context = std::make_shared<ScanContext>();
+        auto stream = computeNodeANNQuery({5.0}, 1, scan_context);
+
+        ASSERT_THROW(
+            {
+                stream->readPrefix();
+                stream->read();
+            },
+            DB::Exception);
+    }
 }
 CATCH
 
