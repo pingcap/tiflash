@@ -88,6 +88,7 @@ add_custom_command(OUTPUT ${_TIFLASH_PROXY_LIBRARY}
     DEPENDS "${_TIFLASH_PROXY_SRCS}"
             "${_TIFLASH_PROXY_SOURCE_DIR}/Cargo.lock"
             "${TiFlash_SOURCE_DIR}/rust-toolchain")
+            find_program(OBJCOPY_EXECUTABLE "objcopy")
 
 add_custom_target(tiflash_proxy ALL DEPENDS ${_TIFLASH_PROXY_LIBRARY})
 add_library(libtiflash_proxy SHARED IMPORTED GLOBAL)
