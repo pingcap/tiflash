@@ -997,6 +997,7 @@ bool Aggregator::executeOnBlock(AggProcessInfo & agg_process_info, AggregatedDat
         LOG_TRACE(log, "Revocable bytes after insert one block {}, thread {}", revocable_bytes, thread_num);
     if (agg_spill_context->updatePerThreadRevocableMemory(revocable_bytes, thread_num))
     {
+        assert(!result.empty());
         result.tryMarkNeedSpill();
     }
 
@@ -1331,7 +1332,7 @@ inline void Aggregator::insertAggregatesIntoColumns(
     for (size_t destroy_i = 0; destroy_i < params.aggregates_size; ++destroy_i)
     {
         /// If ownership was not transferred to ColumnAggregateFunction.
-        if (!(destroy_i < insert_i && aggregate_functions[destroy_i]->isState()))
+        if (destroy_i >= insert_i || !aggregate_functions[destroy_i]->isState())
             aggregate_functions[destroy_i]->destroy(mapped + offsets_of_aggregate_states[destroy_i]);
     }
 

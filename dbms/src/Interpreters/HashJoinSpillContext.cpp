@@ -129,6 +129,8 @@ bool HashJoinSpillContext::updatePartitionRevocableMemory(size_t partition_id, I
         return false;
     bool is_spilled = (*partition_is_spilled)[partition_id];
     (*partition_revocable_memories)[partition_id] = new_value;
+    if (new_value == 0)
+        return false;
     if (operator_spill_threshold > 0)
     {
         auto force_spill = is_spilled && operator_spill_threshold > 0
@@ -244,7 +246,7 @@ Int64 HashJoinSpillContext::triggerSpillImpl(Int64 expected_released_memories)
         });
     for (const auto & pair : partition_index_to_revocable_memories)
     {
-        if (pair.second.second <= 0)
+        if (pair.second.second < MIN_SPILL_THRESHOLD)
             continue;
         if (!in_build_stage && !isPartitionSpilled(pair.first))
             /// no new partition spill is allowed if not in build stage
