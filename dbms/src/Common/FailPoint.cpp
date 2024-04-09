@@ -106,6 +106,7 @@ namespace DB
     M(proactive_flush_force_set_type)                        \
     M(exception_when_fetch_disagg_pages)                     \
     M(cop_send_failure)                                      \
+    M(file_cache_fg_download_fail)                           \
     M(force_set_parallel_prehandle_threshold)                \
     M(force_raise_prehandle_exception)                       \
     M(force_agg_on_partial_block)                            \

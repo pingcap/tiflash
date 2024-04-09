@@ -14,6 +14,7 @@
 
 #include <Common/CurrentMetrics.h>
 #include <Common/Exception.h>
+#include <Common/FailPoint.h>
 #include <Common/ProfileEvents.h>
 #include <Common/Stopwatch.h>
 #include <Common/SyncPoint/SyncPoint.h>
@@ -53,6 +54,11 @@ namespace DB::ErrorCodes
 extern const int S3_ERROR;
 extern const int FILE_DOESNT_EXIST;
 } // namespace DB::ErrorCodes
+
+namespace DB::FailPoints
+{
+extern const char file_cache_fg_download_fail[];
+} // namespace DB::FailPoints
 
 namespace DB
 {
@@ -283,7 +289,7 @@ FileSegmentPtr FileCache::getOrWait(const S3::S3FilenameView & s3_fname, const s
 
     PerfContext::file_cache.fg_download_from_s3++;
     fgDownload(lock, s3_key, file_seg);
-    if (!file_seg->isReadyToRead())
+    if (!file_seg || !file_seg->isReadyToRead())
         throw Exception( //
             ErrorCodes::S3_ERROR,
             "Download object {} failed",
@@ -680,6 +686,7 @@ void FileCache::fgDownload(std::unique_lock<std::mutex> & cache_lock, const Stri
 
     try
     {
+        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::file_cache_fg_download_fail);
         GET_METRIC(tiflash_storage_remote_cache, type_dtfile_download).Increment();
         downloadImpl(s3_key, file_seg);
     }
