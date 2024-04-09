@@ -68,7 +68,12 @@ extern const char random_join_build_failpoint[];
 
 using PointerHelper = PointerTypeColumnHelper<sizeof(void *)>;
 
-void RowsNotInsertToMap::insertRow(Block * stored_block, size_t index, bool need_materialize, JoinArenaPool & pool)
+void RowsNotInsertToMap::insertRow(
+    Block * stored_block,
+    const ColumnWithTypeAndName * columns,
+    size_t index,
+    bool need_materialize,
+    JoinArenaPool & pool)
 {
     if (need_materialize)
     {
@@ -84,7 +89,7 @@ void RowsNotInsertToMap::insertRow(Block * stored_block, size_t index, bool need
     else
     {
         auto * elem = reinterpret_cast<RowRefList *>(pool.arena.alloc(sizeof(RowRefList)));
-        new (elem) RowRefList(stored_block, index);
+        new (elem) RowRefList(columns, index);
         /// don't need cache column since it will explicitly materialize of need_materialize is true
         insertRowToList(pool, &head, elem, 0);
     }
@@ -462,7 +467,7 @@ struct Inserter
     static void insert(
         Map & map,
         const typename Map::key_type & key,
-        Block * stored_block,
+        const ColumnWithTypeAndName * columns,
         size_t i,
         JoinArenaPool & pool,
         std::vector<String> & sort_key_containers,
@@ -475,7 +480,7 @@ struct Inserter<ASTTableJoin::Strictness::Any, Map, KeyGetter>
     static void insert(
         Map & map,
         KeyGetter & key_getter,
-        Block * stored_block,
+        const ColumnWithTypeAndName * columns,
         size_t i,
         JoinArenaPool & pool,
         std::vector<String> & sort_key_container,
@@ -486,7 +491,7 @@ struct Inserter<ASTTableJoin::Strictness::Any, Map, KeyGetter>
         if constexpr (!std::is_same<typename Map::mapped_type, VoidMapped>::value)
         {
             if (emplace_result.isInserted())
-                new (&emplace_result.getMapped()) typename Map::mapped_type(stored_block, i);
+                new (&emplace_result.getMapped()) typename Map::mapped_type(columns, i);
         }
     }
 };
@@ -498,7 +503,7 @@ struct Inserter<ASTTableJoin::Strictness::All, Map, KeyGetter>
     static void insert(
         Map & map,
         KeyGetter & key_getter,
-        Block * stored_block,
+        const ColumnWithTypeAndName * columns,
         size_t i,
         JoinArenaPool & pool,
         std::vector<String> & sort_key_container,
@@ -507,7 +512,7 @@ struct Inserter<ASTTableJoin::Strictness::All, Map, KeyGetter>
         auto emplace_result = key_getter.emplaceKey(map, i, pool.arena, sort_key_container);
 
         if (emplace_result.isInserted())
-            new (&emplace_result.getMapped()) typename Map::mapped_type(stored_block, i, 0);
+            new (&emplace_result.getMapped()) typename Map::mapped_type(columns, i, 0);
         else
         {
             /** The first element of the list is stored in the value of the hash table, the rest in the pool.
@@ -515,7 +520,7 @@ struct Inserter<ASTTableJoin::Strictness::All, Map, KeyGetter>
                  * That is, the former second element, if it was, will be the third, and so on.
                  */
             auto elem = reinterpret_cast<MappedType *>(pool.arena.alloc(sizeof(MappedType)));
-            new (elem) typename Map::mapped_type(stored_block, i);
+            new (elem) typename Map::mapped_type(columns, i);
             insertRowToList(pool, &emplace_result.getMapped(), elem, cache_column_threshold);
         }
     }
@@ -547,6 +552,7 @@ void NO_INLINE insertBlockIntoMapTypeCase(
     sort_key_containers.resize(key_columns.size());
 
     bool null_need_materialize = isNullAwareSemiFamily(join_partition.getJoinKind());
+    const ColumnWithTypeAndName * columns = stored_block->getColumnsWithTypeAndName().data();
     for (size_t i = 0; i < rows; ++i)
     {
         if constexpr (has_null_map)
@@ -556,7 +562,7 @@ void NO_INLINE insertBlockIntoMapTypeCase(
                 if constexpr (need_record_not_insert_rows)
                 {
                     /// for right/full out join or null-aware semi join, need to insert into rows_not_inserted_to_map
-                    rows_not_inserted_to_map->insertRow(stored_block, i, null_need_materialize, pool);
+                    rows_not_inserted_to_map->insertRow(stored_block, columns, i, null_need_materialize, pool);
                 }
                 continue;
             }
@@ -565,7 +571,7 @@ void NO_INLINE insertBlockIntoMapTypeCase(
         Inserter<STRICTNESS, Map, KeyGetter>::insert(
             map,
             key_getter,
-            stored_block,
+            columns,
             i,
             pool,
             sort_key_containers,
@@ -621,6 +627,7 @@ void NO_INLINE insertBlockIntoMapsTypeCase(
     {
         segment_index.reserve(rows_per_seg);
     }
+    const ColumnWithTypeAndName * columns = stored_block->getColumnsWithTypeAndName().data();
     for (size_t i = 0; i < rows; ++i)
     {
         if constexpr (has_null_map)
@@ -659,7 +666,7 @@ void NO_INLINE insertBlockIntoMapsTypeCase(
         Inserter<STRICTNESS, Map, KeyGetter>::insert(         \
             current_map,                                      \
             key_getter,                                       \
-            stored_block,                                     \
+            columns,                                          \
             s_i,                                              \
             pool,                                             \
             sort_key_containers,                              \
@@ -675,7 +682,7 @@ void NO_INLINE insertBlockIntoMapsTypeCase(
     bool null_need_materialize = isNullAwareSemiFamily(current_join_partition->getJoinKind());          \
     for (auto index : segment_index_info[segment_size])                                                 \
     {                                                                                                   \
-        rows_not_inserted_to_map->insertRow(stored_block, index, null_need_materialize, pool);          \
+        rows_not_inserted_to_map->insertRow(stored_block, columns, index, null_need_materialize, pool); \
     }
 
     // First use tryLock to traverse twice to find all segments that can acquire locks immediately and execute insert.
@@ -1151,30 +1158,6 @@ std::pair<bool, bool> checkCachedColumnInfo(CachedColumnInfo * cached_column_inf
     return {true, false};
 }
 
-void insertCachedColumns(
-    CachedColumnInfo * cached_column_info,
-    MutableColumns & added_columns,
-    size_t rows_added,
-    size_t columns_to_added)
-{
-    if (columns_to_added == 0)
-        return;
-    if (added_columns[0]->empty())
-    {
-        for (size_t j = 0; j < columns_to_added; ++j)
-        {
-            added_columns[j] = cached_column_info->columns[j]->cloneFullColumn();
-        }
-    }
-    else
-    {
-        for (size_t j = 0; j < columns_to_added; ++j)
-        {
-            added_columns[j]->insertRangeFrom(*cached_column_info->columns[j], 0, rows_added);
-        }
-    }
-}
-
 void cacheColumns(CachedColumnInfo * cached_column_info, MutableColumns & added_columns, size_t rows, size_t columns)
 {
     Columns cached_columns;
@@ -1202,89 +1185,6 @@ void cacheColumns(CachedColumnInfo * cached_column_info, MutableColumns & added_
     cached_column_info->state = CachedColumnState::CACHED;
 }
 
-template <typename Map>
-struct Adder<ASTTableJoin::Kind::LeftOuterSemi, ASTTableJoin::Strictness::All, Map>
-{
-    static bool addFound(
-        const typename Map::ConstLookupResult & it,
-        size_t num_columns_to_add,
-        MutableColumns & added_columns,
-        size_t i,
-        IColumn::Filter * /*filter*/,
-        IColumn::Offset & current_offset,
-        IColumn::Offsets * offsets,
-        const std::vector<size_t> & right_indexes,
-        ProbeProcessInfo & probe_process_info)
-    {
-        auto & mapped_value = static_cast<const typename Map::mapped_type::Base_t &>(it->getMapped());
-        size_t rows_joined = mapped_value.list_length;
-        bool need_generate_cached_columns = false;
-        auto * current = &mapped_value;
-        auto add_one_row = [&]() {
-            for (size_t j = 0; j < num_columns_to_add - 1; ++j)
-                added_columns[j]->insertFrom(
-                    *current->block->getByPosition(right_indexes[j]).column.get(),
-                    current->row_num);
-        };
-        if unlikely (
-            probe_process_info.cache_columns_threshold > 0 && rows_joined >= probe_process_info.cache_columns_threshold)
-        {
-            assert(mapped_value.cached_column_info != nullptr);
-            auto check_result = checkCachedColumnInfo(mapped_value.cached_column_info);
-            need_generate_cached_columns = check_result.second;
-            if (check_result.first)
-            {
-                insertCachedColumns(
-                    mapped_value.cached_column_info,
-                    added_columns,
-                    rows_joined,
-                    num_columns_to_add - 1);
-                current_offset += rows_joined;
-                (*offsets)[i] = current_offset;
-                /// we insert only one row to `match-helper` for each row of left block
-                /// so before the execution of `HandleOtherConditions`, column sizes of temporary block may be different.
-                added_columns[num_columns_to_add - 1]->insert(FIELD_INT8_1);
-                return false;
-            }
-            add_one_row();
-            current = static_cast<const typename Map::mapped_type::Base_t *>(current->cached_column_info->next);
-        }
-        for (; current != nullptr; current = current->next)
-        {
-            add_one_row();
-        }
-        current_offset += rows_joined;
-        (*offsets)[i] = current_offset;
-        /// we insert only one row to `match-helper` for each row of left block
-        /// so before the execution of `HandleOtherConditions`, column sizes of temporary block may be different.
-        added_columns[num_columns_to_add - 1]->insert(FIELD_INT8_1);
-
-        if unlikely (need_generate_cached_columns)
-        {
-            cacheColumns(mapped_value.cached_column_info, added_columns, rows_joined, num_columns_to_add - 1);
-        }
-        return false;
-    }
-
-    static bool addNotFound(
-        size_t num_columns_to_add,
-        MutableColumns & added_columns,
-        size_t i,
-        IColumn::Filter * /*filter*/,
-        IColumn::Offset & current_offset,
-        IColumn::Offsets * offsets,
-        ProbeProcessInfo & /*probe_process_info*/)
-    {
-        ++current_offset;
-        (*offsets)[i] = current_offset;
-
-        for (size_t j = 0; j < num_columns_to_add - 1; ++j)
-            added_columns[j]->insertDefault();
-        added_columns[num_columns_to_add - 1]->insert(FIELD_INT8_0);
-        return false;
-    }
-};
-
 template <ASTTableJoin::Kind KIND, typename Map>
 struct Adder<KIND, ASTTableJoin::Strictness::All, Map>
 {
@@ -1310,11 +1210,14 @@ struct Adder<KIND, ASTTableJoin::Strictness::All, Map>
 
         bool need_generate_cached_columns = false;
         auto * current = &mapped_value;
+        size_t buffer_offset = probe_process_info.gather_ranges_buffer.empty()
+            ? 0
+            : probe_process_info.gather_ranges_buffer.back().length_offset;
         auto add_one_row = [&]() {
+            ++buffer_offset;
+            probe_process_info.gather_ranges_buffer.emplace_back(current->row_num, buffer_offset);
             for (size_t j = 0; j < num_columns_to_add; ++j)
-                added_columns[j]->insertFrom(
-                    *current->block->getByPosition(right_indexes[j]).column.get(),
-                    current->row_num);
+                probe_process_info.column_ptrs_buffer[j].emplace_back(current->columns[right_indexes[j]].column.get());
         };
         if unlikely (
             probe_process_info.cache_columns_threshold > 0 && rows_joined >= probe_process_info.cache_columns_threshold)
@@ -1324,7 +1227,11 @@ struct Adder<KIND, ASTTableJoin::Strictness::All, Map>
             need_generate_cached_columns = check_result.second;
             if (check_result.first)
             {
-                insertCachedColumns(mapped_value.cached_column_info, added_columns, rows_joined, num_columns_to_add);
+                probe_process_info.gather_ranges_buffer.emplace_back(0, buffer_offset + rows_joined);
+                for (size_t j = 0; j < num_columns_to_add; ++j)
+                    probe_process_info.column_ptrs_buffer[j].emplace_back(
+                        mapped_value.cached_column_info->columns[j].get());
+
                 current_offset += rows_joined;
                 (*offsets)[i] = current_offset;
                 return false;
@@ -1343,6 +1250,7 @@ struct Adder<KIND, ASTTableJoin::Strictness::All, Map>
 
         if unlikely (need_generate_cached_columns)
         {
+            probe_process_info.fillBufferedColumns(added_columns);
             cacheColumns(mapped_value.cached_column_info, added_columns, rows_joined, num_columns_to_add);
         }
         return false;
@@ -1350,7 +1258,6 @@ struct Adder<KIND, ASTTableJoin::Strictness::All, Map>
 
     static bool addNotFound(
         size_t num_columns_to_add,
-        MutableColumns & added_columns,
         size_t i,
         IColumn::Offset & current_offset,
         IColumn::Offsets * offsets,
@@ -1366,11 +1273,16 @@ struct Adder<KIND, ASTTableJoin::Strictness::All, Map>
             {
                 return true;
             }
+
             ++current_offset;
             (*offsets)[i] = current_offset;
 
+            size_t buffer_offset = probe_process_info.gather_ranges_buffer.empty()
+                ? 0
+                : probe_process_info.gather_ranges_buffer.back().length_offset;
+            probe_process_info.gather_ranges_buffer.emplace_back(0, 1 + buffer_offset);
             for (size_t j = 0; j < num_columns_to_add; ++j)
-                added_columns[j]->insertDefault();
+                probe_process_info.column_ptrs_buffer[j].emplace_back(nullptr);
         }
         return false;
     }
@@ -1405,11 +1317,15 @@ struct RowFlaggedHashMapAdder
         auto * current = &mapped_value;
         auto & actual_ptr_col = static_cast<PointerHelper::ColumnType &>(*added_columns[num_columns_to_add]);
         auto & container = static_cast<PointerHelper::ArrayType &>(actual_ptr_col.getData());
+        size_t buffer_offset = probe_process_info.gather_ranges_buffer.empty()
+            ? 0
+            : probe_process_info.gather_ranges_buffer.back().length_offset;
         auto add_one_row = [&]() {
+            ++buffer_offset;
+            probe_process_info.gather_ranges_buffer.emplace_back(current->row_num, buffer_offset);
             for (size_t j = 0; j < num_columns_to_add; ++j)
-                added_columns[j]->insertFrom(
-                    *current->block->getByPosition(right_indexes[j]).column.get(),
-                    current->row_num);
+                probe_process_info.column_ptrs_buffer[j].emplace_back(current->columns[right_indexes[j]].column.get());
+
             container.template push_back(reinterpret_cast<std::intptr_t>(current));
         };
         if unlikely (
@@ -1420,11 +1336,15 @@ struct RowFlaggedHashMapAdder
             need_generate_cached_columns = check_result.second;
             if (check_result.first)
             {
-                insertCachedColumns(
-                    mapped_value.cached_column_info,
-                    added_columns,
-                    rows_joined,
-                    num_columns_to_add + 1);
+                probe_process_info.gather_ranges_buffer.emplace_back(0, buffer_offset + rows_joined);
+                for (size_t j = 0; j < num_columns_to_add; ++j)
+                    probe_process_info.column_ptrs_buffer[j].emplace_back(
+                        mapped_value.cached_column_info->columns[j].get());
+
+                const auto & cached_ptr_col = static_cast<const PointerHelper::ColumnType &>(
+                    *mapped_value.cached_column_info->columns[num_columns_to_add].get());
+                actual_ptr_col.insertRangeFrom(cached_ptr_col, 0, rows_joined);
+
                 current_offset += rows_joined;
                 (*offsets)[i] = current_offset;
                 return false;
@@ -1440,8 +1360,10 @@ struct RowFlaggedHashMapAdder
 
         current_offset += rows_joined;
         (*offsets)[i] = current_offset;
+
         if unlikely (need_generate_cached_columns)
         {
+            probe_process_info.fillBufferedColumns(added_columns);
             cacheColumns(mapped_value.cached_column_info, added_columns, rows_joined, num_columns_to_add + 1);
         }
         return false;
@@ -1508,6 +1430,9 @@ void NO_INLINE probeBlockImplTypeCase(
     const auto & build_hash_data = probe_process_info.hash_join_data->hash_data->getData();
     size_t i;
     bool block_full = false;
+
+    probe_process_info.resetColumnBuffer(num_columns_to_add);
+
     for (i = probe_process_info.start_row; i < rows; ++i)
     {
         if (has_null_map && (*null_map)[i])
@@ -1521,7 +1446,6 @@ void NO_INLINE probeBlockImplTypeCase(
             {
                 block_full = Adder<KIND, STRICTNESS, Map>::addNotFound(
                     num_columns_to_add,
-                    added_columns,
                     i,
                     current_offset,
                     offsets_to_replicate.get(),
@@ -1623,7 +1547,6 @@ void NO_INLINE probeBlockImplTypeCase(
                 {
                     block_full = Adder<KIND, STRICTNESS, Map>::addNotFound(
                         num_columns_to_add,
-                        added_columns,
                         i,
                         current_offset,
                         offsets_to_replicate.get(),
@@ -1638,6 +1561,8 @@ void NO_INLINE probeBlockImplTypeCase(
             break;
         }
     }
+
+    probe_process_info.fillBufferedColumns(added_columns);
 
     probe_process_info.updateEndRow<false>(i);
 }

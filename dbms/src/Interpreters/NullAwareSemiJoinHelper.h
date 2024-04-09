@@ -113,8 +113,7 @@ public:
 
     template <typename Mapped, NASemiJoinStep STEP>
     void fillRightColumns(
-        MutableColumns & added_columns,
-        size_t left_columns,
+        ProbeProcessInfo & probe_process_info,
         size_t right_columns,
         const std::vector<size_t> & right_column_indices_to_add,
         const std::vector<RowsNotInsertToMap *> & null_rows,
@@ -169,11 +168,14 @@ public:
         size_t max_block_size,
         const JoinNonEqualConditions & non_equal_conditions);
 
-    void joinResult(std::list<Result *> & res_list);
+    void joinResult(std::list<Result *> & res_list, ProbeProcessInfo & probe_process_info);
 
 private:
     template <NASemiJoinStep STEP>
-    void runStep(std::list<Result *> & res_list, std::list<Result *> & next_res_list);
+    void runStep(
+        std::list<Result *> & res_list,
+        std::list<Result *> & next_res_list,
+        ProbeProcessInfo & probe_process_info);
 
     void runStepAllBlocks(std::list<Result *> & res_list);
 

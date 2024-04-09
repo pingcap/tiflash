@@ -257,17 +257,40 @@ void ColumnNullable::insertManyFrom(const IColumn & src, size_t n, size_t length
     map.resize_fill(map.size() + length, src_concrete.getNullMapData()[n]);
 }
 
-void ColumnNullable::insertDisjunctFrom(const IColumn & src, const std::vector<size_t> & position_vec)
+void ColumnNullable::insertDisjunctManyFrom(const IColumn & src, const IColumn::Disjuncts & disjuncts)
 {
     const auto & src_concrete = static_cast<const ColumnNullable &>(src);
-    getNestedColumn().insertDisjunctFrom(src_concrete.getNestedColumn(), position_vec);
-    auto & map = getNullMapData();
-    const auto & src_map = src_concrete.getNullMapData();
-    size_t old_size = map.size();
-    size_t to_add_size = position_vec.size();
-    map.resize(old_size + to_add_size);
-    for (size_t i = 0; i < to_add_size; ++i)
-        map[i + old_size] = src_map[position_vec[i]];
+    getNestedColumn().insertDisjunctManyFrom(src_concrete.getNestedColumn(), disjuncts);
+    getNullMapColumn().insertDisjunctManyFrom(src_concrete.getNullMapColumn(), disjuncts);
+}
+
+void ColumnNullable::insertGatherRangeFrom(ColumnRawPtrs & src, const IColumn::GatherRanges & gather_ranges)
+{
+    if (gather_ranges.empty())
+        return;
+    assert(src.size() == gather_ranges.size());
+    auto & data = getNullMapData();
+    size_t old_size = data.size();
+    data.reserve(old_size + gather_ranges.back().length_offset);
+    size_t sz = src.size(), prev_len = 0;
+    for (size_t i = 0; i < sz; ++i)
+    {
+        const auto & g = gather_ranges[i];
+        if (src[i] == nullptr)
+        {
+            data.resize_fill(old_size + g.length_offset, 1);
+        }
+        else
+        {
+            const auto & src_column = static_cast<const ColumnNullable &>(*src[i]);
+            const auto & src_data = src_column.getNullMapData();
+            data.insert(&src_data[g.start_pos], &src_data[g.start_pos + g.length_offset - prev_len]);
+            src[i] = &src_column.getNestedColumn();
+        }
+        prev_len = g.length_offset;
+    }
+
+    getNestedColumn().insertGatherRangeFrom(src, gather_ranges);
 }
 
 void ColumnNullable::popBack(size_t n)

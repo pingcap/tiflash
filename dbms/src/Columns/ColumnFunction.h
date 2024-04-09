@@ -94,12 +94,17 @@ public:
         throw Exception("Cannot insert into " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
 
-    void insertDisjunctFrom(const IColumn &, const std::vector<size_t> &) override
+    void insertDisjunctManyFrom(const IColumn &, const IColumn::Disjuncts &) override
     {
         throw Exception("Cannot insert into " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
 
     void insertData(const char *, size_t) override
+    {
+        throw Exception("Cannot insert into " + getName(), ErrorCodes::NOT_IMPLEMENTED);
+    }
+
+    void insertGatherRangeFrom(ColumnRawPtrs &, const IColumn::GatherRanges &) override
     {
         throw Exception("Cannot insert into " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }

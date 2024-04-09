@@ -80,9 +80,16 @@ public:
 
     void insertManyFrom(const IColumn &, size_t, size_t length) override { s += length; }
 
-    void insertDisjunctFrom(const IColumn &, const std::vector<size_t> & position_vec) override
+    void insertDisjunctManyFrom(const IColumn &, const IColumn::Disjuncts & disjuncts) override
     {
-        s += position_vec.size();
+        if (!disjuncts.empty())
+            s += disjuncts.back().count_offset;
+    }
+
+    void insertGatherRangeFrom(ColumnRawPtrs &, const IColumn::GatherRanges & gather_ranges) override
+    {
+        if (!gather_ranges.empty())
+            s += gather_ranges.back().length_offset;
     }
 
     void insertDefault() override { ++s; }
