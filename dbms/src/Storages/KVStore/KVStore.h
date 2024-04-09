@@ -47,6 +47,9 @@ namespace tests
 class KVStoreTestBase;
 }
 
+enum class ReportThreadAllocateInfoType : uint64_t;
+struct ReportThreadAllocateInfoBatch;
+
 class IAST;
 using ASTPtr = std::shared_ptr<IAST>;
 using ASTs = std::vector<ASTPtr>;
@@ -120,11 +123,58 @@ struct ProxyConfigSummary
     size_t snap_handle_pool_size = 0;
 };
 
-/// TODO: brief design document.
+struct ThreadInfoJealloc
+{
+    uint64_t allocated_ptr{0};
+    uint64_t deallocated_ptr{0};
+
+    uint64_t allocated() const
+    {
+        if (allocated_ptr == 0)
+            return 0;
+        return *reinterpret_cast<uint64_t *>(allocated_ptr);
+    }
+    uint64_t deallocated() const
+    {
+        if (deallocated_ptr == 0)
+            return 0;
+        return *reinterpret_cast<uint64_t *>(deallocated_ptr);
+    }
+    int64_t remaining() const { return static_cast<int64_t>(allocated()) - static_cast<int64_t>(deallocated()); }
+};
+
+/// KVStore manages raft replication and transactions.
+/// - Holds all regions in this TiFlash store.
+/// - Manages region -> table mapping.
+/// - Manages persistence of all regions.
+/// - Implements learner read.
+/// - Wraps FFI interfaces.
+/// - Use `Decoder` to transform row format into col format.
 class KVStore final : private boost::noncopyable
 {
 public:
     explicit KVStore(Context & context);
+    ~KVStore();
+
+    size_t regionSize() const;
+    const TiFlashRaftProxyHelper * getProxyHelper() const { return proxy_helper; }
+    // Exported only for tests.
+    TiFlashRaftProxyHelper * mutProxyHelperUnsafe() { return const_cast<TiFlashRaftProxyHelper *>(proxy_helper); }
+    void setStore(metapb::Store);
+    // May return 0 if uninitialized
+    StoreID getStoreID(std::memory_order = std::memory_order_relaxed) const;
+    metapb::Store clonedStoreMeta() const;
+    const metapb::Store & getStoreMeta() const;
+    metapb::Store & debugMutStoreMeta();
+    FileUsageStatistics getFileUsageStatistics() const;
+    // Proxy will validate and refit the config items from the toml file.
+    const ProxyConfigSummary & getProxyConfigSummay() const { return proxy_config_summary; }
+    void reportThreadAllocInfo(std::string_view, ReportThreadAllocateInfoType type, uint64_t value);
+    static void reportThreadAllocBatch(std::string_view, ReportThreadAllocateInfoBatch data);
+    void recordThreadAllocInfo();
+    void stopThreadAllocInfo();
+
+public: // Region Management
     void restore(PathPool & path_pool, const TiFlashRaftProxyHelper *);
 
     RegionPtr getRegion(RegionID region_id) const;
@@ -143,7 +193,6 @@ public:
         const LoggerPtr & log,
         bool try_until_succeed = true);
 
-    size_t regionSize() const;
     EngineStoreApplyRes handleAdminRaftCmd(
         raft_cmdpb::AdminRequest && request,
         raft_cmdpb::AdminResponse && response,
@@ -201,21 +250,9 @@ public:
 
     EngineStoreApplyRes handleIngestSST(UInt64 region_id, SSTViewVec, UInt64 index, UInt64 term, TMTContext & tmt);
     RegionPtr genRegionPtr(metapb::Region && region, UInt64 peer_id, UInt64 index, UInt64 term);
-    const TiFlashRaftProxyHelper * getProxyHelper() const { return proxy_helper; }
-    // Exported only for tests.
-    TiFlashRaftProxyHelper * mutProxyHelperUnsafe() { return const_cast<TiFlashRaftProxyHelper *>(proxy_helper); }
 
     void addReadIndexEvent(Int64 f) { read_index_event_flag += f; }
     Int64 getReadIndexEvent() const { return read_index_event_flag; }
-
-    void setStore(metapb::Store);
-
-    // May return 0 if uninitialized
-    StoreID getStoreID(std::memory_order = std::memory_order_relaxed) const;
-
-    metapb::Store clonedStoreMeta() const;
-    const metapb::Store & getStoreMeta() const;
-    metapb::Store & debugMutStoreMeta();
 
     BatchReadIndexRes batchReadIndex(const std::vector<kvrpcpb::ReadIndexRequest> & req, uint64_t timeout_ms) const;
 
@@ -237,10 +274,6 @@ public:
     /// TODO: if supported by runtime framework, run one round for specific runner by `id`.
     void runOneRoundOfReadIndexRunner(size_t runner_id);
 
-    ~KVStore();
-
-    FileUsageStatistics getFileUsageStatistics() const;
-
     // TODO(proactive flush)
     // void proactiveFlushCacheAndRegion(TMTContext & tmt, const DM::RowKeyRange & rowkey_range, KeyspaceID keyspace_id, TableID table_id, bool is_background);
     void notifyCompactLog(
@@ -252,7 +285,6 @@ public:
 
     RaftLogEagerGcTasks::Hints getRaftLogGcHints();
     void applyRaftLogGcTaskRes(const RaftLogGcTasksRes & res) const;
-    const ProxyConfigSummary & getProxyConfigSummay() const { return proxy_config_summary; }
 
 #ifndef DBMS_PUBLIC_GTEST
 private:
@@ -417,6 +449,14 @@ private:
     // we can't have access to these codes though.
     std::atomic<int64_t> ongoing_prehandle_task_count{0};
     ProxyConfigSummary proxy_config_summary;
+
+    mutable std::shared_mutex memory_allocation_mut;
+    std::unordered_map<std::string, ThreadInfoJealloc> memory_allocation_map;
+
+    bool is_terminated{false};
+    mutable std::mutex monitoring_mut;
+    std::condition_variable monitoring_cv;
+    std::thread * monitoring_thread{nullptr};
 };
 
 /// Encapsulation of lock guard of task mutex in KVStore

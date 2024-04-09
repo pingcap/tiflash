@@ -1039,6 +1039,12 @@ int Server::main(const std::vector<std::string> & /*args*/)
         LOG_INFO(log, "UniPS is not enabled for proxy, page_version={}", STORAGE_FORMAT_CURRENT.page);
     }
 
+#ifdef USE_JEMALLOC
+    LOG_INFO(log, "Using Jemalloc for TiFlash");
+#else
+    LOG_INFO(log, "Not using Jemalloc for TiFlash");
+#endif
+
     RaftStoreProxyRunner proxy_runner(RaftStoreProxyRunner::RunRaftStoreProxyParms{&helper, proxy_conf}, log);
 
     if (proxy_conf.is_proxy_runnable)
@@ -1777,6 +1783,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
                 LOG_ERROR(log, "Current status of engine-store is NOT Running, should not happen");
                 exit(-1);
             }
+            LOG_INFO(log, "Stop collecting thread alloc metrics");
+            tmt_context.getKVStore()->stopThreadAllocInfo();
             LOG_INFO(log, "Set store context status Stopping");
             tmt_context.setStatusStopping();
             {

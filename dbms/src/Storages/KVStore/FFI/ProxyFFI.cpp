@@ -1022,4 +1022,44 @@ BaseBuffView GetLockByKey(const EngineStoreServerWrap * server, uint64_t region_
     }
 }
 
+void ReportThreadAllocateInfo(
+    EngineStoreServerWrap * server,
+    uint64_t tid,
+    BaseBuffView name,
+    ReportThreadAllocateInfoType type,
+    uint64_t value)
+{
+    try
+    {
+        UNUSED(tid);
+        if (!server || !server->tmt || !server->tmt->getKVStore())
+            return;
+        server->tmt->getKVStore()->reportThreadAllocInfo(buffToStrView(name), type, value);
+    }
+    catch (...)
+    {
+        tryLogCurrentFatalException(__PRETTY_FUNCTION__);
+        exit(-1);
+    }
+}
+
+void ReportThreadAllocateBatch(
+    EngineStoreServerWrap * server,
+    uint64_t tid,
+    BaseBuffView name,
+    ReportThreadAllocateInfoBatch data)
+{
+    try
+    {
+        UNUSED(server);
+        UNUSED(tid);
+        KVStore::reportThreadAllocBatch(buffToStrView(name), data);
+    }
+    catch (...)
+    {
+        tryLogCurrentFatalException(__PRETTY_FUNCTION__);
+        exit(-1);
+    }
+}
+
 } // namespace DB
