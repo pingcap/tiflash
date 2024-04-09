@@ -18,8 +18,8 @@ mysql> alter table test.t set tiflash replica 1 location labels 'rack', 'host', 
 
 func> wait_table test t
 
-mysql> insert into test.t values (1, 1, 1, 1, 1, 1);
-mysql> insert into test.t values (1, 2, 3, NULL, NULL, 1);
+mysql> insert into test.t values (1, 1, 1, 1, 1, 1),(1, 2, 3, NULL, NULL, 1);
+## add primary key will remove the nullable on column `a`,`b`,`c`
 mysql> alter table test.t add primary key new_pk(a,b,c) USING RTREE;
 
 mysql> select /*+ read_from_storage(tiflash[t]) */ * from test.t;
@@ -31,6 +31,7 @@ mysql> select /*+ read_from_storage(tiflash[t]) */ * from test.t;
 +---+---+---+------+------+------+
 
 >> DBGInvoke __refresh_schemas()
+>> DBGInvoke __refresh_table_schema(test, t);
 
 >> DBGInvoke query_mapped('desc \$d.\$t', test, t)
 ┌─name────────┬─type────────────┬─default_type─┬─default_expression─┐
@@ -46,6 +47,7 @@ mysql> select /*+ read_from_storage(tiflash[t]) */ * from test.t;
 mysql> alter table test.t drop primary key;
 
 >> DBGInvoke __refresh_schemas()
+>> DBGInvoke __refresh_table_schema(test, t);
 
 >> DBGInvoke query_mapped('desc \$d.\$t', test, t)
 ┌─name────────┬─type────────────┬─default_type─┬─default_expression─┐
