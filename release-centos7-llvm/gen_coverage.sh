@@ -48,6 +48,7 @@ COVERAGE_DIR="${PROF_DIR}/coverage"
 export LLVM_PROFILE_FILE="${COVERAGE_DIR}/gtest_dbms.profraw"
 echo "running ${TEST_BIN} with filter ${DBMS_FILTER} ..."
 cd "${PROF_DIR}"
+## TODO: Run the unit test in parallel by tests/gtest_parallel.py
 "${PROF_DIR}/${TEST_BIN}" "${DBMS_FILTER}" > ${COVERAGE_DIR}/dbms_test.output.log 2>&1
 cd -
 ## TODO: Add more testing binaries

@@ -382,6 +382,7 @@ To build coverage report, run the script under `release-centos7-llvm`
 ```shell
 cd release-centos7-llvm
 ./gen_coverage.sh
+# Or run with filter:
 # FILTER='*DMFile*:*DeltaMerge*:*Segment*' ./gen_coverage.sh
 
 # After the script finished, it will output the directory of code coverage report, you can check out the files by webbrowser
