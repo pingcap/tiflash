@@ -29,18 +29,18 @@ function bake_llvm_base_amd64() {
     
     # CMake
     source $SCRIPTPATH/install_cmake.sh
-    install_cmake "3.24.2" "x86_64"
+    install_cmake "3.22.1" "x86_64"
 
     # LLVM
     source $SCRIPTPATH/bootstrap_llvm.sh
-    bootstrap_llvm "17.0.6"
+    bootstrap_llvm "13.0.0"
     export CC=clang
     export CXX=clang++
     export LD=ld.lld
 
     # OpenSSL
     source $SCRIPTPATH/install_openssl.sh
-    install_openssl "1_1_1w"
+    install_openssl "1_1_1t"
     export OPENSSL_ROOT_DIR="/usr/local/opt/openssl"
 
     # Git
