@@ -436,11 +436,13 @@ void LearnerReadWorker::waitIndex(
         if (query_info.bypass_lock_ts == nullptr)
             return "";
         FmtBuffer buffer;
+        buffer.append("[");
         buffer.joinStr(
             query_info.bypass_lock_ts->begin(),
             query_info.bypass_lock_ts->end(),
             [](const auto & v, FmtBuffer & f) { f.fmtAppend("{}", v); },
             "|");
+        buffer.append("]");
         return buffer.toString();
     };
     auto region_info_formatter = [&]() -> String {
@@ -451,7 +453,7 @@ void LearnerReadWorker::waitIndex(
             [&](const auto & region_to_query, FmtBuffer & f) {
                 const auto & region = regions_snapshot.find(region_to_query.region_id)->second;
                 f.fmtAppend(
-                    "id:{} applied_index:{} bypass_locks:{});",
+                    "(id:{} applied_index:{} bypass_locks:{})",
                     region_to_query.region_id,
                     region->appliedIndex(),
                     bypass_formatter(region_to_query));
