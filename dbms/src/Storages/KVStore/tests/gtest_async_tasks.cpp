@@ -36,13 +36,10 @@ TEST(AsyncTasksTest, AsyncTasksNormal)
         std::atomic_bool finished_flag = false;
         std::atomic_bool running_flag = false;
         async_tasks->addTask(1, [m, &flag, &async_tasks, &finished_flag, &running_flag]() {
-            // LOG_INFO(log, "Task 1 block");
             running_flag.store(true, std::memory_order_seq_cst);
             auto cancel_handle = async_tasks->getCancelHandleFromExecutor(1);
             std::scoped_lock rl(*m);
-            // LOG_INFO(log, "Task 1 run");
             SCOPE_EXIT({
-                // LOG_INFO(log, "Task 1 finished");
                 finished_flag.store(true, std::memory_order_seq_cst);
             });
             // Run after `cl` is released.
@@ -53,7 +50,6 @@ TEST(AsyncTasksTest, AsyncTasksNormal)
             flag = 1;
         });
         ASSERT_TRUE(async_tasks->isScheduled(1));
-        // LOG_INFO(log, "Cancel task 1");
         int count1 = 0;
         while (!running_flag.load(std::memory_order_seq_cst))
         {
@@ -66,7 +62,6 @@ TEST(AsyncTasksTest, AsyncTasksNormal)
         // The task is not registered anymore.
         ASSERT_FALSE(async_tasks->isScheduled(1));
         async_tasks->addTask(1, [&flag]() { flag = 2; });
-        // LOG_INFO(log, "Enable task 1");
         cl.unlock();
         int count2 = 0;
         using namespace std::chrono_literals;
