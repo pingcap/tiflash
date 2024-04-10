@@ -74,7 +74,7 @@ struct UnavailableRegions
     String toDebugString() const
     {
         FmtBuffer buffer;
-        buffer.append("ids=[");
+        buffer.append("{ids=[");
         buffer.joinStr(
             ids.begin(),
             ids.end(),
@@ -87,7 +87,7 @@ struct UnavailableRegions
             region_locks.end(),
             [](const auto & v, FmtBuffer & f) { f.fmtAppend("{}({})", v.first, v.second->DebugString()); },
             "|");
-        buffer.append("]");
+        buffer.append("]}");
         return buffer.toString();
     }
 
