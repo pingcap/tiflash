@@ -18,6 +18,7 @@
 #include <Core/ColumnWithTypeAndName.h>
 #include <Core/ColumnsWithTypeAndName.h>
 #include <Core/NamesAndTypes.h>
+#include <Storages/KVStore/Types.h>
 
 #include <initializer_list>
 #include <list>
@@ -51,6 +52,10 @@ private:
     // `segment_row_id_col` is a virtual column that represents the records' row id in the corresponding segment.
     // Only used for calculating MVCC-bitmap-filter.
     ColumnPtr segment_row_id_col;
+
+    // `region_id` is use to trace which region this block belongs to when writing.
+    // Only use for logging and debugging.
+    RegionID region_id = 0;
 
 public:
     BlockInfo info;
@@ -162,6 +167,9 @@ public:
     UInt64 startOffset() const { return start_offset; }
     void setSegmentRowIdCol(ColumnPtr && col) { segment_row_id_col = col; }
     ColumnPtr segmentRowIdCol() const { return segment_row_id_col; }
+
+    void setRegionID(RegionID region_id_) { region_id = region_id_; }
+    RegionID regionID() const { return region_id; }
 
 private:
     void eraseImpl(size_t position);

@@ -554,7 +554,7 @@ DM::WriteResult DeltaMergeStore::write(const Context & db_context, const DB::Set
         {
             dedup_ver.insert(v);
         }
-        LOG_DEBUG(log, "Record count: {}, Versions: {}", block.rows(), dedup_ver);
+        LOG_DEBUG(log, "RegionID: {}, Record count: {}, Versions: {}", block.regionID(), block.rows(), dedup_ver);
     }
     const auto bytes = block.bytes();
 

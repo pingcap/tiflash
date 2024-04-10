@@ -172,6 +172,7 @@ static inline bool atomicReadWrite(
     if constexpr (std::is_same_v<ReadList, RegionDataReadInfoList>)
     {
         RUNTIME_CHECK(block_ptr != nullptr);
+        block_ptr->setRegionID(region->id());
         writeCommittedBlockDataIntoStorage(rw_ctx, lock, storage, *block_ptr);
         storage->releaseDecodingBlock(block_decoding_schema_epoch, std::move(block_ptr));
     }
