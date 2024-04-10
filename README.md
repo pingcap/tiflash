@@ -37,7 +37,7 @@ And the following operating systems:
 The following packages are required:
 
 - CMake 3.21.0+
-- Clang 17.0.0+ under Linux or AppleClang 15.0.0+ under MacOS
+- Clang 14.0.0+
 - Rust
 - Python 3.0+
 - Ninja-Build or GNU Make
@@ -56,10 +56,10 @@ curl https://sh.rustup.rs -sSf | sh -s -- --default-toolchain none
 source $HOME/.cargo/env
 
 # Install LLVM, see https://apt.llvm.org for details
-# Clang will be available as /usr/bin/clang++-17
+# Clang will be available as /usr/bin/clang++-15
 wget https://apt.llvm.org/llvm.sh
 chmod +x llvm.sh
-sudo ./llvm.sh 17 all
+sudo ./llvm.sh 15 all
 
 # Install other dependencies
 sudo apt install -y cmake ninja-build zlib1g-dev libcurl4-openssl-dev ccache
@@ -162,8 +162,8 @@ Note: In Linux, usually you need to explicitly specify to use LLVM.
 ```shell
 # In cmake-build-debug directory:
 cmake .. -GNinja -DCMAKE_BUILD_TYPE=DEBUG \
-  -DCMAKE_C_COMPILER=/usr/bin/clang-17 \
-  -DCMAKE_CXX_COMPILER=/usr/bin/clang++-17
+  -DCMAKE_C_COMPILER=/usr/bin/clang-14 \
+  -DCMAKE_CXX_COMPILER=/usr/bin/clang++-14
 ```
 
 In MacOS, if you install llvm clang, you need to explicitly specify to use llvm clang.
@@ -250,7 +250,7 @@ cmake .. -GNinja -DCMAKE_BUILD_TYPE=DEBUG -DFOO=BAR
 
   There is another option to append extra paths for CMake to find system libraries:
 
-  - `PREBUILT_LIBS_ROOT`: Default as empty, can be specified with multiple values, separated by `;`
+  - `PREBUILT_LIBS_ROOT`: Default as empty, can be specified with multiple values, seperated by `;`
 
   </details>
 

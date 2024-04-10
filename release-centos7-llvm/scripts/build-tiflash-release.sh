@@ -38,9 +38,6 @@ fi
 
 set -ueox pipefail
 
-# workaround git ownership check
-git config --global --add safe.directory "/build/tics"
-
 SCRIPTPATH="$(
   cd "$(dirname "$0")"
   pwd -P
