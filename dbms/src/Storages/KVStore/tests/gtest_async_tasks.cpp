@@ -39,9 +39,7 @@ TEST(AsyncTasksTest, AsyncTasksNormal)
             running_flag.store(true, std::memory_order_seq_cst);
             auto cancel_handle = async_tasks->getCancelHandleFromExecutor(1);
             std::scoped_lock rl(*m);
-            SCOPE_EXIT({
-                finished_flag.store(true, std::memory_order_seq_cst);
-            });
+            SCOPE_EXIT({ finished_flag.store(true, std::memory_order_seq_cst); });
             // Run after `cl` is released.
             if (cancel_handle->isCanceled())
             {
@@ -50,12 +48,14 @@ TEST(AsyncTasksTest, AsyncTasksNormal)
             flag = 1;
         });
         ASSERT_TRUE(async_tasks->isScheduled(1));
-        int count1 = 0;
-        while (!running_flag.load(std::memory_order_seq_cst))
         {
-            count1 += 1;
-            ASSERT(count1 < 6);
-            std::this_thread::sleep_for(200ms);
+            int cnt_wait_sche = 0;
+            while (!running_flag.load(std::memory_order_seq_cst))
+            {
+                cnt_wait_sche += 1;
+                ASSERT(cnt_wait_sche < 6);
+                std::this_thread::sleep_for(200ms);
+            }
         }
         // Make sure we don't cancel in queue.
         async_tasks->asyncCancelTask(1);
@@ -63,13 +63,15 @@ TEST(AsyncTasksTest, AsyncTasksNormal)
         ASSERT_FALSE(async_tasks->isScheduled(1));
         async_tasks->addTask(1, [&flag]() { flag = 2; });
         cl.unlock();
-        int count2 = 0;
-        using namespace std::chrono_literals;
-        while (!finished_flag.load(std::memory_order_seq_cst))
         {
-            count2 += 1;
-            ASSERT(count2 < 6);
-            std::this_thread::sleep_for(200ms);
+            int cnt_wait_finish = 0;
+            using namespace std::chrono_literals;
+            while (!finished_flag.load(std::memory_order_seq_cst))
+            {
+                cnt_wait_finish += 1;
+                ASSERT(cnt_wait_finish < 6);
+                std::this_thread::sleep_for(200ms);
+            }
         }
         ASSERT_NO_THROW(async_tasks->fetchResult(1));
         ASSERT_EQ(flag, 2);
