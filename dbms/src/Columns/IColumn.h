@@ -142,6 +142,13 @@ public:
     /// Appends disjunctive elements from other column with the same type.
     virtual void insertDisjunctFrom(const IColumn & src, const std::vector<size_t> & position_vec) = 0;
 
+    /// Appends one field multiple times. Can be optimized in inherited classes.
+    virtual void insertMany(const Field & field, size_t length)
+    {
+        for (size_t i = 0; i < length; ++i)
+            insert(field);
+    }
+
     /// Appends data located in specified memory chunk if it is possible (throws an exception if it cannot be implemented).
     /// Is used to optimize some computations (in aggregation, for example).
     /// Parameter length could be ignored if column values have fixed size.
