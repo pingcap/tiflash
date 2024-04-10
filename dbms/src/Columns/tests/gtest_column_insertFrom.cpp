@@ -119,9 +119,9 @@ public:
                 cols[i] = column_ptr->cloneEmpty();
             for (size_t i = 0; i < 6; ++i)
                 cols[0]->insertFrom(*column_ptr, 1);
-            if unlikely (
-                typeid_cast<const ColumnNothing *>(column_ptr.get())
-                || typeid_cast<const ColumnSet *>(column_ptr.get()))
+            if (unlikely(
+                    typeid_cast<const ColumnNothing *>(column_ptr.get())
+                    || typeid_cast<const ColumnSet *>(column_ptr.get())))
             {
                 /// ColumnNothing and ColumnSet are not allowed to insertMany
                 return;
