@@ -166,11 +166,7 @@ FileSegmentPtr FileCache::get(const S3::S3FilenameView & s3_fname, const std::op
 }
 
 // Remove `local_fname` from disk and remove parent directory if parent directory is empty.
-<<<<<<< HEAD
-void FileCache::removeDiskFile(const String & local_fname)
-=======
 void FileCache::removeDiskFile(const String & local_fname, bool update_fsize_metrics) const
->>>>>>> da10aa6ba9 (Disagg: fix used size metrics of FileCache (#8921))
 {
     if (!std::filesystem::exists(local_fname))
     {

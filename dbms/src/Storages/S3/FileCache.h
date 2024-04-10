@@ -256,11 +256,7 @@ public:
         const String & s3_key,
         FileSegmentPtr & f,
         bool force = false);
-<<<<<<< HEAD
-    void removeDiskFile(const String & local_fname);
-=======
     void removeDiskFile(const String & local_fname, bool update_fsize_metrics) const;
->>>>>>> da10aa6ba9 (Disagg: fix used size metrics of FileCache (#8921))
 
     // Estimated size is an empirical value.
     // We don't know object size before get object from S3.
