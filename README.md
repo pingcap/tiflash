@@ -250,7 +250,7 @@ cmake .. -GNinja -DCMAKE_BUILD_TYPE=DEBUG -DFOO=BAR
 
   There is another option to append extra paths for CMake to find system libraries:
 
-  - `PREBUILT_LIBS_ROOT`: Default as empty, can be specified with multiple values, seperated by `;`
+  - `PREBUILT_LIBS_ROOT`: Default as empty, can be specified with multiple values, separated by `;`
 
   </details>
 
