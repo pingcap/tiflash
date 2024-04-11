@@ -83,7 +83,8 @@ static void inline writeCommittedBlockDataIntoStorage(
     AtomicReadWriteCtx & rw_ctx,
     TableStructureLockHolder & lock,
     ManageableStoragePtr & storage,
-    Block & block)
+    Block & block,
+    RegionID region_id)
 {
     /// Write block into storage.
     // Release the alter lock so that writing does not block DDL operations
@@ -97,7 +98,7 @@ static void inline writeCommittedBlockDataIntoStorage(
         static_cast<Int32>(storage->engineType()));
     // Note: do NOT use typeid_cast, since Storage is multi-inherited and typeid_cast will return nullptr
     auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
-    rw_ctx.write_result = dm_storage->write(block, rw_ctx.context.getSettingsRef());
+    rw_ctx.write_result = dm_storage->write(block, rw_ctx.context.getSettingsRef(), region_id);
     rw_ctx.write_part_cost = watch.elapsedMilliseconds();
     GET_METRIC(tiflash_raft_write_data_to_storage_duration_seconds, type_write)
         .Observe(rw_ctx.write_part_cost / 1000.0);
@@ -172,8 +173,7 @@ static inline bool atomicReadWrite(
     if constexpr (std::is_same_v<ReadList, RegionDataReadInfoList>)
     {
         RUNTIME_CHECK(block_ptr != nullptr);
-        block_ptr->setRegionID(region->id());
-        writeCommittedBlockDataIntoStorage(rw_ctx, lock, storage, *block_ptr);
+        writeCommittedBlockDataIntoStorage(rw_ctx, lock, storage, *block_ptr, region->id());
         storage->releaseDecodingBlock(block_decoding_schema_epoch, std::move(block_ptr));
     }
     else
