@@ -33,7 +33,6 @@
 #include <Storages/S3/S3RandomAccessFile.h>
 #include <fmt/format.h>
 
-
 namespace CurrentMetrics
 {
 extern const Metric OpenFileForRead;
@@ -196,7 +195,7 @@ DMFileReader::DMFileReader(
     size_t rows_threshold_per_read_,
     bool read_one_pack_every_time_,
     const String & tracing_id_,
-    size_t max_sharing_column_count,
+    size_t max_sharing_column_bytes_,
     const ScanContextPtr & scan_context_)
     : dmfile(dmfile_)
     , read_columns(read_columns_)
@@ -213,6 +212,7 @@ DMFileReader::DMFileReader(
     , column_cache(column_cache_)
     , scan_context(scan_context_)
     , rows_threshold_per_read(rows_threshold_per_read_)
+    , max_sharing_column_bytes(max_sharing_column_bytes_)
     , file_provider(file_provider_)
     , log(Logger::get(tracing_id_))
 {
@@ -238,9 +238,9 @@ DMFileReader::DMFileReader(
         const auto data_type = dmfile->getColumnStat(cd.id).type;
         data_type->enumerateStreams(callback, {});
     }
-    if (max_sharing_column_count > 0)
+    if (max_sharing_column_bytes > 0)
     {
-        col_data_cache = std::make_unique<ColumnSharingCacheMap>(path(), read_columns, max_sharing_column_count, log);
+        col_data_cache = std::make_unique<ColumnSharingCacheMap>(path(), read_columns, log);
         for (const auto & cd : read_columns)
         {
             last_read_from_cache[cd.id] = false;
@@ -702,6 +702,13 @@ void DMFileReader::readColumn(ColumnDefine & column_define,
                               size_t skip_packs)
 {
     bool has_concurrent_reader = DMFileReaderPool::instance().hasConcurrentReader(*this);
+    bool reach_sharing_column_memory_limit = shared_column_data_mem_tracker != nullptr
+        && shared_column_data_mem_tracker->get() >= static_cast<Int64>(max_sharing_column_bytes);
+    if (reach_sharing_column_memory_limit)
+    {
+        GET_METRIC(tiflash_storage_read_thread_counter, type_add_cache_total_bytes_limit).Increment();
+    }
+    bool enable_sharing_column = has_concurrent_reader && !reach_sharing_column_memory_limit;
     if (!getCachedPacks(column_define.id, start_pack_id, pack_count, read_rows, column))
     {
         // If there are concurrent read requests, this data is likely to be shared.
@@ -709,7 +716,7 @@ void DMFileReader::readColumn(ColumnDefine & column_define,
         // This can lead to inaccurate memory statistics of MemoryTracker.
         // To solve this problem, we use a independent global memory tracker to trace the shared column data in ColumnSharingCacheMap.
         auto mem_tracker_guard
-            = has_concurrent_reader ? std::make_optional<MemoryTrackerSetter>(true, nullptr) : std::nullopt;
+            = enable_sharing_column ? std::make_optional<MemoryTrackerSetter>(true, nullptr) : std::nullopt;
         auto data_type = dmfile->getColumnStat(column_define.id).type;
         auto col = data_type->createColumn();
         readFromDisk(column_define, col, start_pack_id, read_rows, skip_packs, last_read_from_cache[column_define.id]);
@@ -721,7 +728,7 @@ void DMFileReader::readColumn(ColumnDefine & column_define,
         last_read_from_cache[column_define.id] = true;
     }
 
-    if (has_concurrent_reader && col_data_cache != nullptr)
+    if (enable_sharing_column && col_data_cache != nullptr)
     {
         DMFileReaderPool::instance().set(*this, column_define.id, start_pack_id, pack_count, column);
     }
