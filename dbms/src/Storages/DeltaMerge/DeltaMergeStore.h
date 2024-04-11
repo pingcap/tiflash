@@ -295,7 +295,7 @@ public:
         const Context & db_context,
         const DB::Settings & db_settings,
         Block & block,
-        RegionID region_id = 0);
+        const RegionAppliedStatus & applied_status = {});
 
     void deleteRange(const Context & db_context, const DB::Settings & db_settings, const RowKeyRange & delete_range);
 

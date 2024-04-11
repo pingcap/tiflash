@@ -537,7 +537,7 @@ DM::WriteResult DeltaMergeStore::write(
     const Context & db_context,
     const DB::Settings & db_settings,
     Block & block,
-    RegionID region_id)
+    const RegionAppliedStatus & applied_status)
 {
     LOG_TRACE(log, "Table write block, rows={} bytes={}", block.rows(), block.bytes());
 
@@ -558,7 +558,13 @@ DM::WriteResult DeltaMergeStore::write(
         {
             dedup_ver.insert(v);
         }
-        LOG_DEBUG(log, "RegionID: {}, Record count: {}, Versions: {}", region_id, block.rows(), dedup_ver);
+        LOG_DEBUG(
+            log,
+            "RegionID: {}, AppliedIndex: {}, RecordCount: {}, Versions: {}",
+            applied_status.region_id,
+            applied_status.applied_index,
+            block.rows(),
+            dedup_ver);
     }
     const auto bytes = block.bytes();
 

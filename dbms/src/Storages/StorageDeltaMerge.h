@@ -95,7 +95,7 @@ public:
     BlockOutputStreamPtr write(const ASTPtr & query, const Settings & settings) override;
 
     /// Write from raft layer.
-    DM::WriteResult write(Block & block, const Settings & settings, RegionID region_id = 0);
+    DM::WriteResult write(Block & block, const Settings & settings, const RegionAppliedStatus & applied_status = {});
 
     void flushCache(const Context & context) override;
 
