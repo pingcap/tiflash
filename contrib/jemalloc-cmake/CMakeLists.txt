@@ -112,6 +112,12 @@ elseif (OS_FREEBSD)
     set (JEMALLOC_INCLUDE_PREFIX "include_freebsd")
 elseif (APPLE)
     set (JEMALLOC_INCLUDE_PREFIX "include_darwin")
+
+    # Jemalloc is not supposed to replace `malloc`/`free`/etc. on MacOS.
+    # So we should explicitly prefix the jemalloc symbols. 
+    # See https://github.com/jemalloc/jemalloc/blob/1978e5cdac731dca43b62e4b03612c0758f7cece/INSTALL.md?plain=1#L92-L94
+    set (JEMALLOC_PREFIX "je_")
+    set (JEMALLOC_CPREFIX "JE_")
 else ()
     message (FATAL_ERROR "internal jemalloc: This OS is not supported")
 endif ()
@@ -134,10 +140,16 @@ endif ()
 
 configure_file(${JEMALLOC_INCLUDE_PREFIX}/jemalloc/internal/jemalloc_internal_defs.h.in
         ${JEMALLOC_INCLUDE_PREFIX}/jemalloc/internal/jemalloc_internal_defs.h)
+configure_file(include/jemalloc/jemalloc_rename.h.in include/jemalloc/jemalloc_rename.h)
+
 target_include_directories(jemalloc SYSTEM PRIVATE
         "${CMAKE_CURRENT_BINARY_DIR}/${JEMALLOC_INCLUDE_PREFIX}/jemalloc/internal")
 
-target_include_directories(jemalloc PUBLIC ${JEMALLOC_SOURCE_DIR}/include ${TiFlash_SOURCE_DIR}/contrib/jemalloc-cmake/include)
+target_include_directories(jemalloc PUBLIC
+        ${CMAKE_CURRENT_BINARY_DIR}/include
+        ${CMAKE_CURRENT_BINARY_DIR}/include/jemalloc
+        ${JEMALLOC_SOURCE_DIR}/include
+        ${TiFlash_SOURCE_DIR}/contrib/jemalloc-cmake/include)
 
 target_compile_definitions(jemalloc PRIVATE -DJEMALLOC_NO_PRIVATE_NAMESPACE)
 

@@ -71,6 +71,26 @@ struct UnavailableRegions
 
     void addRegionWaitIndexTimeout(RegionID region_id, UInt64 index_to_wait, UInt64 current_applied_index);
 
+    String toDebugString() const
+    {
+        FmtBuffer buffer;
+        buffer.append("{ids=[");
+        buffer.joinStr(
+            ids.begin(),
+            ids.end(),
+            [](const auto & v, FmtBuffer & f) { f.fmtAppend("{}", v); },
+            "|");
+        buffer.append("] locks=");
+        buffer.append("[");
+        buffer.joinStr(
+            region_locks.begin(),
+            region_locks.end(),
+            [](const auto & v, FmtBuffer & f) { f.fmtAppend("{}({})", v.first, v.second->DebugString()); },
+            "|");
+        buffer.append("]}");
+        return buffer.toString();
+    }
+
 private:
     const bool batch_cop;
     const bool is_wn_disagg_read;
@@ -82,6 +102,8 @@ private:
 };
 
 using RegionsReadIndexResult = std::unordered_map<RegionID, kvrpcpb::ReadIndexResponse>;
+
+/// LearnerReadWorker is serves all read index requests in a query.
 class LearnerReadWorker
 {
 public:

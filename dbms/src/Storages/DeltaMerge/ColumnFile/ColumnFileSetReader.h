@@ -15,8 +15,7 @@
 #pragma once
 
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileSetSnapshot.h>
-#include <Storages/DeltaMerge/DMContext.h>
-#include <Storages/DeltaMerge/ScanContext.h>
+#include <Storages/DeltaMerge/DMContext_fwd.h>
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
 
 namespace DB
@@ -45,10 +44,7 @@ private:
     LACBytesCollector lac_bytes_collector;
 
 private:
-    explicit ColumnFileSetReader(const DMContext & context_)
-        : context(context_)
-        , lac_bytes_collector(context_.scan_context ? context_.scan_context->resource_group_name : "")
-    {}
+    explicit ColumnFileSetReader(const DMContext & context_);
 
     Block readPKVersion(size_t offset, size_t limit);
 
@@ -57,11 +53,12 @@ public:
         const DMContext & context_,
         const ColumnFileSetSnapshotPtr & snapshot_,
         const ColumnDefinesPtr & col_defs_,
-        const RowKeyRange & segment_range_);
+        const RowKeyRange & segment_range_,
+        ReadTag read_tag_);
 
     // If we need to read columns besides pk and version, a ColumnFileSetReader can NOT be used more than once.
     // This method create a new reader based on the current one. It will reuse some caches in the current reader.
-    ColumnFileSetReaderPtr createNewReader(const ColumnDefinesPtr & new_col_defs);
+    ColumnFileSetReaderPtr createNewReader(const ColumnDefinesPtr & new_col_defs, ReadTag read_tag);
 
     // Use for DeltaMergeBlockInputStream to read rows from MemTableSet to do full compaction with other layer.
     // This method will check whether offset and limit are valid. It only return those valid rows.
@@ -104,8 +101,9 @@ public:
         const DMContext & context_,
         const ColumnFileSetSnapshotPtr & delta_snap_,
         const ColumnDefinesPtr & col_defs_,
-        const RowKeyRange & segment_range_)
-        : reader(context_, delta_snap_, col_defs_, segment_range_)
+        const RowKeyRange & segment_range_,
+        ReadTag read_tag_)
+        : reader(context_, delta_snap_, col_defs_, segment_range_, read_tag_)
         , column_files(reader.snapshot->getColumnFiles())
         , column_files_count(column_files.size())
     {}

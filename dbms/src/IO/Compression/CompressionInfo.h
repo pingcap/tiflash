@@ -14,32 +14,17 @@
 
 #pragma once
 
-#include <Common/config.h>
+#include <common/types.h>
 
-#include <cstdint>
-
-/** Common Defines */
+/** Common defines for compression */
 
 #define DBMS_MAX_COMPRESSED_SIZE 0x40000000ULL /// 1GB
 
+/** one byte for method, 4 bytes for compressed size, 4 bytes for uncompressed size */
 #define COMPRESSED_BLOCK_HEADER_SIZE 9
-
 
 namespace DB
 {
-/** Compression method */
-enum class CompressionMethod
-{
-    LZ4 = 1,
-    LZ4HC = 2, /// The format is the same as for LZ4. The difference is only in compression.
-    ZSTD = 3, /// Experimental algorithm: https://github.com/Cyan4973/zstd
-#if USE_QPL
-    QPL = 4, /// The Intel Query Processing Library (QPL) is an open-source library to provide high-performance query processing operations
-    NONE = 5, /// No compression
-#else
-    NONE = 4, /// No compression
-#endif
-};
 
 /** The compressed block format is as follows:
   *
@@ -62,16 +47,16 @@ enum class CompressionMethod
   * All sizes are little endian.
   */
 
-enum class CompressionMethodByte : uint8_t
+// clang-format off
+enum class CompressionMethodByte : UInt8
 {
-    NONE = 0x02,
-    LZ4 = 0x82,
-    ZSTD = 0x90,
-#if USE_QPL
-    QPL = 0x88,
-#endif
+    NONE            = 0x02,
+    LZ4             = 0x82,
+    QPL             = 0x88,
+    ZSTD            = 0x90,
     // COL_END is not a compreesion method, but a flag of column end used in compact file.
-    COL_END = 0x66,
+    COL_END         = 0x66,
 };
+// clang-format on
 
 } // namespace DB

@@ -44,7 +44,8 @@ public:
       * Parameters are for "parametric" aggregate functions.
       * For example, in quantileWeighted(0.9)(x, weight), 0.9 is "parameter" and x, weight are "arguments".
       */
-    using Creator = std::function<AggregateFunctionPtr(const String &, const DataTypes &, const Array &)>;
+    using Creator
+        = std::function<AggregateFunctionPtr(const Context &, const String &, const DataTypes &, const Array &)>;
 
     /// For compatibility with SQL, it's possible to specify that certain aggregate function name is case insensitive.
     enum CaseSensitiveness
@@ -59,6 +60,7 @@ public:
 
     /// Throws an exception if not found.
     AggregateFunctionPtr get(
+        const Context & context,
         const String & name,
         const DataTypes & argument_types,
         const Array & parameters = {},
@@ -66,13 +68,17 @@ public:
         bool empty_input_as_null = false) const;
 
     /// Returns nullptr if not found.
-    AggregateFunctionPtr tryGet(const String & name, const DataTypes & argument_types, const Array & parameters = {})
-        const;
+    AggregateFunctionPtr tryGet(
+        const Context & context,
+        const String & name,
+        const DataTypes & argument_types,
+        const Array & parameters = {}) const;
 
     bool isAggregateFunctionName(const String & name, int recursion_level = 0) const;
 
 private:
     AggregateFunctionPtr getImpl(
+        const Context & context,
         const String & name,
         const DataTypes & argument_types,
         const Array & parameters,

@@ -32,6 +32,11 @@ class ReadIndexRequest;
 
 namespace DB
 {
+namespace RegionBench
+{
+struct DebugRegion;
+} // namespace RegionBench
+
 namespace tests
 {
 class KVStoreTestBase;
@@ -120,6 +125,7 @@ public:
 
 public: // Simple Read and Write
     explicit Region(RegionMeta && meta_, const TiFlashRaftProxyHelper *);
+    Region(const Region &) = delete;
     Region() = delete;
     ~Region();
 
@@ -131,7 +137,6 @@ public: // Simple Read and Write
     void clearAllData();
 
     void mergeDataFrom(const Region & other);
-    RegionMeta & mutMeta() { return meta; }
 
     // Assign data and meta by moving from `new_region`.
     void assignRegion(Region && new_region);
@@ -142,6 +147,9 @@ public: // Stats
 
     std::string getDebugString() const;
     std::string toString(bool dump_status = true) const;
+
+    RegionMeta & mutMeta() { return meta; }
+    const RegionMeta & getMeta() const { return meta; }
 
     bool isPendingRemove() const;
     void setPendingRemove();
@@ -260,10 +268,12 @@ private:
     friend class tests::KVStoreTestBase;
     friend class tests::RegionKVStoreOldTest;
     friend class tests::RegionKVStoreTest;
+    friend struct RegionBench::DebugRegion;
 
     // Private methods no need to lock mutex, normally
 
-    size_t doInsert(ColumnFamilyType type, TiKVKey && key, TiKVValue && value, DupCheck mode);
+    // Returns the size of data change(inc or dec)
+    RegionDataRes doInsert(ColumnFamilyType type, TiKVKey && key, TiKVValue && value, DupCheck mode);
     void doRemove(ColumnFamilyType type, const TiKVKey & key);
 
     std::optional<RegionDataReadInfo> readDataByWriteIt(

@@ -69,33 +69,6 @@ struct AtomicReadWriteCtx
         , table_id(table_id_)
     {}
 
-    std::optional<Block> tryUseDecodeCache(const RegionPtrWithBlock & region, ManageableStoragePtr & storage)
-    {
-        if unlikely (region.pre_decode_cache)
-        {
-            auto schema_version = storage->getTableInfo().schema_version;
-            std::stringstream ss;
-            region.pre_decode_cache->toString(ss);
-            LOG_DEBUG(
-                log,
-                "{} got pre-decode cache {}, storage schema version: {}",
-                region->toString(),
-                ss.str(),
-                schema_version);
-
-            if (region.pre_decode_cache->schema_version == schema_version)
-            {
-                return std::move(region.pre_decode_cache->block);
-            }
-            else
-            {
-                LOG_DEBUG(log, "schema version not equal, try to re-decode region cache into block");
-                region.pre_decode_cache->block.clear();
-            }
-        }
-        return std::nullopt;
-    }
-
     const LoggerPtr & log;
     const Context & context;
     const TMTContext & tmt;
@@ -164,17 +137,6 @@ static inline bool atomicReadWrite(
             throw;
     }
 
-    // TODO get rid of pre_decode logic.
-    Block block;
-    bool need_decode = true;
-    // Try to use block cache if exists
-    auto maybe_block = rw_ctx.tryUseDecodeCache(region, storage);
-    if unlikely (maybe_block.has_value())
-    {
-        block = std::move(maybe_block.value());
-        need_decode = false;
-    }
-
     /// Read region data as block.
     Stopwatch watch;
     Int64 block_decoding_schema_epoch = -1;
@@ -184,7 +146,10 @@ static inline bool atomicReadWrite(
     {
         should_handle_version_col = false;
     }
-    if likely (need_decode)
+
+    // Currently, RegionPtrWithBlock with a not-null CachePtr is only used in debug functions
+    // to apply a pre-decoded snapshot. So it will not take place here.
+    // In short, we always decode here because there is no pre-decode cache.
     {
         LOG_TRACE(
             rw_ctx.log,
@@ -206,16 +171,9 @@ static inline bool atomicReadWrite(
     }
     if constexpr (std::is_same_v<ReadList, RegionDataReadInfoList>)
     {
-        if likely (need_decode)
-        {
-            RUNTIME_CHECK(block_ptr != nullptr);
-            writeCommittedBlockDataIntoStorage(rw_ctx, lock, storage, *block_ptr);
-            storage->releaseDecodingBlock(block_decoding_schema_epoch, std::move(block_ptr));
-        }
-        else
-        {
-            writeCommittedBlockDataIntoStorage(rw_ctx, lock, storage, block);
-        }
+        RUNTIME_CHECK(block_ptr != nullptr);
+        writeCommittedBlockDataIntoStorage(rw_ctx, lock, storage, *block_ptr);
+        storage->releaseDecodingBlock(block_decoding_schema_epoch, std::move(block_ptr));
     }
     else
     {
@@ -452,7 +410,7 @@ DM::WriteResult RegionTable::writeCommittedByRegion(
     std::optional<RegionDataReadInfoList> maybe_data_list_read = std::nullopt;
     if (region.pre_decode_cache)
     {
-        // if schema version changed, use the kv data to rebuild block cache
+        // If schema version changed, use the kv data to rebuild block cache
         maybe_data_list_read = std::move(region.pre_decode_cache->data_list_read);
     }
     else
@@ -527,7 +485,7 @@ AtomicGetStorageSchema(const RegionPtr & region, TMTContext & tmt)
     auto keyspace_id = region->getKeyspaceID();
     auto table_id = region->getMappedTableID();
     LOG_DEBUG(Logger::get(__PRETTY_FUNCTION__), "Get schema, keyspace={} table_id={}", keyspace_id, table_id);
-    auto context = tmt.getContext();
+    auto & context = tmt.getContext();
     const auto atomic_get = [&](bool force_decode) -> bool {
         auto storage = tmt.getStorages().get(keyspace_id, table_id);
         if (storage == nullptr)
@@ -641,9 +599,15 @@ Block GenRegionBlockDataWithSchema(
 
     res_block = sortColumnsBySchemaSnap(std::move(res_block), *(schema_snap->column_defines));
 
+    auto prev_region_size = region->dataSize();
     // Remove committed data
     RemoveRegionCommitCache(region, *data_list_read);
-
+    auto new_region_size = region->dataSize();
+    if likely (new_region_size <= prev_region_size)
+    {
+        auto committed_bytes = prev_region_size - new_region_size;
+        GET_METRIC(tiflash_raft_throughput_bytes, type_snapshot_committed).Increment(committed_bytes);
+    }
     return res_block;
 }
 

@@ -16,6 +16,11 @@
 #include <Storages/DeltaMerge/ReadThread/MergedTask.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 
+namespace DB
+{
+struct Settings;
+}
+
 namespace DB::DM
 {
 

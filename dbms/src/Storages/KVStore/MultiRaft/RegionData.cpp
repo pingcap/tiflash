@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/TiFlashMetrics.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/KVStore/FFI/ColumnFamily.h>
@@ -48,7 +49,7 @@ void RegionData::reportDelta(size_t prev, size_t current)
     }
 }
 
-size_t RegionData::insert(ColumnFamilyType cf, TiKVKey && key, TiKVValue && value, DupCheck mode)
+RegionDataRes RegionData::insert(ColumnFamilyType cf, TiKVKey && key, TiKVValue && value, DupCheck mode)
 {
     switch (cf)
     {
@@ -68,8 +69,16 @@ size_t RegionData::insert(ColumnFamilyType cf, TiKVKey && key, TiKVValue && valu
     }
     case ColumnFamilyType::Lock:
     {
-        // lock cf is not count into the size of RegionData
-        lock_cf.insert(std::move(key), std::move(value), mode);
+        auto delta = lock_cf.insert(std::move(key), std::move(value), mode);
+        cf_data_size += delta;
+        if likely (delta >= 0)
+        {
+            reportAlloc(delta);
+        }
+        else
+        {
+            reportDealloc(-delta);
+        }
         return 0;
     }
     }
@@ -103,7 +112,10 @@ void RegionData::remove(ColumnFamilyType cf, const TiKVKey & key)
     }
     case ColumnFamilyType::Lock:
     {
-        lock_cf.remove(RegionLockCFDataTrait::Key{nullptr, std::string_view(key.data(), key.dataSize())}, true);
+        auto delta
+            = lock_cf.remove(RegionLockCFDataTrait::Key{nullptr, std::string_view(key.data(), key.dataSize())}, true);
+        cf_data_size -= delta;
+        reportDealloc(delta);
         return;
     }
     }
@@ -217,8 +229,14 @@ DecodedLockCFValuePtr RegionData::getLockInfo(const RegionLockReadQuery & query)
             continue;
         if (lock_info.min_commit_ts > query.read_tso)
             continue;
-        if (query.bypass_lock_ts && query.bypass_lock_ts->count(lock_info.lock_version))
-            continue;
+        if (query.bypass_lock_ts)
+        {
+            if (query.bypass_lock_ts->count(lock_info.lock_version))
+            {
+                GET_METRIC(tiflash_raft_read_index_events_count, type_bypass_lock).Increment();
+                continue;
+            }
+        }
         return lock_info_ptr;
     }
 

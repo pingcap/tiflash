@@ -25,6 +25,7 @@
 #include <Storages/DeltaMerge/PKSquashingBlockInputStream.h>
 #include <Storages/DeltaMerge/ReadThread/UnorderedInputStream.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
+#include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/DeltaMerge/StoragePool/GlobalStoragePool.h>
 #include <Storages/DeltaMerge/StoragePool/StoragePool.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
@@ -578,10 +579,8 @@ try
     while (in->read()) {};
     in->readSuffix();
 
-    ASSERT_EQ(scan_context->total_dmfile_scanned_packs, 7);
-    ASSERT_EQ(scan_context->total_dmfile_scanned_rows, 50000);
-    ASSERT_EQ(scan_context->total_dmfile_skipped_packs, 0);
-    ASSERT_EQ(scan_context->total_dmfile_skipped_rows, 0);
+    ASSERT_EQ(scan_context->dmfile_data_scanned_rows, 50000);
+    ASSERT_EQ(scan_context->dmfile_data_skipped_rows, 0);
 
     auto filter = createGreater(
         Attr{col_a_define.name, col_a_define.id, DataTypeFactory::instance().get("Int64")},
@@ -609,10 +608,8 @@ try
     while (in->read()) {};
     in->readSuffix();
 
-    ASSERT_EQ(scan_context->total_dmfile_scanned_packs, 6);
-    ASSERT_EQ(scan_context->total_dmfile_scanned_rows, 41808);
-    ASSERT_EQ(scan_context->total_dmfile_skipped_packs, 1);
-    ASSERT_EQ(scan_context->total_dmfile_skipped_rows, 8192);
+    ASSERT_EQ(scan_context->dmfile_data_scanned_rows, 41808);
+    ASSERT_EQ(scan_context->dmfile_data_skipped_rows, 8192);
 }
 CATCH
 

@@ -14,6 +14,7 @@
 
 #pragma once
 #include <Debug/MockKVStore/MockUtils.h>
+#include <Debug/dbgKVStore/dbgRegion.h>
 
 #include <optional>
 
@@ -22,5 +23,6 @@ namespace DB::tests
 using DB::RegionBench::createPeer;
 using DB::RegionBench::createRegionInfo;
 using DB::RegionBench::createRegionMeta;
+using DB::RegionBench::DebugRegion;
 using DB::RegionBench::makeRegion;
 } // namespace DB::tests

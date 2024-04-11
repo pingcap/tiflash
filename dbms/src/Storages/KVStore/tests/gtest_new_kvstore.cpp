@@ -76,6 +76,8 @@ try
     auto end = RecordKVFormat::genKey(table_id, 100);
     auto str_key = RecordKVFormat::genKey(table_id, 1, 111);
     auto [str_val_write, str_val_default] = proxy_instance->generateTiKVKeyValue(111, 999);
+    auto str_lock_value
+        = RecordKVFormat::encodeLockCfValue(RecordKVFormat::CFModifyFlag::PutFlag, "PK", 111, 999).toString();
     MockRaftStoreProxy::FailCond cond;
     proxy_instance->debugAddRegions(
         kvs,
@@ -151,6 +153,37 @@ try
                 initialApplyState()));
         ASSERT_EQ(root_of_kvstore_mem_trackers->get(), expected);
         region->mergeDataFrom(*new_region);
+        ASSERT_EQ(root_of_kvstore_mem_trackers->get(), expected);
+    }
+    {
+        root_of_kvstore_mem_trackers->reset();
+        RegionPtr region = tests::makeRegion(1000, start, end, proxy_helper.get());
+        region->insert("lock", TiKVKey::copyFrom(str_key), TiKVValue::copyFrom(str_lock_value));
+        auto expected = str_key.dataSize() + str_lock_value.size();
+        ASSERT_EQ(root_of_kvstore_mem_trackers->get(), expected);
+        auto str_key2 = RecordKVFormat::genKey(table_id, 20, 111);
+        std::string short_value('a', 100);
+        auto str_lock_value2
+            = RecordKVFormat::encodeLockCfValue(RecordKVFormat::CFModifyFlag::PutFlag, "PK", 20, 111, &short_value)
+                  .toString();
+        region->insert("lock", TiKVKey::copyFrom(str_key2), TiKVValue::copyFrom(str_lock_value2));
+        expected += str_key2.dataSize() + str_lock_value2.size();
+        ASSERT_EQ(root_of_kvstore_mem_trackers->get(), expected);
+        auto new_region = splitRegion(
+            region,
+            RegionMeta(
+                createPeer(1001, true),
+                createRegionInfo(1002, RecordKVFormat::genKey(table_id, 50), end),
+                initialApplyState()));
+        ASSERT_EQ(root_of_kvstore_mem_trackers->get(), expected);
+        region->mergeDataFrom(*new_region);
+        ASSERT_EQ(root_of_kvstore_mem_trackers->get(), expected);
+        region->insert("lock", TiKVKey::copyFrom(str_key2), TiKVValue::copyFrom(str_lock_value2));
+        auto str_lock_value2_2
+            = RecordKVFormat::encodeLockCfValue(RecordKVFormat::CFModifyFlag::PutFlag, "PK", 20, 111).toString();
+        region->insert("lock", TiKVKey::copyFrom(str_key2), TiKVValue::copyFrom(str_lock_value2_2));
+        expected -= short_value.size();
+        expected -= 2; // Short value prefix and length
         ASSERT_EQ(root_of_kvstore_mem_trackers->get(), expected);
     }
     ASSERT_EQ(root_of_kvstore_mem_trackers->get(), 0);
@@ -866,6 +899,58 @@ try
         MockRaftStoreProxy::FailCond cond;
         proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index);
     }
+}
+CATCH
+
+TEST_F(RegionKVStoreTest, MemoryTrace)
+try
+{
+    KVStore & kvs = getKVS();
+    std::string name = "test1-1";
+    kvs.reportThreadAllocInfo(std::string_view(name.data(), name.size()), ReportThreadAllocateInfoType::Reset, 0);
+    kvs.reportThreadAllocBatch(
+        std::string_view(name.data(), name.size()),
+        ReportThreadAllocateInfoBatch{.alloc = 1, .dealloc = 2});
+    auto & tiflash_metrics = TiFlashMetrics::instance();
+    ASSERT_EQ(tiflash_metrics.getProxyThreadMemory("test1"), -1);
+    std::string namee = "";
+    kvs.reportThreadAllocBatch(
+        std::string_view(namee.data(), namee.size()),
+        ReportThreadAllocateInfoBatch{.alloc = 1, .dealloc = 2});
+    EXPECT_ANY_THROW(tiflash_metrics.getProxyThreadMemory(""));
+    std::thread t([&]() {
+        kvs.reportThreadAllocInfo(std::string_view(name.data(), name.size()), ReportThreadAllocateInfoType::Reset, 0);
+        uint64_t mock = 999;
+        uint64_t alloc_ptr = reinterpret_cast<uint64_t>(&mock);
+        kvs.reportThreadAllocInfo(
+            std::string_view(name.data(), name.size()),
+            ReportThreadAllocateInfoType::AllocPtr,
+            alloc_ptr);
+        kvs.recordThreadAllocInfo();
+        ASSERT_EQ(tiflash_metrics.getProxyThreadMemory("test1"), -1);
+
+        std::string name2 = "ReadIndexWkr-1";
+        kvs.reportThreadAllocInfo(std::string_view(name2.data(), name2.size()), ReportThreadAllocateInfoType::Reset, 0);
+        kvs.reportThreadAllocInfo(
+            std::string_view(name2.data(), name2.size()),
+            ReportThreadAllocateInfoType::AllocPtr,
+            alloc_ptr);
+        kvs.recordThreadAllocInfo();
+        ASSERT_EQ(tiflash_metrics.getProxyThreadMemory("ReadIndexWkr"), 999);
+        uint64_t mock2 = 998;
+        uint64_t dealloc_ptr = reinterpret_cast<uint64_t>(&mock2);
+        kvs.reportThreadAllocInfo(
+            std::string_view(name2.data(), name2.size()),
+            ReportThreadAllocateInfoType::DeallocPtr,
+            dealloc_ptr);
+        kvs.recordThreadAllocInfo();
+        ASSERT_EQ(tiflash_metrics.getProxyThreadMemory("ReadIndexWkr"), 1);
+        kvs.reportThreadAllocInfo(
+            std::string_view(name2.data(), name2.size()),
+            ReportThreadAllocateInfoType::Remove,
+            0);
+    });
+    t.join();
 }
 CATCH
 

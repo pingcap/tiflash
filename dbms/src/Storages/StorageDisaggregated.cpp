@@ -64,9 +64,10 @@ void StorageDisaggregated::read(
     return readThroughS3(exec_context, group_builder, db_context, num_streams);
 }
 
-std::vector<StorageDisaggregated::RemoteTableRange> StorageDisaggregated::buildRemoteTableRanges()
+std::tuple<std::vector<StorageDisaggregated::RemoteTableRange>, UInt64> StorageDisaggregated::buildRemoteTableRanges()
 {
     std::unordered_map<TableID, RegionRetryList> all_remote_regions;
+    UInt64 region_num = 0;
     for (auto physical_table_id : table_scan.getPhysicalTableIDs())
     {
         const auto & table_regions_info = context.getDAGContext()->getTableRegionsInfoByTableID(physical_table_id);
@@ -74,6 +75,7 @@ std::vector<StorageDisaggregated::RemoteTableRange> StorageDisaggregated::buildR
         RUNTIME_CHECK_MSG(
             table_regions_info.local_regions.empty(),
             "in disaggregated_compute_mode, local_regions should be empty");
+        region_num += table_regions_info.remote_regions.size();
         for (const auto & reg : table_regions_info.remote_regions)
             all_remote_regions[physical_table_id].emplace_back(std::cref(reg));
     }
@@ -87,7 +89,7 @@ std::vector<StorageDisaggregated::RemoteTableRange> StorageDisaggregated::buildR
         auto key_ranges = RemoteRequest::buildKeyRanges(remote_regions);
         remote_table_ranges.emplace_back(RemoteTableRange{physical_table_id, key_ranges});
     }
-    return remote_table_ranges;
+    return std::make_tuple(std::move(remote_table_ranges), region_num);
 }
 
 std::vector<pingcap::coprocessor::BatchCopTask> StorageDisaggregated::buildBatchCopTasks(

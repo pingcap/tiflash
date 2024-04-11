@@ -26,6 +26,7 @@ void assertOperatorStatus(OperatorStatus status, std::initializer_list<OperatorS
     // cancel status, waiting and io status can be returned in all method of operator.
     case OperatorStatus::CANCELLED:
     case OperatorStatus::WAITING:
+    case OperatorStatus::WAIT_FOR_NOTIFY:
     case OperatorStatus::IO_IN:
     case OperatorStatus::IO_OUT:
         return;

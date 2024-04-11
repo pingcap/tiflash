@@ -31,6 +31,9 @@
 
 namespace DB
 {
+
+struct Settings;
+
 using SyncPagePacketWriter = grpc::ServerWriter<disaggregated::PagesPacket>;
 
 class WNFetchPagesStreamWriter;
@@ -48,14 +51,7 @@ public:
         std::function<void(const disaggregated::PagesPacket &)> && sync_write_,
         DM::SegmentReadTaskPtr seg_task_,
         PageIdU64s read_page_ids_,
-        const Settings & settings_)
-        : sync_write(std::move(sync_write_))
-        , seg_task(std::move(seg_task_))
-        , read_page_ids(std::move(read_page_ids_))
-        , packet_limit_size(settings_.dt_fetch_pages_packet_limit_size)
-        , enable_fetch_memtableset(settings_.dt_enable_fetch_memtableset)
-        , mem_tracker_wrapper(fetch_pages_mem_tracker.get())
-    {}
+        const Settings & settings_);
 
     void syncWrite();
 

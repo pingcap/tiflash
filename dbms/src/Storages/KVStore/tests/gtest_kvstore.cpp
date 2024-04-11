@@ -182,7 +182,9 @@ TEST_F(RegionKVStoreOldTest, ReadIndex)
             auto region = kvs.getRegion(1);
             auto req = GenRegionReadIndexReq(*region, 8); // start_ts = 8
             auto resp = kvs.batchReadIndex({req}, 100);
-            ASSERT_EQ(resp[0].first.read_index(), 5);
+            auto proxy_region = proxy_instance->getRegion(1);
+            ASSERT_EQ(resp[0].first.read_index(), proxy_region->getLatestCommitIndex());
+            ASSERT_EQ(5, proxy_region->getLatestCommitIndex());
             {
                 auto r = region->waitIndex(
                     5,
@@ -214,6 +216,13 @@ TEST_F(RegionKVStoreOldTest, ReadIndex)
         {
             auto region = kvs.getRegion(1);
             auto req = GenRegionReadIndexReq(*region, 10);
+            auto resp = kvs.batchReadIndex({req}, 100);
+            ASSERT_EQ(resp[0].first.read_index(), 667);
+        }
+        {
+            // Found updated value in `history_success_tasks`
+            auto region = kvs.getRegion(1);
+            auto req = GenRegionReadIndexReq(*region, 8);
             auto resp = kvs.batchReadIndex({req}, 100);
             ASSERT_EQ(resp[0].first.read_index(), 667);
         }
@@ -344,7 +353,7 @@ static void testRaftSplit(KVStore & kvs, TMTContext & tmt, std::unique_ptr<MockR
     RegionID region_id = 1;
     RegionID region_id2 = 7;
     auto source_region = kvs.getRegion(region_id);
-    auto old_epoch = source_region->mutMeta().getMetaRegion().region_epoch();
+    auto old_epoch = source_region->getMeta().getMetaRegion().region_epoch();
     const auto & ori_source_range = source_region->getRange()->comparableKeys();
     RegionRangeKeys::RegionRange new_source_range = RegionRangeKeys::makeComparableKeys( //
         RecordKVFormat::genKey(table_id, 5),
@@ -1533,9 +1542,7 @@ TEST_F(RegionKVStoreOldTest, RegionRange)
         catch (Exception & e)
         {
             const auto & res = e.message();
-            ASSERT_EQ(
-                res,
-                "void DB::RegionsRangeIndex::remove(const DB::RegionRange &, DB::RegionID): not found region_id=1");
+            ASSERT_EQ(res, "void DB::RegionsRangeIndex::remove(const RegionRange &, RegionID): not found region_id=1");
         }
 
         region_index.add(makeRegion(2, RecordKVFormat::genKey(1, 3), RecordKVFormat::genKey(1, 5)));
@@ -1549,9 +1556,7 @@ TEST_F(RegionKVStoreOldTest, RegionRange)
         catch (Exception & e)
         {
             const auto & res = e.message();
-            ASSERT_EQ(
-                res,
-                "void DB::RegionsRangeIndex::remove(const DB::RegionRange &, DB::RegionID): not found start key");
+            ASSERT_EQ(res, "void DB::RegionsRangeIndex::remove(const RegionRange &, RegionID): not found start key");
         }
 
         try
@@ -1564,9 +1569,7 @@ TEST_F(RegionKVStoreOldTest, RegionRange)
         catch (Exception & e)
         {
             const auto & res = e.message();
-            ASSERT_EQ(
-                res,
-                "void DB::RegionsRangeIndex::remove(const DB::RegionRange &, DB::RegionID): not found end key");
+            ASSERT_EQ(res, "void DB::RegionsRangeIndex::remove(const RegionRange &, RegionID): not found end key");
         }
 
         try
@@ -1581,7 +1584,7 @@ TEST_F(RegionKVStoreOldTest, RegionRange)
             const auto & res = e.message();
             ASSERT_EQ(
                 res,
-                "void DB::RegionsRangeIndex::remove(const DB::RegionRange &, DB::RegionID): range of region_id=2 is "
+                "void DB::RegionsRangeIndex::remove(const RegionRange &, RegionID): range of region_id=2 is "
                 "empty");
         }
 
@@ -1593,9 +1596,7 @@ TEST_F(RegionKVStoreOldTest, RegionRange)
         catch (Exception & e)
         {
             const auto & res = e.message();
-            ASSERT_EQ(
-                res,
-                "void DB::RegionsRangeIndex::remove(const DB::RegionRange &, DB::RegionID): not found region_id=2");
+            ASSERT_EQ(res, "void DB::RegionsRangeIndex::remove(const RegionRange &, RegionID): not found region_id=2");
         }
 
         region_index.clear();
