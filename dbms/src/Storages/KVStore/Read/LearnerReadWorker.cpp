@@ -431,6 +431,42 @@ void LearnerReadWorker::waitIndex(
         stats.wait_index_elapsed_ms,
         stats.num_regions,
         unavailable_regions.size());
+
+    auto bypass_formatter = [&](const RegionQueryInfo & query_info) -> String {
+        if (query_info.bypass_lock_ts == nullptr)
+            return "";
+        FmtBuffer buffer;
+        buffer.append("[");
+        buffer.joinStr(
+            query_info.bypass_lock_ts->begin(),
+            query_info.bypass_lock_ts->end(),
+            [](const auto & v, FmtBuffer & f) { f.fmtAppend("{}", v); },
+            "|");
+        buffer.append("]");
+        return buffer.toString();
+    };
+    auto region_info_formatter = [&]() -> String {
+        FmtBuffer buffer;
+        buffer.joinStr(
+            regions_info.begin(),
+            regions_info.end(),
+            [&](const auto & region_to_query, FmtBuffer & f) {
+                const auto & region = regions_snapshot.find(region_to_query.region_id)->second;
+                f.fmtAppend(
+                    "(id:{} applied_index:{} bypass_locks:{})",
+                    region_to_query.region_id,
+                    region->appliedIndex(),
+                    bypass_formatter(region_to_query));
+            },
+            ";");
+        return buffer.toString();
+    };
+
+    LOG_DEBUG(
+        log,
+        "[Learner Read] Learner Read Summary, regions_info={}, unavailable_regions_info={}",
+        region_info_formatter(),
+        unavailable_regions.toDebugString());
 }
 
 std::tuple<Clock::time_point, Clock::time_point> //
