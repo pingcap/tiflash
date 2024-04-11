@@ -560,7 +560,7 @@ DM::WriteResult DeltaMergeStore::write(
         }
         LOG_DEBUG(
             log,
-            "RegionID: {}, AppliedIndex: {}, RecordCount: {}, Versions: {}",
+            "region_id: {}, applied_index: {}, record_count: {}, versions: {}",
             applied_status.region_id,
             applied_status.applied_index,
             block.rows(),
