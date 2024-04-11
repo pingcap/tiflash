@@ -36,13 +36,13 @@ auto newNotNull(T && ptr)
 template <class T, class... Args>
 auto makeNotNullShared(Args &&... args)
 {
-    return cpp::bitwizeshift::check_not_null(std::make_shared<T>(std::forward<Args>(args)...));
+    return cpp::bitwizeshift::assume_not_null(std::make_shared<T>(std::forward<Args>(args)...));
 }
 
 template <class T, class... Args>
 auto makeNotNullUnique(Args &&... args)
 {
-    return cpp::bitwizeshift::check_not_null(std::make_unique<T>(std::forward<Args>(args)...));
+    return cpp::bitwizeshift::assume_not_null(std::make_unique<T>(std::forward<Args>(args)...));
 }
 
 template <typename T>
