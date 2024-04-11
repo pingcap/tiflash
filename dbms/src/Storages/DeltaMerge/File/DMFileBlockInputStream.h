@@ -162,7 +162,6 @@ private:
         aio_threshold = settings.min_bytes_to_use_direct_io;
         max_read_buffer_size = settings.max_read_buffer_size;
         max_sharing_column_bytes_for_all = settings.dt_max_sharing_column_bytes_for_all;
-        max_sharing_column_count = settings.dt_max_sharing_column_count;
         return *this;
     }
     DMFileBlockInputStreamBuilder & setCaches(const MarkCachePtr & mark_cache_, const MinMaxIndexCachePtr & index_cache_)
