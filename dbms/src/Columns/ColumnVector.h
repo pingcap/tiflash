@@ -229,6 +229,11 @@ public:
             data[i + old_size] = src_container[position_vec[i]];
     }
 
+    void insertMany(const Field & field, size_t length) override
+    {
+        data.resize_fill(data.size() + length, static_cast<T>(field.get<T>()));
+    }
+
     void insertData(const char * pos, size_t /*length*/) override { data.push_back(*reinterpret_cast<const T *>(pos)); }
 
     bool decodeTiDBRowV2Datum(
@@ -243,7 +248,7 @@ public:
             {
                 throw Exception("Invalid float value length " + std::to_string(length), ErrorCodes::LOGICAL_ERROR);
             }
-            constexpr UInt64 SIGN_MASK = static_cast<UInt64>(1) << 63;
+            constexpr UInt64 SIGN_MASK = static_cast<UInt64>(1) << 63; // NOLINT(readability-identifier-naming)
             auto num = readBigEndian<UInt64>(raw_value.c_str() + cursor);
             if (num & SIGN_MASK)
                 num ^= SIGN_MASK;
