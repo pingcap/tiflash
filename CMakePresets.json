@@ -75,6 +75,17 @@
       "cacheVariables": {}
     },
     {
+        "name": "dev-coverage",
+        "inherits": [
+            "base-debug",
+            "tests-on"
+        ],
+        "displayName": "Development: DEBUG build with tests and code coverage enabled",
+        "cacheVariables": {
+            "TEST_LLVM_COVERAGE": "ON"
+        }
+    },
+    {
       "name": "release",
       "inherits": [
         "base-relwithdebinfo",

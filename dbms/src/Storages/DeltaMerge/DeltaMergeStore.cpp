@@ -533,7 +533,11 @@ Block DeltaMergeStore::addExtraColumnIfNeed(
     return std::move(block);
 }
 
-DM::WriteResult DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_settings, Block & block)
+DM::WriteResult DeltaMergeStore::write(
+    const Context & db_context,
+    const DB::Settings & db_settings,
+    Block & block,
+    const RegionAppliedStatus & applied_status)
 {
     LOG_TRACE(log, "Table write block, rows={} bytes={}", block.rows(), block.bytes());
 
@@ -554,7 +558,13 @@ DM::WriteResult DeltaMergeStore::write(const Context & db_context, const DB::Set
         {
             dedup_ver.insert(v);
         }
-        LOG_DEBUG(log, "Record count: {}, Versions: {}", block.rows(), dedup_ver);
+        LOG_DEBUG(
+            log,
+            "region_id: {}, applied_index: {}, record_count: {}, versions: {}",
+            applied_status.region_id,
+            applied_status.applied_index,
+            block.rows(),
+            dedup_ver);
     }
     const auto bytes = block.bytes();
 
