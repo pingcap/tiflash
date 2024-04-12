@@ -442,7 +442,23 @@ public:
         background_threads.emplace_back([this] { this->watchGAC(); });
     }
 
+<<<<<<< HEAD
     ~LocalAdmissionController() { stop(); }
+=======
+    ~LocalAdmissionController() { safeStop(); }
+
+    void safeStop()
+    {
+        try
+        {
+            stop();
+        }
+        catch (...)
+        {
+            LOG_ERROR(log, "stop server id({}) failed: {}", unique_client_id, getCurrentExceptionMessage(false));
+        }
+    }
+>>>>>>> 0b0cc4527b (catch exception of LocalAdmissionController::stop() (#8942))
 
     void consumeCPUResource(const std::string & name, double ru, uint64_t cpu_time_in_ns)
     {
@@ -523,7 +539,11 @@ public:
     static constexpr auto DEFAULT_FETCH_GAC_INTERVAL_MS = 5000;
 
 private:
+<<<<<<< HEAD
     void consumeResource(const std::string & name, double ru, uint64_t cpu_time_in_ns)
+=======
+    void stop()
+>>>>>>> 0b0cc4527b (catch exception of LocalAdmissionController::stop() (#8942))
     {
         assert(!stopped);
 
@@ -602,6 +622,37 @@ private:
                     getCurrentExceptionMessage(false));
             }
         }
+<<<<<<< HEAD
+=======
+        LOG_INFO(log, "LAC stopped done: final report size: {}", acquire_infos.size());
+    }
+
+    void consumeResource(const std::string & name, double ru, uint64_t cpu_time_in_ns)
+    {
+        if (unlikely(stopped))
+            return;
+
+        // When tidb_enable_resource_control is disabled, resource group name is empty.
+        if (name.empty())
+            return;
+
+        ResourceGroupPtr group = findResourceGroup(name);
+        if unlikely (!group)
+        {
+            LOG_DEBUG(log, "cannot consume ru for {}, maybe it has been deleted", name);
+            return;
+        }
+
+        group->consumeResource(ru, cpu_time_in_ns);
+        if (group->lowToken() || group->trickleModeLeaseExpire(SteadyClock::now()))
+        {
+            {
+                std::lock_guard lock(mu);
+                low_token_resource_groups.insert(name);
+            }
+            cv.notify_one();
+        }
+>>>>>>> 0b0cc4527b (catch exception of LocalAdmissionController::stop() (#8942))
     }
 
     // If we cannot get GAC resp for DEGRADE_MODE_DURATION seconds, enter degrade mode.

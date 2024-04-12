@@ -1802,6 +1802,71 @@ int Server::main(const std::vector<std::string> & /*args*/)
             GET_METRIC(tiflash_server_info, start_time).Set(ts.epochTime());
         }
 
+<<<<<<< HEAD
+=======
+        // For test mode, TaskScheduler and LAC is controlled by test case.
+        // TODO: resource control is not supported for WN. So disable pipeline model and LAC.
+        const bool init_pipeline_and_lac
+            = !global_context->isTest() && !global_context->getSharedContextDisagg()->isDisaggregatedStorageMode();
+        if (init_pipeline_and_lac)
+        {
+#ifdef DBMS_PUBLIC_GTEST
+            LocalAdmissionController::global_instance = std::make_unique<MockLocalAdmissionController>();
+#else
+            LocalAdmissionController::global_instance
+                = std::make_unique<LocalAdmissionController>(tmt_context.getKVCluster(), tmt_context.getEtcdClient());
+#endif
+
+            auto get_pool_size = [](const auto & setting) {
+                return setting == 0 ? getNumberOfLogicalCPUCores() : static_cast<size_t>(setting);
+            };
+            TaskSchedulerConfig config{
+                {get_pool_size(settings.pipeline_cpu_task_thread_pool_size),
+                 settings.pipeline_cpu_task_thread_pool_queue_type},
+                {get_pool_size(settings.pipeline_io_task_thread_pool_size),
+                 settings.pipeline_io_task_thread_pool_queue_type},
+            };
+            RUNTIME_CHECK(!TaskScheduler::instance);
+            TaskScheduler::instance = std::make_unique<TaskScheduler>(config);
+            LOG_INFO(log, "init pipeline task scheduler with {}", config.toString());
+        }
+
+        SCOPE_EXIT({
+            if (init_pipeline_and_lac)
+            {
+                assert(TaskScheduler::instance);
+                TaskScheduler::instance.reset();
+                // Stop LAC instead of reset, because storage layer still needs it.
+                // Workload will not be throttled when LAC is stopped.
+                // It's ok because flash service has already been destructed, so throllting is meaningless.
+                assert(LocalAdmissionController::global_instance);
+                LocalAdmissionController::global_instance->safeStop();
+            }
+        });
+
+        if (settings.enable_async_grpc_client)
+        {
+            auto size = settings.grpc_completion_queue_pool_size;
+            if (size == 0)
+                size = std::thread::hardware_concurrency();
+            GRPCCompletionQueuePool::global_instance = std::make_unique<GRPCCompletionQueuePool>(size);
+        }
+
+        /// startup grpc server to serve raft and/or flash services.
+        FlashGrpcServerHolder flash_grpc_server_holder(this->context(), this->config(), raft_config, log);
+
+        SCOPE_EXIT({
+            // Stop LAC for AutoScaler managed CN before FlashGrpcServerHolder is destructed.
+            // Because AutoScaler it will kill tiflash process when port of flash_server_addr is down.
+            // And we want to make sure LAC is cleanedup.
+            // The effects are there will be no resource control during [lac.safeStop(), FlashGrpcServer destruct done],
+            // but it's basically ok, that duration is small(normally 100-200ms).
+            if (global_context->getSharedContextDisagg()->isDisaggregatedComputeMode() && use_autoscaler
+                && LocalAdmissionController::global_instance)
+                LocalAdmissionController::global_instance->safeStop();
+        });
+
+>>>>>>> 0b0cc4527b (catch exception of LocalAdmissionController::stop() (#8942))
         tmt_context.setStatusRunning();
 
         try
