@@ -34,12 +34,9 @@
 #include <Storages/S3/S3Common.h>
 #include <Storages/S3/S3RandomAccessFile.h>
 #include <fmt/format.h>
-<<<<<<< HEAD
-=======
 
 #include <utility>
 
->>>>>>> 12d7a9617a (Storages: Refine memory tracker of data sharing (#8857))
 namespace CurrentMetrics
 {
 extern const Metric OpenFileForRead;
@@ -297,14 +294,8 @@ DMFileReader::DMFileReader(
     size_t rows_threshold_per_read_,
     bool read_one_pack_every_time_,
     const String & tracing_id_,
-<<<<<<< HEAD
-    size_t max_sharing_column_count,
-    const ScanContextPtr & scan_context_)
-=======
     size_t max_sharing_column_bytes_,
-    const ScanContextPtr & scan_context_,
-    const ReadTag read_tag_)
->>>>>>> 12d7a9617a (Storages: Refine memory tracker of data sharing (#8857))
+    const ScanContextPtr & scan_context_)
     : dmfile(dmfile_)
     , read_columns(read_columns_)
     , is_common_handle(is_common_handle_)
