@@ -442,10 +442,7 @@ public:
         background_threads.emplace_back([this] { this->watchGAC(); });
     }
 
-    ~LocalAdmissionController()
-    {
-        safeStop();
-    }
+    ~LocalAdmissionController() { safeStop(); }
 
     void safeStop()
     {
