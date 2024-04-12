@@ -16,8 +16,6 @@
 #include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 
-#include <utility>
-
 namespace DB::DM
 {
 DMFileBlockInputStreamBuilder::DMFileBlockInputStreamBuilder(const Context & context)
@@ -68,15 +66,7 @@ DMFileBlockInputStreamPtr DMFileBlockInputStreamBuilder::build(
     if (!enable_read_thread || max_sharing_column_bytes_for_all <= 0)
     {
         // Disable data sharing.
-        max_sharing_column_count = 0;
-    }
-    else if (
-        shared_column_data_mem_tracker != nullptr
-        && std::cmp_greater_equal(shared_column_data_mem_tracker->get(), max_sharing_column_bytes_for_all))
-    {
-        // The memory used reaches the limitation by running queries, disable the data sharing for this DMFile
-        max_sharing_column_count = 0;
-        GET_METRIC(tiflash_storage_read_thread_counter, type_add_cache_total_bytes_limit).Increment();
+        max_sharing_column_bytes_for_all = 0;
     }
 
     DMFileReader reader(
@@ -98,9 +88,9 @@ DMFileBlockInputStreamPtr DMFileBlockInputStreamBuilder::build(
         rows_threshold_per_read,
         read_one_pack_every_time,
         tracing_id,
-        max_sharing_column_count,
+        max_sharing_column_bytes_for_all,
         scan_context);
 
-    return std::make_shared<DMFileBlockInputStream>(std::move(reader), max_sharing_column_count > 0);
+    return std::make_shared<DMFileBlockInputStream>(std::move(reader), max_sharing_column_bytes_for_all > 0);
 }
 } // namespace DB::DM

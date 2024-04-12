@@ -90,7 +90,7 @@ public:
         size_t rows_threshold_per_read_,
         bool read_one_pack_every_time_,
         const String & tracing_id_,
-        size_t max_sharing_column_count,
+        size_t max_sharing_column_bytes_,
         const ScanContextPtr & scan_context_);
 
     Block getHeader() const { return toEmptyBlock(read_columns); }
@@ -176,6 +176,7 @@ private:
     const ScanContextPtr scan_context;
 
     const size_t rows_threshold_per_read;
+    const size_t max_sharing_column_bytes;
 
     size_t next_pack_id = 0;
     size_t next_row_offset = 0;
