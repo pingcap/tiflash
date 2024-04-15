@@ -16,6 +16,7 @@
 
 #include <common/defines.h>
 
+#include <atomic>
 #include <mutex>
 #include <string>
 #include <unordered_set>
