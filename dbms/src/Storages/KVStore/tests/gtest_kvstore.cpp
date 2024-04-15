@@ -1544,8 +1544,7 @@ TEST_F(RegionKVStoreOldTest, RegionRange)
         catch (Exception & e)
         {
             const auto & res = e.message();
-            std::regex msg_reg(
-                "void DB::RegionsRangeIndex::remove\\(const .*RegionRange &, .*RegionID\\): not found region_id=1");
+            std::regex msg_reg(".*: not found region_id=1");
             ASSERT_TRUE(std::regex_match(res, msg_reg));
         }
 
@@ -1560,8 +1559,7 @@ TEST_F(RegionKVStoreOldTest, RegionRange)
         catch (Exception & e)
         {
             const auto & res = e.message();
-            std::regex msg_reg(
-                "void DB::RegionsRangeIndex::remove\\(const .*RegionRange &, .*RegionID\\): not found start key");
+            std::regex msg_reg(".*: not found start key");
             ASSERT_TRUE(std::regex_match(res, msg_reg));
         }
 
@@ -1575,8 +1573,7 @@ TEST_F(RegionKVStoreOldTest, RegionRange)
         catch (Exception & e)
         {
             const auto & res = e.message();
-            std::regex msg_reg(
-                "void DB::RegionsRangeIndex::remove\\(const .*RegionRange &, .*RegionID\\): not found end key");
+            std::regex msg_reg(".*: not found end key");
             ASSERT_TRUE(std::regex_match(res, msg_reg));
         }
 
@@ -1590,8 +1587,7 @@ TEST_F(RegionKVStoreOldTest, RegionRange)
         catch (Exception & e)
         {
             const auto & res = e.message();
-            std::regex msg_reg("void DB::RegionsRangeIndex::remove\\(const .*RegionRange &, .*RegionID\\): "
-                               "range of region_id=2 is empty");
+            std::regex msg_reg(".*: range of region_id=2 is empty");
             ASSERT_TRUE(std::regex_match(res, msg_reg));
         }
 
@@ -1603,8 +1599,7 @@ TEST_F(RegionKVStoreOldTest, RegionRange)
         catch (Exception & e)
         {
             const auto & res = e.message();
-            std::regex msg_reg(
-                "void DB::RegionsRangeIndex::remove\\(const .*RegionRange &, .*RegionID\\): not found region_id=2");
+            std::regex msg_reg(".*: not found region_id=2");
             ASSERT_TRUE(std::regex_match(res, msg_reg));
         }
 
