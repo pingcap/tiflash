@@ -142,6 +142,11 @@ RNReadSegmentTaskPtr RNWorkerFetchPages::doWork(const RNReadSegmentTaskPtr & seg
                 seg_task->info());
             std::this_thread::sleep_for(1s);
         }
+        catch (...)
+        {
+            LOG_ERROR(log, "{}: {}", seg_task->info(), getCurrentExceptionMessage(true));
+            throw;
+        }
     }
 
     // Still failed after retry...
@@ -191,8 +196,12 @@ void RNWorkerFetchPages::doFetchPages(
     auto stream_resp = rpc.call(&client_context, request);
 
     SCOPE_EXIT({
-        // TODO: Not sure whether we really need this. Maybe RAII is already there?
-        stream_resp->Finish();
+        // Most of the time, it will call `Finish()` and check the status of grpc when `Read()` return false.
+        // `Finish()` will be called here when exceptions thrown.
+        if (unlikely(stream_resp != nullptr))
+        {
+            stream_resp->Finish();
+        }
     });
 
     // Used to verify all pages are fetched.
@@ -227,7 +236,18 @@ void RNWorkerFetchPages::doFetchPages(
         Stopwatch sw_packet;
         auto packet = std::make_shared<disaggregated::PagesPacket>();
         if (bool more = stream_resp->Read(packet.get()); !more)
+        {
+            auto status = stream_resp->Finish();
+            stream_resp.reset(); // Reset to avoid calling `Finish()` repeatedly.
+            RUNTIME_CHECK_MSG(
+                status.ok(),
+                "Failed to fetch all pages for {}, status={}, message={}, wn_address={}",
+                seg_task->info(),
+                static_cast<int>(status.error_code()),
+                status.error_message(),
+                seg_task->meta.store_address);
             break;
+        }
 
         MemTrackerWrapper packet_mem_tracker_wrapper(packet->SpaceUsedLong(), fetch_pages_mem_tracker.get());
 
