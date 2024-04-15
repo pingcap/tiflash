@@ -3705,6 +3705,8 @@ TEST_P(DeltaMergeStoreRWTest, TestForCleanRead)
 try
 {
     static constexpr const char * pk_name = "_tidb_rowid";
+    store = reload(DMTestEnv::getDefaultColumns(DMTestEnv::PkType::HiddenTiDBRowID, true));
+    DMTestEnv::getDefaultColumns(DMTestEnv::PkType::HiddenTiDBRowID, true);
     const size_t pack_block_count = 2;
     constexpr size_t num_rows_each_block = DEFAULT_MERGE_BLOCK_SIZE / pack_block_count;
     const size_t num_block = 6;
@@ -3739,7 +3741,8 @@ try
                 false,
                 1,
                 true,
-                i == 3); // the 4th block mark as delete
+                i == 3, // the 4th block mark as delete
+                /*with_nullable_uint64*/ true);
             write_block(block);
         }
     }
@@ -3755,12 +3758,11 @@ try
         ColumnDefines real_columns;
         for (const auto & col : columns)
         {
-            if (col.name != EXTRA_HANDLE_COLUMN_NAME && col.name != TAG_COLUMN_NAME)
+            if (col.name != EXTRA_HANDLE_COLUMN_NAME && col.name != TAG_COLUMN_NAME && col.name != VERSION_COLUMN_NAME)
             {
                 real_columns.emplace_back(col);
             }
         }
-
         BlockInputStreamPtr in = store->read(
             *db_context,
             db_context->getSettingsRef(),
@@ -3772,7 +3774,7 @@ try
             std::vector<RuntimeFilterPtr>{},
             0,
             TRACING_NAME,
-            /* keep_order= */ false)[0];
+            /* keep_order= */ true)[0]; // set keep order to let read_mode = Normal
         ASSERT_INPUTSTREAM_NROWS(in, num_rows_each_block * num_block - num_rows_each_block);
     }
 }

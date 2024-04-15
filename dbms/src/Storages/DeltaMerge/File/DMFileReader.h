@@ -96,7 +96,6 @@ public:
     friend class tests::DMFileMetaV2Test;
 
 private:
-    bool shouldSeek(size_t pack_id) const;
     size_t getReadRows();
     ColumnPtr readExtraColumn(
         const ColumnDefine & cd,

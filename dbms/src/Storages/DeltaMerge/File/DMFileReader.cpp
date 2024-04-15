@@ -102,12 +102,6 @@ DMFileReader::DMFileReader(
     }
 }
 
-bool DMFileReader::shouldSeek(size_t pack_id) const
-{
-    // If current pack is the first one, or we just finished reading the last pack, then no need to seek.
-    return pack_id != 0 && !pack_filter.getUsePacksConst()[pack_id - 1];
-}
-
 bool DMFileReader::getSkippedRows(size_t & skip_rows)
 {
     skip_rows = 0;
@@ -273,11 +267,6 @@ Block DMFileReader::readWithFilter(const IColumn::Filter & filter)
     Block res = getHeader().cloneWithColumns(std::move(columns));
     res.setStartOffset(start_row_offset);
     return res;
-}
-
-inline bool isExtraColumn(const ColumnDefine & cd)
-{
-    return cd.id == EXTRA_HANDLE_COLUMN_ID || cd.id == VERSION_COLUMN_ID || cd.id == TAG_COLUMN_ID;
 }
 
 bool DMFileReader::isCacheableColumn(const ColumnDefine & cd)
@@ -455,7 +444,15 @@ ColumnPtr DMFileReader::readExtraColumn(
     const std::vector<size_t> & clean_read_packs)
 {
     const auto & pack_stats = dmfile->getPackStats();
-    const auto read_strategy = ColumnCache::getReadStrategy(start_pack_id, pack_count, clean_read_packs);
+    auto read_strategy = ColumnCache::getReadStrategy(start_pack_id, pack_count, clean_read_packs);
+    if (read_strategy.size() != 1 && cd.id == EXTRA_HANDLE_COLUMN_ID)
+    {
+        // If size of read_strategy is not 1, handle can not do clean read.
+        read_strategy.clear();
+        read_strategy.emplace_back(
+            std::make_pair(start_pack_id, start_pack_id + pack_count),
+            ColumnCache::Strategy::Disk);
+    }
     auto column = cd.type->createColumn();
     column->reserve(read_rows);
     for (const auto & [range, strategy] : read_strategy)
