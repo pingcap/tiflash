@@ -3707,9 +3707,9 @@ try
     static constexpr const char * pk_name = "_tidb_rowid";
     store = reload(DMTestEnv::getDefaultColumns(DMTestEnv::PkType::HiddenTiDBRowID, true));
     DMTestEnv::getDefaultColumns(DMTestEnv::PkType::HiddenTiDBRowID, true);
-    const size_t pack_block_count = 2;
+    constexpr size_t pack_block_count = 2;
     constexpr size_t num_rows_each_block = DEFAULT_MERGE_BLOCK_SIZE / pack_block_count;
-    const size_t num_block = 6;
+    constexpr size_t num_block = 6;
     auto write_block = [&](Block block) {
         switch (mode)
         {
