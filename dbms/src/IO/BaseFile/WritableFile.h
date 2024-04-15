@@ -14,9 +14,7 @@
 
 #pragma once
 
-#if __APPLE__ && __clang__
-#include <sys/_types/_off_t.h>
-#endif
+#include <sys/types.h>
 #include <memory>
 
 namespace DB
