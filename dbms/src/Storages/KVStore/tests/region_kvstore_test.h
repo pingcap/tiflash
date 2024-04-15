@@ -31,6 +31,13 @@ public:
         log = DB::Logger::get("RegionKVStoreTest");
         test_path = TiFlashTestEnv::getTemporaryPath("/region_kvs_test");
     }
+
+    static RegionPtr splitRegion(const RegionPtr & region, RegionMeta && meta)
+    {
+        return region->splitInto(std::move(meta));
+    }
+
+    static void dropTable(Context & ctx, TableID table_id);
 };
 
 static inline void validateSSTGeneration(

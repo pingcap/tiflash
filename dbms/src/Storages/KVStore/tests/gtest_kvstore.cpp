@@ -15,12 +15,23 @@
 #include <Debug/dbgTools.h>
 #include <Storages/KVStore/MultiRaft/RegionsRangeIndex.h>
 #include <Storages/KVStore/tests/kvstore_helper.h>
-
+#include <Storages/KVStore/tests/region_kvstore_test.h>
 
 namespace DB::tests
 {
+class RegionKVStoreOldTest : public KVStoreTestBase
+{
+public:
+    void testRaftMerge(Context & ctx, KVStore & kvs, TMTContext & tmt);
+    static void testRaftMergeRollback(KVStore & kvs, TMTContext & tmt);
+    RegionKVStoreOldTest()
+    {
+        log = DB::Logger::get("RegionKVStoreOldTest");
+        test_path = TiFlashTestEnv::getTemporaryPath("/region_kvs_old_test");
+    }
+};
 
-TEST_F(RegionKVStoreTest, PersistenceV1)
+TEST_F(RegionKVStoreOldTest, PersistenceV1)
 try
 {
     auto ctx = TiFlashTestEnv::getGlobalContext();
@@ -415,7 +426,7 @@ static void testRaftSplit(KVStore & kvs, TMTContext & tmt, std::unique_ptr<MockR
     }
 }
 
-void RegionKVStoreTest::testRaftMerge(Context & ctx, KVStore & kvs, TMTContext & tmt)
+void RegionKVStoreOldTest::testRaftMerge(Context & ctx, KVStore & kvs, TMTContext & tmt)
 {
     const RegionID source_region_id = 7;
     const RegionID target_region_id = 1;
@@ -920,7 +931,7 @@ TEST_F(RegionKVStoreOldTest, AdminSplit)
     }
 }
 
-TEST_F(RegionKVStoreTest, AdminMergeRollback)
+TEST_F(RegionKVStoreOldTest, AdminMergeRollback)
 {
     auto ctx = TiFlashTestEnv::getGlobalContext();
     KVStore & kvs = getKVS();
@@ -933,7 +944,7 @@ TEST_F(RegionKVStoreTest, AdminMergeRollback)
     testRaftMergeRollback(kvs, ctx.getTMTContext());
 }
 
-TEST_F(RegionKVStoreTest, AdminMerge)
+TEST_F(RegionKVStoreOldTest, AdminMerge)
 try
 {
     auto ctx = TiFlashTestEnv::getGlobalContext();

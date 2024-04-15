@@ -36,6 +36,7 @@ namespace tests
 {
 class KVStoreTestBase;
 class RegionKVStoreOldTest;
+class RegionKVStoreTest;
 } // namespace tests
 
 class Region;
@@ -261,6 +262,7 @@ private:
     friend class RegionMockTest;
     friend class tests::KVStoreTestBase;
     friend class tests::RegionKVStoreOldTest;
+    friend class tests::RegionKVStoreTest;
 
     // Private methods no need to lock mutex, normally
 

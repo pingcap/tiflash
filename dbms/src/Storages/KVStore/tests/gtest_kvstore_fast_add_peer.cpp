@@ -62,7 +62,7 @@ struct FAPTestOpt
     bool persist_empty_segment = false;
 };
 
-class RegionKVStoreTestFAP : public KVStoreTestBase
+class RegionKVStoreOldTestFAP : public KVStoreTestBase
 {
 public:
     void SetUp() override
@@ -265,7 +265,7 @@ void assertNoSegment(
     }
 }
 
-TEST_F(RegionKVStoreTestFAP, RestoreRaftState)
+TEST_F(RegionKVStoreOldTestFAP, RestoreRaftState)
 try
 {
     auto & global_context = TiFlashTestEnv::getGlobalContext();
@@ -350,7 +350,7 @@ void verifyRows(Context & ctx, DM::DeltaMergeStorePtr store, const DM::RowKeyRan
     ASSERT_INPUTSTREAM_NROWS(in, rows);
 }
 
-CheckpointRegionInfoAndData RegionKVStoreTestFAP::prepareForRestart(FAPTestOpt opt)
+CheckpointRegionInfoAndData RegionKVStoreOldTestFAP::prepareForRestart(FAPTestOpt opt)
 {
     auto & global_context = TiFlashTestEnv::getGlobalContext();
     uint64_t region_id = 1;
@@ -432,7 +432,7 @@ void setTiFlashReplicaSyncInfo(StorageDeltaMergePtr & dm_storage)
 }
 
 // Test load from restart.
-TEST_F(RegionKVStoreTestFAP, RestoreFromRestart1)
+TEST_F(RegionKVStoreOldTestFAP, RestoreFromRestart1)
 try
 {
     CheckpointRegionInfoAndData mock_data = prepareForRestart(FAPTestOpt{});
@@ -508,7 +508,7 @@ try
 CATCH
 
 // Test if region is destroyed before applied.
-TEST_F(RegionKVStoreTestFAP, RestoreFromRestart2)
+TEST_F(RegionKVStoreOldTestFAP, RestoreFromRestart2)
 try
 {
     CheckpointRegionInfoAndData mock_data = prepareForRestart(FAPTestOpt{});
@@ -539,7 +539,7 @@ try
 CATCH
 
 // Test if we can parse from an uploaded manifest
-TEST_F(RegionKVStoreTestFAP, RestoreFromRestart3)
+TEST_F(RegionKVStoreOldTestFAP, RestoreFromRestart3)
 try
 {
     CheckpointRegionInfoAndData mock_data = prepareForRestart(FAPTestOpt{});
@@ -584,7 +584,7 @@ try
 CATCH
 
 // Test cancel from peer select
-TEST_F(RegionKVStoreTestFAP, Cancel1)
+TEST_F(RegionKVStoreOldTestFAP, Cancel1)
 try
 {
     CheckpointRegionInfoAndData mock_data = prepareForRestart(FAPTestOpt{});
@@ -624,7 +624,7 @@ try
 CATCH
 
 // Test cancel from write
-TEST_F(RegionKVStoreTestFAP, Cancel2)
+TEST_F(RegionKVStoreOldTestFAP, Cancel2)
 try
 {
     using namespace std::chrono_literals;
@@ -675,7 +675,7 @@ try
 CATCH
 
 // Test cancel and destroy
-TEST_F(RegionKVStoreTestFAP, Cancel3)
+TEST_F(RegionKVStoreOldTestFAP, Cancel3)
 try
 {
     using namespace std::chrono_literals;
@@ -722,7 +722,7 @@ try
 CATCH
 
 // Test cancel and regular snapshot
-TEST_F(RegionKVStoreTestFAP, Cancel4)
+TEST_F(RegionKVStoreOldTestFAP, Cancel4)
 try
 {
     using namespace std::chrono_literals;
@@ -788,7 +788,7 @@ try
 }
 CATCH
 
-TEST_F(RegionKVStoreTestFAP, EmptySegment)
+TEST_F(RegionKVStoreOldTestFAP, EmptySegment)
 try
 {
     CheckpointRegionInfoAndData mock_data = prepareForRestart(FAPTestOpt{.persist_empty_segment = true});
@@ -812,7 +812,7 @@ try
 }
 CATCH
 
-TEST_F(RegionKVStoreTestFAP, OnExistingPeer)
+TEST_F(RegionKVStoreOldTestFAP, OnExistingPeer)
 try
 {
     CheckpointRegionInfoAndData mock_data = prepareForRestart(FAPTestOpt{});
