@@ -26,6 +26,10 @@ public:
 
     UInt8 getMethodByte() const override;
 
+    void specializedUInt64Compress(const char * source, UInt32 source_size, char * dest) const;
+    void specializedUInt32Compress(const char * source, UInt32 source_size, char * dest) const;
+    void ordinaryCompress(const char * source, UInt32 source_size, char * dest) const;
+
 protected:
     UInt32 doCompressData(const char * source, UInt32 source_size, char * dest) const override;
     void doDecompressData(const char * source, UInt32 source_size, char * dest, UInt32 uncompressed_size)

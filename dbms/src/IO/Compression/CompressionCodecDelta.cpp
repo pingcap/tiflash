@@ -300,4 +300,48 @@ void CompressionCodecDelta::doDecompressData(
     }
 }
 
+
+void CompressionCodecDelta::ordinaryCompress(const char * source, UInt32 source_size, char * dest) const
+{
+    dest[0] = delta_bytes_size;
+    size_t start_pos = 1;
+    switch (delta_bytes_size)
+    {
+    case 1:
+        compressDataForType<UInt8>(source, source_size, &dest[start_pos]);
+        break;
+    case 2:
+        compressDataForType<UInt16>(source, source_size, &dest[start_pos]);
+        break;
+    case 4:
+        compressDataForType<UInt32>(source, source_size, &dest[start_pos]);
+        break;
+    case 8:
+        compressDataForType<UInt64>(source, source_size, &dest[start_pos]);
+        break;
+    default:
+        throw Exception(ErrorCodes::CANNOT_COMPRESS, "Cannot compress Delta-encoded data. Unsupported bytes size");
+    }
+}
+
+void CompressionCodecDelta::specializedUInt64Compress(const char * source, UInt32 source_size, char * dest) const
+{
+    dest[0] = delta_bytes_size;
+    size_t start_pos = 1;
+    compressDataFor64bits(
+        reinterpret_cast<const UInt64 *>(source),
+        (source_size) / 8,
+        reinterpret_cast<UInt64 *>(&dest[start_pos]));
+}
+
+void CompressionCodecDelta::specializedUInt32Compress(const char * source, UInt32 source_size, char * dest) const
+{
+    dest[0] = delta_bytes_size;
+    size_t start_pos = 1;
+    compressDataFor32bits(
+        reinterpret_cast<const UInt32 *>(source),
+        (source_size) / 4,
+        reinterpret_cast<UInt32 *>(&dest[start_pos]));
+}
+
 } // namespace DB
