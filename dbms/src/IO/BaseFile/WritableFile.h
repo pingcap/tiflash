@@ -14,6 +14,8 @@
 
 #pragma once
 
+#include <sys/types.h>
+
 #include <memory>
 
 namespace DB

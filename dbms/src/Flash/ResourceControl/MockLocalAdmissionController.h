@@ -70,7 +70,7 @@ public:
         return {get_priority_func(name)};
     }
     void warmupResourceGroupInfoCache(const std::string &) {}
-    uint64_t estWaitDuraMS(const std::string &) { return 100; }
+    static uint64_t estWaitDuraMS(const std::string &) { return 100; }
 
     void registerRefillTokenCallback(const std::function<void()> & cb)
     {
@@ -84,6 +84,8 @@ public:
         RUNTIME_CHECK_MSG(refill_token_callback != nullptr, "callback cannot be nullptr before unregistering");
         refill_token_callback = nullptr;
     }
+
+    void safeStop() { stop(); }
 
     void stop()
     {

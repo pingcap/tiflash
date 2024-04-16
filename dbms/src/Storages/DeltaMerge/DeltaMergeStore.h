@@ -291,7 +291,11 @@ public:
 
     static Block addExtraColumnIfNeed(const Context & db_context, const ColumnDefine & handle_define, Block && block);
 
-    DM::WriteResult write(const Context & db_context, const DB::Settings & db_settings, Block & block);
+    DM::WriteResult write(
+        const Context & db_context,
+        const DB::Settings & db_settings,
+        Block & block,
+        const RegionAppliedStatus & applied_status = {});
 
     void deleteRange(const Context & db_context, const DB::Settings & db_settings, const RowKeyRange & delete_range);
 

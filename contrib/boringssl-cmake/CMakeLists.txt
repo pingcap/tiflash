@@ -593,6 +593,7 @@ add_library(
   "${BORINGSSL_SOURCE_DIR}/crypto/x509v3/v3_skey.c"
   "${BORINGSSL_SOURCE_DIR}/crypto/x509v3/v3_utl.c"
 )
+target_compile_options(crypto PRIVATE "-Wno-unused-but-set-variable")
 
 add_library(
   ssl

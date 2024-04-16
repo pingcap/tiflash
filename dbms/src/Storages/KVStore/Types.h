@@ -75,4 +75,10 @@ using Timepoint = Clock::time_point;
 using Duration = Clock::duration;
 using Seconds = std::chrono::seconds;
 
+struct RegionAppliedStatus
+{
+    RegionID region_id = InvalidRegionID;
+    UInt64 applied_index = 0;
+};
+
 } // namespace DB

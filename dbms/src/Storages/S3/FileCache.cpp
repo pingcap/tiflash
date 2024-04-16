@@ -32,7 +32,6 @@
 #include <chrono>
 #include <cmath>
 #include <filesystem>
-#include <fstream>
 
 namespace ProfileEvents
 {
@@ -55,6 +54,8 @@ extern const int FILE_DOESNT_EXIST;
 namespace DB
 {
 using FileType = FileSegment::FileType;
+
+std::unique_ptr<FileCache> FileCache::global_file_cache_instance;
 
 FileCache::FileCache(PathCapacityMetricsPtr capacity_metrics_, const StorageRemoteCacheConfig & config_)
     : capacity_metrics(capacity_metrics_)
