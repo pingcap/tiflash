@@ -179,7 +179,6 @@ template <typename T, typename ContainerLeft, typename ContainerRight>
 
     const auto l_size = left.size() / sizeof(T);
     const auto r_size = right.size() / sizeof(T);
-    const auto size = std::min(l_size, r_size);
 
     if (l_size != r_size)
     {
@@ -193,43 +192,22 @@ template <typename T, typename ContainerLeft, typename ContainerRight>
     auto l = AsSequenceOf<T>(left);
     auto r = AsSequenceOf<T>(right);
 
-    static constexpr auto MAX_MISMATCHING_ITEMS = 5;
-    int mismatching_items = 0;
-    size_t i = 0;
-
     while (l && r)
     {
         const auto left_value = *l;
         const auto right_value = *r;
         ++l;
         ++r;
-        ++i;
 
         if (left_value != right_value)
         {
             if (result)
             {
                 result = ::testing::AssertionFailure();
-            }
-
-            if (++mismatching_items <= MAX_MISMATCHING_ITEMS)
-            {
-                result << "\nmismatching " << sizeof(T) << "-byte item #" << i << "\nexpected: " << bin(left_value)
-                       << " (0x" << std::hex << static_cast<size_t>(left_value) << ")"
-                       << "\ngot     : " << bin(right_value) << " (0x" << std::hex << static_cast<size_t>(right_value)
-                       << ")";
-                if (mismatching_items == MAX_MISMATCHING_ITEMS)
-                {
-                    result << "\n..." << std::endl;
-                }
+                break;
             }
         }
     }
-    if (mismatching_items > 0)
-    {
-        result << "total mismatching items:" << mismatching_items << " of " << size;
-    }
-
     return result;
 }
 

@@ -223,7 +223,7 @@ UInt32 CompressionCodecDelta::doCompressData(const char * source, UInt32 source_
     case 4:
 #if defined(__x86_64__) && defined(__AVX2__)
         compressDataFor32bits(
-            reinterpret_cast<const UInt32 *>(source) + bytes_to_skip,
+            reinterpret_cast<const UInt32 *>(source + bytes_to_skip),
             (source_size - bytes_to_skip) / 4,
             reinterpret_cast<UInt32 *>(&dest[start_pos]));
 #else
@@ -233,7 +233,7 @@ UInt32 CompressionCodecDelta::doCompressData(const char * source, UInt32 source_
     case 8:
 #if defined(__x86_64__) && defined(__AVX2__)
         compressDataFor64bits(
-            reinterpret_cast<const UInt64 *>(source) + bytes_to_skip,
+            reinterpret_cast<const UInt64 *>(source + bytes_to_skip),
             (source_size - bytes_to_skip) / 8,
             reinterpret_cast<UInt64 *>(&dest[start_pos]));
 #else
