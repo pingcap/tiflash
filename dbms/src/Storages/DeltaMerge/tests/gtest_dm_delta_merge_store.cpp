@@ -3752,7 +3752,7 @@ try
     store->compact(*db_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
     store->mergeDeltaAll(*db_context);
 
-    // only pack 0, 2 can do clean read
+    // only pack 0,3,4 can do clean read
     {
         const auto & columns = store->getTableColumns();
         ColumnDefines real_columns;
