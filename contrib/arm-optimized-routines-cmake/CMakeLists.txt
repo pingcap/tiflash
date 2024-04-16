@@ -26,14 +26,12 @@
 #   the qualities can be ensured while using it also enables us to keep sync with latest
 #   acceleration techniques.
 
-set(CMAKE_C_FLAGS "")
 ENABLE_LANGUAGE(C)
 ENABLE_LANGUAGE(ASM)
-set(TIFLASH_AOR_DIR ../arm-optimized-routines)
+set(TIFLASH_AOR_DIR ${TiFlash_SOURCE_DIR}/contrib/arm-optimized-routines)
 
 file(GLOB TIFLASH_AARCH64_STRING_FILES ${TIFLASH_AOR_DIR}/string/aarch64/*.S)
-add_library(tiflash-aarch64-string STATIC ${TIFLASH_AARCH64_STRING_FILES} src/aor.c)
-target_compile_options(tiflash-aarch64-string PRIVATE -march=armv8-a+sve)
+add_library(tiflash-aarch64-string STATIC ${TIFLASH_AARCH64_STRING_FILES})
 target_include_directories(tiflash-aarch64-string PRIVATE ${TIFLASH_AOR_DIR}/string/include)
 
 file(GLOB TIFLASH_AARCH64_MATH_FILES ${TIFLASH_AOR_DIR}/math/*.c)

@@ -16,6 +16,8 @@
 #include <Storages/KVStore/MultiRaft/RegionsRangeIndex.h>
 #include <Storages/KVStore/tests/kvstore_helper.h>
 
+#include <regex>
+
 
 namespace DB::tests
 {
@@ -182,7 +184,9 @@ TEST_F(RegionKVStoreOldTest, ReadIndex)
             auto region = kvs.getRegion(1);
             auto req = GenRegionReadIndexReq(*region, 8); // start_ts = 8
             auto resp = kvs.batchReadIndex({req}, 100);
-            ASSERT_EQ(resp[0].first.read_index(), 5);
+            auto proxy_region = proxy_instance->getRegion(1);
+            ASSERT_EQ(resp[0].first.read_index(), proxy_region->getLatestCommitIndex());
+            ASSERT_EQ(5, proxy_region->getLatestCommitIndex());
             {
                 auto r = region->waitIndex(
                     5,
@@ -214,6 +218,13 @@ TEST_F(RegionKVStoreOldTest, ReadIndex)
         {
             auto region = kvs.getRegion(1);
             auto req = GenRegionReadIndexReq(*region, 10);
+            auto resp = kvs.batchReadIndex({req}, 100);
+            ASSERT_EQ(resp[0].first.read_index(), 667);
+        }
+        {
+            // Found updated value in `history_success_tasks`
+            auto region = kvs.getRegion(1);
+            auto req = GenRegionReadIndexReq(*region, 8);
             auto resp = kvs.batchReadIndex({req}, 100);
             ASSERT_EQ(resp[0].first.read_index(), 667);
         }
@@ -1533,9 +1544,8 @@ TEST_F(RegionKVStoreOldTest, RegionRange)
         catch (Exception & e)
         {
             const auto & res = e.message();
-            ASSERT_EQ(
-                res,
-                "void DB::RegionsRangeIndex::remove(const DB::RegionRange &, DB::RegionID): not found region_id=1");
+            std::regex msg_reg(".*: not found region_id=1");
+            ASSERT_TRUE(std::regex_match(res, msg_reg));
         }
 
         region_index.add(makeRegion(2, RecordKVFormat::genKey(1, 3), RecordKVFormat::genKey(1, 5)));
@@ -1549,9 +1559,8 @@ TEST_F(RegionKVStoreOldTest, RegionRange)
         catch (Exception & e)
         {
             const auto & res = e.message();
-            ASSERT_EQ(
-                res,
-                "void DB::RegionsRangeIndex::remove(const DB::RegionRange &, DB::RegionID): not found start key");
+            std::regex msg_reg(".*: not found start key");
+            ASSERT_TRUE(std::regex_match(res, msg_reg));
         }
 
         try
@@ -1564,9 +1573,8 @@ TEST_F(RegionKVStoreOldTest, RegionRange)
         catch (Exception & e)
         {
             const auto & res = e.message();
-            ASSERT_EQ(
-                res,
-                "void DB::RegionsRangeIndex::remove(const DB::RegionRange &, DB::RegionID): not found end key");
+            std::regex msg_reg(".*: not found end key");
+            ASSERT_TRUE(std::regex_match(res, msg_reg));
         }
 
         try
@@ -1579,10 +1587,8 @@ TEST_F(RegionKVStoreOldTest, RegionRange)
         catch (Exception & e)
         {
             const auto & res = e.message();
-            ASSERT_EQ(
-                res,
-                "void DB::RegionsRangeIndex::remove(const DB::RegionRange &, DB::RegionID): range of region_id=2 is "
-                "empty");
+            std::regex msg_reg(".*: range of region_id=2 is empty");
+            ASSERT_TRUE(std::regex_match(res, msg_reg));
         }
 
         try
@@ -1593,9 +1599,8 @@ TEST_F(RegionKVStoreOldTest, RegionRange)
         catch (Exception & e)
         {
             const auto & res = e.message();
-            ASSERT_EQ(
-                res,
-                "void DB::RegionsRangeIndex::remove(const DB::RegionRange &, DB::RegionID): not found region_id=2");
+            std::regex msg_reg(".*: not found region_id=2");
+            ASSERT_TRUE(std::regex_match(res, msg_reg));
         }
 
         region_index.clear();

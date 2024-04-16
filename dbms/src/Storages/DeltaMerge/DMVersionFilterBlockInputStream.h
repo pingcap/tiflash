@@ -21,7 +21,7 @@
 #include <DataStreams/SelectionByColumnIdTransformAction.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
-#include <Storages/DeltaMerge/ScanContext.h>
+#include <Storages/DeltaMerge/ScanContext_fwd.h>
 #include <common/logger_useful.h>
 
 namespace DB

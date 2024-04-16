@@ -14,6 +14,7 @@
 
 #pragma once
 #include <Common/MemoryTrackerSetter.h>
+#include <Flash/Pipeline/Schedule/Tasks/NotifyFuture.h>
 #include <Storages/DeltaMerge/DMContext_fwd.h>
 #include <Storages/DeltaMerge/Filter/PushDownFilter.h>
 #include <Storages/DeltaMerge/ReadMode.h>
@@ -97,7 +98,9 @@ private:
     std::unordered_map<GlobalSegmentID, SegmentReadTaskPtr> unordered_tasks;
 };
 
-class SegmentReadTaskPool : private boost::noncopyable
+class SegmentReadTaskPool
+    : public NotifyFuture
+    , private boost::noncopyable
 {
 public:
     SegmentReadTaskPool(
@@ -167,6 +170,8 @@ public:
 
     std::once_flag & addToSchedulerFlag() { return add_to_scheduler; }
 
+    void registerTask(TaskPtr && task) override { q.registerPipeTask(std::move(task)); }
+
 public:
     const uint64_t pool_id;
 
@@ -175,7 +180,7 @@ public:
 
     ColumnDefines & getColumnToRead() { return columns_to_read; }
 
-    void appendRSOperator(RSOperatorPtr & new_filter)
+    void appendRSOperator(RSOperatorPtr & new_filter) const
     {
         if (filter->rs_operator == DM::EMPTY_RS_OPERATOR)
         {

@@ -16,15 +16,15 @@
 
 set -ueox pipefail
 
-CMAKE_VERSION="3.22.1"
-GO_VERSION="1.20"
+CMAKE_VERSION="3.24.2"
+GO_VERSION="1.21.5"
 ARCH=$(uname -m)
 GO_ARCH=$([[ "${ARCH}" == "aarch64" ]] && echo "arm64" || echo "amd64")
-LLVM_VERSION="13.0.0"
+LLVM_VERSION="17.0.6"
 CCACHE_VERSION="4.5.1"
 SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
 SYSROOT="${SCRIPTPATH}/sysroot"
-OPENSSL_VERSION="1_1_1l"
+OPENSSL_VERSION="1_1_1w"
 
 function install_cmake() {
     wget "https://github.com/Kitware/CMake/releases/download/v${CMAKE_VERSION}/cmake-${CMAKE_VERSION}-linux-${ARCH}.sh"
@@ -38,10 +38,10 @@ function install_llvm() {
     mkdir -p llvm-project/build
     cd llvm-project/build
 
-    # TODO: enable `bolt` for >= 14.0.0. https://github.com/llvm/llvm-project/tree/main/bolt
+    # `bolt` is enabled; https://github.com/llvm/llvm-project/tree/main/bolt
     cmake -DCMAKE_BUILD_TYPE=Release \
         -GNinja \
-        -DLLVM_ENABLE_PROJECTS="clang;lld;polly;clang-tools-extra" \
+        -DLLVM_ENABLE_PROJECTS="clang;lld;polly;clang-tools-extra;bolt" \
         -DLLVM_ENABLE_RUNTIMES="compiler-rt;libcxx;libcxxabi;libunwind;openmp" \
         -DLLVM_TARGETS_TO_BUILD=Native \
         -DCOMPILER_RT_USE_BUILTINS_LIBRARY=ON \
@@ -86,7 +86,7 @@ function install_openssl() {
 }
 
 function install_go() {
-    wget "https://dl.google.com/go/go${GO_VERSION}.linux-${GO_ARCH}.tar.gz"
+    wget "https://go.dev/dl/go${GO_VERSION}.linux-${GO_ARCH}.tar.gz"
     tar -C "${SYSROOT}" -xzvf go${GO_VERSION}.linux-${GO_ARCH}.tar.gz
     mv "${SYSROOT}/go" "${SYSROOT}/go${GO_VERSION}" && \
         pushd "${SYSROOT}" && ln -sv "go${GO_VERSION}" "go" && popd

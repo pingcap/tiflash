@@ -14,10 +14,11 @@
 
 #pragma once
 
+#include <IO/FileProvider/FileProvider_fwd.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFile.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFilePersisted.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h>
-#include <Storages/DeltaMerge/DMContext.h>
+#include <Storages/DeltaMerge/DMContext_fwd.h>
 #include <Storages/DeltaMerge/Remote/Serializer_fwd.h>
 #include <Storages/Page/PageStorage_fwd.h>
 
@@ -87,15 +88,7 @@ public:
         UInt64 bytes_,
         PageIdU64 data_page_id_,
         const DMContext & dm_context,
-        const CachePtr & cache_ = nullptr)
-        : schema(schema_)
-        , rows(rows_)
-        , bytes(bytes_)
-        , data_page_id(data_page_id_)
-        , keyspace_id(dm_context.keyspace_id)
-        , file_provider(dm_context.global_context.getFileProvider())
-        , cache(cache_)
-    {}
+        const CachePtr & cache_ = nullptr);
 
     Type getType() const override { return Type::TINY_FILE; }
 

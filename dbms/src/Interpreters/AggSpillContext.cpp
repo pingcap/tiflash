@@ -52,6 +52,9 @@ bool AggSpillContext::updatePerThreadRevocableMemory(Int64 new_value, size_t thr
     if (!in_spillable_stage || !isSpillEnabled())
         return false;
     per_thread_revocable_memories[thread_num] = new_value;
+    if (new_value == 0)
+        // new_value == 0 means no agg data to spill
+        return false;
     if (auto_spill_mode)
     {
         AutoSpillStatus old_value = AutoSpillStatus::NEED_AUTO_SPILL;
@@ -97,6 +100,8 @@ Int64 AggSpillContext::triggerSpillImpl(Int64 expected_released_memories)
     for (; checked_thread < per_thread_revocable_memories.size(); ++checked_thread)
     {
         AutoSpillStatus old_value = AutoSpillStatus::NO_NEED_AUTO_SPILL;
+        if (per_thread_revocable_memories[checked_thread] < MIN_SPILL_THRESHOLD)
+            continue;
         if (per_thread_auto_spill_status[checked_thread].compare_exchange_strong(
                 old_value,
                 AutoSpillStatus::NEED_AUTO_SPILL))
@@ -146,7 +151,7 @@ void AggSpillContext::finishOneSpill(size_t thread_num)
 
 bool AggSpillContext::markThreadForAutoSpill(size_t thread_num)
 {
-    if (in_spillable_stage && isSpillEnabled())
+    if (in_spillable_stage && isSpillEnabled() && per_thread_revocable_memories[thread_num] > 0)
     {
         auto old_value = AutoSpillStatus::NO_NEED_AUTO_SPILL;
         return per_thread_auto_spill_status[thread_num].compare_exchange_strong(

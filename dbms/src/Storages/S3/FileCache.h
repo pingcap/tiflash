@@ -228,7 +228,7 @@ public:
 #endif
 
     inline static std::atomic<bool> global_file_cache_initialized{false};
-    inline static std::unique_ptr<FileCache> global_file_cache_instance;
+    static std::unique_ptr<FileCache> global_file_cache_instance;
 
     DISALLOW_COPY_AND_MOVE(FileCache);
 
@@ -257,7 +257,7 @@ public:
         const String & s3_key,
         FileSegmentPtr & f,
         bool force = false);
-    void removeDiskFile(const String & local_fname) const;
+    void removeDiskFile(const String & local_fname, bool update_fsize_metrics) const;
 
     // Estimated size is an empirical value.
     // We don't know object size before get object from S3.

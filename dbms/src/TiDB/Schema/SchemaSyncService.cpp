@@ -60,7 +60,7 @@ void SchemaSyncService::addKeyspaceGCTasks()
     UInt64 num_add_tasks = 0;
     // Add new sync schema task for new keyspace.
     std::unique_lock<std::shared_mutex> lock(keyspace_map_mutex);
-    for (auto const iter : keyspaces)
+    for (auto const & iter : keyspaces)
     {
         auto keyspace = iter.first;
         if (keyspace_handle_map.contains(keyspace))
@@ -304,6 +304,7 @@ bool SchemaSyncService::gcImpl(Timestamp gc_safepoint, KeyspaceID keyspace_id, b
                     storage->getTombstone(),
                     gc_safepoint,
                     canonical_name);
+                succeeded = false; // dropping this table is skipped, do not succee the `last_gc_safepoint`
                 continue;
             }
             else
@@ -343,7 +344,7 @@ bool SchemaSyncService::gcImpl(Timestamp gc_safepoint, KeyspaceID keyspace_id, b
         }
         catch (DB::Exception & e)
         {
-            succeeded = false;
+            succeeded = false; // dropping this table is skipped, do not succee the `last_gc_safepoint`
             String err_msg;
             // Maybe a read lock of a table is held for a long time, just ignore it this round.
             if (e.code() == ErrorCodes::DEADLOCK_AVOIDED)
@@ -397,7 +398,7 @@ bool SchemaSyncService::gcImpl(Timestamp gc_safepoint, KeyspaceID keyspace_id, b
         }
         catch (DB::Exception & e)
         {
-            succeeded = false;
+            succeeded = false; // dropping this database is skipped, do not succee the `last_gc_safepoint`
             String err_msg;
             if (e.code() == ErrorCodes::DEADLOCK_AVOIDED)
                 err_msg = "locking attempt has timed out!"; // ignore verbose stack for this error

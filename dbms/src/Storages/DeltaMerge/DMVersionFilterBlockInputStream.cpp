@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Storages/DeltaMerge/DMVersionFilterBlockInputStream.h>
+#include <Storages/DeltaMerge/ScanContext.h>
 
 namespace ProfileEvents
 {
