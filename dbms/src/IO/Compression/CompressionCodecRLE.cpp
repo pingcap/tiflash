@@ -52,12 +52,11 @@ constexpr UInt8 JUST_COPY_CODE = 0xFF;
 template <typename T>
 UInt32 compressDataForType(const char * source, UInt32 source_size, char * dest)
 {
-    UInt8 bytes_to_skip = source_size % sizeof(T);
     const char * source_end = source + source_size;
     std::vector<std::pair<T, UInt16>> rle_vec;
     rle_vec.reserve(source_size / sizeof(T));
     static constexpr size_t RLE_PAIR_LENGTH = sizeof(T) + sizeof(UInt16);
-    for (const auto * src = source + bytes_to_skip; src < source_end; src += sizeof(T))
+    for (const auto * src = source; src < source_end; src += sizeof(T))
     {
         T value = unalignedLoad<T>(src);
         if (rle_vec.empty() || rle_vec.back().first != value)
@@ -74,8 +73,7 @@ UInt32 compressDataForType(const char * source, UInt32 source_size, char * dest)
     }
 
     dest[0] = sizeof(T);
-    memcpy(&dest[1], source, bytes_to_skip);
-    dest += (1 + bytes_to_skip);
+    dest += 1;
     for (const auto & [value, count] : rle_vec)
     {
         unalignedStore<T>(dest, value);
@@ -83,7 +81,7 @@ UInt32 compressDataForType(const char * source, UInt32 source_size, char * dest)
         unalignedStore<UInt16>(dest, count);
         dest += sizeof(UInt16);
     }
-    return 1 + bytes_to_skip + rle_vec.size() * RLE_PAIR_LENGTH;
+    return 1 + rle_vec.size() * RLE_PAIR_LENGTH;
 }
 
 template <typename T>
@@ -95,12 +93,6 @@ void decompressDataForType(const char * source, UInt32 source_size, char * dest,
     UInt8 bytes_size = source[0];
     RUNTIME_CHECK(bytes_size == sizeof(T), bytes_size, sizeof(T));
     source += 1;
-
-    static constexpr size_t RLE_PAIR_LENGTH = sizeof(T) + sizeof(UInt16);
-    UInt8 bytes_to_skip = (source_size - 1) % RLE_PAIR_LENGTH;
-    memcpy(dest, source, bytes_to_skip);
-    dest += bytes_to_skip;
-    source += bytes_to_skip;
 
     while (source < source_end)
     {
@@ -124,6 +116,8 @@ void decompressDataForType(const char * source, UInt32 source_size, char * dest,
 
 UInt32 CompressionCodecRLE::doCompressData(const char * source, UInt32 source_size, char * dest) const
 {
+    if unlikely (source_size % bytes_size != 0)
+        throw Exception(ErrorCodes::CANNOT_DECOMPRESS, "source size {} is not aligned to {}", source_size, bytes_size);
     switch (bytes_size)
     {
     case 1:
@@ -161,9 +155,12 @@ void CompressionCodecRLE::doDecompressData(
         return;
     }
 
-    UInt8 bytes_to_skip = uncompressed_size % (bytes_size + sizeof(UInt16));
-    if (static_cast<UInt32>(1 + bytes_to_skip) > source_size)
-        throw Exception(ErrorCodes::CANNOT_DECOMPRESS, "Cannot decompress RLE-encoded data. File has wrong header");
+    if unlikely (uncompressed_size % bytes_size != 0)
+        throw Exception(
+            ErrorCodes::CANNOT_DECOMPRESS,
+            "uncompressed size {} is not aligned to {}",
+            uncompressed_size,
+            bytes_size);
 
     switch (bytes_size)
     {

@@ -23,11 +23,6 @@
 #include <immintrin.h>
 #endif
 
-#ifdef TIFLASH_ENABLE_AVX_SUPPORT
-#include <common/mem_utils_opt.h>
-ASSERT_USE_AVX2_COMPILE_FLAG
-#endif
-
 namespace DB
 {
 
@@ -208,36 +203,40 @@ void decompressDataForType(const char * source, UInt32 source_size, char * dest,
 
 UInt32 CompressionCodecDelta::doCompressData(const char * source, UInt32 source_size, char * dest) const
 {
-    UInt8 bytes_to_skip = source_size % delta_bytes_size;
+    if unlikely (source_size % delta_bytes_size != 0)
+        throw Exception(
+            ErrorCodes::CANNOT_DECOMPRESS,
+            "source size {} is not aligned to {}",
+            source_size,
+            delta_bytes_size);
     dest[0] = delta_bytes_size;
-    memcpy(&dest[1], source, bytes_to_skip);
-    size_t start_pos = 1 + bytes_to_skip;
+    size_t start_pos = 1;
     switch (delta_bytes_size)
     {
     case 1:
-        compressDataForType<UInt8>(source + bytes_to_skip, source_size - bytes_to_skip, &dest[start_pos]);
+        compressDataForType<UInt8>(source, source_size, &dest[start_pos]);
         break;
     case 2:
-        compressDataForType<UInt16>(source + bytes_to_skip, source_size - bytes_to_skip, &dest[start_pos]);
+        compressDataForType<UInt16>(source, source_size, &dest[start_pos]);
         break;
     case 4:
 #if defined(__x86_64__) && defined(__AVX2__)
         compressDataFor32bits(
-            reinterpret_cast<const UInt32 *>(source + bytes_to_skip),
-            (source_size - bytes_to_skip) / 4,
+            reinterpret_cast<const UInt32 *>(source),
+            (source_size) / 4,
             reinterpret_cast<UInt32 *>(&dest[start_pos]));
 #else
-        compressDataForType<UInt32>(source + bytes_to_skip, source_size - bytes_to_skip, &dest[start_pos]);
+        compressDataForType<UInt32>(source, source_size, &dest[start_pos]);
 #endif
         break;
     case 8:
 #if defined(__x86_64__) && defined(__AVX2__)
         compressDataFor64bits(
-            reinterpret_cast<const UInt64 *>(source + bytes_to_skip),
-            (source_size - bytes_to_skip) / 8,
+            reinterpret_cast<const UInt64 *>(source),
+            (source_size) / 8,
             reinterpret_cast<UInt64 *>(&dest[start_pos]));
 #else
-        compressDataForType<UInt64>(source + bytes_to_skip, source_size - bytes_to_skip, &dest[start_pos]);
+        compressDataForType<UInt64>(source, source_size, &dest[start_pos]);
 #endif
         break;
     default:
@@ -259,57 +258,41 @@ void CompressionCodecDelta::doDecompressData(
         return;
 
     UInt8 bytes_size = source[0];
-    UInt8 bytes_to_skip = uncompressed_size % bytes_size;
-    UInt32 output_size = uncompressed_size - bytes_to_skip;
+    if unlikely (uncompressed_size % bytes_size != 0)
+        throw Exception(
+            ErrorCodes::CANNOT_DECOMPRESS,
+            "uncompressed size {} is not aligned to {}",
+            uncompressed_size,
+            bytes_size);
+    UInt32 output_size = uncompressed_size;
 
-    if unlikely (static_cast<UInt32>(1 + bytes_to_skip) > source_size)
-        throw Exception(ErrorCodes::CANNOT_DECOMPRESS, "Cannot decompress delta-encoded data. File has wrong header");
-
-    memcpy(dest, &source[1], bytes_to_skip);
-    UInt32 source_size_no_header = source_size - bytes_to_skip - 1;
+    UInt32 source_size_no_header = source_size - 1;
     switch (bytes_size) // NOLINT(bugprone-switch-missing-default-case)
     {
     case 1:
-        decompressDataForType<UInt8>(
-            &source[1 + bytes_to_skip],
-            source_size_no_header,
-            &dest[bytes_to_skip],
-            output_size);
+        decompressDataForType<UInt8>(&source[1], source_size_no_header, dest, output_size);
         break;
     case 2:
-        decompressDataForType<UInt16>(
-            &source[1 + bytes_to_skip],
-            source_size_no_header,
-            &dest[bytes_to_skip],
-            output_size);
+        decompressDataForType<UInt16>(&source[1], source_size_no_header, dest, output_size);
         break;
     case 4:
 #if defined(__x86_64__) && defined(__AVX2__)
         decompressDataFor32bits(
-            reinterpret_cast<const UInt32 *>(&source[1 + bytes_to_skip]),
+            reinterpret_cast<const UInt32 *>(&source[1]),
             source_size_no_header / 4,
-            reinterpret_cast<UInt32 *>(&dest[bytes_to_skip]));
-
+            reinterpret_cast<UInt32 *>(dest));
 #else
-        decompressDataForType<UInt32>(
-            &source[1 + bytes_to_skip],
-            source_size_no_header,
-            &dest[bytes_to_skip],
-            output_size);
+        decompressDataForType<UInt32>(&source[1], source_size_no_header, dest, output_size);
 #endif
         break;
     case 8:
 #if defined(__x86_64__) && defined(__AVX2__)
         decompressDataFor64bits(
-            reinterpret_cast<const UInt64 *>(&source[1 + bytes_to_skip]),
+            reinterpret_cast<const UInt64 *>(&source[1]),
             source_size_no_header / 8,
-            reinterpret_cast<UInt64 *>(&dest[bytes_to_skip]));
+            reinterpret_cast<UInt64 *>(dest));
 #else
-        decompressDataForType<UInt64>(
-            &source[1 + bytes_to_skip],
-            source_size_no_header,
-            &dest[bytes_to_skip],
-            output_size);
+        decompressDataForType<UInt64>(&source[1], source_size_no_header, dest, output_size);
 #endif
         break;
     default:
