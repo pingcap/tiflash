@@ -43,17 +43,28 @@ enum class TaskState
 };
 } // namespace AsyncTaskHelper
 
+struct NoGuardCtxHolder {
+
+};
+
 // Key should support `fmt::formatter`.
-template <typename Key, typename Func, typename R>
+template <typename CtxHolder, typename Key, typename Func, typename R>
 struct AsyncTasks
 {
     // We use a big queue to cache, to reduce add task failures.
-    explicit AsyncTasks(uint64_t pool_size, uint64_t free_pool_size, uint64_t queue_size)
+    // Providing `holder_` to make the holder of `AsyncTasks` lives at least as long as `AsyncTasks`.
+    explicit AsyncTasks(CtxHolder holder_, uint64_t pool_size, uint64_t free_pool_size, uint64_t queue_size)
         : thread_pool(std::make_unique<ThreadPool>(pool_size, free_pool_size, queue_size))
         , log(DB::Logger::get())
+        , holder(holder_)
     {}
 
-    ~AsyncTasks() { LOG_INFO(log, "Pending {} tasks when destructing", count()); }
+    ~AsyncTasks() {
+        LOG_INFO(log, "AsyncTasks: Pending {} tasks when destructing", count());
+        // To avoid the "last owner" problem in worker thread.
+        thread_pool->wait();
+        LOG_INFO(log, "AsyncTasks: Finish finalize threads");
+    }
 
     using TaskState = AsyncTaskHelper::TaskState;
 
@@ -399,5 +410,6 @@ protected:
     std::unique_ptr<ThreadPool> thread_pool;
     mutable std::mutex mtx;
     LoggerPtr log;
+    CtxHolder holder;
 };
 } // namespace DB

@@ -23,13 +23,13 @@ namespace tests
 TEST(AsyncTasksTest, AsyncTasksNormal)
 {
     using namespace std::chrono_literals;
-    using TestAsyncTasks = AsyncTasks<uint64_t, std::function<void()>, void>;
+    using TestAsyncTasks = AsyncTasks<NoGuardCtxHolder, uint64_t, std::function<void()>, void>;
 
     auto log = DB::Logger::get();
     LOG_INFO(log, "Cancel and addTask");
     // Cancel and addTask
     {
-        auto async_tasks = std::make_unique<TestAsyncTasks>(1, 1, 2);
+        auto async_tasks = std::make_unique<TestAsyncTasks>(NoGuardCtxHolder(), 1, 1, 2);
         auto m = std::make_shared<std::mutex>();
         int flag = 0;
         std::unique_lock cl(*m);
@@ -80,7 +80,7 @@ TEST(AsyncTasksTest, AsyncTasksNormal)
     // Lifetime of tasks
     LOG_INFO(log, "Lifetime of tasks");
     {
-        auto async_tasks = std::make_unique<TestAsyncTasks>(1, 1, 1);
+        auto async_tasks = std::make_unique<TestAsyncTasks>(NoGuardCtxHolder(), 1, 1, 1);
         auto sp_after_sched = SyncPointCtl::enableInScope("after_AsyncTasks::addTask_scheduled");
         auto sp_before_quit = SyncPointCtl::enableInScope("before_AsyncTasks::addTask_quit");
         std::thread t1([&]() {
@@ -106,7 +106,7 @@ TEST(AsyncTasksTest, AsyncTasksNormal)
     // Cancel in queue
     LOG_INFO(log, "Cancel in queue");
     {
-        auto async_tasks = std::make_unique<TestAsyncTasks>(1, 1, 2);
+        auto async_tasks = std::make_unique<TestAsyncTasks>(NoGuardCtxHolder(), 1, 1, 2);
         bool finished = false;
         bool canceled = false;
         std::mutex mtx;
@@ -144,7 +144,7 @@ TEST(AsyncTasksTest, AsyncTasksNormal)
     // Block cancel
     LOG_INFO(log, "Block cancel");
     {
-        auto async_tasks = std::make_unique<TestAsyncTasks>(2, 2, 10);
+        auto async_tasks = std::make_unique<TestAsyncTasks>(NoGuardCtxHolder(), 2, 2, 10);
         int total = 9;
         int finished = 0;
         std::vector<char> f(total, false);
@@ -195,7 +195,7 @@ TEST(AsyncTasksTest, AsyncTasksNormal)
     // Cancel tasks in queue
     LOG_INFO(log, "Cancel tasks in queue");
     {
-        auto async_tasks = std::make_unique<TestAsyncTasks>(1, 1, 100);
+        auto async_tasks = std::make_unique<TestAsyncTasks>(NoGuardCtxHolder(), 1, 1, 100);
 
         int total = 7;
         std::atomic_int finished = 0;
@@ -250,8 +250,8 @@ try
 {
     using namespace std::chrono_literals;
 
-    using TestAsyncTasks = AsyncTasks<uint64_t, std::function<int()>, int>;
-    auto async_tasks = std::make_unique<TestAsyncTasks>(1, 1, 2);
+    using TestAsyncTasks = AsyncTasks<NoGuardCtxHolder, uint64_t, std::function<int()>, int>;
+    auto async_tasks = std::make_unique<TestAsyncTasks>(NoGuardCtxHolder(), 1, 1, 2);
 
     int total = 5;
     int max_steps = 10;
