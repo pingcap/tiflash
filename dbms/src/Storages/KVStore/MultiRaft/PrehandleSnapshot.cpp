@@ -493,7 +493,7 @@ void executeParallelTransform(
 {
     CurrentMetrics::add(CurrentMetrics::RaftNumParallelPrehandlingTasks);
     SCOPE_EXIT({ CurrentMetrics::sub(CurrentMetrics::RaftNumParallelPrehandlingTasks); });
-    using SingleSnapshotAsyncTasks = AsyncTasks<NoGuardCtxHolder, uint64_t, std::function<bool()>, bool>;
+    using SingleSnapshotAsyncTasks = AsyncTasks<uint64_t, std::function<bool()>, bool>;
     auto split_key_count = split_keys.size();
     RUNTIME_CHECK_MSG(
         split_key_count >= 1,
@@ -507,7 +507,7 @@ void executeParallelTransform(
         new_region->id());
     Stopwatch watch;
     // Make sure the queue is bigger than `split_key_count`, otherwise `addTask` may fail.
-    auto async_tasks = SingleSnapshotAsyncTasks(NoGuardCtxHolder(), split_key_count, split_key_count, split_key_count + 5);
+    auto async_tasks = SingleSnapshotAsyncTasks(split_key_count, split_key_count, split_key_count + 5);
     sst_stream->resetSoftLimit(
         DM::SSTScanSoftLimit(DM::SSTScanSoftLimit::HEAD_OR_ONLY_SPLIT, std::string(""), std::string(split_keys[0])));
 

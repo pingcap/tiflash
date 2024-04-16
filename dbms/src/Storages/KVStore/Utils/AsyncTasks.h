@@ -43,27 +43,32 @@ enum class TaskState
 };
 } // namespace AsyncTaskHelper
 
-struct NoGuardCtxHolder {
-
-};
-
 // Key should support `fmt::formatter`.
-template <typename CtxHolder, typename Key, typename Func, typename R>
+template <typename Key, typename Func, typename R>
 struct AsyncTasks
 {
     // We use a big queue to cache, to reduce add task failures.
-    // Providing `holder_` to make the holder of `AsyncTasks` lives at least as long as `AsyncTasks`.
-    explicit AsyncTasks(CtxHolder holder_, uint64_t pool_size, uint64_t free_pool_size, uint64_t queue_size)
+    explicit AsyncTasks(uint64_t pool_size, uint64_t free_pool_size, uint64_t queue_size)
         : thread_pool(std::make_unique<ThreadPool>(pool_size, free_pool_size, queue_size))
         , log(DB::Logger::get())
-        , holder(holder_)
     {}
 
-    ~AsyncTasks() {
+    void shutdown()
+    {
         LOG_INFO(log, "AsyncTasks: Pending {} tasks when destructing", count());
         // To avoid the "last owner" problem in worker thread.
         thread_pool->wait();
+        shut.store(true);
         LOG_INFO(log, "AsyncTasks: Finish finalize threads");
+    }
+
+    ~AsyncTasks()
+    {
+        if (!shut.load())
+        {
+            // Chould deadlock if the instance is held and released directly or indirectly by a task in its worker.
+            shutdown();
+        }
     }
 
     using TaskState = AsyncTaskHelper::TaskState;
@@ -252,6 +257,7 @@ struct AsyncTasks
     // 1. There is already a task registered with the same name and not canceled or fetched.
     bool addTaskWithCancel(Key k, Func f, CancelFunc cf)
     {
+        RUNTIME_CHECK(!shut.load());
         std::scoped_lock l(mtx);
         RUNTIME_CHECK(!tasks.contains(k));
         using P = std::packaged_task<R()>;
@@ -410,6 +416,6 @@ protected:
     std::unique_ptr<ThreadPool> thread_pool;
     mutable std::mutex mtx;
     LoggerPtr log;
-    CtxHolder holder;
+    std::atomic_bool shut = false;
 };
 } // namespace DB

@@ -23,7 +23,7 @@
 namespace DB
 {
 class FastAddPeerContext;
-using FAPAsyncTasks = AsyncTasks<std::shared_ptr<FastAddPeerContext>, uint64_t, std::function<FastAddPeerRes()>, FastAddPeerRes>;
+using FAPAsyncTasks = AsyncTasks<uint64_t, std::function<FastAddPeerRes()>, FastAddPeerRes>;
 struct CheckpointInfo;
 using CheckpointInfoPtr = std::shared_ptr<CheckpointInfo>;
 class Region;
@@ -34,8 +34,8 @@ using CheckpointRegionInfoAndData
 class FastAddPeerContext : public std::enable_shared_from_this<FastAddPeerContext>
 {
 public:
-    explicit FastAddPeerContext();
-    void initFAPAsyncTasks(uint64_t thread_count = 0);
+    explicit FastAddPeerContext(uint64_t thread_count = 0);
+    void shutdown();
 
     // Return parsed checkpoint data and its corresponding seq which is newer than `required_seq` if exists, otherwise return pair<required_seq, nullptr>
     std::pair<UInt64, ParsedCheckpointDataHolderPtr> getNewerCheckpointData(

@@ -29,13 +29,8 @@
 
 namespace DB
 {
-FastAddPeerContext::FastAddPeerContext()
+FastAddPeerContext::FastAddPeerContext(uint64_t thread_count)
     : log(Logger::get())
-{
-
-}
-
-void FastAddPeerContext::initFAPAsyncTasks(uint64_t thread_count)
 {
     if (thread_count == 0)
     {
@@ -45,7 +40,12 @@ void FastAddPeerContext::initFAPAsyncTasks(uint64_t thread_count)
         static constexpr int region_per_sec = 5;
         thread_count = ffi_handle_sec * region_per_sec;
     }
-    tasks_trace = std::make_shared<FAPAsyncTasks>(shared_from_this(), thread_count, thread_count, 1000);
+    tasks_trace = std::make_shared<FAPAsyncTasks>(thread_count, thread_count, 1000);
+}
+
+void FastAddPeerContext::shutdown()
+{
+    tasks_trace->shutdown();
 }
 
 ParsedCheckpointDataHolderPtr FastAddPeerContext::CheckpointCacheElement::getParsedCheckpointData(Context & context)
