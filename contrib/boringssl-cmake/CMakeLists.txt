@@ -678,4 +678,3 @@ target_include_directories(crypto SYSTEM PUBLIC "${BORINGSSL_SOURCE_DIR}/include
 target_include_directories(ssl SYSTEM PUBLIC "${BORINGSSL_SOURCE_DIR}/include")
 
 target_compile_options(crypto PRIVATE -Wno-gnu-anonymous-struct)
-target_compile_options(crypto PRIVATE -Wno-unused-but-set-variable)

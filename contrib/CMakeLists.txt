@@ -107,7 +107,6 @@ if (USE_INTERNAL_POCO_LIBRARY)
         # Bug in poco https://github.com/pocoproject/poco/pull/2100 found on macos
         target_include_directories(Crypto PUBLIC ${OPENSSL_INCLUDE_DIR})
     endif ()
-    target_no_warning(Net deprecated-enum-enum-conversion)
 endif ()
 
 if (USE_INTERNAL_PROTOBUF_LIBRARY)
