@@ -3709,7 +3709,7 @@ try
     DMTestEnv::getDefaultColumns(DMTestEnv::PkType::HiddenTiDBRowID, true);
     constexpr size_t pack_block_count = 2;
     constexpr size_t num_rows_each_block = DEFAULT_MERGE_BLOCK_SIZE / pack_block_count;
-    constexpr size_t num_block = 6;
+    constexpr size_t num_block = 10;
     auto write_block = [&](Block block) {
         switch (mode)
         {
@@ -3741,13 +3741,13 @@ try
                 false,
                 1,
                 true,
-                i == 3, // the 4th block mark as delete
+                i == 3 || i == 5, // the 4th and 7th block mark as delete.
                 /*with_nullable_uint64*/ true);
             write_block(block);
         }
     }
 
-    // After compact, there are 3 pack. The [0, 2] is clean, and the [1] contains deletes.
+    // After compact, there are 5 pack. The [0,3,4] is clean, and the [1,2] contains deletes.
     store->flushCache(*db_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
     store->compact(*db_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
     store->mergeDeltaAll(*db_context);
@@ -3775,7 +3775,7 @@ try
             0,
             TRACING_NAME,
             /* keep_order= */ true)[0]; // set keep order to let read_mode = Normal
-        ASSERT_INPUTSTREAM_NROWS(in, num_rows_each_block * num_block - num_rows_each_block);
+        ASSERT_INPUTSTREAM_NROWS(in, num_rows_each_block * num_block - num_rows_each_block * 2);
     }
 }
 CATCH
