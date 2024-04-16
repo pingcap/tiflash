@@ -48,6 +48,8 @@ namespace DB
   */
 
 // clang-format off
+// `CompressionMethodByte` is used to indicate which compression/decompression algorithm to use.
+// The value of `CompressionMethodByte` will be stored with compressed data.
 enum class CompressionMethodByte : UInt8
 {
     NONE            = 0x02,
