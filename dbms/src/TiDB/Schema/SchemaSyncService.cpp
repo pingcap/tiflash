@@ -60,7 +60,7 @@ void SchemaSyncService::addKeyspaceGCTasks()
     UInt64 num_add_tasks = 0;
     // Add new sync schema task for new keyspace.
     std::unique_lock<std::shared_mutex> lock(keyspace_map_mutex);
-    for (auto const iter : keyspaces)
+    for (auto const & iter : keyspaces)
     {
         auto keyspace = iter.first;
         if (keyspace_handle_map.contains(keyspace))

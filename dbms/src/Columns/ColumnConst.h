@@ -85,6 +85,8 @@ public:
         s += position_vec.size();
     }
 
+    void insertMany(const Field &, size_t length) override { s += length; }
+
     void insertDefault() override { ++s; }
 
     void insertManyDefaults(size_t length) override { s += length; }
