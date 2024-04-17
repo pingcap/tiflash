@@ -16,6 +16,8 @@
 
 #include <Common/Logger.h>
 #include <Common/Stopwatch.h>
+#include <Flash/Pipeline/Schedule/Tasks/NotifyFuture.h>
+#include <Flash/Pipeline/Schedule/Tasks/PipeConditionVariable.h>
 #include <Interpreters/Aggregator.h>
 #include <Operators/LocalAggregateRestorer.h>
 #include <Operators/SharedAggregateRestorer.h>
@@ -28,13 +30,13 @@ struct ThreadData
     size_t src_bytes = 0;
 
     Aggregator::AggProcessInfo agg_process_info;
-    ThreadData(Aggregator * aggregator)
+    explicit ThreadData(Aggregator * aggregator)
         : agg_process_info(aggregator)
     {}
 };
 
 /// Aggregated data shared between AggBuild and AggConvergent Pipeline.
-class AggregateContext
+class AggregateContext : public NotifyFuture
 {
 public:
     explicit AggregateContext(const String & req_id)
@@ -70,8 +72,10 @@ public:
 
     Block readForConvergent(size_t index);
 
-    void convertPendingDataToTwoLevel();
-    bool isAllConvertFinished();
+    void registerTask(TaskPtr && task) override;
+
+    /// Return if all convert work has been done.
+    bool convertPendingDataToTwoLevel();
 
     Block getHeader() const;
 
@@ -120,6 +124,9 @@ private:
     const LoggerPtr log;
 
     std::optional<Stopwatch> build_watch;
+
+    std::mutex pipe_lock;
+    PipeConditionVariable pipe_cv;
 };
 
 using AggregateContextPtr = std::shared_ptr<AggregateContext>;

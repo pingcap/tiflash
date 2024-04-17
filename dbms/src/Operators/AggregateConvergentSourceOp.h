@@ -37,8 +37,6 @@ protected:
 
     OperatorStatus readImpl(Block & block) override;
 
-    OperatorStatus awaitImpl() override;
-
 private:
     AggregateContextPtr agg_context;
     uint64_t total_rows{};

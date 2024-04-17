@@ -1087,7 +1087,9 @@ public:
             , group_by_two_level_threshold(group_by_two_level_threshold_)
             , group_by_two_level_threshold_bytes(group_by_two_level_threshold_bytes_)
             , max_bytes_before_external_group_by(max_bytes_before_external_group_by_)
-        {}
+        {
+            group_by_two_level_threshold = 600;
+        }
 
         /// Only parameters that matter during merge.
         Params(
@@ -1125,7 +1127,7 @@ public:
     private:
         /// Note these thresholds should not be used directly, they are only used to
         /// init the threshold in Aggregator
-        const size_t group_by_two_level_threshold;
+        size_t group_by_two_level_threshold;
         const size_t group_by_two_level_threshold_bytes;
         size_t max_bytes_before_external_group_by; /// 0 - do not use external aggregation.
     };

@@ -31,17 +31,14 @@ AggregateConvergentSourceOp::AggregateConvergentSourceOp(
 
 OperatorStatus AggregateConvergentSourceOp::readImpl(Block & block)
 {
-    agg_context->convertPendingDataToTwoLevel();
-    if (!agg_context->isAllConvertFinished())
-        return OperatorStatus::WAITING;
+    if (!agg_context->convertPendingDataToTwoLevel())
+    {
+        setNotifyFuture(agg_context);
+        return OperatorStatus::WAIT_FOR_NOTIFY;
+    }
     block = agg_context->readForConvergent(index);
     total_rows += block.rows();
     return OperatorStatus::HAS_OUTPUT;
-}
-
-OperatorStatus AggregateConvergentSourceOp::awaitImpl()
-{
-    return agg_context->isAllConvertFinished() ? OperatorStatus::HAS_OUTPUT : OperatorStatus::WAITING;
 }
 
 void AggregateConvergentSourceOp::operateSuffixImpl()

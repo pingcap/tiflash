@@ -209,20 +209,35 @@ Block AggregateContext::readForConvergent(size_t index)
     return merging_buckets->getData(index);
 }
 
-void AggregateContext::convertPendingDataToTwoLevel()
+void AggregateContext::registerTask(TaskPtr && task)
 {
-    assert(status.load() == AggStatus::convergent);
-    if unlikely (!merging_buckets)
-        return;
-    merging_buckets->convertPendingDataToTwoLevel();
+    assert(merging_buckets);
+    {
+        std::lock_guard lock(pipe_lock);
+        if (!merging_buckets->isAllConvertFinished())
+        {
+            pipe_cv.registerTask(std::move(task));
+            return;
+        }
+    }
+    PipeConditionVariable::notifyTaskDirectly(std::move(task));
 }
 
-bool AggregateContext::isAllConvertFinished()
+bool AggregateContext::convertPendingDataToTwoLevel()
 {
     assert(status.load() == AggStatus::convergent);
     if unlikely (!merging_buckets)
         return true;
-    return merging_buckets->isAllConvertFinished();
+    merging_buckets->convertPendingDataToTwoLevel();
+
+    {
+        std::lock_guard lock(pipe_lock);
+        if (!merging_buckets->isAllConvertFinished())
+            return false;
+    }
+
+    pipe_cv.notifyAll();
+    return true;
 }
 
 } // namespace DB
