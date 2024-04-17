@@ -537,6 +537,7 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       "Raft read index events counter",                                                                                             \
       Counter,                                                                                                                      \
       F(type_bypass_lock, {{"type", "bypass_lock"}}),                                                                               \
+      F(type_zero_read_tso, {{"type", "zero_read_tso"}}),                                                                           \
       F(type_use_histroy, {{"type", "use_histroy"}}),                                                                               \
       F(type_use_cache, {{"type", "use_cache"}}))                                                                                   \
     M(tiflash_raft_learner_read_failures_count,                                                                                     \
