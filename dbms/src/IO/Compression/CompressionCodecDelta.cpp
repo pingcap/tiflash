@@ -68,33 +68,7 @@ void compressDataForType(const char * source, UInt32 source_size, char * dest)
 }
 
 #if defined(__x86_64__) && defined(__AVX2__)
-void compressDataFor32bits(const UInt32 * __restrict__ source, UInt32 source_size, UInt32 * __restrict__ dest)
-{
-    __m256i prev = _mm256_setzero_si256();
-    size_t i = 0;
-    for (; i < source_size / 8; ++i)
-    {
-        // curr = {a0, a1, a2, a3, a4, a5, a6, a7}
-        auto curr = _mm256_loadu_si256(reinterpret_cast<const __m256i *>(source) + i);
-        // x0 = {prev[7], a0, a1, a2, a3, a4, a5, a6}
-        const __m256i p_curr = {0x0000000000000007, 0x0000000200000001, 0x0000000400000003, 0x0000000600000005};
-        const __m256i p_prev = {0x0000000700000007, 0x0000000700000007, 0x0000000700000007, 0x0000000700000007};
-        auto x0 = _mm256_blend_epi32(
-            _mm256_permutevar8x32_epi32(curr, p_curr), // {a7, a0, a1, a2, a3, a4, a5, a6}
-            _mm256_permutevar8x32_epi32(prev, p_prev), // {prev[7], prev[7], ...}
-            0b00000001);
-        auto delta = _mm256_sub_epi32(curr, x0);
-        _mm256_storeu_si256(reinterpret_cast<__m256i *>(dest) + i, delta);
-        prev = curr;
-    }
-    UInt32 lastprev = _mm256_extract_epi32(prev, 7);
-    for (i = 8 * i; i < source_size; ++i)
-    {
-        UInt32 curr = source[i];
-        dest[i] = curr - lastprev;
-        lastprev = curr;
-    }
-}
+// Note: using SIMD to rewrite compress does not improve performance.
 
 void decompressDataFor32bits(const UInt32 * __restrict__ source, UInt32 source_size, UInt32 * __restrict__ dest)
 {
@@ -113,32 +87,6 @@ void decompressDataFor32bits(const UInt32 * __restrict__ source, UInt32 source_s
     {
         lastprev = lastprev + source[i];
         dest[i] = lastprev;
-    }
-}
-
-void compressDataFor64bits(const UInt64 * __restrict__ source, UInt32 source_size, UInt64 * __restrict__ dest)
-{
-    __m256i prev = _mm256_setzero_si256();
-    size_t i = 0;
-    for (; i < source_size / 4; ++i)
-    {
-        // curr = {a0, a1, a2, a3}
-        auto curr = _mm256_loadu_si256(reinterpret_cast<const __m256i *>(source) + i);
-        // x0 = {prev[3], a0, a1, a2}
-        auto x0 = _mm256_blend_epi32(
-            _mm256_permute4x64_epi64(curr, 0b10010011), // {a3, a0, a1, a2}
-            _mm256_permute4x64_epi64(prev, 0b11111111), // {prev[3], prev[3], prev[3], prev[3]}
-            0b00000011);
-        auto delta = _mm256_sub_epi64(curr, x0);
-        _mm256_storeu_si256(reinterpret_cast<__m256i *>(dest) + i, delta);
-        prev = curr;
-    }
-    UInt64 lastprev = _mm256_extract_epi64(prev, 3);
-    for (i = 4 * i; i < source_size; ++i)
-    {
-        UInt64 curr = source[i];
-        dest[i] = curr - lastprev;
-        lastprev = curr;
     }
 }
 
@@ -220,24 +168,10 @@ UInt32 CompressionCodecDelta::doCompressData(const char * source, UInt32 source_
         compressDataForType<UInt16>(source, source_size, &dest[start_pos]);
         break;
     case 4:
-#if defined(__x86_64__) && defined(__AVX2__)
-        compressDataFor32bits(
-            reinterpret_cast<const UInt32 *>(source),
-            (source_size) / 4,
-            reinterpret_cast<UInt32 *>(&dest[start_pos]));
-#else
         compressDataForType<UInt32>(source, source_size, &dest[start_pos]);
-#endif
         break;
     case 8:
-#if defined(__x86_64__) && defined(__AVX2__)
-        compressDataFor64bits(
-            reinterpret_cast<const UInt64 *>(source),
-            (source_size) / 8,
-            reinterpret_cast<UInt64 *>(&dest[start_pos]));
-#else
         compressDataForType<UInt64>(source, source_size, &dest[start_pos]);
-#endif
         break;
     default:
         throw Exception(ErrorCodes::CANNOT_COMPRESS, "Cannot compress Delta-encoded data. Unsupported bytes size");
@@ -267,7 +201,7 @@ void CompressionCodecDelta::doDecompressData(
     UInt32 output_size = uncompressed_size;
 
     UInt32 source_size_no_header = source_size - 1;
-    switch (bytes_size) // NOLINT(bugprone-switch-missing-default-case)
+    switch (bytes_size)
     {
     case 1:
         decompressDataForType<UInt8>(&source[1], source_size_no_header, dest, output_size);
@@ -300,48 +234,78 @@ void CompressionCodecDelta::doDecompressData(
     }
 }
 
-
-void CompressionCodecDelta::ordinaryCompress(const char * source, UInt32 source_size, char * dest) const
+void CompressionCodecDelta::ordinaryDecompress(const char * source, UInt32 source_size, char * dest, UInt32 dest_size)
 {
-    dest[0] = delta_bytes_size;
-    size_t start_pos = 1;
-    switch (delta_bytes_size)
+    if unlikely (source_size < 2)
+        throw Exception(ErrorCodes::CANNOT_DECOMPRESS, "Cannot decompress delta-encoded data. File has wrong header");
+
+    if (dest_size == 0)
+        return;
+
+    UInt8 bytes_size = source[0];
+    if unlikely (dest_size % bytes_size != 0)
+        throw Exception(
+            ErrorCodes::CANNOT_DECOMPRESS,
+            "uncompressed size {} is not aligned to {}",
+            dest_size,
+            bytes_size);
+
+    UInt32 source_size_no_header = source_size - 1;
+    switch (bytes_size)
     {
     case 1:
-        compressDataForType<UInt8>(source, source_size, &dest[start_pos]);
+        decompressDataForType<UInt8>(&source[1], source_size_no_header, dest, dest_size);
         break;
     case 2:
-        compressDataForType<UInt16>(source, source_size, &dest[start_pos]);
+        decompressDataForType<UInt16>(&source[1], source_size_no_header, dest, dest_size);
         break;
     case 4:
-        compressDataForType<UInt32>(source, source_size, &dest[start_pos]);
+        decompressDataForType<UInt32>(&source[1], source_size_no_header, dest, dest_size);
         break;
     case 8:
-        compressDataForType<UInt64>(source, source_size, &dest[start_pos]);
+        decompressDataForType<UInt64>(&source[1], source_size_no_header, dest, dest_size);
         break;
     default:
-        throw Exception(ErrorCodes::CANNOT_COMPRESS, "Cannot compress Delta-encoded data. Unsupported bytes size");
+        throw Exception(ErrorCodes::CANNOT_DECOMPRESS, "Cannot decompress Delta-encoded data. Unsupported bytes size");
     }
 }
 
-void CompressionCodecDelta::specializedUInt64Compress(const char * source, UInt32 source_size, char * dest) const
+void CompressionCodecDelta::specializedUInt32Decompress(
+    const char * source,
+    UInt32 source_size,
+    char * dest,
+    UInt32 dest_size)
 {
-    dest[0] = delta_bytes_size;
-    size_t start_pos = 1;
-    compressDataFor64bits(
-        reinterpret_cast<const UInt64 *>(source),
-        (source_size) / 8,
-        reinterpret_cast<UInt64 *>(&dest[start_pos]));
+    if unlikely (source_size < 2)
+        throw Exception(ErrorCodes::CANNOT_DECOMPRESS, "Cannot decompress delta-encoded data. File has wrong header");
+
+    if (dest_size == 0)
+        return;
+
+    UInt32 source_size_no_header = source_size - 1;
+    decompressDataFor32bits(
+        reinterpret_cast<const UInt32 *>(&source[1]),
+        source_size_no_header / 4,
+        reinterpret_cast<UInt32 *>(dest));
 }
 
-void CompressionCodecDelta::specializedUInt32Compress(const char * source, UInt32 source_size, char * dest) const
+void CompressionCodecDelta::specializedUInt64Decompress(
+    const char * source,
+    UInt32 source_size,
+    char * dest,
+    UInt32 dest_size)
 {
-    dest[0] = delta_bytes_size;
-    size_t start_pos = 1;
-    compressDataFor32bits(
-        reinterpret_cast<const UInt32 *>(source),
-        (source_size) / 4,
-        reinterpret_cast<UInt32 *>(&dest[start_pos]));
+    if unlikely (source_size < 2)
+        throw Exception(ErrorCodes::CANNOT_DECOMPRESS, "Cannot decompress delta-encoded data. File has wrong header");
+
+    if (dest_size == 0)
+        return;
+
+    UInt32 source_size_no_header = source_size - 1;
+    decompressDataFor64bits(
+        reinterpret_cast<const UInt64 *>(&source[1]),
+        source_size_no_header / 8,
+        reinterpret_cast<UInt64 *>(dest));
 }
 
 } // namespace DB

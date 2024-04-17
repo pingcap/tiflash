@@ -15,11 +15,13 @@ static void codecDeltaOrdinaryBM(benchmark::State & state)
     for (auto _ : state)
     {
         CompressionCodecDelta codec(sizeof(T));
-        std::vector<T> dest(DEFAULT_MERGE_BLOCK_SIZE);
-        codec.ordinaryCompress(
-            reinterpret_cast<const char *>(v.data()),
-            v.size() * sizeof(T),
-            reinterpret_cast<char *>(dest.data()));
+        char dest[sizeof(T) * DEFAULT_MERGE_BLOCK_SIZE + 1];
+        codec.doCompressData(reinterpret_cast<const char *>(v.data()), v.size() * sizeof(T), dest);
+        codec.ordinaryDecompress(
+            dest,
+            sizeof(T) * DEFAULT_MERGE_BLOCK_SIZE + 1,
+            reinterpret_cast<char *>(v.data()),
+            v.size() * sizeof(T));
     }
 }
 
@@ -40,11 +42,13 @@ static void codecDeltaSpecializedUInt64BM(benchmark::State & state)
     for (auto _ : state)
     {
         CompressionCodecDelta codec(sizeof(UInt64));
-        std::vector<UInt64> dest(DEFAULT_MERGE_BLOCK_SIZE);
-        codec.specializedUInt64Compress(
-            reinterpret_cast<const char *>(v.data()),
-            v.size() * sizeof(UInt64),
-            reinterpret_cast<char *>(dest.data()));
+        char dest[sizeof(UInt64) * DEFAULT_MERGE_BLOCK_SIZE + 1];
+        codec.doCompressData(reinterpret_cast<const char *>(v.data()), v.size() * sizeof(UInt64), dest);
+        codec.specializedUInt64Decompress(
+            dest,
+            sizeof(UInt64) * DEFAULT_MERGE_BLOCK_SIZE + 1,
+            reinterpret_cast<char *>(v.data()),
+            v.size() * sizeof(UInt64));
     }
 }
 
@@ -55,11 +59,13 @@ static void codecDeltaSpecializedUInt32BM(benchmark::State & state)
     for (auto _ : state)
     {
         CompressionCodecDelta codec(sizeof(UInt32));
-        std::vector<UInt32> dest(DEFAULT_MERGE_BLOCK_SIZE);
-        codec.specializedUInt32Compress(
-            reinterpret_cast<const char *>(v.data()),
-            v.size() * sizeof(UInt32),
-            reinterpret_cast<char *>(dest.data()));
+        char dest[sizeof(UInt32) * DEFAULT_MERGE_BLOCK_SIZE + 1];
+        codec.doCompressData(reinterpret_cast<const char *>(v.data()), v.size() * sizeof(UInt32), dest);
+        codec.specializedUInt32Decompress(
+            dest,
+            sizeof(UInt32) * DEFAULT_MERGE_BLOCK_SIZE + 1,
+            reinterpret_cast<char *>(v.data()),
+            v.size() * sizeof(UInt32));
     }
 }
 
