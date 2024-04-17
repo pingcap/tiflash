@@ -32,7 +32,6 @@
 #include <chrono>
 #include <cmath>
 #include <filesystem>
-#include <fstream>
 
 namespace ProfileEvents
 {
@@ -55,6 +54,8 @@ extern const int FILE_DOESNT_EXIST;
 namespace DB
 {
 using FileType = FileSegment::FileType;
+
+std::unique_ptr<FileCache> FileCache::global_file_cache_instance;
 
 FileCache::FileCache(PathCapacityMetricsPtr capacity_metrics_, const StorageRemoteCacheConfig & config_)
     : capacity_metrics(capacity_metrics_)
@@ -166,7 +167,7 @@ FileSegmentPtr FileCache::get(const S3::S3FilenameView & s3_fname, const std::op
 }
 
 // Remove `local_fname` from disk and remove parent directory if parent directory is empty.
-void FileCache::removeDiskFile(const String & local_fname) const
+void FileCache::removeDiskFile(const String & local_fname, bool update_fsize_metrics) const
 {
     if (!std::filesystem::exists(local_fname))
     {
@@ -181,9 +182,7 @@ void FileCache::removeDiskFile(const String & local_fname) const
             if (s != cache_dir && (s == local_fname || std::filesystem::is_empty(p)))
             {
                 std::filesystem::remove(p); // If p is a directory, remove success only when it is empty.
-                // Temporary files are not reported size to metrics until they are renamed.
-                // So we don't need to free its size here.
-                if (s == local_fname && !isTemporaryFilename(local_fname))
+                if (s == local_fname && update_fsize_metrics)
                 {
                     capacity_metrics->freeUsedSize(local_fname, fsize);
                 }
@@ -231,9 +230,10 @@ std::pair<Int64, std::list<String>::iterator> FileCache::removeImpl(
         return {-1, {}};
     }
     const auto & local_fname = f->getLocalFileName();
-    removeDiskFile(local_fname);
+    removeDiskFile(local_fname, /*update_fsize_metrics*/ true);
     auto temp_fname = toTemporaryFilename(local_fname);
-    removeDiskFile(temp_fname);
+    // Not update fsize metrics for temporary files because they are not add to fsize metrics before.
+    removeDiskFile(temp_fname, /*update_fsize_metrics*/ false);
 
     auto release_size = f->getSize();
     GET_METRIC(tiflash_storage_remote_cache, type_dtfile_evict).Increment();
@@ -651,7 +651,8 @@ void FileCache::restoreDMFile(const std::filesystem::directory_entry & dmfile_en
         auto fname = file_entry.path().string();
         if (unlikely(isTemporaryFilename(fname)))
         {
-            removeDiskFile(fname);
+            // Not update fsize metrics for temporary files because they are not add to fsize metrics before.
+            removeDiskFile(fname, /*update_fsize_metrics*/ false);
         }
         else
         {
@@ -669,7 +670,8 @@ void FileCache::restoreDMFile(const std::filesystem::directory_entry & dmfile_en
             }
             else
             {
-                removeDiskFile(fname);
+                // Not update fsize metrics because this file is not added to metrics yet.
+                removeDiskFile(fname, /*update_fsize_metrics*/ false);
             }
         }
     }

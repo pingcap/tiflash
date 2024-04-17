@@ -175,7 +175,9 @@ try
         EncryptionMethod::Aes128Ctr,
         EncryptionMethod::Aes192Ctr,
         EncryptionMethod::Aes256Ctr,
+#if USE_GM_SSL
         EncryptionMethod::SM4Ctr,
+#endif
     };
     for (size_t i = 0; i < 10; ++i)
     {
