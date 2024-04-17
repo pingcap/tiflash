@@ -297,7 +297,7 @@ RemotePb::ColumnFileRemote Serializer::serializeCFInMemory(const ColumnFileInMem
                 0,
                 block_rows,
                 CompressionMethod::LZ4,
-                CompressionSettings::getDefaultLevel(CompressionMethod::LZ4));
+                CompressionSetting::getDefaultLevel(CompressionMethod::LZ4));
         }
         remote_in_memory->add_block_columns(std::move(buf));
     }

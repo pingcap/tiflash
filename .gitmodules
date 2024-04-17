@@ -142,4 +142,4 @@
 	url = https://github.com/intel/qpl.git
 [submodule "contrib/simdjson"]
 	path = contrib/simdjson
-	url = https://github.com/simdjson/simdjson
+	url = https://github.com/simdjson/simdjson.git
