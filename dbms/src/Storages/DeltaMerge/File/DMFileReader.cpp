@@ -18,9 +18,12 @@
 #include <Common/Stopwatch.h>
 #include <Common/escapeForFileName.h>
 #include <DataTypes/IDataType.h>
+#include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/File/DMFileReader.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/DeltaMerge/convertColumnTypeHelpers.h>
+#include <Storages/KVStore/Types.h>
+#include <common/logger_useful.h>
 #include <fmt/format.h>
 
 
@@ -436,6 +439,9 @@ ColumnPtr DMFileReader::cleanRead(
     }
 }
 
+/**
+  * Read the hidden column (handle, tag, version).
+  */
 ColumnPtr DMFileReader::readExtraColumn(
     const ColumnDefine & cd,
     size_t start_pack_id,
@@ -443,6 +449,8 @@ ColumnPtr DMFileReader::readExtraColumn(
     size_t read_rows,
     const std::vector<size_t> & clean_read_packs)
 {
+    assert(cd.id == EXTRA_HANDLE_COLUMN_ID || cd.id == TAG_COLUMN_ID || cd.id == VERSION_COLUMN_ID);
+
     const auto & pack_stats = dmfile->getPackStats();
     auto read_strategy = ColumnCache::getReadStrategy(start_pack_id, pack_count, clean_read_packs);
     if (read_strategy.size() != 1 && cd.id == EXTRA_HANDLE_COLUMN_ID)
@@ -462,32 +470,36 @@ ColumnPtr DMFileReader::readExtraColumn(
         {
             rows_count += pack_stats[cursor].rows;
         }
-        ColumnPtr col;
+        // TODO: this create a temp `src_col` then copy the data into `column`.
+        //       we can try to elimiate the copying
+        ColumnPtr src_col;
         switch (strategy)
         {
         case ColumnCache::Strategy::Memory:
         {
-            col = cleanRead(cd, rows_count, range, pack_stats);
+            src_col = cleanRead(cd, rows_count, range, pack_stats);
             break;
         }
         case ColumnCache::Strategy::Disk:
         {
-            col = readColumn(cd, range.first, range.second - range.first, rows_count);
+            src_col = readColumn(cd, range.first, range.second - range.first, rows_count);
             break;
         }
         default:
             throw Exception("Unknown strategy", ErrorCodes::LOGICAL_ERROR);
         }
         if (read_strategy.size() == 1)
-            return col;
-        if (col->isColumnConst())
+            return src_col;
+        if (src_col->isColumnConst())
         {
-            auto v = (*col)[0];
-            column->insertMany(v, col->size());
+            // The src_col get from `cleanRead` may be a ColumnConst, fill the `column`
+            // with the value of ColumnConst
+            auto v = (*src_col)[0];
+            column->insertMany(v, src_col->size());
         }
         else
         {
-            column->insertRangeFrom(*col, 0, col->size());
+            column->insertRangeFrom(*src_col, 0, src_col->size());
         }
     }
     return column;
