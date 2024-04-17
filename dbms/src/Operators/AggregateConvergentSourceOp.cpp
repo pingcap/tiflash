@@ -31,7 +31,7 @@ AggregateConvergentSourceOp::AggregateConvergentSourceOp(
 
 OperatorStatus AggregateConvergentSourceOp::readImpl(Block & block)
 {
-    if (!agg_context->convertPendingDataToTwoLevel())
+    if unlikely (!agg_context->convertPendingDataToTwoLevel())
     {
         setNotifyFuture(agg_context);
         return OperatorStatus::WAIT_FOR_NOTIFY;

@@ -211,6 +211,7 @@ Block AggregateContext::readForConvergent(size_t index)
 
 void AggregateContext::registerTask(TaskPtr && task)
 {
+    assert(status.load() == AggStatus::convergent);
     assert(merging_buckets);
     {
         /// `isAllConvertFinished` do not need lock, this lock is used to avoid lost notification problem.
@@ -229,6 +230,10 @@ bool AggregateContext::convertPendingDataToTwoLevel()
     assert(status.load() == AggStatus::convergent);
     if unlikely (!merging_buckets)
         return true;
+
+    if likely (merging_buckets->isAllConvertFinished())
+        return true;
+
     merging_buckets->convertPendingDataToTwoLevel();
 
     {
