@@ -26,8 +26,6 @@ public:
 
     UInt8 getMethodByte() const override;
 
-    static void specializedUInt32Decompress(const char * source, UInt32 source_size, char * dest, UInt32 dest_size);
-    static void specializedUInt64Decompress(const char * source, UInt32 source_size, char * dest, UInt32 dest_size);
     static void ordinaryDecompress(const char * source, UInt32 source_size, char * dest, UInt32 dest_size);
 
 #ifndef DBMS_PUBLIC_GTEST

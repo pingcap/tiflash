@@ -44,7 +44,7 @@ static void codecDeltaSpecializedUInt64BM(benchmark::State & state)
         CompressionCodecDelta codec(sizeof(UInt64));
         char dest[sizeof(UInt64) * DEFAULT_MERGE_BLOCK_SIZE + 1];
         codec.doCompressData(reinterpret_cast<const char *>(v.data()), v.size() * sizeof(UInt64), dest);
-        codec.specializedUInt64Decompress(
+        codec.doDecompressData(
             dest,
             sizeof(UInt64) * DEFAULT_MERGE_BLOCK_SIZE + 1,
             reinterpret_cast<char *>(v.data()),
@@ -61,7 +61,7 @@ static void codecDeltaSpecializedUInt32BM(benchmark::State & state)
         CompressionCodecDelta codec(sizeof(UInt32));
         char dest[sizeof(UInt32) * DEFAULT_MERGE_BLOCK_SIZE + 1];
         codec.doCompressData(reinterpret_cast<const char *>(v.data()), v.size() * sizeof(UInt32), dest);
-        codec.specializedUInt32Decompress(
+        codec.doDecompressData(
             dest,
             sizeof(UInt32) * DEFAULT_MERGE_BLOCK_SIZE + 1,
             reinterpret_cast<char *>(v.data()),

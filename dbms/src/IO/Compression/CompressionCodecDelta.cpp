@@ -43,9 +43,8 @@ UInt8 CompressionCodecDelta::getMethodByte() const
 
 namespace
 {
-
 template <typename T>
-void compressDataForType(const char * source, UInt32 source_size, char * dest)
+void compressData(const char * source, UInt32 source_size, char * dest)
 {
     if (source_size % sizeof(T) != 0)
         throw Exception(
@@ -67,11 +66,50 @@ void compressDataForType(const char * source, UInt32 source_size, char * dest)
     }
 }
 
+template <typename T>
+void ordinaryDecompressData(const char * source, UInt32 source_size, char * dest, UInt32 output_size)
+{
+    if (source_size % sizeof(T) != 0)
+        throw Exception(
+            ErrorCodes::CANNOT_DECOMPRESS,
+            "Cannot decompress Delta-encoded data, data size {} is not aligned to {}",
+            source_size,
+            sizeof(T));
+
+    const char * const output_end = dest + output_size;
+    T accumulator{};
+    const char * const source_end = source + source_size;
+    while (source < source_end)
+    {
+        accumulator += unalignedLoad<T>(source);
+        if unlikely (dest + sizeof(accumulator) > output_end)
+            throw Exception(ErrorCodes::CANNOT_DECOMPRESS, "Cannot decompress delta-encoded data");
+        unalignedStore<T>(dest, accumulator);
+
+        source += sizeof(T);
+        dest += sizeof(T);
+    }
+}
+
+template <typename T>
+void decompressData(const char * source, UInt32 source_size, char * dest, UInt32 output_size)
+{
+    ordinaryDecompressData<T>(source, source_size, dest, output_size);
+}
+
 #if defined(__x86_64__) && defined(__AVX2__)
 // Note: using SIMD to rewrite compress does not improve performance.
 
-void decompressDataFor32bits(const UInt32 * __restrict__ source, UInt32 source_size, UInt32 * __restrict__ dest)
+template <>
+void decompressData<UInt32>(
+    const char * raw_source,
+    UInt32 raw_source_size,
+    char * raw_dest,
+    UInt32 /*raw_output_size*/)
 {
+    const auto * source = reinterpret_cast<const UInt32 *>(raw_source);
+    auto source_size = raw_source_size / sizeof(UInt32);
+    auto * dest = reinterpret_cast<UInt32 *>(raw_dest);
     __m128i prev = _mm_setzero_si128();
     size_t i = 0;
     for (; i < source_size / 4; i++)
@@ -90,8 +128,16 @@ void decompressDataFor32bits(const UInt32 * __restrict__ source, UInt32 source_s
     }
 }
 
-void decompressDataFor64bits(const UInt64 * __restrict__ source, UInt32 source_size, UInt64 * __restrict__ dest)
+template <>
+void decompressData<UInt64>(
+    const char * raw_source,
+    UInt32 raw_source_size,
+    char * raw_dest,
+    UInt32 /*raw_output_size*/)
 {
+    const auto * source = reinterpret_cast<const UInt64 *>(raw_source);
+    auto source_size = raw_source_size / sizeof(UInt64);
+    auto * dest = reinterpret_cast<UInt64 *>(raw_dest);
     // AVX2 does not support shffule across 128-bit lanes, so we need to use permute.
     __m256i prev = _mm256_setzero_si256();
     __m256i zero = _mm256_setzero_si256();
@@ -119,33 +165,8 @@ void decompressDataFor64bits(const UInt64 * __restrict__ source, UInt32 source_s
         dest[i] = lastprev;
     }
 }
+
 #endif
-
-template <typename T>
-void decompressDataForType(const char * source, UInt32 source_size, char * dest, UInt32 output_size)
-{
-    const char * const output_end = dest + output_size;
-
-    if (source_size % sizeof(T) != 0)
-        throw Exception(
-            ErrorCodes::CANNOT_DECOMPRESS,
-            "Cannot decompress Delta-encoded data, data size {} is not aligned to {}",
-            source_size,
-            sizeof(T));
-
-    T accumulator{};
-    const char * const source_end = source + source_size;
-    while (source < source_end)
-    {
-        accumulator += unalignedLoad<T>(source);
-        if unlikely (dest + sizeof(accumulator) > output_end)
-            throw Exception(ErrorCodes::CANNOT_DECOMPRESS, "Cannot decompress delta-encoded data");
-        unalignedStore<T>(dest, accumulator);
-
-        source += sizeof(T);
-        dest += sizeof(T);
-    }
-}
 
 } // namespace
 
@@ -162,16 +183,16 @@ UInt32 CompressionCodecDelta::doCompressData(const char * source, UInt32 source_
     switch (delta_bytes_size)
     {
     case 1:
-        compressDataForType<UInt8>(source, source_size, &dest[start_pos]);
+        compressData<UInt8>(source, source_size, &dest[start_pos]);
         break;
     case 2:
-        compressDataForType<UInt16>(source, source_size, &dest[start_pos]);
+        compressData<UInt16>(source, source_size, &dest[start_pos]);
         break;
     case 4:
-        compressDataForType<UInt32>(source, source_size, &dest[start_pos]);
+        compressData<UInt32>(source, source_size, &dest[start_pos]);
         break;
     case 8:
-        compressDataForType<UInt64>(source, source_size, &dest[start_pos]);
+        compressData<UInt64>(source, source_size, &dest[start_pos]);
         break;
     default:
         throw Exception(ErrorCodes::CANNOT_COMPRESS, "Cannot compress Delta-encoded data. Unsupported bytes size");
@@ -204,30 +225,16 @@ void CompressionCodecDelta::doDecompressData(
     switch (bytes_size)
     {
     case 1:
-        decompressDataForType<UInt8>(&source[1], source_size_no_header, dest, output_size);
+        decompressData<UInt8>(&source[1], source_size_no_header, dest, output_size);
         break;
     case 2:
-        decompressDataForType<UInt16>(&source[1], source_size_no_header, dest, output_size);
+        decompressData<UInt16>(&source[1], source_size_no_header, dest, output_size);
         break;
     case 4:
-#if defined(__x86_64__) && defined(__AVX2__)
-        decompressDataFor32bits(
-            reinterpret_cast<const UInt32 *>(&source[1]),
-            source_size_no_header / 4,
-            reinterpret_cast<UInt32 *>(dest));
-#else
-        decompressDataForType<UInt32>(&source[1], source_size_no_header, dest, output_size);
-#endif
+        decompressData<UInt32>(&source[1], source_size_no_header, dest, output_size);
         break;
     case 8:
-#if defined(__x86_64__) && defined(__AVX2__)
-        decompressDataFor64bits(
-            reinterpret_cast<const UInt64 *>(&source[1]),
-            source_size_no_header / 8,
-            reinterpret_cast<UInt64 *>(dest));
-#else
-        decompressDataForType<UInt64>(&source[1], source_size_no_header, dest, output_size);
-#endif
+        decompressData<UInt64>(&source[1], source_size_no_header, dest, output_size);
         break;
     default:
         throw Exception(ErrorCodes::CANNOT_DECOMPRESS, "Cannot decompress Delta-encoded data. Unsupported bytes size");
@@ -254,58 +261,20 @@ void CompressionCodecDelta::ordinaryDecompress(const char * source, UInt32 sourc
     switch (bytes_size)
     {
     case 1:
-        decompressDataForType<UInt8>(&source[1], source_size_no_header, dest, dest_size);
+        ordinaryDecompressData<UInt8>(&source[1], source_size_no_header, dest, dest_size);
         break;
     case 2:
-        decompressDataForType<UInt16>(&source[1], source_size_no_header, dest, dest_size);
+        ordinaryDecompressData<UInt16>(&source[1], source_size_no_header, dest, dest_size);
         break;
     case 4:
-        decompressDataForType<UInt32>(&source[1], source_size_no_header, dest, dest_size);
+        ordinaryDecompressData<UInt32>(&source[1], source_size_no_header, dest, dest_size);
         break;
     case 8:
-        decompressDataForType<UInt64>(&source[1], source_size_no_header, dest, dest_size);
+        ordinaryDecompressData<UInt64>(&source[1], source_size_no_header, dest, dest_size);
         break;
     default:
         throw Exception(ErrorCodes::CANNOT_DECOMPRESS, "Cannot decompress Delta-encoded data. Unsupported bytes size");
     }
-}
-
-void CompressionCodecDelta::specializedUInt32Decompress(
-    const char * source,
-    UInt32 source_size,
-    char * dest,
-    UInt32 dest_size)
-{
-    if unlikely (source_size < 2)
-        throw Exception(ErrorCodes::CANNOT_DECOMPRESS, "Cannot decompress delta-encoded data. File has wrong header");
-
-    if (dest_size == 0)
-        return;
-
-    UInt32 source_size_no_header = source_size - 1;
-    decompressDataFor32bits(
-        reinterpret_cast<const UInt32 *>(&source[1]),
-        source_size_no_header / 4,
-        reinterpret_cast<UInt32 *>(dest));
-}
-
-void CompressionCodecDelta::specializedUInt64Decompress(
-    const char * source,
-    UInt32 source_size,
-    char * dest,
-    UInt32 dest_size)
-{
-    if unlikely (source_size < 2)
-        throw Exception(ErrorCodes::CANNOT_DECOMPRESS, "Cannot decompress delta-encoded data. File has wrong header");
-
-    if (dest_size == 0)
-        return;
-
-    UInt32 source_size_no_header = source_size - 1;
-    decompressDataFor64bits(
-        reinterpret_cast<const UInt64 *>(&source[1]),
-        source_size_no_header / 8,
-        reinterpret_cast<UInt64 *>(dest));
 }
 
 } // namespace DB
