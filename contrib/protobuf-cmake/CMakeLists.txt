@@ -211,6 +211,7 @@ set(libprotoc_files
 
 add_library(libprotoc ${libprotoc_files})
 target_link_libraries(libprotoc libprotobuf)
+target_compile_options(libprotoc PRIVATE "-Wno-deprecated-pragma")
 add_library(protobuf::libprotoc ALIAS libprotoc)
 
 set(protoc_files ${protobuf_source_dir}/src/google/protobuf/compiler/main.cc)
