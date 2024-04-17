@@ -26,10 +26,10 @@ static void codecDeltaOrdinaryBM(benchmark::State & state)
 {
     std::vector<T> v(DEFAULT_MERGE_BLOCK_SIZE);
     std::iota(v.begin(), v.end(), 0);
+    CompressionCodecDelta codec(sizeof(T));
+    char dest[sizeof(T) * DEFAULT_MERGE_BLOCK_SIZE + 1];
     for (auto _ : state)
     {
-        CompressionCodecDelta codec(sizeof(T));
-        char dest[sizeof(T) * DEFAULT_MERGE_BLOCK_SIZE + 1];
         codec.doCompressData(reinterpret_cast<const char *>(v.data()), v.size() * sizeof(T), dest);
         codec.ordinaryDecompress(
             dest,
@@ -53,10 +53,10 @@ static void codecDeltaSpecializedUInt64BM(benchmark::State & state)
 {
     std::vector<UInt64> v(DEFAULT_MERGE_BLOCK_SIZE);
     std::iota(v.begin(), v.end(), 0);
+    CompressionCodecDelta codec(sizeof(UInt64));
+    char dest[sizeof(UInt64) * DEFAULT_MERGE_BLOCK_SIZE + 1];
     for (auto _ : state)
     {
-        CompressionCodecDelta codec(sizeof(UInt64));
-        char dest[sizeof(UInt64) * DEFAULT_MERGE_BLOCK_SIZE + 1];
         codec.doCompressData(reinterpret_cast<const char *>(v.data()), v.size() * sizeof(UInt64), dest);
         codec.doDecompressData(
             dest,
@@ -70,10 +70,10 @@ static void codecDeltaSpecializedUInt32BM(benchmark::State & state)
 {
     std::vector<UInt32> v(DEFAULT_MERGE_BLOCK_SIZE);
     std::iota(v.begin(), v.end(), 0);
+    CompressionCodecDelta codec(sizeof(UInt32));
+    char dest[sizeof(UInt32) * DEFAULT_MERGE_BLOCK_SIZE + 1];
     for (auto _ : state)
     {
-        CompressionCodecDelta codec(sizeof(UInt32));
-        char dest[sizeof(UInt32) * DEFAULT_MERGE_BLOCK_SIZE + 1];
         codec.doCompressData(reinterpret_cast<const char *>(v.data()), v.size() * sizeof(UInt32), dest);
         codec.doDecompressData(
             dest,
