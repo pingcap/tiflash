@@ -66,7 +66,8 @@ struct AsyncTasks
     {
         if (!shut.load())
         {
-            // Chould deadlock if the instance is held and released directly or indirectly by a task in its worker.
+            LOG_INFO(log, "AsyncTasks: Destruct without shutdown");
+            // Potential deadlock if the instance is held and released directly or indirectly by a task in its worker.
             shutdown();
         }
     }

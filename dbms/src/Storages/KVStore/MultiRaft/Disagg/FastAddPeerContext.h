@@ -31,7 +31,7 @@ using RegionPtr = std::shared_ptr<Region>;
 using CheckpointRegionInfoAndData
     = std::tuple<CheckpointInfoPtr, RegionPtr, raft_serverpb::RaftApplyState, raft_serverpb::RegionLocalState>;
 
-class FastAddPeerContext : public std::enable_shared_from_this<FastAddPeerContext>
+class FastAddPeerContext
 {
 public:
     explicit FastAddPeerContext(uint64_t thread_count = 0);
