@@ -117,7 +117,8 @@ std::vector<kvrpcpb::ReadIndexRequest> LearnerReadWorker::buildBatchReadIndexReq
     // If using `std::numeric_limits<uint64_t>::max()`, set `start-ts` 0 to get the latest index but let read-index-worker do not record as history.
     auto read_index_tso
         = mvcc_query_info.read_tso == std::numeric_limits<uint64_t>::max() ? 0 : mvcc_query_info.read_tso;
-    if (read_index_tso == 0) {
+    if (read_index_tso == 0)
+    {
         GET_METRIC(tiflash_raft_read_index_events_count, type_zero_read_tso).Increment();
     }
     for (const auto & region_to_query : regions_info)
