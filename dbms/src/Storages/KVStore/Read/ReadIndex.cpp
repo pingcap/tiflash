@@ -368,6 +368,7 @@ void KVStore::stopReadIndexWorkers() const
 
 void KVStore::releaseReadIndexWorkers()
 {
+    LOG_INFO(log, "KVStore shutdown, deleting read index worker");
     if (read_index_worker_manager)
     {
         delete read_index_worker_manager;
