@@ -408,7 +408,8 @@ bool SchemaSyncService::gcImpl(Timestamp gc_safepoint, KeyspaceID keyspace_id, b
         }
     }
 
-    // TODO: Optimize it after `BackgroundProcessingPool` can 
+    // TODO: Optimize it after `BackgroundProcessingPool` can the task return how many seconds to sleep
+    //       before next round.
     if (succeeded)
     {
         updateLastGcSafepoint(keyspace_id, gc_safepoint);
