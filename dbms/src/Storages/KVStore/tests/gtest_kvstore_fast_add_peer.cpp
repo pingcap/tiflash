@@ -124,7 +124,7 @@ public:
     {
         auto & global_context = TiFlashTestEnv::getGlobalContext();
         KVStoreTestBase::TearDown();
-        global_context.getSharedContextDisagg()->fap_context.reset();
+        global_context.getSharedContextDisagg()->fap_context->shutdown();
         if (!already_initialize_data_store)
         {
             global_context.getSharedContextDisagg()->remote_data_store = nullptr;

@@ -43,6 +43,11 @@ FastAddPeerContext::FastAddPeerContext(uint64_t thread_count)
     tasks_trace = std::make_shared<FAPAsyncTasks>(thread_count, thread_count, 1000);
 }
 
+void FastAddPeerContext::shutdown() const
+{
+    tasks_trace->shutdown();
+}
+
 ParsedCheckpointDataHolderPtr FastAddPeerContext::CheckpointCacheElement::getParsedCheckpointData(Context & context)
 {
     std::scoped_lock<std::mutex> lock(mu);

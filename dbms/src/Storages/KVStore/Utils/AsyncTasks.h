@@ -53,7 +53,24 @@ struct AsyncTasks
         , log(DB::Logger::get())
     {}
 
-    ~AsyncTasks() { LOG_INFO(log, "Pending {} tasks when destructing", count()); }
+    void shutdown()
+    {
+        LOG_INFO(log, "Pending {} tasks when destructing", count());
+        // To avoid the "last owner" problem in worker thread.
+        thread_pool->wait();
+        shut.store(true);
+        LOG_INFO(log, "Finish finalize thread pool");
+    }
+
+    ~AsyncTasks()
+    {
+        if (!shut.load())
+        {
+            LOG_INFO(log, "Destruct without shutdown");
+            // Potential deadlock if the instance is held and released directly or indirectly by a task in its worker.
+            shutdown();
+        }
+    }
 
     using TaskState = AsyncTaskHelper::TaskState;
 
@@ -241,6 +258,8 @@ struct AsyncTasks
     // 1. There is already a task registered with the same name and not canceled or fetched.
     bool addTaskWithCancel(Key k, Func f, CancelFunc cf)
     {
+        if (shut.load())
+            return false;
         std::scoped_lock l(mtx);
         RUNTIME_CHECK(!tasks.contains(k));
         using P = std::packaged_task<R()>;
@@ -396,5 +415,6 @@ protected:
     std::unique_ptr<ThreadPool> thread_pool;
     mutable std::mutex mtx;
     LoggerPtr log;
+    std::atomic_bool shut = false;
 };
 } // namespace DB

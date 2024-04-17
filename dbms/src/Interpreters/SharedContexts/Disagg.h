@@ -79,6 +79,8 @@ struct SharedContextDisagg : private boost::noncopyable
         : global_context(global_context_)
     {}
 
+    ~SharedContextDisagg();
+
     void initReadNodePageCache(const PathPool & path_pool, const String & cache_dir, size_t cache_capacity);
 
     /// Note that the unit of max_size is quantity, not byte size. It controls how
