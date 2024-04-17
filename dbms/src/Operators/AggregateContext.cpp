@@ -213,6 +213,7 @@ void AggregateContext::registerTask(TaskPtr && task)
 {
     assert(merging_buckets);
     {
+        /// `isAllConvertFinished` do not need lock, this lock is used to avoid lost notification problem.
         std::lock_guard lock(pipe_lock);
         if (!merging_buckets->isAllConvertFinished())
         {
@@ -231,6 +232,7 @@ bool AggregateContext::convertPendingDataToTwoLevel()
     merging_buckets->convertPendingDataToTwoLevel();
 
     {
+        /// `isAllConvertFinished` do not need lock, this lock is used to avoid lost notification problem.
         std::lock_guard lock(pipe_lock);
         if (!merging_buckets->isAllConvertFinished())
             return false;

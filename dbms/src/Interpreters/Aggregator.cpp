@@ -43,6 +43,7 @@ extern const char random_aggregate_create_state_failpoint[];
 extern const char random_aggregate_merge_failpoint[];
 extern const char force_agg_on_partial_block[];
 extern const char random_fail_in_resize_callback[];
+extern const char force_agg_two_level_hash_table_before_merge[];
 } // namespace FailPoints
 
 #define AggregationMethodName(NAME) AggregatedDataVariants::AggregationMethod_##NAME
@@ -1951,6 +1952,11 @@ MergingBucketsPtr Aggregator::mergeAndConvertToBlocks(
         }
     }
 
+    fiu_do_on(FailPoints::force_agg_two_level_hash_table_before_merge, {
+        if (non_empty_data.size() > 1)
+            has_at_least_one_two_level = true;
+    });
+
     ManyAggregatedDataVariants pending_convert_data;
     if (has_at_least_one_two_level)
         for (auto & variant : non_empty_data)
@@ -2488,6 +2494,7 @@ void MergingBuckets::convertPendingDataToTwoLevel()
         if (convert_data == nullptr)
             break;
         (*convert_data)->convertToTwoLevel();
+
         finished_convert_count.fetch_add(1, std::memory_order_relaxed);
     }
 }
