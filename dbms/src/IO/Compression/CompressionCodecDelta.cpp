@@ -102,9 +102,9 @@ void decompressData(const char * source, UInt32 source_size, char * dest, UInt32
 
 template <>
 void decompressData<UInt32>(
-    const char * raw_source,
+    const char * __restrict__ raw_source,
     UInt32 raw_source_size,
-    char * raw_dest,
+    char * __restrict__ raw_dest,
     UInt32 /*raw_output_size*/)
 {
     const auto * source = reinterpret_cast<const UInt32 *>(raw_source);
@@ -130,9 +130,9 @@ void decompressData<UInt32>(
 
 template <>
 void decompressData<UInt64>(
-    const char * raw_source,
+    const char * __restrict__ raw_source,
     UInt32 raw_source_size,
-    char * raw_dest,
+    char * __restrict__ raw_dest,
     UInt32 /*raw_output_size*/)
 {
     const auto * source = reinterpret_cast<const UInt64 *>(raw_source);
