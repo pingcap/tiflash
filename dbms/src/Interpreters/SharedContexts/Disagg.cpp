@@ -108,7 +108,6 @@ void SharedContextDisagg::initFastAddPeerContext(UInt64 fap_concur)
 
 SharedContextDisagg::~SharedContextDisagg()
 {
-    LOG_INFO(Logger::get(), "Shutdown SharedContextDisagg");
     if (fap_context)
     {
         fap_context->shutdown();
