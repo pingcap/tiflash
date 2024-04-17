@@ -55,18 +55,18 @@ struct AsyncTasks
 
     void shutdown()
     {
-        LOG_INFO(log, "AsyncTasks: Pending {} tasks when destructing", count());
+        LOG_INFO(log, "Pending {} tasks when destructing", count());
         // To avoid the "last owner" problem in worker thread.
         thread_pool->wait();
         shut.store(true);
-        LOG_INFO(log, "AsyncTasks: Finish finalize threads");
+        LOG_INFO(log, "Finish finalize thread pool");
     }
 
     ~AsyncTasks()
     {
         if (!shut.load())
         {
-            LOG_INFO(log, "AsyncTasks: Destruct without shutdown");
+            LOG_INFO(log, "Destruct without shutdown");
             // Potential deadlock if the instance is held and released directly or indirectly by a task in its worker.
             shutdown();
         }
@@ -258,7 +258,8 @@ struct AsyncTasks
     // 1. There is already a task registered with the same name and not canceled or fetched.
     bool addTaskWithCancel(Key k, Func f, CancelFunc cf)
     {
-        RUNTIME_CHECK(!shut.load());
+        if (shut.load())
+            return false;
         std::scoped_lock l(mtx);
         RUNTIME_CHECK(!tasks.contains(k));
         using P = std::packaged_task<R()>;
