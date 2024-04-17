@@ -1951,20 +1951,16 @@ MergingBucketsPtr Aggregator::mergeAndConvertToBlocks(
         }
     }
 
+    ManyAggregatedDataVariants pending_convert_data;
     if (has_at_least_one_two_level)
         for (auto & variant : non_empty_data)
             if (!variant->isTwoLevel())
-                variant->convertToTwoLevel();
+                pending_convert_data.push_back(variant);
 
     AggregatedDataVariantsPtr & first = non_empty_data[0];
 
     for (size_t i = 1, size = non_empty_data.size(); i < size; ++i)
     {
-        if (unlikely(first->type != non_empty_data[i]->type))
-            throw Exception(
-                "Cannot merge different aggregated data variants.",
-                ErrorCodes::CANNOT_MERGE_DIFFERENT_AGGREGATED_DATA_VARIANTS);
-
         /** Elements from the remaining sets can be moved to the first data set.
           * Therefore, it must own all the arenas of all other sets.
           */
@@ -1976,7 +1972,7 @@ MergingBucketsPtr Aggregator::mergeAndConvertToBlocks(
 
     // for single level merge, concurrency must be 1.
     size_t merge_concurrency = has_at_least_one_two_level ? std::max(max_threads, 1) : 1;
-    return std::make_shared<MergingBuckets>(*this, non_empty_data, final, merge_concurrency);
+    return std::make_shared<MergingBuckets>(*this, non_empty_data, pending_convert_data, final, merge_concurrency);
 }
 
 template <typename Method, typename Table>
@@ -2413,6 +2409,7 @@ void Aggregator::setCancellationHook(CancellationHook cancellation_hook)
 MergingBuckets::MergingBuckets(
     const Aggregator & aggregator_,
     const ManyAggregatedDataVariants & data_,
+    const ManyAggregatedDataVariants & pending_convert_data_,
     bool final_,
     size_t concurrency_)
     : log(Logger::get(aggregator_.log ? aggregator_.log->identifier() : ""))
@@ -2420,11 +2417,13 @@ MergingBuckets::MergingBuckets(
     , data(data_)
     , final(final_)
     , concurrency(concurrency_)
+    , pending_convert_data(pending_convert_data_)
 {
     assert(concurrency > 0);
     if (!data.empty())
     {
-        is_two_level = data[0]->isTwoLevel();
+        // If pending_convert_data is not empty, it means some data is waiting for converting to two level.
+        is_two_level = data[0]->isTwoLevel() || !pending_convert_data.empty();
         if (is_two_level)
         {
             for (size_t i = 0; i < concurrency; ++i)
@@ -2455,12 +2454,52 @@ Block MergingBuckets::getData(size_t concurrency_index)
 {
     assert(concurrency_index < concurrency);
 
-    if (unlikely(data.empty()))
+    if unlikely (data.empty())
         return {};
+
+    if unlikely (!isAllConvertFinished())
+        throw Exception(
+            "Logical error: converting data does not finish before getting data.",
+            ErrorCodes::LOGICAL_ERROR);
+
+    if unlikely (!is_type_checked.load(std::memory_order_acquire))
+    {
+        AggregatedDataVariantsPtr & first = data[0];
+        for (size_t i = 1, size = data.size(); i < size; ++i)
+        {
+            if unlikely (first->type != data[i]->type)
+                throw Exception(
+                    "Cannot merge different aggregated data variants.",
+                    ErrorCodes::CANNOT_MERGE_DIFFERENT_AGGREGATED_DATA_VARIANTS);
+        }
+        is_type_checked.store(true, std::memory_order_release);
+    }
 
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_aggregate_merge_failpoint);
 
     return is_two_level ? getDataForTwoLevel(concurrency_index) : getDataForSingleLevel();
+}
+
+void MergingBuckets::convertPendingDataToTwoLevel()
+{
+    while (true)
+    {
+        AggregatedDataVariantsPtr * convert_data = getNextPendingConvertData();
+        if (convert_data == nullptr)
+            break;
+        (*convert_data)->convertToTwoLevel();
+        finished_convert_count.fetch_add(1, std::memory_order_relaxed);
+    }
+}
+
+AggregatedDataVariantsPtr * MergingBuckets::getNextPendingConvertData()
+{
+    if (pending_convert_index.load(std::memory_order_relaxed) >= pending_convert_data.size())
+        return nullptr;
+    auto index = pending_convert_index.fetch_add(1, std::memory_order_relaxed);
+    if (index >= pending_convert_data.size())
+        return nullptr;
+    return &pending_convert_data[index];
 }
 
 Block MergingBuckets::getDataForSingleLevel()

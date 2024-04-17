@@ -208,4 +208,21 @@ Block AggregateContext::readForConvergent(size_t index)
         return {};
     return merging_buckets->getData(index);
 }
+
+void AggregateContext::convertPendingDataToTwoLevel()
+{
+    assert(status.load() == AggStatus::convergent);
+    if unlikely (!merging_buckets)
+        return;
+    merging_buckets->convertPendingDataToTwoLevel();
+}
+
+bool AggregateContext::isAllConvertFinished()
+{
+    assert(status.load() == AggStatus::convergent);
+    if unlikely (!merging_buckets)
+        return true;
+    return merging_buckets->isAllConvertFinished();
+}
+
 } // namespace DB
