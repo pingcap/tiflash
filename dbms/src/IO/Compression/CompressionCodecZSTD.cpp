@@ -72,7 +72,7 @@ CompressionCodecZSTD::CompressionCodecZSTD(int level_)
 
 CompressionCodecPtr getCompressionCodecZSTD(int level)
 {
-    return std::make_shared<CompressionCodecZSTD>(level);
+    return std::make_unique<CompressionCodecZSTD>(level);
 }
 
 } // namespace DB
