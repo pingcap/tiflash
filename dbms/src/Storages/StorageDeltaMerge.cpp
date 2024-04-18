@@ -646,7 +646,7 @@ void setColumnsToRead(
 }
 
 // Check whether tso is smaller than TiDB GcSafePoint
-void checkReadTso(UInt64 read_tso, const Context & context, const String & req_id, KeyspaceID keyspace_id)
+void checkStartTs(UInt64 start_ts, const Context & context, const String & req_id, KeyspaceID keyspace_id)
 {
     auto & tmt = context.getTMTContext();
     RUNTIME_CHECK(tmt.isInitialized());
@@ -658,12 +658,12 @@ void checkReadTso(UInt64 read_tso, const Context & context, const String & req_i
         keyspace_id,
         /* ignore_cache= */ false,
         context.getSettingsRef().safe_point_update_interval_seconds);
-    if (read_tso < safe_point)
+    if (start_ts < safe_point)
     {
         throw TiFlashException(
             Errors::Coprocessor::BadRequest,
-            "read tso is smaller than tidb gc safe point! read_tso={} safepoint={} req={}",
-            read_tso,
+            "read tso is smaller than tidb gc safe point! start_ts={} safepoint={} req={}",
+            start_ts,
             safe_point,
             req_id);
     }
@@ -677,7 +677,7 @@ DM::RowKeyRanges StorageDeltaMerge::parseMvccQueryInfo(
     const LoggerPtr & tracing_logger)
 {
     auto keyspace_id = getTableInfo().getKeyspaceID();
-    checkReadTso(mvcc_query_info.read_tso, context, req_id, keyspace_id);
+    checkStartTs(mvcc_query_info.start_ts, context, req_id, keyspace_id);
 
     FmtBuffer fmt_buf;
     if (unlikely(tracing_logger->is(Poco::Message::Priority::PRIO_TRACE)))
@@ -980,7 +980,7 @@ BlockInputStreams StorageDeltaMerge::read(
         columns_to_read,
         ranges,
         num_streams,
-        /*max_version=*/mvcc_query_info.read_tso,
+        /*start_ts=*/mvcc_query_info.start_ts,
         filter,
         runtime_filter_list,
         query_info.dag_query == nullptr ? 0 : query_info.dag_query->rf_max_wait_time_ms,
@@ -993,8 +993,8 @@ BlockInputStreams StorageDeltaMerge::read(
         scan_context);
 
     auto keyspace_id = getTableInfo().getKeyspaceID();
-    /// Ensure read_tso info after read.
-    checkReadTso(mvcc_query_info.read_tso, context, query_info.req_id, keyspace_id);
+    /// Ensure start_ts info after read.
+    checkStartTs(mvcc_query_info.start_ts, context, query_info.req_id, keyspace_id);
 
     LOG_TRACE(tracing_logger, "[ranges: {}] [streams: {}]", ranges.size(), streams.size());
 
@@ -1071,7 +1071,7 @@ void StorageDeltaMerge::read(
         columns_to_read,
         ranges,
         num_streams,
-        /*max_version=*/mvcc_query_info.read_tso,
+        /*start_ts=*/mvcc_query_info.start_ts,
         filter,
         runtime_filter_list,
         query_info.dag_query == nullptr ? 0 : query_info.dag_query->rf_max_wait_time_ms,
@@ -1084,8 +1084,8 @@ void StorageDeltaMerge::read(
         scan_context);
 
     auto keyspace_id = getTableInfo().getKeyspaceID();
-    /// Ensure read_tso info after read.
-    checkReadTso(mvcc_query_info.read_tso, context, query_info.req_id, keyspace_id);
+    /// Ensure start_ts info after read.
+    checkStartTs(mvcc_query_info.start_ts, context, query_info.req_id, keyspace_id);
 
     LOG_TRACE(tracing_logger, "[ranges: {}] [concurrency: {}]", ranges.size(), group_builder.concurrency());
 }
@@ -1121,8 +1121,8 @@ DM::Remote::DisaggPhysicalTableReadSnapshotPtr StorageDeltaMerge::writeNodeBuild
     snap->column_defines = std::make_shared<ColumnDefines>(columns_to_read);
 
     auto keyspace_id = getTableInfo().getKeyspaceID();
-    // Ensure read_tso is valid after snapshot is built
-    checkReadTso(mvcc_query_info.read_tso, context, query_info.req_id, keyspace_id);
+    // Ensure start_ts is valid after snapshot is built
+    checkStartTs(mvcc_query_info.start_ts, context, query_info.req_id, keyspace_id);
     return snap;
 }
 
