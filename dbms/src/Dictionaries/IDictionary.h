@@ -65,7 +65,7 @@ struct IDictionaryBase : public IExternalLoadable
 
     bool isModified() const override
     {
-        const auto *source = getSource();
+        const auto * source = getSource();
         return source && source->isModified();
     }
 
