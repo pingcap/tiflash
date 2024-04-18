@@ -20,7 +20,7 @@ mysql> insert into test.t (col) values (1);
 
 func> wait_table test t
 
-mysql> use test; set @@tidb_allow_mpp=0; set @@tidb_allow_tiflash_cop=true; set @@tidb_allow_batch_cop=2; set @@tidb_isolation_read_engines='tiflash'; select * from t order by col limit 10;
+mysql> use test; set @@tidb_allow_mpp=0; set @@tidb_allow_batch_cop=2; set @@tidb_isolation_read_engines='tiflash'; select * from t order by col limit 10;
 col	__col
 1	1
 
