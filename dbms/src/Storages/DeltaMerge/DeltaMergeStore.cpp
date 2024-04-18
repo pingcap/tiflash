@@ -1197,15 +1197,6 @@ BlockInputStreams DeltaMergeStore::read(
         /*try_split_task =*/!enable_read_thread);
     auto log_tracing_id = getLogTracingId(*dm_context);
     auto tracing_logger = log->getChild(log_tracing_id);
-    LOG_INFO(
-        tracing_logger,
-        "Read create segment snapshot done, keep_order={} dt_enable_read_thread={} enable_read_thread={} "
-        "is_fast_scan={} is_push_down_filter_empty={}",
-        keep_order,
-        db_context.getSettingsRef().dt_enable_read_thread,
-        enable_read_thread,
-        is_fast_scan,
-        filter == nullptr || filter->before_where == nullptr);
 
     auto after_segment_read = [&](const DMContextPtr & dm_context_, const SegmentPtr & segment_) {
         // TODO: Update the tracing_id before checkSegmentUpdate?
@@ -1263,7 +1254,13 @@ BlockInputStreams DeltaMergeStore::read(
     }
     LOG_INFO(
         tracing_logger,
-        "Read create stream done, pool_id={} num_streams={}",
+        "Read create stream done, keep_order={} dt_enable_read_thread={} enable_read_thread={} "
+        "is_fast_scan={} is_push_down_filter_empty={} pool_id={} num_streams={}",
+        keep_order,
+        db_context.getSettingsRef().dt_enable_read_thread,
+        enable_read_thread,
+        is_fast_scan,
+        filter == nullptr || filter->before_where == nullptr,
         read_task_pool->pool_id,
         final_num_stream);
 
@@ -1306,15 +1303,6 @@ void DeltaMergeStore::read(
         /*try_split_task =*/!enable_read_thread);
     auto log_tracing_id = getLogTracingId(*dm_context);
     auto tracing_logger = log->getChild(log_tracing_id);
-    LOG_INFO(
-        tracing_logger,
-        "Read create segment snapshot done, keep_order={} dt_enable_read_thread={} enable_read_thread={} "
-        "is_fast_scan={} is_push_down_filter_empty={}",
-        keep_order,
-        db_context.getSettingsRef().dt_enable_read_thread,
-        enable_read_thread,
-        is_fast_scan,
-        filter == nullptr || filter->before_where == nullptr);
 
     auto after_segment_read = [&](const DMContextPtr & dm_context_, const SegmentPtr & segment_) {
         // TODO: Update the tracing_id before checkSegmentUpdate?
@@ -1383,7 +1371,13 @@ void DeltaMergeStore::read(
 
     LOG_INFO(
         tracing_logger,
-        "Read create PipelineExec done, pool_id={} num_streams={}",
+        "Read create PipelineExec done, keep_order={} dt_enable_read_thread={} enable_read_thread={} "
+        "is_fast_scan={} is_push_down_filter_empty={} pool_id={} num_streams={}",
+        keep_order,
+        db_context.getSettingsRef().dt_enable_read_thread,
+        enable_read_thread,
+        is_fast_scan,
+        filter == nullptr || filter->before_where == nullptr,
         read_task_pool->pool_id,
         final_num_stream);
 }
