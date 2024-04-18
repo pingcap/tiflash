@@ -29,6 +29,7 @@ namespace tests
 {
 class RegionKVStoreOldTest;
 class RegionKVStoreTest;
+class SchemaSyncTest;
 } // namespace tests
 class Logger;
 using LoggerPtr = std::shared_ptr<Logger>;
@@ -67,6 +68,7 @@ private:
     friend void dbgFuncGcSchemas(Context &, const ASTs &, DBGInvokerPrinter);
     friend class tests::RegionKVStoreOldTest;
     friend class tests::RegionKVStoreTest;
+    friend class tests::SchemaSyncTest;
 
     struct KeyspaceGCContext
     {
