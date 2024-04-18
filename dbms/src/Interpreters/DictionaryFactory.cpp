@@ -18,7 +18,6 @@
 #include <Dictionaries/DictionaryFactory.h>
 #include <Dictionaries/DictionarySourceFactory.h>
 #include <Dictionaries/DictionaryStructure.h>
-#include <Dictionaries/HashedDictionary.h>
 #include <Dictionaries/TrieDictionary.h>
 
 #include <memory>
@@ -127,16 +126,7 @@ DictionaryPtr DictionaryFactory::create(
                       "for a dictionary of layout 'range_hashed'",
                 ErrorCodes::BAD_ARGUMENTS};
 
-        if ("hashed" == layout_type)
-        {
-            return std::make_unique<HashedDictionary>(
-                name,
-                dict_struct,
-                std::move(source_ptr),
-                dict_lifetime,
-                require_nonempty);
-        }
-        else if ("cache" == layout_type)
+        if ("cache" == layout_type)
         {
             const auto size = config.getInt(layout_prefix + ".cache.size_in_cells");
             if (size == 0)
