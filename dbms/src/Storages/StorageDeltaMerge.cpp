@@ -676,8 +676,6 @@ DM::RowKeyRanges StorageDeltaMerge::parseMvccQueryInfo(
     const String & req_id,
     const LoggerPtr & tracing_logger)
 {
-    LOG_DEBUG(tracing_logger, "Read with tso: {}", mvcc_query_info.read_tso);
-
     auto keyspace_id = getTableInfo().getKeyspaceID();
     checkReadTso(mvcc_query_info.read_tso, context, req_id, keyspace_id);
 
