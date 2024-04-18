@@ -61,7 +61,6 @@ add_headers_and_sources(tiflash_common_io src/IO)
 add_headers_and_sources(tiflash_common_io src/IO/BaseFile)
 add_headers_and_sources(tiflash_common_io src/IO/Buffer)
 add_headers_and_sources(tiflash_common_io src/IO/Checksum)
-add_headers_and_sources(tiflash_common_io src/IO/Compression)
 
 add_headers_and_sources(dbms src/Analyzers)
 add_headers_and_sources(dbms src/Core)
@@ -77,6 +76,9 @@ add_headers_and_sources(dbms src/Dictionaries)
 # Encryption needs to link tiflash-proxy, but we do not want to link tiflash-proxy to tiflash_common_io.
 # So we put the encryption source files in dbms.
 add_headers_and_sources(dbms src/IO/Encryption)
+# Some source files under src/IO/Compression need to use specific cxx flags.
+# In order to enable PCH for tiflash_common_io, so we put it in dbms as well.
+add_headers_and_sources(dbms src/IO/Compression)
 # FileProvider relies on Encryption, so we put it in dbms as well.
 add_headers_and_sources(dbms src/IO/FileProvider)
 add_headers_and_sources(dbms src/Interpreters)

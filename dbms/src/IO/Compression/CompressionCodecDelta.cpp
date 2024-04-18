@@ -19,7 +19,7 @@
 #include <common/likely.h>
 #include <common/unaligned.h>
 
-#if defined(__x86_64__) && defined(__AVX2__)
+#if defined(__AVX2__)
 #include <immintrin.h>
 #endif
 
@@ -97,7 +97,7 @@ void decompressData(const char * source, UInt32 source_size, char * dest, UInt32
     ordinaryDecompressData<T>(source, source_size, dest, output_size);
 }
 
-#if defined(__x86_64__) && defined(__AVX2__)
+#if defined(__AVX2__)
 // Note: using SIMD to rewrite compress does not improve performance.
 
 template <>
