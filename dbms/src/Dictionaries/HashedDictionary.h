@@ -160,8 +160,6 @@ public:
     void isInConstantVector(const Key child_id, const PaddedPODArray<Key> & ancestor_ids, PaddedPODArray<UInt8> & out)
         const override;
 
-    BlockInputStreamPtr getBlockInputStream(const Names & column_names, size_t max_block_size) const override;
-
 private:
     template <typename Value>
     using CollectionType = HashMap<UInt64, Value>;

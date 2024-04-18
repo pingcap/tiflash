@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Dictionaries/DictionaryBlockInputStream.h>
 #include <Dictionaries/HashedDictionary.h>
 
 #include <ext/size.h>
@@ -777,12 +776,6 @@ PaddedPODArray<HashedDictionary::Key> HashedDictionary::getIds() const
         break;
     }
     return PaddedPODArray<Key>();
-}
-
-BlockInputStreamPtr HashedDictionary::getBlockInputStream(const Names & column_names, size_t max_block_size) const
-{
-    using BlockInputStreamType = DictionaryBlockInputStream<HashedDictionary, Key>;
-    return std::make_shared<BlockInputStreamType>(shared_from_this(), max_block_size, getIds(), column_names);
 }
 
 } // namespace DB
