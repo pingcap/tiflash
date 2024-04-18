@@ -37,7 +37,7 @@ public:
         DM::AfterSegmentRead after_segment_read_,
         const DM::ColumnDefines & columns_to_read_,
         const DM::PushDownFilterPtr & filter_,
-        UInt64 max_version_,
+        UInt64 start_ts_,
         size_t expected_block_size_,
         DM::ReadMode read_mode_,
         const String & req_id);
@@ -59,7 +59,7 @@ private:
     DM::AfterSegmentRead after_segment_read;
     DM::ColumnDefines columns_to_read;
     DM::PushDownFilterPtr filter;
-    const UInt64 max_version;
+    const UInt64 start_ts;
     const size_t expected_block_size;
     const DM::ReadMode read_mode;
 
