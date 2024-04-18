@@ -14,7 +14,6 @@
 
 #include <Dictionaries/CacheDictionary.h>
 #include <Dictionaries/ComplexKeyCacheDictionary.h>
-#include <Dictionaries/ComplexKeyHashedDictionary.h>
 #include <Dictionaries/DictionaryFactory.h>
 #include <Dictionaries/DictionarySourceFactory.h>
 #include <Dictionaries/DictionaryStructure.h>
@@ -60,21 +59,7 @@ DictionaryPtr DictionaryFactory::create(
 
     const auto & layout_type = keys.front();
 
-    if ("complex_key_hashed" == layout_type)
-    {
-        if (!dict_struct.key)
-            throw Exception{
-                "'key' is required for dictionary of layout 'complex_key_hashed'",
-                ErrorCodes::BAD_ARGUMENTS};
-
-        return std::make_unique<ComplexKeyHashedDictionary>(
-            name,
-            dict_struct,
-            std::move(source_ptr),
-            dict_lifetime,
-            require_nonempty);
-    }
-    else if ("complex_key_cache" == layout_type)
+    if ("complex_key_cache" == layout_type)
     {
         if (!dict_struct.key)
             throw Exception{

@@ -158,7 +158,6 @@ if (CMAKE_BUILD_TYPE_UC STREQUAL "RELEASE" OR CMAKE_BUILD_TYPE_UC STREQUAL "RELW
     set_source_files_properties(
         src/Dictionaries/CacheDictionary.cpp
         src/Dictionaries/TrieDictionary.cpp
-        src/Dictionaries/ComplexKeyHashedDictionary.cpp
         src/Dictionaries/ComplexKeyCacheDictionary.cpp
         src/Dictionaries/ComplexKeyCacheDictionary_generate1.cpp
         src/Dictionaries/ComplexKeyCacheDictionary_generate2.cpp
