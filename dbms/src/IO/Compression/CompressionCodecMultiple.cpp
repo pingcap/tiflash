@@ -29,8 +29,8 @@ namespace ErrorCodes
 extern const int CORRUPTED_DATA;
 }
 
-CompressionCodecMultiple::CompressionCodecMultiple(Codecs codecs_)
-    : codecs(codecs_)
+CompressionCodecMultiple::CompressionCodecMultiple(Codecs && codecs_)
+    : codecs(std::move(codecs_))
 {}
 
 UInt8 CompressionCodecMultiple::getMethodByte() const
