@@ -46,7 +46,7 @@ public:
     {
         const LoggerPtr log;
         const ColumnDefinesPtr & columns_to_read;
-        const UInt64 read_tso;
+        const UInt64 start_ts;
         const PushDownFilterPtr & push_down_filter;
         const ReadMode read_mode;
     };

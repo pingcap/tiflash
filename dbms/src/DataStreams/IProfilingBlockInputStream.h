@@ -53,7 +53,7 @@ class IProfilingBlockInputStream : public IBlockInputStream
 public:
     IProfilingBlockInputStream();
 
-    Block read() override final;
+    Block read() final;
 
     Block read(FilterPtr & res_filter, bool return_filter) override;
 
@@ -242,7 +242,7 @@ private:
         std::shared_lock lock(children_mutex);
 
         for (auto & child : children)
-            if (IProfilingBlockInputStream * p_child = dynamic_cast<IProfilingBlockInputStream *>(child.get()))
+            if (auto * p_child = dynamic_cast<IProfilingBlockInputStream *>(child.get()))
                 if (f(*p_child))
                     return;
     }

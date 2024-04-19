@@ -96,7 +96,7 @@ BlockInputStreamPtr SegmentReadTaskPool::buildInputStream(SegmentReadTaskPtr & t
     }
     t->initInputStream(
         columns_to_read,
-        max_version,
+        start_ts,
         filter,
         read_mode,
         expected_block_size,
@@ -118,7 +118,7 @@ SegmentReadTaskPool::SegmentReadTaskPool(
     int extra_table_id_index_,
     const ColumnDefines & columns_to_read_,
     const PushDownFilterPtr & filter_,
-    uint64_t max_version_,
+    uint64_t start_ts_,
     size_t expected_block_size_,
     ReadMode read_mode_,
     SegmentReadTasks && tasks_,
@@ -132,7 +132,7 @@ SegmentReadTaskPool::SegmentReadTaskPool(
     , extra_table_id_index(extra_table_id_index_)
     , columns_to_read(columns_to_read_)
     , filter(filter_)
-    , max_version(max_version_)
+    , start_ts(start_ts_)
     , expected_block_size(expected_block_size_)
     , read_mode(read_mode_)
     , tasks_wrapper(enable_read_thread_, std::move(tasks_))
