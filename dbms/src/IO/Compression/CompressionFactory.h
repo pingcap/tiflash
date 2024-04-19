@@ -74,6 +74,7 @@ public:
     // Create codec for compressing/decompressing data with specified settings.
     static CompressionCodecPtr create(const CompressionSettings & settings)
     {
+        RUNTIME_CHECK(!settings.settings.empty());
         return settings.settings.size() > 1 ? std::make_unique<CompressionCodecMultiple>(createCodecs(settings))
                                             : create(settings.settings.front());
     }
