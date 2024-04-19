@@ -22,7 +22,6 @@
 #include <Poco/Util/XMLConfiguration.h>
 #include <common/StringRef.h>
 
-#include <chrono>
 #include <memory>
 
 namespace DB
@@ -62,13 +61,11 @@ struct IDictionaryBase : public IExternalLoadable
 
     virtual bool isInjective(const std::string & attribute_name) const = 0;
 
-    virtual BlockInputStreamPtr getBlockInputStream(const Names & column_names, size_t max_block_size) const = 0;
-
     bool supportUpdates() const override { return !isCached(); }
 
     bool isModified() const override
     {
-        auto source = getSource();
+        const auto * source = getSource();
         return source && source->isModified();
     }
 
