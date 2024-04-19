@@ -73,6 +73,8 @@ struct SegmentSnapshot : private boost::noncopyable
         // handle + version + flag
         return (sizeof(Int64) + sizeof(UInt64) + sizeof(UInt8)) * getRows();
     }
+
+    String detailInfo() const;
 };
 
 /// A segment contains many rows of a table. A table is split into segments by consecutive ranges.
