@@ -23,7 +23,10 @@
 
 namespace DB::DM
 {
-
+namespace tests
+{
+class SegmentReadTasksPoolTest;
+}
 using AfterSegmentRead = std::function<void(const DMContextPtr &, const SegmentPtr &)>;
 
 class BlockStat
@@ -199,11 +202,7 @@ public:
 
     const LoggerPtr & getLogger() const { return log; }
 
-#ifndef DBMS_PUBLIC_GTEST
 private:
-#else
-public:
-#endif
     Int64 getFreeActiveSegmentsUnlock() const;
     bool exceptionHappened() const;
     void finishSegment(const SegmentReadTaskPtr & seg);
@@ -249,6 +248,8 @@ public:
     inline static BlockStat global_blk_stat;
     static uint64_t nextPoolId() { return pool_id_gen.fetch_add(1, std::memory_order_relaxed); }
     inline static constexpr Int64 check_ru_interval_ms = 100;
+
+    friend class tests::SegmentReadTasksPoolTest;
 };
 
 using SegmentReadTaskPoolPtr = std::shared_ptr<SegmentReadTaskPool>;
