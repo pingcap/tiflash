@@ -612,6 +612,8 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_sche_active_segment_limit, {"type", "sche_active_segment_limit"}),                                                     \
       F(type_sche_from_cache, {"type", "sche_from_cache"}),                                                                         \
       F(type_sche_new_task, {"type", "sche_new_task"}),                                                                             \
+      F(type_sche_timeout, {"type", "sche_timeout"}),                                                                               \
+      F(type_sche_notify, {"type", "sche_notify"}),                                                                                 \
       F(type_ru_exhausted, {"type", "ru_exhausted"}),                                                                               \
       F(type_push_block_bytes, {"type", "push_block_bytes"}),                                                                       \
       F(type_add_cache_succ, {"type", "add_cache_succ"}),                                                                           \

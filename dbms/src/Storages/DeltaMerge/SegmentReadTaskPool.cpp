@@ -16,6 +16,7 @@
 #include <DataStreams/AddExtraTableIDColumnInputStream.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DMContext.h>
+#include <Storages/DeltaMerge/ReadThread/SegmentReadTaskScheduler.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 
 #include <magic_enum.hpp>
@@ -35,10 +36,7 @@ SegmentReadTasksWrapper::SegmentReadTasksWrapper(bool enable_read_thread_, Segme
         for (const auto & t : ordered_tasks_)
         {
             auto [itr, inserted] = unordered_tasks.emplace(t->getGlobalSegmentID(), t);
-            if (!inserted)
-            {
-                throw DB::Exception(fmt::format("segment={} already exist.", t));
-            }
+            RUNTIME_CHECK_MSG(inserted, "segment={} already exist.", t);
         }
     }
     else
@@ -250,29 +248,27 @@ bool SegmentReadTaskPool::readOneBlock(BlockInputStreamPtr & stream, const Segme
 
 void SegmentReadTaskPool::popBlock(Block & block)
 {
+    throwIfExceptionHappened();
     q.pop(block);
     blk_stat.pop(block);
     global_blk_stat.pop(block);
-    if (exceptionHappened())
-    {
-        throw exception;
-    }
+    notifySchedulerOnDemand();
 }
 
 bool SegmentReadTaskPool::tryPopBlock(Block & block)
 {
+    throwIfExceptionHappened();
     if (q.tryPop(block))
     {
         blk_stat.pop(block);
         global_blk_stat.pop(block);
-        if (exceptionHappened())
-            throw exception;
         return true;
     }
     else
     {
         return false;
     }
+    notifySchedulerOnDemand();
 }
 
 void SegmentReadTaskPool::pushBlock(Block && block)
@@ -319,6 +315,28 @@ Int64 SegmentReadTaskPool::getPendingSegmentCount() const
 bool SegmentReadTaskPool::exceptionHappened() const
 {
     return exception_happened.load(std::memory_order_relaxed);
+}
+
+void SegmentReadTaskPool::throwIfExceptionHappened() const
+{
+    if (unlikely(exceptionHappened()))
+    {
+        throw exception;
+    }
+}
+
+void SegmentReadTaskPool::notifySchedulerOnDemand() const
+{
+    bool has_adequate_free_slot
+        = static_cast<double>(getFreeBlockSlots()) / static_cast<double>(block_slot_limit) >= 0.25;
+    auto may_have_more_tasks = [&]() {
+        std::lock_guard lock(mutex);
+        return active_segment_ids.empty() && tasks_wrapper.empty();
+    };
+    if (has_adequate_free_slot && may_have_more_tasks())
+    {
+        SegmentReadTaskScheduler::instance().notify();
+    }
 }
 
 bool SegmentReadTaskPool::valid() const
