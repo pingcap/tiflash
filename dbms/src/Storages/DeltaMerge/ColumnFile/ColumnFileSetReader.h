@@ -82,7 +82,7 @@ public:
     bool shouldPlace(
         const DMContext & context,
         const RowKeyRange & relevant_range,
-        UInt64 max_version,
+        UInt64 start_ts,
         size_t placed_rows);
 };
 

@@ -476,7 +476,7 @@ public:
         DeltaIndexPtr my_delta_index,
         const RowKeyRange & segment_range,
         const RowKeyRange & relevant_range,
-        UInt64 max_version);
+        UInt64 start_ts);
 };
 
 class DeltaValueInputStream : public SkippableBlockInputStream

@@ -216,7 +216,7 @@ bool DeltaValueReader::shouldPlace(
     DeltaIndexPtr my_delta_index,
     const RowKeyRange & segment_range_,
     const RowKeyRange & relevant_range,
-    UInt64 max_version)
+    UInt64 start_ts)
 {
     auto [placed_rows, placed_delete_ranges] = my_delta_index->getPlacedStatus();
 
@@ -230,11 +230,11 @@ bool DeltaValueReader::shouldPlace(
         return true;
 
     size_t rows_in_persisted_file_snap = delta_snap->getMemTableSetRowsOffset();
-    return persisted_files_reader->shouldPlace(context, relevant_range, max_version, placed_rows)
+    return persisted_files_reader->shouldPlace(context, relevant_range, start_ts, placed_rows)
         || mem_table_reader->shouldPlace(
             context,
             relevant_range,
-            max_version,
+            start_ts,
             placed_rows <= rows_in_persisted_file_snap ? 0 : placed_rows - rows_in_persisted_file_snap);
 }
 
