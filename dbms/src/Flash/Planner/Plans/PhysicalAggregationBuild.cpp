@@ -15,6 +15,7 @@
 #include <Flash/Coprocessor/AggregationInterpreterHelper.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Executor/PipelineExecutorContext.h>
+#include <Flash/Pipeline/Schedule/Events/AggregateFinalConvertEvent.h>
 #include <Flash/Pipeline/Schedule/Events/AggregateFinalSpillEvent.h>
 #include <Flash/Planner/Plans/PhysicalAggregationBuild.h>
 #include <Interpreters/Context.h>
@@ -92,7 +93,7 @@ EventPtr PhysicalAggregationBuild::doSinkComplete(PipelineExecutorContext & exec
 
         if (!indexes.empty())
         {
-            auto final_convert_event = std::make_shared<AggregateFinalSpillEvent>(
+            auto final_convert_event = std::make_shared<AggregateFinalConvertEvent>(
                 exec_context,
                 log->identifier(),
                 aggregate_context,

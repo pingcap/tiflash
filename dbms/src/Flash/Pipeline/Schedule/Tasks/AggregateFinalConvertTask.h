@@ -21,7 +21,7 @@ namespace DB
 class AggregateContext;
 using AggregateContextPtr = std::shared_ptr<AggregateContext>;
 
-class AggregateFinalConvertTask : public OutputIOEventTask
+class AggregateFinalConvertTask : public EventTask
 {
 public:
     AggregateFinalConvertTask(
@@ -32,9 +32,7 @@ public:
         size_t index_);
 
 protected:
-    ExecTaskStatus executeIOImpl() override;
-
-    void doFinalizeImpl() override;
+    ExecTaskStatus executeImpl() override;
 
 private:
     AggregateContextPtr agg_context;

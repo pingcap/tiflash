@@ -23,21 +23,17 @@ AggregateFinalConvertTask::AggregateFinalConvertTask(
     const EventPtr & event_,
     AggregateContextPtr agg_context_,
     size_t index_)
-    : OutputIOEventTask(exec_context_, req_id, event_)
+    : EventTask(exec_context_, req_id, event_)
     , agg_context(std::move(agg_context_))
     , index(index_)
 {
     assert(agg_context);
 }
 
-void AggregateFinalConvertTask::doFinalizeImpl()
-{
-    agg_context.reset();
-}
-
-ExecTaskStatus AggregateFinalConvertTask::executeIOImpl()
+ExecTaskStatus AggregateFinalConvertTask::executeImpl()
 {
     agg_context->convertToTwoLevel(index);
+    agg_context.reset();
     return ExecTaskStatus::FINISHED;
 }
 

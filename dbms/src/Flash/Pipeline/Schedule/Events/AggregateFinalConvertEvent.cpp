@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <Flash/Pipeline/Schedule/Events/AggregateFinalConvertEvent.h>
-#include <Flash/Pipeline/Schedule/Tasks/AggregateFinalSpillTask.h>
+#include <Flash/Pipeline/Schedule/Tasks/AggregateFinalConvertTask.h>
 
 namespace DB
 {
@@ -21,7 +21,7 @@ void AggregateFinalConvertEvent::scheduleImpl()
 {
     assert(agg_context);
     for (auto index : indexes)
-        addTask(std::make_unique<AggregateFinalSpillTask>(
+        addTask(std::make_unique<AggregateFinalConvertTask>(
             exec_context,
             log->identifier(),
             shared_from_this(),
