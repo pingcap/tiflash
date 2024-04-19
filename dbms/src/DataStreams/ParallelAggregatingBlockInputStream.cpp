@@ -93,7 +93,6 @@ Block ParallelAggregatingBlockInputStream::readImpl()
             else
             {
                 RUNTIME_CHECK(merging_buckets->getConcurrency() > 0);
-                merging_buckets->convertPendingDataToTwoLevel();
                 if (merging_buckets->getConcurrency() > 1)
                 {
                     BlockInputStreams merging_streams;

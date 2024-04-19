@@ -77,6 +77,33 @@ void PhysicalAggregationBuild::buildPipelineExecGroupImpl(
 EventPtr PhysicalAggregationBuild::doSinkComplete(PipelineExecutorContext & exec_context)
 {
     assert(aggregate_context);
+    SCOPE_EXIT({ aggregate_context.reset(); });
+    if (!aggregate_context->hasSpilledData())
+    {
+        if (!aggregate_context->hasAtLeastOneTwoLevel())
+            return nullptr;
+
+        std::vector<size_t> indexes;
+        for (size_t index = 0; index < aggregate_context->getBuildConcurrency(); ++index)
+        {
+            if (!aggregate_context->isTwoLevel(index))
+                indexes.push_back(index);
+        }
+
+        if (!indexes.empty())
+        {
+            auto final_convert_event = std::make_shared<AggregateFinalSpillEvent>(
+                exec_context,
+                log->identifier(),
+                aggregate_context,
+                std::move(indexes),
+                std::move(profile_infos));
+            return final_convert_event;
+        }
+
+        return nullptr;
+    }
+
     aggregate_context->getAggSpillContext()->finishSpillableStage();
     bool need_final_spill = false;
     for (size_t i = 0; i < aggregate_context->getBuildConcurrency(); ++i)
@@ -87,11 +114,9 @@ EventPtr PhysicalAggregationBuild::doSinkComplete(PipelineExecutorContext & exec
             break;
         }
     }
-    if (!aggregate_context->hasSpilledData() && !need_final_spill)
-    {
-        aggregate_context.reset();
+
+    if (!need_final_spill)
         return nullptr;
-    }
 
     /// Currently, the aggregation spill algorithm requires all bucket data to be spilled,
     /// so a new event is added here to execute the final spill.
@@ -114,10 +139,9 @@ EventPtr PhysicalAggregationBuild::doSinkComplete(PipelineExecutorContext & exec
             aggregate_context,
             std::move(indexes),
             std::move(profile_infos));
-        aggregate_context.reset();
         return final_spill_event;
     }
-    aggregate_context.reset();
+
     return nullptr;
 }
 } // namespace DB

@@ -16,8 +16,6 @@
 
 #include <Common/Logger.h>
 #include <Common/Stopwatch.h>
-#include <Flash/Pipeline/Schedule/Tasks/NotifyFuture.h>
-#include <Flash/Pipeline/Schedule/Tasks/PipeConditionVariable.h>
 #include <Interpreters/Aggregator.h>
 #include <Operators/LocalAggregateRestorer.h>
 #include <Operators/SharedAggregateRestorer.h>
@@ -36,7 +34,7 @@ struct ThreadData
 };
 
 /// Aggregated data shared between AggBuild and AggConvergent Pipeline.
-class AggregateContext : public NotifyFuture
+class AggregateContext
 {
 public:
     explicit AggregateContext(const String & req_id)
@@ -72,11 +70,6 @@ public:
 
     Block readForConvergent(size_t index);
 
-    void registerTask(TaskPtr && task) override;
-
-    /// Return if all convert work has been done.
-    bool convertPendingDataToTwoLevel();
-
     Block getHeader() const;
 
     Block getSourceHeader() const;
@@ -90,6 +83,12 @@ public:
     bool isTaskMarkedForSpill(size_t task_index);
 
     size_t getTotalBuildRows(size_t task_index) { return threads_data[task_index]->src_rows; }
+
+    bool hasAtLeastOneTwoLevel();
+
+    bool isTwoLevel(size_t task_index) { return many_data[task_index]->isTwoLevel(); }
+
+    void convertToTwoLevel(size_t task_index) { many_data[task_index]->convertToTwoLevel(); }
 
 private:
     std::unique_ptr<Aggregator> aggregator;
@@ -124,9 +123,6 @@ private:
     const LoggerPtr log;
 
     std::optional<Stopwatch> build_watch;
-
-    std::mutex pipe_lock;
-    PipeConditionVariable pipe_cv;
 };
 
 using AggregateContextPtr = std::shared_ptr<AggregateContext>;

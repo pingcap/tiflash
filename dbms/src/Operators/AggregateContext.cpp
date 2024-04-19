@@ -12,10 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/FailPoint.h>
 #include <Operators/AggregateContext.h>
 
 namespace DB
 {
+namespace FailPoints
+{
+extern const char force_agg_two_level_hash_table_before_merge[];
+} // namespace FailPoints
+
 void AggregateContext::initBuild(
     const Aggregator::Params & params,
     size_t max_threads_,
@@ -209,42 +215,18 @@ Block AggregateContext::readForConvergent(size_t index)
     return merging_buckets->getData(index);
 }
 
-void AggregateContext::registerTask(TaskPtr && task)
+bool AggregateContext::hasAtLeastOneTwoLevel()
 {
-    assert(status.load() == AggStatus::convergent);
-    assert(merging_buckets);
+    fiu_do_on(FailPoints::force_agg_two_level_hash_table_before_merge, {
+        if (max_threads > 1)
+            return true;
+    });
+    for (size_t i = 0; i < max_threads; ++i)
     {
-        /// `isAllConvertFinished` do not need lock, this lock is used to avoid lost notification problem.
-        std::lock_guard lock(pipe_lock);
-        if (!merging_buckets->isAllConvertFinished())
-        {
-            pipe_cv.registerTask(std::move(task));
-            return;
-        }
+        if (many_data[i]->isTwoLevel())
+            return true;
     }
-    PipeConditionVariable::notifyTaskDirectly(std::move(task));
-}
-
-bool AggregateContext::convertPendingDataToTwoLevel()
-{
-    assert(status.load() == AggStatus::convergent);
-    if unlikely (!merging_buckets)
-        return true;
-
-    if likely (merging_buckets->isAllConvertFinished())
-        return true;
-
-    merging_buckets->convertPendingDataToTwoLevel();
-
-    {
-        /// `isAllConvertFinished` do not need lock, this lock is used to avoid lost notification problem.
-        std::lock_guard lock(pipe_lock);
-        if (!merging_buckets->isAllConvertFinished())
-            return false;
-    }
-
-    pipe_cv.notifyAll();
-    return true;
+    return false;
 }
 
 } // namespace DB

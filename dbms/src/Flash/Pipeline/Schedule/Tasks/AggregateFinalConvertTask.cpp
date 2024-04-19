@@ -12,33 +12,33 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Flash/Pipeline/Schedule/Tasks/AggregateFinalConvertTask.h>
 #include <Operators/AggregateContext.h>
-#include <Operators/AggregateConvergentSourceOp.h>
 
 namespace DB
 {
-AggregateConvergentSourceOp::AggregateConvergentSourceOp(
+AggregateFinalConvertTask::AggregateFinalConvertTask(
     PipelineExecutorContext & exec_context_,
-    const AggregateContextPtr & agg_context_,
-    size_t index_,
-    const String & req_id)
-    : SourceOp(exec_context_, req_id)
-    , agg_context(agg_context_)
+    const String & req_id,
+    const EventPtr & event_,
+    AggregateContextPtr agg_context_,
+    size_t index_)
+    : OutputIOEventTask(exec_context_, req_id, event_)
+    , agg_context(std::move(agg_context_))
     , index(index_)
 {
-    setHeader(agg_context->getHeader());
+    assert(agg_context);
 }
 
-OperatorStatus AggregateConvergentSourceOp::readImpl(Block & block)
+void AggregateFinalConvertTask::doFinalizeImpl()
 {
-    block = agg_context->readForConvergent(index);
-    total_rows += block.rows();
-    return OperatorStatus::HAS_OUTPUT;
+    agg_context.reset();
 }
 
-void AggregateConvergentSourceOp::operateSuffixImpl()
+ExecTaskStatus AggregateFinalConvertTask::executeIOImpl()
 {
-    LOG_DEBUG(log, "finish read {} rows from aggregate context", total_rows);
+    agg_context->convertToTwoLevel(index);
+    return ExecTaskStatus::FINISHED;
 }
 
 } // namespace DB
