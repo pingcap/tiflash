@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/FailPoint.h>
 #include <Flash/Coprocessor/AggregationInterpreterHelper.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Executor/PipelineExecutorContext.h>
@@ -24,6 +25,11 @@
 
 namespace DB
 {
+namespace FailPoints
+{
+extern const char force_agg_two_level_hash_table_before_merge[];
+} // namespace FailPoints
+
 void PhysicalAggregationBuild::buildPipelineExecGroupImpl(
     PipelineExecutorContext & exec_context,
     PipelineExecGroupBuilder & group_builder,
@@ -78,16 +84,22 @@ void PhysicalAggregationBuild::buildPipelineExecGroupImpl(
 EventPtr PhysicalAggregationBuild::doSinkComplete(PipelineExecutorContext & exec_context)
 {
     assert(aggregate_context);
+
     SCOPE_EXIT({ aggregate_context.reset(); });
     if (!aggregate_context->hasSpilledData())
     {
-        if (!aggregate_context->hasAtLeastOneTwoLevel())
+        if (!aggregate_context->isConvertibleToTwoLevel())
+            return nullptr;
+
+        bool has_two_level = aggregate_context->hasAtLeastOneTwoLevel();
+        fiu_do_on(FailPoints::force_agg_two_level_hash_table_before_merge, { has_two_level = true; });
+        if (!has_two_level)
             return nullptr;
 
         std::vector<size_t> indexes;
         for (size_t index = 0; index < aggregate_context->getBuildConcurrency(); ++index)
         {
-            if (!aggregate_context->isTwoLevel(index))
+            if (!aggregate_context->isTwoLevelOrEmpty(index))
                 indexes.push_back(index);
         }
 

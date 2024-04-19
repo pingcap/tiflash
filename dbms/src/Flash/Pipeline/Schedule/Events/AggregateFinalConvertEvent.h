@@ -29,8 +29,8 @@ public:
         PipelineExecutorContext & exec_context_,
         const String & req_id,
         AggregateContextPtr agg_context_,
-        std::vector<size_t> indexes_,
-        OperatorProfileInfos profile_infos_)
+        std::vector<size_t> && indexes_,
+        OperatorProfileInfos && profile_infos_)
         : Event(exec_context_, req_id)
         , agg_context(std::move(agg_context_))
         , indexes(std::move(indexes_))

@@ -12,16 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/FailPoint.h>
 #include <Operators/AggregateContext.h>
 
 namespace DB
 {
-namespace FailPoints
-{
-extern const char force_agg_two_level_hash_table_before_merge[];
-} // namespace FailPoints
-
 void AggregateContext::initBuild(
     const Aggregator::Params & params,
     size_t max_threads_,
@@ -217,10 +211,6 @@ Block AggregateContext::readForConvergent(size_t index)
 
 bool AggregateContext::hasAtLeastOneTwoLevel()
 {
-    fiu_do_on(FailPoints::force_agg_two_level_hash_table_before_merge, {
-        if (max_threads > 1)
-            return true;
-    });
     for (size_t i = 0; i < max_threads; ++i)
     {
         if (many_data[i]->isTwoLevel())

@@ -85,9 +85,11 @@ public:
     size_t getTotalBuildRows(size_t task_index) { return threads_data[task_index]->src_rows; }
 
     bool hasAtLeastOneTwoLevel();
-
-    bool isTwoLevel(size_t task_index) { return many_data[task_index]->isTwoLevel(); }
-
+    bool isConvertibleToTwoLevel() const { return aggregator->isConvertibleToTwoLevel(); }
+    bool isTwoLevelOrEmpty(size_t task_index) const
+    {
+        return many_data[task_index]->isTwoLevel() || many_data[task_index]->empty();
+    }
     void convertToTwoLevel(size_t task_index) { many_data[task_index]->convertToTwoLevel(); }
 
 private:
