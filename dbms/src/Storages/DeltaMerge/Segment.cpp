@@ -803,7 +803,7 @@ BlockInputStreamPtr Segment::getInputStream(
     const SegmentSnapshotPtr & segment_snap,
     const RowKeyRanges & read_ranges,
     const PushDownFilterPtr & filter,
-    UInt64 max_version,
+    UInt64 start_ts,
     size_t expected_block_size)
 {
     Stopwatch sw;
@@ -822,7 +822,7 @@ BlockInputStreamPtr Segment::getInputStream(
             segment_snap,
             read_ranges,
             filter ? filter->rs_operator : EMPTY_RS_OPERATOR,
-            max_version,
+            start_ts,
             clipped_block_rows);
     case ReadMode::Fast:
         return getInputStreamModeFast(
@@ -846,7 +846,7 @@ BlockInputStreamPtr Segment::getInputStream(
             segment_snap,
             read_ranges,
             filter,
-            max_version,
+            start_ts,
             expected_block_size,
             clipped_block_rows);
     default:
@@ -869,14 +869,14 @@ BlockInputStreamPtr Segment::getInputStreamModeNormal(
     const SegmentSnapshotPtr & segment_snap,
     const RowKeyRanges & read_ranges,
     const RSOperatorPtr & filter,
-    UInt64 max_version,
+    UInt64 start_ts,
     size_t expected_block_size,
     bool need_row_id)
 {
     LOG_TRACE(segment_snap->log, "Begin segment create input stream");
 
     auto read_tag = need_row_id ? ReadTag::MVCC : ReadTag::Query;
-    auto read_info = getReadInfo(dm_context, columns_to_read, segment_snap, read_ranges, read_tag, max_version);
+    auto read_info = getReadInfo(dm_context, columns_to_read, segment_snap, read_ranges, read_tag, start_ts);
 
     RowKeyRanges real_ranges;
     for (const auto & read_range : read_ranges)
@@ -900,7 +900,7 @@ BlockInputStreamPtr Segment::getInputStreamModeNormal(
             *read_info.read_columns,
             real_ranges,
             filter,
-            max_version,
+            start_ts,
             expected_block_size,
             false,
             read_tag);
@@ -914,7 +914,7 @@ BlockInputStreamPtr Segment::getInputStreamModeNormal(
             *read_info.read_columns,
             real_ranges,
             filter,
-            max_version,
+            start_ts,
             expected_block_size,
             true,
             read_tag);
@@ -932,7 +932,7 @@ BlockInputStreamPtr Segment::getInputStreamModeNormal(
             read_info.index_end,
             expected_block_size,
             read_tag,
-            max_version,
+            start_ts,
             need_row_id);
     }
 
@@ -940,15 +940,15 @@ BlockInputStreamPtr Segment::getInputStreamModeNormal(
     stream = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_MVCC>>(
         stream,
         columns_to_read,
-        max_version,
+        start_ts,
         is_common_handle,
         dm_context.tracing_id,
         dm_context.scan_context);
 
     LOG_TRACE(
         segment_snap->log,
-        "Finish segment create input stream, max_version={} range_size={} ranges={}",
-        max_version,
+        "Finish segment create input stream, start_ts={} range_size={} ranges={}",
+        start_ts,
         real_ranges.size(),
         DB::DM::toDebugString(read_ranges));
     return stream;
@@ -959,7 +959,7 @@ BlockInputStreamPtr Segment::getInputStreamModeNormal(
     const ColumnDefines & columns_to_read,
     const RowKeyRanges & read_ranges,
     const RSOperatorPtr & filter,
-    UInt64 max_version,
+    UInt64 start_ts,
     size_t expected_block_size)
 {
     auto segment_snap = createSnapshot(dm_context, false, CurrentMetrics::DT_SnapshotOfRead);
@@ -971,7 +971,7 @@ BlockInputStreamPtr Segment::getInputStreamModeNormal(
         segment_snap,
         read_ranges,
         filter,
-        max_version,
+        start_ts,
         expected_block_size);
 }
 
@@ -2399,7 +2399,7 @@ Segment::ReadInfo Segment::getReadInfo(
     const SegmentSnapshotPtr & segment_snap,
     const RowKeyRanges & read_ranges,
     ReadTag read_tag,
-    UInt64 max_version) const
+    UInt64 start_ts) const
 {
     LOG_DEBUG(segment_snap->log, "Begin segment getReadInfo");
 
@@ -2415,8 +2415,7 @@ Segment::ReadInfo Segment::getReadInfo(
         this->rowkey_range,
         ReadTag::MVCC);
 
-    auto [my_delta_index, fully_indexed]
-        = ensurePlace(dm_context, segment_snap, delta_reader, read_ranges, max_version);
+    auto [my_delta_index, fully_indexed] = ensurePlace(dm_context, segment_snap, delta_reader, read_ranges, start_ts);
     auto compacted_index = my_delta_index->getDeltaTree()->getCompactedEntries();
 
 
@@ -2479,7 +2478,7 @@ SkippableBlockInputStreamPtr Segment::getPlacedStream(
     const IndexIterator & delta_index_end,
     size_t expected_block_size,
     ReadTag read_tag,
-    UInt64 max_version,
+    UInt64 start_ts,
     bool need_row_id)
 {
     if (unlikely(rowkey_ranges.empty()))
@@ -2490,7 +2489,7 @@ SkippableBlockInputStreamPtr Segment::getPlacedStream(
         read_columns,
         rowkey_ranges,
         filter,
-        max_version,
+        start_ts,
         expected_block_size,
         /* enable_handle_clean_read */ false,
         read_tag,
@@ -2532,7 +2531,7 @@ std::pair<DeltaIndexPtr, bool> Segment::ensurePlace(
     const SegmentSnapshotPtr & segment_snap,
     const DeltaValueReaderPtr & delta_reader,
     const RowKeyRanges & read_ranges,
-    UInt64 max_version) const
+    UInt64 start_ts) const
 {
     const auto & stable_snap = segment_snap->stable;
     auto delta_snap = delta_reader->getDeltaSnap();
@@ -2552,7 +2551,7 @@ std::pair<DeltaIndexPtr, bool> Segment::ensurePlace(
     auto [my_placed_rows, my_placed_deletes] = my_delta_index->getPlacedStatus();
 
     // Let's do a fast check, determine whether we need to do place or not.
-    if (!delta_reader->shouldPlace(dm_context, my_delta_index, rowkey_range, relevant_range, max_version))
+    if (!delta_reader->shouldPlace(dm_context, my_delta_index, rowkey_range, relevant_range, start_ts))
         return {my_delta_index, false};
 
     CurrentMetrics::Increment cur_dm_segments{CurrentMetrics::DT_PlaceIndexUpdate};
@@ -2798,7 +2797,7 @@ BitmapFilterPtr Segment::buildBitmapFilter(
     const SegmentSnapshotPtr & segment_snap,
     const RowKeyRanges & read_ranges,
     const RSOperatorPtr & filter,
-    UInt64 max_version,
+    UInt64 start_ts,
     size_t expected_block_size)
 {
     RUNTIME_CHECK_MSG(!dm_context.read_delta_only, "Read delta only is unsupported");
@@ -2809,12 +2808,12 @@ BitmapFilterPtr Segment::buildBitmapFilter(
             segment_snap,
             read_ranges,
             filter,
-            max_version,
+            start_ts,
             expected_block_size);
     }
     else
     {
-        return buildBitmapFilterNormal(dm_context, segment_snap, read_ranges, filter, max_version, expected_block_size);
+        return buildBitmapFilterNormal(dm_context, segment_snap, read_ranges, filter, start_ts, expected_block_size);
     }
 }
 
@@ -2823,7 +2822,7 @@ BitmapFilterPtr Segment::buildBitmapFilterNormal(
     const SegmentSnapshotPtr & segment_snap,
     const RowKeyRanges & read_ranges,
     const RSOperatorPtr & filter,
-    UInt64 max_version,
+    UInt64 start_ts,
     size_t expected_block_size)
 {
     Stopwatch sw_total;
@@ -2837,7 +2836,7 @@ BitmapFilterPtr Segment::buildBitmapFilterNormal(
         segment_snap,
         read_ranges,
         filter,
-        max_version,
+        start_ts,
         expected_block_size,
         /*need_row_id*/ true);
     // `total_rows` is the rows read for building bitmap
@@ -2875,7 +2874,7 @@ std::pair<std::vector<Range>, std::vector<IdSetPtr>> parseDMFilePackInfo(
     const DMContext & dm_context,
     const RowKeyRanges & read_ranges,
     const RSOperatorPtr & filter,
-    UInt64 max_version)
+    UInt64 start_ts)
 {
     // Packs that all rows compliant with MVCC filter and RowKey filter requirements.
     // For building bitmap filter, we don't need to read these packs,
@@ -2922,7 +2921,7 @@ std::pair<std::vector<Range>, std::vector<IdSetPtr>> parseDMFilePackInfo(
             }
 
             if (handle_res[pack_id] == RSResult::Some || pack_stat.not_clean > 0
-                || pack_filter.getMaxVersion(pack_id) > max_version)
+                || pack_filter.getMaxVersion(pack_id) > start_ts)
             {
                 // We need to read this pack to do RowKey or MVCC filter.
                 some_packs_set->insert(pack_id);
@@ -2958,7 +2957,7 @@ BitmapFilterPtr Segment::buildBitmapFilterStableOnly(
     const SegmentSnapshotPtr & segment_snap,
     const RowKeyRanges & read_ranges,
     const RSOperatorPtr & filter,
-    UInt64 max_version,
+    UInt64 start_ts,
     size_t expected_block_size)
 {
     Stopwatch sw;
@@ -2971,7 +2970,7 @@ BitmapFilterPtr Segment::buildBitmapFilterStableOnly(
         return elapse_ns / 1'000'000.0;
     };
 
-    auto [skipped_ranges, some_packs_sets] = parseDMFilePackInfo(dmfiles, dm_context, read_ranges, filter, max_version);
+    auto [skipped_ranges, some_packs_sets] = parseDMFilePackInfo(dmfiles, dm_context, read_ranges, filter, start_ts);
 
     if (skipped_ranges.size() == 1 && skipped_ranges[0].offset == 0
         && skipped_ranges[0].rows == segment_snap->stable->getDMFilesRows())
@@ -3022,7 +3021,7 @@ BitmapFilterPtr Segment::buildBitmapFilterStableOnly(
         columns_to_read,
         read_ranges,
         filter,
-        max_version,
+        start_ts,
         expected_block_size,
         /*enable_handle_clean_read*/ false,
         ReadTag::MVCC,
@@ -3037,7 +3036,7 @@ BitmapFilterPtr Segment::buildBitmapFilterStableOnly(
     stream = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_MVCC>>(
         stream,
         read_columns,
-        max_version,
+        start_ts,
         is_common_handle,
         dm_context.tracing_id);
     bitmap_filter->set(stream);
@@ -3059,7 +3058,7 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(
     const ColumnDefines & columns_to_read,
     const RowKeyRanges & read_ranges,
     const RSOperatorPtr & filter,
-    UInt64 max_version,
+    UInt64 start_ts,
     size_t expected_block_size)
 {
     // set `is_fast_scan` to true to try to enable clean read
@@ -3072,7 +3071,7 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(
         columns_to_read,
         read_ranges,
         filter,
-        max_version,
+        start_ts,
         expected_block_size,
         enable_handle_clean_read,
         ReadTag::Query,
@@ -3103,7 +3102,7 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(
     const SegmentSnapshotPtr & segment_snap,
     const RowKeyRanges & data_ranges,
     const PushDownFilterPtr & filter,
-    UInt64 max_version,
+    UInt64 start_ts,
     size_t expected_block_size)
 {
     // set `is_fast_scan` to true to try to enable clean read
@@ -3118,7 +3117,7 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(
         *filter_columns,
         data_ranges,
         filter->rs_operator,
-        max_version,
+        start_ts,
         expected_block_size,
         enable_handle_clean_read,
         ReadTag::LMFilter,
@@ -3205,7 +3204,7 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(
         *rest_columns_to_read,
         data_ranges,
         filter->rs_operator,
-        max_version,
+        start_ts,
         expected_block_size,
         enable_handle_clean_read,
         ReadTag::Query,
@@ -3257,7 +3256,7 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(
     const SegmentSnapshotPtr & segment_snap,
     const RowKeyRanges & read_ranges,
     const PushDownFilterPtr & filter,
-    UInt64 max_version,
+    UInt64 start_ts,
     size_t build_bitmap_filter_block_rows,
     size_t read_data_block_rows)
 {
@@ -3272,7 +3271,7 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(
         segment_snap,
         real_ranges,
         filter ? filter->rs_operator : EMPTY_RS_OPERATOR,
-        max_version,
+        start_ts,
         build_bitmap_filter_block_rows);
 
     // If we don't need to read the cacheable columns, release column cache as soon as possible.
@@ -3291,7 +3290,7 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(
             segment_snap,
             real_ranges,
             filter,
-            max_version,
+            start_ts,
             read_data_block_rows);
     }
 
@@ -3302,7 +3301,7 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(
         columns_to_read,
         real_ranges,
         filter ? filter->rs_operator : EMPTY_RS_OPERATOR,
-        max_version,
+        start_ts,
         read_data_block_rows);
 }
 

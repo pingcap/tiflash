@@ -22,6 +22,7 @@
 
 namespace DB
 {
+class FastAddPeerContext;
 using FAPAsyncTasks = AsyncTasks<uint64_t, std::function<FastAddPeerRes()>, FastAddPeerRes>;
 struct CheckpointInfo;
 using CheckpointInfoPtr = std::shared_ptr<CheckpointInfo>;
@@ -34,6 +35,7 @@ class FastAddPeerContext
 {
 public:
     explicit FastAddPeerContext(uint64_t thread_count = 0);
+    void shutdown() const;
 
     // Return parsed checkpoint data and its corresponding seq which is newer than `required_seq` if exists, otherwise return pair<required_seq, nullptr>
     std::pair<UInt64, ParsedCheckpointDataHolderPtr> getNewerCheckpointData(
