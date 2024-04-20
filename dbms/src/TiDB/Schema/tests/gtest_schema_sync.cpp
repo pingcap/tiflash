@@ -72,6 +72,14 @@ public:
 
     void SetUp() override
     {
+        // unit test.
+        // Get DBInfo/TableInfo from MockTiDB, but create table with names `t_${table_id}`
+        auto cluster = std::make_shared<pingcap::kv::Cluster>();
+        schema_sync_manager = std::make_unique<TiDBSchemaSyncerManager>(
+            cluster,
+            /*mock_getter*/ true,
+            /*mock_mapper*/ false);
+
         // disable schema sync timer
         global_ctx.getSchemaSyncService().reset();
         recreateMetadataPath();
@@ -97,11 +105,9 @@ public:
     // Sync schema info from TiDB/MockTiDB to TiFlash
     void refreshSchema()
     {
-        auto & flash_ctx = global_ctx.getTMTContext();
-        auto schema_syncer = flash_ctx.getSchemaSyncerManager();
         try
         {
-            schema_syncer->syncSchemas(global_ctx, NullspaceID);
+            schema_sync_manager->syncSchemas(global_ctx, NullspaceID);
         }
         catch (Exception & e)
         {
@@ -118,11 +124,9 @@ public:
 
     void refreshTableSchema(TableID table_id)
     {
-        auto & flash_ctx = global_ctx.getTMTContext();
-        auto schema_syncer = flash_ctx.getSchemaSyncerManager();
         try
         {
-            schema_syncer->syncTableSchema(global_ctx, NullspaceID, table_id);
+            schema_sync_manager->syncTableSchema(global_ctx, NullspaceID, table_id);
         }
         catch (Exception & e)
         {
@@ -138,11 +142,7 @@ public:
     }
 
     // Reset the schema syncer to mock TiFlash shutdown
-    void resetSchemas()
-    {
-        auto & flash_ctx = global_ctx.getTMTContext();
-        flash_ctx.getSchemaSyncerManager()->reset(NullspaceID);
-    }
+    void resetSchemas() { schema_sync_manager->reset(NullspaceID); }
 
     // Get the TiFlash synced table
     ManageableStoragePtr mustGetSyncedTable(TableID table_id)
@@ -207,6 +207,8 @@ private:
 
 protected:
     Context & global_ctx;
+
+    std::unique_ptr<TiDBSchemaSyncerManager> schema_sync_manager;
 };
 
 TEST_F(SchemaSyncTest, SchemaDiff)
