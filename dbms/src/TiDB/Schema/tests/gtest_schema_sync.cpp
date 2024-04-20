@@ -300,7 +300,12 @@ try
         refreshTableSchema(table_id);
     }
 
-    auto sync_service = std::make_shared<SchemaSyncService>(global_ctx);
+    // Create a temporary context with ddl sync task disabled
+    auto ctx = DB::tests::TiFlashTestEnv::getContext();
+    ctx->getSettingsRef().ddl_sync_interval_seconds = 0;
+    auto sync_service = std::make_shared<SchemaSyncService>(*ctx);
+    sync_service->shutdown(); // shutdown the background tasks
+
     // run gc with safepoint == 0, will be skip
     ASSERT_FALSE(sync_service->gc(0, NullspaceID));
     ASSERT_TRUE(sync_service->gc(10000000, NullspaceID));
@@ -312,8 +317,6 @@ try
     ASSERT_TRUE(sync_service->gc(20000000, 1024));
     // run gc with the same safepoint
     ASSERT_FALSE(sync_service->gc(20000000, 1024));
-
-    sync_service->shutdown();
 }
 CATCH
 
@@ -357,7 +360,12 @@ try
         std::vector<RegionID>{1001, 1002, 1003});
     SCOPE_EXIT({ FailPointHelper::disableFailPoint(FailPoints::force_set_num_regions_for_table); });
 
-    auto sync_service = std::make_shared<SchemaSyncService>(global_ctx);
+    // Create a temporary context with ddl sync task disabled
+    auto ctx = DB::tests::TiFlashTestEnv::getContext();
+    ctx->getSettingsRef().ddl_sync_interval_seconds = 0;
+    auto sync_service = std::make_shared<SchemaSyncService>(*ctx);
+    sync_service->shutdown(); // shutdown the background tasks
+
     {
         // ensure gc_safe_point cache is empty
         auto last_gc_safe_point = lastGcSafePoint(sync_service, NullspaceID);
@@ -381,8 +389,6 @@ try
         ++num_remain_tables;
     }
     ASSERT_EQ(num_remain_tables, 1);
-
-    sync_service->shutdown();
 }
 CATCH
 
