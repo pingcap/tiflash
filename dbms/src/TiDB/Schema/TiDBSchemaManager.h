@@ -133,7 +133,7 @@ private:
             return iter->second;
         }
         auto syncer = createSchemaSyncer(keyspace_id);
-        schema_syncers[keyspace_id] = syncer;
+        schema_syncers[keyspace_id] = syncer; // register to the syncers
         return syncer;
     }
 
