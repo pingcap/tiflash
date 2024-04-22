@@ -30,7 +30,7 @@ namespace DB
 class CompressionCodecMultiple final : public ICompressionCodec
 {
 public:
-    explicit CompressionCodecMultiple(Codecs codecs_);
+    explicit CompressionCodecMultiple(Codecs && codecs_);
 
     UInt8 getMethodByte() const override;
 

@@ -63,7 +63,7 @@ struct RegionQueryInfo
 
 struct MvccQueryInfo
 {
-    const UInt64 read_tso;
+    const UInt64 start_ts;
 
     const bool resolve_locks;
 
@@ -77,7 +77,7 @@ struct MvccQueryInfo
     DM::ScanContextPtr scan_context;
 
 public:
-    explicit MvccQueryInfo(bool resolve_locks_ = false, UInt64 read_tso_ = 0, DM::ScanContextPtr scan_ctx = nullptr);
+    explicit MvccQueryInfo(bool resolve_locks_ = false, UInt64 start_ts_ = 0, DM::ScanContextPtr scan_ctx = nullptr);
 
     void addReadIndexResToCache(RegionID region_id, UInt64 read_index) { read_index_res_cache[region_id] = read_index; }
     UInt64 getReadIndexRes(RegionID region_id) const

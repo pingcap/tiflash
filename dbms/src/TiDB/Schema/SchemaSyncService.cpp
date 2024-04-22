@@ -42,15 +42,26 @@ SchemaSyncService::SchemaSyncService(DB::Context & context_)
     , log(Logger::get())
 {
     // Add task for adding and removing keyspace sync schema tasks.
-    handle = background_pool.addTask(
-        [&, this] {
-            addKeyspaceGCTasks();
-            removeKeyspaceGCTasks();
+    auto interval_ms = context.getSettingsRef().ddl_sync_interval_seconds * 1000;
+    if (interval_ms == 0)
+    {
+        LOG_WARNING(
+            log,
+            "The background task of SchemaSyncService is disabled, please check the ddl_sync_interval_seconds "
+            "settings");
+    }
+    else
+    {
+        handle = background_pool.addTask(
+            [&, this] {
+                addKeyspaceGCTasks();
+                removeKeyspaceGCTasks();
 
-            return false;
-        },
-        false,
-        context.getSettingsRef().ddl_sync_interval_seconds * 1000);
+                return false;
+            },
+            false,
+            interval_ms);
+    }
 }
 
 void SchemaSyncService::addKeyspaceGCTasks()

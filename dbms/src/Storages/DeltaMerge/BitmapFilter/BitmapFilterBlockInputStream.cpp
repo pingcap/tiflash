@@ -35,7 +35,7 @@ BitmapFilterBlockInputStream::BitmapFilterBlockInputStream(
     , log(Logger::get(NAME, req_id_))
 {}
 
-Block BitmapFilterBlockInputStream::readImpl(FilterPtr & res_filter, bool return_filter)
+Block BitmapFilterBlockInputStream::read(FilterPtr & res_filter, bool return_filter)
 {
     auto [block, from_delta] = readBlock(stable, delta);
     if (block)

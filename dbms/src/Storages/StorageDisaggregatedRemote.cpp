@@ -538,7 +538,7 @@ std::variant<DM::Remote::RNWorkersPtr, DM::SegmentReadTaskPoolPtr> StorageDisagg
         table_scan.isFastScan(),
         table_scan.keepOrder(),
         push_down_filter);
-    const UInt64 read_tso = sender_target_mpp_task_id.gather_id.query_id.start_ts;
+    const UInt64 start_ts = sender_target_mpp_task_id.gather_id.query_id.start_ts;
     const auto enable_read_thread = db_context.getSettingsRef().dt_enable_read_thread;
     LOG_INFO(
         log,
@@ -558,7 +558,7 @@ std::variant<DM::Remote::RNWorkersPtr, DM::SegmentReadTaskPoolPtr> StorageDisagg
             extra_table_id_index,
             *column_defines,
             push_down_filter,
-            read_tso,
+            start_ts,
             db_context.getSettingsRef().max_block_size,
             read_mode,
             std::move(read_tasks),
@@ -576,7 +576,7 @@ std::variant<DM::Remote::RNWorkersPtr, DM::SegmentReadTaskPoolPtr> StorageDisagg
             {
                 .log = log->getChild(executor_id),
                 .columns_to_read = column_defines,
-                .read_tso = read_tso,
+                .start_ts = start_ts,
                 .push_down_filter = push_down_filter,
                 .read_mode = read_mode,
             },

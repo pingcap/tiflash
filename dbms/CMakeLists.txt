@@ -61,7 +61,6 @@ add_headers_and_sources(tiflash_common_io src/IO)
 add_headers_and_sources(tiflash_common_io src/IO/BaseFile)
 add_headers_and_sources(tiflash_common_io src/IO/Buffer)
 add_headers_and_sources(tiflash_common_io src/IO/Checksum)
-add_headers_and_sources(tiflash_common_io src/IO/Compression)
 
 add_headers_and_sources(dbms src/Analyzers)
 add_headers_and_sources(dbms src/Core)
@@ -77,6 +76,9 @@ add_headers_and_sources(dbms src/Dictionaries)
 # Encryption needs to link tiflash-proxy, but we do not want to link tiflash-proxy to tiflash_common_io.
 # So we put the encryption source files in dbms.
 add_headers_and_sources(dbms src/IO/Encryption)
+# Some source files under src/IO/Compression need to use specific cxx flags.
+# In order to enable PCH for tiflash_common_io, so we put it in dbms as well.
+add_headers_and_sources(dbms src/IO/Compression)
 # FileProvider relies on Encryption, so we put it in dbms as well.
 add_headers_and_sources(dbms src/IO/FileProvider)
 add_headers_and_sources(dbms src/Interpreters)
@@ -151,17 +153,14 @@ else ()
     install (TARGETS dbms LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT tiflash)
 endif ()
 
+target_include_directories(dbms PUBLIC ${TiFlash_SOURCE_DIR}/contrib/not_null/include)
 target_include_directories(dbms PUBLIC "${TIFLASH_PROXY_INCLUDE_DIR}")
 
 if (CMAKE_BUILD_TYPE_UC STREQUAL "RELEASE" OR CMAKE_BUILD_TYPE_UC STREQUAL "RELWITHDEBINFO" OR CMAKE_BUILD_TYPE_UC STREQUAL "MINSIZEREL")
     # Won't generate debug info for files with heavy template instantiation to achieve faster linking and lower size.
     set_source_files_properties(
-        src/Dictionaries/FlatDictionary.cpp
-        src/Dictionaries/HashedDictionary.cpp
         src/Dictionaries/CacheDictionary.cpp
         src/Dictionaries/TrieDictionary.cpp
-        src/Dictionaries/RangeHashedDictionary.cpp
-        src/Dictionaries/ComplexKeyHashedDictionary.cpp
         src/Dictionaries/ComplexKeyCacheDictionary.cpp
         src/Dictionaries/ComplexKeyCacheDictionary_generate1.cpp
         src/Dictionaries/ComplexKeyCacheDictionary_generate2.cpp
