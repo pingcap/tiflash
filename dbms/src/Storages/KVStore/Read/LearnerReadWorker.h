@@ -150,7 +150,7 @@ private:
     /// wait index relate methods
     void waitIndex(
         const LearnerReadSnapshot & regions_snapshot,
-        RegionsReadIndexResult & batch_read_index_result,
+        const RegionsReadIndexResult & batch_read_index_result,
         UInt64 timeout_ms,
         Stopwatch & watch);
 

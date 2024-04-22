@@ -43,14 +43,14 @@ public:
         switch (setting.method)
         {
         case CompressionMethod::LZ4:
-            return std::make_shared<CompressionCodecLZ4>(setting.level);
+            return std::make_unique<CompressionCodecLZ4>(setting.level);
         case CompressionMethod::LZ4HC:
-            return std::make_shared<CompressionCodecLZ4HC>(setting.level);
+            return std::make_unique<CompressionCodecLZ4HC>(setting.level);
         case CompressionMethod::ZSTD:
-            return std::make_shared<CompressionCodecZSTD>(setting.level);
+            return std::make_unique<CompressionCodecZSTD>(setting.level);
 #if USE_QPL
         case CompressionMethod::QPL:
-            return std::make_shared<CompressionCodecDeflateQpl>();
+            return std::make_unique<CompressionCodecDeflateQpl>();
 #endif
         default:
             break;
@@ -58,11 +58,11 @@ public:
         switch (setting.method_byte)
         {
         case CompressionMethodByte::Delta:
-            return std::make_shared<CompressionCodecDelta>(setting.type_bytes_size);
+            return std::make_unique<CompressionCodecDelta>(setting.type_bytes_size);
         case CompressionMethodByte::RLE:
-            return std::make_shared<CompressionCodecRLE>(setting.type_bytes_size);
+            return std::make_unique<CompressionCodecRLE>(setting.type_bytes_size);
         case CompressionMethodByte::NONE:
-            return std::make_shared<CompressionCodecNone>();
+            return std::make_unique<CompressionCodecNone>();
         default:
             throw Exception(
                 ErrorCodes::UNKNOWN_COMPRESSION_METHOD,
@@ -74,17 +74,9 @@ public:
     // Create codec for compressing/decompressing data with specified settings.
     static CompressionCodecPtr create(const CompressionSettings & settings)
     {
-        if (settings.settings.size() > 1)
-        {
-            Codecs codecs;
-            codecs.reserve(settings.settings.size());
-            for (const auto & setting : settings.settings)
-            {
-                codecs.push_back(create(setting));
-            }
-            return std::make_shared<CompressionCodecMultiple>(std::move(codecs));
-        }
-        return create(settings.settings.front());
+        RUNTIME_CHECK(!settings.settings.empty());
+        return settings.settings.size() > 1 ? std::make_unique<CompressionCodecMultiple>(createCodecs(settings))
+                                            : create(settings.settings.front());
     }
 
     // Create codec for decompressing data with specified method byte.
@@ -93,6 +85,19 @@ public:
     {
         CompressionSetting setting(static_cast<CompressionMethodByte>(method_byte));
         return create(setting);
+    }
+
+private:
+    static Codecs createCodecs(const CompressionSettings & settings)
+    {
+        RUNTIME_CHECK(settings.settings.size() > 1);
+        Codecs codecs;
+        codecs.reserve(settings.settings.size());
+        for (const auto & setting : settings.settings)
+        {
+            codecs.push_back(create(setting));
+        }
+        return codecs;
     }
 };
 

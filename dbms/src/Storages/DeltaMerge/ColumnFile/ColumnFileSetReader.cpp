@@ -340,7 +340,7 @@ bool ColumnFileSetReader::shouldPlace(
         }
         else
         {
-            throw Exception("Unknown column file: " + column_file->toString(), ErrorCodes::LOGICAL_ERROR);
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Unknown column file: {}", column_file->toString());
         }
     }
 

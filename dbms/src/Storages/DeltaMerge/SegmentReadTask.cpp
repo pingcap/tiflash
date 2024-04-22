@@ -678,8 +678,8 @@ void SegmentReadTask::doFetchPagesImpl(
             auto write_batch_limit_size = dm_context->global_context.getSettingsRef().dt_write_page_cache_limit_size;
             if (write_page_task->wb.getTotalDataSize() >= write_batch_limit_size)
             {
-                write_page_results.push_back(
-                    schedule_write_page_task(std::move(write_page_task))); // write_page_task is moved and reset.
+                // write_page_task is moved and reset.
+                write_page_results.push_back(schedule_write_page_task(std::move(write_page_task)));
             }
         }
     }
