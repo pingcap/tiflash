@@ -341,7 +341,7 @@ RegionsReadIndexResult LearnerReadWorker::readIndex(
 
 void LearnerReadWorker::waitIndex(
     const LearnerReadSnapshot & regions_snapshot,
-    RegionsReadIndexResult & batch_read_index_result,
+    const RegionsReadIndexResult & batch_read_index_result,
     const UInt64 timeout_ms,
     Stopwatch & watch)
 {
@@ -436,7 +436,7 @@ void LearnerReadWorker::waitIndex(
         unavailable_regions.size(),
         mvcc_query_info.start_ts);
 
-    auto bypass_formatter = [&](const RegionQueryInfo & query_info) -> String {
+    auto bypass_formatter = [](const RegionQueryInfo & query_info) -> String {
         if (query_info.bypass_lock_ts == nullptr)
             return "";
         FmtBuffer buffer;
@@ -456,9 +456,11 @@ void LearnerReadWorker::waitIndex(
             regions_info.end(),
             [&](const auto & region_to_query, FmtBuffer & f) {
                 const auto & region = regions_snapshot.find(region_to_query.region_id)->second;
+                const auto index_to_wait = batch_read_index_result.find(region_to_query.region_id)->second.read_index();
                 f.fmtAppend(
-                    "(id:{} applied_index:{} bypass_locks:{})",
+                    "(region_id={} to_wait={} applied_index={} bypass_locks={})",
                     region_to_query.region_id,
+                    index_to_wait,
                     region->appliedIndex(),
                     bypass_formatter(region_to_query));
             },
