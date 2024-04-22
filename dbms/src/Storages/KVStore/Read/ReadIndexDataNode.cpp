@@ -83,7 +83,8 @@ void ReadIndexDataNode::runOneRound(const TiFlashRaftProxyHelper & helper, const
             }
 
             LOG_DEBUG(
-                "[Learner Read] Read Index in Batch(use histroy), max_ts={} region_id={} waiting_tasks={ "
+                DB::Logger::get(),
+                "[Learner Read] Read Index in Batch(use histroy), max_ts={} region_id={} waiting_tasks={} "
                 "running_tasks={}, histroy_ts={}",
                 max_ts,
                 region_id,
@@ -100,6 +101,7 @@ void ReadIndexDataNode::runOneRound(const TiFlashRaftProxyHelper & helper, const
             bool build_success = false;
             if (should_build_running_task)
             {
+                // If we can't attach us to some running_tasks.
                 TEST_LOG_FMT("no exist running_tasks for ts {}", max_ts);
 
                 if (auto t = makeReadIndexTask(helper, max_ts_task->req); t)
@@ -122,6 +124,7 @@ void ReadIndexDataNode::runOneRound(const TiFlashRaftProxyHelper & helper, const
             }
 
             LOG_DEBUG(
+                DB::Logger::get(),
                 "[Learner Read] Read Index in Batch(new request), max_ts={} region_id={} waiting_tasks={} "
                 "running_tasks={} should_build_running_task={} build_success={}",
                 max_ts,
@@ -137,6 +140,7 @@ void ReadIndexDataNode::runOneRound(const TiFlashRaftProxyHelper & helper, const
                 run_it->second.callbacks.emplace_back(std::move(e.second));
             }
 
+            // Try poll result and add histroy tasks.
             doConsume(helper, run_it);
         }
     }
@@ -314,6 +318,7 @@ ReadIndexFuturePtr ReadIndexDataNode::insertTask(const kvrpcpb::ReadIndexRequest
     auto task = std::make_shared<ReadIndexFuture>();
     task->req = req;
 
+    // See GenRegionReadIndexReq
     waiting_tasks.add(req.start_ts(), task);
 
     return task;
