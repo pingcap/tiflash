@@ -438,6 +438,7 @@ KVStore::~KVStore()
     LOG_INFO(log, "Destroy KVStore");
     stopThreadAllocInfo();
     releaseReadIndexWorkers();
+    LOG_INFO(log, "Destroy KVStore Finished");
 }
 
 FileUsageStatistics KVStore::getFileUsageStatistics() const
@@ -611,6 +612,7 @@ void KVStore::stopThreadAllocInfo()
         is_terminated = true;
         monitoring_cv.notify_all();
     }
+    LOG_INFO(log, "KVStore shutdown, wait thread alloc monitor join");
     monitoring_thread->join();
     delete monitoring_thread;
     monitoring_thread = nullptr;
