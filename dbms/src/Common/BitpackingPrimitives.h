@@ -47,17 +47,17 @@ public:
         else
         {
             size_t misaligned_count = count % BITPACKING_ALGORITHM_GROUP_SIZE;
-            T tmp_buffer[BITPACKING_ALGORITHM_GROUP_SIZE]; // TODO: maybe faster on the heap?
             count -= misaligned_count;
             for (size_t i = 0; i < count; i += BITPACKING_ALGORITHM_GROUP_SIZE)
             {
-                packGroup<T>(dst + (i * width) / 8, src + i, width);
+                packGroup(dst + (i * width) / 8, src + i, width);
             }
             // Input was not aligned to BITPACKING_ALGORITHM_GROUP_SIZE, we need a copy
             if (misaligned_count)
             {
+                T tmp_buffer[BITPACKING_ALGORITHM_GROUP_SIZE]; // TODO: maybe faster on the heap?
                 memcpy(tmp_buffer, src + count, misaligned_count * sizeof(T));
-                packGroup<T>(dst + (count * width) / 8, tmp_buffer, width);
+                packGroup(dst + (count * width) / 8, tmp_buffer, width);
             }
         }
     }
@@ -82,7 +82,7 @@ public:
     template <typename T>
     static void packBlock(unsigned char * dst, const T * src, UInt8 width)
     {
-        return packGroup<T>(dst, src, width);
+        return packGroup(dst, src, width);
     }
 
     // Unpacks a block of BITPACKING_ALGORITHM_GROUP_SIZE values
@@ -124,16 +124,15 @@ public:
         return ((count * width) / 8);
     }
 
+    // round up to nearest multiple of BITPACKING_ALGORITHM_GROUP_SIZE
     template <typename T>
     constexpr static T roundUpToAlgorithmGroupSize(T num_to_round)
     {
-        int remainder = num_to_round % BITPACKING_ALGORITHM_GROUP_SIZE;
-        if (remainder == 0)
-        {
-            return num_to_round;
-        }
-
-        return num_to_round + BITPACKING_ALGORITHM_GROUP_SIZE - remainder;
+        static_assert(
+            (BITPACKING_ALGORITHM_GROUP_SIZE & (BITPACKING_ALGORITHM_GROUP_SIZE - 1)) == 0,
+            "BITPACKING_ALGORITHM_GROUP_SIZE must be a power of 2");
+        constexpr T mask = BITPACKING_ALGORITHM_GROUP_SIZE - 1;
+        return (num_to_round + mask) & ~mask;
     }
 
 private:
@@ -286,7 +285,7 @@ private:
         }
         else
         {
-            throw Exception("Unsupported type for bitpacking");
+            static_assert(false, "Unsupported type for bitpacking");
         }
     }
 
@@ -327,7 +326,7 @@ private:
         }
         else
         {
-            throw Exception("Unsupported type for bitpacking");
+            static_assert(false, "Unsupported type for bitpacking");
         }
 
         if (std::numeric_limits<T>::is_signed && !skip_sign_extension && width > 0 && width < sizeof(T) * 8)
