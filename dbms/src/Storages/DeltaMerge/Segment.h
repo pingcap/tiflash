@@ -572,7 +572,13 @@ public:
     /// Returns whether this segment has been marked as abandoned.
     /// Note: Segment member functions never abandon the segment itself.
     /// The abandon state is usually triggered by the DeltaMergeStore.
-    bool hasAbandoned() const { return delta->hasAbandoned(); }
+    bool hasAbandoned() const
+    {
+        // `delta` at disagg read-node is empty
+        if (unlikely(!delta))
+            return false;
+        return delta->hasAbandoned();
+    }
 
     bool isSplitForbidden() const { return split_forbidden; }
     void forbidSplit() { split_forbidden = true; }
