@@ -512,12 +512,15 @@ void DAGQueryBlockInterpreter::executeAggregation(
         context.getFileProvider(),
         settings.max_threads,
         settings.max_block_size);
-    auto params = AggregationInterpreterHelper::buildParams(
+    // todo: finish this
+    std::unordered_map<String, String> key_from_agg_func;
+    auto params = *AggregationInterpreterHelper::buildParams(
         context,
         before_agg_header,
         pipeline.streams.size(),
         enable_fine_grained_shuffle ? pipeline.streams.size() : 1,
         key_names,
+        key_from_agg_func,
         collators,
         aggregate_descriptions,
         is_final_agg,

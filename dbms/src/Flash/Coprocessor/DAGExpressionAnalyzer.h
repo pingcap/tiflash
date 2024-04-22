@@ -189,6 +189,7 @@ public:
         NamesAndTypes & aggregated_columns,
         Names & aggregation_keys,
         std::unordered_set<String> & agg_key_set,
+        std::unordered_map<String, String> & key_from_agg_func,
         bool group_by_collation_sensitive,
         TiDB::TiDBCollators & collators);
 

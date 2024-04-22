@@ -40,6 +40,7 @@ public:
         const PhysicalPlanNodePtr & child_,
         const ExpressionActionsPtr & before_agg_actions_,
         const Names & aggregation_keys_,
+        const std::unordered_map<String, String> & key_from_agg_func_,
         const TiDB::TiDBCollators & aggregation_collators_,
         bool is_final_agg_,
         const AggregateDescriptions & aggregate_descriptions_,
@@ -47,6 +48,7 @@ public:
         : PhysicalUnary(executor_id_, PlanType::Aggregation, schema_, fine_grained_shuffle_, req_id, child_)
         , before_agg_actions(before_agg_actions_)
         , aggregation_keys(aggregation_keys_)
+        , key_from_agg_func(key_from_agg_func_)
         , aggregation_collators(aggregation_collators_)
         , is_final_agg(is_final_agg_)
         , aggregate_descriptions(aggregate_descriptions_)
@@ -71,6 +73,7 @@ private:
 private:
     ExpressionActionsPtr before_agg_actions;
     Names aggregation_keys;
+    std::unordered_map<String, String> key_from_agg_func;
     TiDB::TiDBCollators aggregation_collators;
     bool is_final_agg;
     AggregateDescriptions aggregate_descriptions;

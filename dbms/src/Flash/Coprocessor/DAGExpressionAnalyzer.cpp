@@ -555,6 +555,18 @@ void DAGExpressionAnalyzer::buildCommonAggFunc(
         context);
 }
 
+std::pair<String, DataTypePtr> findFirstRow(const AggregateDescriptions & aggregate_descriptions, const String & arg_name)
+{
+    for (const auto & desc : aggregate_descriptions)
+    {
+        if (desc.function->getName() == "first_row" &&
+                desc.argument_names.size() == 1 &&
+                desc.argument_names[0] == arg_name)
+            return std::make_pair(desc.column_name, desc.function->getReturnType());
+    }
+    return std::make_pair("", nullptr);
+}
+
 void DAGExpressionAnalyzer::buildAggGroupBy(
     const google::protobuf::RepeatedPtrField<tipb::Expr> & group_by,
     const ExpressionActionsPtr & actions,
@@ -562,6 +574,7 @@ void DAGExpressionAnalyzer::buildAggGroupBy(
     NamesAndTypes & aggregated_columns,
     Names & aggregation_keys,
     std::unordered_set<String> & agg_key_set,
+    std::unordered_map<String, String> & key_from_agg_func,
     bool group_by_collation_sensitive,
     TiDB::TiDBCollators & collators)
 {
@@ -591,19 +604,36 @@ void DAGExpressionAnalyzer::buildAggGroupBy(
                 collators.push_back(collator);
             if (collator != nullptr)
             {
-                /// if the column is a string with collation info, the `sort_key` of the column is used during
-                /// aggregation, but we can not reconstruct the origin column by `sort_key`, so add an extra
-                /// extra aggregation function any(group_by_column) here as the output of the group by column
-                TiDB::TiDBCollators arg_collators{collator};
-                appendAggDescription(
-                    {name},
-                    {type},
-                    arg_collators,
-                    "any",
-                    aggregate_descriptions,
-                    aggregated_columns,
-                    false,
-                    context);
+                // todo arg_collators
+                auto [first_row_name, first_row_type] = findFirstRow(aggregate_descriptions, name);
+                String agg_func_name = first_row_name;
+                if (!first_row_name.empty())
+                {
+                    // todo need or not?
+                    aggregated_columns.emplace_back(first_row_name, first_row_type);
+                }
+                else
+                {
+                    /// if the column is a string with collation info, the `sort_key` of the column is used during
+                    /// aggregation, but we can not reconstruct the origin column by `sort_key`, so add an extra
+                    /// extra aggregation function any(group_by_column) here as the output of the group by column
+                    TiDB::TiDBCollators arg_collators{collator};
+                    appendAggDescription(
+                            {name},
+                            {type},
+                            arg_collators,
+                            "any",
+                            aggregate_descriptions,
+                            aggregated_columns,
+                            false,
+                            context);
+                    agg_func_name = aggregate_descriptions.back().column_name;
+                }
+                auto [iter, inserted] = key_from_agg_func.insert({name, agg_func_name});
+                if unlikely (!inserted)
+                {
+                    throw Exception("unexpected already exists agg key: {}", name);
+                }
             }
             else
             {
@@ -666,6 +696,8 @@ std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions, ExpressionActionsP
     Names aggregation_keys;
     TiDB::TiDBCollators collators;
     std::unordered_set<String> agg_key_set;
+    // todo check analyzeExpressions DAGQueryBlockInterpreter.cpp
+    std::unordered_map<String, String> key_from_agg_func;
     buildAggFuncs(agg, step.actions, aggregate_descriptions, aggregated_columns);
     buildAggGroupBy(
         agg.group_by(),
@@ -674,6 +706,7 @@ std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions, ExpressionActionsP
         aggregated_columns,
         aggregation_keys,
         agg_key_set,
+        key_from_agg_func,
         group_by_collation_sensitive,
         collators);
     // set required output for agg funcs's arguments and group by keys.

@@ -54,6 +54,7 @@ PhysicalPlanNodePtr PhysicalAggregation::build(
     NamesAndTypes aggregated_columns;
     AggregateDescriptions aggregate_descriptions;
     Names aggregation_keys;
+    std::unordered_map<String, String> key_from_agg_func;
     TiDB::TiDBCollators collators;
     {
         std::unordered_set<String> agg_key_set;
@@ -65,6 +66,7 @@ PhysicalPlanNodePtr PhysicalAggregation::build(
             aggregated_columns,
             aggregation_keys,
             agg_key_set,
+            key_from_agg_func,
             AggregationInterpreterHelper::isGroupByCollationSensitive(context),
             collators);
     }
@@ -83,6 +85,7 @@ PhysicalPlanNodePtr PhysicalAggregation::build(
         child,
         before_agg_actions,
         aggregation_keys,
+        key_from_agg_func,
         collators,
         AggregationInterpreterHelper::isFinalAgg(aggregation),
         aggregate_descriptions,
@@ -107,12 +110,13 @@ void PhysicalAggregation::buildBlockInputStreamImpl(DAGPipeline & pipeline, Cont
         context.getFileProvider(),
         context.getSettingsRef().max_threads,
         context.getSettingsRef().max_block_size);
-    auto params = AggregationInterpreterHelper::buildParams(
+    auto params = *AggregationInterpreterHelper::buildParams(
         context,
         before_agg_header,
         pipeline.streams.size(),
         fine_grained_shuffle.enable() ? pipeline.streams.size() : 1,
         aggregation_keys,
+        key_from_agg_func,
         aggregation_collators,
         aggregate_descriptions,
         is_final_agg,
@@ -223,12 +227,13 @@ void PhysicalAggregation::buildPipelineExecGroupImpl(
         context.getFileProvider(),
         context.getSettingsRef().max_threads,
         context.getSettingsRef().max_block_size);
-    auto params = AggregationInterpreterHelper::buildParams(
+    auto params = *AggregationInterpreterHelper::buildParams(
         context,
         before_agg_header,
         concurrency,
         concurrency,
         aggregation_keys,
+        key_from_agg_func,
         aggregation_collators,
         aggregate_descriptions,
         is_final_agg,

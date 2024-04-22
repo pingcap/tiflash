@@ -1035,6 +1035,7 @@ public:
 
         /// What to count.
         ColumnNumbers keys;
+        size_t normal_key_size;
         AggregateDescriptions aggregates;
         size_t keys_size;
         size_t aggregates_size;
@@ -1050,6 +1051,7 @@ public:
         Params(
             const Block & src_header_,
             const ColumnNumbers & keys_,
+            size_t normal_key_size_,
             const AggregateDescriptions & aggregates_,
             size_t group_by_two_level_threshold_,
             size_t group_by_two_level_threshold_bytes_,
@@ -1060,6 +1062,7 @@ public:
             const TiDB::TiDBCollators & collators_ = TiDB::dummy_collators)
             : src_header(src_header_)
             , keys(keys_)
+            , normal_key_size(normal_key_size_)
             , aggregates(aggregates_)
             , keys_size(keys.size())
             , aggregates_size(aggregates.size())
@@ -1076,11 +1079,12 @@ public:
         Params(
             const Block & intermediate_header_,
             const ColumnNumbers & keys_,
+            size_t normal_key_size_,
             const AggregateDescriptions & aggregates_,
             const SpillConfig & spill_config,
             UInt64 max_block_size_,
             const TiDB::TiDBCollators & collators_ = TiDB::dummy_collators)
-            : Params(Block(), keys_, aggregates_, 0, 0, 0, false, spill_config, max_block_size_, collators_)
+            : Params(Block(), keys_, normal_key_size_, aggregates_, 0, 0, 0, false, spill_config, max_block_size_, collators_)
         {
             intermediate_header = intermediate_header_;
         }
@@ -1321,7 +1325,7 @@ protected:
         Arena * arena,
         bool final) const;
 
-    template <typename Method, typename Table>
+    template <typename Method, typename Table, bool skip_serialize_key>
     void convertToBlocksImpl(
         Method & method,
         Table & data,
@@ -1331,6 +1335,10 @@ protected:
         Arena * arena,
         bool final) const;
 
+    // todo change name to distinguish convertToBlocksImplFinal()
+    // convertToBlocksImplFinal() is used for non spill situation, and will consider
+    // skip serialize key optimization.
+    // todo why spill doesn't use convertToBlocksImplFinal()?
     template <typename Method, typename Table>
     void convertToBlockImplFinal(
         Method & method,
@@ -1339,7 +1347,7 @@ protected:
         MutableColumns & final_aggregate_columns,
         Arena * arena) const;
 
-    template <typename Method, typename Table>
+    template <typename Method, typename Table, bool skip_serialize_key>
     void convertToBlocksImplFinal(
         Method & method,
         Table & data,
@@ -1354,7 +1362,7 @@ protected:
         std::vector<IColumn *> key_columns,
         AggregateColumnsData & aggregate_columns) const;
 
-    template <typename Method, typename Table>
+    template <typename Method, typename Table, bool skip_serialize_key>
     void convertToBlocksImplNotFinal(
         Method & method,
         Table & data,

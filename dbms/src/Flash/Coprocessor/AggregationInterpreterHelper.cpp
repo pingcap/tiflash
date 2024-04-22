@@ -76,21 +76,33 @@ bool isGroupByCollationSensitive(const Context & context)
     return context.getSettingsRef().group_by_collation_sensitive || context.getDAGContext()->isMPPTask();
 }
 
-Aggregator::Params buildParams(
+std::shared_ptr<Aggregator::Params> buildParams(
     const Context & context,
     const Block & before_agg_header,
     size_t before_agg_streams_size,
     size_t agg_streams_size,
     const Names & key_names,
+    const std::unordered_map<String, String> & key_from_agg_func,
     const TiDB::TiDBCollators & collators,
     const AggregateDescriptions & aggregate_descriptions,
     bool is_final_agg,
     const SpillConfig & spill_config)
 {
     ColumnNumbers keys;
+    keys.resize(key_names.size());
+    size_t normal_key_idx = 0;
+    size_t agg_func_as_key_idx = key_from_agg_func.size();
     for (const auto & name : key_names)
     {
-        keys.push_back(before_agg_header.getPositionByName(name));
+        auto col_idx = before_agg_header.getPositionByName(name);
+        if (key_from_agg_func.find(name) == key_from_agg_func.end())
+        {
+            keys[normal_key_idx++] = col_idx;
+        }
+        else
+        {
+            keys[agg_func_as_key_idx++] = col_idx;
+        }
     }
 
     const Settings & settings = context.getSettingsRef();
@@ -101,9 +113,10 @@ Aggregator::Params buildParams(
 
     bool has_collator = std::any_of(begin(collators), end(collators), [](const auto & p) { return p != nullptr; });
 
-    return Aggregator::Params(
+    return std::make_shared<Aggregator::Params>(
         before_agg_header,
         keys,
+        normal_key_idx,
         aggregate_descriptions,
         /// do not use the average value for key count threshold, because for a random distributed data, the key count
         /// in every threads should almost be the same

@@ -47,12 +47,16 @@ void PhysicalAggregationBuild::buildPipelineExecGroupImpl(
         context.getFileProvider(),
         context.getSettingsRef().max_threads,
         context.getSettingsRef().max_block_size);
-    auto params = AggregationInterpreterHelper::buildParams(
+    // todo finish this
+    std::unordered_map<String, String> key_from_agg_func;
+    // todo maybe keep use pointer?
+    auto params = *AggregationInterpreterHelper::buildParams(
         context,
         before_agg_header,
         concurrency,
         1,
         aggregation_keys,
+        key_from_agg_func,
         aggregation_collators,
         aggregate_descriptions,
         is_final_agg,
