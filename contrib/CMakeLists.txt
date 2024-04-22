@@ -179,6 +179,8 @@ target_include_directories(cpptoml INTERFACE
 SET (BENCHMARK_ENABLE_TESTING OFF CACHE BOOL "Disable google-benchmark testing" FORCE)
 SET (BENCHMARK_ENABLE_GTEST_TESTS OFF CACHE BOOL "Disable google-benchmark testing" FORCE)
 add_subdirectory(benchmark)
+target_compile_options(benchmark PRIVATE "-Wno-error=thread-safety-analysis")
+target_no_warning(benchmark thread-safety-analysis)
 
 set (BUILD_TESTING OFF CACHE BOOL "Disable cpu-features testing" FORCE)
 if (NOT (OS_DARWIN AND ARCH_AARCH64))

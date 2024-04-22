@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Inc.
+// Copyright 2024 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,10 +19,10 @@
 namespace DB
 {
 
-class CompressionCodecDelta : public ICompressionCodec
+class CompressionCodecDeltaFor : public ICompressionCodec
 {
 public:
-    explicit CompressionCodecDelta(UInt8 delta_bytes_size_);
+    explicit CompressionCodecDeltaFor(UInt8 bytes_size_);
 
     UInt8 getMethodByte() const override;
 
@@ -36,13 +36,13 @@ protected:
     void doDecompressData(const char * source, UInt32 source_size, char * dest, UInt32 uncompressed_size)
         const override;
 
-    UInt32 getMaxCompressedDataSize(UInt32 uncompressed_size) const override { return uncompressed_size + 1; }
+    UInt32 getMaxCompressedDataSize(UInt32 uncompressed_size) const override;
 
-    bool isCompression() const override { return false; }
+    bool isCompression() const override { return true; }
     bool isGenericCompression() const override { return false; }
 
 private:
-    const UInt8 delta_bytes_size;
+    const UInt8 bytes_size;
 };
 
 } // namespace DB

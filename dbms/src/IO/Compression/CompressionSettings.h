@@ -38,7 +38,7 @@ const std::unordered_map<CompressionMethodByte, CompressionMethod> method_map = 
     {CompressionMethodByte::ZSTD, CompressionMethod::ZSTD},
     {CompressionMethodByte::QPL, CompressionMethod::QPL},
     {CompressionMethodByte::NONE, CompressionMethod::NONE},
-    {CompressionMethodByte::Delta, CompressionMethod::NONE},
+    {CompressionMethodByte::DeltaFor, CompressionMethod::NONE},
     {CompressionMethodByte::RLE, CompressionMethod::NONE},
 };
 

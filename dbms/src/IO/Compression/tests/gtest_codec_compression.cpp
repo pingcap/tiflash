@@ -17,6 +17,7 @@
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/IDataType.h>
 #include <IO/Compression/CompressionFactory.h>
+#include <TestUtils/TiFlashTestBasic.h>
 #include <common/types.h>
 #include <gtest/gtest.h>
 
@@ -395,12 +396,14 @@ public:
 };
 
 TEST_P(CodecTest, TranscodingWithDataType)
+try
 {
     const auto method_byte = std::get<0>(GetParam());
     const auto sequence = std::get<1>(GetParam());
     const auto codec = ::DB::tests::makeCodec(method_byte, sequence.type_byte);
     testTranscoding(*codec);
 }
+CATCH
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // Here we use generators to produce test payload for codecs.
@@ -520,7 +523,7 @@ std::vector<CodecTestSequence> generatePyramidOfSequences(
 #define G(generator) generator, #generator
 
 const auto IntegerCodecsToTest = ::testing::Values(
-    CompressionMethodByte::Delta,
+    CompressionMethodByte::DeltaFor,
     CompressionMethodByte::RLE
 #if USE_QPL
     ,
