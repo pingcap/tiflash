@@ -47,7 +47,7 @@ void ReadIndexDataNode::runOneRound(const TiFlashRaftProxyHelper & helper, const
     auto _ = genLockGuard();
 
     {
-        // Find the task with the maximum ts in all `waiting_tasks`.
+        // Find the task with the maximum ts in all `waiting_tasks` in this region.
         Timestamp max_ts = 0;
         ReadIndexFuturePtr max_ts_task = nullptr;
         {
@@ -73,7 +73,7 @@ void ReadIndexDataNode::runOneRound(const TiFlashRaftProxyHelper & helper, const
             running_tasks.size());
 
         // start-ts `0` will be used to only get the latest index, do not use history
-        if (history_success_tasks && history_success_tasks->first >= max_ts && max_ts)
+        if (false && history_success_tasks && history_success_tasks->first >= max_ts && max_ts)
         {
             TEST_LOG_FMT("find history_tasks resp {}", history_success_tasks->second.ShortDebugString());
 
@@ -82,13 +82,23 @@ void ReadIndexDataNode::runOneRound(const TiFlashRaftProxyHelper & helper, const
                 e.second->update(history_success_tasks->second);
             }
 
+            LOG_DEBUG(
+                "[Learner Read] Read Index in Batch(use histroy), max_ts={} region_id={} waiting_tasks={ "
+                "running_tasks={}, histroy_ts={}",
+                max_ts,
+                region_id,
+                waiting_tasks.size(),
+                running_tasks.size(),
+                history_success_tasks->first);
             cnt_use_history_tasks += waiting_tasks.size();
             GET_METRIC(tiflash_raft_read_index_events_count, type_use_histroy).Increment(waiting_tasks.size());
         }
         else
         {
             auto run_it = running_tasks.lower_bound(max_ts);
-            if (run_it == running_tasks.end())
+            bool should_build_running_task = run_it == running_tasks.end();
+            bool build_success = false;
+            if (should_build_running_task)
             {
                 TEST_LOG_FMT("no exist running_tasks for ts {}", max_ts);
 
@@ -96,20 +106,34 @@ void ReadIndexDataNode::runOneRound(const TiFlashRaftProxyHelper & helper, const
                 {
                     TEST_LOG_FMT("successfully make ReadIndexTask for region_id={} ts {}", region_id, max_ts);
                     AsyncWaker waker{helper, new RegionReadIndexNotifier(region_id, max_ts, notify)};
+                    // Timestamp(max_ts) -> ReadIndexElement{region_id, max_ts}
                     run_it = running_tasks.try_emplace(max_ts, region_id, max_ts).first;
                     run_it->second.task_pair.emplace(std::move(*t), std::move(waker));
+                    build_success = true;
                 }
                 else
                 {
                     TEST_LOG_FMT("failed to make ReadIndexTask for region_id={} ts {}", region_id, max_ts);
                     GET_METRIC(tiflash_raft_learner_read_failures_count, type_request_error).Increment();
+                    // Timestamp(max_ts) -> ReadIndexElement{region_id, max_ts}
                     run_it = running_tasks.try_emplace(max_ts, region_id, max_ts).first;
                     run_it->second.resp.mutable_region_error();
                 }
             }
 
+            LOG_DEBUG(
+                "[Learner Read] Read Index in Batch(new request), max_ts={} region_id={} waiting_tasks={} "
+                "running_tasks={} should_build_running_task={} build_success={}",
+                max_ts,
+                region_id,
+                waiting_tasks.size(),
+                running_tasks.size(),
+                should_build_running_task,
+                build_success);
+
             for (auto && e : waiting_tasks)
             {
+                // Set `ReadIndexElement::callbacks`
                 run_it->second.callbacks.emplace_back(std::move(e.second));
             }
 

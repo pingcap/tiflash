@@ -133,7 +133,13 @@ std::vector<kvrpcpb::ReadIndexRequest> LearnerReadWorker::buildBatchReadIndexReq
         if (auto ori_read_index = mvcc_query_info.getReadIndexRes(region_id); ori_read_index)
         {
             GET_METRIC(tiflash_raft_read_index_events_count, type_use_cache).Increment();
-            // the read index result from cache
+            LOG_DEBUG(
+                log,
+                "[Learner Read] Reuse read result in cache, start_ts={} region_id={} read_index={}",
+                mvcc_query_info.start_ts,
+                region_id,
+                ori_read_index);
+            // Reuse the read index result from cache
             auto resp = kvrpcpb::ReadIndexResponse();
             resp.set_read_index(ori_read_index);
             batch_read_index_result.emplace(region_id, std::move(resp));
@@ -306,6 +312,11 @@ RegionsReadIndexResult LearnerReadWorker::readIndex(
     UInt64 timeout_ms,
     Stopwatch & watch)
 {
+    LOG_DEBUG(
+        log,
+        "[Learner Read] Start read index, start_ts={} num_regions={}",
+        mvcc_query_info.start_ts,
+        regions_snapshot.size());
     RegionsReadIndexResult batch_read_index_result;
     const auto batch_read_index_req
         = buildBatchReadIndexReq(tmt.getRegionTable(), regions_snapshot, batch_read_index_result);
