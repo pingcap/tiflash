@@ -139,8 +139,13 @@ private:
     template <typename T, bool is_signed, bool round_to_next_byte = false>
     constexpr static UInt8 findMinimumBitWidth(const T * values, size_t count)
     {
-        auto [min, max] = std::minmax_element(values, values + count);
-        return findMinimumBitWidth<T, is_signed, round_to_next_byte>(*min, *max);
+        T min_value = values[0];
+        T max_value = *std::max_element(values, values + count);
+        if constexpr (is_signed)
+        {
+            min_value = *std::min_element(values, values + count);
+        }
+        return findMinimumBitWidth<T, is_signed, round_to_next_byte>(min_value, max_value);
     }
 
     template <typename T, bool is_signed, bool round_to_next_byte = false>
