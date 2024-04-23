@@ -50,6 +50,30 @@ public:
     static void testError();
 };
 
+
+struct Helper
+{
+    size_t & counter;
+    void operator()(std::unordered_map<RegionID, ReadIndexDataNodePtr> & d) NO_THREAD_SAFETY_ANALYSIS
+    {
+        for (auto & x : d)
+        {
+            auto _ = x.second->genLockGuard();
+            counter += x.second->cnt_use_history_tasks;
+        }
+    }
+};
+
+size_t ReadIndexTest::computeCntUseHistoryTasks(ReadIndexWorkerManager & manager)
+{
+    size_t cnt_use_history_tasks = 0;
+    for (auto & worker : manager.workers)
+    {
+        worker->data_map.invoke(Helper{.counter = cnt_use_history_tasks});
+    }
+    return cnt_use_history_tasks;
+}
+
 void ReadIndexTest::testError()
 {
     // test error
@@ -202,28 +226,6 @@ void ReadIndexTest::testError()
     ASSERT(!GCMonitor::instance().empty());
 }
 
-struct Helper
-{
-    size_t & counter;
-    void operator()(std::unordered_map<RegionID, ReadIndexDataNodePtr> & d) NO_THREAD_SAFETY_ANALYSIS
-    {
-        for (auto & x : d)
-        {
-            auto _ = x.second->genLockGuard();
-            counter += x.second->cnt_use_history_tasks;
-        }
-    }
-};
-
-size_t ReadIndexTest::computeCntUseHistoryTasks(ReadIndexWorkerManager & manager)
-{
-    size_t cnt_use_history_tasks = 0;
-    for (auto & worker : manager.workers)
-    {
-        worker->data_map.invoke(Helper{.counter = cnt_use_history_tasks});
-    }
-    return cnt_use_history_tasks;
-}
 
 void ReadIndexTest::testBasic()
 {
@@ -276,8 +278,8 @@ void ReadIndexTest::testBasic()
 }
 
 void ReadIndexTest::testNormal()
+try
 {
-    // test normal
     auto & ctx = TiFlashTestEnv::getGlobalContext();
     KVStore kvs = KVStore{ctx};
     MockRaftStoreProxy proxy_instance;
@@ -310,13 +312,14 @@ void ReadIndexTest::testNormal()
     });
 
     {
+        static constexpr uint64_t ORIGIN_TS = 10;
         std::vector<kvrpcpb::ReadIndexRequest> reqs;
         {
             // One request of start_ts = 10 for every region.
             reqs.reserve(proxy_instance.size());
             for (size_t i = 0; i < proxy_instance.size(); ++i)
             {
-                reqs.emplace_back(make_read_index_reqs(i, 10));
+                reqs.emplace_back(make_read_index_reqs(i, ORIGIN_TS));
             }
         }
         {
@@ -338,12 +341,13 @@ void ReadIndexTest::testNormal()
             }
         }
 
-        size_t expect_cnt_use_history_tasks = proxy_instance.size();
+        // See #8845
         {
-            // smaller ts, use history success record
+            uint64_t smaller_ts = ORIGIN_TS - 1;
+            // Smaller ts than 10, use history success record
             for (auto & r : reqs)
             {
-                r.set_start_ts(9);
+                r.set_start_ts(smaller_ts);
             }
             auto resps = manager->batchReadIndex(reqs);
             ASSERT_EQ(resps.size(), reqs.size());
@@ -352,16 +356,18 @@ void ReadIndexTest::testNormal()
                 auto & req = reqs[i];
                 auto && [resp, id] = resps[i];
                 ASSERT_EQ(req.context().region_id(), id);
-                ASSERT_EQ(resp.read_index(), 5);
+                // See #8845
+                ASSERT_EQ(resp.read_index(), 668);
             }
-            ASSERT_EQ(computeCntUseHistoryTasks(*manager), expect_cnt_use_history_tasks);
+            // No adding histroy counts since temporarily disabled.
+            ASSERT_EQ(computeCntUseHistoryTasks(*manager), 0);
         }
         {
-            // bigger ts, fetch latest commit index
+            // Bigger ts, fetch latest commit index
             reqs = {make_read_index_reqs(0, 11)};
             auto resps = manager->batchReadIndex(reqs);
             ASSERT_EQ(resps[0].first.read_index(), 668);
-            ASSERT_EQ(computeCntUseHistoryTasks(*manager), expect_cnt_use_history_tasks);
+            ASSERT_EQ(computeCntUseHistoryTasks(*manager), 0);
         }
         {
             for (auto & r : proxy_instance.regions)
@@ -370,18 +376,18 @@ void ReadIndexTest::testNormal()
             }
         }
         {
+            // Always no using of histroy if start_ts = 0
             reqs = {make_read_index_reqs(0, 0)};
             auto resps = manager->batchReadIndex(reqs);
-            ASSERT_EQ(resps[0].first.read_index(), 669); // tso 0 will not use history record
-            ASSERT_EQ(computeCntUseHistoryTasks(*manager), expect_cnt_use_history_tasks);
+            ASSERT_EQ(resps[0].first.read_index(), 669);
+            ASSERT_EQ(computeCntUseHistoryTasks(*manager), 0);
         }
         {
-            // smaller ts, use history success record.
-            expect_cnt_use_history_tasks++;
-            reqs = {make_read_index_reqs(0, 9)};
+            uint64_t smaller_ts = ORIGIN_TS - 1;
+            reqs = {make_read_index_reqs(0, smaller_ts)};
             auto resps = manager->batchReadIndex(reqs);
-            ASSERT_EQ(resps[0].first.read_index(), 668); // history record has been updated
-            ASSERT_EQ(computeCntUseHistoryTasks(*manager), expect_cnt_use_history_tasks);
+            ASSERT_EQ(resps[0].first.read_index(), 669);
+            ASSERT_EQ(computeCntUseHistoryTasks(*manager), 0);
         }
         {
             // Set region id to let mock proxy drop all related tasks.
@@ -464,6 +470,8 @@ void ReadIndexTest::testNormal()
     ASSERT(GCMonitor::instance().checkClean());
     ASSERT(!GCMonitor::instance().empty());
 }
+CATCH
+
 void ReadIndexTest::testBatch()
 {
     // test batch
@@ -667,7 +675,6 @@ void ReadIndexTest::testBatch()
     ASSERT(GCMonitor::instance().checkClean());
     ASSERT(!GCMonitor::instance().empty());
 }
-
 
 TEST_F(ReadIndexTest, workers)
 try
