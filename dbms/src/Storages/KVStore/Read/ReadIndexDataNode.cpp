@@ -253,6 +253,7 @@ void ReadIndexDataNode::doAddHistoryTasks(Timestamp ts, kvrpcpb::ReadIndexRespon
         }
     }
     {
+        LOG_TRACE(DB::Logger::get(), "[Learner Read] Add histroy tasks ts={} region_id={}", ts, region_id);
         history_success_tasks.emplace(ts, std::move(resp)); // move resp
     }
 }
