@@ -123,7 +123,7 @@ void ReadIndexDataNode::runOneRound(const TiFlashRaftProxyHelper & helper, const
                 }
             }
 
-            LOG_TRACE(
+            LOG_DEBUG(
                 DB::Logger::get(),
                 "[Learner Read] Read Index in Batch(new request), max_ts={} region_id={} waiting_tasks={} "
                 "running_tasks={} should_build_running_task={} build_success={}",
