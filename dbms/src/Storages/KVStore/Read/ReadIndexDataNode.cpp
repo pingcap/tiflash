@@ -85,7 +85,7 @@ void ReadIndexDataNode::runOneRound(const TiFlashRaftProxyHelper & helper, const
             LOG_TRACE(
                 DB::Logger::get(),
                 "[Learner Read] Read Index in Batch(use histroy), max_ts={} region_id={} waiting_tasks={} "
-                "running_tasks={}, histroy_ts={}",
+                "running_tasks={} histroy_ts={}",
                 max_ts,
                 region_id,
                 waiting_tasks.size(),
@@ -101,7 +101,7 @@ void ReadIndexDataNode::runOneRound(const TiFlashRaftProxyHelper & helper, const
             bool build_success = false;
             if (should_build_running_task)
             {
-                // If we can't attach us to some running_tasks.
+                // If we can't attach to some running_tasks.
                 TEST_LOG_FMT("no exist running_tasks for ts {}", max_ts);
 
                 if (auto t = makeReadIndexTask(helper, max_ts_task->req); t)
