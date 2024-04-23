@@ -285,7 +285,9 @@ private:
         }
         else
         {
-            static_assert(false, "Unsupported type for bitpacking");
+            // TODO: use static_assert instead until the toolchain upgrade to clang 17.0
+            // static_assert(false, "Unsupported type for bitpacking");
+            throw Exception("Unsupported type for bitpacking");
         }
     }
 
@@ -326,7 +328,9 @@ private:
         }
         else
         {
-            static_assert(false, "Unsupported type for bitpacking");
+            // TODO: use static_assert instead until the toolchain upgrade to clang 17.0
+            // static_assert(false, "Unsupported type for bitpacking");
+            throw Exception("Unsupported type for bitpacking");
         }
 
         if (std::numeric_limits<T>::is_signed && !skip_sign_extension && width > 0 && width < sizeof(T) * 8)
