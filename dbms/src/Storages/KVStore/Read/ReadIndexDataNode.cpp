@@ -82,7 +82,7 @@ void ReadIndexDataNode::runOneRound(const TiFlashRaftProxyHelper & helper, const
                 e.second->update(history_success_tasks->second);
             }
 
-            LOG_TRACE(
+            LOG_DEBUG(
                 DB::Logger::get(),
                 "[Learner Read] Read Index in Batch(use histroy), max_ts={} region_id={} waiting_tasks={} "
                 "running_tasks={} histroy_ts={}",
