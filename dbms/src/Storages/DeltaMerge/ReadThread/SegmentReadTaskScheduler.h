@@ -23,7 +23,10 @@ struct Settings;
 
 namespace DB::DM
 {
-
+namespace tests
+{
+class SegmentReadTasksPoolTest;
+}
 // `SegmentReadTaskScheduler` is a global singleton. All `SegmentReadTaskPool` will be added to it and be scheduled by it.
 // 1. `UnorderedInputStream`/`UnorderedSourceOps` will call `SegmentReadTaskScheduler::add` to add a `SegmentReadTaskPool`
 // object to the `read_pools` list and index segments information into `merging_segments`.
@@ -51,11 +54,7 @@ public:
 
     void updateConfig(const Settings & settings);
 
-#ifndef DBMS_PUBLIC_GTEST
 private:
-#else
-public:
-#endif
     // `run_sched_thread` is used for test.
     explicit SegmentReadTaskScheduler(bool run_sched_thread = true);
 
@@ -101,5 +100,7 @@ public:
 
     // To count how many threads are waitting to add tasks.
     std::atomic<Int64> add_waittings{0};
+
+    friend class tests::SegmentReadTasksPoolTest;
 };
 } // namespace DB::DM

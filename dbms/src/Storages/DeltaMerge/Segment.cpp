@@ -39,6 +39,7 @@
 #include <Storages/DeltaMerge/Filter/FilterHelper.h>
 #include <Storages/DeltaMerge/LateMaterializationBlockInputStream.h>
 #include <Storages/DeltaMerge/PKSquashingBlockInputStream.h>
+#include <Storages/DeltaMerge/Range.h>
 #include <Storages/DeltaMerge/Remote/DataStore/DataStore.h>
 #include <Storages/DeltaMerge/Remote/ObjectId.h>
 #include <Storages/DeltaMerge/Remote/RNDeltaIndexCache.h>
@@ -121,6 +122,23 @@ extern const int UNKNOWN_FORMAT_VERSION;
 
 namespace DM
 {
+String SegmentSnapshot::detailInfo() const
+{
+    return fmt::format(
+        "{{"
+        "stable_rows={} "
+        "persisted_rows={} persisted_dels={} persisted_cfs={} "
+        "mem_rows={} mem_dels={} mem_cfs={}"
+        "}}",
+        stable->getRows(),
+        delta->getPersistedFileSetSnapshot()->getRows(),
+        delta->getPersistedFileSetSnapshot()->getDeletes(),
+        delta->getPersistedFileSetSnapshot()->getColumnFileCount(),
+        delta->getMemTableSetSnapshot()->getRows(),
+        delta->getMemTableSetSnapshot()->getDeletes(),
+        delta->getMemTableSetSnapshot()->getColumnFileCount());
+}
+
 const static size_t SEGMENT_BUFFER_SIZE = 128; // More than enough.
 
 DMFilePtr writeIntoNewDMFile(
@@ -2401,7 +2419,7 @@ Segment::ReadInfo Segment::getReadInfo(
     ReadTag read_tag,
     UInt64 start_ts) const
 {
-    LOG_DEBUG(segment_snap->log, "Begin segment getReadInfo");
+    LOG_DEBUG(segment_snap->log, "Begin segment getReadInfo {}", simpleInfo());
 
     auto new_read_columns = arrangeReadColumns(getExtraHandleColumnDefine(is_common_handle), read_columns);
     auto pk_ver_col_defs = std::make_shared<ColumnDefines>(
@@ -2417,12 +2435,18 @@ Segment::ReadInfo Segment::getReadInfo(
 
     auto [my_delta_index, fully_indexed] = ensurePlace(dm_context, segment_snap, delta_reader, read_ranges, start_ts);
     auto compacted_index = my_delta_index->getDeltaTree()->getCompactedEntries();
-
-
     // Hold compacted_index reference, to prevent it from deallocated.
     delta_reader->setDeltaIndex(compacted_index);
 
-    LOG_DEBUG(segment_snap->log, "Finish segment getReadInfo");
+    LOG_DEBUG(
+        segment_snap->log,
+        "Finish segment getReadInfo, my_delta_index={} fully_indexed={} read_ranges={} "
+        "snap={} {}",
+        my_delta_index->toString(),
+        fully_indexed,
+        DB::DM::toDebugString(read_ranges),
+        segment_snap->detailInfo(),
+        simpleInfo());
 
     if (fully_indexed)
     {
@@ -2430,7 +2454,11 @@ Segment::ReadInfo Segment::getReadInfo(
         bool ok = segment_snap->delta->getSharedDeltaIndex()->updateIfAdvanced(*my_delta_index);
         if (ok)
         {
-            LOG_DEBUG(segment_snap->log, "Segment updated delta index");
+            LOG_DEBUG(
+                segment_snap->log,
+                "Segment updated delta index, my_delta_index={} {}",
+                my_delta_index->toString(),
+                simpleInfo());
             // Update cache size.
             if (auto cache = dm_context.global_context.getSharedContextDisagg()->rn_delta_index_cache; cache)
                 cache->setDeltaIndex(segment_snap->delta->getSharedDeltaIndex());
@@ -2539,8 +2567,8 @@ std::pair<DeltaIndexPtr, bool> Segment::ensurePlace(
     auto my_delta_index = delta_snap->getSharedDeltaIndex()->tryClone(delta_snap->getRows(), delta_snap->getDeletes());
     auto my_delta_tree = my_delta_index->getDeltaTree();
 
-    bool relevant_place = dm_context.enable_relevant_place;
-    bool skippable_place = dm_context.enable_skippable_place;
+    const bool relevant_place = dm_context.enable_relevant_place;
+    const bool skippable_place = dm_context.enable_skippable_place;
 
     // Note that, when enable_relevant_place is false , we cannot use the range of this segment.
     // Because some block / delete ranges could contain some data / range that are not belong to current segment.
@@ -2552,7 +2580,9 @@ std::pair<DeltaIndexPtr, bool> Segment::ensurePlace(
 
     // Let's do a fast check, determine whether we need to do place or not.
     if (!delta_reader->shouldPlace(dm_context, my_delta_index, rowkey_range, relevant_range, start_ts))
+    {
         return {my_delta_index, false};
+    }
 
     CurrentMetrics::Increment cur_dm_segments{CurrentMetrics::DT_PlaceIndexUpdate};
     GET_METRIC(tiflash_storage_subtask_count, type_place_index_update).Increment();
@@ -2578,8 +2608,11 @@ std::pair<DeltaIndexPtr, bool> Segment::ensurePlace(
             auto offset = v.getBlockOffset();
             auto rows = block.rows();
 
-            if (unlikely(my_placed_rows != offset))
-                throw Exception("Place block offset not match", ErrorCodes::LOGICAL_ERROR);
+            RUNTIME_CHECK_MSG(
+                my_placed_rows == offset,
+                "Place block offset not match, my_placed_rows={} offset={}",
+                my_placed_rows,
+                offset);
 
             if (skippable_place)
                 fully_indexed &= placeUpsert<true>(
@@ -2629,25 +2662,24 @@ std::pair<DeltaIndexPtr, bool> Segment::ensurePlace(
         }
     }
 
-    if (unlikely(my_placed_rows != delta_snap->getRows() || my_placed_deletes != delta_snap->getDeletes()))
-    {
-        throw Exception(fmt::format(
-            "Placed status not match! Expected place rows:{}, deletes:{}, but actually placed rows:{}, deletes:{}",
-            delta_snap->getRows(),
-            delta_snap->getDeletes(),
-            my_placed_rows,
-            my_placed_deletes));
-    }
+    RUNTIME_CHECK_MSG(
+        my_placed_rows == delta_snap->getRows() && my_placed_deletes == delta_snap->getDeletes(),
+        "Placed status not match! Expected place rows:{}, deletes:{}, but actually placed rows:{}, deletes:{}",
+        delta_snap->getRows(),
+        delta_snap->getDeletes(),
+        my_placed_rows,
+        my_placed_deletes);
 
     my_delta_index->update(my_delta_tree, my_placed_rows, my_placed_deletes);
 
     LOG_DEBUG(
         segment_snap->log,
-        "Finish segment ensurePlace, read_ranges={} placed_items={} shared_delta_index={} my_delta_index={}",
+        "Finish segment ensurePlace, read_ranges={} placed_items={} shared_delta_index={} my_delta_index={} {}",
         DB::DM::toDebugString(read_ranges),
         items.size(),
         delta_snap->getSharedDeltaIndex()->toString(),
-        my_delta_index->toString());
+        my_delta_index->toString(),
+        simpleInfo());
 
     return {my_delta_index, fully_indexed};
 }
