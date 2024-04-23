@@ -73,7 +73,7 @@ void ReadIndexDataNode::runOneRound(const TiFlashRaftProxyHelper & helper, const
             running_tasks.size());
 
         // start-ts `0` will be used to only get the latest index, do not use history
-        if (false && history_success_tasks && history_success_tasks->first >= max_ts && max_ts)
+        if (history_success_tasks && history_success_tasks->first >= max_ts && max_ts)
         {
             TEST_LOG_FMT("find history_tasks resp {}", history_success_tasks->second.ShortDebugString());
 
