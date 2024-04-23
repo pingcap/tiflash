@@ -74,14 +74,22 @@ struct MvccQueryInfo
     using ReadIndexRes = std::unordered_map<RegionID, UInt64>;
 
     DM::ScanContextPtr scan_context;
+
 private:
     ReadIndexRes read_index_res_cache;
+
 public:
     explicit MvccQueryInfo(bool resolve_locks_ = false, UInt64 start_ts_ = 0, DM::ScanContextPtr scan_ctx = nullptr);
 
-    void addReadIndexResToCache(RegionID region_id, UInt64 read_index) {
-        LOG_DEBUG(DB::Logger::get(), "addReadIndexResToCache region_id={} read_index={} start_ts={}", region_id, read_index, start_ts);
-        read_index_res_cache[region_id] = read_index; 
+    void addReadIndexResToCache(RegionID region_id, UInt64 read_index)
+    {
+        LOG_DEBUG(
+            DB::Logger::get(),
+            "addReadIndexResToCache region_id={} read_index={} start_ts={}",
+            region_id,
+            read_index,
+            start_ts);
+        read_index_res_cache[region_id] = read_index;
     }
 
     UInt64 getReadIndexRes(RegionID region_id) const
