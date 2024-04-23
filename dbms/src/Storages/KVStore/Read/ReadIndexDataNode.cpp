@@ -72,9 +72,9 @@ void ReadIndexDataNode::runOneRound(const TiFlashRaftProxyHelper & helper, const
             waiting_tasks.size(),
             running_tasks.size());
 
-        // start-ts `0` will be used to only get the latest index, do not use history
         // According to https://github.com/pingcap/tiflash/issues/8845, a txn with larger commit_ts could have smaller raft log index.
         // Thus the optimization is not safe. We temporarily disable this feature until we find a correct way.
+        // start-ts `0` will be used to only get the latest index, do not use history
         if (false) // NOLINT
         {
             TEST_LOG_FMT("find history_tasks resp {}", history_success_tasks->second.ShortDebugString());
