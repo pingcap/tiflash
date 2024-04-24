@@ -15,7 +15,7 @@
 #pragma once
 
 #include <DataStreams/AddExtraTableIDColumnTransformAction.h>
-#include <DataStreams/IProfilingBlockInputStream.h>
+#include <DataStreams/IBlockInputStream.h>
 #include <Storages/KVStore/Types.h>
 
 namespace DB
@@ -24,7 +24,7 @@ namespace DB
 /**
   * Adds an extra TableID column to the block.
   */
-class AddExtraTableIDColumnInputStream : public IProfilingBlockInputStream
+class AddExtraTableIDColumnInputStream : public IBlockInputStream
 {
     static constexpr auto NAME = "AddExtraTableIDColumn";
 
@@ -36,7 +36,7 @@ public:
     Block getHeader() const override { return action.getHeader(); }
 
 protected:
-    Block readImpl() override;
+    Block read() override;
 
 private:
     const TableID physical_table_id;

@@ -27,7 +27,7 @@ AddExtraTableIDColumnInputStream::AddExtraTableIDColumnInputStream(
     children.push_back(input);
 }
 
-Block AddExtraTableIDColumnInputStream::readImpl()
+Block AddExtraTableIDColumnInputStream::read()
 {
     Block res = children.back()->read();
     if (!res)
