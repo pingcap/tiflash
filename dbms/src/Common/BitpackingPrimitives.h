@@ -228,6 +228,7 @@ private:
     }
 
     // Prevent compression at widths that are ineffective
+    // Ineffective means that the width is greater than 7/8 of the original width.
     template <typename T>
     constexpr static UInt8 getEffectiveWidth(UInt8 width)
     {
