@@ -206,6 +206,7 @@ Block AggregateContext::readForConvergent(size_t index)
     assert(status.load() == AggStatus::convergent);
     if unlikely (!merging_buckets)
         return {};
-    return merging_buckets->getData(index);
+
+    return merging_buckets->getData(index, /*enable_skip_serialize_key=*/true);
 }
 } // namespace DB

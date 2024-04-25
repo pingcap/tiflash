@@ -991,16 +991,16 @@ public:
 
     Block getHeader() const;
 
-    Block getData(size_t concurrency_index);
+    Block getData(size_t concurrency_index, bool enable_skip_serialize_key);
 
     size_t getConcurrency() const { return concurrency; }
 
 private:
-    Block getDataForSingleLevel();
+    Block getDataForSingleLevel(bool enable_skip_serialize_key);
 
-    Block getDataForTwoLevel(size_t concurrency_index);
+    Block getDataForTwoLevel(size_t concurrency_index, bool enable_skip_serialize_key);
 
-    void doLevelMerge(Int32 bucket_num, size_t concurrency_index);
+    void doLevelMerge(Int32 bucket_num, size_t concurrency_index, bool enable_skip_serialize_key);
 
 private:
     const LoggerPtr log;
@@ -1315,7 +1315,10 @@ protected:
     template <typename Method>
     void mergeSingleLevelDataImpl(ManyAggregatedDataVariants & non_empty_data) const;
 
-    template <typename Method, typename Table>
+    // enable_skip_serialize_key will only be true when output.
+    // It will be false when spilling to disk.
+    // Because need to make sure the block inserting into HashMap is same as the child output block.
+    template <typename Method, typename Table, bool skip_serialize_key>
     void convertToBlockImpl(
         Method & method,
         Table & data,
@@ -1325,6 +1328,9 @@ protected:
         Arena * arena,
         bool final) const;
 
+    // The template parameter skip_serialize_key indicates whether the key in the HashMap can be skipped to serialize.
+    // For example, select first_row(c1) from t group by c1, only the result of first_row(c1) needs to be serialized.
+    // The key c1 does not need to be serialized into Column. It only needs to reference to the result column of first_row(c1).
     template <typename Method, typename Table, bool skip_serialize_key>
     void convertToBlocksImpl(
         Method & method,
@@ -1335,11 +1341,7 @@ protected:
         Arena * arena,
         bool final) const;
 
-    // todo change name to distinguish convertToBlocksImplFinal()
-    // convertToBlocksImplFinal() is used for non spill situation, and will consider
-    // skip serialize key optimization.
-    // todo why spill doesn't use convertToBlocksImplFinal()?
-    template <typename Method, typename Table>
+    template <typename Method, typename Table, bool skip_serialize_key>
     void convertToBlockImplFinal(
         Method & method,
         Table & data,
@@ -1355,7 +1357,7 @@ protected:
         std::vector<MutableColumns> & final_aggregate_columns_vec,
         Arena * arena) const;
 
-    template <typename Method, typename Table>
+    template <typename Method, typename Table, bool skip_serialize_key>
     void convertToBlockImplNotFinal(
         Method & method,
         Table & data,
@@ -1382,7 +1384,8 @@ protected:
         Method & method,
         Arena * arena,
         bool final,
-        size_t bucket) const;
+        size_t bucket,
+        bool enable_skip_serialize_key) const;
 
     template <typename Method>
     BlocksList convertOneBucketToBlocks(
@@ -1390,7 +1393,8 @@ protected:
         Method & method,
         Arena * arena,
         bool final,
-        size_t bucket) const;
+        size_t bucket,
+        bool enable_skip_serialize_key) const;
 
     template <typename Mapped>
     void insertAggregatesIntoColumns(Mapped & mapped, MutableColumns & final_aggregate_columns, Arena * arena) const;
@@ -1402,7 +1406,7 @@ protected:
         AggregateFunctionInstructions & instructions);
 
     BlocksList prepareBlocksAndFillWithoutKey(AggregatedDataVariants & data_variants, bool final) const;
-    BlocksList prepareBlocksAndFillSingleLevel(AggregatedDataVariants & data_variants, bool final) const;
+    BlocksList prepareBlocksAndFillSingleLevel(AggregatedDataVariants & data_variants, bool final, bool enable_skip_serialize_key) const;
 
     template <typename Method, typename Table>
     void mergeStreamsImplCase(Block & block, Arena * aggregates_pool, Method & method, Table & data) const;

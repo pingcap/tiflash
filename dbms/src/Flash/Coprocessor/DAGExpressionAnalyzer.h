@@ -76,7 +76,7 @@ public:
 
     /// <aggregation_keys, collators, aggregate_descriptions, before_agg>
     /// May change the source columns.
-    std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions, ExpressionActionsPtr> appendAggregation(
+    std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions, ExpressionActionsPtr, std::unordered_map<String, String>> appendAggregation(
         ExpressionActionsChain & chain,
         const tipb::Aggregation & agg,
         bool group_by_collation_sensitive);

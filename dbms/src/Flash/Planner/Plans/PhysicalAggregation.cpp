@@ -274,6 +274,7 @@ void PhysicalAggregation::buildPipeline(
             before_agg_actions,
             aggregation_keys,
             aggregation_collators,
+            key_from_agg_func,
             is_final_agg,
             aggregate_descriptions,
             aggregate_context);

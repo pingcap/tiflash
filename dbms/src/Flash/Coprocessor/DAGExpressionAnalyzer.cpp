@@ -559,9 +559,7 @@ std::pair<String, DataTypePtr> findFirstRow(const AggregateDescriptions & aggreg
 {
     for (const auto & desc : aggregate_descriptions)
     {
-        if (desc.function->getName() == "first_row" &&
-                desc.argument_names.size() == 1 &&
-                desc.argument_names[0] == arg_name)
+        if (desc.function->getName() == "first_row" && desc.argument_names[0] == arg_name)
             return std::make_pair(desc.column_name, desc.function->getReturnType());
     }
     return std::make_pair("", nullptr);
@@ -604,12 +602,10 @@ void DAGExpressionAnalyzer::buildAggGroupBy(
                 collators.push_back(collator);
             if (collator != nullptr)
             {
-                // todo arg_collators
                 auto [first_row_name, first_row_type] = findFirstRow(aggregate_descriptions, name);
                 String agg_func_name = first_row_name;
                 if (!first_row_name.empty())
                 {
-                    // todo need or not?
                     aggregated_columns.emplace_back(first_row_name, first_row_type);
                 }
                 else
@@ -680,8 +676,8 @@ void DAGExpressionAnalyzer::buildAggFuncs(
     }
 }
 
-std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions, ExpressionActionsPtr> DAGExpressionAnalyzer::
-    appendAggregation(ExpressionActionsChain & chain, const tipb::Aggregation & agg, bool group_by_collation_sensitive)
+std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions, ExpressionActionsPtr, std::unordered_map<String, String>>
+DAGExpressionAnalyzer::appendAggregation(ExpressionActionsChain & chain, const tipb::Aggregation & agg, bool group_by_collation_sensitive)
 {
     if (agg.group_by_size() == 0 && agg.agg_func_size() == 0)
     {
@@ -696,7 +692,6 @@ std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions, ExpressionActionsP
     Names aggregation_keys;
     TiDB::TiDBCollators collators;
     std::unordered_set<String> agg_key_set;
-    // todo check analyzeExpressions DAGQueryBlockInterpreter.cpp
     std::unordered_map<String, String> key_from_agg_func;
     buildAggFuncs(agg, step.actions, aggregate_descriptions, aggregated_columns);
     buildAggGroupBy(
@@ -730,7 +725,7 @@ std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions, ExpressionActionsP
     for (const auto & column : getCurrentInputColumns())
         after_agg_step.required_output.push_back(column.name);
 
-    return {aggregation_keys, collators, aggregate_descriptions, before_agg};
+    return {aggregation_keys, collators, aggregate_descriptions, before_agg, key_from_agg_func};
 }
 
 bool isWindowFunctionsValid(const tipb::Window & window)

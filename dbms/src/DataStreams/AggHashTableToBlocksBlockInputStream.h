@@ -52,7 +52,8 @@ protected:
                 method,
                 aggregated_data_variants.aggregates_pool,
                 false,
-                current_bucket++);
+                current_bucket++,
+                /*enable_skip_serialize_key=*/false);
             size_t block_rows = block.rows();
             size_t block_bytes = block.bytes();
 

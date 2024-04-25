@@ -88,10 +88,15 @@ std::shared_ptr<Aggregator::Params> buildParams(
     bool is_final_agg,
     const SpillConfig & spill_config)
 {
-    ColumnNumbers keys;
-    keys.resize(key_names.size());
+    ColumnNumbers keys(key_names.size(), 0);
     size_t normal_key_idx = 0;
-    size_t agg_func_as_key_idx = key_from_agg_func.size();
+    size_t agg_func_as_key_idx = key_names.size() - key_from_agg_func.size();
+    // We put group by key that reference aggregate func after original key. For example:
+    // select sum(c0), first_row(c1), first_row(c3) group by c1, c2, c3
+    // Before: keys: c1 | c2 | c3
+    // After:  keys: c2 | c1 | c3
+    // By doing this, when deserialize group by keys from HashMap to columns,
+    // we only need to handle c2(normal_key_size == 1) and ignore c2/c3.
     for (const auto & name : key_names)
     {
         auto col_idx = before_agg_header.getPositionByName(name);
@@ -104,6 +109,8 @@ std::shared_ptr<Aggregator::Params> buildParams(
             keys[agg_func_as_key_idx++] = col_idx;
         }
     }
+    assert(normal_key_idx == key_names.size() - key_from_agg_func.size());
+    assert(agg_func_as_key_idx == key_names.size());
 
     const Settings & settings = context.getSettingsRef();
 

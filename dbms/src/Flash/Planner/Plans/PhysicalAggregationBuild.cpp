@@ -47,10 +47,7 @@ void PhysicalAggregationBuild::buildPipelineExecGroupImpl(
         context.getFileProvider(),
         context.getSettingsRef().max_threads,
         context.getSettingsRef().max_block_size);
-    // todo finish this
-    std::unordered_map<String, String> key_from_agg_func;
-    // todo maybe keep use pointer?
-    auto params = *AggregationInterpreterHelper::buildParams(
+    auto params = AggregationInterpreterHelper::buildParams(
         context,
         before_agg_header,
         concurrency,
@@ -63,7 +60,7 @@ void PhysicalAggregationBuild::buildPipelineExecGroupImpl(
         spill_config);
     assert(aggregate_context);
     aggregate_context->initBuild(
-        params,
+        *params,
         concurrency,
         /*hook=*/[&]() { return exec_context.isCancelled(); },
         exec_context.getRegisterOperatorSpillContext());
