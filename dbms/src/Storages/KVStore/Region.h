@@ -244,12 +244,17 @@ public:
     // Methods to handle orphan keys under raftstore v2.
     void beforePrehandleSnapshot(uint64_t region_id, std::optional<uint64_t> deadline_index);
     void afterPrehandleSnapshot(int64_t ongoing);
+<<<<<<< HEAD
     RegionData::OrphanKeysInfo & orphanKeysInfo() { return data.orphan_keys_info; }
     const RegionData::OrphanKeysInfo & orphanKeysInfo() const { return data.orphan_keys_info; }
 
     void mergeDataFrom(const Region & other);
 
     Region() = delete;
+=======
+    void observeLearnerReadEvent(Timestamp read_tso) const;
+    Timestamp getLastObservedReadTso() const;
+>>>>>>> 89d1d73883 (KVStore: Log when meets any commit_ts < observed max_read_tso (#8991))
 
 private:
     friend class RegionRaftCommandDelegate;
@@ -296,6 +301,7 @@ private:
     UInt64 last_restart_log_applied{0};
     mutable std::atomic<size_t> approx_mem_cache_rows{0};
     mutable std::atomic<size_t> approx_mem_cache_bytes{0};
+    mutable std::atomic<Timestamp> last_observed_read_tso{0};
 };
 
 class RegionRaftCommandDelegate

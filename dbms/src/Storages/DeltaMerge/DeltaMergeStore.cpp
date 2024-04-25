@@ -546,6 +546,42 @@ DM::WriteResult DeltaMergeStore::write(const Context & db_context, const DB::Set
 
     auto dm_context = newDMContext(db_context, db_settings, "write");
 
+<<<<<<< HEAD
+=======
+    if (db_context.getSettingsRef().dt_log_record_version)
+    {
+        const auto & ver_col = block.getByName(VERSION_COLUMN_NAME).column;
+        const auto * ver = toColumnVectorDataPtr<UInt64>(ver_col);
+        std::unordered_set<UInt64> dedup_ver;
+        for (auto v : *ver)
+        {
+            dedup_ver.insert(v);
+        }
+
+        std::unordered_set<Int64> dedup_handles;
+        auto extra_handle_col = tryGetByColumnId(block, EXTRA_HANDLE_COLUMN_ID);
+        if (extra_handle_col.column)
+        {
+            if (extra_handle_col.type->getTypeId() == TypeIndex::Int64)
+            {
+                const auto * extra_handles = toColumnVectorDataPtr<Int64>(extra_handle_col.column);
+                for (auto h : *extra_handles)
+                {
+                    dedup_handles.insert(h);
+                }
+            }
+        }
+
+        LOG_DEBUG(
+            log,
+            "region_id={} applied_index={} record_count={} versions={} handles={}",
+            applied_status.region_id,
+            applied_status.applied_index,
+            block.rows(),
+            dedup_ver,
+            dedup_handles);
+    }
+>>>>>>> 89d1d73883 (KVStore: Log when meets any commit_ts < observed max_read_tso (#8991))
     const auto bytes = block.bytes();
 
     {

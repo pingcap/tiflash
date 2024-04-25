@@ -393,4 +393,20 @@ void Region::mergeDataFrom(const Region & other)
     this->data.mergeFrom(other.data);
     this->data.orphan_keys_info.mergeFrom(other.data.orphan_keys_info);
 }
+
+void Region::observeLearnerReadEvent(Timestamp read_tso) const
+{
+    auto ori = last_observed_read_tso.load();
+    if (read_tso > ori)
+    {
+        // Do not retry if failed, though may lost some update here, however the total read_tso can advance.
+        last_observed_read_tso.compare_exchange_strong(ori, read_tso);
+    }
+}
+
+Timestamp Region::getLastObservedReadTso() const
+{
+    return last_observed_read_tso.load();
+}
+
 } // namespace DB
