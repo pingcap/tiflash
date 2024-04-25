@@ -26,6 +26,7 @@
 
 #include <chrono>
 #include <map>
+#include <optional>
 
 namespace DB
 {
@@ -54,6 +55,8 @@ public:
     void setRUInfo(const RUConsumption & ru_info_);
 
     void setCompileTimestamp(const Timestamp & start_timestamp, const Timestamp & end_timestamp);
+
+    void setExtraInfo(const String & extra_info_);
 
     tipb::SelectResponse genExecutionSummaryResponse();
 
@@ -92,5 +95,8 @@ private:
     // resource
     RUConsumption ru_info{.cpu_ru = 0.0, .cpu_time_ns = 0, .read_ru = 0.0, .read_bytes = 0};
     Int64 memory_peak = 0;
+
+    // extra
+    String extra_info = "{}";
 };
 } // namespace DB
