@@ -355,10 +355,31 @@ std::optional<RegionDataReadInfoList> ReadRegionCommitCache(const RegionPtr & re
 
     RegionDataReadInfoList data_list_read;
     data_list_read.reserve(scanner.writeMapSize());
+    auto read_tso = region->getLastObservedReadTso();
+    Timestamp min_error_read_tso = std::numeric_limits<Timestamp>::max();
+    size_t error_prone_count = 0;
     do
     {
-        data_list_read.emplace_back(scanner.next());
+        // A read index request with read_tso will stop concurrency manager from committing txns with smaller tso by advancing max_ts to at least read_tso.
+        auto data_read = scanner.next();
+        // It's a natual fallback when there has not been any read_tso on this region.
+        if (data_read.commit_ts <= read_tso)
+        {
+            error_prone_count++;
+            min_error_read_tso = std::min(min_error_read_tso, data_read.commit_ts);
+        }
+        data_list_read.emplace_back(std::move(data_read));
     } while (scanner.hasNext());
+    if (error_prone_count > 0)
+    {
+        LOG_INFO(
+            DB::Logger::get(),
+            "Error prone txn commit error_prone_count={} min_rso={} region_id={} applied_index={}",
+            error_prone_count,
+            min_error_read_tso,
+            region->id(),
+            region->appliedIndex());
+    }
     return data_list_read;
 }
 
