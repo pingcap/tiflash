@@ -448,6 +448,7 @@ FastAddPeerRes FastAddPeerImpl(
                 new_peer_id,
                 e.message()));
         GET_METRIC(tiflash_fap_task_result, type_failed_baddata).Increment();
+        // The task could stuck in AsyncTasks as Finished till fetched by resolveFapSnapshotState.
         return genFastAddPeerRes(FastAddPeerStatus::BadData, "", "");
     }
     catch (...)
@@ -459,6 +460,7 @@ FastAddPeerRes FastAddPeerImpl(
                 region_id,
                 new_peer_id));
         GET_METRIC(tiflash_fap_task_result, type_failed_baddata).Increment();
+        // The task could stuck in AsyncTasks as Finished till fetched by resolveFapSnapshotState.
         return genFastAddPeerRes(FastAddPeerStatus::BadData, "", "");
     }
 }
