@@ -26,7 +26,6 @@
 
 #include <chrono>
 #include <map>
-#include <optional>
 
 namespace DB
 {
