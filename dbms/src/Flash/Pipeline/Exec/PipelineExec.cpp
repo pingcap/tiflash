@@ -236,8 +236,7 @@ OperatorStatus PipelineExec::awaitImpl()
 
 void PipelineExec::finalizeProfileInfo(UInt64 queuing_time, UInt64 pipeline_breaker_wait_time)
 {
-    // For the pipeline_breaker_wait_time,
-    // it should be added to the pipeline breaker operator(AggConvergent and JoinProbe),
+    // For the pipeline_breaker_wait_time, it should be added to the pipeline breaker operator(AggConvergent and JoinProbe),
     // However, if there are multiple pipeline breaker operators within a single pipeline, it can become very complex.
     // Therefore, to simplify matters, we will include the pipeline schedule duration in the execution time of the source operator.
     //
