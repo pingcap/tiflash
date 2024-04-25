@@ -86,36 +86,6 @@ EventPtr PhysicalAggregationBuild::doSinkComplete(PipelineExecutorContext & exec
     assert(aggregate_context);
 
     SCOPE_EXIT({ aggregate_context.reset(); });
-    if (!aggregate_context->hasSpilledData())
-    {
-        if (!aggregate_context->isConvertibleToTwoLevel())
-            return nullptr;
-
-        bool has_two_level = aggregate_context->hasAtLeastOneTwoLevel();
-        fiu_do_on(FailPoints::force_agg_two_level_hash_table_before_merge, { has_two_level = true; });
-        if (!has_two_level)
-            return nullptr;
-
-        std::vector<size_t> indexes;
-        for (size_t index = 0; index < aggregate_context->getBuildConcurrency(); ++index)
-        {
-            if (!aggregate_context->isTwoLevelOrEmpty(index))
-                indexes.push_back(index);
-        }
-
-        if (!indexes.empty())
-        {
-            auto final_convert_event = std::make_shared<AggregateFinalConvertEvent>(
-                exec_context,
-                log->identifier(),
-                aggregate_context,
-                std::move(indexes),
-                std::move(profile_infos));
-            return final_convert_event;
-        }
-
-        return nullptr;
-    }
 
     aggregate_context->getAggSpillContext()->finishSpillableStage();
     bool need_final_spill = false;
@@ -128,31 +98,56 @@ EventPtr PhysicalAggregationBuild::doSinkComplete(PipelineExecutorContext & exec
         }
     }
 
-    if (!need_final_spill)
-        return nullptr;
-
-    /// Currently, the aggregation spill algorithm requires all bucket data to be spilled,
-    /// so a new event is added here to execute the final spill.
-    /// ...──►AggregateBuildSinkOp[local spill]──┐
-    /// ...──►AggregateBuildSinkOp[local spill]──┤                                         ┌──►AggregateFinalSpillTask
-    /// ...──►AggregateBuildSinkOp[local spill]──┼──►[final spill]AggregateFinalSpillEvent─┼──►AggregateFinalSpillTask
-    /// ...──►AggregateBuildSinkOp[local spill]──┤                                         └──►AggregateFinalSpillTask
-    /// ...──►AggregateBuildSinkOp[local spill]──┘
-    std::vector<size_t> indexes;
-    for (size_t index = 0; index < aggregate_context->getBuildConcurrency(); ++index)
+    if (need_final_spill)
     {
-        if (aggregate_context->needSpill(index, /*try_mark_need_spill=*/true))
-            indexes.push_back(index);
+        /// Currently, the aggregation spill algorithm requires all bucket data to be spilled,
+        /// so a new event is added here to execute the final spill.
+        /// ...──►AggregateBuildSinkOp[local spill]──┐
+        /// ...──►AggregateBuildSinkOp[local spill]──┤                                         ┌──►AggregateFinalSpillTask
+        /// ...──►AggregateBuildSinkOp[local spill]──┼──►[final spill]AggregateFinalSpillEvent─┼──►AggregateFinalSpillTask
+        /// ...──►AggregateBuildSinkOp[local spill]──┤                                         └──►AggregateFinalSpillTask
+        /// ...──►AggregateBuildSinkOp[local spill]──┘
+        std::vector<size_t> indexes;
+        for (size_t index = 0; index < aggregate_context->getBuildConcurrency(); ++index)
+        {
+            if (aggregate_context->needSpill(index, /*try_mark_need_spill=*/true))
+                indexes.push_back(index);
+        }
+        if (!indexes.empty())
+        {
+            auto final_spill_event = std::make_shared<AggregateFinalSpillEvent>(
+                exec_context,
+                log->identifier(),
+                aggregate_context,
+                std::move(indexes),
+                std::move(profile_infos));
+            return final_spill_event;
+        }
     }
-    if (!indexes.empty())
+
+    if (!aggregate_context->hasSpilledData() && aggregate_context->isConvertibleToTwoLevel())
     {
-        auto final_spill_event = std::make_shared<AggregateFinalSpillEvent>(
-            exec_context,
-            log->identifier(),
-            aggregate_context,
-            std::move(indexes),
-            std::move(profile_infos));
-        return final_spill_event;
+        bool has_two_level = aggregate_context->hasAtLeastOneTwoLevel();
+        fiu_do_on(FailPoints::force_agg_two_level_hash_table_before_merge, { has_two_level = true; });
+        if (has_two_level)
+        {
+            std::vector<size_t> indexes;
+            for (size_t index = 0; index < aggregate_context->getBuildConcurrency(); ++index)
+            {
+                if (!aggregate_context->isTwoLevelOrEmpty(index))
+                    indexes.push_back(index);
+            }
+            if (!indexes.empty())
+            {
+                auto final_convert_event = std::make_shared<AggregateFinalConvertEvent>(
+                    exec_context,
+                    log->identifier(),
+                    aggregate_context,
+                    std::move(indexes),
+                    std::move(profile_infos));
+                return final_convert_event;
+            }
+        }
     }
 
     return nullptr;
