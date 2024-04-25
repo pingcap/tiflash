@@ -242,7 +242,7 @@ void SegmentReadTask::initColumnFileDataProvider(const Remote::RNLocalPageCacheG
 
 void SegmentReadTask::initInputStream(
     const ColumnDefines & columns_to_read,
-    UInt64 read_tso,
+    UInt64 start_ts,
     const PushDownFilterPtr & push_down_filter,
     ReadMode read_mode,
     size_t expected_block_size,
@@ -250,7 +250,7 @@ void SegmentReadTask::initInputStream(
 {
     if (likely(doInitInputStreamWithErrorFallback(
             columns_to_read,
-            read_tso,
+            start_ts,
             push_down_filter,
             read_mode,
             expected_block_size,
@@ -266,12 +266,12 @@ void SegmentReadTask::initInputStream(
     {
         cache->setDeltaIndex(read_snapshot->delta->getSharedDeltaIndex());
     }
-    doInitInputStream(columns_to_read, read_tso, push_down_filter, read_mode, expected_block_size);
+    doInitInputStream(columns_to_read, start_ts, push_down_filter, read_mode, expected_block_size);
 }
 
 bool SegmentReadTask::doInitInputStreamWithErrorFallback(
     const ColumnDefines & columns_to_read,
-    UInt64 read_tso,
+    UInt64 start_ts,
     const PushDownFilterPtr & push_down_filter,
     ReadMode read_mode,
     size_t expected_block_size,
@@ -279,7 +279,7 @@ bool SegmentReadTask::doInitInputStreamWithErrorFallback(
 {
     try
     {
-        doInitInputStream(columns_to_read, read_tso, push_down_filter, read_mode, expected_block_size);
+        doInitInputStream(columns_to_read, start_ts, push_down_filter, read_mode, expected_block_size);
         return true;
     }
     catch (const Exception & e)
@@ -298,7 +298,7 @@ bool SegmentReadTask::doInitInputStreamWithErrorFallback(
 
 void SegmentReadTask::doInitInputStream(
     const ColumnDefines & columns_to_read,
-    UInt64 read_tso,
+    UInt64 start_ts,
     const PushDownFilterPtr & push_down_filter,
     ReadMode read_mode,
     size_t expected_block_size)
@@ -317,7 +317,7 @@ void SegmentReadTask::doInitInputStream(
         read_snapshot,
         ranges,
         push_down_filter,
-        read_tso,
+        start_ts,
         expected_block_size);
 }
 
@@ -678,8 +678,8 @@ void SegmentReadTask::doFetchPagesImpl(
             auto write_batch_limit_size = dm_context->global_context.getSettingsRef().dt_write_page_cache_limit_size;
             if (write_page_task->wb.getTotalDataSize() >= write_batch_limit_size)
             {
-                write_page_results.push_back(
-                    schedule_write_page_task(std::move(write_page_task))); // write_page_task is moved and reset.
+                // write_page_task is moved and reset.
+                write_page_results.push_back(schedule_write_page_task(std::move(write_page_task)));
             }
         }
     }

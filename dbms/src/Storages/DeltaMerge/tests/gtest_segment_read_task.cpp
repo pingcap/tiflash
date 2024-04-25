@@ -657,7 +657,7 @@ try
 }
 CATCH
 
-TEST_F(DMStoreForSegmentReadTaskTest, FetchPages_NoTiny_NoInMem)
+TEST_F(DMStoreForSegmentReadTaskTest, FetchPagesNoTinyNoInMem)
 try
 {
     auto fp_guard = disableFlushCache();
@@ -704,7 +704,7 @@ try
 }
 CATCH
 
-TEST_F(DMStoreForSegmentReadTaskTest, FetchPages_Tiny_NoInMem)
+TEST_F(DMStoreForSegmentReadTaskTest, FetchPagesTinyNoInMem)
 try
 {
     auto fp_guard = disableFlushCache();
@@ -747,7 +747,7 @@ try
 }
 CATCH
 
-TEST_F(DMStoreForSegmentReadTaskTest, FetchPages_NoTiny_InMem)
+TEST_F(DMStoreForSegmentReadTaskTest, FetchPagesNoTinyInMem)
 try
 {
     auto fp_guard = disableFlushCache();
@@ -798,7 +798,7 @@ try
 }
 CATCH
 
-TEST_F(DMStoreForSegmentReadTaskTest, FetchPages_Tiny_InMem)
+TEST_F(DMStoreForSegmentReadTaskTest, FetchPagesTinyInMem)
 try
 {
     auto fp_guard = disableFlushCache();

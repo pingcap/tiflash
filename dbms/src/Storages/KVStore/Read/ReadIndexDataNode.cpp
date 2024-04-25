@@ -47,7 +47,7 @@ void ReadIndexDataNode::runOneRound(const TiFlashRaftProxyHelper & helper, const
     auto _ = genLockGuard();
 
     {
-        // Find the task with the maximum ts in all `waiting_tasks`.
+        // Find the task with the maximum ts in all `waiting_tasks` in this region.
         Timestamp max_ts = 0;
         ReadIndexFuturePtr max_ts_task = nullptr;
         {
@@ -82,36 +82,65 @@ void ReadIndexDataNode::runOneRound(const TiFlashRaftProxyHelper & helper, const
                 e.second->update(history_success_tasks->second);
             }
 
+            LOG_TRACE(
+                DB::Logger::get(),
+                "[Learner Read] Read Index in Batch(use histroy), max_ts={} region_id={} waiting_tasks={} "
+                "running_tasks={} histroy_ts={}",
+                max_ts,
+                region_id,
+                waiting_tasks.size(),
+                running_tasks.size(),
+                history_success_tasks->first);
             cnt_use_history_tasks += waiting_tasks.size();
             GET_METRIC(tiflash_raft_read_index_events_count, type_use_histroy).Increment(waiting_tasks.size());
         }
         else
         {
             auto run_it = running_tasks.lower_bound(max_ts);
-            if (run_it == running_tasks.end())
+            bool should_build_running_task = run_it == running_tasks.end();
+            bool build_success = false;
+            if (should_build_running_task)
             {
+                // If we can't attach to some running_tasks.
                 TEST_LOG_FMT("no exist running_tasks for ts {}", max_ts);
 
                 if (auto t = makeReadIndexTask(helper, max_ts_task->req); t)
                 {
                     TEST_LOG_FMT("successfully make ReadIndexTask for region_id={} ts {}", region_id, max_ts);
                     AsyncWaker waker{helper, new RegionReadIndexNotifier(region_id, max_ts, notify)};
+                    // Timestamp(max_ts) -> ReadIndexElement{region_id, max_ts}
                     run_it = running_tasks.try_emplace(max_ts, region_id, max_ts).first;
                     run_it->second.task_pair.emplace(std::move(*t), std::move(waker));
+                    build_success = true;
                 }
                 else
                 {
                     TEST_LOG_FMT("failed to make ReadIndexTask for region_id={} ts {}", region_id, max_ts);
+                    GET_METRIC(tiflash_raft_learner_read_failures_count, type_request_error).Increment();
+                    // Timestamp(max_ts) -> ReadIndexElement{region_id, max_ts}
                     run_it = running_tasks.try_emplace(max_ts, region_id, max_ts).first;
                     run_it->second.resp.mutable_region_error();
                 }
             }
 
+            LOG_TRACE(
+                DB::Logger::get(),
+                "[Learner Read] Read Index in Batch(new request), max_ts={} region_id={} waiting_tasks={} "
+                "running_tasks={} should_build_running_task={} build_success={}",
+                max_ts,
+                region_id,
+                waiting_tasks.size(),
+                running_tasks.size(),
+                should_build_running_task,
+                build_success);
+
             for (auto && e : waiting_tasks)
             {
+                // Set `ReadIndexElement::callbacks`
                 run_it->second.callbacks.emplace_back(std::move(e.second));
             }
 
+            // Try poll result and add histroy tasks.
             doConsume(helper, run_it);
         }
     }
@@ -182,8 +211,8 @@ void ReadIndexDataNode::ReadIndexElement::doPoll(
                 TEST_LOG_FMT("poll ReadIndexElement timeout for region_id={}", region_id);
 
                 clean_task = true;
-                resp.mutable_region_error()
-                    ->mutable_server_is_busy(); // set region_error `server_is_busy` for task timeout
+                // set region_error `server_is_busy` for task timeout
+                resp.mutable_region_error()->mutable_server_is_busy();
             }
             else
             {
@@ -289,6 +318,7 @@ ReadIndexFuturePtr ReadIndexDataNode::insertTask(const kvrpcpb::ReadIndexRequest
     auto task = std::make_shared<ReadIndexFuture>();
     task->req = req;
 
+    // See GenRegionReadIndexReq
     waiting_tasks.add(req.start_ts(), task);
 
     return task;

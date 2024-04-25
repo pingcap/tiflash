@@ -288,7 +288,7 @@ void ColumnFileSetReader::getPlaceItems(
 bool ColumnFileSetReader::shouldPlace(
     const DMContext & context,
     const RowKeyRange & relevant_range,
-    UInt64 max_version,
+    UInt64 start_ts,
     size_t placed_rows)
 {
     auto & column_files = snapshot->getColumnFiles();
@@ -319,7 +319,7 @@ bool ColumnFileSetReader::shouldPlace(
 
             for (auto i = rows_start_in_file; i < rows_end_in_file; ++i)
             {
-                if (version_col_data[i] <= max_version && relevant_range.check(rkcc.getRowKeyValue(i)))
+                if (version_col_data[i] <= start_ts && relevant_range.check(rkcc.getRowKeyValue(i)))
                     return true;
             }
         }
@@ -334,13 +334,13 @@ bool ColumnFileSetReader::shouldPlace(
 
             for (auto i = rows_start_in_file; i < rows_end_in_file; ++i)
             {
-                if (version_col_data[i] <= max_version && relevant_range.check(rkcc.getRowKeyValue(i)))
+                if (version_col_data[i] <= start_ts && relevant_range.check(rkcc.getRowKeyValue(i)))
                     return true;
             }
         }
         else
         {
-            throw Exception("Unknown column file: " + column_file->toString(), ErrorCodes::LOGICAL_ERROR);
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Unknown column file: {}", column_file->toString());
         }
     }
 

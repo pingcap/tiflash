@@ -121,7 +121,7 @@ public:
     {
         auto & global_context = TiFlashTestEnv::getGlobalContext();
         KVStoreTestBase::TearDown();
-        global_context.getSharedContextDisagg()->fap_context.reset();
+        global_context.getSharedContextDisagg()->fap_context->shutdown();
         if (!already_initialize_data_store)
         {
             global_context.getSharedContextDisagg()->remote_data_store = nullptr;
@@ -336,7 +336,7 @@ void verifyRows(Context & ctx, DM::DeltaMergeStorePtr store, const DM::RowKeyRan
         columns,
         {range},
         /* num_streams= */ 1,
-        /* max_version= */ std::numeric_limits<UInt64>::max(),
+        /* start_ts= */ std::numeric_limits<UInt64>::max(),
         DM::EMPTY_FILTER,
         std::vector<RuntimeFilterPtr>{},
         0,

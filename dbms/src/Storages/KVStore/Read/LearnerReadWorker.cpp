@@ -115,14 +115,17 @@ std::vector<kvrpcpb::ReadIndexRequest> LearnerReadWorker::buildBatchReadIndexReq
     batch_read_index_req.reserve(regions_info.size());
 
     // If using `std::numeric_limits<uint64_t>::max()`, set `start-ts` 0 to get the latest index but let read-index-worker do not record as history.
-    auto read_index_tso
-        = mvcc_query_info.read_tso == std::numeric_limits<uint64_t>::max() ? 0 : mvcc_query_info.read_tso;
+    auto start_ts = mvcc_query_info.start_ts == std::numeric_limits<uint64_t>::max() ? 0 : mvcc_query_info.start_ts;
+    if (start_ts == 0)
+    {
+        GET_METRIC(tiflash_raft_read_index_events_count, type_zero_read_tso).Increment();
+    }
     for (const auto & region_to_query : regions_info)
     {
         const RegionID region_id = region_to_query.region_id;
         // don't stale read in test scenarios.
-        bool can_stale_read = mvcc_query_info.read_tso != std::numeric_limits<uint64_t>::max()
-            && read_index_tso <= region_table.getSelfSafeTS(region_id);
+        bool can_stale_read = mvcc_query_info.start_ts != std::numeric_limits<uint64_t>::max()
+            && start_ts <= region_table.getSelfSafeTS(region_id);
         if (can_stale_read)
         {
             batch_read_index_result.emplace(region_id, kvrpcpb::ReadIndexResponse());
@@ -133,7 +136,13 @@ std::vector<kvrpcpb::ReadIndexRequest> LearnerReadWorker::buildBatchReadIndexReq
         if (auto ori_read_index = mvcc_query_info.getReadIndexRes(region_id); ori_read_index)
         {
             GET_METRIC(tiflash_raft_read_index_events_count, type_use_cache).Increment();
-            // the read index result from cache
+            LOG_DEBUG(
+                log,
+                "[Learner Read] Reuse read result in cache, start_ts={} region_id={} read_index={}",
+                mvcc_query_info.start_ts,
+                region_id,
+                ori_read_index);
+            // Reuse the read index result from cache
             auto resp = kvrpcpb::ReadIndexResponse();
             resp.set_read_index(ori_read_index);
             batch_read_index_result.emplace(region_id, std::move(resp));
@@ -143,7 +152,7 @@ std::vector<kvrpcpb::ReadIndexRequest> LearnerReadWorker::buildBatchReadIndexReq
         {
             // generate request for read index
             const auto & region = regions_snapshot.find(region_id)->second;
-            batch_read_index_req.emplace_back(GenRegionReadIndexReq(*region, read_index_tso));
+            batch_read_index_req.emplace_back(GenRegionReadIndexReq(*region, start_ts));
             ++stats.num_read_index_request;
         }
     }
@@ -306,6 +315,11 @@ RegionsReadIndexResult LearnerReadWorker::readIndex(
     UInt64 timeout_ms,
     Stopwatch & watch)
 {
+    LOG_DEBUG(
+        log,
+        "[Learner Read] Start read index, start_ts={} num_regions={}",
+        mvcc_query_info.start_ts,
+        regions_snapshot.size());
     RegionsReadIndexResult batch_read_index_result;
     const auto batch_read_index_req
         = buildBatchReadIndexReq(tmt.getRegionTable(), regions_snapshot, batch_read_index_result);
@@ -324,21 +338,21 @@ RegionsReadIndexResult LearnerReadWorker::readIndex(
         log,
         log_lvl,
         "[Learner Read] Batch read index, num_regions={} num_requests={} num_stale_read={} num_cached_index={} "
-        "num_unavailable={} "
-        "cost={}ms",
+        "num_unavailable={} cost={}ms, start_ts={}",
         stats.num_regions,
         stats.num_read_index_request,
         stats.num_stale_read,
         stats.num_cached_read_index,
         unavailable_regions.size(),
-        stats.read_index_elapsed_ms);
+        stats.read_index_elapsed_ms,
+        mvcc_query_info.start_ts);
 
     return batch_read_index_result;
 }
 
 void LearnerReadWorker::waitIndex(
     const LearnerReadSnapshot & regions_snapshot,
-    RegionsReadIndexResult & batch_read_index_result,
+    const RegionsReadIndexResult & batch_read_index_result,
     const UInt64 timeout_ms,
     Stopwatch & watch)
 {
@@ -396,7 +410,7 @@ void LearnerReadWorker::waitIndex(
             tmt,
             physical_table_id,
             region,
-            mvcc_query_info.read_tso,
+            mvcc_query_info.start_ts,
             region_to_query.bypass_lock_ts,
             region_to_query.version,
             region_to_query.conf_version,
@@ -427,10 +441,50 @@ void LearnerReadWorker::waitIndex(
     LOG_IMPL(
         log,
         log_lvl,
-        "[Learner Read] Finish wait index and resolve locks, wait_cost={}ms n_regions={} n_unavailable={}",
+        "[Learner Read] Finish wait index and resolve locks, wait_cost={}ms n_regions={} n_unavailable={}, start_ts={}",
         stats.wait_index_elapsed_ms,
         stats.num_regions,
-        unavailable_regions.size());
+        unavailable_regions.size(),
+        mvcc_query_info.start_ts);
+
+    auto bypass_formatter = [](const RegionQueryInfo & query_info) -> String {
+        if (query_info.bypass_lock_ts == nullptr)
+            return "";
+        FmtBuffer buffer;
+        buffer.append("[");
+        buffer.joinStr(
+            query_info.bypass_lock_ts->begin(),
+            query_info.bypass_lock_ts->end(),
+            [](const auto & v, FmtBuffer & f) { f.fmtAppend("{}", v); },
+            "|");
+        buffer.append("]");
+        return buffer.toString();
+    };
+    auto region_info_formatter = [&]() -> String {
+        FmtBuffer buffer;
+        buffer.joinStr(
+            regions_info.begin(),
+            regions_info.end(),
+            [&](const auto & region_to_query, FmtBuffer & f) {
+                const auto & region = regions_snapshot.find(region_to_query.region_id)->second;
+                const auto index_to_wait = batch_read_index_result.find(region_to_query.region_id)->second.read_index();
+                f.fmtAppend(
+                    "(region_id={} to_wait={} applied_index={} bypass_locks={})",
+                    region_to_query.region_id,
+                    index_to_wait,
+                    region->appliedIndex(),
+                    bypass_formatter(region_to_query));
+            },
+            ";");
+        return buffer.toString();
+    };
+
+    LOG_DEBUG(
+        log,
+        "[Learner Read] Learner Read Summary, regions_info={}, unavailable_regions_info={}, start_ts={}",
+        region_info_formatter(),
+        unavailable_regions.toDebugString(),
+        mvcc_query_info.start_ts);
 }
 
 std::tuple<Clock::time_point, Clock::time_point> //
@@ -469,13 +523,14 @@ LearnerReadWorker::waitUntilDataAvailable(
         log,
         log_lvl,
         "[Learner Read] batch read index | wait index"
-        " total_cost={} read_cost={} wait_cost={} n_regions={} n_stale_read={} n_unavailable={}",
+        " total_cost={} read_cost={} wait_cost={} n_regions={} n_stale_read={} n_unavailable={}, start_ts={}",
         time_elapsed_ms,
         stats.read_index_elapsed_ms,
         stats.wait_index_elapsed_ms,
         stats.num_regions,
         stats.num_stale_read,
-        unavailable_regions.size());
+        unavailable_regions.size(),
+        mvcc_query_info.start_ts);
     return {start_time, end_time};
 }
 

@@ -233,8 +233,19 @@ void SemiJoinHelper<KIND, Mapped>::joinResult(std::list<Result *> & res_list)
         if (has_other_eq_cond_from_in)
         {
             other_eq_from_in_column = exec_block.getByName(non_equal_conditions.other_eq_cond_from_in_name).column;
+            auto is_nullable_col = [&]() {
+                if (other_eq_from_in_column->isColumnNullable())
+                    return true;
+                if (other_eq_from_in_column->isColumnConst())
+                {
+                    const auto & const_col = typeid_cast<const ColumnConst &>(*other_eq_from_in_column);
+                    return const_col.getDataColumn().isColumnNullable();
+                }
+                return false;
+            };
+            // nullable, const(nullable)
             RUNTIME_CHECK_MSG(
-                other_eq_from_in_column->isColumnNullable(),
+                is_nullable_col(),
                 "The equal condition from in column should be nullable, otherwise it should be used as join key");
 
             std::tie(other_eq_from_in_column_data, other_eq_from_in_null_map)

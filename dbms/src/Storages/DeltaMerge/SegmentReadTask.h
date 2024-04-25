@@ -94,7 +94,7 @@ public:
 
     void initInputStream(
         const ColumnDefines & columns_to_read,
-        UInt64 read_tso,
+        UInt64 start_ts,
         const PushDownFilterPtr & push_down_filter,
         ReadMode read_mode,
         size_t expected_block_size,
@@ -132,7 +132,7 @@ public:
 
     bool doInitInputStreamWithErrorFallback(
         const ColumnDefines & columns_to_read,
-        UInt64 read_tso,
+        UInt64 start_ts,
         const PushDownFilterPtr & push_down_filter,
         ReadMode read_mode,
         size_t expected_block_size,
@@ -140,7 +140,7 @@ public:
 
     void doInitInputStream(
         const ColumnDefines & columns_to_read,
-        UInt64 read_tso,
+        UInt64 start_ts,
         const PushDownFilterPtr & push_down_filter,
         ReadMode read_mode,
         size_t expected_block_size);

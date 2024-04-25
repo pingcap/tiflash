@@ -38,8 +38,7 @@ DeltaSnapshotPtr DeltaValueSpace::createSnapshot(
     if (abandoned.load(std::memory_order_relaxed))
         return {};
 
-    auto snap = std::make_shared<DeltaValueSnapshot>(type);
-    snap->is_update = for_update;
+    auto snap = std::make_shared<DeltaValueSnapshot>(type, for_update);
     snap->delta = this->shared_from_this();
 
     auto storage_snap = std::make_shared<StorageSnapshot>(
@@ -216,25 +215,27 @@ bool DeltaValueReader::shouldPlace(
     DeltaIndexPtr my_delta_index,
     const RowKeyRange & segment_range_,
     const RowKeyRange & relevant_range,
-    UInt64 max_version)
+    UInt64 start_ts)
 {
     auto [placed_rows, placed_delete_ranges] = my_delta_index->getPlacedStatus();
 
-    // Already placed.
+    // The placed_rows, placed_delete_range already contains the data in delta_snap
     if (placed_rows >= delta_snap->getRows() && placed_delete_ranges == delta_snap->getDeletes())
         return false;
 
-    if (relevant_range.all() || relevant_range == segment_range_ //
+    if (relevant_range.all() || relevant_range == segment_range_ // read all the data in this segment
         || delta_snap->getRows() - placed_rows > context.delta_cache_limit_rows //
-        || placed_delete_ranges != delta_snap->getDeletes())
+        || placed_delete_ranges != delta_snap->getDeletes() // new delete_range appended, must place it
+    )
         return true;
 
-    size_t rows_in_persisted_file_snap = delta_snap->getMemTableSetRowsOffset();
-    return persisted_files_reader->shouldPlace(context, relevant_range, max_version, placed_rows)
+    // otherwise check persisted_files and mem_tables
+    const size_t rows_in_persisted_file_snap = delta_snap->getMemTableSetRowsOffset();
+    return persisted_files_reader->shouldPlace(context, relevant_range, start_ts, placed_rows)
         || mem_table_reader->shouldPlace(
             context,
             relevant_range,
-            max_version,
+            start_ts,
             placed_rows <= rows_in_persisted_file_snap ? 0 : placed_rows - rows_in_persisted_file_snap);
 }
 

@@ -130,17 +130,28 @@ public:
 
     /// Appends n-th element from other column with the same type.
     /// Is used in merge-sort and merges. It could be implemented in inherited classes more optimally than default implementation.
+    /// Note: the source column and the destination column must be of the same type, can not ColumnXXX->insertFrom(ConstColumnXXX, ...)
     virtual void insertFrom(const IColumn & src, size_t n) { insert(src[n]); }
 
-    /// Appends range of elements from other column.
+    /// Appends range of elements from other column with the same type.
     /// Could be used to concatenate columns.
+    /// Note: the source column and the destination column must be of the same type, can not ColumnXXX->insertRangeFrom(ConstColumnXXX, ...)
     virtual void insertRangeFrom(const IColumn & src, size_t start, size_t length) = 0;
 
     /// Appends one element from other column with the same type multiple times.
+    /// Note: the source column and the destination column must be of the same type, can not ColumnXXX->insertManyFrom(ConstColumnXXX, ...)
     virtual void insertManyFrom(const IColumn & src, size_t position, size_t length) = 0;
 
     /// Appends disjunctive elements from other column with the same type.
+    /// Note: the source column and the destination column must be of the same type, can not ColumnXXX->insertDisjunctFrom(ConstColumnXXX, ...)
     virtual void insertDisjunctFrom(const IColumn & src, const std::vector<size_t> & position_vec) = 0;
+
+    /// Appends one field multiple times. Can be optimized in inherited classes.
+    virtual void insertMany(const Field & field, size_t length)
+    {
+        for (size_t i = 0; i < length; ++i)
+            insert(field);
+    }
 
     /// Appends data located in specified memory chunk if it is possible (throws an exception if it cannot be implemented).
     /// Is used to optimize some computations (in aggregation, for example).
