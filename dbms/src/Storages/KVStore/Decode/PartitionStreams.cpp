@@ -370,7 +370,7 @@ std::optional<RegionDataReadInfoList> ReadRegionCommitCache(const RegionPtr & re
         }
         data_list_read.emplace_back(std::move(data_read));
     } while (scanner.hasNext());
-    if unlikely(error_prone_count > 0)
+    if unlikely (error_prone_count > 0)
     {
         LOG_INFO(
             DB::Logger::get(),
