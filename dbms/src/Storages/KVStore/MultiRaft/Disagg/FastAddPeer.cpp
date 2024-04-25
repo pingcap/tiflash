@@ -51,6 +51,7 @@ namespace DB
 
 namespace FailPoints
 {
+extern const char force_fap_worker_throw[];
 extern const char force_set_fap_candidate_store_id[];
 } // namespace FailPoints
 
@@ -198,6 +199,8 @@ std::variant<CheckpointRegionInfoAndData, FastAddPeerRes> FastAddPeerImplSelect(
     const auto & settings = tmt.getContext().getSettingsRef();
     auto current_store_id = tmt.getKVStore()->clonedStoreMeta().id();
     std::vector<StoreID> candidate_store_ids = getCandidateStoreIDsForRegion(tmt, region_id, current_store_id);
+
+    fiu_do_on(FailPoints::force_fap_worker_throw, { throw Exception(ErrorCodes::LOGICAL_ERROR, "mocked throw"); });
 
     if (candidate_store_ids.empty())
     {
