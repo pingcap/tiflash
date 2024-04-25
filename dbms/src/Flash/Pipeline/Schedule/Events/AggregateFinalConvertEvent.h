@@ -22,10 +22,10 @@ namespace DB
 class AggregateContext;
 using AggregateContextPtr = std::shared_ptr<AggregateContext>;
 
-class AggregateFinalSpillEvent : public Event
+class AggregateFinalConvertEvent : public Event
 {
 public:
-    AggregateFinalSpillEvent(
+    AggregateFinalConvertEvent(
         PipelineExecutorContext & exec_context_,
         const String & req_id,
         AggregateContextPtr agg_context_,
