@@ -204,9 +204,15 @@ public:
 
     RaftstoreVer getClusterRaftstoreVer();
     void beforePrehandleSnapshot(uint64_t region_id, std::optional<uint64_t> deadline_index);
+<<<<<<< HEAD:dbms/src/Storages/Transaction/Region.h
     void afterPrehandleSnapshot();
     RegionData::OrphanKeysInfo & orphanKeysInfo() { return data.orphan_keys_info; }
     const RegionData::OrphanKeysInfo & orphanKeysInfo() const { return data.orphan_keys_info; }
+=======
+    void afterPrehandleSnapshot(int64_t ongoing);
+    void observeLearnerReadEvent(Timestamp read_tso) const;
+    Timestamp getLastObservedReadTso() const;
+>>>>>>> 89d1d73883 (KVStore: Log when meets any commit_ts < observed max_read_tso (#8991)):dbms/src/Storages/KVStore/Region.h
 
 private:
     Region() = delete;
@@ -243,6 +249,7 @@ private:
     mutable std::atomic<Timepoint> last_compact_log_time{Timepoint::min()};
     mutable std::atomic<size_t> approx_mem_cache_rows{0};
     mutable std::atomic<size_t> approx_mem_cache_bytes{0};
+    mutable std::atomic<Timestamp> last_observed_read_tso{0};
 };
 
 class RegionRaftCommandDelegate : public Region
