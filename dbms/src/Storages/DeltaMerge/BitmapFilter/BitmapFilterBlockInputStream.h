@@ -15,14 +15,14 @@
 #pragma once
 
 #include <Common/Stopwatch.h>
-#include <DataStreams/IProfilingBlockInputStream.h>
+#include <DataStreams/IBlockInputStream.h>
 #include <Storages/DeltaMerge/BitmapFilter/BitmapFilter.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
 
 namespace DB::DM
 {
-class BitmapFilterBlockInputStream : public IProfilingBlockInputStream
+class BitmapFilterBlockInputStream : public IBlockInputStream
 {
     static constexpr auto NAME = "BitmapFilterBlockInputStream";
 
@@ -40,15 +40,15 @@ public:
     Block getHeader() const override { return header; }
 
 protected:
-    Block readImpl() override
+    Block read() override
     {
         FilterPtr filter_ignored;
-        return readImpl(filter_ignored, false);
+        return read(filter_ignored, false);
     }
     // When all rows in block are not filtered out,
     // `res_filter` will be set to null.
     // The caller needs to do handle this situation.
-    Block readImpl(FilterPtr & res_filter, bool return_filter) override;
+    Block read(FilterPtr & res_filter, bool return_filter) override;
 
 private:
     Block header;

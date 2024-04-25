@@ -163,8 +163,6 @@ public:
 
     void has(const Columns & key_columns, const DataTypes & key_types, PaddedPODArray<UInt8> & out) const;
 
-    BlockInputStreamPtr getBlockInputStream(const Names & column_names, size_t max_block_size) const override;
-
 private:
     template <typename Value>
     using ContainerType = std::vector<Value>;

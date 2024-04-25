@@ -205,6 +205,7 @@ BatchReadIndexRes ReadIndexWorkerManager::batchReadIndex(
     {
         auto region_id = req.context().region_id();
         auto & wk = this->getWorkerByRegion(region_id);
+        // Will insert the read index task into data node
         auto future = wk.genReadIndexFuture(req);
         tasks.emplace(region_id, future);
     }

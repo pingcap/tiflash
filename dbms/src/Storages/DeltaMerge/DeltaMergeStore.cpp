@@ -560,7 +560,7 @@ DM::WriteResult DeltaMergeStore::write(
         }
         LOG_DEBUG(
             log,
-            "region_id: {}, applied_index: {}, record_count: {}, versions: {}",
+            "region_id={} applied_index={} record_count={} versions={}",
             applied_status.region_id,
             applied_status.applied_index,
             block.rows(),
@@ -1169,7 +1169,7 @@ BlockInputStreams DeltaMergeStore::read(
     const ColumnDefines & columns_to_read,
     const RowKeyRanges & sorted_ranges,
     size_t num_streams,
-    UInt64 max_version,
+    UInt64 start_ts,
     const PushDownFilterPtr & filter,
     const RuntimeFilteList & runtime_filter_list,
     int rf_max_wait_time_ms,
@@ -1197,15 +1197,6 @@ BlockInputStreams DeltaMergeStore::read(
         /*try_split_task =*/!enable_read_thread);
     auto log_tracing_id = getLogTracingId(*dm_context);
     auto tracing_logger = log->getChild(log_tracing_id);
-    LOG_INFO(
-        tracing_logger,
-        "Read create segment snapshot done, keep_order={} dt_enable_read_thread={} enable_read_thread={} "
-        "is_fast_scan={} is_push_down_filter_empty={}",
-        keep_order,
-        db_context.getSettingsRef().dt_enable_read_thread,
-        enable_read_thread,
-        is_fast_scan,
-        filter == nullptr || filter->before_where == nullptr);
 
     auto after_segment_read = [&](const DMContextPtr & dm_context_, const SegmentPtr & segment_) {
         // TODO: Update the tracing_id before checkSegmentUpdate?
@@ -1219,7 +1210,7 @@ BlockInputStreams DeltaMergeStore::read(
         extra_table_id_index,
         columns_to_read,
         filter,
-        max_version,
+        start_ts,
         expected_block_size,
         read_mode,
         std::move(tasks),
@@ -1252,7 +1243,7 @@ BlockInputStreams DeltaMergeStore::read(
                 after_segment_read,
                 filter && filter->extra_cast ? *filter->columns_after_cast : columns_to_read,
                 filter,
-                max_version,
+                start_ts,
                 expected_block_size,
                 read_mode,
                 log_tracing_id);
@@ -1263,7 +1254,13 @@ BlockInputStreams DeltaMergeStore::read(
     }
     LOG_INFO(
         tracing_logger,
-        "Read create stream done, pool_id={} num_streams={}",
+        "Read create stream done, keep_order={} dt_enable_read_thread={} enable_read_thread={} "
+        "is_fast_scan={} is_push_down_filter_empty={} pool_id={} num_streams={}",
+        keep_order,
+        db_context.getSettingsRef().dt_enable_read_thread,
+        enable_read_thread,
+        is_fast_scan,
+        filter == nullptr || filter->before_where == nullptr,
         read_task_pool->pool_id,
         final_num_stream);
 
@@ -1278,7 +1275,7 @@ void DeltaMergeStore::read(
     const ColumnDefines & columns_to_read,
     const RowKeyRanges & sorted_ranges,
     size_t num_streams,
-    UInt64 max_version,
+    UInt64 start_ts,
     const PushDownFilterPtr & filter,
     const RuntimeFilteList & runtime_filter_list,
     int rf_max_wait_time_ms,
@@ -1306,15 +1303,6 @@ void DeltaMergeStore::read(
         /*try_split_task =*/!enable_read_thread);
     auto log_tracing_id = getLogTracingId(*dm_context);
     auto tracing_logger = log->getChild(log_tracing_id);
-    LOG_INFO(
-        tracing_logger,
-        "Read create segment snapshot done, keep_order={} dt_enable_read_thread={} enable_read_thread={} "
-        "is_fast_scan={} is_push_down_filter_empty={}",
-        keep_order,
-        db_context.getSettingsRef().dt_enable_read_thread,
-        enable_read_thread,
-        is_fast_scan,
-        filter == nullptr || filter->before_where == nullptr);
 
     auto after_segment_read = [&](const DMContextPtr & dm_context_, const SegmentPtr & segment_) {
         // TODO: Update the tracing_id before checkSegmentUpdate?
@@ -1329,7 +1317,7 @@ void DeltaMergeStore::read(
         extra_table_id_index,
         columns_to_read,
         filter,
-        max_version,
+        start_ts,
         expected_block_size,
         read_mode,
         std::move(tasks),
@@ -1366,7 +1354,7 @@ void DeltaMergeStore::read(
                 after_segment_read,
                 columns_after_cast,
                 filter,
-                max_version,
+                start_ts,
                 expected_block_size,
                 read_mode,
                 log_tracing_id));
@@ -1383,7 +1371,13 @@ void DeltaMergeStore::read(
 
     LOG_INFO(
         tracing_logger,
-        "Read create PipelineExec done, pool_id={} num_streams={}",
+        "Read create PipelineExec done, keep_order={} dt_enable_read_thread={} enable_read_thread={} "
+        "is_fast_scan={} is_push_down_filter_empty={} pool_id={} num_streams={}",
+        keep_order,
+        db_context.getSettingsRef().dt_enable_read_thread,
+        enable_read_thread,
+        is_fast_scan,
+        filter == nullptr || filter->before_where == nullptr,
         read_task_pool->pool_id,
         final_num_stream);
 }

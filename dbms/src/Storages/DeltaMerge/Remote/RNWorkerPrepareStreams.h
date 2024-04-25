@@ -41,7 +41,7 @@ protected:
         const auto & settings = task->dm_context->global_context.getSettingsRef();
         task->initInputStream(
             *columns_to_read,
-            read_tso,
+            start_ts,
             push_down_filter,
             read_mode,
             settings.max_block_size,
@@ -53,7 +53,7 @@ protected:
 
 public:
     const ColumnDefinesPtr columns_to_read;
-    const UInt64 read_tso;
+    const UInt64 start_ts;
     const PushDownFilterPtr push_down_filter;
     const ReadMode read_mode;
 
@@ -65,7 +65,7 @@ public:
         const LoggerPtr & log;
         const size_t concurrency;
         const ColumnDefinesPtr & columns_to_read;
-        const UInt64 read_tso;
+        const UInt64 start_ts;
         const PushDownFilterPtr & push_down_filter;
         const ReadMode read_mode;
     };
@@ -82,7 +82,7 @@ public:
             options.log,
             options.concurrency)
         , columns_to_read(options.columns_to_read)
-        , read_tso(options.read_tso)
+        , start_ts(options.start_ts)
         , push_down_filter(options.push_down_filter)
         , read_mode(options.read_mode)
     {}

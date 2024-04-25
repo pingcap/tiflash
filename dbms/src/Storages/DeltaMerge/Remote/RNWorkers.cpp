@@ -60,7 +60,7 @@ RNWorkers::RNWorkers(
         .log = options.log,
         .concurrency = prepare_streams_concurrency,
         .columns_to_read = options.columns_to_read,
-        .read_tso = options.read_tso,
+        .start_ts = options.start_ts,
         .push_down_filter = options.push_down_filter,
         .read_mode = options.read_mode,
     });

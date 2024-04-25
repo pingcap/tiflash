@@ -336,7 +336,7 @@ void verifyRows(Context & ctx, DM::DeltaMergeStorePtr store, const DM::RowKeyRan
         columns,
         {range},
         /* num_streams= */ 1,
-        /* max_version= */ std::numeric_limits<UInt64>::max(),
+        /* start_ts= */ std::numeric_limits<UInt64>::max(),
         DM::EMPTY_FILTER,
         std::vector<RuntimeFilterPtr>{},
         0,
