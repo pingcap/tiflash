@@ -83,8 +83,15 @@ bool SegmentReadTasksWrapper::empty() const
     return ordered_tasks.empty() && unordered_tasks.empty();
 }
 
+Int64 SegmentReadTasksWrapper::size() const
+{
+    return enable_read_thread ? unordered_tasks.size() : ordered_tasks.size();
+}
+
 BlockInputStreamPtr SegmentReadTaskPool::buildInputStream(SegmentReadTaskPtr & t)
 {
+    Stopwatch sw;
+    SCOPE_EXIT({ scanning_execution_ns += sw.elapsed(); });
     MemoryTrackerSetter setter(true, mem_tracker.get());
 
     t->fetchPages();
@@ -148,12 +155,48 @@ SegmentReadTaskPool::SegmentReadTaskPool(
     // Limiting the minimum number of reading segments to 2 is to avoid, as much as possible,
     // situations where the computation may be faster and the storage layer may not be able to keep up.
     , active_segment_limit(std::max(num_streams_, 2))
+    , seg_task_count(tasks_wrapper.size())
     , res_group_name(res_group_name_)
 {
     if (tasks_wrapper.empty())
     {
-        q.finish();
+        finishTableScanning();
     }
+}
+
+SegmentReadTaskPool::~SegmentReadTaskPool()
+{
+    auto [pop_times, pop_empty_times, max_queue_size] = q.getStat();
+    auto pop_empty_ratio = pop_times > 0 ? pop_empty_times * 1.0 / pop_times : 0.0;
+    auto total_count = blk_stat.totalCount();
+    auto total_bytes = blk_stat.totalBytes();
+    auto blk_avg_bytes = total_count > 0 ? total_bytes / total_count : 0;
+    auto max_pending_block_bytes = blk_avg_bytes * max_queue_size;
+    auto total_rows = blk_stat.totalRows();
+    LOG_INFO(
+        log,
+        "Done. pool_id={} pop={} pop_empty={} pop_empty_ratio={} "
+        "max_queue_size={} blk_avg_bytes={} max_pending_block_bytes={:.2f}MB "
+        "total_count={} total_bytes={:.2f}MB total_rows={} avg_block_rows={} avg_rows_bytes={}B "
+        "waitting_start_time={}ms scanning_wall_time={}ms scanning_execution_time={}ms "
+        "seg_task_count={} execution_time_per_seg={}ms",
+        pool_id,
+        pop_times,
+        pop_empty_times,
+        pop_empty_ratio,
+        max_queue_size,
+        blk_avg_bytes,
+        max_pending_block_bytes / 1024.0 / 1024.0,
+        total_count,
+        total_bytes / 1024.0 / 1024.0,
+        total_rows,
+        total_count > 0 ? total_rows / total_count : 0,
+        total_rows > 0 ? total_bytes / total_rows : 0,
+        waitting_start_clock.elapsedMilliseconds(),
+        scanning_wall_clock.elapsedMilliseconds(),
+        scanning_execution_ns / 1000'000,
+        seg_task_count,
+        seg_task_count > 0 ? scanning_execution_ns / seg_task_count / 1000'000 : 0);
 }
 
 void SegmentReadTaskPool::finishSegment(const SegmentReadTaskPtr & seg)
@@ -168,7 +211,7 @@ void SegmentReadTaskPool::finishSegment(const SegmentReadTaskPtr & seg)
     LOG_DEBUG(log, "finishSegment pool_id={} segment={} pool_finished={}", pool_id, seg, pool_finished);
     if (pool_finished)
     {
-        q.finish();
+        finishTableScanning();
     }
 }
 
@@ -233,6 +276,8 @@ MergingSegments::iterator SegmentReadTaskPool::scheduleSegment(
 
 bool SegmentReadTaskPool::readOneBlock(BlockInputStreamPtr & stream, const SegmentReadTaskPtr & seg)
 {
+    Stopwatch sw;
+    SCOPE_EXIT({ scanning_execution_ns += sw.elapsed(); });
     MemoryTrackerSetter setter(true, mem_tracker.get());
     FAIL_POINT_PAUSE(FailPoints::pause_when_reading_from_dt_stream);
     auto block = stream->read();
@@ -332,7 +377,7 @@ void SegmentReadTaskPool::setException(const DB::Exception & e)
     {
         exception = e;
         exception_happened.store(true, std::memory_order_relaxed);
-        q.finish();
+        finishTableScanning();
     }
 }
 
@@ -393,6 +438,17 @@ bool SegmentReadTaskPool::isRUExhaustedImpl()
     ru_is_exhausted = checkIsRUExhausted(res_group_name);
     last_time_check_ru = ms;
     return ru_is_exhausted;
+}
+
+void SegmentReadTaskPool::startTableScanning()
+{
+    waitting_start_clock.stop();
+    scanning_wall_clock.start();
+}
+void SegmentReadTaskPool::finishTableScanning()
+{
+    q.finish();
+    scanning_wall_clock.stop();
 }
 
 } // namespace DB::DM

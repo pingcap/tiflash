@@ -94,6 +94,7 @@ public:
     const std::unordered_map<GlobalSegmentID, SegmentReadTaskPtr> & getTasks() const;
 
     bool empty() const;
+    Int64 size() const;
 
 private:
     bool enable_read_thread;
@@ -120,33 +121,7 @@ public:
         Int64 num_streams_,
         const String & res_group_name_);
 
-    ~SegmentReadTaskPool() override
-    {
-        auto [pop_times, pop_empty_times, max_queue_size] = q.getStat();
-        auto pop_empty_ratio = pop_times > 0 ? pop_empty_times * 1.0 / pop_times : 0.0;
-        auto total_count = blk_stat.totalCount();
-        auto total_bytes = blk_stat.totalBytes();
-        auto blk_avg_bytes = total_count > 0 ? total_bytes / total_count : 0;
-        auto approximate_max_pending_block_bytes = blk_avg_bytes * max_queue_size;
-        auto total_rows = blk_stat.totalRows();
-        LOG_INFO(
-            log,
-            "Done. pool_id={} pop={} pop_empty={} pop_empty_ratio={} "
-            "max_queue_size={} blk_avg_bytes={} approximate_max_pending_block_bytes={:.2f}MB "
-            "total_count={} total_bytes={:.2f}MB total_rows={} avg_block_rows={} avg_rows_bytes={}B",
-            pool_id,
-            pop_times,
-            pop_empty_times,
-            pop_empty_ratio,
-            max_queue_size,
-            blk_avg_bytes,
-            approximate_max_pending_block_bytes / 1024.0 / 1024.0,
-            total_count,
-            total_bytes / 1024.0 / 1024.0,
-            total_rows,
-            total_count > 0 ? total_rows / total_count : 0,
-            total_rows > 0 ? total_bytes / total_rows : 0);
-    }
+    ~SegmentReadTaskPool() override;
 
     SegmentReadTaskPtr nextTask();
     const std::unordered_map<GlobalSegmentID, SegmentReadTaskPtr> & getTasks();
@@ -163,6 +138,8 @@ public:
         UInt64 expected_merge_count,
         bool enable_data_sharing);
 
+    void startTableScanning();
+    void finishTableScanning();
     Int64 increaseUnorderedInputStreamRefCount();
     Int64 decreaseUnorderedInputStreamRefCount();
     Int64 getFreeBlockSlots() const;
@@ -237,12 +214,18 @@ private:
 
     const Int64 block_slot_limit;
     const Int64 active_segment_limit;
+    const Int64 seg_task_count;
 
     const String res_group_name;
     std::mutex ru_mu;
     std::atomic<Int64> last_time_check_ru = 0;
     std::atomic<bool> ru_is_exhausted = false;
     std::atomic<UInt64> read_bytes_after_last_check = 0;
+
+    // Stats of table scanning.
+    Stopwatch waitting_start_clock; // Watching the duration from creating this object to starting to read.
+    Stopwatch scanning_wall_clock; // Watching the duration from starting to read to finished.
+    std::atomic<Int64> scanning_execution_ns{0}; // Sum of executions time of all read threads.
 
     inline static std::atomic<uint64_t> pool_id_gen{1};
     inline static BlockStat global_blk_stat;
