@@ -194,8 +194,9 @@ public:
     {
         std::scoped_lock lock(mutex);
 
-        if ((maybe_advanced.placed_rows >= placed_rows && maybe_advanced.placed_deletes >= placed_deletes)
-            && !(maybe_advanced.placed_rows == placed_rows && maybe_advanced.placed_deletes == placed_deletes))
+        if ((maybe_advanced.placed_rows >= placed_rows && maybe_advanced.placed_deletes >= placed_deletes) // advance
+            // not excatly the same
+            && (maybe_advanced.placed_rows != placed_rows || maybe_advanced.placed_deletes != placed_deletes))
         {
             delta_tree = maybe_advanced.delta_tree;
             placed_rows = maybe_advanced.placed_rows;
@@ -205,13 +206,16 @@ public:
         return false;
     }
 
+    /**
+     * Try to get a clone of current instance.
+     * Return an empty DeltaIndex if `deletes < this->placed_deletes` because the advanced delta-index will break
+     * the MVCC view.
+     */
     DeltaIndexPtr tryClone(size_t /*rows*/, size_t deletes) { return tryCloneInner(deletes); }
 
     DeltaIndexPtr cloneWithUpdates(const Updates & updates)
     {
-        if (unlikely(updates.empty()))
-            throw Exception("Unexpected empty updates");
-
+        RUNTIME_CHECK_MSG(!updates.empty(), "Unexpected empty updates");
         return tryCloneInner(updates.front().delete_ranges_offset, &updates);
     }
 

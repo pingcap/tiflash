@@ -473,7 +473,8 @@ public:
 
     bool shouldPlace(
         const DMContext & context,
-        DeltaIndexPtr my_delta_index,
+        size_t placed_rows,
+        size_t placed_delete_ranges,
         const RowKeyRange & segment_range,
         const RowKeyRange & relevant_range,
         UInt64 start_ts);
