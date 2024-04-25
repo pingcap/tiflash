@@ -15,6 +15,7 @@
 #include <Common/FailPoint.h>
 #include <Flash/Pipeline/Exec/PipelineExec.h>
 #include <Operators/OperatorHelper.h>
+
 #include "common/types.h"
 
 namespace DB
