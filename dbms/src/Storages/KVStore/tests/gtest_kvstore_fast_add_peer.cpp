@@ -892,7 +892,7 @@ try
     // The FAP will fail because it doesn't contain the new peer in region meta.
     FastAddPeer(&server, region_id, 2333);
     eventuallyPredicate(
-        [&]() { return fap_context->tasks_trace->queryState(region_id) == FAPAsyncTasks::TaskState::NotScheduled; });
+        [&]() { return fap_context->tasks_trace->queryState(region_id) == FAPAsyncTasks::TaskState::Finished; });
     eventuallyPredicate([&]() {
         return !CheckpointIngestInfo::restore(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333);
     });
