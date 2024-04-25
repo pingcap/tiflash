@@ -14,42 +14,28 @@
 
 #pragma once
 
-#include <Flash/Pipeline/Schedule/Events/Event.h>
-#include <Operators/OperatorProfileInfo.h>
+#include <Flash/Pipeline/Schedule/Tasks/IOEventTask.h>
 
 namespace DB
 {
 class AggregateContext;
 using AggregateContextPtr = std::shared_ptr<AggregateContext>;
 
-class AggregateFinalSpillEvent : public Event
+class AggregateFinalConvertTask : public EventTask
 {
 public:
-    AggregateFinalSpillEvent(
+    AggregateFinalConvertTask(
         PipelineExecutorContext & exec_context_,
         const String & req_id,
+        const EventPtr & event_,
         AggregateContextPtr agg_context_,
-        std::vector<size_t> && indexes_,
-        OperatorProfileInfos && profile_infos_)
-        : Event(exec_context_, req_id)
-        , agg_context(std::move(agg_context_))
-        , indexes(std::move(indexes_))
-        , profile_infos(std::move(profile_infos_))
-    {
-        assert(agg_context);
-        assert(!indexes.empty());
-        assert(!profile_infos.empty());
-    }
+        size_t index_);
 
 protected:
-    void scheduleImpl() override;
-
-    void finishImpl() override;
+    ExecTaskStatus executeImpl() override;
 
 private:
     AggregateContextPtr agg_context;
-    std::vector<size_t> indexes;
-
-    OperatorProfileInfos profile_infos;
+    size_t index;
 };
 } // namespace DB
