@@ -356,7 +356,7 @@ std::optional<RegionDataReadInfoList> ReadRegionCommitCache(const RegionPtr & re
     RegionDataReadInfoList data_list_read;
     data_list_read.reserve(scanner.writeMapSize());
     auto read_tso = region->getLastObservedReadTso();
-    Timestamp min_error_read_tso = std::numeric_limits<Timestamp>::max();
+    Timestamp min_error_commit_tso = std::numeric_limits<Timestamp>::max();
     size_t error_prone_count = 0;
     do
     {
@@ -366,7 +366,7 @@ std::optional<RegionDataReadInfoList> ReadRegionCommitCache(const RegionPtr & re
         if (data_read.commit_ts <= read_tso)
         {
             error_prone_count++;
-            min_error_read_tso = std::min(min_error_read_tso, data_read.commit_ts);
+            min_error_commit_tso = std::min(min_error_commit_tso, data_read.commit_ts);
         }
         data_list_read.emplace_back(std::move(data_read));
     } while (scanner.hasNext());
@@ -374,9 +374,10 @@ std::optional<RegionDataReadInfoList> ReadRegionCommitCache(const RegionPtr & re
     {
         LOG_INFO(
             DB::Logger::get(),
-            "Error prone txn commit error_prone_count={} min_tso={} read_tso={} region_id={} applied_index={}",
+            "Error prone txn commit error_prone_count={} min_error_commit_tso={} read_tso={} region_id={} "
+            "applied_index={}",
             error_prone_count,
-            min_error_read_tso,
+            min_error_commit_tso,
             read_tso,
             region->id(),
             region->appliedIndex());
