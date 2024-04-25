@@ -352,6 +352,8 @@ void LearnerReadWorker::waitIndex(
 
         const auto & region = regions_snapshot.find(region_to_query.region_id)->second;
 
+        region->observeLearnerReadEvent(mvcc_query_info.start_ts);
+
         const auto total_wait_index_elapsed_ms = watch.elapsedMilliseconds();
         const auto index_to_wait = batch_read_index_result.find(region_to_query.region_id)->second.read_index();
         if (timeout_ms != 0 && total_wait_index_elapsed_ms > timeout_ms)
