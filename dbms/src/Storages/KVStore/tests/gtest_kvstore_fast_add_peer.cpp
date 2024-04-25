@@ -41,11 +41,8 @@ namespace DB
 {
 namespace FailPoints
 {
+extern const char force_fap_worker_throw[];
 extern const char force_set_fap_candidate_store_id[];
-} // namespace FailPoints
-
-namespace FailPoints
-{
 extern const char force_not_clean_fap_on_destroy[];
 } // namespace FailPoints
 
@@ -869,6 +866,65 @@ try
         Exception);
 }
 CATCH
+
+TEST_F(RegionKVStoreTestFAP, FAPWorkerException)
+try
+{
+    CheckpointRegionInfoAndData mock_data = prepareForRestart(FAPTestOpt{});
+    KVStore & kvs = getKVS();
+    RegionPtr kv_region = std::get<1>(mock_data);
+
+    auto & global_context = TiFlashTestEnv::getGlobalContext();
+    auto fap_context = global_context.getSharedContextDisagg()->fap_context;
+    uint64_t region_id = 1;
+
+    EngineStoreServerWrap server = {
+        .tmt = &global_context.getTMTContext(),
+        .proxy_helper = proxy_helper.get(),
+    };
+
+    kvstore->getStore().store_id.store(1, std::memory_order_release);
+    kvstore->debugMutStoreMeta().set_id(1);
+    ASSERT_EQ(1, kvstore->getStoreID());
+    ASSERT_EQ(1, kvstore->clonedStoreMeta().id());
+    FailPointHelper::enableFailPoint(FailPoints::force_fap_worker_throw);
+    FailPointHelper::enableFailPoint(FailPoints::force_set_fap_candidate_store_id);
+    // The FAP will fail because it doesn't contain the new peer in region meta.
+    FastAddPeer(&server, region_id, 2333);
+    eventuallyPredicate(
+        [&]() { return fap_context->tasks_trace->queryState(region_id) == FAPAsyncTasks::TaskState::Finished; });
+    eventuallyPredicate([&]() {
+        return !CheckpointIngestInfo::restore(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333);
+    });
+    ASSERT_TRUE(!fap_context->tryGetCheckpointIngestInfo(region_id).has_value());
+    // Now we try to apply regular snapshot.
+    // Note that if an fap snapshot is in stage 1, no regular snapshot could happen,
+    // because no MsgAppend is handled, such that no following MsgSnapshot could be sent.
+    {
+        MockSSTReader::getMockSSTData().clear();
+        MockSSTGenerator default_cf{901, 800, ColumnFamilyType::Default};
+        default_cf.finish_file();
+        default_cf.freeze();
+        kvs.mutProxyHelperUnsafe()->sst_reader_interfaces = make_mock_sst_reader_interface();
+        proxy_instance->snapshot(
+            kvs,
+            global_context.getTMTContext(),
+            region_id,
+            {default_cf},
+            kv_region->cloneMetaRegion(),
+            2,
+            0,
+            0,
+            std::nullopt,
+            false);
+    }
+    ASSERT_EQ(fap_context->tasks_trace->queryState(region_id), FAPAsyncTasks::TaskState::NotScheduled);
+
+    FailPointHelper::disableFailPoint(FailPoints::force_fap_worker_throw);
+    FailPointHelper::disableFailPoint(FailPoints::force_set_fap_candidate_store_id);
+}
+CATCH
+
 
 } // namespace tests
 } // namespace DB
