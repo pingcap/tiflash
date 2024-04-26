@@ -54,7 +54,7 @@ cd -
 ## TODO: Add more testing binaries
 
 # Collect the prof raw data and generate cov report
-llvm-profdata merge -sparse "${COVERAGE_DIR}/*.profraw" -o "${COVERAGE_DIR}/merged.profdata"
+llvm-profdata merge -sparse ${COVERAGE_DIR}/*.profraw -o "${COVERAGE_DIR}/merged.profdata"
 
 export LD_LIBRARY_PATH=.
 llvm-cov export \
