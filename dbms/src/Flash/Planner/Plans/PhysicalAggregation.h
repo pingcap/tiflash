@@ -40,7 +40,7 @@ public:
         const PhysicalPlanNodePtr & child_,
         const ExpressionActionsPtr & before_agg_actions_,
         const Names & aggregation_keys_,
-        const std::unordered_map<String, String> & key_from_agg_func_,
+        const std::unordered_set<String> & key_from_agg_func_,
         const TiDB::TiDBCollators & aggregation_collators_,
         bool is_final_agg_,
         const AggregateDescriptions & aggregate_descriptions_,
@@ -73,7 +73,7 @@ private:
 private:
     ExpressionActionsPtr before_agg_actions;
     Names aggregation_keys;
-    std::unordered_map<String, String> key_from_agg_func;
+    std::unordered_set<String> key_from_agg_func;
     TiDB::TiDBCollators aggregation_collators;
     bool is_final_agg;
     AggregateDescriptions aggregate_descriptions;

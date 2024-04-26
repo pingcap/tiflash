@@ -54,7 +54,7 @@ PhysicalPlanNodePtr PhysicalAggregation::build(
     NamesAndTypes aggregated_columns;
     AggregateDescriptions aggregate_descriptions;
     Names aggregation_keys;
-    std::unordered_map<String, String> key_from_agg_func;
+    std::unordered_set<String> key_from_agg_func;
     TiDB::TiDBCollators collators;
     {
         std::unordered_set<String> agg_key_set;

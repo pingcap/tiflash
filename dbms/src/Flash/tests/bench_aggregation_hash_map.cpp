@@ -48,13 +48,11 @@ using BlockPtr = std::shared_ptr<Block>;
 template <typename T>
 std::vector<T> getRandomInt(T min, T max, size_t n)
 {
-    static_assert(std::is_integral<T>::value, "should be integral type for getRandomInt");
+    static_assert(std::is_integral<T>::value, "arguments of getRandomInt() should be integral");
 
     assert(max > min);
     assert(n > 0);
 
-    // std::random_device rd;
-    // std::mt19937_64 gen(rd());
     std::mt19937_64 gen(123);
     std::uniform_int_distribution<T> dist(min, max);
 
@@ -75,8 +73,6 @@ std::vector<std::string> getRandomStr(size_t min_len, size_t max_len, size_t n)
     std::vector<std::string> results;
     results.reserve(n);
 
-    // std::random_device rd;
-    // std::mt19937_64 gen(rd());
     std::mt19937_64 gen(123);
 
     for (auto len : size_vec)
@@ -133,7 +129,6 @@ public:
             auto data_type_decimal = std::make_shared<DataTypeDecimal128>();
             ::tipb::Aggregation agg_tipb;
             ::google::protobuf::util::JsonStringToMessage(agg_tipb_json, &agg_tipb);
-            // todo src_header for both analyzer and before_agg_actions? why?
             DAGExpressionAnalyzer analyzer(src_header, *context);
             ExpressionActionsPtr before_agg_actions = PhysicalPlanHelper::newActions(src_header);
             AggregateDescriptions aggregate_desc;
@@ -141,7 +136,7 @@ public:
             Names aggregation_keys;
             TiDB::TiDBCollators collators;
             std::unordered_set<String> agg_key_set;
-            std::unordered_map<String, String> key_from_agg_func;
+            std::unordered_set<String> key_from_agg_func;
             analyzer.buildAggFuncs(agg_tipb, before_agg_actions, aggregate_desc, aggregated_columns);
             analyzer.buildAggGroupBy(
                 agg_tipb.group_by(),
@@ -154,7 +149,7 @@ public:
                 /*collation sensitive*/ true,
                 collators);
 
-            // !!!
+            // Fill argument number of agg func.
             AggregationInterpreterHelper::fillArgColumnNumbers(aggregate_desc, src_header);
             SpillConfig spill_config(
                 context->getTemporaryPath(),
@@ -176,12 +171,6 @@ public:
                 aggregate_desc,
                 /*is_final_agg*/ true,
                 spill_config);
-
-            // RegisterOperatorSpillContext register_operator_spill_context;
-            // aggregator = std::make_shared<Aggregator>(params, "BenchProbeAggHashMap", /*concurrency*/1, register_operator_spill_context);
-
-            // data_variants = std::make_shared<AggregatedDataVariants>();
-            // data_variants->aggregator = aggregator.get();
         }
         CATCH
     }
@@ -192,36 +181,6 @@ public:
         context.reset();
     }
 
-    // void adjustAggTiPBColumnIndex(tipb::Aggregation & agg_tipb)
-    // {
-    //     WriteBufferFromOwnString ss;
-    //     encodeDAGInt64(0, ss);
-    //     agg_tipb.mutable_group_by(0)->set_val(ss.releaseStr());
-    //     agg_tipb.mutable_group_by(1)->set_val(1);
-    //     agg_tipb.mutable_group_by(2)->set_val(3);
-    //     agg_tipb.mutable_group_by(3)->set_val(4);
-    //     agg_tipb.mutable_group_by(4)->set_val(5);
-    //     agg_tipb.mutable_group_by(5)->set_val(2);
-    //     agg_tipb.mutable_group_by(6)->set_val(9);
-
-    //     // agg_tipb.agg_func()[0].children()[0].set_val();
-    //     agg_tipb.mutable_agg_func(1)->mutable_children(0)->set_val(6);
-    //     agg_tipb.mutable_agg_func(2)->mutable_children(0)->set_val(7);
-    //     agg_tipb.mutable_agg_func(3)->mutable_children(0)->set_val(8);
-    //     agg_tipb.mutable_agg_func(4)->mutable_children(0)->set_val(3);
-    //     agg_tipb.mutable_agg_func(5)->mutable_children(0)->set_val(4);
-    //     agg_tipb.mutable_agg_func(6)->mutable_children(0)->set_val(0);
-    //     agg_tipb.mutable_agg_func(7)->mutable_children(0)->set_val(1);
-    //     agg_tipb.mutable_agg_func(8)->mutable_children(0)->set_val(5);
-    //     agg_tipb.mutable_agg_func(9)->mutable_children(0)->set_val(2);
-    //     // agg_tipb.agg_func()[10].children()[0].set_val(9);
-
-    //     agg_tipb.mutable_agg_func()->RemoveLast();
-
-    //     // LOG_INFO(log, "gjt debug group by {}", decodeDAGInt64(agg_tipb.mutable_group_by(0)->val()));
-    //     // LOG_INFO(log, "gjt debug last agg func first_row child index: {}", decodeDAGInt64(agg_tipb.agg_func()[10].children()[0].val()));
-    // }
-
     static std::vector<BlockPtr> generateData(size_t total_rows, size_t rows_per_block)
     {
         auto data_type_string = std::make_shared<DataTypeString>();
@@ -229,25 +188,17 @@ public:
         auto data_type_decimal = std::make_shared<DataTypeDecimal128>();
         auto data_type_date = std::make_shared<DataTypeDate>();
 
-        // account
         std::vector<std::string> random_str_2 = getRandomCurrency(total_rows);
-        // currency
         std::vector<std::string> random_str_3 = getRandomStr(/*min_len*/ 1, /*max_len*/ 50, total_rows);
 
-        // category_id
         std::vector<int32_t> random_int_1 = getRandomInt<int32_t>(/*min*/ 1, /*max*/ 50, total_rows);
-        // platform_id
         std::vector<int32_t> random_int_2 = getRandomInt<int32_t>(/*min*/ 1, /*max*/ 50, total_rows);
-        // game_id
         std::vector<int32_t> random_int_3 = getRandomInt<int32_t>(/*min*/ 1, /*max*/ 50, total_rows);
 
-        // bet_total
         auto random_prec_1 = getRandomInt<Int128>(/*min*/ 1, /*max*/ 999999999, total_rows);
         auto random_scale_1 = getRandomInt<UInt32>(/*min*/ 1, /*max*/ 6, total_rows);
-        // valid_bet_total
         auto random_prec_2 = getRandomInt<Int128>(/*min*/ 1, /*max*/ 999999999, total_rows);
         auto random_scale_2 = getRandomInt<UInt32>(/*min*/ 1, /*max*/ 6, total_rows);
-        // profit_total
         auto random_prec_3 = getRandomInt<Int128>(/*min*/ 1, /*max*/ 999999999, total_rows);
         auto random_scale_3 = getRandomInt<UInt32>(/*min*/ 1, /*max*/ 6, total_rows);
 
@@ -260,7 +211,6 @@ public:
         MutableColumnPtr col_decimal_1;
         MutableColumnPtr col_decimal_2;
         MutableColumnPtr col_decimal_3;
-        // MutableColumnPtr col_date_1;
 
         std::vector<BlockPtr> blocks;
         blocks.reserve(total_rows / rows_per_block);
@@ -273,17 +223,17 @@ public:
                 if (col_varchar_1 != nullptr)
                 {
                     ColumnsWithTypeAndName cols{
-                        ColumnWithTypeAndName(std::move(col_varchar_1), data_type_string, "site_code"), // 0
-                        ColumnWithTypeAndName(std::move(col_varchar_2), data_type_string, "account"), // 1
-                        ColumnWithTypeAndName(std::move(col_varchar_3), data_type_string, "currency"), // 2
+                        ColumnWithTypeAndName(std::move(col_varchar_1), data_type_string, "col_varchar_1"), // 0
+                        ColumnWithTypeAndName(std::move(col_varchar_2), data_type_string, "col_varchar_2"), // 1
+                        ColumnWithTypeAndName(std::move(col_varchar_3), data_type_string, "col_varchar_3"), // 2
 
-                        ColumnWithTypeAndName(std::move(col_int_1), data_type_int, "category_id"), // 3
-                        ColumnWithTypeAndName(std::move(col_int_2), data_type_int, "platform_id"), // 4
-                        ColumnWithTypeAndName(std::move(col_int_3), data_type_int, "game_id"), // 5
+                        ColumnWithTypeAndName(std::move(col_int_1), data_type_int, "col_int_1"), // 3
+                        ColumnWithTypeAndName(std::move(col_int_2), data_type_int, "col_int_2"), // 4
+                        ColumnWithTypeAndName(std::move(col_int_3), data_type_int, "col_int_3"), // 5
 
-                        ColumnWithTypeAndName(std::move(col_decimal_1), data_type_decimal, "bet_total"), // 6
-                        ColumnWithTypeAndName(std::move(col_decimal_2), data_type_decimal, "valid_bet_total"), // 7
-                        ColumnWithTypeAndName(std::move(col_decimal_3), data_type_decimal, "profit_total"), // 8
+                        ColumnWithTypeAndName(std::move(col_decimal_1), data_type_decimal, "col_decimal_1"), // 6
+                        ColumnWithTypeAndName(std::move(col_decimal_2), data_type_decimal, "col_decimal_2"), // 7
+                        ColumnWithTypeAndName(std::move(col_decimal_3), data_type_decimal, "col_decimal_3"), // 8
                     };
                     blocks.push_back(std::make_shared<Block>(cols));
                 }
@@ -344,18 +294,14 @@ try
         Aggregator::AggProcessInfo agg_process_info(aggregator.get());
         Stopwatch build_side_watch;
         {
-            // int i = 0;
             build_side_watch.start();
             for (auto & block : test_blocks)
             {
-                // LOG_INFO(log, "gjt debug insert block: {}", i++);
                 agg_process_info.resetBlock(*block);
-                // aggregator->executeOnBlock(agg_process_info, *data_variants, 1, build_side_watch);
                 aggregator->executeOnBlock(agg_process_info, *data_variants, 1);
             }
             build_side_watch.stop();
         }
-        LOG_INFO(log, "gjt debug build_side_watch build: {}", build_side_watch.elapsed());
 
         std::vector<AggregatedDataVariantsPtr> variants{data_variants};
         auto merging_buckets = aggregator->mergeAndConvertToBlocks(variants, true, 1);
@@ -378,12 +324,11 @@ try
         {
             total_rows += block.rows();
         }
-        LOG_INFO(log, "gjt debug probe_side_watch: {}, res rows: {}", probe_side_watch.elapsed(), total_rows);
+        LOG_DEBUG(log, "probe_side_watch: {}, res rows: {}", probe_side_watch.elapsed(), total_rows);
     }
 }
 CATCH
 BENCHMARK_REGISTER_F(BenchProbeAggHashMap, decimal128);
-// BENCHMARK_REGISTER_F(BenchProbeAggHashMap, decimal128)->Iterations(1);
 
 } // namespace tests
 } // namespace DB
