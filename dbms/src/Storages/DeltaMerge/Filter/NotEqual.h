@@ -31,9 +31,7 @@ public:
 
     RSResults roughCheck(size_t start_pack, size_t pack_count, const RSCheckParam & param) override
     {
-        RSResults results(pack_count, RSResult::Some);
-        GET_RSINDEX_FROM_PARAM_NOT_FOUND_RETURN_DIRECTLY(param, attr, rsindex, results);
-        results = rsindex.minmax->checkCmp<RoughCheck::CheckEqual>(start_pack, pack_count, value, rsindex.type);
+        auto results = minMaxCheckCmp<RoughCheck::CheckEqual>(start_pack, pack_count, param, attr, value);
         std::transform(results.begin(), results.end(), results.begin(), [](RSResult result) { return !result; });
         return results;
     }
