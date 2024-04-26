@@ -34,8 +34,7 @@ struct RSCheckParam
     ColumnIndexes indexes;
 };
 
-
-class RSOperator : public std::enable_shared_from_this<RSOperator>
+class RSOperator
 {
 protected:
     RSOperator() = default;
@@ -111,13 +110,28 @@ public:
     }
 };
 
-#define GET_RSINDEX_FROM_PARAM_NOT_FOUND_RETURN_DIRECTLY(param, attr, rsindex, res) \
-    auto it = (param).indexes.find((attr).col_id);                                  \
-    if (it == (param).indexes.end())                                                \
-        return (res);                                                               \
-    auto(rsindex) = it->second;                                                     \
-    if (!(rsindex).type->equals(*(attr).type))                                      \
-        return (res);
+inline std::optional<RSIndex> getRSIndex(const RSCheckParam & param, const Attr & attr)
+{
+    auto it = param.indexes.find(attr.col_id);
+    if (it != param.indexes.end() && it->second.type->equals(*attr.type))
+    {
+        return it->second;
+    }
+    return std::nullopt;
+}
+
+template <typename Op>
+RSResults minMaxCheckCmp(
+    size_t start_pack,
+    size_t pack_count,
+    const RSCheckParam & param,
+    const Attr & attr,
+    const Field & value)
+{
+    auto rs_index = getRSIndex(param, attr);
+    return rs_index ? rs_index->minmax->checkCmp<Op>(start_pack, pack_count, value, rs_index->type)
+                    : RSResults(pack_count, RSResult::Some);
+}
 
 // logical
 RSOperatorPtr createNot(const RSOperatorPtr & op);
