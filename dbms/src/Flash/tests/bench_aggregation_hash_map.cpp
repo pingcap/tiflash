@@ -278,7 +278,7 @@ public:
 BENCHMARK_DEFINE_F(BenchProbeAggHashMap, decimal128)(benchmark::State & state)
 try
 {
-    for (auto _ : state)
+    for (const auto & _ : state)
     {
         // watchout order of data_variants and aggregator.
         // should destroy data_variants first.
@@ -312,7 +312,7 @@ try
             probe_side_watch.start();
             for (;;)
             {
-                auto block = merging_buckets->getData(0);
+                auto block = merging_buckets->getData(0, /*enable_skip_serialize_key*/false);
                 if (!block)
                     break;
                 res_block.push_back(block);

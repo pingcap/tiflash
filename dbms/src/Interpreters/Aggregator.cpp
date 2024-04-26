@@ -1477,7 +1477,7 @@ void NO_INLINE Aggregator::convertToBlockImplFinal(
     AggregatorMethodInitKeyColumnHelper<Method> agg_keys_helper{method};
     agg_keys_helper.initAggKeys(data.size(), key_columns);
 
-    data.forEachValue([&](const auto & key, auto & mapped) {
+    data.forEachValue([&](const auto & key [[maybe_unused]], auto & mapped) {
         if constexpr (!skip_serialize_key)
         {
             agg_keys_helper.insertKeyIntoColumns(key, key_columns, key_sizes_ref, params.collators);
@@ -1538,7 +1538,7 @@ void NO_INLINE Aggregator::convertToBlocksImplFinal(
     auto agg_keys_helpers = initAggKeysForKeyColumnsVec(method, key_columns_vec, params.max_block_size, data.size());
 
     size_t data_index = 0;
-    data.forEachValue([&](const auto & key, auto & mapped) {
+    data.forEachValue([&](const auto & key [[maybe_unused]], auto & mapped) {
         size_t key_columns_vec_index = data_index / params.max_block_size;
         if constexpr (!skip_serialize_key)
         {
@@ -1563,7 +1563,7 @@ void NO_INLINE Aggregator::convertToBlockImplNotFinal(
     AggregatorMethodInitKeyColumnHelper<Method> agg_keys_helper{method};
     agg_keys_helper.initAggKeys(data.size(), key_columns);
 
-    data.forEachValue([&](const auto & key, auto & mapped) {
+    data.forEachValue([&](const auto & key [[maybe_unused]], auto & mapped) {
         if constexpr (!skip_serialize_key)
         {
             agg_keys_helper.insertKeyIntoColumns(key, key_columns, key_sizes_ref, params.collators);
@@ -1590,7 +1590,7 @@ void NO_INLINE Aggregator::convertToBlocksImplNotFinal(
     auto agg_keys_helpers = initAggKeysForKeyColumnsVec(method, key_columns_vec, params.max_block_size, data.size());
 
     size_t data_index = 0;
-    data.forEachValue([&](const auto & key, auto & mapped) {
+    data.forEachValue([&](const auto & key [[maybe_unused]], auto & mapped) {
         size_t key_columns_vec_index = data_index / params.max_block_size;
         if constexpr (!skip_serialize_key)
         {
