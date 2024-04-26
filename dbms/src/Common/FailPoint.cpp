@@ -112,6 +112,7 @@ namespace DB
     M(force_agg_on_partial_block)                            \
     M(force_set_fap_candidate_store_id)                      \
     M(force_not_clean_fap_on_destroy)                        \
+    M(force_fap_worker_throw)                                \
     M(delta_tree_create_node_fail)                           \
     M(disable_flush_cache)
 

@@ -52,6 +52,7 @@ namespace DB
 
 namespace FailPoints
 {
+extern const char force_fap_worker_throw[];
 extern const char force_set_fap_candidate_store_id[];
 } // namespace FailPoints
 
@@ -199,6 +200,8 @@ std::variant<CheckpointRegionInfoAndData, FastAddPeerRes> FastAddPeerImplSelect(
     const auto & settings = tmt.getContext().getSettingsRef();
     auto current_store_id = tmt.getKVStore()->clonedStoreMeta().id();
     std::vector<StoreID> candidate_store_ids = getCandidateStoreIDsForRegion(tmt, region_id, current_store_id);
+
+    fiu_do_on(FailPoints::force_fap_worker_throw, { throw Exception(ErrorCodes::LOGICAL_ERROR, "mocked throw"); });
 
     if (candidate_store_ids.empty())
     {
@@ -446,6 +449,8 @@ FastAddPeerRes FastAddPeerImpl(
                 new_peer_id,
                 e.message()));
         GET_METRIC(tiflash_fap_task_result, type_failed_baddata).Increment();
+        // The task could stuck in AsyncTasks as Finished till fetched by resolveFapSnapshotState,
+        // since a FastAddPeerStatus::BadData result will lead to a fallback in Proxy.
         return genFastAddPeerRes(FastAddPeerStatus::BadData, "", "");
     }
     catch (...)
@@ -457,6 +462,8 @@ FastAddPeerRes FastAddPeerImpl(
                 region_id,
                 new_peer_id));
         GET_METRIC(tiflash_fap_task_result, type_failed_baddata).Increment();
+        // The task could stuck in AsyncTasks as Finished till fetched by resolveFapSnapshotState.
+        // since a FastAddPeerStatus::BadData result will lead to a fallback in Proxy.
         return genFastAddPeerRes(FastAddPeerStatus::BadData, "", "");
     }
 }
