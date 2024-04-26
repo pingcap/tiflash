@@ -12,29 +12,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#pragma once
-#include <DataStreams/IProfilingBlockInputStream.h>
+#include <Flash/Pipeline/Schedule/Tasks/AggregateFinalConvertTask.h>
+#include <Operators/AggregateContext.h>
 
 namespace DB
 {
-
-class DictionaryBlockInputStreamBase : public IProfilingBlockInputStream
+AggregateFinalConvertTask::AggregateFinalConvertTask(
+    PipelineExecutorContext & exec_context_,
+    const String & req_id,
+    const EventPtr & event_,
+    AggregateContextPtr agg_context_,
+    size_t index_)
+    : EventTask(exec_context_, req_id, event_)
+    , agg_context(std::move(agg_context_))
+    , index(index_)
 {
-protected:
-    Block block;
+    assert(agg_context);
+}
 
-    DictionaryBlockInputStreamBase(size_t rows_count, size_t max_block_size);
-
-    virtual Block getBlock(size_t start, size_t length) const = 0;
-
-    Block getHeader() const override;
-
-private:
-    const size_t rows_count;
-    const size_t max_block_size;
-    size_t next_row = 0;
-
-    Block readImpl() override;
-};
+ExecTaskStatus AggregateFinalConvertTask::executeImpl()
+{
+    agg_context->convertToTwoLevel(index);
+    agg_context.reset();
+    return ExecTaskStatus::FINISHED;
+}
 
 } // namespace DB

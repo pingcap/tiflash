@@ -350,7 +350,7 @@ private:
 #else
 public:
 #endif
-    bool is_update{false};
+    const bool is_update{false};
 
     // The delta index of cached.
     DeltaIndexPtr shared_delta_index;
@@ -371,8 +371,7 @@ public:
         // We only allow one for_update snapshots to exist, so it cannot be cloned.
         RUNTIME_CHECK(!is_update);
 
-        auto c = std::make_shared<DeltaValueSnapshot>(type);
-        c->is_update = is_update;
+        auto c = std::make_shared<DeltaValueSnapshot>(type, is_update);
         c->shared_delta_index = shared_delta_index;
         c->delta_index_epoch = delta_index_epoch;
         c->mem_table_snap = mem_table_snap->clone();
@@ -383,8 +382,9 @@ public:
         return c;
     }
 
-    explicit DeltaValueSnapshot(CurrentMetrics::Metric type_)
-        : type(type_)
+    explicit DeltaValueSnapshot(CurrentMetrics::Metric type_, bool update_)
+        : is_update(update_)
+        , type(type_)
     {
         CurrentMetrics::add(type);
     }
@@ -476,7 +476,7 @@ public:
         DeltaIndexPtr my_delta_index,
         const RowKeyRange & segment_range,
         const RowKeyRange & relevant_range,
-        UInt64 max_version);
+        UInt64 start_ts);
 };
 
 class DeltaValueInputStream : public SkippableBlockInputStream

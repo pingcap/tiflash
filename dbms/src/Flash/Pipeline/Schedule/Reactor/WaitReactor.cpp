@@ -53,6 +53,7 @@ bool WaitReactor::awaitAndCollectReadyTask(WaitingTask && task)
         io_tasks.push_back(std::move(task.first));
         return true;
     case ExecTaskStatus::WAIT_FOR_NOTIFY:
+        task_ptr->profile_info.elapsedAwaitTime();
         registerTaskToFuture(std::move(task.first));
         return true;
     case FINISH_STATUS:

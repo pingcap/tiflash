@@ -135,8 +135,7 @@ SegmentSnapshotPtr Serializer::deserializeSegment(
 
     auto data_store = dm_context.global_context.getSharedContextDisagg()->remote_data_store;
 
-    auto delta_snap = std::make_shared<DeltaValueSnapshot>(CurrentMetrics::DT_SnapshotOfDisaggReadNodeRead);
-    delta_snap->is_update = false;
+    auto delta_snap = std::make_shared<DeltaValueSnapshot>(CurrentMetrics::DT_SnapshotOfDisaggReadNodeRead, false);
     delta_snap->mem_table_snap
         = deserializeColumnFileSet(dm_context, proto.column_files_memtable(), data_store, segment_range);
     delta_snap->persisted_files_snap
@@ -297,7 +296,7 @@ RemotePb::ColumnFileRemote Serializer::serializeCFInMemory(const ColumnFileInMem
                 0,
                 block_rows,
                 CompressionMethod::LZ4,
-                CompressionSettings::getDefaultLevel(CompressionMethod::LZ4));
+                CompressionSetting::getDefaultLevel(CompressionMethod::LZ4));
         }
         remote_in_memory->add_block_columns(std::move(buf));
     }

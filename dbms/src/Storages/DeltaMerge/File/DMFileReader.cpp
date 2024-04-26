@@ -371,10 +371,10 @@ Block DMFileReader::read()
 
     if (do_clean_read_on_normal_mode)
     {
-        UInt64 max_version = 0;
+        UInt64 start_ts = 0;
         for (size_t pack_id = start_pack_id; pack_id < next_pack_id; ++pack_id)
-            max_version = std::max(pack_filter.getMaxVersion(pack_id), max_version);
-        do_clean_read_on_normal_mode = max_version <= max_read_version;
+            start_ts = std::max(pack_filter.getMaxVersion(pack_id), start_ts);
+        do_clean_read_on_normal_mode = start_ts <= max_read_version;
     }
 
     for (size_t i = 0; i < read_columns.size(); ++i)
