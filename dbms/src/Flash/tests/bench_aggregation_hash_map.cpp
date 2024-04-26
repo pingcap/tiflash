@@ -12,24 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Interpreters/Aggregator.h>
+#include <AggregateFunctions/registerAggregateFunctions.h>
 #include <Columns/ColumnDecimal.h>
+#include <DataTypes/DataTypeDate.h>
 #include <DataTypes/DataTypeDecimal.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
-#include <DataTypes/DataTypeDate.h>
-#include <AggregateFunctions/registerAggregateFunctions.h>
-#include <TestUtils/TiFlashTestEnv.h>
+#include <Flash/Coprocessor/AggregationInterpreterHelper.h>
+#include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Planner/PhysicalPlanHelper.h>
+#include <Interpreters/Aggregator.h>
 #include <Interpreters/Context.h>
 #include <TestUtils/TiFlashTestBasic.h>
-#include <Flash/Coprocessor/DAGCodec.h>
-#include <Flash/Coprocessor/AggregationInterpreterHelper.h>
-
-#include <tipb/executor.pb.h>
-#include <google/protobuf/util/json_util.h>
+#include <TestUtils/TiFlashTestEnv.h>
 #include <benchmark/benchmark.h>
+#include <google/protobuf/util/json_util.h>
+#include <tipb/executor.pb.h>
+
 #include <random>
 #include <string>
 
@@ -40,7 +40,8 @@ namespace tests
 // todo sum(1)
 // static const std::string agg_tipb_json = R"({"groupBy":[{"tp":"ColumnRef","val":"gAAAAAAAAAA=","sig":"Unspecified","fieldType":{"tp":15,"flag":0,"flen":32,"decimal":0,"collate":-46,"charset":"utf8mb4","array":false},"hasDistinct":false},{"tp":"ColumnRef","val":"gAAAAAAAAAE=","sig":"Unspecified","fieldType":{"tp":15,"flag":0,"flen":64,"decimal":0,"collate":-46,"charset":"utf8mb4","array":false},"hasDistinct":false},{"tp":"ColumnRef","val":"gAAAAAAAAAI=","sig":"Unspecified","fieldType":{"tp":15,"flag":0,"flen":16,"decimal":0,"collate":-46,"charset":"utf8mb4","array":false},"hasDistinct":false},{"tp":"ColumnRef","val":"gAAAAAAAAAM=","sig":"Unspecified","fieldType":{"tp":3,"flag":0,"flen":11,"decimal":0,"collate":-63,"charset":"binary","array":false},"hasDistinct":false},{"tp":"ColumnRef","val":"gAAAAAAAAAQ=","sig":"Unspecified","fieldType":{"tp":3,"flag":0,"flen":11,"decimal":0,"collate":-63,"charset":"binary","array":false},"hasDistinct":false},{"tp":"ColumnRef","val":"gAAAAAAAAAU=","sig":"Unspecified","fieldType":{"tp":3,"flag":0,"flen":11,"decimal":0,"collate":-63,"charset":"binary","array":false},"hasDistinct":false}],"aggFunc":[{"tp":"Sum","children":[{"tp":"MysqlDecimal","val":"AQCB","sig":"Unspecified","fieldType":{"tp":246,"flag":129,"flen":1,"decimal":0,"collate":-63,"charset":"binary","array":false},"hasDistinct":false}],"sig":"Unspecified","fieldType":{"tp":246,"flag":128,"flen":22,"decimal":0,"collate":-63,"charset":"binary","array":false},"hasDistinct":false,"aggFuncMode":"CompleteMode"},{"tp":"Sum","children":[{"tp":"ColumnRef","val":"gAAAAAAAAAY=","sig":"Unspecified","fieldType":{"tp":246,"flag":0,"flen":19,"decimal":6,"collate":-63,"charset":"binary","array":false},"hasDistinct":false}],"sig":"Unspecified","fieldType":{"tp":246,"flag":128,"flen":41,"decimal":6,"collate":-63,"charset":"binary","array":false},"hasDistinct":false,"aggFuncMode":"CompleteMode"},{"tp":"Sum","children":[{"tp":"ColumnRef","val":"gAAAAAAAAAc=","sig":"Unspecified","fieldType":{"tp":246,"flag":0,"flen":19,"decimal":6,"collate":-63,"charset":"binary","array":false},"hasDistinct":false}],"sig":"Unspecified","fieldType":{"tp":246,"flag":128,"flen":41,"decimal":6,"collate":-63,"charset":"binary","array":false},"hasDistinct":false,"aggFuncMode":"CompleteMode"},{"tp":"Sum","children":[{"tp":"ColumnRef","val":"gAAAAAAAAAg=","sig":"Unspecified","fieldType":{"tp":246,"flag":0,"flen":19,"decimal":6,"collate":-63,"charset":"binary","array":false},"hasDistinct":false}],"sig":"Unspecified","fieldType":{"tp":246,"flag":128,"flen":41,"decimal":6,"collate":-63,"charset":"binary","array":false},"hasDistinct":false,"aggFuncMode":"CompleteMode"},{"tp":"First","children":[{"tp":"ColumnRef","val":"gAAAAAAAAAA=","sig":"Unspecified","fieldType":{"tp":15,"flag":0,"flen":32,"decimal":0,"collate":-46,"charset":"utf8mb4","array":false},"hasDistinct":false}],"sig":"Unspecified","fieldType":{"tp":15,"flag":0,"flen":32,"decimal":0,"collate":-46,"charset":"utf8mb4","array":false},"hasDistinct":false,"aggFuncMode":"CompleteMode"},{"tp":"First","children":[{"tp":"ColumnRef","val":"gAAAAAAAAAE=","sig":"Unspecified","fieldType":{"tp":15,"flag":0,"flen":64,"decimal":0,"collate":-46,"charset":"utf8mb4","array":false},"hasDistinct":false}],"sig":"Unspecified","fieldType":{"tp":15,"flag":0,"flen":64,"decimal":0,"collate":-46,"charset":"utf8mb4","array":false},"hasDistinct":false,"aggFuncMode":"CompleteMode"},{"tp":"First","children":[{"tp":"ColumnRef","val":"gAAAAAAAAAI=","sig":"Unspecified","fieldType":{"tp":15,"flag":0,"flen":16,"decimal":0,"collate":-46,"charset":"utf8mb4","array":false},"hasDistinct":false}],"sig":"Unspecified","fieldType":{"tp":15,"flag":0,"flen":16,"decimal":0,"collate":-46,"charset":"utf8mb4","array":false},"hasDistinct":false,"aggFuncMode":"CompleteMode"},{"tp":"First","children":[{"tp":"ColumnRef","val":"gAAAAAAAAAM=","sig":"Unspecified","fieldType":{"tp":3,"flag":0,"flen":11,"decimal":0,"collate":-63,"charset":"binary","array":false},"hasDistinct":false}],"sig":"Unspecified","fieldType":{"tp":3,"flag":0,"flen":11,"decimal":0,"collate":-63,"charset":"binary","array":false},"hasDistinct":false,"aggFuncMode":"CompleteMode"},{"tp":"First","children":[{"tp":"ColumnRef","val":"gAAAAAAAAAQ=","sig":"Unspecified","fieldType":{"tp":3,"flag":0,"flen":11,"decimal":0,"collate":-63,"charset":"binary","array":false},"hasDistinct":false}],"sig":"Unspecified","fieldType":{"tp":3,"flag":0,"flen":11,"decimal":0,"collate":-63,"charset":"binary","array":false},"hasDistinct":false,"aggFuncMode":"CompleteMode"},{"tp":"First","children":[{"tp":"ColumnRef","val":"gAAAAAAAAAU=","sig":"Unspecified","fieldType":{"tp":3,"flag":0,"flen":11,"decimal":0,"collate":-63,"charset":"binary","array":false},"hasDistinct":false}],"sig":"Unspecified","fieldType":{"tp":3,"flag":0,"flen":11,"decimal":0,"collate":-63,"charset":"binary","array":false},"hasDistinct":false,"aggFuncMode":"CompleteMode"}],"streamed":false,"child":{"tp":"TypeExchangeReceiver","exchangeReceiver":{"encodedTaskMeta":["CIGAkJ3p/8udBhABIg4xMjcuMC4wLjE6MzkzMCgBML2osq7ZiMriFzgGQIgOSAI="],"fieldTypes":[{"tp":15,"flag":0,"flen":32,"decimal":0,"collate":-46,"charset":"utf8mb4","array":false},{"tp":15,"flag":0,"flen":64,"decimal":0,"collate":-46,"charset":"utf8mb4","array":false},{"tp":15,"flag":0,"flen":16,"decimal":0,"collate":-46,"charset":"utf8mb4","array":false},{"tp":3,"flag":0,"flen":11,"decimal":0,"collate":-63,"charset":"binary","array":false},{"tp":3,"flag":0,"flen":11,"decimal":0,"collate":-63,"charset":"binary","array":false},{"tp":3,"flag":0,"flen":11,"decimal":0,"collate":-63,"charset":"binary","array":false},{"tp":246,"flag":0,"flen":19,"decimal":6,"collate":-63,"charset":"binary","array":false},{"tp":246,"flag":0,"flen":19,"decimal":6,"collate":-63,"charset":"binary","array":false},{"tp":246,"flag":0,"flen":19,"decimal":6,"collate":-63,"charset":"binary","array":false}]},"executorId":"ExchangeReceiver_18","fineGrainedShuffleStreamCount":"10","fineGrainedShuffleBatchSize":"8192"}})";
 
-static const std::string agg_tipb_json = R"({"groupBy":[{"tp":"ColumnRef","val":"gAAAAAAAAAA=","sig":"Unspecified","fieldType":{"tp":15,"flag":0,"flen":32,"decimal":0,"collate":-46,"charset":"utf8mb4","array":false},"hasDistinct":false},{"tp":"ColumnRef","val":"gAAAAAAAAAE=","sig":"Unspecified","fieldType":{"tp":15,"flag":0,"flen":64,"decimal":0,"collate":-46,"charset":"utf8mb4","array":false},"hasDistinct":false},{"tp":"ColumnRef","val":"gAAAAAAAAAI=","sig":"Unspecified","fieldType":{"tp":15,"flag":0,"flen":16,"decimal":0,"collate":-46,"charset":"utf8mb4","array":false},"hasDistinct":false},{"tp":"ColumnRef","val":"gAAAAAAAAAM=","sig":"Unspecified","fieldType":{"tp":3,"flag":0,"flen":11,"decimal":0,"collate":-63,"charset":"binary","array":false},"hasDistinct":false},{"tp":"ColumnRef","val":"gAAAAAAAAAQ=","sig":"Unspecified","fieldType":{"tp":3,"flag":0,"flen":11,"decimal":0,"collate":-63,"charset":"binary","array":false},"hasDistinct":false},{"tp":"ColumnRef","val":"gAAAAAAAAAU=","sig":"Unspecified","fieldType":{"tp":3,"flag":0,"flen":11,"decimal":0,"collate":-63,"charset":"binary","array":false},"hasDistinct":false}],"aggFunc":[{"tp":"Sum","children":[{"tp":"ColumnRef","val":"gAAAAAAAAAY=","sig":"Unspecified","fieldType":{"tp":246,"flag":0,"flen":19,"decimal":6,"collate":-63,"charset":"binary","array":false},"hasDistinct":false}],"sig":"Unspecified","fieldType":{"tp":246,"flag":128,"flen":41,"decimal":6,"collate":-63,"charset":"binary","array":false},"hasDistinct":false,"aggFuncMode":"CompleteMode"},{"tp":"Sum","children":[{"tp":"ColumnRef","val":"gAAAAAAAAAc=","sig":"Unspecified","fieldType":{"tp":246,"flag":0,"flen":19,"decimal":6,"collate":-63,"charset":"binary","array":false},"hasDistinct":false}],"sig":"Unspecified","fieldType":{"tp":246,"flag":128,"flen":41,"decimal":6,"collate":-63,"charset":"binary","array":false},"hasDistinct":false,"aggFuncMode":"CompleteMode"},{"tp":"Sum","children":[{"tp":"ColumnRef","val":"gAAAAAAAAAg=","sig":"Unspecified","fieldType":{"tp":246,"flag":0,"flen":19,"decimal":6,"collate":-63,"charset":"binary","array":false},"hasDistinct":false}],"sig":"Unspecified","fieldType":{"tp":246,"flag":128,"flen":41,"decimal":6,"collate":-63,"charset":"binary","array":false},"hasDistinct":false,"aggFuncMode":"CompleteMode"},{"tp":"First","children":[{"tp":"ColumnRef","val":"gAAAAAAAAAA=","sig":"Unspecified","fieldType":{"tp":15,"flag":0,"flen":32,"decimal":0,"collate":-46,"charset":"utf8mb4","array":false},"hasDistinct":false}],"sig":"Unspecified","fieldType":{"tp":15,"flag":0,"flen":32,"decimal":0,"collate":-46,"charset":"utf8mb4","array":false},"hasDistinct":false,"aggFuncMode":"CompleteMode"},{"tp":"First","children":[{"tp":"ColumnRef","val":"gAAAAAAAAAE=","sig":"Unspecified","fieldType":{"tp":15,"flag":0,"flen":64,"decimal":0,"collate":-46,"charset":"utf8mb4","array":false},"hasDistinct":false}],"sig":"Unspecified","fieldType":{"tp":15,"flag":0,"flen":64,"decimal":0,"collate":-46,"charset":"utf8mb4","array":false},"hasDistinct":false,"aggFuncMode":"CompleteMode"},{"tp":"First","children":[{"tp":"ColumnRef","val":"gAAAAAAAAAI=","sig":"Unspecified","fieldType":{"tp":15,"flag":0,"flen":16,"decimal":0,"collate":-46,"charset":"utf8mb4","array":false},"hasDistinct":false}],"sig":"Unspecified","fieldType":{"tp":15,"flag":0,"flen":16,"decimal":0,"collate":-46,"charset":"utf8mb4","array":false},"hasDistinct":false,"aggFuncMode":"CompleteMode"},{"tp":"First","children":[{"tp":"ColumnRef","val":"gAAAAAAAAAM=","sig":"Unspecified","fieldType":{"tp":3,"flag":0,"flen":11,"decimal":0,"collate":-63,"charset":"binary","array":false},"hasDistinct":false}],"sig":"Unspecified","fieldType":{"tp":3,"flag":0,"flen":11,"decimal":0,"collate":-63,"charset":"binary","array":false},"hasDistinct":false,"aggFuncMode":"CompleteMode"},{"tp":"First","children":[{"tp":"ColumnRef","val":"gAAAAAAAAAQ=","sig":"Unspecified","fieldType":{"tp":3,"flag":0,"flen":11,"decimal":0,"collate":-63,"charset":"binary","array":false},"hasDistinct":false}],"sig":"Unspecified","fieldType":{"tp":3,"flag":0,"flen":11,"decimal":0,"collate":-63,"charset":"binary","array":false},"hasDistinct":false,"aggFuncMode":"CompleteMode"},{"tp":"First","children":[{"tp":"ColumnRef","val":"gAAAAAAAAAU=","sig":"Unspecified","fieldType":{"tp":3,"flag":0,"flen":11,"decimal":0,"collate":-63,"charset":"binary","array":false},"hasDistinct":false}],"sig":"Unspecified","fieldType":{"tp":3,"flag":0,"flen":11,"decimal":0,"collate":-63,"charset":"binary","array":false},"hasDistinct":false,"aggFuncMode":"CompleteMode"}],"streamed":false,"child":{"tp":"TypeExchangeReceiver","exchangeReceiver":{"encodedTaskMeta":["CIGA4NK8qMydBhABIg4xMjcuMC4wLjE6MzkzMCgBMJGZlt/io8viFzgHQIgOSAI="],"fieldTypes":[{"tp":15,"flag":0,"flen":32,"decimal":0,"collate":-46,"charset":"utf8mb4","array":false},{"tp":15,"flag":0,"flen":64,"decimal":0,"collate":-46,"charset":"utf8mb4","array":false},{"tp":15,"flag":0,"flen":16,"decimal":0,"collate":-46,"charset":"utf8mb4","array":false},{"tp":3,"flag":0,"flen":11,"decimal":0,"collate":-63,"charset":"binary","array":false},{"tp":3,"flag":0,"flen":11,"decimal":0,"collate":-63,"charset":"binary","array":false},{"tp":3,"flag":0,"flen":11,"decimal":0,"collate":-63,"charset":"binary","array":false},{"tp":246,"flag":0,"flen":19,"decimal":6,"collate":-63,"charset":"binary","array":false},{"tp":246,"flag":0,"flen":19,"decimal":6,"collate":-63,"charset":"binary","array":false},{"tp":246,"flag":0,"flen":19,"decimal":6,"collate":-63,"charset":"binary","array":false}]},"executorId":"ExchangeReceiver_18","fineGrainedShuffleStreamCount":"10","fineGrainedShuffleBatchSize":"8192"}})";
+static const std::string agg_tipb_json
+    = R"({"groupBy":[{"tp":"ColumnRef","val":"gAAAAAAAAAA=","sig":"Unspecified","fieldType":{"tp":15,"flag":0,"flen":32,"decimal":0,"collate":-46,"charset":"utf8mb4","array":false},"hasDistinct":false},{"tp":"ColumnRef","val":"gAAAAAAAAAE=","sig":"Unspecified","fieldType":{"tp":15,"flag":0,"flen":64,"decimal":0,"collate":-46,"charset":"utf8mb4","array":false},"hasDistinct":false},{"tp":"ColumnRef","val":"gAAAAAAAAAI=","sig":"Unspecified","fieldType":{"tp":15,"flag":0,"flen":16,"decimal":0,"collate":-46,"charset":"utf8mb4","array":false},"hasDistinct":false},{"tp":"ColumnRef","val":"gAAAAAAAAAM=","sig":"Unspecified","fieldType":{"tp":3,"flag":0,"flen":11,"decimal":0,"collate":-63,"charset":"binary","array":false},"hasDistinct":false},{"tp":"ColumnRef","val":"gAAAAAAAAAQ=","sig":"Unspecified","fieldType":{"tp":3,"flag":0,"flen":11,"decimal":0,"collate":-63,"charset":"binary","array":false},"hasDistinct":false},{"tp":"ColumnRef","val":"gAAAAAAAAAU=","sig":"Unspecified","fieldType":{"tp":3,"flag":0,"flen":11,"decimal":0,"collate":-63,"charset":"binary","array":false},"hasDistinct":false}],"aggFunc":[{"tp":"Sum","children":[{"tp":"ColumnRef","val":"gAAAAAAAAAY=","sig":"Unspecified","fieldType":{"tp":246,"flag":0,"flen":19,"decimal":6,"collate":-63,"charset":"binary","array":false},"hasDistinct":false}],"sig":"Unspecified","fieldType":{"tp":246,"flag":128,"flen":41,"decimal":6,"collate":-63,"charset":"binary","array":false},"hasDistinct":false,"aggFuncMode":"CompleteMode"},{"tp":"Sum","children":[{"tp":"ColumnRef","val":"gAAAAAAAAAc=","sig":"Unspecified","fieldType":{"tp":246,"flag":0,"flen":19,"decimal":6,"collate":-63,"charset":"binary","array":false},"hasDistinct":false}],"sig":"Unspecified","fieldType":{"tp":246,"flag":128,"flen":41,"decimal":6,"collate":-63,"charset":"binary","array":false},"hasDistinct":false,"aggFuncMode":"CompleteMode"},{"tp":"Sum","children":[{"tp":"ColumnRef","val":"gAAAAAAAAAg=","sig":"Unspecified","fieldType":{"tp":246,"flag":0,"flen":19,"decimal":6,"collate":-63,"charset":"binary","array":false},"hasDistinct":false}],"sig":"Unspecified","fieldType":{"tp":246,"flag":128,"flen":41,"decimal":6,"collate":-63,"charset":"binary","array":false},"hasDistinct":false,"aggFuncMode":"CompleteMode"},{"tp":"First","children":[{"tp":"ColumnRef","val":"gAAAAAAAAAA=","sig":"Unspecified","fieldType":{"tp":15,"flag":0,"flen":32,"decimal":0,"collate":-46,"charset":"utf8mb4","array":false},"hasDistinct":false}],"sig":"Unspecified","fieldType":{"tp":15,"flag":0,"flen":32,"decimal":0,"collate":-46,"charset":"utf8mb4","array":false},"hasDistinct":false,"aggFuncMode":"CompleteMode"},{"tp":"First","children":[{"tp":"ColumnRef","val":"gAAAAAAAAAE=","sig":"Unspecified","fieldType":{"tp":15,"flag":0,"flen":64,"decimal":0,"collate":-46,"charset":"utf8mb4","array":false},"hasDistinct":false}],"sig":"Unspecified","fieldType":{"tp":15,"flag":0,"flen":64,"decimal":0,"collate":-46,"charset":"utf8mb4","array":false},"hasDistinct":false,"aggFuncMode":"CompleteMode"},{"tp":"First","children":[{"tp":"ColumnRef","val":"gAAAAAAAAAI=","sig":"Unspecified","fieldType":{"tp":15,"flag":0,"flen":16,"decimal":0,"collate":-46,"charset":"utf8mb4","array":false},"hasDistinct":false}],"sig":"Unspecified","fieldType":{"tp":15,"flag":0,"flen":16,"decimal":0,"collate":-46,"charset":"utf8mb4","array":false},"hasDistinct":false,"aggFuncMode":"CompleteMode"},{"tp":"First","children":[{"tp":"ColumnRef","val":"gAAAAAAAAAM=","sig":"Unspecified","fieldType":{"tp":3,"flag":0,"flen":11,"decimal":0,"collate":-63,"charset":"binary","array":false},"hasDistinct":false}],"sig":"Unspecified","fieldType":{"tp":3,"flag":0,"flen":11,"decimal":0,"collate":-63,"charset":"binary","array":false},"hasDistinct":false,"aggFuncMode":"CompleteMode"},{"tp":"First","children":[{"tp":"ColumnRef","val":"gAAAAAAAAAQ=","sig":"Unspecified","fieldType":{"tp":3,"flag":0,"flen":11,"decimal":0,"collate":-63,"charset":"binary","array":false},"hasDistinct":false}],"sig":"Unspecified","fieldType":{"tp":3,"flag":0,"flen":11,"decimal":0,"collate":-63,"charset":"binary","array":false},"hasDistinct":false,"aggFuncMode":"CompleteMode"},{"tp":"First","children":[{"tp":"ColumnRef","val":"gAAAAAAAAAU=","sig":"Unspecified","fieldType":{"tp":3,"flag":0,"flen":11,"decimal":0,"collate":-63,"charset":"binary","array":false},"hasDistinct":false}],"sig":"Unspecified","fieldType":{"tp":3,"flag":0,"flen":11,"decimal":0,"collate":-63,"charset":"binary","array":false},"hasDistinct":false,"aggFuncMode":"CompleteMode"}],"streamed":false,"child":{"tp":"TypeExchangeReceiver","exchangeReceiver":{"encodedTaskMeta":["CIGA4NK8qMydBhABIg4xMjcuMC4wLjE6MzkzMCgBMJGZlt/io8viFzgHQIgOSAI="],"fieldTypes":[{"tp":15,"flag":0,"flen":32,"decimal":0,"collate":-46,"charset":"utf8mb4","array":false},{"tp":15,"flag":0,"flen":64,"decimal":0,"collate":-46,"charset":"utf8mb4","array":false},{"tp":15,"flag":0,"flen":16,"decimal":0,"collate":-46,"charset":"utf8mb4","array":false},{"tp":3,"flag":0,"flen":11,"decimal":0,"collate":-63,"charset":"binary","array":false},{"tp":3,"flag":0,"flen":11,"decimal":0,"collate":-63,"charset":"binary","array":false},{"tp":3,"flag":0,"flen":11,"decimal":0,"collate":-63,"charset":"binary","array":false},{"tp":246,"flag":0,"flen":19,"decimal":6,"collate":-63,"charset":"binary","array":false},{"tp":246,"flag":0,"flen":19,"decimal":6,"collate":-63,"charset":"binary","array":false},{"tp":246,"flag":0,"flen":19,"decimal":6,"collate":-63,"charset":"binary","array":false}]},"executorId":"ExchangeReceiver_18","fineGrainedShuffleStreamCount":"10","fineGrainedShuffleBatchSize":"8192"}})";
 
 using BlockPtr = std::shared_ptr<Block>;
 
@@ -56,7 +57,7 @@ std::vector<T> getRandomInt(T min, T max, size_t n)
     // std::mt19937_64 gen(rd());
     std::mt19937_64 gen(123);
     std::uniform_int_distribution<T> dist(min, max);
-    
+
     std::vector<T> results;
     results.reserve(n);
     for (size_t i = 0; i < n; ++i)
@@ -80,7 +81,7 @@ std::vector<std::string> getRandomStr(size_t min_len, size_t max_len, size_t n)
 
     for (auto len : size_vec)
     {
-        std::uniform_int_distribution<size_t> dist(0, sizeof(letters)/sizeof(char) - 1);
+        std::uniform_int_distribution<size_t> dist(0, sizeof(letters) / sizeof(char) - 1);
         std::string str;
         str.reserve(len);
         for (size_t i = 0; i < len; ++i)
@@ -94,26 +95,9 @@ std::vector<std::string> getRandomStr(size_t min_len, size_t max_len, size_t n)
 
 std::vector<std::string> getRandomCurrency(size_t total_rows)
 {
-    const static std::vector<std::string> currency{"USD",
-      "EUR",
-      "GBP",
-      "JPY",
-      "CNY",
-      "CAD",
-      "AUD",
-      "CHF",
-      "NZD",
-      "ZAR",
-      "SEK",
-      "RUB",
-      "BRL",
-      "INR",
-      "SGD",
-      "KRW",
-      "MXN",
-      "TRY",
-      "AED",
-      "ARS"};
+    const static std::vector<std::string> currency{"USD", "EUR", "GBP", "JPY", "CNY", "CAD", "AUD",
+                                                   "CHF", "NZD", "ZAR", "SEK", "RUB", "BRL", "INR",
+                                                   "SGD", "KRW", "MXN", "TRY", "AED", "ARS"};
     auto index_vec = getRandomInt<UInt32>(0, currency.size() - 1, total_rows);
     std::vector<std::string> results;
     results.reserve(total_rows);
@@ -159,8 +143,16 @@ public:
             std::unordered_set<String> agg_key_set;
             std::unordered_map<String, String> key_from_agg_func;
             analyzer.buildAggFuncs(agg_tipb, before_agg_actions, aggregate_desc, aggregated_columns);
-            analyzer.buildAggGroupBy(agg_tipb.group_by(), before_agg_actions, aggregate_desc, aggregated_columns,
-                    aggregation_keys, agg_key_set, key_from_agg_func, /*collation sensitive*/true, collators);
+            analyzer.buildAggGroupBy(
+                agg_tipb.group_by(),
+                before_agg_actions,
+                aggregate_desc,
+                aggregated_columns,
+                aggregation_keys,
+                agg_key_set,
+                key_from_agg_func,
+                /*collation sensitive*/ true,
+                collators);
 
             // !!!
             AggregationInterpreterHelper::fillArgColumnNumbers(aggregate_desc, src_header);
@@ -173,16 +165,18 @@ public:
                 context->getFileProvider(),
                 context->getSettingsRef().max_threads,
                 context->getSettingsRef().max_block_size);
-            params = AggregationInterpreterHelper::buildParams(*context,
-                    src_header, /*before_agg_streams_size*/1,
-                    /*agg_streams_size*/1,
-                    aggregation_keys,
-                    key_from_agg_func,
-                    collators,
-                    aggregate_desc,
-                    /*is_final_agg*/true,
-                    spill_config);
-            
+            params = AggregationInterpreterHelper::buildParams(
+                *context,
+                src_header,
+                /*before_agg_streams_size*/ 1,
+                /*agg_streams_size*/ 1,
+                aggregation_keys,
+                key_from_agg_func,
+                collators,
+                aggregate_desc,
+                /*is_final_agg*/ true,
+                spill_config);
+
             // RegisterOperatorSpillContext register_operator_spill_context;
             // aggregator = std::make_shared<Aggregator>(params, "BenchProbeAggHashMap", /*concurrency*/1, register_operator_spill_context);
 
@@ -238,24 +232,24 @@ public:
         // account
         std::vector<std::string> random_str_2 = getRandomCurrency(total_rows);
         // currency
-        std::vector<std::string> random_str_3 = getRandomStr(/*min_len*/1, /*max_len*/50, total_rows);
+        std::vector<std::string> random_str_3 = getRandomStr(/*min_len*/ 1, /*max_len*/ 50, total_rows);
 
         // category_id
-        std::vector<int32_t> random_int_1 = getRandomInt<int32_t>(/*min*/1, /*max*/50, total_rows);
+        std::vector<int32_t> random_int_1 = getRandomInt<int32_t>(/*min*/ 1, /*max*/ 50, total_rows);
         // platform_id
-        std::vector<int32_t> random_int_2 = getRandomInt<int32_t>(/*min*/1, /*max*/50, total_rows);
+        std::vector<int32_t> random_int_2 = getRandomInt<int32_t>(/*min*/ 1, /*max*/ 50, total_rows);
         // game_id
-        std::vector<int32_t> random_int_3 = getRandomInt<int32_t>(/*min*/1, /*max*/50, total_rows);
+        std::vector<int32_t> random_int_3 = getRandomInt<int32_t>(/*min*/ 1, /*max*/ 50, total_rows);
 
         // bet_total
-        auto random_prec_1 = getRandomInt<Int128>(/*min*/1, /*max*/999999999, total_rows);
-        auto random_scale_1 = getRandomInt<UInt32>(/*min*/1, /*max*/6, total_rows);
+        auto random_prec_1 = getRandomInt<Int128>(/*min*/ 1, /*max*/ 999999999, total_rows);
+        auto random_scale_1 = getRandomInt<UInt32>(/*min*/ 1, /*max*/ 6, total_rows);
         // valid_bet_total
-        auto random_prec_2 = getRandomInt<Int128>(/*min*/1, /*max*/999999999, total_rows);
-        auto random_scale_2 = getRandomInt<UInt32>(/*min*/1, /*max*/6, total_rows);
+        auto random_prec_2 = getRandomInt<Int128>(/*min*/ 1, /*max*/ 999999999, total_rows);
+        auto random_scale_2 = getRandomInt<UInt32>(/*min*/ 1, /*max*/ 6, total_rows);
         // profit_total
-        auto random_prec_3 = getRandomInt<Int128>(/*min*/1, /*max*/999999999, total_rows);
-        auto random_scale_3 = getRandomInt<UInt32>(/*min*/1, /*max*/6, total_rows);
+        auto random_prec_3 = getRandomInt<Int128>(/*min*/ 1, /*max*/ 999999999, total_rows);
+        auto random_scale_3 = getRandomInt<UInt32>(/*min*/ 1, /*max*/ 6, total_rows);
 
         MutableColumnPtr col_varchar_1;
         MutableColumnPtr col_varchar_2;
@@ -269,7 +263,7 @@ public:
         // MutableColumnPtr col_date_1;
 
         std::vector<BlockPtr> blocks;
-        blocks.reserve(total_rows/rows_per_block);
+        blocks.reserve(total_rows / rows_per_block);
         BlockPtr cur_block;
 
         for (size_t i = 0; i < total_rows; ++i)
@@ -280,16 +274,16 @@ public:
                 {
                     ColumnsWithTypeAndName cols{
                         ColumnWithTypeAndName(std::move(col_varchar_1), data_type_string, "site_code"), // 0
-                            ColumnWithTypeAndName(std::move(col_varchar_2), data_type_string, "account"), // 1
-                            ColumnWithTypeAndName(std::move(col_varchar_3), data_type_string, "currency"), // 2
+                        ColumnWithTypeAndName(std::move(col_varchar_2), data_type_string, "account"), // 1
+                        ColumnWithTypeAndName(std::move(col_varchar_3), data_type_string, "currency"), // 2
 
-                            ColumnWithTypeAndName(std::move(col_int_1), data_type_int, "category_id"), // 3
-                            ColumnWithTypeAndName(std::move(col_int_2), data_type_int, "platform_id"), // 4
-                            ColumnWithTypeAndName(std::move(col_int_3), data_type_int, "game_id"), // 5
+                        ColumnWithTypeAndName(std::move(col_int_1), data_type_int, "category_id"), // 3
+                        ColumnWithTypeAndName(std::move(col_int_2), data_type_int, "platform_id"), // 4
+                        ColumnWithTypeAndName(std::move(col_int_3), data_type_int, "game_id"), // 5
 
-                            ColumnWithTypeAndName(std::move(col_decimal_1), data_type_decimal, "bet_total"), // 6
-                            ColumnWithTypeAndName(std::move(col_decimal_2), data_type_decimal, "valid_bet_total"), // 7
-                            ColumnWithTypeAndName(std::move(col_decimal_3), data_type_decimal, "profit_total"), // 8
+                        ColumnWithTypeAndName(std::move(col_decimal_1), data_type_decimal, "bet_total"), // 6
+                        ColumnWithTypeAndName(std::move(col_decimal_2), data_type_decimal, "valid_bet_total"), // 7
+                        ColumnWithTypeAndName(std::move(col_decimal_3), data_type_decimal, "profit_total"), // 8
                     };
                     blocks.push_back(std::make_shared<Block>(cols));
                 }
@@ -340,7 +334,11 @@ try
         // should destroy data_variants first.
         data_variants = std::make_shared<AggregatedDataVariants>();
         RegisterOperatorSpillContext register_operator_spill_context;
-        aggregator = std::make_shared<Aggregator>(*params, "BenchProbeAggHashMap", /*concurrency*/1, register_operator_spill_context);
+        aggregator = std::make_shared<Aggregator>(
+            *params,
+            "BenchProbeAggHashMap",
+            /*concurrency*/ 1,
+            register_operator_spill_context);
         data_variants->aggregator = aggregator.get();
 
         Aggregator::AggProcessInfo agg_process_info(aggregator.get());

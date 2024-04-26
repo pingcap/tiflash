@@ -1084,7 +1084,18 @@ public:
             const SpillConfig & spill_config,
             UInt64 max_block_size_,
             const TiDB::TiDBCollators & collators_ = TiDB::dummy_collators)
-            : Params(Block(), keys_, normal_key_size_, aggregates_, 0, 0, 0, false, spill_config, max_block_size_, collators_)
+            : Params(
+                Block(),
+                keys_,
+                normal_key_size_,
+                aggregates_,
+                0,
+                0,
+                0,
+                false,
+                spill_config,
+                max_block_size_,
+                collators_)
         {
             intermediate_header = intermediate_header_;
         }
@@ -1406,7 +1417,10 @@ protected:
         AggregateFunctionInstructions & instructions);
 
     BlocksList prepareBlocksAndFillWithoutKey(AggregatedDataVariants & data_variants, bool final) const;
-    BlocksList prepareBlocksAndFillSingleLevel(AggregatedDataVariants & data_variants, bool final, bool enable_skip_serialize_key) const;
+    BlocksList prepareBlocksAndFillSingleLevel(
+        AggregatedDataVariants & data_variants,
+        bool final,
+        bool enable_skip_serialize_key) const;
 
     template <typename Method, typename Table>
     void mergeStreamsImplCase(Block & block, Arena * aggregates_pool, Method & method, Table & data) const;

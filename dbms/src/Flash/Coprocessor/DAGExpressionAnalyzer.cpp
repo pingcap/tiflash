@@ -555,7 +555,9 @@ void DAGExpressionAnalyzer::buildCommonAggFunc(
         context);
 }
 
-std::pair<String, DataTypePtr> findFirstRow(const AggregateDescriptions & aggregate_descriptions, const String & arg_name)
+std::pair<String, DataTypePtr> findFirstRow(
+    const AggregateDescriptions & aggregate_descriptions,
+    const String & arg_name)
 {
     for (const auto & desc : aggregate_descriptions)
     {
@@ -615,14 +617,14 @@ void DAGExpressionAnalyzer::buildAggGroupBy(
                     /// extra aggregation function any(group_by_column) here as the output of the group by column
                     TiDB::TiDBCollators arg_collators{collator};
                     appendAggDescription(
-                            {name},
-                            {type},
-                            arg_collators,
-                            "any",
-                            aggregate_descriptions,
-                            aggregated_columns,
-                            false,
-                            context);
+                        {name},
+                        {type},
+                        arg_collators,
+                        "any",
+                        aggregate_descriptions,
+                        aggregated_columns,
+                        false,
+                        context);
                     agg_func_name = aggregate_descriptions.back().column_name;
                 }
                 auto [iter, inserted] = key_from_agg_func.insert({name, agg_func_name});
@@ -676,8 +678,8 @@ void DAGExpressionAnalyzer::buildAggFuncs(
     }
 }
 
-std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions, ExpressionActionsPtr, std::unordered_map<String, String>>
-DAGExpressionAnalyzer::appendAggregation(ExpressionActionsChain & chain, const tipb::Aggregation & agg, bool group_by_collation_sensitive)
+std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions, ExpressionActionsPtr, std::unordered_map<String, String>> DAGExpressionAnalyzer::
+    appendAggregation(ExpressionActionsChain & chain, const tipb::Aggregation & agg, bool group_by_collation_sensitive)
 {
     if (agg.group_by_size() == 0 && agg.agg_func_size() == 0)
     {

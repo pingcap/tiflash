@@ -119,7 +119,12 @@ AnalysisResult analyzeExpressions(
         res.enable_fine_grained_shuffle_agg
             = enableFineGrainedShuffle(query_block.aggregation->fine_grained_shuffle_stream_count());
 
-        std::tie(res.aggregation_keys, res.aggregation_collators, res.aggregate_descriptions, res.before_aggregation, res.key_from_agg_func)
+        std::tie(
+            res.aggregation_keys,
+            res.aggregation_collators,
+            res.aggregate_descriptions,
+            res.before_aggregation,
+            res.key_from_agg_func)
             = analyzer.appendAggregation(
                 chain,
                 query_block.aggregation->aggregation(),
