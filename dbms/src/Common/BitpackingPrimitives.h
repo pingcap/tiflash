@@ -72,6 +72,8 @@ public:
         UInt8 width,
         bool skip_sign_extension = false)
     {
+        if (width == 0)
+            memset(dst, 0, count * sizeof(T));
         for (size_t i = 0; i < count; i += BITPACKING_ALGORITHM_GROUP_SIZE)
         {
             unPackGroup<T>(dst + i * sizeof(T), src + (i * width) / 8, width, skip_sign_extension);

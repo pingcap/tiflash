@@ -16,6 +16,7 @@
 
 #include <Common/config.h>
 #include <IO/Compression/CompressionCodecDelta.h>
+#include <IO/Compression/CompressionCodecFor.h>
 #include <IO/Compression/CompressionCodecLZ4.h>
 #include <IO/Compression/CompressionCodecMultiple.h>
 #include <IO/Compression/CompressionCodecNone.h>
@@ -61,6 +62,8 @@ public:
             return std::make_unique<CompressionCodecDelta>(setting.type_bytes_size);
         case CompressionMethodByte::RLE:
             return std::make_unique<CompressionCodecRLE>(setting.type_bytes_size);
+        case CompressionMethodByte::For:
+            return std::make_unique<CompressionCodecFor>(setting.type_bytes_size);
         case CompressionMethodByte::NONE:
             return std::make_unique<CompressionCodecNone>();
         default:

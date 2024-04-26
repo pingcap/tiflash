@@ -1,0 +1,231 @@
+// Copyright 2024 PingCAP, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+#include <Common/BitpackingPrimitives.h>
+#include <Common/Exception.h>
+#include <DataTypes/IDataType.h>
+#include <IO/Compression/CompressionCodecFor.h>
+#include <IO/Compression/CompressionInfo.h>
+#include <common/unaligned.h>
+
+#if defined(__AVX2__)
+#include <immintrin.h>
+#endif
+
+namespace DB
+{
+
+namespace ErrorCodes
+{
+extern const int CANNOT_COMPRESS;
+extern const int CANNOT_DECOMPRESS;
+} // namespace ErrorCodes
+
+CompressionCodecFor::CompressionCodecFor(UInt8 bytes_size_)
+    : bytes_size(bytes_size_)
+{}
+
+UInt8 CompressionCodecFor::getMethodByte() const
+{
+    return static_cast<UInt8>(CompressionMethodByte::For);
+}
+
+UInt32 CompressionCodecFor::getMaxCompressedDataSize(UInt32 uncompressed_size) const
+{
+    // 1 byte for bytes_size, x bytes for frame of reference, 1 byte for width.
+    size_t count = uncompressed_size / bytes_size;
+    return 1 + bytes_size + sizeof(UInt8) + BitpackingPrimitives::getRequiredSize(count, bytes_size * 8);
+}
+
+namespace
+{
+template <typename T>
+UInt32 compressData(const char * source, UInt32 source_size, char * dest)
+{
+    const auto count = source_size / sizeof(T);
+    std::vector<T> values;
+    values.reserve(count);
+    const char * const source_end = source + source_size;
+    while (source < source_end)
+    {
+        values.push_back(unalignedLoad<T>(source));
+        source += sizeof(T);
+    }
+    T frame_of_reference = *std::min_element(values.cbegin(), values.cend());
+    // store frame of reference
+    unalignedStore<T>(dest, frame_of_reference);
+    dest += sizeof(T);
+    if (frame_of_reference != 0)
+    {
+        for (auto & value : values)
+            value -= frame_of_reference;
+    }
+    T max_value = *std::max_element(values.cbegin(), values.cend());
+    UInt8 width = BitpackingPrimitives::minimumBitWidth(max_value);
+    // store width
+    unalignedStore<UInt8>(dest, width);
+    dest += sizeof(UInt8);
+    // if width == 0, skip bitpacking
+    if (width == 0)
+        return sizeof(T) + sizeof(UInt8);
+    auto required_size = BitpackingPrimitives::getRequiredSize(count, width);
+    // after applying frame of reference, all values are bigger than 0.
+    BitpackingPrimitives::packBuffer(
+        reinterpret_cast<unsigned char *>(dest),
+        reinterpret_cast<const T *>(values.data()),
+        count,
+        width);
+    return sizeof(T) + sizeof(UInt8) + required_size;
+}
+
+template <class T>
+void ApplyFrameOfReference(T * dst, T frame_of_reference, UInt32 count)
+{
+    if (!frame_of_reference)
+        return;
+
+    UInt32 i = 0;
+    UInt32 misaligned_count = count;
+#if defined(__AVX2__)
+    misaligned_count = count % (sizeof(__m256i) / sizeof(T));
+#endif
+    for (; i < misaligned_count; ++i)
+    {
+        dst[i] += frame_of_reference;
+    }
+#if defined(__AVX2__)
+    for (; i < count; i += (sizeof(__m256i) / sizeof(T)))
+    {
+        // Load the data using SIMD
+        __m256i delta = _mm256_loadu_si256(reinterpret_cast<__m256i *>(dst + i));
+        // Perform vectorized addition
+        if constexpr (sizeof(T) == 1)
+        {
+            delta = _mm256_add_epi8(delta, _mm256_set1_epi8(frame_of_reference));
+        }
+        else if constexpr (sizeof(T) == 2)
+        {
+            delta = _mm256_add_epi16(delta, _mm256_set1_epi16(frame_of_reference));
+        }
+        else if constexpr (sizeof(T) == 4)
+        {
+            delta = _mm256_add_epi32(delta, _mm256_set1_epi32(frame_of_reference));
+        }
+        else if constexpr (sizeof(T) == 8)
+        {
+            delta = _mm256_add_epi64(delta, _mm256_set1_epi64x(frame_of_reference));
+        }
+        // Store the result back to memory
+        _mm256_storeu_si256(reinterpret_cast<__m256i *>(dst + i), delta);
+    }
+#endif
+}
+
+template <typename T>
+void decompressData(const char * source, UInt32 source_size, char * dest, UInt32 output_size)
+{
+    const auto count = output_size / sizeof(T);
+    T frame_of_reference = unalignedLoad<T>(source);
+    source += sizeof(T);
+    auto width = unalignedLoad<UInt8>(source);
+    source += sizeof(UInt8);
+    const auto required_size = source_size - sizeof(T) - sizeof(UInt8);
+    RUNTIME_CHECK(BitpackingPrimitives::getRequiredSize(count, width) == required_size);
+    auto round_size = BitpackingPrimitives::roundUpToAlgorithmGroupSize(count);
+    RUNTIME_CHECK(round_size >= count);
+    if (round_size != count)
+    {
+        // Reserve enough space for the temporary buffer.
+        unsigned char tmp_buffer[round_size * sizeof(T)];
+        BitpackingPrimitives::unPackBuffer<T>(
+            tmp_buffer,
+            reinterpret_cast<const unsigned char *>(source),
+            count,
+            width);
+        ApplyFrameOfReference(reinterpret_cast<T *>(tmp_buffer), frame_of_reference, count);
+        memcpy(dest, tmp_buffer, output_size);
+        return;
+    }
+    BitpackingPrimitives::unPackBuffer<T>(
+        reinterpret_cast<unsigned char *>(dest),
+        reinterpret_cast<const unsigned char *>(source),
+        count,
+        width);
+    ApplyFrameOfReference(reinterpret_cast<T *>(dest), frame_of_reference, count);
+}
+
+} // namespace
+
+UInt32 CompressionCodecFor::doCompressData(const char * source, UInt32 source_size, char * dest) const
+{
+    if unlikely (source_size % bytes_size != 0)
+        throw Exception(ErrorCodes::CANNOT_DECOMPRESS, "source size {} is not aligned to {}", source_size, bytes_size);
+    dest[0] = bytes_size;
+    size_t start_pos = 1;
+    switch (bytes_size)
+    {
+    case 1:
+        return 1 + compressData<UInt8>(source, source_size, &dest[start_pos]);
+    case 2:
+        return 1 + compressData<UInt16>(source, source_size, &dest[start_pos]);
+    case 4:
+        return 1 + compressData<UInt32>(source, source_size, &dest[start_pos]);
+    case 8:
+        return 1 + compressData<UInt64>(source, source_size, &dest[start_pos]);
+    default:
+        throw Exception(ErrorCodes::CANNOT_COMPRESS, "Cannot compress Delta-encoded data. Unsupported bytes size");
+    }
+}
+
+void CompressionCodecFor::doDecompressData(
+    const char * source,
+    UInt32 source_size,
+    char * dest,
+    UInt32 uncompressed_size) const
+{
+    if unlikely (source_size < 2)
+        throw Exception(ErrorCodes::CANNOT_DECOMPRESS, "Cannot decompress delta-encoded data. File has wrong header");
+
+    if (uncompressed_size == 0)
+        return;
+
+    UInt8 bytes_size = source[0];
+    if unlikely (uncompressed_size % bytes_size != 0)
+        throw Exception(
+            ErrorCodes::CANNOT_DECOMPRESS,
+            "uncompressed size {} is not aligned to {}",
+            uncompressed_size,
+            bytes_size);
+
+    UInt32 source_size_no_header = source_size - 1;
+    switch (bytes_size)
+    {
+    case 1:
+        decompressData<UInt8>(&source[1], source_size_no_header, dest, uncompressed_size);
+        break;
+    case 2:
+        decompressData<UInt16>(&source[1], source_size_no_header, dest, uncompressed_size);
+        break;
+    case 4:
+        decompressData<UInt32>(&source[1], source_size_no_header, dest, uncompressed_size);
+        break;
+    case 8:
+        decompressData<UInt64>(&source[1], source_size_no_header, dest, uncompressed_size);
+        break;
+    default:
+        throw Exception(ErrorCodes::CANNOT_DECOMPRESS, "Cannot decompress Delta-encoded data. Unsupported bytes size");
+    }
+}
+
+} // namespace DB
