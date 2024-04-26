@@ -370,9 +370,9 @@ std::optional<RegionDataReadInfoList> ReadRegionCommitCache(const RegionPtr & re
         }
         data_list_read.emplace_back(std::move(data_read));
     } while (scanner.hasNext());
-    if unlikely (error_prone_count > 0)
+    if (unlikely (error_prone_count > 0))
     {
-        LOG_INFO(
+        LOG_DEBUG(
             DB::Logger::get(),
             "Error prone txn commit, tot_count={} error_prone_count={} min_error_commit_tso={} read_tso={} "
             "region_id={} applied_index={}",
