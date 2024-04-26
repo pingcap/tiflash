@@ -28,6 +28,11 @@ struct SegmentReadTask;
 using SegmentReadTaskPtr = std::shared_ptr<SegmentReadTask>;
 using SegmentReadTasks = std::list<SegmentReadTaskPtr>;
 
+namespace tests
+{
+class SegmentReadTaskTest;
+class DMStoreForSegmentReadTaskTest;
+} // namespace tests
 
 // A SegmentReadTask object is identified by <store_id, keyspace_id, physical_table_id, segment_id, segment_epoch>.
 // Under disagg arch, there could be SegmentReadTasks from different stores in one compute node.
@@ -108,11 +113,7 @@ public:
 
     String toString() const;
 
-#ifndef DBMS_PUBLIC_GTEST
 private:
-#else
-public:
-#endif
     std::vector<Remote::PageOID> buildRemotePageOID() const;
 
     Remote::RNLocalPageCache::OccupySpaceResult blockingOccupySpaceForTask() const;
@@ -146,6 +147,9 @@ public:
         size_t expected_block_size);
 
     BlockInputStreamPtr input_stream;
+
+    friend tests::SegmentReadTaskTest;
+    friend tests::DMStoreForSegmentReadTaskTest;
 };
 
 // Used in SegmentReadTaskScheduler, SegmentReadTaskPool.
