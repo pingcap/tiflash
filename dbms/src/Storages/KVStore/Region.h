@@ -261,6 +261,8 @@ public: // Raft Read and Write
     // Methods to handle orphan keys under raftstore v2.
     void beforePrehandleSnapshot(uint64_t region_id, std::optional<uint64_t> deadline_index);
     void afterPrehandleSnapshot(int64_t ongoing);
+    void observeLearnerReadEvent(Timestamp read_tso) const;
+    Timestamp getLastObservedReadTso() const;
 
 private:
     friend class RegionRaftCommandDelegate;
@@ -311,6 +313,7 @@ private:
     UInt64 last_restart_log_applied{0};
     mutable std::atomic<size_t> approx_mem_cache_rows{0};
     mutable std::atomic<size_t> approx_mem_cache_bytes{0};
+    mutable std::atomic<Timestamp> last_observed_read_tso{0};
 };
 
 class RegionRaftCommandDelegate
