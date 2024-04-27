@@ -453,19 +453,31 @@ DM::WriteResult RegionTable::writeCommittedByRegion(
 
     RegionDataReadInfoList & data_list_read = maybe_data_list_read.value();
 
-    LOG_DEBUG(DB::Logger::get(), "Decode write start when Raft Command, region_id={} applied_index={} region_info={} data_list_size={}",
-        region->id(), region->appliedIndex(), region->getDebugString(), data_list_read.size()
-    );
+    LOG_DEBUG(
+        DB::Logger::get(),
+        "Decode write start when Raft Command, region_id={} applied_index={} region_info={} data_list_size={}",
+        region->id(),
+        region->appliedIndex(),
+        region->getDebugString(),
+        data_list_read.size());
     reportUpstreamLatency(data_list_read);
     auto write_result = writeRegionDataToStorage(context, region, data_list_read, log);
-    LOG_DEBUG(DB::Logger::get(), "Decode write finished when Raft Command, region_id={} applied_index={} region_info={} data_list_size={}",
-        region->id(), region->appliedIndex(), region->getDebugString(), data_list_read.size()
-    );
+    LOG_DEBUG(
+        DB::Logger::get(),
+        "Decode write finished when Raft Command, region_id={} applied_index={} region_info={} data_list_size={}",
+        region->id(),
+        region->appliedIndex(),
+        region->getDebugString(),
+        data_list_read.size());
     auto prev_region_size = region->dataSize();
     RemoveRegionCommitCache(region, data_list_read, lock_region);
-    LOG_DEBUG(DB::Logger::get(), "Decode write remove when Raft Command, region_id={} applied_index={} region_info={} data_list_size={}",
-        region->id(), region->appliedIndex(), region->getDebugString(), data_list_read.size()
-    );
+    LOG_DEBUG(
+        DB::Logger::get(),
+        "Decode write remove when Raft Command, region_id={} applied_index={} region_info={} data_list_size={}",
+        region->id(),
+        region->appliedIndex(),
+        region->getDebugString(),
+        data_list_read.size());
     auto new_region_size = region->dataSize();
     if likely (new_region_size <= prev_region_size)
     {
@@ -506,20 +518,31 @@ RegionTable::ResolveLocksAndWriteRegionRes RegionTable::resolveLocksAndWriteRegi
                     return RegionException::RegionReadStatus::OK;
                 auto & context = tmt.getContext();
                 // There is no raft input here, so we can just ignore the fg flush request.
-                LOG_DEBUG(DB::Logger::get(), "Decode write start when Learner Read, region_id={} applied_index={} region_info={} data_list_size={} keyspace={} table_id={}",
-                    region->id(), region->appliedIndex(), region->getDebugString(), data_list_read.size(),
-                    keyspace_id, table_id
-                );
+                LOG_DEBUG(
+                    DB::Logger::get(),
+                    "Decode write start when Learner Read, region_id={} applied_index={} region_info={} "
+                    "data_list_size={}",
+                    region->id(),
+                    region->appliedIndex(),
+                    region->getDebugString(),
+                    data_list_read.size());
                 writeRegionDataToStorage(context, region, data_list_read, log);
-                LOG_DEBUG(DB::Logger::get(), "Decode write finished when Learner Read, region_id={} applied_index={} region_info={} data_list_size={} keyspace={} table_id={}",
-                    region->id(), region->appliedIndex(), region->getDebugString(), data_list_read.size(),
-                    keyspace_id, table_id
-                );
+                LOG_DEBUG(
+                    DB::Logger::get(),
+                    "Decode write finished when Learner Read, region_id={} applied_index={} region_info={} "
+                    "data_list_size={}",
+                    region->id(),
+                    region->appliedIndex(),
+                    region->getDebugString(),
+                    data_list_read.size());
                 RemoveRegionCommitCache(region, data_list_read);
-                LOG_DEBUG(DB::Logger::get(), "Decode remove when Learner Read, region_id={} applied_index={} region_info={} data_list_size={} keyspace={} table_id={}",
-                    region->id(), region->appliedIndex(), region->getDebugString(), data_list_read.size(),
-                    keyspace_id, table_id
-                );
+                LOG_DEBUG(
+                    DB::Logger::get(),
+                    "Decode remove when Learner Read, region_id={} applied_index={} region_info={} data_list_size={}",
+                    region->id(),
+                    region->appliedIndex(),
+                    region->getDebugString(),
+                    data_list_read.size());
                 return RegionException::RegionReadStatus::OK;
             },
             [](auto & r) -> ResolveLocksAndWriteRegionRes { return std::move(r); },
