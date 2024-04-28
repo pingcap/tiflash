@@ -558,13 +558,29 @@ DM::WriteResult DeltaMergeStore::write(
         {
             dedup_ver.insert(v);
         }
+
+        std::unordered_set<Int64> dedup_handles;
+        auto extra_handle_col = tryGetByColumnId(block, EXTRA_HANDLE_COLUMN_ID);
+        if (extra_handle_col.column)
+        {
+            if (extra_handle_col.type->getTypeId() == TypeIndex::Int64)
+            {
+                const auto * extra_handles = toColumnVectorDataPtr<Int64>(extra_handle_col.column);
+                for (auto h : *extra_handles)
+                {
+                    dedup_handles.insert(h);
+                }
+            }
+        }
+
         LOG_DEBUG(
             log,
-            "region_id={} applied_index={} record_count={} versions={}",
+            "region_id={} applied_index={} record_count={} versions={} handles={}",
             applied_status.region_id,
             applied_status.applied_index,
             block.rows(),
-            dedup_ver);
+            dedup_ver,
+            dedup_handles);
     }
     const auto bytes = block.bytes();
 

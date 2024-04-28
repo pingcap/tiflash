@@ -209,4 +209,15 @@ Block AggregateContext::readForConvergent(size_t index)
 
     return merging_buckets->getData(index, /*enable_skip_serialize_key=*/true);
 }
+
+bool AggregateContext::hasAtLeastOneTwoLevel()
+{
+    for (size_t i = 0; i < max_threads; ++i)
+    {
+        if (many_data[i]->isTwoLevel())
+            return true;
+    }
+    return false;
+}
+
 } // namespace DB

@@ -28,7 +28,7 @@ struct ThreadData
     size_t src_bytes = 0;
 
     Aggregator::AggProcessInfo agg_process_info;
-    ThreadData(Aggregator * aggregator)
+    explicit ThreadData(Aggregator * aggregator)
         : agg_process_info(aggregator)
     {}
 };
@@ -83,6 +83,14 @@ public:
     bool isTaskMarkedForSpill(size_t task_index);
 
     size_t getTotalBuildRows(size_t task_index) { return threads_data[task_index]->src_rows; }
+
+    bool hasAtLeastOneTwoLevel();
+    bool isConvertibleToTwoLevel() const { return aggregator->isConvertibleToTwoLevel(); }
+    bool isTwoLevelOrEmpty(size_t task_index) const
+    {
+        return many_data[task_index]->isTwoLevel() || many_data[task_index]->empty();
+    }
+    void convertToTwoLevel(size_t task_index) { many_data[task_index]->convertToTwoLevel(); }
 
 private:
     std::unique_ptr<Aggregator> aggregator;

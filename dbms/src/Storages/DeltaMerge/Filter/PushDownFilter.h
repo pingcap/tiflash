@@ -24,7 +24,7 @@ class PushDownFilter;
 using PushDownFilterPtr = std::shared_ptr<PushDownFilter>;
 inline static const PushDownFilterPtr EMPTY_FILTER{};
 
-class PushDownFilter : public std::enable_shared_from_this<PushDownFilter>
+class PushDownFilter
 {
 public:
     PushDownFilter(

@@ -1209,6 +1209,7 @@ public:
     /// Merge several partially aggregated blocks into one.
     BlocksList vstackBlocks(BlocksList & blocks, bool final);
 
+    bool isConvertibleToTwoLevel() { return AggregatedDataVariants::isConvertibleToTwoLevel(method_chosen); }
     /** Split block with partially-aggregated data to many blocks, as if two-level method of aggregation was used.
       * This is needed to simplify merging of that data with other results, that are already two-level.
       */

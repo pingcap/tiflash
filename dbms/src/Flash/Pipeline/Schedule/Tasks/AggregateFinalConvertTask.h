@@ -14,25 +14,28 @@
 
 #pragma once
 
-#include <Storages/DeltaMerge/Filter/RSOperator.h>
-#include <Storages/DeltaMerge/Index/RoughCheck.h>
+#include <Flash/Pipeline/Schedule/Tasks/IOEventTask.h>
 
-namespace DB::DM
+namespace DB
 {
+class AggregateContext;
+using AggregateContextPtr = std::shared_ptr<AggregateContext>;
 
-class Equal : public ColCmpVal
+class AggregateFinalConvertTask : public EventTask
 {
 public:
-    Equal(const Attr & attr_, const Field & value_)
-        : ColCmpVal(attr_, value_)
-    {}
+    AggregateFinalConvertTask(
+        PipelineExecutorContext & exec_context_,
+        const String & req_id,
+        const EventPtr & event_,
+        AggregateContextPtr agg_context_,
+        size_t index_);
 
-    String name() override { return "equal"; }
+protected:
+    ExecTaskStatus executeImpl() override;
 
-    RSResults roughCheck(size_t start_pack, size_t pack_count, const RSCheckParam & param) override
-    {
-        return minMaxCheckCmp<RoughCheck::CheckEqual>(start_pack, pack_count, param, attr, value);
-    }
+private:
+    AggregateContextPtr agg_context;
+    size_t index;
 };
-
-} // namespace DB::DM
+} // namespace DB
