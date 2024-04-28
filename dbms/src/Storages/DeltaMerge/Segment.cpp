@@ -2561,6 +2561,7 @@ std::pair<DeltaIndexPtr, bool> Segment::ensurePlace(
     const RowKeyRanges & read_ranges,
     UInt64 start_ts) const
 {
+    UNUSED(start_ts);
     const auto & stable_snap = segment_snap->stable;
     auto delta_snap = delta_reader->getDeltaSnap();
     // Clone a new delta index.
