@@ -1249,8 +1249,7 @@ void Aggregator::convertToBlockImpl(
     if (data.empty())
         return;
 
-    if (key_columns.size() != params.keys_size)
-        throw Exception{"Aggregate. Unexpected key columns size.", ErrorCodes::LOGICAL_ERROR};
+    RUNTIME_CHECK_MSG(key_columns.size() + params.key_from_agg_func.size() == params.keys_size, "Aggregate. Unexpected key columns size.");
 
     std::vector<IColumn *> raw_key_columns;
     raw_key_columns.reserve(key_columns.size());
@@ -1413,6 +1412,9 @@ struct AggregatorMethodInitKeyColumnHelper<AggregationMethodFastPathTwoKeysNoCac
 {
     using Method = AggregationMethodFastPathTwoKeysNoCache<Key1Desc, Key2Desc, TData>;
     size_t index{};
+    std::function<void(const StringRef &,
+            std::vector<IColumn *> &,
+            size_t)> insert_key_into_columns_function_ptr{};
 
     Method & method;
     explicit AggregatorMethodInitKeyColumnHelper(Method & method_)
@@ -1421,9 +1423,21 @@ struct AggregatorMethodInitKeyColumnHelper<AggregationMethodFastPathTwoKeysNoCac
 
     ALWAYS_INLINE inline void initAggKeys(size_t rows, std::vector<IColumn *> & key_columns)
     {
-        Method::template initAggKeys<Key1Desc>(rows, key_columns[0]);
-        Method::template initAggKeys<Key2Desc>(rows, key_columns[1]);
+        assert(key_columns.size() == 1 || key_columns.size() == 2 || key_columns.empty());
         index = 0;
+        if (key_columns.size() == 1)
+        {
+            Method::template initAggKeys<Key1Desc>(rows, key_columns[0]);
+            insert_key_into_columns_function_ptr = 
+                AggregationMethodFastPathTwoKeysNoCache<Key1Desc, Key2Desc, TData>::insertKeyIntoColumnsOneKey;
+        }
+        else if (key_columns.size() == 2)
+        {
+            Method::template initAggKeys<Key1Desc>(rows, key_columns[0]);
+            Method::template initAggKeys<Key2Desc>(rows, key_columns[1]);
+            insert_key_into_columns_function_ptr = 
+                AggregationMethodFastPathTwoKeysNoCache<Key1Desc, Key2Desc, TData>::insertKeyIntoColumnsTwoKey;
+        }
     }
     ALWAYS_INLINE inline void insertKeyIntoColumns(
         const StringRef & key,
@@ -1431,7 +1445,7 @@ struct AggregatorMethodInitKeyColumnHelper<AggregationMethodFastPathTwoKeysNoCac
         const Sizes &,
         const TiDB::TiDBCollators &)
     {
-        method.insertKeyIntoColumns(key, key_columns, index);
+        insert_key_into_columns_function_ptr(key, key_columns, index);
         ++index;
     }
 };
@@ -1449,7 +1463,9 @@ struct AggregatorMethodInitKeyColumnHelper<AggregationMethodOneKeyStringNoCache<
 
     void initAggKeys(size_t rows, std::vector<IColumn *> & key_columns)
     {
-        Method::initAggKeys(rows, key_columns[0]);
+        assert(key_columns.size() == 1 || key_columns.empty());
+        if (key_columns.size() == 1)
+            Method::initAggKeys(rows, key_columns[0]);
         index = 0;
     }
     ALWAYS_INLINE inline void insertKeyIntoColumns(
@@ -1475,6 +1491,7 @@ void NO_INLINE Aggregator::convertToBlockImplFinal(
     const auto & key_sizes_ref = shuffled_key_sizes ? *shuffled_key_sizes : key_sizes;
 
     AggregatorMethodInitKeyColumnHelper<Method> agg_keys_helper{method};
+    // todo check
     agg_keys_helper.initAggKeys(data.size(), key_columns);
 
     data.forEachValue([&](const auto & key [[maybe_unused]], auto & mapped) {
@@ -1535,7 +1552,9 @@ void NO_INLINE Aggregator::convertToBlocksImplFinal(
     auto shuffled_key_sizes = shuffleKeyColumnsForKeyColumnsVec(method, key_columns_vec, key_sizes);
     const auto & key_sizes_ref = shuffled_key_sizes ? *shuffled_key_sizes : key_sizes;
 
-    auto agg_keys_helpers = initAggKeysForKeyColumnsVec(method, key_columns_vec, params.max_block_size, data.size());
+    std::vector<std::unique_ptr<AggregatorMethodInitKeyColumnHelper<std::decay_t<Method>>>> agg_keys_helpers;
+    if constexpr (!skip_serialize_key)
+        agg_keys_helpers = initAggKeysForKeyColumnsVec(method, key_columns_vec, params.max_block_size, data.size());
 
     size_t data_index = 0;
     data.forEachValue([&](const auto & key [[maybe_unused]], auto & mapped) {

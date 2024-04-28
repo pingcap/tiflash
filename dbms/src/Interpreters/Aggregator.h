@@ -358,7 +358,17 @@ struct AggregationMethodFastPathTwoKeysNoCache
         return insertAggKeyIntoColumnString(pos, key_column);
     }
 
-    ALWAYS_INLINE static inline void insertKeyIntoColumns(
+    ALWAYS_INLINE static inline void insertKeyIntoColumnsOneKey(
+        const StringRef & key,
+        std::vector<IColumn *> & key_columns,
+        size_t index)
+    {
+        // todo only pointer?
+        const auto * pos = key.data;
+        pos = insertAggKeyIntoColumn<Key1Desc>(pos, key_columns[0], index);
+    }
+
+    ALWAYS_INLINE static inline void insertKeyIntoColumnsTwoKey(
         const StringRef & key,
         std::vector<IColumn *> & key_columns,
         size_t index)

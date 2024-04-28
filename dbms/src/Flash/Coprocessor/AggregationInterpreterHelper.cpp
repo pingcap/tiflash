@@ -97,16 +97,21 @@ std::shared_ptr<Aggregator::Params> buildParams(
     // After:  keys: c2 | c1 | c3
     // By doing this, when deserialize group by keys from HashMap to columns,
     // we only need to handle c2(normal_key_size == 1) and ignore c2/c3.
-    for (const auto & name : key_names)
+    assert(key_names.size() == collators.size());
+    TiDB::TiDBCollators reordered_collators(collators.size(), nullptr);
+    for (size_t i = 0; i < key_names.size(); ++i)
     {
+        const auto & name = key_names[i];
         auto col_idx = before_agg_header.getPositionByName(name);
         if (key_from_agg_func.find(name) == key_from_agg_func.end())
         {
-            keys[normal_key_idx++] = col_idx;
+            keys[normal_key_idx] = col_idx;
+            reordered_collators[normal_key_idx++] = collators[i];
         }
         else
         {
-            keys[agg_func_as_key_idx++] = col_idx;
+            keys[agg_func_as_key_idx] = col_idx;
+            reordered_collators[agg_func_as_key_idx++] = collators[i];
         }
     }
     assert(normal_key_idx == key_names.size() - key_from_agg_func.size());
@@ -118,7 +123,7 @@ std::shared_ptr<Aggregator::Params> buildParams(
     auto total_two_level_threshold_bytes
         = allow_to_use_two_level_group_by ? settings.group_by_two_level_threshold_bytes : SettingUInt64(0);
 
-    bool has_collator = std::any_of(begin(collators), end(collators), [](const auto & p) { return p != nullptr; });
+    bool has_collator = std::any_of(begin(reordered_collators), end(reordered_collators), [](const auto & p) { return p != nullptr; });
 
     return std::make_shared<Aggregator::Params>(
         before_agg_header,
@@ -133,7 +138,7 @@ std::shared_ptr<Aggregator::Params> buildParams(
         !is_final_agg,
         spill_config,
         context.getSettingsRef().max_block_size,
-        has_collator ? collators : TiDB::dummy_collators);
+        has_collator ? reordered_collators : TiDB::dummy_collators);
 }
 
 void fillArgColumnNumbers(AggregateDescriptions & aggregate_descriptions, const Block & before_agg_header)
