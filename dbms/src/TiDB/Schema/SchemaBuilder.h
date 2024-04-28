@@ -79,6 +79,7 @@ private:
     void applyPartitionDiff(const TiDB::DBInfoPtr & db_info, TableID table_id);
 
     void applyPartitionDiff(const TiDB::DBInfoPtr & db_info, const TiDB::TableInfoPtr & table_info, const ManageableStoragePtr & storage, bool drop_part_if_not_exist);
+    TiDB::DBInfoPtr tryFindDatabaseByPartitionTable(const TiDB::DBInfoPtr & db_info, const String & part_table_name);
 
     void applyAlterTable(const TiDB::DBInfoPtr & db_info, TableID table_id);
 
