@@ -627,7 +627,10 @@ void DAGExpressionAnalyzer::buildAggGroupBy(
                         context);
                     agg_func_name = aggregate_descriptions.back().column_name;
                 }
-                RUNTIME_CHECK_MSG(key_from_agg_func.insert(name), "unexpected already exists agg key: {}", name);
+                if unlikely (!(key_from_agg_func.insert(name).second))
+                {
+                    throw Exception("unexpected already exists agg key: {}", name);
+                }
             }
             else
             {
