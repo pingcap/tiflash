@@ -108,16 +108,16 @@ DMFileReader::DMFileReader(
 bool DMFileReader::getSkippedRows(size_t & skip_rows)
 {
     skip_rows = 0;
-    const auto & use_packs = pack_filter.getUsePacksConst();
+    const auto & pack_res = pack_filter.getPackResConst();
     const auto & pack_stats = dmfile->getPackStats();
-    for (; next_pack_id < use_packs.size() && !use_packs[next_pack_id]; ++next_pack_id)
+    for (; next_pack_id < pack_res.size() && !isUseful(pack_res[next_pack_id]); ++next_pack_id)
     {
         skip_rows += pack_stats[next_pack_id].rows;
         addSkippedRows(pack_stats[next_pack_id].rows);
     }
     next_row_offset += skip_rows;
     // return false if it is the end of stream.
-    return next_pack_id < use_packs.size();
+    return next_pack_id < pack_res.size();
 }
 
 // Skip the block which should be returned by next read()
@@ -144,14 +144,14 @@ size_t DMFileReader::skipNextBlock()
 // Move forward next_pack_id and next_row_offset
 size_t DMFileReader::getReadRows()
 {
-    const auto & use_packs = pack_filter.getUsePacksConst();
+    const auto & pack_res = pack_filter.getPackResConst();
     const size_t start_pack_id = next_pack_id;
     // When read_one_pack_every_time is true, we can just read one pack every time.
     // std::numeric_limits<size_t>::max() means no limit
     const size_t read_pack_limit = read_one_pack_every_time ? 1 : std::numeric_limits<size_t>::max();
     const auto & pack_stats = dmfile->getPackStats();
     size_t read_rows = 0;
-    for (; next_pack_id < use_packs.size() && use_packs[next_pack_id] && read_rows < rows_threshold_per_read;
+    for (; next_pack_id < pack_res.size() && isUseful(pack_res[next_pack_id]) && read_rows < rows_threshold_per_read;
          ++next_pack_id)
     {
         if (next_pack_id - start_pack_id >= read_pack_limit)
@@ -172,10 +172,10 @@ Block DMFileReader::readWithFilter(const IColumn::Filter & filter)
         return {};
     }
 
-    /// 2. Mark use_packs[i] = false if all rows in the i-th pack are filtered out by filter.
+    /// 2. Mark pack_res[i] = None if all rows in the i-th pack are filtered out by filter.
 
     const auto & pack_stats = dmfile->getPackStats();
-    auto & use_packs = pack_filter.getUsePacks();
+    auto & pack_res = pack_filter.getPackRes();
 
     size_t start_row_offset = next_row_offset;
     size_t start_pack_id = next_pack_id;
@@ -187,18 +187,18 @@ Block DMFileReader::readWithFilter(const IColumn::Filter & filter)
         for (size_t i = start_pack_id; i < last_pack_id; ++i)
         {
             if (countBytesInFilter(filter, offset, pack_stats[i].rows) == 0)
-                use_packs[i] = false;
+                pack_res[i] = RSResult::None;
             offset += pack_stats[i].rows;
         }
     }
 
-    /// 3. Mark the use_packs[last_pack_id] as false temporarily to avoid reading it and its following packs in this round
+    /// 3. Mark the pack_res[last_pack_id] as None temporarily to avoid reading it and its following packs in this round
 
-    bool next_pack_id_use_packs_cp = false;
-    if (last_pack_id < use_packs.size())
+    auto next_pack_id_pack_res_cp = RSResult::None;
+    if (last_pack_id < pack_res.size())
     {
-        next_pack_id_use_packs_cp = use_packs[last_pack_id];
-        use_packs[last_pack_id] = false;
+        next_pack_id_pack_res_cp = pack_res[last_pack_id];
+        pack_res[last_pack_id] = RSResult::None;
     }
 
     /// 4. Read and filter packs
@@ -221,11 +221,11 @@ Block DMFileReader::readWithFilter(const IColumn::Filter & filter)
     {
         // When the next pack is not used or the pack is the last pack, call read() to read theses packs and filter them
         // For example:
-        //  When next_pack_id_cp = use_packs.size() and use_packs[next_pack_id:next_pack_id_cp] = [true, true, false, true, true, true]
+        //  When next_pack_id_cp = pack_res.size() and pack_res[next_pack_id:next_pack_id_cp] = [true, true, false, true, true, true]
         //  The algorithm runs as follows:
         //      When i = next_pack_id + 2, call read() to read {next_pack_id, next_pack_id + 1}th packs
         //      When i = next_pack_id + 5, call read() to read {next_pack_id + 3, next_pack_id + 4, next_pack_id + 5}th packs
-        if (use_packs[pack_id] && (pack_id + 1 == use_packs.size() || !use_packs[pack_id + 1]))
+        if (isUseful(pack_res[pack_id]) && (pack_id + 1 == pack_res.size() || !isUseful(pack_res[pack_id + 1])))
         {
             Block block = read();
             size_t rows = block.rows();
@@ -256,16 +256,16 @@ Block DMFileReader::readWithFilter(const IColumn::Filter & filter)
             }
             offset += rows;
         }
-        else if (!use_packs[pack_id])
+        else if (!isUseful(pack_res[pack_id]))
         {
             offset += pack_stats[pack_id].rows;
         }
     }
 
-    /// 5. Restore the use_packs[last_pack_id]
+    /// 5. Restore the pack_res[last_pack_id]
 
-    if (last_pack_id < use_packs.size())
-        use_packs[last_pack_id] = next_pack_id_use_packs_cp;
+    if (last_pack_id < pack_res.size())
+        pack_res[last_pack_id] = next_pack_id_pack_res_cp;
 
     Block res = getHeader().cloneWithColumns(std::move(columns));
     res.setStartOffset(start_row_offset);
