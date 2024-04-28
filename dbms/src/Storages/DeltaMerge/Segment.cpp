@@ -2579,10 +2579,10 @@ std::pair<DeltaIndexPtr, bool> Segment::ensurePlace(
     auto [my_placed_rows, my_placed_deletes] = my_delta_index->getPlacedStatus();
 
     // Let's do a fast check, determine whether we need to do place or not.
-    if (!delta_reader->shouldPlace(dm_context, my_delta_index, rowkey_range, relevant_range, start_ts))
-    {
-        return {my_delta_index, false};
-    }
+    // if (!delta_reader->shouldPlace(dm_context, my_delta_index, rowkey_range, relevant_range, start_ts))
+    // {
+    //     return {my_delta_index, false};
+    // }
 
     CurrentMetrics::Increment cur_dm_segments{CurrentMetrics::DT_PlaceIndexUpdate};
     GET_METRIC(tiflash_storage_subtask_count, type_place_index_update).Increment();
