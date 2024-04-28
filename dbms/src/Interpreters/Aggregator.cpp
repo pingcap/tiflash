@@ -1086,7 +1086,7 @@ Block Aggregator::convertOneBucketToBlock(
 #undef FILLER_DEFINE
 
     Block block;
-    if (params.normal_key_size == 0 && enable_skip_serialize_key)
+    if (params.key_from_agg_func.size() == params.keys_size && enable_skip_serialize_key)
     {
         block = prepareBlockAndFill(data_variants, final, method.data.impls[bucket].size(), filler_skip_serialize_key);
     }
@@ -1129,7 +1129,7 @@ BlocksList Aggregator::convertOneBucketToBlocks(
 #undef FILLER_DEFINE
 
     BlocksList blocks;
-    if (params.normal_key_size == 0 && enable_skip_serialize_key)
+    if (params.key_from_agg_func.size() == params.keys_size && enable_skip_serialize_key)
     {
         blocks
             = prepareBlocksAndFill(data_variants, final, method.data.impls[bucket].size(), filler_skip_serialize_key);
@@ -1292,7 +1292,7 @@ void Aggregator::convertToBlocksImpl(
     raw_key_columns_vec.reserve(key_columns_vec.size());
     for (auto & key_columns : key_columns_vec)
     {
-        RUNTIME_CHECK_MSG(key_columns.size() == params.normal_key_size, "Aggregate. Unexpected key columns size.");
+        RUNTIME_CHECK_MSG(key_columns.size() + params.key_from_agg_func.size() == params.keys_size, "Aggregate. Unexpected key columns size.");
 
         std::vector<IColumn *> raw_key_columns;
         raw_key_columns.reserve(key_columns.size());
@@ -1611,14 +1611,15 @@ template <typename Filler>
 Block Aggregator::prepareBlockAndFill(AggregatedDataVariants & data_variants, bool final, size_t rows, Filler && filler)
     const
 {
-    MutableColumns key_columns(params.normal_key_size);
+    const auto normal_key_size = params.keys_size - params.key_from_agg_func.size();
+    MutableColumns key_columns(normal_key_size);
     MutableColumns aggregate_columns(params.aggregates_size);
     MutableColumns final_aggregate_columns(params.aggregates_size);
     AggregateColumnsData aggregate_columns_data(params.aggregates_size);
 
     Block header = getHeader(final);
 
-    for (size_t i = 0; i < params.normal_key_size; ++i)
+    for (size_t i = 0; i < normal_key_size; ++i)
     {
         key_columns[i] = header.safeGetByPosition(i).type->createColumn();
         key_columns[i]->reserve(rows);
@@ -1660,7 +1661,7 @@ Block Aggregator::prepareBlockAndFill(AggregatedDataVariants & data_variants, bo
 
     Block res = header.cloneEmpty();
 
-    for (size_t i = 0; i < params.normal_key_size; ++i)
+    for (size_t i = 0; i < normal_key_size; ++i)
         res.getByPosition(i).column = std::move(key_columns[i]);
 
     for (size_t i = 0; i < params.aggregates_size; ++i)
@@ -1670,6 +1671,11 @@ Block Aggregator::prepareBlockAndFill(AggregatedDataVariants & data_variants, bo
             res.getByName(aggregate_column_name).column = std::move(final_aggregate_columns[i]);
         else
             res.getByName(aggregate_column_name).column = std::move(aggregate_columns[i]);
+    }
+
+    for (const auto & pair : params.key_from_agg_func)
+    {
+        res.getByName(pair.first).column = res.getByName(pair.second).column;
     }
 
     /// Change the size of the columns-constants in the block.
@@ -1697,6 +1703,7 @@ BlocksList Aggregator::prepareBlocksAndFill(
     std::vector<MutableColumns> final_aggregate_columns_vec;
 
     size_t block_rows = params.max_block_size;
+    const auto normal_key_size = params.keys_size - params.key_from_agg_func.size();
 
     for (size_t j = 0; j < block_count; ++j)
     {
@@ -1705,7 +1712,7 @@ BlocksList Aggregator::prepareBlocksAndFill(
             block_rows = rows % block_rows;
         }
 
-        key_columns_vec.push_back(MutableColumns(params.normal_key_size));
+        key_columns_vec.push_back(MutableColumns(normal_key_size));
         aggregate_columns_data_vec.push_back(AggregateColumnsData(params.aggregates_size));
         aggregate_columns_vec.push_back(MutableColumns(params.aggregates_size));
         final_aggregate_columns_vec.push_back(MutableColumns(params.aggregates_size));
@@ -1715,7 +1722,7 @@ BlocksList Aggregator::prepareBlocksAndFill(
         auto & aggregate_columns = aggregate_columns_vec.back();
         auto & final_aggregate_columns = final_aggregate_columns_vec.back();
 
-        for (size_t i = 0; i < params.normal_key_size; ++i)
+        for (size_t i = 0; i < normal_key_size; ++i)
         {
             key_columns[i] = header.safeGetByPosition(i).type->createColumn();
             key_columns[i]->reserve(block_rows);
@@ -1762,7 +1769,7 @@ BlocksList Aggregator::prepareBlocksAndFill(
     {
         Block res = header.cloneEmpty();
 
-        for (size_t i = 0; i < params.normal_key_size; ++i)
+        for (size_t i = 0; i < normal_key_size; ++i)
             res.getByPosition(i).column = std::move(key_columns_vec[j][i]);
 
         for (size_t i = 0; i < params.aggregates_size; ++i)
@@ -1772,6 +1779,11 @@ BlocksList Aggregator::prepareBlocksAndFill(
                 res.getByName(aggregate_column_name).column = std::move(final_aggregate_columns_vec[j][i]);
             else
                 res.getByName(aggregate_column_name).column = std::move(aggregate_columns_vec[j][i]);
+        }
+
+        for (const auto & pair : params.key_from_agg_func)
+        {
+            res.getByName(pair.first).column = res.getByName(pair.second).column;
         }
 
         if (j == (block_count - 1) && rows % block_rows != 0)
@@ -1881,7 +1893,7 @@ BlocksList Aggregator::prepareBlocksAndFillSingleLevel(
 #undef M_serialize_key
 #undef FILLER_DEFINE
 
-    if (params.normal_key_size == 0 && enable_skip_serialize_key)
+    if (params.key_from_agg_func.size() == params.keys_size && enable_skip_serialize_key)
         return prepareBlocksAndFill(data_variants, final, rows, filler_skip_serialize_key);
     else
         return prepareBlocksAndFill(data_variants, final, rows, filler_serialize_key);

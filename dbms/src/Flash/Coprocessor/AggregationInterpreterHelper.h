@@ -39,7 +39,7 @@ std::shared_ptr<Aggregator::Params> buildParams(
     size_t before_agg_streams_size,
     size_t agg_streams_size,
     const Names & key_names,
-    const std::unordered_set<String> & key_from_agg_func,
+    const std::unordered_map<String, String> & key_from_agg_func,
     const TiDB::TiDBCollators & collators,
     const AggregateDescriptions & aggregate_descriptions,
     bool is_final_agg,

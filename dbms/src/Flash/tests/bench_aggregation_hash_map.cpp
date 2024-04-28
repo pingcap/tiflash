@@ -133,7 +133,7 @@ public:
             Names aggregation_keys;
             TiDB::TiDBCollators collators;
             std::unordered_set<String> agg_key_set;
-            std::unordered_set<String> key_from_agg_func;
+            std::unordered_map<String, String> key_from_agg_func;
             analyzer.buildAggFuncs(agg_tipb, before_agg_actions, aggregate_desc, aggregated_columns);
             analyzer.buildAggGroupBy(
                 agg_tipb.group_by(),

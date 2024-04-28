@@ -574,7 +574,7 @@ void DAGExpressionAnalyzer::buildAggGroupBy(
     NamesAndTypes & aggregated_columns,
     Names & aggregation_keys,
     std::unordered_set<String> & agg_key_set,
-    std::unordered_set<String> & key_from_agg_func,
+    std::unordered_map<String, String> & key_from_agg_func,
     bool group_by_collation_sensitive,
     TiDB::TiDBCollators & collators)
 {
@@ -627,7 +627,7 @@ void DAGExpressionAnalyzer::buildAggGroupBy(
                         context);
                     agg_func_name = aggregate_descriptions.back().column_name;
                 }
-                if unlikely (!(key_from_agg_func.insert(name).second))
+                if unlikely (!(key_from_agg_func.insert({name, agg_func_name}).second))
                 {
                     throw Exception("unexpected already exists agg key: {}", name);
                 }
@@ -677,7 +677,7 @@ void DAGExpressionAnalyzer::buildAggFuncs(
     }
 }
 
-std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions, ExpressionActionsPtr, std::unordered_set<String>> DAGExpressionAnalyzer::
+std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions, ExpressionActionsPtr, std::unordered_map<String, String>> DAGExpressionAnalyzer::
     appendAggregation(ExpressionActionsChain & chain, const tipb::Aggregation & agg, bool group_by_collation_sensitive)
 {
     if (agg.group_by_size() == 0 && agg.agg_func_size() == 0)
@@ -693,7 +693,7 @@ std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions, ExpressionActionsP
     Names aggregation_keys;
     TiDB::TiDBCollators collators;
     std::unordered_set<String> agg_key_set;
-    std::unordered_set<String> key_from_agg_func;
+    std::unordered_map<String, String> key_from_agg_func;
     buildAggFuncs(agg, step.actions, aggregate_descriptions, aggregated_columns);
     buildAggGroupBy(
         agg.group_by(),

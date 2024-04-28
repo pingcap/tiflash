@@ -76,7 +76,12 @@ public:
 
     /// <aggregation_keys, collators, aggregate_descriptions, before_agg>
     /// May change the source columns.
-    std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions, ExpressionActionsPtr, std::unordered_set<String>> appendAggregation(
+    std::tuple<Names,
+        TiDB::TiDBCollators,
+        AggregateDescriptions,
+        ExpressionActionsPtr,
+        std::unordered_map<String, String>>
+    appendAggregation(
         ExpressionActionsChain & chain,
         const tipb::Aggregation & agg,
         bool group_by_collation_sensitive);
@@ -189,7 +194,7 @@ public:
         NamesAndTypes & aggregated_columns,
         Names & aggregation_keys,
         std::unordered_set<String> & agg_key_set,
-        std::unordered_set<String> & key_from_agg_func,
+        std::unordered_map<String, String> & key_from_agg_func,
         bool group_by_collation_sensitive,
         TiDB::TiDBCollators & collators);
 

@@ -1035,7 +1035,7 @@ public:
 
         /// What to count.
         ColumnNumbers keys;
-        size_t normal_key_size;
+        std::unordered_map<String, String> key_from_agg_func;
         AggregateDescriptions aggregates;
         size_t keys_size;
         size_t aggregates_size;
@@ -1051,7 +1051,7 @@ public:
         Params(
             const Block & src_header_,
             const ColumnNumbers & keys_,
-            size_t normal_key_size_,
+            const std::unordered_map<String, String> & key_from_agg_func_,
             const AggregateDescriptions & aggregates_,
             size_t group_by_two_level_threshold_,
             size_t group_by_two_level_threshold_bytes_,
@@ -1062,7 +1062,7 @@ public:
             const TiDB::TiDBCollators & collators_ = TiDB::dummy_collators)
             : src_header(src_header_)
             , keys(keys_)
-            , normal_key_size(normal_key_size_)
+            , key_from_agg_func(key_from_agg_func_)
             , aggregates(aggregates_)
             , keys_size(keys.size())
             , aggregates_size(aggregates.size())
@@ -1079,7 +1079,7 @@ public:
         Params(
             const Block & intermediate_header_,
             const ColumnNumbers & keys_,
-            size_t normal_key_size_,
+            const std::unordered_map<String, String> & key_from_agg_func_,
             const AggregateDescriptions & aggregates_,
             const SpillConfig & spill_config,
             UInt64 max_block_size_,
@@ -1087,7 +1087,7 @@ public:
             : Params(
                 Block(),
                 keys_,
-                normal_key_size_,
+                key_from_agg_func_,
                 aggregates_,
                 0,
                 0,

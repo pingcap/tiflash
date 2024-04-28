@@ -22,6 +22,9 @@
 #include <Parsers/ASTIdentifier.h>
 #include <fmt/core.h>
 
+#include <Common/Logger.h>
+#include <common/logger_useful.h>
+
 namespace DB::mock
 {
 bool AggregationBinder::toTiPBExecutor(
@@ -37,6 +40,7 @@ bool AggregationBinder::toTiPBExecutor(
     buildAggExpr(agg, collator_id, context);
     buildGroupBy(agg, collator_id, context);
     auto * child_executor = agg->mutable_child();
+    LOG_INFO(Logger::get(), "gjt debug agg pb: {}", agg->DebugString());
     return children[0]->toTiPBExecutor(child_executor, collator_id, mpp_info, context);
 }
 
