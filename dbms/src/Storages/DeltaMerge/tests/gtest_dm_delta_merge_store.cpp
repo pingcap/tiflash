@@ -3780,6 +3780,102 @@ try
 }
 CATCH
 
+
+TEST_P(DeltaMergeStoreRWTest, DupHandleVersionAndReuseDeltaIndex)
+try
+{
+    // Add a column for extra value.
+    auto table_column_defines = DMTestEnv::getDefaultColumns();
+    store = reload(table_column_defines);
+
+    auto create_block = [&](UInt64 beg, UInt64 end) {
+        constexpr UInt64 ts = 1; // Always use the same ts.
+        auto block = DMTestEnv::prepareSimpleWriteBlock(beg, end, false, ts);
+        block.checkNumberOfRows();
+        return block;
+    };
+
+    // Write [0, 128) for initializing stable.
+    {
+        auto block = create_block(0, 128);
+        store->write(*db_context, db_context->getSettingsRef(), block);
+        store->mergeDeltaAll(*db_context);
+    }
+
+    // Write [50, 60) for initializing delta.
+    {
+        auto block = create_block(50, 60);
+        store->write(*db_context, db_context->getSettingsRef(), block);
+    }
+
+    // Read request - create snapshot.
+    auto stream1 = store->read(
+        *db_context,
+        db_context->getSettingsRef(),
+        store->getTableColumns(),
+        {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+        /* num_streams= */ 1,
+        /* start_ts= */ std::numeric_limits<UInt64>::max(),
+        EMPTY_FILTER,
+        std::vector<RuntimeFilterPtr>{},
+        /* rf_max_wait_time_ms= */ 0,
+        TRACING_NAME,
+        /* keep_order= */ false,
+        /* is_fast_scan= */ false,
+        DEFAULT_BLOCK_SIZE)[0];
+
+    // Write [50, 60) duplicated.
+    {
+        auto block = create_block(50, 60);
+        store->write(*db_context, db_context->getSettingsRef(), block);
+    }
+
+    // Place index with newest data.
+    auto stream2 = store->read(
+        *db_context,
+        db_context->getSettingsRef(),
+        store->getTableColumns(),
+        {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+        /* num_streams= */ 1,
+        /* start_ts= */ std::numeric_limits<UInt64>::max(),
+        EMPTY_FILTER,
+        std::vector<RuntimeFilterPtr>{},
+        /* rf_max_wait_time_ms= */ 0,
+        TRACING_NAME,
+        /* keep_order= */ false,
+        /* is_fast_scan= */ false,
+        DEFAULT_BLOCK_SIZE)[0];
+    std::size_t count2 = 0;
+    stream2->readPrefix();
+    for (;;)
+    {
+        auto block = stream2->read();
+        if (!block)
+        {
+            break;
+        }
+        count2 += block.rows();
+    }
+    stream2->readSuffix();
+
+    // stream1 will reuse delta index of stream2!!!
+    std::size_t count1 = 0;
+    stream1->readPrefix();
+    for (;;)
+    {
+        auto block = stream1->read();
+        if (!block)
+        {
+            break;
+        }
+        count1 += block.rows();
+    }
+    stream1->readPrefix();
+
+    ASSERT_EQ(count1, count2);
+}
+CATCH
+
 } // namespace tests
 } // namespace DM
 } // namespace DB
