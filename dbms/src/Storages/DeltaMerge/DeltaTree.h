@@ -1041,7 +1041,7 @@ public:
     size_t numInserts() const { return num_inserts; }
     size_t numDeletes() const { return num_deletes; }
     Int64 lastDupTupleID() const { return last_dup_tuple_id; }
-    void setLastDupTupleID(Int64 tuple_id) { last_dup_tuple_id = tuple_id; }
+    void setLastDupTupleID(Int64 tuple_id) { last_dup_tuple_id = std::max(tuple_id, last_dup_tuple_id); }
 
     void addDelete(UInt64 rid);
     void addInsert(UInt64 rid, UInt64 tuple_id);
