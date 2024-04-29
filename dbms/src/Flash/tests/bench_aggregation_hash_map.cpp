@@ -220,17 +220,17 @@ public:
                 if (col_varchar_1 != nullptr)
                 {
                     ColumnsWithTypeAndName cols{
-                        ColumnWithTypeAndName(std::move(col_varchar_1), data_type_string, "col_varchar_1"), // 0
-                        ColumnWithTypeAndName(std::move(col_varchar_2), data_type_string, "col_varchar_2"), // 1
-                        ColumnWithTypeAndName(std::move(col_varchar_3), data_type_string, "col_varchar_3"), // 2
+                        ColumnWithTypeAndName(std::move(col_varchar_1), data_type_string, "col_varchar_1"),
+                        ColumnWithTypeAndName(std::move(col_varchar_2), data_type_string, "col_varchar_2"),
+                        ColumnWithTypeAndName(std::move(col_varchar_3), data_type_string, "col_varchar_3"),
 
-                        ColumnWithTypeAndName(std::move(col_int_1), data_type_int, "col_int_1"), // 3
-                        ColumnWithTypeAndName(std::move(col_int_2), data_type_int, "col_int_2"), // 4
-                        ColumnWithTypeAndName(std::move(col_int_3), data_type_int, "col_int_3"), // 5
+                        ColumnWithTypeAndName(std::move(col_int_1), data_type_int, "col_int_1"),
+                        ColumnWithTypeAndName(std::move(col_int_2), data_type_int, "col_int_2"),
+                        ColumnWithTypeAndName(std::move(col_int_3), data_type_int, "col_int_3"),
 
-                        ColumnWithTypeAndName(std::move(col_decimal_1), data_type_decimal, "col_decimal_1"), // 6
-                        ColumnWithTypeAndName(std::move(col_decimal_2), data_type_decimal, "col_decimal_2"), // 7
-                        ColumnWithTypeAndName(std::move(col_decimal_3), data_type_decimal, "col_decimal_3"), // 8
+                        ColumnWithTypeAndName(std::move(col_decimal_1), data_type_decimal, "col_decimal_1"),
+                        ColumnWithTypeAndName(std::move(col_decimal_2), data_type_decimal, "col_decimal_2"),
+                        ColumnWithTypeAndName(std::move(col_decimal_3), data_type_decimal, "col_decimal_3"),
                     };
                     blocks.push_back(std::make_shared<Block>(cols));
                 }
