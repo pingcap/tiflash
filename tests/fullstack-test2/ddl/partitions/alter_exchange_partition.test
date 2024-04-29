@@ -202,3 +202,55 @@ mysql> drop table if exists test.e2;
 mysql> drop table if exists test_new.e2;
 mysql> drop database if exists test_new;
 >> DBGInvoke __enable_schema_sync_service('true')
+
+mysql> create table test.e(id INT NOT NULL,fname VARCHAR(30),lname VARCHAR(30)) PARTITION BY RANGE (id) ( PARTITION p0 VALUES LESS THAN (50),PARTITION p1 VALUES LESS THAN (100),PARTITION p2 VALUES LESS THAN (150), PARTITION p3 VALUES LESS THAN (MAXVALUE));
+mysql> alter table test.e set tiflash replica 1;
+
+mysql> create table test.e2(id int not null, fname varchar(30), lname varchar(30));
+mysql> alter table test.e2 set tiflash replica 1;
+
+mysql> create database test_new;
+mysql> create table test_new.e2(id int not null, fname varchar(30), lname varchar(30));
+mysql> alter table test_new.e2 set tiflash replica 1;
+
+func> wait_table test e e2
+func> wait_table test_new e2
+
+mysql> insert into test.e values (1, 'a', 'b'),(108, 'a', 'b');
+mysql> insert into test.e2 values (2, 'a', 'b');
+mysql> insert into test_new.e2 values (3, 'a', 'b');
+
+# disable schema sync service
+>> DBGInvoke __enable_schema_sync_service('false')
+>> DBGInvoke __refresh_schemas()
+
+# case 13, exchagne partition across databases, syncAllSchema without applying the diff
+>> DBGInvoke __enable_fail_point(force_schema_sync_diff_fail)
+mysql> set @@tidb_enable_exchange_partition=1; alter table test.e exchange partition p0 with table test_new.e2
+>> DBGInvoke __refresh_schemas()
+mysql> alter table test.e add column c1 int;
+>> DBGInvoke __refresh_schemas()
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.e order by id;
++-----+-------+-------+------+
+| id  | fname | lname | c1   |
++-----+-------+-------+------+
+|   3 | a     | b     | NULL |
+| 108 | a     | b     | NULL |
++-----+-------+-------+------+
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test_new.e2;
++----+-------+-------+
+| id | fname | lname |
++----+-------+-------+
+|  1 | a     | b     |
++----+-------+-------+
+mysql> alter table test.e drop column c1;
+>> DBGInvoke __refresh_schemas()
+
+>> DBGInvoke __disable_fail_point(force_schema_sync_diff_fail)
+
+# cleanup
+mysql> drop table if exists test.e;
+mysql> drop table if exists test.e2;
+mysql> drop table if exists test_new.e2;
+mysql> drop database if exists test_new;
+>> DBGInvoke __enable_schema_sync_service('true')
