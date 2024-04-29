@@ -27,11 +27,6 @@
 namespace DB
 {
 using KVClusterPtr = std::shared_ptr<pingcap::kv::Cluster>;
-namespace ErrorCodes
-{
-extern const int FAIL_POINT_ERROR;
-};
-
 
 /// The schema syncer for given keyspace
 template <bool mock_getter, bool mock_mapper>
@@ -55,7 +50,6 @@ private:
 
     DatabaseInfoCache databases;
     TableIDMap table_id_map;
-
 
     Getter createSchemaGetter(KeyspaceID keyspace_id);
 

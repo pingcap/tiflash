@@ -20,9 +20,9 @@
 #include <TiDB/Schema/TiDBSchemaSyncer.h>
 #include <common/logger_useful.h>
 #include <common/types.h>
+#include <fiu.h>
 
 #include <mutex>
-#include "fiu.h"
 
 namespace DB
 {
@@ -136,9 +136,7 @@ Int64 TiDBSchemaSyncer<mock_getter, mock_mapper>::syncSchemaDiffs(
     Getter & getter,
     Int64 latest_version)
 {
-    fiu_do_on(FailPoints::force_schema_sync_diff_fail, {
-        return SchemaGetter::SchemaVersionNotExist;
-    });
+    fiu_do_on(FailPoints::force_schema_sync_diff_fail, { return SchemaGetter::SchemaVersionNotExist; });
 
     Int64 cur_apply_version = cur_version;
 
