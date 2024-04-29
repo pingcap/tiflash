@@ -225,7 +225,7 @@ mysql> insert into test_new.e2 values (3, 'a', 'b');
 >> DBGInvoke __refresh_schemas()
 
 # case 13, exchagne partition across databases, syncAllSchema without applying the diff
->> DBGInvoke __enable_fail_point(force_schema_sync_too_old_schema)
+>> DBGInvoke __enable_fail_point(force_schema_sync_diff_fail)
 mysql> set @@tidb_enable_exchange_partition=1; alter table test.e exchange partition p0 with table test_new.e2
 >> DBGInvoke __enable_fail_point(exception_after_step_1_in_exchange_partition)
 >> DBGInvoke __refresh_schemas()
