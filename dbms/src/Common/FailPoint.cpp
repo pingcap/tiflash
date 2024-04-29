@@ -101,6 +101,7 @@ namespace DB
     M(force_use_dmfile_format_v3)                            \
     M(force_set_mocked_s3_object_mtime)                      \
     M(force_stop_background_checkpoint_upload)               \
+    M(force_schema_sync_diff_fail)                           \
     M(exception_after_large_write_exceed)                    \
     M(proactive_flush_force_set_type)                        \
     M(exception_when_fetch_disagg_pages)                     \
@@ -163,7 +164,7 @@ namespace DB
     M(random_pipeline_model_cancel_failpoint)                \
     M(random_pipeline_model_execute_prefix_failpoint)        \
     M(random_pipeline_model_execute_suffix_failpoint)        \
-    M(random_ddl_fail_when_rename_partitions)               \
+    M(random_ddl_fail_when_rename_partitions)                \
     M(random_spill_to_disk_failpoint)                        \
     M(random_region_persister_latency_failpoint)             \
     M(random_restore_from_disk_failpoint)                    \

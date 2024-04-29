@@ -127,7 +127,7 @@ public:
 
     void shutdown() override;
 
-     ~DatabaseWithOwnTablesBase() override;
+    ~DatabaseWithOwnTablesBase() override;
 
 protected:
     String name;
