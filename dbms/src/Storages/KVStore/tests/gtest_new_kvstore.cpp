@@ -926,7 +926,7 @@ try
             std::string_view(name.data(), name.size()),
             ReportThreadAllocateInfoType::AllocPtr,
             alloc_ptr);
-        kvs.joint_memory_allocation_map->recordThreadAllocInfo();
+        kvs.joint_memory_allocation_map->recordThreadAllocInfoForKVStore();
         ASSERT_EQ(tiflash_metrics.getProxyThreadMemory("test1"), -1);
 
         std::string name2 = "ReadIndexWkr-1";
@@ -935,7 +935,7 @@ try
             std::string_view(name2.data(), name2.size()),
             ReportThreadAllocateInfoType::AllocPtr,
             alloc_ptr);
-        kvs.joint_memory_allocation_map->recordThreadAllocInfo();
+        kvs.joint_memory_allocation_map->recordThreadAllocInfoForKVStore();
         ASSERT_EQ(tiflash_metrics.getProxyThreadMemory("ReadIndexWkr"), 999);
         uint64_t mock2 = 998;
         uint64_t dealloc_ptr = reinterpret_cast<uint64_t>(&mock2);
@@ -943,7 +943,7 @@ try
             std::string_view(name2.data(), name2.size()),
             ReportThreadAllocateInfoType::DeallocPtr,
             dealloc_ptr);
-        kvs.joint_memory_allocation_map->recordThreadAllocInfo();
+        kvs.joint_memory_allocation_map->recordThreadAllocInfoForKVStore();
         ASSERT_EQ(tiflash_metrics.getProxyThreadMemory("ReadIndexWkr"), 1);
         kvs.reportThreadAllocInfo(
             std::string_view(name2.data(), name2.size()),

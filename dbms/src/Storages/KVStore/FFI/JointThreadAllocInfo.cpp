@@ -25,17 +25,22 @@ namespace DB
 
 JointThreadInfoJeallocMap::JointThreadInfoJeallocMap()
 {
-    using namespace std::chrono_literals;
     monitoring_thread = new std::thread([&]() {
         while (true)
         {
-            std::unique_lock l(monitoring_mut);
-            monitoring_cv.wait_for(l, 5000ms, [&]() { return is_terminated; });
-            if (is_terminated)
-                return;
             recordThreadAllocInfo();
         }
     });
+}
+
+void JointThreadInfoJeallocMap::recordThreadAllocInfo()
+{
+    using namespace std::chrono_literals;
+    std::unique_lock l(monitoring_mut);
+    monitoring_cv.wait_for(l, 5000ms, [&]() { return is_terminated; });
+    if (is_terminated)
+        return;
+    recordThreadAllocInfoForKVStore();
 }
 
 JointThreadInfoJeallocMap::~JointThreadInfoJeallocMap()
@@ -52,7 +57,8 @@ static std::string getThreadNameAggPrefix(const std::string_view & s)
     return std::string(s.begin(), s.end());
 }
 
-void JointThreadInfoJeallocMap::reportThreadAllocInfo(
+void JointThreadInfoJeallocMap::reportThreadAllocInfoImpl(
+    std::unordered_map<std::string, ThreadInfoJealloc> & m,
     std::string_view thdname,
     ReportThreadAllocateInfoType type,
     uint64_t value)
@@ -69,14 +75,14 @@ void JointThreadInfoJeallocMap::reportThreadAllocInfo(
         metrics.registerProxyThreadMemory(getThreadNameAggPrefix(tname));
         {
             std::unique_lock l(memory_allocation_mut);
-            memory_allocation_map.insert_or_assign(tname, ThreadInfoJealloc());
+            m.insert_or_assign(tname, ThreadInfoJealloc());
         }
         break;
     }
     case ReportThreadAllocateInfoType::Remove:
     {
         std::unique_lock l(memory_allocation_mut);
-        memory_allocation_map.erase(tname);
+        m.erase(tname);
         break;
     }
     case ReportThreadAllocateInfoType::AllocPtr:
@@ -84,8 +90,8 @@ void JointThreadInfoJeallocMap::reportThreadAllocInfo(
         std::shared_lock l(memory_allocation_mut);
         if (value == 0)
             return;
-        auto it = memory_allocation_map.find(tname);
-        if unlikely (it == memory_allocation_map.end())
+        auto it = m.find(tname);
+        if unlikely (it == m.end())
         {
             return;
         }
@@ -97,8 +103,8 @@ void JointThreadInfoJeallocMap::reportThreadAllocInfo(
         std::shared_lock l(memory_allocation_mut);
         if (value == 0)
             return;
-        auto it = memory_allocation_map.find(tname);
-        if unlikely (it == memory_allocation_map.end())
+        auto it = m.find(tname);
+        if unlikely (it == m.end())
         {
             return;
         }
@@ -108,14 +114,22 @@ void JointThreadInfoJeallocMap::reportThreadAllocInfo(
     }
 }
 
+void JointThreadInfoJeallocMap::reportThreadAllocInfoForKVStore(
+    std::string_view thdname,
+    ReportThreadAllocateInfoType type,
+    uint64_t value)
+{
+    reportThreadAllocInfoImpl(kvstore_map, thdname, type, value);
+}
+
 static const std::unordered_set<std::string> RECORD_WHITE_LIST_THREAD_PREFIX = {"ReadIndexWkr"};
 
-void JointThreadInfoJeallocMap::recordThreadAllocInfo()
+void JointThreadInfoJeallocMap::recordThreadAllocInfoForKVStore()
 {
     std::shared_lock l(memory_allocation_mut);
     std::unordered_map<std::string, uint64_t> agg_allocate;
     std::unordered_map<std::string, uint64_t> agg_deallocate;
-    for (const auto & [k, v] : memory_allocation_map)
+    for (const auto & [k, v] : kvstore_map)
     {
         auto agg_thread_name = getThreadNameAggPrefix(std::string_view(k.data(), k.size()));
         // Some thread may have shorter lifetime, we can't use this timed task here to upgrade.
@@ -143,7 +157,9 @@ void JointThreadInfoJeallocMap::recordThreadAllocInfo()
     }
 }
 
-void JointThreadInfoJeallocMap::reportThreadAllocBatch(std::string_view name, ReportThreadAllocateInfoBatch data)
+void JointThreadInfoJeallocMap::reportThreadAllocBatchForKVStore(
+    std::string_view name,
+    ReportThreadAllocateInfoBatch data)
 {
     // Many threads have empty name, better just not handle.
     if (name.empty())

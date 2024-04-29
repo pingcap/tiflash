@@ -67,18 +67,25 @@ struct JointThreadInfoJeallocMap
 {
     JointThreadInfoJeallocMap();
     ~JointThreadInfoJeallocMap();
-    /// For those everlasting threads, we can directly access their allocatedp/allocatedp.
-    void reportThreadAllocInfo(std::string_view, ReportThreadAllocateInfoType type, uint64_t value);
-    /// For those threads with shorter life, we can only update in their call chain.
-    static void reportThreadAllocBatch(std::string_view, ReportThreadAllocateInfoBatch data);
     /// Called by a bg thread as a routine work.
+    void recordThreadAllocInfoForKVStore();
     void recordThreadAllocInfo();
     void stopThreadAllocInfo();
 
+    /// For those everlasting threads, we can directly access their allocatedp/allocatedp.
+    void reportThreadAllocInfoForKVStore(std::string_view, ReportThreadAllocateInfoType type, uint64_t value);
+    /// For those threads with shorter life, we can only update in their call chain.
+    static void reportThreadAllocBatchForKVStore(std::string_view, ReportThreadAllocateInfoBatch data);
+
     mutable std::shared_mutex memory_allocation_mut;
-    std::unordered_map<std::string, ThreadInfoJealloc> memory_allocation_map;
+    std::unordered_map<std::string, ThreadInfoJealloc> kvstore_map;
 
 private:
+    void reportThreadAllocInfoImpl(
+        std::unordered_map<std::string, ThreadInfoJealloc> &,
+        std::string_view,
+        ReportThreadAllocateInfoType type,
+        uint64_t value);
     bool is_terminated{false};
     mutable std::mutex monitoring_mut;
     std::condition_variable monitoring_cv;
