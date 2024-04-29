@@ -12,13 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/Logger.h>
 #include <Core/BlockUtils.h>
 #include <Interpreters/Context.h>
 #include <TestUtils/ColumnGenerator.h>
 #include <TestUtils/ExecutorTestUtils.h>
 #include <TestUtils/mockExecutor.h>
-#include <common/logger_useful.h>
 
 namespace DB
 {
@@ -607,13 +605,10 @@ try
     ASSERT_EQ(test_num, projections.size());
     ASSERT_EQ(test_num, group_by_exprs.size());
 
-    auto log = Logger::get();
-    LOG_INFO(log, "gjt debug 1");
     {
         context.setCollation(TiDB::ITiDBCollator::UTF8MB4_BIN);
         for (size_t i = 0; i < test_num; ++i)
         {
-            LOG_INFO(log, "gjt debug 1 {}", i);
             request = buildDAGRequest(
                 std::make_pair("test_db", "test_table_not_null"),
                 {agg_func},
@@ -624,7 +619,6 @@ try
             WRAP_FOR_AGG_PARTIAL_BLOCK_END
         }
     }
-    LOG_INFO(log, "gjt debug 1");
     {
         context.setCollation(TiDB::ITiDBCollator::UTF8_UNICODE_CI);
         for (size_t i = 0; i < test_num; ++i)
@@ -642,7 +636,6 @@ try
     int idx = 0;
     for (auto collation_id : {0, static_cast<int>(TiDB::ITiDBCollator::BINARY)})
     {
-        LOG_INFO(log, "gjt debug for loop {}", idx++);
         // 0: no collation
         // binnary collation
         context.setCollation(collation_id);
@@ -670,7 +663,6 @@ try
         ASSERT_EQ(test_num, group_by_exprs.size());
         for (size_t i = 0; i < test_num; ++i)
         {
-            LOG_INFO(log, "gjt debug for loop {}.{}", idx++, i);
             request = buildDAGRequest(
                 std::make_pair("test_db", "test_table_not_null"),
                 {agg_func},
