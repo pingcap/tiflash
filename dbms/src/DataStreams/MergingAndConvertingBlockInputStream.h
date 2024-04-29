@@ -38,7 +38,7 @@ public:
 protected:
     Block readImpl() override
     {
-        return merging_buckets->getData(concurrency_index, /*enable_skip_serialize_key=*/true);
+        return merging_buckets->getData(concurrency_index, /*enable_convert_key_optimization=*/true);
     }
 
 private:

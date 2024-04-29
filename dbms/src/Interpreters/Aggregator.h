@@ -1440,7 +1440,7 @@ protected:
     BlocksList prepareBlocksAndFillSingleLevel(
         AggregatedDataVariants & data_variants,
         bool final,
-        bool enable_convert_key_optimizatioenable_convert_key_optimization) const;
+        bool enable_convert_key_optimization) const;
 
     template <typename Method, typename Table>
     void mergeStreamsImplCase(Block & block, Arena * aggregates_pool, Method & method, Table & data) const;

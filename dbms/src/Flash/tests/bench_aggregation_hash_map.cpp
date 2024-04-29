@@ -309,7 +309,7 @@ try
             probe_side_watch.start();
             for (;;)
             {
-                auto block = merging_buckets->getData(0, /*enable_skip_serialize_key*/ false);
+                auto block = merging_buckets->getData(0, /*enable_convert_key_optimization=*/true);
                 if (!block)
                     break;
                 res_block.push_back(block);
