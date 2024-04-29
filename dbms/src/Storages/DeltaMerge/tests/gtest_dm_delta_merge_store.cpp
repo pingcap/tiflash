@@ -3843,11 +3843,11 @@ void DeltaMergeStoreRWTest::dupHandleVersionAndDeltaIndexAdvancedThanSnapshot()
     };
 
     auto check_delta_index
-        = [](DeltaIndexPtr delta_index, size_t expect_rows, size_t expect_deletes, Int64 expect_last_dup_tuple_id) {
+        = [](DeltaIndexPtr delta_index, size_t expect_rows, size_t expect_deletes, Int64 expect_max_dup_tuple_id) {
               auto [placed_rows, placed_deletes] = delta_index->getPlacedStatus();
               ASSERT_EQ(placed_rows, expect_rows);
               ASSERT_EQ(placed_deletes, expect_deletes);
-              ASSERT_EQ(delta_index->getDeltaTree()->lastDupTupleID(), expect_last_dup_tuple_id);
+              ASSERT_EQ(delta_index->getDeltaTree()->maxDupTupleID(), expect_max_dup_tuple_id);
           };
 
     auto ensure_place = [&](SegmentReadTaskPtr seg_read_task) {

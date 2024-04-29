@@ -264,7 +264,7 @@ bool placeInsert(
         if (dup)
         {
             delta_tree.addDelete(rid);
-            delta_tree.setLastDupTupleID(tuple_id);
+            delta_tree.setMaxDupTupleID(tuple_id);
         }
         delta_tree.addInsert(rid, tuple_id);
     }
