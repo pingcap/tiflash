@@ -145,17 +145,9 @@ void JointThreadInfoJeallocMap::reportThreadAllocBatch(std::string_view name, Re
         return;
     // TODO(jemalloc-trace) Could be costy.
     auto k = getThreadNameAggPrefix(name);
-    int64_t v = 0;
-    if (data.alloc > data.dealloc)
-    {
-        v = data.alloc - data.dealloc;
-    }
-    else
-    {
-        v = -(data.dealloc - data.alloc);
-    }
     auto & tiflash_metrics = TiFlashMetrics::instance();
-    tiflash_metrics.setProxyThreadMemory(k, v);
+    tiflash_metrics.setProxyThreadMemory("alloc_" + k, data.alloc);
+    tiflash_metrics.setProxyThreadMemory("dealloc_" + k, data.dealloc);
 }
 
 void JointThreadInfoJeallocMap::stopThreadAllocInfo()
