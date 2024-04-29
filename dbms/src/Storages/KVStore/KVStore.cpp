@@ -564,21 +564,33 @@ static const std::unordered_set<std::string> RECORD_WHITE_LIST_THREAD_PREFIX = {
 void KVStore::recordThreadAllocInfo()
 {
     std::shared_lock l(memory_allocation_mut);
-    std::unordered_map<std::string, int64_t> agg_remaining;
+    std::unordered_map<std::string, uint64_t> agg_allocate;
+    std::unordered_map<std::string, uint64_t> agg_deallocate;
     for (const auto & [k, v] : memory_allocation_map)
     {
         auto agg_thread_name = getThreadNameAggPrefix(std::string_view(k.data(), k.size()));
         // Some thread may have shorter lifetime, we can't use this timed task here to upgrade.
         if (RECORD_WHITE_LIST_THREAD_PREFIX.contains(agg_thread_name))
         {
-            auto [it, ok] = agg_remaining.emplace(agg_thread_name, 0);
-            it->second += v.remaining();
+            {
+                auto [it, ok] = agg_allocate.emplace(agg_thread_name, 0);
+                it->second += v.allocated();
+            }
+            {
+                auto [it, ok] = agg_deallocate.emplace(agg_thread_name, 0);
+                it->second += v.deallocated();
+            }
         }
     }
-    for (const auto & [k, v] : agg_remaining)
+    for (const auto & [k, v] : agg_allocate)
     {
         auto & tiflash_metrics = TiFlashMetrics::instance();
-        tiflash_metrics.setProxyThreadMemory(k, v);
+        tiflash_metrics.setProxyThreadMemory("alloc_" + k, v);
+    }
+    for (const auto & [k, v] : agg_deallocate)
+    {
+        auto & tiflash_metrics = TiFlashMetrics::instance();
+        tiflash_metrics.setProxyThreadMemory("dealloc_" + k, v);
     }
 }
 
