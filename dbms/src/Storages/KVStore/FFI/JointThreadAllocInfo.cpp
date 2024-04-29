@@ -12,14 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/TiFlashMetrics.h>
 #include <Storages/KVStore/FFI/JointThreadAllocInfo.h>
 #include <Storages/KVStore/FFI/ProxyFFI.h>
-#include <Common/TiFlashMetrics.h>
-#include <unordered_set>
-#include <thread>
-#include <mutex>
 
-namespace DB {
+#include <mutex>
+#include <thread>
+#include <unordered_set>
+
+namespace DB
+{
 
 JointThreadInfoJeallocMap::JointThreadInfoJeallocMap()
 {
@@ -50,7 +52,10 @@ static std::string getThreadNameAggPrefix(const std::string_view & s)
     return std::string(s.begin(), s.end());
 }
 
-void JointThreadInfoJeallocMap::reportThreadAllocInfo(std::string_view thdname, ReportThreadAllocateInfoType type, uint64_t value)
+void JointThreadInfoJeallocMap::reportThreadAllocInfo(
+    std::string_view thdname,
+    ReportThreadAllocateInfoType type,
+    uint64_t value)
 {
     // Many threads have empty name, better just not handle.
     if (thdname.empty())
@@ -165,4 +170,4 @@ void JointThreadInfoJeallocMap::stopThreadAllocInfo()
     monitoring_thread = nullptr;
 }
 
-}
+} // namespace DB

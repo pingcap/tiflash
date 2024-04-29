@@ -14,10 +14,11 @@
 
 #pragma once
 
-#include <unordered_map>
 #include <shared_mutex>
+#include <unordered_map>
 
-namespace DB {
+namespace DB
+{
 
 enum class ReportThreadAllocateInfoType : uint64_t;
 struct ReportThreadAllocateInfoBatch;
@@ -39,12 +40,16 @@ struct ThreadInfoJealloc
             return 0;
         return *reinterpret_cast<uint64_t *>(deallocated_ptr);
     }
-    int64_t remaining() const {
+    int64_t remaining() const
+    {
         uint64_t a = allocated();
         uint64_t d = deallocated();
-        if (a > d) {
+        if (a > d)
+        {
             return static_cast<int64_t>(a - d);
-        } else {
+        }
+        else
+        {
             return -static_cast<int64_t>(d - a);
         }
     }
@@ -56,9 +61,10 @@ struct ThreadInfoJealloc
 /// - Register by reportThreadAllocInfo with AllocPtr/DellocPtr
 ///   In this way, by recordThreadAllocInfo the routine thread will update the allocation info.
 ///   One must guarantee that the thread must exist before `Remove`.
-/// - Directly report by reportThreadAllocBatch 
+/// - Directly report by reportThreadAllocBatch
 ///   The call will immedialy update the alloc info of the specified thread.
-struct JointThreadInfoJeallocMap {
+struct JointThreadInfoJeallocMap
+{
     JointThreadInfoJeallocMap();
     ~JointThreadInfoJeallocMap();
     /// For those everlasting threads, we can directly access their allocatedp/allocatedp.
@@ -81,4 +87,4 @@ private:
 
 using JointThreadInfoJeallocMapPtr = std::shared_ptr<JointThreadInfoJeallocMap>;
 
-}
+} // namespace DB
