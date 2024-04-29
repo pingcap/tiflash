@@ -363,9 +363,7 @@ struct AggregationMethodFastPathTwoKeysNoCache
         std::vector<IColumn *> & key_columns,
         size_t index)
     {
-        // todo only pointer?
-        const auto * pos = key.data;
-        pos = insertAggKeyIntoColumn<Key1Desc>(pos, key_columns[0], index);
+        insertAggKeyIntoColumn<Key1Desc>(key.data, key_columns[0], index);
     }
 
     ALWAYS_INLINE static inline void insertKeyIntoColumnsTwoKey(
@@ -1001,16 +999,16 @@ public:
 
     Block getHeader() const;
 
-    Block getData(size_t concurrency_index, bool enable_skip_serialize_key);
+    Block getData(size_t concurrency_index, bool enable_convert_key_optimization);
 
     size_t getConcurrency() const { return concurrency; }
 
 private:
-    Block getDataForSingleLevel(bool enable_skip_serialize_key);
+    Block getDataForSingleLevel(bool enable_convert_key_optimization);
 
-    Block getDataForTwoLevel(size_t concurrency_index, bool enable_skip_serialize_key);
+    Block getDataForTwoLevel(size_t concurrency_index, bool enable_convert_key_optimization);
 
-    void doLevelMerge(Int32 bucket_num, size_t concurrency_index, bool enable_skip_serialize_key);
+    void doLevelMerge(Int32 bucket_num, size_t concurrency_index, bool enable_convert_key_optimization);
 
 private:
     const LoggerPtr log;
@@ -1337,7 +1335,7 @@ protected:
     template <typename Method>
     void mergeSingleLevelDataImpl(ManyAggregatedDataVariants & non_empty_data) const;
 
-    // enable_skip_serialize_key will only be true when output.
+    // enable_convert_key_optimization will only be true when output.
     // It will be false when spilling to disk.
     // Because need to make sure the block inserting into HashMap is same as the child output block.
     template <typename Method, typename Table, bool skip_serialize_key>
@@ -1394,11 +1392,22 @@ protected:
         std::vector<AggregateColumnsData> & aggregate_columns_vec) const;
 
     template <typename Filler>
-    Block prepareBlockAndFill(AggregatedDataVariants & data_variants, bool final, size_t rows, Filler && filler) const;
+    Block prepareBlockAndFill(
+            AggregatedDataVariants & data_variants,
+            bool final,
+            size_t rows,
+            Filler && filler,
+            size_t serialize_key_size,
+            const std::unordered_map<String, String> & key_ref_agg_func) const;
 
     template <typename Filler>
-    BlocksList prepareBlocksAndFill(AggregatedDataVariants & data_variants, bool final, size_t rows, Filler && filler)
-        const;
+    BlocksList prepareBlocksAndFill(
+            AggregatedDataVariants & data_variants,
+            bool final,
+            size_t rows,
+            Filler && filler,
+            size_t serialize_key_size,
+            const std::unordered_map<String, String> & key_ref_agg_func) const;
 
     template <typename Method>
     Block convertOneBucketToBlock(
@@ -1407,7 +1416,7 @@ protected:
         Arena * arena,
         bool final,
         size_t bucket,
-        bool enable_skip_serialize_key) const;
+        bool enable_convert_key_optimization) const;
 
     template <typename Method>
     BlocksList convertOneBucketToBlocks(
@@ -1416,7 +1425,7 @@ protected:
         Arena * arena,
         bool final,
         size_t bucket,
-        bool enable_skip_serialize_key) const;
+        bool enable_convert_key_optimization) const;
 
     template <typename Mapped>
     void insertAggregatesIntoColumns(Mapped & mapped, MutableColumns & final_aggregate_columns, Arena * arena) const;
@@ -1431,7 +1440,7 @@ protected:
     BlocksList prepareBlocksAndFillSingleLevel(
         AggregatedDataVariants & data_variants,
         bool final,
-        bool enable_skip_serialize_key) const;
+        bool enable_convert_key_optimizatioenable_convert_key_optimization) const;
 
     template <typename Method, typename Table>
     void mergeStreamsImplCase(Block & block, Arena * aggregates_pool, Method & method, Table & data) const;

@@ -1061,7 +1061,7 @@ Block Aggregator::convertOneBucketToBlock(
     Arena * arena,
     bool final,
     size_t bucket,
-    bool enable_skip_serialize_key) const
+    bool enable_convert_key_optimization) const
 {
 #define FILLER_DEFINE(name, skip_serialize_key)                              \
     auto filler_##name = [bucket, &method, arena, this](                     \
@@ -1086,13 +1086,17 @@ Block Aggregator::convertOneBucketToBlock(
 #undef FILLER_DEFINE
 
     Block block;
-    if (params.key_from_agg_func.size() == params.keys_size && enable_skip_serialize_key)
+    std::unordered_map<String, String> key_ref_agg_func = enable_convert_key_optimization ?
+        params.key_from_agg_func : std::unordered_map<String, String>();
+    size_t serialize_key_size = enable_convert_key_optimization ?
+        params.keys_size - key_ref_agg_func.size() : params.keys_size;
+    if (enable_convert_key_optimization && params.key_from_agg_func.size() == params.keys_size)
     {
-        block = prepareBlockAndFill(data_variants, final, method.data.impls[bucket].size(), filler_skip_serialize_key);
+        block = prepareBlockAndFill(data_variants, final, method.data.impls[bucket].size(), filler_skip_serialize_key, serialize_key_size, key_ref_agg_func);
     }
     else
     {
-        block = prepareBlockAndFill(data_variants, final, method.data.impls[bucket].size(), filler_serialize_key);
+        block = prepareBlockAndFill(data_variants, final, method.data.impls[bucket].size(), filler_serialize_key, serialize_key_size, key_ref_agg_func);
     }
 
     block.info.bucket_num = bucket;
@@ -1106,7 +1110,7 @@ BlocksList Aggregator::convertOneBucketToBlocks(
     Arena * arena,
     bool final,
     size_t bucket,
-    bool enable_skip_serialize_key) const
+    bool enable_convert_key_optimization) const
 {
 #define FILLER_DEFINE(name, skip_serialize_key)                                                         \
     auto filler_##name = [bucket, &method, arena, this](                                                \
@@ -1129,14 +1133,19 @@ BlocksList Aggregator::convertOneBucketToBlocks(
 #undef FILLER_DEFINE
 
     BlocksList blocks;
-    if (params.key_from_agg_func.size() == params.keys_size && enable_skip_serialize_key)
+    std::unordered_map<String, String> key_ref_agg_func = enable_convert_key_optimization ?
+        params.key_from_agg_func : std::unordered_map<String, String>();
+    size_t serialize_key_size = enable_convert_key_optimization ?
+        params.keys_size - key_ref_agg_func.size() : params.keys_size;
+
+    if (enable_convert_key_optimization && params.key_from_agg_func.size() == params.keys_size)
     {
         blocks
-            = prepareBlocksAndFill(data_variants, final, method.data.impls[bucket].size(), filler_skip_serialize_key);
+            = prepareBlocksAndFill(data_variants, final, method.data.impls[bucket].size(), filler_skip_serialize_key, serialize_key_size, key_ref_agg_func);
     }
     else
     {
-        blocks = prepareBlocksAndFill(data_variants, final, method.data.impls[bucket].size(), filler_serialize_key);
+        blocks = prepareBlocksAndFill(data_variants, final, method.data.impls[bucket].size(), filler_serialize_key, serialize_key_size, key_ref_agg_func);
     }
 
 
@@ -1249,9 +1258,6 @@ void Aggregator::convertToBlockImpl(
     if (data.empty())
         return;
 
-    // RUNTIME_CHECK_MSG(key_columns.size() + params.key_from_agg_func.size() == params.keys_size, "Aggregate. Unexpected key columns size.");
-    RUNTIME_CHECK_MSG(key_columns.size() == params.keys_size, "Aggregate. Unexpected key columns size.");
-
     std::vector<IColumn *> raw_key_columns;
     raw_key_columns.reserve(key_columns.size());
     for (auto & column : key_columns)
@@ -1292,8 +1298,6 @@ void Aggregator::convertToBlocksImpl(
     raw_key_columns_vec.reserve(key_columns_vec.size());
     for (auto & key_columns : key_columns_vec)
     {
-        RUNTIME_CHECK_MSG(key_columns.size() + params.key_from_agg_func.size() == params.keys_size, "Aggregate. Unexpected key columns size.");
-
         std::vector<IColumn *> raw_key_columns;
         raw_key_columns.reserve(key_columns.size());
         for (auto & column : key_columns)
@@ -1439,6 +1443,10 @@ struct AggregatorMethodInitKeyColumnHelper<AggregationMethodFastPathTwoKeysNoCac
             insert_key_into_columns_function_ptr = 
                 AggregationMethodFastPathTwoKeysNoCache<Key1Desc, Key2Desc, TData>::insertKeyIntoColumnsTwoKey;
         }
+        else
+        {
+            assert(false);
+        }
     }
     ALWAYS_INLINE inline void insertKeyIntoColumns(
         const StringRef & key,
@@ -1446,6 +1454,7 @@ struct AggregatorMethodInitKeyColumnHelper<AggregationMethodFastPathTwoKeysNoCac
         const Sizes &,
         const TiDB::TiDBCollators &)
     {
+        assert(insert_key_into_columns_function_ptr);
         insert_key_into_columns_function_ptr(key, key_columns, index);
         ++index;
     }
@@ -1629,10 +1638,14 @@ void NO_INLINE Aggregator::convertToBlocksImplNotFinal(
 }
 
 template <typename Filler>
-Block Aggregator::prepareBlockAndFill(AggregatedDataVariants & data_variants, bool final, size_t rows, Filler && filler)
-    const
+Block Aggregator::prepareBlockAndFill(
+        AggregatedDataVariants & data_variants,
+        bool final,
+        size_t rows,
+        Filler && filler,
+        size_t serialize_key_size,
+        const std::unordered_map<String, String> & key_ref_agg_func) const
 {
-    // const auto normal_key_size = params.keys_size - params.key_from_agg_func.size();
     MutableColumns key_columns(params.keys_size);
     MutableColumns aggregate_columns(params.aggregates_size);
     MutableColumns final_aggregate_columns(params.aggregates_size);
@@ -1640,8 +1653,7 @@ Block Aggregator::prepareBlockAndFill(AggregatedDataVariants & data_variants, bo
 
     Block header = getHeader(final);
 
-    // for (size_t i = 0; i < normal_key_size; ++i)
-    for (size_t i = 0; i < params.keys_size; ++i)
+    for (size_t i = 0; i < serialize_key_size; ++i)
     {
         key_columns[i] = header.safeGetByPosition(i).type->createColumn();
         key_columns[i]->reserve(rows);
@@ -1683,7 +1695,7 @@ Block Aggregator::prepareBlockAndFill(AggregatedDataVariants & data_variants, bo
 
     Block res = header.cloneEmpty();
 
-    for (size_t i = 0; i < params.keys_size; ++i)
+    for (size_t i = 0; i < serialize_key_size; ++i)
         res.getByPosition(i).column = std::move(key_columns[i]);
 
     for (size_t i = 0; i < params.aggregates_size; ++i)
@@ -1695,10 +1707,10 @@ Block Aggregator::prepareBlockAndFill(AggregatedDataVariants & data_variants, bo
             res.getByName(aggregate_column_name).column = std::move(aggregate_columns[i]);
     }
 
-    // for (const auto & pair : params.key_from_agg_func)
-    // {
-    //     res.getByName(pair.first).column = res.getByName(pair.second).column;
-    // }
+    for (const auto & pair : key_ref_agg_func)
+    {
+        res.getByName(pair.first).column = res.getByName(pair.second).column;
+    }
 
     /// Change the size of the columns-constants in the block.
     size_t columns = header.columns();
@@ -1714,7 +1726,9 @@ BlocksList Aggregator::prepareBlocksAndFill(
     AggregatedDataVariants & data_variants,
     bool final,
     size_t rows,
-    Filler && filler) const
+    Filler && filler,
+    size_t serialize_key_size,
+    const std::unordered_map<String, String> & key_ref_agg_func) const
 {
     Block header = getHeader(final);
 
@@ -1725,7 +1739,6 @@ BlocksList Aggregator::prepareBlocksAndFill(
     std::vector<MutableColumns> final_aggregate_columns_vec;
 
     size_t block_rows = params.max_block_size;
-    const auto normal_key_size = params.keys_size - params.key_from_agg_func.size();
 
     for (size_t j = 0; j < block_count; ++j)
     {
@@ -1734,7 +1747,7 @@ BlocksList Aggregator::prepareBlocksAndFill(
             block_rows = rows % block_rows;
         }
 
-        key_columns_vec.push_back(MutableColumns(normal_key_size));
+        key_columns_vec.push_back(MutableColumns(serialize_key_size));
         aggregate_columns_data_vec.push_back(AggregateColumnsData(params.aggregates_size));
         aggregate_columns_vec.push_back(MutableColumns(params.aggregates_size));
         final_aggregate_columns_vec.push_back(MutableColumns(params.aggregates_size));
@@ -1744,7 +1757,7 @@ BlocksList Aggregator::prepareBlocksAndFill(
         auto & aggregate_columns = aggregate_columns_vec.back();
         auto & final_aggregate_columns = final_aggregate_columns_vec.back();
 
-        for (size_t i = 0; i < normal_key_size; ++i)
+        for (size_t i = 0; i < serialize_key_size; ++i)
         {
             key_columns[i] = header.safeGetByPosition(i).type->createColumn();
             key_columns[i]->reserve(block_rows);
@@ -1791,7 +1804,7 @@ BlocksList Aggregator::prepareBlocksAndFill(
     {
         Block res = header.cloneEmpty();
 
-        for (size_t i = 0; i < normal_key_size; ++i)
+        for (size_t i = 0; i < serialize_key_size; ++i)
             res.getByPosition(i).column = std::move(key_columns_vec[j][i]);
 
         for (size_t i = 0; i < params.aggregates_size; ++i)
@@ -1803,7 +1816,7 @@ BlocksList Aggregator::prepareBlocksAndFill(
                 res.getByName(aggregate_column_name).column = std::move(aggregate_columns_vec[j][i]);
         }
 
-        for (const auto & pair : params.key_from_agg_func)
+        for (const auto & pair : key_ref_agg_func)
         {
             res.getByName(pair.first).column = res.getByName(pair.second).column;
         }
@@ -1860,7 +1873,7 @@ BlocksList Aggregator::prepareBlocksAndFillWithoutKey(AggregatedDataVariants & d
         }
     };
 
-    BlocksList blocks = prepareBlocksAndFill(data_variants, final, rows, filler);
+    BlocksList blocks = prepareBlocksAndFill(data_variants, final, rows, filler, params.keys_size, std::unordered_map<String, String>());
 
     if (final)
         destroyWithoutKey(data_variants);
@@ -1871,7 +1884,7 @@ BlocksList Aggregator::prepareBlocksAndFillWithoutKey(AggregatedDataVariants & d
 BlocksList Aggregator::prepareBlocksAndFillSingleLevel(
     AggregatedDataVariants & data_variants,
     bool final,
-    bool enable_skip_serialize_key) const
+    bool enable_convert_key_optimization) const
 {
     size_t rows = data_variants.size();
 #define M(NAME, skip_serialize_key)                                                                  \
@@ -1915,10 +1928,16 @@ BlocksList Aggregator::prepareBlocksAndFillSingleLevel(
 #undef M_serialize_key
 #undef FILLER_DEFINE
 
-    if (params.key_from_agg_func.size() == params.keys_size && enable_skip_serialize_key)
-        return prepareBlocksAndFill(data_variants, final, rows, filler_skip_serialize_key);
-    else
-        return prepareBlocksAndFill(data_variants, final, rows, filler_serialize_key);
+    std::unordered_map<String, String> key_ref_agg_func = enable_convert_key_optimization ?
+        params.key_from_agg_func : std::unordered_map<String, String>();
+    size_t serialize_key_size = enable_convert_key_optimization ?
+        params.keys_size - key_ref_agg_func.size() : params.keys_size;
+
+    if (enable_convert_key_optimization && params.key_from_agg_func.size() == params.keys_size)
+    {
+        return prepareBlocksAndFill(data_variants, final, rows, filler_skip_serialize_key, serialize_key_size, key_ref_agg_func);
+    }
+    return prepareBlocksAndFill(data_variants, final, rows, filler_serialize_key, serialize_key_size, key_ref_agg_func);
 }
 
 
@@ -2286,7 +2305,7 @@ BlocksList Aggregator::vstackBlocks(BlocksList & blocks, bool final)
     if (result.type == AggregatedDataVariants::Type::without_key)
         return_blocks = prepareBlocksAndFillWithoutKey(result, final);
     else
-        return_blocks = prepareBlocksAndFillSingleLevel(result, final, /*enable_skip_serialize_key=*/false);
+        return_blocks = prepareBlocksAndFillSingleLevel(result, final, /*enable_convert_key_optimization=*/false);
     /// NOTE: two-level data is not possible here - chooseAggregationMethod chooses only among single-level methods.
 
     if (!final)
@@ -2562,7 +2581,7 @@ Block MergingBuckets::getHeader() const
     return aggregator.getHeader(final);
 }
 
-Block MergingBuckets::getData(size_t concurrency_index, bool enable_skip_serialize_key)
+Block MergingBuckets::getData(size_t concurrency_index, bool enable_convert_key_optimization)
 {
     assert(concurrency_index < concurrency);
 
@@ -2571,11 +2590,11 @@ Block MergingBuckets::getData(size_t concurrency_index, bool enable_skip_seriali
 
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_aggregate_merge_failpoint);
 
-    return is_two_level ? getDataForTwoLevel(concurrency_index, enable_skip_serialize_key)
-                        : getDataForSingleLevel(enable_skip_serialize_key);
+    return is_two_level ? getDataForTwoLevel(concurrency_index, enable_convert_key_optimization)
+                        : getDataForSingleLevel(enable_convert_key_optimization);
 }
 
-Block MergingBuckets::getDataForSingleLevel(bool enable_skip_serialize_key)
+Block MergingBuckets::getDataForSingleLevel(bool enable_convert_key_optimization)
 {
     assert(!data.empty());
 
@@ -2609,13 +2628,13 @@ Block MergingBuckets::getDataForSingleLevel(bool enable_skip_serialize_key)
             throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
         }
 #undef M
-        single_level_blocks = aggregator.prepareBlocksAndFillSingleLevel(*first, final, enable_skip_serialize_key);
+        single_level_blocks = aggregator.prepareBlocksAndFillSingleLevel(*first, final, enable_convert_key_optimization);
     }
     ++current_bucket_num;
     return popBlocksListFront(single_level_blocks);
 }
 
-Block MergingBuckets::getDataForTwoLevel(size_t concurrency_index, bool enable_skip_serialize_key)
+Block MergingBuckets::getDataForTwoLevel(size_t concurrency_index, bool enable_convert_key_optimization)
 {
     assert(concurrency_index < two_level_parallel_merge_data.size());
     auto & two_level_merge_data = *two_level_parallel_merge_data[concurrency_index];
@@ -2632,14 +2651,14 @@ Block MergingBuckets::getDataForTwoLevel(size_t concurrency_index, bool enable_s
         if (unlikely(local_current_bucket_num >= NUM_BUCKETS))
             return {};
 
-        doLevelMerge(local_current_bucket_num, concurrency_index, enable_skip_serialize_key);
+        doLevelMerge(local_current_bucket_num, concurrency_index, enable_convert_key_optimization);
         Block block = popBlocksListFront(two_level_merge_data);
         if (likely(block))
             return block;
     }
 }
 
-void MergingBuckets::doLevelMerge(Int32 bucket_num, size_t concurrency_index, bool enable_skip_serialize_key)
+void MergingBuckets::doLevelMerge(Int32 bucket_num, size_t concurrency_index, bool enable_convert_key_optimization)
 {
     auto & two_level_merge_data = *two_level_parallel_merge_data[concurrency_index];
     assert(two_level_merge_data.empty());
@@ -2661,7 +2680,7 @@ void MergingBuckets::doLevelMerge(Int32 bucket_num, size_t concurrency_index, bo
             arena,                                                                        \
             final,                                                                        \
             bucket_num,                                                                   \
-            enable_skip_serialize_key);                                                   \
+            enable_convert_key_optimization);                                                   \
         break;                                                                            \
     }
     switch (method)
