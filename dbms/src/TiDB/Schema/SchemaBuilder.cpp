@@ -693,6 +693,7 @@ void SchemaBuilder<Getter, NameMapper>::applyPartitionDiff(const TiDB::DBInfoPtr
             if (!new_part_id_set.contains(orig_def.id))
             {
                 const auto part_table_name = name_mapper.mapTableNameByID(updated_table_info.keyspace_id, orig_def.id);
+                // When `tryLoadSchemaDiffs` fails, we may run into `SchemaBuilder::syncAllSchem` -> `applyPartitionDiff` without `applyExchangeTablePartition`
                 // The physical table maybe `EXCHANGE` to another database, try to find the partition from all database
                 auto part_db_info = tryFindDatabaseByPartitionTable(db_info, part_table_name);
                 applyDropPhysicalTable(name_mapper.mapDatabaseName(*part_db_info), orig_def.id);
@@ -706,7 +707,8 @@ void SchemaBuilder<Getter, NameMapper>::applyPartitionDiff(const TiDB::DBInfoPtr
         {
             auto part_table_info = updated_table_info.producePartitionTableInfo(new_def.id, name_mapper);
             const auto part_table_name = name_mapper.mapTableName(*part_table_info);
-                // The physical table maybe `EXCHANGE` from another database, try to find the partition from all database
+            // When `tryLoadSchemaDiffs` fails, we may run into `SchemaBuilder::syncAllSchem` -> `applyPartitionDiff` without `applyExchangeTablePartition`
+            // The physical table maybe `EXCHANGE` from another database, try to find the partition from all database
             auto part_db_info = tryFindDatabaseByPartitionTable(db_info, part_table_name);
             applyCreatePhysicalTable(part_db_info, part_table_info);
         }
