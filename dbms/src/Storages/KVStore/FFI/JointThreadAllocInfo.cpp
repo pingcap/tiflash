@@ -173,7 +173,7 @@ void JointThreadInfoJeallocMap::reportThreadAllocBatchForKVStore(
 
 void JointThreadInfoJeallocMap::stopThreadAllocInfo()
 {
-    LOG_INFO(log, "Stop collecting thread alloc metrics");
+    LOG_INFO(DB::Logger::get(), "Stop collecting thread alloc metrics");
     {
         std::unique_lock lk(monitoring_mut);
         if (monitoring_thread == nullptr)
