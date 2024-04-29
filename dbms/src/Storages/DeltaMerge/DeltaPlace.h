@@ -262,7 +262,10 @@ bool placeInsert(
             tuple_id = delta_value_space_offset + (offset + i);
 
         if (dup)
+        {
             delta_tree.addDelete(rid);
+            delta_tree.setLastDupTupleID(tuple_id);
+        }
         delta_tree.addInsert(rid, tuple_id);
     }
 
