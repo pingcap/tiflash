@@ -1338,56 +1338,62 @@ protected:
     // enable_convert_key_optimization will only be true when output.
     // It will be false when spilling to disk.
     // Because need to make sure the block inserting into HashMap is same as the child output block.
-    template <typename Method, typename Table, bool skip_serialize_key>
+    template <typename Method, typename Table, bool skip_convert_key>
     void convertToBlockImpl(
         Method & method,
         Table & data,
+        const Sizes & key_sizes,
         MutableColumns & key_columns,
         AggregateColumnsData & aggregate_columns,
         MutableColumns & final_aggregate_columns,
         Arena * arena,
         bool final) const;
 
-    // The template parameter skip_serialize_key indicates whether the key in the HashMap can be skipped to serialize.
+    // The template parameter skip_convert_key indicates whether the key in the HashMap can be skipped to serialize.
     // For example, select first_row(c1) from t group by c1, only the result of first_row(c1) needs to be serialized.
     // The key c1 does not need to be serialized into Column. It only needs to reference to the result column of first_row(c1).
-    template <typename Method, typename Table, bool skip_serialize_key>
+    template <typename Method, typename Table, bool skip_convert_key>
     void convertToBlocksImpl(
         Method & method,
         Table & data,
+        const Sizes & key_sizes,
         std::vector<MutableColumns> & key_columns_vec,
         std::vector<AggregateColumnsData> & aggregate_columns_vec,
         std::vector<MutableColumns> & final_aggregate_columns_vec,
         Arena * arena,
         bool final) const;
 
-    template <typename Method, typename Table, bool skip_serialize_key>
+    template <typename Method, typename Table, bool skip_convert_key>
     void convertToBlockImplFinal(
         Method & method,
         Table & data,
+        const Sizes & key_sizes,
         std::vector<IColumn *> key_columns,
         MutableColumns & final_aggregate_columns,
         Arena * arena) const;
 
-    template <typename Method, typename Table, bool skip_serialize_key>
+    template <typename Method, typename Table, bool skip_convert_key>
     void convertToBlocksImplFinal(
         Method & method,
         Table & data,
+        const Sizes & key_sizes,
         std::vector<std::vector<IColumn *>> && key_columns_vec,
         std::vector<MutableColumns> & final_aggregate_columns_vec,
         Arena * arena) const;
 
-    template <typename Method, typename Table, bool skip_serialize_key>
+    template <typename Method, typename Table, bool skip_convert_key>
     void convertToBlockImplNotFinal(
         Method & method,
         Table & data,
+        const Sizes & key_sizes,
         std::vector<IColumn *> key_columns,
         AggregateColumnsData & aggregate_columns) const;
 
-    template <typename Method, typename Table, bool skip_serialize_key>
+    template <typename Method, typename Table, bool skip_convert_key>
     void convertToBlocksImplNotFinal(
         Method & method,
         Table & data,
+        const Sizes & key_sizes,
         std::vector<std::vector<IColumn *>> && key_columns_vec,
         std::vector<AggregateColumnsData> & aggregate_columns_vec) const;
 

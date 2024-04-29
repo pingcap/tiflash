@@ -1063,17 +1063,19 @@ Block Aggregator::convertOneBucketToBlock(
     size_t bucket,
     bool enable_convert_key_optimization) const
 {
-#define FILLER_DEFINE(name, skip_serialize_key)                              \
+#define FILLER_DEFINE(name, skip_convert_key)                                \
     auto filler_##name = [bucket, &method, arena, this](                     \
+                             const Sizes & key_sizes,                        \
                              MutableColumns & key_columns,                   \
                              AggregateColumnsData & aggregate_columns,       \
                              MutableColumns & final_aggregate_columns,       \
                              bool final_) {                                  \
         using METHOD_TYPE = std::decay_t<decltype(method)>;                  \
         using DATA_TYPE = std::decay_t<decltype(method.data.impls[bucket])>; \
-        convertToBlockImpl<METHOD_TYPE, DATA_TYPE, skip_serialize_key>(      \
+        convertToBlockImpl<METHOD_TYPE, DATA_TYPE, skip_convert_key>(        \
             method,                                                          \
             method.data.impls[bucket],                                       \
+            key_sizes,                                                       \
             key_columns,                                                     \
             aggregate_columns,                                               \
             final_aggregate_columns,                                         \
@@ -1081,8 +1083,8 @@ Block Aggregator::convertOneBucketToBlock(
             final_);                                                         \
     }
 
-    FILLER_DEFINE(serialize_key, false);
-    FILLER_DEFINE(skip_serialize_key, true);
+    FILLER_DEFINE(convert_key, false);
+    FILLER_DEFINE(skip_convert_key, true);
 #undef FILLER_DEFINE
 
     Block block;
@@ -1096,7 +1098,7 @@ Block Aggregator::convertOneBucketToBlock(
             data_variants,
             final,
             method.data.impls[bucket].size(),
-            filler_skip_serialize_key,
+            filler_skip_convert_key,
             convert_key_size,
             key_ref_agg_func);
     }
@@ -1106,7 +1108,7 @@ Block Aggregator::convertOneBucketToBlock(
             data_variants,
             final,
             method.data.impls[bucket].size(),
-            filler_serialize_key,
+            filler_convert_key,
             convert_key_size,
             key_ref_agg_func);
     }
@@ -1124,24 +1126,26 @@ BlocksList Aggregator::convertOneBucketToBlocks(
     size_t bucket,
     bool enable_convert_key_optimization) const
 {
-#define FILLER_DEFINE(name, skip_serialize_key)                                                         \
-    auto filler_##name = [bucket, &method, arena, this](                                                \
-                             std::vector<MutableColumns> & key_columns_vec,                             \
-                             std::vector<AggregateColumnsData> & aggregate_columns_vec,                 \
-                             std::vector<MutableColumns> & final_aggregate_columns_vec,                 \
-                             bool final_) {                                                             \
-        convertToBlocksImpl<decltype(method), decltype(method.data.impls[bucket]), skip_serialize_key>( \
-            method,                                                                                     \
-            method.data.impls[bucket],                                                                  \
-            key_columns_vec,                                                                            \
-            aggregate_columns_vec,                                                                      \
-            final_aggregate_columns_vec,                                                                \
-            arena,                                                                                      \
-            final_);                                                                                    \
+#define FILLER_DEFINE(name, skip_convert_key)                                                         \
+    auto filler_##name = [bucket, &method, arena, this](                                              \
+                             const Sizes & key_sizes,                                                 \
+                             std::vector<MutableColumns> & key_columns_vec,                           \
+                             std::vector<AggregateColumnsData> & aggregate_columns_vec,               \
+                             std::vector<MutableColumns> & final_aggregate_columns_vec,               \
+                             bool final_) {                                                           \
+        convertToBlocksImpl<decltype(method), decltype(method.data.impls[bucket]), skip_convert_key>( \
+            method,                                                                                   \
+            method.data.impls[bucket],                                                                \
+            key_sizes,                                                                                \
+            key_columns_vec,                                                                          \
+            aggregate_columns_vec,                                                                    \
+            final_aggregate_columns_vec,                                                              \
+            arena,                                                                                    \
+            final_);                                                                                  \
     };
 
-    FILLER_DEFINE(serialize_key, false);
-    FILLER_DEFINE(skip_serialize_key, true);
+    FILLER_DEFINE(convert_key, false);
+    FILLER_DEFINE(skip_convert_key, true);
 #undef FILLER_DEFINE
 
     BlocksList blocks;
@@ -1156,7 +1160,7 @@ BlocksList Aggregator::convertOneBucketToBlocks(
             data_variants,
             final,
             method.data.impls[bucket].size(),
-            filler_skip_serialize_key,
+            filler_skip_convert_key,
             convert_key_size,
             key_ref_agg_func);
     }
@@ -1166,7 +1170,7 @@ BlocksList Aggregator::convertOneBucketToBlocks(
             data_variants,
             final,
             method.data.impls[bucket].size(),
-            filler_serialize_key,
+            filler_convert_key,
             convert_key_size,
             key_ref_agg_func);
     }
@@ -1268,10 +1272,11 @@ void Aggregator::execute(const BlockInputStreamPtr & stream, AggregatedDataVaria
         src_bytes / elapsed_seconds / 1048576.0);
 }
 
-template <typename Method, typename Table, bool skip_serialize_key>
+template <typename Method, typename Table, bool skip_convert_key>
 void Aggregator::convertToBlockImpl(
     Method & method,
     Table & data,
+    const Sizes & key_sizes,
     MutableColumns & key_columns,
     AggregateColumnsData & aggregate_columns,
     MutableColumns & final_aggregate_columns,
@@ -1287,16 +1292,18 @@ void Aggregator::convertToBlockImpl(
         raw_key_columns.push_back(column.get());
 
     if (final)
-        convertToBlockImplFinal<Method, Table, skip_serialize_key>(
+        convertToBlockImplFinal<Method, Table, skip_convert_key>(
             method,
             data,
+            key_sizes,
             std::move(raw_key_columns),
             final_aggregate_columns,
             arena);
     else
-        convertToBlockImplNotFinal<Method, Table, skip_serialize_key>(
+        convertToBlockImplNotFinal<Method, Table, skip_convert_key>(
             method,
             data,
+            key_sizes,
             std::move(raw_key_columns),
             aggregate_columns);
 
@@ -1304,10 +1311,11 @@ void Aggregator::convertToBlockImpl(
     data.clearAndShrink();
 }
 
-template <typename Method, typename Table, bool skip_serialize_key>
+template <typename Method, typename Table, bool skip_convert_key>
 void Aggregator::convertToBlocksImpl(
     Method & method,
     Table & data,
+    const Sizes & key_sizes,
     std::vector<MutableColumns> & key_columns_vec,
     std::vector<AggregateColumnsData> & aggregate_columns_vec,
     std::vector<MutableColumns> & final_aggregate_columns_vec,
@@ -1332,16 +1340,18 @@ void Aggregator::convertToBlocksImpl(
     }
 
     if (final)
-        convertToBlocksImplFinal<decltype(method), decltype(data), skip_serialize_key>(
+        convertToBlocksImplFinal<decltype(method), decltype(data), skip_convert_key>(
             method,
             data,
+            key_sizes,
             std::move(raw_key_columns_vec),
             final_aggregate_columns_vec,
             arena);
     else
-        convertToBlocksImplNotFinal<decltype(method), decltype(data), skip_serialize_key>(
+        convertToBlocksImplNotFinal<decltype(method), decltype(data), skip_convert_key>(
             method,
             data,
+            key_sizes,
             std::move(raw_key_columns_vec),
             aggregate_columns_vec);
 
@@ -1449,7 +1459,6 @@ struct AggregatorMethodInitKeyColumnHelper<AggregationMethodFastPathTwoKeysNoCac
 
     ALWAYS_INLINE inline void initAggKeys(size_t rows, std::vector<IColumn *> & key_columns)
     {
-        assert(key_columns.size() == 1 || key_columns.size() == 2 || key_columns.empty());
         index = 0;
         if (key_columns.size() == 1)
         {
@@ -1466,7 +1475,7 @@ struct AggregatorMethodInitKeyColumnHelper<AggregationMethodFastPathTwoKeysNoCac
         }
         else
         {
-            assert(false);
+            throw Exception("unexpected key_columns size for AggMethodFastPathTwoKey: {}", key_columns.size());
         }
     }
     ALWAYS_INLINE inline void insertKeyIntoColumns(
@@ -1494,10 +1503,11 @@ struct AggregatorMethodInitKeyColumnHelper<AggregationMethodOneKeyStringNoCache<
 
     void initAggKeys(size_t rows, std::vector<IColumn *> & key_columns)
     {
-        assert(key_columns.size() == 1 || key_columns.empty());
+        index = 0;
         if (key_columns.size() == 1)
             Method::initAggKeys(rows, key_columns[0]);
-        index = 0;
+        else
+            throw Exception("unexpected key_columns size for AggMethodOneKeyString: {}", key_columns.size());
     }
     ALWAYS_INLINE inline void insertKeyIntoColumns(
         const StringRef & key,
@@ -1510,26 +1520,30 @@ struct AggregatorMethodInitKeyColumnHelper<AggregationMethodOneKeyStringNoCache<
     }
 };
 
-template <typename Method, typename Table, bool skip_serialize_key>
+template <typename Method, typename Table, bool skip_convert_key>
 void NO_INLINE Aggregator::convertToBlockImplFinal(
     Method & method,
     Table & data,
+    const Sizes & key_sizes,
     std::vector<IColumn *> key_columns,
     MutableColumns & final_aggregate_columns,
     Arena * arena) const
 {
-    auto shuffled_key_sizes = method.shuffleKeyColumns(key_columns, key_sizes);
-    const auto & key_sizes_ref = shuffled_key_sizes ? *shuffled_key_sizes : key_sizes;
-
+    const Sizes * key_sizes_ref = nullptr;
     AggregatorMethodInitKeyColumnHelper<Method> agg_keys_helper{method};
-    // todo check
-    agg_keys_helper.initAggKeys(data.size(), key_columns);
+    if constexpr (!skip_convert_key)
+    {
+        auto shuffled_key_sizes = method.shuffleKeyColumns(key_columns, key_sizes);
+        key_sizes_ref = shuffled_key_sizes ? &*shuffled_key_sizes : &key_sizes;
+        agg_keys_helper.initAggKeys(data.size(), key_columns);
+    }
 
     data.forEachValue([&](const auto & key [[maybe_unused]], auto & mapped) {
-        if constexpr (!skip_serialize_key)
+        if constexpr (!skip_convert_key)
         {
-            agg_keys_helper.insertKeyIntoColumns(key, key_columns, key_sizes_ref, params.collators);
+            agg_keys_helper.insertKeyIntoColumns(key, key_columns, *key_sizes_ref, params.collators);
         }
+
         insertAggregatesIntoColumns(mapped, final_aggregate_columns, arena);
     });
 }
@@ -1571,53 +1585,60 @@ std::vector<std::unique_ptr<AggregatorMethodInitKeyColumnHelper<Method>>> initAg
 }
 } // namespace
 
-template <typename Method, typename Table, bool skip_serialize_key>
+template <typename Method, typename Table, bool skip_convert_key>
 void NO_INLINE Aggregator::convertToBlocksImplFinal(
     Method & method,
     Table & data,
+    const Sizes & key_sizes,
     std::vector<std::vector<IColumn *>> && key_columns_vec,
     std::vector<MutableColumns> & final_aggregate_columns_vec,
     Arena * arena) const
 {
     assert(!key_columns_vec.empty());
-    auto shuffled_key_sizes = shuffleKeyColumnsForKeyColumnsVec(method, key_columns_vec, key_sizes);
-    const auto & key_sizes_ref = shuffled_key_sizes ? *shuffled_key_sizes : key_sizes;
-
     std::vector<std::unique_ptr<AggregatorMethodInitKeyColumnHelper<std::decay_t<Method>>>> agg_keys_helpers;
-    if constexpr (!skip_serialize_key)
+    const Sizes * key_sizes_ref = nullptr;
+    if constexpr (!skip_convert_key)
+    {
+        auto shuffled_key_sizes = shuffleKeyColumnsForKeyColumnsVec(method, key_columns_vec, key_sizes);
+        key_sizes_ref = shuffled_key_sizes ? &*shuffled_key_sizes : &key_sizes;
         agg_keys_helpers = initAggKeysForKeyColumnsVec(method, key_columns_vec, params.max_block_size, data.size());
+    }
 
     size_t data_index = 0;
     data.forEachValue([&](const auto & key [[maybe_unused]], auto & mapped) {
         size_t key_columns_vec_index = data_index / params.max_block_size;
-        if constexpr (!skip_serialize_key)
+        if constexpr (!skip_convert_key)
         {
             agg_keys_helpers[key_columns_vec_index]
-                ->insertKeyIntoColumns(key, key_columns_vec[key_columns_vec_index], key_sizes_ref, params.collators);
+                ->insertKeyIntoColumns(key, key_columns_vec[key_columns_vec_index], *key_sizes_ref, params.collators);
         }
         insertAggregatesIntoColumns(mapped, final_aggregate_columns_vec[key_columns_vec_index], arena);
         ++data_index;
     });
 }
 
-template <typename Method, typename Table, bool skip_serialize_key>
+template <typename Method, typename Table, bool skip_convert_key>
 void NO_INLINE Aggregator::convertToBlockImplNotFinal(
     Method & method,
     Table & data,
+    const Sizes & key_sizes,
     std::vector<IColumn *> key_columns,
     AggregateColumnsData & aggregate_columns) const
 {
-    auto shuffled_key_sizes = method.shuffleKeyColumns(key_columns, key_sizes);
-    const auto & key_sizes_ref = shuffled_key_sizes ? *shuffled_key_sizes : key_sizes;
-
-    // todo: check convertToBlocksImplFinal()
     AggregatorMethodInitKeyColumnHelper<Method> agg_keys_helper{method};
-    agg_keys_helper.initAggKeys(data.size(), key_columns);
+    const Sizes * key_sizes_ref = nullptr;
+
+    if constexpr (!skip_convert_key)
+    {
+        auto shuffled_key_sizes = method.shuffleKeyColumns(key_columns, key_sizes);
+        key_sizes_ref = shuffled_key_sizes ? &*shuffled_key_sizes : &key_sizes;
+        agg_keys_helper.initAggKeys(data.size(), key_columns);
+    }
 
     data.forEachValue([&](const auto & key [[maybe_unused]], auto & mapped) {
-        if constexpr (!skip_serialize_key)
+        if constexpr (!skip_convert_key)
         {
-            agg_keys_helper.insertKeyIntoColumns(key, key_columns, key_sizes_ref, params.collators);
+            agg_keys_helper.insertKeyIntoColumns(key, key_columns, *key_sizes_ref, params.collators);
         }
 
         /// reserved, so push_back does not throw exceptions
@@ -1628,25 +1649,31 @@ void NO_INLINE Aggregator::convertToBlockImplNotFinal(
     });
 }
 
-template <typename Method, typename Table, bool skip_serialize_key>
+template <typename Method, typename Table, bool skip_convert_key>
 void NO_INLINE Aggregator::convertToBlocksImplNotFinal(
     Method & method,
     Table & data,
+    const Sizes & key_sizes,
     std::vector<std::vector<IColumn *>> && key_columns_vec,
     std::vector<AggregateColumnsData> & aggregate_columns_vec) const
 {
-    auto shuffled_key_sizes = shuffleKeyColumnsForKeyColumnsVec(method, key_columns_vec, key_sizes);
-    const auto & key_sizes_ref = shuffled_key_sizes ? *shuffled_key_sizes : key_sizes;
+    std::vector<std::unique_ptr<AggregatorMethodInitKeyColumnHelper<std::decay_t<Method>>>> agg_keys_helpers;
+    const Sizes * key_sizes_ref = nullptr;
 
-    auto agg_keys_helpers = initAggKeysForKeyColumnsVec(method, key_columns_vec, params.max_block_size, data.size());
+    if constexpr (!skip_convert_key)
+    {
+        auto shuffled_key_sizes = shuffleKeyColumnsForKeyColumnsVec(method, key_columns_vec, key_sizes);
+        key_sizes_ref = shuffled_key_sizes ? &*shuffled_key_sizes : &key_sizes;
+        agg_keys_helpers = initAggKeysForKeyColumnsVec(method, key_columns_vec, params.max_block_size, data.size());
+    }
 
     size_t data_index = 0;
     data.forEachValue([&](const auto & key [[maybe_unused]], auto & mapped) {
         size_t key_columns_vec_index = data_index / params.max_block_size;
-        if constexpr (!skip_serialize_key)
+        if constexpr (!skip_convert_key)
         {
             agg_keys_helpers[key_columns_vec_index]
-                ->insertKeyIntoColumns(key, key_columns_vec[key_columns_vec_index], key_sizes_ref, params.collators);
+                ->insertKeyIntoColumns(key, key_columns_vec[key_columns_vec_index], *key_sizes_ref, params.collators);
         }
 
         /// reserved, so push_back does not throw exceptions
@@ -1671,6 +1698,8 @@ Block Aggregator::prepareBlockAndFill(
     MutableColumns aggregate_columns(params.aggregates_size);
     MutableColumns final_aggregate_columns(params.aggregates_size);
     AggregateColumnsData aggregate_columns_data(params.aggregates_size);
+    Sizes new_key_sizes;
+    new_key_sizes.reserve(key_sizes.size());
 
     Block header = getHeader(final);
 
@@ -1678,6 +1707,7 @@ Block Aggregator::prepareBlockAndFill(
     {
         key_columns[i] = header.safeGetByPosition(i).type->createColumn();
         key_columns[i]->reserve(rows);
+        new_key_sizes.push_back(key_sizes[i]);
     }
 
     for (size_t i = 0; i < params.aggregates_size; ++i)
@@ -1712,7 +1742,7 @@ Block Aggregator::prepareBlockAndFill(
         }
     }
 
-    filler(key_columns, aggregate_columns_data, final_aggregate_columns, final);
+    filler(new_key_sizes, key_columns, aggregate_columns_data, final_aggregate_columns, final);
 
     Block res = header.cloneEmpty();
 
@@ -1758,6 +1788,8 @@ BlocksList Aggregator::prepareBlocksAndFill(
     std::vector<AggregateColumnsData> aggregate_columns_data_vec;
     std::vector<MutableColumns> aggregate_columns_vec;
     std::vector<MutableColumns> final_aggregate_columns_vec;
+    Sizes new_key_sizes;
+    new_key_sizes.reserve(key_sizes.size());
 
     size_t block_rows = params.max_block_size;
 
@@ -1782,6 +1814,7 @@ BlocksList Aggregator::prepareBlocksAndFill(
         {
             key_columns[i] = header.safeGetByPosition(i).type->createColumn();
             key_columns[i]->reserve(block_rows);
+            new_key_sizes.push_back(key_sizes[i]);
         }
 
         for (size_t i = 0; i < params.aggregates_size; ++i)
@@ -1817,7 +1850,7 @@ BlocksList Aggregator::prepareBlocksAndFill(
         }
     }
 
-    filler(key_columns_vec, aggregate_columns_data_vec, final_aggregate_columns_vec, final);
+    filler(new_key_sizes, key_columns_vec, aggregate_columns_data_vec, final_aggregate_columns_vec, final);
 
     BlocksList res_list;
     block_rows = params.max_block_size;
@@ -1870,6 +1903,7 @@ BlocksList Aggregator::prepareBlocksAndFillWithoutKey(AggregatedDataVariants & d
     size_t rows = 1;
 
     auto filler = [&data_variants, this](
+                      const Sizes &,
                       std::vector<MutableColumns> &,
                       std::vector<AggregateColumnsData> & aggregate_columns_vec,
                       std::vector<MutableColumns> & final_aggregate_columns_vec,
@@ -1914,14 +1948,15 @@ BlocksList Aggregator::prepareBlocksAndFillSingleLevel(
     bool enable_convert_key_optimization) const
 {
     size_t rows = data_variants.size();
-#define M(NAME, skip_serialize_key)                                                                  \
+#define M(NAME, skip_convert_key)                                                                    \
     case AggregationMethodType(NAME):                                                                \
     {                                                                                                \
         auto & tmp_method = *ToAggregationMethodPtr(NAME, data_variants.aggregation_method_impl);    \
         auto & tmp_data = ToAggregationMethodPtr(NAME, data_variants.aggregation_method_impl)->data; \
-        convertToBlocksImpl<decltype(tmp_method), decltype(tmp_data), skip_serialize_key>(           \
+        convertToBlocksImpl<decltype(tmp_method), decltype(tmp_data), skip_convert_key>(             \
             tmp_method,                                                                              \
             tmp_data,                                                                                \
+            key_sizes,                                                                               \
             key_columns_vec,                                                                         \
             aggregate_columns_vec,                                                                   \
             final_aggregate_columns_vec,                                                             \
@@ -1930,11 +1965,12 @@ BlocksList Aggregator::prepareBlocksAndFillSingleLevel(
         break;                                                                                       \
     }
 
-#define M_skip_serialize_key(NAME) M(NAME, true)
-#define M_serialize_key(NAME) M(NAME, false)
+#define M_skip_convert_key(NAME) M(NAME, true)
+#define M_convert_key(NAME) M(NAME, false)
 
 #define FILLER_DEFINE(name, M_tmp)                                                                            \
     auto filler_##name = [&data_variants, this](                                                              \
+                             const Sizes & key_sizes,                                                         \
                              std::vector<MutableColumns> & key_columns_vec,                                   \
                              std::vector<AggregateColumnsData> & aggregate_columns_vec,                       \
                              std::vector<MutableColumns> & final_aggregate_columns_vec,                       \
@@ -1947,12 +1983,12 @@ BlocksList Aggregator::prepareBlocksAndFillSingleLevel(
         }                                                                                                     \
     }
 
-    FILLER_DEFINE(serialize_key, M_serialize_key);
-    FILLER_DEFINE(skip_serialize_key, M_skip_serialize_key);
+    FILLER_DEFINE(convert_key, M_convert_key);
+    FILLER_DEFINE(skip_convert_key, M_skip_convert_key);
 
 #undef M
-#undef M_skip_serialize_key
-#undef M_serialize_key
+#undef M_skip_convert_key
+#undef M_convert_key
 #undef FILLER_DEFINE
 
     std::unordered_map<String, String> key_ref_agg_func
@@ -1966,11 +2002,11 @@ BlocksList Aggregator::prepareBlocksAndFillSingleLevel(
             data_variants,
             final,
             rows,
-            filler_skip_serialize_key,
+            filler_skip_convert_key,
             convert_key_size,
             key_ref_agg_func);
     }
-    return prepareBlocksAndFill(data_variants, final, rows, filler_serialize_key, convert_key_size, key_ref_agg_func);
+    return prepareBlocksAndFill(data_variants, final, rows, filler_convert_key, convert_key_size, key_ref_agg_func);
 }
 
 
