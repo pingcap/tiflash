@@ -93,9 +93,8 @@ private:
             std::scoped_lock lock(mutex);
             // Make sure the MVCC view will not be broken by the mismatch of delta index and snapshot:
             // - First, make sure the delta index do not place more deletes than `placed_deletes_limit`.
-            // - Second, make sure the snapshot includes all duplicated tuples in the delta index.  
-            if (placed_deletes <= placed_deletes_limit &&
-                delta_tree->lastDupTupleID() < static_cast<Int64>(rows_limit))  
+            // - Second, make sure the snapshot includes all duplicated tuples in the delta index.
+            if (placed_deletes <= placed_deletes_limit && delta_tree->lastDupTupleID() < static_cast<Int64>(rows_limit))
             {
                 delta_tree_copy = delta_tree;
                 placed_rows_copy = placed_rows;

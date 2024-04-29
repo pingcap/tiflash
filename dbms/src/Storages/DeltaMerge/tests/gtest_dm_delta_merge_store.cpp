@@ -3842,12 +3842,13 @@ void DeltaMergeStoreRWTest::dupHandleVersionAndDeltaIndexAdvancedThanSnapshot()
         return delta_snap->getSharedDeltaIndex()->tryClone(delta_snap->getRows(), delta_snap->getDeletes());
     };
 
-    auto check_delta_index = [](DeltaIndexPtr delta_index, size_t expect_rows, size_t expect_deletes, Int64 expect_last_dup_tuple_id) {
-        auto [placed_rows, placed_deletes] = delta_index->getPlacedStatus();
-        ASSERT_EQ(placed_rows, expect_rows);
-        ASSERT_EQ(placed_deletes, expect_deletes);
-        ASSERT_EQ(delta_index->getDeltaTree()->lastDupTupleID(), expect_last_dup_tuple_id);
-    };
+    auto check_delta_index
+        = [](DeltaIndexPtr delta_index, size_t expect_rows, size_t expect_deletes, Int64 expect_last_dup_tuple_id) {
+              auto [placed_rows, placed_deletes] = delta_index->getPlacedStatus();
+              ASSERT_EQ(placed_rows, expect_rows);
+              ASSERT_EQ(placed_deletes, expect_deletes);
+              ASSERT_EQ(delta_index->getDeltaTree()->lastDupTupleID(), expect_last_dup_tuple_id);
+          };
 
     auto ensure_place = [&](SegmentReadTaskPtr seg_read_task) {
         auto pk_ver_col_defs = std::make_shared<ColumnDefines>(
@@ -3934,11 +3935,11 @@ void DeltaMergeStoreRWTest::dupHandleVersionAndDeltaIndexAdvancedThanSnapshot()
         check_delta_index(cloned_delta_index, 20, 0, 19);
         auto [placed_delta_index, fully_indexed] = ensure_place(seg_read_task);
         ASSERT_TRUE(fully_indexed);
-        check_delta_index(placed_delta_index, 30, 0, 19);   
+        check_delta_index(placed_delta_index, 30, 0, 19);
         auto count = count_rows(stream);
         ASSERT_EQ(count, 128);
     }
-    
+
     {
         write_block(75, 85, 2);
         auto stream = create_stream();
