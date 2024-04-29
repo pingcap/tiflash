@@ -133,7 +133,7 @@ public:
             Names aggregation_keys;
             TiDB::TiDBCollators collators;
             std::unordered_set<String> agg_key_set;
-            std::unordered_map<String, String> key_from_agg_func;
+            std::unordered_map<String, String> key_ref_agg_func;
             analyzer.buildAggFuncs(agg_tipb, before_agg_actions, aggregate_desc, aggregated_columns);
             analyzer.buildAggGroupBy(
                 agg_tipb.group_by(),
@@ -142,7 +142,7 @@ public:
                 aggregated_columns,
                 aggregation_keys,
                 agg_key_set,
-                key_from_agg_func,
+                key_ref_agg_func,
                 /*collation sensitive*/ true,
                 collators);
 
@@ -163,7 +163,7 @@ public:
                 /*before_agg_streams_size*/ 1,
                 /*agg_streams_size*/ 1,
                 aggregation_keys,
-                key_from_agg_func,
+                key_ref_agg_func,
                 collators,
                 aggregate_desc,
                 /*is_final_agg*/ true,

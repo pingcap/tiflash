@@ -574,7 +574,7 @@ void DAGExpressionAnalyzer::buildAggGroupBy(
     NamesAndTypes & aggregated_columns,
     Names & aggregation_keys,
     std::unordered_set<String> & agg_key_set,
-    std::unordered_map<String, String> & key_from_agg_func,
+    std::unordered_map<String, String> & key_ref_agg_func,
     bool group_by_collation_sensitive,
     TiDB::TiDBCollators & collators)
 {
@@ -627,7 +627,7 @@ void DAGExpressionAnalyzer::buildAggGroupBy(
                         context);
                     agg_func_name = aggregate_descriptions.back().column_name;
                 }
-                key_from_agg_func.insert({name, agg_func_name});
+                key_ref_agg_func.insert({name, agg_func_name});
             }
             else
             {
@@ -690,7 +690,7 @@ std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions, ExpressionActionsP
     Names aggregation_keys;
     TiDB::TiDBCollators collators;
     std::unordered_set<String> agg_key_set;
-    std::unordered_map<String, String> key_from_agg_func;
+    std::unordered_map<String, String> key_ref_agg_func;
     buildAggFuncs(agg, step.actions, aggregate_descriptions, aggregated_columns);
     buildAggGroupBy(
         agg.group_by(),
@@ -699,7 +699,7 @@ std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions, ExpressionActionsP
         aggregated_columns,
         aggregation_keys,
         agg_key_set,
-        key_from_agg_func,
+        key_ref_agg_func,
         group_by_collation_sensitive,
         collators);
     // set required output for agg funcs's arguments and group by keys.
@@ -723,7 +723,7 @@ std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions, ExpressionActionsP
     for (const auto & column : getCurrentInputColumns())
         after_agg_step.required_output.push_back(column.name);
 
-    return {aggregation_keys, collators, aggregate_descriptions, before_agg, key_from_agg_func};
+    return {aggregation_keys, collators, aggregate_descriptions, before_agg, key_ref_agg_func};
 }
 
 bool isWindowFunctionsValid(const tipb::Window & window)

@@ -38,7 +38,7 @@ public:
         const ExpressionActionsPtr & before_agg_actions_,
         const Names & aggregation_keys_,
         const TiDB::TiDBCollators & aggregation_collators_,
-        const std::unordered_map<String, String> & key_from_agg_func_,
+        const std::unordered_map<String, String> & key_ref_agg_func_,
         bool is_final_agg_,
         const AggregateDescriptions & aggregate_descriptions_,
         const AggregateContextPtr & aggregate_context_)
@@ -46,7 +46,7 @@ public:
         , before_agg_actions(before_agg_actions_)
         , aggregation_keys(aggregation_keys_)
         , aggregation_collators(aggregation_collators_)
-        , key_from_agg_func(key_from_agg_func_)
+        , key_ref_agg_func(key_ref_agg_func_)
         , is_final_agg(is_final_agg_)
         , aggregate_descriptions(aggregate_descriptions_)
         , aggregate_context(aggregate_context_)
@@ -71,7 +71,7 @@ private:
     ExpressionActionsPtr before_agg_actions;
     Names aggregation_keys;
     TiDB::TiDBCollators aggregation_collators;
-    std::unordered_map<String, String> key_from_agg_func;
+    std::unordered_map<String, String> key_ref_agg_func;
     bool is_final_agg;
     AggregateDescriptions aggregate_descriptions;
     AggregateContextPtr aggregate_context;

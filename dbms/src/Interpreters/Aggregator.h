@@ -1043,7 +1043,7 @@ public:
 
         /// What to count.
         ColumnNumbers keys;
-        std::unordered_map<String, String> key_from_agg_func;
+        std::unordered_map<String, String> key_ref_agg_func;
         AggregateDescriptions aggregates;
         size_t keys_size;
         size_t aggregates_size;
@@ -1059,7 +1059,7 @@ public:
         Params(
             const Block & src_header_,
             const ColumnNumbers & keys_,
-            const std::unordered_map<String, String> & key_from_agg_func_,
+            const std::unordered_map<String, String> & key_ref_agg_func_,
             const AggregateDescriptions & aggregates_,
             size_t group_by_two_level_threshold_,
             size_t group_by_two_level_threshold_bytes_,
@@ -1070,7 +1070,7 @@ public:
             const TiDB::TiDBCollators & collators_ = TiDB::dummy_collators)
             : src_header(src_header_)
             , keys(keys_)
-            , key_from_agg_func(key_from_agg_func_)
+            , key_ref_agg_func(key_ref_agg_func_)
             , aggregates(aggregates_)
             , keys_size(keys.size())
             , aggregates_size(aggregates.size())
@@ -1087,7 +1087,7 @@ public:
         Params(
             const Block & intermediate_header_,
             const ColumnNumbers & keys_,
-            const std::unordered_map<String, String> & key_from_agg_func_,
+            const std::unordered_map<String, String> & key_ref_agg_func_,
             const AggregateDescriptions & aggregates_,
             const SpillConfig & spill_config,
             UInt64 max_block_size_,
@@ -1095,7 +1095,7 @@ public:
             : Params(
                 Block(),
                 keys_,
-                key_from_agg_func_,
+                key_ref_agg_func_,
                 aggregates_,
                 0,
                 0,
@@ -1393,21 +1393,21 @@ protected:
 
     template <typename Filler>
     Block prepareBlockAndFill(
-            AggregatedDataVariants & data_variants,
-            bool final,
-            size_t rows,
-            Filler && filler,
-            size_t serialize_key_size,
-            const std::unordered_map<String, String> & key_ref_agg_func) const;
+        AggregatedDataVariants & data_variants,
+        bool final,
+        size_t rows,
+        Filler && filler,
+        size_t convert_key_size,
+        const std::unordered_map<String, String> & key_ref_agg_func) const;
 
     template <typename Filler>
     BlocksList prepareBlocksAndFill(
-            AggregatedDataVariants & data_variants,
-            bool final,
-            size_t rows,
-            Filler && filler,
-            size_t serialize_key_size,
-            const std::unordered_map<String, String> & key_ref_agg_func) const;
+        AggregatedDataVariants & data_variants,
+        bool final,
+        size_t rows,
+        Filler && filler,
+        size_t convert_key_size,
+        const std::unordered_map<String, String> & key_ref_agg_func) const;
 
     template <typename Method>
     Block convertOneBucketToBlock(

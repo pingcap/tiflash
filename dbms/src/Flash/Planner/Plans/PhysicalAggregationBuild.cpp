@@ -60,7 +60,7 @@ void PhysicalAggregationBuild::buildPipelineExecGroupImpl(
         concurrency,
         1,
         aggregation_keys,
-        key_from_agg_func,
+        key_ref_agg_func,
         aggregation_collators,
         aggregate_descriptions,
         is_final_agg,

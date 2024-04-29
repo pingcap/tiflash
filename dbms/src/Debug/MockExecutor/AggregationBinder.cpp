@@ -14,16 +14,15 @@
 
 #include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <AggregateFunctions/AggregateFunctionUniq.h>
+#include <Common/Logger.h>
 #include <Debug/MockExecutor/AggregationBinder.h>
 #include <Debug/MockExecutor/AstToPB.h>
 #include <Debug/MockExecutor/ExchangeReceiverBinder.h>
 #include <Debug/MockExecutor/ExchangeSenderBinder.h>
 #include <Debug/MockExecutor/FuncSigMap.h>
 #include <Parsers/ASTIdentifier.h>
-#include <fmt/core.h>
-
-#include <Common/Logger.h>
 #include <common/logger_useful.h>
+#include <fmt/core.h>
 
 namespace DB::mock
 {

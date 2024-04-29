@@ -93,7 +93,7 @@ struct AnalysisResult
     AggregateDescriptions aggregate_descriptions;
     bool is_final_agg = false;
     bool enable_fine_grained_shuffle_agg = false;
-    std::unordered_map<String, String> key_from_agg_func;
+    std::unordered_map<String, String> key_ref_agg_func;
 };
 
 AnalysisResult analyzeExpressions(
@@ -124,7 +124,7 @@ AnalysisResult analyzeExpressions(
             res.aggregation_collators,
             res.aggregate_descriptions,
             res.before_aggregation,
-            res.key_from_agg_func)
+            res.key_ref_agg_func)
             = analyzer.appendAggregation(
                 chain,
                 query_block.aggregation->aggregation(),
@@ -500,7 +500,7 @@ void DAGQueryBlockInterpreter::executeAggregation(
     const Names & key_names,
     const TiDB::TiDBCollators & collators,
     AggregateDescriptions & aggregate_descriptions,
-    const std::unordered_map<String, String> & key_from_agg_func,
+    const std::unordered_map<String, String> & key_ref_agg_func,
     bool is_final_agg,
     bool enable_fine_grained_shuffle)
 {
@@ -525,7 +525,7 @@ void DAGQueryBlockInterpreter::executeAggregation(
         pipeline.streams.size(),
         enable_fine_grained_shuffle ? pipeline.streams.size() : 1,
         key_names,
-        key_from_agg_func,
+        key_ref_agg_func,
         collators,
         aggregate_descriptions,
         is_final_agg,
@@ -978,7 +978,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
             res.aggregation_keys,
             res.aggregation_collators,
             res.aggregate_descriptions,
-            res.key_from_agg_func,
+            res.key_ref_agg_func,
             res.is_final_agg,
             res.enable_fine_grained_shuffle_agg);
     }
