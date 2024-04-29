@@ -1058,7 +1058,7 @@ DT_CLASS::DeltaTree(const DT_CLASS::Self & o)
     , num_inserts(o.num_inserts)
     , num_deletes(o.num_deletes)
     , num_entries(o.num_entries)
-    , last_dup_tuple_id(o.last_dup_tuple_id)
+    , max_dup_tuple_id(o.max_dup_tuple_id)
     , allocator(std::make_unique<Allocator>())
 {
     // If exception is thrown before clear copying_nodes, all nodes will be destroyed.
