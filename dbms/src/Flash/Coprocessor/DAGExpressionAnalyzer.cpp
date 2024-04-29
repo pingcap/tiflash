@@ -588,6 +588,7 @@ void DAGExpressionAnalyzer::buildAggGroupBy(
             /// need double check this assumption when we support agg with collation
             aggregation_keys.push_back(name);
             agg_key_set.emplace(name);
+            collators.push_back(nullptr);
         }
         /// when group_by_collation_sensitive is true, TiFlash will do the aggregation with collation
         /// info, since the aggregation in TiFlash is actually the partial stage, and TiDB always do
@@ -601,7 +602,7 @@ void DAGExpressionAnalyzer::buildAggGroupBy(
             if (removeNullable(type)->isString())
                 collator = getCollatorFromExpr(expr);
             if (!duplicated_key)
-                collators.push_back(collator);
+                collators.back() = collator;
             if (collator != nullptr)
             {
                 auto [first_row_name, first_row_type] = findFirstRow(aggregate_descriptions, name);
