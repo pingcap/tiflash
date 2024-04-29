@@ -633,7 +633,6 @@ try
             WRAP_FOR_AGG_PARTIAL_BLOCK_END
         }
     }
-    int idx = 0;
     for (auto collation_id : {0, static_cast<int>(TiDB::ITiDBCollator::BINARY)})
     {
         // 0: no collation
