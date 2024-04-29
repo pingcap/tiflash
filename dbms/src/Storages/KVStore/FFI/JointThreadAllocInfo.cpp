@@ -1,0 +1,176 @@
+// Copyright 2024 PingCAP, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+#include <Storages/KVStore/FFI/JointThreadAllocInfo.h>
+#include <Storages/KVStore/FFI/ProxyFFI.h>
+#include <Common/TiFlashMetrics.h>
+#include <unordered_set>
+#include <thread>
+#include <mutex>
+
+namespace DB {
+
+JointThreadInfoJeallocMap::JointThreadInfoJeallocMap()
+{
+    using namespace std::chrono_literals;
+    monitoring_thread = new std::thread([&]() {
+        while (true)
+        {
+            std::unique_lock l(monitoring_mut);
+            monitoring_cv.wait_for(l, 5000ms, [&]() { return is_terminated; });
+            if (is_terminated)
+                return;
+            recordThreadAllocInfo();
+        }
+    });
+}
+
+JointThreadInfoJeallocMap::~JointThreadInfoJeallocMap()
+{
+    stopThreadAllocInfo();
+}
+
+static std::string getThreadNameAggPrefix(const std::string_view & s)
+{
+    if (auto pos = s.find_last_of('-'); pos != std::string::npos)
+    {
+        return std::string(s.begin(), s.begin() + pos);
+    }
+    return std::string(s.begin(), s.end());
+}
+
+void JointThreadInfoJeallocMap::reportThreadAllocInfo(std::string_view thdname, ReportThreadAllocateInfoType type, uint64_t value)
+{
+    // Many threads have empty name, better just not handle.
+    if (thdname.empty())
+        return;
+    std::string tname(thdname.begin(), thdname.end());
+    switch (type)
+    {
+    case ReportThreadAllocateInfoType::Reset:
+    {
+        auto & metrics = TiFlashMetrics::instance();
+        metrics.registerProxyThreadMemory(getThreadNameAggPrefix(tname));
+        {
+            std::unique_lock l(memory_allocation_mut);
+            memory_allocation_map.insert_or_assign(tname, ThreadInfoJealloc());
+        }
+        break;
+    }
+    case ReportThreadAllocateInfoType::Remove:
+    {
+        std::unique_lock l(memory_allocation_mut);
+        memory_allocation_map.erase(tname);
+        break;
+    }
+    case ReportThreadAllocateInfoType::AllocPtr:
+    {
+        std::shared_lock l(memory_allocation_mut);
+        if (value == 0)
+            return;
+        auto it = memory_allocation_map.find(tname);
+        if unlikely (it == memory_allocation_map.end())
+        {
+            return;
+        }
+        it->second.allocated_ptr = value;
+        break;
+    }
+    case ReportThreadAllocateInfoType::DeallocPtr:
+    {
+        std::shared_lock l(memory_allocation_mut);
+        if (value == 0)
+            return;
+        auto it = memory_allocation_map.find(tname);
+        if unlikely (it == memory_allocation_map.end())
+        {
+            return;
+        }
+        it->second.deallocated_ptr = value;
+        break;
+    }
+    }
+}
+
+static const std::unordered_set<std::string> RECORD_WHITE_LIST_THREAD_PREFIX = {"ReadIndexWkr"};
+
+void JointThreadInfoJeallocMap::recordThreadAllocInfo()
+{
+    std::shared_lock l(memory_allocation_mut);
+    std::unordered_map<std::string, uint64_t> agg_allocate;
+    std::unordered_map<std::string, uint64_t> agg_deallocate;
+    for (const auto & [k, v] : memory_allocation_map)
+    {
+        auto agg_thread_name = getThreadNameAggPrefix(std::string_view(k.data(), k.size()));
+        // Some thread may have shorter lifetime, we can't use this timed task here to upgrade.
+        if (RECORD_WHITE_LIST_THREAD_PREFIX.contains(agg_thread_name))
+        {
+            {
+                auto [it, ok] = agg_allocate.emplace(agg_thread_name, 0);
+                it->second += v.allocated();
+            }
+            {
+                auto [it, ok] = agg_deallocate.emplace(agg_thread_name, 0);
+                it->second += v.deallocated();
+            }
+        }
+    }
+    for (const auto & [k, v] : agg_allocate)
+    {
+        auto & tiflash_metrics = TiFlashMetrics::instance();
+        tiflash_metrics.setProxyThreadMemory("alloc_" + k, v);
+    }
+    for (const auto & [k, v] : agg_deallocate)
+    {
+        auto & tiflash_metrics = TiFlashMetrics::instance();
+        tiflash_metrics.setProxyThreadMemory("dealloc_" + k, v);
+    }
+}
+
+void JointThreadInfoJeallocMap::reportThreadAllocBatch(std::string_view name, ReportThreadAllocateInfoBatch data)
+{
+    // Many threads have empty name, better just not handle.
+    if (name.empty())
+        return;
+    // TODO(jemalloc-trace) Could be costy.
+    auto k = getThreadNameAggPrefix(name);
+    int64_t v = 0;
+    if (data.alloc > data.dealloc)
+    {
+        v = data.alloc - data.dealloc;
+    }
+    else
+    {
+        v = -(data.dealloc - data.alloc);
+    }
+    auto & tiflash_metrics = TiFlashMetrics::instance();
+    tiflash_metrics.setProxyThreadMemory(k, v);
+}
+
+void JointThreadInfoJeallocMap::stopThreadAllocInfo()
+{
+    {
+        std::unique_lock lk(monitoring_mut);
+        if (monitoring_thread == nullptr)
+            return;
+        is_terminated = true;
+        monitoring_cv.notify_all();
+    }
+    LOG_INFO(DB::Logger::get(), "JointThreadInfoJeallocMap shutdown, wait thread alloc monitor join");
+    monitoring_thread->join();
+    delete monitoring_thread;
+    monitoring_thread = nullptr;
+}
+
+}
