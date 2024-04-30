@@ -120,15 +120,15 @@ size_t DeltaValueReader::readRows(
     //
     // So here, we should filter out those out-of-range rows.
 
-    auto mem_table_rows_offset = delta_snap->getMemTableSetRowsOffset();
-    auto total_delta_rows = delta_snap->getRows();
+    const auto mem_table_rows_offset = delta_snap->getMemTableSetRowsOffset();
+    const auto total_delta_rows = delta_snap->getRows();
 
-    auto persisted_files_start = std::min(offset, mem_table_rows_offset);
-    auto persisted_files_end = std::min(offset + limit, mem_table_rows_offset);
-    auto mem_table_start = offset <= mem_table_rows_offset
+    const auto persisted_files_start = std::min(offset, mem_table_rows_offset);
+    const auto persisted_files_end = std::min(offset + limit, mem_table_rows_offset);
+    const auto mem_table_start = offset <= mem_table_rows_offset
         ? 0
         : std::min(offset - mem_table_rows_offset, total_delta_rows - mem_table_rows_offset);
-    auto mem_table_end = offset + limit <= mem_table_rows_offset
+    const auto mem_table_end = offset + limit <= mem_table_rows_offset
         ? 0
         : std::min(offset + limit - mem_table_rows_offset, total_delta_rows - mem_table_rows_offset);
 
@@ -146,8 +146,12 @@ size_t DeltaValueReader::readRows(
     }
     if (mem_table_start < mem_table_end)
     {
-        actual_read += mem_table_reader
-                           ->readRows(output_cols, mem_table_start, mem_table_end - mem_table_start, range, row_ids);
+        actual_read += mem_table_reader->readRows( //
+            output_cols,
+            mem_table_start,
+            mem_table_end - mem_table_start,
+            range,
+            row_ids);
     }
 
     if (row_ids != nullptr)
@@ -212,13 +216,12 @@ BlockOrDeletes DeltaValueReader::getPlaceItems(
 
 bool DeltaValueReader::shouldPlace(
     const DMContext & context,
-    DeltaIndexPtr my_delta_index,
+    const size_t placed_rows,
+    const size_t placed_delete_ranges,
     const RowKeyRange & segment_range_,
     const RowKeyRange & relevant_range,
     UInt64 start_ts)
 {
-    auto [placed_rows, placed_delete_ranges] = my_delta_index->getPlacedStatus();
-
     // The placed_rows, placed_delete_range already contains the data in delta_snap
     if (placed_rows >= delta_snap->getRows() && placed_delete_ranges == delta_snap->getDeletes())
         return false;

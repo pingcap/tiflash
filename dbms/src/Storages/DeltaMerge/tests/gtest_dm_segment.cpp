@@ -19,6 +19,8 @@
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
+#include <Storages/DeltaMerge/Range.h>
+#include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/Segment_fwd.h>
 #include <Storages/DeltaMerge/StoragePool/GlobalPageIdAllocator.h>
@@ -49,9 +51,7 @@ extern const Metric DT_SnapshotOfDeltaMerge;
 extern const Metric DT_SnapshotOfPlaceIndex;
 } // namespace CurrentMetrics
 
-namespace DB
-{
-namespace DM
+namespace DB::DM
 {
 extern DMFilePtr writeIntoNewDMFile(
     DMContext & dm_context, //
@@ -59,7 +59,9 @@ extern DMFilePtr writeIntoNewDMFile(
     const BlockInputStreamPtr & input_stream,
     UInt64 file_id,
     const String & parent_path);
-namespace tests
+}
+
+namespace DB::DM::tests
 {
 class SegmentTest : public DB::base::TiFlashStorageTestBasic
 {
@@ -431,6 +433,211 @@ try
             std::numeric_limits<UInt64>::max(),
             DEFAULT_BLOCK_SIZE);
         ASSERT_INPUTSTREAM_NROWS(in, 100);
+    }
+}
+CATCH
+
+TEST_F(SegmentTest, ReadWithMoreAdvacedDeltaIndex2)
+try
+{
+    auto write_rows = [&](size_t offset, size_t rows) {
+        Block block = DMTestEnv::prepareSimpleWriteBlock(offset, offset + rows, false);
+        // write to segment
+        segment->write(dmContext(), block);
+    };
+
+    // Thread A
+    write_rows(0, 100);
+    ASSERT_INPUTSTREAM_NROWS(
+        segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)}),
+        100);
+    auto snap = segment->createSnapshot(dmContext(), false, CurrentMetrics::DT_SnapshotOfRead);
+
+    {
+        // check segment
+        segment->check(dmContext(), "test");
+    }
+
+    // Thread B
+    write_rows(0, 100);
+    ASSERT_INPUTSTREAM_NROWS(
+        segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)}),
+        100);
+
+    // Thread A
+    {
+        auto in = segment->getInputStreamModeNormal(
+            dmContext(),
+            *tableColumns(),
+            snap,
+            {RowKeyRange::newAll(false, 1)},
+            {},
+            std::numeric_limits<UInt64>::max(),
+            DEFAULT_BLOCK_SIZE);
+        ASSERT_INPUTSTREAM_NROWS(in, 100);
+    }
+}
+CATCH
+
+TEST_F(SegmentTest, ReadWithMoreAdvacedDeltaIndexWithDeleteRange01)
+try
+{
+    auto write_rows = [&](size_t offset, size_t rows) {
+        Block block = DMTestEnv::prepareSimpleWriteBlock(offset, offset + rows, false);
+        // write to segment
+        segment->write(dmContext(), block);
+    };
+
+    // Thread A write [0, 100) && [100, 200)
+    write_rows(0, 100);
+    write_rows(100, 100);
+    ASSERT_INPUTSTREAM_NROWS(
+        segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)}),
+        200);
+    // check segment
+    segment->check(dmContext(), "test");
+    auto snap_a = segment->createSnapshot(dmContext(), false, CurrentMetrics::DT_SnapshotOfRead);
+
+    // Thread B delete range [0, 50)
+    RowKeyRange range = RowKeyRange::fromHandleRange(HandleRange(0, 50));
+    segment->write(dmContext(), range);
+    LOG_INFO(Logger::get(), "Thread B read");
+    ASSERT_INPUTSTREAM_NROWS(
+        segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)}),
+        150);
+
+    {
+        // tryClone will return an empty delta-index because `shared_delta_index.placed_deletes != delta->getDeletes()`
+        auto my_delta_index
+            = snap_a->delta->getSharedDeltaIndex()->tryClone(snap_a->delta->getRows(), snap_a->delta->getDeletes());
+        auto [my_placed_rows, my_placed_deletes] = my_delta_index->getPlacedStatus();
+        ASSERT_EQ(my_placed_rows, 0);
+        ASSERT_EQ(my_placed_deletes, 0);
+    }
+
+    // Thread A read [0, 200)
+    {
+        LOG_INFO(Logger::get(), "Thread A read with snap_a");
+        auto in = segment->getInputStreamModeNormal(
+            dmContext(),
+            *tableColumns(),
+            snap_a,
+            {RowKeyRange::newAll(false, 1)},
+            {},
+            std::numeric_limits<UInt64>::max(),
+            DEFAULT_BLOCK_SIZE);
+        ASSERT_INPUTSTREAM_NROWS(in, 200);
+    }
+}
+CATCH
+
+
+TEST_F(SegmentTest, ReadWithMoreAdvacedDeltaIndexWithDeleteRange02)
+try
+{
+    auto write_rows = [&](size_t offset, size_t rows) {
+        Block block = DMTestEnv::prepareSimpleWriteBlock(offset, offset + rows, false);
+        // write to segment
+        segment->write(dmContext(), block);
+    };
+
+    // Thread A write [0, 100)
+    write_rows(0, 100);
+    ASSERT_INPUTSTREAM_NROWS(
+        segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)}),
+        100);
+    // check segment
+    segment->check(dmContext(), "test");
+    auto snap_a = segment->createSnapshot(dmContext(), false, CurrentMetrics::DT_SnapshotOfRead);
+
+    // Thread B write [100, 200) && delete range [0, 50)
+    write_rows(100, 100);
+    RowKeyRange range = RowKeyRange::fromHandleRange(HandleRange(0, 50));
+    segment->write(dmContext(), range);
+    LOG_INFO(Logger::get(), "Thread B read");
+    ASSERT_INPUTSTREAM_NROWS(
+        segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)}),
+        150);
+
+    // Thread A
+    {
+        LOG_INFO(Logger::get(), "Thread A read with snap_a");
+        auto in = segment->getInputStreamModeNormal(
+            dmContext(),
+            *tableColumns(),
+            snap_a,
+            {RowKeyRange::newAll(false, 1)},
+            {},
+            std::numeric_limits<UInt64>::max(),
+            DEFAULT_BLOCK_SIZE);
+        ASSERT_INPUTSTREAM_NROWS(in, 100);
+    }
+}
+CATCH
+
+TEST_F(SegmentTest, ReadWithMoreAdvacedDeltaIndexComplicated)
+try
+{
+    // Test the case that reading rows with an advance DeltaIndex
+    size_t offset = 0;
+    auto write_rows = [&](size_t rows, bool flush) {
+        Block block = DMTestEnv::prepareSimpleWriteBlock(offset, offset + rows, false);
+        offset += rows;
+        // write to segment
+        segment->write(dmContext(), block, flush);
+    };
+
+    // Thread C
+    write_rows(100, false);
+    write_rows(100, false);
+    ASSERT_INPUTSTREAM_NROWS(
+        segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)}),
+        200);
+    auto snap_c = segment->createSnapshot(dmContext(), false, CurrentMetrics::DT_SnapshotOfRead);
+    segment->check(dmContext(), "test");
+
+    // Thread A write 100 rows to persisted_files and 100 rows to mem_tables
+    write_rows(100, true);
+    write_rows(100, false);
+    ASSERT_INPUTSTREAM_NROWS(
+        segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)}),
+        400);
+    auto snap_a = segment->createSnapshot(dmContext(), false, CurrentMetrics::DT_SnapshotOfRead);
+    segment->check(dmContext(), "test");
+
+    // Thread B write 100 rows to mem_tables
+    write_rows(100, false);
+    LOG_INFO(Logger::get(), "Thread B read");
+    ASSERT_INPUTSTREAM_NROWS(
+        segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)}),
+        500);
+    segment->check(dmContext(), "test");
+
+    // Thread A
+    {
+        LOG_INFO(Logger::get(), "Thread A read with snap_a");
+        auto in = segment->getInputStreamModeNormal(
+            dmContext(),
+            *tableColumns(),
+            snap_a,
+            {RowKeyRange::newAll(false, 1)},
+            {},
+            std::numeric_limits<UInt64>::max(),
+            DEFAULT_BLOCK_SIZE);
+        ASSERT_INPUTSTREAM_NROWS(in, 400);
+    }
+    // Thread C
+    {
+        LOG_INFO(Logger::get(), "Thread C read with snap_c");
+        auto in = segment->getInputStreamModeNormal(
+            dmContext(),
+            *tableColumns(),
+            snap_c,
+            {RowKeyRange::newAll(false, 1)},
+            {},
+            std::numeric_limits<UInt64>::max(),
+            DEFAULT_BLOCK_SIZE);
+        ASSERT_INPUTSTREAM_NROWS(in, 200);
     }
 }
 CATCH
@@ -1747,6 +1954,4 @@ try
 }
 CATCH
 
-} // namespace tests
-} // namespace DM
-} // namespace DB
+} // namespace DB::DM::tests
