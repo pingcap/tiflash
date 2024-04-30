@@ -150,6 +150,7 @@ public:
     const ProxyConfigSummary & getProxyConfigSummay() const { return proxy_config_summary; }
     void reportThreadAllocInfo(std::string_view, ReportThreadAllocateInfoType type, uint64_t value);
     void reportThreadAllocBatch(std::string_view, ReportThreadAllocateInfoBatch data);
+    JointThreadInfoJeallocMapPtr getJointThreadInfoJeallocMap() const { return joint_memory_allocation_map; }
 
 public: // Region Management
     void restore(PathPool & path_pool, const TiFlashRaftProxyHelper *);

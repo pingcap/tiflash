@@ -1089,6 +1089,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->getSharedContextDisagg()->disaggregated_mode = disaggregated_mode;
     global_context->getSharedContextDisagg()->use_autoscaler = use_autoscaler;
 
+    // Must init this before KVStore.
+    global_context->initializeJointThreadInfoJeallocMap();
+
     /// Init File Provider
     if (proxy_conf.is_proxy_runnable)
     {

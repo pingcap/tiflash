@@ -68,7 +68,11 @@ KVStore::KVStore(Context & context)
 {
     // default config about compact-log: rows 40k, bytes 32MB, gap 200.
     LOG_INFO(log, "KVStore inited, eager_raft_log_gc_enabled={}", eager_raft_log_gc_enabled);
-    joint_memory_allocation_map = std::make_shared<JointThreadInfoJeallocMap>();
+    joint_memory_allocation_map = context.getJointThreadInfoJeallocMap();
+    if (joint_memory_allocation_map == nullptr)
+    {
+        LOG_WARNING(log, "JointThreadInfoJeallocMap is not inited from context");
+    }
 }
 
 void KVStore::restore(PathPool & path_pool, const TiFlashRaftProxyHelper * proxy_helper)

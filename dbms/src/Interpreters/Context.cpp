@@ -32,7 +32,6 @@
 #include <IO/BaseFile/fwd.h>
 #include <IO/Buffer/ReadBufferFromFile.h>
 #include <IO/FileProvider/FileProvider.h>
-#include <Interpreters/Context.h>
 #include <Interpreters/ISecurityManager.h>
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/QueryLog.h>
@@ -60,6 +59,7 @@
 #include <Storages/DeltaMerge/StoragePool/StoragePool.h>
 #include <Storages/IStorage.h>
 #include <Storages/KVStore/BackgroundService.h>
+#include <Storages/KVStore/FFI/JointThreadAllocInfo.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/MarkCache.h>
 #include <Storages/Page/PageConstants.h>
@@ -1751,6 +1751,18 @@ DM::GlobalStoragePoolPtr Context::getGlobalStoragePool() const
 {
     auto lock = getLock();
     return shared->global_storage_pool;
+}
+
+
+void Context::initializeJointThreadInfoJeallocMap()
+{
+    auto lock = getLock();
+    joint_memory_allocation_map = std::make_shared<JointThreadInfoJeallocMap>();
+}
+
+JointThreadInfoJeallocMapPtr Context::getJointThreadInfoJeallocMap() const
+{
+    return joint_memory_allocation_map;
 }
 
 /**
