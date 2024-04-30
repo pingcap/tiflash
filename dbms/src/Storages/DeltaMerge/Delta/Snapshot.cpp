@@ -98,13 +98,24 @@ size_t DeltaValueReader::readRows(MutableColumns & output_cols, size_t offset, s
     //
     // So here, we should filter out those out-of-range rows.
 
-    auto mem_table_rows_offset = delta_snap->getMemTableSetRowsOffset();
-    auto total_delta_rows = delta_snap->getRows();
+    const auto mem_table_rows_offset = delta_snap->getMemTableSetRowsOffset();
+    const auto total_delta_rows = delta_snap->getRows();
 
+<<<<<<< HEAD
     auto persisted_files_start = std::min(offset, mem_table_rows_offset);
     auto persisted_files_end = std::min(offset + limit, mem_table_rows_offset);
     auto mem_table_start = offset <= mem_table_rows_offset ? 0 : std::min(offset - mem_table_rows_offset, total_delta_rows - mem_table_rows_offset);
     auto mem_table_end = offset + limit <= mem_table_rows_offset ? 0 : std::min(offset + limit - mem_table_rows_offset, total_delta_rows - mem_table_rows_offset);
+=======
+    const auto persisted_files_start = std::min(offset, mem_table_rows_offset);
+    const auto persisted_files_end = std::min(offset + limit, mem_table_rows_offset);
+    const auto mem_table_start = offset <= mem_table_rows_offset
+        ? 0
+        : std::min(offset - mem_table_rows_offset, total_delta_rows - mem_table_rows_offset);
+    const auto mem_table_end = offset + limit <= mem_table_rows_offset
+        ? 0
+        : std::min(offset + limit - mem_table_rows_offset, total_delta_rows - mem_table_rows_offset);
+>>>>>>> 8e170090fa (Storages: Fix cloning delta index when there are duplicated tuples (#9000))
 
     size_t actual_read = 0;
     size_t persisted_read_rows = 0;
@@ -115,7 +126,16 @@ size_t DeltaValueReader::readRows(MutableColumns & output_cols, size_t offset, s
     }
     if (mem_table_start < mem_table_end)
     {
+<<<<<<< HEAD
         actual_read += mem_table_reader->readRows(output_cols, mem_table_start, mem_table_end - mem_table_start, range, row_ids);
+=======
+        actual_read += mem_table_reader->readRows( //
+            output_cols,
+            mem_table_start,
+            mem_table_end - mem_table_start,
+            range,
+            row_ids);
+>>>>>>> 8e170090fa (Storages: Fix cloning delta index when there are duplicated tuples (#9000))
     }
 
     if (row_ids != nullptr)
@@ -153,6 +173,7 @@ BlockOrDeletes DeltaValueReader::getPlaceItems(size_t rows_begin, size_t deletes
     return res;
 }
 
+<<<<<<< HEAD
 bool DeltaValueReader::shouldPlace(const DMContext & context,
                                    DeltaIndexPtr my_delta_index,
                                    const RowKeyRange & segment_range_,
@@ -162,6 +183,17 @@ bool DeltaValueReader::shouldPlace(const DMContext & context,
     auto [placed_rows, placed_delete_ranges] = my_delta_index->getPlacedStatus();
 
     // Already placed.
+=======
+bool DeltaValueReader::shouldPlace(
+    const DMContext & context,
+    const size_t placed_rows,
+    const size_t placed_delete_ranges,
+    const RowKeyRange & segment_range_,
+    const RowKeyRange & relevant_range,
+    UInt64 start_ts)
+{
+    // The placed_rows, placed_delete_range already contains the data in delta_snap
+>>>>>>> 8e170090fa (Storages: Fix cloning delta index when there are duplicated tuples (#9000))
     if (placed_rows >= delta_snap->getRows() && placed_delete_ranges == delta_snap->getDeletes())
         return false;
 
