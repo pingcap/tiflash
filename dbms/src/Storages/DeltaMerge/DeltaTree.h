@@ -825,6 +825,7 @@ private:
     size_t num_inserts = 0;
     size_t num_deletes = 0;
     size_t num_entries = 0;
+    Int64 max_dup_tuple_id = -1;
 
     std::unique_ptr<Allocator> allocator;
     size_t bytes = 0;
@@ -1039,6 +1040,8 @@ public:
     size_t numEntries() const { return num_entries; }
     size_t numInserts() const { return num_inserts; }
     size_t numDeletes() const { return num_deletes; }
+    Int64 maxDupTupleID() const { return max_dup_tuple_id; }
+    void setMaxDupTupleID(Int64 tuple_id) { max_dup_tuple_id = std::max(tuple_id, max_dup_tuple_id); }
 
     void addDelete(UInt64 rid);
     void addInsert(UInt64 rid, UInt64 tuple_id);
@@ -1055,6 +1058,7 @@ DT_CLASS::DeltaTree(const DT_CLASS::Self & o)
     , num_inserts(o.num_inserts)
     , num_deletes(o.num_deletes)
     , num_entries(o.num_entries)
+    , max_dup_tuple_id(o.max_dup_tuple_id)
     , allocator(std::make_unique<Allocator>())
 {
     // If exception is thrown before clear copying_nodes, all nodes will be destroyed.
