@@ -111,6 +111,7 @@ protected:
         auto & global_ctx = TiFlashTestEnv::getGlobalContext();
         global_ctx.tryReleaseWriteNodePageStorageForTest();
         global_ctx.initializeWriteNodePageStorageIfNeed(*path_pool);
+        global_ctx.initializeJointThreadInfoJeallocMap();
     }
     KVStore & reloadKVSFromDisk(bool with_reset = true)
     {
