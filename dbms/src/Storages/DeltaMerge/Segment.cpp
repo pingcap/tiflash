@@ -2485,7 +2485,8 @@ std::pair<DeltaIndexPtr, bool> Segment::ensurePlace(
 {
     const auto & stable_snap = segment_snap->stable;
     auto delta_snap = delta_reader->getDeltaSnap();
-    // Clone a new delta index.
+    // Try to clone from the sahred delta index, if it fails to reuse the shared delta index,
+    // it will return an empty delta index and we should place it in the following branch.
     auto my_delta_index = delta_snap->getSharedDeltaIndex()->tryClone(delta_snap->getRows(), delta_snap->getDeletes());
     auto my_delta_tree = my_delta_index->getDeltaTree();
 
@@ -2501,7 +2502,19 @@ std::pair<DeltaIndexPtr, bool> Segment::ensurePlace(
     auto [my_placed_rows, my_placed_deletes] = my_delta_index->getPlacedStatus();
 
     // Let's do a fast check, determine whether we need to do place or not.
+<<<<<<< HEAD
     if (!delta_reader->shouldPlace(dm_context, my_delta_index, rowkey_range, relevant_range, max_version))
+=======
+    if (!delta_reader->shouldPlace( //
+            dm_context,
+            my_placed_rows,
+            my_placed_deletes,
+            rowkey_range,
+            relevant_range,
+            start_ts))
+    {
+        // We can reuse the shared-delta-index
+>>>>>>> 8e170090fa (Storages: Fix cloning delta index when there are duplicated tuples (#9000))
         return {my_delta_index, false};
 
     CurrentMetrics::Increment cur_dm_segments{CurrentMetrics::DT_PlaceIndexUpdate};
