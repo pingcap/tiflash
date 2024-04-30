@@ -135,14 +135,8 @@ void JointThreadInfoJeallocMap::recordThreadAllocInfoForKVStore()
         // Some thread may have shorter lifetime, we can't use this timed task here to upgrade.
         if (RECORD_WHITE_LIST_THREAD_PREFIX.contains(agg_thread_name))
         {
-            {
-                auto [it, ok] = agg_allocate.emplace(agg_thread_name, 0);
-                it->second += v.allocated();
-            }
-            {
-                auto [it, ok] = agg_deallocate.emplace(agg_thread_name, 0);
-                it->second += v.deallocated();
-            }
+            agg_allocate[agg_thread_name] += v.allocated();
+            agg_deallocate[agg_thread_name] += v.deallocated();
         }
     }
     for (const auto & [k, v] : agg_allocate)
