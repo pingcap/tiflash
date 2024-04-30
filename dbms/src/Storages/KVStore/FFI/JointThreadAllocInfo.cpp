@@ -131,7 +131,7 @@ void JointThreadInfoJeallocMap::recordThreadAllocInfoForKVStore()
     std::unordered_map<std::string, uint64_t> agg_deallocate;
     for (const auto & [k, v] : kvstore_map)
     {
-        auto agg_thread_name = getThreadNameAggPrefix(std::string_view(k.data(), k.size()));
+        auto agg_thread_name = getThreadNameAggPrefix(k);
         // Some thread may have shorter lifetime, we can't use this timed task here to upgrade.
         if (RECORD_WHITE_LIST_THREAD_PREFIX.contains(agg_thread_name))
         {

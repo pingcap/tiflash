@@ -125,10 +125,10 @@ void TiFlashMetrics::registerProxyThreadMemory(const std::string & k)
     {
         registered_raft_proxy_thread_memory_usage_metrics.emplace(
             "alloc_" + k,
-            &registered_raft_proxy_thread_memory_usage_family->Add({{"type", k}}));
+            &registered_raft_proxy_thread_memory_usage_family->Add({{"type", "alloc_" + k}}));
         registered_raft_proxy_thread_memory_usage_metrics.emplace(
             "dealloc_" + k,
-            &registered_raft_proxy_thread_memory_usage_family->Add({{"type", k}}));
+            &registered_raft_proxy_thread_memory_usage_family->Add({{"type", "dealloc_" + k}}));
     }
 }
 
