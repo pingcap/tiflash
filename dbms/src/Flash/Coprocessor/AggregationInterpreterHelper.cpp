@@ -91,8 +91,8 @@ std::shared_ptr<Aggregator::Params> buildParams(
     ColumnNumbers keys(key_names.size(), 0);
     size_t normal_key_idx = 0;
     size_t agg_func_as_key_idx = key_names.size() - key_ref_agg_func.size();
-    // Put group by key that reference aggregate func after original key. For example:
-    // select sum(c0), first_row(c1), first_row(c3) group by c1, c2, c3
+    // Put group by key that reference aggregate func after original key.
+    // For example: select sum(c0), first_row(c1), first_row(c3) group by c1, c2, c3
     // Before: keys: c1 | c2 | c3
     // After:  keys: c2 | c1 | c3
     // By doing this, when deserialize group by keys from HashMap to columns,
