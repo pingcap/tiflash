@@ -124,7 +124,10 @@ void TiFlashMetrics::registerProxyThreadMemory(const std::string & k)
     if unlikely (!registered_raft_proxy_thread_memory_usage_metrics.count(k))
     {
         registered_raft_proxy_thread_memory_usage_metrics.emplace(
-            k,
+            "alloc_" + k,
+            &registered_raft_proxy_thread_memory_usage_family->Add({{"type", k}}));
+        registered_raft_proxy_thread_memory_usage_metrics.emplace(
+            "dealloc_" + k,
             &registered_raft_proxy_thread_memory_usage_family->Add({{"type", k}}));
     }
 }
