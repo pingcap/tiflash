@@ -74,4 +74,4 @@ REPORT_DIR="${PROF_DIR}/report"
 genhtml "${COVERAGE_DIR}/lcov.info" -o "${REPORT_DIR}" --ignore-errors source
 
 echo "The coverage report is built under ${REPORT_DIR}. Checkout the ${REPORT_DIR}/index.html"
-echo "You can use "python3 -m http --directory ${REPORT_DIR} 12345" to check out the files by webbrowser"
+echo "You can use "python3 -m http.server --directory ${REPORT_DIR} 12345" to check out the files by webbrowser"
