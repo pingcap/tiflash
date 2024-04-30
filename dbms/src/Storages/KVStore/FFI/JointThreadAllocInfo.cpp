@@ -28,6 +28,11 @@ JointThreadInfoJeallocMap::JointThreadInfoJeallocMap()
     monitoring_thread = new std::thread([&]() {
         while (true)
         {
+            using namespace std::chrono_literals;
+            std::unique_lock l(monitoring_mut);
+            monitoring_cv.wait_for(l, 5000ms, [&]() { return is_terminated; });
+            if (is_terminated)
+                return;
             recordThreadAllocInfo();
         }
     });
@@ -35,11 +40,6 @@ JointThreadInfoJeallocMap::JointThreadInfoJeallocMap()
 
 void JointThreadInfoJeallocMap::recordThreadAllocInfo()
 {
-    using namespace std::chrono_literals;
-    std::unique_lock l(monitoring_mut);
-    monitoring_cv.wait_for(l, 5000ms, [&]() { return is_terminated; });
-    if (is_terminated)
-        return;
     recordThreadAllocInfoForKVStore();
 }
 
