@@ -379,7 +379,7 @@ TEST_F(FileCacheTest, FileSystem)
     }
     ASSERT_TRUE(std::filesystem::exists(local_file2));
 
-    file_cache.removeDiskFile(local_fname1);
+    file_cache.removeDiskFile(local_fname1, false);
     ASSERT_FALSE(std::filesystem::exists(local_file1)) << local_file1.generic_string();
     ASSERT_TRUE(std::filesystem::exists(local_file2)) << local_file2.generic_string();
     ASSERT_TRUE(std::filesystem::exists(dmf)) << dmf.generic_string();
@@ -393,7 +393,7 @@ TEST_F(FileCacheTest, FileSystem)
     ASSERT_TRUE(std::filesystem::exists(cache_root)) << cache_root.generic_string();
     ASSERT_EQ(cache_root.generic_string(), cache_config.getDTFileCacheDir());
 
-    file_cache.removeDiskFile(local_fname2);
+    file_cache.removeDiskFile(local_fname2, false);
     ASSERT_FALSE(std::filesystem::exists(local_file2)) << local_file2.generic_string();
     ASSERT_FALSE(std::filesystem::exists(dmf)) << dmf.generic_string();
     ASSERT_FALSE(std::filesystem::exists(table)) << table.generic_string();

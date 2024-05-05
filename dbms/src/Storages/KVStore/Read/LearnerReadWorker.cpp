@@ -325,13 +325,14 @@ RegionsReadIndexResult LearnerReadWorker::readIndex(
         log_lvl,
         "[Learner Read] Batch read index, num_regions={} num_requests={} num_stale_read={} num_cached_index={} "
         "num_unavailable={} "
-        "cost={}ms",
+        "cost={}ms, read_tso={}",
         stats.num_regions,
         stats.num_read_index_request,
         stats.num_stale_read,
         stats.num_cached_read_index,
         unavailable_regions.size(),
-        stats.read_index_elapsed_ms);
+        stats.read_index_elapsed_ms,
+        mvcc_query_info.read_tso);
 
     return batch_read_index_result;
 }
@@ -427,10 +428,11 @@ void LearnerReadWorker::waitIndex(
     LOG_IMPL(
         log,
         log_lvl,
-        "[Learner Read] Finish wait index and resolve locks, wait_cost={}ms n_regions={} n_unavailable={}",
+        "[Learner Read] Finish wait index and resolve locks, wait_cost={}ms n_regions={} n_unavailable={}, read_tso={}",
         stats.wait_index_elapsed_ms,
         stats.num_regions,
-        unavailable_regions.size());
+        unavailable_regions.size(),
+        mvcc_query_info.read_tso);
 }
 
 std::tuple<Clock::time_point, Clock::time_point> //
@@ -469,13 +471,14 @@ LearnerReadWorker::waitUntilDataAvailable(
         log,
         log_lvl,
         "[Learner Read] batch read index | wait index"
-        " total_cost={} read_cost={} wait_cost={} n_regions={} n_stale_read={} n_unavailable={}",
+        " total_cost={} read_cost={} wait_cost={} n_regions={} n_stale_read={} n_unavailable={}, read_tso={}",
         time_elapsed_ms,
         stats.read_index_elapsed_ms,
         stats.wait_index_elapsed_ms,
         stats.num_regions,
         stats.num_stale_read,
-        unavailable_regions.size());
+        unavailable_regions.size(),
+        mvcc_query_info.read_tso);
     return {start_time, end_time};
 }
 

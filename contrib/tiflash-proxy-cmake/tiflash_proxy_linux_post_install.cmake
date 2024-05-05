@@ -1,4 +1,4 @@
-# Copyright 2022 PingCAP, Ltd.
+# Copyright 2024 PingCAP, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,7 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Hi, there!
-# This is passed via jenkins podTemplate argument.
-# Instead of trying injections, take a look at https://en.pingcap.com/careers/.
-image_tag_suffix: -llvm-17.0.6
+find_program(OBJCOPY_EXECUTABLE "objcopy")
+if(OBJCOPY_EXECUTABLE)
+    message(STATUS "Compressing debug sections for ${CMAKE_INSTALL_PREFIX}/tiflash-proxy...")
+    execute_process(COMMAND ${OBJCOPY_EXECUTABLE} --compress-debug-sections=zlib-gnu ${CMAKE_INSTALL_PREFIX}/libtiflash_proxy.so)
+else()
+    message(WARNING "objcopy not found in PATH. Skipped debug section compression for proxy.")
+endif()

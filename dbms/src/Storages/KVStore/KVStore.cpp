@@ -438,6 +438,7 @@ KVStore::~KVStore()
     LOG_INFO(log, "Destroy KVStore");
     stopThreadAllocInfo();
     releaseReadIndexWorkers();
+    LOG_INFO(log, "Destroy KVStore Finished");
 }
 
 FileUsageStatistics KVStore::getFileUsageStatistics() const
@@ -589,7 +590,15 @@ void KVStore::reportThreadAllocBatch(std::string_view name, ReportThreadAllocate
         return;
     // TODO(jemalloc-trace) Could be costy.
     auto k = getThreadNameAggPrefix(name);
-    int64_t v = static_cast<int64_t>(data.alloc) - static_cast<int64_t>(data.dealloc);
+    int64_t v = 0;
+    if (data.alloc > data.dealloc)
+    {
+        v = data.alloc - data.dealloc;
+    }
+    else
+    {
+        v = -(data.dealloc - data.alloc);
+    }
     auto & tiflash_metrics = TiFlashMetrics::instance();
     tiflash_metrics.setProxyThreadMemory(k, v);
 }
@@ -603,6 +612,7 @@ void KVStore::stopThreadAllocInfo()
         is_terminated = true;
         monitoring_cv.notify_all();
     }
+    LOG_INFO(log, "KVStore shutdown, wait thread alloc monitor join");
     monitoring_thread->join();
     delete monitoring_thread;
     monitoring_thread = nullptr;
