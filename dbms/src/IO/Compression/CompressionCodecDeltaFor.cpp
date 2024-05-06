@@ -15,11 +15,10 @@
 #include <Common/BitpackingPrimitives.h>
 #include <Common/Exception.h>
 #include <IO/Compression/CompressionCodecDeltaFor.h>
+#include <IO/Compression/CompressionCodecFor.h>
 #include <IO/Compression/CompressionInfo.h>
 #include <common/likely.h>
 #include <common/unaligned.h>
-
-#include <cstring>
 
 #if defined(__AVX2__)
 #include <immintrin.h>
@@ -52,92 +51,26 @@ UInt32 CompressionCodecDeltaFor::getMaxCompressedDataSize(UInt32 uncompressed_si
 
 namespace
 {
+
+template <typename T>
+void DeltaEncode(const T * source, UInt32 count, T * dest)
+{
+    T prev = 0;
+    for (UInt32 i = 0; i < count; ++i)
+    {
+        T curr = source[i];
+        dest[i] = curr - prev;
+        prev = curr;
+    }
+}
+
 template <typename T>
 UInt32 compressData(const char * source, UInt32 source_size, char * dest)
 {
     static_assert(std::is_integral<T>::value, "Integral required.");
     const auto count = source_size / sizeof(T);
-    using ST = typename std::make_signed<T>::type;
-    std::vector<ST> deltas;
-    deltas.reserve(count);
-    T prev_src = 0;
-    const char * const source_end = source + source_size;
-    while (source < source_end)
-    {
-        T curr_src = unalignedLoad<T>(source);
-        deltas.push_back(static_cast<ST>(curr_src - prev_src));
-        prev_src = curr_src;
-        source += sizeof(T);
-    }
-    ST frame_of_reference = *std::min_element(deltas.cbegin(), deltas.cend());
-    // store frame of reference
-    unalignedStore<ST>(dest, frame_of_reference);
-    dest += sizeof(ST);
-    if (frame_of_reference != 0)
-    {
-        for (auto & delta : deltas)
-            delta -= frame_of_reference;
-    }
-    ST max_value = *std::max_element(deltas.cbegin(), deltas.cend());
-    UInt8 width = BitpackingPrimitives::minimumBitWidth(max_value);
-    // store width
-    unalignedStore<UInt8>(dest, width);
-    dest += sizeof(UInt8);
-    // if width == 0, skip bitpacking
-    if (width == 0)
-        return sizeof(ST) + sizeof(UInt8);
-    auto required_size = BitpackingPrimitives::getRequiredSize(count, width);
-    // after applying frame of reference, all deltas are bigger than 0.
-    BitpackingPrimitives::packBuffer(
-        reinterpret_cast<unsigned char *>(dest),
-        reinterpret_cast<const T *>(deltas.data()),
-        count,
-        width);
-    return sizeof(ST) + sizeof(UInt8) + required_size;
-}
-
-template <class T>
-void ApplyFrameOfReference(T * dst, T frame_of_reference, UInt32 count)
-{
-    if (!frame_of_reference)
-        return;
-
-    UInt32 i = 0;
-    UInt32 misaligned_count = count;
-#if defined(__AVX2__)
-    static_assert(sizeof(T) < sizeof(__m256i) && sizeof(__m256i) % sizeof(T) == 0);
-    misaligned_count = count % (sizeof(__m256i) / sizeof(T));
-#endif
-    for (; i < misaligned_count; ++i)
-    {
-        dst[i] += frame_of_reference;
-    }
-#if defined(__AVX2__)
-    for (; i < count; i += (sizeof(__m256i) / sizeof(T)))
-    {
-        // Load the data using SIMD
-        __m256i delta = _mm256_loadu_si256(reinterpret_cast<__m256i *>(dst + i));
-        // Perform vectorized addition
-        if constexpr (sizeof(T) == 1)
-        {
-            delta = _mm256_add_epi8(delta, _mm256_set1_epi8(frame_of_reference));
-        }
-        else if constexpr (sizeof(T) == 2)
-        {
-            delta = _mm256_add_epi16(delta, _mm256_set1_epi16(frame_of_reference));
-        }
-        else if constexpr (sizeof(T) == 4)
-        {
-            delta = _mm256_add_epi32(delta, _mm256_set1_epi32(frame_of_reference));
-        }
-        else if constexpr (sizeof(T) == 8)
-        {
-            delta = _mm256_add_epi64(delta, _mm256_set1_epi64x(frame_of_reference));
-        }
-        // Store the result back to memory
-        _mm256_storeu_si256(reinterpret_cast<__m256i *>(dst + i), delta);
-    }
-#endif
+    DeltaEncode<T>(reinterpret_cast<const T *>(source), count, reinterpret_cast<T *>(dest));
+    return CompressionCodecFor::compressData<T>(dest, source_size, dest);
 }
 
 template <typename T>
@@ -225,44 +158,16 @@ void DeltaDecode<UInt64>(const char * __restrict__ raw_source, UInt32 raw_source
 #endif
 
 template <typename T>
-void ForDecode(const char * source, UInt32 source_size, unsigned char * dest, UInt32 count)
-{
-    using ST = typename std::make_signed<T>::type;
-    ST frame_of_reference = unalignedLoad<ST>(source);
-    source += sizeof(ST);
-    auto width = unalignedLoad<UInt8>(source);
-    source += sizeof(UInt8);
-    const auto required_size = source_size - sizeof(ST) - sizeof(UInt8);
-    RUNTIME_CHECK(BitpackingPrimitives::getRequiredSize(count, width) == required_size);
-    if (width != 0)
-        BitpackingPrimitives::unPackBuffer<T>(dest, reinterpret_cast<const unsigned char *>(source), count, width);
-    else
-        memset(dest, 0, sizeof(T) * count);
-    ApplyFrameOfReference(reinterpret_cast<ST *>(dest), frame_of_reference, count);
-}
-
-template <typename T>
 void ordinaryDecompressData(const char * source, UInt32 source_size, char * dest, UInt32 output_size)
 {
-    const auto count = output_size / sizeof(T);
-    auto round_size = BitpackingPrimitives::roundUpToAlgorithmGroupSize(count);
-    if (round_size != count)
-    {
-        // Reserve enough space for the temporary buffer.
-        unsigned char tmp_buffer[round_size * sizeof(T)];
-        ForDecode<T>(source, source_size, tmp_buffer, count);
-        ordinaryDeltaDecode<T>(reinterpret_cast<const char *>(tmp_buffer), output_size, dest);
-    }
-    else
-    {
-        ForDecode<T>(source, source_size, reinterpret_cast<unsigned char *>(dest), count);
-        ordinaryDeltaDecode<T>(dest, output_size, dest);
-    }
+    CompressionCodecFor::decompressData<T>(source, source_size, dest, output_size);
+    ordinaryDeltaDecode<T>(dest, output_size, dest);
 }
 
 template <typename T>
 void decompressData(const char * source, UInt32 source_size, char * dest, UInt32 output_size)
 {
+    static_assert(std::is_integral<T>::value, "Integral required.");
     ordinaryDecompressData<T>(source, source_size, dest, output_size);
 }
 
@@ -272,8 +177,9 @@ void decompressData<UInt32>(const char * source, UInt32 source_size, char * dest
     const auto count = output_size / sizeof(UInt32);
     auto round_size = BitpackingPrimitives::roundUpToAlgorithmGroupSize(count);
     // Reserve enough space for the temporary buffer.
-    unsigned char tmp_buffer[round_size * sizeof(UInt32)];
-    ForDecode<UInt32>(source, source_size, tmp_buffer, count);
+    const auto required_size = round_size * sizeof(UInt32);
+    char tmp_buffer[required_size];
+    CompressionCodecFor::decompressData<UInt32>(source, source_size, tmp_buffer, required_size);
     DeltaDecode<UInt32>(reinterpret_cast<const char *>(tmp_buffer), output_size, dest);
 }
 
@@ -281,10 +187,11 @@ template <>
 void decompressData<UInt64>(const char * source, UInt32 source_size, char * dest, UInt32 output_size)
 {
     const auto count = output_size / sizeof(UInt64);
-    auto round_size = BitpackingPrimitives::roundUpToAlgorithmGroupSize(count);
+    const auto round_size = BitpackingPrimitives::roundUpToAlgorithmGroupSize(count);
     // Reserve enough space for the temporary buffer.
-    unsigned char tmp_buffer[round_size * sizeof(UInt64)];
-    ForDecode<UInt64>(source, source_size, tmp_buffer, count);
+    const auto required_size = round_size * sizeof(UInt64);
+    char tmp_buffer[required_size];
+    CompressionCodecFor::decompressData<UInt64>(source, source_size, tmp_buffer, required_size);
     DeltaDecode<UInt64>(reinterpret_cast<const char *>(tmp_buffer), output_size, dest);
 }
 

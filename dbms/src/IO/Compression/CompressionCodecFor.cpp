@@ -14,7 +14,6 @@
 
 #include <Common/BitpackingPrimitives.h>
 #include <Common/Exception.h>
-#include <DataTypes/IDataType.h>
 #include <IO/Compression/CompressionCodecFor.h>
 #include <IO/Compression/CompressionInfo.h>
 #include <common/unaligned.h>
@@ -48,11 +47,10 @@ UInt32 CompressionCodecFor::getMaxCompressedDataSize(UInt32 uncompressed_size) c
     return 1 + bytes_size + sizeof(UInt8) + BitpackingPrimitives::getRequiredSize(count, bytes_size * 8);
 }
 
-namespace
-{
 template <typename T>
-UInt32 compressData(const char * source, UInt32 source_size, char * dest)
+UInt32 CompressionCodecFor::compressData(const char * source, UInt32 source_size, char * dest)
 {
+    static_assert(std::is_integral<T>::value, "Integral required.");
     const auto count = source_size / sizeof(T);
     std::vector<T> values;
     values.reserve(count);
@@ -89,8 +87,41 @@ UInt32 compressData(const char * source, UInt32 source_size, char * dest)
     return sizeof(T) + sizeof(UInt8) + required_size;
 }
 
+template <typename T>
+void CompressionCodecFor::decompressData(const char * source, UInt32 source_size, char * dest, UInt32 output_size)
+{
+    static_assert(std::is_integral<T>::value, "Integral required.");
+    const auto count = output_size / sizeof(T);
+    T frame_of_reference = unalignedLoad<T>(source);
+    source += sizeof(T);
+    auto width = unalignedLoad<UInt8>(source);
+    source += sizeof(UInt8);
+    const auto required_size = source_size - sizeof(T) - sizeof(UInt8);
+    RUNTIME_CHECK(BitpackingPrimitives::getRequiredSize(count, width) == required_size);
+    auto round_size = BitpackingPrimitives::roundUpToAlgorithmGroupSize(count);
+    if (round_size != count)
+    {
+        // Reserve enough space for the temporary buffer.
+        unsigned char tmp_buffer[round_size * sizeof(T)];
+        BitpackingPrimitives::unPackBuffer<T>(
+            tmp_buffer,
+            reinterpret_cast<const unsigned char *>(source),
+            count,
+            width);
+        CompressionCodecFor::applyFrameOfReference(reinterpret_cast<T *>(tmp_buffer), frame_of_reference, count);
+        memcpy(dest, tmp_buffer, output_size);
+        return;
+    }
+    BitpackingPrimitives::unPackBuffer<T>(
+        reinterpret_cast<unsigned char *>(dest),
+        reinterpret_cast<const unsigned char *>(source),
+        count,
+        width);
+    CompressionCodecFor::applyFrameOfReference(reinterpret_cast<T *>(dest), frame_of_reference, count);
+}
+
 template <class T>
-void ApplyFrameOfReference(T * dst, T frame_of_reference, UInt32 count)
+void CompressionCodecFor::applyFrameOfReference(T * dst, T frame_of_reference, UInt32 count)
 {
     if (!frame_of_reference)
         return;
@@ -108,64 +139,29 @@ void ApplyFrameOfReference(T * dst, T frame_of_reference, UInt32 count)
     for (; i < count; i += (sizeof(__m256i) / sizeof(T)))
     {
         // Load the data using SIMD
-        __m256i delta = _mm256_loadu_si256(reinterpret_cast<__m256i *>(dst + i));
+        __m256i value = _mm256_loadu_si256(reinterpret_cast<__m256i *>(dst + i));
         // Perform vectorized addition
         if constexpr (sizeof(T) == 1)
         {
-            delta = _mm256_add_epi8(delta, _mm256_set1_epi8(frame_of_reference));
+            value = _mm256_add_epi8(value, _mm256_set1_epi8(frame_of_reference));
         }
         else if constexpr (sizeof(T) == 2)
         {
-            delta = _mm256_add_epi16(delta, _mm256_set1_epi16(frame_of_reference));
+            value = _mm256_add_epi16(value, _mm256_set1_epi16(frame_of_reference));
         }
         else if constexpr (sizeof(T) == 4)
         {
-            delta = _mm256_add_epi32(delta, _mm256_set1_epi32(frame_of_reference));
+            value = _mm256_add_epi32(value, _mm256_set1_epi32(frame_of_reference));
         }
         else if constexpr (sizeof(T) == 8)
         {
-            delta = _mm256_add_epi64(delta, _mm256_set1_epi64x(frame_of_reference));
+            value = _mm256_add_epi64(value, _mm256_set1_epi64x(frame_of_reference));
         }
         // Store the result back to memory
-        _mm256_storeu_si256(reinterpret_cast<__m256i *>(dst + i), delta);
+        _mm256_storeu_si256(reinterpret_cast<__m256i *>(dst + i), value);
     }
 #endif
 }
-
-template <typename T>
-void decompressData(const char * source, UInt32 source_size, char * dest, UInt32 output_size)
-{
-    const auto count = output_size / sizeof(T);
-    T frame_of_reference = unalignedLoad<T>(source);
-    source += sizeof(T);
-    auto width = unalignedLoad<UInt8>(source);
-    source += sizeof(UInt8);
-    const auto required_size = source_size - sizeof(T) - sizeof(UInt8);
-    RUNTIME_CHECK(BitpackingPrimitives::getRequiredSize(count, width) == required_size);
-    auto round_size = BitpackingPrimitives::roundUpToAlgorithmGroupSize(count);
-    RUNTIME_CHECK(round_size >= count);
-    if (round_size != count)
-    {
-        // Reserve enough space for the temporary buffer.
-        unsigned char tmp_buffer[round_size * sizeof(T)];
-        BitpackingPrimitives::unPackBuffer<T>(
-            tmp_buffer,
-            reinterpret_cast<const unsigned char *>(source),
-            count,
-            width);
-        ApplyFrameOfReference(reinterpret_cast<T *>(tmp_buffer), frame_of_reference, count);
-        memcpy(dest, tmp_buffer, output_size);
-        return;
-    }
-    BitpackingPrimitives::unPackBuffer<T>(
-        reinterpret_cast<unsigned char *>(dest),
-        reinterpret_cast<const unsigned char *>(source),
-        count,
-        width);
-    ApplyFrameOfReference(reinterpret_cast<T *>(dest), frame_of_reference, count);
-}
-
-} // namespace
 
 UInt32 CompressionCodecFor::doCompressData(const char * source, UInt32 source_size, char * dest) const
 {
