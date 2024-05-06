@@ -14,10 +14,9 @@
 
 #include <Storages/DeltaMerge/File/ColumnCache.h>
 
-namespace DB
+namespace DB::DM
 {
-namespace DM
-{
+
 RangeWithStrategys ColumnCache::getReadStrategy(size_t start_pack_idx, size_t pack_count, ColId column_id)
 {
     PackRange target_range{start_pack_idx, start_pack_idx + pack_count};
@@ -170,5 +169,4 @@ bool ColumnCache::isPackInCache(PackId pack_id, ColId column_id)
     return false;
 }
 
-} // namespace DM
-} // namespace DB
+} // namespace DB::DM

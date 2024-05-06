@@ -55,9 +55,9 @@ public:
         // So return none directly.
         if (values.empty())
             return RSResults(pack_count, RSResult::None);
-        RSResults results(pack_count, RSResult::Some);
-        GET_RSINDEX_FROM_PARAM_NOT_FOUND_RETURN_DIRECTLY(param, attr, rsindex, results);
-        return rsindex.minmax->checkIn(start_pack, pack_count, values, rsindex.type);
+        auto rs_index = getRSIndex(param, attr);
+        return rs_index ? rs_index->minmax->checkIn(start_pack, pack_count, values, rs_index->type)
+                        : RSResults(pack_count, RSResult::Some);
     }
 };
 

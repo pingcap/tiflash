@@ -22,6 +22,10 @@
 
 namespace DB::DM
 {
+namespace tests
+{
+class DeltaMergeStoreRWTest;
+}
 class UnorderedInputStream : public IProfilingBlockInputStream
 {
     static constexpr auto NAME = "UnorderedInputStream";
@@ -151,5 +155,7 @@ private:
     // runtime filter
     std::vector<RuntimeFilterPtr> runtime_filter_list;
     int max_wait_time_ms;
+
+    friend class tests::DeltaMergeStoreRWTest;
 };
 } // namespace DB::DM

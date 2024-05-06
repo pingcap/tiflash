@@ -60,6 +60,7 @@ bool AggregateContext::isTaskMarkedForSpill(size_t task_index)
         return true;
     if (getAggSpillContext()->updatePerThreadRevocableMemory(many_data[task_index]->revocableBytes(), task_index))
     {
+        assert(!many_data[task_index]->empty());
         return many_data[task_index]->tryMarkNeedSpill();
     }
     return false;
@@ -207,4 +208,15 @@ Block AggregateContext::readForConvergent(size_t index)
         return {};
     return merging_buckets->getData(index);
 }
+
+bool AggregateContext::hasAtLeastOneTwoLevel()
+{
+    for (size_t i = 0; i < max_threads; ++i)
+    {
+        if (many_data[i]->isTwoLevel())
+            return true;
+    }
+    return false;
+}
+
 } // namespace DB

@@ -12,31 +12,30 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Dictionaries/DictionaryBlockInputStreamBase.h>
+#pragma once
+
+#include <Flash/Pipeline/Schedule/Tasks/IOEventTask.h>
 
 namespace DB
 {
+class AggregateContext;
+using AggregateContextPtr = std::shared_ptr<AggregateContext>;
 
-DictionaryBlockInputStreamBase::DictionaryBlockInputStreamBase(size_t rows_count, size_t max_block_size)
-    : rows_count(rows_count)
-    , max_block_size(max_block_size)
-    , next_row(0)
-{}
-
-Block DictionaryBlockInputStreamBase::readImpl()
+class AggregateFinalConvertTask : public EventTask
 {
-    if (next_row == rows_count)
-        return Block();
+public:
+    AggregateFinalConvertTask(
+        PipelineExecutorContext & exec_context_,
+        const String & req_id,
+        const EventPtr & event_,
+        AggregateContextPtr agg_context_,
+        size_t index_);
 
-    size_t block_size = std::min<size_t>(max_block_size, rows_count - next_row);
-    Block block = getBlock(next_row, block_size);
-    next_row += block_size;
-    return block;
-}
+protected:
+    ExecTaskStatus executeImpl() override;
 
-Block DictionaryBlockInputStreamBase::getHeader() const
-{
-    return getBlock(0, 0);
-}
-
+private:
+    AggregateContextPtr agg_context;
+    size_t index;
+};
 } // namespace DB

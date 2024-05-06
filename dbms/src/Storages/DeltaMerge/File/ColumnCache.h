@@ -14,18 +14,15 @@
 
 #pragma once
 
-#include <Core/Block.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/KVStore/Types.h>
-#include <common/logger_useful.h>
 
 #include <cstddef>
 #include <memory>
 
-namespace DB
+namespace DB::DM
 {
-namespace DM
-{
+
 using ColId = DB::ColumnID;
 using PackId = size_t;
 using PackRange = std::pair<PackId, PackId>;
@@ -78,5 +75,5 @@ using ColumnCachePtrs = std::vector<ColumnCachePtr>;
 using RangeWithStrategy = ColumnCache::RangeWithStrategy;
 using RangeWithStrategys = ColumnCache::RangeWithStrategys;
 using ColumnCacheElement = ColumnCache::ColumnCacheElement;
-} // namespace DM
-} // namespace DB
+
+} // namespace DB::DM

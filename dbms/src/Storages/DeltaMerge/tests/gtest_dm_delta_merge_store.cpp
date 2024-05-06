@@ -41,6 +41,7 @@
 #include <algorithm>
 #include <future>
 #include <iterator>
+#include <memory>
 #include <random>
 
 namespace DB
@@ -289,7 +290,7 @@ try
         *new_cols,
         {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
         /* num_streams= */ 1,
-        /* max_version= */ std::numeric_limits<UInt64>::max(),
+        /* start_ts= */ std::numeric_limits<UInt64>::max(),
         EMPTY_FILTER,
         std::vector<RuntimeFilterPtr>{},
         0,
@@ -476,7 +477,7 @@ try
             columns,
             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
             /* num_streams= */ 1,
-            /* max_version= */ std::numeric_limits<UInt64>::max(),
+            /* start_ts= */ std::numeric_limits<UInt64>::max(),
             EMPTY_FILTER,
             std::vector<RuntimeFilterPtr>{},
             0,
@@ -564,7 +565,7 @@ try
         columns,
         {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
         /* num_streams= */ 1,
-        /* max_version= */ std::numeric_limits<UInt64>::max(),
+        /* start_ts= */ std::numeric_limits<UInt64>::max(),
         EMPTY_FILTER,
         std::vector<RuntimeFilterPtr>{},
         0,
@@ -592,7 +593,7 @@ try
         columns,
         {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
         /* num_streams= */ 1,
-        /* max_version= */ std::numeric_limits<UInt64>::max(),
+        /* start_ts= */ std::numeric_limits<UInt64>::max(),
         std::make_shared<PushDownFilter>(filter),
         std::vector<RuntimeFilterPtr>{},
         0,
@@ -682,7 +683,7 @@ try
             columns,
             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
             /* num_streams= */ 1,
-            /* max_version= */ std::numeric_limits<UInt64>::max(),
+            /* start_ts= */ std::numeric_limits<UInt64>::max(),
             EMPTY_FILTER,
             std::vector<RuntimeFilterPtr>{},
             0,
@@ -767,7 +768,7 @@ try
             columns,
             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
             /* num_streams= */ 1,
-            /* max_version= */ std::numeric_limits<UInt64>::max(),
+            /* start_ts= */ std::numeric_limits<UInt64>::max(),
             EMPTY_FILTER,
             std::vector<RuntimeFilterPtr>{},
             0,
@@ -820,7 +821,7 @@ try
             columns,
             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
             /* num_streams= */ 1,
-            /* max_version= */ std::numeric_limits<UInt64>::max(),
+            /* start_ts= */ std::numeric_limits<UInt64>::max(),
             EMPTY_FILTER,
             std::vector<RuntimeFilterPtr>{},
             0,
@@ -850,7 +851,7 @@ try
             columns,
             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
             /* num_streams= */ 1,
-            /* max_version= */ std::numeric_limits<UInt64>::max(),
+            /* start_ts= */ std::numeric_limits<UInt64>::max(),
             EMPTY_FILTER,
             std::vector<RuntimeFilterPtr>{},
             0,
@@ -931,7 +932,7 @@ try
             columns,
             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
             /* num_streams= */ 1,
-            /* max_version= */ std::numeric_limits<UInt64>::max(),
+            /* start_ts= */ std::numeric_limits<UInt64>::max(),
             EMPTY_FILTER,
             std::vector<RuntimeFilterPtr>{},
             0,
@@ -1009,7 +1010,7 @@ try
             columns,
             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
             /* num_streams= */ 1,
-            /* max_version= */ std::numeric_limits<UInt64>::max(),
+            /* start_ts= */ std::numeric_limits<UInt64>::max(),
             EMPTY_FILTER,
             std::vector<RuntimeFilterPtr>{},
             0,
@@ -1033,7 +1034,7 @@ try
             columns,
             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
             /* num_streams= */ 1,
-            /* max_version= */ static_cast<UInt64>(1),
+            /* start_ts= */ static_cast<UInt64>(1),
             EMPTY_FILTER,
             std::vector<RuntimeFilterPtr>{},
             0,
@@ -1081,7 +1082,7 @@ try
             columns,
             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
             /* num_streams= */ 1,
-            /* max_version= */ std::numeric_limits<UInt64>::max(),
+            /* start_ts= */ std::numeric_limits<UInt64>::max(),
             EMPTY_FILTER,
             std::vector<RuntimeFilterPtr>{},
             0,
@@ -1114,7 +1115,7 @@ try
             columns,
             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
             /* num_streams= */ 1,
-            /* max_version= */ std::numeric_limits<UInt64>::max(),
+            /* start_ts= */ std::numeric_limits<UInt64>::max(),
             EMPTY_FILTER,
             std::vector<RuntimeFilterPtr>{},
             0,
@@ -1145,7 +1146,7 @@ try
         columns,
         {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
         /* num_streams= */ 1,
-        /* max_version= */ std::numeric_limits<UInt64>::max(),
+        /* start_ts= */ std::numeric_limits<UInt64>::max(),
         EMPTY_FILTER,
         std::vector<RuntimeFilterPtr>{},
         0,
@@ -1186,7 +1187,7 @@ try
             columns,
             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
             /* num_streams= */ 1,
-            /* max_version= */ std::numeric_limits<UInt64>::max(),
+            /* start_ts= */ std::numeric_limits<UInt64>::max(),
             EMPTY_FILTER,
             std::vector<RuntimeFilterPtr>{},
             0,
@@ -1208,7 +1209,7 @@ try
             columns,
             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
             /* num_streams= */ 1,
-            /* max_version= */ tso2,
+            /* start_ts= */ tso2,
             EMPTY_FILTER,
             std::vector<RuntimeFilterPtr>{},
             0,
@@ -1230,7 +1231,7 @@ try
             columns,
             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
             /* num_streams= */ 1,
-            /* max_version= */ tso1,
+            /* start_ts= */ tso1,
             EMPTY_FILTER,
             std::vector<RuntimeFilterPtr>{},
             0,
@@ -1252,7 +1253,7 @@ try
             columns,
             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
             /* num_streams= */ 1,
-            /* max_version= */ tso1 - 1,
+            /* start_ts= */ tso1 - 1,
             EMPTY_FILTER,
             std::vector<RuntimeFilterPtr>{},
             0,
@@ -1312,7 +1313,7 @@ try
             columns,
             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
             /* num_streams= */ 1,
-            /* max_version= */ tso1,
+            /* start_ts= */ tso1,
             EMPTY_FILTER,
             std::vector<RuntimeFilterPtr>{},
             0,
@@ -1341,7 +1342,7 @@ try
             columns,
             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
             /* num_streams= */ 1,
-            /* max_version= */ tso2 - 1,
+            /* start_ts= */ tso2 - 1,
             EMPTY_FILTER,
             std::vector<RuntimeFilterPtr>{},
             0,
@@ -1372,7 +1373,7 @@ try
             columns,
             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
             /* num_streams= */ 1,
-            /* max_version= */ tso3 - 1,
+            /* start_ts= */ tso3 - 1,
             EMPTY_FILTER,
             std::vector<RuntimeFilterPtr>{},
             0,
@@ -1395,7 +1396,7 @@ try
             columns,
             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
             /* num_streams= */ 1,
-            /* max_version= */ std::numeric_limits<UInt64>::max(),
+            /* start_ts= */ std::numeric_limits<UInt64>::max(),
             EMPTY_FILTER,
             std::vector<RuntimeFilterPtr>{},
             0,
@@ -1419,7 +1420,7 @@ try
             columns,
             {range0, range1},
             /* num_streams= */ 1,
-            /* max_version= */ std::numeric_limits<UInt64>::max(),
+            /* start_ts= */ std::numeric_limits<UInt64>::max(),
             EMPTY_FILTER,
             std::vector<RuntimeFilterPtr>{},
             0,
@@ -1480,7 +1481,7 @@ try
             columns,
             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
             /* num_streams= */ 1,
-            /* max_version= */ tso1,
+            /* start_ts= */ tso1,
             EMPTY_FILTER,
             std::vector<RuntimeFilterPtr>{},
             0,
@@ -1509,7 +1510,7 @@ try
             columns,
             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
             /* num_streams= */ 1,
-            /* max_version= */ tso2 - 1,
+            /* start_ts= */ tso2 - 1,
             EMPTY_FILTER,
             std::vector<RuntimeFilterPtr>{},
             0,
@@ -1540,7 +1541,7 @@ try
             columns,
             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
             /* num_streams= */ 1,
-            /* max_version= */ std::numeric_limits<UInt64>::max(),
+            /* start_ts= */ std::numeric_limits<UInt64>::max(),
             EMPTY_FILTER,
             std::vector<RuntimeFilterPtr>{},
             0,
@@ -1585,7 +1586,7 @@ try
             store->getTableColumns(),
             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
             /* num_streams= */ 1,
-            /* max_version= */ std::numeric_limits<UInt64>::max(),
+            /* start_ts= */ std::numeric_limits<UInt64>::max(),
             EMPTY_FILTER,
             std::vector<RuntimeFilterPtr>{},
             /* rf_max_wait_time_ms= */ 0,
@@ -1816,7 +1817,7 @@ try
                 columns,
                 {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
                 /* num_streams= */ 1,
-                /* max_version= */ std::numeric_limits<UInt64>::max(),
+                /* start_ts= */ std::numeric_limits<UInt64>::max(),
                 EMPTY_FILTER,
                 std::vector<RuntimeFilterPtr>{},
                 0,
@@ -1904,7 +1905,7 @@ try
             columns,
             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
             /* num_streams= */ 1,
-            /* max_version= */ std::numeric_limits<UInt64>::max(),
+            /* start_ts= */ std::numeric_limits<UInt64>::max(),
             EMPTY_FILTER,
             std::vector<RuntimeFilterPtr>{},
             0,
@@ -1990,7 +1991,7 @@ try
             columns,
             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
             /* num_streams= */ 1,
-            /* max_version= */ std::numeric_limits<UInt64>::max(),
+            /* start_ts= */ std::numeric_limits<UInt64>::max(),
             EMPTY_FILTER,
             std::vector<RuntimeFilterPtr>{},
             0,
@@ -2061,7 +2062,7 @@ try
             columns,
             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
             /* num_streams= */ 1,
-            /* max_version= */ std::numeric_limits<UInt64>::max(),
+            /* start_ts= */ std::numeric_limits<UInt64>::max(),
             EMPTY_FILTER,
             std::vector<RuntimeFilterPtr>{},
             0,
@@ -2130,7 +2131,7 @@ try
             store->getTableColumns(),
             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
             /* num_streams= */ 1,
-            /* max_version= */ std::numeric_limits<UInt64>::max(),
+            /* start_ts= */ std::numeric_limits<UInt64>::max(),
             EMPTY_FILTER,
             std::vector<RuntimeFilterPtr>{},
             0,
@@ -2181,7 +2182,7 @@ try
             store->getTableColumns(),
             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
             /* num_streams= */ 1,
-            /* max_version= */ std::numeric_limits<UInt64>::max(),
+            /* start_ts= */ std::numeric_limits<UInt64>::max(),
             EMPTY_FILTER,
             std::vector<RuntimeFilterPtr>{},
             0,
@@ -2231,7 +2232,7 @@ try
             store->getTableColumns(),
             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
             /* num_streams= */ 1,
-            /* max_version= */ std::numeric_limits<UInt64>::max(),
+            /* start_ts= */ std::numeric_limits<UInt64>::max(),
             EMPTY_FILTER,
             std::vector<RuntimeFilterPtr>{},
             0,
@@ -2281,7 +2282,7 @@ try
             store->getTableColumns(),
             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
             /* num_streams= */ 1,
-            /* max_version= */ std::numeric_limits<UInt64>::max(),
+            /* start_ts= */ std::numeric_limits<UInt64>::max(),
             EMPTY_FILTER,
             std::vector<RuntimeFilterPtr>{},
             0,
@@ -2331,7 +2332,7 @@ try
             store->getTableColumns(),
             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
             /* num_streams= */ 1,
-            /* max_version= */ std::numeric_limits<UInt64>::max(),
+            /* start_ts= */ std::numeric_limits<UInt64>::max(),
             EMPTY_FILTER,
             std::vector<RuntimeFilterPtr>{},
             0,
@@ -2387,7 +2388,7 @@ try
             store->getTableColumns(),
             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
             /* num_streams= */ 1,
-            /* max_version= */ std::numeric_limits<UInt64>::max(),
+            /* start_ts= */ std::numeric_limits<UInt64>::max(),
             EMPTY_FILTER,
             std::vector<RuntimeFilterPtr>{},
             0,
@@ -2463,7 +2464,7 @@ try
             columns,
             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
             /* num_streams= */ 1,
-            /* max_version= */ std::numeric_limits<UInt64>::max(),
+            /* start_ts= */ std::numeric_limits<UInt64>::max(),
             EMPTY_FILTER,
             std::vector<RuntimeFilterPtr>{},
             0,
@@ -2571,7 +2572,7 @@ try
             columns,
             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
             /* num_streams= */ 1,
-            /* max_version= */ std::numeric_limits<UInt64>::max(),
+            /* start_ts= */ std::numeric_limits<UInt64>::max(),
             EMPTY_FILTER,
             std::vector<RuntimeFilterPtr>{},
             0,
@@ -2622,7 +2623,7 @@ try
                 columns,
                 {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
                 /* num_streams= */ 1,
-                /* max_version= */ std::numeric_limits<UInt64>::max(),
+                /* start_ts= */ std::numeric_limits<UInt64>::max(),
                 EMPTY_FILTER,
                 std::vector<RuntimeFilterPtr>{},
                 0,
@@ -2695,7 +2696,7 @@ try
             store->getTableColumns(),
             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
             /* num_streams= */ 1,
-            /* max_version= */ std::numeric_limits<UInt64>::max(),
+            /* start_ts= */ std::numeric_limits<UInt64>::max(),
             EMPTY_FILTER,
             std::vector<RuntimeFilterPtr>{},
             0,
@@ -2743,7 +2744,7 @@ try
             store->getTableColumns(),
             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
             /* num_streams= */ 1,
-            /* max_version= */ std::numeric_limits<UInt64>::max(),
+            /* start_ts= */ std::numeric_limits<UInt64>::max(),
             EMPTY_FILTER,
             std::vector<RuntimeFilterPtr>{},
             0,
@@ -2858,7 +2859,7 @@ try
             columns,
             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
             /* num_streams= */ 1,
-            /* max_version= */ std::numeric_limits<UInt64>::max(),
+            /* start_ts= */ std::numeric_limits<UInt64>::max(),
             EMPTY_FILTER,
             std::vector<RuntimeFilterPtr>{},
             0,
@@ -2971,7 +2972,7 @@ try
             columns,
             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
             /* num_streams= */ 1,
-            /* max_version= */ std::numeric_limits<UInt64>::max(),
+            /* start_ts= */ std::numeric_limits<UInt64>::max(),
             EMPTY_FILTER,
             std::vector<RuntimeFilterPtr>{},
             0,
@@ -3051,7 +3052,7 @@ try
             columns,
             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
             /* num_streams= */ 1,
-            /* max_version= */ std::numeric_limits<UInt64>::max(),
+            /* start_ts= */ std::numeric_limits<UInt64>::max(),
             EMPTY_FILTER,
             std::vector<RuntimeFilterPtr>{},
             0,
@@ -3085,7 +3086,7 @@ try
             columns,
             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
             /* num_streams= */ 1,
-            /* max_version= */ static_cast<UInt64>(1),
+            /* start_ts= */ static_cast<UInt64>(1),
             EMPTY_FILTER,
             std::vector<RuntimeFilterPtr>{},
             0,
@@ -3146,7 +3147,7 @@ try
             columns,
             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
             /* num_streams= */ 1,
-            /* max_version= */ std::numeric_limits<UInt64>::max(),
+            /* start_ts= */ std::numeric_limits<UInt64>::max(),
             EMPTY_FILTER,
             std::vector<RuntimeFilterPtr>{},
             0,
@@ -3188,7 +3189,7 @@ try
             columns,
             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
             /* num_streams= */ 1,
-            /* max_version= */ std::numeric_limits<UInt64>::max(),
+            /* start_ts= */ std::numeric_limits<UInt64>::max(),
             EMPTY_FILTER,
             std::vector<RuntimeFilterPtr>{},
             0,
@@ -3259,7 +3260,7 @@ try
                 columns,
                 {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
                 /* num_streams= */ 1,
-                /* max_version= */ std::numeric_limits<UInt64>::max(),
+                /* start_ts= */ std::numeric_limits<UInt64>::max(),
                 EMPTY_FILTER,
                 std::vector<RuntimeFilterPtr>{},
                 0,
@@ -3704,84 +3705,65 @@ CATCH
 TEST_P(DeltaMergeStoreRWTest, TestForCleanRead)
 try
 {
-    const size_t num_rows_each_pack = 128;
-    const size_t num_packs = 3;
-    {
-        for (size_t i = 0; i < num_packs; ++i)
+    static constexpr const char * pk_name = "_tidb_rowid";
+    store = reload(DMTestEnv::getDefaultColumns(DMTestEnv::PkType::HiddenTiDBRowID, true));
+    DMTestEnv::getDefaultColumns(DMTestEnv::PkType::HiddenTiDBRowID, true);
+    constexpr size_t pack_block_count = 2;
+    constexpr size_t num_rows_each_block = DEFAULT_MERGE_BLOCK_SIZE / pack_block_count;
+    constexpr size_t num_block = 10;
+    auto write_block = [&](Block block) {
+        switch (mode)
         {
-            // [i * 128, (i + 1) * 128)]: [0, 128), [128, 256), [256, 384) ...]
-            Block block = DMTestEnv::prepareSimpleWriteBlock(i * 128, (i + 1) * 128, false);
-
-            switch (mode)
-            {
-            case TestMode::V1_BlockOnly:
-            case TestMode::V2_BlockOnly:
-            case TestMode::V3_BlockOnly:
-                store->write(*db_context, db_context->getSettingsRef(), block);
-                break;
-            default:
-            {
-                auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
-                auto [range, file_ids] = genDMFile(*dm_context, block);
-                store->ingestFiles(dm_context, range, file_ids, false);
-                break;
-            }
-            }
+        case TestMode::V1_BlockOnly:
+        case TestMode::V2_BlockOnly:
+        case TestMode::V3_BlockOnly:
+            store->write(*db_context, db_context->getSettingsRef(), block);
+            break;
+        default:
+        {
+            auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
+            auto [range, file_ids] = genDMFile(*dm_context, block);
+            store->ingestFiles(dm_context, range, file_ids, false);
+            break;
+        }
+        }
+    };
+    {
+        for (size_t i = 0; i < num_block; ++i)
+        {
+            Block block = DMTestEnv::prepareSimpleWriteBlock(
+                i * num_rows_each_block,
+                (i + 1) * num_rows_each_block,
+                false,
+                std::numeric_limits<UInt64>::max(), // max version to make sure it's the latest
+                pk_name,
+                EXTRA_HANDLE_COLUMN_ID,
+                EXTRA_HANDLE_COLUMN_INT_TYPE,
+                false,
+                1,
+                true,
+                i == 3 || i == 5, // the 4th and 7th block mark as delete.
+                /*with_nullable_uint64*/ true);
+            write_block(block);
         }
     }
 
+    // After compact, there are 5 pack. The [0,3,4] is clean, and the [1,2] contains deletes.
     store->flushCache(*db_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
     store->compact(*db_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
     store->mergeDeltaAll(*db_context);
 
-    // can do clean read for all packs
-    {
-        const auto & columns = store->getTableColumns();
-        BlockInputStreamPtr in = store->read(
-            *db_context,
-            db_context->getSettingsRef(),
-            columns,
-            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
-            /* num_streams= */ 1,
-            /* max_version= */ std::numeric_limits<UInt64>::max(),
-            EMPTY_FILTER,
-            std::vector<RuntimeFilterPtr>{},
-            0,
-            TRACING_NAME,
-            /* keep_order= */ false,
-            /* is_fast_scan= */ false,
-            /* expected_block_size= */ 1024)[0];
-        ASSERT_INPUTSTREAM_COLS_UR(
-            in,
-            Strings({DMTestEnv::pk_name}),
-            createColumns({
-                createColumn<Int64>(createNumbers<Int64>(0, num_rows_each_pack * num_packs)),
-            }));
-    }
-
-    // Delete range [128, 192)
-    const size_t num_deleted_rows = 64;
-    {
-        HandleRange range(num_rows_each_pack, num_rows_each_pack + num_deleted_rows);
-        store->deleteRange(*db_context, db_context->getSettingsRef(), RowKeyRange::fromHandleRange(range));
-    }
-
-    store->flushCache(*db_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
-    store->compact(*db_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
-    store->mergeDeltaAll(*db_context);
-
-    // only pack 0, 2 can do clean read
+    // only pack 0,3,4 can do clean read
     {
         const auto & columns = store->getTableColumns();
         ColumnDefines real_columns;
         for (const auto & col : columns)
         {
-            if (col.name != EXTRA_HANDLE_COLUMN_NAME && col.name != TAG_COLUMN_NAME)
+            if (col.name != EXTRA_HANDLE_COLUMN_NAME && col.name != TAG_COLUMN_NAME && col.name != VERSION_COLUMN_NAME)
             {
                 real_columns.emplace_back(col);
             }
         }
-
         BlockInputStreamPtr in = store->read(
             *db_context,
             db_context->getSettingsRef(),
@@ -3793,13 +3775,194 @@ try
             std::vector<RuntimeFilterPtr>{},
             0,
             TRACING_NAME,
-            /* keep_order= */ false,
-            /* is_fast_scan= */ false,
-            /* expected_block_size= */ 1024)[0];
-        ASSERT_INPUTSTREAM_NROWS(in, num_rows_each_pack * num_packs - num_deleted_rows);
+            /* keep_order= */ true)[0]; // set keep order to let read_mode = Normal
+        ASSERT_INPUTSTREAM_NROWS(in, num_rows_each_block * num_block - num_rows_each_block * 2);
     }
 }
 CATCH
+
+void DeltaMergeStoreRWTest::dupHandleVersionAndDeltaIndexAdvancedThanSnapshot()
+{
+    auto table_column_defines = DMTestEnv::getDefaultColumns();
+    store = reload(table_column_defines);
+
+    auto create_block = [&](UInt64 beg, UInt64 end, UInt64 ts) {
+        auto block = DMTestEnv::prepareSimpleWriteBlock(beg, end, false, ts);
+        block.checkNumberOfRows();
+        return block;
+    };
+
+    auto write_block = [&](UInt64 beg, UInt64 end, UInt64 ts) {
+        auto block = create_block(beg, end, ts);
+        store->write(*db_context, db_context->getSettingsRef(), block);
+    };
+
+    auto create_stream = [&]() {
+        return store->read(
+            *db_context,
+            db_context->getSettingsRef(),
+            store->getTableColumns(),
+            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+            /* num_streams= */ 1,
+            /* start_ts= */ std::numeric_limits<UInt64>::max(),
+            EMPTY_FILTER,
+            std::vector<RuntimeFilterPtr>{},
+            /* rf_max_wait_time_ms= */ 0,
+            TRACING_NAME,
+            /* keep_order= */ false,
+            /* is_fast_scan= */ false,
+            DEFAULT_BLOCK_SIZE)[0];
+    };
+
+    auto count_rows = [](BlockInputStreamPtr stream) {
+        std::size_t count = 0;
+        stream->readPrefix();
+        for (;;)
+        {
+            auto block = stream->read();
+            if (!block)
+            {
+                break;
+            }
+            count += block.rows();
+        }
+        stream->readSuffix();
+        return count;
+    };
+
+    auto get_seg_read_task = [&](BlockInputStreamPtr stream) {
+        auto unordered_stream = std::dynamic_pointer_cast<UnorderedInputStream>(stream);
+        const auto & tasks = unordered_stream->task_pool->getTasks();
+        RUNTIME_CHECK(tasks.size() == 1, tasks.size());
+        return tasks.begin()->second;
+    };
+
+    auto clone_delta_index = [](SegmentReadTaskPtr seg_read_task) {
+        auto delta_snap = seg_read_task->read_snapshot->delta;
+        return delta_snap->getSharedDeltaIndex()->tryClone(delta_snap->getRows(), delta_snap->getDeletes());
+    };
+
+    auto check_delta_index
+        = [](DeltaIndexPtr delta_index, size_t expect_rows, size_t expect_deletes, Int64 expect_max_dup_tuple_id) {
+              auto [placed_rows, placed_deletes] = delta_index->getPlacedStatus();
+              ASSERT_EQ(placed_rows, expect_rows);
+              ASSERT_EQ(placed_deletes, expect_deletes);
+              ASSERT_EQ(delta_index->getDeltaTree()->maxDupTupleID(), expect_max_dup_tuple_id);
+          };
+
+    auto ensure_place = [&](SegmentReadTaskPtr seg_read_task) {
+        auto pk_ver_col_defs = std::make_shared<ColumnDefines>(
+            ColumnDefines{getExtraHandleColumnDefine(dm_context->is_common_handle), getVersionColumnDefine()});
+        auto delta_reader = std::make_shared<DeltaValueReader>(
+            *dm_context,
+            seg_read_task->read_snapshot->delta,
+            pk_ver_col_defs,
+            RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()),
+            ReadTag::MVCC);
+        return seg_read_task->segment->ensurePlace(
+            *dm_context,
+            seg_read_task->read_snapshot,
+            delta_reader,
+            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+            std::numeric_limits<UInt64>::max());
+    };
+
+    // Write [0, 128) with ts 1 for initializing stable.
+    write_block(0, 128, 1);
+    store->mergeDeltaAll(*db_context);
+
+    // Write [50, 60) with ts 2 for initializing delta.
+    write_block(50, 60, 2);
+
+    // Scan table normally.
+    {
+        auto stream = create_stream();
+        auto count = count_rows(stream);
+        ASSERT_EQ(count, 128);
+    }
+
+    // The snapshot does not include all the duplicated tuples of the delta index.
+    // This snapshot should rebuild delta index for itself.
+    // https://github.com/pingcap/tiflash/issues/8845
+    {
+        // Create snapshot but not place index
+        auto stream1 = create_stream();
+
+        // !!!Duplicated!!!: Write [50, 60) with ts 2
+        write_block(50, 60, 2);
+
+        // Place index with newest data.
+        auto stream2 = create_stream();
+        auto count2 = count_rows(stream2);
+        ASSERT_EQ(count2, 128);
+
+        // stream1 should not resue delta index of stream2
+
+        // Check cloning delta index
+        {
+            auto seg_read_task = get_seg_read_task(stream1);
+
+            // Shared delta index has been placed to the newest by `count_rows(stream2)`.
+            auto shared_delta_index = seg_read_task->read_snapshot->delta->getSharedDeltaIndex();
+            check_delta_index(shared_delta_index, 20, 0, 19);
+
+            // Cannot clone delta index because it contains duplicated records in the gap of snapshot and the shared delta index.
+            auto cloned_delta_index = clone_delta_index(seg_read_task);
+            check_delta_index(cloned_delta_index, 0, 0, -1);
+        }
+        // Check scanning result of stream1
+        auto count1 = count_rows(stream1);
+        ASSERT_EQ(count1, count2);
+    }
+
+    // Make sure shared delta index can be reused by new snapshot
+    {
+        auto stream = create_stream();
+        auto seg_read_task = get_seg_read_task(stream);
+        auto cloned_delta_index = clone_delta_index(seg_read_task);
+        check_delta_index(cloned_delta_index, 20, 0, 19);
+    }
+
+    // The snapshot includes all the duplicated tuples of the delta index.
+    // Delta index can be reused safely.
+    {
+        write_block(70, 80, 2);
+        auto stream = create_stream();
+        auto seg_read_task = get_seg_read_task(stream);
+        auto shared_delta_index = seg_read_task->read_snapshot->delta->getSharedDeltaIndex();
+        check_delta_index(shared_delta_index, 20, 0, 19);
+        auto cloned_delta_index = clone_delta_index(seg_read_task);
+        check_delta_index(cloned_delta_index, 20, 0, 19);
+        auto [placed_delta_index, fully_indexed] = ensure_place(seg_read_task);
+        ASSERT_TRUE(fully_indexed);
+        check_delta_index(placed_delta_index, 30, 0, 19);
+        auto count = count_rows(stream);
+        ASSERT_EQ(count, 128);
+    }
+
+    {
+        write_block(75, 85, 2);
+        auto stream = create_stream();
+        auto seg_read_task = get_seg_read_task(stream);
+        auto shared_delta_index = seg_read_task->read_snapshot->delta->getSharedDeltaIndex();
+        check_delta_index(shared_delta_index, 30, 0, 19);
+        auto cloned_delta_index = clone_delta_index(seg_read_task);
+        check_delta_index(cloned_delta_index, 30, 0, 19);
+        auto [placed_delta_index, fully_indexed] = ensure_place(seg_read_task);
+        ASSERT_TRUE(fully_indexed);
+        check_delta_index(placed_delta_index, 40, 0, 34);
+        auto count = count_rows(stream);
+        ASSERT_EQ(count, 128);
+    }
+}
+
+TEST_P(DeltaMergeStoreRWTest, DupHandleVersionAndDeltaIndexAdvancedThanSnapshot)
+try
+{
+    dupHandleVersionAndDeltaIndexAdvancedThanSnapshot();
+}
+CATCH
+
 } // namespace tests
 } // namespace DM
 } // namespace DB

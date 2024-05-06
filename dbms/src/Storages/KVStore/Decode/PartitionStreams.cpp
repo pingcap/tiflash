@@ -83,7 +83,8 @@ static void inline writeCommittedBlockDataIntoStorage(
     AtomicReadWriteCtx & rw_ctx,
     TableStructureLockHolder & lock,
     ManageableStoragePtr & storage,
-    Block & block)
+    Block & block,
+    RegionAppliedStatus applied_status)
 {
     /// Write block into storage.
     // Release the alter lock so that writing does not block DDL operations
@@ -97,7 +98,7 @@ static void inline writeCommittedBlockDataIntoStorage(
         static_cast<Int32>(storage->engineType()));
     // Note: do NOT use typeid_cast, since Storage is multi-inherited and typeid_cast will return nullptr
     auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
-    rw_ctx.write_result = dm_storage->write(block, rw_ctx.context.getSettingsRef());
+    rw_ctx.write_result = dm_storage->write(block, rw_ctx.context.getSettingsRef(), applied_status);
     rw_ctx.write_part_cost = watch.elapsedMilliseconds();
     GET_METRIC(tiflash_raft_write_data_to_storage_duration_seconds, type_write)
         .Observe(rw_ctx.write_part_cost / 1000.0);
@@ -172,7 +173,12 @@ static inline bool atomicReadWrite(
     if constexpr (std::is_same_v<ReadList, RegionDataReadInfoList>)
     {
         RUNTIME_CHECK(block_ptr != nullptr);
-        writeCommittedBlockDataIntoStorage(rw_ctx, lock, storage, *block_ptr);
+        writeCommittedBlockDataIntoStorage(
+            rw_ctx,
+            lock,
+            storage,
+            *block_ptr,
+            {.region_id = region->id(), .applied_index = region->appliedIndex()});
         storage->releaseDecodingBlock(block_decoding_schema_epoch, std::move(block_ptr));
     }
     else
@@ -349,10 +355,34 @@ std::optional<RegionDataReadInfoList> ReadRegionCommitCache(const RegionPtr & re
 
     RegionDataReadInfoList data_list_read;
     data_list_read.reserve(scanner.writeMapSize());
+    auto read_tso = region->getLastObservedReadTso();
+    Timestamp min_error_commit_tso = std::numeric_limits<Timestamp>::max();
+    size_t error_prone_count = 0;
     do
     {
-        data_list_read.emplace_back(scanner.next());
+        // A read index request with read_tso will stop concurrency manager from committing txns with smaller tso by advancing max_ts to at least read_tso.
+        auto data_read = scanner.next();
+        // It's a natual fallback when there has not been any read_tso on this region.
+        if (data_read.commit_ts <= read_tso)
+        {
+            error_prone_count++;
+            min_error_commit_tso = std::min(min_error_commit_tso, data_read.commit_ts);
+        }
+        data_list_read.emplace_back(std::move(data_read));
     } while (scanner.hasNext());
+    if (unlikely(error_prone_count > 0))
+    {
+        LOG_DEBUG(
+            DB::Logger::get(),
+            "Error prone txn commit, tot_count={} error_prone_count={} min_error_commit_tso={} read_tso={} "
+            "region_id={} applied_index={}",
+            data_list_read.size(),
+            error_prone_count,
+            min_error_commit_tso,
+            read_tso,
+            region->id(),
+            region->appliedIndex());
+    }
     return data_list_read;
 }
 

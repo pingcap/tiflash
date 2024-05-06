@@ -23,6 +23,8 @@ BatchReadIndexRes TiFlashRaftProxyHelper::batchReadIndex(
     return batchReadIndex_v2(req, timeout_ms);
 }
 
+// Learner Read will use `ReadIndexDataNode` which will send read index requests in batch,
+// so this function is not actually used after the optimization.
 BatchReadIndexRes TiFlashRaftProxyHelper::batchReadIndex_v2(
     const std::vector<kvrpcpb::ReadIndexRequest> & req,
     uint64_t timeout_ms) const
@@ -38,10 +40,10 @@ BatchReadIndexRes TiFlashRaftProxyHelper::batchReadIndex_v2(
     {
         if (auto task = makeReadIndexTask(r); !task)
         {
-            // The read index request is not sent successfully.
-            GET_METRIC(tiflash_raft_learner_read_failures_count, type_request_error).Increment();
             kvrpcpb::ReadIndexResponse res;
             res.mutable_region_error();
+            // The read index request is not sent successfully.
+            GET_METRIC(tiflash_raft_learner_read_failures_count, type_request_error_legacy).Increment();
             resps.emplace_back(std::move(res), r.context().region_id());
         }
         else
