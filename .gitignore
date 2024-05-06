@@ -49,6 +49,7 @@ CTestTestfile.cmake
 *.a
 *.o
 cmake-build-*
+/out
 /build
 /build-debug
 /build-release

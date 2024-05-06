@@ -54,7 +54,7 @@ void GeneratedColumnPlaceHolderTransformAction::insertColumns(Block & block, boo
         if (insert_data)
             column = data_type->createColumnConstWithDefaultValue(block.rows());
         else
-            column = data_type->createColumn();
+            column = data_type->createColumnConstWithDefaultValue(0);
         block.insert(col_index, ColumnWithTypeAndName{column, data_type, col_name});
     }
 }

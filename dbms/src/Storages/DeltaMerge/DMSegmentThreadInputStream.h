@@ -45,7 +45,7 @@ public:
         AfterSegmentRead after_segment_read_,
         const ColumnDefines & columns_to_read_,
         const PushDownFilterPtr & filter_,
-        UInt64 max_version_,
+        UInt64 start_ts_,
         size_t expected_block_size_,
         ReadMode read_mode_,
         const String & req_id)
@@ -55,7 +55,7 @@ public:
         , columns_to_read(columns_to_read_)
         , filter(filter_)
         , header(toEmptyBlock(columns_to_read))
-        , max_version(max_version_)
+        , start_ts(start_ts_)
         , expected_block_size(expected_block_size_)
         , read_mode(read_mode_)
         , log(Logger::get(req_id))
@@ -99,7 +99,7 @@ protected:
                     task->read_snapshot,
                     task->ranges,
                     filter,
-                    max_version,
+                    start_ts,
                     block_size);
                 LOG_TRACE(log, "Start to read segment, segment={}", cur_segment->simpleInfo());
             }
@@ -131,7 +131,7 @@ private:
     ColumnDefines columns_to_read;
     PushDownFilterPtr filter;
     Block header;
-    const UInt64 max_version;
+    const UInt64 start_ts;
     const size_t expected_block_size;
     const ReadMode read_mode;
     size_t total_rows = 0;

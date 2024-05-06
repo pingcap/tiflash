@@ -17,7 +17,6 @@
 #include <Common/formatIPv6.h>
 #include <DataTypes/DataTypeFixedString.h>
 #include <DataTypes/DataTypeString.h>
-#include <Dictionaries/DictionaryBlockInputStream.h>
 #include <Dictionaries/TrieDictionary.h>
 #include <IO/WriteIntText.h>
 #include <Poco/ByteOrder.h>
@@ -750,43 +749,6 @@ Columns TrieDictionary::getKeyColumns() const
     throw Exception("TrieDictionary::getKeyColumns is not implemented for 32bit arch", ErrorCodes::NOT_IMPLEMENTED);
 #endif
     return {std::move(ip_column), std::move(mask_column)};
-}
-
-BlockInputStreamPtr TrieDictionary::getBlockInputStream(const Names & column_names, size_t max_block_size) const
-{
-    using BlockInputStreamType = DictionaryBlockInputStream<TrieDictionary, UInt64>;
-
-    auto get_keys = [](const Columns & columns, const std::vector<DictionaryAttribute> & attributes) {
-        const auto & attr = attributes.front();
-        return ColumnsWithTypeAndName({ColumnWithTypeAndName(
-            columns.front(),
-            std::make_shared<DataTypeFixedString>(IPV6_BINARY_LENGTH),
-            attr.name)});
-    };
-    auto get_view = [](const Columns & columns, const std::vector<DictionaryAttribute> & attributes) {
-        auto column = ColumnString::create();
-        const auto & ip_column = static_cast<const ColumnFixedString &>(*columns.front());
-        const auto & mask_column = static_cast<const ColumnVector<UInt8> &>(*columns.back());
-        char buffer[48];
-        for (size_t row : ext::range(0, ip_column.size()))
-        {
-            UInt8 mask = mask_column.getElement(row);
-            char * ptr = buffer;
-            formatIPv6(reinterpret_cast<const unsigned char *>(ip_column.getDataAt(row).data), ptr);
-            *(ptr - 1) = '/';
-            auto size = detail::writeUIntText(mask, ptr);
-            column->insertData(buffer, size + (ptr - buffer));
-        }
-        return ColumnsWithTypeAndName{
-            ColumnWithTypeAndName(std::move(column), std::make_shared<DataTypeString>(), attributes.front().name)};
-    };
-    return std::make_shared<BlockInputStreamType>(
-        shared_from_this(),
-        max_block_size,
-        getKeyColumns(),
-        column_names,
-        std::move(get_keys),
-        std::move(get_view));
 }
 
 } // namespace DB

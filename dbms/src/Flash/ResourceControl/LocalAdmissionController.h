@@ -442,7 +442,9 @@ public:
         background_threads.emplace_back([this] { this->watchGAC(); });
     }
 
-    ~LocalAdmissionController()
+    ~LocalAdmissionController() { safeStop(); }
+
+    void safeStop()
     {
         try
         {
@@ -530,6 +532,17 @@ public:
         refill_token_callback = nullptr;
     }
 
+#ifdef DBMS_PUBLIC_GTEST
+    static std::unique_ptr<MockLocalAdmissionController> global_instance;
+#else
+    static std::unique_ptr<LocalAdmissionController> global_instance;
+#endif
+
+    // Interval of fetch from GAC periodically.
+    static constexpr auto DEFAULT_FETCH_GAC_INTERVAL = std::chrono::seconds(5);
+    static constexpr auto DEFAULT_FETCH_GAC_INTERVAL_MS = 5000;
+
+private:
     void stop()
     {
         if (stopped)
@@ -590,17 +603,6 @@ public:
         LOG_INFO(log, "LAC stopped done: final report size: {}", acquire_infos.size());
     }
 
-#ifdef DBMS_PUBLIC_GTEST
-    static std::unique_ptr<MockLocalAdmissionController> global_instance;
-#else
-    static std::unique_ptr<LocalAdmissionController> global_instance;
-#endif
-
-    // Interval of fetch from GAC periodically.
-    static constexpr auto DEFAULT_FETCH_GAC_INTERVAL = std::chrono::seconds(5);
-    static constexpr auto DEFAULT_FETCH_GAC_INTERVAL_MS = 5000;
-
-private:
     void consumeResource(const std::string & name, double ru, uint64_t cpu_time_in_ns)
     {
         if (unlikely(stopped))

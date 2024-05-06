@@ -121,9 +121,9 @@ void validateQueryInfo(
     }
 }
 
-MvccQueryInfo::MvccQueryInfo(bool resolve_locks_, UInt64 read_tso_, DM::ScanContextPtr scan_ctx)
-    : read_tso(read_tso_)
-    , resolve_locks(read_tso_ == std::numeric_limits<UInt64>::max() ? false : resolve_locks_)
+MvccQueryInfo::MvccQueryInfo(bool resolve_locks_, UInt64 start_ts_, DM::ScanContextPtr scan_ctx)
+    : start_ts(start_ts_)
+    , resolve_locks(start_ts_ == std::numeric_limits<UInt64>::max() ? false : resolve_locks_)
     , scan_context(std::move(scan_ctx))
 {
     // using `std::numeric_limits::max()` to resolve lock may break basic logic.

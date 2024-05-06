@@ -23,6 +23,7 @@ namespace DB
 namespace FailPoints
 {
 extern const char force_agg_on_partial_block[];
+extern const char force_agg_two_level_hash_table_before_merge[];
 } // namespace FailPoints
 namespace tests
 {
@@ -355,9 +356,16 @@ try
         for (size_t i = 0; i < test_num; ++i)
         {
             request = buildDAGRequest(std::make_pair(db_name, table_types), {}, group_by_exprs[i], projections[i]);
-            WRAP_FOR_AGG_PARTIAL_BLOCK_START
-            executeAndAssertColumnsEqual(request, expect_cols[i]);
-            WRAP_FOR_AGG_PARTIAL_BLOCK_END
+            for (auto force_two_level : {false, true})
+            {
+                if (force_two_level)
+                    FailPointHelper::enableFailPoint(FailPoints::force_agg_two_level_hash_table_before_merge);
+                else
+                    FailPointHelper::disableFailPoint(FailPoints::force_agg_two_level_hash_table_before_merge);
+                WRAP_FOR_AGG_PARTIAL_BLOCK_START
+                executeAndAssertColumnsEqual(request, expect_cols[i]);
+                WRAP_FOR_AGG_PARTIAL_BLOCK_END
+            }
         }
     }
 
@@ -414,9 +422,16 @@ try
         for (size_t i = 0; i < test_num; ++i)
         {
             request = buildDAGRequest(std::make_pair(db_name, table_types), {}, group_by_exprs[i], projections[i]);
-            WRAP_FOR_AGG_PARTIAL_BLOCK_START
-            executeAndAssertColumnsEqual(request, expect_cols[i]);
-            WRAP_FOR_AGG_PARTIAL_BLOCK_END
+            for (auto force_two_level : {false, true})
+            {
+                if (force_two_level)
+                    FailPointHelper::enableFailPoint(FailPoints::force_agg_two_level_hash_table_before_merge);
+                else
+                    FailPointHelper::disableFailPoint(FailPoints::force_agg_two_level_hash_table_before_merge);
+                WRAP_FOR_AGG_PARTIAL_BLOCK_START
+                executeAndAssertColumnsEqual(request, expect_cols[i]);
+                WRAP_FOR_AGG_PARTIAL_BLOCK_END
+            }
         }
     }
 

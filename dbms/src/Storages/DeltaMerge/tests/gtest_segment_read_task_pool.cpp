@@ -107,75 +107,11 @@ protected:
             /*res_group_name_*/ String{});
     }
 
-    inline static const std::vector<PageIdU64> test_seg_ids{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12};
-};
 
-TEST_F(SegmentReadTasksPoolTest, UnorderedWrapper)
-{
-    SegmentReadTasksWrapper tasks_wrapper(true, createSegmentReadTasks(test_seg_ids));
-
-    bool exception_happened = false;
-    try
+    void schedulerBasic()
     {
-        tasks_wrapper.nextTask();
-    }
-    catch (const Exception & e)
-    {
-        exception_happened = true;
-    }
-    ASSERT_TRUE(exception_happened);
+        SegmentReadTaskScheduler scheduler{false};
 
-    ASSERT_FALSE(tasks_wrapper.empty());
-    const auto & tasks = tasks_wrapper.getTasks();
-    ASSERT_EQ(tasks.size(), test_seg_ids.size());
-
-    std::random_device rd;
-    std::mt19937 g(rd());
-    std::vector<PageIdU64> v = test_seg_ids;
-    std::shuffle(v.begin(), v.end(), g);
-    for (PageIdU64 seg_id : v)
-    {
-        auto global_seg_id = createGlobalSegmentID(seg_id);
-        auto task = tasks_wrapper.getTask(global_seg_id);
-        ASSERT_NE(task, nullptr);
-        ASSERT_EQ(task->segment->segmentId(), seg_id);
-        task = tasks_wrapper.getTask(global_seg_id);
-        ASSERT_EQ(task, nullptr);
-    }
-    ASSERT_TRUE(tasks_wrapper.empty());
-}
-
-TEST_F(SegmentReadTasksPoolTest, OrderedWrapper)
-{
-    SegmentReadTasksWrapper tasks_wrapper(false, createSegmentReadTasks(test_seg_ids));
-
-    bool exception_happened = false;
-    try
-    {
-        tasks_wrapper.getTasks();
-    }
-    catch (const Exception & e)
-    {
-        exception_happened = true;
-    }
-    ASSERT_TRUE(exception_happened);
-
-    ASSERT_FALSE(tasks_wrapper.empty());
-
-    for (PageIdU64 seg_id : test_seg_ids)
-    {
-        auto task = tasks_wrapper.nextTask();
-        ASSERT_EQ(task->segment->segmentId(), seg_id);
-    }
-    ASSERT_TRUE(tasks_wrapper.empty());
-    ASSERT_EQ(tasks_wrapper.nextTask(), nullptr);
-}
-
-TEST_F(SegmentReadTasksPoolTest, SchedulerBasic)
-{
-    SegmentReadTaskScheduler scheduler{false};
-
-    {
         // Create and add pool.
         auto pool = createSegmentReadTaskPool(test_seg_ids);
         pool->increaseUnorderedInputStreamRefCount();
@@ -254,6 +190,74 @@ TEST_F(SegmentReadTasksPoolTest, SchedulerBasic)
             ASSERT_FALSE(pool->valid());
         }
     }
+
+    inline static const std::vector<PageIdU64> test_seg_ids{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12};
+};
+
+TEST_F(SegmentReadTasksPoolTest, UnorderedWrapper)
+{
+    SegmentReadTasksWrapper tasks_wrapper(true, createSegmentReadTasks(test_seg_ids));
+
+    bool exception_happened = false;
+    try
+    {
+        tasks_wrapper.nextTask();
+    }
+    catch (const Exception & e)
+    {
+        exception_happened = true;
+    }
+    ASSERT_TRUE(exception_happened);
+
+    ASSERT_FALSE(tasks_wrapper.empty());
+    const auto & tasks = tasks_wrapper.getTasks();
+    ASSERT_EQ(tasks.size(), test_seg_ids.size());
+
+    std::random_device rd;
+    std::mt19937 g(rd());
+    std::vector<PageIdU64> v = test_seg_ids;
+    std::shuffle(v.begin(), v.end(), g);
+    for (PageIdU64 seg_id : v)
+    {
+        auto global_seg_id = createGlobalSegmentID(seg_id);
+        auto task = tasks_wrapper.getTask(global_seg_id);
+        ASSERT_NE(task, nullptr);
+        ASSERT_EQ(task->segment->segmentId(), seg_id);
+        task = tasks_wrapper.getTask(global_seg_id);
+        ASSERT_EQ(task, nullptr);
+    }
+    ASSERT_TRUE(tasks_wrapper.empty());
+}
+
+TEST_F(SegmentReadTasksPoolTest, OrderedWrapper)
+{
+    SegmentReadTasksWrapper tasks_wrapper(false, createSegmentReadTasks(test_seg_ids));
+
+    bool exception_happened = false;
+    try
+    {
+        tasks_wrapper.getTasks();
+    }
+    catch (const Exception & e)
+    {
+        exception_happened = true;
+    }
+    ASSERT_TRUE(exception_happened);
+
+    ASSERT_FALSE(tasks_wrapper.empty());
+
+    for (PageIdU64 seg_id : test_seg_ids)
+    {
+        auto task = tasks_wrapper.nextTask();
+        ASSERT_EQ(task->segment->segmentId(), seg_id);
+    }
+    ASSERT_TRUE(tasks_wrapper.empty());
+    ASSERT_EQ(tasks_wrapper.nextTask(), nullptr);
+}
+
+TEST_F(SegmentReadTasksPoolTest, SchedulerBasic)
+{
+    schedulerBasic();
 }
 
 } // namespace DB::DM::tests
