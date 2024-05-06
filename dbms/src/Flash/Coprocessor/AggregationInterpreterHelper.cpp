@@ -83,6 +83,7 @@ std::shared_ptr<Aggregator::Params> buildParams(
     size_t agg_streams_size,
     const Names & key_names,
     const std::unordered_map<String, String> & key_ref_agg_func,
+    const std::unordered_map<String, String> & agg_func_ref_key,
     const TiDB::TiDBCollators & collators,
     const AggregateDescriptions & aggregate_descriptions,
     bool is_final_agg,
@@ -131,6 +132,7 @@ std::shared_ptr<Aggregator::Params> buildParams(
         before_agg_header,
         keys,
         key_ref_agg_func,
+        agg_func_ref_key,
         aggregate_descriptions,
         /// do not use the average value for key count threshold, because for a random distributed data, the key count
         /// in every threads should almost be the same

@@ -55,9 +55,11 @@ PhysicalPlanNodePtr PhysicalAggregation::build(
     AggregateDescriptions aggregate_descriptions;
     Names aggregation_keys;
     std::unordered_map<String, String> key_ref_agg_func;
+    std::unordered_map<String, String> agg_func_ref_key;
     TiDB::TiDBCollators collators;
     {
         std::unordered_set<String> agg_key_set;
+        const bool collation_sensitive = AggregationInterpreterHelper::isGroupByCollationSensitive(context);
         analyzer.buildAggFuncs(aggregation, before_agg_actions, aggregate_descriptions, aggregated_columns);
         analyzer.buildAggGroupBy(
             aggregation.group_by(),
@@ -67,8 +69,13 @@ PhysicalPlanNodePtr PhysicalAggregation::build(
             aggregation_keys,
             agg_key_set,
             key_ref_agg_func,
-            AggregationInterpreterHelper::isGroupByCollationSensitive(context),
+            collation_sensitive,
             collators);
+        analyzer.tryEliminateFirstRow(
+            aggregation_keys,
+            collators,
+            agg_func_ref_key,
+            aggregate_descriptions);
     }
 
     auto expr_after_agg_actions = PhysicalPlanHelper::newActions(aggregated_columns);
@@ -86,6 +93,7 @@ PhysicalPlanNodePtr PhysicalAggregation::build(
         before_agg_actions,
         aggregation_keys,
         key_ref_agg_func,
+        agg_func_ref_key,
         collators,
         AggregationInterpreterHelper::isFinalAgg(aggregation),
         aggregate_descriptions,
@@ -117,6 +125,7 @@ void PhysicalAggregation::buildBlockInputStreamImpl(DAGPipeline & pipeline, Cont
         fine_grained_shuffle.enable() ? pipeline.streams.size() : 1,
         aggregation_keys,
         key_ref_agg_func,
+        agg_func_ref_key,
         aggregation_collators,
         aggregate_descriptions,
         is_final_agg,
@@ -234,6 +243,7 @@ void PhysicalAggregation::buildPipelineExecGroupImpl(
         concurrency,
         aggregation_keys,
         key_ref_agg_func,
+        agg_func_ref_key,
         aggregation_collators,
         aggregate_descriptions,
         is_final_agg,
@@ -275,6 +285,7 @@ void PhysicalAggregation::buildPipeline(
             aggregation_keys,
             aggregation_collators,
             key_ref_agg_func,
+            agg_func_ref_key,
             is_final_agg,
             aggregate_descriptions,
             aggregate_context);

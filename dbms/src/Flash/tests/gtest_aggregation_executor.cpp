@@ -982,6 +982,63 @@ try
 }
 CATCH
 
+TEST_F(AggExecutorTestRunner, AggKeyOptimization)
+try
+{
+    const auto rows = 1024;
+    const auto row_types = 4;
+    const auto rows_per_type = rows / row_types;
+    DB::MockColumnInfoVec table_column_infos{
+        {"col_string_with_collator", TiDB::TP::TypeString, false},
+        {"col_string_no_collator", TiDB::TP::TypeString, false},
+        {"col_int", TiDB::TP::TypeLong, false}};
+
+    std::vector<String> col_data_string_with_collator(rows);
+    std::vector<String> col_data_string_no_collator(rows);
+    std::vector<TypeTraits<Int32>::FieldType> col_data_int(rows);
+    for (size_t i = 0; i < row_types; ++i)
+    {
+        for (size_t j = 0; j < rows_per_type; ++j)
+        {
+            char ch = 'a' + i;
+            const auto idx = i * rows_per_type + j;
+            col_data_string_with_collator[idx] = std::string{ch};
+            col_data_string_no_collator[idx] = std::string{ch};
+            col_data_int[idx] = i;
+        }
+    }
+    context.addMockTable(
+            {"test_db", "agg_key_opt_table"},
+            table_column_infos,
+            {
+                toVec<String>("col_string_with_collator", col_data_string_with_collator),
+                toVec<String>("col_string_no_collator", col_data_string_no_collator),
+                toVec<Int32>("col_int", col_data_int),
+            });
+
+    // select count(1), col_int from t1 group by col_int
+    std::vector<ASTPtr> agg_funcs = {
+        makeASTFunction("count", lit(Field(static_cast<UInt64>(1)))),
+        makeASTFunction("first_row", col("col_int"))
+    };
+    MockAstVec keys;
+    keys.push_back(col("col_int"));
+    auto request = context.scan("test_db", "agg_key_opt_table").aggregation(agg_funcs, keys).build(context);
+    auto expected = {
+        toVec<UInt64>("count(1)", ColumnWithUInt64{rows_per_type, rows_per_type, rows_per_type, rows_per_type}),
+        toNullableVec<Int32>("first_row(col_int)", ColumnWithNullableInt32{0, 1, 2, 3}),
+        toVec<Int32>("col_int", ColumnWithInt32{0, 1, 2, 3})
+    };
+    executeAndAssertColumnsEqual(request, expected);
+
+    // select count(1), col_string_with_collator from t1 group by col_string_with_collator
+
+
+    // select count(1), col_string_no_collator from t1 group by col_string_no_collator
+
+}
+CATCH
+
 TEST_F(AggExecutorTestRunner, FineGrainedShuffle)
 try
 {

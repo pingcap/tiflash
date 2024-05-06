@@ -239,6 +239,7 @@ Block Aggregator::Params::getHeader(
     const Block & intermediate_header,
     const ColumnNumbers & keys,
     const AggregateDescriptions & aggregates,
+    const std::unordered_map<String, String> & agg_func_ref_key,
     bool final)
 {
     Block res;
@@ -256,6 +257,12 @@ Block Aggregator::Params::getHeader(
                 elem.type = aggregate.function->getReturnType();
                 elem.column = elem.type->createColumn();
             }
+            // todo ?
+            // for (const auto & ref : agg_func_ref_key)
+            // {
+            //     const auto agg_func_name = ref.first;
+            //     const auto key_name = ref.second;
+            // }
         }
     }
     else
@@ -280,6 +287,17 @@ Block Aggregator::Params::getHeader(
                     aggregate.parameters);
 
             res.insert({type, aggregate.column_name});
+        }
+        if (final)
+        {
+            // todo change not final, agg_func_ref_key only works for final
+            for (const auto & ref : agg_func_ref_key)
+            {
+                const auto & agg_func_name = ref.first;
+                const auto & key_name = ref.second;
+                const auto & key_type = src_header.getByName(key_name).type;
+                res.insert({key_type, agg_func_name});
+            }
         }
     }
 
@@ -1092,6 +1110,7 @@ Block Aggregator::convertOneBucketToBlock(
         = enable_convert_key_optimization ? params.key_ref_agg_func : std::unordered_map<String, String>();
     size_t convert_key_size
         = enable_convert_key_optimization ? params.keys_size - key_ref_agg_func.size() : params.keys_size;
+
     if (enable_convert_key_optimization && params.key_ref_agg_func.size() == params.keys_size)
     {
         block = prepareBlockAndFill(
@@ -1761,6 +1780,11 @@ Block Aggregator::prepareBlockAndFill(
         res.getByName(pair.first).column = res.getByName(pair.second).column;
     }
 
+    for (const auto & pair : params.agg_func_ref_key)
+    {
+        res.getByName(pair.first).column = res.getByName(pair.second).column;
+    }
+
     /// Change the size of the columns-constants in the block.
     size_t columns = header.columns();
     for (size_t i = 0; i < columns; ++i)
@@ -1870,6 +1894,11 @@ BlocksList Aggregator::prepareBlocksAndFill(
         }
 
         for (const auto & pair : key_ref_agg_func)
+        {
+            res.getByName(pair.first).column = res.getByName(pair.second).column;
+        }
+
+        for (const auto & pair : params.agg_func_ref_key)
         {
             res.getByName(pair.first).column = res.getByName(pair.second).column;
         }

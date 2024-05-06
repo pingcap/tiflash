@@ -919,7 +919,8 @@ void InterpreterSelectQuery::executeAggregation(
     Aggregator::Params params(
         header,
         keys,
-        {}, // ignore group by key serialization optimization.
+        {}, // ignore group by skip key convert optimization.
+        {}, // ignore eliminate agg func optimization.
         aggregates,
         allow_to_use_two_level_group_by ? settings.group_by_two_level_threshold : SettingUInt64(0),
         allow_to_use_two_level_group_by ? settings.group_by_two_level_threshold_bytes : SettingUInt64(0),
@@ -997,7 +998,8 @@ void InterpreterSelectQuery::executeMergeAggregated(Pipeline & pipeline, bool fi
     Aggregator::Params params(
         header,
         keys,
-        {}, // ignore group by key serialization optimization.
+        {}, // ignore group by skip key convert optimization.
+        {}, // ignore eliminate agg func optimization.
         aggregates,
         SpillConfig(
             context.getTemporaryPath(),

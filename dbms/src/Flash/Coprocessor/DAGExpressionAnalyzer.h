@@ -74,9 +74,9 @@ public:
 
     std::vector<NameAndTypePair> appendOrderBy(ExpressionActionsChain & chain, const tipb::TopN & topN);
 
-    /// <aggregation_keys, collators, aggregate_descriptions, before_agg>
+    /// <aggregation_keys, collators, aggregate_descriptions, before_agg, key_ref_agg_func, agg_func_ref_key>
     /// May change the source columns.
-    std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions, ExpressionActionsPtr, std::unordered_map<String, String>> appendAggregation(
+    std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions, ExpressionActionsPtr, std::unordered_map<String, String>, std::unordered_map<String, String>> appendAggregation(
         ExpressionActionsChain & chain,
         const tipb::Aggregation & agg,
         bool group_by_collation_sensitive);
@@ -192,6 +192,15 @@ public:
         std::unordered_map<String, String> & key_ref_agg_func,
         bool group_by_collation_sensitive,
         TiDB::TiDBCollators & collators);
+
+    // Try eliminate first_row/any agg func when there is no collator for this column.
+    // The agg func value will reference to group by key, which is indicated by agg_func_ref_key.
+    // This function should be called after buildAggFuncs() and buildAggGroupBy().
+    static void tryEliminateFirstRow(
+        const Names & aggregation_keys,
+        const TiDB::TiDBCollators & collators,
+        std::unordered_map<String, String> & agg_func_ref_key,
+        AggregateDescriptions & aggregate_descriptions);
 
     void appendCastAfterAgg(const ExpressionActionsPtr & actions, const tipb::Aggregation & agg);
 

@@ -1044,6 +1044,7 @@ public:
         /// What to count.
         ColumnNumbers keys;
         std::unordered_map<String, String> key_ref_agg_func;
+        std::unordered_map<String, String> agg_func_ref_key;
         AggregateDescriptions aggregates;
         size_t keys_size;
         size_t aggregates_size;
@@ -1060,6 +1061,7 @@ public:
             const Block & src_header_,
             const ColumnNumbers & keys_,
             const std::unordered_map<String, String> & key_ref_agg_func_,
+            const std::unordered_map<String, String> & agg_func_ref_key_,
             const AggregateDescriptions & aggregates_,
             size_t group_by_two_level_threshold_,
             size_t group_by_two_level_threshold_bytes_,
@@ -1071,6 +1073,7 @@ public:
             : src_header(src_header_)
             , keys(keys_)
             , key_ref_agg_func(key_ref_agg_func_)
+            , agg_func_ref_key(agg_func_ref_key_)
             , aggregates(aggregates_)
             , keys_size(keys.size())
             , aggregates_size(aggregates.size())
@@ -1088,6 +1091,7 @@ public:
             const Block & intermediate_header_,
             const ColumnNumbers & keys_,
             const std::unordered_map<String, String> & key_ref_agg_func_,
+            const std::unordered_map<String, String> & agg_func_ref_key_,
             const AggregateDescriptions & aggregates_,
             const SpillConfig & spill_config,
             UInt64 max_block_size_,
@@ -1096,6 +1100,7 @@ public:
                 Block(),
                 keys_,
                 key_ref_agg_func_,
+                agg_func_ref_key_,
                 aggregates_,
                 0,
                 0,
@@ -1113,11 +1118,12 @@ public:
             const Block & intermediate_header,
             const ColumnNumbers & keys,
             const AggregateDescriptions & aggregates,
+            const std::unordered_map<String, String> & agg_func_ref_key,
             bool final);
 
         Block getHeader(bool final) const
         {
-            return getHeader(src_header, intermediate_header, keys, aggregates, final);
+            return getHeader(src_header, intermediate_header, keys, aggregates, agg_func_ref_key, final);
         }
 
         /// Calculate the column numbers in `keys` and `aggregates`.

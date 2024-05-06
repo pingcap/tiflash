@@ -642,6 +642,43 @@ void DAGExpressionAnalyzer::buildAggGroupBy(
     }
 }
 
+void DAGExpressionAnalyzer::tryEliminateFirstRow(
+    const Names & aggregation_keys,
+    const TiDB::TiDBCollators & collators,
+    std::unordered_map<String, String> & agg_func_ref_key,
+    AggregateDescriptions & aggregate_descriptions)
+{
+    // Assume aggregate_keys and collators are corresponding one by one.
+    RUNTIME_CHECK(aggregation_keys.size() == collators.size());
+
+    for (size_t i = 0; i < aggregation_keys.size(); ++i)
+    {
+        for (const auto & agg_desc : aggregate_descriptions)
+        {
+            const auto & func_name = agg_desc.function->getName();
+            if (collators[i] == nullptr && (func_name == "first_row" || func_name == "any")
+                && agg_desc.argument_names.size() == 1 && agg_desc.argument_names[0] == aggregation_keys[i])
+            {
+                agg_func_ref_key.insert({agg_desc.column_name, aggregation_keys[i]});
+            }
+        }
+    }
+
+    if (agg_func_ref_key.empty())
+        return;
+
+    AggregateDescriptions tmp_aggregate_descriptions;
+    tmp_aggregate_descriptions.reserve(aggregate_descriptions.size() - agg_func_ref_key.size());
+    for (const auto & desc : aggregate_descriptions)
+    {
+        if (agg_func_ref_key.find(desc.column_name) == agg_func_ref_key.end())
+        {
+            tmp_aggregate_descriptions.push_back(desc);
+        }
+    }
+    aggregate_descriptions = tmp_aggregate_descriptions;
+}
+
 void DAGExpressionAnalyzer::buildAggFuncs(
     const tipb::Aggregation & aggregation,
     const ExpressionActionsPtr & actions,
@@ -675,7 +712,7 @@ void DAGExpressionAnalyzer::buildAggFuncs(
     }
 }
 
-std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions, ExpressionActionsPtr, std::unordered_map<String, String>> DAGExpressionAnalyzer::
+std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions, ExpressionActionsPtr, std::unordered_map<String, String>, std::unordered_map<String, String>> DAGExpressionAnalyzer::
     appendAggregation(ExpressionActionsChain & chain, const tipb::Aggregation & agg, bool group_by_collation_sensitive)
 {
     if (agg.group_by_size() == 0 && agg.agg_func_size() == 0)
@@ -692,6 +729,7 @@ std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions, ExpressionActionsP
     TiDB::TiDBCollators collators;
     std::unordered_set<String> agg_key_set;
     std::unordered_map<String, String> key_ref_agg_func;
+    std::unordered_map<String, String> agg_func_ref_key;
     buildAggFuncs(agg, step.actions, aggregate_descriptions, aggregated_columns);
     buildAggGroupBy(
         agg.group_by(),
@@ -703,6 +741,7 @@ std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions, ExpressionActionsP
         key_ref_agg_func,
         group_by_collation_sensitive,
         collators);
+    tryEliminateFirstRow(aggregation_keys, collators, agg_func_ref_key, aggregate_descriptions);
     // set required output for agg funcs's arguments and group by keys.
     for (const auto & aggregate_description : aggregate_descriptions)
     {
@@ -724,7 +763,7 @@ std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions, ExpressionActionsP
     for (const auto & column : getCurrentInputColumns())
         after_agg_step.required_output.push_back(column.name);
 
-    return {aggregation_keys, collators, aggregate_descriptions, before_agg, key_ref_agg_func};
+    return {aggregation_keys, collators, aggregate_descriptions, before_agg, key_ref_agg_func, agg_func_ref_key};
 }
 
 bool isWindowFunctionsValid(const tipb::Window & window)
