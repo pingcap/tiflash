@@ -16,6 +16,8 @@
 #include <Storages/DeltaMerge/ReadThread/MergedTask.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 
+#include <condition_variable>
+
 namespace DB
 {
 struct Settings;
@@ -54,6 +56,8 @@ public:
 
     void updateConfig(const Settings & settings);
 
+    void notify() LOCKS_EXCLUDED(mtx);
+
 private:
     // `run_sched_thread` is used for test.
     explicit SegmentReadTaskScheduler(bool run_sched_thread = true);
@@ -74,6 +78,7 @@ private:
     bool schedule() LOCKS_EXCLUDED(mtx);
     // `schedLoop()` calls `schedule()` in infinite loop.
     void schedLoop() LOCKS_EXCLUDED(mtx);
+    void waitForTimeoutOrNotify() LOCKS_EXCLUDED(mtx);
 
     MergedTaskPtr scheduleMergedTask(SegmentReadTaskPoolPtr & pool) EXCLUSIVE_LOCKS_REQUIRED(mtx);
     // Returns <seg_id, pool_ids>.
@@ -85,6 +90,7 @@ private:
     std::mutex add_mtx ACQUIRED_BEFORE(mtx);
 
     std::mutex mtx;
+    std::condition_variable cv;
     // pool_id -> pool
     std::unordered_map<UInt64, SegmentReadTaskPoolPtr> read_pools GUARDED_BY(mtx);
     // GlobalSegmentID -> pool_ids

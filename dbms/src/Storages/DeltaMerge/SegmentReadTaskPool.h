@@ -205,9 +205,10 @@ public:
 private:
     Int64 getFreeActiveSegmentsUnlock() const;
     bool exceptionHappened() const;
+    void throwIfExceptionHappened() const;
     void finishSegment(const SegmentReadTaskPtr & seg);
     void pushBlock(Block && block);
-
+    void notifySchedulerOnDemand() const;
     bool isRUExhaustedImpl();
 
     const int extra_table_id_index;

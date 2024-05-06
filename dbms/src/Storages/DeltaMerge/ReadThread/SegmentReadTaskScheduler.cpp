@@ -65,6 +65,7 @@ void SegmentReadTaskScheduler::add(const SegmentReadTaskPoolPtr & pool)
         read_pools.size(),
         sw_add.elapsed() / 1000.0,
         sw_do_add.elapsed() / 1000.0);
+    cv.notify_one();
 }
 
 MergedTaskPtr SegmentReadTaskScheduler::scheduleMergedTask(SegmentReadTaskPoolPtr & pool)
@@ -197,6 +198,7 @@ std::optional<std::pair<GlobalSegmentID, std::vector<UInt64>>> SegmentReadTaskSc
 void SegmentReadTaskScheduler::setStop()
 {
     stop.store(true, std::memory_order_relaxed);
+    cv.notify_one();
 }
 
 bool SegmentReadTaskScheduler::isStop() const
@@ -297,8 +299,7 @@ void SegmentReadTaskScheduler::schedLoop()
     {
         if (!schedule())
         {
-            using namespace std::chrono_literals;
-            std::this_thread::sleep_for(2ms);
+            waitForTimeoutOrNotify();
         }
     }
 }
@@ -308,4 +309,22 @@ void SegmentReadTaskScheduler::updateConfig(const Settings & settings)
     enable_data_sharing = settings.dt_max_sharing_column_bytes_for_all > 0;
 }
 
+void SegmentReadTaskScheduler::notify()
+{
+    cv.notify_one();
+}
+
+void SegmentReadTaskScheduler::waitForTimeoutOrNotify()
+{
+    std::unique_lock lock(mtx);
+    auto status = cv.wait_for(lock, std::chrono::milliseconds(2));
+    if (status == std::cv_status::timeout)
+    {
+        GET_METRIC(tiflash_storage_read_thread_counter, type_sche_timeout).Increment();
+    }
+    else
+    {
+        GET_METRIC(tiflash_storage_read_thread_counter, type_sche_notify).Increment();
+    }
+}
 } // namespace DB::DM
