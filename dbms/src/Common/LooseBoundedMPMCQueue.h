@@ -69,7 +69,7 @@ public:
             std::lock_guard lock(mu);
             if (isFullWithoutLock() && status == MPMCQueueStatus::NORMAL)
             {
-                pipe_reader_cv.registerTask(std::move(task));
+                pipe_writer_cv.registerTask(std::move(task));
                 return;
             }
         }
@@ -98,8 +98,8 @@ public:
             }
         }
         if (notify_writer)
-            notifyWriter();
-        notifyReader();
+            notifyOneWriter();
+        notifyOneReader();
         return MPMCQueueResult::OK;
     }
 
@@ -123,8 +123,8 @@ public:
             }
         }
         if (notify_writer)
-            notifyWriter();
-        notifyReader();
+            notifyOneWriter();
+        notifyOneReader();
         return MPMCQueueResult::OK;
     }
 
@@ -146,8 +146,8 @@ public:
                 notify_writer = pushFront(std::forward<U>(data));
         }
         if (notify_writer)
-            notifyWriter();
-        notifyReader();
+            notifyOneWriter();
+        notifyOneReader();
         return MPMCQueueResult::OK;
     }
 
@@ -168,7 +168,7 @@ public:
 
             data = popBack();
         }
-        notifyWriter();
+        notifyOneWriter();
         return MPMCQueueResult::OK;
     }
 
@@ -184,7 +184,7 @@ public:
 
             data = popBack();
         }
-        notifyWriter();
+        notifyOneWriter();
         return MPMCQueueResult::OK;
     }
 
@@ -201,7 +201,7 @@ public:
 
             popBack();
         }
-        notifyWriter();
+        notifyOneWriter();
         return MPMCQueueResult::OK;
     }
 
@@ -255,16 +255,25 @@ public:
     }
 
 private:
-    void notifyReader()
+    void notifyOneReader()
     {
         reader_cv.notify_one();
         pipe_reader_cv.notifyOne();
     }
 
-    void notifyWriter()
+    void notifyOneWriter()
     {
         writer_cv.notify_one();
         pipe_writer_cv.notifyOne();
+    }
+
+    void notifyAll()
+    {
+        reader_cv.notify_all();
+        pipe_reader_cv.notifyAll();
+
+        writer_cv.notify_all();
+        pipe_writer_cv.notifyAll();
     }
 
     bool isFullWithoutLock() const
@@ -287,12 +296,7 @@ private:
             }
         }
         if (ret)
-        {
-            reader_cv.notify_all();
-            pipe_reader_cv.notifyAll();
-            writer_cv.notify_all();
-            pipe_writer_cv.notifyAll();
-        }
+            notifyAll();
         return ret;
     }
 
@@ -354,8 +358,9 @@ private:
     Int64 current_auxiliary_memory_usage = 0;
 
     std::condition_variable reader_cv;
-    PipeConditionVariable pipe_reader_cv;
     std::condition_variable writer_cv;
+
+    PipeConditionVariable pipe_reader_cv;
     PipeConditionVariable pipe_writer_cv;
 
     MPMCQueueStatus status = MPMCQueueStatus::NORMAL;

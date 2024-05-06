@@ -170,8 +170,7 @@ ResultQueuePtr PipelineExecutorContext::toConsumeMode(size_t queue_size)
 void PipelineExecutorContext::addSharedQueue(const SharedQueuePtr & shared_queue)
 {
     std::lock_guard lock(mu);
-    if (unlikely(isCancelled()))
-        throw Exception("query has been cancelled.");
+    RUNTIME_CHECK_MSG(!isCancelled(), "query has been cancelled.");
     assert(shared_queue);
     shared_queues.push_back(shared_queue);
 }
