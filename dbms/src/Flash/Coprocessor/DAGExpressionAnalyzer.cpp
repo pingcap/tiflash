@@ -648,7 +648,7 @@ void DAGExpressionAnalyzer::buildAggGroupBy(
 void DAGExpressionAnalyzer::tryEliminateFirstRow(
     const Names & aggregation_keys,
     const TiDB::TiDBCollators & collators,
-    std::unordered_map<String, String> & agg_func_ref_key,
+    AggFuncRefKeyMap & agg_func_ref_key,
     AggregateDescriptions & aggregate_descriptions)
 {
     // Assume aggregate_keys and collators are corresponding one by one.
@@ -1540,7 +1540,11 @@ ExpressionActionsPtr DAGExpressionAnalyzer::appendCopyColumnAfterAgg(
     const KeyRefAggFuncMap & key_ref_agg_func,
     const AggFuncRefKeyMap & agg_func_ref_key)
 {
-    RUNTIME_CHECK(agg_required_output_columns.size() > key_ref_agg_func.size() + agg_func_ref_key.size());
+    // agg_required_output_columns.size() == key_ref_agg_func.size() + agg_func_ref_key.size() happens when:
+    // select group_concat(distinct c1) from t where id = 0;
+    // The first stage of HashAgg will only has one group by expr and no agg func expr.
+    // So agg_required_output_columns is [any(c1)], key_ref_agg_func is [c1, any(c1)], agg_func_ref_key is empty.
+    RUNTIME_CHECK(agg_required_output_columns.size() >= key_ref_agg_func.size() + agg_func_ref_key.size());
     auto actual_agg_output_col_cnt
         = agg_required_output_columns.size() - key_ref_agg_func.size() - agg_func_ref_key.size();
     NamesAndTypes agg_output_columns;
@@ -1553,6 +1557,7 @@ ExpressionActionsPtr DAGExpressionAnalyzer::appendCopyColumnAfterAgg(
             agg_output_columns.push_back(col);
         }
     }
+    RUNTIME_CHECK(!agg_output_columns.empty());
 
     auto expr_after_agg_actions = PhysicalPlanHelper::newActions(agg_output_columns);
     for (const auto & pair : key_ref_agg_func)

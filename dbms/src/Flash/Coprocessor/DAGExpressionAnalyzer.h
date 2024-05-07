@@ -199,7 +199,7 @@ public:
     static void tryEliminateFirstRow(
         const Names & aggregation_keys,
         const TiDB::TiDBCollators & collators,
-        std::unordered_map<String, String> & agg_func_ref_key,
+        AggFuncRefKeyMap & agg_func_ref_key,
         AggregateDescriptions & aggregate_descriptions);
 
     // There may be first row optimization for HashAgg,
