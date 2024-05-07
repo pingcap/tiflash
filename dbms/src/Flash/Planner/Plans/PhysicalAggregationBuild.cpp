@@ -103,7 +103,7 @@ EventPtr PhysicalAggregationBuild::doSinkComplete(PipelineExecutorContext & exec
 
     if (aggregate_context->isConvertibleToTwoLevel())
     {
-        bool need_convert_to_two_level = aggregate_context->hasAtLeastOneTwoLevel();
+        bool need_convert_to_two_level = need_final_spill || aggregate_context->hasAtLeastOneTwoLevel();
         fiu_do_on(FailPoints::force_agg_two_level_hash_table_before_merge, { need_convert_to_two_level = true; });
         if (need_convert_to_two_level)
         {
