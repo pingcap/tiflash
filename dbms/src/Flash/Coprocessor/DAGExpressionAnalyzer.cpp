@@ -31,6 +31,7 @@
 #include <Flash/Coprocessor/DAGExpressionAnalyzerHelper.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Coprocessor/JoinInterpreterHelper.h>
+#include <Flash/Planner/PhysicalPlanHelper.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/FunctionsTiDBConversion.h>
@@ -47,6 +48,7 @@
 #include <WindowFunctions/WindowFunctionFactory.h>
 #include <tipb/executor.pb.h>
 #include <tipb/expression.pb.h>
+#include "Flash/Coprocessor/InterpreterUtils.h"
 
 
 namespace DB
@@ -141,14 +143,14 @@ DataTypePtr findDuplicateAggWindowFunc(const String & func_string, const Descrip
 }
 
 /// Generate AggregateDescription and append it to AggregateDescriptions if need.
-/// And append output column to aggregated_columns.
+/// And append output column to agg_required_output_columns.
 void appendAggDescription(
     const Names & arg_names,
     const DataTypes & arg_types,
     TiDB::TiDBCollators & arg_collators,
     const String & agg_func_name,
     AggregateDescriptions & aggregate_descriptions,
-    NamesAndTypes & aggregated_columns,
+    NamesAndTypes & agg_required_output_columns,
     bool empty_input_as_null,
     const Context & context)
 {
@@ -160,7 +162,7 @@ void appendAggDescription(
     if (auto duplicated_return_type = findDuplicateAggWindowFunc(func_string, aggregate_descriptions))
     {
         // agg function duplicate, don't need to build again.
-        aggregated_columns.emplace_back(func_string, duplicated_return_type);
+        agg_required_output_columns.emplace_back(func_string, duplicated_return_type);
         return;
     }
 
@@ -170,7 +172,7 @@ void appendAggDescription(
         = AggregateFunctionFactory::instance().get(context, agg_func_name, arg_types, {}, 0, empty_input_as_null);
     aggregate.function->setCollators(arg_collators);
 
-    aggregated_columns.emplace_back(func_string, aggregate.function->getReturnType());
+    agg_required_output_columns.emplace_back(func_string, aggregate.function->getReturnType());
 
     aggregate_descriptions.emplace_back(std::move(aggregate));
 }
@@ -408,7 +410,7 @@ void DAGExpressionAnalyzer::buildGroupConcat(
     const ExpressionActionsPtr & actions,
     const String & agg_func_name,
     AggregateDescriptions & aggregate_descriptions,
-    NamesAndTypes & aggregated_columns,
+    NamesAndTypes & agg_required_output_columns,
     bool result_is_nullable)
 {
     AggregateDescription aggregate;
@@ -462,7 +464,7 @@ void DAGExpressionAnalyzer::buildGroupConcat(
     /// return directly if the agg is duplicated
     if (auto duplicated_return_type = findDuplicateAggWindowFunc(func_string, aggregate_descriptions))
     {
-        aggregated_columns.emplace_back(func_string, duplicated_return_type);
+        agg_required_output_columns.emplace_back(func_string, duplicated_return_type);
         return;
     }
 
@@ -516,8 +518,8 @@ void DAGExpressionAnalyzer::buildGroupConcat(
 
     aggregate_descriptions.push_back(aggregate);
     DataTypePtr result_type = aggregate.function->getReturnType();
-    // this is a temp result since implicit cast maybe added on these aggregated_columns
-    aggregated_columns.emplace_back(func_string, result_type);
+    // this is a temp result since implicit cast maybe added on these agg_required_output_columns
+    agg_required_output_columns.emplace_back(func_string, result_type);
 }
 
 void DAGExpressionAnalyzer::buildCommonAggFunc(
@@ -525,7 +527,7 @@ void DAGExpressionAnalyzer::buildCommonAggFunc(
     const ExpressionActionsPtr & actions,
     const String & agg_func_name,
     AggregateDescriptions & aggregate_descriptions,
-    NamesAndTypes & aggregated_columns,
+    NamesAndTypes & agg_required_output_columns,
     bool empty_input_as_null)
 {
     auto child_size = expr.children_size();
@@ -550,7 +552,7 @@ void DAGExpressionAnalyzer::buildCommonAggFunc(
         arg_collators,
         agg_func_name,
         aggregate_descriptions,
-        aggregated_columns,
+        agg_required_output_columns,
         empty_input_as_null,
         context);
 }
@@ -571,10 +573,10 @@ void DAGExpressionAnalyzer::buildAggGroupBy(
     const google::protobuf::RepeatedPtrField<tipb::Expr> & group_by,
     const ExpressionActionsPtr & actions,
     AggregateDescriptions & aggregate_descriptions,
-    NamesAndTypes & aggregated_columns,
+    NamesAndTypes & agg_required_output_columns,
     Names & aggregation_keys,
     std::unordered_set<String> & agg_key_set,
-    std::unordered_map<String, String> & key_ref_agg_func,
+    KeyRefAggFuncMap & key_ref_agg_func,
     bool group_by_collation_sensitive,
     TiDB::TiDBCollators & collators)
 {
@@ -609,7 +611,7 @@ void DAGExpressionAnalyzer::buildAggGroupBy(
                 String agg_func_name = first_row_name;
                 if (!first_row_name.empty())
                 {
-                    aggregated_columns.emplace_back(first_row_name, first_row_type);
+                    agg_required_output_columns.emplace_back(first_row_name, first_row_type);
                 }
                 else
                 {
@@ -623,7 +625,7 @@ void DAGExpressionAnalyzer::buildAggGroupBy(
                         arg_collators,
                         "any",
                         aggregate_descriptions,
-                        aggregated_columns,
+                        agg_required_output_columns,
                         false,
                         context);
                     agg_func_name = aggregate_descriptions.back().column_name;
@@ -632,12 +634,12 @@ void DAGExpressionAnalyzer::buildAggGroupBy(
             }
             else
             {
-                aggregated_columns.emplace_back(name, actions->getSampleBlock().getByName(name).type);
+                agg_required_output_columns.emplace_back(name, actions->getSampleBlock().getByName(name).type);
             }
         }
         else
         {
-            aggregated_columns.emplace_back(name, actions->getSampleBlock().getByName(name).type);
+            agg_required_output_columns.emplace_back(name, actions->getSampleBlock().getByName(name).type);
         }
     }
 }
@@ -683,7 +685,7 @@ void DAGExpressionAnalyzer::buildAggFuncs(
     const tipb::Aggregation & aggregation,
     const ExpressionActionsPtr & actions,
     AggregateDescriptions & aggregate_descriptions,
-    NamesAndTypes & aggregated_columns)
+    NamesAndTypes & agg_required_output_columns)
 {
     for (const tipb::Expr & expr : aggregation.agg_func())
     {
@@ -694,7 +696,7 @@ void DAGExpressionAnalyzer::buildAggFuncs(
                 actions,
                 getAggFuncName(expr, aggregation, context.getSettingsRef()),
                 aggregate_descriptions,
-                aggregated_columns,
+                agg_required_output_columns,
                 aggregation.group_by().empty());
         }
         else
@@ -706,13 +708,13 @@ void DAGExpressionAnalyzer::buildAggFuncs(
                 actions,
                 getAggFuncName(expr, aggregation, context.getSettingsRef()),
                 aggregate_descriptions,
-                aggregated_columns,
+                agg_required_output_columns,
                 empty_input_as_null);
         }
     }
 }
 
-std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions, ExpressionActionsPtr, std::unordered_map<String, String>, std::unordered_map<String, String>> DAGExpressionAnalyzer::
+std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions, ExpressionActionsPtr, KeyRefAggFuncMap, AggFuncRefKeyMap> DAGExpressionAnalyzer::
     appendAggregation(ExpressionActionsChain & chain, const tipb::Aggregation & agg, bool group_by_collation_sensitive)
 {
     if (agg.group_by_size() == 0 && agg.agg_func_size() == 0)
@@ -723,19 +725,19 @@ std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions, ExpressionActionsP
 
     auto & step = initAndGetLastStep(chain);
 
-    NamesAndTypes aggregated_columns;
+    NamesAndTypes agg_required_output_columns;
     AggregateDescriptions aggregate_descriptions;
     Names aggregation_keys;
     TiDB::TiDBCollators collators;
     std::unordered_set<String> agg_key_set;
-    std::unordered_map<String, String> key_ref_agg_func;
-    std::unordered_map<String, String> agg_func_ref_key;
-    buildAggFuncs(agg, step.actions, aggregate_descriptions, aggregated_columns);
+    KeyRefAggFuncMap key_ref_agg_func;
+    AggFuncRefKeyMap agg_func_ref_key;
+    buildAggFuncs(agg, step.actions, aggregate_descriptions, agg_required_output_columns);
     buildAggGroupBy(
         agg.group_by(),
         step.actions,
         aggregate_descriptions,
-        aggregated_columns,
+        agg_required_output_columns,
         aggregation_keys,
         agg_key_set,
         key_ref_agg_func,
@@ -751,13 +753,12 @@ std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions, ExpressionActionsP
     for (const auto & aggregation_key : aggregation_keys)
         step.required_output.push_back(aggregation_key);
 
-    source_columns = std::move(aggregated_columns);
-
     auto before_agg = chain.getLastActions();
     chain.finalize();
     chain.clear();
 
     auto & after_agg_step = initAndGetLastStep(chain);
+    after_agg_step.actions = appendCopyColumnAfterAgg(agg_required_output_columns, key_ref_agg_func, agg_func_ref_key);
     appendCastAfterAgg(after_agg_step.actions, agg);
     // after appendCastAfterAgg, current input columns has been modified.
     for (const auto & column : getCurrentInputColumns())
@@ -1531,6 +1532,42 @@ void DAGExpressionAnalyzer::appendCastAfterAgg(
     {
         std::swap(source_columns, updated_aggregated_columns);
     }
+}
+
+ExpressionActionsPtr DAGExpressionAnalyzer::appendCopyColumnAfterAgg(
+        const NamesAndTypes & agg_required_output_columns,
+        const KeyRefAggFuncMap & key_ref_agg_func,
+        const AggFuncRefKeyMap & agg_func_ref_key)
+{
+    RUNTIME_CHECK(agg_required_output_columns.size() > key_ref_agg_func.size() + agg_func_ref_key.size());
+    auto actual_agg_output_col_cnt = agg_required_output_columns.size() - key_ref_agg_func.size() - agg_func_ref_key.size();
+    NamesAndTypes agg_output_columns;
+    agg_output_columns.reserve(actual_agg_output_col_cnt);
+    for (const auto & col : agg_required_output_columns)
+    {
+        if (key_ref_agg_func.find(col.name) == key_ref_agg_func.end() &&
+                agg_func_ref_key.find(col.name) == agg_func_ref_key.end())
+        {
+            agg_output_columns.push_back(col);
+        }
+    }
+
+    auto expr_after_agg_actions = PhysicalPlanHelper::newActions(agg_output_columns);
+    for (const auto & pair : key_ref_agg_func)
+    {
+        const auto & key_name = pair.first;
+        const auto & agg_func_name = pair.second;
+        expr_after_agg_actions->add(ExpressionAction::copyColumn(agg_func_name, key_name));
+    }
+
+    for (const auto & pair : agg_func_ref_key)
+    {
+        const auto & agg_func_name = pair.first;
+        const auto & key_name = pair.second;
+        expr_after_agg_actions->add(ExpressionAction::copyColumn(key_name, agg_func_name));
+    }
+    reset(agg_required_output_columns);
+    return expr_after_agg_actions;
 }
 
 NamesWithAliases DAGExpressionAnalyzer::genNonRootFinalProjectAliases(const String & column_prefix) const

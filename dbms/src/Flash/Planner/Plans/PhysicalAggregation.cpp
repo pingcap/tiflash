@@ -51,21 +51,21 @@ PhysicalPlanNodePtr PhysicalAggregation::build(
 
     DAGExpressionAnalyzer analyzer{child->getSchema(), context};
     ExpressionActionsPtr before_agg_actions = PhysicalPlanHelper::newActions(child->getSampleBlock());
-    NamesAndTypes aggregated_columns;
+    NamesAndTypes agg_required_output_columns;
     AggregateDescriptions aggregate_descriptions;
     Names aggregation_keys;
-    std::unordered_map<String, String> key_ref_agg_func;
-    std::unordered_map<String, String> agg_func_ref_key;
+    KeyRefAggFuncMap key_ref_agg_func;
+    AggFuncRefKeyMap agg_func_ref_key;
     TiDB::TiDBCollators collators;
     {
         std::unordered_set<String> agg_key_set;
         const bool collation_sensitive = AggregationInterpreterHelper::isGroupByCollationSensitive(context);
-        analyzer.buildAggFuncs(aggregation, before_agg_actions, aggregate_descriptions, aggregated_columns);
+        analyzer.buildAggFuncs(aggregation, before_agg_actions, aggregate_descriptions, agg_required_output_columns);
         analyzer.buildAggGroupBy(
             aggregation.group_by(),
             before_agg_actions,
             aggregate_descriptions,
-            aggregated_columns,
+            agg_required_output_columns,
             aggregation_keys,
             agg_key_set,
             key_ref_agg_func,
@@ -78,8 +78,7 @@ PhysicalPlanNodePtr PhysicalAggregation::build(
             aggregate_descriptions);
     }
 
-    auto expr_after_agg_actions = PhysicalPlanHelper::newActions(aggregated_columns);
-    analyzer.reset(aggregated_columns);
+    auto expr_after_agg_actions = analyzer.appendCopyColumnAfterAgg(agg_required_output_columns, key_ref_agg_func, agg_func_ref_key);
     analyzer.appendCastAfterAgg(expr_after_agg_actions, aggregation);
     /// project action after aggregation to remove useless columns.
     auto schema = PhysicalPlanHelper::addSchemaProjectAction(expr_after_agg_actions, analyzer.getCurrentInputColumns());

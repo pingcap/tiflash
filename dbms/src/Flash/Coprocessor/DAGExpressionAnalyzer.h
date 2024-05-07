@@ -76,7 +76,7 @@ public:
 
     /// <aggregation_keys, collators, aggregate_descriptions, before_agg, key_ref_agg_func, agg_func_ref_key>
     /// May change the source columns.
-    std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions, ExpressionActionsPtr, std::unordered_map<String, String>, std::unordered_map<String, String>> appendAggregation(
+    std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions, ExpressionActionsPtr, KeyRefAggFuncMap, AggFuncRefKeyMap> appendAggregation(
         ExpressionActionsChain & chain,
         const tipb::Aggregation & agg,
         bool group_by_collation_sensitive);
@@ -180,16 +180,16 @@ public:
         const tipb::Aggregation & aggregation,
         const ExpressionActionsPtr & actions,
         AggregateDescriptions & aggregate_descriptions,
-        NamesAndTypes & aggregated_columns);
+        NamesAndTypes & agg_required_output_columns);
 
     void buildAggGroupBy(
         const google::protobuf::RepeatedPtrField<tipb::Expr> & group_by,
         const ExpressionActionsPtr & actions,
         AggregateDescriptions & aggregate_descriptions,
-        NamesAndTypes & aggregated_columns,
+        NamesAndTypes & agg_required_output_columns,
         Names & aggregation_keys,
         std::unordered_set<String> & agg_key_set,
-        std::unordered_map<String, String> & key_ref_agg_func,
+        KeyRefAggFuncMap & key_ref_agg_func,
         bool group_by_collation_sensitive,
         TiDB::TiDBCollators & collators);
 
@@ -201,6 +201,14 @@ public:
         const TiDB::TiDBCollators & collators,
         std::unordered_map<String, String> & agg_func_ref_key,
         AggregateDescriptions & aggregate_descriptions);
+
+    // There may be first row optimization for HashAgg,
+    // which will not copy all required columns(specificed by tipb) from HashMap.
+    // So need to append copy column action.
+    ExpressionActionsPtr appendCopyColumnAfterAgg(
+            const NamesAndTypes & agg_required_output_columns,
+            const KeyRefAggFuncMap & key_ref_agg_func,
+            const AggFuncRefKeyMap & agg_func_ref_key);
 
     void appendCastAfterAgg(const ExpressionActionsPtr & actions, const tipb::Aggregation & agg);
 
@@ -225,7 +233,7 @@ private:
         const ExpressionActionsPtr & actions,
         const String & agg_func_name,
         AggregateDescriptions & aggregate_descriptions,
-        NamesAndTypes & aggregated_columns,
+        NamesAndTypes & agg_required_output_columns,
         bool result_is_nullable);
 
     void buildCommonAggFunc(
@@ -233,7 +241,7 @@ private:
         const ExpressionActionsPtr & actions,
         const String & agg_func_name,
         AggregateDescriptions & aggregate_descriptions,
-        NamesAndTypes & aggregated_columns,
+        NamesAndTypes & agg_required_output_columns,
         bool empty_input_as_null);
 
     void buildLeadLag(

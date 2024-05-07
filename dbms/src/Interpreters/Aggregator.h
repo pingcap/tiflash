@@ -1043,8 +1043,8 @@ public:
 
         /// What to count.
         ColumnNumbers keys;
-        std::unordered_map<String, String> key_ref_agg_func;
-        std::unordered_map<String, String> agg_func_ref_key;
+        KeyRefAggFuncMap key_ref_agg_func;
+        AggFuncRefKeyMap agg_func_ref_key;
         AggregateDescriptions aggregates;
         size_t keys_size;
         size_t aggregates_size;
@@ -1060,8 +1060,8 @@ public:
         Params(
             const Block & src_header_,
             const ColumnNumbers & keys_,
-            const std::unordered_map<String, String> & key_ref_agg_func_,
-            const std::unordered_map<String, String> & agg_func_ref_key_,
+            const KeyRefAggFuncMap & key_ref_agg_func_,
+            const AggFuncRefKeyMap & agg_func_ref_key_,
             const AggregateDescriptions & aggregates_,
             size_t group_by_two_level_threshold_,
             size_t group_by_two_level_threshold_bytes_,
@@ -1090,8 +1090,8 @@ public:
         Params(
             const Block & intermediate_header_,
             const ColumnNumbers & keys_,
-            const std::unordered_map<String, String> & key_ref_agg_func_,
-            const std::unordered_map<String, String> & agg_func_ref_key_,
+            const KeyRefAggFuncMap & key_ref_agg_func_,
+            const AggFuncRefKeyMap & agg_func_ref_key_,
             const AggregateDescriptions & aggregates_,
             const SpillConfig & spill_config,
             UInt64 max_block_size_,
@@ -1118,12 +1118,12 @@ public:
             const Block & intermediate_header,
             const ColumnNumbers & keys,
             const AggregateDescriptions & aggregates,
-            const std::unordered_map<String, String> & agg_func_ref_key,
+            const KeyRefAggFuncMap & key_ref_agg_func,
             bool final);
 
         Block getHeader(bool final) const
         {
-            return getHeader(src_header, intermediate_header, keys, aggregates, agg_func_ref_key, final);
+            return getHeader(src_header, intermediate_header, keys, aggregates, key_ref_agg_func, final);
         }
 
         /// Calculate the column numbers in `keys` and `aggregates`.
@@ -1409,8 +1409,7 @@ protected:
         bool final,
         size_t rows,
         Filler && filler,
-        size_t convert_key_size,
-        const std::unordered_map<String, String> & key_ref_agg_func) const;
+        size_t convert_key_size) const;
 
     template <typename Filler>
     BlocksList prepareBlocksAndFill(
@@ -1418,8 +1417,7 @@ protected:
         bool final,
         size_t rows,
         Filler && filler,
-        size_t convert_key_size,
-        const std::unordered_map<String, String> & key_ref_agg_func) const;
+        size_t convert_key_size) const;
 
     template <typename Method>
     Block convertOneBucketToBlock(
