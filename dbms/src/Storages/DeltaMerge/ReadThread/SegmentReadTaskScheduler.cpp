@@ -40,6 +40,15 @@ SegmentReadTaskScheduler::~SegmentReadTaskScheduler()
 void SegmentReadTaskScheduler::add(const SegmentReadTaskPoolPtr & pool)
 {
     assert(pool != nullptr);
+    if (pool->getPendingSegmentCount() <= 0)
+    {
+        LOG_INFO(
+            pool->getLogger(),
+            "Ignored for no segment to read, pool_id={} table_id={}",
+            pool->pool_id,
+            pool->physical_table_id);
+        return;
+    }
     Stopwatch sw_add;
     // `add_lock` is only used in this function to make all threads calling `add` to execute serially.
     std::lock_guard add_lock(add_mtx);
