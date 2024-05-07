@@ -22,6 +22,7 @@ namespace DB
 namespace FailPoints
 {
 extern const char force_agg_on_partial_block[];
+extern const char force_thread_0_no_agg_spill[];
 } // namespace FailPoints
 
 namespace tests
@@ -46,6 +47,17 @@ public:
             FailPointHelper::disableFailPoint(FailPoints::force_agg_on_partial_block);
 
 #define WRAP_FOR_AGG_PARTIAL_BLOCK_END }
+
+#define WRAP_FOR_AGG_THREAD0_NO_SPILL_START                                            \
+    for (auto thread0_no_spill : {true, false})                                        \
+    {                                                                                  \
+        if (thread0_no_spill)                                                          \
+            FailPointHelper::enableFailPoint(FailPoints::force_thread_0_no_agg_spill); \
+        else                                                                           \
+            FailPointHelper::disableFailPoint(FailPoints::force_thread_0_no_agg_spill);
+
+#define WRAP_FOR_AGG_THREAD0_NO_SPILL_END }
+
 
 #define WRAP_FOR_SPILL_TEST_BEGIN                  \
     std::vector<bool> pipeline_bools{false, true}; \
@@ -249,6 +261,7 @@ try
                     context.context->setSetting("max_block_size", Field(static_cast<UInt64>(max_block_size)));
                     WRAP_FOR_SPILL_TEST_BEGIN
                     WRAP_FOR_AGG_PARTIAL_BLOCK_START
+                    WRAP_FOR_AGG_THREAD0_NO_SPILL_START
                     auto blocks = getExecuteStreamsReturnBlocks(request, concurrency);
                     for (auto & block : blocks)
                     {
@@ -273,6 +286,7 @@ try
                             vstackBlocks(std::move(blocks)).getColumnsWithTypeAndName(),
                             false));
                     }
+                    WRAP_FOR_AGG_THREAD0_NO_SPILL_END
                     WRAP_FOR_AGG_PARTIAL_BLOCK_END
                     WRAP_FOR_SPILL_TEST_END
                 }
@@ -402,6 +416,7 @@ try
                     context.context->setSetting("max_block_size", Field(static_cast<UInt64>(max_block_size)));
                     WRAP_FOR_SPILL_TEST_BEGIN
                     WRAP_FOR_AGG_PARTIAL_BLOCK_START
+                    WRAP_FOR_AGG_THREAD0_NO_SPILL_START
                     auto blocks = getExecuteStreamsReturnBlocks(request, concurrency);
                     for (auto & block : blocks)
                     {
@@ -426,6 +441,7 @@ try
                             vstackBlocks(std::move(blocks)).getColumnsWithTypeAndName(),
                             false));
                     }
+                    WRAP_FOR_AGG_THREAD0_NO_SPILL_END
                     WRAP_FOR_AGG_PARTIAL_BLOCK_END
                     WRAP_FOR_SPILL_TEST_END
                 }

@@ -98,7 +98,7 @@ EventPtr PhysicalAggregationBuild::doSinkComplete(PipelineExecutorContext & exec
         }
     }
 
-    if (need_final_spill)
+    if (aggregate_context->hasSpilledData() || need_final_spill)
     {
         /// Currently, the aggregation spill algorithm requires all bucket data to be spilled,
         /// so a new event is added here to execute the final spill.

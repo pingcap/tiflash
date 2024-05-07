@@ -78,7 +78,6 @@ bool AggregatedDataVariants::tryMarkNeedSpill()
         /// Data can only be flushed to disk if a two-level aggregation is supported.
         if (!isConvertibleToTwoLevel())
             return false;
-        convertToTwoLevel();
     }
     need_spill = true;
     return true;
@@ -1028,6 +1027,11 @@ void Aggregator::spill(AggregatedDataVariants & data_variants, size_t thread_num
 {
     assert(data_variants.need_spill);
     agg_spill_context->markSpilled();
+    if unlikely (!data_variants.isTwoLevel())
+    {
+        assert(isConvertibleToTwoLevel());
+        data_variants.convertToTwoLevel();
+    }
     /// Flush only two-level data and possibly overflow data.
 #define M(NAME)                                                                                                     \
     case AggregationMethodType(NAME):                                                                               \
