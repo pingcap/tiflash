@@ -100,7 +100,7 @@ protected:
 
     virtual OperatorStatus awaitImpl() { throw Exception("Unsupport"); }
 
-    virtual void notifyImpl(){}
+    virtual void notifyImpl() {}
 
 protected:
     PipelineExecutorContext & exec_context;
