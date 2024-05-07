@@ -15031,14 +15031,6 @@
               "interval": "",
               "legendFormat": "DeltaIndexCacheSize-{{instance}}",
               "refId": "E"
-            },
-            {
-              "exemplar": true,
-              "expr": "sum(tiflash_system_current_metric_MemoryTrackingSharedColumnData{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}) by (instance)",
-              "hide": false,
-              "interval": "",
-              "legendFormat": "SharedColumnData-{{instance}}",
-              "refId": "F"
             }
           ],
           "thresholds": [],

@@ -93,7 +93,11 @@ public:
     }
     void setException(const DB::Exception & e);
 
+#ifndef DBMS_PUBLIC_GTEST
 private:
+#else
+public:
+#endif
     void initOnce();
     int readOneBlock();
 
