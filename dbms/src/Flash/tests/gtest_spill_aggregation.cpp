@@ -48,15 +48,15 @@ public:
 
 #define WRAP_FOR_AGG_PARTIAL_BLOCK_END }
 
-#define WRAP_FOR_AGG_THREAD0_NO_SPILL_START                                            \
-    for (auto thread0_no_spill : {true, false})                                        \
+#define WRAP_FOR_AGG_THREAD_0_NO_SPILL_START                                           \
+    for (auto thread_0_no_spill : {true, false})                                       \
     {                                                                                  \
-        if (thread0_no_spill)                                                          \
+        if (thread_0_no_spill)                                                         \
             FailPointHelper::enableFailPoint(FailPoints::force_thread_0_no_agg_spill); \
         else                                                                           \
             FailPointHelper::disableFailPoint(FailPoints::force_thread_0_no_agg_spill);
 
-#define WRAP_FOR_AGG_THREAD0_NO_SPILL_END }
+#define WRAP_FOR_AGG_THREAD_0_NO_SPILL_END }
 
 
 #define WRAP_FOR_SPILL_TEST_BEGIN                  \
@@ -115,9 +115,11 @@ try
     /// don't use `executeAndAssertColumnsEqual` since it takes too long to run
     /// test single thread aggregation
     WRAP_FOR_AGG_PARTIAL_BLOCK_START
+    WRAP_FOR_AGG_THREAD_0_NO_SPILL_START
     ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, 1));
     /// test parallel aggregation
     ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams));
+    WRAP_FOR_AGG_THREAD_0_NO_SPILL_END
     WRAP_FOR_AGG_PARTIAL_BLOCK_END
     /// enable spill and use small max_cached_data_bytes_in_spiller
     context.context->setSetting("max_cached_data_bytes_in_spiller", Field(static_cast<UInt64>(total_data_size / 200)));
@@ -261,7 +263,7 @@ try
                     context.context->setSetting("max_block_size", Field(static_cast<UInt64>(max_block_size)));
                     WRAP_FOR_SPILL_TEST_BEGIN
                     WRAP_FOR_AGG_PARTIAL_BLOCK_START
-                    WRAP_FOR_AGG_THREAD0_NO_SPILL_START
+                    WRAP_FOR_AGG_THREAD_0_NO_SPILL_START
                     auto blocks = getExecuteStreamsReturnBlocks(request, concurrency);
                     for (auto & block : blocks)
                     {
@@ -286,7 +288,7 @@ try
                             vstackBlocks(std::move(blocks)).getColumnsWithTypeAndName(),
                             false));
                     }
-                    WRAP_FOR_AGG_THREAD0_NO_SPILL_END
+                    WRAP_FOR_AGG_THREAD_0_NO_SPILL_END
                     WRAP_FOR_AGG_PARTIAL_BLOCK_END
                     WRAP_FOR_SPILL_TEST_END
                 }
@@ -416,7 +418,7 @@ try
                     context.context->setSetting("max_block_size", Field(static_cast<UInt64>(max_block_size)));
                     WRAP_FOR_SPILL_TEST_BEGIN
                     WRAP_FOR_AGG_PARTIAL_BLOCK_START
-                    WRAP_FOR_AGG_THREAD0_NO_SPILL_START
+                    WRAP_FOR_AGG_THREAD_0_NO_SPILL_START
                     auto blocks = getExecuteStreamsReturnBlocks(request, concurrency);
                     for (auto & block : blocks)
                     {
@@ -441,7 +443,7 @@ try
                             vstackBlocks(std::move(blocks)).getColumnsWithTypeAndName(),
                             false));
                     }
-                    WRAP_FOR_AGG_THREAD0_NO_SPILL_END
+                    WRAP_FOR_AGG_THREAD_0_NO_SPILL_END
                     WRAP_FOR_AGG_PARTIAL_BLOCK_END
                     WRAP_FOR_SPILL_TEST_END
                 }
