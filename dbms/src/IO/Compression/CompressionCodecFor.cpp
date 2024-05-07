@@ -174,7 +174,7 @@ UInt32 CompressionCodecFor::doCompressData(const char * source, UInt32 source_si
     case 8:
         return 1 + compressData<UInt64>(reinterpret_cast<const UInt64 *>(source), count, &dest[1]);
     default:
-        throw Exception(ErrorCodes::CANNOT_COMPRESS, "Cannot compress Delta-encoded data. Unsupported bytes size");
+        throw Exception(ErrorCodes::CANNOT_COMPRESS, "Cannot compress For-encoded data. Unsupported bytes size");
     }
 }
 
@@ -185,7 +185,7 @@ void CompressionCodecFor::doDecompressData(
     UInt32 uncompressed_size) const
 {
     if unlikely (source_size < 2)
-        throw Exception(ErrorCodes::CANNOT_DECOMPRESS, "Cannot decompress delta-encoded data. File has wrong header");
+        throw Exception(ErrorCodes::CANNOT_DECOMPRESS, "Cannot decompress For-encoded data. File has wrong header");
 
     if (uncompressed_size == 0)
         return;
@@ -214,7 +214,7 @@ void CompressionCodecFor::doDecompressData(
         decompressData<UInt64>(&source[1], source_size_no_header, dest, uncompressed_size);
         break;
     default:
-        throw Exception(ErrorCodes::CANNOT_DECOMPRESS, "Cannot decompress Delta-encoded data. Unsupported bytes size");
+        throw Exception(ErrorCodes::CANNOT_DECOMPRESS, "Cannot decompress For-encoded data. Unsupported bytes size");
     }
 }
 
