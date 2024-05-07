@@ -30,7 +30,7 @@ public:
     static void applyFrameOfReference(T * dst, T frame_of_reference, UInt32 count);
 
     template <typename T>
-    static UInt32 compressData(const char * source, UInt32 source_size, char * dest);
+    static UInt32 compressData(const T * source, UInt32 count, char * dest);
 
     template <typename T>
     static void decompressData(const char * source, UInt32 source_size, char * dest, UInt32 output_size);

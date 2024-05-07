@@ -44,7 +44,10 @@ UInt8 CompressionCodecDeltaFor::getMethodByte() const
 
 UInt32 CompressionCodecDeltaFor::getMaxCompressedDataSize(UInt32 uncompressed_size) const
 {
-    // 1 byte for bytes_size, x bytes for frame of reference, 1 byte for width.
+    /**
+     *|bytes_of_original_type|frame_of_reference|width(bits)  |bitpacked data|
+     *|1 bytes               |bytes_size        |sizeof(UInt8)|required size |
+     */
     const size_t count = uncompressed_size / bytes_size;
     return 1 + bytes_size + sizeof(UInt8) + BitpackingPrimitives::getRequiredSize(count, bytes_size * 8);
 }
@@ -69,8 +72,9 @@ UInt32 compressData(const char * source, UInt32 source_size, char * dest)
 {
     static_assert(std::is_integral<T>::value, "Integral required.");
     const auto count = source_size / sizeof(T);
-    DeltaEncode<T>(reinterpret_cast<const T *>(source), count, reinterpret_cast<T *>(dest));
-    return CompressionCodecFor::compressData<T>(dest, source_size, dest);
+    auto * typed_dest = reinterpret_cast<T *>(dest);
+    DeltaEncode<T>(reinterpret_cast<const T *>(source), count, typed_dest);
+    return CompressionCodecFor::compressData<T>(typed_dest, count, dest);
 }
 
 template <typename T>

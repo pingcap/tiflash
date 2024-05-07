@@ -16,6 +16,7 @@
 #include <Common/Exception.h>
 #include <IO/Compression/CompressionCodecFor.h>
 #include <IO/Compression/CompressionInfo.h>
+#include <common/likely.h>
 #include <common/unaligned.h>
 
 #if defined(__AVX2__)
@@ -42,24 +43,21 @@ UInt8 CompressionCodecFor::getMethodByte() const
 
 UInt32 CompressionCodecFor::getMaxCompressedDataSize(UInt32 uncompressed_size) const
 {
-    // 1 byte for bytes_size, x bytes for frame of reference, 1 byte for width.
-    size_t count = uncompressed_size / bytes_size;
+    /**
+     *|bytes_of_original_type|frame_of_reference|width(bits)  |bitpacked data|
+     *|1 bytes               |bytes_size        |sizeof(UInt8)|required size |
+     */
+    const size_t count = uncompressed_size / bytes_size;
     return 1 + bytes_size + sizeof(UInt8) + BitpackingPrimitives::getRequiredSize(count, bytes_size * 8);
 }
 
 template <typename T>
-UInt32 CompressionCodecFor::compressData(const char * source, UInt32 source_size, char * dest)
+UInt32 CompressionCodecFor::compressData(const T * source, UInt32 count, char * dest)
 {
     static_assert(std::is_integral<T>::value, "Integral required.");
-    const auto count = source_size / sizeof(T);
-    std::vector<T> values;
-    values.reserve(count);
-    const char * const source_end = source + source_size;
-    while (source < source_end)
-    {
-        values.push_back(unalignedLoad<T>(source));
-        source += sizeof(T);
-    }
+    std::vector<T> values(count);
+    for (UInt32 i = 0; i < count; ++i)
+        values[i] = source[i];
     T frame_of_reference = *std::min_element(values.cbegin(), values.cend());
     // store frame of reference
     unalignedStore<T>(dest, frame_of_reference);
@@ -79,11 +77,7 @@ UInt32 CompressionCodecFor::compressData(const char * source, UInt32 source_size
         return sizeof(T) + sizeof(UInt8);
     auto required_size = BitpackingPrimitives::getRequiredSize(count, width);
     // after applying frame of reference, all values are bigger than 0.
-    BitpackingPrimitives::packBuffer(
-        reinterpret_cast<unsigned char *>(dest),
-        reinterpret_cast<const T *>(values.data()),
-        count,
-        width);
+    BitpackingPrimitives::packBuffer(reinterpret_cast<unsigned char *>(dest), values.data(), count, width);
     return sizeof(T) + sizeof(UInt8) + required_size;
 }
 
@@ -168,17 +162,17 @@ UInt32 CompressionCodecFor::doCompressData(const char * source, UInt32 source_si
     if unlikely (source_size % bytes_size != 0)
         throw Exception(ErrorCodes::CANNOT_DECOMPRESS, "source size {} is not aligned to {}", source_size, bytes_size);
     dest[0] = bytes_size;
-    size_t start_pos = 1;
+    auto count = source_size / bytes_size;
     switch (bytes_size)
     {
     case 1:
-        return 1 + compressData<UInt8>(source, source_size, &dest[start_pos]);
+        return 1 + compressData<UInt8>(reinterpret_cast<const UInt8 *>(source), count, &dest[1]);
     case 2:
-        return 1 + compressData<UInt16>(source, source_size, &dest[start_pos]);
+        return 1 + compressData<UInt16>(reinterpret_cast<const UInt16 *>(source), count, &dest[1]);
     case 4:
-        return 1 + compressData<UInt32>(source, source_size, &dest[start_pos]);
+        return 1 + compressData<UInt32>(reinterpret_cast<const UInt32 *>(source), count, &dest[1]);
     case 8:
-        return 1 + compressData<UInt64>(source, source_size, &dest[start_pos]);
+        return 1 + compressData<UInt64>(reinterpret_cast<const UInt64 *>(source), count, &dest[1]);
     default:
         throw Exception(ErrorCodes::CANNOT_COMPRESS, "Cannot compress Delta-encoded data. Unsupported bytes size");
     }
