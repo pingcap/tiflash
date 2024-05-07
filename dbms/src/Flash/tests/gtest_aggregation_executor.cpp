@@ -982,14 +982,16 @@ try
 }
 CATCH
 
-TEST_F(AggExecutorTestRunner, AggKeyOptimization)
+TEST_F(AggExecutorTestRunner, FirstRowOptimization)
 try
 {
     const auto rows = 1024;
     const auto row_types = 4;
     const auto rows_per_type = rows / row_types;
+    const String db_name = "test_db";
+    const String tbl_name = "agg_first_row_opt_tbl";
     DB::MockColumnInfoVec table_column_infos{
-        {"col_string_with_collator", TiDB::TP::TypeString, false},
+        {"col_string_with_collator", TiDB::TP::TypeString, false, Poco::Dynamic::Var("utf8_general_ci")},
         {"col_string_no_collator", TiDB::TP::TypeString, false},
         {"col_int", TiDB::TP::TypeLong, false}};
 
@@ -1008,34 +1010,53 @@ try
         }
     }
     context.addMockTable(
-            {"test_db", "agg_key_opt_table"},
-            table_column_infos,
-            {
-                toVec<String>("col_string_with_collator", col_data_string_with_collator),
-                toVec<String>("col_string_no_collator", col_data_string_no_collator),
-                toVec<Int32>("col_int", col_data_int),
-            });
+        {db_name, tbl_name},
+        table_column_infos,
+        {
+            toVec<String>("col_string_with_collator", col_data_string_with_collator),
+            toVec<String>("col_string_no_collator", col_data_string_no_collator),
+            toVec<Int32>("col_int", col_data_int),
+        });
 
     // select count(1), col_int from t1 group by col_int
-    std::vector<ASTPtr> agg_funcs = {
-        makeASTFunction("count", lit(Field(static_cast<UInt64>(1)))),
-        makeASTFunction("first_row", col("col_int"))
-    };
+    std::vector<ASTPtr> agg_funcs
+        = {makeASTFunction("count", lit(Field(static_cast<UInt64>(1)))), makeASTFunction("first_row", col("col_int"))};
     MockAstVec keys;
     keys.push_back(col("col_int"));
-    auto request = context.scan("test_db", "agg_key_opt_table").aggregation(agg_funcs, keys).build(context);
-    auto expected = {
-        toVec<UInt64>("count(1)", ColumnWithUInt64{rows_per_type, rows_per_type, rows_per_type, rows_per_type}),
-        toNullableVec<Int32>("first_row(col_int)", ColumnWithNullableInt32{0, 1, 2, 3}),
-        toVec<Int32>("col_int", ColumnWithInt32{0, 1, 2, 3})
-    };
+    auto request = context.scan(db_name, tbl_name).aggregation(agg_funcs, keys).build(context);
+    auto expected
+        = {toVec<UInt64>("count(1)", ColumnWithUInt64{rows_per_type, rows_per_type, rows_per_type, rows_per_type}),
+           toNullableVec<Int32>("first_row(col_int)", ColumnWithNullableInt32{0, 1, 2, 3}),
+           toVec<Int32>("col_int", ColumnWithInt32{0, 1, 2, 3})};
     executeAndAssertColumnsEqual(request, expected);
 
     // select count(1), col_string_with_collator from t1 group by col_string_with_collator
-
+    agg_funcs.clear();
+    keys.clear();
+    agg_funcs
+        = {makeASTFunction("count", lit(Field(static_cast<UInt64>(1)))),
+           makeASTFunction("first_row", col("col_string_with_collator"))};
+    keys.push_back(col("col_string_with_collator"));
+    request = context.scan(db_name, tbl_name).aggregation(agg_funcs, keys).build(context);
+    auto expected_with_collator
+        = {toVec<UInt64>("count(1)", ColumnWithUInt64{rows_per_type, rows_per_type, rows_per_type, rows_per_type}),
+           toNullableVec<String>("first_row(col_string_with_collator)", ColumnWithNullableString{"a", "b", "c", "d"}),
+           toVec<String>("col_string_with_collator", ColumnWithString{"a", "b", "c", "d"})};
+    executeAndAssertColumnsEqual(request, expected_with_collator);
 
     // select count(1), col_string_no_collator from t1 group by col_string_no_collator
-
+    agg_funcs.clear();
+    keys.clear();
+    agg_funcs
+        = {makeASTFunction("count", lit(Field(static_cast<UInt64>(1)))),
+           makeASTFunction("first_row", col("col_string_no_collator"))};
+    keys.push_back(col("col_string_no_collator"));
+    request = context.scan(db_name, tbl_name).aggregation(agg_funcs, keys).build(context);
+    auto expected_no_collator
+        = {toVec<UInt64>("count(1)", ColumnWithUInt64{rows_per_type, rows_per_type, rows_per_type, rows_per_type}),
+           toNullableVec<String>("first_row(col_string_no_collator)", ColumnWithNullableString{"a", "b", "c", "d"}),
+           toVec<String>("col_string_no_collator", ColumnWithString{"a", "b", "c", "d"})};
+    executeAndAssertColumnsEqual(request, expected_no_collator);
 }
 CATCH
 

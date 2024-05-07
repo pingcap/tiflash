@@ -71,14 +71,11 @@ PhysicalPlanNodePtr PhysicalAggregation::build(
             key_ref_agg_func,
             collation_sensitive,
             collators);
-        analyzer.tryEliminateFirstRow(
-            aggregation_keys,
-            collators,
-            agg_func_ref_key,
-            aggregate_descriptions);
+        analyzer.tryEliminateFirstRow(aggregation_keys, collators, agg_func_ref_key, aggregate_descriptions);
     }
 
-    auto expr_after_agg_actions = analyzer.appendCopyColumnAfterAgg(agg_required_output_columns, key_ref_agg_func, agg_func_ref_key);
+    auto expr_after_agg_actions
+        = analyzer.appendCopyColumnAfterAgg(agg_required_output_columns, key_ref_agg_func, agg_func_ref_key);
     analyzer.appendCastAfterAgg(expr_after_agg_actions, aggregation);
     /// project action after aggregation to remove useless columns.
     auto schema = PhysicalPlanHelper::addSchemaProjectAction(expr_after_agg_actions, analyzer.getCurrentInputColumns());

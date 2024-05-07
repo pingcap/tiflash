@@ -1235,6 +1235,16 @@ tipb::FieldType columnInfoToFieldType(const ColumnInfo & ci)
     ret.set_flag(ci.flag);
     ret.set_flen(ci.flen);
     ret.set_decimal(ci.decimal);
+    if (!ci.collate.isEmpty())
+    {
+        auto collator_name = ci.collate.convert<String>();
+        TiDBCollatorPtr collator = ITiDBCollator::getCollator(collator_name);
+        if (!collator)
+        {
+            throw Exception("cannot find collator: {}", collator_name);
+        }
+        ret.set_collate(collator->getCollatorId());
+    }
     for (const auto & elem : ci.elems)
     {
         ret.add_elems(elem.first);

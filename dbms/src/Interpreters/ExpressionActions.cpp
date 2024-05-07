@@ -345,7 +345,9 @@ void ExpressionAction::execute(Block & block) const
             if (!block.has(argument_names[i]))
             {
                 String res = block.dumpStructure();
-                throw Exception("res: " + res + ". Not found column: '" + argument_names[i] + "'", ErrorCodes::NOT_FOUND_COLUMN_IN_BLOCK);
+                throw Exception(
+                    "res: " + res + ". Not found column: '" + argument_names[i] + "'",
+                    ErrorCodes::NOT_FOUND_COLUMN_IN_BLOCK);
             }
             arguments[i] = block.getPositionByName(argument_names[i]);
         }

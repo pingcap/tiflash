@@ -263,8 +263,8 @@ Block Aggregator::Params::getHeader(
     {
         for (const auto & key : keys)
         {
-            // For final stage, no need to output columns with key optimization.
-            // There will be an extra CopyColumn Action.
+            // For final stage, key optimization is enabled, so no need to output columns.
+            // An CopyColumn Action will handle this.
             const auto & key_col = src_header.safeGetByPosition(key);
             if (final && key_ref_agg_func.find(key_col.name) != key_ref_agg_func.end())
                 continue;
@@ -1917,12 +1917,7 @@ BlocksList Aggregator::prepareBlocksAndFillWithoutKey(AggregatedDataVariants & d
         }
     };
 
-    BlocksList blocks = prepareBlocksAndFill(
-        data_variants,
-        final,
-        rows,
-        filler,
-        params.keys_size);
+    BlocksList blocks = prepareBlocksAndFill(data_variants, final, rows, filler, params.keys_size);
 
     if (final)
         destroyWithoutKey(data_variants);
@@ -1984,12 +1979,7 @@ BlocksList Aggregator::prepareBlocksAndFillSingleLevel(
 
     if (enable_convert_key_optimization && params.key_ref_agg_func.size() == params.keys_size)
     {
-        return prepareBlocksAndFill(
-            data_variants,
-            final,
-            rows,
-            filler_skip_convert_key,
-            convert_key_size);
+        return prepareBlocksAndFill(data_variants, final, rows, filler_skip_convert_key, convert_key_size);
     }
     return prepareBlocksAndFill(data_variants, final, rows, filler_convert_key, convert_key_size);
 }

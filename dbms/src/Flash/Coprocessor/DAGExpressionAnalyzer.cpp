@@ -48,6 +48,7 @@
 #include <WindowFunctions/WindowFunctionFactory.h>
 #include <tipb/executor.pb.h>
 #include <tipb/expression.pb.h>
+
 #include "Flash/Coprocessor/InterpreterUtils.h"
 
 
@@ -1535,18 +1536,19 @@ void DAGExpressionAnalyzer::appendCastAfterAgg(
 }
 
 ExpressionActionsPtr DAGExpressionAnalyzer::appendCopyColumnAfterAgg(
-        const NamesAndTypes & agg_required_output_columns,
-        const KeyRefAggFuncMap & key_ref_agg_func,
-        const AggFuncRefKeyMap & agg_func_ref_key)
+    const NamesAndTypes & agg_required_output_columns,
+    const KeyRefAggFuncMap & key_ref_agg_func,
+    const AggFuncRefKeyMap & agg_func_ref_key)
 {
     RUNTIME_CHECK(agg_required_output_columns.size() > key_ref_agg_func.size() + agg_func_ref_key.size());
-    auto actual_agg_output_col_cnt = agg_required_output_columns.size() - key_ref_agg_func.size() - agg_func_ref_key.size();
+    auto actual_agg_output_col_cnt
+        = agg_required_output_columns.size() - key_ref_agg_func.size() - agg_func_ref_key.size();
     NamesAndTypes agg_output_columns;
     agg_output_columns.reserve(actual_agg_output_col_cnt);
     for (const auto & col : agg_required_output_columns)
     {
-        if (key_ref_agg_func.find(col.name) == key_ref_agg_func.end() &&
-                agg_func_ref_key.find(col.name) == agg_func_ref_key.end())
+        if (key_ref_agg_func.find(col.name) == key_ref_agg_func.end()
+            && agg_func_ref_key.find(col.name) == agg_func_ref_key.end())
         {
             agg_output_columns.push_back(col);
         }

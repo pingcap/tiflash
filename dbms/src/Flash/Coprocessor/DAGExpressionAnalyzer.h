@@ -206,9 +206,9 @@ public:
     // which will not copy all required columns(specificed by tipb) from HashMap.
     // So need to append copy column action.
     ExpressionActionsPtr appendCopyColumnAfterAgg(
-            const NamesAndTypes & agg_required_output_columns,
-            const KeyRefAggFuncMap & key_ref_agg_func,
-            const AggFuncRefKeyMap & agg_func_ref_key);
+        const NamesAndTypes & agg_required_output_columns,
+        const KeyRefAggFuncMap & key_ref_agg_func,
+        const AggFuncRefKeyMap & agg_func_ref_key);
 
     void appendCastAfterAgg(const ExpressionActionsPtr & actions, const tipb::Aggregation & agg);
 
