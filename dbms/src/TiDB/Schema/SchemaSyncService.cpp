@@ -42,15 +42,26 @@ SchemaSyncService::SchemaSyncService(DB::Context & context_)
     , log(Logger::get())
 {
     // Add task for adding and removing keyspace sync schema tasks.
-    handle = background_pool.addTask(
-        [&, this] {
-            addKeyspaceGCTasks();
-            removeKeyspaceGCTasks();
+    auto interval_ms = context.getSettingsRef().ddl_sync_interval_seconds * 1000;
+    if (interval_ms == 0)
+    {
+        LOG_WARNING(
+            log,
+            "The background task of SchemaSyncService is disabled, please check the ddl_sync_interval_seconds "
+            "settings");
+    }
+    else
+    {
+        handle = background_pool.addTask(
+            [&, this] {
+                addKeyspaceGCTasks();
+                removeKeyspaceGCTasks();
 
-            return false;
-        },
-        false,
-        context.getSettingsRef().ddl_sync_interval_seconds * 1000);
+                return false;
+            },
+            false,
+            interval_ms);
+    }
 }
 
 void SchemaSyncService::addKeyspaceGCTasks()
@@ -307,6 +318,7 @@ bool SchemaSyncService::gcImpl(Timestamp gc_safepoint, KeyspaceID keyspace_id, b
                     storage->getTombstone(),
                     gc_safepoint,
                     canonical_name);
+                succeeded = false; // dropping this table is skipped, do not succee the `last_gc_safepoint`
                 continue;
             }
             else
@@ -346,7 +358,7 @@ bool SchemaSyncService::gcImpl(Timestamp gc_safepoint, KeyspaceID keyspace_id, b
         }
         catch (DB::Exception & e)
         {
-            succeeded = false;
+            succeeded = false; // dropping this table is skipped, do not succee the `last_gc_safepoint`
             String err_msg;
             // Maybe a read lock of a table is held for a long time, just ignore it this round.
             if (e.code() == ErrorCodes::DEADLOCK_AVOIDED)
@@ -400,7 +412,7 @@ bool SchemaSyncService::gcImpl(Timestamp gc_safepoint, KeyspaceID keyspace_id, b
         }
         catch (DB::Exception & e)
         {
-            succeeded = false;
+            succeeded = false; // dropping this database is skipped, do not succee the `last_gc_safepoint`
             String err_msg;
             if (e.code() == ErrorCodes::DEADLOCK_AVOIDED)
                 err_msg = "locking attempt has timed out!"; // ignore verbose stack for this error
@@ -410,6 +422,8 @@ bool SchemaSyncService::gcImpl(Timestamp gc_safepoint, KeyspaceID keyspace_id, b
         }
     }
 
+    // TODO: Optimize it after `BackgroundProcessingPool` can the task return how many seconds to sleep
+    //       before next round.
     if (succeeded)
     {
         updateLastGcSafepoint(keyspace_id, gc_safepoint);
@@ -419,6 +433,11 @@ bool SchemaSyncService::gcImpl(Timestamp gc_safepoint, KeyspaceID keyspace_id, b
             num_tables_removed,
             num_databases_removed,
             gc_safepoint);
+        // This round of GC could run for a long time. Run immediately to check whether
+        // the latest gc_safepoint has been updated in PD.
+        // - gc_safepoint is not updated, it will be skipped because gc_safepoint == last_gc_safepoint
+        // - gc_safepoint is updated, run again immediately to cleanup other dropped data
+        return true;
     }
     else
     {
@@ -428,9 +447,10 @@ bool SchemaSyncService::gcImpl(Timestamp gc_safepoint, KeyspaceID keyspace_id, b
             "Schema GC meet error, will try again later, last_safepoint={} safepoint={}",
             last_gc_safepoint_str,
             gc_safepoint);
+        // Return false to let it run again after `ddl_sync_interval_seconds` even if the gc_safepoint
+        // on PD is not updated.
+        return false;
     }
-
-    return true;
 }
 
 } // namespace DB
