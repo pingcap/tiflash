@@ -54,6 +54,7 @@ UInt32 CompressionCodecFOR::getMaxCompressedDataSize(UInt32 uncompressed_size) c
 template <std::integral T>
 UInt32 CompressionCodecFOR::compressData(const T * source, UInt32 count, char * dest)
 {
+    RUNTIME_CHECK(count > 0, count);
     std::vector<T> values(count);
     for (UInt32 i = 0; i < count; ++i)
         values[i] = source[i];
@@ -115,20 +116,13 @@ void CompressionCodecFOR::decompressData(const char * source, UInt32 source_size
 template <std::integral T>
 void CompressionCodecFOR::applyFrameOfReference(T * dst, T frame_of_reference, UInt32 count)
 {
-    if (!frame_of_reference)
+    if (frame_of_reference == 0)
         return;
 
     UInt32 i = 0;
-    UInt32 misaligned_count = count;
 #if defined(__AVX2__)
-    misaligned_count = count % (sizeof(__m256i) / sizeof(T));
-#endif
-    for (; i < misaligned_count; ++i)
-    {
-        dst[i] += frame_of_reference;
-    }
-#if defined(__AVX2__)
-    for (; i < count; i += (sizeof(__m256i) / sizeof(T)))
+    UInt32 aligned_count = count - count % (sizeof(__m256i) / sizeof(T));
+    for (; i < aligned_count; i += (sizeof(__m256i) / sizeof(T)))
     {
         // Load the data using SIMD
         __m256i value = _mm256_loadu_si256(reinterpret_cast<__m256i *>(dst + i));
@@ -153,6 +147,10 @@ void CompressionCodecFOR::applyFrameOfReference(T * dst, T frame_of_reference, U
         _mm256_storeu_si256(reinterpret_cast<__m256i *>(dst + i), value);
     }
 #endif
+    for (; i < count; ++i)
+    {
+        dst[i] += frame_of_reference;
+    }
 }
 
 UInt32 CompressionCodecFOR::doCompressData(const char * source, UInt32 source_size, char * dest) const
