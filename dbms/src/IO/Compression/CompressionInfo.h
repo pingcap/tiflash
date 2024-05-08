@@ -60,6 +60,7 @@ enum class CompressionMethodByte : UInt8
     DeltaFOR        = 0x92,
     RLE             = 0x93,
     FOR             = 0x94,
+    Lightweight     = 0x95,
     // COL_END is not a compreesion method, but a flag of column end used in compact file.
     COL_END         = 0x66,
 };

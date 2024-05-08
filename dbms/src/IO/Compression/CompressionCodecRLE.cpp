@@ -15,6 +15,7 @@
 #include <Common/Exception.h>
 #include <IO/Compression/CompressionCodecRLE.h>
 #include <IO/Compression/CompressionInfo.h>
+#include <IO/Compression/EncodingUtil.h>
 #include <IO/Compression/ICompressionCodec.h>
 #include <common/unaligned.h>
 
@@ -48,24 +49,23 @@ namespace
 {
 constexpr UInt8 JUST_COPY_CODE = 0xFF;
 
-// TODO: better implementation
-template <std::integral T>
+template <typename T>
 UInt32 compressDataForType(const char * source, UInt32 source_size, char * dest)
 {
     const char * source_end = source + source_size;
-    std::vector<std::pair<T, UInt16>> rle_vec;
+    DB::Compression::RLEPairs<T> rle_vec;
     rle_vec.reserve(source_size / sizeof(T));
-    static constexpr size_t RLE_PAIR_LENGTH = sizeof(T) + sizeof(UInt16);
     for (const auto * src = source; src < source_end; src += sizeof(T))
     {
         T value = unalignedLoad<T>(src);
-        if (rle_vec.empty() || rle_vec.back().first != value)
+        if (rle_vec.empty() || rle_vec.back().first != value
+            || rle_vec.back().second == std::numeric_limits<UInt8>::max())
             rle_vec.emplace_back(value, 1);
         else
             ++rle_vec.back().second;
     }
 
-    if (rle_vec.size() * RLE_PAIR_LENGTH > source_size)
+    if (DB::Compression::RLEPairsSize<T>(rle_vec) > source_size)
     {
         dest[0] = JUST_COPY_CODE;
         memcpy(&dest[1], source, source_size);
@@ -74,42 +74,7 @@ UInt32 compressDataForType(const char * source, UInt32 source_size, char * dest)
 
     dest[0] = sizeof(T);
     dest += 1;
-    for (const auto & [value, count] : rle_vec)
-    {
-        unalignedStore<T>(dest, value);
-        dest += sizeof(T);
-        unalignedStore<UInt16>(dest, count);
-        dest += sizeof(UInt16);
-    }
-    return 1 + rle_vec.size() * RLE_PAIR_LENGTH;
-}
-
-template <std::integral T>
-void decompressDataForType(const char * source, UInt32 source_size, char * dest, UInt32 output_size)
-{
-    const char * output_end = dest + output_size;
-    const char * source_end = source + source_size;
-
-    UInt8 bytes_size = source[0];
-    RUNTIME_CHECK(bytes_size == sizeof(T), bytes_size, sizeof(T));
-    source += 1;
-
-    while (source < source_end)
-    {
-        T data = unalignedLoad<T>(source);
-        source += sizeof(T);
-        auto count = unalignedLoad<UInt16>(source);
-        source += sizeof(UInt16);
-        if unlikely (dest + count * sizeof(T) > output_end)
-            throw Exception(
-                ErrorCodes::CANNOT_DECOMPRESS,
-                "Cannot decompress RLE-encoded data, output buffer is too small");
-        for (UInt16 i = 0; i < count; ++i)
-        {
-            unalignedStore<T>(dest, data);
-            dest += sizeof(T);
-        }
-    }
+    return 1 + DB::Compression::RLEEncoding<T>(rle_vec, dest);
 }
 
 } // namespace
@@ -165,16 +130,16 @@ void CompressionCodecRLE::doDecompressData(
     switch (bytes_size)
     {
     case 1:
-        decompressDataForType<UInt8>(source, source_size, dest, uncompressed_size);
+        DB::Compression::RLEDecoding<UInt8>(&source[1], source_size - 1, dest, uncompressed_size);
         break;
     case 2:
-        decompressDataForType<UInt16>(source, source_size, dest, uncompressed_size);
+        DB::Compression::RLEDecoding<UInt16>(&source[1], source_size - 1, dest, uncompressed_size);
         break;
     case 4:
-        decompressDataForType<UInt32>(source, source_size, dest, uncompressed_size);
+        DB::Compression::RLEDecoding<UInt32>(&source[1], source_size - 1, dest, uncompressed_size);
         break;
     case 8:
-        decompressDataForType<UInt64>(source, source_size, dest, uncompressed_size);
+        DB::Compression::RLEDecoding<UInt64>(&source[1], source_size - 1, dest, uncompressed_size);
         break;
     default:
         throw Exception(ErrorCodes::CANNOT_DECOMPRESS, "Cannot decompress RLE-encoded data. Unsupported bytes size");

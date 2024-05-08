@@ -25,6 +25,7 @@ enum class CompressionMethod
     ZSTD = 3, /// Experimental algorithm: https://github.com/Cyan4973/zstd
     QPL = 4, /// The Intel Query Processing Library (QPL) is an open-source library to provide high-performance query processing operations
     NONE = 5, /// No compression
+    Lightweight = 6, /// Lightweight compression
 };
 
 } // namespace DB

@@ -16,12 +16,10 @@
 #include <Common/Exception.h>
 #include <IO/Compression/CompressionCodecFOR.h>
 #include <IO/Compression/CompressionInfo.h>
+#include <IO/Compression/EncodingUtil.h>
 #include <common/likely.h>
 #include <common/unaligned.h>
 
-#if defined(__AVX2__)
-#include <immintrin.h>
-#endif
 
 namespace DB
 {
@@ -58,98 +56,8 @@ UInt32 CompressionCodecFOR::compressData(const T * source, UInt32 count, char * 
     std::vector<T> values(count);
     values.assign(source, source + count);
     T frame_of_reference = *std::min_element(values.cbegin(), values.cend());
-    // store frame of reference
-    unalignedStore<T>(dest, frame_of_reference);
-    dest += sizeof(T);
-    if (frame_of_reference != 0)
-    {
-        for (auto & value : values)
-            value -= frame_of_reference;
-    }
-    T max_value = *std::max_element(values.cbegin(), values.cend());
-    UInt8 width = BitpackingPrimitives::minimumBitWidth(max_value);
-    // store width
-    unalignedStore<UInt8>(dest, width);
-    dest += sizeof(UInt8);
-    // if width == 0, skip bitpacking
-    if (width == 0)
-        return sizeof(T) + sizeof(UInt8);
-    auto required_size = BitpackingPrimitives::getRequiredSize(count, width);
-    // after applying frame of reference, all values are bigger than 0.
-    BitpackingPrimitives::packBuffer(reinterpret_cast<unsigned char *>(dest), values.data(), count, width);
-    return sizeof(T) + sizeof(UInt8) + required_size;
-}
-
-template <std::integral T>
-void CompressionCodecFOR::decompressData(const char * source, UInt32 source_size, char * dest, UInt32 output_size)
-{
-    const auto count = output_size / sizeof(T);
-    T frame_of_reference = unalignedLoad<T>(source);
-    source += sizeof(T);
-    auto width = unalignedLoad<UInt8>(source);
-    source += sizeof(UInt8);
-    const auto required_size = source_size - sizeof(T) - sizeof(UInt8);
-    RUNTIME_CHECK(BitpackingPrimitives::getRequiredSize(count, width) == required_size);
-    auto round_size = BitpackingPrimitives::roundUpToAlgorithmGroupSize(count);
-    if (round_size != count)
-    {
-        // Reserve enough space for the temporary buffer.
-        unsigned char tmp_buffer[round_size * sizeof(T)];
-        BitpackingPrimitives::unPackBuffer<T>(
-            tmp_buffer,
-            reinterpret_cast<const unsigned char *>(source),
-            count,
-            width);
-        CompressionCodecFOR::applyFrameOfReference(reinterpret_cast<T *>(tmp_buffer), frame_of_reference, count);
-        memcpy(dest, tmp_buffer, output_size);
-        return;
-    }
-    BitpackingPrimitives::unPackBuffer<T>(
-        reinterpret_cast<unsigned char *>(dest),
-        reinterpret_cast<const unsigned char *>(source),
-        count,
-        width);
-    CompressionCodecFOR::applyFrameOfReference(reinterpret_cast<T *>(dest), frame_of_reference, count);
-}
-
-template <std::integral T>
-void CompressionCodecFOR::applyFrameOfReference(T * dst, T frame_of_reference, UInt32 count)
-{
-    if (frame_of_reference == 0)
-        return;
-
-    UInt32 i = 0;
-#if defined(__AVX2__)
-    UInt32 aligned_count = count - count % (sizeof(__m256i) / sizeof(T));
-    for (; i < aligned_count; i += (sizeof(__m256i) / sizeof(T)))
-    {
-        // Load the data using SIMD
-        __m256i value = _mm256_loadu_si256(reinterpret_cast<__m256i *>(dst + i));
-        // Perform vectorized addition
-        if constexpr (sizeof(T) == 1)
-        {
-            value = _mm256_add_epi8(value, _mm256_set1_epi8(frame_of_reference));
-        }
-        else if constexpr (sizeof(T) == 2)
-        {
-            value = _mm256_add_epi16(value, _mm256_set1_epi16(frame_of_reference));
-        }
-        else if constexpr (sizeof(T) == 4)
-        {
-            value = _mm256_add_epi32(value, _mm256_set1_epi32(frame_of_reference));
-        }
-        else if constexpr (sizeof(T) == 8)
-        {
-            value = _mm256_add_epi64(value, _mm256_set1_epi64x(frame_of_reference));
-        }
-        // Store the result back to memory
-        _mm256_storeu_si256(reinterpret_cast<__m256i *>(dst + i), value);
-    }
-#endif
-    for (; i < count; ++i)
-    {
-        dst[i] += frame_of_reference;
-    }
+    UInt8 width = DB::Compression::ForEncodingWidth(values, frame_of_reference);
+    return DB::Compression::ForEncoding<T, std::is_signed_v<T>>(values, frame_of_reference, width, dest);
 }
 
 UInt32 CompressionCodecFOR::doCompressData(const char * source, UInt32 source_size, char * dest) const
@@ -200,16 +108,16 @@ void CompressionCodecFOR::doDecompressData(
     switch (bytes_size)
     {
     case 1:
-        decompressData<UInt8>(&source[1], source_size_no_header, dest, uncompressed_size);
+        DB::Compression::ForDecoding<UInt8>(&source[1], source_size_no_header, dest, uncompressed_size);
         break;
     case 2:
-        decompressData<UInt16>(&source[1], source_size_no_header, dest, uncompressed_size);
+        DB::Compression::ForDecoding<UInt16>(&source[1], source_size_no_header, dest, uncompressed_size);
         break;
     case 4:
-        decompressData<UInt32>(&source[1], source_size_no_header, dest, uncompressed_size);
+        DB::Compression::ForDecoding<UInt32>(&source[1], source_size_no_header, dest, uncompressed_size);
         break;
     case 8:
-        decompressData<UInt64>(&source[1], source_size_no_header, dest, uncompressed_size);
+        DB::Compression::ForDecoding<UInt64>(&source[1], source_size_no_header, dest, uncompressed_size);
         break;
     default:
         throw Exception(
@@ -226,26 +134,5 @@ template UInt32 CompressionCodecFOR::compressData<Int8>(const Int8 * source, UIn
 template UInt32 CompressionCodecFOR::compressData<Int16>(const Int16 * source, UInt32 count, char * dest);
 template UInt32 CompressionCodecFOR::compressData<Int32>(const Int32 * source, UInt32 count, char * dest);
 template UInt32 CompressionCodecFOR::compressData<Int64>(const Int64 * source, UInt32 count, char * dest);
-
-template void CompressionCodecFOR::decompressData<Int8>(
-    const char * source,
-    UInt32 source_size,
-    char * dest,
-    UInt32 output_size);
-template void CompressionCodecFOR::decompressData<Int16>(
-    const char * source,
-    UInt32 source_size,
-    char * dest,
-    UInt32 output_size);
-template void CompressionCodecFOR::decompressData<Int32>(
-    const char * source,
-    UInt32 source_size,
-    char * dest,
-    UInt32 output_size);
-template void CompressionCodecFOR::decompressData<Int64>(
-    const char * source,
-    UInt32 source_size,
-    char * dest,
-    UInt32 output_size);
 
 } // namespace DB
