@@ -131,7 +131,10 @@ OperatorStatus TransformOp::transform(Block & block)
     assertOperatorStatus(op_status, {OperatorStatus::NEED_INPUT, OperatorStatus::HAS_OUTPUT});
 #endif
     exec_context.triggerAutoSpill();
-    op_status == OperatorStatus::HAS_OUTPUT ? profile_info.update(block) : profile_info.update();
+    if (op_status == OperatorStatus::HAS_OUTPUT)
+        profile_info.update(block);
+    else
+        profile_info.update();
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_operator_run_failpoint);
     return op_status;
 }
