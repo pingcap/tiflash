@@ -54,7 +54,7 @@ UInt32 CompressionCodecFOR::getMaxCompressedDataSize(UInt32 uncompressed_size) c
 template <std::integral T>
 UInt32 CompressionCodecFOR::compressData(const T * source, UInt32 count, char * dest)
 {
-    RUNTIME_CHECK(count > 0, count);
+    assert(count > 0); // doCompressData ensure it
     std::vector<T> values(count);
     values.assign(source, source + count);
     T frame_of_reference = *std::min_element(values.cbegin(), values.cend());
