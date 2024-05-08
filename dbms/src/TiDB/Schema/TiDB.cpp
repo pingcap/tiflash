@@ -1239,10 +1239,7 @@ tipb::FieldType columnInfoToFieldType(const ColumnInfo & ci)
     {
         auto collator_name = ci.collate.convert<String>();
         TiDBCollatorPtr collator = ITiDBCollator::getCollator(collator_name);
-        if (!collator)
-        {
-            throw Exception("cannot find collator: {}", collator_name);
-        }
+        RUNTIME_CHECK_MSG(collator, "cannot find collator: {}", collator_name);
         ret.set_collate(collator->getCollatorId());
     }
     for (const auto & elem : ci.elems)

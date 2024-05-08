@@ -180,13 +180,13 @@ public:
         const tipb::Aggregation & aggregation,
         const ExpressionActionsPtr & actions,
         AggregateDescriptions & aggregate_descriptions,
-        NamesAndTypes & agg_required_output_columns);
+        NamesAndTypes & aggregated_columns);
 
     void buildAggGroupBy(
         const google::protobuf::RepeatedPtrField<tipb::Expr> & group_by,
         const ExpressionActionsPtr & actions,
         AggregateDescriptions & aggregate_descriptions,
-        NamesAndTypes & agg_required_output_columns,
+        NamesAndTypes & aggregated_columns,
         Names & aggregation_keys,
         std::unordered_set<String> & agg_key_set,
         KeyRefAggFuncMap & key_ref_agg_func,
@@ -206,7 +206,7 @@ public:
     // which will not copy all required columns(specificed by tipb) from HashMap.
     // So need to append copy column action.
     ExpressionActionsPtr appendCopyColumnAfterAgg(
-        const NamesAndTypes & agg_required_output_columns,
+        const NamesAndTypes & aggregated_columns,
         const KeyRefAggFuncMap & key_ref_agg_func,
         const AggFuncRefKeyMap & agg_func_ref_key);
 
@@ -233,7 +233,7 @@ private:
         const ExpressionActionsPtr & actions,
         const String & agg_func_name,
         AggregateDescriptions & aggregate_descriptions,
-        NamesAndTypes & agg_required_output_columns,
+        NamesAndTypes & aggregated_columns,
         bool result_is_nullable);
 
     void buildCommonAggFunc(
@@ -241,7 +241,7 @@ private:
         const ExpressionActionsPtr & actions,
         const String & agg_func_name,
         AggregateDescriptions & aggregate_descriptions,
-        NamesAndTypes & agg_required_output_columns,
+        NamesAndTypes & aggregated_columns,
         bool empty_input_as_null);
 
     void buildLeadLag(

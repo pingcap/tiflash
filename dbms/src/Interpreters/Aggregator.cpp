@@ -1504,10 +1504,8 @@ struct AggregatorMethodInitKeyColumnHelper<AggregationMethodOneKeyStringNoCache<
     void initAggKeys(size_t rows, std::vector<IColumn *> & key_columns)
     {
         index = 0;
-        if (key_columns.size() == 1)
-            Method::initAggKeys(rows, key_columns[0]);
-        else
-            throw Exception("unexpected key_columns size for AggMethodOneKeyString: {}", key_columns.size());
+        RUNTIME_CHECK_MSG(key_columns.size() == 1, "unexpected key_columns size for AggMethodOneKeyString: {}", key_columns.size());
+        Method::initAggKeys(rows, key_columns[0]);
     }
     ALWAYS_INLINE inline void insertKeyIntoColumns(
         const StringRef & key,
@@ -1695,6 +1693,7 @@ Block Aggregator::prepareBlockAndFill(
     MutableColumns aggregate_columns(params.aggregates_size);
     MutableColumns final_aggregate_columns(params.aggregates_size);
     AggregateColumnsData aggregate_columns_data(params.aggregates_size);
+    // Store size of keys that need to convert.
     Sizes new_key_sizes;
     new_key_sizes.reserve(key_sizes.size());
 
@@ -1779,6 +1778,7 @@ BlocksList Aggregator::prepareBlocksAndFill(
     std::vector<AggregateColumnsData> aggregate_columns_data_vec;
     std::vector<MutableColumns> aggregate_columns_vec;
     std::vector<MutableColumns> final_aggregate_columns_vec;
+    // Store size of keys that need to convert.
     Sizes new_key_sizes;
     new_key_sizes.reserve(convert_key_size);
 

@@ -1352,9 +1352,9 @@ protected:
         Arena * arena,
         bool final) const;
 
-    // The template parameter skip_convert_key indicates whether the key in the HashMap can be skipped to serialize.
+    // The template parameter skip_convert_key indicates whether we can skip serializing the keys in the HashMap.
     // For example, select first_row(c1) from t group by c1, only the result of first_row(c1) needs to be serialized.
-    // The key c1 does not need to be serialized into Column. It only needs to reference to the result column of first_row(c1).
+    // The key c1 only needs to reference to first_row(c1).
     template <typename Method, typename Table, bool skip_convert_key>
     void convertToBlocksImpl(
         Method & method,
