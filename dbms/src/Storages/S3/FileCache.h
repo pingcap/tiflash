@@ -240,7 +240,7 @@ public:
 #endif
 
     inline static std::atomic<bool> global_file_cache_initialized{false};
-    inline static std::unique_ptr<FileCache> global_file_cache_instance;
+    static std::unique_ptr<FileCache> global_file_cache_instance;
 
     DISALLOW_COPY_AND_MOVE(FileCache);
 

@@ -119,8 +119,10 @@ std::pair<ASTTableJoin::Kind, size_t> getJoinKindAndBuildSideIndex(
     auto join_type_it = join_type_map.find(std::make_pair(tipb_join_type, inner_index));
     if (unlikely(join_type_it == join_type_map.end()))
         throw TiFlashException(
-            fmt::format("Unknown join type in dag request {} {}", tipb_join_type, inner_index),
-            Errors::Coprocessor::BadRequest);
+            Errors::Coprocessor::BadRequest,
+            "Unknown join type in dag request {} {}",
+            fmt::underlying(tipb_join_type),
+            inner_index);
     return join_type_it->second;
 }
 

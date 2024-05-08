@@ -197,7 +197,7 @@ private:
             String done_msg = fmt::format("Exchange receiver meet error : {}", finish_status.error_message());
             String log_msg = fmt::format(
                 "Finish fail. err code: {}, err msg: {}, retry time {}",
-                finish_status.error_code(),
+                magic_enum::enum_name(finish_status.error_code()),
                 finish_status.error_message(),
                 retry_times);
             retryOrDone(std::move(done_msg), log_msg);

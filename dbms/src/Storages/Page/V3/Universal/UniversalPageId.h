@@ -89,7 +89,7 @@ struct fmt::formatter<DB::UniversalPageId>
     template <typename FormatContext>
     auto format(const DB::UniversalPageId & value, FormatContext & ctx) const
     {
-        return format_to(ctx.out(), "{}", DB::details::UniversalPageIdFormatHelper::format(value));
+        return fmt::format_to(ctx.out(), "{}", DB::details::UniversalPageIdFormatHelper::format(value));
     }
 };
 

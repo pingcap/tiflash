@@ -1611,7 +1611,7 @@ bool DeltaMergeStore::checkSegmentUpdate(
             LOG_DEBUG(
                 log,
                 "Foreground flush cache in checkSegmentUpdate, thread={} segment={} input_type={}",
-                thread_type,
+                magic_enum::enum_name(thread_type),
                 segment->info(),
                 magic_enum::enum_name(input_type));
             segment->flushCache(*dm_context);

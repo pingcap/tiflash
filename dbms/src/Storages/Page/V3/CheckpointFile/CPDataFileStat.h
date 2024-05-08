@@ -87,6 +87,6 @@ struct fmt::formatter<DB::PS::V3::CPDataFileStat>
     template <typename FormatContext>
     auto format(const DB::PS::V3::CPDataFileStat & value, FormatContext & ctx) const -> decltype(ctx.out())
     {
-        return format_to(ctx.out(), "valid:{},total:{}", value.valid_size, value.total_size);
+        return fmt::format_to(ctx.out(), "valid:{},total:{}", value.valid_size, value.total_size);
     }
 };

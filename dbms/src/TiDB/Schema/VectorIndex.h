@@ -49,7 +49,7 @@ struct fmt::formatter<TiDB::VectorIndexDefinition>
     template <typename FormatContext>
     auto format(const TiDB::VectorIndexDefinition & vi, FormatContext & ctx) const -> decltype(ctx.out())
     {
-        return format_to(
+        return fmt::format_to(
             ctx.out(), //
             "{}:{}",
             tipb::VectorIndexKind_Name(vi.kind),
@@ -66,7 +66,7 @@ struct fmt::formatter<TiDB::VectorIndexDefinitionPtr>
     auto format(const TiDB::VectorIndexDefinitionPtr & vi, FormatContext & ctx) const -> decltype(ctx.out())
     {
         if (!vi)
-            return format_to(ctx.out(), "<no_idx>");
-        return format_to(ctx.out(), "{}", *vi);
+            return fmt::format_to(ctx.out(), "<no_idx>");
+        return fmt::format_to(ctx.out(), "{}", *vi);
     }
 };

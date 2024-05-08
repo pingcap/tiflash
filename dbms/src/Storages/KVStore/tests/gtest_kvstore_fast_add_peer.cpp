@@ -870,7 +870,7 @@ try
 }
 CATCH
 
-TEST_F(RegionKVStoreTestFAP, FAPWorkerException)
+TEST_F(RegionKVStoreOldTestFAP, FAPWorkerException)
 try
 {
     CheckpointRegionInfoAndData mock_data = prepareForRestart(FAPTestOpt{});

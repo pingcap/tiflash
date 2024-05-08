@@ -150,7 +150,7 @@ std::enable_if_t<IsDecimalType<T>, DataTypePtr> getDataTypeByColumnInfoBase(cons
 template <typename T>
 std::enable_if_t<IsArrayType<T>, DataTypePtr> getDataTypeByColumnInfoBase(const ColumnInfo & column_info, const T *)
 {
-    RUNTIME_CHECK(column_info.tp == TiDB::TypeTiDBVectorFloat32, column_info.tp);
+    RUNTIME_CHECK(column_info.tp == TiDB::TypeTiDBVectorFloat32, fmt::underlying(column_info.tp));
     const auto nested_type = std::make_shared<DataTypeFloat32>();
     return std::make_shared<DataTypeArray>(nested_type);
 }
@@ -191,7 +191,7 @@ DataTypePtr TypeMapping::getDataType(const ColumnInfo & column_info)
         iter != type_map.end(),
         "Invalid type from column info, column_id={} tp={} flag={}",
         column_info.id,
-        column_info.tp,
+        fmt::underlying(column_info.tp),
         column_info.flag);
     return (iter->second)(column_info);
 }

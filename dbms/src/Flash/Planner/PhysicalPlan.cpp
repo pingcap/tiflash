@@ -232,7 +232,7 @@ void PhysicalPlan::build(const tipb::Executor * executor)
     }
     default:
         throw TiFlashException(
-            fmt::format("{} executor is not supported", executor->tp()),
+            fmt::format("{} executor is not supported", fmt::underlying(executor->tp())),
             Errors::Planner::Unimplemented);
     }
 }

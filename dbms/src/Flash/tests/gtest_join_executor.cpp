@@ -2385,7 +2385,7 @@ ColumnsWithTypeAndName genSemiJoinResult(
             r.column = r.column->filter(filter, -1);
     }
     else
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "Semi join Type {} is not supported", type);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Semi join Type {} is not supported", magic_enum::enum_name(type));
     return res;
 }
 } // namespace

@@ -233,7 +233,7 @@ std::queue<tipb::ExecType> ExecutorCollation::checkExecutorCollation(
             break; /// Do nothing
         default:
         {
-            auto exception_str = fmt::format("Unhandled executor {}", type);
+            auto exception_str = fmt::format("Unhandled executor {}", fmt::underlying(type));
             throw Exception(exception_str);
         }
         }
@@ -313,7 +313,7 @@ void ExecutorCollation::checkScalarFunctionCollation(std::shared_ptr<tipb::DAGRe
             break; /// Do nothing
         default:
         {
-            auto exception_str = fmt::format("Unhandled executor {}", type);
+            auto exception_str = fmt::format("Unhandled executor {}", fmt::underlying(type));
             throw Exception(exception_str);
         }
         }

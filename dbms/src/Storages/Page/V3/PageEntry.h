@@ -128,7 +128,7 @@ struct fmt::formatter<DB::PS::V3::PageEntryV3>
             [](const auto & offset_checksum, FmtBuffer & fb) { fb.fmtAppend("{}", offset_checksum.first); },
             ",");
 
-        return format_to(
+        return fmt::format_to(
             ctx.out(),
             "PageEntry{{file: {}, offset: 0x{:X}, size: {}, checksum: 0x{:X}, tag: {}, field_offsets: [{}], "
             "checkpoint_info: {}}}",

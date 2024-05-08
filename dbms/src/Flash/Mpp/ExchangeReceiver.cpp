@@ -173,7 +173,7 @@ public:
                 LOG_WARNING(
                     log,
                     "Finish fail. err code: {}, err msg: {}, retry time {}",
-                    finish_status.error_code(),
+                    magic_enum::enum_name(finish_status.error_code()),
                     finish_status.error_message(),
                     retry_times);
                 retryOrDone(fmt::format("Exchange receiver meet error : {}", finish_status.error_message()));
@@ -690,7 +690,7 @@ void ExchangeReceiverBase<RPCContext>::readLoop(const Request & req)
                 LOG_WARNING(
                     log,
                     "EstablishMPPConnectionRequest meets rpc fail. Err code = {}, err msg = {}, retriable = {}",
-                    status.error_code(),
+                    magic_enum::enum_name(status.error_code()),
                     status.error_message(),
                     retriable);
                 // if we have received some data, we should not retry.

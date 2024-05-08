@@ -134,7 +134,7 @@ EngineStoreApplyRes KVStore::handleUselessAdminRaftCmd(
             curr_region,
             region_task_lock,
             PersistRegionReason::UselessAdminCommand,
-            fmt::format("{}", cmd_type).c_str());
+            raft_cmdpb::AdminCmdType_Name(cmd_type).c_str());
         return EngineStoreApplyRes::Persist;
     }
     return EngineStoreApplyRes::None;

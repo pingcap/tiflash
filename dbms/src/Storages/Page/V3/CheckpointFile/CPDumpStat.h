@@ -99,7 +99,7 @@ struct fmt::formatter<DB::PS::V3::CPDataDumpStats>
                 value.num_keys[i],
                 value.num_bytes[i]);
         }
-        return format_to(
+        return fmt::format_to(
             it,
             "]" // end of "keys"
             "}}" // end of "CPDataDumpStats"
