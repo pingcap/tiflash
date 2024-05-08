@@ -223,13 +223,7 @@ bool DeltaValueReader::shouldPlace(
     const RowKeyRange & relevant_range,
     UInt64 max_version)
 {
-<<<<<<< HEAD
-    auto [placed_rows, placed_delete_ranges] = my_delta_index->getPlacedStatus();
-
-    // Already placed.
-=======
     // The placed_rows, placed_delete_range already contains the data in delta_snap
->>>>>>> 8e170090fa (Storages: Fix cloning delta index when there are duplicated tuples (#9000))
     if (placed_rows >= delta_snap->getRows() && placed_delete_ranges == delta_snap->getDeletes())
         return false;
 

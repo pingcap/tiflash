@@ -2502,21 +2502,17 @@ std::pair<DeltaIndexPtr, bool> Segment::ensurePlace(
     auto [my_placed_rows, my_placed_deletes] = my_delta_index->getPlacedStatus();
 
     // Let's do a fast check, determine whether we need to do place or not.
-<<<<<<< HEAD
-    if (!delta_reader->shouldPlace(dm_context, my_delta_index, rowkey_range, relevant_range, max_version))
-=======
     if (!delta_reader->shouldPlace( //
             dm_context,
             my_placed_rows,
             my_placed_deletes,
             rowkey_range,
             relevant_range,
-            start_ts))
+            max_version))
     {
         // We can reuse the shared-delta-index
->>>>>>> 8e170090fa (Storages: Fix cloning delta index when there are duplicated tuples (#9000))
         return {my_delta_index, false};
-
+    }
     CurrentMetrics::Increment cur_dm_segments{CurrentMetrics::DT_PlaceIndexUpdate};
     GET_METRIC(tiflash_storage_subtask_count, type_place_index_update).Increment();
     Stopwatch watch;
