@@ -172,7 +172,8 @@ DM::Remote::RNReadTaskPtr StorageDisaggregated::buildReadTask(
     // First split the read task for different write nodes.
     // For each write node, a BatchCopTask is built.
     {
-        auto remote_table_ranges = buildRemoteTableRanges();
+        auto [remote_table_ranges, region_num] = buildRemoteTableRanges();
+        scan_context->setRegionNumOfCurrentInstance(region_num);
         // only send to tiflash node with label [{"engine":"tiflash"}, {"engine-role":"write"}]
         const auto label_filter = pingcap::kv::labelFilterOnlyTiFlashWriteNode;
         batch_cop_tasks = buildBatchCopTasks(remote_table_ranges, label_filter);
@@ -201,6 +202,7 @@ DM::Remote::RNReadTaskPtr StorageDisaggregated::buildReadTask(
         // TODO
     }
 
+    scan_context->num_segments = output_seg_tasks.size();
     return DM::Remote::RNReadTask::create(output_seg_tasks);
 }
 

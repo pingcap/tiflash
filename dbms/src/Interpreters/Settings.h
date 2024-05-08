@@ -39,7 +39,7 @@ struct Settings
       *  but we are not going to do it, because settings is used everywhere as static struct fields.
       */
 
-// clang-format off
+    // clang-format off
 #define APPLY_FOR_SETTINGS(M)                                                                                                                                                                                                           \
     M(SettingString, regions, "", "Deprecated. the region need to be read.")                                                                                                                                                            \
     M(SettingBool, resolve_locks, false, "resolve locks for TiDB transaction")                                                                                                                                                          \

@@ -138,7 +138,7 @@ private:
 
 private:
     using RemoteTableRange = std::pair<TableID, pingcap::coprocessor::KeyRanges>;
-    std::vector<RemoteTableRange> buildRemoteTableRanges();
+    std::tuple<std::vector<RemoteTableRange>, UInt64> buildRemoteTableRanges();
     std::vector<pingcap::coprocessor::BatchCopTask> buildBatchCopTasks(
         const std::vector<RemoteTableRange> & remote_table_ranges,
         const pingcap::kv::LabelFilter & label_filter);

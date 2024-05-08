@@ -53,6 +53,7 @@ protected:
             std::numeric_limits<UInt64>::max(),
             DEFAULT_BLOCK_SIZE,
             enable_handle_clean_read,
+            ReadTag::Internal,
             is_fast_scan,
             enable_del_clean_read);
 
@@ -61,7 +62,8 @@ protected:
             *dm_context,
             snapshot->delta,
             columns_to_read_ptr,
-            segment->getRowKeyRange());
+            segment->getRowKeyRange(),
+            ReadTag::Internal);
 
         return std::make_shared<RowKeyOrderedBlockInputStream>(
             columns_to_read,
