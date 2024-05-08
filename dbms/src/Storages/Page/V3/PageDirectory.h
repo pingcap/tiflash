@@ -328,7 +328,7 @@ public:
      *
      * `normal_entries_to_deref`: Return the informations that the entries need
      *   to be decreased the ref count by `derefAndClean`.
-     *   The elem is <page_id, <version, num to decrease ref count>> 
+     *   The elem is <page_id, <version, num to decrease ref count>>
      * `entries_removed`: Return the entries removed from the version list
      *
      * Return `true` iff this page can be totally removed from the whole `PageDirectory`.
@@ -681,7 +681,7 @@ struct fmt::formatter<DB::PS::V3::EntryOrDelete>
     template <typename FormatContext>
     auto format(const DB::PS::V3::EntryOrDelete & entry, FormatContext & ctx) const
     {
-        return format_to(
+        return fmt::format_to(
             ctx.out(),
             "{{is_delete:{}, entry:{}, being_ref_count:{}}}",
             entry.is_delete,

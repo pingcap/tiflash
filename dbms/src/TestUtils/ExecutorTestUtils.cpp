@@ -26,6 +26,7 @@
 #include <TestUtils/ExecutorSerializer.h>
 #include <TestUtils/ExecutorTestUtils.h>
 #include <gtest/gtest.h>
+#include <gtest/internal/gtest-internal.h>
 
 #include <functional>
 
@@ -424,9 +425,18 @@ DB::ColumnsWithTypeAndName ExecutorTest::executeRawQuery(const String & query, s
     return executeStreams(query_tasks[0].dag_request, concurrency);
 }
 
-void ExecutorTest::dagRequestEqual(const String & expected_string, const std::shared_ptr<tipb::DAGRequest> & actual)
+::testing::AssertionResult ExecutorTest::dagRequestEqual(
+    const char * lhs_expr,
+    const char * rhs_expr,
+    const String & expected_string,
+    const std::shared_ptr<tipb::DAGRequest> & actual)
 {
-    ASSERT_EQ(Poco::trim(expected_string), Poco::trim(ExecutorSerializer().serialize(actual.get())));
+    auto trim_expected = Poco::trim(expected_string);
+    auto trim_actual = Poco::trim(ExecutorSerializer().serialize(actual.get()));
+
+    if (trim_expected == trim_actual)
+        return ::testing::AssertionSuccess();
+    return ::testing::internal::EqFailure(lhs_expr, rhs_expr, trim_expected, trim_actual, false);
 }
 
 } // namespace DB::tests

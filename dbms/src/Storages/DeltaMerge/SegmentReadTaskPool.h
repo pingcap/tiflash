@@ -296,7 +296,7 @@ struct fmt::formatter<DB::DM::SegmentReadTaskPtr>
     template <typename FormatContext>
     auto format(const DB::DM::SegmentReadTaskPtr & t, FormatContext & ctx) const -> decltype(ctx.out())
     {
-        return format_to(
+        return fmt::format_to(
             ctx.out(),
             "{}_{}_{}",
             t->segment->segmentId(),

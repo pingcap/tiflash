@@ -243,5 +243,6 @@ try
     }
 }
 CATCH
+
 } // namespace tests
 } // namespace DB

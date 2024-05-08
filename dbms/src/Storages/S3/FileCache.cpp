@@ -35,7 +35,6 @@
 #include <chrono>
 #include <cmath>
 #include <filesystem>
-#include <fstream>
 
 namespace ProfileEvents
 {
@@ -63,6 +62,8 @@ extern const char file_cache_fg_download_fail[];
 namespace DB
 {
 using FileType = FileSegment::FileType;
+
+std::unique_ptr<FileCache> FileCache::global_file_cache_instance;
 
 FileSegment::Status FileSegment::waitForNotEmpty()
 {

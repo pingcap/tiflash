@@ -20,6 +20,7 @@
 #include <fmt/compile.h>
 #include <fmt/format.h>
 #include <fmt/ranges.h>
+#include <fmt/std.h>
 
 #ifndef QUERY_PREVIEW_LENGTH
 #define QUERY_PREVIEW_LENGTH 160
