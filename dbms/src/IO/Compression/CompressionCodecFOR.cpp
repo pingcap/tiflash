@@ -56,8 +56,7 @@ UInt32 CompressionCodecFOR::compressData(const T * source, UInt32 count, char * 
 {
     RUNTIME_CHECK(count > 0, count);
     std::vector<T> values(count);
-    for (UInt32 i = 0; i < count; ++i)
-        values[i] = source[i];
+    values.assign(source, source + count);
     T frame_of_reference = *std::min_element(values.cbegin(), values.cend());
     // store frame of reference
     unalignedStore<T>(dest, frame_of_reference);
