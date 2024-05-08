@@ -39,7 +39,7 @@ public:
 
     void notify();
 
-    void finalizeProfileInfo(UInt64 extra_time);
+    void finalizeProfileInfo(UInt64 queuing_time, UInt64 pipeline_breaker_wait_time);
 
 private:
     inline OperatorStatus executeImpl();

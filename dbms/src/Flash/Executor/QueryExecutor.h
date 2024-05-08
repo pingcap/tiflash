@@ -55,6 +55,8 @@ public:
 
     virtual BaseRuntimeStatistics getRuntimeStatistics() const = 0;
 
+    virtual String getExtraJsonInfo() const { return "{}"; }
+
 protected:
     virtual ExecutionResult execute(ResultHandler &&) = 0;
 

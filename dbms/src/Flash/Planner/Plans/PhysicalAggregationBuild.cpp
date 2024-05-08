@@ -88,13 +88,42 @@ EventPtr PhysicalAggregationBuild::doSinkComplete(PipelineExecutorContext & exec
     SCOPE_EXIT({ aggregate_context.reset(); });
 
     aggregate_context->getAggSpillContext()->finishSpillableStage();
-    bool need_final_spill = false;
-    for (size_t i = 0; i < aggregate_context->getBuildConcurrency(); ++i)
+    bool need_final_spill = aggregate_context->hasSpilledData();
+    if (!need_final_spill)
     {
-        if (aggregate_context->getAggSpillContext()->isThreadMarkedForAutoSpill(i))
+        for (size_t i = 0; i < aggregate_context->getBuildConcurrency(); ++i)
         {
-            need_final_spill = true;
-            break;
+            if (aggregate_context->getAggSpillContext()->isThreadMarkedForAutoSpill(i))
+            {
+                need_final_spill = true;
+                break;
+            }
+        }
+    }
+
+    if (aggregate_context->isConvertibleToTwoLevel())
+    {
+        bool need_convert_to_two_level = need_final_spill || aggregate_context->hasAtLeastOneTwoLevel();
+        fiu_do_on(FailPoints::force_agg_two_level_hash_table_before_merge, { need_convert_to_two_level = true; });
+        if (need_convert_to_two_level)
+        {
+            std::vector<size_t> indexes;
+            for (size_t index = 0; index < aggregate_context->getBuildConcurrency(); ++index)
+            {
+                if (!aggregate_context->isTwoLevelOrEmpty(index))
+                    indexes.push_back(index);
+            }
+            if (!indexes.empty())
+            {
+                auto final_convert_event = std::make_shared<AggregateFinalConvertEvent>(
+                    exec_context,
+                    log->identifier(),
+                    aggregate_context,
+                    std::move(indexes),
+                    need_final_spill,
+                    std::move(profile_infos));
+                return final_convert_event;
+            }
         }
     }
 
@@ -122,31 +151,6 @@ EventPtr PhysicalAggregationBuild::doSinkComplete(PipelineExecutorContext & exec
                 std::move(indexes),
                 std::move(profile_infos));
             return final_spill_event;
-        }
-    }
-
-    if (!aggregate_context->hasSpilledData() && aggregate_context->isConvertibleToTwoLevel())
-    {
-        bool has_two_level = aggregate_context->hasAtLeastOneTwoLevel();
-        fiu_do_on(FailPoints::force_agg_two_level_hash_table_before_merge, { has_two_level = true; });
-        if (has_two_level)
-        {
-            std::vector<size_t> indexes;
-            for (size_t index = 0; index < aggregate_context->getBuildConcurrency(); ++index)
-            {
-                if (!aggregate_context->isTwoLevelOrEmpty(index))
-                    indexes.push_back(index);
-            }
-            if (!indexes.empty())
-            {
-                auto final_convert_event = std::make_shared<AggregateFinalConvertEvent>(
-                    exec_context,
-                    log->identifier(),
-                    aggregate_context,
-                    std::move(indexes),
-                    std::move(profile_infos));
-                return final_convert_event;
-            }
         }
     }
 

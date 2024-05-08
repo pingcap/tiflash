@@ -234,28 +234,34 @@ OperatorStatus PipelineExec::awaitImpl()
 #undef HANDLE_OP_STATUS
 #undef HANDLE_LAST_OP_STATUS
 
-void PipelineExec::finalizeProfileInfo(UInt64 extra_time)
+void PipelineExec::finalizeProfileInfo(UInt64 queuing_time, UInt64 pipeline_breaker_wait_time)
 {
-    // `extra_time` usually includes pipeline schedule duration and task queuing time.
-    //
-    // The pipeline schedule duration should be added to the pipeline breaker operator(AggConvergent and JoinProbe),
+    // For the pipeline_breaker_wait_time, it should be added to the pipeline breaker operator(AggConvergent and JoinProbe),
     // However, if there are multiple pipeline breaker operators within a single pipeline, it can become very complex.
     // Therefore, to simplify matters, we will include the pipeline schedule duration in the execution time of the source operator.
     //
-    // ditto for task queuing time.
+    // For the queuing_time, it should be evenly distributed across all operators.
     //
     // TODO Refining execution summary, excluding extra time from execution time.
-    // For example: [total_time:6s, execution_time:1s, pending_time:2s, pipeline_waiting_time:3s]
+    // For example: [total_time:6s, execution_time:1s, queuing_time:2s, pipeline_breaker_wait_time:3s]
 
-    // The execution time of operator[i] = self_time_from_profile_info + sum(self_time_from_profile_info[i-1, .., 0]) + extra_time.
-    source_op->getProfileInfo()->execution_time += extra_time;
-    extra_time = source_op->getProfileInfo()->execution_time;
+    // The execution time of operator[i] = self_time_from_profile_info + sum(self_time_from_profile_info[i-1, .., 0]) + (i + 1) * extra_time / operator_num.
+
+    source_op->getProfileInfo()->execution_time += pipeline_breaker_wait_time;
+
+    UInt64 operator_num = 2 + transform_ops.size();
+    UInt64 per_operator_queuing_time = queuing_time / operator_num;
+
+    source_op->getProfileInfo()->execution_time += per_operator_queuing_time;
+    // Compensate for the values missing due to rounding.
+    source_op->getProfileInfo()->execution_time += (queuing_time - (per_operator_queuing_time * operator_num));
+    UInt64 time_for_prev_op = source_op->getProfileInfo()->execution_time;
     for (const auto & transform_op : transform_ops)
     {
-        transform_op->getProfileInfo()->execution_time += extra_time;
-        extra_time = transform_op->getProfileInfo()->execution_time;
+        transform_op->getProfileInfo()->execution_time += (per_operator_queuing_time + time_for_prev_op);
+        time_for_prev_op = transform_op->getProfileInfo()->execution_time;
     }
-    sink_op->getProfileInfo()->execution_time += extra_time;
+    sink_op->getProfileInfo()->execution_time += (per_operator_queuing_time + time_for_prev_op);
 }
 
 } // namespace DB
