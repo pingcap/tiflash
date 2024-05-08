@@ -30,10 +30,12 @@ public:
         const String & req_id,
         AggregateContextPtr agg_context_,
         std::vector<size_t> && indexes_,
+        bool need_final_spill_,
         OperatorProfileInfos && profile_infos_)
         : Event(exec_context_, req_id)
         , agg_context(std::move(agg_context_))
         , indexes(std::move(indexes_))
+        , need_final_spill(need_final_spill_)
         , profile_infos(std::move(profile_infos_))
     {
         assert(agg_context);
@@ -49,6 +51,7 @@ protected:
 private:
     AggregateContextPtr agg_context;
     std::vector<size_t> indexes;
+    bool need_final_spill;
 
     OperatorProfileInfos profile_infos;
 };
