@@ -1184,7 +1184,7 @@ void DAGStorageInterpreter::buildLocalStreams(DAGPipeline & pipeline, size_t max
     size_t total_local_region_num = mvcc_query_info->regions_query_info.size();
     if (total_local_region_num == 0)
         return;
-    mvcc_query_info->scan_context->total_local_region_num = total_local_region_num;
+    mvcc_query_info->scan_context->setRegionNumOfCurrentInstance(total_local_region_num);
     const auto table_query_infos = generateSelectQueryInfos();
     bool has_multiple_partitions = table_query_infos.size() > 1;
     // MultiPartitionStreamPool will be disabled in no partition mode or single-partition case
@@ -1250,7 +1250,7 @@ void DAGStorageInterpreter::buildLocalExec(
     size_t total_local_region_num = mvcc_query_info->regions_query_info.size();
     if (total_local_region_num == 0)
         return;
-    mvcc_query_info->scan_context->total_local_region_num = total_local_region_num;
+    mvcc_query_info->scan_context->setRegionNumOfCurrentInstance(total_local_region_num);
     const auto table_query_infos = generateSelectQueryInfos();
     bool has_multiple_partitions = table_query_infos.size() > 1;
     ConcatBuilderPool builder_pool{max_streams};
