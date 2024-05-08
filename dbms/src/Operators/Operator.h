@@ -65,6 +65,8 @@ public:
     // running status may return are NEED_INPUT and HAS_OUTPUT here.
     OperatorStatus await();
 
+    void notify();
+
     // These two methods are used to set state, log and etc, and should not perform calculation logic.
     void operatePrefix();
     void operateSuffix();
@@ -96,6 +98,8 @@ protected:
     virtual OperatorStatus executeIOImpl() { throw Exception("Unsupport"); }
 
     virtual OperatorStatus awaitImpl() { throw Exception("Unsupport"); }
+
+    virtual void notifyImpl() {}
 
 protected:
     PipelineExecutorContext & exec_context;

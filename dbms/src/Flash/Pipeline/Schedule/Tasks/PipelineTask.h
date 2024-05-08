@@ -41,9 +41,15 @@ protected:
 
     ExecTaskStatus awaitImpl() override { return runAwait(); }
 
+    void notifyImpl() override { runNotify(); }
+
     void doFinalizeImpl() override
     {
+<<<<<<< HEAD
         runFinalize(profile_info.getCPUPendingTimeNs() + profile_info.getIOPendingTimeNs() + getScheduleDuration());
+=======
+        runFinalize(profile_info.getCPUPendingTimeNs() + profile_info.getIOPendingTimeNs(), getScheduleDuration());
+>>>>>>> 6129d97e0b (Pipeline: refactor the extra time calculation in explain analyze (#8987))
     }
 };
 } // namespace DB

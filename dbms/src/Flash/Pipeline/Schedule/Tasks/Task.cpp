@@ -151,6 +151,22 @@ ExecTaskStatus Task::await()
 
 #undef EXECUTE
 
+<<<<<<< HEAD
+=======
+void Task::notify()
+{
+    assert(task_status == ExecTaskStatus::WAIT_FOR_NOTIFY);
+    // If the query has been canceled,
+    // move the task to WaitReactor to quickly trigger the cancel process.
+    if (unlikely(exec_context.isCancelled()))
+        switchStatus(ExecTaskStatus::WAITING);
+    else
+        switchStatus(ExecTaskStatus::RUNNING);
+    notifyImpl();
+    profile_info.elapsedWaitForNotifyTime();
+}
+
+>>>>>>> 6129d97e0b (Pipeline: refactor the extra time calculation in explain analyze (#8987))
 void Task::finalize()
 {
     // To make sure that `finalize` only called once.

@@ -120,13 +120,19 @@ protected:
         }
     }
 
-    void runFinalize(UInt64 extra_time)
+    void runFinalize(UInt64 queuing_time, UInt64 pipeline_breaker_wait_time)
     {
         assert(pipeline_exec);
         pipeline_exec->executeSuffix();
-        pipeline_exec->finalizeProfileInfo(extra_time);
+        pipeline_exec->finalizeProfileInfo(queuing_time, pipeline_breaker_wait_time);
         pipeline_exec = nullptr;
         pipeline_exec_holder.reset();
+    }
+
+    void runNotify()
+    {
+        assert(pipeline_exec);
+        pipeline_exec->notify();
     }
 
 private:
