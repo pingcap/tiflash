@@ -73,7 +73,10 @@ public:
         bool skip_sign_extension = false)
     {
         if (width == 0)
+        {
             memset(dst, 0, count * sizeof(T));
+            return;
+        }
         for (size_t i = 0; i < count; i += BITPACKING_ALGORITHM_GROUP_SIZE)
         {
             unPackGroup<T>(dst + i * sizeof(T), src + (i * width) / 8, width, skip_sign_extension);
@@ -127,13 +130,12 @@ public:
     }
 
     // round up to nearest multiple of BITPACKING_ALGORITHM_GROUP_SIZE
-    template <typename T>
-    constexpr static T roundUpToAlgorithmGroupSize(T num_to_round)
+    constexpr static size_t roundUpToAlgorithmGroupSize(size_t num_to_round)
     {
         static_assert(
             (BITPACKING_ALGORITHM_GROUP_SIZE & (BITPACKING_ALGORITHM_GROUP_SIZE - 1)) == 0,
             "BITPACKING_ALGORITHM_GROUP_SIZE must be a power of 2");
-        constexpr T mask = BITPACKING_ALGORITHM_GROUP_SIZE - 1;
+        constexpr size_t mask = BITPACKING_ALGORITHM_GROUP_SIZE - 1;
         return (num_to_round + mask) & ~mask;
     }
 
