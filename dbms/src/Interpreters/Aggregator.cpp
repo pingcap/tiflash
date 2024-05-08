@@ -1069,8 +1069,7 @@ Block Aggregator::convertOneBucketToBlock(
     Method & method,
     Arena * arena,
     bool final,
-    size_t bucket,
-    bool enable_convert_key_optimization) const
+    size_t bucket) const
 {
 #define FILLER_DEFINE(name, skip_convert_key)                                \
     auto filler_##name = [bucket, &method, arena, this](                     \
@@ -1096,11 +1095,12 @@ Block Aggregator::convertOneBucketToBlock(
     FILLER_DEFINE(skip_convert_key, true);
 #undef FILLER_DEFINE
 
-    Block block;
-    size_t convert_key_size
-        = enable_convert_key_optimization ? params.keys_size - params.key_ref_agg_func.size() : params.keys_size;
+    // Ignore key optimization if in non-final mode(a.k.a. during spilling process).
+    // Because all keys are needed when insert spilled block back into HashMap during restore process.
+    size_t convert_key_size = final ? params.keys_size - params.key_ref_agg_func.size() : params.keys_size;
 
-    if (enable_convert_key_optimization && params.key_ref_agg_func.size() == params.keys_size)
+    Block block;
+    if (final && params.key_ref_agg_func.size() == params.keys_size)
     {
         block = prepareBlockAndFill(
             data_variants,
@@ -1129,8 +1129,7 @@ BlocksList Aggregator::convertOneBucketToBlocks(
     Method & method,
     Arena * arena,
     bool final,
-    size_t bucket,
-    bool enable_convert_key_optimization) const
+    size_t bucket) const
 {
 #define FILLER_DEFINE(name, skip_convert_key)                                                         \
     auto filler_##name = [bucket, &method, arena, this](                                              \
@@ -1155,10 +1154,9 @@ BlocksList Aggregator::convertOneBucketToBlocks(
 #undef FILLER_DEFINE
 
     BlocksList blocks;
-    size_t convert_key_size
-        = enable_convert_key_optimization ? params.keys_size - params.key_ref_agg_func.size() : params.keys_size;
+    size_t convert_key_size = final ? params.keys_size - params.key_ref_agg_func.size() : params.keys_size;
 
-    if (enable_convert_key_optimization && params.key_ref_agg_func.size() == params.keys_size)
+    if (final && params.key_ref_agg_func.size() == params.keys_size)
     {
         blocks = prepareBlocksAndFill(
             data_variants,
@@ -1693,7 +1691,7 @@ Block Aggregator::prepareBlockAndFill(
     Filler && filler,
     size_t convert_key_size) const
 {
-    MutableColumns key_columns(params.keys_size);
+    MutableColumns key_columns(convert_key_size);
     MutableColumns aggregate_columns(params.aggregates_size);
     MutableColumns final_aggregate_columns(params.aggregates_size);
     AggregateColumnsData aggregate_columns_data(params.aggregates_size);
@@ -1925,10 +1923,7 @@ BlocksList Aggregator::prepareBlocksAndFillWithoutKey(AggregatedDataVariants & d
     return blocks;
 }
 
-BlocksList Aggregator::prepareBlocksAndFillSingleLevel(
-    AggregatedDataVariants & data_variants,
-    bool final,
-    bool enable_convert_key_optimization) const
+BlocksList Aggregator::prepareBlocksAndFillSingleLevel(AggregatedDataVariants & data_variants, bool final) const
 {
     size_t rows = data_variants.size();
 #define M(NAME, skip_convert_key)                                                                    \
@@ -1974,10 +1969,9 @@ BlocksList Aggregator::prepareBlocksAndFillSingleLevel(
 #undef M_convert_key
 #undef FILLER_DEFINE
 
-    size_t convert_key_size
-        = enable_convert_key_optimization ? params.keys_size - params.key_ref_agg_func.size() : params.keys_size;
+    size_t convert_key_size = final ? params.keys_size - params.key_ref_agg_func.size() : params.keys_size;
 
-    if (enable_convert_key_optimization && params.key_ref_agg_func.size() == params.keys_size)
+    if (final && params.key_ref_agg_func.size() == params.keys_size)
     {
         return prepareBlocksAndFill(data_variants, final, rows, filler_skip_convert_key, convert_key_size);
     }
@@ -2349,7 +2343,7 @@ BlocksList Aggregator::vstackBlocks(BlocksList & blocks, bool final)
     if (result.type == AggregatedDataVariants::Type::without_key)
         return_blocks = prepareBlocksAndFillWithoutKey(result, final);
     else
-        return_blocks = prepareBlocksAndFillSingleLevel(result, final, /*enable_convert_key_optimization=*/false);
+        return_blocks = prepareBlocksAndFillSingleLevel(result, final);
     /// NOTE: two-level data is not possible here - chooseAggregationMethod chooses only among single-level methods.
 
     if (!final)
@@ -2625,7 +2619,7 @@ Block MergingBuckets::getHeader() const
     return aggregator.getHeader(final);
 }
 
-Block MergingBuckets::getData(size_t concurrency_index, bool enable_convert_key_optimization)
+Block MergingBuckets::getData(size_t concurrency_index)
 {
     assert(concurrency_index < concurrency);
 
@@ -2634,11 +2628,10 @@ Block MergingBuckets::getData(size_t concurrency_index, bool enable_convert_key_
 
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_aggregate_merge_failpoint);
 
-    return is_two_level ? getDataForTwoLevel(concurrency_index, enable_convert_key_optimization)
-                        : getDataForSingleLevel(enable_convert_key_optimization);
+    return is_two_level ? getDataForTwoLevel(concurrency_index) : getDataForSingleLevel();
 }
 
-Block MergingBuckets::getDataForSingleLevel(bool enable_convert_key_optimization)
+Block MergingBuckets::getDataForSingleLevel()
 {
     assert(!data.empty());
 
@@ -2672,14 +2665,13 @@ Block MergingBuckets::getDataForSingleLevel(bool enable_convert_key_optimization
             throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
         }
 #undef M
-        single_level_blocks
-            = aggregator.prepareBlocksAndFillSingleLevel(*first, final, enable_convert_key_optimization);
+        single_level_blocks = aggregator.prepareBlocksAndFillSingleLevel(*first, final);
     }
     ++current_bucket_num;
     return popBlocksListFront(single_level_blocks);
 }
 
-Block MergingBuckets::getDataForTwoLevel(size_t concurrency_index, bool enable_convert_key_optimization)
+Block MergingBuckets::getDataForTwoLevel(size_t concurrency_index)
 {
     assert(concurrency_index < two_level_parallel_merge_data.size());
     auto & two_level_merge_data = *two_level_parallel_merge_data[concurrency_index];
@@ -2696,14 +2688,14 @@ Block MergingBuckets::getDataForTwoLevel(size_t concurrency_index, bool enable_c
         if (unlikely(local_current_bucket_num >= NUM_BUCKETS))
             return {};
 
-        doLevelMerge(local_current_bucket_num, concurrency_index, enable_convert_key_optimization);
+        doLevelMerge(local_current_bucket_num, concurrency_index);
         Block block = popBlocksListFront(two_level_merge_data);
         if (likely(block))
             return block;
     }
 }
 
-void MergingBuckets::doLevelMerge(Int32 bucket_num, size_t concurrency_index, bool enable_convert_key_optimization)
+void MergingBuckets::doLevelMerge(Int32 bucket_num, size_t concurrency_index)
 {
     auto & two_level_merge_data = *two_level_parallel_merge_data[concurrency_index];
     assert(two_level_merge_data.empty());
@@ -2724,8 +2716,7 @@ void MergingBuckets::doLevelMerge(Int32 bucket_num, size_t concurrency_index, bo
             *ToAggregationMethodPtr(NAME, merged_data.aggregation_method_impl),           \
             arena,                                                                        \
             final,                                                                        \
-            bucket_num,                                                                   \
-            enable_convert_key_optimization);                                             \
+            bucket_num);                                                                  \
         break;                                                                            \
     }
     switch (method)

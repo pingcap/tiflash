@@ -207,7 +207,7 @@ Block AggregateContext::readForConvergent(size_t index)
     if unlikely (!merging_buckets)
         return {};
 
-    return merging_buckets->getData(index, /*enable_convert_key_optimization=*/true);
+    return merging_buckets->getData(index);
 }
 
 bool AggregateContext::hasAtLeastOneTwoLevel()

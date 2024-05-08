@@ -36,10 +36,7 @@ public:
     Block getHeader() const override { return merging_buckets->getHeader(); }
 
 protected:
-    Block readImpl() override
-    {
-        return merging_buckets->getData(concurrency_index, /*enable_convert_key_optimization=*/true);
-    }
+    Block readImpl() override { return merging_buckets->getData(concurrency_index); }
 
 private:
     MergingBucketsPtr merging_buckets;

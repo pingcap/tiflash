@@ -999,16 +999,16 @@ public:
 
     Block getHeader() const;
 
-    Block getData(size_t concurrency_index, bool enable_convert_key_optimization);
+    Block getData(size_t concurrency_index);
 
     size_t getConcurrency() const { return concurrency; }
 
 private:
-    Block getDataForSingleLevel(bool enable_convert_key_optimization);
+    Block getDataForSingleLevel();
 
-    Block getDataForTwoLevel(size_t concurrency_index, bool enable_convert_key_optimization);
+    Block getDataForTwoLevel(size_t concurrency_index);
 
-    void doLevelMerge(Int32 bucket_num, size_t concurrency_index, bool enable_convert_key_optimization);
+    void doLevelMerge(Int32 bucket_num, size_t concurrency_index);
 
 private:
     const LoggerPtr log;
@@ -1341,9 +1341,6 @@ protected:
     template <typename Method>
     void mergeSingleLevelDataImpl(ManyAggregatedDataVariants & non_empty_data) const;
 
-    // enable_convert_key_optimization will only be true when output.
-    // It will be false when spilling to disk.
-    // Because need to make sure the block inserting into HashMap is same as the child output block.
     template <typename Method, typename Table, bool skip_convert_key>
     void convertToBlockImpl(
         Method & method,
@@ -1425,8 +1422,7 @@ protected:
         Method & method,
         Arena * arena,
         bool final,
-        size_t bucket,
-        bool enable_convert_key_optimization) const;
+        size_t bucket) const;
 
     template <typename Method>
     BlocksList convertOneBucketToBlocks(
@@ -1434,8 +1430,7 @@ protected:
         Method & method,
         Arena * arena,
         bool final,
-        size_t bucket,
-        bool enable_convert_key_optimization) const;
+        size_t bucket) const;
 
     template <typename Mapped>
     void insertAggregatesIntoColumns(Mapped & mapped, MutableColumns & final_aggregate_columns, Arena * arena) const;
@@ -1447,10 +1442,7 @@ protected:
         AggregateFunctionInstructions & instructions);
 
     BlocksList prepareBlocksAndFillWithoutKey(AggregatedDataVariants & data_variants, bool final) const;
-    BlocksList prepareBlocksAndFillSingleLevel(
-        AggregatedDataVariants & data_variants,
-        bool final,
-        bool enable_convert_key_optimization) const;
+    BlocksList prepareBlocksAndFillSingleLevel(AggregatedDataVariants & data_variants, bool final) const;
 
     template <typename Method, typename Table>
     void mergeStreamsImplCase(Block & block, Arena * aggregates_pool, Method & method, Table & data) const;

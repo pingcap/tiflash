@@ -47,17 +47,12 @@ protected:
     {
         if (current_bucket < total_bucket)
         {
-            // For spill, enable_convert_key_optimization will be false. Because
-            // 1. There are disk operations during pilling, which make the optimization useless.
-            // 2. Restored block needs emplace into HashMap again, so we need full complete group by keys,
-            //    which means we cannot use this optimization.
             auto block = aggregator.convertOneBucketToBlock(
                 aggregated_data_variants,
                 method,
                 aggregated_data_variants.aggregates_pool,
-                false,
-                current_bucket++,
-                /*enable_convert_key_optimization=*/false);
+                /*final=*/false,
+                current_bucket++);
             size_t block_rows = block.rows();
             size_t block_bytes = block.bytes();
 
