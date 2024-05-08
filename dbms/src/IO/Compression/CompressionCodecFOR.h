@@ -19,10 +19,18 @@
 namespace DB
 {
 
-class CompressionCodecFor : public ICompressionCodec
+// The Frame of Reference (FOR) compression scheme for numeric values: Instead
+// of compressing the actual value, use a value close to all others in the same
+// range (for integers - often the minimum value, or the minimum without
+// outliers/exceptionals) and encode all values using their difference from
+// this reference. The differences typically need less bits to represent.
+// One could think of this as an approximation of the data by a constant + residuals.
+//
+// Reference: https://dbms-arch.fandom.com/wiki/Frame_of_Reference_(Compression_Scheme)
+class CompressionCodecFOR : public ICompressionCodec
 {
 public:
-    explicit CompressionCodecFor(UInt8 bytes_size_);
+    explicit CompressionCodecFOR(UInt8 bytes_size_);
 
     UInt8 getMethodByte() const override;
 

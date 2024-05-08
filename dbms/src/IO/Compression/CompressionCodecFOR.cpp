@@ -14,7 +14,7 @@
 
 #include <Common/BitpackingPrimitives.h>
 #include <Common/Exception.h>
-#include <IO/Compression/CompressionCodecFor.h>
+#include <IO/Compression/CompressionCodecFOR.h>
 #include <IO/Compression/CompressionInfo.h>
 #include <common/likely.h>
 #include <common/unaligned.h>
@@ -32,16 +32,16 @@ extern const int CANNOT_COMPRESS;
 extern const int CANNOT_DECOMPRESS;
 } // namespace ErrorCodes
 
-CompressionCodecFor::CompressionCodecFor(UInt8 bytes_size_)
+CompressionCodecFOR::CompressionCodecFOR(UInt8 bytes_size_)
     : bytes_size(bytes_size_)
 {}
 
-UInt8 CompressionCodecFor::getMethodByte() const
+UInt8 CompressionCodecFOR::getMethodByte() const
 {
-    return static_cast<UInt8>(CompressionMethodByte::For);
+    return static_cast<UInt8>(CompressionMethodByte::FOR);
 }
 
-UInt32 CompressionCodecFor::getMaxCompressedDataSize(UInt32 uncompressed_size) const
+UInt32 CompressionCodecFOR::getMaxCompressedDataSize(UInt32 uncompressed_size) const
 {
     /**
      *|bytes_of_original_type|frame_of_reference|width(bits)  |bitpacked data|
@@ -52,7 +52,7 @@ UInt32 CompressionCodecFor::getMaxCompressedDataSize(UInt32 uncompressed_size) c
 }
 
 template <typename T>
-UInt32 CompressionCodecFor::compressData(const T * source, UInt32 count, char * dest)
+UInt32 CompressionCodecFOR::compressData(const T * source, UInt32 count, char * dest)
 {
     static_assert(std::is_integral<T>::value, "Integral required.");
     std::vector<T> values(count);
@@ -82,7 +82,7 @@ UInt32 CompressionCodecFor::compressData(const T * source, UInt32 count, char * 
 }
 
 template <typename T>
-void CompressionCodecFor::decompressData(const char * source, UInt32 source_size, char * dest, UInt32 output_size)
+void CompressionCodecFOR::decompressData(const char * source, UInt32 source_size, char * dest, UInt32 output_size)
 {
     static_assert(std::is_integral<T>::value, "Integral required.");
     const auto count = output_size / sizeof(T);
@@ -102,7 +102,7 @@ void CompressionCodecFor::decompressData(const char * source, UInt32 source_size
             reinterpret_cast<const unsigned char *>(source),
             count,
             width);
-        CompressionCodecFor::applyFrameOfReference(reinterpret_cast<T *>(tmp_buffer), frame_of_reference, count);
+        CompressionCodecFOR::applyFrameOfReference(reinterpret_cast<T *>(tmp_buffer), frame_of_reference, count);
         memcpy(dest, tmp_buffer, output_size);
         return;
     }
@@ -111,11 +111,11 @@ void CompressionCodecFor::decompressData(const char * source, UInt32 source_size
         reinterpret_cast<const unsigned char *>(source),
         count,
         width);
-    CompressionCodecFor::applyFrameOfReference(reinterpret_cast<T *>(dest), frame_of_reference, count);
+    CompressionCodecFOR::applyFrameOfReference(reinterpret_cast<T *>(dest), frame_of_reference, count);
 }
 
 template <class T>
-void CompressionCodecFor::applyFrameOfReference(T * dst, T frame_of_reference, UInt32 count)
+void CompressionCodecFOR::applyFrameOfReference(T * dst, T frame_of_reference, UInt32 count)
 {
     if (!frame_of_reference)
         return;
@@ -157,7 +157,7 @@ void CompressionCodecFor::applyFrameOfReference(T * dst, T frame_of_reference, U
 #endif
 }
 
-UInt32 CompressionCodecFor::doCompressData(const char * source, UInt32 source_size, char * dest) const
+UInt32 CompressionCodecFOR::doCompressData(const char * source, UInt32 source_size, char * dest) const
 {
     if unlikely (source_size % bytes_size != 0)
         throw Exception(ErrorCodes::CANNOT_DECOMPRESS, "source size {} is not aligned to {}", source_size, bytes_size);
@@ -178,7 +178,7 @@ UInt32 CompressionCodecFor::doCompressData(const char * source, UInt32 source_si
     }
 }
 
-void CompressionCodecFor::doDecompressData(
+void CompressionCodecFOR::doDecompressData(
     const char * source,
     UInt32 source_size,
     char * dest,
@@ -217,5 +217,34 @@ void CompressionCodecFor::doDecompressData(
         throw Exception(ErrorCodes::CANNOT_DECOMPRESS, "Cannot decompress For-encoded data. Unsupported bytes size");
     }
 }
+
+
+// The following instantiations are used in CompressionCodecDeltaFor.cpp
+
+template UInt32 CompressionCodecFOR::compressData<Int8>(const Int8 * source, UInt32 count, char * dest);
+template UInt32 CompressionCodecFOR::compressData<Int16>(const Int16 * source, UInt32 count, char * dest);
+template UInt32 CompressionCodecFOR::compressData<Int32>(const Int32 * source, UInt32 count, char * dest);
+template UInt32 CompressionCodecFOR::compressData<Int64>(const Int64 * source, UInt32 count, char * dest);
+
+template void CompressionCodecFOR::decompressData<Int8>(
+    const char * source,
+    UInt32 source_size,
+    char * dest,
+    UInt32 output_size);
+template void CompressionCodecFOR::decompressData<Int16>(
+    const char * source,
+    UInt32 source_size,
+    char * dest,
+    UInt32 output_size);
+template void CompressionCodecFOR::decompressData<Int32>(
+    const char * source,
+    UInt32 source_size,
+    char * dest,
+    UInt32 output_size);
+template void CompressionCodecFOR::decompressData<Int64>(
+    const char * source,
+    UInt32 source_size,
+    char * dest,
+    UInt32 output_size);
 
 } // namespace DB

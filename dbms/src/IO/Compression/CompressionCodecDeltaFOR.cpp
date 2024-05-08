@@ -14,11 +14,13 @@
 
 #include <Common/BitpackingPrimitives.h>
 #include <Common/Exception.h>
-#include <IO/Compression/CompressionCodecDeltaFor.h>
-#include <IO/Compression/CompressionCodecFor.h>
+#include <IO/Compression/CompressionCodecDeltaFOR.h>
+#include <IO/Compression/CompressionCodecFOR.h>
 #include <IO/Compression/CompressionInfo.h>
 #include <common/likely.h>
 #include <common/unaligned.h>
+
+#include <type_traits>
 
 #if defined(__AVX2__)
 #include <immintrin.h>
@@ -33,16 +35,16 @@ extern const int CANNOT_COMPRESS;
 extern const int CANNOT_DECOMPRESS;
 } // namespace ErrorCodes
 
-CompressionCodecDeltaFor::CompressionCodecDeltaFor(UInt8 bytes_size_)
+CompressionCodecDeltaFOR::CompressionCodecDeltaFOR(UInt8 bytes_size_)
     : bytes_size(bytes_size_)
 {}
 
-UInt8 CompressionCodecDeltaFor::getMethodByte() const
+UInt8 CompressionCodecDeltaFOR::getMethodByte() const
 {
-    return static_cast<UInt8>(CompressionMethodByte::DeltaFor);
+    return static_cast<UInt8>(CompressionMethodByte::DeltaFOR);
 }
 
-UInt32 CompressionCodecDeltaFor::getMaxCompressedDataSize(UInt32 uncompressed_size) const
+UInt32 CompressionCodecDeltaFOR::getMaxCompressedDataSize(UInt32 uncompressed_size) const
 {
     /**
      *|bytes_of_original_type|frame_of_reference|width(bits)  |bitpacked data|
@@ -72,9 +74,10 @@ UInt32 compressData(const char * source, UInt32 source_size, char * dest)
 {
     static_assert(std::is_integral<T>::value, "Integral required.");
     const auto count = source_size / sizeof(T);
-    auto * typed_dest = reinterpret_cast<T *>(dest);
-    DeltaEncode<T>(reinterpret_cast<const T *>(source), count, typed_dest);
-    return CompressionCodecFor::compressData<T>(typed_dest, count, dest);
+    DeltaEncode<T>(reinterpret_cast<const T *>(source), count, reinterpret_cast<T *>(dest));
+    // Cast deltas to signed type to better compress negative values.
+    using TS = typename std::make_signed<T>::type;
+    return CompressionCodecFOR::compressData<TS>(reinterpret_cast<TS *>(dest), count, dest);
 }
 
 template <typename T>
@@ -164,7 +167,8 @@ void DeltaDecode<UInt64>(const char * __restrict__ raw_source, UInt32 raw_source
 template <typename T>
 void ordinaryDecompressData(const char * source, UInt32 source_size, char * dest, UInt32 output_size)
 {
-    CompressionCodecFor::decompressData<T>(source, source_size, dest, output_size);
+    using TS = typename std::make_signed<T>::type;
+    CompressionCodecFOR::decompressData<TS>(source, source_size, dest, output_size);
     ordinaryDeltaDecode<T>(dest, output_size, dest);
 }
 
@@ -183,7 +187,7 @@ void decompressData<UInt32>(const char * source, UInt32 source_size, char * dest
     // Reserve enough space for the temporary buffer.
     const auto required_size = round_size * sizeof(UInt32);
     char tmp_buffer[required_size];
-    CompressionCodecFor::decompressData<UInt32>(source, source_size, tmp_buffer, required_size);
+    CompressionCodecFOR::decompressData<Int32>(source, source_size, tmp_buffer, required_size);
     DeltaDecode<UInt32>(reinterpret_cast<const char *>(tmp_buffer), output_size, dest);
 }
 
@@ -195,13 +199,13 @@ void decompressData<UInt64>(const char * source, UInt32 source_size, char * dest
     // Reserve enough space for the temporary buffer.
     const auto required_size = round_size * sizeof(UInt64);
     char tmp_buffer[required_size];
-    CompressionCodecFor::decompressData<UInt64>(source, source_size, tmp_buffer, required_size);
+    CompressionCodecFOR::decompressData<Int64>(source, source_size, tmp_buffer, required_size);
     DeltaDecode<UInt64>(reinterpret_cast<const char *>(tmp_buffer), output_size, dest);
 }
 
 } // namespace
 
-UInt32 CompressionCodecDeltaFor::doCompressData(const char * source, UInt32 source_size, char * dest) const
+UInt32 CompressionCodecDeltaFOR::doCompressData(const char * source, UInt32 source_size, char * dest) const
 {
     if unlikely (source_size % bytes_size != 0)
         throw Exception(ErrorCodes::CANNOT_DECOMPRESS, "source size {} is not aligned to {}", source_size, bytes_size);
@@ -222,7 +226,7 @@ UInt32 CompressionCodecDeltaFor::doCompressData(const char * source, UInt32 sour
     }
 }
 
-void CompressionCodecDeltaFor::doDecompressData(
+void CompressionCodecDeltaFOR::doDecompressData(
     const char * source,
     UInt32 source_size,
     char * dest,
@@ -266,7 +270,7 @@ void CompressionCodecDeltaFor::doDecompressData(
     }
 }
 
-void CompressionCodecDeltaFor::ordinaryDecompress(
+void CompressionCodecDeltaFOR::ordinaryDecompress(
     const char * source,
     UInt32 source_size,
     char * dest,

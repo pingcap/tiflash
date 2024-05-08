@@ -15,8 +15,8 @@
 #pragma once
 
 #include <Common/config.h>
-#include <IO/Compression/CompressionCodecDeltaFor.h>
-#include <IO/Compression/CompressionCodecFor.h>
+#include <IO/Compression/CompressionCodecDeltaFOR.h>
+#include <IO/Compression/CompressionCodecFOR.h>
 #include <IO/Compression/CompressionCodecLZ4.h>
 #include <IO/Compression/CompressionCodecMultiple.h>
 #include <IO/Compression/CompressionCodecNone.h>
@@ -58,12 +58,12 @@ public:
         }
         switch (setting.method_byte)
         {
-        case CompressionMethodByte::DeltaFor:
-            return std::make_unique<CompressionCodecDeltaFor>(setting.type_bytes_size);
+        case CompressionMethodByte::DeltaFOR:
+            return std::make_unique<CompressionCodecDeltaFOR>(setting.type_bytes_size);
         case CompressionMethodByte::RLE:
             return std::make_unique<CompressionCodecRLE>(setting.type_bytes_size);
-        case CompressionMethodByte::For:
-            return std::make_unique<CompressionCodecFor>(setting.type_bytes_size);
+        case CompressionMethodByte::FOR:
+            return std::make_unique<CompressionCodecFOR>(setting.type_bytes_size);
         case CompressionMethodByte::NONE:
             return std::make_unique<CompressionCodecNone>();
         default:
