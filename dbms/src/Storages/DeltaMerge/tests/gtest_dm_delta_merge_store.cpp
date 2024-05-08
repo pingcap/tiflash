@@ -3486,8 +3486,6 @@ void DeltaMergeStoreRWTest::dupHandleVersionAndDeltaIndexAdvancedThanSnapshot()
             /* num_streams= */ 1,
             /* start_ts= */ std::numeric_limits<UInt64>::max(),
             EMPTY_FILTER,
-            std::vector<RuntimeFilterPtr>{},
-            /* rf_max_wait_time_ms= */ 0,
             TRACING_NAME,
             /* keep_order= */ false,
             /* is_fast_scan= */ false,
@@ -3537,11 +3535,10 @@ void DeltaMergeStoreRWTest::dupHandleVersionAndDeltaIndexAdvancedThanSnapshot()
             *dm_context,
             seg_read_task->read_snapshot->delta,
             pk_ver_col_defs,
-            RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()),
-            ReadTag::MVCC);
+            RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
         return seg_read_task->segment->ensurePlace(
             *dm_context,
-            seg_read_task->read_snapshot,
+            seg_read_task->read_snapshot->stable,
             delta_reader,
             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
             std::numeric_limits<UInt64>::max());

@@ -48,7 +48,6 @@ extern const Metric DT_SnapshotOfPlaceIndex;
 
 namespace DB::DM
 {
-<<<<<<< HEAD
 extern DMFilePtr writeIntoNewDMFile(DMContext & dm_context, //
                                     const ColumnDefinesPtr & schema_snap,
                                     const BlockInputStreamPtr & input_stream,
@@ -56,17 +55,6 @@ extern DMFilePtr writeIntoNewDMFile(DMContext & dm_context, //
                                     const String & parent_path,
                                     DMFileBlockOutputStream::Flags flags);
 namespace tests
-=======
-extern DMFilePtr writeIntoNewDMFile(
-    DMContext & dm_context, //
-    const ColumnDefinesPtr & schema_snap,
-    const BlockInputStreamPtr & input_stream,
-    UInt64 file_id,
-    const String & parent_path);
-}
-
-namespace DB::DM::tests
->>>>>>> 8e170090fa (Storages: Fix cloning delta index when there are duplicated tuples (#9000))
 {
 class SegmentTest : public DB::base::TiFlashStorageTestBasic
 {
@@ -1860,4 +1848,5 @@ try
 }
 CATCH
 
-} // namespace DB::DM::tests
+} // namespace tests
+} // namespace DB::DM

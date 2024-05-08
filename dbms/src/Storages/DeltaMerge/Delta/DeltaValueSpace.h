@@ -406,21 +406,11 @@ public:
     // We use the result to update DeltaTree.
     BlockOrDeletes getPlaceItems(size_t rows_begin, size_t deletes_begin, size_t rows_end, size_t deletes_end);
 
-<<<<<<< HEAD
     bool shouldPlace(const DMContext & context,
                      DeltaIndexPtr my_delta_index,
                      const RowKeyRange & segment_range,
                      const RowKeyRange & relevant_range,
                      UInt64 max_version);
-=======
-    bool shouldPlace(
-        const DMContext & context,
-        size_t placed_rows,
-        size_t placed_delete_ranges,
-        const RowKeyRange & segment_range,
-        const RowKeyRange & relevant_range,
-        UInt64 start_ts);
->>>>>>> 8e170090fa (Storages: Fix cloning delta index when there are duplicated tuples (#9000))
 };
 
 class DeltaValueInputStream : public IBlockInputStream

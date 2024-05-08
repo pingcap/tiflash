@@ -144,15 +144,8 @@ private:
     LoggerPtr log;
     int64_t ref_no;
     size_t total_rows = 0;
-<<<<<<< HEAD
     bool task_pool_added;
-=======
 
-    // runtime filter
-    std::vector<RuntimeFilterPtr> runtime_filter_list;
-    int max_wait_time_ms;
-
-    friend class tests::DeltaMergeStoreRWTest;
->>>>>>> 8e170090fa (Storages: Fix cloning delta index when there are duplicated tuples (#9000))
+    friend tests::DeltaMergeStoreRWTest;
 };
 } // namespace DB::DM

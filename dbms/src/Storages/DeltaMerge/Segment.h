@@ -31,6 +31,11 @@
 
 namespace DB::DM
 {
+namespace tests
+{
+class DeltaMergeStoreRWTest;
+}
+
 class Segment;
 struct SegmentSnapshot;
 using SegmentSnapshotPtr = std::shared_ptr<SegmentSnapshot>;
@@ -616,6 +621,8 @@ private:
 
     const LoggerPtr parent_log; // Used when constructing new segments in split
     const LoggerPtr log;
+
+    friend tests::DeltaMergeStoreRWTest;
 };
 
 } // namespace DB::DM
