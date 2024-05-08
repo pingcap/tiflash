@@ -54,7 +54,6 @@ UInt32 CompressionCodecFOR::getMaxCompressedDataSize(UInt32 uncompressed_size) c
 template <std::integral T>
 UInt32 CompressionCodecFOR::compressData(const T * source, UInt32 count, char * dest)
 {
-    static_assert(std::is_integral<T>::value, "Integral required.");
     std::vector<T> values(count);
     for (UInt32 i = 0; i < count; ++i)
         values[i] = source[i];
@@ -84,7 +83,6 @@ UInt32 CompressionCodecFOR::compressData(const T * source, UInt32 count, char * 
 template <std::integral T>
 void CompressionCodecFOR::decompressData(const char * source, UInt32 source_size, char * dest, UInt32 output_size)
 {
-    static_assert(std::is_integral<T>::value, "Integral required.");
     const auto count = output_size / sizeof(T);
     T frame_of_reference = unalignedLoad<T>(source);
     source += sizeof(T);
