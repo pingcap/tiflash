@@ -34,13 +34,13 @@ public:
 
     UInt8 getMethodByte() const override;
 
-    template <class T>
+    template <std::integral T>
     static void applyFrameOfReference(T * dst, T frame_of_reference, UInt32 count);
 
-    template <typename T>
+    template <std::integral T>
     static UInt32 compressData(const T * source, UInt32 count, char * dest);
 
-    template <typename T>
+    template <std::integral T>
     static void decompressData(const char * source, UInt32 source_size, char * dest, UInt32 output_size);
 
 #ifndef DBMS_PUBLIC_GTEST

@@ -51,7 +51,7 @@ UInt32 CompressionCodecFOR::getMaxCompressedDataSize(UInt32 uncompressed_size) c
     return 1 + bytes_size + sizeof(UInt8) + BitpackingPrimitives::getRequiredSize(count, bytes_size * 8);
 }
 
-template <typename T>
+template <std::integral T>
 UInt32 CompressionCodecFOR::compressData(const T * source, UInt32 count, char * dest)
 {
     static_assert(std::is_integral<T>::value, "Integral required.");
@@ -81,7 +81,7 @@ UInt32 CompressionCodecFOR::compressData(const T * source, UInt32 count, char * 
     return sizeof(T) + sizeof(UInt8) + required_size;
 }
 
-template <typename T>
+template <std::integral T>
 void CompressionCodecFOR::decompressData(const char * source, UInt32 source_size, char * dest, UInt32 output_size)
 {
     static_assert(std::is_integral<T>::value, "Integral required.");
@@ -114,7 +114,7 @@ void CompressionCodecFOR::decompressData(const char * source, UInt32 source_size
     CompressionCodecFOR::applyFrameOfReference(reinterpret_cast<T *>(dest), frame_of_reference, count);
 }
 
-template <class T>
+template <std::integral T>
 void CompressionCodecFOR::applyFrameOfReference(T * dst, T frame_of_reference, UInt32 count)
 {
     if (!frame_of_reference)

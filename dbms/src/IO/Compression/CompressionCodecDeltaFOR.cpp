@@ -20,8 +20,6 @@
 #include <common/likely.h>
 #include <common/unaligned.h>
 
-#include <concepts>
-#include <type_traits>
 
 #if defined(__AVX2__)
 #include <immintrin.h>
