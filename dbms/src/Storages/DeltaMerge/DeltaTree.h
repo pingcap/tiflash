@@ -1005,7 +1005,6 @@ public:
         return std::make_shared<CompactedEntries>(begin(), end(), num_entries);
     }
 
-<<<<<<< HEAD
     size_t numEntries() const
     {
         return num_entries;
@@ -1018,13 +1017,8 @@ public:
     {
         return num_deletes;
     }
-=======
-    size_t numEntries() const { return num_entries; }
-    size_t numInserts() const { return num_inserts; }
-    size_t numDeletes() const { return num_deletes; }
     Int64 maxDupTupleID() const { return max_dup_tuple_id; }
     void setMaxDupTupleID(Int64 tuple_id) { max_dup_tuple_id = std::max(tuple_id, max_dup_tuple_id); }
->>>>>>> 8e170090fa (Storages: Fix cloning delta index when there are duplicated tuples (#9000))
 
     void addDelete(UInt64 rid);
     void addInsert(UInt64 rid, UInt64 tuple_id);

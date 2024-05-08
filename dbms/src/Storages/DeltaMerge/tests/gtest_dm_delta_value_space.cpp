@@ -627,29 +627,9 @@ TEST_F(DeltaValueSpaceTest, ShouldPlace)
             dmContext(),
             snapshot,
             table_columns,
-<<<<<<< HEAD
             RowKeyRange::newAll(false, 1));
         ASSERT_TRUE(reader->shouldPlace(dmContext(), snapshot->getSharedDeltaIndex(), RowKeyRange::newAll(false, 1), RowKeyRange::fromHandleRange(HandleRange(0, 100)), tso + 1));
         ASSERT_FALSE(reader->shouldPlace(dmContext(), snapshot->getSharedDeltaIndex(), RowKeyRange::newAll(false, 1), RowKeyRange::fromHandleRange(HandleRange(0, 100)), tso - 1));
-=======
-            RowKeyRange::newAll(false, 1),
-            ReadTag::Internal);
-        auto [placed_rows, placed_deletes] = snapshot->getSharedDeltaIndex()->getPlacedStatus();
-        ASSERT_TRUE(reader->shouldPlace(
-            dmContext(),
-            placed_rows,
-            placed_deletes,
-            RowKeyRange::newAll(false, 1),
-            RowKeyRange::fromHandleRange(HandleRange(0, 100)),
-            tso + 1));
-        ASSERT_FALSE(reader->shouldPlace(
-            dmContext(),
-            placed_rows,
-            placed_deletes,
-            RowKeyRange::newAll(false, 1),
-            RowKeyRange::fromHandleRange(HandleRange(0, 100)),
-            tso - 1));
->>>>>>> 8e170090fa (Storages: Fix cloning delta index when there are duplicated tuples (#9000))
     }
     {
         delta->flush(dmContext());
@@ -658,29 +638,9 @@ TEST_F(DeltaValueSpaceTest, ShouldPlace)
             dmContext(),
             snapshot,
             table_columns,
-<<<<<<< HEAD
             RowKeyRange::newAll(false, 1));
         ASSERT_TRUE(reader->shouldPlace(dmContext(), snapshot->getSharedDeltaIndex(), RowKeyRange::newAll(false, 1), RowKeyRange::fromHandleRange(HandleRange(0, 100)), tso + 1));
         ASSERT_FALSE(reader->shouldPlace(dmContext(), snapshot->getSharedDeltaIndex(), RowKeyRange::newAll(false, 1), RowKeyRange::fromHandleRange(HandleRange(0, 100)), tso - 1));
-=======
-            RowKeyRange::newAll(false, 1),
-            ReadTag::Internal);
-        auto [placed_rows, placed_deletes] = snapshot->getSharedDeltaIndex()->getPlacedStatus();
-        ASSERT_TRUE(reader->shouldPlace(
-            dmContext(),
-            placed_rows,
-            placed_deletes,
-            RowKeyRange::newAll(false, 1),
-            RowKeyRange::fromHandleRange(HandleRange(0, 100)),
-            tso + 1));
-        ASSERT_FALSE(reader->shouldPlace(
-            dmContext(),
-            placed_rows,
-            placed_deletes,
-            RowKeyRange::newAll(false, 1),
-            RowKeyRange::fromHandleRange(HandleRange(0, 100)),
-            tso - 1));
->>>>>>> 8e170090fa (Storages: Fix cloning delta index when there are duplicated tuples (#9000))
     }
 }
 
