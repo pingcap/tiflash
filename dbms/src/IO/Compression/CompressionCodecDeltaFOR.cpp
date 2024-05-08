@@ -20,6 +20,7 @@
 #include <common/likely.h>
 #include <common/unaligned.h>
 
+#include <concepts>
 #include <type_traits>
 
 #if defined(__AVX2__)
@@ -57,7 +58,7 @@ UInt32 CompressionCodecDeltaFOR::getMaxCompressedDataSize(UInt32 uncompressed_si
 namespace
 {
 
-template <typename T>
+template <std::integral T>
 void DeltaEncode(const T * source, UInt32 count, T * dest)
 {
     T prev = 0;
@@ -69,10 +70,9 @@ void DeltaEncode(const T * source, UInt32 count, T * dest)
     }
 }
 
-template <typename T>
+template <std::integral T>
 UInt32 compressData(const char * source, UInt32 source_size, char * dest)
 {
-    static_assert(std::is_integral<T>::value, "Integral required.");
     const auto count = source_size / sizeof(T);
     DeltaEncode<T>(reinterpret_cast<const T *>(source), count, reinterpret_cast<T *>(dest));
     // Cast deltas to signed type to better compress negative values.
@@ -80,7 +80,7 @@ UInt32 compressData(const char * source, UInt32 source_size, char * dest)
     return CompressionCodecFOR::compressData<TS>(reinterpret_cast<TS *>(dest), count, dest);
 }
 
-template <typename T>
+template <std::integral T>
 void ordinaryDeltaDecode(const char * source, UInt32 source_size, char * dest)
 {
     T accumulator{};
@@ -95,7 +95,7 @@ void ordinaryDeltaDecode(const char * source, UInt32 source_size, char * dest)
     }
 }
 
-template <typename T>
+template <std::integral T>
 void DeltaDecode(const char * source, UInt32 source_size, char * dest)
 {
     ordinaryDeltaDecode<T>(source, source_size, dest);
@@ -164,7 +164,7 @@ void DeltaDecode<UInt64>(const char * __restrict__ raw_source, UInt32 raw_source
 
 #endif
 
-template <typename T>
+template <std::integral T>
 void ordinaryDecompressData(const char * source, UInt32 source_size, char * dest, UInt32 output_size)
 {
     using TS = typename std::make_signed<T>::type;
@@ -172,10 +172,9 @@ void ordinaryDecompressData(const char * source, UInt32 source_size, char * dest
     ordinaryDeltaDecode<T>(dest, output_size, dest);
 }
 
-template <typename T>
+template <std::integral T>
 void decompressData(const char * source, UInt32 source_size, char * dest, UInt32 output_size)
 {
-    static_assert(std::is_integral<T>::value, "Integral required.");
     ordinaryDecompressData<T>(source, source_size, dest, output_size);
 }
 
