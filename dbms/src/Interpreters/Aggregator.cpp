@@ -1504,7 +1504,10 @@ struct AggregatorMethodInitKeyColumnHelper<AggregationMethodOneKeyStringNoCache<
     void initAggKeys(size_t rows, std::vector<IColumn *> & key_columns)
     {
         index = 0;
-        RUNTIME_CHECK_MSG(key_columns.size() == 1, "unexpected key_columns size for AggMethodOneKeyString: {}", key_columns.size());
+        RUNTIME_CHECK_MSG(
+            key_columns.size() == 1,
+            "unexpected key_columns size for AggMethodOneKeyString: {}",
+            key_columns.size());
         Method::initAggKeys(rows, key_columns[0]);
     }
     ALWAYS_INLINE inline void insertKeyIntoColumns(

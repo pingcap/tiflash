@@ -1542,8 +1542,7 @@ ExpressionActionsPtr DAGExpressionAnalyzer::appendCopyColumnAfterAgg(
     // The first stage of HashAgg will only has one group by expr and no agg func expr.
     // So aggregated_columns is [any(c1)], key_ref_agg_func is [c1, any(c1)], agg_func_ref_key is empty.
     RUNTIME_CHECK(aggregated_columns.size() >= key_ref_agg_func.size() + agg_func_ref_key.size());
-    auto actual_agg_output_col_cnt
-        = aggregated_columns.size() - key_ref_agg_func.size() - agg_func_ref_key.size();
+    auto actual_agg_output_col_cnt = aggregated_columns.size() - key_ref_agg_func.size() - agg_func_ref_key.size();
     NamesAndTypes agg_output_columns;
     agg_output_columns.reserve(actual_agg_output_col_cnt);
     for (const auto & col : aggregated_columns)
