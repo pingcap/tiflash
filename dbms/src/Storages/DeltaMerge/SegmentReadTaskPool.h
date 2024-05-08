@@ -158,7 +158,7 @@ public:
         auto blk_avg_bytes = total_count > 0 ? total_bytes / total_count : 0;
         auto approximate_max_pending_block_bytes = blk_avg_bytes * max_queue_size;
         auto total_rows = blk_stat.totalRows();
-        LOG_DEBUG(
+        LOG_INFO(
             log,
             "Done. pool_id={} table_id={} pop={} pop_empty={} pop_empty_ratio={} "
             "max_queue_size={} blk_avg_bytes={} approximate_max_pending_block_bytes={:.2f}MB "
@@ -228,7 +228,13 @@ public:
 
     bool isRUExhausted();
 
+    const LoggerPtr & getLogger() const { return log; }
+
+#ifndef DBMS_PUBLIC_GTEST
 private:
+#else
+public:
+#endif
     Int64 getFreeActiveSegmentsUnlock() const;
     bool exceptionHappened() const;
     void finishSegment(const SegmentPtr & seg);
