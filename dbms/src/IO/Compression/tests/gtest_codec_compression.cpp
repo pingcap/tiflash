@@ -532,6 +532,7 @@ std::vector<CodecTestSequence> generatePyramidOfSequences(
 #define G(generator) generator, #generator
 
 const auto IntegerCodecsToTest = ::testing::Values(
+    CompressionMethodByte::Lightweight,
     CompressionMethodByte::DeltaFOR,
     CompressionMethodByte::FOR,
     CompressionMethodByte::RLE
