@@ -94,7 +94,11 @@ void SegmentReadTaskScheduler::reapPendingPools()
     }
     if (!pools.empty())
     {
-        addPools(pools);
+        for (const auto & pool : pools)
+        {
+            addPool(pool);
+        }
+        LOG_INFO(log, "Added, pool_ids={}, pool_count={}", pools, read_pools.size());
     }
 }
 
