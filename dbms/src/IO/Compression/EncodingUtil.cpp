@@ -65,6 +65,10 @@ template void ApplyFrameOfReference<UInt8>(UInt8 *, UInt8, UInt32);
 template void ApplyFrameOfReference<UInt16>(UInt16 *, UInt16, UInt32);
 template void ApplyFrameOfReference<UInt32>(UInt32 *, UInt32, UInt32);
 template void ApplyFrameOfReference<UInt64>(UInt64 *, UInt64, UInt32);
+template void ApplyFrameOfReference<Int8>(Int8 *, Int8, UInt32);
+template void ApplyFrameOfReference<Int16>(Int16 *, Int16, UInt32);
+template void ApplyFrameOfReference<Int32>(Int32 *, Int32, UInt32);
+template void ApplyFrameOfReference<Int64>(Int64 *, Int64, UInt32);
 
 template <std::integral T>
 void SubtractFrameOfReference(T * dst, T frame_of_reference, UInt32 count)
