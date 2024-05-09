@@ -13,7 +13,9 @@
 // limitations under the License.
 
 #include <Flash/Pipeline/Schedule/Events/AggregateFinalConvertEvent.h>
+#include <Flash/Pipeline/Schedule/Events/AggregateFinalSpillEvent.h>
 #include <Flash/Pipeline/Schedule/Tasks/AggregateFinalConvertTask.h>
+#include <Operators/AggregateContext.h>
 
 namespace DB
 {
@@ -31,6 +33,33 @@ void AggregateFinalConvertEvent::scheduleImpl()
 
 void AggregateFinalConvertEvent::finishImpl()
 {
+    if (need_final_spill)
+    {
+        /// Currently, the aggregation spill algorithm requires all bucket data to be spilled,
+        /// so a new event is added here to execute the final spill.
+        /// ...──►AggregateBuildSinkOp[local spill]──┐
+        /// ...──►AggregateBuildSinkOp[local spill]──┤                                         ┌──►AggregateFinalSpillTask
+        /// ...──►AggregateBuildSinkOp[local spill]──┼──►[final spill]AggregateFinalSpillEvent─┼──►AggregateFinalSpillTask
+        /// ...──►AggregateBuildSinkOp[local spill]──┤                                         └──►AggregateFinalSpillTask
+        /// ...──►AggregateBuildSinkOp[local spill]──┘
+        std::vector<size_t> indexes;
+        for (size_t index = 0; index < agg_context->getBuildConcurrency(); ++index)
+        {
+            if (agg_context->needSpill(index, /*try_mark_need_spill=*/true))
+                indexes.push_back(index);
+        }
+        if (!indexes.empty())
+        {
+            auto final_spill_event = std::make_shared<AggregateFinalSpillEvent>(
+                exec_context,
+                log->identifier(),
+                agg_context,
+                std::move(indexes),
+                std::move(profile_infos));
+            insertEvent(final_spill_event);
+        }
+    }
+
     auto dur = getFinishDuration();
     for (const auto & profile_info : profile_infos)
         profile_info->execution_time += dur;

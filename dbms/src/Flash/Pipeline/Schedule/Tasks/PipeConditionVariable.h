@@ -76,9 +76,16 @@ public:
     {
         assert(task);
         task->notify();
-        task->profile_info.elapsedWaitForNotifyTime();
         assert(TaskScheduler::instance);
-        TaskScheduler::instance->submitToCPUTaskThreadPool(std::move(task));
+        if (unlikely(task->getStatus() == ExecTaskStatus::WAITING))
+        {
+            TaskScheduler::instance->submitToWaitReactor(std::move(task));
+        }
+        else
+        {
+            assert(task->getStatus() == ExecTaskStatus::RUNNING);
+            TaskScheduler::instance->submitToCPUTaskThreadPool(std::move(task));
+        }
     }
 
 private:

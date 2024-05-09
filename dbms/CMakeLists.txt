@@ -104,7 +104,8 @@ check_then_add_sources_compile_flag (
     src/Columns/ColumnVector.cpp
     src/DataTypes/DataTypeString.cpp
     src/Interpreters/Join.cpp
-    src/IO/Compression/CompressionCodecDelta.cpp
+    src/IO/Compression/CompressionCodecFOR.cpp
+    src/IO/Compression/CompressionCodecDeltaFOR.cpp
     src/Storages/DeltaMerge/BitmapFilter/BitmapFilter.cpp
     src/Storages/DeltaMerge/DMVersionFilterBlockInputStream.cpp
 )
