@@ -275,10 +275,13 @@ bool SegmentReadTaskScheduler::schedule()
     UInt64 sched_succ_count = 0;
     UInt64 sched_round = 0;
     bool can_sched_more_tasks = false;
+    UInt64 reap_pending_pools_ns = 0;
     do
     {
         ++sched_round;
+        Stopwatch sw;
         reapPendingPools();
+        reap_pending_pools_ns += sw.elapsed();
         auto [erase, null, succ] = scheduleOneRound();
         erased_pool_count += erase;
         sched_null_count += null;
@@ -292,15 +295,16 @@ bool SegmentReadTaskScheduler::schedule()
         GET_METRIC(tiflash_storage_read_thread_counter, type_sche_no_pool).Increment();
     }
 
-    if (auto total_ms = sw_sched.elapsedMilliseconds(); total_ms >= 100)
+    if (auto total_ms = sw_sched.elapsedMilliseconds(); total_ms >= 50)
     {
         LOG_INFO(
             log,
-            "schedule sched_round={} erased_pool_count={} sched_null_count={} sched_succ_count={} cost={}ms",
+            "schedule sched_round={} erased_pool_count={} sched_null_count={} sched_succ_count={} reap={}ms cost={}ms",
             sched_round,
             erased_pool_count,
             sched_null_count,
             sched_succ_count,
+            reap_pending_pools_ns / 1000'000,
             total_ms);
     }
     return can_sched_more_tasks;
