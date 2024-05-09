@@ -99,13 +99,13 @@ size_t CompressionCodecIntegerLightweight::compressDataForType(const char * sour
     case Mode::FOR:
     {
         FORState for_state = std::get<2>(state);
-        compressed_size += Compression::ForEncoding(values, for_state.min_value, for_state.bit_width, dest);
+        compressed_size += Compression::FOREncoding(values, for_state.min_value, for_state.bit_width, dest);
         break;
     }
     case Mode::DELTA_FOR:
     {
         DeltaFORState delta_for_state = std::get<3>(state);
-        compressed_size += Compression::ForEncoding<typename std::make_signed_t<T>, true>(
+        compressed_size += Compression::FOREncoding<typename std::make_signed_t<T>, true>(
             delta_for_state.deltas,
             delta_for_state.min_delta_value,
             delta_for_state.bit_width,
@@ -160,10 +160,10 @@ void CompressionCodecIntegerLightweight::decompressDataForType(
         Compression::RLEDecoding<T>(source, source_size, dest, output_size);
         break;
     case Mode::FOR:
-        Compression::ForDecoding<T>(source, source_size, dest, output_size);
+        Compression::FORDecoding<T>(source, source_size, dest, output_size);
         break;
     case Mode::DELTA_FOR:
-        Compression::DeltaForDecoding<T>(source, source_size, dest, output_size);
+        Compression::DeltaFORDecoding<T>(source, source_size, dest, output_size);
         break;
     case Mode::LZ4:
         if (unlikely(LZ4_decompress_safe(source, dest, source_size, output_size) < 0))
@@ -254,7 +254,7 @@ void CompressionCodecIntegerLightweight::CompressContext::analyze(std::vector<T>
         return;
     }
 
-    UInt8 delta_for_width = Compression::ForEncodingWidth(deltas, min_delta);
+    UInt8 delta_for_width = Compression::FOREncodingWidth(deltas, min_delta);
     // additional T bytes for min_delta, and 1 byte for width
     size_t delta_for_size
         = BitpackingPrimitives::getRequiredSize(deltas.size(), delta_for_width) + sizeof(T) + sizeof(UInt8);

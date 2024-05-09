@@ -149,10 +149,10 @@ template <std::integral T>
 void SubtractFrameOfReference(T * dst, T frame_of_reference, UInt32 count);
 
 template <std::integral T>
-UInt8 ForEncodingWidth(std::vector<T> & values, T frame_of_reference);
+UInt8 FOREncodingWidth(std::vector<T> & values, T frame_of_reference);
 
 template <std::integral T, bool skip_subtract_frame_of_reference = false>
-size_t ForEncoding(std::vector<T> & values, T frame_of_reference, UInt8 width, char * dest)
+size_t FOREncoding(std::vector<T> & values, T frame_of_reference, UInt8 width, char * dest)
 {
     assert(!values.empty());
     if constexpr (!skip_subtract_frame_of_reference)
@@ -176,7 +176,7 @@ template <std::integral T>
 void ApplyFrameOfReference(T * dst, T frame_of_reference, UInt32 count);
 
 template <std::integral T>
-void ForDecoding(const char * src, UInt32 source_size, char * dest, UInt32 dest_size)
+void FORDecoding(const char * src, UInt32 source_size, char * dest, UInt32 dest_size)
 {
     const auto count = dest_size / sizeof(T);
     T frame_of_reference = unalignedLoad<T>(src);
@@ -238,14 +238,14 @@ void DeltaDecoding(const char * source, UInt32 source_size, char * dest);
 /// Delta + Frame of Reference encoding
 
 template <std::integral T>
-void OrdinaryDeltaForDecoding(const char * src, UInt32 source_size, char * dest, UInt32 dest_size)
+void OrdinaryDeltaFORDecoding(const char * src, UInt32 source_size, char * dest, UInt32 dest_size)
 {
     using TS = typename std::make_signed_t<T>;
-    ForDecoding<TS>(src, source_size, dest, dest_size);
+    FORDecoding<TS>(src, source_size, dest, dest_size);
     ordinaryDeltaDecoding<T>(dest, dest_size, dest);
 }
 
 template <std::integral T>
-void DeltaForDecoding(const char * src, UInt32 source_size, char * dest, UInt32 dest_size);
+void DeltaFORDecoding(const char * src, UInt32 source_size, char * dest, UInt32 dest_size);
 
 } // namespace DB::Compression

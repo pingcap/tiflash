@@ -116,7 +116,7 @@ template void SubtractFrameOfReference<UInt32>(UInt32 *, UInt32, UInt32);
 template void SubtractFrameOfReference<UInt64>(UInt64 *, UInt64, UInt32);
 
 template <std::integral T>
-UInt8 ForEncodingWidth(std::vector<T> & values, T frame_of_reference)
+UInt8 FOREncodingWidth(std::vector<T> & values, T frame_of_reference)
 {
     if constexpr (std::is_signed_v<T>)
     {
@@ -136,14 +136,14 @@ UInt8 ForEncodingWidth(std::vector<T> & values, T frame_of_reference)
     }
 }
 
-template UInt8 ForEncodingWidth<Int8>(std::vector<Int8> &, Int8);
-template UInt8 ForEncodingWidth<Int16>(std::vector<Int16> &, Int16);
-template UInt8 ForEncodingWidth<Int32>(std::vector<Int32> &, Int32);
-template UInt8 ForEncodingWidth<Int64>(std::vector<Int64> &, Int64);
-template UInt8 ForEncodingWidth<UInt8>(std::vector<UInt8> &, UInt8);
-template UInt8 ForEncodingWidth<UInt16>(std::vector<UInt16> &, UInt16);
-template UInt8 ForEncodingWidth<UInt32>(std::vector<UInt32> &, UInt32);
-template UInt8 ForEncodingWidth<UInt64>(std::vector<UInt64> &, UInt64);
+template UInt8 FOREncodingWidth<Int8>(std::vector<Int8> &, Int8);
+template UInt8 FOREncodingWidth<Int16>(std::vector<Int16> &, Int16);
+template UInt8 FOREncodingWidth<Int32>(std::vector<Int32> &, Int32);
+template UInt8 FOREncodingWidth<Int64>(std::vector<Int64> &, Int64);
+template UInt8 FOREncodingWidth<UInt8>(std::vector<UInt8> &, UInt8);
+template UInt8 FOREncodingWidth<UInt16>(std::vector<UInt16> &, UInt16);
+template UInt8 FOREncodingWidth<UInt32>(std::vector<UInt32> &, UInt32);
+template UInt8 FOREncodingWidth<UInt64>(std::vector<UInt64> &, UInt64);
 
 template <std::integral T>
 void DeltaDecoding(const char * source, UInt32 source_size, char * dest)
@@ -215,14 +215,14 @@ void DeltaDecoding<UInt64>(const char * __restrict__ raw_source, UInt32 raw_sour
 #endif
 
 template <std::integral T>
-void DeltaForDecoding(const char * src, UInt32 source_size, char * dest, UInt32 dest_size)
+void DeltaFORDecoding(const char * src, UInt32 source_size, char * dest, UInt32 dest_size)
 {
     static_assert(std::is_integral<T>::value, "Integral required.");
-    OrdinaryDeltaForDecoding<T>(src, source_size, dest, dest_size);
+    OrdinaryDeltaFORDecoding<T>(src, source_size, dest, dest_size);
 }
 
 template <>
-void DeltaForDecoding<UInt32>(const char * src, UInt32 source_size, char * dest, UInt32 dest_size)
+void DeltaFORDecoding<UInt32>(const char * src, UInt32 source_size, char * dest, UInt32 dest_size)
 {
     const auto count = dest_size / sizeof(UInt32);
     auto round_size = BitpackingPrimitives::roundUpToAlgorithmGroupSize(count);
@@ -230,12 +230,12 @@ void DeltaForDecoding<UInt32>(const char * src, UInt32 source_size, char * dest,
     const auto required_size = round_size * sizeof(UInt32);
     char tmp_buffer[required_size];
     memset(tmp_buffer, 0, required_size);
-    ForDecoding<Int32>(src, source_size, tmp_buffer, required_size);
+    FORDecoding<Int32>(src, source_size, tmp_buffer, required_size);
     DeltaDecoding<UInt32>(reinterpret_cast<const char *>(tmp_buffer), dest_size, dest);
 }
 
 template <>
-void DeltaForDecoding<UInt64>(const char * src, UInt32 source_size, char * dest, UInt32 dest_size)
+void DeltaFORDecoding<UInt64>(const char * src, UInt32 source_size, char * dest, UInt32 dest_size)
 {
     const auto count = dest_size / sizeof(UInt64);
     const auto round_size = BitpackingPrimitives::roundUpToAlgorithmGroupSize(count);
@@ -243,11 +243,11 @@ void DeltaForDecoding<UInt64>(const char * src, UInt32 source_size, char * dest,
     const auto required_size = round_size * sizeof(UInt64);
     char tmp_buffer[required_size];
     memset(tmp_buffer, 0, required_size);
-    ForDecoding<Int64>(src, source_size, tmp_buffer, required_size);
+    FORDecoding<Int64>(src, source_size, tmp_buffer, required_size);
     DeltaDecoding<UInt64>(reinterpret_cast<const char *>(tmp_buffer), dest_size, dest);
 }
 
-template void DeltaForDecoding<UInt8>(const char *, UInt32, char *, UInt32);
-template void DeltaForDecoding<UInt16>(const char *, UInt32, char *, UInt32);
+template void DeltaFORDecoding<UInt8>(const char *, UInt32, char *, UInt32);
+template void DeltaFORDecoding<UInt16>(const char *, UInt32, char *, UInt32);
 
 } // namespace DB::Compression
