@@ -29,6 +29,8 @@ public:
 
     UInt8 getMethodByte() const override;
 
+    ~CompressionCodecIntegerLightweight() override;
+
 protected:
     UInt32 doCompressData(const char * source, UInt32 source_size, char * dest) const override;
     void doDecompressData(const char * source, UInt32 source_size, char * dest, UInt32 uncompressed_size)
@@ -45,7 +47,7 @@ private:
         Invalid = 0,
         CONSTANT = 1, // all values are the same
         CONSTANT_DELTA = 2, // the difference between two adjacent values is the same
-        RLE = 3, // run-length encoding
+        RunLength = 3, // run-length encoding
         FOR = 4, // Frame of Reference encoding
         DELTA_FOR = 5, // delta encoding and then FOR encoding
         LZ4 = 6, // the above modes are not suitable, use LZ4 instead
@@ -56,7 +58,7 @@ private:
     using ConstantState = T;
 
     template <typename T>
-    using RLEState = std::vector<std::pair<T, UInt8>>;
+    using RunLengthState = std::vector<std::pair<T, UInt8>>;
 
     template <typename T>
     struct FORState
@@ -77,7 +79,7 @@ private:
 
     // State is a union of different states for different modes
     template <typename T>
-    using State = std::variant<ConstantState<T>, RLEState<T>, FORState<T>, DeltaFORState<T>>;
+    using State = std::variant<ConstantState<T>, RunLengthState<T>, FORState<T>, DeltaFORState<T>>;
 
     class CompressContext
     {
@@ -86,12 +88,15 @@ private:
 
         bool needAnalyze() const;
         bool needAnalyzeDelta() const;
-        bool needAnalyzeRLE() const;
+        bool needAnalyzeRunLength() const;
 
         template <typename T>
         void analyze(std::span<const T> & values, State<T> & state);
 
         void update(size_t uncompressed_size, size_t compressed_size);
+
+        String toDebugString() const;
+        bool isCompression() const { return lz4_counter > 0 || lw_counter > 0; }
 
         Mode mode = Mode::LZ4;
 
