@@ -912,12 +912,12 @@ try
         std::string_view(name.data(), name.size()),
         ReportThreadAllocateInfoBatch{.alloc = 1, .dealloc = 2});
     auto & tiflash_metrics = TiFlashMetrics::instance();
-    ASSERT_EQ(tiflash_metrics.getProxyThreadMemory("test1"), -1);
+    ASSERT_EQ(tiflash_metrics.getProxyThreadMemory(TiFlashMetrics::MemoryAllocType::Alloc, "test1"), 1);
     std::string namee = "";
     kvs.reportThreadAllocBatch(
         std::string_view(namee.data(), namee.size()),
         ReportThreadAllocateInfoBatch{.alloc = 1, .dealloc = 2});
-    EXPECT_ANY_THROW(tiflash_metrics.getProxyThreadMemory(""));
+    EXPECT_ANY_THROW(tiflash_metrics.getProxyThreadMemory(TiFlashMetrics::MemoryAllocType::Alloc, ""));
     std::thread t([&]() {
         kvs.reportThreadAllocInfo(std::string_view(name.data(), name.size()), ReportThreadAllocateInfoType::Reset, 0);
         uint64_t mock = 999;
@@ -927,7 +927,7 @@ try
             ReportThreadAllocateInfoType::AllocPtr,
             alloc_ptr);
         kvs.joint_memory_allocation_map->recordThreadAllocInfoForKVStore();
-        ASSERT_EQ(tiflash_metrics.getProxyThreadMemory("test1"), -1);
+        ASSERT_EQ(tiflash_metrics.getProxyThreadMemory(TiFlashMetrics::MemoryAllocType::Alloc, "test1"), -1);
 
         std::string name2 = "ReadIndexWkr-1";
         kvs.reportThreadAllocInfo(std::string_view(name2.data(), name2.size()), ReportThreadAllocateInfoType::Reset, 0);
@@ -936,7 +936,7 @@ try
             ReportThreadAllocateInfoType::AllocPtr,
             alloc_ptr);
         kvs.joint_memory_allocation_map->recordThreadAllocInfoForKVStore();
-        ASSERT_EQ(tiflash_metrics.getProxyThreadMemory("ReadIndexWkr"), 999);
+        ASSERT_EQ(tiflash_metrics.getProxyThreadMemory(TiFlashMetrics::MemoryAllocType::Alloc, "ReadIndexWkr"), 999);
         uint64_t mock2 = 998;
         uint64_t dealloc_ptr = reinterpret_cast<uint64_t>(&mock2);
         kvs.reportThreadAllocInfo(
@@ -944,7 +944,7 @@ try
             ReportThreadAllocateInfoType::DeallocPtr,
             dealloc_ptr);
         kvs.joint_memory_allocation_map->recordThreadAllocInfoForKVStore();
-        ASSERT_EQ(tiflash_metrics.getProxyThreadMemory("ReadIndexWkr"), 1);
+        ASSERT_EQ(tiflash_metrics.getProxyThreadMemory(TiFlashMetrics::MemoryAllocType::Alloc, "ReadIndexWkr"), 1);
         kvs.reportThreadAllocInfo(
             std::string_view(name2.data(), name2.size()),
             ReportThreadAllocateInfoType::Remove,

@@ -142,12 +142,12 @@ void JointThreadInfoJeallocMap::recordThreadAllocInfoForKVStore()
     for (const auto & [k, v] : agg_allocate)
     {
         auto & tiflash_metrics = TiFlashMetrics::instance();
-        tiflash_metrics.setProxyThreadMemory("alloc_" + k, v);
+        tiflash_metrics.setProxyThreadMemory(TiFlashMetrics::MemoryAllocType::Alloc, k, v);
     }
     for (const auto & [k, v] : agg_deallocate)
     {
         auto & tiflash_metrics = TiFlashMetrics::instance();
-        tiflash_metrics.setProxyThreadMemory("dealloc_" + k, v);
+        tiflash_metrics.setProxyThreadMemory(TiFlashMetrics::MemoryAllocType::Dealloc, k, v);
     }
 }
 
@@ -161,8 +161,8 @@ void JointThreadInfoJeallocMap::reportThreadAllocBatchForKVStore(
     // TODO(jemalloc-trace) Could be costy.
     auto k = getThreadNameAggPrefix(name);
     auto & tiflash_metrics = TiFlashMetrics::instance();
-    tiflash_metrics.setProxyThreadMemory("alloc_" + k, data.alloc);
-    tiflash_metrics.setProxyThreadMemory("dealloc_" + k, data.dealloc);
+    tiflash_metrics.setProxyThreadMemory(TiFlashMetrics::MemoryAllocType::Alloc, k, data.alloc);
+    tiflash_metrics.setProxyThreadMemory(TiFlashMetrics::MemoryAllocType::Dealloc, k, data.dealloc);
 }
 
 void JointThreadInfoJeallocMap::stopThreadAllocInfo()

@@ -99,15 +99,24 @@ void TiFlashMetrics::removeReplicaSyncRUCounter(UInt32 keyspace_id)
     registered_keyspace_sync_replica_ru.erase(itr);
 }
 
-double TiFlashMetrics::getProxyThreadMemory(const std::string & k)
+static constexpr std::string genPrefix(TiFlashMetrics::MemoryAllocType type, const std::string & k) {
+    if (type == TiFlashMetrics::MemoryAllocType::Alloc) {
+        return "alloc_" + k;
+    } else {
+        return "dealloc_" + k;
+    }
+}
+
+double TiFlashMetrics::getProxyThreadMemory(TiFlashMetrics::MemoryAllocType type, const std::string & k)
 {
     std::shared_lock lock(proxy_thread_report_mtx);
-    auto it = registered_raft_proxy_thread_memory_usage_metrics.find(k);
+
+    auto it = registered_raft_proxy_thread_memory_usage_metrics.find(genPrefix(type, k));
     RUNTIME_CHECK(it != registered_raft_proxy_thread_memory_usage_metrics.end(), k);
     return it->second->Value();
 }
 
-void TiFlashMetrics::setProxyThreadMemory(const std::string & k, Int64 v)
+void TiFlashMetrics::setProxyThreadMemory(TiFlashMetrics::MemoryAllocType type, const std::string & k, Int64 v)
 {
     std::shared_lock lock(proxy_thread_report_mtx);
     if unlikely (!registered_raft_proxy_thread_memory_usage_metrics.count(k))
@@ -115,23 +124,29 @@ void TiFlashMetrics::setProxyThreadMemory(const std::string & k, Int64 v)
         // New metrics added through `Reset`.
         return;
     }
-    registered_raft_proxy_thread_memory_usage_metrics[k]->Set(v);
+    registered_raft_proxy_thread_memory_usage_metrics[genPrefix(type, k)]->Set(v);
 }
 
 void TiFlashMetrics::registerProxyThreadMemory(const std::string & k)
 {
     std::unique_lock lock(proxy_thread_report_mtx);
-    if unlikely (!registered_raft_proxy_thread_memory_usage_metrics.count("alloc_" + k))
     {
-        registered_raft_proxy_thread_memory_usage_metrics.emplace(
-            "alloc_" + k,
-            &registered_raft_proxy_thread_memory_usage_family->Add({{"type", "alloc_" + k}}));
+        auto prefix = genPrefix(TiFlashMetrics::MemoryAllocType::Alloc, k);
+        if unlikely (!registered_raft_proxy_thread_memory_usage_metrics.count(prefix))
+        {
+            registered_raft_proxy_thread_memory_usage_metrics.emplace(
+                prefix,
+                &registered_raft_proxy_thread_memory_usage_family->Add({{"type", prefix}}));
+        }
     }
-    if unlikely (!registered_raft_proxy_thread_memory_usage_metrics.count("dealloc_" + k))
     {
-        registered_raft_proxy_thread_memory_usage_metrics.emplace(
-            "dealloc_" + k,
-            &registered_raft_proxy_thread_memory_usage_family->Add({{"type", "dealloc_" + k}}));
+        auto prefix = genPrefix(TiFlashMetrics::MemoryAllocType::Alloc, k);
+        if unlikely (!registered_raft_proxy_thread_memory_usage_metrics.count(prefix))
+        {
+            registered_raft_proxy_thread_memory_usage_metrics.emplace(
+                prefix,
+                &registered_raft_proxy_thread_memory_usage_family->Add({{"type", prefix}}));
+        }
     }
 }
 
