@@ -123,13 +123,11 @@ protected:
         std::vector<MergedTaskPtr> merged_tasks;
         for (int i = 0; i < active_segment_limits; ++i)
         {
-            std::lock_guard lock(scheduler.mtx);
             auto merged_task = scheduler.scheduleMergedTask(pool);
             ASSERT_NE(merged_task, nullptr);
             merged_tasks.push_back(merged_task);
         }
         {
-            std::lock_guard lock(scheduler.mtx);
             ASSERT_EQ(scheduler.scheduleMergedTask(pool), nullptr);
         }
 
@@ -173,7 +171,6 @@ protected:
 
             for (;;)
             {
-                std::lock_guard lock(scheduler.mtx);
                 auto merged_task = scheduler.scheduleMergedTask(pool);
                 if (merged_task == nullptr)
                 {
