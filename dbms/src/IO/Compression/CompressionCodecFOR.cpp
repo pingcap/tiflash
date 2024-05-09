@@ -56,8 +56,8 @@ UInt32 CompressionCodecFOR::compressData(const T * source, UInt32 count, char * 
     std::vector<T> values(count);
     values.assign(source, source + count);
     T frame_of_reference = *std::min_element(values.cbegin(), values.cend());
-    UInt8 width = DB::Compression::ForEncodingWidth(values, frame_of_reference);
-    return DB::Compression::ForEncoding<T, std::is_signed_v<T>>(values, frame_of_reference, width, dest);
+    UInt8 width = DB::Compression::FOREncodingWidth(values, frame_of_reference);
+    return DB::Compression::FOREncoding<T, std::is_signed_v<T>>(values, frame_of_reference, width, dest);
 }
 
 UInt32 CompressionCodecFOR::doCompressData(const char * source, UInt32 source_size, char * dest) const
@@ -108,16 +108,16 @@ void CompressionCodecFOR::doDecompressData(
     switch (bytes_size)
     {
     case 1:
-        DB::Compression::ForDecoding<UInt8>(&source[1], source_size_no_header, dest, uncompressed_size);
+        DB::Compression::FORDecoding<UInt8>(&source[1], source_size_no_header, dest, uncompressed_size);
         break;
     case 2:
-        DB::Compression::ForDecoding<UInt16>(&source[1], source_size_no_header, dest, uncompressed_size);
+        DB::Compression::FORDecoding<UInt16>(&source[1], source_size_no_header, dest, uncompressed_size);
         break;
     case 4:
-        DB::Compression::ForDecoding<UInt32>(&source[1], source_size_no_header, dest, uncompressed_size);
+        DB::Compression::FORDecoding<UInt32>(&source[1], source_size_no_header, dest, uncompressed_size);
         break;
     case 8:
-        DB::Compression::ForDecoding<UInt64>(&source[1], source_size_no_header, dest, uncompressed_size);
+        DB::Compression::FORDecoding<UInt64>(&source[1], source_size_no_header, dest, uncompressed_size);
         break;
     default:
         throw Exception(

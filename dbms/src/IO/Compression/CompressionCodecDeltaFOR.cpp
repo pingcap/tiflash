@@ -114,16 +114,16 @@ void CompressionCodecDeltaFOR::doDecompressData(
     switch (bytes_size)
     {
     case 1:
-        DB::Compression::DeltaForDecoding<UInt8>(&source[1], source_size_no_header, dest, uncompressed_size);
+        DB::Compression::DeltaFORDecoding<UInt8>(&source[1], source_size_no_header, dest, uncompressed_size);
         break;
     case 2:
-        DB::Compression::DeltaForDecoding<UInt16>(&source[1], source_size_no_header, dest, uncompressed_size);
+        DB::Compression::DeltaFORDecoding<UInt16>(&source[1], source_size_no_header, dest, uncompressed_size);
         break;
     case 4:
-        DB::Compression::DeltaForDecoding<UInt32>(&source[1], source_size_no_header, dest, uncompressed_size);
+        DB::Compression::DeltaFORDecoding<UInt32>(&source[1], source_size_no_header, dest, uncompressed_size);
         break;
     case 8:
-        DB::Compression::DeltaForDecoding<UInt64>(&source[1], source_size_no_header, dest, uncompressed_size);
+        DB::Compression::DeltaFORDecoding<UInt64>(&source[1], source_size_no_header, dest, uncompressed_size);
         break;
     default:
         throw Exception(
@@ -158,16 +158,16 @@ void CompressionCodecDeltaFOR::ordinaryDecompress(
     switch (bytes_size)
     {
     case 1:
-        DB::Compression::OrdinaryDeltaForDecoding<UInt8>(&source[1], source_size_no_header, dest, dest_size);
+        DB::Compression::OrdinaryDeltaFORDecoding<UInt8>(&source[1], source_size_no_header, dest, dest_size);
         break;
     case 2:
-        DB::Compression::OrdinaryDeltaForDecoding<UInt16>(&source[1], source_size_no_header, dest, dest_size);
+        DB::Compression::OrdinaryDeltaFORDecoding<UInt16>(&source[1], source_size_no_header, dest, dest_size);
         break;
     case 4:
-        DB::Compression::OrdinaryDeltaForDecoding<UInt32>(&source[1], source_size_no_header, dest, dest_size);
+        DB::Compression::OrdinaryDeltaFORDecoding<UInt32>(&source[1], source_size_no_header, dest, dest_size);
         break;
     case 8:
-        DB::Compression::OrdinaryDeltaForDecoding<UInt64>(&source[1], source_size_no_header, dest, dest_size);
+        DB::Compression::OrdinaryDeltaFORDecoding<UInt64>(&source[1], source_size_no_header, dest, dest_size);
         break;
     default:
         throw Exception(
