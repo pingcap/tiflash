@@ -122,7 +122,7 @@ void JointThreadInfoJeallocMap::reportThreadAllocInfoForKVStore(
     reportThreadAllocInfoImpl(kvstore_map, thdname, type, value);
 }
 
-static const std::unordered_set<std::string> RECORD_WHITE_LIST_THREAD_PREFIX = {"ReadIndexWkr"};
+static const std::unordered_set<std::string> PROXY_RECORD_WHITE_LIST_THREAD_PREFIX = {"ReadIndexWkr"};
 
 void JointThreadInfoJeallocMap::recordThreadAllocInfoForKVStore()
 {
@@ -133,7 +133,7 @@ void JointThreadInfoJeallocMap::recordThreadAllocInfoForKVStore()
     {
         auto agg_thread_name = getThreadNameAggPrefix(k);
         // Some thread may have shorter lifetime, we can't use this timed task here to upgrade.
-        if (RECORD_WHITE_LIST_THREAD_PREFIX.contains(agg_thread_name))
+        if (PROXY_RECORD_WHITE_LIST_THREAD_PREFIX.contains(agg_thread_name) && v.has_ptr())
         {
             agg_allocate[agg_thread_name] += v.allocated();
             agg_deallocate[agg_thread_name] += v.deallocated();

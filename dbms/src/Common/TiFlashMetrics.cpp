@@ -99,10 +99,14 @@ void TiFlashMetrics::removeReplicaSyncRUCounter(UInt32 keyspace_id)
     registered_keyspace_sync_replica_ru.erase(itr);
 }
 
-static constexpr std::string genPrefix(TiFlashMetrics::MemoryAllocType type, const std::string & k) {
-    if (type == TiFlashMetrics::MemoryAllocType::Alloc) {
+static constexpr std::string genPrefix(TiFlashMetrics::MemoryAllocType type, const std::string & k)
+{
+    if (type == TiFlashMetrics::MemoryAllocType::Alloc)
+    {
         return "alloc_" + k;
-    } else {
+    }
+    else
+    {
         return "dealloc_" + k;
     }
 }
@@ -119,12 +123,13 @@ double TiFlashMetrics::getProxyThreadMemory(TiFlashMetrics::MemoryAllocType type
 void TiFlashMetrics::setProxyThreadMemory(TiFlashMetrics::MemoryAllocType type, const std::string & k, Int64 v)
 {
     std::shared_lock lock(proxy_thread_report_mtx);
-    if unlikely (!registered_raft_proxy_thread_memory_usage_metrics.count(k))
+    auto it = registered_raft_proxy_thread_memory_usage_metrics.find(genPrefix(type, k));
+    if unlikely (it == registered_raft_proxy_thread_memory_usage_metrics.end())
     {
         // New metrics added through `Reset`.
         return;
     }
-    registered_raft_proxy_thread_memory_usage_metrics[genPrefix(type, k)]->Set(v);
+    it->second->Set(v);
 }
 
 void TiFlashMetrics::registerProxyThreadMemory(const std::string & k)
@@ -140,7 +145,7 @@ void TiFlashMetrics::registerProxyThreadMemory(const std::string & k)
         }
     }
     {
-        auto prefix = genPrefix(TiFlashMetrics::MemoryAllocType::Alloc, k);
+        auto prefix = genPrefix(TiFlashMetrics::MemoryAllocType::Dealloc, k);
         if unlikely (!registered_raft_proxy_thread_memory_usage_metrics.count(prefix))
         {
             registered_raft_proxy_thread_memory_usage_metrics.emplace(

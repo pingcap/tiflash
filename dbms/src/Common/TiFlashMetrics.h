@@ -1114,9 +1114,10 @@ public:
 
     void addReplicaSyncRU(UInt32 keyspace_id, UInt64 ru);
     UInt64 debugQueryReplicaSyncRU(UInt32 keyspace_id);
-    enum class MemoryAllocType {
-      Alloc = 1,
-      Dealloc = 2,
+    enum class MemoryAllocType
+    {
+        Alloc = 1,
+        Dealloc = 2,
     };
     void setProxyThreadMemory(MemoryAllocType type, const std::string & k, Int64 v);
     double getProxyThreadMemory(MemoryAllocType type, const std::string & k);

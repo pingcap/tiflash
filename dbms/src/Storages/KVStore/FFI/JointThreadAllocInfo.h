@@ -28,6 +28,8 @@ struct ThreadInfoJealloc
     uint64_t allocated_ptr{0};
     uint64_t deallocated_ptr{0};
 
+    bool has_ptr() const { return allocated_ptr != 0 && deallocated_ptr != 0; }
+
     uint64_t allocated() const
     {
         if (allocated_ptr == 0)
