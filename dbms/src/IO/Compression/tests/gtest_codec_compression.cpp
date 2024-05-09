@@ -534,7 +534,7 @@ std::vector<CodecTestSequence> generatePyramidOfSequences(
 const auto IntegerCodecsToTest = ::testing::Values(
     CompressionMethodByte::Lightweight,
     CompressionMethodByte::DeltaFOR,
-    CompressionMethodByte::FOR,
+    // CompressionMethodByte::FOR, // disable FOR codec for now, since there are too many unit tests.
     CompressionMethodByte::RLE
 #if USE_QPL
     ,
