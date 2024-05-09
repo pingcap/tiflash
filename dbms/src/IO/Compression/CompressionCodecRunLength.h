@@ -19,10 +19,10 @@
 namespace DB
 {
 
-class CompressionCodecRLE : public ICompressionCodec
+class CompressionCodecRunLength : public ICompressionCodec
 {
 public:
-    explicit CompressionCodecRLE(UInt8 bytes_size_);
+    explicit CompressionCodecRunLength(UInt8 bytes_size_);
 
     UInt8 getMethodByte() const override;
 

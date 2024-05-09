@@ -535,7 +535,7 @@ const auto IntegerCodecsToTest = ::testing::Values(
     CompressionMethodByte::Lightweight,
     CompressionMethodByte::DeltaFOR,
     // CompressionMethodByte::FOR, // disable FOR codec for now, since there are too many unit tests.
-    CompressionMethodByte::RLE
+    CompressionMethodByte::RunLength
 #if USE_QPL
     ,
     CompressionMethodByte::QPL

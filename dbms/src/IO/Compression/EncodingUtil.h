@@ -91,20 +91,20 @@ void ConstantDeltaDecoding(const char * src, UInt32 source_size, char * dest, UI
 /// Run-length encoding
 
 template <std::integral T>
-using RLEPair = std::pair<T, UInt8>;
+using RunLengthPair = std::pair<T, UInt8>;
 template <std::integral T>
-using RLEPairs = std::vector<RLEPair<T>>;
+using RunLengthPairs = std::vector<RunLengthPair<T>>;
 template <std::integral T>
-static constexpr size_t RLEPairLength = sizeof(T) + sizeof(UInt8);
+static constexpr size_t RunLengthPairLength = sizeof(T) + sizeof(UInt8);
 
 template <std::integral T>
-size_t RLEPairsSize(const RLEPairs<T> & rle)
+size_t RunLengthPairsSize(const RunLengthPairs<T> & rle)
 {
-    return rle.size() * RLEPairLength<T>;
+    return rle.size() * RunLengthPairLength<T>;
 }
 
 template <std::integral T>
-size_t RLEEncoding(const RLEPairs<T> & rle, char * dest)
+size_t RunLengthEncoding(const RunLengthPairs<T> & rle, char * dest)
 {
     for (const auto & [value, count] : rle)
     {
@@ -113,32 +113,39 @@ size_t RLEEncoding(const RLEPairs<T> & rle, char * dest)
         unalignedStore<UInt8>(dest, count);
         dest += sizeof(UInt8);
     }
-    return rle.size() * RLEPairLength<T>;
+    return rle.size() * RunLengthPairLength<T>;
 }
 
 template <std::integral T>
-void RLEDecoding(const char * src, UInt32 source_size, char * dest, UInt32 dest_size)
+void RunLengthDecoding(const char * src, UInt32 source_size, char * dest, UInt32 dest_size)
 {
-    if unlikely (source_size % RLEPairLength<T> != 0)
+    if unlikely (source_size % RunLengthPairLength<T> != 0)
         throw Exception(
             ErrorCodes::CANNOT_DECOMPRESS,
-            "Cannot use RLE decoding, data size {} is not aligned to {}",
+            "Cannot use RunLength decoding, data size {} is not aligned to {}",
             source_size,
-            RLEPairLength<T>);
+            RunLengthPairLength<T>);
 
     const char * dest_end = dest + dest_size;
-    for (UInt32 i = 0; i < source_size / RLEPairLength<T>; ++i)
+    for (UInt32 i = 0; i < source_size / RunLengthPairLength<T>; ++i)
     {
         T value = unalignedLoad<T>(src);
         src += sizeof(T);
         auto count = unalignedLoad<UInt8>(src);
         src += sizeof(UInt8);
-        if (dest + count * sizeof(T) > dest_end)
-            throw Exception(ErrorCodes::CANNOT_DECOMPRESS, "Cannot use RLE decoding, data is too large");
-        for (UInt8 j = 0; j < count; ++j)
+        if (unlikely(dest + count * sizeof(T) > dest_end))
+            throw Exception(ErrorCodes::CANNOT_DECOMPRESS, "Cannot use RunLength decoding, data is too large");
+        if constexpr (std::is_same_v<T, UInt8> || std::is_same_v<T, Int8>)
         {
-            unalignedStore<T>(dest, value);
-            dest += sizeof(T);
+            memset(dest, value, count);
+        }
+        else
+        {
+            for (UInt8 j = 0; j < count; ++j)
+            {
+                unalignedStore<T>(dest, value);
+                dest += sizeof(T);
+            }
         }
     }
 }

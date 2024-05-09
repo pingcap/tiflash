@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
-#include <IO/Compression/CompressionCodecRLE.h>
+#include <IO/Compression/CompressionCodecRunLength.h>
 #include <IO/Compression/CompressionInfo.h>
 #include <IO/Compression/EncodingUtil.h>
 #include <IO/Compression/ICompressionCodec.h>
@@ -29,16 +29,16 @@ extern const int CANNOT_COMPRESS;
 extern const int CANNOT_DECOMPRESS;
 } // namespace ErrorCodes
 
-CompressionCodecRLE::CompressionCodecRLE(UInt8 bytes_size_)
+CompressionCodecRunLength::CompressionCodecRunLength(UInt8 bytes_size_)
     : bytes_size(bytes_size_)
 {}
 
-UInt8 CompressionCodecRLE::getMethodByte() const
+UInt8 CompressionCodecRunLength::getMethodByte() const
 {
-    return static_cast<uint8_t>(CompressionMethodByte::RLE);
+    return static_cast<uint8_t>(CompressionMethodByte::RunLength);
 }
 
-UInt32 CompressionCodecRLE::getMaxCompressedDataSize(UInt32 uncompressed_size) const
+UInt32 CompressionCodecRunLength::getMaxCompressedDataSize(UInt32 uncompressed_size) const
 {
     // If the encoded data is larger than the original data, we will store the original data
     // Additional byte is used to store the size of the data type
@@ -53,7 +53,7 @@ template <typename T>
 UInt32 compressDataForType(const char * source, UInt32 source_size, char * dest)
 {
     const char * source_end = source + source_size;
-    DB::Compression::RLEPairs<T> rle_vec;
+    DB::Compression::RunLengthPairs<T> rle_vec;
     rle_vec.reserve(source_size / sizeof(T));
     for (const auto * src = source; src < source_end; src += sizeof(T))
     {
@@ -65,7 +65,7 @@ UInt32 compressDataForType(const char * source, UInt32 source_size, char * dest)
             ++rle_vec.back().second;
     }
 
-    if (DB::Compression::RLEPairsSize<T>(rle_vec) > source_size)
+    if (DB::Compression::RunLengthPairsSize<T>(rle_vec) > source_size)
     {
         dest[0] = JUST_COPY_CODE;
         memcpy(&dest[1], source, source_size);
@@ -74,12 +74,12 @@ UInt32 compressDataForType(const char * source, UInt32 source_size, char * dest)
 
     dest[0] = sizeof(T);
     dest += 1;
-    return 1 + DB::Compression::RLEEncoding<T>(rle_vec, dest);
+    return 1 + DB::Compression::RunLengthEncoding<T>(rle_vec, dest);
 }
 
 } // namespace
 
-UInt32 CompressionCodecRLE::doCompressData(const char * source, UInt32 source_size, char * dest) const
+UInt32 CompressionCodecRunLength::doCompressData(const char * source, UInt32 source_size, char * dest) const
 {
     if unlikely (source_size % bytes_size != 0)
         throw Exception(ErrorCodes::CANNOT_DECOMPRESS, "source size {} is not aligned to {}", source_size, bytes_size);
@@ -94,18 +94,20 @@ UInt32 CompressionCodecRLE::doCompressData(const char * source, UInt32 source_si
     case 8:
         return compressDataForType<UInt64>(source, source_size, dest);
     default:
-        throw Exception(ErrorCodes::CANNOT_COMPRESS, "Cannot compress RLE-encoded data. Unsupported bytes size");
+        throw Exception(ErrorCodes::CANNOT_COMPRESS, "Cannot compress RunLength-encoded data. Unsupported bytes size");
     }
 }
 
-void CompressionCodecRLE::doDecompressData(
+void CompressionCodecRunLength::doDecompressData(
     const char * source,
     UInt32 source_size,
     char * dest,
     UInt32 uncompressed_size) const
 {
     if (source_size < 1)
-        throw Exception(ErrorCodes::CANNOT_DECOMPRESS, "Cannot decompress RLE-encoded data. File has wrong header");
+        throw Exception(
+            ErrorCodes::CANNOT_DECOMPRESS,
+            "Cannot decompress RunLength-encoded data. File has wrong header");
 
     if (uncompressed_size == 0)
         return;
@@ -114,7 +116,9 @@ void CompressionCodecRLE::doDecompressData(
     if (bytes_size == JUST_COPY_CODE)
     {
         if (source_size - 1 < uncompressed_size)
-            throw Exception(ErrorCodes::CANNOT_DECOMPRESS, "Cannot decompress RLE-encoded data. File has wrong header");
+            throw Exception(
+                ErrorCodes::CANNOT_DECOMPRESS,
+                "Cannot decompress RunLength-encoded data. File has wrong header");
 
         memcpy(dest, &source[1], uncompressed_size);
         return;
@@ -130,19 +134,21 @@ void CompressionCodecRLE::doDecompressData(
     switch (bytes_size)
     {
     case 1:
-        DB::Compression::RLEDecoding<UInt8>(&source[1], source_size - 1, dest, uncompressed_size);
+        DB::Compression::RunLengthDecoding<UInt8>(&source[1], source_size - 1, dest, uncompressed_size);
         break;
     case 2:
-        DB::Compression::RLEDecoding<UInt16>(&source[1], source_size - 1, dest, uncompressed_size);
+        DB::Compression::RunLengthDecoding<UInt16>(&source[1], source_size - 1, dest, uncompressed_size);
         break;
     case 4:
-        DB::Compression::RLEDecoding<UInt32>(&source[1], source_size - 1, dest, uncompressed_size);
+        DB::Compression::RunLengthDecoding<UInt32>(&source[1], source_size - 1, dest, uncompressed_size);
         break;
     case 8:
-        DB::Compression::RLEDecoding<UInt64>(&source[1], source_size - 1, dest, uncompressed_size);
+        DB::Compression::RunLengthDecoding<UInt64>(&source[1], source_size - 1, dest, uncompressed_size);
         break;
     default:
-        throw Exception(ErrorCodes::CANNOT_DECOMPRESS, "Cannot decompress RLE-encoded data. Unsupported bytes size");
+        throw Exception(
+            ErrorCodes::CANNOT_DECOMPRESS,
+            "Cannot decompress RunLength-encoded data. Unsupported bytes size");
     }
 }
 
