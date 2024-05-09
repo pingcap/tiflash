@@ -56,15 +56,6 @@ void SegmentReadTaskScheduler::addPool(const SegmentReadTaskPoolPtr & pool)
     }
 }
 
-void SegmentReadTaskScheduler::addPools(const SegmentReadTaskPools & pools)
-{
-    for (const auto & pool : pools)
-    {
-        addPool(pool);
-    }
-    LOG_INFO(log, "Added, pool_ids={}, pool_count={}", pools, read_pools.size());
-}
-
 void SegmentReadTaskScheduler::submitPendingPool(SegmentReadTaskPoolPtr pool)
 {
     assert(pool != nullptr);

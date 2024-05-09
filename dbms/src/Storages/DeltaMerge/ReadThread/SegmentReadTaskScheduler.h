@@ -84,7 +84,6 @@ private:
     void submitPendingPool(SegmentReadTaskPoolPtr pool);
     void reapPendingPools();
     void addPool(const SegmentReadTaskPoolPtr & pool);
-    void addPools(const SegmentReadTaskPools & pools);
 
     // To restrict the instantaneous concurrency of `add` and avoid `schedule` from always failing to acquire the lock.
     std::mutex add_mtx;
