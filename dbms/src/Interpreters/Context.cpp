@@ -280,7 +280,10 @@ struct ContextShared
             tmt_context->shutdown();
         }
 
-        joint_memory_allocation_map->stopThreadAllocInfo();
+        if (joint_memory_allocation_map)
+        {
+            joint_memory_allocation_map->stopThreadAllocInfo();
+        }
 
         if (schema_sync_service)
         {
