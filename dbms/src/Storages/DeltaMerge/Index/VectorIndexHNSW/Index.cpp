@@ -13,6 +13,8 @@
 // limitations under the License.
 
 #include <Columns/ColumnArray.h>
+#include <Common/Stopwatch.h>
+#include <Common/TiFlashMetrics.h>
 #include <Functions/FunctionHelpers.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
@@ -22,6 +24,7 @@
 #include <tipb/executor.pb.h>
 
 #include <algorithm>
+#include <ext/scope_guard.h>
 #include <usearch/index.hpp>
 #include <usearch/index_plugins.hpp>
 
@@ -62,6 +65,7 @@ VectorIndexHNSWBuilder::VectorIndexHNSWBuilder(const TiDB::VectorIndexDefinition
           getUSearchMetricKind(definition->distance_metric))))
 {
     RUNTIME_CHECK(definition_->kind == tipb::VectorIndexKind::HNSW);
+    GET_METRIC(tiflash_vector_index_active_instances, type_build).Increment();
 }
 
 void VectorIndexHNSWBuilder::addBlock(const IColumn & column, const ColumnVector<UInt8> * del_mark)
@@ -82,6 +86,9 @@ void VectorIndexHNSWBuilder::addBlock(const IColumn & column, const ColumnVector
     {
         throw Exception(ErrorCodes::CANNOT_ALLOCATE_MEMORY, "Could not reserve memory for HNSW index");
     }
+
+    Stopwatch w;
+    SCOPE_EXIT({ total_duration += w.elapsedSeconds(); });
 
     for (int i = 0, i_max = col_array->size(); i < i_max; ++i)
     {
@@ -105,12 +112,28 @@ void VectorIndexHNSWBuilder::addBlock(const IColumn & column, const ColumnVector
         if (auto rc = index.add(row_offset, reinterpret_cast<const Float32 *>(data.data)); !rc)
             throw Exception(ErrorCodes::INCORRECT_DATA, rc.error.release());
     }
+
+    auto current_memory_usage = index.memory_usage();
+    auto delta = static_cast<Int64>(current_memory_usage) - static_cast<Int64>(last_reported_memory_usage);
+    GET_METRIC(tiflash_vector_index_memory_usage, type_build).Increment(static_cast<double>(delta));
+    last_reported_memory_usage = current_memory_usage;
 }
 
 void VectorIndexHNSWBuilder::save(std::string_view path) const
 {
+    Stopwatch w;
+    SCOPE_EXIT({ total_duration += w.elapsedSeconds(); });
+
     auto result = index.save(unum::usearch::output_file_t(path.data()));
     RUNTIME_CHECK_MSG(result, "Failed to save vector index: {}", result.error.what());
+}
+
+VectorIndexHNSWBuilder::~VectorIndexHNSWBuilder()
+{
+    GET_METRIC(tiflash_vector_index_duration, type_build).Observe(total_duration);
+    GET_METRIC(tiflash_vector_index_memory_usage, type_build)
+        .Decrement(static_cast<double>(last_reported_memory_usage));
+    GET_METRIC(tiflash_vector_index_active_instances, type_build).Decrement();
 }
 
 VectorIndexViewerPtr VectorIndexHNSWViewer::view(const dtpb::VectorIndexFileProps & file_props, std::string_view path)
@@ -121,12 +144,19 @@ VectorIndexViewerPtr VectorIndexHNSWViewer::view(const dtpb::VectorIndexFileProp
     RUNTIME_CHECK(tipb::VectorDistanceMetric_Parse(file_props.distance_metric(), &metric));
     RUNTIME_CHECK(metric != tipb::VectorDistanceMetric::INVALID_DISTANCE_METRIC);
 
+    Stopwatch w;
+    SCOPE_EXIT({ GET_METRIC(tiflash_vector_index_duration, type_view).Observe(w.elapsedSeconds()); });
+
     auto vi = std::make_shared<VectorIndexHNSWViewer>(file_props);
     vi->index = USearchImplType::make(unum::usearch::metric_punned_t( //
         file_props.dimensions(),
         getUSearchMetricKind(metric)));
     auto result = vi->index.view(unum::usearch::memory_mapped_file_t(path.data()));
     RUNTIME_CHECK_MSG(result, "Failed to load vector index: {}", result.error.what());
+
+    auto current_memory_usage = vi->index.memory_usage();
+    GET_METRIC(tiflash_vector_index_memory_usage, type_view).Increment(static_cast<double>(current_memory_usage));
+    vi->last_reported_memory_usage = current_memory_usage;
 
     return vi;
 }
@@ -175,6 +205,9 @@ std::vector<VectorIndexBuilder::Key> VectorIndexHNSWViewer::search(
         }
     };
 
+    Stopwatch w;
+    SCOPE_EXIT({ GET_METRIC(tiflash_vector_index_duration, type_search).Observe(w.elapsedSeconds()); });
+
     // TODO: Support efSearch.
     auto result = index.search( //
         reinterpret_cast<const Float32 *>(queryInfo->ref_vec_f32().data() + sizeof(UInt32)),
@@ -203,6 +236,18 @@ void VectorIndexHNSWViewer::get(Key key, std::vector<Float32> & out) const
 {
     out.resize(file_props.dimensions());
     index.get(key, out.data());
+}
+
+VectorIndexHNSWViewer::VectorIndexHNSWViewer(const dtpb::VectorIndexFileProps & props)
+    : VectorIndexViewer(props)
+{
+    GET_METRIC(tiflash_vector_index_active_instances, type_view).Increment();
+}
+
+VectorIndexHNSWViewer::~VectorIndexHNSWViewer()
+{
+    GET_METRIC(tiflash_vector_index_memory_usage, type_view).Decrement(static_cast<double>(last_reported_memory_usage));
+    GET_METRIC(tiflash_vector_index_active_instances, type_view).Decrement();
 }
 
 } // namespace DB::DM
