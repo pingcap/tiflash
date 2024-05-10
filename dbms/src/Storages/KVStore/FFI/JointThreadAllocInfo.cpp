@@ -172,6 +172,9 @@ void JointThreadInfoJeallocMap::stopThreadAllocInfo()
     LOG_INFO(DB::Logger::get(), "Stop collecting thread alloc metrics");
     {
         std::unique_lock lk(monitoring_mut);
+        // Only one caller can successfully stop the thread.
+        if (is_terminated)
+            return;
         if (monitoring_thread == nullptr)
             return;
         is_terminated = true;
@@ -179,8 +182,11 @@ void JointThreadInfoJeallocMap::stopThreadAllocInfo()
     }
     LOG_INFO(DB::Logger::get(), "JointThreadInfoJeallocMap shutdown, wait thread alloc monitor join");
     monitoring_thread->join();
-    delete monitoring_thread;
-    monitoring_thread = nullptr;
+    {
+        std::unique_lock lk(monitoring_mut);
+        delete monitoring_thread;
+        monitoring_thread = nullptr;
+    }
 }
 
 } // namespace DB
