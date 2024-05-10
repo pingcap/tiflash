@@ -16,7 +16,10 @@
 pub struct ProcessMetricsInfo {
     pub cpu_total: u64,
     pub vsize: i64,
-    pub rss: i64,
+    pub rss: u64,
+    pub rss_anon: u64,
+    pub rss_file: u64,
+    pub rss_shared: u64,
     pub start_time: i64,
 }
 
@@ -26,6 +29,9 @@ impl Default for ProcessMetricsInfo {
             cpu_total: 0,
             vsize: 0,
             rss: 0,
+            rss_anon: 0,
+            rss_file: 0,
+            rss_shared: 0,
             start_time: 0,
         }
     }
@@ -74,19 +80,13 @@ pub extern "C" fn get_process_metrics() -> ProcessMetricsInfo {
     }
     ProcessMetricsInfo {
         cpu_total: (p.stat.utime + p.stat.stime) / ticks_per_second() as u64,
-        vsize: p.stat.vsize as i64,
-        rss: p.stat.rss * *PAGESIZE,
+        vsize: (p.status.vm_size * 1024) as u64,
+        rss: (p.status.vm_rss * 1024) as u64,
+        rss_anon: (p.status.vm_rss_anon * 1024) as u64,
+        rss_file: (p.status.vm_rss_file * 1024) as u64,
+        rss_shared: (p.status.vm_rss_shared * 1024) as u64,
         start_time,
     }
-}
-
-lazy_static::lazy_static! {
-    // getconf PAGESIZE
-    static ref PAGESIZE: i64 = {
-        unsafe {
-            libc::sysconf(libc::_SC_PAGESIZE)
-        }
-    };
 }
 
 lazy_static::lazy_static! {
