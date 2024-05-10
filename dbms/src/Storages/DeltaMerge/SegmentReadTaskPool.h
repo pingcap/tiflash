@@ -286,7 +286,6 @@ public:
 using SegmentReadTaskPoolPtr = std::shared_ptr<SegmentReadTaskPool>;
 using SegmentReadTaskPools = std::vector<SegmentReadTaskPoolPtr>;
 
-<<<<<<< HEAD
 } // namespace DM
 } // namespace DB
 
@@ -303,8 +302,8 @@ struct fmt::formatter<DB::DM::SegmentReadTaskPtr>
             t->segment->segmentId(),
             t->segment->segmentEpoch(),
             t->read_snapshot->delta->getDeltaIndexEpoch());
-=======
-} // namespace DB::DM
+    }
+};
 
 template <>
 struct fmt::formatter<DB::DM::SegmentReadTaskPoolPtr>
@@ -315,6 +314,5 @@ struct fmt::formatter<DB::DM::SegmentReadTaskPoolPtr>
     auto format(const DB::DM::SegmentReadTaskPoolPtr & pool, FormatContext & ctx) const
     {
         return fmt::format_to(ctx.out(), "{}", pool->pool_id);
->>>>>>> bddd270b16 (Storages: Refine SegmentReadTaskScheduler::add to reduce lock contention (#9027))
     }
 };

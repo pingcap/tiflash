@@ -40,10 +40,7 @@ protected:
 
     SegmentReadTaskPtr createSegmentReadTask(PageIdU64 seg_id)
     {
-        return std::make_shared<SegmentReadTask>(
-            createSegment(seg_id),
-            createSegmentSnapshot(),
-            RowKeyRanges{});
+        return std::make_shared<SegmentReadTask>(createSegment(seg_id), createSegmentSnapshot(), RowKeyRanges{});
     }
 
     static Block createBlock()
@@ -93,9 +90,6 @@ protected:
             /*res_group_name_*/ String{});
     }
 
-<<<<<<< HEAD
-=======
-
     void schedulerBasic()
     {
         SegmentReadTaskScheduler scheduler{false};
@@ -138,7 +132,7 @@ protected:
             ASSERT_FALSE(scheduler.needScheduleToRead(pool));
             auto merged_task = merged_tasks.back();
             ASSERT_EQ(merged_task->units.size(), 1);
-            pool->finishSegment(merged_task->units.front().task);
+            pool->finishSegment(merged_task->units.front().task->segment);
             ASSERT_TRUE(scheduler.needScheduleToRead(pool));
         }
 
@@ -168,7 +162,7 @@ protected:
             {
                 auto merged_task = merged_tasks.back();
                 merged_tasks.pop_back();
-                pool->finishSegment(merged_task->units.front().task);
+                pool->finishSegment(merged_task->units.front().task->segment);
             }
 
             for (;;)
@@ -178,7 +172,7 @@ protected:
                 {
                     break;
                 }
-                pool->finishSegment(merged_task->units.front().task);
+                pool->finishSegment(merged_task->units.front().task->segment);
             }
 
             ASSERT_EQ(pool->q.size(), 0);
@@ -190,7 +184,6 @@ protected:
         }
     }
 
->>>>>>> bddd270b16 (Storages: Refine SegmentReadTaskScheduler::add to reduce lock contention (#9027))
     inline static const std::vector<PageIdU64> test_seg_ids{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12};
 };
 
@@ -257,87 +250,7 @@ TEST_F(SegmentReadTasksPoolTest, OrderedWrapper)
 TEST_F(SegmentReadTasksPoolTest, SchedulerBasic)
 try
 {
-    SegmentReadTaskScheduler scheduler{false};
-
-    {
-        // Create and add pool.
-        auto pool = createSegmentReadTaskPool(test_seg_ids);
-        pool->increaseUnorderedInputStreamRefCount();
-        scheduler.add(pool);
-
-        // Schedule segment to reach limitation.
-        auto active_segment_limits = pool->getFreeActiveSegments();
-        ASSERT_GT(active_segment_limits, 0);
-        std::vector<MergedTaskPtr> merged_tasks;
-        for (int i = 0; i < active_segment_limits; ++i)
-        {
-            std::lock_guard lock(scheduler.mtx);
-            auto merged_task = scheduler.scheduleMergedTask(pool);
-            ASSERT_NE(merged_task, nullptr);
-            merged_tasks.push_back(merged_task);
-        }
-        {
-            std::lock_guard lock(scheduler.mtx);
-            ASSERT_EQ(scheduler.scheduleMergedTask(pool), nullptr);
-        }
-
-        // Make a segment finished.
-        {
-            ASSERT_FALSE(scheduler.needScheduleToRead(pool));
-            auto merged_task = merged_tasks.back();
-            ASSERT_EQ(merged_task->units.size(), 1);
-            pool->finishSegment(merged_task->units.front().task->segment);
-            ASSERT_TRUE(scheduler.needScheduleToRead(pool));
-        }
-
-        // Push block to reach limitation.
-        {
-            auto free_slot_limits = pool->getFreeBlockSlots();
-            ASSERT_GT(free_slot_limits, 0);
-            for (int i = 0; i < free_slot_limits; ++i)
-            {
-                pool->pushBlock(createBlock());
-            }
-            ASSERT_EQ(pool->getFreeBlockSlots(), 0);
-            ASSERT_FALSE(scheduler.needScheduleToRead(pool));
-
-            Block blk;
-            pool->popBlock(blk);
-            ASSERT_TRUE(blk);
-            ASSERT_EQ(pool->getFreeBlockSlots(), 1);
-            ASSERT_TRUE(scheduler.needScheduleToRead(pool));
-
-            while (pool->tryPopBlock(blk)) {}
-        }
-
-        // Finish
-        {
-            while (!merged_tasks.empty())
-            {
-                auto merged_task = merged_tasks.back();
-                merged_tasks.pop_back();
-                pool->finishSegment(merged_task->units.front().task->segment);
-            }
-
-            for (;;)
-            {
-                std::lock_guard lock(scheduler.mtx);
-                auto merged_task = scheduler.scheduleMergedTask(pool);
-                if (merged_task == nullptr)
-                {
-                    break;
-                }
-                pool->finishSegment(merged_task->units.front().task->segment);
-            }
-
-            ASSERT_EQ(pool->q.size(), 0);
-            Block blk;
-            ASSERT_FALSE(pool->q.pop(blk));
-
-            pool->decreaseUnorderedInputStreamRefCount();
-            ASSERT_FALSE(pool->valid());
-        }
-    }
+    schedulerBasic();
 }
 CATCH
 
