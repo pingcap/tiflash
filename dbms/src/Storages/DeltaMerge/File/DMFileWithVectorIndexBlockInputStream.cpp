@@ -302,7 +302,9 @@ void DMFileWithVectorIndexBlockInputStream::loadVectorIndex()
             PerfContext::file_cache.fg_wait_download_from_s3 > perf_begin.fg_wait_download_from_s3)
             has_s3_download = true;
 
-        duration_load_index += watch.elapsedSeconds();
+        auto download_duration = watch.elapsedSeconds();
+        duration_load_index += download_duration;
+        GET_METRIC(tiflash_vector_index_duration, type_download).Observe(download_duration);
     }
     else
     {

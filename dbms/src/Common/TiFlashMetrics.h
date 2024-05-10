@@ -786,6 +786,23 @@ namespace DB
       F(type_gac_req_ru_consumption_delta, {"type", "gac_req_ru_consumption_delta"}),                                               \
       F(type_gac_resp_tokens, {"type", "gac_resp_tokens"}),                                                                         \
       F(type_gac_resp_capacity, {"type", "gac_resp_capacity"}))                                                                     \
+    M(tiflash_vector_index_memory_usage,                                                                                            \
+      "Vector index memory usage",                                                                                                  \
+      Gauge,                                                                                                                        \
+      F(type_build, {"type", "build"}),                                                                                             \
+      F(type_view, {"type", "view"}))                                                                                               \
+    M(tiflash_vector_index_active_instances,                                                                                        \
+      "Active Vector index instances",                                                                                              \
+      Gauge,                                                                                                                        \
+      F(type_build, {"type", "build"}),                                                                                             \
+      F(type_view, {"type", "view"}))                                                                                               \
+    M(tiflash_vector_index_duration,                                                                                                \
+      "Vector index operation duration",                                                                                            \
+      Histogram,                                                                                                                    \
+      F(type_build, {{"type", "build"}}, ExpBuckets{0.001, 2, 20}),                                                                 \
+      F(type_download, {{"type", "download"}}, ExpBuckets{0.001, 2, 20}),                                                           \
+      F(type_view, {{"type", "view"}}, ExpBuckets{0.001, 2, 20}),                                                                   \
+      F(type_search, {{"type", "search"}}, ExpBuckets{0.001, 2, 20}))                                                               \
     M(tiflash_storage_io_limiter_pending_count,                                                                                     \
       "I/O limiter pending count",                                                                                                  \
       Counter,                                                                                                                      \
