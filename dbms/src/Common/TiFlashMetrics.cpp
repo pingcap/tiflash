@@ -99,7 +99,7 @@ void TiFlashMetrics::removeReplicaSyncRUCounter(UInt32 keyspace_id)
     registered_keyspace_sync_replica_ru.erase(itr);
 }
 
-static constexpr std::string genPrefix(TiFlashMetrics::MemoryAllocType type, const std::string & k)
+static std::string genPrefix(TiFlashMetrics::MemoryAllocType type, const std::string & k)
 {
     if (type == TiFlashMetrics::MemoryAllocType::Alloc)
     {
