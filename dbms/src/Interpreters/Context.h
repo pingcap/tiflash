@@ -159,7 +159,6 @@ private:
     Context * session_context = nullptr; /// Session context or nullptr. Could be equal to this.
     Context * global_context = nullptr; /// Global context or nullptr. Could be equal to this.
     SystemLogsPtr system_logs; /// Used to log queries and operations on parts
-    JointThreadInfoJeallocMapPtr joint_memory_allocation_map; /// Joint thread-wise alloc/dealloc map
 
     UInt64 session_close_cycle = 0;
     bool session_is_used = false;

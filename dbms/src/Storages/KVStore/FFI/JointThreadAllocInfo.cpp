@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/TiFlashMetrics.h>
+#include <Common/setThreadName.h>
 #include <Storages/KVStore/FFI/JointThreadAllocInfo.h>
 #include <Storages/KVStore/FFI/ProxyFFI.h>
 
@@ -26,6 +27,7 @@ namespace DB
 JointThreadInfoJeallocMap::JointThreadInfoJeallocMap()
 {
     monitoring_thread = new std::thread([&]() {
+        setThreadName("ThreadMemoryTracer");
         while (true)
         {
             using namespace std::chrono_literals;

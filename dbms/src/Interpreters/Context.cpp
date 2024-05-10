@@ -180,6 +180,8 @@ struct ContextShared
 
     /// Named sessions. The user could specify session identifier to reuse settings and temporary tables in subsequent requests.
 
+    JointThreadInfoJeallocMapPtr joint_memory_allocation_map; /// Joint thread-wise alloc/dealloc map
+
     class SessionKeyHash
     {
     public:
@@ -277,6 +279,8 @@ struct ContextShared
         {
             tmt_context->shutdown();
         }
+
+        joint_memory_allocation_map->stopThreadAllocInfo();
 
         if (schema_sync_service)
         {
@@ -1757,12 +1761,12 @@ DM::GlobalStoragePoolPtr Context::getGlobalStoragePool() const
 void Context::initializeJointThreadInfoJeallocMap()
 {
     auto lock = getLock();
-    joint_memory_allocation_map = std::make_shared<JointThreadInfoJeallocMap>();
+    shared->joint_memory_allocation_map = std::make_shared<JointThreadInfoJeallocMap>();
 }
 
 JointThreadInfoJeallocMapPtr Context::getJointThreadInfoJeallocMap() const
 {
-    return joint_memory_allocation_map;
+    return shared->joint_memory_allocation_map;
 }
 
 /**
