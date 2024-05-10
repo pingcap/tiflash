@@ -125,6 +125,7 @@ TEST_F(SegmentReadTasksPoolTest, UnorderedWrapper)
     }
     ASSERT_TRUE(exception_happened);
 
+<<<<<<< HEAD
     ASSERT_FALSE(tasks_wrapper.empty());
     const auto & tasks = tasks_wrapper.getTasks();
     ASSERT_EQ(tasks.size(), test_seg_ids.size());
@@ -177,25 +178,40 @@ TEST_F(SegmentReadTasksPoolTest, SchedulerBasic)
 
     {
         // Create and add pool.
+=======
+        // Create
+>>>>>>> bddd270b16 (Storages: Refine SegmentReadTaskScheduler::add to reduce lock contention (#9027))
         auto pool = createSegmentReadTaskPool(test_seg_ids);
         pool->increaseUnorderedInputStreamRefCount();
-        scheduler.add(pool);
+        ASSERT_EQ(pool->getPendingSegmentCount(), test_seg_ids.size());
 
-        // Schedule segment to reach limitation.
+        // Submit to pending_pools
+        scheduler.add(pool);
+        {
+            std::lock_guard lock(scheduler.pending_mtx); // Disable TSA warnnings
+            ASSERT_EQ(scheduler.pending_pools.size(), 1);
+        }
+        ASSERT_EQ(scheduler.read_pools.size(), 0);
+
+        // Reap the pending_pools
+        scheduler.reapPendingPools();
+        {
+            std::lock_guard lock(scheduler.pending_mtx); // Disable TSA warnnings
+            ASSERT_EQ(scheduler.pending_pools.size(), 0);
+        }
+        ASSERT_EQ(scheduler.read_pools.size(), 1);
+
+        // Schedule segment to reach limitation
         auto active_segment_limits = pool->getFreeActiveSegments();
         ASSERT_GT(active_segment_limits, 0);
         std::vector<MergedTaskPtr> merged_tasks;
         for (int i = 0; i < active_segment_limits; ++i)
         {
-            std::lock_guard lock(scheduler.mtx);
             auto merged_task = scheduler.scheduleMergedTask(pool);
             ASSERT_NE(merged_task, nullptr);
             merged_tasks.push_back(merged_task);
         }
-        {
-            std::lock_guard lock(scheduler.mtx);
-            ASSERT_EQ(scheduler.scheduleMergedTask(pool), nullptr);
-        }
+        ASSERT_EQ(scheduler.scheduleMergedTask(pool), nullptr);
 
         // Make a segment finished.
         {
@@ -237,7 +253,6 @@ TEST_F(SegmentReadTasksPoolTest, SchedulerBasic)
 
             for (;;)
             {
-                std::lock_guard lock(scheduler.mtx);
                 auto merged_task = scheduler.scheduleMergedTask(pool);
                 if (merged_task == nullptr)
                 {
@@ -254,6 +269,79 @@ TEST_F(SegmentReadTasksPoolTest, SchedulerBasic)
             ASSERT_FALSE(pool->valid());
         }
     }
+<<<<<<< HEAD
+=======
+
+    inline static const std::vector<PageIdU64> test_seg_ids{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12};
+};
+
+TEST_F(SegmentReadTasksPoolTest, UnorderedWrapper)
+{
+    SegmentReadTasksWrapper tasks_wrapper(true, createSegmentReadTasks(test_seg_ids));
+
+    bool exception_happened = false;
+    try
+    {
+        tasks_wrapper.nextTask();
+    }
+    catch (const Exception & e)
+    {
+        exception_happened = true;
+    }
+    ASSERT_TRUE(exception_happened);
+
+    ASSERT_FALSE(tasks_wrapper.empty());
+    const auto & tasks = tasks_wrapper.getTasks();
+    ASSERT_EQ(tasks.size(), test_seg_ids.size());
+
+    std::random_device rd;
+    std::mt19937 g(rd());
+    std::vector<PageIdU64> v = test_seg_ids;
+    std::shuffle(v.begin(), v.end(), g);
+    for (PageIdU64 seg_id : v)
+    {
+        auto global_seg_id = createGlobalSegmentID(seg_id);
+        auto task = tasks_wrapper.getTask(global_seg_id);
+        ASSERT_NE(task, nullptr);
+        ASSERT_EQ(task->segment->segmentId(), seg_id);
+        task = tasks_wrapper.getTask(global_seg_id);
+        ASSERT_EQ(task, nullptr);
+    }
+    ASSERT_TRUE(tasks_wrapper.empty());
 }
+
+TEST_F(SegmentReadTasksPoolTest, OrderedWrapper)
+{
+    SegmentReadTasksWrapper tasks_wrapper(false, createSegmentReadTasks(test_seg_ids));
+
+    bool exception_happened = false;
+    try
+    {
+        tasks_wrapper.getTasks();
+    }
+    catch (const Exception & e)
+    {
+        exception_happened = true;
+    }
+    ASSERT_TRUE(exception_happened);
+
+    ASSERT_FALSE(tasks_wrapper.empty());
+
+    for (PageIdU64 seg_id : test_seg_ids)
+    {
+        auto task = tasks_wrapper.nextTask();
+        ASSERT_EQ(task->segment->segmentId(), seg_id);
+    }
+    ASSERT_TRUE(tasks_wrapper.empty());
+    ASSERT_EQ(tasks_wrapper.nextTask(), nullptr);
+}
+
+TEST_F(SegmentReadTasksPoolTest, SchedulerBasic)
+try
+{
+    schedulerBasic();
+>>>>>>> bddd270b16 (Storages: Refine SegmentReadTaskScheduler::add to reduce lock contention (#9027))
+}
+CATCH
 
 } // namespace DB::DM::tests
