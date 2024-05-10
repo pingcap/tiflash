@@ -35,7 +35,47 @@ std::vector<prometheus::MetricFamily> ProcessCollector::Collect() const
     rss.Set(new_info.rss);
 
     std::vector<prometheus::MetricFamily> familes;
-    familes.reserve(4);
+
+    // The following metrics shadow TiFlash proxy metrics, so that we ensure these metrics are available
+    // in disaggregated mode, where TiFlash proxy may not start at all.
+    // Note that, even in non-disaggregated mode, duplicates are fine when being collected by Prometheus,
+    // because TiFlash proxy and TiFlash have different metrics endpoints. However we will see multiple
+    // endpoints in the Grafana, because both TiFlash proxy and TiFlash uses the same metric name.
+    // To avoid duplicates in Grafana, we will only include proxy metrics when proxy is not enabled.
+    if (include_proxy_metrics)
+    {
+        familes.emplace_back(prometheus::MetricFamily{
+            "tiflash_proxy_process_cpu_seconds_total",
+            "Total user and system CPU time spent in seconds.",
+            prometheus::MetricType::Gauge,
+            {
+                prometheus::ClientMetric{.gauge = {static_cast<double>(new_info.cpu_total)}},
+            }});
+
+        familes.emplace_back(prometheus::MetricFamily{
+            "tiflash_proxy_process_virtual_memory_bytes",
+            "Virtual memory size in bytes.",
+            prometheus::MetricType::Gauge,
+            {
+                prometheus::ClientMetric{.gauge = {static_cast<double>(new_info.vsize)}},
+            }});
+        familes.emplace_back(prometheus::MetricFamily{
+            "tiflash_proxy_process_resident_memory_bytes",
+            "Resident memory size in bytes.",
+            prometheus::MetricType::Gauge,
+            {
+                prometheus::ClientMetric{.gauge = {static_cast<double>(new_info.rss)}},
+            }});
+        familes.emplace_back(prometheus::MetricFamily{
+            "tiflash_proxy_process_start_time_seconds",
+            "Start time of the process since unix epoch in seconds.",
+            prometheus::MetricType::Gauge,
+            {
+                prometheus::ClientMetric{.gauge = {static_cast<double>(new_info.start_time)}},
+            }});
+    }
+
+    // The following metrics are TiFlash specific process metrics.
     familes.emplace_back(prometheus::MetricFamily{
         CPU_METRIC_NAME,
         CPU_METRIC_HELP,
