@@ -16,6 +16,9 @@
 
 #include <IO/Compression/ICompressionCodec.h>
 
+#include <span>
+
+
 namespace DB
 {
 
@@ -58,6 +61,7 @@ private:
     template <typename T>
     struct FORState
     {
+        std::vector<T> values;
         T min_value;
         UInt8 bit_width;
     };
@@ -81,9 +85,11 @@ private:
         CompressContext() = default;
 
         bool needAnalyze() const;
+        bool needAnalyzeDelta() const;
+        bool needAnalyzeRLE() const;
 
         template <typename T>
-        void analyze(std::vector<T> & values, State<T> & state);
+        void analyze(std::span<const T> & values, State<T> & state);
 
         void update(size_t uncompressed_size, size_t compressed_size);
 
@@ -96,6 +102,9 @@ private:
         size_t lz4_uncompressed_size = 0;
         size_t lz4_compressed_size = 0;
         size_t lz4_counter = 0;
+        size_t constant_delta_counter = 0;
+        size_t delta_for_counter = 0;
+        size_t rle_counter = 0;
     };
 
     template <typename T>
