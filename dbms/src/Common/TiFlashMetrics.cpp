@@ -146,7 +146,7 @@ void TiFlashMetrics::registerProxyThreadMemory(const std::string & k)
     }
     {
         auto prefix = genPrefix(TiFlashMetrics::MemoryAllocType::Dealloc, k);
-        if unlikely (!registered_raft_proxy_thread_memory_usage_metrics.count(prefix))
+        if unlikely (!registered_raft_proxy_thread_memory_usage_metrics.contains(prefix))
         {
             registered_raft_proxy_thread_memory_usage_metrics.emplace(
                 prefix,
