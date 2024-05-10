@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #[repr(C)]
+#[derive(Default)]
 pub struct ProcessMetricsInfo {
     pub cpu_total: u64,
     pub vsize: i64,
@@ -21,20 +22,6 @@ pub struct ProcessMetricsInfo {
     pub rss_file: u64,
     pub rss_shared: u64,
     pub start_time: i64,
-}
-
-impl Default for ProcessMetricsInfo {
-    fn default() -> Self {
-        ProcessMetricsInfo {
-            cpu_total: 0,
-            vsize: 0,
-            rss: 0,
-            rss_anon: 0,
-            rss_file: 0,
-            rss_shared: 0,
-            start_time: 0,
-        }
-    }
 }
 
 #[cfg(target_os = "linux")]
@@ -63,30 +50,31 @@ pub extern "C" fn get_process_metrics() -> ProcessMetricsInfo {
 }
 
 #[cfg(target_os = "linux")]
+fn get_proces_metrics_linux() -> procfs::ProcResult<ProcessMetricsInfo> {
+    let p = procfs::process::Process::myself()?;
+    let stat = p.stat()?;
+    let status = p.status()?;
+
+    let mut start_time = 0i64;
+    if let Ok(boot_time) = procfs::boot_time_secs() {
+        start_time = stat.starttime as i64 / ticks_per_second() + boot_time as i64;
+    }
+
+    Ok(ProcessMetricsInfo {
+        cpu_total: (stat.utime + stat.stime) / ticks_per_second() as u64,
+        vsize: status.vmsize().unwrap_or_default() * 1024,
+        rss: status.vmrss().unwrap_or_default() * 1024,
+        rss_anon: status.rssanon().unwrap_or_default() * 1024,
+        rss_file: status.rssfile().unwrap_or_default() * 1024,
+        rss_shared: status.rssshmem().unwrap_or_default() * 1024,
+        start_time,
+    })
+}
+
+#[cfg(target_os = "linux")]
 #[no_mangle]
 pub extern "C" fn get_process_metrics() -> ProcessMetricsInfo {
-    use procfs;
-    let p = match procfs::process::Process::myself() {
-        Ok(p) => p,
-        Err(..) => {
-            // we can't construct a Process object, so there's no stats to gather
-            return ProcessMetricsInfo::default();
-        }
-    };
-
-    let mut start_time: i64 = 0;
-    if let Ok(boot_time) = procfs::boot_time_secs() {
-        start_time = p.stat.starttime as i64 / ticks_per_second() + boot_time as i64;
-    }
-    ProcessMetricsInfo {
-        cpu_total: (p.stat.utime + p.stat.stime) / ticks_per_second() as u64,
-        vsize: (p.status.vm_size * 1024) as u64,
-        rss: (p.status.vm_rss * 1024) as u64,
-        rss_anon: (p.status.vm_rss_anon * 1024) as u64,
-        rss_file: (p.status.vm_rss_file * 1024) as u64,
-        rss_shared: (p.status.vm_rss_shared * 1024) as u64,
-        start_time,
-    }
+    get_proces_metrics_linux().unwrap_or_default()
 }
 
 lazy_static::lazy_static! {
