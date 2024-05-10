@@ -309,6 +309,7 @@ private:
         return element.data;
     }
 
+    // If returns true, then notify writers afterward; if false, no need to notify writers.
     template <typename U>
     ALWAYS_INLINE bool pushFront(U && data)
     {
