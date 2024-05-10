@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/CurrentMetrics.h>
+#include <Common/ProcessCollector.h>
 #include <Common/ProfileEvents.h>
 #include <Common/TiFlashMetrics.h>
 #include <common/defines.h>
@@ -27,6 +28,8 @@ TiFlashMetrics & TiFlashMetrics::instance()
 
 TiFlashMetrics::TiFlashMetrics()
 {
+    process_collector = std::make_shared<ProcessCollector>();
+
     registered_profile_events.reserve(ProfileEvents::end());
     for (ProfileEvents::Event event = 0; event < ProfileEvents::end(); event++)
     {
@@ -89,4 +92,5 @@ void TiFlashMetrics::removeReplicaSyncRUCounter(UInt32 keyspace_id)
     registered_keyspace_sync_replica_ru_family->Remove(itr->second);
     registered_keyspace_sync_replica_ru.erase(itr);
 }
+
 } // namespace DB
