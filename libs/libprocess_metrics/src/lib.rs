@@ -16,7 +16,7 @@
 #[derive(Default)]
 pub struct ProcessMetricsInfo {
     pub cpu_total: u64,
-    pub vsize: i64,
+    pub vsize: u64,
     pub rss: u64,
     pub rss_anon: u64,
     pub rss_file: u64,
@@ -62,11 +62,11 @@ fn get_proces_metrics_linux() -> procfs::ProcResult<ProcessMetricsInfo> {
 
     Ok(ProcessMetricsInfo {
         cpu_total: (stat.utime + stat.stime) / ticks_per_second() as u64,
-        vsize: status.vmsize.unwrap_or_default() * 1024u64,
-        rss: status.vmrss.unwrap_or_default() * 1024u64,
-        rss_anon: status.rssanon.unwrap_or_default() * 1024u64,
-        rss_file: status.rssfile.unwrap_or_default() * 1024u64,
-        rss_shared: status.rssshmem.unwrap_or_default() * 1024u64,
+        vsize: status.vmsize.unwrap_or_default() * 1024,
+        rss: status.vmrss.unwrap_or_default() * 1024,
+        rss_anon: status.rssanon.unwrap_or_default() * 1024,
+        rss_file: status.rssfile.unwrap_or_default() * 1024,
+        rss_shared: status.rssshmem.unwrap_or_default() * 1024,
         start_time,
     })
 }
