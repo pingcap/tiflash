@@ -69,11 +69,18 @@ std::vector<prometheus::MetricFamily> ProcessCollector::Collect() const
         "Resident memory size by type in bytes.",
         prometheus::MetricType::Gauge,
         {
-            prometheus::ClientMetric{.gauge = {static_cast<double>(new_info.rss_anon)}, .label = {{"type", "anon"}}},
-            prometheus::ClientMetric{.gauge = {static_cast<double>(new_info.rss_file)}, .label = {{"type", "file"}}},
             prometheus::ClientMetric{
+                .label = {{"type", "anon"}},
+                .gauge = {static_cast<double>(new_info.rss_anon)},
+            },
+            prometheus::ClientMetric{
+                .label = {{"type", "file"}},
+                .gauge = {static_cast<double>(new_info.rss_file)},
+            },
+            prometheus::ClientMetric{
+                .label = {{"type", "shared"}},
                 .gauge = {static_cast<double>(new_info.rss_shared)},
-                .label = {{"type", "shared"}}},
+            },
         }});
 
     return familes;
