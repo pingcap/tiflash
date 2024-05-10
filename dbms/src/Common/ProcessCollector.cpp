@@ -58,7 +58,7 @@ std::vector<prometheus::MetricFamily> ProcessCollector::Collect() const
             "tiflash_proxy_process_start_time_seconds",
             "Start time of the process since unix epoch in seconds.",
             prometheus::MetricType::Gauge,
-            std::vector<prometheus::ClientMetric>{
+            {
                 prometheus::ClientMetric{.gauge = {static_cast<double>(new_info.start_time)}},
             }});
     }

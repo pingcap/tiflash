@@ -93,4 +93,9 @@ void TiFlashMetrics::removeReplicaSyncRUCounter(UInt32 keyspace_id)
     registered_keyspace_sync_replica_ru.erase(itr);
 }
 
+void TiFlashMetrics::setProvideProxyProcessMetrics(bool v)
+{
+    process_collector->include_proxy_metrics = v;
+}
+
 } // namespace DB
