@@ -271,16 +271,6 @@ CodecTestSequence operator+(CodecTestSequence && left, const CodecTestSequence &
     return left.append(right);
 }
 
-std::vector<CodecTestSequence> operator+(
-    const std::vector<CodecTestSequence> & left,
-    const std::vector<CodecTestSequence> & right)
-{
-    std::vector<CodecTestSequence> result(left);
-    std::move(std::begin(right), std::end(right), std::back_inserter(result));
-
-    return result;
-}
-
 template <typename T>
 CodecTestSequence operator*(CodecTestSequence && left, T times)
 {
