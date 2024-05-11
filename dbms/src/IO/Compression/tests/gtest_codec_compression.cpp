@@ -389,10 +389,29 @@ void testTranscoding(ICompressionCodec & codec, const CodecTestSequence & test_s
     ASSERT_TRUE(EqualByteContainers(test_sequence.data_type->getSizeOfValueInMemory(), source_data, decoded));
 }
 
+class MultipleSequencesCodecTest
+    : public ::testing::TestWithParam<std::tuple<CompressionMethodByte, std::vector<CodecTestSequence>>>
+{
+};
+
+TEST_P(MultipleSequencesCodecTest, TranscodingWithDataType)
+try
+{
+    const auto method_byte = std::get<0>(GetParam());
+    const auto sequences = std::get<1>(GetParam());
+    ASSERT_FALSE(sequences.empty());
+    auto type_byte = sequences.front().type_byte;
+    const auto codec = DB::tests::makeCodec(method_byte, type_byte);
+    for (const auto & sequence : sequences)
+    {
+        ASSERT_EQ(sequence.type_byte, type_byte);
+        DB::tests::testTranscoding(*codec, sequence);
+    }
+}
+CATCH
+
 class CodecTest : public ::testing::TestWithParam<std::tuple<CompressionMethodByte, CodecTestSequence>>
 {
-public:
-    void testTranscoding(ICompressionCodec & codec) { ::DB::tests::testTranscoding(codec, std::get<1>(GetParam())); }
 };
 
 TEST_P(CodecTest, TranscodingWithDataType)
@@ -400,8 +419,8 @@ try
 {
     const auto method_byte = std::get<0>(GetParam());
     const auto sequence = std::get<1>(GetParam());
-    const auto codec = ::DB::tests::makeCodec(method_byte, sequence.type_byte);
-    testTranscoding(*codec);
+    const auto codec = DB::tests::makeCodec(method_byte, sequence.type_byte);
+    DB::tests::testTranscoding(*codec, sequence);
 }
 CATCH
 
@@ -570,18 +589,18 @@ const auto IntegerCodecsToTest = ::testing::Values(
 
 INSTANTIATE_TEST_CASE_P(
     SmallSequences,
-    CodecTest,
+    MultipleSequencesCodecTest,
     ::testing::Combine(
         IntegerCodecsToTest,
-        ::testing::ValuesIn(
-            generatePyramidOfSequences<Int8>(42, G(SequentialGenerator(1)))
-            + generatePyramidOfSequences<Int16>(42, G(SequentialGenerator(1)))
-            + generatePyramidOfSequences<Int32>(42, G(SequentialGenerator(1)))
-            + generatePyramidOfSequences<Int64>(42, G(SequentialGenerator(1)))
-            + generatePyramidOfSequences<UInt8>(42, G(SequentialGenerator(1)))
-            + generatePyramidOfSequences<UInt16>(42, G(SequentialGenerator(1)))
-            + generatePyramidOfSequences<UInt32>(42, G(SequentialGenerator(1)))
-            + generatePyramidOfSequences<UInt64>(42, G(SequentialGenerator(1))))));
+        ::testing::Values(
+            generatePyramidOfSequences<Int8>(42, G(SequentialGenerator(1))),
+            generatePyramidOfSequences<Int16>(42, G(SequentialGenerator(1))),
+            generatePyramidOfSequences<Int32>(42, G(SequentialGenerator(1))),
+            generatePyramidOfSequences<Int64>(42, G(SequentialGenerator(1))),
+            generatePyramidOfSequences<UInt8>(42, G(SequentialGenerator(1))),
+            generatePyramidOfSequences<UInt16>(42, G(SequentialGenerator(1))),
+            generatePyramidOfSequences<UInt32>(42, G(SequentialGenerator(1))),
+            generatePyramidOfSequences<UInt64>(42, G(SequentialGenerator(1))))));
 
 INSTANTIATE_TEST_CASE_P(
     Mixed,
