@@ -1089,6 +1089,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->getSharedContextDisagg()->disaggregated_mode = disaggregated_mode;
     global_context->getSharedContextDisagg()->use_autoscaler = use_autoscaler;
 
+    // Must init this before KVStore.
+    global_context->initializeJointThreadInfoJeallocMap();
+
     /// Init File Provider
     if (proxy_conf.is_proxy_runnable)
     {
@@ -1717,8 +1720,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
                 LOG_ERROR(log, "Current status of engine-store is NOT Running, should not happen");
                 exit(-1);
             }
-            LOG_INFO(log, "Stop collecting thread alloc metrics");
-            tmt_context.getKVStore()->stopThreadAllocInfo();
             LOG_INFO(log, "Set store context status Stopping");
             tmt_context.setStatusStopping();
             {
