@@ -14,19 +14,13 @@
 
 #pragma once
 
-#include <Storages/DeltaMerge/DeltaMergeDefines.h>
+#include <Common/Exception.h>
+#include <common/types.h>
 
 namespace DB
 {
 namespace DM
 {
-struct Attr
-{
-    String col_name;
-    ColId col_id;
-    DataTypePtr type;
-};
-using Attrs = std::vector<Attr>;
 
 enum class RSResult : UInt8
 {
