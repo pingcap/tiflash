@@ -363,17 +363,6 @@ DMFile::OffsetAndSize DMFile::writeMetaToBuffer(WriteBuffer & buffer) const
     return std::make_tuple(meta_offset, meta_size);
 }
 
-DMFile::OffsetAndSize DMFile::writePackStatToBuffer(WriteBuffer & buffer)
-{
-    size_t pack_offset = buffer.count();
-    for (auto & stat : pack_stats)
-    {
-        writePODBinary(stat, buffer);
-    }
-    size_t pack_size = buffer.count() - pack_offset;
-    return std::make_tuple(pack_offset, pack_size);
-}
-
 DMFile::OffsetAndSize DMFile::writePackPropertyToBuffer(WriteBuffer & buffer, UnifiedDigestBase * digest)
 {
     size_t offset = buffer.count();
