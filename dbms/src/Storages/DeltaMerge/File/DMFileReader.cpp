@@ -151,12 +151,15 @@ size_t DMFileReader::getReadRows()
     const size_t read_pack_limit = read_one_pack_every_time ? 1 : std::numeric_limits<size_t>::max();
     const auto & pack_stats = dmfile->getPackStats();
     size_t read_rows = 0;
-    for (; next_pack_id < pack_res.size() && isUse(pack_res[next_pack_id]) && read_rows < rows_threshold_per_read;
-         ++next_pack_id)
+    auto last_pack_res = RSResult::Unknown;
+    auto can_read = [&](size_t pack_id) {
+        return read_rows < rows_threshold_per_read && next_pack_id - start_pack_id < read_pack_limit
+            && isUse(pack_res[pack_id]) && (last_pack_res == RSResult::Unknown || last_pack_res == pack_res[pack_id]);
+    };
+    for (; next_pack_id < pack_res.size() && can_read(next_pack_id); ++next_pack_id)
     {
-        if (next_pack_id - start_pack_id >= read_pack_limit)
-            break;
         read_rows += pack_stats[next_pack_id].rows;
+        last_pack_res = pack_res[next_pack_id];
     }
 
     next_row_offset += read_rows;
