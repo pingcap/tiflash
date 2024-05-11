@@ -52,7 +52,7 @@
   "gnetId": null,
   "graphTooltip": 1,
   "id": null,
-  "iteration": 1715392955752,
+  "iteration": 1715392955755,
   "links": [],
   "panels": [
     {
@@ -5743,6 +5743,7 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
+          "decimals": 0,
           "description": "",
           "fieldConfig": {
             "defaults": {},
@@ -5837,7 +5838,7 @@
             {
               "decimals": 0,
               "format": "short",
-              "label": null,
+              "label": "",
               "logBase": 1,
               "max": null,
               "min": "0",
@@ -5863,6 +5864,7 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
+          "decimals": 0,
           "description": "",
           "fieldConfig": {
             "defaults": {},
@@ -5991,6 +5993,7 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
+          "decimals": 1,
           "description": "",
           "fieldConfig": {
             "defaults": {},
@@ -6117,6 +6120,7 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
+          "decimals": 1,
           "description": "",
           "fieldConfig": {
             "defaults": {},
