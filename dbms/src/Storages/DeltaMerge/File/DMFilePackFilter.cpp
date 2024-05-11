@@ -106,7 +106,7 @@ void DMFilePackFilter::init()
 
 size_t DMFilePackFilter::countUsefulPack() const
 {
-    return std::count_if(pack_res.cbegin(), pack_res.cend(), [](RSResult res) { return isUseful(res); });
+    return std::count_if(pack_res.cbegin(), pack_res.cend(), [](RSResult res) { return isUse(res); });
 }
 
 void DMFilePackFilter::loadIndex(

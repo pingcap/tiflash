@@ -110,7 +110,7 @@ bool DMFileReader::getSkippedRows(size_t & skip_rows)
     skip_rows = 0;
     const auto & pack_res = pack_filter.getPackResConst();
     const auto & pack_stats = dmfile->getPackStats();
-    for (; next_pack_id < pack_res.size() && !isUseful(pack_res[next_pack_id]); ++next_pack_id)
+    for (; next_pack_id < pack_res.size() && !isUse(pack_res[next_pack_id]); ++next_pack_id)
     {
         skip_rows += pack_stats[next_pack_id].rows;
         addSkippedRows(pack_stats[next_pack_id].rows);
@@ -151,7 +151,7 @@ size_t DMFileReader::getReadRows()
     const size_t read_pack_limit = read_one_pack_every_time ? 1 : std::numeric_limits<size_t>::max();
     const auto & pack_stats = dmfile->getPackStats();
     size_t read_rows = 0;
-    for (; next_pack_id < pack_res.size() && isUseful(pack_res[next_pack_id]) && read_rows < rows_threshold_per_read;
+    for (; next_pack_id < pack_res.size() && isUse(pack_res[next_pack_id]) && read_rows < rows_threshold_per_read;
          ++next_pack_id)
     {
         if (next_pack_id - start_pack_id >= read_pack_limit)
@@ -225,7 +225,7 @@ Block DMFileReader::readWithFilter(const IColumn::Filter & filter)
         //  The algorithm runs as follows:
         //      When i = next_pack_id + 2, call read() to read {next_pack_id, next_pack_id + 1}th packs
         //      When i = next_pack_id + 5, call read() to read {next_pack_id + 3, next_pack_id + 4, next_pack_id + 5}th packs
-        if (isUseful(pack_res[pack_id]) && (pack_id + 1 == pack_res.size() || !isUseful(pack_res[pack_id + 1])))
+        if (isUse(pack_res[pack_id]) && (pack_id + 1 == pack_res.size() || !isUse(pack_res[pack_id + 1])))
         {
             Block block = read();
             size_t rows = block.rows();
@@ -256,7 +256,7 @@ Block DMFileReader::readWithFilter(const IColumn::Filter & filter)
             }
             offset += rows;
         }
-        else if (!isUseful(pack_res[pack_id]))
+        else if (!isUse(pack_res[pack_id]))
         {
             offset += pack_stats[pack_id].rows;
         }

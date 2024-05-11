@@ -75,7 +75,7 @@ inline RSResult operator&&(RSResult v0, RSResult v1)
     return Some;
 }
 
-inline bool isUseful(RSResult res) noexcept
+inline bool isUse(RSResult res) noexcept
 {
     return res != RSResult::None;
 }

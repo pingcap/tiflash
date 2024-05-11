@@ -161,7 +161,7 @@ std::unique_ptr<CompressedSeekableReaderBuffer> ColumnReadStream::buildColDataRe
     const auto & pack_res = reader.pack_filter.getPackResConst();
     for (size_t i = 0; i < n_packs; /*empty*/)
     {
-        if (!isUseful(pack_res[i]))
+        if (!isUse(pack_res[i]))
         {
             ++i;
             continue;
@@ -169,7 +169,7 @@ std::unique_ptr<CompressedSeekableReaderBuffer> ColumnReadStream::buildColDataRe
         size_t cur_offset_in_file = getOffsetInFile(i);
         size_t end = i + 1;
         // First, find the end of current available range.
-        while (end < n_packs && isUseful(pack_res[end]))
+        while (end < n_packs && isUse(pack_res[end]))
             ++end;
 
         // Second, if the end of range is inside the block, we will need to read it too.
