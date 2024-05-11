@@ -86,6 +86,8 @@ RemoteRequest RemoteRequest::build(
     /// do not collect execution summaries because in this case because the execution summaries
     /// will be collected by CoprocessorBlockInputStream
     dag_req.set_collect_execution_summaries(false);
+    dag_req.set_flags(dag_context.getFlags());
+    dag_req.set_sql_mode(dag_context.getSQLMode());
     const auto & original_dag_req = *dag_context.dag_request;
     if (original_dag_req.has_time_zone_name() && !original_dag_req.time_zone_name().empty())
         dag_req.set_time_zone_name(original_dag_req.time_zone_name());
