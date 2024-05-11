@@ -33,12 +33,6 @@
       "id": "prometheus",
       "name": "Prometheus",
       "version": "1.0.0"
-    },
-    {
-      "type": "panel",
-      "id": "timeseries",
-      "name": "Time series",
-      "version": ""
     }
   ],
   "annotations": {
@@ -58,7 +52,7 @@
   "gnetId": null,
   "graphTooltip": 1,
   "id": null,
-  "iteration": 1715392955749,
+  "iteration": 1715392955752,
   "links": [],
   "panels": [
     {
@@ -5744,75 +5738,71 @@
       "id": 274,
       "panels": [
         {
+          "aliasColors": {},
+          "bars": false,
+          "dashLength": 10,
+          "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
           "description": "",
           "fieldConfig": {
-            "defaults": {
-              "color": {
-                "mode": "palette-classic"
-              },
-              "custom": {
-                "axisLabel": "",
-                "axisPlacement": "auto",
-                "barAlignment": 0,
-                "drawStyle": "line",
-                "fillOpacity": 0,
-                "gradientMode": "none",
-                "hideFrom": {
-                  "graph": false,
-                  "legend": false,
-                  "tooltip": false
+            "defaults": {},
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "/delete_range|ingest/"
                 },
-                "lineInterpolation": "linear",
-                "lineStyle": {
-                  "fill": "solid"
-                },
-                "lineWidth": 1,
-                "pointSize": 5,
-                "scaleDistribution": {
-                  "type": "linear"
-                },
-                "showPoints": "never",
-                "spanNulls": false
-              },
-              "decimals": 0,
-              "mappings": [],
-              "min": 0,
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
+                "properties": [
                   {
-                    "color": "green",
-                    "value": null
+                    "id": "unit",
+                    "value": "opm"
                   }
                 ]
-              },
-              "unit": "short"
-            },
-            "overrides": []
+              }
+            ]
           },
+          "fill": 0,
+          "fillGradient": 0,
           "gridPos": {
             "h": 8,
             "w": 12,
             "x": 0,
             "y": 6
           },
-          "id": 276,
-          "links": [],
-          "options": {
-            "graph": {},
-            "legend": {
-              "calcs": [
-                "max"
-              ],
-              "displayMode": "table",
-              "placement": "right"
-            },
-            "tooltipOptions": {
-              "mode": "multi"
-            }
+          "hiddenSeries": false,
+          "id": 286,
+          "legend": {
+            "alignAsTable": true,
+            "avg": false,
+            "current": false,
+            "hideEmpty": true,
+            "hideZero": true,
+            "max": true,
+            "min": false,
+            "rightSide": true,
+            "show": true,
+            "sideWidth": null,
+            "sort": "max",
+            "sortDesc": true,
+            "total": false,
+            "values": true
           },
+          "lines": true,
+          "linewidth": 1,
+          "links": [],
+          "nullPointMode": "null as zero",
+          "options": {
+            "alertThreshold": true
+          },
+          "percentage": false,
           "pluginVersion": "7.5.11",
+          "pointradius": 5,
+          "points": false,
+          "renderer": "flot",
+          "seriesOverrides": [],
+          "spaceLength": 10,
+          "stack": false,
+          "steppedLine": false,
           "targets": [
             {
               "exemplar": true,
@@ -5825,78 +5815,114 @@
               "refId": "A"
             }
           ],
+          "thresholds": [],
           "timeFrom": null,
+          "timeRegions": [],
           "timeShift": null,
           "title": "In-Memory Vector Index Instances",
-          "type": "timeseries"
+          "tooltip": {
+            "shared": true,
+            "sort": 0,
+            "value_type": "individual"
+          },
+          "type": "graph",
+          "xaxis": {
+            "buckets": null,
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": []
+          },
+          "yaxes": [
+            {
+              "decimals": 0,
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": "0",
+              "show": true
+            },
+            {
+              "format": "ops",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": "0",
+              "show": false
+            }
+          ],
+          "yaxis": {
+            "align": false,
+            "alignLevel": null
+          }
         },
         {
+          "aliasColors": {},
+          "bars": false,
+          "dashLength": 10,
+          "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
           "description": "",
           "fieldConfig": {
-            "defaults": {
-              "color": {
-                "mode": "palette-classic"
-              },
-              "custom": {
-                "axisLabel": "",
-                "axisPlacement": "auto",
-                "barAlignment": 0,
-                "drawStyle": "line",
-                "fillOpacity": 0,
-                "gradientMode": "none",
-                "hideFrom": {
-                  "graph": false,
-                  "legend": false,
-                  "tooltip": false
+            "defaults": {},
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "/delete_range|ingest/"
                 },
-                "lineInterpolation": "linear",
-                "lineWidth": 1,
-                "pointSize": 5,
-                "scaleDistribution": {
-                  "type": "linear"
-                },
-                "showPoints": "never",
-                "spanNulls": false
-              },
-              "decimals": 0,
-              "mappings": [],
-              "min": 0,
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
+                "properties": [
                   {
-                    "color": "green",
-                    "value": null
+                    "id": "unit",
+                    "value": "opm"
                   }
                 ]
-              },
-              "unit": "bytes"
-            },
-            "overrides": []
+              }
+            ]
           },
+          "fill": 0,
+          "fillGradient": 0,
           "gridPos": {
             "h": 8,
             "w": 12,
             "x": 12,
             "y": 6
           },
-          "id": 278,
-          "links": [],
-          "options": {
-            "graph": {},
-            "legend": {
-              "calcs": [
-                "max"
-              ],
-              "displayMode": "table",
-              "placement": "right"
-            },
-            "tooltipOptions": {
-              "mode": "multi"
-            }
+          "hiddenSeries": false,
+          "id": 288,
+          "legend": {
+            "alignAsTable": true,
+            "avg": false,
+            "current": false,
+            "hideEmpty": true,
+            "hideZero": true,
+            "max": true,
+            "min": false,
+            "rightSide": true,
+            "show": true,
+            "sideWidth": null,
+            "sort": "max",
+            "sortDesc": true,
+            "total": false,
+            "values": true
           },
+          "lines": true,
+          "linewidth": 1,
+          "links": [],
+          "nullPointMode": "null as zero",
+          "options": {
+            "alertThreshold": true
+          },
+          "percentage": false,
           "pluginVersion": "7.5.11",
+          "pointradius": 5,
+          "points": false,
+          "renderer": "flot",
+          "seriesOverrides": [],
+          "spaceLength": 10,
+          "stack": false,
+          "steppedLine": false,
           "targets": [
             {
               "exemplar": true,
@@ -5917,10 +5943,47 @@
               "refId": "B"
             }
           ],
+          "thresholds": [],
           "timeFrom": null,
+          "timeRegions": [],
           "timeShift": null,
           "title": "Vector Index Estimated Memory Usage",
-          "type": "timeseries"
+          "tooltip": {
+            "shared": true,
+            "sort": 0,
+            "value_type": "individual"
+          },
+          "type": "graph",
+          "xaxis": {
+            "buckets": null,
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": []
+          },
+          "yaxes": [
+            {
+              "decimals": 0,
+              "format": "bytes",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": "0",
+              "show": true
+            },
+            {
+              "format": "ops",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": "0",
+              "show": false
+            }
+          ],
+          "yaxis": {
+            "align": false,
+            "alignLevel": null
+          }
         },
         {
           "aliasColors": {},
