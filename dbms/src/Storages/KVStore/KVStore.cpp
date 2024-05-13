@@ -497,6 +497,7 @@ void KVStore::reportThreadAllocInfo(std::string_view v, ReportThreadAllocateInfo
 
 void KVStore::reportThreadAllocBatch(std::string_view v, ReportThreadAllocateInfoBatch data)
 {
+    // Initialize Context before RaftStoreProxyRunner, if it should be changed into non-static method.
     JointThreadInfoJeallocMap::reportThreadAllocBatchForKVStore(v, data);
 }
 
