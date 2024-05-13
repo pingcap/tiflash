@@ -497,7 +497,7 @@ void KVStore::reportThreadAllocInfo(std::string_view v, ReportThreadAllocateInfo
 
 void KVStore::reportThreadAllocBatch(std::string_view v, ReportThreadAllocateInfoBatch data)
 {
-    // Initialize Context before RaftStoreProxyRunner, if it should be changed into non-static method.
+    // Currently, ProxyRunner is destroyed after global_context. So we can not always access KVStore here.
     JointThreadInfoJeallocMap::reportThreadAllocBatchForKVStore(v, data);
 }
 
