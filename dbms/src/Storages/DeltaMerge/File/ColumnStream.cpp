@@ -32,7 +32,7 @@ public:
 
         size_t size = sizeof(MarkInCompressedFile) * reader.dmfile->getPacks();
         auto mark_guard = S3::S3RandomAccessFile::setReadFileInfo({
-            .size = reader.dmfile->getReadFileSize(col_id, reader.dmfile->colMarkFileName(file_name_base)),
+            .size = reader.dmfile->getReadFileSize(col_id, colMarkFileName(file_name_base)),
             .scan_context = reader.scan_context,
         });
 
@@ -41,7 +41,7 @@ public:
             // the col_mark is merged into metav2
             return loadColMarkFromMetav2To(res, size);
         }
-        else if (unlikely(!reader.dmfile->configuration))
+        else if (unlikely(!reader.dmfile->getConfiguration()))
         {
             // without checksum, simply load the raw bytes from file
             return loadRawColMarkTo(res, size);
@@ -94,17 +94,15 @@ private:
     }
     MarksInCompressedFilePtr loadColMarkFromMetav2To(const MarksInCompressedFilePtr & res, size_t bytes_size)
     {
-        auto info = reader.dmfile->merged_sub_file_infos.find(reader.dmfile->colMarkFileName(file_name_base));
-        if (info == reader.dmfile->merged_sub_file_infos.end())
+        const auto * dmfile_meta = typeid_cast<const DMFileMetaV2 *>(reader.dmfile->meta.get());
+        auto info = dmfile_meta->merged_sub_file_infos.find(colMarkFileName(file_name_base));
+        if (info == dmfile_meta->merged_sub_file_infos.end())
         {
-            throw Exception(
-                ErrorCodes::LOGICAL_ERROR,
-                "Unknown mark file {}",
-                reader.dmfile->colMarkFileName(file_name_base));
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Unknown mark file {}", colMarkFileName(file_name_base));
         }
 
-        auto file_path = reader.dmfile->mergedPath(info->second.number);
-        auto encryp_path = reader.dmfile->encryptionMergedPath(info->second.number);
+        auto file_path = dmfile_meta->mergedPath(info->second.number);
+        auto encryp_path = dmfile_meta->encryptionMergedPath(info->second.number);
         auto offset = info->second.offset;
         auto data_size = info->second.size;
 
@@ -131,8 +129,8 @@ private:
             std::move(raw_data),
             reader.dmfile->colDataPath(file_name_base),
             reader.dmfile->getConfiguration()->getChecksumFrameLength(),
-            reader.dmfile->configuration->getChecksumAlgorithm(),
-            reader.dmfile->configuration->getChecksumFrameLength());
+            reader.dmfile->getConfiguration()->getChecksumAlgorithm(),
+            reader.dmfile->getConfiguration()->getChecksumFrameLength());
         buf->readBig(reinterpret_cast<char *>(res->data()), bytes_size);
         return res;
     }
@@ -147,7 +145,7 @@ std::unique_ptr<CompressedSeekableReaderBuffer> ColumnReadStream::buildColDataRe
     const ReadLimiterPtr & read_limiter,
     const LoggerPtr & log) const
 {
-    assert(!reader.dmfile->configuration);
+    assert(!reader.dmfile->getConfiguration());
 
     DMFile::ColDataType type = DMFile::ColDataType::Elements;
     if (endsWith(file_name_base, ".null"))
@@ -219,8 +217,8 @@ std::unique_ptr<CompressedSeekableReaderBuffer> ColumnReadStream::buildColDataRe
         reader.dmfile->encryptionDataPath(file_name_base),
         reader.dmfile->getConfiguration()->getChecksumFrameLength(),
         read_limiter,
-        reader.dmfile->configuration->getChecksumAlgorithm(),
-        reader.dmfile->configuration->getChecksumFrameLength());
+        reader.dmfile->getConfiguration()->getChecksumAlgorithm(),
+        reader.dmfile->getConfiguration()->getChecksumFrameLength());
 }
 
 std::unique_ptr<CompressedSeekableReaderBuffer> ColumnReadStream::buildColDataReadBuffByMetaV2(
@@ -229,8 +227,9 @@ std::unique_ptr<CompressedSeekableReaderBuffer> ColumnReadStream::buildColDataRe
     const String & file_name_base,
     const ReadLimiterPtr & read_limiter)
 {
-    auto info = reader.dmfile->merged_sub_file_infos.find(reader.dmfile->colDataFileName(file_name_base));
-    if (info == reader.dmfile->merged_sub_file_infos.end())
+    const auto * dmfile_meta = typeid_cast<const DMFileMetaV2 *>(reader.dmfile->meta.get());
+    auto info = dmfile_meta->merged_sub_file_infos.find(colDataFileName(file_name_base));
+    if (info == dmfile_meta->merged_sub_file_infos.end())
     {
         return CompressedReadBufferFromFileBuilder::build(
             reader.file_provider,
@@ -238,13 +237,13 @@ std::unique_ptr<CompressedSeekableReaderBuffer> ColumnReadStream::buildColDataRe
             reader.dmfile->encryptionDataPath(file_name_base),
             reader.dmfile->getConfiguration()->getChecksumFrameLength(),
             read_limiter,
-            reader.dmfile->configuration->getChecksumAlgorithm(),
-            reader.dmfile->configuration->getChecksumFrameLength());
+            reader.dmfile->getConfiguration()->getChecksumAlgorithm(),
+            reader.dmfile->getConfiguration()->getChecksumFrameLength());
     }
 
-    assert(info != reader.dmfile->merged_sub_file_infos.end());
-    auto file_path = reader.dmfile->mergedPath(info->second.number);
-    auto encryp_path = reader.dmfile->encryptionMergedPath(info->second.number);
+    assert(info != dmfile_meta->merged_sub_file_infos.end());
+    auto file_path = dmfile_meta->mergedPath(info->second.number);
+    auto encryp_path = dmfile_meta->encryptionMergedPath(info->second.number);
     auto offset = info->second.offset;
     auto size = info->second.size;
 
@@ -268,8 +267,8 @@ std::unique_ptr<CompressedSeekableReaderBuffer> ColumnReadStream::buildColDataRe
         std::move(raw_data),
         file_path,
         reader.dmfile->getConfiguration()->getChecksumFrameLength(),
-        reader.dmfile->configuration->getChecksumAlgorithm(),
-        reader.dmfile->configuration->getChecksumFrameLength());
+        reader.dmfile->getConfiguration()->getChecksumAlgorithm(),
+        reader.dmfile->getConfiguration()->getChecksumFrameLength());
 }
 
 ColumnReadStream::ColumnReadStream(
@@ -296,7 +295,7 @@ ColumnReadStream::ColumnReadStream(
         return;
 
     auto data_guard = S3::S3RandomAccessFile::setReadFileInfo({
-        .size = reader.dmfile->getReadFileSize(col_id, reader.dmfile->colDataFileName(file_name_base)),
+        .size = reader.dmfile->getReadFileSize(col_id, colDataFileName(file_name_base)),
         .scan_context = reader.scan_context,
     });
 
@@ -305,7 +304,7 @@ ColumnReadStream::ColumnReadStream(
     {
         buf = buildColDataReadBuffByMetaV2(reader, col_id, file_name_base, read_limiter);
     }
-    else if (unlikely(!reader.dmfile->configuration)) // checksum not enabled
+    else if (unlikely(!reader.dmfile->getConfiguration())) // checksum not enabled
     {
         buf = buildColDataReadBuffWithoutChecksum(
             reader,

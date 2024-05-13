@@ -145,7 +145,7 @@ public:
         auto page_id = dm_file->pageId();
         auto parent_path = dm_file->parentPath();
         auto file_provider = dbContext().getFileProvider();
-        return DMFile::restore(file_provider, file_id, page_id, parent_path, DMFile::ReadMetaMode::all());
+        return DMFile::restore(file_provider, file_id, page_id, parent_path, DMFileMeta::ReadMode::all());
     }
 
     DMContext & dmContext() { return *dm_context; }
@@ -192,13 +192,14 @@ void DMFileMetaV2Test::checkMergedFile(
     const std::set<String> & not_uploaded_files,
     std::set<String> & checked_fnames)
 {
-    auto merged_filename = dmfile->mergedPath(merged_number);
+    const auto * dmfile_mata = typeid_cast<const DMFileMetaV2 *>(dmfile->meta.get());
+    auto merged_filename = dmfile_mata->mergedPath(merged_number);
     auto merged_file = PosixRandomAccessFile::create(merged_filename);
 
     for (const auto & fname : not_uploaded_files)
     {
-        auto itr = dmfile->merged_sub_file_infos.find(fname);
-        ASSERT_NE(itr, dmfile->merged_sub_file_infos.end());
+        auto itr = dmfile_mata->merged_sub_file_infos.find(fname);
+        ASSERT_NE(itr, dmfile_mata->merged_sub_file_infos.end());
         if (itr->second.number != merged_number)
         {
             continue;
@@ -549,7 +550,7 @@ try
         dmfile2->fileId(),
         dmfile2->pageId(),
         dmfile2->parentPath(),
-        DMFile::ReadMetaMode::all());
+        DMFileMeta::ReadMode::all());
     LOG_DEBUG(Logger::get(), "check dmfile1 dmfile3");
     check_meta(dmfile1, dmfile3);
 
@@ -613,7 +614,7 @@ try
             dmfile->fileId(),
             dmfile->pageId(),
             dmfile->parentPath(),
-            DMFile::ReadMetaMode::all());
+            DMFileMeta::ReadMode::all());
         FAIL(); // Should not come here.
     }
     catch (const DB::Exception & e)

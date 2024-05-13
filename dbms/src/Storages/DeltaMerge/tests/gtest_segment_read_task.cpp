@@ -279,43 +279,47 @@ public:
 
     static void checkDMFile(const DMFilePtr & dmfile_wn, const DMFilePtr & dmfile_cn)
     {
-        ASSERT_EQ(dmfile_wn->file_id, dmfile_cn->file_id);
+        ASSERT_EQ(dmfile_wn->fileId(), dmfile_cn->fileId());
         ASSERT_EQ(dmfile_wn->page_id, dmfile_cn->page_id);
-        ASSERT_EQ(dmfile_wn->parent_path, dmfile_cn->parent_path);
-        ASSERT_EQ(dmfile_wn->status, dmfile_cn->status);
-        ASSERT_EQ(dmfile_wn->version, dmfile_cn->version);
+        ASSERT_EQ(dmfile_wn->parentPath(), dmfile_cn->parentPath());
+        ASSERT_EQ(dmfile_wn->getStatus(), dmfile_cn->getStatus());
+        ASSERT_EQ(dmfile_wn->getStatus(), dmfile_cn->getStatus());
 
-        ASSERT_TRUE(dmfile_wn->configuration.has_value());
-        ASSERT_TRUE(dmfile_cn->configuration.has_value());
+        ASSERT_TRUE(dmfile_wn->getConfiguration().has_value());
+        ASSERT_TRUE(dmfile_cn->getConfiguration().has_value());
         ASSERT_EQ(
-            dmfile_wn->configuration->getChecksumFrameLength(),
-            dmfile_cn->configuration->getChecksumFrameLength());
+            dmfile_wn->getConfiguration()->getChecksumFrameLength(),
+            dmfile_cn->getConfiguration()->getChecksumFrameLength());
         ASSERT_EQ(
-            dmfile_wn->configuration->getChecksumHeaderLength(),
-            dmfile_cn->configuration->getChecksumHeaderLength());
-        ASSERT_EQ(dmfile_wn->configuration->getChecksumAlgorithm(), dmfile_cn->configuration->getChecksumAlgorithm());
-        ASSERT_EQ(dmfile_wn->configuration->getEmbeddedChecksum(), dmfile_cn->configuration->getEmbeddedChecksum());
-        ASSERT_EQ(dmfile_wn->configuration->getDebugInfo(), dmfile_cn->configuration->getDebugInfo());
+            dmfile_wn->getConfiguration()->getChecksumHeaderLength(),
+            dmfile_cn->getConfiguration()->getChecksumHeaderLength());
+        ASSERT_EQ(
+            dmfile_wn->getConfiguration()->getChecksumAlgorithm(),
+            dmfile_cn->getConfiguration()->getChecksumAlgorithm());
+        ASSERT_EQ(
+            dmfile_wn->getConfiguration()->getEmbeddedChecksum(),
+            dmfile_cn->getConfiguration()->getEmbeddedChecksum());
+        ASSERT_EQ(dmfile_wn->getConfiguration()->getDebugInfo(), dmfile_cn->getConfiguration()->getDebugInfo());
 
-        ASSERT_EQ(dmfile_wn->pack_stats.size(), dmfile_cn->pack_stats.size());
-        for (size_t j = 0; j < dmfile_wn->pack_stats.size(); j++)
+        ASSERT_EQ(dmfile_wn->getPackStats().size(), dmfile_cn->getPackStats().size());
+        for (size_t j = 0; j < dmfile_wn->getPackStats().size(); j++)
         {
-            ASSERT_EQ(dmfile_wn->pack_stats[j].toDebugString(), dmfile_cn->pack_stats[j].toDebugString());
+            ASSERT_EQ(dmfile_wn->getPackStats()[j].toDebugString(), dmfile_cn->getPackStats()[j].toDebugString());
         }
 
-        ASSERT_EQ(dmfile_wn->pack_properties.property_size(), dmfile_cn->pack_properties.property_size());
-        for (int j = 0; j < dmfile_wn->pack_properties.property_size(); j++)
+        ASSERT_EQ(dmfile_wn->getPackProperties().property_size(), dmfile_cn->getPackProperties().property_size());
+        for (int j = 0; j < dmfile_wn->getPackProperties().property_size(); j++)
         {
             ASSERT_EQ(
-                dmfile_wn->pack_properties.property(j).ShortDebugString(),
-                dmfile_cn->pack_properties.property(j).ShortDebugString());
+                dmfile_wn->getPackProperties().property(j).ShortDebugString(),
+                dmfile_cn->getPackProperties().property(j).ShortDebugString());
         }
 
-        ASSERT_EQ(dmfile_wn->column_stats.size(), dmfile_cn->column_stats.size());
-        for (const auto & [col_id, col_stat_wn] : dmfile_wn->column_stats)
+        ASSERT_EQ(dmfile_wn->getColumnStats().size(), dmfile_cn->getColumnStats().size());
+        for (const auto & [col_id, col_stat_wn] : dmfile_wn->getColumnStats())
         {
-            auto itr = dmfile_cn->column_stats.find(col_id);
-            ASSERT_NE(itr, dmfile_cn->column_stats.end());
+            auto itr = dmfile_cn->getColumnStats().find(col_id);
+            ASSERT_NE(itr, dmfile_cn->getColumnStats().end());
             const auto & col_stat_cn = itr->second;
             WriteBufferFromOwnString wb_wn;
             col_stat_wn.serializeToBuffer(wb_wn);
@@ -324,22 +328,23 @@ public:
             ASSERT_EQ(wb_wn.str(), wb_cn.str());
         }
 
-        ASSERT_EQ(dmfile_wn->column_indices, dmfile_cn->column_indices);
+        ASSERT_EQ(dmfile_wn->getColumnIndices(), dmfile_cn->getColumnIndices());
 
-        ASSERT_EQ(dmfile_wn->merged_files.size(), dmfile_cn->merged_files.size());
-        for (size_t j = 0; j < dmfile_wn->merged_files.size(); j++)
+        const auto * dmfile_mata_wn = typeid_cast<const DMFileMetaV2 *>(dmfile_wn->meta.get());
+        ASSERT_EQ(dmfile_mata_wn->merged_files.size(), dmfile_mata_wn->merged_files.size());
+        for (auto merged_file : dmfile_mata_wn->merged_files)
         {
-            const auto & merged_file_wn = dmfile_wn->merged_files[j];
-            const auto & merged_file_cn = dmfile_cn->merged_files[j];
+            const auto & merged_file_wn = merged_file;
+            const auto & merged_file_cn = merged_file;
             ASSERT_EQ(merged_file_wn.number, merged_file_cn.number);
             ASSERT_EQ(merged_file_wn.size, merged_file_cn.size);
         }
 
-        ASSERT_EQ(dmfile_wn->merged_sub_file_infos.size(), dmfile_cn->merged_sub_file_infos.size());
-        for (const auto & [fname, sub_files_wn] : dmfile_wn->merged_sub_file_infos)
+        ASSERT_EQ(dmfile_mata_wn->merged_sub_file_infos.size(), dmfile_mata_wn->merged_sub_file_infos.size());
+        for (const auto & [fname, sub_files_wn] : dmfile_mata_wn->merged_sub_file_infos)
         {
-            auto itr = dmfile_cn->merged_sub_file_infos.find(fname);
-            ASSERT_NE(itr, dmfile_cn->merged_sub_file_infos.end());
+            auto itr = dmfile_mata_wn->merged_sub_file_infos.find(fname);
+            ASSERT_NE(itr, dmfile_mata_wn->merged_sub_file_infos.end());
             const auto & sub_files_cn = itr->second;
             WriteBufferFromOwnString wb_wn;
             sub_files_wn.serializeToBuffer(wb_wn);

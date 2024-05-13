@@ -1353,7 +1353,7 @@ public:
         return {RowKeyRange::fromHandleRange(range), {file_id}};
     }
 
-    SegmentTestMode mode;
+    SegmentTestMode mode{};
 };
 
 TEST_P(SegmentTest2, FlushDuringSplitAndMerge)
@@ -1381,7 +1381,7 @@ try
                 auto file_id = file_ids[0];
                 auto file_parent_path = delegate.getDTFilePath(file_id);
                 auto file
-                    = DMFile::restore(file_provider, file_id, file_id, file_parent_path, DMFile::ReadMetaMode::all());
+                    = DMFile::restore(file_provider, file_id, file_id, file_parent_path, DMFileMeta::ReadMode::all());
                 WriteBatches wbs(*storage_pool);
                 wbs.data.putExternal(file_id, 0);
                 wbs.writeLogAndData();
@@ -1839,7 +1839,7 @@ try
             ASSERT_EQ(Poco::File(file_path + "/property").exists(), false);
         }
         // clear PackProperties to force it to calculate from scratch
-        dmfile->getPackProperties().clear_property();
+        dmfile->clearPackProperties();
         ASSERT_EQ(dmfile->getPackProperties().property_size(), 0);
         // caculate StableProperty
         ASSERT_EQ(stable->isStablePropertyCached(), false);

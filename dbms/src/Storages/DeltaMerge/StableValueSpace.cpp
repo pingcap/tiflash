@@ -149,7 +149,7 @@ StableValueSpacePtr StableValueSpace::restore(DMContext & dm_context, ReadBuffer
             RUNTIME_CHECK(file_oid.keyspace_id == dm_context.keyspace_id);
             RUNTIME_CHECK(file_oid.table_id == dm_context.physical_table_id);
             auto prepared = remote_data_store->prepareDMFile(file_oid, page_id);
-            dmfile = prepared->restore(DMFile::ReadMetaMode::all());
+            dmfile = prepared->restore(DMFileMeta::ReadMode::all());
             // gc only begin to run after restore so we can safely call addRemoteDTFileIfNotExists here
             path_delegate.addRemoteDTFileIfNotExists(local_external_id, dmfile->getBytesOnDisk());
         }
@@ -162,7 +162,7 @@ StableValueSpacePtr StableValueSpace::restore(DMContext & dm_context, ReadBuffer
                 file_id,
                 page_id,
                 file_parent_path,
-                DMFile::ReadMetaMode::all(),
+                DMFileMeta::ReadMode::all(),
                 dm_context.keyspace_id);
             auto res = path_delegate.updateDTFileSize(file_id, dmfile->getBytesOnDisk());
             RUNTIME_CHECK_MSG(res, "update dt file size failed, path={}", dmfile->path());
@@ -227,7 +227,7 @@ StableValueSpacePtr StableValueSpace::createFromCheckpoint( //
         };
         wbs.data.putRemoteExternal(new_local_page_id, loc);
         auto prepared = remote_data_store->prepareDMFile(file_oid, new_local_page_id);
-        auto dmfile = prepared->restore(DMFile::ReadMetaMode::all());
+        auto dmfile = prepared->restore(DMFileMeta::ReadMode::all());
         wbs.writeLogAndData();
         // new_local_page_id is already applied to PageDirectory so we can safely call addRemoteDTFileIfNotExists here
         delegator.addRemoteDTFileIfNotExists(new_local_page_id, dmfile->getBytesOnDisk());
@@ -339,7 +339,7 @@ void StableValueSpace::calculateStableProperty(
         // `new_pack_properties` is the temporary container for the calculation result of this StableValueSpace's pack property.
         // Note that `pack_stats` stores the stat of the whole underlying DTFile,
         // and this Segment may share this DTFile with other Segment. So `pack_stats` may be larger than `new_pack_properties`.
-        DMFile::PackProperties new_pack_properties;
+        DMFileMeta::PackProperties new_pack_properties;
         if (pack_properties.property_size() == 0)
         {
             LOG_DEBUG(log, "Try to calculate StableProperty from column data for stable {}", id);
