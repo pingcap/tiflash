@@ -1764,7 +1764,8 @@ DM::GlobalStoragePoolPtr Context::getGlobalStoragePool() const
 void Context::initializeJointThreadInfoJeallocMap()
 {
     auto lock = getLock();
-    if(!shared->joint_memory_allocation_map) {
+    if (!shared->joint_memory_allocation_map)
+    {
         shared->joint_memory_allocation_map = std::make_shared<JointThreadInfoJeallocMap>();
     }
 }
