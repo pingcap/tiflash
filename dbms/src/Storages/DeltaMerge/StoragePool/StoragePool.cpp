@@ -412,7 +412,7 @@ void StoragePool::forceTransformMetaV2toV3()
         {
             throw Exception(
                 ErrorCodes::LOGICAL_ERROR,
-                "Can't transform meta from V2 to V3, [page_id={}] {}", //
+                "Can't transform meta from V2 to V3, page_id={} {}", //
                 page_transform.page_id,
                 page_transform_entry.toDebugString());
         }
@@ -559,15 +559,15 @@ PageStorageRunMode StoragePool::restore()
         {
             LOG_INFO(
                 logger,
-                "Current pool.meta transform to V3 begin [table_id={}] [pages_before_transform={}]",
+                "Current pool.meta transform to V3 begin, table_id={} pages_before_transform={}",
                 table_id,
                 meta_remain_pages);
             forceTransformMetaV2toV3();
             const auto & meta_remain_pages_after_transform = meta_storage_v2->getNumberOfPages();
             LOG_INFO(
                 logger,
-                "Current pool.meta transform to V3 finished [table_id={}] [done={}] [pages_before_transform={}], "
-                "[pages_after_transform={}]", //
+                "Current pool.meta transform to V3 finished, table_id={} done={} pages_before_transform={} "
+                "pages_after_transform={}", //
                 table_id,
                 meta_remain_pages_after_transform == 0,
                 meta_remain_pages,
@@ -575,22 +575,22 @@ PageStorageRunMode StoragePool::restore()
         }
         else
         {
-            LOG_INFO(logger, "Current pool.meta transform already done before restored [table_id={}] ", table_id);
+            LOG_INFO(logger, "Current pool.meta transform already done before restored, table_id={}", table_id);
         }
 
         if (const auto & data_remain_pages = data_storage_v2->getNumberOfPages(); data_remain_pages != 0)
         {
             LOG_INFO(
                 logger,
-                "Current pool.data transform to V3 begin [table_id={}] [pages_before_transform={}]",
+                "Current pool.data transform to V3 begin, table_id={} pages_before_transform={}",
                 table_id,
                 data_remain_pages);
             forceTransformDataV2toV3();
             const auto & data_remain_pages_after_transform = data_storage_v2->getNumberOfPages();
             LOG_INFO(
                 logger,
-                "Current pool.data transform to V3 finished [table_id={}] [done={}] [pages_before_transform={}], "
-                "[pages_after_transform={}]", //
+                "Current pool.data transform to V3 finished, table_id={} done={} pages_before_transform={} "
+                "pages_after_transform={}", //
                 table_id,
                 data_remain_pages_after_transform == 0,
                 data_remain_pages,
@@ -598,7 +598,7 @@ PageStorageRunMode StoragePool::restore()
         }
         else
         {
-            LOG_INFO(logger, "Current pool.data transform already done before restored [table_id={}]", table_id);
+            LOG_INFO(logger, "Current pool.data transform already done before restored, table_id={}", table_id);
         }
 
         // Though all the pages may have been transformed into PageStoage V3 format, we still need
@@ -619,7 +619,7 @@ PageStorageRunMode StoragePool::restore()
         {
             LOG_INFO(
                 logger,
-                "Current pagestorage change from {} to {} [table_id={}]",
+                "Current pagestorage change from {} to {}, table_id={}",
                 magic_enum::enum_name(PageStorageRunMode::MIX_MODE),
                 magic_enum::enum_name(PageStorageRunMode::ONLY_V3),
                 table_id);
