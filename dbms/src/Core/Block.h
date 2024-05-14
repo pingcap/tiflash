@@ -18,13 +18,12 @@
 #include <Core/ColumnWithTypeAndName.h>
 #include <Core/ColumnsWithTypeAndName.h>
 #include <Core/NamesAndTypes.h>
+#include <Storages/DeltaMerge/Index/RSResult.h>
 
 #include <initializer_list>
 #include <list>
 #include <map>
 #include <vector>
-
-
 namespace DB
 {
 /** Container for set of columns for bunch of rows in memory.
@@ -52,6 +51,7 @@ private:
     // Only used for calculating MVCC-bitmap-filter.
     ColumnPtr segment_row_id_col;
 
+    DM::RSResult rs_result = DM::RSResult::Unknown; // Hack for PoC
 public:
     BlockInfo info;
 
@@ -162,6 +162,8 @@ public:
     UInt64 startOffset() const { return start_offset; }
     void setSegmentRowIdCol(ColumnPtr && col) { segment_row_id_col = col; }
     ColumnPtr segmentRowIdCol() const { return segment_row_id_col; }
+    void setRSResult(DM::RSResult res) { rs_result = res; }
+    DM::RSResult rsResult() const { return rs_result; }
 
 private:
     void eraseImpl(size_t position);

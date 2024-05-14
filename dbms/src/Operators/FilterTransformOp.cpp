@@ -25,10 +25,16 @@ OperatorStatus FilterTransformOp::transformImpl(Block & block)
     }
 
     if (likely(block))
+    {
+        RUNTIME_CHECK(block.rsResult() == DM::RSResult::All || block.rsResult() == DM::RSResult::Some);
+        if (block.rsResult() == DM::RSResult::All)
+        {
+            return OperatorStatus::HAS_OUTPUT;
+        }
         return filter_transform_action.transform(block, /*res_filter=*/filter_ignored, /*return_filter=*/false)
             ? OperatorStatus::HAS_OUTPUT
             : OperatorStatus::NEED_INPUT;
-
+    }
     return OperatorStatus::HAS_OUTPUT;
 }
 
