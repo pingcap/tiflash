@@ -1085,6 +1085,14 @@ int Server::main(const std::vector<std::string> & /*args*/)
       *  settings, available functions, data types, aggregate functions, databases...
       */
     global_context = Context::createGlobal();
+    SCOPE_EXIT({
+        if (!proxy_conf.is_proxy_runnable)
+            return;
+
+        LOG_INFO(log, "Unlink tiflash_instance_wrap.tmt");
+        // Reset the `tiflash_instance_wrap.tmt` before `global_context` get released, or it will be a dangling pointer
+        tiflash_instance_wrap.tmt = nullptr;
+    });
     global_context->setApplicationType(Context::ApplicationType::SERVER);
     global_context->getSharedContextDisagg()->disaggregated_mode = disaggregated_mode;
     global_context->getSharedContextDisagg()->use_autoscaler = use_autoscaler;
