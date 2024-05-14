@@ -497,7 +497,7 @@ void KVStore::reportThreadAllocInfo(std::string_view v, ReportThreadAllocateInfo
 
 void KVStore::reportThreadAllocBatch(std::string_view v, ReportThreadAllocateInfoBatch data)
 {
-    JointThreadInfoJeallocMap::reportThreadAllocBatchForKVStore(v, data);
+    joint_memory_allocation_map->reportThreadAllocBatchForKVStore(v, data);
 }
 
 } // namespace DB
