@@ -1090,6 +1090,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             return;
 
         LOG_INFO(log, "Unlink tiflash_instance_wrap.tmt");
+        // Reset the `tiflash_instance_wrap.tmt` before `global_context` get released, or it will be a dangling pointer
         tiflash_instance_wrap.tmt = nullptr;
     });
     global_context->setApplicationType(Context::ApplicationType::SERVER);
