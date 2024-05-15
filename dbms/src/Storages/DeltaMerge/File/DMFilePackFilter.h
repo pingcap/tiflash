@@ -71,7 +71,10 @@ public:
     const RSResults & getHandleRes() const { return handle_res; }
     const RSResults & getPackResConst() const { return pack_res; }
     RSResults & getPackRes() { return pack_res; }
-    size_t countUsefulPack() const;
+
+    // None, Some, All
+    std::tuple<UInt64, UInt64, UInt64> countPackRes() const;
+    UInt64 countUsePack() const;
 
     Handle getMinHandle(size_t pack_id)
     {

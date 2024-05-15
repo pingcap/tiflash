@@ -43,6 +43,9 @@ public:
 
     std::atomic<uint64_t> total_dmfile_rough_set_index_check_time_ns{0};
     std::atomic<uint64_t> total_dmfile_read_time_ns{0};
+    std::atomic<uint64_t> rs_pack_filter_none{0};
+    std::atomic<uint64_t> rs_pack_filter_some{0};
+    std::atomic<uint64_t> rs_pack_filter_all{0};
 
     std::atomic<uint64_t> total_remote_region_num{0};
     std::atomic<uint64_t> total_local_region_num{0};
@@ -75,11 +78,6 @@ public:
     std::atomic<uint64_t> mvcc_output_rows{0};
     std::atomic<uint64_t> late_materialization_skip_rows{0};
 
-    // TODO: filter
-    std::atomic<uint64_t> pack_filter_none{0};
-    std::atomic<uint64_t> pack_filter_some{0};
-    std::atomic<uint64_t> pack_filter_all{0};
-
     // Learner read
     std::atomic<uint64_t> learner_read_ns{0};
     // Create snapshot from PageStorage
@@ -103,6 +101,7 @@ public:
         dmfile_lm_filter_scanned_rows = tiflash_scan_context_pb.dmfile_lm_filter_scanned_rows();
         dmfile_lm_filter_skipped_rows = tiflash_scan_context_pb.dmfile_lm_filter_skipped_rows();
         total_dmfile_rough_set_index_check_time_ns = tiflash_scan_context_pb.total_dmfile_rs_check_ms() * 1000000;
+        // TODO: rs_pack_filter_none, rs_pack_filter_some, rs_pack_filter_all
         total_dmfile_read_time_ns = tiflash_scan_context_pb.total_dmfile_read_ms() * 1000000;
         create_snapshot_time_ns = tiflash_scan_context_pb.total_build_snapshot_ms() * 1000000;
         total_remote_region_num = tiflash_scan_context_pb.remote_regions();
@@ -145,6 +144,7 @@ public:
         tiflash_scan_context_pb.set_dmfile_lm_filter_scanned_rows(dmfile_lm_filter_scanned_rows);
         tiflash_scan_context_pb.set_dmfile_lm_filter_skipped_rows(dmfile_lm_filter_skipped_rows);
         tiflash_scan_context_pb.set_total_dmfile_rs_check_ms(total_dmfile_rough_set_index_check_time_ns / 1000000);
+        // TODO: pack_filter_none, pack_filter_some, pack_filter_all
         tiflash_scan_context_pb.set_total_dmfile_read_ms(total_dmfile_read_time_ns / 1000000);
         tiflash_scan_context_pb.set_total_build_snapshot_ms(create_snapshot_time_ns / 1000000);
         tiflash_scan_context_pb.set_remote_regions(total_remote_region_num);
@@ -187,6 +187,9 @@ public:
         dmfile_lm_filter_scanned_rows += other.dmfile_lm_filter_scanned_rows;
         dmfile_lm_filter_skipped_rows += other.dmfile_lm_filter_skipped_rows;
         total_dmfile_rough_set_index_check_time_ns += other.total_dmfile_rough_set_index_check_time_ns;
+        rs_pack_filter_none += other.rs_pack_filter_none;
+        rs_pack_filter_some += other.rs_pack_filter_some;
+        rs_pack_filter_all += other.rs_pack_filter_all;
         total_dmfile_read_time_ns += other.total_dmfile_read_time_ns;
 
         total_local_region_num += other.total_local_region_num;
@@ -232,6 +235,7 @@ public:
         dmfile_lm_filter_scanned_rows += other.dmfile_lm_filter_scanned_rows();
         dmfile_lm_filter_skipped_rows += other.dmfile_lm_filter_skipped_rows();
         total_dmfile_rough_set_index_check_time_ns += other.total_dmfile_rs_check_ms() * 1000000;
+        // TODO: rs_pack_filter_none, rs_pack_filter_some, rs_pack_filter_all
         total_dmfile_read_time_ns += other.total_dmfile_read_ms() * 1000000;
         create_snapshot_time_ns += other.total_build_snapshot_ms() * 1000000;
         total_local_region_num += other.local_regions();

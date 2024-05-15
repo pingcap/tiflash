@@ -401,7 +401,7 @@ void StableValueSpace::calculateStableProperty(
         const bool use_new_pack_properties = pack_properties.property_size() == 0;
         if (use_new_pack_properties)
         {
-            const size_t use_packs_count = pack_filter.countUsefulPack();
+            const size_t use_packs_count = pack_filter.countUsePack();
 
             RUNTIME_CHECK_MSG(
                 static_cast<size_t>(new_pack_properties.property_size()) == use_packs_count,

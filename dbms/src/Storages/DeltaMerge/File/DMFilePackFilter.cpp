@@ -51,7 +51,7 @@ void DMFilePackFilter::init()
 
     /// Check packs by handle_res
     pack_res = handle_res;
-    auto after_pk = countUsefulPack();
+    auto after_pk = countUsePack();
 
     /// Check packs by read_packs
     if (read_packs)
@@ -61,7 +61,7 @@ void DMFilePackFilter::init()
             pack_res[i] = pack_res[i] && (read_packs->contains(i) ? RSResult::Some : RSResult::None);
         }
     }
-    auto after_read_packs = countUsefulPack();
+    auto after_read_packs = countUsePack();
     ProfileEvents::increment(ProfileEvents::DMFileFilterAftPKAndPackSet, after_read_packs);
 
     /// Check packs by filter in where clause
@@ -82,8 +82,12 @@ void DMFilePackFilter::init()
             pack_res.begin(),
             [](RSResult a, RSResult b) { return a && b; });
     }
-    auto after_filter = countUsefulPack();
+    auto [none_count, some_count, all_count] = countPackRes();
+    auto after_filter = some_count + all_count;
     ProfileEvents::increment(ProfileEvents::DMFileFilterAftRoughSet, after_filter);
+    scan_context->rs_pack_filter_none += none_count;
+    scan_context->rs_pack_filter_some += some_count;
+    scan_context->rs_pack_filter_all += all_count;
 
     Float64 filter_rate = 0.0;
     if (after_read_packs != 0)
@@ -94,17 +98,45 @@ void DMFilePackFilter::init()
     LOG_DEBUG(
         log,
         "RSFilter exclude rate: {:.2f}, after_pk: {}, after_read_packs: {}, after_filter: {}, handle_ranges: {}"
-        ", read_packs: {}, pack_count: {}",
+        ", read_packs: {}, pack_count: {}, none_count: {}, some_count: {}, all_count: {}",
         ((after_read_packs == 0) ? std::numeric_limits<double>::quiet_NaN() : filter_rate),
         after_pk,
         after_read_packs,
         after_filter,
         toDebugString(rowkey_ranges),
         ((read_packs == nullptr) ? 0 : read_packs->size()),
-        pack_count);
+        pack_count,
+        none_count,
+        some_count,
+        all_count);
 }
 
-size_t DMFilePackFilter::countUsefulPack() const
+std::tuple<UInt64, UInt64, UInt64> DMFilePackFilter::countPackRes() const
+{
+    UInt64 none_count = 0;
+    UInt64 some_count = 0;
+    UInt64 all_count = 0;
+    for (auto res : pack_res)
+    {
+        switch (res)
+        {
+        case RSResult::None:
+            ++none_count;
+            break;
+        case RSResult::Some:
+            ++some_count;
+            break;
+        case RSResult::All:
+            ++all_count;
+            break;
+        default:
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "{} is invalid", magic_enum::enum_name(res));
+        }
+    }
+    return {none_count, some_count, all_count};
+}
+
+UInt64 DMFilePackFilter::countUsePack() const
 {
     return std::count_if(pack_res.cbegin(), pack_res.cend(), [](RSResult res) { return isUse(res); });
 }
