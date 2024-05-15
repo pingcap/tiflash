@@ -27,6 +27,11 @@
 #include <fmt/ranges.h>
 #include <gtest/gtest.h>
 
+namespace DB::FailPoints
+{
+extern const char force_set_dtfile_exist_when_acquire_id[];
+} // namespace DB::FailPoints
+
 namespace DB
 {
 using namespace tests;
@@ -692,30 +697,74 @@ try
 }
 CATCH
 
+TEST_F(PageStorageMixedTest, GetMaxIdAfterUpgraded)
+try
+{
+    const size_t buf_sz = 1024;
+    char c_buff[buf_sz] = {0};
+
+    const PageIdU64 max_data_page_id_allocated = (1 << 30) + 1;
+    const PageIdU64 max_meta_page_id_allocated = (1 << 28) + 1;
+    {
+        // Prepare a StoragePool with
+        // - 0 pages in "log" (must be 0)
+        // - some pages in "data" with `max_data_page_id_allocated`
+        // - some pages in "meta" with `max_meta_page_id_allocated`
+        {
+            WriteBatch batch;
+            ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
+            batch.putPage(1, 0, buff, buf_sz);
+            batch.putRefPage(2, 1);
+            ReadBufferPtr buff2 = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
+            batch.putPage(1 << 30, 0, buff2, buf_sz);
+            batch.putRefPage(max_data_page_id_allocated, 1 << 30);
+            storage_pool_v2->dataWriter()->write(std::move(batch), nullptr);
+        }
+        {
+            WriteBatch batch;
+            ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
+            batch.putPage(max_meta_page_id_allocated, 0, buff, buf_sz);
+            storage_pool_v2->metaWriter()->write(std::move(batch), nullptr);
+        }
+    }
+
+    // Mock that after upgraded, the run_mode is transformed to `ONLY_V3`
+    ASSERT_EQ(reloadMixedStoragePool(), PageStorageRunMode::ONLY_V3);
+
+    // Disable some failpoint to avoid it affect the allocated id
+    DB::FailPointHelper::disableFailPoint(DB::FailPoints::force_set_dtfile_exist_when_acquire_id);
+    SCOPE_EXIT({ DB::FailPointHelper::enableFailPoint(DB::FailPoints::force_set_dtfile_exist_when_acquire_id); });
+
+    // Allocate new id for "data" should be larger than `max_data_page_id_allocated`
+    auto d = storage_path_pool_v2->getStableDiskDelegator();
+    EXPECT_GT(storage_pool_mix->newDataPageIdForDTFile(d, "GetMaxIdAfterUpgraded"), max_data_page_id_allocated);
+
+    // Allocate new id for "meta" should be larger than `max_meta_page_id_allocated`
+    EXPECT_GT(storage_pool_mix->newMetaPageId(), max_meta_page_id_allocated);
+}
+CATCH
 
 TEST_F(PageStorageMixedTest, ReuseV2ID)
 try
 {
     const size_t buf_sz = 1024;
     char c_buff[buf_sz] = {0};
-
     {
-        WriteBatch batch;
-        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
-        batch.putPage(1, 0, buff, buf_sz);
-        page_writer_v2->write(std::move(batch), nullptr);
+        {
+            WriteBatch batch;
+            ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
+            batch.putPage(1, 0, buff, buf_sz);
+            page_writer_v2->write(std::move(batch), nullptr);
+        }
+        {
+            WriteBatch batch;
+            batch.delPage(1);
+            page_writer_v2->write(std::move(batch), nullptr);
+        }
     }
 
-    {
-        WriteBatch batch;
-        batch.delPage(1);
-        page_writer_v2->write(std::move(batch), nullptr);
-    }
-
-    {
-        ASSERT_EQ(reloadMixedStoragePool(), PageStorageRunMode::ONLY_V3);
-        ASSERT_EQ(storage_pool_mix->newLogPageId(), 1);
-    }
+    ASSERT_EQ(reloadMixedStoragePool(), PageStorageRunMode::ONLY_V3);
+    ASSERT_EQ(storage_pool_mix->newLogPageId(), 2);
 
     {
         WriteBatch batch;
@@ -730,10 +779,8 @@ try
         page_writer_mix->write(std::move(batch), nullptr);
     }
 
-    {
-        ASSERT_EQ(reloadMixedStoragePool(), PageStorageRunMode::ONLY_V3);
-        //        ASSERT_EQ(storage_pool_mix->newLogPageId(), 2); // max id for v3 will not be updated, ignore this check
-    }
+    ASSERT_EQ(reloadMixedStoragePool(), PageStorageRunMode::ONLY_V3);
+    //        ASSERT_EQ(storage_pool_mix->newLogPageId(), 2); // max id for v3 will not be updated, ignore this check
 }
 CATCH
 
