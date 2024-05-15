@@ -359,7 +359,7 @@ toV2ConcreteSnapshot(const DB::PageStorage::SnapshotPtr & ptr)
 void StoragePool::forceTransformDataV2toV3()
 {
     if (unlikely(run_mode != PageStorageRunMode::MIX_MODE))
-        throw Exception(fmt::format("Transform meta must run under mix mode [run_mode={}]", static_cast<Int32>(run_mode)));
+        throw Exception(fmt::format("Transform data must run under mix mode [run_mode={}]", static_cast<Int32>(run_mode)));
     assert(data_storage_v2 != nullptr);
     assert(data_storage_v3 != nullptr);
     auto data_transform_storage_writer = std::make_shared<PageWriter>(run_mode, StorageType::Data, data_storage_v2, data_storage_v3, /*uni_ps_*/ nullptr);
@@ -493,7 +493,7 @@ PageStorageRunMode StoragePool::restore()
         }
         else
         {
-            LOG_INFO(logger, "Current pool.data transform already done before restored [table_id={}]", table_id);
+            LOG_INFO(logger, "Current pool.data transform already done before restored, table_id={}", table_id);
         }
 
         // Though all the pages may have been transformed into PageStoage V3 format, we still need
