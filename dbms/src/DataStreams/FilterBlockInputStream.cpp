@@ -63,8 +63,6 @@ Block FilterBlockInputStream::readImpl(FilterPtr & res_filter, bool return_filte
         if (!res)
             return res;
 
-        RUNTIME_CHECK(res.rsResult() == DM::RSResult::All || res.rsResult() == DM::RSResult::Some);
-
         if (res.rsResult() == DM::RSResult::All)
         {
             res_filter = nullptr;

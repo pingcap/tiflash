@@ -26,7 +26,6 @@ OperatorStatus FilterTransformOp::transformImpl(Block & block)
 
     if (likely(block))
     {
-        RUNTIME_CHECK(block.rsResult() == DM::RSResult::All || block.rsResult() == DM::RSResult::Some);
         if (block.rsResult() == DM::RSResult::All)
         {
             return OperatorStatus::HAS_OUTPUT;

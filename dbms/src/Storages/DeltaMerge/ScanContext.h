@@ -76,6 +76,10 @@ public:
     std::atomic<uint64_t> late_materialization_skip_rows{0};
 
     // TODO: filter
+    std::atomic<uint64_t> pack_filter_none{0};
+    std::atomic<uint64_t> pack_filter_some{0};
+    std::atomic<uint64_t> pack_filter_all{0};
+
     // Learner read
     std::atomic<uint64_t> learner_read_ns{0};
     // Create snapshot from PageStorage
