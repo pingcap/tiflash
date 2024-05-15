@@ -27,7 +27,7 @@ namespace DB
 JointThreadInfoJeallocMap::JointThreadInfoJeallocMap()
 {
     monitoring_thread = new std::thread([&]() {
-        setThreadName("ThreadMemoryTracer");
+        setThreadName("ThdMemTrace");
         while (true)
         {
             using namespace std::chrono_literals;
