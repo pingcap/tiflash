@@ -766,40 +766,40 @@ try
     char c_buff[buf_sz] = {0};
 
     {
+        // prepare "put 1" && "del 1"
+        {
+            WriteBatch batch;
+            ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
+            batch.putPage(1, 0, buff, buf_sz);
+            page_writer_v2->write(std::move(batch), nullptr);
+        }
+        {
+            WriteBatch batch;
+            batch.delPage(1);
+            page_writer_v2->write(std::move(batch), nullptr);
+        }
+    }
+
+    // All pages in v2 are removed, it run on V3 after restart
+    ASSERT_EQ(reloadMixedStoragePool(), PageStorageRunMode::ONLY_V3);
+    ASSERT_EQ(storage_pool_mix->newLogPageId(), 2); // new allocated page id won't reuse page 1
+
+    // Mock that some new pages are written
+    {
         WriteBatch batch;
         ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
-        batch.putPage(1, 0, buff, buf_sz);
-        page_writer_v2->write(std::move(batch), nullptr);
+        batch.putPage(2, 0, buff, buf_sz);
+        page_writer_mix->write(std::move(batch), nullptr);
     }
-
     {
         WriteBatch batch;
-        batch.delPage(1);
-        page_writer_v2->write(std::move(batch), nullptr);
-    }
-
-    {
-        ASSERT_EQ(reloadMixedStoragePool(), PageStorageRunMode::ONLY_V3);
-        ASSERT_EQ(storage_pool_mix->newLogPageId(), 1);
-    }
-
-    {
-        WriteBatch batch;
-        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
-        batch.putPage(1, 0, buff, buf_sz);
+        batch.delPage(2);
         page_writer_mix->write(std::move(batch), nullptr);
     }
 
-    {
-        WriteBatch batch;
-        batch.delPage(1);
-        page_writer_mix->write(std::move(batch), nullptr);
-    }
-
-    {
-        ASSERT_EQ(reloadMixedStoragePool(), PageStorageRunMode::ONLY_V3);
-        //        ASSERT_EQ(storage_pool_mix->newLogPageId(), 2); // max id for v3 will not be updated, ignore this check
-    }
+    // Mock restart
+    ASSERT_EQ(reloadMixedStoragePool(), PageStorageRunMode::ONLY_V3);
+    ASSERT_EQ(storage_pool_mix->newLogPageId(), 3);
 }
 CATCH
 
