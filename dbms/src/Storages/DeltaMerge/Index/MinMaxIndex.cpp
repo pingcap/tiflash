@@ -493,6 +493,7 @@ RSResults MinMaxIndex::checkNullableCmpImpl(
         auto min = minmaxes_data[i * 2];
         auto max = minmaxes_data[i * 2 + 1];
         results[i - start_pack] = Op::template check<T>(value, type, min, max);
+        results[i - start_pack] = results[i - start_pack] && ((*has_null_marks)[i] != 0 ? RSResult::Some : RSResult::All);
     }
     return results;
 }
