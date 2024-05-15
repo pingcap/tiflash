@@ -14,7 +14,12 @@
 
 #include <Interpreters/Context.h>
 #include <Poco/Logger.h>
+<<<<<<< HEAD
 #include <Storages/DeltaMerge/StoragePool.h>
+=======
+#include <Storages/DeltaMerge/StoragePool/StoragePool.h>
+#include <Storages/Page/PageDefinesBase.h>
+>>>>>>> 961f9dded3 (Storage: Fix page_id being mis-reuse when upgrade from cluster < 6.5 (#9041))
 #include <Storages/Page/PageStorage.h>
 #include <Storages/Page/WriteBatchImpl.h>
 #include <Storages/Page/WriteBatchWrapperImpl.h>
@@ -26,6 +31,11 @@
 #include <common/logger_useful.h>
 #include <fmt/ranges.h>
 #include <gtest/gtest.h>
+
+namespace DB::FailPoints
+{
+extern const char force_set_dtfile_exist_when_acquire_id[];
+} // namespace DB::FailPoints
 
 namespace DB
 {
@@ -692,6 +702,52 @@ try
 }
 CATCH
 
+TEST_F(PageStorageMixedTest, GetMaxIdAfterUpgraded)
+try
+{
+    const size_t buf_sz = 1024;
+    char c_buff[buf_sz] = {0};
+
+    const PageIdU64 max_data_page_id_allocated = (1 << 30) + 1;
+    const PageIdU64 max_meta_page_id_allocated = (1 << 28) + 1;
+    {
+        // Prepare a StoragePool with
+        // - 0 pages in "log" (must be 0)
+        // - some pages in "data" with `max_data_page_id_allocated`
+        // - some pages in "meta" with `max_meta_page_id_allocated`
+        {
+            WriteBatch batch;
+            ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
+            batch.putPage(1, 0, buff, buf_sz);
+            batch.putRefPage(2, 1);
+            ReadBufferPtr buff2 = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
+            batch.putPage(1 << 30, 0, buff2, buf_sz);
+            batch.putRefPage(max_data_page_id_allocated, 1 << 30);
+            storage_pool_v2->dataWriter()->write(std::move(batch), nullptr);
+        }
+        {
+            WriteBatch batch;
+            ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
+            batch.putPage(max_meta_page_id_allocated, 0, buff, buf_sz);
+            storage_pool_v2->metaWriter()->write(std::move(batch), nullptr);
+        }
+    }
+
+    // Mock that after upgraded, the run_mode is transformed to `ONLY_V3`
+    ASSERT_EQ(reloadMixedStoragePool(), PageStorageRunMode::ONLY_V3);
+
+    // Disable some failpoint to avoid it affect the allocated id
+    DB::FailPointHelper::disableFailPoint(DB::FailPoints::force_set_dtfile_exist_when_acquire_id);
+    SCOPE_EXIT({ DB::FailPointHelper::enableFailPoint(DB::FailPoints::force_set_dtfile_exist_when_acquire_id); });
+
+    // Allocate new id for "data" should be larger than `max_data_page_id_allocated`
+    auto d = storage_path_pool_v2->getStableDiskDelegator();
+    EXPECT_GT(storage_pool_mix->newDataPageIdForDTFile(d, "GetMaxIdAfterUpgraded"), max_data_page_id_allocated);
+
+    // Allocate new id for "meta" should be larger than `max_meta_page_id_allocated`
+    EXPECT_GT(storage_pool_mix->newMetaPageId(), max_meta_page_id_allocated);
+}
+CATCH
 
 TEST_F(PageStorageMixedTest, ReuseV2ID)
 try
@@ -700,40 +756,40 @@ try
     char c_buff[buf_sz] = {0};
 
     {
+        // prepare "put 1" && "del 1"
+        {
+            WriteBatch batch;
+            ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
+            batch.putPage(1, 0, buff, buf_sz);
+            page_writer_v2->write(std::move(batch), nullptr);
+        }
+        {
+            WriteBatch batch;
+            batch.delPage(1);
+            page_writer_v2->write(std::move(batch), nullptr);
+        }
+    }
+
+    // All pages in v2 are removed, it run on V3 after restart
+    ASSERT_EQ(reloadMixedStoragePool(), PageStorageRunMode::ONLY_V3);
+    ASSERT_EQ(storage_pool_mix->newLogPageId(), 2); // new allocated page id won't reuse page 1
+
+    // Mock that some new pages are written
+    {
         WriteBatch batch;
         ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
-        batch.putPage(1, 0, buff, buf_sz);
-        page_writer_v2->write(std::move(batch), nullptr);
+        batch.putPage(2, 0, buff, buf_sz);
+        page_writer_mix->write(std::move(batch), nullptr);
     }
-
     {
         WriteBatch batch;
-        batch.delPage(1);
-        page_writer_v2->write(std::move(batch), nullptr);
-    }
-
-    {
-        ASSERT_EQ(reloadMixedStoragePool(), PageStorageRunMode::ONLY_V3);
-        ASSERT_EQ(storage_pool_mix->newLogPageId(), 1);
-    }
-
-    {
-        WriteBatch batch;
-        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
-        batch.putPage(1, 0, buff, buf_sz);
+        batch.delPage(2);
         page_writer_mix->write(std::move(batch), nullptr);
     }
 
-    {
-        WriteBatch batch;
-        batch.delPage(1);
-        page_writer_mix->write(std::move(batch), nullptr);
-    }
-
-    {
-        ASSERT_EQ(reloadMixedStoragePool(), PageStorageRunMode::ONLY_V3);
-        //        ASSERT_EQ(storage_pool_mix->newLogPageId(), 2); // max id for v3 will not be updated, ignore this check
-    }
+    // Mock restart
+    ASSERT_EQ(reloadMixedStoragePool(), PageStorageRunMode::ONLY_V3);
+    ASSERT_EQ(storage_pool_mix->newLogPageId(), 3);
 }
 CATCH
 
