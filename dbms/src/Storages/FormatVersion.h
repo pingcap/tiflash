@@ -133,8 +133,8 @@ inline static const StorageFormatVersion STORAGE_FORMAT_V5 = StorageFormatVersio
 
 inline static const StorageFormatVersion STORAGE_FORMAT_V6 = StorageFormatVersion{
     .segment = SegmentFormat::V2,
-    .dm_file = DMFileFormat::V3, // diff
-    .stable = StableFormat::V2,
+    .dm_file = DMFileFormat::V3,
+    .stable = StableFormat::V2, // diff
     .delta = DeltaFormat::V3,
     .page = PageFormat::V3,
     .identifier = 5,

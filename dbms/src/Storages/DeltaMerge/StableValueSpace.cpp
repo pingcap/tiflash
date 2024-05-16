@@ -29,7 +29,6 @@
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
 #include <Storages/PathPool.h>
 
-#include "common/types.h"
 
 namespace DB
 {
