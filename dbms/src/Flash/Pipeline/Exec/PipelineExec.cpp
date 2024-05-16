@@ -24,52 +24,44 @@ extern const char random_pipeline_model_execute_prefix_failpoint[];
 extern const char random_pipeline_model_execute_suffix_failpoint[];
 } // namespace FailPoints
 
-#define HANDLE_OP_STATUS(op, op_status, expect_status)                                                         \
-    switch (op_status)                                                                                         \
-    {                                                                                                          \
-    /* For the expected status, it will not return here, */                                                    \
-    /* but instead return control to the macro caller, */                                                      \
-    /* who will continue to call the next operator. */                                                         \
-    case (expect_status):                                                                                      \
-        break;                                                                                                 \
-    /* For the io status, the operator needs to be filled in io_op for later use in executeIO. */              \
-    case OperatorStatus::IO_IN:                                                                                \
-    case OperatorStatus::IO_OUT:                                                                               \
-        fillIOOp((op).get());                                                                                  \
-        return (op_status);                                                                                    \
-    /* For the waiting status, the operator needs to be filled in awaitable for later use in await. */         \
-    case OperatorStatus::WAITING:                                                                              \
-        fillAwaitable((op).get());                                                                             \
-        return (op_status);                                                                                    \
-    /* For the wait for notify status, the operator needs to be filled in awaitable for later use in await. */ \
-    case OperatorStatus::WAIT_FOR_NOTIFY:                                                                      \
-        fillWaitingForNotifyOp((op).get());                                                                    \
-        return (op_status);                                                                                    \
-    /* For other status, an immediate return is required. */                                                   \
-    default:                                                                                                   \
-        return (op_status);                                                                                    \
+#define HANDLE_OP_STATUS(op, op_status, expect_status)                                                 \
+    switch (op_status)                                                                                 \
+    {                                                                                                  \
+    /* For the expected status, it will not return here, */                                            \
+    /* but instead return control to the macro caller, */                                              \
+    /* who will continue to call the next operator. */                                                 \
+    case (expect_status):                                                                              \
+        break;                                                                                         \
+    /* For the io status, the operator needs to be filled in io_op for later use in executeIO. */      \
+    case OperatorStatus::IO_IN:                                                                        \
+    case OperatorStatus::IO_OUT:                                                                       \
+        fillIOOp((op).get());                                                                          \
+        return (op_status);                                                                            \
+    /* For the waiting status, the operator needs to be filled in awaitable for later use in await. */ \
+    case OperatorStatus::WAITING:                                                                      \
+        fillAwaitable((op).get());                                                                     \
+        return (op_status);                                                                            \
+    /* For unexpected status, an immediate return is required. */                                      \
+    default:                                                                                           \
+        return (op_status);                                                                            \
     }
 
-#define HANDLE_LAST_OP_STATUS(op, op_status)                                                                   \
-    assert(op);                                                                                                \
-    switch (op_status)                                                                                         \
-    {                                                                                                          \
-    /* For the io status, the operator needs to be filled in io_op for later use in executeIO. */              \
-    case OperatorStatus::IO_IN:                                                                                \
-    case OperatorStatus::IO_OUT:                                                                               \
-        fillIOOp((op).get());                                                                                  \
-        return (op_status);                                                                                    \
-    /* For the waiting status, the operator needs to be filled in awaitable for later use in await. */         \
-    case OperatorStatus::WAITING:                                                                              \
-        fillAwaitable((op).get());                                                                             \
-        return (op_status);                                                                                    \
-    /* For the wait for notify status, the operator needs to be filled in awaitable for later use in await. */ \
-    case OperatorStatus::WAIT_FOR_NOTIFY:                                                                      \
-        fillWaitingForNotifyOp((op).get());                                                                    \
-        return (op_status);                                                                                    \
-    /* For the last operator, the status will always be returned. */                                           \
-    default:                                                                                                   \
-        return (op_status);                                                                                    \
+#define HANDLE_LAST_OP_STATUS(op, op_status)                                                           \
+    assert(op);                                                                                        \
+    switch (op_status)                                                                                 \
+    {                                                                                                  \
+    /* For the io status, the operator needs to be filled in io_op for later use in executeIO. */      \
+    case OperatorStatus::IO_IN:                                                                        \
+    case OperatorStatus::IO_OUT:                                                                       \
+        fillIOOp((op).get());                                                                          \
+        return (op_status);                                                                            \
+    /* For the waiting status, the operator needs to be filled in awaitable for later use in await. */ \
+    case OperatorStatus::WAITING:                                                                      \
+        fillAwaitable((op).get());                                                                     \
+        return (op_status);                                                                            \
+    /* For the last operator, the status will always be returned. */                                   \
+    default:                                                                                           \
+        return (op_status);                                                                            \
     }
 
 PipelineExec::PipelineExec(SourceOpPtr && source_op_, TransformOps && transform_ops_, SinkOpPtr && sink_op_)
@@ -97,13 +89,6 @@ void PipelineExec::executeSuffix()
     source_op->operateSuffix();
 }
 
-void PipelineExec::notify()
-{
-    assert(waiting_for_notify);
-    waiting_for_notify->notify();
-    waiting_for_notify = nullptr;
-}
-
 OperatorStatus PipelineExec::execute()
 {
     auto op_status = executeImpl();
@@ -122,10 +107,6 @@ OperatorStatus PipelineExec::execute()
  */
 OperatorStatus PipelineExec::executeImpl()
 {
-    assert(!awaitable);
-    assert(!io_op);
-    assert(!waiting_for_notify);
-
     Block block;
     size_t start_transform_op_index = 0;
     auto op_status = fetchBlock(block, start_transform_op_index);
@@ -175,25 +156,12 @@ OperatorStatus PipelineExec::executeIO()
 }
 OperatorStatus PipelineExec::executeIOImpl()
 {
-    assert(!waiting_for_notify);
-    assert(!awaitable);
     assert(io_op);
     auto op_status = io_op->executeIO();
-    switch (op_status)
-    {
-    case OperatorStatus::IO_IN:
-    case OperatorStatus::IO_OUT:
-        return op_status;
-    case OperatorStatus::WAITING:
+    if (op_status == OperatorStatus::WAITING)
         fillAwaitable(io_op);
-        break;
-    case OperatorStatus::WAIT_FOR_NOTIFY:
-        fillWaitingForNotifyOp(io_op);
-        break;
-    default:
-        break;
-    }
-    io_op = nullptr;
+    if (op_status != OperatorStatus::IO_IN && op_status != OperatorStatus::IO_OUT)
+        io_op = nullptr;
     return op_status;
 }
 
@@ -209,25 +177,12 @@ OperatorStatus PipelineExec::await()
 }
 OperatorStatus PipelineExec::awaitImpl()
 {
-    assert(!waiting_for_notify);
-    assert(!io_op);
     assert(awaitable);
     auto op_status = awaitable->await();
-    switch (op_status)
-    {
-    case OperatorStatus::WAITING:
-        return op_status;
-    case OperatorStatus::IO_IN:
-    case OperatorStatus::IO_OUT:
+    if (op_status == OperatorStatus::IO_IN || op_status == OperatorStatus::IO_OUT)
         fillIOOp(awaitable);
-        break;
-    case OperatorStatus::WAIT_FOR_NOTIFY:
-        fillWaitingForNotifyOp(awaitable);
-        break;
-    default:
-        break;
-    }
-    awaitable = nullptr;
+    if (op_status != OperatorStatus::WAITING)
+        awaitable = nullptr;
     return op_status;
 }
 
