@@ -161,4 +161,9 @@ BaseRuntimeStatistics PipelineExecutor::getRuntimeStatistics() const
     }
     return runtime_statistics;
 }
+
+String PipelineExecutor::getExtraJsonInfo() const
+{
+    return exec_context.getQueryProfileInfo().toJson();
+}
 } // namespace DB

@@ -55,6 +55,8 @@ public:
 
     void setCompileTimestamp(const Timestamp & start_timestamp, const Timestamp & end_timestamp);
 
+    void setExtraInfo(const String & extra_info_);
+
     tipb::SelectResponse genExecutionSummaryResponse();
 
     tipb::TiFlashExecutionInfo genTiFlashExecutionInfo();
@@ -93,5 +95,8 @@ private:
     RU cpu_ru = 0;
     RU read_ru = 0;
     Int64 memory_peak = 0;
+
+    // extra
+    String extra_info = "{}";
 };
 } // namespace DB

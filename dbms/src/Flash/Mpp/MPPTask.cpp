@@ -594,7 +594,7 @@ void MPPTask::runImpl()
         LOG_DEBUG(log, "mpp finish with request unit: cpu={} read={}", cpu_ru, read_ru);
         GET_METRIC(tiflash_compute_request_unit, type_mpp).Increment(cpu_ru + read_ru);
         mpp_task_statistics.setRU(cpu_ru, read_ru);
-
+        mpp_task_statistics.setExtraInfo(query_executor_holder->getExtraJsonInfo());
         mpp_task_statistics.collectRuntimeStatistics();
 
         auto runtime_statistics = query_executor_holder->getRuntimeStatistics();
