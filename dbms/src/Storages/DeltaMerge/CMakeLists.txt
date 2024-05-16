@@ -17,6 +17,7 @@ add_subdirectory(File/dtpb)
 include(${TiFlash_SOURCE_DIR}/cmake/dbms_glob_sources.cmake)
 
 add_subdirectory(./Remote/Proto)
+add_subdirectory(./Proto)
 
 add_headers_and_sources(delta_merge .)
 add_headers_and_sources(delta_merge ./BitmapFilter)
@@ -33,7 +34,7 @@ add_headers_and_sources(delta_merge ./Decode)
 add_headers_and_sources(delta_merge ./StoragePool)
 
 add_library(delta_merge ${delta_merge_headers} ${delta_merge_sources})
-target_link_libraries(delta_merge PRIVATE dbms page)
+target_link_libraries(delta_merge PRIVATE dbms page DeltaMergeProto)
 
 add_subdirectory(workload)
 

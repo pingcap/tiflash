@@ -47,6 +47,7 @@ namespace StableFormat
 using Version = Int64;
 
 inline static constexpr Version V1 = 1;
+inline static constexpr Version V2 = 2; // Meta using protobuf
 } // namespace StableFormat
 
 namespace DeltaFormat
@@ -130,6 +131,15 @@ inline static const StorageFormatVersion STORAGE_FORMAT_V5 = StorageFormatVersio
     .identifier = 5,
 };
 
+inline static const StorageFormatVersion STORAGE_FORMAT_V6 = StorageFormatVersion{
+    .segment = SegmentFormat::V2,
+    .dm_file = DMFileFormat::V3, // diff
+    .stable = StableFormat::V2,
+    .delta = DeltaFormat::V3,
+    .page = PageFormat::V3,
+    .identifier = 5,
+};
+
 // STORAGE_FORMAT_V100 is used for S3 only
 inline static const StorageFormatVersion STORAGE_FORMAT_V100 = StorageFormatVersion{
     .segment = SegmentFormat::V2,
@@ -140,7 +150,7 @@ inline static const StorageFormatVersion STORAGE_FORMAT_V100 = StorageFormatVers
     .identifier = 100,
 };
 
-inline StorageFormatVersion STORAGE_FORMAT_CURRENT = STORAGE_FORMAT_V5;
+inline StorageFormatVersion STORAGE_FORMAT_CURRENT = STORAGE_FORMAT_V6;
 
 inline const StorageFormatVersion & toStorageFormat(UInt64 setting)
 {

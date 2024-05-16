@@ -29,6 +29,8 @@
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
 #include <Storages/PathPool.h>
 
+#include "common/types.h"
+
 namespace DB
 {
 namespace ErrorCodes
@@ -82,31 +84,99 @@ void StableValueSpace::saveMeta(WriteBatchWrapper & meta_wb)
 {
     MemoryWriteBuffer buf(0, 8192);
     // The method must call `buf.count()` to get the last seralized size before `buf.tryGetReadBuffer`
-    auto data_size = saveMeta(buf);
+    auto data_size = serializeMetaToBuf(buf);
     meta_wb.putPage(id, 0, buf.tryGetReadBuffer(), data_size);
 }
 
-UInt64 StableValueSpace::saveMeta(WriteBuffer & buf) const
+UInt64 StableValueSpace::serializeMetaToBuf(WriteBuffer & buf) const
 {
     writeIntBinary(STORAGE_FORMAT_CURRENT.stable, buf);
-    writeIntBinary(valid_rows, buf);
-    writeIntBinary(valid_bytes, buf);
-    writeIntBinary(static_cast<UInt64>(files.size()), buf);
-    for (const auto & f : files)
-        writeIntBinary(f->pageId(), buf);
+    if (STORAGE_FORMAT_CURRENT.stable == StableFormat::V1)
+    {
+        writeIntBinary(valid_rows, buf);
+        writeIntBinary(valid_bytes, buf);
+        writeIntBinary(static_cast<UInt64>(files.size()), buf);
+        for (const auto & f : files)
+            writeIntBinary(f->pageId(), buf);
+    }
+    else if (STORAGE_FORMAT_CURRENT.stable == StableFormat::V2)
+    {
+        PB::StableMeta meta;
+        meta.set_valid_rows(valid_rows);
+        meta.set_valid_bytes(valid_bytes);
+        meta.set_num_files(files.size());
+        for (const auto & f : files)
+            meta.add_file_ids(f->pageId());
 
+        auto data = meta.SerializeAsString();
+        writeStringBinary(data, buf);
+    }
+    else
+    {
+        throw Exception("Unexpected version: {}", STORAGE_FORMAT_CURRENT.stable);
+    }
     return buf.count();
 }
+
+namespace
+{
+PB::StableMeta derializeMetaV1FromBuf(ReadBuffer & buf)
+{
+    PB::StableMeta meta;
+    UInt64 valid_rows, valid_bytes, size;
+    readIntBinary(valid_rows, buf);
+    readIntBinary(valid_bytes, buf);
+    readIntBinary(size, buf);
+    meta.set_valid_rows(valid_rows);
+    meta.set_valid_bytes(valid_bytes);
+    meta.set_num_files(size);
+    for (size_t i = 0; i < size; ++i)
+    {
+        UInt64 page_id;
+        readIntBinary(page_id, buf);
+        meta.add_file_ids(page_id);
+    }
+    return meta;
+}
+
+PB::StableMeta derializeMetaV2FromBuf(ReadBuffer & buf)
+{
+    PB::StableMeta meta;
+    String data;
+    readStringBinary(data, buf);
+    RUNTIME_CHECK_MSG(meta.ParseFromString(data), "Failed to parse StableMeta from string: {}", data);
+    return meta;
+}
+
+PB::StableMeta derializeMetaFromBuf(ReadBuffer & buf)
+{
+    UInt64 version;
+    readIntBinary(version, buf);
+    if (STORAGE_FORMAT_CURRENT.stable == StableFormat::V1)
+    {
+        return derializeMetaV1FromBuf(buf);
+    }
+    else if (STORAGE_FORMAT_CURRENT.stable == StableFormat::V2)
+    {
+        return derializeMetaV2FromBuf(buf);
+    }
+    else
+    {
+        throw Exception("Unexpected version: {}", STORAGE_FORMAT_CURRENT.stable);
+    }
+}
+} // namespace
 
 std::string StableValueSpace::serializeMeta() const
 {
     WriteBufferFromOwnString wb;
-    saveMeta(wb);
+    serializeMetaToBuf(wb);
     return wb.releaseStr();
 }
 
 StableValueSpacePtr StableValueSpace::restore(DMContext & dm_context, PageIdU64 id)
 {
+    // read meta page
     Page page = dm_context.storage_pool->metaReader()->read(id); // not limit restore
     ReadBufferFromMemory buf(page.data.begin(), page.data.size());
     return StableValueSpace::restore(dm_context, buf, id);
@@ -116,20 +186,11 @@ StableValueSpacePtr StableValueSpace::restore(DMContext & dm_context, ReadBuffer
 {
     auto stable = std::make_shared<StableValueSpace>(id);
 
-    UInt64 version, valid_rows, valid_bytes, size;
-    readIntBinary(version, buf);
-    if (version != StableFormat::V1)
-        throw Exception("Unexpected version: " + DB::toString(version));
-
-    readIntBinary(valid_rows, buf);
-    readIntBinary(valid_bytes, buf);
-    readIntBinary(size, buf);
-    UInt64 page_id;
+    auto metapb = derializeMetaFromBuf(buf);
     auto remote_data_store = dm_context.global_context.getSharedContextDisagg()->remote_data_store;
-    for (size_t i = 0; i < size; ++i)
+    for (size_t i = 0; i < metapb.num_files(); ++i)
     {
-        readIntBinary(page_id, buf);
-
+        UInt64 page_id = metapb.file_ids(i);
         DMFilePtr dmfile;
         auto path_delegate = dm_context.path_pool->getStableDiskDelegator();
         if (remote_data_store)
@@ -170,8 +231,8 @@ StableValueSpacePtr StableValueSpace::restore(DMContext & dm_context, ReadBuffer
         stable->files.push_back(dmfile);
     }
 
-    stable->valid_rows = valid_rows;
-    stable->valid_bytes = valid_bytes;
+    stable->valid_rows = metapb.valid_rows();
+    stable->valid_bytes = metapb.valid_bytes();
 
     return stable;
 }
@@ -192,22 +253,11 @@ StableValueSpacePtr StableValueSpace::createFromCheckpoint( //
     ReadBufferFromMemory buf(page.data.begin(), page.data.size());
 
     // read stable meta info
-    UInt64 version, valid_rows, valid_bytes, size;
-    {
-        readIntBinary(version, buf);
-        if (version != StableFormat::V1)
-            throw Exception("Unexpected version: " + DB::toString(version));
-
-        readIntBinary(valid_rows, buf);
-        readIntBinary(valid_bytes, buf);
-        readIntBinary(size, buf);
-    }
-
+    auto metapb = derializeMetaFromBuf(buf);
     auto remote_data_store = dm_context.global_context.getSharedContextDisagg()->remote_data_store;
-    for (size_t i = 0; i < size; ++i)
+    for (size_t i = 0; i < metapb.num_files(); ++i)
     {
-        UInt64 page_id;
-        readIntBinary(page_id, buf);
+        UInt64 page_id = metapb.file_ids(i);
         auto full_page_id = UniversalPageIdFormat::toFullPageId(
             UniversalPageIdFormat::toFullPrefix(
                 dm_context.keyspace_id,
@@ -234,8 +284,8 @@ StableValueSpacePtr StableValueSpace::createFromCheckpoint( //
         stable->files.push_back(dmfile);
     }
 
-    stable->valid_rows = valid_rows;
-    stable->valid_bytes = valid_bytes;
+    stable->valid_rows = metapb.valid_rows();
+    stable->valid_bytes = metapb.valid_bytes();
 
     return stable;
 }
