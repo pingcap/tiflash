@@ -304,3 +304,15 @@ struct fmt::formatter<DB::DM::SegmentReadTaskPtr>
             t->read_snapshot->delta->getDeltaIndexEpoch());
     }
 };
+
+template <>
+struct fmt::formatter<DB::DM::SegmentReadTaskPoolPtr>
+{
+    static constexpr auto parse(format_parse_context & ctx) { return ctx.begin(); }
+
+    template <typename FormatContext>
+    auto format(const DB::DM::SegmentReadTaskPoolPtr & pool, FormatContext & ctx) const
+    {
+        return fmt::format_to(ctx.out(), "{}", pool->pool_id);
+    }
+};
