@@ -1121,7 +1121,10 @@ public:
     };
     void setProxyThreadMemory(MemoryAllocType type, const std::string & k, Int64 v);
     double getProxyThreadMemory(MemoryAllocType type, const std::string & k);
+    void setStorageThreadMemory(MemoryAllocType type, const std::string & k, Int64 v);
+    double getStorageThreadMemory(MemoryAllocType type, const std::string & k);
     void registerProxyThreadMemory(const std::string & k);
+    void registerStorageThreadMemory(const std::string & k);
 
 private:
     TiFlashMetrics();
@@ -1157,6 +1160,10 @@ private:
     prometheus::Family<prometheus::Gauge> * registered_raft_proxy_thread_memory_usage_family;
     std::shared_mutex proxy_thread_report_mtx;
     std::unordered_map<std::string, prometheus::Gauge *> registered_raft_proxy_thread_memory_usage_metrics;
+
+    prometheus::Family<prometheus::Gauge> * registered_storage_thread_memory_usage_family;
+    std::shared_mutex storage_thread_report_mtx;
+    std::unordered_map<std::string, prometheus::Gauge *> registered_storage_thread_memory_usage_metrics;
 
 public:
 #define MAKE_METRIC_MEMBER_M(family_name, help, type, ...) \

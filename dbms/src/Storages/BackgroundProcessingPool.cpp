@@ -21,6 +21,7 @@
 #include <Interpreters/Context.h>
 #include <Poco/Timespan.h>
 #include <Storages/BackgroundProcessingPool.h>
+#include <Storages/KVStore/FFI/ProxyFFI.h>
 #include <common/logger_useful.h>
 
 #include <ext/scope_guard.h>
@@ -215,11 +216,27 @@ void BackgroundProcessingPool::threadFunction(size_t thread_idx) noexcept
         setThreadName(name.data());
         is_background_thread = true;
         addThreadId(getTid());
+        auto ptrs = JointThreadInfoJeallocMap::getPtrs();
+        joint_memory_allocation_map->reportThreadAllocInfoForStorage(
+            thread_prefix,
+            ReportThreadAllocateInfoType::Reset,
+            0);
+        joint_memory_allocation_map->reportThreadAllocInfoForStorage(
+            thread_prefix,
+            ReportThreadAllocateInfoType::AllocPtr,
+            reinterpret_cast<uint64_t>(std::get<0>(ptrs)));
+        joint_memory_allocation_map->reportThreadAllocInfoForStorage(
+            thread_prefix,
+            ReportThreadAllocateInfoType::DeallocPtr,
+            reinterpret_cast<uint64_t>(std::get<1>(ptrs)));
     }
 
-    // SCOPE_EXIT({
-
-    // });
+    SCOPE_EXIT({
+        joint_memory_allocation_map->reportThreadAllocInfoForStorage(
+            thread_prefix,
+            ReportThreadAllocateInfoType::Remove,
+            0);
+    });
 
     // set up the thread local memory tracker
     auto memory_tracker = MemoryTracker::create(0, root_of_non_query_mem_trackers.get());

@@ -71,6 +71,7 @@ struct JointThreadInfoJeallocMap
     ~JointThreadInfoJeallocMap();
     /// Called by a bg thread as a routine work.
     void recordThreadAllocInfoForKVStore();
+    void recordThreadAllocInfoForStorage();
     void recordThreadAllocInfo();
     void stopThreadAllocInfo();
 
@@ -78,6 +79,8 @@ struct JointThreadInfoJeallocMap
     void reportThreadAllocInfoForKVStore(std::string_view, ReportThreadAllocateInfoType type, uint64_t value);
     /// For those threads with shorter life, we can only update in their call chain.
     static void reportThreadAllocBatchForKVStore(std::string_view, ReportThreadAllocateInfoBatch data);
+
+    void reportThreadAllocInfoForStorage(const std::string &, ReportThreadAllocateInfoType type, uint64_t value);
 
     // Call `thread.(de)allocatedp` for caller
     static std::tuple<uint64_t *, uint64_t *> getPtrs();
@@ -88,7 +91,7 @@ struct JointThreadInfoJeallocMap
 private:
     void reportThreadAllocInfoImpl(
         std::unordered_map<std::string, ThreadInfoJealloc> &,
-        std::string_view,
+        const std::string &,
         ReportThreadAllocateInfoType type,
         uint64_t value);
     bool is_terminated{false};
