@@ -137,7 +137,7 @@ inline static const StorageFormatVersion STORAGE_FORMAT_V6 = StorageFormatVersio
     .stable = StableFormat::V2, // diff
     .delta = DeltaFormat::V3,
     .page = PageFormat::V3,
-    .identifier = 5,
+    .identifier = 6,
 };
 
 // STORAGE_FORMAT_V100 is used for S3 only
