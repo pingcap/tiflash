@@ -188,11 +188,11 @@ ScanHashMapAfterProbeBlockInputStream::ScanHashMapAfterProbeBlockInputStream(
         }
     }
 
-    column_indices_right.reserve(parent.sample_block_without_keys.columns());
+    column_indices_right.reserve(parent.right_sample_block.columns());
     /// Add columns from the right-side table to the block.
-    for (size_t i = 0; i < parent.sample_block_without_keys.columns(); ++i)
+    for (size_t i = 0; i < parent.right_sample_block.columns(); ++i)
     {
-        const ColumnWithTypeAndName & src_column = parent.sample_block_without_keys.getByPosition(i);
+        const ColumnWithTypeAndName & src_column = parent.right_sample_block.getByPosition(i);
         if (parent.output_column_names_set_after_finalize.contains(src_column.name))
         {
             result_sample_block.insert(src_column.cloneEmpty());

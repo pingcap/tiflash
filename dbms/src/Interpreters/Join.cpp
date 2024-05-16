@@ -317,23 +317,23 @@ void Join::setBuildConcurrencyAndInitJoinPartition(size_t build_concurrency_)
     }
 }
 
-void Join::setSampleBlock(const Block & block)
+void Join::setRightSampleBlock(const Block & block)
 {
-    sample_block_without_keys = materializeBlock(block);
+    right_sample_block = materializeBlock(block);
 
-    /// Move from `sample_block_without_keys` key columns to `sample_block_only_keys`, keeping the order.
-    for (size_t pos = 0; pos < sample_block_without_keys.columns(); ++pos)
+    /// Copy from `right_sample_block` key columns to `right_sample_block_only_keys`, keeping the order.
+    for (size_t pos = 0; pos < right_sample_block.columns(); ++pos)
     {
-        const auto & name = sample_block_without_keys.getByPosition(pos).name;
+        const auto & name = right_sample_block.getByPosition(pos).name;
         if (key_names_right.end() != std::find(key_names_right.begin(), key_names_right.end(), name))
-            sample_block_only_keys.insert(sample_block_without_keys.getByPosition(pos));
+            right_sample_block_only_keys.insert(right_sample_block.getByPosition(pos));
     }
 
-    size_t num_columns_to_add = sample_block_without_keys.columns();
+    size_t num_columns_to_add = right_sample_block.columns();
 
     for (size_t i = 0; i < num_columns_to_add; ++i)
     {
-        auto & column = sample_block_without_keys.getByPosition(i);
+        auto & column = right_sample_block.getByPosition(i);
         if (!column.column)
             column.column = column.type->createColumn();
     }
@@ -341,10 +341,10 @@ void Join::setSampleBlock(const Block & block)
     /// In case of LEFT and FULL joins, if use_nulls, convert joined columns to Nullable.
     if (isLeftOuterJoin(kind) || kind == ASTTableJoin::Kind::Full)
         for (size_t i = 0; i < num_columns_to_add; ++i)
-            convertColumnToNullable(sample_block_without_keys.getByPosition(i));
+            convertColumnToNullable(right_sample_block.getByPosition(i));
 
     if (isLeftOuterSemiFamily(kind))
-        sample_block_without_keys.insert(ColumnWithTypeAndName(Join::match_helper_type, match_helper_name));
+        right_sample_block.insert(ColumnWithTypeAndName(Join::match_helper_type, match_helper_name));
 }
 
 std::shared_ptr<Join> Join::createRestoreJoin(size_t max_bytes_before_external_join_, size_t restore_partition_id)
@@ -416,7 +416,7 @@ void Join::initBuild(const Block & sample_block, size_t build_concurrency_)
     }
     for (auto & partition : partitions)
         partition->setResizeCallbackIfNeeded();
-    setSampleBlock(sample_block);
+    setRightSampleBlock(sample_block);
     build_side_marked_spilled_data.resize(build_concurrency);
 }
 
@@ -1012,7 +1012,7 @@ void Join::handleOtherConditions(Block & block, IColumn::Filter * anti_filter, I
     if (isLeftOuterJoin(kind))
     {
         /// for left join, convert right column to null if not joined
-        applyNullToNotMatchedRows(block, sample_block_without_keys, *filter_column);
+        applyNullToNotMatchedRows(block, right_sample_block, *filter_column);
         for (size_t i = 0; i < block.columns(); ++i)
             block.getByPosition(i).column = block.getByPosition(i).column->filter(row_filter, -1);
         return;
@@ -1121,7 +1121,7 @@ void Join::handleOtherConditionsForOneProbeRow(Block & block, ProbeProcessInfo &
             for (size_t i = 0; i < block.columns(); ++i)
                 block.getByPosition(i).column = block.getByPosition(i).column->cut(0, 1);
             filter.resize(1);
-            applyNullToNotMatchedRows(block, sample_block_without_keys, *filter_column);
+            applyNullToNotMatchedRows(block, right_sample_block, *filter_column);
         }
         else
         {
@@ -1214,9 +1214,9 @@ Block Join::doJoinBlockHash(ProbeProcessInfo & probe_process_info, const JoinBui
 
     /// Add new columns to the block.
     std::vector<size_t> num_columns_to_add;
-    for (size_t i = 0; i < sample_block_without_keys.columns(); ++i)
+    for (size_t i = 0; i < right_sample_block.columns(); ++i)
     {
-        if (probe_output_name_set.find(sample_block_without_keys.getByPosition(i).name) != probe_output_name_set.end())
+        if (probe_output_name_set.find(right_sample_block.getByPosition(i).name) != probe_output_name_set.end())
             num_columns_to_add.push_back(i);
     }
 
@@ -1229,10 +1229,10 @@ Block Join::doJoinBlockHash(ProbeProcessInfo & probe_process_info, const JoinBui
     size_t rows = probe_process_info.block.rows();
     for (const auto & index : num_columns_to_add)
     {
-        const ColumnWithTypeAndName & src_column = sample_block_without_keys.getByPosition(index);
+        const ColumnWithTypeAndName & src_column = right_sample_block.getByPosition(index);
         RUNTIME_CHECK_MSG(
             !block.has(src_column.name),
-            "block from probe side has a column with the same name: {} as a column in sample_block_without_keys",
+            "block from probe side has a column with the same name: {} as a column in right_sample_block",
             src_column.name);
 
         added_columns.push_back(src_column.column->cloneEmpty());
@@ -1274,12 +1274,12 @@ Block Join::doJoinBlockHash(ProbeProcessInfo & probe_process_info, const JoinBui
     /// For RIGHT_SEMI/RIGHT_ANTI join without other conditions, hash table has been marked already, just return empty build table header
     if (isRightSemiFamily(kind) && !use_row_flagged_hash_map)
     {
-        return sample_block_without_keys;
+        return right_sample_block;
     }
 
     for (size_t index = 0; index < num_columns_to_add.size(); ++index)
     {
-        const ColumnWithTypeAndName & sample_col = sample_block_without_keys.getByPosition(num_columns_to_add[index]);
+        const ColumnWithTypeAndName & sample_col = right_sample_block.getByPosition(num_columns_to_add[index]);
         block.insert(ColumnWithTypeAndName(std::move(added_columns[index]), sample_col.type, sample_col.name));
     }
     if (use_row_flagged_hash_map)
@@ -1333,7 +1333,7 @@ Block Join::doJoinBlockHash(ProbeProcessInfo & probe_process_info, const JoinBui
             if (isRightSemiFamily(kind))
             {
                 // Return build table header for right semi/anti join
-                block = sample_block_without_keys;
+                block = right_sample_block;
             }
             else if (kind == ASTTableJoin::Kind::RightOuter)
             {
@@ -1469,7 +1469,7 @@ Block Join::joinBlockCross(ProbeProcessInfo & probe_process_info) const
         non_equal_conditions.left_filter_column,
         kind,
         strictness,
-        sample_block_without_keys,
+        right_sample_block,
         has_other_condition ? output_columns_names_set_for_other_condition_after_finalize
                             : output_column_names_set_after_finalize,
         right_rows_to_be_added_when_matched_for_cross_join,
@@ -1497,7 +1497,7 @@ Block Join::joinBlockCross(ProbeProcessInfo & probe_process_info) const
 
 void Join::checkTypes(const Block & block) const
 {
-    checkTypesOfKeys(block, sample_block_only_keys);
+    checkTypesOfKeys(block, right_sample_block_only_keys);
 }
 
 Block Join::joinBlockNullAwareSemi(ProbeProcessInfo & probe_process_info) const
@@ -1575,14 +1575,14 @@ Block Join::joinBlockNullAwareSemiImpl(const ProbeProcessInfo & probe_process_in
     /// Add new columns to the block.
     std::vector<size_t> right_column_indices_to_add;
 
-    for (size_t i = 0; i < sample_block_without_keys.columns(); ++i)
+    for (size_t i = 0; i < right_sample_block.columns(); ++i)
     {
-        const auto & column = sample_block_without_keys.getByPosition(i);
+        const auto & column = right_sample_block.getByPosition(i);
         if (output_columns_names_set_for_other_condition_after_finalize.contains(column.name))
         {
             RUNTIME_CHECK_MSG(
                 !block.has(column.name),
-                "block from probe side has a column with the same name: {} as a column in sample_block_without_keys",
+                "block from probe side has a column with the same name: {} as a column in right_sample_block",
                 column.name);
             block.insert(column);
             right_column_indices_to_add.push_back(i);
@@ -1765,14 +1765,14 @@ Block Join::joinBlockSemiImpl(const JoinBuildInfo & join_build_info, const Probe
     /// Add new columns to the block.
     std::vector<size_t> right_column_indices_to_add;
 
-    for (size_t i = 0; i < sample_block_without_keys.columns(); ++i)
+    for (size_t i = 0; i < right_sample_block.columns(); ++i)
     {
-        const auto & column = sample_block_without_keys.getByPosition(i);
+        const auto & column = right_sample_block.getByPosition(i);
         if (probe_output_name_set.contains(column.name))
         {
             RUNTIME_CHECK_MSG(
                 !block.has(column.name),
-                "block from probe side has a column with the same name: {} as a column in sample_block_without_keys",
+                "block from probe side has a column with the same name: {} as a column in right_sample_block",
                 column.name);
             block.insert(column);
             right_column_indices_to_add.push_back(i);

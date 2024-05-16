@@ -106,7 +106,7 @@ void ProbeProcessInfo::prepareForCrossProbe(
     const String & filter_column,
     ASTTableJoin::Kind kind,
     ASTTableJoin::Strictness strictness,
-    const Block & sample_block_without_keys,
+    const Block & right_sample_block,
     const NameSet & output_column_names_set,
     size_t right_rows_to_be_added_when_matched_,
     CrossProbeMode cross_probe_mode_,
@@ -142,15 +142,15 @@ void ProbeProcessInfo::prepareForCrossProbe(
                 cross_join_data->left_column_index_in_left_block.push_back(i);
             }
         }
-        for (size_t i = 0; i < sample_block_without_keys.columns(); ++i)
+        for (size_t i = 0; i < right_sample_block.columns(); ++i)
         {
-            const ColumnWithTypeAndName & src_column = sample_block_without_keys.getByPosition(i);
+            const ColumnWithTypeAndName & src_column = right_sample_block.getByPosition(i);
             if (output_column_names_set.contains(src_column.name))
             {
                 RUNTIME_CHECK_MSG(
                     !cross_join_data->result_block_schema.has(src_column.name),
                     "block from probe side has a column with the same name: {} as a column in "
-                    "sample_block_without_keys",
+                    "right_sample_block",
                     src_column.name);
                 cross_join_data->result_block_schema.insert(src_column);
                 cross_join_data->right_column_index_in_right_block.push_back(i);
