@@ -40,8 +40,6 @@ protected:
 
     ExecTaskStatus awaitImpl() override { return runAwait(); }
 
-    void notifyImpl() override { runNotify(); }
-
     void finalizeImpl() override
     {
         runFinalize(profile_info.getCPUPendingTimeNs() + profile_info.getIOPendingTimeNs(), 0);
