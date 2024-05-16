@@ -100,8 +100,6 @@ protected:
     // Avoid allocating memory in `await` if possible.
     virtual ExecTaskStatus awaitImpl() { return ExecTaskStatus::RUNNING; }
 
-    virtual void notifyImpl() {}
-
     // Used to release held resources, just like `Event::finishImpl`.
     virtual void finalizeImpl() {}
 
