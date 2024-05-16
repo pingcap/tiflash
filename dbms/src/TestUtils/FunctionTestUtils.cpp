@@ -243,10 +243,13 @@ std::multiset<Row> columnsToRowSet(const ColumnsWithTypeAndName & cols)
     {
         auto const & expect_col = expected[i];
         auto const & actual_col = actual[i];
-        ASSERT_EQUAL(
-            expect_col.column->getName(),
-            actual_col.column->getName(),
-            fmt::format("Column {} name mismatch", i));
+        if (expect_col.column->getName() != actual_col.column->getName())
+        {
+            ASSERT_EQUAL(
+                expect_col.column->getName(),
+                actual_col.column->getName(),
+                fmt::format("Column {} name mismatch", i));
+        }
         ASSERT_EQUAL(expect_col.column->size(), actual_col.column->size(), fmt::format("Column {} size mismatch", i));
         auto type_eq = dataTypeEqual(expected[i].type, actual[i].type);
         if (!type_eq)

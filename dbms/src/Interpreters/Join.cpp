@@ -322,17 +322,11 @@ void Join::setSampleBlock(const Block & block)
     sample_block_without_keys = materializeBlock(block);
 
     /// Move from `sample_block_without_keys` key columns to `sample_block_only_keys`, keeping the order.
-    size_t pos = 0;
-    while (pos < sample_block_without_keys.columns())
+    for (size_t pos = 0; pos < sample_block_without_keys.columns(); ++pos)
     {
         const auto & name = sample_block_without_keys.getByPosition(pos).name;
         if (key_names_right.end() != std::find(key_names_right.begin(), key_names_right.end(), name))
-        {
             sample_block_only_keys.insert(sample_block_without_keys.getByPosition(pos));
-            sample_block_without_keys.erase(pos);
-        }
-        else
-            ++pos;
     }
 
     size_t num_columns_to_add = sample_block_without_keys.columns();
@@ -629,7 +623,6 @@ bool Join::isRestoreJoin() const
 
 void Join::insertFromBlockInternal(Block * stored_block, size_t stream_index)
 {
-    size_t keys_size = key_names_right.size();
     Block key_block;
     if (!runtime_filter_list.empty())
     {
@@ -685,28 +678,6 @@ void Join::insertFromBlockInternal(Block * stored_block, size_t stream_index)
     /// match the join filter will not insert to the maps
     recordFilteredRows(block, non_equal_conditions.right_filter_column, null_map_holder, null_map);
 
-    if (needScanHashMapAfterProbe(kind))
-    {
-        /** Move the key columns to the beginning of the block.
-          * This is where ScanHashMapAfterProbBlockInputStream will expect.
-          */
-        size_t key_num = 0;
-        for (const auto & name : key_names_right)
-        {
-            size_t pos = stored_block->getPositionByName(name);
-            ColumnWithTypeAndName col = stored_block->safeGetByPosition(pos);
-            stored_block->erase(pos);
-            stored_block->insert(key_num, std::move(col));
-            ++key_num;
-        }
-    }
-    else
-    {
-        /// Remove the key columns from stored_block, as they are not needed.
-        for (const auto & name : key_names_right)
-            stored_block->erase(stored_block->getPositionByName(name));
-    }
-
     size_t size = stored_block->columns();
 
     /// Rare case, when joined columns are constant. To avoid code bloat, simply materialize them.
@@ -720,7 +691,7 @@ void Join::insertFromBlockInternal(Block * stored_block, size_t stream_index)
     /// In case of LEFT and FULL joins, if use_nulls, convert joined columns to Nullable.
     if (isLeftOuterJoin(kind) || kind == ASTTableJoin::Kind::Full)
     {
-        for (size_t i = getFullness(kind) ? keys_size : 0; i < size; ++i)
+        for (size_t i = 0; i < size; ++i)
         {
             convertColumnToNullable(stored_block->getByPosition(i));
         }
@@ -1239,16 +1210,7 @@ Block Join::doJoinBlockHash(ProbeProcessInfo & probe_process_info, const JoinBui
             ++pos;
     }
 
-    size_t keys_size = key_names_left.size();
     size_t existing_columns = block.columns();
-
-    /** For LEFT/INNER JOIN, the saved blocks do not contain keys.
-      * For FULL/RIGHT/RIGHT_SEMI/RIGHT_ANTI_SEMI JOIN, the saved blocks contain keys;
-      *  but they will not be used at this stage of joining (and will be in `ScanHashMapAfterProbe`), and they need to be skipped.
-      */
-    size_t num_columns_to_skip = 0;
-    if (needScanHashMapAfterProbe(kind))
-        num_columns_to_skip = keys_size;
 
     /// Add new columns to the block.
     std::vector<size_t> num_columns_to_add;
@@ -1279,7 +1241,7 @@ Block Join::doJoinBlockHash(ProbeProcessInfo & probe_process_info, const JoinBui
             // todo figure out more accurate `rows`
             added_columns.back()->reserve(rows);
         }
-        right_indexes.push_back(num_columns_to_skip + index);
+        right_indexes.push_back(index);
     }
 
     bool use_row_flagged_hash_map = useRowFlaggedHashMap(kind, has_other_condition);
@@ -2584,7 +2546,7 @@ void Join::finalize(const Names & parent_require)
     }
     for (const auto & name_and_type : output_columns)
     {
-        if (required_names_set.find(name_and_type.name) != required_names_set.end())
+        if (required_names_set.contains(name_and_type.name))
         {
             output_columns_after_finalize.push_back(name_and_type);
             output_column_names_set_after_finalize.insert(name_and_type.name);
@@ -2596,10 +2558,9 @@ void Join::finalize(const Names & parent_require)
         updated_require = parent_require;
     else
     {
-        for (const auto & name : required_names_set)
-            if (name != match_helper_name)
-                updated_require.push_back(name);
         required_names_set.erase(match_helper_name);
+        for (const auto & name : required_names_set)
+            updated_require.push_back(name);
     }
     if (!non_equal_conditions.null_aware_eq_cond_name.empty())
     {
@@ -2622,6 +2583,16 @@ void Join::finalize(const Names & parent_require)
         non_equal_conditions.other_cond_expr->finalize(updated_require, keep_used_input_columns);
         updated_require = non_equal_conditions.other_cond_expr->getRequiredColumns();
     }
+
+    if (non_equal_conditions.other_cond_expr != nullptr || non_equal_conditions.null_aware_eq_cond_expr != nullptr)
+    {
+        output_columns_names_set_for_other_condition_after_finalize = output_column_names_set_after_finalize;
+        for (const auto & name : updated_require)
+            output_columns_names_set_for_other_condition_after_finalize.insert(name);
+        if (!match_helper_name.empty())
+            output_columns_names_set_for_other_condition_after_finalize.insert(match_helper_name);
+    }
+
     /// remove duplicated column
     required_names_set.clear();
     for (const auto & name : updated_require)
@@ -2637,14 +2608,6 @@ void Join::finalize(const Names & parent_require)
     for (const auto & name : key_names_left)
         required_names_set.insert(name);
 
-
-    if (non_equal_conditions.other_cond_expr != nullptr || non_equal_conditions.null_aware_eq_cond_expr != nullptr)
-    {
-        for (const auto & name : required_names_set)
-            output_columns_names_set_for_other_condition_after_finalize.insert(name);
-        if (!match_helper_name.empty())
-            output_columns_names_set_for_other_condition_after_finalize.insert(match_helper_name);
-    }
     for (const auto & name : required_names_set)
         required_columns.push_back(name);
     finalized = true;

@@ -77,13 +77,9 @@ void ProbeProcessInfo::prepareForHashProbe(
         for (size_t i = 0; i < existing_columns; ++i)
         {
             auto & col = block.getByPosition(i).column;
-
             if (ColumnPtr converted = col->convertToFullColumnIfConst())
                 col = converted;
-
-            /// convert left columns (except keys) to Nullable
-            if (std::end(key_names) == std::find(key_names.begin(), key_names.end(), block.getByPosition(i).name))
-                convertColumnToNullable(block.getByPosition(i));
+            convertColumnToNullable(block.getByPosition(i));
         }
     }
 

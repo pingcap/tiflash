@@ -269,8 +269,6 @@ void DAGQueryBlockInterpreter::handleJoin(
         = tiflash_join.genJoinOutputColumns(left_source_columns, right_source_columns, match_helper_name);
     /// add necessary transformation if the join key is an expression
 
-    bool is_tiflash_right_join = isRightOuterJoin(tiflash_join.kind);
-
     JoinNonEqualConditions join_non_equal_conditions;
     // prepare probe side
     auto [probe_side_prepare_actions, probe_key_names, original_probe_key_names, probe_filter_column_name]
@@ -279,8 +277,6 @@ void DAGQueryBlockInterpreter::handleJoin(
             probe_source_columns,
             tiflash_join.getProbeJoinKeys(),
             tiflash_join.join_key_types,
-            true,
-            is_tiflash_right_join,
             tiflash_join.getProbeConditions());
     RUNTIME_ASSERT(probe_side_prepare_actions, log, "probe_side_prepare_actions cannot be nullptr");
     join_non_equal_conditions.left_filter_column = std::move(probe_filter_column_name);
@@ -292,8 +288,6 @@ void DAGQueryBlockInterpreter::handleJoin(
             build_source_columns,
             tiflash_join.getBuildJoinKeys(),
             tiflash_join.join_key_types,
-            false,
-            is_tiflash_right_join,
             tiflash_join.getBuildConditions());
     RUNTIME_ASSERT(build_side_prepare_actions, log, "build_side_prepare_actions cannot be nullptr");
     join_non_equal_conditions.right_filter_column = std::move(build_filter_column_name);
