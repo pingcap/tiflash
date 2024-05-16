@@ -717,15 +717,18 @@ TEST_F(DeltaValueSpaceTest, ShouldPlace)
             table_columns,
             RowKeyRange::newAll(false, 1),
             ReadTag::Internal);
+        auto [placed_rows, placed_deletes] = snapshot->getSharedDeltaIndex()->getPlacedStatus();
         ASSERT_TRUE(reader->shouldPlace(
             dmContext(),
-            snapshot->getSharedDeltaIndex(),
+            placed_rows,
+            placed_deletes,
             RowKeyRange::newAll(false, 1),
             RowKeyRange::fromHandleRange(HandleRange(0, 100)),
             tso + 1));
         ASSERT_FALSE(reader->shouldPlace(
             dmContext(),
-            snapshot->getSharedDeltaIndex(),
+            placed_rows,
+            placed_deletes,
             RowKeyRange::newAll(false, 1),
             RowKeyRange::fromHandleRange(HandleRange(0, 100)),
             tso - 1));
@@ -739,15 +742,18 @@ TEST_F(DeltaValueSpaceTest, ShouldPlace)
             table_columns,
             RowKeyRange::newAll(false, 1),
             ReadTag::Internal);
+        auto [placed_rows, placed_deletes] = snapshot->getSharedDeltaIndex()->getPlacedStatus();
         ASSERT_TRUE(reader->shouldPlace(
             dmContext(),
-            snapshot->getSharedDeltaIndex(),
+            placed_rows,
+            placed_deletes,
             RowKeyRange::newAll(false, 1),
             RowKeyRange::fromHandleRange(HandleRange(0, 100)),
             tso + 1));
         ASSERT_FALSE(reader->shouldPlace(
             dmContext(),
-            snapshot->getSharedDeltaIndex(),
+            placed_rows,
+            placed_deletes,
             RowKeyRange::newAll(false, 1),
             RowKeyRange::fromHandleRange(HandleRange(0, 100)),
             tso - 1));
