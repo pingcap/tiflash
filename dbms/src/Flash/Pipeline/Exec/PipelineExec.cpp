@@ -24,28 +24,6 @@ extern const char random_pipeline_model_execute_prefix_failpoint[];
 extern const char random_pipeline_model_execute_suffix_failpoint[];
 } // namespace FailPoints
 
-<<<<<<< HEAD
-#define HANDLE_OP_STATUS(op, op_status, expect_status)                                                 \
-    switch (op_status)                                                                                 \
-    {                                                                                                  \
-    /* For the expected status, it will not return here, */                                            \
-    /* but instead return control to the macro caller, */                                              \
-    /* who will continue to call the next operator. */                                                 \
-    case (expect_status):                                                                              \
-        break;                                                                                         \
-    /* For the io status, the operator needs to be filled in io_op for later use in executeIO. */      \
-    case OperatorStatus::IO_IN:                                                                        \
-    case OperatorStatus::IO_OUT:                                                                       \
-        fillIOOp((op).get());                                                                          \
-        return (op_status);                                                                            \
-    /* For the waiting status, the operator needs to be filled in awaitable for later use in await. */ \
-    case OperatorStatus::WAITING:                                                                      \
-        fillAwaitable((op).get());                                                                     \
-        return (op_status);                                                                            \
-    /* For unexpected status, an immediate return is required. */                                      \
-    default:                                                                                           \
-        return (op_status);                                                                            \
-=======
 #define HANDLE_OP_STATUS(op, op_status, expect_status)                                                         \
     switch (op_status)                                                                                         \
     {                                                                                                          \
@@ -70,7 +48,6 @@ extern const char random_pipeline_model_execute_suffix_failpoint[];
     /* For other status, an immediate return is required. */                                                   \
     default:                                                                                                   \
         return (op_status);                                                                                    \
->>>>>>> 6129d97e0b (Pipeline: refactor the extra time calculation in explain analyze (#8987))
     }
 
 #define HANDLE_LAST_OP_STATUS(op, op_status)                                                                   \
