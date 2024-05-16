@@ -775,15 +775,8 @@ try
         page_writer_mix->write(std::move(batch), nullptr);
     }
 
-<<<<<<< HEAD
-    {
         ASSERT_EQ(reloadMixedStoragePool(), PageStorageRunMode::ONLY_V3);
         ASSERT_EQ(storage_pool_mix->newLogPageId(), 2);
-    }
-=======
-    ASSERT_EQ(reloadMixedStoragePool(), PageStorageRunMode::ONLY_V3);
-    //        ASSERT_EQ(storage_pool_mix->newLogPageId(), 2); // max id for v3 will not be updated, ignore this check
->>>>>>> 1b6cc860f9 (Storage: Fix page_id being mis-reuse when upgrade from cluster < 6.5 (#9041) (release-7.1) (#9048))
 }
 CATCH
 

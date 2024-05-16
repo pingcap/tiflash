@@ -83,23 +83,13 @@ public:
     using Timepoint = Clock::time_point;
     using Seconds = std::chrono::seconds;
 
-<<<<<<< HEAD
-    StoragePool(Context & global_ctx, NamespaceId ns_id_, StoragePathPool & storage_path_pool_, const String & name = "");
-=======
-    StoragePool(Context & global_ctx, KeyspaceID keyspace_id_, NamespaceID table_id_, StoragePathPool & storage_path_pool_, const String & name = "");
->>>>>>> 1b6cc860f9 (Storage: Fix page_id being mis-reuse when upgrade from cluster < 6.5 (#9041) (release-7.1) (#9048))
+    StoragePool(Context & global_ctx, NamespaceId table_id_, StoragePathPool & storage_path_pool_, const String & name = "");
 
     PageStorageRunMode restore();
 
     ~StoragePool();
 
-<<<<<<< HEAD
-    NamespaceId getNamespaceId() const { return ns_id; }
-=======
-    KeyspaceID getKeyspaceID() const { return keyspace_id; }
-
     NamespaceID getNamespaceID() const { return table_id; }
->>>>>>> 1b6cc860f9 (Storage: Fix page_id being mis-reuse when upgrade from cluster < 6.5 (#9041) (release-7.1) (#9048))
 
     PageStorageRunMode getPageStorageRunMode() const
     {
@@ -191,13 +181,7 @@ private:
 
     PageStorageRunMode run_mode;
 
-<<<<<<< HEAD
-    // whether the three storage instance is owned by this StoragePool
-    const NamespaceId ns_id;
-=======
-    const KeyspaceID keyspace_id;
     const NamespaceID table_id;
->>>>>>> 1b6cc860f9 (Storage: Fix page_id being mis-reuse when upgrade from cluster < 6.5 (#9041) (release-7.1) (#9048))
 
     StoragePathPool & storage_path_pool;
 

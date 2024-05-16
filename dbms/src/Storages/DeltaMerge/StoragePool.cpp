@@ -179,18 +179,10 @@ bool GlobalStoragePool::gc(const Settings & settings, bool immediately, const Se
     return done_anything;
 }
 
-<<<<<<< HEAD
-StoragePool::StoragePool(Context & global_ctx, NamespaceId ns_id_, StoragePathPool & storage_path_pool_, const String & name)
-    : logger(Logger::get(!name.empty() ? name : DB::toString(ns_id_)))
-    , run_mode(global_ctx.getPageStorageRunMode())
-    , ns_id(ns_id_)
-=======
-StoragePool::StoragePool(Context & global_ctx, KeyspaceID keyspace_id_, NamespaceID table_id_, StoragePathPool & storage_path_pool_, const String & name)
+StoragePool::StoragePool(Context & global_ctx, NamespaceId table_id_, StoragePathPool & storage_path_pool_, const String & name)
     : logger(Logger::get(!name.empty() ? name : DB::toString(table_id_)))
     , run_mode(global_ctx.getPageStorageRunMode())
-    , keyspace_id(keyspace_id_)
     , table_id(table_id_)
->>>>>>> 1b6cc860f9 (Storage: Fix page_id being mis-reuse when upgrade from cluster < 6.5 (#9041) (release-7.1) (#9048))
     , storage_path_pool(storage_path_pool_)
     , global_context(global_ctx)
     , storage_pool_metrics(CurrentMetrics::StoragePoolV3Only, 0)
@@ -215,15 +207,9 @@ StoragePool::StoragePool(Context & global_ctx, KeyspaceID keyspace_id_, Namespac
                                               extractConfig(global_context.getSettingsRef(), StorageType::Meta),
                                               global_context.getFileProvider(),
                                               global_context);
-<<<<<<< HEAD
-        log_storage_reader = std::make_shared<PageReader>(run_mode, ns_id, log_storage_v2, /*storage_v3_*/ nullptr, nullptr);
-        data_storage_reader = std::make_shared<PageReader>(run_mode, ns_id, data_storage_v2, /*storage_v3_*/ nullptr, nullptr);
-        meta_storage_reader = std::make_shared<PageReader>(run_mode, ns_id, meta_storage_v2, /*storage_v3_*/ nullptr, nullptr);
-=======
-        log_storage_reader = std::make_shared<PageReader>(run_mode, keyspace_id, StorageType::Log, table_id, log_storage_v2, /*storage_v3_*/ nullptr, /*uni_ps_*/ nullptr, nullptr);
-        data_storage_reader = std::make_shared<PageReader>(run_mode, keyspace_id, StorageType::Data, table_id, data_storage_v2, /*storage_v3_*/ nullptr, /*uni_ps_*/ nullptr, nullptr);
-        meta_storage_reader = std::make_shared<PageReader>(run_mode, keyspace_id, StorageType::Meta, table_id, meta_storage_v2, /*storage_v3_*/ nullptr, /*uni_ps_*/ nullptr, nullptr);
->>>>>>> 1b6cc860f9 (Storage: Fix page_id being mis-reuse when upgrade from cluster < 6.5 (#9041) (release-7.1) (#9048))
+        log_storage_reader = std::make_shared<PageReader>(run_mode, table_id, log_storage_v2, /*storage_v3_*/ nullptr, nullptr);
+        data_storage_reader = std::make_shared<PageReader>(run_mode, table_id, data_storage_v2, /*storage_v3_*/ nullptr, nullptr);
+        meta_storage_reader = std::make_shared<PageReader>(run_mode, table_id, meta_storage_v2, /*storage_v3_*/ nullptr, nullptr);
 
         log_storage_writer = std::make_shared<PageWriter>(run_mode, log_storage_v2, /*storage_v3_*/ nullptr);
         data_storage_writer = std::make_shared<PageWriter>(run_mode, data_storage_v2, /*storage_v3_*/ nullptr);
@@ -237,15 +223,9 @@ StoragePool::StoragePool(Context & global_ctx, KeyspaceID keyspace_id_, Namespac
         data_storage_v3 = global_storage_pool->data_storage;
         meta_storage_v3 = global_storage_pool->meta_storage;
 
-<<<<<<< HEAD
-        log_storage_reader = std::make_shared<PageReader>(run_mode, ns_id, /*storage_v2_*/ nullptr, log_storage_v3, nullptr);
-        data_storage_reader = std::make_shared<PageReader>(run_mode, ns_id, /*storage_v2_*/ nullptr, data_storage_v3, nullptr);
-        meta_storage_reader = std::make_shared<PageReader>(run_mode, ns_id, /*storage_v2_*/ nullptr, meta_storage_v3, nullptr);
-=======
-        log_storage_reader = std::make_shared<PageReader>(run_mode, keyspace_id, StorageType::Log, table_id, /*storage_v2_*/ nullptr, log_storage_v3, /*uni_ps_*/ nullptr, nullptr);
-        data_storage_reader = std::make_shared<PageReader>(run_mode, keyspace_id, StorageType::Data, table_id, /*storage_v2_*/ nullptr, data_storage_v3, /*uni_ps_*/ nullptr, nullptr);
-        meta_storage_reader = std::make_shared<PageReader>(run_mode, keyspace_id, StorageType::Meta, table_id, /*storage_v2_*/ nullptr, meta_storage_v3, /*uni_ps_*/ nullptr, nullptr);
->>>>>>> 1b6cc860f9 (Storage: Fix page_id being mis-reuse when upgrade from cluster < 6.5 (#9041) (release-7.1) (#9048))
+        log_storage_reader = std::make_shared<PageReader>(run_mode, table_id, /*storage_v2_*/ nullptr, log_storage_v3, nullptr);
+        data_storage_reader = std::make_shared<PageReader>(run_mode, table_id, /*storage_v2_*/ nullptr, data_storage_v3, nullptr);
+        meta_storage_reader = std::make_shared<PageReader>(run_mode, table_id, /*storage_v2_*/ nullptr, meta_storage_v3, nullptr);
 
         log_storage_writer = std::make_shared<PageWriter>(run_mode, /*storage_v2_*/ nullptr, log_storage_v3);
         data_storage_writer = std::make_shared<PageWriter>(run_mode, /*storage_v2_*/ nullptr, data_storage_v3);
@@ -299,34 +279,13 @@ StoragePool::StoragePool(Context & global_ctx, KeyspaceID keyspace_id_, Namespac
                                                   /* no_more_write_to_v2 */ true);
         }
 
-<<<<<<< HEAD
-        log_storage_reader = std::make_shared<PageReader>(run_mode, ns_id, log_storage_v2, log_storage_v3, nullptr);
-        data_storage_reader = std::make_shared<PageReader>(run_mode, ns_id, data_storage_v2, data_storage_v3, nullptr);
-        meta_storage_reader = std::make_shared<PageReader>(run_mode, ns_id, meta_storage_v2, meta_storage_v3, nullptr);
+        log_storage_reader = std::make_shared<PageReader>(run_mode, table_id, log_storage_v2, log_storage_v3, nullptr);
+        data_storage_reader = std::make_shared<PageReader>(run_mode, table_id, data_storage_v2, data_storage_v3, nullptr);
+        meta_storage_reader = std::make_shared<PageReader>(run_mode, table_id, meta_storage_v2, meta_storage_v3, nullptr);
 
         log_storage_writer = std::make_shared<PageWriter>(run_mode, log_storage_v2, log_storage_v3);
         data_storage_writer = std::make_shared<PageWriter>(run_mode, data_storage_v2, data_storage_v3);
         meta_storage_writer = std::make_shared<PageWriter>(run_mode, meta_storage_v2, meta_storage_v3);
-=======
-        log_storage_reader = std::make_shared<PageReader>(run_mode, keyspace_id, StorageType::Log, table_id, log_storage_v2, log_storage_v3, /*uni_ps_*/ nullptr, nullptr);
-        data_storage_reader = std::make_shared<PageReader>(run_mode, keyspace_id, StorageType::Data, table_id, data_storage_v2, data_storage_v3, /*uni_ps_*/ nullptr, nullptr);
-        meta_storage_reader = std::make_shared<PageReader>(run_mode, keyspace_id, StorageType::Meta, table_id, meta_storage_v2, meta_storage_v3, /*uni_ps_*/ nullptr, nullptr);
-
-        log_storage_writer = std::make_shared<PageWriter>(run_mode, StorageType::Log, log_storage_v2, log_storage_v3, /*uni_ps_*/ nullptr);
-        data_storage_writer = std::make_shared<PageWriter>(run_mode, StorageType::Data, data_storage_v2, data_storage_v3, /*uni_ps_*/ nullptr);
-        meta_storage_writer = std::make_shared<PageWriter>(run_mode, StorageType::Meta, meta_storage_v2, meta_storage_v3, /*uni_ps_*/ nullptr);
-        break;
-    }
-    case PageStorageRunMode::UNI_PS:
-    {
-        log_storage_reader = std::make_shared<PageReader>(run_mode, keyspace_id, StorageType::Log, table_id, /*storage_v2_*/ nullptr, /*storage_v3_*/ nullptr, uni_ps, nullptr);
-        data_storage_reader = std::make_shared<PageReader>(run_mode, keyspace_id, StorageType::Data, table_id, /*storage_v2_*/ nullptr, /*storage_v3_*/ nullptr, uni_ps, nullptr);
-        meta_storage_reader = std::make_shared<PageReader>(run_mode, keyspace_id, StorageType::Meta, table_id, /*storage_v2_*/ nullptr, /*storage_v3_*/ nullptr, uni_ps, nullptr);
-
-        log_storage_writer = std::make_shared<PageWriter>(run_mode, StorageType::Log, /*storage_v2_*/ nullptr, /*storage_v3_*/ nullptr, uni_ps);
-        data_storage_writer = std::make_shared<PageWriter>(run_mode, StorageType::Data, /*storage_v2_*/ nullptr, /*storage_v3_*/ nullptr, uni_ps);
-        meta_storage_writer = std::make_shared<PageWriter>(run_mode, StorageType::Meta, /*storage_v2_*/ nullptr, /*storage_v3_*/ nullptr, uni_ps);
->>>>>>> 1b6cc860f9 (Storage: Fix page_id being mis-reuse when upgrade from cluster < 6.5 (#9041) (release-7.1) (#9048))
         break;
     }
     default:
@@ -340,13 +299,8 @@ void StoragePool::forceTransformMetaV2toV3()
         throw Exception(fmt::format("Transform meta must run under mix mode [run_mode={}]", static_cast<Int32>(run_mode)));
     assert(meta_storage_v2 != nullptr);
     assert(meta_storage_v3 != nullptr);
-<<<<<<< HEAD
     auto meta_transform_storage_writer = std::make_shared<PageWriter>(run_mode, meta_storage_v2, meta_storage_v3);
-    auto meta_transform_storage_reader = std::make_shared<PageReader>(run_mode, ns_id, meta_storage_v2, meta_storage_v3, nullptr);
-=======
-    auto meta_transform_storage_writer = std::make_shared<PageWriter>(run_mode, StorageType::Meta, meta_storage_v2, meta_storage_v3, /*uni_ps_*/ nullptr);
-    auto meta_transform_storage_reader = std::make_shared<PageReader>(run_mode, keyspace_id, StorageType::Meta, table_id, meta_storage_v2, meta_storage_v3, /*uni_ps_*/ nullptr, nullptr);
->>>>>>> 1b6cc860f9 (Storage: Fix page_id being mis-reuse when upgrade from cluster < 6.5 (#9041) (release-7.1) (#9048))
+    auto meta_transform_storage_reader = std::make_shared<PageReader>(run_mode, table_id, meta_storage_v2, meta_storage_v3, nullptr);
 
     Pages pages_transform = {};
     auto meta_transform_acceptor = [&](const DB::Page & page) {
@@ -560,15 +514,9 @@ PageStorageRunMode StoragePool::restore()
             meta_storage_v2 = nullptr;
 
             // Must init by PageStorageRunMode::ONLY_V3
-<<<<<<< HEAD
-            log_storage_reader = std::make_shared<PageReader>(PageStorageRunMode::ONLY_V3, ns_id, /*storage_v2_*/ nullptr, log_storage_v3, nullptr);
-            data_storage_reader = std::make_shared<PageReader>(PageStorageRunMode::ONLY_V3, ns_id, /*storage_v2_*/ nullptr, data_storage_v3, nullptr);
-            meta_storage_reader = std::make_shared<PageReader>(PageStorageRunMode::ONLY_V3, ns_id, /*storage_v2_*/ nullptr, meta_storage_v3, nullptr);
-=======
-            log_storage_reader = std::make_shared<PageReader>(PageStorageRunMode::ONLY_V3, keyspace_id, StorageType::Log, table_id, /*storage_v2_*/ nullptr, log_storage_v3, /*uni_ps_*/ nullptr, nullptr);
-            data_storage_reader = std::make_shared<PageReader>(PageStorageRunMode::ONLY_V3, keyspace_id, StorageType::Data, table_id, /*storage_v2_*/ nullptr, data_storage_v3, /*uni_ps_*/ nullptr, nullptr);
-            meta_storage_reader = std::make_shared<PageReader>(PageStorageRunMode::ONLY_V3, keyspace_id, StorageType::Meta, table_id, /*storage_v2_*/ nullptr, meta_storage_v3, /*uni_ps_*/ nullptr, nullptr);
->>>>>>> 1b6cc860f9 (Storage: Fix page_id being mis-reuse when upgrade from cluster < 6.5 (#9041) (release-7.1) (#9048))
+            log_storage_reader = std::make_shared<PageReader>(PageStorageRunMode::ONLY_V3, table_id, /*storage_v2_*/ nullptr, log_storage_v3, nullptr);
+            data_storage_reader = std::make_shared<PageReader>(PageStorageRunMode::ONLY_V3, table_id, /*storage_v2_*/ nullptr, data_storage_v3, nullptr);
+            meta_storage_reader = std::make_shared<PageReader>(PageStorageRunMode::ONLY_V3, table_id, /*storage_v2_*/ nullptr, meta_storage_v3, nullptr);
 
             log_storage_writer = std::make_shared<PageWriter>(PageStorageRunMode::ONLY_V3, /*storage_v2_*/ nullptr, log_storage_v3);
             data_storage_writer = std::make_shared<PageWriter>(PageStorageRunMode::ONLY_V3, /*storage_v2_*/ nullptr, data_storage_v3);
@@ -583,18 +531,6 @@ PageStorageRunMode StoragePool::restore()
         }
         break;
     }
-<<<<<<< HEAD
-=======
-    case PageStorageRunMode::UNI_PS:
-    {
-        // UNI_PS
-        // - StoragePool is simply a wrapper for the uni_ps
-        max_log_page_id = uni_ps->getMaxIdAfterRestart();
-        max_data_page_id = uni_ps->getMaxIdAfterRestart();
-        max_meta_page_id = uni_ps->getMaxIdAfterRestart();
-        break;
-    }
->>>>>>> 1b6cc860f9 (Storage: Fix page_id being mis-reuse when upgrade from cluster < 6.5 (#9041) (release-7.1) (#9048))
     default:
         throw Exception(fmt::format("Unknown PageStorageRunMode {}", static_cast<UInt8>(run_mode)), ErrorCodes::LOGICAL_ERROR);
     }
@@ -640,19 +576,6 @@ void StoragePool::startup(ExternalPageCallbacks && callbacks)
         gc_handle = global_context.getBackgroundPool().addTask([this] { return this->gc(global_context.getSettingsRef()); });
         break;
     }
-<<<<<<< HEAD
-=======
-    case PageStorageRunMode::UNI_PS:
-    {
-        // For uni ps, the GC is handled by `UniversalPageStorageService`, register callbacks with prefix for this table
-        UniversalExternalPageCallbacks us_callbacks;
-        us_callbacks.remover = std::move(callbacks.remover);
-        us_callbacks.scanner = std::move(callbacks.scanner);
-        us_callbacks.prefix = UniversalPageIdFormat::toFullPrefix(keyspace_id, StorageType::Data, table_id);
-        uni_ps->registerUniversalExternalPagesCallbacks(us_callbacks);
-        break;
-    }
->>>>>>> 1b6cc860f9 (Storage: Fix page_id being mis-reuse when upgrade from cluster < 6.5 (#9041) (release-7.1) (#9048))
     default:
         throw Exception(fmt::format("Unknown PageStorageRunMode {}", static_cast<UInt8>(run_mode)), ErrorCodes::LOGICAL_ERROR);
     }
@@ -692,14 +615,6 @@ void StoragePool::shutdown()
         data_storage_v3->unregisterExternalPagesCallbacks(table_id);
         break;
     }
-<<<<<<< HEAD
-=======
-    case PageStorageRunMode::UNI_PS:
-    {
-        uni_ps->unregisterUniversalExternalPagesCallbacks(UniversalPageIdFormat::toFullPrefix(keyspace_id, StorageType::Data, table_id));
-        break;
-    }
->>>>>>> 1b6cc860f9 (Storage: Fix page_id being mis-reuse when upgrade from cluster < 6.5 (#9041) (release-7.1) (#9048))
     default:
         throw Exception(fmt::format("Unknown PageStorageRunMode {}", static_cast<UInt8>(run_mode)), ErrorCodes::LOGICAL_ERROR);
     }
@@ -791,43 +706,19 @@ PageId StoragePool::newDataPageIdForDTFile(StableDiskDelegator & delegator, cons
 }
 
 template <typename T>
-<<<<<<< HEAD
-inline static PageReader newReader(const PageStorageRunMode run_mode, const NamespaceId ns_id, T & storage_v2, T & storage_v3, ReadLimiterPtr read_limiter, bool snapshot_read, const String & tracing_id)
-=======
-inline static PageReaderPtr newReader(const PageStorageRunMode run_mode, KeyspaceID keyspace_id, StorageType tag, const NamespaceID table_id, T & storage_v2, T & storage_v3, UniversalPageStoragePtr uni_ps, ReadLimiterPtr read_limiter, bool snapshot_read, const String & tracing_id)
->>>>>>> 1b6cc860f9 (Storage: Fix page_id being mis-reuse when upgrade from cluster < 6.5 (#9041) (release-7.1) (#9048))
+inline static PageReader newReader(const PageStorageRunMode run_mode, const NamespaceId table_id, T & storage_v2, T & storage_v3, ReadLimiterPtr read_limiter, bool snapshot_read, const String & tracing_id)
 {
     switch (run_mode)
     {
     case PageStorageRunMode::ONLY_V2:
-<<<<<<< HEAD
-        return PageReader(run_mode, ns_id, storage_v2, nullptr, snapshot_read ? storage_v2->getSnapshot(tracing_id) : nullptr, read_limiter);
+        return PageReader(run_mode, table_id, storage_v2, nullptr, snapshot_read ? storage_v2->getSnapshot(tracing_id) : nullptr, read_limiter);
     case PageStorageRunMode::ONLY_V3:
-        return PageReader(run_mode, ns_id, nullptr, storage_v3, snapshot_read ? storage_v3->getSnapshot(tracing_id) : nullptr, read_limiter);
+        return PageReader(run_mode, table_id, nullptr, storage_v3, snapshot_read ? storage_v3->getSnapshot(tracing_id) : nullptr, read_limiter);
     case PageStorageRunMode::MIX_MODE:
-        return PageReader(run_mode, ns_id, storage_v2, storage_v3, snapshot_read ? std::make_shared<PageStorageSnapshotMixed>(storage_v2->getSnapshot(fmt::format("{}-v2", tracing_id)), //
-                                                                                                                              storage_v3->getSnapshot(fmt::format("{}-v3", tracing_id)))
-                                                                                 : nullptr,
+        return PageReader(run_mode, table_id, storage_v2, storage_v3, snapshot_read ? std::make_shared<PageStorageSnapshotMixed>(storage_v2->getSnapshot(fmt::format("{}-v2", tracing_id)), //
+                                                                                                                                 storage_v3->getSnapshot(fmt::format("{}-v3", tracing_id)))
+                                                                                    : nullptr,
                           read_limiter);
-=======
-        return std::make_shared<PageReader>(run_mode, keyspace_id, tag, table_id, storage_v2, nullptr, /*uni_ps*/ nullptr, snapshot_read ? storage_v2->getSnapshot(tracing_id) : nullptr, read_limiter);
-    case PageStorageRunMode::ONLY_V3:
-        return std::make_shared<PageReader>(run_mode, keyspace_id, tag, table_id, nullptr, storage_v3, /*uni_ps*/ nullptr, snapshot_read ? storage_v3->getSnapshot(tracing_id) : nullptr, read_limiter);
-    case PageStorageRunMode::MIX_MODE:
-        return std::make_shared<PageReader>(
-            run_mode,
-            keyspace_id,
-            tag,
-            table_id,
-            storage_v2,
-            storage_v3,
-            /*uni_ps*/ nullptr,
-            snapshot_read ? std::make_shared<PageStorageSnapshotMixed>(storage_v2->getSnapshot(fmt::format("{}-v2", tracing_id)), storage_v3->getSnapshot(fmt::format("{}-v3", tracing_id)))
-                          : nullptr,
-            read_limiter);
-    case PageStorageRunMode::UNI_PS:
-        return std::make_shared<PageReader>(run_mode, keyspace_id, tag, table_id, nullptr, nullptr, uni_ps, snapshot_read ? uni_ps->getSnapshot(tracing_id) : nullptr, read_limiter);
->>>>>>> 1b6cc860f9 (Storage: Fix page_id being mis-reuse when upgrade from cluster < 6.5 (#9041) (release-7.1) (#9048))
     default:
         throw Exception(fmt::format("Unknown PageStorageRunMode {}", static_cast<UInt8>(run_mode)), ErrorCodes::LOGICAL_ERROR);
     }
@@ -835,56 +726,32 @@ inline static PageReaderPtr newReader(const PageStorageRunMode run_mode, Keyspac
 
 PageReader StoragePool::newLogReader(ReadLimiterPtr read_limiter, bool snapshot_read, const String & tracing_id)
 {
-<<<<<<< HEAD
-    return newReader(run_mode, ns_id, log_storage_v2, log_storage_v3, read_limiter, snapshot_read, tracing_id);
-=======
-    return newReader(run_mode, keyspace_id, StorageType::Log, table_id, log_storage_v2, log_storage_v3, uni_ps, read_limiter, snapshot_read, tracing_id);
->>>>>>> 1b6cc860f9 (Storage: Fix page_id being mis-reuse when upgrade from cluster < 6.5 (#9041) (release-7.1) (#9048))
+    return newReader(run_mode, table_id, log_storage_v2, log_storage_v3, read_limiter, snapshot_read, tracing_id);
 }
 
 PageReader StoragePool::newLogReader(ReadLimiterPtr read_limiter, PageStorage::SnapshotPtr & snapshot)
 {
-<<<<<<< HEAD
-    return PageReader(run_mode, ns_id, log_storage_v2, log_storage_v3, snapshot, read_limiter);
-=======
-    return std::make_shared<PageReader>(run_mode, keyspace_id, StorageType::Log, table_id, log_storage_v2, log_storage_v3, uni_ps, snapshot, read_limiter);
->>>>>>> 1b6cc860f9 (Storage: Fix page_id being mis-reuse when upgrade from cluster < 6.5 (#9041) (release-7.1) (#9048))
+    return PageReader(run_mode, table_id, log_storage_v2, log_storage_v3, snapshot, read_limiter);
 }
 
 PageReader StoragePool::newDataReader(ReadLimiterPtr read_limiter, bool snapshot_read, const String & tracing_id)
 {
-<<<<<<< HEAD
-    return newReader(run_mode, ns_id, data_storage_v2, data_storage_v3, read_limiter, snapshot_read, tracing_id);
-=======
-    return newReader(run_mode, keyspace_id, StorageType::Data, table_id, data_storage_v2, data_storage_v3, uni_ps, read_limiter, snapshot_read, tracing_id);
->>>>>>> 1b6cc860f9 (Storage: Fix page_id being mis-reuse when upgrade from cluster < 6.5 (#9041) (release-7.1) (#9048))
+    return newReader(run_mode, table_id, data_storage_v2, data_storage_v3, read_limiter, snapshot_read, tracing_id);
 }
 
 PageReader StoragePool::newDataReader(ReadLimiterPtr read_limiter, PageStorage::SnapshotPtr & snapshot)
 {
-<<<<<<< HEAD
-    return PageReader(run_mode, ns_id, data_storage_v2, data_storage_v3, snapshot, read_limiter);
-=======
-    return std::make_shared<PageReader>(run_mode, keyspace_id, StorageType::Data, table_id, data_storage_v2, data_storage_v3, uni_ps, snapshot, read_limiter);
->>>>>>> 1b6cc860f9 (Storage: Fix page_id being mis-reuse when upgrade from cluster < 6.5 (#9041) (release-7.1) (#9048))
+    return PageReader(run_mode, table_id, data_storage_v2, data_storage_v3, snapshot, read_limiter);
 }
 
 PageReader StoragePool::newMetaReader(ReadLimiterPtr read_limiter, bool snapshot_read, const String & tracing_id)
 {
-<<<<<<< HEAD
-    return newReader(run_mode, ns_id, meta_storage_v2, meta_storage_v3, read_limiter, snapshot_read, tracing_id);
-=======
-    return newReader(run_mode, keyspace_id, StorageType::Meta, table_id, meta_storage_v2, meta_storage_v3, uni_ps, read_limiter, snapshot_read, tracing_id);
->>>>>>> 1b6cc860f9 (Storage: Fix page_id being mis-reuse when upgrade from cluster < 6.5 (#9041) (release-7.1) (#9048))
+    return newReader(run_mode, table_id, meta_storage_v2, meta_storage_v3, read_limiter, snapshot_read, tracing_id);
 }
 
 PageReader StoragePool::newMetaReader(ReadLimiterPtr read_limiter, PageStorage::SnapshotPtr & snapshot)
 {
-<<<<<<< HEAD
-    return PageReader(run_mode, ns_id, meta_storage_v2, meta_storage_v3, snapshot, read_limiter);
-=======
-    return std::make_shared<PageReader>(run_mode, keyspace_id, StorageType::Meta, table_id, meta_storage_v2, meta_storage_v3, uni_ps, snapshot, read_limiter);
->>>>>>> 1b6cc860f9 (Storage: Fix page_id being mis-reuse when upgrade from cluster < 6.5 (#9041) (release-7.1) (#9048))
+    return PageReader(run_mode, table_id, meta_storage_v2, meta_storage_v3, snapshot, read_limiter);
 }
 
 } // namespace DM
