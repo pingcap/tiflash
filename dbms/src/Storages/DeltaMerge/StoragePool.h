@@ -83,13 +83,23 @@ public:
     using Timepoint = Clock::time_point;
     using Seconds = std::chrono::seconds;
 
+<<<<<<< HEAD
     StoragePool(Context & global_ctx, NamespaceId ns_id_, StoragePathPool & storage_path_pool_, const String & name = "");
+=======
+    StoragePool(Context & global_ctx, KeyspaceID keyspace_id_, NamespaceID table_id_, StoragePathPool & storage_path_pool_, const String & name = "");
+>>>>>>> 1b6cc860f9 (Storage: Fix page_id being mis-reuse when upgrade from cluster < 6.5 (#9041) (release-7.1) (#9048))
 
     PageStorageRunMode restore();
 
     ~StoragePool();
 
+<<<<<<< HEAD
     NamespaceId getNamespaceId() const { return ns_id; }
+=======
+    KeyspaceID getKeyspaceID() const { return keyspace_id; }
+
+    NamespaceID getNamespaceID() const { return table_id; }
+>>>>>>> 1b6cc860f9 (Storage: Fix page_id being mis-reuse when upgrade from cluster < 6.5 (#9041) (release-7.1) (#9048))
 
     PageStorageRunMode getPageStorageRunMode() const
     {
@@ -157,10 +167,10 @@ public:
     // For function `newLogPageId`,`newMetaPageId`,`newDataPageIdForDTFile`:
     // For PageStorageRunMode::ONLY_V2, every table have its own three PageStorage (meta/data/log).
     // So these functions return the Page id starts from 1 and is continuously incremented.
-    // For PageStorageRunMode::ONLY_V3/MIX_MODE, PageStorage is global(distinguish by ns_id for different table).
+    // For PageStorageRunMode::ONLY_V3/MIX_MODE, PageStorage is global(distinguish by table_id for different table).
     // In order to avoid Page id from being reused (and cause troubles while restoring WAL from disk),
     // StoragePool will assign the max_log_page_id/max_meta_page_id/max_data_page_id by the global max id
-    // regardless of ns_id while being restored. This causes the ids in a table to not be continuously incremented.
+    // regardless of table_id while being restored. This causes the ids in a table to not be continuously incremented.
 
     PageId newDataPageIdForDTFile(StableDiskDelegator & delegator, const char * who);
     PageId newLogPageId() { return ++max_log_page_id; }
@@ -181,8 +191,13 @@ private:
 
     PageStorageRunMode run_mode;
 
+<<<<<<< HEAD
     // whether the three storage instance is owned by this StoragePool
     const NamespaceId ns_id;
+=======
+    const KeyspaceID keyspace_id;
+    const NamespaceID table_id;
+>>>>>>> 1b6cc860f9 (Storage: Fix page_id being mis-reuse when upgrade from cluster < 6.5 (#9041) (release-7.1) (#9048))
 
     StoragePathPool & storage_path_pool;
 
