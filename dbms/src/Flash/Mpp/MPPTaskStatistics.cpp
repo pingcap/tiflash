@@ -133,16 +133,10 @@ void MPPTaskStatistics::logTracingJson()
         output_bytes,
         magic_enum::enum_name(status),
         error_message,
-<<<<<<< HEAD
         cpu_ru,
         read_ru,
-        memory_peak);
-=======
-        ru_info.cpu_ru,
-        ru_info.read_ru,
         memory_peak,
         extra_info);
->>>>>>> 6129d97e0b (Pipeline: refactor the extra time calculation in explain analyze (#8987))
 }
 
 void MPPTaskStatistics::setMemoryPeak(Int64 memory_peak_)
