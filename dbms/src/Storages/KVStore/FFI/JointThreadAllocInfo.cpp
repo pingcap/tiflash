@@ -17,11 +17,10 @@
 #include <Storages/KVStore/FFI/JointThreadAllocInfo.h>
 #include <Storages/KVStore/FFI/ProxyFFI.h>
 
+#include <Common/MemoryAllocrace.cpp>
 #include <mutex>
 #include <thread>
 #include <unordered_set>
-
-#include <Common/MemoryAllocrace.cpp>
 
 
 namespace DB
@@ -192,7 +191,8 @@ void JointThreadInfoJeallocMap::stopThreadAllocInfo()
     }
 }
 
-std::tuple<uint64_t *, uint64_t *> JointThreadInfoJeallocMap::getPtrs() {
+std::tuple<uint64_t *, uint64_t *> JointThreadInfoJeallocMap::getPtrs()
+{
     return getAllocDeallocPtr();
 }
 } // namespace DB

@@ -993,7 +993,7 @@ try
         ASSERT(allocated != 0);
         ASSERT_GE(*allocated, 888888);
         ASSERT(deallocated != 0);
-        delete [] a;
+        delete[] a;
     });
     t2.join();
 }

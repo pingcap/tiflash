@@ -22,6 +22,7 @@
 #include <Poco/Timespan.h>
 #include <Storages/BackgroundProcessingPool.h>
 #include <common/logger_useful.h>
+
 #include <ext/scope_guard.h>
 #include <pcg_random.hpp>
 #include <random>
@@ -82,7 +83,10 @@ void BackgroundProcessingPool::TaskInfo::wake()
 }
 
 
-BackgroundProcessingPool::BackgroundProcessingPool(int size_, std::string thread_prefix_, JointThreadInfoJeallocMapPtr joint_memory_allocation_map_)
+BackgroundProcessingPool::BackgroundProcessingPool(
+    int size_,
+    std::string thread_prefix_,
+    JointThreadInfoJeallocMapPtr joint_memory_allocation_map_)
     : size(size_)
     , thread_prefix(thread_prefix_)
     , thread_ids_counter(size_)

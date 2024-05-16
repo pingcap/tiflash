@@ -17,8 +17,8 @@
 #include <Core/Types.h>
 #include <Poco/Event.h>
 #include <Poco/Timestamp.h>
-#include <absl/synchronization/blocking_counter.h>
 #include <Storages/KVStore/FFI/JointThreadAllocInfo.h>
+#include <absl/synchronization/blocking_counter.h>
 
 #include <atomic>
 #include <condition_variable>
@@ -90,7 +90,10 @@ public:
     using TaskHandle = std::shared_ptr<TaskInfo>;
 
 
-    explicit BackgroundProcessingPool(int size_, std::string thread_prefix_, JointThreadInfoJeallocMapPtr joint_memory_allocation_map_);
+    explicit BackgroundProcessingPool(
+        int size_,
+        std::string thread_prefix_,
+        JointThreadInfoJeallocMapPtr joint_memory_allocation_map_);
 
     size_t getNumberOfThreads() const { return size; }
 
