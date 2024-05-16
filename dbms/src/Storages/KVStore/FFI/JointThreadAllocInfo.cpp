@@ -21,6 +21,9 @@
 #include <thread>
 #include <unordered_set>
 
+#include <Common/MemoryAllocrace.cpp>
+
+
 namespace DB
 {
 
@@ -189,4 +192,7 @@ void JointThreadInfoJeallocMap::stopThreadAllocInfo()
     }
 }
 
+std::tuple<uint64_t *, uint64_t *> JointThreadInfoJeallocMap::getPtrs() {
+    return getAllocDeallocPtr();
+}
 } // namespace DB

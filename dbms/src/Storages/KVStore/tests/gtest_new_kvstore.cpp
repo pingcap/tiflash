@@ -975,4 +975,28 @@ try
 }
 CATCH
 
+
+TEST(FFIJemallocTest, JemallocThread)
+try
+{
+    std::thread t2([&]() {
+        char * a = new char[888888];
+        std::thread t1([&]() {
+            auto [allocated, deallocated] = JointThreadInfoJeallocMap::getPtrs();
+            ASSERT(allocated != 0);
+            ASSERT_EQ(*allocated, 0);
+            ASSERT(deallocated != 0);
+            ASSERT_EQ(*deallocated, 0);
+        });
+        t1.join();
+        auto [allocated, deallocated] = JointThreadInfoJeallocMap::getPtrs();
+        ASSERT(allocated != 0);
+        ASSERT_GE(*allocated, 888888);
+        ASSERT(deallocated != 0);
+        delete [] a;
+    });
+    t2.join();
+}
+CATCH
+
 } // namespace DB::tests

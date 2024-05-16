@@ -36,7 +36,7 @@ public:
     {
         config.compact_hint_delta_entries = 1;
         config.compact_hint_delta_deletions = 1;
-        bkg_pool = std::make_shared<DB::BackgroundProcessingPool>(4, "bg-page-");
+        bkg_pool = std::make_shared<DB::BackgroundProcessingPool>(4, "bg-page-", std::make_shared<JointThreadInfoJeallocMap>());
     }
 
 protected:

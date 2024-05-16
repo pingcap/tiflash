@@ -79,6 +79,9 @@ struct JointThreadInfoJeallocMap
     /// For those threads with shorter life, we can only update in their call chain.
     static void reportThreadAllocBatchForKVStore(std::string_view, ReportThreadAllocateInfoBatch data);
 
+    // Call `thread.(de)allocatedp` for caller
+    static std::tuple<uint64_t *, uint64_t *> getPtrs();
+
     mutable std::shared_mutex memory_allocation_mut;
     std::unordered_map<std::string, ThreadInfoJealloc> kvstore_map;
 

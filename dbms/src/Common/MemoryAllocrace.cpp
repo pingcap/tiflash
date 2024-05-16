@@ -14,6 +14,8 @@
 
 #include <Common/MemoryAllocTrace.h>
 
+#include <common/config_common.h>
+
 #ifdef USE_JEMALLOC
 #include <jemalloc/jemalloc.h>
 #endif

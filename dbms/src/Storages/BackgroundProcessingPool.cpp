@@ -22,7 +22,7 @@
 #include <Poco/Timespan.h>
 #include <Storages/BackgroundProcessingPool.h>
 #include <common/logger_useful.h>
-
+#include <ext/scope_guard.h>
 #include <pcg_random.hpp>
 #include <random>
 
@@ -82,10 +82,11 @@ void BackgroundProcessingPool::TaskInfo::wake()
 }
 
 
-BackgroundProcessingPool::BackgroundProcessingPool(int size_, std::string thread_prefix_)
+BackgroundProcessingPool::BackgroundProcessingPool(int size_, std::string thread_prefix_, JointThreadInfoJeallocMapPtr joint_memory_allocation_map_)
     : size(size_)
     , thread_prefix(thread_prefix_)
     , thread_ids_counter(size_)
+    , joint_memory_allocation_map(joint_memory_allocation_map_)
 {
     LOG_INFO(Logger::get(), "Create BackgroundProcessingPool, prefix={} n_threads={}", thread_prefix, size);
 
@@ -211,6 +212,10 @@ void BackgroundProcessingPool::threadFunction(size_t thread_idx) noexcept
         is_background_thread = true;
         addThreadId(getTid());
     }
+
+    // SCOPE_EXIT({
+
+    // });
 
     // set up the thread local memory tracker
     auto memory_tracker = MemoryTracker::create(0, root_of_non_query_mem_trackers.get());

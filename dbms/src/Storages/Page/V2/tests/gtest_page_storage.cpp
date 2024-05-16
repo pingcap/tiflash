@@ -62,7 +62,7 @@ protected:
 
     void SetUp() override
     {
-        bkg_pool = std::make_shared<DB::BackgroundProcessingPool>(4, "bg-page-");
+        bkg_pool = std::make_shared<DB::BackgroundProcessingPool>(4, "bg-page-", std::make_shared<JointThreadInfoJeallocMap>());
         TiFlashStorageTestBasic::SetUp();
         // drop dir if exists
         path_pool = std::make_unique<StoragePathPool>(db_context->getPathPool().withTable("test", "t1", false));

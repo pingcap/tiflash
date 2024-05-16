@@ -61,7 +61,7 @@ try
     const auto file_provider = TiFlashTestEnv::getDefaultFileProvider();
     PSDiskDelegatorPtr delegate = std::make_shared<DB::tests::MockDiskDelegatorMulti>(test_paths);
 
-    auto bkg_pool = std::make_shared<DB::BackgroundProcessingPool>(4, "bg-page-");
+    auto bkg_pool = std::make_shared<DB::BackgroundProcessingPool>(4, "bg-page-", std::make_shared<JointThreadInfoJeallocMap>());
     PageStorage storage("data_compact_test", delegate, config, file_provider, *bkg_pool);
 #ifdef GENERATE_TEST_DATA
     // Codes to generate a directory of test data
@@ -172,7 +172,7 @@ try
 
     {
         // Try to recover from disk, check whether page 1, 2, 3, 4, 5, 6 is valid or not.
-        auto bkg_pool = std::make_shared<DB::BackgroundProcessingPool>(4, "bg-page-");
+        auto bkg_pool = std::make_shared<DB::BackgroundProcessingPool>(4, "bg-page-", std::make_shared<JointThreadInfoJeallocMap>());
         PageStorage ps("data_compact_test", delegate, config, file_provider, *bkg_pool);
         ps.restore();
         // Page 1, 2 have been migrated to PageFile_2_1

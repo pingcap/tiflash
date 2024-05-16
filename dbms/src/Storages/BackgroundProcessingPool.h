@@ -18,6 +18,7 @@
 #include <Poco/Event.h>
 #include <Poco/Timestamp.h>
 #include <absl/synchronization/blocking_counter.h>
+#include <Storages/KVStore/FFI/JointThreadAllocInfo.h>
 
 #include <atomic>
 #include <condition_variable>
@@ -89,7 +90,7 @@ public:
     using TaskHandle = std::shared_ptr<TaskInfo>;
 
 
-    explicit BackgroundProcessingPool(int size_, std::string thread_prefix_);
+    explicit BackgroundProcessingPool(int size_, std::string thread_prefix_, JointThreadInfoJeallocMapPtr joint_memory_allocation_map_);
 
     size_t getNumberOfThreads() const { return size; }
 
@@ -134,6 +135,8 @@ private:
 
     std::atomic<bool> shutdown{false};
     std::condition_variable wake_event;
+
+    JointThreadInfoJeallocMapPtr joint_memory_allocation_map;
 };
 
 using BackgroundProcessingPoolPtr = std::shared_ptr<BackgroundProcessingPool>;

@@ -174,7 +174,7 @@ try
     const FileProviderPtr file_provider = ctx->getFileProvider();
     StoragePathPool spool = ctx->getPathPool().withTable("test", "t", false);
     auto delegator = spool.getPSDiskDelegatorSingle("meta");
-    auto bkg_pool = std::make_shared<DB::BackgroundProcessingPool>(4, "bg-page-");
+    auto bkg_pool = std::make_shared<DB::BackgroundProcessingPool>(4, "bg-page-", std::make_shared<JointThreadInfoJeallocMap>());
     PageStorage storage("compact_test", delegator, PageStorageConfig{}, file_provider, *bkg_pool);
 
     PageStorage::ListPageFilesOption opt;
