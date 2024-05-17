@@ -150,6 +150,16 @@ inline static const StorageFormatVersion STORAGE_FORMAT_V100 = StorageFormatVers
     .identifier = 100,
 };
 
+// STORAGE_FORMAT_V101 is used for S3 only
+inline static const StorageFormatVersion STORAGE_FORMAT_V101 = StorageFormatVersion{
+    .segment = SegmentFormat::V2,
+    .dm_file = DMFileFormat::V3,
+    .stable = StableFormat::V2, // diff
+    .delta = DeltaFormat::V3,
+    .page = PageFormat::V4,
+    .identifier = 101,
+};
+
 inline StorageFormatVersion STORAGE_FORMAT_CURRENT = STORAGE_FORMAT_V5;
 
 inline const StorageFormatVersion & toStorageFormat(UInt64 setting)
@@ -170,8 +180,10 @@ inline const StorageFormatVersion & toStorageFormat(UInt64 setting)
         return STORAGE_FORMAT_V6;
     case 100:
         return STORAGE_FORMAT_V100;
+    case 101:
+        return STORAGE_FORMAT_V101;
     default:
-        throw Exception("Illegal setting value: " + DB::toString(setting));
+        throw Exception("Illegal setting value: {}", setting);
     }
 }
 

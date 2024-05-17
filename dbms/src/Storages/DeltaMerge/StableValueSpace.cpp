@@ -100,12 +100,11 @@ UInt64 StableValueSpace::serializeMetaToBuf(WriteBuffer & buf) const
     }
     else if (STORAGE_FORMAT_CURRENT.stable == StableFormat::V2)
     {
-        PB::StableLayerMeta meta;
+        dtpb::StableLayerMeta meta;
         meta.set_valid_rows(valid_rows);
         meta.set_valid_bytes(valid_bytes);
-        meta.set_num_files(files.size());
         for (const auto & f : files)
-            meta.add_file_ids()->set_file_id(f->pageId());
+            meta.add_files()->set_page_id(f->pageId());
 
         auto data = meta.SerializeAsString();
         writeStringBinary(data, buf);
@@ -119,35 +118,34 @@ UInt64 StableValueSpace::serializeMetaToBuf(WriteBuffer & buf) const
 
 namespace
 {
-PB::StableLayerMeta derializeMetaV1FromBuf(ReadBuffer & buf)
+dtpb::StableLayerMeta derializeMetaV1FromBuf(ReadBuffer & buf)
 {
-    PB::StableLayerMeta meta;
+    dtpb::StableLayerMeta meta;
     UInt64 valid_rows, valid_bytes, size;
     readIntBinary(valid_rows, buf);
     readIntBinary(valid_bytes, buf);
     readIntBinary(size, buf);
     meta.set_valid_rows(valid_rows);
     meta.set_valid_bytes(valid_bytes);
-    meta.set_num_files(size);
     for (size_t i = 0; i < size; ++i)
     {
         UInt64 page_id;
         readIntBinary(page_id, buf);
-        meta.add_file_ids()->set_file_id(page_id);
+        meta.add_files()->set_page_id(page_id);
     }
     return meta;
 }
 
-PB::StableLayerMeta derializeMetaV2FromBuf(ReadBuffer & buf)
+dtpb::StableLayerMeta derializeMetaV2FromBuf(ReadBuffer & buf)
 {
-    PB::StableLayerMeta meta;
+    dtpb::StableLayerMeta meta;
     String data;
     readStringBinary(data, buf);
     RUNTIME_CHECK_MSG(meta.ParseFromString(data), "Failed to parse StableLayerMeta from string: {}", data);
     return meta;
 }
 
-PB::StableLayerMeta derializeMetaFromBuf(ReadBuffer & buf)
+dtpb::StableLayerMeta derializeMetaFromBuf(ReadBuffer & buf)
 {
     UInt64 version;
     readIntBinary(version, buf);
@@ -181,9 +179,9 @@ StableValueSpacePtr StableValueSpace::restore(DMContext & dm_context, ReadBuffer
 
     auto metapb = derializeMetaFromBuf(buf);
     auto remote_data_store = dm_context.global_context.getSharedContextDisagg()->remote_data_store;
-    for (size_t i = 0; i < metapb.num_files(); ++i)
+    for (int i = 0; i < metapb.files().size(); ++i)
     {
-        UInt64 page_id = metapb.file_ids(i).file_id();
+        UInt64 page_id = metapb.files(i).page_id();
         DMFilePtr dmfile;
         auto path_delegate = dm_context.path_pool->getStableDiskDelegator();
         if (remote_data_store)
@@ -248,9 +246,9 @@ StableValueSpacePtr StableValueSpace::createFromCheckpoint( //
     // read stable meta info
     auto metapb = derializeMetaFromBuf(buf);
     auto remote_data_store = dm_context.global_context.getSharedContextDisagg()->remote_data_store;
-    for (size_t i = 0; i < metapb.num_files(); ++i)
+    for (int i = 0; i < metapb.files().size(); ++i)
     {
-        UInt64 page_id = metapb.file_ids(i).file_id();
+        UInt64 page_id = metapb.files(i).page_id();
         auto full_page_id = UniversalPageIdFormat::toFullPageId(
             UniversalPageIdFormat::toFullPrefix(
                 dm_context.keyspace_id,
