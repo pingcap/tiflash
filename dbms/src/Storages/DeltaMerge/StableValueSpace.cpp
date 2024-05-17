@@ -90,7 +90,7 @@ void StableValueSpace::saveMeta(WriteBatchWrapper & meta_wb)
 UInt64 StableValueSpace::serializeMetaToBuf(WriteBuffer & buf) const
 {
     writeIntBinary(STORAGE_FORMAT_CURRENT.stable, buf);
-    if (STORAGE_FORMAT_CURRENT.stable == StableFormat::V1)
+    if (likely(STORAGE_FORMAT_CURRENT.stable == StableFormat::V1))
     {
         writeIntBinary(valid_rows, buf);
         writeIntBinary(valid_bytes, buf);

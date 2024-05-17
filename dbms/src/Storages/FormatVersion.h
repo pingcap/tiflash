@@ -183,7 +183,7 @@ inline const StorageFormatVersion & toStorageFormat(UInt64 setting)
     case 101:
         return STORAGE_FORMAT_V101;
     default:
-        throw Exception("Illegal setting value: {}", setting);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Illegal setting value: {}", setting);
     }
 }
 
