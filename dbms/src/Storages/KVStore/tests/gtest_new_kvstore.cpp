@@ -914,7 +914,7 @@ try
     auto & tiflash_metrics = TiFlashMetrics::instance();
     ASSERT_EQ(tiflash_metrics.getProxyThreadMemory(TiFlashMetrics::MemoryAllocType::Alloc, "test1"), 1);
     ASSERT_EQ(tiflash_metrics.getProxyThreadMemory(TiFlashMetrics::MemoryAllocType::Dealloc, "test1"), 2);
-    std::string namee = "";
+    std::string namee;
     kvs.reportThreadAllocBatch(
         std::string_view(namee.data(), namee.size()),
         ReportThreadAllocateInfoBatch{.alloc = 1, .dealloc = 2});
@@ -924,12 +924,12 @@ try
         std::string name1 = "test11-1";
         kvs.reportThreadAllocInfo(std::string_view(name1.data(), name1.size()), ReportThreadAllocateInfoType::Reset, 0);
         uint64_t mock = 999;
-        uint64_t alloc_ptr = reinterpret_cast<uint64_t>(&mock);
+        auto alloc_ptr = reinterpret_cast<uint64_t>(&mock);
         kvs.reportThreadAllocInfo(
             std::string_view(name1.data(), name1.size()),
             ReportThreadAllocateInfoType::AllocPtr,
             alloc_ptr);
-        kvs.joint_memory_allocation_map->recordThreadAllocInfoForKVStore();
+        recordThreadAllocInfoForKVStore(kvs.getJointThreadInfoJeallocMap());
         ASSERT_EQ(tiflash_metrics.getProxyThreadMemory(TiFlashMetrics::MemoryAllocType::Alloc, "test11"), 0);
 
         // recordThreadAllocInfoForKVStore can't override if not all alloc/dealloc are provided.
@@ -942,19 +942,19 @@ try
             std::string_view(name2.data(), name2.size()),
             ReportThreadAllocateInfoType::AllocPtr,
             alloc_ptr);
-        kvs.joint_memory_allocation_map->recordThreadAllocInfoForKVStore();
+        recordThreadAllocInfoForKVStore(kvs.getJointThreadInfoJeallocMap());
         ASSERT_EQ(tiflash_metrics.getProxyThreadMemory(TiFlashMetrics::MemoryAllocType::Alloc, "ReadIndexWkr"), 111);
         ASSERT_EQ(tiflash_metrics.getProxyThreadMemory(TiFlashMetrics::MemoryAllocType::Dealloc, "ReadIndexWkr"), 222);
 
         // recordThreadAllocInfoForKVStore will override if all alloc/dealloc are both provided,
         // because the infomation from pointer is always the newest.
         uint64_t mock2 = 998;
-        uint64_t dealloc_ptr = reinterpret_cast<uint64_t>(&mock2);
+        auto dealloc_ptr = reinterpret_cast<uint64_t>(&mock2);
         kvs.reportThreadAllocInfo(
             std::string_view(name2.data(), name2.size()),
             ReportThreadAllocateInfoType::DeallocPtr,
             dealloc_ptr);
-        kvs.joint_memory_allocation_map->recordThreadAllocInfoForKVStore();
+        recordThreadAllocInfoForKVStore(kvs.getJointThreadInfoJeallocMap());
         ASSERT_EQ(tiflash_metrics.getProxyThreadMemory(TiFlashMetrics::MemoryAllocType::Alloc, "ReadIndexWkr"), 999);
         ASSERT_EQ(tiflash_metrics.getProxyThreadMemory(TiFlashMetrics::MemoryAllocType::Dealloc, "ReadIndexWkr"), 998);
         kvs.reportThreadAllocInfo(
@@ -967,7 +967,7 @@ try
         kvs.reportThreadAllocBatch(
             std::string_view(name2.data(), name2.size()),
             ReportThreadAllocateInfoBatch{.alloc = 111, .dealloc = 222});
-        kvs.joint_memory_allocation_map->recordThreadAllocInfoForKVStore();
+        recordThreadAllocInfoForKVStore(kvs.getJointThreadInfoJeallocMap());
         ASSERT_EQ(tiflash_metrics.getProxyThreadMemory(TiFlashMetrics::MemoryAllocType::Alloc, "ReadIndexWkr"), 111);
         ASSERT_EQ(tiflash_metrics.getProxyThreadMemory(TiFlashMetrics::MemoryAllocType::Dealloc, "ReadIndexWkr"), 222);
     });
