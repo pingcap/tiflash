@@ -141,7 +141,10 @@ dtpb::StableLayerMeta derializeMetaV2FromBuf(ReadBuffer & buf)
     dtpb::StableLayerMeta meta;
     String data;
     readStringBinary(data, buf);
-    RUNTIME_CHECK_MSG(meta.ParseFromString(data), "Failed to parse StableLayerMeta from string: {}", data);
+    RUNTIME_CHECK_MSG(
+        meta.ParseFromString(data),
+        "Failed to parse StableLayerMeta from string: {}",
+        Redact::keyToHexString(data.data(), data.size()));
     return meta;
 }
 
