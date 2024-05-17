@@ -89,7 +89,7 @@ public:
 
     ~StoragePool();
 
-    NamespaceID getNamespaceID() const { return table_id; }
+    NamespaceId getNamespaceId() const { return table_id; }
 
     PageStorageRunMode getPageStorageRunMode() const
     {
@@ -181,7 +181,7 @@ private:
 
     PageStorageRunMode run_mode;
 
-    const NamespaceID table_id;
+    const NamespaceId table_id;
 
     StoragePathPool & storage_path_pool;
 

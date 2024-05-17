@@ -699,8 +699,8 @@ try
     const size_t buf_sz = 1024;
     char c_buff[buf_sz] = {0};
 
-    const PageIdU64 max_data_page_id_allocated = (1 << 30) + 1;
-    const PageIdU64 max_meta_page_id_allocated = (1 << 28) + 1;
+    const PageId max_data_page_id_allocated = (1 << 30) + 1;
+    const PageId max_meta_page_id_allocated = (1 << 28) + 1;
     {
         // Prepare a StoragePool with
         // - 0 pages in "log" (must be 0)
@@ -775,8 +775,8 @@ try
         page_writer_mix->write(std::move(batch), nullptr);
     }
 
-        ASSERT_EQ(reloadMixedStoragePool(), PageStorageRunMode::ONLY_V3);
-        ASSERT_EQ(storage_pool_mix->newLogPageId(), 2);
+    ASSERT_EQ(reloadMixedStoragePool(), PageStorageRunMode::ONLY_V3);
+    ASSERT_EQ(storage_pool_mix->newLogPageId(), 2);
 }
 CATCH
 
