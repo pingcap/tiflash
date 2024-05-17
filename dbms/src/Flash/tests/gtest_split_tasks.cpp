@@ -117,9 +117,8 @@ try
            "  MockTableScan",
            "CreatingSets\n"
            " HashJoinBuild: <join build, build_side_root_executor_id = exchange_receiver_8>, join_kind = Left\n"
-           "  Expression: <append join key and join filters for build side>\n"
-           "   Expression: <final projection>\n"
-           "    MockExchangeReceiver\n"
+           "  Expression: <final projection>\n"
+           "   MockExchangeReceiver\n"
            " MockExchangeSender\n"
            "  Expression: <final projection>\n"
            "   MergeSorting, limit = 2\n"
