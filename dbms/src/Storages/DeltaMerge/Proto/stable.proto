@@ -16,9 +16,13 @@ syntax = "proto3";
 
 package DB.DM.PB;
 
-message StableMeta {
+message FileIdentifier {
+    uint64 file_id = 1;
+}
+
+message StableLayerMeta {
     uint64 valid_rows = 1;
     uint64 valid_bytes = 2;
     uint64 num_files = 3;
-    repeated uint64 file_ids = 4;
+    repeated FileIdentifier file_ids = 4;
 }

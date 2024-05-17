@@ -100,12 +100,12 @@ UInt64 StableValueSpace::serializeMetaToBuf(WriteBuffer & buf) const
     }
     else if (STORAGE_FORMAT_CURRENT.stable == StableFormat::V2)
     {
-        PB::StableMeta meta;
+        PB::StableLayerMeta meta;
         meta.set_valid_rows(valid_rows);
         meta.set_valid_bytes(valid_bytes);
         meta.set_num_files(files.size());
         for (const auto & f : files)
-            meta.add_file_ids(f->pageId());
+            meta.add_file_ids()->set_file_id(f->pageId());
 
         auto data = meta.SerializeAsString();
         writeStringBinary(data, buf);
@@ -119,9 +119,9 @@ UInt64 StableValueSpace::serializeMetaToBuf(WriteBuffer & buf) const
 
 namespace
 {
-PB::StableMeta derializeMetaV1FromBuf(ReadBuffer & buf)
+PB::StableLayerMeta derializeMetaV1FromBuf(ReadBuffer & buf)
 {
-    PB::StableMeta meta;
+    PB::StableLayerMeta meta;
     UInt64 valid_rows, valid_bytes, size;
     readIntBinary(valid_rows, buf);
     readIntBinary(valid_bytes, buf);
@@ -133,36 +133,30 @@ PB::StableMeta derializeMetaV1FromBuf(ReadBuffer & buf)
     {
         UInt64 page_id;
         readIntBinary(page_id, buf);
-        meta.add_file_ids(page_id);
+        meta.add_file_ids()->set_file_id(page_id);
     }
     return meta;
 }
 
-PB::StableMeta derializeMetaV2FromBuf(ReadBuffer & buf)
+PB::StableLayerMeta derializeMetaV2FromBuf(ReadBuffer & buf)
 {
-    PB::StableMeta meta;
+    PB::StableLayerMeta meta;
     String data;
     readStringBinary(data, buf);
-    RUNTIME_CHECK_MSG(meta.ParseFromString(data), "Failed to parse StableMeta from string: {}", data);
+    RUNTIME_CHECK_MSG(meta.ParseFromString(data), "Failed to parse StableLayerMeta from string: {}", data);
     return meta;
 }
 
-PB::StableMeta derializeMetaFromBuf(ReadBuffer & buf)
+PB::StableLayerMeta derializeMetaFromBuf(ReadBuffer & buf)
 {
     UInt64 version;
     readIntBinary(version, buf);
-    if (STORAGE_FORMAT_CURRENT.stable == StableFormat::V1)
-    {
+    if (version == StableFormat::V1)
         return derializeMetaV1FromBuf(buf);
-    }
-    else if (STORAGE_FORMAT_CURRENT.stable == StableFormat::V2)
-    {
+    else if (version == StableFormat::V2)
         return derializeMetaV2FromBuf(buf);
-    }
     else
-    {
-        throw Exception("Unexpected version: {}", STORAGE_FORMAT_CURRENT.stable);
-    }
+        throw Exception("Unexpected version: {}", version);
 }
 } // namespace
 
@@ -189,7 +183,7 @@ StableValueSpacePtr StableValueSpace::restore(DMContext & dm_context, ReadBuffer
     auto remote_data_store = dm_context.global_context.getSharedContextDisagg()->remote_data_store;
     for (size_t i = 0; i < metapb.num_files(); ++i)
     {
-        UInt64 page_id = metapb.file_ids(i);
+        UInt64 page_id = metapb.file_ids(i).file_id();
         DMFilePtr dmfile;
         auto path_delegate = dm_context.path_pool->getStableDiskDelegator();
         if (remote_data_store)
@@ -256,7 +250,7 @@ StableValueSpacePtr StableValueSpace::createFromCheckpoint( //
     auto remote_data_store = dm_context.global_context.getSharedContextDisagg()->remote_data_store;
     for (size_t i = 0; i < metapb.num_files(); ++i)
     {
-        UInt64 page_id = metapb.file_ids(i);
+        UInt64 page_id = metapb.file_ids(i).file_id();
         auto full_page_id = UniversalPageIdFormat::toFullPageId(
             UniversalPageIdFormat::toFullPrefix(
                 dm_context.keyspace_id,
