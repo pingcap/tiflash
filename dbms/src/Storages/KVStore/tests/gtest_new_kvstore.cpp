@@ -162,7 +162,7 @@ try
         auto expected = str_key.dataSize() + str_lock_value.size();
         ASSERT_EQ(root_of_kvstore_mem_trackers->get(), expected);
         auto str_key2 = RecordKVFormat::genKey(table_id, 20, 111);
-        std::string short_value('a', 100);
+        std::string short_value(97, 'a');
         auto str_lock_value2
             = RecordKVFormat::encodeLockCfValue(RecordKVFormat::CFModifyFlag::PutFlag, "PK", 20, 111, &short_value)
                   .toString();
