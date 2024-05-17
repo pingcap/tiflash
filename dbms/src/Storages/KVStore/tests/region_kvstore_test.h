@@ -35,6 +35,11 @@ public:
     }
 
     static void dropTable(Context & ctx, TableID table_id);
+
+    static void recordThreadAllocInfoForKVStore(const JointThreadInfoJeallocMapPtr & m)
+    {
+        m->recordThreadAllocInfoForKVStore();
+    }
 };
 
 inline void validateSSTGeneration(
