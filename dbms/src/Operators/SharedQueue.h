@@ -125,7 +125,6 @@ public:
 private:
     SharedQueuePtr queue;
 };
-using SharedQueueSourceHolderPtr = std::shared_ptr<SharedQueueSourceHolder>;
 
 class SharedQueueSourceOp : public SourceOp
 {
