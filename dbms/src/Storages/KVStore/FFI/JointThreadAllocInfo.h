@@ -75,9 +75,6 @@ class JointThreadInfoJeallocMap
 public:
     JointThreadInfoJeallocMap();
     ~JointThreadInfoJeallocMap();
-    /// Called by a bg thread as a routine work.
-    void recordThreadAllocInfoForKVStore();
-    void recordThreadAllocInfoForStorage();
     void recordThreadAllocInfo();
     void stopThreadAllocInfo();
 
@@ -92,16 +89,12 @@ public:
     // Call `thread.(de)allocatedp` for caller
     static std::tuple<uint64_t *, uint64_t *> getPtrs();
 
-    mutable std::shared_mutex memory_allocation_mut;
-    std::unordered_map<std::string, ThreadInfoJealloc> kvstore_map;
-
     friend class tests::RegionKVStoreTest;
-
 private:
     /// Be called periodicly to submit the alloc info to TiFlashMetrics
     /// Note that this function rely on `TiFlashMetrics::instance` is alive
-    void recordThreadAllocInfo();
     void recordThreadAllocInfoForKVStore();
+    void recordThreadAllocInfoForStorage();
 
     /// Note that this function rely on `TiFlashMetrics::instance` is alive
     void reportThreadAllocInfoImpl(
