@@ -14,6 +14,7 @@
 
 #include <Flash/Pipeline/Schedule/Tasks/StreamRestoreTask.h>
 #include <Operators/SharedQueue.h>
+
 #include <magic_enum.hpp>
 
 namespace DB
@@ -41,7 +42,7 @@ ExecTaskStatus StreamRestoreTask::executeIOImpl()
 {
     if unlikely (is_done)
         return ExecTaskStatus::FINISHED;
- 
+
     auto block = stream->read();
     if (unlikely(!block))
     {

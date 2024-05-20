@@ -110,8 +110,7 @@ void HashProbeTransformExec::startRestoreProbe()
     assert(!probe_source_holder);
 
     SharedQueueSinkHolderPtr probe_sink_holder;
-    std::tie(probe_sink_holder, probe_source_holder)
-        = SharedQueue::build(exec_context, 1, 1, -1, 1);
+    std::tie(probe_sink_holder, probe_source_holder) = SharedQueue::build(exec_context, 1, 1, -1, 1);
     TaskScheduler::instance->submit(
         std::make_unique<StreamRestoreTask>(exec_context, log->identifier(), probe_restore_stream, probe_sink_holder));
     probe_restore_stream.reset();
