@@ -134,9 +134,11 @@ bool HashProbeTransformExec::prepareProbeRestoredBlock()
         setNotifyFuture(probe_source_holder);
         return false;
     case MPMCQueueResult::FINISHED:
+    case MPMCQueueResult::CANCELLED:
         is_probe_restore_done = true;
         return true;
     default:
+        // queue result can not be full here.
         throw Exception(fmt::format("Unexpected result: {}", magic_enum::enum_name(ret)));
     }
 }

@@ -57,7 +57,10 @@ ExecTaskStatus StreamRestoreTask::executeIOImpl()
     case MPMCQueueResult::FULL:
         setNotifyFuture(sink);
         return ExecTaskStatus::WAIT_FOR_NOTIFY;
+    case MPMCQueueResult::CANCELLED:
+        return ExecTaskStatus::CANCELLED;
     default:
+        // queue result can not be finish/empty here.
         throw Exception(fmt::format("Unexpect result: {}", magic_enum::enum_name(ret)));
     }
 }
