@@ -95,7 +95,8 @@ private:
     MarksInCompressedFilePtr loadColMarkFromMetav2To(const MarksInCompressedFilePtr & res, size_t bytes_size)
     {
         const auto * dmfile_meta = typeid_cast<const DMFileMetaV2 *>(reader.dmfile->meta.get());
-        auto info = dmfile_meta->merged_sub_file_infos.find(colMarkFileName(file_name_base));
+        assert(dmfile_meta != nullptr);
+        const auto & info = dmfile_meta->merged_sub_file_infos.find(colMarkFileName(file_name_base));
         if (info == dmfile_meta->merged_sub_file_infos.end())
         {
             throw Exception(ErrorCodes::LOGICAL_ERROR, "Unknown mark file {}", colMarkFileName(file_name_base));
@@ -228,7 +229,8 @@ std::unique_ptr<CompressedSeekableReaderBuffer> ColumnReadStream::buildColDataRe
     const ReadLimiterPtr & read_limiter)
 {
     const auto * dmfile_meta = typeid_cast<const DMFileMetaV2 *>(reader.dmfile->meta.get());
-    auto info = dmfile_meta->merged_sub_file_infos.find(colDataFileName(file_name_base));
+    assert(dmfile_meta != nullptr);
+    const auto & info = dmfile_meta->merged_sub_file_infos.find(colDataFileName(file_name_base));
     if (info == dmfile_meta->merged_sub_file_infos.end())
     {
         return CompressedReadBufferFromFileBuilder::build(

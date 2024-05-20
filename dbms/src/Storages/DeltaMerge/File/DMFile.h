@@ -87,6 +87,8 @@ public:
     // keyspaceID
     KeyspaceID keyspaceId() const { return meta->keyspace_id; }
 
+    DMFileFormat::Version version() const { return meta->version; }
+
     String path() const;
 
     const String & parentPath() const { return meta->parent_path; }

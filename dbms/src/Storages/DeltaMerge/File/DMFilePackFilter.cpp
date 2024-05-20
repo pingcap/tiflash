@@ -152,6 +152,7 @@ void DMFilePackFilter::loadIndex(
         else if (dmfile->useMetaV2()) // v3
         {
             const auto * dmfile_meta = typeid_cast<const DMFileMetaV2 *>(dmfile->meta.get());
+            assert(dmfile_meta != nullptr);
             auto info = dmfile_meta->merged_sub_file_infos.find(colIndexFileName(file_name_base));
             if (info == dmfile_meta->merged_sub_file_infos.end())
             {

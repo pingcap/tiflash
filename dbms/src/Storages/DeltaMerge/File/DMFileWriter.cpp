@@ -47,6 +47,7 @@ DMFileWriter::DMFileWriter(
     if (dmfile->useMetaV2())
     {
         auto * dmfile_meta = typeid_cast<DMFileMetaV2 *>(dmfile->meta.get());
+        assert(dmfile_meta != nullptr);
         merged_file.buffer = WriteBufferFromWritableFileBuilder::buildPtr(
             file_provider,
             dmfile_meta->mergedPath(0),
@@ -166,6 +167,7 @@ void DMFileWriter::finalize()
     if (dmfile->useMetaV2())
     {
         auto * dmfile_meta = typeid_cast<DMFileMetaV2 *>(dmfile->meta.get());
+        assert(dmfile_meta != nullptr);
         dmfile_meta->finalizeSmallFiles(merged_file, file_provider, write_limiter);
     }
     finalizeMeta();
@@ -274,6 +276,7 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
         if (dmfile->useMetaV2())
         {
             auto * dmfile_meta = typeid_cast<DMFileMetaV2 *>(dmfile->meta.get());
+            assert(dmfile_meta != nullptr);
             stream->compressed_buf->next();
             stream->plain_file->next();
             stream->plain_file->sync();
