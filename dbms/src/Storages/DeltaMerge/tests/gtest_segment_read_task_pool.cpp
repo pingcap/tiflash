@@ -112,26 +112,38 @@ protected:
     {
         SegmentReadTaskScheduler scheduler{false};
 
-        // Create and add pool.
+        // Create
         auto pool = createSegmentReadTaskPool(test_seg_ids);
         pool->increaseUnorderedInputStreamRefCount();
-        scheduler.add(pool);
+        ASSERT_EQ(pool->getPendingSegmentCount(), test_seg_ids.size());
 
-        // Schedule segment to reach limitation.
+        // Submit to pending_pools
+        scheduler.add(pool);
+        {
+            std::lock_guard lock(scheduler.pending_mtx); // Disable TSA warnnings
+            ASSERT_EQ(scheduler.pending_pools.size(), 1);
+        }
+        ASSERT_EQ(scheduler.read_pools.size(), 0);
+
+        // Reap the pending_pools
+        scheduler.reapPendingPools();
+        {
+            std::lock_guard lock(scheduler.pending_mtx); // Disable TSA warnnings
+            ASSERT_EQ(scheduler.pending_pools.size(), 0);
+        }
+        ASSERT_EQ(scheduler.read_pools.size(), 1);
+
+        // Schedule segment to reach limitation
         auto active_segment_limits = pool->getFreeActiveSegments();
         ASSERT_GT(active_segment_limits, 0);
         std::vector<MergedTaskPtr> merged_tasks;
         for (int i = 0; i < active_segment_limits; ++i)
         {
-            std::lock_guard lock(scheduler.mtx);
             auto merged_task = scheduler.scheduleMergedTask(pool);
             ASSERT_NE(merged_task, nullptr);
             merged_tasks.push_back(merged_task);
         }
-        {
-            std::lock_guard lock(scheduler.mtx);
-            ASSERT_EQ(scheduler.scheduleMergedTask(pool), nullptr);
-        }
+        ASSERT_EQ(scheduler.scheduleMergedTask(pool), nullptr);
 
         // Make a segment finished.
         {
@@ -173,7 +185,6 @@ protected:
 
             for (;;)
             {
-                std::lock_guard lock(scheduler.mtx);
                 auto merged_task = scheduler.scheduleMergedTask(pool);
                 if (merged_task == nullptr)
                 {
@@ -256,8 +267,10 @@ TEST_F(SegmentReadTasksPoolTest, OrderedWrapper)
 }
 
 TEST_F(SegmentReadTasksPoolTest, SchedulerBasic)
+try
 {
     schedulerBasic();
 }
+CATCH
 
 } // namespace DB::DM::tests

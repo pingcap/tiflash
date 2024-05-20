@@ -32,7 +32,6 @@
 #include <IO/BaseFile/fwd.h>
 #include <IO/Buffer/ReadBufferFromFile.h>
 #include <IO/FileProvider/FileProvider.h>
-#include <Interpreters/Context.h>
 #include <Interpreters/ISecurityManager.h>
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/QueryLog.h>
@@ -60,6 +59,7 @@
 #include <Storages/DeltaMerge/StoragePool/StoragePool.h>
 #include <Storages/IStorage.h>
 #include <Storages/KVStore/BackgroundService.h>
+#include <Storages/KVStore/FFI/JointThreadAllocInfo.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/MarkCache.h>
 #include <Storages/Page/PageConstants.h>
@@ -180,6 +180,8 @@ struct ContextShared
 
     /// Named sessions. The user could specify session identifier to reuse settings and temporary tables in subsequent requests.
 
+    JointThreadInfoJeallocMapPtr joint_memory_allocation_map; /// Joint thread-wise alloc/dealloc map
+
     class SessionKeyHash
     {
     public:
@@ -276,6 +278,11 @@ struct ContextShared
         if (tmt_context)
         {
             tmt_context->shutdown();
+        }
+
+        if (joint_memory_allocation_map)
+        {
+            joint_memory_allocation_map->stopThreadAllocInfo();
         }
 
         if (schema_sync_service)
@@ -1751,6 +1758,21 @@ DM::GlobalStoragePoolPtr Context::getGlobalStoragePool() const
 {
     auto lock = getLock();
     return shared->global_storage_pool;
+}
+
+
+void Context::initializeJointThreadInfoJeallocMap()
+{
+    auto lock = getLock();
+    if (!shared->joint_memory_allocation_map)
+    {
+        shared->joint_memory_allocation_map = std::make_shared<JointThreadInfoJeallocMap>();
+    }
+}
+
+JointThreadInfoJeallocMapPtr Context::getJointThreadInfoJeallocMap() const
+{
+    return shared->joint_memory_allocation_map;
 }
 
 /**
