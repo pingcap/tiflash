@@ -999,4 +999,26 @@ try
 }
 CATCH
 
+TEST_F(RegionKVStoreTest, StorageBgPool)
+try
+{
+    using namespace std::chrono_literals;
+    auto & ctx = TiFlashTestEnv::getGlobalContext();
+    std::atomic_bool b;
+    ctx.getBackgroundPool().addTask([&](){
+        auto * x = new int[1000];
+        while(!b.load()) {
+            std::this_thread::sleep_for(1000ms);
+        }
+        delete [] x;
+        return false;
+    }, false, 5 * 60 * 1000);
+    std::this_thread::sleep_for(1000ms);
+    ctx.getJointThreadInfoJeallocMap()->recordThreadAllocInfo();
+    auto r = TiFlashMetrics::instance().getStorageThreadMemory(TiFlashMetrics::MemoryAllocType::Alloc, "bg-");
+    ASSERT_GE(r, sizeof(int) * 1000);
+    b.store(true);
+}
+CATCH
+
 } // namespace DB::tests
