@@ -211,29 +211,30 @@ BackgroundProcessingPool::TaskHandle BackgroundProcessingPool::tryPopTask(pcg64 
 
 void BackgroundProcessingPool::threadFunction(size_t thread_idx) noexcept
 {
+    const auto name = thread_prefix + std::to_string(thread_idx);
     {
-        const auto name = thread_prefix + std::to_string(thread_idx);
         setThreadName(name.data());
         is_background_thread = true;
         addThreadId(getTid());
         auto ptrs = JointThreadInfoJeallocMap::getPtrs();
+        LOG_INFO(DB::Logger::get(), "!!!!!! threadFunction {}", thread_prefix);
         joint_memory_allocation_map->reportThreadAllocInfoForStorage(
-            thread_prefix,
+            name,
             ReportThreadAllocateInfoType::Reset,
             0);
         joint_memory_allocation_map->reportThreadAllocInfoForStorage(
-            thread_prefix,
+            name,
             ReportThreadAllocateInfoType::AllocPtr,
             reinterpret_cast<uint64_t>(std::get<0>(ptrs)));
         joint_memory_allocation_map->reportThreadAllocInfoForStorage(
-            thread_prefix,
+            name,
             ReportThreadAllocateInfoType::DeallocPtr,
             reinterpret_cast<uint64_t>(std::get<1>(ptrs)));
     }
 
     SCOPE_EXIT({
         joint_memory_allocation_map->reportThreadAllocInfoForStorage(
-            thread_prefix,
+            name,
             ReportThreadAllocateInfoType::Remove,
             0);
     });

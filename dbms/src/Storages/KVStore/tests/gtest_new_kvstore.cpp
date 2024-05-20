@@ -1004,9 +1004,11 @@ try
 {
     using namespace std::chrono_literals;
     auto & ctx = TiFlashTestEnv::getGlobalContext();
+    auto size = ctx.getSettingsRef().background_pool_size;
     std::atomic_bool b;
     ctx.getBackgroundPool().addTask([&](){
         auto * x = new int[1000];
+        LOG_INFO(DB::Logger::get(), "!!!! S");
         while(!b.load()) {
             std::this_thread::sleep_for(1000ms);
         }
@@ -1015,7 +1017,7 @@ try
     }, false, 5 * 60 * 1000);
     std::this_thread::sleep_for(1000ms);
     ctx.getJointThreadInfoJeallocMap()->recordThreadAllocInfo();
-    auto r = TiFlashMetrics::instance().getStorageThreadMemory(TiFlashMetrics::MemoryAllocType::Alloc, "bg-");
+    UInt64 r = TiFlashMetrics::instance().getStorageThreadMemory(TiFlashMetrics::MemoryAllocType::Alloc, "bg");
     ASSERT_GE(r, sizeof(int) * 1000);
     b.store(true);
 }
