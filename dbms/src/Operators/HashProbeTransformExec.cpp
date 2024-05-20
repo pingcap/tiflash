@@ -24,7 +24,6 @@
 #include <Operators/SharedQueue.h>
 
 #include <magic_enum.hpp>
-#include "Flash/Pipeline/Schedule/Tasks/NotifyFuture.h"
 
 namespace DB
 {
