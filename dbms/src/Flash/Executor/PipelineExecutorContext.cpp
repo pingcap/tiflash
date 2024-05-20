@@ -190,11 +190,14 @@ void PipelineExecutorContext::cancelSharedQueues()
 
 void PipelineExecutorContext::cancelResultQueueIfNeed()
 {
-    std::lock_guard lock(mu);
-    if (!isWaitMode())
+    ResultQueue * tmp{nullptr};
     {
-        assert(*result_queue);
-        (*result_queue)->cancel();
+        std::lock_guard lock(mu);
+        if (isWaitMode())
+            return;
+        tmp = (*result_queue).get();
     }
+    assert(tmp);
+    tmp->cancel();
 }
 } // namespace DB
