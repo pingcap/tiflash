@@ -41,10 +41,16 @@ protected:
 
     void finalizeImpl() override;
 
+    ExecTaskStatus notifyImpl() override { return ExecTaskStatus::IO_IN; }
+
+private:
+    ExecTaskStatus tryFlush();
+
 private:
     BlockInputStreamPtr stream;
     SharedQueueSinkHolderPtr sink;
 
+    Block t_block;
     bool is_done = false;
 };
 } // namespace DB

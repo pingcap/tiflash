@@ -28,32 +28,24 @@ StreamRestoreTask::StreamRestoreTask(
     , stream(stream_)
     , sink(sink_)
 {
+    assert(sink);
     assert(stream);
     stream->readPrefix();
-    assert(sink);
 }
 
 ExecTaskStatus StreamRestoreTask::executeImpl()
 {
-    return is_done ? ExecTaskStatus::FINISHED : ExecTaskStatus::IO_IN;
+    throw Exception("unreachable");
 }
 
-ExecTaskStatus StreamRestoreTask::executeIOImpl()
+ExecTaskStatus StreamRestoreTask::tryFlush()
 {
-    if unlikely (is_done)
-        return ExecTaskStatus::FINISHED;
-
-    auto block = stream->read();
-    if (unlikely(!block))
-    {
-        is_done = true;
-        return ExecTaskStatus::FINISHED;
-    }
-
-    auto ret = sink->tryPush(std::move(block));
+    assert(t_block);
+    auto ret = sink->tryPush(std::move(t_block));
     switch (ret)
     {
     case MPMCQueueResult::OK:
+        t_block.clear();
         return ExecTaskStatus::IO_IN;
     case MPMCQueueResult::FULL:
         setNotifyFuture(sink);
@@ -64,6 +56,28 @@ ExecTaskStatus StreamRestoreTask::executeIOImpl()
         // queue result can not be finish/empty here.
         throw Exception(fmt::format("Unexpect result: {}", magic_enum::enum_name(ret)));
     }
+}
+
+ExecTaskStatus StreamRestoreTask::executeIOImpl()
+{
+    if unlikely (is_done)
+        return ExecTaskStatus::FINISHED;
+
+    if (t_block)
+    {
+        auto try_flush_status = tryFlush();
+        if (try_flush_status != ExecTaskStatus::IO_IN)
+            return try_flush_status;
+    }
+
+    assert(!t_block);
+    t_block = stream->read();
+    if (unlikely(!t_block))
+    {
+        is_done = true;
+        return ExecTaskStatus::FINISHED;
+    }
+    return tryFlush();
 }
 
 void StreamRestoreTask::finalizeImpl()

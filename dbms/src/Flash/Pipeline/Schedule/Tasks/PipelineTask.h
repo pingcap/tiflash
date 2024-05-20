@@ -41,7 +41,7 @@ protected:
 
     ExecTaskStatus awaitImpl() override { return runAwait(); }
 
-    void notifyImpl() override { runNotify(); }
+    ExecTaskStatus notifyImpl() override { return runNotify(); }
 
     void doFinalizeImpl() override
     {
