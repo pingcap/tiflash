@@ -110,6 +110,7 @@ private:
     std::optional<Block> buffer;
     SharedQueueSinkHolderPtr shared_queue;
 };
+using SharedQueueSourceHolderPtr = std::shared_ptr<SharedQueueSourceHolder>;
 
 class SharedQueueSourceHolder : public NotifyFuture
 {
