@@ -1059,10 +1059,11 @@ void ReportThreadAllocateBatch(
 {
     try
     {
+        UNUSED(server);
         UNUSED(tid);
-        if (!server || !server->tmt || !server->tmt->getKVStore())
-            return;
-        server->tmt->getKVStore()->reportThreadAllocBatch(buffToStrView(name), data);
+        // Note: We need to ensure the following code must be accessiable when
+        // tiflash process is shutting down
+        KVStore::reportThreadAllocBatch(buffToStrView(name), data);
     }
     catch (...)
     {
