@@ -165,6 +165,7 @@ ResultQueuePtr PipelineExecutorContext::toConsumeMode(size_t queue_size)
 {
     std::lock_guard lock(mu);
     RUNTIME_ASSERT(!result_queue.has_value());
+    RUNTIME_CHECK_MSG(!isCancelled(), "query has been cancelled.");
     result_queue.emplace(std::make_shared<ResultQueue>(queue_size));
     return *result_queue;
 }
