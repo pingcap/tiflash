@@ -158,7 +158,8 @@ DMFilePtr DMFile::restore(
             DMFileStatus::READABLE,
             keyspace_id,
             std::nullopt,
-            STORAGE_FORMAT_CURRENT.dm_file);
+            DMFileFormat::V2 // version is decieded by the file content, not used.
+        );
         dmfile->meta->read(file_provider, read_meta_mode);
     }
     return dmfile;

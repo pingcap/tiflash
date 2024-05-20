@@ -332,16 +332,16 @@ public:
         ASSERT_EQ(dmfile_wn->getColumnIndices(), dmfile_cn->getColumnIndices());
 
         const auto * dmfile_meta_wn = typeid_cast<const DMFileMetaV2 *>(dmfile_wn->meta.get());
-        ASSERT_EQ(dmfile_meta_wn->merged_files.size(), dmfile_meta_wn->merged_files.size());
-        for (auto merged_file : dmfile_meta_wn->merged_files)
+        const auto * dmfile_meta_cn = typeid_cast<const DMFileMetaV2 *>(dmfile_cn->meta.get());
+        ASSERT_EQ(dmfile_meta_cn->merged_files.size(), dmfile_meta_wn->merged_files.size());
+        for (size_t j = 0; j < dmfile_meta_wn->merged_files.size(); ++j)
         {
-            const auto & merged_file_wn = merged_file;
-            const auto & merged_file_cn = merged_file;
+            const auto & merged_file_wn = dmfile_meta_wn->merged_files[j];
+            const auto & merged_file_cn = dmfile_meta_cn->merged_files[j];
             ASSERT_EQ(merged_file_wn.number, merged_file_cn.number);
             ASSERT_EQ(merged_file_wn.size, merged_file_cn.size);
         }
 
-        const auto * dmfile_meta_cn = typeid_cast<const DMFileMetaV2 *>(dmfile_cn->meta.get());
         ASSERT_EQ(dmfile_meta_wn->merged_sub_file_infos.size(), dmfile_meta_cn->merged_sub_file_infos.size());
         for (const auto & [fname, sub_files_wn] : dmfile_meta_wn->merged_sub_file_infos)
         {

@@ -34,7 +34,9 @@ public:
         : DMFileMeta(file_id_, parent_path_, status_, keyspace_id_, configuration_, version_)
         , small_file_size_threshold(small_file_size_threshold_)
         , merged_file_max_size(merged_file_max_size_)
-    {}
+    {
+        RUNTIME_CHECK(version_ == DMFileFormat::V3);
+    }
 
     ~DMFileMetaV2() override = default;
 

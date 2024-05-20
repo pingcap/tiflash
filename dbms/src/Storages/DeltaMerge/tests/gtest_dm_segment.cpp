@@ -1304,9 +1304,12 @@ class SegmentTest2
     : public SegmentTest
     , public testing::WithParamInterface<SegmentTestMode>
 {
-public:
-    SegmentTest2() = default;
+    const StorageFormatVersion current_version;
 
+public:
+    SegmentTest2()
+        : current_version(STORAGE_FORMAT_CURRENT)
+    {}
 
     void SetUp() override
     {
@@ -1328,6 +1331,8 @@ public:
 
         SegmentTest::SetUp();
     }
+
+    ~SegmentTest2() override { setStorageFormat(current_version); }
 
     std::pair<RowKeyRange, PageIdU64s> genDMFile(DMContext & context, const Block & block)
     {
