@@ -21,8 +21,10 @@
 #include <Operators/HashProbeTransformExec.h>
 #include <Operators/IOBlockInputStreamSourceOp.h>
 #include <Operators/Operator.h>
+#include <Operators/SharedQueue.h>
 
 #include <magic_enum.hpp>
+#include "Flash/Pipeline/Schedule/Tasks/NotifyFuture.h"
 
 namespace DB
 {
@@ -100,16 +102,19 @@ void HashProbeTransformExec::startRestoreProbe()
     /// StreamRestoreTask [probe_restore_stream]
     ///                       | read and push
     ///                       ▼
-    ///               probe_result_queue
+    ///               probe_source_holder
     ///                       | pop and probe
     ///                       ▼
     ///             HashProbeTransformExec (probe restored hash partition)
     assert(!is_probe_restore_done && probe_restore_stream);
     // Use 1 as the queue_size to avoid accumulating too many blocks and causing the memory to exceed the limit.
-    assert(!probe_result_queue);
-    probe_result_queue = std::make_shared<ResultQueue>(1);
+    assert(!probe_source_holder);
+
+    SharedQueueSinkHolderPtr probe_sink_holder;
+    std::tie(probe_sink_holder, probe_source_holder)
+        = SharedQueue::build(exec_context, 1, 1, -1, 1);
     TaskScheduler::instance->submit(
-        std::make_unique<StreamRestoreTask>(exec_context, log->identifier(), probe_restore_stream, probe_result_queue));
+        std::make_unique<StreamRestoreTask>(exec_context, log->identifier(), probe_restore_stream, probe_sink_holder));
     probe_restore_stream.reset();
 }
 
@@ -119,13 +124,14 @@ bool HashProbeTransformExec::prepareProbeRestoredBlock()
         return true;
     if (probe_restored_block)
         return true;
-    assert(probe_result_queue);
-    auto ret = probe_result_queue->tryPop(probe_restored_block);
+    assert(probe_source_holder);
+    auto ret = probe_source_holder->tryPop(probe_restored_block);
     switch (ret)
     {
     case MPMCQueueResult::OK:
         return true;
     case MPMCQueueResult::EMPTY:
+        setNotifyFuture(probe_source_holder);
         return false;
     case MPMCQueueResult::FINISHED:
         is_probe_restore_done = true;
@@ -174,7 +180,7 @@ OperatorStatus HashProbeTransformExec::tryFillProcessInfoInRestoreProbeStage(Pro
         else
         {
             if (!prepareProbeRestoredBlock())
-                return OperatorStatus::WAITING;
+                return OperatorStatus::WAIT_FOR_NOTIFY;
             auto restore_ret = popProbeRestoredBlock();
             if (likely(restore_ret))
             {

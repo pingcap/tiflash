@@ -39,13 +39,18 @@ using SharedQueueSourceHolderPtr = std::shared_ptr<SharedQueueSourceHolder>;
 class SharedQueue
 {
 public:
-    static SharedQueuePtr buildInternal(size_t producer, size_t consumer, Int64 max_buffered_bytes);
+    static SharedQueuePtr buildInternal(
+        size_t producer,
+        size_t consumer,
+        Int64 max_buffered_bytes = -1,
+        Int64 max_queue_size = -1);
 
     static std::pair<SharedQueueSinkHolderPtr, SharedQueueSourceHolderPtr> build(
         PipelineExecutorContext & exec_context,
         size_t producer,
         size_t consumer,
-        Int64 max_buffered_bytes);
+        Int64 max_buffered_bytes = -1,
+        Int64 max_queue_size = -1);
 
     SharedQueue(CapacityLimits queue_limits, size_t init_producer);
 
@@ -71,7 +76,7 @@ public:
         : queue(queue_)
     {}
     MPMCQueueResult tryPush(Block && block) { return queue->tryPush(std::move(block)); }
-    void producerFinish() { queue->producerFinish(); }
+    void finish() { queue->producerFinish(); }
 
     void registerTask(TaskPtr && task) override { queue->registerWriteTask(std::move(task)); }
 
@@ -90,7 +95,7 @@ public:
         , shared_queue(shared_queue_)
     {}
 
-    ~SharedQueueSinkOp() override { shared_queue->producerFinish(); }
+    ~SharedQueueSinkOp() override { shared_queue->finish(); }
 
     String getName() const override { return "SharedQueueSinkOp"; }
 

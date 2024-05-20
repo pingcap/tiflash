@@ -19,11 +19,17 @@
 
 namespace DB
 {
-SharedQueuePtr SharedQueue::buildInternal(size_t producer, size_t consumer, Int64 max_buffered_bytes)
+SharedQueuePtr SharedQueue::buildInternal(
+    size_t producer,
+    size_t consumer,
+    Int64 max_buffered_bytes,
+    Int64 max_queue_size)
 {
     RUNTIME_CHECK(producer > 0 && consumer > 0);
-    // The queue size is same as UnionBlockInputStream = concurrency * 5.
-    CapacityLimits queue_limits(std::max(producer, consumer) * 5, max_buffered_bytes);
+    // The default queue size is same as UnionBlockInputStream = concurrency * 5.
+    if (max_queue_size <= 0)
+        max_queue_size = std::max(producer, consumer) * 5;
+    CapacityLimits queue_limits(max_queue_size, max_buffered_bytes);
     return std::make_shared<SharedQueue>(queue_limits, producer);
 }
 
@@ -31,9 +37,10 @@ std::pair<SharedQueueSinkHolderPtr, SharedQueueSourceHolderPtr> SharedQueue::bui
     PipelineExecutorContext & exec_context,
     size_t producer,
     size_t consumer,
-    Int64 max_buffered_bytes)
+    Int64 max_buffered_bytes,
+    Int64 max_queue_size)
 {
-    auto shared_queue = buildInternal(producer, consumer, max_buffered_bytes);
+    auto shared_queue = buildInternal(producer, consumer, max_buffered_bytes, max_queue_size);
     exec_context.addSharedQueue(shared_queue);
     return {
         std::make_shared<SharedQueueSinkHolder>(shared_queue),
