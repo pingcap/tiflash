@@ -18,11 +18,10 @@
 #include <Storages/KVStore/FFI/JointThreadAllocInfo.h>
 #include <Storages/KVStore/FFI/ProxyFFI.h>
 
+#include <magic_enum.hpp>
 #include <mutex>
 #include <thread>
 #include <unordered_set>
-
-#include <magic_enum.hpp>
 
 
 namespace DB
@@ -188,7 +187,12 @@ void JointThreadInfoJeallocMap::recordThreadAllocInfoForStorage()
     for (const auto & [k, v] : kvstore_map)
     {
         auto agg_thread_name = getThreadNameAggPrefix(k);
-        LOG_INFO(DB::Logger::get(), "!!!!! recordThreadAllocInfoForStorage {} {} {}", k, agg_thread_name, v.allocated());
+        LOG_INFO(
+            DB::Logger::get(),
+            "!!!!! recordThreadAllocInfoForStorage {} {} {}",
+            k,
+            agg_thread_name,
+            v.allocated());
         // Some thread may have shorter lifetime, we can't use this timed task here to upgrade.
         if (v.has_ptr())
         {

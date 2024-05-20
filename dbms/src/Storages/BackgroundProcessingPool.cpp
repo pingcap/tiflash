@@ -218,10 +218,7 @@ void BackgroundProcessingPool::threadFunction(size_t thread_idx) noexcept
         addThreadId(getTid());
         auto ptrs = JointThreadInfoJeallocMap::getPtrs();
         LOG_INFO(DB::Logger::get(), "!!!!!! threadFunction {}", thread_prefix);
-        joint_memory_allocation_map->reportThreadAllocInfoForStorage(
-            name,
-            ReportThreadAllocateInfoType::Reset,
-            0);
+        joint_memory_allocation_map->reportThreadAllocInfoForStorage(name, ReportThreadAllocateInfoType::Reset, 0);
         joint_memory_allocation_map->reportThreadAllocInfoForStorage(
             name,
             ReportThreadAllocateInfoType::AllocPtr,
@@ -233,10 +230,7 @@ void BackgroundProcessingPool::threadFunction(size_t thread_idx) noexcept
     }
 
     SCOPE_EXIT({
-        joint_memory_allocation_map->reportThreadAllocInfoForStorage(
-            name,
-            ReportThreadAllocateInfoType::Remove,
-            0);
+        joint_memory_allocation_map->reportThreadAllocInfoForStorage(name, ReportThreadAllocateInfoType::Remove, 0);
     });
 
     // set up the thread local memory tracker
