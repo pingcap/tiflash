@@ -36,9 +36,9 @@ public:
 
     static void dropTable(Context & ctx, TableID table_id);
 
-    static void recordThreadAllocInfoForKVStore(const JointThreadInfoJeallocMapPtr & m)
+    static void recordThreadAllocInfoForProxy(const JointThreadInfoJeallocMapPtr & m)
     {
-        m->recordThreadAllocInfoForKVStore();
+        m->recordThreadAllocInfoForProxy();
     }
 };
 

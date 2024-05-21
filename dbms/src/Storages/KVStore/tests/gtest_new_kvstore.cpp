@@ -919,6 +919,10 @@ try
         std::string_view(namee.data(), namee.size()),
         ReportThreadAllocateInfoBatch{.alloc = 1, .dealloc = 2});
     EXPECT_ANY_THROW(tiflash_metrics.getProxyThreadMemory(TiFlashMetrics::MemoryAllocType::Alloc, ""));
+    kvs.getJointThreadInfoJeallocMap()->accessStorageMap(
+        [](const JointThreadInfoJeallocMap::AllocMap & m) { ASSERT_EQ(m.size(), 0); });
+    kvs.getJointThreadInfoJeallocMap()->accessProxyMap(
+        [](const JointThreadInfoJeallocMap::AllocMap & m) { ASSERT_EQ(m.size(), 1); });
     std::thread t([&]() {
         // For names not in `PROXY_RECORD_WHITE_LIST_THREAD_PREFIX`, the record operation will not update.
         std::string name1 = "test11-1";
@@ -929,10 +933,10 @@ try
             std::string_view(name1.data(), name1.size()),
             ReportThreadAllocateInfoType::AllocPtr,
             alloc_ptr);
-        recordThreadAllocInfoForKVStore(kvs.getJointThreadInfoJeallocMap());
+        recordThreadAllocInfoForProxy(kvs.getJointThreadInfoJeallocMap());
         ASSERT_EQ(tiflash_metrics.getProxyThreadMemory(TiFlashMetrics::MemoryAllocType::Alloc, "test11"), 0);
 
-        // recordThreadAllocInfoForKVStore can't override if not all alloc/dealloc are provided.
+        // recordThreadAllocInfoForProxy can't override if not all alloc/dealloc are provided.
         std::string name2 = "ReadIndexWkr-1";
         kvs.reportThreadAllocInfo(std::string_view(name2.data(), name2.size()), ReportThreadAllocateInfoType::Reset, 0);
         kvs.reportThreadAllocBatch(
@@ -942,11 +946,11 @@ try
             std::string_view(name2.data(), name2.size()),
             ReportThreadAllocateInfoType::AllocPtr,
             alloc_ptr);
-        recordThreadAllocInfoForKVStore(kvs.getJointThreadInfoJeallocMap());
+        recordThreadAllocInfoForProxy(kvs.getJointThreadInfoJeallocMap());
         ASSERT_EQ(tiflash_metrics.getProxyThreadMemory(TiFlashMetrics::MemoryAllocType::Alloc, "ReadIndexWkr"), 111);
         ASSERT_EQ(tiflash_metrics.getProxyThreadMemory(TiFlashMetrics::MemoryAllocType::Dealloc, "ReadIndexWkr"), 222);
 
-        // recordThreadAllocInfoForKVStore will override if all alloc/dealloc are both provided,
+        // recordThreadAllocInfoForProxy will override if all alloc/dealloc are both provided,
         // because the infomation from pointer is always the newest.
         uint64_t mock2 = 998;
         auto dealloc_ptr = reinterpret_cast<uint64_t>(&mock2);
@@ -954,7 +958,7 @@ try
             std::string_view(name2.data(), name2.size()),
             ReportThreadAllocateInfoType::DeallocPtr,
             dealloc_ptr);
-        recordThreadAllocInfoForKVStore(kvs.getJointThreadInfoJeallocMap());
+        recordThreadAllocInfoForProxy(kvs.getJointThreadInfoJeallocMap());
         ASSERT_EQ(tiflash_metrics.getProxyThreadMemory(TiFlashMetrics::MemoryAllocType::Alloc, "ReadIndexWkr"), 999);
         ASSERT_EQ(tiflash_metrics.getProxyThreadMemory(TiFlashMetrics::MemoryAllocType::Dealloc, "ReadIndexWkr"), 998);
         kvs.reportThreadAllocInfo(
@@ -967,7 +971,7 @@ try
         kvs.reportThreadAllocBatch(
             std::string_view(name2.data(), name2.size()),
             ReportThreadAllocateInfoBatch{.alloc = 111, .dealloc = 222});
-        recordThreadAllocInfoForKVStore(kvs.getJointThreadInfoJeallocMap());
+        recordThreadAllocInfoForProxy(kvs.getJointThreadInfoJeallocMap());
         ASSERT_EQ(tiflash_metrics.getProxyThreadMemory(TiFlashMetrics::MemoryAllocType::Alloc, "ReadIndexWkr"), 111);
         ASSERT_EQ(tiflash_metrics.getProxyThreadMemory(TiFlashMetrics::MemoryAllocType::Dealloc, "ReadIndexWkr"), 222);
     });
@@ -1006,22 +1010,29 @@ try
     auto & ctx = TiFlashTestEnv::getGlobalContext();
     auto size = ctx.getSettingsRef().background_pool_size;
     std::atomic_bool b;
-    auto t = ctx.getBackgroundPool().addTask(
+    auto & pool = ctx.getBackgroundPool();
+    auto t = pool.addTask(
         [&]() {
             auto * x = new int[1000];
             while (!b.load())
             {
-                std::this_thread::sleep_for(1000ms);
+                std::this_thread::sleep_for(1500ms);
             }
             delete[] x;
             return false;
         },
         false,
         5 * 60 * 1000);
-    std::this_thread::sleep_for(1000ms);
-    ctx.getJointThreadInfoJeallocMap()->recordThreadAllocInfo();
+    std::this_thread::sleep_for(500ms);
+    JointThreadInfoJeallocMap & jm = *ctx.getJointThreadInfoJeallocMap();
+    jm.recordThreadAllocInfo();
     UInt64 r = TiFlashMetrics::instance().getStorageThreadMemory(TiFlashMetrics::MemoryAllocType::Alloc, "bg");
     ASSERT_GE(r, sizeof(int) * 1000);
+    jm.accessStorageMap([size](const JointThreadInfoJeallocMap::AllocMap & m) {
+        // There are some other bg thread pools
+        ASSERT_GE(m.size(), size);
+    });
+    jm.accessProxyMap([](const JointThreadInfoJeallocMap::AllocMap & m) { ASSERT_EQ(m.size(), 0); });
     b.store(true);
     ctx.getBackgroundPool().removeTask(t);
 }

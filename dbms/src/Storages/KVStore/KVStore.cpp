@@ -492,12 +492,12 @@ RegionTaskLock KVStore::genRegionTaskLock(UInt64 region_id) const
 
 void KVStore::reportThreadAllocInfo(std::string_view v, ReportThreadAllocateInfoType type, uint64_t value)
 {
-    joint_memory_allocation_map->reportThreadAllocInfoForKVStore(v, type, value);
+    joint_memory_allocation_map->reportThreadAllocInfoForProxy(v, type, value);
 }
 
 void KVStore::reportThreadAllocBatch(std::string_view v, ReportThreadAllocateInfoBatch data)
 {
-    JointThreadInfoJeallocMap::reportThreadAllocBatchForKVStore(v, data);
+    JointThreadInfoJeallocMap::reportThreadAllocBatchForProxy(v, data);
 }
 
 } // namespace DB

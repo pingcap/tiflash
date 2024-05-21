@@ -45,7 +45,7 @@ JointThreadInfoJeallocMap::JointThreadInfoJeallocMap()
 
 void JointThreadInfoJeallocMap::recordThreadAllocInfo()
 {
-    recordThreadAllocInfoForKVStore();
+    recordThreadAllocInfoForProxy();
     recordThreadAllocInfoForStorage();
 }
 
@@ -114,7 +114,7 @@ void JointThreadInfoJeallocMap::reportThreadAllocInfoImpl(
     }
 }
 
-void JointThreadInfoJeallocMap::reportThreadAllocInfoForKVStore(
+void JointThreadInfoJeallocMap::reportThreadAllocInfoForProxy(
     std::string_view thdname,
     ReportThreadAllocateInfoType type,
     uint64_t value)
@@ -123,7 +123,8 @@ void JointThreadInfoJeallocMap::reportThreadAllocInfoForKVStore(
     if (thdname.empty())
         return;
     std::string tname(thdname.begin(), thdname.end());
-    reportThreadAllocInfoImpl(kvstore_map, tname, type, value);
+    reportThreadAllocInfoImpl(proxy_map, tname, type, value);
+    // Extra logics for Reset to set up metrics
     if (type == ReportThreadAllocateInfoType::Reset)
     {
         auto & metrics = TiFlashMetrics::instance();
@@ -132,33 +133,16 @@ void JointThreadInfoJeallocMap::reportThreadAllocInfoForKVStore(
 }
 
 
-void JointThreadInfoJeallocMap::reportThreadAllocInfoForStorage(
-    const std::string & tname,
-    ReportThreadAllocateInfoType type,
-    uint64_t value)
-{
-    // Many threads have empty name, better just not handle.
-    if (tname.empty())
-        return;
-    reportThreadAllocInfoImpl(kvstore_map, tname, type, value);
-    if (type == ReportThreadAllocateInfoType::Reset)
-    {
-        auto & metrics = TiFlashMetrics::instance();
-        // Already a prefix
-        metrics.registerStorageThreadMemory(getThreadNameAggPrefix(tname));
-    }
-}
-
 static const std::unordered_set<std::string> PROXY_RECORD_WHITE_LIST_THREAD_PREFIX = {"ReadIndexWkr"};
 
-void JointThreadInfoJeallocMap::recordThreadAllocInfoForKVStore()
+void JointThreadInfoJeallocMap::recordThreadAllocInfoForProxy()
 {
     std::unordered_map<std::string, uint64_t> agg_allocate;
     std::unordered_map<std::string, uint64_t> agg_deallocate;
 
     {
         std::shared_lock l(memory_allocation_mut);
-        for (const auto & [k, v] : kvstore_map)
+        for (const auto & [k, v] : proxy_map)
         {
             auto agg_thread_name = getThreadNameAggPrefix(k);
             // Some thread may have shorter lifetime, we can't use this timed task here to upgrade.
@@ -182,34 +166,7 @@ void JointThreadInfoJeallocMap::recordThreadAllocInfoForKVStore()
     }
 }
 
-void JointThreadInfoJeallocMap::recordThreadAllocInfoForStorage()
-{
-    std::shared_lock l(memory_allocation_mut);
-    std::unordered_map<std::string, uint64_t> agg_allocate;
-    std::unordered_map<std::string, uint64_t> agg_deallocate;
-    for (const auto & [k, v] : kvstore_map)
-    {
-        auto agg_thread_name = getThreadNameAggPrefix(k);
-        // Some thread may have shorter lifetime, we can't use this timed task here to upgrade.
-        if (v.has_ptr())
-        {
-            agg_allocate[agg_thread_name] += v.allocated();
-            agg_deallocate[agg_thread_name] += v.deallocated();
-        }
-    }
-    for (const auto & [k, v] : agg_allocate)
-    {
-        auto & tiflash_metrics = TiFlashMetrics::instance();
-        tiflash_metrics.setStorageThreadMemory(TiFlashMetrics::MemoryAllocType::Alloc, k, v);
-    }
-    for (const auto & [k, v] : agg_deallocate)
-    {
-        auto & tiflash_metrics = TiFlashMetrics::instance();
-        tiflash_metrics.setStorageThreadMemory(TiFlashMetrics::MemoryAllocType::Dealloc, k, v);
-    }
-}
-
-void JointThreadInfoJeallocMap::reportThreadAllocBatchForKVStore(
+void JointThreadInfoJeallocMap::reportThreadAllocBatchForProxy(
     std::string_view name,
     ReportThreadAllocateInfoBatch data)
 {
@@ -223,6 +180,12 @@ void JointThreadInfoJeallocMap::reportThreadAllocBatchForKVStore(
     tiflash_metrics.setProxyThreadMemory(TiFlashMetrics::MemoryAllocType::Dealloc, k, data.dealloc);
 }
 
+
+void JointThreadInfoJeallocMap::accessProxyMap(std::function<void(const AllocMap &)> f)
+{
+    std::shared_lock l(memory_allocation_mut);
+    f(proxy_map);
+}
 void JointThreadInfoJeallocMap::stopThreadAllocInfo()
 {
     LOG_INFO(DB::Logger::get(), "Stop collecting thread alloc metrics");
@@ -249,4 +212,57 @@ std::tuple<uint64_t *, uint64_t *> JointThreadInfoJeallocMap::getPtrs()
 {
     return getAllocDeallocPtr();
 }
+
+
+void JointThreadInfoJeallocMap::reportThreadAllocInfoForStorage(
+    const std::string & tname,
+    ReportThreadAllocateInfoType type,
+    uint64_t value)
+{
+    // Many threads have empty name, better just not handle.
+    if (tname.empty())
+        return;
+    reportThreadAllocInfoImpl(storage_map, tname, type, value);
+    // Extra logics for Reset to set up metrics
+    if (type == ReportThreadAllocateInfoType::Reset)
+    {
+        auto & metrics = TiFlashMetrics::instance();
+        // Already a prefix
+        metrics.registerStorageThreadMemory(getThreadNameAggPrefix(tname));
+    }
+}
+
+void JointThreadInfoJeallocMap::recordThreadAllocInfoForStorage()
+{
+    std::shared_lock l(memory_allocation_mut);
+    std::unordered_map<std::string, uint64_t> agg_allocate;
+    std::unordered_map<std::string, uint64_t> agg_deallocate;
+    for (const auto & [k, v] : storage_map)
+    {
+        auto agg_thread_name = getThreadNameAggPrefix(k);
+        // Some thread may have shorter lifetime, we can't use this timed task here to upgrade.
+        if (v.has_ptr())
+        {
+            agg_allocate[agg_thread_name] += v.allocated();
+            agg_deallocate[agg_thread_name] += v.deallocated();
+        }
+    }
+    for (const auto & [k, v] : agg_allocate)
+    {
+        auto & tiflash_metrics = TiFlashMetrics::instance();
+        tiflash_metrics.setStorageThreadMemory(TiFlashMetrics::MemoryAllocType::Alloc, k, v);
+    }
+    for (const auto & [k, v] : agg_deallocate)
+    {
+        auto & tiflash_metrics = TiFlashMetrics::instance();
+        tiflash_metrics.setStorageThreadMemory(TiFlashMetrics::MemoryAllocType::Dealloc, k, v);
+    }
+}
+
+void JointThreadInfoJeallocMap::accessStorageMap(std::function<void(const AllocMap &)> f)
+{
+    std::shared_lock l(memory_allocation_mut);
+    f(storage_map);
+}
+
 } // namespace DB
