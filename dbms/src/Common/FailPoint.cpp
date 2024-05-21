@@ -96,6 +96,14 @@ namespace DB
     M(unblock_query_init_after_write)                        \
     M(exception_in_merged_task_init)                         \
     M(force_fail_in_flush_region_data)                       \
+<<<<<<< HEAD
+=======
+    M(force_use_dmfile_format_v3)                            \
+    M(force_set_mocked_s3_object_mtime)                      \
+    M(force_stop_background_checkpoint_upload)               \
+    M(force_schema_sync_too_old_schema)                      \
+    M(skip_seek_before_read_dmfile)                          \
+>>>>>>> 5b12a0d56e (ddl: Fix exchange partition across databases (release-7.1) (#9001))
     M(exception_after_large_write_exceed)                    \
     M(delta_tree_create_node_fail)
 
