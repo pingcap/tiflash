@@ -162,7 +162,7 @@ SegmentSnapshotPtr Serializer::deserializeSegmentSnapshotFrom(
     {
         auto remote_key = stable_file.checkpoint_info().data_file_id();
         auto prepared = data_store->prepareDMFileByKey(remote_key);
-        auto dmfile = prepared->restore(DMFile::ReadMetaMode::all());
+        auto dmfile = prepared->restore(DMFileMeta::ReadMode::all());
         dmfiles.emplace_back(std::move(dmfile));
     }
     new_stable->setFiles(dmfiles, segment_range, &dm_context);
@@ -391,7 +391,7 @@ ColumnFileBigPtr Serializer::deserializeCFBig(
     LOG_DEBUG(Logger::get(), "Rebuild local ColumnFileBig from remote, key={}", proto.checkpoint_info().data_file_id());
 
     auto prepared = data_store->prepareDMFileByKey(proto.checkpoint_info().data_file_id());
-    auto dmfile = prepared->restore(DMFile::ReadMetaMode::all());
+    auto dmfile = prepared->restore(DMFileMeta::ReadMode::all());
     auto * cf_big = new ColumnFileBig(dmfile, proto.valid_rows(), proto.valid_bytes(), segment_range);
     return std::shared_ptr<ColumnFileBig>(cf_big); // The constructor is private, so we cannot use make_shared.
 }

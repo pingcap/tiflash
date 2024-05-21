@@ -1317,7 +1317,7 @@ SegmentPtr Segment::dangerouslyReplaceDataFromCheckpoint(
         data_file->fileId(),
         new_page_id,
         data_file->parentPath(),
-        DMFile::ReadMetaMode::all());
+        DMFileMeta::ReadMode::all());
     wbs.data.putRefPage(new_page_id, data_file->pageId());
 
     auto new_stable = std::make_shared<StableValueSpace>(stable->getId());
@@ -1357,7 +1357,7 @@ SegmentPtr Segment::dangerouslyReplaceDataFromCheckpoint(
             auto remote_data_store = dm_context.db_context.getSharedContextDisagg()->remote_data_store;
             RUNTIME_CHECK(remote_data_store != nullptr);
             auto prepared = remote_data_store->prepareDMFile(file_oid, new_data_page_id);
-            auto dmfile = prepared->restore(DMFile::ReadMetaMode::all());
+            auto dmfile = prepared->restore(DMFileMeta::ReadMode::all());
             auto new_column_file = b->cloneWith(dm_context, dmfile, rowkey_range);
             new_column_file_persisteds.push_back(new_column_file);
         }
@@ -1756,13 +1756,13 @@ Segment::prepareSplitLogical( //
             file_id,
             /* page_id= */ my_dmfile_page_id,
             file_parent_path,
-            DMFile::ReadMetaMode::all());
+            DMFileMeta::ReadMode::all());
         auto other_dmfile = DMFile::restore(
             dm_context.db_context.getFileProvider(),
             file_id,
             /* page_id= */ other_dmfile_page_id,
             file_parent_path,
-            DMFile::ReadMetaMode::all());
+            DMFileMeta::ReadMode::all());
         my_stable_files.push_back(my_dmfile);
         other_stable_files.push_back(other_dmfile);
     }

@@ -57,7 +57,7 @@ public:
             bool do_index,
             TiDB::VectorIndexDefinitionPtr do_vector_index)
             : plain_file(WriteBufferByFileProviderBuilder(
-                             dmfile->configuration.has_value(),
+                             dmfile->getConfiguration().has_value(),
                              file_provider,
                              dmfile->colDataPath(file_base_name),
                              dmfile->encryptionDataPath(file_base_name),
@@ -68,10 +68,10 @@ public:
                              .with_checksum_frame_size(detail::getFrameSizeOrDefault(*dmfile))
                              .build())
             , compressed_buf(
-                  dmfile->configuration ? std::unique_ptr<WriteBuffer>(
+                  dmfile->getConfiguration() ? std::unique_ptr<WriteBuffer>(
                       new CompressedWriteBuffer<false>(*plain_file, compression_settings))
-                                        : std::unique_ptr<WriteBuffer>(
-                                            new CompressedWriteBuffer<true>(*plain_file, compression_settings)))
+                                             : std::unique_ptr<WriteBuffer>(
+                                                 new CompressedWriteBuffer<true>(*plain_file, compression_settings)))
             , minmaxes(do_index ? std::make_shared<MinMaxIndex>(*type) : nullptr)
             , vector_index(do_vector_index ? VectorIndexBuilder::create(do_vector_index) : nullptr)
         {
@@ -79,7 +79,7 @@ public:
             {
                 mark_file
                     = WriteBufferByFileProviderBuilder( // will not used in DMFileFormat::V3, could be removed when v3 is default
-                          dmfile->configuration.has_value(),
+                          dmfile->getConfiguration().has_value(),
                           file_provider,
                           dmfile->colMarkPath(file_base_name),
                           dmfile->encryptionMarkPath(file_base_name),
@@ -149,7 +149,7 @@ public:
     void write(const Block & block, const BlockProperty & block_property);
     void finalize();
 
-    const DMFilePtr getFile() const { return dmfile; }
+    DMFilePtr getFile() const { return dmfile; }
 
 private:
     void finalizeColumn(ColId col_id, DataTypePtr type);
@@ -167,8 +167,7 @@ private:
     WriteBufferFromFileBasePtr createMetaFile();
     WriteBufferFromFileBasePtr createMetaV2File();
     WriteBufferFromFileBasePtr createPackStatsFile();
-    void finalizeMetaV1();
-    void finalizeMetaV2();
+    void finalizeMeta();
 
 private:
     DMFilePtr dmfile;
@@ -184,7 +183,7 @@ private:
     // else `meta_file` is for pack stats.
     WriteBufferFromFileBasePtr meta_file;
 
-    DMFile::MergedFileWriter merged_file;
+    DMFileMetaV2::MergedFileWriter merged_file;
 
     // use to avoid count data written in index file for empty dmfile
     bool is_empty_file = true;

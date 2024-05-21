@@ -129,7 +129,7 @@ public:
                     continue;
 
                 // Note that page_id is useless here.
-                auto dmfile = DMFile::restore(file_provider, id, /* page_id= */ 0, path, DMFile::ReadMetaMode::none());
+                auto dmfile = DMFile::restore(file_provider, id, /* page_id= */ 0, path, DMFileMeta::ReadMode::none());
                 if (unlikely(!dmfile))
                 {
                     // If the dtfile directory is not exist, it means `StoragePathPool::drop` have been
@@ -145,7 +145,7 @@ public:
                     LOG_INFO(
                         logger,
                         "GC try remove useless DM file, but file not found and may have been removed, dmfile={}",
-                        DMFile::getPathByStatus(path, id, DMFile::Status::READABLE));
+                        getPathByStatus(path, id, DMFileStatus::READABLE));
                     continue; // next file
                 }
                 else if (dmfile->canGC())

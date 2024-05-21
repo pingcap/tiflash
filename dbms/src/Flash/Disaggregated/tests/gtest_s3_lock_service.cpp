@@ -68,7 +68,7 @@ public:
                 DMFileOID{.store_id = store_id, .table_id = physical_table_id, .file_id = dm_file_id});
             DB::S3::uploadEmptyFile(
                 *s3_client,
-                fmt::format("{}/{}", data_filename.toFullKey(), DM::DMFile::metav2FileName()));
+                fmt::format("{}/{}", data_filename.toFullKey(), DM::DMFileMetaV2::metaFileName()));
             ++dm_file_id;
         }
     }
@@ -110,7 +110,7 @@ protected:
 #define CHECK_S3_ENABLED                                                                                          \
     if (!is_s3_test_enabled)                                                                                      \
     {                                                                                                             \
-        const auto * t = ::testing::UnitTest::GetInstance()->current_test_info();                                 \
+        const auto * t = ::testing::UnitTest::GetInstance() -> current_test_info();                               \
         LOG_INFO(log, "{}.{} is skipped because S3ClientFactory is not inited.", t->test_case_name(), t->name()); \
         return;                                                                                                   \
     }

@@ -17,7 +17,7 @@
 namespace DB::DM
 {
 
-std::vector<UInt32> VectorColumnFromIndexReader::calcPackStartRowID(const DMFile::PackStats & pack_stats)
+std::vector<UInt32> VectorColumnFromIndexReader::calcPackStartRowID(const DMFileMeta::PackStats & pack_stats)
 {
     std::vector<UInt32> pack_start_rowid(pack_stats.size());
     UInt32 rowid = 0;
@@ -31,7 +31,7 @@ std::vector<UInt32> VectorColumnFromIndexReader::calcPackStartRowID(const DMFile
 
 MutableColumnPtr VectorColumnFromIndexReader::calcResultsByPack(
     std::vector<VectorIndexViewer::Key> && results,
-    const DMFile::PackStats & pack_stats,
+    const DMFileMeta::PackStats & pack_stats,
     const std::vector<UInt32> & pack_start_rowid)
 {
     auto column = ColumnArray::create(ColumnUInt32::create());

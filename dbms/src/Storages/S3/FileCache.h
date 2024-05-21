@@ -187,6 +187,7 @@ public:
     std::vector<FileSegmentPtr> getAllFiles() const
     {
         std::vector<FileSegmentPtr> files;
+        files.reserve(table.size());
         for (const auto & pa : table)
         {
             files.push_back(pa.second.first);
@@ -262,7 +263,7 @@ public:
     static void prepareParentDir(const String & local_fname);
     static bool isS3Filename(const String & fname);
     String toLocalFilename(const String & s3_key);
-    String toS3Key(const String & local_fname);
+    String toS3Key(const String & local_fname) const;
 
     void restore();
     void restoreWriteNode(const std::filesystem::directory_entry & write_node_entry);

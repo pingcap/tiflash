@@ -260,8 +260,8 @@ private:
             if (index_file_size == 0)
                 return std::make_shared<MinMaxIndex>(*type);
             auto index_guard = S3::S3RandomAccessFile::setReadFileInfo(
-                {dmfile->getReadFileSize(col_id, dmfile->colIndexFileName(file_name_base)), scan_context});
-            if (!dmfile->configuration) // v1
+                {dmfile->getReadFileSize(col_id, colIndexFileName(file_name_base)), scan_context});
+            if (!dmfile->getConfiguration()) // v1
             {
                 auto index_buf = ReadBufferFromFileProvider(
                     file_provider,
@@ -273,16 +273,18 @@ private:
             }
             else if (dmfile->useMetaV2()) // v3
             {
-                auto info = dmfile->merged_sub_file_infos.find(dmfile->colIndexFileName(file_name_base));
-                if (info == dmfile->merged_sub_file_infos.end())
+                const auto * dmfile_meta = typeid_cast<const DMFileMetaV2 *>(dmfile->meta.get());
+                assert(dmfile_meta != nullptr);
+                auto info = dmfile_meta->merged_sub_file_infos.find(colIndexFileName(file_name_base));
+                if (info == dmfile_meta->merged_sub_file_infos.end())
                 {
                     throw Exception(
                         fmt::format("Unknown index file {}", dmfile->colIndexPath(file_name_base)),
                         ErrorCodes::LOGICAL_ERROR);
                 }
 
-                auto file_path = dmfile->mergedPath(info->second.number);
-                auto encryp_path = dmfile->encryptionMergedPath(info->second.number);
+                auto file_path = dmfile_meta->mergedPath(info->second.number);
+                auto encryp_path = dmfile_meta->encryptionMergedPath(info->second.number);
                 auto offset = info->second.offset;
                 auto data_size = info->second.size;
 
@@ -303,11 +305,11 @@ private:
                     std::move(raw_data),
                     dmfile->colDataPath(file_name_base),
                     dmfile->getConfiguration()->getChecksumFrameLength(),
-                    dmfile->configuration->getChecksumAlgorithm(),
-                    dmfile->configuration->getChecksumFrameLength());
+                    dmfile->getConfiguration()->getChecksumAlgorithm(),
+                    dmfile->getConfiguration()->getChecksumFrameLength());
 
-                auto header_size = dmfile->configuration->getChecksumHeaderLength();
-                auto frame_total_size = dmfile->configuration->getChecksumFrameLength() + header_size;
+                auto header_size = dmfile->getConfiguration()->getChecksumHeaderLength();
+                auto frame_total_size = dmfile->getConfiguration()->getChecksumFrameLength() + header_size;
                 auto frame_count = index_file_size / frame_total_size + (index_file_size % frame_total_size != 0);
 
                 return MinMaxIndex::read(*type, *buf, index_file_size - header_size * frame_count);
@@ -320,10 +322,10 @@ private:
                     dmfile->encryptionIndexPath(file_name_base),
                     index_file_size,
                     read_limiter,
-                    dmfile->configuration->getChecksumAlgorithm(),
-                    dmfile->configuration->getChecksumFrameLength());
-                auto header_size = dmfile->configuration->getChecksumHeaderLength();
-                auto frame_total_size = dmfile->configuration->getChecksumFrameLength() + header_size;
+                    dmfile->getConfiguration()->getChecksumAlgorithm(),
+                    dmfile->getConfiguration()->getChecksumFrameLength());
+                auto header_size = dmfile->getConfiguration()->getChecksumHeaderLength();
+                auto frame_total_size = dmfile->getConfiguration()->getChecksumFrameLength() + header_size;
                 auto frame_count = index_file_size / frame_total_size + (index_file_size % frame_total_size != 0);
                 return MinMaxIndex::read(*type, *index_buf, index_file_size - header_size * frame_count);
             }

@@ -120,7 +120,7 @@ public:
     {
         // Status of DMFile can be updated when DMFileReader in used and the pathname will be changed.
         // For DMFileReader, always use the readable path.
-        return DMFile::getPathByStatus(dmfile->parentPath(), dmfile->fileId(), DMFile::Status::READABLE);
+        return getPathByStatus(dmfile->parentPath(), dmfile->fileId(), DMFileStatus::READABLE);
     }
     void addCachedPacks(ColId col_id, size_t start_pack_id, size_t pack_count, ColumnPtr & col) const;
 

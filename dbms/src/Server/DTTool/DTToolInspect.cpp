@@ -46,7 +46,7 @@ int inspectServiceMain(DB::Context & context, const InspectArgs & args)
 
     // Open the DMFile at `workdir/dmf_<file-id>`
     auto fp = context.getFileProvider();
-    auto dmfile = DB::DM::DMFile::restore(fp, args.file_id, 0, args.workdir, DB::DM::DMFile::ReadMetaMode::all());
+    auto dmfile = DB::DM::DMFile::restore(fp, args.file_id, 0, args.workdir, DB::DM::DMFileMeta::ReadMode::all());
 
     LOG_INFO(logger, "bytes on disk: {}", dmfile->getBytesOnDisk());
 

@@ -42,7 +42,7 @@ void DataStoreS3::putDMFile(DMFilePtr local_dmfile, const S3::DMFileOID & oid, b
     const auto local_dir = local_dmfile->path();
     const auto local_files = local_dmfile->listFilesForUpload();
     auto itr_meta = std::find_if(local_files.cbegin(), local_files.cend(), [](const auto & file_name) {
-        return file_name == DMFile::metav2FileName();
+        return file_name == DMFileMetaV2::metaFileName();
     });
     RUNTIME_CHECK(itr_meta != local_files.cend());
 
@@ -59,7 +59,7 @@ void DataStoreS3::putDMFile(DMFilePtr local_dmfile, const S3::DMFileOID & oid, b
     std::vector<std::future<void>> upload_results;
     for (const auto & fname : local_files)
     {
-        if (fname == DMFile::metav2FileName())
+        if (fname == DMFileMetaV2::metaFileName())
         {
             // meta file will be upload at last.
             continue;
@@ -79,8 +79,8 @@ void DataStoreS3::putDMFile(DMFilePtr local_dmfile, const S3::DMFileOID & oid, b
     }
 
     // Only when the meta upload is successful, the dmfile upload can be considered successful.
-    auto local_meta_fname = fmt::format("{}/{}", local_dir, DMFile::metav2FileName());
-    auto remote_meta_fname = fmt::format("{}/{}", remote_dir, DMFile::metav2FileName());
+    auto local_meta_fname = fmt::format("{}/{}", local_dir, DMFileMetaV2::metaFileName());
+    auto remote_meta_fname = fmt::format("{}/{}", remote_dir, DMFileMetaV2::metaFileName());
     S3::uploadFile(*s3_client, local_meta_fname, remote_meta_fname);
 
     if (remove_local)
@@ -240,7 +240,7 @@ IPreparedDMFileTokenPtr DataStoreS3::prepareDMFileByKey(const String & remote_ke
     return prepareDMFile(oid, 0);
 }
 
-DMFilePtr S3PreparedDMFileToken::restore(DMFile::ReadMetaMode read_mode)
+DMFilePtr S3PreparedDMFileToken::restore(DMFileMeta::ReadMode read_mode)
 {
     return DMFile::restore(
         file_provider,

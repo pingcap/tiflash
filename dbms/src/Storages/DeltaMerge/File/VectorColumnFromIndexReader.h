@@ -22,7 +22,6 @@
 #include <Storages/DeltaMerge/File/VectorColumnFromIndexReader_fwd.h>
 #include <Storages/DeltaMerge/Index/VectorIndex.h>
 
-#include <unordered_map>
 #include <vector>
 
 namespace DB::DM
@@ -41,7 +40,7 @@ class VectorColumnFromIndexReader
 {
 private:
     const DMFilePtr dmfile; // Keep a reference of dmfile to keep pack_stats valid.
-    const DMFile::PackStats & pack_stats;
+    const DMFileMeta::PackStats & pack_stats;
     const std::vector<UInt32> pack_start_rowid;
 
     const VectorIndexViewerPtr index;
@@ -50,11 +49,11 @@ private:
     MutableColumnPtr /* ColumnArray of UInt32 */ results_by_pack;
 
 private:
-    static std::vector<UInt32> calcPackStartRowID(const DMFile::PackStats & pack_stats);
+    static std::vector<UInt32> calcPackStartRowID(const DMFileMeta::PackStats & pack_stats);
 
     static MutableColumnPtr calcResultsByPack(
         std::vector<VectorIndexViewer::Key> && results,
-        const DMFile::PackStats & pack_stats,
+        const DMFileMeta::PackStats & pack_stats,
         const std::vector<UInt32> & pack_start_rowid);
 
 public:

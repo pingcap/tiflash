@@ -158,7 +158,7 @@ std::vector<ColumnFilePtrT> CloneColumnFilesHelper<ColumnFilePtrT>::clone(
                 file_id,
                 /* page_id= */ new_page_id,
                 file_parent_path,
-                DMFile::ReadMetaMode::all());
+                DMFileMeta::ReadMode::all());
 
             auto new_column_file = f->cloneWith(context, new_file, target_range);
             cloned.push_back(new_column_file);

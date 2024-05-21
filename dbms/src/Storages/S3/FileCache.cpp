@@ -534,7 +534,7 @@ FileType FileCache::getFileType(const String & fname)
     auto ext = p.extension();
     if (ext.empty())
     {
-        return p.stem() == DM::DMFile::metav2FileName() ? FileType::Meta : FileType::Unknow;
+        return p.stem() == DM::DMFileMetaV2::metaFileName() ? FileType::Meta : FileType::Unknow;
     }
     else if (ext == ".merged")
     {
@@ -720,7 +720,7 @@ String FileCache::toLocalFilename(const String & s3_key)
     return fmt::format("{}/{}", cache_dir, s3_key);
 }
 
-String FileCache::toS3Key(const String & local_fname)
+String FileCache::toS3Key(const String & local_fname) const
 {
     return local_fname.substr(cache_dir.size() + 1);
 }
