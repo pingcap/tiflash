@@ -284,7 +284,6 @@ public:
         ASSERT_EQ(dmfile_wn->version(), dmfile_cn->version());
         ASSERT_EQ(dmfile_wn->parentPath(), dmfile_cn->parentPath());
         ASSERT_EQ(dmfile_wn->getStatus(), dmfile_cn->getStatus());
-        ASSERT_EQ(dmfile_wn->getStatus(), dmfile_cn->getStatus());
 
         ASSERT_TRUE(dmfile_wn->getConfiguration().has_value());
         ASSERT_TRUE(dmfile_cn->getConfiguration().has_value());
