@@ -47,6 +47,7 @@ enum class TestType
 class TiFlashTestEnv
 {
 public:
+    static constexpr uint64_t DEFAULT_BG_POOL_SIZE = 2;
     static String getTemporaryPath(std::string_view test_case = "", bool get_abs = true);
 
     static void tryCreatePath(const std::string & path);
@@ -106,12 +107,12 @@ public:
     static void initializeGlobalContext(
         Strings testdata_path = {},
         PageStorageRunMode ps_run_mode = PageStorageRunMode::ONLY_V3,
-        uint64_t bg_thread_count = 2);
+        uint64_t bg_thread_count = DEFAULT_BG_POOL_SIZE);
     static void addGlobalContext(
         const DB::Settings & settings,
         Strings testdata_path = {},
         PageStorageRunMode ps_run_mode = PageStorageRunMode::ONLY_V3,
-        uint64_t bg_thread_count = 2);
+        uint64_t bg_thread_count = DEFAULT_BG_POOL_SIZE);
     static Context & getGlobalContext() { return *global_contexts[0]; }
     static Context & getGlobalContext(int idx) { return *global_contexts[idx]; }
     static int globalContextSize() { return global_contexts.size(); }

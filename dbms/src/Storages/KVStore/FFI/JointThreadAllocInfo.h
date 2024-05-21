@@ -30,6 +30,10 @@ struct ReportThreadAllocateInfoBatch;
 
 struct ThreadInfoJealloc
 {
+    ThreadInfoJealloc(char aggregate_delimer_)
+        : aggregate_delimer(aggregate_delimer_)
+    {}
+    char aggregate_delimer = '-';
     uint64_t allocated_ptr{0};
     uint64_t deallocated_ptr{0};
 
@@ -95,7 +99,11 @@ public: // Proxy
     static void reportThreadAllocBatchForProxy(std::string_view, ReportThreadAllocateInfoBatch data);
 
 public: // Storage
-    void reportThreadAllocInfoForStorage(const std::string &, ReportThreadAllocateInfoType type, uint64_t value);
+    void reportThreadAllocInfoForStorage(
+        const std::string &,
+        ReportThreadAllocateInfoType type,
+        uint64_t value,
+        char aggregate_delimer);
 
 private:
     /// Be called periodicly to submit the alloc info to TiFlashMetrics
@@ -104,7 +112,12 @@ private:
     void recordThreadAllocInfoForStorage();
 
     /// Note that this function rely on `TiFlashMetrics::instance` is alive
-    void reportThreadAllocInfoImpl(AllocMap &, const std::string &, ReportThreadAllocateInfoType type, uint64_t value);
+    void reportThreadAllocInfoImpl(
+        AllocMap &,
+        const std::string &,
+        ReportThreadAllocateInfoType type,
+        uint64_t value,
+        char aggregate_delimer);
 
 private:
     mutable std::shared_mutex memory_allocation_mut;

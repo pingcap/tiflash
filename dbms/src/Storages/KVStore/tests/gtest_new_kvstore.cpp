@@ -980,6 +980,79 @@ try
 CATCH
 
 
+TEST_F(RegionKVStoreTest, MemoryTraceAgg)
+try
+{
+    auto & ctx = TiFlashTestEnv::getGlobalContext();
+    uint64_t al1 = 1;
+    uint64_t al2 = 2;
+    uint64_t dl = 3;
+    auto & tiflash_metrics = TiFlashMetrics::instance();
+    std::string name1 = "non-agg-1";
+    ctx.getJointThreadInfoJeallocMap()
+        ->reportThreadAllocInfoForStorage(name1, ReportThreadAllocateInfoType::Reset, 0, '\0');
+    ctx.getJointThreadInfoJeallocMap()->reportThreadAllocInfoForStorage(
+        name1,
+        ReportThreadAllocateInfoType::AllocPtr,
+        reinterpret_cast<uint64_t>(&al1),
+        '\0');
+    ctx.getJointThreadInfoJeallocMap()->reportThreadAllocInfoForStorage(
+        name1,
+        ReportThreadAllocateInfoType::DeallocPtr,
+        reinterpret_cast<uint64_t>(&dl),
+        '\0');
+    std::string name2 = "non-agg-2";
+    ctx.getJointThreadInfoJeallocMap()
+        ->reportThreadAllocInfoForStorage(name2, ReportThreadAllocateInfoType::Reset, 0, '\0');
+    ctx.getJointThreadInfoJeallocMap()->reportThreadAllocInfoForStorage(
+        name2,
+        ReportThreadAllocateInfoType::AllocPtr,
+        reinterpret_cast<uint64_t>(&al2),
+        '\0');
+    ctx.getJointThreadInfoJeallocMap()->reportThreadAllocInfoForStorage(
+        name2,
+        ReportThreadAllocateInfoType::DeallocPtr,
+        reinterpret_cast<uint64_t>(&dl),
+        '\0');
+    std::string name3 = "agg+1";
+    ctx.getJointThreadInfoJeallocMap()
+        ->reportThreadAllocInfoForStorage(name3, ReportThreadAllocateInfoType::Reset, 0, '+');
+    ctx.getJointThreadInfoJeallocMap()->reportThreadAllocInfoForStorage(
+        name3,
+        ReportThreadAllocateInfoType::AllocPtr,
+        reinterpret_cast<uint64_t>(&al1),
+        '\0');
+    ctx.getJointThreadInfoJeallocMap()->reportThreadAllocInfoForStorage(
+        name3,
+        ReportThreadAllocateInfoType::DeallocPtr,
+        reinterpret_cast<uint64_t>(&dl),
+        '\0');
+    std::string name4 = "agg+2";
+    ctx.getJointThreadInfoJeallocMap()
+        ->reportThreadAllocInfoForStorage(name4, ReportThreadAllocateInfoType::Reset, 0, '+');
+    ctx.getJointThreadInfoJeallocMap()->reportThreadAllocInfoForStorage(
+        name4,
+        ReportThreadAllocateInfoType::AllocPtr,
+        reinterpret_cast<uint64_t>(&al2),
+        '\0');
+    ctx.getJointThreadInfoJeallocMap()->reportThreadAllocInfoForStorage(
+        name4,
+        ReportThreadAllocateInfoType::DeallocPtr,
+        reinterpret_cast<uint64_t>(&dl),
+        '\0');
+    ASSERT_EQ(al1 + al2, tiflash_metrics.getProxyThreadMemory(TiFlashMetrics::MemoryAllocType::Alloc, "agg"));
+    ASSERT_EQ(al1, tiflash_metrics.getProxyThreadMemory(TiFlashMetrics::MemoryAllocType::Alloc, "non-agg-1"));
+    ctx.getJointThreadInfoJeallocMap()
+        ->reportThreadAllocInfoForStorage(name1, ReportThreadAllocateInfoType::Remove, 0, '\0');
+    ctx.getJointThreadInfoJeallocMap()
+        ->reportThreadAllocInfoForStorage(name2, ReportThreadAllocateInfoType::Remove, 0, '\0');
+    ctx.getJointThreadInfoJeallocMap()
+        ->reportThreadAllocInfoForStorage(name3, ReportThreadAllocateInfoType::Remove, 0, '+');
+    ctx.getJointThreadInfoJeallocMap()
+        ->reportThreadAllocInfoForStorage(name4, ReportThreadAllocateInfoType::Remove, 0, '+');
+}
+CATCH
+
 TEST(FFIJemallocTest, JemallocThread)
 try
 {
@@ -1008,7 +1081,7 @@ try
 {
     using namespace std::chrono_literals;
     auto & ctx = TiFlashTestEnv::getGlobalContext();
-    auto size = ctx.getSettingsRef().background_pool_size;
+    auto size = TiFlashTestEnv::DEFAULT_BG_POOL_SIZE;
     std::atomic_bool b;
     auto & pool = ctx.getBackgroundPool();
     auto t = pool.addTask(
@@ -1026,7 +1099,15 @@ try
     std::this_thread::sleep_for(500ms);
     JointThreadInfoJeallocMap & jm = *ctx.getJointThreadInfoJeallocMap();
     jm.recordThreadAllocInfo();
-    UInt64 r = TiFlashMetrics::instance().getStorageThreadMemory(TiFlashMetrics::MemoryAllocType::Alloc, "bg");
+
+    LOG_INFO(DB::Logger::get(), "size {}", size);
+    UInt64 r = 0;
+    for (UInt64 i = 0; i < size; i++)
+    {
+        r += TiFlashMetrics::instance().getStorageThreadMemory(
+            TiFlashMetrics::MemoryAllocType::Alloc,
+            fmt::format("bg-{}", i));
+    }
     ASSERT_GE(r, sizeof(int) * 1000);
     jm.accessStorageMap([size](const JointThreadInfoJeallocMap::AllocMap & m) {
         // There are some other bg thread pools

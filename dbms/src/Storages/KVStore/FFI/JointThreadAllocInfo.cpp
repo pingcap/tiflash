@@ -54,9 +54,11 @@ JointThreadInfoJeallocMap::~JointThreadInfoJeallocMap()
     stopThreadAllocInfo();
 }
 
-static std::string getThreadNameAggPrefix(const std::string_view & s)
+static std::string getThreadNameAggPrefix(const std::string_view & s, char delimer)
 {
-    if (auto pos = s.find_last_of('-'); pos != std::string::npos)
+    if (delimer == '\0')
+        return std::string(s.begin(), s.end());
+    if (auto pos = s.find_last_of(delimer); pos != std::string::npos)
     {
         return std::string(s.begin(), s.begin() + pos);
     }
@@ -64,10 +66,11 @@ static std::string getThreadNameAggPrefix(const std::string_view & s)
 }
 
 void JointThreadInfoJeallocMap::reportThreadAllocInfoImpl(
-    std::unordered_map<std::string, ThreadInfoJealloc> & m,
+    JointThreadInfoJeallocMap::AllocMap & m,
     const std::string & tname,
     ReportThreadAllocateInfoType type,
-    uint64_t value)
+    uint64_t value,
+    char aggregate_delimer)
 {
     switch (type)
     {
@@ -75,7 +78,7 @@ void JointThreadInfoJeallocMap::reportThreadAllocInfoImpl(
     {
         {
             std::unique_lock l(memory_allocation_mut);
-            m.insert_or_assign(tname, ThreadInfoJealloc());
+            m.insert_or_assign(tname, ThreadInfoJealloc(aggregate_delimer));
         }
         break;
     }
@@ -123,12 +126,12 @@ void JointThreadInfoJeallocMap::reportThreadAllocInfoForProxy(
     if (thdname.empty())
         return;
     std::string tname(thdname.begin(), thdname.end());
-    reportThreadAllocInfoImpl(proxy_map, tname, type, value);
+    reportThreadAllocInfoImpl(proxy_map, tname, type, value, '-');
     // Extra logics for Reset to set up metrics
     if (type == ReportThreadAllocateInfoType::Reset)
     {
         auto & metrics = TiFlashMetrics::instance();
-        metrics.registerProxyThreadMemory(getThreadNameAggPrefix(tname));
+        metrics.registerProxyThreadMemory(getThreadNameAggPrefix(tname, '-'));
     }
 }
 
@@ -144,7 +147,7 @@ void JointThreadInfoJeallocMap::recordThreadAllocInfoForProxy()
         std::shared_lock l(memory_allocation_mut);
         for (const auto & [k, v] : proxy_map)
         {
-            auto agg_thread_name = getThreadNameAggPrefix(k);
+            auto agg_thread_name = getThreadNameAggPrefix(k, '-');
             // Some thread may have shorter lifetime, we can't use this timed task here to upgrade.
             if (PROXY_RECORD_WHITE_LIST_THREAD_PREFIX.contains(agg_thread_name) && v.has_ptr())
             {
@@ -174,12 +177,11 @@ void JointThreadInfoJeallocMap::reportThreadAllocBatchForProxy(
     if (name.empty())
         return;
     // TODO(jemalloc-trace) Could be costy.
-    auto k = getThreadNameAggPrefix(name);
+    auto k = getThreadNameAggPrefix(name, '-');
     auto & tiflash_metrics = TiFlashMetrics::instance();
     tiflash_metrics.setProxyThreadMemory(TiFlashMetrics::MemoryAllocType::Alloc, k, data.alloc);
     tiflash_metrics.setProxyThreadMemory(TiFlashMetrics::MemoryAllocType::Dealloc, k, data.dealloc);
 }
-
 
 void JointThreadInfoJeallocMap::accessProxyMap(std::function<void(const AllocMap &)> f)
 {
@@ -217,18 +219,19 @@ std::tuple<uint64_t *, uint64_t *> JointThreadInfoJeallocMap::getPtrs()
 void JointThreadInfoJeallocMap::reportThreadAllocInfoForStorage(
     const std::string & tname,
     ReportThreadAllocateInfoType type,
-    uint64_t value)
+    uint64_t value,
+    char aggregate_delimer)
 {
     // Many threads have empty name, better just not handle.
     if (tname.empty())
         return;
-    reportThreadAllocInfoImpl(storage_map, tname, type, value);
+    reportThreadAllocInfoImpl(storage_map, tname, type, value, aggregate_delimer);
     // Extra logics for Reset to set up metrics
     if (type == ReportThreadAllocateInfoType::Reset)
     {
         auto & metrics = TiFlashMetrics::instance();
         // Already a prefix
-        metrics.registerStorageThreadMemory(getThreadNameAggPrefix(tname));
+        metrics.registerStorageThreadMemory(getThreadNameAggPrefix(tname, aggregate_delimer));
     }
 }
 
@@ -239,7 +242,7 @@ void JointThreadInfoJeallocMap::recordThreadAllocInfoForStorage()
     std::unordered_map<std::string, uint64_t> agg_deallocate;
     for (const auto & [k, v] : storage_map)
     {
-        auto agg_thread_name = getThreadNameAggPrefix(k);
+        auto agg_thread_name = getThreadNameAggPrefix(k, v.aggregate_delimer);
         // Some thread may have shorter lifetime, we can't use this timed task here to upgrade.
         if (v.has_ptr())
         {

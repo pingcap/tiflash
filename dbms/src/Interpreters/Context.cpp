@@ -1421,6 +1421,7 @@ void Context::dropCaches() const
 BackgroundProcessingPool & Context::initializeBackgroundPool(UInt16 pool_size)
 {
     auto lock = getLock();
+    LOG_INFO(DB::Logger::get(), "!!!! ffff {}", pool_size);
     if (!shared->background_pool)
         shared->background_pool
             = std::make_shared<BackgroundProcessingPool>(pool_size, "bg-", getJointThreadInfoJeallocMap(lock));
