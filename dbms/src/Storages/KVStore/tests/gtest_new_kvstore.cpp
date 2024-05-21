@@ -1009,7 +1009,6 @@ try
     auto t = ctx.getBackgroundPool().addTask(
         [&]() {
             auto * x = new int[1000];
-            LOG_INFO(DB::Logger::get(), "!!!! S");
             while (!b.load())
             {
                 std::this_thread::sleep_for(1000ms);

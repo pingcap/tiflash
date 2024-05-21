@@ -137,7 +137,6 @@ void JointThreadInfoJeallocMap::reportThreadAllocInfoForStorage(
     ReportThreadAllocateInfoType type,
     uint64_t value)
 {
-    LOG_INFO(DB::Logger::get(), "!!!!! sto {} {}", magic_enum::enum_name(type), tname);
     // Many threads have empty name, better just not handle.
     if (tname.empty())
         return;
@@ -191,12 +190,6 @@ void JointThreadInfoJeallocMap::recordThreadAllocInfoForStorage()
     for (const auto & [k, v] : kvstore_map)
     {
         auto agg_thread_name = getThreadNameAggPrefix(k);
-        LOG_INFO(
-            DB::Logger::get(),
-            "!!!!! recordThreadAllocInfoForStorage {} {} {}",
-            k,
-            agg_thread_name,
-            v.allocated());
         // Some thread may have shorter lifetime, we can't use this timed task here to upgrade.
         if (v.has_ptr())
         {
@@ -206,7 +199,6 @@ void JointThreadInfoJeallocMap::recordThreadAllocInfoForStorage()
     }
     for (const auto & [k, v] : agg_allocate)
     {
-        LOG_INFO(DB::Logger::get(), "!!!!! recordThreadAllocInfoForStorage SSS {} {}", k, v);
         auto & tiflash_metrics = TiFlashMetrics::instance();
         tiflash_metrics.setStorageThreadMemory(TiFlashMetrics::MemoryAllocType::Alloc, k, v);
     }

@@ -217,7 +217,6 @@ void BackgroundProcessingPool::threadFunction(size_t thread_idx) noexcept
         is_background_thread = true;
         addThreadId(getTid());
         auto ptrs = JointThreadInfoJeallocMap::getPtrs();
-        LOG_INFO(DB::Logger::get(), "!!!!!! threadFunction {}", thread_prefix);
         joint_memory_allocation_map->reportThreadAllocInfoForStorage(name, ReportThreadAllocateInfoType::Reset, 0);
         joint_memory_allocation_map->reportThreadAllocInfoForStorage(
             name,

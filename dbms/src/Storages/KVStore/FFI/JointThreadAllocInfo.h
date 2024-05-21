@@ -90,6 +90,7 @@ public:
     static std::tuple<uint64_t *, uint64_t *> getPtrs();
 
     friend class tests::RegionKVStoreTest;
+
 private:
     /// Be called periodicly to submit the alloc info to TiFlashMetrics
     /// Note that this function rely on `TiFlashMetrics::instance` is alive
