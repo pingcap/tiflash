@@ -217,23 +217,22 @@ void BackgroundProcessingPool::threadFunction(size_t thread_idx) noexcept
         is_background_thread = true;
         addThreadId(getTid());
         auto ptrs = JointThreadInfoJeallocMap::getPtrs();
-        joint_memory_allocation_map
-            ->reportThreadAllocInfoForStorage(name, ReportThreadAllocateInfoType::Reset, 0, '\0');
+        joint_memory_allocation_map->reportThreadAllocInfoForStorage(name, ReportThreadAllocateInfoType::Reset, 0, '-');
         joint_memory_allocation_map->reportThreadAllocInfoForStorage(
             name,
             ReportThreadAllocateInfoType::AllocPtr,
             reinterpret_cast<uint64_t>(std::get<0>(ptrs)),
-            '\0');
+            '-');
         joint_memory_allocation_map->reportThreadAllocInfoForStorage(
             name,
             ReportThreadAllocateInfoType::DeallocPtr,
             reinterpret_cast<uint64_t>(std::get<1>(ptrs)),
-            '\0');
+            '-');
     }
 
     SCOPE_EXIT({
         joint_memory_allocation_map
-            ->reportThreadAllocInfoForStorage(name, ReportThreadAllocateInfoType::Remove, 0, '\0');
+            ->reportThreadAllocInfoForStorage(name, ReportThreadAllocateInfoType::Remove, 0, '-');
     });
 
     // set up the thread local memory tracker

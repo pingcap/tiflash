@@ -1101,13 +1101,7 @@ try
     jm.recordThreadAllocInfo();
 
     LOG_INFO(DB::Logger::get(), "size {}", size);
-    UInt64 r = 0;
-    for (UInt64 i = 0; i < size; i++)
-    {
-        r += TiFlashMetrics::instance().getStorageThreadMemory(
-            TiFlashMetrics::MemoryAllocType::Alloc,
-            fmt::format("bg-{}", i));
-    }
+    UInt64 r = TiFlashMetrics::instance().getStorageThreadMemory(TiFlashMetrics::MemoryAllocType::Alloc, "bg");
     ASSERT_GE(r, sizeof(int) * 1000);
     jm.accessStorageMap([size](const JointThreadInfoJeallocMap::AllocMap & m) {
         // There are some other bg thread pools
