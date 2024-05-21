@@ -137,6 +137,7 @@ class DeltaMergeStoreRWTest
 {
 public:
     DeltaMergeStoreRWTest()
+        : current_version(STORAGE_FORMAT_CURRENT)
     {
         mode = GetParam();
 
@@ -157,6 +158,8 @@ public:
             break;
         }
     }
+
+    ~DeltaMergeStoreRWTest() override { setStorageFormat(current_version); }
 
     void SetUp() override
     {
@@ -225,6 +228,7 @@ protected:
     TestMode mode;
     DeltaMergeStorePtr store;
     DMContextPtr dm_context;
+    StorageFormatVersion current_version;
 
     constexpr static const char * TRACING_NAME = "DeltaMergeStoreRWTest";
 

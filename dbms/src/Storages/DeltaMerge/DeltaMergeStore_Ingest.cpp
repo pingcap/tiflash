@@ -121,7 +121,7 @@ void DeltaMergeStore::cleanPreIngestFiles(
                 f.id,
                 f.id,
                 file_parent_path,
-                DM::DMFile::ReadMetaMode::memoryAndDiskSize(),
+                DM::DMFileMeta::ReadMode::memoryAndDiskSize(),
                 keyspace_id);
             removePreIngestFile(f.id, false);
             file->remove(file_provider);
@@ -188,7 +188,7 @@ Segments DeltaMergeStore::ingestDTFilesUsingColumnFile(
                     file_id,
                     page_id,
                     file_parent_path,
-                    DMFile::ReadMetaMode::all(),
+                    DMFileMeta::ReadMode::all(),
                     keyspace_id);
                 data_files.emplace_back(std::move(ref_file));
                 wbs.data.putRefPage(page_id, file->pageId());
@@ -471,7 +471,7 @@ bool DeltaMergeStore::ingestDTFileIntoSegmentUsingSplit(
             file->fileId(),
             new_page_id,
             file->parentPath(),
-            DMFile::ReadMetaMode::all(),
+            DMFileMeta::ReadMode::all(),
             keyspace_id);
         wbs.data.putRefPage(new_page_id, file->pageId());
 
@@ -660,7 +660,7 @@ UInt64 DeltaMergeStore::ingestFiles(
                 external_file.id,
                 external_file.id,
                 file_parent_path,
-                DMFile::ReadMetaMode::memoryAndDiskSize(),
+                DMFileMeta::ReadMode::memoryAndDiskSize(),
                 keyspace_id);
         }
         else
@@ -671,7 +671,7 @@ UInt64 DeltaMergeStore::ingestFiles(
                 .table_id = dm_context->physical_table_id,
                 .file_id = external_file.id};
             file = remote_data_store->prepareDMFile(oid, external_file.id)
-                       ->restore(DMFile::ReadMetaMode::memoryAndDiskSize());
+                       ->restore(DMFileMeta::ReadMode::memoryAndDiskSize());
         }
         rows += file->getRows();
         bytes += file->getBytes();

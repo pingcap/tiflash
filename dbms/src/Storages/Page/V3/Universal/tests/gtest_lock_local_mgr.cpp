@@ -76,7 +76,9 @@ try
         = S3::S3Filename::fromDMFileOID(S3::DMFileOID{.store_id = old_store_id, .table_id = 10, .file_id = 5});
     auto s3name_datafile = S3::S3Filename::newCheckpointData(old_store_id, old_store_seq, 1);
     {
-        S3::uploadEmptyFile(*s3_client, fmt::format("{}/{}", s3name_dtfile.toFullKey(), DM::DMFile::metav2FileName()));
+        S3::uploadEmptyFile(
+            *s3_client,
+            fmt::format("{}/{}", s3name_dtfile.toFullKey(), DM::DMFileMetaV2::metaFileName()));
         PS::V3::CheckpointLocation loc{
             .data_file_id = std::make_shared<String>(s3name_dtfile.toFullKey()),
             .offset_in_file = 0,
