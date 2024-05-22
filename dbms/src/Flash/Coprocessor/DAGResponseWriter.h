@@ -15,9 +15,9 @@
 #pragma once
 
 #include <Core/Block.h>
+#include <Flash/Coprocessor/WaitResult.h>
 #include <common/types.h>
 #include <tipb/select.pb.h>
-#include <Flash/Coprocessor/WaitResult.h>
 
 namespace DB
 {
@@ -31,13 +31,12 @@ public:
     virtual void prepare(const Block &){};
     virtual void write(const Block & block) = 0;
 
-    // For async writer, `isWritable` need to be called before calling `write`.
+    // For async writer, `waitForWritable` need to be called before calling `write`.
     // ```
-    // while (!isWritable()) {}
+    // auto res = waitForWritable();
+    // switch (res) case...
     // write(block);
     // ```
-    virtual bool isWritable() const { throw Exception("Unsupport"); }
-
     virtual WaitResult waitForWritable() const { throw Exception("Unsupport"); }
 
     /// flush cached blocks for batch writer

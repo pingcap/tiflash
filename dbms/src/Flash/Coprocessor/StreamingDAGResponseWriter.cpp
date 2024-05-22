@@ -68,12 +68,6 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::flush()
 }
 
 template <class StreamWriterPtr>
-bool StreamingDAGResponseWriter<StreamWriterPtr>::isWritable() const
-{
-    return writer->isWritable();
-}
-
-template <class StreamWriterPtr>
 WaitResult StreamingDAGResponseWriter<StreamWriterPtr>::waitForWritable() const
 {
     return writer->waitForWritable();

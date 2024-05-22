@@ -147,7 +147,6 @@ struct MockWriter
         queue->push(tracked_packet);
     }
     static uint16_t getPartitionNum() { return 1; }
-    static bool isWritable() { throw Exception("Unsupport async write"); }
     static WaitResult waitForWritable() { throw Exception("Unsupport async write"); }
 
     std::vector<tipb::FieldType> result_field_types;

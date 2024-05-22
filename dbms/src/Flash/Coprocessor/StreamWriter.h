@@ -58,7 +58,6 @@ struct CopStreamWriter
         if (!writer->Write(resp))
             throw Exception("Failed to write resp");
     }
-    static bool isWritable() { throw Exception("Unsupport async write"); }
     static WaitResult waitForWritable() { throw Exception("Unsupport async write"); }
 };
 
@@ -83,7 +82,6 @@ struct BatchCopStreamWriter
         if (!writer->Write(resp))
             throw Exception("Failed to write resp");
     }
-    static bool isWritable() { throw Exception("Unsupport async write"); }
     static WaitResult waitForWritable() { throw Exception("Unsupport async write"); }
 };
 

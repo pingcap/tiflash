@@ -18,7 +18,6 @@
 #include <Flash/Mpp/TrackedMppDataPacket.h>
 #include <Flash/Mpp/Utils.h>
 #include <fmt/core.h>
-#include "Flash/Mpp/MPPTunnel.h"
 
 namespace DB
 {
@@ -66,17 +65,6 @@ void MPPTunnelSetBase<Tunnel>::forceWrite(tipb::SelectResponse & response, size_
 {
     assert(index < tunnels.size());
     tunnels[index]->forceWrite(serializePacket(response));
-}
-
-template <typename Tunnel>
-bool MPPTunnelSetBase<Tunnel>::isWritable() const
-{
-    for (const auto & tunnel : tunnels)
-    {
-        if (!tunnel->isWritable())
-            return false;
-    }
-    return true;
 }
 
 template <typename Tunnel>

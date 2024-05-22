@@ -69,8 +69,6 @@ public:
 
     uint16_t getPartitionNum() const { return mpp_tunnel_set->getPartitionNum(); }
 
-    virtual bool isWritable() const = 0;
-
     virtual WaitResult waitForWritable() const = 0;
 
 protected:
@@ -93,9 +91,6 @@ public:
         : MPPTunnelSetWriterBase(mpp_tunnel_set_, result_field_types_, req_id)
     {}
 
-    // For sync writer, `isWritable` will not be called, so an exception is thrown here.
-    bool isWritable() const override { throw Exception("Unsupport sync writer"); }
-
     // For sync writer, `waitForWritable` will not be called, so an exception is thrown here.
     WaitResult waitForWritable() const override { throw Exception("Unsupport sync writer"); }
 
@@ -114,8 +109,6 @@ public:
         const String & req_id)
         : MPPTunnelSetWriterBase(mpp_tunnel_set_, result_field_types_, req_id)
     {}
-
-    bool isWritable() const override { return mpp_tunnel_set->isWritable(); }
 
     WaitResult waitForWritable() const override { return mpp_tunnel_set->waitForWritable(); }
 

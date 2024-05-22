@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include <Operators/ExchangeSenderSinkOp.h>
-#include "Flash/Coprocessor/WaitResult.h"
 
 namespace DB
 {
@@ -40,12 +39,7 @@ OperatorStatus ExchangeSenderSinkOp::writeImpl(Block && block)
     return OperatorStatus::NEED_INPUT;
 }
 
-OperatorStatus ExchangeSenderSinkOp::prepareImpl()
-{
-    return awaitImpl();
-}
-
-OperatorStatus ExchangeSenderSinkOp::awaitImpl()
+OperatorStatus ExchangeSenderSinkOp::waitForWriter() const
 {
     auto res = writer->waitForWritable();
     switch (res)
@@ -57,6 +51,16 @@ OperatorStatus ExchangeSenderSinkOp::awaitImpl()
     case WaitResult::WaitForNotify:
         return OperatorStatus::WAIT_FOR_NOTIFY;
     }
+}
+
+OperatorStatus ExchangeSenderSinkOp::prepareImpl()
+{
+    return waitForWriter();
+}
+
+OperatorStatus ExchangeSenderSinkOp::awaitImpl()
+{
+    return waitForWriter();
 }
 
 } // namespace DB

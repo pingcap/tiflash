@@ -493,15 +493,14 @@ public:
     void write(TrackedMppDataPacketPtr && data);
 
     // forceWrite write a single packet to the tunnel's send queue without blocking,
-    // and need to call isReadForWrite first.
+    // and need to call waitForWritable first.
     // ```
-    // while (!isWritable()) {}
+    // auto res = waitForWritable();
+    // switch (res) case...
     // forceWrite(std::move(data));
     // ```
-    void forceWrite(TrackedMppDataPacketPtr && data);
-    bool isWritable() const;
-
     WaitResult waitForWritable() const;
+    void forceWrite(TrackedMppDataPacketPtr && data);
 
     // finish the writing, and wait until the sender finishes.
     void writeDone();

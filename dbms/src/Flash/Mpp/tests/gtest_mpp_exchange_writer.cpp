@@ -224,7 +224,6 @@ struct MockExchangeWriter
         // make only part 0 use local tunnel
         return index == 0;
     }
-    static bool isWritable() { throw Exception("Unsupport async write"); }
     static WaitResult waitForWritable() { throw Exception("Unsupport async write"); }
 
 private:
