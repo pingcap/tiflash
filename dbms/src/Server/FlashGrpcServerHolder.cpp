@@ -96,9 +96,12 @@ static grpc_ssl_certificate_config_reload_status sslServerCertificateConfigCallb
     }
     auto * context = static_cast<Context *>(arg);
     auto options = context->getSecurityConfig()->readAndCacheSslCredentialOptions();
-    if (options.has_value()) {
-        grpc_ssl_pem_key_cert_pair pem_key_cert_pair = {options.value().pem_private_key.c_str(), options.value().pem_cert_chain.c_str()};
-        *config = grpc_ssl_server_certificate_config_create(options.value().pem_root_certs.c_str(), &pem_key_cert_pair, 1);
+    if (options.has_value())
+    {
+        grpc_ssl_pem_key_cert_pair pem_key_cert_pair
+            = {options.value().pem_private_key.c_str(), options.value().pem_cert_chain.c_str()};
+        *config
+            = grpc_ssl_server_certificate_config_create(options.value().pem_root_certs.c_str(), &pem_key_cert_pair, 1);
         return GRPC_SSL_CERTIFICATE_CONFIG_RELOAD_NEW;
     }
     return GRPC_SSL_CERTIFICATE_CONFIG_RELOAD_UNCHANGED;
