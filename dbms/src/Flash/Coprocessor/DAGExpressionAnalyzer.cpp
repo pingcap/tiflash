@@ -640,6 +640,12 @@ void DAGExpressionAnalyzer::buildAggGroupBy(
             aggregated_columns.emplace_back(name, actions->getSampleBlock().getByName(name).type);
         }
     }
+#ifndef NDEBUG
+    for (const auto & p : key_ref_agg_func)
+    {
+        LOG_TRACE(Logger::get(), "key_ref_agg_func optimization: {} ref {}", p.first, p.second);
+    }
+#endif
 }
 
 void DAGExpressionAnalyzer::tryEliminateFirstRow(
@@ -677,6 +683,13 @@ void DAGExpressionAnalyzer::tryEliminateFirstRow(
         }
     }
     aggregate_descriptions = tmp_aggregate_descriptions;
+
+#ifndef NDEBUG
+    for (const auto & p : agg_func_ref_key)
+    {
+        LOG_TRACE(Logger::get(), "agg_func_ref_key optimization: {} ref {}", p.first, p.second);
+    }
+#endif
 }
 
 void DAGExpressionAnalyzer::buildAggFuncs(
