@@ -214,6 +214,7 @@ TEST(TiFlashSecurityTest, readAndCacheSslCredentialOptions)
     String file_name = test_info->file();
     auto pos = file_name.find_last_of('/');
     auto file_path = file_name.substr(0, pos);
+    // these certs are copied from https://github.com/grpc/grpc/tree/v1.64.0/src/python/grpcio_tests/tests/unit/credentials
     auto ca_path = file_path + "/tls/ca.crt";
     auto cert_path = file_path + "/tls/cert.crt";
     auto key_path = file_path + "/tls/key.pem";
@@ -228,6 +229,7 @@ TEST(TiFlashSecurityTest, readAndCacheSslCredentialOptions)
     // not return valid options if cert is not changed
     options = tiflash_config.readAndCacheSslCredentialOptions();
     ASSERT_FALSE(options.has_value());
+    // these certs are copied from https://github.com/grpc/grpc/tree/v1.64.0/src/python/grpcio_tests/tests/unit/credentials
     ca_path = file_path + "/tls/ca_new.crt";
     cert_path = file_path + "/tls/cert_new.crt";
     key_path = file_path + "/tls/key_new.pem";
