@@ -42,5 +42,10 @@ header:
     - '.devcontainer/'
     - '**/OWNERS'
     - 'OWNERS_ALIASES'
+<<<<<<< HEAD
+=======
+    - '**/*.sql'
+    - 'dbms/src/Common/tests/tls/'
+>>>>>>> bab33aa025 (security: Do not let grpc reload ssh cert if not changed (#9068))
 
   comment: on-failure
