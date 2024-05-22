@@ -185,6 +185,7 @@ using ColFloat64Type = typename TypeTraits<Float64>::FieldType;
 using ColStringType = typename TypeTraits<String>::FieldType;
 using ColInt32Type = typename TypeTraits<Int32>::FieldType;
 using ColUInt8Type = typename TypeTraits<UInt8>::FieldType;
+using ColInt8Type = typename TypeTraits<Int8>::FieldType;
 
 // nullable column
 using ColumnWithNullableString = std::vector<ColStringNullableType>;
@@ -205,5 +206,6 @@ using ColumnWithUInt64 = std::vector<ColUInt64Type>;
 using ColumnWithFloat64 = std::vector<ColFloat64Type>;
 using ColumnWithString = std::vector<ColStringType>;
 using ColumnWithUInt8 = std::vector<ColUInt8Type>;
+using ColumnWithInt8 = std::vector<ColInt8Type>;
 using ColumnWithInt32 = std::vector<ColInt32Type>;
 } // namespace DB::tests
