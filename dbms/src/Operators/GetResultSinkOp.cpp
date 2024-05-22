@@ -46,7 +46,7 @@ OperatorStatus GetResultSinkOp::tryFlush()
     case MPMCQueueResult::CANCELLED:
         return OperatorStatus::CANCELLED;
     default:
-        // queue result can not be finish/empty here.
+        // queue result can not be finished/empty here.
         RUNTIME_CHECK_MSG(
             false,
             "Unexpected queue result for GetResultSinkOp: {}",
