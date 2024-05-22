@@ -53,7 +53,7 @@ ExecTaskStatus StreamRestoreTask::tryFlush()
     case MPMCQueueResult::CANCELLED:
         return ExecTaskStatus::CANCELLED;
     default:
-        // queue result can not be finish/empty here.
+        // queue result can not be finished/empty here.
         throw Exception(fmt::format("Unexpect result: {}", magic_enum::enum_name(ret)));
     }
 }
