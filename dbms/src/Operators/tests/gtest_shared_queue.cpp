@@ -26,7 +26,7 @@ class TestSharedQueue : public ::testing::Test
 TEST_F(TestSharedQueue, base)
 try
 {
-    auto shared_queue = SharedQueue::build(2, 1, 0);
+    auto shared_queue = SharedQueue::buildInternal(2, 1, 0);
     {
         Block block{ColumnGenerator::instance().generate({2, "Int32", DataDistribution::RANDOM})};
         ASSERT_EQ(shared_queue->tryPush(std::move(block)), MPMCQueueResult::OK);

@@ -399,7 +399,7 @@ FileType FileCache::getFileType(const String & fname)
     auto ext = p.extension();
     if (ext.empty())
     {
-        return p.stem() == DM::DMFile::metav2FileName() ? FileType::Meta : FileType::Unknow;
+        return p.stem() == DM::DMFileMetaV2::metaFileName() ? FileType::Meta : FileType::Unknow;
     }
     else if (ext == ".merged")
     {

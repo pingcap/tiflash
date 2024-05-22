@@ -49,7 +49,7 @@ namespace
 constexpr UInt8 JUST_COPY_CODE = 0xFF;
 
 // TODO: better implementation
-template <typename T>
+template <std::integral T>
 UInt32 compressDataForType(const char * source, UInt32 source_size, char * dest)
 {
     const char * source_end = source + source_size;
@@ -84,7 +84,7 @@ UInt32 compressDataForType(const char * source, UInt32 source_size, char * dest)
     return 1 + rle_vec.size() * RLE_PAIR_LENGTH;
 }
 
-template <typename T>
+template <std::integral T>
 void decompressDataForType(const char * source, UInt32 source_size, char * dest, UInt32 output_size)
 {
     const char * output_end = dest + output_size;

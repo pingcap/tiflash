@@ -109,7 +109,7 @@ ColumnFilePersistedPtr ColumnFileBig::deserializeMetadata(
         const auto & lock_key_view = S3::S3FilenameView::fromKey(*(remote_data_location->data_file_id));
         auto file_oid = lock_key_view.asDataFile().getDMFileOID();
         auto prepared = remote_data_store->prepareDMFile(file_oid, file_page_id);
-        dmfile = prepared->restore(DMFile::ReadMetaMode::all());
+        dmfile = prepared->restore(DMFileMeta::ReadMode::all());
         // gc only begin to run after restore so we can safely call addRemoteDTFileIfNotExists here
         path_delegate.addRemoteDTFileIfNotExists(local_external_id, dmfile->getBytesOnDisk());
     }
@@ -122,7 +122,7 @@ ColumnFilePersistedPtr ColumnFileBig::deserializeMetadata(
             file_id,
             file_page_id,
             file_parent_path,
-            DMFile::ReadMetaMode::all(),
+            DMFileMeta::ReadMode::all(),
             dm_context.keyspace_id);
         auto res = path_delegate.updateDTFileSize(file_id, dmfile->getBytesOnDisk());
         RUNTIME_CHECK_MSG(res, "update dt file size failed, path={}", dmfile->path());
@@ -164,7 +164,7 @@ ColumnFilePersistedPtr ColumnFileBig::createFromCheckpoint(
     wbs.data.putRemoteExternal(new_local_page_id, loc);
     auto remote_data_store = dm_context.global_context.getSharedContextDisagg()->remote_data_store;
     auto prepared = remote_data_store->prepareDMFile(file_oid, new_local_page_id);
-    auto dmfile = prepared->restore(DMFile::ReadMetaMode::all());
+    auto dmfile = prepared->restore(DMFileMeta::ReadMode::all());
     wbs.writeLogAndData();
     // new_local_page_id is already applied to PageDirectory so we can safely call addRemoteDTFileIfNotExists here
     delegator.addRemoteDTFileIfNotExists(new_local_page_id, dmfile->getBytesOnDisk());
