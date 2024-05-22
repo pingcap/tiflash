@@ -258,8 +258,10 @@ TEST(TiFlashSecurityTest, readAndCacheSslCredentialOptions)
         fos << options.value().pem_root_certs;
     }
     new_options = tiflash_config.readAndCacheSslCredentialOptions();
+    // no aware of the change since `update` is not called
     ASSERT_FALSE(new_options.has_value());
     ASSERT_TRUE(tiflash_config.update(*config));
+    // aware of the change and return a new options
     new_options = tiflash_config.readAndCacheSslCredentialOptions();
     ASSERT_TRUE(new_options.has_value());
     Poco::File ca_file(ca_path);
