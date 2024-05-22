@@ -188,5 +188,57 @@ redact_info_log=false
     ASSERT_TRUE(tiflash_config_2.allowedCommonNames().empty());
     ASSERT_FALSE(tiflash_config_2.hasTlsConfig());
 }
+
+String createConfigString(String & ca_path, String & cert_path, String & key_path)
+{
+    String ret =
+        R"(
+[security]
+ca_path=")";
+    ret += ca_path;
+    ret += R"("
+cert_path=")";
+    ret += cert_path;
+    ret += R"("
+key_path=")";
+    ret += key_path;
+    ret += R"("
+)";
+    return ret;
+}
+
+TEST(TiFlashSecurityTest, readAndCacheSslCredentialOptions)
+{
+    const auto & test_info = testing::UnitTest::GetInstance()->current_test_info();
+    assert(test_info);
+    String file_name = test_info->file();
+    auto pos = file_name.find_last_of('/');
+    auto file_path = file_name.substr(0, pos);
+    auto ca_path = file_path + "/tls/ca.crt";
+    auto cert_path = file_path + "/tls/cert.crt";
+    auto key_path = file_path + "/tls/key.pem";
+    auto test = createConfigString(ca_path, cert_path, key_path);
+    auto config = loadConfigFromString(test);
+    const auto log = Logger::get();
+    TiFlashSecurityConfig tiflash_config(log);
+    tiflash_config.init(*config);
+    // first read will return a valid options
+    auto options = tiflash_config.readAndCacheSslCredentialOptions();
+    ASSERT_TRUE(options.has_value());
+    // not return valid options if cert is not changed
+    options = tiflash_config.readAndCacheSslCredentialOptions();
+    ASSERT_FALSE(options.has_value());
+    ca_path = file_path + "/tls/ca_new.crt";
+    cert_path = file_path + "/tls/cert_new.crt";
+    key_path = file_path + "/tls/key_new.pem";
+    test = createConfigString(ca_path, cert_path, key_path);
+    config = loadConfigFromString(test);
+    ASSERT_TRUE(tiflash_config.update(*config));
+    // return a valid options if cert is changed
+    options = tiflash_config.readAndCacheSslCredentialOptions();
+    ASSERT_TRUE(options.has_value());
+    options = tiflash_config.readAndCacheSslCredentialOptions();
+    ASSERT_FALSE(options.has_value());
+}
 } // namespace tests
 } // namespace DB
