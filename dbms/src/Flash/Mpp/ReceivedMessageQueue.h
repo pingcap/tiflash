@@ -21,6 +21,7 @@
 #include <Common/TiFlashMetrics.h>
 #include <Flash/Mpp/ReceivedMessage.h>
 #include <Flash/Mpp/TrackedMppDataPacket.h>
+#include <Flash/Pipeline/Schedule/Tasks/NotifyFuture.h>
 
 #include <memory>
 #include <utility>
