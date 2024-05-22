@@ -133,6 +133,7 @@ struct AggregationMethodOneNumber
         HashMethodOneNumber<typename Data::value_type, Mapped, FieldType, consecutive_keys_optimization>;
     using EmplaceResult = ColumnsHashing::columns_hashing_impl::EmplaceResultImpl<Mapped>;
 
+    static bool canUseKeyRefAggFuncOptimization() { return true; }
     /// Shuffle key columns before `insertKeyIntoColumns` call if needed.
     std::optional<Sizes> shuffleKeyColumns(std::vector<IColumn *> &, const Sizes &) { return {}; }
 
@@ -169,6 +170,7 @@ struct AggregationMethodString
     using State = ColumnsHashing::HashMethodString<typename Data::value_type, Mapped>;
     using EmplaceResult = ColumnsHashing::columns_hashing_impl::EmplaceResultImpl<Mapped>;
 
+    static bool canUseKeyRefAggFuncOptimization() { return true; }
     std::optional<Sizes> shuffleKeyColumns(std::vector<IColumn *> &, const Sizes &) { return {}; }
 
     static void insertKeyIntoColumns(
@@ -202,6 +204,7 @@ struct AggregationMethodStringNoCache
     using State = ColumnsHashing::HashMethodString<typename Data::value_type, Mapped, true, false>;
     using EmplaceResult = ColumnsHashing::columns_hashing_impl::EmplaceResultImpl<Mapped>;
 
+    static bool canUseKeyRefAggFuncOptimization() { return true; }
     std::optional<Sizes> shuffleKeyColumns(std::vector<IColumn *> &, const Sizes &) { return {}; }
 
     static void insertKeyIntoColumns(
@@ -234,6 +237,7 @@ struct AggregationMethodOneKeyStringNoCache
     using State = ColumnsHashing::HashMethodStringBin<typename Data::value_type, Mapped, bin_padding>;
     using EmplaceResult = ColumnsHashing::columns_hashing_impl::EmplaceResultImpl<Mapped>;
 
+    static bool canUseKeyRefAggFuncOptimization() { return true; }
     std::optional<Sizes> shuffleKeyColumns(std::vector<IColumn *> &, const Sizes &) { return {}; }
 
     ALWAYS_INLINE static inline void insertKeyIntoColumns(
@@ -299,6 +303,7 @@ struct AggregationMethodFastPathTwoKeysNoCache
         = ColumnsHashing::HashMethodFastPathTwoKeysSerialized<Key1Desc, Key2Desc, typename Data::value_type, Mapped>;
     using EmplaceResult = ColumnsHashing::columns_hashing_impl::EmplaceResultImpl<Mapped>;
 
+    static bool canUseKeyRefAggFuncOptimization() { return true; }
     std::optional<Sizes> shuffleKeyColumns(std::vector<IColumn *> &, const Sizes &) { return {}; }
 
     template <typename KeyType>
@@ -402,6 +407,7 @@ struct AggregationMethodFixedString
     using State = ColumnsHashing::HashMethodFixedString<typename Data::value_type, Mapped>;
     using EmplaceResult = ColumnsHashing::columns_hashing_impl::EmplaceResultImpl<Mapped>;
 
+    static bool canUseKeyRefAggFuncOptimization() { return true; }
     std::optional<Sizes> shuffleKeyColumns(std::vector<IColumn *> &, const Sizes &) { return {}; }
 
     static void insertKeyIntoColumns(
@@ -434,6 +440,7 @@ struct AggregationMethodFixedStringNoCache
     using State = ColumnsHashing::HashMethodFixedString<typename Data::value_type, Mapped, true, false>;
     using EmplaceResult = ColumnsHashing::columns_hashing_impl::EmplaceResultImpl<Mapped>;
 
+    static bool canUseKeyRefAggFuncOptimization() { return true; }
     std::optional<Sizes> shuffleKeyColumns(std::vector<IColumn *> &, const Sizes &) { return {}; }
 
     static void insertKeyIntoColumns(
@@ -445,7 +452,6 @@ struct AggregationMethodFixedStringNoCache
         static_cast<ColumnFixedString *>(key_columns[0])->insertData(key.data, key.size);
     }
 };
-
 
 /// For the case where all keys are of fixed length, and they fit in N (for example, 128) bits.
 template <typename TData, bool has_nullable_keys_ = false, bool use_cache = true>
@@ -469,6 +475,7 @@ struct AggregationMethodKeysFixed
         = ColumnsHashing::HashMethodKeysFixed<typename Data::value_type, Key, Mapped, has_nullable_keys, use_cache>;
     using EmplaceResult = ColumnsHashing::columns_hashing_impl::EmplaceResultImpl<Mapped>;
 
+    static bool canUseKeyRefAggFuncOptimization() { return false; }
     std::optional<Sizes> shuffleKeyColumns(std::vector<IColumn *> & key_columns, const Sizes & key_sizes)
     {
         return State::shuffleKeyColumns(key_columns, key_sizes);
@@ -532,7 +539,6 @@ struct AggregationMethodKeysFixed
     }
 };
 
-
 /** Aggregates by concatenating serialized key values.
   * The serialized value differs in that it uniquely allows to deserialize it, having only the position with which it starts.
   * That is, for example, for strings, it contains first the serialized length of the string, and then the bytes.
@@ -557,6 +563,7 @@ struct AggregationMethodSerialized
     using State = ColumnsHashing::HashMethodSerialized<typename Data::value_type, Mapped>;
     using EmplaceResult = ColumnsHashing::columns_hashing_impl::EmplaceResultImpl<Mapped>;
 
+    static bool canUseKeyRefAggFuncOptimization() { return true; }
     std::optional<Sizes> shuffleKeyColumns(std::vector<IColumn *> &, const Sizes &) { return {}; }
 
     static void insertKeyIntoColumns(

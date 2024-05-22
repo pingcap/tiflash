@@ -1547,8 +1547,17 @@ ExpressionActionsPtr DAGExpressionAnalyzer::appendCopyColumnAfterAgg(
     agg_output_columns.reserve(actual_agg_output_col_cnt);
     for (const auto & col : aggregated_columns)
     {
-        if (key_ref_agg_func.find(col.name) == key_ref_agg_func.end()
-            && agg_func_ref_key.find(col.name) == agg_func_ref_key.end())
+        const bool found_in_key_ref_agg_func = key_ref_agg_func.find(col.name) != key_ref_agg_func.end();
+        const bool found_in_agg_func_ref_key = agg_func_ref_key.find(col.name) != agg_func_ref_key.end();
+
+        // Agg col cannot exists both in key_ref_agg_func and agg_func_ref_key.
+        // Because key_ref_agg_func is only for column with collator,
+        // and agg_func_ref_key is only for column without collator.
+        RUNTIME_CHECK(!(found_in_key_ref_agg_func && found_in_agg_func_ref_key));
+
+        // If agg col doesn't exist neither, it means Aggregator should output it.
+        // Otherwise this col should reference some column of the output column of Aggregator.
+        if (!found_in_key_ref_agg_func && !found_in_agg_func_ref_key)
         {
             agg_output_columns.push_back(col);
         }

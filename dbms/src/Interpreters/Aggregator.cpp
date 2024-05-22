@@ -120,6 +120,11 @@ void AggregatedDataVariants::init(Type variants_type)
     case AggregationMethodType(NAME):                                                        \
     {                                                                                        \
         aggregation_method_impl = std::make_unique<AggregationMethodName(NAME)>().release(); \
+        if (!aggregator->params.key_ref_agg_func.empty())                                    \
+            RUNTIME_CHECK_MSG(                                                               \
+                AggregationMethodName(NAME)::canUseKeyRefAggFuncOptimization(),              \
+                "cannot use key_ref_agg_func opt for method {}",                             \
+                getMethodName());                                                            \
         break;                                                                               \
     }
 
@@ -1530,12 +1535,18 @@ void NO_INLINE Aggregator::convertToBlockImplFinal(
     MutableColumns & final_aggregate_columns,
     Arena * arena) const
 {
-    Sizes key_sizes_ref;
+    Sizes key_sizes_ref = key_sizes;
     AggregatorMethodInitKeyColumnHelper<Method> agg_keys_helper{method};
     if constexpr (!skip_convert_key)
     {
         auto shuffled_key_sizes = method.shuffleKeyColumns(key_columns, key_sizes);
-        key_sizes_ref = shuffled_key_sizes ? *shuffled_key_sizes : key_sizes;
+        if (shuffled_key_sizes)
+        {
+            // When key_ref_agg_func is not empty, we may reorder key to skip copying some key from HashMap.
+            // But this optimization is not compatible with shuffleKeyColumns of AggregationMethodKeysFixed.
+            RUNTIME_CHECK(params.key_ref_agg_func.empty());
+            key_sizes_ref = *shuffled_key_sizes;
+        }
         agg_keys_helper.initAggKeys(data.size(), key_columns);
     }
 
@@ -1597,11 +1608,15 @@ void NO_INLINE Aggregator::convertToBlocksImplFinal(
 {
     assert(!key_columns_vec.empty());
     std::vector<std::unique_ptr<AggregatorMethodInitKeyColumnHelper<std::decay_t<Method>>>> agg_keys_helpers;
-    Sizes key_sizes_ref;
+    Sizes key_sizes_ref = key_sizes;
     if constexpr (!skip_convert_key)
     {
         auto shuffled_key_sizes = shuffleKeyColumnsForKeyColumnsVec(method, key_columns_vec, key_sizes);
-        key_sizes_ref = shuffled_key_sizes ? *shuffled_key_sizes : key_sizes;
+        if (shuffled_key_sizes)
+        {
+            RUNTIME_CHECK(params.key_ref_agg_func.empty());
+            key_sizes_ref = *shuffled_key_sizes;
+        }
         agg_keys_helpers = initAggKeysForKeyColumnsVec(method, key_columns_vec, params.max_block_size, data.size());
     }
 
@@ -1627,11 +1642,15 @@ void NO_INLINE Aggregator::convertToBlockImplNotFinal(
     AggregateColumnsData & aggregate_columns) const
 {
     AggregatorMethodInitKeyColumnHelper<Method> agg_keys_helper{method};
-    Sizes key_sizes_ref;
+    Sizes key_sizes_ref = key_sizes;
     if constexpr (!skip_convert_key)
     {
         auto shuffled_key_sizes = method.shuffleKeyColumns(key_columns, key_sizes);
-        key_sizes_ref = shuffled_key_sizes ? *shuffled_key_sizes : key_sizes;
+        if (shuffled_key_sizes)
+        {
+            RUNTIME_CHECK(params.key_ref_agg_func.empty());
+            key_sizes_ref = *shuffled_key_sizes;
+        }
         agg_keys_helper.initAggKeys(data.size(), key_columns);
     }
 
@@ -1658,11 +1677,15 @@ void NO_INLINE Aggregator::convertToBlocksImplNotFinal(
     std::vector<AggregateColumnsData> & aggregate_columns_vec) const
 {
     std::vector<std::unique_ptr<AggregatorMethodInitKeyColumnHelper<std::decay_t<Method>>>> agg_keys_helpers;
-    Sizes key_sizes_ref;
+    Sizes key_sizes_ref = key_sizes;
     if constexpr (!skip_convert_key)
     {
         auto shuffled_key_sizes = shuffleKeyColumnsForKeyColumnsVec(method, key_columns_vec, key_sizes);
-        key_sizes_ref = shuffled_key_sizes ? *shuffled_key_sizes : key_sizes;
+        if (shuffled_key_sizes)
+        {
+            RUNTIME_CHECK(params.key_ref_agg_func.empty());
+            key_sizes_ref = shuffled_key_sizes ? *shuffled_key_sizes : key_sizes;
+        }
         agg_keys_helpers = initAggKeysForKeyColumnsVec(method, key_columns_vec, params.max_block_size, data.size());
     }
 
