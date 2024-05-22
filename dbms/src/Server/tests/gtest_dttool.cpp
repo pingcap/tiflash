@@ -319,7 +319,7 @@ TEST_F(DTToolTest, BlockwiseInvariant)
             1,
             0,
             getTemporaryPath(),
-            DB::DM::DMFile::ReadMetaMode::all());
+            DB::DM::DMFileMeta::ReadMode::all());
         if (version == 2)
         {
             EXPECT_EQ(refreshed_file->getConfiguration()->getChecksumFrameLength(), frame_size);

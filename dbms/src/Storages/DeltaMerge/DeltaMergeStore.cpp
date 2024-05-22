@@ -2001,7 +2001,7 @@ void DeltaMergeStore::restoreStableFilesFromLocal() const
 void DeltaMergeStore::removeLocalStableFilesIfDisagg() const
 {
     listLocalStableFiles([](UInt64 file_id, const String & root_path) {
-        auto path = DMFile::getPathByStatus(root_path, file_id, DMFile::Status::READABLE);
+        auto path = getPathByStatus(root_path, file_id, DMFileStatus::READABLE);
         Poco::File file(path);
         if (file.exists())
         {

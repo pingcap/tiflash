@@ -135,7 +135,7 @@ public:
                     id,
                     /* page_id= */ 0,
                     path,
-                    DMFile::ReadMetaMode::none(),
+                    DMFileMeta::ReadMode::none(),
                     path_pool->getKeyspaceID());
                 if (unlikely(!dmfile))
                 {
@@ -152,7 +152,7 @@ public:
                     LOG_INFO(
                         logger,
                         "GC try remove useless DM file, but file not found and may have been removed, dmfile={}",
-                        DMFile::getPathByStatus(path, id, DMFile::Status::READABLE));
+                        getPathByStatus(path, id, DMFileStatus::READABLE));
                     continue; // next file
                 }
                 else if (dmfile->canGC())
