@@ -96,6 +96,7 @@ namespace DB
     M(unblock_query_init_after_write)                        \
     M(exception_in_merged_task_init)                         \
     M(force_fail_in_flush_region_data)                       \
+    M(force_schema_sync_too_old_schema)                      \
     M(exception_after_large_write_exceed)                    \
     M(delta_tree_create_node_fail)
 

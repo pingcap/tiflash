@@ -1122,9 +1122,9 @@ inline OptionTableInfoConstRef getTableInfoForCreateStatement(
 
 void StorageDeltaMerge::alterImpl(
     const AlterCommands & commands,
-    const String & database_name,
+    const String & database_name_,
     const String & table_name_,
-    const OptionTableInfoConstRef table_info,
+    OptionTableInfoConstRef table_info,
     const Context & context)
 try
 {
@@ -1229,7 +1229,7 @@ try
     // after update `new_columns` and store's table columns, we need to update create table statement,
     // so that we can restore table next time.
     updateDeltaMergeTableCreateStatement(
-        database_name,
+        database_name_,
         table_name_,
         pk_desc,
         getColumns(),

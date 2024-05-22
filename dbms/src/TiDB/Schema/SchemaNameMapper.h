@@ -29,8 +29,12 @@ struct SchemaNameMapper
 
     virtual String mapDatabaseName(const TiDB::DBInfo & db_info) const { return DATABASE_PREFIX + std::to_string(db_info.id); }
     virtual String displayDatabaseName(const TiDB::DBInfo & db_info) const { return db_info.name; }
-    virtual String mapTableName(const TiDB::TableInfo & table_info) const { return TABLE_PREFIX + std::to_string(table_info.id); }
+    virtual String mapTableName(const TiDB::TableInfo & table_info) const { return mapTableNameByID(table_info.id); }
     virtual String displayTableName(const TiDB::TableInfo & table_info) const { return table_info.name; }
+    virtual String mapTableNameByID(const TiDB::TableID table_id) const
+    {
+        return fmt::format("{}{}", TABLE_PREFIX, table_id);
+    }
     virtual String mapPartitionName(const TiDB::TableInfo & table_info) const { return mapTableName(table_info); }
 
     // Only use for logging / debugging

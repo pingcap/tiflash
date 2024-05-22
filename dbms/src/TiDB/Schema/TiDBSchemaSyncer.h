@@ -33,6 +33,10 @@ namespace ErrorCodes
 {
 extern const int FAIL_POINT_ERROR;
 };
+namespace FailPoints
+{
+extern const char force_schema_sync_too_old_schema[];
+}
 
 template <bool mock_getter, bool mock_mapper>
 struct TiDBSchemaSyncer : public SchemaSyncer
@@ -59,7 +63,13 @@ struct TiDBSchemaSyncer : public SchemaSyncer
         , log(Logger::get())
     {}
 
-    bool isTooOldSchema(Int64 cur_ver, Int64 new_version) { return cur_ver == 0 || new_version - cur_ver > maxNumberOfDiffs; }
+    bool isTooOldSchema(Int64 cur_ver, Int64 new_version)
+    {
+        fiu_do_on(FailPoints::force_schema_sync_too_old_schema, {
+            return true;
+        });
+        return cur_ver == 0 || new_version - cur_ver > maxNumberOfDiffs;
+    }
 
     Getter createSchemaGetter()
     {

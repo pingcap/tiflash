@@ -607,6 +607,36 @@ void SchemaBuilder<Getter, NameMapper>::applyPartitionDiff(const TiDB::DBInfoPtr
 }
 
 template <typename Getter, typename NameMapper>
+TiDB::DBInfoPtr SchemaBuilder<Getter, NameMapper>::tryFindDatabaseByPartitionTable(const TiDB::DBInfoPtr & db_info, const String & part_table_name)
+{
+    bool ok = context.getDatabase(name_mapper.mapDatabaseName(*db_info))->isTableExist(context, part_table_name);
+    if (ok)
+    {
+        return db_info;
+    }
+
+    auto local_dbs = context.getDatabases();
+    for (const auto & [db_name, local_db] : local_dbs)
+    {
+        if (!local_db->isTableExist(context, part_table_name))
+        {
+            continue;
+        }
+        auto db_tiflash = std::dynamic_pointer_cast<DatabaseTiFlash>(local_db);
+        if (!db_tiflash)
+        {
+            LOG_WARNING(log, "tryFindDatabaseByPartitionTable, find part table in another database, but can not cast to DatabaseTiFlash, db_name={} part_table_name={}", db_name, part_table_name);
+            break;
+        }
+        LOG_INFO(log, "tryFindDatabaseByPartitionTable, find part table in another database, EXCHANGE PARTITION may be executed, db_name={} part_table_name={}", db_name, part_table_name);
+        return std::make_shared<TiDB::DBInfo>(db_tiflash->getDatabaseInfo());
+    }
+
+    LOG_INFO(log, "tryFindDatabaseByPartitionTable, can not find part table in all database, part_table_name={}", part_table_name);
+    return db_info;
+}
+
+template <typename Getter, typename NameMapper>
 void SchemaBuilder<Getter, NameMapper>::applyPartitionDiff(const TiDB::DBInfoPtr & db_info, const TableInfoPtr & table_info, const ManageableStoragePtr & storage, bool drop_part_if_not_exist)
 {
     const auto & orig_table_info = storage->getTableInfo();
@@ -655,7 +685,11 @@ void SchemaBuilder<Getter, NameMapper>::applyPartitionDiff(const TiDB::DBInfoPtr
         {
             if (new_part_id_set.count(orig_def.id) == 0)
             {
-                applyDropPhysicalTable(name_mapper.mapDatabaseName(*db_info), orig_def.id);
+                const auto part_table_name = name_mapper.mapTableNameByID(orig_def.id);
+                // When `tryLoadSchemaDiffs` fails, we may run into `SchemaBuilder::syncAllSchem` -> `applyPartitionDiff` without `applyExchangeTablePartition`
+                // The physical table maybe `EXCHANGE` to another database, try to find the partition from all database
+                auto part_db_info = tryFindDatabaseByPartitionTable(db_info, part_table_name);
+                applyDropPhysicalTable(name_mapper.mapDatabaseName(*part_db_info), orig_def.id);
             }
         }
     }
@@ -665,7 +699,11 @@ void SchemaBuilder<Getter, NameMapper>::applyPartitionDiff(const TiDB::DBInfoPtr
         if (orig_part_id_set.count(new_def.id) == 0)
         {
             auto part_table_info = updated_table_info.producePartitionTableInfo(new_def.id, name_mapper);
-            applyCreatePhysicalTable(db_info, part_table_info);
+            const auto part_table_name = name_mapper.mapTableName(*part_table_info);
+            // When `tryLoadSchemaDiffs` fails, we may run into `SchemaBuilder::syncAllSchem` -> `applyPartitionDiff` without `applyExchangeTablePartition`
+            // The physical table maybe `EXCHANGE` from another database, try to find the partition from all database
+            auto part_db_info = tryFindDatabaseByPartitionTable(db_info, part_table_name);
+            applyCreatePhysicalTable(part_db_info, part_table_info);
         }
     }
 
