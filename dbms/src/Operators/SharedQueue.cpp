@@ -89,7 +89,7 @@ OperatorStatus SharedQueueSinkOp::tryFlush()
     switch (queue_result)
     {
     case MPMCQueueResult::FULL:
-        setNotifyFuture(shared_queue);
+        setNotifyFuture(shared_queue.get());
         return OperatorStatus::WAIT_FOR_NOTIFY;
     case MPMCQueueResult::OK:
         buffer.reset();
@@ -111,7 +111,7 @@ OperatorStatus SharedQueueSourceOp::readImpl(Block & block)
     switch (queue_result)
     {
     case MPMCQueueResult::EMPTY:
-        setNotifyFuture(shared_queue);
+        setNotifyFuture(shared_queue.get());
         return OperatorStatus::WAIT_FOR_NOTIFY;
     case MPMCQueueResult::OK:
         return OperatorStatus::HAS_OUTPUT;

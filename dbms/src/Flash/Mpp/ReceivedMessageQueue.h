@@ -23,6 +23,9 @@
 #include <Flash/Mpp/TrackedMppDataPacket.h>
 
 #include <memory>
+#include <utility>
+
+#include "Flash/Pipeline/Schedule/Tasks/NotifyFuture.h"
 
 namespace DB
 {
@@ -53,6 +56,65 @@ enum class ReceiverMode
     Local = 0,
     Sync,
     Async
+};
+
+class GRPCNotifyQueue : public NotifyFuture
+{
+public:
+    template <typename... Args>
+    explicit GRPCNotifyQueue(const LoggerPtr & log_, Args &&... args)
+        : queue(log_, std::forward<Args>(args)...)
+    {}
+
+    void registerTask(TaskPtr && task) override { queue.registerPipeReadTask(std::move(task)); }
+
+    MPMCQueueResult pop(ReceivedMessagePtr & data) { return queue.pop(data); }
+
+    MPMCQueueResult tryPop(ReceivedMessagePtr & data) { return queue.tryPop(data); }
+
+    MPMCQueueResult forcePush(ReceivedMessagePtr && data) { return queue.forcePush(std::move(data)); }
+
+    MPMCQueueResult push(ReceivedMessagePtr && data) { return queue.push(std::move(data)); }
+
+    MPMCQueueResult tryDequeue() { return queue.tryDequeue(); }
+
+    MPMCQueueResult pushWithTag(ReceivedMessagePtr && data, GRPCKickTag * new_tag)
+    {
+        return queue.pushWithTag(std::move(data), new_tag);
+    }
+
+    void setKickFuncForTest(GRPCKickFunc && func) { queue.setKickFuncForTest(std::move(func)); }
+
+    bool finish() { return queue.finish(); }
+    bool cancel() { return queue.cancel(); }
+
+    bool isWritable() const { return queue.isWritable(); }
+
+    void registerPipeWriteTask(TaskPtr && task) { queue.registerPipeWriteTask(std::move(task)); }
+
+private:
+    GRPCRecvQueue<ReceivedMessagePtr> queue;
+};
+
+class MSGChannel : public NotifyFuture
+{
+public:
+    void registerTask(TaskPtr && task) override { queue_ref.registerPipeReadTask(std::move(task)); }
+
+    MPMCQueueResult pop(ReceivedMessagePtr & data) { return queue_ref.pop(data); }
+
+    MPMCQueueResult tryPop(ReceivedMessagePtr & data) { return queue_ref.tryPop(data); }
+
+    MPMCQueueResult forcePush(const ReceivedMessagePtr & data) { return queue_ref.forcePush(data); }
+
+    bool finish() { return queue_ref.finish(); }
+    bool cancel() { return queue_ref.cancel(); }
+
+private:
+    using QueueImpl = LooseBoundedMPMCQueue<ReceivedMessagePtr>;
+    // these are unbounded queues.
+    std::shared_ptr<QueueImpl> queue = std::make_shared<QueueImpl>(std::numeric_limits<size_t>::max());
+    QueueImpl & queue_ref = *queue;
 };
 
 class ReceivedMessageQueue
@@ -86,7 +148,7 @@ public:
         grpc_recv_queue.finish();
         /// msg_channels_for_fine_grained_shuffle must be finished after msg_channel is finished
         for (auto & channel : msg_channels_for_fine_grained_shuffle)
-            channel->finish();
+            channel.finish();
     }
 
     void cancel()
@@ -94,12 +156,11 @@ public:
         grpc_recv_queue.cancel();
         /// msg_channels_for_fine_grained_shuffle must be cancelled after msg_channel is cancelled
         for (auto & channel : msg_channels_for_fine_grained_shuffle)
-            channel->cancel();
+            channel.cancel();
     }
 
     bool isWritable() const { return grpc_recv_queue.isWritable(); }
 
-    void registerPipeReadTask(TaskPtr && task) { grpc_recv_queue.registerPipeReadTask(std::move(task)); }
     void registerPipeWriteTask(TaskPtr && task) { grpc_recv_queue.registerPipeWriteTask(std::move(task)); }
 
 #ifndef DBMS_PUBLIC_GTEST
@@ -118,8 +179,8 @@ private:
     /// write: the writer first write the msg to msg_channel/grpc_recv_queue, if write success, then write msg to msg_channels_for_fine_grained_shuffle
     /// read: the reader read msg from msg_channels_for_fine_grained_shuffle, and reduce the `remaining_consumers` in msg, if `remaining_consumers` is 0, then
     ///       remove the msg from msg_channel/grpc_recv_queue
-    std::vector<std::shared_ptr<LooseBoundedMPMCQueue<ReceivedMessagePtr>>> msg_channels_for_fine_grained_shuffle;
-    GRPCRecvQueue<ReceivedMessagePtr> grpc_recv_queue;
+    std::vector<MSGChannel> msg_channels_for_fine_grained_shuffle;
+    GRPCNotifyQueue grpc_recv_queue;
 };
 
 } // namespace DB

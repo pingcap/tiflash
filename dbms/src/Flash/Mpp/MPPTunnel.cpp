@@ -403,7 +403,7 @@ WaitResult MPPTunnel::waitForWritable() const
         RUNTIME_CHECK_MSG(tunnel_sender != nullptr, "write to tunnel {} which is already closed.", tunnel_id);
         if (!tunnel_sender->isWritable())
         {
-            setNotifyFuture(tunnel_sender);
+            setNotifyFuture(tunnel_sender.get());
             return WaitResult::WaitForNotify;
         }
         return WaitResult::Ready;
