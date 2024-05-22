@@ -180,7 +180,7 @@ public:
     std::optional<grpc::SslCredentialsOptions> readAndCacheSslCredentialOptions()
     {
         std::unique_lock lock(mu);
-        // if ssl_cerd_options_cached = true, it means the same options has already return to grpc-core
+        // if ssl_cerd_options_cached = true, it means the same options has already been returned to grpc-core
         // don't need to return it again if ssl cert is not actually changed
         if (ssl_cerd_options_cached)
             return {};
