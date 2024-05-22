@@ -92,12 +92,15 @@ std::shared_ptr<Aggregator::Params> buildParams(
     ColumnNumbers keys(key_names.size(), 0);
     size_t normal_key_idx = 0;
     size_t agg_func_as_key_idx = key_names.size() - key_ref_agg_func.size();
-    // Put group by key that reference aggregate func after original key.
-    // For example: select sum(c0), first_row(c1), first_row(c3) group by c1, c2, c3
+    // For columns with collation, key_ref_agg_func optimization will be enabled.
+    // Need to reorder these columns after normal columns.
+    // For example:
+    // select sum(c0), first_row(c1), first_row(c3) group by c1, c2, c3; (c1 and c3 has collation while c2 doesn't)
     // Before: keys: c1 | c2 | c3
     // After:  keys: c2 | c1 | c3
-    // By doing this, when deserialize group by keys from HashMap to columns,
-    // we only need to handle c2(normal_key_size == 1) and ignore c2/c3.
+    // When converting HashMap, only copy c2 from HashMap to column.
+    // c1/c3 will be skipped copying and a CopyColumn action will be added after agg,
+    // so c1/c3 will reference to agg func first_row(c1)/first_row(c2) directly.
     assert(key_names.size() == collators.size());
     TiDB::TiDBCollators reordered_collators(collators.size(), nullptr);
     for (size_t i = 0; i < key_names.size(); ++i)

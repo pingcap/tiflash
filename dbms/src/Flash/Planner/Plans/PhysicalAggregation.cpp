@@ -54,8 +54,16 @@ PhysicalPlanNodePtr PhysicalAggregation::build(
     NamesAndTypes aggregated_columns;
     AggregateDescriptions aggregate_descriptions;
     Names aggregation_keys;
+    // key_ref_agg_func and agg_func_ref_key are two optimizations for aggregation:
+    // 1. key_ref_agg_func: for group by key with collation, there will always be a agg func(first_row or any)
+    //    to help keep the original column. For these key columns, no need to copy it from HashMap to result column,
+    //    instead a pointer to reference to their corresponding first_row/any agg func is enough.
+    // 2. agg_func_ref_key: for group by key without collation and corresponding first_row exists.
+    //    We can eliminate their first_row func, a pointer to reference the group by key is enough.
+    //    So we can avoid unnecessary agg func computation, also it's good for memory usage.
     KeyRefAggFuncMap key_ref_agg_func;
     AggFuncRefKeyMap agg_func_ref_key;
+
     TiDB::TiDBCollators collators;
     {
         std::unordered_set<String> agg_key_set;
