@@ -986,7 +986,6 @@ CATCH
 TEST_F(AggExecutorTestRunner, AggKeyOptimization)
 try
 {
-    // todo: fix
     const String db_name = "test_db";
     const String tbl_name = "agg_first_row_opt_tbl";
     const auto rows = 1024;
@@ -1023,7 +1022,7 @@ try
             col_data_string_with_collator[idx] = std::string{ch};
             col_data_string_no_collator[idx] = std::string{ch};
             col_data_int[idx] = i;
-            col_data_tinyint[idx] = static_cast<Int64>(static_cast<Int8>(i));
+            col_data_tinyint[idx] = static_cast<Int64>(static_cast<unsigned char>(i));
         }
     }
     context.addMockTable(

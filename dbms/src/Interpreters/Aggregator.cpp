@@ -1535,7 +1535,7 @@ void NO_INLINE Aggregator::convertToBlockImplFinal(
     MutableColumns & final_aggregate_columns,
     Arena * arena) const
 {
-    Sizes key_sizes_ref = key_sizes;
+    Sizes key_sizes_ref = key_sizes; // NOLINT
     AggregatorMethodInitKeyColumnHelper<Method> agg_keys_helper{method};
     if constexpr (!skip_convert_key)
     {
@@ -1608,7 +1608,7 @@ void NO_INLINE Aggregator::convertToBlocksImplFinal(
 {
     assert(!key_columns_vec.empty());
     std::vector<std::unique_ptr<AggregatorMethodInitKeyColumnHelper<std::decay_t<Method>>>> agg_keys_helpers;
-    Sizes key_sizes_ref = key_sizes;
+    Sizes key_sizes_ref = key_sizes; // NOLINT
     if constexpr (!skip_convert_key)
     {
         auto shuffled_key_sizes = shuffleKeyColumnsForKeyColumnsVec(method, key_columns_vec, key_sizes);
@@ -1642,7 +1642,7 @@ void NO_INLINE Aggregator::convertToBlockImplNotFinal(
     AggregateColumnsData & aggregate_columns) const
 {
     AggregatorMethodInitKeyColumnHelper<Method> agg_keys_helper{method};
-    Sizes key_sizes_ref = key_sizes;
+    Sizes key_sizes_ref = key_sizes; // NOLINT
     if constexpr (!skip_convert_key)
     {
         auto shuffled_key_sizes = method.shuffleKeyColumns(key_columns, key_sizes);
@@ -1677,7 +1677,7 @@ void NO_INLINE Aggregator::convertToBlocksImplNotFinal(
     std::vector<AggregateColumnsData> & aggregate_columns_vec) const
 {
     std::vector<std::unique_ptr<AggregatorMethodInitKeyColumnHelper<std::decay_t<Method>>>> agg_keys_helpers;
-    Sizes key_sizes_ref = key_sizes;
+    Sizes key_sizes_ref = key_sizes; // NOLINT
     if constexpr (!skip_convert_key)
     {
         auto shuffled_key_sizes = shuffleKeyColumnsForKeyColumnsVec(method, key_columns_vec, key_sizes);
