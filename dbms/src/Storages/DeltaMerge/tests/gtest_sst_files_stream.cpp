@@ -485,7 +485,7 @@ try
     for (const auto & file : files)
     {
         auto parent_path = delegator.getDTFilePath(file.id);
-        auto file_path = DM::DMFile::getPathByStatus(parent_path, file.id, DM::DMFile::Status::READABLE);
+        auto file_path = DM::getPathByStatus(parent_path, file.id, DM::DMFileStatus::READABLE);
         file_id_to_path.emplace(file.id, file_path);
         ASSERT_TRUE(Poco::File(file_path).exists());
     }
@@ -540,7 +540,7 @@ try
     for (const auto & file : files)
     {
         auto parent_path = delegator.getDTFilePath(file.id);
-        auto file_path = DM::DMFile::getPathByStatus(parent_path, file.id, DM::DMFile::Status::READABLE);
+        auto file_path = DM::getPathByStatus(parent_path, file.id, DM::DMFileStatus::READABLE);
         fps.push_back(file_path);
     }
     storage->cleanPreIngestFiles(files, db_context->getSettingsRef());

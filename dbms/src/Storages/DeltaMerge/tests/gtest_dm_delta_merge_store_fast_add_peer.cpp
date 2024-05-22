@@ -330,7 +330,7 @@ try
                     file_id.id,
                     file_id.id,
                     delegator.getDTFilePath(file_id.id),
-                    DMFile::ReadMetaMode::all());
+                    DMFileMeta::ReadMode::all());
                 remote_store->putDMFile(
                     dm_file,
                     S3::DMFileOID{

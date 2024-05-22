@@ -563,7 +563,7 @@ private:
     /// by returning a non-empty DM::WriteResult.
     // Deferencing `Iter` can get a pointer to a Segment.
     template <typename Iter>
-    DM::WriteResult checkSegmentsUpdateForKVStore(
+    DM::WriteResult checkSegmentsUpdateForProxy(
         const DMContextPtr & context,
         Iter begin,
         Iter end,

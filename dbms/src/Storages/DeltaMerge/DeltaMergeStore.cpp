@@ -706,8 +706,8 @@ DM::WriteResult DeltaMergeStore::write(
                 ErrorCodes::FAIL_POINT_ERROR);
     });
 
-    // TODO: Update the tracing_id before checkSegmentsUpdateForKVStore
-    return checkSegmentsUpdateForKVStore(
+    // TODO: Update the tracing_id before checkSegmentsUpdateForProxy
+    return checkSegmentsUpdateForProxy(
         dm_context,
         updated_segments.begin(),
         updated_segments.end(),
@@ -2001,7 +2001,7 @@ void DeltaMergeStore::restoreStableFilesFromLocal() const
 void DeltaMergeStore::removeLocalStableFilesIfDisagg() const
 {
     listLocalStableFiles([](UInt64 file_id, const String & root_path) {
-        auto path = DMFile::getPathByStatus(root_path, file_id, DMFile::Status::READABLE);
+        auto path = getPathByStatus(root_path, file_id, DMFileStatus::READABLE);
         Poco::File file(path);
         if (file.exists())
         {

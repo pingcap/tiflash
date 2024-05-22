@@ -65,7 +65,7 @@ public:
         throw TiFlashException("unrecognized checksum algorithm", Errors::Checksum::Internal);
     }
     [[nodiscard]] DB::ChecksumAlgo getChecksumAlgorithm() const { return checksum_algorithm; }
-    [[nodiscard]] std::map<std::string, std::string> & getEmbeddedChecksum() { return embedded_checksum; }
+    [[nodiscard]] const std::map<std::string, std::string> & getEmbeddedChecksum() const { return embedded_checksum; }
     [[nodiscard]] const std::map<std::string, std::string> & getDebugInfo() const { return debug_info; }
 
     void addChecksum(std::string name, std::string value) { embedded_checksum[std::move(name)] = std::move(value); }

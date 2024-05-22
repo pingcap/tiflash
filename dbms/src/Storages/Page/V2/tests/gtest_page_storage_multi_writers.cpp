@@ -55,7 +55,10 @@ protected:
     void SetUp() override
     {
         TiFlashStorageTestBasic::SetUp();
-        bkg_pool = std::make_shared<DB::BackgroundProcessingPool>(4, "bg-page-");
+        bkg_pool = std::make_shared<DB::BackgroundProcessingPool>(
+            4,
+            "bg-page-",
+            std::make_shared<JointThreadInfoJeallocMap>());
         // default test config
         config.file_roll_size = 4 * MB;
         config.gc_max_valid_rate = 0.5;
