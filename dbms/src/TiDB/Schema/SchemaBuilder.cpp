@@ -683,9 +683,9 @@ void SchemaBuilder<Getter, NameMapper>::applyPartitionDiff(const TiDB::DBInfoPtr
     {
         for (const auto & orig_def : orig_defs)
         {
-            if (!new_part_id_set.contains(orig_def.id))
+            if (new_part_id_set.count(orig_def.id) == 0)
             {
-                const auto part_table_name = name_mapper.mapTableNameByID(updated_table_info.keyspace_id, orig_def.id);
+                const auto part_table_name = name_mapper.mapTableNameByID(orig_def.id);
                 // When `tryLoadSchemaDiffs` fails, we may run into `SchemaBuilder::syncAllSchem` -> `applyPartitionDiff` without `applyExchangeTablePartition`
                 // The physical table maybe `EXCHANGE` to another database, try to find the partition from all database
                 auto part_db_info = tryFindDatabaseByPartitionTable(db_info, part_table_name);
@@ -696,7 +696,7 @@ void SchemaBuilder<Getter, NameMapper>::applyPartitionDiff(const TiDB::DBInfoPtr
 
     for (const auto & new_def : new_defs)
     {
-        if (!orig_part_id_set.contains(new_def.id))
+        if (orig_part_id_set.count(new_def.id) == 0)
         {
             auto part_table_info = updated_table_info.producePartitionTableInfo(new_def.id, name_mapper);
             const auto part_table_name = name_mapper.mapTableName(*part_table_info);

@@ -1124,7 +1124,7 @@ void StorageDeltaMerge::alterImpl(
     const AlterCommands & commands,
     const String & database_name_,
     const String & table_name_,
-    const OptionTableInfoConstRef table_info,
+    OptionTableInfoConstRef table_info,
     const Context & context)
 try
 {

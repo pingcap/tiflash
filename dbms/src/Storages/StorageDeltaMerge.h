@@ -196,15 +196,9 @@ private:
 
     void alterImpl(
         const AlterCommands & commands,
-<<<<<<< HEAD
-        const String & database_name,
-        const String & table_name,
-        const DB::DM::OptionTableInfoConstRef table_info_,
-=======
         const String & database_name_,
         const String & table_name_,
         DB::DM::OptionTableInfoConstRef table_info_,
->>>>>>> 5b12a0d56e (ddl: Fix exchange partition across databases (release-7.1) (#9001))
         const Context & context);
 
     DataTypePtr getPKTypeImpl() const override;
