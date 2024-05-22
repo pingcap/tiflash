@@ -15,8 +15,6 @@
 #include <Common/TiFlashMetrics.h>
 #include <Flash/Mpp/ReceivedMessageQueue.h>
 
-#include "Flash/Pipeline/Schedule/Tasks/NotifyFuture.h"
-
 namespace DB
 {
 namespace FailPoints

@@ -25,8 +25,6 @@
 #include <memory>
 #include <utility>
 
-#include "Flash/Pipeline/Schedule/Tasks/NotifyFuture.h"
-
 namespace DB
 {
 namespace ExchangeReceiverMetric
