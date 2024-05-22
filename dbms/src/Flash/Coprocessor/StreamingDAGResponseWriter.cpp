@@ -74,6 +74,12 @@ bool StreamingDAGResponseWriter<StreamWriterPtr>::isWritable() const
 }
 
 template <class StreamWriterPtr>
+WaitResult StreamingDAGResponseWriter<StreamWriterPtr>::waitForWritable() const
+{
+    return writer->waitForWritable();
+}
+
+template <class StreamWriterPtr>
 void StreamingDAGResponseWriter<StreamWriterPtr>::write(const Block & block)
 {
     RUNTIME_CHECK_MSG(

@@ -17,6 +17,7 @@
 #include <Core/Block.h>
 #include <common/types.h>
 #include <tipb/select.pb.h>
+#include <Flash/Coprocessor/WaitResult.h>
 
 namespace DB
 {
@@ -36,6 +37,8 @@ public:
     // write(block);
     // ```
     virtual bool isWritable() const { throw Exception("Unsupport"); }
+
+    virtual WaitResult waitForWritable() const { throw Exception("Unsupport"); }
 
     /// flush cached blocks for batch writer
     virtual void flush() = 0;

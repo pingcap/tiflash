@@ -16,6 +16,7 @@
 
 #include <Common/Exception.h>
 #include <Common/TiFlashMetrics.h>
+#include <Flash/Coprocessor/WaitResult.h>
 #ifdef __clang__
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
@@ -57,7 +58,8 @@ struct CopStreamWriter
         if (!writer->Write(resp))
             throw Exception("Failed to write resp");
     }
-    bool isWritable() const { throw Exception("Unsupport async write"); }
+    static bool isWritable() { throw Exception("Unsupport async write"); }
+    static WaitResult waitForWritable() { throw Exception("Unsupport async write"); }
 };
 
 struct BatchCopStreamWriter
@@ -81,7 +83,8 @@ struct BatchCopStreamWriter
         if (!writer->Write(resp))
             throw Exception("Failed to write resp");
     }
-    bool isWritable() const { throw Exception("Unsupport async write"); }
+    static bool isWritable() { throw Exception("Unsupport async write"); }
+    static WaitResult waitForWritable() { throw Exception("Unsupport async write"); }
 };
 
 using CopStreamWriterPtr = std::shared_ptr<CopStreamWriter>;

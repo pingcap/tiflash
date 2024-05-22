@@ -99,6 +99,12 @@ bool HashPartitionWriter<ExchangeWriterPtr>::isWritable() const
 }
 
 template <class ExchangeWriterPtr>
+WaitResult HashPartitionWriter<ExchangeWriterPtr>::waitForWritable() const
+{
+    return writer->waitForWritable();
+}
+
+template <class ExchangeWriterPtr>
 void HashPartitionWriter<ExchangeWriterPtr>::writeImplV1(const Block & block)
 {
     size_t rows = block.rows();

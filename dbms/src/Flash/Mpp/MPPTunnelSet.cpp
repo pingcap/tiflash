@@ -18,6 +18,7 @@
 #include <Flash/Mpp/TrackedMppDataPacket.h>
 #include <Flash/Mpp/Utils.h>
 #include <fmt/core.h>
+#include "Flash/Mpp/MPPTunnel.h"
 
 namespace DB
 {
@@ -76,6 +77,17 @@ bool MPPTunnelSetBase<Tunnel>::isWritable() const
             return false;
     }
     return true;
+}
+
+template <typename Tunnel>
+WaitResult MPPTunnelSetBase<Tunnel>::waitForWritable() const
+{
+    for (const auto & tunnel : tunnels)
+    {
+        if (auto res = tunnel->waitForWritable(); res != WaitResult::Ready)
+            return res;
+    }
+    return WaitResult::Ready;
 }
 
 template <typename Tunnel>

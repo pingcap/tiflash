@@ -102,6 +102,12 @@ bool FineGrainedShuffleWriter<ExchangeWriterPtr>::isWritable() const
 }
 
 template <class ExchangeWriterPtr>
+WaitResult FineGrainedShuffleWriter<ExchangeWriterPtr>::waitForWritable() const
+{
+    return writer->waitForWritable();
+}
+
+template <class ExchangeWriterPtr>
 void FineGrainedShuffleWriter<ExchangeWriterPtr>::write(const Block & block)
 {
     RUNTIME_CHECK_MSG(prepared, "FineGrainedShuffleWriter should be prepared before writing.");

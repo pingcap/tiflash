@@ -22,6 +22,7 @@
 #include <Common/Stopwatch.h>
 #include <Common/ThreadManager.h>
 #include <Common/TiFlashMetrics.h>
+#include <Flash/Coprocessor/WaitResult.h>
 #include <Flash/FlashService.h>
 #include <Flash/Mpp/LocalRequestHandler.h>
 #include <Flash/Mpp/PacketWriter.h>
@@ -499,6 +500,8 @@ public:
     // ```
     void forceWrite(TrackedMppDataPacketPtr && data);
     bool isWritable() const;
+
+    WaitResult waitForWritable() const;
 
     // finish the writing, and wait until the sender finishes.
     void writeDone();

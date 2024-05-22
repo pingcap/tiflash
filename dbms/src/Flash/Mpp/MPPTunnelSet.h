@@ -62,6 +62,8 @@ public:
 
     bool isWritable() const;
 
+    WaitResult waitForWritable() const;
+
     bool isLocal(size_t index) const;
 
 private:

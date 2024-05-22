@@ -46,6 +46,7 @@ public:
     void prepare(const Block & sample_block) override;
     void write(const Block & block) override;
     bool isWritable() const override;
+    WaitResult waitForWritable() const override;
     void flush() override;
 
 private:

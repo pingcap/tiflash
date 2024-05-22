@@ -76,6 +76,12 @@ bool BroadcastOrPassThroughWriter<ExchangeWriterPtr>::isWritable() const
 }
 
 template <class ExchangeWriterPtr>
+WaitResult BroadcastOrPassThroughWriter<ExchangeWriterPtr>::waitForWritable() const
+{
+    return writer->waitForWritable();
+}
+
+template <class ExchangeWriterPtr>
 void BroadcastOrPassThroughWriter<ExchangeWriterPtr>::write(const Block & block)
 {
     RUNTIME_CHECK_MSG(

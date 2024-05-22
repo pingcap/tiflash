@@ -71,6 +71,8 @@ public:
 
     virtual bool isWritable() const = 0;
 
+    virtual WaitResult waitForWritable() const = 0;
+
 protected:
     virtual void writeToTunnel(TrackedMppDataPacketPtr && data, size_t index) = 0;
     virtual void writeToTunnel(tipb::SelectResponse & response, size_t index) = 0;
@@ -94,6 +96,9 @@ public:
     // For sync writer, `isWritable` will not be called, so an exception is thrown here.
     bool isWritable() const override { throw Exception("Unsupport sync writer"); }
 
+    // For sync writer, `waitForWritable` will not be called, so an exception is thrown here.
+    WaitResult waitForWritable() const override { throw Exception("Unsupport sync writer"); }
+
 protected:
     void writeToTunnel(TrackedMppDataPacketPtr && data, size_t index) override;
     void writeToTunnel(tipb::SelectResponse & response, size_t index) override;
@@ -111,6 +116,8 @@ public:
     {}
 
     bool isWritable() const override { return mpp_tunnel_set->isWritable(); }
+
+    WaitResult waitForWritable() const override { return mpp_tunnel_set->waitForWritable(); }
 
 protected:
     void writeToTunnel(TrackedMppDataPacketPtr && data, size_t index) override;

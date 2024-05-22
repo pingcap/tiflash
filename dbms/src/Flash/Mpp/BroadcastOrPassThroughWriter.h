@@ -38,6 +38,7 @@ public:
         tipb::ExchangeType exchange_type_);
     void write(const Block & block) override;
     bool isWritable() const override;
+    WaitResult waitForWritable() const override;
     void flush() override;
 
 private:

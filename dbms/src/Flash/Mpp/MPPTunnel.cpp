@@ -22,6 +22,7 @@
 #include <fmt/core.h>
 
 #include <magic_enum.hpp>
+#include "Flash/Pipeline/Schedule/Tasks/NotifyFuture.h"
 
 namespace DB
 {
@@ -402,6 +403,44 @@ bool MPPTunnel::isWritable() const
     case TunnelStatus::WaitingForSenderFinish:
         RUNTIME_CHECK_MSG(tunnel_sender != nullptr, "write to tunnel {} which is already closed.", tunnel_id);
         return tunnel_sender->isWritable();
+    case TunnelStatus::Finished:
+        RUNTIME_CHECK_MSG(tunnel_sender != nullptr, "write to tunnel {} which is already closed.", tunnel_id);
+        throw Exception(fmt::format(
+            "write to tunnel {} which is already closed, {}",
+            tunnel_id,
+            tunnel_sender->isConsumerFinished() ? tunnel_sender->getConsumerFinishMsg() : ""));
+    default:
+        RUNTIME_ASSERT(false, log, "Unsupported tunnel status: {}", magic_enum::enum_name(status));
+    }
+}
+
+WaitResult MPPTunnel::waitForWritable() const
+{
+    std::unique_lock lk(mu);
+    switch (status)
+    {
+    case TunnelStatus::Unconnected:
+    {
+        if (timeout.count() > 0)
+        {
+            fiu_do_on(FailPoints::random_tunnel_wait_timeout_failpoint,
+                      throw Exception(fmt::format("{} is timeout", tunnel_id)););
+            if (unlikely(!timeout_stopwatch))
+                timeout_stopwatch.emplace(CLOCK_MONOTONIC_COARSE);
+            if (unlikely(timeout_stopwatch->elapsed() > timeout_nanoseconds))
+                throw Exception(fmt::format("{} is timeout", tunnel_id));
+        }
+        return WaitResult::WaitForPolling;
+    }
+    case TunnelStatus::Connected:
+    case TunnelStatus::WaitingForSenderFinish:
+        RUNTIME_CHECK_MSG(tunnel_sender != nullptr, "write to tunnel {} which is already closed.", tunnel_id);
+        if (!tunnel_sender->isWritable())
+        {
+            setNotifyFuture(tunnel_sender);
+            return WaitResult::WaitForNotify;
+        }
+        return WaitResult::Ready;
     case TunnelStatus::Finished:
         RUNTIME_CHECK_MSG(tunnel_sender != nullptr, "write to tunnel {} which is already closed.", tunnel_id);
         throw Exception(fmt::format(
