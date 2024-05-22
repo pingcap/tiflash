@@ -230,7 +230,6 @@ void JointThreadInfoJeallocMap::reportThreadAllocInfoForStorage(
     if (type == ReportThreadAllocateInfoType::Reset)
     {
         auto & metrics = TiFlashMetrics::instance();
-        // Already a prefix
         metrics.registerStorageThreadMemory(getThreadNameAggPrefix(tname, aggregate_delimer));
     }
 }

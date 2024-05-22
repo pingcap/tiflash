@@ -919,8 +919,10 @@ try
         std::string_view(namee.data(), namee.size()),
         ReportThreadAllocateInfoBatch{.alloc = 1, .dealloc = 2});
     EXPECT_ANY_THROW(tiflash_metrics.getProxyThreadMemory(TiFlashMetrics::MemoryAllocType::Alloc, ""));
-    kvs.getJointThreadInfoJeallocMap()->accessStorageMap(
-        [](const JointThreadInfoJeallocMap::AllocMap & m) { ASSERT_EQ(m.size(), 0); });
+    // bg pool and blockable-bg pool
+    kvs.getJointThreadInfoJeallocMap()->accessStorageMap([](const JointThreadInfoJeallocMap::AllocMap & m) {
+        ASSERT_EQ(m.size(), TiFlashTestEnv::DEFAULT_BG_POOL_SIZE * 2);
+    });
     kvs.getJointThreadInfoJeallocMap()->accessProxyMap(
         [](const JointThreadInfoJeallocMap::AllocMap & m) { ASSERT_EQ(m.size(), 1); });
     std::thread t([&]() {
@@ -1040,8 +1042,9 @@ try
         ReportThreadAllocateInfoType::DeallocPtr,
         reinterpret_cast<uint64_t>(&dl),
         '\0');
-    ASSERT_EQ(al1 + al2, tiflash_metrics.getProxyThreadMemory(TiFlashMetrics::MemoryAllocType::Alloc, "agg"));
-    ASSERT_EQ(al1, tiflash_metrics.getProxyThreadMemory(TiFlashMetrics::MemoryAllocType::Alloc, "non-agg-1"));
+    ctx.getJointThreadInfoJeallocMap()->recordThreadAllocInfo();
+    ASSERT_EQ(al1 + al2, tiflash_metrics.getStorageThreadMemory(TiFlashMetrics::MemoryAllocType::Alloc, "agg"));
+    ASSERT_EQ(al1, tiflash_metrics.getStorageThreadMemory(TiFlashMetrics::MemoryAllocType::Alloc, "non-agg-1"));
     ctx.getJointThreadInfoJeallocMap()
         ->reportThreadAllocInfoForStorage(name1, ReportThreadAllocateInfoType::Remove, 0, '\0');
     ctx.getJointThreadInfoJeallocMap()
