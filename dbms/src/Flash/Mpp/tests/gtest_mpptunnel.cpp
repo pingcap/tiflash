@@ -31,7 +31,6 @@
 #include <utility>
 #include <vector>
 
-
 namespace DB
 {
 namespace tests
