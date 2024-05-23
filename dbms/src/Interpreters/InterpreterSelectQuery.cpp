@@ -118,8 +118,6 @@ InterpreterSelectQuery::InterpreterSelectQuery(
     , log(Logger::get())
 {
     init(required_result_column_names_);
-    // TiFlash will not use InterpreterSelectQuery.
-    __builtin_unreachable();
 }
 
 
@@ -970,6 +968,9 @@ void InterpreterSelectQuery::executeAggregation(
 
 void InterpreterSelectQuery::executeMergeAggregated(Pipeline & pipeline, bool final)
 {
+    // TiFlash will not use InterpreterSelectQuery.
+    __builtin_unreachable();
+
     Names key_names;
     AggregateDescriptions aggregates;
     query_analyzer->getAggregateInfo(key_names, aggregates);
