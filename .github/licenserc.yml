@@ -42,5 +42,6 @@ header:
     - '.devcontainer/'
     - '**/OWNERS'
     - 'OWNERS_ALIASES'
+    - 'dbms/src/Common/tests/tls/'
 
   comment: on-failure

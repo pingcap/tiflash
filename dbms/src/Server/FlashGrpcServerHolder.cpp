@@ -98,11 +98,15 @@ sslServerCertificateConfigCallback(
     }
     auto * context = static_cast<Context *>(arg);
     auto options = context->getSecurityConfig()->readAndCacheSslCredentialOptions();
-    grpc_ssl_pem_key_cert_pair pem_key_cert_pair = {options.pem_private_key.c_str(), options.pem_cert_chain.c_str()};
-    *config = grpc_ssl_server_certificate_config_create(options.pem_root_certs.c_str(),
-                                                        &pem_key_cert_pair,
-                                                        1);
-    return GRPC_SSL_CERTIFICATE_CONFIG_RELOAD_NEW;
+    if (options.has_value())
+    {
+        grpc_ssl_pem_key_cert_pair pem_key_cert_pair = {options.value().pem_private_key.c_str(), options.value().pem_cert_chain.c_str()};
+        *config = grpc_ssl_server_certificate_config_create(options.value().pem_root_certs.c_str(),
+                                                            &pem_key_cert_pair,
+                                                            1);
+        return GRPC_SSL_CERTIFICATE_CONFIG_RELOAD_NEW;
+    }
+    return GRPC_SSL_CERTIFICATE_CONFIG_RELOAD_UNCHANGED;
 }
 
 grpc_server_credentials * grpcSslServerCredentialsCreateWithFetcher(
