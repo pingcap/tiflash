@@ -14,6 +14,8 @@
 
 #pragma once
 
+#include <Flash/Pipeline/Schedule/Tasks/NotifyFuture.h>
+#include <Flash/Pipeline/Schedule/Tasks/PipeConditionVariable.h>
 #include <Operators/SpilledBucketInput.h>
 
 #include <atomic>
@@ -54,7 +56,9 @@ enum class SharedLoaderStatus
  *                           ...
  *                           └─────►SharedAggregateRestorern
  */
-class SharedSpilledBucketDataLoader : public std::enable_shared_from_this<SharedSpilledBucketDataLoader>
+class SharedSpilledBucketDataLoader
+    : public std::enable_shared_from_this<SharedSpilledBucketDataLoader>
+    , public NotifyFuture
 {
 public:
     SharedSpilledBucketDataLoader(
@@ -63,7 +67,7 @@ public:
         const String & req_id,
         size_t max_queue_size_);
 
-    ~SharedSpilledBucketDataLoader();
+    ~SharedSpilledBucketDataLoader() override;
 
     // return true if pop success
     // return false means that need to continue tryPop.
@@ -72,6 +76,8 @@ public:
     std::vector<SpilledBucketInput *> getNeedLoadInputs();
 
     void storeBucketData();
+
+    void registerTask(TaskPtr && task) override;
 
 private:
     void loadBucket();
@@ -87,6 +93,8 @@ private:
     std::mutex queue_mu;
     std::queue<BlocksList> bucket_data_queue;
 
+    PipeConditionVariable pipe_read_cv;
+
     // `bucket_inputs` will only be modified in `toFinishStatus` and `storeFromInputToBucketData` and always in `SharedLoaderStatus::loading`.
     // The unique_ptr of spilled file is held by SpilledBucketInput, so don't need to care about agg_context.
     SpilledBucketInputs bucket_inputs;
@@ -99,7 +107,7 @@ using SharedSpilledBucketDataLoaderPtr = std::shared_ptr<SharedSpilledBucketData
 enum class SharedLoadResult
 {
     SUCCESS,
-    RETRY,
+    WAIT,
     FINISHED,
 };
 
@@ -110,9 +118,9 @@ public:
 
     bool tryPop(Block & block);
 
+private:
     SharedLoadResult tryLoadBucketData();
 
-private:
     Block popFromRestoredBlocks();
 
 private:

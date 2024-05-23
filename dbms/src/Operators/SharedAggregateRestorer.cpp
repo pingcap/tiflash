@@ -67,7 +67,10 @@ void SharedSpilledBucketDataLoader::storeBucketData()
 
     // Although the status will always stay at `SharedLoaderStatus::loading`, but because the query has stopped, it doesn't matter.
     if unlikely (exec_context.isCancelled())
+    {
+        pipe_read_cv.notifyAll();
         return;
+    }
 
     // get min bucket num.
     Int32 min_bucket_num = SpilledBucketInput::getMinBucketNum(bucket_inputs);
@@ -75,21 +78,25 @@ void SharedSpilledBucketDataLoader::storeBucketData()
     {
         RUNTIME_CHECK(switchStatus(SharedLoaderStatus::loading, SharedLoaderStatus::finished));
         LOG_DEBUG(log, "shared agg restore finished");
+        pipe_read_cv.notifyAll();
         return;
     }
 
     // store bucket data of min bucket num.
     BlocksList bucket_data = SpilledBucketInput::popOutputs(bucket_inputs, min_bucket_num);
+    bool should_load_bucket{true};
     {
         std::lock_guard lock(queue_mu);
         bucket_data_queue.push(std::move(bucket_data));
         if (bucket_data_queue.size() >= max_queue_size)
         {
             RUNTIME_CHECK(switchStatus(SharedLoaderStatus::loading, SharedLoaderStatus::idle));
-            return;
+            should_load_bucket = false;
         }
     }
-    loadBucket();
+    pipe_read_cv.notifyOne();
+    if (should_load_bucket)
+        loadBucket();
 }
 
 void SharedSpilledBucketDataLoader::loadBucket()
@@ -97,7 +104,11 @@ void SharedSpilledBucketDataLoader::loadBucket()
     RUNTIME_CHECK(status == SharedLoaderStatus::loading);
     // Although the status will always stay at `SharedLoaderStatus::loading`, but because the query has stopped, it doesn't matter.
     if unlikely (exec_context.isCancelled())
+    {
+        pipe_read_cv.notifyAll();
         return;
+    }
+
 
     RUNTIME_CHECK(!bucket_inputs.empty());
     auto event = std::make_shared<LoadBucketEvent>(exec_context, log->identifier(), shared_from_this());
@@ -108,7 +119,10 @@ void SharedSpilledBucketDataLoader::loadBucket()
 bool SharedSpilledBucketDataLoader::tryPop(BlocksList & bucket_data)
 {
     if unlikely (exec_context.isCancelled())
+    {
+        pipe_read_cv.notifyAll();
         return true;
+    }
 
     bool result = true;
     {
@@ -130,6 +144,19 @@ bool SharedSpilledBucketDataLoader::tryPop(BlocksList & bucket_data)
     if (switchStatus(SharedLoaderStatus::idle, SharedLoaderStatus::loading))
         loadBucket();
     return result;
+}
+
+void SharedSpilledBucketDataLoader::registerTask(TaskPtr && task)
+{
+    {
+        std::lock_guard lock(queue_mu);
+        if (bucket_data_queue.empty() && status != SharedLoaderStatus::finished)
+        {
+            pipe_read_cv.registerTask(std::move(task));
+            return;
+        }
+    }
+    PipeConditionVariable::notifyTaskDirectly(std::move(task));
 }
 
 SharedAggregateRestorer::SharedAggregateRestorer(Aggregator & aggregator_, SharedSpilledBucketDataLoaderPtr loader_)
@@ -169,7 +196,8 @@ bool SharedAggregateRestorer::tryPop(Block & block)
     }
     case SharedLoadResult::FINISHED:
         return true;
-    case SharedLoadResult::RETRY:
+    case SharedLoadResult::WAIT:
+        setNotifyFuture(loader);
         return false;
     }
 }
@@ -179,7 +207,7 @@ SharedLoadResult SharedAggregateRestorer::tryLoadBucketData()
     if (!bucket_data.empty() || !restored_blocks.empty())
         return SharedLoadResult::SUCCESS;
     if (!loader->tryPop(bucket_data))
-        return SharedLoadResult::RETRY;
+        return SharedLoadResult::WAIT;
     return bucket_data.empty() ? SharedLoadResult::FINISHED : SharedLoadResult::SUCCESS;
 }
 
