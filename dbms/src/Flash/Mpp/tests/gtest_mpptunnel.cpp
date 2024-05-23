@@ -750,8 +750,7 @@ try
             tunnel->write(std::move(packet));
         }
         catch (...)
-        {
-        }
+        {}
     };
     std::thread thd(tunnelRun<decltype(run_tunnel)>, std::move(run_tunnel));
     thd.join();
