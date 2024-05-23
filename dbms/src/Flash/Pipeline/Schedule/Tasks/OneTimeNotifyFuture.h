@@ -16,6 +16,7 @@
 
 #include <Flash/Pipeline/Schedule/Tasks/NotifyFuture.h>
 #include <Flash/Pipeline/Schedule/Tasks/PipeConditionVariable.h>
+
 #include <mutex>
 
 namespace DB
@@ -33,7 +34,7 @@ public:
                 return;
             }
         }
-        cv.notifyAll();
+        PipeConditionVariable::notifyTaskDirectly(std::move(task));
     }
 
     void finish()

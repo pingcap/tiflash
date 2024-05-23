@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Flash/Executor/PipelineExecutorContext.h>
+#include <Flash/Pipeline/Schedule/Tasks/NotifyFuture.h>
 #include <Operators/HashJoinProbeTransformOp.h>
 
 #include <magic_enum.hpp>
