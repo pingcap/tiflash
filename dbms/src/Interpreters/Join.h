@@ -282,9 +282,9 @@ public:
     bool finishOneProbe(size_t stream_index);
     void finalizeProbe();
     void waitUntilAllProbeFinished() const;
-    bool quickCheckProbeFinished() const;
+    bool isProbeFinishedForPipeline() const;
 
-    bool quickCheckBuildFinished() const;
+    bool isBuildFinishedForPipeline() const;
 
     void finishOneNonJoin(size_t partition_index);
 

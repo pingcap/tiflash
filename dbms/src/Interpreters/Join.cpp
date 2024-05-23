@@ -2166,7 +2166,7 @@ void Join::waitUntilAllProbeFinished() const
         throw Exception(error_message);
 }
 
-bool Join::quickCheckProbeFinished() const
+bool Join::isProbeFinishedForPipeline() const
 {
     if (!probe_finished)
     {
@@ -2176,7 +2176,7 @@ bool Join::quickCheckProbeFinished() const
     return true;
 }
 
-bool Join::quickCheckBuildFinished() const
+bool Join::isBuildFinishedForPipeline() const
 {
     if (!build_finished)
     {

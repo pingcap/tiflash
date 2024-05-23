@@ -126,7 +126,7 @@ OperatorStatus HashJoinProbeTransformOp::onOutput(Block & block)
             scan_hash_map_rows += block.rows();
             return OperatorStatus::HAS_OUTPUT;
         case ProbeStatus::WAIT_PROBE_FINISH:
-            if (probe_transform->quickCheckProbeFinished())
+            if (probe_transform->isProbeFinishedForPipeline())
             {
                 onWaitProbeFinishDone();
                 BREAK;
@@ -136,7 +136,7 @@ OperatorStatus HashJoinProbeTransformOp::onOutput(Block & block)
             onGetRestoreJoin();
             BREAK;
         case ProbeStatus::RESTORE_BUILD:
-            if (probe_transform->quickCheckBuildFinished())
+            if (probe_transform->isBuildFinishedForPipeline())
             {
                 onRestoreBuildFinish();
                 BREAK;
@@ -215,7 +215,7 @@ OperatorStatus HashJoinProbeTransformOp::awaitImpl()
         switch (status)
         {
         case ProbeStatus::WAIT_PROBE_FINISH:
-            if (probe_transform->quickCheckProbeFinished())
+            if (probe_transform->isProbeFinishedForPipeline())
             {
                 onWaitProbeFinishDone();
                 BREAK;
@@ -225,7 +225,7 @@ OperatorStatus HashJoinProbeTransformOp::awaitImpl()
             onGetRestoreJoin();
             BREAK;
         case ProbeStatus::RESTORE_BUILD:
-            if (probe_transform->quickCheckBuildFinished())
+            if (probe_transform->isBuildFinishedForPipeline())
             {
                 onRestoreBuildFinish();
                 BREAK;

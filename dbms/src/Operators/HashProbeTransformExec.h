@@ -67,12 +67,12 @@ public:
     }
     bool finishOneProbe() { return join->finishOneProbe(op_index); }
     bool hasMarkedSpillData() const { return join->hasProbeSideMarkedSpillData(op_index); }
-    bool quickCheckProbeFinished() const { return join->quickCheckProbeFinished(); }
+    bool isProbeFinishedForPipeline() const { return join->isProbeFinishedForPipeline(); }
     void finalizeProbe() { join->finalizeProbe(); }
     void flushMarkedSpillData() { join->flushProbeSideMarkedSpillData(op_index); }
 
     // For restore build stage
-    bool quickCheckBuildFinished() const { return join->quickCheckBuildFinished(); }
+    bool isBuildFinishedForPipeline() const { return join->isBuildFinishedForPipeline(); }
 
     // For restore probe stage
     void startRestoreProbe();
