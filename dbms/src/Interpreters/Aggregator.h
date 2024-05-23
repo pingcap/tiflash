@@ -475,6 +475,9 @@ struct AggregationMethodKeysFixed
         = ColumnsHashing::HashMethodKeysFixed<typename Data::value_type, Key, Mapped, has_nullable_keys, use_cache>;
     using EmplaceResult = ColumnsHashing::columns_hashing_impl::EmplaceResultImpl<Mapped>;
 
+    // Because shuffle key optimization will reorder group by key internally, which is not compatible with
+    // key_ref_agg_func optimization. Because the latter optimization also needs to reorder group by key
+    // to help skipping copy columns.
     static bool canUseKeyRefAggFuncOptimization() { return false; }
     std::optional<Sizes> shuffleKeyColumns(std::vector<IColumn *> & key_columns, const Sizes & key_sizes)
     {

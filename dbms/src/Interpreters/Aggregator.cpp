@@ -1514,6 +1514,7 @@ void NO_INLINE Aggregator::convertToBlockImplFinal(
     MutableColumns & final_aggregate_columns,
     Arena * arena) const
 {
+    assert(key_sizes.size() == key_columns.size());
     Sizes key_sizes_ref = key_sizes; // NOLINT
     AggregatorMethodInitKeyColumnHelper<Method> agg_keys_helper{method};
     if constexpr (!skip_convert_key)
@@ -1586,6 +1587,12 @@ void NO_INLINE Aggregator::convertToBlocksImplFinal(
     Arena * arena) const
 {
     assert(!key_columns_vec.empty());
+#ifndef NDEBUG
+    for (const auto & key_columns : key_columns_vec)
+    {
+        assert(key_columns.size() == key_sizes.size());
+    }
+#endif
     std::vector<std::unique_ptr<AggregatorMethodInitKeyColumnHelper<std::decay_t<Method>>>> agg_keys_helpers;
     Sizes key_sizes_ref = key_sizes; // NOLINT
     if constexpr (!skip_convert_key)
@@ -1620,6 +1627,7 @@ void NO_INLINE Aggregator::convertToBlockImplNotFinal(
     std::vector<IColumn *> key_columns,
     AggregateColumnsData & aggregate_columns) const
 {
+    assert(key_sizes.size() == key_columns.size());
     AggregatorMethodInitKeyColumnHelper<Method> agg_keys_helper{method};
     Sizes key_sizes_ref = key_sizes; // NOLINT
     if constexpr (!skip_convert_key)
@@ -1655,6 +1663,12 @@ void NO_INLINE Aggregator::convertToBlocksImplNotFinal(
     std::vector<std::vector<IColumn *>> && key_columns_vec,
     std::vector<AggregateColumnsData> & aggregate_columns_vec) const
 {
+#ifndef NDEBUG
+    for (const auto & key_columns : key_columns_vec)
+    {
+        assert(key_sizes.size() == key_columns.size());
+    }
+#endif
     std::vector<std::unique_ptr<AggregatorMethodInitKeyColumnHelper<std::decay_t<Method>>>> agg_keys_helpers;
     Sizes key_sizes_ref = key_sizes; // NOLINT
     if constexpr (!skip_convert_key)
