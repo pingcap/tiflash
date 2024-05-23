@@ -1048,8 +1048,6 @@ public:
     {
         /// Data structure of source blocks.
         Block src_header;
-        /// Data structure of intermediate blocks before merge.
-        Block intermediate_header;
 
         /// What to count.
         ColumnNumbers keys;
@@ -1095,37 +1093,6 @@ public:
             , group_by_two_level_threshold_bytes(group_by_two_level_threshold_bytes_)
             , max_bytes_before_external_group_by(max_bytes_before_external_group_by_)
         {}
-
-        /// Only parameters that matter during merge.
-        Params(
-            const Block & intermediate_header_,
-            const ColumnNumbers & keys_,
-            const KeyRefAggFuncMap & key_ref_agg_func_,
-            const AggFuncRefKeyMap & agg_func_ref_key_,
-            const AggregateDescriptions & aggregates_,
-            const SpillConfig & spill_config,
-            UInt64 max_block_size_,
-            const TiDB::TiDBCollators & collators_ = TiDB::dummy_collators)
-            : Params(
-                Block(),
-                keys_,
-                key_ref_agg_func_,
-                agg_func_ref_key_,
-                aggregates_,
-                0,
-                0,
-                0,
-                false,
-                spill_config,
-                max_block_size_,
-                collators_)
-        {
-            intermediate_header = intermediate_header_;
-            RUNTIME_CHECK_MSG(
-                false,
-                "Aggregator::Params ctor with intermediate_header is only for InterpreterSelectQuery, should not be "
-                "used by TiFlash");
-        }
 
         static Block getHeader(
             const Block & src_header,

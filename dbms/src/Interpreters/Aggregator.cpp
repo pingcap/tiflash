@@ -494,8 +494,7 @@ AggregatedDataVariants::Type Aggregator::chooseAggregationMethod()
 
     for (const auto & pos : params.keys)
     {
-        const auto & type
-            = (params.src_header ? params.src_header : params.intermediate_header).safeGetByPosition(pos).type;
+        const auto & type = params.src_header.safeGetByPosition(pos).type;
 
         if (type->isNullable())
         {

@@ -118,6 +118,8 @@ InterpreterSelectQuery::InterpreterSelectQuery(
     , log(Logger::get())
 {
     init(required_result_column_names_);
+    // TiFlash will not use InterpreterSelectQuery.
+    __builtin_unreachable();
 }
 
 
@@ -1001,6 +1003,10 @@ void InterpreterSelectQuery::executeMergeAggregated(Pipeline & pipeline, bool fi
         {}, // ignore group by skip key convert optimization.
         {}, // ignore eliminate agg func optimization.
         aggregates,
+        0,
+        0,
+        0,
+        false,
         SpillConfig(
             context.getTemporaryPath(),
             "aggregation",
