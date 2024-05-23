@@ -34,6 +34,9 @@ using RegisterOperatorSpillContext = std::function<void(const std::shared_ptr<Op
 class SharedQueue;
 using SharedQueuePtr = std::shared_ptr<SharedQueue>;
 
+class OneTimeNotifyFuture;
+using OneTimeNotifyFuturePtr = std::shared_ptr<OneTimeNotifyFuture>;
+
 class PipelineExecutorContext : private boost::noncopyable
 {
 public:
@@ -179,6 +182,8 @@ public:
 
     void addSharedQueue(const SharedQueuePtr & shared_queue);
 
+    void addOneTimeFuture(const OneTimeNotifyFuturePtr & future);
+
 private:
     bool setExceptionPtr(const std::exception_ptr & exception_ptr_);
 
@@ -188,6 +193,8 @@ private:
     ResultQueuePtr getConsumedResultQueue();
 
     void cancelSharedQueues();
+
+    void cancelOneTimeFutures();
 
 private:
     const String query_id;
@@ -217,5 +224,7 @@ private:
     const String resource_group_name;
 
     std::vector<SharedQueuePtr> shared_queues;
+
+    std::vector<OneTimeNotifyFuturePtr> one_time_futures;
 };
 } // namespace DB

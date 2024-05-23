@@ -104,6 +104,9 @@ struct RestoreConfig
     size_t restore_partition_id;
 };
 
+class OneTimeNotifyFuture;
+using OneTimeNotifyFuturePtr = std::shared_ptr<OneTimeNotifyFuture>;
+
 /** Data structure for implementation of JOIN.
   * It is just a hash table: keys -> rows of joined ("right") table.
   * Additionally, CROSS JOIN is supported: instead of hash table, it use just set of blocks without keys.
@@ -327,6 +330,9 @@ public:
     const Block & getOutputBlock() const { return finalized ? output_block_after_finalize : output_block; }
     const Names & getRequiredColumns() const { return required_columns; }
     void finalize(const Names & parent_require);
+
+    OneTimeNotifyFuturePtr wait_build_finished_future;
+    OneTimeNotifyFuturePtr wait_probe_finished_future;
 
 private:
     friend class ScanHashMapAfterProbeBlockInputStream;

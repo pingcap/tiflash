@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Flash/Coprocessor/InterpreterUtils.h>
+#include <Flash/Executor/PipelineExecutorContext.h>
 #include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 #include <Flash/Planner/Plans/PhysicalJoinProbe.h>
 #include <Interpreters/Context.h>
@@ -56,6 +57,8 @@ void PhysicalJoinProbe::buildPipelineExecGroupImpl(
             max_block_size,
             input_header));
     });
+    exec_context.addOneTimeFuture(join_ptr->wait_build_finished_future);
+    exec_context.addOneTimeFuture(join_ptr->wait_probe_finished_future);
     join_ptr.reset();
 }
 } // namespace DB

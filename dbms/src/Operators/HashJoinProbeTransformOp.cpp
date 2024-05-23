@@ -20,6 +20,7 @@
 namespace DB
 {
 #define BREAK                                \
+    assert(!current_notify_future);          \
     if unlikely (exec_context.isCancelled()) \
         return OperatorStatus::CANCELLED;    \
     break
@@ -129,7 +130,7 @@ OperatorStatus HashJoinProbeTransformOp::onOutput(Block & block)
                 onWaitProbeFinishDone();
                 BREAK;
             }
-            return OperatorStatus::WAITING;
+            return OperatorStatus::WAIT_FOR_NOTIFY;
         case ProbeStatus::GET_RESTORE_JOIN:
             onGetRestoreJoin();
             BREAK;
@@ -139,7 +140,7 @@ OperatorStatus HashJoinProbeTransformOp::onOutput(Block & block)
                 onRestoreBuildFinish();
                 BREAK;
             }
-            return OperatorStatus::WAITING;
+            return OperatorStatus::WAIT_FOR_NOTIFY;
         case ProbeStatus::FINISHED:
             block = {};
             return OperatorStatus::HAS_OUTPUT;
@@ -218,7 +219,7 @@ OperatorStatus HashJoinProbeTransformOp::awaitImpl()
                 onWaitProbeFinishDone();
                 BREAK;
             }
-            return OperatorStatus::WAITING;
+            return OperatorStatus::WAIT_FOR_NOTIFY;
         case ProbeStatus::GET_RESTORE_JOIN:
             onGetRestoreJoin();
             BREAK;
@@ -228,7 +229,7 @@ OperatorStatus HashJoinProbeTransformOp::awaitImpl()
                 onRestoreBuildFinish();
                 BREAK;
             }
-            return OperatorStatus::WAITING;
+            return OperatorStatus::WAIT_FOR_NOTIFY;
         case ProbeStatus::RESTORE_PROBE:
             return probe_transform->prepareProbeRestoredBlock() ? OperatorStatus::HAS_OUTPUT : OperatorStatus::WAITING;
         case ProbeStatus::READ_SCAN_HASH_MAP_DATA:
@@ -252,7 +253,7 @@ OperatorStatus HashJoinProbeTransformOp::executeIOImpl()
         probe_transform->flushMarkedSpillData();
         probe_transform->finalizeProbe();
         switchStatus(ProbeStatus::WAIT_PROBE_FINISH);
-        return OperatorStatus::WAITING;
+        return OperatorStatus::HAS_OUTPUT;
     default:
         throw Exception(fmt::format("Unexpected status: {}", magic_enum::enum_name(status)));
     }

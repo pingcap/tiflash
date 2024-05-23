@@ -23,6 +23,7 @@
 #include <DataStreams/materializeBlock.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypesNumber.h>
+#include <Flash/Pipeline/Schedule/Tasks/OneTimeNotifyFuture.h>
 #include <Functions/FunctionHelpers.h>
 #include <Interpreters/CrossJoinProbeHelper.h>
 #include <Interpreters/Join.h>
@@ -132,6 +133,8 @@ Join::Join(
     : restore_config(restore_config_)
     , match_helper_name(match_helper_name_)
     , flag_mapped_entry_helper_name(flag_mapped_entry_helper_name_)
+    , wait_build_finished_future(std::make_shared<OneTimeNotifyFuture>())
+    , wait_probe_finished_future(std::make_shared<OneTimeNotifyFuture>())
     , kind(kind_)
     , join_req_id(req_id)
     , may_probe_side_expanded_after_join(mayProbeSideExpandedAfterJoin(kind))
@@ -218,6 +221,8 @@ void Join::meetErrorImpl(const String & error_message_, std::unique_lock<std::mu
     error_message = error_message_.empty() ? "Join meet error" : error_message_;
     build_cv.notify_all();
     probe_cv.notify_all();
+    // wait_build/probe_finished_future does not need to call finish here
+    // because it is called in PipelineExecutorContext.
 }
 
 size_t Join::getTotalRowCount() const
@@ -1963,8 +1968,9 @@ void Join::finalizeBuild()
             hash_join_spill_context->getBuildSpiller()->finishSpill();
         assert(active_build_threads == 0);
         build_finished = true;
-        build_cv.notify_all();
     }
+    build_cv.notify_all();
+    wait_build_finished_future->finish();
     LOG_INFO(log, "build finalize with {} entries from {} rows.", getTotalRowCount(), getTotalBuildInputRows());
 }
 
@@ -2141,12 +2147,15 @@ bool Join::finishOneProbe(size_t stream_index)
 
 void Join::finalizeProbe()
 {
-    std::unique_lock lock(build_probe_mutex);
-    if (hash_join_spill_context->getProbeSpiller())
-        hash_join_spill_context->getProbeSpiller()->finishSpill();
-    assert(active_probe_threads == 0);
-    probe_finished = true;
+    {
+        std::unique_lock lock(build_probe_mutex);
+        if (hash_join_spill_context->getProbeSpiller())
+            hash_join_spill_context->getProbeSpiller()->finishSpill();
+        assert(active_probe_threads == 0);
+        probe_finished = true;
+    }
     probe_cv.notify_all();
+    wait_probe_finished_future->finish();
 }
 
 void Join::waitUntilAllProbeFinished() const
@@ -2159,12 +2168,22 @@ void Join::waitUntilAllProbeFinished() const
 
 bool Join::quickCheckProbeFinished() const
 {
-    return probe_finished;
+    if (!probe_finished)
+    {
+        setNotifyFuture(wait_probe_finished_future);
+        return false;
+    }
+    return true;
 }
 
 bool Join::quickCheckBuildFinished() const
 {
-    return build_finished;
+    if (!build_finished)
+    {
+        setNotifyFuture(wait_build_finished_future);
+        return false;
+    }
+    return true;
 }
 
 void Join::finishOneNonJoin(size_t partition_index)
@@ -2564,6 +2583,8 @@ void Join::wakeUpAllWaitingThreads()
     probe_cv.notify_all();
     build_cv.notify_all();
     cancelRuntimeFilter("Join has been cancelled.");
+    // wait_build/probe_finished_future does not need to call finish here
+    // because it is called in PipelineExecutorContext.
 }
 
 void Join::finalize(const Names & parent_require)
