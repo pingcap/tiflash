@@ -84,14 +84,18 @@ private:
 
     bool switchStatus(SharedLoaderStatus from, SharedLoaderStatus to);
 
+    bool checkCancelled();
+
 private:
     PipelineExecutorContext & exec_context;
 
     LoggerPtr log;
 
     size_t max_queue_size;
-    std::mutex queue_mu;
+    std::mutex mu;
     std::queue<BlocksList> bucket_data_queue;
+
+    bool is_cancelled{false};
 
     PipeConditionVariable pipe_read_cv;
 

@@ -48,6 +48,22 @@ bool SharedSpilledBucketDataLoader::switchStatus(SharedLoaderStatus from, Shared
     return status.compare_exchange_strong(from, to);
 }
 
+bool SharedSpilledBucketDataLoader::checkCancelled()
+{
+    if unlikely (exec_context.isCancelled())
+    {
+        {
+            std::lock_guard lock(mu);
+            if (is_cancelled)
+                return true;
+            is_cancelled = true;
+        }
+        pipe_read_cv.notifyAll();
+        return true;
+    }
+    return false;
+}
+
 std::vector<SpilledBucketInput *> SharedSpilledBucketDataLoader::getNeedLoadInputs()
 {
     RUNTIME_CHECK(!bucket_inputs.empty());
@@ -66,11 +82,8 @@ void SharedSpilledBucketDataLoader::storeBucketData()
     RUNTIME_CHECK(status == SharedLoaderStatus::loading);
 
     // Although the status will always stay at `SharedLoaderStatus::loading`, but because the query has stopped, it doesn't matter.
-    if unlikely (exec_context.isCancelled())
-    {
-        pipe_read_cv.notifyAll();
+    if (checkCancelled())
         return;
-    }
 
     // get min bucket num.
     Int32 min_bucket_num = SpilledBucketInput::getMinBucketNum(bucket_inputs);
@@ -86,7 +99,7 @@ void SharedSpilledBucketDataLoader::storeBucketData()
     BlocksList bucket_data = SpilledBucketInput::popOutputs(bucket_inputs, min_bucket_num);
     bool should_load_bucket{true};
     {
-        std::lock_guard lock(queue_mu);
+        std::lock_guard lock(mu);
         bucket_data_queue.push(std::move(bucket_data));
         if (bucket_data_queue.size() >= max_queue_size)
         {
@@ -103,11 +116,8 @@ void SharedSpilledBucketDataLoader::loadBucket()
 {
     RUNTIME_CHECK(status == SharedLoaderStatus::loading);
     // Although the status will always stay at `SharedLoaderStatus::loading`, but because the query has stopped, it doesn't matter.
-    if unlikely (exec_context.isCancelled())
-    {
-        pipe_read_cv.notifyAll();
+    if (checkCancelled())
         return;
-    }
 
 
     RUNTIME_CHECK(!bucket_inputs.empty());
@@ -118,15 +128,12 @@ void SharedSpilledBucketDataLoader::loadBucket()
 
 bool SharedSpilledBucketDataLoader::tryPop(BlocksList & bucket_data)
 {
-    if unlikely (exec_context.isCancelled())
-    {
-        pipe_read_cv.notifyAll();
+    if (checkCancelled())
         return true;
-    }
 
     bool result = true;
     {
-        std::lock_guard lock(queue_mu);
+        std::lock_guard lock(mu);
         // If `SharedSpilledBucketDataLoader` is finished, return true after the bucket_data_queue is exhausted.
         // When `tryPop` returns true and `bucket_data` is still empty, the caller knows that `SharedSpilledBucketDataLoader` is finished.
         if (bucket_data_queue.empty())
@@ -149,8 +156,8 @@ bool SharedSpilledBucketDataLoader::tryPop(BlocksList & bucket_data)
 void SharedSpilledBucketDataLoader::registerTask(TaskPtr && task)
 {
     {
-        std::lock_guard lock(queue_mu);
-        if (bucket_data_queue.empty() && status != SharedLoaderStatus::finished)
+        std::lock_guard lock(mu);
+        if (!is_cancelled && bucket_data_queue.empty() && status != SharedLoaderStatus::finished)
         {
             pipe_read_cv.registerTask(std::move(task));
             return;
