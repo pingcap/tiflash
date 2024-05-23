@@ -404,7 +404,7 @@ ColumnPtr DMFileReader::cleanRead(
     const ColumnDefine & cd,
     size_t rows_count,
     std::pair<size_t, size_t> range,
-    const DMFile::PackStats & pack_stats)
+    const DMFileMeta::PackStats & pack_stats)
 {
     switch (cd.id)
     {

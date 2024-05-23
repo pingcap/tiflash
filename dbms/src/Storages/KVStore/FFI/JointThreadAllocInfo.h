@@ -30,6 +30,10 @@ struct ReportThreadAllocateInfoBatch;
 
 struct ThreadInfoJealloc
 {
+    ThreadInfoJealloc(char aggregate_delimer_)
+        : aggregate_delimer(aggregate_delimer_)
+    {}
+    char aggregate_delimer = '-';
     uint64_t allocated_ptr{0};
     uint64_t deallocated_ptr{0};
 
@@ -73,36 +77,52 @@ struct ThreadInfoJealloc
 class JointThreadInfoJeallocMap
 {
 public:
+    using AllocMap = std::unordered_map<std::string, ThreadInfoJealloc>;
     JointThreadInfoJeallocMap();
     ~JointThreadInfoJeallocMap();
-    // Stop the periodic c
+    void recordThreadAllocInfo();
     void stopThreadAllocInfo();
 
-    /// For those everlasting threads, we can directly access their allocatedp/allocatedp.
-    void reportThreadAllocInfoForKVStore(std::string_view, ReportThreadAllocateInfoType type, uint64_t value);
-    /// For those threads with shorter life, we can only update in their call chain.
-    /// Note that this function rely on `TiFlashMetrics::instance` is alive
-    static void reportThreadAllocBatchForKVStore(std::string_view, ReportThreadAllocateInfoBatch data);
+    // Call `thread.(de)allocatedp` for caller
+    static std::tuple<uint64_t *, uint64_t *> getPtrs();
 
+    void accessProxyMap(std::function<void(const AllocMap &)>);
+    void accessStorageMap(std::function<void(const AllocMap &)>);
 
     friend class tests::RegionKVStoreTest;
+
+public: // Proxy
+    /// For those everlasting threads, we can directly access their allocatedp/allocatedp.
+    void reportThreadAllocInfoForProxy(std::string_view, ReportThreadAllocateInfoType type, uint64_t value);
+    /// For those threads with shorter life, we can only update in their call chain.
+    /// Note that this function rely on `TiFlashMetrics::instance` is alive
+    static void reportThreadAllocBatchForProxy(std::string_view, ReportThreadAllocateInfoBatch data);
+
+public: // Storage
+    void reportThreadAllocInfoForStorage(
+        const std::string &,
+        ReportThreadAllocateInfoType type,
+        uint64_t value,
+        char aggregate_delimer);
 
 private:
     /// Be called periodicly to submit the alloc info to TiFlashMetrics
     /// Note that this function rely on `TiFlashMetrics::instance` is alive
-    void recordThreadAllocInfo();
-    void recordThreadAllocInfoForKVStore();
+    void recordThreadAllocInfoForProxy();
+    void recordThreadAllocInfoForStorage();
 
     /// Note that this function rely on `TiFlashMetrics::instance` is alive
     void reportThreadAllocInfoImpl(
-        std::unordered_map<std::string, ThreadInfoJealloc> &,
-        std::string_view,
+        AllocMap &,
+        const std::string &,
         ReportThreadAllocateInfoType type,
-        uint64_t value);
+        uint64_t value,
+        char aggregate_delimer);
 
 private:
     mutable std::shared_mutex memory_allocation_mut;
-    std::unordered_map<std::string, ThreadInfoJealloc> kvstore_map;
+    AllocMap proxy_map;
+    AllocMap storage_map;
 
     bool is_terminated{false};
     mutable std::mutex monitoring_mut;
