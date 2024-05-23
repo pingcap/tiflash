@@ -120,7 +120,7 @@ void AggregatedDataVariants::init(Type variants_type)
     case AggregationMethodType(NAME):                                                        \
     {                                                                                        \
         aggregation_method_impl = std::make_unique<AggregationMethodName(NAME)>().release(); \
-        if (!aggregator->params.key_ref_agg_func.empty())                                    \
+        if (aggregator && !aggregator->params.key_ref_agg_func.empty())                      \
             RUNTIME_CHECK_MSG(                                                               \
                 AggregationMethodName(NAME)::canUseKeyRefAggFuncOptimization(),              \
                 "cannot use key_ref_agg_func opt for method {}",                             \
@@ -241,7 +241,6 @@ Block Aggregator::getSourceHeader() const
 
 Block Aggregator::Params::getHeader(
     const Block & src_header,
-    const Block & intermediate_header,
     const ColumnNumbers & keys,
     const AggregateDescriptions & aggregates,
     const KeyRefAggFuncMap & key_ref_agg_func,
@@ -249,52 +248,34 @@ Block Aggregator::Params::getHeader(
 {
     Block res;
 
-    if (intermediate_header)
+    for (const auto & key : keys)
     {
-        res = intermediate_header.cloneEmpty();
+        // For final stage, key optimization is enabled, so no need to output columns.
+        // An CopyColumn Action will handle this.
+        const auto & key_col = src_header.safeGetByPosition(key);
+        if (final && key_ref_agg_func.find(key_col.name) != key_ref_agg_func.end())
+            continue;
 
-        if (final)
-        {
-            for (const auto & aggregate : aggregates)
-            {
-                auto & elem = res.getByName(aggregate.column_name);
-
-                elem.type = aggregate.function->getReturnType();
-                elem.column = elem.type->createColumn();
-            }
-        }
+        res.insert(key_col.cloneEmpty());
     }
-    else
+
+    for (const auto & aggregate : aggregates)
     {
-        for (const auto & key : keys)
-        {
-            // For final stage, key optimization is enabled, so no need to output columns.
-            // An CopyColumn Action will handle this.
-            const auto & key_col = src_header.safeGetByPosition(key);
-            if (final && key_ref_agg_func.find(key_col.name) != key_ref_agg_func.end())
-                continue;
+        size_t arguments_size = aggregate.arguments.size();
+        DataTypes argument_types(arguments_size);
+        for (size_t j = 0; j < arguments_size; ++j)
+            argument_types[j] = src_header.safeGetByPosition(aggregate.arguments[j]).type;
 
-            res.insert(key_col.cloneEmpty());
-        }
+        DataTypePtr type;
+        if (final)
+            type = aggregate.function->getReturnType();
+        else
+            type = std::make_shared<DataTypeAggregateFunction>(
+                aggregate.function,
+                argument_types,
+                aggregate.parameters);
 
-        for (const auto & aggregate : aggregates)
-        {
-            size_t arguments_size = aggregate.arguments.size();
-            DataTypes argument_types(arguments_size);
-            for (size_t j = 0; j < arguments_size; ++j)
-                argument_types[j] = src_header.safeGetByPosition(aggregate.arguments[j]).type;
-
-            DataTypePtr type;
-            if (final)
-                type = aggregate.function->getReturnType();
-            else
-                type = std::make_shared<DataTypeAggregateFunction>(
-                    aggregate.function,
-                    argument_types,
-                    aggregate.parameters);
-
-            res.insert({type, aggregate.column_name});
-        }
+        res.insert({type, aggregate.column_name});
     }
 
     return materializeBlock(res);
@@ -1105,7 +1086,7 @@ Block Aggregator::convertOneBucketToBlock(
     size_t convert_key_size = final ? params.keys_size - params.key_ref_agg_func.size() : params.keys_size;
 
     Block block;
-    if (final && params.key_ref_agg_func.size() == params.keys_size)
+    if (final && convert_key_size == 0)
     {
         block = prepareBlockAndFill(
             data_variants,
@@ -1161,7 +1142,7 @@ BlocksList Aggregator::convertOneBucketToBlocks(
     BlocksList blocks;
     size_t convert_key_size = final ? params.keys_size - params.key_ref_agg_func.size() : params.keys_size;
 
-    if (final && params.key_ref_agg_func.size() == params.keys_size)
+    if (final && convert_key_size == 0)
     {
         blocks = prepareBlocksAndFill(
             data_variants,
@@ -1721,7 +1702,7 @@ Block Aggregator::prepareBlockAndFill(
     AggregateColumnsData aggregate_columns_data(params.aggregates_size);
     // Store size of keys that need to convert.
     Sizes new_key_sizes;
-    new_key_sizes.reserve(key_sizes.size());
+    new_key_sizes.reserve(convert_key_size);
 
     Block header = getHeader(final);
 
@@ -1807,6 +1788,10 @@ BlocksList Aggregator::prepareBlocksAndFill(
     // Store size of keys that need to convert.
     Sizes new_key_sizes;
     new_key_sizes.reserve(convert_key_size);
+    for (size_t i = 0; i < convert_key_size; ++i)
+    {
+        new_key_sizes.push_back(key_sizes[i]);
+    }
 
     size_t block_rows = params.max_block_size;
 
@@ -1831,8 +1816,6 @@ BlocksList Aggregator::prepareBlocksAndFill(
         {
             key_columns[i] = header.safeGetByPosition(i).type->createColumn();
             key_columns[i]->reserve(block_rows);
-            if (j == 0)
-                new_key_sizes.push_back(key_sizes[i]);
         }
 
         for (size_t i = 0; i < params.aggregates_size; ++i)
@@ -1941,7 +1924,7 @@ BlocksList Aggregator::prepareBlocksAndFillWithoutKey(AggregatedDataVariants & d
         }
     };
 
-    BlocksList blocks = prepareBlocksAndFill(data_variants, final, rows, filler, params.keys_size);
+    BlocksList blocks = prepareBlocksAndFill(data_variants, final, rows, filler, /*convert_key_size=*/0);
 
     if (final)
         destroyWithoutKey(data_variants);
@@ -1997,7 +1980,7 @@ BlocksList Aggregator::prepareBlocksAndFillSingleLevel(AggregatedDataVariants & 
 
     size_t convert_key_size = final ? params.keys_size - params.key_ref_agg_func.size() : params.keys_size;
 
-    if (final && params.key_ref_agg_func.size() == params.keys_size)
+    if (final && convert_key_size == 0)
     {
         return prepareBlocksAndFill(data_variants, final, rows, filler_skip_convert_key, convert_key_size);
     }

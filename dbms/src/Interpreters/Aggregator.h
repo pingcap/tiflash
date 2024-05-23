@@ -1118,11 +1118,11 @@ public:
                 collators_)
         {
             intermediate_header = intermediate_header_;
+            RUNTIME_CHECK_MSG(false, "Aggregator::Params ctor with intermediate_header is only for InterpreterSelectQuery, should not be used by TiFlash");
         }
 
         static Block getHeader(
             const Block & src_header,
-            const Block & intermediate_header,
             const ColumnNumbers & keys,
             const AggregateDescriptions & aggregates,
             const KeyRefAggFuncMap & key_ref_agg_func,
@@ -1130,7 +1130,7 @@ public:
 
         Block getHeader(bool final) const
         {
-            return getHeader(src_header, intermediate_header, keys, aggregates, key_ref_agg_func, final);
+            return getHeader(src_header, keys, aggregates, key_ref_agg_func, final);
         }
 
         /// Calculate the column numbers in `keys` and `aggregates`.
@@ -1359,9 +1359,9 @@ protected:
         Arena * arena,
         bool final) const;
 
-    // The template parameter skip_convert_key indicates whether we can skip serializing the keys in the HashMap.
-    // For example, select first_row(c1) from t group by c1, only the result of first_row(c1) needs to be serialized.
-    // The key c1 only needs to reference to first_row(c1).
+    // The template parameter skip_convert_key indicates whether we can skip deserializing the keys in the HashMap.
+    // For example, select first_row(c1) from t group by c1, where c1 is a string column with collator,
+    // only the result of first_row(c1) needs to be constructed. The key c1 only needs to reference to first_row(c1).
     template <typename Method, typename Table, bool skip_convert_key>
     void convertToBlocksImpl(
         Method & method,
