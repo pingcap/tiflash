@@ -328,8 +328,12 @@ FastAddPeerRes FastAddPeerImplWrite(
         GET_METRIC(tiflash_fap_task_result, type_failed_cancel).Increment();
         return genFastAddPeerRes(FastAddPeerStatus::Canceled, "", "");
     }
-    auto segments = dm_storage->buildSegmentsFromCheckpointInfo(new_key_range, checkpoint_info, settings);
 
+    Stopwatch sbuild;
+    auto segments = dm_storage->buildSegmentsFromCheckpointInfo(new_key_range, checkpoint_info, settings);
+    GET_METRIC(tiflash_fap_task_duration_seconds, type_write_stage_build).Observe(sbuild.elapsedSeconds());
+
+    Stopwatch sinsert;
     fap_ctx->insertCheckpointIngestInfo(
         tmt,
         region_id,
@@ -338,6 +342,7 @@ FastAddPeerRes FastAddPeerImplWrite(
         region,
         std::move(segments),
         start_time);
+    GET_METRIC(tiflash_fap_task_duration_seconds, type_write_stage_insert).Observe(sinsert.elapsedSeconds());
 
     SYNC_FOR("in_FastAddPeerImplWrite::after_write_segments");
     if (cancel_handle->isCanceled())
@@ -352,9 +357,11 @@ FastAddPeerRes FastAddPeerImplWrite(
         GET_METRIC(tiflash_fap_task_result, type_failed_cancel).Increment();
         return genFastAddPeerRes(FastAddPeerStatus::Canceled, "", "");
     }
+
     // Write raft log to uni ps, we do this here because we store raft log seperately.
     // Currently, FAP only handle when the peer is newly created in this store.
     // TODO(fap) However, Move this to `ApplyFapSnapshot` and clean stale data, if FAP can later handle all snapshots.
+    Stopwatch sraft;
     UniversalWriteBatch wb;
     RaftDataReader raft_data_reader(*(checkpoint_info->temp_ps));
     raft_data_reader.traverseRemoteRaftLogForRegion(
@@ -368,6 +375,7 @@ FastAddPeerRes FastAddPeerImplWrite(
                 UniversalPageIdFormat::getU64ID(page_id));
             wb.putRemotePage(page_id, 0, size, location, {});
         });
+    GET_METRIC(tiflash_fap_task_duration_seconds, type_write_stage_raft).Observe(sinsert.elapsedSeconds());
     auto wn_ps = tmt.getContext().getWriteNodePageStorage();
     wn_ps->write(std::move(wb));
     SYNC_FOR("in_FastAddPeerImplWrite::after_write_raft_log");
