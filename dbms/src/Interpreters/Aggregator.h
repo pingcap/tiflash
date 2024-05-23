@@ -1118,7 +1118,10 @@ public:
                 collators_)
         {
             intermediate_header = intermediate_header_;
-            RUNTIME_CHECK_MSG(false, "Aggregator::Params ctor with intermediate_header is only for InterpreterSelectQuery, should not be used by TiFlash");
+            RUNTIME_CHECK_MSG(
+                false,
+                "Aggregator::Params ctor with intermediate_header is only for InterpreterSelectQuery, should not be "
+                "used by TiFlash");
         }
 
         static Block getHeader(
@@ -1128,10 +1131,7 @@ public:
             const KeyRefAggFuncMap & key_ref_agg_func,
             bool final);
 
-        Block getHeader(bool final) const
-        {
-            return getHeader(src_header, keys, aggregates, key_ref_agg_func, final);
-        }
+        Block getHeader(bool final) const { return getHeader(src_header, keys, aggregates, key_ref_agg_func, final); }
 
         /// Calculate the column numbers in `keys` and `aggregates`.
         void calculateColumnNumbers(const Block & block);
