@@ -119,7 +119,6 @@ void SharedSpilledBucketDataLoader::loadBucket()
     if (checkCancelled())
         return;
 
-
     RUNTIME_CHECK(!bucket_inputs.empty());
     auto event = std::make_shared<LoadBucketEvent>(exec_context, log->identifier(), shared_from_this());
     RUNTIME_CHECK(event->prepare());
