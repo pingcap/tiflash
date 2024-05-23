@@ -621,7 +621,7 @@ void DAGExpressionAnalyzer::buildAggGroupBy(
                         {name},
                         {type},
                         arg_collators,
-                        "any",
+                        "first_row",
                         aggregate_descriptions,
                         aggregated_columns,
                         false,
@@ -655,6 +655,7 @@ void DAGExpressionAnalyzer::tryEliminateFirstRow(
     AggregateDescriptions & aggregate_descriptions)
 {
     // Assume aggregate_keys and collators are corresponding one by one.
+    // This is assured by buildAggGroupBy().
     RUNTIME_CHECK(aggregation_keys.size() == collators.size());
 
     for (size_t i = 0; i < aggregation_keys.size(); ++i)

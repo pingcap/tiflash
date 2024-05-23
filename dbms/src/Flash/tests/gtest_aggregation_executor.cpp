@@ -1114,7 +1114,7 @@ try
         auto request = context.scan(db_name, tbl_name).aggregation(agg_funcs, keys).build(context);
         auto expected = {
             toVec<UInt64>("count(1)", ColumnWithUInt64{rows_per_type, rows_per_type, rows_per_type, rows_per_type}),
-            toVec<String>("any(col_string_with_collator)", ColumnWithString{"a", "b", "c", "d"}),
+            toVec<String>("first_row(col_string_with_collator)", ColumnWithString{"a", "b", "c", "d"}),
         };
         executeAndAssertColumnsEqual(request, expected);
     }
