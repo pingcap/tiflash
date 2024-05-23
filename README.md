@@ -1,7 +1,5 @@
 # TiFlash
 
-
-
 ![tiflash-architecture](tiflash-architecture.png)
 
 [TiFlash](https://docs.pingcap.com/tidb/stable/tiflash-overview) is a columnar storage component of [TiDB](https://docs.pingcap.com/tidb/stable) and [TiDB Cloud](https://en.pingcap.com/tidb-cloud/), the fully-managed service of TiDB. It mainly plays the role of Analytical Processing (AP) in the Hybrid Transactional/Analytical Processing (HTAP) architecture of TiDB.
