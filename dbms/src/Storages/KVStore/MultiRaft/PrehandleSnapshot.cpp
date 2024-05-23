@@ -323,8 +323,11 @@ static inline std::pair<std::vector<std::string>, size_t> getSplitKey(
 
     // Don't change the order of following checks, `getApproxBytes` involves some overhead,
     // although it is optimized to bring about the minimum overhead.
-    if (new_region->getClusterRaftstoreVer() != RaftstoreVer::V2)
-        return std::make_pair(std::vector<std::string>{}, 0);
+    if constexpr (SERVERLESS_PROXY == 0)
+    {
+        if (new_region->getClusterRaftstoreVer() != RaftstoreVer::V2)
+            return std::make_pair(std::vector<std::string>{}, 0);
+    }
     auto approx_bytes = sst_stream->getApproxBytes();
     if (approx_bytes <= parallel_prehandle_threshold)
     {
