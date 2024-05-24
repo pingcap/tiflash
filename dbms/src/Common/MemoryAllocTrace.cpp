@@ -36,8 +36,5 @@ std::tuple<uint64_t *, uint64_t *> getAllocDeallocPtr()
 #else
     return std::make_tuple(nullptr, nullptr);
 #endif
-#else
-    return std::make_tuple(nullptr, nullptr);
-#endif
 }
 } // namespace DB
