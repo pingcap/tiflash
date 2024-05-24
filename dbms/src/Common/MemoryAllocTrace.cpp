@@ -16,7 +16,9 @@
 #include <common/config_common.h> // Included for `USE_JEMALLOC`
 
 #ifdef USE_JEMALLOC
+#if USE_JEMALLOC == 1
 #include <jemalloc/jemalloc.h>
+#endif
 #endif
 
 namespace DB
@@ -24,6 +26,7 @@ namespace DB
 std::tuple<uint64_t *, uint64_t *> getAllocDeallocPtr()
 {
 #ifdef USE_JEMALLOC
+#if USE_JEMALLOC == 1
     uint64_t * ptr1 = nullptr;
     uint64_t size1 = sizeof ptr1;
     je_mallctl("thread.allocatedp", reinterpret_cast<void *>(&ptr1), &size1, nullptr, 0);
@@ -31,6 +34,9 @@ std::tuple<uint64_t *, uint64_t *> getAllocDeallocPtr()
     uint64_t size2 = sizeof ptr2;
     je_mallctl("thread.deallocatedp", reinterpret_cast<void *>(&ptr2), &size2, nullptr, 0);
     return std::make_tuple(ptr1, ptr2);
+#else
+    return std::make_tuple(nullptr, nullptr);
+#endif
 #else
     return std::make_tuple(nullptr, nullptr);
 #endif
