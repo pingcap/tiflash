@@ -6,6 +6,10 @@ Problem Summary:
 
 ### What is changed and how it works?
 
+```commit-message
+
+```
+
 ### Check List
 
 Tests <!-- At least one of them must be included. -->
