@@ -25,8 +25,7 @@ namespace DB
 {
 std::tuple<uint64_t *, uint64_t *> getAllocDeallocPtr()
 {
-#ifdef USE_JEMALLOC
-#if USE_JEMALLOC == 1
+#if USE_JEMALLOC
     uint64_t * ptr1 = nullptr;
     uint64_t size1 = sizeof ptr1;
     je_mallctl("thread.allocatedp", reinterpret_cast<void *>(&ptr1), &size1, nullptr, 0);
