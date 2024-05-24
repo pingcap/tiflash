@@ -15,10 +15,8 @@
 #include <Common/MemoryAllocTrace.h>
 #include <common/config_common.h> // Included for `USE_JEMALLOC`
 
-#ifdef USE_JEMALLOC
-#if USE_JEMALLOC == 1
+#if USE_JEMALLOC
 #include <jemalloc/jemalloc.h>
-#endif
 #endif
 
 namespace DB
