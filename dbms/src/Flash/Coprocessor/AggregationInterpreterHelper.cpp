@@ -93,7 +93,7 @@ std::shared_ptr<Aggregator::Params> buildParams(
     size_t normal_key_idx = 0;
     size_t agg_func_as_key_idx = key_names.size() - key_ref_agg_func.size();
     // For columns with collation, key_ref_agg_func optimization will be enabled.
-    // Need to reorder these columns after normal columns.
+    // Need to **reorder** these columns after normal columns.
     // For example:
     // select sum(c0), first_row(c1), first_row(c3) group by c1, c2, c3; (c1 and c3 has collation while c2 doesn't)
     // Before: keys: c1 | c2 | c3

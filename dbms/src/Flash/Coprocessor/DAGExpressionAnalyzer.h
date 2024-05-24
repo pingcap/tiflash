@@ -189,24 +189,32 @@ public:
         NamesAndTypes & aggregated_columns,
         Names & aggregation_keys,
         std::unordered_set<String> & agg_key_set,
-        KeyRefAggFuncMap & key_ref_agg_func,
         bool group_by_collation_sensitive,
         TiDB::TiDBCollators & collators);
 
-    // Try eliminate first_row/any agg func when there is no collator for this column.
-    // The agg func value will reference to group by key, which is indicated by agg_func_ref_key.
-    // This function should be called after buildAggFuncs() and buildAggGroupBy().
-    static void tryEliminateFirstRow(
+    // Try remove group by keys that with collators and corresponding first_row func.
+    // Because we can avoid copying that group by key when convert HashMap to result columns,
+    // instead only a pointer to reference first_row is enough.
+    static void tryRemoveGroupByKeyWithCollator(
         const Names & aggregation_keys,
         const TiDB::TiDBCollators & collators,
-        AggFuncRefKeyMap & agg_func_ref_key,
-        AggregateDescriptions & aggregate_descriptions);
+        const AggregateDescriptions & aggregate_descriptions,
+        NamesAndTypes & aggregate_output_columns,
+        KeyRefAggFuncMap & key_ref_agg_func);
 
-    // There may be first row optimization for HashAgg,
-    // which will not copy all required columns(specificed by tipb) from HashMap.
-    // So need to append copy column action.
+    // Try remove first_row/any agg func when there is no collator for this column.
+    // The agg func value will reference to group by key, which is indicated by agg_func_ref_key.
+    static void tryRemoveFirstRow(
+        const Names & aggregation_keys,
+        const TiDB::TiDBCollators & collators,
+        AggregateDescriptions & aggregate_descriptions,
+        NamesAndTypes & aggregate_output_columns,
+        AggFuncRefKeyMap & agg_func_ref_key);
+
+    // For agg key optimizations, agg block input stream will not output some columns.
+    // So copy column actions are added here to reference result column.
     ExpressionActionsPtr appendCopyColumnAfterAgg(
-        const NamesAndTypes & aggregated_columns,
+        const NamesAndTypes & aggregate_output_columns,
         const KeyRefAggFuncMap & key_ref_agg_func,
         const AggFuncRefKeyMap & agg_func_ref_key);
 

@@ -51,7 +51,7 @@ PhysicalPlanNodePtr PhysicalAggregation::build(
 
     DAGExpressionAnalyzer analyzer{child->getSchema(), context};
     ExpressionActionsPtr before_agg_actions = PhysicalPlanHelper::newActions(child->getSampleBlock());
-    NamesAndTypes aggregated_columns;
+    NamesAndTypes aggregate_output_columns;
     AggregateDescriptions aggregate_descriptions;
     Names aggregation_keys;
     // key_ref_agg_func and agg_func_ref_key are two optimizations for aggregation:
@@ -68,22 +68,32 @@ PhysicalPlanNodePtr PhysicalAggregation::build(
     {
         std::unordered_set<String> agg_key_set;
         const bool collation_sensitive = AggregationInterpreterHelper::isGroupByCollationSensitive(context);
-        analyzer.buildAggFuncs(aggregation, before_agg_actions, aggregate_descriptions, aggregated_columns);
+        analyzer.buildAggFuncs(aggregation, before_agg_actions, aggregate_descriptions, aggregate_output_columns);
         analyzer.buildAggGroupBy(
             aggregation.group_by(),
             before_agg_actions,
             aggregate_descriptions,
-            aggregated_columns,
+            aggregate_output_columns,
             aggregation_keys,
             agg_key_set,
-            key_ref_agg_func,
             collation_sensitive,
             collators);
-        analyzer.tryEliminateFirstRow(aggregation_keys, collators, agg_func_ref_key, aggregate_descriptions);
+        analyzer.tryRemoveGroupByKeyWithCollator(
+            aggregation_keys,
+            collators,
+            aggregate_descriptions,
+            aggregate_output_columns,
+            key_ref_agg_func);
+        analyzer.tryRemoveFirstRow(
+            aggregation_keys,
+            collators,
+            aggregate_descriptions,
+            aggregate_output_columns,
+            agg_func_ref_key);
     }
 
     auto expr_after_agg_actions
-        = analyzer.appendCopyColumnAfterAgg(aggregated_columns, key_ref_agg_func, agg_func_ref_key);
+        = analyzer.appendCopyColumnAfterAgg(aggregate_output_columns, key_ref_agg_func, agg_func_ref_key);
     analyzer.appendCastAfterAgg(expr_after_agg_actions, aggregation);
     /// project action after aggregation to remove useless columns.
     auto schema = PhysicalPlanHelper::addSchemaProjectAction(expr_after_agg_actions, analyzer.getCurrentInputColumns());

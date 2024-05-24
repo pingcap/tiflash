@@ -129,24 +129,34 @@ public:
             DAGExpressionAnalyzer analyzer(src_header, *context);
             ExpressionActionsPtr before_agg_actions = PhysicalPlanHelper::newActions(src_header);
             AggregateDescriptions aggregate_desc;
-            NamesAndTypes aggregated_columns;
+            NamesAndTypes aggregate_output_columns;
             Names aggregation_keys;
             TiDB::TiDBCollators collators;
             std::unordered_set<String> agg_key_set;
-            std::unordered_map<String, String> key_ref_agg_func;
-            std::unordered_map<String, String> agg_func_ref_key;
-            analyzer.buildAggFuncs(agg_tipb, before_agg_actions, aggregate_desc, aggregated_columns);
+            KeyRefAggFuncMap key_ref_agg_func;
+            AggFuncRefKeyMap agg_func_ref_key;
+            analyzer.buildAggFuncs(agg_tipb, before_agg_actions, aggregate_desc, aggregate_output_columns);
             analyzer.buildAggGroupBy(
                 agg_tipb.group_by(),
                 before_agg_actions,
                 aggregate_desc,
-                aggregated_columns,
+                aggregate_output_columns,
                 aggregation_keys,
                 agg_key_set,
-                key_ref_agg_func,
                 /*collation sensitive*/ true,
                 collators);
-            analyzer.tryEliminateFirstRow(aggregation_keys, collators, agg_func_ref_key, aggregate_desc);
+            analyzer.tryRemoveGroupByKeyWithCollator(
+                aggregation_keys,
+                collators,
+                aggregate_desc,
+                aggregate_output_columns,
+                key_ref_agg_func);
+            analyzer.tryRemoveFirstRow(
+                aggregation_keys,
+                collators,
+                aggregate_desc,
+                aggregate_output_columns,
+                agg_func_ref_key);
 
             // Fill argument number of agg func.
             AggregationInterpreterHelper::fillArgColumnNumbers(aggregate_desc, src_header);
