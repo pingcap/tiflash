@@ -558,13 +558,29 @@ DM::WriteResult DeltaMergeStore::write(
         {
             dedup_ver.insert(v);
         }
+
+        std::unordered_set<Int64> dedup_handles;
+        auto extra_handle_col = tryGetByColumnId(block, EXTRA_HANDLE_COLUMN_ID);
+        if (extra_handle_col.column)
+        {
+            if (extra_handle_col.type->getTypeId() == TypeIndex::Int64)
+            {
+                const auto * extra_handles = toColumnVectorDataPtr<Int64>(extra_handle_col.column);
+                for (auto h : *extra_handles)
+                {
+                    dedup_handles.insert(h);
+                }
+            }
+        }
+
         LOG_DEBUG(
             log,
-            "region_id={} applied_index={} record_count={} versions={}",
+            "region_id={} applied_index={} record_count={} versions={} handles={}",
             applied_status.region_id,
             applied_status.applied_index,
             block.rows(),
-            dedup_ver);
+            dedup_ver,
+            dedup_handles);
     }
     const auto bytes = block.bytes();
 
@@ -690,8 +706,8 @@ DM::WriteResult DeltaMergeStore::write(
                 ErrorCodes::FAIL_POINT_ERROR);
     });
 
-    // TODO: Update the tracing_id before checkSegmentsUpdateForKVStore
-    return checkSegmentsUpdateForKVStore(
+    // TODO: Update the tracing_id before checkSegmentsUpdateForProxy
+    return checkSegmentsUpdateForProxy(
         dm_context,
         updated_segments.begin(),
         updated_segments.end(),
@@ -1985,7 +2001,7 @@ void DeltaMergeStore::restoreStableFilesFromLocal() const
 void DeltaMergeStore::removeLocalStableFilesIfDisagg() const
 {
     listLocalStableFiles([](UInt64 file_id, const String & root_path) {
-        auto path = DMFile::getPathByStatus(root_path, file_id, DMFile::Status::READABLE);
+        auto path = getPathByStatus(root_path, file_id, DMFileStatus::READABLE);
         Poco::File file(path);
         if (file.exists())
         {

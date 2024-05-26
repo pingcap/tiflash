@@ -18,6 +18,11 @@
 
 namespace DB::DM
 {
+namespace tests
+{
+class SegmentReadTasksPoolTest;
+}
+
 struct MergedUnit
 {
     MergedUnit(const SegmentReadTaskPoolPtr & pool_, const SegmentReadTaskPtr & task_)
@@ -127,11 +132,7 @@ public:
         }
     }
 
-#ifndef DBMS_PUBLIC_GTEST
 private:
-#else
-public:
-#endif
     void initOnce();
     int readOneBlock();
     void setUnitFinish(int i) { finished_count += units[i].setFinish(); }
@@ -143,6 +144,8 @@ public:
     size_t finished_count;
     Stopwatch sw;
     inline static std::atomic<int64_t> passive_merged_segments{0};
+
+    friend class tests::SegmentReadTasksPoolTest;
 };
 
 using MergedTaskPtr = std::shared_ptr<MergedTask>;

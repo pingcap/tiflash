@@ -104,7 +104,8 @@ check_then_add_sources_compile_flag (
     src/Columns/ColumnVector.cpp
     src/DataTypes/DataTypeString.cpp
     src/Interpreters/Join.cpp
-    src/IO/Compression/CompressionCodecDelta.cpp
+    src/IO/Compression/CompressionCodecFOR.cpp
+    src/IO/Compression/CompressionCodecDeltaFOR.cpp
     src/Storages/DeltaMerge/BitmapFilter/BitmapFilter.cpp
     src/Storages/DeltaMerge/DMVersionFilterBlockInputStream.cpp
 )
@@ -159,12 +160,8 @@ target_include_directories(dbms PUBLIC "${TIFLASH_PROXY_INCLUDE_DIR}")
 if (CMAKE_BUILD_TYPE_UC STREQUAL "RELEASE" OR CMAKE_BUILD_TYPE_UC STREQUAL "RELWITHDEBINFO" OR CMAKE_BUILD_TYPE_UC STREQUAL "MINSIZEREL")
     # Won't generate debug info for files with heavy template instantiation to achieve faster linking and lower size.
     set_source_files_properties(
-        src/Dictionaries/FlatDictionary.cpp
-        src/Dictionaries/HashedDictionary.cpp
         src/Dictionaries/CacheDictionary.cpp
         src/Dictionaries/TrieDictionary.cpp
-        src/Dictionaries/RangeHashedDictionary.cpp
-        src/Dictionaries/ComplexKeyHashedDictionary.cpp
         src/Dictionaries/ComplexKeyCacheDictionary.cpp
         src/Dictionaries/ComplexKeyCacheDictionary_generate1.cpp
         src/Dictionaries/ComplexKeyCacheDictionary_generate2.cpp
@@ -203,6 +200,7 @@ target_link_libraries (tiflash_common_io
     libsymbolization
     ${RE2_LIBRARY}
     ${RE2_ST_LIBRARY}
+    fastpforlib
 )
 
 target_include_directories (tiflash_common_io BEFORE PRIVATE ${kvClient_SOURCE_DIR}/include)

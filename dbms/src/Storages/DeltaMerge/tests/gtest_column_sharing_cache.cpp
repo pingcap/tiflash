@@ -15,8 +15,7 @@
 #include <DataTypes/DataTypeString.h>
 #include <Storages/DeltaMerge/ReadThread/ColumnSharingCache.h>
 #include <TestUtils/TiFlashTestBasic.h>
-
-#include "gtest/gtest.h"
+#include <gtest/gtest.h>
 
 namespace DB::DM::tests
 {

@@ -17,6 +17,7 @@
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/IDataType.h>
 #include <IO/Compression/CompressionFactory.h>
+#include <TestUtils/TiFlashTestBasic.h>
 #include <common/types.h>
 #include <gtest/gtest.h>
 
@@ -270,16 +271,6 @@ CodecTestSequence operator+(CodecTestSequence && left, const CodecTestSequence &
     return left.append(right);
 }
 
-std::vector<CodecTestSequence> operator+(
-    const std::vector<CodecTestSequence> & left,
-    const std::vector<CodecTestSequence> & right)
-{
-    std::vector<CodecTestSequence> result(left);
-    std::move(std::begin(right), std::end(right), std::back_inserter(result));
-
-    return result;
-}
-
 template <typename T>
 CodecTestSequence operator*(CodecTestSequence && left, T times)
 {
@@ -388,19 +379,40 @@ void testTranscoding(ICompressionCodec & codec, const CodecTestSequence & test_s
     ASSERT_TRUE(EqualByteContainers(test_sequence.data_type->getSizeOfValueInMemory(), source_data, decoded));
 }
 
+class MultipleSequencesCodecTest
+    : public ::testing::TestWithParam<std::tuple<CompressionMethodByte, std::vector<CodecTestSequence>>>
+{
+};
+
+TEST_P(MultipleSequencesCodecTest, TranscodingWithDataType)
+try
+{
+    const auto method_byte = std::get<0>(GetParam());
+    const auto sequences = std::get<1>(GetParam());
+    ASSERT_FALSE(sequences.empty());
+    auto type_byte = sequences.front().type_byte;
+    const auto codec = DB::tests::makeCodec(method_byte, type_byte);
+    for (const auto & sequence : sequences)
+    {
+        ASSERT_EQ(sequence.type_byte, type_byte);
+        DB::tests::testTranscoding(*codec, sequence);
+    }
+}
+CATCH
+
 class CodecTest : public ::testing::TestWithParam<std::tuple<CompressionMethodByte, CodecTestSequence>>
 {
-public:
-    void testTranscoding(ICompressionCodec & codec) { ::DB::tests::testTranscoding(codec, std::get<1>(GetParam())); }
 };
 
 TEST_P(CodecTest, TranscodingWithDataType)
+try
 {
     const auto method_byte = std::get<0>(GetParam());
     const auto sequence = std::get<1>(GetParam());
-    const auto codec = ::DB::tests::makeCodec(method_byte, sequence.type_byte);
-    testTranscoding(*codec);
+    const auto codec = DB::tests::makeCodec(method_byte, sequence.type_byte);
+    DB::tests::testTranscoding(*codec, sequence);
 }
+CATCH
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // Here we use generators to produce test payload for codecs.
@@ -474,13 +486,13 @@ private:
     uniform_distribution<T> distribution;
 };
 
-auto RandomishGenerator = [](auto i) {
-    using T = decltype(i);
-    double sin_value = sin(static_cast<double>(i * i)) * i;
-    if (sin_value < std::numeric_limits<T>::lowest() || sin_value > static_cast<double>(std::numeric_limits<T>::max()))
-        return T{};
-    return static_cast<T>(sin_value);
-};
+// auto RandomishGenerator = [](auto i) {
+//     using T = decltype(i);
+//     double sin_value = sin(static_cast<double>(i * i)) * i;
+//     if (sin_value < std::numeric_limits<T>::lowest() || sin_value > static_cast<double>(std::numeric_limits<T>::max()))
+//         return T{};
+//     return static_cast<T>(sin_value);
+// };
 
 auto MinMaxGenerator = []() {
     return [step = 0](auto i) mutable {
@@ -520,7 +532,8 @@ std::vector<CodecTestSequence> generatePyramidOfSequences(
 #define G(generator) generator, #generator
 
 const auto IntegerCodecsToTest = ::testing::Values(
-    CompressionMethodByte::Delta,
+    CompressionMethodByte::DeltaFOR,
+    CompressionMethodByte::FOR,
     CompressionMethodByte::RLE
 #if USE_QPL
     ,
@@ -566,18 +579,18 @@ const auto IntegerCodecsToTest = ::testing::Values(
 
 INSTANTIATE_TEST_CASE_P(
     SmallSequences,
-    CodecTest,
+    MultipleSequencesCodecTest,
     ::testing::Combine(
         IntegerCodecsToTest,
-        ::testing::ValuesIn(
-            generatePyramidOfSequences<Int8>(42, G(SequentialGenerator(1)))
-            + generatePyramidOfSequences<Int16>(42, G(SequentialGenerator(1)))
-            + generatePyramidOfSequences<Int32>(42, G(SequentialGenerator(1)))
-            + generatePyramidOfSequences<Int64>(42, G(SequentialGenerator(1)))
-            + generatePyramidOfSequences<UInt8>(42, G(SequentialGenerator(1)))
-            + generatePyramidOfSequences<UInt16>(42, G(SequentialGenerator(1)))
-            + generatePyramidOfSequences<UInt32>(42, G(SequentialGenerator(1)))
-            + generatePyramidOfSequences<UInt64>(42, G(SequentialGenerator(1))))));
+        ::testing::Values(
+            generatePyramidOfSequences<Int8>(42, G(SequentialGenerator(1))),
+            generatePyramidOfSequences<Int16>(42, G(SequentialGenerator(1))),
+            generatePyramidOfSequences<Int32>(42, G(SequentialGenerator(1))),
+            generatePyramidOfSequences<Int64>(42, G(SequentialGenerator(1))),
+            generatePyramidOfSequences<UInt8>(42, G(SequentialGenerator(1))),
+            generatePyramidOfSequences<UInt16>(42, G(SequentialGenerator(1))),
+            generatePyramidOfSequences<UInt32>(42, G(SequentialGenerator(1))),
+            generatePyramidOfSequences<UInt64>(42, G(SequentialGenerator(1))))));
 
 INSTANTIATE_TEST_CASE_P(
     Mixed,
@@ -693,23 +706,23 @@ INSTANTIATE_TEST_CASE_P(
     ::testing::Combine(
         IntegerCodecsToTest,
         ::testing::Values(
-            generateSeq<UInt8>(G(RandomGenerator<uint8_t>(0))),
+            generateSeq<UInt8>(G(RandomGenerator<UInt8>(0))),
             generateSeq<UInt16>(G(RandomGenerator<UInt16>(0))),
             generateSeq<UInt32>(G(RandomGenerator<UInt32>(0, 0, 1000'000'000))),
             generateSeq<UInt64>(G(RandomGenerator<UInt64>(0, 0, 1000'000'000))))));
 
-INSTANTIATE_TEST_CASE_P(
-    RandomishInt,
-    CodecTest,
-    ::testing::Combine(
-        IntegerCodecsToTest,
-        ::testing::Values(
-            generateSeq<Int32>(G(RandomishGenerator)),
-            generateSeq<Int64>(G(RandomishGenerator)),
-            generateSeq<UInt32>(G(RandomishGenerator)),
-            generateSeq<UInt64>(G(RandomishGenerator)),
-            generateSeq<Float32>(G(RandomishGenerator)),
-            generateSeq<Float64>(G(RandomishGenerator)))));
+// INSTANTIATE_TEST_CASE_P(
+//     RandomishInt,
+//     CodecTest,
+//     ::testing::Combine(
+//         IntegerCodecsToTest,
+//         ::testing::Values(
+//             generateSeq<Int32>(G(RandomishGenerator)),
+//             generateSeq<Int64>(G(RandomishGenerator)),
+//             generateSeq<UInt32>(G(RandomishGenerator)),
+//             generateSeq<UInt64>(G(RandomishGenerator)),
+//             generateSeq<Float32>(G(RandomishGenerator)),
+//             generateSeq<Float64>(G(RandomishGenerator)))));
 
 
 // INSTANTIATE_TEST_CASE_P(

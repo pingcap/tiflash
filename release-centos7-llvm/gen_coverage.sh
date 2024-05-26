@@ -54,7 +54,7 @@ cd -
 ## TODO: Add more testing binaries
 
 # Collect the prof raw data and generate cov report
-llvm-profdata merge -sparse "${COVERAGE_DIR}/*.profraw" -o "${COVERAGE_DIR}/merged.profdata"
+llvm-profdata merge -sparse ${COVERAGE_DIR}/*.profraw -o "${COVERAGE_DIR}/merged.profdata"
 
 export LD_LIBRARY_PATH=.
 llvm-cov export \
@@ -74,4 +74,4 @@ REPORT_DIR="${PROF_DIR}/report"
 genhtml "${COVERAGE_DIR}/lcov.info" -o "${REPORT_DIR}" --ignore-errors source
 
 echo "The coverage report is built under ${REPORT_DIR}. Checkout the ${REPORT_DIR}/index.html"
-echo "You can use "python3 -m http --directory ${REPORT_DIR} 12345" to check out the files by webbrowser"
+echo "You can use "python3 -m http.server --directory ${REPORT_DIR} 12345" to check out the files by webbrowser"

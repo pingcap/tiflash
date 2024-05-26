@@ -43,5 +43,6 @@ header:
     - '**/OWNERS'
     - 'OWNERS_ALIASES'
     - '**/*.sql'
+    - 'dbms/src/Common/tests/tls/'
 
   comment: on-failure
