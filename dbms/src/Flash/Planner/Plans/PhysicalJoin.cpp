@@ -125,6 +125,7 @@ PhysicalPlanNodePtr PhysicalJoin::build(
         left->getSchema(),
         right->getSchema(),
         probe_side_prepare_actions,
+        build_side_prepare_actions,
         original_probe_key_names,
         original_build_key_names,
         join_non_equal_conditions);
