@@ -1271,6 +1271,11 @@ ColumnInfo toTiDBColumnInfo(const tipb::ColumnInfo & tipb_column_info)
     tidb_column_info.flag = tipb_column_info.flag();
     tidb_column_info.flen = tipb_column_info.columnlen();
     tidb_column_info.decimal = tipb_column_info.decimal();
+    // TiFlash get default value from origin_default_value, check `Field ColumnInfo::defaultValueToField() const`
+    // So we need to set origin_default_value to tipb_column_info.default_val()
+    // Related logic in tidb, https://github.com/pingcap/tidb/blob/45318da24d8e4c0c6aab836d291a33f949dd18bf/pkg/table/tables/tables.go#L2303-L2329
+    tidb_column_info.origin_default_value = tipb_column_info.default_val();
+    tidb_column_info.collate = tipb_column_info.collation();
     for (int i = 0; i < tipb_column_info.elems_size(); ++i)
         tidb_column_info.elems.emplace_back(tipb_column_info.elems(i), i + 1);
     return tidb_column_info;
