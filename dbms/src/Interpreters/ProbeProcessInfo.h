@@ -181,7 +181,7 @@ struct ProbeProcessInfo
         const String & filter_column,
         ASTTableJoin::Kind kind,
         ASTTableJoin::Strictness strictness,
-        const Block & sample_block_without_keys,
+        const Block & right_sample_block,
         const NameSet & output_column_names_set,
         size_t right_rows_to_be_added_when_matched,
         CrossProbeMode cross_probe_mode,
