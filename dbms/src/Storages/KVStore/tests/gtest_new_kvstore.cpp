@@ -23,6 +23,7 @@
 #include <Storages/RegionQueryInfo.h>
 #include <TiDB/Schema/SchemaSyncService.h>
 #include <TiDB/Schema/TiDBSchemaManager.h>
+#include <common/config_common.h> // Included for `USE_JEMALLOC`
 
 #include <limits>
 
@@ -1056,6 +1057,7 @@ try
 }
 CATCH
 
+#if USE_JEMALLOC // following tests depends on jemalloc
 TEST(FFIJemallocTest, JemallocThread)
 try
 {
@@ -1063,16 +1065,16 @@ try
         char * a = new char[888888];
         std::thread t1([&]() {
             auto [allocated, deallocated] = JointThreadInfoJeallocMap::getPtrs();
-            ASSERT(allocated != 0);
+            ASSERT(allocated != nullptr);
             ASSERT_EQ(*allocated, 0);
-            ASSERT(deallocated != 0);
+            ASSERT(deallocated != nullptr);
             ASSERT_EQ(*deallocated, 0);
         });
         t1.join();
         auto [allocated, deallocated] = JointThreadInfoJeallocMap::getPtrs();
-        ASSERT(allocated != 0);
+        ASSERT(allocated != nullptr);
         ASSERT_GE(*allocated, 888888);
-        ASSERT(deallocated != 0);
+        ASSERT(deallocated != nullptr);
         delete[] a;
     });
     t2.join();
@@ -1084,37 +1086,43 @@ try
 {
     using namespace std::chrono_literals;
     auto & ctx = TiFlashTestEnv::getGlobalContext();
-    auto size = TiFlashTestEnv::DEFAULT_BG_POOL_SIZE;
-    std::atomic_bool b;
     auto & pool = ctx.getBackgroundPool();
+    const auto size = TiFlashTestEnv::DEFAULT_BG_POOL_SIZE;
+    std::atomic_bool b = false;
     auto t = pool.addTask(
         [&]() {
             auto * x = new int[1000];
+            LOG_INFO(Logger::get(), "allocated");
             while (!b.load())
             {
                 std::this_thread::sleep_for(1500ms);
             }
             delete[] x;
+            LOG_INFO(Logger::get(), "released");
             return false;
         },
         false,
         5 * 60 * 1000);
     std::this_thread::sleep_for(500ms);
+
     JointThreadInfoJeallocMap & jm = *ctx.getJointThreadInfoJeallocMap();
     jm.recordThreadAllocInfo();
 
-    LOG_INFO(DB::Logger::get(), "size {}", size);
+    LOG_INFO(DB::Logger::get(), "bg pool size={}", size);
     UInt64 r = TiFlashMetrics::instance().getStorageThreadMemory(TiFlashMetrics::MemoryAllocType::Alloc, "bg");
     ASSERT_GE(r, sizeof(int) * 1000);
     jm.accessStorageMap([size](const JointThreadInfoJeallocMap::AllocMap & m) {
         // There are some other bg thread pools
-        ASSERT_GE(m.size(), size);
+        ASSERT_GE(m.size(), size) << m.size();
     });
     jm.accessProxyMap([](const JointThreadInfoJeallocMap::AllocMap & m) { ASSERT_EQ(m.size(), 0); });
+
     b.store(true);
+
     ctx.getBackgroundPool().removeTask(t);
 }
 CATCH
+#endif
 
 TEST(ProxyMode, Normal)
 try
