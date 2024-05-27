@@ -1065,16 +1065,16 @@ try
         char * a = new char[888888];
         std::thread t1([&]() {
             auto [allocated, deallocated] = JointThreadInfoJeallocMap::getPtrs();
-            ASSERT(allocated != nullptr);
+            ASSERT_TRUE(allocated != nullptr);
             ASSERT_EQ(*allocated, 0);
-            ASSERT(deallocated != nullptr);
+            ASSERT_TRUE(deallocated != nullptr);
             ASSERT_EQ(*deallocated, 0);
         });
         t1.join();
         auto [allocated, deallocated] = JointThreadInfoJeallocMap::getPtrs();
-        ASSERT(allocated != nullptr);
+        ASSERT_TRUE(allocated != nullptr);
         ASSERT_GE(*allocated, 888888);
-        ASSERT(deallocated != nullptr);
+        ASSERT_TRUE(deallocated != nullptr);
         delete[] a;
     });
     t2.join();
