@@ -87,7 +87,7 @@ public:
     {
         // Status of DMFile can be updated when DMFileReader in used and the pathname will be changed.
         // For DMFileReader, always use the readable path.
-        return DMFile::getPathByStatus(dmfile->parentPath(), dmfile->fileId(), DMFile::Status::READABLE);
+        return getPathByStatus(dmfile->parentPath(), dmfile->fileId(), DMFileStatus::READABLE);
     }
     void addCachedPacks(ColId col_id, size_t start_pack_id, size_t pack_count, ColumnPtr & col) const;
 
@@ -119,7 +119,7 @@ private:
         const ColumnDefine & cd,
         size_t rows_count,
         std::pair<size_t, size_t> range,
-        const DMFile::PackStats & pack_stats);
+        const DMFileMeta::PackStats & pack_stats);
     bool getCachedPacks(ColId col_id, size_t start_pack_id, size_t pack_count, size_t read_rows, ColumnPtr & col) const;
 
     void addScannedRows(UInt64 rows);

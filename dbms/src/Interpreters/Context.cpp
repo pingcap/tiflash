@@ -1422,7 +1422,8 @@ BackgroundProcessingPool & Context::initializeBackgroundPool(UInt16 pool_size)
 {
     auto lock = getLock();
     if (!shared->background_pool)
-        shared->background_pool = std::make_shared<BackgroundProcessingPool>(pool_size, "bg-");
+        shared->background_pool
+            = std::make_shared<BackgroundProcessingPool>(pool_size, "bg-", getJointThreadInfoJeallocMap(lock));
     return *shared->background_pool;
 }
 
@@ -1436,7 +1437,8 @@ BackgroundProcessingPool & Context::initializeBlockableBackgroundPool(UInt16 poo
 {
     auto lock = getLock();
     if (!shared->blockable_background_pool)
-        shared->blockable_background_pool = std::make_shared<BackgroundProcessingPool>(pool_size, "bg-block-");
+        shared->blockable_background_pool
+            = std::make_shared<BackgroundProcessingPool>(pool_size, "bg-block-", getJointThreadInfoJeallocMap(lock));
     return *shared->blockable_background_pool;
 }
 
@@ -1452,8 +1454,10 @@ BackgroundProcessingPool & Context::getPSBackgroundPool()
     auto lock = getLock();
     // use the same size as `background_pool_size`
     if (!shared->ps_compact_background_pool)
-        shared->ps_compact_background_pool
-            = std::make_shared<BackgroundProcessingPool>(settings.background_pool_size, "bg-page-");
+        shared->ps_compact_background_pool = std::make_shared<BackgroundProcessingPool>(
+            settings.background_pool_size,
+            "bg-page-",
+            getJointThreadInfoJeallocMap(lock));
     return *shared->ps_compact_background_pool;
 }
 
@@ -1772,6 +1776,20 @@ void Context::initializeJointThreadInfoJeallocMap()
 
 JointThreadInfoJeallocMapPtr Context::getJointThreadInfoJeallocMap() const
 {
+    auto lock = getLock();
+    if (!shared->joint_memory_allocation_map)
+    {
+        shared->joint_memory_allocation_map = std::make_shared<JointThreadInfoJeallocMap>();
+    }
+    return shared->joint_memory_allocation_map;
+}
+
+JointThreadInfoJeallocMapPtr Context::getJointThreadInfoJeallocMap(std::unique_lock<std::recursive_mutex> &) const
+{
+    if (!shared->joint_memory_allocation_map)
+    {
+        shared->joint_memory_allocation_map = std::make_shared<JointThreadInfoJeallocMap>();
+    }
     return shared->joint_memory_allocation_map;
 }
 

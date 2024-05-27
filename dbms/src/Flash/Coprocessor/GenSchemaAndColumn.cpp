@@ -18,6 +18,7 @@
 #include <TiDB/Decode/TypeMapping.h>
 #include <TiDB/Schema/TiDB.h>
 
+
 namespace DB
 {
 namespace
@@ -121,7 +122,6 @@ std::tuple<DM::ColumnDefinesPtr, int> genColumnDefinesForDisaggregatedRead(const
             break;
         }
         default:
-            // TODO: Is it ok to use the default value here?
             column_defines->emplace_back(DM::ColumnDefine{
                 column_info.id,
                 output_name,

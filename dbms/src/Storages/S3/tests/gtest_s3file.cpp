@@ -186,16 +186,16 @@ protected:
 
     std::unordered_map<String, size_t> listFiles(const DMFileOID & oid)
     {
-        auto dmfile_dir = DMFile::getPathByStatus(
+        auto dmfile_dir = getPathByStatus(
             S3::S3Filename::fromTableID(oid.store_id, oid.keyspace_id, oid.table_id).toFullKey(),
             oid.file_id,
-            DMFile::Status::READABLE);
+            DMFileStatus::READABLE);
         return S3::listPrefixWithSize(*s3_client, dmfile_dir + "/");
     }
 
     DMFilePtr restoreDMFile(const DMFileOID & oid)
     {
-        return data_store->prepareDMFile(oid)->restore(DMFile::ReadMetaMode::all());
+        return data_store->prepareDMFile(oid)->restore(DMFileMeta::ReadMode::all());
     }
 
     LoggerPtr log;

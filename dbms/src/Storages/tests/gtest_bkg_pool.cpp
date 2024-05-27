@@ -26,7 +26,7 @@ namespace DB::tests
 
 TEST(BackgroundProcessingPoolTest, FixedInterval)
 {
-    BackgroundProcessingPool pool(10, "test");
+    BackgroundProcessingPool pool(10, "test", std::make_shared<JointThreadInfoJeallocMap>());
 
     using Clock = std::chrono::system_clock;
     using TimePoint = std::chrono::time_point<Clock>;
