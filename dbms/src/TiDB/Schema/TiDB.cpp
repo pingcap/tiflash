@@ -1264,7 +1264,7 @@ ColumnInfo toTiDBColumnInfo(const tipb::ColumnInfo & tipb_column_info)
     tidb_column_info.flag = tipb_column_info.flag();
     tidb_column_info.flen = tipb_column_info.columnlen();
     tidb_column_info.decimal = tipb_column_info.decimal();
-    tidb_column_info.default_value = tipb_column_info.default_val();
+    tidb_column_info.origin_default_value = tipb_column_info.default_val();
     tidb_column_info.collate = tipb_column_info.collation();
     for (int i = 0; i < tipb_column_info.elems_size(); ++i)
         tidb_column_info.elems.emplace_back(tipb_column_info.elems(i), i + 1);
