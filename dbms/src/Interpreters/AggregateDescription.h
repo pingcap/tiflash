@@ -17,7 +17,6 @@
 #include <AggregateFunctions/IAggregateFunction.h>
 #include <Core/ColumnNumbers.h>
 #include <Core/Names.h>
-#include <Core/NamesAndTypes.h>
 
 
 namespace DB
@@ -32,7 +31,7 @@ struct AggregateDescription
 };
 
 using AggregateDescriptions = std::vector<AggregateDescription>;
-using KeyRefAggFuncMap = std::unordered_map<String, NameAndTypePair>;
-using AggFuncRefKeyMap = std::unordered_map<String, NameAndTypePair>;
+using KeyRefAggFuncMap = std::unordered_map<String, String>;
+using AggFuncRefKeyMap = std::unordered_map<String, String>;
 
 } // namespace DB

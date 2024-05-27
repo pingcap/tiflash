@@ -204,8 +204,8 @@ try
     execute(
         request,
         /*expected_physical_plan=*/R"(
-<Projection, aggregation_1> | is_tidb_operator: false, schema: <aggregation_1_max(s2)_collator_46 , Nullable(String)>, <aggregation_1_first_row(s1)_collator_46 , Nullable(String)>
- <Aggregation, aggregation_1> | is_tidb_operator: true, schema: <max(s2)_collator_46 , Nullable(String)>, <first_row(s1)_collator_46 , Nullable(String)>, <s1, Nullable(String)>
+<Projection, aggregation_1> | is_tidb_operator: false, schema: <aggregation_1_max(s2)_collator_46 , Nullable(String)>, <aggregation_1_any(s1)_collator_46 , Nullable(String)>
+ <Aggregation, aggregation_1> | is_tidb_operator: true, schema: <max(s2)_collator_46 , Nullable(String)>, <any(s1)_collator_46 , Nullable(String)>
   <MockExchangeReceiver, exchange_receiver_0> | is_tidb_operator: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>)",
         /*expected_streams=*/R"(
 Expression: <final projection>

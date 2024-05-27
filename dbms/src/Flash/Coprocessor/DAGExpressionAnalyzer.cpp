@@ -142,7 +142,7 @@ DataTypePtr findDuplicateAggWindowFunc(const String & func_string, const Descrip
 
 /// Generate AggregateDescription and append it to AggregateDescriptions if need.
 /// And append output column to aggregated_columns.
-String appendAggDescription(
+void appendAggDescription(
     const Names & arg_names,
     const DataTypes & arg_types,
     TiDB::TiDBCollators & arg_collators,
@@ -161,7 +161,7 @@ String appendAggDescription(
     {
         // agg function duplicate, don't need to build again.
         aggregated_columns.emplace_back(func_string, duplicated_return_type);
-        return func_string;
+        return;
     }
 
     aggregate.column_name = func_string;
@@ -171,8 +171,8 @@ String appendAggDescription(
     aggregate.function->setCollators(arg_collators);
 
     aggregated_columns.emplace_back(func_string, aggregate.function->getReturnType());
+
     aggregate_descriptions.emplace_back(std::move(aggregate));
-    return func_string;
 }
 
 /// Generate WindowFunctionDescription and append it to WindowDescription if need.
@@ -574,6 +574,7 @@ void DAGExpressionAnalyzer::buildAggGroupBy(
     NamesAndTypes & aggregated_columns,
     Names & aggregation_keys,
     std::unordered_set<String> & agg_key_set,
+    KeyRefAggFuncMap & key_ref_agg_func,
     bool group_by_collation_sensitive,
     TiDB::TiDBCollators & collators)
 {
@@ -592,7 +593,7 @@ void DAGExpressionAnalyzer::buildAggGroupBy(
         /// when group_by_collation_sensitive is true, TiFlash will do the aggregation with collation
         /// info, since the aggregation in TiFlash is actually the partial stage, and TiDB always do
         /// the final stage of the aggregation, even if TiFlash do the aggregation without collation
-        /// info, the corectness of the query result is guaranteed by TiDB itself, so add a flag to
+        /// info, the correctness of the query result is guaranteed by TiDB itself, so add a flag to
         /// let TiDB/TiFlash to decide whether aggregate the data with collation info or not
         if (group_by_collation_sensitive)
         {
@@ -604,19 +605,30 @@ void DAGExpressionAnalyzer::buildAggGroupBy(
                 collators.back() = collator;
             if (collator != nullptr)
             {
-                /// if the column is a string with collation info, the `sort_key` of the column is used during
-                /// aggregation, but we can not reconstruct the origin column by `sort_key`, so add an extra
-                /// extra aggregation function any(group_by_column) here as the output of the group by column
-                TiDB::TiDBCollators arg_collators{collator};
-                auto agg_func_name = appendAggDescription(
-                    {name},
-                    {type},
-                    arg_collators,
-                    "first_row",
-                    aggregate_descriptions,
-                    aggregated_columns,
-                    false,
-                    context);
+                auto [first_row_name, first_row_type] = findFirstRow(aggregate_descriptions, name);
+                String agg_func_name = first_row_name;
+                if (!first_row_name.empty())
+                {
+                    aggregated_columns.emplace_back(first_row_name, first_row_type);
+                }
+                else
+                {
+                    /// if the column is a string with collation info, the `sort_key` of the column is used during
+                    /// aggregation, but we can not reconstruct the origin column by `sort_key`, so add an extra
+                    /// extra aggregation function any(group_by_column) here as the output of the group by column
+                    TiDB::TiDBCollators arg_collators{collator};
+                    appendAggDescription(
+                        {name},
+                        {type},
+                        arg_collators,
+                        "first_row",
+                        aggregate_descriptions,
+                        aggregated_columns,
+                        false,
+                        context);
+                    agg_func_name = aggregate_descriptions.back().column_name;
+                }
+                key_ref_agg_func.insert({name, agg_func_name});
             }
             else
             {
@@ -628,69 +640,19 @@ void DAGExpressionAnalyzer::buildAggGroupBy(
             aggregated_columns.emplace_back(name, actions->getSampleBlock().getByName(name).type);
         }
     }
-}
-
-template <typename MapType, typename VecType, typename GetNameFunc>
-VecType doRemove(const MapType & map, const VecType & vec, const GetNameFunc & get_name_func)
-{
-    VecType new_vec;
-    new_vec.reserve(vec.size());
-
-    for (const auto & v : vec)
-    {
-        if (map.find(get_name_func(v)) == map.end())
-        {
-            new_vec.push_back(v);
-        }
-    }
-    return new_vec;
-}
-
-void DAGExpressionAnalyzer::tryRemoveGroupByKeyWithCollator(
-    const Names & aggregation_keys,
-    const TiDB::TiDBCollators & collators,
-    const AggregateDescriptions & aggregate_descriptions,
-    NamesAndTypes & aggregate_output_columns,
-    KeyRefAggFuncMap & key_ref_agg_func)
-{
-    // Assume aggregation_keys and collators are corresponding one by bone.
-    RUNTIME_CHECK(aggregation_keys.size() == collators.size());
-
-    for (size_t i = 0; i < aggregation_keys.size(); ++i)
-    {
-        if (collators[i] == nullptr)
-            continue;
-
-        auto [first_row_name, first_row_type] = findFirstRow(aggregate_descriptions, aggregation_keys[i]);
-        if (first_row_name.empty())
-            continue;
-
-        const auto & key_name = aggregation_keys[i];
-        key_ref_agg_func.insert({key_name, {first_row_name, first_row_type}});
-    }
-
-    if (key_ref_agg_func.empty())
-        return;
-
-    // Remove group by key with collator from output columns.
-    // Will add it back as copy column action later.
-    aggregate_output_columns
-        = doRemove(key_ref_agg_func, aggregate_output_columns, [](const NameAndTypePair & p) { return p.name; });
-
 #ifndef NDEBUG
     for (const auto & p : key_ref_agg_func)
     {
-        LOG_TRACE(Logger::get(), "key_ref_agg_func optimization: {} ref {}", p.first, p.second.name);
+        LOG_TRACE(Logger::get(), "key_ref_agg_func optimization: {} ref {}", p.first, p.second);
     }
 #endif
 }
 
-void DAGExpressionAnalyzer::tryRemoveFirstRow(
+void DAGExpressionAnalyzer::tryEliminateFirstRow(
     const Names & aggregation_keys,
     const TiDB::TiDBCollators & collators,
-    AggregateDescriptions & aggregate_descriptions,
-    NamesAndTypes & aggregate_output_columns,
-    AggFuncRefKeyMap & agg_func_ref_key)
+    AggFuncRefKeyMap & agg_func_ref_key,
+    AggregateDescriptions & aggregate_descriptions)
 {
     // Assume aggregate_keys and collators are corresponding one by one.
     // This is assured by buildAggGroupBy().
@@ -704,8 +666,7 @@ void DAGExpressionAnalyzer::tryRemoveFirstRow(
             if (collators[i] == nullptr && (func_name == "first_row" || func_name == "any")
                 && agg_desc.argument_names[0] == aggregation_keys[i])
             {
-                agg_func_ref_key.insert(
-                    {agg_desc.column_name, {aggregation_keys[i], agg_desc.function->getReturnType()}});
+                agg_func_ref_key.insert({agg_desc.column_name, aggregation_keys[i]});
             }
         }
     }
@@ -713,21 +674,21 @@ void DAGExpressionAnalyzer::tryRemoveFirstRow(
     if (agg_func_ref_key.empty())
         return;
 
-    // Remove first_row/any func from aggregate_description.
-    // Will add it back as copy column action later.
-    aggregate_descriptions = doRemove(agg_func_ref_key, aggregate_descriptions, [](const AggregateDescription & desc) {
-        return desc.column_name;
-    });
-
-    // Remove first_row/any func from output columns.
-    // Will add it back as copy column action later.
-    aggregate_output_columns
-        = doRemove(agg_func_ref_key, aggregate_output_columns, [](const NameAndTypePair & p) { return p.name; });
+    AggregateDescriptions tmp_aggregate_descriptions;
+    tmp_aggregate_descriptions.reserve(aggregate_descriptions.size() - agg_func_ref_key.size());
+    for (const auto & desc : aggregate_descriptions)
+    {
+        if (agg_func_ref_key.find(desc.column_name) == agg_func_ref_key.end())
+        {
+            tmp_aggregate_descriptions.push_back(desc);
+        }
+    }
+    aggregate_descriptions = tmp_aggregate_descriptions;
 
 #ifndef NDEBUG
     for (const auto & p : agg_func_ref_key)
     {
-        LOG_TRACE(Logger::get(), "agg_func_ref_key optimization: {} ref {}", p.first, p.second.name);
+        LOG_TRACE(Logger::get(), "agg_func_ref_key optimization: {} ref {}", p.first, p.second);
     }
 #endif
 }
@@ -776,30 +737,25 @@ std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions, ExpressionActionsP
 
     auto & step = initAndGetLastStep(chain);
 
-    NamesAndTypes aggregate_output_columns;
+    NamesAndTypes aggregated_columns;
     AggregateDescriptions aggregate_descriptions;
     Names aggregation_keys;
     TiDB::TiDBCollators collators;
     std::unordered_set<String> agg_key_set;
     KeyRefAggFuncMap key_ref_agg_func;
     AggFuncRefKeyMap agg_func_ref_key;
-    buildAggFuncs(agg, step.actions, aggregate_descriptions, aggregate_output_columns);
+    buildAggFuncs(agg, step.actions, aggregate_descriptions, aggregated_columns);
     buildAggGroupBy(
         agg.group_by(),
         step.actions,
         aggregate_descriptions,
-        aggregate_output_columns,
+        aggregated_columns,
         aggregation_keys,
         agg_key_set,
+        key_ref_agg_func,
         group_by_collation_sensitive,
         collators);
-    tryRemoveGroupByKeyWithCollator(
-        aggregation_keys,
-        collators,
-        aggregate_descriptions,
-        aggregate_output_columns,
-        key_ref_agg_func);
-    tryRemoveFirstRow(aggregation_keys, collators, aggregate_descriptions, aggregate_output_columns, agg_func_ref_key);
+    tryEliminateFirstRow(aggregation_keys, collators, agg_func_ref_key, aggregate_descriptions);
     // set required output for agg funcs's arguments and group by keys.
     for (const auto & aggregate_description : aggregate_descriptions)
     {
@@ -814,7 +770,7 @@ std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions, ExpressionActionsP
     chain.clear();
 
     auto & after_agg_step = initAndGetLastStep(chain);
-    after_agg_step.actions = appendCopyColumnAfterAgg(aggregate_output_columns, key_ref_agg_func, agg_func_ref_key);
+    after_agg_step.actions = appendCopyColumnAfterAgg(aggregated_columns, key_ref_agg_func, agg_func_ref_key);
     appendCastAfterAgg(after_agg_step.actions, agg);
     // after appendCastAfterAgg, current input columns has been modified.
     for (const auto & column : getCurrentInputColumns())
@@ -1591,30 +1547,52 @@ void DAGExpressionAnalyzer::appendCastAfterAgg(
 }
 
 ExpressionActionsPtr DAGExpressionAnalyzer::appendCopyColumnAfterAgg(
-    const NamesAndTypes & aggregate_output_columns,
+    const NamesAndTypes & aggregated_columns,
     const KeyRefAggFuncMap & key_ref_agg_func,
     const AggFuncRefKeyMap & agg_func_ref_key)
 {
-    RUNTIME_CHECK(!aggregate_output_columns.empty());
+    // aggregated_columns.size() == key_ref_agg_func.size() + agg_func_ref_key.size() happens when:
+    // select group_concat(distinct c1) from t where id = 0;
+    // The first stage of HashAgg will only has one group by expr and no agg func expr.
+    // So aggregated_columns is [any(c1)], key_ref_agg_func is [c1, any(c1)], agg_func_ref_key is empty.
+    RUNTIME_CHECK(aggregated_columns.size() >= key_ref_agg_func.size() + agg_func_ref_key.size());
+    auto actual_agg_output_col_cnt = aggregated_columns.size() - key_ref_agg_func.size() - agg_func_ref_key.size();
+    NamesAndTypes agg_output_columns;
+    agg_output_columns.reserve(actual_agg_output_col_cnt);
+    for (const auto & col : aggregated_columns)
+    {
+        const bool found_in_key_ref_agg_func = key_ref_agg_func.find(col.name) != key_ref_agg_func.end();
+        const bool found_in_agg_func_ref_key = agg_func_ref_key.find(col.name) != agg_func_ref_key.end();
 
-    auto columns_after_copy_column = aggregate_output_columns;
-    auto expr_after_agg_actions = PhysicalPlanHelper::newActions(aggregate_output_columns);
+        // Agg col cannot exists both in key_ref_agg_func and agg_func_ref_key.
+        // Because key_ref_agg_func is only for column with collator,
+        // and agg_func_ref_key is only for column without collator.
+        RUNTIME_CHECK(!(found_in_key_ref_agg_func && found_in_agg_func_ref_key));
+
+        // If agg col doesn't exist neither, it means Aggregator should output it.
+        // Otherwise this col should reference some column of the output column of Aggregator.
+        if (!found_in_key_ref_agg_func && !found_in_agg_func_ref_key)
+        {
+            agg_output_columns.push_back(col);
+        }
+    }
+    RUNTIME_CHECK(!agg_output_columns.empty());
+
+    auto expr_after_agg_actions = PhysicalPlanHelper::newActions(agg_output_columns);
     for (const auto & pair : key_ref_agg_func)
     {
         const auto & key_name = pair.first;
-        const auto & agg_func_name = pair.second.name;
+        const auto & agg_func_name = pair.second;
         expr_after_agg_actions->add(ExpressionAction::copyColumn(agg_func_name, key_name));
-        columns_after_copy_column.push_back({key_name, pair.second.type});
     }
 
     for (const auto & pair : agg_func_ref_key)
     {
         const auto & agg_func_name = pair.first;
-        const auto & key_name = pair.second.name;
+        const auto & key_name = pair.second;
         expr_after_agg_actions->add(ExpressionAction::copyColumn(key_name, agg_func_name));
-        columns_after_copy_column.push_back({agg_func_name, pair.second.type});
     }
-    reset(columns_after_copy_column);
+    reset(aggregated_columns);
     return expr_after_agg_actions;
 }
 

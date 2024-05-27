@@ -93,8 +93,8 @@ struct AnalysisResult
     AggregateDescriptions aggregate_descriptions;
     bool is_final_agg = false;
     bool enable_fine_grained_shuffle_agg = false;
-    KeyRefAggFuncMap key_ref_agg_func;
-    AggFuncRefKeyMap agg_func_ref_key;
+    std::unordered_map<String, String> key_ref_agg_func;
+    std::unordered_map<String, String> agg_func_ref_key;
 };
 
 AnalysisResult analyzeExpressions(
@@ -502,8 +502,8 @@ void DAGQueryBlockInterpreter::executeAggregation(
     const Names & key_names,
     const TiDB::TiDBCollators & collators,
     AggregateDescriptions & aggregate_descriptions,
-    const KeyRefAggFuncMap & key_ref_agg_func,
-    const AggFuncRefKeyMap & agg_func_ref_key,
+    const std::unordered_map<String, String> & key_ref_agg_func,
+    const std::unordered_map<String, String> & agg_func_ref_key,
     bool is_final_agg,
     bool enable_fine_grained_shuffle)
 {
