@@ -344,17 +344,16 @@ Union: <for test>
 ~result:
 Union: <for test>
  Expression x 10: <final projection>
-  Expression: <projection>
-   Expression: <expr after aggregation>
-    SharedQuery: <restore concurrency>
-     ParallelAggregating, max_threads: 10, final: true
-      Expression x 10: <projection>
-       SharedQuery: <restore concurrency>
-        MergeSorting, limit = 10
-         Union: <for partial order>
-          PartialSorting x 10: limit = 10
-           Expression: <projection>
-            MockTableScan
+  Expression: <expr after aggregation>
+   SharedQuery: <restore concurrency>
+    ParallelAggregating, max_threads: 10, final: true
+     Expression x 10: <projection>
+      SharedQuery: <restore concurrency>
+       MergeSorting, limit = 10
+        Union: <for partial order>
+         PartialSorting x 10: limit = 10
+          Expression: <projection>
+           MockTableScan
 @
 ~test_suite_name: MultipleQueryBlockWithSource
 ~result_index: 3
@@ -367,17 +366,16 @@ Union: <for test>
      Limit x 10, limit = 10
       Expression: <projection>
        Filter
-        Expression: <projection>
-         Expression: <expr after aggregation>
-          SharedQuery: <restore concurrency>
-           ParallelAggregating, max_threads: 10, final: true
-            Expression x 10: <projection>
-             SharedQuery: <restore concurrency>
-              MergeSorting, limit = 10
-               Union: <for partial order>
-                PartialSorting x 10: limit = 10
-                 Expression: <projection>
-                  MockTableScan
+        Expression: <expr after aggregation>
+         SharedQuery: <restore concurrency>
+          ParallelAggregating, max_threads: 10, final: true
+           Expression x 10: <projection>
+            SharedQuery: <restore concurrency>
+             MergeSorting, limit = 10
+              Union: <for partial order>
+               PartialSorting x 10: limit = 10
+                Expression: <projection>
+                 MockTableScan
 @
 ~test_suite_name: MultipleQueryBlockWithSource
 ~result_index: 4
@@ -715,14 +713,13 @@ CreatingSets
       PartialSorting x 10: limit = 2
        Expression: <projection>
         HashJoinProbe: <join probe, join_executor_id = Join_5, scan_hash_map_after_probe = false>
-         Expression: <append join key and join filters for probe side>
-          Expression: <final projection>
-           Expression: <expand, expand_executor_id = expand_2: grouping set [{<count(exchange_receiver_0)_collator_46 >}{<first_row(exchange_receiver_1)_collator_46 >}]>
-            Expression: <expr after aggregation>
-             SharedQuery: <restore concurrency>
-              ParallelAggregating, max_threads: 10, final: true
-               Expression x 10: <before aggregation>
-                MockExchangeReceiver
+         Expression: <final projection>
+          Expression: <expand, expand_executor_id = expand_2: grouping set [{<count(exchange_receiver_0)_collator_46 >}{<first_row(exchange_receiver_1)_collator_46 >}]>
+           Expression: <expr after aggregation>
+            SharedQuery: <restore concurrency>
+             ParallelAggregating, max_threads: 10, final: true
+              Expression x 10: <before aggregation>
+               MockExchangeReceiver
 @
 ~test_suite_name: Expand2Plan
 ~result_index: 0
