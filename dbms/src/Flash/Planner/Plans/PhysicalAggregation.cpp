@@ -55,9 +55,9 @@ PhysicalPlanNodePtr PhysicalAggregation::build(
     AggregateDescriptions aggregate_descriptions;
     Names aggregation_keys;
     // key_ref_agg_func and agg_func_ref_key are two optimizations for aggregation:
-    // 1. key_ref_agg_func: for group by key with collation, there will always be a agg func(first_row or any)
+    // 1. key_ref_agg_func: for group by key with collation, there will always be a first_row agg func
     //    to help keep the original column. For these key columns, no need to copy it from HashMap to result column,
-    //    instead a pointer to reference to their corresponding first_row/any agg func is enough.
+    //    instead a pointer to reference to their corresponding first_row agg func is enough.
     // 2. agg_func_ref_key: for group by key without collation and corresponding first_row exists.
     //    We can eliminate their first_row func, a pointer to reference the group by key is enough.
     //    So we can avoid unnecessary agg func computation, also it's good for memory usage.

@@ -616,7 +616,7 @@ void DAGExpressionAnalyzer::buildAggGroupBy(
                 {
                     /// if the column is a string with collation info, the `sort_key` of the column is used during
                     /// aggregation, but we can not reconstruct the origin column by `sort_key`, so add an extra
-                    /// extra aggregation function any(group_by_column) here as the output of the group by column
+                    /// extra aggregation function first_row(group_by_column) here as the output of the group by column
                     TiDB::TiDBCollators arg_collators{collator};
                     appendAggDescription(
                         {name},
