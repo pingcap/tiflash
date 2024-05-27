@@ -1101,6 +1101,12 @@ public:
             const KeyRefAggFuncMap & key_ref_agg_func,
             bool final);
 
+        Params(const Params &) = default;
+        Params & operator=(const Params &) = delete;
+
+        Params(Params &&) = default;
+        Params & operator=(Params &&) = delete;
+
         Block getHeader(bool final) const { return getHeader(src_header, keys, aggregates, key_ref_agg_func, final); }
 
         /// Calculate the column numbers in `keys` and `aggregates`.

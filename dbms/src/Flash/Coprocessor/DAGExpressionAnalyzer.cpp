@@ -1547,6 +1547,7 @@ void DAGExpressionAnalyzer::appendCastAfterAgg(
     }
 }
 
+// TODO: Maybe no need to append copy column action, just use same column name to reference column.
 ExpressionActionsPtr DAGExpressionAnalyzer::appendCopyColumnAfterAgg(
     const NamesAndTypes & aggregated_columns,
     const KeyRefAggFuncMap & key_ref_agg_func,
@@ -1555,7 +1556,7 @@ ExpressionActionsPtr DAGExpressionAnalyzer::appendCopyColumnAfterAgg(
     // aggregated_columns.size() == key_ref_agg_func.size() + agg_func_ref_key.size() happens when:
     // select group_concat(distinct c1) from t where id = 0;
     // The first stage of HashAgg will only has one group by expr and no agg func expr.
-    // So aggregated_columns is [any(c1)], key_ref_agg_func is [c1, any(c1)], agg_func_ref_key is empty.
+    // So aggregated_columns is [any(c1)], key_ref_agg_func is [c1->any(c1)], agg_func_ref_key is empty.
     RUNTIME_CHECK(aggregated_columns.size() >= key_ref_agg_func.size() + agg_func_ref_key.size());
     auto actual_agg_output_col_cnt = aggregated_columns.size() - key_ref_agg_func.size() - agg_func_ref_key.size();
     NamesAndTypes agg_output_columns;
