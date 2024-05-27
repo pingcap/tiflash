@@ -609,7 +609,8 @@ void DAGExpressionAnalyzer::buildAggGroupBy(
                 String agg_func_name = first_row_name;
                 if (!first_row_name.empty())
                 {
-                    aggregated_columns.emplace_back(first_row_name, first_row_type);
+                    // Got here when this group by key has its corresponding first_row agg func.
+                    aggregated_columns.emplace_back(name, first_row_type);
                 }
                 else
                 {
