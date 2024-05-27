@@ -956,7 +956,7 @@ try
         while (kvs.getOngoingPrehandleTaskCount() != 3)
         {
             loop += 1;
-            ASSERT(loop < 30);
+            ASSERT_TRUE(loop < 30);
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
         ASSERT_EQ(kvs.prehandling_trace.ongoing_prehandle_subtask_count.load(), 3);
