@@ -664,7 +664,7 @@ void DAGExpressionAnalyzer::tryEliminateFirstRow(
         for (const auto & agg_desc : aggregate_descriptions)
         {
             const auto & func_name = agg_desc.function->getName();
-            if (collators[i] == nullptr && (func_name == "first_row" || func_name == "any")
+            if (collators[i] == nullptr && func_name == "first_row"
                 && agg_desc.argument_names[0] == aggregation_keys[i])
             {
                 agg_func_ref_key.insert({agg_desc.column_name, aggregation_keys[i]});
