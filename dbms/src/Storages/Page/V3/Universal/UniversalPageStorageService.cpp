@@ -64,7 +64,8 @@ UniversalPageStorageServicePtr UniversalPageStorageService::create(
         // TODO: make this interval reloadable
         auto interval_s = context.getSettingsRef().remote_checkpoint_interval_seconds;
         // Only upload checkpoint when S3 is enabled
-        service->checkpoint_pool = std::make_unique<BackgroundProcessingPool>(1, "ps-checkpoint");
+        service->checkpoint_pool
+            = std::make_unique<BackgroundProcessingPool>(1, "ps-checkpoint", context.getJointThreadInfoJeallocMap());
         service->remote_checkpoint_handle = service->checkpoint_pool->addTask(
             [srv_weak = std::weak_ptr<UniversalPageStorageService>(service)] {
                 auto service = srv_weak.lock();

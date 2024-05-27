@@ -462,6 +462,7 @@ public:
 
     void initializeJointThreadInfoJeallocMap();
     JointThreadInfoJeallocMapPtr getJointThreadInfoJeallocMap() const;
+    JointThreadInfoJeallocMapPtr getJointThreadInfoJeallocMap(std::unique_lock<std::recursive_mutex> &) const;
 
     SharedContextDisaggPtr getSharedContextDisagg() const;
 
