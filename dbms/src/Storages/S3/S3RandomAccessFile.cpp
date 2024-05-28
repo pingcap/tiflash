@@ -208,7 +208,7 @@ bool S3RandomAccessFile::initialize()
     }
     if (cur_retry >= max_retry && !request_succ)
     {
-        LOG_INFO(log, "S3 GetObject timeout: {}, max_retry={}", max_retry);
+        LOG_INFO(log, "S3 GetObject timeout: {}, max_retry={}", remote_fname, max_retry);
     }
     return request_succ;
 }

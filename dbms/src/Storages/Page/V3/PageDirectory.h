@@ -162,6 +162,22 @@ public:
                 return;
             }
             RUNTIME_CHECK(ref_count_delta_in_snap > 0, deref_count_delta, ref_count_delta_in_snap);
+            if unlikely (ref_count_delta_in_snap > 0)
+            {
+                FmtBuffer buf;
+                for (const auto & [ver, ref_count_delta] : *versioned_ref_counts)
+                {
+                    buf.fmtAppend("{}|{},", ver.sequence, ref_count_delta);
+                }
+                throw Exception(
+                    ErrorCodes::LOGICAL_ERROR,
+                    "Check ref_count_delta_in_snap > 0 failed, deref_count_delta={}, ref_count_delta_in_snap={}, "
+                    "snap_seq={}, versions={}",
+                    deref_count_delta,
+                    ref_count_delta_in_snap,
+                    snap_seq,
+                    buf.toString());
+            }
             new_versioned_ref_counts->emplace_back(PageVersion(snap_seq, 0), ref_count_delta_in_snap);
             versioned_ref_counts.swap(new_versioned_ref_counts);
         }
