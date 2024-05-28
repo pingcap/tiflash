@@ -801,7 +801,7 @@ void BlobStore<Trait>::removePosFromStats(BlobFileId blob_id, BlobFileOffset off
     // Note that we must release the lock on blob_stat before removing it
     // from all blob_stats, or deadlocks could happen.
     // As the blob_stat has been became read-only, it is safe to release the lock.
-    LOG_INFO(log, "Removing BlobFile [blob_id={}] offset={} size={}", blob_id, offset, size);
+    LOG_INFO(log, "Removing BlobFile, blob_id={} read_only={} offset={} size={}", blob_id, stat->isReadOnly(), offset, size);
 
     {
         // Remove the stat from memory

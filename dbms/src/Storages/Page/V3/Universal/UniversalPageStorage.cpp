@@ -502,16 +502,13 @@ PS::V3::CPDataDumpStats UniversalPageStorage::dumpIncrementalCheckpoint(
     if (snap->sequence == last_checkpoint_sequence && !options.full_compact)
         return {.has_new_data = false};
 
-    auto edit_from_mem = page_directory->dumpSnapshotToEdit(snap);
-    auto dump_snapshot_seconds = sw.elapsedMillisecondsFromLastTime() / 1000.0;
-
     // As a checkpoint, we write both entries (in manifest) and its data.
     // Some entries' data may be already written by a previous checkpoint. These data will not be written again.
     UInt64 sequence = snap->sequence;
     if (options.override_sequence)
         sequence = options.override_sequence.value();
 
-
+    auto edit_from_mem = page_directory->dumpSnapshotToEdit(snap);
     // The output of `PageDirectory::dumpSnapshotToEdit` may contain page ids which are logically deleted but have not been gced yet.
     // These page ids may be GC-ed when dumping snapshot, so we cannot read data of these page ids.
     // So we create a clean temp page_directory here and use it to dump edits with all visible page ids for `snap`.
@@ -523,6 +520,7 @@ PS::V3::CPDataDumpStats UniversalPageStorage::dumpIncrementalCheckpoint(
             = factory.dangerouslyCreateFromEditWithoutWAL(fmt::format("{}_{}", storage_name, sequence), edit_from_mem);
         edit_from_mem = temp_page_directory->dumpSnapshotToEdit();
     }
+    auto dump_snapshot_seconds = sw.elapsedMillisecondsFromLastTime() / 1000.0;
 
     auto manifest_file_id = fmt::format(fmt::runtime(options.manifest_file_id_pattern), fmt::arg("seq", sequence));
     auto manifest_file_path = fmt::format(fmt::runtime(options.manifest_file_path_pattern), fmt::arg("seq", sequence));

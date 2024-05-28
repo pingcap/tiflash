@@ -41,10 +41,10 @@
 
 
 #ifdef FIU_ENABLE
-#include <thread>
+#include <Common/randomSeed.h>
 
-#include "Common/randomSeed.h"
-#include "pcg_random.hpp"
+#include <pcg_random.hpp>
+#include <thread>
 #endif // FIU_ENABLE
 
 #pragma GCC diagnostic push
@@ -447,9 +447,10 @@ std::shared_ptr<typename VersionedPageEntries<Trait>::PageId> VersionedPageEntri
     }
     default:
     {
-        throw Exception(fmt::format(
+        throw Exception(
+            ErrorCodes::LOGICAL_ERROR,
             "Calling VersionedPageEntries::fromRestored with unknown type: {}",
-            static_cast<Int32>(rec.type)));
+            static_cast<Int32>(rec.type));
     }
     }
 }
@@ -513,7 +514,11 @@ std::tuple<ResolveResult, typename VersionedPageEntries<Trait>::PageId, PageVers
     }
     else
     {
-        LOG_WARNING(Logger::get(), "Can't resolve the EditRecordType {}", magic_enum::enum_name(type));
+        LOG_WARNING(
+            Logger::get(),
+            "Can't resolve the EditRecordType, type={} type_int={}",
+            magic_enum::enum_name(type),
+            static_cast<Int32>(type));
     }
 
     return {ResolveResult::FAIL, Trait::PageIdTrait::getInvalidID(), PageVersion(0)};
@@ -885,11 +890,12 @@ bool VersionedPageEntries<Trait>::derefAndClean(
         auto iter = MapUtils::findMutLess(entries, PageVersion(deref_ver.sequence + 1, 0));
         if (iter == entries.end())
         {
-            throw Exception(fmt::format(
+            throw Exception(
+                ErrorCodes::LOGICAL_ERROR,
                 "Can not find entry for decreasing ref count [page_id={}] [ver={}] [deref_count={}]",
                 page_id,
                 deref_ver,
-                deref_count));
+                deref_count);
         }
         // ignore all "delete"
         while (iter != entries.begin() && iter->second.isDelete())
@@ -921,7 +927,7 @@ bool VersionedPageEntries<Trait>::derefAndClean(
             page_lock);
     }
 
-    throw Exception(fmt::format("calling derefAndClean with invalid state [state={}]", toDebugString()));
+    throw Exception(ErrorCodes::LOGICAL_ERROR, "calling derefAndClean with invalid state, state={}", toDebugString());
 }
 
 template <typename Trait>
@@ -933,9 +939,11 @@ void VersionedPageEntries<Trait>::collapseTo(const UInt64 seq, const PageId & pa
     {
         if (create_ver.sequence > seq)
             return;
-        // We need to keep the VAR_REF once create_ver > seq,
-        // or the being-ref entry/external won't be able to be clean
-        // after restore.
+        // - If create_ver > seq && ! is_deleted, then
+        //   we need to keep a record for {page_id, VAR_REF}
+        // - If create_ver > seq && is_deleted, then
+        //   we need to keep a record for {page_id, VAR_REF} and {page_id, VAR_DEL}
+        //   so that the page_id and being-ref page_id can be cleanup after restore
         edit.varRef(page_id, create_ver, ori_page_id);
         if (is_deleted && delete_ver.sequence <= seq)
         {
@@ -950,6 +958,11 @@ void VersionedPageEntries<Trait>::collapseTo(const UInt64 seq, const PageId & pa
             return;
         auto iter = entries.find(create_ver);
         RUNTIME_CHECK(iter != entries.end());
+        // - If create_ver > seq && ! is_deleted, then
+        //   we need to keep a record for {page_id, VAR_EXT}
+        // - If create_ver > seq && is_deleted, then
+        //   we need to keep a record for {page_id, VAR_EXT} and {page_id, VAR_DEL}
+        //   so that the page_id can be ref by another page_id after restore
         edit.varExternal(page_id, create_ver, iter->second.entry.value(), being_ref_count.getRefCountInSnap(seq));
         if (is_deleted && delete_ver.sequence <= seq)
         {
@@ -960,13 +973,13 @@ void VersionedPageEntries<Trait>::collapseTo(const UInt64 seq, const PageId & pa
 
     if (type == EditRecordType::VAR_ENTRY)
     {
-        // dump the latest entry if it is not a "delete"
         auto last_iter = MapUtils::findLess(entries, PageVersion(seq + 1));
         if (last_iter == entries.end())
             return;
 
         if (last_iter->second.isEntry())
         {
+            // The latest entry is not a "delete", then "collapse" to {page_id, the latest version entry}
             const auto & entry = last_iter->second;
             edit.varEntry(
                 page_id,
@@ -979,9 +992,14 @@ void VersionedPageEntries<Trait>::collapseTo(const UInt64 seq, const PageId & pa
         {
             if (last_iter == entries.begin())
             {
-                // only delete left, then we don't need to keep this
+                // only delete left, then we don't need to keep record for this page_id
                 return;
             }
+
+            // The latest entry is "delete",
+            // - If the last non-delete entry is not being ref, then don't need to keep record for this page_id
+            // - If the last non-delete entry is still being ref, then we keep a varEntry and varDel for this page_id
+            //   so that it can be ref by another page_id after restore
             auto last_version = last_iter->first;
             auto prev_iter = --last_iter; // Note that `last_iter` should not be used anymore
             if (prev_iter->second.isEntry())
@@ -1004,7 +1022,7 @@ void VersionedPageEntries<Trait>::collapseTo(const UInt64 seq, const PageId & pa
         return;
     }
 
-    throw Exception(fmt::format("Calling collapseTo with invalid state [state={}]", toDebugString()));
+    throw Exception(ErrorCodes::LOGICAL_ERROR, "Calling collapseTo with invalid state, state={}", toDebugString());
 }
 
 /**************************
@@ -1218,11 +1236,10 @@ std::pair<typename PageDirectory<Trait>::PageIdAndEntries, typename PageDirector
                     if (throw_on_not_exist)
                     {
                         throw Exception(
-                            fmt::format(
-                                "Invalid page id, entry not exist [page_id={}] [resolve_id={}]",
-                                page_id,
-                                id_to_resolve),
-                            ErrorCodes::PS_ENTRY_NOT_EXISTS);
+                            ErrorCodes::PS_ENTRY_NOT_EXISTS,
+                            "Invalid page id, entry not exist [page_id={}] [resolve_id={}]",
+                            page_id,
+                            id_to_resolve);
                     }
                     else
                     {
@@ -1308,7 +1325,10 @@ typename PageDirectory<Trait>::PageId PageDirectory<Trait>::getNormalPageId(
                 if (throw_on_not_exist)
                 {
                     throw Exception(
-                        fmt::format("Invalid page id [page_id={}] [resolve_id={}]", page_id, id_to_resolve));
+                        ErrorCodes::LOGICAL_ERROR,
+                        "Invalid page id [page_id={}] [resolve_id={}]",
+                        page_id,
+                        id_to_resolve);
                 }
                 else
                 {
@@ -1342,12 +1362,13 @@ typename PageDirectory<Trait>::PageId PageDirectory<Trait>::getNormalPageId(
 
     if (throw_on_not_exist)
     {
-        throw Exception(fmt::format(
+        throw Exception(
+            ErrorCodes::LOGICAL_ERROR,
             "fail to get normal id [page_id={}] [seq={}] [resolve_id={}] [resolve_ver={}]",
             page_id,
             snap->sequence,
             id_to_resolve,
-            ver_to_resolve));
+            ver_to_resolve);
     }
     else
     {
@@ -2242,7 +2263,7 @@ typename PageDirectory<Trait>::PageEntriesEdit PageDirectory<Trait>::dumpSnapsho
         }
     }
 
-    LOG_INFO(log, "Dumped snapshot to edits.[sequence={}]", snap->sequence);
+    LOG_INFO(log, "Dumped snapshot to edits, sequence={} edit_size={}", snap->sequence, edit.size());
     return edit;
 }
 
