@@ -384,16 +384,20 @@ void buildActionsAfterWindow(
     chain.clear();
 }
 
-std::pair<String, DataTypePtr> findFirstRow(
+std::optional<String> findFirstRow(
     const AggregateDescriptions & aggregate_descriptions,
-    const String & arg_name)
+    const String & arg_name,
+    const DataTypePtr & arg_type)
 {
     for (const auto & desc : aggregate_descriptions)
     {
         if (desc.function->getName() == "first_row" && desc.argument_names[0] == arg_name)
-            return std::make_pair(desc.column_name, desc.function->getReturnType());
+        {
+            RUNTIME_CHECK(desc.function->getReturnType()->equals(*arg_type));
+            return {desc.column_name};
+        }
     }
-    return std::make_pair("", nullptr);
+    return {};
 }
 } // namespace
 
@@ -605,13 +609,13 @@ void DAGExpressionAnalyzer::buildAggGroupBy(
                 collators.back() = collator;
             if (collator != nullptr)
             {
-                auto [first_row_name, first_row_type] = findFirstRow(aggregate_descriptions, name);
-                String agg_func_name = first_row_name;
-                if (!first_row_name.empty())
+                auto first_row_name = findFirstRow(aggregate_descriptions, name, type);
+                String agg_func_name;
+                if (!first_row_name)
                 {
-                    RUNTIME_CHECK(type->equals(*first_row_type));
+                    agg_func_name = *first_row_name;
                     // Got here when this group by key has its corresponding first_row agg func.
-                    aggregated_columns.emplace_back(name, first_row_type);
+                    aggregated_columns.emplace_back(name, type);
                 }
                 else
                 {
