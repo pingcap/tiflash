@@ -269,7 +269,7 @@ public:
 
     ContextPtr context;
     std::vector<BlockPtr> test_blocks;
-    std::shared_ptr<Aggregator::Params> params;
+    std::unique_ptr<Aggregator::Params> params;
     std::shared_ptr<Aggregator> aggregator;
     std::shared_ptr<AggregatedDataVariants> data_variants;
     LoggerPtr log;

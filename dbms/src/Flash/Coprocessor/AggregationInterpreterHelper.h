@@ -33,7 +33,7 @@ bool isFinalAgg(const tipb::Aggregation & aggregation);
 
 bool isGroupByCollationSensitive(const Context & context);
 
-std::shared_ptr<Aggregator::Params> buildParams(
+std::unique_ptr<Aggregator::Params> buildParams(
     const Context & context,
     const Block & before_agg_header,
     size_t before_agg_streams_size,

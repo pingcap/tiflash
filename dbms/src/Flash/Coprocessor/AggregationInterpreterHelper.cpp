@@ -76,7 +76,7 @@ bool isGroupByCollationSensitive(const Context & context)
     return context.getSettingsRef().group_by_collation_sensitive || context.getDAGContext()->isMPPTask();
 }
 
-std::shared_ptr<Aggregator::Params> buildParams(
+std::unique_ptr<Aggregator::Params> buildParams(
     const Context & context,
     const Block & before_agg_header,
     size_t before_agg_streams_size,
@@ -131,7 +131,7 @@ std::shared_ptr<Aggregator::Params> buildParams(
         return p != nullptr;
     });
 
-    return std::make_shared<Aggregator::Params>(
+    return std::make_unique<Aggregator::Params>(
         before_agg_header,
         keys,
         key_ref_agg_func,
