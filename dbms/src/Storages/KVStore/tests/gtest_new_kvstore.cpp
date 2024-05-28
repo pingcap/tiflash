@@ -1123,4 +1123,21 @@ try
 }
 CATCH
 
+TEST_F(RegionKVStoreTest, ParseUniPage)
+try
+{
+    String origin = "0101020000000000000835010000000000021AE8";
+    auto decode = Redact::hexStringToKey(origin.data(), origin.size());
+    const char * data = decode.data();
+    size_t len = decode.size();
+    ASSERT_EQ(RecordKVFormat::readUInt8(data, len), UniversalPageIdFormat::RAFT_PREFIX);
+    ASSERT_EQ(RecordKVFormat::readUInt8(data, len), 0x01);
+    ASSERT_EQ(RecordKVFormat::readUInt8(data, len), 0x02);
+    // RAFT_PREFIX LOCAL_PREFIX REGION_RAFT_PREFIX region_id RAFT_LOG_SUFFIX
+    LOG_INFO(DB::Logger::get(), "region_id={}", RecordKVFormat::readUInt64(data, len));
+    ASSERT_EQ(RecordKVFormat::readUInt8(data, len), 0x01);
+    LOG_INFO(DB::Logger::get(), "index={}", RecordKVFormat::readUInt64(data, len));
+}
+CATCH
+
 } // namespace DB::tests

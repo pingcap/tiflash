@@ -206,6 +206,10 @@ bool S3RandomAccessFile::initialize()
         GET_METRIC(tiflash_storage_s3_request_seconds, type_get_object).Observe(sw.elapsedSeconds());
         break;
     }
+    if (cur_retry >= max_retry && !request_succ)
+    {
+        LOG_INFO(log, "S3 GetObject timeout: {}, max_retry={}", max_retry);
+    }
     return request_succ;
 }
 
