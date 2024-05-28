@@ -89,8 +89,6 @@ PhysicalPlanNodePtr PhysicalJoin::build(
 
     /// add necessary transformation if the join key is an expression
 
-    bool is_tiflash_right_join = isRightOuterJoin(tiflash_join.kind);
-
     JoinNonEqualConditions join_non_equal_conditions;
     // prepare probe side
     auto [probe_side_prepare_actions, probe_key_names, original_probe_key_names, probe_filter_column_name]
@@ -99,8 +97,6 @@ PhysicalPlanNodePtr PhysicalJoin::build(
             probe_source_columns,
             tiflash_join.getProbeJoinKeys(),
             tiflash_join.join_key_types,
-            /*left=*/true,
-            is_tiflash_right_join,
             tiflash_join.getProbeConditions());
     RUNTIME_ASSERT(probe_side_prepare_actions, log, "probe_side_prepare_actions cannot be nullptr");
     /// in TiFlash, left side is always the probe side
@@ -113,8 +109,6 @@ PhysicalPlanNodePtr PhysicalJoin::build(
             build_source_columns,
             tiflash_join.getBuildJoinKeys(),
             tiflash_join.join_key_types,
-            /*left=*/false,
-            is_tiflash_right_join,
             tiflash_join.getBuildConditions());
     RUNTIME_ASSERT(build_side_prepare_actions, log, "build_side_prepare_actions cannot be nullptr");
     /// in TiFlash, right side is always the build side

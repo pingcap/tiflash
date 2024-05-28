@@ -396,14 +396,12 @@ try
             /*expected_streams=*/R"(
 CreatingSets
  HashJoinBuild: <join build, build_side_root_executor_id = exchange_receiver_1>, join_kind = Inner
-  Expression: <append join key and join filters for build side>
-   Expression: <final projection>
-    MockExchangeReceiver
+  Expression: <final projection>
+   MockExchangeReceiver
  Expression: <final projection>
   HashJoinProbe: <join probe, join_executor_id = Join_2, scan_hash_map_after_probe = false>
-   Expression: <append join key and join filters for probe side>
-    Expression: <final projection>
-     MockExchangeReceiver)",
+   Expression: <final projection>
+    MockExchangeReceiver)",
             {toNullableVec<String>({"banana", "banana"}),
              toNullableVec<String>({"apple", "banana"}),
              toNullableVec<String>({"banana", "banana"}),
@@ -422,14 +420,12 @@ CreatingSets
             /*expected_streams=*/R"(
 CreatingSets
  HashJoinBuild: <join build, build_side_root_executor_id = exchange_receiver_1>, join_kind = Left
-  Expression: <append join key and join filters for build side>
-   Expression: <final projection>
-    MockExchangeReceiver
+  Expression: <final projection>
+   MockExchangeReceiver
  Expression: <final projection>
   HashJoinProbe: <join probe, join_executor_id = Join_2, scan_hash_map_after_probe = false>
-   Expression: <append join key and join filters for probe side>
-    Expression: <final projection>
-     MockExchangeReceiver)",
+   Expression: <final projection>
+    MockExchangeReceiver)",
             {toNullableVec<String>({"banana", "banana"}),
              toNullableVec<String>({"apple", "banana"}),
              toNullableVec<String>({"banana", "banana"}),
@@ -448,14 +444,12 @@ CreatingSets
             /*expected_streams=*/R"(
 CreatingSets
  HashJoinBuild: <join build, build_side_root_executor_id = exchange_receiver_1>, join_kind = Right
-  Expression: <append join key and join filters for build side>
-   Expression: <final projection>
-    MockExchangeReceiver
+  Expression: <final projection>
+   MockExchangeReceiver
  Expression: <final projection>
   HashJoinProbe: <join probe, join_executor_id = Join_2, scan_hash_map_after_probe = true>
-   Expression: <append join key and join filters for probe side>
-    Expression: <final projection>
-     MockExchangeReceiver)",
+   Expression: <final projection>
+    MockExchangeReceiver)",
             {toNullableVec<String>({"banana", "banana"}),
              toNullableVec<String>({"apple", "banana"}),
              toNullableVec<String>({"banana", "banana"}),
@@ -491,23 +485,19 @@ CreatingSets
             /*expected_streams=*/R"(
 CreatingSets
  HashJoinBuild x 2: <join build, build_side_root_executor_id = table_scan_3>, join_kind = Right
-  Expression: <append join key and join filters for build side>
-   Expression: <final projection>
-    MockTableScan
+  Expression: <final projection>
+   MockTableScan
  HashJoinBuild: <join build, build_side_root_executor_id = Join_5>, join_kind = Inner
-  Expression: <append join key and join filters for build side>
-   Expression: <final projection>
-    HashJoinProbe: <join probe, join_executor_id = Join_5, scan_hash_map_after_probe = true>
-     Expression: <append join key and join filters for probe side>
-      Expression: <final projection>
-       MockTableScan
+  Expression: <final projection>
+   HashJoinProbe: <join probe, join_executor_id = Join_5, scan_hash_map_after_probe = true>
+    Expression: <final projection>
+     MockTableScan
  Expression: <final projection>
   HashJoinProbe: <join probe, join_executor_id = Join_6, scan_hash_map_after_probe = false>
    Expression: <final projection>
     HashJoinProbe: <join probe, join_executor_id = Join_4, scan_hash_map_after_probe = true>
-     Expression: <append join key and join filters for probe side>
-      Expression: <final projection>
-       MockTableScan)",
+     Expression: <final projection>
+      MockTableScan)",
             {toNullableVec<Int32>({3, 3, 0}),
              toNullableVec<Int32>({2, 2, 0}),
              toNullableVec<Int32>({2, 2, 0}),
@@ -549,23 +539,19 @@ CreatingSets
             /*expected_streams=*/R"(
 CreatingSets
  HashJoinBuild x 2: <join build, build_side_root_executor_id = table_scan_3>, join_kind = Right
-  Expression: <append join key and join filters for build side>
-   Expression: <final projection>
-    MockTableScan
+  Expression: <final projection>
+   MockTableScan
  HashJoinBuild: <join build, build_side_root_executor_id = Join_5>, join_kind = Left
-  Expression: <append join key and join filters for build side>
-   Expression: <final projection>
-    HashJoinProbe: <join probe, join_executor_id = Join_5, scan_hash_map_after_probe = true>
-     Expression: <append join key and join filters for probe side>
-      Expression: <final projection>
-       MockTableScan
+  Expression: <final projection>
+   HashJoinProbe: <join probe, join_executor_id = Join_5, scan_hash_map_after_probe = true>
+    Expression: <final projection>
+     MockTableScan
  Expression: <final projection>
   HashJoinProbe: <join probe, join_executor_id = Join_6, scan_hash_map_after_probe = false>
    Expression: <final projection>
     HashJoinProbe: <join probe, join_executor_id = Join_4, scan_hash_map_after_probe = true>
-     Expression: <append join key and join filters for probe side>
-      Expression: <final projection>
-       MockTableScan)",
+     Expression: <final projection>
+      MockTableScan)",
             {toNullableVec<Int32>({3, 3, 0}),
              toNullableVec<Int32>({2, 2, 0}),
              toNullableVec<Int32>({2, 2, 0}),

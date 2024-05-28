@@ -218,8 +218,6 @@ std::tuple<ExpressionActionsPtr, Names, Names, String> prepareJoin(
     const NamesAndTypes & source_columns,
     const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
     const JoinKeyTypes & join_key_types,
-    bool left,
-    bool is_right_out_join,
     const google::protobuf::RepeatedPtrField<tipb::Expr> & filters);
 
 /// generate source_columns that is used to compile tipb::Expr, the rule is columns in `tidb_schema`
