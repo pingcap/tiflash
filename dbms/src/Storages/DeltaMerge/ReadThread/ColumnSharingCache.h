@@ -218,6 +218,27 @@ private:
 
 class DMFileReader;
 
+class DMFileReaderPoolSharding
+{
+public:
+    void add(const String & path, DMFileReader & reader);
+    void del(const String & path, DMFileReader & reader);
+    void set(
+        const String & path,
+        DMFileReader & from_reader,
+        int64_t col_id,
+        size_t start,
+        size_t count,
+        ColumnPtr & col);
+    bool hasConcurrentReader(const String & path);
+    // `get` is just for test.
+    DMFileReader * get(const std::string & path);
+
+private:
+    std::mutex mtx;
+    std::unordered_map<std::string, std::unordered_set<DMFileReader *>> readers;
+};
+
 // DMFileReaderPool holds all the DMFileReader objects, so we can easily find DMFileReader objects with the same DMFile ID.
 // When a DMFileReader object successfully reads a column's packs, it will try to put these packs into other DMFileReader objects' cache.
 class DMFileReaderPool
@@ -232,14 +253,14 @@ public:
     void set(DMFileReader & from_reader, int64_t col_id, size_t start, size_t count, ColumnPtr & col);
     bool hasConcurrentReader(DMFileReader & from_reader);
     // `get` is just for test.
-    DMFileReader * get(const std::string & name);
+    DMFileReader * get(const std::string & path);
 
 private:
     DMFileReaderPool() = default;
+    DMFileReaderPoolSharding & getSharding(const String & path);
 
 private:
-    std::mutex mtx;
-    std::unordered_map<std::string, std::unordered_set<DMFileReader *>> readers;
+    std::array<DMFileReaderPoolSharding, 16> shardings;
 };
 
 } // namespace DB::DM
