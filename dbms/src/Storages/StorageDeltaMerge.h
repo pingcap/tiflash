@@ -217,8 +217,8 @@ private:
 
     void alterImpl(
         const AlterCommands & commands,
-        const String & database_name,
-        const String & table_name,
+        const String & database_name_,
+        const String & table_name_,
         DB::DM::OptionTableInfoConstRef table_info_,
         const Context & context);
 
