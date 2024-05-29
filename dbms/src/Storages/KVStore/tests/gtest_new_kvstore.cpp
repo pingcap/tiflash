@@ -1078,6 +1078,16 @@ try
         delete[] a;
     });
     t2.join();
+
+    std::thread t3([&]() {
+        // Will not cover mmap memory.
+        auto [allocated, deallocated] = JointThreadInfoJeallocMap::getPtrs();
+        char * a = new char[120];
+        void * buf = mmap(nullptr, 6000, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        ASSERT_LT(*allocated, 6000);
+        munmap(buf, 0);
+        delete[] a;
+    });
 }
 CATCH
 
