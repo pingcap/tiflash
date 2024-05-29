@@ -1998,7 +1998,8 @@ std::pair<DeltaIndexPtr, bool> Segment::ensurePlace(const DMContext & dm_context
                                                     UInt64 max_version) const
 {
     auto delta_snap = delta_reader->getDeltaSnap();
-    // Clone a new delta index.
+    // Try to clone from the sahred delta index, if it fails to reuse the shared delta index,
+    // it will return an empty delta index and we should place it in the following branch.
     auto my_delta_index = delta_snap->getSharedDeltaIndex()->tryClone(delta_snap->getRows(), delta_snap->getDeletes());
     auto my_delta_tree = my_delta_index->getDeltaTree();
 
