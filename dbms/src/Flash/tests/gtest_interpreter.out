@@ -242,9 +242,8 @@ Union: <for test>
 CreatingSets
  Union: <for join>
   HashJoinBuild x 8: <join build, build_side_root_executor_id = exchange_receiver_1 enable fine grained shuffle>, join_kind = Left
-   Expression: <append join key and join filters for build side>
-    Expression: <final projection>
-     MockExchangeReceiver
+   Expression: <final projection>
+    MockExchangeReceiver
  Union: <for test>
   Expression x 10: <final projection>
    HashJoinProbe: <join probe, join_executor_id = Join_2, scan_hash_map_after_probe = false>
@@ -257,9 +256,8 @@ CreatingSets
 CreatingSets
  Union: <for join>
   HashJoinBuild x 8: <join build, build_side_root_executor_id = exchange_receiver_1 enable fine grained shuffle>, join_kind = Left
-   Expression: <append join key and join filters for build side>
-    Expression: <final projection>
-     MockExchangeReceiver
+   Expression: <final projection>
+    MockExchangeReceiver
  Union: <for test>
   Expression x 5: <final projection>
    HashJoinProbe: <join probe, join_executor_id = Join_2, scan_hash_map_after_probe = false>
@@ -272,9 +270,8 @@ CreatingSets
 CreatingSets
  Union: <for join>
   HashJoinBuild x 10: <join build, build_side_root_executor_id = exchange_receiver_1>, join_kind = Left
-   Expression: <append join key and join filters for build side>
-    Expression: <final projection>
-     MockExchangeReceiver
+   Expression: <final projection>
+    MockExchangeReceiver
  Union: <for test>
   Expression x 10: <final projection>
    HashJoinProbe: <join probe, join_executor_id = Join_2, scan_hash_map_after_probe = false>
@@ -304,16 +301,14 @@ Union: <for test>
 CreatingSets
  Union: <for join>
   HashJoinBuild x 10: <join build, build_side_root_executor_id = table_scan_3>, join_kind = Left
-   Expression: <append join key and join filters for build side>
-    Expression: <final projection>
-     MockTableScan
+   Expression: <final projection>
+    MockTableScan
  Union x 2: <for join>
   HashJoinBuild x 10: <join build, build_side_root_executor_id = Join_4>, join_kind = Left
-   Expression: <append join key and join filters for build side>
-    Expression: <final projection>
-     HashJoinProbe: <join probe, join_executor_id = Join_4, scan_hash_map_after_probe = false>
-      Expression: <final projection>
-       MockTableScan
+   Expression: <final projection>
+    HashJoinProbe: <join probe, join_executor_id = Join_4, scan_hash_map_after_probe = false>
+     Expression: <final projection>
+      MockTableScan
  Union: <for test>
   Expression x 10: <final projection>
    HashJoinProbe: <join probe, join_executor_id = Join_6, scan_hash_map_after_probe = false>
@@ -326,16 +321,14 @@ CreatingSets
 CreatingSets
  Union: <for join>
   HashJoinBuild x 10: <join build, build_side_root_executor_id = exchange_receiver_3>, join_kind = Left
-   Expression: <append join key and join filters for build side>
-    Expression: <final projection>
-     MockExchangeReceiver
+   Expression: <final projection>
+    MockExchangeReceiver
  Union x 2: <for join>
   HashJoinBuild x 10: <join build, build_side_root_executor_id = Join_4>, join_kind = Left
-   Expression: <append join key and join filters for build side>
-    Expression: <final projection>
-     HashJoinProbe: <join probe, join_executor_id = Join_4, scan_hash_map_after_probe = false>
-      Expression: <final projection>
-       MockExchangeReceiver
+   Expression: <final projection>
+    HashJoinProbe: <join probe, join_executor_id = Join_4, scan_hash_map_after_probe = false>
+     Expression: <final projection>
+      MockExchangeReceiver
  Union: <for test>
   Expression x 10: <final projection>
    HashJoinProbe: <join probe, join_executor_id = Join_6, scan_hash_map_after_probe = false>
@@ -348,16 +341,14 @@ CreatingSets
 CreatingSets
  Union: <for join>
   HashJoinBuild x 10: <join build, build_side_root_executor_id = exchange_receiver_3>, join_kind = Left
-   Expression: <append join key and join filters for build side>
-    Expression: <final projection>
-     MockExchangeReceiver
+   Expression: <final projection>
+    MockExchangeReceiver
  Union x 2: <for join>
   HashJoinBuild x 10: <join build, build_side_root_executor_id = Join_4>, join_kind = Left
-   Expression: <append join key and join filters for build side>
-    Expression: <final projection>
-     HashJoinProbe: <join probe, join_executor_id = Join_4, scan_hash_map_after_probe = false>
-      Expression: <final projection>
-       MockExchangeReceiver
+   Expression: <final projection>
+    HashJoinProbe: <join probe, join_executor_id = Join_4, scan_hash_map_after_probe = false>
+     Expression: <final projection>
+      MockExchangeReceiver
  Union: <for test>
   MockExchangeSender x 10
    Expression: <final projection>
@@ -371,9 +362,8 @@ CreatingSets
 CreatingSets
  Union: <for join>
   HashJoinBuild x 10: <join build, build_side_root_executor_id = table_scan_1>, join_kind = Left
-   Expression: <append join key and join filters for build side>
-    Expression: <final projection>
-     MockTableScan
+   Expression: <final projection>
+    MockTableScan
  Union: <for test>
   Expression x 10: <final projection>
    SharedQuery: <restore concurrency>
@@ -388,17 +378,15 @@ CreatingSets
 CreatingSets
  Union: <for join>
   HashJoinBuild x 10: <join build, build_side_root_executor_id = table_scan_1>, join_kind = Right
-   Expression: <append join key and join filters for build side>
-    Expression: <final projection>
-     MockTableScan
+   Expression: <final projection>
+    MockTableScan
  Union: <for test>
   Expression x 10: <final projection>
    SharedQuery: <restore concurrency>
     ParallelAggregating, max_threads: 10, final: true
      HashJoinProbe x 10: <join probe, join_executor_id = Join_2, scan_hash_map_after_probe = true>
-      Expression: <append join key and join filters for probe side>
-       Expression: <final projection>
-        MockTableScan
+      Expression: <final projection>
+       MockTableScan
 @
 ~test_suite_name: JoinThenAgg
 ~result_index: 2
@@ -406,9 +394,8 @@ CreatingSets
 CreatingSets
  Union: <for join>
   HashJoinBuild x 20: <join build, build_side_root_executor_id = exchange_receiver_1>, join_kind = Right
-   Expression: <append join key and join filters for build side>
-    Expression: <final projection>
-     MockExchangeReceiver
+   Expression: <final projection>
+    MockExchangeReceiver
  Union: <for test>
   MockExchangeSender x 20
    SharedQuery: <restore concurrency>
@@ -420,9 +407,8 @@ CreatingSets
          SharedQuery: <restore concurrency>
           ParallelAggregating, max_threads: 20, final: true
            HashJoinProbe x 20: <join probe, join_executor_id = Join_2, scan_hash_map_after_probe = true>
-            Expression: <append join key and join filters for probe side>
-             Expression: <final projection>
-              MockExchangeReceiver
+            Expression: <final projection>
+             MockExchangeReceiver
 @
 ~test_suite_name: ListBase
 ~result_index: 0
@@ -455,11 +441,10 @@ Union: <for test>
 CreatingSets
  Union: <for join>
   HashJoinBuild x 10: <join build, build_side_root_executor_id = project_4>, join_kind = Inner
-   Expression: <append join key and join filters for build side>
-    Expression: <final projection>
-     Expression: <projection>
-      Expression: <final projection>
-       MockTableScan
+   Expression: <final projection>
+    Expression: <projection>
+     Expression: <final projection>
+      MockTableScan
  Union: <for test>
   SharedQuery x 10: <restore concurrency>
    Expression: <final projection>
@@ -481,11 +466,10 @@ CreatingSets
 CreatingSets
  Union: <for join>
   HashJoinBuild x 10: <join build, build_side_root_executor_id = project_4>, join_kind = Inner
-   Expression: <append join key and join filters for build side>
-    Expression: <final projection>
-     Expression: <projection>
-      Expression: <final projection>
-       MockTableScan
+   Expression: <final projection>
+    Expression: <projection>
+     Expression: <final projection>
+      MockTableScan
  Union: <for test>
   SharedQuery x 10: <restore concurrency>
    Expression: <final projection>
