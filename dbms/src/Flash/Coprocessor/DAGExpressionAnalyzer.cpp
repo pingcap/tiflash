@@ -1300,9 +1300,7 @@ String DAGExpressionAnalyzer::appendDurationCast(
 std::tuple<bool, Names, Names> DAGExpressionAnalyzer::buildJoinKey(
     const ExpressionActionsPtr & actions,
     const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
-    const JoinKeyTypes & join_key_types,
-    bool left,
-    bool is_right_out_join)
+    const JoinKeyTypes & join_key_types)
 {
     bool has_actions_of_keys = false;
 
@@ -1328,26 +1326,7 @@ std::tuple<bool, Names, Names> DAGExpressionAnalyzer::buildJoinKey(
                 : appendCast(join_key_type.key_type, actions, key_name);
             has_actions = true;
         }
-        if (!has_actions && (!left || is_right_out_join))
-        {
-            /// if the join key is a columnRef, then add a new column as the join key if needed.
-            /// In ClickHouse, the columns returned by join are: join_keys, left_columns and right_columns
-            /// where left_columns and right_columns don't include the join keys if they are ColumnRef
-            /// In TiDB, the columns returned by join are left_columns, right_columns, if the join keys
-            /// are ColumnRef, they will be included in both left_columns and right_columns
-            /// E.g, for table t1(id, value), t2(id, value) and query select * from t1 join t2 on t1.id = t2.id
-            /// In ClickHouse, it returns id,t1_value,t2_value
-            /// In TiDB, it returns t1_id,t1_value,t2_id,t2_value
-            /// So in order to make the join compatible with TiDB, if the join key is a columnRef, for inner/left
-            /// join, add a new key for right join key, for right join, add new key for both left and right join key
-            String updated_key_name = unique_name_generator.toUniqueName((left ? "_l_k_" : "_r_k_") + key_name);
-            /// duplicated key names, in Clickhouse join, it is assumed that here is no duplicated
-            /// key names, so just copy a key with new name
-            actions->add(ExpressionAction::copyColumn(key_name, updated_key_name));
-            key_name = updated_key_name;
-            has_actions = true;
-        }
-        else
+        if (has_actions)
         {
             String updated_key_name = unique_name_generator.toUniqueName(key_name);
             /// duplicated key names, in Clickhouse join, it is assumed that here is no duplicated
@@ -1356,7 +1335,6 @@ std::tuple<bool, Names, Names> DAGExpressionAnalyzer::buildJoinKey(
             {
                 actions->add(ExpressionAction::copyColumn(key_name, updated_key_name));
                 key_name = updated_key_name;
-                has_actions = true;
             }
         }
         key_names.push_back(key_name);
@@ -1372,8 +1350,6 @@ bool DAGExpressionAnalyzer::appendJoinKeyAndJoinFilters(
     const JoinKeyTypes & join_key_types,
     Names & key_names,
     Names & original_key_names,
-    bool left,
-    bool is_right_out_join,
     const google::protobuf::RepeatedPtrField<tipb::Expr> & filters,
     String & filter_column_name)
 {
@@ -1381,7 +1357,7 @@ bool DAGExpressionAnalyzer::appendJoinKeyAndJoinFilters(
     ExpressionActionsPtr actions = chain.getLastActions();
 
     bool ret = false;
-    std::tie(ret, key_names, original_key_names) = buildJoinKey(actions, keys, join_key_types, left, is_right_out_join);
+    std::tie(ret, key_names, original_key_names) = buildJoinKey(actions, keys, join_key_types);
 
     if (!filters.empty())
     {

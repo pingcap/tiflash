@@ -225,6 +225,8 @@ public:
 
     ~MPPTaskManager();
 
+    void shutdown();
+
     std::shared_ptr<MPPTaskMonitor> getMPPTaskMonitor() const { return monitor; }
 
     bool addMonitoredTask(const String & task_unique_id) { return monitor->addMonitoredTask(task_unique_id); }

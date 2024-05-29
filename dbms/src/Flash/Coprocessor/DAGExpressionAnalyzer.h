@@ -148,8 +148,6 @@ public:
         const JoinKeyTypes & join_key_types,
         Names & key_names,
         Names & original_key_names,
-        bool left,
-        bool is_right_out_join,
         const google::protobuf::RepeatedPtrField<tipb::Expr> & filters,
         String & filter_column_name);
 
@@ -301,9 +299,7 @@ private:
     std::tuple<bool, Names, Names> buildJoinKey(
         const ExpressionActionsPtr & actions,
         const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
-        const JoinKeyTypes & join_key_types,
-        bool left,
-        bool is_right_out_join);
+        const JoinKeyTypes & join_key_types);
 
     String applyFunction(
         const String & func_name,
