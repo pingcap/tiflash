@@ -38,6 +38,7 @@
 #include <algorithm>
 #include <future>
 #include <iterator>
+#include <memory>
 #include <random>
 
 namespace DB
@@ -3469,6 +3470,185 @@ try
 }
 CATCH
 
+
+void DeltaMergeStoreRWTest::dupHandleVersionAndDeltaIndexAdvancedThanSnapshot()
+{
+    auto table_column_defines = DMTestEnv::getDefaultColumns();
+    store = reload(table_column_defines);
+
+    auto create_block = [&](UInt64 beg, UInt64 end, UInt64 ts) {
+        auto block = DMTestEnv::prepareSimpleWriteBlock(beg, end, false, ts);
+        block.checkNumberOfRows();
+        return block;
+    };
+
+    auto write_block = [&](UInt64 beg, UInt64 end, UInt64 ts) {
+        auto block = create_block(beg, end, ts);
+        store->write(*db_context, db_context->getSettingsRef(), block);
+    };
+
+    auto create_stream = [&]() {
+        return store->read(
+            *db_context,
+            db_context->getSettingsRef(),
+            store->getTableColumns(),
+            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+            /* num_streams= */ 1,
+            /* start_ts= */ std::numeric_limits<UInt64>::max(),
+            EMPTY_FILTER,
+            TRACING_NAME,
+            /* keep_order= */ false,
+            /* is_fast_scan= */ false,
+            DEFAULT_BLOCK_SIZE)[0];
+    };
+
+    auto count_rows = [](BlockInputStreamPtr stream) {
+        std::size_t count = 0;
+        stream->readPrefix();
+        for (;;)
+        {
+            auto block = stream->read();
+            if (!block)
+            {
+                break;
+            }
+            count += block.rows();
+        }
+        stream->readSuffix();
+        return count;
+    };
+
+    auto get_seg_read_task = [&](BlockInputStreamPtr stream) {
+        auto unordered_stream = std::dynamic_pointer_cast<UnorderedInputStream>(stream);
+        const auto & tasks = unordered_stream->task_pool->getTasks();
+        RUNTIME_CHECK(tasks.size() == 1, tasks.size());
+        return tasks.begin()->second;
+    };
+
+    auto clone_delta_index = [](SegmentReadTaskPtr seg_read_task) {
+        auto delta_snap = seg_read_task->read_snapshot->delta;
+        return delta_snap->getSharedDeltaIndex()->tryClone(delta_snap->getRows(), delta_snap->getDeletes());
+    };
+
+    auto check_delta_index
+        = [](DeltaIndexPtr delta_index, size_t expect_rows, size_t expect_deletes, Int64 expect_max_dup_tuple_id) {
+              auto [placed_rows, placed_deletes] = delta_index->getPlacedStatus();
+              ASSERT_EQ(placed_rows, expect_rows);
+              ASSERT_EQ(placed_deletes, expect_deletes);
+              ASSERT_EQ(delta_index->getDeltaTree()->maxDupTupleID(), expect_max_dup_tuple_id);
+          };
+
+    auto ensure_place = [&](SegmentReadTaskPtr seg_read_task) {
+        auto pk_ver_col_defs = std::make_shared<ColumnDefines>(
+            ColumnDefines{getExtraHandleColumnDefine(dm_context->is_common_handle), getVersionColumnDefine()});
+        auto delta_reader = std::make_shared<DeltaValueReader>(
+            *dm_context,
+            seg_read_task->read_snapshot->delta,
+            pk_ver_col_defs,
+            RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
+        return seg_read_task->segment->ensurePlace(
+            *dm_context,
+            seg_read_task->read_snapshot->stable,
+            delta_reader,
+            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+            std::numeric_limits<UInt64>::max());
+    };
+
+    // Write [0, 128) with ts 1 for initializing stable.
+    write_block(0, 128, 1);
+    store->mergeDeltaAll(*db_context);
+
+    // Write [50, 60) with ts 2 for initializing delta.
+    write_block(50, 60, 2);
+
+    // Scan table normally.
+    {
+        auto stream = create_stream();
+        auto count = count_rows(stream);
+        ASSERT_EQ(count, 128);
+    }
+
+    // The snapshot does not include all the duplicated tuples of the delta index.
+    // This snapshot should rebuild delta index for itself.
+    // https://github.com/pingcap/tiflash/issues/8845
+    {
+        // Create snapshot but not place index
+        auto stream1 = create_stream();
+
+        // !!!Duplicated!!!: Write [50, 60) with ts 2
+        write_block(50, 60, 2);
+
+        // Place index with newest data.
+        auto stream2 = create_stream();
+        auto count2 = count_rows(stream2);
+        ASSERT_EQ(count2, 128);
+
+        // stream1 should not resue delta index of stream2
+
+        // Check cloning delta index
+        {
+            auto seg_read_task = get_seg_read_task(stream1);
+
+            // Shared delta index has been placed to the newest by `count_rows(stream2)`.
+            auto shared_delta_index = seg_read_task->read_snapshot->delta->getSharedDeltaIndex();
+            check_delta_index(shared_delta_index, 20, 0, 19);
+
+            // Cannot clone delta index because it contains duplicated records in the gap of snapshot and the shared delta index.
+            auto cloned_delta_index = clone_delta_index(seg_read_task);
+            check_delta_index(cloned_delta_index, 0, 0, -1);
+        }
+        // Check scanning result of stream1
+        auto count1 = count_rows(stream1);
+        ASSERT_EQ(count1, count2);
+    }
+
+    // Make sure shared delta index can be reused by new snapshot
+    {
+        auto stream = create_stream();
+        auto seg_read_task = get_seg_read_task(stream);
+        auto cloned_delta_index = clone_delta_index(seg_read_task);
+        check_delta_index(cloned_delta_index, 20, 0, 19);
+    }
+
+    // The snapshot includes all the duplicated tuples of the delta index.
+    // Delta index can be reused safely.
+    {
+        write_block(70, 80, 2);
+        auto stream = create_stream();
+        auto seg_read_task = get_seg_read_task(stream);
+        auto shared_delta_index = seg_read_task->read_snapshot->delta->getSharedDeltaIndex();
+        check_delta_index(shared_delta_index, 20, 0, 19);
+        auto cloned_delta_index = clone_delta_index(seg_read_task);
+        check_delta_index(cloned_delta_index, 20, 0, 19);
+        auto [placed_delta_index, fully_indexed] = ensure_place(seg_read_task);
+        ASSERT_TRUE(fully_indexed);
+        check_delta_index(placed_delta_index, 30, 0, 19);
+        auto count = count_rows(stream);
+        ASSERT_EQ(count, 128);
+    }
+
+    {
+        write_block(75, 85, 2);
+        auto stream = create_stream();
+        auto seg_read_task = get_seg_read_task(stream);
+        auto shared_delta_index = seg_read_task->read_snapshot->delta->getSharedDeltaIndex();
+        check_delta_index(shared_delta_index, 30, 0, 19);
+        auto cloned_delta_index = clone_delta_index(seg_read_task);
+        check_delta_index(cloned_delta_index, 30, 0, 19);
+        auto [placed_delta_index, fully_indexed] = ensure_place(seg_read_task);
+        ASSERT_TRUE(fully_indexed);
+        check_delta_index(placed_delta_index, 40, 0, 34);
+        auto count = count_rows(stream);
+        ASSERT_EQ(count, 128);
+    }
+}
+
+TEST_P(DeltaMergeStoreRWTest, DupHandleVersionAndDeltaIndexAdvancedThanSnapshot)
+try
+{
+    dupHandleVersionAndDeltaIndexAdvancedThanSnapshot();
+}
+CATCH
 
 } // namespace tests
 } // namespace DM

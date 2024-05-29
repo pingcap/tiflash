@@ -27,6 +27,10 @@ extern const char pause_when_reading_from_dt_stream[];
 
 namespace DB::DM
 {
+namespace tests
+{
+class DeltaMergeStoreRWTest;
+}
 class UnorderedInputStream : public IProfilingBlockInputStream
 {
     static constexpr auto NAME = "UnorderedInputStream";
@@ -134,5 +138,7 @@ private:
     LoggerPtr log;
     int64_t ref_no;
     bool task_pool_added;
+
+    friend class tests::DeltaMergeStoreRWTest;
 };
 } // namespace DB::DM
