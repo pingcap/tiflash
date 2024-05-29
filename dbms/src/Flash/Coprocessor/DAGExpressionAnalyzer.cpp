@@ -611,7 +611,7 @@ void DAGExpressionAnalyzer::buildAggGroupBy(
             {
                 auto first_row_name = findFirstRow(aggregate_descriptions, name, type);
                 String agg_func_name;
-                if (!first_row_name)
+                if (first_row_name)
                 {
                     agg_func_name = *first_row_name;
                     // Got here when this group by key has its corresponding first_row agg func.
