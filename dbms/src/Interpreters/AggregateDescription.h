@@ -31,5 +31,7 @@ struct AggregateDescription
 };
 
 using AggregateDescriptions = std::vector<AggregateDescription>;
+using KeyRefAggFuncMap = std::unordered_map<String, String>;
+using AggFuncRefKeyMap = std::unordered_map<String, String>;
 
 } // namespace DB
