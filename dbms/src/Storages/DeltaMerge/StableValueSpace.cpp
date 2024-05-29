@@ -91,7 +91,13 @@ UInt64 StableValueSpace::serializeMetaToBuf(WriteBuffer & buf) const
         writeIntBinary(valid_bytes, buf);
         writeIntBinary(static_cast<UInt64>(files.size()), buf);
         for (const auto & f : files)
+        {
+            RUNTIME_CHECK_MSG(
+                f->metaVersion() == 0,
+                "StableFormat::V1 cannot persist meta_version={}",
+                f->metaVersion());
             writeIntBinary(f->pageId(), buf);
+        }
     }
     else if (STORAGE_FORMAT_CURRENT.stable == StableFormat::V2)
     {
@@ -99,7 +105,11 @@ UInt64 StableValueSpace::serializeMetaToBuf(WriteBuffer & buf) const
         meta.set_valid_rows(valid_rows);
         meta.set_valid_bytes(valid_bytes);
         for (const auto & f : files)
-            meta.add_files()->set_page_id(f->pageId());
+        {
+            auto * mf = meta.add_files();
+            mf->set_page_id(f->pageId());
+            mf->set_meta_version(f->metaVersion());
+        }
 
         auto data = meta.SerializeAsString();
         writeStringBinary(data, buf);
@@ -180,10 +190,11 @@ StableValueSpacePtr StableValueSpace::restore(DMContext & dm_context, ReadBuffer
     for (int i = 0; i < metapb.files().size(); ++i)
     {
         UInt64 page_id = metapb.files(i).page_id();
-        if (remote_data_store)
-            stable->files.push_back(restoreDMFileFromRemoteDataSource(dm_context, remote_data_store, page_id));
-        else
-            stable->files.push_back(restoreDMFileFromLocal(dm_context, page_id));
+        UInt64 meta_version = metapb.files(i).meta_version();
+        auto dmfile = remote_data_store
+            ? restoreDMFileFromRemoteDataSource(dm_context, remote_data_store, page_id, meta_version)
+            : restoreDMFileFromLocal(dm_context, page_id, meta_version);
+        stable->files.push_back(dmfile);
     }
 
     stable->valid_rows = metapb.valid_rows();
@@ -213,7 +224,8 @@ StableValueSpacePtr StableValueSpace::createFromCheckpoint( //
     for (int i = 0; i < metapb.files().size(); ++i)
     {
         UInt64 page_id = metapb.files(i).page_id();
-        auto dmfile = restoreDMFileFromCheckpoint(dm_context, remote_data_store, temp_ps, wbs, page_id);
+        UInt64 meta_version = metapb.files(i).meta_version();
+        auto dmfile = restoreDMFileFromCheckpoint(dm_context, remote_data_store, temp_ps, wbs, page_id, meta_version);
         stable->files.push_back(dmfile);
     }
 

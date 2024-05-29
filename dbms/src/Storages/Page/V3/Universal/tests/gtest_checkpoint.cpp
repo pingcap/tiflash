@@ -1093,7 +1093,10 @@ try
         S3::uploadEmptyFile(*s3_client, ingest_from_data_file.toFullKey());
         S3::uploadEmptyFile(
             *s3_client,
-            fmt::format("{}/{}", ingest_from_dtfile.toFullKey(), DM::DMFileMetaV2::metaFileName()));
+            fmt::format(
+                "{}/{}",
+                ingest_from_dtfile.toFullKey(),
+                DM::DMFileMetaV2::metaFileName(/* meta_version= */ 0)));
 
         UniversalWriteBatch batch;
 

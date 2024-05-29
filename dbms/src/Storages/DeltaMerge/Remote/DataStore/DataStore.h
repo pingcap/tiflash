@@ -32,7 +32,7 @@ public:
     /**
      * Restores into a DMFile object. This token will be kept valid when DMFile is valid.
      */
-    virtual DMFilePtr restore(DMFileMeta::ReadMode read_mode) = 0;
+    virtual DMFilePtr restore(DMFileMeta::ReadMode read_mode, UInt32 meta_version) = 0;
 
 protected:
     // These should be the required information for any kind of DataStore.
@@ -73,6 +73,19 @@ public:
      * (`DMFile::switchToRemote`).
      */
     virtual void putDMFile(DMFilePtr local_dm_file, const S3::DMFileOID & oid, bool remove_local) = 0;
+
+    /**
+      * @brief Note: Unlike putDMFile, this function intentionally does not
+      * remove any local files, because it is only a "put".
+      *
+      * @param local_dir The path of the local DMFile
+      * @param local_files File names to upload
+      */
+    virtual void putDMFileLocalFiles(
+        const String & local_dir,
+        const std::vector<String> & local_files,
+        const S3::DMFileOID & oid)
+        = 0;
 
     /**
      * Blocks until a DMFile in the remote data store is successfully prepared in a local cache.

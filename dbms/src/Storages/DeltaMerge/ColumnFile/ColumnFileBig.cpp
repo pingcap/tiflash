@@ -100,8 +100,10 @@ ColumnFilePersistedPtr ColumnFileBig::deserializeMetadata(
     readIntBinary(valid_bytes, buf);
 
     auto remote_data_store = dm_context.global_context.getSharedContextDisagg()->remote_data_store;
-    auto dmfile = remote_data_store ? restoreDMFileFromRemoteDataSource(dm_context, remote_data_store, file_page_id)
-                                    : restoreDMFileFromLocal(dm_context, file_page_id);
+    // In this version, ColumnFileBig's meta_version is always 0.
+    auto dmfile = remote_data_store
+        ? restoreDMFileFromRemoteDataSource(dm_context, remote_data_store, file_page_id, /* meta_version */ 0)
+        : restoreDMFileFromLocal(dm_context, file_page_id, /* meta_version */ 0);
     auto * dp_file = new ColumnFileBig(dmfile, valid_rows, valid_bytes, segment_range);
     return std::shared_ptr<ColumnFileBig>(dp_file);
 }
@@ -112,8 +114,9 @@ ColumnFilePersistedPtr ColumnFileBig::deserializeMetadata(
     const dtpb::ColumnFileBig & cf_pb)
 {
     auto remote_data_store = dm_context.global_context.getSharedContextDisagg()->remote_data_store;
-    auto dmfile = remote_data_store ? restoreDMFileFromRemoteDataSource(dm_context, remote_data_store, cf_pb.id())
-                                    : restoreDMFileFromLocal(dm_context, cf_pb.id());
+    auto dmfile = remote_data_store
+        ? restoreDMFileFromRemoteDataSource(dm_context, remote_data_store, cf_pb.id(), cf_pb.meta_version())
+        : restoreDMFileFromLocal(dm_context, cf_pb.id(), cf_pb.meta_version());
     auto * dp_file = new ColumnFileBig(dmfile, cf_pb.valid_rows(), cf_pb.valid_bytes(), segment_range);
     return std::shared_ptr<ColumnFileBig>(dp_file);
 }
@@ -132,8 +135,11 @@ ColumnFilePersistedPtr ColumnFileBig::createFromCheckpoint(
     readIntBinary(valid_rows, buf);
     readIntBinary(valid_bytes, buf);
 
+    // In this version, ColumnFileBig's meta_version is always 0.
+    UInt64 meta_version = 0;
+
     auto remote_data_store = dm_context.global_context.getSharedContextDisagg()->remote_data_store;
-    auto dmfile = restoreDMFileFromCheckpoint(dm_context, remote_data_store, temp_ps, wbs, file_page_id);
+    auto dmfile = restoreDMFileFromCheckpoint(dm_context, remote_data_store, temp_ps, wbs, file_page_id, meta_version);
     auto * dp_file = new ColumnFileBig(dmfile, valid_rows, valid_bytes, target_range);
     return std::shared_ptr<ColumnFileBig>(dp_file);
 }
@@ -148,9 +154,10 @@ ColumnFilePersistedPtr ColumnFileBig::createFromCheckpoint(
     UInt64 file_page_id = cf_pb.id();
     size_t valid_rows = cf_pb.valid_rows();
     size_t valid_bytes = cf_pb.valid_bytes();
+    size_t meta_version = cf_pb.meta_version();
 
     auto remote_data_store = dm_context.global_context.getSharedContextDisagg()->remote_data_store;
-    auto dmfile = restoreDMFileFromCheckpoint(dm_context, remote_data_store, temp_ps, wbs, file_page_id);
+    auto dmfile = restoreDMFileFromCheckpoint(dm_context, remote_data_store, temp_ps, wbs, file_page_id, meta_version);
     auto * dp_file = new ColumnFileBig(dmfile, valid_rows, valid_bytes, target_range);
     return std::shared_ptr<ColumnFileBig>(dp_file);
 }

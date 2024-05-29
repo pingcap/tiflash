@@ -68,7 +68,7 @@ public:
                 DMFileOID{.store_id = store_id, .table_id = physical_table_id, .file_id = dm_file_id});
             DB::S3::uploadEmptyFile(
                 *s3_client,
-                fmt::format("{}/{}", data_filename.toFullKey(), DM::DMFileMetaV2::metaFileName()));
+                fmt::format("{}/{}", data_filename.toFullKey(), DM::DMFileMetaV2::metaFileName(/* meta_version= */ 0)));
             ++dm_file_id;
         }
     }

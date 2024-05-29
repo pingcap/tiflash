@@ -14,6 +14,7 @@
 
 #include <Storages/DeltaMerge/Remote/DataStore/DataStoreMock.h>
 
+
 namespace DB::DM::Remote
 {
 
@@ -35,7 +36,7 @@ static std::tuple<String, UInt64> parseDMFilePath(const String & path)
     return std::tuple<String, UInt64>{parent_path, file_id};
 }
 
-DMFilePtr MockPreparedDMFileToken::restore(DMFileMeta::ReadMode read_mode)
+DMFilePtr MockPreparedDMFileToken::restore(DMFileMeta::ReadMode read_mode, UInt32 meta_version)
 {
     auto [parent_path, file_id] = parseDMFilePath(path);
     return DMFile::restore(
@@ -43,6 +44,7 @@ DMFilePtr MockPreparedDMFileToken::restore(DMFileMeta::ReadMode read_mode)
         file_id,
         /*page_id*/ 0,
         parent_path,
-        read_mode);
+        read_mode,
+        meta_version);
 }
 } // namespace DB::DM::Remote

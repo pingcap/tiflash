@@ -152,7 +152,13 @@ public:
         auto file_id = dm_file->fileId();
         auto page_id = dm_file->pageId();
         auto file_provider = dbContext().getFileProvider();
-        return DMFile::restore(file_provider, file_id, page_id, parent_path, DMFileMeta::ReadMode::all());
+        return DMFile::restore(
+            file_provider,
+            file_id,
+            page_id,
+            parent_path,
+            DMFileMeta::ReadMode::all(),
+            /* meta_version= */ 0);
     }
 
     Context & dbContext() { return *db_context; }

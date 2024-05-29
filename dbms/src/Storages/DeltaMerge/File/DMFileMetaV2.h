@@ -30,12 +30,14 @@ public:
         UInt64 merged_file_max_size_,
         KeyspaceID keyspace_id_,
         DMConfigurationOpt configuration_,
-        DMFileFormat::Version version_)
-        : DMFileMeta(file_id_, parent_path_, status_, keyspace_id_, configuration_, version_)
+        DMFileFormat::Version format_version_,
+        UInt32 meta_version_)
+        : DMFileMeta(file_id_, parent_path_, status_, keyspace_id_, configuration_, format_version_)
         , small_file_size_threshold(small_file_size_threshold_)
         , merged_file_max_size(merged_file_max_size_)
+        , meta_version(meta_version_)
     {
-        RUNTIME_CHECK(version_ == DMFileFormat::V3);
+        RUNTIME_CHECK(format_version_ == DMFileFormat::V3);
     }
 
     ~DMFileMetaV2() override = default;
@@ -78,16 +80,38 @@ public:
     void finalize(WriteBuffer & buffer, const FileProviderPtr & file_provider, const WriteLimiterPtr & write_limiter)
         override;
     void read(const FileProviderPtr & file_provider, const DMFileMeta::ReadMode & read_meta_mode) override;
-    static String metaFileName() { return "meta"; }
-    String metaPath() const override { return subFilePath(metaFileName()); }
+    static String metaFileName(UInt32 meta_version)
+    {
+        if (meta_version == 0)
+            return "meta";
+        else
+            return fmt::format("v{}.meta", meta_version);
+    }
+
+    static bool isMetaFileName(std::string_view file_name)
+    {
+        return file_name == "meta" || (file_name.starts_with("v") && file_name.ends_with(".meta"));
+    }
+
+    // Note: metaPath is different when meta_version is changed.
+    String metaPath() const override { return subFilePath(metaFileName(meta_version)); }
+
     EncryptionPath encryptionMetaPath() const override;
 
     UInt64 getReadFileSize(ColId col_id, const String & filename) const override;
     EncryptionPath encryptionMergedPath(UInt32 number) const;
     static String mergedFilename(UInt32 number) { return fmt::format("{}.merged", number); }
 
+    UInt32 metaVersion() const override { return meta_version; }
+    UInt32 bumpMetaVersion() override
+    {
+        ++meta_version;
+        return meta_version;
+    }
+
     UInt64 small_file_size_threshold;
     UInt64 merged_file_max_size;
+    UInt32 meta_version = 0; // Note: meta_version affects the output file name.
 
 private:
     UInt64 getMergedFileSizeOfColumn(const MergedSubFileInfo & file_info) const;
