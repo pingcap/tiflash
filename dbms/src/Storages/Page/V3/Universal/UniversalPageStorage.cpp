@@ -454,7 +454,7 @@ void UniversalPageStorage::tryUpdateLocalCacheForRemotePages(UniversalWriteBatch
     auto ignored_entries = page_directory->updateLocalCacheForRemotePages(std::move(edit), snapshot);
     if (!ignored_entries.empty())
     {
-        blob_store->remove(ignored_entries);
+        blob_store->removeEntries(ignored_entries);
     }
 }
 

@@ -321,11 +321,12 @@ void VersionedPageEntries<Trait>::createDelete(const PageVersion & ver) NO_THREA
         return;
     }
 
-    throw Exception(fmt::format(
+    throw Exception(
+        ErrorCodes::LOGICAL_ERROR,
         "try to create delete version with invalid state "
         "[ver={}] [state={}]",
         ver,
-        toDebugString()));
+        toDebugString());
 }
 
 template <typename Trait>
@@ -350,11 +351,12 @@ bool VersionedPageEntries<Trait>::updateLocalCacheForRemotePage(const PageVersio
         ori_entry.checkpoint_info.is_local_data_reclaimed = false;
         return true;
     }
-    throw Exception(fmt::format(
+    throw Exception(
+        ErrorCodes::LOGICAL_ERROR,
         "try to update remote page with invalid state "
         "[ver={}] [state={}]",
         ver,
-        toDebugString()));
+        toDebugString());
 }
 
 // Create a new reference version with version=`ver` and `ori_page_id_`.
@@ -672,11 +674,10 @@ Int64 VersionedPageEntries<Trait>::incrRefCount(const PageVersion & target_ver, 
                 if (unlikely(met_delete && ref_count_value == 1))
                 {
                     throw Exception(
-                        fmt::format(
-                            "Try to add ref to a completely deleted entry [entry={}] [ver={}]",
-                            iter->second,
-                            target_ver),
-                        ErrorCodes::LOGICAL_ERROR);
+                        ErrorCodes::LOGICAL_ERROR,
+                        "Try to add ref to a completely deleted entry [entry={}] [ver={}]",
+                        iter->second,
+                        target_ver);
                 }
                 iter->second.being_ref_count.incrRefCount(ref_ver, 1);
                 return ref_count_value + 1;
@@ -785,7 +786,7 @@ bool VersionedPageEntries<Trait>::cleanOutdatedEntries(
     }
     else if (type != EditRecordType::VAR_ENTRY)
     {
-        throw Exception(fmt::format("Invalid state {}", toDebugString()), ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Invalid state {}", toDebugString());
     }
 
     // type == EditRecordType::VAR_ENTRY
@@ -906,11 +907,12 @@ bool VersionedPageEntries<Trait>::derefAndClean(
         if (iter->second.isDelete())
         {
             // run into the begin of `entries`, but still can not find a valid entry to decrease the ref-count
-            throw Exception(fmt::format(
+            throw Exception(
+                ErrorCodes::LOGICAL_ERROR,
                 "Can not find entry for decreasing ref count till the begin [page_id={}] [ver={}] [deref_count={}]",
                 page_id,
                 deref_ver,
-                deref_count));
+                deref_count);
         }
         assert(iter->second.isEntry());
         iter->second.being_ref_count.decrRefCountInSnap(lowest_seq, deref_count);
@@ -1153,11 +1155,10 @@ typename PageDirectory<Trait>::PageIdAndEntry PageDirectory<Trait>::getByIDImpl(
                             dump_entry == nullptr ? "<null>" : dump_entry->toDebugString());
                     }
                     throw Exception(
-                        fmt::format(
-                            "Invalid page id, entry not exist [page_id={}] [resolve_id={}]",
-                            page_id,
-                            id_to_resolve),
-                        ErrorCodes::PS_ENTRY_NOT_EXISTS);
+                        ErrorCodes::PS_ENTRY_NOT_EXISTS,
+                        "Invalid page id, entry not exist [page_id={}] [resolve_id={}]",
+                        page_id,
+                        id_to_resolve);
                 }
                 else
                 {
@@ -1550,13 +1551,14 @@ void PageDirectory<Trait>::applyRefEditRecord(
     }(rec.ori_page_id, version);
     if (!resolve_success)
     {
-        throw Exception(fmt::format(
+        throw Exception(
+            ErrorCodes::LOGICAL_ERROR,
             "Trying to add ref to non-exist page [page_id={}] [ori_id={}] [ver={}] [resolve_id={}] [resolve_ver={}]",
             rec.page_id,
             rec.ori_page_id,
             version,
             resolved_id,
-            resolved_ver));
+            resolved_ver);
     }
 
     SYNC_FOR("before_PageDirectory::applyRefEditRecord_create_ref");
@@ -1573,13 +1575,14 @@ void PageDirectory<Trait>::applyRefEditRecord(
         }
         else
         {
-            throw Exception(fmt::format(
+            throw Exception(
+                ErrorCodes::LOGICAL_ERROR,
                 "The ori page id is not found [page_id={}] [ori_id={}] [ver={}] [resolved_id={}] [resolved_ver={}]",
                 rec.page_id,
                 rec.ori_page_id,
                 version,
                 resolved_id,
-                resolved_ver));
+                resolved_ver);
         }
     }
     SYNC_FOR("after_PageDirectory::applyRefEditRecord_incr_ref_count");
@@ -1637,7 +1640,7 @@ std::unordered_set<String> PageDirectory<Trait>::apply(PageEntriesEdit && edit, 
             }
             else
             {
-                throw Exception("Unknown exception");
+                throw Exception(ErrorCodes::LOGICAL_ERROR, "Unknown exception");
             }
         }
         // the `applied_data_files` will be returned by the write
@@ -1742,9 +1745,10 @@ std::unordered_set<String> PageDirectory<Trait>::apply(PageEntriesEdit && edit, 
                 case EditRecordType::VAR_EXTERNAL:
                 case EditRecordType::VAR_REF:
                 case EditRecordType::UPDATE_DATA_FROM_REMOTE:
-                    throw Exception(fmt::format(
+                    throw Exception(
+                        ErrorCodes::LOGICAL_ERROR,
                         "should not handle edit with invalid type [type={}]",
-                        magic_enum::enum_name(r.type)));
+                        magic_enum::enum_name(r.type));
                 }
 
                 // collect the applied remote data_file_ids
@@ -1976,7 +1980,7 @@ std::pair<typename PageDirectory<Trait>::GcEntriesMap, PageSize> PageDirectory<T
 
     LOG_INFO(
         log,
-        "Get entries by blob ids done [rewrite_ref_page_num={}] [total_page_size={}] [total_page_nums={}]", //
+        "Get entries by blob ids done, rewrite_ref_page_num={} total_page_size={} total_page_nums={}", //
         num_ref_id_rewrite,
         total_page_size, //
         total_page_nums);
@@ -2110,7 +2114,7 @@ typename PageDirectory<Trait>::PageEntries PageDirectory<Trait>::gcInMemEntries(
                     {
                         LOG_WARNING(
                             log,
-                            "Meet a stale snapshot [thread id={}] [tracing id={}] [seq={}] [alive time(s)={}]",
+                            "Meet a stale snapshot, create_thread={} tracing_id={} seq={} alive_time={:.3f}",
                             snap->create_thread,
                             snap->tracing_id,
                             snap->sequence,
