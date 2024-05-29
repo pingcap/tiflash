@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/FieldVisitors.h>
+#include <Flash/Coprocessor/DAGQueryInfo.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/Index/RSIndex.h>
 #include <Storages/DeltaMerge/Index/RSResult.h>
@@ -48,6 +49,13 @@ public:
     virtual RSResults roughCheck(size_t start_pack, size_t pack_count, const RSCheckParam & param) = 0;
 
     virtual ColIds getColumnIDs() = 0;
+
+    static RSOperatorPtr build(
+        const std::unique_ptr<DAGQueryInfo> & dag_query,
+        const ColumnDefines & columns_to_read,
+        const ColumnDefines & table_column_defines,
+        bool enable_rs_filter,
+        const LoggerPtr & tracing_logger);
 };
 
 class ColCmpVal : public RSOperator
