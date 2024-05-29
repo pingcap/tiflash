@@ -41,7 +41,7 @@ bool isRecognizable(const DB::DM::DMFile & file, const std::string & target)
 {
     return DB::DM::DMFileMeta::metaFileName() == target || DB::DM::DMFileMeta::configurationFileName() == target
         || DB::DM::DMFileMeta::packPropertyFileName() == target || needFrameMigration(file, target)
-        || isIgnoredInMigration(file, target) || DB::DM::DMFileMetaV2::metaFileName() == target;
+        || isIgnoredInMigration(file, target) || DB::DM::DMFileMetaV2::isMetaFileName(target);
 }
 
 namespace bpo = boost::program_options;
@@ -194,7 +194,8 @@ int migrateServiceMain(DB::Context & context, const MigrateArgs & args)
             args.file_id,
             0,
             args.workdir,
-            DB::DM::DMFileMeta::ReadMode::all());
+            DB::DM::DMFileMeta::ReadMode::all(),
+            0 /* FIXME: Support other meta version */);
         auto source_version = 0;
         if (src_file->useMetaV2())
         {
@@ -271,7 +272,8 @@ int migrateServiceMain(DB::Context & context, const MigrateArgs & args)
                 args.file_id,
                 1,
                 keeper.migration_temp_dir.path(),
-                DB::DM::DMFileMeta::ReadMode::all());
+                DB::DM::DMFileMeta::ReadMode::all(),
+                0 /* FIXME: Support other meta version */);
         }
     }
     LOG_INFO(logger, "migration finished");

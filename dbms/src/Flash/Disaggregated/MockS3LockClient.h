@@ -42,8 +42,9 @@ public:
     {
         // If the data file exist and no delmark exist, then create a lock file on `data_file_key`
         auto view = S3FilenameView::fromKey(data_file_key);
-        auto object_key
-            = view.isDMFile() ? fmt::format("{}/{}", data_file_key, DM::DMFileMetaV2::metaFileName()) : data_file_key;
+        auto object_key = view.isDMFile()
+            ? fmt::format("{}/{}", data_file_key, DM::DMFileMetaV2::metaFileName(/* meta_version= */ 0))
+            : data_file_key;
         if (!objectExists(*s3_client, object_key))
         {
             return {false, ""};

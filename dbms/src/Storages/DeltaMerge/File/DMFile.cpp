@@ -109,7 +109,8 @@ DMFilePtr DMFile::restore(
     UInt64 file_id,
     UInt64 page_id,
     const String & parent_path,
-    const DMFileMeta::ReadMode & read_meta_mode)
+    const DMFileMeta::ReadMode & read_meta_mode,
+    UInt32 meta_version)
 {
     auto is_s3_file = S3::S3FilenameView::fromKeyWithPrefix(parent_path).isDataFile();
     if (!is_s3_file)
@@ -124,8 +125,12 @@ DMFilePtr DMFile::restore(
     }
 
     DMFilePtr dmfile(new DMFile(file_id, page_id, parent_path, DMFileStatus::READABLE));
-    if (is_s3_file || Poco::File(dmfile->metav2Path()).exists())
+    if (is_s3_file || Poco::File(dmfile->metav2Path(/* meta_version= */ 0)).exists())
     {
+        // Always use meta_version=0 when checking whether we should treat it as metav2.
+        // However, when reading actual meta data, we will read according to specified
+        // meta version.
+
         dmfile->meta = std::make_unique<DMFileMetaV2>(
             file_id,
             parent_path,
@@ -133,11 +138,14 @@ DMFilePtr DMFile::restore(
             128 * 1024,
             16 * 1024 * 1024,
             std::nullopt,
-            STORAGE_FORMAT_CURRENT.dm_file);
+            STORAGE_FORMAT_CURRENT.dm_file,
+            meta_version);
         dmfile->meta->read(file_provider, read_meta_mode);
     }
     else if (!read_meta_mode.isNone())
     {
+        RUNTIME_CHECK_MSG(meta_version == 0, "Only support meta_version=0 for MetaV2, meta_version={}", meta_version);
+
         dmfile->meta = std::make_unique<DMFileMeta>(
             file_id,
             parent_path,

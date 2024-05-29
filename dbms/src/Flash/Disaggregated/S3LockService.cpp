@@ -205,8 +205,9 @@ bool S3LockService::tryAddLockImpl(
 
     auto s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
     // make sure data file exists
-    auto object_key
-        = key_view.isDMFile() ? fmt::format("{}/{}", data_file_key, DM::DMFileMetaV2::metaFileName()) : data_file_key;
+    auto object_key = key_view.isDMFile()
+        ? fmt::format("{}/{}", data_file_key, DM::DMFileMetaV2::metaFileName(/* meta_version= */ 0))
+        : data_file_key;
     if (!DB::S3::objectExists(*s3_client, object_key))
     {
         auto * e = response->mutable_result()->mutable_conflict();

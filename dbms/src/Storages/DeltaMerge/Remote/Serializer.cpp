@@ -92,6 +92,7 @@ RemotePb::RemoteSegment Serializer::serializeTo(
     {
         auto * remote_file = remote.add_stable_pages();
         remote_file->set_page_id(dt_file->pageId());
+        remote_file->set_meta_version(dt_file->metaVersion());
         auto * checkpoint_info = remote_file->mutable_checkpoint_info();
         RUNTIME_CHECK(startsWith(dt_file->path(), "s3://"), dt_file->path());
         checkpoint_info->set_data_file_id(dt_file->path()); // It should be a key to remote path
@@ -162,7 +163,7 @@ SegmentSnapshotPtr Serializer::deserializeSegmentSnapshotFrom(
     {
         auto remote_key = stable_file.checkpoint_info().data_file_id();
         auto prepared = data_store->prepareDMFileByKey(remote_key);
-        auto dmfile = prepared->restore(DMFileMeta::ReadMode::all());
+        auto dmfile = prepared->restore(DMFileMeta::ReadMode::all(), stable_file.meta_version());
         dmfiles.emplace_back(std::move(dmfile));
     }
     new_stable->setFiles(dmfiles, segment_range, &dm_context);
@@ -377,6 +378,7 @@ RemotePb::ColumnFileRemote Serializer::serializeTo(const ColumnFileBig & cf_big)
     auto * checkpoint_info = remote_big->mutable_checkpoint_info();
     checkpoint_info->set_data_file_id(cf_big.file->path());
     remote_big->set_page_id(cf_big.file->pageId());
+    remote_big->set_meta_version(cf_big.file->metaVersion());
     remote_big->set_valid_rows(cf_big.valid_rows);
     remote_big->set_valid_bytes(cf_big.valid_bytes);
     return ret;
@@ -391,7 +393,7 @@ ColumnFileBigPtr Serializer::deserializeCFBig(
     LOG_DEBUG(Logger::get(), "Rebuild local ColumnFileBig from remote, key={}", proto.checkpoint_info().data_file_id());
 
     auto prepared = data_store->prepareDMFileByKey(proto.checkpoint_info().data_file_id());
-    auto dmfile = prepared->restore(DMFileMeta::ReadMode::all());
+    auto dmfile = prepared->restore(DMFileMeta::ReadMode::all(), proto.meta_version());
     auto * cf_big = new ColumnFileBig(dmfile, proto.valid_rows(), proto.valid_bytes(), segment_range);
     return std::shared_ptr<ColumnFileBig>(cf_big); // The constructor is private, so we cannot use make_shared.
 }

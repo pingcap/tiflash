@@ -64,6 +64,9 @@ message ColumnStat {
 
     reserved 101; // old VectorIndexFileProps which does not have dimensions, we just treat index as not exist.
     optional VectorIndexFileProps vector_index = 102;
+
+    // Only used in tests. Modifying other fields of ColumnStat is hard.
+    optional string additional_data_for_test = 999;
 }
 
 message ColumnStats {
@@ -84,6 +87,7 @@ message VectorIndexFileProps {
 
 message StableFile {
     optional uint64 page_id = 1;
+    optional uint64 meta_version = 2;
 }
 
 message StableLayerMeta {

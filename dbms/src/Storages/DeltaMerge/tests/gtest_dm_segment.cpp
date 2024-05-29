@@ -1383,8 +1383,13 @@ try
                 auto [range, file_ids] = genDMFile(dmContext(), block);
                 auto file_id = file_ids[0];
                 auto file_parent_path = delegate.getDTFilePath(file_id);
-                auto file
-                    = DMFile::restore(file_provider, file_id, file_id, file_parent_path, DMFileMeta::ReadMode::all());
+                auto file = DMFile::restore(
+                    file_provider,
+                    file_id,
+                    file_id,
+                    file_parent_path,
+                    DMFileMeta::ReadMode::all(),
+                    /* meta_version= */ 0);
                 WriteBatches wbs(*storage_pool);
                 wbs.data.putExternal(file_id, 0);
                 wbs.writeLogAndData();

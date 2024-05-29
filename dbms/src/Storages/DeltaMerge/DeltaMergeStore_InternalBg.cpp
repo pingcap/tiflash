@@ -129,7 +129,13 @@ public:
                     continue;
 
                 // Note that page_id is useless here.
-                auto dmfile = DMFile::restore(file_provider, id, /* page_id= */ 0, path, DMFileMeta::ReadMode::none());
+                auto dmfile = DMFile::restore(
+                    file_provider,
+                    id,
+                    /* page_id= */ 0,
+                    path,
+                    DMFileMeta::ReadMode::none(),
+                    0 /* a meta version that must exist */);
                 if (unlikely(!dmfile))
                 {
                     // If the dtfile directory is not exist, it means `StoragePathPool::drop` have been

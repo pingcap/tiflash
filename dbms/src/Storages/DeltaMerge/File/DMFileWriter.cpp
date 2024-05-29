@@ -89,7 +89,7 @@ DMFileWriter::WriteBufferFromFileBasePtr DMFileWriter::createMetaV2File()
 {
     return std::make_unique<WriteBufferFromFileProvider>(
         file_provider,
-        dmfile->metav2Path(),
+        dmfile->meta->metaPath(),
         dmfile->meta->encryptionMetaPath(),
         /*create_new_encryption_info*/ true,
         write_limiter,

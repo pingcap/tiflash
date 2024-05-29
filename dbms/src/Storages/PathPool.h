@@ -122,7 +122,11 @@ public:
     friend class PSDiskDelegatorGlobalMulti;
     friend class PSDiskDelegatorFixedDirectory;
 
+#ifndef DBMS_PUBLIC_GTEST
 private:
+#else
+public:
+#endif
     Strings main_data_paths;
     Strings latest_data_paths;
     Strings kvstore_paths;

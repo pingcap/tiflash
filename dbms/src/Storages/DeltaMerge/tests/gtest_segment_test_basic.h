@@ -95,6 +95,12 @@ public:
     void replaceSegmentData(PageIdU64 segment_id, const DMFilePtr & file, SegmentSnapshotPtr snapshot = nullptr);
     void replaceSegmentData(PageIdU64 segment_id, const Block & block, SegmentSnapshotPtr snapshot = nullptr);
 
+    /**
+     * This function does not check rows.
+     * Returns whether replace is successful.
+     */
+    bool replaceSegmentStableData(PageIdU64 segment_id, const DMFilePtr & file);
+
     Block prepareWriteBlock(Int64 start_key, Int64 end_key, bool is_deleted = false);
     Block prepareWriteBlockInSegmentRange(
         PageIdU64 segment_id,

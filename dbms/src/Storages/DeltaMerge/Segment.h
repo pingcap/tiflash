@@ -487,6 +487,22 @@ public:
         const DMFilePtr & data_file,
         SegmentSnapshotPtr segment_snap_opt = nullptr) const;
 
+    /**
+     * Replace the stable layer using the DMFile with a new meta version.
+     * Delta layer is unchanged.
+     *
+     * This API can be used to make a newly added index visible.
+     *
+     * This API does not have a prepare & apply pair, as it should be quick enough.
+     *
+     * @param new_stable_files Must be the same as the current stable DMFiles (except for the meta version).
+     *                         Otherwise replace will be failed and nullptr will be returned.
+     */
+    [[nodiscard]] SegmentPtr replaceStableMetaVersion(
+        const Lock &,
+        DMContext & dm_context,
+        const DMFiles & new_stable_files);
+
     [[nodiscard]] SegmentPtr dangerouslyReplaceDataFromCheckpoint(
         const Lock &,
         DMContext & dm_context,

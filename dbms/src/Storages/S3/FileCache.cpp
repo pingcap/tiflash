@@ -531,12 +531,9 @@ UInt64 FileCache::getEstimatedSizeOfFileType(FileSegment::FileType file_type)
 FileType FileCache::getFileType(const String & fname)
 {
     std::filesystem::path p(fname);
+
     auto ext = p.extension();
-    if (ext.empty())
-    {
-        return p.stem() == DM::DMFileMetaV2::metaFileName() ? FileType::Meta : FileType::Unknow;
-    }
-    else if (ext == ".merged")
+    if (ext == ".merged")
     {
         return FileType::Merged;
     }
@@ -552,10 +549,17 @@ FileType FileCache::getFileType(const String & fname)
     {
         return getFileTypeOfColData(p.stem());
     }
-    else
+    else if (ext == ".meta")
     {
-        return FileType::Unknow;
+        // Example: v1.meta
+        return FileType::Meta;
     }
+    else if (ext.empty() && p.stem() == "meta")
+    {
+        return FileType::Meta;
+    }
+
+    return FileType::Unknow;
 }
 
 bool FileCache::finalizeReservedSize(FileType reserve_for, UInt64 reserved_size, UInt64 content_length)

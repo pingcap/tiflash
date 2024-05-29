@@ -26,7 +26,7 @@ namespace DB::DM
 
 EncryptionPath DMFileMetaV2::encryptionMetaPath() const
 {
-    return EncryptionPath(encryptionBasePath(), metaFileName());
+    return EncryptionPath(encryptionBasePath(), metaFileName(meta_version));
 }
 
 EncryptionPath DMFileMetaV2::encryptionMergedPath(UInt32 number) const
@@ -67,7 +67,7 @@ void DMFileMetaV2::parse(std::string_view buffer)
     }
 
     ptr = ptr - sizeof(DMFileFormat::Version);
-    version = *(reinterpret_cast<const DMFileFormat::Version *>(ptr));
+    format_version = *(reinterpret_cast<const DMFileFormat::Version *>(ptr));
 
     ptr = ptr - sizeof(UInt64);
     auto meta_block_handle_count = *(reinterpret_cast<const UInt64 *>(ptr));
@@ -187,7 +187,7 @@ void DMFileMetaV2::finalize(
     };
     writePODBinary(meta_block_handles, tmp_buffer);
     writeIntBinary(static_cast<UInt64>(meta_block_handles.size()), tmp_buffer);
-    writeIntBinary(version, tmp_buffer);
+    writeIntBinary(format_version, tmp_buffer);
 
     // Write to file and do checksums.
     auto s = tmp_buffer.releaseStr();

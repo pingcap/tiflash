@@ -17,6 +17,7 @@
 #include <Poco/File.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/File/DMFileMetaV2.h>
+#include <Storages/DeltaMerge/File/DMFileV3IncrementWriter_fwd.h>
 #include <Storages/DeltaMerge/File/dtpb/dmfile.pb.h>
 #include <Storages/FormatVersion.h>
 #include <Storages/S3/S3Filename.h>
@@ -64,7 +65,8 @@ public:
         UInt64 file_id,
         UInt64 page_id,
         const String & parent_path,
-        const DMFileMeta::ReadMode & read_meta_mode);
+        const DMFileMeta::ReadMode & read_meta_mode,
+        UInt32 meta_version);
 
     struct ListOptions
     {
@@ -167,9 +169,11 @@ public:
         return results;
     }
 
-    bool useMetaV2() const { return meta->version == DMFileFormat::V3; }
+    bool useMetaV2() const { return meta->format_version == DMFileFormat::V3; }
     std::vector<String> listFilesForUpload() const;
     void switchToRemote(const S3::DMFileOID & oid);
+
+    UInt32 metaVersion() const { return meta->metaVersion(); }
 
 #ifndef DBMS_PUBLIC_GTEST
 private:
@@ -197,7 +201,8 @@ public:
                 small_file_size_threshold_,
                 merged_file_max_size_,
                 configuration_,
-                version_);
+                version_,
+                /* meta_version= */ 0);
         }
         else
         {
@@ -212,7 +217,7 @@ public:
 
     // Do not gc me.
     String ngcPath() const;
-    String metav2Path() const { return subFilePath(DMFileMetaV2::metaFileName()); }
+    String metav2Path(UInt32 meta_version) const { return subFilePath(DMFileMetaV2::metaFileName(meta_version)); }
     UInt64 getReadFileSize(ColId col_id, const String & filename) const
     {
         return meta->getReadFileSize(col_id, filename);
@@ -279,6 +284,7 @@ public:
     LoggerPtr log;
     DMFileMetaPtr meta;
 
+    friend class DMFileV3IncrementWriter;
     friend class DMFileWriter;
     friend class DMFileWriterRemote;
     friend class DMFileReader;
