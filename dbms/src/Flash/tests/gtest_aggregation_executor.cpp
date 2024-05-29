@@ -24,7 +24,6 @@ namespace FailPoints
 {
 extern const char force_agg_on_partial_block[];
 extern const char force_agg_two_level_hash_table_before_merge[];
-extern const char force_agg_key_optimization[];
 } // namespace FailPoints
 namespace tests
 {
@@ -1086,7 +1085,7 @@ try
     }
 
     {
-        // case-3: select count(1), col_string_with_collator from t group by col_string_with_collator
+        // case-4: select count(1), col_string_with_collator from t group by col_string_with_collator
         // agg method: key_strbin/key_strbinpadding(AggregationMethodOneKeyStringNoCache)
         // opt: key_ref_agg_func
         std::vector<ASTPtr> agg_funcs
@@ -1103,7 +1102,7 @@ try
     }
 
     {
-        // case-3-1: select count(1) from t group by col_string_with_collator
+        // case-4-1: select count(1) from t group by col_string_with_collator
         // Use 'any' agg func instead of first_row
         // agg method: key_strbin/key_strbinpadding(AggregationMethodOneKeyStringNoCache)
         // opt: key_ref_agg_func
@@ -1119,11 +1118,11 @@ try
         executeAndAssertColumnsEqual(request, expected);
     }
 
-    // case-4: none
+    // case-5: none
     // agg method: key_fixed_string(AggregationMethodFixedStringNoCache)
 
     {
-        // case-5: select count(1), col_string_with_collator from t group by col_string_with_collator, col_int, col_string_no_collator
+        // case-6: select count(1), col_string_with_collator from t group by col_string_with_collator, col_int, col_string_no_collator
         // agg method: serialized(AggregationMethodSerialized)
         // opt: key_ref_agg_func && agg_func_ref_key
         std::vector<ASTPtr> agg_funcs
@@ -1142,7 +1141,7 @@ try
     }
 
     {
-        // case-6: select count(1), col_string_with_collator, col_int from t group by col_string_with_collator, col_int
+        // case-7: select count(1), col_string_with_collator, col_int from t group by col_string_with_collator, col_int
         // agg method: two_keys_num64_strbin(AggregationMethodFastPathTwoKeyNoCache)
         // opt: key_ref_agg_func && agg_func_ref_key
         std::vector<ASTPtr> agg_funcs

@@ -76,7 +76,7 @@ public:
 
     /// <aggregation_keys, collators, aggregate_descriptions, before_agg, key_ref_agg_func, agg_func_ref_key>
     /// May change the source columns.
-    std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions, ExpressionActionsPtr, KeyRefAggFuncMap, AggFuncRefKeyMap> appendAggregation(
+    std::tuple<Names, std::unordered_map<String, TiDB::TiDBCollatorPtr>, AggregateDescriptions, ExpressionActionsPtr, KeyRefAggFuncMap, AggFuncRefKeyMap> appendAggregation(
         ExpressionActionsChain & chain,
         const tipb::Aggregation & agg,
         bool group_by_collation_sensitive);
@@ -189,14 +189,14 @@ public:
         std::unordered_set<String> & agg_key_set,
         KeyRefAggFuncMap & key_ref_agg_func,
         bool group_by_collation_sensitive,
-        TiDB::TiDBCollators & collators);
+        std::unordered_map<String, TiDB::TiDBCollatorPtr> & collators);
 
     // Try eliminate first_row/any agg func when there is no collator for this column.
     // The agg func value will reference to group by key, which is indicated by agg_func_ref_key.
     // This function should be called after buildAggFuncs() and buildAggGroupBy().
     static void tryEliminateFirstRow(
         const Names & aggregation_keys,
-        const TiDB::TiDBCollators & collators,
+        const std::unordered_map<String, TiDB::TiDBCollatorPtr> & collators,
         AggFuncRefKeyMap & agg_func_ref_key,
         AggregateDescriptions & aggregate_descriptions);
 

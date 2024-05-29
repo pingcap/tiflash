@@ -42,7 +42,7 @@ public:
         const Names & aggregation_keys_,
         const std::unordered_map<String, String> & key_ref_agg_func_,
         const std::unordered_map<String, String> & agg_func_ref_key_,
-        const TiDB::TiDBCollators & aggregation_collators_,
+        const std::unordered_map<String, TiDB::TiDBCollatorPtr> & aggregation_collators_,
         bool is_final_agg_,
         const AggregateDescriptions & aggregate_descriptions_,
         const ExpressionActionsPtr & expr_after_agg_)
@@ -77,7 +77,7 @@ private:
     Names aggregation_keys;
     std::unordered_map<String, String> key_ref_agg_func;
     std::unordered_map<String, String> agg_func_ref_key;
-    TiDB::TiDBCollators aggregation_collators;
+    std::unordered_map<String, TiDB::TiDBCollatorPtr> aggregation_collators;
     bool is_final_agg;
     AggregateDescriptions aggregate_descriptions;
     ExpressionActionsPtr expr_after_agg;

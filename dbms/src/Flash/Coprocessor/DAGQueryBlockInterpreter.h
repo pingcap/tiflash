@@ -93,7 +93,7 @@ private:
         DAGPipeline & pipeline,
         const ExpressionActionsPtr & expression_actions_ptr,
         const Names & key_names,
-        const TiDB::TiDBCollators & collators,
+        const std::unordered_map<String, TiDB::TiDBCollatorPtr> & collators,
         AggregateDescriptions & aggregate_descriptions,
         const std::unordered_map<String, String> & key_ref_agg_func,
         const std::unordered_map<String, String> & agg_func_ref_key,

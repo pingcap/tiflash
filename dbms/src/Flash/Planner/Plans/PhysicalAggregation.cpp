@@ -64,7 +64,7 @@ PhysicalPlanNodePtr PhysicalAggregation::build(
     KeyRefAggFuncMap key_ref_agg_func;
     AggFuncRefKeyMap agg_func_ref_key;
 
-    TiDB::TiDBCollators collators;
+    std::unordered_map<String, TiDB::TiDBCollatorPtr> collators;
     {
         std::unordered_set<String> agg_key_set;
         const bool collation_sensitive = AggregationInterpreterHelper::isGroupByCollationSensitive(context);

@@ -123,7 +123,7 @@ void AggregatedDataVariants::init(Type variants_type)
         if (aggregator && !aggregator->params.key_ref_agg_func.empty())                      \
             RUNTIME_CHECK_MSG(                                                               \
                 AggregationMethodName(NAME)::canUseKeyRefAggFuncOptimization(),              \
-                "cannot use key_ref_agg_func opt for method {}",                             \
+                "cannot use key_ref_agg_func optimization for method {}",                    \
                 getMethodName());                                                            \
         break;                                                                               \
     }

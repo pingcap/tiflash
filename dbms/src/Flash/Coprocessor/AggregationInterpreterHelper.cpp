@@ -84,7 +84,7 @@ std::unique_ptr<Aggregator::Params> buildParams(
     const Names & key_names,
     const KeyRefAggFuncMap & key_ref_agg_func,
     const AggFuncRefKeyMap & agg_func_ref_key,
-    const TiDB::TiDBCollators & collators,
+    const std::unordered_map<String, TiDB::TiDBCollatorPtr> & collators,
     const AggregateDescriptions & aggregate_descriptions,
     bool is_final_agg,
     const SpillConfig & spill_config)
@@ -103,19 +103,20 @@ std::unique_ptr<Aggregator::Params> buildParams(
     // so c1/c3 will reference to agg func first_row(c1)/first_row(c2) directly.
     assert(key_names.size() == collators.size());
     TiDB::TiDBCollators reordered_collators(collators.size(), nullptr);
-    for (size_t i = 0; i < key_names.size(); ++i)
+    for (const auto & key_name : key_names)
     {
-        const auto & name = key_names[i];
-        auto col_idx = before_agg_header.getPositionByName(name);
-        if (key_ref_agg_func.find(name) == key_ref_agg_func.end())
+        auto col_idx = before_agg_header.getPositionByName(key_name);
+        const auto & collator_iter = collators.find(key_name);
+        RUNTIME_CHECK(collator_iter != collators.end());
+        if (key_ref_agg_func.find(key_name) == key_ref_agg_func.end())
         {
             keys[normal_key_idx] = col_idx;
-            reordered_collators[normal_key_idx++] = collators[i];
+            reordered_collators[normal_key_idx++] = collator_iter->second;
         }
         else
         {
             keys[agg_func_as_key_idx] = col_idx;
-            reordered_collators[agg_func_as_key_idx++] = collators[i];
+            reordered_collators[agg_func_as_key_idx++] = collator_iter->second;
         }
     }
     assert(normal_key_idx == key_names.size() - key_ref_agg_func.size());

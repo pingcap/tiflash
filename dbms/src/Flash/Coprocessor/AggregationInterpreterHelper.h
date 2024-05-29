@@ -41,7 +41,7 @@ std::unique_ptr<Aggregator::Params> buildParams(
     const Names & key_names,
     const KeyRefAggFuncMap & key_ref_agg_func,
     const AggFuncRefKeyMap & agg_func_ref_key,
-    const TiDB::TiDBCollators & collators,
+    const std::unordered_map<String, TiDB::TiDBCollatorPtr> & collators,
     const AggregateDescriptions & aggregate_descriptions,
     bool is_final_agg,
     const SpillConfig & spill_config);

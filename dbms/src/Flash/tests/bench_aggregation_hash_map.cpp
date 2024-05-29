@@ -125,13 +125,18 @@ public:
             auto data_type_int = std::make_shared<DataTypeInt32>();
             auto data_type_decimal = std::make_shared<DataTypeDecimal128>();
             ::tipb::Aggregation agg_tipb;
-            ::google::protobuf::util::JsonStringToMessage(agg_tipb_json, &agg_tipb);
+            auto ret_status = ::google::protobuf::util::JsonStringToMessage(agg_tipb_json, &agg_tipb);
+            if (!ret_status.ok())
+            {
+                LOG_ERROR(log, "JsonStringToMessage failed: {}", ret_status.ToString());
+                RUNTIME_ASSERT(false);
+            }
             DAGExpressionAnalyzer analyzer(src_header, *context);
             ExpressionActionsPtr before_agg_actions = PhysicalPlanHelper::newActions(src_header);
             AggregateDescriptions aggregate_desc;
             NamesAndTypes aggregated_columns;
             Names aggregation_keys;
-            TiDB::TiDBCollators collators;
+            std::unordered_map<String, TiDB::TiDBCollatorPtr> collators;
             std::unordered_set<String> agg_key_set;
             std::unordered_map<String, String> key_ref_agg_func;
             std::unordered_map<String, String> agg_func_ref_key;
@@ -287,7 +292,7 @@ try
         aggregator = std::make_shared<Aggregator>(
             *params,
             "BenchProbeAggHashMap",
-            /*concurrency*/ 1,
+            /*concurrency=*/1,
             register_operator_spill_context);
         data_variants->aggregator = aggregator.get();
 
@@ -302,9 +307,10 @@ try
             }
             build_side_watch.stop();
         }
+        LOG_DEBUG(log, "build_side_watch: {}, hashmap size: {}", build_side_watch.elapsed(), data_variants->size());
 
         std::vector<AggregatedDataVariantsPtr> variants{data_variants};
-        auto merging_buckets = aggregator->mergeAndConvertToBlocks(variants, true, 1);
+        auto merging_buckets = aggregator->mergeAndConvertToBlocks(variants, /*final=*/true, /*max_thread=*/1);
         std::vector<Block> res_block;
 
         Stopwatch probe_side_watch;
