@@ -16,8 +16,8 @@
 #include <Flash/Coprocessor/AggregationInterpreterHelper.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Executor/PipelineExecutorContext.h>
-#include <Flash/Pipeline/Schedule/Events/AggregateFinalConvertEvent.h>
-#include <Flash/Pipeline/Schedule/Events/AggregateFinalSpillEvent.h>
+#include <Flash/Pipeline/Schedule/Events/Impls/AggregateFinalConvertEvent.h>
+#include <Flash/Pipeline/Schedule/Events/Impls/AggregateFinalSpillEvent.h>
 #include <Flash/Planner/Plans/PhysicalAggregationBuild.h>
 #include <Interpreters/Context.h>
 #include <Operators/AggregateBuildSinkOp.h>
@@ -60,13 +60,15 @@ void PhysicalAggregationBuild::buildPipelineExecGroupImpl(
         concurrency,
         1,
         aggregation_keys,
+        key_ref_agg_func,
+        agg_func_ref_key,
         aggregation_collators,
         aggregate_descriptions,
         is_final_agg,
         spill_config);
     assert(aggregate_context);
     aggregate_context->initBuild(
-        params,
+        *params,
         concurrency,
         /*hook=*/[&]() { return exec_context.isCancelled(); },
         exec_context.getRegisterOperatorSpillContext());
