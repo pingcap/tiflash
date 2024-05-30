@@ -76,22 +76,51 @@ bool isGroupByCollationSensitive(const Context & context)
     return context.getSettingsRef().group_by_collation_sensitive || context.getDAGContext()->isMPPTask();
 }
 
-Aggregator::Params buildParams(
+std::unique_ptr<Aggregator::Params> buildParams(
     const Context & context,
     const Block & before_agg_header,
     size_t before_agg_streams_size,
     size_t agg_streams_size,
     const Names & key_names,
-    const TiDB::TiDBCollators & collators,
+    const KeyRefAggFuncMap & key_ref_agg_func,
+    const AggFuncRefKeyMap & agg_func_ref_key,
+    const std::unordered_map<String, TiDB::TiDBCollatorPtr> & collators,
     const AggregateDescriptions & aggregate_descriptions,
     bool is_final_agg,
     const SpillConfig & spill_config)
 {
-    ColumnNumbers keys;
-    for (const auto & name : key_names)
+    ColumnNumbers keys(key_names.size(), 0);
+    size_t normal_key_idx = 0;
+    size_t agg_func_as_key_idx = key_names.size() - key_ref_agg_func.size();
+    // For columns with collation, key_ref_agg_func optimization will be enabled.
+    // Need to reorder these columns after normal columns.
+    // For example:
+    // select sum(c0), first_row(c1), first_row(c3) group by c1, c2, c3; (c1 and c3 has collation while c2 doesn't)
+    // Before: keys: c1 | c2 | c3
+    // After:  keys: c2 | c1 | c3
+    // When converting HashMap, only copy c2 from HashMap to column.
+    // c1/c3 will be skipped copying and a CopyColumn action will be added after agg,
+    // so c1/c3 will reference to agg func first_row(c1)/first_row(c2) directly.
+    assert(key_names.size() == collators.size());
+    TiDB::TiDBCollators reordered_collators(collators.size(), nullptr);
+    for (const auto & key_name : key_names)
     {
-        keys.push_back(before_agg_header.getPositionByName(name));
+        auto col_idx = before_agg_header.getPositionByName(key_name);
+        const auto & collator_iter = collators.find(key_name);
+        RUNTIME_CHECK(collator_iter != collators.end());
+        if (key_ref_agg_func.find(key_name) == key_ref_agg_func.end())
+        {
+            keys[normal_key_idx] = col_idx;
+            reordered_collators[normal_key_idx++] = collator_iter->second;
+        }
+        else
+        {
+            keys[agg_func_as_key_idx] = col_idx;
+            reordered_collators[agg_func_as_key_idx++] = collator_iter->second;
+        }
     }
+    assert(normal_key_idx == key_names.size() - key_ref_agg_func.size());
+    assert(agg_func_as_key_idx == key_names.size());
 
     const Settings & settings = context.getSettingsRef();
 
@@ -99,11 +128,15 @@ Aggregator::Params buildParams(
     auto total_two_level_threshold_bytes
         = allow_to_use_two_level_group_by ? settings.group_by_two_level_threshold_bytes : SettingUInt64(0);
 
-    bool has_collator = std::any_of(begin(collators), end(collators), [](const auto & p) { return p != nullptr; });
+    bool has_collator = std::any_of(begin(reordered_collators), end(reordered_collators), [](const auto & p) {
+        return p != nullptr;
+    });
 
-    return Aggregator::Params(
+    return std::make_unique<Aggregator::Params>(
         before_agg_header,
         keys,
+        key_ref_agg_func,
+        agg_func_ref_key,
         aggregate_descriptions,
         /// do not use the average value for key count threshold, because for a random distributed data, the key count
         /// in every threads should almost be the same
@@ -113,7 +146,7 @@ Aggregator::Params buildParams(
         !is_final_agg,
         spill_config,
         context.getSettingsRef().max_block_size,
-        has_collator ? collators : TiDB::dummy_collators);
+        has_collator ? reordered_collators : TiDB::dummy_collators);
 }
 
 void fillArgColumnNumbers(AggregateDescriptions & aggregate_descriptions, const Block & before_agg_header)

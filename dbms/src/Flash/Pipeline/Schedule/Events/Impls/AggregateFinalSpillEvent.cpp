@@ -12,33 +12,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Flash/Pipeline/Schedule/Tasks/AggregateFinalSpillTask.h>
-#include <Operators/AggregateContext.h>
+#include <Flash/Pipeline/Schedule/Events/Impls/AggregateFinalSpillEvent.h>
+#include <Flash/Pipeline/Schedule/Tasks/Impls/AggregateFinalSpillTask.h>
 
 namespace DB
 {
-AggregateFinalSpillTask::AggregateFinalSpillTask(
-    PipelineExecutorContext & exec_context_,
-    const String & req_id,
-    const EventPtr & event_,
-    AggregateContextPtr agg_context_,
-    size_t index_)
-    : OutputIOEventTask(exec_context_, req_id, event_)
-    , agg_context(std::move(agg_context_))
-    , index(index_)
+void AggregateFinalSpillEvent::scheduleImpl()
 {
     assert(agg_context);
+    for (auto index : indexes)
+        addTask(std::make_unique<AggregateFinalSpillTask>(
+            exec_context,
+            log->identifier(),
+            shared_from_this(),
+            agg_context,
+            index));
 }
 
-void AggregateFinalSpillTask::doFinalizeImpl()
+void AggregateFinalSpillEvent::finishImpl()
 {
+    auto dur = getFinishDuration();
+    for (const auto & profile_info : profile_infos)
+        profile_info->execution_time += dur;
     agg_context.reset();
 }
-
-ExecTaskStatus AggregateFinalSpillTask::executeIOImpl()
-{
-    agg_context->spillData(index);
-    return ExecTaskStatus::FINISHED;
-}
-
 } // namespace DB

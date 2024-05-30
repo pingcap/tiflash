@@ -48,6 +48,13 @@ if(NOT EXTERNAL_TIFLASH_PROXY_FOUND)
 endif()
 
 set(TIFLASH_PROXY_FOUND TRUE)
+# SERVERLESS_PROXY=0 if using normal proxy.
+# SERVERLESS_PROXY=1 if using serverless proxy.
+if (EXISTS "${TiFlash_SOURCE_DIR}/contrib/tiflash-proxy/proxy_components/proxy_ffi/src/cloud_helper.rs")
+    add_definitions(-DSERVERLESS_PROXY=1)
+else()
+    add_definitions(-DSERVERLESS_PROXY=0)
+endif()
 
 message(STATUS "Using tiflash proxy: ${USE_INTERNAL_TIFLASH_PROXY} : ${TIFLASH_PROXY_INCLUDE_DIR}, ${TIFLASH_PROXY_LIBRARY}")
 

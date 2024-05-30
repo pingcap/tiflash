@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <Flash/Pipeline/Schedule/TaskScheduler.h>
-#include <Flash/Pipeline/Schedule/Tasks/RFWaitTask.h>
+#include <Flash/Pipeline/Schedule/Tasks/Impls/RFWaitTask.h>
 #include <Operators/UnorderedSourceOp.h>
 
 namespace DB
