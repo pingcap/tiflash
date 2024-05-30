@@ -149,7 +149,7 @@ void JointThreadInfoJeallocMap::recordThreadAllocInfoForProxy()
         {
             auto agg_thread_name = getThreadNameAggPrefix(k, '-');
             // Some thread may have shorter lifetime, we can't use this timed task here to upgrade.
-            if (PROXY_RECORD_WHITE_LIST_THREAD_PREFIX.contains(agg_thread_name) && v.has_ptr())
+            if (PROXY_RECORD_WHITE_LIST_THREAD_PREFIX.contains(agg_thread_name) && v.hasPtr())
             {
                 agg_allocate[agg_thread_name] += v.allocated();
                 agg_deallocate[agg_thread_name] += v.deallocated();
@@ -157,7 +157,6 @@ void JointThreadInfoJeallocMap::recordThreadAllocInfoForProxy()
         }
     }
 
-    // TODO: maybe we should move the following code to `recordThreadAllocInfo`
     auto & tiflash_metrics = TiFlashMetrics::instance();
     for (const auto & [k, v] : agg_allocate)
     {
@@ -236,27 +235,30 @@ void JointThreadInfoJeallocMap::reportThreadAllocInfoForStorage(
 
 void JointThreadInfoJeallocMap::recordThreadAllocInfoForStorage()
 {
-    std::shared_lock l(memory_allocation_mut);
     std::unordered_map<std::string, uint64_t> agg_allocate;
     std::unordered_map<std::string, uint64_t> agg_deallocate;
-    for (const auto & [k, v] : storage_map)
+
     {
-        auto agg_thread_name = getThreadNameAggPrefix(k, v.aggregate_delimer);
-        // Some thread may have shorter lifetime, we can't use this timed task here to upgrade.
-        if (v.has_ptr())
+        std::shared_lock l(memory_allocation_mut);
+        for (const auto & [k, v] : storage_map)
         {
-            agg_allocate[agg_thread_name] += v.allocated();
-            agg_deallocate[agg_thread_name] += v.deallocated();
+            auto agg_thread_name = getThreadNameAggPrefix(k, v.aggregate_delimer);
+            // Some thread may have shorter lifetime, we can't use this timed task here to upgrade.
+            if (v.hasPtr())
+            {
+                agg_allocate[agg_thread_name] += v.allocated();
+                agg_deallocate[agg_thread_name] += v.deallocated();
+            }
         }
     }
+
+    auto & tiflash_metrics = TiFlashMetrics::instance();
     for (const auto & [k, v] : agg_allocate)
     {
-        auto & tiflash_metrics = TiFlashMetrics::instance();
         tiflash_metrics.setStorageThreadMemory(TiFlashMetrics::MemoryAllocType::Alloc, k, v);
     }
     for (const auto & [k, v] : agg_deallocate)
     {
-        auto & tiflash_metrics = TiFlashMetrics::instance();
         tiflash_metrics.setStorageThreadMemory(TiFlashMetrics::MemoryAllocType::Dealloc, k, v);
     }
 }

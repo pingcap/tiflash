@@ -111,7 +111,7 @@ UInt64 StableValueSpace::serializeMetaToBuf(WriteBuffer & buf) const
     }
     else
     {
-        throw Exception("Unexpected version: {}", STORAGE_FORMAT_CURRENT.stable);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Unexpected version: {}", STORAGE_FORMAT_CURRENT.stable);
     }
     return buf.count();
 }
@@ -157,7 +157,7 @@ dtpb::StableLayerMeta derializeMetaFromBuf(ReadBuffer & buf)
     else if (version == StableFormat::V2)
         return derializeMetaV2FromBuf(buf);
     else
-        throw Exception("Unexpected version: {}", version);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Unexpected version: {}", version);
 }
 } // namespace
 

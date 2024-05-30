@@ -12,30 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#pragma once
-
-#include <Flash/Pipeline/Schedule/Tasks/IOEventTask.h>
+#include <Flash/Pipeline/Schedule/Events/Impls/FineGrainedPipelineEvent.h>
+#include <Flash/Pipeline/Schedule/Tasks/Impls/PipelineTask.h>
 
 namespace DB
 {
-class AggregateContext;
-using AggregateContextPtr = std::shared_ptr<AggregateContext>;
-
-class AggregateFinalConvertTask : public EventTask
+void FineGrainedPipelineEvent::scheduleImpl()
 {
-public:
-    AggregateFinalConvertTask(
-        PipelineExecutorContext & exec_context_,
-        const String & req_id,
-        const EventPtr & event_,
-        AggregateContextPtr agg_context_,
-        size_t index_);
-
-protected:
-    ExecTaskStatus executeImpl() override;
-
-private:
-    AggregateContextPtr agg_context;
-    size_t index;
-};
+    addTask(
+        std::make_unique<PipelineTask>(exec_context, log->identifier(), shared_from_this(), std::move(pipeline_exec)));
+}
 } // namespace DB
