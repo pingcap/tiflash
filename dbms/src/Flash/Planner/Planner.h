@@ -15,7 +15,7 @@
 #pragma once
 
 #include <Common/Logger.h>
-#include <DataStreams/BlockIO.h>
+#include <DataStreams/IBlockInputStream.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 
 namespace DB
@@ -30,7 +30,7 @@ public:
 
     ~Planner() = default;
 
-    BlockIO execute();
+    BlockInputStreamPtr execute();
 
 private:
     DAGContext & dagContext() const;

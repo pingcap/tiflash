@@ -27,14 +27,12 @@ Planner::Planner(Context & context_)
     , log(Logger::get(dagContext().log ? dagContext().log->identifier() : ""))
 {}
 
-BlockIO Planner::execute()
+BlockInputStreamPtr Planner::execute()
 {
     DAGPipeline pipeline;
     executeImpl(pipeline);
     executeCreatingSets(pipeline, context, max_streams, log);
-    BlockIO res;
-    res.in = pipeline.firstStream();
-    return res;
+    return pipeline.firstStream();
 }
 
 DAGContext & Planner::dagContext() const
