@@ -16,7 +16,7 @@
 #include <Flash/Executor/PipelineExecutorContext.h>
 #include <Flash/Pipeline/Schedule/Events/Event.h>
 #include <Flash/Pipeline/Schedule/TaskScheduler.h>
-#include <Flash/Pipeline/Schedule/Tasks/EventTask.h>
+#include <Flash/Pipeline/Schedule/Tasks/Impls/EventTask.h>
 #include <Flash/ResourceControl/LocalAdmissionController.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <gtest/gtest.h>

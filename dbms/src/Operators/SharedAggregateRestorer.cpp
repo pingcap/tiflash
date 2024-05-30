@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <Flash/Executor/PipelineExecutorContext.h>
-#include <Flash/Pipeline/Schedule/Events/LoadBucketEvent.h>
+#include <Flash/Pipeline/Schedule/Events/Impls/LoadBucketEvent.h>
 #include <Interpreters/Aggregator.h>
 #include <Operators/SharedAggregateRestorer.h>
 

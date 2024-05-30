@@ -15,22 +15,21 @@
 #pragma once
 
 #include <Flash/Pipeline/Exec/PipelineExec.h>
-#include <Flash/Pipeline/Schedule/Tasks/EventTask.h>
-#include <Flash/Pipeline/Schedule/Tasks/PipelineTaskBase.h>
+#include <Flash/Pipeline/Schedule/Tasks/Impls/PipelineTaskBase.h>
+#include <Flash/Pipeline/Schedule/Tasks/Task.h>
 
 namespace DB
 {
-class PipelineTask
-    : public EventTask
+class SimplePipelineTask
+    : public Task
     , public PipelineTaskBase
 {
 public:
-    PipelineTask(
+    SimplePipelineTask(
         PipelineExecutorContext & exec_context_,
         const String & req_id,
-        const EventPtr & event_,
         PipelineExecPtr && pipeline_exec_)
-        : EventTask(exec_context_, req_id, event_, ExecTaskStatus::RUNNING)
+        : Task(exec_context_, req_id, ExecTaskStatus::RUNNING)
         , PipelineTaskBase(std::move(pipeline_exec_))
     {}
 
@@ -43,9 +42,9 @@ protected:
 
     ExecTaskStatus notifyImpl() override { return runNotify(); }
 
-    void doFinalizeImpl() override
+    void finalizeImpl() override
     {
-        runFinalize(profile_info.getCPUPendingTimeNs() + profile_info.getIOPendingTimeNs(), getScheduleDuration());
+        runFinalize(profile_info.getCPUPendingTimeNs() + profile_info.getIOPendingTimeNs(), 0);
     }
 };
 } // namespace DB

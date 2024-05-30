@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Flash/Pipeline/Schedule/Tasks/StreamRestoreTask.h>
+#include <Flash/Pipeline/Schedule/Tasks/Impls/StreamRestoreTask.h>
 #include <Operators/SharedQueue.h>
 
 #include <magic_enum.hpp>

@@ -12,24 +12,30 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Flash/Pipeline/Schedule/Events/LoadBucketEvent.h>
-#include <Flash/Pipeline/Schedule/Tasks/LoadBucketTask.h>
-#include <Operators/SharedAggregateRestorer.h>
+#pragma once
+
+#include <Flash/Pipeline/Schedule/Tasks/Impls/IOEventTask.h>
 
 namespace DB
 {
-void LoadBucketEvent::scheduleImpl()
-{
-    assert(loader);
-    auto load_inputs = loader->getNeedLoadInputs();
-    for (const auto & input : load_inputs)
-        addTask(std::make_unique<LoadBucketTask>(exec_context, log->identifier(), shared_from_this(), *input));
-}
+class SpilledBucketInput;
 
-void LoadBucketEvent::finishImpl()
+class LoadBucketTask : public InputIOEventTask
 {
-    assert(loader);
-    loader->storeBucketData();
-    loader.reset();
-}
+public:
+    LoadBucketTask(
+        PipelineExecutorContext & exec_context_,
+        const String & req_id,
+        const EventPtr & event_,
+        SpilledBucketInput & input_)
+        : IOEventTask(exec_context_, req_id, event_)
+        , input(input_)
+    {}
+
+private:
+    ExecTaskStatus executeIOImpl() override;
+
+private:
+    SpilledBucketInput & input;
+};
 } // namespace DB

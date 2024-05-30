@@ -36,25 +36,15 @@ struct AdderMapEntry<ASTTableJoin::Strictness::Any, Mapped>
 {
     static size_t add(
         const Mapped & mapped,
-        size_t key_num,
-        size_t num_columns_left,
-        MutableColumns & columns_left,
         const ColumnNumbers & column_indices_right,
         MutableColumns & columns_right,
         const void *&,
         size_t,
         const size_t)
     {
-        for (size_t j = 0; j < num_columns_left; ++j)
-            /// should fill the key column with key columns from right block
-            /// but we don't care about the key column now so just insert a default value is ok.
-            /// refer to https://github.com/pingcap/tiflash/blob/v6.5.0/dbms/src/Flash/Coprocessor/DAGExpressionAnalyzer.cpp#L953
-            /// for detailed explanation
-            columns_left[j]->insertDefault();
-
         for (size_t j = 0; j < column_indices_right.size(); ++j)
             columns_right[j]->insertFrom(
-                *mapped.block->getByPosition(key_num + column_indices_right[j]).column.get(),
+                *mapped.block->getByPosition(column_indices_right[j]).column.get(),
                 mapped.row_num);
         return 1;
     }
@@ -65,9 +55,6 @@ struct AdderMapEntry<ASTTableJoin::Strictness::All, Mapped>
 {
     static size_t add(
         const Mapped & mapped,
-        size_t key_num,
-        size_t num_columns_left,
-        MutableColumns & columns_left,
         const ColumnNumbers & column_indices_right,
         MutableColumns & columns_right,
         const void *& next_element_in_row_list,
@@ -82,7 +69,7 @@ struct AdderMapEntry<ASTTableJoin::Strictness::All, Mapped>
             /// handle left columns later to utilize insertManyDefaults
             for (size_t j = 0; j < column_indices_right.size(); ++j)
                 columns_right[j]->insertFrom(
-                    *current->block->getByPosition(key_num + column_indices_right[j]).column.get(),
+                    *current->block->getByPosition(column_indices_right[j]).column.get(),
                     current->row_num);
             ++rows_added;
         };
@@ -106,12 +93,6 @@ struct AdderMapEntry<ASTTableJoin::Strictness::All, Mapped>
         {
             add_one_row();
         }
-        for (size_t j = 0; j < num_columns_left; ++j)
-            /// should fill the key column with key columns from right block
-            /// but we don't care about the key column now so just insert a default value is ok.
-            /// refer to https://github.com/pingcap/tiflash/blob/v6.5.0/dbms/src/Flash/Coprocessor/DAGExpressionAnalyzer.cpp#L953
-            /// for detailed explanation
-            columns_left[j]->insertManyDefaults(rows_added);
 
         next_element_in_row_list = current;
         return rows_added;
@@ -123,9 +104,6 @@ struct AdderRowFlaggedMapEntry
 {
     static size_t add(
         const Mapped & mapped,
-        size_t key_num,
-        size_t num_columns_left,
-        MutableColumns & columns_left,
         const ColumnNumbers & column_indices_right,
         MutableColumns & columns_right,
         const void *& next_element_in_row_list,
@@ -145,7 +123,7 @@ struct AdderRowFlaggedMapEntry
                 /// handle left columns later to utilize insertManyDefaults if any
                 for (size_t j = 0; j < column_indices_right.size(); ++j)
                     columns_right[j]->insertFrom(
-                        *current->block->getByPosition(key_num + column_indices_right[j]).column.get(),
+                        *current->block->getByPosition(column_indices_right[j]).column.get(),
                         current->row_num);
                 ++rows_added;
             }
@@ -168,12 +146,6 @@ struct AdderRowFlaggedMapEntry
         {
             check_and_add_one_row();
         }
-        for (size_t j = 0; j < num_columns_left; ++j)
-            /// should fill the key column with key columns from right block
-            /// but we don't care about the key column now so just insert a default value is ok.
-            /// refer to https://github.com/pingcap/tiflash/blob/v6.5.0/dbms/src/Flash/Coprocessor/DAGExpressionAnalyzer.cpp#L953
-            /// for detailed explanation
-            columns_left[j]->insertManyDefaults(rows_added);
 
         next_element_in_row_list = current;
         return rows_added;
@@ -216,11 +188,11 @@ ScanHashMapAfterProbeBlockInputStream::ScanHashMapAfterProbeBlockInputStream(
         }
     }
 
-    column_indices_right.reserve(parent.sample_block_without_keys.columns());
+    column_indices_right.reserve(parent.right_sample_block.columns());
     /// Add columns from the right-side table to the block.
-    for (size_t i = 0; i < parent.sample_block_without_keys.columns(); ++i)
+    for (size_t i = 0; i < parent.right_sample_block.columns(); ++i)
     {
-        const ColumnWithTypeAndName & src_column = parent.sample_block_without_keys.getByPosition(i);
+        const ColumnWithTypeAndName & src_column = parent.right_sample_block.getByPosition(i);
         if (parent.output_column_names_set_after_finalize.contains(src_column.name))
         {
             result_sample_block.insert(src_column.cloneEmpty());
@@ -229,15 +201,7 @@ ScanHashMapAfterProbeBlockInputStream::ScanHashMapAfterProbeBlockInputStream(
     }
 
     for (size_t i = 0; i < column_indices_left.size(); ++i)
-    {
-        const auto & column_with_type_and_name = result_sample_block.getByPosition(i);
-        if (parent.key_names_left.end()
-            == std::find(parent.key_names_left.begin(), parent.key_names_left.end(), column_with_type_and_name.name))
-            /// if it is not the key, then convert to nullable, if it is key, then just keep the original type
-            /// actually we don't care about the key column now refer to https://github.com/pingcap/tiflash/blob/v6.5.0/dbms/src/Flash/Coprocessor/DAGExpressionAnalyzer.cpp#L953
-            /// for detailed explanation
-            convertColumnToNullable(result_sample_block.getByPosition(i));
-    }
+        convertColumnToNullable(result_sample_block.getByPosition(i));
 
     columns_left.resize(column_indices_left.size());
     columns_right.resize(column_indices_right.size());
@@ -415,7 +379,6 @@ void ScanHashMapAfterProbeBlockInputStream::fillColumns(
     MutableColumns & mutable_columns_right,
     IColumn * row_counter_column)
 {
-    size_t key_num = parent.key_names_right.size();
     /// first add rows that is not in the hash table
     RowCountInfo row_count_info(row_counter_column->size(), max_block_size);
     while (!output_joined_rows && not_mapped_row_pos != nullptr)
@@ -424,7 +387,7 @@ void ScanHashMapAfterProbeBlockInputStream::fillColumns(
         /// handle left columns later to utilize insertManyDefaults
         for (size_t j = 0; j < column_indices_right.size(); ++j)
             mutable_columns_right[j]->insertFrom(
-                *not_mapped_row_pos->block->getByPosition(key_num + column_indices_right[j]).column.get(),
+                *not_mapped_row_pos->block->getByPosition(column_indices_right[j]).column.get(),
                 not_mapped_row_pos->row_num);
 
         not_mapped_row_pos = not_mapped_row_pos->next;
@@ -433,15 +396,12 @@ void ScanHashMapAfterProbeBlockInputStream::fillColumns(
     }
     /// Fill left columns with defaults
     for (size_t j = 0; j < column_indices_left.size(); ++j)
-        /// should fill the key column with key columns from right block
-        /// but we don't care about the key column now so just insert a default value is ok.
-        /// refer to https://github.com/pingcap/tiflash/blob/v6.5.0/dbms/src/Flash/Coprocessor/DAGExpressionAnalyzer.cpp#L953
-        /// for detailed explanation
         mutable_columns_left[j]->insertManyDefaults(row_count_info.getAddedRows());
 
     if (row_count_info.reachMaxRows())
         return;
 
+    size_t added_rows = row_count_info.getAddedRows();
     /// then add rows that in hash table, but not joined
     if (!pos_in_hashmap_inited)
     {
@@ -460,9 +420,6 @@ void ScanHashMapAfterProbeBlockInputStream::fillColumns(
         if constexpr (row_flagged)
             row_count_info.inc(AdderRowFlaggedMapEntry<output_joined_rows, typename Map::mapped_type>::add(
                 (*it)->getMapped(),
-                key_num,
-                column_indices_left.size(),
-                mutable_columns_left,
                 column_indices_right,
                 mutable_columns_right,
                 next_element_in_row_list,
@@ -481,9 +438,6 @@ void ScanHashMapAfterProbeBlockInputStream::fillColumns(
 
             row_count_info.inc(AdderMapEntry<STRICTNESS, typename Map::mapped_type>::add(
                 (*it)->getMapped(),
-                key_num,
-                column_indices_left.size(),
-                mutable_columns_left,
                 column_indices_right,
                 mutable_columns_right,
                 next_element_in_row_list,
@@ -505,6 +459,9 @@ void ScanHashMapAfterProbeBlockInputStream::fillColumns(
         if (row_count_info.reachMaxRows())
             break;
     }
+    /// Fill left columns with defaults
+    for (size_t j = 0; j < column_indices_left.size(); ++j)
+        mutable_columns_left[j]->insertManyDefaults(row_count_info.getAddedRows() - added_rows);
 
     if (*it == end)
         advancedToNextPartition();

@@ -132,6 +132,7 @@ ExecutorBinderPtr compileTableScan(
         ci.elems = column_info.elems;
         ci.default_value = column_info.default_value;
         ci.origin_default_value = column_info.origin_default_value;
+        ci.collate = column_info.collate;
         /// use qualified name as the column name to handle multiple table queries, not very
         /// efficient but functionally enough for mock test
         ts_output.emplace_back(std::make_pair(db + "." + table_name + "." + column_info.name, std::move(ci)));
