@@ -1088,6 +1088,7 @@ try
         munmap(buf, 0);
         delete[] a;
     });
+    t3.join();
 }
 CATCH
 
