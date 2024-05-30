@@ -63,7 +63,6 @@ public:
         enablePipeline(enable_pipeline);                                          \
         for (const auto t : type)                                                 \
         {
-
 #define WRAP_FOR_EXCUTION_SUMMARY_TEST_END \
     }                                      \
     }

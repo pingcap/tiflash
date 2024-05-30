@@ -21,9 +21,8 @@
 
 namespace DB
 {
-Planner::Planner(Context & context_, const PlanQuerySource & plan_source_)
+Planner::Planner(Context & context_)
     : context(context_)
-    , plan_source(plan_source_)
     , max_streams(context.getMaxStreams())
     , log(Logger::get(dagContext().log ? dagContext().log->identifier() : ""))
 {}
@@ -47,7 +46,7 @@ void Planner::executeImpl(DAGPipeline & pipeline)
 {
     PhysicalPlan physical_plan{context, log->identifier()};
 
-    physical_plan.build(&plan_source.getDAGRequest());
+    physical_plan.build(dagContext().dag_request());
     physical_plan.outputAndOptimize();
 
     physical_plan.buildBlockInputStream(pipeline, context, max_streams);

@@ -194,8 +194,7 @@ void ExecutorTest::executeExecutor(
         {
             context.context->setSetting("max_block_size", Field(static_cast<UInt64>(block_size)));
             auto res = executeStreams(request, concurrency);
-            ASSERT_TRUE(assert_func(res))
-                << testInfoMsg(request, enable_pipeline, concurrency, block_size);
+            ASSERT_TRUE(assert_func(res)) << testInfoMsg(request, enable_pipeline, concurrency, block_size);
         }
     }
     WRAP_FOR_TEST_END
@@ -374,9 +373,8 @@ void ExecutorTest::testForExecutionSummary(
             << "\n"
             << testInfoMsg(request, enable_pipeline, concurrency, DEFAULT_BLOCK_SIZE);
         auto it = expect.find(summary.executor_id());
-        ASSERT_TRUE(it != expect.end())
-            << fmt::format("unknown executor_id: {}", summary.executor_id()) << "\n"
-            << testInfoMsg(request, enable_pipeline, concurrency, DEFAULT_BLOCK_SIZE);
+        ASSERT_TRUE(it != expect.end()) << fmt::format("unknown executor_id: {}", summary.executor_id()) << "\n"
+                                        << testInfoMsg(request, enable_pipeline, concurrency, DEFAULT_BLOCK_SIZE);
         if (it->second.first != not_check_rows)
             ASSERT_EQ(summary.num_produced_rows(), it->second.first)
                 << fmt::format("executor_id: {}", summary.executor_id()) << "\n"

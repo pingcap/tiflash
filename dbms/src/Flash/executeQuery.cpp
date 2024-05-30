@@ -23,8 +23,7 @@
 #include <Flash/Executor/PipelineExecutor.h>
 #include <Flash/Pipeline/Pipeline.h>
 #include <Flash/Pipeline/Schedule/TaskScheduler.h>
-#include <Flash/Planner/PhysicalPlan.h>
-#include <Flash/Planner/PlanQuerySource.h>
+#include <Flash/Planner/Planner.h>
 #include <Flash/executeQuery.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/ProcessList.h>
@@ -78,7 +77,7 @@ ProcessList::EntryPtr getProcessListEntry(Context & context, DAGContext & dag_co
     }
 }
 
-QueryExecutorPtr doExecuteAsBlockIO(IQuerySource & dag, Context & context, bool internal)
+QueryExecutorPtr executeAsBlockIO(Context & context, bool internal)
 {
     RUNTIME_ASSERT(context.getDAGContext());
     auto & dag_context = *context.getDAGContext();
@@ -96,7 +95,7 @@ QueryExecutorPtr doExecuteAsBlockIO(IQuerySource & dag, Context & context, bool 
     {
         process_list_entry = getProcessListEntry(context, dag_context);
         memory_tracker = (*process_list_entry)->getMemoryTrackerPtr();
-        logQuery(dag.str(context.getSettingsRef().log_queries_cut_to_length), context, logger);
+        logQuery(dag_context.dummy_query_string, context, logger);
     }
 
     if (memory_tracker != nullptr && memory_tracker->getLimit() != 0
@@ -112,8 +111,8 @@ QueryExecutorPtr doExecuteAsBlockIO(IQuerySource & dag, Context & context, bool 
     }
 
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_interpreter_failpoint);
-    auto interpreter = dag.interpreter(context, QueryProcessingStage::Complete);
-    BlockIO res = interpreter->execute();
+    Planner planner{context};
+    BlockIO res = planner.execute();
     /// Hold element of process list till end of query execution.
     res.process_list_entry = process_list_entry;
 
@@ -189,12 +188,6 @@ std::optional<QueryExecutorPtr> executeAsPipeline(Context & context, bool intern
         LOG_INFO(logger, fmt::format("Query pipeline:\n{}", executor->toString()));
     dag_context.switchToPipelineMode();
     return {std::move(executor)};
-}
-
-QueryExecutorPtr executeAsBlockIO(Context & context, bool internal)
-{
-    PlanQuerySource plan(context);
-    return doExecuteAsBlockIO(plan, context, internal);
 }
 } // namespace
 
