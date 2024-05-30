@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <Core/Defines.h>
-#include <IO/Compression/CompressionCodecDeltaFor.h>
+#include <IO/Compression/CompressionCodecDeltaFOR.h>
 #include <benchmark/benchmark.h>
 
 #include <vector>
@@ -27,7 +27,7 @@ static void codecDeltaForOrdinaryBM(benchmark::State & state)
     std::vector<T> v(DEFAULT_MERGE_BLOCK_SIZE);
     for (auto & i : v)
         i = random();
-    CompressionCodecDeltaFor codec(sizeof(T));
+    CompressionCodecDeltaFOR codec(sizeof(T));
     char dest[sizeof(T) * DEFAULT_MERGE_BLOCK_SIZE + 1];
     for (auto _ : state)
     {
@@ -52,7 +52,7 @@ static void codecDeltaForSpecializedUInt64BM(benchmark::State & state)
     std::vector<UInt64> v(DEFAULT_MERGE_BLOCK_SIZE);
     for (auto & i : v)
         i = random();
-    CompressionCodecDeltaFor codec(sizeof(UInt64));
+    CompressionCodecDeltaFOR codec(sizeof(UInt64));
     char dest[sizeof(UInt64) * DEFAULT_MERGE_BLOCK_SIZE + 1];
     for (auto _ : state)
     {
@@ -67,7 +67,7 @@ static void codecDeltaForSpecializedUInt32BM(benchmark::State & state)
     std::vector<UInt32> v(DEFAULT_MERGE_BLOCK_SIZE);
     for (auto & i : v)
         i = random();
-    CompressionCodecDeltaFor codec(sizeof(UInt32));
+    CompressionCodecDeltaFOR codec(sizeof(UInt32));
     char dest[sizeof(UInt32) * DEFAULT_MERGE_BLOCK_SIZE + 1];
     for (auto _ : state)
     {

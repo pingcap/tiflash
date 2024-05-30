@@ -60,13 +60,15 @@ void PhysicalAggregationBuild::buildPipelineExecGroupImpl(
         concurrency,
         1,
         aggregation_keys,
+        key_ref_agg_func,
+        agg_func_ref_key,
         aggregation_collators,
         aggregate_descriptions,
         is_final_agg,
         spill_config);
     assert(aggregate_context);
     aggregate_context->initBuild(
-        params,
+        *params,
         concurrency,
         /*hook=*/[&]() { return exec_context.isCancelled(); },
         exec_context.getRegisterOperatorSpillContext());
