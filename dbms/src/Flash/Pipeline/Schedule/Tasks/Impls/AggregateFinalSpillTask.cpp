@@ -12,14 +12,33 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Flash/Pipeline/Schedule/Tasks/LoadBucketTask.h>
-#include <Operators/SpilledBucketInput.h>
+#include <Flash/Pipeline/Schedule/Tasks/Impls/AggregateFinalSpillTask.h>
+#include <Operators/AggregateContext.h>
 
 namespace DB
 {
-ExecTaskStatus LoadBucketTask::executeIOImpl()
+AggregateFinalSpillTask::AggregateFinalSpillTask(
+    PipelineExecutorContext & exec_context_,
+    const String & req_id,
+    const EventPtr & event_,
+    AggregateContextPtr agg_context_,
+    size_t index_)
+    : OutputIOEventTask(exec_context_, req_id, event_)
+    , agg_context(std::move(agg_context_))
+    , index(index_)
 {
-    input.load();
+    assert(agg_context);
+}
+
+void AggregateFinalSpillTask::doFinalizeImpl()
+{
+    agg_context.reset();
+}
+
+ExecTaskStatus AggregateFinalSpillTask::executeIOImpl()
+{
+    agg_context->spillData(index);
     return ExecTaskStatus::FINISHED;
 }
+
 } // namespace DB

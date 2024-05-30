@@ -12,29 +12,32 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Flash/Pipeline/Schedule/Tasks/AggregateFinalConvertTask.h>
-#include <Operators/AggregateContext.h>
+#pragma once
+
+#include <Flash/Pipeline/Schedule/Tasks/Impls/IOEventTask.h>
 
 namespace DB
 {
-AggregateFinalConvertTask::AggregateFinalConvertTask(
-    PipelineExecutorContext & exec_context_,
-    const String & req_id,
-    const EventPtr & event_,
-    AggregateContextPtr agg_context_,
-    size_t index_)
-    : EventTask(exec_context_, req_id, event_)
-    , agg_context(std::move(agg_context_))
-    , index(index_)
-{
-    assert(agg_context);
-}
+class AggregateContext;
+using AggregateContextPtr = std::shared_ptr<AggregateContext>;
 
-ExecTaskStatus AggregateFinalConvertTask::executeImpl()
+class AggregateFinalSpillTask : public OutputIOEventTask
 {
-    agg_context->convertToTwoLevel(index);
-    agg_context.reset();
-    return ExecTaskStatus::FINISHED;
-}
+public:
+    AggregateFinalSpillTask(
+        PipelineExecutorContext & exec_context_,
+        const String & req_id,
+        const EventPtr & event_,
+        AggregateContextPtr agg_context_,
+        size_t index_);
 
+protected:
+    ExecTaskStatus executeIOImpl() override;
+
+    void doFinalizeImpl() override;
+
+private:
+    AggregateContextPtr agg_context;
+    size_t index;
+};
 } // namespace DB

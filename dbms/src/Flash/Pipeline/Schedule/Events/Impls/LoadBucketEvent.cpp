@@ -12,28 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Flash/Pipeline/Schedule/Events/AggregateFinalSpillEvent.h>
-#include <Flash/Pipeline/Schedule/Tasks/AggregateFinalSpillTask.h>
+#include <Flash/Pipeline/Schedule/Events/Impls/LoadBucketEvent.h>
+#include <Flash/Pipeline/Schedule/Tasks/Impls/LoadBucketTask.h>
+#include <Operators/SharedAggregateRestorer.h>
 
 namespace DB
 {
-void AggregateFinalSpillEvent::scheduleImpl()
+void LoadBucketEvent::scheduleImpl()
 {
-    assert(agg_context);
-    for (auto index : indexes)
-        addTask(std::make_unique<AggregateFinalSpillTask>(
-            exec_context,
-            log->identifier(),
-            shared_from_this(),
-            agg_context,
-            index));
+    assert(loader);
+    auto load_inputs = loader->getNeedLoadInputs();
+    for (const auto & input : load_inputs)
+        addTask(std::make_unique<LoadBucketTask>(exec_context, log->identifier(), shared_from_this(), *input));
 }
 
-void AggregateFinalSpillEvent::finishImpl()
+void LoadBucketEvent::finishImpl()
 {
-    auto dur = getFinishDuration();
-    for (const auto & profile_info : profile_infos)
-        profile_info->execution_time += dur;
-    agg_context.reset();
+    assert(loader);
+    loader->storeBucketData();
+    loader.reset();
 }
 } // namespace DB

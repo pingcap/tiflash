@@ -12,30 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#pragma once
-
-#include <Flash/Pipeline/Schedule/Tasks/IOEventTask.h>
+#include <Flash/Pipeline/Schedule/Tasks/Impls/LoadBucketTask.h>
+#include <Operators/SpilledBucketInput.h>
 
 namespace DB
 {
-class SpilledBucketInput;
-
-class LoadBucketTask : public InputIOEventTask
+ExecTaskStatus LoadBucketTask::executeIOImpl()
 {
-public:
-    LoadBucketTask(
-        PipelineExecutorContext & exec_context_,
-        const String & req_id,
-        const EventPtr & event_,
-        SpilledBucketInput & input_)
-        : IOEventTask(exec_context_, req_id, event_)
-        , input(input_)
-    {}
-
-private:
-    ExecTaskStatus executeIOImpl() override;
-
-private:
-    SpilledBucketInput & input;
-};
+    input.load();
+    return ExecTaskStatus::FINISHED;
+}
 } // namespace DB

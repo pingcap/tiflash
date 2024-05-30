@@ -16,8 +16,8 @@
 #include <Flash/Coprocessor/AggregationInterpreterHelper.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Executor/PipelineExecutorContext.h>
-#include <Flash/Pipeline/Schedule/Events/AggregateFinalConvertEvent.h>
-#include <Flash/Pipeline/Schedule/Events/AggregateFinalSpillEvent.h>
+#include <Flash/Pipeline/Schedule/Events/Impls/AggregateFinalConvertEvent.h>
+#include <Flash/Pipeline/Schedule/Events/Impls/AggregateFinalSpillEvent.h>
 #include <Flash/Planner/Plans/PhysicalAggregationBuild.h>
 #include <Interpreters/Context.h>
 #include <Operators/AggregateBuildSinkOp.h>
