@@ -73,9 +73,9 @@ public:
 
     std::vector<NameAndTypePair> appendOrderBy(ExpressionActionsChain & chain, const tipb::TopN & topN);
 
-    /// <aggregation_keys, collators, aggregate_descriptions, before_agg>
+    /// <aggregation_keys, collators, aggregate_descriptions, before_agg, key_ref_agg_func, agg_func_ref_key>
     /// May change the source columns.
-    std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions, ExpressionActionsPtr> appendAggregation(
+    std::tuple<Names, std::unordered_map<String, TiDB::TiDBCollatorPtr>, AggregateDescriptions, ExpressionActionsPtr, KeyRefAggFuncMap, AggFuncRefKeyMap> appendAggregation(
         ExpressionActionsChain & chain,
         const tipb::Aggregation & agg,
         bool group_by_collation_sensitive);
@@ -147,8 +147,6 @@ public:
         const JoinKeyTypes & join_key_types,
         Names & key_names,
         Names & original_key_names,
-        bool left,
-        bool is_right_out_join,
         const google::protobuf::RepeatedPtrField<tipb::Expr> & filters,
         String & filter_column_name);
 
@@ -188,8 +186,26 @@ public:
         NamesAndTypes & aggregated_columns,
         Names & aggregation_keys,
         std::unordered_set<String> & agg_key_set,
+        KeyRefAggFuncMap & key_ref_agg_func,
         bool group_by_collation_sensitive,
-        TiDB::TiDBCollators & collators);
+        std::unordered_map<String, TiDB::TiDBCollatorPtr> & collators);
+
+    // Try eliminate first_row/any agg func when there is no collator for this column.
+    // The agg func value will reference to group by key, which is indicated by agg_func_ref_key.
+    // This function should be called after buildAggFuncs() and buildAggGroupBy().
+    static void tryEliminateFirstRow(
+        const Names & aggregation_keys,
+        const std::unordered_map<String, TiDB::TiDBCollatorPtr> & collators,
+        AggFuncRefKeyMap & agg_func_ref_key,
+        AggregateDescriptions & aggregate_descriptions);
+
+    // There may be first row optimization for HashAgg,
+    // which will not copy all required columns(specificed by tipb) from HashMap.
+    // So need to append copy column action.
+    ExpressionActionsPtr appendCopyColumnAfterAgg(
+        const NamesAndTypes & aggregated_columns,
+        const KeyRefAggFuncMap & key_ref_agg_func,
+        const AggFuncRefKeyMap & agg_func_ref_key);
 
     void appendCastAfterAgg(const ExpressionActionsPtr & actions, const tipb::Aggregation & agg);
 
@@ -282,9 +298,7 @@ private:
     std::tuple<bool, Names, Names> buildJoinKey(
         const ExpressionActionsPtr & actions,
         const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
-        const JoinKeyTypes & join_key_types,
-        bool left,
-        bool is_right_out_join);
+        const JoinKeyTypes & join_key_types);
 
     String applyFunction(
         const String & func_name,
