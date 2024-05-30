@@ -179,6 +179,13 @@ std::optional<QueryExecutorPtr> executeAsPipeline(Context & context, bool intern
 
 QueryExecutorPtr queryExecute(Context & context, bool internal)
 {
+    if (!context.getSettingsRef().enable_planner)
+    {
+        LOG_INFO(
+            context.getDAGContext()->log,
+            "The setting `profiles.default.enable_planner` has been removed and is no longer effective. "
+            "The planner interpreter will be enabled by default.");
+    }
     if (context.getSettingsRef().enable_resource_control)
     {
         if (auto res = executeAsPipeline(context, internal); likely(res))
