@@ -93,23 +93,7 @@ public:
 
     ExpressionActionsChain::Step & initAndGetLastStep(ExpressionActionsChain & chain) const;
 
-    // Generate a project action for non-root DAGQueryBlock,
-    // to keep the schema of Block and tidb-schema the same, and
-    // guarantee that left/right block of join don't have duplicated column names.
-    NamesWithAliases appendFinalProjectForNonRootQueryBlock(
-        ExpressionActionsChain & chain,
-        const String & column_prefix) const;
-
     NamesWithAliases genNonRootFinalProjectAliases(const String & column_prefix) const;
-
-    // Generate a project action for root DAGQueryBlock,
-    // to keep the schema of Block and tidb-schema the same.
-    NamesWithAliases appendFinalProjectForRootQueryBlock(
-        ExpressionActionsChain & chain,
-        const std::vector<tipb::FieldType> & schema,
-        const std::vector<Int32> & output_offsets,
-        const String & column_prefix,
-        bool keep_session_timezone_info);
 
     NamesWithAliases buildFinalProjection(
         const ExpressionActionsPtr & actions,

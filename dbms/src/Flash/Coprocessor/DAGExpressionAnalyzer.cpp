@@ -1375,7 +1375,7 @@ bool DAGExpressionAnalyzer::appendJoinKeyAndJoinFilters(
     /// same constant column for `1`
     /// Note that the origin left streams and right streams
     /// will never have duplicated columns because in
-    /// DAGQueryBlockInterpreter we add qb_column_prefix in
+    /// PhysicalPlanNode we add column_prefix in
     /// final project step, so if the join condition is not
     /// literal expression, the key names should never be
     /// duplicated. In the above example, the final key names should be
@@ -1591,18 +1591,6 @@ NamesWithAliases DAGExpressionAnalyzer::genNonRootFinalProjectAliases(const Stri
     return final_project_aliases;
 }
 
-NamesWithAliases DAGExpressionAnalyzer::appendFinalProjectForNonRootQueryBlock(
-    ExpressionActionsChain & chain,
-    const String & column_prefix) const
-{
-    NamesWithAliases final_project = genNonRootFinalProjectAliases(column_prefix);
-
-    auto & step = initAndGetLastStep(chain);
-    for (const auto & name : final_project)
-        step.required_output.push_back(name.first);
-    return final_project;
-}
-
 NamesWithAliases DAGExpressionAnalyzer::genRootFinalProjectAliases(
     const String & column_prefix,
     const std::vector<Int32> & output_offsets) const
@@ -1695,25 +1683,6 @@ std::pair<bool, BoolVec> DAGExpressionAnalyzer::isCastRequiredForRootFinalProjec
         }
     }
     return std::make_pair(need_append_type_cast, std::move(need_append_type_cast_vec));
-}
-
-NamesWithAliases DAGExpressionAnalyzer::appendFinalProjectForRootQueryBlock(
-    ExpressionActionsChain & chain,
-    const std::vector<tipb::FieldType> & schema,
-    const std::vector<Int32> & output_offsets,
-    const String & column_prefix,
-    bool keep_session_timezone_info)
-{
-    auto & step = initAndGetLastStep(chain);
-
-    NamesWithAliases final_project
-        = buildFinalProjection(step.actions, schema, output_offsets, column_prefix, keep_session_timezone_info);
-
-    for (const auto & name : final_project)
-    {
-        step.required_output.push_back(name.first);
-    }
-    return final_project;
 }
 
 NamesWithAliases DAGExpressionAnalyzer::buildFinalProjection(
