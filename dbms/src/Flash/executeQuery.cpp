@@ -194,22 +194,14 @@ std::optional<QueryExecutorPtr> executeAsPipeline(Context & context, bool intern
 
 QueryExecutorPtr executeAsBlockIO(Context & context, bool internal)
 {
-    if (context.getSettingsRef().enable_planner)
-    {
-        PlanQuerySource plan(context);
-        return doExecuteAsBlockIO(plan, context, internal);
-    }
-    else
-    {
-        DAGQuerySource dag(context);
-        return doExecuteAsBlockIO(dag, context, internal);
-    }
+    PlanQuerySource plan(context);
+    return doExecuteAsBlockIO(plan, context, internal);
 }
 } // namespace
 
 QueryExecutorPtr queryExecute(Context & context, bool internal)
 {
-    if (context.getSettingsRef().enable_planner && context.getSettingsRef().enable_resource_control)
+    if (context.getSettingsRef().enable_resource_control)
     {
         if (auto res = executeAsPipeline(context, internal); likely(res))
             return std::move(*res);
