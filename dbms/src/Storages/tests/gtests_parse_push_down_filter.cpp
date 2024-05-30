@@ -16,7 +16,6 @@
 #include <Common/typeid_cast.h>
 #include <Debug/dbgQueryCompiler.h>
 #include <Flash/Coprocessor/DAGQueryInfo.h>
-#include <Flash/Coprocessor/DAGQuerySource.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/Filter/PushDownFilter.h>
@@ -75,14 +74,19 @@ DM::PushDownFilterPtr ParsePushDownFilterTest::generatePushDownFilter(
     DAGContext dag_context(dag_request, {}, NullspaceID, "", DAGRequestKind::Cop, "", 0, "", log);
     ctx->setDAGContext(&dag_context);
     // Don't care about regions information in this test
-    DAGQuerySource dag(*ctx);
-    auto query_block = *dag.getRootQueryBlock();
     google::protobuf::RepeatedPtrField<tipb::Expr> empty_condition;
     // Push down all filters
-    const google::protobuf::RepeatedPtrField<tipb::Expr> & pushed_down_filters
-        = query_block.children[0]->selection != nullptr ? query_block.children[0]->selection->selection().conditions()
-                                                        : empty_condition;
     const google::protobuf::RepeatedPtrField<tipb::Expr> & conditions = empty_condition;
+    google::protobuf::RepeatedPtrField<tipb::Expr> pushed_down_filters;
+    DAGRequest request{&dag_request};
+    request.traverse([&](const tipb::Executor & executor) {
+        if (executor.has_selection())
+        {
+            pushed_down_filters = executor.selection().conditions();
+            return false;
+        }
+        return true;
+    });
 
     std::unique_ptr<DAGQueryInfo> dag_query;
     DM::ColumnDefines columns_to_read;

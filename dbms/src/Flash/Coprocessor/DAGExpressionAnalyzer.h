@@ -19,7 +19,6 @@
 #include <tipb/executor.pb.h>
 #pragma GCC diagnostic pop
 
-#include <Flash/Coprocessor/DAGQueryBlock.h>
 #include <Flash/Coprocessor/DAGSet.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Coprocessor/RuntimeFilterMgr.h>

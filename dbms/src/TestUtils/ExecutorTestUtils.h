@@ -59,8 +59,6 @@ public:
 
     DAGContext & getDAGContext();
 
-    void enablePlanner(bool is_enable) const;
-
     void enablePipeline(bool is_enable) const;
 
     static ::testing::AssertionResult dagRequestEqual(

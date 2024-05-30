@@ -18,7 +18,7 @@
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGQueryInfo.h>
-#include <Flash/Coprocessor/DAGQuerySource.h>
+#include <Flash/Coprocessor/DAGRequest.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Functions/registerFunctions.h>
 #include <Interpreters/Context.h>
@@ -87,12 +87,16 @@ DM::RSOperatorPtr FilterParserTest::generateRsOperator(
     DAGContext dag_context(dag_request, {}, NullspaceID, "", DAGRequestKind::Cop, "", 0, "", log);
     ctx->setDAGContext(&dag_context);
     // Don't care about regions information in this test
-    DAGQuerySource dag(*ctx);
-    auto query_block = *dag.getRootQueryBlock();
-    google::protobuf::RepeatedPtrField<tipb::Expr> empty_condition;
-    const google::protobuf::RepeatedPtrField<tipb::Expr> & conditions = query_block.children[0]->selection != nullptr
-        ? query_block.children[0]->selection->selection().conditions()
-        : empty_condition;
+    google::protobuf::RepeatedPtrField<tipb::Expr> conditions;
+    DAGRequest request{&dag_request};
+    request.traverse([&](const tipb::Executor & executor) {
+        if (executor.has_selection())
+        {
+            conditions = executor.selection().conditions();
+            return false;
+        }
+        return true;
+    });
 
     DM::ColumnDefines columns_to_read;
     columns_to_read.reserve(table_info.columns.size());

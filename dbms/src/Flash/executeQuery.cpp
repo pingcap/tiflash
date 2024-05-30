@@ -19,7 +19,6 @@
 #include <Core/QueryProcessingStage.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Flash/Coprocessor/DAGContext.h>
-#include <Flash/Coprocessor/DAGQuerySource.h>
 #include <Flash/Executor/DataStreamExecutor.h>
 #include <Flash/Executor/PipelineExecutor.h>
 #include <Flash/Pipeline/Pipeline.h>
