@@ -14,17 +14,17 @@
 
 #pragma once
 
-#include <Flash/Pipeline/Schedule/Tasks/IOEventTask.h>
+#include <Flash/Pipeline/Schedule/Tasks/Impls/IOEventTask.h>
 
 namespace DB
 {
 class AggregateContext;
 using AggregateContextPtr = std::shared_ptr<AggregateContext>;
 
-class AggregateFinalSpillTask : public OutputIOEventTask
+class AggregateFinalConvertTask : public EventTask
 {
 public:
-    AggregateFinalSpillTask(
+    AggregateFinalConvertTask(
         PipelineExecutorContext & exec_context_,
         const String & req_id,
         const EventPtr & event_,
@@ -32,9 +32,7 @@ public:
         size_t index_);
 
 protected:
-    ExecTaskStatus executeIOImpl() override;
-
-    void doFinalizeImpl() override;
+    ExecTaskStatus executeImpl() override;
 
 private:
     AggregateContextPtr agg_context;
