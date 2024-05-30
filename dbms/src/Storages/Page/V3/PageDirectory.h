@@ -161,8 +161,7 @@ public:
                 }
                 return;
             }
-            RUNTIME_CHECK(ref_count_delta_in_snap > 0, deref_count_delta, ref_count_delta_in_snap);
-            if unlikely (ref_count_delta_in_snap > 0)
+            if unlikely (ref_count_delta_in_snap <= 0)
             {
                 FmtBuffer buf;
                 for (const auto & [ver, ref_count_delta] : *versioned_ref_counts)
