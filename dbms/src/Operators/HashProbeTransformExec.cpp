@@ -15,8 +15,8 @@
 #include <Flash/Executor/PipelineExecutorContext.h>
 #include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 #include <Flash/Pipeline/Schedule/TaskScheduler.h>
-#include <Flash/Pipeline/Schedule/Tasks/SimplePipelineTask.h>
-#include <Flash/Pipeline/Schedule/Tasks/StreamRestoreTask.h>
+#include <Flash/Pipeline/Schedule/Tasks/Impls/SimplePipelineTask.h>
+#include <Flash/Pipeline/Schedule/Tasks/Impls/StreamRestoreTask.h>
 #include <Operators/HashJoinBuildSink.h>
 #include <Operators/HashProbeTransformExec.h>
 #include <Operators/IOBlockInputStreamSourceOp.h>

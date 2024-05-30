@@ -15,7 +15,7 @@
 #include <Common/MemoryAllocTrace.h>
 #include <common/config_common.h> // Included for `USE_JEMALLOC`
 
-#ifdef USE_JEMALLOC
+#if USE_JEMALLOC
 #include <jemalloc/jemalloc.h>
 #endif
 
@@ -23,12 +23,12 @@ namespace DB
 {
 std::tuple<uint64_t *, uint64_t *> getAllocDeallocPtr()
 {
-#ifdef USE_JEMALLOC
+#if USE_JEMALLOC
     uint64_t * ptr1 = nullptr;
-    uint64_t size1 = sizeof ptr1;
+    size_t size1 = sizeof(ptr1);
     je_mallctl("thread.allocatedp", reinterpret_cast<void *>(&ptr1), &size1, nullptr, 0);
     uint64_t * ptr2 = nullptr;
-    uint64_t size2 = sizeof ptr2;
+    size_t size2 = sizeof(ptr2);
     je_mallctl("thread.deallocatedp", reinterpret_cast<void *>(&ptr2), &size2, nullptr, 0);
     return std::make_tuple(ptr1, ptr2);
 #else

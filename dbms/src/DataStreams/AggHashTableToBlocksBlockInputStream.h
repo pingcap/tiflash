@@ -51,7 +51,7 @@ protected:
                 aggregated_data_variants,
                 method,
                 aggregated_data_variants.aggregates_pool,
-                false,
+                /*final=*/false,
                 current_bucket++);
             size_t block_rows = block.rows();
             size_t block_bytes = block.bytes();

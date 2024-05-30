@@ -189,7 +189,7 @@ public:
 
     RestoreConfig restore_config;
 
-    /** Call `setBuildConcurrencyAndInitJoinPartition` and `setSampleBlock`.
+    /** Call `setBuildConcurrencyAndInitJoinPartition` and `setRightSampleBlock`.
       * You must call this method before subsequent calls to insertFromBlock.
       */
     void initBuild(const Block & sample_block, size_t build_concurrency_ = 1);
@@ -415,10 +415,10 @@ private:
 
     Sizes key_sizes;
 
-    /// Block with columns from the right-side table except key columns.
-    Block sample_block_without_keys;
+    /// Block with columns from the right-side table.
+    Block right_sample_block;
     /// Block with key columns in the same order they appear in the right-side table.
-    Block sample_block_only_keys;
+    Block right_sample_block_only_keys;
 
     NamesAndTypes output_columns;
     Block output_block;
@@ -457,7 +457,7 @@ private:
     /** Set information about structure of right hand of JOIN (joined data).
       * You must call this method before subsequent calls to insertFromBlock.
       */
-    void setSampleBlock(const Block & block);
+    void setRightSampleBlock(const Block & block);
 
     /** Set Join build concurrency and init hash map.
       * You must call this method before subsequent calls to insertFromBlock.
