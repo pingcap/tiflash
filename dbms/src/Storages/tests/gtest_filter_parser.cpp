@@ -18,8 +18,8 @@
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGQueryInfo.h>
-#include <Flash/Coprocessor/DAGRequest.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
+#include <Flash/Statistics/traverseExecutors.h>
 #include <Functions/registerFunctions.h>
 #include <Interpreters/Context.h>
 #include <Storages/AlterCommands.h>
@@ -88,8 +88,7 @@ DM::RSOperatorPtr FilterParserTest::generateRsOperator(
     ctx->setDAGContext(&dag_context);
     // Don't care about regions information in this test
     google::protobuf::RepeatedPtrField<tipb::Expr> conditions;
-    DAGRequest request{&dag_request};
-    request.traverse([&](const tipb::Executor & executor) {
+    traverseExecutors(&dag_request, [&](const tipb::Executor & executor) {
         if (executor.has_selection())
         {
             conditions = executor.selection().conditions();

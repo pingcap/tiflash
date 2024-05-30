@@ -16,6 +16,7 @@
 #include <Common/typeid_cast.h>
 #include <Debug/dbgQueryCompiler.h>
 #include <Flash/Coprocessor/DAGQueryInfo.h>
+#include <Flash/Statistics/traverseExecutors.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/Filter/PushDownFilter.h>
@@ -78,8 +79,7 @@ DM::PushDownFilterPtr ParsePushDownFilterTest::generatePushDownFilter(
     // Push down all filters
     const google::protobuf::RepeatedPtrField<tipb::Expr> & conditions = empty_condition;
     google::protobuf::RepeatedPtrField<tipb::Expr> pushed_down_filters;
-    DAGRequest request{&dag_request};
-    request.traverse([&](const tipb::Executor & executor) {
+    traverseExecutors(&dag_request, [&](const tipb::Executor & executor) {
         if (executor.has_selection())
         {
             pushed_down_filters = executor.selection().conditions();
