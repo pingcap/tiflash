@@ -733,59 +733,6 @@ void DAGExpressionAnalyzer::buildAggFuncs(
     }
 }
 
-std::tuple<Names, std::unordered_map<String, TiDB::TiDBCollatorPtr>, AggregateDescriptions, ExpressionActionsPtr, KeyRefAggFuncMap, AggFuncRefKeyMap> DAGExpressionAnalyzer::
-    appendAggregation(ExpressionActionsChain & chain, const tipb::Aggregation & agg, bool group_by_collation_sensitive)
-{
-    if (agg.group_by_size() == 0 && agg.agg_func_size() == 0)
-    {
-        //should not reach here
-        throw TiFlashException("Aggregation executor without group by/agg exprs", Errors::Coprocessor::BadRequest);
-    }
-
-    auto & step = initAndGetLastStep(chain);
-
-    NamesAndTypes aggregated_columns;
-    AggregateDescriptions aggregate_descriptions;
-    Names aggregation_keys;
-    std::unordered_map<String, TiDB::TiDBCollatorPtr> collators;
-    std::unordered_set<String> agg_key_set;
-    KeyRefAggFuncMap key_ref_agg_func;
-    AggFuncRefKeyMap agg_func_ref_key;
-    buildAggFuncs(agg, step.actions, aggregate_descriptions, aggregated_columns);
-    buildAggGroupBy(
-        agg.group_by(),
-        step.actions,
-        aggregate_descriptions,
-        aggregated_columns,
-        aggregation_keys,
-        agg_key_set,
-        key_ref_agg_func,
-        group_by_collation_sensitive,
-        collators);
-    tryEliminateFirstRow(aggregation_keys, collators, agg_func_ref_key, aggregate_descriptions);
-    // set required output for agg funcs's arguments and group by keys.
-    for (const auto & aggregate_description : aggregate_descriptions)
-    {
-        for (const auto & argument_name : aggregate_description.argument_names)
-            step.required_output.push_back(argument_name);
-    }
-    for (const auto & aggregation_key : aggregation_keys)
-        step.required_output.push_back(aggregation_key);
-
-    auto before_agg = chain.getLastActions();
-    chain.finalize();
-    chain.clear();
-
-    auto & after_agg_step = initAndGetLastStep(chain);
-    after_agg_step.actions = appendCopyColumnAfterAgg(aggregated_columns, key_ref_agg_func, agg_func_ref_key);
-    appendCastAfterAgg(after_agg_step.actions, agg);
-    // after appendCastAfterAgg, current input columns has been modified.
-    for (const auto & column : getCurrentInputColumns())
-        after_agg_step.required_output.push_back(column.name);
-
-    return {aggregation_keys, collators, aggregate_descriptions, before_agg, key_ref_agg_func, agg_func_ref_key};
-}
-
 bool isWindowFunctionsValid(const tipb::Window & window)
 {
     bool has_agg_func = false;
@@ -1154,45 +1101,6 @@ GroupingSets DAGExpressionAnalyzer::buildExpandGroupingColumns(
     }
     source_columns.emplace_back(Expand::grouping_identifier_column_name, Expand::grouping_identifier_column_type);
     return group_sets_columns;
-}
-
-ExpressionActionsPtr DAGExpressionAnalyzer::appendExpand(const tipb::Expand & expand, ExpressionActionsChain & chain)
-{
-    auto & last_step = initAndGetLastStep(chain);
-    for (const auto & origin_col : last_step.actions->getSampleBlock().getNamesAndTypesList())
-    {
-        last_step.required_output.push_back(origin_col.name);
-    }
-    auto grouping_sets = buildExpandGroupingColumns(expand, last_step.actions);
-    last_step.actions->add(ExpressionAction::expandSource(grouping_sets));
-
-    auto before_expand = chain.getLastActions();
-    chain.finalize();
-    chain.clear();
-
-    auto & after_expand_step = initAndGetLastStep(chain);
-    for (const auto & column : getCurrentInputColumns())
-        after_expand_step.required_output.push_back(column.name);
-    return before_expand;
-}
-
-std::vector<NameAndTypePair> DAGExpressionAnalyzer::appendOrderBy(
-    ExpressionActionsChain & chain,
-    const tipb::TopN & topN)
-{
-    if (topN.order_by_size() == 0)
-    {
-        throw TiFlashException("TopN executor without order by exprs", Errors::Coprocessor::BadRequest);
-    }
-
-    auto & step = initAndGetLastStep(chain);
-    auto order_columns = buildOrderColumns(step.actions, topN.order_by());
-
-    assert(static_cast<int>(order_columns.size()) == topN.order_by_size());
-    for (const auto & order_column : order_columns)
-        step.required_output.push_back(order_column.name);
-
-    return order_columns;
 }
 
 const std::vector<NameAndTypePair> & DAGExpressionAnalyzer::getCurrentInputColumns() const

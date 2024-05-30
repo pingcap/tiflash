@@ -67,18 +67,7 @@ public:
 
     GroupingSets buildExpandGroupingColumns(const tipb::Expand & expand, const ExpressionActionsPtr & actions);
 
-    ExpressionActionsPtr appendExpand(const tipb::Expand & expand, ExpressionActionsChain & chain);
-
     NamesAndTypes buildWindowOrderColumns(const tipb::Sort & window_sort) const;
-
-    std::vector<NameAndTypePair> appendOrderBy(ExpressionActionsChain & chain, const tipb::TopN & topN);
-
-    /// <aggregation_keys, collators, aggregate_descriptions, before_agg, key_ref_agg_func, agg_func_ref_key>
-    /// May change the source columns.
-    std::tuple<Names, std::unordered_map<String, TiDB::TiDBCollatorPtr>, AggregateDescriptions, ExpressionActionsPtr, KeyRefAggFuncMap, AggFuncRefKeyMap> appendAggregation(
-        ExpressionActionsChain & chain,
-        const tipb::Aggregation & agg,
-        bool group_by_collation_sensitive);
 
     void appendWindowColumns(
         WindowDescription & window_description,
