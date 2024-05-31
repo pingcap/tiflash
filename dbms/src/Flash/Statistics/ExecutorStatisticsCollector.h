@@ -49,8 +49,6 @@ public:
 
     void fillExecuteSummaries(tipb::SelectResponse & response);
 
-    tipb::SelectResponse genExecutionSummaryResponse();
-
     tipb::TiFlashExecutionInfo genTiFlashExecutionInfo();
 
     const std::map<String, ExecutorStatisticsPtr> & getProfiles() const { return profiles; }

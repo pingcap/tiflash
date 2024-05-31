@@ -98,7 +98,8 @@ struct BinaryOperationImplBase
         const ArrayB & b,
         const ColumnUInt8 * b_nullmap,
         PaddedPODArray<ResultType> & c,
-        typename ColumnUInt8::Container & res_null)
+        typename ColumnUInt8::Container & res_null,
+        const Context & context)
     {
         size_t size = a.size();
         if (a_nullmap != nullptr && b_nullmap != nullptr)
@@ -122,11 +123,11 @@ struct BinaryOperationImplBase
                     DecimalField<B>(b[i], b.getScale()),
                     res_null[i]);
             else if constexpr (IsDecimal<A>)
-                c[i] = Op::template apply<ResultType>(DecimalField<A>(a[i], a.getScale()), b[i], res_null[i]);
+                c[i] = Op::template apply<ResultType>(DecimalField<A>(a[i], a.getScale()), b[i], res_null[i], context);
             else if constexpr (IsDecimal<B>)
-                c[i] = Op::template apply<ResultType>(a[i], DecimalField<B>(b[i], b.getScale()), res_null[i]);
+                c[i] = Op::template apply<ResultType>(a[i], DecimalField<B>(b[i], b.getScale()), res_null[i], context);
             else
-                c[i] = Op::template apply<ResultType>(a[i], b[i], res_null[i]);
+                c[i] = Op::template apply<ResultType>(a[i], b[i], res_null[i], context);
         }
     }
 
@@ -146,7 +147,8 @@ struct BinaryOperationImplBase
         const ColumnUInt8 * a_nullmap,
         typename NearestFieldType<B>::Type b,
         PaddedPODArray<ResultType> & c,
-        typename ColumnUInt8::Container & res_null)
+        typename ColumnUInt8::Container & res_null,
+        const Context & context)
     {
         size_t size = a.size();
         if (a_nullmap != nullptr)
@@ -157,9 +159,9 @@ struct BinaryOperationImplBase
         }
         for (size_t i = 0; i < size; ++i)
             if constexpr (IsDecimal<A>)
-                c[i] = Op::template apply<ResultType>(DecimalField<A>(a[i], a.getScale()), b, res_null[i]);
+                c[i] = Op::template apply<ResultType>(DecimalField<A>(a[i], a.getScale()), b, res_null[i], context);
             else
-                c[i] = Op::template apply<ResultType>(a[i], b, res_null[i]);
+                c[i] = Op::template apply<ResultType>(a[i], b, res_null[i], context);
     }
 
     static void NO_INLINE
@@ -180,7 +182,8 @@ struct BinaryOperationImplBase
         const ArrayB & b,
         const ColumnUInt8 * b_nullmap,
         PaddedPODArray<ResultType> & c,
-        typename ColumnUInt8::Container & res_null)
+        typename ColumnUInt8::Container & res_null,
+        const Context & context)
     {
         size_t size = b.size();
         if (b_nullmap != nullptr)
@@ -192,9 +195,9 @@ struct BinaryOperationImplBase
         for (size_t i = 0; i < size; ++i)
         {
             if constexpr (IsDecimal<B>)
-                c[i] = Op::template apply<ResultType>(a, DecimalField<B>(b[i], b.getScale()), res_null[i]);
+                c[i] = Op::template apply<ResultType>(a, DecimalField<B>(b[i], b.getScale()), res_null[i], context);
             else
-                c[i] = Op::template apply<ResultType>(a, b[i], res_null[i]);
+                c[i] = Op::template apply<ResultType>(a, b[i], res_null[i], context);
         }
     }
 
@@ -205,9 +208,10 @@ struct BinaryOperationImplBase
     static ResultType constantConstantNullable(
         typename NearestFieldType<A>::Type a,
         typename NearestFieldType<B>::Type b,
-        UInt8 & res_null)
+        UInt8 & res_null,
+        const Context & context)
     {
-        return Op::template apply<ResultType>(a, b, res_null);
+        return Op::template apply<ResultType>(a, b, res_null, context);
     }
 };
 
@@ -331,7 +335,8 @@ struct DecimalBinaryOperation
         typename ColumnUInt8::Container & res_null,
         NativeResultType scale_a [[maybe_unused]],
         NativeResultType scale_b [[maybe_unused]],
-        NativeResultType scale_result [[maybe_unused]])
+        NativeResultType scale_result [[maybe_unused]],
+        const Context & context)
     {
         size_t size = a.size();
 
@@ -340,7 +345,7 @@ struct DecimalBinaryOperation
         if constexpr (is_division)
         {
             for (size_t i = 0; i < size; ++i)
-                c[i] = applyScaled<true>(a[i], b[i], scale_a, res_null[i]);
+                c[i] = applyScaled<true>(a[i], b[i], scale_a, res_null[i], context);
             return;
         }
         else if constexpr (is_modulo)
@@ -348,12 +353,12 @@ struct DecimalBinaryOperation
             if (scale_a != 1)
             {
                 for (size_t i = 0; i < size; ++i)
-                    c[i] = applyScaled<true>(a[i], b[i], scale_a, res_null[i]);
+                    c[i] = applyScaled<true>(a[i], b[i], scale_a, res_null[i], context);
             }
             else
             {
                 for (size_t i = 0; i < size; ++i)
-                    c[i] = applyScaled<false>(a[i], b[i], scale_b, res_null[i]);
+                    c[i] = applyScaled<false>(a[i], b[i], scale_b, res_null[i], context);
             }
 
             return;
@@ -412,7 +417,8 @@ struct DecimalBinaryOperation
         typename ColumnUInt8::Container & res_null,
         NativeResultType scale_a [[maybe_unused]],
         NativeResultType scale_b [[maybe_unused]],
-        NativeResultType scale_result [[maybe_unused]])
+        NativeResultType scale_result [[maybe_unused]],
+        const Context & context)
     {
         size_t size = a.size();
 
@@ -421,7 +427,7 @@ struct DecimalBinaryOperation
         if constexpr (is_division)
         {
             for (size_t i = 0; i < size; ++i)
-                c[i] = applyScaled<true>(a[i], b, scale_a, res_null[i]);
+                c[i] = applyScaled<true>(a[i], b, scale_a, res_null[i], context);
             return;
         }
         else if constexpr (is_modulo)
@@ -429,12 +435,12 @@ struct DecimalBinaryOperation
             if (scale_a != 1)
             {
                 for (size_t i = 0; i < size; ++i)
-                    c[i] = applyScaled<true>(a[i], b, scale_a, res_null[i]);
+                    c[i] = applyScaled<true>(a[i], b, scale_a, res_null[i], context);
             }
             else
             {
                 for (size_t i = 0; i < size; ++i)
-                    c[i] = applyScaled<false>(a[i], b, scale_b, res_null[i]);
+                    c[i] = applyScaled<false>(a[i], b, scale_b, res_null[i], context);
             }
 
             return;
@@ -493,7 +499,8 @@ struct DecimalBinaryOperation
         typename ColumnUInt8::Container & res_null,
         NativeResultType scale_a [[maybe_unused]],
         NativeResultType scale_b [[maybe_unused]],
-        NativeResultType scale_result [[maybe_unused]])
+        NativeResultType scale_result [[maybe_unused]],
+        const Context & context)
     {
         size_t size = b.size();
 
@@ -502,7 +509,7 @@ struct DecimalBinaryOperation
         if constexpr (is_division)
         {
             for (size_t i = 0; i < size; ++i)
-                c[i] = applyScaled<true>(a, b[i], scale_a, res_null[i]);
+                c[i] = applyScaled<true>(a, b[i], scale_a, res_null[i], context);
             return;
         }
         else if constexpr (is_modulo)
@@ -510,12 +517,12 @@ struct DecimalBinaryOperation
             if (scale_a != 1)
             {
                 for (size_t i = 0; i < size; ++i)
-                    c[i] = applyScaled<true>(a, b[i], scale_a, res_null[i]);
+                    c[i] = applyScaled<true>(a, b[i], scale_a, res_null[i], context);
             }
             else
             {
                 for (size_t i = 0; i < size; ++i)
-                    c[i] = applyScaled<false>(a, b[i], scale_b, res_null[i]);
+                    c[i] = applyScaled<false>(a, b[i], scale_b, res_null[i], context);
             }
 
             return;
@@ -554,18 +561,19 @@ struct DecimalBinaryOperation
         NativeResultType scale_a [[maybe_unused]],
         NativeResultType scale_b [[maybe_unused]],
         NativeResultType scale_result [[maybe_unused]],
-        UInt8 & res_null)
+        UInt8 & res_null,
+        const Context & context)
     {
         if constexpr (is_division)
         {
-            return applyScaled<true>(a, b, scale_a, res_null);
+            return applyScaled<true>(a, b, scale_a, res_null, context);
         }
         else if constexpr (is_modulo)
         {
             if (scale_a != 1)
-                return applyScaled<true>(a, b, scale_a, res_null);
+                return applyScaled<true>(a, b, scale_a, res_null, context);
             else
-                return applyScaled<false>(a, b, scale_b, res_null);
+                return applyScaled<false>(a, b, scale_b, res_null, context);
         }
 
         throw Exception("Should not reach here");
@@ -646,7 +654,12 @@ private:
     }
 
     template <bool scale_left>
-    static NativeResultType applyScaled(InputType a, InputType b, InputType scale, UInt8 & res_null)
+    static NativeResultType applyScaled(
+        InputType a,
+        InputType b,
+        InputType scale,
+        UInt8 & res_null,
+        const Context & context)
     {
         if constexpr (is_division || is_modulo)
         {
@@ -657,7 +670,7 @@ private:
             else
                 b = b * scale;
 
-            res = Op::template apply<InputType>(a, b, res_null);
+            res = Op::template apply<InputType>(a, b, res_null, context);
 
             if constexpr (check_overflow)
             {
@@ -1277,7 +1290,8 @@ public:
                                         scale_a,
                                         scale_b,
                                         scale_result,
-                                        res_null);
+                                        res_null,
+                                        context);
                                     if (!res_null)
                                         result_field = toField(res, result_type.getScale());
                                     block.getByPosition(result).column
@@ -1301,7 +1315,8 @@ public:
                                     auto res = OpImpl::constantConstantNullable(
                                         col_left->getField().template safeGet<FieldT0>(),
                                         col_right->getField().template safeGet<FieldT1>(),
-                                        res_null);
+                                        res_null,
+                                        context);
                                     if (!res_null)
                                         result_field = toField(res);
                                     block.getByPosition(result).column
@@ -1358,7 +1373,8 @@ public:
                                         vec_res_nulmap,
                                         scale_a,
                                         scale_b,
-                                        scale_result);
+                                        scale_result,
+                                        context);
                                 }
                             }
                             else
@@ -1377,7 +1393,8 @@ public:
                                         col_right->getData(),
                                         col_right_nullmap,
                                         vec_res,
-                                        vec_res_nulmap);
+                                        vec_res_nulmap,
+                                        context);
                                 }
                             }
                         }
@@ -1412,7 +1429,8 @@ public:
                                         vec_res_nulmap,
                                         scale_a,
                                         scale_b,
-                                        scale_result);
+                                        scale_result,
+                                        context);
                                 }
                             }
                             else
@@ -1431,7 +1449,8 @@ public:
                                         col_left_nullmap,
                                         col_right_const->getField().template safeGet<FieldT1>(),
                                         vec_res,
-                                        vec_res_nulmap);
+                                        vec_res_nulmap,
+                                        context);
                                 }
                             }
                         }
@@ -1462,7 +1481,8 @@ public:
                                         vec_res_nulmap,
                                         scale_a,
                                         scale_b,
-                                        scale_result);
+                                        scale_result,
+                                        context);
                                 }
                             }
                             else
@@ -1479,7 +1499,8 @@ public:
                                         col_right->getData(),
                                         col_right_nullmap,
                                         vec_res,
-                                        vec_res_nulmap);
+                                        vec_res_nulmap,
+                                        context);
                                 }
                             }
                         }

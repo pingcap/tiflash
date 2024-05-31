@@ -92,13 +92,11 @@ struct TiDBDivideFloatingImpl<A, B, false>
             return static_cast<Result>(x) / d;
     }
     template <typename Result = ResultType>
-    static Result apply(A a, B b, UInt8 & res_null)
+    static Result apply(A a, B b, UInt8 & res_null, const Context & context)
     {
         if (b == 0)
         {
-            /// we can check res_null to see if it is DIVISION_BY_ZERO or DIVISION_BY_NULL, when sql mode is ERROR_FOR_DIVISION_BY_ZERO,
-            /// inserts and updates involving expressions that perform division by zero should be treated as errors, now only read-only
-            /// statement will send to TiFlash, so just return NULL here
+            context.getDAGContext()->handleDivisionByZero();
             res_null = 1;
             return static_cast<Result>(0);
         }
@@ -119,13 +117,11 @@ struct TiDBDivideFloatingImpl<A, B, true>
     }
 
     template <typename Result = ResultType>
-    static Result apply(A a, B b, UInt8 & res_null)
+    static Result apply(A a, B b, UInt8 & res_null, const Context & context)
     {
         if (static_cast<Result>(b) == static_cast<Result>(0))
         {
-            /// we can check res_null to see if it is DIVISION_BY_ZERO or DIVISION_BY_NULL, when sql mode is ERROR_FOR_DIVISION_BY_ZERO,
-            /// inserts and updates involving expressions that perform division by zero should be treated as errors, now only read-only
-            /// statement will send to TiFlash, so just return NULL here
+            context.getDAGContext()->handleDivisionByZero();
             res_null = 1;
             return static_cast<Result>(0);
         }

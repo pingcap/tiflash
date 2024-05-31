@@ -192,9 +192,21 @@ void MPPTask::abortQueryExecutor()
 void MPPTask::finishWrite()
 {
     RUNTIME_ASSERT(tunnel_set != nullptr, log, "mpp task without tunnel set");
+    tipb::SelectResponse last_response;
+    bool need_send = false;
     if (dag_context->collect_execution_summaries
         && !ReportExecutionSummaryToCoordinator(meta.mpp_version(), meta.report_execution_summary()))
-        tunnel_set->sendExecutionSummary(mpp_task_statistics.genExecutionSummaryResponse());
+    {
+        mpp_task_statistics.fillExecuteSummaries(last_response);
+        need_send = true;
+    }
+    if (dag_context->getWarningCount() > 0)
+    {
+        dag_context->fillWarnings(last_response);
+        need_send = true;
+    }
+    if (need_send)
+        tunnel_set->sendLastResponse(last_response);
     tunnel_set->finishWrite();
 }
 

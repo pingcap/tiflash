@@ -135,16 +135,10 @@ void ExecutorStatisticsCollector::fillChildren()
     }
 }
 
-tipb::SelectResponse ExecutorStatisticsCollector::genExecutionSummaryResponse()
+tipb::TiFlashExecutionInfo ExecutorStatisticsCollector::genTiFlashExecutionInfo()
 {
     tipb::SelectResponse response;
     fillExecuteSummaries(response);
-    return response;
-}
-
-tipb::TiFlashExecutionInfo ExecutorStatisticsCollector::genTiFlashExecutionInfo()
-{
-    tipb::SelectResponse response = genExecutionSummaryResponse();
     tipb::TiFlashExecutionInfo execution_info;
     auto * execution_summaries = execution_info.mutable_execution_summaries();
     execution_summaries->CopyFrom(response.execution_summaries());
