@@ -32,6 +32,10 @@ SegmentReadTaskScheduler::~SegmentReadTaskScheduler()
 
 void SegmentReadTaskScheduler::add(const SegmentReadTaskPoolPtr & pool)
 {
+    if (pool->getTasks().empty())
+    {
+        return;
+    }
     Stopwatch sw_add;
     std::lock_guard lock(mtx);
     Stopwatch sw_do_add;
