@@ -23,17 +23,6 @@ struct Settings;
 
 namespace DB::DM
 {
-<<<<<<< HEAD
-
-// `SegmentReadTaskScheduler` is a global singleton. All `SegmentReadTaskPool` will be added to it and be scheduled by it.
-// 1. `UnorderedInputStream`/`UnorderedSourceOps` will call `SegmentReadTaskScheduler::add` to add a `SegmentReadTaskPool`
-// object to the `read_pools` list and index segments information into `merging_segments`.
-// 2. A schedule-thread will scheduling read tasks:
-//   a. It scans the `read_pools` list and check if `SegmentReadTaskPool` need be scheduled.
-//   b. Chooses a `SegmentReadTask` of the `SegmentReadTaskPool`, if other `SegmentReadTaskPool` will read the same
-//      `SegmentReadTask`, pop them, and build a `MergedTask`.
-//   c. Sends the MergedTask to read threads(SegmentReader).
-=======
 namespace tests
 {
 class SegmentReadTasksPoolTest;
@@ -46,7 +35,6 @@ class SegmentReadTasksPoolTest;
 // - Call path: schedLoop -> schedule -> reapPendingPools -> scheduleOneRound
 // - reapPeningPools will swap the `pending_pools` and add these pools to `read_pools` and `merging_segments`.
 // - scheduleOneRound will scan `read_pools` and choose segments to read.
->>>>>>> bddd270b16 (Storages: Refine SegmentReadTaskScheduler::add to reduce lock contention (#9027))
 class SegmentReadTaskScheduler
 {
 public:
@@ -118,14 +106,9 @@ public:
 
     LoggerPtr log;
 
-<<<<<<< HEAD
-    // To count how many threads are waitting to add tasks.
-    std::atomic<Int64> add_waittings{0};
-=======
     std::mutex pending_mtx;
     SegmentReadTaskPools pending_pools GUARDED_BY(pending_mtx);
 
     friend class tests::SegmentReadTasksPoolTest;
->>>>>>> bddd270b16 (Storages: Refine SegmentReadTaskScheduler::add to reduce lock contention (#9027))
 };
 } // namespace DB::DM
