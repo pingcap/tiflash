@@ -206,17 +206,17 @@ public:
         auto total_bytes = blk_stat.totalBytes();
         auto blk_avg_bytes = total_count > 0 ? total_bytes / total_count : 0;
         auto approximate_max_pending_block_bytes = blk_avg_bytes * max_queue_size;
-        LOG_DEBUG(log, "Done. pool_id={} table_id={} pop={} pop_empty={} pop_empty_ratio={} max_queue_size={} blk_avg_bytes={} approximate_max_pending_block_bytes={:.2f}MB total_count={} total_bytes={:.2f}MB", //
-                  pool_id,
-                  table_id,
-                  pop_times,
-                  pop_empty_times,
-                  pop_empty_ratio,
-                  max_queue_size,
-                  blk_avg_bytes,
-                  approximate_max_pending_block_bytes / 1024.0 / 1024.0,
-                  total_count,
-                  total_bytes / 1024.0 / 1024.0);
+        LOG_INFO(log, "Done. pool_id={} table_id={} pop={} pop_empty={} pop_empty_ratio={} max_queue_size={} blk_avg_bytes={} approximate_max_pending_block_bytes={:.2f}MB total_count={} total_bytes={:.2f}MB", //
+                 pool_id,
+                 table_id,
+                 pop_times,
+                 pop_empty_times,
+                 pop_empty_ratio,
+                 max_queue_size,
+                 blk_avg_bytes,
+                 approximate_max_pending_block_bytes / 1024.0 / 1024.0,
+                 total_count,
+                 total_bytes / 1024.0 / 1024.0);
     }
 
     SegmentReadTaskPtr nextTask();
