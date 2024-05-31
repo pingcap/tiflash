@@ -83,5 +83,40 @@ try
 }
 CATCH
 
+class TestDiv : public DB::tests::FunctionTest
+{
+public:
+};
+
+TEST_F(TestDiv, DivZero)
+try
+{
+    /// Decimal32
+    ASSERT_COLUMN_EQ_V2(
+        createColumn<Nullable<Decimal64>>(std::make_tuple(12, 5), {"0.73333", {}}),
+        DB::tests::executeFunction(
+            *context,
+            func_name,
+            {createColumn<Decimal32>(std::make_tuple(8, 1), {"2.2", "3.3"}),
+             createColumn<Decimal32>(std::make_tuple(2, 0), {"3", "0"})}));
+
+    context->getDAGContext()->setFlags(TiDBSQLFlags::IN_INSERT_STMT);
+    context->getDAGContext()->setSQLMode(TiDBSQLMode::ERROR_FOR_DIVISION_BY_ZERO | TiDBSQLMode::STRICT_ALL_TABLES);
+
+    try
+    {
+        DB::tests::executeFunction(
+            *context,
+            func_name,
+            {createColumn<Decimal32>(std::make_tuple(8, 1), {"2.2", "3.3"}),
+             createColumn<Decimal32>(std::make_tuple(2, 0), {"3", "0"})});
+    }
+    catch (DB::Exception & e)
+    {
+        GTEST_ASSERT_EQ(e.message(), "Division by 0");
+    }
+}
+CATCH
+
 } // namespace
 } // namespace DB::tests
