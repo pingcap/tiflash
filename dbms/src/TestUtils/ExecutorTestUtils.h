@@ -168,6 +168,7 @@ protected:
 // nullable type
 using ColStringNullableType = std::optional<typename TypeTraits<String>::FieldType>;
 using ColInt8NullableType = std::optional<typename TypeTraits<Int8>::FieldType>;
+using ColUInt8NullableType = std::optional<typename TypeTraits<UInt8>::FieldType>;
 using ColInt16NullableType = std::optional<typename TypeTraits<Int16>::FieldType>;
 using ColInt32NullableType = std::optional<typename TypeTraits<Int32>::FieldType>;
 using ColInt64NullableType = std::optional<typename TypeTraits<Int64>::FieldType>;
@@ -182,10 +183,14 @@ using ColUInt64Type = typename TypeTraits<UInt64>::FieldType;
 using ColInt64Type = typename TypeTraits<Int64>::FieldType;
 using ColFloat64Type = typename TypeTraits<Float64>::FieldType;
 using ColStringType = typename TypeTraits<String>::FieldType;
+using ColInt32Type = typename TypeTraits<Int32>::FieldType;
+using ColUInt8Type = typename TypeTraits<UInt8>::FieldType;
+using ColInt8Type = typename TypeTraits<Int8>::FieldType;
 
 // nullable column
 using ColumnWithNullableString = std::vector<ColStringNullableType>;
 using ColumnWithNullableInt8 = std::vector<ColInt8NullableType>;
+using ColumnWithNullableUInt8 = std::vector<ColUInt8NullableType>;
 using ColumnWithNullableInt16 = std::vector<ColInt16NullableType>;
 using ColumnWithNullableInt32 = std::vector<ColInt32NullableType>;
 using ColumnWithNullableInt64 = std::vector<ColInt64NullableType>;
@@ -200,4 +205,7 @@ using ColumnWithInt64 = std::vector<ColInt64Type>;
 using ColumnWithUInt64 = std::vector<ColUInt64Type>;
 using ColumnWithFloat64 = std::vector<ColFloat64Type>;
 using ColumnWithString = std::vector<ColStringType>;
+using ColumnWithUInt8 = std::vector<ColUInt8Type>;
+using ColumnWithInt8 = std::vector<ColInt8Type>;
+using ColumnWithInt32 = std::vector<ColInt32Type>;
 } // namespace DB::tests

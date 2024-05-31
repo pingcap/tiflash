@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Flash/Pipeline/Schedule/Events/AggregateFinalConvertEvent.h>
-#include <Flash/Pipeline/Schedule/Events/AggregateFinalSpillEvent.h>
-#include <Flash/Pipeline/Schedule/Tasks/AggregateFinalConvertTask.h>
+#include <Flash/Pipeline/Schedule/Events/Impls/AggregateFinalConvertEvent.h>
+#include <Flash/Pipeline/Schedule/Events/Impls/AggregateFinalSpillEvent.h>
+#include <Flash/Pipeline/Schedule/Tasks/Impls/AggregateFinalConvertTask.h>
 #include <Operators/AggregateContext.h>
 
 namespace DB
