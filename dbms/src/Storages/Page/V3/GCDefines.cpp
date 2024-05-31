@@ -271,7 +271,7 @@ GCTimeStatistics ExternalPageCallbacksManager<Trait>::doGC(
     // 2. Remove the expired entries in BlobStore.
     // It won't delete the data on the disk.
     // It will only update the SpaceMap which in memory.
-    blob_store.remove(del_entries);
+    blob_store.removeEntries(del_entries);
     statistics.compact_spacemap_ms = gc_watch.elapsedMillisecondsFromLastTime();
     GET_METRIC(tiflash_storage_page_gc_duration_seconds, type_compact_spacemap)
         .Observe(statistics.compact_spacemap_ms / 1000.0);
